@@ -22,6 +22,8 @@ export function createDb(url: string, opts: { max?: number; applicationName?: st
     connectionString: url,
     max: opts.max ?? 10,
     application_name: opts.applicationName ?? "bsec",
+    // A DB outage or bad host should fail requests fast, not hang the process indefinitely.
+    connectionTimeoutMillis: 5000,
   });
   const db = drizzle(pool, { schema });
   return { db, pool, close: () => pool.end() };
