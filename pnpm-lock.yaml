@@ -386,6 +386,9 @@ importers:
       '@bs/auth':
         specifier: workspace:*
         version: link:../auth
+      '@bs/blocks':
+        specifier: workspace:*
+        version: link:../blocks
       '@bs/db':
         specifier: workspace:*
         version: link:../db

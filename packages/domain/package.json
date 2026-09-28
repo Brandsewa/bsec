@@ -14,6 +14,7 @@
   },
   "dependencies": {
     "@bs/auth": "workspace:*",
+    "@bs/blocks": "workspace:*",
     "@bs/db": "workspace:*",
     "drizzle-orm": "0.45.3",
     "pino": "10.3.1",
