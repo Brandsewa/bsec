@@ -16,3 +16,5 @@ export * from "./media-services.ts";
 export * from "./brand-services.ts";
 export * from "./content-services.ts";
 export * from "./storefront/lifecycle.ts";
+export * from "./storefront/catalog.ts";
+export * from "./storefront/search.ts";
