@@ -18,3 +18,5 @@ export * from "./content-services.ts";
 export * from "./storefront/lifecycle.ts";
 export * from "./storefront/catalog.ts";
 export * from "./storefront/search.ts";
+export * from "./storefront/cart.ts";
+export * from "./storefront/newsletter.ts";
