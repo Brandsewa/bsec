@@ -52,6 +52,7 @@ export const pages = tenantTable(
   },
   (t) => [
     unique("pages_tenant_slug_uniq").on(t.tenantId, t.slug),
+    unique("pages_tenant_id_uniq").on(t.tenantId, t.id),
     index("pages_tenant_type_idx").on(t.tenantId, t.type),
   ],
 );

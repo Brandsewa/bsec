@@ -42,6 +42,7 @@ export const media = tenantTable(
     updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().default(sql`now()`),
   },
   (t) => [
+    unique("media_tenant_id_uniq").on(t.tenantId, t.id),
     index("media_tenant_created_idx").on(t.tenantId, t.createdAt),
   ],
 );
@@ -61,6 +62,7 @@ export const brands = tenantTable(
   },
   (t) => [
     unique("brands_tenant_slug_uniq").on(t.tenantId, t.slug),
+    unique("brands_tenant_id_uniq").on(t.tenantId, t.id),
     tenantForeignKey({
       tableTenantId: t.tenantId,
       column: t.logoMediaId,
@@ -88,6 +90,7 @@ export const locations = tenantTable(
     updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().default(sql`now()`),
   },
   (t) => [
+    unique("locations_tenant_id_uniq").on(t.tenantId, t.id),
     index("locations_tenant_idx").on(t.tenantId),
   ],
 );
@@ -112,6 +115,7 @@ export const categories = tenantTable(
   },
   (t) => [
     unique("categories_tenant_slug_uniq").on(t.tenantId, t.slug),
+    unique("categories_tenant_id_uniq").on(t.tenantId, t.id),
     tenantForeignKey({
       tableTenantId: t.tenantId,
       column: t.parentId,
@@ -161,6 +165,7 @@ export const products = tenantTable(
   },
   (t) => [
     unique("products_tenant_slug_uniq").on(t.tenantId, t.slug),
+    unique("products_tenant_id_uniq").on(t.tenantId, t.id),
     tenantForeignKey({
       tableTenantId: t.tenantId,
       column: t.brandId,
@@ -226,6 +231,7 @@ export const variants = tenantTable(
   },
   (t) => [
     unique("variants_tenant_sku_uniq").on(t.tenantId, t.sku),
+    unique("variants_tenant_id_uniq").on(t.tenantId, t.id),
     tenantForeignKey({
       tableTenantId: t.tenantId,
       column: t.productId,
@@ -338,6 +344,7 @@ export const collections = tenantTable(
   },
   (t) => [
     unique("collections_tenant_slug_uniq").on(t.tenantId, t.slug),
+    unique("collections_tenant_id_uniq").on(t.tenantId, t.id),
     tenantForeignKey({
       tableTenantId: t.tenantId,
       column: t.imageMediaId,
