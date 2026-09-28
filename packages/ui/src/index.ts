@@ -22,3 +22,7 @@ export { Toaster, toast } from "./components/toast.tsx";
 export { PageBreadcrumbs, PageContainer, PageHeader, PageSection, type Crumb } from "./layout/page.tsx";
 export { AppShell, type NavGroup, type NavItem } from "./layout/sidebar.tsx";
 export { PageSkeleton, ROUTE_PENDING_MIN_MS, ROUTE_PENDING_MS } from "./patterns/route-template.tsx";
+export { MetricCard, type MetricCardProps } from "./patterns/metric-card.tsx";
+export { FilterBar, type FilterBarProps } from "./patterns/filter-bar.tsx";
+export { DataTable, type ColumnDef, type DataTableProps } from "./patterns/data-table.tsx";
+
