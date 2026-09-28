@@ -6,3 +6,6 @@ export * from "./host-resolver.ts";
 export * from "./features.ts";
 export * from "./admin-services.ts";
 export * from "./platform-services.ts";
+export * from "./branding/contrast.ts";
+export * from "./branding/favicon.ts";
+export * from "./branding/fonts.ts";
