@@ -83,32 +83,34 @@ jobs:
           cache-from: type=gha,scope=${{ matrix.app }}
           cache-to: type=gha,mode=max,scope=${{ matrix.app }}
 
-  deploy-staging:
-    name: deploy staging (Coolify)
+  # No staging environment yet (single shared VPS for now, RUNBOOK §TODO). This job deploys
+  # straight to production once approved. Add a deploy-staging job ahead of this one when the
+  # staging VPS exists — same shape, different Coolify resource UUIDs.
+  deploy-production:
+    name: deploy production (Coolify)
     needs: images
     runs-on: ubuntu-24.04
-    environment: staging
-    steps:
-      # Coolify pulls the new :sha tags. Webhook URL + token are environment secrets (RUNBOOK §5).
-      - name: Trigger Coolify deploy
-        env:
-          COOLIFY_WEBHOOK: ${{ secrets.COOLIFY_STAGING_WEBHOOK }}
-          COOLIFY_TOKEN: ${{ secrets.COOLIFY_TOKEN }}
-        run: |
-          if [ -z "$COOLIFY_WEBHOOK" ]; then echo "::warning::COOLIFY_STAGING_WEBHOOK not set; skipping"; exit 0; fi
-          curl -fsS -X GET "$COOLIFY_WEBHOOK" -H "Authorization: Bearer $COOLIFY_TOKEN"
-
-  deploy-production:
-    name: deploy production (Coolify, manual approval)
-    needs: deploy-staging
-    runs-on: ubuntu-24.04
-    # Required reviewers on the "production" environment gate this job.
+    # Required reviewers on the "production" environment gate this job (GitHub → Settings →
+    # Environments → production). COOLIFY_TOKEN is a Coolify API token, permission "Deploy" only
+    # (Keys & Tokens → API Tokens). Resource UUIDs below aren't secret, just identifiers.
     environment: production
+    env:
+      COOLIFY_URL: https://server.brandsewa.com
+      MIGRATE_UUID: qqqlm48eqo7f8pnfwn766suc
+      APP_UUIDS: 7wuzc3xhtzhxud3315pjutnd,w4awz0y3fxzxtwstps1srgfi,ecfwkdh7citlanfto6gpgqdv,miz7k30kdqjwmqgiru4k9xtz
     steps:
-      - name: Trigger Coolify deploy
+      - name: Run migration (bsec-migrate; bootstraps roles once, always migrates)
         env:
-          COOLIFY_WEBHOOK: ${{ secrets.COOLIFY_PRODUCTION_WEBHOOK }}
           COOLIFY_TOKEN: ${{ secrets.COOLIFY_TOKEN }}
         run: |
-          if [ -z "$COOLIFY_WEBHOOK" ]; then echo "::warning::COOLIFY_PRODUCTION_WEBHOOK not set; skipping"; exit 0; fi
-          curl -fsS -X GET "$COOLIFY_WEBHOOK" -H "Authorization: Bearer $COOLIFY_TOKEN"
+          curl -fsS -X POST "$COOLIFY_URL/api/v1/deploy?uuid=$MIGRATE_UUID&force=false" \
+            -H "Authorization: Bearer $COOLIFY_TOKEN"
+          # No read-scoped token to poll deployment status; migrate finishes in ~15-20s
+          # (observed). Give it comfortable headroom before the apps redeploy.
+          sleep 45
+      - name: Deploy web, platform, worker, admin
+        env:
+          COOLIFY_TOKEN: ${{ secrets.COOLIFY_TOKEN }}
+        run: |
+          curl -fsS -X POST "$COOLIFY_URL/api/v1/deploy?uuid=$APP_UUIDS&force=false" \
+            -H "Authorization: Bearer $COOLIFY_TOKEN"
