@@ -1,6 +1,6 @@
 import { and, eq } from "drizzle-orm";
 import { schema, withTenant, type Db } from "@bs/db";
-import { resolveHostToTenant } from "./host-resolver.ts";
+import { evaluateStorefrontAccess } from "./storefront/lifecycle.ts";
 import type { Runtime } from "./runtime.ts";
 
 /**
@@ -162,8 +162,8 @@ export async function buildTenantContext(
     return null;
   }
 
-  const resolved = await resolveHostToTenant(db, host);
-  if (!resolved) {
+  const access = await evaluateStorefrontAccess(db, host, opts);
+  if (!access.tenantId || access.reason === "not_found") {
     return null;
   }
 
@@ -176,9 +176,12 @@ export async function buildTenantContext(
     }
   }
 
+  const storeStatus: StoreStatus =
+    access.mode ?? (access.tenantStatus === "suspended" ? "maintenance" : "live");
+
   return {
-    tenantId: resolved.tenantId,
-    storeStatus: resolved.storeStatus,
+    tenantId: access.tenantId,
+    storeStatus,
     actor,
     roles: [],
     permissions: [],

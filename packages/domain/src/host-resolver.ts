@@ -1,11 +1,10 @@
 import type { Db } from "@bs/db";
 import { schema } from "@bs/db";
 import { eq } from "drizzle-orm";
-import type { StoreStatus } from "./context.ts";
 
 export interface HostResolution {
   tenantId: string;
-  storeStatus: StoreStatus;
+  tenantStatus: string;
 }
 
 interface CacheEntry {
@@ -36,7 +35,7 @@ export function invalidateHostCache(host?: string): void {
 }
 
 /**
- * Resolves a hostname (from Host header) to an active tenant (PLAN §4, §5.1).
+ * Resolves a hostname (from Host header) to a tenant (PLAN §4, §5.1, §6.4).
  * Uses a 60s in-memory cache to minimize database roundtrips.
  */
 export async function resolveHostToTenant(
@@ -66,16 +65,9 @@ export async function resolveHostToTenant(
     return null;
   }
 
-  let storeStatus: StoreStatus = "live";
-  if (row.tenantStatus === "suspended") {
-    storeStatus = "maintenance";
-  } else if (row.tenantStatus !== "active" && row.tenantStatus !== "trial") {
-    return null;
-  }
-
   const resolution: HostResolution = {
     tenantId: row.tenantId,
-    storeStatus,
+    tenantStatus: row.tenantStatus,
   };
 
   hostCache.set(host, {

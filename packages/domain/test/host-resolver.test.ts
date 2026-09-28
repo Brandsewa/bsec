@@ -34,12 +34,12 @@ describe("resolveHostToTenant()", () => {
 
     // First call: hits DB
     const res1 = await resolveHostToTenant(mockDb, "alpha.gobs.cloud:3000");
-    expect(res1).toEqual({ tenantId, storeStatus: "live" });
+    expect(res1).toEqual({ tenantId, tenantStatus: "active" });
     expect(queryCount).toBe(1);
 
     // Second call with different casing/port: cache hit, no DB query
     const res2 = await resolveHostToTenant(mockDb, "ALPHA.gobs.cloud");
-    expect(res2).toEqual({ tenantId, storeStatus: "live" });
+    expect(res2).toEqual({ tenantId, tenantStatus: "active" });
     expect(queryCount).toBe(1);
 
     // Invalidate cache
@@ -47,7 +47,7 @@ describe("resolveHostToTenant()", () => {
 
     // Third call: hits DB again
     const res3 = await resolveHostToTenant(mockDb, "alpha.gobs.cloud");
-    expect(res3).toEqual({ tenantId, storeStatus: "live" });
+    expect(res3).toEqual({ tenantId, tenantStatus: "active" });
     expect(queryCount).toBe(2);
   });
 
@@ -91,7 +91,7 @@ describe("resolveHostToTenant()", () => {
     expect(res).toBeNull();
   });
 
-  it("returns maintenance status for suspended tenant", async () => {
+  it("returns suspended tenant status", async () => {
     const tenantId = "0199a000-0000-7000-8000-000000000001";
     const mockDb = {
       select: () => ({
@@ -112,6 +112,6 @@ describe("resolveHostToTenant()", () => {
     } as unknown as Db;
 
     const res = await resolveHostToTenant(mockDb, "suspended.gobs.cloud");
-    expect(res).toEqual({ tenantId, storeStatus: "maintenance" });
+    expect(res).toEqual({ tenantId, tenantStatus: "suspended" });
   });
 });

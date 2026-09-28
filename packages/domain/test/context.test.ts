@@ -14,6 +14,7 @@ describe("buildTenantContext()", () => {
   const createMockDb = (opts: {
     domainResult?: { tenantId: string; domainStatus: string; tenantStatus: string } | null;
     membershipResult?: { status: string; roleName: string; tenantStatus: string } | null;
+    statusResult?: { mode: string; [key: string]: unknown } | null;
   }) => {
     return {
       select: () => ({
@@ -36,6 +37,12 @@ describe("buildTenantContext()", () => {
           }),
           where: () => ({
             limit: async () => {
+              if (opts.statusResult !== undefined) {
+                return opts.statusResult ? [opts.statusResult] : [];
+              }
+              if (opts.domainResult) {
+                return [{ mode: "live" }];
+              }
               if (opts.membershipResult) return [opts.membershipResult];
               return [];
             },
