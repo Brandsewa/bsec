@@ -161,6 +161,59 @@ describe("M1 Schema Definitions", () => {
     const menuUniq = menuCfg.uniqueConstraints.find((u) => u.name === "menus_tenant_handle_uniq");
     expect(menuUniq).toBeDefined();
   });
+
+  it("exports M3 storefront tables", () => {
+    expect(schema.storeStatus).toBeDefined();
+    expect(schema.seoSettings).toBeDefined();
+    expect(schema.searchQueries).toBeDefined();
+    expect(schema.newsletterSubscribers).toBeDefined();
+    expect(schema.carts).toBeDefined();
+    expect(schema.cartItems).toBeDefined();
+  });
+
+  it("registers M3 storefront tables in tenantTableNames", () => {
+    const expected = [
+      "store_status",
+      "seo_settings",
+      "search_queries",
+      "newsletter_subscribers",
+      "carts",
+      "cart_items",
+    ];
+    for (const name of expected) {
+      expect(tenantTableNames.has(name), `Missing registration for ${name}`).toBe(true);
+    }
+  });
+
+  it("enforces tenant-scoped unique constraints and FKs on M3 storefront tables", () => {
+    const statusCfg = getTableConfig(schema.storeStatus);
+    expect(statusCfg.enableRLS).toBe(true);
+    expect(statusCfg.uniqueConstraints.some((u) => u.columns.map((c) => c.name).join(",") === "tenant_id")).toBe(true);
+
+    const seoCfg = getTableConfig(schema.seoSettings);
+    expect(seoCfg.enableRLS).toBe(true);
+    expect(seoCfg.uniqueConstraints.some((u) => u.columns.map((c) => c.name).join(",") === "tenant_id")).toBe(true);
+
+    const searchCfg = getTableConfig(schema.searchQueries);
+    expect(searchCfg.enableRLS).toBe(true);
+    expect(searchCfg.uniqueConstraints.some((u) => u.columns.map((c) => c.name).join(",") === "tenant_id,normalized_query,day")).toBe(true);
+
+    const newsCfg = getTableConfig(schema.newsletterSubscribers);
+    expect(newsCfg.enableRLS).toBe(true);
+    expect(newsCfg.uniqueConstraints.some((u) => u.columns.map((c) => c.name).join(",") === "tenant_id,email")).toBe(true);
+
+    const cartCfg = getTableConfig(schema.carts);
+    expect(cartCfg.enableRLS).toBe(true);
+    expect(cartCfg.uniqueConstraints.some((u) => u.columns.map((c) => c.name).join(",") === "tenant_id,token")).toBe(true);
+
+    const cartItemsCfg = getTableConfig(schema.cartItems);
+    expect(cartItemsCfg.enableRLS).toBe(true);
+    expect(cartItemsCfg.uniqueConstraints.some((u) => u.columns.map((c) => c.name).join(",") === "tenant_id,cart_id,variant_id")).toBe(true);
+    const cartFk = cartItemsCfg.foreignKeys.find((f) => f.reference().columns.map((c) => c.name).join(",") === "tenant_id,cart_id");
+    expect(cartFk?.onDelete).toBe("cascade");
+    const variantFk = cartItemsCfg.foreignKeys.find((f) => f.reference().columns.map((c) => c.name).join(",") === "tenant_id,variant_id");
+    expect(variantFk?.onDelete).toBe("restrict");
+  });
 });
 
 

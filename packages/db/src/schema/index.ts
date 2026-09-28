@@ -16,5 +16,8 @@ export * from "./settings.ts";
 export * from "./catalog.ts";
 export * from "./branding.ts";
 export * from "./content.ts";
+export * from "./search.ts";
+export * from "./marketing.ts";
+export * from "./cart.ts";
 
 
