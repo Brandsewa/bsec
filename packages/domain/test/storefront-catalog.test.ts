@@ -200,6 +200,7 @@ describe("Storefront Catalog & Search Services", () => {
         page: 1,
         limit: 10,
         sort: "price_asc",
+        inStockOnly: true,
       });
 
       expect(res).not.toBeNull();

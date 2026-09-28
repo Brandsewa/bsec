@@ -137,6 +137,7 @@ export interface CatalogListingOptions {
   page?: number | undefined;
   limit?: number | undefined;
   sort?: "price_asc" | "price_desc" | "newest" | "title" | undefined;
+  inStockOnly?: boolean | undefined;
 }
 
 /**
@@ -335,10 +336,15 @@ export async function getStorefrontCollection(
     const limit = Math.max(1, Math.min(100, opts?.limit ?? 24));
     const offset = (page - 1) * limit;
 
+    const inStockCondition = opts?.inStockOnly
+      ? sql`exists (select 1 from variants v join inventory_levels il on il.tenant_id = v.tenant_id and il.variant_id = v.id where v.tenant_id = ${schema.products.tenantId} and v.product_id = ${schema.products.id} and (il.on_hand - il.reserved) > 0)`
+      : undefined;
+
     const baseWhere = and(
       eq(schema.collectionProducts.collectionId, col.id),
       eq(schema.products.status, "published"),
       isNull(schema.products.deletedAt),
+      inStockCondition,
     );
 
     // Order clause mapping
@@ -440,10 +446,15 @@ export async function getStorefrontCategory(
     const limit = Math.max(1, Math.min(100, opts?.limit ?? 24));
     const offset = (page - 1) * limit;
 
+    const inStockCondition = opts?.inStockOnly
+      ? sql`exists (select 1 from variants v join inventory_levels il on il.tenant_id = v.tenant_id and il.variant_id = v.id where v.tenant_id = ${schema.products.tenantId} and v.product_id = ${schema.products.id} and (il.on_hand - il.reserved) > 0)`
+      : undefined;
+
     const baseWhere = and(
       eq(schema.productCategories.categoryId, cat.id),
       eq(schema.products.status, "published"),
       isNull(schema.products.deletedAt),
+      inStockCondition,
     );
 
     const minPriceSql = sql`(select min(v.price) from variants v where v.tenant_id = ${schema.products.tenantId} and v.product_id = ${schema.products.id})`;

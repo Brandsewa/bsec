@@ -128,6 +128,7 @@ export default async function CategoryDetailPage({
       page,
       limit,
       sort: sortOption,
+      inStockOnly: inStockOnly || undefined,
     });
   } catch {
     notFound();

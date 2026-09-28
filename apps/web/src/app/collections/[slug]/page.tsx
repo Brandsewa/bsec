@@ -126,6 +126,7 @@ export default async function CollectionDetailPage({
       page,
       limit,
       sort: sortOption,
+      inStockOnly: inStockOnly || undefined,
     });
   } catch {
     notFound();
