@@ -24,16 +24,58 @@ import {
 import { bootstrapRoles } from "@bs/db/bootstrap";
 import { runMigrations } from "@bs/db/migrate";
 import {
+  adjustInventory,
   assertPlatformStaff,
   buildTenantContext,
+  createBrand,
+  createCategory,
+  createCollection,
+  createMediaRecord,
+  createMenu,
+  createPage,
+  createProduct,
   createRuntime,
+  deleteBrand,
+  deleteCategory,
+  deleteCollection,
+  deleteMediaRecord,
+  deleteMenu,
+  deleteProduct,
+  getBrandSettings,
+  getCollection,
+  getMenu,
+  getPage,
   getPlatformTenant,
+  getProduct,
   getStoreSettings,
+  getTheme,
   inviteStaff,
+  listBrands,
+  listCategories,
+  listCollections,
+  listInventoryLevels,
+  listMedia,
   listMemberships,
+  listMenus,
+  listPages,
   listPlatformTenants,
+  listProducts,
   listStoreFeatureFlags,
+  publishBrandSettings,
+  publishPage,
+  requestMediaUpload,
+  rollbackPage,
+  savePageDraft,
+  updateBrand,
+  updateBrandSettings,
+  updateCategory,
+  updateCollection,
+  updateMenu,
+  updatePage,
+  updateProduct,
   updateStoreSettings,
+  updateTheme,
+  updateVariant,
   type Runtime,
   type TenantContext,
 } from "../src/index.ts";
@@ -82,6 +124,21 @@ describe("Generated Isolation Test Suite (M1 Real Postgres 18 Proof)", () => {
   const roleAdminA = "0199a000-0000-7000-8000-000000000011";
   const roleLimitedA = "0199a000-0000-7000-8000-000000000012";
   const roleAdminB = "0199a000-0000-7000-8000-000000000021";
+
+  const testLocationA = "0199a000-0000-7000-8000-000000000501";
+  const testBrandA = "0199a000-0000-7000-8000-000000000502";
+  const testCategoryA = "0199a000-0000-7000-8000-000000000503";
+  const testProductA = "0199a000-0000-7000-8000-000000000504";
+  const testVariantA = "0199a000-0000-7000-8000-000000000505";
+  const testCollectionA = "0199a000-0000-7000-8000-000000000506";
+  const testMediaA = "0199a000-0000-7000-8000-000000000507";
+  const testPageA = "0199a000-0000-7000-8000-000000000508";
+  const testVersionA = "0199a000-0000-7000-8000-000000000509";
+  const testMenuA = "0199a000-0000-7000-8000-000000000510";
+  const testMenuHandleA = "main-menu";
+
+  const testProductB = "0199a000-0000-7000-8000-000000000604";
+  const testVariantB = "0199a000-0000-7000-8000-000000000605";
 
   let rtApp: Runtime;
   let rtPlatform: Runtime;
@@ -175,14 +232,21 @@ describe("Generated Isolation Test Suite (M1 Real Postgres 18 Proof)", () => {
           tenantId: tenantA,
           name: "store_admin",
           isSystem: true,
-          permissions: ["staff.manage", "settings.write"],
+          permissions: [
+            "staff.manage",
+            "settings.write",
+            "products.read",
+            "products.write",
+            "content.write",
+            "theme.publish",
+          ],
         },
         {
           id: roleLimitedA,
           tenantId: tenantA,
           name: "store_viewer",
           isSystem: false,
-          permissions: ["products.read"],
+          permissions: ["analytics.read"],
         },
       ]);
 
@@ -206,6 +270,91 @@ describe("Generated Isolation Test Suite (M1 Real Postgres 18 Proof)", () => {
         storeName: "Alpha Store Settings",
         currency: "USD",
         timezone: "America/New_York",
+      });
+
+      await tx.insert(schema.locations).values({
+        id: testLocationA,
+        tenantId: tenantA,
+        name: "Main Warehouse",
+      });
+
+      await tx.insert(schema.brands).values({
+        id: testBrandA,
+        tenantId: tenantA,
+        name: "Acme",
+        slug: "acme",
+      });
+
+      await tx.insert(schema.categories).values({
+        id: testCategoryA,
+        tenantId: tenantA,
+        name: "Apparel",
+        slug: "apparel",
+      });
+
+      await tx.insert(schema.products).values({
+        id: testProductA,
+        tenantId: tenantA,
+        title: "Sample T-Shirt",
+        slug: "sample-t-shirt",
+        status: "active",
+      });
+
+      await tx.insert(schema.variants).values({
+        id: testVariantA,
+        tenantId: tenantA,
+        productId: testProductA,
+        sku: "TSHIRT-BLK-S",
+        title: "Small / Black",
+        price: 2999n,
+      });
+
+      await tx.insert(schema.collections).values({
+        id: testCollectionA,
+        tenantId: tenantA,
+        title: "Summer Collection",
+        slug: "summer-collection",
+        published: true,
+      });
+
+      await tx.insert(schema.media).values({
+        id: testMediaA,
+        tenantId: tenantA,
+        storageKey: "sample.png",
+        mime: "image/png",
+        bytes: 1024,
+        folder: "products",
+      });
+
+      await tx.insert(schema.pages).values({
+        id: testPageA,
+        tenantId: tenantA,
+        title: "Home Page",
+        slug: "home",
+        status: "published",
+      });
+
+      await tx.insert(schema.pageVersions).values({
+        id: testVersionA,
+        tenantId: tenantA,
+        pageId: testPageA,
+        document: { version: 1, blocks: [] },
+      });
+
+      await tx
+        .update(schema.pages)
+        .set({
+          publishedVersionId: testVersionA,
+          draftVersionId: testVersionA,
+        })
+        .where(eq(schema.pages.id, testPageA));
+
+      await tx.insert(schema.menus).values({
+        id: testMenuA,
+        tenantId: tenantA,
+        title: "Main Menu",
+        handle: testMenuHandleA,
+        items: [],
       });
     });
 
@@ -236,6 +385,23 @@ describe("Generated Isolation Test Suite (M1 Real Postgres 18 Proof)", () => {
         currency: "EUR",
         timezone: "Europe/Paris",
       });
+
+      await tx.insert(schema.products).values({
+        id: testProductB,
+        tenantId: tenantB,
+        title: "Beta Product",
+        slug: "beta-product",
+        status: "active",
+      });
+
+      await tx.insert(schema.variants).values({
+        id: testVariantB,
+        tenantId: tenantB,
+        productId: testProductB,
+        sku: "BETA-PROD",
+        title: "Beta Default",
+        price: 4999n,
+      });
     });
   }, 180_000);
 
@@ -248,12 +414,27 @@ describe("Generated Isolation Test Suite (M1 Real Postgres 18 Proof)", () => {
   });
 
   it("dynamically discovers all registered admin procedures", () => {
-    expect(adminProcedures.length).toBeGreaterThanOrEqual(5);
+    expect(adminProcedures.length).toBeGreaterThanOrEqual(40);
     expect(adminProcedures).toContain("memberships.list");
     expect(adminProcedures).toContain("memberships.invite");
     expect(adminProcedures).toContain("settings.get");
     expect(adminProcedures).toContain("settings.update");
     expect(adminProcedures).toContain("featureFlags.list");
+    expect(adminProcedures).toContain("products.list");
+    expect(adminProcedures).toContain("products.get");
+    expect(adminProcedures).toContain("products.create");
+    expect(adminProcedures).toContain("products.update");
+    expect(adminProcedures).toContain("products.delete");
+    expect(adminProcedures).toContain("variants.update");
+    expect(adminProcedures).toContain("categories.list");
+    expect(adminProcedures).toContain("collections.list");
+    expect(adminProcedures).toContain("brands.list");
+    expect(adminProcedures).toContain("inventory.list");
+    expect(adminProcedures).toContain("media.list");
+    expect(adminProcedures).toContain("branding.get");
+    expect(adminProcedures).toContain("themes.get");
+    expect(adminProcedures).toContain("pages.list");
+    expect(adminProcedures).toContain("menus.list");
   });
 
   it("dynamically discovers all registered platform procedures", () => {
@@ -280,6 +461,125 @@ describe("Generated Isolation Test Suite (M1 Real Postgres 18 Proof)", () => {
         return await updateStoreSettings(rt, ctx, { storeName: "Updated Alpha Store" });
       case "featureFlags.list":
         return await listStoreFeatureFlags(rt, ctx);
+      case "products.list":
+        return await listProducts(rt, ctx);
+      case "products.get":
+        return await getProduct(rt, ctx, { id: testProductA });
+      case "products.create":
+        return await createProduct(rt, ctx, {
+          title: `Product-${Date.now()}`,
+          variants: [{ sku: `SKU-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`, title: "Default", price: 1000 }],
+        });
+      case "products.update":
+        return await updateProduct(rt, ctx, { id: testProductA, title: "Updated Product A" });
+      case "products.delete": {
+        const p = await createProduct(rt, ctx, {
+          title: `To Delete-${Date.now()}`,
+          variants: [{ sku: `DEL-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`, title: "Default", price: 500 }],
+        });
+        return await deleteProduct(rt, ctx, { id: p.id });
+      }
+      case "variants.update":
+        return await updateVariant(rt, ctx, { id: testVariantA, price: 2500 });
+      case "categories.list":
+        return await listCategories(rt, ctx);
+      case "categories.create":
+        return await createCategory(rt, ctx, { name: `Cat-${Date.now()}` });
+      case "categories.update":
+        return await updateCategory(rt, ctx, { id: testCategoryA, name: "Updated Category" });
+      case "categories.delete": {
+        const c = await createCategory(rt, ctx, { name: `Del Cat-${Date.now()}` });
+        return await deleteCategory(rt, ctx, { id: c.id });
+      }
+      case "collections.list":
+        return await listCollections(rt, ctx);
+      case "collections.get":
+        return await getCollection(rt, ctx, { id: testCollectionA });
+      case "collections.create":
+        return await createCollection(rt, ctx, { title: `Col-${Date.now()}` });
+      case "collections.update":
+        return await updateCollection(rt, ctx, { id: testCollectionA, title: "Updated Collection" });
+      case "collections.delete": {
+        const col = await createCollection(rt, ctx, { title: `Del Col-${Date.now()}` });
+        return await deleteCollection(rt, ctx, { id: col.id });
+      }
+      case "brands.list":
+        return await listBrands(rt, ctx);
+      case "brands.create":
+        return await createBrand(rt, ctx, { name: `Brand-${Date.now()}` });
+      case "brands.update":
+        return await updateBrand(rt, ctx, { id: testBrandA, name: "Updated Brand" });
+      case "brands.delete": {
+        const b = await createBrand(rt, ctx, { name: `Del Brand-${Date.now()}` });
+        return await deleteBrand(rt, ctx, { id: b.id });
+      }
+      case "inventory.list":
+        return await listInventoryLevels(rt, ctx);
+      case "inventory.adjust":
+        return await adjustInventory(rt, ctx, {
+          variantId: testVariantA,
+          locationId: testLocationA,
+          quantityDelta: 10,
+          reason: "received",
+        });
+      case "media.list":
+        return await listMedia(rt, ctx);
+      case "media.requestUpload":
+        return await requestMediaUpload(rt, ctx, {
+          filename: "test.png",
+          mime: "image/png",
+          bytes: 1024,
+        });
+      case "media.create":
+        return await createMediaRecord(rt, ctx, {
+          storageKey: `iso-${Date.now()}-${Math.random().toString(36).slice(2, 6)}.png`,
+          mime: "image/png",
+          bytes: 1024,
+        });
+      case "media.delete": {
+        const m = await createMediaRecord(rt, ctx, {
+          storageKey: `del-${Date.now()}-${Math.random().toString(36).slice(2, 6)}.png`,
+          mime: "image/png",
+          bytes: 1024,
+        });
+        return await deleteMediaRecord(rt, ctx, { id: m.id });
+      }
+      case "branding.get":
+        return await getBrandSettings(rt, ctx);
+      case "branding.update":
+        return await updateBrandSettings(rt, ctx, { primaryColor: "#112233" });
+      case "branding.publish":
+        return await publishBrandSettings(rt, ctx);
+      case "themes.get":
+        return await getTheme(rt, ctx);
+      case "themes.update":
+        return await updateTheme(rt, ctx, { tokens: { primary: "#000" } });
+      case "pages.list":
+        return await listPages(rt, ctx);
+      case "pages.get":
+        return await getPage(rt, ctx, { id: testPageA });
+      case "pages.create":
+        return await createPage(rt, ctx, { title: `Page-${Date.now()}`, slug: `page-${Date.now()}-${Math.random().toString(36).slice(2, 6)}` });
+      case "pages.update":
+        return await updatePage(rt, ctx, { id: testPageA, title: "Updated Page" });
+      case "pages.saveDraft":
+        return await savePageDraft(rt, ctx, { id: testPageA, blocks: [] });
+      case "pages.publish":
+        return await publishPage(rt, ctx, { id: testPageA, versionId: testVersionA });
+      case "pages.rollback":
+        return await rollbackPage(rt, ctx, { id: testPageA, targetVersionId: testVersionA });
+      case "menus.list":
+        return await listMenus(rt, ctx);
+      case "menus.get":
+        return await getMenu(rt, ctx, { handle: testMenuHandleA });
+      case "menus.create":
+        return await createMenu(rt, ctx, { name: `Menu-${Date.now()}`, handle: `menu-${Date.now()}-${Math.random().toString(36).slice(2, 6)}` });
+      case "menus.update":
+        return await updateMenu(rt, ctx, { id: testMenuA, name: "Updated Menu" });
+      case "menus.delete": {
+        const menu = await createMenu(rt, ctx, { name: "Del Menu", handle: `del-${Date.now()}-${Math.random().toString(36).slice(2, 6)}` });
+        return await deleteMenu(rt, ctx, { id: menu.id });
+      }
       default:
         throw new Error(`Unmapped procedure in isolation test: ${procPath}`);
     }
@@ -326,7 +626,7 @@ describe("Generated Isolation Test Suite (M1 Real Postgres 18 Proof)", () => {
         });
 
         it("rejects with 403 Forbidden when staff user lacks the required permission (hasPermission check)", async () => {
-          // userLimited has active membership in tenantA, but only possesses ["products.read"]
+          // userLimited has active membership in tenantA, but only possesses ["analytics.read"]
           const limitedCtx = await buildTenantContext(rtApp._db.db, {
             entryPath: "admin",
             headers: { "x-store-id": tenantA },
@@ -336,9 +636,9 @@ describe("Generated Isolation Test Suite (M1 Real Postgres 18 Proof)", () => {
             },
           });
           expect(limitedCtx).not.toBeNull();
-          expect(limitedCtx!.permissions).toEqual(["products.read"]);
+          expect(limitedCtx!.permissions).toEqual(["analytics.read"]);
 
-          // Procedure execution fails because userLimited lacks staff.manage / settings.write
+          // Procedure execution fails because userLimited lacks required permissions
           await expect(
             executeAdminProcedure(proc, rtApp, limitedCtx!),
           ).rejects.toThrow(/forbidden: missing required permission/i);
@@ -356,7 +656,14 @@ describe("Generated Isolation Test Suite (M1 Real Postgres 18 Proof)", () => {
           expect(authCtx).not.toBeNull();
           expect(authCtx!.tenantId).toBe(tenantA);
           expect(authCtx!.actor).toEqual({ type: "staff", userId: userA });
-          expect(authCtx!.permissions).toEqual(["staff.manage", "settings.write"]);
+          expect(authCtx!.permissions).toEqual([
+            "staff.manage",
+            "settings.write",
+            "products.read",
+            "products.write",
+            "content.write",
+            "theme.publish",
+          ]);
 
           const result = await executeAdminProcedure(proc, rtApp, authCtx!);
           expect(result).toBeDefined();
@@ -457,6 +764,48 @@ describe("Generated Isolation Test Suite (M1 Real Postgres 18 Proof)", () => {
 
       const unisolatedMemberships = await dbRw.db.select().from(schema.memberships);
       expect(unisolatedMemberships).toEqual([]);
+
+      const unisolatedProducts = await dbRw.db.select().from(schema.products);
+      expect(unisolatedProducts).toEqual([]);
+
+      const unisolatedPages = await dbRw.db.select().from(schema.pages);
+      expect(unisolatedPages).toEqual([]);
+    });
+
+    it("proves direct query under tenant A cannot read M2 rows belonging to tenant B", async () => {
+      const bProductsUnderA = await withTenant(dbRw.db, tenantA, async (tx) => {
+        return await tx
+          .select()
+          .from(schema.products)
+          .where(eq(schema.products.tenantId, tenantB));
+      });
+      expect(bProductsUnderA).toEqual([]);
+
+      const allProductsUnderA = await withTenant(dbRw.db, tenantA, async (tx) => {
+        return await tx.select().from(schema.products);
+      });
+      expect(allProductsUnderA.length).toBeGreaterThanOrEqual(1);
+      for (const p of allProductsUnderA) {
+        expect(p.tenantId).toBe(tenantA);
+      }
+    });
+
+    it("proves direct insert of M2 records under tenant A with tenant B ID is rejected by Postgres RLS WITH CHECK", async () => {
+      let threw = false;
+      try {
+        await withTenant(dbRw.db, tenantA, async (tx) => {
+          await tx.insert(schema.products).values({
+            tenantId: tenantB, // Poisoned tenant ID
+            title: "Malicious Cross-Tenant Product",
+            slug: "malicious-cross-tenant-product",
+          });
+        });
+      } catch (err: unknown) {
+        threw = true;
+        const msg = String(err) + " " + String((err as { cause?: { message?: string } })?.cause?.message ?? "");
+        expect(msg).toMatch(/violates row-level security policy/i);
+      }
+      expect(threw).toBe(true);
     });
 
     it("proves app_platform (BYPASSRLS) can view all tenants across stores", async () => {
