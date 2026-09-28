@@ -28,4 +28,33 @@ describe("Admin Catalog & Inventory Routes", () => {
     expect(mod.Route.options.pendingComponent).toBeDefined();
     expect(mod.Route.options.component).toBeDefined();
   });
+
+  it("exports valid Route definition with pendingComponent for online-store theme", async () => {
+    const mod = await import("../src/routes/_store/online-store/theme.tsx");
+    expect(mod.Route).toBeDefined();
+    expect(mod.Route.options.pendingComponent).toBeDefined();
+    expect(mod.Route.options.component).toBeDefined();
+  });
+
+  it("exports valid Route definition with pendingComponent for online-store pages", async () => {
+    const mod = await import("../src/routes/_store/online-store/pages.tsx");
+    expect(mod.Route).toBeDefined();
+    expect(mod.Route.options.pendingComponent).toBeDefined();
+    expect(mod.Route.options.component).toBeDefined();
+  });
+
+  it("exports valid Route definition with pendingComponent for online-store menus", async () => {
+    const mod = await import("../src/routes/_store/online-store/menus.tsx");
+    expect(mod.Route).toBeDefined();
+    expect(mod.Route.options.pendingComponent).toBeDefined();
+    expect(mod.Route.options.component).toBeDefined();
+  });
+
+  it("exports valid Route definition with pendingComponent for settings branding", async () => {
+    const mod = await import("../src/routes/_store/settings/branding.tsx");
+    expect(mod.Route).toBeDefined();
+    expect(mod.Route.options.pendingComponent).toBeDefined();
+    expect(mod.Route.options.component).toBeDefined();
+  });
 });
+

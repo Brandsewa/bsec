@@ -1,5 +1,5 @@
 import { Outlet, createFileRoute, useRouterState } from "@tanstack/react-router";
-import { Home, Package, Settings, ShoppingBag, Users, Warehouse } from "lucide-react";
+import { FileText, Home, Menu, Package, Palette, Settings, ShoppingBag, Sparkles, Users, Warehouse } from "lucide-react";
 import { AppShell, PageSkeleton, type NavGroup } from "@bs/ui";
 
 /** Store admin shell (PLAN §8). Store switcher, permissions and real data arrive in M1+. */
@@ -14,8 +14,23 @@ const nav: NavGroup[] = [
       { label: "Customers", href: "/customers", icon: Users },
     ],
   },
-  { items: [{ label: "Settings", href: "/settings", icon: Settings }] },
+  {
+    label: "Online Store",
+    items: [
+      { label: "Themes", href: "/online-store/theme", icon: Palette },
+      { label: "Pages", href: "/online-store/pages", icon: FileText },
+      { label: "Navigation", href: "/online-store/menus", icon: Menu },
+    ],
+  },
+  {
+    label: "Settings",
+    items: [
+      { label: "General", href: "/settings", icon: Settings },
+      { label: "Branding", href: "/settings/branding", icon: Sparkles },
+    ],
+  },
 ];
+
 
 export const Route = createFileRoute("/_store")({
   pendingComponent: () => <PageSkeleton />,
