@@ -73,4 +73,55 @@ describe("M1 Schema Definitions", () => {
     expect(uniq).toBeDefined();
     expect(uniq?.columns.map((c) => c.name)).toEqual(["tenant_id", "name"]);
   });
+
+  it("exports all expected M2 catalog, inventory, and media tables", () => {
+    expect(schema.products).toBeDefined();
+    expect(schema.productOptions).toBeDefined();
+    expect(schema.variants).toBeDefined();
+    expect(schema.productMedia).toBeDefined();
+    expect(schema.categories).toBeDefined();
+    expect(schema.productCategories).toBeDefined();
+    expect(schema.collections).toBeDefined();
+    expect(schema.collectionProducts).toBeDefined();
+    expect(schema.brands).toBeDefined();
+    expect(schema.locations).toBeDefined();
+    expect(schema.inventoryLevels).toBeDefined();
+    expect(schema.inventoryMovements).toBeDefined();
+    expect(schema.media).toBeDefined();
+  });
+
+  it("registers M2 catalog tables in tenantTableNames", () => {
+    const expected = [
+      "products",
+      "product_options",
+      "variants",
+      "product_media",
+      "categories",
+      "product_categories",
+      "collections",
+      "collection_products",
+      "brands",
+      "locations",
+      "inventory_levels",
+      "inventory_movements",
+      "media",
+    ];
+    for (const name of expected) {
+      expect(tenantTableNames.has(name), `Missing registration for ${name}`).toBe(true);
+    }
+  });
+
+  it("enforces composite foreign keys on catalog relationships", () => {
+    const variantCfg = getTableConfig(schema.variants);
+    const prodFk = variantCfg.foreignKeys.find((f) => f.getName() === "variants_product_fk");
+    expect(prodFk).toBeDefined();
+    expect(prodFk?.reference().columns.map((c) => c.name)).toEqual(["tenant_id", "product_id"]);
+    expect(prodFk?.reference().foreignColumns.map((c) => c.name)).toEqual(["tenant_id", "id"]);
+
+    const invCfg = getTableConfig(schema.inventoryLevels);
+    const variantFk = invCfg.foreignKeys.find((f) => f.getName() === "inventory_levels_variant_fk");
+    expect(variantFk).toBeDefined();
+    expect(variantFk?.reference().columns.map((c) => c.name)).toEqual(["tenant_id", "variant_id"]);
+  });
 });
+

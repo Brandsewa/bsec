@@ -13,3 +13,5 @@ export const platformMeta = pgTable("_platform_meta", {
 export * from "./platform.ts";
 export * from "./identity.ts";
 export * from "./settings.ts";
+export * from "./catalog.ts";
+
