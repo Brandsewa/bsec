@@ -5,6 +5,17 @@
 import { PutObjectCommand, S3Client } from "@aws-sdk/client-s3";
 import { getSignedUrl } from "@aws-sdk/s3-request-presigner";
 
+/**
+ * Copies bytes into a fresh, plain ArrayBuffer. Node's Buffer/Uint8Array are typed as
+ * Uint8Array<ArrayBufferLike>, which includes SharedArrayBuffer and so isn't directly
+ * assignable to BlobPart's ArrayBuffer-only requirement under strict lib.dom typings.
+ */
+function toArrayBuffer(data: Uint8Array | Buffer): ArrayBuffer {
+  const out = new ArrayBuffer(data.byteLength);
+  new Uint8Array(out).set(data);
+  return out;
+}
+
 export const ALLOWED_IMAGE_MIMES = [
   "image/jpeg",
   "image/png",
@@ -283,7 +294,7 @@ export async function uploadToCloudflareImages(params: {
   const blob =
     params.file instanceof Blob
       ? params.file
-      : new Blob([params.file as Uint8Array]);
+      : new Blob([toArrayBuffer(params.file as Uint8Array | Buffer)]);
   formData.append("file", blob, params.filename);
 
   if (params.metadata) {
