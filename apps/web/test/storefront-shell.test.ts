@@ -52,6 +52,30 @@ describe("Storefront Shell & Components", () => {
       expect(vars["--font-body"]).toBe("Roboto");
       expect(vars["--radius"]).toBe("0.75rem");
     });
+
+    it("sanitizes malicious or malformed CSS values and safely falls back to defaults", () => {
+      const vars = computeThemeTokens({
+        primaryColor: "; } body { display: none }",
+        secondaryColor: "javascript:alert(1)",
+        accentColor: "expression(alert(1))",
+        backgroundColor: "red; background: url('https://evil.com/x.jpg')",
+        surfaceColor: "#xyz123",
+        textColor: "rgb(255, 0, 0); } * { display: none; }",
+        fontHeading: "Arial; } * { color: red; }",
+        fontBody: "Inter, sans-serif; font-size: 100px",
+        cornerRadius: "20px; } body { opacity: 0; }",
+      });
+
+      expect(vars["--color-primary"]).toBe("#0f172a");
+      expect(vars["--color-secondary"]).toBe("#334155");
+      expect(vars["--color-accent"]).toBe("#2563eb");
+      expect(vars["--color-background"]).toBe("#ffffff");
+      expect(vars["--color-surface"]).toBe("#f8fafc");
+      expect(vars["--color-text"]).toBe("#0f172a");
+      expect(vars["--font-heading"]).toBe("Inter");
+      expect(vars["--font-body"]).toBe("Inter");
+      expect(vars["--radius"]).toBe("0.5rem");
+    });
   });
 
   describe("StoreHeader", () => {

@@ -76,6 +76,7 @@ export function ComingSoonScreen({
               type="email"
               name="email"
               required
+              aria-label="Email address"
               placeholder="Enter your email"
               className="w-full rounded-md border border-gray-300 px-4 py-2 text-sm focus:border-black focus:outline-none"
             />
@@ -174,6 +175,7 @@ export function PasswordScreen({ storeName = "Store", error }: PasswordScreenPro
             type="password"
             name="password"
             required
+            aria-label="Store password"
             placeholder="Store password"
             className="w-full rounded-md border border-gray-300 px-4 py-2 text-sm focus:border-black focus:outline-none"
           />

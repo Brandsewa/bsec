@@ -30,58 +30,91 @@ const RADIUS_MAP: Record<string, string> = {
   full: "9999px",
 };
 
+const HEX_COLOR_REGEX = /^#(?:[0-9a-fA-F]{3,4}|[0-9a-fA-F]{6}|[0-9a-fA-F]{8})$/;
+const RGB_HSL_COLOR_REGEX =
+  /^(?:rgb|rgba|hsl|hsla)\(\s*[\d.]+%?\s*,\s*[\d.]+%?\s*,\s*[\d.]+%?(?:\s*,\s*[\d.]+%)?\s*\)$/i;
+const FONT_SAFE_REGEX = /^[a-zA-Z0-9\s,_-]+$/;
+const DIMENSION_RADIUS_REGEX = /^\d+(\.\d+)?(px|rem|em|%)$/;
+
+function sanitizeColor(val: unknown, fallback: string): string {
+  if (typeof val !== "string") return fallback;
+  const trimmed = val.trim();
+  if (HEX_COLOR_REGEX.test(trimmed) || RGB_HSL_COLOR_REGEX.test(trimmed)) {
+    return trimmed;
+  }
+  return fallback;
+}
+
+function sanitizeFont(val: unknown, fallback: string): string {
+  if (typeof val !== "string") return fallback;
+  const trimmed = val.trim();
+  if (
+    trimmed.includes(";") ||
+    trimmed.includes("{") ||
+    trimmed.includes("}") ||
+    trimmed.includes("url") ||
+    trimmed.includes("import") ||
+    trimmed.includes('"') ||
+    trimmed.includes("'")
+  ) {
+    return fallback;
+  }
+  if (!FONT_SAFE_REGEX.test(trimmed)) {
+    return fallback;
+  }
+  return trimmed;
+}
+
+function sanitizeRadius(val: unknown, fallback: string): string {
+  if (typeof val !== "string") return fallback;
+  const trimmed = val.trim();
+  const mapped = RADIUS_MAP[trimmed];
+  if (mapped) {
+    return mapped;
+  }
+  if (DIMENSION_RADIUS_REGEX.test(trimmed)) {
+    return trimmed;
+  }
+  return fallback;
+}
+
 export function computeThemeTokens(
   brandSettings?: BrandSettingsLike | null,
   themeTokens?: ThemeTokensLike | null,
 ): Record<string, string> {
   const brandRadiusKey =
     brandSettings?.cornerRadius ?? brandSettings?.radius ?? "md";
-  const mappedRadius =
-    RADIUS_MAP[brandRadiusKey] ?? (typeof brandRadiusKey === "string" ? brandRadiusKey : "0.5rem");
+
+  const rawRadius =
+    typeof themeTokens?.radius === "string"
+      ? themeTokens.radius
+      : typeof brandRadiusKey === "string"
+        ? brandRadiusKey
+        : "md";
 
   const colors = (themeTokens?.colors as Record<string, string | undefined>) ?? {};
 
-  const primary =
-    brandSettings?.primaryColor ||
-    colors["primary"] ||
-    "#0f172a";
+  const rawPrimary = brandSettings?.primaryColor || colors["primary"];
+  const rawSecondary = brandSettings?.secondaryColor || colors["secondary"];
+  const rawAccent = brandSettings?.accentColor || colors["accent"];
+  const rawBackground = brandSettings?.backgroundColor || colors["background"];
+  const rawSurface = brandSettings?.surfaceColor || colors["surface"];
+  const rawText = brandSettings?.textColor || colors["text"];
 
-  const secondary =
-    brandSettings?.secondaryColor ||
-    colors["secondary"] ||
-    "#334155";
+  const rawFontHeading = brandSettings?.fontHeading || themeTokens?.fonts?.heading;
+  const rawFontBody = brandSettings?.fontBody || themeTokens?.fonts?.body;
 
-  const accent =
-    brandSettings?.accentColor ||
-    colors["accent"] ||
-    "#2563eb";
+  const primary = sanitizeColor(rawPrimary, "#0f172a");
+  const secondary = sanitizeColor(rawSecondary, "#334155");
+  const accent = sanitizeColor(rawAccent, "#2563eb");
+  const background = sanitizeColor(rawBackground, "#ffffff");
+  const surface = sanitizeColor(rawSurface, "#f8fafc");
+  const text = sanitizeColor(rawText, "#0f172a");
 
-  const background =
-    brandSettings?.backgroundColor ||
-    colors["background"] ||
-    "#ffffff";
+  const fontHeading = sanitizeFont(rawFontHeading, "Inter");
+  const fontBody = sanitizeFont(rawFontBody, "Inter");
 
-  const surface =
-    brandSettings?.surfaceColor ||
-    colors["surface"] ||
-    "#f8fafc";
-
-  const text =
-    brandSettings?.textColor ||
-    colors["text"] ||
-    "#0f172a";
-
-  const fontHeading =
-    brandSettings?.fontHeading ||
-    themeTokens?.fonts?.heading ||
-    "Inter";
-
-  const fontBody =
-    brandSettings?.fontBody ||
-    themeTokens?.fonts?.body ||
-    "Inter";
-
-  const radius = themeTokens?.radius || mappedRadius;
+  const radius = sanitizeRadius(rawRadius, "0.5rem");
 
   return {
     "--color-primary": primary,

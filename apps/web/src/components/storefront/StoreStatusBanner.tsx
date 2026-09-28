@@ -13,7 +13,8 @@ export function StoreStatusBanner({ isBypass, mode }: StoreStatusBannerProps) {
 
   return (
     <div
-      role="banner"
+      role="status"
+      aria-label="Staff preview notice"
       className="sticky top-0 z-50 flex items-center justify-between border-b border-amber-300 bg-amber-100 px-4 py-2 text-center text-xs font-medium text-amber-900 shadow-sm"
     >
       <div className="mx-auto flex items-center gap-2">

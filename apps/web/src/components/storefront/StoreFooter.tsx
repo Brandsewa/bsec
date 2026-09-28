@@ -102,6 +102,7 @@ export function StoreFooter({ storeName = "Store" }: StoreFooterProps) {
                 type="email"
                 name="email"
                 required
+                aria-label="Email address"
                 placeholder="Enter your email"
                 className="w-full rounded border px-3 py-1.5 text-xs outline-none focus:ring-1 focus:ring-[var(--color-primary,#0f172a)]"
                 style={{

@@ -109,13 +109,16 @@ export default async function RootLayout({ children }: { children: ReactNode }) 
     );
   }
 
+  const storeName = "Store";
+  const logoWidth = typeof brandSettings?.logoWidth === "number" ? brandSettings.logoWidth : 150;
+
   return (
     <html lang="en" style={themeVars as React.CSSProperties}>
       <body className="flex min-h-dvh flex-col antialiased">
         <StoreStatusBanner isBypass={access.isBypass} mode={access.mode} />
-        <StoreHeader />
+        <StoreHeader storeName={storeName} logoWidth={logoWidth} />
         <main className="flex-1">{children}</main>
-        <StoreFooter />
+        <StoreFooter storeName={storeName} />
       </body>
     </html>
   );
