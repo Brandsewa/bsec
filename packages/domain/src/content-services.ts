@@ -1,4 +1,4 @@
-import { desc, eq } from "drizzle-orm";
+import { and, desc, eq } from "drizzle-orm";
 import { schema, withTenant } from "@bs/db";
 import { validateBlockDocument } from "@bs/blocks";
 import type { Runtime } from "./runtime.ts";
@@ -438,3 +438,185 @@ export async function deleteMenu(rt: Runtime, ctx: TenantContext, input: { id: s
     return { success: true };
   });
 }
+
+// --- Storefront Public Content Services ---
+
+export interface StorefrontPageDetail {
+  id: string;
+  slug: string;
+  title: string;
+  type: string;
+  seo: unknown;
+  publishedAt?: string | undefined;
+  document: {
+    version: 1;
+    blocks: unknown[];
+  };
+}
+
+/**
+ * Retrieves a published page by slug for storefront visitor rendering.
+ */
+export async function getStorefrontPage(
+  rt: Runtime,
+  ctx: TenantContext,
+  slug: string,
+): Promise<StorefrontPageDetail | null> {
+  const db = rt._db.db;
+
+  return withTenant(db, ctx.tenantId, async (tx) => {
+    const [p] = await tx
+      .select()
+      .from(schema.pages)
+      .where(
+        and(
+          eq(schema.pages.slug, slug),
+          eq(schema.pages.status, "published"),
+        ),
+      )
+      .limit(1);
+
+    if (!p || !p.publishedVersionId) {
+      return null;
+    }
+
+    const [ver] = await tx
+      .select()
+      .from(schema.pageVersions)
+      .where(eq(schema.pageVersions.id, p.publishedVersionId))
+      .limit(1);
+
+    const doc = (ver?.document as { version?: 1; blocks?: unknown[] } | null) ?? {
+      version: 1,
+      blocks: [],
+    };
+
+    return {
+      id: p.id,
+      slug: p.slug,
+      title: p.title,
+      type: p.type,
+      seo: p.seo,
+      publishedAt: p.updatedAt.toISOString(),
+      document: {
+        version: 1,
+        blocks: Array.isArray(doc.blocks) ? doc.blocks : [],
+      },
+    };
+  });
+}
+
+/**
+ * Retrieves published home page document or default starter blocks if no page authored yet.
+ */
+export async function getStorefrontHomePage(
+  rt: Runtime,
+  ctx: TenantContext,
+): Promise<{
+  id?: string;
+  title: string;
+  seo?: unknown;
+  document: { version: 1; blocks: unknown[] };
+}> {
+  const db = rt._db.db;
+
+  const publishedHome = await withTenant(db, ctx.tenantId, async (tx) => {
+    const [p] = await tx
+      .select()
+      .from(schema.pages)
+      .where(
+        and(
+          eq(schema.pages.type, "home"),
+          eq(schema.pages.status, "published"),
+        ),
+      )
+      .limit(1);
+
+    if (!p || !p.publishedVersionId) {
+      return null;
+    }
+
+    const [ver] = await tx
+      .select()
+      .from(schema.pageVersions)
+      .where(eq(schema.pageVersions.id, p.publishedVersionId))
+      .limit(1);
+
+    const doc = (ver?.document as { version?: 1; blocks?: unknown[] } | null) ?? {
+      version: 1,
+      blocks: [],
+    };
+
+    return {
+      id: p.id,
+      title: p.title,
+      seo: p.seo,
+      document: {
+        version: 1 as const,
+        blocks: Array.isArray(doc.blocks) ? doc.blocks : [],
+      },
+    };
+  });
+
+  if (publishedHome && publishedHome.document.blocks.length > 0) {
+    return publishedHome;
+  }
+
+  // Default starter blocks if no home page authored yet
+  return {
+    title: "Home",
+    document: {
+      version: 1,
+      blocks: [
+        {
+          id: "default-hero",
+          type: "Hero",
+          version: 1,
+          props: {
+            title: "Welcome to Our Store",
+            subtitle: "Discover our handcrafted collection of high-quality products.",
+            ctaText: "Shop All",
+            ctaLink: "/collections",
+            alignment: "center",
+          },
+        },
+        {
+          id: "default-usp",
+          type: "UspStrip",
+          version: 1,
+          props: {
+            items: [
+              { icon: "Truck", title: "Free Shipping", description: "On orders above ₹999 across India" },
+              { icon: "ShieldCheck", title: "100% Authentic", description: "Direct from verified makers" },
+              { icon: "RotateCcw", title: "Easy Returns", description: "7-day seamless exchange guarantee" },
+              { icon: "Headphones", title: "Dedicated Support", description: "Friendly support via WhatsApp" },
+            ],
+          },
+        },
+        {
+          id: "default-grid",
+          type: "ProductGrid",
+          version: 1,
+          props: {
+            title: "Featured Products",
+            subtitle: "Explore our latest arrivals",
+            limit: 8,
+            columns: "4",
+          },
+        },
+        {
+          id: "default-newsletter",
+          type: "Newsletter",
+          version: 1,
+          props: {
+            title: "Subscribe to Our Newsletter",
+            subtitle: "Get updates on new releases, special discounts, and seasonal collections.",
+            buttonText: "Subscribe",
+            placeholder: "Enter your email address",
+          },
+        },
+      ],
+    },
+  };
+}
+

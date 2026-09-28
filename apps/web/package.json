@@ -13,6 +13,7 @@
   },
   "dependencies": {
     "@bs/auth": "workspace:*",
+    "@bs/blocks": "workspace:*",
     "@bs/contracts": "workspace:*",
     "@bs/domain": "workspace:*",
     "@orpc/openapi": "1.15.4",

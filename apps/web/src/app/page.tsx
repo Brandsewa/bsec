@@ -1,34 +1,135 @@
-import { Suspense } from "react";
-import { connection } from "next/server";
+import type { Metadata } from "next";
+import { headers } from "next/headers";
+import {
+  evaluateStorefrontAccess,
+  getStorefrontHomePage,
+  generateWebSiteJsonLd,
+  generateOrganizationJsonLd,
+  getStoreSettings,
+} from "@bs/domain";
+import { renderBlockDocument } from "@bs/blocks";
+import { server } from "@/server/runtime.ts";
+import { BlockRenderer } from "@/components/blocks/BlockRenderer.tsx";
 
-/**
- * M0 placeholder. Demonstrates the storefront rendering model (PLAN §10, §12):
- * a static shell served instantly, with request-time parts inside Suspense + skeletons.
- * Host → tenant resolution and real blocks arrive in M1/M3.
- */
-export default function Home() {
-  return (
-    <main className="mx-auto grid max-w-5xl gap-8 px-4 py-10">
-      <header className="flex items-center justify-between">
-        <span className="text-lg font-semibold">Bs Commerce</span>
-        <Suspense fallback={<span aria-hidden className="store-skeleton inline-block h-6 w-16" />}>
-          <CartBadge />
-        </Suspense>
-      </header>
-      <section className="grid gap-3">
-        <h1 className="text-3xl font-semibold tracking-tight">Platform boots.</h1>
-        <p className="text-base opacity-80">Milestone M0: storefront shell, Store API at /api, skeletons on every route.</p>
-      </section>
-    </main>
-  );
+export async function generateMetadata(): Promise<Metadata> {
+  let title = "Home";
+  const description = "Welcome to our store.";
+
+  try {
+    const h = await headers();
+    const host = h.get("x-forwarded-host") ?? h.get("host") ?? "localhost";
+    const { rt } = server();
+    const access = await evaluateStorefrontAccess(rt, host, { headers: h });
+
+    if (access.tenantId) {
+      const tenantCtx = {
+        tenantId: access.tenantId,
+        storeStatus: access.mode ?? "live",
+        actor: { type: "system" as const },
+        roles: ["store_admin"],
+        permissions: ["settings.write", "content.write", "theme.publish"],
+        requestId: crypto.randomUUID(),
+      };
+      const homePage = await getStorefrontHomePage(rt, tenantCtx);
+      if (homePage.title) {
+        title = homePage.title;
+      }
+    }
+  } catch {
+    // Non-fatal fallback for static compilation / mock setups
+  }
+
+  return {
+    title,
+    description,
+  };
 }
 
-/** Stand-in for the per-visitor cart badge: request-time, so it streams into its Suspense hole. */
-async function CartBadge() {
-  await connection();
+export default async function HomePage() {
+  let blocksToRender = [] as ReturnType<typeof renderBlockDocument>["blocks"];
+  let host = "localhost";
+  let storeName = "Store";
+  const logoUrl: string | null = null;
+
+  try {
+    const h = await headers();
+    host = h.get("x-forwarded-host") ?? h.get("host") ?? "localhost";
+    const { rt } = server();
+    const access = await evaluateStorefrontAccess(rt, host, { headers: h });
+
+    if (access.tenantId) {
+      const tenantCtx = {
+        tenantId: access.tenantId,
+        storeStatus: access.mode ?? "live",
+        actor: { type: "system" as const },
+        roles: ["store_admin"],
+        permissions: ["settings.write", "content.write", "theme.publish"],
+        requestId: crypto.randomUUID(),
+      };
+
+      const [homeData, storeSettingsData] = await Promise.all([
+        getStorefrontHomePage(rt, tenantCtx).catch(() => null),
+        getStoreSettings(rt, tenantCtx).catch(() => null),
+      ]);
+
+      if (homeData) {
+        const renderResult = renderBlockDocument(homeData.document);
+        if (renderResult.success) {
+          blocksToRender = renderResult.blocks;
+        }
+      }
+
+      if (storeSettingsData?.storeName) {
+        storeName = storeSettingsData.storeName;
+      }
+    }
+  } catch {
+    // Fallback default blocks if DB unconfigured during build
+    const defaultDoc = {
+      version: 1,
+      blocks: [
+        {
+          id: "fallback-hero",
+          type: "Hero" as const,
+          version: 1,
+          props: {
+            title: "Welcome to Our Store",
+            subtitle: "Discover our handcrafted collection of high-quality products.",
+            ctaText: "Shop All",
+            ctaLink: "/collections",
+          },
+        },
+      ],
+    };
+    const res = renderBlockDocument(defaultDoc);
+    if (res.success) {
+      blocksToRender = res.blocks;
+    }
+  }
+
+  const storeUrl = `https://${host}`;
+  const webSiteJsonLd = generateWebSiteJsonLd({
+    name: storeName,
+    url: storeUrl,
+  });
+
+  const orgJsonLd = generateOrganizationJsonLd({
+    name: storeName,
+    url: storeUrl,
+    logoUrl,
+  });
+
   return (
-    <span className="rounded-full bg-store-muted px-3 py-1 text-sm" aria-label="Cart, 0 items">
-      Cart · 0
-    </span>
+    <main className="w-full min-h-[60vh]">
+      <script
+        type="application/ld+json"
+        dangerouslySetInnerHTML={{ __html: JSON.stringify(webSiteJsonLd) }}
+      />
+      <script
+        type="application/ld+json"
+        dangerouslySetInnerHTML={{ __html: JSON.stringify(orgJsonLd) }}
+      />
+      <BlockRenderer blocks={blocksToRender} />
+    </main>
   );
 }

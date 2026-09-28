@@ -142,6 +142,9 @@ importers:
       '@bs/auth':
         specifier: workspace:*
         version: link:../../packages/auth
+      '@bs/blocks':
+        specifier: workspace:*
+        version: link:../../packages/blocks
       '@bs/contracts':
         specifier: workspace:*
         version: link:../../packages/contracts
