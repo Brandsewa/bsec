@@ -29,8 +29,10 @@ export interface BlockInstance {
   type: BlockType;
   version: number;
   props: Record<string, unknown>;
+  hidden?: boolean | undefined;
 }
 
 export interface BlockDocument {
+  version: 1;
   blocks: BlockInstance[];
 }
