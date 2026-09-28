@@ -115,7 +115,7 @@ export const categories = tenantTable(
     tenantForeignKey({
       tableTenantId: t.tenantId,
       column: t.parentId,
-      target: categories,
+      target: { tenantId: t.tenantId, id: t.id },
       name: "categories_parent_fk",
       onDelete: "set null",
     }),

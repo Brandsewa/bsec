@@ -123,5 +123,44 @@ describe("M1 Schema Definitions", () => {
     expect(variantFk).toBeDefined();
     expect(variantFk?.reference().columns.map((c) => c.name)).toEqual(["tenant_id", "variant_id"]);
   });
+
+  it("exports branding, theme, pages, and menus tables", () => {
+    expect(schema.brandSettings).toBeDefined();
+    expect(schema.themes).toBeDefined();
+    expect(schema.pages).toBeDefined();
+    expect(schema.pageVersions).toBeDefined();
+    expect(schema.menus).toBeDefined();
+  });
+
+  it("registers branding and content tables in tenantTableNames", () => {
+    const expected = [
+      "brand_settings",
+      "themes",
+      "pages",
+      "page_versions",
+      "menus",
+    ];
+    for (const name of expected) {
+      expect(tenantTableNames.has(name), `Missing registration for ${name}`).toBe(true);
+    }
+  });
+
+  it("enforces tenant-scoped unique constraints on brand_settings, pages, and menus", () => {
+    const brandCfg = getTableConfig(schema.brandSettings);
+    expect(brandCfg.enableRLS).toBe(true);
+    const brandUniq = brandCfg.uniqueConstraints.find((u) => u.name === "brand_settings_tenant_id_uniq");
+    expect(brandUniq).toBeDefined();
+
+    const pageCfg = getTableConfig(schema.pages);
+    expect(pageCfg.enableRLS).toBe(true);
+    const pageUniq = pageCfg.uniqueConstraints.find((u) => u.name === "pages_tenant_slug_uniq");
+    expect(pageUniq).toBeDefined();
+
+    const menuCfg = getTableConfig(schema.menus);
+    expect(menuCfg.enableRLS).toBe(true);
+    const menuUniq = menuCfg.uniqueConstraints.find((u) => u.name === "menus_tenant_handle_uniq");
+    expect(menuUniq).toBeDefined();
+  });
 });
+
 

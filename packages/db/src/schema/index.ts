@@ -14,4 +14,7 @@ export * from "./platform.ts";
 export * from "./identity.ts";
 export * from "./settings.ts";
 export * from "./catalog.ts";
+export * from "./branding.ts";
+export * from "./content.ts";
+
 
