@@ -1,4 +1,4 @@
-import { and, asc, desc, eq, isNull, sql } from "drizzle-orm";
+import { and, asc, desc, eq, inArray, isNull, sql } from "drizzle-orm";
 import { schema, withTenant } from "@bs/db";
 import type { Runtime } from "../runtime.ts";
 import type { TenantContext } from "../context.ts";
@@ -211,7 +211,7 @@ export async function getStorefrontProduct(
           lowStockThreshold: schema.inventoryLevels.lowStockThreshold,
         })
         .from(schema.inventoryLevels)
-        .where(sql`${schema.inventoryLevels.variantId} IN ${variantIds}`)) ?? [];
+        .where(inArray(schema.inventoryLevels.variantId, variantIds))) ?? [];
 
       if (Array.isArray(invRows)) {
         for (const inv of invRows) {
@@ -389,6 +389,12 @@ export async function getStorefrontCollection(
     const productIds = productList.map((p) => p.id);
     const summaryItems = await buildProductSummaries(tx, productIds, productList);
 
+    if (opts?.sort === "price_asc") {
+      summaryItems.sort((a, b) => a.priceMin - b.priceMin);
+    } else if (opts?.sort === "price_desc") {
+      summaryItems.sort((a, b) => b.priceMax - a.priceMax);
+    }
+
     return {
       collection: {
         id: col.id,
@@ -489,6 +495,12 @@ export async function getStorefrontCategory(
     const productIds = productList.map((p) => p.id);
     const summaryItems = await buildProductSummaries(tx, productIds, productList);
 
+    if (opts?.sort === "price_asc") {
+      summaryItems.sort((a, b) => a.priceMin - b.priceMin);
+    } else if (opts?.sort === "price_desc") {
+      summaryItems.sort((a, b) => b.priceMax - a.priceMax);
+    }
+
     return {
       category: {
         id: cat.id,
@@ -529,7 +541,7 @@ export async function buildProductSummaries(
         compareAtPrice: schema.variants.compareAtPrice,
       })
       .from(schema.variants)
-      .where(sql`${schema.variants.productId} IN ${productIds}`)) ?? [];
+      .where(inArray(schema.variants.productId, productIds))) ?? [];
 
   const pricesByProduct: Record<
     string,
@@ -573,20 +585,17 @@ export async function buildProductSummaries(
   }
 
   // Query primary media
-  const mediaQuery = tx
-    .select({
-      productId: schema.productMedia.productId,
-      mediaId: schema.productMedia.mediaId,
-      alt: schema.productMedia.alt,
-      position: schema.productMedia.position,
-    })
-    .from(schema.productMedia)
-    .where(sql`${schema.productMedia.productId} IN ${productIds}`);
-
   const mediaRows =
-    (await (typeof mediaQuery?.orderBy === "function"
-      ? mediaQuery.orderBy(schema.productMedia.position)
-      : mediaQuery)) ?? [];
+    (await tx
+      .select({
+        productId: schema.productMedia.productId,
+        mediaId: schema.productMedia.mediaId,
+        alt: schema.productMedia.alt,
+        position: schema.productMedia.position,
+      })
+      .from(schema.productMedia)
+      .where(inArray(schema.productMedia.productId, productIds))
+      .orderBy(schema.productMedia.position)) ?? [];
 
   const mediaByProduct: Record<string, { mediaId: string; alt: string | null }> = {};
   if (Array.isArray(mediaRows)) {

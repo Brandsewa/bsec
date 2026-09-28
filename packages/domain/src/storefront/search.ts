@@ -35,8 +35,9 @@ export async function searchStorefrontProducts(
   }
 
   const db = rt._db.db;
+  const escapedQuery = normalizedQuery.replace(/[%_\\]/g, "\\$&");
 
-  return withTenant(db, ctx.tenantId, async (tx) => {
+  const searchResult = await withTenant(db, ctx.tenantId, async (tx) => {
     const page = Math.max(1, opts?.page ?? 1);
     const limit = Math.max(1, Math.min(100, opts?.limit ?? 24));
     const offset = (page - 1) * limit;
@@ -46,7 +47,7 @@ export async function searchStorefrontProducts(
     const searchFilter = sql`(
       ${schema.products.searchVector} @@ websearch_to_tsquery('english', ${normalizedQuery})
       OR ${schema.products.title} % ${normalizedQuery}
-      OR ${schema.products.title} ILIKE ${`%${normalizedQuery}%`}
+      OR ${schema.products.title} ILIKE ${`%${escapedQuery}%`}
     )`;
 
     const baseWhere = and(
@@ -72,34 +73,6 @@ export async function searchStorefrontProducts(
       .where(baseWhere);
 
     const total = Number(countRows[0]?.count ?? rows.length);
-
-    // Log query into search_queries table with daily aggregation
-    try {
-      await tx
-        .insert(schema.searchQueries)
-        .values({
-          tenantId: ctx.tenantId,
-          query: rawQuery.trim(),
-          normalizedQuery,
-          resultsCount: total,
-          day: sql`CURRENT_DATE`,
-          count: 1,
-        })
-        .onConflictDoUpdate({
-          target: [
-            schema.searchQueries.tenantId,
-            schema.searchQueries.normalizedQuery,
-            schema.searchQueries.day,
-          ],
-          set: {
-            count: sql`${schema.searchQueries.count} + 1`,
-            resultsCount: sql`excluded.results_count`,
-          },
-        });
-    } catch {
-      // Don't fail the user query if logging fails (e.g. in test mocks or minor issues)
-    }
-
     const productIds = rows.map((r) => r.id);
     const items = await buildProductSummaries(tx, productIds, rows);
 
@@ -108,6 +81,36 @@ export async function searchStorefrontProducts(
       total,
     };
   });
+
+  // Log query into search_queries table with daily aggregation in an isolated tenant transaction
+  // so any logging failure or db issue never fails the search response or aborts the search tx
+  withTenant(db, ctx.tenantId, async (tx) => {
+    await tx
+      .insert(schema.searchQueries)
+      .values({
+        tenantId: ctx.tenantId,
+        query: rawQuery.trim(),
+        normalizedQuery,
+        resultsCount: searchResult.total,
+        day: sql`CURRENT_DATE`,
+        count: 1,
+      })
+      .onConflictDoUpdate({
+        target: [
+          schema.searchQueries.tenantId,
+          schema.searchQueries.normalizedQuery,
+          schema.searchQueries.day,
+        ],
+        set: {
+          count: sql`${schema.searchQueries.count} + 1`,
+          resultsCount: sql`excluded.results_count`,
+        },
+      });
+  }).catch(() => {
+    // Non-blocking: search logging must never break search operations
+  });
+
+  return searchResult;
 }
 
 /**
@@ -122,6 +125,7 @@ export async function getSearchSuggestions(
   const normalized = partial.trim().toLowerCase();
   if (!normalized) return [];
 
+  const escaped = normalized.replace(/[%_\\]/g, "\\$&");
   const db = rt._db.db;
 
   return withTenant(db, ctx.tenantId, async (tx) => {
@@ -133,7 +137,7 @@ export async function getSearchSuggestions(
       .from(schema.products)
       .where(
         and(
-          ilike(schema.products.title, `%${normalized}%`),
+          ilike(schema.products.title, `%${escaped}%`),
           eq(schema.products.status, "published"),
           isNull(schema.products.deletedAt),
         ),

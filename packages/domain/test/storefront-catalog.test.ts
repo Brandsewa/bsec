@@ -134,23 +134,35 @@ describe("Storefront Catalog & Search Services", () => {
             execute: async () => {},
             select: () => ({
               from: () => ({
-                where: () => ({
-                  limit: () => [
+                where: () => {
+                  const items = [
                     {
-                      id: collectionId,
-                      title: "Summer Collection",
-                      slug: "summer-collection",
-                      type: "manual",
-                      rules: null,
-                      sortOrder: "manual",
-                      imageMediaId: null,
-                      seo: null,
-                      published: true,
-                      createdAt: new Date(),
-                      updatedAt: new Date(),
+                      id: "prod-1",
+                      title: "Summer Shirt",
+                      slug: "summer-shirt",
+                      status: "published",
+                      deletedAt: null,
                     },
-                  ],
-                }),
+                  ];
+                  return Object.assign(items, {
+                    limit: () => [
+                      {
+                        id: collectionId,
+                        title: "Summer Collection",
+                        slug: "summer-collection",
+                        type: "manual",
+                        rules: null,
+                        sortOrder: "manual",
+                        imageMediaId: null,
+                        seo: null,
+                        published: true,
+                        createdAt: new Date(),
+                        updatedAt: new Date(),
+                      },
+                    ],
+                    orderBy: () => items,
+                  });
+                },
                 innerJoin: () => ({
                   where: () => ({
                     orderBy: () => ({
@@ -196,20 +208,32 @@ describe("Storefront Catalog & Search Services", () => {
             execute: async () => {},
             select: () => ({
               from: () => ({
-                where: () => ({
-                  limit: () => [
+                where: () => {
+                  const items = [
                     {
-                      id: categoryId,
-                      parentId: null,
-                      name: "Electronics",
-                      slug: "electronics",
-                      description: "Electronic gadgets",
-                      position: 0,
-                      createdAt: new Date(),
-                      updatedAt: new Date(),
+                      id: "prod-2",
+                      title: "Smartphone",
+                      slug: "smartphone",
+                      status: "published",
+                      deletedAt: null,
                     },
-                  ],
-                }),
+                  ];
+                  return Object.assign(items, {
+                    limit: () => [
+                      {
+                        id: categoryId,
+                        parentId: null,
+                        name: "Electronics",
+                        slug: "electronics",
+                        description: "Electronic gadgets",
+                        position: 0,
+                        createdAt: new Date(),
+                        updatedAt: new Date(),
+                      },
+                    ],
+                    orderBy: () => items,
+                  });
+                },
                 innerJoin: () => ({
                   where: () => ({
                     orderBy: () => ({
@@ -268,23 +292,26 @@ describe("Storefront Catalog & Search Services", () => {
             execute: async () => {},
             select: () => ({
               from: () => ({
-                where: () => ({
-                  orderBy: () => ({
-                    limit: () => ({
-                      offset: () => [
-                        {
-                          id: "prod-1",
-                          title: "Wireless Mouse",
-                          slug: "wireless-mouse",
-                          shortDescription: "Ergonomic mouse",
-                          status: "published",
-                          ratingAvg: "4.20",
-                          ratingCount: 5,
-                        },
-                      ],
+                where: () => {
+                  const items = [
+                    {
+                      id: "prod-1",
+                      title: "Wireless Mouse",
+                      slug: "wireless-mouse",
+                      shortDescription: "Ergonomic mouse",
+                      status: "published",
+                      ratingAvg: "4.20",
+                      ratingCount: 5,
+                    },
+                  ];
+                  return Object.assign(items, {
+                    orderBy: () => ({
+                      limit: () => ({
+                        offset: () => items,
+                      }),
                     }),
-                  }),
-                }),
+                  });
+                },
               }),
             }),
             insert: () => ({
@@ -333,4 +360,69 @@ describe("Storefront Catalog & Search Services", () => {
       ]);
     });
   });
+
+  describe("price sorting", () => {
+    it("sorts products by price_asc and price_desc", async () => {
+      const collectionId = "0199a000-0000-7000-8000-000000000100";
+      const mockDb = {
+        transaction: async (cb: (tx: unknown) => Promise<unknown>) => {
+          return cb({
+            execute: async () => {},
+            select: () => ({
+              from: () => ({
+                where: () => {
+                  const variants = [
+                    { productId: "prod-high", price: "100.00" },
+                    { productId: "prod-low", price: "20.00" },
+                  ];
+                  return Object.assign(variants, {
+                    limit: () => [
+                      {
+                        id: collectionId,
+                        title: "Summer",
+                        slug: "summer",
+                        type: "manual",
+                        rules: null,
+                        sortOrder: "manual",
+                        imageMediaId: null,
+                        seo: null,
+                        published: true,
+                        createdAt: new Date(),
+                        updatedAt: new Date(),
+                      },
+                    ],
+                    orderBy: () => [],
+                  });
+                },
+                innerJoin: () => ({
+                  where: () => ({
+                    orderBy: () => ({
+                      limit: () => ({
+                        offset: () => [
+                          { id: "prod-high", title: "Expensive Shirt", slug: "exp-shirt", status: "published", deletedAt: null },
+                          { id: "prod-low", title: "Cheap Shirt", slug: "cheap-shirt", status: "published", deletedAt: null },
+                        ],
+                      }),
+                    }),
+                  }),
+                }),
+              }),
+            }),
+          });
+        },
+      } as unknown as Db;
+
+      const rt = createMockRuntime(mockDb);
+      const ascRes = await getStorefrontCollection(rt, publicCtx, "summer", {
+        sort: "price_asc",
+      });
+      expect(ascRes?.products.items.map((i) => i.id)).toEqual(["prod-low", "prod-high"]);
+
+      const descRes = await getStorefrontCollection(rt, publicCtx, "summer", {
+        sort: "price_desc",
+      });
+      expect(descRes?.products.items.map((i) => i.id)).toEqual(["prod-high", "prod-low"]);
+    });
+  });
 });
+
