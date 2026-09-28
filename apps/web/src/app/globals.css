@@ -1,0 +1,39 @@
+/*
+ * Storefront + marketing styles. The storefront does NOT use the admin (Supabase-pattern) tokens;
+ * per-store theme tokens are injected as CSS variables in M2/M3 (PLAN §10, §12).
+ */
+@import "tailwindcss";
+
+:root {
+  --store-bg: #ffffff;
+  --store-fg: #16201b;
+  --store-muted: #eef2ef;
+  --store-primary: #0b6b42;
+}
+
+@theme inline {
+  --color-store-bg: var(--store-bg);
+  --color-store-fg: var(--store-fg);
+  --color-store-muted: var(--store-muted);
+  --color-store-primary: var(--store-primary);
+}
+
+body {
+  background: var(--store-bg);
+  color: var(--store-fg);
+  font-family: ui-sans-serif, system-ui, sans-serif;
+}
+
+@keyframes store-shimmer {
+  from { opacity: 1; }
+  50% { opacity: 0.55; }
+  to { opacity: 1; }
+}
+.store-skeleton {
+  background: var(--store-muted);
+  border-radius: 0.5rem;
+  animation: store-shimmer 1.4s ease-in-out infinite;
+}
+@media (prefers-reduced-motion: reduce) {
+  .store-skeleton { animation: none; }
+}

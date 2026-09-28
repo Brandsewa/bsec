@@ -1,0 +1,36 @@
+{
+  "name": "@bs/db",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts",
+    "./schema": "./src/schema/index.ts",
+    "./tenant-table": "./src/tenant-table.ts"
+  },
+  "scripts": {
+    "typecheck": "tsc -p tsconfig.json",
+    "lint": "eslint .",
+    "test": "vitest run",
+    "bootstrap": "tsx src/scripts/bootstrap-roles.ts",
+    "migrate": "tsx src/scripts/migrate.ts",
+    "generate": "drizzle-kit generate",
+    "build": "node build.js"
+  },
+  "dependencies": {
+    "drizzle-orm": "0.45.3",
+    "pg": "8.23.0",
+    "pg-boss": "12.35.0"
+  },
+  "devDependencies": {
+    "@bs/config": "workspace:*",
+    "@types/node": "24.19.0",
+    "@types/pg": "8.23.1",
+    "@testcontainers/postgresql": "12.1.0",
+    "drizzle-kit": "0.31.11",
+    "eslint": "10.11.0",
+    "tsx": "4.23.15",
+    "typescript": "6.0.3",
+    "vitest": "5.0.2"
+  }
+}

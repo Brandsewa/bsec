@@ -1,0 +1,52 @@
+<!doctype html>
+<html lang="en" data-theme="light">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+    <meta name="robots" content="noindex" />
+    <title>Bs Commerce Admin</title>
+    <script>
+      // Resolve the stored theme before first paint (light default, PLAN §12).
+      try {
+        var t = localStorage.getItem("bs-theme") || "light";
+        if (t === "system") t = matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light";
+        document.documentElement.dataset.theme = t;
+      } catch (e) {}
+    </script>
+    <style>
+      /* Static shell skeleton: paints before any JavaScript downloads (PLAN §12). Replaced on mount. */
+      :root { --s-bg: #fbfcfb; --s-side: #f6f8f7; --s-line: #e3e8e5; --s-fill: #eceff0; }
+      [data-theme="dark"] { --s-bg: #131815; --s-side: #111512; --s-line: #262d29; --s-fill: #222a26; }
+      html, body { margin: 0; background: var(--s-bg); }
+      #boot { display: grid; grid-template-columns: 15rem 1fr; min-height: 100dvh; }
+      #boot aside { background: var(--s-side); border-right: 1px solid var(--s-line); padding: 12px; }
+      #boot header { height: 48px; border-bottom: 1px solid var(--s-line); background: var(--s-bg); }
+      #boot .b { background: var(--s-fill); border-radius: 6px; margin: 0 0 10px; }
+      #boot .page { max-width: 72rem; margin: 0 auto; padding: 24px 32px; }
+      @media (max-width: 767px) { #boot { grid-template-columns: 1fr; } #boot aside { display: none; } #boot .page { padding: 24px 16px; } }
+    </style>
+  </head>
+  <body>
+    <div id="root">
+      <div id="boot" aria-busy="true" aria-label="Loading">
+        <aside>
+          <div class="b" style="height: 20px; width: 120px; margin-bottom: 24px"></div>
+          <div class="b" style="height: 16px; width: 80%"></div>
+          <div class="b" style="height: 16px; width: 70%"></div>
+          <div class="b" style="height: 16px; width: 75%"></div>
+          <div class="b" style="height: 16px; width: 60%"></div>
+        </aside>
+        <div>
+          <header></header>
+          <div class="page">
+            <div class="b" style="height: 16px; width: 160px; margin-bottom: 24px"></div>
+            <div class="b" style="height: 24px; width: 224px"></div>
+            <div class="b" style="height: 16px; width: 320px; max-width: 100%; margin-bottom: 24px"></div>
+            <div class="b" style="height: 240px; width: 100%"></div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <script type="module" src="/src/main.tsx"></script>
+  </body>
+</html>

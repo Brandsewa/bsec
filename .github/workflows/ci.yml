@@ -1,0 +1,114 @@
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  check:
+    name: typecheck · lint · test
+    runs-on: ubuntu-24.04
+    services:
+      postgres:
+        image: postgres:18
+        env:
+          POSTGRES_DB: bsec
+          POSTGRES_PASSWORD: postgres
+        ports: ["5432:5432"]
+        options: >-
+          --health-cmd "pg_isready -U postgres -d bsec"
+          --health-interval 5s --health-timeout 3s --health-retries 20
+    env:
+      # Integration tests use this instead of starting Testcontainers.
+      TEST_DATABASE_URL_SUPERUSER: postgres://postgres:postgres@localhost:5432/bsec
+    steps:
+      - uses: actions/checkout@v5
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v5
+        with:
+          node-version-file: .nvmrc
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm typecheck
+      - run: pnpm lint
+      - run: pnpm test
+      - run: pnpm build
+
+  images:
+    name: build images → GHCR
+    needs: check
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: read
+      packages: write
+    strategy:
+      fail-fast: true
+      matrix:
+        app: [web, platform, worker, admin, migrate]
+    steps:
+      - uses: actions/checkout@v5
+      - uses: docker/setup-buildx-action@v3
+      - uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - id: meta
+        uses: docker/metadata-action@v5
+        with:
+          # ghcr.io/brandsewa/bsec-<app>; image names must be lowercase.
+          images: ghcr.io/${{ github.repository_owner }}/bsec-${{ matrix.app }}
+          tags: |
+            type=sha,format=long
+            type=raw,value=main
+      - uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: infra/docker/${{ matrix.app }}.Dockerfile
+          push: true
+          platforms: linux/amd64
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          build-args: |
+            APP_VERSION=${{ github.sha }}
+          cache-from: type=gha,scope=${{ matrix.app }}
+          cache-to: type=gha,mode=max,scope=${{ matrix.app }}
+
+  deploy-staging:
+    name: deploy staging (Coolify)
+    needs: images
+    runs-on: ubuntu-24.04
+    environment: staging
+    steps:
+      # Coolify pulls the new :sha tags. Webhook URL + token are environment secrets (RUNBOOK §5).
+      - name: Trigger Coolify deploy
+        env:
+          COOLIFY_WEBHOOK: ${{ secrets.COOLIFY_STAGING_WEBHOOK }}
+          COOLIFY_TOKEN: ${{ secrets.COOLIFY_TOKEN }}
+        run: |
+          if [ -z "$COOLIFY_WEBHOOK" ]; then echo "::warning::COOLIFY_STAGING_WEBHOOK not set; skipping"; exit 0; fi
+          curl -fsS -X GET "$COOLIFY_WEBHOOK" -H "Authorization: Bearer $COOLIFY_TOKEN"
+
+  deploy-production:
+    name: deploy production (Coolify, manual approval)
+    needs: deploy-staging
+    runs-on: ubuntu-24.04
+    # Required reviewers on the "production" environment gate this job.
+    environment: production
+    steps:
+      - name: Trigger Coolify deploy
+        env:
+          COOLIFY_WEBHOOK: ${{ secrets.COOLIFY_PRODUCTION_WEBHOOK }}
+          COOLIFY_TOKEN: ${{ secrets.COOLIFY_TOKEN }}
+        run: |
+          if [ -z "$COOLIFY_WEBHOOK" ]; then echo "::warning::COOLIFY_PRODUCTION_WEBHOOK not set; skipping"; exit 0; fi
+          curl -fsS -X GET "$COOLIFY_WEBHOOK" -H "Authorization: Bearer $COOLIFY_TOKEN"

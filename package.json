@@ -1,0 +1,22 @@
+{
+  "name": "bsec",
+  "private": true,
+  "packageManager": "pnpm@10.34.5",
+  "engines": { "node": ">=24.15.0 <25" },
+  "scripts": {
+    "build": "turbo run build",
+    "dev": "turbo run dev",
+    "typecheck": "turbo run typecheck",
+    "lint": "turbo run lint",
+    "test": "turbo run test",
+    "db:migrate": "pnpm --filter @bs/db migrate",
+    "db:generate": "pnpm --filter @bs/db generate"
+  },
+  "devDependencies": {
+    "@types/node": "24.19.0",
+    "eslint": "10.11.0",
+    "turbo": "2.11.5",
+    "typescript": "6.0.3",
+    "vitest": "5.0.2"
+  }
+}

@@ -1,0 +1,996 @@
+<title>Bs Commerce Platform Plan</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,600;12..96,700&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap">
+<style>
+:root{
+  --paper:#f6f8f6; --panel:#ffffff; --ink:#18221d; --muted:#5b6a62; --rule:#dbe3de;
+  --accent:#0b6b42; --accent-soft:#e3f1ea; --code:#eef2ef; --warn:#9a5b00; --warn-soft:#fbf0dc;
+  --later:#5b4aa8; --later-soft:#ecE9fa;
+}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){
+  color-scheme:dark;--paper:#0f1512;--panel:#151d19;--ink:#e3ebe6;--muted:#95a59c;--rule:#26332c;
+  --accent:#4fc38b;--accent-soft:#16301f;--code:#1a241f;--warn:#e7b14f;--warn-soft:#2e2412;--later:#a99cf0;--later-soft:#221e38;}}
+:root[data-theme="dark"]{
+  color-scheme:dark;--paper:#0f1512;--panel:#151d19;--ink:#e3ebe6;--muted:#95a59c;--rule:#26332c;
+  --accent:#4fc38b;--accent-soft:#16301f;--code:#1a241f;--warn:#e7b14f;--warn-soft:#2e2412;--later:#a99cf0;--later-soft:#221e38;}
+*{box-sizing:border-box}
+body{background:var(--paper);color:var(--ink);font:15px/1.6 "IBM Plex Sans",system-ui,sans-serif;padding-inline:16px;padding-block:0 64px}
+.wrap{max-width:1180px;margin:0 auto;display:grid;grid-template-columns:220px minmax(0,1fr);gap:48px}
+nav.toc{position:sticky;top:calc(env(safe-area-inset-top,0px) + 24px);align-self:start;font-size:13px;padding-top:40px}
+nav.toc a{display:block;color:var(--muted);text-decoration:none;padding:3px 0;border-left:2px solid var(--rule);padding-left:12px}
+nav.toc a:hover,nav.toc a:focus-visible{color:var(--accent);border-color:var(--accent);outline:none}
+nav.toc .lbl{font-size:11px;letter-spacing:.08em;text-transform:uppercase;color:var(--muted);margin-bottom:8px;display:block}
+main{min-width:0}
+header.top{padding-block:40px 28px;border-bottom:1px solid var(--rule);margin-bottom:8px}
+.eyebrow{font-size:12px;letter-spacing:.09em;text-transform:uppercase;color:var(--accent);font-weight:600}
+h1,h2,h3{font-family:"Bricolage Grotesque","IBM Plex Sans",system-ui,sans-serif;text-wrap:balance;line-height:1.15}
+h1{font-size:40px;margin:8px 0 12px}
+h2{font-size:27px;margin:56px 0 12px;padding-top:8px}
+h3{font-size:19px;margin:32px 0 8px}
+h4{font-size:14px;margin:20px 0 6px;letter-spacing:.02em}
+p,li{max-width:72ch}
+.lede{font-size:17px;color:var(--muted);max-width:68ch}
+.meta{display:flex;flex-wrap:wrap;gap:8px 20px;font-size:13px;color:var(--muted);margin-top:16px}
+.meta b{color:var(--ink);font-weight:600}
+code,.mono{font-family:"IBM Plex Mono",ui-monospace,monospace;font-size:.86em}
+code{background:var(--code);padding:1px 5px;border-radius:3px}
+pre{background:var(--code);padding:14px 16px;border-radius:6px;overflow-x:auto;font:12.5px/1.55 "IBM Plex Mono",ui-monospace,monospace;margin:12px 0}
+.tbl{overflow-x:auto;margin:12px 0 4px;border:1px solid var(--rule);border-radius:6px;background:var(--panel)}
+table{border-collapse:collapse;width:100%;font-size:13.5px}
+th,td{text-align:left;padding:8px 12px;border-bottom:1px solid var(--rule);vertical-align:top}
+th{font-size:11.5px;letter-spacing:.06em;text-transform:uppercase;color:var(--muted);font-weight:600;background:var(--paper)}
+tr:last-child td{border-bottom:0}
+td.t{font-family:"IBM Plex Mono",monospace;font-size:12.5px;font-weight:500;white-space:nowrap;color:var(--accent)}
+td.c{font-family:"IBM Plex Mono",monospace;font-size:12px;color:var(--ink)}
+.pill{display:inline-block;font-size:11px;font-weight:600;padding:1px 8px;border-radius:99px;background:var(--accent-soft);color:var(--accent);white-space:nowrap}
+.pill.later{background:var(--later-soft);color:var(--later)}
+.pill.warn{background:var(--warn-soft);color:var(--warn)}
+.note{border:1px solid var(--rule);background:var(--panel);border-radius:6px;padding:12px 16px;margin:14px 0;font-size:14px}
+.note.warn{border-color:transparent;background:var(--warn-soft)}
+.note b{font-weight:600}
+.grid2{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:16px}
+.card{border:1px solid var(--rule);background:var(--panel);border-radius:6px;padding:14px 16px}
+.card h4{margin-top:0}
+.card ul{margin:0;padding-left:18px;font-size:14px}
+.phase{border-top:1px solid var(--rule);padding-top:4px}
+.phase h3 .wk{font-family:"IBM Plex Mono",monospace;font-size:13px;color:var(--muted);font-weight:400;margin-left:8px}
+.exit{font-size:14px;background:var(--accent-soft);border-radius:6px;padding:10px 14px;margin-top:8px}
+.exit b{color:var(--accent)}
+ul.tight li{margin:2px 0}
+.legend{display:flex;gap:12px;flex-wrap:wrap;font-size:12.5px;color:var(--muted);margin:8px 0}
+@media (max-width:900px){.wrap{grid-template-columns:1fr;gap:0}nav.toc{display:none}.grid2{grid-template-columns:1fr}h1{font-size:31px}}
+@media (prefers-reduced-motion:reduce){*{scroll-behavior:auto!important}}
+html{scroll-behavior:smooth}
+</style>
+
+<div class="wrap">
+<nav class="toc" aria-label="Contents">
+  <span class="lbl">Contents</span>
+  <a href="#goals">1. Goals and scope</a>
+  <a href="#stack">2. Final tech stack</a>
+  <a href="#arch">3. Architecture</a>
+  <a href="#tenancy">4. Tenancy and security</a>
+  <a href="#schema">5. Database schema</a>
+  <a href="#super">6. Super Admin</a>
+  <a href="#signup">7. Signup page</a>
+  <a href="#admin">8. Store Admin</a>
+  <a href="#customer">9. Customer account</a>
+  <a href="#front">10. Storefront</a>
+  <a href="#api">11. API and correctness</a>
+  <a href="#design">12. Design system</a>
+  <a href="#phases">13. Milestones</a>
+  <a href="#infra">14. Infra and capacity</a>
+  <a href="#quality">15. Testing and quality</a>
+  <a href="#migrate">16. Migrating store #1</a>
+  <a href="#risks">17. Risks</a>
+</nav>
+
+<main>
+<header class="top">
+  <div class="eyebrow">Implementation plan · rebuild from scratch</div>
+  <h1>Bs Commerce multi-tenant platform</h1>
+  <p class="lede">One modular-monolith platform that runs many independent Indian D2C stores on shared infrastructure. Each store has its own domain, theme, catalog, staff and customers. A store is a row of data; it is never a new server or app.</p>
+  <div class="meta"><span><b>Version</b> 2.0 · 28 Sep 2026 (audit changes applied)</span><span><b>Starting infra</b> 2 vCPU / 8 GB VPS, Ubuntu 24.04, Coolify</span><span><b>Team assumption</b> 1–2 developers with AI assistance</span><span><b>Delivery</b> 10 milestones (M0–M9), exit criteria not dates</span></div>
+</header>
+
+<section id="goals">
+<h2>1. Goals and scope</h2>
+<p><b>Guiding rule:</b> make one real store's commerce loop production-ready first (domain → product → cart → checkout → Razorpay/COD → order → stock → Shiprocket → invoice → notification → return/refund), migrate Bs Ecommerce onto it, then turn the proven engine into a self-service SaaS.</p>
+<div class="grid2">
+  <div class="card"><h4>V0 · Internal platform (M0–M6)</h4><ul class="tight">
+    <li>Tenancy, staff logins and roles</li>
+    <li>Catalog, variants, categories, collections, inventory, media</li>
+    <li>Theme tokens, branding, home page sections, menus, pages</li>
+    <li>Storefront, cart, checkout, guest checkout</li>
+    <li>Razorpay, COD, orders, Shiprocket, GST invoices, returns, email</li>
+    <li>Customer accounts (OTP login, orders, addresses, wishlist)</li>
+    <li>Store status modes, indexing switch, basic SEO</li>
+    <li>Store #1 (Bs Ecommerce) live on the new platform</li>
+  </ul></div>
+  <div class="card"><h4>V1 · SaaS launch (M7–M9)</h4><ul class="tight">
+    <li>Self-signup one-pager, trial, templates</li>
+    <li>Custom domains (Cloudflare for SaaS)</li>
+    <li>Merchant billing, plans, size tiers, quotas</li>
+    <li>Super Admin: tenants, domains, usage, audit, support sessions, exports, per-store feature flags</li>
+    <li>Load, noisy-neighbour and concurrency tests passed</li>
+  </ul></div>
+</div>
+<div class="card" style="margin-top:16px"><h4>Deferred to V1.5 or later</h4><ul class="tight">
+  <li>Full app library (catalog, versions, rollouts, installs). V1 uses per-store feature flags instead (6.2).</li>
+  <li>Puck visual editor, WhatsApp, SMS, AI tools</li>
+  <li>Finance ledger, Razorpay Route settlements, POS, multi-warehouse transfers, B2B quotes</li>
+  <li>Advanced SEO: SEO score, Search Console / Bing integration, IndexNow, <code>llms.txt</code></li>
+  <li>Advanced analytics, Expo mobile apps, Typesense, Valkey, separate API container for storefront traffic</li>
+</ul></div>
+<p>Ideas borrowed as <em>layout and feature references</em> from Storify v2.3 (no code copied): split settings pages, the Online Store section, theme token editor with live preview, one-time token links, abandoned-cart recovery, search analytics, stock history. Gaps in the current Bs Ecommerce admin that this plan closes: no roles, placeholder theme page, no inventory ledger, no collections table, demo-data fallbacks.</p>
+</section>
+
+<section id="stack">
+<h2>2. Final tech stack</h2>
+<div class="legend"><span><span class="pill">Day 1</span> runs on the current VPS</span><span><span class="pill later">Later</span> added when a trigger is hit</span></div>
+<div class="tbl"><table>
+<tr><th>Layer</th><th>Decision</th><th></th></tr>
+<tr><td>Monorepo</td><td>Turborepo + pnpm workspaces</td><td><span class="pill">Day 1</span></td></tr>
+<tr><td>Runtime</td><td>Node 24 LTS everywhere, TypeScript strict, Zod</td><td><span class="pill">Day 1</span></td></tr>
+<tr><td>Storefront + marketing site</td><td>Next.js 16 App Router, <code>cacheComponents: true</code>, Server Components + Suspense, small client islands</td><td><span class="pill">Day 1</span></td></tr>
+<tr><td>Admin apps</td><td>Vite + React 19 + TanStack Router/Query/Table + React Hook Form (one SPA, two shells: store admin and super admin)</td><td><span class="pill">Day 1</span></td></tr>
+<tr><td>API</td><td>Hono + oRPC + Zod contracts → OpenAPI. Store API mounted inside Next at <code>/api</code>; <b>Platform API in its own container</b> with its own DB credentials</td><td><span class="pill">Day 1</span></td></tr>
+<tr><td>Database</td><td>PostgreSQL 18, Drizzle ORM + drizzle-kit migrations, <code>uuidv7()</code> keys, <code>pg_trgm</code>, <code>citext</code></td><td><span class="pill">Day 1</span></td></tr>
+<tr><td>Tenancy</td><td>Host → tenant resolver → TenantContext → RLS (<code>SET LOCAL app.tenant_id</code>, non-owner role, <code>FORCE RLS</code>) → tenant-scoped FKs</td><td><span class="pill">Day 1</span></td></tr>
+<tr><td>Search</td><td>Postgres FTS + trigram → Typesense (shared collection, scoped keys)</td><td><span class="pill">Day 1</span> → <span class="pill later">Later</span></td></tr>
+<tr><td>Jobs / events</td><td>pg-boss; jobs enqueued in the same transaction (transactional outbox); idempotency keys</td><td><span class="pill">Day 1</span></td></tr>
+<tr><td>Cache</td><td>Next cache with <code>cacheTag</code> per tenant + Cloudflare CDN → Valkey shared cache handler</td><td><span class="pill">Day 1</span> → <span class="pill later">Later</span></td></tr>
+<tr><td>Auth</td><td>Better Auth (email+password, OTP, Google, passkeys, 2FA). Separate auth instances for staff and store customers</td><td><span class="pill">Day 1</span></td></tr>
+<tr><td>Media</td><td>Cloudflare R2 (presigned uploads) + Cloudflare Images delivery</td><td><span class="pill">Day 1</span></td></tr>
+<tr><td>Domains</td><td>Cloudflare for SaaS custom hostnames; fallback <code>{slug}.bscommerce.in</code></td><td><span class="pill">Day 1</span></td></tr>
+<tr><td>Payments</td><td>Payment adapter → Razorpay, COD → Stripe, Razorpay Route</td><td><span class="pill">Day 1</span> → <span class="pill later">Later</span></td></tr>
+<tr><td>Shipping</td><td>Shipping adapter → Shiprocket, pincode serviceability, flat/zone rates</td><td><span class="pill">Day 1</span></td></tr>
+<tr><td>Email / messaging</td><td>Resend + React Email → WhatsApp Cloud API, SMS</td><td><span class="pill">Day 1</span> → <span class="pill later">Later</span></td></tr>
+<tr><td>Content</td><td>Versioned component registry, JSON page documents; section ordering in V1 → Puck editor</td><td><span class="pill">Day 1</span> → <span class="pill later">Later</span></td></tr>
+<tr><td>UI</td><td>Tailwind 4, shadcn/ui, Motion, design tokens as CSS variables per theme</td><td><span class="pill">Day 1</span></td></tr>
+<tr><td>Observability</td><td>Sentry, Better Stack logs + uptime, pino with request_id/tenant_id → OTel + Grafana</td><td><span class="pill">Day 1</span> → <span class="pill later">Later</span></td></tr>
+<tr><td>CI/CD</td><td>GitHub Actions builds images → GHCR → Coolify pulls. Never build on the VPS</td><td><span class="pill">Day 1</span></td></tr>
+<tr><td>Feature flags</td><td>Platform-controlled, per-store, audited flags (<code>feature_flags</code> + overrides); used heavily during store #1 migration</td><td><span class="pill">Day 1</span></td></tr>
+<tr><td>Decisions</td><td>Architecture Decision Records in <code>docs/adr/</code></td><td><span class="pill">Day 1</span></td></tr>
+<tr><td>Mobile</td><td>Expo + Expo Router + EAS, consuming the same oRPC contracts</td><td><span class="pill later">Later</span></td></tr>
+</table></div>
+<p><b>Rejected:</b> Bun runtime, Kubernetes, microservices, Kafka, index-per-tenant search, merchant-editable code (Liquid/JSX).</p>
+</section>
+
+<section id="arch">
+<h2>3. Architecture</h2>
+<pre>Cloudflare  (DNS · SaaS custom hostnames + SSL · CDN · WAF · Images)
+    │
+Production VPS 2c/8GB · Ubuntu 24.04 · Coolify (pull-only from GHCR)
+ ├── web        Next.js 16 ─┬─ storefront      (any tenant host)
+ │                          ├─ marketing site  (bscommerce.in: landing + signup)
+ │                          └─ /api/*          Store API: storefront, admin, public routers   DB role: app_rw (RLS)
+ ├── platform   Hono Platform API  (private, platform.bscommerce.in, Cloudflare Access)      DB role: app_platform
+ ├── admin      Vite SPA static files   admin.bscommerce.in  (store admin + /platform super admin)
+ ├── worker     pg-boss consumers (tenant jobs as app_rw; lifecycle/export jobs via platform functions)
+ └── postgres   PG 18, not exposed publicly · pgBackRest + WAL archive → R2
+Staging VPS (separate, small) · same images, own database, seeded test stores
+External: R2 · Resend · Razorpay · Shiprocket · Sentry · Better Stack</pre>
+
+<h3>Repository layout</h3>
+<pre>apps/
+  web/            Next.js: storefront, marketing + signup, /api mount
+  admin/          Vite SPA: store admin + platform (super admin) shells
+  platform/       Hono Platform API (super admin), separate container
+  worker/         pg-boss job runner
+  mobile/         Expo (later)
+packages/
+  db/             Drizzle schema, migrations, RLS policies, withTenant(), seeds
+  contracts/      oRPC + Zod contracts (storefront, admin, platform, webhooks)
+  domain/         modules: catalog, inventory, cart, checkout, orders, customers,
+                  discounts, content, themes, tenants, billing, analytics
+  auth/           Better Auth configs (staff, customer), RBAC permission map
+  payments/       PaymentProvider interface + razorpay, cod, stripe
+  shipping/       ShippingProvider interface + shiprocket, manual
+  storage/        R2 presign, media metadata
+  email/          React Email templates + Resend sender
+  blocks/         component registry: schemas (versioned) + React renderers
+  ui/             shadcn components, tokens
+  config/         eslint, tsconfig, tailwind presets
+docs/
+  adr/            ADR-001 modular monolith … ADR-010 no merchant code execution
+infra/
+  docker/  coolify/  backups/  k6/</pre>
+
+<h3>Rules the code enforces</h3>
+<ul>
+  <li>Route handlers never touch the database. They call domain services, which take a <code>ctx: TenantContext</code> as their first argument.</li>
+  <li>A lint rule bans importing <code>db</code> outside <code>packages/db</code> and <code>packages/domain</code>. All tenant queries run inside <code>withTenant(ctx, tx =&gt; …)</code>.</li>
+  <li>Domain services emit events by enqueuing pg-boss jobs on the same transaction. Side effects (email, search, analytics) only happen in the worker.</li>
+  <li>Every write endpoint that a client may retry accepts an <code>Idempotency-Key</code>.</li>
+</ul>
+</section>
+
+<section id="tenancy">
+<h2>4. Tenancy and security model</h2>
+<h3>Request flow</h3>
+<pre>Host header ─► tenant resolver (cached host→tenant map, 60s + tag revalidation)
+          ─► TenantContext { tenantId, storeStatus, actor, roles, requestId }
+          ─► authorization (permission check per procedure)
+          ─► domain service ─► withTenant(): BEGIN; SET LOCAL app.tenant_id = $1; … COMMIT
+          ─► Postgres RLS policy: tenant_id = current_setting('app.tenant_id')::uuid</pre>
+
+<h3>RLS pattern (applied to every tenant table)</h3>
+<pre>ALTER TABLE products ENABLE ROW LEVEL SECURITY;
+ALTER TABLE products FORCE ROW LEVEL SECURITY;
+CREATE POLICY tenant_isolation ON products
+  USING (tenant_id = nullif(current_setting('app.tenant_id', true), '')::uuid)
+  WITH CHECK (tenant_id = nullif(current_setting('app.tenant_id', true), '')::uuid);
+-- nullif is required: after a SET LOCAL transaction ends, the setting reads back as ''
+-- on the same pooled connection, and ''::uuid raises an error (verified on PG 18.6).
+-- app connects as role app_rw (not table owner). Migrations run as app_owner.
+-- app_platform (BYPASSRLS) is used ONLY by the separate platform container, never by
+-- the storefront/store API process. It exposes named functions, not arbitrary queries:
+--   platformSuspendTenant() · platformRestoreTenant() · platformExportTenant()
+--   platformDeleteTenant() · platformStartSupportSession() · platformUsageRollup()
+-- Every call writes platform_audit_logs.</pre>
+
+<h3>Identity model</h3>
+<ul>
+  <li><b>Staff identity</b> (merchants, their staff, platform team): one global <code>users</code> table. A person can belong to several stores through <code>memberships</code>. <code>organizations</code> group stores owned by one business; organization ≠ tenant.</li>
+  <li><b>Customer identity</b>: <code>customers</code> are per store. The same email can register separately at two stores. Separate Better Auth instance and cookie (<code>__Host-cust</code>) scoped to the store's host.</li>
+  <li><b>Platform roles</b> live in <code>platform_staff</code>, never inferred from a store role.</li>
+</ul>
+
+<h3>Roles and permissions</h3>
+<div class="tbl"><table>
+<tr><th>Role</th><th>Scope</th><th>Default permissions</th></tr>
+<tr><td>platform_owner</td><td>Platform</td><td>Everything, including plans, billing, platform settings, deleting tenants</td></tr>
+<tr><td>platform_admin</td><td>Platform</td><td>Tenants (create/suspend/restore), domains, plans assignment, usage, announcements</td></tr>
+<tr><td>platform_support</td><td>Platform</td><td>Read tenant metadata; impersonate only through a time-boxed, reason-logged support session approved or pre-authorized by the store owner</td></tr>
+<tr><td>store_owner</td><td>One store</td><td>All store permissions, billing, transfer ownership, delete store</td></tr>
+<tr><td>store_admin</td><td>One store</td><td>All store permissions except billing and ownership</td></tr>
+<tr><td>store_staff (custom)</td><td>One store</td><td>Picked from the permission list: <code>products.read/write</code>, <code>orders.read/write/refund</code>, <code>customers.read/write</code>, <code>discounts.write</code>, <code>content.write</code>, <code>theme.publish</code>, <code>settings.write</code>, <code>staff.manage</code>, <code>analytics.read</code>, <code>exports.run</code></td></tr>
+</table></div>
+
+<h3>Security checklist</h3>
+<ul class="tight">
+  <li>Verified on PostgreSQL 18.6: without <code>FORCE ROW LEVEL SECURITY</code> the table owner reads every store's rows; with it, 0 rows. App role cannot insert rows for another store. BYPASSRLS reads everything, which is why it is isolated in its own container.</li>
+  <li>Tenant never taken from the client; always from host (storefront) or session membership + <code>X-Store-Id</code> checked against memberships (admin).</li>
+  <li>Secrets (payment keys, shipping tokens) in <code>tenant_secrets</code>, encrypted with AES-256-GCM using a key from env; never returned to the browser after save.</li>
+  <li>Block JSON validated against the registry schema on save and render. No HTML except sanitized rich text.</li>
+  <li>Uploads: presigned R2 PUT, mime + size checks, per-plan storage quota, image re-encode through Cloudflare Images.</li>
+  <li>Rate limits by IP and tenant at Cloudflare and in Postgres (login, OTP, checkout, search).</li>
+  <li>Audit log for all privileged and platform actions; PII minimized in logs.</li>
+  <li>Cookies: <code>Secure</code>, <code>HttpOnly</code>, <code>SameSite=Lax</code>; CSRF protection on mutations; CSP on storefront.</li>
+</ul>
+</section>
+
+<section id="schema">
+<h2>5. Database schema</h2>
+<div class="note"><b>Conventions.</b> Every table has <code>id uuid pk default uuidv7()</code>, <code>created_at</code>, <code>updated_at timestamptz</code>. Tables marked <span class="pill">T</span> have <code>tenant_id uuid not null → tenants</code>, RLS on, and indexes that start with <code>tenant_id</code>. Unique keys are per tenant, e.g. <code>unique(tenant_id, slug)</code>. Foreign keys between tenant tables are composite <code>(tenant_id, x_id)</code> so a row can never point into another store. Money is <code>bigint</code> in paise with a <code>currency char(3)</code>. Soft delete via <code>deleted_at</code> where noted.</div>
+
+<h3>5.1 Platform (Super Admin)</h3>
+<div class="tbl"><table>
+<tr><th>Table</th><th>Key columns</th><th>Notes</th></tr>
+<tr><td class="t">tenants</td><td class="c">slug citext unique, name, organization_id, owner_user_id, status enum(provisioning, trial, active, past_due, suspended, archived, deletion_requested, deleted), plan_id, trial_ends_at, country, currency, timezone, locale, industry, suspended_reason, archived_at, data_region</td><td>Root of isolation. No RLS; read via platform router or resolver.</td></tr>
+<tr><td class="t">organizations</td><td class="c">name, legal_name, gstin, pan, billing_email, billing_address jsonb</td><td>Business that owns one or more stores.</td></tr>
+<tr><td class="t">domains</td><td class="c">tenant_id, hostname citext unique, type enum(platform_subdomain, custom), is_primary, status enum(requested, awaiting_dns, verifying, ssl_pending, active, failed, removing, removed), prevalidate_txt boolean, cf_custom_hostname_id, verification jsonb, ssl_status, failure_reason, last_checked_at</td><td>Resolver lookup. Can become primary only when <code>active</code> (ownership verified, SSL active, DNS correct).</td></tr>
+<tr><td class="t">plans</td><td class="c">code unique, name, price_monthly, price_yearly, currency, limits jsonb {products, staff, storage_mb, orders_month, custom_domain, remove_branding}, features jsonb, is_public, sort</td><td>Starter / Growth / Pro.</td></tr>
+<tr><td class="t">subscriptions</td><td class="c">tenant_id, plan_id, status enum(trialing, active, past_due, cancelled), interval, current_period_start/end, provider, provider_subscription_id, cancel_at</td><td>Platform billing of merchants (Razorpay Subscriptions).</td></tr>
+<tr><td class="t">platform_invoices</td><td class="c">tenant_id, subscription_id, number, amount, tax, status, issued_at, paid_at, pdf_key</td><td>GST invoices you issue to merchants.</td></tr>
+<tr><td class="t">usage_counters</td><td class="c">tenant_id, period date, orders, gmv, products, storage_bytes, bandwidth_bytes, emails_sent, api_requests</td><td>Daily rollup by worker; drives quotas and the super admin usage view.</td></tr>
+<tr><td class="t">platform_staff</td><td class="c">user_id unique, role enum(platform_owner, platform_admin, platform_support), is_active, mfa_required</td><td>Separate from store memberships.</td></tr>
+<tr><td class="t">support_sessions</td><td class="c">tenant_id, platform_user_id, impersonated_user_id, reason, ticket_ref, scope enum(read_only, write), consent enum(owner_approved, standing_consent, emergency), approved_by_user_id, started_at, expires_at, ended_at, ended_by, actions_count</td><td>Audited impersonation (6.3).</td></tr>
+<tr><td class="t">platform_audit_logs</td><td class="c">actor_user_id, actor_type, action, target_type, target_id, tenant_id null, ip, user_agent, diff jsonb, request_id</td><td>Append-only.</td></tr>
+<tr><td class="t">quota_definitions</td><td class="c">key unique (products, variants, staff_seats, storage_mb, media_file_mb, orders_month, emails_month, api_rpm, storefront_rpm, custom_domains, pages, discounts_active, exports_day, webhooks, apps_installed, job_concurrency), unit, enforcement enum(hard, soft, notify), description</td><td>Catalog of every limit the platform can enforce.</td></tr>
+<tr><td class="t">tenant_size_tiers</td><td class="c">code unique (xs, s, m, l), name, quota_defaults jsonb, notes</td><td>Size presets, independent of the price plan.</td></tr>
+<tr><td class="t">tenant_quota_overrides</td><td class="c">tenant_id, quota_key, limit_value, reason, expires_at null, set_by · unique(tenant_id, quota_key)</td><td>Effective limit = override → tier → plan.</td></tr>
+<tr><td class="t">quota_events</td><td class="c">tenant_id, quota_key, level enum(pct_80, pct_100, blocked), value, limit_value, notified_at</td><td>Warnings to merchant and platform.</td></tr>
+<tr><td class="t">apps <span class="pill later">Later</span></td><td class="c">code unique, name, category, description, icon_key, author enum(first_party, partner), pricing jsonb, required_plan_id, permissions text[], settings_schema jsonb, provides jsonb {admin_pages, blocks, event_handlers, checkout_hooks}, status enum(dev, beta, ga, deprecated)</td><td>App library catalog.</td></tr>
+<tr><td class="t">app_versions <span class="pill later">Later</span></td><td class="c">app_id, version (semver), changelog, migration_key, released_at</td><td></td></tr>
+<tr><td class="t">app_rollouts <span class="pill later">Later</span></td><td class="c">app_id, version_id, mode enum(all, plans, tiers, tenants, percentage), targets jsonb, auto_install, allow_uninstall, starts_at, created_by</td><td>Push globally, to some plans or tiers, or to specific stores.</td></tr>
+<tr><td class="t">tenant_apps <span class="pill">T</span> <span class="pill later">Later</span></td><td class="c">tenant_id, app_id, version_id, status enum(installed, disabled, uninstalled, force_installed), settings jsonb, granted_permissions text[], installed_by, installed_at, uninstalled_at</td><td>Per-store install state.</td></tr>
+<tr><td class="t">feature_flags</td><td class="c">key unique, description, default_on, rules jsonb (plans, tiers, percentage), kill_switch boolean, merchant_toggleable boolean</td><td>With <code>tenant_feature_overrides(tenant_id, key, enabled, set_by, reason)</code>. Changes audited. Also used as integration kill switches (Razorpay, Shiprocket, Resend).</td></tr>
+<tr><td class="t">announcements</td><td class="c">title, body, audience enum(all, plan, tenant), plan_id, tenant_id, starts_at, ends_at, severity</td><td>Banner in store admin.</td></tr>
+<tr><td class="t">theme_templates</td><td class="c">code unique, name, industry, preview_image_key, default_tokens jsonb, default_pages jsonb, version, is_active</td><td>Starter themes offered at signup.</td></tr>
+<tr><td class="t">block_definitions</td><td class="c">type, version, json_schema jsonb, deprecated_at, migration_from_version</td><td>Registry mirror, used for validation and migrations.</td></tr>
+</table></div>
+
+<h3>5.2 Signup and onboarding</h3>
+<div class="tbl"><table>
+<tr><th>Table</th><th>Key columns</th><th>Notes</th></tr>
+<tr><td class="t">signup_leads</td><td class="c">email citext, phone, name, business_name, desired_slug, industry, source, utm jsonb, referral_code, step enum(started, verified, store_created, abandoned), ip_hash</td><td>Captures partial signups for follow-up.</td></tr>
+<tr><td class="t">slug_reservations</td><td class="c">slug citext unique, lead_id, expires_at</td><td>Holds a subdomain for 30 min during signup.</td></tr>
+<tr><td class="t">onboarding_progress <span class="pill">T</span></td><td class="c">tenant_id unique, steps jsonb {branding, first_product, payments, shipping, domain, test_order, launched}, completed_at, dismissed</td><td>Drives the store admin setup checklist.</td></tr>
+<tr><td class="t">reserved_slugs</td><td class="c">slug citext pk, reason</td><td>www, admin, api, mail, shop, etc.</td></tr>
+</table></div>
+
+<h3>5.3 Identity and access</h3>
+<div class="tbl"><table>
+<tr><th>Table</th><th>Key columns</th><th>Notes</th></tr>
+<tr><td class="t">users</td><td class="c">email citext unique, email_verified, name, phone, image, two_factor_enabled, locale, last_login_at</td><td>Better Auth staff user. Plus Better Auth <code>sessions</code>, <code>accounts</code>, <code>verifications</code>, <code>passkeys</code>, <code>two_factors</code>.</td></tr>
+<tr><td class="t">memberships <span class="pill">T</span></td><td class="c">tenant_id, user_id, role_id, status enum(invited, active, disabled), invited_by, last_active_at · unique(tenant_id, user_id)</td><td>Staff ↔ store.</td></tr>
+<tr><td class="t">roles <span class="pill">T</span></td><td class="c">tenant_id, name, is_system, permissions text[]</td><td>System roles seeded per store; custom roles allowed on Growth+.</td></tr>
+<tr><td class="t">staff_invitations <span class="pill">T</span></td><td class="c">tenant_id, email, role_id, token_hash, expires_at, accepted_at</td><td></td></tr>
+<tr><td class="t">api_keys <span class="pill">T</span></td><td class="c">tenant_id, name, prefix, key_hash, scopes text[], last_used_at, revoked_at</td><td>Later: partner/integration API.</td></tr>
+<tr><td class="t">audit_logs <span class="pill">T</span></td><td class="c">tenant_id, actor_type enum(staff, customer, system, platform_support), actor_id, action, target_type, target_id, diff jsonb, ip, request_id</td><td>Store-visible activity log.</td></tr>
+</table></div>
+
+<h3>5.4 Store settings</h3>
+<div class="tbl"><table>
+<tr><th>Table</th><th>Key columns</th><th>Notes</th></tr>
+<tr><td class="t">store_settings <span class="pill">T</span></td><td class="c">tenant_id unique, store_name, legal_name, support_email, support_phone, address jsonb, currency, timezone, weight_unit, order_prefix, social jsonb, checkout jsonb {guest_checkout, phone_required, cod_enabled, cod_min, cod_max, cod_fee}, notifications jsonb</td><td>One row; each admin settings page edits one jsonb group.</td></tr>
+<tr><td class="t">brand_settings <span class="pill">T</span></td><td class="c">tenant_id unique, logo_media_id, logo_dark_media_id, logo_width_px, favicon_media_id, apple_touch_icon_media_id, social_image_media_id, colors jsonb {primary, secondary, accent, background, surface, text, muted, border, success, warning, error}, color_scheme enum(light, dark, auto), font_heading, font_body, font_scale enum(compact, default, large), radius enum(none, sm, md, lg, full), button_style enum(solid, outline, pill), preset_code, version</td><td>Branding section (8.1); feeds theme tokens, emails, invoices.</td></tr>
+<tr><td class="t">store_status <span class="pill">T</span></td><td class="c">tenant_id unique, mode enum(live, coming_soon, maintenance, password), headline, message_json, launch_at, show_countdown, collect_emails, background_media_id, password_hash, retry_after_minutes, bypass_token_hash, changed_by, changed_at</td><td>Coming soon, maintenance, password (8.2).</td></tr>
+<tr><td class="t">seo_settings <span class="pill">T</span></td><td class="c">tenant_id unique, indexing_enabled, title_template, default_meta_description, default_og_image_media_id, twitter_handle, organization_schema jsonb (name, logo, sameAs, contact), local_business jsonb (address, geo, hours, phone), robots_extra, ai_crawlers jsonb {GPTBot, ClaudeBot, PerplexityBot, Google-Extended, CCBot: allow|block}, llms_txt_enabled, llms_txt_custom, sitemap_include jsonb, gsc_verification, bing_verification, indexnow_key, breadcrumbs_enabled, faq_schema_enabled</td><td>SEO, GEO, AEO (8.3).</td></tr>
+<tr><td class="t">seo_overrides <span class="pill">T</span></td><td class="c">tenant_id, entity_type enum(product, collection, category, page, post), entity_id, title, description, canonical_url, og_image_media_id, noindex, faqs jsonb [{q, a}], answer_summary, score smallint, issues jsonb, checked_at</td><td>Per-item SEO and audit results.</td></tr>
+<tr><td class="t">not_found_log <span class="pill">T</span></td><td class="c">tenant_id, path, referrer, hits, last_seen_at, redirected</td><td>404 monitor with one-click redirect.</td></tr>
+<tr><td class="t">tax_settings <span class="pill">T</span></td><td class="c">tenant_id unique, gst_registered, gstin, state_code, prices_include_tax, default_hsn, invoice_prefix, supported_cases text[] (documented V1 GST cases)</td><td>CGST+SGST vs IGST by ship-to state.</td></tr>
+<tr><td class="t">number_sequences <span class="pill">T</span></td><td class="c">tenant_id, kind enum(order, invoice, credit_note, return), scope text ('' for orders, '2026-27' for invoices), next_value bigint · primary key(tenant_id, kind, scope)</td><td>Allocated with one <code>UPDATE … RETURNING</code> in the same transaction. Tested: 1,000 concurrent orders → 1,000 unique numbers. The old "max + 1" approach produced only 51 unique numbers.</td></tr>
+<tr><td class="t">tax_classes <span class="pill">T</span></td><td class="c">tenant_id, name, rate_bps (e.g. 1200 = 12%), hsn</td><td></td></tr>
+<tr><td class="t">tenant_secrets <span class="pill">T</span></td><td class="c">tenant_id, provider, key_name, ciphertext bytea, iv, key_version, updated_by · unique(tenant_id, provider, key_name)</td><td>Razorpay keys, Shiprocket creds.</td></tr>
+<tr><td class="t">payment_methods_config <span class="pill">T</span></td><td class="c">tenant_id, provider enum(razorpay, cod, stripe, manual), is_enabled, mode enum(test, live), display_name, sort, settings jsonb</td><td></td></tr>
+<tr><td class="t">shipping_zones <span class="pill">T</span></td><td class="c">tenant_id, name, states text[], pincodes_include text[], pincodes_exclude text[]</td><td></td></tr>
+<tr><td class="t">shipping_rates <span class="pill">T</span></td><td class="c">tenant_id, zone_id, name, type enum(flat, weight, price, free_over, carrier_calculated), min, max, amount, cod_allowed, eta_days</td><td></td></tr>
+<tr><td class="t">locations <span class="pill">T</span></td><td class="c">tenant_id, name, address jsonb, pincode, is_default, shiprocket_pickup_name, is_active</td><td>Pickup/warehouse.</td></tr>
+<tr><td class="t">policies <span class="pill">T</span></td><td class="c">tenant_id, type enum(privacy, terms, refund, shipping, cancellation, contact), title, body_json, updated_at</td><td>Pre-filled from templates at signup.</td></tr>
+<tr><td class="t">redirects <span class="pill">T</span></td><td class="c">tenant_id, from_path, to_path, status_code</td><td></td></tr>
+</table></div>
+
+<h3>5.5 Catalog and inventory</h3>
+<div class="tbl"><table>
+<tr><th>Table</th><th>Key columns</th><th>Notes</th></tr>
+<tr><td class="t">products <span class="pill">T</span></td><td class="c">tenant_id, title, slug, status enum(draft, active, archived), description_json, short_description, brand_id, product_type, tags text[], seo jsonb, tax_class_id, hsn, requires_shipping, is_featured, published_at, search_vector tsvector, rating_avg, rating_count, deleted_at · unique(tenant_id, slug)</td><td>GIN on search_vector, trigram on title.</td></tr>
+<tr><td class="t">product_options <span class="pill">T</span></td><td class="c">tenant_id, product_id, name (Size, Weight), position, values text[]</td><td></td></tr>
+<tr><td class="t">variants <span class="pill">T</span></td><td class="c">tenant_id, product_id, sku, barcode, title, option_values jsonb, price, compare_at_price, cost_price, weight_grams, dimensions jsonb, track_inventory, allow_backorder, position, image_media_id · unique(tenant_id, sku)</td><td>Every product has ≥1 variant.</td></tr>
+<tr><td class="t">product_media <span class="pill">T</span></td><td class="c">tenant_id, product_id, media_id, variant_id null, position, alt</td><td></td></tr>
+<tr><td class="t">categories <span class="pill">T</span></td><td class="c">tenant_id, parent_id, name, slug, description, image_media_id, position, seo jsonb</td><td>Tree (materialized path column).</td></tr>
+<tr><td class="t">product_categories <span class="pill">T</span></td><td class="c">tenant_id, product_id, category_id, position</td><td></td></tr>
+<tr><td class="t">collections <span class="pill">T</span></td><td class="c">tenant_id, title, slug, type enum(manual, automated), rules jsonb [{field, op, value}], match enum(all, any), sort_order, image_media_id, seo jsonb, published</td><td>Separate from categories (gap in current app).</td></tr>
+<tr><td class="t">collection_products <span class="pill">T</span></td><td class="c">tenant_id, collection_id, product_id, position</td><td>Materialized for automated collections by a job.</td></tr>
+<tr><td class="t">brands <span class="pill">T</span></td><td class="c">tenant_id, name, slug, logo_media_id</td><td></td></tr>
+<tr><td class="t">inventory_levels <span class="pill">T</span></td><td class="c">tenant_id, variant_id, location_id, on_hand, reserved, available (generated), low_stock_threshold · unique(tenant_id, variant_id, location_id) · check (reserved &lt;= on_hand)</td><td>Reserve with a single guarded update (11.3).</td></tr>
+<tr><td class="t">inventory_reservations <span class="pill">T</span></td><td class="c">tenant_id, variant_id, location_id, order_id, cart_id, qty, status enum(active, committed, released, expired), expires_at</td><td>Released idempotently by the expiry job.</td></tr>
+<tr><td class="t">inventory_movements <span class="pill">T</span></td><td class="c">tenant_id, variant_id, location_id, delta, reason enum(received, sold, returned, adjustment, damaged, reserved, released, import), reference_type, reference_id, note, actor_id</td><td>Append-only stock ledger.</td></tr>
+<tr><td class="t">media <span class="pill">T</span></td><td class="c">tenant_id, storage_key, cf_image_id, mime, bytes, width, height, alt, folder, uploaded_by</td><td>Files library.</td></tr>
+</table></div>
+
+<h3>5.6 Customers</h3>
+<div class="tbl"><table>
+<tr><th>Table</th><th>Key columns</th><th>Notes</th></tr>
+<tr><td class="t">customers <span class="pill">T</span></td><td class="c">tenant_id, email citext, phone, name, email_verified, phone_verified, password_hash null, accepts_marketing, marketing_consent_at, tags text[], note, total_spent, orders_count, last_order_at, status enum(active, disabled), deleted_at · unique(tenant_id, email), unique(tenant_id, phone)</td><td>Store-scoped identity.</td></tr>
+<tr><td class="t">customer_sessions <span class="pill">T</span></td><td class="c">tenant_id, customer_id, token_hash, expires_at, ip, user_agent</td><td>Customer Better Auth instance tables are tenant-scoped.</td></tr>
+<tr><td class="t">customer_addresses <span class="pill">T</span></td><td class="c">tenant_id, customer_id, name, phone, line1, line2, landmark, city, state_code, pincode, country, type enum(home, work, other), is_default</td><td></td></tr>
+<tr><td class="t">wishlist_items <span class="pill">T</span></td><td class="c">tenant_id, customer_id, product_id, variant_id</td><td></td></tr>
+<tr><td class="t">customer_segments <span class="pill">T</span></td><td class="c">tenant_id, name, rules jsonb</td><td>Later.</td></tr>
+</table></div>
+
+<h3>5.7 Cart, checkout, orders</h3>
+<div class="tbl"><table>
+<tr><th>Table</th><th>Key columns</th><th>Notes</th></tr>
+<tr><td class="t">carts <span class="pill">T</span></td><td class="c">tenant_id, token unique, customer_id null, email, phone, currency, discount_codes text[], shipping_address jsonb, shipping_rate_id, notes, status enum(active, converted, abandoned, expired), last_activity_at, recovered_at, recovery_sent_at</td><td>Abandoned-cart recovery reads this.</td></tr>
+<tr><td class="t">cart_items <span class="pill">T</span></td><td class="c">tenant_id, cart_id, variant_id, quantity, unit_price_snapshot, properties jsonb</td><td></td></tr>
+<tr><td class="t">orders <span class="pill">T</span></td><td class="c">tenant_id, number (per-store sequence), customer_id, email, phone, currency, status enum(pending, confirmed, processing, partially_fulfilled, fulfilled, delivered, cancelled, returned), payment_status enum(pending, authorized, paid, partially_refunded, refunded, failed, cod_pending, cod_collected), fulfillment_status, subtotal, discount_total, shipping_total, tax_total, grand_total, cod_fee, shipping_address jsonb, billing_address jsonb, place_of_supply_state, source enum(web, admin, mobile, api), cart_id, idempotency_key, cancelled_at, cancel_reason, placed_at · unique(tenant_id, number), unique(tenant_id, idempotency_key)</td><td>Addresses snapshotted.</td></tr>
+<tr><td class="t">order_items <span class="pill">T</span></td><td class="c">tenant_id, order_id, variant_id, product_title, variant_title, sku, hsn, quantity, unit_price, discount_amount, tax_rate_bps, cgst, sgst, igst, total, fulfilled_qty, returned_qty</td><td>Snapshot at purchase.</td></tr>
+<tr><td class="t">order_events <span class="pill">T</span></td><td class="c">tenant_id, order_id, type, message, data jsonb, actor_type, actor_id, visible_to_customer</td><td>Timeline.</td></tr>
+<tr><td class="t">order_notes <span class="pill">T</span></td><td class="c">tenant_id, order_id, author_id, body</td><td>Internal.</td></tr>
+<tr><td class="t">payment_intents <span class="pill">T</span></td><td class="c">tenant_id, order_id, provider, amount, currency, status enum(created, requires_action, authorized, captured, failed, cancelled), provider_order_id, idempotency_key</td><td>Provider-neutral.</td></tr>
+<tr><td class="t">payment_attempts <span class="pill">T</span></td><td class="c">tenant_id, intent_id, provider_payment_id, method (upi, card, netbanking, wallet, cod), status, error_code, error_message, raw jsonb</td><td></td></tr>
+<tr><td class="t">refunds <span class="pill">T</span></td><td class="c">tenant_id, order_id, intent_id, amount, reason, status, provider_refund_id, initiated_by, restock boolean</td><td></td></tr>
+<tr><td class="t">fulfillments <span class="pill">T</span></td><td class="c">tenant_id, order_id, location_id, status enum(pending, label_created, picked_up, in_transit, out_for_delivery, delivered, rto, cancelled), carrier, awb, tracking_url, shiprocket_shipment_id, label_key, weight_grams, shipped_at, delivered_at</td><td></td></tr>
+<tr><td class="t">fulfillment_items <span class="pill">T</span></td><td class="c">tenant_id, fulfillment_id, order_item_id, quantity</td><td></td></tr>
+<tr><td class="t">tracking_events <span class="pill">T</span></td><td class="c">tenant_id, fulfillment_id, status, location, message, occurred_at, raw jsonb</td><td>From carrier webhooks.</td></tr>
+<tr><td class="t">returns <span class="pill">T</span></td><td class="c">tenant_id, order_id, customer_id, number, status enum(requested, approved, rejected, picked_up, received, refunded, replaced, closed), reason, resolution enum(refund, replacement, store_credit), photos media_id[], admin_note</td><td>With <code>return_items</code>.</td></tr>
+<tr><td class="t">invoices <span class="pill">T</span></td><td class="c">tenant_id, order_id, number (per FY), fy, issued_at, seller_gstin, buyer_gstin, totals jsonb, pdf_key, type enum(invoice, credit_note)</td><td>GST tax invoice / credit note.</td></tr>
+<tr><td class="t">action_tokens <span class="pill">T</span></td><td class="c">tenant_id, purpose enum(pay_link, cod_confirm, address_confirm, return_request, unsubscribe, order_view), target_id, token_hash, expires_at, used_at</td><td>One-time links (idea from Storify).</td></tr>
+</table></div>
+
+<h3>5.8 Marketing and engagement</h3>
+<div class="tbl"><table>
+<tr><th>Table</th><th>Key columns</th><th>Notes</th></tr>
+<tr><td class="t">discounts <span class="pill">T</span></td><td class="c">tenant_id, code citext null (null = automatic), title, type enum(percent, fixed, free_shipping, buy_x_get_y), value, applies_to jsonb {all|products|collections}, min_subtotal, min_qty, customer_eligibility jsonb, usage_limit, per_customer_limit, used_count, combinable, starts_at, ends_at, status · unique(tenant_id, code)</td><td></td></tr>
+<tr><td class="t">discount_redemptions <span class="pill">T</span></td><td class="c">tenant_id, discount_id, order_id, customer_id, amount</td><td></td></tr>
+<tr><td class="t">reviews <span class="pill">T</span></td><td class="c">tenant_id, product_id, customer_id, order_item_id (verified purchase), rating smallint, title, body, media_ids uuid[], status enum(pending, published, rejected), reply, replied_at</td><td></td></tr>
+<tr><td class="t">search_queries <span class="pill">T</span></td><td class="c">tenant_id, query, results_count, clicked_product_id, day date, count</td><td>Search analytics incl. zero results.</td></tr>
+<tr><td class="t">newsletter_subscribers <span class="pill">T</span></td><td class="c">tenant_id, email, status, source, consent_at, unsubscribed_at</td><td></td></tr>
+<tr><td class="t">analytics_daily <span class="pill">T</span></td><td class="c">tenant_id, day, sessions, pageviews, add_to_carts, checkouts, orders, revenue, aov, top_products jsonb</td><td>Rollups by worker.</td></tr>
+</table></div>
+
+<h3>5.9 Content and theme</h3>
+<div class="tbl"><table>
+<tr><th>Table</th><th>Key columns</th><th>Notes</th></tr>
+<tr><td class="t">themes <span class="pill">T</span></td><td class="c">tenant_id, template_code, name, tokens jsonb {colors, fonts, radius, spacing, button_style}, status enum(draft, published), published_at, version</td><td>Tokens only, no code.</td></tr>
+<tr><td class="t">pages <span class="pill">T</span></td><td class="c">tenant_id, type enum(home, landing, custom, product_template, collection_template), title, slug, seo jsonb, status, published_version_id, draft_version_id · unique(tenant_id, slug)</td><td></td></tr>
+<tr><td class="t">page_versions <span class="pill">T</span></td><td class="c">tenant_id, page_id, document jsonb {blocks:[{id, type, version, props}]}, created_by, note</td><td>Rollback = point published_version_id back.</td></tr>
+<tr><td class="t">menus <span class="pill">T</span></td><td class="c">tenant_id, handle enum(header, footer, custom), title, items jsonb (nested links to page/collection/product/url)</td><td></td></tr>
+<tr><td class="t">blog_posts <span class="pill">T</span></td><td class="c">tenant_id, title, slug, excerpt, body_json, cover_media_id, author_id, category_id, tags text[], status, published_at, seo jsonb</td><td>With <code>blog_categories</code>.</td></tr>
+<tr><td class="t">announcement_bars <span class="pill">T</span></td><td class="c">tenant_id, message, link, starts_at, ends_at, is_active</td><td></td></tr>
+</table></div>
+
+<h3>5.10 System tables</h3>
+<div class="tbl"><table>
+<tr><th>Table</th><th>Key columns</th><th>Notes</th></tr>
+<tr><td class="t">pgboss.*</td><td class="c">managed by pg-boss</td><td>Jobs enqueued inside the business transaction.</td></tr>
+<tr><td class="t">idempotency_keys <span class="pill">T</span></td><td class="c">tenant_id, key, route, request_hash, response_status, response_body jsonb, locked_until, expires_at · unique(tenant_id, key, route)</td><td>24 h retention.</td></tr>
+<tr><td class="t">webhook_inbox</td><td class="c">provider, event_id, tenant_id, signature_valid, payload_sanitized jsonb, received_at, status enum(received, processing, processed, failed), attempts, processed_at, error · <b>unique(provider, event_id)</b></td><td>Tested: unique on event_id alone wrongly rejects a Shiprocket event whose ID matches a Razorpay one. Card data, auth headers and secrets are stripped before storage.</td></tr>
+<tr><td class="t">email_log <span class="pill">T</span></td><td class="c">tenant_id, template, to_email, subject, provider_id, status, event_ref</td><td></td></tr>
+<tr><td class="t">tenant_deletions</td><td class="c">tenant_id, requested_by, reason, step enum(requested, exported, billing_stopped, domains_disconnected, media_scheduled, db_purged, verified, deleted), scheduled_for, completed_at</td><td>Long-running deletion workflow (6.4).</td></tr>
+<tr><td class="t">exports <span class="pill">T</span></td><td class="c">tenant_id, type enum(full_store, products, orders, customers), status, file_key, requested_by, expires_at</td><td>Per-store export.</td></tr>
+<tr><td class="t">rate_limits</td><td class="c">bucket text pk, count, window_start</td><td>Unlogged table.</td></tr>
+</table></div>
+<p>Roughly <b>80 tables</b> (about 75 in V1; app tables are later) in V1. Drizzle schema lives in <code>packages/db/schema/{platform,identity,settings,catalog,customers,orders,marketing,content,system}.ts</code>, with RLS policies generated by a helper for every table declared through <code>tenantTable()</code>.</p>
+</section>
+
+<section id="super">
+<h2>6. Super Admin dashboard</h2>
+<p>Route: <code>admin.bscommerce.in/platform/*</code>. Only users with a <code>platform_staff</code> row. MFA required. Uses the <code>platform</code> oRPC router, which runs with <code>app_platform</code> (BYPASSRLS) and writes <code>platform_audit_logs</code> on every mutation.</p>
+<div class="tbl"><table>
+<tr><th>Screen</th><th>What it shows / does</th><th>Tables</th></tr>
+<tr><td>Overview</td><td>Active stores, new signups (7/30 d), trial → paid conversion, platform GMV, orders today, MRR, failed jobs, error rate, disk/DB size, CPU trend</td><td>tenants, subscriptions, usage_counters</td></tr>
+<tr><td>Tenants list</td><td>Search by name/slug/domain/owner email; filter by status, plan, created, GMV; bulk suspend/notify</td><td>tenants, domains, users</td></tr>
+<tr><td>Tenant detail</td><td>Tabs: Overview (status, plan, owner, limits vs usage), Domains, Members, Billing, Usage charts, Health (errors, failed webhooks, job failures), Audit, Notes. Actions: suspend, restore, archive, change plan, extend trial, reset owner, start support session, run export, schedule deletion</td><td>all platform tables</td></tr>
+<tr><td>Create tenant</td><td>Manual onboarding for agency clients: org, owner invite, template, plan, subdomain</td><td>tenants, memberships, themes</td></tr>
+<tr><td>Domains</td><td>All custom hostnames with DNS/SSL status, retry verification, force re-issue</td><td>domains</td></tr>
+<tr><td>Plans and billing</td><td>Plan editor (limits, features), subscriptions, platform invoices, failed payments, dunning</td><td>plans, subscriptions, platform_invoices</td></tr>
+<tr><td>Signups funnel</td><td>Leads by step, abandoned signups, source/UTM, slug reservations</td><td>signup_leads</td></tr>
+<tr><td>Templates and blocks</td><td>Theme templates, block registry versions, deprecations</td><td>theme_templates, block_definitions</td></tr>
+<tr><td>Support sessions</td><td>Active/expired sessions, reason, scope, actions taken</td><td>support_sessions, audit</td></tr>
+<tr><td>System</td><td>Job queues (depth, failures, retry), webhook inbox errors, backups last run + last restore test, feature flags, announcements</td><td>pgboss, webhook_inbox, feature_flags</td></tr>
+<tr><td>Quotas and tiers</td><td>Tier definitions, bulk tier change, stores near limits, override history (6.1)</td><td>quota_*, tenant_size_tiers</td></tr>
+<tr><td>Features</td><td>Feature flags per store, plan, tier or percentage; kill switches for integrations (6.2)</td><td>feature_flags, tenant_feature_overrides</td></tr>
+<tr><td>Platform staff</td><td>Invite, role, MFA status, deactivate</td><td>platform_staff</td></tr>
+<tr><td>Audit log</td><td>Filter by actor, tenant, action; export CSV</td><td>platform_audit_logs</td></tr>
+</table></div>
+<h3>6.1 Quotas per tenant</h3>
+<p>Every limit is a row in <code>quota_definitions</code>. A store's effective limit is resolved as <b>tenant override → size tier → plan</b>. The price plan decides features; the size tier decides resource ceilings. An agency client on a cheap plan with heavy traffic can get more headroom without changing plan.</p>
+<p>Recommended starting tiers (tune after the load test):</p>
+<div class="tbl"><table>
+<tr><th>Quota</th><th>XS</th><th>S</th><th>M</th><th>L</th><th>Enforcement</th></tr>
+<tr><td>Products</td><td>50</td><td>500</td><td>5,000</td><td>25,000</td><td>hard</td></tr>
+<tr><td>Staff seats</td><td>2</td><td>5</td><td>15</td><td>50</td><td>hard</td></tr>
+<tr><td>Media storage</td><td>1 GB</td><td>5 GB</td><td>25 GB</td><td>100 GB</td><td>hard</td></tr>
+<tr><td>Max file size</td><td>5 MB</td><td>10 MB</td><td>20 MB</td><td>50 MB</td><td>hard</td></tr>
+<tr><td>Orders / month</td><td>300</td><td>3,000</td><td>20,000</td><td>no limit</td><td>soft: warn and upsell, never block checkout</td></tr>
+<tr><td>Transactional emails / month</td><td>2,000</td><td>15,000</td><td>80,000</td><td>300,000</td><td>soft</td></tr>
+<tr><td>Uncached storefront requests / min</td><td>120</td><td>300</td><td>900</td><td>2,400</td><td>hard at the edge (Cloudflare rule per host), 429 with cached fallback</td></tr>
+<tr><td>Admin/API requests / min</td><td>60</td><td>120</td><td>300</td><td>600</td><td>hard</td></tr>
+<tr><td>Custom domains</td><td>0</td><td>1</td><td>3</td><td>10</td><td>hard</td></tr>
+<tr><td>Installed apps</td><td>3</td><td>10</td><td>25</td><td>no limit</td><td>hard</td></tr>
+<tr><td>Exports / day</td><td>2</td><td>5</td><td>10</td><td>20</td><td>hard</td></tr>
+<tr><td>Background job concurrency</td><td>1</td><td>2</td><td>4</td><td>8</td><td>hard (pg-boss per-tenant keys)</td></tr>
+</table></div>
+<ul class="tight">
+  <li>Super Admin → Tenant → Quotas: each limit with usage bar, source (plan, tier or override), and an override form with reason and optional expiry.</li>
+  <li>Bulk tier change; a nightly job recommends a higher tier for stores above 80% of any quota for 30 days.</li>
+  <li>Merchants see usage in Settings → Plan and billing and get emails at 80% and 100%.</li>
+  <li>A quota never blocks checkout. Only admin-side creation is blocked.</li>
+</ul>
+
+<h3>6.2 Feature rollout (V1) and app library (later)</h3>
+<p><b>V1:</b> new features ship behind per-store <b>feature flags</b>. Super Admin → Features lets the platform turn a feature on for all stores, some plans or tiers, a list of stores, or a percentage, and flip a kill switch. Flags marked <code>merchant_toggleable</code> appear on a simple <b>Store Admin → Features</b> page where the merchant can turn them on or off. This covers "push to all or some stores, install/uninstall per store" without building an app platform.</p>
+<p><b>Later (V1.5+), once merchants ask for it:</b> the full app library below.</p>
+<p>New features ship as <b>apps</b>: first-party modules in our codebase (<code>packages/apps/*</code>) that are switched on per store. Each app has a manifest listing its permissions, settings form, admin pages, storefront blocks, event handlers and checkout hooks.</p>
+<div class="grid2">
+  <div class="card"><h4>Super Admin → Apps</h4><ul class="tight">
+    <li>Catalog: app entry, versions, changelog, status (dev → beta → GA → deprecated)</li>
+    <li>Rollout to all stores, some plans, some tiers, a list of stores, or a percentage</li>
+    <li>Options: auto-install, allow uninstall, force-install (for security or legal apps)</li>
+    <li>Install counts, error rates and a kill switch per app</li>
+  </ul></div>
+  <div class="card"><h4>Store Admin → Apps</h4><ul class="tight">
+    <li>Library of apps available to this store: install, uninstall, settings</li>
+    <li>Permission prompt on install; upgrade prompt if the plan doesn't include it</li>
+    <li>Uninstall keeps app data for 30 days, then a purge job deletes it</li>
+  </ul></div>
+</div>
+<p>Candidate first apps: Reviews, Abandoned cart recovery, WhatsApp notifications, Product bundles, Announcement bar, Store pickup, Wholesale pricing, Loyalty points, Google Shopping feed, Meta catalog feed.</p>
+<div class="note warn"><b>Push-back:</b> in V1, apps are our own code only. Running third-party or merchant-uploaded code inside our servers would break tenant isolation. A partner ecosystem comes later through the public API, webhooks and OAuth, with partner apps running on the partner's own servers (the Shopify model).</div>
+
+<h3>6.3 Impersonation (support mode)</h3>
+<ul class="tight">
+  <li>Started from Super Admin → Tenant → "Open as support", with a required reason and ticket reference.</li>
+  <li>Consent: the owner approves from an email or admin prompt, or the store has turned on standing consent in Settings, or a platform_owner starts an emergency session, which alerts the store owner immediately.</li>
+  <li>Read-only by default. Write access needs a second confirmation and is logged separately. Sessions last 60 minutes and can be extended once.</li>
+  <li>Support can never view decrypted payment or shipping secrets, change passwords or 2FA, change the owner, edit bank or payout details, delete the store, or export customer data.</li>
+  <li>The admin shows a fixed banner: "Support session by {name} · ends in 42 min · End session".</li>
+  <li>Every action is logged with <code>actor_type=platform_support</code> in both audit logs, and the owner gets a summary email when the session ends.</li>
+  <li>Implemented as a separate short-lived session carrying <code>support_session_id</code>, never by signing in as the merchant's own account.</li>
+</ul>
+
+<h3>6.4 Tenant lifecycle</h3>
+<div class="tbl"><table>
+<tr><th>State</th><th>Storefront</th><th>Checkout</th><th>Admin</th><th>Domains / jobs</th><th>Billing / data</th></tr>
+<tr><td>provisioning</td><td>not served</td><td>no</td><td>no</td><td>setup jobs only</td><td>—</td></tr>
+<tr><td>trial</td><td>per store status</td><td>yes</td><td>full</td><td>all</td><td>trial clock</td></tr>
+<tr><td>active</td><td>per store status</td><td>yes</td><td>full</td><td>all</td><td>billed</td></tr>
+<tr><td>past_due</td><td>served</td><td>yes</td><td>full + banner</td><td>all</td><td>dunning, 7 days grace</td></tr>
+<tr><td>suspended</td><td>"temporarily unavailable"</td><td>no</td><td>read-only + export</td><td>webhooks accepted, marketing jobs paused</td><td>kept</td></tr>
+<tr><td>archived</td><td>404</td><td>no</td><td>no (owner can request restore)</td><td>custom domains released</td><td>kept 90 days</td></tr>
+<tr><td>deletion_requested → deleted</td><td>404</td><td>no</td><td>no</td><td>deletion workflow</td><td>purged; invoices kept 8 years</td></tr>
+</table></div>
+<p>Deletion is a long-running workflow (<code>tenant_deletions</code>): requested → final export → billing stopped → domains disconnected → media deletion scheduled → database purge → verification → deleted. Never a synchronous DELETE.</p>
+<div class="note"><b>Tenant lifecycle.</b> provisioning → trial (14 days) → active ↔ past_due → suspended (storefront shows "temporarily unavailable", admin read-only) → archived (hidden, data kept 90 days) → deleted (purge job removes rows and R2 objects, keeps invoices for 8 years for tax).</div>
+</section>
+
+<section id="signup">
+<h2>7. One-page front page with self signup</h2>
+<p>Route: <code>bscommerce.in</code>, served by the Next app (marketing host). Static and CDN-cached except the signup form.</p>
+<h3>Page sections (top to bottom)</h3>
+<ol class="tight">
+  <li><b>Hero</b>: "Launch your online store in 10 minutes." Store-name field with live subdomain availability (<code>yourname.bscommerce.in</code>) and a Start free trial button. That field is step 1 of signup.</li>
+  <li><b>Proof strip</b>: live stores on the platform, logos of the first merchants.</li>
+  <li><b>Features</b>: UPI and COD payments, Shiprocket shipping, GST invoices, custom domain, mobile-first themes, WhatsApp-ready notifications (marked "coming soon" until built).</li>
+  <li><b>Templates gallery</b>: 3–6 starter themes by industry (food, fashion, beauty, handicrafts) with previews.</li>
+  <li><b>How it works</b>: Sign up → pick a template → add products → connect payments → go live.</li>
+  <li><b>Pricing</b>: plans from the <code>plans</code> table (Starter / Growth / Pro), monthly/yearly toggle, GST note.</li>
+  <li><b>FAQ</b> and <b>footer</b> (policies, contact, login link).</li>
+</ol>
+<h3>Signup flow</h3>
+<pre>1  Store name + subdomain check     → slug_reservations (30 min), signup_leads.step=started
+2  Email or phone + password / Google → Better Auth user; OTP verify → step=verified
+3  About your business              → industry, what you sell, GSTIN (optional), city/state
+4  Pick template                    → theme_templates
+5  Provision (single transaction + jobs):
+     tenants(status=trial) · domains(platform_subdomain) · memberships(owner) · roles(system)
+     store_settings · tax_settings · policies (from templates) · themes · pages(home) · menus
+     locations(default) · shipping_zones/rates(India flat) · payment_methods_config(cod on)
+     onboarding_progress · subscriptions(trialing)
+   jobs: welcome email, seed sample products (optional), notify platform
+6  Redirect to admin.bscommerce.in/?store={slug} with setup checklist</pre>
+<ul class="tight">
+  <li>Abuse controls: Cloudflare Turnstile on step 2, rate limit per IP/email, disposable-email blocklist, max 3 trial stores per user.</li>
+  <li>Analytics: step events recorded in <code>signup_leads</code>; abandoned leads get one reminder email after 24 h.</li>
+  <li>Target: signup to live storefront in under 60 seconds of server time.</li>
+</ul>
+</section>
+
+<section id="admin">
+<h2>8. Store Admin dashboard</h2>
+<p>Route: <code>admin.bscommerce.in</code>. Store switcher for users with several memberships. Every screen checks a permission. Visual system and page layout follow the Supabase Design System (section 12); section map from the current Bs Ecommerce admin plus Storify.</p>
+<div class="tbl"><table>
+<tr><th>Section</th><th>Screens and features</th><th>Permission</th><th></th></tr>
+<tr><td>Home</td><td>Setup checklist (onboarding_progress), today's sales/orders/visitors, orders to fulfil, low stock, recent activity, announcements</td><td>—</td><td><span class="pill">V1</span></td></tr>
+<tr><td>Orders</td><td>List with saved views (unfulfilled, unpaid, COD to confirm, RTO), detail (timeline, payment, fulfil, invoice, refund, cancel, notes), create draft order, send pay link</td><td>orders.*</td><td><span class="pill">V1</span></td></tr>
+<tr><td>Abandoned checkouts</td><td>Carts with contact info, recovery email status, one-click send</td><td>orders.read</td><td><span class="pill">V1</span></td></tr>
+<tr><td>Shipments</td><td>Shiprocket: create shipment, print label, AWB, tracking, pickup schedule, RTO</td><td>orders.write</td><td><span class="pill">V1</span></td></tr>
+<tr><td>Returns</td><td>Requests with photos, approve/reject, pickup, refund / replace, restock</td><td>orders.refund</td><td><span class="pill">V1</span></td></tr>
+<tr><td>Products</td><td>List, bulk edit, CSV import/export, product editor (options, variants, media, SEO, GST/HSN), categories, collections (manual/automated), brands</td><td>products.*</td><td><span class="pill">V1</span></td></tr>
+<tr><td>Inventory</td><td>Stock by variant/location, adjust with reason, movement history, low-stock alerts</td><td>products.write</td><td><span class="pill">V1</span></td></tr>
+<tr><td>Customers</td><td>List, segments by tag/spend, detail (orders, addresses, notes, marketing consent), export</td><td>customers.*</td><td><span class="pill">V1</span></td></tr>
+<tr><td>Discounts</td><td>Codes and automatic; percent, fixed, free shipping, BXGY; usage stats</td><td>discounts.write</td><td><span class="pill">V1</span></td></tr>
+<tr><td>Reviews</td><td>Moderate, reply, feature on product page</td><td>content.write</td><td><span class="pill">V1</span></td></tr>
+<tr><td>Online Store → Theme</td><td>Template gallery, token editor (colors, fonts, radius, buttons) with live preview iframe, publish/rollback</td><td>theme.publish</td><td><span class="pill">V1</span></td></tr>
+<tr><td>Online Store → Pages</td><td>Home page and landing pages as block lists: add/reorder/remove sections, edit props in forms, preview, publish, version history</td><td>content.write</td><td><span class="pill">V1</span></td></tr>
+<tr><td>Online Store → Menus, Blog, Policies, Announcement bar, Redirects, Files</td><td>Standard CRUD; files library backed by R2</td><td>content.write</td><td><span class="pill">V1</span></td></tr>
+<tr><td>Analytics</td><td>Sales, orders, AOV, conversion funnel, top products, search terms and zero-result searches</td><td>analytics.read</td><td><span class="pill">V1</span></td></tr>
+<tr><td>Features</td><td>Turn merchant-toggleable features on or off (6.2)</td><td>settings.write</td><td><span class="pill">V1</span></td></tr>
+<tr><td>Apps</td><td>Full app library</td><td>settings.write</td><td><span class="pill later">Later</span></td></tr>
+<tr><td>Settings</td><td>Separate pages: Store details, Branding (8.1), Store status (8.2), SEO (8.3), Domains, Payments (Razorpay keys, COD rules), Shipping (zones, rates, Shiprocket), Taxes (GST), Checkout, Notifications (email templates on/off), Policies, Staff and roles, Plan and billing, Activity log, Data export, Danger zone</td><td>settings.write / staff.manage</td><td><span class="pill">V1</span></td></tr>
+<tr><td>Inbox, WhatsApp, SMS</td><td>Unified conversations</td><td></td><td><span class="pill later">Later</span></td></tr>
+<tr><td>Finance, payouts, POS</td><td>Ledger and statements, Razorpay Route settlements, in-store POS</td><td></td><td><span class="pill later">Later</span></td></tr>
+</table></div>
+<h3>8.1 Branding</h3>
+<p>Settings → Branding, kept separate from the theme template so switching templates keeps the brand.</p>
+<ul class="tight">
+  <li><b>Logo</b>: light and dark versions, display width, previewed in the header and in emails. <b>Favicon</b>: one square upload; we generate 16, 32, 180, 192 and 512 px icons and the web manifest. <b>Social share image</b> at 1200×630.</li>
+  <li><b>Typography</b>: heading and body font from a curated list of about 30 Google Fonts (including Devanagari-capable faces) plus a size scale. Fonts are self-hosted from R2, so storefront visitors never load anything from Google.</li>
+  <li><b>Colour scheme</b>: 8 presets or custom primary, secondary, accent, background, surface and text colours. The editor checks contrast against WCAG AA and suggests a fix. Light, dark or automatic mode.</li>
+  <li><b>Shape</b>: corner radius and button style.</li>
+  <li>Live preview of home, product and checkout. Publishing creates a new version with rollback. The same brand settings style transactional emails and invoices.</li>
+</ul>
+
+<h3>8.2 Store status: live, coming soon, maintenance, password</h3>
+<div class="tbl"><table>
+<tr><th>Mode</th><th>Visitors see</th><th>HTTP and SEO</th></tr>
+<tr><td>Live</td><td>The normal store</td><td>200; indexing follows the SEO switch</td></tr>
+<tr><td>Coming soon</td><td>Branded page with logo, headline, launch countdown, email signup (saved to newsletter subscribers) and social links</td><td>200 with noindex</td></tr>
+<tr><td>Maintenance</td><td>Branded "back soon" page with a message and expected time</td><td>503 with <code>Retry-After</code>, so search engines keep existing rankings</td></tr>
+<tr><td>Password</td><td>Password prompt, for private launches or wholesale</td><td>noindex</td></tr>
+</table></div>
+<ul class="tight">
+  <li>Signed-in staff, and anyone with a shareable preview link, see the real store with a small bar saying which mode is active.</li>
+  <li>Payment callbacks, webhooks and the admin keep working in every mode.</li>
+  <li>Scheduled launch: set a date and time and the store goes live automatically.</li>
+  <li>A platform suspension from Super Admin overrides every mode.</li>
+  <li>New stores start in Coming soon. The last step of the setup checklist is "Launch store".</li>
+</ul>
+
+<h3>8.3 SEO, GEO and AEO</h3>
+<p>Settings → SEO. Rows marked <span class="pill later">Later</span> are deferred; the rest ships in V0.</p>
+<div class="tbl"><table>
+<tr><th>Area</th><th>What the store gets</th></tr>
+<tr><td>Search engine indexing <span class="pill">V0</span></td><td>One switch: "Allow search engines to index this store". When off, every page gets a <code>noindex</code> meta tag and <code>X-Robots-Tag</code> header, and robots.txt returns <code>Disallow: /</code>. It is forced off in coming soon and password modes, and on the platform subdomain once a custom domain is primary. Turning it off asks for confirmation and warns about losing rankings.</td></tr>
+<tr><td>Classic SEO <span class="pill">V0</span></td><td>Title template, default description and share image; overrides per product, collection, page and post; Open Graph; clean URLs with automatic 301 redirects when a URL changes; canonical URLs on the primary domain; XML sitemap; robots.txt with safe defaults; breadcrumbs; 404 monitor with one-click redirect; Search Console / Bing verification meta tag.</td></tr>
+<tr><td>Search engine integrations <span class="pill later">Later</span></td><td>Search Console and Bing API integration, IndexNow ping on publish.</td></tr>
+<tr><td>Structured data <span class="pill">V0</span></td><td>JSON-LD generated automatically: Organization, WebSite with SearchAction, Product with Offer and AggregateRating, BreadcrumbList, FAQPage, Article, LocalBusiness (when an address is set) and ItemList on collections.</td></tr>
+<tr><td>AEO <span class="pill">V0</span> (FAQ block, answer summary) · content checks <span class="pill later">Later</span></td><td>FAQ block for products and pages with FAQPage schema; a short "answer summary" per product (what it is, who it's for, key facts) rendered as the first paragraph; specifications as plain HTML tables; content checks that flag missing FAQs, thin descriptions and missing specs.</td></tr>
+<tr><td>GEO: AI crawler switches <span class="pill">V0</span> · <code>llms.txt</code> <span class="pill later">Later</span></td><td>Allow or block each AI crawler (GPTBot, ClaudeBot, PerplexityBot, Google-Extended, CCBot) in robots.txt; <code>/llms.txt</code> generated from store info, policies, top collections and products (on by default, editable); fast server-rendered pages with complete product facts; consistent Organization data and <code>sameAs</code> social links.</td></tr>
+<tr><td>SEO score <span class="pill later">Later</span></td><td>A checklist per page (title length, description, H1, alt text, valid schema, internal links, word count, FAQ present) giving a 0–100 score inside the product and page editors, plus a store-wide list of issues.</td></tr>
+</table></div>
+<div class="note warn"><b>Push-back:</b> <code>llms.txt</code> is a proposal, not a standard that AI engines are known to rely on. It is deferred to after launch; when shipped it costs little, but visibility in AI answers mostly comes from fast, crawlable pages with clear facts, structured data and consistent brand information, which the rest of this list covers. We should not promise merchants rankings in AI answers.</div>
+
+<h3>Domain connection flow</h3>
+<pre>requested ──► awaiting_dns ──► verifying ──► ssl_pending ──► active
+    │              │ (48 h)          │              │
+    └──────────────┴────► failed ◄───┴──────────────┘        active ──► removing ──► removed</pre>
+<ul class="tight">
+  <li><b>New domain:</b> merchant adds a CNAME to <code>stores.bscommerce.in</code>; Cloudflare verifies ownership and issues SSL over HTTP. Worker polls every 5 min for 48 h.</li>
+  <li><b>Domain already live elsewhere</b> (e.g. gobs.cloud during migration): <code>prevalidate_txt</code> path. Merchant adds TXT records first, SSL is issued before DNS moves, then the CNAME switch causes no downtime.</li>
+  <li>Becomes primary only in <code>active</code>. The old primary then 301-redirects.</li>
+  <li>Cloudflare for SaaS custom-hostname fees are included in per-store unit economics.</li>
+</ul>
+</section>
+
+<section id="customer">
+<h2>9. Store customer dashboard</h2>
+<p>Route: <code>{store-host}/account/*</code>. Store-scoped login. Server-rendered, dynamic (never cached).</p>
+<div class="tbl"><table>
+<tr><th>Screen</th><th>Features</th><th>Tables</th></tr>
+<tr><td>Login / register</td><td>Phone OTP (primary for India), email + password, Google; guest order lookup by order number + phone</td><td>customers, customer_sessions</td></tr>
+<tr><td>Overview</td><td>Latest order status card, quick reorder, saved addresses count, wishlist preview</td><td>orders, wishlist_items</td></tr>
+<tr><td>Orders</td><td>List with status chips; detail with items, tracking timeline, invoice PDF download, cancel (before shipping), request return, reorder</td><td>orders, fulfillments, tracking_events, invoices</td></tr>
+<tr><td>Returns</td><td>Start return per item with reason and photos; track status and refund</td><td>returns, return_items</td></tr>
+<tr><td>Addresses</td><td>Add/edit/default; pincode auto-fills city/state; serviceability check</td><td>customer_addresses</td></tr>
+<tr><td>Wishlist</td><td>Saved products, move to cart, back-in-stock note</td><td>wishlist_items</td></tr>
+<tr><td>Profile and security</td><td>Name, email, phone (re-verify on change), password, sessions list, sign out everywhere</td><td>customers, customer_sessions</td></tr>
+<tr><td>Communication</td><td>Marketing email opt-in/out, order update channels</td><td>customers, newsletter_subscribers</td></tr>
+<tr><td>Privacy</td><td>Download my data, delete my account (DPDP Act request, handled by a job)</td><td>exports, audit_logs</td></tr>
+</table></div>
+<p>Token links (no login needed): <code>/o/{token}</code> view order, <code>/pay/{token}</code> retry payment, <code>/cod/{token}</code> confirm COD order, <code>/address/{token}</code> fix undeliverable address, <code>/unsubscribe/{token}</code>.</p>
+</section>
+
+<section id="front">
+<h2>10. Storefront</h2>
+<p>Route: any active tenant host. Next.js 16 with Cache Components. Cache tags always include the tenant: <code>t:{tenantId}:product:{id}</code>, <code>t:{tenantId}:collection:{id}</code>, <code>t:{tenantId}:page:{id}</code>, <code>t:{tenantId}:theme</code>, <code>t:{tenantId}:nav</code>.</p>
+<div class="tbl"><table>
+<tr><th>Route</th><th>Rendering</th><th>Content</th></tr>
+<tr><td><code>/</code></td><td>Cached page document + blocks; dynamic cart badge</td><td>Home page blocks: Hero, Banner, ProductGrid, CollectionGrid, ProductCarousel, Testimonials, Reviews, RichText, FAQ, Gallery, Newsletter, USP strip</td></tr>
+<tr><td><code>/products/[slug]</code></td><td>Cached product; Suspense for stock/serviceability/delivery ETA</td><td>Gallery, variant picker, price with GST note, pincode check, COD availability, reviews, related products, JSON-LD Product</td></tr>
+<tr><td><code>/collections/[slug]</code>, <code>/categories/[slug]</code></td><td>Cached first page; filters via search params</td><td>Filters (price, options, in stock), sort, pagination</td></tr>
+<tr><td><code>/search</code></td><td>Dynamic</td><td>Postgres FTS + trigram, suggestions, logs query to search_queries</td></tr>
+<tr><td><code>/cart</code></td><td>Dynamic</td><td>Line items, discount code, shipping estimate by pincode</td></tr>
+<tr><td><code>/checkout</code></td><td>Dynamic, single page</td><td>Contact (phone first) → address (pincode autofill) → shipping rate → payment (Razorpay UPI/card/netbanking or COD with fee) → place order with idempotency key</td></tr>
+<tr><td><code>/orders/[token]/thank-you</code></td><td>Dynamic</td><td>Confirmation, create-account prompt</td></tr>
+<tr><td><code>/pages/[slug]</code>, <code>/blog</code>, <code>/blog/[slug]</code>, <code>/policies/[type]</code></td><td>Cached</td><td>Block pages, posts, policies</td></tr>
+<tr><td><code>/track</code></td><td>Dynamic</td><td>Order number + phone → tracking</td></tr>
+<tr><td><code>/sitemap.xml</code>, <code>/robots.txt</code>, OG images</td><td>Cached per tenant</td><td>Built from the tenant's primary domain</td></tr>
+</table></div>
+<p>Every storefront request runs in this order: resolve tenant → platform suspension check → store status mode (with staff and preview-link bypass) → SEO headers (<code>X-Robots-Tag</code> when indexing is off) → page. <code>robots.txt</code>, <code>sitemap.xml</code>, <code>llms.txt</code> and the web manifest are generated per store and cached under the tag <code>t:{tenantId}:seo</code>.</p>
+<h3>Performance budget</h3>
+<ul class="tight">
+  <li>LCP &lt; 2.0 s on 4G mid-range Android; CLS &lt; 0.05; INP &lt; 200 ms.</li>
+  <li>JS on product page &lt; 100 KB gzipped; images through Cloudflare Images as AVIF/WebP with fixed dimensions.</li>
+  <li>Cached HTML TTFB &lt; 150 ms from Cloudflare; uncached p95 &lt; 500 ms on the VPS.</li>
+</ul>
+<h3>Checkout and payment sequence</h3>
+<pre>POST /api/checkout/place  (Idempotency-Key)
+  tx: validate cart → price + tax + discount → reserve stock (guarded UPDATE, 11.3)
+      → order number from number_sequences → orders(pending) → payment_intents(created)
+      → enqueue job "order.created"
+  Razorpay: create provider order → client opens Razorpay → webhook payment.captured
+      → verify signature → insert webhook_inbox (unique provider+event_id) → reply 200 at once
+      → worker: tx: intent captured, order paid, reservation committed, invoice number
+        allocated → enqueue "order.paid" (email, analytics, search, shipment prep)
+  COD: order status confirmed after optional /cod/{token} confirmation → "order.cod_confirmed"
+  Expiry job: unpaid online orders after 30 min → cancel, release reservation</pre>
+</section>
+
+<section id="api">
+<h2>11. API, events and commerce correctness</h2>
+<div class="grid2">
+  <div class="card"><h4>oRPC routers</h4><ul class="tight">
+    <li><code>storefront.*</code>: catalog, cart, checkout, customer account. Tenant from host.</li>
+    <li><code>admin.*</code>: all store admin procedures. Tenant from membership + <code>X-Store-Id</code>.</li>
+    <li><code>platform.*</code>: super admin, served by the separate platform container only. Requires platform_staff + MFA.</li>
+    <li><code>public.*</code>: signup, slug check, plans.</li>
+    <li><code>/webhooks/{provider}</code>: plain Hono routes with signature checks.</li>
+    <li>OpenAPI generated at <code>/api/openapi.json</code> for the future mobile app and partners.</li>
+  </ul></div>
+  <div class="card"><h4>Domain events (pg-boss queues)</h4><ul class="tight">
+    <li>tenant.created, tenant.suspended, domain.verified, theme.published, page.published</li>
+    <li>product.created/updated/deleted, inventory.changed, inventory.low</li>
+    <li>cart.abandoned, order.created, order.paid, order.cod_confirmed, order.cancelled</li>
+    <li>fulfillment.created, fulfillment.delivered, fulfillment.rto</li>
+    <li>return.requested, refund.processed, review.submitted</li>
+    <li>export.requested, customer.data_request</li>
+  </ul></div>
+</div>
+<p>Each consumer is idempotent (checks <code>event_id</code> in its own effect table or uses upserts). Retries: 5 with exponential backoff; dead-lettered jobs appear in Super Admin → System.</p>
+
+<h3>11.1 State machines</h3>
+<p>Status columns change only through one transition function per entity (<code>transitionOrder(ctx, id, event)</code>), which checks the table below, writes an <code>order_events</code> row, and rejects everything else. Every valid and invalid transition has a unit test.</p>
+<div class="tbl"><table>
+<tr><th>Entity</th><th>Allowed transitions</th></tr>
+<tr><td>Order</td><td>pending → confirmed (paid or COD confirmed) · pending → cancelled (expired, customer, merchant) · confirmed → processing → partially_fulfilled → fulfilled → delivered · confirmed/processing → cancelled (only if nothing shipped; triggers refund) · delivered → returned (when all items returned)</td></tr>
+<tr><td>Payment intent</td><td>created → requires_action → authorized → captured · created/requires_action → failed · authorized → cancelled (void) · captured → partially_refunded → refunded · COD: cod_pending → cod_collected | cod_failed (RTO)</td></tr>
+<tr><td>Fulfillment</td><td>pending → label_created → picked_up → in_transit → out_for_delivery → delivered · in_transit/out_for_delivery → rto → rto_delivered · pending/label_created → cancelled</td></tr>
+<tr><td>Return</td><td>requested → approved | rejected · approved → picked_up → received → refunded | replaced → closed</td></tr>
+</table></div>
+<p>Cross-entity guards (database check or transition function): an order cannot be cancelled once any fulfillment is past <code>label_created</code>; an order cannot be <code>delivered</code> while any fulfillment is pending; refunds cannot exceed captured amount.</p>
+
+<h3>11.2 Numbering</h3>
+<p>Order, invoice (per financial year), credit note and return numbers come from <code>number_sequences</code> with a single <code>UPDATE … SET next_value = next_value + 1 … RETURNING</code> inside the order or invoice transaction. Tested on PG 18.6 with 20 parallel clients: 1,000 orders, 1,000 unique numbers, no gaps.</p>
+
+<h3>11.3 Inventory reservation</h3>
+<pre>UPDATE inventory_levels
+   SET reserved = reserved + $qty
+ WHERE tenant_id = $t AND variant_id = $v AND location_id = $l
+   AND on_hand - reserved >= $qty
+RETURNING id;          -- 0 rows = out of stock, abort checkout
+INSERT INTO inventory_reservations (…, status 'active', expires_at now()+30 min);</pre>
+<p>Tested: 500 concurrent attempts against stock of 100 produced exactly 100 reservations and never oversold. On payment: reservation → committed, on_hand and reserved both decrease, movement row <code>sold</code>. Expiry job releases active reservations past <code>expires_at</code>; release is idempotent (only <code>active</code> rows change).</p>
+
+<h3>11.4 Webhooks</h3>
+<p>Receive → verify signature → sanitize (strip card data, CVV, auth headers, secrets) → insert into <code>webhook_inbox</code> with <code>on conflict (provider, event_id) do nothing</code> → reply 200 immediately → enqueue processing → worker processes idempotently. The provider never waits for the business workflow.</p>
+
+<h3>11.5 Payment provider interface</h3>
+<pre>interface PaymentProvider {
+  createIntent(ctx, order): Intent
+  authorize(ctx, intent) / capture(ctx, intent, amount) / cancel(ctx, intent)
+  refund(ctx, payment, amount, reason): Refund
+  verifyWebhook(headers, rawBody): VerifiedEvent
+  getPayment(ctx, providerPaymentId): ProviderPayment
+  reconcile(ctx, date): ReconciliationReport      // daily job
+}
+// RazorpayProvider · CODProvider · StripeProvider (later). Razorpay Route is a later
+// settlement layer on top, not part of the Order model.</pre>
+
+<h3>11.6 Cache keys and invalidation</h3>
+<p>Invariant: every cache tag starts with the tenant (<code>t:{tenantId}:…</code>). A lint rule rejects <code>cacheTag()</code> calls without it.</p>
+<div class="tbl"><table>
+<tr><th>Change</th><th>Tags revalidated</th></tr>
+<tr><td>Product title, description, SEO</td><td>product, its categories, its collections, home page if featured</td></tr>
+<tr><td>Price or compare-at price</td><td>product, its collections and categories</td></tr>
+<tr><td>Product image</td><td>product</td></tr>
+<tr><td>Inventory</td><td>none cached (stock renders in a dynamic Suspense hole); out-of-stock flip → product, collections</td></tr>
+<tr><td>Theme or branding publish</td><td>theme, store-shell (all pages)</td></tr>
+<tr><td>Home page publish</td><td>page:home</td></tr>
+<tr><td>Menu</td><td>nav</td></tr>
+<tr><td>Collection rules or order</td><td>collection, pages that embed it</td></tr>
+<tr><td>Store settings, status, SEO settings</td><td>store-shell, seo</td></tr>
+</table></div>
+<p>Merchant edits use read-your-writes (admin preview bypasses cache; publish revalidates tags synchronously). Storefront reads use stale-while-revalidate.</p>
+
+<h3>11.7 Integration kill switches</h3>
+<p>Razorpay, Shiprocket, Resend, Cloudflare API and (later) Typesense each have a platform kill switch flag and a fallback: Razorpay off → checkout offers COD only with a notice; Shiprocket off → manual fulfillment with tracking entry; Resend off → emails queue and retry; Typesense off → Postgres search. Failures show in Super Admin → System and never take down unrelated store functions.</p>
+</section>
+
+<section id="design">
+<h2>12. Admin design system and loading states</h2>
+<p>Store Admin and Super Admin follow the <a href="https://supabase.com/design-system">Supabase Design System</a> (Apache-2.0, built on shadcn/ui + Radix + Tailwind, the same base as our stack). The storefront does <b>not</b> use it; storefronts use per-store theme tokens (section 10).</p>
+
+<h3>What we adopt</h3>
+<div class="tbl"><table>
+<tr><th>Area</th><th>Adopt from Supabase</th><th>Our implementation</th></tr>
+<tr><td>Token architecture</td><td>Semantic CSS-variable tokens: <code>foreground</code> / <code>-light</code> / <code>-lighter</code> / <code>-muted</code>; <code>surface-75…400</code>, <code>bg-alternative</code>, <code>overlay</code>, <code>control</code>, <code>dash-sidebar</code>, <code>dash-canvas</code>; borders <code>default/muted/strong/stronger/control</code>; <code>destructive</code>, <code>warning</code> scales</td><td><code>packages/ui/tokens.css</code> + Tailwind 4 <code>@theme</code> mapping, same names</td></tr>
+<tr><td>Primary hue</td><td><code>--primary-hue</code> drives <code>--primary</code> (readable ink, AA in light), <code>--primary-solid</code> (buttons), <code>--primary-bright</code> (focus ring, selected)</td><td>Our own hue (Bs emerald), not Supabase's brand green</td></tr>
+<tr><td>Themes</td><td>Light, dark, system</td><td>Same; stored per user</td></tr>
+<tr><td>Page layout</td><td>PageContainer (widths <code>small</code> settings/forms, <code>default</code> lists/details, <code>full</code> dense tables/editors), PageBreadcrumbs row first, PageNav under it, optional PageHeader meta, PageSection</td><td>Every admin route is built from these five components</td></tr>
+<tr><td>Action placement</td><td>Actions go where the eye is: breadcrumb row for parents with sub-nav, header aside for detail pages, right side of the filter row for tables</td><td>Written into the admin page template and PR checklist</td></tr>
+<tr><td>Patterns</td><td>Forms (FormItemLayout), tables + FilterBar, empty states, modality (dialog vs sheet), navigation, charts, copywriting, accessibility</td><td>Ported as <code>packages/ui/patterns/*</code></td></tr>
+<tr><td>Fragments</td><td>PageHeader, PageSection, FilterBar, MetricCard, ConfirmationModal, TextConfirmDialog (type-to-confirm for deletes), EmptyStatePresentational, ErrorDisplay, InfoTooltip, InnerSideMenu, MultiSelect, Admonition</td><td>Ported and adapted</td></tr>
+<tr><td>Atoms</td><td>shadcn set incl. Sidebar, Command menu, Sheet, Data table, Input OTP, Tree view, Sonner, Skeleton</td><td>Installed via shadcn CLI, restyled with the tokens</td></tr>
+</table></div>
+
+<h3>Push-back and adjustments</h3>
+<ul>
+  <li><b>It is not an installable package.</b> Supabase's <code>ui</code> and <code>ui-patterns</code> live inside their monorepo. We port (copy and adapt) the pieces we need into <code>packages/ui</code>, keep the Apache-2.0 notice, and own them from then on. No upstream updates.</li>
+  <li><b>Do not copy the Supabase brand.</b> Use the token system and patterns, but our own primary hue, logo, icons (Lucide) and fonts. The admin should feel Supabase-grade, not look like a Supabase clone.</li>
+  <li><b>Their code imports Next.js (<code>next/link</code>).</b> Our admin is Vite + TanStack Router, so links and navigation helpers are swapped during the port.</li>
+  <li><b>It is built for developers on desktop, dark-first and dense.</b> Our users are shop owners, often on a phone. We raise touch targets to 40 px on mobile, default to light theme, turn tables into card lists below 768 px, and use shop vocabulary ("Orders to ship", not "Pending fulfillment records").</li>
+  <li><b>Their Studio-specific pieces</b> (SQL editor, logs charts, connect interstitials, assistant chat) are skipped.</li>
+</ul>
+
+<h3>Porting scope</h3>
+<p><b>M0 (a few days, not weeks):</b> tokens and theming, PageContainer, PageBreadcrumbs, PageHeader, PageSection, Sidebar, Button, Input, Select, Dialog, Sheet, Table, Form, EmptyState, Skeleton, Toast. <b>Everything else</b> (FilterBar, MetricCard, command menu, tree view, etc.) is ported when the first screen needs it.</p>
+
+<h3>Skeleton loading everywhere, from day one</h3>
+<p>Every screen that fetches data shows a skeleton that matches the final layout, so nothing jumps when content arrives. Built in M0 as part of the page template, not added later.</p>
+<div class="tbl"><table>
+<tr><th>Where</th><th>How</th></tr>
+<tr><td>Admin first load</td><td>Static skeleton of the sidebar + page frame written into <code>index.html</code>, so it paints before any JavaScript downloads</td></tr>
+<tr><td>Admin route changes</td><td>TanStack Router <code>pendingComponent</code> on every route, with <code>pendingMs: 150</code> and <code>pendingMinMs: 300</code> so fast loads show no flash and slow loads never flicker. Loaders prefetch on link hover</td></tr>
+<tr><td>Admin sections</td><td>Each PageSection has its own Suspense boundary and matching skeleton (<code>TableSkeleton rows={10}</code>, <code>MetricCardSkeleton</code>, <code>FormSkeleton fields={n}</code>, <code>DetailSkeleton</code>)</td></tr>
+<tr><td>Storefront</td><td>Cache Components serve the static shell instantly; dynamic parts (cart badge, stock, delivery ETA, account data) sit in Suspense with skeletons; <code>loading.tsx</code> on every route</td></tr>
+<tr><td>Customer account</td><td><code>loading.tsx</code> + Suspense skeletons for orders, addresses, wishlist</td></tr>
+<tr><td>Super Admin</td><td>Same admin rules</td></tr>
+</table></div>
+<p><b>Where skeletons are the wrong tool</b> (we use something else):</p>
+<ul class="tight">
+  <li>Button actions and saves: button spinner + disabled state, then a toast.</li>
+  <li>Pagination, sorting, filtering a table that already has data: keep the old rows visible (<code>placeholderData: keepPreviousData</code>) with a thin progress bar, instead of blanking to a skeleton.</li>
+  <li>Data already in the query cache: render it immediately and refresh in the background.</li>
+  <li>Skeletons respect <code>prefers-reduced-motion</code> (no shimmer, static fill) and are hidden from screen readers, with <code>aria-busy</code> on the region.</li>
+</ul>
+<p>Enforcement: a lint rule and PR checklist item require every route file to export a <code>pendingComponent</code> (admin) or have a <code>loading.tsx</code> (storefront); Playwright takes a screenshot under a throttled network to catch missing skeletons and layout shift.</p>
+</section>
+
+<section id="phases">
+<h2>13. Milestones</h2>
+<p>Delivery is milestone-driven: a milestone is done when its exit criteria pass, not when a date arrives. Rough effort for one developer with AI assistance is shown only for planning (about 30 weeks to V1).</p>
+
+<div class="phase"><h3>M0 · Platform boots <span class="wk">~2 weeks</span></h3>
+<ul class="tight">
+  <li>Production VPS reinstalled (Ubuntu 24.04, Coolify, swap, ufw, Postgres not public). <b>Separate small staging VPS.</b></li>
+  <li>Turborepo with <code>web</code>, <code>platform</code>, <code>admin</code>, <code>worker</code> and packages; strict TS; lint rules (db import ban, tenant cache tags).</li>
+  <li>GitHub Actions → GHCR → Coolify pull. Drizzle migrations run as <code>app_owner</code>; expand/contract rule documented.</li>
+  <li>Postgres roles <code>app_owner</code>, <code>app_rw</code>, <code>app_platform</code>; pgBackRest + WAL archive to R2.</li>
+  <li>Sentry, Better Stack, request_id/tenant_id logging. ADR-001…010 written.</li>
+  <li>Design system M0 scope (section 12) with the skeleton route template.</li>
+</ul>
+<div class="exit"><b>Exit:</b> push to main deploys web, platform, admin and worker to staging then production; a migration runs; a backup is restored into a scratch database.</div></div>
+
+<div class="phase"><h3>M1 · Tenant isolation proven <span class="wk">~3 weeks</span></h3>
+<ul class="tight">
+  <li>Schema for platform, identity, settings. <code>tenantTable()</code> helper: tenant_id, composite FKs, FORCE RLS, <code>nullif</code> policy.</li>
+  <li><code>withTenant()</code>, host resolver, TenantContext; Better Auth staff instance + separate customer instance (one shared auth package, separate cookies); memberships, roles, permissions.</li>
+  <li>Feature flags with per-store overrides.</li>
+</ul>
+<div class="exit"><b>Exit:</b> store A cannot read or write store B through any procedure (generated suite); pooled-connection test without SET LOCAL returns zero rows, not an error; host resolution and membership checks pass; customer session cannot call admin procedures.</div></div>
+
+<div class="phase"><h3>M2 · Merchant manages catalog <span class="wk">~3 weeks</span></h3>
+<ul class="tight">
+  <li>Products, options, variants, categories, collections, brands, CSV import/export.</li>
+  <li>R2 uploads, Cloudflare Images, files library. Inventory levels, reservations table, movement ledger.</li>
+  <li>Theme tokens, branding (8.1), block registry v1, home page sections, menus, pages, publish with versions.</li>
+</ul>
+<div class="exit"><b>Exit:</b> merchant creates and edits products with variants, images and stock, sets branding and theme, and publishes a home page.</div></div>
+
+<div class="phase"><h3>M3 · Storefront sells the catalog <span class="wk">~3 weeks</span></h3>
+<ul class="tight">
+  <li>Storefront routes with Cache Components and the invalidation matrix (11.6); Postgres search.</li>
+  <li>Store status modes (8.2), indexing switch and V0 SEO (8.3), sitemap, robots, JSON-LD.</li>
+  <li>Cart and checkout UI.</li>
+</ul>
+<div class="exit"><b>Exit:</b> a store on its subdomain shows home, collection, product, cart and checkout UI; Lighthouse mobile ≥ 90 on product page recorded as baseline.</div></div>
+
+<div class="phase"><h3>M4 · Payment works <span class="wk">~3 weeks</span></h3>
+<ul class="tight">
+  <li>Payment interface (11.5), RazorpayProvider with per-store encrypted keys, CODProvider (fee, limits, confirmation link).</li>
+  <li>Idempotency keys, webhook inbox (11.4), payment and order state machines (11.1), number sequences (11.2), atomic reservation (11.3), expiry job.</li>
+  <li>Customer accounts: OTP login, orders, addresses, wishlist; guest checkout.</li>
+</ul>
+<div class="exit"><b>Exit:</b> Razorpay test and COD orders complete end to end; duplicate checkout submits, duplicate webhooks and retried jobs each produce exactly one order, one payment and one stock change; invalid transitions are rejected.</div></div>
+
+<div class="phase"><h3>M5 · Fulfillment works <span class="wk">~3 weeks</span></h3>
+<ul class="tight">
+  <li>Orders admin (views, timeline, notes, draft orders, pay links, cancel, refund).</li>
+  <li>Shipping interface + Shiprocket (rates, serviceability, shipment, label, tracking webhooks, RTO); fulfillment and return state machines.</li>
+  <li>GST invoices and credit notes for the documented V1 cases; transactional emails via events; returns; abandoned-cart recovery; customers and discounts admin.</li>
+</ul>
+<div class="exit"><b>Exit:</b> on staging, an order is shipped via Shiprocket with an invoice, tracked, delivered, returned and refunded; emails sent at each step.</div></div>
+
+<div class="phase"><h3>M6 · Store #1 live on the new platform <span class="wk">~2–3 weeks</span></h3>
+<p><b>Minimum hardening before real customers</b> (moved here from M7): backup restore drill passed with RPO/RTO measured, isolation and concurrency suites green, Sentry and uptime alerts on, security review of auth, checkout and webhooks, payload sanitization verified.</p>
+<ul class="tight">
+  <li>Migration script and cutover (section 16), behind feature flags so any area can fall back.</li>
+  <li>gobs.cloud moved with TXT pre-validation (no downtime).</li>
+</ul>
+<div class="exit"><b>Exit:</b> real catalog, customers, historical orders and media on the platform; real orders flowing for 2 weeks with no data or payment incidents.</div></div>
+
+<div class="phase"><h3>M7 · Production hardening <span class="wk">~2 weeks</span></h3>
+<ul class="tight">
+  <li>k6 load test on staging; capacity number replaces the hypothesis (section 14).</li>
+  <li>Noisy-neighbour test: store A runs a 10k-product import and heavy traffic while store B checks out; B's p95 stays within target.</li>
+  <li>Concurrency tests at scale (section 15); per-tenant rate limits and job concurrency tuned.</li>
+  <li>Monitoring thresholds and alerts (section 14); incident, rollback and tenant-restore runbooks.</li>
+</ul>
+<div class="exit"><b>Exit:</b> load, noisy-neighbour and concurrency tests pass; capacity policy written; second restore drill passed.</div></div>
+
+<div class="phase"><h3>M8 · Self-service SaaS <span class="wk">~4 weeks</span></h3>
+<ul class="tight">
+  <li>One-page marketing site and signup flow (section 7), provisioning, templates, setup checklist.</li>
+  <li>Plans, trial, Razorpay Subscriptions for merchant billing; size tiers and quotas (6.1).</li>
+  <li>Custom domains with the state machine (8, domain flow).</li>
+</ul>
+<div class="exit"><b>Exit:</b> a stranger signs up, gets a live store, connects a custom domain and starts a paid plan without help; quota limits block admin creation but never checkout.</div></div>
+
+<div class="phase"><h3>M9 · SaaS launch <span class="wk">~3 weeks</span></h3>
+<ul class="tight">
+  <li>Super Admin screens (section 6) on the platform container: tenants, domains, plans, usage, features, audit, system.</li>
+  <li>Support sessions (6.3), tenant lifecycle and deletion workflow (6.4), full store export.</li>
+  <li>Legal: merchant terms, DPA, subprocessor list, DPDP handling. GST cases reviewed with an accountant.</li>
+</ul>
+<div class="exit"><b>Exit:</b> platform team runs the business from Super Admin; every privileged action is audited; incident procedures and capacity policy published; public launch.</div></div>
+
+<div class="phase"><h3>After V1 <span class="wk">ordered by expected demand</span></h3>
+<ol class="tight">
+  <li>WhatsApp notifications and COD confirmation over WhatsApp</li>
+  <li>Puck visual editor on the stable block registry</li>
+  <li>Full app library (6.2) if merchants need installable modules</li>
+  <li>Advanced SEO: SEO score, Search Console / IndexNow, <code>llms.txt</code></li>
+  <li>Move Postgres to its own server; second app instance with Valkey; Typesense projection</li>
+  <li>Finance ledger, Razorpay Route, multi-location transfers, POS; Expo apps</li>
+</ol></div>
+
+<h3>Definition of done for V1</h3>
+<ul class="tight">
+  <li>Tenant isolation suite passes; manual penetration test cannot cross stores; BYPASSRLS credentials exist only in the platform container.</li>
+  <li>Store #1 migrated without regressions and running real orders; a second store with a different domain, theme and catalog is live.</li>
+  <li>Self-signup to live store works unaided.</li>
+  <li>Store admins cannot reach platform routes; support access is time-boxed and audited.</li>
+  <li>Restore drill met RPO ≤ 15 min and RTO ≤ 2 h in the last 30 days; per-store export verified.</li>
+  <li>Concurrency, noisy-neighbour and load tests documented; quotas and rate limits stop a noisy store.</li>
+  <li>Separate staging, rollback procedure and incident runbook in place.</li>
+</ul>
+</section>
+
+<section id="infra">
+<h2>14. Infrastructure and capacity</h2>
+<div class="tbl"><table>
+<tr><th>Production container</th><th>RAM budget</th><th>Notes</th></tr>
+<tr><td>OS + Docker + Coolify</td><td>~1.2 GB</td><td>Coolify runs its own Postgres and Redis</td></tr>
+<tr><td>postgres</td><td>~2.0 GB</td><td>shared_buffers 1.5 GB, work_mem 8 MB, max_connections 60; bound to the private Docker network only</td></tr>
+<tr><td>web (Next + Store API)</td><td>~0.8 GB</td><td>pool 10, role app_rw</td></tr>
+<tr><td>platform (Platform API)</td><td>~0.2 GB</td><td>pool 3, role app_platform, behind Cloudflare Access</td></tr>
+<tr><td>worker</td><td>~0.4 GB</td><td>pool 5, concurrency 4, per-tenant job limits</td></tr>
+<tr><td>Headroom + 4 GB swap</td><td>~3.4 GB</td><td>no builds and no staging on this server</td></tr>
+</table></div>
+<p><b>Staging:</b> separate small VPS (2 vCPU / 4 GB, about €5/month) running the same images with its own database and seeded test stores. Load tests, migrations rehearsals and restore drills run there.</p>
+<p><b>Capacity:</b> initial hypothesis 50–150 small stores. The real number comes from the M7 load test and production telemetry. Pricing is not designed around an assumed store count.</p>
+<div class="tbl"><table>
+<tr><th>Signal</th><th>Warning</th><th>Scale trigger</th></tr>
+<tr><td>CPU</td><td>&gt; 60% sustained</td><td>&gt; 75–80% at peak</td></tr>
+<tr><td>RAM</td><td>&gt; 70%</td><td>&gt; 80%</td></tr>
+<tr><td>DB connections</td><td>&gt; 70% of max</td><td>waits appear</td></tr>
+<tr><td>Uncached p95</td><td>&gt; 400 ms</td><td>&gt; 500 ms</td></tr>
+<tr><td>Job lag</td><td>&gt; 30 s</td><td>&gt; 2 min</td></tr>
+<tr><td>Single store share of load</td><td>&gt; 20%</td><td>&gt; 25–30% repeatedly → throttle, raise tier, or move to dedicated resources</td></tr>
+</table></div>
+<p><b>Upgrade stages:</b> (1) current VPS → (2) larger app VPS + separate or managed Postgres in Mumbai → (3) two app instances behind a load balancer + Valkey shared cache + Typesense. No Kubernetes.</p>
+<h3>Backups and disaster recovery</h3>
+<ul class="tight">
+  <li>Targets: <b>RPO ≤ 15 minutes</b> (continuous WAL archiving to R2 with <code>archive_timeout = 60s</code>), <b>RTO ≤ 2 hours</b> (restore to a fresh VPS from runbook).</li>
+  <li>pgBackRest full weekly, differential daily, 30-day retention; R2 versioning on media; Coolify config, env templates, migration state and image tags backed up with each release.</li>
+  <li>A backup counts as valid only after a restore test. Monthly drill on staging, results logged in Super Admin → System.</li>
+</ul>
+<h3>Database migration safety</h3>
+<p>Expand → migrate → contract: add the new column or table, deploy code that works with both, backfill, switch reads, switch writes, remove the old schema in a later release. No destructive change while an older app version may still be running.</p>
+</section>
+
+<section id="quality">
+<h2>15. Testing and quality</h2>
+<ul class="tight">
+  <li><b>Unit</b> (Vitest): pricing, GST, discounts, inventory math, every valid and invalid state transition, block schema migrations.</li>
+  <li><b>Integration</b>: domain services against real Postgres 18 in CI (Testcontainers), with RLS and the pooled-connection test.</li>
+  <li><b>Isolation suite</b>: generated from the router list so every new procedure is covered automatically.</li>
+  <li><b>Concurrency</b>: 100 simultaneous checkouts; simultaneous reservations on the last unit; simultaneous coupon redemption against a usage limit; simultaneous invoice allocation; duplicate payment, order and webhook requests; duplicate jobs; refund retries.</li>
+  <li><b>Noisy neighbour</b>: heavy import and traffic on store A while store B checks out.</li>
+  <li><b>E2E</b> (Playwright): signup → first product → storefront → checkout (Razorpay test + COD) → fulfil → return; throttled-network run checks skeletons and layout shift.</li>
+  <li><b>Contract</b>: OpenAPI diff check on PRs.</li>
+  <li><b>Performance</b>: Lighthouse CI on storefront routes; k6 before each major release.</li>
+</ul>
+<h3>Architecture Decision Records</h3>
+<p><code>docs/adr/</code>: ADR-001 Modular monolith · 002 Tenant isolation via RLS · 003 PostgreSQL as source of truth · 004 Next.js Cache Components · 005 oRPC instead of tRPC · 006 pg-boss instead of a workflow engine · 007 Cloudflare for SaaS · 008 Payment provider adapter · 009 Versioned block registry · 010 No merchant code execution. New decisions get an ADR before code.</p>
+<h3>GST scope for V1</h3>
+<p>Documented and reviewed with an accountant before M6: tax-inclusive and exclusive pricing, HSN, exempt items, B2C and B2B with GSTIN, place of supply (CGST+SGST vs IGST), discounts reducing taxable value, shipping tax treatment, rounding, invoice and credit note numbering per financial year, cancellations. Anything outside the list is marked unsupported in the admin.</p>
+</section>
+
+<section id="migrate">
+<h2>16. Migrating the current store as tenant #1</h2>
+<ol class="tight">
+  <li>Freeze the current app at a git tag and take a full DB dump.</li>
+  <li>Write a one-off script that maps the current 19 tables (categories, products, product_variants, customers, orders, order_items, order_events, discounts, admins, store_settings, policies, shipping_zones, pages, menus, media, blog_posts, reviews, returns) into the new schema under tenant #1.</li>
+  <li>Move files from the Coolify uploads volume to R2 and rewrite media keys.</li>
+  <li>Admins become users with store_owner/store_admin memberships and must reset passwords (old hashes are bcrypt; Better Auth can verify bcrypt with a custom hasher if we want seamless login).</li>
+  <li>Keep order numbers and product slugs; add redirects for any URL changes (<code>/product/[slug]</code> → <code>/products/[slug]</code>).</li>
+  <li>Dry run on the staging VPS, compare counts and totals; enable areas behind feature flags; cut over gobs.cloud using TXT pre-validation so SSL is ready before DNS moves.</li>
+  <li>This happens at M6, right after the commerce loop is proven, not at the end.</li>
+</ol>
+</section>
+
+<section id="risks">
+<h2>17. Risks and mitigations</h2>
+<div class="tbl"><table>
+<tr><th>Risk</th><th>Mitigation</th></tr>
+<tr><td>Cross-tenant data leak</td><td>Three layers (context, RLS, composite FKs), isolation suite in CI, lint ban on raw db access</td></tr>
+<tr><td>Privileged BYPASSRLS access misused or leaked</td><td>Separate platform container and credentials, named platform functions only, MFA, full audit</td></tr>
+<tr><td>Inventory, payment or order concurrency bugs</td><td>Guarded updates, number sequences, state machines, idempotency, webhook dedupe, concurrency test suite (all verified on PG 18.6)</td></tr>
+<tr><td>Building platform features before commerce is proven</td><td>V0 → store #1 → V1 ordering; milestone exit criteria</td></tr>
+<tr><td>Scope creep delays V1</td><td>Deferred list is fixed; Storify features are references, not requirements</td></tr>
+<tr><td>2-CPU server saturates during a sale</td><td>CDN caching, Cloudflare rate limits, per-tenant quotas, upgrade path ready</td></tr>
+<tr><td>Block schema changes break stores</td><td>Versioned block types with migration functions, run on read and in a backfill job</td></tr>
+<tr><td>Payment/webhook edge cases</td><td>Webhook inbox dedupe, idempotency keys, reconciliation job comparing Razorpay settlements daily</td></tr>
+<tr><td>COD fraud and RTO costs</td><td>COD limits, confirmation link, pincode blocklist, RTO rate per customer</td></tr>
+<tr><td>Legal exposure as a platform</td><td>Merchant terms, DPA, subprocessor list, DPDP Act handling for customer data requests; legal review before launch</td></tr>
+<tr><td>Single server failure</td><td>Off-site backups with PITR, documented restore to a fresh VPS in under 2 hours</td></tr>
+</table></div>
+</section>
+</main>
+</div>

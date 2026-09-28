@@ -1,0 +1,6 @@
+Portions of packages/ui (token architecture, page layout components, patterns and fragments)
+are adapted from the Supabase Design System (https://supabase.com/design-system),
+Copyright (c) Supabase, Inc., licensed under the Apache License, Version 2.0.
+You may obtain a copy of the License at http://www.apache.org/licenses/LICENSE-2.0
+Modifications: own primary hue and brand, router-agnostic links, mobile touch targets,
+light-first defaults. No Supabase brand assets are included.

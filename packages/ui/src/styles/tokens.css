@@ -1,0 +1,158 @@
+/*
+ * Admin design tokens (PLAN §12). Token architecture and names follow the Supabase Design System
+ * (Apache-2.0, see packages/ui/NOTICE); values and the primary hue are our own (Bs emerald).
+ * Light is the default; the app resolves light/dark/system and sets <html data-theme>.
+ * Storefronts do NOT use this file — they use per-store theme tokens.
+ */
+@import "tailwindcss";
+@source "../";
+
+@custom-variant dark (&:where([data-theme="dark"], [data-theme="dark"] *));
+
+:root {
+  --primary-hue: 158;
+
+  --foreground: oklch(0.22 0.02 var(--primary-hue));
+  --foreground-light: oklch(0.38 0.015 var(--primary-hue));
+  --foreground-lighter: oklch(0.52 0.012 var(--primary-hue));
+  --foreground-muted: oklch(0.64 0.01 var(--primary-hue));
+
+  --background: oklch(1 0 0);
+  --bg-alternative: oklch(0.985 0.003 var(--primary-hue));
+  --surface-75: oklch(0.99 0.002 var(--primary-hue));
+  --surface-100: oklch(0.975 0.004 var(--primary-hue));
+  --surface-200: oklch(0.955 0.005 var(--primary-hue));
+  --surface-300: oklch(0.93 0.006 var(--primary-hue));
+  --surface-400: oklch(0.9 0.008 var(--primary-hue));
+  --overlay: oklch(1 0 0);
+  --control: oklch(0.985 0.003 var(--primary-hue));
+  --dash-sidebar: oklch(0.985 0.004 var(--primary-hue));
+  --dash-canvas: oklch(0.995 0.002 var(--primary-hue));
+
+  --border-default: oklch(0.91 0.006 var(--primary-hue));
+  --border-muted: oklch(0.94 0.004 var(--primary-hue));
+  --border-strong: oklch(0.86 0.008 var(--primary-hue));
+  --border-stronger: oklch(0.78 0.01 var(--primary-hue));
+  --border-control: oklch(0.86 0.008 var(--primary-hue));
+
+  /* --primary: readable ink (AA on light), --primary-solid: buttons, --primary-bright: focus/selected */
+  --primary: oklch(0.47 0.11 var(--primary-hue));
+  --primary-solid: oklch(0.52 0.13 var(--primary-hue));
+  --primary-solid-foreground: oklch(0.99 0.01 var(--primary-hue));
+  --primary-bright: oklch(0.7 0.16 var(--primary-hue));
+
+  --destructive: oklch(0.55 0.2 27);
+  --destructive-solid: oklch(0.58 0.21 27);
+  --destructive-foreground: oklch(0.99 0 0);
+  --destructive-soft: oklch(0.96 0.03 27);
+  --warning: oklch(0.55 0.13 70);
+  --warning-soft: oklch(0.96 0.05 85);
+
+  --radius: 0.5rem;
+  --touch-target: 2.5rem; /* 40px minimum on mobile (PLAN §12 adjustment) */
+
+  color-scheme: light;
+}
+
+
+:root[data-theme="dark"] {
+  --foreground: oklch(0.95 0.005 var(--primary-hue));
+  --foreground-light: oklch(0.8 0.008 var(--primary-hue));
+  --foreground-lighter: oklch(0.68 0.01 var(--primary-hue));
+  --foreground-muted: oklch(0.56 0.01 var(--primary-hue));
+  --background: oklch(0.17 0.006 var(--primary-hue));
+  --bg-alternative: oklch(0.15 0.006 var(--primary-hue));
+  --surface-75: oklch(0.19 0.006 var(--primary-hue));
+  --surface-100: oklch(0.21 0.007 var(--primary-hue));
+  --surface-200: oklch(0.24 0.008 var(--primary-hue));
+  --surface-300: oklch(0.28 0.009 var(--primary-hue));
+  --surface-400: oklch(0.32 0.01 var(--primary-hue));
+  --overlay: oklch(0.2 0.007 var(--primary-hue));
+  --control: oklch(0.2 0.007 var(--primary-hue));
+  --dash-sidebar: oklch(0.16 0.006 var(--primary-hue));
+  --dash-canvas: oklch(0.17 0.006 var(--primary-hue));
+  --border-default: oklch(0.28 0.008 var(--primary-hue));
+  --border-muted: oklch(0.24 0.007 var(--primary-hue));
+  --border-strong: oklch(0.34 0.01 var(--primary-hue));
+  --border-stronger: oklch(0.42 0.012 var(--primary-hue));
+  --border-control: oklch(0.34 0.01 var(--primary-hue));
+  --primary: oklch(0.78 0.14 var(--primary-hue));
+  --primary-solid: oklch(0.6 0.13 var(--primary-hue));
+  --primary-solid-foreground: oklch(0.99 0.01 var(--primary-hue));
+  --primary-bright: oklch(0.8 0.16 var(--primary-hue));
+  --destructive: oklch(0.72 0.17 27);
+  --destructive-soft: oklch(0.28 0.07 27);
+  --warning: oklch(0.8 0.13 80);
+  --warning-soft: oklch(0.3 0.06 80);
+  color-scheme: dark;
+}
+
+@theme inline {
+  --color-foreground: var(--foreground);
+  --color-foreground-light: var(--foreground-light);
+  --color-foreground-lighter: var(--foreground-lighter);
+  --color-foreground-muted: var(--foreground-muted);
+  --color-background: var(--background);
+  --color-alternative: var(--bg-alternative);
+  --color-surface-75: var(--surface-75);
+  --color-surface-100: var(--surface-100);
+  --color-surface-200: var(--surface-200);
+  --color-surface-300: var(--surface-300);
+  --color-surface-400: var(--surface-400);
+  --color-overlay: var(--overlay);
+  --color-control: var(--control);
+  --color-dash-sidebar: var(--dash-sidebar);
+  --color-dash-canvas: var(--dash-canvas);
+  --color-border: var(--border-default);
+  --color-border-muted: var(--border-muted);
+  --color-border-strong: var(--border-strong);
+  --color-border-stronger: var(--border-stronger);
+  --color-border-control: var(--border-control);
+  --color-primary: var(--primary);
+  --color-primary-solid: var(--primary-solid);
+  --color-primary-solid-foreground: var(--primary-solid-foreground);
+  --color-primary-bright: var(--primary-bright);
+  --color-destructive: var(--destructive);
+  --color-destructive-solid: var(--destructive-solid);
+  --color-destructive-foreground: var(--destructive-foreground);
+  --color-destructive-soft: var(--destructive-soft);
+  --color-warning: var(--warning);
+  --color-warning-soft: var(--warning-soft);
+  --radius-sm: calc(var(--radius) - 2px);
+  --radius-md: var(--radius);
+  --radius-lg: calc(var(--radius) + 4px);
+  --font-sans: "Inter Variable", ui-sans-serif, system-ui, sans-serif;
+  --spacing-touch: var(--touch-target);
+}
+
+@layer base {
+  *,
+  ::before,
+  ::after {
+    border-color: var(--border-default);
+  }
+  body {
+    background: var(--dash-canvas);
+    color: var(--foreground);
+    font-family: var(--font-sans);
+    -webkit-font-smoothing: antialiased;
+  }
+  :focus-visible {
+    outline: 2px solid var(--primary-bright);
+    outline-offset: 2px;
+  }
+}
+
+/* Skeleton shimmer; static fill when the user prefers reduced motion (PLAN §12). */
+@keyframes bs-shimmer {
+  from { background-position: 200% 0; }
+  to { background-position: -200% 0; }
+}
+.bs-skeleton {
+  background: linear-gradient(90deg, var(--surface-200) 25%, var(--surface-300) 37%, var(--surface-200) 63%);
+  background-size: 400% 100%;
+  animation: bs-shimmer 1.4s ease infinite;
+}
+@media (prefers-reduced-motion: reduce) {
+  .bs-skeleton { animation: none; background: var(--surface-200); }
+}

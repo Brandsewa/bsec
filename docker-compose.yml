@@ -1,0 +1,83 @@
+# Local dev stack: PostgreSQL 18 + the same images CI builds.
+#   docker compose up --build        (first run builds the images locally)
+# Ports: web 3000 · platform 4000 · worker 4100 (health) · admin 8080 · postgres 5432 (override: POSTGRES_HOST_PORT)
+# Local only. Production pulls prebuilt images from GHCR via Coolify (infra/coolify/RUNBOOK.md).
+
+x-app-env: &app-env
+  APP_ENV: local
+  LOG_LEVEL: ${LOG_LEVEL:-info}
+  SENTRY_DSN: ${SENTRY_DSN:-}
+
+services:
+  postgres:
+    image: postgres:18
+    environment:
+      POSTGRES_DB: bsec
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-postgres}
+    ports:
+      - "127.0.0.1:${POSTGRES_HOST_PORT:-5432}:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d bsec"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+
+  # One-shot: create roles (superuser), then migrate as app_owner. Apps wait for it to finish.
+  migrate:
+    build: { context: ., dockerfile: infra/docker/migrate.Dockerfile }
+    image: bsec-migrate:local
+    depends_on:
+      postgres: { condition: service_healthy }
+    environment:
+      DATABASE_URL_SUPERUSER: postgres://postgres:${POSTGRES_PASSWORD:-postgres}@postgres:5432/bsec
+      DATABASE_URL_OWNER: postgres://app_owner:${APP_OWNER_PASSWORD:-owner_dev}@postgres:5432/bsec
+      APP_OWNER_PASSWORD: ${APP_OWNER_PASSWORD:-owner_dev}
+      APP_RW_PASSWORD: ${APP_RW_PASSWORD:-rw_dev}
+      APP_PLATFORM_PASSWORD: ${APP_PLATFORM_PASSWORD:-platform_dev}
+    command: ["sh", "-c", "node dist/bootstrap.js && node dist/migrate.js"]
+    restart: "no"
+
+  web:
+    build: { context: ., dockerfile: infra/docker/web.Dockerfile }
+    image: bsec-web:local
+    depends_on:
+      migrate: { condition: service_completed_successfully }
+    environment:
+      <<: *app-env
+      DATABASE_URL_RW: postgres://app_rw:${APP_RW_PASSWORD:-rw_dev}@postgres:5432/bsec
+    ports:
+      - "127.0.0.1:3000:3000"
+
+  platform:
+    build: { context: ., dockerfile: infra/docker/platform.Dockerfile }
+    image: bsec-platform:local
+    depends_on:
+      migrate: { condition: service_completed_successfully }
+    environment:
+      <<: *app-env
+      DATABASE_URL_PLATFORM: postgres://app_platform:${APP_PLATFORM_PASSWORD:-platform_dev}@postgres:5432/bsec
+    ports:
+      - "127.0.0.1:4000:4000"
+
+  worker:
+    build: { context: ., dockerfile: infra/docker/worker.Dockerfile }
+    image: bsec-worker:local
+    depends_on:
+      migrate: { condition: service_completed_successfully }
+    environment:
+      <<: *app-env
+      DATABASE_URL_RW: postgres://app_rw:${APP_RW_PASSWORD:-rw_dev}@postgres:5432/bsec
+    ports:
+      - "127.0.0.1:4100:4100"
+
+  admin:
+    build: { context: ., dockerfile: infra/docker/admin.Dockerfile }
+    image: bsec-admin:local
+    ports:
+      - "127.0.0.1:8080:8080"
+
+volumes:
+  pgdata:

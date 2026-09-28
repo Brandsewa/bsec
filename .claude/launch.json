@@ -1,0 +1,7 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    { "name": "admin", "runtimeExecutable": "pnpm", "runtimeArgs": ["--filter", "@bs/admin", "dev"], "port": 5173 },
+    { "name": "web", "runtimeExecutable": "pnpm", "runtimeArgs": ["--filter", "@bs/web", "dev"], "port": 3000 }
+  ]
+}

@@ -1,0 +1,1 @@
+{ "extends": "@bs/config/tsconfig/base.json", "include": ["src", "test", "drizzle.config.ts", "vitest.config.ts"] }

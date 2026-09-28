@@ -1,0 +1,2 @@
+/* Shared Tailwind 4 entry. Apps import this, then add their own @source lines. */
+@import "tailwindcss";
