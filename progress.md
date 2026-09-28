@@ -64,7 +64,7 @@ Source of truth: `docs/PLAN.html` v2.0. Items are ticked only after verification
   - platform `/health` → `db.ok:true`, role `app_platform`.
   - worker logs show it connected, started, and processed the `system.ping` job.
   - admin `/health` → 200; SPA and a deep link (`/orders`) both → 200.
-- [ ] Domains: still on Coolify's auto `*.sslip.io` URLs. Real domains (`bscommerce.in` etc.) and Cloudflare for SaaS are not set up yet.
+- [x] Domain: `gobs.cloud` and `www.gobs.cloud` now point at `bsec-web` (deliberate decision — the old single-store "Bs Ecommerce" Coolify project, which previously served real gobs.cloud traffic, was deleted; nothing left to migrate onto the new platform yet, so gobs.cloud currently shows the M0 placeholder page). SSL and both hostnames verified live: `https://gobs.cloud/api/health` → `db.ok:true`. Cloudflare for SaaS, `admin.gobs.cloud`, `platform.gobs.cloud` not set up yet.
 - [ ] Separate staging VPS provisioned. Everything above is on the single existing VPS.
 - [ ] GitHub Actions' `deploy-staging` / `deploy-production` jobs are still no-ops (no `COOLIFY_*_WEBHOOK` secrets set) — this session's deploys were done by hand in the Coolify UI, not through the pipeline. Wiring the webhooks is the next step to make `git push` actually deploy.
 - [ ] GitHub `production` environment has no required reviewers yet, so the approval gate in `ci.yml` doesn't actually gate anything.
