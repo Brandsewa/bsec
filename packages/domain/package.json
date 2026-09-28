@@ -20,6 +20,7 @@
   },
   "devDependencies": {
     "@bs/config": "workspace:*",
+    "@bs/contracts": "workspace:*",
     "@types/node": "24.19.0",
     "eslint": "10.11.0",
     "typescript": "6.0.3",

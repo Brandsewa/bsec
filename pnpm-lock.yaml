@@ -368,6 +368,9 @@ importers:
       '@bs/config':
         specifier: workspace:*
         version: link:../config
+      '@bs/contracts':
+        specifier: workspace:*
+        version: link:../contracts
       '@types/node':
         specifier: 24.19.0
         version: 24.19.0
