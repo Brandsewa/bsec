@@ -6,6 +6,8 @@ import {
 } from "../src/branding/contrast.ts";
 import {
   FAVICON_SIZES,
+  buildManifestOnly,
+  generateFaviconVariantUrls,
   generateWebManifest,
 } from "../src/branding/favicon.ts";
 import {
@@ -64,7 +66,19 @@ describe("favicon utilities", () => {
     expect(FAVICON_SIZES).toEqual([16, 32, 180, 192, 512]);
   });
 
-  it("generates a valid web manifest with all icon sizes", () => {
+  it("generates CDN image transform URLs for all 5 favicon dimensions", () => {
+    const variants = generateFaviconVariantUrls(
+      "https://cdn.brandsewa.com",
+      "tenant-1/branding/icon.png",
+    );
+    expect(variants[16]).toContain("width=16,height=16");
+    expect(variants[32]).toContain("width=32,height=32");
+    expect(variants[180]).toContain("width=180,height=180");
+    expect(variants[192]).toContain("width=192,height=192");
+    expect(variants[512]).toContain("width=512,height=512");
+  });
+
+  it("generates a valid web manifest with all icon sizes using buildManifestOnly", () => {
     const iconUrls = {
       16: "https://cdn.brandsewa.com/icons/icon-16.png",
       32: "https://cdn.brandsewa.com/icons/icon-32.png",
@@ -73,7 +87,7 @@ describe("favicon utilities", () => {
       512: "https://cdn.brandsewa.com/icons/icon-512.png",
     };
 
-    const manifest = generateWebManifest("Handicraft Studio", iconUrls);
+    const manifest = buildManifestOnly("Handicraft Studio", iconUrls);
     expect(manifest.name).toBe("Handicraft Studio");
     expect(manifest.short_name).toBe("Handicraft Studio");
     expect(manifest.start_url).toBe("/");
@@ -81,6 +95,10 @@ describe("favicon utilities", () => {
     expect(manifest.icons).toHaveLength(5);
     expect(manifest.icons.some((i) => i.sizes === "192x192")).toBe(true);
     expect(manifest.icons.some((i) => i.sizes === "512x512")).toBe(true);
+
+    // Also assert backwards compatibility alias generateWebManifest works identically
+    const manifestFromAlias = generateWebManifest("Handicraft Studio", iconUrls);
+    expect(manifestFromAlias).toEqual(manifest);
   });
 });
 

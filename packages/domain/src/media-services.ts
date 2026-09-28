@@ -87,10 +87,8 @@ export async function requestMediaUpload(
     throw new Error(validation.error || "Invalid media upload");
   }
 
-  // Generate upload descriptor
-  const bucketBaseUrl = process.env.R2_PUBLIC_URL || "https://r2.bscommerce.in/uploads";
-  return buildPresignedUploadDescriptor({
-    bucketBaseUrl,
+  // Generate real S3/R2 presigned upload descriptor
+  return await buildPresignedUploadDescriptor({
     tenantId: ctx.tenantId,
     folder: input.folder ?? "products",
     filename: input.filename,
