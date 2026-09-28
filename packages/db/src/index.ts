@@ -4,7 +4,7 @@ import pg from "pg";
 import * as schema from "./schema/index.ts";
 
 export { schema };
-export { tenantTable, forceRlsSql, tenantPredicate, TENANT_SETTING } from "./tenant-table.ts";
+export { tenantTable, forceRlsSql, tenantPredicate, TENANT_SETTING, tenantForeignKey } from "./tenant-table.ts";
 
 export type Db = NodePgDatabase<typeof schema>;
 
@@ -34,9 +34,13 @@ export async function ping(db: Db): Promise<{ ok: true; role: string }> {
 }
 
 /**
- * M1: withTenant(ctx, fn) opens a transaction, runs SET LOCAL app.tenant_id, and passes tx to fn.
- * Declared now so domain code can be written against the final signature.
+ * withTenant(db, tenantId, fn) opens a transaction, sets app.tenant_id via parameterized
+ * set_config(..., true) (SET LOCAL), and passes tx to fn (PLAN §4, §13 M1).
+ * After commit/rollback, connection resets app.tenant_id to '' which nullif() turns to NULL.
  */
-export async function withTenant<T>(_db: Db, _tenantId: string, _fn: (tx: Db) => Promise<T>): Promise<T> {
-  throw new Error("withTenant() is implemented in M1");
+export async function withTenant<T>(db: Db, tenantId: string, fn: (tx: Db) => Promise<T>): Promise<T> {
+  return db.transaction(async (tx) => {
+    await tx.execute(sql`select set_config('app.tenant_id', ${tenantId}, true)`);
+    return fn(tx as unknown as Db);
+  });
 }
