@@ -27,4 +27,4 @@ COPY --from=build --chown=node:node /repo/packages/db/dist ./dist
 COPY --from=build --chown=node:node /repo/packages/db/migrations ./migrations
 USER node
 # One-shot job. Every deploy: migrate (as app_owner). First deploy per env: bootstrap (superuser) first.
-CMD ["node", "--enable-source-maps", "dist/migrate.js"]
+CMD ["node", "--enable-source-maps", "dist/deploy.js"]
