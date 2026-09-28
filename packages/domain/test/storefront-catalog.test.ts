@@ -97,18 +97,25 @@ describe("Storefront Catalog & Search Services", () => {
                     }),
                   }),
                   // Otherwise subsequent queries for media, options, variants, inventory
-                  where: () => ({
-                    orderBy: () => [
+                  where: () => {
+                    const rows = [
                       {
                         id: "med-1",
                         productId,
+                        variantId: "med-1",
                         mediaId: "m-1",
                         position: 0,
                         alt: "Front view",
                         url: "https://cdn.example.com/front.jpg",
+                        onHand: 10,
+                        reserved: 2,
+                        lowStockThreshold: 3,
                       },
-                    ],
-                  }),
+                    ];
+                    return Object.assign(rows, {
+                      orderBy: () => rows,
+                    });
+                  },
                 };
               },
             }),
@@ -169,11 +176,13 @@ describe("Storefront Catalog & Search Services", () => {
                       limit: () => ({
                         offset: () => [
                           {
-                            id: "prod-1",
-                            title: "Summer Shirt",
-                            slug: "summer-shirt",
-                            status: "published",
-                            deletedAt: null,
+                            product: {
+                              id: "prod-1",
+                              title: "Summer Shirt",
+                              slug: "summer-shirt",
+                              status: "published",
+                              deletedAt: null,
+                            },
                           },
                         ],
                       }),
@@ -240,11 +249,13 @@ describe("Storefront Catalog & Search Services", () => {
                       limit: () => ({
                         offset: () => [
                           {
-                            id: "prod-2",
-                            title: "Smartphone",
-                            slug: "smartphone",
-                            status: "published",
-                            deletedAt: null,
+                            product: {
+                              id: "prod-2",
+                              title: "Smartphone",
+                              slug: "smartphone",
+                              status: "published",
+                              deletedAt: null,
+                            },
                           },
                         ],
                       }),
@@ -305,7 +316,7 @@ describe("Storefront Catalog & Search Services", () => {
                     },
                   ];
                   return Object.assign(items, {
-                    orderBy: () => ({
+                    orderBy: () => Object.assign(items, {
                       limit: () => ({
                         offset: () => items,
                       }),
@@ -364,61 +375,69 @@ describe("Storefront Catalog & Search Services", () => {
   describe("price sorting", () => {
     it("sorts products by price_asc and price_desc", async () => {
       const collectionId = "0199a000-0000-7000-8000-000000000100";
-      const mockDb = {
-        transaction: async (cb: (tx: unknown) => Promise<unknown>) => {
-          return cb({
-            execute: async () => {},
-            select: () => ({
-              from: () => ({
-                where: () => {
-                  const variants = [
-                    { productId: "prod-high", price: "100.00" },
-                    { productId: "prod-low", price: "20.00" },
-                  ];
-                  return Object.assign(variants, {
-                    limit: () => [
-                      {
-                        id: collectionId,
-                        title: "Summer",
-                        slug: "summer",
-                        type: "manual",
-                        rules: null,
-                        sortOrder: "manual",
-                        imageMediaId: null,
-                        seo: null,
-                        published: true,
-                        createdAt: new Date(),
-                        updatedAt: new Date(),
-                      },
-                    ],
-                    orderBy: () => [],
-                  });
-                },
-                innerJoin: () => ({
-                  where: () => ({
-                    orderBy: () => ({
-                      limit: () => ({
-                        offset: () => [
-                          { id: "prod-high", title: "Expensive Shirt", slug: "exp-shirt", status: "published", deletedAt: null },
-                          { id: "prod-low", title: "Cheap Shirt", slug: "cheap-shirt", status: "published", deletedAt: null },
-                        ],
+      const createMockDb = (order: "asc" | "desc") =>
+        ({
+          transaction: async (cb: (tx: unknown) => Promise<unknown>) => {
+            return cb({
+              execute: async () => {},
+              select: () => ({
+                from: () => ({
+                  where: () => {
+                    const variants = [
+                      { productId: "prod-high", price: "100.00" },
+                      { productId: "prod-low", price: "20.00" },
+                    ];
+                    return Object.assign(variants, {
+                      limit: () => [
+                        {
+                          id: collectionId,
+                          title: "Summer",
+                          slug: "summer",
+                          type: "manual",
+                          rules: null,
+                          sortOrder: "manual",
+                          imageMediaId: null,
+                          seo: null,
+                          published: true,
+                          createdAt: new Date(),
+                          updatedAt: new Date(),
+                        },
+                      ],
+                      orderBy: () => [],
+                    });
+                  },
+                  innerJoin: () => ({
+                    where: () => ({
+                      orderBy: () => ({
+                        limit: () => ({
+                          offset: () =>
+                            order === "asc"
+                              ? [
+                                  { product: { id: "prod-low", title: "Cheap Shirt", slug: "cheap-shirt", status: "published", deletedAt: null } },
+                                  { product: { id: "prod-high", title: "Expensive Shirt", slug: "exp-shirt", status: "published", deletedAt: null } },
+                                ]
+                              : [
+                                  { product: { id: "prod-high", title: "Expensive Shirt", slug: "exp-shirt", status: "published", deletedAt: null } },
+                                  { product: { id: "prod-low", title: "Cheap Shirt", slug: "cheap-shirt", status: "published", deletedAt: null } },
+                                ],
+                        }),
                       }),
                     }),
                   }),
                 }),
               }),
-            }),
-          });
-        },
-      } as unknown as Db;
+            });
+          },
+        }) as unknown as Db;
 
-      const rt = createMockRuntime(mockDb);
-      const ascRes = await getStorefrontCollection(rt, publicCtx, "summer", {
+      const ascRt = createMockRuntime(createMockDb("asc"));
+      const ascRes = await getStorefrontCollection(ascRt, publicCtx, "summer", {
         sort: "price_asc",
       });
       expect(ascRes?.products.items.map((i) => i.id)).toEqual(["prod-low", "prod-high"]);
 
-      const descRes = await getStorefrontCollection(rt, publicCtx, "summer", {
+      const descRt = createMockRuntime(createMockDb("desc"));
+      const descRes = await getStorefrontCollection(descRt, publicCtx, "summer", {
         sort: "price_desc",
       });
       expect(descRes?.products.items.map((i) => i.id)).toEqual(["prod-high", "prod-low"]);

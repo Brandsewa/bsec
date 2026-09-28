@@ -203,7 +203,7 @@ export async function getStorefrontProduct(
     const inventoryByVariant: Record<string, { available: number; lowStock: boolean }> = {};
 
     if (variantIds.length > 0) {
-      const invRows = (await tx
+      const invRows = await tx
         .select({
           variantId: schema.inventoryLevels.variantId,
           onHand: schema.inventoryLevels.onHand,
@@ -211,18 +211,16 @@ export async function getStorefrontProduct(
           lowStockThreshold: schema.inventoryLevels.lowStockThreshold,
         })
         .from(schema.inventoryLevels)
-        .where(inArray(schema.inventoryLevels.variantId, variantIds))) ?? [];
+        .where(inArray(schema.inventoryLevels.variantId, variantIds));
 
-      if (Array.isArray(invRows)) {
-        for (const inv of invRows) {
-          const avail = (inv.onHand ?? 0) - (inv.reserved ?? 0);
-          const existing = inventoryByVariant[inv.variantId] ?? { available: 0, lowStock: false };
-          existing.available += avail;
-          if (avail <= (inv.lowStockThreshold ?? 0)) {
-            existing.lowStock = true;
-          }
-          inventoryByVariant[inv.variantId] = existing;
+      for (const inv of invRows) {
+        const avail = (inv.onHand ?? 0) - (inv.reserved ?? 0);
+        const existing = inventoryByVariant[inv.variantId] ?? { available: 0, lowStock: false };
+        existing.available += avail;
+        if (avail <= (inv.lowStockThreshold ?? 0)) {
+          existing.lowStock = true;
         }
+        inventoryByVariant[inv.variantId] = existing;
       }
     }
 
@@ -344,8 +342,13 @@ export async function getStorefrontCollection(
     );
 
     // Order clause mapping
+    const minPriceSql = sql`(select min(v.price) from variants v where v.tenant_id = ${schema.products.tenantId} and v.product_id = ${schema.products.id})`;
     let orderClause = asc(schema.collectionProducts.position);
-    if (opts?.sort === "newest") {
+    if (opts?.sort === "price_asc") {
+      orderClause = asc(minPriceSql);
+    } else if (opts?.sort === "price_desc") {
+      orderClause = desc(minPriceSql);
+    } else if (opts?.sort === "newest") {
       orderClause = desc(schema.products.createdAt);
     } else if (opts?.sort === "title") {
       orderClause = asc(schema.products.title);
@@ -383,17 +386,9 @@ export async function getStorefrontCollection(
 
     const total = Number(countRows[0]?.count ?? prodRows.length);
 
-    const productList = (prodRows ?? []).map(
-      (r) => ("product" in r ? r.product : r) as typeof schema.products.$inferSelect,
-    );
+    const productList = prodRows.map((r) => r.product);
     const productIds = productList.map((p) => p.id);
     const summaryItems = await buildProductSummaries(tx, productIds, productList);
-
-    if (opts?.sort === "price_asc") {
-      summaryItems.sort((a, b) => a.priceMin - b.priceMin);
-    } else if (opts?.sort === "price_desc") {
-      summaryItems.sort((a, b) => b.priceMax - a.priceMax);
-    }
 
     return {
       collection: {
@@ -451,8 +446,13 @@ export async function getStorefrontCategory(
       isNull(schema.products.deletedAt),
     );
 
+    const minPriceSql = sql`(select min(v.price) from variants v where v.tenant_id = ${schema.products.tenantId} and v.product_id = ${schema.products.id})`;
     let orderClause = asc(schema.productCategories.position);
-    if (opts?.sort === "newest") {
+    if (opts?.sort === "price_asc") {
+      orderClause = asc(minPriceSql);
+    } else if (opts?.sort === "price_desc") {
+      orderClause = desc(minPriceSql);
+    } else if (opts?.sort === "newest") {
       orderClause = desc(schema.products.createdAt);
     } else if (opts?.sort === "title") {
       orderClause = asc(schema.products.title);
@@ -489,17 +489,9 @@ export async function getStorefrontCategory(
 
     const total = Number(countRows[0]?.count ?? prodRows.length);
 
-    const productList = (prodRows ?? []).map(
-      (r) => ("product" in r ? r.product : r) as typeof schema.products.$inferSelect,
-    );
+    const productList = prodRows.map((r) => r.product);
     const productIds = productList.map((p) => p.id);
     const summaryItems = await buildProductSummaries(tx, productIds, productList);
-
-    if (opts?.sort === "price_asc") {
-      summaryItems.sort((a, b) => a.priceMin - b.priceMin);
-    } else if (opts?.sort === "price_desc") {
-      summaryItems.sort((a, b) => b.priceMax - a.priceMax);
-    }
 
     return {
       category: {
@@ -533,15 +525,14 @@ export async function buildProductSummaries(
   if (productIds.length === 0) return [];
 
   // Query variants to determine min/max prices
-  const variantRows =
-    (await tx
-      .select({
-        productId: schema.variants.productId,
-        price: schema.variants.price,
-        compareAtPrice: schema.variants.compareAtPrice,
-      })
-      .from(schema.variants)
-      .where(inArray(schema.variants.productId, productIds))) ?? [];
+  const variantRows = await tx
+    .select({
+      productId: schema.variants.productId,
+      price: schema.variants.price,
+      compareAtPrice: schema.variants.compareAtPrice,
+    })
+    .from(schema.variants)
+    .where(inArray(schema.variants.productId, productIds));
 
   const pricesByProduct: Record<
     string,
@@ -553,59 +544,54 @@ export async function buildProductSummaries(
     }
   > = {};
 
-  if (Array.isArray(variantRows)) {
-    for (const v of variantRows) {
-      const pId = v.productId;
-      const price = Number(v.price);
-      const compareAt = v.compareAtPrice ? Number(v.compareAtPrice) : undefined;
-      const existing = pricesByProduct[pId];
+  for (const v of variantRows) {
+    const pId = v.productId;
+    const price = Number(v.price);
+    const compareAt = v.compareAtPrice ? Number(v.compareAtPrice) : undefined;
+    const existing = pricesByProduct[pId];
 
-      if (!existing) {
-        pricesByProduct[pId] = {
-          priceMin: price,
-          priceMax: price,
-          compareAtPriceMin: compareAt,
-          compareAtPriceMax: compareAt,
-        };
-      } else {
-        existing.priceMin = Math.min(existing.priceMin, price);
-        existing.priceMax = Math.max(existing.priceMax, price);
-        if (compareAt !== undefined) {
-          existing.compareAtPriceMin =
-            existing.compareAtPriceMin !== undefined
-              ? Math.min(existing.compareAtPriceMin, compareAt)
-              : compareAt;
-          existing.compareAtPriceMax =
-            existing.compareAtPriceMax !== undefined
-              ? Math.max(existing.compareAtPriceMax, compareAt)
-              : compareAt;
-        }
+    if (!existing) {
+      pricesByProduct[pId] = {
+        priceMin: price,
+        priceMax: price,
+        compareAtPriceMin: compareAt,
+        compareAtPriceMax: compareAt,
+      };
+    } else {
+      existing.priceMin = Math.min(existing.priceMin, price);
+      existing.priceMax = Math.max(existing.priceMax, price);
+      if (compareAt !== undefined) {
+        existing.compareAtPriceMin =
+          existing.compareAtPriceMin !== undefined
+            ? Math.min(existing.compareAtPriceMin, compareAt)
+            : compareAt;
+        existing.compareAtPriceMax =
+          existing.compareAtPriceMax !== undefined
+            ? Math.max(existing.compareAtPriceMax, compareAt)
+            : compareAt;
       }
     }
   }
 
   // Query primary media
-  const mediaRows =
-    (await tx
-      .select({
-        productId: schema.productMedia.productId,
-        mediaId: schema.productMedia.mediaId,
-        alt: schema.productMedia.alt,
-        position: schema.productMedia.position,
-      })
-      .from(schema.productMedia)
-      .where(inArray(schema.productMedia.productId, productIds))
-      .orderBy(schema.productMedia.position)) ?? [];
+  const mediaRows = await tx
+    .select({
+      productId: schema.productMedia.productId,
+      mediaId: schema.productMedia.mediaId,
+      alt: schema.productMedia.alt,
+      position: schema.productMedia.position,
+    })
+    .from(schema.productMedia)
+    .where(inArray(schema.productMedia.productId, productIds))
+    .orderBy(schema.productMedia.position);
 
   const mediaByProduct: Record<string, { mediaId: string; alt: string | null }> = {};
-  if (Array.isArray(mediaRows)) {
-    for (const m of mediaRows) {
-      if (!mediaByProduct[m.productId]) {
-        mediaByProduct[m.productId] = {
-          mediaId: m.mediaId,
-          alt: m.alt,
-        };
-      }
+  for (const m of mediaRows) {
+    if (!mediaByProduct[m.productId]) {
+      mediaByProduct[m.productId] = {
+        mediaId: m.mediaId,
+        alt: m.alt,
+      };
     }
   }
 
