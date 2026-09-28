@@ -4,16 +4,59 @@ import { implement, onError } from "@orpc/server";
 import { RPCHandler } from "@orpc/server/fetch";
 import { OpenAPIHandler } from "@orpc/openapi/fetch";
 import { storeContract } from "@bs/contracts";
+import { hasPermission, type StorePermission } from "@bs/auth";
 import {
+  adjustInventory,
   buildTenantContext,
   checkHealth,
+  createBrand,
+  createCategory,
+  createCollection,
+  createMediaRecord,
+  createMenu,
+  createPage,
+  createProduct,
+  deleteBrand,
+  deleteCategory,
+  deleteCollection,
+  deleteMediaRecord,
+  deleteMenu,
+  deleteProduct,
+  getBrandSettings,
+  getCollection,
+  getMenu,
+  getPage,
+  getProduct,
   getStoreSettings,
+  getTheme,
   inviteStaff,
+  listBrands,
+  listCategories,
+  listCollections,
+  listInventoryLevels,
+  listMedia,
   listMemberships,
+  listMenus,
+  listPages,
+  listProducts,
   listStoreFeatureFlags,
+  publishBrandSettings,
+  publishPage,
   requestLogger,
+  requestMediaUpload,
   resolveRequestId,
+  rollbackPage,
+  savePageDraft,
+  updateBrand,
+  updateBrandSettings,
+  updateCategory,
+  updateCollection,
+  updateMenu,
+  updatePage,
+  updateProduct,
   updateStoreSettings,
+  updateTheme,
+  updateVariant,
   type Logger,
   type Runtime,
   type TenantContext,
@@ -37,8 +80,6 @@ export interface ApiContext {
 }
 
 const os = implement(storeContract).$context<ApiContext>();
-
-import { hasPermission, type StorePermission } from "@bs/auth";
 
 const requireAdmin = os.middleware(async ({ context, next }) => {
   const headers = context.headers ?? new Headers();
@@ -120,6 +161,344 @@ export const storeRouter = os.router({
         .handler(({ context }) => {
           if (!context.tenantCtx) throw new Error("Missing tenant context");
           return listStoreFeatureFlags(context.rt, context.tenantCtx);
+        }),
+    },
+
+    // Catalog: Products
+    products: {
+      list: os.admin.products.list
+        .use(requireAdmin)
+        .use(requirePermission("products.read"))
+        .handler(({ context, input }) => {
+          if (!context.tenantCtx) throw new Error("Missing tenant context");
+          return listProducts(context.rt, context.tenantCtx, input);
+        }),
+      get: os.admin.products.get
+        .use(requireAdmin)
+        .use(requirePermission("products.read"))
+        .handler(({ context, input }) => {
+          if (!context.tenantCtx) throw new Error("Missing tenant context");
+          return getProduct(context.rt, context.tenantCtx, input);
+        }),
+      create: os.admin.products.create
+        .use(requireAdmin)
+        .use(requirePermission("products.write"))
+        .handler(({ context, input }) => {
+          if (!context.tenantCtx) throw new Error("Missing tenant context");
+          return createProduct(context.rt, context.tenantCtx, input);
+        }),
+      update: os.admin.products.update
+        .use(requireAdmin)
+        .use(requirePermission("products.write"))
+        .handler(({ context, input }) => {
+          if (!context.tenantCtx) throw new Error("Missing tenant context");
+          return updateProduct(context.rt, context.tenantCtx, input);
+        }),
+      delete: os.admin.products.delete
+        .use(requireAdmin)
+        .use(requirePermission("products.write"))
+        .handler(({ context, input }) => {
+          if (!context.tenantCtx) throw new Error("Missing tenant context");
+          return deleteProduct(context.rt, context.tenantCtx, input);
+        }),
+    },
+
+    // Catalog: Variants
+    variants: {
+      update: os.admin.variants.update
+        .use(requireAdmin)
+        .use(requirePermission("products.write"))
+        .handler(({ context, input }) => {
+          if (!context.tenantCtx) throw new Error("Missing tenant context");
+          return updateVariant(context.rt, context.tenantCtx, input);
+        }),
+    },
+
+    // Catalog: Categories
+    categories: {
+      list: os.admin.categories.list
+        .use(requireAdmin)
+        .use(requirePermission("products.read"))
+        .handler(({ context, input }) => {
+          if (!context.tenantCtx) throw new Error("Missing tenant context");
+          return listCategories(context.rt, context.tenantCtx, input);
+        }),
+      create: os.admin.categories.create
+        .use(requireAdmin)
+        .use(requirePermission("products.write"))
+        .handler(({ context, input }) => {
+          if (!context.tenantCtx) throw new Error("Missing tenant context");
+          return createCategory(context.rt, context.tenantCtx, input);
+        }),
+      update: os.admin.categories.update
+        .use(requireAdmin)
+        .use(requirePermission("products.write"))
+        .handler(({ context, input }) => {
+          if (!context.tenantCtx) throw new Error("Missing tenant context");
+          return updateCategory(context.rt, context.tenantCtx, input);
+        }),
+      delete: os.admin.categories.delete
+        .use(requireAdmin)
+        .use(requirePermission("products.write"))
+        .handler(({ context, input }) => {
+          if (!context.tenantCtx) throw new Error("Missing tenant context");
+          return deleteCategory(context.rt, context.tenantCtx, input);
+        }),
+    },
+
+    // Catalog: Collections
+    collections: {
+      list: os.admin.collections.list
+        .use(requireAdmin)
+        .use(requirePermission("products.read"))
+        .handler(({ context }) => {
+          if (!context.tenantCtx) throw new Error("Missing tenant context");
+          return listCollections(context.rt, context.tenantCtx);
+        }),
+      get: os.admin.collections.get
+        .use(requireAdmin)
+        .use(requirePermission("products.read"))
+        .handler(({ context, input }) => {
+          if (!context.tenantCtx) throw new Error("Missing tenant context");
+          return getCollection(context.rt, context.tenantCtx, input);
+        }),
+      create: os.admin.collections.create
+        .use(requireAdmin)
+        .use(requirePermission("products.write"))
+        .handler(({ context, input }) => {
+          if (!context.tenantCtx) throw new Error("Missing tenant context");
+          return createCollection(context.rt, context.tenantCtx, input);
+        }),
+      update: os.admin.collections.update
+        .use(requireAdmin)
+        .use(requirePermission("products.write"))
+        .handler(({ context, input }) => {
+          if (!context.tenantCtx) throw new Error("Missing tenant context");
+          return updateCollection(context.rt, context.tenantCtx, input);
+        }),
+      delete: os.admin.collections.delete
+        .use(requireAdmin)
+        .use(requirePermission("products.write"))
+        .handler(({ context, input }) => {
+          if (!context.tenantCtx) throw new Error("Missing tenant context");
+          return deleteCollection(context.rt, context.tenantCtx, input);
+        }),
+    },
+
+    // Catalog: Brands
+    brands: {
+      list: os.admin.brands.list
+        .use(requireAdmin)
+        .use(requirePermission("products.read"))
+        .handler(({ context }) => {
+          if (!context.tenantCtx) throw new Error("Missing tenant context");
+          return listBrands(context.rt, context.tenantCtx);
+        }),
+      create: os.admin.brands.create
+        .use(requireAdmin)
+        .use(requirePermission("products.write"))
+        .handler(({ context, input }) => {
+          if (!context.tenantCtx) throw new Error("Missing tenant context");
+          return createBrand(context.rt, context.tenantCtx, input);
+        }),
+      update: os.admin.brands.update
+        .use(requireAdmin)
+        .use(requirePermission("products.write"))
+        .handler(({ context, input }) => {
+          if (!context.tenantCtx) throw new Error("Missing tenant context");
+          return updateBrand(context.rt, context.tenantCtx, input);
+        }),
+      delete: os.admin.brands.delete
+        .use(requireAdmin)
+        .use(requirePermission("products.write"))
+        .handler(({ context, input }) => {
+          if (!context.tenantCtx) throw new Error("Missing tenant context");
+          return deleteBrand(context.rt, context.tenantCtx, input);
+        }),
+    },
+
+    // Inventory
+    inventory: {
+      list: os.admin.inventory.list
+        .use(requireAdmin)
+        .use(requirePermission("products.read"))
+        .handler(({ context, input }) => {
+          if (!context.tenantCtx) throw new Error("Missing tenant context");
+          return listInventoryLevels(context.rt, context.tenantCtx, input);
+        }),
+      adjust: os.admin.inventory.adjust
+        .use(requireAdmin)
+        .use(requirePermission("products.write"))
+        .handler(({ context, input }) => {
+          if (!context.tenantCtx) throw new Error("Missing tenant context");
+          return adjustInventory(context.rt, context.tenantCtx, input);
+        }),
+    },
+
+    // Media
+    media: {
+      list: os.admin.media.list
+        .use(requireAdmin)
+        .use(requirePermission("content.write"))
+        .handler(({ context, input }) => {
+          if (!context.tenantCtx) throw new Error("Missing tenant context");
+          return listMedia(context.rt, context.tenantCtx, input);
+        }),
+      requestUpload: os.admin.media.requestUpload
+        .use(requireAdmin)
+        .use(requirePermission("content.write"))
+        .handler(({ context, input }) => {
+          if (!context.tenantCtx) throw new Error("Missing tenant context");
+          return requestMediaUpload(context.rt, context.tenantCtx, input);
+        }),
+      create: os.admin.media.create
+        .use(requireAdmin)
+        .use(requirePermission("content.write"))
+        .handler(({ context, input }) => {
+          if (!context.tenantCtx) throw new Error("Missing tenant context");
+          return createMediaRecord(context.rt, context.tenantCtx, input);
+        }),
+      delete: os.admin.media.delete
+        .use(requireAdmin)
+        .use(requirePermission("content.write"))
+        .handler(({ context, input }) => {
+          if (!context.tenantCtx) throw new Error("Missing tenant context");
+          return deleteMediaRecord(context.rt, context.tenantCtx, input);
+        }),
+    },
+
+    // Branding
+    branding: {
+      get: os.admin.branding.get
+        .use(requireAdmin)
+        .use(requirePermission("settings.write"))
+        .handler(({ context }) => {
+          if (!context.tenantCtx) throw new Error("Missing tenant context");
+          return getBrandSettings(context.rt, context.tenantCtx);
+        }),
+      update: os.admin.branding.update
+        .use(requireAdmin)
+        .use(requirePermission("settings.write"))
+        .handler(({ context, input }) => {
+          if (!context.tenantCtx) throw new Error("Missing tenant context");
+          return updateBrandSettings(context.rt, context.tenantCtx, input);
+        }),
+      publish: os.admin.branding.publish
+        .use(requireAdmin)
+        .use(requirePermission("settings.write"))
+        .handler(({ context }) => {
+          if (!context.tenantCtx) throw new Error("Missing tenant context");
+          return publishBrandSettings(context.rt, context.tenantCtx);
+        }),
+    },
+
+    // Themes
+    themes: {
+      get: os.admin.themes.get
+        .use(requireAdmin)
+        .use(requirePermission("content.write"))
+        .handler(({ context }) => {
+          if (!context.tenantCtx) throw new Error("Missing tenant context");
+          return getTheme(context.rt, context.tenantCtx);
+        }),
+      update: os.admin.themes.update
+        .use(requireAdmin)
+        .use(requirePermission("theme.publish"))
+        .handler(({ context, input }) => {
+          if (!context.tenantCtx) throw new Error("Missing tenant context");
+          return updateTheme(context.rt, context.tenantCtx, input);
+        }),
+    },
+
+    // Pages
+    pages: {
+      list: os.admin.pages.list
+        .use(requireAdmin)
+        .use(requirePermission("content.write"))
+        .handler(({ context }) => {
+          if (!context.tenantCtx) throw new Error("Missing tenant context");
+          return listPages(context.rt, context.tenantCtx);
+        }),
+      get: os.admin.pages.get
+        .use(requireAdmin)
+        .use(requirePermission("content.write"))
+        .handler(({ context, input }) => {
+          if (!context.tenantCtx) throw new Error("Missing tenant context");
+          return getPage(context.rt, context.tenantCtx, input);
+        }),
+      create: os.admin.pages.create
+        .use(requireAdmin)
+        .use(requirePermission("content.write"))
+        .handler(({ context, input }) => {
+          if (!context.tenantCtx) throw new Error("Missing tenant context");
+          return createPage(context.rt, context.tenantCtx, input);
+        }),
+      update: os.admin.pages.update
+        .use(requireAdmin)
+        .use(requirePermission("content.write"))
+        .handler(({ context, input }) => {
+          if (!context.tenantCtx) throw new Error("Missing tenant context");
+          return updatePage(context.rt, context.tenantCtx, input);
+        }),
+      saveDraft: os.admin.pages.saveDraft
+        .use(requireAdmin)
+        .use(requirePermission("content.write"))
+        .handler(({ context, input }) => {
+          if (!context.tenantCtx) throw new Error("Missing tenant context");
+          return savePageDraft(context.rt, context.tenantCtx, input);
+        }),
+      publish: os.admin.pages.publish
+        .use(requireAdmin)
+        .use(requirePermission("theme.publish"))
+        .handler(({ context, input }) => {
+          if (!context.tenantCtx) throw new Error("Missing tenant context");
+          return publishPage(context.rt, context.tenantCtx, input);
+        }),
+      rollback: os.admin.pages.rollback
+        .use(requireAdmin)
+        .use(requirePermission("theme.publish"))
+        .handler(({ context, input }) => {
+          if (!context.tenantCtx) throw new Error("Missing tenant context");
+          return rollbackPage(context.rt, context.tenantCtx, input);
+        }),
+    },
+
+    // Menus
+    menus: {
+      list: os.admin.menus.list
+        .use(requireAdmin)
+        .use(requirePermission("content.write"))
+        .handler(({ context }) => {
+          if (!context.tenantCtx) throw new Error("Missing tenant context");
+          return listMenus(context.rt, context.tenantCtx);
+        }),
+      get: os.admin.menus.get
+        .use(requireAdmin)
+        .use(requirePermission("content.write"))
+        .handler(({ context, input }) => {
+          if (!context.tenantCtx) throw new Error("Missing tenant context");
+          return getMenu(context.rt, context.tenantCtx, input);
+        }),
+      create: os.admin.menus.create
+        .use(requireAdmin)
+        .use(requirePermission("content.write"))
+        .handler(({ context, input }) => {
+          if (!context.tenantCtx) throw new Error("Missing tenant context");
+          return createMenu(context.rt, context.tenantCtx, input);
+        }),
+      update: os.admin.menus.update
+        .use(requireAdmin)
+        .use(requirePermission("content.write"))
+        .handler(({ context, input }) => {
+          if (!context.tenantCtx) throw new Error("Missing tenant context");
+          return updateMenu(context.rt, context.tenantCtx, input);
+        }),
+      delete: os.admin.menus.delete
+        .use(requireAdmin)
+        .use(requirePermission("content.write"))
+        .handler(({ context, input }) => {
+          if (!context.tenantCtx) throw new Error("Missing tenant context");
+          return deleteMenu(context.rt, context.tenantCtx, input);
         }),
     },
   },

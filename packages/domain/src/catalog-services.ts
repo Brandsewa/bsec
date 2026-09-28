@@ -574,7 +574,7 @@ export async function adjustInventory(
 export async function listInventoryLevels(
   rt: Runtime,
   ctx: TenantContext,
-  query?: { locationId?: string; search?: string; limit?: number; offset?: number },
+  query?: { locationId?: string | undefined; search?: string | undefined; limit?: number | undefined; offset?: number | undefined } | undefined,
 ) {
   assertPermission(ctx, "products.read");
   const db = rt._db.db;
@@ -611,7 +611,7 @@ export async function listInventoryLevels(
 }
 
 // --- Categories ---
-export async function listCategories(rt: Runtime, ctx: TenantContext, query?: { parentId?: string | null }) {
+export async function listCategories(rt: Runtime, ctx: TenantContext, query?: { parentId?: string | null | undefined } | undefined) {
   assertPermission(ctx, "products.read");
   const db = rt._db.db;
 
@@ -646,7 +646,7 @@ export async function listCategories(rt: Runtime, ctx: TenantContext, query?: { 
 export async function createCategory(
   rt: Runtime,
   ctx: TenantContext,
-  input: { name: string; slug?: string; description?: string; parentId?: string; position?: number },
+  input: { name: string; slug?: string | undefined; description?: string | undefined; parentId?: string | undefined; position?: number | undefined },
 ) {
   assertPermission(ctx, "products.write");
   const db = rt._db.db;
@@ -688,7 +688,7 @@ export async function createCategory(
 export async function updateCategory(
   rt: Runtime,
   ctx: TenantContext,
-  input: { id: string; name?: string; slug?: string; description?: string; parentId?: string | null; position?: number },
+  input: { id: string; name?: string | undefined; slug?: string | undefined; description?: string | undefined; parentId?: string | null | undefined; position?: number | undefined },
 ) {
   assertPermission(ctx, "products.write");
   const db = rt._db.db;
@@ -789,11 +789,11 @@ export async function createCollection(
   ctx: TenantContext,
   input: {
     title: string;
-    slug?: string;
-    description?: string;
-    isAutomated?: boolean;
+    slug?: string | undefined;
+    description?: string | undefined;
+    isAutomated?: boolean | undefined;
     rules?: unknown;
-    productIds?: string[];
+    productIds?: string[] | undefined;
   },
 ) {
   assertPermission(ctx, "products.write");
@@ -855,12 +855,12 @@ export async function updateCollection(
   ctx: TenantContext,
   input: {
     id: string;
-    title?: string;
-    slug?: string;
-    description?: string;
-    isAutomated?: boolean;
+    title?: string | undefined;
+    slug?: string | undefined;
+    description?: string | undefined;
+    isAutomated?: boolean | undefined;
     rules?: unknown;
-    productIds?: string[];
+    productIds?: string[] | undefined;
   },
 ) {
   assertPermission(ctx, "products.write");
@@ -941,7 +941,7 @@ export async function listBrands(rt: Runtime, ctx: TenantContext) {
 export async function createBrand(
   rt: Runtime,
   ctx: TenantContext,
-  input: { name: string; slug?: string; logoMediaId?: string },
+  input: { name: string; slug?: string | undefined; logoMediaId?: string | undefined },
 ) {
   assertPermission(ctx, "products.write");
   const db = rt._db.db;
@@ -978,7 +978,7 @@ export async function createBrand(
 export async function updateBrand(
   rt: Runtime,
   ctx: TenantContext,
-  input: { id: string; name?: string; slug?: string; logoMediaId?: string | null },
+  input: { id: string; name?: string | undefined; slug?: string | undefined; logoMediaId?: string | null | undefined },
 ) {
   assertPermission(ctx, "products.write");
   const db = rt._db.db;
