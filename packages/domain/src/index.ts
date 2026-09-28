@@ -20,3 +20,4 @@ export * from "./storefront/catalog.ts";
 export * from "./storefront/search.ts";
 export * from "./storefront/cart.ts";
 export * from "./storefront/newsletter.ts";
+export * from "./storefront/seo.ts";

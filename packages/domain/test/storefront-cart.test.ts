@@ -605,14 +605,15 @@ describe("Storefront Cart & Newsletter Services", () => {
 
   describe("Newsletter Subscription", () => {
     it("subscribes new email or handles conflict with upsert", async () => {
-      let insertedRow: { email: string; source: string } | null = null;
+      const inserted: { email?: string | undefined; source?: string | undefined } = {};
       const mockDb = {
         transaction: async (cb: (tx: unknown) => Promise<unknown>) => {
           return cb({
             execute: async () => {},
             insert: () => ({
-              values: (val: { email: string; source: string }) => {
-                insertedRow = val;
+              values: (val: { email?: string | undefined; source?: string | undefined }) => {
+                inserted.email = val.email;
+                inserted.source = val.source;
                 return {
                   onConflictDoUpdate: () => ({
                     returning: () => [{ id: "sub-1", email: val.email, status: "subscribed" }],
@@ -632,8 +633,8 @@ describe("Storefront Cart & Newsletter Services", () => {
 
       expect(res.success).toBe(true);
       expect(res.message).toBe("Subscribed successfully");
-      expect(insertedRow?.email).toBe("customer@example.com");
-      expect(insertedRow?.source).toBe("footer");
+      expect(inserted.email).toBe("customer@example.com");
+      expect(inserted.source).toBe("footer");
     });
 
     it("rejects invalid email format", async () => {
