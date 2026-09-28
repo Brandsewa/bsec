@@ -52,17 +52,28 @@ Source of truth: `docs/PLAN.html` v2.0. Items are ticked only after verification
 - [x] `x-request-id` on every API response. pino JSON logs carry `request_id` (`tenant_id` field present, null until M1).
 - [x] APP_VERSION build arg flows into `/health`.
 
-### CI/CD and infra (needs your action or servers)
-- [ ] GitHub Actions `ci.yml` runs green on GitHub. It's written but has never run, because nothing has been pushed to github.com/Brandsewa/bsec yet.
-- [ ] Images pushed to GHCR (`ghcr.io/brandsewa/bsec-{web,platform,worker,admin,migrate}`).
-- [ ] Production VPS reinstalled: Ubuntu 24.04, Coolify, swap, ufw, Postgres not public (`infra/coolify/RUNBOOK.md` §1–3).
-- [ ] Separate staging VPS provisioned.
-- [ ] Coolify pulls from GHCR; push to main deploys to staging, then production with approval.
-- [ ] A migration runs as part of a real deploy.
-- [ ] pgBackRest + WAL archive to R2 configured (`infra/backups/`, draft).
+### CI/CD and infra
+- [x] GitHub Actions `ci.yml` runs green on `github.com/Brandsewa/bsec` (main).
+- [x] Images pushed to GHCR: `ghcr.io/brandsewa/bsec-{web,platform,worker,admin,migrate}`, all set **public** (anonymous `docker pull` verified) so Coolify needs no registry credentials.
+- [x] Coolify project **Bs Commerce Platform** created on the existing Brand Sewa VPS (shared with the other 4 projects for now), with a `production` environment.
+- [x] `bsec-postgres` (Postgres 18) resource running, internal-only (no public port), database `bsec`.
+- [x] Roles bootstrapped for real: `app_owner` / `app_rw` / `app_platform` created via the `bsec-migrate` Docker Image resource's one-shot `deploy.js` entrypoint (bootstrap + migrate in one image, driven entirely through Coolify's UI — no shell/terminal access used for secrets). Verified via container logs (`roles ok` / `migrations ok`) and confirmed live through every app's `/health`.
+- [x] Four long-running resources created and deployed as Docker Image resources on `:main`: `bsec-web` (3000), `bsec-platform` (4000), `bsec-worker` (4100), `bsec-admin` (8080, nginx). Each has its own DB credentials only (`app_rw` for web/worker, `app_platform` for platform only).
+- [x] **End-to-end verified live** (not just locally) via the auto-generated sslip.io URLs:
+  - web `/api/health` → `db.ok:true`, role `app_rw`; storefront `/` → 200.
+  - platform `/health` → `db.ok:true`, role `app_platform`.
+  - worker logs show it connected, started, and processed the `system.ping` job.
+  - admin `/health` → 200; SPA and a deep link (`/orders`) both → 200.
+- [ ] Domains: still on Coolify's auto `*.sslip.io` URLs. Real domains (`bscommerce.in` etc.) and Cloudflare for SaaS are not set up yet.
+- [ ] Separate staging VPS provisioned. Everything above is on the single existing VPS.
+- [ ] GitHub Actions' `deploy-staging` / `deploy-production` jobs are still no-ops (no `COOLIFY_*_WEBHOOK` secrets set) — this session's deploys were done by hand in the Coolify UI, not through the pipeline. Wiring the webhooks is the next step to make `git push` actually deploy.
+- [ ] GitHub `production` environment has no required reviewers yet, so the approval gate in `ci.yml` doesn't actually gate anything.
+- [ ] pgBackRest + WAL archive to R2 configured (`infra/backups/`, draft, not applied to this Postgres).
 - [ ] Backup restored into a scratch database, with RPO/RTO logged.
-- [ ] Sentry projects + DSNs set. The code is wired and no-ops without a DSN; it has not been verified against a live Sentry.
+- [ ] Sentry projects + DSNs set. The code is wired and no-ops without a DSN; not yet verified against a live Sentry.
 - [ ] Better Stack log drain + uptime monitors.
+- [ ] Coolify healthcheck (the HTTP-request check configured per-resource) fails on this server with "wget: can't connect to remote host: Connection refused" even though the app is listening — its `docker exec`-style check appears to run outside the app container's network namespace. Worked around by leaving Coolify healthchecks **disabled** on all four app resources and verifying liveness via the apps' own `/health` endpoints externally instead. Worth root-causing later (possibly a Coolify/Docker network mode quirk on this host) before relying on Coolify's own rolling-update healthcheck gating.
+- [ ] Coolify's "Exposed ports" field was flaky when set through the General page's Internal-access widget (silently reverted to `80` after save+reload for two resources) but reliable when set through the dedicated Networking sidebar page. Every app also now sets `PORT` (and `HOSTNAME` for web) explicitly as an env var as a defensive fix — don't rely on "Exposed ports" alone to determine what port the app binds.
 
 ### Notes / decisions this session
 - TypeScript pinned to 6.0.3, not 7.0.2: typescript-eslint 8.70 supports `<6.1`.
