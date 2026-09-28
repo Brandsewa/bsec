@@ -1,6 +1,7 @@
 import { and, eq } from "drizzle-orm";
 import { schema, type Db } from "@bs/db";
 import { resolveHostToTenant } from "./host-resolver.ts";
+import type { Runtime } from "./runtime.ts";
 
 /**
  * Every domain service takes ctx first (PLAN §3). The tenant is never taken from the client:
@@ -26,13 +27,13 @@ export interface TenantContext {
 export type HeaderValues = Headers | Record<string, string | string[] | undefined>;
 
 export interface BuildTenantContextOptions {
-  entryPath?: "storefront" | "admin";
+  entryPath?: "storefront" | "admin" | undefined;
   headers: HeaderValues;
   session?: {
-    user: { id: string; email?: string };
-    session?: { id: string; userId: string; [key: string]: unknown };
-    type?: "staff" | "customer";
-  } | null;
+    user: { id: string; email?: string | undefined };
+    session?: { id: string; userId: string; [key: string]: unknown } | undefined;
+    type?: "staff" | "customer" | undefined;
+  } | null | undefined;
 }
 
 function getHeader(headers: HeaderValues, name: string): string | undefined {
@@ -58,9 +59,10 @@ function getHeader(headers: HeaderValues, name: string): string | undefined {
  *   Customer sessions cannot resolve admin context.
  */
 export async function buildTenantContext(
-  db: Db,
+  dbOrRt: Db | Runtime,
   opts: BuildTenantContextOptions,
 ): Promise<TenantContext | null> {
+  const db = "_db" in dbOrRt ? dbOrRt._db.db : dbOrRt;
   const requestId =
     getHeader(opts.headers, "x-request-id") ?? crypto.randomUUID();
 

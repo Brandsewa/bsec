@@ -21,4 +21,10 @@ describe("platform app", () => {
     expect(res.status).toBe(200);
     expect(await res.json()).toMatchObject({ status: "ok", service: "platform" });
   });
+
+  it("rejects unauthorized access to /platform/tenants", async () => {
+    const res = await app.request("/platform/tenants");
+    // Should fail authorization with error status
+    expect(res.status).toBeGreaterThanOrEqual(400);
+  });
 });
