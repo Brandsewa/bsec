@@ -1,6 +1,7 @@
 import { z } from "zod";
 import type { BlockDefinition, BlockType } from "./types.ts";
 import React from "react";
+import { sanitizeRichText } from "./sanitize.ts";
 
 // 1. Hero Block
 export const HeroSchema = z.object({
@@ -266,11 +267,12 @@ export const RichTextBlock: BlockDefinition<RichTextProps> = {
     alignment: "left",
   },
   render: ({ props }) => {
+    const safeContent = sanitizeRichText(props.content);
     return React.createElement(
       "section",
       {
         className: `bs-block-richtext prose dark:prose-invert py-12 px-4 max-w-4xl mx-auto text-${props.alignment}`,
-        dangerouslySetInnerHTML: { __html: props.content },
+        dangerouslySetInnerHTML: { __html: safeContent },
       },
     );
   },

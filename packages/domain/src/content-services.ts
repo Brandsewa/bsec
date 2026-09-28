@@ -470,6 +470,7 @@ export async function getStorefrontPage(
       .from(schema.pages)
       .where(
         and(
+          eq(schema.pages.tenantId, ctx.tenantId),
           eq(schema.pages.slug, slug),
           eq(schema.pages.status, "published"),
         ),
@@ -483,7 +484,12 @@ export async function getStorefrontPage(
     const [ver] = await tx
       .select()
       .from(schema.pageVersions)
-      .where(eq(schema.pageVersions.id, p.publishedVersionId))
+      .where(
+        and(
+          eq(schema.pageVersions.tenantId, ctx.tenantId),
+          eq(schema.pageVersions.id, p.publishedVersionId),
+        ),
+      )
       .limit(1);
 
     const doc = (ver?.document as { version?: 1; blocks?: unknown[] } | null) ?? {
@@ -526,6 +532,7 @@ export async function getStorefrontHomePage(
       .from(schema.pages)
       .where(
         and(
+          eq(schema.pages.tenantId, ctx.tenantId),
           eq(schema.pages.type, "home"),
           eq(schema.pages.status, "published"),
         ),
@@ -539,7 +546,12 @@ export async function getStorefrontHomePage(
     const [ver] = await tx
       .select()
       .from(schema.pageVersions)
-      .where(eq(schema.pageVersions.id, p.publishedVersionId))
+      .where(
+        and(
+          eq(schema.pageVersions.tenantId, ctx.tenantId),
+          eq(schema.pageVersions.id, p.publishedVersionId),
+        ),
+      )
       .limit(1);
 
     const doc = (ver?.document as { version?: 1; blocks?: unknown[] } | null) ?? {

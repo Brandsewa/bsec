@@ -46,6 +46,22 @@ describe("Block Registry v1", () => {
         const res = def.schema.safeParse("invalid string input");
         expect(res.success).toBe(false);
       });
+
+      if (type === "RichText") {
+        it("sanitizes content in render function as defense-in-depth", () => {
+          const def = getBlockDefinition("RichText");
+          const rendered = def.render({
+            props: {
+              content: "<p>Safe</p><script>alert('xss')</script><img src=x onerror=alert(1)>",
+              alignment: "left",
+            },
+          }) as React.ReactElement<{ dangerouslySetInnerHTML: { __html: string } }>;
+
+          expect(rendered.props.dangerouslySetInnerHTML.__html).toContain("<p>Safe</p>");
+          expect(rendered.props.dangerouslySetInnerHTML.__html).not.toContain("<script");
+          expect(rendered.props.dangerouslySetInnerHTML.__html).not.toContain("onerror");
+        });
+      }
     });
   }
 });
