@@ -151,6 +151,9 @@ export function validateBlockDocument(doc: unknown): ValidationResult {
  * Migrates a single block from its current version to the registry's target version.
  */
 export function migrateBlock(block: BlockInstance): BlockInstance {
+  if (!block || typeof block !== "object") {
+    return block;
+  }
   const def = BLOCK_DEFINITIONS[block.type];
   if (!def) {
     return block;
@@ -181,6 +184,9 @@ export function migrateBlock(block: BlockInstance): BlockInstance {
  * Migrates all blocks in a document that are below the current registry version.
  */
 export function migrateBlockDocument(doc: BlockDocument): BlockDocument {
+  if (!doc || !Array.isArray(doc.blocks)) {
+    return doc;
+  }
   const migratedBlocks = doc.blocks.map(migrateBlock);
   return {
     ...doc,
