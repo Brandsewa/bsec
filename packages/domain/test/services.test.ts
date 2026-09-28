@@ -19,6 +19,7 @@ describe("Domain Services", () => {
     storeStatus: "live",
     actor: { type: "staff", userId: "user-1" },
     roles: ["store_admin"],
+    permissions: ["staff.manage", "settings.write"],
     requestId: "req-1",
   };
 
@@ -260,6 +261,21 @@ describe("Domain Services", () => {
 
       const rt = createMockRuntime(mockDb);
       await expect(assertPlatformStaff(rt, "unauthorized-user")).rejects.toThrow(/forbidden/i);
+    });
+
+    it("rejects admin procedures when required permission is missing", async () => {
+      const unprivilegedCtx: TenantContext = {
+        ...ctx,
+        permissions: ["products.read"], // lacks staff.manage and settings.write
+      };
+      const mockDb = {} as Db;
+      const rt = createMockRuntime(mockDb);
+
+      await expect(listMemberships(rt, unprivilegedCtx)).rejects.toThrow(/missing required permission 'staff\.manage'/);
+      await expect(inviteStaff(rt, unprivilegedCtx, { email: "a@b.com", roleId: "r1" })).rejects.toThrow(/missing required permission 'staff\.manage'/);
+      await expect(getStoreSettings(rt, unprivilegedCtx)).rejects.toThrow(/missing required permission 'settings\.write'/);
+      await expect(updateStoreSettings(rt, unprivilegedCtx, { storeName: "X" })).rejects.toThrow(/missing required permission 'settings\.write'/);
+      await expect(listStoreFeatureFlags(rt, unprivilegedCtx)).rejects.toThrow(/missing required permission 'settings\.write'/);
     });
   });
 });

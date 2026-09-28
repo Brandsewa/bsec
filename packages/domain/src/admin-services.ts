@@ -1,6 +1,6 @@
 import { schema, withTenant } from "@bs/db";
 import type { Runtime } from "./runtime.ts";
-import type { TenantContext } from "./context.ts";
+import { assertPermission, type TenantContext } from "./context.ts";
 
 export interface MembershipRecord {
   id: string;
@@ -37,6 +37,7 @@ export async function listMemberships(
   rt: Runtime,
   ctx: TenantContext,
 ): Promise<MembershipRecord[]> {
+  assertPermission(ctx, "staff.manage");
   const db = rt._db.db;
   return withTenant(db, ctx.tenantId, async (tx) => {
     const rows = await tx
@@ -68,6 +69,7 @@ export async function inviteStaff(
   ctx: TenantContext,
   input: { email: string; roleId: string },
 ): Promise<StaffInvitationRecord> {
+  assertPermission(ctx, "staff.manage");
   const db = rt._db.db;
   return withTenant(db, ctx.tenantId, async (tx) => {
     const tokenHash = crypto.randomUUID();
@@ -105,6 +107,7 @@ export async function getStoreSettings(
   rt: Runtime,
   ctx: TenantContext,
 ): Promise<StoreSettingsRecord> {
+  assertPermission(ctx, "settings.write");
   const db = rt._db.db;
   return withTenant(db, ctx.tenantId, async (tx) => {
     const rows = await tx
@@ -145,6 +148,7 @@ export async function updateStoreSettings(
   ctx: TenantContext,
   input: { storeName?: string | undefined; currency?: string | undefined; timezone?: string | undefined },
 ): Promise<StoreSettingsRecord> {
+  assertPermission(ctx, "settings.write");
   const db = rt._db.db;
   return withTenant(db, ctx.tenantId, async (tx) => {
     const rows = await tx
@@ -205,6 +209,7 @@ export async function listStoreFeatureFlags(
   rt: Runtime,
   ctx: TenantContext,
 ): Promise<FeatureFlagItemRecord[]> {
+  assertPermission(ctx, "settings.write");
   const db = rt._db.db;
   return withTenant(db, ctx.tenantId, async (tx) => {
     const globalFlags = await tx

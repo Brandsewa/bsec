@@ -13,6 +13,7 @@
     "test": "vitest run"
   },
   "dependencies": {
+    "@bs/auth": "workspace:*",
     "@bs/db": "workspace:*",
     "drizzle-orm": "0.45.3",
     "pino": "10.3.1",
@@ -21,8 +22,11 @@
   "devDependencies": {
     "@bs/config": "workspace:*",
     "@bs/contracts": "workspace:*",
+    "@testcontainers/postgresql": "12.1.0",
     "@types/node": "24.19.0",
+    "@types/pg": "8.23.1",
     "eslint": "10.11.0",
+    "pg": "8.23.0",
     "typescript": "6.0.3",
     "vitest": "5.0.2"
   }

@@ -12,6 +12,7 @@
     "test": "vitest run --passWithNoTests"
   },
   "dependencies": {
+    "@bs/auth": "workspace:*",
     "@bs/contracts": "workspace:*",
     "@bs/domain": "workspace:*",
     "@orpc/openapi": "1.15.4",

@@ -75,7 +75,7 @@ CREATE TABLE "tenants" (
 	"industry" text,
 	"suspended_reason" text,
 	"archived_at" timestamp with time zone,
-	"dataRegion" text DEFAULT 'ap-south-1' NOT NULL,
+	"data_region" text DEFAULT 'ap-south-1' NOT NULL,
 	"created_at" timestamp with time zone DEFAULT now() NOT NULL,
 	"updated_at" timestamp with time zone DEFAULT now() NOT NULL,
 	CONSTRAINT "tenants_slug_unique" UNIQUE("slug")
@@ -151,7 +151,8 @@ CREATE TABLE "roles" (
 	"permissions" text[] DEFAULT '{}'::text[] NOT NULL,
 	"created_at" timestamp with time zone DEFAULT now() NOT NULL,
 	"updated_at" timestamp with time zone DEFAULT now() NOT NULL,
-	CONSTRAINT "roles_tenant_name_uniq" UNIQUE("tenant_id","name")
+	CONSTRAINT "roles_tenant_name_uniq" UNIQUE("tenant_id","name"),
+	CONSTRAINT "roles_tenant_id_uniq" UNIQUE("tenant_id","id")
 );
 --> statement-breakpoint
 ALTER TABLE "roles" ENABLE ROW LEVEL SECURITY;--> statement-breakpoint

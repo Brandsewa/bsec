@@ -8,6 +8,7 @@ import pg from "pg";
 import { bootstrapRoles } from "../src/scripts/bootstrap-roles.ts";
 import { runMigrations } from "../src/scripts/migrate.ts";
 import { forceRlsSql, tenantTableNames } from "../src/tenant-table.ts";
+import "../src/schema/index.ts";
 
 const PW = { owner: "o_test", rw: "rw_test", platform: "p_test" };
 let container: StartedPostgreSqlContainer | undefined;

@@ -68,6 +68,7 @@ describe("buildTenantContext()", () => {
         storeStatus: "live",
         actor: { type: "anonymous" },
         roles: [],
+        permissions: [],
         requestId: "req-12345",
       });
     });
@@ -139,6 +140,7 @@ describe("buildTenantContext()", () => {
                     {
                       membershipStatus: "active",
                       roleName: "store_admin",
+                      permissions: ["staff.manage", "settings.write"],
                       tenantStatus: "active",
                     },
                   ],
@@ -166,6 +168,7 @@ describe("buildTenantContext()", () => {
         storeStatus: "live",
         actor: { type: "staff", userId },
         roles: ["store_admin"],
+        permissions: ["staff.manage", "settings.write"],
         requestId: "admin-req-1",
       });
     });

@@ -38,6 +38,8 @@ export interface ApiContext {
 
 const os = implement(storeContract).$context<ApiContext>();
 
+import { hasPermission, type StorePermission } from "@bs/auth";
+
 const requireAdmin = os.middleware(async ({ context, next }) => {
   const headers = context.headers ?? new Headers();
   const tenantCtx = await buildTenantContext(context.rt, {
@@ -58,36 +60,67 @@ const requireAdmin = os.middleware(async ({ context, next }) => {
   });
 });
 
+const requirePermission = (needed: StorePermission) =>
+  os.middleware(async ({ context, next }) => {
+    if (!context.tenantCtx) {
+      throw new Error("Unauthorized: missing tenant context");
+    }
+    if (!hasPermission(context.tenantCtx.permissions, needed)) {
+      throw new Error(`Forbidden: missing required permission '${needed}'`);
+    }
+    return next({
+      context: {
+        ...context,
+        tenantCtx: context.tenantCtx as TenantContext,
+      },
+    });
+  });
+
 export const storeRouter = os.router({
   system: {
     health: os.system.health.handler(({ context }) => checkHealth(context.rt)),
   },
   admin: {
     memberships: {
-      list: os.admin.memberships.list.use(requireAdmin).handler(({ context }) => {
-        if (!context.tenantCtx) throw new Error("Missing tenant context");
-        return listMemberships(context.rt, context.tenantCtx);
-      }),
-      invite: os.admin.memberships.invite.use(requireAdmin).handler(({ context, input }) => {
-        if (!context.tenantCtx) throw new Error("Missing tenant context");
-        return inviteStaff(context.rt, context.tenantCtx, input);
-      }),
+      list: os.admin.memberships.list
+        .use(requireAdmin)
+        .use(requirePermission("staff.manage"))
+        .handler(({ context }) => {
+          if (!context.tenantCtx) throw new Error("Missing tenant context");
+          return listMemberships(context.rt, context.tenantCtx);
+        }),
+      invite: os.admin.memberships.invite
+        .use(requireAdmin)
+        .use(requirePermission("staff.manage"))
+        .handler(({ context, input }) => {
+          if (!context.tenantCtx) throw new Error("Missing tenant context");
+          return inviteStaff(context.rt, context.tenantCtx, input);
+        }),
     },
     settings: {
-      get: os.admin.settings.get.use(requireAdmin).handler(({ context }) => {
-        if (!context.tenantCtx) throw new Error("Missing tenant context");
-        return getStoreSettings(context.rt, context.tenantCtx);
-      }),
-      update: os.admin.settings.update.use(requireAdmin).handler(({ context, input }) => {
-        if (!context.tenantCtx) throw new Error("Missing tenant context");
-        return updateStoreSettings(context.rt, context.tenantCtx, input);
-      }),
+      get: os.admin.settings.get
+        .use(requireAdmin)
+        .use(requirePermission("settings.write"))
+        .handler(({ context }) => {
+          if (!context.tenantCtx) throw new Error("Missing tenant context");
+          return getStoreSettings(context.rt, context.tenantCtx);
+        }),
+      update: os.admin.settings.update
+        .use(requireAdmin)
+        .use(requirePermission("settings.write"))
+        .handler(({ context, input }) => {
+          if (!context.tenantCtx) throw new Error("Missing tenant context");
+          return updateStoreSettings(context.rt, context.tenantCtx, input);
+        }),
     },
     featureFlags: {
-      list: os.admin.featureFlags.list.use(requireAdmin).handler(({ context }) => {
-        if (!context.tenantCtx) throw new Error("Missing tenant context");
-        return listStoreFeatureFlags(context.rt, context.tenantCtx);
-      }),
+      list: os.admin.featureFlags.list
+        .use(requireAdmin)
+        .use(requirePermission("settings.write"))
+        .handler(({ context }) => {
+          if (!context.tenantCtx) throw new Error("Missing tenant context");
+          return listStoreFeatureFlags(context.rt, context.tenantCtx);
+        }),
     },
   },
 });

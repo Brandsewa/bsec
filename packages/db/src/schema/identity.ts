@@ -93,6 +93,7 @@ export const roles = tenantTable(
   },
   (t) => [
     unique("roles_tenant_name_uniq").on(t.tenantId, t.name),
+    unique("roles_tenant_id_uniq").on(t.tenantId, t.id),
   ],
 );
 

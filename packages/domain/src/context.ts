@@ -1,5 +1,5 @@
 import { and, eq } from "drizzle-orm";
-import { schema, type Db } from "@bs/db";
+import { schema, withTenant, type Db } from "@bs/db";
 import { resolveHostToTenant } from "./host-resolver.ts";
 import type { Runtime } from "./runtime.ts";
 
@@ -7,6 +7,10 @@ import type { Runtime } from "./runtime.ts";
  * Every domain service takes ctx first (PLAN §3). The tenant is never taken from the client:
  * it comes from the host (storefront) or session membership + X-Store-Id (admin). Built in M1.
  */
+import { hasPermission, type StorePermission } from "@bs/auth";
+
+export { hasPermission, type StorePermission };
+
 export type Actor =
   | { type: "anonymous" }
   | { type: "customer"; customerId: string }
@@ -21,7 +25,18 @@ export interface TenantContext {
   storeStatus: StoreStatus;
   actor: Actor;
   roles: readonly string[];
+  permissions: readonly string[];
   requestId: string;
+}
+
+/**
+ * Asserts that the TenantContext possesses a required store permission (PLAN §4).
+ * Throws a Forbidden error if the permission is not granted.
+ */
+export function assertPermission(ctx: TenantContext, needed: StorePermission): void {
+  if (!hasPermission(ctx.permissions, needed)) {
+    throw new Error(`Forbidden: missing required permission '${needed}'`);
+  }
 }
 
 export type HeaderValues = Headers | Record<string, string | string[] | undefined>;
@@ -75,38 +90,53 @@ export async function buildTenantContext(
       throw new Error("Forbidden: customer session cannot access admin context");
     }
 
+    const session = opts.session;
     const storeId = getHeader(opts.headers, "x-store-id");
     if (!storeId) {
       throw new Error("Bad Request: missing X-Store-Id header for admin context");
     }
 
-    // Cross-check active membership and load assigned role and tenant status
-    const membershipRows = await db
-      .select({
-        membershipStatus: schema.memberships.status,
-        roleName: schema.roles.name,
-        tenantStatus: schema.tenants.status,
-      })
-      .from(schema.memberships)
-      .innerJoin(
-        schema.roles,
-        and(
-          eq(schema.roles.id, schema.memberships.roleId),
-          eq(schema.roles.tenantId, schema.memberships.tenantId),
-        ),
-      )
-      .innerJoin(
-        schema.tenants,
-        eq(schema.tenants.id, schema.memberships.tenantId),
-      )
-      .where(
-        and(
-          eq(schema.memberships.tenantId, storeId),
-          eq(schema.memberships.userId, opts.session.user.id),
-          eq(schema.memberships.status, "active"),
-        ),
-      )
-      .limit(1);
+    const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+    if (!UUID_RE.test(storeId)) {
+      throw new Error("Forbidden: user has no active membership for the requested store");
+    }
+
+    // Cross-check active membership and load assigned role and tenant status.
+    // Executed within withTenant(db, storeId, ...) because memberships table has FORCE ROW LEVEL SECURITY.
+    const queryMembership = async (d: Db) => {
+      return await d
+        .select({
+          membershipStatus: schema.memberships.status,
+          roleName: schema.roles.name,
+          permissions: schema.roles.permissions,
+          tenantStatus: schema.tenants.status,
+        })
+        .from(schema.memberships)
+        .innerJoin(
+          schema.roles,
+          and(
+            eq(schema.roles.id, schema.memberships.roleId),
+            eq(schema.roles.tenantId, schema.memberships.tenantId),
+          ),
+        )
+        .innerJoin(
+          schema.tenants,
+          eq(schema.tenants.id, schema.memberships.tenantId),
+        )
+        .where(
+          and(
+            eq(schema.memberships.tenantId, storeId),
+            eq(schema.memberships.userId, session.user.id),
+            eq(schema.memberships.status, "active"),
+          ),
+        )
+        .limit(1);
+    };
+
+    const membershipRows =
+      typeof db.transaction === "function"
+        ? await withTenant(db, storeId, queryMembership)
+        : await queryMembership(db);
 
     const row = membershipRows[0];
     if (!row) {
@@ -120,6 +150,7 @@ export async function buildTenantContext(
       storeStatus,
       actor: { type: "staff", userId: opts.session.user.id },
       roles: [row.roleName],
+      permissions: row.permissions ?? [],
       requestId,
     };
   }
@@ -150,6 +181,7 @@ export async function buildTenantContext(
     storeStatus: resolved.storeStatus,
     actor,
     roles: [],
+    permissions: [],
     requestId,
   };
 }
