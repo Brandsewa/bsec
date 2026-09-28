@@ -2,9 +2,11 @@ import { oc } from "@orpc/contract";
 import { z } from "zod";
 import { adminContract } from "./admin.ts";
 import { platformTenantsContract } from "./platform.ts";
+import { storefrontContract } from "./storefront.ts";
 
 export * from "./admin.ts";
 export * from "./platform.ts";
+export * from "./storefront.ts";
 
 /**
  * oRPC contracts (PLAN §11).
@@ -25,6 +27,7 @@ const health = oc.route({ method: "GET", path: "/system/health" }).output(Health
 export const storeContract = {
   system: { health },
   admin: adminContract,
+  storefront: storefrontContract,
 };
 
 /** Platform API, served only by apps/platform (BYPASSRLS credentials). */

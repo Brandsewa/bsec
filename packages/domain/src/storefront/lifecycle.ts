@@ -3,7 +3,7 @@ import { eq } from "drizzle-orm";
 import type { Db } from "@bs/db";
 import { schema } from "@bs/db";
 import { resolveHostToTenant } from "../host-resolver.ts";
-import type { HeaderValues } from "../context.ts";
+import type { HeaderValues, TenantContext } from "../context.ts";
 import type { Runtime } from "../runtime.ts";
 
 export type StorefrontMode = "live" | "coming_soon" | "maintenance" | "password";
@@ -419,5 +419,36 @@ export async function evaluateStorefrontAccess(
     tenantId,
     tenantStatus,
     noindex: true,
+  };
+}
+
+/**
+ * Verifies a password against the tenant's store status password_hash.
+ */
+export async function verifyStorefrontPassword(
+  rt: Runtime,
+  ctx: TenantContext,
+  password: string,
+): Promise<{ success: boolean; token?: string | undefined }> {
+  const db = rt._db.db;
+  const rows = await db
+    .select({ passwordHash: schema.storeStatus.passwordHash })
+    .from(schema.storeStatus)
+    .where(eq(schema.storeStatus.tenantId, ctx.tenantId))
+    .limit(1);
+
+  const passwordHash = rows[0]?.passwordHash;
+  if (!passwordHash) {
+    return { success: false };
+  }
+
+  const valid = await verifyStorePassword(password, passwordHash);
+  if (!valid) {
+    return { success: false };
+  }
+
+  return {
+    success: true,
+    token: password,
   };
 }

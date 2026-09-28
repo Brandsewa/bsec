@@ -57,6 +57,16 @@ import {
   updateStoreSettings,
   updateTheme,
   updateVariant,
+  searchStorefrontProducts,
+  getSearchSuggestions,
+  getOrCreateCart,
+  addToCart,
+  updateCartItemQuantity,
+  removeCartItem,
+  clearCart,
+  estimateCartShipping,
+  subscribeNewsletter,
+  verifyStorefrontPassword,
   type Logger,
   type Runtime,
   type TenantContext,
@@ -93,6 +103,24 @@ const requireAdmin = os.middleware(async ({ context, next }) => {
     throw new Error("Unauthorized: unable to resolve admin tenant context");
   }
 
+  return next({
+    context: {
+      ...context,
+      tenantCtx,
+    },
+  });
+});
+
+const requireStorefront = os.middleware(async ({ context, next }) => {
+  const headers = context.headers ?? new Headers();
+  const tenantCtx = await buildTenantContext(context.rt, {
+    entryPath: "storefront",
+    headers,
+    session: context.session,
+  });
+  if (!tenantCtx) {
+    throw new Error("Unable to resolve storefront tenant from host");
+  }
   return next({
     context: {
       ...context,
@@ -499,6 +527,122 @@ export const storeRouter = os.router({
         .handler(({ context, input }) => {
           if (!context.tenantCtx) throw new Error("Missing tenant context");
           return deleteMenu(context.rt, context.tenantCtx, input);
+        }),
+    },
+  },
+  storefront: {
+    search: os.storefront.search
+      .use(requireStorefront)
+      .handler(async ({ context, input }) => {
+        if (!context.tenantCtx) throw new Error("Missing tenant context");
+        const res = await searchStorefrontProducts(context.rt, context.tenantCtx, input.query, {
+          page: input.page,
+          limit: input.limit,
+        });
+        return {
+          total: res.total,
+          items: res.items.map((item) => ({
+            id: item.id,
+            title: item.title,
+            slug: item.slug,
+            priceMin: item.priceMin,
+            priceMax: item.priceMax,
+            compareAtPriceMin: item.compareAtPriceMin ?? null,
+            compareAtPriceMax: item.compareAtPriceMax ?? null,
+            hasVariants: item.priceMin !== item.priceMax,
+            primaryMedia: item.primaryImage
+              ? {
+                  id: item.primaryImage.mediaId,
+                  storageKey: item.primaryImage.mediaId,
+                  cfImageId: null,
+                  alt: item.primaryImage.alt ?? null,
+                  width: null,
+                  height: null,
+                }
+              : null,
+          })),
+        };
+      }),
+    searchSuggestions: os.storefront.searchSuggestions
+      .use(requireStorefront)
+      .handler(async ({ context, input }) => {
+        if (!context.tenantCtx) throw new Error("Missing tenant context");
+        const items = await getSearchSuggestions(context.rt, context.tenantCtx, input.query, input.limit);
+        return {
+          suggestions: items.map((s) => ({
+            id: s.slug,
+            title: s.title,
+            slug: s.slug,
+          })),
+        };
+      }),
+    cart: {
+      get: os.storefront.cart.get
+        .use(requireStorefront)
+        .handler(({ context, input }) => {
+          if (!context.tenantCtx) throw new Error("Missing tenant context");
+          return getOrCreateCart(context.rt, context.tenantCtx, input.token);
+        }),
+      addItem: os.storefront.cart.addItem
+        .use(requireStorefront)
+        .handler(({ context, input }) => {
+          if (!context.tenantCtx) throw new Error("Missing tenant context");
+          return addToCart(context.rt, context.tenantCtx, {
+            token: input.token ?? "",
+            variantId: input.variantId,
+            quantity: input.quantity,
+            properties: input.properties,
+          });
+        }),
+      updateItem: os.storefront.cart.updateItem
+        .use(requireStorefront)
+        .handler(({ context, input }) => {
+          if (!context.tenantCtx) throw new Error("Missing tenant context");
+          return updateCartItemQuantity(context.rt, context.tenantCtx, input);
+        }),
+      removeItem: os.storefront.cart.removeItem
+        .use(requireStorefront)
+        .handler(({ context, input }) => {
+          if (!context.tenantCtx) throw new Error("Missing tenant context");
+          return removeCartItem(context.rt, context.tenantCtx, input);
+        }),
+      clear: os.storefront.cart.clear
+        .use(requireStorefront)
+        .handler(({ context, input }) => {
+          if (!context.tenantCtx) throw new Error("Missing tenant context");
+          return clearCart(context.rt, context.tenantCtx, input.token);
+        }),
+      estimateShipping: os.storefront.cart.estimateShipping
+        .use(requireStorefront)
+        .handler(async ({ context, input }) => {
+          if (!context.tenantCtx) throw new Error("Missing tenant context");
+          const estimate = await estimateCartShipping(context.rt, context.tenantCtx, input);
+          return {
+            serviceable: estimate.serviceable,
+            pincode: estimate.pincode,
+            rates: estimate.rates.map((r) => ({
+              id: r.id,
+              name: r.title,
+              amountPaise: r.amount,
+              estimatedDays: r.estimatedDays,
+            })),
+          };
+        }),
+    },
+    newsletter: {
+      subscribe: os.storefront.newsletter.subscribe
+        .use(requireStorefront)
+        .handler(({ context, input }) => {
+          if (!context.tenantCtx) throw new Error("Missing tenant context");
+          return subscribeNewsletter(context.rt, context.tenantCtx, input);
+        }),
+    },
+    status: {
+      verifyPassword: os.storefront.status.verifyPassword
+        .use(requireStorefront)
+        .handler(async ({ context, input }) => {
+          if (!context.tenantCtx) throw new Error("Missing tenant context");
+          return verifyStorefrontPassword(context.rt, context.tenantCtx, input.password);
         }),
     },
   },
