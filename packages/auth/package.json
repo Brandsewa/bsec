@@ -12,7 +12,9 @@
     "test": "vitest run"
   },
   "dependencies": {
-    "better-auth": "1.7.6"
+    "@bs/db": "workspace:*",
+    "better-auth": "1.7.6",
+    "drizzle-orm": "0.45.3"
   },
   "devDependencies": {
     "@bs/config": "workspace:*",

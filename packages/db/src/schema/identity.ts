@@ -175,7 +175,7 @@ export const auditLogs = tenantTable("audit_logs", {
  */
 export const customerSessions = tenantTable("customer_sessions", {
   id: text("id").primaryKey(),
-  customerId: uuid("customer_id"),
+  userId: uuid("user_id"),
   token: text("token").notNull().unique(),
   expiresAt: timestamp("expires_at", { withTimezone: true }).notNull(),
   ipAddress: text("ip_address"),

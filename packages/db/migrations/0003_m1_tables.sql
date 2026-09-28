@@ -116,7 +116,7 @@ ALTER TABLE "audit_logs" FORCE ROW LEVEL SECURITY;--> statement-breakpoint
 CREATE TABLE "customer_sessions" (
 	"tenant_id" uuid NOT NULL,
 	"id" text PRIMARY KEY NOT NULL,
-	"customer_id" uuid,
+	"user_id" uuid,
 	"token" text NOT NULL,
 	"expires_at" timestamp with time zone NOT NULL,
 	"ip_address" text,
