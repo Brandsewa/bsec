@@ -7,7 +7,8 @@ import { PostgreSqlContainer, type StartedPostgreSqlContainer } from "@testconta
 import pg from "pg";
 import { bootstrapRoles } from "../src/scripts/bootstrap-roles.ts";
 import { runMigrations } from "../src/scripts/migrate.ts";
-import { forceRlsSql } from "../src/tenant-table.ts";
+import { forceRlsSql, tenantTableNames } from "../src/tenant-table.ts";
+import "../src/schema/index.ts";
 
 const PW = { owner: "o_test", rw: "rw_test", platform: "p_test" };
 let container: StartedPostgreSqlContainer | undefined;
@@ -117,5 +118,38 @@ describe("postgres roles", () => {
 
     // BYPASSRLS role reads everything (why it lives only in the platform container).
     expect((await q(as("app_platform", PW.platform), "select * from rls_probe")).rowCount).toBe(2);
+  });
+
+  it("enforces FORCE ROW LEVEL SECURITY on every registered tenant table", async () => {
+    const tableList = Array.from(tenantTableNames);
+    expect(tableList.length).toBeGreaterThan(0);
+    const r = await q<{ relname: string; relforcerowsecurity: boolean; relrowsecurity: boolean }>(
+      superUrl,
+      `select relname, relforcerowsecurity, relrowsecurity
+       from pg_class
+       where relname = any($1::text[])`,
+      [tableList],
+    );
+    expect(r.rows.length).toBe(tableList.length);
+    for (const row of r.rows) {
+      expect(row.relrowsecurity).toBe(true);
+      expect(row.relforcerowsecurity).toBe(true);
+    }
+  });
+
+  it("proves raw pooled connection without SET LOCAL returns 0 rows on real tables", async () => {
+    const rw = as("app_rw", PW.rw);
+    const c = new pg.Client({ connectionString: rw });
+    await c.connect();
+    try {
+      const resMemberships = await c.query("select * from memberships");
+      expect(resMemberships.rowCount).toBe(0);
+      const resSettings = await c.query("select * from store_settings");
+      expect(resSettings.rowCount).toBe(0);
+      const resOverrides = await c.query("select * from tenant_feature_overrides");
+      expect(resOverrides.rowCount).toBe(0);
+    } finally {
+      await c.end();
+    }
   });
 });

@@ -6,7 +6,9 @@
   "exports": {
     ".": "./src/index.ts",
     "./schema": "./src/schema/index.ts",
-    "./tenant-table": "./src/tenant-table.ts"
+    "./tenant-table": "./src/tenant-table.ts",
+    "./bootstrap": "./src/scripts/bootstrap-roles.ts",
+    "./migrate": "./src/scripts/migrate.ts"
   },
   "scripts": {
     "typecheck": "tsc -p tsconfig.json",

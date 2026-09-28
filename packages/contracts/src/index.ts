@@ -1,8 +1,13 @@
 import { oc } from "@orpc/contract";
 import { z } from "zod";
+import { adminContract } from "./admin.ts";
+import { platformTenantsContract } from "./platform.ts";
+
+export * from "./admin.ts";
+export * from "./platform.ts";
 
 /**
- * oRPC contracts (PLAN §11). M0 ships only health/version so every surface is wired end to end.
+ * oRPC contracts (PLAN §11).
  * Namespaces: storefront.* (tenant from host), admin.* (membership + X-Store-Id),
  * public.* (signup, plans), platform.* (platform container only).
  */
@@ -19,11 +24,13 @@ const health = oc.route({ method: "GET", path: "/system/health" }).output(Health
 /** Store API, mounted inside Next at /api. */
 export const storeContract = {
   system: { health },
+  admin: adminContract,
 };
 
 /** Platform API, served only by apps/platform (BYPASSRLS credentials). */
 export const platformContract = {
   system: { health },
+  tenants: platformTenantsContract,
 };
 
 export type StoreContract = typeof storeContract;

@@ -36,3 +36,7 @@ export const SYSTEM_STORE_ROLES: Record<"store_owner" | "store_admin", readonly 
 export function hasPermission(granted: readonly string[], needed: StorePermission): boolean {
   return granted.includes(needed);
 }
+
+export { createStaffAuth, type StaffAuth, type StaffAuthOptions } from "./staff.ts";
+export { createCustomerAuth, type CustomerAuth, type CustomerAuthOptions } from "./customer.ts";
+
