@@ -1,111 +1,135 @@
 # Coolify deployment runbook
 
-Applies to **staging** (small VPS, 2 vCPU / 4 GB) and **production** (2 vCPU / 8 GB), both Ubuntu 24.04 + Coolify. Images are built by GitHub Actions and pulled from GHCR. **Nothing is built on a VPS.** Source: PLAN §3, §13 (M0), §14.
+**Status:** production is live on the shared Brand Sewa VPS (`server.brandsewa.com`, host IP `88.222.241.159`), Coolify project **Bs Commerce Platform** -> environment `production`. There is **no staging VPS yet** -- deliberately deferred; see section 0. Everything below reflects what is actually configured, not just the plan.
 
-Images (`ghcr.io/brandsewa/…`, tags `:<git sha>` and `:main`):
+Images are built by GitHub Actions and pulled from GHCR (`ghcr.io/brandsewa/bsec-*`, all **public** -- no registry credentials needed on the VPS). **Nothing is built on the VPS.** Source: PLAN section 3, section 13 (M0), section 14.
 
-| Image | Role | DB credentials | Port | Health |
-|---|---|---|---|---|
-| `bsec-migrate` | one-shot, before every deploy | `app_owner` (+ superuser only for first bootstrap) | – | exit code 0 |
-| `bsec-web` | storefront, marketing, Store API | `app_rw` | 3000 | `GET /api/health` |
-| `bsec-platform` | Platform API (private) | `app_platform` (BYPASSRLS) | 4000 | `GET /health` |
-| `bsec-worker` | pg-boss consumers | `app_rw` | 4100 | `GET /health` |
-| `bsec-admin` | static SPA (nginx) | none | 8080 | `GET /health` |
+| Resource (Coolify name) | UUID | Role | DB credentials | Port | Domain |
+|---|---|---|---|---|---|
+| `bsec-postgres` | `jpukpasrsnmzzt6w2gshxktd` | Postgres 18, internal-only | superuser (Coolify-generated) | 5432 | none |
+| `bsec-migrate` | `qqqlm48eqo7f8pnfwn766suc` | one-shot, before every deploy | `app_owner` (+ superuser, first run only) | - | none |
+| `bsec-web` | `7wuzc3xhtzhxud3315pjutnd` | storefront, marketing, Store API | `app_rw` | 3000 | `gobs.cloud`, `www.gobs.cloud` |
+| `bsec-platform` | `w4awz0y3fxzxtwstps1srgfi` | Platform API | `app_platform` (BYPASSRLS) | 4000 | `platform.gobs.cloud` |
+| `bsec-worker` | `ecfwkdh7citlanfto6gpgqdv` | pg-boss consumers | `app_rw` | 4100 | none |
+| `bsec-admin` | `miz7k30kdqjwmqgiru4k9xtz` | static SPA (nginx) | none | 8080 | `admin.gobs.cloud` |
 
 ---
 
-## 1. Server preparation (both VPSs)
-Run as root on a fresh Ubuntu 24.04 install.
+## 0. Staging - deferred
+
+There is intentionally no separate staging VPS right now (user decision, 2026-09-28). `ci.yml` deploys straight to `production` on every push to `main` that passes checks. When a staging VPS exists:
+1. Repeat sections 1-5 below on it, as its own Coolify project/environment with its own database and resource UUIDs.
+2. Add a `deploy-staging` job to `ci.yml` ahead of `deploy-production`, same shape (see section 6), with its own `COOLIFY_TOKEN`/UUIDs as secrets on a `staging` GitHub environment.
+3. Point `deploy-production`'s `needs:` at `deploy-staging` again.
+
+## 1. Server preparation
+Already done on the production VPS (shared with other Brand Sewa projects). For a **new** VPS (e.g. the future staging one), as root on a fresh Ubuntu 24.04 install:
 ```bash
 apt update && apt -y full-upgrade && apt -y install ufw fail2ban unattended-upgrades
 dpkg-reconfigure -plow unattended-upgrades
-# 4 GB swap (PLAN §14 budget)
 fallocate -l 4G /swapfile && chmod 600 /swapfile && mkswap /swapfile && swapon /swapfile
 echo '/swapfile none swap sw 0 0' >> /etc/fstab
 sysctl -w vm.swappiness=10 && echo 'vm.swappiness=10' > /etc/sysctl.d/99-swap.conf
-# SSH: key-only
 sed -i 's/^#\?PasswordAuthentication.*/PasswordAuthentication no/' /etc/ssh/sshd_config && systemctl reload ssh
-# Firewall: SSH + HTTP/S only. Postgres is NEVER opened.
 ufw default deny incoming && ufw default allow outgoing
 ufw allow 22/tcp && ufw allow 80/tcp && ufw allow 443/tcp
 ufw enable
 ```
-> Docker publishes ports by writing iptables rules that bypass ufw. Therefore **never publish the Postgres port** in Coolify. Services talk over the Coolify Docker network only.
+Docker publishes ports by writing iptables rules that bypass ufw. **Never publish the Postgres port.** `bsec-postgres` has no port mapping - confirmed (Public access: none).
 
-## 2. Install Coolify
-```bash
-curl -fsSL https://cdn.coollabs.io/coolify/install.sh | bash
-```
-- Open `http://<ip>:8000`, create the admin account, **enable 2FA**, then put the dashboard behind a domain with HTTPS and close 8000 (`ufw deny 8000`).
-- Settings → set instance domain; disable "Build server" usage (we only pull).
-- Add GHCR credentials: Keys & Tokens → Registry: `ghcr.io`, user = GitHub user, password = a **read:packages** fine-grained PAT.
+## 2. Coolify
+Already running on the production VPS. API access is **enabled** (Settings -> Advanced -> API and MCP), needed for CI deploys (section 6). `Allowed API IPs` is currently unrestricted - GitHub Actions runner IPs are dynamic, so this is guarded by the bearer token instead; tighten later if Coolify supports IP ranges well enough to be worth it.
 
-## 3. Postgres 18
-Coolify → New resource → Database → PostgreSQL, image `postgres:18`.
-- Name `bsec-postgres`, **"Make it publicly available": off**.
-- Superuser password: generate, store in the password manager (not in app env).
-- Custom config (production 8 GB): `shared_buffers=1536MB`, `work_mem=8MB`, `max_connections=60`, `effective_cache_size=4GB`, `maintenance_work_mem=256MB`, `wal_level=replica`, `archive_mode=on`, `archive_timeout=60`, `archive_command` per `infra/backups/README.md`.
-  Staging: `shared_buffers=768MB`, `max_connections=40`.
-- Create database `bsec`.
+## 3. Postgres
+`bsec-postgres`: image `postgres:18`, database `bsec`, not publicly exposed. Running on default memory settings - **not** the plan's 1.5 GB `shared_buffers` tuning, because this VPS is shared with other projects (Bs Ecommerce, Discover Darjeeling, Ricwell, Santuals) and there's no room to reserve that much just for this database yet. Revisit sizing once this platform is the primary tenant of the box or moves to its own server.
 
-## 4. Roles bootstrap (once per environment)
-Run the migrate image once with the bootstrap command and the **superuser** URL, from Coolify → the migrate resource → "Execute command", or as a one-off:
-```bash
-docker run --rm --network coolify \
-  -e DATABASE_URL_SUPERUSER='postgres://postgres:<superpw>@bsec-postgres:5432/bsec' \
-  -e APP_OWNER_PASSWORD='<gen>' -e APP_RW_PASSWORD='<gen>' -e APP_PLATFORM_PASSWORD='<gen>' \
-  ghcr.io/brandsewa/bsec-migrate:main node dist/bootstrap.js
-```
-Idempotent: re-running rotates the three role passwords. The superuser URL is **not** stored in any Coolify app afterwards.
+## 4. Roles bootstrap
+Done via the `bsec-migrate` resource's single `deploy.js` entrypoint (`packages/db/src/scripts/deploy.ts`), **not** a manual `docker run` - that needs no VPS shell access at all:
+1. Create `bsec-migrate` as a Coolify "Docker Image" resource, image `ghcr.io/brandsewa/bsec-migrate:main`.
+2. Set env vars (once, for the first run): `DATABASE_URL_SUPERUSER` (copy from `bsec-postgres` -> General -> "Postgres URL (internal)"), `APP_OWNER_PASSWORD`, `APP_RW_PASSWORD`, `APP_PLATFORM_PASSWORD` (generate three strong random values), `DATABASE_URL_OWNER` (same host, `app_owner` + its password).
+3. Click **Deploy**. Check Runtime Logs for `roles ok` / `migrations ok`.
+4. **Remove `DATABASE_URL_SUPERUSER`** from the resource's env vars afterwards - only this one-shot job may ever hold superuser credentials, and it only needs it once. `deploy.js` skips the bootstrap step (just migrates) when that var is absent.
+5. Coolify's default restart policy will loop-restart a Docker Image resource whose process exits 0 (as `deploy.js` always does). After a successful deploy, go to Actions -> Stop so it sits idle until the next deploy, instead of restarting forever.
 
 ## 5. Applications
-Create one Coolify "Docker Image" resource per image, same project + environment, all on the same network as Postgres. Pin to `:main` for staging auto-deploys; production uses the exact `:<sha>` promoted from staging.
+One Coolify "Docker Image" resource per image (see the table above for images/ports/domains). For each:
+- **Networking -> Ports exposes**: set to the app's port. This field has been flaky on this Coolify install - after Save, **reload the page and confirm it stuck** before moving on; it silently reverted to `80` twice during setup. Every app also sets `PORT` (and web additionally `HOSTNAME=0.0.0.0`) explicitly as an env var as a defensive backstop, since Coolify injects its own `PORT` matching Exposed Ports and that's what actually decided which port the process bound to in testing.
+- **Healthcheck**: leave **disabled**. Coolify's own HTTP healthcheck on this server fails with `wget: can't connect to remote host: Connection refused` even when the app is demonstrably up - its check appears to run outside the app container's network namespace. Verify liveness via the app's own `/health` endpoint from outside instead (see section 6 verification). Root-cause and re-enable later if it matters for rolling-update gating.
+- **Environment variables** (Developer view, paste as a block):
 
-### Environment variables
-| Resource | Variables |
+| Resource | Env vars |
 |---|---|
-| migrate | `DATABASE_URL_OWNER=postgres://app_owner:…@bsec-postgres:5432/bsec` |
-| web | `DATABASE_URL_RW=postgres://app_rw:…@bsec-postgres:5432/bsec`, `DB_POOL_MAX=10`, `APP_ENV`, `SENTRY_DSN`, `LOG_LEVEL=info` |
-| platform | `DATABASE_URL_PLATFORM=postgres://app_platform:…@bsec-postgres:5432/bsec`, `DB_POOL_MAX=3`, `APP_ENV`, `SENTRY_DSN` |
-| worker | `DATABASE_URL_RW=…app_rw…`, `WORKER_CONCURRENCY=4`, `APP_ENV`, `SENTRY_DSN` |
-| admin | none (static) |
+| web | `DATABASE_URL_RW=postgres://app_rw:...@<postgres-internal-hostname>:5432/bsec`, `APP_ENV=production`, `DB_POOL_MAX=10`, `LOG_LEVEL=info`, `PORT=3000`, `HOSTNAME=0.0.0.0` |
+| platform | `DATABASE_URL_PLATFORM=postgres://app_platform:...@<postgres-internal-hostname>:5432/bsec`, `APP_ENV=production`, `DB_POOL_MAX=3`, `LOG_LEVEL=info`, `PORT=4000` |
+| worker | `DATABASE_URL_RW=postgres://app_rw:...@<postgres-internal-hostname>:5432/bsec`, `WORKER_CONCURRENCY=4`, `APP_ENV=production`, `LOG_LEVEL=info`, `PORT=4100` |
+| admin | none (static nginx SPA) |
 
-**Checklist (security):** `DATABASE_URL_PLATFORM` exists **only** on the platform resource. The owner URL exists **only** on migrate. Web and worker get `app_rw` only.
+`<postgres-internal-hostname>` is `bsec-postgres`'s Coolify-assigned container hostname (visible on its General page, "Postgres URL (internal)") - same Docker network (`coolify`), reachable by name.
 
-### Domains / exposure
-- web: `bscommerce.in`, `*.bscommerce.in`, `stores.bscommerce.in` (Cloudflare for SaaS fallback origin) → port 3000.
-- admin: `admin.bscommerce.in` → 8080.
-- platform: `platform.bscommerce.in` → 4000, **behind Cloudflare Access** (Zero Trust application, platform staff only). Never exposed without Access.
-- worker: no domain.
+**Checklist (security):** `DATABASE_URL_PLATFORM` exists **only** on `bsec-platform`. `DATABASE_URL_OWNER`/`APP_*_PASSWORD` exist **only** on `bsec-migrate`, and its `DATABASE_URL_SUPERUSER` is removed after the first run (section 4, step 4).
 
-### Resource limits (production, PLAN §14)
-web 800 MB, platform 200 MB, worker 400 MB, admin 64 MB. Postgres 2 GB.
+### Domains
+- `gobs.cloud` / `www.gobs.cloud` -> `bsec-web`. **Live.** (Previously served the old single-store app; that Coolify project has been deleted.)
+- `admin.gobs.cloud` -> `bsec-admin`. **Live.** No `www.` variant (not needed for an admin/API subdomain).
+- `platform.gobs.cloud` -> `bsec-platform`. **Live.** No `www.` variant. Note PLAN section 14 wants the platform API behind Cloudflare Access or otherwise non-public - right now it's a public HTTPS endpoint requiring platform_staff auth at the application layer only (which doesn't exist yet - M1). Don't point real traffic at it until that's decided; consider adding Cloudflare Access in front of it.
+- **Gotcha (2026-09-28):** when `admin.gobs.cloud` was first added through Coolify's "Add Domain" dialog, a pre-filled/stale value in the input wasn't cleared before typing, so the saved value became the literal string `admin.gobs.cloudadmin.gobs.cloud` - Traefik had no router for the real hostname, giving a 503 until it was caught (from a screenshot) and fixed. Always reload and re-read a freshly-typed domain value in this UI before trusting it. The auto-added `www.admin.gobs.cloud` / `www.platform.gobs.cloud` entries were also removed as unneeded. While cleaning those up, `bsec-platform`'s auto-generated `sslip.io` fallback domain was accidentally deleted too (stale UI element reference) - harmless, it was only a diagnostic convenience.
+- `bsec-worker`: no domain (internal only; its `/health` is reachable over the `coolify` network, not the public internet).
 
-### Health checks
-Images define `HEALTHCHECK`; also set Coolify health check path per the table above so rolling deploys wait for health.
+### Resource limits
+Not yet set (PLAN section 14 target: web 800 MB / platform 200 MB / worker 400 MB / admin 64 MB / Postgres 2 GB). Low priority until this VPS is under real load - see section 3 on shared-tenancy sizing.
 
-## 6. Deploy order
-1. CI builds and pushes all images on push to `main`.
-2. CI calls the staging webhook (`COOLIFY_STAGING_WEBHOOK`) → Coolify:
-   **migrate** (must exit 0) → **worker, platform, web, admin** (rolling).
-   Configure migrate as the first resource and the others with "depends on / pre-deployment command" so a failed migration stops the rollout.
-3. Verify staging (health endpoints, smoke check).
-4. Approve the `production` environment in GitHub Actions → production webhook, same order.
+## 6. Deploy flow (as actually wired)
+CI (`.github/workflows/ci.yml`) on every push to `main`:
+1. `check`: typecheck, lint, test (real Postgres 18 service container), build.
+2. `images`: build + push all 5 images to GHCR, tags `:<sha>` and `:main`.
+3. `deploy-production` (gated by the GitHub `production` environment - **see the approval caveat below**):
+   - `POST https://server.brandsewa.com/api/v1/deploy?uuid=qqqlm48eqo7f8pnfwn766suc&force=false` - redeploys `bsec-migrate`, which pulls `:main` and runs `deploy.js` (bootstrap-if-superuser-set, then always migrate).
+   - `sleep 45` - no read-scoped token to poll deployment status, so this is a fixed wait. Migrate has taken ~15-20s in practice; 45s is headroom, not a guarantee. If a migration ever takes longer (a big backfill, say), this needs a real poll loop instead.
+   - `POST .../api/v1/deploy?uuid=<web>,<platform>,<worker>,<admin>&force=false` - Coolify accepts comma-separated UUIDs in one call and redeploys all four.
+4. Auth: `COOLIFY_TOKEN`, a Coolify API token scoped to **Deploy only** (Keys & Tokens -> API Tokens), 1-year expiry, stored as a secret on the GitHub `production` environment. It cannot read deployment status or anything else - least privilege. **Rotate before it expires** (create a new token, update the GitHub secret, revoke the old one in Coolify).
 
-GitHub secrets (per environment): `COOLIFY_TOKEN`, `COOLIFY_STAGING_WEBHOOK`, `COOLIFY_PRODUCTION_WEBHOOK` (Coolify → resource → Webhooks → Deploy webhook).
+**Approval gate caveat:** GitHub's required-reviewers protection rule on the `production` environment needs a paid plan for a private repo - attempting to set it returned a 422 ("Please ensure the billing plan supports the required reviewers protection rule"). Until the repo goes public or the org upgrades, **every push to `main` that passes CI deploys straight to production with no human approval step**, despite what the workflow's comments say. Either upgrade the plan, make the repo public, or add a manual `workflow_dispatch` gate if that risk needs closing sooner.
+
+**Verified for real (2026-09-28):** a genuine push to `main` (adding this workflow change itself) ran the whole pipeline end to end - typecheck/lint/test, build+push all 5 images, migrate, then redeploy all four apps via the Coolify API - and finished green (`gh run view`, all jobs succeeded). `gobs.cloud/api/health` afterwards reported the exact commit SHA that triggered the run, confirming the new build actually landed.
+
+### Manual deploy (without CI)
+```bash
+curl -X POST "https://server.brandsewa.com/api/v1/deploy?uuid=<resource-uuid>[,<uuid2>,...]&force=false" \
+  -H "Authorization: Bearer <COOLIFY_TOKEN>"
+```
+
+### Verification after any deploy
+```bash
+curl -s https://gobs.cloud/api/health          # web
+curl -s https://platform.gobs.cloud/health     # platform
+curl -s https://admin.gobs.cloud/health        # admin
+# worker has no public URL; check Coolify -> bsec-worker -> Runtime Logs for "worker started"
+```
+Each app's `/health` returns `{"status":"ok","service":"...","db":{"ok":true,"role":"..."}}` (admin has no `db` field - it's static). Confirm `role` matches the table above (`app_rw` for web/worker, `app_platform` for platform) - a mismatch means the wrong `DATABASE_URL_*` landed on the wrong resource.
 
 ## 7. Rollback
-- App: redeploy the previous `:<sha>` tag in Coolify for each resource. Schema stays compatible thanks to expand/contract (`docs/migrations.md`).
-- Never roll back a migration by hand in production. Write a forward fix.
-- Data: point-in-time restore per `infra/backups/README.md`.
+- App: in Coolify, redeploy the previous `:<sha>` tag for the affected resource(s) (Container Image -> Tag, or via the API with an explicit tag). Schema stays compatible thanks to expand/contract (`docs/migrations.md`).
+- Never hand-edit the schema in production. Write a forward migration.
+- Data: restore from a `bsec-postgres` backup (section 8).
 
-## 8. Observability
-- Sentry: one project per service (`web`, `platform`, `worker`), `SENTRY_DSN` per resource. Code no-ops when unset.
-- Logs: pino JSON on stdout with `request_id` and `tenant_id`. Ship with Better Stack (Coolify → Logs drain, or Vector container) per service.
-- Uptime (Better Stack): `https://bscommerce.in/api/health`, `https://admin.bscommerce.in/health`, platform health through Access service token.
+## 8. Backups
+**Using Coolify's native scheduled `pg_dump` backups**, not pgBackRest (`infra/backups/` is now superseded by this for the current stage - simpler, and needs no VPS shell access). Configured on `bsec-postgres` -> Backups:
+- Schedule: daily, cron `30 2 * * *` (02:30 UTC), database `bsec`, timeout 3600s.
+- Local retention: 14 backups / 14 days / 5 GB cap.
+- Offsite: Cloudflare R2, bucket `bsec-backups` (Standard class, Asia-Pacific auto location). S3 storage destination `bsec-backups-r2` added in Coolify (Settings -> S3 Storage), endpoint `https://7a0533854a8ded58696db809f403f26c.r2.cloudflarestorage.com`, region `auto`, credentials from a Cloudflare Account API Token scoped **only** to this bucket (Object Read & Write) - same pattern as the account's other per-project R2 tokens. Attached to `bsec-postgres`'s schedule with "Keep local backup" also on, so both copies exist.
+- Verified for real (2026-09-28): ran "Back Up Now" -> `Success`, execution shows both `Local Available` and `S3 Available`; confirmed in the Cloudflare R2 dashboard that real objects exist under `bsec-backups/data/` with non-zero Class A/B operations counters.
+- Not yet done: a restore drill (pull an object back from R2, restore into a scratch Postgres, log RPO/RTO) and an S3-side lifecycle/retention policy in R2 (local retention is 14 backups/14 days/5 GB; R2 currently has no separate expiry, so it will grow unbounded until one is added).
 
-## 9. Gotchas
+## 9. Observability
+- Sentry: one project per service (`web`, `platform`, `worker`), `SENTRY_DSN` per resource. Code no-ops when unset - **not configured yet**, no DSNs set.
+- Logs: pino JSON on stdout with `request_id` (`tenant_id` populated from M1). Not yet shipped anywhere durable - only visible via Coolify's Runtime Logs, which don't persist long. Better Stack log drain still to do.
+- Uptime: not set up yet. Once it is: `https://gobs.cloud/api/health`, `https://admin.gobs.cloud/health`, `https://platform.gobs.cloud/health`.
+
+## 10. Gotchas (specific to this VPS/Coolify install, learned the hard way)
 - Only publish Postgres on the internal network; ufw does not protect Docker-published ports.
-- `app_platform` has BYPASSRLS: treat its password like the superuser's.
-- Staging and production never share a database, bucket or secrets.
+- `app_platform` has BYPASSRLS: treat its password like a superuser's.
+- Coolify's per-resource HTTP healthcheck doesn't work here (section 5) - leave it disabled, verify externally.
+- The "Exposed ports" field on a resource's General page can silently revert after save+reload; the dedicated Networking sidebar page is reliable. Always set `PORT` as an explicit env var too.
+- A Docker Image resource whose process exits 0 (like `bsec-migrate`) gets restarted in a loop by Coolify's default policy - **Stop it manually** after a successful one-shot run.
+- Deploying via the API needs `POST`, not `GET` (a `GET` on `/api/v1/deploy` returns a 405 telling you so).
 - Keep the VPS free of build tools; if a build is needed, it belongs in GitHub Actions.

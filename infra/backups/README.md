@@ -1,5 +1,7 @@
 # Backups and restore drill (pgBackRest → R2)
 
+**Superseded for now.** What's actually running in production is Coolify's native scheduled `pg_dump`, with Cloudflare R2 as an offsite S3 destination attached directly in the Coolify UI — see `infra/coolify/RUNBOOK.md` §8 for the real, verified setup (bucket `bsec-backups`, daily dump, both local and R2 copies confirmed). It gives RPO ≤ 24h, not the ≤15min this doc targets. This pgBackRest + continuous WAL archiving design below is the eventual upgrade path once point-in-time recovery actually matters (real order data) — revisit then.
+
 Targets (PLAN §14): **RPO ≤ 15 min**, **RTO ≤ 2 h**. A backup counts as valid only after a restore test. Status: **draft, not yet executed** (needs the production VPS and an R2 bucket).
 
 ## Layout
