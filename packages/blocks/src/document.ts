@@ -33,6 +33,13 @@ export function registerBlockMigration(
 }
 
 /**
+ * Clear all registered block migrations.
+ */
+export function clearBlockMigrations(): void {
+  MIGRATION_REGISTRY.clear();
+}
+
+/**
  * Validates a block document JSON payload against the block registry.
  * Validates document version, block schema props, enforces ID uniqueness,
  * and automatically sanitizes rich text blocks per ADR-009.
@@ -99,16 +106,13 @@ export function validateBlockDocument(doc: unknown): ValidationResult {
     const def = BLOCK_DEFINITIONS[type];
     const version = typeof rawBlock.version === "number" ? rawBlock.version : 1;
 
-    let props = rawBlock.props;
-    if (!props || typeof props !== "object" || Array.isArray(props)) {
-      props = {};
-    }
+    const props: Record<string, unknown> =
+      rawBlock.props && typeof rawBlock.props === "object" && !Array.isArray(rawBlock.props)
+        ? { ...(rawBlock.props as Record<string, unknown>) }
+        : {};
 
-    // Auto-sanitize rich text content before schema parsing
-    if (type === "RichText" && typeof (props as Record<string, unknown>).content === "string") {
-      (props as Record<string, unknown>).content = sanitizeRichText(
-        (props as Record<string, unknown>).content as string,
-      );
+    if (type === "RichText" && typeof props.content === "string") {
+      props.content = sanitizeRichText(props.content);
     }
 
     const parseResult = def.schema.safeParse(props);

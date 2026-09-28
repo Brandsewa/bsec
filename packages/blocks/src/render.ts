@@ -1,11 +1,9 @@
 import { migrateBlockDocument, validateBlockDocument, type ValidationError } from "./document.ts";
 import type { BlockDocument, BlockInstance } from "./types.ts";
 
-export interface RenderBlockResult {
-  success: boolean;
-  blocks: BlockInstance[];
-  errors?: ValidationError[];
-}
+export type RenderBlockResult =
+  | { success: true; blocks: BlockInstance[]; errors?: never }
+  | { success: false; blocks: []; errors: ValidationError[] };
 
 /**
  * Prepares a block document for public storefront rendering.
@@ -15,31 +13,39 @@ export interface RenderBlockResult {
  * 4. Filters out hidden blocks so they are not rendered.
  */
 export function renderBlockDocument(doc: unknown): RenderBlockResult {
-  if (!doc || typeof doc !== "object" || Array.isArray(doc)) {
+  try {
+    if (!doc || typeof doc !== "object" || Array.isArray(doc)) {
+      return {
+        success: false,
+        blocks: [],
+        errors: [{ path: "", message: "Block document must be a non-null object" }],
+      };
+    }
+
+    // Cast candidate to BlockDocument for migration
+    const candidate = doc as BlockDocument;
+    const migrated = migrateBlockDocument(candidate);
+    const validated = validateBlockDocument(migrated);
+
+    if (!validated.success) {
+      return {
+        success: false,
+        blocks: [],
+        errors: validated.errors,
+      };
+    }
+
+    const visibleBlocks = validated.data.blocks.filter((block) => !block.hidden);
+
+    return {
+      success: true,
+      blocks: visibleBlocks,
+    };
+  } catch (err) {
     return {
       success: false,
       blocks: [],
-      errors: [{ path: "", message: "Block document must be a non-null object" }],
+      errors: [{ path: "", message: err instanceof Error ? err.message : String(err) }],
     };
   }
-
-  // Cast candidate to BlockDocument for migration
-  const candidate = doc as BlockDocument;
-  const migrated = migrateBlockDocument(candidate);
-  const validated = validateBlockDocument(migrated);
-
-  if (!validated.success) {
-    return {
-      success: false,
-      blocks: [],
-      errors: validated.errors,
-    };
-  }
-
-  const visibleBlocks = validated.data.blocks.filter((block) => !block.hidden);
-
-  return {
-    success: true,
-    blocks: visibleBlocks,
-  };
 }
