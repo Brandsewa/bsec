@@ -57,6 +57,8 @@ beforeAll(async () => {
     INSERT INTO tenants (id, organization_id, slug, name) VALUES ('${controlTenant}', '${orgId}', 'demo-control-a3', 'Control Store') ON CONFLICT DO NOTHING;
     SELECT set_config('app.tenant_id', '${controlTenant}', false);
     INSERT INTO products (tenant_id, title, slug, status) VALUES ('${controlTenant}', 'Real Product', 'real-product', 'active') ON CONFLICT DO NOTHING;
+    -- another store with its own default warehouse: the seed runs as the platform role (bypasses RLS), so every lookup must filter by tenant itself
+    INSERT INTO locations (tenant_id, name, is_default) VALUES ('${controlTenant}', 'Other Store Warehouse', true) ON CONFLICT DO NOTHING;
   `);
   await createStoreOwner(rwDb.db, { email: OWNER, name: "Demo Owner", password: "demo-owner-password", tenantSlug: "demo-control-a3" });
 }, 240_000);

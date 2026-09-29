@@ -492,13 +492,14 @@ export async function createAdminFulfillment(
       const [loc] = await tx
         .select({ id: schema.locations.id })
         .from(schema.locations)
-        .where(eq(schema.locations.isDefault, true))
+        .where(and(eq(schema.locations.tenantId, ctx.tenantId), eq(schema.locations.isDefault, true)))
         .limit(1);
       locationId = loc?.id;
       if (!locationId) {
         const [anyLoc] = await tx
           .select({ id: schema.locations.id })
           .from(schema.locations)
+          .where(eq(schema.locations.tenantId, ctx.tenantId))
           .limit(1);
         locationId = anyLoc?.id;
       }
