@@ -1,3 +1,4 @@
+import { createHash, timingSafeEqual } from "node:crypto";
 import { eq } from "drizzle-orm";
 import type { Db } from "@bs/db";
 import { schema, withTenant } from "@bs/db";
@@ -116,27 +117,20 @@ function getQueryParam(
   return val;
 }
 
-async function sha256Hex(plain: string): Promise<string> {
-  const msgUint8 = new TextEncoder().encode(plain);
-  const hashBuffer = await crypto.subtle.digest("SHA-256", msgUint8);
-  const hashArray = Array.from(new Uint8Array(hashBuffer));
-  return hashArray.map((b) => b.toString(16).padStart(2, "0")).join("");
-}
-
-function constantTimeEqual(a: string, b: string): boolean {
+function safeEqual(a: string, b: string): boolean {
   if (a.length !== b.length) return false;
-  let result = 0;
-  for (let i = 0; i < a.length; i++) {
-    result |= a.charCodeAt(i) ^ b.charCodeAt(i);
+  try {
+    return timingSafeEqual(Buffer.from(a), Buffer.from(b));
+  } catch {
+    return a === b;
   }
-  return result === 0;
 }
 
 /**
  * Hashes a plaintext store password using SHA-256.
  */
 export async function hashStorePassword(plain: string): Promise<string> {
-  return sha256Hex(plain);
+  return createHash("sha256").update(plain).digest("hex");
 }
 
 /**
@@ -145,22 +139,15 @@ export async function hashStorePassword(plain: string): Promise<string> {
 export async function verifyStorePassword(plain: string, hash: string): Promise<boolean> {
   if (!plain || !hash) return false;
   if (plain === hash) return true;
-  const computed = await sha256Hex(plain);
-  return constantTimeEqual(computed, hash);
+  const computed = createHash("sha256").update(plain).digest("hex");
+  return safeEqual(computed, hash);
 }
 
 /**
  * Hashes a preview bypass token using SHA-256.
  */
 export function hashBypassToken(token: string): string {
-  // Simple deterministic hash for synchronous preview token verification
-  let hash = 0;
-  for (let i = 0; i < token.length; i++) {
-    const char = token.charCodeAt(i);
-    hash = (hash << 5) - hash + char;
-    hash |= 0;
-  }
-  return `hash_${Math.abs(hash).toString(16)}_${token.length}`;
+  return createHash("sha256").update(token).digest("hex");
 }
 
 /**
@@ -170,7 +157,7 @@ export function verifyBypassToken(token: string, hash: string): boolean {
   if (!token || !hash) return false;
   if (token === hash) return true;
   const computed = hashBypassToken(token);
-  return constantTimeEqual(computed, hash) || constantTimeEqual(token, hash);
+  return safeEqual(computed, hash) || safeEqual(token, hash);
 }
 
 /**

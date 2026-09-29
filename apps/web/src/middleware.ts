@@ -31,18 +31,31 @@ export async function middleware(request: NextRequest) {
   try {
     const evalUrl = new URL("/api/storefront/status/evaluate", request.url);
     evalUrl.searchParams.set("host", host);
+    // Forward all search parameters (e.g. preview_token, previewToken) to the Node evaluation route
+    for (const [key, value] of request.nextUrl.searchParams.entries()) {
+      if (key !== "host") {
+        evalUrl.searchParams.set(key, value);
+      }
+    }
+
+    // Fail-open timeout protection:
+    // If the evaluation route times out (e.g. 3s under heavy DB load), abort request
+    // and fail open to prevent transient infrastructure hiccups from taking down the storefront.
     const res = await fetch(evalUrl.toString(), {
       headers: {
         ...Object.fromEntries(request.headers.entries()),
         host,
       },
+      signal: AbortSignal.timeout(3000),
     });
     if (res.ok) {
       access = await res.json();
     } else {
+      // Fail open on non-200 responses from the internal evaluation endpoint
       access = { allowed: true, httpStatus: 200, mode: "live" };
     }
   } catch {
+    // Fail open on fetch network errors or timeout aborts
     access = { allowed: true, httpStatus: 200, mode: "live" };
   }
 

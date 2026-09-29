@@ -180,4 +180,17 @@ describe("Storefront Status Middleware (PLAN §8.2, §8.3 & M3 Status Pipeline)"
     expect(res.status).toBe(200);
     expect(res.headers.get("X-Robots-Tag")).toBe("noindex, nofollow");
   });
+
+  it("fails open and permits traffic if evaluation route times out or encounters network error", async () => {
+    mockEvaluateStorefrontAccess.mockRejectedValueOnce(new Error("Timeout waiting for response"));
+
+    const req = new NextRequest("https://mystore.test.com/products/pro-keyboard", {
+      headers: { host: "mystore.test.com" },
+    });
+
+    const res = await middleware(req);
+
+    expect(res.status).toBe(200);
+    expect(res.headers.get("X-Robots-Tag")).toBeNull();
+  });
 });
