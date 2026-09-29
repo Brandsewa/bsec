@@ -1,4 +1,5 @@
-import { randomBytes } from "node:crypto";
+import { createHmac, randomBytes, timingSafeEqual } from "node:crypto";
+import { sanitizePaymentPayload } from "./razorpay.ts";
 import type {
   AuthorizeResult,
   CancelResult,
@@ -15,9 +16,10 @@ import type {
 } from "../types.ts";
 
 export interface CODProviderOptions {
-  fee?: number; // extra fee in paise
-  maxLimit?: number; // max order amount allowed for COD in paise (e.g. 5000000 for 50k INR)
-  requiresConfirmation?: boolean; // whether to issue action token for confirmation
+  fee?: number | undefined; // extra fee in paise
+  maxLimit?: number | undefined; // max order amount allowed for COD in paise (e.g. 5000000 for 50k INR)
+  requiresConfirmation?: boolean | undefined; // whether to issue action token for confirmation
+  webhookSecret?: string | undefined;
 }
 
 /**
@@ -29,11 +31,13 @@ export class CODProvider implements PaymentProvider {
   private readonly fee: number;
   private readonly maxLimit: number;
   private readonly requiresConfirmation: boolean;
+  private readonly webhookSecret: string | undefined;
 
   constructor(opts: CODProviderOptions = {}) {
     this.fee = opts.fee ?? 0;
     this.maxLimit = opts.maxLimit ?? 5000000; // 50,000 INR default max
     this.requiresConfirmation = opts.requiresConfirmation ?? false;
+    this.webhookSecret = opts.webhookSecret;
   }
 
   async createIntent(_ctx: TenantContext, order: OrderForPayment): Promise<IntentResult> {
@@ -88,21 +92,48 @@ export class CODProvider implements PaymentProvider {
   }
 
   async verifyWebhook(
-    _headers: Record<string, string | string[] | undefined>,
+    headers: Record<string, string | string[] | undefined>,
     rawBody: string | Buffer,
   ): Promise<VerifiedWebhookEvent> {
-    let payload: Record<string, unknown> = {};
+    const signature = (headers["x-cod-signature"] ??
+      headers["X-COD-Signature"] ??
+      headers["x-webhook-signature"] ??
+      headers["X-Webhook-Signature"] ??
+      headers["x-signature"] ??
+      headers["X-Signature"]) as string | undefined;
+    const bodyStr = typeof rawBody === "string" ? rawBody : rawBody.toString("utf8");
+
+    let parsed: Record<string, unknown> = {};
     try {
-      payload = JSON.parse(typeof rawBody === "string" ? rawBody : rawBody.toString("utf8"));
+      parsed = JSON.parse(bodyStr);
     } catch {
-      // empty
+      // malformed JSON
     }
+
+    const secret = this.webhookSecret ?? process.env.COD_WEBHOOK_SECRET ?? "";
+    let isValid = false;
+
+    if (signature && secret) {
+      const expected = createHmac("sha256", secret).update(bodyStr).digest("hex");
+      const sigBuf = Buffer.from(signature, "utf8");
+      const expBuf = Buffer.from(expected, "utf8");
+      if (sigBuf.length === expBuf.length && timingSafeEqual(sigBuf, expBuf)) {
+        isValid = true;
+      }
+    }
+
+    const sanitized = sanitizePaymentPayload(parsed);
+    const eventType = (parsed.event as string) ?? "cod.updated";
+    const eventId = (parsed.event_id as string) ?? `cod_evt_${randomBytes(8).toString("hex")}`;
+    const orderId = (parsed.order_id as string) ?? undefined;
+
     return {
-      isValid: true,
+      isValid,
       provider: "cod",
-      eventId: `cod_event_${randomBytes(6).toString("hex")}`,
-      eventType: "cod.updated",
-      rawPayload: payload,
+      eventId,
+      eventType,
+      orderId,
+      rawPayload: sanitized,
     };
   }
 

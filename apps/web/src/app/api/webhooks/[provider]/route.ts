@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { randomUUID } from "node:crypto";
 import { receiveWebhook, getTenantPaymentSecrets } from "@bs/domain";
-import { RazorpayProvider } from "@bs/payments";
+import { RazorpayProvider, CODProvider } from "@bs/payments";
 import { server } from "@/server/runtime.ts";
 
 export async function POST(
@@ -62,12 +62,12 @@ export async function POST(
       const verified = await razorpayProvider.verifyWebhook(headersRecord, rawBody);
       signatureValid = verified.isValid;
     } else if (provider === "cod") {
-      // COD events originating internally or from staff apps require valid signature header
-      const sig = headersRecord["x-webhook-signature"] || headersRecord["x-signature"];
-      signatureValid = Boolean(sig && sig !== "forged_invalid_signature");
+      const creds = tenantId ? await getTenantPaymentSecrets(rt._db.db, tenantId, "cod") : {};
+      const codProvider = new CODProvider(creds);
+      const verified = await codProvider.verifyWebhook(headersRecord, rawBody);
+      signatureValid = verified.isValid;
     } else {
-      const sig = headersRecord["x-webhook-signature"] || headersRecord["x-signature"];
-      signatureValid = Boolean(sig);
+      signatureValid = false;
     }
 
     // Ingest into inbox (decoupled, returns immediately)

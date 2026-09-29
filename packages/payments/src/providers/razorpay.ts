@@ -174,7 +174,27 @@ export class RazorpayProvider implements PaymentProvider {
     };
   }
 
-  async cancel(_ctx: TenantContext, _intent: PaymentIntentModel): Promise<CancelResult> {
+  /**
+   * Cancels/voids an authorized payment intent on Razorpay (POST /v1/payments/:id/refund).
+   */
+  async cancel(_ctx: TenantContext, intent: PaymentIntentModel): Promise<CancelResult> {
+    const paymentId = intent.providerPaymentId;
+    if (paymentId) {
+      try {
+        const rzp = this.getClient();
+        await rzp.payments.refund(paymentId, {
+          notes: {
+            reason: "order_cancelled",
+          },
+        });
+      } catch (err: unknown) {
+        return {
+          status: "failed",
+          errorMessage: err instanceof Error ? err.message : String(err),
+        };
+      }
+    }
+
     return { status: "cancelled" };
   }
 

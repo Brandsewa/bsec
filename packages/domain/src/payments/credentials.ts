@@ -59,6 +59,8 @@ export async function getTenantPaymentSecrets(
     if (!creds.keyId && process.env.RAZORPAY_KEY_ID) creds.keyId = process.env.RAZORPAY_KEY_ID;
     if (!creds.keySecret && process.env.RAZORPAY_KEY_SECRET) creds.keySecret = process.env.RAZORPAY_KEY_SECRET;
     if (!creds.webhookSecret && process.env.RAZORPAY_WEBHOOK_SECRET) creds.webhookSecret = process.env.RAZORPAY_WEBHOOK_SECRET;
+  } else if (provider === "cod") {
+    if (!creds.webhookSecret && process.env.COD_WEBHOOK_SECRET) creds.webhookSecret = process.env.COD_WEBHOOK_SECRET;
   }
 
   return creds;

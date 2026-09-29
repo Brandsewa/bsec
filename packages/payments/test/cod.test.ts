@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import { createHmac } from "node:crypto";
 import { CODProvider } from "../src/providers/cod.ts";
 
 describe("CODProvider", () => {
@@ -11,6 +12,7 @@ describe("CODProvider", () => {
     email: "customer@example.com",
     phone: "9876543210",
   };
+  const webhookSecret = "cod_webhook_secret_test_xyz";
 
   it("creates intent with status cod_pending", async () => {
     const provider = new CODProvider({ fee: 5000, maxLimit: 100000 });
@@ -42,5 +44,37 @@ describe("CODProvider", () => {
     );
 
     expect(result.status).toBe("captured");
+  });
+
+  it("verifies webhook signature correctly with valid HMAC", async () => {
+    const provider = new CODProvider({ webhookSecret });
+    const rawBody = JSON.stringify({
+      event: "cod.confirmed",
+      order_id: "ord_1",
+    });
+
+    const signature = createHmac("sha256", webhookSecret).update(rawBody).digest("hex");
+    const verified = await provider.verifyWebhook({ "x-cod-signature": signature }, rawBody);
+
+    expect(verified.isValid).toBe(true);
+    expect(verified.eventType).toBe("cod.confirmed");
+    expect(verified.orderId).toBe("ord_1");
+  });
+
+  it("rejects forged COD webhook signature", async () => {
+    const provider = new CODProvider({ webhookSecret });
+    const rawBody = JSON.stringify({ event: "cod.confirmed", order_id: "ord_1" });
+    const forgedSig = createHmac("sha256", "wrong_secret").update(rawBody).digest("hex");
+
+    const verified = await provider.verifyWebhook({ "x-cod-signature": forgedSig }, rawBody);
+    expect(verified.isValid).toBe(false);
+  });
+
+  it("rejects malformed signature length without throwing", async () => {
+    const provider = new CODProvider({ webhookSecret });
+    const rawBody = JSON.stringify({ event: "cod.confirmed" });
+
+    const verified = await provider.verifyWebhook({ "x-cod-signature": "short" }, rawBody);
+    expect(verified.isValid).toBe(false);
   });
 });

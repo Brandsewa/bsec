@@ -261,4 +261,36 @@ describe("RazorpayProvider", () => {
     expect(report.totalAmountCaptured).toBe(40000);
     expect(report.totalRefundsAmount).toBe(0);
   });
+
+  it("cancel voids payment via refund API when payment ID exists", async () => {
+    const mockPaymentsRefund = vi.fn().mockResolvedValue({
+      id: "rfnd_cancel_001",
+      status: "processed",
+    });
+
+    const mockClient = {
+      payments: { refund: mockPaymentsRefund },
+    } as unknown as Razorpay;
+
+    const provider = new RazorpayProvider({
+      keyId: "rzp_test_key",
+      keySecret: "rzp_test_secret",
+      client: mockClient,
+    });
+
+    const res = await provider.cancel(mockTenantCtx, {
+      id: "pi_cancel_01",
+      orderId: "ord_cancel_01",
+      provider: "razorpay",
+      providerPaymentId: "pay_cancel_999",
+      amount: 50000,
+      currency: "INR",
+      status: "authorized",
+    });
+
+    expect(mockPaymentsRefund).toHaveBeenCalledWith("pay_cancel_999", {
+      notes: { reason: "order_cancelled" },
+    });
+    expect(res.status).toBe("cancelled");
+  });
 });

@@ -12,6 +12,8 @@ import {
 } from "@bs/db";
 import { bootstrapRoles } from "@bs/db/bootstrap";
 import { runMigrations } from "@bs/db/migrate";
+import { createHmac } from "node:crypto";
+import { CODProvider } from "@bs/payments";
 import {
   withIdempotencyKey,
   IdempotencyConflictError,
@@ -302,6 +304,93 @@ describe("PLAN §5.10 & §11.4 Idempotency & Webhook Inbox Integration", () => {
       expect(orderRow?.paymentStatus).toBe("pending");
 
       // Verify inventory reservation remains active, NOT committed!
+      const [resRow] = await tx
+        .select()
+        .from(inventoryReservations)
+        .where(eq(inventoryReservations.id, reservation!.id));
+      expect(resRow?.status).toBe("active");
+    });
+  });
+
+  it("SECURITY: real COD webhook with forged HMAC signature is rejected before touching business logic", async () => {
+    // 1. Create order and active reservation
+    const testOrderId = "0199a000-0000-7000-8000-000000000666";
+    await withTenant(rwDb.db, tenantId, async (tx) => {
+      await tx.insert(orders).values({
+        id: testOrderId,
+        tenantId,
+        number: "ORD-COD-FORGE-SEC",
+        email: "dave@example.com",
+        phone: "9876543210",
+        status: "pending",
+        paymentStatus: "pending",
+        grandTotal: 7500,
+        subtotal: 7500,
+        shippingAddress: {},
+      });
+    });
+
+    const [reservation] = await reserveInventory(
+      rwDb.db,
+      tenantId,
+      [{ variantId, locationId, qty: 1 }],
+      { orderId: testOrderId },
+    );
+    expect(reservation).toBeDefined();
+    expect(reservation?.status).toBe("active");
+
+    // 2. Real COD provider with configured webhook secret
+    const webhookSecret = "super_secret_cod_key_555";
+    const codProvider = new CODProvider({ webhookSecret });
+
+    const rawPayload = {
+      event: "cod.confirmed",
+      order_id: testOrderId,
+      tenant_id: tenantId,
+    };
+    const bodyStr = JSON.stringify(rawPayload);
+
+    // Compute forged HMAC signature with wrong secret
+    const forgedSignature = createHmac("sha256", "wrong_attacker_secret_999").update(bodyStr).digest("hex");
+
+    // 3. Verify signature via real CODProvider
+    const verified = await codProvider.verifyWebhook(
+      { "x-cod-signature": forgedSignature },
+      bodyStr,
+    );
+    expect(verified.isValid).toBe(false);
+
+    // 4. Ingest into webhook inbox with verified signature status
+    const ingestRes = await receiveWebhook(rwDb.db, {
+      provider: "cod",
+      eventId: "evt_cod_forged_sec_666",
+      tenantId,
+      signatureValid: verified.isValid,
+      rawPayload,
+    });
+
+    expect(ingestRes.duplicate).toBe(false);
+    expect(ingestRes.inboxId).toBeDefined();
+
+    // 5. Background processor claims and processes item
+    const processRes = await processWebhookInboxItem(rwDb.db, ingestRes.inboxId!);
+    expect(processRes.success).toBe(false);
+    expect(processRes.error).toBe("Invalid webhook signature");
+
+    // 6. Verify inbox record marked as failed
+    const [inboxRow] = await rwDb.db
+      .select()
+      .from(webhookInbox)
+      .where(eq(webhookInbox.id, ingestRes.inboxId!));
+    expect(inboxRow?.status).toBe("failed");
+    expect(inboxRow?.error).toBe("Invalid webhook signature");
+
+    // 7. Verify CRITICAL invariant: order remains pending, reservation remains active
+    await withTenant(rwDb.db, tenantId, async (tx) => {
+      const [orderRow] = await tx.select().from(orders).where(eq(orders.id, testOrderId));
+      expect(orderRow?.status).toBe("pending");
+      expect(orderRow?.paymentStatus).toBe("pending");
+
       const [resRow] = await tx
         .select()
         .from(inventoryReservations)

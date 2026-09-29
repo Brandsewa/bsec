@@ -78,8 +78,19 @@ export async function startJobs(opts: {
     }
   });
 
-  // Proof of life on boot: enqueue one ping so logs show the round trip.
+  // Register recurring schedules and proof-of-life sweeps on boot (PLAN §5.10, §11.3)
+  try {
+    await boss.schedule(QUEUE_NAMES.RESERVATION_EXPIRY, "* * * * *", {});
+    await boss.schedule(QUEUE_NAMES.IDEMPOTENCY_CLEANUP, "*/15 * * * *", {});
+    opts.log.info("Registered recurring cron: reservation.expiry (* * * * *), idempotency.cleanup (*/15 * * * *)");
+  } catch (err) {
+    opts.log.warn({ err }, "Could not register recurring cron schedules with pg-boss");
+  }
+
+  // Proof of life on boot: enqueue one ping and trigger initial maintenance passes
   await boss.send("system.ping", { at: new Date().toISOString() });
+  await boss.send(QUEUE_NAMES.RESERVATION_EXPIRY, {});
+  await boss.send(QUEUE_NAMES.IDEMPOTENCY_CLEANUP, {});
   opts.log.info({ concurrency: opts.concurrency }, "worker started");
 
   return {
