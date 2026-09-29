@@ -80,9 +80,13 @@ function as(role: "app_owner" | "app_rw" | "app_platform", password: string): st
 }
 
 describe("Storefront Integration & Tenant Isolation Suite (Real PostgreSQL 18)", () => {
-  const orgId = "0199a000-0000-7000-8000-000000000001";
-  const tenantA = "0199a000-0000-7000-8000-000000000010";
-  const tenantB = "0199a000-0000-7000-8000-000000000020";
+  // All IDs in this file use the 0199a0f1-... prefix (isolation.int.test.ts uses 0199a000-...):
+  // in CI every *.int.test.ts file shares one Postgres service container
+  // (TEST_DATABASE_URL_SUPERUSER) rather than a per-file Testcontainers instance, so hardcoded
+  // fixture IDs must not collide across files. Give any new *.int.test.ts file its own prefix too.
+  const orgId = "0199a0f1-0000-7000-8000-0000000000f1";
+  const tenantA = "0199a0f1-0000-7000-8000-000000000010";
+  const tenantB = "0199a0f1-0000-7000-8000-000000000020";
 
   const hostA = "store-alpha.test";
   const hostB = "store-beta.test";
@@ -92,24 +96,24 @@ describe("Storefront Integration & Tenant Isolation Suite (Real PostgreSQL 18)",
   const passwordA = "AlphaStorePassword!2026";
   const passwordB = "BetaStorePassword!2026";
 
-  const userA = "0199a000-0000-7000-8000-000000000100";
-  const userB = "0199a000-0000-7000-8000-000000000200";
+  const userA = "0199a0f1-0000-7000-8000-000000000100";
+  const userB = "0199a0f1-0000-7000-8000-000000000200";
 
   // Product & Catalog IDs for Tenant A
-  const productA1 = "0199a000-0000-7000-8000-000000000a01";
-  const variantA1Cheap = "0199a000-0000-7000-8000-000000000a02";
-  const productA2 = "0199a000-0000-7000-8000-000000000a03";
-  const variantA2Expensive = "0199a000-0000-7000-8000-000000000a04";
-  const collectionA = "0199a000-0000-7000-8000-000000000a05";
-  const categoryA = "0199a000-0000-7000-8000-000000000a06";
-  const pageA = "0199a000-0000-7000-8000-000000000a07";
+  const productA1 = "0199a0f1-0000-7000-8000-000000000a01";
+  const variantA1Cheap = "0199a0f1-0000-7000-8000-000000000a02";
+  const productA2 = "0199a0f1-0000-7000-8000-000000000a03";
+  const variantA2Expensive = "0199a0f1-0000-7000-8000-000000000a04";
+  const collectionA = "0199a0f1-0000-7000-8000-000000000a05";
+  const categoryA = "0199a0f1-0000-7000-8000-000000000a06";
+  const pageA = "0199a0f1-0000-7000-8000-000000000a07";
 
   // Product & Catalog IDs for Tenant B
-  const productB1 = "0199a000-0000-7000-8000-000000000b01";
-  const variantB1 = "0199a000-0000-7000-8000-000000000b02";
-  const collectionB = "0199a000-0000-7000-8000-000000000b05";
-  const categoryB = "0199a000-0000-7000-8000-000000000b06";
-  const pageB = "0199a000-0000-7000-8000-000000000b07";
+  const productB1 = "0199a0f1-0000-7000-8000-000000000b01";
+  const variantB1 = "0199a0f1-0000-7000-8000-000000000b02";
+  const collectionB = "0199a0f1-0000-7000-8000-000000000b05";
+  const categoryB = "0199a0f1-0000-7000-8000-000000000b06";
+  const pageB = "0199a0f1-0000-7000-8000-000000000b07";
 
   let rtApp: Runtime;
   let dbRw: DbHandle;
@@ -163,14 +167,14 @@ describe("Storefront Integration & Tenant Isolation Suite (Real PostgreSQL 18)",
     await dbRw.db.insert(schema.tenants).values([
       {
         id: tenantA,
-        slug: "store-alpha",
+        slug: "storefront-alpha",
         name: "Store Alpha",
         organizationId: orgId,
         status: "active",
       },
       {
         id: tenantB,
-        slug: "store-beta",
+        slug: "storefront-beta",
         name: "Store Beta",
         organizationId: orgId,
         status: "active",
