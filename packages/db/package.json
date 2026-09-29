@@ -12,7 +12,7 @@
   },
   "scripts": {
     "typecheck": "tsc -p tsconfig.json",
-    "lint": "eslint .",
+    "lint": "eslint . --cache --cache-location node_modules/.cache/eslint/",
     "test": "vitest run",
     "bootstrap": "tsx src/scripts/bootstrap-roles.ts",
     "migrate": "tsx src/scripts/migrate.ts",

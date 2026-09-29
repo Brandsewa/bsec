@@ -8,7 +8,7 @@
     "build": "vite build",
     "preview": "vite preview --port 5173",
     "typecheck": "tsr generate && tsc -p tsconfig.json",
-    "lint": "eslint .",
+    "lint": "eslint . --cache --cache-location node_modules/.cache/eslint/",
     "test": "vitest run --passWithNoTests"
   },
   "dependencies": {

@@ -12,7 +12,7 @@
     "./bundle-node": "./build/bundle-node.js"
   },
   "scripts": {
-    "lint": "eslint .",
+    "lint": "eslint . --cache --cache-location node_modules/.cache/eslint/",
     "test": "vitest run",
     "typecheck": "tsc -p tsconfig.json"
   },

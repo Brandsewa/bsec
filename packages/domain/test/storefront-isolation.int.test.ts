@@ -121,7 +121,9 @@ describe("Storefront Integration & Tenant Isolation Suite (Real PostgreSQL 18)",
     if (process.env.TEST_DATABASE_URL_SUPERUSER) {
       superUrl = process.env.TEST_DATABASE_URL_SUPERUSER;
     } else {
-      container = await new PostgreSqlContainer("postgres:18").start();
+      // .withReuse() only activates with TESTCONTAINERS_REUSE_ENABLE=true (opt-in for local dev
+      // to skip container startup between runs); it's a no-op otherwise, so CI is unaffected.
+      container = await new PostgreSqlContainer("postgres:18").withReuse().start();
       superUrl = container.getConnectionUri();
     }
 
