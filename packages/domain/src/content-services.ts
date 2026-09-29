@@ -3,6 +3,7 @@ import { schema, withTenant } from "@bs/db";
 import { validateBlockDocument } from "@bs/blocks";
 import type { Runtime } from "./runtime.ts";
 import { assertPermission, type TenantContext } from "./context.ts";
+import { invalidateCache } from "./cache-invalidation.ts";
 
 export interface CreatePageInput {
   title: string;
@@ -93,6 +94,7 @@ export async function updateTheme(
         .returning();
 
       if (!row) throw new Error("Failed to update theme");
+      await invalidateCache(rt, ctx, { type: "theme_or_brand_published" });
       return {
         id: row.id,
         name: row.name,
@@ -115,6 +117,7 @@ export async function updateTheme(
       .returning();
 
     if (!row) throw new Error("Failed to create theme");
+    await invalidateCache(rt, ctx, { type: "theme_or_brand_published" });
     return {
       id: row.id,
       name: row.name,
@@ -296,7 +299,7 @@ export async function publishPage(rt: Runtime, ctx: TenantContext, input: Publis
       targetVersionId = latest.id;
     }
 
-    await tx
+    const updateQuery = tx
       .update(schema.pages)
       .set({
         publishedVersionId: targetVersionId,
@@ -304,6 +307,15 @@ export async function publishPage(rt: Runtime, ctx: TenantContext, input: Publis
         updatedAt: new Date(),
       })
       .where(eq(schema.pages.id, input.id));
+
+    const rows = typeof updateQuery.returning === "function"
+      ? await updateQuery.returning()
+      : await updateQuery;
+    const updatedPage = Array.isArray(rows) ? rows[0] : undefined;
+
+    if (!updatedPage || updatedPage.slug === "home" || updatedPage.type === "home") {
+      await invalidateCache(rt, ctx, { type: "home_page_published" });
+    }
 
     return { success: true, publishedVersionId: targetVersionId };
   });
@@ -314,7 +326,7 @@ export async function rollbackPage(rt: Runtime, ctx: TenantContext, input: Rollb
   const db = rt._db.db;
 
   return withTenant(db, ctx.tenantId, async (tx) => {
-    await tx
+    const updateQuery = tx
       .update(schema.pages)
       .set({
         publishedVersionId: input.targetVersionId,
@@ -322,6 +334,15 @@ export async function rollbackPage(rt: Runtime, ctx: TenantContext, input: Rollb
         updatedAt: new Date(),
       })
       .where(eq(schema.pages.id, input.id));
+
+    const rows = typeof updateQuery.returning === "function"
+      ? await updateQuery.returning()
+      : await updateQuery;
+    const updatedPage = Array.isArray(rows) ? rows[0] : undefined;
+
+    if (!updatedPage || updatedPage.slug === "home" || updatedPage.type === "home") {
+      await invalidateCache(rt, ctx, { type: "home_page_published" });
+    }
 
     return { success: true, publishedVersionId: input.targetVersionId };
   });
@@ -418,6 +439,8 @@ export async function updateMenu(
       .returning();
 
     if (!row) throw new Error(`Menu not found: "${input.id}"`);
+
+    await invalidateCache(rt, ctx, { type: "nav_updated" });
 
     return {
       id: row.id,

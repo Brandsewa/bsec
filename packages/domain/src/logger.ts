@@ -1,4 +1,3 @@
-import { randomUUID } from "node:crypto";
 import { pino, type Logger } from "pino";
 
 /**
@@ -20,7 +19,7 @@ export function requestLogger(root: Logger, requestId: string, tenantId?: string
 
 /** Trust an inbound x-request-id only when it looks sane; otherwise mint one. */
 export function resolveRequestId(header: string | null | undefined): string {
-  return header && /^[\w-]{8,64}$/.test(header) ? header : randomUUID();
+  return header && /^[\w-]{8,64}$/.test(header) ? header : crypto.randomUUID();
 }
 
 export type { Logger };

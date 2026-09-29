@@ -2,6 +2,7 @@ import { and, desc, eq, ilike, sql } from "drizzle-orm";
 import { schema, withTenant } from "@bs/db";
 import type { Runtime } from "./runtime.ts";
 import { assertPermission, type TenantContext } from "./context.ts";
+import { invalidateCache } from "./cache-invalidation.ts";
 
 export interface ListProductsQuery {
   search?: string | undefined;
@@ -408,6 +409,24 @@ export async function updateProduct(
       throw new Error(`Product not found: "${input.id}"`);
     }
 
+    const catRows = await tx
+      .select({ categoryId: schema.productCategories.categoryId })
+      .from(schema.productCategories)
+      .where(eq(schema.productCategories.productId, row.id));
+
+    const colRows = await tx
+      .select({ collectionId: schema.collectionProducts.collectionId })
+      .from(schema.collectionProducts)
+      .where(eq(schema.collectionProducts.productId, row.id));
+
+    await invalidateCache(rt, ctx, {
+      type: "product_updated",
+      productId: row.id,
+      categoryIds: catRows.map((c) => c.categoryId),
+      collectionIds: colRows.map((c) => c.collectionId),
+      isFeatured: row.isFeatured,
+    });
+
     return {
       id: row.id,
       title: row.title,
@@ -485,6 +504,35 @@ export async function updateVariant(
       throw new Error(`Variant not found: "${input.id}"`);
     }
 
+    const catRows = await tx
+      .select({ categoryId: schema.productCategories.categoryId })
+      .from(schema.productCategories)
+      .where(eq(schema.productCategories.productId, row.productId));
+
+    const colRows = await tx
+      .select({ collectionId: schema.collectionProducts.collectionId })
+      .from(schema.collectionProducts)
+      .where(eq(schema.collectionProducts.productId, row.productId));
+
+    const isImageOnly =
+      input.imageMediaId !== undefined &&
+      input.price === undefined &&
+      input.compareAtPrice === undefined;
+
+    if (isImageOnly) {
+      await invalidateCache(rt, ctx, {
+        type: "product_image_updated",
+        productId: row.productId,
+      });
+    } else {
+      await invalidateCache(rt, ctx, {
+        type: "product_price_changed",
+        productId: row.productId,
+        categoryIds: catRows.map((c) => c.categoryId),
+        collectionIds: colRows.map((c) => c.collectionId),
+      });
+    }
+
     return {
       id: row.id,
       productId: row.productId,
@@ -560,6 +608,26 @@ export async function adjustInventory(
       reason: input.reason,
       note: input.notes,
     });
+
+    const isFlip = (currentOnHand === 0 && newOnHand > 0) || (currentOnHand > 0 && newOnHand === 0);
+    if (isFlip) {
+      const [v] = await tx
+        .select({ productId: schema.variants.productId })
+        .from(schema.variants)
+        .where(eq(schema.variants.id, input.variantId));
+      if (v) {
+        const colRows = await tx
+          .select({ collectionId: schema.collectionProducts.collectionId })
+          .from(schema.collectionProducts)
+          .where(eq(schema.collectionProducts.productId, v.productId));
+
+        await invalidateCache(rt, ctx, {
+          type: "inventory_out_of_stock_flip",
+          productId: v.productId,
+          collectionIds: colRows.map((c) => c.collectionId),
+        });
+      }
+    }
 
     return {
       success: true,
@@ -894,6 +962,11 @@ export async function updateCollection(
         });
       }
     }
+
+    await invalidateCache(rt, ctx, {
+      type: "collection_updated",
+      collectionId: row.id,
+    });
 
     return {
       id: row.id,

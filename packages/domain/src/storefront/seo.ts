@@ -2,6 +2,7 @@ import { and, desc, eq, isNull } from "drizzle-orm";
 import { schema, withTenant } from "@bs/db";
 import type { Runtime } from "../runtime.ts";
 import type { TenantContext } from "../context.ts";
+import { invalidateCache } from "../cache-invalidation.ts";
 import type { StorefrontProductDetail } from "./catalog.ts";
 
 export interface SeoSettings {
@@ -542,6 +543,65 @@ export async function getStorefrontSeoSettings(
       breadcrumbsEnabled: row.breadcrumbsEnabled,
       faqSchemaEnabled: row.faqSchemaEnabled,
     };
+  });
+}
+
+/**
+ * Updates SEO settings for a tenant and invalidates storefront SEO cache tags.
+ */
+export async function updateStorefrontSeoSettings(
+  rt: Runtime,
+  ctx: TenantContext,
+  input: Partial<Omit<SeoSettings, "id" | "tenantId" | "updatedAt">>,
+): Promise<void> {
+  const db = rt._db.db;
+
+  await withTenant(db, ctx.tenantId, async (tx) => {
+    const [existing] = await tx
+      .select({ id: schema.seoSettings.id })
+      .from(schema.seoSettings)
+      .where(eq(schema.seoSettings.tenantId, ctx.tenantId))
+      .limit(1);
+
+    const updateValues: Record<string, unknown> = {
+      updatedAt: new Date(),
+    };
+
+    if (input.indexingEnabled !== undefined) updateValues.indexingEnabled = input.indexingEnabled;
+    if (input.titleTemplate !== undefined) updateValues.titleTemplate = input.titleTemplate;
+    if (input.defaultMetaDescription !== undefined) updateValues.defaultMetaDescription = input.defaultMetaDescription;
+    if (input.defaultOgImageMediaId !== undefined) updateValues.defaultOgImageMediaId = input.defaultOgImageMediaId;
+    if (input.twitterHandle !== undefined) updateValues.twitterHandle = input.twitterHandle;
+    if (input.organizationSchema !== undefined) updateValues.organizationSchema = input.organizationSchema;
+    if (input.localBusiness !== undefined) updateValues.localBusiness = input.localBusiness;
+    if (input.robotsExtra !== undefined) updateValues.robotsExtra = input.robotsExtra;
+    if (input.aiCrawlers !== undefined) updateValues.aiCrawlers = input.aiCrawlers;
+    if (input.breadcrumbsEnabled !== undefined) updateValues.breadcrumbsEnabled = input.breadcrumbsEnabled;
+    if (input.faqSchemaEnabled !== undefined) updateValues.faqSchemaEnabled = input.faqSchemaEnabled;
+
+    if (existing) {
+      await tx
+        .update(schema.seoSettings)
+        .set(updateValues)
+        .where(eq(schema.seoSettings.id, existing.id));
+    } else {
+      await tx.insert(schema.seoSettings).values({
+        tenantId: ctx.tenantId,
+        indexingEnabled: input.indexingEnabled ?? true,
+        titleTemplate: input.titleTemplate ?? "%s | {{store_name}}",
+        defaultMetaDescription: input.defaultMetaDescription ?? null,
+        defaultOgImageMediaId: input.defaultOgImageMediaId ?? null,
+        twitterHandle: input.twitterHandle ?? null,
+        organizationSchema: input.organizationSchema ?? null,
+        localBusiness: input.localBusiness ?? null,
+        robotsExtra: input.robotsExtra ?? null,
+        aiCrawlers: input.aiCrawlers ?? { ...DEFAULT_AI_CRAWLERS },
+        breadcrumbsEnabled: input.breadcrumbsEnabled ?? true,
+        faqSchemaEnabled: input.faqSchemaEnabled ?? true,
+      });
+    }
+
+    await invalidateCache(rt, ctx, { type: "store_or_seo_updated" });
   });
 }
 

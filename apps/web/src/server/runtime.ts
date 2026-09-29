@@ -1,4 +1,5 @@
 import "server-only";
+import { revalidateTag } from "next/cache";
 import { createLogger, createRuntime, type Logger, type Runtime } from "@bs/domain";
 
 /**
@@ -12,7 +13,21 @@ export function server(): { rt: Runtime; log: Logger } {
     const url = process.env.DATABASE_URL_RW;
     if (!url) throw new Error("Missing env DATABASE_URL_RW");
     g.__bsWeb = {
-      rt: createRuntime({ service: "web", databaseUrl: url, poolMax: Number(process.env.DB_POOL_MAX ?? 10) }),
+      rt: createRuntime({
+        service: "web",
+        databaseUrl: url,
+        poolMax: Number(process.env.DB_POOL_MAX ?? 10),
+        revalidateTags: (tags) => {
+          for (const t of tags) {
+            try {
+              // eslint-disable-next-line bs/tenant-cache-tag -- tag strings are pre-verified tenant-prefixed via computeInvalidationTags
+              revalidateTag(t, "max");
+            } catch {
+              // Ignore if outside Next.js request context
+            }
+          }
+        },
+      }),
       log: createLogger("web"),
     };
   }

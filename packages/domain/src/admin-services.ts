@@ -1,6 +1,7 @@
 import { schema, withTenant } from "@bs/db";
 import type { Runtime } from "./runtime.ts";
 import { assertPermission, type TenantContext } from "./context.ts";
+import { invalidateCache } from "./cache-invalidation.ts";
 
 export interface MembershipRecord {
   id: string;
@@ -170,6 +171,7 @@ export async function updateStoreSettings(
       if (!created) {
         throw new Error("Failed to initialize store settings");
       }
+      await invalidateCache(rt, ctx, { type: "store_or_seo_updated" });
       return {
         tenantId: created.tenantId ?? ctx.tenantId,
         storeName: created.storeName,
@@ -191,6 +193,8 @@ export async function updateStoreSettings(
     if (!updated) {
       throw new Error("Failed to update store settings");
     }
+
+    await invalidateCache(rt, ctx, { type: "store_or_seo_updated" });
 
     return {
       tenantId: updated.tenantId ?? ctx.tenantId,

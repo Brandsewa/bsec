@@ -2,6 +2,7 @@ import { eq } from "drizzle-orm";
 import { schema, withTenant } from "@bs/db";
 import type { Runtime } from "./runtime.ts";
 import { assertPermission, type TenantContext } from "./context.ts";
+import { invalidateCache } from "./cache-invalidation.ts";
 
 export interface UpdateBrandSettingsInput {
   logoLightMediaId?: string | null | undefined;
@@ -206,6 +207,8 @@ export async function updateBrandSettings(
       });
     }
 
+    await invalidateCache(rt, ctx, { type: "theme_or_brand_published" });
+
     return getBrandSettings(rt, ctx);
   });
 }
@@ -239,6 +242,8 @@ export async function publishBrandSettings(rt: Runtime, ctx: TenantContext) {
         version: nextVersion,
       });
     }
+
+    await invalidateCache(rt, ctx, { type: "theme_or_brand_published" });
 
     return { version: nextVersion };
   });

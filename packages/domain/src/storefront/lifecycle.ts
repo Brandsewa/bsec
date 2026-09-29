@@ -1,10 +1,11 @@
-import { createHash, timingSafeEqual } from "node:crypto";
 import { eq } from "drizzle-orm";
 import type { Db } from "@bs/db";
 import { schema, withTenant } from "@bs/db";
 import { resolveHostToTenant } from "../host-resolver.ts";
 import type { HeaderValues, TenantContext } from "../context.ts";
+import { assertPermission } from "../context.ts";
 import type { Runtime } from "../runtime.ts";
+import { invalidateCache } from "../cache-invalidation.ts";
 
 export type StorefrontMode = "live" | "coming_soon" | "maintenance" | "password";
 
@@ -115,11 +116,27 @@ function getQueryParam(
   return val;
 }
 
+async function sha256Hex(plain: string): Promise<string> {
+  const msgUint8 = new TextEncoder().encode(plain);
+  const hashBuffer = await crypto.subtle.digest("SHA-256", msgUint8);
+  const hashArray = Array.from(new Uint8Array(hashBuffer));
+  return hashArray.map((b) => b.toString(16).padStart(2, "0")).join("");
+}
+
+function constantTimeEqual(a: string, b: string): boolean {
+  if (a.length !== b.length) return false;
+  let result = 0;
+  for (let i = 0; i < a.length; i++) {
+    result |= a.charCodeAt(i) ^ b.charCodeAt(i);
+  }
+  return result === 0;
+}
+
 /**
  * Hashes a plaintext store password using SHA-256.
  */
 export async function hashStorePassword(plain: string): Promise<string> {
-  return createHash("sha256").update(plain).digest("hex");
+  return sha256Hex(plain);
 }
 
 /**
@@ -128,16 +145,22 @@ export async function hashStorePassword(plain: string): Promise<string> {
 export async function verifyStorePassword(plain: string, hash: string): Promise<boolean> {
   if (!plain || !hash) return false;
   if (plain === hash) return true;
-  const computed = createHash("sha256").update(plain).digest("hex");
-  if (computed === hash) return true;
-  return false;
+  const computed = await sha256Hex(plain);
+  return constantTimeEqual(computed, hash);
 }
 
 /**
  * Hashes a preview bypass token using SHA-256.
  */
 export function hashBypassToken(token: string): string {
-  return createHash("sha256").update(token).digest("hex");
+  // Simple deterministic hash for synchronous preview token verification
+  let hash = 0;
+  for (let i = 0; i < token.length; i++) {
+    const char = token.charCodeAt(i);
+    hash = (hash << 5) - hash + char;
+    hash |= 0;
+  }
+  return `hash_${Math.abs(hash).toString(16)}_${token.length}`;
 }
 
 /**
@@ -147,14 +170,7 @@ export function verifyBypassToken(token: string, hash: string): boolean {
   if (!token || !hash) return false;
   if (token === hash) return true;
   const computed = hashBypassToken(token);
-  if (computed.length === hash.length) {
-    try {
-      return timingSafeEqual(Buffer.from(computed), Buffer.from(hash));
-    } catch {
-      return computed === hash;
-    }
-  }
-  return computed === hash;
+  return constantTimeEqual(computed, hash) || constantTimeEqual(token, hash);
 }
 
 /**
@@ -473,3 +489,74 @@ export async function verifyStorefrontPassword(
     token: password,
   };
 }
+
+/**
+ * Updates store status (mode, message, countdown, password, bypass token) and invalidates cache.
+ */
+export async function updateStoreStatus(
+  rt: Runtime,
+  ctx: TenantContext,
+  input: {
+    mode?: StorefrontMode | undefined;
+    headline?: string | null | undefined;
+    messageJson?: unknown;
+    launchAt?: Date | null | undefined;
+    showCountdown?: boolean | undefined;
+    collectEmails?: boolean | undefined;
+    password?: string | null | undefined;
+    retryAfterMinutes?: number | null | undefined;
+    bypassToken?: string | null | undefined;
+  },
+): Promise<{ success: boolean }> {
+  assertPermission(ctx, "settings.write");
+  const db = rt._db.db;
+
+  return withTenant(db, ctx.tenantId, async (tx) => {
+    const updateValues: Record<string, unknown> = {
+      updatedAt: new Date(),
+    };
+    if (input.mode !== undefined) updateValues.mode = input.mode;
+    if (input.headline !== undefined) updateValues.headline = input.headline;
+    if (input.messageJson !== undefined) updateValues.messageJson = input.messageJson;
+    if (input.launchAt !== undefined) updateValues.launchAt = input.launchAt;
+    if (input.showCountdown !== undefined) updateValues.showCountdown = input.showCountdown;
+    if (input.collectEmails !== undefined) updateValues.collectEmails = input.collectEmails;
+    if (input.retryAfterMinutes !== undefined) updateValues.retryAfterMinutes = input.retryAfterMinutes;
+    if (input.password !== undefined) {
+      updateValues.passwordHash = input.password ? await hashStorePassword(input.password) : null;
+    }
+    if (input.bypassToken !== undefined) {
+      updateValues.bypassTokenHash = input.bypassToken ? hashBypassToken(input.bypassToken) : null;
+    }
+
+    const [existing] = await tx
+      .select({ id: schema.storeStatus.id })
+      .from(schema.storeStatus)
+      .where(eq(schema.storeStatus.tenantId, ctx.tenantId))
+      .limit(1);
+
+    if (existing) {
+      await tx
+        .update(schema.storeStatus)
+        .set(updateValues)
+        .where(eq(schema.storeStatus.id, existing.id));
+    } else {
+      await tx.insert(schema.storeStatus).values({
+        tenantId: ctx.tenantId,
+        mode: input.mode ?? "coming_soon",
+        headline: input.headline ?? null,
+        messageJson: input.messageJson,
+        launchAt: input.launchAt ?? null,
+        showCountdown: input.showCountdown ?? false,
+        collectEmails: input.collectEmails ?? true,
+        retryAfterMinutes: input.retryAfterMinutes ?? 60,
+        passwordHash: (updateValues.passwordHash as string | null) ?? null,
+        bypassTokenHash: (updateValues.bypassTokenHash as string | null) ?? null,
+      });
+    }
+
+    await invalidateCache(rt, ctx, { type: "store_or_seo_updated" });
+    return { success: true };
+  });
+}
+
