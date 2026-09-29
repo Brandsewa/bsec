@@ -56,7 +56,12 @@ export function ShippingEstimator({ onEstimateChange }: ShippingEstimatorProps) 
       </p>
 
       <form onSubmit={handleEstimate} className="flex gap-2">
+        <label htmlFor="shipping-pincode" className="sr-only">
+          Pincode
+        </label>
         <input
+          id="shipping-pincode"
+          aria-label="6-digit Indian Pincode"
           type="text"
           maxLength={6}
           value={pincode}

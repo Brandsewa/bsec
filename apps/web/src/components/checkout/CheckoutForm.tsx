@@ -45,10 +45,15 @@ export const INDIAN_STATES_AND_UTS = [
 
 export interface CheckoutFormProps {
   cart: StorefrontCart;
-  onShippingMethodChange?: (shippingPaise: number) => void;
+  shippingMethod?: "standard" | "express";
+  onShippingMethodChange?: (method: "standard" | "express") => void;
 }
 
-export function CheckoutForm({ cart, onShippingMethodChange }: CheckoutFormProps) {
+export function CheckoutForm({
+  cart,
+  shippingMethod: controlledShippingMethod,
+  onShippingMethodChange,
+}: CheckoutFormProps) {
   const router = useRouter();
 
   // Contact
@@ -64,7 +69,8 @@ export function CheckoutForm({ cart, onShippingMethodChange }: CheckoutFormProps
   const [pincode, setPincode] = useState("");
 
   // Method
-  const [shippingMethod, setShippingMethod] = useState<"standard" | "express">("standard");
+  const [internalShippingMethod, setInternalShippingMethod] = useState<"standard" | "express">("standard");
+  const shippingMethod = controlledShippingMethod ?? internalShippingMethod;
   const [paymentMethod, setPaymentMethod] = useState<"cod" | "online">("cod");
   const [notes, setNotes] = useState("");
 
@@ -81,10 +87,11 @@ export function CheckoutForm({ cart, onShippingMethodChange }: CheckoutFormProps
     shippingMethod === "standard" ? standardShippingPaise : expressShippingPaise;
 
   const handleShippingChange = (method: "standard" | "express") => {
-    setShippingMethod(method);
-    const paise = method === "standard" ? standardShippingPaise : expressShippingPaise;
+    if (controlledShippingMethod === undefined) {
+      setInternalShippingMethod(method);
+    }
     if (onShippingMethodChange) {
-      onShippingMethodChange(paise);
+      onShippingMethodChange(method);
     }
   };
 

@@ -4,8 +4,7 @@ import { headers, cookies } from "next/headers";
 import { redirect } from "next/navigation";
 import { evaluateStorefrontAccess, getOrCreateCart } from "@bs/domain";
 import { server } from "@/server/runtime.ts";
-import { CheckoutForm } from "@/components/checkout/CheckoutForm.tsx";
-import { OrderSummary } from "@/components/checkout/OrderSummary.tsx";
+import { CheckoutContainer } from "@/components/checkout/CheckoutContainer.tsx";
 import { CART_COOKIE_NAME } from "@/app/api/storefront/cart/route.ts";
 
 export const metadata: Metadata = {
@@ -52,17 +51,7 @@ export default async function CheckoutPage() {
         Checkout
       </h1>
 
-      <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 lg:gap-12 items-start">
-        {/* Checkout input forms (Customer info, address, shipping, payment) */}
-        <div className="lg:col-span-7">
-          <CheckoutForm cart={cart} />
-        </div>
-
-        {/* Order review & totals */}
-        <div className="lg:col-span-5">
-          <OrderSummary cart={cart} />
-        </div>
-      </div>
+      <CheckoutContainer cart={cart} />
     </div>
   );
 }

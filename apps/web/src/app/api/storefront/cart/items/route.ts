@@ -82,6 +82,7 @@ export async function POST(req: Request) {
       value: cart.token,
       path: "/",
       httpOnly: true,
+      secure: process.env.NODE_ENV === "production",
       sameSite: "lax",
       maxAge: CART_COOKIE_MAX_AGE,
     });
@@ -90,6 +91,7 @@ export async function POST(req: Request) {
       name: "bs_cart_count",
       value: String(cart.itemCount),
       path: "/",
+      secure: process.env.NODE_ENV === "production",
       sameSite: "lax",
       maxAge: CART_COOKIE_MAX_AGE,
     });
@@ -152,6 +154,7 @@ export async function PATCH(req: Request) {
       name: "bs_cart_count",
       value: String(cart.itemCount),
       path: "/",
+      secure: process.env.NODE_ENV === "production",
       sameSite: "lax",
       maxAge: CART_COOKIE_MAX_AGE,
     });
@@ -213,6 +216,7 @@ export async function DELETE(req: Request) {
       name: "bs_cart_count",
       value: String(cart.itemCount),
       path: "/",
+      secure: process.env.NODE_ENV === "production",
       sameSite: "lax",
       maxAge: CART_COOKIE_MAX_AGE,
     });

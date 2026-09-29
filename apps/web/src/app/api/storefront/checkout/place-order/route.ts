@@ -74,6 +74,7 @@ export async function POST(req: Request) {
       value: "",
       path: "/",
       httpOnly: true,
+      secure: process.env.NODE_ENV === "production",
       sameSite: "lax",
       maxAge: 0,
     });
@@ -82,6 +83,7 @@ export async function POST(req: Request) {
       name: "bs_cart_count",
       value: "0",
       path: "/",
+      secure: process.env.NODE_ENV === "production",
       sameSite: "lax",
       maxAge: 0,
     });

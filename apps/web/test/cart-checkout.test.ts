@@ -68,6 +68,7 @@ import { CartItemRow } from "../src/components/cart/CartItemRow.tsx";
 import { ShippingEstimator } from "../src/components/cart/ShippingEstimator.tsx";
 import { CheckoutForm } from "../src/components/checkout/CheckoutForm.tsx";
 import { OrderSummary } from "../src/components/checkout/OrderSummary.tsx";
+import { CheckoutContainer } from "../src/components/checkout/CheckoutContainer.tsx";
 import type { StorefrontCart, StorefrontCartItem } from "@bs/domain";
 
 describe("Storefront Cart & Checkout Flow", () => {
@@ -139,11 +140,14 @@ describe("Storefront Cart & Checkout Flow", () => {
   });
 
   describe("ShippingEstimator", () => {
-    it("renders pincode input with Indian pincode placeholder and estimate button", () => {
+    it("renders pincode input with Indian pincode placeholder, a11y label, and estimate button", () => {
       const html = renderToString(React.createElement(ShippingEstimator));
 
       expect(html).toContain("Estimate Shipping");
-      expect(html).toContain("6-digit Indian Pincode");
+      expect(html).toContain('aria-label="6-digit Indian Pincode"');
+      expect(html).toContain('id="shipping-pincode"');
+      expect(html).toContain('for="shipping-pincode"');
+      expect(html).toContain("Pincode");
       expect(html).toContain("Calculate");
     });
   });
@@ -224,6 +228,24 @@ describe("Storefront Cart & Checkout Flow", () => {
       expect(html).toContain("UPI / Card / NetBanking");
       expect(html).toContain("Payment gateway in test mode");
       expect(html).toContain("Place Order");
+    });
+  });
+
+  describe("CheckoutContainer", () => {
+    it("renders both CheckoutForm and OrderSummary coordinated with shipping calculation", () => {
+      const html = renderToString(
+        React.createElement(CheckoutContainer, {
+          cart: mockCart,
+        }),
+      );
+
+      // Contains elements from both child components
+      expect(html).toContain("Contact Information");
+      expect(html).toContain("Shipping Address");
+      expect(html).toContain("Order Summary");
+      expect(html).toContain("KeyCraft Custom Switch Lubing Station");
+      // Since subtotal 299800 >= 99900, standard delivery is Free
+      expect(html).toContain("Free");
     });
   });
 
