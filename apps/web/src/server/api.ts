@@ -11,6 +11,16 @@ import {
   buildTenantContext,
   checkAdminLoginLimit,
   getAdminMe,
+  acceptInvitation,
+  checkRateLimit,
+  clearRazorpayCredentials,
+  getPaymentsStatus,
+  listInvitations,
+  listStoreRoles,
+  removeMember,
+  revokeInvitation,
+  saveRazorpayCredentials,
+  setMemberRole,
   checkHealth,
   createBrand,
   createCategory,
@@ -121,6 +131,9 @@ function mapAuthError(err: unknown): unknown {
     if (m.startsWith("Unauthorized")) return new ORPCError("UNAUTHORIZED", { message: m.replace(/^Unauthorized:\s*/, "") });
     if (m.startsWith("Forbidden")) return new ORPCError("FORBIDDEN", { message: m.replace(/^Forbidden:\s*/, "") });
     if (m.startsWith("Bad Request")) return new ORPCError("BAD_REQUEST", { message: m.replace(/^Bad Request:\s*/, "") });
+    if (m.startsWith("Not Found")) return new ORPCError("NOT_FOUND", { message: m.replace(/^Not Found:\s*/, "") });
+    if (m.startsWith("Conflict")) return new ORPCError("CONFLICT", { message: m.replace(/^Conflict:\s*/, "") });
+    if (m.startsWith("Precondition")) return new ORPCError("PRECONDITION_FAILED", { message: m.replace(/^Precondition:\s*/, "") });
   }
   return err;
 }
@@ -163,12 +176,16 @@ const requireAdmin = os.middleware(async ({ context, next }) => {
     throw err;
   }
 
-  return next({
-    context: {
-      ...context,
-      tenantCtx,
-    },
-  });
+  try {
+    return await next({
+      context: {
+        ...context,
+        tenantCtx,
+      },
+    });
+  } catch (err) {
+    throw mapAuthError(err);
+  }
 });
 
 const requireStorefront = os.middleware(async ({ context, next }) => {
@@ -230,7 +247,78 @@ export const storeRouter = os.router({
         return getAdminMe(context.rt, context.session.user.id);
       }),
     },
+    payments: {
+      get: os.admin.payments.get
+        .use(requireAdmin)
+        .use(requirePermission("settings.write"))
+        .handler(({ context }) => {
+          if (!context.tenantCtx) throw new Error("Missing tenant context");
+          return getPaymentsStatus(context.rt, context.tenantCtx);
+        }),
+      saveRazorpay: os.admin.payments.saveRazorpay
+        .use(requireAdmin)
+        .use(requirePermission("settings.write"))
+        .handler(({ context, input }) => {
+          if (!context.tenantCtx) throw new Error("Missing tenant context");
+          return saveRazorpayCredentials(context.rt, context.tenantCtx, input);
+        }),
+      clearRazorpay: os.admin.payments.clearRazorpay
+        .use(requireAdmin)
+        .use(requirePermission("settings.write"))
+        .handler(({ context }) => {
+          if (!context.tenantCtx) throw new Error("Missing tenant context");
+          return clearRazorpayCredentials(context.rt, context.tenantCtx);
+        }),
+    },
     memberships: {
+      roles: os.admin.memberships.roles
+        .use(requireAdmin)
+        .use(requirePermission("staff.manage"))
+        .handler(({ context }) => {
+          if (!context.tenantCtx) throw new Error("Missing tenant context");
+          return listStoreRoles(context.rt, context.tenantCtx);
+        }),
+      setRole: os.admin.memberships.setRole
+        .use(requireAdmin)
+        .use(requirePermission("staff.manage"))
+        .handler(({ context, input }) => {
+          if (!context.tenantCtx) throw new Error("Missing tenant context");
+          return setMemberRole(context.rt, context.tenantCtx, input);
+        }),
+      remove: os.admin.memberships.remove
+        .use(requireAdmin)
+        .use(requirePermission("staff.manage"))
+        .handler(({ context, input }) => {
+          if (!context.tenantCtx) throw new Error("Missing tenant context");
+          return removeMember(context.rt, context.tenantCtx, input);
+        }),
+      invitations: os.admin.memberships.invitations
+        .use(requireAdmin)
+        .use(requirePermission("staff.manage"))
+        .handler(({ context }) => {
+          if (!context.tenantCtx) throw new Error("Missing tenant context");
+          return listInvitations(context.rt, context.tenantCtx);
+        }),
+      revokeInvitation: os.admin.memberships.revokeInvitation
+        .use(requireAdmin)
+        .use(requirePermission("staff.manage"))
+        .handler(({ context, input }) => {
+          if (!context.tenantCtx) throw new Error("Missing tenant context");
+          return revokeInvitation(context.rt, context.tenantCtx, input);
+        }),
+      // Public: the invite link carries the store id and a one-time token. Rate limited per IP.
+      acceptInvite: os.admin.memberships.acceptInvite.handler(async ({ context, input }) => {
+        const ip = clientIp(context.headers ?? new Headers());
+        const limit = await checkRateLimit(context.rt._db.db, { key: `invite:accept:ip:${ip}`, limit: 10, windowSeconds: 900 });
+        if (!limit.allowed) {
+          throw new ORPCError("TOO_MANY_REQUESTS", { message: "Too many attempts. Try again later.", data: { retryAfter: limit.retryAfter } });
+        }
+        try {
+          return await acceptInvitation(context.rt, input);
+        } catch (err) {
+          throw mapAuthError(err);
+        }
+      }),
       list: os.admin.memberships.list
         .use(requireAdmin)
         .use(requirePermission("staff.manage"))

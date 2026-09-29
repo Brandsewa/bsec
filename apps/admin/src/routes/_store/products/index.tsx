@@ -1,9 +1,10 @@
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
-import { Download, Package, Plus, Upload } from "lucide-react";
-import { useState } from "react";
+import { AlertTriangle, Download, Package, Plus, Upload } from "lucide-react";
+import { useEffect, useState } from "react";
 import {
   Button,
   DataTable,
+  EmptyState,
   FilterBar,
   MetricCard,
   MetricCardSkeleton,
@@ -15,37 +16,19 @@ import {
   TableSkeleton,
   type ColumnDef,
 } from "@bs/ui";
+import { useQuery } from "@tanstack/react-query";
+import { orpc } from "../../../lib/orpc.ts";
 
-interface ProductRow {
-  id: string;
-  title: string;
-  slug: string;
-  status: "active" | "draft" | "archived";
-  category?: string;
-  pricePaise: number;
-  stockOnHand: number;
-}
+type ProductStatus = "draft" | "active" | "archived";
+type StatusFilter = ProductStatus | "all";
 
-const mockProducts: ProductRow[] = [
-  {
-    id: "0199a000-0000-7000-8000-000000000504",
-    title: "Organic Cotton T-Shirt",
-    slug: "organic-cotton-tshirt",
-    status: "active",
-    category: "Apparel",
-    pricePaise: 2999,
-    stockOnHand: 42,
-  },
-  {
-    id: "0199a000-0000-7000-8000-000000000505",
-    title: "Ceramic Coffee Mug",
-    slug: "ceramic-coffee-mug",
-    status: "draft",
-    category: "Home & Kitchen",
-    pricePaise: 899,
-    stockOnHand: 0,
-  },
-];
+export const PRODUCTS_PAGE_SIZE = 20;
+
+const STATUS_BADGE: Record<ProductStatus, string> = {
+  active: "bg-emerald-500/10 text-emerald-600 dark:text-emerald-400",
+  draft: "bg-amber-500/10 text-amber-600 dark:text-amber-400",
+  archived: "bg-surface-100 text-foreground-muted",
+};
 
 export const Route = createFileRoute("/_store/products/")({
   pendingComponent: () => (
@@ -55,28 +38,58 @@ export const Route = createFileRoute("/_store/products/")({
         <MetricCardSkeleton />
         <MetricCardSkeleton />
       </div>
-      <TableSkeleton rows={10} columns={5} />
+      <TableSkeleton rows={10} columns={4} />
     </PageSkeleton>
   ),
-  component: ProductsPage,
+  component: ProductsRoute,
 });
 
-function ProductsPage() {
+function ProductsRoute() {
   const navigate = useNavigate();
+  return <ProductsPage navigate={(to) => void navigate({ to })} />;
+}
+
+export function ProductsPage({ navigate }: { navigate?: (to: string) => void }) {
+  const go = navigate ?? (() => undefined);
   const [search, setSearch] = useState("");
-  const [statusFilter, setStatusFilter] = useState<string>("all");
+  const [debounced, setDebounced] = useState("");
+  const [statusFilter, setStatusFilter] = useState<StatusFilter>("all");
+  const [page, setPage] = useState(0);
 
-  const filteredProducts = mockProducts.filter((p) => {
-    if (search.trim() && !p.title.toLowerCase().includes(search.toLowerCase())) {
-      return false;
-    }
-    if (statusFilter !== "all" && p.status !== statusFilter) {
-      return false;
-    }
-    return true;
-  });
+  useEffect(() => {
+    const t = setTimeout(() => {
+      setDebounced(search.trim());
+      setPage(0);
+    }, 300);
+    return () => clearTimeout(t);
+  }, [search]);
 
-  const columns: ColumnDef<ProductRow>[] = [
+  const listQuery = useQuery(
+    orpc.admin.products.list.queryOptions({
+      input: {
+        search: debounced ? debounced : undefined,
+        status: statusFilter === "all" ? undefined : statusFilter,
+        limit: PRODUCTS_PAGE_SIZE,
+        offset: page * PRODUCTS_PAGE_SIZE,
+      },
+    }),
+  );
+  const totalQuery = useQuery(
+    orpc.admin.products.list.queryOptions({ input: { limit: 1, offset: 0 } }),
+  );
+  const activeQuery = useQuery(
+    orpc.admin.products.list.queryOptions({ input: { status: "active", limit: 1, offset: 0 } }),
+  );
+  const draftQuery = useQuery(
+    orpc.admin.products.list.queryOptions({ input: { status: "draft", limit: 1, offset: 0 } }),
+  );
+
+  const items = listQuery.data?.items ?? [];
+  const total = listQuery.data?.total ?? 0;
+  const hasFilters = statusFilter !== "all" || debounced.length > 0 || search.length > 0;
+
+  type Row = (typeof items)[number];
+  const columns: ColumnDef<Row>[] = [
     {
       header: "Product",
       cell: (p) => (
@@ -88,38 +101,98 @@ function ProductsPage() {
     },
     {
       header: "Status",
-      cell: (p) => {
-        const badgeColors = {
-          active: "bg-emerald-500/10 text-emerald-600 dark:text-emerald-400",
-          draft: "bg-amber-500/10 text-amber-600 dark:text-amber-400",
-          archived: "bg-surface-100 text-foreground-muted",
-        };
-        return (
-          <span className={`inline-flex rounded-full px-2 py-0.5 text-xs font-medium capitalize ${badgeColors[p.status]}`}>
-            {p.status}
-          </span>
-        );
-      },
-    },
-    {
-      header: "Category",
-      cell: (p) => <span className="text-sm text-foreground-muted">{p.category ?? "—"}</span>,
-    },
-    {
-      header: "Stock",
       cell: (p) => (
-        <span className={`text-sm ${p.stockOnHand === 0 ? "font-medium text-rose-500" : "text-foreground-muted"}`}>
-          {p.stockOnHand === 0 ? "Out of stock" : `${p.stockOnHand} in stock`}
+        <span className={`inline-flex rounded-full px-2 py-0.5 text-xs font-medium capitalize ${STATUS_BADGE[p.status]}`}>
+          {p.status}
         </span>
       ),
     },
     {
-      header: "Price",
+      header: "Type",
+      cell: (p) => <span className="text-sm text-foreground-muted">{p.productType ?? "—"}</span>,
+    },
+    {
+      header: "Updated",
       className: "text-right",
       headerClassName: "text-right",
-      cell: (p) => <span className="font-medium text-foreground">₹{(p.pricePaise / 100).toFixed(2)}</span>,
+      cell: (p) => (
+        <span className="text-xs text-foreground-muted">{new Date(p.updatedAt).toLocaleDateString("en-IN")}</span>
+      ),
     },
   ];
+
+  const from = total === 0 ? 0 : page * PRODUCTS_PAGE_SIZE + 1;
+  const to = Math.min(total, (page + 1) * PRODUCTS_PAGE_SIZE);
+
+  const metric = (label: string, q: typeof totalQuery, icon?: typeof Package) =>
+    q.isLoading ? (
+      <MetricCardSkeleton />
+    ) : (
+      <MetricCard label={label} value={q.data ? q.data.total : "—"} {...(icon ? { icon } : {})} />
+    );
+
+  let body;
+  if (listQuery.isError) {
+    body = (
+      <EmptyState
+        icon={AlertTriangle}
+        title="Could not load products"
+        description={listQuery.error instanceof Error ? listQuery.error.message : "Something went wrong."}
+        action={
+          <Button variant="default" size="sm" onClick={() => void listQuery.refetch()}>
+            Retry
+          </Button>
+        }
+      />
+    );
+  } else if (listQuery.isLoading) {
+    body = <TableSkeleton rows={5} columns={4} />;
+  } else if (total === 0 && !hasFilters) {
+    body = (
+      <EmptyState
+        icon={Package}
+        title="No products yet"
+        description="Add your first product to start building your catalog."
+        action={
+          <Button variant="primary" size="sm" onClick={() => go("/products/new")}>
+            <Plus className="mr-1.5 size-3.5" aria-hidden />
+            Add product
+          </Button>
+        }
+      />
+    );
+  } else {
+    body = (
+      <>
+        <DataTable
+          data={items}
+          columns={columns}
+          keyExtractor={(p) => p.id}
+          onRowClick={(p) => go(`/products/${p.id}`)}
+          emptyTitle="No products match"
+          emptyDescription="Try adjusting your search query or status filter."
+        />
+        <div className="flex items-center justify-between text-xs text-foreground-muted">
+          <span>
+            {from}-{to} of {total}
+          </span>
+          <div className="flex gap-2">
+            <Button variant="default" size="sm" disabled={page === 0} onClick={() => setPage((p) => p - 1)}>
+              Previous
+            </Button>
+            <Button
+              variant="default"
+              size="sm"
+              disabled={(page + 1) * PRODUCTS_PAGE_SIZE >= total}
+              onClick={() => setPage((p) => p + 1)}
+            >
+              Next
+            </Button>
+          </div>
+        </div>
+      </>
+    );
+  }
 
   return (
     <PageContainer size="full">
@@ -127,15 +200,15 @@ function ProductsPage() {
         items={[{ label: "Products" }]}
         actions={
           <div className="flex items-center gap-2">
-            <Button variant="default" size="sm">
+            <Button variant="default" size="sm" disabled title="Coming soon">
               <Download className="mr-1.5 size-3.5" aria-hidden />
               Export
             </Button>
-            <Button variant="default" size="sm">
+            <Button variant="default" size="sm" disabled title="Coming soon">
               <Upload className="mr-1.5 size-3.5" aria-hidden />
               Import
             </Button>
-            <Button variant="primary" size="sm" onClick={() => navigate({ to: "/products/new" })}>
+            <Button variant="primary" size="sm" onClick={() => go("/products/new")}>
               <Plus className="mr-1.5 size-3.5" aria-hidden />
               Add product
             </Button>
@@ -149,17 +222,9 @@ function ProductsPage() {
       />
 
       <div className="grid gap-4 sm:grid-cols-3">
-        <MetricCard label="Total Products" value={mockProducts.length} icon={Package} />
-        <MetricCard
-          label="Active"
-          value={mockProducts.filter((p) => p.status === "active").length}
-          change={{ value: "+1", trend: "up" }}
-        />
-        <MetricCard
-          label="Out of Stock"
-          value={mockProducts.filter((p) => p.stockOnHand === 0).length}
-          change={{ value: "1", trend: "down" }}
-        />
+        {metric("Total Products", totalQuery, Package)}
+        {metric("Active", activeQuery)}
+        {metric("Draft", draftQuery)}
       </div>
 
       <PageSection>
@@ -168,21 +233,34 @@ function ProductsPage() {
             search={search}
             onSearchChange={setSearch}
             searchPlaceholder="Search products by title..."
-            hasActiveFilters={statusFilter !== "all" || search.length > 0}
+            hasActiveFilters={hasFilters}
             onReset={() => {
               setSearch("");
+              setDebounced("");
               setStatusFilter("all");
+              setPage(0);
             }}
+            filters={
+              <div className="flex gap-1">
+                {(["all", "active", "draft", "archived"] as const).map((s) => (
+                  <Button
+                    key={s}
+                    type="button"
+                    size="sm"
+                    variant={statusFilter === s ? "primary" : "default"}
+                    className="capitalize"
+                    onClick={() => {
+                      setStatusFilter(s);
+                      setPage(0);
+                    }}
+                  >
+                    {s}
+                  </Button>
+                ))}
+              </div>
+            }
           />
-
-          <DataTable
-            data={filteredProducts}
-            columns={columns}
-            keyExtractor={(p) => p.id}
-            onRowClick={(p) => navigate({ to: `/products/${p.id}` })}
-            emptyTitle="No products found"
-            emptyDescription="Try adjusting your search query or status filter."
-          />
+          {body}
         </div>
       </PageSection>
     </PageContainer>

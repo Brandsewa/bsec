@@ -3,12 +3,14 @@ import {
   invoices,
   orders,
   orderItems,
+  storeSettings,
   withTenant,
   type Db,
 } from "@bs/db";
 import type { Runtime } from "../runtime.ts";
 import type { TenantContext } from "../context.ts";
 import { allocateSequenceNumber } from "./sequences.ts";
+import { readStoreConfig } from "../admin/store-config.ts";
 
 /**
  * Returns Indian Financial Year string (e.g. 2026-27).
@@ -199,10 +201,17 @@ export async function generateInvoice(
       .from(orderItems)
       .where(and(eq(orderItems.tenantId, ctx.tenantId), eq(orderItems.orderId, input.orderId)));
 
-    // 2. Resolve place of supply (seller vs ship-to state)
+    // 2. Resolve place of supply (seller vs ship-to state). Seller details come from the store's own
+    // tax settings (Settings > Taxes); explicit input still wins. "Delhi" is only the last-resort default
+    // for stores that have not configured a seller state or address yet.
+    const storeCfg = await readStoreConfig(db);
+    const [settingsRow] = await db.select({ address: storeSettings.address }).from(storeSettings).limit(1);
+    const addressState = (settingsRow?.address as { state?: string } | null | undefined)?.state;
     const shippingAddr = (order.shippingAddress ?? {}) as { state?: string };
     const destinationState = input.placeOfSupplyState ?? order.placeOfSupplyState ?? shippingAddr.state ?? "Delhi";
-    const originState = input.sellerState ?? "Delhi"; // default
+    const originState = input.sellerState ?? storeCfg.tax.sellerState ?? addressState ?? "Delhi";
+    const sellerGstin = input.sellerGstin ?? storeCfg.tax.gstin ?? undefined;
+    const pricesIncludeTax = input.pricesIncludeTax ?? storeCfg.tax.pricesIncludeTax;
     const isInterState = normalizeState(originState) !== normalizeState(destinationState);
 
     // 3. Financial year and sequence numbering (PLAN §11.2)
@@ -235,7 +244,7 @@ export async function generateInvoice(
         unitPrice: it.unitPrice,
         discountAmount: it.discountAmount,
         taxRateBps: it.taxRateBps || 1800, // default 18% standard GST if unset
-        pricesIncludeTax: input.pricesIncludeTax ?? true,
+        pricesIncludeTax,
         isInterState,
       });
 
@@ -256,7 +265,7 @@ export async function generateInvoice(
     let shippingIgst = 0;
 
     if (shippingTotal > 0) {
-      if (input.pricesIncludeTax ?? true) {
+      if (pricesIncludeTax) {
         shippingTaxable = Math.round((shippingTotal * 10000) / (10000 + shippingTaxRate));
         const shippingTax = shippingTotal - shippingTaxable;
         if (isInterState) {
@@ -309,7 +318,7 @@ export async function generateInvoice(
         number: seq.formatted,
         fy,
         type: invoiceType,
-        sellerGstin: input.sellerGstin ?? null,
+        sellerGstin: sellerGstin ?? null,
         buyerGstin: input.buyerGstin ?? null,
         placeOfSupplyState: destinationState,
         totals: totals as unknown as Record<string, unknown>,

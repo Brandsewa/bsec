@@ -1,17 +1,10 @@
 import { createFileRoute } from "@tanstack/react-router";
-import {
-  AlertTriangle,
-  CheckCircle2,
-  Download,
-  Image as ImageIcon,
-  RotateCcw,
-  Save,
-  ShieldCheck,
-  Sparkles,
-} from "lucide-react";
+import { AlertTriangle, CheckCircle2, Image as ImageIcon, RotateCcw, Save, ShieldCheck, Sparkles, Upload } from "lucide-react";
 import { useId, useState } from "react";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   Button,
+  FormSkeleton,
   Input,
   Label,
   MetricCard,
@@ -23,39 +16,10 @@ import {
   PageSkeleton,
   toast,
 } from "@bs/ui";
+import type { BrandSettings } from "@bs/contracts";
+import { client, orpc } from "../../../lib/orpc.ts";
 
-interface BrandingState {
-  brandName: string;
-  tagline: string;
-  logoLightUrl: string;
-  logoDarkUrl: string;
-  faviconUrl: string;
-  fontFamily: string;
-  primaryColor: string;
-  backgroundColor: string;
-  textColor: string;
-}
-
-const defaultBranding: BrandingState = {
-  brandName: "Acme Store",
-  tagline: "Sustainable goods crafted with care",
-  logoLightUrl: "https://images.unsplash.com/photo-1599305445671-ac291c95aaa9?w=200&h=60&fit=crop",
-  logoDarkUrl: "https://images.unsplash.com/photo-1599305445671-ac291c95aaa9?w=200&h=60&fit=crop",
-  faviconUrl: "https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?w=128&h=128&fit=crop",
-  fontFamily: "Inter",
-  primaryColor: "#4f46e5",
-  backgroundColor: "#ffffff",
-  textColor: "#0f172a",
-};
-
-const curatedFonts = [
-  { id: "Inter", name: "Inter", category: "Sans-serif", devanagari: false },
-  { id: "Plus Jakarta Sans", name: "Plus Jakarta Sans", category: "Sans-serif", devanagari: false },
-  { id: "DM Sans", name: "DM Sans", category: "Sans-serif", devanagari: false },
-  { id: "Poppins", name: "Poppins", category: "Geometric Sans", devanagari: true },
-  { id: "Mukta", name: "Mukta", category: "Humanist Sans", devanagari: true },
-  { id: "Rozha One", name: "Rozha One", category: "Display Serif", devanagari: true },
-];
+const HEX = /^#(?:[0-9a-fA-F]{3}|[0-9a-fA-F]{6})$/;
 
 /**
  * Calculates WCAG 2.1 relative luminance and contrast ratio in client side.
@@ -69,11 +33,7 @@ function parseHex(hex: string): [number, number, number] {
     return [parseInt(c0 + c0, 16), parseInt(c1 + c1, 16), parseInt(c2 + c2, 16)];
   }
   if (clean.length === 6) {
-    return [
-      parseInt(clean.substring(0, 2), 16),
-      parseInt(clean.substring(2, 4), 16),
-      parseInt(clean.substring(4, 6), 16),
-    ];
+    return [parseInt(clean.substring(0, 2), 16), parseInt(clean.substring(2, 4), 16), parseInt(clean.substring(4, 6), 16)];
   }
   return [0, 0, 0];
 }
@@ -87,80 +47,260 @@ function getLuminance(hex: string): number {
   return 0.2126 * toLinear(r) + 0.7152 * toLinear(g) + 0.0722 * toLinear(b);
 }
 
-function computeContrast(color1: string, color2: string): number {
-  try {
-    const l1 = getLuminance(color1);
-    const l2 = getLuminance(color2);
-    const lighter = Math.max(l1, l2);
-    const darker = Math.min(l1, l2);
-    return (lighter + 0.05) / (darker + 0.05);
-  } catch {
-    return 1.0;
-  }
+export function computeContrast(color1: string, color2: string): number {
+  if (!HEX.test(color1) || !HEX.test(color2)) return 1;
+  const l1 = getLuminance(color1);
+  const l2 = getLuminance(color2);
+  return (Math.max(l1, l2) + 0.05) / (Math.min(l1, l2) + 0.05);
 }
 
-export const Route = createFileRoute("/_store/settings/branding")({
-  pendingComponent: () => (
+const curatedFonts = [
+  { id: "Inter", name: "Inter", category: "Sans-serif", devanagari: false },
+  { id: "Plus Jakarta Sans", name: "Plus Jakarta Sans", category: "Sans-serif", devanagari: false },
+  { id: "DM Sans", name: "DM Sans", category: "Sans-serif", devanagari: false },
+  { id: "Poppins", name: "Poppins", category: "Geometric Sans", devanagari: true },
+  { id: "Mukta", name: "Mukta", category: "Humanist Sans", devanagari: true },
+  { id: "Rozha One", name: "Rozha One", category: "Display Serif", devanagari: true },
+];
+
+const colorFields = [
+  { key: "primaryColor", label: "Primary color" },
+  { key: "secondaryColor", label: "Secondary color" },
+  { key: "accentColor", label: "Accent color" },
+  { key: "backgroundColor", label: "Background color" },
+  { key: "surfaceColor", label: "Surface color" },
+  { key: "textColor", label: "Text color" },
+] as const;
+
+type ColorKey = (typeof colorFields)[number]["key"];
+
+const IMAGE_SLOTS = [
+  { key: "logoLightMediaId", label: "Logo (light background)" },
+  { key: "logoDarkMediaId", label: "Logo (dark background)" },
+  { key: "faviconMediaId", label: "Favicon" },
+  { key: "socialImageMediaId", label: "Social sharing image" },
+] as const;
+type SlotKey = (typeof IMAGE_SLOTS)[number]["key"];
+
+interface FormState {
+  storeName: string;
+  logoLightMediaId: string | null;
+  logoDarkMediaId: string | null;
+  faviconMediaId: string | null;
+  socialImageMediaId: string | null;
+  logoWidth: number;
+  fontHeading: string;
+  fontBody: string;
+  fontSizeScale: string;
+  primaryColor: string;
+  secondaryColor: string;
+  accentColor: string;
+  backgroundColor: string;
+  surfaceColor: string;
+  textColor: string;
+  colorMode: BrandSettings["colorMode"];
+  cornerRadius: BrandSettings["cornerRadius"];
+  buttonStyle: BrandSettings["buttonStyle"];
+}
+
+function fromServer(b: BrandSettings, storeName: string): FormState {
+  return {
+    storeName,
+    logoLightMediaId: b.logoLightMediaId ?? null,
+    logoDarkMediaId: b.logoDarkMediaId ?? null,
+    faviconMediaId: b.faviconMediaId ?? null,
+    socialImageMediaId: b.socialImageMediaId ?? null,
+    logoWidth: b.logoWidth,
+    fontHeading: b.fontHeading,
+    fontBody: b.fontBody,
+    fontSizeScale: b.fontSizeScale,
+    primaryColor: b.primaryColor,
+    secondaryColor: b.secondaryColor,
+    accentColor: b.accentColor,
+    backgroundColor: b.backgroundColor,
+    surfaceColor: b.surfaceColor,
+    textColor: b.textColor,
+    colorMode: b.colorMode,
+    cornerRadius: b.cornerRadius,
+    buttonStyle: b.buttonStyle,
+  };
+}
+
+function BrandingLoading() {
+  return (
     <PageSkeleton>
       <div className="grid gap-4 sm:grid-cols-3">
         <MetricCardSkeleton />
         <MetricCardSkeleton />
         <MetricCardSkeleton />
       </div>
+      <FormSkeleton fields={6} />
     </PageSkeleton>
-  ),
+  );
+}
+
+export const Route = createFileRoute("/_store/settings/branding")({
+  pendingComponent: () => <BrandingLoading />,
   component: BrandingSettingsPage,
 });
 
-function BrandingSettingsPage() {
-  const [branding, setBranding] = useState<BrandingState>(defaultBranding);
-  const [saving, setSaving] = useState(false);
+export function BrandingSettingsPage() {
+  const brandQuery = useQuery(orpc.admin.branding.get.queryOptions());
+  const settingsQuery = useQuery(orpc.admin.settings.get.queryOptions());
+  const mediaQuery = useQuery(orpc.admin.media.list.queryOptions({ input: { limit: 100, offset: 0 } }));
 
-  const textBgRatio = computeContrast(branding.textColor, branding.backgroundColor);
-  const primaryBgRatio = computeContrast(branding.primaryColor, branding.backgroundColor);
-  const isTextAaPass = textBgRatio >= 4.5;
-  const isPrimaryAaPass = primaryBgRatio >= 4.5;
+  const failed = brandQuery.isError ? brandQuery : settingsQuery.isError ? settingsQuery : null;
+  if (failed) {
+    return (
+      <PageContainer>
+        <PageBreadcrumbs items={[{ label: "Settings", href: "/settings" }, { label: "Branding" }]} />
+        <div role="alert" className="flex flex-col items-start gap-3 rounded-md border border-destructive/40 bg-destructive/5 p-4">
+          <p className="text-sm font-medium text-foreground">Could not load branding settings</p>
+          <p className="text-sm text-foreground-light">{failed.error?.message}</p>
+          <Button
+            size="sm"
+            onClick={() => {
+              void brandQuery.refetch();
+              void settingsQuery.refetch();
+            }}
+          >
+            <RotateCcw className="size-3.5" aria-hidden />
+            Retry
+          </Button>
+        </div>
+      </PageContainer>
+    );
+  }
+  if (!brandQuery.data || !settingsQuery.data) return <BrandingLoading />;
 
-  const brandNameId = useId();
-  const taglineId = useId();
-  const logoLightId = useId();
-  const logoDarkId = useId();
-  const faviconInputId = useId();
-  const primaryColorId = useId();
-  const bgColorId = useId();
-  const textColorId = useId();
-
-  const handleSave = () => {
-    setSaving(true);
-    setTimeout(() => {
-      setSaving(false);
-      toast.success("Branding settings saved successfully!");
-    }, 400);
-  };
-
-  const handleFixTextColor = () => {
-    // Pick dark slate for high contrast on light bg, or pure white on dark bg
-    const bgLum = getLuminance(branding.backgroundColor);
-    const fixedColor = bgLum > 0.5 ? "#0f172a" : "#ffffff";
-    setBranding((prev) => ({ ...prev, textColor: fixedColor }));
-    toast.success(`Text color adjusted to ${fixedColor} for WCAG AA compliance.`);
-  };
-
-  const manifestSnippet = JSON.stringify(
-    {
-      name: branding.brandName,
-      short_name: branding.brandName,
-      icons: [
-        { src: "/favicon-192.png", sizes: "192x192", type: "image/png" },
-        { src: "/favicon-512.png", sizes: "512x512", type: "image/png" },
-      ],
-      theme_color: branding.primaryColor,
-      background_color: branding.backgroundColor,
-      display: "standalone",
-    },
-    null,
-    2
+  return (
+    <BrandingEditor
+      key={`${brandQuery.data.id}:${brandQuery.data.version}`}
+      brand={brandQuery.data}
+      storeName={settingsQuery.data.storeName}
+      media={mediaQuery.data?.items ?? []}
+    />
   );
+}
+
+type MediaEntry = { id: string; url?: string | undefined; alt?: string | null | undefined };
+
+function BrandingEditor({ brand, storeName, media }: { brand: BrandSettings; storeName: string; media: MediaEntry[] }) {
+  const queryClient = useQueryClient();
+  const baseline = fromServer(brand, storeName);
+  const [form, setForm] = useState<FormState>(baseline);
+  const [uploading, setUploading] = useState<SlotKey | null>(null);
+  const [localUrls, setLocalUrls] = useState<Record<string, string>>({});
+  const nameId = useId();
+
+  const dirty = JSON.stringify(form) !== JSON.stringify(baseline);
+  const invalidColors = colorFields.filter((f) => !HEX.test(form[f.key]));
+  const textBg = computeContrast(form.textColor, form.backgroundColor);
+  const primaryBg = computeContrast(form.primaryColor, form.backgroundColor);
+  const textPass = textBg >= 4.5;
+  const primaryPass = primaryBg >= 4.5;
+
+  const set = <K extends keyof FormState>(key: K, value: FormState[K]) => setForm((p) => ({ ...p, [key]: value }));
+
+  const invalidateAll = () =>
+    Promise.all([
+      queryClient.invalidateQueries({ queryKey: orpc.admin.branding.get.key() }),
+      queryClient.invalidateQueries({ queryKey: orpc.admin.settings.get.key() }),
+      queryClient.invalidateQueries({ queryKey: orpc.admin.media.list.key() }),
+    ]);
+
+  const updateBrand = useMutation(orpc.admin.branding.update.mutationOptions());
+  const updateSettings = useMutation(orpc.admin.settings.update.mutationOptions());
+  const publishBrand = useMutation(orpc.admin.branding.publish.mutationOptions());
+
+  const validate = (): string | null => {
+    if (!form.storeName.trim()) return "Store name is required";
+    if (invalidColors.length > 0) return `Enter valid hex colours for: ${invalidColors.map((f) => f.label).join(", ")}`;
+    if (!Number.isInteger(form.logoWidth) || form.logoWidth < 20 || form.logoWidth > 1000) return "Logo width must be between 20 and 1000 px";
+    return null;
+  };
+
+  const persist = async (): Promise<boolean> => {
+    const problem = validate();
+    if (problem) {
+      toast.error(problem);
+      return false;
+    }
+    const { storeName: name, ...brandFields } = form;
+    try {
+      if (name.trim() !== baseline.storeName) await updateSettings.mutateAsync({ storeName: name.trim() });
+      await updateBrand.mutateAsync(brandFields);
+      return true;
+    } catch (err) {
+      toast.error(`Could not save branding: ${err instanceof Error ? err.message : "unknown error"}`);
+      return false;
+    }
+  };
+
+  const handleSave = async () => {
+    if (await persist()) {
+      await invalidateAll();
+      toast.success("Branding saved.");
+    }
+  };
+
+  const handlePublish = async () => {
+    if (dirty && !(await persist())) return;
+    try {
+      const res = await publishBrand.mutateAsync(undefined);
+      await invalidateAll();
+      toast.success(`Branding published (version ${res.version}).`);
+    } catch (err) {
+      toast.error(`Could not publish branding: ${err instanceof Error ? err.message : "unknown error"}`);
+    }
+  };
+
+  const handleUpload = async (slot: SlotKey, file: File) => {
+    if (!file.type.startsWith("image/")) {
+      toast.error("Choose an image file.");
+      return;
+    }
+    setUploading(slot);
+    try {
+      const presigned = await client.admin.media.requestUpload({
+        filename: file.name,
+        mime: file.type,
+        bytes: file.size,
+        folder: "branding",
+      });
+      const put = await fetch(presigned.uploadUrl, { method: "PUT", headers: presigned.headers, body: file });
+      if (!put.ok) throw new Error(`Upload failed (${put.status})`);
+      const created = await client.admin.media.create({
+        storageKey: presigned.storageKey,
+        mime: file.type,
+        bytes: file.size,
+        alt: file.name,
+        folder: "branding",
+      });
+      setLocalUrls((prev) => ({ ...prev, [created.id]: created.url ?? URL.createObjectURL(file) }));
+      set(slot, created.id);
+      await queryClient.invalidateQueries({ queryKey: orpc.admin.media.list.key() });
+      toast.success("Image uploaded. Save to apply it.");
+    } catch (err) {
+      toast.error(`Upload failed: ${err instanceof Error ? err.message : "unknown error"}`);
+    } finally {
+      setUploading(null);
+    }
+  };
+
+  const urlFor = (id: string | null): string | undefined => {
+    if (!id) return undefined;
+    return localUrls[id] ?? media.find((m) => m.id === id)?.url;
+  };
+
+  const fixTextColor = () => {
+    const fixed = getLuminance(form.backgroundColor) > 0.5 ? "#0f172a" : "#ffffff";
+    set("textColor", fixed);
+    toast.success(`Text colour set to ${fixed} for better contrast.`);
+  };
+
+  const busy = updateBrand.isPending || updateSettings.isPending || publishBrand.isPending;
+  const previewFont = form.fontBody;
 
   return (
     <PageContainer size="full">
@@ -168,20 +308,17 @@ function BrandingSettingsPage() {
         items={[{ label: "Settings", href: "/settings" }, { label: "Branding" }]}
         actions={
           <div className="flex items-center gap-2">
-            <Button
-              variant="default"
-              size="sm"
-              onClick={() => {
-                setBranding(defaultBranding);
-                toast.info("Branding reset to defaults.");
-              }}
-            >
+            <Button size="sm" disabled={!dirty || busy} onClick={() => setForm(baseline)}>
               <RotateCcw className="mr-1.5 size-3.5" aria-hidden />
-              Reset
+              Discard changes
             </Button>
-            <Button variant="primary" size="sm" disabled={saving} onClick={handleSave}>
+            <Button size="sm" loading={updateBrand.isPending || updateSettings.isPending} disabled={!dirty || busy} onClick={() => void handleSave()}>
               <Save className="mr-1.5 size-3.5" aria-hidden />
-              {saving ? "Saving..." : "Save Branding"}
+              Save branding
+            </Button>
+            <Button size="sm" variant="primary" loading={publishBrand.isPending} disabled={busy} onClick={() => void handlePublish()}>
+              <Upload className="mr-1.5 size-3.5" aria-hidden />
+              Publish
             </Button>
           </div>
         }
@@ -189,305 +326,226 @@ function BrandingSettingsPage() {
 
       <PageHeader
         title="Branding & Visual Identity"
-        description="Configure logos, brand colors, curated typography, and verify WCAG AA accessibility contrast."
+        description={`Logos, colours and typography. Published version ${brand.version}${brand.publishedAt ? `, last published ${new Date(brand.publishedAt).toLocaleDateString()}` : ", not published yet"}.`}
       />
 
       <div className="grid gap-4 sm:grid-cols-3">
-        <MetricCard label="Brand" value={branding.brandName} icon={Sparkles} />
+        <MetricCard label="Store" value={form.storeName || "Not set"} icon={Sparkles} />
         <MetricCard
           label="Text / Bg Contrast"
-          value={`${textBgRatio.toFixed(2)}:1`}
-          change={{
-            value: isTextAaPass ? "WCAG AA Pass" : "Fails AA (<4.5)",
-            trend: isTextAaPass ? "up" : "down",
-          }}
+          value={`${textBg.toFixed(2)}:1`}
+          change={{ value: textPass ? "WCAG AA Pass" : "Fails AA (<4.5)", trend: textPass ? "up" : "down" }}
         />
-        <MetricCard
-          label="Active Font"
-          value={branding.fontFamily}
-          change={{ value: "Self-hosted R2", trend: "neutral" }}
-        />
+        <MetricCard label="Heading font" value={form.fontHeading} change={{ value: `Body: ${form.fontBody}`, trend: "neutral" }} />
       </div>
 
       <div className="grid gap-6 lg:grid-cols-12">
-        {/* Main Settings Form */}
         <div className="space-y-6 lg:col-span-7">
-          {/* Identity & Logos */}
-          <PageSection title="Store Identity & Logos">
+          <PageSection title="Store identity & images">
             <div className="space-y-4">
-              <div className="grid gap-4 sm:grid-cols-2">
-                <div className="space-y-1">
-                  <Label htmlFor={brandNameId}>Store Name</Label>
-                  <Input
-                    id={brandNameId}
-                    value={branding.brandName}
-                    onChange={(e) => setBranding({ ...branding, brandName: e.target.value })}
-                    required
-                  />
-                </div>
-                <div className="space-y-1">
-                  <Label htmlFor={taglineId}>Tagline</Label>
-                  <Input
-                    id={taglineId}
-                    value={branding.tagline}
-                    onChange={(e) => setBranding({ ...branding, tagline: e.target.value })}
-                  />
-                </div>
+              <div className="space-y-1">
+                <Label htmlFor={nameId}>Store name</Label>
+                <Input id={nameId} value={form.storeName} aria-invalid={!form.storeName.trim()} onChange={(e) => set("storeName", e.target.value)} required />
+                {form.storeName.trim() ? null : <p className="text-xs text-destructive">Store name is required</p>}
               </div>
+              <p className="text-xs text-foreground-lighter">A tagline is not stored by the backend yet, so it is not editable here.</p>
 
               <div className="grid gap-4 sm:grid-cols-2">
-                <div className="space-y-2">
-                  <Label htmlFor={logoLightId}>Light Theme Logo URL</Label>
-                  <Input
-                    id={logoLightId}
-                    value={branding.logoLightUrl}
-                    onChange={(e) => setBranding({ ...branding, logoLightUrl: e.target.value })}
-                  />
-                  <div className="flex h-16 items-center justify-center rounded-lg border border-border bg-white p-2">
-                    {branding.logoLightUrl ? (
-                      <img src={branding.logoLightUrl} alt="Light logo preview" className="max-h-12 max-w-full object-contain" />
-                    ) : (
-                      <ImageIcon className="size-6 text-foreground-lighter" />
-                    )}
-                  </div>
-                </div>
-
-                <div className="space-y-2">
-                  <Label htmlFor={logoDarkId}>Dark Theme Logo URL</Label>
-                  <Input
-                    id={logoDarkId}
-                    value={branding.logoDarkUrl}
-                    onChange={(e) => setBranding({ ...branding, logoDarkUrl: e.target.value })}
-                  />
-                  <div className="flex h-16 items-center justify-center rounded-lg border border-border bg-slate-900 p-2">
-                    {branding.logoDarkUrl ? (
-                      <img src={branding.logoDarkUrl} alt="Dark logo preview" className="max-h-12 max-w-full object-contain" />
-                    ) : (
-                      <ImageIcon className="size-6 text-foreground-lighter" />
-                    )}
-                  </div>
-                </div>
-              </div>
-            </div>
-          </PageSection>
-
-          {/* Typography */}
-          <PageSection title="Typography (Self-Hosted Google Fonts)">
-            <div className="space-y-3">
-              <p className="text-xs text-foreground-lighter">
-                Fonts are self-hosted directly from Cloudflare R2 to ensure zero third-party font tracking and 100% privacy compliance.
-              </p>
-              <div className="grid gap-2 sm:grid-cols-2">
-                {curatedFonts.map((font) => (
-                  <button
-                    key={font.id}
-                    type="button"
-                    onClick={() => setBranding({ ...branding, fontFamily: font.id })}
-                    className={`flex items-center justify-between rounded-lg border p-3 text-left transition-colors ${
-                      branding.fontFamily === font.id
-                        ? "border-primary bg-primary/5 text-foreground"
-                        : "border-border hover:bg-surface-50"
-                    }`}
-                  >
-                    <div>
-                      <span className="text-sm font-semibold">{font.name}</span>
-                      <p className="text-xs text-foreground-lighter">{font.category}</p>
+                {IMAGE_SLOTS.map((slot) => {
+                  const id = form[slot.key];
+                  const url = urlFor(id);
+                  return (
+                    <div key={slot.key} className="space-y-2">
+                      <span className="text-sm font-medium text-foreground-light">{slot.label}</span>
+                      <div className="flex h-16 items-center justify-center rounded-lg border border-border bg-white p-2">
+                        {url ? (
+                          <img src={url} alt={`${slot.label} preview`} className="max-h-12 max-w-full object-contain" />
+                        ) : (
+                          <ImageIcon className="size-6 text-foreground-lighter" aria-hidden />
+                        )}
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <label className="inline-flex h-8 cursor-pointer items-center gap-1.5 rounded-md border border-border-control bg-control px-3 text-sm font-medium hover:bg-surface-200">
+                          <Upload className="size-3.5" aria-hidden />
+                          {uploading === slot.key ? "Uploading..." : id ? "Replace" : "Upload"}
+                          <input
+                            type="file"
+                            accept="image/*"
+                            className="sr-only"
+                            disabled={uploading !== null}
+                            onChange={(e) => {
+                              const file = e.target.files?.[0];
+                              e.target.value = "";
+                              if (file) void handleUpload(slot.key, file);
+                            }}
+                          />
+                        </label>
+                        {id ? (
+                          <Button size="sm" variant="ghost" onClick={() => set(slot.key, null)}>
+                            Remove
+                          </Button>
+                        ) : null}
+                      </div>
                     </div>
-                    {font.devanagari && (
-                      <span className="rounded bg-sky-500/10 px-2 py-0.5 text-[10px] font-semibold text-sky-600 dark:text-sky-400">
-                        Devanagari
-                      </span>
-                    )}
-                  </button>
-                ))}
+                  );
+                })}
+              </div>
+
+              <div className="space-y-1">
+                <Label htmlFor="logo-width">Logo width (px)</Label>
+                <Input
+                  id="logo-width"
+                  type="number"
+                  min={20}
+                  max={1000}
+                  value={form.logoWidth}
+                  onChange={(e) => set("logoWidth", Number(e.target.value))}
+                />
               </div>
             </div>
           </PageSection>
 
-          {/* Color Scheme */}
-          <PageSection title="Color Palette & Tokens">
+          <PageSection title="Brand colours">
+            <div className="grid gap-4 sm:grid-cols-2">
+              {colorFields.map((f) => {
+                const value = form[f.key as ColorKey];
+                const valid = HEX.test(value);
+                return (
+                  <div key={f.key} className="space-y-1">
+                    <Label htmlFor={f.key}>{f.label}</Label>
+                    <div className="flex items-center gap-2">
+                      <input
+                        id={f.key}
+                        type="color"
+                        value={valid && value.length === 7 ? value : "#000000"}
+                        onChange={(e) => set(f.key, e.target.value)}
+                        className="size-9 cursor-pointer rounded border border-border"
+                      />
+                      <Input aria-label={`${f.label} hex value`} value={value} aria-invalid={!valid} onChange={(e) => set(f.key, e.target.value)} className="font-mono" />
+                    </div>
+                    {valid ? null : <p className="text-xs text-destructive">Use a hex colour like #1a2b3c</p>}
+                  </div>
+                );
+              })}
+            </div>
+            <div className="mt-4 flex flex-wrap gap-4">
+              <div className="space-y-1">
+                <Label htmlFor="color-mode">Colour mode</Label>
+                <select id="color-mode" value={form.colorMode} onChange={(e) => set("colorMode", e.target.value as FormState["colorMode"])} className="h-9 rounded-md border border-border-control bg-control px-2 text-sm">
+                  <option value="light">Light</option>
+                  <option value="dark">Dark</option>
+                  <option value="auto">Match visitor device</option>
+                </select>
+              </div>
+              <div className="space-y-1">
+                <Label htmlFor="corner-radius">Corner radius</Label>
+                <select id="corner-radius" value={form.cornerRadius} onChange={(e) => set("cornerRadius", e.target.value as FormState["cornerRadius"])} className="h-9 rounded-md border border-border-control bg-control px-2 text-sm">
+                  {(["none", "small", "medium", "large", "full"] as const).map((r) => (
+                    <option key={r} value={r}>
+                      {r}
+                    </option>
+                  ))}
+                </select>
+              </div>
+              <div className="space-y-1">
+                <Label htmlFor="button-style">Button style</Label>
+                <select id="button-style" value={form.buttonStyle} onChange={(e) => set("buttonStyle", e.target.value as FormState["buttonStyle"])} className="h-9 rounded-md border border-border-control bg-control px-2 text-sm">
+                  {(["solid", "outline", "pill"] as const).map((r) => (
+                    <option key={r} value={r}>
+                      {r}
+                    </option>
+                  ))}
+                </select>
+              </div>
+            </div>
+          </PageSection>
+
+          <PageSection title="Typography">
             <div className="grid gap-4 sm:grid-cols-3">
-              <div>
-                <Label htmlFor={primaryColorId}>Primary Brand</Label>
-                <div className="mt-1 flex items-center gap-2">
-                  <input
-                    id={primaryColorId}
-                    type="color"
-                    value={branding.primaryColor}
-                    onChange={(e) => setBranding({ ...branding, primaryColor: e.target.value })}
-                    className="size-8 cursor-pointer rounded border border-border"
-                  />
-                  <input
-                    type="text"
-                    value={branding.primaryColor}
-                    onChange={(e) => setBranding({ ...branding, primaryColor: e.target.value })}
-                    className="h-8 flex-1 rounded border border-border bg-surface-50 px-2 font-mono text-xs"
-                  />
+              {(
+                [
+                  { key: "fontHeading", label: "Heading font" },
+                  { key: "fontBody", label: "Body font" },
+                ] as const
+              ).map((f) => (
+                <div key={f.key} className="space-y-1">
+                  <Label htmlFor={f.key}>{f.label}</Label>
+                  <select id={f.key} value={form[f.key]} onChange={(e) => set(f.key, e.target.value)} className="h-9 w-full rounded-md border border-border-control bg-control px-2 text-sm">
+                    {!curatedFonts.some((c) => c.id === form[f.key]) ? <option value={form[f.key]}>{form[f.key]}</option> : null}
+                    {curatedFonts.map((c) => (
+                      <option key={c.id} value={c.id}>
+                        {c.name} ({c.category}){c.devanagari ? " - Devanagari" : ""}
+                      </option>
+                    ))}
+                  </select>
                 </div>
-              </div>
-
-              <div>
-                <Label htmlFor={textColorId}>Text Color</Label>
-                <div className="mt-1 flex items-center gap-2">
-                  <input
-                    id={textColorId}
-                    type="color"
-                    value={branding.textColor}
-                    onChange={(e) => setBranding({ ...branding, textColor: e.target.value })}
-                    className="size-8 cursor-pointer rounded border border-border"
-                  />
-                  <input
-                    type="text"
-                    value={branding.textColor}
-                    onChange={(e) => setBranding({ ...branding, textColor: e.target.value })}
-                    className="h-8 flex-1 rounded border border-border bg-surface-50 px-2 font-mono text-xs"
-                  />
-                </div>
-              </div>
-
-              <div>
-                <Label htmlFor={bgColorId}>Background Color</Label>
-                <div className="mt-1 flex items-center gap-2">
-                  <input
-                    id={bgColorId}
-                    type="color"
-                    value={branding.backgroundColor}
-                    onChange={(e) => setBranding({ ...branding, backgroundColor: e.target.value })}
-                    className="size-8 cursor-pointer rounded border border-border"
-                  />
-                  <input
-                    type="text"
-                    value={branding.backgroundColor}
-                    onChange={(e) => setBranding({ ...branding, backgroundColor: e.target.value })}
-                    className="h-8 flex-1 rounded border border-border bg-surface-50 px-2 font-mono text-xs"
-                  />
-                </div>
+              ))}
+              <div className="space-y-1">
+                <Label htmlFor="font-scale">Text size</Label>
+                <select id="font-scale" value={form.fontSizeScale} onChange={(e) => set("fontSizeScale", e.target.value)} className="h-9 w-full rounded-md border border-border-control bg-control px-2 text-sm">
+                  {!["small", "default", "large"].includes(form.fontSizeScale) ? <option value={form.fontSizeScale}>{form.fontSizeScale}</option> : null}
+                  <option value="small">Small</option>
+                  <option value="default">Default</option>
+                  <option value="large">Large</option>
+                </select>
               </div>
             </div>
           </PageSection>
         </div>
 
-        {/* Right: Accessibility & Favicon Suite */}
         <div className="space-y-6 lg:col-span-5">
-          {/* WCAG AA Contrast Inspector */}
-          <PageSection title="WCAG 2.1 AA Contrast Check">
-            <div className="space-y-4">
-              {/* Text Contrast Card */}
-              <div
-                className={`rounded-lg border p-4 ${
-                  isTextAaPass
-                    ? "border-emerald-500/30 bg-emerald-500/5"
-                    : "border-amber-500/30 bg-amber-500/5"
-                }`}
-              >
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center gap-2">
-                    {isTextAaPass ? (
-                      <CheckCircle2 className="size-4 text-emerald-600 dark:text-emerald-400" />
-                    ) : (
-                      <AlertTriangle className="size-4 text-amber-600 dark:text-amber-400" />
-                    )}
-                    <span className="text-sm font-bold text-foreground">Body Text Contrast</span>
-                  </div>
-                  <span className="font-mono text-sm font-extrabold">{textBgRatio.toFixed(2)}:1</span>
+          <PageSection title="Accessibility check" description="Computed from the colours above (WCAG AA needs 4.5:1).">
+            <div className="space-y-3">
+              {(
+                [
+                  { label: "Text on background", ratio: textBg, pass: textPass },
+                  { label: "Primary on background", ratio: primaryBg, pass: primaryPass },
+                ] as const
+              ).map((row) => (
+                <div key={row.label} className="flex items-center justify-between rounded-md border border-border p-3 text-sm">
+                  <span className="flex items-center gap-2">
+                    {row.pass ? <CheckCircle2 className="size-4 text-emerald-500" aria-hidden /> : <AlertTriangle className="size-4 text-amber-500" aria-hidden />}
+                    {row.label}
+                  </span>
+                  <span className="font-mono">{row.ratio.toFixed(2)}:1</span>
                 </div>
-                <p className="mt-1 text-xs text-foreground-muted">
-                  {isTextAaPass
-                    ? "Passes WCAG AA standard (minimum 4.5:1 required for normal body text)."
-                    : "Non-compliant! Contrast ratio is below the 4.5:1 minimum threshold."}
-                </p>
-
-                {!isTextAaPass && (
-                  <div className="mt-3 flex items-center justify-between border-t border-amber-500/20 pt-2">
-                    <span className="text-xs font-medium text-amber-700 dark:text-amber-300">
-                      Recommendation available
-                    </span>
-                    <Button variant="default" size="sm" onClick={handleFixTextColor}>
-                      Auto-fix text color
-                    </Button>
-                  </div>
-                )}
-              </div>
-
-              {/* Primary / Accent Contrast Card */}
-              <div
-                className={`rounded-lg border p-4 ${
-                  isPrimaryAaPass
-                    ? "border-emerald-500/30 bg-emerald-500/5"
-                    : "border-sky-500/30 bg-sky-500/5"
-                }`}
-              >
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center gap-2">
-                    <ShieldCheck className="size-4 text-primary" />
-                    <span className="text-sm font-bold text-foreground">Button / Primary CTA</span>
-                  </div>
-                  <span className="font-mono text-sm font-extrabold">{primaryBgRatio.toFixed(2)}:1</span>
-                </div>
-                <p className="mt-1 text-xs text-foreground-muted">
-                  {isPrimaryAaPass
-                    ? "Passes WCAG AA standard against storefront background."
-                    : "Suitable for large text and graphic components (>=3.0:1)."}
-                </p>
-              </div>
+              ))}
+              {textPass ? null : (
+                <Button size="sm" onClick={fixTextColor}>
+                  <ShieldCheck className="mr-1.5 size-3.5" aria-hidden />
+                  Fix text colour
+                </Button>
+              )}
             </div>
           </PageSection>
 
-          {/* Favicon & Web Manifest Generator */}
-          <PageSection title="Favicon & PWA Suite">
-            <div className="space-y-4">
-              <div className="space-y-1">
-                <Label htmlFor={faviconInputId}>Source Icon (Square 512x512)</Label>
-                <Input
-                  id={faviconInputId}
-                  value={branding.faviconUrl}
-                  onChange={(e) => setBranding({ ...branding, faviconUrl: e.target.value })}
-                  placeholder="https://..."
-                />
+          <PageSection title="Preview">
+            <div
+              className="overflow-hidden rounded-lg border border-border"
+              style={{ backgroundColor: form.backgroundColor, color: form.textColor, fontFamily: previewFont }}
+            >
+              <div className="p-5" style={{ backgroundColor: form.surfaceColor }}>
+                <p className="text-lg font-bold" style={{ fontFamily: form.fontHeading }}>
+                  {form.storeName || "Your store"}
+                </p>
               </div>
-
-              <div>
-                <span className="text-xs font-semibold uppercase tracking-wider text-foreground-muted">
-                  Generated Sizes Preview
+              <div className="space-y-3 p-5">
+                <p className="text-sm">Body text sample in your selected body font.</p>
+                <button
+                  type="button"
+                  className="px-4 py-2 text-sm font-semibold"
+                  style={{
+                    backgroundColor: form.buttonStyle === "outline" ? "transparent" : form.primaryColor,
+                    color: form.buttonStyle === "outline" ? form.primaryColor : "#ffffff",
+                    border: `2px solid ${form.primaryColor}`,
+                    borderRadius: form.buttonStyle === "pill" || form.cornerRadius === "full" ? 9999 : { none: 0, small: 4, medium: 8, large: 14, full: 9999 }[form.cornerRadius],
+                  }}
+                >
+                  Button
+                </button>
+                <span className="ml-3 text-sm font-medium" style={{ color: form.accentColor }}>
+                  Accent link
                 </span>
-                <div className="mt-3 grid grid-cols-4 items-end gap-3 text-center">
-                  <div className="flex flex-col items-center">
-                    <img src={branding.faviconUrl} alt="16px" className="size-4 rounded-xs border border-border" />
-                    <span className="mt-1 font-mono text-[10px] text-foreground-lighter">16x16</span>
-                  </div>
-                  <div className="flex flex-col items-center">
-                    <img src={branding.faviconUrl} alt="32px" className="size-8 rounded border border-border" />
-                    <span className="mt-1 font-mono text-[10px] text-foreground-lighter">32x32</span>
-                  </div>
-                  <div className="flex flex-col items-center">
-                    <img src={branding.faviconUrl} alt="180px" className="size-11 rounded-md border border-border" />
-                    <span className="mt-1 font-mono text-[10px] text-foreground-lighter">180x180</span>
-                  </div>
-                  <div className="flex flex-col items-center">
-                    <img src={branding.faviconUrl} alt="192px" className="size-14 rounded-lg border border-border" />
-                    <span className="mt-1 font-mono text-[10px] text-foreground-lighter">192x192</span>
-                  </div>
-                </div>
-              </div>
-
-              <div>
-                <div className="flex items-center justify-between pb-1">
-                  <span className="text-xs font-semibold text-foreground">Web Manifest Snippet</span>
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    onClick={() => {
-                      navigator.clipboard?.writeText(manifestSnippet);
-                      toast.success("Manifest JSON copied to clipboard");
-                    }}
-                  >
-                    <Download className="mr-1 size-3" />
-                    Copy JSON
-                  </Button>
-                </div>
-                <pre className="max-h-36 overflow-auto rounded-md bg-surface-100 p-2.5 font-mono text-[11px] text-foreground-muted">
-                  {manifestSnippet}
-                </pre>
               </div>
             </div>
           </PageSection>

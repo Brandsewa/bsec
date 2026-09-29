@@ -1,0 +1,96 @@
+import { and, eq } from "drizzle-orm";
+import { schema, withTenant } from "@bs/db";
+import { decryptSecret, encryptSecret, isEncryptionKeyConfigured } from "@bs/payments";
+import type { Runtime } from "../runtime.ts";
+import { assertPermission, type TenantContext } from "../context.ts";
+import { readStoreConfig } from "./store-config.ts";
+
+export interface PaymentsStatusRecord {
+  razorpay: { configured: boolean; keyIdHint: string | null; hasWebhookSecret: boolean };
+  cod: { enabled: boolean; feePaise: number };
+  encryptionKeyConfigured: boolean;
+}
+
+const RAZORPAY_KEY_ID = /^rzp_(test|live)_[A-Za-z0-9]{6,}$/;
+
+/**
+ * Payment setup as shown in Settings > Payments. Secrets are write-only: this returns whether they are
+ * set and a short hint of the public key id, never the secret values.
+ */
+export async function getPaymentsStatus(rt: Runtime, ctx: TenantContext): Promise<PaymentsStatusRecord> {
+  assertPermission(ctx, "settings.write");
+  return withTenant(rt._db.db, ctx.tenantId, async (tx) => {
+    const rows = await tx
+      .select({ keyName: schema.tenantSecrets.keyName, ciphertext: schema.tenantSecrets.ciphertext, iv: schema.tenantSecrets.iv })
+      .from(schema.tenantSecrets)
+      .where(eq(schema.tenantSecrets.provider, "razorpay"));
+    const byName = new Map(rows.map((r) => [r.keyName, r]));
+    const keyRow = byName.get("key_id");
+    let keyIdHint: string | null = null;
+    if (keyRow) {
+      try {
+        const plain = decryptSecret({ ciphertext: keyRow.ciphertext, iv: keyRow.iv });
+        keyIdHint = `…${plain.slice(-4)}`;
+      } catch {
+        keyIdHint = null;
+      }
+    }
+    const cfg = await readStoreConfig(tx);
+    return {
+      razorpay: { configured: byName.has("key_id") && byName.has("key_secret"), keyIdHint, hasWebhookSecret: byName.has("webhook_secret") },
+      cod: cfg.cod,
+      encryptionKeyConfigured: isEncryptionKeyConfigured(),
+    };
+  });
+}
+
+/** Stores the store's own Razorpay credentials, encrypted (AES-256-GCM) in tenant_secrets. */
+export async function saveRazorpayCredentials(
+  rt: Runtime,
+  ctx: TenantContext,
+  input: { keyId: string; keySecret: string; webhookSecret?: string | undefined },
+): Promise<PaymentsStatusRecord> {
+  assertPermission(ctx, "settings.write");
+  if (!RAZORPAY_KEY_ID.test(input.keyId)) {
+    throw new Error("Bad Request: Razorpay key id should look like rzp_test_XXXX or rzp_live_XXXX");
+  }
+  const entries: Array<[string, string]> = [
+    ["key_id", input.keyId],
+    ["key_secret", input.keySecret],
+    ...(input.webhookSecret ? ([["webhook_secret", input.webhookSecret]] as Array<[string, string]>) : []),
+  ];
+  let encrypted: Array<{ keyName: string; ciphertext: string; iv: string; keyVersion: number }>;
+  try {
+    encrypted = entries.map(([keyName, value]) => ({ keyName, ...encryptSecret(value) }));
+  } catch (err) {
+    if (err instanceof Error && err.message.startsWith("Encryption key not set")) {
+      throw new Error(
+        "Precondition: credentials cannot be saved yet because the server has no encryption key. Ask the platform operator to set TENANT_SECRETS_KEY.",
+      );
+    }
+    throw err;
+  }
+  const updatedBy = ctx.actor.type === "staff" ? ctx.actor.userId : null;
+  await withTenant(rt._db.db, ctx.tenantId, async (tx) => {
+    for (const e of encrypted) {
+      await tx
+        .insert(schema.tenantSecrets)
+        .values({ tenantId: ctx.tenantId, provider: "razorpay", keyName: e.keyName, ciphertext: e.ciphertext, iv: e.iv, keyVersion: e.keyVersion, updatedBy })
+        .onConflictDoUpdate({
+          target: [schema.tenantSecrets.tenantId, schema.tenantSecrets.provider, schema.tenantSecrets.keyName],
+          set: { ciphertext: e.ciphertext, iv: e.iv, keyVersion: e.keyVersion, updatedBy, updatedAt: new Date() },
+        });
+    }
+  });
+  return getPaymentsStatus(rt, ctx);
+}
+
+export async function clearRazorpayCredentials(rt: Runtime, ctx: TenantContext): Promise<PaymentsStatusRecord> {
+  assertPermission(ctx, "settings.write");
+  await withTenant(rt._db.db, ctx.tenantId, (tx) =>
+    tx
+      .delete(schema.tenantSecrets)
+      .where(and(eq(schema.tenantSecrets.tenantId, ctx.tenantId), eq(schema.tenantSecrets.provider, "razorpay"))),
+  );
+  return getPaymentsStatus(rt, ctx);
+}

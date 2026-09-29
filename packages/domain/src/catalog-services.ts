@@ -1,4 +1,4 @@
-import { and, desc, eq, ilike, sql } from "drizzle-orm";
+import { and, desc, eq, ilike, inArray, sql } from "drizzle-orm";
 import { schema, withTenant } from "@bs/db";
 import type { Runtime } from "./runtime.ts";
 import { assertPermission, type TenantContext } from "./context.ts";
@@ -104,29 +104,67 @@ export async function listProducts(
       .limit(limit)
       .offset(offset);
 
+    const [{ n: total } = { n: 0 }] = await tx
+      .select({ n: sql<number>`count(*)::int` })
+      .from(schema.products)
+      .where(whereClause);
+
+    // One aggregate per page for price range, variant count and sellable stock.
+    const ids = rows.map((r) => r.id);
+    const summary = new Map<string, { variantCount: number; priceMin: number | null; priceMax: number | null; stock: number }>();
+    if (ids.length > 0) {
+      const agg = await tx
+        .select({
+          productId: schema.variants.productId,
+          variantCount: sql<number>`count(distinct ${schema.variants.id})::int`,
+          priceMin: sql<string | null>`min(${schema.variants.price})`,
+          priceMax: sql<string | null>`max(${schema.variants.price})`,
+          stock: sql<string>`coalesce(sum(${schema.inventoryLevels.available}), 0)`,
+        })
+        .from(schema.variants)
+        .leftJoin(schema.inventoryLevels, eq(schema.inventoryLevels.variantId, schema.variants.id))
+        .where(inArray(schema.variants.productId, ids))
+        .groupBy(schema.variants.productId);
+      for (const a of agg) {
+        summary.set(a.productId, {
+          variantCount: Number(a.variantCount),
+          priceMin: a.priceMin === null ? null : Number(a.priceMin),
+          priceMax: a.priceMax === null ? null : Number(a.priceMax),
+          stock: Number(a.stock),
+        });
+      }
+    }
+
     return {
-      items: rows.map((r) => ({
-        id: r.id,
-        title: r.title,
-        slug: r.slug,
-        status: r.status as "draft" | "active" | "archived",
-        descriptionJson: r.descriptionJson,
-        shortDescription: r.shortDescription,
-        brandId: r.brandId,
-        productType: r.productType,
-        tags: r.tags,
-        seo: r.seo,
-        taxClassId: r.taxClassId,
-        hsn: r.hsn,
-        requiresShipping: r.requiresShipping,
-        isFeatured: r.isFeatured,
-        publishedAt: r.publishedAt ? r.publishedAt.toISOString() : undefined,
-        ratingAvg: r.ratingAvg,
-        ratingCount: r.ratingCount,
-        createdAt: r.createdAt.toISOString(),
-        updatedAt: r.updatedAt.toISOString(),
-      })),
-      total: rows.length,
+      items: rows.map((r) => {
+        const sm = summary.get(r.id);
+        return {
+          id: r.id,
+          title: r.title,
+          slug: r.slug,
+          status: r.status as "draft" | "active" | "archived",
+          descriptionJson: r.descriptionJson,
+          shortDescription: r.shortDescription,
+          brandId: r.brandId,
+          productType: r.productType,
+          tags: r.tags,
+          seo: r.seo,
+          taxClassId: r.taxClassId,
+          hsn: r.hsn,
+          requiresShipping: r.requiresShipping,
+          isFeatured: r.isFeatured,
+          publishedAt: r.publishedAt ? r.publishedAt.toISOString() : undefined,
+          ratingAvg: r.ratingAvg,
+          ratingCount: r.ratingCount,
+          createdAt: r.createdAt.toISOString(),
+          updatedAt: r.updatedAt.toISOString(),
+          variantCount: sm?.variantCount ?? 0,
+          priceMin: sm?.priceMin ?? null,
+          priceMax: sm?.priceMax ?? null,
+          stock: sm?.stock ?? 0,
+        };
+      }),
+      total,
     };
   });
 }

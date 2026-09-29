@@ -8,6 +8,9 @@ export const Membership = z.object({
   roleId: z.string(),
   status: z.string(),
   createdAt: z.string().optional(),
+  email: z.string().optional(),
+  name: z.string().optional(),
+  roleName: z.string().optional(),
 });
 export type Membership = z.infer<typeof Membership>;
 
@@ -16,14 +19,41 @@ export const StaffInvitation = z.object({
   email: z.string(),
   roleId: z.string(),
   expiresAt: z.string().optional(),
+  /** Only present on the response to creating an invitation: the raw token is shown once and never stored. */
+  token: z.string().optional(),
+  acceptedAt: z.string().nullable().optional(),
 });
 export type StaffInvitation = z.infer<typeof StaffInvitation>;
+
+export const GSTIN_PATTERN = /^\d{2}[A-Z]{5}\d{4}[A-Z][1-9A-Z]Z[0-9A-Z]$/;
+
+export const StoreAddress = z.object({
+  line1: z.string().max(200).optional(),
+  line2: z.string().max(200).optional(),
+  city: z.string().max(100).optional(),
+  state: z.string().max(100).optional(),
+  pincode: z.string().max(12).optional(),
+});
+export type StoreAddress = z.infer<typeof StoreAddress>;
 
 export const StoreSettings = z.object({
   tenantId: z.string(),
   storeName: z.string(),
   currency: z.string(),
   timezone: z.string(),
+  legalName: z.string().nullable().optional(),
+  supportEmail: z.string().nullable().optional(),
+  supportPhone: z.string().nullable().optional(),
+  address: StoreAddress.nullable().optional(),
+  orderPrefix: z.string().optional(),
+  cod: z.object({ enabled: z.boolean(), feePaise: z.number().int().min(0) }).optional(),
+  tax: z
+    .object({
+      gstin: z.string().nullable(),
+      sellerState: z.string().nullable(),
+      pricesIncludeTax: z.boolean(),
+    })
+    .optional(),
 });
 export type StoreSettings = z.infer<typeof StoreSettings>;
 
@@ -94,6 +124,11 @@ export const Product = z.object({
   ratingCount: z.number(),
   createdAt: z.string(),
   updatedAt: z.string(),
+  /** List summaries (paise / units). Present on list results. */
+  variantCount: z.number().optional(),
+  priceMin: z.number().nullable().optional(),
+  priceMax: z.number().nullable().optional(),
+  stock: z.number().optional(),
 });
 export type Product = z.infer<typeof Product>;
 
@@ -271,6 +306,17 @@ export const MenuDetail = Menu.extend({
 export type MenuDetail = z.infer<typeof MenuDetail>;
 
 // --- Admin oRPC Contract ---
+export const PaymentsStatus = z.object({
+  razorpay: z.object({
+    configured: z.boolean(),
+    keyIdHint: z.string().nullable(),
+    hasWebhookSecret: z.boolean(),
+  }),
+  cod: z.object({ enabled: z.boolean(), feePaise: z.number().int() }),
+  encryptionKeyConfigured: z.boolean(),
+});
+export type PaymentsStatus = z.infer<typeof PaymentsStatus>;
+
 export const AdminMeStore = z.object({
   tenantId: z.string().uuid(),
   name: z.string(),
@@ -289,10 +335,42 @@ export const adminContract = {
   me: {
     get: oc.route({ method: "GET", path: "/admin/me" }).output(AdminMe),
   },
+  payments: {
+    get: oc.route({ method: "GET", path: "/admin/payments" }).output(PaymentsStatus),
+    saveRazorpay: oc
+      .route({ method: "PUT", path: "/admin/payments/razorpay" })
+      .input(
+        z.object({
+          keyId: z.string().min(6).max(100),
+          keySecret: z.string().min(6).max(200),
+          webhookSecret: z.string().min(6).max(200).optional(),
+        }),
+      )
+      .output(PaymentsStatus),
+    clearRazorpay: oc.route({ method: "DELETE", path: "/admin/payments/razorpay" }).output(PaymentsStatus),
+  },
   memberships: {
     list: oc
       .route({ method: "GET", path: "/admin/memberships" })
       .output(z.array(Membership)),
+    roles: oc
+      .route({ method: "GET", path: "/admin/memberships/roles" })
+      .output(z.array(z.object({ id: z.string(), name: z.string() }))),
+    setRole: oc
+      .route({ method: "PATCH", path: "/admin/memberships/{id}" })
+      .input(z.object({ id: z.string().uuid(), roleId: z.string().uuid() }))
+      .output(Membership),
+    remove: oc
+      .route({ method: "DELETE", path: "/admin/memberships/{id}" })
+      .input(z.object({ id: z.string().uuid() }))
+      .output(z.object({ ok: z.literal(true) })),
+    invitations: oc
+      .route({ method: "GET", path: "/admin/memberships/invitations" })
+      .output(z.array(StaffInvitation)),
+    revokeInvitation: oc
+      .route({ method: "DELETE", path: "/admin/memberships/invitations/{id}" })
+      .input(z.object({ id: z.string().uuid() }))
+      .output(z.object({ ok: z.literal(true) })),
     invite: oc
       .route({ method: "POST", path: "/admin/memberships/invite" })
       .input(
@@ -302,6 +380,17 @@ export const adminContract = {
         }),
       )
       .output(StaffInvitation),
+    acceptInvite: oc
+      .route({ method: "POST", path: "/admin/accept-invite" })
+      .input(
+        z.object({
+          storeId: z.string().uuid(),
+          token: z.string().min(20).max(200),
+          name: z.string().min(1).max(120).optional(),
+          password: z.string().min(10).max(128).optional(),
+        }),
+      )
+      .output(z.object({ ok: z.literal(true), email: z.string() })),
   },
   settings: {
     get: oc
@@ -311,9 +400,22 @@ export const adminContract = {
       .route({ method: "PATCH", path: "/admin/settings" })
       .input(
         z.object({
-          storeName: z.string().min(1).optional(),
+          storeName: z.string().min(1).max(120).optional(),
           currency: z.string().min(3).max(3).optional(),
           timezone: z.string().optional(),
+          legalName: z.string().max(200).nullable().optional(),
+          supportEmail: z.string().email().nullable().optional(),
+          supportPhone: z.string().max(30).nullable().optional(),
+          address: StoreAddress.nullable().optional(),
+          orderPrefix: z.string().max(10).optional(),
+          cod: z.object({ enabled: z.boolean(), feePaise: z.number().int().min(0).max(1_000_000) }).optional(),
+          tax: z
+            .object({
+              gstin: z.string().regex(GSTIN_PATTERN, "Enter a valid 15-character GSTIN").nullable(),
+              sellerState: z.string().max(100).nullable(),
+              pricesIncludeTax: z.boolean(),
+            })
+            .optional(),
         }),
       )
       .output(StoreSettings),

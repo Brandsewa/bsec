@@ -1,8 +1,11 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { Check, Eye, Laptop, Palette, RotateCcw, Save, Smartphone, Sparkles, Upload } from "lucide-react";
 import { useState } from "react";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   Button,
+  DetailSkeleton,
+  FormSkeleton,
   PageBreadcrumbs,
   PageContainer,
   PageHeader,
@@ -10,6 +13,10 @@ import {
   PageSkeleton,
   toast,
 } from "@bs/ui";
+import { orpc } from "../../../lib/orpc.ts";
+
+type Radius = "none" | "sm" | "md" | "lg" | "full";
+type ButtonStyle = "solid" | "outline" | "soft";
 
 interface ThemeTokens {
   primaryColor: string;
@@ -18,10 +25,13 @@ interface ThemeTokens {
   textColor: string;
   accentColor: string;
   fontFamily: string;
-  borderRadius: "none" | "sm" | "md" | "lg" | "full";
-  buttonStyle: "solid" | "outline" | "soft";
+  borderRadius: Radius;
+  buttonStyle: ButtonStyle;
 }
 
+type ColorKey = "primaryColor" | "secondaryColor" | "backgroundColor" | "textColor" | "accentColor";
+
+/** Fallback token values used only for keys the stored theme has not set yet. */
 const defaultTokens: ThemeTokens = {
   primaryColor: "#4f46e5",
   secondaryColor: "#06b6d4",
@@ -50,16 +60,133 @@ const colorPresets = [
   { name: "Slate", primary: "#0f172a", secondary: "#475569", accent: "#38bdf8" },
 ];
 
+const radii: Radius[] = ["none", "sm", "md", "lg", "full"];
+const buttonStyles: ButtonStyle[] = ["solid", "outline", "soft"];
+const HEX = /^#(?:[0-9a-fA-F]{3}|[0-9a-fA-F]{6})$/;
+
+const colorFields: { key: ColorKey; label: string }[] = [
+  { key: "primaryColor", label: "Primary Brand Color" },
+  { key: "secondaryColor", label: "Secondary Color" },
+  { key: "accentColor", label: "Accent Color" },
+  { key: "backgroundColor", label: "Storefront Background" },
+  { key: "textColor", label: "Text Color" },
+];
+
+function str(v: unknown, fallback: string): string {
+  return typeof v === "string" && v ? v : fallback;
+}
+
+function tokensFromRecord(record: Record<string, unknown>): ThemeTokens {
+  const radius = record.borderRadius;
+  const style = record.buttonStyle;
+  return {
+    primaryColor: str(record.primaryColor, defaultTokens.primaryColor),
+    secondaryColor: str(record.secondaryColor, defaultTokens.secondaryColor),
+    backgroundColor: str(record.backgroundColor, defaultTokens.backgroundColor),
+    textColor: str(record.textColor, defaultTokens.textColor),
+    accentColor: str(record.accentColor, defaultTokens.accentColor),
+    fontFamily: str(record.fontFamily, defaultTokens.fontFamily),
+    borderRadius: radii.includes(radius as Radius) ? (radius as Radius) : defaultTokens.borderRadius,
+    buttonStyle: buttonStyles.includes(style as ButtonStyle) ? (style as ButtonStyle) : defaultTokens.buttonStyle,
+  };
+}
+
+function ThemeLoading() {
+  return (
+    <PageSkeleton size="full">
+      <div className="grid gap-6 lg:grid-cols-12">
+        <div className="lg:col-span-5">
+          <FormSkeleton fields={6} />
+        </div>
+        <div className="lg:col-span-7">
+          <DetailSkeleton />
+        </div>
+      </div>
+    </PageSkeleton>
+  );
+}
+
 export const Route = createFileRoute("/_store/online-store/theme")({
-  pendingComponent: () => <PageSkeleton />,
+  pendingComponent: () => <ThemeLoading />,
   component: ThemePage,
 });
 
-function ThemePage() {
-  const [tokens, setTokens] = useState<ThemeTokens>(defaultTokens);
-  const [isPublished, setIsPublished] = useState(true);
+function QueryError({ message, onRetry }: { message: string; onRetry: () => void }) {
+  return (
+    <div role="alert" className="flex flex-col items-start gap-3 rounded-md border border-destructive/40 bg-destructive/5 p-4">
+      <p className="text-sm font-medium text-foreground">Could not load the theme</p>
+      <p className="text-sm text-foreground-light">{message}</p>
+      <Button size="sm" onClick={onRetry}>
+        <RotateCcw className="size-3.5" aria-hidden />
+        Retry
+      </Button>
+    </div>
+  );
+}
+
+export function ThemePage() {
+  const themeQuery = useQuery(orpc.admin.themes.get.queryOptions());
+  const settingsQuery = useQuery(orpc.admin.settings.get.queryOptions());
+
+  if (themeQuery.isError) {
+    return (
+      <PageContainer size="full">
+        <PageBreadcrumbs items={[{ label: "Online Store", href: "/online-store/theme" }, { label: "Themes" }]} />
+        <QueryError message={themeQuery.error.message} onRetry={() => void themeQuery.refetch()} />
+      </PageContainer>
+    );
+  }
+  if (!themeQuery.data) return <ThemeLoading />;
+
+  return (
+    <ThemeEditor
+      key={themeQuery.data.id}
+      themeName={themeQuery.data.name}
+      isActive={themeQuery.data.isActive}
+      serverTokens={themeQuery.data.tokens}
+      storeName={settingsQuery.data?.storeName ?? ""}
+    />
+  );
+}
+
+function ThemeEditor({
+  themeName,
+  isActive,
+  serverTokens,
+  storeName,
+}: {
+  themeName: string;
+  isActive: boolean;
+  serverTokens: Record<string, unknown>;
+  storeName: string;
+}) {
+  const queryClient = useQueryClient();
+  const saved = tokensFromRecord(serverTokens);
+  const [tokens, setTokens] = useState<ThemeTokens>(saved);
   const [previewDevice, setPreviewDevice] = useState<"desktop" | "mobile">("desktop");
-  const [saving, setSaving] = useState(false);
+
+  const dirty = JSON.stringify(tokens) !== JSON.stringify(saved);
+  const invalidColors = colorFields.filter((f) => !HEX.test(tokens[f.key]));
+
+  const publish = useMutation(
+    orpc.admin.themes.update.mutationOptions({
+      onSuccess: async () => {
+        await queryClient.invalidateQueries({ queryKey: orpc.admin.themes.get.key() });
+        toast.success("Theme published to the storefront.");
+      },
+      onError: (err: Error) => toast.error(`Could not publish theme: ${err.message}`),
+    }),
+  );
+
+  const setColor = (key: ColorKey, value: string) => setTokens((prev) => ({ ...prev, [key]: value }));
+
+  const handlePublish = () => {
+    if (invalidColors.length > 0) {
+      toast.error(`Enter valid hex colours (e.g. #1a2b3c) for: ${invalidColors.map((f) => f.label).join(", ")}`);
+      return;
+    }
+    publish.mutate({ tokens: { ...tokens } });
+  };
 
   const radiusClass = {
     none: "rounded-none",
@@ -69,24 +196,7 @@ function ThemePage() {
     full: "rounded-full",
   }[tokens.borderRadius];
 
-  const handlePublish = () => {
-    setSaving(true);
-    setTimeout(() => {
-      setSaving(false);
-      setIsPublished(true);
-      toast.success("Theme published successfully to storefront!");
-    }, 400);
-  };
-
-  const handleSaveDraft = () => {
-    setIsPublished(false);
-    toast.info("Theme changes saved as draft.");
-  };
-
-  const handleReset = () => {
-    setTokens(defaultTokens);
-    toast.info("Theme tokens reset to defaults.");
-  };
+  const previewName = storeName || "Your store";
 
   return (
     <PageContainer size="full">
@@ -96,25 +206,39 @@ function ThemePage() {
           <div className="flex items-center gap-2">
             <span
               className={`inline-flex items-center gap-1 rounded-full px-2.5 py-0.5 text-xs font-medium ${
-                isPublished
-                  ? "bg-emerald-500/10 text-emerald-600 dark:text-emerald-400"
-                  : "bg-amber-500/10 text-amber-600 dark:text-amber-400"
+                dirty
+                  ? "bg-amber-500/10 text-amber-600 dark:text-amber-400"
+                  : "bg-emerald-500/10 text-emerald-600 dark:text-emerald-400"
               }`}
             >
-              <span className={`size-1.5 rounded-full ${isPublished ? "bg-emerald-500" : "bg-amber-500"}`} />
-              {isPublished ? "Published (Live)" : "Unpublished Draft"}
+              <span className={`size-1.5 rounded-full ${dirty ? "bg-amber-500" : "bg-emerald-500"}`} />
+              {dirty ? "Unpublished changes" : isActive ? "Published (Live)" : "Saved"}
             </span>
-            <Button variant="default" size="sm" onClick={handleReset}>
+            <Button
+              size="sm"
+              disabled={!dirty || publish.isPending}
+              onClick={() => {
+                setTokens(saved);
+                toast.info("Unsaved theme changes discarded.");
+              }}
+            >
               <RotateCcw className="mr-1.5 size-3.5" aria-hidden />
-              Reset
+              Discard changes
             </Button>
-            <Button variant="default" size="sm" onClick={handleSaveDraft}>
+            <Button
+              size="sm"
+              disabled={publish.isPending}
+              onClick={() => {
+                setTokens(defaultTokens);
+                toast.info("Default values loaded. Publish to apply them.");
+              }}
+            >
               <Save className="mr-1.5 size-3.5" aria-hidden />
-              Save draft
+              Restore defaults
             </Button>
-            <Button variant="primary" size="sm" disabled={saving} onClick={handlePublish}>
+            <Button variant="primary" size="sm" loading={publish.isPending} disabled={!dirty} onClick={handlePublish}>
               <Upload className="mr-1.5 size-3.5" aria-hidden />
-              {saving ? "Publishing..." : "Publish Theme"}
+              {publish.isPending ? "Publishing..." : "Publish theme"}
             </Button>
           </div>
         }
@@ -122,19 +246,15 @@ function ThemePage() {
 
       <PageHeader
         title="Theme Customizer"
-        description="Configure colors, typography tokens, border radii, and button styles for your customer-facing storefront."
+        description={`Colours, typography, corner radius and button style for ${themeName}. The theme service has no separate draft state, so changes go live when you publish.`}
       />
 
       <div className="grid gap-6 lg:grid-cols-12">
-        {/* Token Controls Panel */}
         <div className="space-y-6 lg:col-span-5">
-          {/* Color Palettes */}
           <PageSection title="Colors & Palette">
             <div className="space-y-4">
               <div>
-                <label className="text-xs font-semibold uppercase tracking-wider text-foreground-muted">
-                  Quick Presets
-                </label>
+                <span className="text-xs font-semibold uppercase tracking-wider text-foreground-muted">Quick Presets</span>
                 <div className="mt-2 flex flex-wrap gap-2">
                   {colorPresets.map((preset) => (
                     <button
@@ -158,103 +278,50 @@ function ThemePage() {
               </div>
 
               <div className="grid gap-3 sm:grid-cols-2">
-                <div>
-                  <label htmlFor="primaryColor" className="text-xs font-medium text-foreground">
-                    Primary Brand Color
-                  </label>
-                  <div className="mt-1 flex items-center gap-2">
-                    <input
-                      id="primaryColor"
-                      type="color"
-                      value={tokens.primaryColor}
-                      onChange={(e) => setTokens({ ...tokens, primaryColor: e.target.value })}
-                      className="size-8 cursor-pointer rounded border border-border"
-                    />
-                    <input
-                      type="text"
-                      value={tokens.primaryColor}
-                      onChange={(e) => setTokens({ ...tokens, primaryColor: e.target.value })}
-                      className="h-8 flex-1 rounded border border-border bg-surface-50 px-2 font-mono text-xs"
-                    />
-                  </div>
-                </div>
-
-                <div>
-                  <label htmlFor="secondaryColor" className="text-xs font-medium text-foreground">
-                    Secondary Color
-                  </label>
-                  <div className="mt-1 flex items-center gap-2">
-                    <input
-                      id="secondaryColor"
-                      type="color"
-                      value={tokens.secondaryColor}
-                      onChange={(e) => setTokens({ ...tokens, secondaryColor: e.target.value })}
-                      className="size-8 cursor-pointer rounded border border-border"
-                    />
-                    <input
-                      type="text"
-                      value={tokens.secondaryColor}
-                      onChange={(e) => setTokens({ ...tokens, secondaryColor: e.target.value })}
-                      className="h-8 flex-1 rounded border border-border bg-surface-50 px-2 font-mono text-xs"
-                    />
-                  </div>
-                </div>
-
-                <div>
-                  <label htmlFor="accentColor" className="text-xs font-medium text-foreground">
-                    Accent Color
-                  </label>
-                  <div className="mt-1 flex items-center gap-2">
-                    <input
-                      id="accentColor"
-                      type="color"
-                      value={tokens.accentColor}
-                      onChange={(e) => setTokens({ ...tokens, accentColor: e.target.value })}
-                      className="size-8 cursor-pointer rounded border border-border"
-                    />
-                    <input
-                      type="text"
-                      value={tokens.accentColor}
-                      onChange={(e) => setTokens({ ...tokens, accentColor: e.target.value })}
-                      className="h-8 flex-1 rounded border border-border bg-surface-50 px-2 font-mono text-xs"
-                    />
-                  </div>
-                </div>
-
-                <div>
-                  <label htmlFor="backgroundColor" className="text-xs font-medium text-foreground">
-                    Storefront Background
-                  </label>
-                  <div className="mt-1 flex items-center gap-2">
-                    <input
-                      id="backgroundColor"
-                      type="color"
-                      value={tokens.backgroundColor}
-                      onChange={(e) => setTokens({ ...tokens, backgroundColor: e.target.value })}
-                      className="size-8 cursor-pointer rounded border border-border"
-                    />
-                    <input
-                      type="text"
-                      value={tokens.backgroundColor}
-                      onChange={(e) => setTokens({ ...tokens, backgroundColor: e.target.value })}
-                      className="h-8 flex-1 rounded border border-border bg-surface-50 px-2 font-mono text-xs"
-                    />
-                  </div>
-                </div>
+                {colorFields.map((f) => {
+                  const value = tokens[f.key];
+                  const valid = HEX.test(value);
+                  return (
+                    <div key={f.key}>
+                      <label htmlFor={f.key} className="text-xs font-medium text-foreground">
+                        {f.label}
+                      </label>
+                      <div className="mt-1 flex items-center gap-2">
+                        <input
+                          id={f.key}
+                          type="color"
+                          value={valid && value.length === 7 ? value : "#000000"}
+                          onChange={(e) => setColor(f.key, e.target.value)}
+                          className="size-8 cursor-pointer rounded border border-border"
+                        />
+                        <input
+                          type="text"
+                          aria-label={`${f.label} hex value`}
+                          aria-invalid={!valid}
+                          value={value}
+                          onChange={(e) => setColor(f.key, e.target.value)}
+                          className={`h-8 flex-1 rounded border bg-surface-50 px-2 font-mono text-xs ${
+                            valid ? "border-border" : "border-destructive"
+                          }`}
+                        />
+                      </div>
+                      {valid ? null : <p className="mt-1 text-xs text-destructive">Use a hex colour like #1a2b3c</p>}
+                    </div>
+                  );
+                })}
               </div>
             </div>
           </PageSection>
 
-          {/* Typography */}
           <PageSection title="Typography (Curated Fonts)">
             <div className="space-y-3">
-              <label className="text-xs font-medium text-foreground">Font Family</label>
+              <span className="text-xs font-medium text-foreground">Font Family</span>
               <div className="grid gap-2">
                 {fontOptions.map((font) => (
                   <button
                     key={font.id}
                     type="button"
-                    onClick={() => setTokens({ ...tokens, fontFamily: font.id })}
+                    onClick={() => setTokens((prev) => ({ ...prev, fontFamily: font.id }))}
                     className={`flex items-center justify-between rounded-lg border p-3 text-left transition-colors ${
                       tokens.fontFamily === font.id
                         ? "border-primary bg-primary/5 text-foreground"
@@ -265,9 +332,7 @@ function ThemePage() {
                       <span className="text-sm font-semibold" style={{ fontFamily: font.id }}>
                         {font.name}
                       </span>
-                      <span className="text-xs text-foreground-lighter">
-                        The quick brown fox jumps over the lazy dog
-                      </span>
+                      <span className="text-xs text-foreground-lighter">The quick brown fox jumps over the lazy dog</span>
                     </div>
                     <div className="flex items-center gap-1.5">
                       {font.devanagari && (
@@ -283,17 +348,16 @@ function ThemePage() {
             </div>
           </PageSection>
 
-          {/* Shape & Buttons */}
           <PageSection title="Shape & Button Style">
             <div className="space-y-4">
               <div>
-                <label className="text-xs font-medium text-foreground">Corner Radius</label>
+                <span className="text-xs font-medium text-foreground">Corner Radius</span>
                 <div className="mt-2 grid grid-cols-5 gap-2">
-                  {(["none", "sm", "md", "lg", "full"] as const).map((r) => (
+                  {radii.map((r) => (
                     <button
                       key={r}
                       type="button"
-                      onClick={() => setTokens({ ...tokens, borderRadius: r })}
+                      onClick={() => setTokens((prev) => ({ ...prev, borderRadius: r }))}
                       className={`flex flex-col items-center gap-1 rounded border p-2 text-xs capitalize ${
                         tokens.borderRadius === r ? "border-primary bg-primary/10 font-bold" : "border-border"
                       }`}
@@ -318,13 +382,13 @@ function ThemePage() {
               </div>
 
               <div>
-                <label className="text-xs font-medium text-foreground">Button Style</label>
+                <span className="text-xs font-medium text-foreground">Button Style</span>
                 <div className="mt-2 grid grid-cols-3 gap-2">
-                  {(["solid", "outline", "soft"] as const).map((style) => (
+                  {buttonStyles.map((style) => (
                     <button
                       key={style}
                       type="button"
-                      onClick={() => setTokens({ ...tokens, buttonStyle: style })}
+                      onClick={() => setTokens((prev) => ({ ...prev, buttonStyle: style }))}
                       className={`rounded border p-2 text-xs font-medium capitalize ${
                         tokens.buttonStyle === style ? "border-primary bg-primary/10 text-primary" : "border-border"
                       }`}
@@ -338,7 +402,6 @@ function ThemePage() {
           </PageSection>
         </div>
 
-        {/* Live Storefront Preview */}
         <div className="space-y-4 lg:col-span-7">
           <div className="flex items-center justify-between rounded-lg border border-border bg-surface-50 p-2">
             <div className="flex items-center gap-2">
@@ -349,20 +412,18 @@ function ThemePage() {
               <button
                 type="button"
                 onClick={() => setPreviewDevice("desktop")}
-                className={`rounded p-1 text-xs ${
-                  previewDevice === "desktop" ? "bg-surface-200 text-foreground" : "text-foreground-lighter"
-                }`}
+                className={`rounded p-1 text-xs ${previewDevice === "desktop" ? "bg-surface-200 text-foreground" : "text-foreground-lighter"}`}
                 title="Desktop View"
+                aria-label="Desktop view"
               >
                 <Laptop className="size-4" />
               </button>
               <button
                 type="button"
                 onClick={() => setPreviewDevice("mobile")}
-                className={`rounded p-1 text-xs ${
-                  previewDevice === "mobile" ? "bg-surface-200 text-foreground" : "text-foreground-lighter"
-                }`}
+                className={`rounded p-1 text-xs ${previewDevice === "mobile" ? "bg-surface-200 text-foreground" : "text-foreground-lighter"}`}
                 title="Mobile View"
+                aria-label="Mobile view"
               >
                 <Smartphone className="size-4" />
               </button>
@@ -373,20 +434,12 @@ function ThemePage() {
             className={`mx-auto overflow-hidden rounded-xl border border-border shadow-lg transition-all ${
               previewDevice === "mobile" ? "max-w-sm" : "w-full"
             }`}
-            style={{
-              backgroundColor: tokens.backgroundColor,
-              color: tokens.textColor,
-              fontFamily: tokens.fontFamily,
-            }}
+            style={{ backgroundColor: tokens.backgroundColor, color: tokens.textColor, fontFamily: tokens.fontFamily }}
           >
-            {/* Storefront Nav Bar */}
             <div className="flex items-center justify-between border-b border-border/40 px-6 py-4">
               <div className="flex items-center gap-2">
-                <div
-                  className={`size-6 ${radiusClass}`}
-                  style={{ backgroundColor: tokens.primaryColor }}
-                />
-                <span className="text-base font-bold tracking-tight">Acme Store</span>
+                <div className={`size-6 ${radiusClass}`} style={{ backgroundColor: tokens.primaryColor }} />
+                <span className="text-base font-bold tracking-tight">{previewName}</span>
               </div>
               <div className="flex items-center gap-4 text-xs font-medium opacity-80">
                 <span>Shop</span>
@@ -395,22 +448,16 @@ function ThemePage() {
               </div>
             </div>
 
-            {/* Hero Section Preview */}
             <div className="px-6 py-12 text-center">
               <span
                 className={`inline-flex items-center gap-1 px-3 py-1 text-xs font-medium ${radiusClass}`}
-                style={{
-                  backgroundColor: `${tokens.accentColor}20`,
-                  color: tokens.accentColor,
-                }}
+                style={{ backgroundColor: `${tokens.accentColor}20`, color: tokens.accentColor }}
               >
-                <Sparkles className="size-3" /> New Collection Live
+                <Sparkles className="size-3" /> Announcement
               </span>
-              <h1 className="mt-4 text-3xl font-extrabold tracking-tight sm:text-4xl">
-                Crafted for everyday comfort.
-              </h1>
+              <h1 className="mt-4 text-3xl font-extrabold tracking-tight sm:text-4xl">Headline for {previewName}</h1>
               <p className="mx-auto mt-3 max-w-md text-sm opacity-75">
-                Explore our catalog of sustainable home goods and organic essentials.
+                Supporting text that describes your latest collection or offer.
               </p>
               <div className="mt-6 flex justify-center gap-3">
                 <button
@@ -423,59 +470,43 @@ function ThemePage() {
                     opacity: tokens.buttonStyle === "soft" ? 0.85 : 1,
                   }}
                 >
-                  Shop Now
+                  Primary action
                 </button>
-                <button
-                  type="button"
-                  className={`border border-border/80 px-4 py-2.5 text-xs font-semibold ${radiusClass}`}
-                >
-                  View Lookbook
+                <button type="button" className={`border border-border/80 px-4 py-2.5 text-xs font-semibold ${radiusClass}`}>
+                  Secondary
                 </button>
               </div>
             </div>
 
-            {/* Featured Product Cards */}
             <div className="border-t border-border/40 bg-surface-50/40 p-6">
               <div className="mb-4 flex items-center justify-between">
-                <h3 className="text-sm font-bold">Featured Products</h3>
+                <h3 className="text-sm font-bold">Featured products</h3>
                 <span className="text-xs font-medium" style={{ color: tokens.primaryColor }}>
                   See all &rarr;
                 </span>
               </div>
               <div className="grid gap-4 sm:grid-cols-2">
-                {[
-                  { title: "Organic Cotton T-Shirt", price: "₹2,999", tag: "Best Seller" },
-                  { title: "Ceramic Coffee Mug", price: "₹899", tag: "New" },
-                ].map((item) => (
-                  <div
-                    key={item.title}
-                    className={`border border-border/60 bg-surface p-4 shadow-xs ${radiusClass}`}
-                  >
-                    <div className={`aspect-4/3 w-full bg-surface-200/60 ${radiusClass} flex items-center justify-center`}>
+                {[1, 2].map((n) => (
+                  <div key={n} className={`border border-border/60 bg-surface p-4 shadow-xs ${radiusClass}`}>
+                    <div className={`flex aspect-4/3 w-full items-center justify-center bg-surface-200/60 ${radiusClass}`}>
                       <Palette className="size-8 opacity-20" />
                     </div>
                     <div className="mt-3 flex items-start justify-between">
                       <div>
-                        <h4 className="text-xs font-semibold">{item.title}</h4>
-                        <p className="text-xs font-bold text-foreground mt-0.5">{item.price}</p>
+                        <h4 className="text-xs font-semibold">Product name</h4>
+                        <p className="mt-0.5 text-xs font-bold text-foreground">₹0.00</p>
                       </div>
                       <span
                         className="rounded px-1.5 py-0.5 text-[10px] font-semibold"
-                        style={{
-                          backgroundColor: `${tokens.secondaryColor}25`,
-                          color: tokens.secondaryColor,
-                        }}
+                        style={{ backgroundColor: `${tokens.secondaryColor}25`, color: tokens.secondaryColor }}
                       >
-                        {item.tag}
+                        Label
                       </span>
                     </div>
                     <button
                       type="button"
                       className={`mt-3 w-full py-1.5 text-xs font-medium transition-opacity hover:opacity-90 ${radiusClass}`}
-                      style={{
-                        backgroundColor: tokens.primaryColor,
-                        color: "#ffffff",
-                      }}
+                      style={{ backgroundColor: tokens.primaryColor, color: "#ffffff" }}
                     >
                       Add to cart
                     </button>

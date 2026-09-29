@@ -40,6 +40,8 @@ import {
   createMenu,
   createPage,
   createProduct,
+  acceptInvitation,
+  clearRazorpayCredentials,
   createRuntime,
   deleteAdminDiscount,
   deleteBrand,
@@ -49,6 +51,8 @@ import {
   deleteMenu,
   deleteProduct,
   getAdminCustomerDetail,
+  getAdminMe,
+  getPaymentsStatus,
   getAdminOrderDetail,
   getBrandSettings,
   getCollection,
@@ -62,6 +66,8 @@ import {
   listAdminCustomers,
   listAdminDiscounts,
   listAdminOrders,
+  listInvitations,
+  listStoreRoles,
   listBrands,
   listCategories,
   listCollections,
@@ -76,6 +82,10 @@ import {
   publishBrandSettings,
   publishPage,
   refundAdminOrder,
+  removeMember,
+  revokeInvitation,
+  saveRazorpayCredentials,
+  setMemberRole,
   requestMediaUpload,
   rollbackPage,
   savePageDraft,
@@ -577,8 +587,43 @@ describe("Generated Isolation Test Suite (M1 Real Postgres 18 Proof)", () => {
   /**
    * Helper to dispatch procedure calls to actual domain services against real DB.
    */
+  /** Adds a second staff member to the store through the real invite + accept flow. */
+  async function addTeamMember(rt: Runtime, ctx: TenantContext) {
+    const email = `member-${Date.now()}-${Math.random().toString(36).slice(2, 6)}@test.com`;
+    const invite = await inviteStaff(rt, ctx, { email, roleId: roleAdminA });
+    await acceptInvitation(rt, { storeId: ctx.tenantId, token: invite.token!, name: "Team Member", password: "long-enough-password" });
+    const member = (await listMemberships(rt, ctx)).find((m) => m.email === email);
+    if (!member) throw new Error("member not created");
+    return member;
+  }
+
   async function executeAdminProcedure(procPath: string, rt: Runtime, ctx: TenantContext) {
     switch (procPath) {
+      case "memberships.roles":
+        return await listStoreRoles(rt, ctx);
+      case "memberships.setRole": {
+        const m = await addTeamMember(rt, ctx);
+        return await setMemberRole(rt, ctx, { id: m.id, roleId: roleAdminA });
+      }
+      case "memberships.remove": {
+        const m = await addTeamMember(rt, ctx);
+        return await removeMember(rt, ctx, { id: m.id });
+      }
+      case "memberships.invitations":
+        return await listInvitations(rt, ctx);
+      case "memberships.revokeInvitation": {
+        const invite = await inviteStaff(rt, ctx, {
+          email: `revoke-${Date.now()}-${Math.random().toString(36).slice(2, 6)}@test.com`,
+          roleId: roleAdminA,
+        });
+        return await revokeInvitation(rt, ctx, { id: invite.id });
+      }
+      case "payments.get":
+        return await getPaymentsStatus(rt, ctx);
+      case "payments.saveRazorpay":
+        return await saveRazorpayCredentials(rt, ctx, { keyId: "rzp_test_IsolationKey1", keySecret: "isolation-secret-value" });
+      case "payments.clearRazorpay":
+        return await clearRazorpayCredentials(rt, ctx);
       case "memberships.list":
         return await listMemberships(rt, ctx);
       case "memberships.invite":
@@ -794,8 +839,52 @@ describe("Generated Isolation Test Suite (M1 Real Postgres 18 Proof)", () => {
     }
   }
 
+  // me.get needs a signed-in staff session but no store; acceptInvite is public (invite token + IP rate limit).
+  // Both are covered by dedicated tests below instead of the store-scoped permission checks.
+  const SESSION_ONLY = new Set(["me.get"]);
+  const PUBLIC = new Set(["memberships.acceptInvite"]);
+
+  describe("Session-only and public admin procedures", () => {
+    it("me.get lists only the stores the signed-in user belongs to", async () => {
+      const meA = await getAdminMe(rtApp, userA);
+      expect(meA.stores.map((s) => s.tenantId)).toEqual([tenantA]);
+      expect(meA.stores.map((s) => s.tenantId)).not.toContain(tenantB);
+    });
+
+    it("me.get rejects an unknown user", async () => {
+      await expect(getAdminMe(rtApp, "00000000-0000-7000-8000-00000000dead")).rejects.toThrow(/unauthorized/i);
+    });
+
+    it("acceptInvite rejects a wrong token and a token used against another store", async () => {
+      const ctxA = await buildTenantContext(rtApp._db.db, {
+        entryPath: "admin",
+        headers: { "x-store-id": tenantA },
+        session: { user: { id: userA }, type: "staff" },
+      });
+      const invite = await inviteStaff(rtApp, ctxA!, {
+        email: `cross-${Date.now()}@test.com`,
+        roleId: roleAdminA,
+      });
+      await expect(
+        acceptInvitation(rtApp, { storeId: tenantA, token: "definitely-not-the-right-token-value", name: "X", password: "long-enough-password" }),
+      ).rejects.toThrow(/invalid or has expired/i);
+      await expect(
+        acceptInvitation(rtApp, { storeId: tenantB, token: invite.token!, name: "X", password: "long-enough-password" }),
+      ).rejects.toThrow(/invalid or has expired/i);
+      await expect(
+        acceptInvitation(rtApp, { storeId: tenantA, token: invite.token!, name: "Y", password: "short" }),
+      ).rejects.toThrow(/at least 10/i);
+      const ok = await acceptInvitation(rtApp, { storeId: tenantA, token: invite.token!, name: "Y", password: "long-enough-password" });
+      expect(ok.ok).toBe(true);
+      // single use
+      await expect(
+        acceptInvitation(rtApp, { storeId: tenantA, token: invite.token!, name: "Y", password: "long-enough-password" }),
+      ).rejects.toThrow(/invalid or has expired/i);
+    });
+  });
+
   describe("Admin Procedures Dynamic Isolation & Authorization Invariants", () => {
-    for (const proc of adminProcedures) {
+    for (const proc of adminProcedures.filter((p) => !SESSION_ONLY.has(p) && !PUBLIC.has(p))) {
       describe(`Procedure: admin.${proc}`, () => {
         it("rejects when staff user on tenant A attempts to access tenant B (X-Store-Id: B)", async () => {
           // Real DB query: userA has no membership in tenantB

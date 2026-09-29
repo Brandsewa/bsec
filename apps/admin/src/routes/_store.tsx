@@ -78,10 +78,9 @@ export const Route = createFileRoute("/_store")({
   beforeLoad: async ({ context }) => {
     const me = await context.queryClient.fetchQuery({ queryKey: ["me"], queryFn: fetchMe, staleTime: 60_000 });
     if (!me) throw redirect({ to: "/login" });
-    if (me.stores.length === 0) return { me, store: null };
     const saved = getActiveStoreId();
-    const store = me.stores.find((s) => s.tenantId === saved) ?? me.stores[0]!;
-    setActiveStoreId(store.tenantId);
+    const store = me.stores.find((s) => s.tenantId === saved) ?? me.stores[0] ?? null;
+    if (store) setActiveStoreId(store.tenantId);
     return { me, store };
   },
   pendingComponent: () => <PageSkeleton />,

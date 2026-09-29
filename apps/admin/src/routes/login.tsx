@@ -1,9 +1,10 @@
 import { createFileRoute, redirect, useNavigate } from "@tanstack/react-router";
 import { useState, type FormEvent } from "react";
-import { Button, Input, Label } from "@bs/ui";
+import { Button, Input, Label, PageSkeleton } from "@bs/ui";
 import { fetchMe, signIn } from "../lib/auth.ts";
 
 export const Route = createFileRoute("/login")({
+  pendingComponent: () => <PageSkeleton />,
   beforeLoad: async ({ context }) => {
     const me = await context.queryClient.fetchQuery({ queryKey: ["me"], queryFn: fetchMe, staleTime: 0 }).catch(() => null);
     if (me) throw redirect({ to: "/" });

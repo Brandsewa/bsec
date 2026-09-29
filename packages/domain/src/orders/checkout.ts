@@ -18,6 +18,7 @@ import { allocateSequenceNumber } from "./sequences.ts";
 import { calculateShippingRate } from "./shipping-rates.ts";
 import { withIdempotencyKey } from "../system/idempotency.ts";
 import { isFeatureEnabled, FeatureDisabledError } from "../features.ts";
+import { readStoreConfig } from "../admin/store-config.ts";
 
 export interface PlaceOrderInput {
   cartToken: string;
@@ -98,7 +99,11 @@ export async function placeOrder(
     const shipping = calculateShippingRate(subtotal, (input.shippingMethod as "standard" | "express") ?? "standard");
     const shippingTotal = shipping.amount;
     const isCod = input.paymentMethod === "cod";
-    const codFee = isCod ? 5000 : 0; // ₹50 default COD fee
+    const storeConfig = await readStoreConfig(tx);
+    if (isCod && !storeConfig.cod.enabled) {
+      throw new Error("Cash on delivery is not available for this store");
+    }
+    const codFee = isCod ? storeConfig.cod.feePaise : 0;
     const grandTotal = subtotal + shippingTotal + codFee;
 
     // 3. Find default inventory location for tenant
