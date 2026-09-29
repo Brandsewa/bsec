@@ -19,6 +19,8 @@ import {
   generateLocalBusinessJsonLd,
   generateRobotsTxt,
   getStorefrontSeoSettings,
+  generateSitemapXml,
+  getStorefrontSitemapUrls,
 } from "../src/index.ts";
 
 describe("Storefront SEO & JSON-LD Structured Data", () => {
@@ -480,4 +482,97 @@ describe("Storefront SEO & JSON-LD Structured Data", () => {
       expect(settings.aiCrawlers).toEqual({ GPTBot: "allow" });
     });
   });
+
+  describe("generateSitemapXml", () => {
+    it("generates valid sitemap 0.9 XML string with correct schema, tags, and formatting", () => {
+      const xml = generateSitemapXml([
+        {
+          loc: "https://shop.example.com",
+          lastmod: "2026-09-28T00:00:00.000Z",
+          changefreq: "daily",
+          priority: 1.0,
+        },
+        {
+          loc: "https://shop.example.com/products/switch-lube",
+          lastmod: "2026-09-27T00:00:00.000Z",
+          changefreq: "weekly",
+          priority: 0.8,
+        },
+      ]);
+
+      expect(xml).toContain('<?xml version="1.0" encoding="UTF-8"?>');
+      expect(xml).toContain('<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">');
+      expect(xml).toContain("<loc>https://shop.example.com</loc>");
+      expect(xml).toContain("<lastmod>2026-09-28T00:00:00.000Z</lastmod>");
+      expect(xml).toContain("<changefreq>daily</changefreq>");
+      expect(xml).toContain("<priority>1.0</priority>");
+      expect(xml).toContain("<loc>https://shop.example.com/products/switch-lube</loc>");
+      expect(xml).toContain("<priority>0.8</priority>");
+      expect(xml).toContain("</urlset>");
+    });
+
+    it("generates valid empty sitemap urlset when urls is empty", () => {
+      const xml = generateSitemapXml([]);
+      expect(xml).toContain('<?xml version="1.0" encoding="UTF-8"?>');
+      expect(xml).toContain('<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">');
+      expect(xml).toContain("</urlset>");
+      expect(xml).not.toContain("<loc>");
+    });
+  });
+
+  describe("getStorefrontSitemapUrls", () => {
+    it("queries published products, collections, categories, custom pages, blog posts, and policies", async () => {
+      const now = new Date("2026-09-29T00:00:00.000Z");
+      let callCount = 0;
+      const mockDb = {
+        transaction: async (cb: (tx: unknown) => Promise<unknown>) => {
+          return cb({
+            execute: async () => {},
+            select: () => ({
+              from: () => ({
+                where: () => ({
+                  orderBy: () => {
+                    callCount++;
+                    if (callCount === 1) {
+                      // products
+                      return [{ slug: "custom-board", updatedAt: now }];
+                    }
+                    if (callCount === 2) {
+                      // collections
+                      return [{ slug: "keyboards", updatedAt: now }];
+                    }
+                    if (callCount === 3) {
+                      // categories
+                      return [{ slug: "switches", updatedAt: now }];
+                    }
+                    if (callCount === 4) {
+                      // pages
+                      return [
+                        { slug: "home", type: "home", updatedAt: now },
+                        { slug: "about-us", type: "custom", updatedAt: now },
+                      ];
+                    }
+                    return [];
+                  },
+                }),
+              }),
+            }),
+          });
+        },
+      } as unknown as Db;
+
+      const rt = createMockRuntime(mockDb);
+      const urls = await getStorefrontSitemapUrls(rt, publicCtx, "shop.example.com");
+
+      expect(urls.length).toBeGreaterThan(5);
+      expect(urls.find((u) => u.loc === "https://shop.example.com")?.priority).toBe(1.0);
+      expect(urls.find((u) => u.loc === "https://shop.example.com/products/custom-board")?.priority).toBe(0.8);
+      expect(urls.find((u) => u.loc === "https://shop.example.com/collections/keyboards")?.priority).toBe(0.7);
+      expect(urls.find((u) => u.loc === "https://shop.example.com/categories/switches")?.priority).toBe(0.7);
+      expect(urls.find((u) => u.loc === "https://shop.example.com/pages/about-us")?.priority).toBe(0.5);
+      expect(urls.find((u) => u.loc === "https://shop.example.com/policies/privacy")?.priority).toBe(0.3);
+      expect(urls.find((u) => u.loc === "https://shop.example.com/policies/terms")?.priority).toBe(0.3);
+    });
+  });
 });
+

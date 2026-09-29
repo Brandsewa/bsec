@@ -1,4 +1,4 @@
-import { eq } from "drizzle-orm";
+import { and, desc, eq, isNull } from "drizzle-orm";
 import { schema, withTenant } from "@bs/db";
 import type { Runtime } from "../runtime.ts";
 import type { TenantContext } from "../context.ts";
@@ -542,5 +542,206 @@ export async function getStorefrontSeoSettings(
       breadcrumbsEnabled: row.breadcrumbsEnabled,
       faqSchemaEnabled: row.faqSchemaEnabled,
     };
+  });
+}
+
+export interface SitemapUrlItem {
+  loc: string;
+  lastmod?: string | undefined;
+  changefreq?: "always" | "hourly" | "daily" | "weekly" | "monthly" | "yearly" | "never" | undefined;
+  priority?: number | undefined;
+}
+
+/**
+ * Generates valid Sitemap 0.9 XML string from a list of URLs.
+ */
+export function generateSitemapXml(urls: SitemapUrlItem[]): string {
+  const xmlLines = [
+    '<?xml version="1.0" encoding="UTF-8"?>',
+    '<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">',
+  ];
+
+  for (const item of urls) {
+    xmlLines.push("  <url>");
+    xmlLines.push(`    <loc>${item.loc}</loc>`);
+    if (item.lastmod) {
+      xmlLines.push(`    <lastmod>${item.lastmod}</lastmod>`);
+    }
+    if (item.changefreq) {
+      xmlLines.push(`    <changefreq>${item.changefreq}</changefreq>`);
+    }
+    if (item.priority !== undefined) {
+      xmlLines.push(`    <priority>${item.priority.toFixed(1)}</priority>`);
+    }
+    xmlLines.push("  </url>");
+  }
+
+  xmlLines.push("</urlset>");
+  return xmlLines.join("\n");
+}
+
+export const STATIC_POLICY_PAGES = [
+  { path: "/policies/privacy", changefreq: "yearly" as const, priority: 0.3 },
+  { path: "/policies/terms", changefreq: "yearly" as const, priority: 0.3 },
+  { path: "/policies/refund", changefreq: "yearly" as const, priority: 0.3 },
+  { path: "/policies/shipping", changefreq: "yearly" as const, priority: 0.3 },
+];
+
+export const STATIC_BLOG_POSTS = [
+  { slug: "mechanical-keyboards-guide-for-beginners", publishedAt: "2026-09-15T00:00:00.000Z" },
+  { slug: "lubing-switches-sound-and-feel", publishedAt: "2026-09-20T00:00:00.000Z" },
+  { slug: "workspace-ergonomics-desk-setup", publishedAt: "2026-09-25T00:00:00.000Z" },
+];
+
+/**
+ * Queries all published entities for a tenant and builds a complete sitemap list:
+ * - Home page (/, daily, 1.0)
+ * - Published products (/products/[slug], weekly, 0.8)
+ * - Published collections (/collections/[slug], weekly, 0.7)
+ * - Published categories (/categories/[slug], weekly, 0.7)
+ * - Published custom pages (/pages/[slug], monthly, 0.5)
+ * - Published blog posts (/blog/[slug], monthly, 0.6)
+ * - Static policy pages (/policies/..., yearly, 0.3)
+ */
+export async function getStorefrontSitemapUrls(
+  rt: Runtime,
+  ctx: TenantContext,
+  host: string,
+): Promise<SitemapUrlItem[]> {
+  const cleanHost = host.replace(/^https?:\/\//, "").replace(/\/$/, "");
+  const baseUrl = `https://${cleanHost}`;
+  const db = rt._db.db;
+
+  return withTenant(db, ctx.tenantId, async (tx) => {
+    // 1. Published Products
+    const productRows = await tx
+      .select({
+        slug: schema.products.slug,
+        updatedAt: schema.products.updatedAt,
+      })
+      .from(schema.products)
+      .where(
+        and(
+          eq(schema.products.tenantId, ctx.tenantId),
+          eq(schema.products.status, "published"),
+          isNull(schema.products.deletedAt),
+        ),
+      )
+      .orderBy(desc(schema.products.updatedAt));
+
+    // 2. Published Collections
+    const collectionRows = await tx
+      .select({
+        slug: schema.collections.slug,
+        updatedAt: schema.collections.updatedAt,
+      })
+      .from(schema.collections)
+      .where(
+        and(
+          eq(schema.collections.tenantId, ctx.tenantId),
+          eq(schema.collections.published, true),
+        ),
+      )
+      .orderBy(desc(schema.collections.updatedAt));
+
+    // 3. Published Categories
+    const categoryRows = await tx
+      .select({
+        slug: schema.categories.slug,
+        updatedAt: schema.categories.updatedAt,
+      })
+      .from(schema.categories)
+      .where(eq(schema.categories.tenantId, ctx.tenantId))
+      .orderBy(desc(schema.categories.updatedAt));
+
+    // 4. Published Custom Pages (excluding "home" which is mapped to /)
+    const pageRows = await tx
+      .select({
+        slug: schema.pages.slug,
+        type: schema.pages.type,
+        updatedAt: schema.pages.updatedAt,
+      })
+      .from(schema.pages)
+      .where(
+        and(
+          eq(schema.pages.tenantId, ctx.tenantId),
+          eq(schema.pages.status, "published"),
+        ),
+      )
+      .orderBy(desc(schema.pages.updatedAt));
+
+    const sitemapItems: SitemapUrlItem[] = [];
+
+    // Home page
+    const homePageRow = pageRows.find((p) => p.type === "home");
+    sitemapItems.push({
+      loc: baseUrl,
+      lastmod: homePageRow ? homePageRow.updatedAt.toISOString() : new Date().toISOString(),
+      changefreq: "daily",
+      priority: 1.0,
+    });
+
+    // Products
+    for (const p of productRows) {
+      sitemapItems.push({
+        loc: `${baseUrl}/products/${p.slug}`,
+        lastmod: p.updatedAt.toISOString(),
+        changefreq: "weekly",
+        priority: 0.8,
+      });
+    }
+
+    // Collections
+    for (const c of collectionRows) {
+      sitemapItems.push({
+        loc: `${baseUrl}/collections/${c.slug}`,
+        lastmod: c.updatedAt.toISOString(),
+        changefreq: "weekly",
+        priority: 0.7,
+      });
+    }
+
+    // Categories
+    for (const cat of categoryRows) {
+      sitemapItems.push({
+        loc: `${baseUrl}/categories/${cat.slug}`,
+        lastmod: cat.updatedAt.toISOString(),
+        changefreq: "weekly",
+        priority: 0.7,
+      });
+    }
+
+    // Custom pages (type !== 'home')
+    for (const page of pageRows) {
+      if (page.type !== "home") {
+        sitemapItems.push({
+          loc: `${baseUrl}/pages/${page.slug}`,
+          lastmod: page.updatedAt.toISOString(),
+          changefreq: "monthly",
+          priority: 0.5,
+        });
+      }
+    }
+
+    // Blog posts
+    for (const blog of STATIC_BLOG_POSTS) {
+      sitemapItems.push({
+        loc: `${baseUrl}/blog/${blog.slug}`,
+        lastmod: blog.publishedAt,
+        changefreq: "monthly",
+        priority: 0.6,
+      });
+    }
+
+    // Static policy pages
+    for (const policy of STATIC_POLICY_PAGES) {
+      sitemapItems.push({
+        loc: `${baseUrl}${policy.path}`,
+        changefreq: policy.changefreq,
+        priority: policy.priority,
+      });
+    }
+
+    return sitemapItems;
   });
 }
