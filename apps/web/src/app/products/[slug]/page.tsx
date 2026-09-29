@@ -2,6 +2,7 @@ import React, { Suspense } from "react";
 import type { Metadata } from "next";
 import { notFound } from "next/navigation";
 import { headers } from "next/headers";
+import { cacheTag } from "next/cache";
 import Link from "next/link";
 import {
   evaluateStorefrontAccess,
@@ -14,6 +15,7 @@ import {
   tenantTag,
 } from "@bs/domain";
 import { server } from "@/server/runtime.ts";
+import { getCachedStorefrontProduct } from "@/server/cached-storefront.ts";
 import { ProductGallery } from "@/components/product/ProductGallery.tsx";
 import { VariantSelector } from "@/components/product/VariantSelector.tsx";
 import { StockEtaSkeleton } from "@/components/product/StockEtaHole.tsx";
@@ -91,17 +93,7 @@ export default async function ProductDetailPage({ params }: ProductPageProps) {
     }
 
     tenantId = access.tenantId;
-
-    const tenantCtx = {
-      tenantId: access.tenantId,
-      storeStatus: access.mode ?? "live",
-      actor: { type: "system" as const },
-      roles: ["store_admin"],
-      permissions: ["products.read", "settings.write"],
-      requestId: crypto.randomUUID(),
-    };
-
-    product = await getStorefrontProduct(rt, tenantCtx, slug);
+    product = await getCachedStorefrontProduct(tenantId, slug);
   } catch {
     notFound();
   }
@@ -110,8 +102,14 @@ export default async function ProductDetailPage({ params }: ProductPageProps) {
     notFound();
   }
 
-  // Set tenant product cache tag for Next.js Cache Components
-  // Using tenantTag helper ensures consistency with the bs/tenant-cache-tag invariant
+  // Set tenant product cache tags for Next.js Cache Components (PLAN §11.6)
+  try {
+    cacheTag(tenantTag(tenantId, "product", product.id));
+    cacheTag(tenantTag(tenantId, "product"));
+  } catch {
+    // Ignore outside Next.js request context
+  }
+
   const productCacheTag = tenantTag(tenantId, "product", product.id);
 
   const storeUrl = `https://${host}`;

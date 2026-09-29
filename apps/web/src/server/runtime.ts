@@ -1,6 +1,7 @@
 import "server-only";
 import { revalidateTag } from "next/cache";
 import { createLogger, createRuntime, type Logger, type Runtime } from "@bs/domain";
+import { invalidateStorefrontCache } from "./cached-storefront.ts";
 
 /**
  * One runtime per server process, role app_rw (RLS applies). Cached on globalThis so dev HMR
@@ -18,6 +19,7 @@ export function server(): { rt: Runtime; log: Logger } {
         databaseUrl: url,
         poolMax: Number(process.env.DB_POOL_MAX ?? 10),
         revalidateTags: (tags) => {
+          invalidateStorefrontCache(tags);
           for (const t of tags) {
             try {
               // eslint-disable-next-line bs/tenant-cache-tag -- tag strings are pre-verified tenant-prefixed via computeInvalidationTags

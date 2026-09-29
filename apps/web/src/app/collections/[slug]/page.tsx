@@ -2,6 +2,7 @@ import React from "react";
 import type { Metadata } from "next";
 import { notFound } from "next/navigation";
 import { headers } from "next/headers";
+import { cacheTag } from "next/cache";
 import Link from "next/link";
 import {
   evaluateStorefrontAccess,
@@ -15,6 +16,7 @@ import {
   type CatalogListingOptions,
 } from "@bs/domain";
 import { server } from "@/server/runtime.ts";
+import { getCachedStorefrontCollection } from "@/server/cached-storefront.ts";
 import { ProductCard } from "@/components/catalog/ProductCard.tsx";
 import { ProductFilterSort } from "@/components/catalog/ProductFilterSort.tsx";
 import { Pagination } from "@/components/catalog/Pagination.tsx";
@@ -112,17 +114,7 @@ export default async function CollectionDetailPage({
     }
 
     tenantId = access.tenantId;
-
-    const tenantCtx = {
-      tenantId: access.tenantId,
-      storeStatus: access.mode ?? "live",
-      actor: { type: "system" as const },
-      roles: ["store_admin"],
-      permissions: ["products.read", "settings.write"],
-      requestId: crypto.randomUUID(),
-    };
-
-    collectionData = await getStorefrontCollection(rt, tenantCtx, slug, {
+    collectionData = await getCachedStorefrontCollection(tenantId, slug, {
       page,
       limit,
       sort: sortOption,
@@ -137,6 +129,15 @@ export default async function CollectionDetailPage({
   }
 
   const { collection, products } = collectionData;
+
+  // Set tenant collection cache tags for Next.js Cache Components (PLAN §11.6)
+  try {
+    cacheTag(tenantTag(tenantId, "collection", collection.id));
+    cacheTag(tenantTag(tenantId, "collection"));
+  } catch {
+    // Ignore outside Next.js request context
+  }
+
   const collectionCacheTag = tenantTag(tenantId, "collection", collection.id);
 
   const storeUrl = `https://${host}`;

@@ -1,8 +1,10 @@
 import type { Metadata } from "next";
 import { notFound } from "next/navigation";
 import { headers } from "next/headers";
+import { cacheTag } from "next/cache";
 import Link from "next/link";
-import { generateArticleJsonLd, generateBreadcrumbJsonLd } from "@bs/domain";
+import { generateArticleJsonLd, generateBreadcrumbJsonLd, evaluateStorefrontAccess, tenantTag } from "@bs/domain";
+import { server } from "@/server/runtime.ts";
 
 interface BlogPostProps {
   params: Promise<{ slug: string }>;
@@ -83,6 +85,15 @@ export default async function BlogPostPage({ params }: BlogPostProps) {
   try {
     const h = await headers();
     host = h.get("x-forwarded-host") ?? h.get("host") ?? "localhost";
+    const { rt } = server();
+    const access = await evaluateStorefrontAccess(rt, host, { headers: h });
+    if (access.tenantId) {
+      try {
+        cacheTag(tenantTag(access.tenantId, "page", slug));
+      } catch {
+        // Ignore outside Next.js request context
+      }
+    }
   } catch {
     // Non-fatal
   }

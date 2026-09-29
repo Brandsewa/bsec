@@ -1,8 +1,10 @@
 import type { Metadata } from "next";
 import type { ReactNode } from "react";
 import { headers } from "next/headers";
-import { evaluateStorefrontAccess, getBrandSettings } from "@bs/domain";
+import { cacheTag } from "next/cache";
+import { evaluateStorefrontAccess, tenantTag, type getBrandSettings } from "@bs/domain";
 import { server } from "@/server/runtime.ts";
+import { getCachedBrandSettings } from "@/server/cached-storefront.ts";
 import { StoreHeader } from "@/components/storefront/StoreHeader.tsx";
 import { StoreFooter } from "@/components/storefront/StoreFooter.tsx";
 import { StoreStatusBanner } from "@/components/storefront/StoreStatusBanner.tsx";
@@ -52,17 +54,18 @@ export default async function RootLayout({ children }: { children: ReactNode }) 
     access = await evaluateStorefrontAccess(rt, host, { headers: h });
 
     if (access.tenantId) {
-      // In M3, retrieve published brand settings and theme tokens using tenant context
+      // In M3, retrieve published brand settings and theme tokens using tenant context with Cache Components
       try {
-        const tenantCtx = {
-          tenantId: access.tenantId,
-          storeStatus: access.mode ?? "live",
-          actor: { type: "system" as const },
-          roles: ["store_admin"],
-          permissions: ["settings.write", "content.write", "theme.publish"],
-          requestId: crypto.randomUUID(),
-        };
-        brandSettings = await getBrandSettings(rt, tenantCtx);
+        brandSettings = await getCachedBrandSettings(access.tenantId);
+
+        // Set tenant shell and theme cache tags for Next.js Cache Components (PLAN §11.6)
+        try {
+          cacheTag(tenantTag(access.tenantId, "theme"));
+          cacheTag(tenantTag(access.tenantId, "store-shell"));
+          cacheTag(tenantTag(access.tenantId, "nav"));
+        } catch {
+          // Ignore outside Next.js request context
+        }
       } catch {
         // Fallback to null brand settings
       }

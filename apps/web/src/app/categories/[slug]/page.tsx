@@ -2,6 +2,7 @@ import React from "react";
 import type { Metadata } from "next";
 import { notFound } from "next/navigation";
 import { headers } from "next/headers";
+import { cacheTag } from "next/cache";
 import Link from "next/link";
 import {
   evaluateStorefrontAccess,
@@ -15,6 +16,7 @@ import {
   type CatalogListingOptions,
 } from "@bs/domain";
 import { server } from "@/server/runtime.ts";
+import { getCachedStorefrontCategory } from "@/server/cached-storefront.ts";
 import { ProductCard } from "@/components/catalog/ProductCard.tsx";
 import { ProductFilterSort } from "@/components/catalog/ProductFilterSort.tsx";
 import { Pagination } from "@/components/catalog/Pagination.tsx";
@@ -114,17 +116,7 @@ export default async function CategoryDetailPage({
     }
 
     tenantId = access.tenantId;
-
-    const tenantCtx = {
-      tenantId: access.tenantId,
-      storeStatus: access.mode ?? "live",
-      actor: { type: "system" as const },
-      roles: ["store_admin"],
-      permissions: ["products.read", "settings.write"],
-      requestId: crypto.randomUUID(),
-    };
-
-    categoryData = await getStorefrontCategory(rt, tenantCtx, slug, {
+    categoryData = await getCachedStorefrontCategory(tenantId, slug, {
       page,
       limit,
       sort: sortOption,
@@ -139,6 +131,15 @@ export default async function CategoryDetailPage({
   }
 
   const { category, products } = categoryData;
+
+  // Set tenant category cache tags for Next.js Cache Components (PLAN §11.6)
+  try {
+    cacheTag(tenantTag(tenantId, "category", category.id));
+    cacheTag(tenantTag(tenantId, "category"));
+  } catch {
+    // Ignore outside Next.js request context
+  }
+
   const categoryCacheTag = tenantTag(tenantId, "category", category.id);
 
   const storeUrl = `https://${host}`;

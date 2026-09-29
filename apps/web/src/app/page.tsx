@@ -1,14 +1,17 @@
 import type { Metadata } from "next";
 import { headers } from "next/headers";
+import { cacheTag } from "next/cache";
 import {
   evaluateStorefrontAccess,
   getStorefrontHomePage,
   generateWebSiteJsonLd,
   generateOrganizationJsonLd,
   getStoreSettings,
+  tenantTag,
 } from "@bs/domain";
 import { renderBlockDocument } from "@bs/blocks";
 import { server } from "@/server/runtime.ts";
+import { getCachedStorefrontHomePage } from "@/server/cached-storefront.ts";
 import { BlockRenderer } from "@/components/blocks/BlockRenderer.tsx";
 
 export async function generateMetadata(): Promise<Metadata> {
@@ -68,9 +71,17 @@ export default async function HomePage() {
       };
 
       const [homeData, storeSettingsData] = await Promise.all([
-        getStorefrontHomePage(rt, tenantCtx).catch(() => null),
+        getCachedStorefrontHomePage(access.tenantId).catch(() => null),
         getStoreSettings(rt, tenantCtx).catch(() => null),
       ]);
+
+      // Set tenant home page cache tags for Next.js Cache Components (PLAN §11.6)
+      try {
+        cacheTag(tenantTag(access.tenantId, "page", "home"));
+        cacheTag(tenantTag(access.tenantId, "store-shell"));
+      } catch {
+        // Ignore outside Next.js request context
+      }
 
       if (homeData) {
         const renderResult = renderBlockDocument(homeData.document);
