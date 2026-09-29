@@ -16,7 +16,7 @@ if (!url) throw new Error("Missing env DATABASE_URL_RW");
 
 const log = createLogger("worker");
 const rt = createRuntime({ service: "worker", databaseUrl: url, poolMax: 2 });
-const jobs = await startJobs({ databaseUrl: url, log, concurrency: Number(process.env.WORKER_CONCURRENCY ?? 4) });
+const jobs = await startJobs({ databaseUrl: url, log, concurrency: Number(process.env.WORKER_CONCURRENCY ?? 4), db: rt._db.db });
 
 // Tiny health endpoint for Docker/Coolify.
 const port = Number(process.env.PORT ?? 4100);

@@ -60,6 +60,13 @@ vi.mock("@bs/domain", async (importOriginal) => {
       ],
     })),
     clearCart: vi.fn(async () => {}),
+    placeOrder: vi.fn(async () => ({
+      success: true,
+      orderId: "ord-test-1",
+      orderNumber: "ORD-00001",
+      orderToken: "ord_1234567890abcdef",
+      redirectUrl: "/orders/ord_1234567890abcdef/thank-you",
+    })),
   };
 });
 

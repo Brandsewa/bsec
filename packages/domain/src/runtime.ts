@@ -1,4 +1,5 @@
 import { createDb, ping, type DbHandle } from "@bs/db";
+import type { Jobs } from "./jobs.ts";
 
 export type CacheInvalidator = (tags: string[]) => Promise<void> | void;
 
@@ -10,6 +11,7 @@ export interface Runtime {
   readonly service: "web" | "platform" | "worker";
   /** @internal used by domain services only */
   readonly _db: DbHandle;
+  readonly _jobs?: Jobs | undefined;
   readonly revalidateTags?: CacheInvalidator | undefined;
   close(): Promise<void>;
 }
@@ -19,11 +21,13 @@ export function createRuntime(opts: {
   databaseUrl: string;
   poolMax: number;
   revalidateTags?: CacheInvalidator | undefined;
+  jobs?: Jobs | undefined;
 }): Runtime {
   const handle = createDb(opts.databaseUrl, { max: opts.poolMax, applicationName: `bsec-${opts.service}` });
   return {
     service: opts.service,
     _db: handle,
+    _jobs: opts.jobs,
     revalidateTags: opts.revalidateTags,
     close: () => handle.close(),
   };

@@ -1,7 +1,6 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
-import { randomUUID } from "node:crypto";
-import { evaluateStorefrontAccess, clearCart } from "@bs/domain";
+import { evaluateStorefrontAccess, placeOrder } from "@bs/domain";
 import { server } from "@/server/runtime.ts";
 import { CART_COOKIE_NAME, getRequestHeaders, getCookieValue } from "../../cart/route.ts";
 
@@ -15,7 +14,7 @@ const PlaceOrderSchema = z.object({
   state: z.string().min(1, "State is required"),
   pincode: z.string().regex(/^[1-9][0-9]{5}$/, "Valid 6-digit Indian pincode required"),
   shippingMethod: z.enum(["standard", "express"]).default("standard"),
-  paymentMethod: z.enum(["cod", "online"]).default("cod"),
+  paymentMethod: z.enum(["cod", "razorpay", "online"]).default("cod"),
   notes: z.string().optional(),
 });
 
@@ -41,6 +40,9 @@ export async function POST(req: Request) {
     }
 
     const token = await getCookieValue(CART_COOKIE_NAME, req);
+    if (!token) {
+      return NextResponse.json({ error: "No active shopping cart" }, { status: 400 });
+    }
 
     const tenantCtx = {
       tenantId: access.tenantId,
@@ -51,22 +53,29 @@ export async function POST(req: Request) {
       requestId: crypto.randomUUID(),
     };
 
-    if (token) {
-      try {
-        await clearCart(rt, tenantCtx, token);
-      } catch {
-        // Non-fatal if clearing cart rows fails or already empty
-      }
-    }
+    const bodyObj = typeof json === "object" && json !== null ? (json as Record<string, unknown>) : {};
+    const idempotencyKey =
+      h.get("idempotency-key") ??
+      (typeof bodyObj.idempotencyKey === "string" ? bodyObj.idempotencyKey : undefined);
+    const paymentMethod = parsed.data.paymentMethod === "online" ? "razorpay" : parsed.data.paymentMethod;
 
-    const orderToken = `ord_${randomUUID()}`;
-    const redirectUrl = `/orders/${orderToken}/thank-you`;
-
-    const response = NextResponse.json({
-      success: true,
-      orderToken,
-      redirectUrl,
+    const orderResult = await placeOrder(rt, tenantCtx, {
+      cartToken: token,
+      idempotencyKey,
+      email: parsed.data.email,
+      phone: parsed.data.phone,
+      fullName: parsed.data.fullName,
+      addressLine1: parsed.data.addressLine1,
+      addressLine2: parsed.data.addressLine2,
+      city: parsed.data.city,
+      state: parsed.data.state,
+      pincode: parsed.data.pincode,
+      shippingMethod: parsed.data.shippingMethod,
+      paymentMethod,
+      notes: parsed.data.notes,
     });
+
+    const response = NextResponse.json(orderResult, { status: 200 });
 
     // Clear cart token cookie
     response.cookies.set({

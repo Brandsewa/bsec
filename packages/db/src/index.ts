@@ -4,7 +4,9 @@ import pg from "pg";
 import * as schema from "./schema/index.ts";
 
 export { schema };
+export * from "./schema/index.ts";
 export { tenantTable, forceRlsSql, tenantPredicate, TENANT_SETTING, tenantForeignKey } from "./tenant-table.ts";
+export * from "./queues.ts";
 
 export type Db = NodePgDatabase<typeof schema>;
 

@@ -214,6 +214,58 @@ describe("M1 Schema Definitions", () => {
     const variantFk = cartItemsCfg.foreignKeys.find((f) => f.reference().columns.map((c) => c.name).join(",") === "tenant_id,variant_id");
     expect(variantFk?.onDelete).toBe("restrict");
   });
+
+  describe("M4 Payment and Orders Schema Definitions", () => {
+    it("exports all expected M4 tables", () => {
+      expect(schema.orders).toBeDefined();
+      expect(schema.orderItems).toBeDefined();
+      expect(schema.orderEvents).toBeDefined();
+      expect(schema.orderNotes).toBeDefined();
+      expect(schema.paymentIntents).toBeDefined();
+      expect(schema.paymentAttempts).toBeDefined();
+      expect(schema.refunds).toBeDefined();
+      expect(schema.actionTokens).toBeDefined();
+      expect(schema.numberSequences).toBeDefined();
+      expect(schema.inventoryReservations).toBeDefined();
+      expect(schema.tenantSecrets).toBeDefined();
+      expect(schema.idempotencyKeys).toBeDefined();
+      expect(schema.webhookInbox).toBeDefined();
+      expect(schema.customers).toBeDefined();
+      expect(schema.customerAddresses).toBeDefined();
+      expect(schema.wishlistItems).toBeDefined();
+    });
+
+    it("registers all M4 tenant tables in tenantTableNames", () => {
+      const expected = [
+        "orders",
+        "order_items",
+        "order_events",
+        "order_notes",
+        "payment_intents",
+        "payment_attempts",
+        "refunds",
+        "action_tokens",
+        "number_sequences",
+        "inventory_reservations",
+        "tenant_secrets",
+        "idempotency_keys",
+        "customers",
+        "customer_addresses",
+        "wishlist_items",
+      ];
+      for (const name of expected) {
+        expect(tenantTableNames.has(name), `Missing registration for ${name}`).toBe(true);
+      }
+    });
+
+    it("verifies webhook_inbox unique constraint on (provider, event_id)", () => {
+      const cfg = getTableConfig(schema.webhookInbox);
+      const uniq = cfg.uniqueConstraints.find((u) => u.name === "webhook_inbox_provider_event_id_uniq");
+      expect(uniq).toBeDefined();
+      expect(uniq?.columns.map((c) => c.name).sort()).toEqual(["event_id", "provider"].sort());
+    });
+  });
 });
+
 
 

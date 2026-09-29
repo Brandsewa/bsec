@@ -7,6 +7,7 @@
     ".": "./src/index.ts",
     "./schema": "./src/schema/index.ts",
     "./tenant-table": "./src/tenant-table.ts",
+    "./queues": "./src/queues.ts",
     "./bootstrap": "./src/scripts/bootstrap-roles.ts",
     "./migrate": "./src/scripts/migrate.ts"
   },
