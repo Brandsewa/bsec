@@ -1,12 +1,13 @@
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { PostgreSqlContainer, type StartedPostgreSqlContainer } from "@testcontainers/postgresql";
-import { eq } from "drizzle-orm";
+import { eq, sql } from "drizzle-orm";
 import {
   createDb,
   type DbHandle,
   orders,
   inventoryReservations,
   webhookInbox,
+  idempotencyKeys,
   withTenant,
 } from "@bs/db";
 import { bootstrapRoles } from "@bs/db/bootstrap";
@@ -14,6 +15,7 @@ import { runMigrations } from "@bs/db/migrate";
 import {
   withIdempotencyKey,
   IdempotencyConflictError,
+  cleanupExpiredIdempotencyKeys,
 } from "../src/system/idempotency.ts";
 import {
   receiveWebhook,
@@ -235,5 +237,104 @@ describe("PLAN §5.10 & §11.4 Idempotency & Webhook Inbox Integration", () => {
     // 4. Reprocessing the same webhook inbox item is idempotent
     const secondProcessRes = await processWebhookInboxItem(rwDb.db, webhookRes.inboxId!);
     expect(secondProcessRes.alreadyProcessed).toBe(true);
+  });
+
+  it("SECURITY: rejects forged webhook with signatureValid = false: leaves order pending, inventory reservation active, marks inbox item failed", async () => {
+    // 1. Create order and active reservation
+    const testOrderId = "0199a000-0000-7000-8000-000000000777";
+    await withTenant(rwDb.db, tenantId, async (tx) => {
+      await tx.insert(orders).values({
+        id: testOrderId,
+        tenantId,
+        number: "ORD-FORGE-001",
+        email: "charlie@example.com",
+        phone: "9876543210",
+        status: "pending",
+        paymentStatus: "pending",
+        grandTotal: 5000,
+        subtotal: 5000,
+        shippingAddress: {},
+      });
+    });
+
+    const [reservation] = await reserveInventory(
+      rwDb.db,
+      tenantId,
+      [{ variantId, locationId, qty: 1 }],
+      { orderId: testOrderId },
+    );
+    expect(reservation).toBeDefined();
+    expect(reservation?.status).toBe("active");
+
+    // 2. Ingest forged webhook with signatureValid: false
+    const forgedWebhookRes = await receiveWebhook(rwDb.db, {
+      provider: "razorpay",
+      eventId: "evt_forged_999",
+      tenantId,
+      signatureValid: false,
+      rawPayload: {
+        event: "payment.captured",
+        order_id: testOrderId,
+        payment_id: "pay_forged_999",
+      },
+    });
+
+    expect(forgedWebhookRes.duplicate).toBe(false);
+    expect(forgedWebhookRes.inboxId).toBeDefined();
+
+    // 3. Process the forged webhook
+    const processRes = await processWebhookInboxItem(rwDb.db, forgedWebhookRes.inboxId!);
+    expect(processRes.success).toBe(false);
+    expect(processRes.error).toBe("Invalid webhook signature");
+
+    // 4. Verify inbox record marked as failed
+    const [inboxRow] = await rwDb.db
+      .select()
+      .from(webhookInbox)
+      .where(eq(webhookInbox.id, forgedWebhookRes.inboxId!));
+    expect(inboxRow?.status).toBe("failed");
+    expect(inboxRow?.error).toBe("Invalid webhook signature");
+
+    // 5. Verify CRITICAL security invariant: order status remains pending, NOT confirmed!
+    await withTenant(rwDb.db, tenantId, async (tx) => {
+      const [orderRow] = await tx.select().from(orders).where(eq(orders.id, testOrderId));
+      expect(orderRow?.status).toBe("pending");
+      expect(orderRow?.paymentStatus).toBe("pending");
+
+      // Verify inventory reservation remains active, NOT committed!
+      const [resRow] = await tx
+        .select()
+        .from(inventoryReservations)
+        .where(eq(inventoryReservations.id, reservation!.id));
+      expect(resRow?.status).toBe("active");
+    });
+  });
+
+  it("PLAN §5.10 cleans up expired idempotency keys while keeping active keys", async () => {
+    const expiredKey = "idemp_expired_key_01";
+    const activeKey = "idemp_active_key_02";
+    const route = "/api/test";
+
+    // Insert an expired key and an active key
+    await withTenant(rwDb.db, tenantId, async (tx) => {
+      await tx.execute(sql`
+        INSERT INTO idempotency_keys (tenant_id, key, route, request_hash, expires_at)
+        VALUES
+          (${tenantId}, ${expiredKey}, ${route}, 'hash1', now() - interval '1 hour'),
+          (${tenantId}, ${activeKey}, ${route}, 'hash2', now() + interval '1 hour')
+        ON CONFLICT (tenant_id, key, route) DO NOTHING;
+      `);
+    });
+
+    const cleanupRes = await cleanupExpiredIdempotencyKeys(rwDb.db, tenantId);
+    expect(cleanupRes.deletedCount).toBeGreaterThanOrEqual(1);
+
+    // Verify expired key is deleted, active key remains
+    await withTenant(rwDb.db, tenantId, async (tx) => {
+      const keys = await tx.select().from(idempotencyKeys).where(eq(idempotencyKeys.tenantId, tenantId));
+      const keyNames = keys.map((k) => k.key);
+      expect(keyNames).not.toContain(expiredKey);
+      expect(keyNames).toContain(activeKey);
+    });
   });
 });

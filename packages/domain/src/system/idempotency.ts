@@ -44,123 +44,75 @@ export async function withIdempotencyKey<T>(
   key: string,
   requestPayload: unknown,
   fn: (tx: Db) => Promise<{ status: number; body: T }>,
-  opts?: { ttlHours?: number | undefined; lockTimeoutSeconds?: number | undefined },
+  opts?: {
+    ttlHours?: number | undefined;
+    lockTimeoutSeconds?: number | undefined;
+    inFlightWaitTimeoutMs?: number | undefined;
+  },
 ): Promise<IdempotencyResult<T>> {
   const requestHash = hashPayload(requestPayload);
   const ttlHours = opts?.ttlHours ?? 24;
   const lockTimeoutSeconds = opts?.lockTimeoutSeconds ?? 30;
+  const inFlightWaitTimeoutMs = opts?.inFlightWaitTimeoutMs ?? 5000;
+  const startTime = Date.now();
 
-  return await withTenant(db, tenantId, async (tx) => {
-    // 1. Try to atomically acquire lock via INSERT ... ON CONFLICT DO NOTHING
-    const insertRes = await tx.execute<{ id: string }>(sql`
-      INSERT INTO idempotency_keys (tenant_id, key, route, request_hash, locked_until, expires_at)
-      VALUES (
-        ${tenantId},
-        ${key},
-        ${route},
-        ${requestHash},
-        now() + (${lockTimeoutSeconds} * interval '1 second'),
-        now() + (${ttlHours} * interval '1 hour')
-      )
-      ON CONFLICT (tenant_id, key, route) DO NOTHING
-      RETURNING id;
-    `);
+  while (Date.now() - startTime < inFlightWaitTimeoutMs) {
+    // 1. In a brief transaction, inspect or acquire lock
+    const outcome = await withTenant(db, tenantId, async (tx) => {
+      const insertRes = await tx.execute<{ id: string }>(sql`
+        INSERT INTO idempotency_keys (tenant_id, key, route, request_hash, locked_until, expires_at)
+        VALUES (
+          ${tenantId},
+          ${key},
+          ${route},
+          ${requestHash},
+          now() + (${lockTimeoutSeconds} * interval '1 second'),
+          now() + (${ttlHours} * interval '1 hour')
+        )
+        ON CONFLICT (tenant_id, key, route) DO NOTHING
+        RETURNING id;
+      `);
 
-    if (insertRes.rows.length > 0) {
-      // We acquired lock
-      try {
-        const result = await fn(tx);
-        await tx
-          .update(idempotencyKeys)
-          .set({
-            responseStatus: result.status,
-            responseBody: result.body,
-            lockedUntil: null,
-            updatedAt: new Date(),
-          })
-          .where(
-            and(
-              eq(idempotencyKeys.tenantId, tenantId),
-              eq(idempotencyKeys.key, key),
-              eq(idempotencyKeys.route, route),
-            ),
-          );
-
-        return {
-          status: result.status,
-          body: result.body,
-          cached: false,
-        };
-      } catch (err) {
-        // Unlock on error so client can retry
-        await tx
-          .delete(idempotencyKeys)
-          .where(
-            and(
-              eq(idempotencyKeys.tenantId, tenantId),
-              eq(idempotencyKeys.key, key),
-              eq(idempotencyKeys.route, route),
-            ),
-          );
-        throw err;
+      if (insertRes.rows.length > 0) {
+        return { kind: "acquired" as const };
       }
-    }
 
-    // 2. Conflict occurred: inspect existing record
-    const [existing] = await tx
-      .select()
-      .from(idempotencyKeys)
-      .where(
-        and(
-          eq(idempotencyKeys.tenantId, tenantId),
-          eq(idempotencyKeys.key, key),
-          eq(idempotencyKeys.route, route),
-        ),
-      );
+      const [existing] = await tx
+        .select()
+        .from(idempotencyKeys)
+        .where(
+          and(
+            eq(idempotencyKeys.tenantId, tenantId),
+            eq(idempotencyKeys.key, key),
+            eq(idempotencyKeys.route, route),
+          ),
+        );
 
-    if (!existing) {
-      throw new Error(`Unexpected idempotency key state for ${key}`);
-    }
+      if (!existing) {
+        throw new Error(`Unexpected idempotency key state for ${key}`);
+      }
 
-    if (existing.requestHash !== requestHash) {
-      throw new IdempotencyConflictError();
-    }
+      if (existing.requestHash !== requestHash) {
+        throw new IdempotencyConflictError();
+      }
 
-    if (existing.responseStatus != null) {
-      return {
-        status: existing.responseStatus,
-        body: existing.responseBody as T,
-        cached: true,
-      };
-    }
+      if (existing.responseStatus != null) {
+        return {
+          kind: "cached" as const,
+          status: existing.responseStatus,
+          body: existing.responseBody as T,
+        };
+      }
 
-    if (existing.lockedUntil && existing.lockedUntil.getTime() > Date.now()) {
-      throw new IdempotencyInFlightError();
-    }
+      if (existing.lockedUntil && existing.lockedUntil.getTime() > Date.now()) {
+        return { kind: "in_flight" as const };
+      }
 
-    // Stale lock recovery
-    await tx
-      .update(idempotencyKeys)
-      .set({
-        lockedUntil: new Date(Date.now() + lockTimeoutSeconds * 1000),
-        updatedAt: new Date(),
-      })
-      .where(
-        and(
-          eq(idempotencyKeys.tenantId, tenantId),
-          eq(idempotencyKeys.key, key),
-          eq(idempotencyKeys.route, route),
-        ),
-      );
-
-    try {
-      const result = await fn(tx);
+      // Stale lock recovery
       await tx
         .update(idempotencyKeys)
         .set({
-          responseStatus: result.status,
-          responseBody: result.body,
-          lockedUntil: null,
+          lockedUntil: new Date(Date.now() + lockTimeoutSeconds * 1000),
           updatedAt: new Date(),
         })
         .where(
@@ -171,22 +123,93 @@ export async function withIdempotencyKey<T>(
           ),
         );
 
+      return { kind: "acquired" as const };
+    });
+
+    if (outcome.kind === "cached") {
       return {
-        status: result.status,
-        body: result.body,
-        cached: false,
+        status: outcome.status,
+        body: outcome.body,
+        cached: true,
       };
-    } catch (err) {
-      await tx
-        .delete(idempotencyKeys)
-        .where(
-          and(
-            eq(idempotencyKeys.tenantId, tenantId),
-            eq(idempotencyKeys.key, key),
-            eq(idempotencyKeys.route, route),
-          ),
-        );
-      throw err;
     }
-  });
+
+    if (outcome.kind === "acquired") {
+      return await withTenant(db, tenantId, async (tx) => {
+        try {
+          const result = await fn(tx);
+          await tx
+            .update(idempotencyKeys)
+            .set({
+              responseStatus: result.status,
+              responseBody: result.body,
+              lockedUntil: null,
+              updatedAt: new Date(),
+            })
+            .where(
+              and(
+                eq(idempotencyKeys.tenantId, tenantId),
+                eq(idempotencyKeys.key, key),
+                eq(idempotencyKeys.route, route),
+              ),
+            );
+
+          return {
+            status: result.status,
+            body: result.body,
+            cached: false,
+          };
+        } catch (err) {
+          await tx
+            .delete(idempotencyKeys)
+            .where(
+              and(
+                eq(idempotencyKeys.tenantId, tenantId),
+                eq(idempotencyKeys.key, key),
+                eq(idempotencyKeys.route, route),
+              ),
+            );
+          throw err;
+        }
+      });
+    }
+
+    // In-flight: wait briefly outside transaction so the connection is returned to the pool
+    await new Promise((resolve) => setTimeout(resolve, 50));
+  }
+
+  throw new IdempotencyInFlightError();
+}
+
+/**
+ * Periodically deletes expired idempotency key entries (PLAN §5.10).
+ */
+export async function cleanupExpiredIdempotencyKeys(
+  db: Db,
+  tenantId?: string | undefined,
+): Promise<{ deletedCount: number }> {
+  if (tenantId) {
+    return await withTenant(db, tenantId, async (tx) => {
+      const res = await tx.execute<{ count: string }>(sql`
+        WITH deleted AS (
+          DELETE FROM idempotency_keys
+           WHERE tenant_id = ${tenantId}
+             AND expires_at < now()
+          RETURNING 1
+        )
+        SELECT count(*)::text AS count FROM deleted;
+      `);
+      return { deletedCount: Number(res.rows[0]?.count ?? 0) };
+    });
+  }
+
+  const res = await db.execute<{ count: string }>(sql`
+    WITH deleted AS (
+      DELETE FROM idempotency_keys
+       WHERE expires_at < now()
+      RETURNING 1
+    )
+    SELECT count(*)::text AS count FROM deleted;
+  `);
+  return { deletedCount: Number(res.rows[0]?.count ?? 0) };
 }

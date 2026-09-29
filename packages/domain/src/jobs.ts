@@ -3,6 +3,8 @@ import type { Logger } from "pino";
 import { QUEUE_NAMES } from "@bs/db";
 import { createDb, type Db, type DbHandle } from "@bs/db";
 import { expireOldReservations } from "./catalog/inventory-reservations.ts";
+import { processWebhookInboxItem } from "./system/webhooks.ts";
+import { cleanupExpiredIdempotencyKeys } from "./system/idempotency.ts";
 
 /**
  * Job runtime (PLAN §11). Queues are created by the migrate step (as app_owner); workers run
@@ -45,6 +47,32 @@ export async function startJobs(opts: {
         opts.log.info({ job_id: job.id, expiredCount: res.expiredCount }, "reservation.expiry processed");
       } catch (err) {
         opts.log.error({ err, job_id: job.id }, "reservation.expiry failed");
+        throw err;
+      }
+    }
+  });
+
+  // Handle webhook background processing (PLAN §11.4)
+  await boss.work<{ inboxId: string }>(QUEUE_NAMES.WEBHOOK_PROCESS, { localConcurrency: 2 }, async (batch) => {
+    for (const job of batch) {
+      try {
+        const res = await processWebhookInboxItem(db, job.data.inboxId);
+        opts.log.info({ job_id: job.id, inboxId: job.data.inboxId, success: res.success }, "webhook.process completed");
+      } catch (err) {
+        opts.log.error({ err, job_id: job.id }, "webhook.process failed");
+        throw err;
+      }
+    }
+  });
+
+  // Handle idempotency keys cleanup (PLAN §5.10)
+  await boss.work<{ tenantId?: string }>(QUEUE_NAMES.IDEMPOTENCY_CLEANUP, { localConcurrency: 1 }, async (batch) => {
+    for (const job of batch) {
+      try {
+        const res = await cleanupExpiredIdempotencyKeys(db, job.data?.tenantId);
+        opts.log.info({ job_id: job.id, deletedCount: res.deletedCount }, "idempotency.cleanup processed");
+      } catch (err) {
+        opts.log.error({ err, job_id: job.id }, "idempotency.cleanup failed");
         throw err;
       }
     }

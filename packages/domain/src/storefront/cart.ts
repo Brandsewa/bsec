@@ -205,10 +205,9 @@ export async function getOrCreateCart(
   rt: Runtime,
   ctx: TenantContext,
   token?: string,
+  txOrDb?: Parameters<Parameters<typeof withTenant>[2]>[0],
 ): Promise<StorefrontCart> {
-  const db = rt._db.db;
-
-  return withTenant(db, ctx.tenantId, async (tx) => {
+  const runWithTx = async (tx: Parameters<Parameters<typeof withTenant>[2]>[0]) => {
     let cartRecord: typeof schema.carts.$inferSelect | undefined;
 
     if (token) {
@@ -239,7 +238,14 @@ export async function getOrCreateCart(
     }
 
     return loadCartWithItems(tx, cartRecord);
-  });
+  };
+
+  if (txOrDb) {
+    return runWithTx(txOrDb);
+  }
+
+  const db = rt._db.db;
+  return withTenant(db, ctx.tenantId, runWithTx);
 }
 
 /**
@@ -434,10 +440,9 @@ export async function clearCart(
   rt: Runtime,
   ctx: TenantContext,
   token: string,
+  txOrDb?: Parameters<Parameters<typeof withTenant>[2]>[0],
 ): Promise<StorefrontCart> {
-  const db = rt._db.db;
-
-  return withTenant(db, ctx.tenantId, async (tx) => {
+  const runWithTx = async (tx: Parameters<Parameters<typeof withTenant>[2]>[0]) => {
     const [cartRecord] = await tx
       .select()
       .from(schema.carts)
@@ -460,7 +465,14 @@ export async function clearCart(
       .where(eq(schema.carts.id, cartRecord.id));
 
     return loadCartWithItems(tx, cartRecord);
-  });
+  };
+
+  if (txOrDb) {
+    return runWithTx(txOrDb);
+  }
+
+  const db = rt._db.db;
+  return withTenant(db, ctx.tenantId, runWithTx);
 }
 
 /**

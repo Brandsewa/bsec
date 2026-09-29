@@ -194,4 +194,58 @@ describe("End-to-End Checkout Place Order", () => {
       expect(intent?.status).toBe("created");
     });
   });
+
+  it("concurrent checkout idempotency: multiple simultaneous placeOrder calls with same key produce exactly one order and all callers receive identical response", async () => {
+    // 1. Create cart and add 2 units
+    const cart = await getOrCreateCart(rt, ctx, "cart_concurrent_token_789");
+    await addToCart(rt, ctx, {
+      token: cart.token,
+      variantId,
+      quantity: 2,
+    });
+
+    const idempotencyKey = "concurrent_checkout_key_003";
+    const checkoutInput = {
+      cartToken: cart.token,
+      idempotencyKey,
+      email: "concurrent@example.com",
+      phone: "9876543210",
+      fullName: "Concurrent User",
+      addressLine1: "123 Speed Way",
+      city: "Mumbai",
+      state: "Maharashtra",
+      pincode: "400020",
+      paymentMethod: "cod" as const,
+    };
+
+    // 2. Fire 10 parallel checkout calls concurrently
+    const results = await Promise.all(
+      Array.from({ length: 10 }, () => placeOrder(rt, ctx, checkoutInput)),
+    );
+
+    // 3. All callers must succeed and receive the exact same order
+    expect(results).toHaveLength(10);
+    const firstOrderId = results[0]?.orderId;
+    const firstOrderNumber = results[0]?.orderNumber;
+    expect(firstOrderId).toBeDefined();
+    expect(firstOrderNumber).toBe("ORD-00003");
+
+    for (const res of results) {
+      expect(res.success).toBe(true);
+      expect(res.orderId).toBe(firstOrderId);
+      expect(res.orderNumber).toBe(firstOrderNumber);
+      expect(res.grandTotal).toBe(results[0]?.grandTotal);
+    }
+
+    // 4. Verify DB state: exactly ONE order created
+    await withTenant(rwDb.db, tenantId, async (tx) => {
+      const orderRows = await tx.select().from(orders).where(eq(orders.id, firstOrderId!));
+      expect(orderRows).toHaveLength(1);
+
+      // Verify inventory: reserved = 5 (2 from test 1 + 1 from test 2 + 2 from this test), NOT 23!
+      const [inv] = await tx.select().from(inventoryLevels).where(eq(inventoryLevels.variantId, variantId));
+      expect(inv?.reserved).toBe(5);
+      expect(inv?.available).toBe(5);
+    });
+  });
 });

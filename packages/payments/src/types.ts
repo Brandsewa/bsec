@@ -30,6 +30,7 @@ export interface PaymentIntentModel {
   currency: string;
   status: string;
   providerOrderId?: string | null | undefined;
+  providerPaymentId?: string | null | undefined;
 }
 
 export interface IntentResult {
@@ -85,7 +86,7 @@ export interface VerifiedWebhookEvent {
 
 export interface ProviderPayment {
   id: string;
-  status: "authorized" | "captured" | "failed" | "refunded";
+  status: "created" | "authorized" | "captured" | "failed" | "refunded";
   amount: bigint | number;
   currency: string;
   method?: string | undefined;

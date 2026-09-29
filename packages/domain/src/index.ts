@@ -33,3 +33,4 @@ export * from "./customers/otp.ts";
 export * from "./customers/addresses.ts";
 export * from "./customers/wishlist.ts";
 export * from "./customers/orders.ts";
+export * from "./payments/credentials.ts";

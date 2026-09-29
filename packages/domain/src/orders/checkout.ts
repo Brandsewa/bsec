@@ -81,7 +81,7 @@ export async function placeOrder(
 
   const executeOrderPlacement = async (tx: typeof rt._db.db): Promise<{ status: number; body: PlaceOrderResult }> => {
     // 1. Fetch cart
-    const cart = await getOrCreateCart(rt, ctx, input.cartToken);
+    const cart = await getOrCreateCart(rt, ctx, input.cartToken, tx);
     if (!cart || cart.items.length === 0) {
       throw new Error("Cannot place order with empty cart");
     }
@@ -234,7 +234,7 @@ export async function placeOrder(
     });
 
     // 11. Clear cart
-    await clearCart(rt, ctx, input.cartToken);
+    await clearCart(rt, ctx, input.cartToken, tx);
 
     // 12. Enqueue order.created job if boss runtime is present
     if (rt._jobs) {

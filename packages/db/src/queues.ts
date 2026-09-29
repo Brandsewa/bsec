@@ -10,6 +10,7 @@ export const QUEUES = [
   { name: "order.cancelled", options: { retryLimit: 5, retryBackoff: true, retryDelay: 5 } },
   { name: "reservation.expiry", options: { retryLimit: 5, retryBackoff: true, retryDelay: 5 } },
   { name: "webhook.process", options: { retryLimit: 5, retryBackoff: true, retryDelay: 5 } },
+  { name: "idempotency.cleanup", options: { retryLimit: 5, retryBackoff: true, retryDelay: 5 } },
 ] as const;
 
 export type QueueName = (typeof QUEUES)[number]["name"];
@@ -22,5 +23,6 @@ export const QUEUE_NAMES = {
   ORDER_CANCELLED: "order.cancelled",
   RESERVATION_EXPIRY: "reservation.expiry",
   WEBHOOK_PROCESS: "webhook.process",
+  IDEMPOTENCY_CLEANUP: "idempotency.cleanup",
 } as const;
 

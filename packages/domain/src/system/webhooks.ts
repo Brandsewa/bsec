@@ -140,6 +140,20 @@ export async function processWebhookInboxItem(
     return { alreadyProcessed: false };
   }
 
+  // Reject unverified / forged webhook signatures before any business logic executes (PLAN §11.4)
+  if (!item.signature_valid) {
+    await db
+      .update(webhookInbox)
+      .set({
+        status: "failed",
+        error: "Invalid webhook signature",
+        updatedAt: new Date(),
+      })
+      .where(eq(webhookInbox.id, inboxId));
+
+    return { success: false, error: "Invalid webhook signature" };
+  }
+
   try {
     const payload = (item.payload_sanitized ?? {}) as WebhookPayloadStructure;
     const provider = item.provider;
