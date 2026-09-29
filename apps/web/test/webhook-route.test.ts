@@ -8,6 +8,8 @@ vi.mock("server-only", () => ({}));
 
 const mockReceiveWebhook = vi.fn();
 const mockGetTenantPaymentSecrets = vi.fn();
+const mockCheckWebhookRateLimit = vi.fn();
+const mockResolveWebhookTenant = vi.fn();
 
 vi.mock("@bs/domain", async (importOriginal) => {
   const actual = (await importOriginal()) as Record<string, unknown>;
@@ -15,6 +17,8 @@ vi.mock("@bs/domain", async (importOriginal) => {
     ...actual,
     receiveWebhook: (...args: unknown[]) => mockReceiveWebhook(...args),
     getTenantPaymentSecrets: (...args: unknown[]) => mockGetTenantPaymentSecrets(...args),
+    checkWebhookRateLimit: (...args: unknown[]) => mockCheckWebhookRateLimit(...args),
+    resolveWebhookTenant: (...args: unknown[]) => mockResolveWebhookTenant(...args),
   };
 });
 
@@ -40,6 +44,10 @@ describe("Webhook Route Handler End-to-End Signature Verification & Processing C
       },
     };
 
+    mockCheckWebhookRateLimit.mockResolvedValue(undefined);
+    mockResolveWebhookTenant.mockImplementation(async (_db: unknown, params: { claimedTenantId?: string }) => {
+      return { tenantId: params.claimedTenantId || TENANT_ID, verified: true };
+    });
     mockReceiveWebhook.mockResolvedValue({ duplicate: false, inboxId: "inbox_rec_001" });
     mockGetTenantPaymentSecrets.mockImplementation(async (_db: unknown, _tenantId: string, provider: string) => {
       if (provider === "razorpay") return { webhookSecret: RZP_SECRET };
@@ -256,5 +264,26 @@ describe("Webhook Route Handler End-to-End Signature Verification & Processing C
     expect(mockReceiveWebhook).toHaveBeenCalledTimes(1);
     const receivedInput = mockReceiveWebhook.mock.calls[0]?.[1];
     expect(receivedInput.signatureValid).toBe(false);
+  });
+
+  it("returns 429 when checkWebhookRateLimit throws RateLimitExceededError", async () => {
+    const { RateLimitExceededError } = await import("@bs/domain");
+    mockCheckWebhookRateLimit.mockRejectedValueOnce(
+      new RateLimitExceededError("Rate limit exceeded", 45, 300, "rate:webhook:razorpay:127.0.0.1"),
+    );
+
+    const req = new Request(`http://localhost:3000/api/webhooks/razorpay?tenantId=${TENANT_ID}`, {
+      method: "POST",
+      headers: {
+        "content-type": "application/json",
+      },
+      body: JSON.stringify({ event: "payment.captured" }),
+    });
+
+    const res = await POST(req, { params: Promise.resolve({ provider: "razorpay" }) });
+    expect(res.status).toBe(429);
+    expect(res.headers.get("Retry-After")).toBe("45");
+    const json = await res.json();
+    expect(json.error).toBe("Rate limit exceeded");
   });
 });

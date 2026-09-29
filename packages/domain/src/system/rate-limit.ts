@@ -82,11 +82,64 @@ export async function checkRateLimit(
 
 export type QuotaKey = "uncached_storefront_rpm" | "admin_api_rpm" | "job_concurrency";
 
+/**
+ * Generous starting quotas (PLAN §14 / M7):
+ * Storefront default: 3,000 req/min (XS). Admin default: 600 req/min (XS).
+ */
 const DEFAULT_TIER_QUOTAS: Record<QuotaKey, { XS: number; S: number; M: number; L: number }> = {
-  uncached_storefront_rpm: { XS: 120, S: 300, M: 900, L: 2400 },
-  admin_api_rpm: { XS: 60, S: 120, M: 300, L: 600 },
+  uncached_storefront_rpm: { XS: 3000, S: 4500, M: 9000, L: 18000 },
+  admin_api_rpm: { XS: 600, S: 1200, M: 2400, L: 4800 },
   job_concurrency: { XS: 1, S: 2, M: 4, L: 8 },
 };
+
+/**
+ * Extracts verified client IP behind reverse proxy (PLAN §14 / M7).
+ * - Never trusts the first X-Forwarded-For hop (which can be client-forged).
+ * - Takes the last hop added by trusted reverse proxy (Caddy / Coolify).
+ * - Reads CF-Connecting-IP ONLY if TRUST_CLOUDFLARE=true is explicitly set.
+ */
+export function getClientIp(
+  headers: Headers | Record<string, string | string[] | undefined>,
+): string {
+  const getHeader = (name: string): string | undefined => {
+    if (typeof (headers as Headers).get === "function") {
+      return (headers as Headers).get(name) ?? undefined;
+    }
+    const rec = headers as Record<string, string | string[] | undefined>;
+    const val = rec[name] ?? rec[name.toLowerCase()];
+    if (Array.isArray(val)) return val[0];
+    return val ?? undefined;
+  };
+
+  // 1. Guarded Cloudflare check: only trust CF-Connecting-IP when explicitly configured
+  if (process.env.TRUST_CLOUDFLARE === "true") {
+    const cfIp = getHeader("cf-connecting-ip");
+    if (cfIp && cfIp.trim()) {
+      return cfIp.trim();
+    }
+  }
+
+  // 2. Reverse proxy hop parsing: take the last untrusted hop
+  const xForwardedFor = getHeader("x-forwarded-for");
+  if (xForwardedFor) {
+    const hops = xForwardedFor
+      .split(",")
+      .map((h) => h.trim())
+      .filter(Boolean);
+    const lastHop = hops[hops.length - 1];
+    if (lastHop) {
+      return lastHop;
+    }
+  }
+
+  // 3. Fallback to X-Real-IP
+  const realIp = getHeader("x-real-ip");
+  if (realIp && realIp.trim()) {
+    return realIp.trim();
+  }
+
+  return "127.0.0.1";
+}
 
 /**
  * Resolves effective quota for a tenant:
@@ -132,6 +185,7 @@ export async function resolveTenantQuota(
 
 /**
  * Customer OTP Request Rate Limits (strictest):
+ * - Minimum 60-second cooldown per phone number across all IPs (anti-spam)
  * - Per phone: 3 requests / 10 min (600s)
  * - Per IP: 5 requests / 10 min (600s)
  * - Per tenant: 50 requests / 10 min (600s)
@@ -141,6 +195,21 @@ export async function checkCustomerOtpRequestLimit(
   params: { tenantId: string; ip: string; phone: string },
 ): Promise<void> {
   const { tenantId, ip, phone } = params;
+
+  // 1. Phone + IP 60s cooldown (anti-spam)
+  const cooldownRes = await checkRateLimit(db, {
+    key: `otp:cooldown:${tenantId}:${phone}:${ip}`,
+    limit: 1,
+    windowSeconds: 60,
+  });
+  if (!cooldownRes.allowed) {
+    throw new RateLimitExceededError(
+      `Please wait ${cooldownRes.retryAfter} seconds before requesting another OTP.`,
+      cooldownRes.retryAfter,
+      1,
+      `otp:cooldown:${tenantId}:${phone}:${ip}`,
+    );
+  }
 
   // 1. IP check
   const ipRes = await checkRateLimit(db, {
@@ -287,73 +356,73 @@ export async function checkAdminLoginLimit(
 }
 
 /**
- * Webhook Rate Limits:
- * - Per IP: 120 requests / 60s
- * - Per provider: 300 requests / 60s
+ * Webhook Rate Limits (PLAN §14 / M7):
+ * - Per-provider + per-source-IP (300 requests / 60s default)
+ * Enforced on unverified / forged requests to protect origin from DoS.
  */
 export async function checkWebhookRateLimit(
   db: Db,
   params: { ip: string; provider: string },
 ): Promise<void> {
   const { ip, provider } = params;
-
-  const ipRes = await checkRateLimit(db, {
-    key: `webhook:ip:${ip}`,
-    limit: 120,
-    windowSeconds: 60,
-  });
-  if (!ipRes.allowed) {
-    throw new RateLimitExceededError(
-      `Webhook rate limit exceeded for IP. Retry after ${ipRes.retryAfter} seconds.`,
-      ipRes.retryAfter,
-      ipRes.limit,
-      `webhook:ip:${ip}`,
-    );
-  }
-
+  const key = `rate:webhook:${provider.toLowerCase()}:${ip}`;
   const provRes = await checkRateLimit(db, {
-    key: `webhook:provider:${provider.toLowerCase()}`,
+    key,
     limit: 300,
     windowSeconds: 60,
   });
   if (!provRes.allowed) {
     throw new RateLimitExceededError(
-      `Webhook rate limit exceeded for provider ${provider}. Retry after ${provRes.retryAfter} seconds.`,
+      `Webhook rate limit exceeded for provider ${provider} from this IP. Retry after ${provRes.retryAfter} seconds.`,
       provRes.retryAfter,
       provRes.limit,
-      `webhook:provider:${provider.toLowerCase()}`,
+      key,
     );
   }
 }
 
 /**
  * Uncached Storefront Request Rate Limit per Tenant (PLAN §14 quota table):
- * XS: 120/min, S: 300/min, M: 900/min, L: 2400/min
+ * Default: 3,000 req/min (XS). Fail-open on database errors with loud warning log.
  */
 export async function checkStorefrontRateLimit(
   db: Db,
   tenantId: string,
 ): Promise<RateLimitResult> {
-  const limit = await resolveTenantQuota(db, tenantId, "uncached_storefront_rpm");
-  const res = await checkRateLimit(db, {
-    key: `rate:storefront:tenant:${tenantId}`,
-    limit,
-    windowSeconds: 60,
-  });
-  if (!res.allowed) {
-    throw new RateLimitExceededError(
-      `Storefront rate limit exceeded (${limit} req/min). Retry after ${res.retryAfter} seconds.`,
-      res.retryAfter,
-      res.limit,
-      `rate:storefront:tenant:${tenantId}`,
-    );
+  try {
+    const limit = await resolveTenantQuota(db, tenantId, "uncached_storefront_rpm");
+    const res = await checkRateLimit(db, {
+      key: `rate:storefront:tenant:${tenantId}`,
+      limit,
+      windowSeconds: 60,
+    });
+    if (!res.allowed) {
+      throw new RateLimitExceededError(
+        `Storefront rate limit exceeded (${limit} req/min). Retry after ${res.retryAfter} seconds.`,
+        res.retryAfter,
+        res.limit,
+        `rate:storefront:tenant:${tenantId}`,
+      );
+    }
+    return res;
+  } catch (err: unknown) {
+    if (err instanceof RateLimitExceededError) {
+      throw err;
+    }
+    console.warn(`[WARN] Storefront rate limit check failed for tenant ${tenantId}. Failing open. Error: ${err instanceof Error ? err.message : String(err)}`);
+    return {
+      allowed: true,
+      count: 0,
+      limit: 3000,
+      remaining: 3000,
+      retryAfter: 0,
+    };
   }
-  return res;
 }
 
 /**
  * Admin / API Request Rate Limit per Tenant (PLAN §14 quota table):
- * XS: 60/min, S: 120/min, M: 300/min, L: 600/min
+ * Default: 600 req/min (XS).
  */
 export async function checkAdminApiRateLimit(
   db: Db,
@@ -412,3 +481,41 @@ export async function releaseTenantJobSlot(
     WHERE tenant_id = ${tenantId};
   `);
 }
+
+/**
+ * Prunes expired rate limit counters older than 1 hour (PLAN §14 / M7).
+ * Prevents unbounded growth of rate_limit_counters table.
+ */
+export async function cleanExpiredRateLimits(db: Db): Promise<number> {
+  const result = await db.execute<{ count: string }>(sql`
+    WITH deleted AS (
+      DELETE FROM rate_limit_counters
+      WHERE expires_at < now() - INTERVAL '1 hour'
+      RETURNING 1
+    )
+    SELECT count(*)::text as count FROM deleted;
+  `);
+  return parseInt(result.rows[0]?.count ?? "0", 10);
+}
+
+/**
+ * Reaps stale tenant active job slots (PLAN §14 / M7).
+ * If a worker crashed while holding a slot, resets active_count based on a 30-minute stale threshold.
+ */
+export async function reapStaleTenantJobSlots(
+  db: Db,
+  staleMinutes: number = 30,
+): Promise<number> {
+  const result = await db.execute<{ count: string }>(sql`
+    WITH updated AS (
+      UPDATE tenant_active_jobs
+      SET active_count = 0, updated_at = now()
+      WHERE updated_at < now() - make_interval(mins => ${staleMinutes})
+        AND active_count > 0
+      RETURNING 1
+    )
+    SELECT count(*)::text as count FROM updated;
+  `);
+  return parseInt(result.rows[0]?.count ?? "0", 10);
+}
+

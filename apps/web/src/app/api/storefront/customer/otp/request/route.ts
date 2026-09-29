@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
-import { evaluateStorefrontAccess, requestCustomerOtp } from "@bs/domain";
+import { evaluateStorefrontAccess, requestCustomerOtp, getClientIp } from "@bs/domain";
 import { server } from "@/server/runtime.ts";
 import { getRequestHeaders } from "../../../cart/route.ts";
 
@@ -26,10 +26,7 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: "Invalid phone number", details: parsed.error.issues }, { status: 400 });
     }
 
-    const clientIp =
-      req.headers.get("cf-connecting-ip") ||
-      req.headers.get("x-forwarded-for")?.split(",")[0]?.trim() ||
-      "127.0.0.1";
+    const clientIp = getClientIp(req.headers);
 
     try {
       const { checkCustomerOtpRequestLimit } = await import("@bs/domain");

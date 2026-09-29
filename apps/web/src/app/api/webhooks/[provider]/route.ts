@@ -7,6 +7,7 @@ import {
   ShiprocketProvider,
   checkWebhookRateLimit,
   RateLimitExceededError,
+  getClientIp,
 } from "@bs/domain";
 import { RazorpayProvider, CODProvider } from "@bs/payments";
 import { server } from "@/server/runtime.ts";
@@ -21,28 +22,8 @@ export async function POST(
 
     const { rt } = server();
 
-    // 1. IP and Provider rate limiting (PLAN §14 / M7)
-    const clientIp =
-      req.headers.get("cf-connecting-ip") ||
-      req.headers.get("x-forwarded-for")?.split(",")[0]?.trim() ||
-      "127.0.0.1";
-
-    try {
-      await checkWebhookRateLimit(rt._db.db, { ip: clientIp, provider });
-    } catch (err: unknown) {
-      if (err instanceof RateLimitExceededError) {
-        return NextResponse.json(
-          { error: err.message },
-          {
-            status: 429,
-            headers: {
-              "Retry-After": String(err.retryAfter),
-            },
-          },
-        );
-      }
-      throw err;
-    }
+    // 1. IP extraction using reverse proxy hop parsing (PLAN §14 / M7)
+    const clientIp = getClientIp(req.headers);
 
     const rawBody = await req.text();
     let parsed: Record<string, unknown>;
@@ -106,7 +87,9 @@ export async function POST(
       (typeof parsed.order_id === "string" && parsed.order_id) ||
       undefined;
 
-    // 2. Server-side derivation and verification of tenantId (M7 security finding fix)
+    // 2. Tenant identity verification (M7 security boundary)
+    // Tenant identity is established by the per-tenant webhook secret.
+    // The claimed tenantId selects which secret to verify against; the HMAC signature proves authenticity.
     let tenantId: string | undefined;
     try {
       const resolved = await resolveWebhookTenant(rt._db.db, {
@@ -120,6 +103,17 @@ export async function POST(
       });
       tenantId = resolved.tenantId;
     } catch (err: unknown) {
+      // Enforce rate limit on unverified / failed tenant requests before returning 400
+      try {
+        await checkWebhookRateLimit(rt._db.db, { ip: clientIp, provider });
+      } catch (rateErr: unknown) {
+        if (rateErr instanceof RateLimitExceededError) {
+          return NextResponse.json(
+            { error: rateErr.message },
+            { status: 429, headers: { "Retry-After": String(rateErr.retryAfter) } },
+          );
+        }
+      }
       const msg = err instanceof Error ? err.message : "Tenant verification failed";
       return NextResponse.json({ error: msg }, { status: 400 });
     }
@@ -154,7 +148,29 @@ export async function POST(
       signatureValid = false;
     }
 
-    // 4. Ingest into inbox (decoupled, returns immediately)
+    // 4. Rate Limiting Policy (PLAN §14 / M7):
+    // A webhook carrying a valid signature must NEVER be rate-limited into failure.
+    // Rate-limiting applies strictly to unverified / spoofed requests per provider and source IP.
+    if (!signatureValid) {
+      try {
+        await checkWebhookRateLimit(rt._db.db, { ip: clientIp, provider });
+      } catch (err: unknown) {
+        if (err instanceof RateLimitExceededError) {
+          return NextResponse.json(
+            { error: err.message },
+            {
+              status: 429,
+              headers: {
+                "Retry-After": String(err.retryAfter),
+              },
+            },
+          );
+        }
+        throw err;
+      }
+    }
+
+    // 5. Ingest into inbox (decoupled, returns immediately)
     const result = await receiveWebhook(
       rt._db.db,
       {

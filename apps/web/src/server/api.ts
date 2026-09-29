@@ -57,6 +57,8 @@ import {
   updateStoreSettings,
   updateTheme,
   updateVariant,
+  getAdminShippingSettings,
+  updateAdminShippingSettings,
   searchStorefrontProducts,
   getSearchSuggestions,
   getOrCreateCart,
@@ -695,6 +697,22 @@ export const storeRouter = os.router({
         .handler(({ context, input }) => {
           if (!context.tenantCtx) throw new Error("Missing tenant context");
           return deleteAdminDiscount(context.rt, context.tenantCtx, input);
+        }),
+    },
+    shipping: {
+      get: os.admin.shipping.get
+        .use(requireAdmin)
+        .use(requirePermission("settings.write"))
+        .handler(({ context }) => {
+          if (!context.tenantCtx) throw new Error("Missing tenant context");
+          return getAdminShippingSettings(context.rt._db.db, context.tenantCtx.tenantId);
+        }),
+      update: os.admin.shipping.update
+        .use(requireAdmin)
+        .use(requirePermission("settings.write"))
+        .handler(({ context, input }) => {
+          if (!context.tenantCtx) throw new Error("Missing tenant context");
+          return updateAdminShippingSettings(context.rt._db.db, context.tenantCtx.tenantId, input);
         }),
     },
   },

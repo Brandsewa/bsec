@@ -1,5 +1,5 @@
 import { Outlet, createFileRoute, useRouterState } from "@tanstack/react-router";
-import { FileText, Home, Menu, Package, Palette, Settings, ShoppingBag, Sparkles, Users, Warehouse } from "lucide-react";
+import { FileText, Home, Menu, Package, Palette, Settings, ShoppingBag, Sparkles, Truck, Users, Warehouse } from "lucide-react";
 import { AppShell, PageSkeleton, type NavGroup } from "@bs/ui";
 
 /** Store admin shell (PLAN §8). Store switcher, permissions and real data arrive in M1+. */
@@ -27,6 +27,7 @@ const nav: NavGroup[] = [
     items: [
       { label: "General", href: "/settings", icon: Settings },
       { label: "Branding", href: "/settings/branding", icon: Sparkles },
+      { label: "Shipping", href: "/settings/shipping", icon: Truck },
     ],
   },
 ];

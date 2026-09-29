@@ -1,6 +1,11 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
-import { evaluateStorefrontAccess, estimateCartShipping } from "@bs/domain";
+import {
+  evaluateStorefrontAccess,
+  estimateCartShipping,
+  checkStorefrontRateLimit,
+  RateLimitExceededError,
+} from "@bs/domain";
 import { server } from "@/server/runtime.ts";
 import { CART_COOKIE_NAME, getRequestHeaders, getCookieValue } from "../route.ts";
 
@@ -18,6 +23,18 @@ export async function POST(req: Request) {
 
     if (!access.tenantId) {
       return NextResponse.json({ error: "Store not found" }, { status: 404 });
+    }
+
+    try {
+      await checkStorefrontRateLimit(rt._db.db, access.tenantId);
+    } catch (err: unknown) {
+      if (err instanceof RateLimitExceededError) {
+        return NextResponse.json(
+          { error: err.message },
+          { status: 429, headers: { "Retry-After": String(err.retryAfter) } },
+        );
+      }
+      throw err;
     }
 
     const json = await req.json().catch(() => ({}));

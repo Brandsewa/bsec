@@ -29,7 +29,7 @@ When a new release introduces regressions (e.g. 500 errors, checkout failure, me
    - Example previous (good) tag: `sha-6e78ac7...`
 
 ### Step 2: Trigger Rollback via Coolify UI
-1. Navigate to Coolify (`https://server.brandsewa.com:8000`).
+1. Navigate to Coolify (`https://server.brandsewa.com`).
 2. Go to **Bs Commerce Platform** -> **production**.
 3. For each affected service (`bsec-web`, `bsec-worker`, `bsec-platform`, `bsec-admin`):
    - Open resource -> **Configuration** -> **Docker Image**.
@@ -41,7 +41,7 @@ When a new release introduces regressions (e.g. 500 errors, checkout failure, me
 If Coolify UI is unavailable, use the Coolify API bearer token from GitHub Secrets (`COOLIFY_TOKEN`):
 ```bash
 # Set parameters
-COOLIFY_API_URL="https://server.brandsewa.com:8000/api/v1"
+COOLIFY_API_URL="https://server.brandsewa.com/api/v1"
 BEARER_TOKEN="<COOLIFY_API_TOKEN>"
 PREV_SHA="sha-6e78ac7f0123456789abcdef0123456789abcdef"
 
@@ -72,7 +72,7 @@ ssh root@server.brandsewa.com
 2. Inspect the latest applied migration in Drizzle metadata journal:
 ```bash
 docker exec -i bsec-postgres psql -U postgres -d bsec -c "
-SELECT id, hash, created_at FROM \"__drizzle_migrations\" ORDER BY id DESC LIMIT 5;
+SELECT id, hash, created_at FROM \"drizzle\".\"__drizzle_migrations\" ORDER BY id DESC LIMIT 5;
 "
 ```
 3. If an index is causing locking or performance degradation, drop it concurrently (zero downtime):
@@ -90,7 +90,7 @@ ALTER TABLE <table_name> DROP CONSTRAINT <constraint_name>;
 5. If a migration row in `__drizzle_migrations` must be removed so the fixed migration can re-run:
 ```bash
 docker exec -i bsec-postgres psql -U postgres -d bsec -c "
-DELETE FROM \"__drizzle_migrations\" WHERE id = <latest_id>;
+DELETE FROM \"drizzle\".\"__drizzle_migrations\" WHERE id = <latest_id>;
 "
 ```
 
@@ -100,7 +100,7 @@ DELETE FROM \"__drizzle_migrations\" WHERE id = <latest_id>;
 
 Immediately after rollback completes, verify the following in sequence:
 
-- [ ] **Health Endpoint Version:** `curl -sS https://gobs.cloud/api/health | jq .gitCommit` confirms the running container is on the rollback commit SHA.
+- [ ] **Health Endpoint Version:** `curl -sS https://gobs.cloud/api/health | jq .version` confirms the running container is on the rollback version / commit SHA.
 - [ ] **Database Connection Health:** `curl -sS https://gobs.cloud/api/health | jq .db` returns `{"ok": true, "role": "app_rw"}`.
 - [ ] **Storefront Smoke Test:** Load home page `https://gobs.cloud/` and a product page. Verify HTTP 200 and valid rendered HTML.
 - [ ] **Admin Smoke Test:** Open `https://admin.gobs.cloud/` and log in. Verify order list loads cleanly.

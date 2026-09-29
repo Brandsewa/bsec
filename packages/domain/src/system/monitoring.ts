@@ -3,7 +3,7 @@ import os from "node:os";
 import type { Runtime } from "../runtime.ts";
 
 export interface SystemSignalStatus {
-  value: number;
+  value: number | null;
   unit: string;
   status: "ok" | "warning" | "scale_trigger";
   warningThreshold: number;
@@ -117,8 +117,9 @@ export async function getSystemMetrics(
   }
 
   // 3. Database Connection Pool Signal
-  let activeDbConnections: number;
+  let activeDbConnections = 0;
   let dbWaitingCount = 0;
+  let dbError: string | undefined;
   try {
     const connRes = await db.execute<{ active: string; waiting: string }>(sql`
       SELECT
@@ -129,15 +130,19 @@ export async function getSystemMetrics(
     `);
     activeDbConnections = parseInt(connRes.rows[0]?.active ?? "0", 10);
     dbWaitingCount = parseInt(connRes.rows[0]?.waiting ?? "0", 10);
-  } catch {
-    activeDbConnections = 1;
+  } catch (err: unknown) {
+    dbError = err instanceof Error ? err.message : "DB query failed";
   }
 
   const dbConnPercent = Math.round(((activeDbConnections / thresholds.dbConnections.maxPool) * 100) * 10) / 10;
   let dbStatus: "ok" | "warning" | "scale_trigger" = "ok";
   let dbAction: string | undefined;
 
-  if (dbConnPercent >= thresholds.dbConnections.scaleTrigger || dbWaitingCount > 0) {
+  if (dbError) {
+    dbStatus = "scale_trigger";
+    dbAction = `Database unreachable: ${dbError}`;
+    activeAlerts.push("DBUnreachable");
+  } else if (dbConnPercent >= thresholds.dbConnections.scaleTrigger || dbWaitingCount > 0) {
     dbStatus = "scale_trigger";
     dbAction = "DB connections saturated or lock waits appearing. Tune container pools or deploy PgBouncer";
     activeAlerts.push("DBConnectionPoolSaturation");
@@ -148,18 +153,20 @@ export async function getSystemMetrics(
   }
 
   // 4. Uncached p95 Request Latency Signal
-  const uncachedP95Ms = options?.simulatedP95Ms ?? 180;
+  const uncachedP95Ms: number | null = options?.simulatedP95Ms ?? null;
   let p95Status: "ok" | "warning" | "scale_trigger" = "ok";
   let p95Action: string | undefined;
 
-  if (uncachedP95Ms >= thresholds.uncachedP95.scaleTrigger) {
-    p95Status = "scale_trigger";
-    p95Action = "Uncached p95 > 500 ms SLA violated. Investigate slow queries, missing indexes, or container throttling";
-    activeAlerts.push("UncachedP95LatencyScaleTrigger");
-  } else if (uncachedP95Ms >= thresholds.uncachedP95.warning) {
-    p95Status = "warning";
-    p95Action = "Uncached p95 > 400 ms SLA warning. Check query performance";
-    activeAlerts.push("UncachedP95LatencyWarning");
+  if (uncachedP95Ms !== null) {
+    if (uncachedP95Ms >= thresholds.uncachedP95.scaleTrigger) {
+      p95Status = "scale_trigger";
+      p95Action = "Uncached p95 > 500 ms SLA violated. Investigate slow queries, missing indexes, or container throttling";
+      activeAlerts.push("UncachedP95LatencyScaleTrigger");
+    } else if (uncachedP95Ms >= thresholds.uncachedP95.warning) {
+      p95Status = "warning";
+      p95Action = "Uncached p95 > 400 ms SLA warning. Check query performance";
+      activeAlerts.push("UncachedP95LatencyWarning");
+    }
   }
 
   // 5. Background Job Lag Signal
@@ -199,11 +206,11 @@ export async function getSystemMetrics(
   try {
     const tenantRes = await db.execute<{ tenant_id: string; total_req: string }>(sql`
       SELECT
-        split_part(key, ':', 3) as tenant_id,
+        split_part(key, ':', 4) as tenant_id,
         sum(count)::text as total_req
       FROM rate_limit_counters
-      WHERE key LIKE 'rate:storefront:%' OR key LIKE 'rate:admin:%'
-      GROUP BY split_part(key, ':', 3);
+      WHERE key LIKE 'rate:storefront:tenant:%' OR key LIKE 'rate:admin:tenant:%'
+      GROUP BY split_part(key, ':', 4);
     `);
 
     let grandTotalRequests = 0;
