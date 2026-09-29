@@ -1,0 +1,75 @@
+# CI staging: the exact images `images` just pushed to GHCR (no build), run as an ephemeral stack
+# on the Actions runner and smoke-tested before deploy-production. Same topology as production.
+#   IMAGE_TAG=<sha> POSTGRES_PASSWORD=... APP_OWNER_PASSWORD=... APP_RW_PASSWORD=... \
+#     APP_PLATFORM_PASSWORD=... docker compose -f docker-compose.staging.yml up -d
+# All passwords are required (generated per run in CI). Never used with real data.
+
+x-app-env: &app-env
+  APP_ENV: staging
+  LOG_LEVEL: info
+
+services:
+  postgres:
+    image: postgres:18
+    environment:
+      POSTGRES_DB: bsec
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?required}
+    volumes:
+      - pgdata:/var/lib/postgresql
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d bsec"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+
+  # One-shot, same entrypoint as production: bootstrap roles (superuser present) then migrate.
+  migrate:
+    image: ghcr.io/brandsewa/bsec-migrate:${IMAGE_TAG:?required}
+    depends_on:
+      postgres: { condition: service_healthy }
+    environment:
+      DATABASE_URL_SUPERUSER: postgres://postgres:${POSTGRES_PASSWORD}@postgres:5432/bsec
+      DATABASE_URL_OWNER: postgres://app_owner:${APP_OWNER_PASSWORD:?required}@postgres:5432/bsec
+      APP_OWNER_PASSWORD: ${APP_OWNER_PASSWORD}
+      APP_RW_PASSWORD: ${APP_RW_PASSWORD:?required}
+      APP_PLATFORM_PASSWORD: ${APP_PLATFORM_PASSWORD:?required}
+    restart: "no"
+
+  web:
+    image: ghcr.io/brandsewa/bsec-web:${IMAGE_TAG}
+    depends_on:
+      migrate: { condition: service_completed_successfully }
+    environment:
+      <<: *app-env
+      DATABASE_URL_RW: postgres://app_rw:${APP_RW_PASSWORD}@postgres:5432/bsec
+    ports:
+      - "127.0.0.1:3000:3000"
+
+  platform:
+    image: ghcr.io/brandsewa/bsec-platform:${IMAGE_TAG}
+    depends_on:
+      migrate: { condition: service_completed_successfully }
+    environment:
+      <<: *app-env
+      DATABASE_URL_PLATFORM: postgres://app_platform:${APP_PLATFORM_PASSWORD}@postgres:5432/bsec
+    ports:
+      - "127.0.0.1:4000:4000"
+
+  worker:
+    image: ghcr.io/brandsewa/bsec-worker:${IMAGE_TAG}
+    depends_on:
+      migrate: { condition: service_completed_successfully }
+    environment:
+      <<: *app-env
+      DATABASE_URL_RW: postgres://app_rw:${APP_RW_PASSWORD}@postgres:5432/bsec
+    ports:
+      - "127.0.0.1:4100:4100"
+
+  admin:
+    image: ghcr.io/brandsewa/bsec-admin:${IMAGE_TAG}
+    ports:
+      - "127.0.0.1:8080:8080"
+
+volumes:
+  pgdata:

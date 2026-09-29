@@ -83,12 +83,61 @@ jobs:
           cache-from: type=gha,scope=${{ matrix.app }}
           cache-to: type=gha,mode=max,scope=${{ matrix.app }}
 
-  # No staging environment yet (single shared VPS for now, RUNBOOK §TODO). This job deploys
-  # straight to production once approved. Add a deploy-staging job ahead of this one when the
-  # staging VPS exists — same shape, different Coolify resource UUIDs.
+  # Ephemeral staging: run the exact images just pushed, on the runner, smoke-test, tear down.
+  # Replaces a persistent staging VPS (cost/simplicity call, 2026-09-29). Fresh random secrets
+  # per run; never touches production data or credentials.
+  staging-smoke-test:
+    name: staging smoke test (ephemeral compose)
+    needs: images
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    env:
+      IMAGE_TAG: ${{ github.sha }}
+      COMPOSE: docker compose -f docker-compose.staging.yml
+    steps:
+      - uses: actions/checkout@v5
+      - name: Generate per-run secrets
+        run: |
+          for v in POSTGRES_PASSWORD APP_OWNER_PASSWORD APP_RW_PASSWORD APP_PLATFORM_PASSWORD; do
+            val=$(openssl rand -hex 16); echo "::add-mask::$val"; echo "$v=$val" >> "$GITHUB_ENV"
+          done
+      - name: Start stack (pulls images from GHCR)
+        run: |
+          $COMPOSE pull
+          # --wait blocks until services are running/healthy; migrate is a one-shot dependency.
+          $COMPOSE up -d --wait
+      - name: Assert migrate completed successfully
+        run: |
+          code=$($COMPOSE ps -a --format '{{.Service}} {{.ExitCode}}' | awk '$1=="migrate"{print $2}')
+          echo "migrate exit code: $code"; test "$code" = "0"
+      - name: Smoke test /health endpoints
+        run: |
+          check() { # url, expected role ("" = none expected), extra jq filter
+            for i in $(seq 1 30); do
+              body=$(curl -fsS "$1" 2>/dev/null) && break; sleep 2
+            done
+            echo "$1 -> $body"
+            echo "$body" | jq -e '.status == "ok"' >/dev/null
+            if [ -n "$2" ]; then echo "$body" | jq -e --arg r "$2" '.db.ok == true and .db.role == $r' >/dev/null; fi
+          }
+          check http://127.0.0.1:3000/api/health app_rw
+          check http://127.0.0.1:4000/health app_platform
+          check http://127.0.0.1:4100/health app_rw
+          check http://127.0.0.1:8080/health ""
+          # TODO(M4/M5): once order placement lands, place a real COD test order against
+          # http://127.0.0.1:3000 here (M5 exit criterion: proven "on staging").
+      - name: Dump logs on failure
+        if: failure()
+        run: $COMPOSE logs --no-color --tail=100
+      - name: Tear down (always)
+        if: always()
+        run: |
+          $COMPOSE down -v
+          echo "remaining containers:"; $COMPOSE ps -a
+
   deploy-production:
     name: deploy production (Coolify)
-    needs: images
+    needs: [images, staging-smoke-test]
     runs-on: ubuntu-24.04
     # Required reviewers on the "production" environment gate this job (GitHub → Settings →
     # Environments → production). COOLIFY_TOKEN is a Coolify API token, permission "Deploy" only
