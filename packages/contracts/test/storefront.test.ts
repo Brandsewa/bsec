@@ -2,7 +2,6 @@ import { describe, expect, it } from "vitest";
 import {
   storeContract,
   StorefrontCart,
-  StorefrontCartItem,
   StorefrontSearchOutput,
   StorefrontSuggestionsOutput,
   ShippingEstimateOutput,

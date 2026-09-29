@@ -469,7 +469,20 @@ export const BLOCK_DEFINITIONS: Record<BlockType, AnyBlockDefinition> = {
 
 export const BLOCK_TYPES = Object.keys(BLOCK_DEFINITIONS) as BlockType[];
 
-export function getBlockDefinition<T extends BlockType>(type: T): AnyBlockDefinition {
+export function getBlockDefinition(type: "Hero"): BlockDefinition<HeroProps>;
+export function getBlockDefinition(type: "Banner"): BlockDefinition<BannerProps>;
+export function getBlockDefinition(type: "ProductGrid"): BlockDefinition<ProductGridProps>;
+export function getBlockDefinition(type: "CollectionGrid"): BlockDefinition<CollectionGridProps>;
+export function getBlockDefinition(type: "ProductCarousel"): BlockDefinition<ProductCarouselProps>;
+export function getBlockDefinition(type: "Testimonials"): BlockDefinition<TestimonialsProps>;
+export function getBlockDefinition(type: "Reviews"): BlockDefinition<ReviewsProps>;
+export function getBlockDefinition(type: "RichText"): BlockDefinition<RichTextProps>;
+export function getBlockDefinition(type: "FAQ"): BlockDefinition<FAQProps>;
+export function getBlockDefinition(type: "Gallery"): BlockDefinition<GalleryProps>;
+export function getBlockDefinition(type: "Newsletter"): BlockDefinition<NewsletterProps>;
+export function getBlockDefinition(type: "UspStrip"): BlockDefinition<UspStripProps>;
+export function getBlockDefinition(type: BlockType): AnyBlockDefinition;
+export function getBlockDefinition(type: BlockType): AnyBlockDefinition {
   const def = BLOCK_DEFINITIONS[type];
   if (!def) {
     throw new Error(`Unknown block type: "${type}"`);
