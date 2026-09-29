@@ -92,7 +92,7 @@ jobs:
     runs-on: ubuntu-24.04
     timeout-minutes: 15
     env:
-      IMAGE_TAG: ${{ github.sha }}
+      IMAGE_TAG: sha-${{ github.sha }}  # docker/metadata-action type=sha prefixes "sha-"
       COMPOSE: docker compose -f docker-compose.staging.yml
     steps:
       - uses: actions/checkout@v5
