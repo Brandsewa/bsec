@@ -71,6 +71,13 @@
       "when": 1790650000000,
       "tag": "0009_m7_rate_limits",
       "breakpoints": true
+    },
+    {
+      "idx": 10,
+      "version": "7",
+      "when": 1790660000000,
+      "tag": "0010_m75_membership_self_read",
+      "breakpoints": true
     }
   ]
 }

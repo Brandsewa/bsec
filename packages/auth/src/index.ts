@@ -38,5 +38,6 @@ export function hasPermission(granted: readonly string[], needed: StorePermissio
 }
 
 export { createStaffAuth, type StaffAuth, type StaffAuthOptions } from "./staff.ts";
+export { hashPassword, verifyPassword } from "better-auth/crypto";
 export { createCustomerAuth, type CustomerAuth, type CustomerAuthOptions } from "./customer.ts";
 

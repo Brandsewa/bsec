@@ -1,10 +1,11 @@
 import { StrictMode } from "react";
 import { createRoot } from "react-dom/client";
 import * as Sentry from "@sentry/react";
-import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import { QueryCache, QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { RouterProvider, createRouter } from "@tanstack/react-router";
 import { ROUTE_PENDING_MIN_MS, ROUTE_PENDING_MS } from "@bs/ui";
 import { routeTree } from "./routeTree.gen.ts";
+import { isUnauthorized } from "./lib/auth.ts";
 import "./index.css";
 
 const sentryDsn = import.meta.env.VITE_SENTRY_DSN;
@@ -16,6 +17,12 @@ if (sentryDsn) {
 }
 
 const queryClient = new QueryClient({
+  // A 401 anywhere means the session ended: go to the sign-in page instead of showing broken screens.
+  queryCache: new QueryCache({
+    onError: (err) => {
+      if (isUnauthorized(err) && window.location.pathname !== "/login") window.location.assign("/login");
+    },
+  }),
   defaultOptions: { queries: { staleTime: 30_000, refetchOnWindowFocus: false } },
 });
 

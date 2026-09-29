@@ -1,5 +1,6 @@
 import "server-only";
 import { Hono } from "hono";
+import { cors } from "hono/cors";
 import { implement, onError, ORPCError } from "@orpc/server";
 import { RPCHandler } from "@orpc/server/fetch";
 import { OpenAPIHandler } from "@orpc/openapi/fetch";
@@ -8,6 +9,8 @@ import { hasPermission, type StorePermission } from "@bs/auth";
 import {
   adjustInventory,
   buildTenantContext,
+  checkAdminLoginLimit,
+  getAdminMe,
   checkHealth,
   createBrand,
   createCategory,
@@ -90,6 +93,8 @@ import {
   type TenantContext,
 } from "@bs/domain";
 import { server } from "./runtime.ts";
+import { allowedApiOrigins, getStaffAuth, resolveStaffSession } from "./auth.ts";
+import { clientIp } from "./client-ip.ts";
 
 /**
  * Store API mounted inside Next at /api (PLAN §3). Route handlers never touch the DB:
@@ -109,16 +114,40 @@ export interface ApiContext {
 
 const os = implement(storeContract).$context<ApiContext>();
 
+/** Domain code signals auth problems with "Unauthorized:/Forbidden:/Bad Request:" prefixes; map them to real HTTP-level codes. */
+function mapAuthError(err: unknown): unknown {
+  if (err instanceof Error) {
+    const m = err.message;
+    if (m.startsWith("Unauthorized")) return new ORPCError("UNAUTHORIZED", { message: m.replace(/^Unauthorized:\s*/, "") });
+    if (m.startsWith("Forbidden")) return new ORPCError("FORBIDDEN", { message: m.replace(/^Forbidden:\s*/, "") });
+    if (m.startsWith("Bad Request")) return new ORPCError("BAD_REQUEST", { message: m.replace(/^Bad Request:\s*/, "") });
+  }
+  return err;
+}
+
+/** Requires a signed-in staff session but no store selection (used by /admin/me to list the user's stores). */
+const requireSession = os.middleware(async ({ context, next }) => {
+  if (!context.session || context.session.type === "customer") {
+    throw new ORPCError("UNAUTHORIZED", { message: "Sign in required" });
+  }
+  return next({ context });
+});
+
 const requireAdmin = os.middleware(async ({ context, next }) => {
   const headers = context.headers ?? new Headers();
-  const tenantCtx = await buildTenantContext(context.rt, {
-    entryPath: "admin",
-    headers,
-    session: context.session,
-  });
+  let tenantCtx: TenantContext | null;
+  try {
+    tenantCtx = await buildTenantContext(context.rt, {
+      entryPath: "admin",
+      headers,
+      session: context.session,
+    });
+  } catch (err) {
+    throw mapAuthError(err);
+  }
 
   if (!tenantCtx) {
-    throw new Error("Unauthorized: unable to resolve admin tenant context");
+    throw new ORPCError("UNAUTHORIZED", { message: "Unable to resolve admin tenant context" });
   }
 
   // Quota enforcement: Admin/API requests / min (PLAN §14)
@@ -180,7 +209,7 @@ const requirePermission = (needed: StorePermission) =>
       throw new Error("Unauthorized: missing tenant context");
     }
     if (!hasPermission(context.tenantCtx.permissions, needed)) {
-      throw new Error(`Forbidden: missing required permission '${needed}'`);
+      throw new ORPCError("FORBIDDEN", { message: `Missing required permission '${needed}'` });
     }
     return next({
       context: {
@@ -195,6 +224,12 @@ export const storeRouter = os.router({
     health: os.system.health.handler(({ context }) => checkHealth(context.rt)),
   },
   admin: {
+    me: {
+      get: os.admin.me.get.use(requireSession).handler(({ context }) => {
+        if (!context.session) throw new ORPCError("UNAUTHORIZED", { message: "Sign in required" });
+        return getAdminMe(context.rt, context.session.user.id);
+      }),
+    },
     memberships: {
       list: os.admin.memberships.list
         .use(requireAdmin)
@@ -832,6 +867,61 @@ api.use("*", async (c, next) => {
   c.header("x-request-id", requestId);
 });
 
+/**
+ * Credentialed cross-origin access for the admin SPA only. The allowed origins come from config
+ * (BETTER_AUTH_URL / ADMIN_ORIGINS); anything else gets no CORS headers, so browsers block it.
+ */
+api.use(
+  "*",
+  cors({
+    origin: (origin) => (allowedApiOrigins().includes(origin) ? origin : null),
+    credentials: true,
+    allowHeaders: ["content-type", "x-store-id", "x-request-id"],
+    allowMethods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
+    exposeHeaders: ["x-request-id", "retry-after"],
+    maxAge: 600,
+  }),
+);
+
+/** CSRF defence in depth: a state-changing request that carries a staff cookie must come from an allowed origin. */
+api.use("*", async (c, next) => {
+  const method = c.req.method;
+  if (method !== "GET" && method !== "HEAD" && method !== "OPTIONS" && (c.req.header("cookie") ?? "").includes("bs-staff")) {
+    const origin = c.req.header("origin");
+    if (origin && !allowedApiOrigins().includes(origin)) {
+      return c.json({ error: "Origin not allowed" }, 403);
+    }
+  }
+  await next();
+});
+
+/** Staff authentication (Better Auth): sign-in, sign-out, get-session. Public sign-up is disabled. */
+api.all("/auth/*", async (c) => {
+  const cfg = getStaffAuth();
+  if (!cfg) {
+    return c.json({ error: "Admin sign-in is not configured on this server (BETTER_AUTH_URL / BETTER_AUTH_SECRET)." }, 503);
+  }
+  const req = c.req.raw;
+  if (req.method === "POST" && new URL(req.url).pathname.endsWith("/sign-in/email")) {
+    let email = "";
+    try {
+      const body = (await req.clone().json()) as { email?: unknown };
+      email = typeof body.email === "string" ? body.email : "";
+    } catch {
+      /* malformed body: let Better Auth reject it */
+    }
+    try {
+      await checkAdminLoginLimit(server().rt._db.db, { ip: clientIp(req.headers), email: email || "unknown" });
+    } catch (err) {
+      if (err instanceof RateLimitExceededError) {
+        return c.json({ error: err.message }, 429, { "retry-after": String(err.retryAfter) });
+      }
+      throw err;
+    }
+  }
+  return cfg.auth.handler(req);
+});
+
 /** Liveness + DB readiness, used by Docker/Coolify health checks. */
 api.get("/health", async (c) => {
   const h = await checkHealth(server().rt);
@@ -839,18 +929,20 @@ api.get("/health", async (c) => {
 });
 
 api.all("/rpc/*", async (c, next) => {
+  const session = await resolveStaffSession(c.req.raw.headers);
   const { matched, response } = await rpc.handle(c.req.raw, {
     prefix: "/api/rpc",
-    context: { rt: server().rt, log: c.get("log"), headers: c.req.raw.headers },
+    context: { rt: server().rt, log: c.get("log"), headers: c.req.raw.headers, session },
   });
   if (matched) return c.newResponse(response.body, response);
   await next();
 });
 
 api.all("/*", async (c, next) => {
+  const session = await resolveStaffSession(c.req.raw.headers);
   const { matched, response } = await openapi.handle(c.req.raw, {
     prefix: "/api",
-    context: { rt: server().rt, log: c.get("log"), headers: c.req.raw.headers },
+    context: { rt: server().rt, log: c.get("log"), headers: c.req.raw.headers, session },
   });
   if (matched) return c.newResponse(response.body, response);
   await next();

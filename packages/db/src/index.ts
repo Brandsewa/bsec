@@ -48,3 +48,14 @@ export async function withTenant<T>(db: Db, tenantId: string, fn: (tx: Db) => Pr
     return fn(tx as unknown as Db);
   });
 }
+
+/**
+ * withUser(db, userId, fn): sets app.user_id (SET LOCAL) so a signed-in user can list their OWN
+ * memberships across stores (policy memberships_self_read). It grants no access to any other row.
+ */
+export async function withUser<T>(db: Db, userId: string, fn: (tx: Db) => Promise<T>): Promise<T> {
+  return db.transaction(async (tx) => {
+    await tx.execute(sql`select set_config('app.user_id', ${userId}, true)`);
+    return fn(tx as unknown as Db);
+  });
+}

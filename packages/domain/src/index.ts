@@ -42,6 +42,8 @@ export * from "./orders/discounts.ts";
 export * from "./admin/orders.ts";
 export * from "./admin/customers.ts";
 export * from "./admin/discounts.ts";
+export * from "./admin/me.ts";
+export * from "./admin/create-owner.ts";
 export * from "./system/email.ts";
 export * from "./system/abandoned-carts.ts";
 export type {

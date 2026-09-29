@@ -271,7 +271,24 @@ export const MenuDetail = Menu.extend({
 export type MenuDetail = z.infer<typeof MenuDetail>;
 
 // --- Admin oRPC Contract ---
+export const AdminMeStore = z.object({
+  tenantId: z.string().uuid(),
+  name: z.string(),
+  slug: z.string(),
+  status: z.string(),
+  role: z.string(),
+  permissions: z.array(z.string()),
+});
+export const AdminMe = z.object({
+  user: z.object({ id: z.string().uuid(), email: z.string(), name: z.string() }),
+  stores: z.array(AdminMeStore),
+});
+export type AdminMe = z.infer<typeof AdminMe>;
+
 export const adminContract = {
+  me: {
+    get: oc.route({ method: "GET", path: "/admin/me" }).output(AdminMe),
+  },
   memberships: {
     list: oc
       .route({ method: "GET", path: "/admin/memberships" })
