@@ -30,13 +30,13 @@ export async function searchStorefrontProducts(
   rawQuery: string,
   opts?: SearchProductsOptions,
 ): Promise<SearchProductsResult> {
-  const catalogEnabled = await isFeatureEnabled(rt._db.db, ctx.tenantId, "catalog");
-  if (!catalogEnabled) {
+  const normalizedQuery = rawQuery.trim().toLowerCase();
+  if (!normalizedQuery) {
     return { items: [], total: 0 };
   }
 
-  const normalizedQuery = rawQuery.trim().toLowerCase();
-  if (!normalizedQuery) {
+  const catalogEnabled = await isFeatureEnabled(rt._db.db, ctx.tenantId, "catalog");
+  if (!catalogEnabled) {
     return { items: [], total: 0 };
   }
 

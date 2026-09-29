@@ -7,7 +7,7 @@ import { ROUTE_PENDING_MIN_MS, ROUTE_PENDING_MS } from "@bs/ui";
 import { routeTree } from "./routeTree.gen.ts";
 import "./index.css";
 
-const sentryDsn = import.meta.env.VITE_SENTRY_DSN || import.meta.env.SENTRY_DSN;
+const sentryDsn = import.meta.env.VITE_SENTRY_DSN;
 if (sentryDsn) {
   Sentry.init({
     dsn: sentryDsn,

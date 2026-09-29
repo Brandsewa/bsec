@@ -16,7 +16,7 @@ import { clearCart, getOrCreateCart } from "../storefront/cart.ts";
 import { reserveInventory } from "../catalog/inventory-reservations.ts";
 import { allocateSequenceNumber } from "./sequences.ts";
 import { withIdempotencyKey } from "../system/idempotency.ts";
-import { isFeatureEnabled } from "../features.ts";
+import { isFeatureEnabled, FeatureDisabledError } from "../features.ts";
 
 export interface PlaceOrderInput {
   cartToken: string;
@@ -82,7 +82,7 @@ export async function placeOrder(
 
   const checkoutEnabled = await isFeatureEnabled(rt._db.db, tenantId, "checkout");
   if (!checkoutEnabled) {
-    throw new Error("Checkout is currently disabled for this store");
+    throw new FeatureDisabledError("checkout", "Checkout is currently disabled for this store");
   }
 
   const executeOrderPlacement = async (tx: typeof rt._db.db): Promise<{ status: number; body: PlaceOrderResult }> => {

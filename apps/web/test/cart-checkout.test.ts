@@ -411,6 +411,37 @@ describe("Storefront Cart & Checkout Flow", () => {
           expect(setCookie).toBeDefined();
         }
       });
+
+      it("returns 503 Service Unavailable when checkout feature flag is disabled", async () => {
+        const domain = await import("@bs/domain");
+        vi.mocked(domain.placeOrder).mockRejectedValueOnce(
+          new domain.FeatureDisabledError("checkout", "Checkout is currently disabled for this store"),
+        );
+        const { POST } = await import("../src/app/api/storefront/checkout/place-order/route.ts");
+        const req = new Request("https://demo.gobs.cloud/api/storefront/checkout/place-order", {
+          method: "POST",
+          headers: {
+            host: "demo.gobs.cloud",
+            "content-type": "application/json",
+            cookie: "bs_cart_token=cart-token-1234",
+          },
+          body: JSON.stringify({
+            email: "buyer@example.in",
+            phone: "9876543210",
+            fullName: "Aarav Sharma",
+            addressLine1: "123 MG Road",
+            city: "Bengaluru",
+            state: "Karnataka",
+            pincode: "560001",
+            shippingMethod: "standard",
+            paymentMethod: "cod",
+          }),
+        });
+        const res = await POST(req);
+        expect(res.status).toBe(503);
+        const data = await res.json();
+        expect(data.error).toMatch(/Checkout is currently disabled/);
+      });
     });
   });
 });

@@ -1,6 +1,6 @@
 import "server-only";
 import { Hono } from "hono";
-import { implement, onError } from "@orpc/server";
+import { implement, onError, ORPCError } from "@orpc/server";
 import { RPCHandler } from "@orpc/server/fetch";
 import { OpenAPIHandler } from "@orpc/openapi/fetch";
 import { storeContract } from "@bs/contracts";
@@ -81,6 +81,7 @@ import {
   createAdminDiscount,
   updateAdminDiscount,
   deleteAdminDiscount,
+  FeatureDisabledError,
   type Logger,
   type Runtime,
   type TenantContext,
@@ -591,9 +592,22 @@ export const storeRouter = os.router({
       createFulfillment: os.admin.orders.createFulfillment
         .use(requireAdmin)
         .use(requirePermission("orders.write"))
-        .handler(({ context, input }) => {
+        .handler(async ({ context, input }) => {
           if (!context.tenantCtx) throw new Error("Missing tenant context");
-          return createAdminFulfillment(context.rt, context.tenantCtx, input);
+          try {
+            return await createAdminFulfillment(context.rt, context.tenantCtx, input);
+          } catch (err: unknown) {
+            if (
+              err instanceof FeatureDisabledError ||
+              (typeof err === "object" && err !== null && (err as { statusCode?: number }).statusCode === 503) ||
+              (err instanceof Error && /disabled/i.test(err.message))
+            ) {
+              throw new ORPCError("SERVICE_UNAVAILABLE", {
+                message: err instanceof Error ? err.message : "Fulfillment is currently disabled for this store",
+              });
+            }
+            throw err;
+          }
         }),
       createInvoice: os.admin.orders.createInvoice
         .use(requireAdmin)

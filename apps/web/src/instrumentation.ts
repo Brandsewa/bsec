@@ -1,7 +1,9 @@
 import type { Instrumentation } from "next";
+import { assertProductionEncryptionKeySet } from "@bs/domain";
 
 /** Sentry is optional: without SENTRY_DSN nothing is initialised (local dev, CI). */
 export async function register() {
+  assertProductionEncryptionKeySet();
   if (process.env.NEXT_RUNTIME === "nodejs" && process.env.SENTRY_DSN) {
     const Sentry = await import("@sentry/nextjs");
     Sentry.init({

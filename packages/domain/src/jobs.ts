@@ -8,7 +8,7 @@ import { cleanupExpiredIdempotencyKeys } from "./system/idempotency.ts";
 import { sendTransactionalEmail } from "./system/email.ts";
 import { sweepAbandonedCarts } from "./system/abandoned-carts.ts";
 import { schema } from "@bs/db";
-import { eq } from "drizzle-orm";
+import { eq, and } from "drizzle-orm";
 
 /**
  * Job runtime (PLAN §11). Queues are created by the migrate step (as app_owner); workers run
@@ -156,9 +156,10 @@ export async function handleReturnRequestedJob(
 export async function handleRefundProcessedJob(
   db: Db,
   log: Logger,
-  data: { tenantId: string; orderId: string; refundAmount: number; refundId?: string },
+  data: { tenantId: string; orderId: string; refundAmount?: number; refundId?: string; returnId?: string },
 ): Promise<void> {
-  const { tenantId, orderId, refundAmount, refundId } = data;
+  const { tenantId, orderId, refundAmount = 0, refundId, returnId } = data;
+  const refundKey = refundId ?? returnId;
   const orderRows = await withTenant(db, tenantId, async (tx) => {
     return await tx
       .select({ email: schema.orders.email, number: schema.orders.number })
@@ -168,13 +169,35 @@ export async function handleRefundProcessedJob(
   });
 
   if (orderRows[0]?.email) {
+    const refundRef = `refund_${orderId}_${refundKey ?? "processed"}`;
+
+    // Deduplicate per-refund: if an email was already successfully logged for this refund, skip sending again
+    const [alreadySent] = await withTenant(db, tenantId, async (tx) => {
+      return await tx
+        .select({ id: schema.emailLog.id })
+        .from(schema.emailLog)
+        .where(
+          and(
+            eq(schema.emailLog.tenantId, tenantId),
+            eq(schema.emailLog.eventRef, refundRef),
+            eq(schema.emailLog.status, "sent"),
+          ),
+        )
+        .limit(1);
+    });
+
+    if (alreadySent) {
+      log.info({ orderId, refundKey, eventRef: refundRef }, "Refund email already sent, skipping duplicate");
+      return;
+    }
+
     await dispatchTransactionalEmailOrThrow(db, log, {
       tenantId,
       template: "refund_processed",
       toEmail: orderRows[0].email,
       subject: `Refund processed for order ${orderRows[0].number}`,
       data: { orderNumber: orderRows[0].number, refundAmount },
-      eventRef: `refund_${orderId}_${refundId ?? "processed"}`,
+      eventRef: refundRef,
     });
   }
 }
@@ -344,7 +367,7 @@ export async function startJobs(opts: {
   );
 
   // Handle refund.processed domain event
-  await boss.work<{ tenantId: string; orderId: string; refundAmount: number; refundId?: string }>(
+  await boss.work<{ tenantId: string; orderId: string; refundAmount?: number; refundId?: string; returnId?: string }>(
     QUEUE_NAMES.REFUND_PROCESSED,
     { localConcurrency: 2 },
     async (batch) => {

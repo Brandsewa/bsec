@@ -17,9 +17,20 @@
 
 ---
 
-## 3. Step-by-Step Restore Drill Procedure
+## 3. RPO Architecture & Scope Caveat (pg_dump vs pgBackRest PITR)
 
-### Step 3.1: Provision Clean Scratch PostgreSQL 18
+> [!IMPORTANT]
+> **Current Practice vs Continuous Archiving**:
+> The restore drill procedure documented in §4 restores a full logical dump (`pg_dump`), which corresponds to Coolify's native daily backup to Cloudflare R2.
+> The strict **$\le 15$-minute RPO target** in PLAN §14 depends on **pgBackRest continuous WAL archiving and Point-In-Time Recovery (PITR)**.
+> This pgBackRest PITR pipeline has **not been exercised or deployed** in production yet (it requires running the pgBackRest sidecar and configuring PostgreSQL WAL archiving on the shared VPS).
+> Note also that Postgres continuous archiving parameters (such as `archive_mode = on`, `archive_command = 'pgbackrest --stanza=bsec archive-push %p'`, and `archive_timeout = 60`) live in the documentation in `infra/backups/README.md` and `postgresql.conf`, not inside `pgbackrest.conf`.
+
+---
+
+## 4. Step-by-Step Restore Drill Procedure (pg_dump from R2)
+
+### Step 4.1: Provision Clean Scratch PostgreSQL 18
 On the recovery host or staging machine:
 ```bash
 docker run -d \
@@ -30,7 +41,7 @@ docker run -d \
   postgres:18
 ```
 
-### Step 3.2: Retrieve Backup from Cloudflare R2
+### Step 4.2: Retrieve Backup from Cloudflare R2
 Using AWS CLI or MinIO Client configured for Cloudflare R2:
 ```bash
 export AWS_ACCESS_KEY_ID="<R2_ACCESS_KEY_ID>"
@@ -45,7 +56,7 @@ LATEST_BACKUP=$(aws s3 ls s3://bsec-backups/data/ | sort | tail -n 1 | awk '{pri
 aws s3 cp "s3://bsec-backups/data/${LATEST_BACKUP}" ./latest-restore.dump
 ```
 
-### Step 3.3: Measure RTO Start & Restore Schema & Data
+### Step 4.3: Measure RTO Start & Restore Schema & Data
 ```bash
 RESTORE_START=$(date +%s)
 
@@ -64,43 +75,31 @@ RTO_SECONDS=$((RESTORE_END - RESTORE_START))
 echo "Restore completed in ${RTO_SECONDS} seconds (RTO Target: <= 7200s)"
 ```
 
-### Step 3.4: Verify Schema Migrations & Zero Drift
+### Step 4.4: Verify Schema Migrations & Zero Drift
 Run database migration tool against scratch DB using owner credentials:
 ```bash
 pnpm --filter @bs/db migrate
 # Output must indicate zero pending migrations ("Migrations up to date")
 ```
 
-### Step 3.5: Row Count & Consistency Audit
+### Step 4.5: Row Count & Consistency Audit
 Query production and scratch databases to compare critical table row counts:
 ```sql
-SELECT
-  'organizations' AS tbl, count(*) FROM organizations
-UNION ALL
-SELECT 'tenants', count(*) FROM tenants
-UNION ALL
-SELECT 'users', count(*) FROM users
-UNION ALL
-SELECT 'products', count(*) FROM products
-UNION ALL
-SELECT 'variants', count(*) FROM variants
-UNION ALL
-SELECT 'inventory_levels', count(*) FROM inventory_levels
-UNION ALL
-SELECT 'orders', count(*) FROM orders
-UNION ALL
-SELECT 'order_items', count(*) FROM order_items
-UNION ALL
-SELECT 'invoices', count(*) FROM invoices
-UNION ALL
-SELECT 'number_sequences', count(*) FROM number_sequences
-UNION ALL
-SELECT 'webhook_inbox', count(*) FROM webhook_inbox
-UNION ALL
-SELECT 'email_log', count(*) FROM email_log;
+SELECT 'organizations' AS tbl, count(*) FROM organizations
+UNION ALL SELECT 'tenants', count(*) FROM tenants
+UNION ALL SELECT 'users', count(*) FROM users
+UNION ALL SELECT 'products', count(*) FROM products
+UNION ALL SELECT 'variants', count(*) FROM variants
+UNION ALL SELECT 'inventory_levels', count(*) FROM inventory_levels
+UNION ALL SELECT 'orders', count(*) FROM orders
+UNION ALL SELECT 'order_items', count(*) FROM order_items
+UNION ALL SELECT 'invoices', count(*) FROM invoices
+UNION ALL SELECT 'number_sequences', count(*) FROM number_sequences
+UNION ALL SELECT 'webhook_inbox', count(*) FROM webhook_inbox
+UNION ALL SELECT 'email_log', count(*) FROM email_log;
 ```
 
-### Step 3.6: Verify RPO
+### Step 4.6: Verify RPO
 Calculate difference between latest transaction timestamp in restored database and time of backup:
 ```sql
 SELECT max(placed_at) AS latest_order_time FROM orders;
@@ -108,7 +107,7 @@ SELECT max(created_at) AS latest_invoice_time FROM invoices;
 ```
 Verify that $\text{backup\_timestamp} - \text{latest\_order\_time} \le \text{RPO Target}$.
 
-### Step 3.7: Clean Up Scratch Container
+### Step 4.7: Clean Up Scratch Container
 ```bash
 docker stop bsec-postgres-scratch && docker rm -v bsec-postgres-scratch
 rm -f ./latest-restore.dump
@@ -116,13 +115,13 @@ rm -f ./latest-restore.dump
 
 ---
 
-## 4. Drill Log Record Template (Super Admin -> System)
+## 5. Drill Log Record Template (Super Admin -> System)
 
 | Parameter | Drill Value | Target SLO | Pass / Fail |
 |---|---|---|---|
-| **Backup Object** | `s3://bsec-backups/data/bsec-2026-09-28-0230.dump` | Valid R2 object | PASS |
-| **RTO (Duration)** | `<to be filled upon operator drill>` | $\le 2\text{ hours}$ | - |
-| **RPO (Lag)** | `<to be filled upon operator drill>` | $\le 15\text{ min}$ (WAL) / $\le 24\text{ h}$ (Dump) | - |
-| **Order Row Diff** | `0` | `0` | - |
-| **Invoice Row Diff**| `0` | `0` | - |
-| **Migration State**| Up to date | No pending schema drift | - |
+| **Backup Object** | | Valid R2 object | |
+| **RTO (Duration)** | | $\le 2\text{ hours}$ | |
+| **RPO (Lag)** | | $\le 15\text{ min}$ (WAL) / $\le 24\text{ h}$ (Dump) | |
+| **Order Row Diff** | | `0` | |
+| **Invoice Row Diff**| | `0` | |
+| **Migration State**| | No pending schema drift | |

@@ -2,6 +2,17 @@ import type { Db } from "@bs/db";
 import { schema, withTenant } from "@bs/db";
 import { and, eq } from "drizzle-orm";
 
+export class FeatureDisabledError extends Error {
+  readonly statusCode = 503;
+  readonly featureKey: string;
+
+  constructor(featureKey: string, message?: string) {
+    super(message ?? `Feature '${featureKey}' is currently disabled for this store`);
+    this.name = "FeatureDisabledError";
+    this.featureKey = featureKey;
+  }
+}
+
 /**
  * Resolves whether a feature flag is enabled for a specific tenant (PLAN §5.1, M1).
  * Resolution hierarchy:
@@ -15,10 +26,6 @@ export async function isFeatureEnabled(
   tenantId: string,
   key: string,
 ): Promise<boolean> {
-  if (!db || (!db.query?.featureFlags && typeof db.select !== "function")) {
-    return true;
-  }
-
   let flag: { defaultOn: boolean; killSwitch: boolean } | undefined;
 
   if (db.query?.featureFlags) {
@@ -41,11 +48,7 @@ export async function isFeatureEnabled(
     return false;
   }
 
-  let override: { enabled: boolean } | undefined;
-  const readOverride = async (tx: Db): Promise<{ enabled: boolean } | undefined> => {
-    if (typeof tx.select !== "function" && !tx.query?.tenantFeatureOverrides) {
-      return undefined;
-    }
+  const override = await withTenant(db, tenantId, async (tx) => {
     if (tx.query?.tenantFeatureOverrides) {
       return await tx.query.tenantFeatureOverrides.findFirst({
         where: and(
@@ -68,17 +71,7 @@ export async function isFeatureEnabled(
         .limit(1);
       return rows[0];
     }
-  };
-
-  if (typeof (db as unknown as { transaction?: unknown }).transaction === "function") {
-    try {
-      override = await withTenant(db, tenantId, readOverride);
-    } catch {
-      override = await readOverride(db);
-    }
-  } else {
-    override = await readOverride(db);
-  }
+  });
 
   if (override !== undefined) {
     return override.enabled;

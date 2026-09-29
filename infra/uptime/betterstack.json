@@ -1,81 +1,45 @@
-{
-  "$schema": "https://betterstack.com/schemas/monitors.json",
-  "name": "bsec-production-uptime-monitors",
-  "description": "Production synthetic uptime and health checks for Brand Sewa E-Commerce Platform (PLAN §13, §14)",
-  "monitors": [
-    {
-      "name": "BS Web Storefront & Store API Health",
-      "url": "https://gobs.cloud/api/health",
-      "monitor_type": "status",
-      "check_frequency_seconds": 60,
-      "request_timeout_seconds": 10,
-      "expected_status_codes": [200],
-      "response_content_check": {
-        "pattern": "\"status\":\"ok\"",
-        "type": "contains"
-      },
-      "ssl": {
-        "check_expiration": true,
-        "expiration_threshold_days": 14
-      },
-      "alert_policy": {
-        "escalation_minutes": 2,
-        "channels": ["pagerduty", "email", "slack"]
-      },
-      "metadata": {
-        "service": "bsec-web",
-        "expected_role": "app_rw",
-        "container_uuid": "7wuzc3xhtzhxud3315pjutnd"
+[
+  {
+    "service": "web",
+    "url": "https://gobs.cloud/api/health",
+    "expected_status": 200,
+    "expected_body": {
+      "status": "ok",
+      "service": "web",
+      "db": {
+        "ok": true,
+        "role": "app_rw"
       }
     },
-    {
-      "name": "BS Merchant Admin SPA Health",
-      "url": "https://admin.gobs.cloud/health",
-      "monitor_type": "status",
-      "check_frequency_seconds": 60,
-      "request_timeout_seconds": 10,
-      "expected_status_codes": [200],
-      "response_content_check": {
-        "pattern": "\"status\":\"ok\"",
-        "type": "contains"
-      },
-      "ssl": {
-        "check_expiration": true,
-        "expiration_threshold_days": 14
-      },
-      "alert_policy": {
-        "escalation_minutes": 2,
-        "channels": ["pagerduty", "email", "slack"]
-      },
-      "metadata": {
-        "service": "bsec-admin",
-        "container_uuid": "miz7k30kdqjwmqgiru4k9xtz"
+    "interval_seconds": 60,
+    "ssl_check": true,
+    "alert_on": "status != 200 or body mismatch or ssl expiration < 14 days"
+  },
+  {
+    "service": "admin",
+    "url": "https://admin.gobs.cloud/health",
+    "expected_status": 200,
+    "expected_body": {
+      "status": "ok"
+    },
+    "interval_seconds": 60,
+    "ssl_check": true,
+    "alert_on": "status != 200 or body mismatch or ssl expiration < 14 days"
+  },
+  {
+    "service": "platform",
+    "url": "https://platform.gobs.cloud/health",
+    "expected_status": 200,
+    "expected_body": {
+      "status": "ok",
+      "service": "platform",
+      "db": {
+        "ok": true,
+        "role": "app_platform"
       }
     },
-    {
-      "name": "BS Platform API Health",
-      "url": "https://platform.gobs.cloud/health",
-      "monitor_type": "status",
-      "check_frequency_seconds": 60,
-      "request_timeout_seconds": 10,
-      "expected_status_codes": [200],
-      "response_content_check": {
-        "pattern": "\"status\":\"ok\"",
-        "type": "contains"
-      },
-      "ssl": {
-        "check_expiration": true,
-        "expiration_threshold_days": 14
-      },
-      "alert_policy": {
-        "escalation_minutes": 2,
-        "channels": ["pagerduty", "email", "slack"]
-      },
-      "metadata": {
-        "service": "bsec-platform",
-        "expected_role": "app_platform",
-        "container_uuid": "w4awz0y3fxzxtwstps1srgfi"
-      }
-    }
-  ]
-}
+    "interval_seconds": 60,
+    "ssl_check": true,
+    "alert_on": "status != 200 or body mismatch or ssl expiration < 14 days"
+  }
+]

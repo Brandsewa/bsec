@@ -184,6 +184,7 @@ export async function transitionReturn(
       if (targetStatus === "refunded") {
         await rt._jobs.send(QUEUE_NAMES.REFUND_PROCESSED, {
           returnId,
+          refundId: returnId,
           orderId: ret.orderId,
           tenantId: ctx.tenantId,
         });

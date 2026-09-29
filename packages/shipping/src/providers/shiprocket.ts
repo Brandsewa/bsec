@@ -380,9 +380,11 @@ export class ShiprocketProvider implements ShippingProvider {
         const providedBuf = Buffer.from(providedSig, "utf8");
         if (computedBuf.length === providedBuf.length && timingSafeEqual(computedBuf, providedBuf)) {
           isValid = true;
-        } else if (providedSig === this.webhookSecret) {
-          // Token comparison
-          isValid = true;
+        } else {
+          const secretBuf = Buffer.from(this.webhookSecret, "utf8");
+          if (providedBuf.length === secretBuf.length && timingSafeEqual(providedBuf, secretBuf)) {
+            isValid = true;
+          }
         }
       } catch {
         isValid = false;

@@ -14,8 +14,8 @@ export interface SendEmailInput {
 export interface SendEmailResult {
   logId: string;
   status: "sent" | "queued" | "skipped_killswitch" | "failed";
-  providerId?: string;
-  error?: string;
+  providerId?: string | undefined;
+  error?: string | undefined;
 }
 
 /**

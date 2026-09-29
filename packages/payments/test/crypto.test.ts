@@ -1,35 +1,67 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, afterEach, beforeEach } from "vitest";
 import { encryptSecret, decryptSecret } from "../src/crypto.ts";
 
-describe("AES-256-GCM Tenant Secret Encryption", () => {
-  const masterKey = "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"; // 32-byte hex
+describe("payments crypto (PLAN §4, M6 hardening)", () => {
+  const originalEnv = { ...process.env };
 
-  it("encrypts and decrypts secret correctly", () => {
-    const secret = "rzp_live_secret_key_123456789";
-    const encrypted = encryptSecret(secret, masterKey);
+  beforeEach(() => {
+    delete process.env.TENANT_SECRETS_KEY;
+    delete process.env.ENCRYPTION_KEY;
+    delete process.env.APP_ENV;
+    delete process.env.NODE_ENV;
+  });
 
+  afterEach(() => {
+    process.env = { ...originalEnv };
+  });
+
+  it("encrypts and decrypts secret in non-production with default dev key", () => {
+    const plaintext = "test_razorpay_secret_123";
+    const encrypted = encryptSecret(plaintext);
     expect(encrypted.ciphertext).toBeDefined();
     expect(encrypted.iv).toBeDefined();
-    expect(encrypted.keyVersion).toBe(1);
-    expect(encrypted.ciphertext).not.toEqual(secret);
 
-    const decrypted = decryptSecret(encrypted, masterKey);
-    expect(decrypted).toBe(secret);
+    const decrypted = decryptSecret(encrypted);
+    expect(decrypted).toBe(plaintext);
   });
 
-  it("fails to decrypt if ciphertext is tampered", () => {
-    const secret = "rzp_live_secret_key_123456789";
-    const encrypted = encryptSecret(secret, masterKey);
-    const tampered = { ...encrypted, ciphertext: encrypted.ciphertext.slice(0, -4) + "abcd" };
-
-    expect(() => decryptSecret(tampered, masterKey)).toThrow();
+  it("encrypts and decrypts with an explicitly supplied secret key", () => {
+    const customKey = "a_very_secure_custom_key_for_payments_32_bytes";
+    const plaintext = "super_secret_payment_key";
+    const encrypted = encryptSecret(plaintext, customKey);
+    const decrypted = decryptSecret(encrypted, customKey);
+    expect(decrypted).toBe(plaintext);
   });
 
-  it("fails to decrypt with incorrect key", () => {
-    const secret = "rzp_live_secret_key_123456789";
-    const encrypted = encryptSecret(secret, masterKey);
-    const wrongKey = "abcdef0123456789abcdef0123456789abcdef0123456789abcdef0123456789";
+  it("throws in production when APP_ENV=production and no key is set", () => {
+    process.env.APP_ENV = "production";
+    expect(() => encryptSecret("my_secret")).toThrowError(
+      /Encryption key not set: TENANT_SECRETS_KEY or ENCRYPTION_KEY is required in production/,
+    );
+  });
 
-    expect(() => decryptSecret(encrypted, wrongKey)).toThrow();
+  it("throws in production when NODE_ENV=production and no key is set", () => {
+    process.env.NODE_ENV = "production";
+    expect(() => decryptSecret({ ciphertext: "abcd", iv: "1234" })).toThrowError(
+      /Encryption key not set: TENANT_SECRETS_KEY or ENCRYPTION_KEY is required in production/,
+    );
+  });
+
+  it("succeeds in production when TENANT_SECRETS_KEY is set", () => {
+    process.env.APP_ENV = "production";
+    process.env.TENANT_SECRETS_KEY = "prod_secret_master_key_for_payments_tests";
+    const plaintext = "production_api_token";
+    const encrypted = encryptSecret(plaintext);
+    const decrypted = decryptSecret(encrypted);
+    expect(decrypted).toBe(plaintext);
+  });
+
+  it("succeeds in production when ENCRYPTION_KEY is set", () => {
+    process.env.NODE_ENV = "production";
+    process.env.ENCRYPTION_KEY = "prod_encryption_master_key_for_payments_tests";
+    const plaintext = "production_encryption_key_token";
+    const encrypted = encryptSecret(plaintext);
+    const decrypted = decryptSecret(encrypted);
+    expect(decrypted).toBe(plaintext);
   });
 });

@@ -3,7 +3,7 @@ import { PostgreSqlContainer, type StartedPostgreSqlContainer } from "@testconta
 import { createDb, type DbHandle, withTenant, schema } from "@bs/db";
 import { bootstrapRoles } from "@bs/db/bootstrap";
 import { runMigrations } from "@bs/db/migrate";
-import { eq } from "drizzle-orm";
+import { and, eq, sql } from "drizzle-orm";
 import pino from "pino";
 import {
   handleFulfillmentShippedJob,
@@ -211,5 +211,51 @@ describe("M5 carry-over: Email job handlers asserting real email_log rows (PLAN 
     expect(row.subject).toContain(orderNumber);
     expect(row.status).toBe("sent");
     expect(row.providerId).toBe("msg_resend_mock_0199a063");
+  });
+
+  it("two different refunds on one order produce two email_log rows, and a retry of the same job produces one", async () => {
+    const return1Id = "0199a063-0000-7000-8000-000000000301";
+    const return2Id = "0199a063-0000-7000-8000-000000000302";
+
+    // 1. Process first refund
+    await handleRefundProcessedJob(rwDb.db, logger, {
+      tenantId,
+      orderId,
+      returnId: return1Id,
+      refundAmount: 20000,
+    });
+
+    // 2. Retry the first refund job (must be deduplicated)
+    await handleRefundProcessedJob(rwDb.db, logger, {
+      tenantId,
+      orderId,
+      returnId: return1Id,
+      refundAmount: 20000,
+    });
+
+    // 3. Process a second distinct refund on the SAME order
+    await handleRefundProcessedJob(rwDb.db, logger, {
+      tenantId,
+      orderId,
+      returnId: return2Id,
+      refundAmount: 30000,
+    });
+
+    const rows = await withTenant(rwDb.db, tenantId, async (tx) => {
+      return await tx
+        .select()
+        .from(schema.emailLog)
+        .where(
+          and(
+            eq(schema.emailLog.template, "refund_processed"),
+            sql`${schema.emailLog.eventRef} LIKE ${`refund_${orderId}_0199a063-0000-7000-8000-00000000030%`}`,
+          ),
+        );
+    });
+
+    // Two distinct refunds on order -> exactly 2 rows (retry did not insert a 3rd row)
+    expect(rows.length).toBe(2);
+    const eventRefs = rows.map((r) => r.eventRef).sort();
+    expect(eventRefs).toEqual([`refund_${orderId}_${return1Id}`, `refund_${orderId}_${return2Id}`]);
   });
 });

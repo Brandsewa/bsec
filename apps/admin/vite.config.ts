@@ -7,6 +7,6 @@ import { tanstackRouter } from "@tanstack/router-plugin/vite";
 export default defineConfig({
   plugins: [tanstackRouter({ target: "react", autoCodeSplitting: true }), react(), tailwindcss()],
   server: { port: 5173, host: true },
-  envPrefix: ["VITE_", "SENTRY_"],
+  envPrefix: ["VITE_"],
   build: { sourcemap: true, target: "es2023" },
 });

@@ -21,11 +21,49 @@ describe("Storefront Catalog & Search Services", () => {
     requestId: "req-storefront-1",
   };
 
-  const createMockRuntime = (mockDb: Db): Runtime => ({
-    service: "web",
-    _db: { db: mockDb, pool: {} as never, close: async () => {} },
-    close: async () => {},
-  });
+  const createMockRuntime = (mockDb: Db): Runtime => {
+    const origTx = (mockDb as unknown as { transaction?: (cb: (tx: unknown) => Promise<unknown>) => Promise<unknown> }).transaction;
+    const wrappedDb = {
+      ...mockDb,
+      query: {
+        ...(mockDb as unknown as { query?: Record<string, unknown> }).query,
+        featureFlags: {
+          findFirst: async () => ({ defaultOn: true, killSwitch: false }),
+        },
+        tenantFeatureOverrides: {
+          findFirst: async () => undefined,
+        },
+      },
+      select: (mockDb as unknown as { select?: unknown }).select ?? (() => ({
+        from: () => ({
+          where: () => ({
+            limit: () => [{ defaultOn: true, killSwitch: false }],
+          }),
+        }),
+      })),
+      execute: (mockDb as unknown as { execute?: unknown }).execute ?? (async () => {}),
+      transaction: async (cb: (tx: unknown) => Promise<unknown>) => {
+        if (!origTx) return cb(wrappedDb);
+        return origTx(async (tx: unknown) => {
+          const augmentedTx = {
+            ...(tx as Record<string, unknown>),
+            query: {
+              ...((tx as { query?: Record<string, unknown> }).query ?? {}),
+              tenantFeatureOverrides: {
+                findFirst: async () => undefined,
+              },
+            },
+          };
+          return cb(augmentedTx);
+        });
+      },
+    };
+    return {
+      service: "web",
+      _db: { db: wrappedDb as unknown as Db, pool: {} as never, close: async () => {} },
+      close: async () => {},
+    };
+  };
 
   describe("getStorefrontProduct", () => {
     it("returns null for non-existent or unpublished or deleted product", async () => {

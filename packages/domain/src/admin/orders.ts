@@ -6,7 +6,7 @@ import { allocateSequenceNumber } from "../orders/sequences.ts";
 import { transitionOrder } from "../orders/state-machine.ts";
 import { transitionFulfillment } from "../orders/fulfillment-state-machine.ts";
 import { generateInvoice } from "../orders/invoices.ts";
-import { isFeatureEnabled } from "../features.ts";
+import { isFeatureEnabled, FeatureDisabledError } from "../features.ts";
 
 export interface ListOrdersInput {
   view?: "all" | "unfulfilled" | "unpaid" | "cod_to_confirm" | "rto" | undefined;
@@ -479,7 +479,7 @@ export async function createAdminFulfillment(
 
   const fulfillmentEnabled = await isFeatureEnabled(db, ctx.tenantId, "fulfillment");
   if (!fulfillmentEnabled) {
-    throw new Error("Fulfillment is currently disabled for this store");
+    throw new FeatureDisabledError("fulfillment", "Fulfillment is currently disabled for this store");
   }
 
   return await withTenant(db, ctx.tenantId, async (tx) => {

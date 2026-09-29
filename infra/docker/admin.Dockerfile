@@ -13,6 +13,8 @@ RUN pnpm dlx turbo@2.11.5 prune @bs/admin --docker
 
 FROM base AS build
 WORKDIR /repo
+ARG VITE_SENTRY_DSN
+ENV VITE_SENTRY_DSN=$VITE_SENTRY_DSN
 COPY --from=prune /repo/out/json/ .
 RUN --mount=type=cache,id=pnpm,target=/pnpm/store pnpm install --frozen-lockfile
 COPY --from=prune /repo/out/full/ .

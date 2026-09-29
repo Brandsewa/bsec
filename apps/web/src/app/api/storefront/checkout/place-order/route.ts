@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
-import { evaluateStorefrontAccess, placeOrder } from "@bs/domain";
+import { evaluateStorefrontAccess, placeOrder, FeatureDisabledError } from "@bs/domain";
 import { server } from "@/server/runtime.ts";
 import { CART_COOKIE_NAME, getRequestHeaders, getCookieValue } from "../../cart/route.ts";
 
@@ -100,6 +100,10 @@ export async function POST(req: Request) {
     return response;
   } catch (err: unknown) {
     const message = err instanceof Error ? err.message : "Error placing order";
-    return NextResponse.json({ error: message }, { status: 400 });
+    const isFeatureDisabled =
+      err instanceof FeatureDisabledError ||
+      (typeof err === "object" && err !== null && (err as { statusCode?: number }).statusCode === 503) ||
+      (err instanceof Error && /disabled/i.test(err.message));
+    return NextResponse.json({ error: message }, { status: isFeatureDisabled ? 503 : 400 });
   }
 }
