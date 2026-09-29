@@ -28,12 +28,10 @@ export async function bootstrapRoles(superuserUrl: string, pw: { owner: string; 
 
 const isMain = process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url);
 if (isMain) {
-  void (async () => {
-    await bootstrapRoles(need("DATABASE_URL_SUPERUSER"), {
-      owner: need("APP_OWNER_PASSWORD"),
-      rw: need("APP_RW_PASSWORD"),
-      platform: need("APP_PLATFORM_PASSWORD"),
-    });
-    console.log("roles ok");
-  })();
+  await bootstrapRoles(need("DATABASE_URL_SUPERUSER"), {
+    owner: need("APP_OWNER_PASSWORD"),
+    rw: need("APP_RW_PASSWORD"),
+    platform: need("APP_PLATFORM_PASSWORD"),
+  });
+  console.log("roles ok");
 }

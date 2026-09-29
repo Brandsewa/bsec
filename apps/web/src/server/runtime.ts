@@ -1,7 +1,6 @@
 import "server-only";
 import { revalidateTag } from "next/cache";
 import { createLogger, createRuntime, type Logger, type Runtime } from "@bs/domain";
-import { invalidateStorefrontCache } from "./cached-storefront.ts";
 
 /**
  * One runtime per server process, role app_rw (RLS applies). Cached on globalThis so dev HMR
@@ -19,13 +18,16 @@ export function server(): { rt: Runtime; log: Logger } {
         databaseUrl: url,
         poolMax: Number(process.env.DB_POOL_MAX ?? 10),
         revalidateTags: (tags) => {
-          invalidateStorefrontCache(tags);
           for (const t of tags) {
             try {
               // eslint-disable-next-line bs/tenant-cache-tag -- tag strings are pre-verified tenant-prefixed via computeInvalidationTags
               revalidateTag(t, "max");
-            } catch {
-              // Ignore if outside Next.js request context
+            } catch (err) {
+              // revalidateTag() only works inside a Server Action/Route Handler request scope.
+              // Domain mutations can legitimately run outside one (e.g. a worker job) - log so a
+              // real misconfiguration (calling this from a route handler and still failing) is
+              // visible, instead of a bare silent catch.
+              g.__bsWeb?.log.warn({ err, tag: t }, "revalidateTag() failed outside request scope");
             }
           }
         },
