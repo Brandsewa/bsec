@@ -67,6 +67,20 @@ import {
   estimateCartShipping,
   subscribeNewsletter,
   verifyStorefrontPassword,
+  listAdminOrders,
+  getAdminOrderDetail,
+  createAdminDraftOrder,
+  addAdminOrderNote,
+  cancelAdminOrder,
+  refundAdminOrder,
+  createAdminFulfillment,
+  createAdminOrderInvoice,
+  listAdminCustomers,
+  getAdminCustomerDetail,
+  listAdminDiscounts,
+  createAdminDiscount,
+  updateAdminDiscount,
+  deleteAdminDiscount,
   type Logger,
   type Runtime,
   type TenantContext,
@@ -527,6 +541,116 @@ export const storeRouter = os.router({
         .handler(({ context, input }) => {
           if (!context.tenantCtx) throw new Error("Missing tenant context");
           return deleteMenu(context.rt, context.tenantCtx, input);
+        }),
+    },
+
+    // --- M5 Orders Admin ---
+    orders: {
+      list: os.admin.orders.list
+        .use(requireAdmin)
+        .use(requirePermission("orders.read"))
+        .handler(({ context, input }) => {
+          if (!context.tenantCtx) throw new Error("Missing tenant context");
+          return listAdminOrders(context.rt, context.tenantCtx, input);
+        }),
+      get: os.admin.orders.get
+        .use(requireAdmin)
+        .use(requirePermission("orders.read"))
+        .handler(({ context, input }) => {
+          if (!context.tenantCtx) throw new Error("Missing tenant context");
+          return getAdminOrderDetail(context.rt, context.tenantCtx, input);
+        }),
+      createDraft: os.admin.orders.createDraft
+        .use(requireAdmin)
+        .use(requirePermission("orders.write"))
+        .handler(({ context, input }) => {
+          if (!context.tenantCtx) throw new Error("Missing tenant context");
+          return createAdminDraftOrder(context.rt, context.tenantCtx, input);
+        }),
+      addNote: os.admin.orders.addNote
+        .use(requireAdmin)
+        .use(requirePermission("orders.write"))
+        .handler(({ context, input }) => {
+          if (!context.tenantCtx) throw new Error("Missing tenant context");
+          return addAdminOrderNote(context.rt, context.tenantCtx, input);
+        }),
+      cancel: os.admin.orders.cancel
+        .use(requireAdmin)
+        .use(requirePermission("orders.write"))
+        .handler(({ context, input }) => {
+          if (!context.tenantCtx) throw new Error("Missing tenant context");
+          return cancelAdminOrder(context.rt, context.tenantCtx, input);
+        }),
+      refund: os.admin.orders.refund
+        .use(requireAdmin)
+        .use(requirePermission("orders.refund"))
+        .handler(({ context, input }) => {
+          if (!context.tenantCtx) throw new Error("Missing tenant context");
+          return refundAdminOrder(context.rt, context.tenantCtx, input);
+        }),
+      createFulfillment: os.admin.orders.createFulfillment
+        .use(requireAdmin)
+        .use(requirePermission("orders.write"))
+        .handler(({ context, input }) => {
+          if (!context.tenantCtx) throw new Error("Missing tenant context");
+          return createAdminFulfillment(context.rt, context.tenantCtx, input);
+        }),
+      createInvoice: os.admin.orders.createInvoice
+        .use(requireAdmin)
+        .use(requirePermission("orders.write"))
+        .handler(({ context, input }) => {
+          if (!context.tenantCtx) throw new Error("Missing tenant context");
+          return createAdminOrderInvoice(context.rt, context.tenantCtx, input);
+        }),
+    },
+
+    // --- M5 Customers Admin ---
+    customers: {
+      list: os.admin.customers.list
+        .use(requireAdmin)
+        .use(requirePermission("customers.read"))
+        .handler(({ context, input }) => {
+          if (!context.tenantCtx) throw new Error("Missing tenant context");
+          return listAdminCustomers(context.rt, context.tenantCtx, input);
+        }),
+      get: os.admin.customers.get
+        .use(requireAdmin)
+        .use(requirePermission("customers.read"))
+        .handler(({ context, input }) => {
+          if (!context.tenantCtx) throw new Error("Missing tenant context");
+          return getAdminCustomerDetail(context.rt, context.tenantCtx, input);
+        }),
+    },
+
+    // --- M5 Discounts Admin ---
+    discounts: {
+      list: os.admin.discounts.list
+        .use(requireAdmin)
+        .use(requirePermission("discounts.write"))
+        .handler(({ context, input }) => {
+          if (!context.tenantCtx) throw new Error("Missing tenant context");
+          return listAdminDiscounts(context.rt, context.tenantCtx, input);
+        }),
+      create: os.admin.discounts.create
+        .use(requireAdmin)
+        .use(requirePermission("discounts.write"))
+        .handler(({ context, input }) => {
+          if (!context.tenantCtx) throw new Error("Missing tenant context");
+          return createAdminDiscount(context.rt, context.tenantCtx, input);
+        }),
+      update: os.admin.discounts.update
+        .use(requireAdmin)
+        .use(requirePermission("discounts.write"))
+        .handler(({ context, input }) => {
+          if (!context.tenantCtx) throw new Error("Missing tenant context");
+          return updateAdminDiscount(context.rt, context.tenantCtx, input);
+        }),
+      delete: os.admin.discounts.delete
+        .use(requireAdmin)
+        .use(requirePermission("discounts.write"))
+        .handler(({ context, input }) => {
+          if (!context.tenantCtx) throw new Error("Missing tenant context");
+          return deleteAdminDiscount(context.rt, context.tenantCtx, input);
         }),
     },
   },

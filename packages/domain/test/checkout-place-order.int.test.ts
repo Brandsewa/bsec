@@ -48,8 +48,22 @@ beforeAll(async () => {
   rwDb = createDb(as("app_rw", PW.rw), { max: 10 });
   rt = createRuntime({ service: "web", databaseUrl: as("app_rw", PW.rw), poolMax: 10 });
 
-  const pgClient = new (await import("pg")).default.Client({ connectionString: as("app_rw", PW.rw) });
+  const pgClient = new (await import("pg")).default.Client({ connectionString: superUrl });
   await pgClient.connect();
+  await pgClient.query("SET session_replication_role = 'replica'");
+  await pgClient.query(`
+    DELETE FROM idempotency_keys WHERE tenant_id = '${tenantId}';
+    DELETE FROM inventory_reservations WHERE tenant_id = '${tenantId}';
+    DELETE FROM payment_attempts WHERE tenant_id = '${tenantId}';
+    DELETE FROM payment_intents WHERE tenant_id = '${tenantId}';
+    DELETE FROM action_tokens WHERE tenant_id = '${tenantId}';
+    DELETE FROM order_items WHERE tenant_id = '${tenantId}';
+    DELETE FROM orders WHERE tenant_id = '${tenantId}';
+    DELETE FROM cart_items WHERE tenant_id = '${tenantId}';
+    DELETE FROM carts WHERE tenant_id = '${tenantId}';
+    DELETE FROM number_sequences WHERE tenant_id = '${tenantId}';
+  `);
+  await pgClient.query("SET session_replication_role = 'origin'");
   await pgClient.query(`
     INSERT INTO organizations (id, name) VALUES ('${orgId}', 'Test Org') ON CONFLICT DO NOTHING;
     INSERT INTO tenants (id, organization_id, slug, name) VALUES ('${tenantId}', '${orgId}', 'test-store-c1', 'Test Store') ON CONFLICT DO NOTHING;

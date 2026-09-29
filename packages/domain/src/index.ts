@@ -34,3 +34,33 @@ export * from "./customers/addresses.ts";
 export * from "./customers/wishlist.ts";
 export * from "./customers/orders.ts";
 export * from "./payments/credentials.ts";
+export * from "./orders/fulfillment-state-machine.ts";
+export * from "./orders/return-state-machine.ts";
+export * from "./orders/invoices.ts";
+export * from "./orders/discounts.ts";
+export * from "./admin/orders.ts";
+export * from "./admin/customers.ts";
+export * from "./admin/discounts.ts";
+export * from "./system/email.ts";
+export * from "./system/abandoned-carts.ts";
+export type {
+  AddressPayload,
+  RateEstimateInput,
+  ShippingRateOption,
+  ServiceabilityResult,
+  CreateShipmentItem,
+  CreateShipmentInput,
+  CreateShipmentResult,
+  LabelResult,
+  TrackingActivity,
+  TrackingResult,
+  CancelShipmentResult,
+  VerifiedShippingWebhookEvent,
+  ShippingProvider,
+} from "@bs/shipping";
+export {
+  ShiprocketProvider,
+  ManualShippingProvider,
+  encryptSecret,
+  decryptSecret,
+} from "@bs/shipping";

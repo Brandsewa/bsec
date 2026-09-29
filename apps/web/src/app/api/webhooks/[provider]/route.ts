@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { randomUUID } from "node:crypto";
-import { receiveWebhook, getTenantPaymentSecrets } from "@bs/domain";
+import { receiveWebhook, getTenantPaymentSecrets, ShiprocketProvider } from "@bs/domain";
 import { RazorpayProvider, CODProvider } from "@bs/payments";
 import { server } from "@/server/runtime.ts";
 
@@ -70,6 +70,11 @@ export async function POST(
       const creds = tenantId ? await getTenantPaymentSecrets(rt._db.db, tenantId, "cod") : {};
       const codProvider = new CODProvider(creds);
       const verified = await codProvider.verifyWebhook(headersRecord, rawBody);
+      signatureValid = verified.isValid;
+    } else if (provider === "shiprocket") {
+      const creds = tenantId ? await getTenantPaymentSecrets(rt._db.db, tenantId, "shiprocket") : {};
+      const shiprocketProvider = new ShiprocketProvider({ credentials: creds });
+      const verified = await shiprocketProvider.verifyWebhook(headersRecord, rawBody);
       signatureValid = verified.isValid;
     } else {
       signatureValid = false;

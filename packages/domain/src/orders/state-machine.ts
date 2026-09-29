@@ -243,7 +243,7 @@ export async function transitionOrder(
         );
       }
 
-      // Cross-entity guards:
+      // Cross-entity guards (PLAN §11.1):
       // Guard 1: an order cannot be cancelled once any fulfillment is past label_created
       if (targetStatus === "cancelled") {
         const shippedStatuses = [
@@ -259,13 +259,42 @@ export async function transitionOrder(
             `Cannot cancel order with fulfillment status '${order.fulfillmentStatus}' (past label_created)`,
           );
         }
+
+        // Check real fulfillments rows
+        const { fulfillments } = await import("@bs/db");
+        const activeFulfillments = await db
+          .select({ status: fulfillments.status })
+          .from(fulfillments)
+          .where(and(eq(fulfillments.tenantId, ctx.tenantId), eq(fulfillments.orderId, orderId)));
+
+        for (const f of activeFulfillments) {
+          if (shippedStatuses.includes(f.status)) {
+            throw new InvalidStateTransitionError(
+              `Cannot cancel order with fulfillment in status '${f.status}' (past label_created)`,
+            );
+          }
+        }
       }
 
       // Guard 2: an order cannot be delivered while any fulfillment is pending
-      if (targetStatus === "delivered" && order.fulfillmentStatus !== "delivered") {
-        throw new InvalidStateTransitionError(
-          `Cannot mark order as delivered while fulfillment status is '${order.fulfillmentStatus}'`,
-        );
+      if (targetStatus === "delivered") {
+        if (order.fulfillmentStatus === "pending") {
+          throw new InvalidStateTransitionError(
+            `Cannot mark order as delivered while fulfillment status is '${order.fulfillmentStatus}'`,
+          );
+        }
+
+        const { fulfillments } = await import("@bs/db");
+        const pendingFulfillments = await db
+          .select({ status: fulfillments.status })
+          .from(fulfillments)
+          .where(and(eq(fulfillments.tenantId, ctx.tenantId), eq(fulfillments.orderId, orderId), eq(fulfillments.status, "pending")));
+
+        if (pendingFulfillments.length > 0) {
+          throw new InvalidStateTransitionError(
+            "Cannot mark order as delivered while any fulfillment is pending",
+          );
+        }
       }
 
       newStatus = targetStatus;

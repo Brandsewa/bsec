@@ -43,12 +43,18 @@ beforeAll(async () => {
 
   const orgId = "0199a0c5-0000-7000-8000-000000000000";
   const tenantId = "0199a0c5-0000-7000-8000-000000000001";
-  const pgClient = new (await import("pg")).default.Client({ connectionString: as("app_rw", PW.rw) });
+  const pgClient = new (await import("pg")).default.Client({ connectionString: superUrl });
   await pgClient.connect();
+  await pgClient.query("SET session_replication_role = 'replica'");
+  await pgClient.query(`
+    DELETE FROM orders WHERE tenant_id = '${tenantId}';
+    DELETE FROM order_events WHERE tenant_id = '${tenantId}';
+    DELETE FROM order_notes WHERE tenant_id = '${tenantId}';
+  `);
+  await pgClient.query("SET session_replication_role = 'origin'");
   await pgClient.query(`
     INSERT INTO organizations (id, name) VALUES ('${orgId}', 'Test Org') ON CONFLICT DO NOTHING;
     INSERT INTO tenants (id, organization_id, slug, name) VALUES ('${tenantId}', '${orgId}', 'test-store-c5', 'Test Store') ON CONFLICT DO NOTHING;
-
   `);
   await pgClient.end();
 }, 180_000);

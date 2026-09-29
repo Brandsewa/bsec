@@ -68,3 +68,28 @@ export const idempotencyKeys = tenantTable(
     index("idempotency_keys_tenant_expires_idx").on(t.tenantId, t.expiresAt),
   ],
 );
+
+/**
+ * Email Log (PLAN §5.10 / M5).
+ * Tracks all transactional emails sent or enqueued per tenant.
+ */
+export const emailLog = tenantTable(
+  "email_log",
+  {
+    id: uuid("id").default(sql`uuidv7()`).primaryKey(),
+    template: text("template").notNull(),
+    toEmail: text("to_email").notNull(),
+    subject: text("subject").notNull(),
+    providerId: text("provider_id"),
+    status: text("status").notNull().default("queued"), // queued, sent, failed
+    eventRef: text("event_ref"),
+    error: text("error"),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().default(sql`now()`),
+    sentAt: timestamp("sent_at", { withTimezone: true }),
+  },
+  (t) => [
+    unique("email_log_tenant_id_uniq").on(t.tenantId, t.id),
+    index("email_log_tenant_status_idx").on(t.tenantId, t.status),
+    index("email_log_tenant_to_email_idx").on(t.tenantId, t.toEmail),
+  ],
+);

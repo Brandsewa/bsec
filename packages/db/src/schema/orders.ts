@@ -87,6 +87,7 @@ export const orderItems = tenantTable(
     updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().default(sql`now()`),
   },
   (t) => [
+    unique("order_items_tenant_id_uniq").on(t.tenantId, t.id),
     index("order_items_tenant_order_idx").on(t.tenantId, t.orderId),
     tenantForeignKey({
       tableTenantId: t.tenantId,

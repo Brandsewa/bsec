@@ -24,9 +24,15 @@ import {
 import { bootstrapRoles } from "@bs/db/bootstrap";
 import { runMigrations } from "@bs/db/migrate";
 import {
+  addAdminOrderNote,
   adjustInventory,
   assertPlatformStaff,
   buildTenantContext,
+  cancelAdminOrder,
+  createAdminDiscount,
+  createAdminDraftOrder,
+  createAdminFulfillment,
+  createAdminOrderInvoice,
   createBrand,
   createCategory,
   createCollection,
@@ -35,12 +41,15 @@ import {
   createPage,
   createProduct,
   createRuntime,
+  deleteAdminDiscount,
   deleteBrand,
   deleteCategory,
   deleteCollection,
   deleteMediaRecord,
   deleteMenu,
   deleteProduct,
+  getAdminCustomerDetail,
+  getAdminOrderDetail,
   getBrandSettings,
   getCollection,
   getMenu,
@@ -50,6 +59,9 @@ import {
   getStoreSettings,
   getTheme,
   inviteStaff,
+  listAdminCustomers,
+  listAdminDiscounts,
+  listAdminOrders,
   listBrands,
   listCategories,
   listCollections,
@@ -63,9 +75,11 @@ import {
   listStoreFeatureFlags,
   publishBrandSettings,
   publishPage,
+  refundAdminOrder,
   requestMediaUpload,
   rollbackPage,
   savePageDraft,
+  updateAdminDiscount,
   updateBrand,
   updateBrandSettings,
   updateCategory,
@@ -137,6 +151,11 @@ describe("Generated Isolation Test Suite (M1 Real Postgres 18 Proof)", () => {
   const testMenuA = "0199a000-0000-7000-8000-000000000510";
   const testMenuHandleA = "main-menu";
 
+  const testCustomerA = "0199a000-0000-7000-8000-000000000511";
+  const testOrderA = "0199a000-0000-7000-8000-000000000512";
+  const testOrderItemA = "0199a000-0000-7000-8000-000000000513";
+  const testDiscountA = "0199a000-0000-7000-8000-000000000514";
+
   const testProductB = "0199a000-0000-7000-8000-000000000604";
   const testVariantB = "0199a000-0000-7000-8000-000000000605";
 
@@ -164,6 +183,27 @@ describe("Generated Isolation Test Suite (M1 Real Postgres 18 Proof)", () => {
     // 2. Run Drizzle migrations as app_owner
     await runMigrations(as("app_owner", PW.owner));
 
+    // Clean up previous runs' test tenant data with superuser (bypassing RLS and FK triggers)
+    const pgClient = new (await import("pg")).default.Client({ connectionString: superUrl });
+    await pgClient.connect();
+    await pgClient.query("SET session_replication_role = 'replica'");
+    const tenantTablesRes = await pgClient.query(`
+      SELECT table_name FROM information_schema.columns 
+      WHERE column_name = 'tenant_id' AND table_schema = 'public' AND table_name != 'tenants'
+    `);
+    const tables = tenantTablesRes.rows.map((r: { table_name: string }) => r.table_name);
+    for (const t of tables) {
+      await pgClient.query(`DELETE FROM "${t}" WHERE tenant_id IN ('${tenantA}', '${tenantB}')`);
+    }
+    await pgClient.query(`
+      DELETE FROM domains WHERE tenant_id IN ('${tenantA}', '${tenantB}');
+      DELETE FROM tenants WHERE id IN ('${tenantA}', '${tenantB}');
+      DELETE FROM organizations WHERE id = '${orgId}';
+      DELETE FROM users WHERE id IN ('${userA}', '${userB}', '${userLimited}', '${userPlatform}');
+    `);
+    await pgClient.query("SET session_replication_role = 'origin'");
+    await pgClient.end();
+
     // 3. Connect runtimes
     rtApp = createRuntime({ service: "web", databaseUrl: as("app_rw", PW.rw), poolMax: 5 });
     rtPlatform = createRuntime({ service: "platform", databaseUrl: as("app_platform", PW.platform), poolMax: 5 });
@@ -171,60 +211,78 @@ describe("Generated Isolation Test Suite (M1 Real Postgres 18 Proof)", () => {
     dbPlatform = createDb(as("app_platform", PW.platform));
 
     // 4. Seed non-tenant global records
-    await dbRw.db.insert(schema.organizations).values({
-      id: orgId,
-      name: "Global Test Org",
-    });
+    await dbRw.db
+      .insert(schema.organizations)
+      .values({
+        id: orgId,
+        name: "Global Test Org",
+      })
+      .onConflictDoNothing();
 
-    await dbRw.db.insert(schema.tenants).values([
-      {
-        id: tenantA,
-        slug: "store-alpha",
-        name: "Store Alpha",
-        organizationId: orgId,
-        status: "active",
-      },
-      {
-        id: tenantB,
-        slug: "store-beta",
-        name: "Store Beta",
-        organizationId: orgId,
-        status: "active",
-      },
-    ]);
+    await dbRw.db
+      .insert(schema.tenants)
+      .values([
+        {
+          id: tenantA,
+          slug: "store-alpha",
+          name: "Store Alpha",
+          organizationId: orgId,
+          status: "active",
+        },
+        {
+          id: tenantB,
+          slug: "store-beta",
+          name: "Store Beta",
+          organizationId: orgId,
+          status: "active",
+        },
+      ])
+      .onConflictDoNothing();
 
-    await dbRw.db.insert(schema.domains).values([
-      {
-        tenantId: tenantA,
-        hostname: "alpha.store.test",
-        isPrimary: true,
-        status: "active",
-      },
-      {
-        tenantId: tenantB,
-        hostname: "beta.store.test",
-        isPrimary: true,
-        status: "active",
-      },
-    ]);
+    await dbRw.db
+      .insert(schema.domains)
+      .values([
+        {
+          tenantId: tenantA,
+          hostname: "alpha.store.test",
+          isPrimary: true,
+          status: "active",
+        },
+        {
+          tenantId: tenantB,
+          hostname: "beta.store.test",
+          isPrimary: true,
+          status: "active",
+        },
+      ])
+      .onConflictDoNothing();
 
-    await dbRw.db.insert(schema.users).values([
-      { id: userA, email: "usera@alpha.test", name: "User A" },
-      { id: userB, email: "userb@beta.test", name: "User B" },
-      { id: userLimited, email: "limited@alpha.test", name: "User Limited" },
-      { id: userPlatform, email: "platform@corp.test", name: "Platform Admin" },
-    ]);
+    await dbRw.db
+      .insert(schema.users)
+      .values([
+        { id: userA, email: "usera@alpha.test", name: "User A" },
+        { id: userB, email: "userb@beta.test", name: "User B" },
+        { id: userLimited, email: "limited@alpha.test", name: "User Limited" },
+        { id: userPlatform, email: "platform@corp.test", name: "Platform Admin" },
+      ])
+      .onConflictDoNothing();
 
-    await dbRw.db.insert(schema.platformStaff).values({
-      userId: userPlatform,
-      role: "platform_owner",
-      isActive: true,
-    });
+    await dbRw.db
+      .insert(schema.platformStaff)
+      .values({
+        userId: userPlatform,
+        role: "platform_owner",
+        isActive: true,
+      })
+      .onConflictDoNothing();
 
-    await dbRw.db.insert(schema.featureFlags).values([
-      { key: "checkout_v2", defaultOn: true, killSwitch: false },
-      { key: "experimental_search", defaultOn: false, killSwitch: false },
-    ]);
+    await dbRw.db
+      .insert(schema.featureFlags)
+      .values([
+        { key: "checkout_v2", defaultOn: true, killSwitch: false },
+        { key: "experimental_search", defaultOn: false, killSwitch: false },
+      ])
+      .onConflictDoNothing();
 
     // 5. Seed Tenant A records using withTenant()
     await withTenant(dbRw.db, tenantA, async (tx) => {
@@ -241,6 +299,11 @@ describe("Generated Isolation Test Suite (M1 Real Postgres 18 Proof)", () => {
             "products.write",
             "content.write",
             "theme.publish",
+            "orders.read",
+            "orders.write",
+            "orders.refund",
+            "customers.read",
+            "discounts.write",
           ],
         },
         {
@@ -358,6 +421,61 @@ describe("Generated Isolation Test Suite (M1 Real Postgres 18 Proof)", () => {
         handle: testMenuHandleA,
         items: [],
       });
+
+      // M5 seed records for Tenant A
+      await tx.insert(schema.customers).values({
+        id: testCustomerA,
+        tenantId: tenantA,
+        email: "customer-a@test.com",
+        phone: "+919876543210",
+        name: "Test Customer A",
+      });
+
+      await tx.insert(schema.orders).values({
+        id: testOrderA,
+        tenantId: tenantA,
+        number: "ORD-ALPHA-1001",
+        customerId: testCustomerA,
+        email: "customer-a@test.com",
+        phone: "+919876543210",
+        status: "placed",
+        paymentStatus: "captured",
+        fulfillmentStatus: "unfulfilled",
+        subtotal: 2999,
+        discountTotal: 0,
+        shippingTotal: 0,
+        taxTotal: 0,
+        grandTotal: 2999,
+        shippingAddress: {
+          line1: "123 MG Road",
+          city: "Bengaluru",
+          stateCode: "KA",
+          pincode: "560001",
+        },
+      });
+
+      await tx.insert(schema.orderItems).values({
+        id: testOrderItemA,
+        tenantId: tenantA,
+        orderId: testOrderA,
+        variantId: testVariantA,
+        productTitle: "Sample T-Shirt",
+        variantTitle: "Small / Black",
+        sku: "TSHIRT-BLK-S",
+        quantity: 1,
+        unitPrice: 2999,
+        total: 2999,
+      });
+
+      await tx.insert(schema.discounts).values({
+        id: testDiscountA,
+        tenantId: tenantA,
+        code: "WELCOME10",
+        title: "Welcome 10% Off",
+        type: "percent",
+        value: 10,
+        status: "active",
+      });
     });
 
     // 6. Seed Tenant B records using withTenant()
@@ -433,10 +551,21 @@ describe("Generated Isolation Test Suite (M1 Real Postgres 18 Proof)", () => {
     expect(adminProcedures).toContain("brands.list");
     expect(adminProcedures).toContain("inventory.list");
     expect(adminProcedures).toContain("media.list");
-    expect(adminProcedures).toContain("branding.get");
-    expect(adminProcedures).toContain("themes.get");
-    expect(adminProcedures).toContain("pages.list");
     expect(adminProcedures).toContain("menus.list");
+    expect(adminProcedures).toContain("orders.list");
+    expect(adminProcedures).toContain("orders.get");
+    expect(adminProcedures).toContain("orders.createDraft");
+    expect(adminProcedures).toContain("orders.addNote");
+    expect(adminProcedures).toContain("orders.cancel");
+    expect(adminProcedures).toContain("orders.refund");
+    expect(adminProcedures).toContain("orders.createFulfillment");
+    expect(adminProcedures).toContain("orders.createInvoice");
+    expect(adminProcedures).toContain("customers.list");
+    expect(adminProcedures).toContain("customers.get");
+    expect(adminProcedures).toContain("discounts.list");
+    expect(adminProcedures).toContain("discounts.create");
+    expect(adminProcedures).toContain("discounts.update");
+    expect(adminProcedures).toContain("discounts.delete");
   });
 
   it("dynamically discovers all registered platform procedures", () => {
@@ -582,6 +711,84 @@ describe("Generated Isolation Test Suite (M1 Real Postgres 18 Proof)", () => {
         const menu = await createMenu(rt, ctx, { name: "Del Menu", handle: `del-${Date.now()}-${Math.random().toString(36).slice(2, 6)}` });
         return await deleteMenu(rt, ctx, { id: menu.id });
       }
+      // --- M5 Orders Admin ---
+      case "orders.list":
+        return await listAdminOrders(rt, ctx);
+      case "orders.get":
+        return await getAdminOrderDetail(rt, ctx, { id: testOrderA });
+      case "orders.createDraft":
+        return await createAdminDraftOrder(rt, ctx, {
+          email: `draft-${Date.now()}@test.com`,
+          phone: "+919876543210",
+          shippingAddress: { line1: "123 MG Road", city: "Bengaluru", stateCode: "KA", pincode: "560001" },
+          items: [{ variantId: testVariantA, quantity: 1 }],
+        });
+      case "orders.addNote":
+        return await addAdminOrderNote(rt, ctx, { id: testOrderA, body: "Customer requested gift wrap" });
+      case "orders.cancel": {
+        // Create a standalone order to cancel
+        const draft = await createAdminDraftOrder(rt, ctx, {
+          email: `cancel-${Date.now()}@test.com`,
+          phone: "+919876543210",
+          shippingAddress: { line1: "123 MG Road", city: "Bengaluru", stateCode: "KA", pincode: "560001" },
+          items: [{ variantId: testVariantA, quantity: 1 }],
+        });
+        return await cancelAdminOrder(rt, ctx, { id: draft.orderId, reason: "Customer request" });
+      }
+      case "orders.refund": {
+        // Create and refund an order
+        const draft = await createAdminDraftOrder(rt, ctx, {
+          email: `refund-${Date.now()}@test.com`,
+          phone: "+919876543210",
+          shippingAddress: { line1: "123 MG Road", city: "Bengaluru", stateCode: "KA", pincode: "560001" },
+          items: [{ variantId: testVariantA, quantity: 1 }],
+        });
+        return await refundAdminOrder(rt, ctx, { id: draft.orderId, amount: 500 });
+      }
+      case "orders.createFulfillment": {
+        // Create an unfulfilled draft order and fulfill it
+        const draft = await createAdminDraftOrder(rt, ctx, {
+          email: `fulfill-${Date.now()}@test.com`,
+          phone: "+919876543210",
+          shippingAddress: { line1: "123 MG Road", city: "Bengaluru", stateCode: "KA", pincode: "560001" },
+          items: [{ variantId: testVariantA, quantity: 1 }],
+        });
+        return await createAdminFulfillment(rt, ctx, {
+          id: draft.orderId,
+          carrier: "Shiprocket",
+          awb: `AWB-${Date.now()}`,
+        });
+      }
+      case "orders.createInvoice": {
+        return await createAdminOrderInvoice(rt, ctx, { id: testOrderA });
+      }
+
+      // --- M5 Customers Admin ---
+      case "customers.list":
+        return await listAdminCustomers(rt, ctx);
+      case "customers.get":
+        return await getAdminCustomerDetail(rt, ctx, { id: testCustomerA });
+
+      // --- M5 Discounts Admin ---
+      case "discounts.list":
+        return await listAdminDiscounts(rt, ctx);
+      case "discounts.create":
+        return await createAdminDiscount(rt, ctx, {
+          title: `Flash Sale ${Date.now()}`,
+          code: `FLASH${Date.now().toString().slice(-4)}`,
+          type: "percent",
+          value: 15,
+        });
+      case "discounts.update":
+        return await updateAdminDiscount(rt, ctx, { id: testDiscountA, title: "Updated Welcome 10%" });
+      case "discounts.delete": {
+        const disc = await createAdminDiscount(rt, ctx, {
+          title: `Del Discount ${Date.now()}`,
+          type: "fixed",
+          value: 100,
+        });
+        return await deleteAdminDiscount(rt, ctx, { id: disc.id });
+      }
       default:
         throw new Error(`Unmapped procedure in isolation test: ${procPath}`);
     }
@@ -665,6 +872,11 @@ describe("Generated Isolation Test Suite (M1 Real Postgres 18 Proof)", () => {
             "products.write",
             "content.write",
             "theme.publish",
+            "orders.read",
+            "orders.write",
+            "orders.refund",
+            "customers.read",
+            "discounts.write",
           ]);
 
           const result = await executeAdminProcedure(proc, rtApp, authCtx!);

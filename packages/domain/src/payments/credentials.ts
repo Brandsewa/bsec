@@ -61,6 +61,10 @@ export async function getTenantPaymentSecrets(
     if (!creds.webhookSecret && process.env.RAZORPAY_WEBHOOK_SECRET) creds.webhookSecret = process.env.RAZORPAY_WEBHOOK_SECRET;
   } else if (provider === "cod") {
     if (!creds.webhookSecret && process.env.COD_WEBHOOK_SECRET) creds.webhookSecret = process.env.COD_WEBHOOK_SECRET;
+  } else if (provider === "shiprocket") {
+    if (!creds.keyId && process.env.SHIPROCKET_EMAIL) creds.keyId = process.env.SHIPROCKET_EMAIL;
+    if (!creds.keySecret && process.env.SHIPROCKET_PASSWORD) creds.keySecret = process.env.SHIPROCKET_PASSWORD;
+    if (!creds.webhookSecret && process.env.SHIPROCKET_WEBHOOK_SECRET) creds.webhookSecret = process.env.SHIPROCKET_WEBHOOK_SECRET;
   }
 
   return creds;

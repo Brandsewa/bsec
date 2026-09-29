@@ -1,8 +1,9 @@
-import { eq, sql } from "drizzle-orm";
+import { and, eq, sql } from "drizzle-orm";
 import { type Db, webhookInbox, orders, orderEvents, withTenant, QUEUE_NAMES } from "@bs/db";
 import { sanitizePaymentPayload } from "@bs/payments";
 import { commitReservation } from "../catalog/inventory-reservations.ts";
 import type { Jobs } from "../jobs.ts";
+import type { Runtime } from "../runtime.ts";
 
 export interface ReceiveWebhookInput {
   provider: string;
@@ -242,6 +243,86 @@ export async function processWebhookInboxItem(
             }
           });
         }
+      }
+    } else if (provider === "shiprocket") {
+      const tenantId = item.tenant_id;
+      const awb = (payload.awb as string | undefined) ?? (payload.awb_code as string | undefined);
+      const currentStatus = String(payload.current_status ?? payload.status ?? "").toLowerCase();
+      const location = (payload.current_location as string | undefined) ?? (payload.location as string | undefined);
+      const message = (payload.scans as string | undefined) ?? (payload.activity as string | undefined) ?? `Shiprocket status: ${currentStatus}`;
+
+      if (awb && tenantId) {
+        await withTenant(db, tenantId, async (tx) => {
+          const { fulfillments, trackingEvents } = await import("@bs/db");
+          const { transitionFulfillment } = await import("../orders/fulfillment-state-machine.ts");
+
+          const [fulfillment] = await tx
+            .select()
+            .from(fulfillments)
+            .where(and(eq(fulfillments.tenantId, tenantId), eq(fulfillments.awb, awb)));
+
+          if (fulfillment) {
+            // Append tracking event
+            await tx.insert(trackingEvents).values({
+              tenantId,
+              fulfillmentId: fulfillment.id,
+              status: currentStatus,
+              location: location ?? null,
+              message,
+              occurredAt: new Date(),
+              raw: payload as Record<string, unknown>,
+            });
+
+            // Map status to fulfillment transition
+            const rt = {
+              service: "worker",
+              _db: { db, close: async () => {} },
+              close: async () => {},
+            } as unknown as Runtime;
+            const ctx = {
+              tenantId,
+              storeStatus: "live" as const,
+              actor: { type: "system" as const },
+              roles: [],
+              permissions: [],
+              requestId: "webhook_shiprocket",
+            };
+
+            if (currentStatus.includes("delivered") && fulfillment.status !== "delivered") {
+              try {
+                await transitionFulfillment(rt, ctx, fulfillment.id, {
+                  type: "fulfillment.deliver",
+                  deliveredAt: new Date(),
+                  data: { awb, provider: "shiprocket" },
+                }, tx);
+              } catch {
+                // Ignore if transition guard prevents or already progressed
+              }
+            } else if (currentStatus.includes("rto") && !fulfillment.status.startsWith("rto")) {
+              try {
+                await transitionFulfillment(rt, ctx, fulfillment.id, {
+                  type: "fulfillment.rto",
+                  reason: message,
+                  data: { awb, provider: "shiprocket" },
+                }, tx);
+              } catch {
+                // Ignore invalid transition
+              }
+            } else if (
+              (currentStatus.includes("pickup") || currentStatus.includes("picked")) &&
+              fulfillment.status === "label_created"
+            ) {
+              try {
+                await transitionFulfillment(rt, ctx, fulfillment.id, {
+                  type: "fulfillment.pick_up",
+                  data: { awb, provider: "shiprocket" },
+                }, tx);
+              } catch {
+                // Ignore invalid transition
+              }
+            }
+          }
+        });
       }
     }
 

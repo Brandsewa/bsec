@@ -742,4 +742,356 @@ export const adminContract = {
       .input(z.object({ id: z.string().uuid() }))
       .output(z.object({ success: z.boolean() })),
   },
+
+  // --- M5 Orders Admin ---
+  orders: {
+    list: oc
+      .route({ method: "GET", path: "/admin/orders" })
+      .input(
+        z
+          .object({
+            view: z.enum(["all", "unfulfilled", "unpaid", "cod_to_confirm", "rto"]).default("all"),
+            search: z.string().optional(),
+            status: z.string().optional(),
+            paymentStatus: z.string().optional(),
+            fulfillmentStatus: z.string().optional(),
+            limit: z.number().int().min(1).max(100).default(50),
+            offset: z.number().int().min(0).default(0),
+          })
+          .optional(),
+      )
+      .output(
+        z.object({
+          items: z.array(
+            z.object({
+              id: z.string().uuid(),
+              number: z.string(),
+              customerEmail: z.string(),
+              customerPhone: z.string(),
+              status: z.string(),
+              paymentStatus: z.string(),
+              fulfillmentStatus: z.string(),
+              grandTotal: z.number(),
+              placedAt: z.string(),
+              itemsCount: z.number(),
+            }),
+          ),
+          total: z.number(),
+        }),
+      ),
+    get: oc
+      .route({ method: "GET", path: "/admin/orders/{id}" })
+      .input(z.object({ id: z.string().uuid() }))
+      .output(
+        z.object({
+          order: z.object({
+            id: z.string().uuid(),
+            number: z.string(),
+            email: z.string(),
+            phone: z.string(),
+            status: z.string(),
+            paymentStatus: z.string(),
+            fulfillmentStatus: z.string(),
+            subtotal: z.number(),
+            discountTotal: z.number(),
+            shippingTotal: z.number(),
+            taxTotal: z.number(),
+            grandTotal: z.number(),
+            codFee: z.number(),
+            shippingAddress: z.unknown(),
+            billingAddress: z.unknown().nullable().optional(),
+            placedAt: z.string(),
+            cancelledAt: z.string().nullable().optional(),
+            cancelReason: z.string().nullable().optional(),
+          }),
+          items: z.array(
+            z.object({
+              id: z.string().uuid(),
+              productTitle: z.string(),
+              variantTitle: z.string().nullable().optional(),
+              sku: z.string().nullable().optional(),
+              quantity: z.number(),
+              unitPrice: z.number(),
+              total: z.number(),
+              fulfilledQty: z.number(),
+              returnedQty: z.number(),
+            }),
+          ),
+          fulfillments: z.array(
+            z.object({
+              id: z.string().uuid(),
+              status: z.string(),
+              carrier: z.string().nullable().optional(),
+              awb: z.string().nullable().optional(),
+              trackingUrl: z.string().nullable().optional(),
+              shippedAt: z.string().nullable().optional(),
+              deliveredAt: z.string().nullable().optional(),
+            }),
+          ),
+          invoices: z.array(
+            z.object({
+              id: z.string().uuid(),
+              number: z.string(),
+              fy: z.string(),
+              type: z.string(),
+              issuedAt: z.string(),
+              totals: z.unknown(),
+            }),
+          ),
+          events: z.array(
+            z.object({
+              id: z.string().uuid(),
+              type: z.string(),
+              message: z.string(),
+              actorType: z.string(),
+              createdAt: z.string(),
+            }),
+          ),
+          notes: z.array(
+            z.object({
+              id: z.string().uuid(),
+              body: z.string(),
+              createdAt: z.string(),
+            }),
+          ),
+        }),
+      ),
+    createDraft: oc
+      .route({ method: "POST", path: "/admin/orders/draft" })
+      .input(
+        z.object({
+          email: z.string().email(),
+          phone: z.string().min(5),
+          shippingAddress: z.record(z.string(), z.unknown()),
+          items: z.array(
+            z.object({
+              variantId: z.string().uuid(),
+              quantity: z.number().int().min(1),
+            }),
+          ),
+        }),
+      )
+      .output(
+        z.object({
+          orderId: z.string().uuid(),
+          orderNumber: z.string(),
+          grandTotal: z.number(),
+          payLink: z.string().optional(),
+        }),
+      ),
+    addNote: oc
+      .route({ method: "POST", path: "/admin/orders/{id}/notes" })
+      .input(
+        z.object({
+          id: z.string().uuid(),
+          body: z.string().min(1),
+        }),
+      )
+      .output(z.object({ success: z.boolean(), noteId: z.string().uuid() })),
+    cancel: oc
+      .route({ method: "POST", path: "/admin/orders/{id}/cancel" })
+      .input(
+        z.object({
+          id: z.string().uuid(),
+          reason: z.string().min(1),
+        }),
+      )
+      .output(z.object({ success: z.boolean() })),
+    refund: oc
+      .route({ method: "POST", path: "/admin/orders/{id}/refund" })
+      .input(
+        z.object({
+          id: z.string().uuid(),
+          amount: z.number().int().min(1),
+          reason: z.string().optional(),
+        }),
+      )
+      .output(z.object({ success: z.boolean(), refundId: z.string().uuid() })),
+    createFulfillment: oc
+      .route({ method: "POST", path: "/admin/orders/{id}/fulfill" })
+      .input(
+        z.object({
+          id: z.string().uuid(),
+          locationId: z.string().uuid().optional(),
+          carrier: z.string().optional(),
+          awb: z.string().optional(),
+          items: z
+            .array(
+              z.object({
+                orderItemId: z.string().uuid(),
+                quantity: z.number().int().min(1),
+              }),
+            )
+            .optional(),
+        }),
+      )
+      .output(z.object({ fulfillmentId: z.string().uuid(), status: z.string() })),
+    createInvoice: oc
+      .route({ method: "POST", path: "/admin/orders/{id}/invoice" })
+      .input(
+        z.object({
+          id: z.string().uuid(),
+        }),
+      )
+      .output(z.object({ invoiceId: z.string().uuid(), invoiceNumber: z.string() })),
+  },
+
+  // --- M5 Customers Admin ---
+  customers: {
+    list: oc
+      .route({ method: "GET", path: "/admin/customers" })
+      .input(
+        z
+          .object({
+            search: z.string().optional(),
+            tag: z.string().optional(),
+            limit: z.number().int().min(1).max(100).default(50),
+            offset: z.number().int().min(0).default(0),
+          })
+          .optional(),
+      )
+      .output(
+        z.object({
+          items: z.array(
+            z.object({
+              id: z.string().uuid(),
+              name: z.string(),
+              email: z.string(),
+              phone: z.string(),
+              ordersCount: z.number(),
+              totalSpent: z.number(),
+              tags: z.array(z.string()),
+              status: z.string(),
+              createdAt: z.string(),
+            }),
+          ),
+          total: z.number(),
+        }),
+      ),
+    get: oc
+      .route({ method: "GET", path: "/admin/customers/{id}" })
+      .input(z.object({ id: z.string().uuid() }))
+      .output(
+        z.object({
+          customer: z.object({
+            id: z.string().uuid(),
+            name: z.string(),
+            email: z.string(),
+            phone: z.string(),
+            ordersCount: z.number(),
+            totalSpent: z.number(),
+            tags: z.array(z.string()),
+            note: z.string().nullable().optional(),
+            acceptsMarketing: z.boolean(),
+            createdAt: z.string(),
+          }),
+          addresses: z.array(
+            z.object({
+              id: z.string().uuid(),
+              name: z.string(),
+              phone: z.string(),
+              line1: z.string(),
+              line2: z.string().nullable().optional(),
+              city: z.string(),
+              stateCode: z.string(),
+              pincode: z.string(),
+              type: z.string(),
+              isDefault: z.boolean(),
+            }),
+          ),
+          recentOrders: z.array(
+            z.object({
+              id: z.string().uuid(),
+              number: z.string(),
+              status: z.string(),
+              grandTotal: z.number(),
+              placedAt: z.string(),
+            }),
+          ),
+        }),
+      ),
+  },
+
+  // --- M5 Discounts Admin ---
+  discounts: {
+    list: oc
+      .route({ method: "GET", path: "/admin/discounts" })
+      .input(
+        z
+          .object({
+            search: z.string().optional(),
+            status: z.string().optional(),
+            limit: z.number().int().min(1).max(100).default(50),
+            offset: z.number().int().min(0).default(0),
+          })
+          .optional(),
+      )
+      .output(
+        z.object({
+          items: z.array(
+            z.object({
+              id: z.string().uuid(),
+              code: z.string().nullable(),
+              title: z.string(),
+              type: z.string(),
+              value: z.number(),
+              usageLimit: z.number().nullable(),
+              usedCount: z.number(),
+              status: z.string(),
+              combinable: z.boolean(),
+              startsAt: z.string().nullable().optional(),
+              endsAt: z.string().nullable().optional(),
+              createdAt: z.string(),
+            }),
+          ),
+          total: z.number(),
+        }),
+      ),
+    create: oc
+      .route({ method: "POST", path: "/admin/discounts" })
+      .input(
+        z.object({
+          code: z.string().min(1).optional(),
+          title: z.string().min(1),
+          type: z.enum(["percent", "fixed", "free_shipping", "buy_x_get_y"]),
+          value: z.number().int().min(0),
+          minSubtotal: z.number().int().min(0).optional(),
+          usageLimit: z.number().int().min(1).optional(),
+          perCustomerLimit: z.number().int().min(1).optional(),
+          combinable: z.boolean().default(false),
+          startsAt: z.string().optional(),
+          endsAt: z.string().optional(),
+        }),
+      )
+      .output(
+        z.object({
+          id: z.string().uuid(),
+          code: z.string().nullable(),
+          title: z.string(),
+          type: z.string(),
+          value: z.number(),
+          status: z.string(),
+        }),
+      ),
+    update: oc
+      .route({ method: "PATCH", path: "/admin/discounts/{id}" })
+      .input(
+        z.object({
+          id: z.string().uuid(),
+          title: z.string().min(1).optional(),
+          status: z.enum(["active", "scheduled", "expired", "disabled"]).optional(),
+          usageLimit: z.number().int().min(1).nullable().optional(),
+        }),
+      )
+      .output(
+        z.object({
+          id: z.string().uuid(),
+          status: z.string(),
+        }),
+      ),
+    delete: oc
+      .route({ method: "DELETE", path: "/admin/discounts/{id}" })
+      .input(z.object({ id: z.string().uuid() }))
+      .output(z.object({ success: z.boolean() })),
+  },
 };

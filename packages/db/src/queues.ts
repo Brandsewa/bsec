@@ -11,6 +11,14 @@ export const QUEUES = [
   { name: "reservation.expiry", options: { retryLimit: 5, retryBackoff: true, retryDelay: 5 } },
   { name: "webhook.process", options: { retryLimit: 5, retryBackoff: true, retryDelay: 5 } },
   { name: "idempotency.cleanup", options: { retryLimit: 5, retryBackoff: true, retryDelay: 5 } },
+  // M5 queues (PLAN §11 domain events)
+  { name: "fulfillment.created", options: { retryLimit: 5, retryBackoff: true, retryDelay: 5 } },
+  { name: "fulfillment.delivered", options: { retryLimit: 5, retryBackoff: true, retryDelay: 5 } },
+  { name: "fulfillment.rto", options: { retryLimit: 5, retryBackoff: true, retryDelay: 5 } },
+  { name: "return.requested", options: { retryLimit: 5, retryBackoff: true, retryDelay: 5 } },
+  { name: "refund.processed", options: { retryLimit: 5, retryBackoff: true, retryDelay: 5 } },
+  { name: "cart.abandoned", options: { retryLimit: 5, retryBackoff: true, retryDelay: 5 } },
+  { name: "cart.recovery_sweep", options: { retryLimit: 5, retryBackoff: true, retryDelay: 5 } },
 ] as const;
 
 export type QueueName = (typeof QUEUES)[number]["name"];
@@ -24,5 +32,11 @@ export const QUEUE_NAMES = {
   RESERVATION_EXPIRY: "reservation.expiry",
   WEBHOOK_PROCESS: "webhook.process",
   IDEMPOTENCY_CLEANUP: "idempotency.cleanup",
+  FULFILLMENT_CREATED: "fulfillment.created",
+  FULFILLMENT_DELIVERED: "fulfillment.delivered",
+  FULFILLMENT_RTO: "fulfillment.rto",
+  RETURN_REQUESTED: "return.requested",
+  REFUND_PROCESSED: "refund.processed",
+  CART_ABANDONED: "cart.abandoned",
+  CART_RECOVERY_SWEEP: "cart.recovery_sweep",
 } as const;
-

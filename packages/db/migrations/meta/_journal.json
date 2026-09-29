@@ -50,6 +50,13 @@
       "when": 1790620000000,
       "tag": "0006_m4_payment_orders",
       "breakpoints": true
+    },
+    {
+      "idx": 7,
+      "version": "7",
+      "when": 1790630000000,
+      "tag": "0007_m5_fulfillment",
+      "breakpoints": true
     }
   ]
 }

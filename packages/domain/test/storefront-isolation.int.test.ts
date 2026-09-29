@@ -137,6 +137,27 @@ describe("Storefront Integration & Tenant Isolation Suite (Real PostgreSQL 18)",
     // 2. Run Drizzle migrations as app_owner
     await runMigrations(as("app_owner", PW.owner));
 
+    // Clean up previous runs' test tenant data with superuser (bypassing RLS and FK triggers)
+    const pgClient = new (await import("pg")).default.Client({ connectionString: superUrl });
+    await pgClient.connect();
+    await pgClient.query("SET session_replication_role = 'replica'");
+    const tenantTablesRes = await pgClient.query(`
+      SELECT table_name FROM information_schema.columns 
+      WHERE column_name = 'tenant_id' AND table_schema = 'public' AND table_name != 'tenants'
+    `);
+    const tables = tenantTablesRes.rows.map((r: { table_name: string }) => r.table_name);
+    for (const t of tables) {
+      await pgClient.query(`DELETE FROM "${t}" WHERE tenant_id IN ('${tenantA}', '${tenantB}')`);
+    }
+    await pgClient.query(`
+      DELETE FROM domains WHERE tenant_id IN ('${tenantA}', '${tenantB}');
+      DELETE FROM tenants WHERE id IN ('${tenantA}', '${tenantB}');
+      DELETE FROM organizations WHERE id = '${orgId}';
+      DELETE FROM users WHERE id IN ('${userA}', '${userB}');
+    `);
+    await pgClient.query("SET session_replication_role = 'origin'");
+    await pgClient.end();
+
     // 3. Connect runtime and db handle as app_rw
     rtApp = createRuntime({ service: "web", databaseUrl: as("app_rw", PW.rw), poolMax: 5 });
     dbRw = createDb(as("app_rw", PW.rw));
