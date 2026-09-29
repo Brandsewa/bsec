@@ -62,6 +62,11 @@ export async function POST(
       const verified = await razorpayProvider.verifyWebhook(headersRecord, rawBody);
       signatureValid = verified.isValid;
     } else if (provider === "cod") {
+      // NOTE (Design & Defense-in-Depth): In the current system architecture, this route has no real
+      // external caller. Real COD order confirmation is handled entirely via the action_tokens
+      // one-time-link flow (/cod/[token] -> confirmCodOrder()). This HMAC check exists purely as an
+      // intentional, fail-closed safety net in case an external delivery partner or automated caller
+      // is ever configured to target /api/webhooks/cod in the future.
       const creds = tenantId ? await getTenantPaymentSecrets(rt._db.db, tenantId, "cod") : {};
       const codProvider = new CODProvider(creds);
       const verified = await codProvider.verifyWebhook(headersRecord, rawBody);

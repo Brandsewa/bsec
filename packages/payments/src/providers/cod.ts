@@ -91,6 +91,15 @@ export class CODProvider implements PaymentProvider {
     };
   }
 
+  /**
+   * Verifies COD webhook signatures using timing-safe HMAC-SHA256 comparison.
+   *
+   * NOTE (Design & Defense-in-Depth): In the current system architecture, COD order confirmation's
+   * actual security boundary is the action_tokens one-time-link flow (apps/web/src/app/cod/[token]/page.tsx
+   * calling confirmCodOrder directly). This route/webhook verification has no real caller in the current design
+   * and exists purely as an intentional, fail-closed safety net in case an external caller or delivery partner
+   * webhook is ever configured to target /api/webhooks/cod in the future.
+   */
   async verifyWebhook(
     headers: Record<string, string | string[] | undefined>,
     rawBody: string | Buffer,
