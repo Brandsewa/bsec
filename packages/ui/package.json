@@ -14,7 +14,8 @@
   "scripts": {
     "typecheck": "tsc -p tsconfig.json",
     "lint": "eslint . --cache --cache-location node_modules/.cache/eslint/",
-    "test": "vitest run"
+    "test": "vitest run",
+    "test:fast": "vitest run"
   },
   "peerDependencies": {
     "react": "19.3.0",

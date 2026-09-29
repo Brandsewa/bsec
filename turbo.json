@@ -21,6 +21,15 @@
         "TEST_DATABASE_URL_SUPERUSER"
       ]
     },
+    "test:fast": {},
+    "test:heavy": {
+      "dependsOn": [
+        "^test:heavy"
+      ],
+      "env": [
+        "TEST_DATABASE_URL_SUPERUSER"
+      ]
+    },
     "dev": {
       "cache": false,
       "persistent": true

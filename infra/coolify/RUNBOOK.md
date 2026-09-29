@@ -79,14 +79,17 @@ One Coolify "Docker Image" resource per image (see the table above for images/po
 Not yet set (PLAN section 14 target: web 800 MB / platform 200 MB / worker 400 MB / admin 64 MB / Postgres 2 GB). Low priority until this VPS is under real load - see section 3 on shared-tenancy sizing.
 
 ## 6. Deploy flow (as actually wired)
-CI (`.github/workflows/ci.yml`) on every push to `main`:
-1. `check`: typecheck, lint, test (real Postgres 18 service container), build.
-2. `images`: build + push all 5 images to GHCR, tags `:<sha>` and `:main`.
-3. `deploy-production` (gated by the GitHub `production` environment - **see the approval caveat below**):
+CI (`.github/workflows/ci.yml`) on every push to `main` (and on PRs):
+1. Parallel check stage (both required, gating the build):
+   - `check-fast`: `pnpm typecheck`, `pnpm lint`, `pnpm build` (generates `.next` for perf budget check), and `pnpm test:fast` (all unit tests across all packages and apps without DB).
+   - `check-heavy`: runs `pnpm test:heavy` against a real Postgres 18 service container (`roles.int.test.ts`, concurrency proofs for number sequences and inventory reservations, webhook inbox HMAC verification, and 247+16 isolation suites with `fileParallelism: false` and advisory lock protection).
+2. `images`: build + push all 5 images to GHCR, tags `:<sha>` and `:main` (strictly depends on `[check-fast, check-heavy]`; skipped if either check fails).
+3. `staging-smoke-test`: ephemeral compose stack running the images just pushed, testing migrate exit code and /health endpoints.
+4. `deploy-production` (gated by `[images, staging-smoke-test]`, and by the GitHub `production` environment - **see the approval caveat below**):
    - `POST https://server.brandsewa.com/api/v1/deploy?uuid=qqqlm48eqo7f8pnfwn766suc&force=false` - redeploys `bsec-migrate`, which pulls `:main` and runs `deploy.js` (bootstrap-if-superuser-set, then always migrate).
    - `sleep 45` - no read-scoped token to poll deployment status, so this is a fixed wait. Migrate has taken ~15-20s in practice; 45s is headroom, not a guarantee. If a migration ever takes longer (a big backfill, say), this needs a real poll loop instead.
    - `POST .../api/v1/deploy?uuid=<web>,<platform>,<worker>,<admin>&force=false` - Coolify accepts comma-separated UUIDs in one call and redeploys all four.
-4. Auth: `COOLIFY_TOKEN`, a Coolify API token scoped to **Deploy only** (Keys & Tokens -> API Tokens), 1-year expiry, stored as a secret on the GitHub `production` environment. It cannot read deployment status or anything else - least privilege. **Rotate before it expires** (create a new token, update the GitHub secret, revoke the old one in Coolify).
+5. Auth: `COOLIFY_TOKEN`, a Coolify API token scoped to **Deploy only** (Keys & Tokens -> API Tokens), 1-year expiry, stored as a secret on the GitHub `production` environment. It cannot read deployment status or anything else - least privilege. **Rotate before it expires** (create a new token, update the GitHub secret, revoke the old one in Coolify).
 
 **Approval gate caveat:** GitHub's required-reviewers protection rule on the `production` environment needs a paid plan for a private repo - attempting to set it returned a 422 ("Please ensure the billing plan supports the required reviewers protection rule"). Until the repo goes public or the org upgrades, **every push to `main` that passes CI deploys straight to production with no human approval step**, despite what the workflow's comments say. Either upgrade the plan, make the repo public, or add a manual `workflow_dispatch` gate if that risk needs closing sooner.
 
