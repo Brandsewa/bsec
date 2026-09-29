@@ -4,6 +4,10 @@
  *  2. pg-boss schema install/upgrade + queue creation (the worker runs with migrate:false as app_rw)
  *  3. Grants on the pgboss schema for the runtime roles
  * Env: DATABASE_URL_OWNER
+ *
+ * No top-level/isMain self-execution here on purpose - see migrate-cli.ts for the standalone
+ * entrypoint, and the comment at the top of bootstrap-roles.ts for why an isMain guard is
+ * unsafe once this module is bundled into deploy.js alongside other entry files.
  */
 import path from "node:path";
 import { fileURLToPath } from "node:url";
@@ -44,12 +48,4 @@ export async function runMigrations(ownerUrl: string, migrationsFolder = default
   } finally {
     await pool.end();
   }
-}
-
-const isMain = process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url);
-if (isMain) {
-  const url = process.env.DATABASE_URL_OWNER;
-  if (!url) throw new Error("Missing env DATABASE_URL_OWNER");
-  await runMigrations(url);
-  console.log("migrations ok");
 }

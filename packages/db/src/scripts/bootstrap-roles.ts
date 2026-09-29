@@ -1,17 +1,17 @@
 /**
  * Creates/updates app_owner, app_rw, app_platform. Run as a superuser, once per environment
  * (and harmlessly on every deploy). Env: DATABASE_URL_SUPERUSER, APP_*_PASSWORD.
+ *
+ * No top-level/isMain self-execution here on purpose: this module is imported as a library
+ * both by bootstrap-cli.ts (standalone use) and deploy.ts (the migrate image's real entrypoint,
+ * which bundles this file's code into dist/deploy.js). esbuild bundling makes import.meta.url
+ * resolve to the OUTPUT bundle's own URL for every module it inlines, so an isMain check here
+ * would incorrectly evaluate true inside deploy.js too and unconditionally demand
+ * DATABASE_URL_SUPERUSER even when deploy.ts intentionally left it unset. See bootstrap-cli.ts
+ * for the standalone entrypoint.
  */
-import path from "node:path";
-import { fileURLToPath } from "node:url";
 import pg from "pg";
 import { rolesSql } from "../sql/roles.ts";
-
-function need(name: string): string {
-  const v = process.env[name];
-  if (!v) throw new Error(`Missing env ${name}`);
-  return v;
-}
 
 // Arbitrary fixed key for a session-level advisory lock scoped to role bootstrap. Roles
 // (ALTER ROLE ... PASSWORD, CREATE ROLE) live in the cluster-wide pg_authid catalog, not a single
@@ -37,14 +37,4 @@ export async function bootstrapRoles(superuserUrl: string, pw: { owner: string; 
   } finally {
     await client.end();
   }
-}
-
-const isMain = process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url);
-if (isMain) {
-  await bootstrapRoles(need("DATABASE_URL_SUPERUSER"), {
-    owner: need("APP_OWNER_PASSWORD"),
-    rw: need("APP_RW_PASSWORD"),
-    platform: need("APP_PLATFORM_PASSWORD"),
-  });
-  console.log("roles ok");
 }

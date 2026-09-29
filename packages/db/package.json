@@ -17,8 +17,8 @@
     "test": "vitest run",
     "test:fast": "vitest run --exclude '**/*.int.test.ts'",
     "test:heavy": "vitest run int.test.ts",
-    "bootstrap": "tsx src/scripts/bootstrap-roles.ts",
-    "migrate": "tsx src/scripts/migrate.ts",
+    "bootstrap": "tsx src/scripts/bootstrap-cli.ts",
+    "migrate": "tsx src/scripts/migrate-cli.ts",
     "generate": "drizzle-kit generate",
     "build": "node build.js"
   },
