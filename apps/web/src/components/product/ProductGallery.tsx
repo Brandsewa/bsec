@@ -8,11 +8,42 @@ export interface ProductGalleryProps {
   title: string;
 }
 
+function generateImageSrcSet(url?: string): { src: string; srcSet?: string; sizes?: string } {
+  if (!url) return { src: "" };
+
+  // If the image is served via Cloudflare Images / CDN transform URL, produce responsive AVIF/WebP variants
+  if (url.includes("/cdn-cgi/image/")) {
+    const widths = [360, 640, 750, 1080];
+    const srcSet = widths
+      .map((w) => {
+        const transformed = url.replace(
+          /\/cdn-cgi\/image\/[^/]+/,
+          `/cdn-cgi/image/width=${w},fit=cover,format=auto,quality=85`,
+        );
+        return `${transformed} ${w}w`;
+      })
+      .join(", ");
+    return {
+      src: url,
+      srcSet,
+      sizes: "(max-width: 640px) 100vw, (max-width: 1024px) 50vw, 600px",
+    };
+  }
+
+  // If image URL is already WebP or AVIF, provide width descriptors or use as-is
+  return {
+    src: url,
+    srcSet: `${url} 1x, ${url} 2x`,
+    sizes: "(max-width: 640px) 100vw, (max-width: 1024px) 50vw, 600px",
+  };
+}
+
 export function ProductGallery({ media, title }: ProductGalleryProps) {
   const [selectedIndex, setSelectedIndex] = useState(0);
 
   const images = media.filter((m) => Boolean(m.url));
   const activeImage = images[selectedIndex] ?? images[0];
+  const { src, srcSet, sizes } = generateImageSrcSet(activeImage?.url);
 
   if (images.length === 0) {
     return (
@@ -44,7 +75,9 @@ export function ProductGallery({ media, title }: ProductGalleryProps) {
       <div className="relative aspect-square w-full overflow-hidden rounded-2xl border border-border/60 bg-surface shadow-xs">
         {/* eslint-disable-next-line @next/next/no-img-element */}
         <img
-          src={activeImage?.url}
+          src={src}
+          srcSet={srcSet}
+          sizes={sizes}
           alt={activeImage?.alt ?? title}
           fetchPriority="high"
           loading="eager"

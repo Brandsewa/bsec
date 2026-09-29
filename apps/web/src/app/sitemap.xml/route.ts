@@ -5,8 +5,6 @@ import {
 } from "@bs/domain";
 import { server } from "@/server/runtime.ts";
 
-export const dynamic = "force-dynamic";
-
 export async function GET(req: Request) {
   const headers = {
     "Content-Type": "application/xml; charset=utf-8",

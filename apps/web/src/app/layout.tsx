@@ -16,6 +16,8 @@ import {
 import { computeThemeTokens } from "@/components/storefront/theme-tokens.ts";
 import "./globals.css";
 
+export const instant = false;
+
 export async function generateMetadata(): Promise<Metadata> {
   try {
     const h = await headers();

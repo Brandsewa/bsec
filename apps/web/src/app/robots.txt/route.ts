@@ -1,8 +1,6 @@
 import { evaluateStorefrontAccess, generateRobotsTxt, getStorefrontSeoSettings } from "@bs/domain";
 import { server } from "@/server/runtime.ts";
 
-export const dynamic = "force-dynamic";
-
 export async function GET(req: Request) {
   try {
     const host =
