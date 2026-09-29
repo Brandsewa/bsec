@@ -1,6 +1,6 @@
 # Coolify deployment runbook
 
-**Status:** production is live on the shared Brand Sewa VPS (`server.brandsewa.com`, host IP `88.222.241.159`), Coolify project **Bs Commerce Platform** -> environment `production`. There is **no staging VPS yet** -- deliberately deferred; see section 0. Everything below reflects what is actually configured, not just the plan.
+**Status:** production is live on the shared Brand Sewa VPS (`server.brandsewa.com`, host IP `88.222.241.159`), Coolify project **Bs Commerce Platform** -> environment `production`. There is **no staging VPS**; staging is an ephemeral CI stack, see section 0. Everything below reflects what is actually configured, not just the plan.
 
 Images are built by GitHub Actions and pulled from GHCR (`ghcr.io/brandsewa/bsec-*`, all **public** -- no registry credentials needed on the VPS). **Nothing is built on the VPS.** Source: PLAN section 3, section 13 (M0), section 14.
 
@@ -15,12 +15,15 @@ Images are built by GitHub Actions and pulled from GHCR (`ghcr.io/brandsewa/bsec
 
 ---
 
-## 0. Staging - deferred
-
-There is intentionally no separate staging VPS right now (user decision, 2026-09-28). `ci.yml` deploys straight to `production` on every push to `main` that passes checks. When a staging VPS exists:
-1. Repeat sections 1-5 below on it, as its own Coolify project/environment with its own database and resource UUIDs.
-2. Add a `deploy-staging` job to `ci.yml` ahead of `deploy-production`, same shape (see section 6), with its own `COOLIFY_TOKEN`/UUIDs as secrets on a `staging` GitHub environment.
-3. Point `deploy-production`'s `needs:` at `deploy-staging` again.
+## 0. Staging - CI-based ephemeral stack (no staging VPS)
+Decided 2026-09-29: a persistent staging VPS isn't worth the cost yet. Instead, every push to `main` runs the exact images `images` just pushed on the GitHub Actions runner, smoke-tests them, and tears the stack down. `deploy-production` has `needs: [images, staging-smoke-test]`, so a failing smoke test blocks the production deploy.
+- Definition: `docker-compose.staging.yml` (same 6-service topology as production; `image:` only, no `build:`; every password is a required variable) and the `staging-smoke-test` job in `ci.yml`. Local dev stays in `docker-compose.yml`.
+- Image tag: `sha-<full sha>` (docker/metadata-action `type=sha` prefixes `sha-`; a bare `<sha>` tag does not exist and gives `manifest unknown`).
+- Secrets: `openssl rand -hex 16` per run, masked in logs. Production credentials are never used.
+- Steps: `pull` -> `up -d --wait` -> assert `migrate` exit code 0 -> curl `/health` on web (`/api/health`), platform, worker, admin, asserting `status: ok` and `db.ok`/`db.role` (`app_rw`, `app_platform`, `app_rw`) -> `down -v` under `if: always()`.
+- TODO (M5 exit criterion): extend the smoke test to place a real COD test order against the running stack, so the order lifecycle is proven "on staging".
+- Limits: it is not a persistent environment (no manual QA, no data carried between runs, no Coolify-level deploy rehearsal). Revisit a real staging VPS if those become needed; the steps would be sections 1-5 on a new host plus a `deploy-staging` job.
+- **Verified for real (2026-09-29):** CI run 36536841168 on `main` (commit 128d86a) was green end to end. The staging job took 39s, `migrate exit code: 0`, and the four `/health` responses reported the run's commit SHA with the correct roles. Teardown removed all six containers, the `bsec_pgdata` volume and the network, and `ps -a` afterwards was empty. `deploy-production` ran only after it. Earlier attempts caught the `sha-` tag bug above.
 
 ## 1. Server preparation
 Already done on the production VPS (shared with other Brand Sewa projects). For a **new** VPS (e.g. the future staging one), as root on a fresh Ubuntu 24.04 install:
@@ -83,7 +86,7 @@ CI (`.github/workflows/ci.yml`) on every push to `main` (and on PRs):
 1. Parallel check stage (both required, gating the build):
    - `check-fast`: `pnpm typecheck`, `pnpm lint`, `pnpm build` (generates `.next` for perf budget check), and `pnpm test:fast` (all unit tests across all packages and apps without DB).
    - `check-heavy`: runs `pnpm test:heavy` against a real Postgres 18 service container (`roles.int.test.ts`, concurrency proofs for number sequences and inventory reservations, webhook inbox HMAC verification, and 247+16 isolation suites with `fileParallelism: false` and advisory lock protection).
-2. `images`: build + push all 5 images to GHCR, tags `:<sha>` and `:main` (strictly depends on `[check-fast, check-heavy]`; skipped if either check fails).
+2. `images`: build + push all 5 images to GHCR, tags `:sha-<sha>` and `:main` (strictly depends on `[check-fast, check-heavy]`; skipped if either check fails).
 3. `staging-smoke-test`: ephemeral compose stack running the images just pushed, testing migrate exit code and /health endpoints.
 4. `deploy-production` (gated by `[images, staging-smoke-test]`, and by the GitHub `production` environment - **see the approval caveat below**):
    - `POST https://server.brandsewa.com/api/v1/deploy?uuid=qqqlm48eqo7f8pnfwn766suc&force=false` - redeploys `bsec-migrate`, which pulls `:main` and runs `deploy.js` (bootstrap-if-superuser-set, then always migrate).
