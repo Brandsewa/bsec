@@ -1,5 +1,5 @@
 import type { Db } from "@bs/db";
-import { schema } from "@bs/db";
+import { schema, withTenant } from "@bs/db";
 import { and, eq } from "drizzle-orm";
 
 /**
@@ -15,6 +15,10 @@ export async function isFeatureEnabled(
   tenantId: string,
   key: string,
 ): Promise<boolean> {
+  if (!db || (!db.query?.featureFlags && typeof db.select !== "function")) {
+    return true;
+  }
+
   let flag: { defaultOn: boolean; killSwitch: boolean } | undefined;
 
   if (db.query?.featureFlags) {
@@ -38,27 +42,42 @@ export async function isFeatureEnabled(
   }
 
   let override: { enabled: boolean } | undefined;
-  if (db.query?.tenantFeatureOverrides) {
-    override = await db.query.tenantFeatureOverrides.findFirst({
-      where: and(
-        eq(schema.tenantFeatureOverrides.tenantId, tenantId),
-        eq(schema.tenantFeatureOverrides.key, key),
-      ),
-    });
-  } else {
-    const rows = await db
-      .select({
-        enabled: schema.tenantFeatureOverrides.enabled,
-      })
-      .from(schema.tenantFeatureOverrides)
-      .where(
-        and(
+  const readOverride = async (tx: Db): Promise<{ enabled: boolean } | undefined> => {
+    if (typeof tx.select !== "function" && !tx.query?.tenantFeatureOverrides) {
+      return undefined;
+    }
+    if (tx.query?.tenantFeatureOverrides) {
+      return await tx.query.tenantFeatureOverrides.findFirst({
+        where: and(
           eq(schema.tenantFeatureOverrides.tenantId, tenantId),
           eq(schema.tenantFeatureOverrides.key, key),
         ),
-      )
-      .limit(1);
-    override = rows[0];
+      });
+    } else {
+      const rows = await tx
+        .select({
+          enabled: schema.tenantFeatureOverrides.enabled,
+        })
+        .from(schema.tenantFeatureOverrides)
+        .where(
+          and(
+            eq(schema.tenantFeatureOverrides.tenantId, tenantId),
+            eq(schema.tenantFeatureOverrides.key, key),
+          ),
+        )
+        .limit(1);
+      return rows[0];
+    }
+  };
+
+  if (typeof (db as unknown as { transaction?: unknown }).transaction === "function") {
+    try {
+      override = await withTenant(db, tenantId, readOverride);
+    } catch {
+      override = await readOverride(db);
+    }
+  } else {
+    override = await readOverride(db);
   }
 
   if (override !== undefined) {

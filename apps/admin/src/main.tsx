@@ -1,10 +1,19 @@
 import { StrictMode } from "react";
 import { createRoot } from "react-dom/client";
+import * as Sentry from "@sentry/react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { RouterProvider, createRouter } from "@tanstack/react-router";
 import { ROUTE_PENDING_MIN_MS, ROUTE_PENDING_MS } from "@bs/ui";
 import { routeTree } from "./routeTree.gen.ts";
 import "./index.css";
+
+const sentryDsn = import.meta.env.VITE_SENTRY_DSN || import.meta.env.SENTRY_DSN;
+if (sentryDsn) {
+  Sentry.init({
+    dsn: sentryDsn,
+    environment: import.meta.env.MODE || "development",
+  });
+}
 
 const queryClient = new QueryClient({
   defaultOptions: { queries: { staleTime: 30_000, refetchOnWindowFocus: false } },

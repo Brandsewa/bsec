@@ -2,6 +2,7 @@ import { and, desc, eq, ilike, isNull, sql } from "drizzle-orm";
 import { schema, withTenant } from "@bs/db";
 import type { Runtime } from "../runtime.ts";
 import type { TenantContext } from "../context.ts";
+import { isFeatureEnabled } from "../features.ts";
 import { buildProductSummaries, type StorefrontProductSummary } from "./catalog.ts";
 
 export interface SearchProductsOptions {
@@ -29,6 +30,11 @@ export async function searchStorefrontProducts(
   rawQuery: string,
   opts?: SearchProductsOptions,
 ): Promise<SearchProductsResult> {
+  const catalogEnabled = await isFeatureEnabled(rt._db.db, ctx.tenantId, "catalog");
+  if (!catalogEnabled) {
+    return { items: [], total: 0 };
+  }
+
   const normalizedQuery = rawQuery.trim().toLowerCase();
   if (!normalizedQuery) {
     return { items: [], total: 0 };
@@ -124,6 +130,9 @@ export async function getSearchSuggestions(
   partial: string,
   limit = 5,
 ): Promise<SearchSuggestion[]> {
+  const catalogEnabled = await isFeatureEnabled(rt._db.db, ctx.tenantId, "catalog");
+  if (!catalogEnabled) return [];
+
   const normalized = partial.trim().toLowerCase();
   if (!normalized) return [];
 

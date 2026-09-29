@@ -2,6 +2,7 @@ import { and, asc, desc, eq, inArray, isNull, sql } from "drizzle-orm";
 import { schema, withTenant } from "@bs/db";
 import type { Runtime } from "../runtime.ts";
 import type { TenantContext } from "../context.ts";
+import { isFeatureEnabled } from "../features.ts";
 
 export interface StorefrontBrand {
   id: string;
@@ -149,6 +150,11 @@ export async function getStorefrontProduct(
   slug: string,
 ): Promise<StorefrontProductDetail | null> {
   const db = rt._db.db;
+
+  const catalogEnabled = await isFeatureEnabled(db, ctx.tenantId, "catalog");
+  if (!catalogEnabled) {
+    return null;
+  }
 
   return withTenant(db, ctx.tenantId, async (tx) => {
     const rows = await tx
@@ -321,6 +327,11 @@ export async function getStorefrontCollection(
 ): Promise<StorefrontCollectionDetail | null> {
   const db = rt._db.db;
 
+  const catalogEnabled = await isFeatureEnabled(db, ctx.tenantId, "catalog");
+  if (!catalogEnabled) {
+    return null;
+  }
+
   return withTenant(db, ctx.tenantId, async (tx) => {
     const [col] = await tx
       .select()
@@ -430,6 +441,11 @@ export async function getStorefrontCategory(
   opts?: CatalogListingOptions,
 ): Promise<StorefrontCategoryDetail | null> {
   const db = rt._db.db;
+
+  const catalogEnabled = await isFeatureEnabled(db, ctx.tenantId, "catalog");
+  if (!catalogEnabled) {
+    return null;
+  }
 
   return withTenant(db, ctx.tenantId, async (tx) => {
     const [cat] = await tx

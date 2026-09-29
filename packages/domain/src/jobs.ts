@@ -75,6 +75,110 @@ export async function handleFulfillmentRtoJob(
   }
 }
 
+export async function handleFulfillmentShippedJob(
+  db: Db,
+  log: Logger,
+  data: { tenantId: string; fulfillmentId: string; orderId: string; awb?: string; carrier?: string },
+): Promise<void> {
+  const { tenantId, orderId, awb, carrier, fulfillmentId } = data;
+  const orderRows = await withTenant(db, tenantId, async (tx) => {
+    return await tx
+      .select({ email: schema.orders.email, number: schema.orders.number })
+      .from(schema.orders)
+      .where(eq(schema.orders.id, orderId))
+      .limit(1);
+  });
+
+  if (orderRows[0]?.email) {
+    await dispatchTransactionalEmailOrThrow(db, log, {
+      tenantId,
+      template: "order_shipped",
+      toEmail: orderRows[0].email,
+      subject: `Your order ${orderRows[0].number} has shipped!`,
+      data: { orderNumber: orderRows[0].number, awb, carrier },
+      eventRef: `fulfillment_${fulfillmentId}`,
+    });
+  }
+}
+
+export async function handleFulfillmentDeliveredJob(
+  db: Db,
+  log: Logger,
+  data: { tenantId: string; fulfillmentId: string; orderId: string },
+): Promise<void> {
+  const { tenantId, orderId, fulfillmentId } = data;
+  const orderRows = await withTenant(db, tenantId, async (tx) => {
+    return await tx
+      .select({ email: schema.orders.email, number: schema.orders.number })
+      .from(schema.orders)
+      .where(eq(schema.orders.id, orderId))
+      .limit(1);
+  });
+
+  if (orderRows[0]?.email) {
+    await dispatchTransactionalEmailOrThrow(db, log, {
+      tenantId,
+      template: "order_delivered",
+      toEmail: orderRows[0].email,
+      subject: `Your order ${orderRows[0].number} has been delivered`,
+      data: { orderNumber: orderRows[0].number },
+      eventRef: `delivered_${fulfillmentId}`,
+    });
+  }
+}
+
+export async function handleReturnRequestedJob(
+  db: Db,
+  log: Logger,
+  data: { tenantId: string; returnId: string; orderId: string; returnNumber: string },
+): Promise<void> {
+  const { tenantId, orderId, returnNumber, returnId } = data;
+  const orderRows = await withTenant(db, tenantId, async (tx) => {
+    return await tx
+      .select({ email: schema.orders.email, number: schema.orders.number })
+      .from(schema.orders)
+      .where(eq(schema.orders.id, orderId))
+      .limit(1);
+  });
+
+  if (orderRows[0]?.email) {
+    await dispatchTransactionalEmailOrThrow(db, log, {
+      tenantId,
+      template: "return_requested",
+      toEmail: orderRows[0].email,
+      subject: `Return request received: ${returnNumber}`,
+      data: { returnNumber, orderNumber: orderRows[0].number },
+      eventRef: `return_${returnId}`,
+    });
+  }
+}
+
+export async function handleRefundProcessedJob(
+  db: Db,
+  log: Logger,
+  data: { tenantId: string; orderId: string; refundAmount: number; refundId?: string },
+): Promise<void> {
+  const { tenantId, orderId, refundAmount, refundId } = data;
+  const orderRows = await withTenant(db, tenantId, async (tx) => {
+    return await tx
+      .select({ email: schema.orders.email, number: schema.orders.number })
+      .from(schema.orders)
+      .where(eq(schema.orders.id, orderId))
+      .limit(1);
+  });
+
+  if (orderRows[0]?.email) {
+    await dispatchTransactionalEmailOrThrow(db, log, {
+      tenantId,
+      template: "refund_processed",
+      toEmail: orderRows[0].email,
+      subject: `Refund processed for order ${orderRows[0].number}`,
+      data: { orderNumber: orderRows[0].number, refundAmount },
+      eventRef: `refund_${orderId}_${refundId ?? "processed"}`,
+    });
+  }
+}
+
 export async function handleCartAbandonedJob(
   db: Db,
   log: Logger,
@@ -161,25 +265,7 @@ export async function startJobs(opts: {
     async (batch) => {
       for (const job of batch) {
         try {
-          const { tenantId, orderId, awb, carrier } = job.data;
-          const orderRows = await withTenant(db, tenantId, async (tx) => {
-            return await tx
-              .select({ email: schema.orders.email, number: schema.orders.number })
-              .from(schema.orders)
-              .where(eq(schema.orders.id, orderId))
-              .limit(1);
-          });
-
-          if (orderRows[0]?.email) {
-            await dispatchTransactionalEmailOrThrow(db, opts.log, {
-              tenantId,
-              template: "order_shipped",
-              toEmail: orderRows[0].email,
-              subject: `Your order ${orderRows[0].number} has shipped!`,
-              data: { orderNumber: orderRows[0].number, awb, carrier },
-              eventRef: `fulfillment_${job.data.fulfillmentId}`,
-            });
-          }
+          await handleFulfillmentShippedJob(db, opts.log, job.data);
           opts.log.info({ job_id: job.id, fulfillmentId: job.data.fulfillmentId }, "fulfillment.created processed");
         } catch (err) {
           opts.log.error({ err, job_id: job.id }, "fulfillment.created failed");
@@ -196,25 +282,7 @@ export async function startJobs(opts: {
     async (batch) => {
       for (const job of batch) {
         try {
-          const { tenantId, orderId } = job.data;
-          const orderRows = await withTenant(db, tenantId, async (tx) => {
-            return await tx
-              .select({ email: schema.orders.email, number: schema.orders.number })
-              .from(schema.orders)
-              .where(eq(schema.orders.id, orderId))
-              .limit(1);
-          });
-
-          if (orderRows[0]?.email) {
-            await dispatchTransactionalEmailOrThrow(db, opts.log, {
-              tenantId,
-              template: "order_delivered",
-              toEmail: orderRows[0].email,
-              subject: `Your order ${orderRows[0].number} has been delivered`,
-              data: { orderNumber: orderRows[0].number },
-              eventRef: `delivered_${job.data.fulfillmentId}`,
-            });
-          }
+          await handleFulfillmentDeliveredJob(db, opts.log, job.data);
           opts.log.info({ job_id: job.id, fulfillmentId: job.data.fulfillmentId }, "fulfillment.delivered processed");
         } catch (err) {
           opts.log.error({ err, job_id: job.id }, "fulfillment.delivered failed");
@@ -265,25 +333,7 @@ export async function startJobs(opts: {
     async (batch) => {
       for (const job of batch) {
         try {
-          const { tenantId, orderId, returnNumber } = job.data;
-          const orderRows = await withTenant(db, tenantId, async (tx) => {
-            return await tx
-              .select({ email: schema.orders.email, number: schema.orders.number })
-              .from(schema.orders)
-              .where(eq(schema.orders.id, orderId))
-              .limit(1);
-          });
-
-          if (orderRows[0]?.email) {
-            await dispatchTransactionalEmailOrThrow(db, opts.log, {
-              tenantId,
-              template: "return_requested",
-              toEmail: orderRows[0].email,
-              subject: `Return request received: ${returnNumber}`,
-              data: { returnNumber, orderNumber: orderRows[0].number },
-              eventRef: `return_${job.data.returnId}`,
-            });
-          }
+          await handleReturnRequestedJob(db, opts.log, job.data);
           opts.log.info({ job_id: job.id, returnId: job.data.returnId }, "return.requested processed");
         } catch (err) {
           opts.log.error({ err, job_id: job.id }, "return.requested failed");
@@ -294,32 +344,14 @@ export async function startJobs(opts: {
   );
 
   // Handle refund.processed domain event
-  await boss.work<{ tenantId: string; orderId: string; refundAmount: number }>(
+  await boss.work<{ tenantId: string; orderId: string; refundAmount: number; refundId?: string }>(
     QUEUE_NAMES.REFUND_PROCESSED,
     { localConcurrency: 2 },
     async (batch) => {
       for (const job of batch) {
         try {
-          const { tenantId, orderId, refundAmount } = job.data;
-          const orderRows = await withTenant(db, tenantId, async (tx) => {
-            return await tx
-              .select({ email: schema.orders.email, number: schema.orders.number })
-              .from(schema.orders)
-              .where(eq(schema.orders.id, orderId))
-              .limit(1);
-          });
-
-          if (orderRows[0]?.email) {
-            await dispatchTransactionalEmailOrThrow(db, opts.log, {
-              tenantId,
-              template: "refund_processed",
-              toEmail: orderRows[0].email,
-              subject: `Refund processed for order ${orderRows[0].number}`,
-              data: { orderNumber: orderRows[0].number, refundAmount },
-              eventRef: `refund_${orderId}_${Date.now()}`,
-            });
-          }
-          opts.log.info({ job_id: job.id, orderId }, "refund.processed processed");
+          await handleRefundProcessedJob(db, opts.log, job.data);
+          opts.log.info({ job_id: job.id, orderId: job.data.orderId }, "refund.processed processed");
         } catch (err) {
           opts.log.error({ err, job_id: job.id }, "refund.processed failed");
           throw err;
