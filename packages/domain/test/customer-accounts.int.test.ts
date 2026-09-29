@@ -45,11 +45,11 @@ function as(role: "app_owner" | "app_rw" | "app_platform", password: string): st
   return u.toString();
 }
 
-const orgId = "0199a000-0000-7000-8000-000000000000";
-const tenantId = "0199a000-0000-7000-8000-000000000001";
-const locationId = "0199a000-0000-7000-8000-000000000010";
-const productId = "0199a000-0000-7000-8000-000000000020";
-const variantId = "0199a000-0000-7000-8000-000000000030";
+const orgId = "0199a0c2-0000-7000-8000-000000000000";
+const tenantId = "0199a0c2-0000-7000-8000-000000000001";
+const locationId = "0199a0c2-0000-7000-8000-000000000010";
+const productId = "0199a0c2-0000-7000-8000-000000000020";
+const variantId = "0199a0c2-0000-7000-8000-000000000030";
 
 beforeAll(async () => {
   if (process.env.TEST_DATABASE_URL_SUPERUSER) {
@@ -67,13 +67,13 @@ beforeAll(async () => {
   await pgClient.connect();
   await pgClient.query(`
     INSERT INTO organizations (id, name) VALUES ('${orgId}', 'Test Org') ON CONFLICT DO NOTHING;
-    INSERT INTO tenants (id, organization_id, slug, name) VALUES ('${tenantId}', '${orgId}', 'test-store', 'Test Store') ON CONFLICT DO NOTHING;
+    INSERT INTO tenants (id, organization_id, slug, name) VALUES ('${tenantId}', '${orgId}', 'test-store-c2', 'Test Store') ON CONFLICT DO NOTHING;
     SELECT set_config('app.tenant_id', '${tenantId}', false);
     INSERT INTO locations (id, tenant_id, name, is_default) VALUES ('${locationId}', '${tenantId}', 'Main Warehouse', true) ON CONFLICT DO NOTHING;
     INSERT INTO products (id, tenant_id, title, slug, status) VALUES ('${productId}', '${tenantId}', 'Premium T-Shirt', 'premium-t-shirt', 'published') ON CONFLICT (tenant_id, slug) DO UPDATE SET status = 'published';
     INSERT INTO variants (id, tenant_id, product_id, sku, title, price) VALUES ('${variantId}', '${tenantId}', '${productId}', 'TSHIRT-BLK-M', 'Black / M', 149900) ON CONFLICT DO NOTHING;
     INSERT INTO inventory_levels (id, tenant_id, variant_id, location_id, on_hand, reserved)
-    VALUES ('0199a000-0000-7000-8000-000000000040', '${tenantId}', '${variantId}', '${locationId}', 25, 0)
+    VALUES ('0199a0c2-0000-7000-8000-000000000040', '${tenantId}', '${variantId}', '${locationId}', 25, 0)
     ON CONFLICT (tenant_id, variant_id, location_id) DO UPDATE SET on_hand = 25, reserved = 0;
   `);
   await pgClient.end();

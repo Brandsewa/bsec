@@ -41,13 +41,13 @@ beforeAll(async () => {
   rwDb = createDb(as("app_rw", PW.rw));
   rt = createRuntime({ service: "web", databaseUrl: as("app_rw", PW.rw), poolMax: 5 });
 
-  const orgId = "0199a000-0000-7000-8000-000000000000";
-  const tenantId = "0199a000-0000-7000-8000-000000000001";
+  const orgId = "0199a0c5-0000-7000-8000-000000000000";
+  const tenantId = "0199a0c5-0000-7000-8000-000000000001";
   const pgClient = new (await import("pg")).default.Client({ connectionString: as("app_rw", PW.rw) });
   await pgClient.connect();
   await pgClient.query(`
     INSERT INTO organizations (id, name) VALUES ('${orgId}', 'Test Org') ON CONFLICT DO NOTHING;
-    INSERT INTO tenants (id, organization_id, slug, name) VALUES ('${tenantId}', '${orgId}', 'test-store', 'Test Store') ON CONFLICT DO NOTHING;
+    INSERT INTO tenants (id, organization_id, slug, name) VALUES ('${tenantId}', '${orgId}', 'test-store-c5', 'Test Store') ON CONFLICT DO NOTHING;
 
   `);
   await pgClient.end();
@@ -62,7 +62,7 @@ afterAll(async () => {
 });
 
 describe("Order State Machine PostgreSQL Integration", () => {
-  const tenantId = "0199a000-0000-7000-8000-000000000001";
+  const tenantId = "0199a0c5-0000-7000-8000-000000000001";
   const ctx: TenantContext = {
     tenantId,
     storeStatus: "live",
@@ -74,7 +74,7 @@ describe("Order State Machine PostgreSQL Integration", () => {
 
   it("transitions order through valid flow and writes audit events", async () => {
     // 1. Create order in pending status
-    const orderId = "0199a000-0000-7000-8000-0000000000aa";
+    const orderId = "0199a0c5-0000-7000-8000-0000000000aa";
     await withTenant(rwDb.db, tenantId, async (tx) => {
       await tx.insert(orders).values({
         id: orderId,
@@ -119,7 +119,7 @@ describe("Order State Machine PostgreSQL Integration", () => {
   });
 
   it("rejects invalid state transition and preserves state", async () => {
-    const orderId = "0199a000-0000-7000-8000-0000000000bb";
+    const orderId = "0199a0c5-0000-7000-8000-0000000000bb";
     await withTenant(rwDb.db, tenantId, async (tx) => {
       await tx.insert(orders).values({
         id: orderId,
@@ -147,7 +147,7 @@ describe("Order State Machine PostgreSQL Integration", () => {
   });
 
   it("enforces cross-entity guard: cannot cancel order when shipped", async () => {
-    const orderId = "0199a000-0000-7000-8000-0000000000cc";
+    const orderId = "0199a0c5-0000-7000-8000-0000000000cc";
     await withTenant(rwDb.db, tenantId, async (tx) => {
       await tx.insert(orders).values({
         id: orderId,

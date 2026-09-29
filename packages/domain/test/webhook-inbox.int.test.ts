@@ -37,11 +37,11 @@ function as(role: "app_owner" | "app_rw" | "app_platform", password: string): st
   return u.toString();
 }
 
-const orgId = "0199a000-0000-7000-8000-000000000000";
-const tenantId = "0199a000-0000-7000-8000-000000000001";
-const locationId = "0199a000-0000-7000-8000-000000000010";
-const productId = "0199a000-0000-7000-8000-000000000020";
-const variantId = "0199a000-0000-7000-8000-000000000030";
+const orgId = "0199a0c6-0000-7000-8000-000000000000";
+const tenantId = "0199a0c6-0000-7000-8000-000000000001";
+const locationId = "0199a0c6-0000-7000-8000-000000000010";
+const productId = "0199a0c6-0000-7000-8000-000000000020";
+const variantId = "0199a0c6-0000-7000-8000-000000000030";
 
 beforeAll(async () => {
   if (process.env.TEST_DATABASE_URL_SUPERUSER) {
@@ -58,13 +58,13 @@ beforeAll(async () => {
   await pgClient.connect();
   await pgClient.query(`
     INSERT INTO organizations (id, name) VALUES ('${orgId}', 'Test Org') ON CONFLICT DO NOTHING;
-    INSERT INTO tenants (id, organization_id, slug, name) VALUES ('${tenantId}', '${orgId}', 'test-store', 'Test Store') ON CONFLICT DO NOTHING;
+    INSERT INTO tenants (id, organization_id, slug, name) VALUES ('${tenantId}', '${orgId}', 'test-store-c6', 'Test Store') ON CONFLICT DO NOTHING;
     SELECT set_config('app.tenant_id', '${tenantId}', false);
     INSERT INTO locations (id, tenant_id, name) VALUES ('${locationId}', '${tenantId}', 'Main Warehouse') ON CONFLICT DO NOTHING;
     INSERT INTO products (id, tenant_id, title, slug) VALUES ('${productId}', '${tenantId}', 'Test Product', 'test-prod') ON CONFLICT DO NOTHING;
     INSERT INTO variants (id, tenant_id, product_id, sku, title, price) VALUES ('${variantId}', '${tenantId}', '${productId}', 'SKU-100', 'Default', 5000) ON CONFLICT DO NOTHING;
     INSERT INTO inventory_levels (id, tenant_id, variant_id, location_id, on_hand, reserved)
-    VALUES ('0199a000-0000-7000-8000-000000000040', '${tenantId}', '${variantId}', '${locationId}', 50, 0)
+    VALUES ('0199a0c6-0000-7000-8000-000000000040', '${tenantId}', '${variantId}', '${locationId}', 50, 0)
     ON CONFLICT (tenant_id, variant_id, location_id) DO UPDATE SET on_hand = 50, reserved = 0;
   `);
   await pgClient.end();
@@ -179,7 +179,7 @@ describe("PLAN §5.10 & §11.4 Idempotency & Webhook Inbox Integration", () => {
 
   it("processes webhook idempotently: transitions order and commits reservation", async () => {
     // 1. Create order and active reservation
-    const testOrderId = "0199a000-0000-7000-8000-000000000888";
+    const testOrderId = "0199a0c6-0000-7000-8000-000000000888";
     await withTenant(rwDb.db, tenantId, async (tx) => {
       await tx.insert(orders).values({
         id: testOrderId,
@@ -243,7 +243,7 @@ describe("PLAN §5.10 & §11.4 Idempotency & Webhook Inbox Integration", () => {
 
   it("SECURITY: rejects forged webhook with signatureValid = false: leaves order pending, inventory reservation active, marks inbox item failed", async () => {
     // 1. Create order and active reservation
-    const testOrderId = "0199a000-0000-7000-8000-000000000777";
+    const testOrderId = "0199a0c6-0000-7000-8000-000000000777";
     await withTenant(rwDb.db, tenantId, async (tx) => {
       await tx.insert(orders).values({
         id: testOrderId,
@@ -314,7 +314,7 @@ describe("PLAN §5.10 & §11.4 Idempotency & Webhook Inbox Integration", () => {
 
   it("SECURITY: real COD webhook with forged HMAC signature is rejected before touching business logic", async () => {
     // 1. Create order and active reservation
-    const testOrderId = "0199a000-0000-7000-8000-000000000666";
+    const testOrderId = "0199a0c6-0000-7000-8000-000000000666";
     await withTenant(rwDb.db, tenantId, async (tx) => {
       await tx.insert(orders).values({
         id: testOrderId,

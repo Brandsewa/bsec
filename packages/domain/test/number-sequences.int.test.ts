@@ -29,8 +29,8 @@ beforeAll(async () => {
   // Create a pool with 25 connections to comfortably serve 20 parallel workers
   rwDb = createDb(as("app_rw", PW.rw), { max: 25 });
 
-  const orgId = "0199a000-0000-7000-8000-000000000000";
-  const tenantId = "0199a000-0000-7000-8000-000000000001";
+  const orgId = "0199a0c4-0000-7000-8000-000000000000";
+  const tenantId = "0199a0c4-0000-7000-8000-000000000001";
   const pgClient = new (await import("pg")).default.Client({ connectionString: as("app_rw", PW.rw) });
   await pgClient.connect();
   await pgClient.query(`
@@ -46,7 +46,7 @@ afterAll(async () => {
 });
 
 describe("PLAN §11.2 Number Sequences & Concurrency Proof", () => {
-  const tenantId = "0199a000-0000-7000-8000-000000000001";
+  const tenantId = "0199a0c4-0000-7000-8000-000000000001";
 
   it("allocates sequential formatted numbers with prefix and padding", async () => {
     const seq1 = await allocateSequenceNumber(rwDb.db, tenantId, "order", "", {

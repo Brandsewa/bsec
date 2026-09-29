@@ -31,11 +31,11 @@ function as(role: "app_owner" | "app_rw" | "app_platform", password: string): st
   return u.toString();
 }
 
-const orgId = "0199a000-0000-7000-8000-000000000000";
-const tenantId = "0199a000-0000-7000-8000-000000000001";
-const locationId = "0199a000-0000-7000-8000-000000000010";
-const productId = "0199a000-0000-7000-8000-000000000020";
-const variantId = "0199a000-0000-7000-8000-000000000030";
+const orgId = "0199a0c3-0000-7000-8000-000000000000";
+const tenantId = "0199a0c3-0000-7000-8000-000000000001";
+const locationId = "0199a0c3-0000-7000-8000-000000000010";
+const productId = "0199a0c3-0000-7000-8000-000000000020";
+const variantId = "0199a0c3-0000-7000-8000-000000000030";
 
 beforeAll(async () => {
   if (process.env.TEST_DATABASE_URL_SUPERUSER) {
@@ -52,13 +52,13 @@ beforeAll(async () => {
   await pgClient.connect();
   await pgClient.query(`
     INSERT INTO organizations (id, name) VALUES ('${orgId}', 'Test Org') ON CONFLICT DO NOTHING;
-    INSERT INTO tenants (id, organization_id, slug, name) VALUES ('${tenantId}', '${orgId}', 'test-store', 'Test Store') ON CONFLICT DO NOTHING;
+    INSERT INTO tenants (id, organization_id, slug, name) VALUES ('${tenantId}', '${orgId}', 'test-store-c3', 'Test Store') ON CONFLICT DO NOTHING;
     SELECT set_config('app.tenant_id', '${tenantId}', false);
     INSERT INTO locations (id, tenant_id, name) VALUES ('${locationId}', '${tenantId}', 'Main Warehouse') ON CONFLICT DO NOTHING;
     INSERT INTO products (id, tenant_id, title, slug) VALUES ('${productId}', '${tenantId}', 'Test Product', 'test-prod') ON CONFLICT DO NOTHING;
     INSERT INTO variants (id, tenant_id, product_id, sku, title, price) VALUES ('${variantId}', '${tenantId}', '${productId}', 'SKU-100', 'Default', 5000) ON CONFLICT DO NOTHING;
     INSERT INTO inventory_levels (id, tenant_id, variant_id, location_id, on_hand, reserved)
-    VALUES ('0199a000-0000-7000-8000-000000000040', '${tenantId}', '${variantId}', '${locationId}', 100, 0)
+    VALUES ('0199a0c3-0000-7000-8000-000000000040', '${tenantId}', '${variantId}', '${locationId}', 100, 0)
     ON CONFLICT (tenant_id, variant_id, location_id) DO UPDATE SET on_hand = 100, reserved = 0;
   `);
   await pgClient.end();
@@ -79,7 +79,7 @@ describe("PLAN §11.3 Guarded Inventory Reservation & Concurrency Proof", () => 
           rwDb.db,
           tenantId,
           [{ variantId, locationId, qty: 1 }],
-          { cartId: `0199a000-0000-7000-8000-${String(idx).padStart(12, "0")}` }
+          { cartId: `0199a0c3-0000-7000-8000-${String(idx).padStart(12, "0")}` }
         );
         return { success: true, reservations };
       } catch (err) {
@@ -125,7 +125,7 @@ describe("PLAN §11.3 Guarded Inventory Reservation & Concurrency Proof", () => 
   it("commits reservation on payment: on_hand and reserved decrease, movement row sold", async () => {
     // Pick one active reservation to commit
     let reservationIdToCommit: string | undefined;
-    const testOrderId = "0199a000-0000-7000-8000-000000000999";
+    const testOrderId = "0199a0c3-0000-7000-8000-000000000999";
 
     await withTenant(rwDb.db, tenantId, async (tx) => {
       const rows = await tx
