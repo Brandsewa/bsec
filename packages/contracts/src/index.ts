@@ -1,4 +1,5 @@
 import { oc } from "@orpc/contract";
+import type { ContractRouterClient } from "@orpc/contract";
 import { z } from "zod";
 import { adminContract } from "./admin.ts";
 import { platformTenantsContract } from "./platform.ts";
@@ -39,6 +40,5 @@ export const platformContract = {
 export type StoreContract = typeof storeContract;
 export type PlatformContract = typeof platformContract;
 
-export type { ContractRouterClient } from "@orpc/contract";
+export type { ContractRouterClient };
 export type StoreClient = ContractRouterClient<StoreContract>;
-

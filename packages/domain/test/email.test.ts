@@ -88,8 +88,9 @@ describe("sendTransactionalEmail()", () => {
 
     expect(result.status).toBe("failed");
     expect(result.error).toContain("No Resend API key configured");
-    expect(updatedRow?.status).toBe("failed");
-    expect(updatedRow?.error).toContain("No Resend API key configured");
+    expect(updatedRow).not.toBeNull();
+    expect((updatedRow as MockRow | null)?.status).toBe("failed");
+    expect((updatedRow as MockRow | null)?.error).toContain("No Resend API key configured");
   });
 
   it("makes a real HTTP call to Resend and marks status as sent on 2xx response", async () => {
@@ -130,8 +131,9 @@ describe("sendTransactionalEmail()", () => {
 
     expect(result.status).toBe("sent");
     expect(result.providerId).toBe("resend_msg_987654");
-    expect(updatedRow?.status).toBe("sent");
-    expect(updatedRow?.providerId).toBe("resend_msg_987654");
+    expect(updatedRow).not.toBeNull();
+    expect((updatedRow as MockRow | null)?.status).toBe("sent");
+    expect((updatedRow as MockRow | null)?.providerId).toBe("resend_msg_987654");
   });
 
   it("marks status as failed when Resend API returns non-2xx error", async () => {
@@ -160,7 +162,8 @@ describe("sendTransactionalEmail()", () => {
 
     expect(result.status).toBe("failed");
     expect(result.error).toContain("Resend API error: 401");
-    expect(updatedRow?.status).toBe("failed");
-    expect(updatedRow?.error).toContain("Resend API error: 401");
+    expect(updatedRow).not.toBeNull();
+    expect((updatedRow as MockRow | null)?.status).toBe("failed");
+    expect((updatedRow as MockRow | null)?.error).toContain("Resend API error: 401");
   });
 });

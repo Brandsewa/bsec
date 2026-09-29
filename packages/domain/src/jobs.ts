@@ -1,7 +1,7 @@
 import { PgBoss } from "pg-boss";
 import type { Logger } from "pino";
 import { QUEUE_NAMES } from "@bs/db";
-import { createDb, type Db, type DbHandle } from "@bs/db";
+import { createDb, type Db, type DbHandle, withTenant } from "@bs/db";
 import { expireOldReservations } from "./catalog/inventory-reservations.ts";
 import { processWebhookInboxItem } from "./system/webhooks.ts";
 import { cleanupExpiredIdempotencyKeys } from "./system/idempotency.ts";
@@ -19,6 +19,78 @@ export interface Jobs {
   isRunning(): boolean;
   stop(): Promise<void>;
   send(queue: string, data: object): Promise<string | null>;
+}
+
+/**
+ * Dispatches a transactional email and handles failures according to retry semantics.
+ * If the error is genuinely un-retryable (e.g. missing API key or killswitch), logs clearly and does NOT throw.
+ * Otherwise throws an Error so pg-boss will retry under the queue's exponential backoff policy.
+ */
+export async function dispatchTransactionalEmailOrThrow(
+  db: Db,
+  log: Logger,
+  input: Parameters<typeof sendTransactionalEmail>[1],
+): Promise<void> {
+  const result = await sendTransactionalEmail(db, input);
+  if (result.status === "failed") {
+    // Missing Resend API key or provider credentials cannot be resolved by retry
+    if (result.error?.includes("No Resend API key configured")) {
+      log.warn(
+        { template: input.template, toEmail: input.toEmail, error: result.error },
+        "Transactional email skipped: missing Resend API key",
+      );
+      return;
+    }
+    log.error(
+      { template: input.template, toEmail: input.toEmail, error: result.error },
+      "Transactional email failed, throwing for pg-boss retry",
+    );
+    throw new Error(`Transactional email [${input.template}] delivery failed: ${result.error}`);
+  }
+}
+
+export async function handleFulfillmentRtoJob(
+  db: Db,
+  log: Logger,
+  data: { tenantId: string; fulfillmentId: string; orderId: string },
+): Promise<void> {
+  const { tenantId, fulfillmentId, orderId } = data;
+  const orderRows = await withTenant(db, tenantId, async (tx) => {
+    return await tx
+      .select({ email: schema.orders.email, number: schema.orders.number })
+      .from(schema.orders)
+      .where(eq(schema.orders.id, orderId))
+      .limit(1);
+  });
+
+  if (orderRows[0]?.email) {
+    await dispatchTransactionalEmailOrThrow(db, log, {
+      tenantId,
+      template: "order_rto",
+      toEmail: orderRows[0].email,
+      subject: `Update regarding order ${orderRows[0].number}: Return to Origin Initiated`,
+      data: { orderNumber: orderRows[0].number, fulfillmentId },
+      eventRef: `rto_${fulfillmentId}`,
+    });
+  }
+}
+
+export async function handleCartAbandonedJob(
+  db: Db,
+  log: Logger,
+  data: { tenantId: string; cartId: string; token: string; email?: string },
+): Promise<void> {
+  const { tenantId, cartId, token, email } = data;
+  if (email) {
+    await dispatchTransactionalEmailOrThrow(db, log, {
+      tenantId,
+      template: "abandoned_cart_recovery",
+      toEmail: email,
+      subject: "Did you leave something behind?",
+      data: { cartToken: token },
+      eventRef: `cart_abandoned_${cartId}`,
+    });
+  }
 }
 
 export async function startJobs(opts: {
@@ -90,14 +162,16 @@ export async function startJobs(opts: {
       for (const job of batch) {
         try {
           const { tenantId, orderId, awb, carrier } = job.data;
-          const orderRows = await db
-            .select({ email: schema.orders.email, number: schema.orders.number })
-            .from(schema.orders)
-            .where(eq(schema.orders.id, orderId))
-            .limit(1);
+          const orderRows = await withTenant(db, tenantId, async (tx) => {
+            return await tx
+              .select({ email: schema.orders.email, number: schema.orders.number })
+              .from(schema.orders)
+              .where(eq(schema.orders.id, orderId))
+              .limit(1);
+          });
 
           if (orderRows[0]?.email) {
-            await sendTransactionalEmail(db, {
+            await dispatchTransactionalEmailOrThrow(db, opts.log, {
               tenantId,
               template: "order_shipped",
               toEmail: orderRows[0].email,
@@ -123,14 +197,16 @@ export async function startJobs(opts: {
       for (const job of batch) {
         try {
           const { tenantId, orderId } = job.data;
-          const orderRows = await db
-            .select({ email: schema.orders.email, number: schema.orders.number })
-            .from(schema.orders)
-            .where(eq(schema.orders.id, orderId))
-            .limit(1);
+          const orderRows = await withTenant(db, tenantId, async (tx) => {
+            return await tx
+              .select({ email: schema.orders.email, number: schema.orders.number })
+              .from(schema.orders)
+              .where(eq(schema.orders.id, orderId))
+              .limit(1);
+          });
 
           if (orderRows[0]?.email) {
-            await sendTransactionalEmail(db, {
+            await dispatchTransactionalEmailOrThrow(db, opts.log, {
               tenantId,
               template: "order_delivered",
               toEmail: orderRows[0].email,
@@ -155,23 +231,7 @@ export async function startJobs(opts: {
     async (batch) => {
       for (const job of batch) {
         try {
-          const { tenantId, orderId } = job.data;
-          const orderRows = await db
-            .select({ email: schema.orders.email, number: schema.orders.number })
-            .from(schema.orders)
-            .where(eq(schema.orders.id, orderId))
-            .limit(1);
-
-          if (orderRows[0]?.email) {
-            await sendTransactionalEmail(db, {
-              tenantId,
-              template: "order_rto",
-              toEmail: orderRows[0].email,
-              subject: `Update regarding order ${orderRows[0].number}: Return to Origin Initiated`,
-              data: { orderNumber: orderRows[0].number, fulfillmentId: job.data.fulfillmentId },
-              eventRef: `rto_${job.data.fulfillmentId}`,
-            });
-          }
+          await handleFulfillmentRtoJob(db, opts.log, job.data);
           opts.log.info({ job_id: job.id, fulfillmentId: job.data.fulfillmentId }, "fulfillment.rto processed");
         } catch (err) {
           opts.log.error({ err, job_id: job.id }, "fulfillment.rto failed");
@@ -188,18 +248,8 @@ export async function startJobs(opts: {
     async (batch) => {
       for (const job of batch) {
         try {
-          const { tenantId, cartId, token, email } = job.data;
-          if (email) {
-            await sendTransactionalEmail(db, {
-              tenantId,
-              template: "abandoned_cart_recovery",
-              toEmail: email,
-              subject: "Did you leave something behind?",
-              data: { cartToken: token },
-              eventRef: `cart_abandoned_${cartId}`,
-            });
-          }
-          opts.log.info({ job_id: job.id, cartId }, "cart.abandoned processed");
+          await handleCartAbandonedJob(db, opts.log, job.data);
+          opts.log.info({ job_id: job.id, cartId: job.data.cartId }, "cart.abandoned processed");
         } catch (err) {
           opts.log.error({ err, job_id: job.id }, "cart.abandoned failed");
           throw err;
@@ -216,14 +266,16 @@ export async function startJobs(opts: {
       for (const job of batch) {
         try {
           const { tenantId, orderId, returnNumber } = job.data;
-          const orderRows = await db
-            .select({ email: schema.orders.email, number: schema.orders.number })
-            .from(schema.orders)
-            .where(eq(schema.orders.id, orderId))
-            .limit(1);
+          const orderRows = await withTenant(db, tenantId, async (tx) => {
+            return await tx
+              .select({ email: schema.orders.email, number: schema.orders.number })
+              .from(schema.orders)
+              .where(eq(schema.orders.id, orderId))
+              .limit(1);
+          });
 
           if (orderRows[0]?.email) {
-            await sendTransactionalEmail(db, {
+            await dispatchTransactionalEmailOrThrow(db, opts.log, {
               tenantId,
               template: "return_requested",
               toEmail: orderRows[0].email,
@@ -249,14 +301,16 @@ export async function startJobs(opts: {
       for (const job of batch) {
         try {
           const { tenantId, orderId, refundAmount } = job.data;
-          const orderRows = await db
-            .select({ email: schema.orders.email, number: schema.orders.number })
-            .from(schema.orders)
-            .where(eq(schema.orders.id, orderId))
-            .limit(1);
+          const orderRows = await withTenant(db, tenantId, async (tx) => {
+            return await tx
+              .select({ email: schema.orders.email, number: schema.orders.number })
+              .from(schema.orders)
+              .where(eq(schema.orders.id, orderId))
+              .limit(1);
+          });
 
           if (orderRows[0]?.email) {
-            await sendTransactionalEmail(db, {
+            await dispatchTransactionalEmailOrThrow(db, opts.log, {
               tenantId,
               template: "refund_processed",
               toEmail: orderRows[0].email,

@@ -66,7 +66,7 @@ export async function sweepAbandonedCarts(
 
       // If cart has customer email and hasn't had recovery email sent yet
       if (cart.email && !cart.recoverySentAt && opts.sendRecoveryEmail !== false) {
-        await sendTransactionalEmail(db, {
+        const emailResult = await sendTransactionalEmail(db, {
           tenantId,
           template: "abandoned_cart_recovery",
           toEmail: cart.email,
@@ -77,14 +77,16 @@ export async function sweepAbandonedCarts(
           eventRef: `cart_${cart.id}`,
         });
 
-        await tx
-          .update(schema.carts)
-          .set({
-            recoverySentAt: sql`now()`,
-          })
-          .where(eq(schema.carts.id, cart.id));
+        if (emailResult.status === "sent") {
+          await tx
+            .update(schema.carts)
+            .set({
+              recoverySentAt: sql`now()`,
+            })
+            .where(eq(schema.carts.id, cart.id));
 
-        emailsSentCount++;
+          emailsSentCount++;
+        }
       }
     }
 
