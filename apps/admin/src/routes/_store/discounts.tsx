@@ -1,5 +1,5 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { Check, Copy, Percent, Plus, Tag } from "lucide-react";
+import { Check, Copy, Percent, Plus, Tag, Trash2, Power } from "lucide-react";
 import { useState } from "react";
 import {
   Button,
@@ -15,54 +15,8 @@ import {
   TableSkeleton,
   type ColumnDef,
 } from "@bs/ui";
-
-interface DiscountRow {
-  id: string;
-  code: string | null;
-  title: string;
-  type: "percent" | "fixed" | "free_shipping" | "buy_x_get_y";
-  value: number;
-  usageLimit: number | null;
-  usedCount: number;
-  status: "active" | "scheduled" | "expired" | "disabled";
-  combinable: boolean;
-}
-
-const mockDiscounts: DiscountRow[] = [
-  {
-    id: "0199a000-0000-7000-8000-000000000301",
-    code: "FESTIVE20",
-    title: "Diwali 20% Off",
-    type: "percent",
-    value: 20,
-    usageLimit: 100,
-    usedCount: 23,
-    status: "active",
-    combinable: false,
-  },
-  {
-    id: "0199a000-0000-7000-8000-000000000302",
-    code: "FREESHIP",
-    title: "Free Shipping on Prepaid Orders",
-    type: "free_shipping",
-    value: 0,
-    usageLimit: null,
-    usedCount: 88,
-    status: "active",
-    combinable: true,
-  },
-  {
-    id: "0199a000-0000-7000-8000-000000000303",
-    code: "WELCOME500",
-    title: "₹500 Flat Off First Order",
-    type: "fixed",
-    value: 50000,
-    usageLimit: 500,
-    usedCount: 498,
-    status: "active",
-    combinable: false,
-  },
-];
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { orpc } from "../../lib/orpc.ts";
 
 export const Route = createFileRoute("/_store/discounts")({
   pendingComponent: () => (
@@ -78,26 +32,71 @@ export const Route = createFileRoute("/_store/discounts")({
   component: DiscountsPage,
 });
 
-function DiscountsPage() {
+export function DiscountsPage() {
+  const queryClient = useQueryClient();
   const [search, setSearch] = useState("");
   const [showModal, setShowModal] = useState(false);
   const [code, setCode] = useState("");
   const [title, setTitle] = useState("");
-  const [type, setType] = useState<DiscountRow["type"]>("percent");
+  const [type, setType] = useState<"percent" | "fixed" | "free_shipping" | "buy_x_get_y">("percent");
   const [value, setValue] = useState(10);
   const [usageLimit, setUsageLimit] = useState<string>("100");
   const [copiedId, setCopiedId] = useState<string | null>(null);
+  const [actionError, setActionError] = useState<string | null>(null);
 
-  const filteredDiscounts = mockDiscounts.filter((d) => {
-    if (search.trim()) {
-      const q = search.toLowerCase();
-      return (
-        d.title.toLowerCase().includes(q) ||
-        (d.code && d.code.toLowerCase().includes(q))
-      );
-    }
-    return true;
-  });
+  // oRPC Queries
+  const { data, isLoading } = useQuery(
+    orpc.admin.discounts.list.queryOptions({
+      input: {
+        search: search.trim() ? search.trim() : undefined,
+      },
+    }),
+  );
+
+  // Mutations
+  const createMutation = useMutation(
+    orpc.admin.discounts.create.mutationOptions({
+      onSuccess: () => {
+        queryClient.invalidateQueries({ queryKey: orpc.admin.discounts.list.key() });
+        setShowModal(false);
+        setCode("");
+        setTitle("");
+        setValue(10);
+        setUsageLimit("100");
+        setActionError(null);
+      },
+      onError: (err: Error) => {
+        setActionError(err.message || "Failed to create discount");
+      },
+    }),
+  );
+
+  const updateMutation = useMutation(
+    orpc.admin.discounts.update.mutationOptions({
+      onSuccess: () => {
+        queryClient.invalidateQueries({ queryKey: orpc.admin.discounts.list.key() });
+      },
+      onError: (err: Error) => {
+        setActionError(err.message || "Failed to update discount");
+      },
+    }),
+  );
+
+  const deleteMutation = useMutation(
+    orpc.admin.discounts.delete.mutationOptions({
+      onSuccess: () => {
+        queryClient.invalidateQueries({ queryKey: orpc.admin.discounts.list.key() });
+      },
+      onError: (err: Error) => {
+        setActionError(err.message || "Failed to delete discount");
+      },
+    }),
+  );
+
+  const discountsList = data?.items ?? [];
+  const totalCount = data?.total ?? discountsList.length;
+
+  type DiscountRow = (typeof discountsList)[number];
 
   const columns: ColumnDef<DiscountRow>[] = [
     {
@@ -149,21 +148,49 @@ function DiscountsPage() {
     },
     {
       header: "Status",
-      className: "text-right",
-      headerClassName: "text-right",
       cell: (d) => {
-        const badgeColors = {
+        const badgeColors: Record<string, string> = {
           active: "bg-emerald-500/10 text-emerald-600 dark:text-emerald-400",
           scheduled: "bg-blue-500/10 text-blue-600 dark:text-blue-400",
           expired: "bg-surface-200 text-foreground-muted",
           disabled: "bg-rose-500/10 text-rose-600 dark:text-rose-400",
         };
         return (
-          <span className={`inline-flex rounded-full px-2 py-0.5 text-xs font-medium capitalize ${badgeColors[d.status]}`}>
+          <span className={`inline-flex rounded-full px-2 py-0.5 text-xs font-medium capitalize ${badgeColors[d.status] ?? "bg-surface-200"}`}>
             {d.status}
           </span>
         );
       },
+    },
+    {
+      header: "Actions",
+      className: "text-right",
+      headerClassName: "text-right",
+      cell: (d) => (
+        <div className="flex items-center justify-end gap-2" onClick={(e) => e.stopPropagation()}>
+          <button
+            type="button"
+            title={d.status === "active" ? "Disable discount" : "Enable discount"}
+            className="text-foreground-muted hover:text-foreground p-1"
+            onClick={() =>
+              updateMutation.mutate({
+                id: d.id,
+                status: d.status === "active" ? "disabled" : "active",
+              })
+            }
+          >
+            <Power className="size-3.5" />
+          </button>
+          <button
+            type="button"
+            title="Delete discount"
+            className="text-foreground-muted hover:text-rose-600 p-1"
+            onClick={() => deleteMutation.mutate({ id: d.id })}
+          >
+            <Trash2 className="size-3.5" />
+          </button>
+        </div>
+      ),
     },
   ];
 
@@ -186,16 +213,22 @@ function DiscountsPage() {
         description="Promotional coupons, percentage off, fixed vouchers, and free shipping rules."
       />
 
+      {actionError && (
+        <div className="rounded-md bg-rose-500/10 p-3 text-xs text-rose-600">
+          {actionError}
+        </div>
+      )}
+
       <div className="grid gap-4 sm:grid-cols-3">
-        <MetricCard label="Active Discounts" value={mockDiscounts.filter((d) => d.status === "active").length} icon={Tag} />
+        <MetricCard label="Active Discounts" value={discountsList.filter((d) => d.status === "active").length} icon={Tag} />
         <MetricCard
           label="Total Redemptions"
-          value={mockDiscounts.reduce((acc, d) => acc + d.usedCount, 0)}
+          value={discountsList.reduce((acc, d) => acc + d.usedCount, 0)}
           icon={Percent}
         />
         <MetricCard
-          label="Expiring / Near Limit"
-          value={mockDiscounts.filter((d) => d.usageLimit && d.usedCount >= d.usageLimit * 0.9).length}
+          label="Total Vouchers"
+          value={totalCount}
         />
       </div>
 
@@ -209,13 +242,17 @@ function DiscountsPage() {
             onReset={() => setSearch("")}
           />
 
-          <DataTable
-            data={filteredDiscounts}
-            columns={columns}
-            keyExtractor={(d) => d.id}
-            emptyTitle="No discounts found"
-            emptyDescription="Create your first promotional discount code."
-          />
+          {isLoading ? (
+            <TableSkeleton rows={5} columns={6} />
+          ) : (
+            <DataTable
+              data={discountsList}
+              columns={columns}
+              keyExtractor={(d) => d.id}
+              emptyTitle="No discounts found"
+              emptyDescription="Create your first promotional discount code."
+            />
+          )}
         </div>
       </PageSection>
 
@@ -253,7 +290,7 @@ function DiscountsPage() {
                   <label className="text-xs font-medium text-foreground-muted">Type</label>
                   <select
                     value={type}
-                    onChange={(e) => setType(e.target.value as DiscountRow["type"])}
+                    onChange={(e) => setType(e.target.value as "percent" | "fixed" | "free_shipping" | "buy_x_get_y")}
                     className="w-full rounded-md border border-surface-200 px-3 py-1.5 text-sm bg-surface-100"
                   >
                     <option value="percent">Percentage Off</option>
@@ -293,11 +330,19 @@ function DiscountsPage() {
               <Button
                 variant="primary"
                 size="sm"
+                disabled={!title || createMutation.isPending}
                 onClick={() => {
-                  setShowModal(false);
+                  createMutation.mutate({
+                    code: code ? code : undefined,
+                    title,
+                    type,
+                    value: type === "fixed" ? value * 100 : value,
+                    usageLimit: usageLimit ? Number(usageLimit) : undefined,
+                    combinable: false,
+                  });
                 }}
               >
-                Save Discount
+                {createMutation.isPending ? "Saving..." : "Save Discount"}
               </Button>
             </div>
           </div>
@@ -306,3 +351,4 @@ function DiscountsPage() {
     </PageContainer>
   );
 }
+export default DiscountsPage;

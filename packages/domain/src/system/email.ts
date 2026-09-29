@@ -126,25 +126,94 @@ export async function sendTransactionalEmail(
       throw new Error("Failed to insert email_log entry");
     }
 
-    // In local / testing or when RESEND_API_KEY is not configured or mock, record as sent
-    // If real API key is present and not mock, real provider HTTP call would be dispatched
-    const simulatedMessageId = apiKey
-      ? `resend_${logEntry.id.slice(0, 12)}`
-      : `msg_${logEntry.id.slice(0, 12)}`;
+    // 4. If no Resend API key is configured, mark as failed
+    if (!apiKey) {
+      const errorMsg = "No Resend API key configured";
+      await tx
+        .update(schema.emailLog)
+        .set({
+          status: "failed",
+          error: errorMsg,
+        })
+        .where(eq(schema.emailLog.id, logEntry.id));
 
-    await tx
-      .update(schema.emailLog)
-      .set({
+      return {
+        logId: logEntry.id,
+        status: "failed",
+        error: errorMsg,
+      };
+    }
+
+    // 5. Dispatch real HTTP call to Resend
+    try {
+      const fromEmail = process.env.RESEND_FROM_EMAIL ?? "orders@brandsewa.com";
+      const payload: Record<string, unknown> = {
+        from: fromEmail,
+        to: [toEmail],
+        subject,
+        text: `Template: ${template}. Subject: ${subject}`,
+      };
+
+      const res = await fetch("https://api.resend.com/emails", {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${apiKey}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify(payload),
+      });
+
+      if (!res.ok) {
+        const errorText = await res.text();
+        const errorMsg = `Resend API error: ${res.status} ${errorText}`;
+        await tx
+          .update(schema.emailLog)
+          .set({
+            status: "failed",
+            error: errorMsg,
+          })
+          .where(eq(schema.emailLog.id, logEntry.id));
+
+        return {
+          logId: logEntry.id,
+          status: "failed",
+          error: errorMsg,
+        };
+      }
+
+      const resData = (await res.json()) as { id?: string };
+      const providerId = resData.id ?? `resend_${logEntry.id.slice(0, 12)}`;
+
+      await tx
+        .update(schema.emailLog)
+        .set({
+          status: "sent",
+          providerId,
+          sentAt: sql`now()`,
+        })
+        .where(eq(schema.emailLog.id, logEntry.id));
+
+      return {
+        logId: logEntry.id,
         status: "sent",
-        providerId: simulatedMessageId,
-        sentAt: sql`now()`,
-      })
-      .where(eq(schema.emailLog.id, logEntry.id));
+        providerId,
+      };
+    } catch (err) {
+      const errorMsg = err instanceof Error ? err.message : String(err);
+      await tx
+        .update(schema.emailLog)
+        .set({
+          status: "failed",
+          error: errorMsg,
+        })
+        .where(eq(schema.emailLog.id, logEntry.id));
 
-    return {
-      logId: logEntry.id,
-      status: "sent",
-      providerId: simulatedMessageId,
-    };
+      return {
+        logId: logEntry.id,
+        status: "failed",
+        error: errorMsg,
+      };
+    }
   });
 }
+

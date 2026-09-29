@@ -25,70 +25,8 @@ import {
   TableSkeleton,
   type ColumnDef,
 } from "@bs/ui";
-
-interface OrderRow {
-  id: string;
-  number: string;
-  customerEmail: string;
-  customerPhone: string;
-  status: "pending" | "confirmed" | "completed" | "cancelled";
-  paymentStatus: "pending" | "paid" | "failed" | "refunded";
-  fulfillmentStatus: "unfulfilled" | "fulfilled" | "delivered" | "rto";
-  grandTotalPaise: number;
-  itemsCount: number;
-  placedAt: string;
-}
-
-const mockOrders: OrderRow[] = [
-  {
-    id: "0199a000-0000-7000-8000-000000000101",
-    number: "ORD-2026-0001",
-    customerEmail: "rahul.sharma@example.com",
-    customerPhone: "+919876543210",
-    status: "confirmed",
-    paymentStatus: "paid",
-    fulfillmentStatus: "unfulfilled",
-    grandTotalPaise: 499900,
-    itemsCount: 2,
-    placedAt: "2026-09-29T10:15:00.000Z",
-  },
-  {
-    id: "0199a000-0000-7000-8000-000000000102",
-    number: "ORD-2026-0002",
-    customerEmail: "priya.patel@example.com",
-    customerPhone: "+919811223344",
-    status: "pending",
-    paymentStatus: "pending",
-    fulfillmentStatus: "unfulfilled",
-    grandTotalPaise: 125000,
-    itemsCount: 1,
-    placedAt: "2026-09-29T11:00:00.000Z",
-  },
-  {
-    id: "0199a000-0000-7000-8000-000000000103",
-    number: "ORD-2026-0003",
-    customerEmail: "amit.kumar@example.com",
-    customerPhone: "+919988776655",
-    status: "confirmed",
-    paymentStatus: "paid",
-    fulfillmentStatus: "fulfilled",
-    grandTotalPaise: 890000,
-    itemsCount: 3,
-    placedAt: "2026-09-28T16:30:00.000Z",
-  },
-  {
-    id: "0199a000-0000-7000-8000-000000000104",
-    number: "ORD-2026-0004",
-    customerEmail: "neha.singh@example.com",
-    customerPhone: "+919123456780",
-    status: "confirmed",
-    paymentStatus: "paid",
-    fulfillmentStatus: "rto",
-    grandTotalPaise: 249900,
-    itemsCount: 1,
-    placedAt: "2026-09-27T09:45:00.000Z",
-  },
-];
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { orpc } from "../../lib/orpc.ts";
 
 type SavedView = "all" | "unfulfilled" | "unpaid" | "cod_to_confirm" | "rto";
 
@@ -107,32 +45,99 @@ export const Route = createFileRoute("/_store/orders")({
   component: OrdersPage,
 });
 
-function OrdersPage() {
+export function OrdersPage() {
+  const queryClient = useQueryClient();
   const [activeView, setActiveView] = useState<SavedView>("all");
   const [search, setSearch] = useState("");
-  const [selectedOrder, setSelectedOrder] = useState<OrderRow | null>(null);
+  const [selectedOrderId, setSelectedOrderId] = useState<string | null>(null);
   const [showDraftModal, setShowDraftModal] = useState(false);
   const [draftEmail, setDraftEmail] = useState("");
   const [draftPhone, setDraftPhone] = useState("");
   const [draftSuccess, setDraftSuccess] = useState<string | null>(null);
+  const [actionError, setActionError] = useState<string | null>(null);
 
-  // Filter orders based on active tab and search
-  const filteredOrders = mockOrders.filter((o) => {
-    if (search.trim()) {
-      const q = search.toLowerCase();
-      const match =
-        o.number.toLowerCase().includes(q) ||
-        o.customerEmail.toLowerCase().includes(q) ||
-        o.customerPhone.toLowerCase().includes(q);
-      if (!match) return false;
-    }
+  // oRPC Queries
+  const { data, isLoading } = useQuery(
+    orpc.admin.orders.list.queryOptions({
+      input: {
+        view: activeView,
+        search: search.trim() ? search.trim() : undefined,
+      },
+    }),
+  );
 
-    if (activeView === "unfulfilled") return o.fulfillmentStatus === "unfulfilled";
-    if (activeView === "unpaid") return o.paymentStatus === "pending";
-    if (activeView === "cod_to_confirm") return o.status === "pending" && o.paymentStatus === "pending";
-    if (activeView === "rto") return o.fulfillmentStatus === "rto";
-    return true;
-  });
+  const { data: orderDetail } = useQuery(
+    orpc.admin.orders.get.queryOptions({
+      input: { id: selectedOrderId ?? "" },
+      enabled: Boolean(selectedOrderId),
+    }),
+  );
+
+  // Mutations
+  const createDraftMutation = useMutation(
+    orpc.admin.orders.createDraft.mutationOptions({
+      onSuccess: (res) => {
+        setDraftSuccess(`Draft order ${res.orderNumber} created successfully!`);
+        queryClient.invalidateQueries({ queryKey: orpc.admin.orders.list.key() });
+        setTimeout(() => {
+          setShowDraftModal(false);
+          setDraftSuccess(null);
+          setDraftEmail("");
+          setDraftPhone("");
+        }, 1500);
+      },
+      onError: (err: Error) => {
+        setActionError(err.message || "Failed to create draft order");
+      },
+    }),
+  );
+
+  const fulfillMutation = useMutation(
+    orpc.admin.orders.createFulfillment.mutationOptions({
+      onSuccess: () => {
+        queryClient.invalidateQueries({ queryKey: orpc.admin.orders.list.key() });
+        if (selectedOrderId) {
+          queryClient.invalidateQueries({ queryKey: orpc.admin.orders.get.key({ input: { id: selectedOrderId } }) });
+        }
+      },
+      onError: (err: Error) => {
+        setActionError(err.message || "Fulfillment failed");
+      },
+    }),
+  );
+
+  const invoiceMutation = useMutation(
+    orpc.admin.orders.createInvoice.mutationOptions({
+      onSuccess: () => {
+        queryClient.invalidateQueries({ queryKey: orpc.admin.orders.list.key() });
+        if (selectedOrderId) {
+          queryClient.invalidateQueries({ queryKey: orpc.admin.orders.get.key({ input: { id: selectedOrderId } }) });
+        }
+      },
+      onError: (err: Error) => {
+        setActionError(err.message || "Invoice generation failed");
+      },
+    }),
+  );
+
+  const cancelMutation = useMutation(
+    orpc.admin.orders.cancel.mutationOptions({
+      onSuccess: () => {
+        queryClient.invalidateQueries({ queryKey: orpc.admin.orders.list.key() });
+        if (selectedOrderId) {
+          queryClient.invalidateQueries({ queryKey: orpc.admin.orders.get.key({ input: { id: selectedOrderId } }) });
+        }
+      },
+      onError: (err: Error) => {
+        setActionError(err.message || "Order cancellation failed");
+      },
+    }),
+  );
+
+  const ordersList = data?.items ?? [];
+  const totalCount = data?.total ?? ordersList.length;
+
+  type OrderRow = (typeof ordersList)[number];
 
   const columns: ColumnDef<OrderRow>[] = [
     {
@@ -156,14 +161,14 @@ function OrdersPage() {
     {
       header: "Payment",
       cell: (o) => {
-        const badgeColors = {
+        const badgeColors: Record<string, string> = {
           paid: "bg-emerald-500/10 text-emerald-600 dark:text-emerald-400",
           pending: "bg-amber-500/10 text-amber-600 dark:text-amber-400",
           failed: "bg-rose-500/10 text-rose-600 dark:text-rose-400",
           refunded: "bg-purple-500/10 text-purple-600 dark:text-purple-400",
         };
         return (
-          <span className={`inline-flex rounded-full px-2 py-0.5 text-xs font-medium capitalize ${badgeColors[o.paymentStatus]}`}>
+          <span className={`inline-flex rounded-full px-2 py-0.5 text-xs font-medium capitalize ${badgeColors[o.paymentStatus] ?? "bg-surface-200 text-foreground-muted"}`}>
             {o.paymentStatus}
           </span>
         );
@@ -172,14 +177,14 @@ function OrdersPage() {
     {
       header: "Fulfillment",
       cell: (o) => {
-        const badgeColors = {
+        const badgeColors: Record<string, string> = {
           fulfilled: "bg-emerald-500/10 text-emerald-600 dark:text-emerald-400",
           delivered: "bg-emerald-500/10 text-emerald-600 dark:text-emerald-400",
           unfulfilled: "bg-amber-500/10 text-amber-600 dark:text-amber-400",
           rto: "bg-rose-500/10 text-rose-600 dark:text-rose-400",
         };
         return (
-          <span className={`inline-flex rounded-full px-2 py-0.5 text-xs font-medium capitalize ${badgeColors[o.fulfillmentStatus]}`}>
+          <span className={`inline-flex rounded-full px-2 py-0.5 text-xs font-medium capitalize ${badgeColors[o.fulfillmentStatus] ?? "bg-surface-200 text-foreground-muted"}`}>
             {o.fulfillmentStatus}
           </span>
         );
@@ -194,7 +199,7 @@ function OrdersPage() {
       className: "text-right",
       headerClassName: "text-right",
       cell: (o) => (
-        <span className="font-medium text-foreground">₹{(o.grandTotalPaise / 100).toLocaleString("en-IN")}</span>
+        <span className="font-medium text-foreground">₹{(o.grandTotal / 100).toLocaleString("en-IN")}</span>
       ),
     },
   ];
@@ -224,20 +229,20 @@ function OrdersPage() {
 
       {/* Metric Cards */}
       <div className="grid gap-4 sm:grid-cols-4">
-        <MetricCard label="Total Orders" value={mockOrders.length} icon={ShoppingBag} />
+        <MetricCard label="Total Orders" value={totalCount} icon={ShoppingBag} />
         <MetricCard
           label="Unfulfilled"
-          value={mockOrders.filter((o) => o.fulfillmentStatus === "unfulfilled").length}
+          value={ordersList.filter((o) => o.fulfillmentStatus === "unfulfilled").length}
           icon={Package}
         />
         <MetricCard
           label="Unpaid / COD"
-          value={mockOrders.filter((o) => o.paymentStatus === "pending").length}
+          value={ordersList.filter((o) => o.paymentStatus === "pending").length}
           icon={Clock}
         />
         <MetricCard
           label="RTO / Returns"
-          value={mockOrders.filter((o) => o.fulfillmentStatus === "rto").length}
+          value={ordersList.filter((o) => o.fulfillmentStatus === "rto").length}
           icon={RotateCcw}
         />
       </div>
@@ -281,44 +286,57 @@ function OrdersPage() {
             }}
           />
 
-          <DataTable
-            data={filteredOrders}
-            columns={columns}
-            keyExtractor={(o) => o.id}
-            onRowClick={(o) => setSelectedOrder(o)}
-            emptyTitle="No orders in this view"
-            emptyDescription="Try selecting another tab or clearing search filters."
-          />
+          {isLoading ? (
+            <TableSkeleton rows={5} columns={6} />
+          ) : (
+            <DataTable
+              data={ordersList}
+              columns={columns}
+              keyExtractor={(o) => o.id}
+              onRowClick={(o) => {
+                setSelectedOrderId(o.id);
+                setActionError(null);
+              }}
+              emptyTitle="No orders in this view"
+              emptyDescription="Try selecting another tab or clearing search filters."
+            />
+          )}
         </div>
       </PageSection>
 
       {/* Order Detail Drawer */}
-      {selectedOrder ? (
+      {selectedOrderId && orderDetail ? (
         <div className="fixed inset-y-0 right-0 z-50 flex w-full max-w-lg flex-col bg-surface-50 p-6 shadow-2xl border-l border-surface-200 animate-in slide-in-from-right">
           <div className="flex items-center justify-between border-b border-surface-200 pb-4">
             <div>
-              <h2 className="text-lg font-semibold text-foreground">{selectedOrder.number}</h2>
-              <p className="text-xs text-foreground-muted">Placed on {new Date(selectedOrder.placedAt).toLocaleString()}</p>
+              <h2 className="text-lg font-semibold text-foreground">{orderDetail.order.number}</h2>
+              <p className="text-xs text-foreground-muted">Placed on {new Date(orderDetail.order.placedAt).toLocaleString()}</p>
             </div>
-            <Button variant="default" size="sm" onClick={() => setSelectedOrder(null)}>
+            <Button variant="default" size="sm" onClick={() => setSelectedOrderId(null)}>
               Close
             </Button>
           </div>
+
+          {actionError && (
+            <div className="mt-3 rounded-md bg-rose-500/10 p-3 text-xs text-rose-600">
+              {actionError}
+            </div>
+          )}
 
           <div className="flex-1 overflow-y-auto py-4 space-y-6">
             {/* Status overview */}
             <div className="rounded-lg border border-surface-200 p-4 bg-surface-100 space-y-3">
               <div className="flex justify-between items-center">
                 <span className="text-sm text-foreground-muted">Payment Status:</span>
-                <span className="text-xs font-semibold uppercase">{selectedOrder.paymentStatus}</span>
+                <span className="text-xs font-semibold uppercase">{orderDetail.order.paymentStatus}</span>
               </div>
               <div className="flex justify-between items-center">
                 <span className="text-sm text-foreground-muted">Fulfillment Status:</span>
-                <span className="text-xs font-semibold uppercase">{selectedOrder.fulfillmentStatus}</span>
+                <span className="text-xs font-semibold uppercase">{orderDetail.order.fulfillmentStatus}</span>
               </div>
               <div className="flex justify-between items-center">
                 <span className="text-sm text-foreground-muted">Grand Total:</span>
-                <span className="text-base font-bold text-foreground">₹{(selectedOrder.grandTotalPaise / 100).toLocaleString("en-IN")}</span>
+                <span className="text-base font-bold text-foreground">₹{(orderDetail.order.grandTotal / 100).toLocaleString("en-IN")}</span>
               </div>
             </div>
 
@@ -326,18 +344,52 @@ function OrdersPage() {
             <div className="space-y-2">
               <h3 className="text-xs font-bold uppercase tracking-wider text-foreground-muted">Actions</h3>
               <div className="grid grid-cols-2 gap-2">
-                <Button variant="primary" size="sm" className="w-full">
+                <Button
+                  variant="primary"
+                  size="sm"
+                  className="w-full"
+                  disabled={orderDetail.order.fulfillmentStatus === "delivered" || orderDetail.order.status === "cancelled"}
+                  onClick={() => fulfillMutation.mutate({ id: selectedOrderId })}
+                >
                   <Truck className="mr-1.5 size-3.5" /> Fulfill (Shiprocket)
                 </Button>
-                <Button variant="default" size="sm" className="w-full">
+                <Button
+                  variant="default"
+                  size="sm"
+                  className="w-full"
+                  onClick={() => invoiceMutation.mutate({ id: selectedOrderId })}
+                >
                   <FileText className="mr-1.5 size-3.5" /> GST Invoice
                 </Button>
                 <Button variant="default" size="sm" className="w-full">
                   <RotateCcw className="mr-1.5 size-3.5" /> Process Return
                 </Button>
-                <Button variant="destructive" size="sm" className="w-full">
+                <Button
+                  variant="destructive"
+                  size="sm"
+                  className="w-full"
+                  disabled={orderDetail.order.status === "cancelled"}
+                  onClick={() => cancelMutation.mutate({ id: selectedOrderId, reason: "Cancelled by store staff" })}
+                >
                   <XCircle className="mr-1.5 size-3.5" /> Cancel Order
                 </Button>
+              </div>
+            </div>
+
+            {/* Items */}
+            <div className="space-y-2">
+              <h3 className="text-xs font-bold uppercase tracking-wider text-foreground-muted">Items</h3>
+              <div className="rounded-lg border border-surface-200 divide-y divide-surface-200">
+                {orderDetail.items.map((it) => (
+                  <div key={it.id} className="p-3 text-xs flex justify-between">
+                    <div>
+                      <p className="font-semibold text-foreground">{it.productTitle}</p>
+                      <p className="text-foreground-muted">{it.variantTitle ?? it.sku ?? "Default"}</p>
+                      <p className="text-foreground-muted">Qty: {it.quantity}</p>
+                    </div>
+                    <span className="font-medium text-foreground">₹{(it.total / 100).toLocaleString("en-IN")}</span>
+                  </div>
+                ))}
               </div>
             </div>
 
@@ -345,20 +397,17 @@ function OrdersPage() {
             <div className="space-y-2">
               <h3 className="text-xs font-bold uppercase tracking-wider text-foreground-muted">Timeline</h3>
               <div className="border-l-2 border-surface-200 ml-2 pl-4 space-y-4 text-xs">
-                <div>
-                  <p className="font-semibold text-foreground">Order placed by customer</p>
-                  <p className="text-foreground-muted">{new Date(selectedOrder.placedAt).toLocaleTimeString()}</p>
-                </div>
-                {selectedOrder.paymentStatus === "paid" && (
+                {orderDetail.events.length > 0 ? (
+                  orderDetail.events.map((ev) => (
+                    <div key={ev.id}>
+                      <p className="font-semibold text-foreground">{ev.message}</p>
+                      <p className="text-foreground-muted">{new Date(ev.createdAt).toLocaleString()} · {ev.actorType}</p>
+                    </div>
+                  ))
+                ) : (
                   <div>
-                    <p className="font-semibold text-emerald-600">Payment captured via Razorpay</p>
-                    <p className="text-foreground-muted">Verified webhook HMAC signature</p>
-                  </div>
-                )}
-                {selectedOrder.fulfillmentStatus === "fulfilled" && (
-                  <div>
-                    <p className="font-semibold text-blue-600">Shipment dispatched via Shiprocket</p>
-                    <p className="text-foreground-muted">AWB generated, label ready</p>
+                    <p className="font-semibold text-foreground">Order placed</p>
+                    <p className="text-foreground-muted">{new Date(orderDetail.order.placedAt).toLocaleString()}</p>
                   </div>
                 )}
               </div>
@@ -377,6 +426,12 @@ function OrdersPage() {
             {draftSuccess ? (
               <div className="rounded-lg bg-emerald-500/10 p-3 text-xs text-emerald-700">
                 {draftSuccess}
+              </div>
+            ) : null}
+
+            {actionError ? (
+              <div className="rounded-lg bg-rose-500/10 p-3 text-xs text-rose-700">
+                {actionError}
               </div>
             ) : null}
 
@@ -404,21 +459,29 @@ function OrdersPage() {
             </div>
 
             <div className="flex justify-end gap-2 pt-2">
-              <Button variant="default" size="sm" onClick={() => { setShowDraftModal(false); setDraftSuccess(null); }}>
+              <Button variant="default" size="sm" onClick={() => { setShowDraftModal(false); setDraftSuccess(null); setActionError(null); }}>
                 Cancel
               </Button>
               <Button
                 variant="primary"
                 size="sm"
+                disabled={!draftEmail || !draftPhone || createDraftMutation.isPending}
                 onClick={() => {
-                  setDraftSuccess("Draft order ORD-2026-D001 generated with pay link!");
-                  setTimeout(() => {
-                    setShowDraftModal(false);
-                    setDraftSuccess(null);
-                  }, 1500);
+                  setActionError(null);
+                  createDraftMutation.mutate({
+                    email: draftEmail,
+                    phone: draftPhone,
+                    shippingAddress: { name: "Direct Customer", city: "Bengaluru", state: "Karnataka", pincode: "560001" },
+                    items: [
+                      {
+                        variantId: "0199a000-0000-7000-8000-000000000501",
+                        quantity: 1,
+                      },
+                    ],
+                  });
                 }}
               >
-                Create Order
+                {createDraftMutation.isPending ? "Creating..." : "Create Order"}
               </Button>
             </div>
           </div>
@@ -427,3 +490,4 @@ function OrdersPage() {
     </PageContainer>
   );
 }
+export default OrdersPage;

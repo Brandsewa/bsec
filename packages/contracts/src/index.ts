@@ -38,3 +38,7 @@ export const platformContract = {
 
 export type StoreContract = typeof storeContract;
 export type PlatformContract = typeof platformContract;
+
+export type { ContractRouterClient } from "@orpc/contract";
+export type StoreClient = ContractRouterClient<StoreContract>;
+

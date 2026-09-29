@@ -148,6 +148,66 @@ export async function startJobs(opts: {
     },
   );
 
+  // Handle fulfillment.rto domain event (PLAN §11.1 / M5)
+  await boss.work<{ tenantId: string; fulfillmentId: string; orderId: string }>(
+    QUEUE_NAMES.FULFILLMENT_RTO,
+    { localConcurrency: 2 },
+    async (batch) => {
+      for (const job of batch) {
+        try {
+          const { tenantId, orderId } = job.data;
+          const orderRows = await db
+            .select({ email: schema.orders.email, number: schema.orders.number })
+            .from(schema.orders)
+            .where(eq(schema.orders.id, orderId))
+            .limit(1);
+
+          if (orderRows[0]?.email) {
+            await sendTransactionalEmail(db, {
+              tenantId,
+              template: "order_rto",
+              toEmail: orderRows[0].email,
+              subject: `Update regarding order ${orderRows[0].number}: Return to Origin Initiated`,
+              data: { orderNumber: orderRows[0].number, fulfillmentId: job.data.fulfillmentId },
+              eventRef: `rto_${job.data.fulfillmentId}`,
+            });
+          }
+          opts.log.info({ job_id: job.id, fulfillmentId: job.data.fulfillmentId }, "fulfillment.rto processed");
+        } catch (err) {
+          opts.log.error({ err, job_id: job.id }, "fulfillment.rto failed");
+          throw err;
+        }
+      }
+    },
+  );
+
+  // Handle cart.abandoned domain event (PLAN §5.5, §11 / M5)
+  await boss.work<{ tenantId: string; cartId: string; token: string; email?: string }>(
+    QUEUE_NAMES.CART_ABANDONED,
+    { localConcurrency: 2 },
+    async (batch) => {
+      for (const job of batch) {
+        try {
+          const { tenantId, cartId, token, email } = job.data;
+          if (email) {
+            await sendTransactionalEmail(db, {
+              tenantId,
+              template: "abandoned_cart_recovery",
+              toEmail: email,
+              subject: "Did you leave something behind?",
+              data: { cartToken: token },
+              eventRef: `cart_abandoned_${cartId}`,
+            });
+          }
+          opts.log.info({ job_id: job.id, cartId }, "cart.abandoned processed");
+        } catch (err) {
+          opts.log.error({ err, job_id: job.id }, "cart.abandoned failed");
+          throw err;
+        }
+      }
+    },
+  );
+
   // Handle return.requested domain event
   await boss.work<{ tenantId: string; returnId: string; orderId: string; returnNumber: string }>(
     QUEUE_NAMES.RETURN_REQUESTED,
