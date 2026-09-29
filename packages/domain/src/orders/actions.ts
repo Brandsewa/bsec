@@ -23,9 +23,10 @@ export async function confirmCodOrder(
   const tenantId = ctx.tenantId;
 
   return await withTenant(rt._db.db, tenantId, async (tx) => {
+    // Single guarded UPDATE claims the token, so two concurrent clicks cannot both succeed.
     const [actionToken] = await tx
-      .select()
-      .from(actionTokens)
+      .update(actionTokens)
+      .set({ usedAt: new Date() })
       .where(
         and(
           eq(actionTokens.tenantId, tenantId),
@@ -34,19 +35,14 @@ export async function confirmCodOrder(
           isNull(actionTokens.usedAt),
           gt(actionTokens.expiresAt, new Date()),
         ),
-      );
+      )
+      .returning();
 
     if (!actionToken) {
       throw new Error("Invalid, expired, or already used COD confirmation link");
     }
 
     const orderId = actionToken.targetId;
-
-    // Mark token used
-    await tx
-      .update(actionTokens)
-      .set({ usedAt: new Date() })
-      .where(eq(actionTokens.id, actionToken.id));
 
     // Transition order to confirmed
     await transitionOrder(rt, ctx, orderId, {

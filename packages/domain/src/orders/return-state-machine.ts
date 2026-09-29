@@ -185,6 +185,7 @@ export async function transitionReturn(
         await rt._jobs.send(QUEUE_NAMES.REFUND_PROCESSED, {
           returnId,
           refundId: returnId,
+          refundAmount: event.type === "return.refund" ? event.refundAmount : undefined,
           orderId: ret.orderId,
           tenantId: ctx.tenantId,
         });

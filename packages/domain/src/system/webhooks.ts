@@ -22,8 +22,9 @@ export interface ReceiveWebhookResult {
  * Ingest an incoming webhook into webhook_inbox (PLAN §11.4).
  *
  * Sequence:
- *   Receive -> verify signature -> sanitize -> insert with ON CONFLICT (provider, event_id) DO NOTHING ->
- *   reply 200 immediately -> enqueue processing.
+ *   Receive -> verify signature -> sanitize -> insert (a validly-signed event replaces an unsigned
+ *   placeholder with the same event_id, so forged pre-posts cannot block the real one; a duplicate of
+ *   an already-valid event is ignored) -> reply 200 immediately -> enqueue processing.
  */
 export async function receiveWebhook(
   db: Db,
@@ -50,7 +51,14 @@ export async function receiveWebhook(
       ${JSON.stringify(sanitized)}::jsonb,
       'received'
     )
-    ON CONFLICT (provider, event_id) DO NOTHING
+    ON CONFLICT (provider, event_id) DO UPDATE
+       SET signature_valid = EXCLUDED.signature_valid,
+           payload_sanitized = EXCLUDED.payload_sanitized,
+           tenant_id = EXCLUDED.tenant_id,
+           status = 'received',
+           updated_at = now()
+     WHERE webhook_inbox.signature_valid = false
+       AND EXCLUDED.signature_valid = true
     RETURNING id;
   `);
 

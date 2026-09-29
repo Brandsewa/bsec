@@ -19,13 +19,23 @@ function normalizeKey(key?: string): Buffer {
   return createHash("sha256").update(master).digest();
 }
 
-export function assertProductionEncryptionKeySet(): void {
+/**
+ * Startup check. Deliberately does NOT throw: the platform must boot without a key until the operator
+ * adds one in the host env. Saving or reading a stored credential still throws (normalizeKey) until then.
+ */
+export function isEncryptionKeyConfigured(): boolean {
+  return Boolean(process.env.TENANT_SECRETS_KEY || process.env.ENCRYPTION_KEY);
+}
+
+export function warnIfEncryptionKeyMissing(log: { warn: (msg: string) => void } = console): boolean {
   const isProd = process.env.APP_ENV === "production" || process.env.NODE_ENV === "production";
-  if (isProd && !process.env.TENANT_SECRETS_KEY && !process.env.ENCRYPTION_KEY) {
-    throw new Error(
-      "Encryption key not set: TENANT_SECRETS_KEY or ENCRYPTION_KEY is required in production (PLAN §4)",
+  if (isProd && !isEncryptionKeyConfigured()) {
+    log.warn(
+      "TENANT_SECRETS_KEY is not set: saving payment/shipping/email credentials is disabled until it is added (see DEPLOYMENT.md).",
     );
+    return false;
   }
+  return true;
 }
 
 export interface EncryptedSecret {

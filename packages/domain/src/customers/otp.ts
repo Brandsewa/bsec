@@ -63,7 +63,7 @@ export async function verifyCustomerOtp(
   const cleanPhone = phone.trim().replace(/\D/g, "");
   const providedHash = hashOtp(otp);
 
-  return await withTenant(db, tenantId, async (tx) => {
+  const outcome = await withTenant(db, tenantId, async (tx): Promise<VerifyOtpResult | { failed: true }> => {
     const [record] = await tx
       .select()
       .from(customerOtps)
@@ -79,15 +79,16 @@ export async function verifyCustomerOtp(
       .limit(1);
 
     if (!record || record.attempts >= 5) {
-      throw new Error("Invalid or expired OTP");
+      return { failed: true };
     }
 
     if (record.otpHash !== providedHash) {
+      // Must commit: throwing inside withTenant would roll the increment back and disable the limit.
       await tx
         .update(customerOtps)
-        .set({ attempts: record.attempts + 1 })
+        .set({ attempts: sql`${customerOtps.attempts} + 1` })
         .where(eq(customerOtps.id, record.id));
-      throw new Error("Invalid or expired OTP");
+      return { failed: true };
     }
 
     // Mark consumed
@@ -134,4 +135,9 @@ export async function verifyCustomerOtp(
       token,
     };
   });
+
+  if ("failed" in outcome) {
+    throw new Error("Invalid or expired OTP");
+  }
+  return outcome;
 }

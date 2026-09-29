@@ -1,9 +1,9 @@
 import * as Sentry from "@sentry/node";
 import { serve } from "@hono/node-server";
-import { assertProductionEncryptionKeySet, createLogger, createRuntime } from "@bs/domain";
+import { warnIfEncryptionKeyMissing, createLogger, createRuntime } from "@bs/domain";
 import { createApp } from "./app.ts";
 
-assertProductionEncryptionKeySet();
+warnIfEncryptionKeyMissing();
 
 if (process.env.SENTRY_DSN) {
   Sentry.init({ dsn: process.env.SENTRY_DSN, environment: process.env.APP_ENV, release: process.env.APP_VERSION });

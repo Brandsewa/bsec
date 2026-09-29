@@ -12,7 +12,7 @@ This comprehensive security review audits the core security boundaries protectin
 1. **Tenant Isolation & Authentication:** Strict separation exists between staff sessions (global users + memberships) and customer sessions (`__Host-cust` secure cookies). RBAC enforces 14 granular permissions across admin RPC routes.
 2. **Checkout & Order Placement:** Zero client trust is maintained for product pricing and totals. Inventory reservation is protected against race conditions using atomic conditional SQL updates. Duplicate order placements are mitigated via database-backed idempotency keys.
 3. **Webhook Ingestion & Verification:** All inbound webhooks (Razorpay, Shiprocket, COD) require cryptographic signature or token verification using decrypted per-tenant secrets. Sensitive payload properties (card numbers, CVVs, tokens, passwords) are scrubbed before persistence or logging. Webhooks are ingested into a decoupled inbox with database-level uniqueness constraints preventing replay attacks.
-4. **Key Management & Fallback Hardening:** Production environments fail closed if `TENANT_SECRETS_KEY` or `ENCRYPTION_KEY` is missing. No hardcoded encryption keys are permitted in production execution paths.
+4. **Key Management & Fallback Hardening:** Encrypting or decrypting a stored credential in production throws if `TENANT_SECRETS_KEY` or `ENCRYPTION_KEY` is missing (boot only warns, so the site stays up until the operator adds a key). No hardcoded encryption keys are permitted in production execution paths.
 
 ---
 
@@ -179,3 +179,27 @@ This comprehensive security review audits the core security boundaries protectin
 
 **Overall Readiness Status:** **APPROVED for Store #1 Production Soak**  
 The platform's authentication, authorization, transactional checkout, and webhook ingestion mechanisms meet the architectural, compliance, and security criteria defined in PLAN §4, §11, and §13.
+
+---
+
+## Post-verification corrections (independent review of 8363d7a)
+
+The independent review found several claims above to be wrong or missing. They supersede the text above.
+
+**Fixed after review**
+- OTP attempt limit: the failed-attempt increment was rolled back by the throw inside `withTenant`, so the 5-attempt lock never took effect. It now commits the increment and throws after the transaction (`customers/otp.ts`). Test: `security-fixes.int.test.ts`.
+- Webhook inbox poisoning: a forged event pre-posted with a real `event_id` blocked the genuine signed event (`ON CONFLICT DO NOTHING`). A validly signed event now replaces an unsigned placeholder; an already-valid event is never downgraded (`system/webhooks.ts`). Test: `security-fixes.int.test.ts`.
+- COD confirmation token: was SELECT then UPDATE (racy). Now one guarded `UPDATE ... WHERE used_at IS NULL ... RETURNING` (`orders/actions.ts`).
+- Refund emails: the publisher now passes `refundAmount` so the email no longer shows 0.
+
+**Corrected claims**
+- Section 1.2: the `__Host-cust` Better Auth cookie is NOT in use. `createCustomerAuth`/`createStaffAuth` are not wired into any app. The live customer flow sets `bs_customer_token` (`otp/verify/route.ts`), an unsigned base64 JSON value that nothing reads. Customer sessions are therefore not implemented; treat customer login as a gap (open item, M7).
+- Section 2.4: gapless numbering uses `UPDATE number_sequences ... RETURNING` (`orders/sequences.ts`), not `SELECT ... FOR UPDATE` on `sequence_counters`.
+- Section 2.2: checkout prices come from `cart.subtotal`, built from `unitPriceSnapshot` set at add-to-cart, not re-read from the current variant price.
+- The `apps/web/src/server/api.ts:24-58` citation for `requireAdmin`/`requirePermission` points at an import list, not the checks.
+
+**Open items (not fixed yet, tracked for M7)**
+- No rate limiting anywhere (login, OTP request/verify, webhook endpoints).
+- No SMS/OTP delivery provider: OTPs are only returned to the client outside production, so customer OTP login cannot work in production.
+- Webhook `tenantId` comes from a query parameter/header, and `RAZORPAY_WEBHOOK_SECRET`/`COD_WEBHOOK_SECRET` fall back to environment variables (cross-tenant fallback).
+- Standard shipping is charged 0 at checkout (`checkout.ts:97`) but quoted 5000 under Rs 999 in `cart.ts:493-515`.

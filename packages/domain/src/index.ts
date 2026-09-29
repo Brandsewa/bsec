@@ -65,5 +65,5 @@ export {
   decryptSecret,
 } from "@bs/shipping";
 export * from "./jobs.ts";
-export { assertProductionEncryptionKeySet } from "@bs/payments";
+export { warnIfEncryptionKeyMissing, isEncryptionKeyConfigured } from "@bs/payments";
 

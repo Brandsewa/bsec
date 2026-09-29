@@ -1,9 +1,9 @@
 import * as Sentry from "@sentry/node";
 import { createServer } from "node:http";
-import { assertProductionEncryptionKeySet, createLogger, createRuntime, checkHealth } from "@bs/domain";
+import { warnIfEncryptionKeyMissing, createLogger, createRuntime, checkHealth } from "@bs/domain";
 import { startJobs } from "@bs/domain/jobs";
 
-assertProductionEncryptionKeySet();
+warnIfEncryptionKeyMissing();
 
 /**
  * pg-boss consumers (PLAN §3, §11). Runs as app_rw; pg-boss schema and queues are created by

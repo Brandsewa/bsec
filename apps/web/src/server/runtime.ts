@@ -1,6 +1,6 @@
 import "server-only";
 import { revalidateTag } from "next/cache";
-import { assertProductionEncryptionKeySet, createLogger, createRuntime, type Logger, type Runtime } from "@bs/domain";
+import { warnIfEncryptionKeyMissing, createLogger, createRuntime, type Logger, type Runtime } from "@bs/domain";
 
 /**
  * One runtime per server process, role app_rw (RLS applies). Cached on globalThis so dev HMR
@@ -9,7 +9,7 @@ import { assertProductionEncryptionKeySet, createLogger, createRuntime, type Log
 const g = globalThis as unknown as { __bsWeb?: { rt: Runtime; log: Logger } };
 
 export function server(): { rt: Runtime; log: Logger } {
-  assertProductionEncryptionKeySet();
+  warnIfEncryptionKeyMissing();
   if (!g.__bsWeb) {
     const url = process.env.DATABASE_URL_RW;
     if (!url) throw new Error("Missing env DATABASE_URL_RW");
