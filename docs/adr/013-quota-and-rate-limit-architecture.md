@@ -28,7 +28,7 @@ Unlike commerce entities (orders, products, customers) which use `tenantTable()`
    - Counter increments in `rate_limit_counters` and job slot leasing in `tenant_active_jobs` execute via atomic SQL statements executed by application runtime services, but the tables themselves are shielded from direct tenant manipulation.
 
 3. **Rate Limiting Policies & Defaults**:
-   - **Storefront Starting Quota**: 3,000 req/min default (Tier XS). Avoids false-positive 429s during launch campaigns or crawler traffic.
+   - **Storefront Starting Quota**: 3,000 req/min default (Tier XS, seeded by migration 0009 and covered by a test on a store with no tier row). Every storefront call, including page views passing the middleware status check, counts. Avoids false-positive 429s during launch campaigns or crawler traffic.
    - **Admin Starting Quota**: 600 req/min default (Tier XS). Generous limit for administrative bulk workflows.
    - **Webhooks**: 300 req/min per provider + IP. Crucially, a webhook bearing a valid cryptographic signature **bypasses or avoids rate-limiting into failure**, ensuring genuine payment captures and fulfillments are never dropped due to attacker spoofing floods.
    - **OTP Protection**: Multi-layered defense with a mandatory 60-second cooldown per phone number across all IPs, combined with per-phone (3/10min), per-IP (5/10min), and per-tenant (50/10min) limits.
@@ -39,7 +39,7 @@ Unlike commerce entities (orders, products, customers) which use `tenantTable()`
 
 5. **Pruning & Slot Reaping**:
    - `cleanExpiredRateLimits`: Periodic scheduled task pruning rows where `expires_at < now() - INTERVAL '1 hour'` to prevent unbounded disk growth.
-   - `reapStaleTenantJobSlots`: Automatic reset of active job slots with a 30-minute stale threshold to prevent worker crashes from permanently locking tenant concurrency.
+   - `reapStaleTenantJobSlots`: Automatic reset of active job slots with a 30-minute stale threshold to prevent worker crashes from permanently locking tenant concurrency. Both run from the worker's existing 15-minute maintenance job (`idempotency.cleanup`), and the worker also releases any slots left over from the previous process on boot (every deploy restarts it).
 
 ## Consequences
 - **Positive**: Complete defense against noisy neighbours and single-store runaway traffic without degrading overall platform availability.

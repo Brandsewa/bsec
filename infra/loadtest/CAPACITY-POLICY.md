@@ -2,7 +2,7 @@
 
 > **Document Type:** Developer Machine Smoke Run Baseline & Sizing Guidelines  
 > **Status:** Working Draft (Formal Production Benchmarks Deferred to Post-M9)  
-> **Test Environment:** Windows 11 local developer workstation (AMD Ryzen / Intel host, containerized PostgreSQL 18, Node.js v22 Next.js standalone runtime)  
+> **Test Environment:** Windows 11 local developer workstation (AMD Ryzen / Intel host, containerized PostgreSQL 18, Node.js 24 Next.js standalone runtime)  
 > **Production Target Server:** 2 vCPU / 4 GB RAM (`server.brandsewa.com`, Ubuntu 24.04 / Coolify)  
 > **Database:** PostgreSQL 18 with Row Level Security (`FORCE RLS`)  
 > **Runtime:** Next.js 16 standalone container (`apps/web`), connection pool: 10–15 (`app_rw`)
@@ -41,9 +41,9 @@ The noisy neighbour test validates tenant isolation under resource contention on
 | **Store B Error Rate** | 0.00% | **0.00%** | All transactions succeeded | < 2.0% | Pass |
 | **Store A Concurrency** | 0 VUs | **6 VUs continuous flood** | Simulated heavy traffic | — | Observed |
 
-### Verified Isolation Behaviors
-1. **Transaction Integrity:** Store B checkouts succeeded with zero inventory oversell, zero failed transactions, and strict sequential order numbers.
-2. **Quota Load Shedding:** When Store A exceeds its configured requests-per-minute quota, the atomic rate limiter (`rate_limit_counters`) returns `HTTP 429 Too Many Requests`, protecting shared resources for other tenants.
+### What this smoke run does and does not show
+1. All of Store B's checkout requests in this short local run succeeded (see the JSON for counts). Overselling and order-number correctness are proven by the concurrency test suite (`packages/domain/test/concurrency-scale.int.test.ts`), **not** by this k6 run.
+2. The rate limiter returns `HTTP 429 Too Many Requests` once a store exceeds its per-minute quota (tested in `rate-limiting.int.test.ts`). This run did not push Store A past its quota, so it does not demonstrate load shedding.
 
 ---
 
@@ -68,12 +68,12 @@ Quota configuration in the platform schema (`quota_definitions`, `tenant_size_ti
 
 | Tier | Uncached Storefront Req / Min (`uncached_storefront_rpm`) | Admin & API Req / Min (`admin_api_rpm`) | Job Concurrency (`job_concurrency`) |
 | :--- | :--- | :--- | :--- |
-| **XS (Default)** | 3,000 req/min (50 req/s) | 600 req/min (10 req/s) | 1 concurrent job |
-| **S** | 4,500 req/min (75 req/s) | 1,200 req/min (20 req/s) | 2 concurrent jobs |
-| **M** | 9,000 req/min (150 req/s) | 2,400 req/min (40 req/s) | 4 concurrent jobs |
-| **L** | 18,000 req/min (300 req/s) | 4,800 req/min (80 req/s) | 8 concurrent jobs |
+| **XS (Default)** | 3,000 req/min (50 req/s) | 600 req/min (10 req/s) | 4 concurrent jobs |
+| **S** | 4,500 req/min (75 req/s) | 1,200 req/min (20 req/s) | 6 concurrent jobs |
+| **M** | 9,000 req/min (150 req/s) | 2,400 req/min (40 req/s) | 8 concurrent jobs |
+| **L** | 18,000 req/min (300 req/s) | 4,800 req/min (80 req/s) | 16 concurrent jobs |
 
 ### Enforcement Mechanics
-- **Storefront & Admin Traffic:** Enforced via atomic sliding-window counters in `rate_limit_counters`. Violations return `HTTP 429 Too Many Requests` with `Retry-After`. Storefront read errors fail open with a warning log to preserve store availability.
+- **Storefront & Admin Traffic:** Enforced via atomic fixed-window counters in `rate_limit_counters`. Violations return `HTTP 429 Too Many Requests` with `Retry-After`. Storefront read errors fail open with a warning log to preserve store availability.
 - **Webhooks:** Default 300 req/min per provider and IP. Webhooks bearing valid cryptographic signatures bypass failure rate-limiting to guarantee payment captures are never lost.
-- **Background Jobs:** Enforced via `acquireTenantJobSlot` in `packages/domain/src/system/rate-limit.ts` against `tenant_active_jobs`. Concurrency slots feature a 30-minute stale reaper (`reapStaleTenantJobSlots`) to prevent slot leaks if workers crash.
+- **Background Jobs:** Enforced via `acquireTenantJobSlot` in `packages/domain/src/system/rate-limit.ts` against `tenant_active_jobs`. Slots that a crashed worker never released are freed by `reapStaleTenantJobSlots` (30-minute threshold, run every 15 minutes) and on every worker start.

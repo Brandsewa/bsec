@@ -24,7 +24,6 @@ const DEMO_EMAIL_DOMAIN = "demo.example";
 export interface SeedDemoInput {
   /** An existing staff login that becomes the owner of the demo store. */
   ownerEmail: string;
-  slug?: string | undefined;
 }
 
 export interface SeedDemoResult {
@@ -92,7 +91,7 @@ function demoCtx(tenantId: string): TenantContext {
  */
 export async function seedDemoStore(rt: Runtime, input: SeedDemoInput): Promise<SeedDemoResult> {
   const db = rt._db.db;
-  const slug = input.slug ?? DEMO_SLUG;
+  const slug = DEMO_SLUG; // never a caller-chosen store: seeding writes data into the tenant
   const ownerEmail = input.ownerEmail.trim().toLowerCase();
 
   const [owner] = await db.select({ id: schema.users.id }).from(schema.users).where(eq(schema.users.email, ownerEmail)).limit(1);

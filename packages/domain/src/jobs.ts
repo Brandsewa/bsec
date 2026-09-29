@@ -9,7 +9,7 @@ import { sendTransactionalEmail } from "./system/email.ts";
 import { sweepAbandonedCarts } from "./system/abandoned-carts.ts";
 import { schema } from "@bs/db";
 import { eq, and } from "drizzle-orm";
-import { acquireTenantJobSlot, releaseTenantJobSlot } from "./system/rate-limit.ts";
+import { acquireTenantJobSlot, cleanExpiredRateLimits, reapStaleTenantJobSlots, releaseTenantJobSlot } from "./system/rate-limit.ts";
 
 /**
  * Job runtime (PLAN §11). Queues are created by the migrate step (as app_owner); workers run
@@ -295,7 +295,14 @@ export async function startJobs(opts: {
     for (const job of batch) {
       try {
         const res = await cleanupExpiredIdempotencyKeys(db, job.data?.tenantId);
-        opts.log.info({ job_id: job.id, deletedCount: res.deletedCount }, "idempotency.cleanup processed");
+        // Same 15-minute maintenance pass: prune expired rate-limit counters and free job slots that a
+        // crashed worker never released (otherwise a store's background jobs could stay blocked).
+        const prunedCounters = await cleanExpiredRateLimits(db);
+        const reapedSlots = await reapStaleTenantJobSlots(db);
+        opts.log.info(
+          { job_id: job.id, deletedCount: res.deletedCount, prunedCounters, reapedSlots },
+          "idempotency.cleanup processed",
+        );
       } catch (err) {
         opts.log.error({ err, job_id: job.id }, "idempotency.cleanup failed");
         throw err;
@@ -452,6 +459,15 @@ export async function startJobs(opts: {
     opts.log.info("Registered recurring cron: reservation.expiry (* * * * *), idempotency.cleanup (*/15 * * * *), cart.recovery_sweep (0 * * * *)");
   } catch (err) {
     opts.log.warn({ err }, "Could not register recurring cron schedules with pg-boss");
+  }
+
+  // A restart (every deploy) kills any job that was running, so any slot still held now is leaked.
+  // Single worker instance today; revisit if workers are ever scaled out.
+  try {
+    const freed = await reapStaleTenantJobSlots(db, 0);
+    if (freed > 0) opts.log.warn({ freed }, "released job slots left over from the previous worker");
+  } catch (err) {
+    opts.log.warn({ err }, "could not release leftover job slots on boot");
   }
 
   // Proof of life on boot: enqueue one ping and trigger initial maintenance passes

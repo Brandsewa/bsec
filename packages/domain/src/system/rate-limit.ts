@@ -89,7 +89,7 @@ export type QuotaKey = "uncached_storefront_rpm" | "admin_api_rpm" | "job_concur
 const DEFAULT_TIER_QUOTAS: Record<QuotaKey, { XS: number; S: number; M: number; L: number }> = {
   uncached_storefront_rpm: { XS: 3000, S: 4500, M: 9000, L: 18000 },
   admin_api_rpm: { XS: 600, S: 1200, M: 2400, L: 4800 },
-  job_concurrency: { XS: 1, S: 2, M: 4, L: 8 },
+  job_concurrency: { XS: 4, S: 6, M: 8, L: 16 },
 };
 
 /**

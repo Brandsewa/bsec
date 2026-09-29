@@ -1,5 +1,6 @@
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { PostgreSqlContainer, type StartedPostgreSqlContainer } from "@testcontainers/postgresql";
+import { sql } from "drizzle-orm";
 import { createDb, type DbHandle } from "@bs/db";
 import { bootstrapRoles } from "@bs/db/bootstrap";
 import { runMigrations } from "@bs/db/migrate";
@@ -13,6 +14,9 @@ import {
   checkAdminApiRateLimit,
   acquireTenantJobSlot,
   releaseTenantJobSlot,
+  cleanExpiredRateLimits,
+  reapStaleTenantJobSlots,
+  resolveTenantQuota,
   RateLimitExceededError,
   resolveWebhookTenant,
 } from "../src/index.ts";
@@ -240,9 +244,80 @@ describe("Rate Limiting Engine (M7 Hardening)", () => {
     expect(adminRejected.length).toBe(3);
   });
 
-  it("enforces background-job concurrency ceilings per tenant (XS ceiling = 1)", async () => {
-    // Tenant A defaults to XS tier -> job_concurrency = 1
-    // Attempt 5 concurrent slot acquisitions
+  it("gives a store with no tier or override generous defaults (what every live store has today)", async () => {
+    const pg = new (await import("pg")).default.Client({ connectionString: superUrl });
+    await pg.connect();
+    const [fresh] = (await pg.query(`select id from tenants where slug = 'rate-limit-fresh-71'`)).rows as Array<{ id: string }>;
+    let freshId = fresh?.id;
+    if (!freshId) {
+      const res = await pg.query(
+        `insert into tenants (id, organization_id, slug, name) values ('0199a071-0000-7000-8000-0000000000f1', '${orgId}', 'rate-limit-fresh-71', 'Fresh') returning id`,
+      );
+      freshId = (res.rows[0] as { id: string }).id;
+    }
+    await pg.end();
+    // The migration seeds are what production will really run with, not the code fallback.
+    expect(await resolveTenantQuota(rwDb.db, freshId, "uncached_storefront_rpm")).toBeGreaterThanOrEqual(3000);
+    expect(await resolveTenantQuota(rwDb.db, freshId, "admin_api_rpm")).toBeGreaterThanOrEqual(600);
+    expect(await resolveTenantQuota(rwDb.db, freshId, "job_concurrency")).toBeGreaterThanOrEqual(4);
+    // and a normal burst is never limited
+    const burst = await Promise.allSettled(Array.from({ length: 200 }, () => checkStorefrontRateLimit(rwDb.db, freshId)));
+    expect(burst.every((r) => r.status === "fulfilled")).toBe(true);
+  });
+
+  it("the tenant runtime role can read quota configuration but never change it", async () => {
+    await expect(resolveTenantQuota(rwDb.db, tenantAId, "admin_api_rpm")).resolves.toBeGreaterThan(0);
+    await expect(
+      rwDb.db.execute(sql`INSERT INTO tenant_quota_overrides (tenant_id, quota_key, value) VALUES (${tenantAId}, 'admin_api_rpm', 999999)`),
+    ).rejects.toThrow();
+    await expect(rwDb.db.execute(sql`UPDATE quota_definitions SET tier_xs = 999999`)).rejects.toThrow();
+    await expect(rwDb.db.execute(sql`DELETE FROM tenant_size_tiers`)).rejects.toThrow();
+  });
+
+  it("frees job slots a crashed worker never released, and prunes expired rate-limit counters", async () => {
+    const pg = new (await import("pg")).default.Client({ connectionString: superUrl });
+    await pg.connect();
+    await pg.query(`
+      INSERT INTO tenant_quota_overrides (tenant_id, quota_key, value) VALUES ('${tenantBId}', 'job_concurrency', 1)
+      ON CONFLICT (tenant_id, quota_key) DO UPDATE SET value = 1;
+      DELETE FROM tenant_active_jobs WHERE tenant_id = '${tenantBId}';
+    `);
+    // A worker takes the only slot and dies without releasing it.
+    expect(await acquireTenantJobSlot(rwDb.db, tenantBId)).toBe(true);
+    expect(await acquireTenantJobSlot(rwDb.db, tenantBId)).toBe(false);
+    // Not stale yet: the reaper leaves a slot that was used just now.
+    expect(await reapStaleTenantJobSlots(rwDb.db, 30)).toBe(0);
+    expect(await acquireTenantJobSlot(rwDb.db, tenantBId)).toBe(false);
+    // 31 minutes later it is reaped and the store's jobs run again.
+    await pg.query(`UPDATE tenant_active_jobs SET updated_at = now() - interval '31 minutes' WHERE tenant_id = '${tenantBId}'`);
+    expect(await reapStaleTenantJobSlots(rwDb.db, 30)).toBeGreaterThanOrEqual(1);
+    expect(await acquireTenantJobSlot(rwDb.db, tenantBId)).toBe(true);
+    await releaseTenantJobSlot(rwDb.db, tenantBId);
+
+    // Counters expired more than an hour ago are deleted; live ones are kept.
+    await pg.query(`
+      INSERT INTO rate_limit_counters (key, count, expires_at) VALUES
+        ('test:prune:old', 3, now() - interval '2 hours'),
+        ('test:prune:live', 3, now() + interval '5 minutes')
+      ON CONFLICT (key) DO UPDATE SET expires_at = EXCLUDED.expires_at;
+    `);
+    expect(await cleanExpiredRateLimits(rwDb.db)).toBeGreaterThanOrEqual(1);
+    const left = (await pg.query(`select key from rate_limit_counters where key like 'test:prune:%'`)).rows as Array<{ key: string }>;
+    expect(left.map((r) => r.key)).toEqual(["test:prune:live"]);
+    await pg.query(`DELETE FROM tenant_quota_overrides WHERE tenant_id = '${tenantBId}' AND quota_key = 'job_concurrency'`);
+    await pg.end();
+  });
+
+  it("enforces background-job concurrency ceilings per tenant (with a ceiling of 1)", async () => {
+    // Give tenant A an explicit ceiling of 1, then attempt 5 concurrent slot acquisitions
+    const pgc = new (await import("pg")).default.Client({ connectionString: superUrl });
+    await pgc.connect();
+    await pgc.query(`
+      INSERT INTO tenant_quota_overrides (tenant_id, quota_key, value) VALUES ('${tenantAId}', 'job_concurrency', 1)
+      ON CONFLICT (tenant_id, quota_key) DO UPDATE SET value = 1;
+      DELETE FROM tenant_active_jobs WHERE tenant_id = '${tenantAId}';
+    `);
+    await pgc.end();
     const results = await Promise.all([
       acquireTenantJobSlot(rwDb.db, tenantAId),
       acquireTenantJobSlot(rwDb.db, tenantAId),

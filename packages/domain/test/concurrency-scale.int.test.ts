@@ -410,8 +410,16 @@ describe("PLAN §15 Concurrency Proofs at Scale (Milestone M7 Hardening)", () =>
     expect(cachedResponses.length).toBe(19);
   });
 
-  it("enforces tenant background job concurrency ceilings (XS = 1)", async () => {
-    // 10 concurrent requests trying to acquire the XS slot (limit = 1)
+  it("enforces tenant background job concurrency ceilings (explicit ceiling of 1)", async () => {
+    const pgc = new (await import("pg")).default.Client({ connectionString: superUrl });
+    await pgc.connect();
+    await pgc.query(`
+      INSERT INTO tenant_quota_overrides (tenant_id, quota_key, value) VALUES ('${tenantId}', 'job_concurrency', 1)
+      ON CONFLICT (tenant_id, quota_key) DO UPDATE SET value = 1;
+      DELETE FROM tenant_active_jobs WHERE tenant_id = '${tenantId}';
+    `);
+    await pgc.end();
+    // 10 concurrent requests trying to acquire the only slot (limit = 1)
     const outcomes = await Promise.all(
       Array.from({ length: 10 }, () => acquireTenantJobSlot(rwDb.db, tenantId)),
     );

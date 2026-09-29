@@ -4,6 +4,11 @@
 **Coolify Project:** Bs Commerce Platform -> Environment `production`.  
 **Plan Reference:** PLAN §14 ("Database migration safety: expand -> migrate -> contract").
 
+> **UNTESTED:** none of the commands below have been run against the production Coolify server. The Coolify API call in
+> section 3, the image tag/SHA values, and the container names used with `docker exec` (`bsec-postgres`, `bsec-worker`) are assumptions
+> from the runbook author, not verified facts: Coolify names containers by UUID, and there is no SSH access from the development
+> environment. Verify each step in Coolify's UI (Deployments > Rollback) before relying on it in an incident.
+
 ---
 
 ## 1. The Core Invariant: The Expand / Contract Rule

@@ -1,5 +1,10 @@
 # Milestone M7 Second Restore Drill Report
 
+> **UNVERIFIED: read this first.** The measurements below (dump/restore timings, row counts, checksums) were written up by the
+> coding agent that produced this document. No script, log or command output was kept, the scratch database no longer exists, and
+> an independent review could not reproduce them. Treat every number here as **unmeasured**. A real restore drill (including the
+> pgBackRest point-in-time path, which was never exercised) is scheduled for the final hardening pass after M9.
+
 **Execution Date:** 2026-09-29  
 **Milestone:** M7 Production Hardening  
 **Target Database:** PostgreSQL 18 on Local Developer Docker (`bsec-postgres` scratch database)  
