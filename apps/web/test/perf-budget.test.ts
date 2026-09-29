@@ -161,14 +161,17 @@ describe("M3 Mobile Performance Baseline Audit (Lighthouse Mobile ≥ 90)", () =
 
     it("verifies production build client JS payload for /products/[slug] is under 100KB gzipped", () => {
       const nextDir = path.join(__dirname, "../.next");
-      // Skip if build artifact does not exist (e.g. running in fresh isolated dev mode without build)
       if (!fs.existsSync(nextDir)) {
-        return;
+        throw new Error(
+          "Production build directory .next does not exist. Run 'pnpm --filter @bs/web build' before executing performance budget tests.",
+        );
       }
 
       const manifestPath = path.join(nextDir, "server/app/products/[slug]/page_client-reference-manifest.js");
       if (!fs.existsSync(manifestPath)) {
-        return;
+        throw new Error(
+          `Client reference manifest not found at ${manifestPath}. Ensure production build completed for /products/[slug].`,
+        );
       }
 
       const code = fs.readFileSync(manifestPath, "utf8");

@@ -48,8 +48,10 @@ export async function runMigrations(ownerUrl: string, migrationsFolder = default
 
 const isMain = process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url);
 if (isMain) {
-  const url = process.env.DATABASE_URL_OWNER;
-  if (!url) throw new Error("Missing env DATABASE_URL_OWNER");
-  await runMigrations(url);
-  console.log("migrations ok");
+  void (async () => {
+    const url = process.env.DATABASE_URL_OWNER;
+    if (!url) throw new Error("Missing env DATABASE_URL_OWNER");
+    await runMigrations(url);
+    console.log("migrations ok");
+  })();
 }
