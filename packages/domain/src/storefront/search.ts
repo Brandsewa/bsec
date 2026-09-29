@@ -84,31 +84,33 @@ export async function searchStorefrontProducts(
 
   // Log query into search_queries table with daily aggregation in an isolated tenant transaction
   // so any logging failure or db issue never fails the search response or aborts the search tx
-  withTenant(db, ctx.tenantId, async (tx) => {
-    await tx
-      .insert(schema.searchQueries)
-      .values({
-        tenantId: ctx.tenantId,
-        query: rawQuery.trim(),
-        normalizedQuery,
-        resultsCount: searchResult.total,
-        day: sql`CURRENT_DATE`,
-        count: 1,
-      })
-      .onConflictDoUpdate({
-        target: [
-          schema.searchQueries.tenantId,
-          schema.searchQueries.normalizedQuery,
-          schema.searchQueries.day,
-        ],
-        set: {
-          count: sql`${schema.searchQueries.count} + 1`,
-          resultsCount: sql`excluded.results_count`,
-        },
-      });
-  }).catch(() => {
+  try {
+    await withTenant(db, ctx.tenantId, async (tx) => {
+      await tx
+        .insert(schema.searchQueries)
+        .values({
+          tenantId: ctx.tenantId,
+          query: rawQuery.trim(),
+          normalizedQuery,
+          resultsCount: searchResult.total,
+          day: sql`CURRENT_DATE`,
+          count: 1,
+        })
+        .onConflictDoUpdate({
+          target: [
+            schema.searchQueries.tenantId,
+            schema.searchQueries.normalizedQuery,
+            schema.searchQueries.day,
+          ],
+          set: {
+            count: sql`${schema.searchQueries.count} + 1`,
+            resultsCount: sql`excluded.results_count`,
+          },
+        });
+    });
+  } catch {
     // Non-blocking: search logging must never break search operations
-  });
+  }
 
   return searchResult;
 }

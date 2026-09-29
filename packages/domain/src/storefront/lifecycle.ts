@@ -1,7 +1,7 @@
 import { createHash, timingSafeEqual } from "node:crypto";
 import { eq } from "drizzle-orm";
 import type { Db } from "@bs/db";
-import { schema } from "@bs/db";
+import { schema, withTenant } from "@bs/db";
 import { resolveHostToTenant } from "../host-resolver.ts";
 import type { HeaderValues, TenantContext } from "../context.ts";
 import type { Runtime } from "../runtime.ts";
@@ -255,21 +255,28 @@ export async function evaluateStorefrontAccess(
     | undefined = undefined;
 
   try {
-    const rows = await db
-      .select({
-        mode: schema.storeStatus.mode,
-        headline: schema.storeStatus.headline,
-        messageJson: schema.storeStatus.messageJson,
-        launchAt: schema.storeStatus.launchAt,
-        showCountdown: schema.storeStatus.showCountdown,
-        collectEmails: schema.storeStatus.collectEmails,
-        passwordHash: schema.storeStatus.passwordHash,
-        retryAfterMinutes: schema.storeStatus.retryAfterMinutes,
-        bypassTokenHash: schema.storeStatus.bypassTokenHash,
-      })
-      .from(schema.storeStatus)
-      .where(eq(schema.storeStatus.tenantId, tenantId))
-      .limit(1);
+    const queryStatus = async (qdb: Db) => {
+      return await qdb
+        .select({
+          mode: schema.storeStatus.mode,
+          headline: schema.storeStatus.headline,
+          messageJson: schema.storeStatus.messageJson,
+          launchAt: schema.storeStatus.launchAt,
+          showCountdown: schema.storeStatus.showCountdown,
+          collectEmails: schema.storeStatus.collectEmails,
+          passwordHash: schema.storeStatus.passwordHash,
+          retryAfterMinutes: schema.storeStatus.retryAfterMinutes,
+          bypassTokenHash: schema.storeStatus.bypassTokenHash,
+        })
+        .from(schema.storeStatus)
+        .where(eq(schema.storeStatus.tenantId, tenantId))
+        .limit(1);
+    };
+
+    const rows =
+      typeof db.transaction === "function"
+        ? await withTenant(db, tenantId, queryStatus)
+        : await queryStatus(db);
 
     statusRow = rows[0];
   } catch {
@@ -281,13 +288,20 @@ export async function evaluateStorefrontAccess(
   // 4. SEO & Robots Policy (PLAN §8.3)
   let indexingEnabled = true;
   try {
-    const seoRows = await db
-      .select({
-        indexingEnabled: schema.seoSettings.indexingEnabled,
-      })
-      .from(schema.seoSettings)
-      .where(eq(schema.seoSettings.tenantId, tenantId))
-      .limit(1);
+    const querySeo = async (qdb: Db) => {
+      return await qdb
+        .select({
+          indexingEnabled: schema.seoSettings.indexingEnabled,
+        })
+        .from(schema.seoSettings)
+        .where(eq(schema.seoSettings.tenantId, tenantId))
+        .limit(1);
+    };
+
+    const seoRows =
+      typeof db.transaction === "function"
+        ? await withTenant(db, tenantId, querySeo)
+        : await querySeo(db);
 
     if (seoRows[0] && typeof seoRows[0].indexingEnabled === "boolean") {
       indexingEnabled = seoRows[0].indexingEnabled;
@@ -431,11 +445,18 @@ export async function verifyStorefrontPassword(
   password: string,
 ): Promise<{ success: boolean; token?: string | undefined }> {
   const db = rt._db.db;
-  const rows = await db
-    .select({ passwordHash: schema.storeStatus.passwordHash })
-    .from(schema.storeStatus)
-    .where(eq(schema.storeStatus.tenantId, ctx.tenantId))
-    .limit(1);
+  const queryPassword = async (qdb: Db) => {
+    return await qdb
+      .select({ passwordHash: schema.storeStatus.passwordHash })
+      .from(schema.storeStatus)
+      .where(eq(schema.storeStatus.tenantId, ctx.tenantId))
+      .limit(1);
+  };
+
+  const rows =
+    typeof db.transaction === "function"
+      ? await withTenant(db, ctx.tenantId, queryPassword)
+      : await queryPassword(db);
 
   const passwordHash = rows[0]?.passwordHash;
   if (!passwordHash) {
