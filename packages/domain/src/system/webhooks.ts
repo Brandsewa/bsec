@@ -19,8 +19,13 @@ export interface ReceiveWebhookResult {
 }
 
 /**
- * Validates webhook tenant ID server-side from database entities under tenant RLS context (PLAN §11.4 / M7).
- * Prevents tenant poisoning where a caller specifies a different tenantId in query params/headers.
+ * Resolves and validates webhook tenant ID (PLAN §11.4 / M7).
+ *
+ * Security boundary architecture:
+ * Tenant identity is established by the per-tenant webhook secret. The claimed tenantId
+ * selects which decrypted secret to verify against; the HMAC signature proves authenticity.
+ * Where available, tenant ID is derived server-side directly from payload entity lookups (e.g. payment intents).
+ * When entity identifiers are present alongside a claimed ID, ownership is checked under tenant RLS context.
  */
 export async function resolveWebhookTenant(
   db: Db,
@@ -34,14 +39,34 @@ export async function resolveWebhookTenant(
     orderId?: string | undefined;
   },
 ): Promise<{ tenantId: string; verified: boolean }> {
-  const claimedTenantId = params.claimedTenantId;
+  let claimedTenantId = params.claimedTenantId;
+
+  // 1. Attempt payload derivation from database entity if claimedTenantId is not provided
+  if (!claimedTenantId && params.providerOrderId) {
+    const res = await db.execute<{ tenant_id: string }>(sql`
+      SELECT tenant_id FROM payment_intents WHERE provider_order_id = ${params.providerOrderId} LIMIT 1;
+    `);
+    if (res.rows[0]?.tenant_id) {
+      claimedTenantId = res.rows[0].tenant_id;
+    }
+  }
+
+  if (!claimedTenantId && params.orderId) {
+    const res = await db.execute<{ tenant_id: string }>(sql`
+      SELECT tenant_id FROM orders WHERE id = ${params.orderId}::uuid LIMIT 1;
+    `);
+    if (res.rows[0]?.tenant_id) {
+      claimedTenantId = res.rows[0].tenant_id;
+    }
+  }
+
   if (!claimedTenantId) {
     throw new Error(
       "Missing tenant identifier: tenantId is required for webhook signature verification and routing",
     );
   }
 
-  // 1. Verify claimed tenant exists in the database
+  // 2. Verify claimed or derived tenant exists in the database
   const tenantRes = await db.execute<{ id: string }>(sql`
     SELECT id FROM tenants WHERE id = ${claimedTenantId}::uuid LIMIT 1;
   `);
@@ -49,7 +74,7 @@ export async function resolveWebhookTenant(
     throw new Error(`Invalid tenant ID: ${claimedTenantId}`);
   }
 
-  // 2. Tenant poisoning prevention: if payload references an entity (order, payment, shipment),
+  // 3. Tenant poisoning prevention: if payload references an entity (order, payment, shipment),
   // verify under tenant context (RLS) that this entity actually belongs to the claimed tenant.
   const hasEntityIdentifier = Boolean(
     params.providerOrderId ||

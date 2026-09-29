@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
-import { evaluateStorefrontAccess, verifyCustomerOtp } from "@bs/domain";
+import { evaluateStorefrontAccess, verifyCustomerOtp, getClientIp } from "@bs/domain";
 import { server } from "@/server/runtime.ts";
 import { getRequestHeaders } from "../../../cart/route.ts";
 
@@ -29,10 +29,7 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: "Invalid OTP data", details: parsed.error.issues }, { status: 400 });
     }
 
-    const clientIp =
-      req.headers.get("cf-connecting-ip") ||
-      req.headers.get("x-forwarded-for")?.split(",")[0]?.trim() ||
-      "127.0.0.1";
+    const clientIp = getClientIp(req.headers);
 
     try {
       const { checkCustomerOtpVerifyLimit } = await import("@bs/domain");

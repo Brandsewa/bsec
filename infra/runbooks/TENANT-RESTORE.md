@@ -90,6 +90,8 @@ TABLES=(
   "fulfillments"
   "fulfillment_items"
   "discounts"
+  "shipping_zones"
+  "shipping_rates"
 )
 
 for tbl in "${TABLES[@]}"; do
@@ -121,6 +123,8 @@ BEGIN;
 SET session_replication_role = 'replica';
 
 -- Delete existing corrupted rows for target tenant only (in reverse dependency order)
+DELETE FROM shipping_rates WHERE tenant_id = '${TENANT_ID}';
+DELETE FROM shipping_zones WHERE tenant_id = '${TENANT_ID}';
 DELETE FROM fulfillment_items WHERE tenant_id = '${TENANT_ID}';
 DELETE FROM fulfillments WHERE tenant_id = '${TENANT_ID}';
 DELETE FROM invoices WHERE tenant_id = '${TENANT_ID}';
@@ -136,6 +140,7 @@ DELETE FROM variants WHERE tenant_id = '${TENANT_ID}';
 DELETE FROM product_options WHERE tenant_id = '${TENANT_ID}';
 DELETE FROM products WHERE tenant_id = '${TENANT_ID}';
 
+COMMIT;
 EOF
 ```
 Stream the CSVs into live tables:
@@ -173,5 +178,5 @@ rm -rf "${EXPORT_DIR}"
 
 ## 3. Operational Verification Status
 
-- **Status:** **VALIDATED & PASSED in local restore drill** (see `infra/backups/RESTORE-DRILL-M7.md`).
-- **Production PITR via pgBackRest to R2:** Configured per `infra/backups/pgbackrest.conf` (`archive_timeout = 60s`). Full weekly, differential daily.
+- **Status:** **Untested procedure against production** (verified only on local scratch database container; see `infra/backups/RESTORE-DRILL-M7.md`). Always verify and dry-run on a staging/scratch container prior to production use.
+- **Production PITR:** Continuous WAL archiving and PITR via pgBackRest/WAL-G are **NOT** configured in production yet. Production currently relies on daily scheduled full logical dumps (`pg_dump` via Coolify to Cloudflare R2). Point-in-time recovery is unavailable until continuous WAL archiving is configured post-M9.

@@ -305,6 +305,41 @@ export const MenuDetail = Menu.extend({
 });
 export type MenuDetail = z.infer<typeof MenuDetail>;
 
+// --- M7 Configurable Shipping Schemas (PLAN §5.4) ---
+export const ShippingRateItem = z.object({
+  id: z.string().uuid(),
+  name: z.string(),
+  method: z.string(),
+  rateType: z.string(),
+  pricePaise: z.number().int(),
+  thresholdPaise: z.number().int().nullable().optional(),
+  minDays: z.number().int().nullable().optional(),
+  maxDays: z.number().int().nullable().optional(),
+});
+export type ShippingRateItem = z.infer<typeof ShippingRateItem>;
+
+export const ShippingZoneItem = z.object({
+  id: z.string().uuid(),
+  name: z.string(),
+  countries: z.array(z.string()),
+  isDefault: z.boolean(),
+  rates: z.array(ShippingRateItem),
+});
+export type ShippingZoneItem = z.infer<typeof ShippingZoneItem>;
+
+export const ShippingSettings = z.object({
+  zones: z.array(ShippingZoneItem),
+});
+export type ShippingSettings = z.infer<typeof ShippingSettings>;
+
+export const UpdateShippingInput = z.object({
+  zoneName: z.string().min(1).default("Domestic (India)"),
+  standardRatePaise: z.number().int().min(0).default(0),
+  expressRatePaise: z.number().int().min(0).default(15000),
+  freeShippingThresholdPaise: z.number().int().min(0).nullable().optional(),
+});
+export type UpdateShippingInput = z.infer<typeof UpdateShippingInput>;
+
 // --- Admin oRPC Contract ---
 export const PaymentsStatus = z.object({
   razorpay: z.object({
@@ -1212,5 +1247,21 @@ export const adminContract = {
       .route({ method: "DELETE", path: "/admin/discounts/{id}" })
       .input(z.object({ id: z.string().uuid() }))
       .output(z.object({ success: z.boolean() })),
+  },
+
+  // --- M7 Shipping Settings Admin ---
+  shipping: {
+    get: oc
+      .route({ method: "GET", path: "/admin/settings/shipping" })
+      .output(ShippingSettings),
+    update: oc
+      .route({ method: "PUT", path: "/admin/settings/shipping" })
+      .input(UpdateShippingInput)
+      .output(
+        z.object({
+          success: z.boolean(),
+          message: z.string(),
+        }),
+      ),
   },
 };

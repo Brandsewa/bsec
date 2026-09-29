@@ -1,6 +1,11 @@
 import { NextResponse } from "next/server";
 import { headers } from "next/headers";
-import { evaluateStorefrontAccess, getSearchSuggestions } from "@bs/domain";
+import {
+  evaluateStorefrontAccess,
+  getSearchSuggestions,
+  checkStorefrontRateLimit,
+  RateLimitExceededError,
+} from "@bs/domain";
 import { server } from "@/server/runtime.ts";
 
 export async function GET(req: Request) {
@@ -13,6 +18,18 @@ export async function GET(req: Request) {
 
     if (!access.tenantId) {
       return NextResponse.json({ suggestions: [] });
+    }
+
+    try {
+      await checkStorefrontRateLimit(rt._db.db, access.tenantId);
+    } catch (err: unknown) {
+      if (err instanceof RateLimitExceededError) {
+        return NextResponse.json(
+          { error: err.message },
+          { status: 429, headers: { "Retry-After": String(err.retryAfter) } },
+        );
+      }
+      throw err;
     }
 
     const url = new URL(req.url);

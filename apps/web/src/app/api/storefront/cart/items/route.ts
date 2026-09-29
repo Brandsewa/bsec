@@ -6,6 +6,8 @@ import {
   addToCart,
   updateCartItemQuantity,
   removeCartItem,
+  checkStorefrontRateLimit,
+  RateLimitExceededError,
 } from "@bs/domain";
 import { server } from "@/server/runtime.ts";
 import { CART_COOKIE_NAME, CART_COOKIE_MAX_AGE, getRequestHeaders, getCookieValue } from "../route.ts";
@@ -36,6 +38,18 @@ export async function POST(req: Request) {
 
     if (!access.tenantId) {
       return NextResponse.json({ error: "Store not found" }, { status: 404 });
+    }
+
+    try {
+      await checkStorefrontRateLimit(rt._db.db, access.tenantId);
+    } catch (err: unknown) {
+      if (err instanceof RateLimitExceededError) {
+        return NextResponse.json(
+          { error: err.message },
+          { status: 429, headers: { "Retry-After": String(err.retryAfter) } },
+        );
+      }
+      throw err;
     }
 
     const json = await req.json().catch(() => ({}));
@@ -115,6 +129,18 @@ export async function PATCH(req: Request) {
       return NextResponse.json({ error: "Store not found" }, { status: 404 });
     }
 
+    try {
+      await checkStorefrontRateLimit(rt._db.db, access.tenantId);
+    } catch (err: unknown) {
+      if (err instanceof RateLimitExceededError) {
+        return NextResponse.json(
+          { error: err.message },
+          { status: 429, headers: { "Retry-After": String(err.retryAfter) } },
+        );
+      }
+      throw err;
+    }
+
     const json = await req.json().catch(() => ({}));
     const parsed = UpdateItemSchema.safeParse(json);
     if (!parsed.success) {
@@ -176,6 +202,18 @@ export async function DELETE(req: Request) {
 
     if (!access.tenantId) {
       return NextResponse.json({ error: "Store not found" }, { status: 404 });
+    }
+
+    try {
+      await checkStorefrontRateLimit(rt._db.db, access.tenantId);
+    } catch (err: unknown) {
+      if (err instanceof RateLimitExceededError) {
+        return NextResponse.json(
+          { error: err.message },
+          { status: 429, headers: { "Retry-After": String(err.retryAfter) } },
+        );
+      }
+      throw err;
     }
 
     const json = await req.json().catch(() => ({}));

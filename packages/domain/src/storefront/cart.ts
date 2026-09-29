@@ -3,7 +3,7 @@ import { STOREFRONT_PRODUCT_STATUSES } from "./product-status.ts";
 import { schema, withTenant } from "@bs/db";
 import type { Runtime } from "../runtime.ts";
 import type { TenantContext } from "../context.ts";
-import { calculateShippingRate } from "../orders/shipping-rates.ts";
+import { getTenantShippingRates } from "../orders/shipping-rates.ts";
 
 export interface StorefrontCartItem {
   id: string;
@@ -492,27 +492,17 @@ export async function estimateCartShipping(
 
   const cart = await getOrCreateCart(rt, ctx, input.token);
 
-  const standard = calculateShippingRate(cart.subtotal, "standard");
-  const express = calculateShippingRate(cart.subtotal, "express");
+  const rates = await getTenantShippingRates(rt._db.db, ctx.tenantId, cart.subtotal);
 
   return {
     serviceable: true,
     pincode: input.pincode,
-    rates: [
-      {
-        id: standard.method,
-        title: standard.title,
-        description: standard.description,
-        amount: standard.amount,
-        estimatedDays: standard.estimatedDays,
-      },
-      {
-        id: express.method,
-        title: express.title,
-        description: express.description,
-        amount: express.amount,
-        estimatedDays: express.estimatedDays,
-      },
-    ],
+    rates: rates.map((r) => ({
+      id: r.method,
+      title: r.title,
+      description: r.description,
+      amount: r.amount,
+      estimatedDays: r.estimatedDays,
+    })),
   };
 }

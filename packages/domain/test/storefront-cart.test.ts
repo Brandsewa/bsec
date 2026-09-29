@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import type { Db } from "@bs/db";
+import { type Db, shippingZones, shippingRates } from "@bs/db";
 import type { Runtime, TenantContext } from "../src/index.ts";
 import {
   getOrCreateCart,
@@ -500,43 +500,90 @@ describe("Storefront Cart & Newsletter Services", () => {
     });
 
     it("calculates standard and express shipping rates with free shipping threshold", async () => {
-      // Subtotal < 99900 paise: Standard ₹5000, Express ₹12000
-      const mockDbSubtotalLow = {
-        transaction: async (cb: (tx: unknown) => Promise<unknown>) => {
-          return cb({
-            execute: async () => {},
-            select: () => ({
-              from: () => ({
-                where: () => ({
-                  limit: () => [{ id: "cart-1", token: "token-1" }],
-                }),
-                innerJoin: () => ({
-                  innerJoin: () => ({
-                    leftJoin: () => ({
+      const defaultZone = { id: "zone-1", tenantId, name: "Domestic (India)", isDefault: true };
+      const configuredRates = [
+        {
+          id: "rate-1",
+          tenantId,
+          zoneId: "zone-1",
+          name: "Standard Delivery",
+          method: "standard",
+          rateType: "flat",
+          pricePaise: 5000,
+          thresholdPaise: 99900,
+          minDays: 4,
+          maxDays: 7,
+        },
+        {
+          id: "rate-2",
+          tenantId,
+          zoneId: "zone-1",
+          name: "Express Delivery",
+          method: "express",
+          rateType: "flat",
+          pricePaise: 12000,
+          thresholdPaise: null,
+          minDays: 2,
+          maxDays: 3,
+        },
+      ];
+
+      const createCartMockDb = (cartItemsList: unknown[]) =>
+        ({
+          transaction: async (cb: (tx: unknown) => Promise<unknown>) => {
+            return cb({
+              execute: async () => {},
+              select: () => ({
+                from: (table: unknown) => {
+                  if (table === shippingZones) {
+                    return {
                       where: () => ({
-                        orderBy: () => [
-                          {
-                            item: {
-                              id: "item-1",
-                              cartId: "cart-1",
-                              variantId: "variant-1",
-                              quantity: 1,
-                              unitPriceSnapshot: 50000, // ₹500
-                            },
-                            variant: { id: "variant-1", sku: "S1", title: "V1", price: 50000n },
-                            product: { id: "p1", title: "P1", slug: "p1" },
-                            primaryMedia: null,
-                          },
-                        ],
+                        orderBy: () => [defaultZone],
+                      }),
+                    };
+                  }
+                  if (table === shippingRates) {
+                    return {
+                      where: () => ({
+                        orderBy: () => configuredRates,
+                      }),
+                    };
+                  }
+                  return {
+                    where: () => ({
+                      limit: () => [{ id: "cart-1", token: "token-1" }],
+                    }),
+                    innerJoin: () => ({
+                      innerJoin: () => ({
+                        leftJoin: () => ({
+                          where: () => ({
+                            orderBy: () => cartItemsList,
+                          }),
+                        }),
                       }),
                     }),
-                  }),
-                }),
+                  };
+                },
               }),
-            }),
-          });
+            });
+          },
+        }) as unknown as Db;
+
+      // Subtotal < 99900 paise: Standard ₹5000, Express ₹12000
+      const mockDbSubtotalLow = createCartMockDb([
+        {
+          item: {
+            id: "item-1",
+            cartId: "cart-1",
+            variantId: "variant-1",
+            quantity: 1,
+            unitPriceSnapshot: 50000, // ₹500
+          },
+          variant: { id: "variant-1", sku: "S1", title: "V1", price: 50000n },
+          product: { id: "p1", title: "P1", slug: "p1" },
+          primaryMedia: null,
         },
-      } as unknown as Db;
+      ]);
 
       const rtLow = createMockRuntime(mockDbSubtotalLow);
       const estLow = await estimateCartShipping(rtLow, publicCtx, {
@@ -553,42 +600,20 @@ describe("Storefront Cart & Newsletter Services", () => {
       expect(expressLow?.amount).toBe(12000);
 
       // Subtotal >= 99900 paise: Standard ₹0 (Free), Express ₹12000
-      const mockDbSubtotalHigh = {
-        transaction: async (cb: (tx: unknown) => Promise<unknown>) => {
-          return cb({
-            execute: async () => {},
-            select: () => ({
-              from: () => ({
-                where: () => ({
-                  limit: () => [{ id: "cart-1", token: "token-1" }],
-                }),
-                innerJoin: () => ({
-                  innerJoin: () => ({
-                    leftJoin: () => ({
-                      where: () => ({
-                        orderBy: () => [
-                          {
-                            item: {
-                              id: "item-1",
-                              cartId: "cart-1",
-                              variantId: "variant-1",
-                              quantity: 2,
-                              unitPriceSnapshot: 60000, // ₹600 * 2 = ₹1200 (120000 paise >= 99900)
-                            },
-                            variant: { id: "variant-1", sku: "S1", title: "V1", price: 60000n },
-                            product: { id: "p1", title: "P1", slug: "p1" },
-                            primaryMedia: null,
-                          },
-                        ],
-                      }),
-                    }),
-                  }),
-                }),
-              }),
-            }),
-          });
+      const mockDbSubtotalHigh = createCartMockDb([
+        {
+          item: {
+            id: "item-1",
+            cartId: "cart-1",
+            variantId: "variant-1",
+            quantity: 2,
+            unitPriceSnapshot: 60000, // ₹600 * 2 = ₹1200 (120000 paise >= 99900)
+          },
+          variant: { id: "variant-1", sku: "S1", title: "V1", price: 60000n },
+          product: { id: "p1", title: "P1", slug: "p1" },
+          primaryMedia: null,
         },
-      } as unknown as Db;
+      ]);
 
       const rtHigh = createMockRuntime(mockDbSubtotalHigh);
       const estHigh = await estimateCartShipping(rtHigh, publicCtx, {

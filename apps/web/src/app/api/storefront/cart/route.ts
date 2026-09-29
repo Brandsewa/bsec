@@ -1,6 +1,11 @@
 import { NextResponse } from "next/server";
 import { headers, cookies } from "next/headers";
-import { evaluateStorefrontAccess, getOrCreateCart } from "@bs/domain";
+import {
+  evaluateStorefrontAccess,
+  getOrCreateCart,
+  checkStorefrontRateLimit,
+  RateLimitExceededError,
+} from "@bs/domain";
 import { server } from "@/server/runtime.ts";
 
 export const CART_COOKIE_NAME = "bs_cart_token";
@@ -42,6 +47,18 @@ export async function GET(req: Request) {
 
     if (!access.tenantId) {
       return NextResponse.json({ error: "Store not found" }, { status: 404 });
+    }
+
+    try {
+      await checkStorefrontRateLimit(rt._db.db, access.tenantId);
+    } catch (err: unknown) {
+      if (err instanceof RateLimitExceededError) {
+        return NextResponse.json(
+          { error: err.message },
+          { status: 429, headers: { "Retry-After": String(err.retryAfter) } },
+        );
+      }
+      throw err;
     }
 
     const tenantCtx = {

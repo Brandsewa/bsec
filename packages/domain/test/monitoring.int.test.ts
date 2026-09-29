@@ -108,9 +108,9 @@ describe("PLAN §14 Monitoring Signals & Saturation Thresholds (Milestone M7)", 
       DELETE FROM rate_limit_counters;
       INSERT INTO rate_limit_counters (key, count, expires_at)
       VALUES
-        ('rate:storefront:${tenantAId}:req', 70, now() + interval '10 minutes'),
-        ('rate:storefront:${tenantBId}:req', 20, now() + interval '10 minutes'),
-        ('rate:storefront:${tenantCId}:req', 10, now() + interval '10 minutes');
+        ('rate:storefront:tenant:${tenantAId}', 70, now() + interval '10 minutes'),
+        ('rate:storefront:tenant:${tenantBId}', 20, now() + interval '10 minutes'),
+        ('rate:storefront:tenant:${tenantCId}', 10, now() + interval '10 minutes');
     `);
     await pg.end();
 
@@ -128,6 +128,30 @@ describe("PLAN §14 Monitoring Signals & Saturation Thresholds (Milestone M7)", 
     const storeA = tenantBreakdown.find((t) => t.tenantId === tenantAId);
     expect(storeA?.sharePercent).toBe(70);
     expect(storeA?.requestCount).toBe(70);
+  });
+
+  it("returns null for uncached p95 when telemetry is absent instead of fabricating 180ms", async () => {
+    const report = await getSystemMetrics(rt);
+    expect(report.signals.uncachedP95.value).toBeNull();
+    expect(report.signals.uncachedP95.status).toBe("ok");
+  });
+
+  it("reports DBUnreachable and scale_trigger status if database query fails", async () => {
+    const badRt = {
+      ...rt,
+      _db: {
+        db: {
+          execute: async () => {
+            throw new Error("Connection refused");
+          },
+        },
+      },
+    } as unknown as Runtime;
+
+    const report = await getSystemMetrics(badRt);
+    expect(report.overallStatus).toBe("scale_trigger");
+    expect(report.signals.dbConnections.status).toBe("scale_trigger");
+    expect(report.activeAlerts).toContain("DBUnreachable");
   });
 
   it("respects custom threshold overrides for specialized environments", async () => {

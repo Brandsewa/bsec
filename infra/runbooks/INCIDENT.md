@@ -60,12 +60,12 @@ df -h /
 docker ps --format "table {{.Names}}\t{{.Status}}\t{{.Ports}}"
 ```
 All six containers must report `Up`:
-- `bsec-postgres`
-- `bsec-web`
-- `bsec-platform`
-- `bsec-worker`
-- `bsec-admin`
-- `bsec-migrate` (should be `Exited (0)` - normal for one-shot migrate)
+- `bsec-postgres` (or `postgres` in staging/local compose)
+- `bsec-web` (or `web` in staging/local compose)
+- `bsec-platform` (or `platform` in staging/local compose)
+- `bsec-worker` (or `worker` in staging/local compose)
+- `bsec-admin` (or `admin` in staging/local compose)
+- `bsec-migrate` (or `migrate` in staging/local compose; should be `Exited (0)` - normal for one-shot migrate)
 
 If a container is continually restarting (`Restarting (1)`):
 ```bash
@@ -127,9 +127,9 @@ docker exec -i bsec-postgres psql -U postgres -d bsec -c "SELECT pg_terminate_ba
 1. Identify the offending tenant ID:
 ```bash
 docker exec -i bsec-postgres psql -U postgres -d bsec -c "
-SELECT split_part(key, ':', 3) as tenant_id, sum(count) as total_requests
+SELECT split_part(key, ':', 4) as tenant_id, sum(count) as total_requests
 FROM rate_limit_counters
-WHERE key LIKE 'rate:storefront:%' OR key LIKE 'rate:admin:%'
+WHERE key LIKE 'rate:storefront:tenant:%' OR key LIKE 'rate:admin:tenant:%'
 GROUP BY 1
 ORDER BY 2 DESC
 LIMIT 5;

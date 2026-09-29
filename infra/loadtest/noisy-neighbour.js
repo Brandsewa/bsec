@@ -1,3 +1,8 @@
+// DEVELOPER MACHINE SMOKE SCRIPT ONLY
+// This script is a lightweight smoke check intended for local developer container validation.
+// It is NOT a full production-scale noisy-neighbour load test. Production load testing is deferred post-M9.
+// Never run against production (server.brandsewa.com).
+
 import http from "k6/http";
 import { check, sleep } from "k6";
 import { Trend, Rate, Counter } from "k6/metrics";

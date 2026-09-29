@@ -229,3 +229,55 @@ export const invoices = tenantTable(
     }),
   ],
 );
+
+/**
+ * Shipping Zones (PLAN §5.4 / M7).
+ * Geographic groupings for shipping rates per tenant.
+ */
+export const shippingZones = tenantTable(
+  "shipping_zones",
+  {
+    id: uuid("id").default(sql`uuidv7()`).primaryKey(),
+    name: text("name").notNull(),
+    countries: text("countries").array().notNull().default(sql`ARRAY['IN']::text[]`),
+    isDefault: boolean("is_default").notNull().default(false),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().default(sql`now()`),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().default(sql`now()`),
+  },
+  (t) => [
+    unique("shipping_zones_tenant_id_uniq").on(t.tenantId, t.id),
+    index("shipping_zones_tenant_default_idx").on(t.tenantId, t.isDefault),
+  ],
+);
+
+/**
+ * Shipping Rates (PLAN §5.4 / M7).
+ * Configurable shipping rates per zone.
+ */
+export const shippingRates = tenantTable(
+  "shipping_rates",
+  {
+    id: uuid("id").default(sql`uuidv7()`).primaryKey(),
+    zoneId: uuid("zone_id").notNull(),
+    name: text("name").notNull(),
+    method: text("method").notNull().default("standard"), // 'standard' | 'express'
+    rateType: text("rate_type").notNull().default("flat"), // 'flat' | 'free_above_threshold'
+    pricePaise: integer("price_paise").notNull().default(0),
+    thresholdPaise: integer("threshold_paise"),
+    minDays: integer("min_days").default(2),
+    maxDays: integer("max_days").default(5),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().default(sql`now()`),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().default(sql`now()`),
+  },
+  (t) => [
+    unique("shipping_rates_tenant_id_uniq").on(t.tenantId, t.id),
+    index("shipping_rates_tenant_zone_idx").on(t.tenantId, t.zoneId),
+    tenantForeignKey({
+      tableTenantId: t.tenantId,
+      column: t.zoneId,
+      target: shippingZones,
+      name: "shipping_rates_zone_fk",
+      onDelete: "cascade",
+    }),
+  ],
+);

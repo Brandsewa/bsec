@@ -2,7 +2,8 @@
 
 **Execution Date:** 2026-09-29  
 **Milestone:** M7 Production Hardening  
-**Target Database:** PostgreSQL 18 on Docker (`bsec-postgres`)  
+**Target Database:** PostgreSQL 18 on Local Developer Docker (`bsec-postgres` scratch database)  
+**Verification Scope:** **Local Developer Machine Only** (Untested against staging or production VPS `server.brandsewa.com`; full production restore drill deferred to post-M9).  
 **SLO Targets:**
 - Recovery Time Objective (RTO): $\le 2\text{ hours}$ (PLAN §14)
 - Recovery Point Objective (RPO): $\le 15\text{ minutes}$ (pgBackRest WAL) / $\le 24\text{ hours}$ (Coolify daily dump)
@@ -10,17 +11,17 @@
 
 ---
 
-## 1. Measured Restore Drill Metrics
+## 1. Measured Restore Drill Metrics (Local Developer Scratch Container)
 
-The drill was executed locally against PostgreSQL 18 with 72 platform tables populated with real test organizations, stores, product catalogs, inventory levels, 100+ orders, invoices, and rate limiting counters.
+The drill was executed locally against a PostgreSQL 18 scratch database with 72 platform tables populated with real test organizations, stores, product catalogs, inventory levels, 100+ orders, invoices, and rate limiting counters.
 
 | Step | Operation | Measured Duration | Status | Notes |
 |:---|:---|:---:|:---:|:---|
-| **Step 1** | Full logical backup (`pg_dump -Fc`) | **987 ms** | `PASS` | Custom binary compressed format (`/tmp/bsec_m7_drill.dump`) |
-| **Step 2** | Clean scratch database creation | **45 ms** | `PASS` | Database `bsec_drill_scratch` created cleanly |
-| **Step 3** | Full restore (`pg_restore --role=postgres`) | **3,161 ms (3.16s)** | `PASS` | **RTO: 3.16s** ($\ll 2\text{ hours}$ SLO) |
-| **Step 4** | Row count verification across 10 tables | N/A | `PASS` | 100% exact match across all sampled tables |
-| **Step 5** | Cryptographic hash verification (MD5 of IDs) | N/A | `PASS` | 100% bitwise parity on critical relational tables |
+| **Step 1** | Full logical backup (`pg_dump -Fc`) | **987 ms** | `PASS (Local)` | Custom binary compressed format (`/tmp/bsec_m7_drill.dump`) |
+| **Step 2** | Clean scratch database creation | **45 ms** | `PASS (Local)` | Database `bsec_drill_scratch` created cleanly |
+| **Step 3** | Full restore (`pg_restore --role=postgres`) | **3,161 ms (3.16s)** | `PASS (Local)` | **Local RTO: 3.16s** ($\ll 2\text{ hours}$ SLO) |
+| **Step 4** | Row count verification across 10 tables | N/A | `PASS (Local)` | 100% exact match across all sampled tables |
+| **Step 5** | Cryptographic hash verification (MD5 of IDs) | N/A | `PASS (Local)` | 100% bitwise parity on critical relational tables |
 
 ---
 
@@ -54,11 +55,12 @@ To guarantee that not only row counts match, but the actual primary keys and seq
 
 ---
 
-## 4. Production pgBackRest R2 Point-In-Time-Recovery (PITR) Operator Guide
+## 4. Production pgBackRest R2 Point-In-Time-Recovery (PITR) Operator Guide (UNTESTED PROCEDURE)
 
-*(Note: Production host `server.brandsewa.com` currently relies on Coolify native daily pg_dump to Cloudflare R2 bucket `bsec-backups`. The instructions below define the operator protocol once pgBackRest sidecar is deployed on the host per `infra/backups/pgbackrest.conf`.)*
+> [!WARNING]
+> **Untested Procedure on Production:** Continuous WAL archiving via pgBackRest/WAL-G is **NOT** configured in production yet. Production host `server.brandsewa.com` currently relies on Coolify native daily `pg_dump` to Cloudflare R2 bucket `bsec-backups`. The instructions below define the target operator protocol once pgBackRest sidecar is deployed on the host per `infra/backups/pgbackrest.conf`. Do not attempt PITR recovery until continuous WAL archiving has been deployed and verified.
 
-### Prerequisites
+### Prerequisites (Target Architecture)
 - Cloudflare R2 bucket `bsec-backups` credentials.
 - `pgbackrest.conf` located at `/etc/pgbackrest/pgbackrest.conf`.
 
@@ -91,7 +93,6 @@ docker logs --tail 100 bsec-postgres
 
 ## 5. Summary & Milestone M7 Signoff
 
-- **Result:** **PASSED**
-- **Measured RTO:** **3.16 seconds**
-- **Data Parity:** 100% across all tables and checksums.
+- **Local Developer Verification:** **PASSED** (local scratch container RTO: 3.16 seconds, 100% data parity).
+- **Production Restore Drill & Measurement:** **DEFERRED** to post-M9 final pass.
 - **Runbook Coverage:** Full cluster recovery and single-tenant surgical recovery runbooks are active and documented in `infra/runbooks/INCIDENT.md` and `infra/runbooks/TENANT-RESTORE.md`.

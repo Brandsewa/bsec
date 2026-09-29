@@ -60,6 +60,7 @@ import {
   getPage,
   getPlatformTenant,
   getProduct,
+  getAdminShippingSettings,
   getStoreSettings,
   getTheme,
   inviteStaff,
@@ -90,6 +91,7 @@ import {
   rollbackPage,
   savePageDraft,
   updateAdminDiscount,
+  updateAdminShippingSettings,
   updateBrand,
   updateBrandSettings,
   updateCategory,
@@ -834,6 +836,16 @@ describe("Generated Isolation Test Suite (M1 Real Postgres 18 Proof)", () => {
         });
         return await deleteAdminDiscount(rt, ctx, { id: disc.id });
       }
+      // --- M7 Shipping Settings Admin ---
+      case "shipping.get":
+        return await getAdminShippingSettings(rt, ctx);
+      case "shipping.update":
+        return await updateAdminShippingSettings(rt, ctx, {
+          zoneName: "Domestic (India)",
+          standardRatePaise: 0,
+          expressRatePaise: 15000,
+          freeShippingThresholdPaise: null,
+        });
       default:
         throw new Error(`Unmapped procedure in isolation test: ${procPath}`);
     }
