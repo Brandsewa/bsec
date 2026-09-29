@@ -119,7 +119,8 @@ export class CODProvider implements PaymentProvider {
       // malformed JSON
     }
 
-    const secret = this.webhookSecret ?? process.env.COD_WEBHOOK_SECRET ?? "";
+    // Strict per-tenant secret: do not fall back to shared environment variables (M7 security finding)
+    const secret = this.webhookSecret ?? "";
     let isValid = false;
 
     if (signature && secret) {

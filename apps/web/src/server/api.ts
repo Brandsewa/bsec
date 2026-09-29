@@ -81,6 +81,9 @@ import {
   createAdminDiscount,
   updateAdminDiscount,
   deleteAdminDiscount,
+  checkAdminApiRateLimit,
+  checkStorefrontRateLimit,
+  RateLimitExceededError,
   FeatureDisabledError,
   type Logger,
   type Runtime,
@@ -118,6 +121,19 @@ const requireAdmin = os.middleware(async ({ context, next }) => {
     throw new Error("Unauthorized: unable to resolve admin tenant context");
   }
 
+  // Quota enforcement: Admin/API requests / min (PLAN §14)
+  try {
+    await checkAdminApiRateLimit(context.rt._db.db, tenantCtx.tenantId);
+  } catch (err: unknown) {
+    if (err instanceof RateLimitExceededError) {
+      throw new ORPCError("TOO_MANY_REQUESTS", {
+        message: err.message,
+        data: { retryAfter: err.retryAfter },
+      });
+    }
+    throw err;
+  }
+
   return next({
     context: {
       ...context,
@@ -136,6 +152,20 @@ const requireStorefront = os.middleware(async ({ context, next }) => {
   if (!tenantCtx) {
     throw new Error("Unable to resolve storefront tenant from host");
   }
+
+  // Quota enforcement: Uncached storefront requests / min (PLAN §14)
+  try {
+    await checkStorefrontRateLimit(context.rt._db.db, tenantCtx.tenantId);
+  } catch (err: unknown) {
+    if (err instanceof RateLimitExceededError) {
+      throw new ORPCError("TOO_MANY_REQUESTS", {
+        message: err.message,
+        data: { retryAfter: err.retryAfter },
+      });
+    }
+    throw err;
+  }
+
   return next({
     context: {
       ...context,

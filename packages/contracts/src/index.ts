@@ -19,6 +19,7 @@ export const Health = z.object({
   service: z.enum(["web", "platform", "worker"]),
   version: z.string(),
   db: z.object({ ok: z.boolean(), role: z.string() }),
+  encryptionKeyConfigured: z.boolean().default(false),
 });
 export type Health = z.infer<typeof Health>;
 

@@ -406,12 +406,13 @@ export async function refundAdminOrder(
   const db = rt._db.db;
 
   return await withTenant(db, ctx.tenantId, async (tx) => {
-    // Find active payment intent for order
+    // Find active payment intent for order with row lock
     const [existingIntent] = await tx
       .select()
       .from(schema.paymentIntents)
       .where(and(eq(schema.paymentIntents.tenantId, ctx.tenantId), eq(schema.paymentIntents.orderId, input.id)))
-      .limit(1);
+      .limit(1)
+      .for("update");
 
     let intentId = existingIntent?.id;
     if (!intentId) {
@@ -431,7 +432,21 @@ export async function refundAdminOrder(
       intentId = newIntent.id;
     }
 
-    // Record refund record
+    // 1. Transition order and payment intent status (locks row and enforces guards)
+    await transitionOrder(
+      rt,
+      ctx,
+      input.id,
+      {
+        type: "payment.refund",
+        intentId,
+        amount: input.amount,
+        reason: input.reason ?? "Admin initiated refund",
+      },
+      tx,
+    );
+
+    // 2. Record refund record
     const [refund] = await tx
       .insert(schema.refunds)
       .values({
@@ -445,19 +460,6 @@ export async function refundAdminOrder(
       .returning();
 
     if (!refund) throw new Error("Failed to insert refund record");
-
-    await transitionOrder(
-      rt,
-      ctx,
-      input.id,
-      {
-        type: "payment.refund",
-        intentId,
-        amount: input.amount,
-        reason: input.reason ?? "Admin initiated refund",
-      },
-      tx,
-    );
 
     return { success: true, refundId: refund.id };
   });

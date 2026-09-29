@@ -2,6 +2,7 @@ import { and, eq, sql } from "drizzle-orm";
 import { schema, withTenant } from "@bs/db";
 import type { Runtime } from "../runtime.ts";
 import type { TenantContext } from "../context.ts";
+import { calculateShippingRate } from "../orders/shipping-rates.ts";
 
 export interface StorefrontCartItem {
   id: string;
@@ -490,30 +491,26 @@ export async function estimateCartShipping(
 
   const cart = await getOrCreateCart(rt, ctx, input.token);
 
-  // Standard: ₹5000 paise (₹50), free if subtotal >= ₹99900 paise (₹999)
-  // Express: ₹12000 paise (₹120)
-  const isFreeStandard = cart.subtotal >= 99900;
-  const standardRateAmount = isFreeStandard ? 0 : 5000;
+  const standard = calculateShippingRate(cart.subtotal, "standard");
+  const express = calculateShippingRate(cart.subtotal, "express");
 
   return {
     serviceable: true,
     pincode: input.pincode,
     rates: [
       {
-        id: "standard",
-        title: "Standard Shipping",
-        description: isFreeStandard
-          ? "Free standard delivery (orders over ₹999)"
-          : "Standard delivery within 4-7 business days",
-        amount: standardRateAmount,
-        estimatedDays: "4-7 business days",
+        id: standard.method,
+        title: standard.title,
+        description: standard.description,
+        amount: standard.amount,
+        estimatedDays: standard.estimatedDays,
       },
       {
-        id: "express",
-        title: "Express Shipping",
-        description: "Expedited air delivery within 2-3 business days",
-        amount: 12000,
-        estimatedDays: "2-3 business days",
+        id: express.method,
+        title: express.title,
+        description: express.description,
+        amount: express.amount,
+        estimatedDays: express.estimatedDays,
       },
     ],
   };

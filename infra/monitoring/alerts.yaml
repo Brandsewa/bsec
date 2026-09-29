@@ -1,0 +1,137 @@
+# Prometheus / Alertmanager Alert Rules (PLAN §14 Signal Table)
+# Production Environment: 2 vCPU / 4 GB RAM on server.brandsewa.com
+
+groups:
+  - name: bsec_capacity_and_saturation_alerts
+    rules:
+      # CPU Alerts
+      - alert: HostCPUWarning
+        expr: 100 - (avg by (instance) (rate(node_cpu_seconds_total{mode="idle"}[5m])) * 100) > 60
+        for: 5m
+        labels:
+          severity: warning
+          component: infrastructure
+        annotations:
+          summary: "Host CPU > 60% sustained"
+          description: "CPU utilization has exceeded 60% for 5 minutes. Monitor load trends."
+
+      - alert: HostCPUScaleTrigger
+        expr: 100 - (avg by (instance) (rate(node_cpu_seconds_total{mode="idle"}[1m])) * 100) > 75
+        for: 2m
+        labels:
+          severity: critical
+          component: infrastructure
+          action: scale_trigger
+        annotations:
+          summary: "Host CPU > 75% at peak (Scale Trigger)"
+          description: "CPU peaked above 75%. Trigger VPS upgrade to 4 vCPU per PLAN §14 upgrade stage 1."
+
+      # RAM Alerts
+      - alert: HostRAMWarning
+        expr: (1 - (node_memory_MemAvailable_bytes / node_memory_MemTotal_bytes)) * 100 > 70
+        for: 3m
+        labels:
+          severity: warning
+          component: infrastructure
+        annotations:
+          summary: "Host RAM > 70%"
+          description: "System memory usage is above 70%. Monitor Postgres shared_buffers and container budgets."
+
+      - alert: HostRAMScaleTrigger
+        expr: (1 - (node_memory_MemAvailable_bytes / node_memory_MemTotal_bytes)) * 100 > 80
+        for: 1m
+        labels:
+          severity: critical
+          component: infrastructure
+          action: scale_trigger
+        annotations:
+          summary: "Host RAM > 80% (Scale Trigger)"
+          description: "System memory usage is above 80%. Risk of OOM kill on Postgres. Trigger RAM expansion to 8 GB."
+
+      # Database Connection Pool Alerts
+      - alert: DBConnectionPoolWarning
+        expr: (pg_stat_activity_count / 60) * 100 > 70
+        for: 2m
+        labels:
+          severity: warning
+          component: database
+        annotations:
+          summary: "PostgreSQL active connections > 70% of max (42/60)"
+          description: "Database connection count is nearing pool limits."
+
+      - alert: DBConnectionPoolSaturation
+        expr: pg_stat_activity_waiting_connections > 0 or (pg_stat_activity_count / 60) * 100 > 90
+        for: 1m
+        labels:
+          severity: critical
+          component: database
+          action: scale_trigger
+        annotations:
+          summary: "PostgreSQL connection pool saturation (Scale Trigger)"
+          description: "Connection pool waits appearing. Tune container pools (web 10, worker 5, platform 3) or deploy PgBouncer."
+
+      # Uncached Request Latency p95
+      - alert: UncachedP95LatencyWarning
+        expr: histogram_quantile(0.95, sum(rate(http_request_duration_seconds_bucket{cached="false"}[5m])) by (le)) * 1000 > 400
+        for: 3m
+        labels:
+          severity: warning
+          component: web
+        annotations:
+          summary: "Uncached response p95 > 400 ms"
+          description: "Uncached p95 response time has exceeded 400ms SLA warning threshold."
+
+      - alert: UncachedP95LatencyScaleTrigger
+        expr: histogram_quantile(0.95, sum(rate(http_request_duration_seconds_bucket{cached="false"}[5m])) by (le)) * 1000 > 500
+        for: 2m
+        labels:
+          severity: critical
+          component: web
+          action: scale_trigger
+        annotations:
+          summary: "Uncached response p95 > 500 ms (Scale Trigger)"
+          description: "Uncached p95 response time violated the 500ms hard SLO. Investigate database slow queries, missing indexes, or container throttling."
+
+      # Background Job Lag
+      - alert: BackgroundJobLagWarning
+        expr: pgboss_queue_oldest_job_age_seconds > 30
+        for: 2m
+        labels:
+          severity: warning
+          component: worker
+        annotations:
+          summary: "Background job queue lag > 30s"
+          description: "Worker job processing lag has exceeded 30 seconds."
+
+      - alert: BackgroundJobLagScaleTrigger
+        expr: pgboss_queue_oldest_job_age_seconds > 120
+        for: 1m
+        labels:
+          severity: critical
+          component: worker
+          action: scale_trigger
+        annotations:
+          summary: "Background job queue lag > 2 min (Scale Trigger)"
+          description: "Worker job lag has exceeded 2 minutes. Increase worker concurrency or scale worker service per PLAN §14."
+
+      # Noisy Neighbour Single Store Load Share
+      - alert: SingleStoreLoadShareWarning
+        expr: (max(rate(bsec_tenant_requests_total[10m])) / sum(rate(bsec_tenant_requests_total[10m]))) * 100 > 20
+        for: 5m
+        labels:
+          severity: warning
+          component: multi_tenancy
+        annotations:
+          summary: "Single tenant load share > 20%"
+          description: "A single store is consuming over 20% of platform request volume. Monitor tenant performance."
+
+      - alert: SingleStoreLoadShareScaleTrigger
+        expr: (max(rate(bsec_tenant_requests_total[10m])) / sum(rate(bsec_tenant_requests_total[10m]))) * 100 > 25
+        for: 5m
+        labels:
+          severity: critical
+          component: multi_tenancy
+          action: noisy_neighbour_action
+        annotations:
+          summary: "Noisy Neighbour: single store load share > 25% repeatedly (Scale Trigger)"
+          description: "A single tenant is monopolizing >25% of platform capacity. Throttle via rate limiting, upgrade tier, or migrate to dedicated database/instance."

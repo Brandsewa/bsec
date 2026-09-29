@@ -1,0 +1,55 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "version": "1.0.0",
+  "description": "PLAN §14 Infrastructure Capacity & Monitoring Thresholds for Brand Sewa Commerce Platform",
+  "targetEnvironment": "production-vps-2vcpu-4gb",
+  "signals": {
+    "cpu": {
+      "metric": "system_cpu_usage_percent",
+      "warning": 60.0,
+      "scaleTrigger": 75.0,
+      "unit": "percent",
+      "window": "5m",
+      "actionOnScaleTrigger": "Plan vertical VPS upgrade or offload compute"
+    },
+    "ram": {
+      "metric": "system_memory_usage_percent",
+      "warning": 70.0,
+      "scaleTrigger": 80.0,
+      "unit": "percent",
+      "window": "3m",
+      "actionOnScaleTrigger": "Upgrade VPS RAM budget (move from 4GB to 8GB) or tune Postgres shared_buffers"
+    },
+    "dbConnections": {
+      "metric": "postgres_active_connections_percent",
+      "warning": 70.0,
+      "scaleTrigger": 90.0,
+      "unit": "percent",
+      "maxProductionPool": 60,
+      "actionOnScaleTrigger": "Connection pool waits appearing. Tune container pool sizes or deploy connection pooler (PgBouncer)"
+    },
+    "uncachedP95": {
+      "metric": "http_request_duration_uncached_p95_ms",
+      "warning": 400,
+      "scaleTrigger": 500,
+      "unit": "milliseconds",
+      "window": "5m",
+      "actionOnScaleTrigger": "Uncached response p95 exceeds 500ms SLA. Investigate slow queries, missing indexes, or CPU saturation"
+    },
+    "jobLag": {
+      "metric": "pgboss_queue_oldest_job_lag_seconds",
+      "warning": 30,
+      "scaleTrigger": 120,
+      "unit": "seconds",
+      "actionOnScaleTrigger": "Background queue lag exceeds 2 minutes. Increase worker concurrency or scale worker service"
+    },
+    "singleStoreLoadShare": {
+      "metric": "tenant_request_share_percent",
+      "warning": 20.0,
+      "scaleTrigger": 25.0,
+      "unit": "percent",
+      "window": "10m",
+      "actionOnScaleTrigger": "Noisy neighbour detected: single tenant consuming >25% of shared platform capacity. Throttle via rate limit, raise tier, or migrate to dedicated instance"
+    }
+  }
+}

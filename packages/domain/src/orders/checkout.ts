@@ -15,6 +15,7 @@ import type { TenantContext } from "../context.ts";
 import { clearCart, getOrCreateCart } from "../storefront/cart.ts";
 import { reserveInventory } from "../catalog/inventory-reservations.ts";
 import { allocateSequenceNumber } from "./sequences.ts";
+import { calculateShippingRate } from "./shipping-rates.ts";
 import { withIdempotencyKey } from "../system/idempotency.ts";
 import { isFeatureEnabled, FeatureDisabledError } from "../features.ts";
 
@@ -92,9 +93,10 @@ export async function placeOrder(
       throw new Error("Cannot place order with empty cart");
     }
 
-    // 2. Calculate amounts (in paise)
+    // 2. Calculate amounts (in paise) using canonical shipping calculation (PLAN §5.4, §7 / M7)
     const subtotal = cart.subtotal;
-    const shippingTotal = input.shippingMethod === "express" ? 15000 : 0;
+    const shipping = calculateShippingRate(subtotal, (input.shippingMethod as "standard" | "express") ?? "standard");
+    const shippingTotal = shipping.amount;
     const isCod = input.paymentMethod === "cod";
     const codFee = isCod ? 5000 : 0; // ₹50 default COD fee
     const grandTotal = subtotal + shippingTotal + codFee;

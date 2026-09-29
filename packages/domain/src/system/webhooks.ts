@@ -19,6 +19,107 @@ export interface ReceiveWebhookResult {
 }
 
 /**
+ * Validates webhook tenant ID server-side from database entities under tenant RLS context (PLAN §11.4 / M7).
+ * Prevents tenant poisoning where a caller specifies a different tenantId in query params/headers.
+ */
+export async function resolveWebhookTenant(
+  db: Db,
+  params: {
+    provider: string;
+    claimedTenantId?: string | undefined;
+    providerOrderId?: string | undefined;
+    providerPaymentId?: string | undefined;
+    shipmentId?: string | undefined;
+    awb?: string | undefined;
+    orderId?: string | undefined;
+  },
+): Promise<{ tenantId: string; verified: boolean }> {
+  const claimedTenantId = params.claimedTenantId;
+  if (!claimedTenantId) {
+    throw new Error(
+      "Missing tenant identifier: tenantId is required for webhook signature verification and routing",
+    );
+  }
+
+  // 1. Verify claimed tenant exists in the database
+  const tenantRes = await db.execute<{ id: string }>(sql`
+    SELECT id FROM tenants WHERE id = ${claimedTenantId}::uuid LIMIT 1;
+  `);
+  if (!tenantRes.rows[0]?.id) {
+    throw new Error(`Invalid tenant ID: ${claimedTenantId}`);
+  }
+
+  // 2. Tenant poisoning prevention: if payload references an entity (order, payment, shipment),
+  // verify under tenant context (RLS) that this entity actually belongs to the claimed tenant.
+  const hasEntityIdentifier = Boolean(
+    params.providerOrderId ||
+    params.providerPaymentId ||
+    params.shipmentId ||
+    params.awb ||
+    params.orderId,
+  );
+
+  if (hasEntityIdentifier) {
+    const matched = await withTenant(db, claimedTenantId, async (tx) => {
+      if (params.provider === "razorpay") {
+        if (params.providerOrderId) {
+          const res = await tx.execute<{ id: string }>(sql`
+            SELECT id FROM payment_intents
+            WHERE provider_order_id = ${params.providerOrderId}
+            LIMIT 1;
+          `);
+          return Boolean(res.rows[0]?.id);
+        }
+        if (params.providerPaymentId) {
+          const res = await tx.execute<{ id: string }>(sql`
+            SELECT pa.id
+            FROM payment_attempts pa
+            WHERE pa.provider_payment_id = ${params.providerPaymentId}
+            LIMIT 1;
+          `);
+          return Boolean(res.rows[0]?.id);
+        }
+      } else if (params.provider === "shiprocket") {
+        if (params.shipmentId) {
+          const res = await tx.execute<{ id: string }>(sql`
+            SELECT id FROM fulfillments
+            WHERE shiprocket_shipment_id = ${params.shipmentId}
+            LIMIT 1;
+          `);
+          return Boolean(res.rows[0]?.id);
+        }
+        if (params.awb) {
+          const res = await tx.execute<{ id: string }>(sql`
+            SELECT id FROM fulfillments
+            WHERE awb = ${params.awb}
+            LIMIT 1;
+          `);
+          return Boolean(res.rows[0]?.id);
+        }
+      } else if (params.provider === "cod") {
+        if (params.orderId) {
+          const res = await tx.execute<{ id: string }>(sql`
+            SELECT id FROM orders
+            WHERE id = ${params.orderId}::uuid
+            LIMIT 1;
+          `);
+          return Boolean(res.rows[0]?.id);
+        }
+      }
+      return true;
+    });
+
+    if (!matched) {
+      throw new Error(
+        `Tenant mismatch: webhook payload entity does not belong to claimed tenant ${claimedTenantId}`,
+      );
+    }
+  }
+
+  return { tenantId: claimedTenantId, verified: true };
+}
+
+/**
  * Ingest an incoming webhook into webhook_inbox (PLAN §11.4).
  *
  * Sequence:

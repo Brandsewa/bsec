@@ -29,6 +29,34 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: "Invalid OTP data", details: parsed.error.issues }, { status: 400 });
     }
 
+    const clientIp =
+      req.headers.get("cf-connecting-ip") ||
+      req.headers.get("x-forwarded-for")?.split(",")[0]?.trim() ||
+      "127.0.0.1";
+
+    try {
+      const { checkCustomerOtpVerifyLimit } = await import("@bs/domain");
+      await checkCustomerOtpVerifyLimit(rt._db.db, {
+        tenantId: access.tenantId,
+        ip: clientIp,
+        phone: parsed.data.phone,
+      });
+    } catch (err: unknown) {
+      const { RateLimitExceededError } = await import("@bs/domain");
+      if (err instanceof RateLimitExceededError) {
+        return NextResponse.json(
+          { error: err.message },
+          {
+            status: 429,
+            headers: {
+              "Retry-After": String(err.retryAfter),
+            },
+          },
+        );
+      }
+      throw err;
+    }
+
     const result = await verifyCustomerOtp(
       rt._db.db,
       access.tenantId,

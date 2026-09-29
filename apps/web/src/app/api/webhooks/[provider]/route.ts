@@ -1,6 +1,13 @@
 import { NextResponse } from "next/server";
 import { randomUUID } from "node:crypto";
-import { receiveWebhook, getTenantPaymentSecrets, ShiprocketProvider } from "@bs/domain";
+import {
+  receiveWebhook,
+  resolveWebhookTenant,
+  getTenantPaymentSecrets,
+  ShiprocketProvider,
+  checkWebhookRateLimit,
+  RateLimitExceededError,
+} from "@bs/domain";
 import { RazorpayProvider, CODProvider } from "@bs/payments";
 import { server } from "@/server/runtime.ts";
 
@@ -12,6 +19,31 @@ export async function POST(
     const params = await props.params;
     const provider = params.provider.toLowerCase();
 
+    const { rt } = server();
+
+    // 1. IP and Provider rate limiting (PLAN §14 / M7)
+    const clientIp =
+      req.headers.get("cf-connecting-ip") ||
+      req.headers.get("x-forwarded-for")?.split(",")[0]?.trim() ||
+      "127.0.0.1";
+
+    try {
+      await checkWebhookRateLimit(rt._db.db, { ip: clientIp, provider });
+    } catch (err: unknown) {
+      if (err instanceof RateLimitExceededError) {
+        return NextResponse.json(
+          { error: err.message },
+          {
+            status: 429,
+            headers: {
+              "Retry-After": String(err.retryAfter),
+            },
+          },
+        );
+      }
+      throw err;
+    }
+
     const rawBody = await req.text();
     let parsed: Record<string, unknown>;
     try {
@@ -20,8 +52,6 @@ export async function POST(
     } catch {
       return NextResponse.json({ error: "Invalid JSON body" }, { status: 400 });
     }
-
-    const { rt } = server();
 
     const payloadObj = parsed.payload as Record<string, unknown> | undefined;
     const paymentObj = payloadObj?.payment as Record<string, unknown> | undefined;
@@ -39,9 +69,9 @@ export async function POST(
       (typeof paymentEntity?.id === "string" && paymentEntity.id) ||
       `evt_${randomUUID()}`;
 
-    // Extract tenantId if present
+    // Extract claimed tenantId if present
     const url = new URL(req.url);
-    const tenantId =
+    const claimedTenantId =
       url.searchParams.get("tenantId") ||
       req.headers.get("x-tenant-id") ||
       (typeof parsed.tenant_id === "string" && parsed.tenant_id) ||
@@ -49,7 +79,56 @@ export async function POST(
       (typeof orderNotes?.tenant_id === "string" && orderNotes.tenant_id) ||
       undefined;
 
-    // Enforce real signature verification using decrypted provider secrets (PLAN §11.4)
+    const providerOrderId =
+      (typeof paymentEntity?.order_id === "string" && paymentEntity.order_id) ||
+      (typeof orderEntity?.id === "string" && orderEntity.id) ||
+      (typeof parsed.order_id === "string" && parsed.order_id) ||
+      undefined;
+
+    const providerPaymentId =
+      (typeof paymentEntity?.id === "string" && paymentEntity.id) ||
+      (typeof parsed.payment_id === "string" && parsed.payment_id) ||
+      undefined;
+
+    const shipmentId =
+      (typeof parsed.shipment_id === "string" && parsed.shipment_id) ||
+      (typeof parsed.shipmentId === "string" && parsed.shipmentId) ||
+      undefined;
+
+    const awb =
+      (typeof parsed.awb === "string" && parsed.awb) ||
+      (typeof parsed.awb_code === "string" && parsed.awb_code) ||
+      undefined;
+
+    const orderId =
+      (typeof orderNotes?.order_id === "string" && orderNotes.order_id) ||
+      (typeof paymentNotes?.order_id === "string" && paymentNotes.order_id) ||
+      (typeof parsed.order_id === "string" && parsed.order_id) ||
+      undefined;
+
+    // 2. Server-side derivation and verification of tenantId (M7 security finding fix)
+    let tenantId: string | undefined;
+    try {
+      const resolved = await resolveWebhookTenant(rt._db.db, {
+        provider,
+        claimedTenantId,
+        providerOrderId,
+        providerPaymentId,
+        shipmentId,
+        awb,
+        orderId,
+      });
+      tenantId = resolved.tenantId;
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : "Tenant verification failed";
+      return NextResponse.json({ error: msg }, { status: 400 });
+    }
+
+    if (!tenantId) {
+      return NextResponse.json({ error: "Cannot determine tenant for webhook event" }, { status: 400 });
+    }
+
+    // 3. Enforce real signature verification using decrypted provider secrets (PLAN §11.4)
     const headersRecord: Record<string, string | string[] | undefined> = {};
     req.headers.forEach((val, key) => {
       headersRecord[key] = val;
@@ -57,22 +136,17 @@ export async function POST(
 
     let signatureValid = false;
     if (provider === "razorpay") {
-      const creds = tenantId ? await getTenantPaymentSecrets(rt._db.db, tenantId, "razorpay") : {};
+      const creds = await getTenantPaymentSecrets(rt._db.db, tenantId, "razorpay");
       const razorpayProvider = new RazorpayProvider(creds);
       const verified = await razorpayProvider.verifyWebhook(headersRecord, rawBody);
       signatureValid = verified.isValid;
     } else if (provider === "cod") {
-      // NOTE (Design & Defense-in-Depth): In the current system architecture, this route has no real
-      // external caller. Real COD order confirmation is handled entirely via the action_tokens
-      // one-time-link flow (/cod/[token] -> confirmCodOrder()). This HMAC check exists purely as an
-      // intentional, fail-closed safety net in case an external delivery partner or automated caller
-      // is ever configured to target /api/webhooks/cod in the future.
-      const creds = tenantId ? await getTenantPaymentSecrets(rt._db.db, tenantId, "cod") : {};
+      const creds = await getTenantPaymentSecrets(rt._db.db, tenantId, "cod");
       const codProvider = new CODProvider(creds);
       const verified = await codProvider.verifyWebhook(headersRecord, rawBody);
       signatureValid = verified.isValid;
     } else if (provider === "shiprocket") {
-      const creds = tenantId ? await getTenantPaymentSecrets(rt._db.db, tenantId, "shiprocket") : {};
+      const creds = await getTenantPaymentSecrets(rt._db.db, tenantId, "shiprocket");
       const shiprocketProvider = new ShiprocketProvider({ credentials: creds });
       const verified = await shiprocketProvider.verifyWebhook(headersRecord, rawBody);
       signatureValid = verified.isValid;
@@ -80,7 +154,7 @@ export async function POST(
       signatureValid = false;
     }
 
-    // Ingest into inbox (decoupled, returns immediately)
+    // 4. Ingest into inbox (decoupled, returns immediately)
     const result = await receiveWebhook(
       rt._db.db,
       {

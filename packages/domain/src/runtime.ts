@@ -1,4 +1,5 @@
 import { createDb, ping, type DbHandle } from "@bs/db";
+import { isEncryptionKeyConfigured } from "@bs/payments";
 import type { Jobs } from "./jobs.ts";
 
 export type CacheInvalidator = (tags: string[]) => Promise<void> | void;
@@ -34,6 +35,7 @@ export function createRuntime(opts: {
 }
 
 export async function checkHealth(rt: Runtime) {
+  const encryptionKeyConfigured = isEncryptionKeyConfigured();
   try {
     const db = await ping(rt._db.db);
     return {
@@ -41,6 +43,7 @@ export async function checkHealth(rt: Runtime) {
       service: rt.service,
       version: process.env.APP_VERSION ?? "dev",
       db: { ok: true, role: db.role },
+      encryptionKeyConfigured,
     };
   } catch {
     return {
@@ -48,6 +51,7 @@ export async function checkHealth(rt: Runtime) {
       service: rt.service,
       version: process.env.APP_VERSION ?? "dev",
       db: { ok: false, role: "unreachable" },
+      encryptionKeyConfigured,
     };
   }
 }

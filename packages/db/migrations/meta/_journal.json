@@ -64,6 +64,13 @@
       "when": 1790640000000,
       "tag": "0008_m6_feature_flags",
       "breakpoints": true
+    },
+    {
+      "idx": 9,
+      "version": "7",
+      "when": 1790650000000,
+      "tag": "0009_m7_rate_limits",
+      "breakpoints": true
     }
   ]
 }

@@ -9,6 +9,7 @@ import { sendTransactionalEmail } from "./system/email.ts";
 import { sweepAbandonedCarts } from "./system/abandoned-carts.ts";
 import { schema } from "@bs/db";
 import { eq, and } from "drizzle-orm";
+import { acquireTenantJobSlot, releaseTenantJobSlot } from "./system/rate-limit.ts";
 
 /**
  * Job runtime (PLAN §11). Queues are created by the migrate step (as app_owner); workers run
@@ -255,12 +256,33 @@ export async function startJobs(opts: {
     }
   });
 
+  const withTenantJobSlot = async <T>(
+    tenantId: string | undefined,
+    fn: () => Promise<T>,
+  ): Promise<T> => {
+    if (!tenantId) {
+      return fn();
+    }
+    const acquired = await acquireTenantJobSlot(db, tenantId);
+    if (!acquired) {
+      opts.log.warn({ tenantId }, "Tenant job concurrency ceiling reached; deferring job for retry");
+      throw new Error(`Tenant job concurrency limit reached for tenant ${tenantId}`);
+    }
+    try {
+      return await fn();
+    } finally {
+      await releaseTenantJobSlot(db, tenantId);
+    }
+  };
+
   // Handle webhook background processing (PLAN §11.4)
-  await boss.work<{ inboxId: string }>(QUEUE_NAMES.WEBHOOK_PROCESS, { localConcurrency: 2 }, async (batch) => {
+  await boss.work<{ inboxId: string; tenantId?: string }>(QUEUE_NAMES.WEBHOOK_PROCESS, { localConcurrency: 2 }, async (batch) => {
     for (const job of batch) {
       try {
-        const res = await processWebhookInboxItem(db, job.data.inboxId);
-        opts.log.info({ job_id: job.id, inboxId: job.data.inboxId, success: res.success }, "webhook.process completed");
+        await withTenantJobSlot(job.data?.tenantId, async () => {
+          const res = await processWebhookInboxItem(db, job.data.inboxId);
+          opts.log.info({ job_id: job.id, inboxId: job.data.inboxId, success: res.success }, "webhook.process completed");
+        });
       } catch (err) {
         opts.log.error({ err, job_id: job.id }, "webhook.process failed");
         throw err;
@@ -288,8 +310,10 @@ export async function startJobs(opts: {
     async (batch) => {
       for (const job of batch) {
         try {
-          await handleFulfillmentShippedJob(db, opts.log, job.data);
-          opts.log.info({ job_id: job.id, fulfillmentId: job.data.fulfillmentId }, "fulfillment.created processed");
+          await withTenantJobSlot(job.data.tenantId, async () => {
+            await handleFulfillmentShippedJob(db, opts.log, job.data);
+            opts.log.info({ job_id: job.id, fulfillmentId: job.data.fulfillmentId }, "fulfillment.created processed");
+          });
         } catch (err) {
           opts.log.error({ err, job_id: job.id }, "fulfillment.created failed");
           throw err;
@@ -305,8 +329,10 @@ export async function startJobs(opts: {
     async (batch) => {
       for (const job of batch) {
         try {
-          await handleFulfillmentDeliveredJob(db, opts.log, job.data);
-          opts.log.info({ job_id: job.id, fulfillmentId: job.data.fulfillmentId }, "fulfillment.delivered processed");
+          await withTenantJobSlot(job.data.tenantId, async () => {
+            await handleFulfillmentDeliveredJob(db, opts.log, job.data);
+            opts.log.info({ job_id: job.id, fulfillmentId: job.data.fulfillmentId }, "fulfillment.delivered processed");
+          });
         } catch (err) {
           opts.log.error({ err, job_id: job.id }, "fulfillment.delivered failed");
           throw err;
@@ -322,8 +348,10 @@ export async function startJobs(opts: {
     async (batch) => {
       for (const job of batch) {
         try {
-          await handleFulfillmentRtoJob(db, opts.log, job.data);
-          opts.log.info({ job_id: job.id, fulfillmentId: job.data.fulfillmentId }, "fulfillment.rto processed");
+          await withTenantJobSlot(job.data.tenantId, async () => {
+            await handleFulfillmentRtoJob(db, opts.log, job.data);
+            opts.log.info({ job_id: job.id, fulfillmentId: job.data.fulfillmentId }, "fulfillment.rto processed");
+          });
         } catch (err) {
           opts.log.error({ err, job_id: job.id }, "fulfillment.rto failed");
           throw err;
@@ -339,8 +367,10 @@ export async function startJobs(opts: {
     async (batch) => {
       for (const job of batch) {
         try {
-          await handleCartAbandonedJob(db, opts.log, job.data);
-          opts.log.info({ job_id: job.id, cartId: job.data.cartId }, "cart.abandoned processed");
+          await withTenantJobSlot(job.data.tenantId, async () => {
+            await handleCartAbandonedJob(db, opts.log, job.data);
+            opts.log.info({ job_id: job.id, cartId: job.data.cartId }, "cart.abandoned processed");
+          });
         } catch (err) {
           opts.log.error({ err, job_id: job.id }, "cart.abandoned failed");
           throw err;
@@ -356,8 +386,10 @@ export async function startJobs(opts: {
     async (batch) => {
       for (const job of batch) {
         try {
-          await handleReturnRequestedJob(db, opts.log, job.data);
-          opts.log.info({ job_id: job.id, returnId: job.data.returnId }, "return.requested processed");
+          await withTenantJobSlot(job.data.tenantId, async () => {
+            await handleReturnRequestedJob(db, opts.log, job.data);
+            opts.log.info({ job_id: job.id, returnId: job.data.returnId }, "return.requested processed");
+          });
         } catch (err) {
           opts.log.error({ err, job_id: job.id }, "return.requested failed");
           throw err;
@@ -373,8 +405,10 @@ export async function startJobs(opts: {
     async (batch) => {
       for (const job of batch) {
         try {
-          await handleRefundProcessedJob(db, opts.log, job.data);
-          opts.log.info({ job_id: job.id, orderId: job.data.orderId }, "refund.processed processed");
+          await withTenantJobSlot(job.data.tenantId, async () => {
+            await handleRefundProcessedJob(db, opts.log, job.data);
+            opts.log.info({ job_id: job.id, orderId: job.data.orderId }, "refund.processed processed");
+          });
         } catch (err) {
           opts.log.error({ err, job_id: job.id }, "refund.processed failed");
           throw err;

@@ -1,4 +1,4 @@
-import { eq, and, sql } from "drizzle-orm";
+import { eq, and, sql, inArray } from "drizzle-orm";
 import {
   orders,
   orderEvents,
@@ -186,11 +186,12 @@ export async function transitionOrder(
   tx?: Db,
 ): Promise<TransitionOrderResult> {
   const runner = async (db: Db): Promise<TransitionOrderResult> => {
-    // 1. Fetch current order
+    // 1. Fetch current order with row lock
     const orderRows = await db
       .select()
       .from(orders)
-      .where(and(eq(orders.tenantId, ctx.tenantId), eq(orders.id, orderId)));
+      .where(and(eq(orders.tenantId, ctx.tenantId), eq(orders.id, orderId)))
+      .for("update");
     const order = orderRows[0];
     if (!order) {
       throw new Error(`Order not found: ${orderId}`);
@@ -312,7 +313,7 @@ export async function transitionOrder(
       if (!("intentId" in event)) {
         throw new Error("intentId is required for payment events");
       }
-      // Payment Intent Transition
+      // Payment Intent Transition with row lock
       const intentRows = await db
         .select()
         .from(paymentIntents)
@@ -322,7 +323,8 @@ export async function transitionOrder(
             eq(paymentIntents.id, event.intentId),
             eq(paymentIntents.orderId, orderId),
           ),
-        );
+        )
+        .for("update");
       const intent = intentRows[0];
       if (!intent) {
         throw new Error(`Payment intent not found: ${event.intentId}`);
@@ -398,7 +400,7 @@ export async function transitionOrder(
             and(
               eq(refunds.tenantId, ctx.tenantId),
               eq(refunds.intentId, intent.id),
-              eq(refunds.status, "processed"),
+              inArray(refunds.status, ["succeeded", "processed"]),
             ),
           );
         const alreadyRefunded = Number(existingRefundRows[0]?.total ?? 0);

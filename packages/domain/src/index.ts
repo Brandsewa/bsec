@@ -24,6 +24,7 @@ export * from "./storefront/newsletter.ts";
 export * from "./storefront/seo.ts";
 export * from "./orders/state-machine.ts";
 export * from "./orders/sequences.ts";
+export * from "./orders/shipping-rates.ts";
 export * from "./orders/checkout.ts";
 export * from "./orders/actions.ts";
 export * from "./catalog/inventory-reservations.ts";
@@ -65,5 +66,7 @@ export {
   decryptSecret,
 } from "@bs/shipping";
 export * from "./jobs.ts";
+export * from "./system/rate-limit.ts";
+export * from "./system/monitoring.ts";
 export { warnIfEncryptionKeyMissing, isEncryptionKeyConfigured } from "@bs/payments";
 
