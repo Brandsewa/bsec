@@ -8,6 +8,7 @@ import { bootstrapRoles } from "@bs/db/bootstrap";
 import { runMigrations } from "@bs/db/migrate";
 import { pino } from "pino";
 import { handleFulfillmentRtoJob, handleCartAbandonedJob } from "../src/jobs.ts";
+import { sweepAbandonedCarts } from "../src/system/abandoned-carts.ts";
 
 const PW = { owner: "o_test", rw: "rw_test", platform: "p_test" };
 let container: StartedPostgreSqlContainer | undefined;
@@ -185,5 +186,61 @@ describe("Queue Consumers Integration", () => {
         orderId,
       }),
     ).resolves.toBeUndefined();
+  });
+
+  describe("sweepAbandonedCarts", () => {
+    const sweepCartA = "0199a0e1-0000-7000-8000-000000000041";
+    const sweepCartB = "0199a0e1-0000-7000-8000-000000000042";
+
+    async function seedStaleCart(id: string, token: string) {
+      const pgClient = new (await import("pg")).default.Client({ connectionString: superUrl });
+      await pgClient.connect();
+      await pgClient.query(`DELETE FROM carts WHERE id IN ('${sweepCartA}', '${sweepCartB}')`);
+      await pgClient.query(
+        `INSERT INTO carts (id, tenant_id, token, email, status, last_activity_at)
+         VALUES ('${id}', '${tenantId}', '${token}', 'sweep@example.com', 'active', now() - interval '3 hours')`,
+      );
+      await pgClient.end();
+    }
+
+    async function recoverySentAt(id: string): Promise<unknown> {
+      const pgClient = new (await import("pg")).default.Client({ connectionString: superUrl });
+      await pgClient.connect();
+      const { rows } = await pgClient.query(`SELECT recovery_sent_at FROM carts WHERE id = '${id}'`);
+      await pgClient.end();
+      return rows[0]?.recovery_sent_at;
+    }
+
+    it("with a jobs provider, enqueues cart.abandoned with the email and does NOT send directly", async () => {
+      await seedStaleCart(sweepCartA, "sweep_tok_a");
+      const fetchMock = vi.fn();
+      globalThis.fetch = fetchMock;
+      const send = vi.fn().mockResolvedValue("job-1");
+
+      const res = await sweepAbandonedCarts(rwDb.db, tenantId, { jobs: { send } });
+
+      expect(res.abandonedCount).toBe(1);
+      expect(fetchMock).not.toHaveBeenCalled();
+      expect(send).toHaveBeenCalledTimes(1);
+      expect(send.mock.calls[0]?.[1]).toMatchObject({ cartId: sweepCartA, email: "sweep@example.com" });
+      expect(await recoverySentAt(sweepCartA)).not.toBeNull();
+    });
+
+    it("without a jobs provider, logs a warning and leaves recovery unsent when the email fails", async () => {
+      await seedStaleCart(sweepCartB, "sweep_tok_b");
+      globalThis.fetch = vi.fn().mockResolvedValue({
+        ok: false,
+        status: 500,
+        text: async () => "boom",
+      } as Response);
+      const warn = vi.fn();
+
+      const res = await sweepAbandonedCarts(rwDb.db, tenantId, { log: { warn } });
+
+      expect(res.emailsSentCount).toBe(0);
+      expect(warn).toHaveBeenCalledTimes(1);
+      expect(warn.mock.calls[0]?.[0]).toMatchObject({ cartId: sweepCartB, status: "failed" });
+      expect(await recoverySentAt(sweepCartB)).toBeNull();
+    });
   });
 });

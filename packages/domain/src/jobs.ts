@@ -343,7 +343,7 @@ export async function startJobs(opts: {
         let totalAbandoned = 0;
         let totalEmails = 0;
         for (const tId of tenantIds) {
-          const res = await sweepAbandonedCarts(db, tId, { jobs: boss });
+          const res = await sweepAbandonedCarts(db, tId, { jobs: boss, log: opts.log });
           totalAbandoned += res.abandonedCount;
           totalEmails += res.emailsSentCount;
         }
