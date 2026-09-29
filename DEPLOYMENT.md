@@ -9,6 +9,12 @@ This document defines the deployment configuration and required environment vari
 - `APP_ENV`: `production` | `staging` | `development`.
 - `PORT`: `3000`.
 - `HOSTNAME`: `0.0.0.0`.
+- `BETTER_AUTH_URL`: **Required for admin sign-in.** The public origin of this app, e.g. `https://gobs.cloud`.
+- `BETTER_AUTH_SECRET`: **Required for admin sign-in.** 32+ random characters (`openssl rand -hex 32`). Keep it stable: changing it signs everyone out.
+- `ADMIN_ORIGINS` (optional): comma-separated admin origins allowed to call the API. Default: `https://admin.<host of BETTER_AUTH_URL>`.
+- `COOKIE_DOMAIN` (optional): cookie domain shared by the API and admin hosts. Default: `.<host of BETTER_AUTH_URL>` on https.
+
+Without `BETTER_AUTH_URL` / `BETTER_AUTH_SECRET` the site keeps serving but admin sign-in answers 503 ("not configured").
 - `TENANT_SECRETS_KEY`: **Set before saving any payment/shipping/email credentials.** The app boots and serves without it (a warning is logged), but storing or reading tenant credentials fails until it is set. Master symmetric encryption key (32 bytes or 64 hex characters) used by `@bs/payments` and `@bs/shipping` (`encryptSecret`/`decryptSecret`) to secure payment gateway secrets and third-party credentials stored in `tenant_secrets`. (Fallback alias: `ENCRYPTION_KEY`).
 
 ### Platform (`bsec-platform`)
@@ -34,3 +40,27 @@ The code (`packages/payments/src/crypto.ts` and `packages/shipping/src/crypto.ts
 
 In `production` (`APP_ENV=production` or `NODE_ENV=production`), the services boot normally and log a warning, and saving or reading a credential fails with:
 `Encryption key not set: TENANT_SECRETS_KEY or ENCRYPTION_KEY is required in production (PLAN §4)` Generate one with `openssl rand -hex 32`, add it to web, platform and worker in Coolify, and redeploy. Set it BEFORE entering any credentials, and never change it afterwards without re-entering them (changing it makes stored credentials undecryptable).
+
+## Operator tools (run from a container terminal in Coolify)
+Both are bundled in the images and never run automatically. Open the app in Coolify, go to **Terminal**, and run:
+
+**Create or reset a store owner login** (worker container). Uses a hidden password prompt; the password is never printed or logged:
+```
+OWNER_EMAIL=you@example.com OWNER_NAME="Your Name" STORE_SLUG=<store slug> node dist/create-owner.js
+```
+Running it again for the same email resets that person's password.
+
+**Demo store** (platform container). Creates a separate store named "Demo Store" with sample products, customers and
+orders in every state, so you can try every admin screen. It never touches your real store and never contacts Razorpay,
+Shiprocket or email. Switch to it with the store selector at the top right of the admin.
+```
+OWNER_EMAIL=you@example.com node dist/demo.js seed
+node dist/demo.js remove
+```
+`remove` deletes all demo rows and leaves the (archived, empty) shell; `seed` can be run again.
+
+## First-time admin setup checklist
+1. Set `BETTER_AUTH_URL` and `BETTER_AUTH_SECRET` on **bsec-web** (Runtime only), redeploy.
+2. Run `create-owner` for your store from the worker terminal.
+3. Open `https://admin.<your domain>` and sign in.
+4. (Later) set `TENANT_SECRETS_KEY` on web, platform and worker before entering Razorpay/Shiprocket/Resend keys.

@@ -13,6 +13,20 @@ export async function middleware(request: NextRequest) {
     return NextResponse.next();
   }
 
+  // The storefront gate (store status, unknown host) must not apply to calls that are not about a storefront
+  // host: the admin API, staff sign-in and provider webhooks resolve their tenant from the session or the
+  // signed payload, and must keep working while a store is in maintenance, suspended, or on an unregistered
+  // host such as the platform root or a staging address. CORS preflights are answered by the API itself.
+  if (
+    request.method === "OPTIONS" ||
+    pathname.startsWith("/api/auth/") ||
+    pathname.startsWith("/api/webhooks/") ||
+    pathname.startsWith("/api/admin/") ||
+    pathname.startsWith("/api/rpc/admin/")
+  ) {
+    return NextResponse.next();
+  }
+
   const host = request.headers.get("x-forwarded-host") ?? request.headers.get("host") ?? "localhost";
 
   let access: {

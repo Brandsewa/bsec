@@ -1,4 +1,4 @@
-import { and, desc, eq, ilike, inArray, sql } from "drizzle-orm";
+import { and, desc, eq, ilike, inArray, or, sql } from "drizzle-orm";
 import { schema, withTenant } from "@bs/db";
 import type { Runtime } from "./runtime.ts";
 import { assertPermission, type TenantContext } from "./context.ts";
@@ -690,17 +690,46 @@ export async function listInventoryLevels(
     if (query?.locationId) {
       conditions.push(eq(schema.inventoryLevels.locationId, query.locationId));
     }
+    const search = query?.search?.trim();
+    if (search) {
+      conditions.push(
+        or(
+          ilike(schema.products.title, `%${search}%`),
+          ilike(schema.variants.title, `%${search}%`),
+          ilike(schema.variants.sku, `%${search}%`),
+        ),
+      );
+    }
 
     const whereClause = conditions.length > 0 ? and(...conditions) : undefined;
     const limit = query?.limit ?? 50;
     const offset = query?.offset ?? 0;
 
-    const rows = await tx
-      .select()
+    const base = tx
+      .select({
+        id: schema.inventoryLevels.id,
+        variantId: schema.inventoryLevels.variantId,
+        locationId: schema.inventoryLevels.locationId,
+        onHand: schema.inventoryLevels.onHand,
+        reserved: schema.inventoryLevels.reserved,
+        variantSku: schema.variants.sku,
+        variantTitle: schema.variants.title,
+        productTitle: schema.products.title,
+        locationName: schema.locations.name,
+      })
       .from(schema.inventoryLevels)
-      .where(whereClause)
-      .limit(limit)
-      .offset(offset);
+      .innerJoin(schema.variants, eq(schema.variants.id, schema.inventoryLevels.variantId))
+      .innerJoin(schema.products, eq(schema.products.id, schema.variants.productId))
+      .innerJoin(schema.locations, eq(schema.locations.id, schema.inventoryLevels.locationId));
+
+    const rows = await base.where(whereClause).orderBy(schema.products.title, schema.variants.title).limit(limit).offset(offset);
+
+    const [{ n: total } = { n: 0 }] = await tx
+      .select({ n: sql<number>`count(*)::int` })
+      .from(schema.inventoryLevels)
+      .innerJoin(schema.variants, eq(schema.variants.id, schema.inventoryLevels.variantId))
+      .innerJoin(schema.products, eq(schema.products.id, schema.variants.productId))
+      .where(whereClause);
 
     return {
       items: rows.map((r) => ({
@@ -710,8 +739,12 @@ export async function listInventoryLevels(
         onHand: r.onHand,
         reserved: r.reserved,
         available: r.onHand - r.reserved,
+        variantSku: r.variantSku,
+        variantTitle: r.variantTitle,
+        productTitle: r.productTitle,
+        locationName: r.locationName,
       })),
-      total: rows.length,
+      total,
     };
   });
 }

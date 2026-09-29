@@ -113,8 +113,11 @@ jobs:
       - uses: actions/checkout@v5
       - name: Generate per-run secrets
         run: |
-          for v in POSTGRES_PASSWORD APP_OWNER_PASSWORD APP_RW_PASSWORD APP_PLATFORM_PASSWORD; do
+          for v in POSTGRES_PASSWORD APP_OWNER_PASSWORD APP_RW_PASSWORD APP_PLATFORM_PASSWORD E2E_PASSWORD; do
             val=$(openssl rand -hex 16); echo "::add-mask::$val"; echo "$v=$val" >> "$GITHUB_ENV"
+          done
+          for v in BETTER_AUTH_SECRET TENANT_SECRETS_KEY; do
+            val=$(openssl rand -hex 32); echo "::add-mask::$val"; echo "$v=$val" >> "$GITHUB_ENV"
           done
       - name: Start stack (pulls images from GHCR)
         run: |
@@ -141,6 +144,34 @@ jobs:
           check http://127.0.0.1:8080/health ""
           # TODO(M4/M5): once order placement lands, place a real COD test order against
           # http://127.0.0.1:3000 here (M5 exit criterion: proven "on staging").
+      - name: Seed a store, an owner login and the demo store (operator tools from the images)
+        run: |
+          $COMPOSE exec -T postgres psql -U postgres -d bsec -v ON_ERROR_STOP=1 -c "insert into organizations (id, name) values ('0199b000-0000-7000-8000-000000000000', 'CI Org'); insert into tenants (id, organization_id, slug, name) values ('0199b000-0000-7000-8000-000000000001', '0199b000-0000-7000-8000-000000000000', 'ci-store', 'CI Store');"
+          $COMPOSE run --rm --no-deps -e OWNER_EMAIL=owner@ci.example -e OWNER_NAME="CI Owner" -e OWNER_PASSWORD="$E2E_PASSWORD" -e STORE_SLUG=ci-store worker node dist/create-owner.js
+          $COMPOSE run --rm --no-deps -e OWNER_EMAIL=owner@ci.example platform node dist/demo.js seed
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v5
+        with:
+          node-version-file: .nvmrc
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile --filter @bs/e2e
+      - run: pnpm --filter @bs/e2e exec playwright install --with-deps chromium
+      - name: Browser end-to-end tests (real admin in a real browser against this stack)
+        env:
+          ADMIN_URL: http://127.0.0.1:8080
+          API_URL: http://127.0.0.1:3000
+          E2E_EMAIL: owner@ci.example
+        run: pnpm --filter @bs/e2e e2e
+      - name: Upload browser test report and screenshots
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: e2e-report
+          path: |
+            e2e/playwright-report
+            e2e/test-results
+          if-no-files-found: ignore
+          retention-days: 7
       - name: Dump logs on failure
         if: failure()
         run: $COMPOSE logs --no-color --tail=100

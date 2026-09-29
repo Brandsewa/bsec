@@ -22,6 +22,34 @@ const SYSTEM_ROLES: Array<{ name: string; permissions: readonly string[] }> = [
   { name: "store_admin", permissions: STORE_PERMISSIONS },
 ];
 
+/** Makes sure the store has its system roles and gives the user an active owner membership. Idempotent. */
+export async function grantStoreOwner(db: Db, tenantId: string, userId: string): Promise<void> {
+  await withTenant(db, tenantId, async (tx) => {
+    for (const role of SYSTEM_ROLES) {
+      await tx
+        .insert(schema.roles)
+        .values({ tenantId, name: role.name, isSystem: true, permissions: [...role.permissions] })
+        .onConflictDoUpdate({
+          target: [schema.roles.tenantId, schema.roles.name],
+          set: { permissions: [...role.permissions], isSystem: true, updatedAt: sql`now()` },
+        });
+    }
+    const [ownerRole] = await tx
+      .select({ id: schema.roles.id })
+      .from(schema.roles)
+      .where(and(eq(schema.roles.tenantId, tenantId), eq(schema.roles.name, "store_owner")))
+      .limit(1);
+    if (!ownerRole) throw new Error("store_owner role missing");
+    await tx
+      .insert(schema.memberships)
+      .values({ tenantId, userId, roleId: ownerRole.id, status: "active" })
+      .onConflictDoUpdate({
+        target: [schema.memberships.tenantId, schema.memberships.userId],
+        set: { roleId: ownerRole.id, status: "active", updatedAt: sql`now()` },
+      });
+  });
+}
+
 /**
  * Operator bootstrap: creates (or updates the password of) a staff user, makes sure the store has its
  * system roles, and grants the owner membership. Never logs or returns the password. Idempotent.
@@ -86,30 +114,7 @@ export async function createStoreOwner(db: Db, input: CreateOwnerInput): Promise
     });
   }
 
-  await withTenant(db, tenant.id, async (tx) => {
-    for (const role of SYSTEM_ROLES) {
-      await tx
-        .insert(schema.roles)
-        .values({ tenantId: tenant.id, name: role.name, isSystem: true, permissions: [...role.permissions] })
-        .onConflictDoUpdate({
-          target: [schema.roles.tenantId, schema.roles.name],
-          set: { permissions: [...role.permissions], isSystem: true, updatedAt: sql`now()` },
-        });
-    }
-    const [ownerRole] = await tx
-      .select({ id: schema.roles.id })
-      .from(schema.roles)
-      .where(and(eq(schema.roles.tenantId, tenant.id), eq(schema.roles.name, "store_owner")))
-      .limit(1);
-    if (!ownerRole) throw new Error("store_owner role missing");
-    await tx
-      .insert(schema.memberships)
-      .values({ tenantId: tenant.id, userId, roleId: ownerRole.id, status: "active" })
-      .onConflictDoUpdate({
-        target: [schema.memberships.tenantId, schema.memberships.userId],
-        set: { roleId: ownerRole.id, status: "active", updatedAt: sql`now()` },
-      });
-  });
+  await grantStoreOwner(db, tenant.id, userId);
 
   return { userId, tenantId: tenant.id, createdUser };
 }

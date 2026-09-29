@@ -1,4 +1,5 @@
-import { and, desc, eq, isNull } from "drizzle-orm";
+import { and, desc, eq, isNull, inArray } from "drizzle-orm";
+import { STOREFRONT_PRODUCT_STATUSES } from "./product-status.ts";
 import { schema, withTenant } from "@bs/db";
 import type { Runtime } from "../runtime.ts";
 import type { TenantContext } from "../context.ts";
@@ -683,7 +684,7 @@ export async function getStorefrontSitemapUrls(
       .where(
         and(
           eq(schema.products.tenantId, ctx.tenantId),
-          eq(schema.products.status, "published"),
+          inArray(schema.products.status, [...STOREFRONT_PRODUCT_STATUSES]),
           isNull(schema.products.deletedAt),
         ),
       )

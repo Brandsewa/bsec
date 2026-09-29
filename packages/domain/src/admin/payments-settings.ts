@@ -66,6 +66,7 @@ export async function saveRazorpayCredentials(
     if (err instanceof Error && err.message.startsWith("Encryption key not set")) {
       throw new Error(
         "Precondition: credentials cannot be saved yet because the server has no encryption key. Ask the platform operator to set TENANT_SECRETS_KEY.",
+        { cause: err },
       );
     }
     throw err;

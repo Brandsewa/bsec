@@ -1,4 +1,5 @@
 import { and, asc, desc, eq, inArray, isNull, sql } from "drizzle-orm";
+import { STOREFRONT_PRODUCT_STATUSES } from "./product-status.ts";
 import { schema, withTenant } from "@bs/db";
 import type { Runtime } from "../runtime.ts";
 import type { TenantContext } from "../context.ts";
@@ -173,7 +174,7 @@ export async function getStorefrontProduct(
       .where(
         and(
           eq(schema.products.slug, slug),
-          eq(schema.products.status, "published"),
+          inArray(schema.products.status, [...STOREFRONT_PRODUCT_STATUSES]),
           isNull(schema.products.deletedAt),
         ),
       )
@@ -353,7 +354,7 @@ export async function getStorefrontCollection(
 
     const baseWhere = and(
       eq(schema.collectionProducts.collectionId, col.id),
-      eq(schema.products.status, "published"),
+      inArray(schema.products.status, [...STOREFRONT_PRODUCT_STATUSES]),
       isNull(schema.products.deletedAt),
       inStockCondition,
     );
@@ -468,7 +469,7 @@ export async function getStorefrontCategory(
 
     const baseWhere = and(
       eq(schema.productCategories.categoryId, cat.id),
-      eq(schema.products.status, "published"),
+      inArray(schema.products.status, [...STOREFRONT_PRODUCT_STATUSES]),
       isNull(schema.products.deletedAt),
       inStockCondition,
     );

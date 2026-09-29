@@ -15,7 +15,20 @@ export interface NavGroup {
   items: NavItem[];
 }
 
+/** The one item that matches the current path best (longest matching href), so /settings does not stay lit on /settings/taxes. */
+function bestMatch(groups: NavGroup[], activeHref: string): string | undefined {
+  let best: string | undefined;
+  for (const g of groups) {
+    for (const item of g.items) {
+      const matches = activeHref === item.href || (item.href !== "/" && activeHref.startsWith(`${item.href}/`));
+      if (matches && (best === undefined || item.href.length > best.length)) best = item.href;
+    }
+  }
+  return best;
+}
+
 function NavList({ groups, activeHref, onNavigate }: { groups: NavGroup[]; activeHref: string; onNavigate?: () => void }) {
+  const current = bestMatch(groups, activeHref);
   return (
     <nav className="grid gap-5" aria-label="Main">
       {groups.map((g, gi) => (
@@ -24,7 +37,7 @@ function NavList({ groups, activeHref, onNavigate }: { groups: NavGroup[]; activ
             <p className="px-2 pb-1 text-[11px] font-medium uppercase tracking-wide text-foreground-muted">{g.label}</p>
           ) : null}
           {g.items.map((item) => {
-            const active = activeHref === item.href || (item.href !== "/" && activeHref.startsWith(`${item.href}/`));
+            const active = item.href === current;
             const Icon = item.icon;
             return (
               <div key={item.href} onClickCapture={onNavigate}>

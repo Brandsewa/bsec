@@ -30,6 +30,12 @@ const STATUS_BADGE: Record<ProductStatus, string> = {
   archived: "bg-surface-100 text-foreground-muted",
 };
 
+const inr = new Intl.NumberFormat("en-IN", { style: "currency", currency: "INR" });
+function formatPriceRange(min: number | null | undefined, max: number | null | undefined): string {
+  if (min == null || max == null) return "—";
+  return min === max ? inr.format(min / 100) : `${inr.format(min / 100)} – ${inr.format(max / 100)}`;
+}
+
 export const Route = createFileRoute("/_store/products/")({
   pendingComponent: () => (
     <PageSkeleton>
@@ -108,8 +114,17 @@ export function ProductsPage({ navigate }: { navigate?: (to: string) => void }) 
       ),
     },
     {
-      header: "Type",
-      cell: (p) => <span className="text-sm text-foreground-muted">{p.productType ?? "—"}</span>,
+      header: "Price",
+      cell: (p) => <span className="text-sm text-foreground">{formatPriceRange(p.priceMin, p.priceMax)}</span>,
+    },
+    {
+      header: "Stock",
+      cell: (p) => (
+        <span className={`text-sm ${(p.stock ?? 0) <= 0 ? "text-destructive" : "text-foreground-muted"}`}>
+          {(p.stock ?? 0) <= 0 ? "Out of stock" : `${p.stock} in stock`}
+          {(p.variantCount ?? 0) > 1 ? ` · ${p.variantCount} variants` : ""}
+        </span>
+      ),
     },
     {
       header: "Updated",

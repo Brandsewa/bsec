@@ -1,7 +1,6 @@
 import { schema, withTenant } from "@bs/db";
 import type { Runtime } from "./runtime.ts";
 import { assertPermission, type TenantContext } from "./context.ts";
-import { invalidateCache } from "./cache-invalidation.ts";
 
 export interface FeatureFlagItemRecord {
   key: string;

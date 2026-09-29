@@ -30,6 +30,10 @@ import { orpc } from "../../lib/orpc.ts";
 
 type SavedView = "all" | "unfulfilled" | "unpaid" | "cod_to_confirm" | "rto";
 
+function useOrderViewCount(view: SavedView): number {
+  return useQuery(orpc.admin.orders.list.queryOptions({ input: { view, limit: 1 } })).data?.total ?? 0;
+}
+
 export const Route = createFileRoute("/_store/orders")({
   pendingComponent: () => (
     <PageSkeleton>
@@ -135,7 +139,12 @@ export function OrdersPage() {
   );
 
   const ordersList = data?.items ?? [];
-  const totalCount = data?.total ?? ordersList.length;
+
+  // Card counts come from the server for each saved view, independent of the tab that is open.
+  const allCount = useOrderViewCount("all");
+  const unfulfilledCount = useOrderViewCount("unfulfilled");
+  const unpaidCount = useOrderViewCount("unpaid");
+  const rtoCount = useOrderViewCount("rto");
 
   type OrderRow = (typeof ordersList)[number];
 
@@ -229,20 +238,20 @@ export function OrdersPage() {
 
       {/* Metric Cards */}
       <div className="grid gap-4 sm:grid-cols-4">
-        <MetricCard label="Total Orders" value={totalCount} icon={ShoppingBag} />
+        <MetricCard label="Total Orders" value={allCount} icon={ShoppingBag} />
         <MetricCard
           label="Unfulfilled"
-          value={ordersList.filter((o) => o.fulfillmentStatus === "unfulfilled").length}
+          value={unfulfilledCount}
           icon={Package}
         />
         <MetricCard
           label="Unpaid / COD"
-          value={ordersList.filter((o) => o.paymentStatus === "pending").length}
+          value={unpaidCount}
           icon={Clock}
         />
         <MetricCard
           label="RTO / Returns"
-          value={ordersList.filter((o) => o.fulfillmentStatus === "rto").length}
+          value={rtoCount}
           icon={RotateCcw}
         />
       </div>

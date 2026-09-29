@@ -7,6 +7,7 @@ import { createStaffAuth } from "@bs/auth";
 import { buildTenantContext } from "../src/context.ts";
 import { createStoreOwner } from "../src/admin/create-owner.ts";
 import { getAdminMe } from "../src/admin/me.ts";
+import { clearLoginFailures, loginRetryAfter, recordLoginFailure } from "../src/system/login-limit.ts";
 import type { Runtime } from "../src/runtime.ts";
 
 const PW = { owner: "o_test", rw: "rw_test", platform: "p_test" };
@@ -223,5 +224,39 @@ describe("staff authentication, end to end on real Postgres", () => {
     await expect(
       createStoreOwner(rwDb.db, { email: "y@admin-auth-test.example", name: "Y", password: "long-enough-password", tenantSlug: "no-such-store" }),
     ).rejects.toThrow(/No store/);
+  });
+});
+
+describe("sign-in throttling counts failures only", () => {
+  const ip = "203.0.113.7";
+  const email = "throttle@admin-auth-test.example";
+
+  it("locks an account after 5 failures, not before, and successful sign-ins never count", async () => {
+    // Many successful sign-ins do not record anything, so they can never lock the account out.
+    expect(await loginRetryAfter(rwDb.db, ip, email)).toBeNull();
+
+    for (let i = 0; i < 4; i++) await recordLoginFailure(rwDb.db, ip, email);
+    expect(await loginRetryAfter(rwDb.db, ip, email)).toBeNull();
+
+    await recordLoginFailure(rwDb.db, ip, email);
+    const wait = await loginRetryAfter(rwDb.db, ip, email);
+    expect(wait).not.toBeNull();
+    expect(wait!).toBeGreaterThan(0);
+    expect(wait!).toBeLessThanOrEqual(900);
+
+    // another account from another address is unaffected
+    expect(await loginRetryAfter(rwDb.db, "198.51.100.9", "someone-else@admin-auth-test.example")).toBeNull();
+
+    // a successful sign-in clears the account's count
+    await clearLoginFailures(rwDb.db, email);
+    expect(await loginRetryAfter(rwDb.db, "198.51.100.10", email)).toBeNull();
+  });
+
+  it("locks an address after 20 failures across different accounts", async () => {
+    const badIp = "192.0.2.55";
+    for (let i = 0; i < 19; i++) await recordLoginFailure(rwDb.db, badIp, `guess-${i}@admin-auth-test.example`);
+    expect(await loginRetryAfter(rwDb.db, badIp, "fresh@admin-auth-test.example")).toBeNull();
+    await recordLoginFailure(rwDb.db, badIp, "guess-19@admin-auth-test.example");
+    expect(await loginRetryAfter(rwDb.db, badIp, "fresh@admin-auth-test.example")).not.toBeNull();
   });
 });

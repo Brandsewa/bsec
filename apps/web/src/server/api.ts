@@ -9,10 +9,12 @@ import { hasPermission, type StorePermission } from "@bs/auth";
 import {
   adjustInventory,
   buildTenantContext,
-  checkAdminLoginLimit,
   getAdminMe,
   acceptInvitation,
   checkRateLimit,
+  clearLoginFailures,
+  loginRetryAfter,
+  recordLoginFailure,
   clearRazorpayCredentials,
   getPaymentsStatus,
   listInvitations,
@@ -998,14 +1000,19 @@ api.all("/auth/*", async (c) => {
     } catch {
       /* malformed body: let Better Auth reject it */
     }
-    try {
-      await checkAdminLoginLimit(server().rt._db.db, { ip: clientIp(req.headers), email: email || "unknown" });
-    } catch (err) {
-      if (err instanceof RateLimitExceededError) {
-        return c.json({ error: err.message }, 429, { "retry-after": String(err.retryAfter) });
-      }
-      throw err;
+    const db = server().rt._db.db;
+    const ip = clientIp(req.headers);
+    const who = email || "unknown";
+    const wait = await loginRetryAfter(db, ip, who);
+    if (wait !== null) {
+      return c.json({ error: `Too many failed sign-in attempts. Try again in ${Math.ceil(wait / 60)} minutes.` }, 429, {
+        "retry-after": String(wait),
+      });
     }
+    const res = await cfg.auth.handler(req);
+    if (res.status >= 400) await recordLoginFailure(db, ip, who);
+    else await clearLoginFailures(db, who);
+    return res;
   }
   return cfg.auth.handler(req);
 });

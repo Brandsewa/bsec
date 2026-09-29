@@ -1,4 +1,5 @@
-import { and, desc, eq, ilike, isNull, sql } from "drizzle-orm";
+import { and, desc, ilike, isNull, sql, inArray } from "drizzle-orm";
+import { STOREFRONT_PRODUCT_STATUSES } from "./product-status.ts";
 import { schema, withTenant } from "@bs/db";
 import type { Runtime } from "../runtime.ts";
 import type { TenantContext } from "../context.ts";
@@ -58,7 +59,7 @@ export async function searchStorefrontProducts(
 
     const baseWhere = and(
       searchFilter,
-      eq(schema.products.status, "published"),
+      inArray(schema.products.status, [...STOREFRONT_PRODUCT_STATUSES]),
       isNull(schema.products.deletedAt),
     );
 
@@ -149,7 +150,7 @@ export async function getSearchSuggestions(
       .where(
         and(
           ilike(schema.products.title, `%${escaped}%`),
-          eq(schema.products.status, "published"),
+          inArray(schema.products.status, [...STOREFRONT_PRODUCT_STATUSES]),
           isNull(schema.products.deletedAt),
         ),
       )

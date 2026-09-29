@@ -1,4 +1,4 @@
-import { and, desc, eq, sql } from "drizzle-orm";
+import { and, desc, eq, inArray, sql } from "drizzle-orm";
 import { schema, withTenant } from "@bs/db";
 import type { Runtime } from "../runtime.ts";
 import { assertPermission, type TenantContext } from "../context.ts";
@@ -47,10 +47,12 @@ export async function listAdminOrders(
     if (input.view === "unfulfilled") {
       conditions.push(eq(schema.orders.fulfillmentStatus, "unfulfilled"));
     } else if (input.view === "unpaid") {
-      conditions.push(eq(schema.orders.paymentStatus, "pending"));
+      // Online payments awaiting capture, and COD orders whose cash has not been collected yet.
+      conditions.push(inArray(schema.orders.paymentStatus, ["pending", "cod_pending"]));
     } else if (input.view === "cod_to_confirm") {
-      conditions.push(eq(schema.orders.paymentStatus, "pending"));
-      conditions.push(sql`${schema.orders.codFee} > 0`);
+      // COD orders the customer has not confirmed yet (confirmed via the emailed/SMS link).
+      conditions.push(eq(schema.orders.status, "pending"));
+      conditions.push(eq(schema.orders.paymentStatus, "cod_pending"));
     } else if (input.view === "rto") {
       conditions.push(eq(schema.orders.fulfillmentStatus, "rto"));
     }

@@ -47,6 +47,8 @@ export * from "./admin/store-config.ts";
 export * from "./admin/team.ts";
 export * from "./admin/payments-settings.ts";
 export * from "./admin/create-owner.ts";
+export * from "./admin/tenant-purge.ts";
+export * from "./admin/demo-store.ts";
 export * from "./system/email.ts";
 export * from "./system/abandoned-carts.ts";
 export type {
@@ -72,6 +74,7 @@ export {
 } from "@bs/shipping";
 export * from "./jobs.ts";
 export * from "./system/rate-limit.ts";
+export * from "./system/login-limit.ts";
 export * from "./system/monitoring.ts";
 export { warnIfEncryptionKeyMissing, isEncryptionKeyConfigured } from "@bs/payments";
 

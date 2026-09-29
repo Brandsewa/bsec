@@ -56,6 +56,26 @@ describe("Storefront Status Middleware (PLAN §8.2, §8.3 & M3 Status Pipeline)"
     expect(bodyText).toContain("Scheduled system upgrade in progress.");
   });
 
+  it("does not apply the storefront gate to admin API, staff sign-in, webhooks or CORS preflights", async () => {
+    // Even if the host would be blocked as a storefront (maintenance / unknown), these must pass through.
+    mockEvaluateStorefrontAccess.mockResolvedValue({ allowed: false, httpStatus: 404, reason: "not_found" });
+    const cases: Array<[string, string]> = [
+      ["POST", "https://platform-root.test/api/rpc/admin/orders/list"],
+      ["POST", "https://platform-root.test/api/auth/sign-in/email"],
+      ["POST", "https://platform-root.test/api/webhooks/razorpay"],
+      ["GET", "https://platform-root.test/api/admin/orders"],
+      ["OPTIONS", "https://platform-root.test/api/rpc/admin/me/get"],
+    ];
+    for (const [method, url] of cases) {
+      const res = await middleware(new NextRequest(url, { method, headers: { host: "platform-root.test" } }));
+      expect(res.status, `${method} ${url}`).toBe(200);
+    }
+    // ...while an ordinary storefront request on the same unknown host is still blocked.
+    const blocked = await middleware(new NextRequest("https://platform-root.test/products", { headers: { host: "platform-root.test" } }));
+    expect(blocked.status).toBe(404);
+    mockEvaluateStorefrontAccess.mockReset();
+  });
+
   it("returns HTTP 503 during tenant provisioning", async () => {
     mockEvaluateStorefrontAccess.mockResolvedValueOnce({
       allowed: false,

@@ -1,0 +1,140 @@
+import { expect, test, type Page } from "@playwright/test";
+
+const ADMIN = process.env.ADMIN_URL ?? "http://127.0.0.1:8080";
+const API = process.env.API_URL ?? "http://127.0.0.1:3000";
+const EMAIL = process.env.E2E_EMAIL ?? "";
+const PASSWORD = process.env.E2E_PASSWORD ?? "";
+
+test.beforeAll(() => {
+  if (!EMAIL || !PASSWORD) throw new Error("Set E2E_EMAIL and E2E_PASSWORD (the seeded owner login)");
+});
+
+async function signIn(page: Page, email = EMAIL, password = PASSWORD) {
+  await page.goto("/");
+  await expect(page).toHaveURL(/\/login/);
+  await page.getByLabel("Email").fill(email);
+  await page.getByLabel("Password").fill(password);
+  await page.getByRole("button", { name: "Sign in" }).click();
+}
+
+async function openDemoStore(page: Page) {
+  await expect(page.getByLabel("Switch store")).toBeVisible();
+  await page.getByLabel("Switch store").selectOption({ label: "Demo Store" });
+  await expect(page.getByText("Demo Store").first()).toBeVisible();
+}
+
+test("the API refuses anonymous admin calls with 401, and allows CORS only for the admin origin", async ({ request }) => {
+  const anon = await request.post(`${API}/api/rpc/admin/me/get`, { data: {}, headers: { origin: ADMIN } });
+  expect(anon.status()).toBe(401);
+  expect(anon.headers()["access-control-allow-origin"]).toBe(ADMIN);
+
+  const orders = await request.post(`${API}/api/rpc/admin/orders/list`, { data: {}, headers: { origin: ADMIN } });
+  expect(orders.status()).toBe(401);
+
+  const evil = await request.post(`${API}/api/rpc/admin/me/get`, { data: {}, headers: { origin: "https://evil.example" } });
+  expect(evil.headers()["access-control-allow-origin"]).toBeUndefined();
+});
+
+test("public sign-up is closed", async ({ request }) => {
+  const res = await request.post(`${API}/api/auth/sign-up/email`, {
+    data: { email: "intruder@e2e.example", password: "an-intruder-password", name: "Intruder" },
+    headers: { origin: ADMIN },
+  });
+  expect(res.status()).toBeGreaterThanOrEqual(400);
+});
+
+test("sign in: a wrong password is refused, the right one opens the store", async ({ page }) => {
+  await signIn(page, EMAIL, "definitely-not-the-password");
+  await expect(page.getByText("Incorrect email or password.")).toBeVisible();
+  await expect(page).toHaveURL(/\/login/);
+
+  await page.getByLabel("Password").fill(PASSWORD);
+  await page.getByRole("button", { name: "Sign in" }).click();
+  await expect(page.getByRole("link", { name: "Orders" })).toBeVisible();
+  await expect(page.getByText(EMAIL)).toBeVisible();
+});
+
+test("the demo store shows real products, orders, customers and discounts", async ({ page }) => {
+  await signIn(page);
+  await openDemoStore(page);
+
+  await page.getByRole("link", { name: "Products" }).click();
+  await expect(page.getByText("Cotton Kurta")).toBeVisible();
+  await expect(page.getByText("Out of stock").first()).toBeVisible();
+
+  await page.getByRole("link", { name: "Orders" }).click();
+  await expect(page.getByText("ORD-00019")).toBeVisible();
+  // the first four demo orders are COD orders the customer has not confirmed yet
+  await page.getByRole("button", { name: "COD to confirm" }).click();
+  await expect(page.getByText("ORD-00001")).toBeVisible();
+  await expect(page.getByText("ORD-00019")).toBeHidden();
+
+  await page.getByRole("link", { name: "Customers" }).click();
+  await expect(page.getByText("aarav.sharma@demo.example")).toBeVisible();
+
+  await page.getByRole("link", { name: "Discounts" }).click();
+  await expect(page.getByText("DEMOWELCOME10")).toBeVisible();
+
+  await page.getByRole("link", { name: "Inventory" }).click();
+  await expect(page.getByText("DEMO-COTTON-1")).toBeVisible();
+});
+
+test("tax settings persist across a reload", async ({ page }) => {
+  await signIn(page);
+  await openDemoStore(page);
+  await page.getByRole("link", { name: "Taxes" }).click();
+  await page.getByLabel("Your state (place of supply)").selectOption("Maharashtra");
+  await page.getByRole("button", { name: "Save changes" }).click();
+  await expect(page.getByText("Tax settings saved")).toBeVisible();
+  await page.reload();
+  await expect(page.getByLabel("Your state (place of supply)")).toHaveValue("Maharashtra");
+  // put it back so re-runs start from the same state
+  await page.getByLabel("Your state (place of supply)").selectOption("Karnataka");
+  await page.getByRole("button", { name: "Save changes" }).click();
+  await expect(page.getByText("Tax settings saved")).toBeVisible();
+});
+
+test("team invite: create link, accept as a new person, they sign in and see the store", async ({ page, browser }) => {
+  const inviteeEmail = `staff-${Date.now()}@e2e.example`;
+  await signIn(page);
+  await openDemoStore(page);
+  await page.getByRole("link", { name: "Team" }).click();
+  await page.getByLabel("Email", { exact: true }).fill(inviteeEmail);
+  await page.getByRole("button", { name: "Create invite" }).click();
+  const link = await page.getByLabel("Invite link").inputValue();
+  expect(link).toContain("/accept-invite?store=");
+
+  const guest = await browser.newContext();
+  const guestPage = await guest.newPage();
+  await guestPage.goto(link);
+  await guestPage.getByLabel("Your name").fill("E2E Staff");
+  await guestPage.getByLabel("Choose a password").fill("e2e-staff-password-1");
+  await guestPage.getByLabel("Repeat password").fill("e2e-staff-password-1");
+  await guestPage.getByRole("button", { name: "Create account and join" }).click();
+  await expect(guestPage).toHaveURL(/\/login/);
+  await guestPage.getByLabel("Email").fill(inviteeEmail);
+  await guestPage.getByLabel("Password").fill("e2e-staff-password-1");
+  await guestPage.getByRole("button", { name: "Sign in" }).click();
+  await expect(guestPage.getByText("Demo Store").first()).toBeVisible();
+
+  // the link only works once
+  const again = await guest.newPage();
+  await again.goto(link);
+  await again.getByLabel("Your name").fill("Someone Else");
+  await again.getByLabel("Choose a password").fill("another-password-123");
+  await again.getByLabel("Repeat password").fill("another-password-123");
+  await again.getByRole("button", { name: "Create account and join" }).click();
+  await expect(again.getByRole("alert")).toContainText(/invalid or has expired/i);
+  await guest.close();
+});
+
+test("signing out ends the session", async ({ page, request }) => {
+  await signIn(page);
+  await expect(page.getByRole("link", { name: "Orders" })).toBeVisible();
+  await page.getByRole("button", { name: "Sign out" }).click();
+  await expect(page).toHaveURL(/\/login/);
+  await page.goto("/orders");
+  await expect(page).toHaveURL(/\/login/);
+  const anon = await request.post(`${API}/api/rpc/admin/orders/list`, { data: {}, headers: { origin: ADMIN } });
+  expect(anon.status()).toBe(401);
+});
