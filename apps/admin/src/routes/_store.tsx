@@ -15,6 +15,7 @@ import {
   Users,
   UserCog,
   LifeBuoy,
+  Store,
   Warehouse,
 } from "lucide-react";
 import { AppShell, Button, EmptyState, PageContainer, PageSkeleton, type NavGroup } from "@bs/ui";
@@ -58,6 +59,7 @@ const nav: GatedGroup[] = [
     label: "Settings",
     items: [
       { label: "General", href: "/settings", icon: Settings, perm: "settings.write" },
+      { label: "Storefront", href: "/settings/storefront", icon: Store, perm: "settings.write" },
       { label: "Branding", href: "/settings/branding", icon: Sparkles, perm: "settings.write" },
       { label: "Shipping", href: "/settings/shipping", icon: Truck, perm: "settings.write" },
       { label: "Payments", href: "/settings/payments", icon: CreditCard, perm: "settings.write" },

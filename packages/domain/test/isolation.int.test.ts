@@ -55,6 +55,8 @@ import {
   getPaymentsStatus,
   getAdminOrderDetail,
   getBrandSettings,
+  getStoreStatus,
+  updateStoreStatus,
   getCollection,
   getMenu,
   getPage,
@@ -996,6 +998,12 @@ describe("Generated Isolation Test Suite (M1 Real Postgres 18 Proof)", () => {
         });
         return await removeCustomDomain(rt, ctx.tenantId, d.id);
       }
+
+      // --- Storefront mode ---
+      case "storefront.getStatus":
+        return await getStoreStatus(rt, ctx);
+      case "storefront.updateStatus":
+        return await updateStoreStatus(rt, ctx, { headline: "Isolation check" });
 
       // --- M8 Onboarding ---
       case "onboarding.get":

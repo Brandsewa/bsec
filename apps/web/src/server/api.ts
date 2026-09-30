@@ -10,6 +10,8 @@ import {
   adjustInventory,
   buildTenantContext,
   getAdminMe,
+  getStoreStatus,
+  updateStoreStatus,
   getSupportAdminMe,
   listStoreSupportSessions,
   approveStoreSupportSession,
@@ -930,6 +932,33 @@ export const storeRouter = os.router({
         .handler(({ context, input }) => {
           if (!context.tenantCtx) throw new Error("Missing tenant context");
           return updateAdminShippingSettings(context.rt._db.db, context.tenantCtx.tenantId, input);
+        }),
+    },
+    storefront: {
+      getStatus: os.admin.storefront.getStatus
+        .use(requireAdmin)
+        .use(requirePermission("settings.write"))
+        .handler(({ context }) => {
+          if (!context.tenantCtx) throw new Error("Missing tenant context");
+          return getStoreStatus(context.rt, context.tenantCtx).catch((e) => {
+            throw mapAuthError(e);
+          });
+        }),
+      updateStatus: os.admin.storefront.updateStatus
+        .use(requireAdmin)
+        .use(requirePermission("settings.write"))
+        .handler(async ({ context, input }) => {
+          if (!context.tenantCtx) throw new Error("Missing tenant context");
+          const { launchAt, ...rest } = input;
+          try {
+            await updateStoreStatus(context.rt, context.tenantCtx, {
+              ...rest,
+              ...(launchAt !== undefined ? { launchAt: launchAt ? new Date(launchAt) : null } : {}),
+            });
+          } catch (e) {
+            throw mapAuthError(e);
+          }
+          return getStoreStatus(context.rt, context.tenantCtx);
         }),
     },
     onboarding: {

@@ -219,6 +219,17 @@ export const PresignedUploadResponse = z.object({
 export type PresignedUploadResponse = z.infer<typeof PresignedUploadResponse>;
 
 // --- M2 Branding Schemas ---
+export const StorefrontStatus = z.object({
+  mode: z.enum(["live", "coming_soon", "maintenance", "password"]),
+  headline: z.string().nullable(),
+  showCountdown: z.boolean(),
+  collectEmails: z.boolean(),
+  launchAt: z.string().nullable(),
+  hasPassword: z.boolean(),
+});
+
+export type StorefrontStatus = z.infer<typeof StorefrontStatus>;
+
 export const BrandSettings = z.object({
   id: z.string().uuid(),
   logoLightMediaId: z.string().uuid().nullable().optional(),
@@ -1303,6 +1314,26 @@ export const adminContract = {
           message: z.string(),
         }),
       ),
+  },
+
+  // --- Storefront mode: live / coming soon / maintenance / password ---
+  storefront: {
+    getStatus: oc
+      .route({ method: "GET", path: "/admin/storefront/status" })
+      .output(StorefrontStatus),
+    updateStatus: oc
+      .route({ method: "PATCH", path: "/admin/storefront/status" })
+      .input(
+        z.object({
+          mode: z.enum(["live", "coming_soon", "maintenance", "password"]).optional(),
+          headline: z.string().trim().max(120).nullable().optional(),
+          collectEmails: z.boolean().optional(),
+          showCountdown: z.boolean().optional(),
+          launchAt: z.string().datetime().nullable().optional(),
+          password: z.string().min(6).max(128).nullable().optional(),
+        }),
+      )
+      .output(StorefrontStatus),
   },
 
   // --- M8 Onboarding Setup Checklist (PLAN §5.2, §8) ---
