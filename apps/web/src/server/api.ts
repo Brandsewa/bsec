@@ -174,6 +174,10 @@ function mapAuthError(err: unknown): unknown {
 
 const requireAdmin = os.middleware(async ({ context, next }) => {
   const headers = context.headers ?? new Headers();
+  // Anonymous callers are refused before anything about the store is looked at (a missing store header must not turn a 401 into a 400).
+  if ((!context.session || context.session.type === "customer") && !headers.get("x-support-token")) {
+    throw new ORPCError("UNAUTHORIZED", { message: "Sign in required" });
+  }
   let tenantCtx: TenantContext | null;
   try {
     tenantCtx = await buildTenantContext(context.rt, {
