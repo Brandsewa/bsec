@@ -60,6 +60,7 @@ export default async function HomePage() {
   let storeName = "Store";
   const logoUrl: string | null = null;
   let isMarketing = false;
+  let tenantIdForBlocks: string | undefined;
 
   try {
     const h = await headers();
@@ -70,6 +71,7 @@ export default async function HomePage() {
     if (!access.tenantId) {
       isMarketing = true;
     } else {
+      tenantIdForBlocks = access.tenantId;
       const tenantCtx = {
         tenantId: access.tenantId,
         storeStatus: access.mode ?? "live",
@@ -153,7 +155,7 @@ export default async function HomePage() {
         type="application/ld+json"
         dangerouslySetInnerHTML={{ __html: JSON.stringify(orgJsonLd) }}
       />
-      <BlockRenderer blocks={blocksToRender} />
+      <BlockRenderer blocks={blocksToRender} tenantId={tenantIdForBlocks} />
     </main>
   );
 }

@@ -543,6 +543,35 @@ export async function getStorefrontCategory(
 }
 
 /**
+ * Products for the storefront home page grid: the newest visible products (featured ones first), or the products of one
+ * published collection. Returns an empty list when the catalog feature is off or nothing is published yet.
+ */
+export async function getStorefrontFeaturedProducts(
+  rt: Runtime,
+  ctx: TenantContext,
+  opts?: { limit?: number | undefined; collectionSlug?: string | undefined },
+): Promise<StorefrontProductSummary[]> {
+  const db = rt._db.db;
+  if (!(await isFeatureEnabled(db, ctx.tenantId, "catalog"))) return [];
+  const limit = Math.max(1, Math.min(48, opts?.limit ?? 8));
+
+  if (opts?.collectionSlug) {
+    const res = await getStorefrontCollection(rt, ctx, opts.collectionSlug, { limit });
+    return res?.products.items ?? [];
+  }
+
+  return withTenant(db, ctx.tenantId, async (tx) => {
+    const rows = await tx
+      .select()
+      .from(schema.products)
+      .where(and(inArray(schema.products.status, [...STOREFRONT_PRODUCT_STATUSES]), isNull(schema.products.deletedAt)))
+      .orderBy(desc(schema.products.isFeatured), desc(schema.products.createdAt))
+      .limit(limit);
+    return buildProductSummaries(tx, rows.map((r) => r.id), rows);
+  });
+}
+
+/**
  * Helper to build product summaries from product records with price bounds and primary image.
  */
 export async function buildProductSummaries(

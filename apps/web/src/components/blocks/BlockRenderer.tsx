@@ -2,12 +2,15 @@ import React from "react";
 import type { BlockInstance } from "@bs/blocks";
 import { getBlockDefinition } from "@bs/blocks";
 import { generateFaqJsonLd } from "@bs/domain";
+import { ProductGridSection, type ProductGridSectionProps } from "./ProductGridSection.tsx";
 
 export interface BlockRendererProps {
   blocks: BlockInstance[];
+  /** Needed by blocks that show store data (ProductGrid). Without it they render the block package's static version. */
+  tenantId?: string | undefined;
 }
 
-export function BlockRenderer({ blocks }: BlockRendererProps) {
+export function BlockRenderer({ blocks, tenantId }: BlockRendererProps) {
   if (!blocks || blocks.length === 0) {
     return null;
   }
@@ -48,7 +51,12 @@ export function BlockRenderer({ blocks }: BlockRendererProps) {
         }
 
         // Render registered block
-        const rendered = (def.render as (data: { props: unknown }) => React.ReactNode)({ props: effectiveProps });
+        const rendered =
+          block.type === "ProductGrid" && tenantId ? (
+            <ProductGridSection tenantId={tenantId} props={effectiveProps as ProductGridSectionProps["props"]} />
+          ) : (
+            (def.render as (data: { props: unknown }) => React.ReactNode)({ props: effectiveProps })
+          );
 
         return (
           <React.Fragment key={block.id}>

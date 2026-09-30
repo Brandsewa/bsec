@@ -8,6 +8,9 @@ import {
   getStorefrontHomePage,
   getStorefrontPage,
   getBrandSettings,
+  getStoreSettings,
+  getStorefrontFeaturedProducts,
+  type StorefrontProductSummary,
   type CatalogListingOptions,
   type StorefrontProductDetail,
   type StorefrontCollectionDetail,
@@ -132,4 +135,26 @@ export async function getCachedBrandSettings(tenantId: string) {
   cacheTag(tenantTag(tenantId, "nav"));
 
   return settings;
+}
+
+/** The store's public name (header, footer, page title). Invalidated with the rest of the store shell. */
+export async function getCachedStoreName(tenantId: string): Promise<string> {
+  "use cache";
+  cacheTag(tenantTag(tenantId, "store-shell"));
+  const { rt } = server();
+  const settings = await getStoreSettings(rt, createStorefrontTenantContext(tenantId));
+  return settings.storeName;
+}
+
+/** Products for a ProductGrid block on the home page or a custom page. */
+export async function getCachedStorefrontFeaturedProducts(
+  tenantId: string,
+  limit: number,
+  collectionSlug?: string,
+): Promise<StorefrontProductSummary[]> {
+  "use cache";
+  cacheTag(tenantTag(tenantId, "product"));
+  cacheTag(tenantTag(tenantId, "collection"));
+  const { rt } = server();
+  return getStorefrontFeaturedProducts(rt, createStorefrontTenantContext(tenantId), { limit, collectionSlug });
 }

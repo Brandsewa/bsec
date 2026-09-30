@@ -58,6 +58,7 @@ export default async function CustomContentPage({ params }: CustomPageProps) {
 
   let pageData: Awaited<ReturnType<typeof getStorefrontPage>> = null;
   let host = "localhost";
+  let tenantIdForBlocks: string | undefined;
 
   try {
     const h = await headers();
@@ -66,6 +67,7 @@ export default async function CustomContentPage({ params }: CustomPageProps) {
     const access = await evaluateStorefrontAccess(rt, host, { headers: h });
 
     if (access.tenantId) {
+      tenantIdForBlocks = access.tenantId;
       pageData = await getCachedStorefrontPage(access.tenantId, slug);
 
       // Set tenant page cache tags for Next.js Cache Components (PLAN §11.6)
@@ -105,7 +107,7 @@ export default async function CustomContentPage({ params }: CustomPageProps) {
           {pageData.title}
         </h1>
       </header>
-      <BlockRenderer blocks={renderResult.blocks} />
+      <BlockRenderer blocks={renderResult.blocks} tenantId={tenantIdForBlocks} />
     </article>
   );
 }
