@@ -1,6 +1,6 @@
 # CI staging: the exact images `images` just pushed to GHCR (no build), run as an ephemeral stack
 # on the Actions runner and smoke-tested before deploy-production. Same topology as production.
-#   IMAGE_TAG=<sha> POSTGRES_PASSWORD=... APP_OWNER_PASSWORD=... APP_RW_PASSWORD=... \
+#   IMAGE_TAG=<sha> POSTGRES_PASSWORD=... APP_OWNER_PASSWORD=... APP_RW_PASSWORD=... APP_SAAS_PASSWORD=... \
 #     APP_PLATFORM_PASSWORD=... BETTER_AUTH_SECRET=... TENANT_SECRETS_KEY=... \
 #     docker compose -f docker-compose.staging.yml up -d
 # All passwords are required (generated per run in CI). Never used with real data.
@@ -35,6 +35,7 @@ services:
       APP_OWNER_PASSWORD: ${APP_OWNER_PASSWORD}
       APP_RW_PASSWORD: ${APP_RW_PASSWORD:?required}
       APP_PLATFORM_PASSWORD: ${APP_PLATFORM_PASSWORD:?required}
+      APP_SAAS_PASSWORD: ${APP_SAAS_PASSWORD:?required}
     restart: "no"
 
   web:
@@ -44,6 +45,7 @@ services:
     environment:
       <<: *app-env
       DATABASE_URL_RW: postgres://app_rw:${APP_RW_PASSWORD}@postgres:5432/bsec
+      DATABASE_URL_SAAS: postgres://app_saas:${APP_SAAS_PASSWORD}@postgres:5432/bsec
       # Admin sign-in (Better Auth) and encrypted tenant credentials. Random per CI run.
       BETTER_AUTH_URL: http://127.0.0.1:3000
       BETTER_AUTH_SECRET: ${BETTER_AUTH_SECRET:?required}
@@ -70,6 +72,7 @@ services:
     environment:
       <<: *app-env
       DATABASE_URL_RW: postgres://app_rw:${APP_RW_PASSWORD}@postgres:5432/bsec
+      DATABASE_URL_SAAS: postgres://app_saas:${APP_SAAS_PASSWORD}@postgres:5432/bsec
       TENANT_SECRETS_KEY: ${TENANT_SECRETS_KEY:?required}
     ports:
       - "127.0.0.1:4100:4100"

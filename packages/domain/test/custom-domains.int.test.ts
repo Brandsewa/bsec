@@ -145,7 +145,7 @@ describe("M8 Custom Domains & Cloudflare for SaaS Integration (PLAN §8, ADR-007
     const result = await provisionTenant(rtPlatform, {
       storeName: "Domains Test Store",
       slug,
-      planCode: "starter", // Initial plan defaults to XS size tier
+      planCode: "starter",
       owner: {
         email: "merchant.domains@example.com",
         name: "Domain Merchant",
@@ -155,6 +155,12 @@ describe("M8 Custom Domains & Cloudflare for SaaS Integration (PLAN §8, ADR-007
 
     tenantId = result.tenantId;
     expect(tenantId).toBeDefined();
+
+    // A Starter store is provisioned on tier S (1 custom domain). Drop it to XS, the tier a lapsed trial gets.
+    await platformDb.db
+      .update(schema.tenantSizeTiers)
+      .set({ tier: "XS", updatedAt: new Date() })
+      .where(eq(schema.tenantSizeTiers.tenantId, tenantId));
 
     // Verify initial subdomain
     const domains = await listTenantDomains(rt, tenantId);

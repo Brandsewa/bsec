@@ -280,3 +280,32 @@ export async function checkLeadCaptureRateLimit(
   return { allowed: true };
 }
 
+/**
+ * Rate limits owner-invite acceptance (the endpoint accepts a password guess for existing accounts):
+ * max 10 attempts per 15 minutes per IP and per invite token.
+ */
+export async function checkInviteAcceptRateLimit(
+  db: Db,
+  ip: string,
+  token: string,
+): Promise<{ allowed: boolean; retryAfter?: number }> {
+  const windowMs = 15 * 60 * 1000;
+  const slot = Math.floor(Date.now() / windowMs);
+  const expiresAt = new Date((slot + 1) * windowMs);
+  const keys = [
+    `rate:invite_accept:ip:${ip.replace(/[^a-zA-Z0-9.:]/g, "")}:${slot}`,
+    `rate:invite_accept:token:${createHash("sha256").update(token).digest("hex").slice(0, 32)}:${slot}`,
+  ];
+  for (const key of keys) {
+    const res = await db.execute<{ count: number }>(sql`
+      INSERT INTO rate_limit_counters (key, count, expires_at, created_at, updated_at)
+      VALUES (${key}, 1, ${expiresAt.toISOString()}, now(), now())
+      ON CONFLICT (key) DO UPDATE SET count = rate_limit_counters.count + 1, updated_at = now()
+      RETURNING count;
+    `);
+    if (Number(res.rows[0]?.count ?? 1) > 10) {
+      return { allowed: false, retryAfter: Math.max(1, Math.ceil((expiresAt.getTime() - Date.now()) / 1000)) };
+    }
+  }
+  return { allowed: true };
+}

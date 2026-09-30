@@ -1,8 +1,8 @@
 import { randomBytes, createHash } from "node:crypto";
 import { eq, and, sql, desc } from "drizzle-orm";
 import { schema } from "@bs/db";
-import { hashPassword, STORE_PERMISSIONS } from "@bs/auth";
-import type { Runtime } from "../runtime.ts";
+import { hashPassword, STORE_PERMISSIONS, verifyPassword } from "@bs/auth";
+import { saasDb, type Runtime } from "../runtime.ts";
 import { provisionTenant, type ProvisionTenantResult } from "./provisioning.ts";
 
 export interface CreateOwnerInviteInput {
@@ -67,7 +67,7 @@ export async function createTenantOwnerInvite(
   rt: Runtime,
   input: CreateOwnerInviteInput,
 ): Promise<CreateOwnerInviteResult> {
-  const db = rt._db.db;
+  const db = saasDb(rt);
   const email = input.email.trim().toLowerCase();
   const rawToken = randomBytes(32).toString("hex");
   const tokenHash = createHash("sha256").update(rawToken).digest("hex");
@@ -129,7 +129,7 @@ export async function acceptTenantOwnerInvite(
   rt: Runtime,
   input: AcceptOwnerInviteInput,
 ): Promise<AcceptOwnerInviteResult> {
-  const db = rt._db.db;
+  const db = saasDb(rt);
   const rawToken = input.token.trim();
   if (!rawToken || rawToken.length < 16) {
     throw new Error("Invalid or missing invitation token");
@@ -182,12 +182,36 @@ export async function acceptTenantOwnerInvite(
       .limit(1);
 
     if (existingUser) {
+      // The person already has an account: they prove it is theirs with their CURRENT password.
+      // Whoever merely holds the invite link (including platform staff who created it) can neither
+      // reset that password nor mark the email verified.
       userId = existingUser.id;
-      if (input.name?.trim()) {
-        await tx
-          .update(schema.users)
-          .set({ name: input.name.trim(), emailVerified: true, updatedAt: new Date() })
-          .where(eq(schema.users.id, userId));
+      const cred = await tx.execute<{ password: string | null }>(sql`
+        SELECT password FROM accounts WHERE user_id = ${userId} AND provider_id = 'credential' LIMIT 1;
+      `);
+      const storedHash = cred.rows[0]?.password;
+      if (storedHash) {
+        const ok = await verifyPassword({ hash: storedHash, password: input.password });
+        if (!ok) throw new Error("Incorrect password for the existing account with this email");
+      } else {
+        // No password yet. That is legitimate only for the pending owner the platform created for this invite
+        // (unverified email, no sign-in method at all). An account that already exists in its own right
+        // (verified email, or another sign-in method) cannot be claimed with the link alone.
+        const info = await tx.execute<{ email_verified: boolean; accounts: string }>(sql`
+          SELECT u.email_verified, (SELECT count(*)::text FROM accounts a WHERE a.user_id = u.id) AS accounts
+          FROM users u WHERE u.id = ${userId};
+        `);
+        const pending = info.rows[0]?.email_verified === false && info.rows[0]?.accounts === "0";
+        if (!pending) {
+          throw new Error("An account with this email already exists. Sign in with your existing method to access the store.");
+        }
+        await tx.insert(schema.accounts).values({
+          id: crypto.randomUUID(),
+          userId,
+          accountId: userId,
+          providerId: "credential",
+          password: await hashPassword(input.password),
+        });
       }
     } else {
       const [newUser] = await tx
@@ -202,26 +226,12 @@ export async function acceptTenantOwnerInvite(
         throw new Error("Failed to create user record");
       }
       userId = newUser.id;
-    }
-
-    // 4. Set password in accounts
-    const passwordHash = await hashPassword(input.password);
-    const existingAccount = await tx.execute<{ id: string }>(sql`
-      SELECT id FROM accounts WHERE user_id = ${userId} AND provider_id = 'credential' LIMIT 1;
-    `);
-
-    if (existingAccount.rows[0]) {
-      await tx.execute(sql`
-        UPDATE accounts SET password = ${passwordHash}, updated_at = now()
-        WHERE id = ${existingAccount.rows[0].id};
-      `);
-    } else {
       await tx.insert(schema.accounts).values({
         id: crypto.randomUUID(),
         userId,
         accountId: userId,
         providerId: "credential",
-        password: passwordHash,
+        password: await hashPassword(input.password),
       });
     }
 
@@ -360,22 +370,21 @@ export async function resendTenantOwnerInvite(
   rt: Runtime,
   input: ResendOwnerInviteInput,
 ): Promise<CreateOwnerInviteResult> {
-  const db = rt._db.db;
+  const db = saasDb(rt);
 
-  // 1. Resolve email
-  let email = input.email?.trim().toLowerCase();
-  if (!email) {
-    const [prevInvite] = await db
-      .select({ email: schema.tenantOwnerInvites.email })
-      .from(schema.tenantOwnerInvites)
-      .where(eq(schema.tenantOwnerInvites.tenantId, input.tenantId))
-      .orderBy(desc(schema.tenantOwnerInvites.createdAt))
-      .limit(1);
-
-    if (!prevInvite?.email) {
-      throw new Error("Unable to determine invite recipient email for this store");
-    }
-    email = prevInvite.email;
+  // 1. The recipient must be the one this store was originally invited (a resend cannot redirect the store to a new mailbox)
+  const [prevInvite] = await db
+    .select({ email: schema.tenantOwnerInvites.email })
+    .from(schema.tenantOwnerInvites)
+    .where(eq(schema.tenantOwnerInvites.tenantId, input.tenantId))
+    .orderBy(desc(schema.tenantOwnerInvites.createdAt))
+    .limit(1);
+  if (!prevInvite?.email) {
+    throw new Error("Unable to determine invite recipient email for this store");
+  }
+  const email = prevInvite.email.toLowerCase();
+  if (input.email && input.email.trim().toLowerCase() !== email) {
+    throw new Error("Email does not match the store's original invite recipient");
   }
 
   // 2. Revoke previous unused invites for this tenant

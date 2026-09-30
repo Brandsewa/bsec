@@ -14,7 +14,7 @@ import {
   getPlatformTenantDetail,
   listPlatformTenants,
   platformCreateTenantForClient,
-  createTenantOwnerInvite,
+  resendTenantOwnerInvite,
   getPlatformOverviewMetrics,
   suspendPlatformTenant,
   restorePlatformTenant,
@@ -140,10 +140,10 @@ export const platformRouter = os.router({
     }),
     resendOwnerInvite: os.tenants.resendOwnerInvite.use(requirePlatformStaff).handler(async ({ context, input }) => {
       const staffUserId = context.session?.user?.id;
-      const res = await createTenantOwnerInvite(context.rt, {
+      const res = await resendTenantOwnerInvite(context.rt, {
         tenantId: input.id,
         email: input.email,
-        invitedBy: staffUserId,
+        staffUserId,
       });
       return {
         inviteId: res.inviteId,

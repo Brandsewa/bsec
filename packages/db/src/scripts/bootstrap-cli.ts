@@ -15,5 +15,6 @@ await bootstrapRoles(need("DATABASE_URL_SUPERUSER"), {
   owner: need("APP_OWNER_PASSWORD"),
   rw: need("APP_RW_PASSWORD"),
   platform: need("APP_PLATFORM_PASSWORD"),
+  saas: process.env.APP_SAAS_PASSWORD || undefined,
 });
 console.log("roles ok");

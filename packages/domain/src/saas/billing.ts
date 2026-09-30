@@ -1,7 +1,8 @@
 import { createHmac, randomBytes, createHash, timingSafeEqual } from "node:crypto";
 import { and, desc, eq, sql } from "drizzle-orm";
 import { schema } from "@bs/db";
-import type { Runtime } from "../runtime.ts";
+import { saasDb, type Runtime } from "../runtime.ts";
+import { tierForPlan } from "./plan-tiers.ts";
 
 export interface SubscriptionBillingProvider {
   isConfigured?(): boolean;
@@ -152,7 +153,7 @@ export async function handlePlatformBillingWebhook(
     eventId?: string;
   },
 ): Promise<PlatformBillingWebhookResult> {
-  const db = rt._db.db;
+  const db = saasDb(rt);
   const billingProvider = params.provider ?? new RazorpaySubscriptionProvider();
 
   // 1. Signature Verification (Fails closed per ADR-014)
@@ -213,36 +214,20 @@ export async function handlePlatformBillingWebhook(
     eventId = createHash("sha256").update(params.rawBody).digest("hex");
   }
 
-  // 2. Idempotency Check in webhook_inbox
-  const [existingInbox] = await db
-    .select()
-    .from(schema.webhookInbox)
-    .where(
-      and(
-        eq(schema.webhookInbox.provider, "razorpay_platform"),
-        eq(schema.webhookInbox.eventId, eventId),
-      ),
-    )
-    .limit(1);
-
-  if (existingInbox && existingInbox.status === "processed") {
+  // 2. Claim the event first, atomically. Concurrent deliveries of the same event race on the unique
+  //    (provider, event_id) key: exactly one wins the row and processes it; the others see a duplicate.
+  //    A previously failed event, or one stuck in 'processing' for over 5 minutes (crashed handler), can be re-claimed.
+  const claim = await db.execute<{ id: string }>(sql`
+    INSERT INTO webhook_inbox (provider, event_id, signature_valid, payload_sanitized, status, attempts)
+    VALUES ('razorpay_platform', ${eventId}, true, ${JSON.stringify(payload)}::jsonb, 'processing', 1)
+    ON CONFLICT (provider, event_id) DO UPDATE
+      SET status = 'processing', attempts = webhook_inbox.attempts + 1, updated_at = now(), error = NULL
+      WHERE webhook_inbox.status = 'failed'
+         OR (webhook_inbox.status = 'processing' AND webhook_inbox.updated_at < now() - interval '5 minutes')
+    RETURNING id;
+  `);
+  if (claim.rows.length === 0) {
     return { received: true, eventId, duplicate: true, actionTaken: "already_processed" };
-  }
-
-  // Record into webhook_inbox
-  if (!existingInbox) {
-    await db.insert(schema.webhookInbox).values({
-      provider: "razorpay_platform",
-      eventId,
-      signatureValid: true,
-      payloadSanitized: payload,
-      status: "processing",
-    });
-  } else {
-    await db
-      .update(schema.webhookInbox)
-      .set({ attempts: existingInbox.attempts + 1, status: "processing" })
-      .where(eq(schema.webhookInbox.id, existingInbox.id));
   }
 
   try {
@@ -341,12 +326,7 @@ export async function handlePlatformBillingWebhook(
                 SELECT code FROM plans WHERE id = ${effectivePlanId} LIMIT 1;
               `);
               const planCode = planRow.rows[0]?.code;
-              const tierMap: Record<string, "XS" | "S" | "M" | "L"> = {
-                starter: "S",
-                growth: "M",
-                pro: "L",
-              };
-              const tier = planCode ? tierMap[planCode] ?? "S" : "S";
+              const tier = tierForPlan(planCode);
 
               await tx
                 .insert(schema.tenantSizeTiers)
@@ -490,7 +470,7 @@ export async function changeTenantPlan(
     provider?: SubscriptionBillingProvider;
   },
 ) {
-  const db = rt._db.db;
+  const db = saasDb(rt);
   const billingProvider = params.provider ?? new RazorpaySubscriptionProvider();
 
   if (typeof billingProvider.isConfigured === "function" && !billingProvider.isConfigured()) {
@@ -576,7 +556,7 @@ export async function cancelTenantSubscription(
   tenantId: string,
   provider?: SubscriptionBillingProvider,
 ) {
-  const db = rt._db.db;
+  const db = saasDb(rt);
   const billingProvider = provider ?? new RazorpaySubscriptionProvider();
 
   if (typeof billingProvider.isConfigured === "function" && !billingProvider.isConfigured()) {

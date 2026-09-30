@@ -12,7 +12,7 @@ export default defineConfig({
       ? {
           globalSetup: ["./test-support/global-setup.ts"],
           setupFiles: ["./test-support/setup-file.ts"],
-          maxWorkers: 4,
+          maxWorkers: 3,
         }
       : {}),
   },

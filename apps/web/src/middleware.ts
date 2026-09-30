@@ -47,11 +47,7 @@ export async function middleware(request: NextRequest) {
     pathname.startsWith("/api/auth/") ||
     pathname.startsWith("/api/webhooks/") ||
     pathname.startsWith("/api/admin/") ||
-    pathname.startsWith("/api/rpc/admin/") ||
-    pathname.startsWith("/pricing") ||
-    pathname.startsWith("/faq") ||
-    pathname.startsWith("/terms") ||
-    pathname.startsWith("/privacy")
+    pathname.startsWith("/api/rpc/admin/")
   ) {
     return NextResponse.next();
   }

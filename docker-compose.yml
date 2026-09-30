@@ -37,6 +37,7 @@ services:
       APP_OWNER_PASSWORD: ${APP_OWNER_PASSWORD:-owner_dev}
       APP_RW_PASSWORD: ${APP_RW_PASSWORD:-rw_dev}
       APP_PLATFORM_PASSWORD: ${APP_PLATFORM_PASSWORD:-platform_dev}
+      APP_SAAS_PASSWORD: ${APP_SAAS_PASSWORD:-saas_dev}
     command: ["sh", "-c", "node dist/bootstrap.js && node dist/migrate.js"]
     restart: "no"
 
@@ -48,6 +49,7 @@ services:
     environment:
       <<: *app-env
       DATABASE_URL_RW: postgres://app_rw:${APP_RW_PASSWORD:-rw_dev}@postgres:5432/bsec
+      DATABASE_URL_SAAS: postgres://app_saas:${APP_SAAS_PASSWORD:-saas_dev}@postgres:5432/bsec
     ports:
       - "127.0.0.1:3000:3000"
 
@@ -70,6 +72,7 @@ services:
     environment:
       <<: *app-env
       DATABASE_URL_RW: postgres://app_rw:${APP_RW_PASSWORD:-rw_dev}@postgres:5432/bsec
+      DATABASE_URL_SAAS: postgres://app_saas:${APP_SAAS_PASSWORD:-saas_dev}@postgres:5432/bsec
     ports:
       - "127.0.0.1:4100:4100"
 
