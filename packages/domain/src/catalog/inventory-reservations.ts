@@ -373,6 +373,25 @@ async function expireTenantOldReservations(
       `);
     }
 
+    // Same safety net for payments: a cancelled order with an unpaid payment shows no payment due.
+    await tx.execute(sql`
+      UPDATE payment_intents pi
+         SET status = 'cancelled', updated_at = now()
+        FROM orders o
+       WHERE pi.tenant_id = ${tenantId}
+         AND o.tenant_id = pi.tenant_id
+         AND o.id = pi.order_id
+         AND o.status = 'cancelled'
+         AND pi.status IN ('created', 'requires_action', 'cod_pending');
+    `);
+    await tx.execute(sql`
+      UPDATE orders
+         SET payment_status = 'cancelled', updated_at = now()
+       WHERE tenant_id = ${tenantId}
+         AND status = 'cancelled'
+         AND payment_status IN ('pending', 'created', 'requires_action', 'cod_pending');
+    `);
+
     return { expiredCount: rows.length + orphanRowsRes.rows.length };
   });
 }

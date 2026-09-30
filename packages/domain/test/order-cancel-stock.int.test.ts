@@ -115,6 +115,12 @@ describe("cancelling an order gives its stock back", () => {
     expect(res.expiredCount).toBe(1);
     expect(await stock()).toMatchObject({ reserved: 0, available: 10 });
 
+    // the same sweep also clears the stale "COD pending" payment on that cancelled order
+    const healed = await rt._db.db.select().from(schema.orders).where(eq(schema.orders.id, placed.orderId));
+    expect(healed[0]?.paymentStatus).toBe("cancelled");
+    const intents = await rt._db.db.select().from(schema.paymentIntents).where(eq(schema.paymentIntents.orderId, placed.orderId));
+    expect(intents.map((i) => i.status)).toEqual(["cancelled"]);
+
     // idempotent
     expect((await expireOldReservations(rt._db.db, ctx.tenantId)).expiredCount).toBe(0);
     expect(await stock()).toMatchObject({ reserved: 0, available: 10 });
