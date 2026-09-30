@@ -128,6 +128,8 @@ const NON_RLS_TABLES_WRITABLE_BY_APP_RW: string[] = [
   "_platform_meta",
   "accounts",
   "domains",
+  "organizations", // self-signup provisioning runs in the web app as app_rw (move to the platform service later)
+  "tenants", // same: provisioning creates the tenant row
   "platform_audit_logs", // INSERT + SELECT only (append-only), asserted in the test above
   "rate_limit_counters",
   "sessions",

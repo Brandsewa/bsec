@@ -15,7 +15,9 @@ REVOKE INSERT, UPDATE, DELETE ON TABLE
   "tenant_owner_invites",
   "signup_leads",
   "slug_reservations",
-  "theme_templates"
+  "theme_templates",
+  "platform_staff",
+  "feature_flags"
 FROM "app_rw";
 --> statement-breakpoint
 
@@ -39,6 +41,8 @@ GRANT ALL ON TABLE
   "signup_leads",
   "slug_reservations",
   "theme_templates",
+  "platform_staff",
+  "feature_flags",
   "platform_audit_logs"
 TO "app_platform";
 --> statement-breakpoint
