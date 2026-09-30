@@ -204,11 +204,36 @@ describe("Storefront Cart & Checkout Flow", () => {
     });
   });
 
+  // The store's own shipping options (priced on the server), as the checkout page passes them in.
+  const storeRates = [
+    { method: "standard", title: "Standard Shipping", description: "Standard Shipping within 3-7 business days", estimatedDays: "3-7 business days", amount: 9900 },
+    { method: "express", title: "Express Shipping", description: "Express Shipping within 1-2 business days", estimatedDays: "1-2 business days", amount: 25000 },
+  ];
+
   describe("CheckoutForm", () => {
+    it("shows the store's own shipping options and prices, never made-up ones", () => {
+      const html = renderToString(React.createElement(CheckoutForm, { cart: mockCart, shippingRates: storeRates }));
+      expect(html).toContain("Standard Shipping");
+      expect(html).toContain("Express Shipping");
+      expect(html).toContain("₹99");
+      expect(html).toContain("₹250");
+      // the old hardcoded prices (₹50 standard / ₹120 express) must be gone
+      expect(html).not.toContain("₹50<");
+      expect(html).not.toContain("₹120");
+    });
+
+    it("shows Free for a zero-cost option", () => {
+      const html = renderToString(
+        React.createElement(CheckoutForm, { cart: mockCart, shippingRates: [{ ...storeRates[0]!, amount: 0 }] }),
+      );
+      expect(html).toContain("Free");
+    });
+
     it("renders customer info, shipping address with Indian states, shipping methods, and payment options", () => {
       const html = renderToString(
         React.createElement(CheckoutForm, {
           cart: mockCart,
+          shippingRates: storeRates,
         }),
       );
 
@@ -229,8 +254,8 @@ describe("Storefront Cart & Checkout Flow", () => {
       expect(html).toContain("Karnataka");
 
       // Shipping and Payment method
-      expect(html).toContain("Standard Delivery");
-      expect(html).toContain("Express Delivery");
+      expect(html).toContain("Standard Shipping");
+      expect(html).toContain("Express Shipping");
       expect(html).toContain("Cash on Delivery (COD)");
       expect(html).toContain("UPI / Card / NetBanking");
       expect(html).toContain("Payment gateway in test mode");
@@ -243,6 +268,7 @@ describe("Storefront Cart & Checkout Flow", () => {
       const html = renderToString(
         React.createElement(CheckoutContainer, {
           cart: mockCart,
+          shippingRates: [{ ...storeRates[0]!, amount: 0 }, storeRates[1]!],
         }),
       );
 
@@ -251,7 +277,7 @@ describe("Storefront Cart & Checkout Flow", () => {
       expect(html).toContain("Shipping Address");
       expect(html).toContain("Order Summary");
       expect(html).toContain("KeyCraft Custom Switch Lubing Station");
-      // Since subtotal 299800 >= 99900, standard delivery is Free
+      // The first option is the selected one; here the store offers it free, so the summary shows Free shipping
       expect(html).toContain("Free");
     });
   });

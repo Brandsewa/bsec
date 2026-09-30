@@ -43,14 +43,25 @@ export const INDIAN_STATES_AND_UTS = [
   "West Bengal",
 ];
 
+export interface CheckoutShippingRate {
+  method: string;
+  title: string;
+  description: string;
+  estimatedDays: string;
+  /** In paise; 0 means free. */
+  amount: number;
+}
+
 export interface CheckoutFormProps {
   cart: StorefrontCart;
-  shippingMethod?: "standard" | "express";
-  onShippingMethodChange?: (method: "standard" | "express") => void;
+  shippingRates: CheckoutShippingRate[];
+  shippingMethod?: string;
+  onShippingMethodChange?: (method: string) => void;
 }
 
 export function CheckoutForm({
   cart,
+  shippingRates,
   shippingMethod: controlledShippingMethod,
   onShippingMethodChange,
 }: CheckoutFormProps) {
@@ -69,7 +80,7 @@ export function CheckoutForm({
   const [pincode, setPincode] = useState("");
 
   // Method
-  const [internalShippingMethod, setInternalShippingMethod] = useState<"standard" | "express">("standard");
+  const [internalShippingMethod, setInternalShippingMethod] = useState<string>(shippingRates[0]?.method ?? "");
   const shippingMethod = controlledShippingMethod ?? internalShippingMethod;
   const [paymentMethod, setPaymentMethod] = useState<"cod" | "online">("cod");
   const [notes, setNotes] = useState("");
@@ -77,16 +88,10 @@ export function CheckoutForm({
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  // Standard rate is ₹50 (5000 paise) or free if subtotal >= ₹999 (99900 paise)
-  // Express rate is ₹120 (12000 paise)
-  const isFreeStandard = cart.subtotal >= 99900;
-  const standardShippingPaise = isFreeStandard ? 0 : 5000;
-  const expressShippingPaise = 12000;
+  // The price comes from the store's own shipping rates (the same ones the order is charged with).
+  const currentShippingPaise = (shippingRates.find((r) => r.method === shippingMethod) ?? shippingRates[0])?.amount ?? 0;
 
-  const currentShippingPaise =
-    shippingMethod === "standard" ? standardShippingPaise : expressShippingPaise;
-
-  const handleShippingChange = (method: "standard" | "express") => {
+  const handleShippingChange = (method: string) => {
     if (controlledShippingMethod === undefined) {
       setInternalShippingMethod(method);
     }
@@ -299,47 +304,34 @@ export function CheckoutForm({
         </div>
       </section>
 
-      {/* 3. Shipping Method */}
+      {/* 3. Shipping Method: the store's own options and prices */}
       <section className="rounded-2xl border border-border bg-card p-6 shadow-sm">
         <h2 className="text-lg font-bold text-foreground mb-4">Shipping Method</h2>
         <div className="space-y-3">
-          <label className="flex items-center justify-between p-3.5 border rounded-xl cursor-pointer hover:bg-muted/40 transition-colors">
-            <div className="flex items-center gap-3">
-              <input
-                type="radio"
-                name="shippingMethod"
-                value="standard"
-                checked={shippingMethod === "standard"}
-                onChange={() => handleShippingChange("standard")}
-                className="text-primary focus:ring-primary"
-              />
-              <div>
-                <p className="text-sm font-semibold text-foreground">Standard Delivery</p>
-                <p className="text-xs text-muted-foreground">Estimated 4-7 business days</p>
+          {shippingRates.map((rate) => (
+            <label
+              key={rate.method}
+              className="flex items-center justify-between p-3.5 border rounded-xl cursor-pointer hover:bg-muted/40 transition-colors"
+            >
+              <div className="flex items-center gap-3">
+                <input
+                  type="radio"
+                  name="shippingMethod"
+                  value={rate.method}
+                  checked={shippingMethod === rate.method}
+                  onChange={() => handleShippingChange(rate.method)}
+                  className="text-primary focus:ring-primary"
+                />
+                <div>
+                  <p className="text-sm font-semibold text-foreground">{rate.title}</p>
+                  <p className="text-xs text-muted-foreground">{rate.description}</p>
+                </div>
               </div>
-            </div>
-            <span className="text-sm font-bold text-foreground">
-              {standardShippingPaise === 0 ? "Free" : "₹50"}
-            </span>
-          </label>
-
-          <label className="flex items-center justify-between p-3.5 border rounded-xl cursor-pointer hover:bg-muted/40 transition-colors">
-            <div className="flex items-center gap-3">
-              <input
-                type="radio"
-                name="shippingMethod"
-                value="express"
-                checked={shippingMethod === "express"}
-                onChange={() => handleShippingChange("express")}
-                className="text-primary focus:ring-primary"
-              />
-              <div>
-                <p className="text-sm font-semibold text-foreground">Express Delivery</p>
-                <p className="text-xs text-muted-foreground">Expedited air delivery within 2-3 business days</p>
-              </div>
-            </div>
-            <span className="text-sm font-bold text-foreground">₹120</span>
-          </label>
+              <span className="text-sm font-bold text-foreground">
+                {rate.amount === 0 ? "Free" : `₹${(rate.amount / 100).toLocaleString("en-IN")}`}
+              </span>
+            </label>
+          ))}
         </div>
       </section>
 

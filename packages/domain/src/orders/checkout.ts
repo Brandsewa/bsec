@@ -35,7 +35,8 @@ export interface PlaceOrderInput {
   state: string;
   pincode: string;
   country?: string | undefined;
-  shippingMethod?: "standard" | "express" | undefined;
+  /** Method id of one of the store's shipping rates; the first configured rate when omitted. */
+  shippingMethod?: string | undefined;
   paymentMethod: "cod" | "razorpay" | "online";
   notes?: string | undefined;
   customerId?: string | undefined;
@@ -110,8 +111,10 @@ export async function placeOrder(
     // 2. Calculate amounts (in paise) using canonical shipping calculation (PLAN §5.4, §7 / M7)
     const subtotal = cart.subtotal;
     const resolvedRates = await getTenantShippingRates(tx, tenantId, subtotal);
-    const selectedMethod = (input.shippingMethod as "standard" | "express") ?? "standard";
-    const shipping = resolvedRates.find((r) => r.method === selectedMethod) ?? resolvedRates[0];
+    if (input.shippingMethod && !resolvedRates.some((r) => r.method === input.shippingMethod)) {
+      throw new Error("Bad Request: the chosen shipping method is not available for this store");
+    }
+    const shipping = (input.shippingMethod ? resolvedRates.find((r) => r.method === input.shippingMethod) : undefined) ?? resolvedRates[0];
     const shippingTotal = shipping ? shipping.amount : 0;
     const isCod = input.paymentMethod === "cod";
     const storeConfig = await readStoreConfig(tx);

@@ -14,6 +14,8 @@ export interface ShippingRateCalculation {
   isFree: boolean;
   estimatedDays: string;
   description: string;
+  /** False for a "free above threshold" rate whose threshold the cart has not reached: it is not offered. */
+  applicable: boolean;
 }
 
 /**
@@ -27,11 +29,19 @@ export function calculateRateFromRule(
     thresholdPaise?: number | null | undefined;
     name: string;
     method: string;
+    rateType?: string | null | undefined;
     minDays?: number | null | undefined;
     maxDays?: number | null | undefined;
   },
   subtotalPaise: number = 0,
 ): ShippingRateCalculation {
+  // A pure "free above threshold" rule (price 0, as a new store is seeded with) only applies once the cart reaches the
+  // threshold. One that has its own price (what the admin's shipping settings write: "₹70, free above ₹1200") is always
+  // offered and simply becomes free at the threshold.
+  const applicable =
+    rate.rateType === "free_above_threshold" && rate.pricePaise === 0
+      ? rate.thresholdPaise != null && subtotalPaise >= rate.thresholdPaise
+      : true;
   const isFree =
     rate.pricePaise === 0 ||
     (rate.thresholdPaise != null && subtotalPaise >= rate.thresholdPaise);
@@ -57,6 +67,7 @@ export function calculateRateFromRule(
     isFree,
     estimatedDays,
     description,
+    applicable,
   };
 }
 
@@ -128,7 +139,17 @@ export async function getTenantShippingRates(
       .where(and(eq(shippingRates.tenantId, tenantId), eq(shippingRates.zoneId, defaultZone.id)))
       .orderBy(shippingRates.createdAt);
 
-    return rates.map((r) => calculateRateFromRule(r, subtotalPaise));
+    // Offer only the rules that apply to this cart, and one option per method (the cheapest one that applies), so a
+    // store with "Standard: flat 99" and "Free above 999" shows 99 below the threshold and Free from 999 up.
+    const offered: ShippingRateCalculation[] = [];
+    for (const r of rates.map((row) => calculateRateFromRule(row, subtotalPaise))) {
+      if (!r.applicable) continue;
+      const at = offered.findIndex((o) => o.method === r.method);
+      const existing = at === -1 ? undefined : offered[at];
+      if (!existing) offered.push(r);
+      else if (r.amount < existing.amount) offered[at] = r;
+    }
+    return offered;
   });
 }
 

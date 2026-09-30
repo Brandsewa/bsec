@@ -19,7 +19,8 @@ const PlaceOrderSchema = z.object({
   city: z.string().min(1, "City is required"),
   state: z.string().min(1, "State is required"),
   pincode: z.string().regex(/^[1-9][0-9]{5}$/, "Valid 6-digit Indian pincode required"),
-  shippingMethod: z.enum(["standard", "express"]).default("standard"),
+  // The method id of one of the store's own shipping rates (as listed on the checkout page).
+  shippingMethod: z.string().min(1).max(64).optional(),
   paymentMethod: z.enum(["cod", "razorpay", "online"]).default("cod"),
   notes: z.string().optional(),
 });
