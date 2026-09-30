@@ -60,7 +60,13 @@ import {
   getCachedStorefrontPage,
   getCachedBrandSettings,
 } from "../src/server/cached-storefront.ts";
-import { tenantTag } from "@bs/domain";
+import {
+  tenantTag,
+  getStorefrontProduct,
+  getStorefrontCollection,
+  getStorefrontCategory,
+  getStorefrontPage,
+} from "@bs/domain";
 
 describe("cached-storefront read-side tags match the write-side invalidation matrix", () => {
   beforeEach(() => {
@@ -70,25 +76,51 @@ describe("cached-storefront read-side tags match the write-side invalidation mat
   it("product loader tags with product:{id} and product", async () => {
     await getCachedStorefrontProduct(TENANT_ID, "kb");
     expect(cacheTagCalls).toEqual([
-      tenantTag(TENANT_ID, "product", PRODUCT_ID),
       tenantTag(TENANT_ID, "product"),
+      tenantTag(TENANT_ID, "product", PRODUCT_ID),
     ]);
   });
 
   it("collection loader tags with collection:{id} and collection", async () => {
     await getCachedStorefrontCollection(TENANT_ID, "new");
     expect(cacheTagCalls).toEqual([
-      tenantTag(TENANT_ID, "collection", COLLECTION_ID),
       tenantTag(TENANT_ID, "collection"),
+      tenantTag(TENANT_ID, "product"),
+      tenantTag(TENANT_ID, "collection", COLLECTION_ID),
     ]);
   });
 
   it("category loader tags with category:{id} and category", async () => {
     await getCachedStorefrontCategory(TENANT_ID, "gadgets");
     expect(cacheTagCalls).toEqual([
-      tenantTag(TENANT_ID, "category", CATEGORY_ID),
       tenantTag(TENANT_ID, "category"),
+      tenantTag(TENANT_ID, "product"),
+      tenantTag(TENANT_ID, "category", CATEGORY_ID),
     ]);
+  });
+
+  // A cached "not found" must carry tags too, otherwise publishing the record later can never clear it
+  // (a draft product that is published stayed a 404 until the server restarted).
+  it("a product that is not found is still tagged, so publishing it invalidates the cached miss", async () => {
+    vi.mocked(getStorefrontProduct).mockResolvedValueOnce(null);
+    expect(await getCachedStorefrontProduct(TENANT_ID, "draft-one")).toBeNull();
+    expect(cacheTagCalls).toContain(tenantTag(TENANT_ID, "product"));
+  });
+
+  it("a collection, category or page that is not found is still tagged", async () => {
+    vi.mocked(getStorefrontCollection).mockResolvedValueOnce(null);
+    await getCachedStorefrontCollection(TENANT_ID, "missing");
+    expect(cacheTagCalls).toContain(tenantTag(TENANT_ID, "collection"));
+
+    cacheTagCalls.length = 0;
+    vi.mocked(getStorefrontCategory).mockResolvedValueOnce(null);
+    await getCachedStorefrontCategory(TENANT_ID, "missing");
+    expect(cacheTagCalls).toContain(tenantTag(TENANT_ID, "category"));
+
+    cacheTagCalls.length = 0;
+    vi.mocked(getStorefrontPage).mockResolvedValueOnce(null);
+    await getCachedStorefrontPage(TENANT_ID, "missing");
+    expect(cacheTagCalls).toEqual([tenantTag(TENANT_ID, "page", "missing"), tenantTag(TENANT_ID, "store-shell")]);
   });
 
   it("home page loader tags with page:home and store-shell", async () => {
