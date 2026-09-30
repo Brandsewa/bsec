@@ -2,7 +2,7 @@ import React from "react";
 import type { Metadata } from "next";
 import { headers, cookies } from "next/headers";
 import { redirect } from "next/navigation";
-import { evaluateStorefrontAccess, getOrCreateCart, getTenantShippingRates } from "@bs/domain";
+import { evaluateStorefrontAccess, getOrCreateCart, getTenantShippingRates, getStorefrontPaymentOptions } from "@bs/domain";
 import { server } from "@/server/runtime.ts";
 import { CheckoutContainer } from "@/components/checkout/CheckoutContainer.tsx";
 import { CART_COOKIE_NAME } from "@/app/api/storefront/cart/route.ts";
@@ -55,13 +55,16 @@ export default async function CheckoutPage() {
     amount: r.amount,
   }));
 
+  const options = await getStorefrontPaymentOptions(rt, access.tenantId);
+  const paymentOptions = { codEnabled: options.cod.enabled, codFeePaise: options.cod.feePaise, onlineAvailable: options.online.available };
+
   return (
     <div className="mx-auto max-w-7xl px-4 py-8 sm:px-6 lg:px-8">
       <h1 className="text-2xl sm:text-3xl font-extrabold tracking-tight text-foreground mb-8">
         Checkout
       </h1>
 
-      <CheckoutContainer cart={cart} shippingRates={shippingRates} />
+      <CheckoutContainer cart={cart} shippingRates={shippingRates} paymentOptions={paymentOptions} />
     </div>
   );
 }

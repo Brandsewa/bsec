@@ -93,6 +93,22 @@ export function getR2Config(override?: Partial<R2ClientConfig>): R2ClientConfig 
   };
 }
 
+/** True when R2 write credentials are configured, i.e. uploads can actually succeed. */
+export function isMediaStorageConfigured(override?: Partial<R2ClientConfig>): boolean {
+  const cfg = getR2Config(override);
+  return Boolean(cfg.accessKeyId && cfg.secretAccessKey);
+}
+
+/**
+ * The public address of a stored file (R2_PUBLIC_URL is the bucket's public domain, e.g. https://media.gobs.cloud).
+ * Undefined when no public address is configured, so callers show no image instead of a broken one.
+ */
+export function publicMediaUrl(storageKey: string | null | undefined, override?: Partial<R2ClientConfig>): string | undefined {
+  if (!storageKey) return undefined;
+  const base = getR2Config(override).publicUrl?.trim().replace(/\/+$/, "");
+  return base ? `${base}/${storageKey.replace(/^\/+/, "")}` : undefined;
+}
+
 /**
  * Creates an S3-compatible client for Cloudflare R2 operations.
  */

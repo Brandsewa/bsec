@@ -3,6 +3,7 @@ import { z } from "zod";
 import {
   evaluateStorefrontAccess,
   placeOrder,
+  ONLINE_PAYMENT_AVAILABLE,
   FeatureDisabledError,
   checkStorefrontRateLimit,
   RateLimitExceededError,
@@ -77,6 +78,9 @@ export async function POST(req: Request) {
       h.get("idempotency-key") ??
       (typeof bodyObj.idempotencyKey === "string" ? bodyObj.idempotencyKey : undefined);
     const paymentMethod = parsed.data.paymentMethod === "online" ? "razorpay" : parsed.data.paymentMethod;
+    if (paymentMethod !== "cod" && !ONLINE_PAYMENT_AVAILABLE) {
+      return NextResponse.json({ error: "Online payment is not available yet. Please choose Cash on Delivery." }, { status: 400 });
+    }
 
     const orderResult = await placeOrder(rt, tenantCtx, {
       cartToken: token,

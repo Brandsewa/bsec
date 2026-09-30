@@ -11,6 +11,8 @@ import {
   buildTenantContext,
   getAdminMe,
   getStoreStatus,
+  attachProductMedia,
+  detachProductMedia,
   updateStoreStatus,
   getSupportAdminMe,
   listStoreSupportSessions,
@@ -460,6 +462,24 @@ export const storeRouter = os.router({
 
     // Catalog: Products
     products: {
+      attachMedia: os.admin.products.attachMedia
+        .use(requireAdmin)
+        .use(requirePermission("products.write"))
+        .handler(({ context, input }) => {
+          if (!context.tenantCtx) throw new Error("Missing tenant context");
+          return attachProductMedia(context.rt, context.tenantCtx, { productId: input.id, mediaId: input.mediaId, alt: input.alt }).catch((e) => {
+            throw mapAuthError(e);
+          });
+        }),
+      detachMedia: os.admin.products.detachMedia
+        .use(requireAdmin)
+        .use(requirePermission("products.write"))
+        .handler(({ context, input }) => {
+          if (!context.tenantCtx) throw new Error("Missing tenant context");
+          return detachProductMedia(context.rt, context.tenantCtx, { productId: input.id, productMediaId: input.productMediaId }).catch((e) => {
+            throw mapAuthError(e);
+          });
+        }),
       list: os.admin.products.list
         .use(requireAdmin)
         .use(requirePermission("products.read"))
@@ -643,7 +663,9 @@ export const storeRouter = os.router({
         .use(requirePermission("content.write"))
         .handler(({ context, input }) => {
           if (!context.tenantCtx) throw new Error("Missing tenant context");
-          return requestMediaUpload(context.rt, context.tenantCtx, input);
+          return Promise.resolve(requestMediaUpload(context.rt, context.tenantCtx, input)).catch((e) => {
+            throw mapAuthError(e);
+          });
         }),
       create: os.admin.media.create
         .use(requireAdmin)

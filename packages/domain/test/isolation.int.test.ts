@@ -56,6 +56,8 @@ import {
   getAdminOrderDetail,
   getBrandSettings,
   getStoreStatus,
+  attachProductMedia,
+  detachProductMedia,
   updateStoreStatus,
   getCollection,
   getMenu,
@@ -763,12 +765,24 @@ describe("Generated Isolation Test Suite (M1 Real Postgres 18 Proof)", () => {
         });
       case "media.list":
         return await listMedia(rt, ctx);
-      case "media.requestUpload":
-        return await requestMediaUpload(rt, ctx, {
-          filename: "test.png",
-          mime: "image/png",
-          bytes: 1024,
-        });
+      case "media.requestUpload": {
+        // uploads are refused unless storage credentials exist, so give this call some
+        const saved = { id: process.env.R2_ACCESS_KEY_ID, secret: process.env.R2_SECRET_ACCESS_KEY };
+        process.env.R2_ACCESS_KEY_ID = "isolation-test-key";
+        process.env.R2_SECRET_ACCESS_KEY = "isolation-test-secret";
+        try {
+          return await requestMediaUpload(rt, ctx, {
+            filename: "test.png",
+            mime: "image/png",
+            bytes: 1024,
+          });
+        } finally {
+          if (saved.id === undefined) delete process.env.R2_ACCESS_KEY_ID;
+          else process.env.R2_ACCESS_KEY_ID = saved.id;
+          if (saved.secret === undefined) delete process.env.R2_SECRET_ACCESS_KEY;
+          else process.env.R2_SECRET_ACCESS_KEY = saved.secret;
+        }
+      }
       case "media.create":
         return await createMediaRecord(rt, ctx, {
           storageKey: `iso-${Date.now()}-${Math.random().toString(36).slice(2, 6)}.png`,
@@ -997,6 +1011,19 @@ describe("Generated Isolation Test Suite (M1 Real Postgres 18 Proof)", () => {
           },
         });
         return await removeCustomDomain(rt, ctx.tenantId, d.id);
+      }
+
+      // --- Product images ---
+      case "products.attachMedia": {
+        const m = await createMediaRecord(rt, ctx, { storageKey: `attach-${Date.now()}-${Math.random().toString(36).slice(2, 6)}.png`, mime: "image/png", bytes: 1024 });
+        const prod = await createProduct(rt, ctx, { title: `Attach ${Date.now()}`, variants: [{ sku: `ATT-${Date.now()}`, title: "D", price: 100 }] });
+        return await attachProductMedia(rt, ctx, { productId: prod.id, mediaId: m.id });
+      }
+      case "products.detachMedia": {
+        const m = await createMediaRecord(rt, ctx, { storageKey: `detach-${Date.now()}-${Math.random().toString(36).slice(2, 6)}.png`, mime: "image/png", bytes: 1024 });
+        const prod = await createProduct(rt, ctx, { title: `Detach ${Date.now()}`, variants: [{ sku: `DET-${Date.now()}`, title: "D", price: 100 }] });
+        const link = await attachProductMedia(rt, ctx, { productId: prod.id, mediaId: m.id });
+        return await detachProductMedia(rt, ctx, { productId: prod.id, productMediaId: link.id });
       }
 
       // --- Storefront mode ---

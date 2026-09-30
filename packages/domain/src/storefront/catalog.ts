@@ -4,6 +4,7 @@ import { schema, withTenant } from "@bs/db";
 import type { Runtime } from "../runtime.ts";
 import type { TenantContext } from "../context.ts";
 import { isFeatureEnabled } from "../features.ts";
+import { publicMediaUrl } from "../media/storage.ts";
 
 export interface StorefrontBrand {
   id: string;
@@ -190,8 +191,16 @@ export async function getStorefrontProduct(
 
     const [mediaRows, optionRows, variantRows] = await Promise.all([
       tx
-        .select()
+        .select({
+          id: schema.productMedia.id,
+          productId: schema.productMedia.productId,
+          mediaId: schema.productMedia.mediaId,
+          position: schema.productMedia.position,
+          alt: schema.productMedia.alt,
+          storageKey: schema.media.storageKey,
+        })
         .from(schema.productMedia)
+        .innerJoin(schema.media, eq(schema.media.id, schema.productMedia.mediaId))
         .where(eq(schema.productMedia.productId, p.id))
         .orderBy(schema.productMedia.position),
       tx
@@ -283,6 +292,7 @@ export async function getStorefrontProduct(
       mediaId: m.mediaId,
       position: m.position,
       alt: m.alt,
+      url: publicMediaUrl(m.storageKey),
     }));
 
     return {
@@ -637,17 +647,20 @@ export async function buildProductSummaries(
       mediaId: schema.productMedia.mediaId,
       alt: schema.productMedia.alt,
       position: schema.productMedia.position,
+      storageKey: schema.media.storageKey,
     })
     .from(schema.productMedia)
+    .innerJoin(schema.media, eq(schema.media.id, schema.productMedia.mediaId))
     .where(inArray(schema.productMedia.productId, productIds))
     .orderBy(schema.productMedia.position);
 
-  const mediaByProduct: Record<string, { mediaId: string; alt: string | null }> = {};
+  const mediaByProduct: Record<string, { mediaId: string; alt: string | null; url: string | undefined }> = {};
   for (const m of mediaRows) {
     if (!mediaByProduct[m.productId]) {
       mediaByProduct[m.productId] = {
         mediaId: m.mediaId,
         alt: m.alt,
+        url: publicMediaUrl(m.storageKey),
       };
     }
   }
@@ -672,6 +685,7 @@ export async function buildProductSummaries(
         ? {
             mediaId: primaryImg.mediaId,
             alt: primaryImg.alt,
+            url: primaryImg.url,
           }
         : undefined,
     };

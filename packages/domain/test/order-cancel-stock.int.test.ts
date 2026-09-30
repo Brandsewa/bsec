@@ -77,6 +77,21 @@ describe("cancelling an order gives its stock back", () => {
     expect(await stock()).toMatchObject({ onHand: 10, reserved: 0, available: 10 });
   });
 
+  it("an unpaid COD order shows no payment due once cancelled", async () => {
+    const cart = await getOrCreateCart(rtWeb, ctx, "tok-cancel-4");
+    await addToCart(rtWeb, ctx, { token: cart.token, variantId, quantity: 1 });
+    const placed = await placeOrder(rtWeb, ctx, buyer(cart.token));
+    const before = await rt._db.db.select().from(schema.orders).where(eq(schema.orders.id, placed.orderId));
+    expect(before[0]?.paymentStatus).toBe("cod_pending");
+
+    await cancelAdminOrder(rtWeb, ctx, { id: placed.orderId, reason: "Cancelled by store staff" });
+
+    const after = await rt._db.db.select().from(schema.orders).where(eq(schema.orders.id, placed.orderId));
+    expect(after[0]).toMatchObject({ status: "cancelled", paymentStatus: "cancelled" });
+    const intents = await rt._db.db.select().from(schema.paymentIntents).where(eq(schema.paymentIntents.orderId, placed.orderId));
+    expect(intents.map((i) => i.status)).toEqual(["cancelled"]);
+  });
+
   it("the stock is back exactly once (cancelling again is refused and changes nothing)", async () => {
     const cart = await getOrCreateCart(rtWeb, ctx, "tok-cancel-2");
     await addToCart(rtWeb, ctx, { token: cart.token, variantId, quantity: 1 });

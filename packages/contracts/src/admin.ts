@@ -515,6 +515,14 @@ export const adminContract = {
 
   // Catalog: Products
   products: {
+    attachMedia: oc
+      .route({ method: "POST", path: "/admin/products/{id}/media" })
+      .input(z.object({ id: z.string().uuid(), mediaId: z.string().uuid(), alt: z.string().max(200).optional() }))
+      .output(z.object({ id: z.string().uuid(), position: z.number(), isPrimary: z.boolean(), url: z.string().optional() })),
+    detachMedia: oc
+      .route({ method: "DELETE", path: "/admin/products/{id}/media/{productMediaId}" })
+      .input(z.object({ id: z.string().uuid(), productMediaId: z.string().uuid() }))
+      .output(z.object({ success: z.boolean() })),
     list: oc
       .route({ method: "GET", path: "/admin/products" })
       .input(

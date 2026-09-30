@@ -3,6 +3,7 @@ import { schema, withTenant } from "@bs/db";
 import type { Runtime } from "./runtime.ts";
 import { assertPermission, type TenantContext } from "./context.ts";
 import { invalidateCache } from "./cache-invalidation.ts";
+import { publicMediaUrl } from "./media/storage.ts";
 import { assertProductQuota } from "./system/quotas.ts";
 
 export interface ListProductsQuery {
@@ -202,9 +203,17 @@ export async function getProduct(
       .where(eq(schema.variants.productId, input.id));
 
     const mediaRows = await tx
-      .select()
+      .select({
+        id: schema.productMedia.id,
+        productId: schema.productMedia.productId,
+        mediaId: schema.productMedia.mediaId,
+        position: schema.productMedia.position,
+        storageKey: schema.media.storageKey,
+      })
       .from(schema.productMedia)
-      .where(eq(schema.productMedia.productId, input.id));
+      .innerJoin(schema.media, eq(schema.media.id, schema.productMedia.mediaId))
+      .where(eq(schema.productMedia.productId, input.id))
+      .orderBy(schema.productMedia.position);
 
     return {
       id: p.id,
@@ -258,6 +267,7 @@ export async function getProduct(
         mediaId: m.mediaId,
         position: m.position,
         isPrimary: m.position === 0,
+        url: publicMediaUrl(m.storageKey),
       })),
     };
   });

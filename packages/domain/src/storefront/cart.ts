@@ -4,6 +4,7 @@ import { schema, withTenant } from "@bs/db";
 import type { Runtime } from "../runtime.ts";
 import type { TenantContext } from "../context.ts";
 import { getTenantShippingRates } from "../orders/shipping-rates.ts";
+import { publicMediaUrl } from "../media/storage.ts";
 
 export interface StorefrontCartItem {
   id: string;
@@ -28,6 +29,7 @@ export interface StorefrontCartItem {
   primaryImage: {
     mediaId: string;
     alt: string | null;
+    url?: string | undefined;
   } | null;
   createdAt: string;
   updatedAt: string;
@@ -107,6 +109,7 @@ async function loadCartWithItems(
         mediaId: schema.productMedia.mediaId,
         alt: schema.productMedia.alt,
       },
+      primaryStorageKey: schema.media.storageKey,
     })
     .from(schema.cartItems)
     .innerJoin(
@@ -131,6 +134,7 @@ async function loadCartWithItems(
         eq(schema.productMedia.position, 0),
       ),
     )
+    .leftJoin(schema.media, eq(schema.media.id, schema.productMedia.mediaId))
     .where(eq(schema.cartItems.cartId, cartRecord.id))
     .orderBy(schema.cartItems.createdAt);
 
@@ -169,6 +173,7 @@ async function loadCartWithItems(
         ? {
             mediaId: r.primaryMedia.mediaId,
             alt: r.primaryMedia.alt,
+            url: publicMediaUrl(r.primaryStorageKey),
           }
         : null,
       createdAt:

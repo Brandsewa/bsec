@@ -14,6 +14,27 @@ export interface PaymentsStatusRecord {
 const RAZORPAY_KEY_ID = /^rzp_(test|live)_[A-Za-z0-9]{6,}$/;
 
 /**
+ * Whether shoppers can pay online. Creating a real Razorpay order at checkout is not built yet (the order gets a
+ * placeholder id), so offering it would send a customer to a payment that cannot complete. Flip this to true when
+ * checkout creates real Razorpay orders with the store's own keys.
+ */
+export const ONLINE_PAYMENT_AVAILABLE = false;
+
+export interface StorefrontPaymentOptions {
+  cod: { enabled: boolean; feePaise: number };
+  online: { available: boolean };
+}
+
+/** The payment methods a shopper may choose at this store's checkout (no secrets, no permission needed). */
+export async function getStorefrontPaymentOptions(rt: Runtime, tenantId: string): Promise<StorefrontPaymentOptions> {
+  const cfg = await withTenant(rt._db.db, tenantId, (tx) => readStoreConfig(tx));
+  return {
+    cod: { enabled: cfg.cod.enabled, feePaise: cfg.cod.feePaise },
+    online: { available: ONLINE_PAYMENT_AVAILABLE },
+  };
+}
+
+/**
  * Payment setup as shown in Settings > Payments. Secrets are write-only: this returns whether they are
  * set and a short hint of the public key id, never the secret values.
  */

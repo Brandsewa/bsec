@@ -444,6 +444,9 @@ function MediaSection({ product }: { product: ProductDetailData }) {
   const [uploading, setUploading] = useState(false);
   const requestUpload = useMutation(orpc.admin.media.requestUpload.mutationOptions());
   const createMedia = useMutation(orpc.admin.media.create.mutationOptions());
+  const attachMedia = useMutation(orpc.admin.products.attachMedia.mutationOptions());
+  const detachMedia = useMutation(orpc.admin.products.detachMedia.mutationOptions());
+  const refresh = () => void queryClient.invalidateQueries({ queryKey: orpc.admin.products.key() });
 
   const onFile = async (file: File) => {
     setUploading(true);
@@ -459,16 +462,18 @@ function MediaSection({ product }: { product: ProductDetailData }) {
         headers: descriptor.headers,
         body: file,
       });
-      if (!res.ok) throw new Error(`Upload failed (${res.status})`);
-      await createMedia.mutateAsync({
+      if (!res.ok) throw new Error(`Upload failed (${res.status}). Check that image storage allows uploads from this site.`);
+      const created = await createMedia.mutateAsync({
         storageKey: descriptor.storageKey,
         mime: file.type || "application/octet-stream",
         bytes: file.size,
         alt: product.title,
         folder: "products",
       });
+      await attachMedia.mutateAsync({ id: product.id, mediaId: created.id, alt: product.title });
       void queryClient.invalidateQueries({ queryKey: orpc.admin.media.list.key() });
-      toast.success("Image uploaded to the media library");
+      refresh();
+      toast.success("Image added to the product");
     } catch (e) {
       toast.error(e instanceof Error ? e.message : "Image upload failed");
     } finally {
@@ -480,14 +485,14 @@ function MediaSection({ product }: { product: ProductDetailData }) {
   return (
     <PageSection
       title="Media"
-      description="Images attached to this product. Uploads go to the media library; attaching library images to a product is not yet supported by the API."
+      description="Images shown for this product in your store. The first image is the main one."
     >
       <div className="grid gap-4">
         {product.media.length === 0 ? (
           <EmptyState
             icon={ImageIcon}
             title="No images attached"
-            description="Upload an image to add it to your media library."
+            description="Upload an image to show it on your product."
           />
         ) : (
           <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
@@ -500,7 +505,22 @@ function MediaSection({ product }: { product: ProductDetailData }) {
                     <ImageIcon className="size-6" aria-hidden />
                   </div>
                 )}
-                {m.isPrimary ? <p className="px-2 py-1 text-xs text-foreground-muted">Primary</p> : null}
+                <div className="flex items-center justify-between px-2 py-1 text-xs text-foreground-muted">
+                  <span>{m.isPrimary ? "Main image" : ""}</span>
+                  <button
+                    type="button"
+                    className="text-rose-500 hover:underline disabled:opacity-50"
+                    disabled={detachMedia.isPending}
+                    onClick={() =>
+                      detachMedia.mutate(
+                        { id: product.id, productMediaId: m.id },
+                        { onSuccess: () => { toast.success("Image removed"); refresh(); }, onError: (e) => toast.error(e instanceof Error ? e.message : "Could not remove the image") },
+                      )
+                    }
+                  >
+                    Remove
+                  </button>
+                </div>
               </div>
             ))}
           </div>
