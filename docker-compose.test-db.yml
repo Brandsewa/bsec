@@ -1,0 +1,17 @@
+# One long-lived Postgres for fast local integration tests (see packages/db/test-support/shared-pg.ts).
+#   docker compose -f docker-compose.test-db.yml up -d
+#   $env:TEST_PG_ADMIN_URL = "postgres://postgres:postgres@localhost:55432/postgres"   (PowerShell)
+#   export TEST_PG_ADMIN_URL=postgres://postgres:postgres@localhost:55432/postgres      (bash)
+# Data lives in memory with fsync off: fast, disposable, never for anything but tests.
+services:
+  postgres-test:
+    image: postgres:18
+    ports:
+      - "55432:5432"
+    environment:
+      POSTGRES_PASSWORD: postgres
+    command: >
+      postgres -c fsync=off -c synchronous_commit=off -c full_page_writes=off
+      -c max_connections=500 -c shared_buffers=256MB
+    tmpfs:
+      - /var/lib/postgresql
