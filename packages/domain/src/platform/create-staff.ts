@@ -24,12 +24,13 @@ export interface CreatePlatformStaffResult {
  * - A brand-new person gets the password given.
  * - An EXISTING account (e.g. someone who also owns a store) keeps its current password: the operator tool never
  *   resets a password (use the store's own reset flow). It only adds the platform_staff role.
+ * - `resetPassword` (explicit, needs `password`) replaces the password of an existing account and ends all its sessions.
  * - `resetMfa` (lost authenticator) removes the person's TOTP enrolment and every session so they enrol again.
  * MFA enrolment is required at first login. Never logs or prints the password. Idempotent.
  */
 export async function createPlatformStaffMember(
   db: Db,
-  input: CreatePlatformStaffInput & { resetMfa?: boolean | undefined },
+  input: CreatePlatformStaffInput & { resetMfa?: boolean | undefined; resetPassword?: boolean | undefined },
 ): Promise<CreatePlatformStaffResult & { passwordUnchanged: boolean }> {
   const email = input.email.trim().toLowerCase();
   if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)) {
@@ -65,6 +66,25 @@ export async function createPlatformStaffMember(
         accountId: userId,
         providerId: "credential",
         password: await hashPassword(input.password),
+      });
+      passwordUnchanged = false;
+    } else if (input.resetPassword) {
+      if (!input.password) throw new Error("Password required: a password reset needs the new password");
+      if (input.password.length < 10) throw new Error("Password must be at least 10 characters");
+      const hash = await hashPassword(input.password);
+      await db.transaction(async (tx) => {
+        await tx
+          .update(schema.accounts)
+          .set({ password: hash, updatedAt: sql`now()` })
+          .where(and(eq(schema.accounts.userId, userId), eq(schema.accounts.providerId, "credential")));
+        await tx.delete(schema.sessions).where(eq(schema.sessions.userId, userId));
+        await tx.insert(schema.platformAuditLogs).values({
+          actorType: "system",
+          action: "platform_staff.password_reset",
+          targetType: "platform_staff",
+          targetId: userId,
+          diff: { via: "operator_cli" },
+        });
       });
       passwordUnchanged = false;
     }

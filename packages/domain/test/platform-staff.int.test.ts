@@ -203,6 +203,13 @@ describe("operator bootstrap (create-staff)", () => {
     expect(await verifyPassword({ hash: acct!.password!, password: original })).toBe(true);
     expect(await verifyPassword({ hash: acct!.password!, password: "some-other-password-123" })).toBe(false);
 
+    // an explicit reset replaces the password and ends the sessions; without it the password stays
+    await rt._db.db.insert(schema.sessions).values({ id: "sess-both", userId: u!.id, token: "tok-both", expiresAt: new Date(Date.now() + 3600_000) });
+    await createPlatformStaffMember(rt._db.db, { email: "both@shop.test", name: "Both", password: "brand-new-password-123", resetPassword: true });
+    const [acct2] = await rt._db.db.select().from(schema.accounts).where(eq(schema.accounts.userId, u!.id));
+    expect(await verifyPassword({ hash: acct2!.password!, password: "brand-new-password-123" })).toBe(true);
+    expect(await verifyPassword({ hash: acct2!.password!, password: original })).toBe(false);
+    expect(await rt._db.db.select().from(schema.sessions).where(eq(schema.sessions.userId, u!.id))).toHaveLength(0);
     // lost authenticator: reset removes the enrolment and every session
     const s = await seedPlatformStaff(rt._db.db, { email: "lost-phone@staff.test" });
     await rt._db.db.insert(schema.sessions).values({ id: "sess-lost", userId: s.userId, token: "tok-lost", expiresAt: new Date(Date.now() + 3600_000) });

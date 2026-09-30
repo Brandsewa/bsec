@@ -3,6 +3,7 @@
  * Run from the platform container's terminal:
  *   STAFF_EMAIL=brandsewaofficial@gmail.com STAFF_NAME="Platform Owner" node dist/create-staff.js
  *   STAFF_EMAIL=... STAFF_RESET_MFA=1 node dist/create-staff.js      (lost phone: they set up a new authenticator)
+ *   STAFF_EMAIL=... STAFF_RESET_PASSWORD=1 node dist/create-staff.js (forgotten password: asks for the new one, ends their sessions)
  * A password is asked for (hidden prompt, or STAFF_PASSWORD when there is no TTY) only when the account is new. An existing
  * account keeps its password. The password is never printed or logged. MFA enrolment is required at first login.
  */
@@ -30,11 +31,12 @@ const email = process.env.STAFF_EMAIL ?? "brandsewaofficial@gmail.com";
 const name = process.env.STAFF_NAME ?? "Platform Owner";
 const role = (process.env.STAFF_ROLE as "platform_owner" | "platform_admin" | "platform_support") ?? "platform_owner";
 const resetMfa = process.env.STAFF_RESET_MFA === "1";
+const resetPassword = process.env.STAFF_RESET_PASSWORD === "1";
 
 const rt = createRuntime({ service: "platform", databaseUrl: url, poolMax: 1 });
 try {
   let password = process.env.STAFF_PASSWORD || undefined;
-  const attempt = () => createPlatformStaffMember(rt._db.db, { email, name, role, resetMfa, ...(password ? { password } : {}) });
+  const attempt = () => createPlatformStaffMember(rt._db.db, { email, name, role, resetMfa, resetPassword, ...(password ? { password } : {}) });
 
   let res;
   try {
