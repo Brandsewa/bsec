@@ -11,6 +11,7 @@ import {
   normalizeSubdomainSlug,
   validateSubdomainFormat,
   reserveSubdomain,
+  evaluateStorefrontAccess,
 } from "../src/index.ts";
 
 const PW = { owner: "o_test", rw: "rw_test", platform: "p_test" };
@@ -19,6 +20,7 @@ let superUrl: string;
 let rwDb: DbHandle;
 let platformDb: DbHandle;
 let rt: Runtime;
+let rtPlatform: Runtime;
 
 function as(role: "app_owner" | "app_rw" | "app_platform", password: string): string {
   const u = new URL(superUrl);
@@ -39,12 +41,14 @@ beforeAll(async () => {
   rwDb = createDb(as("app_rw", PW.rw), { max: 15 });
   platformDb = createDb(as("app_platform", PW.platform), { max: 5 });
   rt = createRuntime({ service: "web", databaseUrl: as("app_rw", PW.rw), poolMax: 15 });
+  rtPlatform = createRuntime({ service: "platform", databaseUrl: as("app_platform", PW.platform), poolMax: 5 });
 }, 180_000);
 
 afterAll(async () => {
   await rwDb?.close();
   await platformDb?.close();
   await rt?.close();
+  await rtPlatform?.close();
   await container?.stop();
 });
 
@@ -54,9 +58,9 @@ describe("M8 Atomic Tenant Provisioning Engine (PLAN §5.1, §6.4, §7 / ADR-016
     const startTime = Date.now();
 
     // Optionally reserve slug beforehand to test reservation cleanup
-    await reserveSubdomain(rt._db.db, slug);
+    await reserveSubdomain(rtPlatform._db.db, slug);
 
-    const result = await provisionTenant(rt, {
+    const result = await provisionTenant(rtPlatform, {
       storeName: "Artisan Crafts Studio",
       slug,
       owner: {
@@ -117,7 +121,8 @@ describe("M8 Atomic Tenant Provisioning Engine (PLAN §5.1, §6.4, §7 / ADR-016
     expect(user!.email).toBe("founder@artisancrafts.in");
     expect(user!.name).toBe("Aarav Sharma");
     expect(user!.phone).toBe("+919876543210");
-    expect(user!.emailVerified).toBe(true);
+    // Per B1 fix: emailVerified is false until verified
+    expect(user!.emailVerified).toBe(false);
 
     const accounts = await rt._db.db
       .select()
@@ -232,10 +237,17 @@ describe("M8 Atomic Tenant Provisioning Engine (PLAN §5.1, §6.4, §7 / ADR-016
       .where(sql`tenant_id = ${result.tenantId}`);
     const homePage = pages.find((p) => p.type === "home");
     const aboutPage = pages.find((p) => p.slug === "about");
+    const privacyPage = pages.find((p) => p.slug === "privacy");
+    const termsPage = pages.find((p) => p.slug === "terms");
+
     expect(homePage).toBeDefined();
     expect(homePage?.publishedVersionId).toBeDefined();
     expect(aboutPage).toBeDefined();
     expect(aboutPage?.publishedVersionId).toBeDefined();
+    expect(privacyPage).toBeDefined();
+    expect(privacyPage?.publishedVersionId).toBeDefined();
+    expect(termsPage).toBeDefined();
+    expect(termsPage?.publishedVersionId).toBeDefined();
 
     // Verify Menus
     const menus = await platformDb.db
@@ -246,14 +258,14 @@ describe("M8 Atomic Tenant Provisioning Engine (PLAN §5.1, §6.4, §7 / ADR-016
     expect(menus.some((m) => m.handle === "footer")).toBe(true);
 
     // Verify slug reservation was cleaned up
-    const reservations = await rt._db.db
+    const reservations = await platformDb.db
       .select()
       .from(schema.slugReservations)
       .where(sql`slug = ${slug}`);
     expect(reservations).toHaveLength(0);
 
     // Verify Platform Audit Log
-    const auditLogs = await rt._db.db
+    const auditLogs = await platformDb.db
       .select()
       .from(schema.platformAuditLogs)
       .where(sql`tenant_id = ${result.tenantId} AND action = 'tenant.provisioned'`);
@@ -265,54 +277,96 @@ describe("M8 Atomic Tenant Provisioning Engine (PLAN §5.1, §6.4, §7 / ADR-016
     });
   });
 
-  it("rolls back entirely if provisioning encounters an error (zero orphaned records)", async () => {
-    const slug = "rollback-store-83";
-
-    // First create a conflicting store with this slug
-    await provisionTenant(rt, {
-      storeName: "Conflict First Store",
-      slug,
-      owner: {
-        email: "first@rollback.local",
-        name: "First Owner",
-      },
-    });
+  it("rolls back entirely if provisioning encounters an error mid-transaction (zero orphaned records)", async () => {
+    const slug = "midway-rollback-store";
+    const ownerEmail = "midway@rollback.local";
 
     const preTenantsCount = (
-      await rt._db.db.execute<{ count: string }>(sql`SELECT count(*) FROM tenants;`)
+      await platformDb.db.execute<{ count: string }>(sql`SELECT count(*) FROM tenants;`)
+    ).rows[0]!.count;
+    const preOrgsCount = (
+      await platformDb.db.execute<{ count: string }>(sql`SELECT count(*) FROM organizations;`)
     ).rows[0]!.count;
 
-    // Attempting to provision again with same slug must fail
+    // Trigger failure mid-transaction (after org, user, tenant, and domain inserts)
     await expect(
-      provisionTenant(rt, {
-        storeName: "Conflict Second Store",
+      provisionTenant(rtPlatform, {
+        storeName: "Midway Failure Store",
         slug,
         owner: {
-          email: "second@rollback.local",
-          name: "Second Owner",
+          email: ownerEmail,
+          name: "Midway Owner",
         },
+        _failMidway: true,
       }),
-    ).rejects.toThrow(/already registered/);
+    ).rejects.toThrow(/Simulated mid-transaction failure/);
 
     const postTenantsCount = (
-      await rt._db.db.execute<{ count: string }>(sql`SELECT count(*) FROM tenants;`)
+      await platformDb.db.execute<{ count: string }>(sql`SELECT count(*) FROM tenants;`)
+    ).rows[0]!.count;
+    const postOrgsCount = (
+      await platformDb.db.execute<{ count: string }>(sql`SELECT count(*) FROM organizations;`)
     ).rows[0]!.count;
 
-    // Total tenant count should not have increased
+    // Verify zero records were committed
     expect(postTenantsCount).toBe(preTenantsCount);
+    expect(postOrgsCount).toBe(preOrgsCount);
 
-    // No orphaned user or domain created for second owner
-    const secondUser = await rt._db.db
+    const orphanedUser = await platformDb.db
       .select()
       .from(schema.users)
-      .where(sql`email = 'second@rollback.local'`);
-    expect(secondUser).toHaveLength(0);
+      .where(sql`email = ${ownerEmail}`);
+    expect(orphanedUser).toHaveLength(0);
+
+    const orphanedDomain = await platformDb.db
+      .select()
+      .from(schema.domains)
+      .where(sql`hostname = ${`${slug}.gobs.cloud`}`);
+    expect(orphanedDomain).toHaveLength(0);
+  });
+
+  it("provisions store and storefront responds immediately on new subdomain in under 60 seconds (exit criterion)", async () => {
+    const slug = "speedy-store-60s";
+    const startTime = performance.now();
+
+    const result = await provisionTenant(rtPlatform, {
+      storeName: "Speedy 60s Store",
+      slug,
+      owner: {
+        email: "speedy@sixtyseconds.local",
+        name: "Speedy Merchant",
+      },
+      planCode: "starter",
+    });
+
+    // Storefront immediately resolves and responds 200 on the new subdomain
+    const access = await evaluateStorefrontAccess(rt, `${slug}.gobs.cloud`);
+    expect(access.httpStatus).toBe(200);
+    expect(access.tenantId).toBe(result.tenantId);
+
+    // With owner/staff session, full storefront access is allowed immediately
+    const staffAccess = await evaluateStorefrontAccess(rt, `${slug}.gobs.cloud`, {
+      session: {
+        type: "staff",
+        userId: result.ownerId,
+        tenantId: result.tenantId,
+        roles: ["store_owner"],
+      } as Parameters<typeof evaluateStorefrontAccess>[2],
+    });
+    expect(staffAccess.allowed).toBe(true);
+    expect(staffAccess.httpStatus).toBe(200);
+
+    const totalDurationMs = performance.now() - startTime;
+    // PLAN exit bar: under 60,000ms
+    expect(totalDurationMs).toBeLessThan(60_000);
+    // Typical server execution time is well under 1,000ms
+    expect(totalDurationMs).toBeLessThan(5_000);
   });
 
   it("rejects reserved subdomains and malformed slugs", async () => {
     // Reserved slug
     await expect(
-      provisionTenant(rt, {
+      provisionTenant(rtPlatform, {
         storeName: "Admin System",
         slug: "admin",
         owner: {

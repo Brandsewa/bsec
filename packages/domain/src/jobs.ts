@@ -10,6 +10,7 @@ import { sweepAbandonedCarts } from "./system/abandoned-carts.ts";
 import { schema } from "@bs/db";
 import { eq, and } from "drizzle-orm";
 import { acquireTenantJobSlot, cleanExpiredRateLimits, reapStaleTenantJobSlots, releaseTenantJobSlot } from "./system/rate-limit.ts";
+import { runTrialExpirySweep } from "./saas/trial-expiry.ts";
 
 /**
  * Job runtime (PLAN §11). Queues are created by the migrate step (as app_owner); workers run
@@ -451,12 +452,26 @@ export async function startJobs(opts: {
     }
   });
 
+  // Handle subscription trial expiry sweep (PLAN §6.4, §14)
+  await boss.work(QUEUE_NAMES.SUBSCRIPTION_TRIAL_EXPIRY_SWEEP, { localConcurrency: 1 }, async (batch) => {
+    for (const job of batch) {
+      try {
+        const res = await runTrialExpirySweep(db);
+        opts.log.info({ job_id: job.id, expiredCount: res.expired }, "subscription.trial_expiry_sweep processed");
+      } catch (err) {
+        opts.log.error({ err, job_id: job.id }, "subscription.trial_expiry_sweep failed");
+        throw err;
+      }
+    }
+  });
+
   // Register recurring schedules and proof-of-life sweeps on boot (PLAN §5.10, §11.3)
   try {
     await boss.schedule(QUEUE_NAMES.RESERVATION_EXPIRY, "* * * * *", {});
     await boss.schedule(QUEUE_NAMES.IDEMPOTENCY_CLEANUP, "*/15 * * * *", {});
     await boss.schedule(QUEUE_NAMES.CART_RECOVERY_SWEEP, "0 * * * *", {});
-    opts.log.info("Registered recurring cron: reservation.expiry (* * * * *), idempotency.cleanup (*/15 * * * *), cart.recovery_sweep (0 * * * *)");
+    await boss.schedule(QUEUE_NAMES.SUBSCRIPTION_TRIAL_EXPIRY_SWEEP, "0 * * * *", {});
+    opts.log.info("Registered recurring cron: reservation.expiry (* * * * *), idempotency.cleanup (*/15 * * * *), cart.recovery_sweep (0 * * * *), subscription.trial_expiry_sweep (0 * * * *)");
   } catch (err) {
     opts.log.warn({ err }, "Could not register recurring cron schedules with pg-boss");
   }
@@ -475,6 +490,7 @@ export async function startJobs(opts: {
   await boss.send(QUEUE_NAMES.RESERVATION_EXPIRY, {});
   await boss.send(QUEUE_NAMES.IDEMPOTENCY_CLEANUP, {});
   await boss.send(QUEUE_NAMES.CART_RECOVERY_SWEEP, {});
+  await boss.send(QUEUE_NAMES.SUBSCRIPTION_TRIAL_EXPIRY_SWEEP, {});
   opts.log.info({ concurrency: opts.concurrency }, "worker started");
 
   return {

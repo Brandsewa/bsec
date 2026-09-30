@@ -1,6 +1,6 @@
-import { randomUUID } from "node:crypto";
+import { randomUUID, randomBytes, createHash } from "node:crypto";
 import { eq, sql } from "drizzle-orm";
-import { schema, withTenant, type Db } from "@bs/db";
+import { schema } from "@bs/db";
 import { hashPassword, STORE_PERMISSIONS } from "@bs/auth";
 import type { Runtime } from "../runtime.ts";
 import { normalizeSubdomainSlug, validateSubdomainFormat } from "./subdomains.ts";
@@ -22,6 +22,8 @@ export interface ProvisionTenantInput {
   timezone?: string | undefined;
   leadId?: string | undefined;
   source?: "self_service" | "platform_admin" | undefined;
+  /** Test hook to verify mid-transaction rollback of created org/tenant/user/domain */
+  _failMidway?: boolean | undefined;
 }
 
 export interface ProvisionTenantResult {
@@ -108,12 +110,14 @@ export async function provisionTenant(
 
     // 4. User creation or reuse (PLAN §4, §7)
     let ownerId: string;
+    let isExistingUser = false;
     const existingUser = await tx.execute<{ id: string }>(sql`
       SELECT id FROM users WHERE LOWER(email) = ${ownerEmail} LIMIT 1;
     `);
 
     if (existingUser.rows[0]) {
       ownerId = existingUser.rows[0].id;
+      isExistingUser = true;
     } else {
       const [newUser] = await tx
         .insert(schema.users)
@@ -121,7 +125,7 @@ export async function provisionTenant(
           email: ownerEmail,
           name: ownerName,
           phone: input.owner.phone ?? null,
-          emailVerified: true,
+          emailVerified: false,
         })
         .returning({ id: schema.users.id });
       if (!newUser) throw new Error("Failed to create store owner user");
@@ -154,26 +158,34 @@ export async function provisionTenant(
       sslStatus: "active",
     });
 
-    // 7. Password Account setup if password provided
-    if (input.owner.password && input.owner.password.length >= 10) {
+    if (input._failMidway) {
+      throw new Error("Simulated mid-transaction failure after org, user, tenant and domain creation");
+    }
+
+    // 7. Password Account setup: only for brand new users (prevent account takeover)
+    // Never reuse or modify an existing user's credentials in self-signup flow.
+    if (!isExistingUser && input.owner.password && input.owner.password.length >= 10) {
       const passwordHash = await hashPassword(input.owner.password);
-      const existingAccount = await tx.execute<{ id: string }>(sql`
-        SELECT id FROM accounts WHERE user_id = ${ownerId} AND provider_id = 'credential' LIMIT 1;
-      `);
-      if (existingAccount.rows[0]) {
-        await tx.execute(sql`
-          UPDATE accounts SET password = ${passwordHash}, updated_at = now()
-          WHERE id = ${existingAccount.rows[0].id};
-        `);
-      } else {
-        await tx.insert(schema.accounts).values({
-          id: randomUUID(),
-          userId: ownerId,
-          accountId: ownerId,
-          providerId: "credential",
-          password: passwordHash,
-        });
-      }
+      await tx.insert(schema.accounts).values({
+        id: randomUUID(),
+        userId: ownerId,
+        accountId: ownerId,
+        providerId: "credential",
+        password: passwordHash,
+      });
+    }
+
+    // If the email already belongs to a user, send an owner invite instead so the real mailbox owner completes setup
+    if (isExistingUser) {
+      const rawToken = randomBytes(32).toString("hex");
+      const tokenHash = createHash("sha256").update(rawToken).digest("hex");
+      const expiresAt = new Date(Date.now() + 7 * 24 * 3600 * 1000);
+      await tx.insert(schema.tenantOwnerInvites).values({
+        tenantId,
+        email: ownerEmail,
+        tokenHash,
+        expiresAt,
+      });
     }
 
     // 8. Roles and Store Owner Membership (using set_config app.tenant_id)
@@ -189,6 +201,9 @@ export async function provisionTenant(
         permissions: [...STORE_PERMISSIONS],
       })
       .returning({ id: schema.roles.id });
+    if (!ownerRole) {
+      throw new Error("Failed to create store owner role");
+    }
 
     await tx.insert(schema.roles).values({
       tenantId,
@@ -197,12 +212,12 @@ export async function provisionTenant(
       permissions: [...STORE_PERMISSIONS],
     });
 
-    // Membership
+    // Membership: if existing user in self-service, mark invited until invite is accepted
     await tx.insert(schema.memberships).values({
       tenantId,
       userId: ownerId,
-      roleId: ownerRole!.id,
-      status: "active",
+      roleId: ownerRole.id,
+      status: isExistingUser ? "invited" : "active",
     });
 
     // 9. Store Settings with default COD configuration
@@ -223,14 +238,13 @@ export async function provisionTenant(
     });
 
     // 10. Default Warehouse Location
-    const [warehouse] = await tx
+    await tx
       .insert(schema.locations)
       .values({
         tenantId,
         name: "Main Warehouse",
         isDefault: true,
-      })
-      .returning({ id: schema.locations.id });
+      });
 
     // 11. Default India Flat Shipping Zone & Rates (PLAN §5.4 / M7)
     const [shippingZone] = await tx
@@ -296,6 +310,9 @@ export async function provisionTenant(
         provider: "razorpay",
       })
       .returning({ id: schema.subscriptions.id });
+    if (!sub) {
+      throw new Error("Failed to create subscription record");
+    }
 
     // 14. Onboarding Progress Checklist (PLAN §5.2, §8)
     await tx.insert(schema.onboardingProgress).values({
@@ -438,6 +455,100 @@ export async function provisionTenant(
       }
     }
 
+    // Starter Privacy Policy Page (/policies/privacy)
+    const [privacyPage] = await tx
+      .insert(schema.pages)
+      .values({
+        tenantId,
+        type: "custom",
+        title: "Privacy Policy",
+        slug: "privacy",
+        status: "published",
+      })
+      .returning({ id: schema.pages.id });
+
+    if (privacyPage) {
+      const [privacyVersion] = await tx
+        .insert(schema.pageVersions)
+        .values({
+          tenantId,
+          pageId: privacyPage.id,
+          document: {
+            blocks: [
+              {
+                id: "b-privacy-01",
+                type: "Content",
+                version: 1,
+                props: {
+                  heading: "Privacy Policy",
+                  body: `This Privacy Policy describes how ${storeName} collects, uses, and discloses your personal data when you visit our store or make a purchase.`,
+                },
+              },
+            ],
+          },
+          createdBy: ownerId,
+          note: "Starter Privacy Policy page",
+        })
+        .returning({ id: schema.pageVersions.id });
+
+      if (privacyVersion) {
+        await tx
+          .update(schema.pages)
+          .set({
+            publishedVersionId: privacyVersion.id,
+            draftVersionId: privacyVersion.id,
+          })
+          .where(eq(schema.pages.id, privacyPage.id));
+      }
+    }
+
+    // Starter Terms of Service Page (/policies/terms)
+    const [termsPage] = await tx
+      .insert(schema.pages)
+      .values({
+        tenantId,
+        type: "custom",
+        title: "Terms of Service",
+        slug: "terms",
+        status: "published",
+      })
+      .returning({ id: schema.pages.id });
+
+    if (termsPage) {
+      const [termsVersion] = await tx
+        .insert(schema.pageVersions)
+        .values({
+          tenantId,
+          pageId: termsPage.id,
+          document: {
+            blocks: [
+              {
+                id: "b-terms-01",
+                type: "Content",
+                version: 1,
+                props: {
+                  heading: "Terms of Service",
+                  body: `By visiting our site or purchasing from ${storeName}, you agree to be bound by these Terms of Service.`,
+                },
+              },
+            ],
+          },
+          createdBy: ownerId,
+          note: "Starter Terms of Service page",
+        })
+        .returning({ id: schema.pageVersions.id });
+
+      if (termsVersion) {
+        await tx
+          .update(schema.pages)
+          .set({
+            publishedVersionId: termsVersion.id,
+            draftVersionId: termsVersion.id,
+          })
+          .where(eq(schema.pages.id, termsPage.id));
+      }
+    }
+
     // Navigation Menus (Header & Footer)
     await tx.insert(schema.menus).values([
       {
@@ -493,7 +604,7 @@ export async function provisionTenant(
       storeUrl,
       adminUrl,
       ownerId,
-      subscriptionId: sub!.id,
+      subscriptionId: sub.id,
     };
   });
 }

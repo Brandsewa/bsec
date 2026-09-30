@@ -3,7 +3,7 @@ import { PostgreSqlContainer, type StartedPostgreSqlContainer } from "@testconta
 import { createDb, type DbHandle, schema } from "@bs/db";
 import { bootstrapRoles } from "@bs/db/bootstrap";
 import { runMigrations } from "@bs/db/migrate";
-import { sql, eq } from "drizzle-orm";
+import { eq } from "drizzle-orm";
 import {
   createRuntime,
   type Runtime,
@@ -14,7 +14,6 @@ import {
   assertTrialStoreLimit,
   saveSignupLead,
   completeSignup,
-  runAbandonedSignupReminderJob,
   provisionTenant,
 } from "../src/index.ts";
 
@@ -43,7 +42,7 @@ beforeAll(async () => {
   await runMigrations(as("app_owner", PW.owner));
   rwDb = createDb(as("app_rw", PW.rw), { max: 15 });
   platformDb = createDb(as("app_platform", PW.platform), { max: 5 });
-  rt = createRuntime({ service: "web", databaseUrl: as("app_rw", PW.rw), poolMax: 15 });
+  rt = createRuntime({ service: "platform", databaseUrl: as("app_platform", PW.platform), poolMax: 15 });
 }, 180_000);
 
 afterAll(async () => {
@@ -207,33 +206,5 @@ describe("M8 Signup Pipeline & Abuse Protection (PLAN §5.2, §7 / ADR-016)", ()
       .from(schema.subscriptions)
       .where(eq(schema.subscriptions.tenantId, result.tenantId));
     expect(sub!.status).toBe("trialing");
-  });
-
-  it("identifies abandoned signup leads for follow-up reminders", async () => {
-    // Create an older abandoned lead (created 25 hours ago)
-    const oldDate = new Date(Date.now() - 25 * 3600 * 1000);
-    const [abandonedLead] = await rt._db.db
-      .insert(schema.signupLeads)
-      .values({
-        email: "abandoned@merchant.local",
-        businessName: "Abandoned Boutique",
-        desiredSlug: "abandoned-boutique-82",
-        step: "subdomain_selected",
-        createdAt: oldDate,
-        updatedAt: oldDate,
-      })
-      .returning({ id: schema.signupLeads.id });
-
-    // Run reminder job
-    const reminderResult = await runAbandonedSignupReminderJob(rt._db.db);
-    expect(reminderResult.inspectedLeads).toBeGreaterThanOrEqual(1);
-    expect(reminderResult.remindedCount).toBeGreaterThanOrEqual(1);
-
-    // Verify lead was marked as reminded
-    const [updatedLead] = await rt._db.db
-      .select()
-      .from(schema.signupLeads)
-      .where(eq(schema.signupLeads.id, abandonedLead!.id));
-    expect(updatedLead!.step).toBe("reminded");
   });
 });

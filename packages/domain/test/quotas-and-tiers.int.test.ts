@@ -8,8 +8,6 @@ import {
   type Runtime,
   type TenantContext,
   resolveEffectiveQuota,
-  assertProductQuota,
-  assertStaffQuota,
   createProduct,
   placeOrder,
   getOrCreateCart,
@@ -181,7 +179,7 @@ describe("PLAN §6.1 Quotas & Size Tiers Engine (Milestone M8)", () => {
 
   it("soft quotas warn and emit quota_events at 80% and 100% without blocking", async () => {
     // Reset quota events
-    await rt._db.db.execute(
+    await platformDb.db.execute(
       (await import("drizzle-orm")).sql`DELETE FROM quota_events WHERE tenant_id = ${tenantAId};`
     );
 
@@ -195,7 +193,7 @@ describe("PLAN §6.1 Quotas & Size Tiers Engine (Milestone M8)", () => {
     );
 
     // At 8 orders (80%), emits pct_80 event
-    const res80 = await trackSoftQuotaUsage(rt._db.db, {
+    const res80 = await trackSoftQuotaUsage(platformDb.db, {
       tenantId: tenantAId,
       quotaKey: "orders_month",
       current: 8,
@@ -204,7 +202,7 @@ describe("PLAN §6.1 Quotas & Size Tiers Engine (Milestone M8)", () => {
     expect(res80.notified).toBe(true);
 
     // At 10 orders (100%), emits pct_100 event
-    const res100 = await trackSoftQuotaUsage(rt._db.db, {
+    const res100 = await trackSoftQuotaUsage(platformDb.db, {
       tenantId: tenantAId,
       quotaKey: "orders_month",
       current: 10,
@@ -325,7 +323,7 @@ describe("PLAN §6.1 Quotas & Size Tiers Engine (Milestone M8)", () => {
       `
     );
 
-    const jobResult = await runNightlyQuotaRecommendationsJob(rt._db.db);
+    const jobResult = await runNightlyQuotaRecommendationsJob(platformDb.db);
     expect(jobResult.inspectedTenants).toBeGreaterThan(0);
     const rec = jobResult.recommendations.find((r) => r.tenantId === tenantAId);
     expect(rec).toBeDefined();

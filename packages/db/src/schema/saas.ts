@@ -27,6 +27,8 @@ export const plans = pgTable("plans", {
   currency: char("currency", { length: 3 }).notNull().default("INR"),
   limits: jsonb("limits").notNull().default({}), // { products, staff, storage_mb, orders_month, custom_domain }
   features: jsonb("features").notNull().default({}),
+  razorpayPlanIdMonthly: text("razorpay_plan_id_monthly"),
+  razorpayPlanIdYearly: text("razorpay_plan_id_yearly"),
   isPublic: boolean("is_public").notNull().default(true),
   sort: integer("sort").notNull().default(0),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().default(sql`now()`),

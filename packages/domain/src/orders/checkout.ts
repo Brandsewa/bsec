@@ -257,21 +257,6 @@ export async function placeOrder(
       await rt._jobs.send(QUEUE_NAMES.ORDER_CREATED, { orderId, tenantId });
     }
 
-    // 13. Soft quota tracking (PLAN §6.1, ADR-015): never blocks checkout
-    try {
-      const orderCountRes = await tx.execute<{ count: string }>(
-        sql`SELECT COUNT(*)::text as count FROM orders WHERE tenant_id = ${tenantId} AND created_at >= date_trunc('month', now());`
-      );
-      const monthlyOrders = parseInt(orderCountRes.rows[0]?.count ?? "1", 10);
-      await trackSoftQuotaUsage(rt._db.db, {
-        tenantId,
-        quotaKey: "orders_month",
-        current: monthlyOrders,
-      });
-    } catch {
-      // Soft quota tracking failure never impedes checkout completion
-    }
-
     const resultBody: PlaceOrderResult = {
       success: true,
       orderId,
@@ -298,6 +283,7 @@ export async function placeOrder(
   };
 
   // If idempotency key provided, run with deduplication
+  let resultBody: PlaceOrderResult;
   if (input.idempotencyKey) {
     const res = await withIdempotencyKey(
       rt._db.db,
@@ -307,9 +293,27 @@ export async function placeOrder(
       input,
       executeOrderPlacement,
     );
-    return res.body;
+    resultBody = res.body;
+  } else {
+    const res = await withTenant(rt._db.db, tenantId, executeOrderPlacement);
+    resultBody = res.body;
   }
 
-  const res = await withTenant(rt._db.db, tenantId, executeOrderPlacement);
-  return res.body;
+  // Soft quota tracking runs after transaction commit:
+  // never blocks checkout and never takes a second pool connection inside an open transaction
+  try {
+    const orderCountRes = await rt._db.db.execute<{ count: string }>(
+      sql`SELECT COUNT(*)::text as count FROM orders WHERE tenant_id = ${tenantId} AND created_at >= date_trunc('month', now());`
+    );
+    const monthlyOrders = parseInt(orderCountRes.rows[0]?.count ?? "1", 10);
+    await trackSoftQuotaUsage(rt._db.db, {
+      tenantId,
+      quotaKey: "orders_month",
+      current: monthlyOrders,
+    });
+  } catch {
+    // Soft quota tracking failure never impedes checkout completion
+  }
+
+  return resultBody;
 }

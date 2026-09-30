@@ -11,10 +11,11 @@ import { isFeatureEnabled, FeatureDisabledError } from "../src/features.ts";
 import { placeOrder } from "../src/orders/checkout.ts";
 import { createAdminFulfillment } from "../src/admin/orders.ts";
 
-const PW = { owner: "o_test_0199a065", rw: "rw_test_0199a065", platform: "p_test_0199a065" };
+const PW = { owner: "o_test", rw: "rw_test", platform: "p_test" };
 let container: StartedPostgreSqlContainer | undefined;
 let superUrl: string;
 let rwDb: DbHandle;
+let platformDb: DbHandle;
 const logger = pino({ level: "silent" });
 
 function as(role: "app_owner" | "app_rw" | "app_platform", password: string): string {
@@ -53,6 +54,7 @@ beforeAll(async () => {
   await bootstrapRoles(superUrl, PW);
   await runMigrations(as("app_owner", PW.owner));
   rwDb = createDb(as("app_rw", PW.rw), { max: 10 });
+  platformDb = createDb(as("app_platform", PW.platform), { max: 5 });
 
   rt = {
     _db: rwDb,
@@ -121,10 +123,11 @@ beforeAll(async () => {
 
 afterAll(async () => {
   // Restore kill switches if modified
-  await rwDb.db
+  await platformDb.db
     .update(schema.featureFlags)
     .set({ killSwitch: false })
     .where(inArray(schema.featureFlags.key, ["catalog", "checkout", "fulfillment"]));
+  await platformDb?.close();
   await rwDb?.close();
   await container?.stop();
 });
@@ -177,7 +180,7 @@ describe("Migration 0008 feature flags seeding & kill_switch verification", () =
     expect(enabledBefore).toBe(true);
 
     // 2. Set kill_switch = true globally in feature_flags
-    await rwDb.db
+    await platformDb.db
       .update(schema.featureFlags)
       .set({ killSwitch: true })
       .where(eq(schema.featureFlags.key, "catalog"));
@@ -187,7 +190,7 @@ describe("Migration 0008 feature flags seeding & kill_switch verification", () =
     expect(enabledAfterKill).toBe(false);
 
     // 4. Restore kill_switch = false
-    await rwDb.db
+    await platformDb.db
       .update(schema.featureFlags)
       .set({ killSwitch: false })
       .where(eq(schema.featureFlags.key, "catalog"));

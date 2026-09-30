@@ -1,3 +1,4 @@
+import { createHash } from "node:crypto";
 import { sql } from "drizzle-orm";
 import type { Db } from "@bs/db";
 
@@ -48,10 +49,38 @@ export async function verifyTurnstileToken(
   token?: string,
   remoteIp?: string,
 ): Promise<TurnstileVerificationResult> {
+  const isProduction = process.env.NODE_ENV === "production";
   const secretKey = process.env.TURNSTILE_SECRET_KEY?.trim();
 
-  // If Turnstile is unconfigured, do not fake live verification
+  // 1. Non-production test bypass (PLAN §7 / ADR-008)
+  if (!isProduction) {
+    if (token === "cf-turnstile-bypass" || token === "test-bypass") {
+      return {
+        success: true,
+        verified: false,
+        reason: "non_production_test_bypass",
+      };
+    }
+  } else {
+    // In production, reject test bypass tokens immediately
+    if (token === "cf-turnstile-bypass" || token === "test-bypass") {
+      return {
+        success: false,
+        verified: false,
+        reason: "Turnstile bypass is disabled in production",
+      };
+    }
+  }
+
+  // 2. Secret key check: Fail-closed in production, unverified pass in dev only
   if (!secretKey) {
+    if (isProduction) {
+      return {
+        success: false,
+        verified: false,
+        reason: "Turnstile is not configured in production",
+      };
+    }
     return {
       success: true,
       verified: false,
@@ -188,3 +217,66 @@ export async function checkSignupRateLimit(
 
   return { allowed: true };
 }
+
+/**
+ * Cryptographically hashes an IP address with a secret salt to prevent storing plaintext PII (PLAN §7 / S3).
+ */
+export function hashIpWithSalt(ip: string): string {
+  const salt = process.env.AUTH_SECRET || process.env.SESSION_SECRET || "bsec-saas-salt";
+  return createHash("sha256").update(`${salt}:${ip.trim()}`).digest("hex");
+}
+
+/**
+ * Rate limits subdomain reservation attempts per IP (max 20 per hour) (PLAN §7, §14 / S3).
+ */
+export async function checkReserveSubdomainRateLimit(
+  db: Db,
+  ip: string,
+): Promise<{ allowed: boolean; retryAfter?: number }> {
+  const now = new Date();
+  const currentHour = Math.floor(now.getTime() / (3600 * 1000));
+  const expiresAt = new Date((currentHour + 1) * 3600 * 1000);
+
+  const ipKey = `rate:reserve_subdomain:ip:${ip.replace(/[^a-zA-Z0-9.:]/g, "")}:${currentHour}`;
+  const ipRes = await db.execute<{ count: number }>(sql`
+    INSERT INTO rate_limit_counters (key, count, expires_at, created_at, updated_at)
+    VALUES (${ipKey}, 1, ${expiresAt.toISOString()}, now(), now())
+    ON CONFLICT (key) DO UPDATE SET count = rate_limit_counters.count + 1, updated_at = now()
+    RETURNING count;
+  `);
+
+  if ((ipRes.rows[0]?.count ?? 0) > 20) {
+    const retryAfter = Math.max(1, Math.ceil((expiresAt.getTime() - now.getTime()) / 1000));
+    return { allowed: false, retryAfter };
+  }
+
+  return { allowed: true };
+}
+
+/**
+ * Rate limits signup lead capture attempts per IP (max 30 per hour) (PLAN §7, §14 / S3).
+ */
+export async function checkLeadCaptureRateLimit(
+  db: Db,
+  ip: string,
+): Promise<{ allowed: boolean; retryAfter?: number }> {
+  const now = new Date();
+  const currentHour = Math.floor(now.getTime() / (3600 * 1000));
+  const expiresAt = new Date((currentHour + 1) * 3600 * 1000);
+
+  const ipKey = `rate:lead_capture:ip:${ip.replace(/[^a-zA-Z0-9.:]/g, "")}:${currentHour}`;
+  const ipRes = await db.execute<{ count: number }>(sql`
+    INSERT INTO rate_limit_counters (key, count, expires_at, created_at, updated_at)
+    VALUES (${ipKey}, 1, ${expiresAt.toISOString()}, now(), now())
+    ON CONFLICT (key) DO UPDATE SET count = rate_limit_counters.count + 1, updated_at = now()
+    RETURNING count;
+  `);
+
+  if ((ipRes.rows[0]?.count ?? 0) > 30) {
+    const retryAfter = Math.max(1, Math.ceil((expiresAt.getTime() - now.getTime()) / 1000));
+    return { allowed: false, retryAfter };
+  }
+
+  return { allowed: true };
+}
+

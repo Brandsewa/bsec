@@ -390,8 +390,7 @@ GRANT SELECT, INSERT, UPDATE, DELETE ON TABLE
   "onboarding_progress",
   "tenant_owner_invites",
   "subscriptions",
-  "platform_invoices",
-  "tenant_size_tiers"
+  "platform_invoices"
 TO "app_rw";
 --> statement-breakpoint
 

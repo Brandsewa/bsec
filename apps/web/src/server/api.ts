@@ -118,6 +118,9 @@ import {
   verifyCustomDomain,
   setPrimaryDomain,
   removeCustomDomain,
+  checkReserveSubdomainRateLimit,
+  checkLeadCaptureRateLimit,
+  hashIpWithSalt,
   type Logger,
   type Runtime,
   type TenantContext,
@@ -1202,22 +1205,41 @@ api.get("/saas/subdomain/check", async (c) => {
 });
 
 api.post("/saas/subdomain/reserve", async (c) => {
+  const ip = clientIp(c.req.raw.headers);
+  const db = server().rt._db.db;
+
+  const rateCheck = await checkReserveSubdomainRateLimit(db, ip);
+  if (!rateCheck.allowed) {
+    return c.json(
+      { success: false, reason: "Too many subdomain reservation requests. Please try again later." },
+      429,
+    );
+  }
+
   const body = (await c.req.json().catch(() => ({}))) as { slug?: unknown; leadId?: unknown };
   const slug = typeof body.slug === "string" ? body.slug : "";
   const leadId = typeof body.leadId === "string" ? body.leadId : undefined;
   if (!slug) return c.json({ success: false, reason: "Slug is required" }, 400);
-  const db = server().rt._db.db;
   const result = await reserveSubdomain(db, slug, leadId);
   return c.json(result, result.success ? 200 : 409);
 });
 
 api.post("/saas/lead", async (c) => {
-  const body = (await c.req.json().catch(() => ({}))) as Record<string, unknown>;
-  const db = server().rt._db.db;
   const ip = clientIp(c.req.raw.headers);
+  const db = server().rt._db.db;
+
+  const rateCheck = await checkLeadCaptureRateLimit(db, ip);
+  if (!rateCheck.allowed) {
+    return c.json(
+      { error: "Too many requests. Please try again later." },
+      429,
+    );
+  }
+
+  const body = (await c.req.json().catch(() => ({}))) as Record<string, unknown>;
   const result = await saveSignupLead(db, {
     ...body,
-    ipHash: ip,
+    ipHash: hashIpWithSalt(ip),
   });
   return c.json(result);
 });

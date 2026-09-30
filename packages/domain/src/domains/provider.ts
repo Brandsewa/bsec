@@ -1,26 +1,36 @@
-import { randomBytes } from "node:crypto";
+interface CfCustomHostnameApiResponse {
+  result: {
+    id: string;
+    hostname: string;
+    status: string;
+    ssl?: { status?: string };
+    ownership_verification?: { name: string; value: string };
+    verification_errors?: string[];
+  };
+}
 
 export interface CustomHostnameResult {
-  providerHostnameId: string;
+  providerHostnameId: string | null;
   hostname: string;
-  cnameTarget: string;
+  cnameTarget?: string | undefined;
   txtVerification?: {
     name: string;
     value: string;
-  };
-  status: "awaiting_dns" | "verifying" | "ssl_pending" | "active" | "failed";
-  sslStatus: "initializing" | "pending_validation" | "pending_issuance" | "active" | "failed";
+  } | undefined;
+  status: "requested" | "awaiting_dns" | "verifying" | "ssl_pending" | "active" | "failed";
+  sslStatus: "not_configured" | "initializing" | "pending_validation" | "pending_issuance" | "active" | "failed";
 }
 
 export interface CustomHostnameStatusResult {
   providerHostnameId: string;
   hostname: string;
-  status: "awaiting_dns" | "verifying" | "ssl_pending" | "active" | "failed";
-  sslStatus: "initializing" | "pending_validation" | "pending_issuance" | "active" | "failed";
+  status: "requested" | "awaiting_dns" | "verifying" | "ssl_pending" | "active" | "failed";
+  sslStatus: "not_configured" | "initializing" | "pending_validation" | "pending_issuance" | "active" | "failed";
   verificationErrors?: string[];
 }
 
 export interface CustomDomainProvider {
+  isConfigured?(): boolean;
   createCustomHostname(
     hostname: string,
     opts?: { prevalidate?: boolean },
@@ -53,19 +63,12 @@ export class CloudflareCustomDomainProvider implements CustomDomainProvider {
     opts?: { prevalidate?: boolean },
   ): Promise<CustomHostnameResult> {
     if (!this.isConfigured()) {
-      const simulatedId = `cf_hn_${randomBytes(8).toString("hex")}`;
-      const txtValue = `bs-saas-verify=${randomBytes(16).toString("hex")}`;
-
       return {
-        providerHostnameId: simulatedId,
+        providerHostnameId: null,
         hostname,
-        cnameTarget: this.fallbackCname,
-        txtVerification: {
-          name: `_cf-custom-hostname.${hostname}`,
-          value: txtValue,
-        },
-        status: "awaiting_dns",
-        sslStatus: opts?.prevalidate ? "pending_validation" : "initializing",
+        cnameTarget: undefined,
+        status: "requested",
+        sslStatus: "not_configured",
       };
     }
 
@@ -95,7 +98,7 @@ export class CloudflareCustomDomainProvider implements CustomDomainProvider {
       throw new Error(`Cloudflare custom hostname creation failed (${res.status}): ${errText}`);
     }
 
-    const data = (await res.json()) as any;
+    const data = (await res.json()) as CfCustomHostnameApiResponse;
     const result = data.result;
 
     const txtRecord = result?.ownership_verification
@@ -116,13 +119,12 @@ export class CloudflareCustomDomainProvider implements CustomDomainProvider {
   }
 
   async getCustomHostnameStatus(providerHostnameId: string): Promise<CustomHostnameStatusResult> {
-    if (!this.isConfigured()) {
-      // In unconfigured state, returns honest awaiting_dns status
+    if (!this.isConfigured() || !providerHostnameId) {
       return {
-        providerHostnameId,
+        providerHostnameId: providerHostnameId || "",
         hostname: "",
-        status: "awaiting_dns",
-        sslStatus: "initializing",
+        status: "requested",
+        sslStatus: "not_configured",
       };
     }
 
@@ -142,7 +144,7 @@ export class CloudflareCustomDomainProvider implements CustomDomainProvider {
       throw new Error(`Cloudflare custom hostname status failed (${res.status}): ${errText}`);
     }
 
-    const data = (await res.json()) as any;
+    const data = (await res.json()) as CfCustomHostnameApiResponse;
     const result = data.result;
 
     return {

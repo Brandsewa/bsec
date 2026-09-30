@@ -113,10 +113,18 @@ export async function addCustomDomain(
   });
 
   const domainId = randomUUID();
-  const verificationPayload = {
-    cname: cfResult.cnameTarget,
-    ...(cfResult.txtVerification ? { txt: cfResult.txtVerification } : {}),
-  };
+  const isUnconfigured =
+    cfResult.status === "requested" ||
+    cfResult.sslStatus === "not_configured" ||
+    Boolean(provider.isConfigured && !provider.isConfigured());
+
+  const verificationPayload =
+    isUnconfigured || !cfResult.cnameTarget
+      ? null
+      : {
+          cname: cfResult.cnameTarget,
+          ...(cfResult.txtVerification ? { txt: cfResult.txtVerification } : {}),
+        };
 
   // 4. Insert into domains table
   const [inserted] = await db
@@ -126,11 +134,11 @@ export async function addCustomDomain(
       tenantId,
       hostname,
       type: "custom",
-      status: cfResult.status,
-      sslStatus: cfResult.sslStatus,
+      status: isUnconfigured ? "requested" : cfResult.status,
+      sslStatus: isUnconfigured ? "not_configured" : cfResult.sslStatus,
       isPrimary: false,
       prevalidateTxt: Boolean(input.prevalidateTxt),
-      cfCustomHostnameId: cfResult.providerHostnameId,
+      cfCustomHostnameId: isUnconfigured ? null : cfResult.providerHostnameId,
       verification: verificationPayload,
     })
     .returning();

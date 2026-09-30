@@ -47,6 +47,10 @@ export function templateName(): string {
       h.update(`${f}:`).update(readFileSync(p));
     }
   }
+  // Roles and the migrate step shape the template too (default privileges, post-migration grants).
+  for (const f of ["../src/sql/roles.ts", "../src/scripts/migrate.ts", "../src/scripts/bootstrap-roles.ts"]) {
+    h.update(`${f}:`).update(readFileSync(path.resolve(here, f)));
+  }
   return `bsec_tpl_${h.digest("hex").slice(0, 12)}`;
 }
 

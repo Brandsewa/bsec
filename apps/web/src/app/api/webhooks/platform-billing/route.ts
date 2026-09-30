@@ -22,10 +22,11 @@ export async function POST(req: Request) {
     });
 
     return NextResponse.json(result, { status: 200 });
-  } catch (err: any) {
-    const status = err.statusCode || 400;
+  } catch (err: unknown) {
+    const error = err as { statusCode?: number; message?: string };
+    const status = error.statusCode || 400;
     return NextResponse.json(
-      { error: err.message || "Failed to process platform billing webhook" },
+      { error: error.message || "Failed to process platform billing webhook" },
       { status },
     );
   }

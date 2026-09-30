@@ -13,6 +13,31 @@ export async function middleware(request: NextRequest) {
     return NextResponse.next();
   }
 
+  const host = request.headers.get("x-forwarded-host") ?? request.headers.get("host") ?? "localhost";
+  const hostname = host.split(":")[0]?.toLowerCase() ?? "localhost";
+  const platformDomain = (process.env.PLATFORM_DOMAIN || "gobs.cloud").toLowerCase();
+  const marketingHost = (process.env.MARKETING_HOST || platformDomain).toLowerCase();
+
+  // Marketing platform host (e.g. gobs.cloud, www.gobs.cloud, or MARKETING_HOST) serves public SaaS pages
+  const isMarketingHost =
+    hostname === marketingHost ||
+    hostname === platformDomain ||
+    hostname === `www.${platformDomain}` ||
+    (hostname === "localhost" && (
+      pathname === "/" ||
+      pathname.startsWith("/signup") ||
+      pathname.startsWith("/api/saas/") ||
+      request.nextUrl.searchParams.get("marketing") === "true"
+    ));
+
+  // S6: Only platform marketing host serves /signup and /api/saas/*; other hosts return 404
+  if (pathname.startsWith("/signup") || pathname.startsWith("/api/saas/")) {
+    if (!isMarketingHost) {
+      return new NextResponse("Not Found", { status: 404 });
+    }
+    return NextResponse.next();
+  }
+
   // The storefront gate (store status, unknown host) must not apply to calls that are not about a storefront
   // host: the admin API, staff sign-in and provider webhooks resolve their tenant from the session or the
   // signed payload, and must keep working while a store is in maintenance, suspended, or on an unregistered
@@ -23,8 +48,6 @@ export async function middleware(request: NextRequest) {
     pathname.startsWith("/api/webhooks/") ||
     pathname.startsWith("/api/admin/") ||
     pathname.startsWith("/api/rpc/admin/") ||
-    pathname.startsWith("/api/saas/") ||
-    pathname.startsWith("/signup") ||
     pathname.startsWith("/pricing") ||
     pathname.startsWith("/faq") ||
     pathname.startsWith("/terms") ||
@@ -32,16 +55,6 @@ export async function middleware(request: NextRequest) {
   ) {
     return NextResponse.next();
   }
-
-  const host = request.headers.get("x-forwarded-host") ?? request.headers.get("host") ?? "localhost";
-  const hostname = host.split(":")[0]?.toLowerCase() ?? "localhost";
-  const platformDomain = (process.env.PLATFORM_DOMAIN || "gobs.cloud").toLowerCase();
-
-  // Marketing platform host (e.g. gobs.cloud, www.gobs.cloud) serves public SaaS pages
-  const isMarketingHost =
-    hostname === platformDomain ||
-    hostname === `www.${platformDomain}` ||
-    (hostname === "localhost" && (pathname === "/" || request.nextUrl.searchParams.get("marketing") === "true"));
 
   if (isMarketingHost && pathname === "/") {
     return NextResponse.next();

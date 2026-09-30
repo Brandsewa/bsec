@@ -13,9 +13,9 @@ import {
 } from "../src/jobs.ts";
 
 const PW = {
-  owner: "owner_pw_test_0199a063",
-  rw: "rw_pw_test_0199a063",
-  platform: "platform_pw_test_0199a063",
+  owner: "o_test",
+  rw: "rw_test",
+  platform: "p_test",
 };
 
 function as(user: string, pw: string) {

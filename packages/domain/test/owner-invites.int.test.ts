@@ -8,7 +8,6 @@ import {
   createRuntime,
   type Runtime,
   platformCreateTenantForClient,
-  createTenantOwnerInvite,
   acceptTenantOwnerInvite,
 } from "../src/index.ts";
 
@@ -37,7 +36,7 @@ beforeAll(async () => {
   await runMigrations(as("app_owner", PW.owner));
   rwDb = createDb(as("app_rw", PW.rw), { max: 15 });
   platformDb = createDb(as("app_platform", PW.platform), { max: 5 });
-  rt = createRuntime({ service: "web", databaseUrl: as("app_rw", PW.rw), poolMax: 15 });
+  rt = createRuntime({ service: "platform", databaseUrl: as("app_platform", PW.platform), poolMax: 15 });
 }, 180_000);
 
 afterAll(async () => {
@@ -66,6 +65,7 @@ describe("M8 Platform Store Creation & Tenant Owner Invites (PLAN §6, §6.4)", 
     expect(created.inviteToken).toBeDefined();
     expect(created.inviteToken.length).toBe(64); // 32 bytes hex
     expect(created.inviteExpiresAt.getTime()).toBeGreaterThan(Date.now() + 6 * 24 * 3600 * 1000);
+    expect(created.inviteUrl).toContain("/accept-invite?token=");
     expect(created.inviteUrl).toContain(created.inviteToken);
 
     // Verify invite was stored as SHA-256 hash (never plain text)
@@ -155,5 +155,31 @@ describe("M8 Platform Store Creation & Tenant Owner Invites (PLAN §6, §6.4)", 
         password: "short",
       }),
     ).rejects.toThrow(/at least 10 characters/);
+  });
+
+  it("atomically claims invite in a single statement to prevent concurrent races", async () => {
+    const slug = "atomic-test-84";
+    const email = "atomic@agency.local";
+
+    const created = await platformCreateTenantForClient(rt, {
+      storeName: "Atomic Store",
+      slug,
+      clientEmail: email,
+    });
+
+    // Run 5 simultaneous acceptance attempts with the same token
+    const results = await Promise.allSettled([
+      acceptTenantOwnerInvite(rt, { token: created.inviteToken, password: "Password12345!" }),
+      acceptTenantOwnerInvite(rt, { token: created.inviteToken, password: "Password12345!" }),
+      acceptTenantOwnerInvite(rt, { token: created.inviteToken, password: "Password12345!" }),
+      acceptTenantOwnerInvite(rt, { token: created.inviteToken, password: "Password12345!" }),
+      acceptTenantOwnerInvite(rt, { token: created.inviteToken, password: "Password12345!" }),
+    ]);
+
+    const fulfilled = results.filter((r) => r.status === "fulfilled");
+    const rejected = results.filter((r) => r.status === "rejected");
+
+    expect(fulfilled).toHaveLength(1);
+    expect(rejected).toHaveLength(4);
   });
 });

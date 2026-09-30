@@ -17,7 +17,7 @@ import { MarketingLandingPage } from "@/components/marketing/MarketingLandingPag
 
 export async function generateMetadata(): Promise<Metadata> {
   let title = "Home";
-  let description = "Welcome to our store.";
+  const description = "Welcome to our store.";
 
   try {
     const h = await headers();
@@ -59,6 +59,7 @@ export default async function HomePage() {
   let host = "localhost";
   let storeName = "Store";
   const logoUrl: string | null = null;
+  let isMarketing = false;
 
   try {
     const h = await headers();
@@ -67,10 +68,8 @@ export default async function HomePage() {
     const access = await evaluateStorefrontAccess(rt, host, { headers: h });
 
     if (!access.tenantId) {
-      return <MarketingLandingPage />;
-    }
-
-    if (access.tenantId) {
+      isMarketing = true;
+    } else {
       const tenantCtx = {
         tenantId: access.tenantId,
         storeStatus: access.mode ?? "live",
@@ -126,6 +125,10 @@ export default async function HomePage() {
     if (res.success) {
       blocksToRender = res.blocks;
     }
+  }
+
+  if (isMarketing) {
+    return <MarketingLandingPage />;
   }
 
   const storeUrl = `https://${host}`;

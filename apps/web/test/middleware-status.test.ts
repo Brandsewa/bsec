@@ -213,4 +213,38 @@ describe("Storefront Status Middleware (PLAN §8.2, §8.3 & M3 Status Pipeline)"
     expect(res.status).toBe(200);
     expect(res.headers.get("X-Robots-Tag")).toBeNull();
   });
+
+  describe("S6: Middleware Host Scoping (/signup and /api/saas/*)", () => {
+    it("returns 404 when /signup is accessed from a non-marketing host", async () => {
+      const req = new NextRequest("https://mystore.test.com/signup", {
+        headers: { host: "mystore.test.com" },
+      });
+
+      const res = await middleware(req);
+      expect(res.status).toBe(404);
+    });
+
+    it("returns 404 when /api/saas/subdomain/check is accessed from a non-marketing host", async () => {
+      const req = new NextRequest("https://mystore.test.com/api/saas/subdomain/check?slug=hello", {
+        headers: { host: "mystore.test.com" },
+      });
+
+      const res = await middleware(req);
+      expect(res.status).toBe(404);
+    });
+
+    it("allows /signup and /api/saas/* when accessed from the marketing host", async () => {
+      const req1 = new NextRequest("https://gobs.cloud/signup", {
+        headers: { host: "gobs.cloud" },
+      });
+      const res1 = await middleware(req1);
+      expect(res1.status).toBe(200);
+
+      const req2 = new NextRequest("https://gobs.cloud/api/saas/plans", {
+        headers: { host: "gobs.cloud" },
+      });
+      const res2 = await middleware(req2);
+      expect(res2.status).toBe(200);
+    });
+  });
 });

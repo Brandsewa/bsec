@@ -116,8 +116,10 @@ function SignupContent() {
 
   useEffect(() => {
     if (!slug || slug.length < 3) {
-      setSlugStatus(null);
-      return;
+      const timer = setTimeout(() => {
+        setSlugStatus(null);
+      }, 0);
+      return () => clearTimeout(timer);
     }
 
     const timer = setTimeout(async () => {
@@ -232,8 +234,9 @@ function SignupContent() {
 
     let stepIndex = 0;
     const progressTimer = setInterval(() => {
-      if (stepIndex < steps.length) {
-        setProvisionProgress(steps[stepIndex]!);
+      const nextStep = steps[stepIndex];
+      if (nextStep) {
+        setProvisionProgress(nextStep);
         stepIndex++;
       }
     }, 400);

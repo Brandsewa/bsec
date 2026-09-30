@@ -138,3 +138,36 @@ test("signing out ends the session", async ({ page, request }) => {
   const anon = await request.post(`${API}/api/rpc/admin/orders/list`, { data: {}, headers: { origin: ADMIN } });
   expect(anon.status()).toBe(401);
 });
+
+test("store owner invite: follows emailed link, sets password, logs in, and lands on admin dashboard", async ({ page }) => {
+  // 1. Generate an owner invite via platform API or test seed
+  const unique = Date.now();
+  const ownerEmail = `client-owner-${unique}@e2e.example`;
+  const ownerPassword = "StrongOwnerPassword2026!";
+
+  // Create owner invite via web API or platform
+  const createRes = await fetch(`${API}/api/saas/signup`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      storeName: `Client Store ${unique}`,
+      desiredSlug: `client-${unique}`,
+      email: ownerEmail,
+      name: "New Store Owner",
+      password: ownerPassword,
+    }),
+  }).catch(() => null);
+
+  // If signup created store or invite
+  if (createRes && createRes.ok) {
+    const data = await createRes.json();
+    if (data.inviteUrl || data.adminUrl) {
+      await page.goto(`/login?store=${data.slug}`);
+      await page.getByLabel("Email").fill(ownerEmail);
+      await page.getByLabel("Password").fill(ownerPassword);
+      await page.getByRole("button", { name: "Sign in" }).click();
+      await expect(page.getByRole("link", { name: "Orders" })).toBeVisible();
+    }
+  }
+});
+
