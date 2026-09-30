@@ -92,6 +92,7 @@ export async function setMemberRole(
   input: { id: string; roleId: string },
 ): Promise<MembershipRecord> {
   assertPermission(ctx, "staff.manage");
+  const isOwner = ctx.roles.includes("store_owner");
   await withTenant(rt._db.db, ctx.tenantId, async (tx) => {
     const [target] = await tx
       .select({ id: schema.memberships.id, roleName: schema.roles.name })
@@ -105,6 +106,12 @@ export async function setMemberRole(
     if (!target) throw new Error("Not Found: member not found");
     const [newRole] = await tx.select({ name: schema.roles.name }).from(schema.roles).where(eq(schema.roles.id, input.roleId)).limit(1);
     if (!newRole) throw new Error("Bad Request: role not found");
+    if (
+      (newRole.name === "store_owner" || newRole.name === "store_admin" || target.roleName === "store_owner" || target.roleName === "store_admin") &&
+      !isOwner
+    ) {
+      throw new Error("Forbidden: only store owners can assign or modify owner and admin roles");
+    }
     if (target.roleName === "store_owner" && newRole.name !== "store_owner" && (await activeOwnerCount(tx)) <= 1) {
       throw new Error("Conflict: a store must keep at least one owner");
     }
@@ -121,6 +128,7 @@ export async function setMemberRole(
 
 export async function removeMember(rt: Runtime, ctx: TenantContext, input: { id: string }): Promise<{ ok: true }> {
   assertPermission(ctx, "staff.manage");
+  const isOwner = ctx.roles.includes("store_owner");
   await withTenant(rt._db.db, ctx.tenantId, async (tx) => {
     const [target] = await tx
       .select({ id: schema.memberships.id, userId: schema.memberships.userId, roleName: schema.roles.name })
@@ -132,6 +140,9 @@ export async function removeMember(rt: Runtime, ctx: TenantContext, input: { id:
       .where(eq(schema.memberships.id, input.id))
       .limit(1);
     if (!target) throw new Error("Not Found: member not found");
+    if ((target.roleName === "store_owner" || target.roleName === "store_admin") && !isOwner) {
+      throw new Error("Forbidden: only store owners can remove owner or admin members");
+    }
     if (ctx.actor.type === "staff" && ctx.actor.userId === target.userId) {
       throw new Error("Conflict: you cannot remove yourself from the store");
     }
@@ -150,11 +161,15 @@ export async function inviteStaff(
   input: { email: string; roleId: string },
 ): Promise<StaffInvitationRecord> {
   assertPermission(ctx, "staff.manage");
+  const isOwner = ctx.roles.includes("store_owner");
   await assertStaffQuota(rt._db.db, ctx.tenantId);
   const email = input.email.trim().toLowerCase();
   return withTenant(rt._db.db, ctx.tenantId, async (tx) => {
-    const [role] = await tx.select({ id: schema.roles.id }).from(schema.roles).where(eq(schema.roles.id, input.roleId)).limit(1);
+    const [role] = await tx.select({ id: schema.roles.id, name: schema.roles.name }).from(schema.roles).where(eq(schema.roles.id, input.roleId)).limit(1);
     if (!role) throw new Error("Bad Request: role not found");
+    if ((role.name === "store_owner" || role.name === "store_admin") && !isOwner) {
+      throw new Error("Forbidden: only store owners can invite owner or admin members");
+    }
 
     const [alreadyMember] = await tx
       .select({ id: schema.memberships.id })

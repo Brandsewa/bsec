@@ -1,29 +1,29 @@
 import { betterAuth, type BetterAuthOptions } from "better-auth";
 import { drizzleAdapter } from "better-auth/adapters/drizzle";
+import { twoFactor } from "better-auth/plugins";
 import { schema, type Db } from "@bs/db";
-import { STAFF_COOKIE_PREFIX } from "./index.ts";
+import { PLATFORM_COOKIE_PREFIX } from "./index.ts";
 
-export interface StaffAuthOptions {
+export interface PlatformAuthOptions {
   baseURL?: string;
   secret?: string;
-  /** Origins allowed to call the auth endpoints (the admin SPA). */
   trustedOrigins?: string[];
-  /** Cookie domain shared between API and admin hosts, e.g. ".example.com". Omit on localhost. */
   cookieDomain?: string;
-  /** Force the Secure cookie flag. Defaults to true when baseURL is https. */
   secureCookies?: boolean;
   advanced?: BetterAuthOptions["advanced"];
 }
 
 /**
- * Staff Better Auth instance (PLAN §4, §5.3).
- * Backs global users + memberships model. Cookie prefix: `bs-staff` (STAFF_COOKIE_PREFIX).
- * Public sign-up is disabled: staff accounts are created by the create-owner operator script
- * or by accepting a staff invitation, never through an open endpoint.
+ * Platform (Super Admin) Better Auth instance (PLAN §4, §6).
+ * Backs platform_staff users with two-factor authentication (TOTP + backup codes).
+ * Cookie prefix: `bs-platform` (PLATFORM_COOKIE_PREFIX).
+ * Public sign-up is disabled; platform accounts are provisioned via operator CLI
+ * or invited by a platform owner.
  */
-export function createStaffAuth(db: Db, opts: StaffAuthOptions = {}) {
-  const baseURL = opts.baseURL ?? process.env.BETTER_AUTH_URL;
+export function createPlatformAuth(db: Db, opts: PlatformAuthOptions = {}) {
+  const baseURL = opts.baseURL ?? process.env.PLATFORM_AUTH_URL ?? process.env.BETTER_AUTH_URL;
   const secure = opts.secureCookies ?? Boolean(baseURL?.startsWith("https://"));
+
   return betterAuth({
     ...(baseURL ? { baseURL } : {}),
     secret: opts.secret ?? process.env.BETTER_AUTH_SECRET,
@@ -50,11 +50,14 @@ export function createStaffAuth(db: Db, opts: StaffAuthOptions = {}) {
       expiresIn: 60 * 60 * 24 * 7,
       updateAge: 60 * 60 * 24,
     },
-    // Our own Postgres-backed limiter (checkAdminLoginLimit) guards sign-in; Better Auth's in-memory
-    // limiter would not be shared across containers.
     rateLimit: { enabled: false },
+    plugins: [
+      twoFactor({
+        issuer: "BsCommerce Platform",
+      }),
+    ],
     advanced: {
-      cookiePrefix: STAFF_COOKIE_PREFIX,
+      cookiePrefix: PLATFORM_COOKIE_PREFIX,
       useSecureCookies: secure,
       ...(opts.cookieDomain
         ? { crossSubDomainCookies: { enabled: true, domain: opts.cookieDomain } }
@@ -65,4 +68,4 @@ export function createStaffAuth(db: Db, opts: StaffAuthOptions = {}) {
   });
 }
 
-export type StaffAuth = ReturnType<typeof createStaffAuth>;
+export type PlatformAuth = ReturnType<typeof createPlatformAuth>;

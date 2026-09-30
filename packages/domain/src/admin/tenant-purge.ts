@@ -1,8 +1,8 @@
 import { sql } from "drizzle-orm";
 import type { Db } from "@bs/db";
 
-/** Rows that must survive a data purge: the tenant row itself is handled by the caller. */
-const KEEP_TABLES = new Set(["tenants"]);
+/** Rows that must survive a data purge: the tenant row itself and tax invoices (kept 8 years, PLAN §6.4). */
+const KEEP_TABLES = new Set(["tenants", "platform_invoices", "platform_audit_logs"]);
 
 export interface PurgeResult {
   /** Rows deleted per table, only tables where something was removed. */

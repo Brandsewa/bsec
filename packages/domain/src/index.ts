@@ -88,5 +88,11 @@ export * from "./saas/billing.ts";
 export * from "./domains/provider.ts";
 export * from "./domains/service.ts";
 export { warnIfEncryptionKeyMissing, isEncryptionKeyConfigured } from "@bs/payments";
+export * from "./system/tenant-lifecycle.ts";
+export * from "./platform/support-sessions.ts";
+export * from "./platform/tenant-deletions.ts";
+export * from "./platform/exports.ts";
+export * from "./platform/create-staff.ts";
+export * from "./platform/system.ts";
 
 

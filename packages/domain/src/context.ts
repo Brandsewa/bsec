@@ -9,6 +9,9 @@ import type { Runtime } from "./runtime.ts";
  */
 import { hasPermission, type StorePermission } from "@bs/auth";
 
+import { validateSupportSessionToken } from "./platform/support-sessions.ts";
+import { isAdminAccessAllowed, isAdminReadOnly } from "./system/tenant-lifecycle.ts";
+
 export { hasPermission, type StorePermission };
 
 export type Actor =
@@ -70,7 +73,8 @@ function getHeader(headers: HeaderValues, name: string): string | undefined {
  * Builds the TenantContext for incoming requests (PLAN §3, §4).
  * Enforces:
  * - Storefront path: tenant strictly resolved from Host header via resolveHostToTenant.
- * - Admin path: tenant resolved from X-Store-Id header + session membership cross-check.
+ * - Admin path: tenant resolved from X-Store-Id header + session membership cross-check,
+ *   or verified X-Support-Token for platform support impersonation.
  *   Customer sessions cannot resolve admin context.
  */
 export async function buildTenantContext(
@@ -82,15 +86,6 @@ export async function buildTenantContext(
     getHeader(opts.headers, "x-request-id") ?? crypto.randomUUID();
 
   if (opts.entryPath === "admin") {
-    if (!opts.session) {
-      throw new Error("Unauthorized: admin access requires an authenticated session");
-    }
-
-    if (opts.session.type === "customer") {
-      throw new Error("Forbidden: customer session cannot access admin context");
-    }
-
-    const session = opts.session;
     const storeId = getHeader(opts.headers, "x-store-id");
     if (!storeId) {
       throw new Error("Bad Request: missing X-Store-Id header for admin context");
@@ -100,6 +95,60 @@ export async function buildTenantContext(
     if (!UUID_RE.test(storeId)) {
       throw new Error("Forbidden: user has no active membership for the requested store");
     }
+
+    // 1. Support session check (PLAN §6.3)
+    const supportToken = getHeader(opts.headers, "x-support-token");
+    if (supportToken) {
+      const supportSession = await validateSupportSessionToken(db, supportToken, storeId);
+      const [t] = await db
+        .select({ status: schema.tenants.status })
+        .from(schema.tenants)
+        .where(eq(schema.tenants.id, storeId))
+        .limit(1);
+
+      const tenantStatus = t?.status ?? "active";
+      if (!isAdminAccessAllowed(tenantStatus)) {
+        throw new Error("Forbidden: tenant is not accessible in admin");
+      }
+
+      const allPermissions = [
+        "orders.read", "orders.write", "orders.manage",
+        "products.read", "products.write",
+        "customers.read", "customers.write",
+        "analytics.read",
+        "settings.read", "settings.write",
+        "domains.read", "domains.write",
+      ];
+      const permissions = (supportSession.scope === "read_only" || isAdminReadOnly(tenantStatus))
+        ? allPermissions.filter((p) => p.endsWith(".read"))
+        : allPermissions;
+
+      const storeStatus: StoreStatus =
+        tenantStatus === "active" ? "live" : (tenantStatus as StoreStatus);
+
+      return {
+        tenantId: storeId,
+        storeStatus,
+        actor: {
+          type: "platform_support",
+          userId: supportSession.platformUserId,
+          supportSessionId: supportSession.sessionId,
+        },
+        roles: ["support"],
+        permissions,
+        requestId,
+      };
+    }
+
+    if (!opts.session) {
+      throw new Error("Unauthorized: admin access requires an authenticated session");
+    }
+
+    if (opts.session.type === "customer") {
+      throw new Error("Forbidden: customer session cannot access admin context");
+    }
+
+    const session = opts.session;
 
     // Cross-check active membership and load assigned role and tenant status.
     // Executed within withTenant(db, storeId, ...) because memberships table has FORCE ROW LEVEL SECURITY.
@@ -142,15 +191,25 @@ export async function buildTenantContext(
     if (!row) {
       throw new Error("Forbidden: user has no active membership for the requested store");
     }
+
+    if (!isAdminAccessAllowed(row.tenantStatus)) {
+      throw new Error("Forbidden: tenant is not accessible in admin");
+    }
+
     const storeStatus: StoreStatus =
       row.tenantStatus === "active" ? "live" : (row.tenantStatus as StoreStatus);
+
+    let permissions = row.permissions ?? [];
+    if (isAdminReadOnly(row.tenantStatus)) {
+      permissions = permissions.filter((p) => p.endsWith(".read"));
+    }
 
     return {
       tenantId: storeId,
       storeStatus,
       actor: { type: "staff", userId: opts.session.user.id },
       roles: [row.roleName],
-      permissions: row.permissions ?? [],
+      permissions,
       requestId,
     };
   }

@@ -7,6 +7,7 @@ import {
   orderItems,
   orders,
   paymentIntents,
+  tenants,
   withTenant,
   QUEUE_NAMES,
 } from "@bs/db";
@@ -20,6 +21,7 @@ import { withIdempotencyKey } from "../system/idempotency.ts";
 import { isFeatureEnabled, FeatureDisabledError } from "../features.ts";
 import { readStoreConfig } from "../admin/store-config.ts";
 import { trackSoftQuotaUsage } from "../system/quotas.ts";
+import { isCheckoutAllowed } from "../system/tenant-lifecycle.ts";
 
 export interface PlaceOrderInput {
   cartToken: string;
@@ -89,6 +91,16 @@ export async function placeOrder(
   }
 
   const executeOrderPlacement = async (tx: typeof rt._db.db): Promise<{ status: number; body: PlaceOrderResult }> => {
+    // Assert tenant lifecycle allows checkout (PLAN §6.4)
+    const [t] = await tx
+      .select({ status: tenants.status })
+      .from(tenants)
+      .where(eq(tenants.id, tenantId))
+      .limit(1);
+    if (t && !isCheckoutAllowed(t.status)) {
+      throw new Error(`Checkout is not available for store in '${t.status}' state`);
+    }
+
     // 1. Fetch cart
     const cart = await getOrCreateCart(rt, ctx, input.cartToken, tx);
     if (!cart || cart.items.length === 0) {

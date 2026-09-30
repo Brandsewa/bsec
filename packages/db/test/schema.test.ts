@@ -11,6 +11,10 @@ describe("M1 Schema Definitions", () => {
     expect(schema.featureFlags).toBeDefined();
     expect(schema.tenantFeatureOverrides).toBeDefined();
     expect(schema.platformStaff).toBeDefined();
+    expect(schema.platformStaffInvitations).toBeDefined();
+    expect(schema.supportSessions).toBeDefined();
+    expect(schema.tenantDeletions).toBeDefined();
+    expect(schema.tenantNotes).toBeDefined();
   });
 
   it("exports all expected identity tables", () => {
@@ -18,6 +22,7 @@ describe("M1 Schema Definitions", () => {
     expect(schema.sessions).toBeDefined();
     expect(schema.accounts).toBeDefined();
     expect(schema.verifications).toBeDefined();
+    expect(schema.twoFactors).toBeDefined();
     expect(schema.roles).toBeDefined();
     expect(schema.memberships).toBeDefined();
     expect(schema.staffInvitations).toBeDefined();
@@ -27,6 +32,7 @@ describe("M1 Schema Definitions", () => {
 
   it("exports all expected settings tables", () => {
     expect(schema.storeSettings).toBeDefined();
+    expect(schema.exports).toBeDefined();
   });
 
   it("registers all tenant tables in tenantTableNames", () => {
@@ -38,6 +44,7 @@ describe("M1 Schema Definitions", () => {
       "audit_logs",
       "customer_sessions",
       "store_settings",
+      "exports",
     ];
     for (const name of expected) {
       expect(tenantTableNames.has(name), `Missing registration for ${name}`).toBe(true);

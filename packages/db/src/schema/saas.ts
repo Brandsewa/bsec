@@ -8,11 +8,13 @@ import {
   pgTable,
   text,
   timestamp,
+  unique,
   uuid,
 } from "drizzle-orm/pg-core";
 import { tenantTable } from "../tenant-table.ts";
 import { citext } from "./custom-types.ts";
 import { tenants } from "./tenants.ts";
+import { users } from "./identity.ts";
 
 /**
  * Plans: Pricing tiers (Starter, Growth, Pro) per PLAN §5.1.
@@ -183,3 +185,28 @@ export const tenantOwnerInvites = pgTable("tenant_owner_invites", {
   usedAt: timestamp("used_at", { withTimezone: true }),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().default(sql`now()`),
 });
+
+/**
+ * Exports: Per-store export requests (PLAN §5.10, §6.4 / M9).
+ * Tenant table: RLS enabled.
+ */
+export const exports = tenantTable(
+  "exports",
+  {
+    id: uuid("id").default(sql`uuidv7()`).primaryKey(),
+    type: text("type").notNull().default("full_store"), // 'full_store' | 'products' | 'orders' | 'customers'
+    status: text("status").notNull().default("pending"), // 'pending' | 'processing' | 'completed' | 'failed'
+    fileKey: text("file_key"),
+    fileSizeBytes: bigint("file_size_bytes", { mode: "number" }),
+    requestedBy: uuid("requested_by").references(() => users.id, { onDelete: "set null" }),
+    expiresAt: timestamp("expires_at", { withTimezone: true }).notNull(),
+    error: text("error"),
+    metadata: jsonb("metadata").default({}),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().default(sql`now()`),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().default(sql`now()`),
+  },
+  (t) => [
+    unique("exports_tenant_id_uniq").on(t.tenantId, t.id),
+  ],
+);
+

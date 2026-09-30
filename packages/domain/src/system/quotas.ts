@@ -260,6 +260,27 @@ export async function assertCustomDomainQuota(db: Db, tenantId: string): Promise
 }
 
 /**
+ * Generic hard enforcement quota assertion.
+ */
+export async function assertQuota(
+  db: Db,
+  tenantId: string,
+  quotaKey: PlanQuotaKey,
+  current: number,
+): Promise<void> {
+  const { limit, enforcement } = await resolveEffectiveQuota(db, tenantId, quotaKey);
+  if (enforcement === "hard" && current >= limit) {
+    throw new QuotaExceededError(
+      `Quota exceeded for '${quotaKey}': limit is ${limit} (current: ${current})`,
+      quotaKey,
+      current,
+      limit,
+    );
+  }
+}
+
+
+/**
  * Hard enforcement check for media file storage (PLAN §6.1).
  */
 export async function assertStorageQuota(db: Db, tenantId: string, uploadSizeMb: number): Promise<void> {

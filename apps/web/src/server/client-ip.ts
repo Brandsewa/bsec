@@ -1,14 +1,9 @@
+import { getClientIp } from "@bs/domain";
+
 /**
- * Best-effort client IP for rate limiting. Behind Traefik (and optionally Cloudflare) the proxy
- * APPENDS the address it saw to X-Forwarded-For, so the rightmost entry is the trustworthy hop;
- * the leftmost entry is whatever the caller sent and must never be trusted.
+ * Re-exports the canonical getClientIp from @bs/domain.
+ * Never trust client-forged headers; takes the trusted reverse proxy hop.
  */
-export function clientIp(headers: Headers): string {
-  const xff = headers.get("x-forwarded-for");
-  if (xff) {
-    const parts = xff.split(",").map((s) => s.trim()).filter(Boolean);
-    const last = parts[parts.length - 1];
-    if (last) return last;
-  }
-  return headers.get("x-real-ip")?.trim() || "unknown";
-}
+export const clientIp = getClientIp;
+export { getClientIp };
+

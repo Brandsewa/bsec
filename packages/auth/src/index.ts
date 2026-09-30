@@ -5,6 +5,7 @@
  */
 export const STAFF_COOKIE_PREFIX = "bs-staff";
 export const CUSTOMER_COOKIE = "__Host-cust";
+export const PLATFORM_COOKIE_PREFIX = "bs-platform";
 
 export const STORE_PERMISSIONS = [
   "products.read",
@@ -38,6 +39,8 @@ export function hasPermission(granted: readonly string[], needed: StorePermissio
 }
 
 export { createStaffAuth, type StaffAuth, type StaffAuthOptions } from "./staff.ts";
+export { createPlatformAuth, type PlatformAuth, type PlatformAuthOptions } from "./platform.ts";
 export { hashPassword, verifyPassword } from "better-auth/crypto";
 export { createCustomerAuth, type CustomerAuth, type CustomerAuthOptions } from "./customer.ts";
+
 
