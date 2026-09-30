@@ -10,6 +10,12 @@ import {
   adjustInventory,
   buildTenantContext,
   getAdminMe,
+  getSupportAdminMe,
+  listStoreSupportSessions,
+  approveStoreSupportSession,
+  denyStoreSupportSession,
+  getStandingSupportConsent,
+  setStandingSupportConsent,
   acceptInvitation,
   checkRateLimit,
   clearLoginFailures,
@@ -140,6 +146,8 @@ export interface ApiContext {
   rt: Runtime;
   log: Logger;
   headers?: Headers | undefined;
+  /** Method and path of the request (recorded when a platform support token is used). */
+  requestInfo?: { method: string; path: string } | undefined;
   session?: {
     user: { id: string; email?: string | undefined };
     session?: { id: string; userId: string; [key: string]: unknown } | undefined;
@@ -164,14 +172,6 @@ function mapAuthError(err: unknown): unknown {
   return err;
 }
 
-/** Requires a signed-in staff session but no store selection (used by /admin/me to list the user's stores). */
-const requireSession = os.middleware(async ({ context, next }) => {
-  if (!context.session || context.session.type === "customer") {
-    throw new ORPCError("UNAUTHORIZED", { message: "Sign in required" });
-  }
-  return next({ context });
-});
-
 const requireAdmin = os.middleware(async ({ context, next }) => {
   const headers = context.headers ?? new Headers();
   let tenantCtx: TenantContext | null;
@@ -180,6 +180,7 @@ const requireAdmin = os.middleware(async ({ context, next }) => {
       entryPath: "admin",
       headers,
       session: context.session,
+      request: context.requestInfo,
     });
   } catch (err) {
     throw mapAuthError(err);
@@ -268,10 +269,75 @@ export const storeRouter = os.router({
   },
   admin: {
     me: {
-      get: os.admin.me.get.use(requireSession).handler(({ context }) => {
-        if (!context.session) throw new ORPCError("UNAUTHORIZED", { message: "Sign in required" });
+      get: os.admin.me.get.handler(async ({ context }) => {
+        // A platform support session identifies itself with X-Support-Token instead of a store login.
+        if (context.headers?.get("x-support-token")) {
+          let tenantCtx: TenantContext | null;
+          try {
+            tenantCtx = await buildTenantContext(context.rt, {
+              entryPath: "admin",
+              headers: context.headers,
+              session: null,
+              request: context.requestInfo,
+            });
+          } catch (err) {
+            throw mapAuthError(err);
+          }
+          if (!tenantCtx) throw new ORPCError("UNAUTHORIZED", { message: "Unable to resolve admin tenant context" });
+          return getSupportAdminMe(context.rt, tenantCtx);
+        }
+        if (!context.session || context.session.type === "customer") {
+          throw new ORPCError("UNAUTHORIZED", { message: "Sign in required" });
+        }
         return getAdminMe(context.rt, context.session.user.id);
       }),
+    },
+    support: {
+      list: os.admin.support.list
+        .use(requireAdmin)
+        .use(requirePermission("settings.write"))
+        .handler(({ context }) => {
+          if (!context.tenantCtx) throw new Error("Missing tenant context");
+          return listStoreSupportSessions(context.rt, context.tenantCtx).catch((e) => {
+            throw mapAuthError(e);
+          });
+        }),
+      approve: os.admin.support.approve
+        .use(requireAdmin)
+        .use(requirePermission("settings.write"))
+        .handler(({ context, input }) => {
+          if (!context.tenantCtx) throw new Error("Missing tenant context");
+          return approveStoreSupportSession(context.rt, context.tenantCtx, input.id).catch((e) => {
+            throw mapAuthError(e);
+          });
+        }),
+      deny: os.admin.support.deny
+        .use(requireAdmin)
+        .use(requirePermission("settings.write"))
+        .handler(({ context, input }) => {
+          if (!context.tenantCtx) throw new Error("Missing tenant context");
+          return denyStoreSupportSession(context.rt, context.tenantCtx, input.id).catch((e) => {
+            throw mapAuthError(e);
+          });
+        }),
+      getStandingConsent: os.admin.support.getStandingConsent
+        .use(requireAdmin)
+        .use(requirePermission("settings.write"))
+        .handler(({ context }) => {
+          if (!context.tenantCtx) throw new Error("Missing tenant context");
+          return getStandingSupportConsent(context.rt, context.tenantCtx).catch((e) => {
+            throw mapAuthError(e);
+          });
+        }),
+      setStandingConsent: os.admin.support.setStandingConsent
+        .use(requireAdmin)
+        .use(requirePermission("settings.write"))
+        .handler(({ context, input }) => {
+          if (!context.tenantCtx) throw new Error("Missing tenant context");
+          return setStandingSupportConsent(context.rt, context.tenantCtx, input.enabled).catch((e) => {
+            throw mapAuthError(e);
+          });
+        }),
     },
     payments: {
       get: os.admin.payments.get
@@ -1147,7 +1213,7 @@ api.use(
   cors({
     origin: (origin) => (allowedApiOrigins().includes(origin) ? origin : null),
     credentials: true,
-    allowHeaders: ["content-type", "x-store-id", "x-request-id"],
+    allowHeaders: ["content-type", "x-store-id", "x-request-id", "x-support-token"],
     allowMethods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
     exposeHeaders: ["x-request-id", "retry-after"],
     maxAge: 600,
@@ -1320,7 +1386,7 @@ api.all("/rpc/*", async (c, next) => {
   const session = await resolveStaffSession(c.req.raw.headers);
   const { matched, response } = await rpc.handle(c.req.raw, {
     prefix: "/api/rpc",
-    context: { rt: server().rt, log: c.get("log"), headers: c.req.raw.headers, session },
+    context: { rt: server().rt, log: c.get("log"), headers: c.req.raw.headers, requestInfo: { method: c.req.method, path: c.req.path }, session },
   });
   if (matched) return c.newResponse(response.body, response);
   await next();
@@ -1330,7 +1396,7 @@ api.all("/*", async (c, next) => {
   const session = await resolveStaffSession(c.req.raw.headers);
   const { matched, response } = await openapi.handle(c.req.raw, {
     prefix: "/api",
-    context: { rt: server().rt, log: c.get("log"), headers: c.req.raw.headers, session },
+    context: { rt: server().rt, log: c.get("log"), headers: c.req.raw.headers, requestInfo: { method: c.req.method, path: c.req.path }, session },
   });
   if (matched) return c.newResponse(response.body, response);
   await next();

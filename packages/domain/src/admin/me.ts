@@ -1,6 +1,7 @@
 import { and, eq } from "drizzle-orm";
 import { schema, withTenant, withUser } from "@bs/db";
 import type { Runtime } from "../runtime.ts";
+import type { TenantContext } from "../context.ts";
 
 export interface AdminMeStore {
   tenantId: string;
@@ -11,9 +12,19 @@ export interface AdminMeStore {
   permissions: string[];
 }
 
+export interface AdminMeSupport {
+  sessionId: string;
+  scope: "read_only" | "write";
+  consent: "owner_approved" | "standing_consent" | "emergency";
+  reason: string;
+  ticketRef: string;
+  expiresAt: string;
+}
+
 export interface AdminMe {
   user: { id: string; email: string; name: string };
   stores: AdminMeStore[];
+  support?: AdminMeSupport | undefined;
 }
 
 /**
@@ -65,4 +76,61 @@ export async function getAdminMe(rt: Runtime, userId: string): Promise<AdminMe> 
   }
 
   return { user: { id: user.id, email: user.email, name: user.name }, stores };
+}
+
+/**
+ * The "me" of a platform support session: who is looking, which store, and what they may do. Built from the already
+ * validated tenant context (the token was checked, counted and audited by buildTenantContext), so it never depends on
+ * a store login.
+ */
+export async function getSupportAdminMe(rt: Runtime, ctx: TenantContext): Promise<AdminMe> {
+  if (ctx.actor.type !== "platform_support") throw new Error("Unauthorized: not a support session");
+  const db = rt._db.db;
+  const [session] = await db
+    .select({
+      id: schema.supportSessions.id,
+      scope: schema.supportSessions.scope,
+      consent: schema.supportSessions.consent,
+      reason: schema.supportSessions.reason,
+      ticketRef: schema.supportSessions.ticketRef,
+      expiresAt: schema.supportSessions.expiresAt,
+    })
+    .from(schema.supportSessions)
+    .where(and(eq(schema.supportSessions.id, ctx.actor.supportSessionId), eq(schema.supportSessions.tenantId, ctx.tenantId)))
+    .limit(1);
+  if (!session) throw new Error("Unauthorized: invalid or expired support session token");
+
+  const [staff] = await db
+    .select({ id: schema.users.id, email: schema.users.email, name: schema.users.name })
+    .from(schema.users)
+    .where(eq(schema.users.id, ctx.actor.userId))
+    .limit(1);
+  const [tenant] = await db
+    .select({ id: schema.tenants.id, name: schema.tenants.name, slug: schema.tenants.slug, status: schema.tenants.status })
+    .from(schema.tenants)
+    .where(eq(schema.tenants.id, ctx.tenantId))
+    .limit(1);
+  if (!staff || !tenant) throw new Error("Unauthorized: invalid or expired support session token");
+
+  return {
+    user: { id: staff.id, email: staff.email, name: staff.name ?? staff.email },
+    stores: [
+      {
+        tenantId: tenant.id,
+        name: tenant.name,
+        slug: tenant.slug,
+        status: tenant.status,
+        role: "support",
+        permissions: [...ctx.permissions],
+      },
+    ],
+    support: {
+      sessionId: session.id,
+      scope: session.scope as "read_only" | "write",
+      consent: session.consent as "owner_approved" | "standing_consent" | "emergency",
+      reason: session.reason,
+      ticketRef: session.ticketRef,
+      expiresAt: session.expiresAt.toISOString(),
+    },
+  };
 }

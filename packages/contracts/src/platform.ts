@@ -98,6 +98,17 @@ export const PlatformTenantDetail = z.object({
     authorName: z.string().nullable().optional(),
     createdAt: z.string(),
   })),
+  /** The open (not cancelled, not finished) deletion of this store, if any. */
+  deletion: z
+    .object({
+      id: z.string(),
+      step: z.string(),
+      scheduledFor: z.string(),
+      reason: z.string(),
+      error: z.string().nullable(),
+      canCancel: z.boolean(),
+    })
+    .nullable(),
 });
 export type PlatformTenantDetail = z.infer<typeof PlatformTenantDetail>;
 
@@ -125,7 +136,9 @@ export const SupportSessionRecordSchema = z.object({
   ticketRef: z.string(),
   scope: z.enum(["read_only", "write"]),
   consent: z.enum(["owner_approved", "standing_consent", "emergency"]),
+  status: z.enum(["pending_owner_approval", "active", "denied", "ended", "expired"]),
   approvedByUserId: z.string().nullable().optional(),
+  approvedAt: z.string().nullable().optional(),
   startedAt: z.string(),
   expiresAt: z.string(),
   endedAt: z.string().nullable().optional(),
@@ -261,11 +274,20 @@ export const platformTenantsContract = {
         adminUrl: z.string(),
         inviteToken: z.string(),
         inviteUrl: z.string(),
+        /** Present when a custom domain was requested with the store. */
+        customDomain: z
+          .object({
+            hostname: z.string(),
+            status: z.string(),
+            /** Why it could not be added (the store itself was created regardless). */
+            error: z.string().nullable(),
+          })
+          .optional(),
       }),
     ),
   resendOwnerInvite: oc
     .route({ method: "POST", path: "/platform/tenants/{id}/resend-invite" })
-    .input(z.object({ id: z.string().uuid(), email: z.string().email() }))
+    .input(z.object({ id: z.string().uuid(), email: z.string().email().optional() }))
     .output(
       z.object({
         inviteId: z.string(),
@@ -305,15 +327,15 @@ export const platformTenantsContract = {
     .output(z.object({ ok: z.boolean(), id: z.string(), createdAt: z.string() })),
   bulkSuspend: oc
     .route({ method: "POST", path: "/platform/tenants/bulk-suspend" })
-    .input(z.object({ tenantIds: z.array(z.string().uuid()), reason: z.string().min(1) }))
+    .input(z.object({ tenantIds: z.array(z.string().uuid()).min(1), reason: z.string().min(1), confirmation: z.string() }))
     .output(z.object({ ok: z.boolean(), suspendedCount: z.number() })),
   bulkChangeTier: oc
     .route({ method: "POST", path: "/platform/tenants/bulk-tier" })
-    .input(z.object({ tenantIds: z.array(z.string().uuid()), tier: z.enum(["XS", "S", "M", "L"]) }))
+    .input(z.object({ tenantIds: z.array(z.string().uuid()).min(1), tier: z.enum(["XS", "S", "M", "L"]), confirmation: z.string() }))
     .output(z.object({ ok: z.boolean(), updatedCount: z.number(), tier: z.string() })),
   requestDeletion: oc
     .route({ method: "POST", path: "/platform/tenants/{id}/request-deletion" })
-    .input(z.object({ id: z.string().uuid(), reason: z.string().optional(), graceDays: z.number().int().optional() }))
+    .input(z.object({ id: z.string().uuid(), reason: z.string().optional(), graceDays: z.number().int().min(0).max(90).optional(), confirmSlug: z.string().min(1) }))
     .output(z.object({ ok: z.boolean(), deletionId: z.string(), scheduledFor: z.string() })),
   cancelDeletion: oc
     .route({ method: "POST", path: "/platform/tenants/{id}/cancel-deletion" })
@@ -502,7 +524,9 @@ export const platformStaffContract = {
         id: z.string(),
         email: z.string(),
         role: z.string(),
+        /** Shown once to the inviter: only its hash is stored. */
         token: z.string(),
+        inviteUrl: z.string(),
         expiresAt: z.string(),
       }),
     ),

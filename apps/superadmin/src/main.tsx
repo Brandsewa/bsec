@@ -18,8 +18,8 @@ if (sentryDsn) {
 
 const queryClient = new QueryClient({
   queryCache: new QueryCache({
-    onError: (err: any) => {
-      if (err?.code === "UNAUTHORIZED" && window.location.pathname !== "/login") {
+    onError: (err: unknown) => {
+      if ((err as { code?: string } | null)?.code === "UNAUTHORIZED" && window.location.pathname !== "/login") {
         window.location.assign("/login");
       }
     },

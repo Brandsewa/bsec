@@ -95,7 +95,8 @@ export const ALLOWED_TRANSITIONS: Record<TenantLifecycleState, readonly TenantLi
   past_due: ["active", "suspended", "archived", "deletion_requested"],
   suspended: ["active", "archived", "deletion_requested"],
   archived: ["active", "deletion_requested"],
-  deletion_requested: ["active", "deleted"], // active is the cancel path
+  // Cancelling a deletion puts the store back into whatever state it was in before the request.
+  deletion_requested: ["trial", "active", "past_due", "suspended", "archived", "deleted"],
   deleted: [], // terminal state
 };
 
@@ -133,4 +134,39 @@ export function isAdminAccessAllowed(status: string): boolean {
 export function isAdminReadOnly(status: string): boolean {
   const behavior = LIFECYCLE_MATRIX[status as TenantLifecycleState];
   return behavior?.admin === "read_only";
+}
+
+export type StorefrontLifecycleDecision =
+  | { served: true }
+  | { served: false; httpStatus: 404 | 503; reason: "provisioning" | "suspended" | "not_found" };
+
+/**
+ * What the public storefront does for a store in a given lifecycle state (PLAN §6.4). The single decision used by the
+ * storefront request pipeline, so the matrix above is not just documentation.
+ */
+export function storefrontLifecycleDecision(status: string): StorefrontLifecycleDecision {
+  const behavior = LIFECYCLE_MATRIX[status as TenantLifecycleState];
+  switch (behavior?.storefront) {
+    case "per_store_status":
+    case "served":
+      return { served: true };
+    case "not_served":
+      return { served: false, httpStatus: 503, reason: "provisioning" };
+    case "temporarily_unavailable":
+      return { served: false, httpStatus: 503, reason: "suspended" };
+    default:
+      return { served: false, httpStatus: 404, reason: "not_found" };
+  }
+}
+
+/** Marketing jobs (abandoned-cart e-mails and the like) run only for stores that are live. */
+export function isMarketingAllowed(status: string): boolean {
+  const behavior = LIFECYCLE_MATRIX[status as TenantLifecycleState];
+  return behavior?.domainsAndJobs === "all";
+}
+
+/** Adding, verifying or changing custom domains is only possible while the store is fully live. */
+export function isDomainManagementAllowed(status: string): boolean {
+  const behavior = LIFECYCLE_MATRIX[status as TenantLifecycleState];
+  return behavior?.domainsAndJobs === "all";
 }

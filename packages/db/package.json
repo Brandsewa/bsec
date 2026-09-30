@@ -9,7 +9,9 @@
     "./tenant-table": "./src/tenant-table.ts",
     "./queues": "./src/queues.ts",
     "./bootstrap": "./src/scripts/bootstrap-roles.ts",
-    "./migrate": "./src/scripts/migrate.ts"
+    "./migrate": "./src/scripts/migrate.ts",
+    "./test-env": "./test-support/test-env.ts",
+    "./test-fixtures": "./test-support/platform-fixtures.ts"
   },
   "scripts": {
     "typecheck": "tsc -p tsconfig.json",

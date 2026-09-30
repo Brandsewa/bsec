@@ -1,7 +1,7 @@
 import React, { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
-import { CheckCircle2, Globe, RefreshCw, Search, ShieldAlert, ShieldCheck } from "lucide-react";
+import { Globe, RefreshCw, } from "lucide-react";
 import {
   Button,
   EmptyState,
@@ -77,7 +77,7 @@ export function Domains() {
                   <TableCell>
                     {d.tenantSlug ? (
                       <Link
-                        to={`/tenants/${d.tenantId}` as any}
+                        to={`/tenants/${d.tenantId}`}
                         className="text-xs text-primary hover:underline font-medium"
                       >
                         {d.tenantName || d.tenantSlug}

@@ -3,6 +3,7 @@ import { and, eq, ne, sql } from "drizzle-orm";
 import { schema } from "@bs/db";
 import type { Runtime } from "../runtime.ts";
 import { assertCustomDomainQuota } from "../system/quotas.ts";
+import { isDomainManagementAllowed } from "../system/tenant-lifecycle.ts";
 import {
   type CustomDomainProvider,
   CloudflareCustomDomainProvider,
@@ -92,6 +93,12 @@ export async function addCustomDomain(
   const db = rt._db.db;
   const hostname = normalizeCustomHostname(input.hostname);
   const provider = input.provider ?? new CloudflareCustomDomainProvider();
+
+  // 0. Lifecycle (PLAN §6.4): domains can only be added while the store is fully live
+  const [tenantRow] = await db.select({ status: schema.tenants.status }).from(schema.tenants).where(eq(schema.tenants.id, tenantId)).limit(1);
+  if (tenantRow && !isDomainManagementAllowed(tenantRow.status)) {
+    throw new Error(`Forbidden: custom domains cannot be added while the store is '${tenantRow.status}'`);
+  }
 
   // 1. Quota Enforcement (PLAN §6.1)
   await assertCustomDomainQuota(db, tenantId);

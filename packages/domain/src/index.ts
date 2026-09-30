@@ -43,6 +43,7 @@ export * from "./admin/orders.ts";
 export * from "./admin/customers.ts";
 export * from "./admin/discounts.ts";
 export * from "./admin/me.ts";
+export * from "./admin/support-access.ts";
 export * from "./admin/store-config.ts";
 export * from "./admin/team.ts";
 export * from "./admin/payments-settings.ts";
@@ -94,5 +95,6 @@ export * from "./platform/tenant-deletions.ts";
 export * from "./platform/exports.ts";
 export * from "./platform/create-staff.ts";
 export * from "./platform/system.ts";
+export * from "./platform/catalog-reads.ts";
 
 

@@ -10,7 +10,7 @@ const PW = { owner: "o_test", rw: "rw_test", platform: "p_test", saas: "s_test" 
 let container: StartedPostgreSqlContainer | undefined;
 let superUrl: string;
 
-function as(role: "app_owner" | "app_rw" | "app_platform", password: string): string {
+function as(role: "app_owner" | "app_rw" | "app_platform" | "app_saas", password: string): string {
   const u = new URL(superUrl);
   u.username = role;
   u.password = password;
@@ -133,7 +133,6 @@ const NON_RLS_TABLES_WRITABLE_BY_APP_RW: string[] = [
   "rate_limit_counters",
   "sessions",
   "tenant_active_jobs",
-  "two_factors",
   "users",
   "verifications",
   "webhook_inbox",
@@ -171,5 +170,32 @@ describe("B2: app_saas write surface stays intentional", () => {
         order by 1`,
     );
     expect(rows.map((r) => r.table_name)).toEqual([...APP_SAAS_WRITABLE_TABLES].sort());
+  });
+});
+
+describe("B2: platform-only tables are invisible to the tenant runtime", () => {
+  it("app_rw and app_saas have no privileges (not even SELECT) on TOTP seeds, staff, deletions, notes, invitations, export files", async () => {
+    const tables = ["two_factors", "platform_staff", "platform_staff_invitations", "tenant_deletions", "tenant_notes", "export_files"];
+    for (const role of ["app_rw", "app_saas"]) {
+      for (const t of tables) {
+        const { rows } = await q<{ ok: boolean }>(
+          as("app_owner", PW.owner),
+          `select (has_table_privilege('${role}', '${t}', 'SELECT') or has_table_privilege('${role}', '${t}', 'INSERT') or has_table_privilege('${role}', '${t}', 'UPDATE') or has_table_privilege('${role}', '${t}', 'DELETE')) as ok`,
+        );
+        expect(rows[0]!.ok, `${role} must have no access to ${t}`).toBe(false);
+      }
+    }
+    // reading or writing them fails outright
+    await expect(q(as("app_rw", PW.rw), "select secret from two_factors")).rejects.toThrow(/permission denied/i);
+    await expect(q(as("app_saas", PW.saas), "select * from platform_staff")).rejects.toThrow(/permission denied/i);
+  });
+
+  it("app_rw sees support_sessions only through column grants: no raw reads of the operator's private columns, no inserts, no deletes", async () => {
+    const rw = as("app_rw", PW.rw);
+    await expect(q(rw, "select impersonated_user_id from support_sessions")).rejects.toThrow(/permission denied/i);
+    await expect(q(rw, "delete from support_sessions")).rejects.toThrow(/permission denied/i);
+    await expect(q(rw, "insert into support_sessions (tenant_id, platform_user_id, reason, ticket_ref, expires_at) values (gen_random_uuid(), gen_random_uuid(), 'x', 'x', now())")).rejects.toThrow(/permission denied/i);
+    await expect(q(rw, "update support_sessions set scope = 'write'")).rejects.toThrow(/permission denied/i);
+    await expect(q(rw, "select id, tenant_id, scope, token_hash, actions_count from support_sessions limit 1")).resolves.toBeDefined();
   });
 });

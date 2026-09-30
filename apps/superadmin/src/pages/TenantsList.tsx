@@ -2,10 +2,7 @@ import React, { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
 import {
-  AlertCircle,
   Building2,
-  CheckCircle2,
-  Filter,
   Plus,
   Search,
   ShieldAlert,
@@ -38,6 +35,7 @@ import {
   toast,
 } from "@bs/ui";
 import { client } from "../lib/orpc.ts";
+import { messageOf } from "../lib/errors.ts";
 
 function statusBadge(status: string) {
   switch (status) {
@@ -69,6 +67,8 @@ export function TenantsList() {
   const [bulkTierOpen, setBulkTierOpen] = useState(false);
   const [selectedTier, setSelectedTier] = useState<"XS" | "S" | "M" | "L">("S");
   const [actionLoading, setActionLoading] = useState(false);
+  const [suspendConfirm, setSuspendConfirm] = useState("");
+  const [tierConfirm, setTierConfirm] = useState("");
 
   const { data: tenants, isLoading, refetch } = useQuery({
     queryKey: ["platform", "tenants", { search, status: statusFilter }],
@@ -104,14 +104,16 @@ export function TenantsList() {
       const res = await client.tenants.bulkSuspend({
         tenantIds: selectedIds,
         reason: suspendReason,
+        confirmation: suspendConfirm,
       });
       toast.success(`Successfully suspended ${res.suspendedCount} store(s)`);
       setBulkSuspendOpen(false);
       setSuspendReason("");
+      setSuspendConfirm("");
       setSelectedIds([]);
       refetch();
-    } catch (err: any) {
-      toast.error(err?.message || "Failed to suspend stores");
+    } catch (err) {
+      toast.error(messageOf(err, "Failed to suspend stores"));
     } finally {
       setActionLoading(false);
     }
@@ -123,13 +125,15 @@ export function TenantsList() {
       const res = await client.tenants.bulkChangeTier({
         tenantIds: selectedIds,
         tier: selectedTier,
+        confirmation: tierConfirm,
       });
       toast.success(`Updated ${res.updatedCount} store(s) to tier ${res.tier}`);
       setBulkTierOpen(false);
+      setTierConfirm("");
       setSelectedIds([]);
       refetch();
-    } catch (err: any) {
-      toast.error(err?.message || "Failed to change tier");
+    } catch (err) {
+      toast.error(messageOf(err, "Failed to change tier"));
     } finally {
       setActionLoading(false);
     }
@@ -143,7 +147,7 @@ export function TenantsList() {
         title="Tenants & Stores"
         description="All hosted storefronts on the platform, managed with explicit tenant isolation."
         aside={
-          <Link to={"/tenants/create" as any}>
+          <Link to={"/tenants/create"}>
             <Button size="sm">
               <Plus className="mr-1.5 h-4 w-4" />
               Create Store
@@ -256,7 +260,7 @@ export function TenantsList() {
                   <TableCell>
                     <div className="flex flex-col">
                       <Link
-                        to={`/tenants/${t.id}` as any}
+                        to={`/tenants/${t.id}`}
                         className="font-medium hover:underline text-sm"
                       >
                         {t.name}
@@ -281,7 +285,7 @@ export function TenantsList() {
                     {t.createdAt ? new Date(t.createdAt).toLocaleDateString("en-IN") : "—"}
                   </TableCell>
                   <TableCell className="text-right">
-                    <Link to={`/tenants/${t.id}` as any}>
+                    <Link to={`/tenants/${t.id}`}>
                       <Button variant="ghost" size="sm" className="h-7 px-2 text-xs">
                         Manage
                       </Button>
@@ -310,12 +314,16 @@ export function TenantsList() {
               value={suspendReason}
               onChange={(e) => setSuspendReason(e.target.value)}
             />
+            <label className="text-xs font-medium">
+              To confirm, type <span className="font-mono select-all">SUSPEND {selectedIds.length}</span>
+            </label>
+            <Input value={suspendConfirm} onChange={(e) => setSuspendConfirm(e.target.value)} placeholder={`SUSPEND ${selectedIds.length}`} />
           </div>
           <DialogFooter>
             <Button variant="default" onClick={() => setBulkSuspendOpen(false)} disabled={actionLoading}>
               Cancel
             </Button>
-            <Button variant="destructive" onClick={handleBulkSuspend} disabled={actionLoading}>
+            <Button variant="destructive" onClick={handleBulkSuspend} disabled={actionLoading || suspendConfirm !== `SUSPEND ${selectedIds.length}`}>
               {actionLoading ? "Suspending..." : "Confirm Bulk Suspend"}
             </Button>
           </DialogFooter>
@@ -333,7 +341,7 @@ export function TenantsList() {
           </DialogHeader>
           <div className="space-y-3 py-2">
             <label className="text-xs font-medium">Target Size Tier</label>
-            <Select value={selectedTier} onValueChange={(val: any) => setSelectedTier(val)}>
+            <Select value={selectedTier} onValueChange={(val) => setSelectedTier(val as typeof selectedTier)}>
               <SelectTrigger>
                 <SelectValue />
               </SelectTrigger>
@@ -344,12 +352,16 @@ export function TenantsList() {
                 <SelectItem value="L">L (Enterprise tier, 25,000 products)</SelectItem>
               </SelectContent>
             </Select>
+            <label className="text-xs font-medium">
+              To confirm, type <span className="font-mono select-all">TIER {selectedTier} {selectedIds.length}</span>
+            </label>
+            <Input value={tierConfirm} onChange={(e) => setTierConfirm(e.target.value)} placeholder={`TIER ${selectedTier} ${selectedIds.length}`} />
           </div>
           <DialogFooter>
             <Button variant="default" onClick={() => setBulkTierOpen(false)} disabled={actionLoading}>
               Cancel
             </Button>
-            <Button onClick={handleBulkChangeTier} disabled={actionLoading}>
+            <Button onClick={handleBulkChangeTier} disabled={actionLoading || tierConfirm !== `TIER ${selectedTier} ${selectedIds.length}`}>
               {actionLoading ? "Updating..." : "Apply Tier"}
             </Button>
           </DialogFooter>

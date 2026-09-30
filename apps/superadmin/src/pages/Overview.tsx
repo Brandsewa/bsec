@@ -6,7 +6,6 @@ import {
   AlertTriangle,
   ArrowUpRight,
   Building2,
-  CheckCircle2,
   CreditCard,
   Database,
   DollarSign,
@@ -17,6 +16,7 @@ import {
 } from "lucide-react";
 import { Button, MetricCard, PageContainer, PageHeader, PageSkeleton } from "@bs/ui";
 import { client } from "../lib/orpc.ts";
+import { messageOf } from "../lib/errors.ts";
 
 function formatRupees(paise: number): string {
   const rupees = paise / 100;
@@ -49,7 +49,7 @@ export function Overview() {
         <div className="rounded-lg border border-destructive/20 bg-destructive/10 p-6 text-center">
           <AlertTriangle className="mx-auto h-8 w-8 text-destructive mb-2" />
           <h2 className="text-lg font-semibold text-destructive">Failed to load platform metrics</h2>
-          <p className="text-sm text-muted-foreground mt-1">{(error as any)?.message || "Unknown error"}</p>
+          <p className="text-sm text-muted-foreground mt-1">{messageOf(error, "Unknown error")}</p>
           <Button variant="default" size="sm" onClick={() => refetch()} className="mt-4">
             Retry
           </Button>
@@ -65,7 +65,7 @@ export function Overview() {
         description="Live operational telemetry and key business metrics across all hosted stores."
         aside={
           <div className="flex items-center gap-2">
-            <Link to={"/tenants/create" as any}>
+            <Link to={"/tenants/create"}>
               <Button size="sm">
                 <Building2 className="mr-1.5 h-4 w-4" />
                 Create Store
@@ -141,7 +141,7 @@ export function Overview() {
           <p className="text-xs text-muted-foreground mb-4">
             Provision a new store with custom template, pricing tier, and single-use owner invite link.
           </p>
-          <Link to={"/tenants/create" as any} className="inline-flex items-center text-xs font-medium text-primary hover:underline">
+          <Link to={"/tenants/create"} className="inline-flex items-center text-xs font-medium text-primary hover:underline">
             Open creation form <ArrowUpRight className="ml-1 h-3 w-3" />
           </Link>
         </div>
@@ -154,7 +154,7 @@ export function Overview() {
           <p className="text-xs text-muted-foreground mb-4">
             Audited, time-boxed support sessions with required merchant consent or emergency overrides.
           </p>
-          <Link to={"/support" as any} className="inline-flex items-center text-xs font-medium text-primary hover:underline">
+          <Link to={"/support"} className="inline-flex items-center text-xs font-medium text-primary hover:underline">
             View active sessions <ArrowUpRight className="ml-1 h-3 w-3" />
           </Link>
         </div>
@@ -167,7 +167,7 @@ export function Overview() {
           <p className="text-xs text-muted-foreground mb-4">
             Inspect pg-boss background queues, retry failed jobs, and monitor webhook inbox errors.
           </p>
-          <Link to={"/system" as any} className="inline-flex items-center text-xs font-medium text-primary hover:underline">
+          <Link to={"/system"} className="inline-flex items-center text-xs font-medium text-primary hover:underline">
             Open system health <ArrowUpRight className="ml-1 h-3 w-3" />
           </Link>
         </div>

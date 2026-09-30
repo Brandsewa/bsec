@@ -20,9 +20,17 @@ Without `BETTER_AUTH_URL` / `BETTER_AUTH_SECRET` the site keeps serving but admi
 - `TENANT_SECRETS_KEY`: **Set before saving any payment/shipping/email credentials.** The app boots and serves without it (a warning is logged), but storing or reading tenant credentials fails until it is set. Master symmetric encryption key (32 bytes or 64 hex characters) used by `@bs/payments` and `@bs/shipping` (`encryptSecret`/`decryptSecret`) to secure payment gateway secrets and third-party credentials stored in `tenant_secrets`. (Fallback alias: `ENCRYPTION_KEY`).
 
 ### Platform (`bsec-platform`)
-- `DATABASE_URL_PLATFORM`: Connection string for PostgreSQL as `app_platform` (BYPASSRLS).
+- `DATABASE_URL_PLATFORM`: Connection string for PostgreSQL as `app_platform` (BYPASSRLS). This is the only service that holds BYPASSRLS credentials.
+- `BETTER_AUTH_SECRET`: **Required for Super Admin sign-in and export downloads.** 32+ random characters. Use a *different* value from the web app's.
+- `PLATFORM_AUTH_URL`: the public origin of this API, e.g. `https://platform.gobs.cloud`.
+- `SUPERADMIN_ORIGINS`: the exact origin(s) of the Super Admin app, comma separated, e.g. `https://superadmin.gobs.cloud`. Only these origins may call the API with credentials (CORS) and only these pass the origin check on state-changing requests. Wildcards are not supported on purpose: tenants own other `*.gobs.cloud` subdomains.
+- `SUPERADMIN_URL` (optional): where staff invitation links point. Defaults to the first `SUPERADMIN_ORIGINS` entry.
+- `PLATFORM_COOKIE_DOMAIN`: **leave unset.** The platform session cookie is host-only (`platform.gobs.cloud`) so it is never shared with tenant subdomains. Do not set the store's `COOKIE_DOMAIN` on this service.
+- `ADMIN_HOST`, `PLATFORM_DOMAIN`: used to build owner-invite links (`https://admin.gobs.cloud/accept-invite?...`).
+- `DELETION_SWEEP_INTERVAL_MS` (optional, default 60000): how often the service looks for tenant deletions whose grace period is over.
 - `APP_ENV`: `production` | `staging` | `development`.
 - `PORT`: `4000`.
+- `R2_ACCESS_KEY_ID`, `R2_SECRET_ACCESS_KEY`, `R2_BUCKET_NAME` (optional): when set, the deletion workflow also deletes the store's media objects from Cloudflare R2. Without them the workflow records how many objects still need manual clean-up in the audit log.
 - `TENANT_SECRETS_KEY`: **Set before saving any payment/shipping/email credentials.** The app boots and serves without it (a warning is logged), but storing or reading tenant credentials fails until it is set. Used to decrypt and validate tenant credentials on platform administrative endpoints. (Fallback alias: `ENCRYPTION_KEY`).
 
 ### Worker (`bsec-worker`)
@@ -33,8 +41,9 @@ Without `BETTER_AUTH_URL` / `BETTER_AUTH_SECRET` the site keeps serving but admi
 - `TENANT_SECRETS_KEY`: **Set before saving any payment/shipping/email credentials.** The app boots and serves without it (a warning is logged), but storing or reading tenant credentials fails until it is set. Used by background workers (e.g. transactional email dispatcher, payment webhooks, shipping background jobs) to decrypt tenant API keys (e.g. Resend, Razorpay). (Fallback alias: `ENCRYPTION_KEY`).
 
 ### Super Admin (`bsec-superadmin`)
-- SPA served at `platform.gobs.cloud` (or port `8081` in staging/local).
-- Connects to `bsec-platform` API with credentials and CORS support.
+- A static SPA (nginx) served at **`superadmin.gobs.cloud`** (port `8081` in staging/local). The platform **API stays at `platform.gobs.cloud`** and the SPA finds it by replacing the `superadmin.` prefix with `platform.` (or set `VITE_PLATFORM_API_URL` at build time).
+- The store admin link used for support sessions is derived as `admin.<domain>` (or `VITE_STORE_ADMIN_URL`).
+- No runtime environment variables. Create it in Coolify as a new application from `ghcr.io/brandsewa/bsec-superadmin`, domain `superadmin.gobs.cloud`, port `8081`, and add it to the deploy list after the first successful build.
 
 ### Migration Runner (`bsec-migrate`)
 - `DATABASE_URL_OWNER`: Connection string for PostgreSQL as `app_owner`.
@@ -74,12 +83,13 @@ In `production` (`APP_ENV=production` or `NODE_ENV=production`), the services bo
 ## Operator tools (run from a container terminal in Coolify)
 Bundled in the images and never run automatically. Open the app in Coolify, go to **Terminal**, and run:
 
-**Bootstrap first Platform Staff operator** (platform container):
-Creates or resets the bootstrap platform staff login with mandatory multi-factor authentication (MFA). Uses an interactive hidden password prompt:
+**Bootstrap the first Platform Staff owner** (platform container). Uses an interactive hidden password prompt (min 10 characters), never printed or logged:
 ```
 STAFF_EMAIL=brandsewaofficial@gmail.com STAFF_NAME="Platform Owner" node dist/create-staff.js
 ```
-The operator must enroll and verify their MFA (TOTP / Authenticator App + backup codes) at first login before accessing any platform mutations or tenant management endpoints.
+- The account can do nothing until it has set up an authenticator app: the first sign-in at `superadmin.gobs.cloud` shows a setup screen (secret + one-time backup codes), you confirm one code, and you are signed out. Every later sign-in is password + a code from the app (or a backup code, each usable once).
+- If the email already belongs to an account (for example a store owner), that account's password is **not** changed; it simply becomes platform staff.
+- **Lost phone / authenticator?** Run the same command again with `STAFF_RESET_MFA=1`: it removes the enrolment and all sessions so the person sets up a new authenticator. (This is why access to the platform container terminal must stay restricted.)
 
 **Create or reset a store owner login** (worker container). Uses a hidden password prompt; the password is never printed or logged:
 ```
@@ -98,8 +108,16 @@ node dist/demo.js remove
 
 ## First-time setup checklist
 1. Set `BETTER_AUTH_URL` and `BETTER_AUTH_SECRET` on **bsec-web** (Runtime only), redeploy.
-2. Bootstrap platform owner: run `create-staff` from the **platform** container terminal.
-3. Open `https://platform.gobs.cloud`, sign in, and complete mandatory MFA setup.
-4. From Super Admin (`https://platform.gobs.cloud`), click **Create Store** to provision the first merchant storefront.
-5. Provide the generated onboarding invite link to the merchant owner to set their password.
-6. (Later) set `TENANT_SECRETS_KEY` on web, platform and worker before entering Razorpay/Shiprocket/Resend keys.
+2. On **bsec-platform** set `BETTER_AUTH_SECRET` (a different random value), `PLATFORM_AUTH_URL=https://platform.gobs.cloud`, `SUPERADMIN_ORIGINS=https://superadmin.gobs.cloud`, `ADMIN_HOST=admin.gobs.cloud`, `PLATFORM_DOMAIN=gobs.cloud`; redeploy.
+3. Create the **bsec-superadmin** application in Coolify (see above) with the domain `superadmin.gobs.cloud` and a DNS record for it.
+4. Bootstrap the platform owner: run `create-staff` from the **platform** container terminal.
+5. Open `https://superadmin.gobs.cloud`, sign in, and set up your authenticator app when asked; then sign in again with a code.
+6. In Super Admin click **Create Store**: it provisions the first merchant store and shows a single-use owner invite link (nothing is e-mailed automatically). Give that link to the merchant so they set their own password. The store owner then finds **Settings → Support access** to approve or deny platform support requests.
+7. (Later) set `TENANT_SECRETS_KEY` on web, platform and worker before entering Razorpay/Shiprocket/Resend keys.
+
+## Operating the platform (Super Admin)
+- **Roles:** `platform_owner` (everything, including roles and emergency support), `platform_admin` (store lifecycle, plans, deletion, exports, staff invitations, support write-confirmation), `platform_support` (read everything, notes, support sessions they started). The last active owner can never be demoted or deactivated.
+- **Support sessions:** always start read-only, 60 minutes (extendable once). Default consent is "owner approves in their store admin". The staff member gets a one-time link (`admin.<domain>/support#token=...`); only a hash of the token is stored. Write access needs a second confirmation by an admin. The store admin shows a fixed banner while a session is active and every request is counted and recorded.
+- **Tenant deletion:** never immediate. The store goes offline at once, a grace period (default 7 days) runs, and it can be cancelled until the workflow starts. After that the platform service runs: export, stop billing, release domains, media clean-up, purge data, verify, mark deleted. A failed step is retried every minute and its error is shown on the store page. Invoices, the audit trail and the export are kept.
+- **Suspend/archive changes reach the public storefront within about 60 seconds** (each web instance caches the host-to-store lookup for 60 s).
+- **Exports** are gzipped JSON archives of all of a store's data with credentials removed. The download link is valid 15 minutes and needs an admin login.

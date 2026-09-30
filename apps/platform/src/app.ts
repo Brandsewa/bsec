@@ -1,15 +1,31 @@
 import { Hono } from "hono";
 import { cors } from "hono/cors";
-import { implement, onError } from "@orpc/server";
+import { implement, onError, ORPCError } from "@orpc/server";
 import { RPCHandler } from "@orpc/server/fetch";
 import { OpenAPIHandler } from "@orpc/openapi/fetch";
-import { desc, eq, sql } from "drizzle-orm";
-import { schema } from "@bs/db";
 import { platformContract } from "@bs/contracts";
 import { createPlatformAuth, PLATFORM_COOKIE_PREFIX, type PlatformAuth } from "@bs/auth";
 import {
+  acceptPlatformStaffInvitation,
+  listPlatformDomains,
+  listPlatformFeatureFlags,
+  listPlatformInvoices,
+  listPlatformPlans,
+  listPlatformQuotaDefinitions,
+  listPlatformSignups,
+  listPlatformThemeTemplates,
+  recordExportDownload,
+  requestCustomDomainForClient,
+  updatePlatformFeatureFlag,
   assertPlatformStaff,
+  assertRoleAtLeast,
   checkHealth,
+  checkInviteAcceptRateLimit,
+  completePlatformMfaEnrollment,
+  getPlatformLoginStatus,
+  readExportArchive,
+  type PlatformRole,
+  type PlatformStaffIdentity,
   getPlatformTenant,
   getPlatformTenantDetail,
   listPlatformTenants,
@@ -44,7 +60,6 @@ import {
   getPlatformSystemData,
   retryFailedJob,
   retryFailedWebhook,
-  writePlatformAudit,
   requestLogger,
   resolveRequestId,
   getClientIp,
@@ -58,12 +73,26 @@ export interface PlatformContext {
   session?: {
     user: { id: string; email?: string };
     type?: string;
-  } | null;
+    /** When the Better Auth session was created. Must be after MFA enrolment completed. */
+    createdAt?: Date;
+  } | null | undefined;
+  /** Set by requirePlatformStaff once the session, MFA and active-staff checks passed. */
+  staff?: PlatformStaffIdentity;
   meta?: {
-    ip?: string;
-    userAgent?: string;
-    requestId?: string;
-  };
+    ip?: string | undefined;
+    userAgent?: string | undefined;
+    requestId?: string | undefined;
+  } | undefined;
+}
+
+/** Origins allowed to call the platform API with credentials. Exact matches only (tenants own *.gobs.cloud subdomains). */
+export function platformAllowedOrigins(): string[] {
+  const configured = (process.env.SUPERADMIN_ORIGINS ?? "")
+    .split(",")
+    .map((v) => v.trim())
+    .filter(Boolean);
+  if (configured.length > 0) return configured;
+  return ["https://superadmin.gobs.cloud", ...(process.env.NODE_ENV !== "production" ? ["http://localhost:5174", "http://localhost:5173"] : [])];
 }
 
 let _platformAuth: PlatformAuth | undefined;
@@ -72,45 +101,77 @@ export function getPlatformAuth(rt: Runtime): PlatformAuth {
     _platformAuth = createPlatformAuth(rt._db.db, {
       baseURL: process.env.PLATFORM_AUTH_URL ?? process.env.BETTER_AUTH_URL,
       secret: process.env.BETTER_AUTH_SECRET,
-      trustedOrigins: (process.env.SUPERADMIN_ORIGINS?.split(",") ?? [
-        "http://localhost:5174",
-        "https://platform.gobs.cloud",
-      ]).map((s) => s.trim()),
-      cookieDomain: process.env.COOKIE_DOMAIN,
+      trustedOrigins: platformAllowedOrigins(),
+      // Host-only cookie by default. Never inherit the store COOKIE_DOMAIN: a platform cookie must not be shared with
+      // tenant subdomains.
+      cookieDomain: process.env.PLATFORM_COOKIE_DOMAIN,
     });
   }
   return _platformAuth;
 }
 
+/** Domain code signals problems with "Unauthorized:/Forbidden:/Bad Request:/Not Found:/Conflict:" prefixes. */
+export function mapPlatformError(err: unknown): unknown {
+  if (err instanceof Error && !(err instanceof ORPCError)) {
+    const m = err.message;
+    if (m.startsWith("Unauthorized")) return new ORPCError("UNAUTHORIZED", { message: m.replace(/^Unauthorized:\s*/, "") });
+    if (m.startsWith("Forbidden")) return new ORPCError("FORBIDDEN", { message: m.replace(/^Forbidden:\s*/, "") });
+    if (m.startsWith("Bad Request")) return new ORPCError("BAD_REQUEST", { message: m.replace(/^Bad Request:\s*/, "") });
+    if (m.startsWith("Not Found")) return new ORPCError("NOT_FOUND", { message: m.replace(/^Not Found:\s*/, "") });
+    if (m.startsWith("Conflict")) return new ORPCError("CONFLICT", { message: m.replace(/^Conflict:\s*/, "") });
+    if (m.startsWith("Incorrect password")) return new ORPCError("FORBIDDEN", { message: m });
+  }
+  return err;
+}
+
 const os = implement(platformContract).$context<PlatformContext>();
 
-export const requirePlatformStaff = os.middleware(async ({ context, next }) => {
-  if (!context.session || context.session.type === "customer") {
-    throw new Error("Unauthorized: platform access requires authenticated staff credentials");
-  }
-  await assertPlatformStaff(context.rt, context.session.user.id);
-  return next({ context });
-});
+/** The authenticated staff member's id. Only called after requireStaff() has run, which sets it. */
+function actor(context: PlatformContext): string {
+  if (!context.staff) throw new ORPCError("UNAUTHORIZED", { message: "Platform access requires authenticated staff credentials" });
+  return context.staff.userId;
+}
+
+/**
+ * Every platform procedure (except health) goes through this: a real session, an active platform_staff row,
+ * completed and verified MFA, a session created after MFA enrolment (i.e. it went through password AND TOTP), and a
+ * platform role of at least `min` (owner > admin > support).
+ */
+export const requireStaff = (min: PlatformRole = "platform_support") =>
+  os.middleware(async ({ context, next }) => {
+    try {
+      if (!context.session || context.session.type === "customer") {
+        throw new Error("Unauthorized: platform access requires authenticated staff credentials");
+      }
+      const staff = await assertPlatformStaff(context.rt, context.session.user.id, { createdAt: context.session.createdAt });
+      assertRoleAtLeast(staff.role, min, "this action");
+      return await next({ context: { ...context, staff } });
+    } catch (err) {
+      throw mapPlatformError(err);
+    }
+  });
+
+export const requirePlatformStaff = requireStaff();
 
 export const platformRouter = os.router({
   system: {
     health: os.system.health.handler(({ context }) => checkHealth(context.rt)),
     data: os.system.data.use(requirePlatformStaff).handler(async ({ context }) => {
-      const staffUserId = context.session!.user.id;
+      const staffUserId = actor(context);
       return getPlatformSystemData(context.rt, staffUserId);
     }),
-    retryJob: os.system.retryJob.use(requirePlatformStaff).handler(async ({ context, input }) => {
-      const staffUserId = context.session!.user.id;
+    retryJob: os.system.retryJob.use(requireStaff("platform_admin")).handler(async ({ context, input }) => {
+      const staffUserId = actor(context);
       return retryFailedJob(context.rt, staffUserId, input.jobId, context.meta);
     }),
-    retryWebhook: os.system.retryWebhook.use(requirePlatformStaff).handler(async ({ context, input }) => {
-      const staffUserId = context.session!.user.id;
+    retryWebhook: os.system.retryWebhook.use(requireStaff("platform_admin")).handler(async ({ context, input }) => {
+      const staffUserId = actor(context);
       return retryFailedWebhook(context.rt, staffUserId, input.webhookId, context.meta);
     }),
   },
   overview: {
     get: os.overview.get.use(requirePlatformStaff).handler(async ({ context }) => {
-      const staffUserId = context.session!.user.id;
+      const staffUserId = actor(context);
       return getPlatformOverviewMetrics(context.rt, staffUserId);
     }),
   },
@@ -122,12 +183,19 @@ export const platformRouter = os.router({
       return getPlatformTenant(context.rt, input.id);
     }),
     getDetail: os.tenants.getDetail.use(requirePlatformStaff).handler(({ context, input }) => {
-      const staffUserId = context.session!.user.id;
+      const staffUserId = actor(context);
       return getPlatformTenantDetail(context.rt, staffUserId, input.id);
     }),
-    create: os.tenants.create.use(requirePlatformStaff).handler(async ({ context, input }) => {
+    create: os.tenants.create.use(requireStaff("platform_admin")).handler(async ({ context, input }) => {
       const staffUserId = context.session?.user?.id;
       const res = await platformCreateTenantForClient(context.rt, input, staffUserId);
+
+      // An optional custom domain is requested right after the store exists (it talks to Cloudflare, so it is not part of the
+      // database transaction). The store is complete either way and the outcome is reported honestly.
+      const customDomain = input.customDomain?.trim()
+        ? await requestCustomDomainForClient(context.rt, staffUserId, res.tenantId, input.customDomain)
+        : undefined;
+
       return {
         tenantId: res.tenantId,
         slug: res.slug,
@@ -136,9 +204,10 @@ export const platformRouter = os.router({
         adminUrl: res.adminUrl,
         inviteToken: res.inviteToken,
         inviteUrl: res.inviteUrl,
+        ...(customDomain ? { customDomain } : {}),
       };
     }),
-    resendOwnerInvite: os.tenants.resendOwnerInvite.use(requirePlatformStaff).handler(async ({ context, input }) => {
+    resendOwnerInvite: os.tenants.resendOwnerInvite.use(requireStaff("platform_admin")).handler(async ({ context, input }) => {
       const staffUserId = context.session?.user?.id;
       const res = await resendTenantOwnerInvite(context.rt, {
         tenantId: input.id,
@@ -153,49 +222,50 @@ export const platformRouter = os.router({
         inviteUrl: res.inviteUrl,
       };
     }),
-    suspend: os.tenants.suspend.use(requirePlatformStaff).handler(async ({ context, input }) => {
-      const staffUserId = context.session!.user.id;
+    suspend: os.tenants.suspend.use(requireStaff("platform_admin")).handler(async ({ context, input }) => {
+      const staffUserId = actor(context);
       return suspendPlatformTenant(context.rt, staffUserId, input.id, input.reason, context.meta);
     }),
-    restore: os.tenants.restore.use(requirePlatformStaff).handler(async ({ context, input }) => {
-      const staffUserId = context.session!.user.id;
+    restore: os.tenants.restore.use(requireStaff("platform_admin")).handler(async ({ context, input }) => {
+      const staffUserId = actor(context);
       return restorePlatformTenant(context.rt, staffUserId, input.id, context.meta);
     }),
-    archive: os.tenants.archive.use(requirePlatformStaff).handler(async ({ context, input }) => {
-      const staffUserId = context.session!.user.id;
+    archive: os.tenants.archive.use(requireStaff("platform_admin")).handler(async ({ context, input }) => {
+      const staffUserId = actor(context);
       return archivePlatformTenant(context.rt, staffUserId, input.id, context.meta);
     }),
-    changePlan: os.tenants.changePlan.use(requirePlatformStaff).handler(async ({ context, input }) => {
-      const staffUserId = context.session!.user.id;
+    changePlan: os.tenants.changePlan.use(requireStaff("platform_admin")).handler(async ({ context, input }) => {
+      const staffUserId = actor(context);
       return changePlatformTenantPlan(context.rt, staffUserId, input.id, input.planCode, context.meta);
     }),
-    extendTrial: os.tenants.extendTrial.use(requirePlatformStaff).handler(async ({ context, input }) => {
-      const staffUserId = context.session!.user.id;
+    extendTrial: os.tenants.extendTrial.use(requireStaff("platform_admin")).handler(async ({ context, input }) => {
+      const staffUserId = actor(context);
       return extendPlatformTenantTrial(context.rt, staffUserId, input.id, input.additionalDays, context.meta);
     }),
-    transferOwnership: os.tenants.transferOwnership.use(requirePlatformStaff).handler(async ({ context, input }) => {
-      const staffUserId = context.session!.user.id;
+    transferOwnership: os.tenants.transferOwnership.use(requireStaff("platform_admin")).handler(async ({ context, input }) => {
+      const staffUserId = actor(context);
       return transferPlatformTenantOwnership(context.rt, staffUserId, input.id, input.newOwnerEmail, context.meta);
     }),
     addNote: os.tenants.addNote.use(requirePlatformStaff).handler(async ({ context, input }) => {
-      const staffUserId = context.session!.user.id;
+      const staffUserId = actor(context);
       return addPlatformTenantNote(context.rt, staffUserId, input.id, input.body, context.meta);
     }),
-    bulkSuspend: os.tenants.bulkSuspend.use(requirePlatformStaff).handler(async ({ context, input }) => {
-      const staffUserId = context.session!.user.id;
-      return bulkSuspendPlatformTenants(context.rt, staffUserId, input.tenantIds, input.reason, context.meta);
+    bulkSuspend: os.tenants.bulkSuspend.use(requireStaff("platform_admin")).handler(async ({ context, input }) => {
+      const staffUserId = actor(context);
+      return bulkSuspendPlatformTenants(context.rt, staffUserId, input.tenantIds, input.reason, input.confirmation, context.meta);
     }),
-    bulkChangeTier: os.tenants.bulkChangeTier.use(requirePlatformStaff).handler(async ({ context, input }) => {
-      const staffUserId = context.session!.user.id;
-      return bulkChangePlatformTenantTier(context.rt, staffUserId, input.tenantIds, input.tier, context.meta);
+    bulkChangeTier: os.tenants.bulkChangeTier.use(requireStaff("platform_admin")).handler(async ({ context, input }) => {
+      const staffUserId = actor(context);
+      return bulkChangePlatformTenantTier(context.rt, staffUserId, input.tenantIds, input.tier, input.confirmation, context.meta);
     }),
-    requestDeletion: os.tenants.requestDeletion.use(requirePlatformStaff).handler(async ({ context, input }) => {
-      const staffUserId = context.session!.user.id;
+    requestDeletion: os.tenants.requestDeletion.use(requireStaff("platform_admin")).handler(async ({ context, input }) => {
+      const staffUserId = actor(context);
       const res = await scheduleTenantDeletion(
         context.rt,
         staffUserId,
         {
           tenantId: input.id,
+          confirmSlug: input.confirmSlug,
           ...(input.reason !== undefined ? { reason: input.reason } : {}),
           ...(input.graceDays !== undefined ? { graceDays: input.graceDays } : {}),
         },
@@ -207,247 +277,88 @@ export const platformRouter = os.router({
         scheduledFor: res.scheduledFor,
       };
     }),
-    cancelDeletion: os.tenants.cancelDeletion.use(requirePlatformStaff).handler(async ({ context, input }) => {
-      const staffUserId = context.session!.user.id;
+    cancelDeletion: os.tenants.cancelDeletion.use(requireStaff("platform_admin")).handler(async ({ context, input }) => {
+      const staffUserId = actor(context);
       await cancelTenantDeletion(context.rt, staffUserId, input.id, context.meta);
       return { ok: true };
     }),
-    export: os.tenants.export.use(requirePlatformStaff).handler(async ({ context, input }) => {
-      const staffUserId = context.session!.user.id;
-      return runStoreExport(context.rt, input.id, staffUserId);
+    export: os.tenants.export.use(requireStaff("platform_admin")).handler(async ({ context, input }) => {
+      const staffUserId = actor(context);
+      return runStoreExport(context.rt, input.id, staffUserId, { meta: context.meta });
     }),
   },
   domains: {
-    list: os.domains.list.use(requirePlatformStaff).handler(async ({ context, input }) => {
-      const rows = await context.rt._db.db
-        .select({
-          id: schema.domains.id,
-          tenantId: schema.domains.tenantId,
-          hostname: schema.domains.hostname,
-          type: schema.domains.type,
-          isPrimary: schema.domains.isPrimary,
-          status: schema.domains.status,
-          sslStatus: schema.domains.sslStatus,
-          failureReason: schema.domains.failureReason,
-          createdAt: schema.domains.createdAt,
-          tenantName: schema.tenants.name,
-          tenantSlug: schema.tenants.slug,
-        })
-        .from(schema.domains)
-        .innerJoin(schema.tenants, eq(schema.tenants.id, schema.domains.tenantId))
-        .orderBy(desc(schema.domains.createdAt))
-        .limit(input?.limit ?? 100)
-        .offset(input?.offset ?? 0);
-
-      return rows.map((r) => ({
-        id: r.id,
-        tenantId: r.tenantId,
-        hostname: r.hostname,
-        type: r.type,
-        isPrimary: r.isPrimary,
-        status: r.status,
-        sslStatus: r.sslStatus,
-        failureReason: r.failureReason,
-        createdAt: r.createdAt.toISOString(),
-        tenantName: r.tenantName,
-        tenantSlug: r.tenantSlug,
-      }));
-    }),
+    list: os.domains.list.use(requirePlatformStaff).handler(({ context, input }) => listPlatformDomains(context.rt, input)),
   },
   plans: {
-    list: os.plans.list.use(requirePlatformStaff).handler(async ({ context }) => {
-      const plans = await context.rt._db.db.select().from(schema.plans);
-      const subCounts = await context.rt._db.db
-        .select({
-          planId: schema.subscriptions.planId,
-          count: sql<number>`count(*)::int`,
-        })
-        .from(schema.subscriptions)
-        .where(eq(schema.subscriptions.status, "active"))
-        .groupBy(schema.subscriptions.planId);
-
-      const countMap = new Map(subCounts.map((s) => [s.planId, s.count]));
-
-      return plans.map((p) => ({
-        id: p.id,
-        code: p.code,
-        name: p.name,
-        priceMonthlyPaise: Number(p.priceMonthlyPaise),
-        priceYearlyPaise: Number(p.priceYearlyPaise),
-        activeSubscribersCount: countMap.get(p.id) ?? 0,
-        features: p.limits,
-      }));
-    }),
-    invoices: os.plans.invoices.use(requirePlatformStaff).handler(async ({ context, input }) => {
-      const rows = await context.rt._db.db
-        .select({
-          id: schema.platformInvoices.id,
-          tenantId: schema.platformInvoices.tenantId,
-          number: schema.platformInvoices.number,
-          amountPaise: schema.platformInvoices.amountPaise,
-          taxPaise: schema.platformInvoices.taxPaise,
-          status: schema.platformInvoices.status,
-          issuedAt: schema.platformInvoices.issuedAt,
-          tenantName: schema.tenants.name,
-        })
-        .from(schema.platformInvoices)
-        .innerJoin(schema.tenants, eq(schema.tenants.id, schema.platformInvoices.tenantId))
-        .orderBy(desc(schema.platformInvoices.issuedAt))
-        .limit(input?.limit ?? 50)
-        .offset(input?.offset ?? 0);
-
-      return rows.map((r) => ({
-        id: r.id,
-        tenantId: r.tenantId,
-        tenantName: r.tenantName,
-        number: r.number,
-        amountPaise: Number(r.amountPaise),
-        taxPaise: Number(r.taxPaise),
-        status: r.status,
-        issuedAt: r.issuedAt.toISOString(),
-      }));
-    }),
+    list: os.plans.list.use(requirePlatformStaff).handler(({ context }) => listPlatformPlans(context.rt)),
+    invoices: os.plans.invoices.use(requirePlatformStaff).handler(({ context, input }) => listPlatformInvoices(context.rt, input)),
   },
   signups: {
-    list: os.signups.list.use(requirePlatformStaff).handler(async ({ context, input }) => {
-      const rows = await context.rt._db.db
-        .select()
-        .from(schema.signupLeads)
-        .orderBy(desc(schema.signupLeads.createdAt))
-        .limit(input?.limit ?? 100)
-        .offset(input?.offset ?? 0);
-
-      return rows.map((r) => ({
-        id: r.id,
-        email: r.email,
-        phone: r.phone,
-        name: r.name,
-        businessName: r.businessName,
-        desiredSlug: r.desiredSlug,
-        industry: r.industry,
-        source: r.source,
-        step: r.step,
-        createdAt: r.createdAt.toISOString(),
-      }));
-    }),
+    list: os.signups.list.use(requirePlatformStaff).handler(({ context, input }) => listPlatformSignups(context.rt, input)),
   },
   templates: {
-    list: os.templates.list.use(requirePlatformStaff).handler(async ({ context }) => {
-      const rows = await context.rt._db.db.select().from(schema.themeTemplates);
-      return rows.map((r) => ({
-        id: r.id,
-        code: r.code,
-        name: r.name,
-        industry: r.industry,
-        previewImageKey: r.previewImageKey,
-        version: r.version,
-        isActive: r.isActive,
-      }));
-    }),
+    list: os.templates.list.use(requirePlatformStaff).handler(({ context }) => listPlatformThemeTemplates(context.rt)),
   },
   support: {
     list: os.support.list.use(requirePlatformStaff).handler(async ({ context, input }) => {
       return listPlatformSupportSessions(context.rt, input?.tenantId);
     }),
     start: os.support.start.use(requirePlatformStaff).handler(async ({ context, input }) => {
-      const staffUserId = context.session!.user.id;
+      const staffUserId = actor(context);
       return startSupportSession(context.rt, staffUserId, input, context.meta);
     }),
     extend: os.support.extend.use(requirePlatformStaff).handler(async ({ context, input }) => {
-      const staffUserId = context.session!.user.id;
+      const staffUserId = actor(context);
       return extendSupportSession(context.rt, staffUserId, input.id, context.meta);
     }),
-    elevateWrite: os.support.elevateWrite.use(requirePlatformStaff).handler(async ({ context, input }) => {
-      const staffUserId = context.session!.user.id;
+    elevateWrite: os.support.elevateWrite.use(requireStaff("platform_admin")).handler(async ({ context, input }) => {
+      const staffUserId = actor(context);
       return confirmSupportSessionWriteAccess(context.rt, staffUserId, input.id, context.meta);
     }),
     end: os.support.end.use(requirePlatformStaff).handler(async ({ context, input }) => {
-      const staffUserId = context.session!.user.id;
+      const staffUserId = actor(context);
       return endSupportSession(context.rt, staffUserId, input.id, context.meta);
     }),
   },
   quotas: {
-    list: os.quotas.list.use(requirePlatformStaff).handler(async ({ context }) => {
-      const rows = await context.rt._db.db.select().from(schema.quotaDefinitions);
-      return rows.map((r) => ({
-        key: r.key,
-        description: r.description,
-        unit: r.unit,
-        enforcement: r.enforcement,
-        tierXs: r.tierXs,
-        tierS: r.tierS,
-        tierM: r.tierM,
-        tierL: r.tierL,
-      }));
-    }),
+    list: os.quotas.list.use(requirePlatformStaff).handler(({ context }) => listPlatformQuotaDefinitions(context.rt)),
   },
   features: {
-    list: os.features.list.use(requirePlatformStaff).handler(async ({ context }) => {
-      const rows = await context.rt._db.db.select().from(schema.featureFlags);
-      return rows.map((r) => ({
-        key: r.key,
-        defaultOn: r.defaultOn,
-        killSwitch: r.killSwitch,
-      }));
-    }),
-    update: os.features.update.use(requirePlatformStaff).handler(async ({ context, input }) => {
-      const staffUserId = context.session!.user.id;
-      await context.rt._db.db.transaction(async (tx) => {
-        const updateValues: { defaultOn: boolean; killSwitch?: boolean; updatedAt: any } = {
-          defaultOn: input.defaultOn,
-          updatedAt: sql`now()`,
-        };
-        if (input.killSwitch !== undefined) {
-          updateValues.killSwitch = input.killSwitch;
-        }
-        await tx
-          .update(schema.featureFlags)
-          .set(updateValues)
-          .where(eq(schema.featureFlags.key, input.featureKey));
-
-        await writePlatformAudit(
-          tx,
-          staffUserId,
-          "feature_flag.update",
-          "feature_flag",
-          input.featureKey,
-          null,
-          updateValues,
-          context.meta,
-        );
-      });
-      return { ok: true };
-    }),
+    list: os.features.list.use(requirePlatformStaff).handler(({ context }) => listPlatformFeatureFlags(context.rt)),
+    update: os.features.update.use(requireStaff("platform_admin")).handler(({ context, input }) =>
+      updatePlatformFeatureFlag(context.rt, actor(context), input, context.meta),
+    ),
   },
   staff: {
-    list: os.staff.list.use(requirePlatformStaff).handler(async ({ context }) => {
-      const staffUserId = context.session!.user.id;
+    list: os.staff.list.use(requireStaff("platform_admin")).handler(async ({ context }) => {
+      const staffUserId = actor(context);
       return listPlatformStaffMembers(context.rt, staffUserId);
     }),
-    invite: os.staff.invite.use(requirePlatformStaff).handler(async ({ context, input }) => {
-      const staffUserId = context.session!.user.id;
+    invite: os.staff.invite.use(requireStaff("platform_admin")).handler(async ({ context, input }) => {
+      const staffUserId = actor(context);
       return invitePlatformStaffMember(context.rt, staffUserId, input, context.meta);
     }),
-    updateRole: os.staff.updateRole.use(requirePlatformStaff).handler(async ({ context, input }) => {
-      const staffUserId = context.session!.user.id;
+    updateRole: os.staff.updateRole.use(requireStaff("platform_owner")).handler(async ({ context, input }) => {
+      const staffUserId = actor(context);
       return updatePlatformStaffRole(context.rt, staffUserId, input.userId, input.role, context.meta);
     }),
-    deactivate: os.staff.deactivate.use(requirePlatformStaff).handler(async ({ context, input }) => {
-      const staffUserId = context.session!.user.id;
+    deactivate: os.staff.deactivate.use(requireStaff("platform_admin")).handler(async ({ context, input }) => {
+      const staffUserId = actor(context);
       return deactivatePlatformStaffMember(context.rt, staffUserId, input.userId, context.meta);
     }),
-    reactivate: os.staff.reactivate.use(requirePlatformStaff).handler(async ({ context, input }) => {
-      const staffUserId = context.session!.user.id;
+    reactivate: os.staff.reactivate.use(requireStaff("platform_owner")).handler(async ({ context, input }) => {
+      const staffUserId = actor(context);
       return reactivatePlatformStaffMember(context.rt, staffUserId, input.userId, context.meta);
     }),
   },
   audit: {
     list: os.audit.list.use(requirePlatformStaff).handler(async ({ context, input }) => {
-      const staffUserId = context.session!.user.id;
+      const staffUserId = actor(context);
       return listPlatformAuditLogs(context.rt, staffUserId, input);
     }),
-    exportCsv: os.audit.exportCsv.use(requirePlatformStaff).handler(async ({ context, input }) => {
-      const staffUserId = context.session!.user.id;
+    exportCsv: os.audit.exportCsv.use(requireStaff("platform_admin")).handler(async ({ context, input }) => {
+      const staffUserId = actor(context);
       const csv = await exportPlatformAuditLogsCsv(context.rt, staffUserId, input);
       return { csv };
     }),
@@ -456,40 +367,40 @@ export const platformRouter = os.router({
 
 type Env = { Variables: { log: Logger } };
 
+/** Better Auth session for the platform cookie, or null. The cookie prefix keeps store cookies out of this path. */
+async function readPlatformSession(rt: Runtime, headers: Headers): Promise<{ user: { id: string; email: string; name: string | null }; createdAt: Date } | null> {
+  const cookieHeader = headers.get("cookie") ?? "";
+  if (!cookieHeader.includes(PLATFORM_COOKIE_PREFIX)) return null;
+  try {
+    const result = await getPlatformAuth(rt).api.getSession({ headers });
+    if (!result) return null;
+    return {
+      user: { id: result.user.id, email: result.user.email, name: result.user.name ?? null },
+      createdAt: new Date(result.session.createdAt),
+    };
+  } catch {
+    return null;
+  }
+}
+
 export function createApp(rt: Runtime, rootLog: Logger) {
   const logError = (error: unknown) => rootLog.error({ err: error }, "platform api error");
   const rpc = new RPCHandler(platformRouter, { interceptors: [onError(logError)] });
   const openapi = new OpenAPIHandler(platformRouter, { interceptors: [onError(logError)] });
 
   const app = new Hono<Env>();
+  const allowedOrigins = platformAllowedOrigins();
 
-  // CORS for Super Admin
-  const allowedOrigins = [
-    "http://localhost:5174",
-    "http://localhost:5173",
-    "https://platform.gobs.cloud",
-    ...(process.env.SUPERADMIN_ORIGINS?.split(",").map((s) => s.trim()) ?? []),
-  ];
-
+  // CORS: exact Super Admin origins only. Tenant stores live on other *.gobs.cloud subdomains and must never be
+  // able to make credentialed calls here.
   app.use(
     "*",
     cors({
-      origin: (origin) => {
-        if (!origin) return "*";
-        if (allowedOrigins.includes(origin) || origin.endsWith(".gobs.cloud")) return origin;
-        return null;
-      },
+      origin: (origin) => (origin && allowedOrigins.includes(origin) ? origin : null),
       credentials: true,
       allowMethods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
-      allowHeaders: [
-        "Content-Type",
-        "Authorization",
-        "Cookie",
-        "X-Request-Id",
-        "X-Support-Token",
-        "X-Test-Staff-Id",
-      ],
-      exposeHeaders: ["X-Request-Id", "Set-Cookie"],
+      allowHeaders: ["Content-Type", "X-Request-Id"],
+      exposeHeaders: ["X-Request-Id"],
     }),
   );
 
@@ -500,35 +411,108 @@ export function createApp(rt: Runtime, rootLog: Logger) {
     c.header("x-request-id", requestId);
   });
 
-  // Better Auth endpoints for platform_staff
-  app.all("/api/auth/*", async (c) => {
-    const auth = getPlatformAuth(rt);
-    return auth.handler(c.req.raw);
+  // CSRF: every state-changing request must carry an allowed Origin (browsers always send one on cross-origin and
+  // same-site POSTs). A request from a tenant storefront page or from no origin at all is refused.
+  app.use("*", async (c, next) => {
+    const m = c.req.method;
+    if (m !== "GET" && m !== "HEAD" && m !== "OPTIONS") {
+      const origin = c.req.header("origin");
+      if (!origin || !allowedOrigins.includes(origin)) {
+        return c.json({ error: "Forbidden: request origin not allowed" }, 403);
+      }
+    }
+    await next();
   });
 
-  // Export download endpoint
+  // Better Auth endpoints for platform_staff (sign-in, two-factor enrolment and verification, sign-out)
+  app.all("/api/auth/*", async (c) => {
+    return getPlatformAuth(rt).handler(c.req.raw);
+  });
+
+  /** Where this login stands: signed in? platform staff? MFA enrolled/complete? Usable before MFA is complete. */
+  app.get("/api/platform/me", async (c) => {
+    const session = await readPlatformSession(rt, c.req.raw.headers);
+    if (!session) return c.json({ authenticated: false });
+    const status = await getPlatformLoginStatus(rt, session.user.id, session.createdAt);
+    return c.json({ authenticated: true, userId: session.user.id, email: session.user.email, name: session.user.name, ...status });
+  });
+
+  /**
+   * Called after the first TOTP code was verified. Stamps enrolment as complete and ends every session of the user, so
+   * the next sign-in is password + authenticator code.
+   */
+  app.post("/api/platform/mfa/complete", async (c) => {
+    const session = await readPlatformSession(rt, c.req.raw.headers);
+    if (!session) return c.json({ error: "Unauthorized: sign in first" }, 401);
+    try {
+      await completePlatformMfaEnrollment(rt, session.user.id, {
+        ip: getClientIp(c.req.raw.headers),
+        userAgent: c.req.header("user-agent"),
+        requestId: resolveRequestId(c.req.header("x-request-id")),
+      });
+      return c.json({ ok: true, signInAgain: true });
+    } catch (err) {
+      const message = err instanceof Error ? err.message : "Failed";
+      return c.json({ error: message.replace(/^[A-Za-z ]+:\s*/, "") }, message.startsWith("Forbidden") ? 403 : 409);
+    }
+  });
+
+  /** Public: accept a platform staff invitation (rate limited per IP and per token). */
+  app.post("/api/platform/staff/accept-invitation", async (c) => {
+    const body = (await c.req.json().catch(() => ({}))) as { token?: string; password?: string; name?: string };
+    if (!body.token || !body.password) return c.json({ error: "Token and password are required" }, 400);
+    const ip = getClientIp(c.req.raw.headers);
+    const limit = await checkInviteAcceptRateLimit(rt._db.db, ip, body.token);
+    if (!limit.allowed) return c.json({ error: "Too many attempts. Please try again later." }, 429);
+    try {
+      const res = await acceptPlatformStaffInvitation(
+        rt,
+        { token: body.token, password: body.password, name: body.name },
+        { ip, userAgent: c.req.header("user-agent"), requestId: resolveRequestId(c.req.header("x-request-id")) },
+      );
+      return c.json(res);
+    } catch (err) {
+      return c.json({ error: err instanceof Error ? err.message : "Failed to accept invitation" }, 400);
+    }
+  });
+
+  /**
+   * Export download. Needs BOTH a signed, expiring link (handed only to an authenticated admin) AND a current platform
+   * session with MFA and the admin role; the download is audited.
+   */
   app.get("/api/platform/exports/:exportId/download", async (c) => {
     const exportId = c.req.param("exportId");
     const expires = Number(c.req.query("expires") ?? 0);
     const signature = c.req.query("signature") ?? "";
 
-    if (!verifyExportSignature(exportId, expires, signature)) {
-      return c.text("Unauthorized or expired export download link", 401);
+    let signatureOk: boolean;
+    try {
+      signatureOk = verifyExportSignature(exportId, expires, signature);
+    } catch {
+      return c.text("Export downloads are not configured", 503);
+    }
+    if (!signatureOk) return c.text("Unauthorized or expired export download link", 401);
+
+    const session = await readPlatformSession(rt, c.req.raw.headers);
+    if (!session) return c.text("Unauthorized: sign in to download", 401);
+    let staff: PlatformStaffIdentity;
+    try {
+      staff = await assertPlatformStaff(rt, session.user.id, { createdAt: session.createdAt });
+      assertRoleAtLeast(staff.role, "platform_admin", "downloading an export");
+    } catch {
+      return c.text("Forbidden", 403);
     }
 
-    const [rec] = await rt._db.db
-      .select()
-      .from(schema.exports)
-      .where(eq(schema.exports.id, exportId))
-      .limit(1);
+    const file = await readExportArchive(rt, exportId);
+    if (!file) return c.text("Export not found or expired", 404);
 
-    if (!rec) {
-      return c.text("Export not found", 404);
-    }
+    await recordExportDownload(rt, staff.userId, { exportId, tenantId: file.tenantId, sha256: file.sha256 }, { ip: getClientIp(c.req.raw.headers), userAgent: c.req.header("user-agent") });
 
-    return c.text(JSON.stringify(rec.metadata ?? {}, null, 2), 200, {
-      "Content-Type": "application/json",
-      "Content-Disposition": `attachment; filename="export-${rec.tenantId}-${exportId}.json"`,
+    return c.body(new Uint8Array(file.data), 200, {
+      "Content-Type": file.contentType,
+      "Content-Disposition": `attachment; filename="store-export-${file.tenantId}-${exportId}.json.gz"`,
+      "X-Content-SHA256": file.sha256,
+      "Cache-Control": "no-store",
     });
   });
 
@@ -537,40 +521,24 @@ export function createApp(rt: Runtime, rootLog: Logger) {
     return c.json(h, h.db.ok ? 200 : 503);
   });
 
-  const buildContext = async (c: any): Promise<PlatformContext> => {
-    const ip = getClientIp(c.req.raw.headers as Headers);
-    const userAgent = c.req.header("user-agent");
-    const requestId = resolveRequestId(c.req.header("x-request-id"));
-    const meta = { ip, userAgent, requestId };
-
-    const cookieHeader = c.req.header("cookie") ?? "";
-    const testStaffId = c.req.header("x-test-staff-id");
+  const buildContext = async (c: { req: { raw: Request; header: (n: string) => string | undefined }; get: (k: "log") => Logger }): Promise<PlatformContext> => {
+    const meta = {
+      ip: getClientIp(c.req.raw.headers as Headers),
+      userAgent: c.req.header("user-agent"),
+      requestId: resolveRequestId(c.req.header("x-request-id")),
+    };
 
     let session: PlatformContext["session"] = null;
-
-    if (testStaffId && process.env.NODE_ENV !== "production") {
-      session = { user: { id: testStaffId }, type: "platform_staff" };
-    } else if (cookieHeader.includes(PLATFORM_COOKIE_PREFIX)) {
-      try {
-        const auth = getPlatformAuth(rt);
-        const result = await auth.api.getSession({ headers: c.req.raw.headers });
-        if (result) {
-          session = {
-            user: { id: result.user.id, email: result.user.email },
-            type: "platform_staff",
-          };
-        }
-      } catch {
-        session = null;
-      }
+    const testStaffId = c.req.header("x-test-staff-id");
+    // Test-only bypass: needs an explicit flag AND a non-production environment. Off everywhere by default.
+    if (testStaffId && process.env.ALLOW_TEST_AUTH === "1" && process.env.NODE_ENV !== "production") {
+      session = { user: { id: testStaffId }, type: "platform_staff", createdAt: new Date() };
+    } else {
+      const s = await readPlatformSession(rt, c.req.raw.headers);
+      if (s) session = { user: { id: s.user.id, email: s.user.email }, type: "platform_staff", createdAt: s.createdAt };
     }
 
-    return {
-      rt,
-      log: c.get("log"),
-      session,
-      meta,
-    };
+    return { rt, log: c.get("log"), session, meta };
   };
 
   app.all("/api/rpc/*", async (c, next) => {

@@ -360,13 +360,53 @@ export const AdminMeStore = z.object({
   role: z.string(),
   permissions: z.array(z.string()),
 });
+export const AdminMeSupport = z.object({
+  sessionId: z.string().uuid(),
+  scope: z.enum(["read_only", "write"]),
+  consent: z.enum(["owner_approved", "standing_consent", "emergency"]),
+  reason: z.string(),
+  ticketRef: z.string(),
+  expiresAt: z.string(),
+});
 export const AdminMe = z.object({
   user: z.object({ id: z.string().uuid(), email: z.string(), name: z.string() }),
   stores: z.array(AdminMeStore),
+  /** Present only when the caller is a platform support session (X-Support-Token), never for a normal sign-in. */
+  support: AdminMeSupport.optional(),
 });
 export type AdminMe = z.infer<typeof AdminMe>;
 
+export const StoreSupportSession = z.object({
+  id: z.string().uuid(),
+  staffName: z.string(),
+  staffEmail: z.string(),
+  reason: z.string(),
+  ticketRef: z.string(),
+  consent: z.enum(["owner_approved", "standing_consent", "emergency"]),
+  scope: z.enum(["read_only", "write"]),
+  status: z.enum(["pending_owner_approval", "active", "denied", "ended", "expired"]),
+  requestedAt: z.string(),
+  expiresAt: z.string(),
+  actionsCount: z.number(),
+});
+
 export const adminContract = {
+  support: {
+    list: oc.route({ method: "GET", path: "/admin/support/sessions" }).output(z.array(StoreSupportSession)),
+    approve: oc
+      .route({ method: "POST", path: "/admin/support/sessions/{id}/approve" })
+      .input(z.object({ id: z.string().uuid() }))
+      .output(z.object({ ok: z.literal(true) })),
+    deny: oc
+      .route({ method: "POST", path: "/admin/support/sessions/{id}/deny" })
+      .input(z.object({ id: z.string().uuid() }))
+      .output(z.object({ ok: z.literal(true) })),
+    getStandingConsent: oc.route({ method: "GET", path: "/admin/support/standing-consent" }).output(z.object({ enabled: z.boolean() })),
+    setStandingConsent: oc
+      .route({ method: "PUT", path: "/admin/support/standing-consent" })
+      .input(z.object({ enabled: z.boolean() }))
+      .output(z.object({ enabled: z.boolean() })),
+  },
   me: {
     get: oc.route({ method: "GET", path: "/admin/me" }).output(AdminMe),
   },

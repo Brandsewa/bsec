@@ -7,6 +7,7 @@ import type { HeaderValues, TenantContext } from "../context.ts";
 import { assertPermission } from "../context.ts";
 import type { Runtime } from "../runtime.ts";
 import { invalidateCache } from "../cache-invalidation.ts";
+import { storefrontLifecycleDecision } from "../system/tenant-lifecycle.ts";
 
 export type StorefrontMode = "live" | "coming_soon" | "maintenance" | "password";
 
@@ -187,58 +188,18 @@ export async function evaluateStorefrontAccess(
 
   const { tenantId, tenantStatus } = resolved;
 
-  // 2. Tenant Lifecycle Check (PLAN §6.4)
-  if (tenantStatus === "provisioning") {
+  // 2. Tenant Lifecycle Check (PLAN §6.4): one shared decision, see system/tenant-lifecycle.ts
+  const lifecycle = storefrontLifecycleDecision(tenantStatus);
+  if (!lifecycle.served) {
     return {
       allowed: false,
-      httpStatus: 503,
-      reason: "provisioning",
-      status: "provisioning",
+      httpStatus: lifecycle.httpStatus,
+      reason: lifecycle.reason,
+      status: lifecycle.reason,
       tenantId,
       tenantStatus,
-      message: "Store is being provisioned",
-    };
-  }
-
-  if (tenantStatus === "suspended") {
-    return {
-      allowed: false,
-      httpStatus: 503,
-      reason: "suspended",
-      status: "suspended",
-      tenantId,
-      tenantStatus,
-      message: "This store is temporarily unavailable",
-    };
-  }
-
-  if (
-    tenantStatus === "archived" ||
-    tenantStatus === "deletion_requested" ||
-    tenantStatus === "deleted"
-  ) {
-    return {
-      allowed: false,
-      httpStatus: 404,
-      reason: "not_found",
-      status: "not_found",
-      tenantId,
-      tenantStatus,
-    };
-  }
-
-  if (
-    tenantStatus !== "active" &&
-    tenantStatus !== "trial" &&
-    tenantStatus !== "past_due"
-  ) {
-    return {
-      allowed: false,
-      httpStatus: 404,
-      reason: "not_found",
-      status: "not_found",
-      tenantId,
-      tenantStatus,
+      ...(lifecycle.reason === "provisioning" ? { message: "Store is being provisioned" } : {}),
+      ...(lifecycle.reason === "suspended" ? { message: "This store is temporarily unavailable" } : {}),
     };
   }
 

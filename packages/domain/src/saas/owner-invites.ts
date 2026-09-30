@@ -1,9 +1,10 @@
-import { randomBytes, createHash } from "node:crypto";
+import { createHash } from "node:crypto";
 import { eq, and, sql, desc } from "drizzle-orm";
 import { schema } from "@bs/db";
 import { hashPassword, STORE_PERMISSIONS, verifyPassword } from "@bs/auth";
 import { saasDb, type Runtime } from "../runtime.ts";
 import { provisionTenant, type ProvisionTenantResult } from "./provisioning.ts";
+import { buildOwnerInviteUrl, issueOwnerInviteInTx } from "./invite-token.ts";
 
 export interface CreateOwnerInviteInput {
   tenantId: string;
@@ -45,6 +46,7 @@ export interface PlatformCreateTenantInput {
   themeTemplate?: "starter-minimal" | "fashion-editorial" | "gourmet-artisan" | string | undefined;
   currency?: string | undefined;
   timezone?: string | undefined;
+  state?: "trial" | "active" | "comped" | undefined;
 }
 
 export interface PlatformCreateTenantResult extends ProvisionTenantResult {
@@ -67,58 +69,16 @@ export async function createTenantOwnerInvite(
   rt: Runtime,
   input: CreateOwnerInviteInput,
 ): Promise<CreateOwnerInviteResult> {
-  const db = saasDb(rt);
-  const email = input.email.trim().toLowerCase();
-  const rawToken = randomBytes(32).toString("hex");
-  const tokenHash = createHash("sha256").update(rawToken).digest("hex");
-  const expiresAt = new Date(Date.now() + 7 * 24 * 3600 * 1000); // 7-day TTL
-
-  // 1. Revoke any previous unused invites for this tenant (S4)
-  await db.execute(sql`
-    UPDATE tenant_owner_invites
-    SET expires_at = now()
-    WHERE tenant_id = ${input.tenantId}
-      AND used_at IS NULL
-      AND expires_at > now();
-  `);
-
-  // 2. Insert fresh invite
-  const [invite] = await db
-    .insert(schema.tenantOwnerInvites)
-    .values({
-      tenantId: input.tenantId,
-      email,
-      tokenHash,
-      expiresAt,
-    })
-    .returning({ id: schema.tenantOwnerInvites.id });
-
-  if (!invite) throw new Error("Failed to create tenant owner invite");
-
-  // 3. Platform audit log (S4)
-  await db.insert(schema.platformAuditLogs).values({
-    actorUserId: input.invitedBy ?? null,
-    actorType: input.invitedBy ? "platform_staff" : "system",
-    action: "tenant.invite_created",
-    targetType: "tenant",
-    targetId: input.tenantId,
-    tenantId: input.tenantId,
-    diff: { email, expiresAt },
-  });
-
-  const platformDomain = process.env.PLATFORM_DOMAIN?.trim() || "gobs.cloud";
-  const isLocal = platformDomain.includes("localhost") || platformDomain.includes("127.0.0.1");
-  const protocol = isLocal ? "http" : "https";
-  const adminHost = process.env.ADMIN_HOST?.trim() || (isLocal ? "localhost:5173" : `admin.${platformDomain}`);
-  const inviteUrl = `${protocol}://${adminHost}/accept-invite?token=${rawToken}`;
-
+  const issued = await saasDb(rt).transaction((tx) =>
+    issueOwnerInviteInTx(tx, { tenantId: input.tenantId, email: input.email, invitedBy: input.invitedBy, action: "tenant.invite_created" }),
+  );
   return {
-    inviteId: invite.id,
+    inviteId: issued.inviteId,
     tenantId: input.tenantId,
-    email,
-    inviteToken: rawToken,
-    expiresAt,
-    inviteUrl,
+    email: issued.email,
+    inviteToken: issued.rawToken,
+    expiresAt: issued.expiresAt,
+    inviteUrl: buildOwnerInviteUrl(issued.rawToken),
   };
 }
 
@@ -319,6 +279,8 @@ export async function platformCreateTenantForClient(
   input: PlatformCreateTenantInput,
   platformStaffUserId?: string,
 ): Promise<PlatformCreateTenantResult> {
+  // Store, owner, membership, defaults, the owner's single-use invite and the audit row (actor = the staff member)
+  // are ONE transaction: either the client gets a complete store with a working invite, or nothing is created.
   const provisionResult = await provisionTenant(rt, {
     storeName: input.storeName,
     slug: input.slug,
@@ -332,34 +294,18 @@ export async function platformCreateTenantForClient(
     currency: input.currency || "INR",
     timezone: input.timezone || "Asia/Kolkata",
     source: "platform_admin",
+    actorUserId: platformStaffUserId,
+    issueOwnerInvite: true,
+    subscriptionState: input.state,
   });
-
-  const inviteResult = await createTenantOwnerInvite(rt, {
-    tenantId: provisionResult.tenantId,
-    email: input.clientEmail,
-    invitedBy: platformStaffUserId,
-  });
-
-  // Audit log platform store creation (S4)
-  await rt._db.db.insert(schema.platformAuditLogs).values({
-    actorUserId: platformStaffUserId ?? null,
-    actorType: platformStaffUserId ? "platform_staff" : "system",
-    action: "tenant.created_by_platform",
-    targetType: "tenant",
-    targetId: provisionResult.tenantId,
-    tenantId: provisionResult.tenantId,
-    diff: {
-      slug: provisionResult.slug,
-      storeName: input.storeName,
-      clientEmail: input.clientEmail,
-    },
-  });
+  const invite = provisionResult.ownerInvite;
+  if (!invite) throw new Error("Failed to issue the owner invite");
 
   return {
     ...provisionResult,
-    inviteToken: inviteResult.inviteToken,
-    inviteUrl: inviteResult.inviteUrl,
-    inviteExpiresAt: inviteResult.expiresAt,
+    inviteToken: invite.token,
+    inviteUrl: invite.url,
+    inviteExpiresAt: invite.expiresAt,
   };
 }
 
@@ -370,72 +316,27 @@ export async function resendTenantOwnerInvite(
   rt: Runtime,
   input: ResendOwnerInviteInput,
 ): Promise<CreateOwnerInviteResult> {
-  const db = saasDb(rt);
-
-  // 1. The recipient must be the one this store was originally invited (a resend cannot redirect the store to a new mailbox)
-  const [prevInvite] = await db
-    .select({ email: schema.tenantOwnerInvites.email })
-    .from(schema.tenantOwnerInvites)
-    .where(eq(schema.tenantOwnerInvites.tenantId, input.tenantId))
-    .orderBy(desc(schema.tenantOwnerInvites.createdAt))
-    .limit(1);
-  if (!prevInvite?.email) {
-    throw new Error("Unable to determine invite recipient email for this store");
-  }
-  const email = prevInvite.email.toLowerCase();
-  if (input.email && input.email.trim().toLowerCase() !== email) {
-    throw new Error("Email does not match the store's original invite recipient");
-  }
-
-  // 2. Revoke previous unused invites for this tenant
-  await db.execute(sql`
-    UPDATE tenant_owner_invites
-    SET expires_at = now()
-    WHERE tenant_id = ${input.tenantId}
-      AND used_at IS NULL
-      AND expires_at > now();
-  `);
-
-  // 3. Generate fresh owner invite
-  const rawToken = randomBytes(32).toString("hex");
-  const tokenHash = createHash("sha256").update(rawToken).digest("hex");
-  const expiresAt = new Date(Date.now() + 7 * 24 * 3600 * 1000); // 7-day TTL
-
-  const [invite] = await db
-    .insert(schema.tenantOwnerInvites)
-    .values({
-      tenantId: input.tenantId,
-      email,
-      tokenHash,
-      expiresAt,
-    })
-    .returning({ id: schema.tenantOwnerInvites.id });
-
-  if (!invite) throw new Error("Failed to create resent tenant owner invite");
-
-  // 4. Record audit log for invite resend with staffId (S4)
-  await db.insert(schema.platformAuditLogs).values({
-    actorUserId: input.staffUserId ?? null,
-    actorType: input.staffUserId ? "platform_staff" : "system",
-    action: "tenant.invite_resent",
-    targetType: "tenant",
-    targetId: input.tenantId,
-    tenantId: input.tenantId,
-    diff: { email, expiresAt },
+  const issued = await saasDb(rt).transaction(async (tx) => {
+    // The recipient must be the one this store was originally invited (a resend cannot redirect the store to a new mailbox)
+    const [prevInvite] = await tx
+      .select({ email: schema.tenantOwnerInvites.email })
+      .from(schema.tenantOwnerInvites)
+      .where(eq(schema.tenantOwnerInvites.tenantId, input.tenantId))
+      .orderBy(desc(schema.tenantOwnerInvites.createdAt))
+      .limit(1);
+    if (!prevInvite?.email) throw new Error("Unable to determine invite recipient email for this store");
+    const email = prevInvite.email.toLowerCase();
+    if (input.email && input.email.trim().toLowerCase() !== email) {
+      throw new Error("Email does not match the store's original invite recipient");
+    }
+    return issueOwnerInviteInTx(tx, { tenantId: input.tenantId, email, invitedBy: input.staffUserId, action: "tenant.invite_resent" });
   });
-
-  const platformDomain = process.env.PLATFORM_DOMAIN?.trim() || "gobs.cloud";
-  const isLocal = platformDomain.includes("localhost") || platformDomain.includes("127.0.0.1");
-  const protocol = isLocal ? "http" : "https";
-  const adminHost = process.env.ADMIN_HOST?.trim() || (isLocal ? "localhost:5173" : `admin.${platformDomain}`);
-  const inviteUrl = `${protocol}://${adminHost}/accept-invite?token=${rawToken}`;
-
   return {
-    inviteId: invite.id,
+    inviteId: issued.inviteId,
     tenantId: input.tenantId,
-    email,
-    inviteToken: rawToken,
-    expiresAt,
-    inviteUrl,
+    email: issued.email,
+    inviteToken: issued.rawToken,
+    expiresAt: issued.expiresAt,
+    inviteUrl: buildOwnerInviteUrl(issued.rawToken),
   };
 }

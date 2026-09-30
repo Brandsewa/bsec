@@ -4,6 +4,7 @@ import { schema } from "@bs/db";
 import { hashPassword, STORE_PERMISSIONS } from "@bs/auth";
 import { saasDb, type Runtime } from "../runtime.ts";
 import { tierForPlan } from "./plan-tiers.ts";
+import { buildOwnerInviteUrl, issueOwnerInviteInTx } from "./invite-token.ts";
 import { normalizeSubdomainSlug, validateSubdomainFormat } from "./subdomains.ts";
 
 export interface ProvisionOwnerInput {
@@ -23,6 +24,15 @@ export interface ProvisionTenantInput {
   timezone?: string | undefined;
   leadId?: string | undefined;
   source?: "self_service" | "platform_admin" | undefined;
+  /** The platform staff member creating the store (platform_admin source): recorded as the actor in the audit log. */
+  actorUserId?: string | undefined;
+  /** Issue the owner's single-use invite in the SAME transaction (platform-created stores). */
+  issueOwnerInvite?: boolean | undefined;
+  /**
+   * Commercial state of a platform-created store: 'trial' (14 days, then it lapses), 'active' (billed outside the platform, no
+   * expiry) or 'comped' (free, no expiry). Self-service signups are always trials.
+   */
+  subscriptionState?: "trial" | "active" | "comped" | undefined;
   /** Test hook to verify mid-transaction rollback of created org/tenant/user/domain */
   _failMidway?: boolean | undefined;
 }
@@ -36,6 +46,8 @@ export interface ProvisionTenantResult {
   adminUrl: string;
   ownerId: string;
   subscriptionId: string;
+  /** Only when issueOwnerInvite was requested: the raw token (shown once) and its link. */
+  ownerInvite?: { inviteId: string; token: string; url: string; expiresAt: Date } | undefined;
 }
 
 /**
@@ -284,17 +296,19 @@ export async function provisionTenant(
     `);
     const planId = planRow.rows[0]?.id ?? null;
 
+    const subscriptionState = source === "self_service" ? "trial" : (input.subscriptionState ?? "trial");
     const trialEnd = new Date(Date.now() + 14 * 24 * 60 * 60 * 1000);
     const [sub] = await tx
       .insert(schema.subscriptions)
       .values({
         tenantId,
         planId,
-        status: "trialing",
+        status: subscriptionState === "trial" ? "trialing" : "active",
         interval: "monthly",
         currentPeriodStart: new Date(),
-        currentPeriodEnd: trialEnd,
-        provider: "razorpay",
+        // Trials lapse after 14 days; manually billed and comped stores have no automatic expiry.
+        currentPeriodEnd: subscriptionState === "trial" ? trialEnd : null,
+        provider: subscriptionState === "trial" ? "razorpay" : subscriptionState === "comped" ? "comped" : "manual",
       })
       .returning({ id: schema.subscriptions.id });
     if (!sub) {
@@ -567,7 +581,7 @@ export async function provisionTenant(
 
     // 17. Record Platform Audit Log
     await tx.insert(schema.platformAuditLogs).values({
-      actorUserId: source === "self_service" ? ownerId : null,
+      actorUserId: source === "self_service" ? ownerId : (input.actorUserId ?? null),
       actorType: source === "self_service" ? "system" : "platform_staff",
       action: "tenant.provisioned",
       targetType: "tenant",
@@ -583,6 +597,12 @@ export async function provisionTenant(
       },
     });
 
+    let ownerInvite: ProvisionTenantResult["ownerInvite"];
+    if (input.issueOwnerInvite) {
+      const issued = await issueOwnerInviteInTx(tx, { tenantId, email: ownerEmail, invitedBy: input.actorUserId });
+      ownerInvite = { inviteId: issued.inviteId, token: issued.rawToken, url: buildOwnerInviteUrl(issued.rawToken), expiresAt: issued.expiresAt };
+    }
+
     return {
       tenantId,
       organizationId,
@@ -592,6 +612,7 @@ export async function provisionTenant(
       adminUrl,
       ownerId,
       subscriptionId: sub.id,
+      ownerInvite,
     };
   });
 }

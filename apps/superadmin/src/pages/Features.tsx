@@ -1,9 +1,8 @@
 import React, { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { Flag, ShieldAlert, CheckCircle2 } from "lucide-react";
+import { } from "lucide-react";
 import {
   Button,
-  EmptyState,
   PageContainer,
   PageHeader,
   PageSkeleton,
@@ -16,6 +15,7 @@ import {
   toast,
 } from "@bs/ui";
 import { client } from "../lib/orpc.ts";
+import { messageOf } from "../lib/errors.ts";
 
 export function Features() {
   const [updatingKey, setUpdatingKey] = useState<string | null>(null);
@@ -25,7 +25,7 @@ export function Features() {
     queryFn: () => client.features.list(),
   });
 
-  const handleToggle = async (key: string, currentOn: boolean, killSwitch: boolean) => {
+  const handleToggle = async (key: string, currentOn: boolean) => {
     setUpdatingKey(key);
     try {
       await client.features.update({
@@ -34,8 +34,8 @@ export function Features() {
       });
       toast.success(`Flag '${key}' updated to ${!currentOn ? "enabled" : "disabled"}`);
       refetch();
-    } catch (err: any) {
-      toast.error(err?.message || "Failed to update feature flag");
+    } catch (err) {
+      toast.error(messageOf(err, "Failed to update feature flag"));
     } finally {
       setUpdatingKey(null);
     }
@@ -52,8 +52,8 @@ export function Features() {
       });
       toast.success(`Kill switch for '${key}' updated`);
       refetch();
-    } catch (err: any) {
-      toast.error(err?.message || "Failed to toggle kill switch");
+    } catch (err) {
+      toast.error(messageOf(err, "Failed to toggle kill switch"));
     } finally {
       setUpdatingKey(null);
     }
@@ -114,7 +114,7 @@ export function Features() {
                         variant="default"
                         className="h-7 text-xs px-2"
                         disabled={updatingKey === f.key}
-                        onClick={() => handleToggle(f.key, f.defaultOn, f.killSwitch)}
+                        onClick={() => handleToggle(f.key, f.defaultOn)}
                       >
                         {f.defaultOn ? "Turn Off" : "Turn On"}
                       </Button>

@@ -1,29 +1,23 @@
 import React, { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { useParams, Link } from "@tanstack/react-router";
+import { useParams, } from "@tanstack/react-router";
 import {
   Activity,
   AlertOctagon,
   AlertTriangle,
   Archive,
-  ArrowLeft,
+  ArrowRightLeft,
   Building2,
   Calendar,
-  CheckCircle2,
   Clock,
   CreditCard,
   Download,
-  ExternalLink,
   FileSpreadsheet,
   Globe,
   Headphones,
-  Mail,
-  Plus,
-  RefreshCw,
   RotateCcw,
   ShieldAlert,
   Trash2,
-  UserCheck,
   Users,
 } from "lucide-react";
 import {
@@ -53,6 +47,9 @@ import {
   toast,
 } from "@bs/ui";
 import { client } from "../lib/orpc.ts";
+import { apiBase, storeAdminBase } from "../lib/config.ts";
+import { useHasRole } from "../lib/user-context.tsx";
+import { messageOf } from "../lib/errors.ts";
 
 export function TenantDetail() {
   const { id } = useParams({ strict: false }) as { id: string };
@@ -71,7 +68,6 @@ export function TenantDetail() {
   const [supportSessionOpen, setSupportSessionOpen] = useState(false);
   const [supportReason, setSupportReason] = useState("");
   const [supportTicketRef, setSupportTicketRef] = useState("");
-  const [supportScope, setSupportScope] = useState<"read_only" | "write">("read_only");
   const [supportConsent, setSupportConsent] = useState<"owner_approved" | "standing_consent" | "emergency">("owner_approved");
 
   const [deletionOpen, setDeletionOpen] = useState(false);
@@ -82,10 +78,25 @@ export function TenantDetail() {
   const [newNote, setNewNote] = useState("");
   const [actionLoading, setActionLoading] = useState(false);
 
+  const isAdmin = useHasRole("platform_admin");
+
+  const [planOpen, setPlanOpen] = useState(false);
+  const [planCode, setPlanCode] = useState("starter");
+  const [transferOpen, setTransferOpen] = useState(false);
+  const [newOwnerEmail, setNewOwnerEmail] = useState("");
+  // The support token is shown exactly once (only its hash is stored)
+  const [supportLink, setSupportLink] = useState<{ url: string; status: string; consent: string } | null>(null);
+
   const { data: detail, isLoading, refetch } = useQuery({
     queryKey: ["platform", "tenants", id, "detail"],
     queryFn: () => client.tenants.getDetail({ id }),
     enabled: Boolean(id),
+  });
+
+  const { data: plans } = useQuery({
+    queryKey: ["platform", "plans"],
+    queryFn: () => client.plans.list(),
+    enabled: planOpen,
   });
 
   if (isLoading || !detail) return <PageSkeleton />;
@@ -103,8 +114,8 @@ export function TenantDetail() {
       toast.success("Store suspended");
       setSuspendOpen(false);
       refetch();
-    } catch (err: any) {
-      toast.error(err?.message || "Failed to suspend store");
+    } catch (err) {
+      toast.error(messageOf(err, "Failed to suspend store"));
     } finally {
       setActionLoading(false);
     }
@@ -116,8 +127,8 @@ export function TenantDetail() {
       await client.tenants.restore({ id: tenant.id });
       toast.success("Store restored to active status");
       refetch();
-    } catch (err: any) {
-      toast.error(err?.message || "Failed to restore store");
+    } catch (err) {
+      toast.error(messageOf(err, "Failed to restore store"));
     } finally {
       setActionLoading(false);
     }
@@ -130,8 +141,8 @@ export function TenantDetail() {
       toast.success(`Trial extended until ${new Date(res.trialEndsAt).toLocaleDateString("en-IN")}`);
       setExtendTrialOpen(false);
       refetch();
-    } catch (err: any) {
-      toast.error(err?.message || "Failed to extend trial");
+    } catch (err) {
+      toast.error(messageOf(err, "Failed to extend trial"));
     } finally {
       setActionLoading(false);
     }
@@ -148,14 +159,21 @@ export function TenantDetail() {
         tenantId: tenant.id,
         reason: supportReason,
         ticketRef: supportTicketRef,
-        scope: supportScope,
+        scope: "read_only",
         consent: supportConsent,
       });
-      toast.success(`Support session started. Expires at ${new Date(res.expiresAt).toLocaleTimeString()}`);
+      toast.success("Support session created");
       setSupportSessionOpen(false);
+      if (res.token) {
+        setSupportLink({
+          url: `${storeAdminBase()}/support#token=${encodeURIComponent(res.token)}&store=${encodeURIComponent(tenant.id)}`,
+          status: res.status,
+          consent: res.consent,
+        });
+      }
       refetch();
-    } catch (err: any) {
-      toast.error(err?.message || "Failed to initiate support session");
+    } catch (err) {
+      toast.error(messageOf(err, "Failed to initiate support session"));
     } finally {
       setActionLoading(false);
     }
@@ -167,10 +185,10 @@ export function TenantDetail() {
       const res = await client.tenants.export({ id: tenant.id });
       toast.success("Full store export generated!");
       if (res.downloadUrl) {
-        window.open(res.downloadUrl, "_blank");
+        window.open(`${apiBase()}${res.downloadUrl}`, "_blank", "noopener");
       }
-    } catch (err: any) {
-      toast.error(err?.message || "Failed to trigger store export");
+    } catch (err) {
+      toast.error(messageOf(err, "Failed to trigger store export"));
     } finally {
       setActionLoading(false);
     }
@@ -185,14 +203,73 @@ export function TenantDetail() {
     try {
       const res = await client.tenants.requestDeletion({
         id: tenant.id,
+        confirmSlug: tenant.slug,
         reason: deletionReason || undefined,
         graceDays: deletionGraceDays,
       });
       toast.success(`Tenant deletion scheduled for ${new Date(res.scheduledFor).toLocaleDateString()}`);
       setDeletionOpen(false);
       refetch();
-    } catch (err: any) {
-      toast.error(err?.message || "Failed to schedule deletion");
+    } catch (err) {
+      toast.error(messageOf(err, "Failed to schedule deletion"));
+    } finally {
+      setActionLoading(false);
+    }
+  };
+
+  const handleArchive = async () => {
+    if (!window.confirm(`Archive ${tenant.name}? The storefront goes offline and custom domains are released. It can be restored later.`)) return;
+    setActionLoading(true);
+    try {
+      await client.tenants.archive({ id: tenant.id });
+      toast.success("Store archived");
+      refetch();
+    } catch (err) {
+      toast.error(messageOf(err, "Failed to archive store"));
+    } finally {
+      setActionLoading(false);
+    }
+  };
+
+  const handleChangePlan = async () => {
+    setActionLoading(true);
+    try {
+      await client.tenants.changePlan({ id: tenant.id, planCode });
+      toast.success(`Plan changed to ${planCode}. The store's size tier follows the plan.`);
+      setPlanOpen(false);
+      refetch();
+    } catch (err) {
+      toast.error(messageOf(err, "Failed to change plan"));
+    } finally {
+      setActionLoading(false);
+    }
+  };
+
+  const handleTransfer = async () => {
+    if (!newOwnerEmail.trim()) return;
+    if (!window.confirm(`Make ${newOwnerEmail.trim()} the owner of ${tenant.name}? They must already have an account.`)) return;
+    setActionLoading(true);
+    try {
+      await client.tenants.transferOwnership({ id: tenant.id, newOwnerEmail: newOwnerEmail.trim() });
+      toast.success("Ownership transferred");
+      setTransferOpen(false);
+      setNewOwnerEmail("");
+      refetch();
+    } catch (err) {
+      toast.error(messageOf(err, "Failed to transfer ownership"));
+    } finally {
+      setActionLoading(false);
+    }
+  };
+
+  const handleCancelDeletion = async () => {
+    setActionLoading(true);
+    try {
+      await client.tenants.cancelDeletion({ id: tenant.id });
+      toast.success("Deletion cancelled. The store is back to the state it had before.");
+      refetch();
+    } catch (err) {
+      toast.error(messageOf(err, "Failed to cancel deletion"));
     } finally {
       setActionLoading(false);
     }
@@ -207,8 +284,8 @@ export function TenantDetail() {
       toast.success("Internal note recorded");
       setNewNote("");
       refetch();
-    } catch (err: any) {
-      toast.error(err?.message || "Failed to save note");
+    } catch (err) {
+      toast.error(messageOf(err, "Failed to save note"));
     } finally {
       setActionLoading(false);
     }
@@ -233,24 +310,35 @@ export function TenantDetail() {
         }
         aside={
           <div className="flex flex-wrap items-center gap-2">
-            {tenant.status === "suspended" ? (
+            {isAdmin && (tenant.status === "suspended" || tenant.status === "archived") && (
               <Button size="sm" variant="default" onClick={handleRestore} disabled={actionLoading}>
                 <RotateCcw className="mr-1.5 h-3.5 w-3.5" /> Restore Store
               </Button>
-            ) : (
-              <Button
-                size="sm"
-                variant="destructive"
-                onClick={() => setSuspendOpen(true)}
-                disabled={actionLoading}
-              >
+            )}
+            {isAdmin && !["suspended", "archived", "deletion_requested", "deleted"].includes(tenant.status) && (
+              <Button size="sm" variant="destructive" onClick={() => setSuspendOpen(true)} disabled={actionLoading}>
                 <ShieldAlert className="mr-1.5 h-3.5 w-3.5" /> Suspend
               </Button>
             )}
+            {isAdmin && !["archived", "deletion_requested", "deleted"].includes(tenant.status) && (
+              <Button size="sm" variant="default" onClick={handleArchive} disabled={actionLoading}>
+                <Archive className="mr-1.5 h-3.5 w-3.5" /> Archive
+              </Button>
+            )}
 
-            {tenant.status === "trial" && (
+            {isAdmin && tenant.status === "trial" && (
               <Button size="sm" variant="default" onClick={() => setExtendTrialOpen(true)}>
                 <Calendar className="mr-1.5 h-3.5 w-3.5" /> Extend Trial
+              </Button>
+            )}
+            {isAdmin && (
+              <Button size="sm" variant="default" onClick={() => setPlanOpen(true)}>
+                <CreditCard className="mr-1.5 h-3.5 w-3.5" /> Change Plan
+              </Button>
+            )}
+            {isAdmin && (
+              <Button size="sm" variant="default" onClick={() => setTransferOpen(true)}>
+                <ArrowRightLeft className="mr-1.5 h-3.5 w-3.5" /> Transfer Ownership
               </Button>
             )}
 
@@ -258,20 +346,41 @@ export function TenantDetail() {
               <Headphones className="mr-1.5 h-3.5 w-3.5" /> Support Session
             </Button>
 
-            <Button size="sm" variant="default" onClick={handleRunExport} disabled={actionLoading}>
-              <Download className="mr-1.5 h-3.5 w-3.5" /> Export Data
-            </Button>
+            {isAdmin && (
+              <Button size="sm" variant="default" onClick={handleRunExport} disabled={actionLoading}>
+                <Download className="mr-1.5 h-3.5 w-3.5" /> Export Data
+              </Button>
+            )}
 
-            <Button
-              size="sm"
-              variant="destructive"
-              onClick={() => setDeletionOpen(true)}
-            >
-              <Trash2 className="mr-1.5 h-3.5 w-3.5" /> Delete
-            </Button>
+            {isAdmin && tenant.status !== "deletion_requested" && tenant.status !== "deleted" && (
+              <Button size="sm" variant="destructive" onClick={() => setDeletionOpen(true)}>
+                <Trash2 className="mr-1.5 h-3.5 w-3.5" /> Delete
+              </Button>
+            )}
           </div>
         }
       />
+
+      {detail.deletion && (
+        <div role="alert" className="mb-6 rounded-xl border border-destructive/40 bg-destructive/10 p-4 text-sm">
+          <div className="font-semibold text-destructive flex items-center gap-2">
+            <AlertOctagon className="h-4 w-4" /> Deletion scheduled for {new Date(detail.deletion.scheduledFor).toLocaleString("en-IN")}
+          </div>
+          <p className="mt-1 text-xs text-muted-foreground">
+            Step: <span className="font-mono">{detail.deletion.step}</span> · Reason: {detail.deletion.reason}
+          </p>
+          {detail.deletion.error && <p className="mt-1 text-xs text-destructive">Last error (it will retry): {detail.deletion.error}</p>}
+          {detail.deletion.canCancel ? (
+            isAdmin && (
+              <Button size="sm" className="mt-3" onClick={handleCancelDeletion} disabled={actionLoading}>
+                Cancel deletion
+              </Button>
+            )
+          ) : (
+            <p className="mt-2 text-xs">The deletion has started and can no longer be cancelled.</p>
+          )}
+        </div>
+      )}
 
       {/* Tabs Bar */}
       <div className="flex items-center gap-1 border-b mb-6 overflow-x-auto">
@@ -674,28 +783,19 @@ export function TenantDetail() {
                 required
               />
             </div>
-            <div>
-              <label className="font-semibold">Access Scope</label>
-              <Select value={supportScope} onValueChange={(val: any) => setSupportScope(val)}>
-                <SelectTrigger>
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="read_only">Read-Only (Default, safe)</SelectItem>
-                  <SelectItem value="write">Write Access (Elevated)</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
+            <p className="rounded-md bg-muted p-2 text-muted-foreground">
+              Sessions always start <strong>read-only</strong>. An admin can grant write access afterwards from the Support Sessions page.
+            </p>
             <div>
               <label className="font-semibold">Consent Verification Mode</label>
-              <Select value={supportConsent} onValueChange={(val: any) => setSupportConsent(val)}>
+              <Select value={supportConsent} onValueChange={(val) => setSupportConsent(val as typeof supportConsent)}>
                 <SelectTrigger>
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="owner_approved">Owner Approved (Email/Portal confirmed)</SelectItem>
-                  <SelectItem value="standing_consent">Standing Merchant Consent</SelectItem>
-                  <SelectItem value="emergency">Emergency Override (Alerts store owner immediately)</SelectItem>
+                  <SelectItem value="owner_approved">Owner approves in their store admin (Settings → Support access)</SelectItem>
+                  <SelectItem value="standing_consent">Standing consent (the owner switched it on)</SelectItem>
+                  <SelectItem value="emergency">Emergency (platform owners only, flagged in the audit log)</SelectItem>
                 </SelectContent>
               </Select>
             </div>
@@ -703,6 +803,76 @@ export function TenantDetail() {
           <DialogFooter>
             <Button variant="default" onClick={() => setSupportSessionOpen(false)}>Cancel</Button>
             <Button onClick={handleStartSupport} disabled={actionLoading}>Start Support Session</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* One-time support link */}
+      <Dialog open={supportLink !== null} onOpenChange={(open) => !open && setSupportLink(null)}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Support session created</DialogTitle>
+            <DialogDescription>
+              {supportLink?.status === "pending_owner_approval"
+                ? "The store owner must approve it in their store admin (Settings → Support access) before the link works."
+                : "The link works now, for 60 minutes."}
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-2 text-xs">
+            <label className="font-semibold">Store admin link (shown once, it opens the store as support)</label>
+            <Input readOnly value={supportLink?.url ?? ""} className="font-mono select-all bg-muted" />
+            <p className="text-muted-foreground">Only a hash of the token is stored, so this link cannot be shown again. Start a new session if you lose it.</p>
+          </div>
+          <DialogFooter>
+            <Button variant="default" onClick={() => void navigator.clipboard?.writeText(supportLink?.url ?? "")}>Copy link</Button>
+            <Button onClick={() => window.open(supportLink?.url, "_blank", "noopener")}>Open store admin</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Change plan */}
+      <Dialog open={planOpen} onOpenChange={setPlanOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Change plan</DialogTitle>
+            <DialogDescription>The plan sets the store's limits (size tier). This changes the plan record; it does not charge the merchant.</DialogDescription>
+          </DialogHeader>
+          <div className="py-2 text-xs space-y-2">
+            <label className="font-semibold">New plan</label>
+            <Select value={planCode} onValueChange={setPlanCode}>
+              <SelectTrigger>
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                {(plans ?? []).map((p) => (
+                  <SelectItem key={p.code} value={p.code}>
+                    {p.name} (₹{(p.priceMonthlyPaise / 100).toLocaleString("en-IN")}/month)
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+          <DialogFooter>
+            <Button variant="default" onClick={() => setPlanOpen(false)}>Cancel</Button>
+            <Button onClick={handleChangePlan} disabled={actionLoading}>Change plan</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Transfer ownership */}
+      <Dialog open={transferOpen} onOpenChange={setTransferOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Transfer ownership</DialogTitle>
+            <DialogDescription>The new owner must already have an account. They become the store owner immediately.</DialogDescription>
+          </DialogHeader>
+          <div className="py-2 text-xs space-y-2">
+            <label className="font-semibold">New owner's email</label>
+            <Input type="email" value={newOwnerEmail} onChange={(e) => setNewOwnerEmail(e.target.value)} placeholder="new.owner@example.com" />
+          </div>
+          <DialogFooter>
+            <Button variant="default" onClick={() => setTransferOpen(false)}>Cancel</Button>
+            <Button onClick={handleTransfer} disabled={actionLoading || !newOwnerEmail.trim()}>Transfer</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>

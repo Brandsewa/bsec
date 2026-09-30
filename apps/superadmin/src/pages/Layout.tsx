@@ -1,5 +1,5 @@
 import React from "react";
-import { Link, Outlet, useLocation, useNavigate } from "@tanstack/react-router";
+import { Outlet, useLocation, useNavigate } from "@tanstack/react-router";
 import {
   Activity,
   Building2,
@@ -18,6 +18,7 @@ import {
 } from "lucide-react";
 import { AppShell, Button, type NavGroup } from "@bs/ui";
 import { signOut, type PlatformUser } from "../lib/auth.ts";
+import { UserContext } from "../lib/user-context.tsx";
 
 interface LayoutProps {
   user: PlatformUser;
@@ -58,15 +59,21 @@ const navGroups: NavGroup[] = [
 
 export function Layout({ user, onLogout }: LayoutProps) {
   const location = useLocation();
+  // The staff list is admin-only on the server; do not show support staff a page that would be refused.
+  const groups = navGroups.map((g) => ({
+    ...g,
+    items: g.items.filter((i) => !(i.href === "/staff" && user.role === "platform_support")),
+  }));
   const navigate = useNavigate();
 
   const handleSignOut = async () => {
     await signOut();
     onLogout();
-    navigate({ to: "/login" as any });
+    navigate({ to: "/login" });
   };
 
   return (
+    <UserContext.Provider value={user}>
     <AppShell
       brand={
         <div className="flex items-center gap-2">
@@ -74,13 +81,13 @@ export function Layout({ user, onLogout }: LayoutProps) {
           <span className="text-sm font-bold tracking-tight">Super Admin</span>
         </div>
       }
-      groups={navGroups}
+      groups={groups}
       activeHref={location.pathname}
       banner={
         <div className="flex items-center justify-between bg-amber-500/10 px-4 py-1.5 text-xs font-medium text-amber-700 dark:text-amber-400 border-b border-amber-500/20">
           <span>Super Admin Mode · Every privileged action is audited under platform BYPASSRLS</span>
           <div className="flex items-center gap-3">
-            <span>Staff: <strong className="font-semibold">{user.email}</strong></span>
+            <span>Staff: <strong className="font-semibold">{user.email}</strong> · {user.role.replace("platform_", "")}</span>
             <Button
               variant="ghost"
               size="sm"
@@ -96,5 +103,6 @@ export function Layout({ user, onLogout }: LayoutProps) {
     >
       <Outlet />
     </AppShell>
+    </UserContext.Provider>
   );
 }

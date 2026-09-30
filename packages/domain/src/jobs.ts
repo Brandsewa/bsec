@@ -11,6 +11,7 @@ import { schema } from "@bs/db";
 import { eq, and } from "drizzle-orm";
 import { acquireTenantJobSlot, cleanExpiredRateLimits, reapStaleTenantJobSlots, releaseTenantJobSlot } from "./system/rate-limit.ts";
 import { runTrialExpirySweep } from "./saas/trial-expiry.ts";
+import { isMarketingAllowed } from "./system/tenant-lifecycle.ts";
 
 /**
  * Job runtime (PLAN §11). Queues are created by the migrate step (as app_owner); workers run
@@ -435,8 +436,9 @@ export async function startJobs(opts: {
         if (job.data?.tenantId) {
           tenantIds = [job.data.tenantId];
         } else {
-          const allTenants = await db.select({ id: schema.tenants.id }).from(schema.tenants);
-          tenantIds = allTenants.map((t) => t.id);
+          // Marketing (recovery e-mails) is paused for stores that are not live (suspended, archived, being deleted)
+          const allTenants = await db.select({ id: schema.tenants.id, status: schema.tenants.status }).from(schema.tenants);
+          tenantIds = allTenants.filter((t) => isMarketingAllowed(t.status)).map((t) => t.id);
         }
 
         let totalAbandoned = 0;

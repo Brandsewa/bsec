@@ -1,9 +1,10 @@
 /**
- * Operator tool: create or reset the bootstrap platform staff login (PLAN §6).
+ * Operator tool: create the bootstrap platform staff login, or reset its authenticator (PLAN §6).
  * Run from the platform container's terminal:
  *   STAFF_EMAIL=brandsewaofficial@gmail.com STAFF_NAME="Platform Owner" node dist/create-staff.js
- * The password is read from an interactive hidden prompt (or STAFF_PASSWORD when there is no TTY)
- * and is never printed or logged. MFA enrolment is required upon first login.
+ *   STAFF_EMAIL=... STAFF_RESET_MFA=1 node dist/create-staff.js      (lost phone: they set up a new authenticator)
+ * A password is asked for (hidden prompt, or STAFF_PASSWORD when there is no TTY) only when the account is new. An existing
+ * account keeps its password. The password is never printed or logged. MFA enrolment is required at first login.
  */
 import { createInterface } from "node:readline";
 import { createRuntime, createPlatformStaffMember } from "@bs/domain";
@@ -28,28 +29,31 @@ if (!url) throw new Error("Missing env DATABASE_URL_PLATFORM");
 const email = process.env.STAFF_EMAIL ?? "brandsewaofficial@gmail.com";
 const name = process.env.STAFF_NAME ?? "Platform Owner";
 const role = (process.env.STAFF_ROLE as "platform_owner" | "platform_admin" | "platform_support") ?? "platform_owner";
-
-let password = process.env.STAFF_PASSWORD ?? "";
-if (!password) {
-  if (!process.stdin.isTTY) throw new Error("No TTY: set STAFF_PASSWORD or run in an interactive terminal");
-  password = await promptHidden("New platform staff password (hidden, min 10 chars): ");
-  const again = await promptHidden("Repeat password: ");
-  if (password !== again) throw new Error("Passwords do not match");
-}
+const resetMfa = process.env.STAFF_RESET_MFA === "1";
 
 const rt = createRuntime({ service: "platform", databaseUrl: url, poolMax: 1 });
 try {
-  const res = await createPlatformStaffMember(rt._db.db, {
-    email,
-    name,
-    password,
-    role,
-  });
+  let password = process.env.STAFF_PASSWORD || undefined;
+  const attempt = () => createPlatformStaffMember(rt._db.db, { email, name, role, resetMfa, ...(password ? { password } : {}) });
+
+  let res;
+  try {
+    res = await attempt();
+  } catch (err) {
+    if (!(err instanceof Error) || !err.message.startsWith("Password required")) throw err;
+    if (!process.stdin.isTTY) throw new Error("This account needs a password: set STAFF_PASSWORD or run in an interactive terminal", { cause: err });
+    password = await promptHidden("New platform staff password (hidden, min 10 chars): ");
+    const again = await promptHidden("Repeat password: ");
+    if (password !== again) throw new Error("Passwords do not match", { cause: err });
+    res = await attempt();
+  }
+
   console.log(
     res.createdUser
-      ? `Platform staff '${email}' created with role '${role}'. MFA enrolment required at first login.`
-      : `Platform staff '${email}' password updated. MFA enrolment verified at login.`,
+      ? `Platform staff '${email}' created with role '${role}'. They set up an authenticator at first sign-in.`
+      : `'${email}' is now platform staff with role '${role}'. Their password was not changed.`,
   );
+  if (resetMfa) console.log("Authenticator removed and all sessions ended: they set up a new authenticator at next sign-in.");
 } finally {
   await rt._db.close();
 }

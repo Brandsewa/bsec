@@ -2,14 +2,10 @@ import React, { useState } from "react";
 import { Link } from "@tanstack/react-router";
 import {
   AlertCircle,
-  Building2,
   Check,
   CheckCircle2,
   Copy,
-  Info,
-  Mail,
   RefreshCw,
-  Sparkles,
 } from "lucide-react";
 import {
   Button,
@@ -26,6 +22,7 @@ import {
   toast,
 } from "@bs/ui";
 import { client } from "../lib/orpc.ts";
+import { messageOf } from "../lib/errors.ts";
 
 export function TenantCreate() {
   const [storeName, setStoreName] = useState("");
@@ -90,8 +87,8 @@ export function TenantCreate() {
         inviteToken: res.inviteToken,
       });
       toast.success(`Store '${storeName}' provisioned successfully`);
-    } catch (err: any) {
-      toast.error(err?.message || "Failed to provision store");
+    } catch (err) {
+      toast.error(messageOf(err, "Failed to provision store"));
     } finally {
       setLoading(false);
     }
@@ -112,8 +109,8 @@ export function TenantCreate() {
       const res = await client.tenants.resendOwnerInvite({ id: result.tenantId, email: clientEmail.trim().toLowerCase() });
       setResult((prev) => (prev ? { ...prev, inviteUrl: res.inviteUrl, inviteToken: res.inviteToken } : null));
       toast.success("New invite link generated");
-    } catch (err: any) {
-      toast.error(err?.message || "Failed to resend invite");
+    } catch (err) {
+      toast.error(messageOf(err, "Failed to resend invite"));
     } finally {
       setResending(false);
     }
@@ -199,7 +196,7 @@ export function TenantCreate() {
               >
                 Provision Another Store
               </Button>
-              <Link to={`/tenants/${result.tenantId}` as any}>
+              <Link to={`/tenants/${result.tenantId}`}>
                 <Button size="sm">Manage Store</Button>
               </Link>
             </div>
@@ -269,7 +266,7 @@ export function TenantCreate() {
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
             <div>
               <Label htmlFor="planCode">Subscription Plan</Label>
-              <Select value={planCode} onValueChange={(val: any) => setPlanCode(val)}>
+              <Select value={planCode} onValueChange={(val) => setPlanCode(val as typeof planCode)}>
                 <SelectTrigger id="planCode">
                   <SelectValue />
                 </SelectTrigger>
@@ -283,7 +280,7 @@ export function TenantCreate() {
 
             <div>
               <Label htmlFor="initialStatus">Store Account State</Label>
-              <Select value={initialStatus} onValueChange={(val: any) => setInitialStatus(val)}>
+              <Select value={initialStatus} onValueChange={(val) => setInitialStatus(val as typeof initialStatus)}>
                 <SelectTrigger id="initialStatus">
                   <SelectValue />
                 </SelectTrigger>

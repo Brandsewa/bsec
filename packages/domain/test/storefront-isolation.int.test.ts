@@ -179,13 +179,15 @@ describe("Storefront Integration & Tenant Isolation Suite (Real PostgreSQL 18)",
       requestId: "req-beta-001",
     };
 
-    // 4. Seed Organization, Tenants, and Domains
-    await dbRw.db.insert(schema.organizations).values({
+    // 4. Seed Organization, Tenants, and Domains. Creating organizations and tenants is a platform/self-service act:
+    // the tenant runtime (app_rw) is deliberately not allowed to, so this fixture uses the superuser.
+    const dbSuper = createDb(superUrl, { max: 1 });
+    await dbSuper.db.insert(schema.organizations).values({
       id: orgId,
       name: "Storefront Test Org",
     });
 
-    await dbRw.db.insert(schema.tenants).values([
+    await dbSuper.db.insert(schema.tenants).values([
       {
         id: tenantA,
         slug: "storefront-alpha",
@@ -202,7 +204,7 @@ describe("Storefront Integration & Tenant Isolation Suite (Real PostgreSQL 18)",
       },
     ]);
 
-    await dbRw.db.insert(schema.domains).values([
+    await dbSuper.db.insert(schema.domains).values([
       {
         tenantId: tenantA,
         hostname: hostA,
@@ -217,10 +219,11 @@ describe("Storefront Integration & Tenant Isolation Suite (Real PostgreSQL 18)",
       },
     ]);
 
-    await dbRw.db.insert(schema.users).values([
+    await dbSuper.db.insert(schema.users).values([
       { id: userA, email: "admin@alpha.test", name: "Admin Alpha" },
       { id: userB, email: "admin@beta.test", name: "Admin Beta" },
     ]);
+    await dbSuper.close();
 
     // 5. Seed Tenant A initial store settings and lifecycle status
     await withTenant(dbRw.db, tenantA, async (tx) => {

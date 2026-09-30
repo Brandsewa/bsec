@@ -7,12 +7,21 @@ import type { Runtime } from "./runtime.ts";
  * Every domain service takes ctx first (PLAN §3). The tenant is never taken from the client:
  * it comes from the host (storefront) or session membership + X-Store-Id (admin). Built in M1.
  */
-import { hasPermission, type StorePermission } from "@bs/auth";
+import { hasPermission, STORE_PERMISSIONS, type StorePermission } from "@bs/auth";
 
 import { validateSupportSessionToken } from "./platform/support-sessions.ts";
 import { isAdminAccessAllowed, isAdminReadOnly } from "./system/tenant-lifecycle.ts";
 
 export { hasPermission, type StorePermission };
+
+/**
+ * What a platform support session may do in a store (PLAN §6.3), expressed in the real store permission names.
+ * Read-only sessions get the *.read permissions. Write sessions (second confirmation) add everyday store work, but
+ * never team management, payment/settings credentials, data exports or refunds: those stay with the store's owner.
+ */
+export const SUPPORT_READ_PERMISSIONS: readonly StorePermission[] = STORE_PERMISSIONS.filter((p) => p.endsWith(".read"));
+const SUPPORT_WRITE_DENIED: readonly StorePermission[] = ["staff.manage", "settings.write", "exports.run", "orders.refund"];
+export const SUPPORT_WRITE_PERMISSIONS: readonly StorePermission[] = STORE_PERMISSIONS.filter((p) => !SUPPORT_WRITE_DENIED.includes(p));
 
 export type Actor =
   | { type: "anonymous" }
@@ -52,6 +61,8 @@ export interface BuildTenantContextOptions {
     session?: { id: string; userId: string; [key: string]: unknown } | undefined;
     type?: "staff" | "customer" | undefined;
   } | null | undefined;
+  /** Method and path of the request, recorded in the audit trail when a support token is used. */
+  request?: { method?: string | undefined; path?: string | undefined } | undefined;
 }
 
 function getHeader(headers: HeaderValues, name: string): string | undefined {
@@ -99,7 +110,7 @@ export async function buildTenantContext(
     // 1. Support session check (PLAN §6.3)
     const supportToken = getHeader(opts.headers, "x-support-token");
     if (supportToken) {
-      const supportSession = await validateSupportSessionToken(db, supportToken, storeId);
+      const supportSession = await validateSupportSessionToken(db, supportToken, storeId, opts.request);
       const [t] = await db
         .select({ status: schema.tenants.status })
         .from(schema.tenants)
@@ -111,17 +122,8 @@ export async function buildTenantContext(
         throw new Error("Forbidden: tenant is not accessible in admin");
       }
 
-      const allPermissions = [
-        "orders.read", "orders.write", "orders.manage",
-        "products.read", "products.write",
-        "customers.read", "customers.write",
-        "analytics.read",
-        "settings.read", "settings.write",
-        "domains.read", "domains.write",
-      ];
-      const permissions = (supportSession.scope === "read_only" || isAdminReadOnly(tenantStatus))
-        ? allPermissions.filter((p) => p.endsWith(".read"))
-        : allPermissions;
+      let permissions = [...(supportSession.scope === "write" ? SUPPORT_WRITE_PERMISSIONS : SUPPORT_READ_PERMISSIONS)] as string[];
+      if (isAdminReadOnly(tenantStatus)) permissions = permissions.filter((p) => p.endsWith(".read"));
 
       const storeStatus: StoreStatus =
         tenantStatus === "active" ? "live" : (tenantStatus as StoreStatus);

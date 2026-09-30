@@ -7,7 +7,6 @@ import {
   listStoreFeatureFlags,
   listPlatformTenants,
   getPlatformTenant,
-  assertPlatformStaff,
 } from "../src/index.ts";
 import type { Runtime, TenantContext } from "../src/index.ts";
 import type { Db } from "@bs/db";
@@ -110,43 +109,7 @@ describe("Domain Services", () => {
       expect(res.slug).toBe("store1");
     });
 
-    it("asserts platform staff member exists and is active", async () => {
-      let callCount = 0;
-      const mockDb = {
-        select: () => ({
-          from: () => ({
-            where: () => ({
-              limit: () => {
-                callCount++;
-                if (callCount === 1) return [{ role: "platform_admin", isActive: true, mfaRequired: true }];
-                if (callCount === 2) return [{ twoFactorEnabled: true }];
-                return [{ verified: true }];
-              },
-            }),
-          }),
-        }),
-      } as unknown as Db;
-
-      const rt = createMockRuntime(mockDb);
-      const res = await assertPlatformStaff(rt, "staff-user-1");
-
-      expect(res.role).toBe("platform_admin");
-    });
-
-    it("rejects non-platform staff", async () => {
-      const mockDb = {
-        select: () => ({
-          from: () => ({
-            where: () => ({
-              limit: () => [],
-            }),
-          }),
-        }),
-      } as unknown as Db;
-
-      const rt = createMockRuntime(mockDb);
-      await expect(assertPlatformStaff(rt, "unauthorized-user")).rejects.toThrow(/forbidden/i);
-    });
+    // assertPlatformStaff (MFA state, session freshness, roles) is tested against a real database in platform-staff.int.test.ts.
 
     it("rejects admin procedures when required permission is missing", async () => {
       const unprivilegedCtx: TenantContext = {

@@ -1,6 +1,6 @@
 import React, { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { UserCheck, UserPlus, ShieldAlert, KeyRound, CheckCircle2, UserX } from "lucide-react";
+import { UserPlus, KeyRound, CheckCircle2, UserX } from "lucide-react";
 import {
   Button,
   Dialog,
@@ -9,7 +9,6 @@ import {
   DialogFooter,
   DialogHeader,
   DialogTitle,
-  EmptyState,
   Input,
   PageContainer,
   PageHeader,
@@ -28,13 +27,19 @@ import {
   toast,
 } from "@bs/ui";
 import { client } from "../lib/orpc.ts";
+import { messageOf } from "../lib/errors.ts";
+import { useHasRole, useStaff } from "../lib/user-context.tsx";
+
+type StaffRole = "platform_owner" | "platform_admin" | "platform_support";
 
 export function Staff() {
+  const me = useStaff();
+  const isOwner = useHasRole("platform_owner");
   const [inviteOpen, setInviteOpen] = useState(false);
   const [inviteEmail, setInviteEmail] = useState("");
-  const [inviteRole, setInviteRole] = useState<"platform_owner" | "platform_admin" | "platform_support">("platform_support");
+  const [inviteRole, setInviteRole] = useState<StaffRole>("platform_support");
 
-  const [createdInvite, setCreatedInvite] = useState<{ email: string; token: string } | null>(null);
+  const [createdInvite, setCreatedInvite] = useState<{ email: string; url: string } | null>(null);
   const [actionLoading, setActionLoading] = useState(false);
 
   const { data: staffList, isLoading, refetch } = useQuery({
@@ -51,11 +56,11 @@ export function Staff() {
         email: inviteEmail.trim().toLowerCase(),
         role: inviteRole,
       });
-      setCreatedInvite({ email: res.email, token: res.token });
+      setCreatedInvite({ email: res.email, url: res.inviteUrl });
       toast.success(`Platform staff invitation created for ${res.email}`);
       refetch();
-    } catch (err: any) {
-      toast.error(err?.message || "Failed to invite staff member");
+    } catch (err) {
+      toast.error(messageOf(err, "Failed to invite staff member"));
     } finally {
       setActionLoading(false);
     }
@@ -68,8 +73,8 @@ export function Staff() {
       await client.staff.deactivate({ userId });
       toast.success(`Deactivated staff ${email}. Active sessions revoked.`);
       refetch();
-    } catch (err: any) {
-      toast.error(err?.message || "Failed to deactivate staff member");
+    } catch (err) {
+      toast.error(messageOf(err, "Failed to deactivate staff member"));
     } finally {
       setActionLoading(false);
     }
@@ -81,21 +86,21 @@ export function Staff() {
       await client.staff.reactivate({ userId });
       toast.success(`Reactivated staff ${email}`);
       refetch();
-    } catch (err: any) {
-      toast.error(err?.message || "Failed to reactivate staff member");
+    } catch (err) {
+      toast.error(messageOf(err, "Failed to reactivate staff member"));
     } finally {
       setActionLoading(false);
     }
   };
 
-  const handleRoleChange = async (userId: string, newRole: "platform_owner" | "platform_admin" | "platform_support") => {
+  const handleRoleChange = async (userId: string, newRole: StaffRole) => {
     setActionLoading(true);
     try {
       await client.staff.updateRole({ userId, role: newRole });
       toast.success("Platform staff role updated");
       refetch();
-    } catch (err: any) {
-      toast.error(err?.message || "Failed to update staff role");
+    } catch (err) {
+      toast.error(messageOf(err, "Failed to update staff role"));
     } finally {
       setActionLoading(false);
     }
@@ -143,8 +148,8 @@ export function Staff() {
                   <TableCell>
                     <Select
                       value={s.role}
-                      onValueChange={(val: any) => handleRoleChange(s.userId, val)}
-                      disabled={actionLoading || !s.isActive}
+                      onValueChange={(val) => handleRoleChange(s.userId, val as StaffRole)}
+                      disabled={actionLoading || !s.isActive || !isOwner}
                     >
                       <SelectTrigger className="h-7 text-xs w-[150px]">
                         <SelectValue />
@@ -177,7 +182,9 @@ export function Staff() {
                     </span>
                   </TableCell>
                   <TableCell className="text-right">
-                    {s.isActive ? (
+                    {s.userId === me.id ? (
+                      <span className="text-xs text-muted-foreground">You</span>
+                    ) : s.isActive ? (
                       <Button
                         size="sm"
                         variant="ghost"
@@ -187,7 +194,7 @@ export function Staff() {
                       >
                         <UserX className="mr-1 h-3 w-3" /> Deactivate
                       </Button>
-                    ) : (
+                    ) : isOwner ? (
                       <Button
                         size="sm"
                         variant="default"
@@ -197,7 +204,7 @@ export function Staff() {
                       >
                         Reactivate
                       </Button>
-                    )}
+                    ) : null}
                   </TableCell>
                 </TableRow>
               ))
@@ -222,8 +229,12 @@ export function Staff() {
                 Invitation created successfully for <strong>{createdInvite.email}</strong>.
               </div>
               <div className="space-y-1">
-                <label className="text-xs font-semibold">Single-Use Invitation Token</label>
-                <Input readOnly value={createdInvite.token} className="font-mono text-xs select-all bg-muted" />
+                <label className="text-xs font-semibold">Invitation link (shown once, valid 7 days, single use)</label>
+                <Input readOnly value={createdInvite.url} className="font-mono text-xs select-all bg-muted" />
+                <p className="text-[11px] text-muted-foreground">
+                  Nothing is emailed automatically. Send this link to the person yourself. Only its hash is stored, so it cannot be shown again: issue a new invitation if it is lost.
+                </p>
+                <Button type="button" size="sm" variant="default" onClick={() => void navigator.clipboard?.writeText(createdInvite.url)}>Copy link</Button>
               </div>
               <DialogFooter>
                 <Button onClick={() => setInviteOpen(false)}>Done</Button>
@@ -243,12 +254,12 @@ export function Staff() {
               </div>
               <div>
                 <label className="font-semibold">Assigned Platform Role</label>
-                <Select value={inviteRole} onValueChange={(val: any) => setInviteRole(val)}>
+                <Select value={inviteRole} onValueChange={(val) => setInviteRole(val as StaffRole)}>
                   <SelectTrigger>
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="platform_owner">Platform Owner (Full administrative control)</SelectItem>
+                    {isOwner && <SelectItem value="platform_owner">Platform Owner (Full administrative control)</SelectItem>}
                     <SelectItem value="platform_admin">Platform Admin (Tenant and feature operations)</SelectItem>
                     <SelectItem value="platform_support">Platform Support (Audited support sessions)</SelectItem>
                   </SelectContent>

@@ -62,6 +62,13 @@ services:
       <<: *app-env
       DATABASE_URL_PLATFORM: postgres://app_platform:${APP_PLATFORM_PASSWORD}@postgres:5432/bsec
       TENANT_SECRETS_KEY: ${TENANT_SECRETS_KEY:?required}
+      # Platform (Super Admin) sign-in: Better Auth + exact SPA origin. Cookies stay host-only (no PLATFORM_COOKIE_DOMAIN).
+      BETTER_AUTH_SECRET: ${BETTER_AUTH_SECRET:?required}
+      PLATFORM_AUTH_URL: http://127.0.0.1:4000
+      SUPERADMIN_ORIGINS: http://127.0.0.1:8081
+      SUPERADMIN_URL: http://127.0.0.1:8081
+      PLATFORM_DOMAIN: localhost
+      ADMIN_HOST: 127.0.0.1:8080
     ports:
       - "127.0.0.1:4000:4000"
 
