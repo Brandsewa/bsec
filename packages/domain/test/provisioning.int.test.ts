@@ -189,13 +189,13 @@ describe("M8 Atomic Tenant Provisioning Engine (PLAN §5.1, §6.4, §7 / ADR-016
     expect(flatRate?.pricePaise).toBe(9900); // ₹99
     expect(freeRate?.thresholdPaise).toBe(99900); // ₹999
 
-    // Verify Size Tier Allocation (Growth Plan -> S Tier)
+    // Verify Size Tier Allocation (Growth Plan -> M Tier, per the shared plan-tier mapping)
     const tiers = await platformDb.db
       .select()
       .from(schema.tenantSizeTiers)
       .where(sql`tenant_id = ${result.tenantId}`);
     expect(tiers).toHaveLength(1);
-    expect(tiers[0]!.tier).toBe("S");
+    expect(tiers[0]!.tier).toBe("M");
 
     // Verify Subscription (14-day trialing)
     const [sub] = await platformDb.db

@@ -47,7 +47,9 @@ export interface CustomDomainProvider {
 export class CloudflareCustomDomainProvider implements CustomDomainProvider {
   private apiToken: string | null;
   private zoneId: string | null;
-  private readonly fallbackCname = "stores.gobs.cloud";
+  // CNAME target customers point their domain at; must exist as a hostname in the Cloudflare zone.
+  private readonly fallbackCname =
+    process.env.CUSTOM_DOMAIN_CNAME_TARGET?.trim() || `stores.${process.env.PLATFORM_DOMAIN?.trim() || "gobs.cloud"}`;
 
   constructor(opts?: { apiToken?: string; zoneId?: string }) {
     this.apiToken = opts?.apiToken ?? process.env.CLOUDFLARE_API_TOKEN ?? null;

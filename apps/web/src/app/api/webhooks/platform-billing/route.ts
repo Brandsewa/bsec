@@ -19,6 +19,7 @@ export async function POST(req: Request) {
     const result = await handlePlatformBillingWebhook(rt, {
       rawBody,
       signature,
+      headers: req.headers,
     });
 
     return NextResponse.json(result, { status: 200 });

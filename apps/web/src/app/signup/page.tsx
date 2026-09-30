@@ -1,6 +1,7 @@
 "use client";
 
 import React, { useState, useEffect, Suspense } from "react";
+import { TurnstileWidget } from "@/components/marketing/TurnstileWidget";
 import { useSearchParams } from "next/navigation";
 import Link from "next/link";
 
@@ -93,6 +94,10 @@ function SignupContent() {
   const [isProvisioning, setIsProvisioning] = useState(false);
   const [provisionProgress, setProvisionProgress] = useState("Initializing store...");
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  // Bot challenge: the site key comes from the server's runtime config; when unset (local dev) no widget is shown.
+  const [turnstileSiteKey, setTurnstileSiteKey] = useState<string | null>(null);
+  const [turnstileToken, setTurnstileToken] = useState<string | null>(null);
+  const [configLoaded, setConfigLoaded] = useState(false);
   const [provisionSuccess, setProvisionSuccess] = useState<{
     storeUrl: string;
     adminUrl: string;
@@ -203,6 +208,14 @@ function SignupContent() {
     setStep(3);
   };
 
+  useEffect(() => {
+    fetch("/api/saas/config")
+      .then((r) => (r.ok ? r.json() : null))
+      .then((cfg: { turnstileSiteKey?: string | null } | null) => setTurnstileSiteKey(cfg?.turnstileSiteKey ?? null))
+      .catch(() => setTurnstileSiteKey(null))
+      .finally(() => setConfigLoaded(true));
+  }, []);
+
   // Step 3 -> Step 4
   const handleStep3Submit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -247,6 +260,7 @@ function SignupContent() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           leadId,
+          turnstileToken: turnstileToken ?? undefined,
           storeName: storeName.trim() || `${slug} Store`,
           slug: slug.trim(),
           owner: {
@@ -690,6 +704,12 @@ function SignupContent() {
               <div>• Trial: <strong>14 days free</strong> on {selectedPlan.toUpperCase()} tier</div>
             </div>
 
+            {turnstileSiteKey && (
+              <div className="flex justify-center">
+                <TurnstileWidget siteKey={turnstileSiteKey} onToken={setTurnstileToken} />
+              </div>
+            )}
+
             <div className="flex gap-3">
               <button
                 type="button"
@@ -701,7 +721,7 @@ function SignupContent() {
               </button>
               <button
                 type="button"
-                disabled={isProvisioning}
+                disabled={isProvisioning || !configLoaded || (turnstileSiteKey !== null && !turnstileToken)}
                 onClick={handleFinalSubmit}
                 className="flex-1 py-3.5 bg-emerald-600 hover:bg-emerald-700 text-white font-bold rounded-xl shadow-md transition-all text-sm disabled:bg-slate-400 flex items-center justify-center gap-2"
               >

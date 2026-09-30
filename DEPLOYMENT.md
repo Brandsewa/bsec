@@ -6,6 +6,8 @@ This document defines the deployment configuration and required environment vari
 
 ### Web (`bsec-web`)
 - `DATABASE_URL_RW`: Connection string for PostgreSQL as `app_rw`.
+- `DATABASE_URL_SAAS`: Connection string for PostgreSQL as `app_saas` (same host and database as `DATABASE_URL_RW`, user `app_saas`, password = `APP_SAAS_PASSWORD`). Used only by the self-service paths: public signup, owner-invite acceptance, plan changes and the Razorpay billing webhook. **Optional at boot**: when unset the site serves normally, but those endpoints answer 503 "Self-service is not configured".
+- `TURNSTILE_SITE_KEY` / `TURNSTILE_SECRET_KEY`: Cloudflare Turnstile keys for the public signup form (runtime env, no rebuild needed). In production signup is refused until BOTH are set (fail-closed); locally, with neither set, signup works without a challenge.
 - `APP_ENV`: `production` | `staging` | `development`.
 - `PORT`: `3000`.
 - `HOSTNAME`: `0.0.0.0`.
@@ -25,13 +27,23 @@ Without `BETTER_AUTH_URL` / `BETTER_AUTH_SECRET` the site keeps serving but admi
 
 ### Worker (`bsec-worker`)
 - `DATABASE_URL_RW`: Connection string for PostgreSQL as `app_rw`.
+- `DATABASE_URL_SAAS`: as for web. Optional; without it the hourly trial-expiry sweep is skipped (a warning is logged).
 - `APP_ENV`: `production` | `staging` | `development`.
 - `PORT`: `4100`.
 - `TENANT_SECRETS_KEY`: **Set before saving any payment/shipping/email credentials.** The app boots and serves without it (a warning is logged), but storing or reading tenant credentials fails until it is set. Used by background workers (e.g. transactional email dispatcher, payment webhooks, shipping background jobs) to decrypt tenant API keys (e.g. Resend, Razorpay). (Fallback alias: `ENCRYPTION_KEY`).
 
 ### Migration Runner (`bsec-migrate`)
 - `DATABASE_URL_OWNER`: Connection string for PostgreSQL as `app_owner`.
-- `DATABASE_URL_SUPERUSER`: Required only on initial bootstrap run to configure roles (`app_owner`, `app_rw`, `app_platform`). Must be removed after first run.
+- `DATABASE_URL_SUPERUSER`: Required only on initial bootstrap run to configure roles (`app_owner`, `app_rw`, `app_platform`, `app_saas`). Must be removed after first run.
+- `APP_SAAS_PASSWORD`: password for the `app_saas` role (`openssl rand -hex 16`). Optional: when unset the role is not created and self-service stays disabled. Set it together with `APP_OWNER_PASSWORD`/`APP_RW_PASSWORD`/`APP_PLATFORM_PASSWORD` on the first run that includes `DATABASE_URL_SUPERUSER`, then use the same value in `DATABASE_URL_SAAS` for web and worker. Grants for the role are re-applied on every migrate run.
+
+### Database roles
+| Role | Used by | Notes |
+|---|---|---|
+| `app_owner` | migrate | owns tables, never used at runtime |
+| `app_rw` | web, worker | tenant runtime, RLS applies; read-only on platform-owned tables |
+| `app_saas` | web, worker (second pool) | member of `app_rw`, plus write on `signup_leads`, `slug_reservations`, `tenant_size_tiers`, `subscriptions`, `platform_invoices`, `quota_events`, `tenant_owner_invites`. NOBYPASSRLS |
+| `app_platform` | platform only | BYPASSRLS |
 
 ## Encryption Key Specification
 The code (`packages/payments/src/crypto.ts` and `packages/shipping/src/crypto.ts`) reads:

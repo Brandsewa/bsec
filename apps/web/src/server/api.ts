@@ -104,6 +104,8 @@ import {
   FeatureDisabledError,
   checkSubdomainAvailability,
   reserveSubdomain,
+  saasDb,
+  SaasNotConfiguredError,
   saveSignupLead,
   completeSignup,
   acceptTenantOwnerInvite,
@@ -1199,14 +1201,14 @@ api.all("/auth/*", async (c) => {
 api.get("/saas/subdomain/check", async (c) => {
   const slug = c.req.query("slug");
   if (!slug) return c.json({ available: false, reason: "Slug parameter is required" }, 400);
-  const db = server().rt._db.db;
+  const db = saasDb(server().rt);
   const result = await checkSubdomainAvailability(db, slug);
   return c.json(result);
 });
 
 api.post("/saas/subdomain/reserve", async (c) => {
   const ip = clientIp(c.req.raw.headers);
-  const db = server().rt._db.db;
+  const db = saasDb(server().rt);
 
   const rateCheck = await checkReserveSubdomainRateLimit(db, ip);
   if (!rateCheck.allowed) {
@@ -1226,7 +1228,7 @@ api.post("/saas/subdomain/reserve", async (c) => {
 
 api.post("/saas/lead", async (c) => {
   const ip = clientIp(c.req.raw.headers);
-  const db = server().rt._db.db;
+  const db = saasDb(server().rt);
 
   const rateCheck = await checkLeadCaptureRateLimit(db, ip);
   if (!rateCheck.allowed) {
@@ -1244,14 +1246,19 @@ api.post("/saas/lead", async (c) => {
   return c.json(result);
 });
 
+api.get("/saas/config", (c) => {
+  // Public, non-secret runtime config for the signup page.
+  return c.json({ turnstileSiteKey: process.env.TURNSTILE_SITE_KEY?.trim() || null });
+});
+
 api.get("/saas/plans", async (c) => {
-  const db = server().rt._db.db;
+  const db = saasDb(server().rt);
   const plans = await listPublicPlans(db);
   return c.json(plans);
 });
 
 api.get("/saas/templates", async (c) => {
-  const db = server().rt._db.db;
+  const db = saasDb(server().rt);
   const templates = await listPublicThemeTemplates(db);
   return c.json(templates);
 });
@@ -1267,6 +1274,7 @@ api.post("/saas/signup", async (c) => {
     });
     return c.json(result, 201);
   } catch (err: unknown) {
+    if (err instanceof SaasNotConfiguredError) return c.json({ error: err.message }, 503);
     const message = err instanceof Error ? err.message : "Failed to provision store";
     return c.json({ error: message }, 400);
   }
@@ -1286,6 +1294,7 @@ api.post("/saas/invite/accept", async (c) => {
     });
     return c.json(res);
   } catch (err: unknown) {
+    if (err instanceof SaasNotConfiguredError) return c.json({ error: err.message }, 503);
     const message = err instanceof Error ? err.message : "Failed to accept store invitation";
     return c.json({ error: message }, 400);
   }

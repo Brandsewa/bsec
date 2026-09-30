@@ -1,8 +1,9 @@
-import { randomUUID, randomBytes, createHash } from "node:crypto";
+import { randomUUID } from "node:crypto";
 import { eq, sql } from "drizzle-orm";
 import { schema } from "@bs/db";
 import { hashPassword, STORE_PERMISSIONS } from "@bs/auth";
-import type { Runtime } from "../runtime.ts";
+import { saasDb, type Runtime } from "../runtime.ts";
+import { tierForPlan } from "./plan-tiers.ts";
 import { normalizeSubdomainSlug, validateSubdomainFormat } from "./subdomains.ts";
 
 export interface ProvisionOwnerInput {
@@ -37,12 +38,6 @@ export interface ProvisionTenantResult {
   subscriptionId: string;
 }
 
-const TIER_FOR_PLAN: Record<string, "XS" | "S" | "M" | "L"> = {
-  starter: "XS",
-  growth: "S",
-  pro: "M",
-};
-
 /**
  * Atomic Tenant Provisioning Engine (PLAN §5.1, §6.4, §7 / ADR-016).
  *
@@ -55,7 +50,7 @@ export async function provisionTenant(
   rt: Runtime,
   input: ProvisionTenantInput,
 ): Promise<ProvisionTenantResult> {
-  const db = rt._db.db;
+  const db = saasDb(rt);
 
   const rawSlug = input.slug.trim();
   const slug = normalizeSubdomainSlug(rawSlug);
@@ -116,6 +111,12 @@ export async function provisionTenant(
     `);
 
     if (existingUser.rows[0]) {
+      if (source === "self_service") {
+        // A stranger must not be able to create stores owned by (or burn the trial quota of) someone else's account.
+        throw new Error(
+          "An account with this email already exists. Sign in to the store admin to manage your stores, or sign up with a different email.",
+        );
+      }
       ownerId = existingUser.rows[0].id;
       isExistingUser = true;
     } else {
@@ -162,8 +163,7 @@ export async function provisionTenant(
       throw new Error("Simulated mid-transaction failure after org, user, tenant and domain creation");
     }
 
-    // 7. Password Account setup: only for brand new users (prevent account takeover)
-    // Never reuse or modify an existing user's credentials in self-signup flow.
+    // 7. Password Account setup: only for brand new users. An existing user's credentials are never touched here.
     if (!isExistingUser && input.owner.password && input.owner.password.length >= 10) {
       const passwordHash = await hashPassword(input.owner.password);
       await tx.insert(schema.accounts).values({
@@ -172,19 +172,6 @@ export async function provisionTenant(
         accountId: ownerId,
         providerId: "credential",
         password: passwordHash,
-      });
-    }
-
-    // If the email already belongs to a user, send an owner invite instead so the real mailbox owner completes setup
-    if (isExistingUser) {
-      const rawToken = randomBytes(32).toString("hex");
-      const tokenHash = createHash("sha256").update(rawToken).digest("hex");
-      const expiresAt = new Date(Date.now() + 7 * 24 * 3600 * 1000);
-      await tx.insert(schema.tenantOwnerInvites).values({
-        tenantId,
-        email: ownerEmail,
-        tokenHash,
-        expiresAt,
       });
     }
 
@@ -285,7 +272,7 @@ export async function provisionTenant(
     }
 
     // 12. Size Tier Allocation (PLAN §6.1)
-    const initialTier = TIER_FOR_PLAN[planCode] ?? "XS";
+    const initialTier = tierForPlan(planCode);
     await tx.insert(schema.tenantSizeTiers).values({
       tenantId,
       tier: initialTier,

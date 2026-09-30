@@ -11,7 +11,7 @@
  * for the standalone entrypoint.
  */
 import pg from "pg";
-import { rolesSql } from "../sql/roles.ts";
+import { rolesSql, type RolePasswords } from "../sql/roles.ts";
 
 // Arbitrary fixed key for a session-level advisory lock scoped to role bootstrap. Roles
 // (ALTER ROLE ... PASSWORD, CREATE ROLE) live in the cluster-wide pg_authid catalog, not a single
@@ -21,7 +21,7 @@ import { rolesSql } from "../sql/roles.ts";
 // fails intermittently with "tuple concurrently updated" on the ALTER ROLE statements.
 const BOOTSTRAP_ROLES_LOCK_KEY = 0x62_73_65_63; // "bsec" as a 32-bit int, arbitrary but stable
 
-export async function bootstrapRoles(superuserUrl: string, pw: { owner: string; rw: string; platform: string }) {
+export async function bootstrapRoles(superuserUrl: string, pw: RolePasswords) {
   const client = new pg.Client({ connectionString: superuserUrl });
   await client.connect();
   try {

@@ -227,6 +227,8 @@ export async function startJobs(opts: {
   log: Logger;
   concurrency: number;
   db?: Db | undefined;
+  /** app_saas connection for the trial sweep; without it the sweep is skipped with a warning. */
+  saasDb?: Db | undefined;
 }): Promise<Jobs> {
   const boss = new PgBoss({ connectionString: opts.databaseUrl, max: 3, migrate: false, application_name: "bsec-worker" });
   let running = false;
@@ -456,7 +458,11 @@ export async function startJobs(opts: {
   await boss.work(QUEUE_NAMES.SUBSCRIPTION_TRIAL_EXPIRY_SWEEP, { localConcurrency: 1 }, async (batch) => {
     for (const job of batch) {
       try {
-        const res = await runTrialExpirySweep(db);
+        if (!opts.saasDb) {
+          opts.log.warn({ job_id: job.id }, "subscription.trial_expiry_sweep skipped: DATABASE_URL_SAAS not configured");
+          continue;
+        }
+        const res = await runTrialExpirySweep(opts.saasDb);
         opts.log.info({ job_id: job.id, expiredCount: res.expired }, "subscription.trial_expiry_sweep processed");
       } catch (err) {
         opts.log.error({ err, job_id: job.id }, "subscription.trial_expiry_sweep failed");

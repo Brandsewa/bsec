@@ -300,19 +300,25 @@ export async function placeOrder(
   }
 
   // Soft quota tracking runs after transaction commit:
-  // never blocks checkout and never takes a second pool connection inside an open transaction
-  try {
-    const orderCountRes = await rt._db.db.execute<{ count: string }>(
-      sql`SELECT COUNT(*)::text as count FROM orders WHERE tenant_id = ${tenantId} AND created_at >= date_trunc('month', now());`
-    );
-    const monthlyOrders = parseInt(orderCountRes.rows[0]?.count ?? "1", 10);
-    await trackSoftQuotaUsage(rt._db.db, {
-      tenantId,
-      quotaKey: "orders_month",
-      current: monthlyOrders,
-    });
-  } catch {
-    // Soft quota tracking failure never impedes checkout completion
+  // never blocks checkout and never takes a second pool connection inside an open transaction.
+  // quota_events is platform-owned, so it is written on the self-service (app_saas) connection;
+  // without it (not configured) tracking is skipped.
+  if (rt._saasDb) {
+    try {
+      const orderCountRes = await withTenant(rt._db.db, tenantId, (tx) =>
+        tx.execute<{ count: string }>(
+          sql`SELECT COUNT(*)::text as count FROM orders WHERE tenant_id = ${tenantId} AND created_at >= date_trunc('month', now());`,
+        ),
+      );
+      const monthlyOrders = parseInt(orderCountRes.rows[0]?.count ?? "1", 10);
+      await trackSoftQuotaUsage(rt._saasDb.db, {
+        tenantId,
+        quotaKey: "orders_month",
+        current: monthlyOrders,
+      });
+    } catch {
+      // Soft quota tracking failure never impedes checkout completion
+    }
   }
 
   return resultBody;

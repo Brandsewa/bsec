@@ -17,8 +17,16 @@ const url = process.env.DATABASE_URL_RW;
 if (!url) throw new Error("Missing env DATABASE_URL_RW");
 
 const log = createLogger("worker");
-const rt = createRuntime({ service: "worker", databaseUrl: url, poolMax: 2 });
-const jobs = await startJobs({ databaseUrl: url, log, concurrency: Number(process.env.WORKER_CONCURRENCY ?? 4), db: rt._db.db });
+const saasUrl = process.env.DATABASE_URL_SAAS || undefined;
+if (!saasUrl) log.warn("DATABASE_URL_SAAS not set: trial expiry sweep is disabled");
+const rt = createRuntime({ service: "worker", databaseUrl: url, saasDatabaseUrl: saasUrl, poolMax: 2 });
+const jobs = await startJobs({
+  databaseUrl: url,
+  log,
+  concurrency: Number(process.env.WORKER_CONCURRENCY ?? 4),
+  db: rt._db.db,
+  saasDb: rt._saasDb?.db,
+});
 
 // Tiny health endpoint for Docker/Coolify.
 const port = Number(process.env.PORT ?? 4100);

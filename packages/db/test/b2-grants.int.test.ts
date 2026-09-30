@@ -4,8 +4,9 @@ import pg from "pg";
 import { bootstrapRoles } from "../src/scripts/bootstrap-roles.ts";
 import { runMigrations } from "../src/scripts/migrate.ts";
 import "../src/schema/index.ts";
+import { APP_SAAS_WRITABLE_TABLES } from "../src/sql/saas-grants.ts";
 
-const PW = { owner: "o_test", rw: "rw_test", platform: "p_test" };
+const PW = { owner: "o_test", rw: "rw_test", platform: "p_test", saas: "s_test" };
 let container: StartedPostgreSqlContainer | undefined;
 let superUrl: string;
 
@@ -152,5 +153,24 @@ describe("B2: app_rw write surface stays intentional", () => {
         order by 1`,
     );
     expect(rows.map((r) => r.table_name)).toEqual([...NON_RLS_TABLES_WRITABLE_BY_APP_RW].sort());
+  });
+});
+
+describe("B2: app_saas write surface stays intentional", () => {
+  it("app_saas can write exactly the tables app_rw can, plus the listed self-service platform tables", async () => {
+    const { rows } = await q<{ table_name: string }>(
+      as("app_owner", PW.owner),
+      `select c.relname as table_name
+         from pg_class c join pg_namespace n on n.oid = c.relnamespace
+        where n.nspname = 'public' and c.relkind = 'r'
+          and (has_table_privilege('app_saas', c.oid, 'INSERT')
+            or has_table_privilege('app_saas', c.oid, 'UPDATE')
+            or has_table_privilege('app_saas', c.oid, 'DELETE'))
+          and not (has_table_privilege('app_rw', c.oid, 'INSERT')
+            or has_table_privilege('app_rw', c.oid, 'UPDATE')
+            or has_table_privilege('app_rw', c.oid, 'DELETE'))
+        order by 1`,
+    );
+    expect(rows.map((r) => r.table_name)).toEqual([...APP_SAAS_WRITABLE_TABLES].sort());
   });
 });
