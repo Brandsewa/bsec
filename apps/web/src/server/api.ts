@@ -120,6 +120,7 @@ import {
   verifyCustomDomain,
   setPrimaryDomain,
   removeCustomDomain,
+  checkInviteAcceptRateLimit,
   checkReserveSubdomainRateLimit,
   checkLeadCaptureRateLimit,
   hashIpWithSalt,
@@ -1198,6 +1199,13 @@ api.all("/auth/*", async (c) => {
 });
 
 /** SaaS Self-service Endpoints (PLAN §5.1, §7) */
+// Any self-service route reached without DATABASE_URL_SAAS answers a clean 503 instead of a raw 500.
+api.onError((err, c) => {
+  if (err instanceof SaasNotConfiguredError) return c.json({ error: err.message }, 503);
+  server().log.error({ err }, "api error");
+  return c.text("Internal Server Error", 500);
+});
+
 api.get("/saas/subdomain/check", async (c) => {
   const slug = c.req.query("slug");
   if (!slug) return c.json({ available: false, reason: "Slug parameter is required" }, 400);
@@ -1287,6 +1295,8 @@ api.post("/saas/invite/accept", async (c) => {
   }
   const rt = server().rt;
   try {
+    const limit = await checkInviteAcceptRateLimit(saasDb(rt), clientIp(c.req.raw.headers), body.token);
+    if (!limit.allowed) return c.json({ error: "Too many attempts. Please try again later." }, 429);
     const res = await acceptTenantOwnerInvite(rt, {
       token: body.token,
       password: body.password,

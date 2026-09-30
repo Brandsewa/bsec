@@ -37,6 +37,20 @@ Without `BETTER_AUTH_URL` / `BETTER_AUTH_SECRET` the site keeps serving but admi
 - `DATABASE_URL_SUPERUSER`: Required only on initial bootstrap run to configure roles (`app_owner`, `app_rw`, `app_platform`, `app_saas`). Must be removed after first run.
 - `APP_SAAS_PASSWORD`: password for the `app_saas` role (`openssl rand -hex 16`). Optional: when unset the role is not created and self-service stays disabled. Set it together with `APP_OWNER_PASSWORD`/`APP_RW_PASSWORD`/`APP_PLATFORM_PASSWORD` on the first run that includes `DATABASE_URL_SUPERUSER`, then use the same value in `DATABASE_URL_SAAS` for web and worker. Grants for the role are re-applied on every migrate run.
 
+### Upgrading an existing production database (adds `app_saas`)
+Roles were bootstrapped once and `DATABASE_URL_SUPERUSER` was removed afterwards, so adding `app_saas` needs one more bootstrap run:
+1. On `bsec-migrate` re-add `DATABASE_URL_SUPERUSER` (copy from the Postgres resource) and set `APP_SAAS_PASSWORD` (`openssl rand -hex 16`). Also re-enter the **existing** `APP_OWNER_PASSWORD`, `APP_RW_PASSWORD` and `APP_PLATFORM_PASSWORD` unchanged: the bootstrap re-applies all four passwords, so a different value would rotate that role's password and break the service using it.
+2. Redeploy `bsec-migrate` (creates `app_saas` and applies migrations), then remove `DATABASE_URL_SUPERUSER` again.
+3. Add `DATABASE_URL_SAAS` to `bsec-web` and `bsec-worker` and redeploy them.
+Until step 3 the site works normally; only the self-service endpoints answer 503 "not configured".
+
+### Other deployment settings that change behaviour
+- `PLATFORM_DOMAIN` (default `gobs.cloud`): root domain for store subdomains; it and its subdomains can never be claimed as custom domains.
+- `ADMIN_HOST` (default `admin.<PLATFORM_DOMAIN>`) and `MARKETING_HOST` (default `PLATFORM_DOMAIN`): also reserved; `MARKETING_HOST` is the only host that serves `/signup` and `/api/saas/*`.
+- `CUSTOM_DOMAIN_CNAME_TARGET` (default `stores.<PLATFORM_DOMAIN>`): the hostname customers point their domain at; it must exist in the Cloudflare zone.
+- `CLOUDFLARE_API_TOKEN` / `CLOUDFLARE_ZONE_ID`: custom domains stay in `requested` ("not configured") until both are set.
+- `RAZORPAY_PLATFORM_KEY_ID`, `RAZORPAY_PLATFORM_KEY_SECRET`, `RAZORPAY_PLATFORM_WEBHOOK_SECRET`: plan changes answer "billing not configured" until set.
+
 ### Database roles
 | Role | Used by | Notes |
 |---|---|---|

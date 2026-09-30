@@ -194,6 +194,17 @@ export async function acceptTenantOwnerInvite(
         const ok = await verifyPassword({ hash: storedHash, password: input.password });
         if (!ok) throw new Error("Incorrect password for the existing account with this email");
       } else {
+        // No password yet. That is legitimate only for the pending owner the platform created for this invite
+        // (unverified email, no sign-in method at all). An account that already exists in its own right
+        // (verified email, or another sign-in method) cannot be claimed with the link alone.
+        const info = await tx.execute<{ email_verified: boolean; accounts: string }>(sql`
+          SELECT u.email_verified, (SELECT count(*)::text FROM accounts a WHERE a.user_id = u.id) AS accounts
+          FROM users u WHERE u.id = ${userId};
+        `);
+        const pending = info.rows[0]?.email_verified === false && info.rows[0]?.accounts === "0";
+        if (!pending) {
+          throw new Error("An account with this email already exists. Sign in with your existing method to access the store.");
+        }
         await tx.insert(schema.accounts).values({
           id: crypto.randomUUID(),
           userId,

@@ -97,6 +97,7 @@ function SignupContent() {
   // Bot challenge: the site key comes from the server's runtime config; when unset (local dev) no widget is shown.
   const [turnstileSiteKey, setTurnstileSiteKey] = useState<string | null>(null);
   const [turnstileToken, setTurnstileToken] = useState<string | null>(null);
+  const [turnstileNonce, setTurnstileNonce] = useState(0); // bumping it remounts the widget for a fresh single-use token
   const [configLoaded, setConfigLoaded] = useState(false);
   const [provisionSuccess, setProvisionSuccess] = useState<{
     storeUrl: string;
@@ -294,6 +295,8 @@ function SignupContent() {
       clearInterval(progressTimer);
       setIsProvisioning(false);
       setErrorMessage(err instanceof Error ? err.message : "An unexpected error occurred during store creation.");
+      setTurnstileToken(null);
+      setTurnstileNonce((n) => n + 1);
     }
   };
 
@@ -706,7 +709,7 @@ function SignupContent() {
 
             {turnstileSiteKey && (
               <div className="flex justify-center">
-                <TurnstileWidget siteKey={turnstileSiteKey} onToken={setTurnstileToken} />
+                <TurnstileWidget key={turnstileNonce} siteKey={turnstileSiteKey} onToken={setTurnstileToken} />
               </div>
             )}
 

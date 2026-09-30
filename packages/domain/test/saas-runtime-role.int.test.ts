@@ -10,6 +10,7 @@ import { hashPassword, verifyPassword } from "@bs/auth";
 import {
   acceptTenantOwnerInvite,
   changeTenantPlan,
+  checkInviteAcceptRateLimit,
   completeSignup,
   createRuntime,
   handlePlatformBillingWebhook,
@@ -256,6 +257,27 @@ describe("owner invites on the real roles", () => {
     expect(ok.success).toBe(true);
     const [acct2] = (await q<{ password: string }>(superUrl, "select password from accounts where user_id = $1 and provider_id = 'credential'", [u!.id])).rows;
     expect(await verifyPassword({ hash: acct2!.password, password: original })).toBe(true);
+  });
+
+  it("refuses to attach a password to an existing account that has none (the link alone is not proof of ownership)", async () => {
+    const email = "nopassword@saasrole-invite.example";
+    await platformDb.db.insert(schema.users).values({ email, name: "No Password", emailVerified: true });
+    const created = await platformCreateTenantForClient(rtWeb, {
+      storeName: "No Password Store",
+      slug: "saasrole-invite-nopw",
+      clientEmail: email,
+    });
+    await expect(acceptTenantOwnerInvite(rtWeb, { token: created.inviteToken, password: "AttackerChosenPassword1#" })).rejects.toThrow(/already exists/i);
+    const { rows } = await q<{ n: string }>(superUrl, "select count(*)::text as n from accounts a join users u on u.id = a.user_id where u.email = $1", [email]);
+    expect(rows[0]!.n).toBe("0");
+  });
+
+  it("rate limits invite acceptance attempts per token (password guessing)", async () => {
+    const token = "t".repeat(40);
+    const results: boolean[] = [];
+    for (let i = 0; i < 12; i++) results.push((await checkInviteAcceptRateLimit(saasDb(rtWeb), `198.51.100.${i}`, token)).allowed);
+    expect(results.slice(0, 10).every(Boolean)).toBe(true);
+    expect(results[10]).toBe(false);
   });
 
   it("resend keeps the original recipient, revokes older links and audits invite_resent with the staff id", async () => {
