@@ -8,6 +8,7 @@ import {
   type Db,
 } from "@bs/db";
 import type { Runtime } from "../runtime.ts";
+import { releaseReservation } from "../catalog/inventory-reservations.ts";
 import type { TenantContext } from "../context.ts";
 
 export const ORDER_STATUSES = [
@@ -309,6 +310,11 @@ export async function transitionOrder(
           updatedAt: new Date(),
         })
         .where(and(eq(orders.tenantId, ctx.tenantId), eq(orders.id, orderId)));
+
+      // A cancelled order must give its reserved stock back, otherwise it keeps blocking real sales.
+      if (targetStatus === "cancelled") {
+        await releaseReservation(db, ctx.tenantId, { orderId, reason: "cancelled" });
+      }
     } else if (event.type.startsWith("payment.")) {
       if (!("intentId" in event)) {
         throw new Error("intentId is required for payment events");
