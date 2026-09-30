@@ -17,32 +17,8 @@ export interface BlogPostSummary {
   readTime: string;
 }
 
-export const SAMPLE_ARTICLES: BlogPostSummary[] = [
-  {
-    slug: "mechanical-keyboards-guide-for-beginners",
-    title: "The Ultimate Guide to Mechanical Keyboards for Beginners",
-    excerpt: "Everything you need to know about linear, tactile, and clicky switches, hot-swap sockets, and keycap profiles.",
-    publishedAt: "2026-09-15",
-    author: "Alex Morgan",
-    readTime: "5 min read",
-  },
-  {
-    slug: "lubing-switches-sound-and-feel",
-    title: "Why Lubing Your Switches Changes Everything",
-    excerpt: "Discover how proper lubrication eliminates spring ping, deepens acoustics, and delivers that buttery-smooth keystroke feel.",
-    publishedAt: "2026-09-20",
-    author: "Maya Sharma",
-    readTime: "7 min read",
-  },
-  {
-    slug: "workspace-ergonomics-desk-setup",
-    title: "Ergonomics & Desk Setup: Typing Comfort That Lasts All Day",
-    excerpt: "Simple adjustments to desk height, wrist rests, and keyboard angles that prevent strain and boost productivity.",
-    publishedAt: "2026-09-25",
-    author: "Kavita Rao",
-    readTime: "4 min read",
-  },
-];
+/** Stores have no blog posts yet: there is no authoring or storage for them, so the list is empty (no demo content). */
+export const SAMPLE_ARTICLES: BlogPostSummary[] = [];
 
 export default async function BlogIndexPage() {
   let host = "localhost";
@@ -69,9 +45,15 @@ export default async function BlogIndexPage() {
           Stories & Guides
         </h1>
         <p className="mt-3 text-lg text-muted max-w-2xl mx-auto">
-          Insights on craftsmanship, desk setup inspiration, and technical guides.
+          News and stories from our store.
         </p>
       </header>
+
+      {SAMPLE_ARTICLES.length === 0 && (
+        <p className="text-center text-muted" data-testid="blog-empty">
+          No articles yet. Please check back soon.
+        </p>
+      )}
 
       <div className="grid gap-8 md:grid-cols-2 lg:grid-cols-3">
         {SAMPLE_ARTICLES.map((article) => (

@@ -20,44 +20,7 @@ export const ARTICLE_DETAILS: Record<
     readTime: string;
     content: string[];
   }
-> = {
-  "mechanical-keyboards-guide-for-beginners": {
-    title: "The Ultimate Guide to Mechanical Keyboards for Beginners",
-    description: "Everything you need to know about linear, tactile, and clicky switches, hot-swap sockets, and keycap profiles.",
-    author: "Alex Morgan",
-    publishedAt: "2026-09-15",
-    readTime: "5 min read",
-    content: [
-      "Typing on a high quality mechanical keyboard transforms your daily computer experience. Unlike common rubber dome keyboards found in typical office equipment, mechanical boards feature individual physical switches beneath every keycap.",
-      "The three major switch categories are linear (smooth actuation with no bump), tactile (a discernible physical bump right around actuation point), and clicky (an audible click along with tactile feedback). For office work and shared environments, linear and tactile switches are by far the most popular.",
-      "Hot-swappable PCB boards allow you to change out switches without any soldering equipment. When paired with high-grade PBT double-shot keycaps, typing becomes tactile, satisfying, and enduring.",
-    ],
-  },
-  "lubing-switches-sound-and-feel": {
-    title: "Why Lubing Your Switches Changes Everything",
-    description: "Discover how proper lubrication eliminates spring ping, deepens acoustics, and delivers that buttery-smooth keystroke feel.",
-    author: "Maya Sharma",
-    publishedAt: "2026-09-20",
-    readTime: "7 min read",
-    content: [
-      "Custom keyboard enthusiasts frequently cite lubing as the single most dramatic acoustic and tactile upgrade you can perform on a mechanical keyboard.",
-      "By applying microscopic amounts of high-performance lubricants (such as Krytox 205g0 for housings and stems, and GPL 105 for springs), you remove friction points and eliminate metallic pinging resonance completely.",
-      "The result is a deeper, lower-pitched acoustic signature and effortless glide that reduces finger fatigue during long coding or typing sessions.",
-    ],
-  },
-  "workspace-ergonomics-desk-setup": {
-    title: "Ergonomics & Desk Setup: Typing Comfort That Lasts All Day",
-    description: "Simple adjustments to desk height, wrist rests, and keyboard angles that prevent strain and boost productivity.",
-    author: "Kavita Rao",
-    publishedAt: "2026-09-25",
-    readTime: "4 min read",
-    content: [
-      "Desk posture is not simply about sitting straight; it is fundamentally about maintaining neutral joint alignment while you work.",
-      "Position your keyboard so that your elbows stay bent at approximately 90 to 100 degrees, with wrists floating naturally or resting gently on a firm wooden or leather wrist rest during typing pauses.",
-      "Pay attention to monitor height: the top third of your display should be at or just slightly below eye level. Incorporating regular micro-breaks and movement ensures enduring comfort throughout your workday.",
-    ],
-  },
-};
+> = {};
 
 export async function generateMetadata({ params }: BlogPostProps): Promise<Metadata> {
   const { slug } = await params;

@@ -298,20 +298,15 @@ describe("Storefront Pages & Block Rendering", () => {
   });
 
   describe("Blog Routes", () => {
-    it("renders blog index articles", async () => {
+    // Stores have no blog authoring yet, so no store may show demo articles (a pickle shop was showing keyboard guides).
+    it("ships no demo articles on the blog index", async () => {
       const { SAMPLE_ARTICLES } = await import("../src/app/blog/page.tsx");
-      expect(SAMPLE_ARTICLES.length).toBeGreaterThanOrEqual(1);
-      expect(SAMPLE_ARTICLES[0]?.title).toBeDefined();
-      expect(SAMPLE_ARTICLES[0]?.slug).toBeDefined();
+      expect(SAMPLE_ARTICLES).toEqual([]);
     });
 
-    it("has article details with valid Article JSON-LD parameters", async () => {
+    it("has no demo article pages, so every article URL is a 404", async () => {
       const { ARTICLE_DETAILS } = await import("../src/app/blog/[slug]/page.tsx");
-      const article = ARTICLE_DETAILS["mechanical-keyboards-guide-for-beginners"];
-      expect(article).toBeDefined();
-      expect(article.title).toContain("Mechanical Keyboards");
-      expect(article.author).toBeDefined();
-      expect(article.content.length).toBeGreaterThan(0);
+      expect(Object.keys(ARTICLE_DETAILS)).toEqual([]);
     });
   });
 });

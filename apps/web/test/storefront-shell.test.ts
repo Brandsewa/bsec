@@ -126,7 +126,8 @@ describe("Storefront Shell & Components", () => {
       expect(html).toContain("/policies/shipping");
       expect(html).toContain("/about");
       expect(html).toContain("/search");
-      expect(html).toContain("/blog");
+      // no blog authoring exists yet, so the footer must not link to an empty blog
+      expect(html).not.toContain("/blog");
       expect(html).toContain('action="/api/storefront/newsletter/subscribe"');
       expect(html).toContain("type=\"email\"");
     });
