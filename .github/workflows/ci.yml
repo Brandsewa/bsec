@@ -106,11 +106,20 @@ jobs:
     needs: images
     runs-on: ubuntu-24.04
     timeout-minutes: 15
+    permissions:
+      contents: read
+      packages: read
     env:
       IMAGE_TAG: sha-${{ github.sha }}  # docker/metadata-action type=sha prefixes "sha-"
       COMPOSE: docker compose -f docker-compose.staging.yml
     steps:
       - uses: actions/checkout@v5
+      # New GHCR packages start private; log in so the pull works whatever their visibility.
+      - uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
       - name: Generate per-run secrets
         run: |
           for v in POSTGRES_PASSWORD APP_OWNER_PASSWORD APP_RW_PASSWORD APP_PLATFORM_PASSWORD APP_SAAS_PASSWORD E2E_PASSWORD; do
