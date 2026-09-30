@@ -38,6 +38,8 @@ export const rateLimitCounters = pgTable(
 export const quotaDefinitions = pgTable("quota_definitions", {
   key: text("key").primaryKey(),
   description: text("description"),
+  unit: text("unit").notNull().default("count"),
+  enforcement: text("enforcement").notNull().default("hard"), // 'hard', 'soft', 'notify'
   tierXs: integer("tier_xs").notNull(),
   tierS: integer("tier_s").notNull(),
   tierM: integer("tier_m").notNull(),
@@ -73,11 +75,40 @@ export const tenantQuotaOverrides = pgTable(
       .notNull()
       .references(() => quotaDefinitions.key, { onDelete: "cascade" }),
     value: integer("value").notNull(),
+    reason: text("reason"),
+    expiresAt: timestamp("expires_at", { withTimezone: true }),
+    setBy: uuid("set_by"),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().default(sql`now()`),
     updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().default(sql`now()`),
   },
   (t) => [
     primaryKey({ columns: [t.tenantId, t.quotaKey] }),
+  ],
+);
+
+/**
+ * Quota Events (PLAN §5.1, §6.1).
+ * Warnings and notifications when soft/hard thresholds are approached or exceeded.
+ */
+export const quotaEvents = pgTable(
+  "quota_events",
+  {
+    id: uuid("id").default(sql`uuidv7()`).primaryKey(),
+    tenantId: uuid("tenant_id")
+      .notNull()
+      .references(() => tenants.id, { onDelete: "cascade" }),
+    quotaKey: text("quota_key")
+      .notNull()
+      .references(() => quotaDefinitions.key, { onDelete: "cascade" }),
+    level: text("level").notNull(), // 'pct_80', 'pct_100', 'blocked'
+    value: integer("value").notNull(),
+    limitValue: integer("limit_value").notNull(),
+    notifiedAt: timestamp("notified_at", { withTimezone: true }),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().default(sql`now()`),
+  },
+  (t) => [
+    index("quota_events_tenant_key_idx").on(t.tenantId, t.quotaKey),
+    index("quota_events_level_idx").on(t.level),
   ],
 );
 

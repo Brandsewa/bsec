@@ -85,6 +85,13 @@
       "when": 1790670000000,
       "tag": "0011_m75_membership_self_read",
       "breakpoints": true
+    },
+    {
+      "idx": 12,
+      "version": "7",
+      "when": 1790680000000,
+      "tag": "0012_m8_saas_platform",
+      "breakpoints": true
     }
   ]
 }

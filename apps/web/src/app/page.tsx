@@ -13,10 +13,11 @@ import { renderBlockDocument } from "@bs/blocks";
 import { server } from "@/server/runtime.ts";
 import { getCachedStorefrontHomePage } from "@/server/cached-storefront.ts";
 import { BlockRenderer } from "@/components/blocks/BlockRenderer.tsx";
+import { MarketingLandingPage } from "@/components/marketing/MarketingLandingPage.tsx";
 
 export async function generateMetadata(): Promise<Metadata> {
   let title = "Home";
-  const description = "Welcome to our store.";
+  let description = "Welcome to our store.";
 
   try {
     const h = await headers();
@@ -24,19 +25,24 @@ export async function generateMetadata(): Promise<Metadata> {
     const { rt } = server();
     const access = await evaluateStorefrontAccess(rt, host, { headers: h });
 
-    if (access.tenantId) {
-      const tenantCtx = {
-        tenantId: access.tenantId,
-        storeStatus: access.mode ?? "live",
-        actor: { type: "system" as const },
-        roles: ["store_admin"],
-        permissions: ["settings.write", "content.write", "theme.publish"],
-        requestId: crypto.randomUUID(),
+    if (!access.tenantId) {
+      return {
+        title: "gobs.cloud — Launch your online store in under 10 minutes",
+        description: "Fastest D2C commerce platform in India: UPI & COD payments, Shiprocket shipping automation, and automated GST invoices.",
       };
-      const homePage = await getStorefrontHomePage(rt, tenantCtx);
-      if (homePage.title) {
-        title = homePage.title;
-      }
+    }
+
+    const tenantCtx = {
+      tenantId: access.tenantId,
+      storeStatus: access.mode ?? "live",
+      actor: { type: "system" as const },
+      roles: ["store_admin"],
+      permissions: ["settings.write", "content.write", "theme.publish"],
+      requestId: crypto.randomUUID(),
+    };
+    const homePage = await getStorefrontHomePage(rt, tenantCtx);
+    if (homePage.title) {
+      title = homePage.title;
     }
   } catch {
     // Non-fatal fallback for static compilation / mock setups
@@ -59,6 +65,10 @@ export default async function HomePage() {
     host = h.get("x-forwarded-host") ?? h.get("host") ?? "localhost";
     const { rt } = server();
     const access = await evaluateStorefrontAccess(rt, host, { headers: h });
+
+    if (!access.tenantId) {
+      return <MarketingLandingPage />;
+    }
 
     if (access.tenantId) {
       const tenantCtx = {

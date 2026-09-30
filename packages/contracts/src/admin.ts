@@ -1264,4 +1264,168 @@ export const adminContract = {
         }),
       ),
   },
+
+  // --- M8 Onboarding Setup Checklist (PLAN §5.2, §8) ---
+  onboarding: {
+    get: oc
+      .route({ method: "GET", path: "/admin/onboarding" })
+      .output(
+        z.object({
+          steps: z.record(z.string(), z.boolean()),
+          completedCount: z.number(),
+          totalCount: z.number(),
+          dismissed: z.boolean(),
+          allCompleted: z.boolean(),
+        }),
+      ),
+    dismiss: oc
+      .route({ method: "POST", path: "/admin/onboarding/dismiss" })
+      .output(z.object({ success: z.boolean() })),
+  },
+
+  // --- M8 Merchant Billing & Subscriptions (PLAN §5.1, §6.4, ADR-014) ---
+  billing: {
+    getSubscription: oc
+      .route({ method: "GET", path: "/admin/billing/subscription" })
+      .output(
+        z.object({
+          subscription: z
+            .object({
+              id: z.string().uuid(),
+              status: z.string(),
+              interval: z.string(),
+              currentPeriodStart: z.string().nullable().optional(),
+              currentPeriodEnd: z.string().nullable().optional(),
+              provider: z.string(),
+            })
+            .nullable(),
+          plan: z
+            .object({
+              id: z.string().uuid(),
+              code: z.string(),
+              name: z.string(),
+              priceMonthlyPaise: z.number(),
+              priceYearlyPaise: z.number(),
+              currency: z.string(),
+            })
+            .nullable(),
+          invoices: z.array(
+            z.object({
+              id: z.string().uuid(),
+              number: z.string(),
+              amountPaise: z.number(),
+              taxPaise: z.number(),
+              status: z.string(),
+              issuedAt: z.string(),
+              paidAt: z.string().nullable().optional(),
+            }),
+          ),
+          isTrial: z.boolean(),
+          daysLeftInTrial: z.number(),
+        }),
+      ),
+    changePlan: oc
+      .route({ method: "POST", path: "/admin/billing/plan" })
+      .input(
+        z.object({
+          planCode: z.string(),
+          interval: z.enum(["monthly", "yearly"]),
+        }),
+      )
+      .output(
+        z.object({
+          providerSubscriptionId: z.string(),
+          shortUrl: z.string().optional(),
+          status: z.string(),
+        }),
+      ),
+  },
+
+  // --- M8 Custom Domains (PLAN §8, ADR-007, ADR-017) ---
+  domains: {
+    list: oc
+      .route({ method: "GET", path: "/admin/domains" })
+      .output(
+        z.array(
+          z.object({
+            id: z.string().uuid(),
+            hostname: z.string(),
+            type: z.string(),
+            isPrimary: z.boolean(),
+            status: z.string(),
+            sslStatus: z.string().nullable().optional(),
+            prevalidateTxt: z.boolean().nullable().optional(),
+            verification: z
+              .object({
+                cname: z.string().optional(),
+                txt: z
+                  .object({
+                    name: z.string(),
+                    value: z.string(),
+                  })
+                  .optional(),
+              })
+              .nullable()
+              .optional(),
+            createdAt: z.string(),
+          }),
+        ),
+      ),
+    add: oc
+      .route({ method: "POST", path: "/admin/domains" })
+      .input(
+        z.object({
+          hostname: z.string().min(3).max(253),
+          prevalidateTxt: z.boolean().optional(),
+        }),
+      )
+      .output(
+        z.object({
+          id: z.string().uuid(),
+          hostname: z.string(),
+          type: z.string(),
+          isPrimary: z.boolean(),
+          status: z.string(),
+          sslStatus: z.string().nullable().optional(),
+          prevalidateTxt: z.boolean().nullable().optional(),
+          verification: z
+            .object({
+              cname: z.string().optional(),
+              txt: z
+                .object({
+                  name: z.string(),
+                  value: z.string(),
+                })
+                .optional(),
+            })
+            .nullable()
+            .optional(),
+          createdAt: z.string(),
+        }),
+      ),
+    verify: oc
+      .route({ method: "POST", path: "/admin/domains/{id}/verify" })
+      .input(z.object({ id: z.string().uuid() }))
+      .output(
+        z.object({
+          id: z.string().uuid(),
+          hostname: z.string(),
+          status: z.string(),
+          sslStatus: z.string().nullable().optional(),
+        }),
+      ),
+    setPrimary: oc
+      .route({ method: "POST", path: "/admin/domains/{id}/set-primary" })
+      .input(z.object({ id: z.string().uuid() }))
+      .output(
+        z.object({
+          success: z.boolean(),
+          primaryHostname: z.string(),
+        }),
+      ),
+    remove: oc
+      .route({ method: "DELETE", path: "/admin/domains/{id}" })
+      .input(z.object({ id: z.string().uuid() }))
+      .output(z.object({ success: z.boolean() })),
+  },
 };

@@ -22,12 +22,30 @@ export async function middleware(request: NextRequest) {
     pathname.startsWith("/api/auth/") ||
     pathname.startsWith("/api/webhooks/") ||
     pathname.startsWith("/api/admin/") ||
-    pathname.startsWith("/api/rpc/admin/")
+    pathname.startsWith("/api/rpc/admin/") ||
+    pathname.startsWith("/api/saas/") ||
+    pathname.startsWith("/signup") ||
+    pathname.startsWith("/pricing") ||
+    pathname.startsWith("/faq") ||
+    pathname.startsWith("/terms") ||
+    pathname.startsWith("/privacy")
   ) {
     return NextResponse.next();
   }
 
   const host = request.headers.get("x-forwarded-host") ?? request.headers.get("host") ?? "localhost";
+  const hostname = host.split(":")[0]?.toLowerCase() ?? "localhost";
+  const platformDomain = (process.env.PLATFORM_DOMAIN || "gobs.cloud").toLowerCase();
+
+  // Marketing platform host (e.g. gobs.cloud, www.gobs.cloud) serves public SaaS pages
+  const isMarketingHost =
+    hostname === platformDomain ||
+    hostname === `www.${platformDomain}` ||
+    (hostname === "localhost" && (pathname === "/" || request.nextUrl.searchParams.get("marketing") === "true"));
+
+  if (isMarketingHost && pathname === "/") {
+    return NextResponse.next();
+  }
 
   let access: {
     allowed: boolean;

@@ -3,6 +3,7 @@ import { schema, withTenant } from "@bs/db";
 import type { Runtime } from "./runtime.ts";
 import { assertPermission, type TenantContext } from "./context.ts";
 import { invalidateCache } from "./cache-invalidation.ts";
+import { assertProductQuota } from "./system/quotas.ts";
 
 export interface ListProductsQuery {
   search?: string | undefined;
@@ -272,6 +273,8 @@ export async function createProduct(
 ) {
   assertPermission(ctx, "products.write");
   const db = rt._db.db;
+
+  await assertProductQuota(db, ctx.tenantId);
 
   return withTenant(db, ctx.tenantId, async (tx) => {
     const slug =

@@ -8,6 +8,8 @@ import {
   checkHealth,
   getPlatformTenant,
   listPlatformTenants,
+  platformCreateTenantForClient,
+  createTenantOwnerInvite,
   requestLogger,
   resolveRequestId,
   type Logger,
@@ -48,6 +50,34 @@ export const platformRouter = os.router({
     }),
     get: os.tenants.get.use(requirePlatformStaff).handler(({ context, input }) => {
       return getPlatformTenant(context.rt, input.id);
+    }),
+    create: os.tenants.create.use(requirePlatformStaff).handler(async ({ context, input }) => {
+      const staffUserId = context.session?.user?.id;
+      const res = await platformCreateTenantForClient(context.rt, input, staffUserId);
+      return {
+        tenantId: res.tenantId,
+        slug: res.slug,
+        hostname: res.hostname,
+        storeUrl: res.storeUrl,
+        adminUrl: res.adminUrl,
+        inviteToken: res.inviteToken,
+        inviteUrl: res.inviteUrl,
+      };
+    }),
+    resendOwnerInvite: os.tenants.resendOwnerInvite.use(requirePlatformStaff).handler(async ({ context, input }) => {
+      const staffUserId = context.session?.user?.id;
+      const res = await createTenantOwnerInvite(context.rt, {
+        tenantId: input.id,
+        email: input.email,
+        invitedBy: staffUserId,
+      });
+      return {
+        inviteId: res.inviteId,
+        tenantId: res.tenantId,
+        email: res.email,
+        inviteToken: res.inviteToken,
+        inviteUrl: res.inviteUrl,
+      };
     }),
   },
 });

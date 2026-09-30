@@ -102,6 +102,22 @@ import {
   checkStorefrontRateLimit,
   RateLimitExceededError,
   FeatureDisabledError,
+  checkSubdomainAvailability,
+  reserveSubdomain,
+  saveSignupLead,
+  completeSignup,
+  acceptTenantOwnerInvite,
+  listPublicPlans,
+  listPublicThemeTemplates,
+  getOnboardingProgress,
+  dismissOnboardingProgress,
+  getTenantSubscription,
+  changeTenantPlan,
+  listTenantDomains,
+  addCustomDomain,
+  verifyCustomDomain,
+  setPrimaryDomain,
+  removeCustomDomain,
   type Logger,
   type Runtime,
   type TenantContext,
@@ -840,6 +856,147 @@ export const storeRouter = os.router({
           return updateAdminShippingSettings(context.rt._db.db, context.tenantCtx.tenantId, input);
         }),
     },
+    onboarding: {
+      get: os.admin.onboarding.get
+        .use(requireAdmin)
+        .handler(({ context }) => {
+          if (!context.tenantCtx) throw new Error("Missing tenant context");
+          return getOnboardingProgress(context.rt, context.tenantCtx);
+        }),
+      dismiss: os.admin.onboarding.dismiss
+        .use(requireAdmin)
+        .handler(({ context }) => {
+          if (!context.tenantCtx) throw new Error("Missing tenant context");
+          return dismissOnboardingProgress(context.rt, context.tenantCtx);
+        }),
+    },
+    billing: {
+      getSubscription: os.admin.billing.getSubscription
+        .use(requireAdmin)
+        .handler(async ({ context }) => {
+          if (!context.tenantCtx) throw new Error("Missing tenant context");
+          const data = await getTenantSubscription(context.rt, context.tenantCtx.tenantId);
+          return {
+            subscription: data.subscription
+              ? {
+                  id: data.subscription.id,
+                  status: data.subscription.status,
+                  interval: data.subscription.interval,
+                  currentPeriodStart: data.subscription.currentPeriodStart?.toISOString() ?? null,
+                  currentPeriodEnd: data.subscription.currentPeriodEnd?.toISOString() ?? null,
+                  provider: data.subscription.provider,
+                }
+              : null,
+            plan: data.plan
+              ? {
+                  id: data.plan.id,
+                  code: data.plan.code,
+                  name: data.plan.name,
+                  priceMonthlyPaise: data.plan.priceMonthlyPaise,
+                  priceYearlyPaise: data.plan.priceYearlyPaise,
+                  currency: data.plan.currency,
+                }
+              : null,
+            invoices: data.invoices.map((inv) => ({
+              id: inv.id,
+              number: inv.number,
+              amountPaise: inv.amountPaise,
+              taxPaise: inv.taxPaise,
+              status: inv.status,
+              issuedAt: inv.issuedAt.toISOString(),
+              paidAt: inv.paidAt?.toISOString() ?? null,
+            })),
+            isTrial: data.isTrial,
+            daysLeftInTrial: data.daysLeftInTrial,
+          };
+        }),
+      changePlan: os.admin.billing.changePlan
+        .use(requireAdmin)
+        .use(requirePermission("settings.write"))
+        .handler(async ({ context, input }) => {
+          if (!context.tenantCtx) throw new Error("Missing tenant context");
+          const session = context.session;
+          const userEmail = session?.user?.email ?? "merchant@example.com";
+          const res = await changeTenantPlan(context.rt, {
+            tenantId: context.tenantCtx.tenantId,
+            planCode: input.planCode,
+            interval: input.interval,
+            customerEmail: userEmail,
+          });
+          return {
+            providerSubscriptionId: res.providerSubscriptionId,
+            shortUrl: res.shortUrl ?? undefined,
+            status: res.status,
+          };
+        }),
+    },
+    domains: {
+      list: os.admin.domains.list
+        .use(requireAdmin)
+        .handler(async ({ context }) => {
+          if (!context.tenantCtx) throw new Error("Missing tenant context");
+          const rows = await listTenantDomains(context.rt, context.tenantCtx.tenantId);
+          return rows.map((r) => ({
+            id: r.id,
+            hostname: r.hostname,
+            type: r.type,
+            isPrimary: r.isPrimary,
+            status: r.status,
+            sslStatus: r.sslStatus,
+            prevalidateTxt: r.prevalidateTxt,
+            verification: r.verification ?? null,
+            createdAt: r.createdAt.toISOString(),
+          }));
+        }),
+      add: os.admin.domains.add
+        .use(requireAdmin)
+        .use(requirePermission("settings.write"))
+        .handler(async ({ context, input }) => {
+          if (!context.tenantCtx) throw new Error("Missing tenant context");
+          const created = await addCustomDomain(context.rt, context.tenantCtx.tenantId, {
+            hostname: input.hostname,
+            ...(input.prevalidateTxt !== undefined ? { prevalidateTxt: input.prevalidateTxt } : {}),
+          });
+          return {
+            id: created.id,
+            hostname: created.hostname,
+            type: created.type,
+            isPrimary: created.isPrimary,
+            status: created.status,
+            sslStatus: created.sslStatus,
+            prevalidateTxt: created.prevalidateTxt,
+            verification: created.verification ?? null,
+            createdAt: created.createdAt.toISOString(),
+          };
+        }),
+      verify: os.admin.domains.verify
+        .use(requireAdmin)
+        .use(requirePermission("settings.write"))
+        .handler(async ({ context, input }) => {
+          if (!context.tenantCtx) throw new Error("Missing tenant context");
+          const updated = await verifyCustomDomain(context.rt, context.tenantCtx.tenantId, input.id);
+          return {
+            id: updated.id,
+            hostname: updated.hostname,
+            status: updated.status,
+            sslStatus: updated.sslStatus,
+          };
+        }),
+      setPrimary: os.admin.domains.setPrimary
+        .use(requireAdmin)
+        .use(requirePermission("settings.write"))
+        .handler(async ({ context, input }) => {
+          if (!context.tenantCtx) throw new Error("Missing tenant context");
+          return setPrimaryDomain(context.rt, context.tenantCtx.tenantId, input.id);
+        }),
+      remove: os.admin.domains.remove
+        .use(requireAdmin)
+        .use(requirePermission("settings.write"))
+        .handler(async ({ context, input }) => {
+          if (!context.tenantCtx) throw new Error("Missing tenant context");
+          return removeCustomDomain(context.rt, context.tenantCtx.tenantId, input.id);
+        }),
+    },
   },
   storefront: {
     search: os.storefront.search
@@ -1033,6 +1190,83 @@ api.all("/auth/*", async (c) => {
     return res;
   }
   return cfg.auth.handler(req);
+});
+
+/** SaaS Self-service Endpoints (PLAN §5.1, §7) */
+api.get("/saas/subdomain/check", async (c) => {
+  const slug = c.req.query("slug");
+  if (!slug) return c.json({ available: false, reason: "Slug parameter is required" }, 400);
+  const db = server().rt._db.db;
+  const result = await checkSubdomainAvailability(db, slug);
+  return c.json(result);
+});
+
+api.post("/saas/subdomain/reserve", async (c) => {
+  const body = (await c.req.json().catch(() => ({}))) as { slug?: unknown; leadId?: unknown };
+  const slug = typeof body.slug === "string" ? body.slug : "";
+  const leadId = typeof body.leadId === "string" ? body.leadId : undefined;
+  if (!slug) return c.json({ success: false, reason: "Slug is required" }, 400);
+  const db = server().rt._db.db;
+  const result = await reserveSubdomain(db, slug, leadId);
+  return c.json(result, result.success ? 200 : 409);
+});
+
+api.post("/saas/lead", async (c) => {
+  const body = (await c.req.json().catch(() => ({}))) as Record<string, unknown>;
+  const db = server().rt._db.db;
+  const ip = clientIp(c.req.raw.headers);
+  const result = await saveSignupLead(db, {
+    ...body,
+    ipHash: ip,
+  });
+  return c.json(result);
+});
+
+api.get("/saas/plans", async (c) => {
+  const db = server().rt._db.db;
+  const plans = await listPublicPlans(db);
+  return c.json(plans);
+});
+
+api.get("/saas/templates", async (c) => {
+  const db = server().rt._db.db;
+  const templates = await listPublicThemeTemplates(db);
+  return c.json(templates);
+});
+
+api.post("/saas/signup", async (c) => {
+  const body = (await c.req.json().catch(() => ({}))) as Parameters<typeof completeSignup>[1];
+  const rt = server().rt;
+  const ip = clientIp(c.req.raw.headers);
+  try {
+    const result = await completeSignup(rt, {
+      ...body,
+      clientIp: ip,
+    });
+    return c.json(result, 201);
+  } catch (err: unknown) {
+    const message = err instanceof Error ? err.message : "Failed to provision store";
+    return c.json({ error: message }, 400);
+  }
+});
+
+api.post("/saas/invite/accept", async (c) => {
+  const body = (await c.req.json().catch(() => ({}))) as { token?: string; password?: string; name?: string };
+  if (!body.token || !body.password) {
+    return c.json({ error: "Token and password are required" }, 400);
+  }
+  const rt = server().rt;
+  try {
+    const res = await acceptTenantOwnerInvite(rt, {
+      token: body.token,
+      password: body.password,
+      name: body.name,
+    });
+    return c.json(res);
+  } catch (err: unknown) {
+    const message = err instanceof Error ? err.message : "Failed to accept store invitation";
+    return c.json({ error: message }, 400);
+  }
 });
 
 /** Liveness + DB readiness, used by Docker/Coolify health checks. */

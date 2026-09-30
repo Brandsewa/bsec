@@ -4,6 +4,7 @@ import { schema, withTenant } from "@bs/db";
 import { hashPassword } from "@bs/auth";
 import type { Runtime } from "../runtime.ts";
 import { assertPermission, type TenantContext } from "../context.ts";
+import { assertStaffQuota } from "../system/quotas.ts";
 
 export interface MembershipRecord {
   id: string;
@@ -149,6 +150,7 @@ export async function inviteStaff(
   input: { email: string; roleId: string },
 ): Promise<StaffInvitationRecord> {
   assertPermission(ctx, "staff.manage");
+  await assertStaffQuota(rt._db.db, ctx.tenantId);
   const email = input.email.trim().toLowerCase();
   return withTenant(rt._db.db, ctx.tenantId, async (tx) => {
     const [role] = await tx.select({ id: schema.roles.id }).from(schema.roles).where(eq(schema.roles.id, input.roleId)).limit(1);

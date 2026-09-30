@@ -28,17 +28,17 @@ export function AcceptInvitePage() {
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
 
-  if (!store || !token) {
+  if (!token) {
     return (
       <Shell title="Invitation link incomplete">
-        <p className="text-sm text-foreground-lighter">This link is missing information. Ask the store owner to send a new invitation.</p>
+        <p className="text-sm text-foreground-lighter">This link is missing an invitation token. Please check your invitation link or ask for a new invite.</p>
       </Shell>
     );
   }
 
   async function onSubmit(e: FormEvent) {
     e.preventDefault();
-    if (!store || !token) return;
+    if (!token) return;
     if (!existing) {
       if (password.length < 10) return setError("Choose a password of at least 10 characters.");
       if (password !== confirm) return setError("The two passwords do not match.");
@@ -46,12 +46,38 @@ export function AcceptInvitePage() {
     setBusy(true);
     setError(null);
     try {
-      await client.admin.memberships.acceptInvite({
-        storeId: store,
-        token,
-        ...(existing ? {} : { name: name.trim() || undefined, password }),
+      if (store) {
+        try {
+          await client.admin.memberships.acceptInvite({
+            storeId: store,
+            token,
+            ...(existing ? {} : { name: name.trim() || undefined, password }),
+          });
+          await navigate({ to: "/login", search: { store } });
+          return;
+        } catch {
+          // Fall through to owner invite endpoint
+        }
+      }
+
+      // Owner invite acceptance via SaaS API
+      const res = await fetch("/api/saas/invite/accept", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          token,
+          password,
+          name: name.trim() || undefined,
+        }),
       });
-      await navigate({ to: "/login" });
+
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}));
+        throw new Error(data.error || "This invitation link is invalid or has expired.");
+      }
+
+      const accepted = await res.json();
+      await navigate({ to: "/login", search: { store: accepted.slug } });
     } catch (err) {
       setError(errorMessage(err, "This invitation link is invalid or has expired."));
       setBusy(false);

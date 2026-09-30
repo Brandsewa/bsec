@@ -19,6 +19,7 @@ import { getTenantShippingRates } from "./shipping-rates.ts";
 import { withIdempotencyKey } from "../system/idempotency.ts";
 import { isFeatureEnabled, FeatureDisabledError } from "../features.ts";
 import { readStoreConfig } from "../admin/store-config.ts";
+import { trackSoftQuotaUsage } from "../system/quotas.ts";
 
 export interface PlaceOrderInput {
   cartToken: string;
@@ -254,6 +255,21 @@ export async function placeOrder(
     // 12. Enqueue order.created job if boss runtime is present
     if (rt._jobs) {
       await rt._jobs.send(QUEUE_NAMES.ORDER_CREATED, { orderId, tenantId });
+    }
+
+    // 13. Soft quota tracking (PLAN §6.1, ADR-015): never blocks checkout
+    try {
+      const orderCountRes = await tx.execute<{ count: string }>(
+        sql`SELECT COUNT(*)::text as count FROM orders WHERE tenant_id = ${tenantId} AND created_at >= date_trunc('month', now());`
+      );
+      const monthlyOrders = parseInt(orderCountRes.rows[0]?.count ?? "1", 10);
+      await trackSoftQuotaUsage(rt._db.db, {
+        tenantId,
+        quotaKey: "orders_month",
+        current: monthlyOrders,
+      });
+    } catch {
+      // Soft quota tracking failure never impedes checkout completion
     }
 
     const resultBody: PlaceOrderResult = {
