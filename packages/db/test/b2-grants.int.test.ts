@@ -132,6 +132,7 @@ const NON_RLS_TABLES_WRITABLE_BY_APP_RW: string[] = [
   "rate_limit_counters",
   "sessions",
   "tenant_active_jobs",
+  "two_factors",
   "users",
   "verifications",
   "webhook_inbox",

@@ -112,12 +112,12 @@ export async function writePlatformAudit(
 export async function listPlatformTenants(
   rt: Runtime,
   params?: {
-    search?: string;
-    status?: string;
-    planId?: string;
-    limit?: number;
-    offset?: number;
-  },
+    search?: string | undefined;
+    status?: string | undefined;
+    planId?: string | undefined;
+    limit?: number | undefined;
+    offset?: number | undefined;
+  } | undefined,
 ): Promise<PlatformTenantRecord[]> {
   const db = rt._db.db;
   const rows = await db
@@ -1056,12 +1056,12 @@ export async function listPlatformAuditLogs(
   rt: Runtime,
   platformStaffUserId: string,
   params?: {
-    tenantId?: string;
-    actorUserId?: string;
-    action?: string;
-    limit?: number;
-    offset?: number;
-  },
+    tenantId?: string | undefined;
+    actorUserId?: string | undefined;
+    action?: string | undefined;
+    limit?: number | undefined;
+    offset?: number | undefined;
+  } | undefined,
 ) {
   await assertPlatformStaff(rt, platformStaffUserId);
   const db = rt._db.db;
@@ -1118,7 +1118,7 @@ export async function listPlatformAuditLogs(
 export async function exportPlatformAuditLogsCsv(
   rt: Runtime,
   platformStaffUserId: string,
-  params?: { tenantId?: string; action?: string },
+  params?: { tenantId?: string | undefined; action?: string | undefined } | undefined,
 ): Promise<string> {
   const logs = await listPlatformAuditLogs(rt, platformStaffUserId, { ...params, limit: 10000 });
   const headers = ["ID", "Timestamp", "Actor Email", "Actor Type", "Action", "Target Type", "Target ID", "Tenant ID", "IP", "Diff"];

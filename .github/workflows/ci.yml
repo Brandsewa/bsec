@@ -67,7 +67,7 @@ jobs:
     strategy:
       fail-fast: true
       matrix:
-        app: [web, platform, worker, admin, migrate]
+        app: [web, platform, worker, admin, superadmin, migrate]
     steps:
       - uses: actions/checkout@v5
       - uses: docker/setup-buildx-action@v3
@@ -142,6 +142,7 @@ jobs:
           check http://127.0.0.1:4000/health app_platform
           check http://127.0.0.1:4100/health app_rw
           check http://127.0.0.1:8080/health ""
+          check http://127.0.0.1:8081/health ""
           # TODO(M4/M5): once order placement lands, place a real COD test order against
           # http://127.0.0.1:3000 here (M5 exit criterion: proven "on staging").
       - name: Seed a store, an owner login and the demo store (operator tools from the images)

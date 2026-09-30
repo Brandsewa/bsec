@@ -135,3 +135,41 @@ BEGIN
       WITH CHECK (tenant_id = nullif(current_setting('app.tenant_id', true), '')::uuid);
   END IF;
 END $$;
+--> statement-breakpoint
+
+-- 8. Table privileges for platform isolation (PLAN §4, §6)
+REVOKE INSERT, UPDATE, DELETE ON TABLE
+  "organizations",
+  "tenants",
+  "feature_flags",
+  "platform_staff",
+  "platform_staff_invitations",
+  "support_sessions",
+  "tenant_deletions",
+  "tenant_notes"
+FROM "app_rw";
+--> statement-breakpoint
+
+GRANT ALL ON TABLE
+  "organizations",
+  "tenants",
+  "feature_flags",
+  "platform_staff",
+  "platform_staff_invitations",
+  "support_sessions",
+  "tenant_deletions",
+  "tenant_notes"
+TO "app_platform";
+--> statement-breakpoint
+
+-- two_factors is an auth table used by Better Auth for staff/platform staff MFA
+GRANT SELECT, INSERT, UPDATE, DELETE ON TABLE "two_factors" TO "app_rw";
+--> statement-breakpoint
+GRANT ALL ON TABLE "two_factors" TO "app_platform";
+--> statement-breakpoint
+
+-- exports is a tenant table with RLS
+GRANT SELECT, INSERT, UPDATE, DELETE ON TABLE "exports" TO "app_rw";
+--> statement-breakpoint
+GRANT ALL ON TABLE "exports" TO "app_platform";
+

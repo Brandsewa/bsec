@@ -29,6 +29,10 @@ Without `BETTER_AUTH_URL` / `BETTER_AUTH_SECRET` the site keeps serving but admi
 - `PORT`: `4100`.
 - `TENANT_SECRETS_KEY`: **Set before saving any payment/shipping/email credentials.** The app boots and serves without it (a warning is logged), but storing or reading tenant credentials fails until it is set. Used by background workers (e.g. transactional email dispatcher, payment webhooks, shipping background jobs) to decrypt tenant API keys (e.g. Resend, Razorpay). (Fallback alias: `ENCRYPTION_KEY`).
 
+### Super Admin (`bsec-superadmin`)
+- SPA served at `platform.gobs.cloud` (or port `8081` in staging/local).
+- Connects to `bsec-platform` API with credentials and CORS support.
+
 ### Migration Runner (`bsec-migrate`)
 - `DATABASE_URL_OWNER`: Connection string for PostgreSQL as `app_owner`.
 - `DATABASE_URL_SUPERUSER`: Required only on initial bootstrap run to configure roles (`app_owner`, `app_rw`, `app_platform`). Must be removed after first run.
@@ -42,7 +46,14 @@ In `production` (`APP_ENV=production` or `NODE_ENV=production`), the services bo
 `Encryption key not set: TENANT_SECRETS_KEY or ENCRYPTION_KEY is required in production (PLAN §4)` Generate one with `openssl rand -hex 32`, add it to web, platform and worker in Coolify, and redeploy. Set it BEFORE entering any credentials, and never change it afterwards without re-entering them (changing it makes stored credentials undecryptable).
 
 ## Operator tools (run from a container terminal in Coolify)
-Both are bundled in the images and never run automatically. Open the app in Coolify, go to **Terminal**, and run:
+Bundled in the images and never run automatically. Open the app in Coolify, go to **Terminal**, and run:
+
+**Bootstrap first Platform Staff operator** (platform container):
+Creates or resets the bootstrap platform staff login with mandatory multi-factor authentication (MFA). Uses an interactive hidden password prompt:
+```
+STAFF_EMAIL=brandsewaofficial@gmail.com STAFF_NAME="Platform Owner" node dist/create-staff.js
+```
+The operator must enroll and verify their MFA (TOTP / Authenticator App + backup codes) at first login before accessing any platform mutations or tenant management endpoints.
 
 **Create or reset a store owner login** (worker container). Uses a hidden password prompt; the password is never printed or logged:
 ```
@@ -59,8 +70,10 @@ node dist/demo.js remove
 ```
 `remove` deletes all demo rows and leaves the (archived, empty) shell; `seed` can be run again.
 
-## First-time admin setup checklist
+## First-time setup checklist
 1. Set `BETTER_AUTH_URL` and `BETTER_AUTH_SECRET` on **bsec-web** (Runtime only), redeploy.
-2. Run `create-owner` for your store from the worker terminal.
-3. Open `https://admin.<your domain>` and sign in.
-4. (Later) set `TENANT_SECRETS_KEY` on web, platform and worker before entering Razorpay/Shiprocket/Resend keys.
+2. Bootstrap platform owner: run `create-staff` from the **platform** container terminal.
+3. Open `https://platform.gobs.cloud`, sign in, and complete mandatory MFA setup.
+4. From Super Admin (`https://platform.gobs.cloud`), click **Create Store** to provision the first merchant storefront.
+5. Provide the generated onboarding invite link to the merchant owner to set their password.
+6. (Later) set `TENANT_SECRETS_KEY` on web, platform and worker before entering Razorpay/Shiprocket/Resend keys.

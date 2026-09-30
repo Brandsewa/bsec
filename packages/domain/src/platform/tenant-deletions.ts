@@ -37,7 +37,7 @@ export interface DeletionRecord {
 export async function scheduleTenantDeletion(
   rt: Runtime,
   platformStaffUserId: string,
-  input: { tenantId: string; reason: string; graceDays?: number },
+  input: { tenantId: string; reason?: string | undefined; graceDays?: number | undefined },
   meta?: { ip?: string; userAgent?: string; requestId?: string },
 ): Promise<DeletionRecord> {
   await assertPlatformStaff(rt, platformStaffUserId);
@@ -73,7 +73,7 @@ export async function scheduleTenantDeletion(
     .values({
       tenantId: input.tenantId,
       requestedBy: platformStaffUserId,
-      reason: input.reason,
+      reason: input.reason ?? "Operator requested deletion",
       step: "requested",
       scheduledFor,
     })

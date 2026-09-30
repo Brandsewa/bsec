@@ -8,9 +8,9 @@ export interface StartSupportSessionInput {
   tenantId: string;
   reason: string;
   ticketRef: string;
-  scope?: "read_only" | "write";
+  scope?: "read_only" | "write" | undefined;
   consent: "owner_approved" | "standing_consent" | "emergency";
-  impersonatedUserId?: string;
+  impersonatedUserId?: string | undefined;
 }
 
 export interface SupportSessionRecord {

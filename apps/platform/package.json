@@ -13,12 +13,15 @@
     "test:fast": "vitest run"
   },
   "dependencies": {
+    "@bs/auth": "workspace:*",
     "@bs/contracts": "workspace:*",
+    "@bs/db": "workspace:*",
     "@bs/domain": "workspace:*",
     "@hono/node-server": "2.1.1",
     "@orpc/openapi": "1.15.4",
     "@orpc/server": "1.15.4",
     "@sentry/node": "11.0.0",
+    "drizzle-orm": "0.45.3",
     "hono": "4.13.9"
   },
   "devDependencies": {

@@ -1,8 +1,8 @@
 import { createHmac, randomBytes } from "node:crypto";
-import { and, eq, sql } from "drizzle-orm";
+import { and, eq, gte, sql } from "drizzle-orm";
 import { schema, withTenant, type Db } from "@bs/db";
 import type { Runtime } from "../runtime.ts";
-import { assertQuota } from "../system/quotas.ts";
+import { assertQuota, QuotaExceededError } from "../system/quotas.ts";
 
 export interface ExportResult {
   id: string;
@@ -49,8 +49,16 @@ export async function runStoreExport(
 
   // 1. Quota check: respects exports_day quota
   try {
-    await assertQuota(db, tenantId, "exports_day");
-  } catch {
+    const todayStart = new Date();
+    todayStart.setHours(0, 0, 0, 0);
+    const [todayCountRes] = await db
+      .select({ count: sql<number>`count(*)::int` })
+      .from(schema.exports)
+      .where(and(eq(schema.exports.tenantId, tenantId), gte(schema.exports.createdAt, todayStart)));
+    const current = todayCountRes?.count ?? 0;
+    await assertQuota(db, tenantId, "exports_day", current);
+  } catch (err) {
+    if (err instanceof QuotaExceededError) throw err;
     // If quota engine is unseeded in tests, allow fallback
   }
 

@@ -59,31 +59,9 @@ describe("Domain Services", () => {
     it("lists platform tenants across all stores without tenant wrapper", async () => {
       const mockDb = {
         select: () => ({
-          from: () => [
-            {
-              id: "t-1",
-              slug: "store1",
-              name: "Store 1",
-              status: "active",
-              createdAt: new Date("2026-01-01"),
-            },
-          ],
-        }),
-      } as unknown as Db;
-
-      const rt = createMockRuntime(mockDb);
-      const res = await listPlatformTenants(rt);
-
-      expect(res).toHaveLength(1);
-      expect(res[0]?.slug).toBe("store1");
-    });
-
-    it("gets platform tenant by id", async () => {
-      const mockDb = {
-        select: () => ({
           from: () => ({
-            where: () => ({
-              limit: () => [
+            leftJoin: () => ({
+              orderBy: () => [
                 {
                   id: "t-1",
                   slug: "store1",
@@ -98,6 +76,34 @@ describe("Domain Services", () => {
       } as unknown as Db;
 
       const rt = createMockRuntime(mockDb);
+      const res = await listPlatformTenants(rt);
+
+      expect(res).toHaveLength(1);
+      expect(res[0]?.slug).toBe("store1");
+    });
+
+    it("gets platform tenant by id", async () => {
+      const mockDb = {
+        select: () => ({
+          from: () => ({
+            leftJoin: () => ({
+              where: () => ({
+                limit: () => [
+                  {
+                    id: "t-1",
+                    slug: "store1",
+                    name: "Store 1",
+                    status: "active",
+                    createdAt: new Date("2026-01-01"),
+                  },
+                ],
+              }),
+            }),
+          }),
+        }),
+      } as unknown as Db;
+
+      const rt = createMockRuntime(mockDb);
       const res = await getPlatformTenant(rt, "t-1");
 
       expect(res.id).toBe("t-1");
@@ -105,16 +111,17 @@ describe("Domain Services", () => {
     });
 
     it("asserts platform staff member exists and is active", async () => {
+      let callCount = 0;
       const mockDb = {
         select: () => ({
           from: () => ({
             where: () => ({
-              limit: () => [
-                {
-                  role: "platform_admin",
-                  isActive: true,
-                },
-              ],
+              limit: () => {
+                callCount++;
+                if (callCount === 1) return [{ role: "platform_admin", isActive: true, mfaRequired: true }];
+                if (callCount === 2) return [{ twoFactorEnabled: true }];
+                return [{ verified: true }];
+              },
             }),
           }),
         }),

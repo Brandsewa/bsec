@@ -5,12 +5,12 @@ import { schema, type Db } from "@bs/db";
 import { PLATFORM_COOKIE_PREFIX } from "./index.ts";
 
 export interface PlatformAuthOptions {
-  baseURL?: string;
-  secret?: string;
-  trustedOrigins?: string[];
-  cookieDomain?: string;
-  secureCookies?: boolean;
-  advanced?: BetterAuthOptions["advanced"];
+  baseURL?: string | undefined;
+  secret?: string | undefined;
+  trustedOrigins?: string[] | undefined;
+  cookieDomain?: string | undefined;
+  secureCookies?: boolean | undefined;
+  advanced?: BetterAuthOptions["advanced"] | undefined;
 }
 
 /**

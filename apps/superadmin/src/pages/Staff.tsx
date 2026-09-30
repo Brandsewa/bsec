@@ -1,0 +1,269 @@
+import React, { useState } from "react";
+import { useQuery } from "@tanstack/react-query";
+import { UserCheck, UserPlus, ShieldAlert, KeyRound, CheckCircle2, UserX } from "lucide-react";
+import {
+  Button,
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+  EmptyState,
+  Input,
+  PageContainer,
+  PageHeader,
+  PageSkeleton,
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+  toast,
+} from "@bs/ui";
+import { client } from "../lib/orpc.ts";
+
+export function Staff() {
+  const [inviteOpen, setInviteOpen] = useState(false);
+  const [inviteEmail, setInviteEmail] = useState("");
+  const [inviteRole, setInviteRole] = useState<"platform_owner" | "platform_admin" | "platform_support">("platform_support");
+
+  const [createdInvite, setCreatedInvite] = useState<{ email: string; token: string } | null>(null);
+  const [actionLoading, setActionLoading] = useState(false);
+
+  const { data: staffList, isLoading, refetch } = useQuery({
+    queryKey: ["platform", "staff"],
+    queryFn: () => client.staff.list(),
+  });
+
+  const handleInvite = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!inviteEmail.trim()) return;
+    setActionLoading(true);
+    try {
+      const res = await client.staff.invite({
+        email: inviteEmail.trim().toLowerCase(),
+        role: inviteRole,
+      });
+      setCreatedInvite({ email: res.email, token: res.token });
+      toast.success(`Platform staff invitation created for ${res.email}`);
+      refetch();
+    } catch (err: any) {
+      toast.error(err?.message || "Failed to invite staff member");
+    } finally {
+      setActionLoading(false);
+    }
+  };
+
+  const handleDeactivate = async (userId: string, email: string) => {
+    if (!confirm(`Are you sure you want to deactivate ${email}? All their active sessions will be terminated immediately.`)) return;
+    setActionLoading(true);
+    try {
+      await client.staff.deactivate({ userId });
+      toast.success(`Deactivated staff ${email}. Active sessions revoked.`);
+      refetch();
+    } catch (err: any) {
+      toast.error(err?.message || "Failed to deactivate staff member");
+    } finally {
+      setActionLoading(false);
+    }
+  };
+
+  const handleReactivate = async (userId: string, email: string) => {
+    setActionLoading(true);
+    try {
+      await client.staff.reactivate({ userId });
+      toast.success(`Reactivated staff ${email}`);
+      refetch();
+    } catch (err: any) {
+      toast.error(err?.message || "Failed to reactivate staff member");
+    } finally {
+      setActionLoading(false);
+    }
+  };
+
+  const handleRoleChange = async (userId: string, newRole: "platform_owner" | "platform_admin" | "platform_support") => {
+    setActionLoading(true);
+    try {
+      await client.staff.updateRole({ userId, role: newRole });
+      toast.success("Platform staff role updated");
+      refetch();
+    } catch (err: any) {
+      toast.error(err?.message || "Failed to update staff role");
+    } finally {
+      setActionLoading(false);
+    }
+  };
+
+  if (isLoading) return <PageSkeleton />;
+
+  return (
+    <PageContainer>
+      <PageHeader
+        title="Platform Staff & Security"
+        description="Authorized platform operators with verified multi-factor authentication (MFA). Deactivating staff kills all active sessions immediately."
+        aside={
+          <Button size="sm" onClick={() => { setCreatedInvite(null); setInviteOpen(true); }}>
+            <UserPlus className="mr-1.5 h-4 w-4" /> Invite Staff
+          </Button>
+        }
+      />
+
+      <div className="rounded-xl border bg-card overflow-hidden">
+        <Table>
+          <TableHeader>
+            <TableRow>
+              <TableHead>Staff Member</TableHead>
+              <TableHead>Platform Role</TableHead>
+              <TableHead>MFA Status</TableHead>
+              <TableHead>Status</TableHead>
+              <TableHead className="text-right">Actions</TableHead>
+            </TableRow>
+          </TableHeader>
+          <TableBody>
+            {(!staffList || staffList.length === 0) ? (
+              <TableRow>
+                <TableCell colSpan={5} className="text-center py-6 text-xs text-muted-foreground">
+                  No platform staff found.
+                </TableCell>
+              </TableRow>
+            ) : (
+              staffList.map((s) => (
+                <TableRow key={s.userId}>
+                  <TableCell>
+                    <div className="font-medium text-xs text-foreground">{s.name || s.email}</div>
+                    <div className="text-muted-foreground text-[11px]">{s.email}</div>
+                  </TableCell>
+                  <TableCell>
+                    <Select
+                      value={s.role}
+                      onValueChange={(val: any) => handleRoleChange(s.userId, val)}
+                      disabled={actionLoading || !s.isActive}
+                    >
+                      <SelectTrigger className="h-7 text-xs w-[150px]">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="platform_owner">Platform Owner</SelectItem>
+                        <SelectItem value="platform_admin">Platform Admin</SelectItem>
+                        <SelectItem value="platform_support">Platform Support</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </TableCell>
+                  <TableCell>
+                    {s.twoFactorEnabled ? (
+                      <span className="inline-flex items-center gap-1 text-xs text-emerald-600 dark:text-emerald-400 font-medium">
+                        <CheckCircle2 className="h-3.5 w-3.5" /> Enrolled (Verified)
+                      </span>
+                    ) : (
+                      <span className="inline-flex items-center gap-1 text-xs text-amber-600 dark:text-amber-400 font-medium">
+                        <KeyRound className="h-3.5 w-3.5" /> Required at Login
+                      </span>
+                    )}
+                  </TableCell>
+                  <TableCell>
+                    <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium ${
+                      s.isActive
+                        ? "bg-emerald-500/10 text-emerald-700 dark:text-emerald-400"
+                        : "bg-destructive/10 text-destructive font-medium"
+                    }`}>
+                      {s.isActive ? "Active" : "Deactivated"}
+                    </span>
+                  </TableCell>
+                  <TableCell className="text-right">
+                    {s.isActive ? (
+                      <Button
+                        size="sm"
+                        variant="ghost"
+                        className="h-7 text-xs text-destructive hover:bg-destructive/10"
+                        disabled={actionLoading}
+                        onClick={() => handleDeactivate(s.userId, s.email)}
+                      >
+                        <UserX className="mr-1 h-3 w-3" /> Deactivate
+                      </Button>
+                    ) : (
+                      <Button
+                        size="sm"
+                        variant="default"
+                        className="h-7 text-xs"
+                        disabled={actionLoading}
+                        onClick={() => handleReactivate(s.userId, s.email)}
+                      >
+                        Reactivate
+                      </Button>
+                    )}
+                  </TableCell>
+                </TableRow>
+              ))
+            )}
+          </TableBody>
+        </Table>
+      </div>
+
+      {/* Invite Staff Dialog */}
+      <Dialog open={inviteOpen} onOpenChange={setInviteOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Invite Platform Staff</DialogTitle>
+            <DialogDescription>
+              Invited staff will receive access to the Super Admin. Mandatory MFA setup will be required.
+            </DialogDescription>
+          </DialogHeader>
+
+          {createdInvite ? (
+            <div className="space-y-4 py-2">
+              <div className="rounded-lg bg-emerald-500/10 p-3 text-xs text-emerald-700 dark:text-emerald-400 border border-emerald-500/20">
+                Invitation created successfully for <strong>{createdInvite.email}</strong>.
+              </div>
+              <div className="space-y-1">
+                <label className="text-xs font-semibold">Single-Use Invitation Token</label>
+                <Input readOnly value={createdInvite.token} className="font-mono text-xs select-all bg-muted" />
+              </div>
+              <DialogFooter>
+                <Button onClick={() => setInviteOpen(false)}>Done</Button>
+              </DialogFooter>
+            </div>
+          ) : (
+            <form onSubmit={handleInvite} className="space-y-4 py-2 text-xs">
+              <div>
+                <label className="font-semibold">Staff Email Address *</label>
+                <Input
+                  type="email"
+                  value={inviteEmail}
+                  onChange={(e) => setInviteEmail(e.target.value)}
+                  placeholder="colleague@platform.gobs.cloud"
+                  required
+                />
+              </div>
+              <div>
+                <label className="font-semibold">Assigned Platform Role</label>
+                <Select value={inviteRole} onValueChange={(val: any) => setInviteRole(val)}>
+                  <SelectTrigger>
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="platform_owner">Platform Owner (Full administrative control)</SelectItem>
+                    <SelectItem value="platform_admin">Platform Admin (Tenant and feature operations)</SelectItem>
+                    <SelectItem value="platform_support">Platform Support (Audited support sessions)</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              <DialogFooter>
+                <Button variant="default" type="button" onClick={() => setInviteOpen(false)}>Cancel</Button>
+                <Button type="submit" disabled={actionLoading}>
+                  {actionLoading ? "Issuing..." : "Send Invitation"}
+                </Button>
+              </DialogFooter>
+            </form>
+          )}
+        </DialogContent>
+      </Dialog>
+    </PageContainer>
+  );
+}

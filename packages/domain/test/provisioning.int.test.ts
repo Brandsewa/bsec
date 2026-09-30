@@ -347,11 +347,9 @@ describe("M8 Atomic Tenant Provisioning Engine (PLAN §5.1, §6.4, §7 / ADR-016
     // With owner/staff session, full storefront access is allowed immediately
     const staffAccess = await evaluateStorefrontAccess(rt, `${slug}.gobs.cloud`, {
       session: {
+        user: { id: result.ownerId, email: "speed@example.com" },
         type: "staff",
-        userId: result.ownerId,
-        tenantId: result.tenantId,
-        roles: ["store_owner"],
-      } as Parameters<typeof evaluateStorefrontAccess>[2],
+      },
     });
     expect(staffAccess.allowed).toBe(true);
     expect(staffAccess.httpStatus).toBe(200);
