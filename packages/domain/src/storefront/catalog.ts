@@ -191,16 +191,8 @@ export async function getStorefrontProduct(
 
     const [mediaRows, optionRows, variantRows] = await Promise.all([
       tx
-        .select({
-          id: schema.productMedia.id,
-          productId: schema.productMedia.productId,
-          mediaId: schema.productMedia.mediaId,
-          position: schema.productMedia.position,
-          alt: schema.productMedia.alt,
-          storageKey: schema.media.storageKey,
-        })
+        .select()
         .from(schema.productMedia)
-        .innerJoin(schema.media, eq(schema.media.id, schema.productMedia.mediaId))
         .where(eq(schema.productMedia.productId, p.id))
         .orderBy(schema.productMedia.position),
       tx
@@ -286,13 +278,14 @@ export async function getStorefrontProduct(
       values: o.values,
     }));
 
+    const keysByMedia = await mediaStorageKeys(tx, mediaRows.map((m) => m.mediaId));
     const media: StorefrontMedia[] = mediaRows.map((m) => ({
       id: m.id,
       productId: m.productId,
       mediaId: m.mediaId,
       position: m.position,
       alt: m.alt,
-      url: publicMediaUrl(m.storageKey),
+      url: publicMediaUrl(keysByMedia.get(m.mediaId)),
     }));
 
     return {
@@ -552,6 +545,20 @@ export async function getStorefrontCategory(
   });
 }
 
+/** Storage keys of the given media files, by media id (the public image address is built from the key). */
+async function mediaStorageKeys(
+  tx: Parameters<Parameters<typeof withTenant>[2]>[0],
+  mediaIds: string[],
+): Promise<Map<string, string>> {
+  const ids = [...new Set(mediaIds)];
+  if (ids.length === 0) return new Map();
+  const rows = await tx
+    .select({ id: schema.media.id, storageKey: schema.media.storageKey })
+    .from(schema.media)
+    .where(inArray(schema.media.id, ids));
+  return new Map([...rows].map((r) => [r.id, r.storageKey]));
+}
+
 /**
  * Products for the storefront home page grid: the newest visible products (featured ones first), or the products of one
  * published collection. Returns an empty list when the catalog feature is off or nothing is published yet.
@@ -647,20 +654,19 @@ export async function buildProductSummaries(
       mediaId: schema.productMedia.mediaId,
       alt: schema.productMedia.alt,
       position: schema.productMedia.position,
-      storageKey: schema.media.storageKey,
     })
     .from(schema.productMedia)
-    .innerJoin(schema.media, eq(schema.media.id, schema.productMedia.mediaId))
     .where(inArray(schema.productMedia.productId, productIds))
     .orderBy(schema.productMedia.position);
 
+  const keysByMedia = await mediaStorageKeys(tx, mediaRows.map((m) => m.mediaId));
   const mediaByProduct: Record<string, { mediaId: string; alt: string | null; url: string | undefined }> = {};
   for (const m of mediaRows) {
     if (!mediaByProduct[m.productId]) {
       mediaByProduct[m.productId] = {
         mediaId: m.mediaId,
         alt: m.alt,
-        url: publicMediaUrl(m.storageKey),
+        url: publicMediaUrl(keysByMedia.get(m.mediaId)),
       };
     }
   }

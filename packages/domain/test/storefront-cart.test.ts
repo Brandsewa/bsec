@@ -44,6 +44,9 @@ describe("Storefront Cart & Newsletter Services", () => {
                 innerJoin: () => ({
                   innerJoin: () => ({
                     leftJoin: () => ({
+                      leftJoin() {
+                        return this; // the cart query joins product media, then the media row for its public url
+                      },
                       where: () => ({
                         orderBy: () => [],
                       }),
@@ -107,6 +110,9 @@ describe("Storefront Cart & Newsletter Services", () => {
                 innerJoin: () => ({
                   innerJoin: () => ({
                     leftJoin: () => ({
+                      leftJoin() {
+                        return this; // the cart query joins product media, then the media row for its public url
+                      },
                       where: () => ({
                         orderBy: () => [
                           {
@@ -250,6 +256,9 @@ describe("Storefront Cart & Newsletter Services", () => {
                 innerJoin: () => ({
                   innerJoin: () => ({
                     leftJoin: () => ({
+                      leftJoin() {
+                        return this; // the cart query joins product media, then the media row for its public url
+                      },
                       where: () => ({
                         orderBy: () => [],
                       }),
@@ -327,6 +336,9 @@ describe("Storefront Cart & Newsletter Services", () => {
                 innerJoin: () => ({
                   innerJoin: () => ({
                     leftJoin: () => ({
+                      leftJoin() {
+                        return this; // the cart query joins product media, then the media row for its public url
+                      },
                       where: () => ({
                         orderBy: () => [],
                       }),
@@ -379,6 +391,9 @@ describe("Storefront Cart & Newsletter Services", () => {
                 innerJoin: () => ({
                   innerJoin: () => ({
                     leftJoin: () => ({
+                      leftJoin() {
+                        return this; // the cart query joins product media, then the media row for its public url
+                      },
                       where: () => ({
                         orderBy: () => [],
                       }),
@@ -428,6 +443,9 @@ describe("Storefront Cart & Newsletter Services", () => {
                 innerJoin: () => ({
                   innerJoin: () => ({
                     leftJoin: () => ({
+                      leftJoin() {
+                        return this; // the cart query joins product media, then the media row for its public url
+                      },
                       where: () => ({
                         orderBy: () => [],
                       }),
@@ -473,6 +491,9 @@ describe("Storefront Cart & Newsletter Services", () => {
                 innerJoin: () => ({
                   innerJoin: () => ({
                     leftJoin: () => ({
+                      leftJoin() {
+                        return this; // the cart query joins product media, then the media row for its public url
+                      },
                       where: () => ({
                         orderBy: () => [],
                       }),
@@ -556,6 +577,9 @@ describe("Storefront Cart & Newsletter Services", () => {
                     innerJoin: () => ({
                       innerJoin: () => ({
                         leftJoin: () => ({
+                          leftJoin() {
+                            return this; // the cart query joins product media, then the media row for its public url
+                          },
                           where: () => ({
                             orderBy: () => cartItemsList,
                           }),
