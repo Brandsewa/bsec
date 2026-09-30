@@ -69,7 +69,7 @@ beforeAll(async () => {
   env = await startTestDb();
   rt = createRuntime({ service: "platform", databaseUrl: env.as("app_platform"), poolMax: 8 });
   rtWeb = createRuntime({ service: "web", databaseUrl: env.as("app_rw"), poolMax: 3 });
-  staffId = (await seedPlatformStaff(rt._db.db, { email: "owner@platform.test" })).userId;
+  staffId = (await seedPlatformStaff(rt._db.db, { email: "deletion-owner@platform.test" })).userId;
 }, 180_000);
 
 afterAll(async () => {
