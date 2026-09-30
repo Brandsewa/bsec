@@ -182,7 +182,8 @@ export type Brand = z.infer<typeof Brand>;
 
 // --- M2 Inventory Schemas ---
 export const InventoryLevelItem = z.object({
-  id: z.string().uuid(),
+  /** The stock row id, or "variantId:locationId" for a variant that has never had stock. */
+  id: z.string(),
   variantId: z.string().uuid(),
   locationId: z.string().uuid(),
   onHand: z.number(),

@@ -275,6 +275,8 @@ function ProductEditor({ product, go }: { product: ProductDetailData; go: (to: s
         </div>
       </form>
 
+      <StockSummary product={product} onManage={() => go("/inventory")} />
+
       <PageSection title="Variants" description="SKUs and pricing (in ₹). Stock is managed on the Inventory page.">
         {product.variants.length === 0 ? (
           <EmptyState title="No variants" description="This product has no variants yet." />
@@ -314,6 +316,41 @@ function ProductEditor({ product, go }: { product: ProductDetailData; go: (to: s
         </DialogContent>
       </Dialog>
     </PageContainer>
+  );
+}
+
+/** Current stock of each variant, with a shortcut to the Inventory page where it is changed. */
+function StockSummary({ product, onManage }: { product: ProductDetailData; onManage: () => void }) {
+  const levels = useQuery(orpc.admin.inventory.list.queryOptions({ input: { search: product.title, limit: 100 } }));
+  const variantIds = new Set(product.variants.map((v) => v.id));
+  const rows = (levels.data?.items ?? []).filter((r) => variantIds.has(r.variantId));
+
+  return (
+    <PageSection title="Stock" description="Customers can only add a product to their cart while it has stock available.">
+      {levels.isLoading ? (
+        <p className="text-sm text-foreground-lighter">Loading stock...</p>
+      ) : rows.length === 0 ? (
+        <p className="text-sm text-foreground-lighter">This product does not track stock.</p>
+      ) : (
+        <ul className="grid gap-1 text-sm" data-testid="product-stock">
+          {rows.map((r) => (
+            <li key={r.id} className="flex items-center justify-between gap-3">
+              <span>
+                {r.variantTitle ?? r.variantSku} · {r.locationName}
+              </span>
+              <span className={r.available > 0 ? "font-medium" : "font-medium text-destructive"}>
+                {r.available > 0 ? `${r.available} available` : "Out of stock"}
+              </span>
+            </li>
+          ))}
+        </ul>
+      )}
+      <div className="mt-3">
+        <Button type="button" variant="default" size="sm" onClick={onManage}>
+          Manage stock
+        </Button>
+      </div>
+    </PageSection>
   );
 }
 
