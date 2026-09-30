@@ -1,15 +1,17 @@
-import { createHmac, randomBytes } from "node:crypto";
+import { createHmac, randomBytes, createHash, timingSafeEqual } from "node:crypto";
 import { and, desc, eq, sql } from "drizzle-orm";
 import { schema } from "@bs/db";
 import type { Runtime } from "../runtime.ts";
 
 export interface SubscriptionBillingProvider {
+  isConfigured?(): boolean;
   createSubscription(params: {
     planCode: string;
     interval: "monthly" | "yearly";
     customerEmail: string;
     customerName?: string;
     tenantId: string;
+    planId?: string;
     notes?: Record<string, string>;
   }): Promise<{
     providerSubscriptionId: string;
@@ -45,6 +47,7 @@ export class RazorpaySubscriptionProvider implements SubscriptionBillingProvider
     customerEmail: string;
     customerName?: string;
     tenantId: string;
+    planId?: string;
     notes?: Record<string, string>;
   }): Promise<{
     providerSubscriptionId: string;
@@ -52,17 +55,14 @@ export class RazorpaySubscriptionProvider implements SubscriptionBillingProvider
     status: string;
   }> {
     if (!this.isConfigured()) {
-      // Per ADR-014: Return honest unconfigured response when credentials are not configured
-      const simulatedId = `sub_unconfigured_${params.planCode}_${Date.now()}`;
-      return {
-        providerSubscriptionId: simulatedId,
-        status: "created",
-      };
+      throw new Error("Billing is not configured: RAZORPAY_KEY_ID or RAZORPAY_KEY_SECRET is missing");
+    }
+
+    if (!params.planId) {
+      throw new Error(`Razorpay plan ID is required to create subscription for '${params.planCode}'`);
     }
 
     const auth = Buffer.from(`${this.keyId}:${this.keySecret}`).toString("base64");
-    // In production, Razorpay requires a plan_id created in Razorpay dashboard.
-    // We send notes with tenantId and planCode.
     const res = await fetch("https://api.razorpay.com/v1/subscriptions", {
       method: "POST",
       headers: {
@@ -70,7 +70,7 @@ export class RazorpaySubscriptionProvider implements SubscriptionBillingProvider
         Authorization: `Basic ${auth}`,
       },
       body: JSON.stringify({
-        plan_id: `plan_${params.planCode}_${params.interval}`,
+        plan_id: params.planId,
         total_count: params.interval === "yearly" ? 5 : 60,
         customer_notify: 1,
         notes: {
@@ -96,7 +96,7 @@ export class RazorpaySubscriptionProvider implements SubscriptionBillingProvider
 
   async cancelSubscription(providerSubscriptionId: string): Promise<{ status: string }> {
     if (!this.isConfigured()) {
-      return { status: "cancelled" };
+      throw new Error("Billing is not configured: RAZORPAY_KEY_ID or RAZORPAY_KEY_SECRET is missing");
     }
 
     const auth = Buffer.from(`${this.keyId}:${this.keySecret}`).toString("base64");
@@ -120,12 +120,14 @@ export class RazorpaySubscriptionProvider implements SubscriptionBillingProvider
 
   verifyWebhookSignature(rawBody: string, signature: string): boolean {
     const secret = this.webhookSecret;
-    if (!secret) {
-      // In development or test if secret is unset, reject unless in test mode with explicit secret
+    if (!secret || typeof signature !== "string") {
       return false;
     }
     const expected = createHmac("sha256", secret).update(rawBody).digest("hex");
-    return expected === signature;
+    if (signature.length !== expected.length) {
+      return false;
+    }
+    return timingSafeEqual(Buffer.from(expected, "utf8"), Buffer.from(signature, "utf8"));
   }
 }
 
@@ -146,6 +148,8 @@ export async function handlePlatformBillingWebhook(
     rawBody: string;
     signature: string;
     provider?: SubscriptionBillingProvider;
+    headers?: Record<string, string | string[] | undefined> | Headers;
+    eventId?: string;
   },
 ): Promise<PlatformBillingWebhookResult> {
   const db = rt._db.db;
@@ -154,22 +158,60 @@ export async function handlePlatformBillingWebhook(
   // 1. Signature Verification (Fails closed per ADR-014)
   const isValid = billingProvider.verifyWebhookSignature(params.rawBody, params.signature);
   if (!isValid) {
-    const err = new Error("Invalid platform billing webhook signature");
-    (err as any).statusCode = 400;
+    const err = Object.assign(new Error("Invalid platform billing webhook signature"), { statusCode: 400 });
     throw err;
   }
 
-  let payload: any;
+  interface RazorpayWebhookPayload {
+    id?: string;
+    event_id?: string;
+    event?: string;
+    payload?: {
+      subscription?: {
+        entity?: {
+          id?: string;
+          current_start?: number;
+          current_end?: number;
+          notes?: Record<string, string>;
+        };
+      };
+      payment?: {
+        entity?: {
+          id?: string;
+          amount?: number;
+          notes?: Record<string, string>;
+        };
+      };
+    };
+  }
+
+  let payload: RazorpayWebhookPayload;
   try {
-    payload = JSON.parse(params.rawBody);
-  } catch (e) {
-    const err = new Error("Invalid JSON payload");
-    (err as any).statusCode = 400;
+    payload = JSON.parse(params.rawBody) as RazorpayWebhookPayload;
+  } catch {
+    const err = Object.assign(new Error("Invalid JSON payload"), { statusCode: 400 });
     throw err;
   }
 
-  const eventType = payload.event as string;
-  const eventId = (payload.event_id || payload.id || `evt_${Date.now()}_${randomBytes(4).toString("hex")}`) as string;
+  const eventType = payload.event ?? "";
+
+  // Take the idempotency key from the X-Razorpay-Event-Id header. If missing, use a hash of the raw body. Never use a random id.
+  let eventId = params.eventId;
+  if (!eventId && params.headers) {
+    if (typeof (params.headers as Headers).get === "function") {
+      eventId = (params.headers as Headers).get("x-razorpay-event-id") ?? undefined;
+    } else {
+      const h = params.headers as Record<string, string | string[] | undefined>;
+      const val = h["x-razorpay-event-id"] ?? h["X-Razorpay-Event-Id"];
+      eventId = Array.isArray(val) ? val[0] : val;
+    }
+  }
+  if (!eventId && (payload.event_id || payload.id)) {
+    eventId = (payload.event_id || payload.id) as string;
+  }
+  if (!eventId) {
+    eventId = createHash("sha256").update(params.rawBody).digest("hex");
+  }
 
   // 2. Idempotency Check in webhook_inbox
   const [existingInbox] = await db
@@ -210,8 +252,14 @@ export async function handlePlatformBillingWebhook(
     if (eventType === "subscription.charged") {
       const subEntity = payload.payload?.subscription?.entity;
       const paymentEntity = payload.payload?.payment?.entity;
+      if (!paymentEntity || typeof paymentEntity.amount !== "number") {
+        const err = Object.assign(new Error("Payment entity missing or invalid in subscription.charged webhook"), { statusCode: 400 });
+        throw err;
+      }
+      const amountPaise = paymentEntity.amount;
       const subId = subEntity?.id;
-      const tenantIdNote = subEntity?.notes?.tenant_id;
+      const tenantIdNote = subEntity?.notes?.tenant_id ?? paymentEntity?.notes?.tenant_id;
+      const planCodeNote = subEntity?.notes?.plan_code ?? paymentEntity?.notes?.plan_code;
 
       if (subId || tenantIdNote) {
         let sub: typeof schema.subscriptions.$inferSelect | null = null;
@@ -234,6 +282,7 @@ export async function handlePlatformBillingWebhook(
         }
 
         if (sub) {
+          const activeSub = sub;
           const currentStart = subEntity?.current_start
             ? new Date(subEntity.current_start * 1000)
             : new Date();
@@ -241,56 +290,73 @@ export async function handlePlatformBillingWebhook(
             ? new Date(subEntity.current_end * 1000)
             : new Date(Date.now() + 30 * 24 * 60 * 60 * 1000);
 
-          // Update subscription to active
-          await db
-            .update(schema.subscriptions)
-            .set({
-              status: "active",
-              providerSubscriptionId: subId ?? undefined,
-              currentPeriodStart: currentStart,
-              currentPeriodEnd: currentEnd,
-              updatedAt: new Date(),
-            })
-            .where(eq(schema.subscriptions.id, sub.id));
-
-          // Generate GST Invoice
-          const amountPaise = paymentEntity?.amount ?? 99900;
           const taxPaise = Math.round((amountPaise * 18) / 118); // 18% inclusive GST
           const dateStr = new Date().toISOString().slice(0, 7).replace("-", "");
           const invoiceNumber = `INV-${dateStr}-${randomBytes(3).toString("hex").toUpperCase()}`;
 
-          await db.insert(schema.platformInvoices).values({
-            tenantId: sub.tenantId,
-            subscriptionId: sub.id,
-            number: invoiceNumber,
-            amountPaise,
-            taxPaise,
-            status: "paid",
-            issuedAt: new Date(),
-            paidAt: new Date(),
+          // Do the invoice, subscription and tier writes in ONE transaction
+          await db.transaction(async (tx) => {
+            // If planCodeNote is present, find plan by code and update planId
+            let newPlanId = activeSub.planId;
+            if (planCodeNote) {
+              const [targetPlan] = await tx
+                .select()
+                .from(schema.plans)
+                .where(eq(schema.plans.code, planCodeNote))
+                .limit(1);
+              if (targetPlan) {
+                newPlanId = targetPlan.id;
+              }
+            }
+
+            // Update subscription to active
+            await tx
+              .update(schema.subscriptions)
+              .set({
+                status: "active",
+                ...(newPlanId ? { planId: newPlanId } : {}),
+                providerSubscriptionId: subId ?? undefined,
+                currentPeriodStart: currentStart,
+                currentPeriodEnd: currentEnd,
+                updatedAt: new Date(),
+              })
+              .where(eq(schema.subscriptions.id, activeSub.id));
+
+            // Generate GST Invoice
+            await tx.insert(schema.platformInvoices).values({
+              tenantId: activeSub.tenantId,
+              subscriptionId: activeSub.id,
+              number: invoiceNumber,
+              amountPaise,
+              taxPaise,
+              status: "paid",
+              issuedAt: new Date(),
+              paidAt: new Date(),
+            });
+
+            // Ensure tenant quota size tier reflects plan tier
+            const effectivePlanId = newPlanId ?? activeSub.planId;
+            if (effectivePlanId) {
+              const planRow = await tx.execute<{ code: string }>(sql`
+                SELECT code FROM plans WHERE id = ${effectivePlanId} LIMIT 1;
+              `);
+              const planCode = planRow.rows[0]?.code;
+              const tierMap: Record<string, "XS" | "S" | "M" | "L"> = {
+                starter: "S",
+                growth: "M",
+                pro: "L",
+              };
+              const tier = planCode ? tierMap[planCode] ?? "S" : "S";
+
+              await tx
+                .insert(schema.tenantSizeTiers)
+                .values({ tenantId: activeSub.tenantId, tier })
+                .onConflictDoUpdate({
+                  target: schema.tenantSizeTiers.tenantId,
+                  set: { tier, updatedAt: new Date() },
+                });
+            }
           });
-
-          // Also ensure tenant quota size tier reflects plan tier
-          if (sub.planId) {
-            const planRow = await db.execute<{ code: string }>(sql`
-              SELECT code FROM plans WHERE id = ${sub.planId} LIMIT 1;
-            `);
-            const planCode = planRow.rows[0]?.code;
-            const tierMap: Record<string, "XS" | "S" | "M" | "L"> = {
-              starter: "S",
-              growth: "M",
-              pro: "L",
-            };
-            const tier = planCode ? tierMap[planCode] ?? "S" : "S";
-
-            await db
-              .insert(schema.tenantSizeTiers)
-              .values({ tenantId: sub.tenantId, tier })
-              .onConflictDoUpdate({
-                target: schema.tenantSizeTiers.tenantId,
-                set: { tier, updatedAt: new Date() },
-              });
-          }
 
           actionTaken = "subscription_activated_and_invoiced";
         }
@@ -343,12 +409,13 @@ export async function handlePlatformBillingWebhook(
       );
 
     return { received: true, eventId, actionTaken };
-  } catch (err: any) {
+  } catch (err: unknown) {
+    const errorMsg = err instanceof Error ? err.message : String(err);
     await db
       .update(schema.webhookInbox)
       .set({
         status: "failed",
-        error: err.message ?? String(err),
+        error: errorMsg,
       })
       .where(
         and(
@@ -426,6 +493,10 @@ export async function changeTenantPlan(
   const db = rt._db.db;
   const billingProvider = params.provider ?? new RazorpaySubscriptionProvider();
 
+  if (typeof billingProvider.isConfigured === "function" && !billingProvider.isConfigured()) {
+    throw new Error("Billing is not configured: missing Razorpay credentials");
+  }
+
   const [plan] = await db
     .select()
     .from(schema.plans)
@@ -436,6 +507,19 @@ export async function changeTenantPlan(
     throw new Error(`Plan '${params.planCode}' not found`);
   }
 
+  const features = plan.features as Record<string, unknown> | null;
+  const planIds = features?.razorpay_plan_ids as Record<string, string> | undefined;
+  const razorpayPlanId =
+    params.interval === "yearly"
+      ? plan.razorpayPlanIdYearly ?? planIds?.yearly
+      : plan.razorpayPlanIdMonthly ?? planIds?.monthly;
+
+  if (!razorpayPlanId) {
+    throw new Error(
+      `Plan '${plan.code}' has no Razorpay plan ID configured for interval '${params.interval}'. Please configure real Razorpay plan IDs.`,
+    );
+  }
+
   // Create provider subscription
   const result = await billingProvider.createSubscription({
     planCode: params.planCode,
@@ -443,9 +527,11 @@ export async function changeTenantPlan(
     customerEmail: params.customerEmail,
     ...(params.customerName ? { customerName: params.customerName } : {}),
     tenantId: params.tenantId,
+    planId: razorpayPlanId,
   });
 
   // Update or insert subscription record
+  // NOTE: Plan changes and activation take effect only after payment webhook confirms it.
   const [existingSub] = await db
     .select()
     .from(schema.subscriptions)
@@ -457,18 +543,18 @@ export async function changeTenantPlan(
     await db
       .update(schema.subscriptions)
       .set({
-        planId: plan.id,
         interval: params.interval,
         providerSubscriptionId: result.providerSubscriptionId,
         updatedAt: new Date(),
       })
       .where(eq(schema.subscriptions.id, existingSub.id));
   } else {
+    // The no-subscription branch must not insert an active subscription without payment.
     await db.insert(schema.subscriptions).values({
       tenantId: params.tenantId,
       planId: plan.id,
       interval: params.interval,
-      status: "active",
+      status: "pending",
       provider: "razorpay",
       providerSubscriptionId: result.providerSubscriptionId,
     });
@@ -481,3 +567,34 @@ export async function changeTenantPlan(
     plan,
   };
 }
+
+/**
+ * Cancels a tenant's subscription.
+ */
+export async function cancelTenantSubscription(
+  rt: Runtime,
+  tenantId: string,
+  provider?: SubscriptionBillingProvider,
+) {
+  const db = rt._db.db;
+  const billingProvider = provider ?? new RazorpaySubscriptionProvider();
+
+  if (typeof billingProvider.isConfigured === "function" && !billingProvider.isConfigured()) {
+    throw new Error("Billing is not configured: missing Razorpay credentials");
+  }
+
+  const [sub] = await db
+    .select()
+    .from(schema.subscriptions)
+    .where(eq(schema.subscriptions.tenantId, tenantId))
+    .orderBy(desc(schema.subscriptions.createdAt))
+    .limit(1);
+
+  if (!sub || !sub.providerSubscriptionId) {
+    throw new Error("No active subscription found to cancel");
+  }
+
+  const res = await billingProvider.cancelSubscription(sub.providerSubscriptionId);
+  return res;
+}
+

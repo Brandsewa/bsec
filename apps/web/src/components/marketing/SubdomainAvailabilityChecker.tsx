@@ -35,9 +35,11 @@ export function SubdomainAvailabilityChecker({
 
   useEffect(() => {
     if (!slug || slug.length < 3) {
-      setCheckResult(null);
-      setIsChecking(false);
-      return;
+      const timer = setTimeout(() => {
+        setCheckResult(null);
+        setIsChecking(false);
+      }, 0);
+      return () => clearTimeout(timer);
     }
 
     const timer = setTimeout(async () => {

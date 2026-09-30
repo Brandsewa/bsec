@@ -4,7 +4,7 @@ import { PostgreSqlContainer, type StartedPostgreSqlContainer } from "@testconta
 import { createDb, type DbHandle, schema } from "@bs/db";
 import { bootstrapRoles } from "@bs/db/bootstrap";
 import { runMigrations } from "@bs/db/migrate";
-import { eq, sql } from "drizzle-orm";
+import { eq } from "drizzle-orm";
 import {
   createRuntime,
   type Runtime,
@@ -21,6 +21,7 @@ let superUrl: string;
 let rwDb: DbHandle;
 let platformDb: DbHandle;
 let rt: Runtime;
+let rtPlatform: Runtime;
 
 const TEST_WEBHOOK_SECRET = "whsec_test_secret_platform_billing_12345";
 const providerWithSecret = new RazorpaySubscriptionProvider({
@@ -50,12 +51,14 @@ beforeAll(async () => {
   rwDb = createDb(as("app_rw", PW.rw), { max: 15 });
   platformDb = createDb(as("app_platform", PW.platform), { max: 5 });
   rt = createRuntime({ service: "web", databaseUrl: as("app_rw", PW.rw), poolMax: 15 });
+  rtPlatform = createRuntime({ service: "platform", databaseUrl: as("app_platform", PW.platform), poolMax: 15 });
 }, 180_000);
 
 afterAll(async () => {
   await rwDb?.close();
   await platformDb?.close();
   await rt?.close();
+  await rtPlatform?.close();
   await container?.stop();
 });
 
@@ -65,7 +68,7 @@ describe("M8 Platform Merchant Subscriptions & Billing Lifecycle (ADR-014, PLAN 
 
   it("provisions a store on 14-day trial and returns trial status and days remaining", async () => {
     const slug = "billing-store-01";
-    const result = await provisionTenant(rt, {
+    const result = await provisionTenant(rtPlatform, {
       storeName: "Billing Store One",
       slug,
       planCode: "starter",
@@ -80,7 +83,7 @@ describe("M8 Platform Merchant Subscriptions & Billing Lifecycle (ADR-014, PLAN 
     tenantId = result.tenantId;
     expect(tenantId).toBeDefined();
 
-    const billingInfo = await getTenantSubscription(rt, tenantId);
+    const billingInfo = await getTenantSubscription(rtPlatform, tenantId);
     expect(billingInfo.subscription).not.toBeNull();
     expect(billingInfo.subscription?.status).toBe("trialing");
     expect(billingInfo.subscription?.interval).toBe("monthly");
@@ -95,7 +98,7 @@ describe("M8 Platform Merchant Subscriptions & Billing Lifecycle (ADR-014, PLAN 
     const invalidSig = "bad_signature_000000000000000000000000000000000000000000000000000000";
 
     await expect(
-      handlePlatformBillingWebhook(rt, {
+      handlePlatformBillingWebhook(rtPlatform, {
         rawBody,
         signature: invalidSig,
         provider: providerWithSecret,
@@ -138,7 +141,7 @@ describe("M8 Platform Merchant Subscriptions & Billing Lifecycle (ADR-014, PLAN 
     const rawBody = JSON.stringify(payload);
     const signature = signPayload(rawBody);
 
-    const result = await handlePlatformBillingWebhook(rt, {
+    const result = await handlePlatformBillingWebhook(rtPlatform, {
       rawBody,
       signature,
       provider: providerWithSecret,
@@ -148,7 +151,7 @@ describe("M8 Platform Merchant Subscriptions & Billing Lifecycle (ADR-014, PLAN 
     expect(result.actionTaken).toBe("subscription_activated_and_invoiced");
 
     // Verify subscription state
-    const billingInfo = await getTenantSubscription(rt, tenantId);
+    const billingInfo = await getTenantSubscription(rtPlatform, tenantId);
     expect(billingInfo.subscription?.status).toBe("active");
     expect(billingInfo.subscription?.providerSubscriptionId).toBe(testSubId);
     expect(billingInfo.isTrial).toBe(false);
@@ -162,7 +165,7 @@ describe("M8 Platform Merchant Subscriptions & Billing Lifecycle (ADR-014, PLAN 
     expect(inv.status).toBe("paid");
 
     // Verify size tier was updated to S
-    const [tierRow] = await rt._db.db
+    const [tierRow] = await rtPlatform._db.db
       .select()
       .from(schema.tenantSizeTiers)
       .where(eq(schema.tenantSizeTiers.tenantId, tenantId))
@@ -195,7 +198,7 @@ describe("M8 Platform Merchant Subscriptions & Billing Lifecycle (ADR-014, PLAN 
     const rawBody = JSON.stringify(payload);
     const signature = signPayload(rawBody);
 
-    const result = await handlePlatformBillingWebhook(rt, {
+    const result = await handlePlatformBillingWebhook(rtPlatform, {
       rawBody,
       signature,
       provider: providerWithSecret,
@@ -205,7 +208,7 @@ describe("M8 Platform Merchant Subscriptions & Billing Lifecycle (ADR-014, PLAN 
     expect(result.duplicate).toBe(true);
 
     // Verify invoice count did NOT increase
-    const billingInfo = await getTenantSubscription(rt, tenantId);
+    const billingInfo = await getTenantSubscription(rtPlatform, tenantId);
     expect(billingInfo.invoices).toHaveLength(1);
   });
 
@@ -228,7 +231,7 @@ describe("M8 Platform Merchant Subscriptions & Billing Lifecycle (ADR-014, PLAN 
     const rawBody = JSON.stringify(payload);
     const signature = signPayload(rawBody);
 
-    const result = await handlePlatformBillingWebhook(rt, {
+    const result = await handlePlatformBillingWebhook(rtPlatform, {
       rawBody,
       signature,
       provider: providerWithSecret,
@@ -237,7 +240,7 @@ describe("M8 Platform Merchant Subscriptions & Billing Lifecycle (ADR-014, PLAN 
     expect(result.received).toBe(true);
     expect(result.actionTaken).toBe("subscription_past_due");
 
-    const billingInfo = await getTenantSubscription(rt, tenantId);
+    const billingInfo = await getTenantSubscription(rtPlatform, tenantId);
     expect(billingInfo.subscription?.status).toBe("past_due");
   });
 
@@ -260,7 +263,7 @@ describe("M8 Platform Merchant Subscriptions & Billing Lifecycle (ADR-014, PLAN 
     const rawBody = JSON.stringify(payload);
     const signature = signPayload(rawBody);
 
-    const result = await handlePlatformBillingWebhook(rt, {
+    const result = await handlePlatformBillingWebhook(rtPlatform, {
       rawBody,
       signature,
       provider: providerWithSecret,
@@ -269,23 +272,81 @@ describe("M8 Platform Merchant Subscriptions & Billing Lifecycle (ADR-014, PLAN 
     expect(result.received).toBe(true);
     expect(result.actionTaken).toBe("subscription_cancelled");
 
-    const billingInfo = await getTenantSubscription(rt, tenantId);
+    const billingInfo = await getTenantSubscription(rtPlatform, tenantId);
     expect(billingInfo.subscription?.status).toBe("cancelled");
   });
 
   it("initiates plan upgrade to growth plan and updates subscription", async () => {
-    const result = await changeTenantPlan(rt, {
+    // 1. Ensure growth plan has razorpayPlanIdYearly
+    await platformDb.db
+      .update(schema.plans)
+      .set({ razorpayPlanIdYearly: "plan_rzp_growth_yr_123" })
+      .where(eq(schema.plans.code, "growth"));
+
+    const mockProvider = {
+      isConfigured: () => true,
+      createSubscription: async () => ({
+        providerSubscriptionId: "sub_rzp_growth_yearly_999",
+        status: "created",
+      }),
+      cancelSubscription: async () => ({ status: "cancelled" }),
+      verifyWebhookSignature: () => true,
+    };
+
+    const result = await changeTenantPlan(rtPlatform, {
       tenantId,
       planCode: "growth",
       interval: "yearly",
       customerEmail: "merchant.billing@example.com",
+      provider: mockProvider as any,
     });
 
     expect(result.plan.code).toBe("growth");
-    expect(result.providerSubscriptionId).toBeDefined();
+    expect(result.providerSubscriptionId).toBe("sub_rzp_growth_yearly_999");
 
-    const billingInfo = await getTenantSubscription(rt, tenantId);
-    expect(billingInfo.plan?.code).toBe("growth");
-    expect(billingInfo.subscription?.interval).toBe("yearly");
+    // Before payment webhook, interval is updated but plan remains until confirmed
+    const billingInfoBefore = await getTenantSubscription(rtPlatform, tenantId);
+    expect(billingInfoBefore.subscription?.interval).toBe("yearly");
+    expect(billingInfoBefore.plan?.code).toBe("starter");
+
+    // 2. Deliver subscription.charged webhook for the growth plan upgrade
+    const payload = {
+      entity: "event",
+      account_id: "acc_test_platform",
+      event: "subscription.charged",
+      event_id: "evt_upgrade_growth_01",
+      payload: {
+        subscription: {
+          entity: {
+            id: "sub_rzp_growth_yearly_999",
+            status: "active",
+            notes: {
+              tenant_id: tenantId,
+              plan_code: "growth",
+            },
+          },
+        },
+        payment: {
+          entity: {
+            id: "pay_growth_1122",
+            amount: 2499000,
+            currency: "INR",
+            status: "captured",
+          },
+        },
+      },
+    };
+    const rawBody = JSON.stringify(payload);
+    const signature = signPayload(rawBody);
+
+    await handlePlatformBillingWebhook(rtPlatform, {
+      rawBody,
+      signature,
+      provider: providerWithSecret,
+    });
+
+    const billingInfoAfter = await getTenantSubscription(rtPlatform, tenantId);
+    expect(billingInfoAfter.plan?.code).toBe("growth");
+    expect(billingInfoAfter.subscription?.status).toBe("active");
   });
 });

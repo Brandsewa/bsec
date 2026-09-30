@@ -26,6 +26,7 @@ let superUrl: string;
 let rwDb: DbHandle;
 let platformDb: DbHandle;
 let rt: Runtime;
+let rtPlatform: Runtime;
 
 function as(role: "app_owner" | "app_rw" | "app_platform", password: string): string {
   const u = new URL(superUrl);
@@ -46,13 +47,14 @@ beforeAll(async () => {
   rwDb = createDb(as("app_rw", PW.rw), { max: 15 });
   platformDb = createDb(as("app_platform", PW.platform), { max: 5 });
   rt = createRuntime({ service: "web", databaseUrl: as("app_rw", PW.rw), poolMax: 15 });
+  rtPlatform = createRuntime({ service: "platform", databaseUrl: as("app_platform", PW.platform), poolMax: 5 });
 
   // Seed Store 1 (store101.gobs.cloud) to verify non-regression
-  const [store1Org] = await rwDb.db
+  const [store1Org] = await platformDb.db
     .insert(schema.organizations)
     .values({ name: "Store 101 Org" })
     .returning();
-  const [store1Tenant] = await rwDb.db
+  const [store1Tenant] = await platformDb.db
     .insert(schema.tenants)
     .values({
       organizationId: store1Org!.id,
@@ -74,6 +76,7 @@ afterAll(async () => {
   await rwDb?.close();
   await platformDb?.close();
   await rt?.close();
+  await rtPlatform?.close();
   await container?.stop();
 });
 
@@ -139,7 +142,7 @@ describe("M8 Custom Domains & Cloudflare for SaaS Integration (PLAN §8, ADR-007
 
   it("provisions a store on XS tier and checks custom domain quota (0 custom domains allowed on XS)", async () => {
     const slug = "domains-store-01";
-    const result = await provisionTenant(rt, {
+    const result = await provisionTenant(rtPlatform, {
       storeName: "Domains Test Store",
       slug,
       planCode: "starter", // Initial plan defaults to XS size tier
@@ -171,7 +174,7 @@ describe("M8 Custom Domains & Cloudflare for SaaS Integration (PLAN §8, ADR-007
 
   it("upgrades store to S tier (1 custom domain allowed) and adds custom domain successfully", async () => {
     // Elevate store size tier to S (Growth/S tier allows 1 custom domain)
-    await rt._db.db
+    await platformDb.db
       .update(schema.tenantSizeTiers)
       .set({ tier: "S", updatedAt: new Date() })
       .where(eq(schema.tenantSizeTiers.tenantId, tenantId));
@@ -245,7 +248,7 @@ describe("M8 Custom Domains & Cloudflare for SaaS Integration (PLAN §8, ADR-007
 
   it("supports prevalidate_txt path with TXT ownership records on M tier", async () => {
     // Upgrade to Tier M (allows 3 custom domains)
-    await rt._db.db
+    await platformDb.db
       .update(schema.tenantSizeTiers)
       .set({ tier: "M", updatedAt: new Date() })
       .where(eq(schema.tenantSizeTiers.tenantId, tenantId));

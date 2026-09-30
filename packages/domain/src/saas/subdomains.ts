@@ -60,6 +60,7 @@ export function validateSubdomainFormat(slug: string): { valid: boolean; reason?
 export async function checkSubdomainAvailability(
   db: Db,
   rawSlug: string,
+  currentLeadId?: string,
 ): Promise<SubdomainCheckResult> {
   const normalizedSlug = normalizeSubdomainSlug(rawSlug);
   const formatCheck = validateSubdomainFormat(normalizedSlug);
@@ -100,13 +101,22 @@ export async function checkSubdomainAvailability(
   }
 
   // 3. Check active reservations (< 30 minutes old)
-  const reservationRes = await db.execute<{ slug: string }>(sql`
-    SELECT slug FROM slug_reservations
+  const reservationRes = await db.execute<{ slug: string; lead_id: string | null }>(sql`
+    SELECT slug, lead_id FROM slug_reservations
     WHERE slug = ${normalizedSlug}
       AND expires_at > now()
     LIMIT 1;
   `);
   if (reservationRes.rows[0]) {
+    const resRow = reservationRes.rows[0];
+    if (currentLeadId && resRow.lead_id === currentLeadId) {
+      // Subdomain is reserved by the caller's lead
+      return {
+        available: true,
+        slug: rawSlug,
+        normalizedSlug,
+      };
+    }
     return {
       available: false,
       slug: rawSlug,
@@ -131,7 +141,7 @@ export async function reserveSubdomain(
   rawSlug: string,
   leadId?: string,
 ): Promise<SubdomainReservationResult> {
-  const check = await checkSubdomainAvailability(db, rawSlug);
+  const check = await checkSubdomainAvailability(db, rawSlug, leadId);
   if (!check.available) {
     return {
       success: false,
@@ -149,16 +159,31 @@ export async function reserveSubdomain(
   `);
 
   try {
-    await db.execute(sql`
+    const res = await db.execute<{ slug: string }>(sql`
       INSERT INTO slug_reservations (slug, lead_id, expires_at, created_at)
-      VALUES (${slug}, ${leadId ?? null}, ${expiresAt.toISOString()}, now());
+      VALUES (${slug}, ${leadId ?? null}, ${expiresAt.toISOString()}, now())
+      ON CONFLICT (slug) DO UPDATE
+        SET expires_at = EXCLUDED.expires_at,
+            lead_id = EXCLUDED.lead_id
+        WHERE slug_reservations.lead_id IS NOT DISTINCT FROM EXCLUDED.lead_id
+           OR slug_reservations.expires_at <= now()
+      RETURNING slug;
     `);
+
+    if (!res.rows[0]) {
+      return {
+        success: false,
+        slug,
+        reason: "Subdomain was just reserved by another user. Please choose another.",
+      };
+    }
+
     return {
       success: true,
       slug,
       expiresAt,
     };
-  } catch (err: unknown) {
+  } catch {
     // Unique violation if raced simultaneously
     return {
       success: false,

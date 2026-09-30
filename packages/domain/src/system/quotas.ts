@@ -1,5 +1,5 @@
 import { sql } from "drizzle-orm";
-import { schema, withTenant, type Db } from "@bs/db";
+import { withTenant, type Db } from "@bs/db";
 
 export class QuotaExceededError extends Error {
   readonly status = 403;
@@ -102,13 +102,13 @@ export async function resolveEffectiveQuota(
     LIMIT 1;
   `);
 
-  // Fetch tenant tier
+  // Fetch tenant tier (un-tiered stores fallback to generous L tier as before M8)
   const tierRes = await db.execute<{ tier: string }>(sql`
     SELECT tier FROM tenant_size_tiers
     WHERE tenant_id = ${tenantId}
     LIMIT 1;
   `);
-  const tier = (tierRes.rows[0]?.tier?.toUpperCase() as "XS" | "S" | "M" | "L") || "XS";
+  const tier = (tierRes.rows[0]?.tier?.toUpperCase() as "XS" | "S" | "M" | "L") || "L";
 
   // Fetch quota definition metadata
   const defRes = await db.execute<{
@@ -181,9 +181,9 @@ export async function resolveEffectiveQuota(
     // If plans/subscriptions tables not yet queryable, proceed to default
   }
 
-  // 4. Default XS fallback
+  // 4. Default generous L fallback (non-regression for pre-M8 stores)
   return {
-    limit: fallback[tier] ?? fallback.XS,
+    limit: fallback[tier] ?? fallback.L,
     unit,
     enforcement,
     source: "default",
@@ -378,20 +378,25 @@ export async function trackSoftQuotaUsage(
   `);
 
   if (!existing.rows[0]) {
-    await db.execute(sql`
-      INSERT INTO quota_events (id, tenant_id, quota_key, level, value, limit_value, notified_at, created_at)
-      VALUES (
-        uuidv7(),
-        ${tenantId},
-        ${quotaKey},
-        ${targetLevel},
-        ${current},
-        ${limit},
-        now(),
-        now()
-      );
-    `);
-    return { level: targetLevel, notified: true };
+    try {
+      await db.execute(sql`
+        INSERT INTO quota_events (id, tenant_id, quota_key, level, value, limit_value, notified_at, created_at)
+        VALUES (
+          uuidv7(),
+          ${tenantId},
+          ${quotaKey},
+          ${targetLevel},
+          ${current},
+          ${limit},
+          now(),
+          now()
+        );
+      `);
+      return { level: targetLevel, notified: true };
+    } catch {
+      // Invariant: soft quota event recording failure must NEVER break callers (checkout, etc.)
+      return { level: targetLevel, notified: false };
+    }
   }
 
   return { level: targetLevel, notified: false };
@@ -404,7 +409,7 @@ export async function getTenantUsageReport(db: Db, tenantId: string): Promise<Te
   const tierRes = await db.execute<{ tier: string }>(sql`
     SELECT tier FROM tenant_size_tiers WHERE tenant_id = ${tenantId} LIMIT 1;
   `);
-  const tier = (tierRes.rows[0]?.tier?.toUpperCase() as "XS" | "S" | "M" | "L") || "XS";
+  const tier = (tierRes.rows[0]?.tier?.toUpperCase() as "XS" | "S" | "M" | "L") || "L";
 
   // Fetch plan
   const planRes = await db.execute<{ code: string }>(sql`

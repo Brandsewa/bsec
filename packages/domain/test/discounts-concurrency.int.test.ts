@@ -41,7 +41,7 @@ beforeAll(async () => {
 
   const orgId = "0199a0d1-0000-7000-8000-000000000000";
   const tenantId = "0199a0d1-0000-7000-8000-000000000001";
-  const pgClient = new (await import("pg")).default.Client({ connectionString: as("app_rw", PW.rw) });
+  const pgClient = new (await import("pg")).default.Client({ connectionString: as("app_platform", PW.platform) });
   await pgClient.connect();
   await pgClient.query(`
     INSERT INTO organizations (id, name) VALUES ('${orgId}', 'Discount Test Org') ON CONFLICT DO NOTHING;

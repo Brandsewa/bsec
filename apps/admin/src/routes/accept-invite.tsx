@@ -3,6 +3,7 @@ import { useState, type FormEvent } from "react";
 import { Button, Input, Label, PageSkeleton } from "@bs/ui";
 import { client } from "../lib/orpc.ts";
 import { errorMessage } from "../lib/errors.ts";
+import { apiBase } from "../lib/config.ts";
 
 interface Search {
   store?: string;
@@ -39,29 +40,31 @@ export function AcceptInvitePage() {
   async function onSubmit(e: FormEvent) {
     e.preventDefault();
     if (!token) return;
-    if (!existing) {
+
+    const isOwnerInvite = !store;
+    const needsPassword = isOwnerInvite || !existing;
+
+    if (needsPassword) {
       if (password.length < 10) return setError("Choose a password of at least 10 characters.");
       if (password !== confirm) return setError("The two passwords do not match.");
     }
+
     setBusy(true);
     setError(null);
     try {
       if (store) {
-        try {
-          await client.admin.memberships.acceptInvite({
-            storeId: store,
-            token,
-            ...(existing ? {} : { name: name.trim() || undefined, password }),
-          });
-          await navigate({ to: "/login", search: { store } });
-          return;
-        } catch {
-          // Fall through to owner invite endpoint
-        }
+        // Staff invite acceptance via store admin RPC
+        await client.admin.memberships.acceptInvite({
+          storeId: store,
+          token,
+          ...(existing ? {} : { name: name.trim() || undefined, password }),
+        });
+        await navigate({ to: "/login", search: { store } });
+        return;
       }
 
-      // Owner invite acceptance via SaaS API
-      const res = await fetch("/api/saas/invite/accept", {
+      // Owner invite acceptance via central SaaS API
+      const res = await fetch(`${apiBase()}/api/saas/invite/accept`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -84,10 +87,13 @@ export function AcceptInvitePage() {
     }
   }
 
+  const isOwnerInvite = !store;
+  const showPassword = isOwnerInvite || !existing;
+
   return (
     <Shell title="Join the store">
       <form onSubmit={onSubmit} className="grid gap-4">
-        {existing ? (
+        {!showPassword ? (
           <p className="text-sm text-foreground-lighter">
             You will keep your existing password. After accepting, sign in with your usual email and password.
           </p>
@@ -114,11 +120,13 @@ export function AcceptInvitePage() {
           </p>
         ) : null}
         <Button type="submit" disabled={busy}>
-          {busy ? "Working…" : existing ? "Accept invitation" : "Create account and join"}
+          {busy ? "Working…" : !showPassword ? "Accept invitation" : "Create account and join"}
         </Button>
-        <button type="button" className="text-left text-xs text-foreground-lighter underline" onClick={() => setExisting((v) => !v)}>
-          {existing ? "I do not have an account yet" : "I already have an account with this email"}
-        </button>
+        {store ? (
+          <button type="button" className="text-left text-xs text-foreground-lighter underline" onClick={() => setExisting((v) => !v)}>
+            {existing ? "I do not have an account yet" : "I already have an account with this email"}
+          </button>
+        ) : null}
       </form>
     </Shell>
   );

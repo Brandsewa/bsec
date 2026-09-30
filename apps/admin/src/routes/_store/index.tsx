@@ -210,10 +210,8 @@ function HomePage() {
 
             {/* Steps list */}
             <div className="divide-y divide-border/60 rounded-lg border border-border/60 bg-background/50">
-              {checklistItems.map((step) => {
-                const Icon = step.icon;
-                return (
-                  <div
+              {checklistItems.map((step) => (
+                <div
                     key={step.id}
                     className={`flex flex-col gap-3 p-4 sm:flex-row sm:items-center sm:justify-between transition-colors ${
                       step.completed ? "bg-muted/20" : "hover:bg-muted/10"
@@ -260,8 +258,7 @@ function HomePage() {
                       ) : null}
                     </div>
                   </div>
-                );
-              })}
+                ))}
             </div>
 
             {onboarding?.allCompleted && (

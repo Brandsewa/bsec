@@ -1,5 +1,5 @@
 import { randomBytes, createHash } from "node:crypto";
-import { eq, and, sql } from "drizzle-orm";
+import { eq, and, sql, desc } from "drizzle-orm";
 import { schema } from "@bs/db";
 import { hashPassword, STORE_PERMISSIONS } from "@bs/auth";
 import type { Runtime } from "../runtime.ts";
@@ -53,9 +53,15 @@ export interface PlatformCreateTenantResult extends ProvisionTenantResult {
   inviteExpiresAt: Date;
 }
 
+export interface ResendOwnerInviteInput {
+  tenantId: string;
+  email?: string | undefined;
+  staffUserId?: string | undefined;
+}
+
 /**
  * Generates a cryptographically random, single-use, hashed owner invite token (PLAN §6).
- * Expires after 7 days.
+ * Expires after 7 days. Revokes any existing unused invites for this tenant.
  */
 export async function createTenantOwnerInvite(
   rt: Runtime,
@@ -67,6 +73,16 @@ export async function createTenantOwnerInvite(
   const tokenHash = createHash("sha256").update(rawToken).digest("hex");
   const expiresAt = new Date(Date.now() + 7 * 24 * 3600 * 1000); // 7-day TTL
 
+  // 1. Revoke any previous unused invites for this tenant (S4)
+  await db.execute(sql`
+    UPDATE tenant_owner_invites
+    SET expires_at = now()
+    WHERE tenant_id = ${input.tenantId}
+      AND used_at IS NULL
+      AND expires_at > now();
+  `);
+
+  // 2. Insert fresh invite
   const [invite] = await db
     .insert(schema.tenantOwnerInvites)
     .values({
@@ -79,11 +95,22 @@ export async function createTenantOwnerInvite(
 
   if (!invite) throw new Error("Failed to create tenant owner invite");
 
+  // 3. Platform audit log (S4)
+  await db.insert(schema.platformAuditLogs).values({
+    actorUserId: input.invitedBy ?? null,
+    actorType: input.invitedBy ? "platform_staff" : "system",
+    action: "tenant.invite_created",
+    targetType: "tenant",
+    targetId: input.tenantId,
+    tenantId: input.tenantId,
+    diff: { email, expiresAt },
+  });
+
   const platformDomain = process.env.PLATFORM_DOMAIN?.trim() || "gobs.cloud";
   const isLocal = platformDomain.includes("localhost") || platformDomain.includes("127.0.0.1");
   const protocol = isLocal ? "http" : "https";
   const adminHost = process.env.ADMIN_HOST?.trim() || (isLocal ? "localhost:5173" : `admin.${platformDomain}`);
-  const inviteUrl = `${protocol}://${adminHost}/invite/accept?token=${rawToken}`;
+  const inviteUrl = `${protocol}://${adminHost}/accept-invite?token=${rawToken}`;
 
   return {
     inviteId: invite.id,
@@ -115,10 +142,10 @@ export async function acceptTenantOwnerInvite(
   const tokenHash = createHash("sha256").update(rawToken).digest("hex");
 
   return await db.transaction(async (tx) => {
-    // 1. Locate valid invite record
+    // 1. Atomically claim invite record (UPDATE ... WHERE used_at IS NULL AND expires_at > now() RETURNING ...)
     const [invite] = await tx
-      .select()
-      .from(schema.tenantOwnerInvites)
+      .update(schema.tenantOwnerInvites)
+      .set({ usedAt: new Date() })
       .where(
         and(
           eq(schema.tenantOwnerInvites.tokenHash, tokenHash),
@@ -126,7 +153,7 @@ export async function acceptTenantOwnerInvite(
           sql`${schema.tenantOwnerInvites.usedAt} IS NULL`,
         ),
       )
-      .limit(1);
+      .returning();
 
     if (!invite) {
       throw new Error("Invitation token is invalid, expired, or has already been used");
@@ -171,7 +198,10 @@ export async function acceptTenantOwnerInvite(
           emailVerified: true,
         })
         .returning({ id: schema.users.id });
-      userId = newUser!.id;
+      if (!newUser) {
+        throw new Error("Failed to create user record");
+      }
+      userId = newUser.id;
     }
 
     // 4. Set password in accounts
@@ -217,7 +247,10 @@ export async function acceptTenantOwnerInvite(
           permissions: [...STORE_PERMISSIONS],
         })
         .returning({ id: schema.roles.id });
-      ownerRoleId = newRole!.id;
+      if (!newRole) {
+        throw new Error("Failed to create owner role record");
+      }
+      ownerRoleId = newRole.id;
     }
 
     // Upsert membership
@@ -240,13 +273,7 @@ export async function acceptTenantOwnerInvite(
       .set({ ownerUserId: userId, updatedAt: new Date() })
       .where(eq(schema.tenants.id, tenantId));
 
-    // 6. Mark invite token as used
-    await tx
-      .update(schema.tenantOwnerInvites)
-      .set({ usedAt: new Date() })
-      .where(eq(schema.tenantOwnerInvites.id, invite.id));
-
-    // 7. Audit log
+    // 6. Audit log (invite token was already atomically marked used in step 1)
     await tx.insert(schema.platformAuditLogs).values({
       actorUserId: userId,
       actorType: "system",
@@ -303,10 +330,103 @@ export async function platformCreateTenantForClient(
     invitedBy: platformStaffUserId,
   });
 
+  // Audit log platform store creation (S4)
+  await rt._db.db.insert(schema.platformAuditLogs).values({
+    actorUserId: platformStaffUserId ?? null,
+    actorType: platformStaffUserId ? "platform_staff" : "system",
+    action: "tenant.created_by_platform",
+    targetType: "tenant",
+    targetId: provisionResult.tenantId,
+    tenantId: provisionResult.tenantId,
+    diff: {
+      slug: provisionResult.slug,
+      storeName: input.storeName,
+      clientEmail: input.clientEmail,
+    },
+  });
+
   return {
     ...provisionResult,
     inviteToken: inviteResult.inviteToken,
     inviteUrl: inviteResult.inviteUrl,
     inviteExpiresAt: inviteResult.expiresAt,
+  };
+}
+
+/**
+ * Resends a tenant owner invitation, invalidating all prior unaccepted invites for this store (PLAN §6 / S4).
+ */
+export async function resendTenantOwnerInvite(
+  rt: Runtime,
+  input: ResendOwnerInviteInput,
+): Promise<CreateOwnerInviteResult> {
+  const db = rt._db.db;
+
+  // 1. Resolve email
+  let email = input.email?.trim().toLowerCase();
+  if (!email) {
+    const [prevInvite] = await db
+      .select({ email: schema.tenantOwnerInvites.email })
+      .from(schema.tenantOwnerInvites)
+      .where(eq(schema.tenantOwnerInvites.tenantId, input.tenantId))
+      .orderBy(desc(schema.tenantOwnerInvites.createdAt))
+      .limit(1);
+
+    if (!prevInvite?.email) {
+      throw new Error("Unable to determine invite recipient email for this store");
+    }
+    email = prevInvite.email;
+  }
+
+  // 2. Revoke previous unused invites for this tenant
+  await db.execute(sql`
+    UPDATE tenant_owner_invites
+    SET expires_at = now()
+    WHERE tenant_id = ${input.tenantId}
+      AND used_at IS NULL
+      AND expires_at > now();
+  `);
+
+  // 3. Generate fresh owner invite
+  const rawToken = randomBytes(32).toString("hex");
+  const tokenHash = createHash("sha256").update(rawToken).digest("hex");
+  const expiresAt = new Date(Date.now() + 7 * 24 * 3600 * 1000); // 7-day TTL
+
+  const [invite] = await db
+    .insert(schema.tenantOwnerInvites)
+    .values({
+      tenantId: input.tenantId,
+      email,
+      tokenHash,
+      expiresAt,
+    })
+    .returning({ id: schema.tenantOwnerInvites.id });
+
+  if (!invite) throw new Error("Failed to create resent tenant owner invite");
+
+  // 4. Record audit log for invite resend with staffId (S4)
+  await db.insert(schema.platformAuditLogs).values({
+    actorUserId: input.staffUserId ?? null,
+    actorType: input.staffUserId ? "platform_staff" : "system",
+    action: "tenant.invite_resent",
+    targetType: "tenant",
+    targetId: input.tenantId,
+    tenantId: input.tenantId,
+    diff: { email, expiresAt },
+  });
+
+  const platformDomain = process.env.PLATFORM_DOMAIN?.trim() || "gobs.cloud";
+  const isLocal = platformDomain.includes("localhost") || platformDomain.includes("127.0.0.1");
+  const protocol = isLocal ? "http" : "https";
+  const adminHost = process.env.ADMIN_HOST?.trim() || (isLocal ? "localhost:5173" : `admin.${platformDomain}`);
+  const inviteUrl = `${protocol}://${adminHost}/accept-invite?token=${rawToken}`;
+
+  return {
+    inviteId: invite.id,
+    tenantId: input.tenantId,
+    email,
+    inviteToken: rawToken,
+    expiresAt,
+    inviteUrl,
   };
 }

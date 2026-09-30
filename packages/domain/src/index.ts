@@ -81,7 +81,7 @@ export * from "./saas/subdomains.ts";
 export * from "./saas/abuse-protection.ts";
 export * from "./saas/provisioning.ts";
 export * from "./saas/signup.ts";
-export * from "./saas/reminder-job.ts";
+export * from "./saas/trial-expiry.ts";
 export * from "./saas/owner-invites.ts";
 export * from "./saas/onboarding.ts";
 export * from "./saas/billing.ts";

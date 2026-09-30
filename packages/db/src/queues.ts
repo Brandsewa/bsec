@@ -19,6 +19,7 @@ export const QUEUES = [
   { name: "refund.processed", options: { retryLimit: 5, retryBackoff: true, retryDelay: 5 } },
   { name: "cart.abandoned", options: { retryLimit: 5, retryBackoff: true, retryDelay: 5 } },
   { name: "cart.recovery_sweep", options: { retryLimit: 5, retryBackoff: true, retryDelay: 5 } },
+  { name: "subscription.trial_expiry_sweep", options: { retryLimit: 5, retryBackoff: true, retryDelay: 5 } },
 ] as const;
 
 export type QueueName = (typeof QUEUES)[number]["name"];
@@ -39,4 +40,5 @@ export const QUEUE_NAMES = {
   REFUND_PROCESSED: "refund.processed",
   CART_ABANDONED: "cart.abandoned",
   CART_RECOVERY_SWEEP: "cart.recovery_sweep",
+  SUBSCRIPTION_TRIAL_EXPIRY_SWEEP: "subscription.trial_expiry_sweep",
 } as const;

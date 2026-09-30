@@ -13,7 +13,7 @@
  */
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { PostgreSqlContainer, type StartedPostgreSqlContainer } from "@testcontainers/postgresql";
-import { eq } from "drizzle-orm";
+import { eq, sql, and } from "drizzle-orm";
 import { platformContract, storeContract } from "@bs/contracts";
 import {
   createDb,
@@ -102,6 +102,16 @@ import {
   updateStoreSettings,
   updateTheme,
   updateVariant,
+  getTenantSubscription,
+  changeTenantPlan,
+  listTenantDomains,
+  addCustomDomain,
+  verifyCustomDomain,
+  setPrimaryDomain,
+  removeCustomDomain,
+  getOnboardingProgress,
+  dismissOnboardingProgress,
+  assertPermission,
   type Runtime,
   type TenantContext,
 } from "../src/index.ts";
@@ -222,8 +232,8 @@ describe("Generated Isolation Test Suite (M1 Real Postgres 18 Proof)", () => {
     dbRw = createDb(as("app_rw", PW.rw));
     dbPlatform = createDb(as("app_platform", PW.platform));
 
-    // 4. Seed non-tenant global records
-    await dbRw.db
+    // 4. Seed non-tenant global records using platform connection
+    await dbPlatform.db
       .insert(schema.organizations)
       .values({
         id: orgId,
@@ -231,7 +241,7 @@ describe("Generated Isolation Test Suite (M1 Real Postgres 18 Proof)", () => {
       })
       .onConflictDoNothing();
 
-    await dbRw.db
+    await dbPlatform.db
       .insert(schema.tenants)
       .values([
         {
@@ -251,7 +261,7 @@ describe("Generated Isolation Test Suite (M1 Real Postgres 18 Proof)", () => {
       ])
       .onConflictDoNothing();
 
-    await dbRw.db
+    await dbPlatform.db
       .insert(schema.domains)
       .values([
         {
@@ -279,7 +289,7 @@ describe("Generated Isolation Test Suite (M1 Real Postgres 18 Proof)", () => {
       ])
       .onConflictDoNothing();
 
-    await dbRw.db
+    await dbPlatform.db
       .insert(schema.platformStaff)
       .values({
         userId: userPlatform,
@@ -288,13 +298,29 @@ describe("Generated Isolation Test Suite (M1 Real Postgres 18 Proof)", () => {
       })
       .onConflictDoNothing();
 
-    await dbRw.db
+    await dbPlatform.db
       .insert(schema.featureFlags)
       .values([
         { key: "checkout_v2", defaultOn: true, killSwitch: false },
         { key: "experimental_search", defaultOn: false, killSwitch: false },
       ])
       .onConflictDoNothing();
+
+    // Seed size tiers and plan details using platform connection
+    await dbPlatform.db
+      .insert(schema.tenantSizeTiers)
+      .values([
+        { tenantId: tenantA, tier: "L" },
+        { tenantId: tenantB, tier: "L" },
+      ])
+      .onConflictDoUpdate({
+        target: schema.tenantSizeTiers.tenantId,
+        set: { tier: "L" },
+      });
+
+    await dbPlatform.db.execute(sql`
+      UPDATE plans SET razorpay_plan_id_monthly = 'plan_test_growth_monthly' WHERE code = 'growth';
+    `);
 
     // 5. Seed Tenant A records using withTenant()
     await withTenant(dbRw.db, tenantA, async (tx) => {
@@ -846,6 +872,105 @@ describe("Generated Isolation Test Suite (M1 Real Postgres 18 Proof)", () => {
           expressRatePaise: 15000,
           freeShippingThresholdPaise: null,
         });
+
+      // --- M8 Billing & Subscriptions ---
+      case "billing.getSubscription":
+        assertPermission(ctx, "settings.write");
+        return await getTenantSubscription(rt, ctx.tenantId);
+      case "billing.changePlan": {
+        assertPermission(ctx, "settings.write");
+        return await changeTenantPlan(rtPlatform, {
+          tenantId: ctx.tenantId,
+          planCode: "growth",
+          interval: "monthly",
+          customerEmail: "admin@alpha.test",
+          provider: {
+            isConfigured: () => true,
+            createSubscription: async () => ({ providerSubscriptionId: "sub_iso_test_123", status: "created" }),
+            cancelSubscription: async () => ({ status: "cancelled" }),
+            verifyWebhookSignature: () => true,
+          },
+        });
+      }
+
+      // --- M8 Custom Domains ---
+      case "domains.list":
+        assertPermission(ctx, "settings.write");
+        return await listTenantDomains(rt, ctx.tenantId);
+      case "domains.add": {
+        assertPermission(ctx, "settings.write");
+        return await addCustomDomain(rt, ctx.tenantId, {
+          hostname: `iso-add-${Date.now()}-${Math.random().toString(36).slice(2, 6)}.storetest.org`,
+          provider: {
+            isConfigured: () => true,
+            createCustomHostname: async (h: string) => ({
+              providerHostnameId: "cf_hn_iso_add",
+              hostname: h,
+              cnameTarget: "stores.gobs.cloud",
+              status: "awaiting_dns",
+              sslStatus: "initializing",
+            }),
+            getCustomHostnameStatus: async () => ({ providerHostnameId: "cf_hn_iso_add", hostname: "", status: "awaiting_dns", sslStatus: "initializing" }),
+            deleteCustomHostname: async () => ({ deleted: true }),
+          },
+        });
+      }
+      case "domains.verify": {
+        assertPermission(ctx, "settings.write");
+        const d = await addCustomDomain(rt, ctx.tenantId, {
+          hostname: `iso-ver-${Date.now()}-${Math.random().toString(36).slice(2, 6)}.storetest.org`,
+          provider: {
+            isConfigured: () => true,
+            createCustomHostname: async (h: string) => ({
+              providerHostnameId: "cf_hn_iso_ver",
+              hostname: h,
+              cnameTarget: "stores.gobs.cloud",
+              status: "awaiting_dns",
+              sslStatus: "initializing",
+            }),
+            getCustomHostnameStatus: async () => ({ providerHostnameId: "cf_hn_iso_ver", hostname: "", status: "awaiting_dns", sslStatus: "initializing" }),
+            deleteCustomHostname: async () => ({ deleted: true }),
+          },
+        });
+        return await verifyCustomDomain(rt, ctx.tenantId, d.id);
+      }
+      case "domains.setPrimary": {
+        assertPermission(ctx, "settings.write");
+        const [activeDomain] = await rt._db.db
+          .select()
+          .from(schema.domains)
+          .where(and(eq(schema.domains.tenantId, ctx.tenantId), eq(schema.domains.status, "active")))
+          .limit(1);
+        if (!activeDomain) throw new Error("No active domain found");
+        return await setPrimaryDomain(rt, ctx.tenantId, activeDomain.id);
+      }
+      case "domains.remove": {
+        assertPermission(ctx, "settings.write");
+        const d = await addCustomDomain(rt, ctx.tenantId, {
+          hostname: `iso-rem-${Date.now()}-${Math.random().toString(36).slice(2, 6)}.storetest.org`,
+          provider: {
+            isConfigured: () => true,
+            createCustomHostname: async (h: string) => ({
+              providerHostnameId: "cf_hn_iso_rem",
+              hostname: h,
+              cnameTarget: "stores.gobs.cloud",
+              status: "awaiting_dns",
+              sslStatus: "initializing",
+            }),
+            getCustomHostnameStatus: async () => ({ providerHostnameId: "cf_hn_iso_rem", hostname: "", status: "awaiting_dns", sslStatus: "initializing" }),
+            deleteCustomHostname: async () => ({ deleted: true }),
+          },
+        });
+        return await removeCustomDomain(rt, ctx.tenantId, d.id);
+      }
+
+      // --- M8 Onboarding ---
+      case "onboarding.get":
+        assertPermission(ctx, "settings.write");
+        return await getOnboardingProgress(rt, ctx);
+      case "onboarding.dismiss":
+        assertPermission(ctx, "settings.write");
+        return await dismissOnboardingProgress(rt, ctx);
       default:
         throw new Error(`Unmapped procedure in isolation test: ${procPath}`);
     }
