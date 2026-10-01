@@ -16,6 +16,7 @@ import { migrate } from "drizzle-orm/node-postgres/migrator";
 import { PgBoss } from "pg-boss";
 import pg from "pg";
 import { QUEUES } from "../queues.ts";
+import { APP_SAAS_GRANTS_SQL } from "../sql/saas-grants.ts";
 
 const here = path.dirname(fileURLToPath(import.meta.url));
 
@@ -45,6 +46,7 @@ export async function runMigrations(ownerUrl: string, migrationsFolder = default
       GRANT USAGE, SELECT ON ALL SEQUENCES IN SCHEMA pgboss TO app_rw, app_platform;
       GRANT EXECUTE ON ALL FUNCTIONS IN SCHEMA pgboss TO app_rw, app_platform;
     `);
+    await pool.query(APP_SAAS_GRANTS_SQL);
   } finally {
     await pool.end();
   }

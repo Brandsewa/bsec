@@ -10,7 +10,7 @@ import {
   uuid,
 } from "drizzle-orm/pg-core";
 import { tenantTable } from "../tenant-table.ts";
-import { citext } from "./custom-types.ts";
+import { bytea, citext } from "./custom-types.ts";
 import { users } from "./identity.ts";
 import { organizations, tenants } from "./tenants.ts";
 
@@ -78,6 +78,8 @@ export const platformStaff = pgTable("platform_staff", {
   role: text("role").notNull().default("platform_support"),
   isActive: boolean("is_active").notNull().default(true),
   mfaRequired: boolean("mfa_required").notNull().default(false),
+  /** Set when MFA enrolment completed; a session is only valid if it was created after this. */
+  mfaVerifiedAt: timestamp("mfa_verified_at", { withTimezone: true }),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().default(sql`now()`),
   updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().default(sql`now()`),
 });
@@ -117,7 +119,10 @@ export const supportSessions = pgTable("support_sessions", {
   endedAt: timestamp("ended_at", { withTimezone: true }),
   endedBy: uuid("ended_by").references(() => users.id, { onDelete: "set null" }),
   actionsCount: integer("actions_count").notNull().default(0),
-  token: text("token").unique(),
+  /** SHA-256 of the raw support token (shown once to the staff member who started the session). */
+  tokenHash: text("token_hash").unique(),
+  approvedAt: timestamp("approved_at", { withTimezone: true }),
+  deniedAt: timestamp("denied_at", { withTimezone: true }),
   extendedAt: timestamp("extended_at", { withTimezone: true }),
   writeConfirmedAt: timestamp("write_confirmed_at", { withTimezone: true }),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().default(sql`now()`),
@@ -158,3 +163,15 @@ export const tenantNotes = pgTable("tenant_notes", {
   updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().default(sql`now()`),
 });
 
+
+/**
+ * Export archive contents (gzipped JSON). Platform-only: the tenant runtime has no access.
+ */
+export const exportFiles = pgTable("export_files", {
+  exportId: uuid("export_id").primaryKey(),
+  tenantId: uuid("tenant_id").notNull().references(() => tenants.id, { onDelete: "cascade" }),
+  contentType: text("content_type").notNull().default("application/gzip"),
+  sha256: text("sha256").notNull(),
+  data: bytea("data").notNull(),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().default(sql`now()`),
+});

@@ -1,6 +1,6 @@
 import React from "react";
 import { useQuery } from "@tanstack/react-query";
-import { UserPlus, Users, ArrowRight } from "lucide-react";
+import { Users, } from "lucide-react";
 import {
   EmptyState,
   PageContainer,

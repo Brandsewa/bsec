@@ -50,7 +50,19 @@ export function createPlatformAuth(db: Db, opts: PlatformAuthOptions = {}) {
       expiresIn: 60 * 60 * 24 * 7,
       updateAge: 60 * 60 * 24,
     },
-    rateLimit: { enabled: false },
+    // Brute-force protection for the highest-value login in the system: 5 attempts per 5 minutes per IP for the password
+    // and for every second-factor endpoint. (In-memory: the platform runs as a single instance.)
+    rateLimit: {
+      enabled: true,
+      window: 60,
+      max: 60,
+      customRules: {
+        "/sign-in/email": { window: 300, max: 5 },
+        "/two-factor/enable": { window: 300, max: 5 },
+        "/two-factor/verify-totp": { window: 300, max: 5 },
+        "/two-factor/verify-backup-code": { window: 300, max: 5 },
+      },
+    },
     plugins: [
       twoFactor({
         issuer: "BsCommerce Platform",

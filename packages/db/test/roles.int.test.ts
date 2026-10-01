@@ -60,11 +60,14 @@ describe("postgres roles", () => {
       superUrl,
       "select rolname, rolbypassrls, rolsuper from pg_roles where rolname like 'app_%' order by rolname",
     );
-    expect(r.rows).toEqual([
+    expect(r.rows.filter((x) => x.rolname !== "app_saas")).toEqual([
       { rolname: "app_owner", rolbypassrls: false, rolsuper: false },
       { rolname: "app_platform", rolbypassrls: true, rolsuper: false },
       { rolname: "app_rw", rolbypassrls: false, rolsuper: false },
     ]);
+    // app_saas exists only when a password was supplied at bootstrap; it must never bypass RLS.
+    const saas = r.rows.find((x) => x.rolname === "app_saas");
+    if (saas) expect(saas).toEqual({ rolname: "app_saas", rolbypassrls: false, rolsuper: false });
   });
 
   it("migration created tables owned by app_owner", async () => {

@@ -4,6 +4,7 @@ import { schema, withTenant } from "@bs/db";
 import type { Runtime } from "../runtime.ts";
 import type { TenantContext } from "../context.ts";
 import { isFeatureEnabled } from "../features.ts";
+import { publicMediaUrl } from "../media/storage.ts";
 
 export interface StorefrontBrand {
   id: string;
@@ -277,12 +278,14 @@ export async function getStorefrontProduct(
       values: o.values,
     }));
 
+    const keysByMedia = await mediaStorageKeys(tx, mediaRows.map((m) => m.mediaId));
     const media: StorefrontMedia[] = mediaRows.map((m) => ({
       id: m.id,
       productId: m.productId,
       mediaId: m.mediaId,
       position: m.position,
       alt: m.alt,
+      url: publicMediaUrl(keysByMedia.get(m.mediaId)),
     }));
 
     return {
@@ -542,6 +545,49 @@ export async function getStorefrontCategory(
   });
 }
 
+/** Storage keys of the given media files, by media id (the public image address is built from the key). */
+async function mediaStorageKeys(
+  tx: Parameters<Parameters<typeof withTenant>[2]>[0],
+  mediaIds: string[],
+): Promise<Map<string, string>> {
+  const ids = [...new Set(mediaIds)];
+  if (ids.length === 0) return new Map();
+  const rows = await tx
+    .select({ id: schema.media.id, storageKey: schema.media.storageKey })
+    .from(schema.media)
+    .where(inArray(schema.media.id, ids));
+  return new Map([...rows].map((r) => [r.id, r.storageKey]));
+}
+
+/**
+ * Products for the storefront home page grid: the newest visible products (featured ones first), or the products of one
+ * published collection. Returns an empty list when the catalog feature is off or nothing is published yet.
+ */
+export async function getStorefrontFeaturedProducts(
+  rt: Runtime,
+  ctx: TenantContext,
+  opts?: { limit?: number | undefined; collectionSlug?: string | undefined },
+): Promise<StorefrontProductSummary[]> {
+  const db = rt._db.db;
+  if (!(await isFeatureEnabled(db, ctx.tenantId, "catalog"))) return [];
+  const limit = Math.max(1, Math.min(48, opts?.limit ?? 8));
+
+  if (opts?.collectionSlug) {
+    const res = await getStorefrontCollection(rt, ctx, opts.collectionSlug, { limit });
+    return res?.products.items ?? [];
+  }
+
+  return withTenant(db, ctx.tenantId, async (tx) => {
+    const rows = await tx
+      .select()
+      .from(schema.products)
+      .where(and(inArray(schema.products.status, [...STOREFRONT_PRODUCT_STATUSES]), isNull(schema.products.deletedAt)))
+      .orderBy(desc(schema.products.isFeatured), desc(schema.products.createdAt))
+      .limit(limit);
+    return buildProductSummaries(tx, rows.map((r) => r.id), rows);
+  });
+}
+
 /**
  * Helper to build product summaries from product records with price bounds and primary image.
  */
@@ -613,12 +659,14 @@ export async function buildProductSummaries(
     .where(inArray(schema.productMedia.productId, productIds))
     .orderBy(schema.productMedia.position);
 
-  const mediaByProduct: Record<string, { mediaId: string; alt: string | null }> = {};
+  const keysByMedia = await mediaStorageKeys(tx, mediaRows.map((m) => m.mediaId));
+  const mediaByProduct: Record<string, { mediaId: string; alt: string | null; url: string | undefined }> = {};
   for (const m of mediaRows) {
     if (!mediaByProduct[m.productId]) {
       mediaByProduct[m.productId] = {
         mediaId: m.mediaId,
         alt: m.alt,
+        url: publicMediaUrl(keysByMedia.get(m.mediaId)),
       };
     }
   }
@@ -643,6 +691,7 @@ export async function buildProductSummaries(
         ? {
             mediaId: primaryImg.mediaId,
             alt: primaryImg.alt,
+            url: primaryImg.url,
           }
         : undefined,
     };

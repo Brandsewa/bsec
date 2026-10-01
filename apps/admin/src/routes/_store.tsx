@@ -14,11 +14,14 @@ import {
   Truck,
   Users,
   UserCog,
+  LifeBuoy,
+  Store,
   Warehouse,
 } from "lucide-react";
 import { AppShell, Button, EmptyState, PageContainer, PageSkeleton, type NavGroup } from "@bs/ui";
 import { fetchMe, signOut } from "../lib/auth.ts";
 import { getActiveStoreId, setActiveStoreId } from "../lib/session.ts";
+import { clearSupportSession } from "../lib/support.ts";
 
 interface GatedItem {
   label: string;
@@ -56,11 +59,13 @@ const nav: GatedGroup[] = [
     label: "Settings",
     items: [
       { label: "General", href: "/settings", icon: Settings, perm: "settings.write" },
+      { label: "Storefront", href: "/settings/storefront", icon: Store, perm: "settings.write" },
       { label: "Branding", href: "/settings/branding", icon: Sparkles, perm: "settings.write" },
       { label: "Shipping", href: "/settings/shipping", icon: Truck, perm: "settings.write" },
       { label: "Payments", href: "/settings/payments", icon: CreditCard, perm: "settings.write" },
       { label: "Taxes", href: "/settings/taxes", icon: Landmark, perm: "settings.write" },
       { label: "Team", href: "/settings/team", icon: UserCog, perm: "staff.manage" },
+      { label: "Support access", href: "/settings/support", icon: LifeBuoy, perm: "settings.write" },
     ],
   },
 ];
@@ -80,7 +85,8 @@ export const Route = createFileRoute("/_store")({
     if (!me) throw redirect({ to: "/login" });
     const saved = getActiveStoreId();
     const store = me.stores.find((s) => s.tenantId === saved) ?? me.stores[0] ?? null;
-    if (store) setActiveStoreId(store.tenantId);
+    // A support session never overwrites the store the signed-in user last chose.
+    if (store && !me.support) setActiveStoreId(store.tenantId);
     return { me, store };
   },
   pendingComponent: () => <PageSkeleton />,
@@ -92,7 +98,11 @@ function StoreShell() {
   const { me, store } = Route.useRouteContext();
 
   async function onSignOut() {
-    await signOut();
+    if (me.support) {
+      clearSupportSession();
+    } else {
+      await signOut();
+    }
     window.location.assign("/login");
   }
 
@@ -113,6 +123,23 @@ function StoreShell() {
       brand={<span className="text-sm font-semibold">{store.name}</span>}
       groups={visibleNav(store.permissions)}
       activeHref={pathname}
+      banner={
+        me.support ? (
+          <div
+            role="alert"
+            data-testid="support-banner"
+            className="sticky top-0 z-50 flex flex-wrap items-center justify-between gap-2 bg-amber-500 px-4 py-2 text-sm font-medium text-black"
+          >
+            <span>
+              PLATFORM SUPPORT SESSION · {me.support.scope === "write" ? "read & WRITE access" : "read-only"} · ticket {me.support.ticketRef} · ends{" "}
+              {new Date(me.support.expiresAt).toLocaleTimeString()} · everything you do here is recorded
+            </span>
+            <Button size="sm" variant="default" onClick={onSignOut}>
+              Leave support mode
+            </Button>
+          </div>
+        ) : undefined
+      }
       topRight={
         <>
           {me.stores.length > 1 ? (
@@ -132,10 +159,12 @@ function StoreShell() {
               ))}
             </select>
           ) : null}
-          <span className="hidden text-sm text-foreground-lighter sm:inline">{me.user.email}</span>
-          <Button variant="ghost" size="sm" onClick={onSignOut}>
-            Sign out
-          </Button>
+          <span className="hidden text-sm text-foreground-lighter sm:inline">{me.support ? `Support: ${me.user.email}` : me.user.email}</span>
+          {me.support ? null : (
+            <Button variant="ghost" size="sm" onClick={onSignOut}>
+              Sign out
+            </Button>
+          )}
         </>
       }
     >

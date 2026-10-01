@@ -8,3 +8,10 @@ export const citext = customType<{ data: string }>({
     return "citext";
   },
 });
+
+/** Binary data as a Node Buffer. */
+export const bytea = customType<{ data: Buffer; driverData: Buffer }>({
+  dataType() {
+    return "bytea";
+  },
+});

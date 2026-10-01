@@ -204,11 +204,63 @@ describe("Storefront Cart & Checkout Flow", () => {
     });
   });
 
+  // The store's own shipping options (priced on the server), as the checkout page passes them in.
+  const storeRates = [
+    { method: "standard", title: "Standard Shipping", description: "Standard Shipping within 3-7 business days", estimatedDays: "3-7 business days", amount: 9900 },
+    { method: "express", title: "Express Shipping", description: "Express Shipping within 1-2 business days", estimatedDays: "1-2 business days", amount: 25000 },
+  ];
+
+  const codOnly = { codEnabled: true, codFeePaise: 0, onlineAvailable: false };
+
   describe("CheckoutForm", () => {
+    it("shows the store's own shipping options and prices, never made-up ones", () => {
+      const html = renderToString(React.createElement(CheckoutForm, { cart: mockCart, shippingRates: storeRates, paymentOptions: codOnly }));
+      expect(html).toContain("Standard Shipping");
+      expect(html).toContain("Express Shipping");
+      expect(html).toContain("₹99");
+      expect(html).toContain("₹250");
+      // the old hardcoded prices (₹50 standard / ₹120 express) must be gone
+      expect(html).not.toContain("₹50<");
+      expect(html).not.toContain("₹120");
+    });
+
+    it("offers only the payment methods the store can take", () => {
+      const render = (paymentOptions: { codEnabled: boolean; codFeePaise: number; onlineAvailable: boolean }) =>
+        renderToString(React.createElement(CheckoutForm, { cart: mockCart, shippingRates: storeRates, paymentOptions }));
+
+      const both = render({ codEnabled: true, codFeePaise: 0, onlineAvailable: true });
+      expect(both).toContain("Cash on Delivery (COD)");
+      expect(both).toContain("UPI / Card / NetBanking");
+
+      const onlineOnly = render({ codEnabled: false, codFeePaise: 0, onlineAvailable: true });
+      expect(onlineOnly).not.toContain("Cash on Delivery (COD)");
+      expect(onlineOnly).toContain("UPI / Card / NetBanking");
+
+      const none = render({ codEnabled: false, codFeePaise: 0, onlineAvailable: false });
+      expect(none).toContain("not taking orders online right now");
+      expect(none).toContain("disabled");
+    });
+
+    it("tells the shopper about a COD handling fee and includes it in the total", () => {
+      const html = renderToString(
+        React.createElement(CheckoutForm, { cart: mockCart, shippingRates: storeRates, paymentOptions: { codEnabled: true, codFeePaise: 4000, onlineAvailable: false } }),
+      );
+      expect(html).toContain("₹40 handling fee");
+    });
+
+    it("shows Free for a zero-cost option", () => {
+      const html = renderToString(
+        React.createElement(CheckoutForm, { cart: mockCart, shippingRates: [{ ...storeRates[0]!, amount: 0 }], paymentOptions: codOnly }),
+      );
+      expect(html).toContain("Free");
+    });
+
     it("renders customer info, shipping address with Indian states, shipping methods, and payment options", () => {
       const html = renderToString(
         React.createElement(CheckoutForm, {
           cart: mockCart,
+          shippingRates: storeRates,
+          paymentOptions: codOnly,
         }),
       );
 
@@ -229,11 +281,12 @@ describe("Storefront Cart & Checkout Flow", () => {
       expect(html).toContain("Karnataka");
 
       // Shipping and Payment method
-      expect(html).toContain("Standard Delivery");
-      expect(html).toContain("Express Delivery");
+      expect(html).toContain("Standard Shipping");
+      expect(html).toContain("Express Shipping");
       expect(html).toContain("Cash on Delivery (COD)");
-      expect(html).toContain("UPI / Card / NetBanking");
-      expect(html).toContain("Payment gateway in test mode");
+      // online payment is not built yet, so it must not be offered
+      expect(html).not.toContain("UPI / Card / NetBanking");
+      expect(html).not.toContain("Payment gateway in test mode");
       expect(html).toContain("Place Order");
     });
   });
@@ -243,6 +296,8 @@ describe("Storefront Cart & Checkout Flow", () => {
       const html = renderToString(
         React.createElement(CheckoutContainer, {
           cart: mockCart,
+          shippingRates: [{ ...storeRates[0]!, amount: 0 }, storeRates[1]!],
+          paymentOptions: codOnly,
         }),
       );
 
@@ -251,7 +306,7 @@ describe("Storefront Cart & Checkout Flow", () => {
       expect(html).toContain("Shipping Address");
       expect(html).toContain("Order Summary");
       expect(html).toContain("KeyCraft Custom Switch Lubing Station");
-      // Since subtotal 299800 >= 99900, standard delivery is Free
+      // The first option is the selected one; here the store offers it free, so the summary shows Free shipping
       expect(html).toContain("Free");
     });
   });
@@ -410,6 +465,32 @@ describe("Storefront Cart & Checkout Flow", () => {
           const setCookie = res.headers.get("set-cookie") || "";
           expect(setCookie).toBeDefined();
         }
+      });
+
+      it("refuses online payment while real online payments are not available, and never places the order", async () => {
+        const domain = await import("@bs/domain");
+        vi.mocked(domain.placeOrder).mockClear();
+        const { POST } = await import("../src/app/api/storefront/checkout/place-order/route.ts");
+        for (const paymentMethod of ["online", "razorpay"]) {
+          const req = new Request("https://demo.gobs.cloud/api/storefront/checkout/place-order", {
+            method: "POST",
+            headers: { host: "demo.gobs.cloud", "content-type": "application/json", cookie: "bs_cart_token=cart-token-1234" },
+            body: JSON.stringify({
+              email: "buyer@example.in",
+              phone: "9876543210",
+              fullName: "Aarav Sharma",
+              addressLine1: "123 MG Road",
+              city: "Bengaluru",
+              state: "Karnataka",
+              pincode: "560001",
+              paymentMethod,
+            }),
+          });
+          const res = await POST(req);
+          expect(res.status).toBe(400);
+          expect((await res.json()).error).toMatch(/Online payment is not available yet/);
+        }
+        expect(domain.placeOrder).not.toHaveBeenCalled();
       });
 
       it("returns 503 Service Unavailable when checkout feature flag is disabled", async () => {

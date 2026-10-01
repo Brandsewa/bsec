@@ -8,6 +8,22 @@ export interface AddToCartButtonProps {
   quantity?: number;
 }
 
+/**
+ * Adds a variant to the shopper's cart. The server creates the cart on the first add and remembers it in an HttpOnly
+ * cookie, so no cart token is sent: a made-up token matches no cart and is answered "Cart not found".
+ */
+export async function addVariantToCart(variantId: string, quantity: number, fetchFn: typeof fetch = fetch): Promise<void> {
+  const res = await fetchFn("/api/storefront/cart/items", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ variantId, quantity }),
+  });
+  if (!res.ok) {
+    const body = (await res.json().catch(() => null)) as { error?: string } | null;
+    throw new Error(body?.error ?? "Failed to add product to cart");
+  }
+}
+
 export function AddToCartButton({
   variantId,
   available,
@@ -25,30 +41,7 @@ export function AddToCartButton({
     setSuccess(false);
 
     try {
-      // Get or initialize cart token from localStorage
-      let token = typeof window !== "undefined" ? localStorage.getItem("bs_cart_token") : null;
-      if (!token) {
-        token = crypto.randomUUID();
-        if (typeof window !== "undefined") {
-          localStorage.setItem("bs_cart_token", token);
-        }
-      }
-
-      const res = await fetch("/api/storefront/cart/items", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          token,
-          variantId,
-          quantity,
-        }),
-      });
-
-      if (!res.ok) {
-        throw new Error("Failed to add product to cart");
-      }
+      await addVariantToCart(variantId, quantity);
 
       setSuccess(true);
       // Dispatch cart update event for header badge sync

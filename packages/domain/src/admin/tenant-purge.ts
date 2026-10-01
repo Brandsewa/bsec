@@ -1,8 +1,22 @@
 import { sql } from "drizzle-orm";
 import type { Db } from "@bs/db";
 
-/** Rows that must survive a data purge: the tenant row itself and tax invoices (kept 8 years, PLAN §6.4). */
-const KEEP_TABLES = new Set(["tenants", "platform_invoices", "platform_audit_logs"]);
+/**
+ * Rows that must survive a data purge (PLAN §6.4): the tenant row, tax invoices (kept 8 years), the audit trail, and
+ * the deletion workflow's own records (its progress row, the export taken before deletion, support sessions and
+ * operator notes). Deleting these would make the workflow non-resumable and destroy the evidence.
+ */
+export const PURGE_KEEP_TABLES: ReadonlySet<string> = new Set([
+  "tenants",
+  "platform_invoices",
+  "platform_audit_logs",
+  "tenant_deletions",
+  "exports",
+  "export_files",
+  "support_sessions",
+  "tenant_notes",
+]);
+const KEEP_TABLES = PURGE_KEEP_TABLES;
 
 export interface PurgeResult {
   /** Rows deleted per table, only tables where something was removed. */

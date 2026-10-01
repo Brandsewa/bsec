@@ -105,11 +105,13 @@ describe("M8 Signup Pipeline & Abuse Protection (PLAN §5.2, §7 / ADR-016)", ()
     // Trial Store Limit: max 3 per user email
     const multiStoreEmail = "serial-creator-82@storebuilder.local";
 
-    // Provision 3 trial stores for this user
+    // Provision 3 trial stores for this user (an agency creating stores for one client goes through the platform
+    // path: self-service signup refuses an email that already has an account)
     for (let i = 1; i <= 3; i++) {
       await provisionTenant(rt, {
         storeName: `Multi Store ${i}`,
         slug: `multi-store-82-${i}`,
+        source: "platform_admin",
         owner: {
           email: multiStoreEmail,
           name: "Serial Creator",

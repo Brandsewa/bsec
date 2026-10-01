@@ -20,7 +20,7 @@ const here = path.dirname(fileURLToPath(import.meta.url));
 const migrationsDir = path.resolve(here, "../migrations");
 
 // Same passwords every int test file uses.
-export const TEST_PW = { owner: "o_test", rw: "rw_test", platform: "p_test" };
+export const TEST_PW = { owner: "o_test", rw: "rw_test", platform: "p_test", saas: "s_test" };
 
 // Keys for advisory locks on the shared server (template build, and clones from the template).
 const TEMPLATE_BUILD_LOCK = 0x62_73_74_31;

@@ -322,9 +322,6 @@ async function expireTenantOldReservations(
     `);
 
     const rows = expiredRowsRes.rows;
-    if (rows.length === 0) {
-      return { expiredCount: 0 };
-    }
 
     for (const row of rows) {
       await tx
@@ -342,6 +339,59 @@ async function expireTenantOldReservations(
       `);
     }
 
-    return { expiredCount: rows.length };
+    // Safety net: stock still held by an order that was cancelled (orders cancelled before cancelling released
+    // stock, or any path that missed it) goes back too. Idempotent: only active rows change.
+    const orphanRowsRes = await tx.execute<{
+      id: string;
+      variant_id: string;
+      location_id: string;
+      qty: number;
+    }>(sql`
+      SELECT r.id, r.variant_id, r.location_id, r.qty
+        FROM inventory_reservations r
+        JOIN orders o ON o.tenant_id = r.tenant_id AND o.id = r.order_id
+       WHERE r.tenant_id = ${tenantId}
+         AND r.status = 'active'
+         AND o.status = 'cancelled'
+       FOR UPDATE OF r SKIP LOCKED
+       LIMIT 100;
+    `);
+
+    for (const row of orphanRowsRes.rows) {
+      await tx
+        .update(inventoryReservations)
+        .set({ status: "released", updatedAt: new Date() })
+        .where(eq(inventoryReservations.id, row.id));
+
+      await tx.execute(sql`
+        UPDATE inventory_levels
+           SET reserved = reserved - ${row.qty},
+               updated_at = now()
+         WHERE tenant_id = ${tenantId}
+           AND variant_id = ${row.variant_id}
+           AND location_id = ${row.location_id};
+      `);
+    }
+
+    // Same safety net for payments: a cancelled order with an unpaid payment shows no payment due.
+    await tx.execute(sql`
+      UPDATE payment_intents pi
+         SET status = 'cancelled', updated_at = now()
+        FROM orders o
+       WHERE pi.tenant_id = ${tenantId}
+         AND o.tenant_id = pi.tenant_id
+         AND o.id = pi.order_id
+         AND o.status = 'cancelled'
+         AND pi.status IN ('created', 'requires_action', 'cod_pending');
+    `);
+    await tx.execute(sql`
+      UPDATE orders
+         SET payment_status = 'cancelled', updated_at = now()
+       WHERE tenant_id = ${tenantId}
+         AND status = 'cancelled'
+         AND payment_status IN ('pending', 'created', 'requires_action', 'cod_pending');
+    `);
+
+    return { expiredCount: rows.length + orphanRowsRes.rows.length };
   });
 }

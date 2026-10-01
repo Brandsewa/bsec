@@ -11,7 +11,7 @@ import {
 import type { Runtime } from "../runtime.ts";
 import { assertPermission, type TenantContext } from "../context.ts";
 import { isFeatureEnabled } from "../features.ts";
-import { buildCloudflareImageUrl, getR2Config } from "../media/storage.ts";
+import { buildCloudflareImageUrl, publicMediaUrl } from "../media/storage.ts";
 import { buildProductSummaries, type StorefrontProductSummary } from "../storefront/catalog.ts";
 import { STOREFRONT_PRODUCT_STATUSES } from "../storefront/product-status.ts";
 
@@ -29,6 +29,7 @@ const toBlockProduct = (s: StorefrontProductSummary): BlockProduct => ({
   ratingAvg: s.ratingAvg,
   ratingCount: s.ratingCount,
   imageMediaId: s.primaryImage?.mediaId,
+  imageUrl: s.primaryImage?.url,
   imageAlt: s.primaryImage?.alt,
 });
 
@@ -187,8 +188,7 @@ function collectMediaIds(blocks: BlockInstance[], data: Record<string, BlockData
 async function resolveMediaUrls(tx: Tx, ids: string[]): Promise<Record<string, string>> {
   if (ids.length === 0) return {};
   const cfBase = process.env.CF_IMAGES_DELIVERY_URL;
-  const r2Base = getR2Config().publicUrl;
-  if (!cfBase && !r2Base) return {};
+  if (!cfBase && !publicMediaUrl("probe")) return {};
   const rows = await tx
     .select({ id: schema.media.id, cfImageId: schema.media.cfImageId, storageKey: schema.media.storageKey })
     .from(schema.media)
@@ -196,7 +196,10 @@ async function resolveMediaUrls(tx: Tx, ids: string[]): Promise<Record<string, s
   const out: Record<string, string> = {};
   for (const r of rows) {
     if (cfBase && r.cfImageId) out[r.id] = buildCloudflareImageUrl(cfBase, r.cfImageId, "public");
-    else if (r2Base) out[r.id] = `${r2Base.replace(/\/+$/, "")}/${r.storageKey}`;
+    else {
+      const url = publicMediaUrl(r.storageKey);
+      if (url) out[r.id] = url;
+    }
   }
   return out;
 }

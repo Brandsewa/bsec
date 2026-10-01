@@ -1,7 +1,6 @@
 "use client";
 
 import React, { useState } from "react";
-import Image from "next/image";
 import Link from "next/link";
 import type { StorefrontCartItem } from "@bs/domain";
 
@@ -46,13 +45,13 @@ export function CartItemRow({ item, onUpdateQuantity, onRemove }: CartItemRowPro
       {/* Product Image & Details */}
       <div className="flex items-start sm:items-center gap-4 flex-1">
         <div className="relative h-20 w-20 flex-shrink-0 overflow-hidden rounded-lg bg-muted border border-border/40">
-          {item.primaryImage?.mediaId ? (
-            <Image
-              src={`https://imagedelivery.net/account/${item.primaryImage.mediaId}/public`}
+          {item.primaryImage?.url ? (
+            /* eslint-disable-next-line @next/next/no-img-element */
+            <img
+              src={item.primaryImage.url}
               alt={item.primaryImage.alt ?? item.product.title}
-              fill
-              sizes="80px"
-              className="object-cover"
+              loading="lazy"
+              className="h-full w-full object-cover"
             />
           ) : (
             <div className="flex h-full w-full items-center justify-center text-xs text-muted-foreground">

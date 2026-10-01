@@ -48,11 +48,6 @@ export function StoreFooter({ storeName = "Store" }: StoreFooterProps) {
                   Search
                 </Link>
               </li>
-              <li>
-                <Link href="/blog" className="hover:underline">
-                  Blog
-                </Link>
-              </li>
             </ul>
           </div>
 

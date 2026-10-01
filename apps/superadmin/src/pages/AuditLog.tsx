@@ -1,6 +1,6 @@
 import React, { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { FileSpreadsheet, Download, Filter, Search } from "lucide-react";
+import { FileSpreadsheet, Download, } from "lucide-react";
 import {
   Button,
   EmptyState,
@@ -17,12 +17,13 @@ import {
   toast,
 } from "@bs/ui";
 import { client } from "../lib/orpc.ts";
+import { messageOf } from "../lib/errors.ts";
 
 export function AuditLog() {
   const [actionFilter, setActionFilter] = useState("");
   const [downloading, setDownloading] = useState(false);
 
-  const { data: auditLogs, isLoading, refetch } = useQuery({
+  const { data: auditLogs, isLoading } = useQuery({
     queryKey: ["platform", "audit-logs", { action: actionFilter }],
     queryFn: () => client.audit.list({ action: actionFilter.trim() || undefined, limit: 100 }),
   });
@@ -40,8 +41,8 @@ export function AuditLog() {
       link.click();
       document.body.removeChild(link);
       toast.success("Audit log CSV exported");
-    } catch (err: any) {
-      toast.error(err?.message || "Failed to export audit CSV");
+    } catch (err) {
+      toast.error(messageOf(err, "Failed to export audit CSV"));
     } finally {
       setDownloading(false);
     }

@@ -35,7 +35,8 @@ export interface PlaceOrderInput {
   state: string;
   pincode: string;
   country?: string | undefined;
-  shippingMethod?: "standard" | "express" | undefined;
+  /** Method id of one of the store's shipping rates; the first configured rate when omitted. */
+  shippingMethod?: string | undefined;
   paymentMethod: "cod" | "razorpay" | "online";
   notes?: string | undefined;
   customerId?: string | undefined;
@@ -110,8 +111,10 @@ export async function placeOrder(
     // 2. Calculate amounts (in paise) using canonical shipping calculation (PLAN §5.4, §7 / M7)
     const subtotal = cart.subtotal;
     const resolvedRates = await getTenantShippingRates(tx, tenantId, subtotal);
-    const selectedMethod = (input.shippingMethod as "standard" | "express") ?? "standard";
-    const shipping = resolvedRates.find((r) => r.method === selectedMethod) ?? resolvedRates[0];
+    if (input.shippingMethod && !resolvedRates.some((r) => r.method === input.shippingMethod)) {
+      throw new Error("Bad Request: the chosen shipping method is not available for this store");
+    }
+    const shipping = (input.shippingMethod ? resolvedRates.find((r) => r.method === input.shippingMethod) : undefined) ?? resolvedRates[0];
     const shippingTotal = shipping ? shipping.amount : 0;
     const isCod = input.paymentMethod === "cod";
     const storeConfig = await readStoreConfig(tx);
@@ -312,19 +315,25 @@ export async function placeOrder(
   }
 
   // Soft quota tracking runs after transaction commit:
-  // never blocks checkout and never takes a second pool connection inside an open transaction
-  try {
-    const orderCountRes = await rt._db.db.execute<{ count: string }>(
-      sql`SELECT COUNT(*)::text as count FROM orders WHERE tenant_id = ${tenantId} AND created_at >= date_trunc('month', now());`
-    );
-    const monthlyOrders = parseInt(orderCountRes.rows[0]?.count ?? "1", 10);
-    await trackSoftQuotaUsage(rt._db.db, {
-      tenantId,
-      quotaKey: "orders_month",
-      current: monthlyOrders,
-    });
-  } catch {
-    // Soft quota tracking failure never impedes checkout completion
+  // never blocks checkout and never takes a second pool connection inside an open transaction.
+  // quota_events is platform-owned, so it is written on the self-service (app_saas) connection;
+  // without it (not configured) tracking is skipped.
+  if (rt._saasDb) {
+    try {
+      const orderCountRes = await withTenant(rt._db.db, tenantId, (tx) =>
+        tx.execute<{ count: string }>(
+          sql`SELECT COUNT(*)::text as count FROM orders WHERE tenant_id = ${tenantId} AND created_at >= date_trunc('month', now());`,
+        ),
+      );
+      const monthlyOrders = parseInt(orderCountRes.rows[0]?.count ?? "1", 10);
+      await trackSoftQuotaUsage(rt._saasDb.db, {
+        tenantId,
+        quotaKey: "orders_month",
+        current: monthlyOrders,
+      });
+    } catch {
+      // Soft quota tracking failure never impedes checkout completion
+    }
   }
 
   return resultBody;

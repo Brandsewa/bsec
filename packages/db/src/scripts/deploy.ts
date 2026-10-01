@@ -22,7 +22,9 @@ if (superuserUrl) {
     owner: need("APP_OWNER_PASSWORD"),
     rw: need("APP_RW_PASSWORD"),
     platform: need("APP_PLATFORM_PASSWORD"),
+    saas: process.env.APP_SAAS_PASSWORD || undefined,
   });
+  if (!process.env.APP_SAAS_PASSWORD) console.warn("APP_SAAS_PASSWORD not set: app_saas role skipped, self-service signup/billing stay disabled");
   console.log("roles ok");
 } else {
   console.log("DATABASE_URL_SUPERUSER not set, skipping role bootstrap");

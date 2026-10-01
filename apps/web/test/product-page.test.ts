@@ -8,7 +8,7 @@ vi.mock("server-only", () => ({}));
 import { ProductGallery } from "../src/components/product/ProductGallery.tsx";
 import { VariantSelector } from "../src/components/product/VariantSelector.tsx";
 import { StockEtaHole, StockEtaSkeleton } from "../src/components/product/StockEtaHole.tsx";
-import { AddToCartButton } from "../src/components/product/AddToCartButton.tsx";
+import { AddToCartButton, addVariantToCart } from "../src/components/product/AddToCartButton.tsx";
 import type { StorefrontProductDetail } from "@bs/domain";
 
 const mockProduct: StorefrontProductDetail = {
@@ -251,6 +251,21 @@ describe("Storefront Product Detail Page (/products/[slug])", () => {
 
       expect(html).toContain("Add to Cart");
       expect(html).not.toContain("disabled");
+    });
+
+    it("adds with just the variant and quantity: it never invents a cart token (the server owns the cart cookie)", async () => {
+      const calls: Array<{ url: string; body: Record<string, unknown> }> = [];
+      const fakeFetch = (async (url: string, init?: RequestInit) => {
+        calls.push({ url, body: JSON.parse(String(init?.body)) });
+        return new Response(JSON.stringify({ cart: {} }), { status: 200 });
+      }) as unknown as typeof fetch;
+      await addVariantToCart("variant-1", 2, fakeFetch);
+      expect(calls).toEqual([{ url: "/api/storefront/cart/items", body: { variantId: "variant-1", quantity: 2 } }]);
+    });
+
+    it("shows the server's reason when adding fails", async () => {
+      const failing = (async () => new Response(JSON.stringify({ error: "Insufficient stock" }), { status: 400 })) as unknown as typeof fetch;
+      await expect(addVariantToCart("variant-1", 1, failing)).rejects.toThrow("Insufficient stock");
     });
 
     it("renders disabled state when variant is out of stock", () => {

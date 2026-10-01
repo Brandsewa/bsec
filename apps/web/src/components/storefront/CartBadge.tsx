@@ -32,19 +32,25 @@ export function CartBadge({ count: initialCount, className = "" }: CartBadgeProp
 
     let isMounted = true;
     // Async fetch from /api/storefront/cart
-    fetch("/api/storefront/cart")
-      .then((res) => (res.ok ? res.json() : null))
-      .then((data) => {
-        if (isMounted && data && typeof data.itemCount === "number") {
-          setItemCount(data.itemCount);
-        }
-      })
-      .catch(() => {
-        // Ignore network errors in background cart badge fetch
-      });
+    const refresh = () => {
+      fetch("/api/storefront/cart")
+        .then((res) => (res.ok ? res.json() : null))
+        .then((data) => {
+          if (isMounted && data && typeof data.itemCount === "number") {
+            setItemCount(data.itemCount);
+          }
+        })
+        .catch(() => {
+          // Ignore network errors in background cart badge fetch
+        });
+    };
+    refresh();
+    // The header stays mounted while the shopper adds items and checks out, so it must refresh itself.
+    window.addEventListener("cart-updated", refresh);
 
     return () => {
       isMounted = false;
+      window.removeEventListener("cart-updated", refresh);
     };
   }, [initialCount]);
 

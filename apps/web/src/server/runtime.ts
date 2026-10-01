@@ -17,6 +17,7 @@ export function server(): { rt: Runtime; log: Logger } {
       rt: createRuntime({
         service: "web",
         databaseUrl: url,
+        saasDatabaseUrl: process.env.DATABASE_URL_SAAS || undefined,
         poolMax: Number(process.env.DB_POOL_MAX ?? 10),
         revalidateTags: (tags) => {
           for (const t of tags) {

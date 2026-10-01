@@ -10,6 +10,16 @@ import {
   adjustInventory,
   buildTenantContext,
   getAdminMe,
+  getStoreStatus,
+  attachProductMedia,
+  detachProductMedia,
+  updateStoreStatus,
+  getSupportAdminMe,
+  listStoreSupportSessions,
+  approveStoreSupportSession,
+  denyStoreSupportSession,
+  getStandingSupportConsent,
+  setStandingSupportConsent,
   acceptInvitation,
   checkRateLimit,
   clearLoginFailures,
@@ -109,6 +119,8 @@ import {
   FeatureDisabledError,
   checkSubdomainAvailability,
   reserveSubdomain,
+  saasDb,
+  SaasNotConfiguredError,
   saveSignupLead,
   completeSignup,
   acceptTenantOwnerInvite,
@@ -123,6 +135,7 @@ import {
   verifyCustomDomain,
   setPrimaryDomain,
   removeCustomDomain,
+  checkInviteAcceptRateLimit,
   checkReserveSubdomainRateLimit,
   checkLeadCaptureRateLimit,
   hashIpWithSalt,
@@ -142,6 +155,8 @@ export interface ApiContext {
   rt: Runtime;
   log: Logger;
   headers?: Headers | undefined;
+  /** Method and path of the request (recorded when a platform support token is used). */
+  requestInfo?: { method: string; path: string } | undefined;
   session?: {
     user: { id: string; email?: string | undefined };
     session?: { id: string; userId: string; [key: string]: unknown } | undefined;
@@ -166,22 +181,19 @@ function mapAuthError(err: unknown): unknown {
   return err;
 }
 
-/** Requires a signed-in staff session but no store selection (used by /admin/me to list the user's stores). */
-const requireSession = os.middleware(async ({ context, next }) => {
-  if (!context.session || context.session.type === "customer") {
-    throw new ORPCError("UNAUTHORIZED", { message: "Sign in required" });
-  }
-  return next({ context });
-});
-
 const requireAdmin = os.middleware(async ({ context, next }) => {
   const headers = context.headers ?? new Headers();
+  // Anonymous callers are refused before anything about the store is looked at (a missing store header must not turn a 401 into a 400).
+  if ((!context.session || context.session.type === "customer") && !headers.get("x-support-token")) {
+    throw new ORPCError("UNAUTHORIZED", { message: "Sign in required" });
+  }
   let tenantCtx: TenantContext | null;
   try {
     tenantCtx = await buildTenantContext(context.rt, {
       entryPath: "admin",
       headers,
       session: context.session,
+      request: context.requestInfo,
     });
   } catch (err) {
     throw mapAuthError(err);
@@ -270,10 +282,75 @@ export const storeRouter = os.router({
   },
   admin: {
     me: {
-      get: os.admin.me.get.use(requireSession).handler(({ context }) => {
-        if (!context.session) throw new ORPCError("UNAUTHORIZED", { message: "Sign in required" });
+      get: os.admin.me.get.handler(async ({ context }) => {
+        // A platform support session identifies itself with X-Support-Token instead of a store login.
+        if (context.headers?.get("x-support-token")) {
+          let tenantCtx: TenantContext | null;
+          try {
+            tenantCtx = await buildTenantContext(context.rt, {
+              entryPath: "admin",
+              headers: context.headers,
+              session: null,
+              request: context.requestInfo,
+            });
+          } catch (err) {
+            throw mapAuthError(err);
+          }
+          if (!tenantCtx) throw new ORPCError("UNAUTHORIZED", { message: "Unable to resolve admin tenant context" });
+          return getSupportAdminMe(context.rt, tenantCtx);
+        }
+        if (!context.session || context.session.type === "customer") {
+          throw new ORPCError("UNAUTHORIZED", { message: "Sign in required" });
+        }
         return getAdminMe(context.rt, context.session.user.id);
       }),
+    },
+    support: {
+      list: os.admin.support.list
+        .use(requireAdmin)
+        .use(requirePermission("settings.write"))
+        .handler(({ context }) => {
+          if (!context.tenantCtx) throw new Error("Missing tenant context");
+          return listStoreSupportSessions(context.rt, context.tenantCtx).catch((e) => {
+            throw mapAuthError(e);
+          });
+        }),
+      approve: os.admin.support.approve
+        .use(requireAdmin)
+        .use(requirePermission("settings.write"))
+        .handler(({ context, input }) => {
+          if (!context.tenantCtx) throw new Error("Missing tenant context");
+          return approveStoreSupportSession(context.rt, context.tenantCtx, input.id).catch((e) => {
+            throw mapAuthError(e);
+          });
+        }),
+      deny: os.admin.support.deny
+        .use(requireAdmin)
+        .use(requirePermission("settings.write"))
+        .handler(({ context, input }) => {
+          if (!context.tenantCtx) throw new Error("Missing tenant context");
+          return denyStoreSupportSession(context.rt, context.tenantCtx, input.id).catch((e) => {
+            throw mapAuthError(e);
+          });
+        }),
+      getStandingConsent: os.admin.support.getStandingConsent
+        .use(requireAdmin)
+        .use(requirePermission("settings.write"))
+        .handler(({ context }) => {
+          if (!context.tenantCtx) throw new Error("Missing tenant context");
+          return getStandingSupportConsent(context.rt, context.tenantCtx).catch((e) => {
+            throw mapAuthError(e);
+          });
+        }),
+      setStandingConsent: os.admin.support.setStandingConsent
+        .use(requireAdmin)
+        .use(requirePermission("settings.write"))
+        .handler(({ context, input }) => {
+          if (!context.tenantCtx) throw new Error("Missing tenant context");
+          return setStandingSupportConsent(context.rt, context.tenantCtx, input.enabled).catch((e) => {
+            throw mapAuthError(e);
+          });
+        }),
     },
     payments: {
       get: os.admin.payments.get
@@ -390,6 +467,24 @@ export const storeRouter = os.router({
 
     // Catalog: Products
     products: {
+      attachMedia: os.admin.products.attachMedia
+        .use(requireAdmin)
+        .use(requirePermission("products.write"))
+        .handler(({ context, input }) => {
+          if (!context.tenantCtx) throw new Error("Missing tenant context");
+          return attachProductMedia(context.rt, context.tenantCtx, { productId: input.id, mediaId: input.mediaId, alt: input.alt }).catch((e) => {
+            throw mapAuthError(e);
+          });
+        }),
+      detachMedia: os.admin.products.detachMedia
+        .use(requireAdmin)
+        .use(requirePermission("products.write"))
+        .handler(({ context, input }) => {
+          if (!context.tenantCtx) throw new Error("Missing tenant context");
+          return detachProductMedia(context.rt, context.tenantCtx, { productId: input.id, productMediaId: input.productMediaId }).catch((e) => {
+            throw mapAuthError(e);
+          });
+        }),
       list: os.admin.products.list
         .use(requireAdmin)
         .use(requirePermission("products.read"))
@@ -573,7 +668,9 @@ export const storeRouter = os.router({
         .use(requirePermission("content.write"))
         .handler(({ context, input }) => {
           if (!context.tenantCtx) throw new Error("Missing tenant context");
-          return requestMediaUpload(context.rt, context.tenantCtx, input);
+          return Promise.resolve(requestMediaUpload(context.rt, context.tenantCtx, input)).catch((e) => {
+            throw mapAuthError(e);
+          });
         }),
       create: os.admin.media.create
         .use(requireAdmin)
@@ -899,6 +996,33 @@ export const storeRouter = os.router({
           return updateAdminShippingSettings(context.rt._db.db, context.tenantCtx.tenantId, input);
         }),
     },
+    storefront: {
+      getStatus: os.admin.storefront.getStatus
+        .use(requireAdmin)
+        .use(requirePermission("settings.write"))
+        .handler(({ context }) => {
+          if (!context.tenantCtx) throw new Error("Missing tenant context");
+          return getStoreStatus(context.rt, context.tenantCtx).catch((e) => {
+            throw mapAuthError(e);
+          });
+        }),
+      updateStatus: os.admin.storefront.updateStatus
+        .use(requireAdmin)
+        .use(requirePermission("settings.write"))
+        .handler(async ({ context, input }) => {
+          if (!context.tenantCtx) throw new Error("Missing tenant context");
+          const { launchAt, ...rest } = input;
+          try {
+            await updateStoreStatus(context.rt, context.tenantCtx, {
+              ...rest,
+              ...(launchAt !== undefined ? { launchAt: launchAt ? new Date(launchAt) : null } : {}),
+            });
+          } catch (e) {
+            throw mapAuthError(e);
+          }
+          return getStoreStatus(context.rt, context.tenantCtx);
+        }),
+    },
     onboarding: {
       get: os.admin.onboarding.get
         .use(requireAdmin)
@@ -1184,7 +1308,7 @@ api.use(
   cors({
     origin: (origin) => (allowedApiOrigins().includes(origin) ? origin : null),
     credentials: true,
-    allowHeaders: ["content-type", "x-store-id", "x-request-id"],
+    allowHeaders: ["content-type", "x-store-id", "x-request-id", "x-support-token"],
     allowMethods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
     exposeHeaders: ["x-request-id", "retry-after"],
     maxAge: 600,
@@ -1236,17 +1360,24 @@ api.all("/auth/*", async (c) => {
 });
 
 /** SaaS Self-service Endpoints (PLAN §5.1, §7) */
+// Any self-service route reached without DATABASE_URL_SAAS answers a clean 503 instead of a raw 500.
+api.onError((err, c) => {
+  if (err instanceof SaasNotConfiguredError) return c.json({ error: err.message }, 503);
+  server().log.error({ err }, "api error");
+  return c.text("Internal Server Error", 500);
+});
+
 api.get("/saas/subdomain/check", async (c) => {
   const slug = c.req.query("slug");
   if (!slug) return c.json({ available: false, reason: "Slug parameter is required" }, 400);
-  const db = server().rt._db.db;
+  const db = saasDb(server().rt);
   const result = await checkSubdomainAvailability(db, slug);
   return c.json(result);
 });
 
 api.post("/saas/subdomain/reserve", async (c) => {
   const ip = clientIp(c.req.raw.headers);
-  const db = server().rt._db.db;
+  const db = saasDb(server().rt);
 
   const rateCheck = await checkReserveSubdomainRateLimit(db, ip);
   if (!rateCheck.allowed) {
@@ -1266,7 +1397,7 @@ api.post("/saas/subdomain/reserve", async (c) => {
 
 api.post("/saas/lead", async (c) => {
   const ip = clientIp(c.req.raw.headers);
-  const db = server().rt._db.db;
+  const db = saasDb(server().rt);
 
   const rateCheck = await checkLeadCaptureRateLimit(db, ip);
   if (!rateCheck.allowed) {
@@ -1284,14 +1415,19 @@ api.post("/saas/lead", async (c) => {
   return c.json(result);
 });
 
+api.get("/saas/config", (c) => {
+  // Public, non-secret runtime config for the signup page.
+  return c.json({ turnstileSiteKey: process.env.TURNSTILE_SITE_KEY?.trim() || null });
+});
+
 api.get("/saas/plans", async (c) => {
-  const db = server().rt._db.db;
+  const db = saasDb(server().rt);
   const plans = await listPublicPlans(db);
   return c.json(plans);
 });
 
 api.get("/saas/templates", async (c) => {
-  const db = server().rt._db.db;
+  const db = saasDb(server().rt);
   const templates = await listPublicThemeTemplates(db);
   return c.json(templates);
 });
@@ -1307,6 +1443,7 @@ api.post("/saas/signup", async (c) => {
     });
     return c.json(result, 201);
   } catch (err: unknown) {
+    if (err instanceof SaasNotConfiguredError) return c.json({ error: err.message }, 503);
     const message = err instanceof Error ? err.message : "Failed to provision store";
     return c.json({ error: message }, 400);
   }
@@ -1319,6 +1456,8 @@ api.post("/saas/invite/accept", async (c) => {
   }
   const rt = server().rt;
   try {
+    const limit = await checkInviteAcceptRateLimit(saasDb(rt), clientIp(c.req.raw.headers), body.token);
+    if (!limit.allowed) return c.json({ error: "Too many attempts. Please try again later." }, 429);
     const res = await acceptTenantOwnerInvite(rt, {
       token: body.token,
       password: body.password,
@@ -1326,6 +1465,7 @@ api.post("/saas/invite/accept", async (c) => {
     });
     return c.json(res);
   } catch (err: unknown) {
+    if (err instanceof SaasNotConfiguredError) return c.json({ error: err.message }, 503);
     const message = err instanceof Error ? err.message : "Failed to accept store invitation";
     return c.json({ error: message }, 400);
   }
@@ -1341,7 +1481,7 @@ api.all("/rpc/*", async (c, next) => {
   const session = await resolveStaffSession(c.req.raw.headers);
   const { matched, response } = await rpc.handle(c.req.raw, {
     prefix: "/api/rpc",
-    context: { rt: server().rt, log: c.get("log"), headers: c.req.raw.headers, session },
+    context: { rt: server().rt, log: c.get("log"), headers: c.req.raw.headers, requestInfo: { method: c.req.method, path: c.req.path }, session },
   });
   if (matched) return c.newResponse(response.body, response);
   await next();
@@ -1351,7 +1491,7 @@ api.all("/*", async (c, next) => {
   const session = await resolveStaffSession(c.req.raw.headers);
   const { matched, response } = await openapi.handle(c.req.raw, {
     prefix: "/api",
-    context: { rt: server().rt, log: c.get("log"), headers: c.req.raw.headers, session },
+    context: { rt: server().rt, log: c.get("log"), headers: c.req.raw.headers, requestInfo: { method: c.req.method, path: c.req.path }, session },
   });
   if (matched) return c.newResponse(response.body, response);
   await next();

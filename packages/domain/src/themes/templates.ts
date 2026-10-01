@@ -2,7 +2,7 @@ import { asc, eq, sql } from "drizzle-orm";
 import { schema } from "@bs/db";
 import { validateBlockDocument, type BlockInstance } from "@bs/blocks";
 import type { Runtime } from "../runtime.ts";
-import { assertPlatformStaff, writePlatformAudit } from "../platform-services.ts";
+import { assertPlatformStaff, writePlatformAudit, type AuditMeta } from "../platform-services.ts";
 
 /**
  * Platform theme templates (PLAN §5.1, ADR-009). A template is the platform-level definition
@@ -31,12 +31,6 @@ export interface TemplateSummary {
 export interface TemplateDetail extends TemplateSummary {
   draftPages: TemplatePages;
   draftTokens: Record<string, unknown>;
-}
-
-interface AuditMeta {
-  ip?: string;
-  userAgent?: string;
-  requestId?: string;
 }
 
 type Row = typeof schema.themeTemplates.$inferSelect;

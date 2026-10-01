@@ -126,7 +126,7 @@ export function BannerView({ props }: A<R.BannerProps>): ReactNode {
 }
 
 function defaultCard(p: BlockProduct, o: { showPrice: boolean; showRating: boolean }, ctx?: RenderContext): ReactNode {
-  const img = mediaSrc(ctx, p.imageMediaId);
+  const img = p.imageUrl ?? mediaSrc(ctx, p.imageMediaId);
   return (
     <a className="bsb-card" href={`/products/${p.slug}`}>
       <div className="bsb-card-media">
@@ -180,9 +180,9 @@ export function ProductGridView({ props, ctx }: A<R.ProductGridProps>): ReactNod
       <div className="bsb-w bsb-w-wide">
         <SectionHead title={props.title} subtitle={props.subtitle} align="center" />
         {products.length === 0 ? (
-          <p className="bsb-muted bsb-align-center">No products to show yet.</p>
+          <p className="bsb-muted bsb-align-center" data-testid="product-grid-empty">No products to show yet.</p>
         ) : (
-          <div className="bsb-grid bsb-gap-md" style={{ "--cols": Number(props.columns), "--cols-m": 2 } as CSSProperties}>
+          <div className="bsb-grid bsb-gap-md" data-testid="product-grid" style={{ "--cols": Number(props.columns), "--cols-m": 2 } as CSSProperties}>
             <ProductList products={products} ctx={ctx} showPrice={props.showPrice} showRating={props.showRating} />
           </div>
         )}

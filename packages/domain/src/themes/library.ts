@@ -1,4 +1,4 @@
-import { and, eq } from "drizzle-orm";
+import { and, asc, eq, or } from "drizzle-orm";
 import { schema, withTenant } from "@bs/db";
 import { validateBlockDocument, type BlockInstance } from "@bs/blocks";
 import type { Runtime } from "../runtime.ts";
@@ -123,7 +123,9 @@ export async function activateTheme(
       const [page] = await tx
         .select()
         .from(schema.pages)
-        .where(isHome ? eq(schema.pages.type, "home") : eq(schema.pages.slug, key))
+        // A page already using the slug "home" is the home page even if its type was set differently.
+        .where(isHome ? or(eq(schema.pages.type, "home"), eq(schema.pages.slug, "home")) : eq(schema.pages.slug, key))
+        .orderBy(asc(schema.pages.createdAt))
         .limit(1);
 
       if (page && !isHome) continue;

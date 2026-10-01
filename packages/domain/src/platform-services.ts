@@ -1,12 +1,15 @@
-import { and, desc, eq, gt, gte, inArray, isNull, sql } from "drizzle-orm";
+import { createHash, randomBytes } from "node:crypto";
+import { and, desc, eq, gte, inArray, isNull, sql } from "drizzle-orm";
 import { schema, withTenant, type Db } from "@bs/db";
+import { hashPassword, verifyPassword } from "@bs/auth";
 import type { Runtime } from "./runtime.ts";
 import { assertCanTransitionTenant } from "./system/tenant-lifecycle.ts";
+import { tierForPlan } from "./saas/plan-tiers.ts";
 
 export interface AuditMeta {
-  ip?: string;
-  userAgent?: string;
-  requestId?: string;
+  ip?: string | undefined;
+  userAgent?: string | undefined;
+  requestId?: string | undefined;
 }
 
 export interface PlatformTenantRecord {
@@ -22,65 +25,82 @@ export interface PlatformTenantRecord {
   createdAt?: string | undefined;
 }
 
+export type PlatformRole = "platform_owner" | "platform_admin" | "platform_support";
+
+const ROLE_RANK: Record<string, number> = { platform_support: 1, platform_admin: 2, platform_owner: 3 };
+
+export function roleAtLeast(role: string, min: PlatformRole): boolean {
+  return (ROLE_RANK[role] ?? 0) >= (ROLE_RANK[min] ?? 0);
+}
+
+/** Throws Forbidden unless the staff role is at least `min`. */
+export function assertRoleAtLeast(role: string, min: PlatformRole, action: string): void {
+  if (!roleAtLeast(role, min)) {
+    throw new Error(`Forbidden: ${action} requires the ${min} role or higher`);
+  }
+}
+
+export interface PlatformStaffIdentity {
+  userId: string;
+  role: PlatformRole;
+}
+
 /**
- * Asserts that the authenticated user is an active platform staff member with verified MFA (PLAN §4, §6).
- * Throws Forbidden error if not found, inactive, or lacking verified MFA.
+ * Asserts that the authenticated user is an active platform staff member with COMPLETED and CURRENT MFA (PLAN §4, §6):
+ *  - the account is an active platform_staff row;
+ *  - TOTP is enabled and verified (Better Auth two_factors);
+ *  - enrolment was completed (mfa_verified_at), which also killed every earlier password-only session;
+ *  - if a session is given, it was created after that moment, i.e. it went through password AND TOTP.
+ * Internal service functions call this without a session (the router middleware already checked it).
  */
 export async function assertPlatformStaff(
   rt: Runtime,
   userId: string,
-): Promise<{ role: string }> {
+  session?: { createdAt?: Date | undefined },
+): Promise<PlatformStaffIdentity> {
   const db = rt._db.db;
-  const rows = await db
+  const [staff] = await db
     .select({
       role: schema.platformStaff.role,
       isActive: schema.platformStaff.isActive,
-      mfaRequired: schema.platformStaff.mfaRequired,
+      mfaVerifiedAt: schema.platformStaff.mfaVerifiedAt,
+      twoFactorEnabled: schema.users.twoFactorEnabled,
     })
     .from(schema.platformStaff)
-    .where(
-      and(
-        eq(schema.platformStaff.userId, userId),
-        eq(schema.platformStaff.isActive, true),
-      ),
-    )
+    .innerJoin(schema.users, eq(schema.users.id, schema.platformStaff.userId))
+    .where(and(eq(schema.platformStaff.userId, userId), eq(schema.platformStaff.isActive, true)))
     .limit(1);
 
-  const staff = rows[0];
   if (!staff) {
     throw new Error("Forbidden: user is not an active platform staff member");
   }
-
-  // M9 MFA Enforcement: platform staff MUST have verified MFA (TOTP / backup codes)
-  const [user] = await db
-    .select({
-      twoFactorEnabled: schema.users.twoFactorEnabled,
-    })
-    .from(schema.users)
-    .where(eq(schema.users.id, userId))
-    .limit(1);
-
-  if (!user?.twoFactorEnabled) {
+  if (!staff.twoFactorEnabled) {
     throw new Error("Forbidden: platform staff requires verified MFA (two-factor authentication not enabled)");
   }
 
   const [twoFactorRecord] = await db
-    .select({
-      verified: schema.twoFactors.verified,
-    })
+    .select({ verified: schema.twoFactors.verified })
     .from(schema.twoFactors)
     .where(eq(schema.twoFactors.userId, userId))
     .limit(1);
-
-  if (!twoFactorRecord || twoFactorRecord.verified === false) {
+  if (!twoFactorRecord || twoFactorRecord.verified !== true) {
     throw new Error("Forbidden: platform staff requires verified MFA (two-factor authentication not verified)");
   }
 
-  return { role: staff.role };
+  if (!staff.mfaVerifiedAt) {
+    throw new Error("Forbidden: MFA enrolment is not complete; finish setup and sign in again");
+  }
+  if (session) {
+    if (!session.createdAt || session.createdAt.getTime() < staff.mfaVerifiedAt.getTime()) {
+      throw new Error("Forbidden: this session predates MFA enrolment; sign in again with your authenticator code");
+    }
+  }
+
+  return { userId, role: staff.role as PlatformRole };
 }
 
 /**
- * Internal helper: writes an audit row in the current transaction.
+ * Internal helper: writes an audit row in the CURRENT transaction (pass the tx, never the pool).
  */
 export async function writePlatformAudit(
   tx: Db,
@@ -103,6 +123,94 @@ export async function writePlatformAudit(
     userAgent: meta?.userAgent,
     requestId: meta?.requestId,
     diff: (diff as Record<string, unknown>) ?? null,
+  });
+}
+
+/**
+ * State of a platform login for the Super Admin login flow (also used before MFA is complete, so it does not
+ * require it). `session` is the Better Auth session of the caller.
+ */
+export async function getPlatformLoginStatus(
+  rt: Runtime,
+  userId: string,
+  sessionCreatedAt: Date,
+): Promise<{
+  isPlatformStaff: boolean;
+  role: PlatformRole | null;
+  mfaEnrolled: boolean;
+  mfaComplete: boolean;
+  sessionValid: boolean;
+}> {
+  const db = rt._db.db;
+  const [staff] = await db
+    .select({
+      role: schema.platformStaff.role,
+      mfaVerifiedAt: schema.platformStaff.mfaVerifiedAt,
+      twoFactorEnabled: schema.users.twoFactorEnabled,
+    })
+    .from(schema.platformStaff)
+    .innerJoin(schema.users, eq(schema.users.id, schema.platformStaff.userId))
+    .where(and(eq(schema.platformStaff.userId, userId), eq(schema.platformStaff.isActive, true)))
+    .limit(1);
+  if (!staff) return { isPlatformStaff: false, role: null, mfaEnrolled: false, mfaComplete: false, sessionValid: false };
+
+  const [tf] = await db
+    .select({ verified: schema.twoFactors.verified })
+    .from(schema.twoFactors)
+    .where(eq(schema.twoFactors.userId, userId))
+    .limit(1);
+  const mfaEnrolled = Boolean(staff.twoFactorEnabled) && tf?.verified === true;
+  const mfaComplete = mfaEnrolled && staff.mfaVerifiedAt !== null;
+  return {
+    isPlatformStaff: true,
+    role: staff.role as PlatformRole,
+    mfaEnrolled,
+    mfaComplete,
+    sessionValid: mfaComplete && sessionCreatedAt.getTime() >= (staff.mfaVerifiedAt?.getTime() ?? Infinity),
+  };
+}
+
+/**
+ * Called after the staff member verified their first TOTP code. Stamps the completion moment and kills EVERY
+ * existing session of the user (including the password-only one used for setup), so the next login is
+ * password + TOTP. Audited in the same transaction.
+ */
+export async function completePlatformMfaEnrollment(
+  rt: Runtime,
+  userId: string,
+  meta?: AuditMeta,
+): Promise<{ ok: true }> {
+  const db = rt._db.db;
+  return db.transaction(async (tx) => {
+    const [staff] = await tx
+      .select({
+        mfaVerifiedAt: schema.platformStaff.mfaVerifiedAt,
+        twoFactorEnabled: schema.users.twoFactorEnabled,
+      })
+      .from(schema.platformStaff)
+      .innerJoin(schema.users, eq(schema.users.id, schema.platformStaff.userId))
+      .where(and(eq(schema.platformStaff.userId, userId), eq(schema.platformStaff.isActive, true)))
+      .for("update", { of: schema.platformStaff })
+      .limit(1);
+    if (!staff) throw new Error("Forbidden: user is not an active platform staff member");
+    if (staff.mfaVerifiedAt) throw new Error("Conflict: MFA enrolment is already complete");
+
+    const [tf] = await tx
+      .select({ verified: schema.twoFactors.verified })
+      .from(schema.twoFactors)
+      .where(eq(schema.twoFactors.userId, userId))
+      .limit(1);
+    if (!staff.twoFactorEnabled || tf?.verified !== true) {
+      throw new Error("Conflict: verify a code from your authenticator app before completing setup");
+    }
+
+    await tx
+      .update(schema.platformStaff)
+      .set({ mfaVerifiedAt: sql`now()`, updatedAt: sql`now()` })
+      .where(eq(schema.platformStaff.userId, userId));
+    await tx.delete(schema.sessions).where(eq(schema.sessions.userId, userId));
+    await writePlatformAudit(tx, userId, "platform_staff.mfa_enrolled", "platform_staff", userId, null, { sessionsRevoked: true }, meta);
+    return { ok: true as const };
   });
 }
 
@@ -322,6 +430,13 @@ export async function getPlatformTenantDetail(
     .where(eq(schema.tenantNotes.tenantId, tenantId))
     .orderBy(desc(schema.tenantNotes.createdAt));
 
+  // Open deletion (grace period / in progress)
+  const [openDeletion] = await db
+    .select()
+    .from(schema.tenantDeletions)
+    .where(and(eq(schema.tenantDeletions.tenantId, tenantId), isNull(schema.tenantDeletions.cancelledAt), isNull(schema.tenantDeletions.completedAt)))
+    .limit(1);
+
   // Size tier & quota overrides
   const [tier] = await db
     .select()
@@ -384,7 +499,7 @@ export async function getPlatformTenantDetail(
     usage: {
       productsCount: productsCountRes?.count ?? 0,
       ordersCount: ordersCountRes?.count ?? 0,
-      gmvPaise: ordersCountRes?.gmv ?? 0,
+      gmvPaise: Number(ordersCountRes?.gmv ?? 0),
     },
     health: {
       failedWebhooksCount: webhookErrors.length,
@@ -410,6 +525,16 @@ export async function getPlatformTenantDetail(
       authorName: n.authorName,
       createdAt: n.createdAt.toISOString(),
     })),
+    deletion: openDeletion
+      ? {
+          id: openDeletion.id,
+          step: openDeletion.step,
+          scheduledFor: openDeletion.scheduledFor.toISOString(),
+          reason: openDeletion.reason,
+          error: openDeletion.error,
+          canCancel: openDeletion.step === "requested" || openDeletion.step === "exported",
+        }
+      : null,
   };
 }
 
@@ -481,7 +606,7 @@ export async function getPlatformOverviewMetrics(
   const conversionRatePct = totalLeads > 0 ? Math.round((activeSubsCount / totalLeads) * 100) : 0;
 
   // Failed jobs & DB size
-  let failedJobsCount = 0;
+  let failedJobsCount: number;
   try {
     const jobRes = await db.execute<{ count: string }>(
       sql`SELECT count(*)::text as count FROM pgboss.job WHERE state = 'failed'`,
@@ -496,7 +621,7 @@ export async function getPlatformOverviewMetrics(
     .from(schema.webhookInbox)
     .where(eq(schema.webhookInbox.status, "failed"));
 
-  let dbSizeBytes = 0;
+  let dbSizeBytes: number;
   try {
     const dbSizeRes = await db.execute<{ size: string }>(
       sql`SELECT pg_database_size(current_database())::text as size`,
@@ -667,9 +792,17 @@ export async function changePlatformTenantPlan(
       .set({ planId: plan.id, updatedAt: sql`now()` })
       .where(eq(schema.subscriptions.tenantId, tenantId));
 
+    // The plan decides the store's size tier (same mapping as provisioning and the billing webhook).
+    const tier = tierForPlan(plan.code);
+    await tx
+      .insert(schema.tenantSizeTiers)
+      .values({ tenantId, tier })
+      .onConflictDoUpdate({ target: [schema.tenantSizeTiers.tenantId], set: { tier, updatedAt: sql`now()` } });
+
     await writePlatformAudit(tx, platformStaffUserId, "tenant.change_plan", "tenant", tenantId, tenantId, {
       oldPlan: t.planId,
       newPlan: planCode,
+      tier,
     }, meta);
 
     return { ok: true, planCode };
@@ -806,49 +939,75 @@ export async function addPlatformTenantNote(
 }
 
 /**
- * Bulk actions on tenants (PLAN §6 bulk suspend). Transactional and audited per store.
+ * Bulk suspend (PLAN §6). All-or-nothing: every store must exist and be allowed to move to `suspended`, the
+ * caller must have typed the exact confirmation, and every store gets its own audit row in the same transaction.
  */
 export async function bulkSuspendPlatformTenants(
   rt: Runtime,
   platformStaffUserId: string,
   tenantIds: string[],
   reason: string,
+  confirmation: string,
   meta?: AuditMeta,
 ) {
   await assertPlatformStaff(rt, platformStaffUserId);
+  const ids = [...new Set(tenantIds)];
+  if (ids.length === 0) throw new Error("Bad Request: select at least one store");
+  if (confirmation !== `SUSPEND ${ids.length}`) {
+    throw new Error(`Bad Request: type "SUSPEND ${ids.length}" to confirm`);
+  }
   const db = rt._db.db;
 
   return db.transaction(async (tx) => {
-    for (const tid of tenantIds) {
+    const rows = await tx.select().from(schema.tenants).where(inArray(schema.tenants.id, ids)).for("update");
+    if (rows.length !== ids.length) throw new Error("Not Found: one or more selected stores do not exist");
+    for (const t of rows) assertCanTransitionTenant(t.status, "suspended");
+
+    for (const t of rows) {
       await tx
         .update(schema.tenants)
         .set({ status: "suspended", suspendedReason: reason, updatedAt: sql`now()` })
-        .where(eq(schema.tenants.id, tid));
-
-      await writePlatformAudit(tx, platformStaffUserId, "tenant.bulk_suspend", "tenant", tid, tid, {
+        .where(eq(schema.tenants.id, t.id));
+      await writePlatformAudit(tx, platformStaffUserId, "tenant.bulk_suspend", "tenant", t.id, t.id, {
+        fromStatus: t.status,
+        toStatus: "suspended",
         reason,
-        bulkCount: tenantIds.length,
+        bulkCount: ids.length,
       }, meta);
     }
-    return { ok: true, suspendedCount: tenantIds.length };
+    return { ok: true, suspendedCount: ids.length };
   });
 }
 
 /**
- * Bulk tier change (PLAN §6.1). Transactional and audited.
+ * Bulk tier change (PLAN §6.1). All-or-nothing, typed confirmation, one audit row per store.
  */
 export async function bulkChangePlatformTenantTier(
   rt: Runtime,
   platformStaffUserId: string,
   tenantIds: string[],
   tier: "XS" | "S" | "M" | "L",
+  confirmation: string,
   meta?: AuditMeta,
 ) {
   await assertPlatformStaff(rt, platformStaffUserId);
+  const ids = [...new Set(tenantIds)];
+  if (ids.length === 0) throw new Error("Bad Request: select at least one store");
+  if (confirmation !== `TIER ${tier} ${ids.length}`) {
+    throw new Error(`Bad Request: type "TIER ${tier} ${ids.length}" to confirm`);
+  }
   const db = rt._db.db;
 
   return db.transaction(async (tx) => {
-    for (const tid of tenantIds) {
+    const existing = await tx.select({ id: schema.tenants.id }).from(schema.tenants).where(inArray(schema.tenants.id, ids));
+    if (existing.length !== ids.length) throw new Error("Not Found: one or more selected stores do not exist");
+    const previous = await tx
+      .select({ tenantId: schema.tenantSizeTiers.tenantId, tier: schema.tenantSizeTiers.tier })
+      .from(schema.tenantSizeTiers)
+      .where(inArray(schema.tenantSizeTiers.tenantId, ids));
+    const before = new Map(previous.map((p) => [p.tenantId, p.tier]));
+
+    for (const tid of ids) {
       await tx
         .insert(schema.tenantSizeTiers)
         .values({ tenantId: tid, tier })
@@ -858,11 +1017,12 @@ export async function bulkChangePlatformTenantTier(
         });
 
       await writePlatformAudit(tx, platformStaffUserId, "tenant.bulk_tier_change", "tenant", tid, tid, {
+        fromTier: before.get(tid) ?? null,
         tier,
-        bulkCount: tenantIds.length,
+        bulkCount: ids.length,
       }, meta);
     }
-    return { ok: true, updatedCount: tenantIds.length, tier };
+    return { ok: true, updatedCount: ids.length, tier };
   });
 }
 
@@ -903,79 +1063,191 @@ export async function listPlatformStaffMembers(
   }));
 }
 
+const INVITE_TTL_MS = 7 * 24 * 60 * 60 * 1000;
+
+function sha256(v: string): string {
+  return createHash("sha256").update(v).digest("hex");
+}
+
+/** Counts active platform owners (used for the last-owner protection). */
+async function countActiveOwners(tx: Db): Promise<number> {
+  const [row] = await tx
+    .select({ n: sql<number>`count(*)::int` })
+    .from(schema.platformStaff)
+    .where(and(eq(schema.platformStaff.role, "platform_owner"), eq(schema.platformStaff.isActive, true)));
+  return Number(row?.n ?? 0);
+}
+
 /**
  * Invites a new platform staff member (PLAN §6 Platform staff).
+ * - platform_admin may invite support and admin staff; only platform_owner may invite another owner.
+ * - Only a SHA-256 of the token is stored. The raw token is returned once, to the inviter, inside the invite URL
+ *   (there is no e-mail delivery), and is never returned again.
  */
 export async function invitePlatformStaffMember(
   rt: Runtime,
   platformStaffUserId: string,
-  input: { email: string; role: "platform_owner" | "platform_admin" | "platform_support" },
+  input: { email: string; role: PlatformRole },
   meta?: AuditMeta,
 ) {
-  await assertPlatformStaff(rt, platformStaffUserId);
+  const caller = await assertPlatformStaff(rt, platformStaffUserId);
+  assertRoleAtLeast(caller.role, "platform_admin", "inviting platform staff");
+  if (input.role === "platform_owner") assertRoleAtLeast(caller.role, "platform_owner", "inviting a platform owner");
   const db = rt._db.db;
   const email = input.email.trim().toLowerCase();
 
   return db.transaction(async (tx) => {
-    const token = crypto.randomUUID();
-    const tokenHash = token; // Can be sha256 or uuid
-    const expiresAt = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000);
+    const [alreadyStaff] = await tx
+      .select({ userId: schema.platformStaff.userId })
+      .from(schema.platformStaff)
+      .innerJoin(schema.users, eq(schema.users.id, schema.platformStaff.userId))
+      .where(and(eq(schema.users.email, email), eq(schema.platformStaff.isActive, true)))
+      .limit(1);
+    if (alreadyStaff) throw new Error("Conflict: this person is already an active platform staff member");
+
+    const token = randomBytes(32).toString("hex");
+    const tokenHash = sha256(token);
+    const expiresAt = new Date(Date.now() + INVITE_TTL_MS);
 
     const [invite] = await tx
       .insert(schema.platformStaffInvitations)
-      .values({
-        email,
-        role: input.role,
-        tokenHash,
-        expiresAt,
-        invitedBy: platformStaffUserId,
-      })
+      .values({ email, role: input.role, tokenHash, expiresAt, invitedBy: platformStaffUserId })
       .onConflictDoUpdate({
         target: [schema.platformStaffInvitations.email],
-        set: { role: input.role, tokenHash, expiresAt, acceptedAt: null, updatedAt: sql`now()` },
+        set: { role: input.role, tokenHash, expiresAt, acceptedAt: null, invitedBy: platformStaffUserId, updatedAt: sql`now()` },
       })
       .returning();
-
     if (!invite) throw new Error("Failed to create staff invitation");
 
     await writePlatformAudit(tx, platformStaffUserId, "platform_staff.invite", "platform_staff_invitation", invite.id, null, {
       email,
       role: input.role,
+      expiresAt: expiresAt.toISOString(),
     }, meta);
 
+    const base = (process.env.SUPERADMIN_URL ?? process.env.SUPERADMIN_ORIGINS?.split(",")[0] ?? "https://platform.gobs.cloud").trim().replace(/\/$/, "");
     return {
       id: invite.id,
       email: invite.email,
       role: invite.role,
       token,
+      inviteUrl: `${base}/accept-invitation?token=${token}`,
       expiresAt: invite.expiresAt.toISOString(),
     };
   });
 }
 
 /**
- * Updates a platform staff member's role (PLAN §6).
+ * Accepts a platform staff invitation (public endpoint, rate limited by the caller).
+ * The token is claimed atomically. A new person gets an account with the password they choose. Someone who already
+ * has an account must prove it with their CURRENT password: an invitation never replaces an existing password.
+ * MFA enrolment is required at the first sign-in like every other staff account.
+ */
+export async function acceptPlatformStaffInvitation(
+  rt: Runtime,
+  input: { token: string; password: string; name?: string | undefined },
+  meta?: AuditMeta,
+): Promise<{ ok: true; email: string; role: PlatformRole }> {
+  const token = input.token.trim();
+  if (token.length < 32) throw new Error("Invitation token is invalid, expired, or has already been used");
+  if (!input.password || input.password.length < 10) throw new Error("Password must be at least 10 characters long");
+  const db = rt._db.db;
+
+  return db.transaction(async (tx) => {
+    const claimed = await tx.execute<{ id: string; email: string; role: string; invited_by: string | null }>(sql`
+      UPDATE platform_staff_invitations
+         SET accepted_at = now(), updated_at = now()
+       WHERE token_hash = ${sha256(token)} AND accepted_at IS NULL AND expires_at > now()
+       RETURNING id, email::text AS email, role, invited_by
+    `);
+    const invite = claimed.rows[0];
+    if (!invite) throw new Error("Invitation token is invalid, expired, or has already been used");
+
+    const email = invite.email.toLowerCase();
+    let userId: string;
+    const [existing] = await tx.select({ id: schema.users.id }).from(schema.users).where(eq(schema.users.email, email)).limit(1);
+    if (existing) {
+      userId = existing.id;
+      const [cred] = await tx
+        .select({ password: schema.accounts.password })
+        .from(schema.accounts)
+        .where(and(eq(schema.accounts.userId, userId), eq(schema.accounts.providerId, "credential")))
+        .limit(1);
+      if (!cred?.password || !(await verifyPassword({ hash: cred.password, password: input.password }))) {
+        throw new Error("Incorrect password for the existing account with this email");
+      }
+    } else {
+      const [created] = await tx
+        .insert(schema.users)
+        .values({ email, name: input.name?.trim() || email.split("@")[0] || "Platform staff", emailVerified: false, twoFactorEnabled: false })
+        .returning({ id: schema.users.id });
+      if (!created) throw new Error("Failed to create user");
+      userId = created.id;
+      await tx.insert(schema.accounts).values({
+        id: crypto.randomUUID(),
+        userId,
+        accountId: userId,
+        providerId: "credential",
+        password: await hashPassword(input.password),
+      });
+    }
+
+    await tx
+      .insert(schema.platformStaff)
+      .values({ userId, role: invite.role, isActive: true, mfaRequired: true })
+      .onConflictDoUpdate({
+        target: [schema.platformStaff.userId],
+        set: { role: invite.role, isActive: true, mfaRequired: true, updatedAt: sql`now()` },
+      });
+
+    await tx.insert(schema.platformAuditLogs).values({
+      actorUserId: userId,
+      actorType: "system",
+      action: "platform_staff.invitation_accepted",
+      targetType: "platform_staff",
+      targetId: userId,
+      ip: meta?.ip,
+      userAgent: meta?.userAgent,
+      requestId: meta?.requestId,
+      diff: { email, role: invite.role, invitedBy: invite.invited_by },
+    });
+    return { ok: true as const, email, role: invite.role as PlatformRole };
+  });
+}
+
+/**
+ * Updates a platform staff member's role (owner only). The last active owner cannot be demoted.
  */
 export async function updatePlatformStaffRole(
   rt: Runtime,
   platformStaffUserId: string,
   targetUserId: string,
-  newRole: "platform_owner" | "platform_admin" | "platform_support",
+  newRole: PlatformRole,
   meta?: AuditMeta,
 ) {
   const caller = await assertPlatformStaff(rt, platformStaffUserId);
-  if (caller.role !== "platform_owner") {
-    throw new Error("Forbidden: only platform_owner can change platform staff roles");
-  }
+  assertRoleAtLeast(caller.role, "platform_owner", "changing platform staff roles");
   const db = rt._db.db;
 
   return db.transaction(async (tx) => {
+    const [target] = await tx
+      .select({ role: schema.platformStaff.role, isActive: schema.platformStaff.isActive })
+      .from(schema.platformStaff)
+      .where(eq(schema.platformStaff.userId, targetUserId))
+      .for("update")
+      .limit(1);
+    if (!target) throw new Error("Not Found: platform staff member not found");
+    if (target.role === "platform_owner" && newRole !== "platform_owner" && target.isActive && (await countActiveOwners(tx)) <= 1) {
+      throw new Error("Conflict: the last active platform owner cannot be demoted");
+    }
+
     await tx
       .update(schema.platformStaff)
       .set({ role: newRole, updatedAt: sql`now()` })
       .where(eq(schema.platformStaff.userId, targetUserId));
 
     await writePlatformAudit(tx, platformStaffUserId, "platform_staff.update_role", "platform_staff", targetUserId, null, {
+      oldRole: target.role,
       newRole,
     }, meta);
 
@@ -984,7 +1256,9 @@ export async function updatePlatformStaffRole(
 }
 
 /**
- * Deactivates a platform staff member and immediately kills all their active sessions (PLAN §6).
+ * Deactivates a platform staff member and immediately kills all their sessions (PLAN §6).
+ * Owners can deactivate anyone; admins only support staff. Nobody can deactivate themselves, and the last active
+ * owner can never be deactivated.
  */
 export async function deactivatePlatformStaffMember(
   rt: Runtime,
@@ -993,26 +1267,38 @@ export async function deactivatePlatformStaffMember(
   meta?: AuditMeta,
 ) {
   const caller = await assertPlatformStaff(rt, platformStaffUserId);
-  if (caller.role !== "platform_owner" && caller.role !== "platform_admin") {
-    throw new Error("Forbidden: only platform owners and admins can deactivate staff");
-  }
-  if (caller.role !== "platform_owner" && platformStaffUserId === targetUserId) {
+  assertRoleAtLeast(caller.role, "platform_admin", "deactivating platform staff");
+  if (platformStaffUserId === targetUserId) {
     throw new Error("Conflict: you cannot deactivate your own account");
   }
   const db = rt._db.db;
 
   return db.transaction(async (tx) => {
-    // 1. Mark inactive in platform_staff
+    const [target] = await tx
+      .select({ role: schema.platformStaff.role, isActive: schema.platformStaff.isActive })
+      .from(schema.platformStaff)
+      .where(eq(schema.platformStaff.userId, targetUserId))
+      .for("update")
+      .limit(1);
+    if (!target) throw new Error("Not Found: platform staff member not found");
+    if (caller.role !== "platform_owner" && target.role !== "platform_support") {
+      throw new Error("Forbidden: only a platform_owner can deactivate admins and owners");
+    }
+    if (target.role === "platform_owner" && target.isActive && (await countActiveOwners(tx)) <= 1) {
+      throw new Error("Conflict: the last active platform owner cannot be deactivated");
+    }
+
     await tx
       .update(schema.platformStaff)
       .set({ isActive: false, updatedAt: sql`now()` })
       .where(eq(schema.platformStaff.userId, targetUserId));
 
-    // 2. Kill sessions immediately (PLAN §6: "Deactivation must kill the sessions immediately")
+    // PLAN §6: "Deactivation must kill the sessions immediately"
     await tx.delete(schema.sessions).where(eq(schema.sessions.userId, targetUserId));
 
     await writePlatformAudit(tx, platformStaffUserId, "platform_staff.deactivate", "platform_staff", targetUserId, null, {
       deactivatedUserId: targetUserId,
+      role: target.role,
       sessionsRevoked: true,
     }, meta);
 
@@ -1021,7 +1307,7 @@ export async function deactivatePlatformStaffMember(
 }
 
 /**
- * Reactivates a previously deactivated platform staff member (PLAN §6).
+ * Reactivates a previously deactivated platform staff member (owner only). They must sign in again.
  */
 export async function reactivatePlatformStaffMember(
   rt: Runtime,
@@ -1030,16 +1316,16 @@ export async function reactivatePlatformStaffMember(
   meta?: AuditMeta,
 ) {
   const caller = await assertPlatformStaff(rt, platformStaffUserId);
-  if (caller.role !== "platform_owner") {
-    throw new Error("Forbidden: only platform_owner can reactivate staff members");
-  }
+  assertRoleAtLeast(caller.role, "platform_owner", "reactivating platform staff");
   const db = rt._db.db;
 
   return db.transaction(async (tx) => {
-    await tx
+    const updated = await tx
       .update(schema.platformStaff)
       .set({ isActive: true, updatedAt: sql`now()` })
-      .where(eq(schema.platformStaff.userId, targetUserId));
+      .where(eq(schema.platformStaff.userId, targetUserId))
+      .returning({ userId: schema.platformStaff.userId });
+    if (updated.length === 0) throw new Error("Not Found: platform staff member not found");
 
     await writePlatformAudit(tx, platformStaffUserId, "platform_staff.reactivate", "platform_staff", targetUserId, null, {
       reactivatedUserId: targetUserId,
@@ -1066,7 +1352,13 @@ export async function listPlatformAuditLogs(
   await assertPlatformStaff(rt, platformStaffUserId);
   const db = rt._db.db;
 
-  const rows = await db
+  const conditions = [
+    params?.tenantId ? eq(schema.platformAuditLogs.tenantId, params.tenantId) : undefined,
+    params?.action ? eq(schema.platformAuditLogs.action, params.action) : undefined,
+    params?.actorUserId ? eq(schema.platformAuditLogs.actorUserId, params.actorUserId) : undefined,
+  ].filter((c): c is NonNullable<typeof c> => c !== undefined);
+
+  const filtered = await db
     .select({
       id: schema.platformAuditLogs.id,
       actorUserId: schema.platformAuditLogs.actorUserId,
@@ -1082,20 +1374,10 @@ export async function listPlatformAuditLogs(
     })
     .from(schema.platformAuditLogs)
     .leftJoin(schema.users, eq(schema.users.id, schema.platformAuditLogs.actorUserId))
+    .where(conditions.length > 0 ? and(...conditions) : undefined)
     .orderBy(desc(schema.platformAuditLogs.createdAt))
-    .limit(params?.limit ?? 100)
+    .limit(Math.min(params?.limit ?? 100, 10000))
     .offset(params?.offset ?? 0);
-
-  let filtered = rows;
-  if (params?.tenantId) {
-    filtered = filtered.filter((r) => r.tenantId === params.tenantId);
-  }
-  if (params?.action) {
-    filtered = filtered.filter((r) => r.action === params.action);
-  }
-  if (params?.actorUserId) {
-    filtered = filtered.filter((r) => r.actorUserId === params.actorUserId);
-  }
 
   return filtered.map((r) => ({
     id: r.id,
@@ -1124,21 +1406,27 @@ export async function exportPlatformAuditLogsCsv(
   const headers = ["ID", "Timestamp", "Actor Email", "Actor Type", "Action", "Target Type", "Target ID", "Tenant ID", "IP", "Diff"];
   const lines = [headers.join(",")];
 
+  // Values starting with = + - @ are prefixed with a quote so spreadsheets never execute them as formulas.
+  const cell = (v: unknown): string => {
+    let t = v === null || v === undefined ? "" : String(v);
+    if (/^[=+\-@\t\r]/.test(t)) t = `'${t}`;
+    return `"${t.replace(/"/g, '""')}"`;
+  };
   for (const log of logs) {
-    const diffStr = log.diff ? JSON.stringify(log.diff).replace(/"/g, '""') : "";
-    const row = [
-      `"${log.id}"`,
-      `"${log.createdAt}"`,
-      `"${log.actorEmail ?? log.actorUserId ?? ""}"`,
-      `"${log.actorType}"`,
-      `"${log.action}"`,
-      `"${log.targetType}"`,
-      `"${log.targetId}"`,
-      `"${log.tenantId ?? ""}"`,
-      `"${log.ip ?? ""}"`,
-      `"${diffStr}"`,
-    ];
-    lines.push(row.join(","));
+    lines.push(
+      [
+        cell(log.id),
+        cell(log.createdAt),
+        cell(log.actorEmail ?? log.actorUserId ?? ""),
+        cell(log.actorType),
+        cell(log.action),
+        cell(log.targetType),
+        cell(log.targetId),
+        cell(log.tenantId ?? ""),
+        cell(log.ip ?? ""),
+        cell(log.diff ? JSON.stringify(log.diff) : ""),
+      ].join(","),
+    );
   }
 
   return lines.join("\n");

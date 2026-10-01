@@ -12,6 +12,7 @@ import { RouterLink } from "./lib/router-link.tsx";
 import { fetchPlatformMe, type PlatformUser } from "./lib/auth.ts";
 import { Layout } from "./pages/Layout.tsx";
 import { Login } from "./pages/Login.tsx";
+import { AcceptInvitation } from "./pages/AcceptInvitation.tsx";
 import { Overview } from "./pages/Overview.tsx";
 import { TenantsList } from "./pages/TenantsList.tsx";
 import { TenantCreate } from "./pages/TenantCreate.tsx";
@@ -58,6 +59,12 @@ const loginRoute = createRoute({
       />
     );
   },
+});
+
+const acceptInvitationRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: "/accept-invitation",
+  component: AcceptInvitation,
 });
 
 const authLayoutRoute = createRoute({
@@ -184,6 +191,7 @@ const auditRoute = createRoute({
 export const routeTree = rootRoute.addChildren([
   loginRoute,
   templateEditorRoute,
+  acceptInvitationRoute,
   authLayoutRoute.addChildren([
     overviewRoute,
     tenantsListRoute,

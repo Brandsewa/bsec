@@ -1,7 +1,7 @@
 import { desc, eq, sql } from "drizzle-orm";
-import { schema, type Db } from "@bs/db";
+import { schema } from "@bs/db";
 import type { Runtime } from "../runtime.ts";
-import { assertPlatformStaff } from "../platform-services.ts";
+import { assertPlatformStaff, writePlatformAudit, type AuditMeta } from "../platform-services.ts";
 
 export interface SystemQueueSummary {
   queue: string;
@@ -99,13 +99,13 @@ export async function getPlatformSystemData(
       name: string;
       data: unknown;
       output: unknown;
-      retrycount: number;
-      createdon: Date;
+      retry_count: number;
+      created_on: Date;
     }>(sql`
-      SELECT id, name, data, output, retrycount, createdon
+      SELECT id, name, data, output, retry_count, created_on
         FROM pgboss.job
        WHERE state = 'failed'
-       ORDER BY createdon DESC
+       ORDER BY created_on DESC
        LIMIT 50
     `);
 
@@ -115,8 +115,8 @@ export async function getPlatformSystemData(
         name: r.name,
         data: r.data,
         output: r.output,
-        retryCount: r.retrycount,
-        createdOn: r.createdon instanceof Date ? r.createdon.toISOString() : new Date(r.createdon).toISOString(),
+        retryCount: r.retry_count,
+        createdOn: r.created_on instanceof Date ? r.created_on.toISOString() : new Date(r.created_on).toISOString(),
       });
     }
   } catch {
@@ -197,82 +197,61 @@ export async function getPlatformSystemData(
 }
 
 /**
- * Retries a failed pg-boss job.
+ * Retries a failed pg-boss job. Only a job that is actually in the `failed` state can be retried, and the retry and
+ * its audit row are one transaction.
  */
 export async function retryFailedJob(
   rt: Runtime,
   platformStaffUserId: string,
   jobId: string,
-  meta?: { ip?: string; userAgent?: string; requestId?: string },
+  meta?: AuditMeta,
 ): Promise<{ ok: true }> {
   await assertPlatformStaff(rt, platformStaffUserId);
-  const db = rt._db.db;
 
-  await db.execute(sql`
-    UPDATE pgboss.job
-       SET state = 'created',
-           retrycount = 0,
-           startafter = now()
-     WHERE id = ${jobId}
-  `);
+  return rt._db.db.transaction(async (tx) => {
+    const found = await tx.execute<{ name: string; state: string }>(sql`
+      SELECT name, state::text AS state FROM pgboss.job WHERE id = ${jobId} FOR UPDATE
+    `);
+    const job = found.rows[0];
+    if (!job) throw new Error("Not Found: job not found");
+    if (job.state !== "failed") throw new Error(`Conflict: only failed jobs can be retried (this one is ${job.state})`);
 
-  await db.insert(schema.platformAuditLogs).values({
-    actorUserId: platformStaffUserId,
-    actorType: "platform_staff",
-    action: "system.retry_job",
-    targetType: "job",
-    targetId: jobId,
-    ip: meta?.ip,
-    userAgent: meta?.userAgent,
-    requestId: meta?.requestId,
+    await tx.execute(sql`
+      UPDATE pgboss.job
+         SET state = 'created', retry_count = 0, start_after = now()
+       WHERE id = ${jobId}
+    `);
+
+    await writePlatformAudit(tx, platformStaffUserId, "system.retry_job", "job", jobId, null, { queue: job.name }, meta);
+    return { ok: true as const };
   });
-
-  return { ok: true };
 }
 
 /**
- * Retries a failed webhook.
+ * Retries a failed webhook. The status change and its audit row are one transaction.
  */
 export async function retryFailedWebhook(
   rt: Runtime,
   platformStaffUserId: string,
   webhookId: string,
-  meta?: { ip?: string; userAgent?: string; requestId?: string },
+  meta?: AuditMeta,
 ): Promise<{ ok: true }> {
   await assertPlatformStaff(rt, platformStaffUserId);
-  const db = rt._db.db;
 
-  const [webhook] = await db
-    .select()
-    .from(schema.webhookInbox)
-    .where(eq(schema.webhookInbox.id, webhookId))
-    .limit(1);
+  return rt._db.db.transaction(async (tx) => {
+    const [webhook] = await tx.select().from(schema.webhookInbox).where(eq(schema.webhookInbox.id, webhookId)).for("update").limit(1);
+    if (!webhook) throw new Error(`Not Found: webhook not found: ${webhookId}`);
+    if (webhook.status !== "failed") throw new Error(`Conflict: only failed webhooks can be retried (this one is ${webhook.status})`);
 
-  if (!webhook) {
-    throw new Error(`Webhook not found: ${webhookId}`);
-  }
+    await tx
+      .update(schema.webhookInbox)
+      .set({ status: "received", attempts: 0, error: null, updatedAt: sql`now()` })
+      .where(eq(schema.webhookInbox.id, webhookId));
 
-  await db
-    .update(schema.webhookInbox)
-    .set({
-      status: "received",
-      attempts: 0,
-      error: null,
-      updatedAt: sql`now()`,
-    })
-    .where(eq(schema.webhookInbox.id, webhookId));
-
-  await db.insert(schema.platformAuditLogs).values({
-    actorUserId: platformStaffUserId,
-    actorType: "platform_staff",
-    action: "system.retry_webhook",
-    targetType: "webhook",
-    targetId: webhookId,
-    tenantId: webhook.tenantId,
-    ip: meta?.ip,
-    userAgent: meta?.userAgent,
-    requestId: meta?.requestId,
+    await writePlatformAudit(tx, platformStaffUserId, "system.retry_webhook", "webhook", webhookId, webhook.tenantId, {
+      provider: webhook.provider,
+      eventId: webhook.eventId,
+    }, meta);
+    return { ok: true as const };
   });
-
-  return { ok: true };
 }

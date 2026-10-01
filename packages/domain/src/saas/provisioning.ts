@@ -1,8 +1,10 @@
-import { randomUUID, randomBytes, createHash } from "node:crypto";
+import { randomUUID } from "node:crypto";
 import { eq, sql } from "drizzle-orm";
 import { schema } from "@bs/db";
 import { hashPassword, STORE_PERMISSIONS } from "@bs/auth";
-import type { Runtime } from "../runtime.ts";
+import { saasDb, type Runtime } from "../runtime.ts";
+import { tierForPlan } from "./plan-tiers.ts";
+import { buildOwnerInviteUrl, issueOwnerInviteInTx } from "./invite-token.ts";
 import { normalizeSubdomainSlug, validateSubdomainFormat } from "./subdomains.ts";
 
 export interface ProvisionOwnerInput {
@@ -22,6 +24,15 @@ export interface ProvisionTenantInput {
   timezone?: string | undefined;
   leadId?: string | undefined;
   source?: "self_service" | "platform_admin" | undefined;
+  /** The platform staff member creating the store (platform_admin source): recorded as the actor in the audit log. */
+  actorUserId?: string | undefined;
+  /** Issue the owner's single-use invite in the SAME transaction (platform-created stores). */
+  issueOwnerInvite?: boolean | undefined;
+  /**
+   * Commercial state of a platform-created store: 'trial' (14 days, then it lapses), 'active' (billed outside the platform, no
+   * expiry) or 'comped' (free, no expiry). Self-service signups are always trials.
+   */
+  subscriptionState?: "trial" | "active" | "comped" | undefined;
   /** Test hook to verify mid-transaction rollback of created org/tenant/user/domain */
   _failMidway?: boolean | undefined;
 }
@@ -35,13 +46,9 @@ export interface ProvisionTenantResult {
   adminUrl: string;
   ownerId: string;
   subscriptionId: string;
+  /** Only when issueOwnerInvite was requested: the raw token (shown once) and its link. */
+  ownerInvite?: { inviteId: string; token: string; url: string; expiresAt: Date } | undefined;
 }
-
-const TIER_FOR_PLAN: Record<string, "XS" | "S" | "M" | "L"> = {
-  starter: "XS",
-  growth: "S",
-  pro: "M",
-};
 
 /**
  * Atomic Tenant Provisioning Engine (PLAN §5.1, §6.4, §7 / ADR-016).
@@ -55,7 +62,7 @@ export async function provisionTenant(
   rt: Runtime,
   input: ProvisionTenantInput,
 ): Promise<ProvisionTenantResult> {
-  const db = rt._db.db;
+  const db = saasDb(rt);
 
   const rawSlug = input.slug.trim();
   const slug = normalizeSubdomainSlug(rawSlug);
@@ -116,6 +123,12 @@ export async function provisionTenant(
     `);
 
     if (existingUser.rows[0]) {
+      if (source === "self_service") {
+        // A stranger must not be able to create stores owned by (or burn the trial quota of) someone else's account.
+        throw new Error(
+          "An account with this email already exists. Sign in to the store admin to manage your stores, or sign up with a different email.",
+        );
+      }
       ownerId = existingUser.rows[0].id;
       isExistingUser = true;
     } else {
@@ -162,8 +175,7 @@ export async function provisionTenant(
       throw new Error("Simulated mid-transaction failure after org, user, tenant and domain creation");
     }
 
-    // 7. Password Account setup: only for brand new users (prevent account takeover)
-    // Never reuse or modify an existing user's credentials in self-signup flow.
+    // 7. Password Account setup: only for brand new users. An existing user's credentials are never touched here.
     if (!isExistingUser && input.owner.password && input.owner.password.length >= 10) {
       const passwordHash = await hashPassword(input.owner.password);
       await tx.insert(schema.accounts).values({
@@ -172,19 +184,6 @@ export async function provisionTenant(
         accountId: ownerId,
         providerId: "credential",
         password: passwordHash,
-      });
-    }
-
-    // If the email already belongs to a user, send an owner invite instead so the real mailbox owner completes setup
-    if (isExistingUser) {
-      const rawToken = randomBytes(32).toString("hex");
-      const tokenHash = createHash("sha256").update(rawToken).digest("hex");
-      const expiresAt = new Date(Date.now() + 7 * 24 * 3600 * 1000);
-      await tx.insert(schema.tenantOwnerInvites).values({
-        tenantId,
-        email: ownerEmail,
-        tokenHash,
-        expiresAt,
       });
     }
 
@@ -285,7 +284,7 @@ export async function provisionTenant(
     }
 
     // 12. Size Tier Allocation (PLAN §6.1)
-    const initialTier = TIER_FOR_PLAN[planCode] ?? "XS";
+    const initialTier = tierForPlan(planCode);
     await tx.insert(schema.tenantSizeTiers).values({
       tenantId,
       tier: initialTier,
@@ -297,17 +296,19 @@ export async function provisionTenant(
     `);
     const planId = planRow.rows[0]?.id ?? null;
 
+    const subscriptionState = source === "self_service" ? "trial" : (input.subscriptionState ?? "trial");
     const trialEnd = new Date(Date.now() + 14 * 24 * 60 * 60 * 1000);
     const [sub] = await tx
       .insert(schema.subscriptions)
       .values({
         tenantId,
         planId,
-        status: "trialing",
+        status: subscriptionState === "trial" ? "trialing" : "active",
         interval: "monthly",
         currentPeriodStart: new Date(),
-        currentPeriodEnd: trialEnd,
-        provider: "razorpay",
+        // Trials lapse after 14 days; manually billed and comped stores have no automatic expiry.
+        currentPeriodEnd: subscriptionState === "trial" ? trialEnd : null,
+        provider: subscriptionState === "trial" ? "razorpay" : subscriptionState === "comped" ? "comped" : "manual",
       })
       .returning({ id: schema.subscriptions.id });
     if (!sub) {
@@ -580,7 +581,7 @@ export async function provisionTenant(
 
     // 17. Record Platform Audit Log
     await tx.insert(schema.platformAuditLogs).values({
-      actorUserId: source === "self_service" ? ownerId : null,
+      actorUserId: source === "self_service" ? ownerId : (input.actorUserId ?? null),
       actorType: source === "self_service" ? "system" : "platform_staff",
       action: "tenant.provisioned",
       targetType: "tenant",
@@ -596,6 +597,12 @@ export async function provisionTenant(
       },
     });
 
+    let ownerInvite: ProvisionTenantResult["ownerInvite"];
+    if (input.issueOwnerInvite) {
+      const issued = await issueOwnerInviteInTx(tx, { tenantId, email: ownerEmail, invitedBy: input.actorUserId });
+      ownerInvite = { inviteId: issued.inviteId, token: issued.rawToken, url: buildOwnerInviteUrl(issued.rawToken), expiresAt: issued.expiresAt };
+    }
+
     return {
       tenantId,
       organizationId,
@@ -605,6 +612,7 @@ export async function provisionTenant(
       adminUrl,
       ownerId,
       subscriptionId: sub.id,
+      ownerInvite,
     };
   });
 }

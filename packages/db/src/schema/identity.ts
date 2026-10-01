@@ -87,7 +87,7 @@ export const twoFactors = pgTable("two_factors", {
   secret: text("secret").notNull(),
   backupCodes: text("backup_codes").notNull(),
   userId: uuid("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
-  verified: boolean("verified").default(true),
+  verified: boolean("verified").default(false),
   failedVerificationCount: integer("failed_verification_count").default(0),
   lockedUntil: timestamp("locked_until", { withTimezone: true }),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().default(sql`now()`),

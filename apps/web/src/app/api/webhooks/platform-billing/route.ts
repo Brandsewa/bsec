@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { handlePlatformBillingWebhook } from "@bs/domain";
+import { handlePlatformBillingWebhook, SaasNotConfiguredError } from "@bs/domain";
 import { server } from "@/server/runtime.ts";
 
 export async function POST(req: Request) {
@@ -19,10 +19,12 @@ export async function POST(req: Request) {
     const result = await handlePlatformBillingWebhook(rt, {
       rawBody,
       signature,
+      headers: req.headers,
     });
 
     return NextResponse.json(result, { status: 200 });
   } catch (err: unknown) {
+    if (err instanceof SaasNotConfiguredError) return NextResponse.json({ error: err.message }, { status: 503 });
     const error = err as { statusCode?: number; message?: string };
     const status = error.statusCode || 400;
     return NextResponse.json(

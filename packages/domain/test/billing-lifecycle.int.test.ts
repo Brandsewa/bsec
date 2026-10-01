@@ -5,6 +5,7 @@ import { createDb, type DbHandle, schema } from "@bs/db";
 import { bootstrapRoles } from "@bs/db/bootstrap";
 import { runMigrations } from "@bs/db/migrate";
 import { eq } from "drizzle-orm";
+import type { SubscriptionBillingProvider } from "../src/saas/billing.ts";
 import {
   createRuntime,
   type Runtime,
@@ -298,7 +299,7 @@ describe("M8 Platform Merchant Subscriptions & Billing Lifecycle (ADR-014, PLAN 
       planCode: "growth",
       interval: "yearly",
       customerEmail: "merchant.billing@example.com",
-      provider: mockProvider as any,
+      provider: mockProvider as SubscriptionBillingProvider,
     });
 
     expect(result.plan.code).toBe("growth");

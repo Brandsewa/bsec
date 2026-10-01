@@ -49,7 +49,7 @@ Already running on the production VPS. API access is **enabled** (Settings -> Ad
 ## 4. Roles bootstrap
 Done via the `bsec-migrate` resource's single `deploy.js` entrypoint (`packages/db/src/scripts/deploy.ts`), **not** a manual `docker run` - that needs no VPS shell access at all:
 1. Create `bsec-migrate` as a Coolify "Docker Image" resource, image `ghcr.io/brandsewa/bsec-migrate:main`.
-2. Set env vars (once, for the first run): `DATABASE_URL_SUPERUSER` (copy from `bsec-postgres` -> General -> "Postgres URL (internal)"), `APP_OWNER_PASSWORD`, `APP_RW_PASSWORD`, `APP_PLATFORM_PASSWORD` (generate three strong random values), `DATABASE_URL_OWNER` (same host, `app_owner` + its password).
+2. Set env vars (once, for the first run): `DATABASE_URL_SUPERUSER` (copy from `bsec-postgres` -> General -> "Postgres URL (internal)"), `APP_OWNER_PASSWORD`, `APP_RW_PASSWORD`, `APP_PLATFORM_PASSWORD` and (for self-service signup/billing) `APP_SAAS_PASSWORD` (generate strong random values); then add `DATABASE_URL_SAAS=postgres://app_saas:<APP_SAAS_PASSWORD>@<postgres-internal-hostname>:5432/bsec` to web and worker, `DATABASE_URL_OWNER` (same host, `app_owner` + its password).
 3. Click **Deploy**. Check Runtime Logs for `roles ok` / `migrations ok`.
 4. **Remove `DATABASE_URL_SUPERUSER`** from the resource's env vars afterwards - only this one-shot job may ever hold superuser credentials, and it only needs it once. `deploy.js` skips the bootstrap step (just migrates) when that var is absent.
 5. Coolify's default restart policy will loop-restart a Docker Image resource whose process exits 0 (as `deploy.js` always does). After a successful deploy, go to Actions -> Stop so it sits idle until the next deploy, instead of restarting forever.

@@ -182,7 +182,8 @@ export type Brand = z.infer<typeof Brand>;
 
 // --- M2 Inventory Schemas ---
 export const InventoryLevelItem = z.object({
-  id: z.string().uuid(),
+  /** The stock row id, or "variantId:locationId" for a variant that has never had stock. */
+  id: z.string(),
   variantId: z.string().uuid(),
   locationId: z.string().uuid(),
   onHand: z.number(),
@@ -219,6 +220,17 @@ export const PresignedUploadResponse = z.object({
 export type PresignedUploadResponse = z.infer<typeof PresignedUploadResponse>;
 
 // --- M2 Branding Schemas ---
+export const StorefrontStatus = z.object({
+  mode: z.enum(["live", "coming_soon", "maintenance", "password"]),
+  headline: z.string().nullable(),
+  showCountdown: z.boolean(),
+  collectEmails: z.boolean(),
+  launchAt: z.string().nullable(),
+  hasPassword: z.boolean(),
+});
+
+export type StorefrontStatus = z.infer<typeof StorefrontStatus>;
+
 export const BrandSettings = z.object({
   // "default" until the store saves branding for the first time (no row yet), so not a uuid.
   id: z.string(),
@@ -387,13 +399,53 @@ export const AdminMeStore = z.object({
   role: z.string(),
   permissions: z.array(z.string()),
 });
+export const AdminMeSupport = z.object({
+  sessionId: z.string().uuid(),
+  scope: z.enum(["read_only", "write"]),
+  consent: z.enum(["owner_approved", "standing_consent", "emergency"]),
+  reason: z.string(),
+  ticketRef: z.string(),
+  expiresAt: z.string(),
+});
 export const AdminMe = z.object({
   user: z.object({ id: z.string().uuid(), email: z.string(), name: z.string() }),
   stores: z.array(AdminMeStore),
+  /** Present only when the caller is a platform support session (X-Support-Token), never for a normal sign-in. */
+  support: AdminMeSupport.optional(),
 });
 export type AdminMe = z.infer<typeof AdminMe>;
 
+export const StoreSupportSession = z.object({
+  id: z.string().uuid(),
+  staffName: z.string(),
+  staffEmail: z.string(),
+  reason: z.string(),
+  ticketRef: z.string(),
+  consent: z.enum(["owner_approved", "standing_consent", "emergency"]),
+  scope: z.enum(["read_only", "write"]),
+  status: z.enum(["pending_owner_approval", "active", "denied", "ended", "expired"]),
+  requestedAt: z.string(),
+  expiresAt: z.string(),
+  actionsCount: z.number(),
+});
+
 export const adminContract = {
+  support: {
+    list: oc.route({ method: "GET", path: "/admin/support/sessions" }).output(z.array(StoreSupportSession)),
+    approve: oc
+      .route({ method: "POST", path: "/admin/support/sessions/{id}/approve" })
+      .input(z.object({ id: z.string().uuid() }))
+      .output(z.object({ ok: z.literal(true) })),
+    deny: oc
+      .route({ method: "POST", path: "/admin/support/sessions/{id}/deny" })
+      .input(z.object({ id: z.string().uuid() }))
+      .output(z.object({ ok: z.literal(true) })),
+    getStandingConsent: oc.route({ method: "GET", path: "/admin/support/standing-consent" }).output(z.object({ enabled: z.boolean() })),
+    setStandingConsent: oc
+      .route({ method: "PUT", path: "/admin/support/standing-consent" })
+      .input(z.object({ enabled: z.boolean() }))
+      .output(z.object({ enabled: z.boolean() })),
+  },
   me: {
     get: oc.route({ method: "GET", path: "/admin/me" }).output(AdminMe),
   },
@@ -490,6 +542,14 @@ export const adminContract = {
 
   // Catalog: Products
   products: {
+    attachMedia: oc
+      .route({ method: "POST", path: "/admin/products/{id}/media" })
+      .input(z.object({ id: z.string().uuid(), mediaId: z.string().uuid(), alt: z.string().max(200).optional() }))
+      .output(z.object({ id: z.string().uuid(), position: z.number(), isPrimary: z.boolean(), url: z.string().optional() })),
+    detachMedia: oc
+      .route({ method: "DELETE", path: "/admin/products/{id}/media/{productMediaId}" })
+      .input(z.object({ id: z.string().uuid(), productMediaId: z.string().uuid() }))
+      .output(z.object({ success: z.boolean() })),
     list: oc
       .route({ method: "GET", path: "/admin/products" })
       .input(
@@ -1310,6 +1370,26 @@ export const adminContract = {
           message: z.string(),
         }),
       ),
+  },
+
+  // --- Storefront mode: live / coming soon / maintenance / password ---
+  storefront: {
+    getStatus: oc
+      .route({ method: "GET", path: "/admin/storefront/status" })
+      .output(StorefrontStatus),
+    updateStatus: oc
+      .route({ method: "PATCH", path: "/admin/storefront/status" })
+      .input(
+        z.object({
+          mode: z.enum(["live", "coming_soon", "maintenance", "password"]).optional(),
+          headline: z.string().trim().max(120).nullable().optional(),
+          collectEmails: z.boolean().optional(),
+          showCountdown: z.boolean().optional(),
+          launchAt: z.string().datetime().nullable().optional(),
+          password: z.string().min(6).max(128).nullable().optional(),
+        }),
+      )
+      .output(StorefrontStatus),
   },
 
   // --- M8 Onboarding Setup Checklist (PLAN §5.2, §8) ---

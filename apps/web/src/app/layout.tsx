@@ -4,7 +4,7 @@ import { headers } from "next/headers";
 import { cacheTag } from "next/cache";
 import { evaluateStorefrontAccess, tenantTag, type getBrandSettings } from "@bs/domain";
 import { server } from "@/server/runtime.ts";
-import { getCachedBrandSettings } from "@/server/cached-storefront.ts";
+import { getCachedBrandSettings, getCachedStoreName } from "@/server/cached-storefront.ts";
 import { StoreHeader } from "@/components/storefront/StoreHeader.tsx";
 import { StoreFooter } from "@/components/storefront/StoreFooter.tsx";
 import { StoreStatusBanner } from "@/components/storefront/StoreStatusBanner.tsx";
@@ -27,6 +27,14 @@ export async function generateMetadata(): Promise<Metadata> {
     const { rt } = server();
     const access = await evaluateStorefrontAccess(rt, host, { headers: h });
     const isNoIndex = access.noindex ?? true;
+    if (access.tenantId) {
+      const name = await getCachedStoreName(access.tenantId).catch(() => "Store");
+      return {
+        title: name,
+        description: `Shop at ${name}.`,
+        robots: isNoIndex ? { index: false, follow: false } : { index: true, follow: true },
+      };
+    }
     return {
       title: "Bs Commerce",
       description: "Launch your online store in 10 minutes.",
@@ -44,6 +52,7 @@ export async function generateMetadata(): Promise<Metadata> {
 export default async function RootLayout({ children }: { children: ReactNode }) {
   let access: Awaited<ReturnType<typeof evaluateStorefrontAccess>>;
   let brandSettings: Awaited<ReturnType<typeof getBrandSettings>> | null = null;
+  let storeName = "Store";
   const activeThemeTokens: Record<string, unknown> | null = null;
 
   try {
@@ -54,6 +63,7 @@ export default async function RootLayout({ children }: { children: ReactNode }) 
     access = await evaluateStorefrontAccess(rt, host, { headers: h });
 
     if (access.tenantId) {
+      storeName = await getCachedStoreName(access.tenantId).catch(() => "Store");
       // In M3, retrieve published brand settings and theme tokens using tenant context with Cache Components
       try {
         brandSettings = await getCachedBrandSettings(access.tenantId);
@@ -114,7 +124,6 @@ export default async function RootLayout({ children }: { children: ReactNode }) 
     );
   }
 
-  const storeName = "Store";
   const logoWidth = typeof brandSettings?.logoWidth === "number" ? brandSettings.logoWidth : 150;
 
   return (

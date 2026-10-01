@@ -59,19 +59,10 @@ CREATE INDEX IF NOT EXISTS "quota_events_level_idx" ON "quota_events" ("level");
 -- 3. Non-regression: Assign existing tenants to generous Tier L so nothing is blocked
 INSERT INTO "tenant_size_tiers" ("tenant_id", "tier", "created_at", "updated_at")
 SELECT "id", 'L', now(), now() FROM "tenants"
-ON CONFLICT ("tenant_id") DO UPDATE SET "tier" = 'L';
+ON CONFLICT ("tenant_id") DO NOTHING;
 --> statement-breakpoint
 
--- 4. Move Store #1 to store101.gobs.cloud and slug store101 if currently on gobs.cloud or store-1
-UPDATE "tenants"
-SET "slug" = 'store101'
-WHERE "slug" = 'store-1';
---> statement-breakpoint
-UPDATE "domains"
-SET "hostname" = 'store101.gobs.cloud', "type" = 'platform_subdomain', "is_primary" = true, "status" = 'active'
-WHERE "hostname" = 'gobs.cloud'
-   OR "tenant_id" IN (SELECT "id" FROM "tenants" WHERE "slug" = 'store101');
---> statement-breakpoint
+-- (Store #1 slug/hostname are deliberately NOT rewritten here: migrations never change existing tenant data.)
 
 -- 5. Plans table
 CREATE TABLE IF NOT EXISTS "plans" (

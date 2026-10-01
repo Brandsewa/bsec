@@ -9,6 +9,7 @@ import {
   getStorefrontPage,
   getBrandSettings,
   resolvePageRenderData,
+  getStoreSettings,
   type CatalogListingOptions,
   type StorefrontProductDetail,
   type StorefrontCollectionDetail,
@@ -49,13 +50,14 @@ export async function getCachedStorefrontProduct(
   slug: string,
 ): Promise<StorefrontProductDetail | null> {
   "use cache";
+  // Tag before the lookup: a "not found" (e.g. a draft that is published later) must be invalidated too.
+  cacheTag(tenantTag(tenantId, "product"));
   const { rt } = server();
   const tenantCtx = createStorefrontTenantContext(tenantId);
   const product = await getStorefrontProduct(rt, tenantCtx, slug);
 
   if (product) {
     cacheTag(tenantTag(tenantId, "product", product.id));
-    cacheTag(tenantTag(tenantId, "product"));
   }
 
   return product;
@@ -67,13 +69,15 @@ export async function getCachedStorefrontCollection(
   options?: CatalogListingOptions,
 ): Promise<StorefrontCollectionDetail | null> {
   "use cache";
+  cacheTag(tenantTag(tenantId, "collection"));
+  // A collection page lists products, so product changes must refresh it too.
+  cacheTag(tenantTag(tenantId, "product"));
   const { rt } = server();
   const tenantCtx = createStorefrontTenantContext(tenantId);
   const res = await getStorefrontCollection(rt, tenantCtx, slug, options);
 
   if (res?.collection) {
     cacheTag(tenantTag(tenantId, "collection", res.collection.id));
-    cacheTag(tenantTag(tenantId, "collection"));
   }
 
   return res;
@@ -85,13 +89,14 @@ export async function getCachedStorefrontCategory(
   options?: CatalogListingOptions,
 ): Promise<StorefrontCategoryDetail | null> {
   "use cache";
+  cacheTag(tenantTag(tenantId, "category"));
+  cacheTag(tenantTag(tenantId, "product"));
   const { rt } = server();
   const tenantCtx = createStorefrontTenantContext(tenantId);
   const res = await getStorefrontCategory(rt, tenantCtx, slug, options);
 
   if (res?.category) {
     cacheTag(tenantTag(tenantId, "category", res.category.id));
-    cacheTag(tenantTag(tenantId, "category"));
   }
 
   return res;
@@ -132,18 +137,16 @@ export async function getCachedStorefrontHomePage(tenantId: string) {
 
 export async function getCachedStorefrontPage(tenantId: string, slug: string) {
   "use cache";
+  // Tag before the lookup so a page that did not exist yet (or was unpublished) refreshes when it is published.
+  cacheTag(tenantTag(tenantId, "page", slug));
+  cacheTag(tenantTag(tenantId, "store-shell"));
   const { rt } = server();
   const tenantCtx = createStorefrontTenantContext(tenantId);
   const page = await getStorefrontPage(rt, tenantCtx, slug);
+  if (!page) return page;
 
-  if (page) {
-    cacheTag(tenantTag(tenantId, "page", slug));
-    cacheTag(tenantTag(tenantId, "store-shell"));
-    const renderData = await loadRenderData(tenantId, tenantCtx, page.document);
-    return { ...page, renderData };
-  }
-
-  return page;
+  const renderData = await loadRenderData(tenantId, tenantCtx, page.document);
+  return { ...page, renderData };
 }
 
 export async function getCachedBrandSettings(tenantId: string) {
@@ -157,4 +160,13 @@ export async function getCachedBrandSettings(tenantId: string) {
   cacheTag(tenantTag(tenantId, "nav"));
 
   return settings;
+}
+
+/** The store's public name (header, footer, page title). Invalidated with the rest of the store shell. */
+export async function getCachedStoreName(tenantId: string): Promise<string> {
+  "use cache";
+  cacheTag(tenantTag(tenantId, "store-shell"));
+  const { rt } = server();
+  const settings = await getStoreSettings(rt, createStorefrontTenantContext(tenantId));
+  return settings.storeName;
 }

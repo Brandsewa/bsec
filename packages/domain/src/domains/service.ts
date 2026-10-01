@@ -3,6 +3,7 @@ import { and, eq, ne, sql } from "drizzle-orm";
 import { schema } from "@bs/db";
 import type { Runtime } from "../runtime.ts";
 import { assertCustomDomainQuota } from "../system/quotas.ts";
+import { isDomainManagementAllowed } from "../system/tenant-lifecycle.ts";
 import {
   type CustomDomainProvider,
   CloudflareCustomDomainProvider,
@@ -26,7 +27,7 @@ export interface CustomDomainRecord {
   updatedAt: Date;
 }
 
-const FQDN_PATTERN = /^(?!:\/\/)([a-zA-Z0-9-_]+\.)+[a-zA-Z]{2,}$/;
+const FQDN_PATTERN = /^(?!:\/\/)([a-zA-Z0-9-]+\.)+[a-zA-Z]{2,}$/;
 
 /**
  * Normalizes and validates custom hostname input.
@@ -41,8 +42,13 @@ export function normalizeCustomHostname(raw: string): string {
     throw new Error(`Invalid domain name format: '${raw}'. Please enter a valid fully-qualified domain name (e.g. store.mydomain.com).`);
   }
 
-  if (h === "gobs.cloud" || h.endsWith(".gobs.cloud")) {
-    throw new Error(`Platform root and subdomains (*.gobs.cloud) cannot be added as custom domains.`);
+  // The platform's own domain, its subdomains and the admin/marketing hosts can never be claimed by a store.
+  const platformDomain = (process.env.PLATFORM_DOMAIN?.trim() || "gobs.cloud").toLowerCase();
+  const reservedExact = [process.env.ADMIN_HOST, process.env.MARKETING_HOST]
+    .map((v) => v?.trim().toLowerCase().replace(/:\d+$/, ""))
+    .filter((v): v is string => Boolean(v));
+  if (h === platformDomain || h.endsWith(`.${platformDomain}`) || reservedExact.includes(h)) {
+    throw new Error(`Platform hosts (${platformDomain} and its subdomains) cannot be added as custom domains.`);
   }
 
   return h;
@@ -87,6 +93,12 @@ export async function addCustomDomain(
   const db = rt._db.db;
   const hostname = normalizeCustomHostname(input.hostname);
   const provider = input.provider ?? new CloudflareCustomDomainProvider();
+
+  // 0. Lifecycle (PLAN §6.4): domains can only be added while the store is fully live
+  const [tenantRow] = await db.select({ status: schema.tenants.status }).from(schema.tenants).where(eq(schema.tenants.id, tenantId)).limit(1);
+  if (tenantRow && !isDomainManagementAllowed(tenantRow.status)) {
+    throw new Error(`Forbidden: custom domains cannot be added while the store is '${tenantRow.status}'`);
+  }
 
   // 1. Quota Enforcement (PLAN §6.1)
   await assertCustomDomainQuota(db, tenantId);
@@ -179,10 +191,17 @@ export async function verifyCustomDomain(
 
   const statusRes = await provider.getCustomHostnameStatus(domain.cfCustomHostnameId);
 
+  // State machine: requested -> awaiting_dns -> verifying -> ssl_pending -> active. A provider poll can move a
+  // domain forward (or to failed) but never silently back, e.g. an active domain does not regress to pending.
+  const rank: Record<string, number> = { requested: 0, awaiting_dns: 1, verifying: 2, ssl_pending: 3, active: 4 };
+  const currentRank = rank[domain.status] ?? -1;
+  const nextRank = rank[statusRes.status] ?? -1;
+  const nextStatus = statusRes.status === "failed" || nextRank >= currentRank ? statusRes.status : domain.status;
+
   const [updated] = await db
     .update(schema.domains)
     .set({
-      status: statusRes.status,
+      status: nextStatus,
       sslStatus: statusRes.sslStatus,
       lastCheckedAt: new Date(),
       updatedAt: new Date(),
@@ -191,7 +210,7 @@ export async function verifyCustomDomain(
     .returning();
 
   // If verified and active, mark onboarding checklist step complete
-  if (statusRes.status === "active") {
+  if (nextStatus === "active") {
     await db.execute(sql`
       UPDATE onboarding_progress
       SET steps = jsonb_set(steps, '{domain_connected}', 'true'::jsonb),

@@ -44,6 +44,8 @@ export interface BlockProduct {
   ratingAvg?: string | undefined;
   ratingCount?: number | undefined;
   imageMediaId?: string | undefined;
+  /** Ready-to-use public URL of the primary image, when the host already knows it. */
+  imageUrl?: string | undefined;
   imageAlt?: string | null | undefined;
 }
 

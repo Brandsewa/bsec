@@ -50,7 +50,7 @@ test("sign in: a wrong password is refused, the right one opens the store", asyn
 
   await page.getByLabel("Password").fill(PASSWORD);
   await page.getByRole("button", { name: "Sign in" }).click();
-  await expect(page.getByRole("link", { name: "Orders" })).toBeVisible();
+  await expect(page.getByRole("link", { name: "Orders" }).first()).toBeVisible();
   await expect(page.getByText(EMAIL)).toBeVisible();
 });
 
@@ -62,7 +62,7 @@ test("the demo store shows real products, orders, customers and discounts", asyn
   await expect(page.getByText("Cotton Kurta")).toBeVisible();
   await expect(page.getByText("Out of stock").first()).toBeVisible();
 
-  await page.getByRole("link", { name: "Orders" }).click();
+  await page.getByRole("link", { name: "Orders" }).first().click();
   await expect(page.getByText("ORD-00019")).toBeVisible();
   // the first four demo orders are COD orders the customer has not confirmed yet
   await page.getByRole("button", { name: "COD to confirm" }).click();
@@ -130,7 +130,7 @@ test("team invite: create link, accept as a new person, they sign in and see the
 
 test("signing out ends the session", async ({ page, request }) => {
   await signIn(page);
-  await expect(page.getByRole("link", { name: "Orders" })).toBeVisible();
+  await expect(page.getByRole("link", { name: "Orders" }).first()).toBeVisible();
   await page.getByRole("button", { name: "Sign out" }).click();
   await expect(page).toHaveURL(/\/login/);
   await page.goto("/orders");
@@ -166,7 +166,7 @@ test("store owner invite: follows emailed link, sets password, logs in, and land
       await page.getByLabel("Email").fill(ownerEmail);
       await page.getByLabel("Password").fill(ownerPassword);
       await page.getByRole("button", { name: "Sign in" }).click();
-      await expect(page.getByRole("link", { name: "Orders" })).toBeVisible();
+      await expect(page.getByRole("link", { name: "Orders" }).first()).toBeVisible();
     }
   }
 });

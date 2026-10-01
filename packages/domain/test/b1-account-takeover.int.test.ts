@@ -73,16 +73,22 @@ describe("B1: Signup account takeover prevention", () => {
     const attackerPassword = "AttackerStolenPassword999!";
     const slug = "victim-store-takeover";
 
-    await provisionTenant(rtPlatform, {
-      storeName: "Victim Impersonated Store",
-      slug,
-      owner: {
-        email: victimEmail,
-        name: "Attacker Impersonator",
-        password: attackerPassword,
-      },
-      source: "self_service",
-    });
+    await expect(
+      provisionTenant(rtPlatform, {
+        storeName: "Victim Impersonated Store",
+        slug,
+        owner: {
+          email: victimEmail,
+          name: "Attacker Impersonator",
+          password: attackerPassword,
+        },
+        source: "self_service",
+      }),
+    ).rejects.toThrow(/already exists/);
+
+    // Nothing was created for the attacker: no tenant, no invite for the victim
+    const stray = await platformDb.db.execute<{ n: string }>(sql`SELECT count(*)::text AS n FROM tenants WHERE slug = ${slug}`);
+    expect(stray.rows[0]!.n).toBe("0");
 
     // 3. Assert victim's password hash in the accounts table has NOT changed
     const accountRows = await platformDb.db.execute<{ password: string }>(sql`
@@ -105,10 +111,9 @@ describe("B1: Signup account takeover prevention", () => {
     `);
     expect(userRows.rows[0]!.email_verified).toBe(false);
 
-    // An owner invite must have been created for the victim to complete setup
-    const inviteRows = await platformDb.db.execute<{ id: string; email: string }>(sql`
-      SELECT id, email FROM tenant_owner_invites WHERE email = ${victimEmail};
+    const inviteRows = await platformDb.db.execute<{ id: string }>(sql`
+      SELECT id FROM tenant_owner_invites WHERE email = ${victimEmail};
     `);
-    expect(inviteRows.rows.length).toBeGreaterThan(0);
+    expect(inviteRows.rows.length).toBe(0);
   });
 });

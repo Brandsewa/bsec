@@ -11,6 +11,7 @@ import { schema } from "@bs/db";
 import { eq, and } from "drizzle-orm";
 import { acquireTenantJobSlot, cleanExpiredRateLimits, reapStaleTenantJobSlots, releaseTenantJobSlot } from "./system/rate-limit.ts";
 import { runTrialExpirySweep } from "./saas/trial-expiry.ts";
+import { isMarketingAllowed } from "./system/tenant-lifecycle.ts";
 
 /**
  * Job runtime (PLAN §11). Queues are created by the migrate step (as app_owner); workers run
@@ -227,6 +228,8 @@ export async function startJobs(opts: {
   log: Logger;
   concurrency: number;
   db?: Db | undefined;
+  /** app_saas connection for the trial sweep; without it the sweep is skipped with a warning. */
+  saasDb?: Db | undefined;
 }): Promise<Jobs> {
   const boss = new PgBoss({ connectionString: opts.databaseUrl, max: 3, migrate: false, application_name: "bsec-worker" });
   let running = false;
@@ -433,8 +436,9 @@ export async function startJobs(opts: {
         if (job.data?.tenantId) {
           tenantIds = [job.data.tenantId];
         } else {
-          const allTenants = await db.select({ id: schema.tenants.id }).from(schema.tenants);
-          tenantIds = allTenants.map((t) => t.id);
+          // Marketing (recovery e-mails) is paused for stores that are not live (suspended, archived, being deleted)
+          const allTenants = await db.select({ id: schema.tenants.id, status: schema.tenants.status }).from(schema.tenants);
+          tenantIds = allTenants.filter((t) => isMarketingAllowed(t.status)).map((t) => t.id);
         }
 
         let totalAbandoned = 0;
@@ -456,7 +460,11 @@ export async function startJobs(opts: {
   await boss.work(QUEUE_NAMES.SUBSCRIPTION_TRIAL_EXPIRY_SWEEP, { localConcurrency: 1 }, async (batch) => {
     for (const job of batch) {
       try {
-        const res = await runTrialExpirySweep(db);
+        if (!opts.saasDb) {
+          opts.log.warn({ job_id: job.id }, "subscription.trial_expiry_sweep skipped: DATABASE_URL_SAAS not configured");
+          continue;
+        }
+        const res = await runTrialExpirySweep(opts.saasDb);
         opts.log.info({ job_id: job.id, expiredCount: res.expired }, "subscription.trial_expiry_sweep processed");
       } catch (err) {
         opts.log.error({ err, job_id: job.id }, "subscription.trial_expiry_sweep failed");

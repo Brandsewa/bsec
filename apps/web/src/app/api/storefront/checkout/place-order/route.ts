@@ -3,6 +3,7 @@ import { z } from "zod";
 import {
   evaluateStorefrontAccess,
   placeOrder,
+  ONLINE_PAYMENT_AVAILABLE,
   FeatureDisabledError,
   checkStorefrontRateLimit,
   RateLimitExceededError,
@@ -19,7 +20,8 @@ const PlaceOrderSchema = z.object({
   city: z.string().min(1, "City is required"),
   state: z.string().min(1, "State is required"),
   pincode: z.string().regex(/^[1-9][0-9]{5}$/, "Valid 6-digit Indian pincode required"),
-  shippingMethod: z.enum(["standard", "express"]).default("standard"),
+  // The method id of one of the store's own shipping rates (as listed on the checkout page).
+  shippingMethod: z.string().min(1).max(64).optional(),
   paymentMethod: z.enum(["cod", "razorpay", "online"]).default("cod"),
   notes: z.string().optional(),
 });
@@ -76,6 +78,9 @@ export async function POST(req: Request) {
       h.get("idempotency-key") ??
       (typeof bodyObj.idempotencyKey === "string" ? bodyObj.idempotencyKey : undefined);
     const paymentMethod = parsed.data.paymentMethod === "online" ? "razorpay" : parsed.data.paymentMethod;
+    if (paymentMethod !== "cod" && !ONLINE_PAYMENT_AVAILABLE) {
+      return NextResponse.json({ error: "Online payment is not available yet. Please choose Cash on Delivery." }, { status: 400 });
+    }
 
     const orderResult = await placeOrder(rt, tenantCtx, {
       cartToken: token,

@@ -106,14 +106,23 @@ jobs:
     needs: images
     runs-on: ubuntu-24.04
     timeout-minutes: 15
+    permissions:
+      contents: read
+      packages: read
     env:
       IMAGE_TAG: sha-${{ github.sha }}  # docker/metadata-action type=sha prefixes "sha-"
       COMPOSE: docker compose -f docker-compose.staging.yml
     steps:
       - uses: actions/checkout@v5
+      # New GHCR packages start private; log in so the pull works whatever their visibility.
+      - uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
       - name: Generate per-run secrets
         run: |
-          for v in POSTGRES_PASSWORD APP_OWNER_PASSWORD APP_RW_PASSWORD APP_PLATFORM_PASSWORD E2E_PASSWORD; do
+          for v in POSTGRES_PASSWORD APP_OWNER_PASSWORD APP_RW_PASSWORD APP_PLATFORM_PASSWORD APP_SAAS_PASSWORD E2E_PASSWORD; do
             val=$(openssl rand -hex 16); echo "::add-mask::$val"; echo "$v=$val" >> "$GITHUB_ENV"
           done
           for v in BETTER_AUTH_SECRET TENANT_SECRETS_KEY; do
@@ -150,6 +159,8 @@ jobs:
           $COMPOSE exec -T postgres psql -U postgres -d bsec -v ON_ERROR_STOP=1 -c "insert into organizations (id, name) values ('0199b000-0000-7000-8000-000000000000', 'CI Org'); insert into tenants (id, organization_id, slug, name) values ('0199b000-0000-7000-8000-000000000001', '0199b000-0000-7000-8000-000000000000', 'ci-store', 'CI Store');"
           $COMPOSE run --rm --no-deps -e OWNER_EMAIL=owner@ci.example -e OWNER_NAME="CI Owner" -e OWNER_PASSWORD="$E2E_PASSWORD" -e STORE_SLUG=ci-store worker node dist/create-owner.js
           $COMPOSE run --rm --no-deps -e OWNER_EMAIL=owner@ci.example platform node dist/demo.js seed
+          # First platform staff login (the Super Admin e2e sets up its authenticator through the UI)
+          $COMPOSE run --rm --no-deps -e STAFF_EMAIL=owner@ci.example -e STAFF_NAME="CI Owner" -e STAFF_PASSWORD="$E2E_PASSWORD" platform node dist/create-staff.js
       - uses: pnpm/action-setup@v4
       - uses: actions/setup-node@v5
         with:
@@ -162,6 +173,10 @@ jobs:
           ADMIN_URL: http://127.0.0.1:8080
           API_URL: http://127.0.0.1:3000
           E2E_EMAIL: owner@ci.example
+          SUPERADMIN_URL: http://127.0.0.1:8081
+          PLATFORM_API_URL: http://127.0.0.1:4000
+          STAFF_EMAIL: owner@ci.example
+          STAFF_PASSWORD: ${{ env.E2E_PASSWORD }}
         run: pnpm --filter @bs/e2e e2e
       - name: Upload browser test report and screenshots
         if: always()

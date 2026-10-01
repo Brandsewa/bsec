@@ -8,6 +8,7 @@ import {
   type Db,
 } from "@bs/db";
 import type { Runtime } from "../runtime.ts";
+import { releaseReservation } from "../catalog/inventory-reservations.ts";
 import type { TenantContext } from "../context.ts";
 
 export const ORDER_STATUSES = [
@@ -309,6 +310,31 @@ export async function transitionOrder(
           updatedAt: new Date(),
         })
         .where(and(eq(orders.tenantId, ctx.tenantId), eq(orders.id, orderId)));
+
+      // A cancelled order must give its reserved stock back, otherwise it keeps blocking real sales.
+      if (targetStatus === "cancelled") {
+        await releaseReservation(db, ctx.tenantId, { orderId, reason: "cancelled" });
+
+        // ...and any payment that has not been paid yet is void: nothing is due (a COD order would otherwise stay
+        // "cod_pending" forever). Paid or authorised money is left alone: refunding is a separate step.
+        const voided = await db
+          .update(paymentIntents)
+          .set({ status: "cancelled", updatedAt: new Date() })
+          .where(
+            and(
+              eq(paymentIntents.tenantId, ctx.tenantId),
+              eq(paymentIntents.orderId, orderId),
+              inArray(paymentIntents.status, ["created", "requires_action", "cod_pending"]),
+            ),
+          )
+          .returning({ id: paymentIntents.id });
+        if (voided.length > 0) {
+          await db
+            .update(orders)
+            .set({ paymentStatus: "cancelled", updatedAt: new Date() })
+            .where(and(eq(orders.tenantId, ctx.tenantId), eq(orders.id, orderId)));
+        }
+      }
     } else if (event.type.startsWith("payment.")) {
       if (!("intentId" in event)) {
         throw new Error("intentId is required for payment events");

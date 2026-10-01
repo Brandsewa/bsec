@@ -1,6 +1,6 @@
 import { eq, sql } from "drizzle-orm";
 import { schema, type Db } from "@bs/db";
-import type { Runtime } from "../runtime.ts";
+import { saasDb, type Runtime } from "../runtime.ts";
 import {
   assertTrialStoreLimit,
   checkSignupRateLimit,
@@ -115,7 +115,7 @@ export async function completeSignup(
   rt: Runtime,
   input: CompleteSignupInput,
 ): Promise<ProvisionTenantResult> {
-  const db = rt._db.db;
+  const db = saasDb(rt);
   const clientIp = input.clientIp || "127.0.0.1";
   const email = input.owner.email.trim().toLowerCase();
 

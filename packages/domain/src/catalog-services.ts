@@ -1,8 +1,9 @@
-import { and, desc, eq, ilike, inArray, or, sql } from "drizzle-orm";
+import { and, desc, eq, ilike, inArray, isNull, or, sql } from "drizzle-orm";
 import { schema, withTenant } from "@bs/db";
 import type { Runtime } from "./runtime.ts";
 import { assertPermission, type TenantContext } from "./context.ts";
 import { invalidateCache } from "./cache-invalidation.ts";
+import { publicMediaUrl } from "./media/storage.ts";
 import { assertProductQuota } from "./system/quotas.ts";
 
 export interface ListProductsQuery {
@@ -202,9 +203,17 @@ export async function getProduct(
       .where(eq(schema.variants.productId, input.id));
 
     const mediaRows = await tx
-      .select()
+      .select({
+        id: schema.productMedia.id,
+        productId: schema.productMedia.productId,
+        mediaId: schema.productMedia.mediaId,
+        position: schema.productMedia.position,
+        storageKey: schema.media.storageKey,
+      })
       .from(schema.productMedia)
-      .where(eq(schema.productMedia.productId, input.id));
+      .innerJoin(schema.media, eq(schema.media.id, schema.productMedia.mediaId))
+      .where(eq(schema.productMedia.productId, input.id))
+      .orderBy(schema.productMedia.position);
 
     return {
       id: p.id,
@@ -258,6 +267,7 @@ export async function getProduct(
         mediaId: m.mediaId,
         position: m.position,
         isPrimary: m.position === 0,
+        url: publicMediaUrl(m.storageKey),
       })),
     };
   });
@@ -689,30 +699,36 @@ export async function listInventoryLevels(
   const db = rt._db.db;
 
   return withTenant(db, ctx.tenantId, async (tx) => {
-    const conditions = [];
+    // Every stock-tracked variant at every active location. A variant that has never had stock has no
+    // inventory_levels row yet: it is listed with 0 on hand so the owner can add the first stock
+    // (adjustInventory creates the row).
+    const conditions = [
+      eq(schema.variants.trackInventory, true),
+      isNull(schema.products.deletedAt),
+      eq(schema.locations.isActive, true),
+    ];
     if (query?.locationId) {
-      conditions.push(eq(schema.inventoryLevels.locationId, query.locationId));
+      conditions.push(eq(schema.locations.id, query.locationId));
     }
     const search = query?.search?.trim();
     if (search) {
-      conditions.push(
-        or(
-          ilike(schema.products.title, `%${search}%`),
-          ilike(schema.variants.title, `%${search}%`),
-          ilike(schema.variants.sku, `%${search}%`),
-        ),
+      const match = or(
+        ilike(schema.products.title, `%${search}%`),
+        ilike(schema.variants.title, `%${search}%`),
+        ilike(schema.variants.sku, `%${search}%`),
       );
+      if (match) conditions.push(match);
     }
 
-    const whereClause = conditions.length > 0 ? and(...conditions) : undefined;
+    const whereClause = and(...conditions);
     const limit = query?.limit ?? 50;
     const offset = query?.offset ?? 0;
 
-    const base = tx
+    const rows = await tx
       .select({
-        id: schema.inventoryLevels.id,
-        variantId: schema.inventoryLevels.variantId,
-        locationId: schema.inventoryLevels.locationId,
+        levelId: schema.inventoryLevels.id,
+        variantId: schema.variants.id,
+        locationId: schema.locations.id,
         onHand: schema.inventoryLevels.onHand,
         reserved: schema.inventoryLevels.reserved,
         variantSku: schema.variants.sku,
@@ -720,33 +736,43 @@ export async function listInventoryLevels(
         productTitle: schema.products.title,
         locationName: schema.locations.name,
       })
-      .from(schema.inventoryLevels)
-      .innerJoin(schema.variants, eq(schema.variants.id, schema.inventoryLevels.variantId))
+      .from(schema.variants)
       .innerJoin(schema.products, eq(schema.products.id, schema.variants.productId))
-      .innerJoin(schema.locations, eq(schema.locations.id, schema.inventoryLevels.locationId));
-
-    const rows = await base.where(whereClause).orderBy(schema.products.title, schema.variants.title).limit(limit).offset(offset);
+      .innerJoin(schema.locations, sql`true`)
+      .leftJoin(
+        schema.inventoryLevels,
+        and(eq(schema.inventoryLevels.variantId, schema.variants.id), eq(schema.inventoryLevels.locationId, schema.locations.id)),
+      )
+      .where(whereClause)
+      .orderBy(schema.products.title, schema.variants.title, schema.locations.name)
+      .limit(limit)
+      .offset(offset);
 
     const [{ n: total } = { n: 0 }] = await tx
       .select({ n: sql<number>`count(*)::int` })
-      .from(schema.inventoryLevels)
-      .innerJoin(schema.variants, eq(schema.variants.id, schema.inventoryLevels.variantId))
+      .from(schema.variants)
       .innerJoin(schema.products, eq(schema.products.id, schema.variants.productId))
+      .innerJoin(schema.locations, sql`true`)
       .where(whereClause);
 
     return {
-      items: rows.map((r) => ({
-        id: r.id,
-        variantId: r.variantId,
-        locationId: r.locationId,
-        onHand: r.onHand,
-        reserved: r.reserved,
-        available: r.onHand - r.reserved,
-        variantSku: r.variantSku,
-        variantTitle: r.variantTitle,
-        productTitle: r.productTitle,
-        locationName: r.locationName,
-      })),
+      items: rows.map((r) => {
+        const onHand = r.onHand ?? 0;
+        const reserved = r.reserved ?? 0;
+        return {
+          // A variant with no stock row yet has no row id: use a stable composite for the list key.
+          id: r.levelId ?? `${r.variantId}:${r.locationId}`,
+          variantId: r.variantId,
+          locationId: r.locationId,
+          onHand,
+          reserved,
+          available: onHand - reserved,
+          variantSku: r.variantSku,
+          variantTitle: r.variantTitle,
+          productTitle: r.productTitle,
+          locationName: r.locationName,
+        };
+      }),
       total,
     };
   });

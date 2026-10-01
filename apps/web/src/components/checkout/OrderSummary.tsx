@@ -1,15 +1,16 @@
 import React from "react";
-import Image from "next/image";
 import type { StorefrontCart } from "@bs/domain";
 
 export interface OrderSummaryProps {
   cart: StorefrontCart;
   shippingPaise?: number;
+  /** Cash-on-delivery handling fee, when the shopper chose COD and the store charges one. */
+  codFeePaise?: number;
 }
 
-export function OrderSummary({ cart, shippingPaise = 0 }: OrderSummaryProps) {
+export function OrderSummary({ cart, shippingPaise = 0, codFeePaise = 0 }: OrderSummaryProps) {
   const formattedSubtotal = `₹${(cart.subtotal / 100).toLocaleString("en-IN")}`;
-  const totalPaise = cart.subtotal + shippingPaise;
+  const totalPaise = cart.subtotal + shippingPaise + codFeePaise;
   const formattedTotal = `₹${(totalPaise / 100).toLocaleString("en-IN")}`;
   const formattedShipping =
     shippingPaise === 0 ? "Free" : `₹${(shippingPaise / 100).toLocaleString("en-IN")}`;
@@ -22,13 +23,13 @@ export function OrderSummary({ cart, shippingPaise = 0 }: OrderSummaryProps) {
         {cart.items.map((item) => (
           <div key={item.id} className="flex items-center gap-3 py-3">
             <div className="relative h-14 w-14 flex-shrink-0 overflow-hidden rounded-lg bg-muted border border-border/40">
-              {item.primaryImage?.mediaId ? (
-                <Image
-                  src={`https://imagedelivery.net/account/${item.primaryImage.mediaId}/public`}
+              {item.primaryImage?.url ? (
+                /* eslint-disable-next-line @next/next/no-img-element */
+                <img
+                  src={item.primaryImage.url}
                   alt={item.primaryImage.alt ?? item.product.title}
-                  fill
-                  sizes="56px"
-                  className="object-cover"
+                  loading="lazy"
+                  className="h-full w-full object-cover"
                 />
               ) : (
                 <div className="flex h-full w-full items-center justify-center text-[10px] text-muted-foreground">
@@ -61,6 +62,12 @@ export function OrderSummary({ cart, shippingPaise = 0 }: OrderSummaryProps) {
           <span>Shipping</span>
           <span className="font-semibold text-foreground">{formattedShipping}</span>
         </div>
+        {codFeePaise > 0 && (
+          <div className="flex justify-between text-muted-foreground">
+            <span>Cash on delivery fee</span>
+            <span className="font-semibold text-foreground">{`₹${(codFeePaise / 100).toLocaleString("en-IN")}`}</span>
+          </div>
+        )}
         <div className="flex justify-between text-base font-bold text-foreground border-t border-border/60 pt-3">
           <span>Total</span>
           <span className="text-xl">{formattedTotal}</span>

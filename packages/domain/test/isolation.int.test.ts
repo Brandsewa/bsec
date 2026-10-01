@@ -60,6 +60,10 @@ import {
   getPaymentsStatus,
   getAdminOrderDetail,
   getBrandSettings,
+  getStoreStatus,
+  attachProductMedia,
+  detachProductMedia,
+  updateStoreStatus,
   getCollection,
   getMenu,
   getPage,
@@ -109,6 +113,12 @@ import {
   updateVariant,
   getTenantSubscription,
   changeTenantPlan,
+  approveStoreSupportSession,
+  denyStoreSupportSession,
+  getStandingSupportConsent,
+  listStoreSupportSessions,
+  setStandingSupportConsent,
+  startSupportSession,
   listTenantDomains,
   addCustomDomain,
   verifyCustomDomain,
@@ -290,8 +300,13 @@ describe("Generated Isolation Test Suite (M1 Real Postgres 18 Proof)", () => {
         { id: userA, email: "usera@alpha.test", name: "User A" },
         { id: userB, email: "userb@beta.test", name: "User B" },
         { id: userLimited, email: "limited@alpha.test", name: "User Limited" },
-        { id: userPlatform, email: "platform@corp.test", name: "Platform Admin" },
+        { id: userPlatform, email: "platform@corp.test", name: "Platform Admin", twoFactorEnabled: true },
       ])
+      .onConflictDoNothing();
+
+    await dbPlatform.db
+      .insert(schema.twoFactors)
+      .values({ id: "isolation-2fa", userId: userPlatform, secret: "x", backupCodes: "x", verified: true })
       .onConflictDoNothing();
 
     await dbPlatform.db
@@ -300,6 +315,7 @@ describe("Generated Isolation Test Suite (M1 Real Postgres 18 Proof)", () => {
         userId: userPlatform,
         role: "platform_owner",
         isActive: true,
+        mfaVerifiedAt: new Date(Date.now() - 3600_000),
       })
       .onConflictDoNothing();
 
@@ -623,12 +639,15 @@ describe("Generated Isolation Test Suite (M1 Real Postgres 18 Proof)", () => {
   /** Adds a second staff member to the store through the real invite + accept flow. */
   async function addTeamMember(rt: Runtime, ctx: TenantContext) {
     const email = `member-${Date.now()}-${Math.random().toString(36).slice(2, 6)}@test.com`;
-    const invite = await inviteStaff(rt, ctx, { email, roleId: roleAdminA });
+    const invite = await inviteStaff(rt, ctx, { email, roleId: roleLimitedA });
     await acceptInvitation(rt, { storeId: ctx.tenantId, token: invite.token!, name: "Team Member", password: "long-enough-password" });
     const member = (await listMemberships(rt, ctx)).find((m) => m.email === email);
     if (!member) throw new Error("member not created");
     return member;
   }
+
+  /** Support access is the store OWNER's decision; the harness's store_admin user gets the owner role for these calls. */
+  const asOwner = (ctx: TenantContext): TenantContext => ({ ...ctx, roles: ["store_owner"] });
 
   async function executeAdminProcedure(procPath: string, rt: Runtime, ctx: TenantContext) {
     switch (procPath) {
@@ -636,7 +655,7 @@ describe("Generated Isolation Test Suite (M1 Real Postgres 18 Proof)", () => {
         return await listStoreRoles(rt, ctx);
       case "memberships.setRole": {
         const m = await addTeamMember(rt, ctx);
-        return await setMemberRole(rt, ctx, { id: m.id, roleId: roleAdminA });
+        return await setMemberRole(rt, ctx, { id: m.id, roleId: roleLimitedA });
       }
       case "memberships.remove": {
         const m = await addTeamMember(rt, ctx);
@@ -647,7 +666,7 @@ describe("Generated Isolation Test Suite (M1 Real Postgres 18 Proof)", () => {
       case "memberships.revokeInvitation": {
         const invite = await inviteStaff(rt, ctx, {
           email: `revoke-${Date.now()}-${Math.random().toString(36).slice(2, 6)}@test.com`,
-          roleId: roleAdminA,
+          roleId: roleLimitedA,
         });
         return await revokeInvitation(rt, ctx, { id: invite.id });
       }
@@ -659,10 +678,28 @@ describe("Generated Isolation Test Suite (M1 Real Postgres 18 Proof)", () => {
         return await clearRazorpayCredentials(rt, ctx);
       case "memberships.list":
         return await listMemberships(rt, ctx);
+      case "support.list":
+        return await listStoreSupportSessions(rt, asOwner(ctx));
+      case "support.getStandingConsent":
+        return await getStandingSupportConsent(rt, asOwner(ctx));
+      case "support.setStandingConsent":
+        return await setStandingSupportConsent(rt, asOwner(ctx), true);
+      case "support.approve":
+      case "support.deny": {
+        const own = await startSupportSession(rtPlatform, userPlatform, { tenantId: ctx.tenantId, reason: "isolation check", ticketRef: "ISO-1", consent: "owner_approved" });
+        // a request for ANOTHER store can be neither seen nor decided by this store's owner
+        const foreign = await startSupportSession(rtPlatform, userPlatform, { tenantId: tenantB, reason: "isolation check", ticketRef: "ISO-2", consent: "owner_approved" });
+        const decide = procPath === "support.approve" ? approveStoreSupportSession : denyStoreSupportSession;
+        const result = await decide(rt, asOwner(ctx), own.id);
+        // the request for ANOTHER store can be neither decided nor seen by this store's owner
+        await expect(decide(rt, asOwner(ctx), foreign.id)).rejects.toThrow(/no pending support request/i);
+        expect((await listStoreSupportSessions(rt, asOwner(ctx))).map((x) => x.id)).not.toContain(foreign.id);
+        return result;
+      }
       case "memberships.invite":
         return await inviteStaff(rt, ctx, {
           email: `invite-${Date.now()}-${Math.random().toString(36).slice(2, 6)}@test.com`,
-          roleId: roleAdminA,
+          roleId: roleLimitedA,
         });
       case "settings.get":
         return await getStoreSettings(rt, ctx);
@@ -733,12 +770,24 @@ describe("Generated Isolation Test Suite (M1 Real Postgres 18 Proof)", () => {
         });
       case "media.list":
         return await listMedia(rt, ctx);
-      case "media.requestUpload":
-        return await requestMediaUpload(rt, ctx, {
-          filename: "test.png",
-          mime: "image/png",
-          bytes: 1024,
-        });
+      case "media.requestUpload": {
+        // uploads are refused unless storage credentials exist, so give this call some
+        const saved = { id: process.env.R2_ACCESS_KEY_ID, secret: process.env.R2_SECRET_ACCESS_KEY };
+        process.env.R2_ACCESS_KEY_ID = "isolation-test-key";
+        process.env.R2_SECRET_ACCESS_KEY = "isolation-test-secret";
+        try {
+          return await requestMediaUpload(rt, ctx, {
+            filename: "test.png",
+            mime: "image/png",
+            bytes: 1024,
+          });
+        } finally {
+          if (saved.id === undefined) delete process.env.R2_ACCESS_KEY_ID;
+          else process.env.R2_ACCESS_KEY_ID = saved.id;
+          if (saved.secret === undefined) delete process.env.R2_SECRET_ACCESS_KEY;
+          else process.env.R2_SECRET_ACCESS_KEY = saved.secret;
+        }
+      }
       case "media.create":
         return await createMediaRecord(rt, ctx, {
           storageKey: `iso-${Date.now()}-${Math.random().toString(36).slice(2, 6)}.png`,
@@ -979,6 +1028,25 @@ describe("Generated Isolation Test Suite (M1 Real Postgres 18 Proof)", () => {
         return await removeCustomDomain(rt, ctx.tenantId, d.id);
       }
 
+      // --- Product images ---
+      case "products.attachMedia": {
+        const m = await createMediaRecord(rt, ctx, { storageKey: `attach-${Date.now()}-${Math.random().toString(36).slice(2, 6)}.png`, mime: "image/png", bytes: 1024 });
+        const prod = await createProduct(rt, ctx, { title: `Attach ${Date.now()}`, variants: [{ sku: `ATT-${Date.now()}`, title: "D", price: 100 }] });
+        return await attachProductMedia(rt, ctx, { productId: prod.id, mediaId: m.id });
+      }
+      case "products.detachMedia": {
+        const m = await createMediaRecord(rt, ctx, { storageKey: `detach-${Date.now()}-${Math.random().toString(36).slice(2, 6)}.png`, mime: "image/png", bytes: 1024 });
+        const prod = await createProduct(rt, ctx, { title: `Detach ${Date.now()}`, variants: [{ sku: `DET-${Date.now()}`, title: "D", price: 100 }] });
+        const link = await attachProductMedia(rt, ctx, { productId: prod.id, mediaId: m.id });
+        return await detachProductMedia(rt, ctx, { productId: prod.id, productMediaId: link.id });
+      }
+
+      // --- Storefront mode ---
+      case "storefront.getStatus":
+        return await getStoreStatus(rt, ctx);
+      case "storefront.updateStatus":
+        return await updateStoreStatus(rt, ctx, { headline: "Isolation check" });
+
       // --- M8 Onboarding ---
       case "onboarding.get":
         assertPermission(ctx, "settings.write");
@@ -1015,7 +1083,7 @@ describe("Generated Isolation Test Suite (M1 Real Postgres 18 Proof)", () => {
       });
       const invite = await inviteStaff(rtApp, ctxA!, {
         email: `cross-${Date.now()}@test.com`,
-        roleId: roleAdminA,
+        roleId: roleLimitedA,
       });
       await expect(
         acceptInvitation(rtApp, { storeId: tenantA, token: "definitely-not-the-right-token-value", name: "X", password: "long-enough-password" }),
@@ -1136,7 +1204,7 @@ describe("Generated Isolation Test Suite (M1 Real Postgres 18 Proof)", () => {
         });
 
         it("accepts authenticated platform staff member and executes procedure", async () => {
-          const staff = await assertPlatformStaff(rtPlatform, userPlatform);
+          const staff = await assertPlatformStaff(rtPlatform, userPlatform, { createdAt: new Date() });
           expect(staff.role).toBe("platform_owner");
 
           if (proc === "list") {

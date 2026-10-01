@@ -13,7 +13,7 @@ export default defineConfig({
       ? {
           globalSetup: ["../db/test-support/global-setup.ts"],
           setupFiles: ["../db/test-support/setup-file.ts"],
-          maxWorkers: 4,
+          maxWorkers: 2,
         }
       : {}),
     // When TEST_DATABASE_URL_SUPERUSER is set (CI: one shared Postgres service container for

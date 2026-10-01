@@ -7,6 +7,7 @@ import type { HeaderValues, TenantContext } from "../context.ts";
 import { assertPermission } from "../context.ts";
 import type { Runtime } from "../runtime.ts";
 import { invalidateCache } from "../cache-invalidation.ts";
+import { storefrontLifecycleDecision } from "../system/tenant-lifecycle.ts";
 
 export type StorefrontMode = "live" | "coming_soon" | "maintenance" | "password";
 
@@ -187,58 +188,18 @@ export async function evaluateStorefrontAccess(
 
   const { tenantId, tenantStatus } = resolved;
 
-  // 2. Tenant Lifecycle Check (PLAN §6.4)
-  if (tenantStatus === "provisioning") {
+  // 2. Tenant Lifecycle Check (PLAN §6.4): one shared decision, see system/tenant-lifecycle.ts
+  const lifecycle = storefrontLifecycleDecision(tenantStatus);
+  if (!lifecycle.served) {
     return {
       allowed: false,
-      httpStatus: 503,
-      reason: "provisioning",
-      status: "provisioning",
+      httpStatus: lifecycle.httpStatus,
+      reason: lifecycle.reason,
+      status: lifecycle.reason,
       tenantId,
       tenantStatus,
-      message: "Store is being provisioned",
-    };
-  }
-
-  if (tenantStatus === "suspended") {
-    return {
-      allowed: false,
-      httpStatus: 503,
-      reason: "suspended",
-      status: "suspended",
-      tenantId,
-      tenantStatus,
-      message: "This store is temporarily unavailable",
-    };
-  }
-
-  if (
-    tenantStatus === "archived" ||
-    tenantStatus === "deletion_requested" ||
-    tenantStatus === "deleted"
-  ) {
-    return {
-      allowed: false,
-      httpStatus: 404,
-      reason: "not_found",
-      status: "not_found",
-      tenantId,
-      tenantStatus,
-    };
-  }
-
-  if (
-    tenantStatus !== "active" &&
-    tenantStatus !== "trial" &&
-    tenantStatus !== "past_due"
-  ) {
-    return {
-      allowed: false,
-      httpStatus: 404,
-      reason: "not_found",
-      status: "not_found",
-      tenantId,
-      tenantStatus,
+      ...(lifecycle.reason === "provisioning" ? { message: "Store is being provisioned" } : {}),
+      ...(lifecycle.reason === "suspended" ? { message: "This store is temporarily unavailable" } : {}),
     };
   }
 
@@ -477,6 +438,31 @@ export async function verifyStorefrontPassword(
   };
 }
 
+export interface StoreStatusView {
+  mode: StorefrontMode;
+  headline: string | null;
+  showCountdown: boolean;
+  collectEmails: boolean;
+  launchAt: string | null;
+  hasPassword: boolean;
+}
+
+/** The store's current storefront mode and public message. A store that has no row yet is in "coming_soon" (the default). */
+export async function getStoreStatus(rt: Runtime, ctx: TenantContext): Promise<StoreStatusView> {
+  assertPermission(ctx, "settings.write");
+  return withTenant(rt._db.db, ctx.tenantId, async (tx) => {
+    const [row] = await tx.select().from(schema.storeStatus).where(eq(schema.storeStatus.tenantId, ctx.tenantId)).limit(1);
+    return {
+      mode: (row?.mode as StorefrontMode | undefined) ?? "coming_soon",
+      headline: row?.headline ?? null,
+      showCountdown: row?.showCountdown ?? false,
+      collectEmails: row?.collectEmails ?? true,
+      launchAt: row?.launchAt ? row.launchAt.toISOString() : null,
+      hasPassword: Boolean(row?.passwordHash),
+    };
+  });
+}
+
 /**
  * Updates store status (mode, message, countdown, password, bypass token) and invalidates cache.
  */
@@ -500,7 +486,8 @@ export async function updateStoreStatus(
 
   return withTenant(db, ctx.tenantId, async (tx) => {
     const updateValues: Record<string, unknown> = {
-      updatedAt: new Date(),
+      changedAt: new Date(),
+      changedBy: "userId" in ctx.actor ? ctx.actor.userId : null,
     };
     if (input.mode !== undefined) updateValues.mode = input.mode;
     if (input.headline !== undefined) updateValues.headline = input.headline;
@@ -522,6 +509,16 @@ export async function updateStoreStatus(
       .where(eq(schema.storeStatus.tenantId, ctx.tenantId))
       .limit(1);
 
+    if (input.mode === "password") {
+      const [current] = await tx
+        .select({ passwordHash: schema.storeStatus.passwordHash })
+        .from(schema.storeStatus)
+        .where(eq(schema.storeStatus.tenantId, ctx.tenantId))
+        .limit(1);
+      const willHavePassword = input.password !== undefined ? Boolean(input.password) : Boolean(current?.passwordHash);
+      if (!willHavePassword) throw new Error("Bad Request: set a password before switching the storefront to password mode");
+    }
+
     if (existing) {
       await tx
         .update(schema.storeStatus)
@@ -531,6 +528,7 @@ export async function updateStoreStatus(
       await tx.insert(schema.storeStatus).values({
         tenantId: ctx.tenantId,
         mode: input.mode ?? "coming_soon",
+        changedBy: "userId" in ctx.actor ? ctx.actor.userId : null,
         headline: input.headline ?? null,
         messageJson: input.messageJson,
         launchAt: input.launchAt ?? null,

@@ -3,6 +3,7 @@ import { PostgreSqlContainer, type StartedPostgreSqlContainer } from "@testconta
 import type { Client as PgClient } from "pg";
 import { createDb, type DbHandle } from "@bs/db";
 import { bootstrapRoles } from "@bs/db/bootstrap";
+import { seedPlatformStaff } from "@bs/db/test-fixtures";
 import { runMigrations } from "@bs/db/migrate";
 import { validateBlockDocument, type BlockInstance } from "@bs/blocks";
 import {
@@ -45,8 +46,9 @@ function as(role: "app_owner" | "app_rw" | "app_platform", password: string): st
 const ORG = "0199a0a4-0000-7000-8000-000000000000";
 const TENANT_A = "0199a0a4-0000-7000-8000-00000000000a";
 const TENANT_B = "0199a0a4-0000-7000-8000-00000000000b";
-const OWNER_STAFF = "0199a0a4-0000-7000-8000-0000000000a1";
-const SUPPORT_STAFF = "0199a0a4-0000-7000-8000-0000000000a2";
+// Platform staff are seeded in beforeAll with the shared fixture (verified MFA, fresh session).
+let OWNER_STAFF = "";
+let SUPPORT_STAFF = "";
 
 const ctxFor = (tenantId: string): TenantContext => ({
   tenantId,
@@ -88,19 +90,14 @@ beforeAll(async () => {
     INSERT INTO tenants (id, organization_id, slug, name) VALUES
       ('${TENANT_A}', '${ORG}', 'themes-a', 'Store A'),
       ('${TENANT_B}', '${ORG}', 'themes-b', 'Store B') ON CONFLICT DO NOTHING;
-    INSERT INTO users (id, email, name, two_factor_enabled) VALUES
-      ('${OWNER_STAFF}', 'owner@themes.test', 'Owner', true),
-      ('${SUPPORT_STAFF}', 'support@themes.test', 'Support', true) ON CONFLICT DO NOTHING;
-    INSERT INTO two_factors (id, secret, backup_codes, user_id, verified) VALUES
-      ('tf1', 's', 'b', '${OWNER_STAFF}', true), ('tf2', 's', 'b', '${SUPPORT_STAFF}', true) ON CONFLICT DO NOTHING;
-    INSERT INTO platform_staff (user_id, role) VALUES
-      ('${OWNER_STAFF}', 'platform_owner'), ('${SUPPORT_STAFF}', 'platform_support') ON CONFLICT DO NOTHING;
     SELECT set_config('app.tenant_id', '${TENANT_A}', false);
     INSERT INTO products (tenant_id, title, slug, status, is_featured) VALUES
       ('${TENANT_A}', 'Featured Jar', 'featured-jar', 'active', true),
       ('${TENANT_A}', 'Plain Jar', 'plain-jar', 'active', false),
       ('${TENANT_A}', 'Draft Jar', 'draft-jar', 'draft', true) ON CONFLICT DO NOTHING;
   `);
+  OWNER_STAFF = (await seedPlatformStaff(platform._db.db, { email: "theme-owner@platform.test", role: "platform_owner" })).userId;
+  SUPPORT_STAFF = (await seedPlatformStaff(platform._db.db, { email: "theme-support@platform.test", role: "platform_support" })).userId;
 }, 240_000);
 
 afterAll(async () => {

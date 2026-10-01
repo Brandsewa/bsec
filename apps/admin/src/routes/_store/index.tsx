@@ -66,6 +66,9 @@ function HomePage() {
     }),
   );
 
+  // Only owners/admins can read the storefront mode; for everyone else the query fails quietly and no banner shows.
+  const storefront = useQuery({ ...orpc.admin.storefront.getStatus.queryOptions(), retry: false });
+
   const steps = onboarding?.steps ?? {
     store_created: true,
     product_added: false,
@@ -132,6 +135,27 @@ function HomePage() {
         title="Home"
         description="Welcome to your store control center. Manage products, orders, and storefront setup."
       />
+
+      {storefront.data && storefront.data.mode !== "live" && (
+        <div
+          className="flex flex-col gap-3 rounded-xl border border-border bg-card p-4 sm:flex-row sm:items-center sm:justify-between"
+          role="status"
+          data-testid="storefront-not-live"
+        >
+          <div>
+            <p className="font-semibold text-foreground">Your store is not live yet</p>
+            <p className="text-sm text-muted-foreground">
+              {storefront.data.mode === "coming_soon" && "Visitors see the coming-soon page."}
+              {storefront.data.mode === "maintenance" && "Visitors see the maintenance page."}
+              {storefront.data.mode === "password" && "Only people with the store password can see it."}{" "}
+              Take it live when your products and payments are ready.
+            </p>
+          </div>
+          <Link to="/settings/storefront">
+            <Button size="sm">Go live</Button>
+          </Link>
+        </div>
+      )}
 
       {/* Setup Checklist Section */}
       <PageSection

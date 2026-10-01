@@ -149,10 +149,10 @@ export default async function SearchPage({ searchParams }: SearchPageProps) {
           Search Products
         </h1>
         <p className="max-w-xl text-sm text-muted-foreground mb-6">
-          Find keyboards, custom switches, keycaps, cables, and modding accessories.
+          Search this store by product name.
         </p>
         <div className="w-full flex justify-center">
-          <SearchInput initialQuery={q} placeholder="Search by name, switch type, or brand..." />
+          <SearchInput initialQuery={q} placeholder="Search products..." />
         </div>
       </div>
 

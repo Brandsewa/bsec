@@ -1,18 +1,12 @@
 import React, { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import {
-  Activity,
-  AlertTriangle,
-  CheckCircle2,
-  Database,
   HardDrive,
   RefreshCw,
   RotateCcw,
-  ShieldCheck,
 } from "lucide-react";
 import {
   Button,
-  EmptyState,
   PageContainer,
   PageHeader,
   PageSkeleton,
@@ -25,6 +19,7 @@ import {
   toast,
 } from "@bs/ui";
 import { client } from "../lib/orpc.ts";
+import { messageOf } from "../lib/errors.ts";
 
 export function System() {
   const [retryingJobId, setRetryingJobId] = useState<string | null>(null);
@@ -42,8 +37,8 @@ export function System() {
       await client.system.retryJob({ jobId });
       toast.success(`Job ${jobId} rescheduled in pg-boss queue`);
       refetch();
-    } catch (err: any) {
-      toast.error(err?.message || "Failed to retry job");
+    } catch (err) {
+      toast.error(messageOf(err, "Failed to retry job"));
     } finally {
       setRetryingJobId(null);
     }
@@ -55,8 +50,8 @@ export function System() {
       await client.system.retryWebhook({ webhookId });
       toast.success("Webhook marked as received for reprocessing");
       refetch();
-    } catch (err: any) {
-      toast.error(err?.message || "Failed to retry webhook");
+    } catch (err) {
+      toast.error(messageOf(err, "Failed to retry webhook"));
     } finally {
       setRetryingWebhookId(null);
     }

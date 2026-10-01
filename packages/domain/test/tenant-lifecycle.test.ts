@@ -2,7 +2,6 @@ import { describe, expect, it } from "vitest";
 import {
   TENANT_LIFECYCLE_STATES,
   LIFECYCLE_MATRIX,
-  ALLOWED_TRANSITIONS,
   canTransitionTenant,
   assertCanTransitionTenant,
   isStorefrontServed,
