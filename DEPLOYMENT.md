@@ -39,7 +39,7 @@ Without `BETTER_AUTH_URL` / `BETTER_AUTH_SECRET` the site keeps serving but admi
 - `DATABASE_URL_SAAS`: as for web. Optional; without it the hourly trial-expiry sweep is skipped (a warning is logged).
 - `APP_ENV`: `production` | `staging` | `development`.
 - `PORT`: `4100`.
-- `TENANT_SECRETS_KEY`: **Set before saving any payment/shipping/email credentials.** The app boots and serves without it (a warning is logged), but storing or reading tenant credentials fails until it is set. Used by background workers (e.g. transactional email dispatcher, payment webhooks, shipping background jobs) to decrypt tenant API keys (e.g. Resend, Razorpay). (Fallback alias: `ENCRYPTION_KEY`).
+- `TENANT_SECRETS_KEY`: **Set before saving any payment/shipping/email credentials.** The app boots and serves without it (a warning is logged), but storing or reading tenant credentials fails until it is set. Used by background workers (e.g. transactional email dispatcher, payment webhooks, shipping background jobs) to decrypt tenant and platform credentials (e.g. Razorpay, ZeptoMail SMTP). (Fallback alias: `ENCRYPTION_KEY`).
 
 ### Super Admin (`bsec-superadmin`)
 - A static SPA (nginx) served at **`superadmin.gobs.cloud`** (port `8081` in staging/local). The platform **API stays at `platform.gobs.cloud`** and the SPA finds it by replacing the `superadmin.` prefix with `platform.` (or set `VITE_PLATFORM_API_URL` at build time).
@@ -114,7 +114,14 @@ node dist/demo.js remove
 4. Bootstrap the platform owner: run `create-staff` from the **platform** container terminal.
 5. Open `https://superadmin.gobs.cloud`, sign in, and set up your authenticator app when asked; then sign in again with a code.
 6. In Super Admin click **Create Store**: it provisions the first merchant store and shows a single-use owner invite link (nothing is e-mailed automatically). Give that link to the merchant so they set their own password. The store owner then finds **Settings → Support access** to approve or deny platform support requests.
-7. (Later) set `TENANT_SECRETS_KEY` on web, platform and worker before entering Razorpay/Shiprocket/Resend keys.
+7. **Configure Platform Transactional Email (Zoho ZeptoMail)**:
+   - In Zoho ZeptoMail, add and verify your sending domain (e.g. `gobs.cloud`) by adding SPF, DKIM, and CNAME DNS verification records in Cloudflare DNS.
+   - Create a Mail Agent in Zoho ZeptoMail and generate an SMTP Send Mail Token.
+   - Open Super Admin -> **Email** (`https://superadmin.gobs.cloud/email`).
+   - Configure SMTP Host (`smtp.zeptomail.in` for India DC), Port `587`, Secure: `STARTTLS`, From Address: `no-reply@gobs.cloud`, Username: `emailapikey`, and paste the Send Mail Token into SMTP Password.
+   - Click "Save email settings". The password will be symmetrically encrypted with `TENANT_SECRETS_KEY` at rest.
+   - Click "Send test email" to verify delivery before going live.
+8. (Later) set `TENANT_SECRETS_KEY` on web, platform and worker before entering Razorpay/Shiprocket keys.
 
 ## Operating the platform (Super Admin)
 - **Roles:** `platform_owner` (everything, including roles and emergency support), `platform_admin` (store lifecycle, plans, deletion, exports, staff invitations, support write-confirmation), `platform_support` (read everything, notes, support sessions they started). The last active owner can never be demoted or deactivated.

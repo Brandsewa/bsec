@@ -51,6 +51,23 @@ Source of truth: `docs/PLAN.html` v2.0 (build order in `docs/BUILD-PLAN-M2-M9.md
   - Storefront web suite (`test/customer-pages.test.ts` and full `apps/web` suite 16/16 files, 158/158 tests passed).
   - Turbo typecheck (15/15 packages passed) and Turbo lint (15/15 packages passed).
 
+### Phase D: Cleanup, Invites, Documentation & Deployment Runbook — Complete
+- [x] **Cleanup & Dead Code Removal**:
+  - Removed deprecated Resend error checks and references from domain background jobs (`packages/domain/src/jobs.ts`).
+  - Confirmed staff invitations in `packages/domain/src/system/staff-invites.ts` cleanly route through the platform mailer.
+- [x] **Documentation & Runbooks**:
+  - Updated `DEPLOYMENT.md` with complete Zoho ZeptoMail SMTP instructions (CNAME / SPF / DKIM verification, Mail Agent setup, Super Admin `/email` configuration, test email verification, environment secrets `SMTP_DEFAULT_FROM` and `TENANT_SECRETS_KEY`).
+  - Authored `docs/adr/019-customer-auth-and-platform-mailer.md` documenting single identity on `customers`, opaque `customer_sessions`, rate-limiting tiers, and platform-wide transactional mailer.
+- [x] **Verification**:
+  - Full workspace typecheck: 15/15 packages passed.
+  - Full workspace lint: 15/15 packages passed.
+  - Sequentially executed test suites:
+    - `@bs/domain` customer accounts suite (10/10 passed).
+    - `@bs/platform` test suite (7/7 files, 76/76 passed).
+    - `@bs/admin` test suite (3/3 files, 25/25 passed).
+    - `@bs/web` storefront suite (16/16 files, 158/158 passed).
+  - Full production build: `pnpm build` across all workspace apps/packages completed cleanly.
+
 ## M10 · Visual theme system (Puck) — shipped to production 2026-10-01
 
 Design and rationale: [`docs/adr/018-visual-theme-editor.md`](docs/adr/018-visual-theme-editor.md) (extends ADR-009 and ADR-010). Shipped in `5644b6c` (feature commit `f469208` + merge of main). CI green end to end; production health checked (web, platform, admin on `5644b6c`).

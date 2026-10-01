@@ -7,6 +7,7 @@ import {
   destroyAllCustomerSessions,
   destroyOtherCustomerSessions,
 } from "./session.ts";
+import type { CustomerRecord } from "./otp.ts";
 import { loadEmailBrand } from "../system/email-context.ts";
 import { renderEmail } from "../system/email-templates.ts";
 import { sendPlatformEmail } from "../system/platform-mailer.ts";

@@ -38,7 +38,6 @@ export async function dispatchTransactionalEmailOrThrow(
   if (result.status === "failed") {
     // Missing email configuration or disabled service cannot be resolved by immediate retry
     if (
-      result.error?.includes("No Resend API key configured") ||
       result.error?.includes("Email service not configured") ||
       result.error?.includes("Email service disabled")
     ) {
