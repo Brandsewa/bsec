@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { z } from "zod";
 import { evaluateStorefrontAccess, verifyCustomerOtp, getClientIp } from "@bs/domain";
 import { server } from "@/server/runtime.ts";
+import { customerCookie, sameOrigin } from "@/server/customer-session.ts";
 import { getRequestHeaders } from "../../../cart/route.ts";
 
 const VerifyOtpSchema = z.object({
@@ -9,10 +10,9 @@ const VerifyOtpSchema = z.object({
   otp: z.string().length(6, "6-digit OTP required"),
 });
 
-export const CUSTOMER_COOKIE_NAME = "bs_customer_token";
-
 export async function POST(req: Request) {
   try {
+    if (!sameOrigin(req)) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
     const h = await getRequestHeaders(req);
     const host = h.get("x-forwarded-host") ?? h.get("host") ?? "localhost";
 
@@ -59,6 +59,7 @@ export async function POST(req: Request) {
       access.tenantId,
       parsed.data.phone,
       parsed.data.otp,
+      { ip: clientIp, userAgent: h.get("user-agent") ?? undefined },
     );
 
     const response = NextResponse.json({
@@ -66,15 +67,7 @@ export async function POST(req: Request) {
       customer: result.customer,
     });
 
-    response.cookies.set({
-      name: CUSTOMER_COOKIE_NAME,
-      value: result.token,
-      path: "/",
-      httpOnly: true,
-      secure: process.env.NODE_ENV === "production",
-      sameSite: "lax",
-      maxAge: 30 * 86400, // 30 days
-    });
+    response.cookies.set(customerCookie(result.token));
 
     return response;
   } catch (err: unknown) {

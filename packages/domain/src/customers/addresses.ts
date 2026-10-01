@@ -115,3 +115,48 @@ export async function deleteCustomerAddress(
     return res.length > 0;
   });
 }
+
+export async function updateCustomerAddress(
+  db: Db,
+  tenantId: string,
+  customerId: string,
+  addressId: string,
+  data: AddressInput,
+): Promise<CustomerAddressRecord | null> {
+  return await withTenant(db, tenantId, async (tx) => {
+    const owned = and(
+      eq(customerAddresses.tenantId, tenantId),
+      eq(customerAddresses.customerId, customerId),
+      eq(customerAddresses.id, addressId),
+    );
+    const [existing] = await tx.select({ id: customerAddresses.id }).from(customerAddresses).where(owned);
+    if (!existing) return null;
+
+    if (data.isDefault) {
+      await tx
+        .update(customerAddresses)
+        .set({ isDefault: false })
+        .where(and(eq(customerAddresses.tenantId, tenantId), eq(customerAddresses.customerId, customerId)));
+    }
+
+    const [updated] = await tx
+      .update(customerAddresses)
+      .set({
+        name: data.name,
+        phone: data.phone,
+        line1: data.line1,
+        line2: data.line2 ?? null,
+        landmark: data.landmark ?? null,
+        city: data.city,
+        stateCode: data.stateCode,
+        pincode: data.pincode,
+        country: data.country ?? "IN",
+        type: data.type ?? "home",
+        ...(data.isDefault !== undefined ? { isDefault: data.isDefault } : {}),
+        updatedAt: new Date(),
+      })
+      .where(owned)
+      .returning();
+    return updated ?? null;
+  });
+}
