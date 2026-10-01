@@ -142,6 +142,10 @@ import {
   checkInviteAcceptRateLimit,
   checkReserveSubdomainRateLimit,
   checkLeadCaptureRateLimit,
+  checkPasswordResetRateLimit,
+  checkResetPasswordConfirmRateLimit,
+  sendPlatformEmail,
+  renderEmail,
   hashIpWithSalt,
   type Logger,
   type Runtime,
@@ -1382,7 +1386,64 @@ api.all("/auth/*", async (c) => {
     return c.json({ error: "Admin sign-in is not configured on this server (BETTER_AUTH_URL / BETTER_AUTH_SECRET)." }, 503);
   }
   const req = c.req.raw;
-  if (req.method === "POST" && new URL(req.url).pathname.endsWith("/sign-in/email")) {
+  const path = new URL(req.url).pathname;
+
+  if (req.method === "POST" && path.endsWith("/request-password-reset")) {
+    const db = server().rt._db.db;
+    const ip = clientIp(req.headers);
+    try {
+      await checkPasswordResetRateLimit(db, { ip });
+    } catch (err) {
+      if (err instanceof RateLimitExceededError) {
+        return c.json({ error: err.message }, 429, { "retry-after": String(err.retryAfter) });
+      }
+      throw err;
+    }
+  }
+
+  if (req.method === "POST" && path.endsWith("/reset-password")) {
+    const db = server().rt._db.db;
+    const ip = clientIp(req.headers);
+    try {
+      await checkResetPasswordConfirmRateLimit(db, { ip });
+    } catch (err) {
+      if (err instanceof RateLimitExceededError) {
+        return c.json({ error: err.message }, 429, { "retry-after": String(err.retryAfter) });
+      }
+      throw err;
+    }
+  }
+
+  if (req.method === "POST" && path.endsWith("/change-password")) {
+    // Intercept change-password to send notification if successful
+    const res = await cfg.auth.handler(req);
+    if (res.status === 200) {
+      const session = await resolveStaffSession(c.req.raw.headers);
+      if (session?.user?.email) {
+        const email = session.user.email;
+        const rt = server().rt;
+        const brand = { storeName: "Brand Sewa Admin", baseUrl: cfg.settings.adminOrigins[0] ?? cfg.settings.baseURL };
+        const { html, text } = renderEmail("password_changed", brand, {}, "Your password was changed");
+        queueMicrotask(async () => {
+          try {
+            await sendPlatformEmail(rt._db.db, {
+              to: email,
+              subject: "Your password was changed",
+              html,
+              text,
+              fromName: "Brand Sewa Admin",
+              template: "password_changed",
+            });
+          } catch (err) {
+            server().log.error({ err, email }, "Failed to send staff password changed email");
+          }
+        });
+      }
+    }
+    return res;
+  }
+
+  if (req.method === "POST" && path.endsWith("/sign-in/email")) {
     let email = "";
     try {
       const body = (await req.clone().json()) as { email?: unknown };

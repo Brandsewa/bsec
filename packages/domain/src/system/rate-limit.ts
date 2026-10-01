@@ -316,6 +316,54 @@ export async function checkCustomerOtpVerifyLimit(
 }
 
 /**
+ * Password Reset Request Rate Limits (PLAN §4.1):
+ * - Max 3 reset requests per 15 minutes per IP (900s)
+ */
+export async function checkPasswordResetRateLimit(
+  db: Db,
+  params: { ip: string },
+): Promise<void> {
+  const { ip } = params;
+  const ipRes = await checkRateLimit(db, {
+    key: `reset:req:ip:${ip}`,
+    limit: 3,
+    windowSeconds: 900,
+  });
+  if (!ipRes.allowed) {
+    throw new RateLimitExceededError(
+      `Too many password reset requests from this IP. Please retry after ${ipRes.retryAfter} seconds.`,
+      ipRes.retryAfter,
+      ipRes.limit,
+      `reset:req:ip:${ip}`,
+    );
+  }
+}
+
+/**
+ * Password Reset Confirm Rate Limits (PLAN §4.1):
+ * - Max 5 attempts per 15 minutes per IP (900s)
+ */
+export async function checkResetPasswordConfirmRateLimit(
+  db: Db,
+  params: { ip: string },
+): Promise<void> {
+  const { ip } = params;
+  const ipRes = await checkRateLimit(db, {
+    key: `reset:confirm:ip:${ip}`,
+    limit: 5,
+    windowSeconds: 900,
+  });
+  if (!ipRes.allowed) {
+    throw new RateLimitExceededError(
+      `Too many password reset attempts from this IP. Please retry after ${ipRes.retryAfter} seconds.`,
+      ipRes.retryAfter,
+      ipRes.limit,
+      `reset:confirm:ip:${ip}`,
+    );
+  }
+}
+
+/**
  * Admin and Staff Login Rate Limits:
  * - Per IP: 10 attempts / 15 min (900s)
  * - Per email: 5 attempts / 15 min (900s)

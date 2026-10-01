@@ -28,6 +28,8 @@ import { Features } from "./pages/Features.tsx";
 import { Staff } from "./pages/Staff.tsx";
 import { AuditLog } from "./pages/AuditLog.tsx";
 import { EmailSettings } from "./pages/EmailSettings.tsx";
+import { ForgotPassword } from "./pages/ForgotPassword.tsx";
+import { ResetPassword } from "./pages/ResetPassword.tsx";
 
 export interface RouterContext {
   queryClient: QueryClient;
@@ -66,6 +68,24 @@ const acceptInvitationRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: "/accept-invitation",
   component: AcceptInvitation,
+});
+
+const forgotPasswordRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: "/forgot-password",
+  component: ForgotPassword,
+});
+
+const resetPasswordRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: "/reset-password",
+  validateSearch: (search: Record<string, unknown>) => ({
+    token: typeof search.token === "string" ? search.token : "",
+  }),
+  component: function ResetPasswordComponent() {
+    const { token } = resetPasswordRoute.useSearch();
+    return <ResetPassword token={token} />;
+  },
 });
 
 const authLayoutRoute = createRoute({
@@ -197,6 +217,8 @@ const emailRoute = createRoute({
 
 export const routeTree = rootRoute.addChildren([
   loginRoute,
+  forgotPasswordRoute,
+  resetPasswordRoute,
   templateEditorRoute,
   acceptInvitationRoute,
   authLayoutRoute.addChildren([

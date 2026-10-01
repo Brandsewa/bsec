@@ -1,4 +1,5 @@
 import React, { useState } from "react";
+import { Link } from "@tanstack/react-router";
 import { Database, ShieldCheck } from "lucide-react";
 import { Button, Input, Label, toast } from "@bs/ui";
 import {
@@ -161,7 +162,12 @@ export function Login({ onSuccess }: LoginProps) {
               <Input id="email" type="email" placeholder="staff@example.com" value={email} onChange={(e) => setEmail(e.target.value)} required autoFocus />
             </div>
             <div>
-              <Label htmlFor="password">Password</Label>
+              <div className="flex items-center justify-between">
+                <Label htmlFor="password">Password</Label>
+                <Link to="/forgot-password" className="text-xs text-muted-foreground hover:text-foreground hover:underline">
+                  Forgot password?
+                </Link>
+              </div>
               <Input id="password" type="password" placeholder="••••••••••••" value={password} onChange={(e) => setPassword(e.target.value)} required />
             </div>
             <Button type="submit" disabled={loading} className="w-full">

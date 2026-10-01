@@ -1,4 +1,5 @@
 import { createStaffAuth, STAFF_COOKIE_PREFIX, type StaffAuth } from "@bs/auth";
+import { renderEmail, sendPlatformEmail } from "@bs/domain";
 import { server } from "./runtime.ts";
 import type { ApiContext } from "./api.ts";
 
@@ -47,8 +48,48 @@ export function getStaffAuth(): { auth: StaffAuth; settings: AuthSettings } | nu
   const auth = createStaffAuth(server().rt._db.db, {
     baseURL: settings.baseURL,
     secret: settings.secret,
+    ...(settings.adminOrigins[0] ? { adminUrl: settings.adminOrigins[0] } : {}),
     trustedOrigins: [settings.baseURL, ...settings.adminOrigins],
     ...(settings.cookieDomain ? { cookieDomain: settings.cookieDomain } : {}),
+    onSendResetPassword: async ({ user, url }) => {
+      const rt = server().rt;
+      const brand = { storeName: "Brand Sewa Admin", baseUrl: settings.adminOrigins[0] ?? settings.baseURL };
+      const { html, text } = renderEmail("password_reset", brand, { resetUrl: url }, "Reset your password");
+      // Fire in background / do not block or cause timing attack
+      queueMicrotask(async () => {
+        try {
+          await sendPlatformEmail(rt._db.db, {
+            to: user.email,
+            subject: "Reset your password",
+            html,
+            text,
+            fromName: "Brand Sewa Admin",
+            template: "password_reset",
+          });
+        } catch (err) {
+          server().log.error({ err, email: user.email }, "Failed to send staff password reset email");
+        }
+      });
+    },
+    onPasswordReset: async ({ user }) => {
+      const rt = server().rt;
+      const brand = { storeName: "Brand Sewa Admin", baseUrl: settings.adminOrigins[0] ?? settings.baseURL };
+      const { html, text } = renderEmail("password_changed", brand, {}, "Your password was changed");
+      queueMicrotask(async () => {
+        try {
+          await sendPlatformEmail(rt._db.db, {
+            to: user.email,
+            subject: "Your password was changed",
+            html,
+            text,
+            fromName: "Brand Sewa Admin",
+            template: "password_changed",
+          });
+        } catch (err) {
+          server().log.error({ err, email: user.email }, "Failed to send staff password changed email");
+        }
+      });
+    },
   });
   g.__bsStaffAuth = { auth, settings };
   return g.__bsStaffAuth;

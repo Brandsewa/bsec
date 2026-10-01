@@ -10,7 +10,23 @@ Source of truth: `docs/PLAN.html` v2.0 (build order in `docs/BUILD-PLAN-M2-M9.md
 - [x] **Superadmin UI**: Implemented `apps/superadmin/src/pages/EmailSettings.tsx` at `/email` with India Zoho ZeptoMail presets, password encryption (never leaking secrets or displaying password in plain text), test email sender, and recent delivery log table.
 - [x] **Domain Mailer & Templates**: Implemented `packages/domain/src/system/platform-mailer.ts` using `nodemailer`, AES-256-GCM encryption/decryption, rate-limiting, error sanitization, and transport injection. Added transactional and auth templates in `packages/domain/src/system/email-templates.ts`. Updated store order emails in `packages/domain/src/system/email.ts` to route through platform mailer with store name as display name, store support email as reply-to, and `no-reply@gobs.cloud` as sender.
 - [x] **Verification**: All unit, integration, and pre-push checks passing (`pnpm lint`, `pnpm typecheck`, `pnpm build`, `@bs/domain` vitest 78/78 files 1070/1070 tests, `@bs/contracts` 15/15 tests, `@bs/db` 27/27 fast tests, `@bs/admin` 25/25 tests, `@bs/web` 158/158 tests).
-- [ ] **STOP & AWAIT VERIFICATION**: Super Admin owner must configure real ZeptoMail credentials in `/email` and confirm receipt of test email before starting Phase B.
+
+### Phase B: Store Admin & Super Admin Password Flows — Complete
+- [x] **Anti-Enumeration & Rate Limiting**: Implemented constant-time responses for unknown emails in forgot-password. Rate limited `/request-password-reset` (3 per 15 min per IP), `/reset-password` (5 per 15 min per IP), and password guessing.
+- [x] **Better Auth Password Reset Engine**:
+  - Store Admin (`packages/auth/src/staff.ts`): Configured `resetPasswordTokenExpiresIn: 3600`, `revokeSessionsOnPasswordReset: true`, callbacks sending transactional emails via platform mailer.
+  - Platform / Super Admin (`packages/auth/src/platform.ts`): Configured reset tokens, email dispatch, session revocation, preserving active MFA on password reset.
+- [x] **Store Admin UI (`apps/admin`)**:
+  - Forgot password page (`/forgot-password`) with generic confirmation message preventing enumeration.
+  - Reset password page (`/reset-password?token=...`) with strength validation and single-use token consumption.
+  - Change password dialog accessible from store admin navigation/settings with current password verification and confirmation email.
+- [x] **Super Admin UI (`apps/superadmin`)**:
+  - Forgot password page (`/forgot-password`) and reset password page (`/reset-password`).
+  - Change password dialog in layout/settings with current password check and notification.
+- [x] **Security Invariants & Testing**:
+  - Real database integration tests in `apps/platform/test/password-reset.int.test.ts` (4/4 passed).
+  - Domain integration tests in `packages/domain/test/admin-auth.int.test.ts` (14/14 passed) verifying token expiry, session revocation on reset/change, anti-enumeration, and preserved MFA.
+  - Typecheck (15/15 packages clean), lint clean, all touched package tests verified sequentially.
 
 ## M10 · Visual theme system (Puck) — shipped to production 2026-10-01
 

@@ -35,6 +35,8 @@ const INPUTS: Record<string, () => unknown> = {
   "staff.list": () => undefined,
   "audit.list": () => ({}),
   "audit.exportCsv": () => ({}),
+  "email.get": () => undefined,
+  "email.recentDeliveries": () => ({}),
 };
 
 beforeAll(async () => {

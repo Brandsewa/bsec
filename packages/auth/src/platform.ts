@@ -10,6 +10,9 @@ export interface PlatformAuthOptions {
   trustedOrigins?: string[] | undefined;
   cookieDomain?: string | undefined;
   secureCookies?: boolean | undefined;
+  superadminUrl?: string | undefined;
+  onSendResetPassword?: ((data: { user: { id: string; email: string; name?: string }; url: string; token: string }) => Promise<void> | void) | undefined;
+  onPasswordReset?: ((data: { user: { id: string; email: string; name?: string } }) => Promise<void> | void) | undefined;
   advanced?: BetterAuthOptions["advanced"] | undefined;
 }
 
@@ -45,6 +48,33 @@ export function createPlatformAuth(db: Db, opts: PlatformAuthOptions = {}) {
       disableSignUp: true,
       minPasswordLength: 10,
       maxPasswordLength: 128,
+      resetPasswordTokenExpiresIn: 3600, // 1 hour (PLAN §4.1)
+      revokeSessionsOnPasswordReset: true,
+      sendResetPassword: async ({ user, token }) => {
+        let superadminUrl = opts.superadminUrl;
+        if (!superadminUrl) {
+          if (baseURL) {
+            try {
+              const u = new URL(baseURL);
+              const isLocal = u.hostname === "localhost" || u.hostname === "127.0.0.1";
+              superadminUrl = isLocal ? "http://localhost:5174" : "https://superadmin.gobs.cloud";
+            } catch {
+              superadminUrl = "https://superadmin.gobs.cloud";
+            }
+          } else {
+            superadminUrl = "https://superadmin.gobs.cloud";
+          }
+        }
+        const resetUrl = `${superadminUrl}/reset-password?token=${token}`;
+        if (opts.onSendResetPassword) {
+          await opts.onSendResetPassword({ user, url: resetUrl, token });
+        }
+      },
+      onPasswordReset: async ({ user }) => {
+        if (opts.onPasswordReset) {
+          await opts.onPasswordReset({ user });
+        }
+      },
     },
     session: {
       expiresIn: 60 * 60 * 24 * 7,
@@ -58,6 +88,8 @@ export function createPlatformAuth(db: Db, opts: PlatformAuthOptions = {}) {
       max: 60,
       customRules: {
         "/sign-in/email": { window: 300, max: 5 },
+        "/request-password-reset": { window: 900, max: 3 },
+        "/reset-password": { window: 900, max: 5 },
         "/two-factor/enable": { window: 300, max: 5 },
         "/two-factor/verify-totp": { window: 300, max: 5 },
         "/two-factor/verify-backup-code": { window: 300, max: 5 },

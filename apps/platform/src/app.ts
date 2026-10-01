@@ -69,6 +69,9 @@ import {
   updatePlatformEmailSettings,
   sendPlatformTestEmail,
   listRecentEmailDeliveries,
+  sendPlatformEmail,
+  renderEmail,
+  createLogger,
   requestLogger,
   resolveRequestId,
   getClientIp,
@@ -104,16 +107,55 @@ export function platformAllowedOrigins(): string[] {
   return ["https://superadmin.gobs.cloud", ...(process.env.NODE_ENV !== "production" ? ["http://localhost:5174", "http://localhost:5173"] : [])];
 }
 
+const platformAuthLogger = createLogger("platform-auth");
 let _platformAuth: PlatformAuth | undefined;
 export function getPlatformAuth(rt: Runtime): PlatformAuth {
   if (!_platformAuth) {
+    const superadminUrl = platformAllowedOrigins()[0] ?? "https://superadmin.gobs.cloud";
     _platformAuth = createPlatformAuth(rt._db.db, {
       baseURL: process.env.PLATFORM_AUTH_URL ?? process.env.BETTER_AUTH_URL,
       secret: process.env.BETTER_AUTH_SECRET,
+      superadminUrl,
       trustedOrigins: platformAllowedOrigins(),
       // Host-only cookie by default. Never inherit the store COOKIE_DOMAIN: a platform cookie must not be shared with
       // tenant subdomains.
       cookieDomain: process.env.PLATFORM_COOKIE_DOMAIN,
+      onSendResetPassword: async ({ user, url }) => {
+        const brand = { storeName: "Brand Sewa Platform", baseUrl: superadminUrl };
+        const { html, text } = renderEmail("password_reset", brand, { resetUrl: url }, "Reset your password");
+        queueMicrotask(async () => {
+          try {
+            await sendPlatformEmail(rt._db.db, {
+              to: user.email,
+              subject: "Reset your password",
+              html,
+              text,
+              fromName: "Brand Sewa Platform",
+              template: "password_reset",
+            });
+          } catch (err) {
+            platformAuthLogger.error({ err, email: user.email }, "Failed to send platform password reset email");
+          }
+        });
+      },
+      onPasswordReset: async ({ user }) => {
+        const brand = { storeName: "Brand Sewa Platform", baseUrl: superadminUrl };
+        const { html, text } = renderEmail("password_changed", brand, {}, "Your password was changed");
+        queueMicrotask(async () => {
+          try {
+            await sendPlatformEmail(rt._db.db, {
+              to: user.email,
+              subject: "Your password was changed",
+              html,
+              text,
+              fromName: "Brand Sewa Platform",
+              template: "password_changed",
+            });
+          } catch (err) {
+            platformAuthLogger.error({ err, email: user.email }, "Failed to send platform password changed email");
+          }
+        });
+      },
     });
   }
   return _platformAuth;
@@ -475,7 +517,36 @@ export function createApp(rt: Runtime, rootLog: Logger) {
 
   // Better Auth endpoints for platform_staff (sign-in, two-factor enrolment and verification, sign-out)
   app.all("/api/auth/*", async (c) => {
-    return getPlatformAuth(rt).handler(c.req.raw);
+    const req = c.req.raw;
+    const path = new URL(req.url).pathname;
+    if (req.method === "POST" && path.endsWith("/change-password")) {
+      const res = await getPlatformAuth(rt).handler(req);
+      if (res.status === 200) {
+        const session = await readPlatformSession(rt, c.req.raw.headers);
+        if (session?.user?.email) {
+          const email = session.user.email;
+          const superadminUrl = platformAllowedOrigins()[0] ?? "https://superadmin.gobs.cloud";
+          const brand = { storeName: "Brand Sewa Platform", baseUrl: superadminUrl };
+          const { html, text } = renderEmail("password_changed", brand, {}, "Your password was changed");
+          queueMicrotask(async () => {
+            try {
+              await sendPlatformEmail(rt._db.db, {
+                to: email,
+                subject: "Your password was changed",
+                html,
+                text,
+                fromName: "Brand Sewa Platform",
+                template: "password_changed",
+              });
+            } catch (err) {
+              platformAuthLogger.error({ err, email }, "Failed to send platform password changed email");
+            }
+          });
+        }
+      }
+      return res;
+    }
+    return getPlatformAuth(rt).handler(req);
   });
 
   /** Where this login stands: signed in? platform staff? MFA enrolled/complete? Usable before MFA is complete. */

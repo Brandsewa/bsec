@@ -1,8 +1,10 @@
+import { useState } from "react";
 import { Outlet, createFileRoute, redirect, useRouterState } from "@tanstack/react-router";
 import {
   BadgePercent,
   FileText,
   Home,
+  KeyRound,
   Menu,
   Package,
   Palette,
@@ -18,6 +20,7 @@ import { Button } from "@/components/ui/button";
 import { fetchMe, signOut } from "../lib/auth.ts";
 import { getActiveStoreId, setActiveStoreId } from "../lib/session.ts";
 import { clearSupportSession } from "../lib/support.ts";
+import { ChangePasswordDialog } from "../components/settings/change-password-dialog.tsx";
 
 interface GatedItem {
   label: string;
@@ -85,6 +88,7 @@ export const Route = createFileRoute("/_store")({
 function StoreShell() {
   const pathname = useRouterState({ select: (s) => s.location.pathname });
   const { me, store } = Route.useRouteContext();
+  const [changePasswordOpen, setChangePasswordOpen] = useState(false);
 
   async function onSignOut() {
     if (me.support) {
@@ -108,56 +112,65 @@ function StoreShell() {
   }
 
   return (
-    <AppShell
-      brand={<span className="text-sm font-semibold">{store.name}</span>}
-      groups={visibleNav(store.permissions)}
-      activeHref={pathname}
-      banner={
-        me.support ? (
-          <div
-            role="alert"
-            data-testid="support-banner"
-            className="sticky top-0 z-50 flex flex-wrap items-center justify-between gap-2 bg-amber-500 px-4 py-2 text-sm font-medium text-black"
-          >
-            <span>
-              PLATFORM SUPPORT SESSION · {me.support.scope === "write" ? "read & WRITE access" : "read-only"} · ticket {me.support.ticketRef} · ends{" "}
-              {new Date(me.support.expiresAt).toLocaleTimeString()} · everything you do here is recorded
-            </span>
-            <Button size="sm" variant="outline" onClick={onSignOut}>
-              Leave support mode
-            </Button>
-          </div>
-        ) : undefined
-      }
-      topRight={
-        <>
-          {me.stores.length > 1 ? (
-            <select
-              aria-label="Switch store"
-              className="h-8 rounded-md border border-border bg-background px-2 text-sm"
-              value={store.tenantId}
-              onChange={(e) => {
-                setActiveStoreId(e.target.value);
-                window.location.assign("/");
-              }}
+    <>
+      <AppShell
+        brand={<span className="text-sm font-semibold">{store.name}</span>}
+        groups={visibleNav(store.permissions)}
+        activeHref={pathname}
+        banner={
+          me.support ? (
+            <div
+              role="alert"
+              data-testid="support-banner"
+              className="sticky top-0 z-50 flex flex-wrap items-center justify-between gap-2 bg-amber-500 px-4 py-2 text-sm font-medium text-black"
             >
-              {me.stores.map((s) => (
-                <option key={s.tenantId} value={s.tenantId}>
-                  {s.name}
-                </option>
-              ))}
-            </select>
-          ) : null}
-          <span className="hidden text-sm text-foreground-lighter sm:inline">{me.support ? `Support: ${me.user.email}` : me.user.email}</span>
-          {me.support ? null : (
-            <Button variant="ghost" size="sm" onClick={onSignOut}>
-              Sign out
-            </Button>
-          )}
-        </>
-      }
-    >
-      <Outlet />
-    </AppShell>
+              <span>
+                PLATFORM SUPPORT SESSION · {me.support.scope === "write" ? "read & WRITE access" : "read-only"} · ticket {me.support.ticketRef} · ends{" "}
+                {new Date(me.support.expiresAt).toLocaleTimeString()} · everything you do here is recorded
+              </span>
+              <Button size="sm" variant="outline" onClick={onSignOut}>
+                Leave support mode
+              </Button>
+            </div>
+          ) : undefined
+        }
+        topRight={
+          <>
+            {me.stores.length > 1 ? (
+              <select
+                aria-label="Switch store"
+                className="h-8 rounded-md border border-border bg-background px-2 text-sm"
+                value={store.tenantId}
+                onChange={(e) => {
+                  setActiveStoreId(e.target.value);
+                  window.location.assign("/");
+                }}
+              >
+                {me.stores.map((s) => (
+                  <option key={s.tenantId} value={s.tenantId}>
+                    {s.name}
+                  </option>
+                ))}
+              </select>
+            ) : null}
+            <span className="hidden text-sm text-foreground-lighter sm:inline">{me.support ? `Support: ${me.user.email}` : me.user.email}</span>
+            {me.support ? null : (
+              <>
+                <Button variant="ghost" size="sm" onClick={() => setChangePasswordOpen(true)} title="Change password">
+                  <KeyRound className="mr-1 h-3.5 w-3.5" />
+                  Password
+                </Button>
+                <Button variant="ghost" size="sm" onClick={onSignOut}>
+                  Sign out
+                </Button>
+              </>
+            )}
+          </>
+        }
+      >
+        <Outlet />
+      </AppShell>
+      <ChangePasswordDialog open={changePasswordOpen} onOpenChange={setChangePasswordOpen} />
+    </>
   );
 }

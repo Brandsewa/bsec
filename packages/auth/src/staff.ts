@@ -12,6 +12,12 @@ export interface StaffAuthOptions {
   cookieDomain?: string;
   /** Force the Secure cookie flag. Defaults to true when baseURL is https. */
   secureCookies?: boolean;
+  /** URL of the Admin SPA, e.g. "https://admin.gobs.cloud" or "http://localhost:5173" */
+  adminUrl?: string;
+  /** Callback to send password reset email */
+  onSendResetPassword?: (data: { user: { id: string; email: string; name?: string }; url: string; token: string }) => Promise<void> | void;
+  /** Callback invoked after password reset completes */
+  onPasswordReset?: (data: { user: { id: string; email: string; name?: string } }) => Promise<void> | void;
   advanced?: BetterAuthOptions["advanced"];
 }
 
@@ -45,6 +51,33 @@ export function createStaffAuth(db: Db, opts: StaffAuthOptions = {}) {
       disableSignUp: true,
       minPasswordLength: 10,
       maxPasswordLength: 128,
+      resetPasswordTokenExpiresIn: 3600, // 1 hour (PLAN §4.1)
+      revokeSessionsOnPasswordReset: true,
+      sendResetPassword: async ({ user, token }) => {
+        let adminUrl = opts.adminUrl;
+        if (!adminUrl) {
+          if (baseURL) {
+            try {
+              const u = new URL(baseURL);
+              const isLocal = u.hostname === "localhost" || u.hostname === "127.0.0.1";
+              adminUrl = isLocal ? "http://localhost:5173" : `${u.protocol}//admin.${u.hostname}`;
+            } catch {
+              adminUrl = "https://admin.gobs.cloud";
+            }
+          } else {
+            adminUrl = "https://admin.gobs.cloud";
+          }
+        }
+        const resetUrl = `${adminUrl}/reset-password?token=${token}`;
+        if (opts.onSendResetPassword) {
+          await opts.onSendResetPassword({ user, url: resetUrl, token });
+        }
+      },
+      onPasswordReset: async ({ user }) => {
+        if (opts.onPasswordReset) {
+          await opts.onPasswordReset({ user });
+        }
+      },
     },
     session: {
       expiresIn: 60 * 60 * 24 * 7,

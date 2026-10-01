@@ -57,3 +57,70 @@ export async function fetchMe(): Promise<AdminMe | null> {
 export function isUnauthorized(err: unknown): boolean {
   return err instanceof ORPCError && err.code === "UNAUTHORIZED";
 }
+
+export async function requestPasswordReset(email: string): Promise<{ ok: boolean; message: string; retryAfter?: number }> {
+  try {
+    const res = await fetch(`${apiBase()}/api/auth/request-password-reset`, {
+      method: "POST",
+      credentials: "include",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ email }),
+    });
+    if (res.ok) {
+      return { ok: true, message: "If this email exists in our system, check your email for the reset link." };
+    }
+    if (res.status === 429) {
+      const retryAfter = Number(res.headers.get("retry-after") ?? "0") || undefined;
+      return { ok: false, message: "Too many reset attempts. Please wait a few minutes and try again.", ...(retryAfter ? { retryAfter } : {}) };
+    }
+    // Anti-enumeration: still show success message unless rate-limited
+    return { ok: true, message: "If this email exists in our system, check your email for the reset link." };
+  } catch {
+    return { ok: false, message: "Could not reach the server. Check your connection and try again." };
+  }
+}
+
+export async function resetPassword(token: string, newPassword: string): Promise<{ ok: boolean; message: string; retryAfter?: number }> {
+  try {
+    const res = await fetch(`${apiBase()}/api/auth/reset-password`, {
+      method: "POST",
+      credentials: "include",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ token, newPassword }),
+    });
+    if (res.ok) {
+      return { ok: true, message: "Your password has been reset successfully. You can now sign in." };
+    }
+    if (res.status === 429) {
+      const retryAfter = Number(res.headers.get("retry-after") ?? "0") || undefined;
+      return { ok: false, message: "Too many attempts. Please wait a few minutes and try again.", ...(retryAfter ? { retryAfter } : {}) };
+    }
+    const data = (await res.json().catch(() => ({}))) as { message?: string; error?: string };
+    const err = data.message || data.error;
+    if (err?.toLowerCase().includes("token") || res.status === 400) {
+      return { ok: false, message: "This password reset link is invalid or has expired." };
+    }
+    return { ok: false, message: err || "Failed to reset password. Please try again." };
+  } catch {
+    return { ok: false, message: "Could not reach the server. Check your connection and try again." };
+  }
+}
+
+export async function changePassword(currentPassword: string, newPassword: string): Promise<{ ok: boolean; message: string }> {
+  try {
+    const res = await fetch(`${apiBase()}/api/auth/change-password`, {
+      method: "POST",
+      credentials: "include",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ currentPassword, newPassword, revokeOtherSessions: true }),
+    });
+    if (res.ok) {
+      return { ok: true, message: "Password updated successfully." };
+    }
+    const data = (await res.json().catch(() => ({}))) as { message?: string; error?: string };
+    const err = data.message || data.error;
+    return { ok: false, message: err || "Failed to change password. Make sure your current password is correct." };
+  } catch {
+    return { ok: false, message: "Could not reach the server. Check your connection and try again." };
+  }
+}

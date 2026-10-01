@@ -260,3 +260,126 @@ describe("sign-in throttling counts failures only", () => {
     expect(await loginRetryAfter(rwDb.db, badIp, "fresh@admin-auth-test.example")).not.toBeNull();
   });
 });
+
+describe("staff password reset and change flows (PLAN §4.1)", () => {
+  it("anti-enumeration: unknown and known email return identical status: true responses", async () => {
+    let sentEmailTo = "";
+    let sentResetUrl = "";
+    const auth = createStaffAuth(rwDb.db, {
+      baseURL: API,
+      secret: "a-test-secret-that-is-at-least-32-characters-long",
+      trustedOrigins: [API, ORIGIN],
+      onSendResetPassword: ({ user, url }) => {
+        sentEmailTo = user.email;
+        sentResetUrl = url;
+      },
+    });
+
+    // 1. Known user
+    const resKnown = await post(auth, "/request-password-reset", { email: EMAIL });
+    expect(resKnown.status).toBe(200);
+    const bodyKnown = (await resKnown.json()) as { status: boolean; message: string };
+    expect(bodyKnown.status).toBe(true);
+    expect(sentEmailTo).toBe(EMAIL);
+    expect(sentResetUrl).toContain("token=");
+
+    // 2. Unknown user
+    sentEmailTo = "";
+    sentResetUrl = "";
+    const resUnknown = await post(auth, "/request-password-reset", { email: "nonexistent@admin-auth-test.example" });
+    expect(resUnknown.status).toBe(200);
+    const bodyUnknown = (await resUnknown.json()) as { status: boolean; message: string };
+    expect(bodyUnknown.status).toBe(true);
+    expect(bodyUnknown.message).toBe(bodyKnown.message);
+    // Did not send email for unknown user
+    expect(sentEmailTo).toBe("");
+    expect(sentResetUrl).toBe("");
+  });
+
+  it("password reset flow: resets password, single use token, revokes active sessions", async () => {
+    let resetToken = "";
+    let passwordResetNotified = false;
+    const auth = createStaffAuth(rwDb.db, {
+      baseURL: API,
+      secret: "a-test-secret-that-is-at-least-32-characters-long",
+      trustedOrigins: [API, ORIGIN],
+      onSendResetPassword: ({ token }) => {
+        resetToken = token;
+      },
+      onPasswordReset: () => {
+        passwordResetNotified = true;
+      },
+    });
+
+    // Establish active session
+    const signIn = await post(auth, "/sign-in/email", { email: EMAIL, password: "a-brand-new-long-password" });
+    expect(signIn.status).toBe(200);
+    const cookie = cookieFrom(signIn);
+    expect(await auth.api.getSession({ headers: new Headers({ cookie }) })).not.toBeNull();
+
+    // Request reset
+    await post(auth, "/request-password-reset", { email: EMAIL });
+    expect(resetToken).toBeTruthy();
+
+    // Reset password
+    const resReset = await post(auth, "/reset-password", {
+      token: resetToken,
+      newPassword: "fresh-reset-password-10+",
+    });
+    expect(resReset.status).toBe(200);
+    expect(passwordResetNotified).toBe(true);
+
+    // Old session revoked!
+    expect(await auth.api.getSession({ headers: new Headers({ cookie }) })).toBeNull();
+
+    // Token is single use
+    const resReuse = await post(auth, "/reset-password", {
+      token: resetToken,
+      newPassword: "another-password-10+",
+    });
+    expect(resReuse.status).toBeGreaterThanOrEqual(400);
+
+    // Can sign in with new password
+    const newSignIn = await post(auth, "/sign-in/email", { email: EMAIL, password: "fresh-reset-password-10+" });
+    expect(newSignIn.status).toBe(200);
+  });
+
+  it("change-password: updates password and revokes other sessions", async () => {
+    const auth = createStaffAuth(rwDb.db, {
+      baseURL: API,
+      secret: "a-test-secret-that-is-at-least-32-characters-long",
+      trustedOrigins: [API, ORIGIN],
+    });
+
+    // First session
+    const s1 = await post(auth, "/sign-in/email", { email: EMAIL, password: "fresh-reset-password-10+" });
+    const c1 = cookieFrom(s1);
+
+    // Second session
+    const s2 = await post(auth, "/sign-in/email", { email: EMAIL, password: "fresh-reset-password-10+" });
+    const c2 = cookieFrom(s2);
+
+    expect(await auth.api.getSession({ headers: new Headers({ cookie: c1 }) })).not.toBeNull();
+    expect(await auth.api.getSession({ headers: new Headers({ cookie: c2 }) })).not.toBeNull();
+
+    // Change password from s1 with revokeOtherSessions: true
+    const resChange = await post(
+      auth,
+      "/change-password",
+      {
+        currentPassword: "fresh-reset-password-10+",
+        newPassword: "even-newer-password-10+",
+        revokeOtherSessions: true,
+      },
+      c1,
+    );
+    expect(resChange.status).toBe(200);
+
+    // s2 session revoked
+    expect(await auth.api.getSession({ headers: new Headers({ cookie: c2 }) })).toBeNull();
+
+    // Can sign in with even newer password
+    const s3 = await post(auth, "/sign-in/email", { email: EMAIL, password: "even-newer-password-10+" });
+    expect(s3.status).toBe(200);
+  });
+});

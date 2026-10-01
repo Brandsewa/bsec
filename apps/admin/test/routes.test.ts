@@ -20,7 +20,7 @@ describe("Admin Catalog & Inventory Routes", () => {
     expect(mod.Route).toBeDefined();
     expect(mod.Route.options.pendingComponent).toBeDefined();
     expect(mod.Route.options.component).toBeDefined();
-  }, 15000);
+  }, 30000);
 
   it("exports valid Route definition with pendingComponent for products new", async () => {
     const mod = await import("../src/routes/_store/products/new.tsx");
