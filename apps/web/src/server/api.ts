@@ -107,6 +107,7 @@ import {
   refundAdminOrder,
   createAdminFulfillment,
   confirmAdminOrder,
+  exportCsv,
   advanceAdminOrder,
   listAdminReturns,
   actOnReturn,
@@ -956,6 +957,17 @@ export const storeRouter = os.router({
             throw mapAuthError(err);
           }
         }),
+    },
+
+    exports: {
+      csv: os.admin.exports.csv.use(requireAdmin).handler(async ({ context, input }) => {
+        if (!context.tenantCtx) throw new Error("Missing tenant context");
+        try {
+          return await exportCsv(context.rt, context.tenantCtx, input);
+        } catch (err) {
+          throw mapAuthError(err);
+        }
+      }),
     },
 
     returns: {

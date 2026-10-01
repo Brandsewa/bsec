@@ -26,6 +26,7 @@ import {
   type ColumnDef,
 } from "@bs/ui";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { useCsvExport } from "../../lib/use-csv-export.ts";
 import { orpc } from "../../lib/orpc.ts";
 
 type SavedView = "all" | "unfulfilled" | "unpaid" | "cod_to_confirm" | "rto";
@@ -50,6 +51,7 @@ export const Route = createFileRoute("/_store/orders")({
 });
 
 export function OrdersPage() {
+  const csvExport = useCsvExport("orders");
   const queryClient = useQueryClient();
   const [activeView, setActiveView] = useState<SavedView>("all");
   const [search, setSearch] = useState("");
@@ -224,7 +226,7 @@ export function OrdersPage() {
         items={[{ label: "Orders" }]}
         actions={
           <div className="flex items-center gap-2">
-            <Button variant="default" size="sm">
+            <Button variant="default" size="sm" disabled={csvExport.pending} onClick={csvExport.run} title={csvExport.error ?? undefined}>
               <Download className="mr-1.5 size-3.5" aria-hidden />
               Export
             </Button>

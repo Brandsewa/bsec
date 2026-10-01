@@ -16,6 +16,7 @@ import {
   type ColumnDef,
 } from "@bs/ui";
 import { useQuery } from "@tanstack/react-query";
+import { useCsvExport } from "../../lib/use-csv-export.ts";
 import { orpc } from "../../lib/orpc.ts";
 
 export const Route = createFileRoute("/_store/customers")({
@@ -33,6 +34,7 @@ export const Route = createFileRoute("/_store/customers")({
 });
 
 export function CustomersPage() {
+  const csvExport = useCsvExport("customers");
   const [search, setSearch] = useState("");
   const [selectedCustomerId, setSelectedCustomerId] = useState<string | null>(null);
 
@@ -110,7 +112,7 @@ export function CustomersPage() {
         items={[{ label: "Customers" }]}
         actions={
           <div className="flex items-center gap-2">
-            <Button variant="default" size="sm">
+            <Button variant="default" size="sm" disabled={csvExport.pending} onClick={csvExport.run} title={csvExport.error ?? undefined}>
               <Download className="mr-1.5 size-3.5" aria-hidden />
               Export CSV
             </Button>

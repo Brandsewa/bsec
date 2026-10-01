@@ -17,6 +17,7 @@ import {
   type ColumnDef,
 } from "@bs/ui";
 import { useQuery } from "@tanstack/react-query";
+import { useCsvExport } from "../../../lib/use-csv-export.ts";
 import { orpc } from "../../../lib/orpc.ts";
 
 type ProductStatus = "draft" | "active" | "archived";
@@ -56,6 +57,7 @@ function ProductsRoute() {
 }
 
 export function ProductsPage({ navigate }: { navigate?: (to: string) => void }) {
+  const csvExport = useCsvExport("products");
   const go = navigate ?? (() => undefined);
   const [search, setSearch] = useState("");
   const [debounced, setDebounced] = useState("");
@@ -215,7 +217,7 @@ export function ProductsPage({ navigate }: { navigate?: (to: string) => void }) 
         items={[{ label: "Products" }]}
         actions={
           <div className="flex items-center gap-2">
-            <Button variant="default" size="sm" disabled title="Coming soon">
+            <Button variant="default" size="sm" disabled={csvExport.pending} onClick={csvExport.run} title={csvExport.error ?? undefined}>
               <Download className="mr-1.5 size-3.5" aria-hidden />
               Export
             </Button>

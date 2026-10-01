@@ -1212,6 +1212,14 @@ export const adminContract = {
       .output(z.object({ success: z.boolean(), status: z.string() })),
   },
 
+  // --- Exports ---
+  exports: {
+    csv: oc
+      .route({ method: "POST", path: "/admin/exports/{kind}" })
+      .input(z.object({ kind: z.enum(["orders", "customers", "products"]) }))
+      .output(z.object({ filename: z.string(), csv: z.string() })),
+  },
+
   // --- Returns ---
   returns: {
     list: oc
