@@ -6,6 +6,7 @@ import {
   Menu,
   Package,
   Palette,
+  RotateCcw,
   Settings,
   ShoppingBag,
   Users,
@@ -36,6 +37,7 @@ const nav: GatedGroup[] = [
     label: "Sell",
     items: [
       { label: "Orders", href: "/orders", icon: ShoppingBag, perm: "orders.read" },
+      { label: "Returns", href: "/returns", icon: RotateCcw, perm: "orders.read" },
       { label: "Products", href: "/products", icon: Package, perm: "products.read" },
       { label: "Inventory", href: "/inventory", icon: Warehouse, perm: "products.read" },
       { label: "Customers", href: "/customers", icon: Users, perm: "customers.read" },

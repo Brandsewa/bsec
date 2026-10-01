@@ -52,6 +52,47 @@ export async function dispatchTransactionalEmailOrThrow(
   }
 }
 
+/** Sends the order confirmation once per order (a retried job finds the email already logged and stops). */
+export async function handleOrderCreatedJob(
+  db: Db,
+  log: Logger,
+  data: { tenantId: string; orderId: string },
+): Promise<void> {
+  const { tenantId, orderId } = data;
+  const [order] = await withTenant(db, tenantId, async (tx) => {
+    return await tx
+      .select({ email: schema.orders.email, number: schema.orders.number })
+      .from(schema.orders)
+      .where(and(eq(schema.orders.tenantId, tenantId), eq(schema.orders.id, orderId)))
+      .limit(1);
+  });
+  // The job is queued while the order is still being committed: if it is not visible yet, fail so pg-boss retries.
+  if (!order) throw new Error(`Order ${orderId} not visible yet; retrying`);
+  if (!order.email) return;
+
+  const eventRef = `order_created_${orderId}`;
+  const [alreadySent] = await withTenant(db, tenantId, async (tx) => {
+    return await tx
+      .select({ id: schema.emailLog.id })
+      .from(schema.emailLog)
+      .where(and(eq(schema.emailLog.tenantId, tenantId), eq(schema.emailLog.eventRef, eventRef), eq(schema.emailLog.status, "sent")))
+      .limit(1);
+  });
+  if (alreadySent) {
+    log.info({ orderId, eventRef }, "Order confirmation already sent, skipping duplicate");
+    return;
+  }
+
+  await dispatchTransactionalEmailOrThrow(db, log, {
+    tenantId,
+    template: "order_confirmation",
+    toEmail: order.email,
+    subject: `Order ${order.number} confirmed`,
+    data: { orderId, orderNumber: order.number },
+    eventRef,
+  });
+}
+
 export async function handleFulfillmentRtoJob(
   db: Db,
   log: Logger,
@@ -62,7 +103,7 @@ export async function handleFulfillmentRtoJob(
     return await tx
       .select({ email: schema.orders.email, number: schema.orders.number })
       .from(schema.orders)
-      .where(eq(schema.orders.id, orderId))
+      .where(and(eq(schema.orders.tenantId, tenantId), eq(schema.orders.id, orderId)))
       .limit(1);
   });
 
@@ -72,7 +113,7 @@ export async function handleFulfillmentRtoJob(
       template: "order_rto",
       toEmail: orderRows[0].email,
       subject: `Update regarding order ${orderRows[0].number}: Return to Origin Initiated`,
-      data: { orderNumber: orderRows[0].number, fulfillmentId },
+      data: { orderId, orderNumber: orderRows[0].number, fulfillmentId },
       eventRef: `rto_${fulfillmentId}`,
     });
   }
@@ -88,7 +129,7 @@ export async function handleFulfillmentShippedJob(
     return await tx
       .select({ email: schema.orders.email, number: schema.orders.number })
       .from(schema.orders)
-      .where(eq(schema.orders.id, orderId))
+      .where(and(eq(schema.orders.tenantId, tenantId), eq(schema.orders.id, orderId)))
       .limit(1);
   });
 
@@ -98,7 +139,7 @@ export async function handleFulfillmentShippedJob(
       template: "order_shipped",
       toEmail: orderRows[0].email,
       subject: `Your order ${orderRows[0].number} has shipped!`,
-      data: { orderNumber: orderRows[0].number, awb, carrier },
+      data: { orderId, orderNumber: orderRows[0].number, awb, carrier },
       eventRef: `fulfillment_${fulfillmentId}`,
     });
   }
@@ -114,7 +155,7 @@ export async function handleFulfillmentDeliveredJob(
     return await tx
       .select({ email: schema.orders.email, number: schema.orders.number })
       .from(schema.orders)
-      .where(eq(schema.orders.id, orderId))
+      .where(and(eq(schema.orders.tenantId, tenantId), eq(schema.orders.id, orderId)))
       .limit(1);
   });
 
@@ -124,7 +165,7 @@ export async function handleFulfillmentDeliveredJob(
       template: "order_delivered",
       toEmail: orderRows[0].email,
       subject: `Your order ${orderRows[0].number} has been delivered`,
-      data: { orderNumber: orderRows[0].number },
+      data: { orderId, orderNumber: orderRows[0].number },
       eventRef: `delivered_${fulfillmentId}`,
     });
   }
@@ -140,7 +181,7 @@ export async function handleReturnRequestedJob(
     return await tx
       .select({ email: schema.orders.email, number: schema.orders.number })
       .from(schema.orders)
-      .where(eq(schema.orders.id, orderId))
+      .where(and(eq(schema.orders.tenantId, tenantId), eq(schema.orders.id, orderId)))
       .limit(1);
   });
 
@@ -150,7 +191,7 @@ export async function handleReturnRequestedJob(
       template: "return_requested",
       toEmail: orderRows[0].email,
       subject: `Return request received: ${returnNumber}`,
-      data: { returnNumber, orderNumber: orderRows[0].number },
+      data: { orderId, returnNumber, orderNumber: orderRows[0].number },
       eventRef: `return_${returnId}`,
     });
   }
@@ -167,7 +208,7 @@ export async function handleRefundProcessedJob(
     return await tx
       .select({ email: schema.orders.email, number: schema.orders.number })
       .from(schema.orders)
-      .where(eq(schema.orders.id, orderId))
+      .where(and(eq(schema.orders.tenantId, tenantId), eq(schema.orders.id, orderId)))
       .limit(1);
   });
 
@@ -199,7 +240,7 @@ export async function handleRefundProcessedJob(
       template: "refund_processed",
       toEmail: orderRows[0].email,
       subject: `Refund processed for order ${orderRows[0].number}`,
-      data: { orderNumber: orderRows[0].number, refundAmount },
+      data: { orderId, orderNumber: orderRows[0].number, refundAmount },
       eventRef: refundRef,
     });
   }
@@ -313,6 +354,25 @@ export async function startJobs(opts: {
       }
     }
   });
+
+  // Handle order.created domain event (send the order confirmation)
+  await boss.work<{ tenantId: string; orderId: string }>(
+    QUEUE_NAMES.ORDER_CREATED,
+    { localConcurrency: 2 },
+    async (batch) => {
+      for (const job of batch) {
+        try {
+          await withTenantJobSlot(job.data.tenantId, async () => {
+            await handleOrderCreatedJob(db, opts.log, job.data);
+            opts.log.info({ job_id: job.id, orderId: job.data.orderId }, "order.created processed");
+          });
+        } catch (err) {
+          opts.log.error({ err, job_id: job.id }, "order.created failed");
+          throw err;
+        }
+      }
+    },
+  );
 
   // Handle fulfillment.created domain event (send shipping notification)
   await boss.work<{ tenantId: string; fulfillmentId: string; orderId: string; awb?: string; carrier?: string }>(

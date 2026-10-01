@@ -5,6 +5,8 @@ import Link from "next/link";
 import type { StorefrontCart } from "@bs/domain";
 import { CartItemRow } from "./CartItemRow.tsx";
 import { ShippingEstimator } from "./ShippingEstimator.tsx";
+import { DiscountCodeBox } from "./DiscountCodeBox.tsx";
+import { priceOrder } from "@bs/domain/pricing";
 
 export interface CartViewProps {
   cart: StorefrontCart;
@@ -88,7 +90,15 @@ export function CartView({ cart: initialCart }: CartViewProps) {
     );
   }
 
-  const formattedSubtotal = `₹${(cart.subtotal / 100).toLocaleString("en-IN")}`;
+  const inr = (paise: number) => `₹${(paise / 100).toLocaleString("en-IN")}`;
+  const formattedSubtotal = inr(cart.subtotal);
+  // shipping is only known at checkout, so the estimate here is goods minus any goods discount
+  const estimate = priceOrder({
+    subtotal: cart.subtotal,
+    shipping: 0,
+    codFee: 0,
+    discount: cart.discount ? { type: cart.discount.type, discountAmount: cart.discount.amount } : null,
+  });
 
   return (
     <div className="mx-auto max-w-7xl px-4 py-8 sm:px-6 lg:px-8">
@@ -121,18 +131,31 @@ export function CartView({ cart: initialCart }: CartViewProps) {
               <span className="font-semibold text-foreground">{formattedSubtotal}</span>
             </div>
 
+            {estimate.discountTotal > 0 && cart.discount && (
+              <div className="flex justify-between items-center text-sm py-2" data-testid="discount-line">
+                <span className="text-muted-foreground">Discount ({cart.discount.code})</span>
+                <span className="font-semibold text-emerald-700">−{inr(estimate.discountTotal)}</span>
+              </div>
+            )}
+
             <div className="flex justify-between items-center text-sm py-2 border-b border-border/60">
               <span className="text-muted-foreground">Shipping</span>
-              <span className="text-xs text-muted-foreground">Calculated at checkout</span>
+              <span className="text-xs text-muted-foreground">
+                {cart.discount?.freeShipping ? "Free with your code" : "Calculated at checkout"}
+              </span>
             </div>
 
             <div className="flex justify-between items-center text-base font-bold py-4">
               <span>Estimated Total</span>
-              <span className="text-xl text-foreground">{formattedSubtotal}</span>
+              <span className="text-xl text-foreground">{inr(estimate.grandTotal)}</span>
+            </div>
+
+            <div className="mb-4">
+              <DiscountCodeBox cart={cart} onChange={setCart} />
             </div>
 
             <p className="text-xs text-muted-foreground mb-6">
-              GST included. Delivery options and discounts calculated at checkout.
+              GST included. Delivery options are calculated at checkout.
             </p>
 
             <Link

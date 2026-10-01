@@ -43,6 +43,8 @@ export * from "./orders/fulfillment-state-machine.ts";
 export * from "./orders/return-state-machine.ts";
 export * from "./orders/invoices.ts";
 export * from "./orders/discounts.ts";
+export * from "./orders/pricing.ts";
+export * from "./orders/manual-lifecycle.ts";
 export * from "./admin/orders.ts";
 export * from "./admin/customers.ts";
 export * from "./admin/discounts.ts";
@@ -55,6 +57,7 @@ export * from "./admin/create-owner.ts";
 export * from "./admin/tenant-purge.ts";
 export * from "./admin/demo-store.ts";
 export * from "./system/email.ts";
+export * from "./system/email-templates.ts";
 export * from "./system/abandoned-carts.ts";
 export type {
   AddressPayload,

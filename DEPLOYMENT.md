@@ -122,3 +122,31 @@ node dist/demo.js remove
 - **Tenant deletion:** never immediate. The store goes offline at once, a grace period (default 7 days) runs, and it can be cancelled until the workflow starts. After that the platform service runs: export, stop billing, release domains, media clean-up, purge data, verify, mark deleted. A failed step is retried every minute and its error is shown on the store page. Invoices, the audit trail and the export are kept.
 - **Suspend/archive changes reach the public storefront within about 60 seconds** (each web instance caches the host-to-store lookup for 60 s).
 - **Exports** are gzipped JSON archives of all of a store's data with credentials removed. The download link is valid 15 minutes and needs an admin login.
+
+## Wildcard store routing (Coolify / Traefik)
+
+Every store lives at `<slug>.gobs.cloud`. Cloudflare DNS has one proxied wildcard record (`*.gobs.cloud` -> the server), but Coolify only writes Traefik routers for the domains typed into an application, so without help any store subdomain answers Traefik's `503 no available server`.
+
+`bsec-web` therefore uses **manually managed container labels** (Application -> Container labels -> "Managed manually"). On top of the labels Coolify generates, these are appended (replace the id with the application's own, here `7wuzc3xhtzhxud3315pjutnd`):
+
+```
+traefik.http.routers.http-wild-<id>.entryPoints=http
+traefik.http.routers.http-wild-<id>.middlewares=redirect-to-https
+traefik.http.routers.http-wild-<id>.priority=1
+traefik.http.routers.http-wild-<id>.rule=HostRegexp(`^[a-z0-9-]+\.gobs\.cloud$`)
+traefik.http.routers.http-wild-<id>.service=http-1-<id>
+traefik.http.routers.https-wild-<id>.entryPoints=https
+traefik.http.routers.https-wild-<id>.middlewares=gzip
+traefik.http.routers.https-wild-<id>.priority=1
+traefik.http.routers.https-wild-<id>.rule=HostRegexp(`^[a-z0-9-]+\.gobs\.cloud$`)
+traefik.http.routers.https-wild-<id>.service=https-1-<id>
+traefik.http.routers.https-wild-<id>.tls=true
+```
+
+Notes:
+- `priority=1` keeps the wildcard below the explicit routers, so `admin.`, `platform.`, `superadmin.` and `media.` keep going to their own applications.
+- HTTPS for the wildcard is terminated by Cloudflare (proxied record); the origin serves the default certificate, so Cloudflare SSL mode must stay "Full".
+- Because the labels are manual, **changing bsec-web's domains in Coolify does not update them**: edit the labels by hand.
+- While the admin, platform or superadmin container restarts, the wildcard also catches its host and the web app answers with its "Opening Soon" page instead of a 503. That is expected for the duration of a deploy.
+- `media.gobs.cloud` is the public address of the R2 images bucket, so `media` can never be a store slug.
+- The platform's own site (`gobs.cloud`, `www.gobs.cloud`, or `MARKETING_HOST`) is served by the same application but is recognised by the layout and middleware (`apps/web/src/server/hosts.ts`) and never gets the store gate, header or footer.

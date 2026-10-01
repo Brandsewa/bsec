@@ -1,5 +1,5 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
-import { FileText, RotateCcw, Truck, XCircle } from "lucide-react";
+import { CheckCircle2, FileText, PackageCheck, RotateCcw, Truck, XCircle } from "lucide-react";
 import { useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { EmptyState, PageBreadcrumbs, PageContainer, PageHeader, PageSkeleton, toast } from "@bs/ui";
@@ -58,9 +58,15 @@ function OrderDetailPage() {
   };
   const onError = (e: unknown) => toast.error(errorMessage(e));
 
-  const fulfill = useMutation(
-    orpc.admin.orders.createFulfillment.mutationOptions({
-      onSuccess: () => { toast.success("Fulfillment created."); refresh(); },
+  const confirmOrder = useMutation(
+    orpc.admin.orders.confirm.mutationOptions({
+      onSuccess: () => { toast.success("Order confirmed."); refresh(); },
+      onError,
+    }),
+  );
+  const advance = useMutation(
+    orpc.admin.orders.advance.mutationOptions({
+      onSuccess: (r) => { toast.success(r.status === "delivered" ? "Marked as delivered." : "Marked as shipped."); refresh(); },
       onError,
     }),
   );
@@ -249,15 +255,29 @@ function OrderDetailPage() {
               <CardTitle>Actions</CardTitle>
             </CardHeader>
             <CardContent className="grid gap-2">
-              <Button
-                disabled={order.fulfillmentStatus === "delivered" || cancelled || fulfill.isPending}
-                onClick={() => fulfill.mutate({ id: orderId })}
-              >
-                <Truck className="mr-1.5" /> Fulfill (Shiprocket)
-              </Button>
+              {order.status === "pending" ? (
+                <Button disabled={confirmOrder.isPending} onClick={() => confirmOrder.mutate({ id: orderId })}>
+                  <CheckCircle2 className="mr-1.5" /> Confirm order
+                </Button>
+              ) : null}
+              {["pending", "confirmed", "processing", "partially_fulfilled"].includes(order.status) ? (
+                <Button disabled={advance.isPending} onClick={() => advance.mutate({ id: orderId, to: "shipped" })}>
+                  <Truck className="mr-1.5" /> Mark shipped
+                </Button>
+              ) : null}
+              {["pending", "confirmed", "processing", "partially_fulfilled", "fulfilled"].includes(order.status) ? (
+                <Button variant="outline" disabled={advance.isPending} onClick={() => advance.mutate({ id: orderId, to: "delivered" })}>
+                  <PackageCheck className="mr-1.5" /> Mark delivered{order.paymentStatus === "cod_pending" ? " & cash collected" : ""}
+                </Button>
+              ) : null}
               <Button variant="outline" disabled={invoice.isPending} onClick={() => invoice.mutate({ id: orderId })}>
                 <FileText className="mr-1.5" /> GST invoice
               </Button>
+              {order.status === "delivered" ? (
+                <Button variant="ghost" size="sm" nativeButton={false} render={<Link to="/returns" />}>
+                  <RotateCcw className="mr-1.5" /> Returns for this store
+                </Button>
+              ) : null}
               <Button variant="destructive" disabled={cancelled} onClick={() => setCancelOpen(true)}>
                 <XCircle className="mr-1.5" /> Cancel order
               </Button>

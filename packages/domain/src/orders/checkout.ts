@@ -16,6 +16,8 @@ import type { TenantContext } from "../context.ts";
 import { clearCart, getOrCreateCart } from "../storefront/cart.ts";
 import { reserveInventory } from "../catalog/inventory-reservations.ts";
 import { allocateSequenceNumber } from "./sequences.ts";
+import { redeemDiscount } from "./discounts.ts";
+import { allocateDiscount, priceOrder } from "./pricing.ts";
 import { getTenantShippingRates } from "./shipping-rates.ts";
 import { withIdempotencyKey } from "../system/idempotency.ts";
 import { isFeatureEnabled, FeatureDisabledError } from "../features.ts";
@@ -49,6 +51,8 @@ export interface PlaceOrderResult {
   status: string;
   paymentMethod: string;
   subtotal: number;
+  /** Goods discount taken off by a code (0 when none or when the code was free shipping). */
+  discountTotal?: number | undefined;
   shippingTotal: number;
   codFee: number;
   grandTotal: number;
@@ -108,6 +112,11 @@ export async function placeOrder(
       throw new Error("Cannot place order with empty cart");
     }
 
+    // A code that was applied but is no longer valid must not quietly change the price: the shopper is told.
+    if (cart.discountNotice) {
+      throw new Error(`Bad Request: ${cart.discountNotice}. Remove the code to continue.`);
+    }
+
     // 2. Calculate amounts (in paise) using canonical shipping calculation (PLAN §5.4, §7 / M7)
     const subtotal = cart.subtotal;
     const resolvedRates = await getTenantShippingRates(tx, tenantId, subtotal);
@@ -115,14 +124,21 @@ export async function placeOrder(
       throw new Error("Bad Request: the chosen shipping method is not available for this store");
     }
     const shipping = (input.shippingMethod ? resolvedRates.find((r) => r.method === input.shippingMethod) : undefined) ?? resolvedRates[0];
-    const shippingTotal = shipping ? shipping.amount : 0;
+    const shippingBase = shipping ? shipping.amount : 0;
     const isCod = input.paymentMethod === "cod";
     const storeConfig = await readStoreConfig(tx);
     if (isCod && !storeConfig.cod.enabled) {
       throw new Error("Cash on delivery is not available for this store");
     }
     const codFee = isCod ? storeConfig.cod.feePaise : 0;
-    const grandTotal = subtotal + shippingTotal + codFee;
+    // The same function the cart and checkout pages use, so the total shown is the total charged.
+    const pricing = priceOrder({
+      subtotal,
+      shipping: shippingBase,
+      codFee,
+      discount: cart.discount ? { type: cart.discount.type, discountAmount: cart.discount.amount } : null,
+    });
+    const { shippingTotal, grandTotal, discountTotal } = pricing;
 
     // 3. Find default inventory location for tenant
     const [loc] = await tx
@@ -169,6 +185,7 @@ export async function placeOrder(
       paymentStatus: isCod ? "cod_pending" : "pending",
       fulfillmentStatus: "unfulfilled",
       subtotal,
+      discountTotal,
       shippingTotal,
       codFee,
       grandTotal,
@@ -196,9 +213,11 @@ export async function placeOrder(
       idempotencyKey: input.idempotencyKey ?? null,
     });
 
-    // 7. Insert Order Items
-    for (const it of cart.items) {
+    // 7. Insert Order Items (a goods discount is split across the lines in proportion to their totals)
+    const lineDiscounts = allocateDiscount(cart.items.map((it) => it.lineTotal), discountTotal);
+    for (const [index, it] of cart.items.entries()) {
       await tx.insert(orderItems).values({
+        discountAmount: lineDiscounts[index] ?? 0,
         tenantId,
         orderId,
         variantId: it.variantId,
@@ -209,6 +228,20 @@ export async function placeOrder(
         unitPrice: it.unitPriceSnapshot,
         total: it.lineTotal,
       });
+    }
+
+    // 7b. Redeem the code against its usage limit in the same transaction: if someone else just used the last
+    // redemption this order (and its stock reservation) is rolled back and the shopper is told.
+    if (cart.discount) {
+      const redeemed = await redeemDiscount(
+        rt,
+        ctx,
+        { discountId: cart.discount.discountId, orderId, ...(input.customerId ? { customerId: input.customerId } : {}), amount: pricing.discountValue },
+        tx,
+      );
+      if (!redeemed.success) {
+        throw new Error(`Bad Request: code ${cart.discount.code} is no longer available. Remove it to continue.`);
+      }
     }
 
     // 8. Payment Intent
@@ -256,7 +289,9 @@ export async function placeOrder(
       tenantId,
       orderId,
       type: "order.create",
-      message: isCod ? "Order placed via Cash on Delivery" : "Order placed awaiting payment",
+      message:
+        (isCod ? "Order placed via Cash on Delivery" : "Order placed awaiting payment") +
+        (cart.discount ? ` with code ${cart.discount.code}${pricing.shippingDiscount > 0 ? " (free shipping)" : ""}` : ""),
       actorType: "customer",
       data: {
         paymentMethod: input.paymentMethod,
@@ -279,6 +314,7 @@ export async function placeOrder(
       status: "pending",
       paymentMethod: input.paymentMethod,
       subtotal,
+      discountTotal,
       shippingTotal,
       codFee,
       grandTotal,

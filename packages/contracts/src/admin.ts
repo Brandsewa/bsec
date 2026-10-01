@@ -1210,6 +1210,59 @@ export const adminContract = {
         }),
       )
       .output(z.object({ invoiceId: z.string().uuid(), invoiceNumber: z.string() })),
+    confirm: oc
+      .route({ method: "POST", path: "/admin/orders/{id}/confirm" })
+      .input(z.object({ id: z.string().uuid() }))
+      .output(z.object({ success: z.boolean() })),
+    advance: oc
+      .route({ method: "POST", path: "/admin/orders/{id}/advance" })
+      .input(
+        z.object({
+          id: z.string().uuid(),
+          to: z.enum(["shipped", "delivered"]),
+          carrier: z.string().trim().max(80).optional(),
+          awb: z.string().trim().max(80).optional(),
+        }),
+      )
+      .output(z.object({ success: z.boolean(), status: z.string() })),
+  },
+
+  // --- Returns ---
+  returns: {
+    list: oc
+      .route({ method: "GET", path: "/admin/returns" })
+      .input(z.object({ status: z.string().optional() }).optional())
+      .output(
+        z.object({
+          items: z.array(
+            z.object({
+              id: z.string().uuid(),
+              number: z.string(),
+              status: z.string(),
+              reason: z.string(),
+              resolution: z.string(),
+              adminNote: z.string().nullable(),
+              createdAt: z.string(),
+              orderId: z.string().uuid(),
+              orderNumber: z.string(),
+              customerEmail: z.string().nullable(),
+              items: z.array(z.object({ title: z.string(), quantity: z.number() })),
+              refundAmount: z.number(),
+            }),
+          ),
+        }),
+      ),
+    act: oc
+      .route({ method: "POST", path: "/admin/returns/{id}/act" })
+      .input(
+        z.object({
+          id: z.string().uuid(),
+          action: z.enum(["approve", "reject", "pick_up", "receive", "refund", "close"]),
+          note: z.string().trim().max(500).optional(),
+          restock: z.boolean().optional(),
+        }),
+      )
+      .output(z.object({ success: z.boolean(), status: z.string() })),
   },
 
   // --- M5 Customers Admin ---

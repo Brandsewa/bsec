@@ -1,19 +1,29 @@
 import React from "react";
 import type { StorefrontCart } from "@bs/domain";
+import { priceOrder } from "@bs/domain/pricing";
+import { DiscountCodeBox } from "@/components/cart/DiscountCodeBox.tsx";
 
 export interface OrderSummaryProps {
   cart: StorefrontCart;
   shippingPaise?: number;
   /** Cash-on-delivery handling fee, when the shopper chose COD and the store charges one. */
   codFeePaise?: number;
+  /** When given, the summary shows the discount code box and calls this after a code is applied or removed. */
+  onCartChange?: ((cart: StorefrontCart) => void) | undefined;
 }
 
-export function OrderSummary({ cart, shippingPaise = 0, codFeePaise = 0 }: OrderSummaryProps) {
+export function OrderSummary({ cart, shippingPaise = 0, codFeePaise = 0, onCartChange }: OrderSummaryProps) {
   const formattedSubtotal = `₹${(cart.subtotal / 100).toLocaleString("en-IN")}`;
-  const totalPaise = cart.subtotal + shippingPaise + codFeePaise;
+  const pricing = priceOrder({
+    subtotal: cart.subtotal,
+    shipping: shippingPaise,
+    codFee: codFeePaise,
+    discount: cart.discount ? { type: cart.discount.type, discountAmount: cart.discount.amount } : null,
+  });
+  const totalPaise = pricing.grandTotal;
   const formattedTotal = `₹${(totalPaise / 100).toLocaleString("en-IN")}`;
   const formattedShipping =
-    shippingPaise === 0 ? "Free" : `₹${(shippingPaise / 100).toLocaleString("en-IN")}`;
+    pricing.shippingTotal === 0 ? "Free" : `₹${(pricing.shippingTotal / 100).toLocaleString("en-IN")}`;
 
   return (
     <div className="rounded-2xl border border-border bg-card p-6 shadow-sm">
@@ -62,6 +72,12 @@ export function OrderSummary({ cart, shippingPaise = 0, codFeePaise = 0 }: Order
           <span>Shipping</span>
           <span className="font-semibold text-foreground">{formattedShipping}</span>
         </div>
+        {pricing.discountTotal > 0 && cart.discount && (
+          <div className="flex justify-between text-muted-foreground" data-testid="discount-line">
+            <span>Discount ({cart.discount.code})</span>
+            <span className="font-semibold text-emerald-700">−{`₹${(pricing.discountTotal / 100).toLocaleString("en-IN")}`}</span>
+          </div>
+        )}
         {codFeePaise > 0 && (
           <div className="flex justify-between text-muted-foreground">
             <span>Cash on delivery fee</span>
@@ -74,6 +90,11 @@ export function OrderSummary({ cart, shippingPaise = 0, codFeePaise = 0 }: Order
         </div>
         <p className="text-xs text-muted-foreground mt-1">Inclusive of all taxes (GST)</p>
       </div>
+      {onCartChange && (
+        <div className="mt-4">
+          <DiscountCodeBox cart={cart} onChange={onCartChange} />
+        </div>
+      )}
     </div>
   );
 }

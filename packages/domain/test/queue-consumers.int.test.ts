@@ -116,7 +116,12 @@ describe("Queue Consumers Integration", () => {
     expect(calledUrl).toBe("https://api.resend.com/emails");
     expect(sentBody.to).toEqual(["rto-customer@example.com"]);
     expect(sentBody.subject).toContain("Return to Origin Initiated");
-    expect(sentBody.text).toContain("Template: order_rto");
+    // a real email: the store's name, the order, and what happened, as HTML and plain text
+    expect(String(sentBody.from)).toContain("Test Store E1");
+    expect(String(sentBody.html)).toContain("We couldn&#39;t deliver your order");
+    expect(String(sentBody.html)).toContain("ORD-E1-001");
+    expect(String(sentBody.text)).toContain("being returned to us");
+    expect(String(sentBody.text)).not.toContain("Template:");
   });
 
   it("cart.abandoned consumer sends abandoned_cart_recovery email", async () => {
@@ -143,7 +148,10 @@ describe("Queue Consumers Integration", () => {
     expect(calledUrl).toBe("https://api.resend.com/emails");
     expect(sentBody.to).toEqual(["abandoned-cart@example.com"]);
     expect(sentBody.subject).toBe("Did you leave something behind?");
-    expect(sentBody.text).toContain("Template: abandoned_cart_recovery");
+    expect(String(sentBody.html)).toContain("Did you leave something behind?");
+    expect(String(sentBody.html)).toContain("https://test-store-e1.gobs.cloud/cart");
+    expect(String(sentBody.text)).toContain("Return to your cart: https://test-store-e1.gobs.cloud/cart");
+    expect(String(sentBody.text)).not.toContain("Template:");
   });
 
   it("cart.abandoned consumer skips email when no email address is on payload", async () => {

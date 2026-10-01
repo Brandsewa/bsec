@@ -1,5 +1,6 @@
 "use client";
 
+import { priceOrder } from "@bs/domain/pricing";
 import React, { useState } from "react";
 import { useRouter } from "next/navigation";
 import type { StorefrontCart } from "@bs/domain";
@@ -435,7 +436,14 @@ export function CheckoutForm({
         disabled={loading || noPaymentMethod}
         className="w-full rounded-xl bg-primary py-4 px-6 text-base font-bold text-primary-foreground shadow hover:opacity-90 disabled:opacity-50 transition-opacity"
       >
-        {loading ? "Processing Order..." : `Place Order (₹${((cart.subtotal + currentShippingPaise + codFeePaise) / 100).toLocaleString("en-IN")})`}
+        {loading ? "Processing Order..." : `Place Order (₹${(
+          priceOrder({
+            subtotal: cart.subtotal,
+            shipping: currentShippingPaise,
+            codFee: codFeePaise,
+            discount: cart.discount ? { type: cart.discount.type, discountAmount: cart.discount.amount } : null,
+          }).grandTotal / 100
+        ).toLocaleString("en-IN")})`}
       </button>
     </form>
   );

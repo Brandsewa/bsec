@@ -1,0 +1,179 @@
+import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
+import { eq } from "drizzle-orm";
+import { pino } from "pino";
+import { schema } from "@bs/db";
+import { startTestDb, type TestDb } from "@bs/db/test-env";
+import {
+  adjustInventory,
+  applyCartDiscount,
+  createAdminDiscount,
+  createProduct,
+  createRuntime,
+  listInventoryLevels,
+  placeOrder,
+  provisionTenant,
+  type Runtime,
+  type TenantContext,
+} from "../src/index.ts";
+import { addToCart, getOrCreateCart } from "../src/storefront/cart.ts";
+import { handleOrderCreatedJob, handleFulfillmentShippedJob } from "../src/jobs.ts";
+
+let env: TestDb;
+let rt: Runtime;
+let rtWeb: Runtime;
+let ctx: TenantContext;
+let other: TenantContext;
+let variantId: string;
+let n = 0;
+
+const logger = pino({ level: "silent" });
+const originalFetch = globalThis.fetch;
+const originalKey = process.env.RESEND_API_KEY;
+const sent: Array<Record<string, unknown>> = [];
+
+const buyer = (cartToken: string, name = "Asha Rana") => ({
+  cartToken,
+  idempotencyKey: `idem_${cartToken}`,
+  email: "asha@customer.example",
+  phone: "9876543210",
+  fullName: name,
+  addressLine1: "12 Hill Road",
+  city: "Dehradun",
+  state: "Uttarakhand",
+  pincode: "248001",
+  paymentMethod: "cod" as const,
+});
+
+async function placeOne(code?: string, name?: string) {
+  const cart = await getOrCreateCart(rtWeb, ctx, `tok-mail-${++n}`);
+  await addToCart(rtWeb, ctx, { token: cart.token, variantId, quantity: 2 });
+  if (code) await applyCartDiscount(rtWeb, ctx, { token: cart.token, code });
+  return placeOrder(rtWeb, ctx, buyer(cart.token, name));
+}
+
+beforeAll(async () => {
+  env = await startTestDb();
+  rt = createRuntime({ service: "platform", databaseUrl: env.as("app_platform"), poolMax: 5 });
+  rtWeb = createRuntime({ service: "web", databaseUrl: env.as("app_rw"), poolMax: 5 });
+  const a = await provisionTenant(rt, { storeName: "Taste of Hills", slug: "mail-a", owner: { email: "owner@mail-a.test", name: "A" }, planCode: "starter", source: "platform_admin" });
+  const b = await provisionTenant(rt, { storeName: "Other Shop", slug: "mail-b", owner: { email: "owner@mail-b.test", name: "B" }, planCode: "starter", source: "platform_admin" });
+  const mk = (t: { tenantId: string; ownerId: string }): TenantContext => ({
+    tenantId: t.tenantId,
+    storeStatus: "live",
+    actor: { type: "staff", userId: t.ownerId },
+    roles: ["store_owner"],
+    permissions: ["products.read", "products.write", "orders.read", "orders.write", "discounts.write", "settings.write"],
+    requestId: "req-test",
+  });
+  ctx = mk(a);
+  other = mk(b);
+  // the store's support address, as set in Settings
+  await rt._db.db.update(schema.storeSettings).set({ supportEmail: "help@tasteofhills.example" }).where(eq(schema.storeSettings.tenantId, a.tenantId));
+  await createProduct(rtWeb, ctx, { title: "Dalle Timboor Chok Pickle | Powder", status: "active", variants: [{ sku: "MAIL-1", title: "Default", price: 10000 }] });
+  const row = (await listInventoryLevels(rtWeb, ctx, {})).items[0]!;
+  variantId = row.variantId;
+  await adjustInventory(rtWeb, ctx, { variantId, locationId: row.locationId, quantityDelta: 100, reason: "received" });
+  await createAdminDiscount(rtWeb, ctx, { code: "TEN", title: "10% off", type: "percent", value: 10 });
+}, 180_000);
+
+afterAll(async () => {
+  await rt?.close();
+  await rtWeb?.close();
+  await env?.stop();
+});
+
+beforeEach(() => {
+  sent.length = 0;
+  process.env.RESEND_API_KEY = "re_test_dummy_key";
+  globalThis.fetch = vi.fn().mockImplementation(async (_url: string, init?: RequestInit) => {
+    sent.push(JSON.parse(String(init?.body ?? "{}")));
+    return { ok: true, status: 200, json: async () => ({ id: `resend_${sent.length}` }) } as Response;
+  });
+});
+
+afterEach(() => {
+  globalThis.fetch = originalFetch;
+  if (originalKey === undefined) delete process.env.RESEND_API_KEY;
+  else process.env.RESEND_API_KEY = originalKey;
+  vi.restoreAllMocks();
+});
+
+describe("order confirmation email", () => {
+  it("is sent for a placed order with the real order, the discount, the store's name and a working view link", async () => {
+    const placed = await placeOne("TEN");
+    await handleOrderCreatedJob(rt._db.db, logger, { tenantId: ctx.tenantId, orderId: placed.orderId });
+
+    expect(sent).toHaveLength(1);
+    const mail = sent[0]!;
+    expect(mail.to).toEqual(["asha@customer.example"]);
+    expect(mail.subject).toBe(`Order ${placed.orderNumber} confirmed`);
+    expect(String(mail.from)).toMatch(/^Taste of Hills <.+@.+>$/);
+    expect(mail.reply_to).toBe("help@tasteofhills.example");
+
+    const text = String(mail.text);
+    expect(text).toContain(placed.orderNumber);
+    expect(text).toContain("Dalle Timboor Chok Pickle | Powder x 2: ₹200");
+    expect(text).toContain("Discount: -₹20"); // 10% of 200
+    expect(text).toContain("Shipping: ₹99");
+    expect(text).toContain("Total: ₹279");
+    expect(text).toContain("Cash on delivery: please pay when your order arrives.");
+    expect(text).toContain("Dehradun");
+
+    // the link in the email really opens this order on this store (a fresh token, not the checkout one)
+    const link = /View your order: (https:\/\/\S+)/.exec(text)?.[1];
+    expect(link).toMatch(/^https:\/\/mail-a\.gobs\.cloud\/o\/ord_[0-9a-f]{48}$/);
+    expect(link).not.toContain(placed.orderToken);
+  });
+
+  it("is logged, and a retried job does not send it twice", async () => {
+    const placed = await placeOne();
+    await handleOrderCreatedJob(rt._db.db, logger, { tenantId: ctx.tenantId, orderId: placed.orderId });
+    await handleOrderCreatedJob(rt._db.db, logger, { tenantId: ctx.tenantId, orderId: placed.orderId });
+    expect(sent).toHaveLength(1);
+    const logs = await rt._db.db.select().from(schema.emailLog).where(eq(schema.emailLog.eventRef, `order_created_${placed.orderId}`));
+    expect(logs.map((l) => ({ template: l.template, status: l.status }))).toEqual([{ template: "order_confirmation", status: "sent" }]);
+  });
+
+  it("text a shopper typed can't inject markup into the email", async () => {
+    const placed = await placeOne(undefined, `<script>alert(1)</script>`);
+    await handleOrderCreatedJob(rt._db.db, logger, { tenantId: ctx.tenantId, orderId: placed.orderId });
+    const html = String(sent[0]!.html);
+    expect(html).not.toContain("<script>alert(1)</script>");
+    expect(html).toContain("&lt;script&gt;alert(1)&lt;/script&gt;");
+  });
+
+  it("fails (so pg-boss retries) when the order is not visible yet, instead of silently losing the email", async () => {
+    await expect(handleOrderCreatedJob(rt._db.db, logger, { tenantId: ctx.tenantId, orderId: "01a0f000-0000-7000-8000-000000000000" })).rejects.toThrow(/not visible yet/);
+    expect(sent).toHaveLength(0);
+  });
+
+  it("without an email provider key the job ends quietly and nothing is sent", async () => {
+    delete process.env.RESEND_API_KEY;
+    const placed = await placeOne();
+    await expect(handleOrderCreatedJob(rt._db.db, logger, { tenantId: ctx.tenantId, orderId: placed.orderId })).resolves.toBeUndefined();
+    expect(sent).toHaveLength(0);
+  });
+
+  it("another store's order can't be emailed through this store's job", async () => {
+    const placed = await placeOne();
+    // asking store B to email store A's order finds nothing and must not leak A's data, whichever connection runs the job
+    // (the worker uses app_rw; the platform connection bypasses row-level security, so the handler must filter by tenant itself)
+    for (const db of [rtWeb._db.db, rt._db.db]) {
+      await expect(handleOrderCreatedJob(db, logger, { tenantId: other.tenantId, orderId: placed.orderId })).rejects.toThrow(/not visible yet/);
+    }
+    expect(sent).toHaveLength(0);
+  });
+});
+
+describe("shipping email", () => {
+  it("names the carrier and tracking number and links to the order", async () => {
+    const placed = await placeOne();
+    await handleFulfillmentShippedJob(rt._db.db, logger, { tenantId: ctx.tenantId, orderId: placed.orderId, fulfillmentId: "ful-1", awb: "AWB-998877", carrier: "Delhivery" });
+    expect(sent).toHaveLength(1);
+    const text = String(sent[0]!.text);
+    expect(text).toContain("Carrier: Delhivery.");
+    expect(text).toContain("Tracking number: AWB-998877.");
+    expect(text).toContain("Track your order: https://mail-a.gobs.cloud/o/ord_");
+    expect(String(sent[0]!.subject)).toContain("has shipped");
+  });
+});

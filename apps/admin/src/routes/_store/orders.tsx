@@ -1,5 +1,5 @@
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
-import { Clock, Copy, Download, ExternalLink, FileText, MoreHorizontal, Package, Plus, RotateCcw, ShoppingBag, Truck, XCircle } from "lucide-react";
+import { CheckCircle2, Clock, Copy, Download, ExternalLink, FileText, MoreHorizontal, Package, PackageCheck, Plus, RotateCcw, ShoppingBag, Truck, XCircle } from "lucide-react";
 import { useMemo, useState } from "react";
 import { MetricCard, MetricCardSkeleton, PageContainer, PageHeader, PageSection, PageSkeleton, TableSkeleton, toast } from "@bs/ui";
 import { keepPreviousData, useQuery, useQueryClient } from "@tanstack/react-query";
@@ -164,13 +164,29 @@ export const Route = createFileRoute("/_store/orders")({
 // Actions on orders (single and bulk share one runner)
 // ---------------------------------------------------------------------------------------------------------------
 
-type ActionKind = "fulfill" | "invoice" | "cancel";
+type ActionKind = "confirm" | "ship" | "deliver" | "invoice" | "cancel";
+type AskKind = "ship" | "deliver" | "cancel";
+
+// The order lifecycle is hand-run: confirm, then mark shipped, then mark delivered (which also collects COD cash).
+const OPEN_STATES = ["pending", "confirmed", "processing", "partially_fulfilled"];
 const ACTIONS: Record<ActionKind, { verb: string; done: string; eligible: (o: OrderRow) => boolean; run: (o: OrderRow, reason?: string) => Promise<unknown> }> = {
-  fulfill: {
-    verb: "Fulfilling",
-    done: "fulfilled",
-    eligible: (o) => o.status !== "cancelled" && o.fulfillmentStatus !== "delivered",
-    run: (o) => client.admin.orders.createFulfillment({ id: o.id }),
+  confirm: {
+    verb: "Confirming",
+    done: "confirmed",
+    eligible: (o) => o.status === "pending",
+    run: (o) => client.admin.orders.confirm({ id: o.id }),
+  },
+  ship: {
+    verb: "Marking shipped",
+    done: "marked shipped",
+    eligible: (o) => OPEN_STATES.includes(o.status),
+    run: (o) => client.admin.orders.advance({ id: o.id, to: "shipped" }),
+  },
+  deliver: {
+    verb: "Marking delivered",
+    done: "marked delivered",
+    eligible: (o) => [...OPEN_STATES, "fulfilled"].includes(o.status),
+    run: (o) => client.admin.orders.advance({ id: o.id, to: "delivered" }),
   },
   invoice: {
     verb: "Creating invoices for",
@@ -184,6 +200,12 @@ const ACTIONS: Record<ActionKind, { verb: string; done: string; eligible: (o: Or
     eligible: (o) => o.status !== "cancelled" && o.fulfillmentStatus !== "delivered",
     run: (o, reason) => client.admin.orders.cancel({ id: o.id, reason: reason?.trim() || "Cancelled by store staff" }),
   },
+};
+
+const ASK_COPY: Record<AskKind, { title: string; description: string; confirm: string }> = {
+  ship: { title: "Mark as shipped", description: "The order moves to shipped. Customers are notified if emails are set up.", confirm: "Mark shipped" },
+  deliver: { title: "Mark as delivered", description: "The order moves to delivered, and cash on delivery orders are marked as collected.", confirm: "Mark delivered" },
+  cancel: { title: "Cancel", description: "This stops fulfillment and releases reserved stock. It cannot be undone.", confirm: "Cancel" },
 };
 
 const EXPORT_HEADER = ["Order", "Placed at", "Customer name", "Customer email", "Phone", "Order status", "Payment", "Fulfillment", "Items", "Total (INR)"];
@@ -241,7 +263,7 @@ export function OrdersPage() {
   });
 
   // ----- actions -----
-  const [confirm, setConfirm] = useState<{ kind: "fulfill" | "cancel"; orders: OrderRow[] } | null>(null);
+  const [confirm, setConfirm] = useState<{ kind: AskKind; orders: OrderRow[] } | null>(null);
   const [cancelReason, setCancelReason] = useState("");
 
   const runAction = (kind: ActionKind, orders: OrderRow[], reason?: string) =>
@@ -279,7 +301,7 @@ export function OrdersPage() {
     }
   }
 
-  function ask(kind: "fulfill" | "cancel", orders: OrderRow[]) {
+  function ask(kind: AskKind, orders: OrderRow[]) {
     setCancelReason("");
     setConfirm({ kind, orders });
   }
@@ -374,8 +396,14 @@ export function OrdersPage() {
           <Copy /> Copy order number
         </DropdownMenuItem>
         <DropdownMenuSeparator />
-        <DropdownMenuItem disabled={!ACTIONS.fulfill.eligible(o) || bulk.busy} onClick={() => ask("fulfill", [o])}>
-          <Truck /> Fulfill
+        <DropdownMenuItem disabled={!ACTIONS.confirm.eligible(o) || bulk.busy} onClick={() => void runAction("confirm", [o])}>
+          <CheckCircle2 /> Confirm order
+        </DropdownMenuItem>
+        <DropdownMenuItem disabled={!ACTIONS.ship.eligible(o) || bulk.busy} onClick={() => ask("ship", [o])}>
+          <Truck /> Mark shipped
+        </DropdownMenuItem>
+        <DropdownMenuItem disabled={!ACTIONS.deliver.eligible(o) || bulk.busy} onClick={() => ask("deliver", [o])}>
+          <PackageCheck /> Mark delivered
         </DropdownMenuItem>
         <DropdownMenuItem disabled={!ACTIONS.invoice.eligible(o) || bulk.busy} onClick={() => void runAction("invoice", [o])}>
           <FileText /> GST invoice
@@ -469,10 +497,16 @@ export function OrdersPage() {
             pageFullySelected={sel.pageFullySelected}
             onSelectAllResults={sel.selectAllResults}
             onClear={sel.clear}
-            note={sel.allResults ? "Fulfill, invoice and cancel work on orders you tick yourself. Export covers every matching order." : undefined}
+            note={sel.allResults ? "Order actions work on orders you tick yourself. Export covers every matching order." : undefined}
           >
-            <Button variant="outline" size="sm" disabled={bulk.busy || sel.allResults} onClick={() => ask("fulfill", sel.picked)}>
-              <Truck className="mr-1.5" /> Fulfill
+            <Button variant="outline" size="sm" disabled={bulk.busy || sel.allResults} onClick={() => void runAction("confirm", sel.picked)}>
+              <CheckCircle2 className="mr-1.5" /> Confirm
+            </Button>
+            <Button variant="outline" size="sm" disabled={bulk.busy || sel.allResults} onClick={() => ask("ship", sel.picked)}>
+              <Truck className="mr-1.5" /> Mark shipped
+            </Button>
+            <Button variant="outline" size="sm" disabled={bulk.busy || sel.allResults} onClick={() => ask("deliver", sel.picked)}>
+              <PackageCheck className="mr-1.5" /> Mark delivered
             </Button>
             <Button variant="outline" size="sm" disabled={bulk.busy || sel.allResults} onClick={() => void runAction("invoice", sel.picked)}>
               <FileText className="mr-1.5" /> GST invoices
@@ -544,14 +578,14 @@ export function OrdersPage() {
       <ConfirmDialog
         open={confirm !== null}
         onOpenChange={(open) => !open && setConfirm(null)}
-        title={`${confirm?.kind === "cancel" ? "Cancel" : "Fulfill"} ${confirmOrders.length === 1 ? (confirmOrders[0]?.number ?? "order") : `${confirmOrders.length} orders`}?`}
+        title={`${confirm ? ASK_COPY[confirm.kind].title : ""} ${confirmOrders.length === 1 ? (confirmOrders[0]?.number ?? "order") : `${confirmOrders.length} orders`}?`}
         description={
           <>
-            {confirm?.kind === "cancel" ? "This stops fulfillment and releases reserved stock. It cannot be undone." : "A shipment is created for each order through your shipping provider."}
+            {confirm ? ASK_COPY[confirm.kind].description : ""}
             {notEligible > 0 ? ` ${notEligible} selected order${notEligible === 1 ? " is" : "s are"} not eligible and will be skipped.` : ""}
           </>
         }
-        confirmLabel={`${confirm?.kind === "cancel" ? "Cancel" : "Fulfill"} ${confirmOrders.length === 1 ? "order" : "orders"}`}
+        confirmLabel={`${confirm ? ASK_COPY[confirm.kind].confirm : ""} ${confirmOrders.length === 1 ? "order" : "orders"}`}
         destructive={confirm?.kind === "cancel"}
         onConfirm={() => {
           const c = confirm;
