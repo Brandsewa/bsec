@@ -161,9 +161,9 @@ Web/SPA component tests: each new screen renders, validates, shows generic error
 5. Cross-tenant checks pass: a customer token or session from one store never works on another.
 6. `pnpm typecheck`, `pnpm lint`, `pnpm build` and each package's vitest pass; `progress.md` updated; ADR and `DEPLOYMENT.md` updated.
 
-## 10. Open questions for the owner (answer before phase C)
+## 10. Owner decisions (answered 2026-10-01)
 
-1. Sender address: confirm the verified ZeptoMail domain and from address (suggest `no-reply@gobs.cloud` for auth, `orders@gobs.cloud` for orders).
-2. Should unverified customers be allowed to check out as guests with that email? (Plan says yes; guest checkout is unchanged.)
-3. Customer phone is required today for checkout; keep optional at registration?
-4. Staff self-registration stays disabled (invite only). Confirm.
+1. **Sender:** `no-reply@gobs.cloud` for **all** transactional email (auth mail and order mail). The store's name is the display name (`"Taste of Hills" <no-reply@gobs.cloud>`) and the store's support email is the reply-to. The `gobs.cloud` domain must be verified in ZeptoMail (SPF and DKIM in Cloudflare DNS) before the test email can pass. The `orders@` suggestion elsewhere in this plan is superseded.
+2. **Guests:** guest checkout is unchanged; unverified customers can still check out as guests with their email.
+3. **Phone number:** optional at registration and on the profile; **mandatory only at checkout** (as today). Phone-code sign-in is only offered to customers who have a verified phone on file.
+4. **Staff sign-up:** stays disabled, invite only. Same for platform staff.
