@@ -66,7 +66,7 @@ test("the demo store shows real products, orders, customers and discounts", asyn
   await expect(page.getByText("ORD-00019").first()).toBeVisible();
   // the redesigned lists render some values twice (table + card/summary), so match the first
   // the first four demo orders are COD orders the customer has not confirmed yet
-  await page.getByRole("button", { name: "COD to confirm" }).click();
+  await page.getByRole("tab", { name: "COD to confirm" }).click();
   await expect(page.getByText("ORD-00001").first()).toBeVisible();
   await expect(page.getByText("ORD-00019").first()).toBeHidden();
 
