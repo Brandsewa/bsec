@@ -2,6 +2,16 @@
 
 Source of truth: `docs/PLAN.html` v2.0 (build order in `docs/BUILD-PLAN-M2-M9.md`). Items are ticked only after verification; the evidence is noted next to each. "From code" means it was read in the repo but not exercised live.
 
+## M11 · Auth & Transactional Email Overhaul (docs/AUTH-OVERHAUL-PLAN.md)
+
+### Phase A: Platform-wide Transactional Email Service (Zoho ZeptoMail) — Complete (Awaiting Credentials Verification)
+- [x] **Database Schema & Migrations**: Created `packages/db/src/schema/platform-email.ts` with `platform_email_settings` and `platform_email_log`. Generated migration `0017_platform_email.sql` granting `app_rw` SELECT on settings & INSERT on logs, and `app_platform` ALL. Verified with real Postgres grant suite (`b2-grants.int.test.ts`).
+- [x] **Contracts & API**: Implemented `platformEmailContract` (`get`, `update`, `sendTest`, `recentDeliveries`) in `@bs/contracts/src/platform.ts`. Implemented and mounted procedures in `apps/platform/src/app.ts`. Updated RBAC and audit-coverage suites.
+- [x] **Superadmin UI**: Implemented `apps/superadmin/src/pages/EmailSettings.tsx` at `/email` with India Zoho ZeptoMail presets, password encryption (never leaking secrets or displaying password in plain text), test email sender, and recent delivery log table.
+- [x] **Domain Mailer & Templates**: Implemented `packages/domain/src/system/platform-mailer.ts` using `nodemailer`, AES-256-GCM encryption/decryption, rate-limiting, error sanitization, and transport injection. Added transactional and auth templates in `packages/domain/src/system/email-templates.ts`. Updated store order emails in `packages/domain/src/system/email.ts` to route through platform mailer with store name as display name, store support email as reply-to, and `no-reply@gobs.cloud` as sender.
+- [x] **Verification**: All unit, integration, and pre-push checks passing (`pnpm lint`, `pnpm typecheck`, `pnpm build`, `@bs/domain` vitest 78/78 files 1070/1070 tests, `@bs/contracts` 15/15 tests, `@bs/db` 27/27 fast tests, `@bs/admin` 25/25 tests, `@bs/web` 158/158 tests).
+- [ ] **STOP & AWAIT VERIFICATION**: Super Admin owner must configure real ZeptoMail credentials in `/email` and confirm receipt of test email before starting Phase B.
+
 ## M10 · Visual theme system (Puck) — shipped to production 2026-10-01
 
 Design and rationale: [`docs/adr/018-visual-theme-editor.md`](docs/adr/018-visual-theme-editor.md) (extends ADR-009 and ADR-010). Shipped in `5644b6c` (feature commit `f469208` + merge of main). CI green end to end; production health checked (web, platform, admin on `5644b6c`).

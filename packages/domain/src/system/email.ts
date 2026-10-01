@@ -1,8 +1,8 @@
-import { eq, and, sql } from "drizzle-orm";
+import { eq, sql } from "drizzle-orm";
 import { type Db, withTenant, schema } from "@bs/db";
-import { decryptSecret } from "@bs/payments";
 import { renderEmail, type EmailData } from "./email-templates.ts";
 import { loadEmailBrand, loadEmailOrder, mintOrderViewUrl } from "./email-context.ts";
+import { sendPlatformEmail } from "./platform-mailer.ts";
 
 export interface SendEmailInput {
   tenantId: string;
@@ -39,17 +39,17 @@ export async function isIntegrationKilled(
     .limit(1);
 
   if (rows.length > 0) {
-    // If the kill switch flag exists and is marked killSwitch: true or defaultOn: true
     return Boolean(rows[0]?.killSwitch || rows[0]?.defaultOn);
   }
   return false;
 }
 
 /**
- * Transactional Email Dispatcher with Integration Kill Switch (PLAN §11.7, §5.10).
- * Handles sending transactional customer emails (order confirmation, shipping updates,
- * abandoned cart recovery, returns, refunds) and logs every attempt to email_log.
- * If resend/email is disabled via kill switch, gracefully logs and defers/skips without erroring.
+ * Transactional Email Dispatcher (AUTH-OVERHAUL-PLAN §3.5).
+ * Dispatches transactional store emails (order confirmation, shipping updates,
+ * abandoned cart recovery, returns, refunds) through the platform-wide SMTP mailer (Zoho ZeptoMail).
+ * From name is the store name; reply-to is the store's support email; from address is no-reply@gobs.cloud.
+ * If mailer is disabled or unconfigured, logs and skips gracefully.
  */
 export async function sendTransactionalEmail(
   db: Db,
@@ -58,7 +58,7 @@ export async function sendTransactionalEmail(
   const { tenantId, template, toEmail, subject, data = {}, eventRef } = input;
 
   return await withTenant(db, tenantId, async (tx) => {
-    // 1. Check integration kill switch for email provider
+    // 1. Check integration kill switch for email
     const emailDisabled = await isIntegrationKilled(db, "email");
     if (emailDisabled) {
       const [logged] = await tx
@@ -85,33 +85,7 @@ export async function sendTransactionalEmail(
       };
     }
 
-    // 2. Fetch email provider credentials if configured in tenant_secrets or env
-    let apiKey: string | undefined = process.env.RESEND_API_KEY;
-    try {
-      const rows = await tx
-        .select({
-          keyName: schema.tenantSecrets.keyName,
-          ciphertext: schema.tenantSecrets.ciphertext,
-          iv: schema.tenantSecrets.iv,
-        })
-        .from(schema.tenantSecrets)
-        .where(
-          and(
-            eq(schema.tenantSecrets.tenantId, tenantId),
-            eq(schema.tenantSecrets.provider, "resend"),
-          ),
-        );
-
-      for (const row of rows) {
-        if (row.keyName === "api_key" || row.keyName === "apiKey") {
-          apiKey = decryptSecret({ ciphertext: row.ciphertext, iv: row.iv });
-        }
-      }
-    } catch {
-      // Fallback to env
-    }
-
-    // 3. Insert email_log entry
+    // 2. Insert email_log entry
     const [logEntry] = await tx
       .insert(schema.emailLog)
       .values({
@@ -128,60 +102,36 @@ export async function sendTransactionalEmail(
       throw new Error("Failed to insert email_log entry");
     }
 
-    // 4. If no Resend API key is configured, mark as failed
-    if (!apiKey) {
-      const errorMsg = "No Resend API key configured";
-      await tx
-        .update(schema.emailLog)
-        .set({
-          status: "failed",
-          error: errorMsg,
-        })
-        .where(eq(schema.emailLog.id, logEntry.id));
-
-      return {
-        logId: logEntry.id,
-        status: "failed",
-        error: errorMsg,
-      };
-    }
-
-    // 5. Dispatch real HTTP call to Resend
+    // 3. Render email with brand and order context
     try {
-      // The content: the store's name and address, and (for order emails) the real order with a fresh view link.
       const brand = await loadEmailBrand(tx, tenantId);
       const emailData: EmailData = { ...data, cartUrl: `${brand.baseUrl}/cart` };
       const orderId = typeof data.orderId === "string" ? data.orderId : undefined;
       if (orderId) {
         const order = await loadEmailOrder(tx, tenantId, orderId);
-        if (order) emailData.order = { ...order, orderUrl: await mintOrderViewUrl(tx, tenantId, orderId, brand.baseUrl) };
+        if (order) {
+          emailData.order = {
+            ...order,
+            orderUrl: await mintOrderViewUrl(tx, tenantId, orderId, brand.baseUrl),
+          };
+        }
       }
       const rendered = renderEmail(template, brand, emailData, subject);
 
-      // "Store name <orders@platform-domain>": the sending address is the platform's verified one, the name is the store's.
-      const configuredFrom = process.env.RESEND_FROM_EMAIL ?? "orders@brandsewa.com";
-      const fromEmail = configuredFrom.includes("<") ? configuredFrom : `${brand.storeName.replace(/["<>]/g, "")} <${configuredFrom}>`;
-      const payload: Record<string, unknown> = {
-        from: fromEmail,
-        to: [toEmail],
+      // 4. Dispatch via platform mailer
+      const platformResult = await sendPlatformEmail(db, {
+        tenantId,
+        to: toEmail,
         subject,
         html: rendered.html,
         text: rendered.text,
-        ...(brand.supportEmail ? { reply_to: brand.supportEmail } : {}),
-      };
-
-      const res = await fetch("https://api.resend.com/emails", {
-        method: "POST",
-        headers: {
-          Authorization: `Bearer ${apiKey}`,
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify(payload),
+        fromName: brand.storeName,
+        replyTo: brand.supportEmail ?? undefined,
+        template,
       });
 
-      if (!res.ok) {
-        const errorText = await res.text();
-        const errorMsg = `Resend API error: ${res.status} ${errorText}`;
+      if (platformResult.status === "skipped") {
+        const errorMsg = platformResult.error ?? "Email service not configured";
         await tx
           .update(schema.emailLog)
           .set({
@@ -197,9 +147,24 @@ export async function sendTransactionalEmail(
         };
       }
 
-      const resData = (await res.json()) as { id?: string };
-      const providerId = resData.id ?? `resend_${logEntry.id.slice(0, 12)}`;
+      if (platformResult.status === "failed") {
+        const errorMsg = platformResult.error ?? "Failed to send platform email";
+        await tx
+          .update(schema.emailLog)
+          .set({
+            status: "failed",
+            error: errorMsg,
+          })
+          .where(eq(schema.emailLog.id, logEntry.id));
 
+        return {
+          logId: logEntry.id,
+          status: "failed",
+          error: errorMsg,
+        };
+      }
+
+      const providerId = platformResult.providerMessageId ?? `smtp_${logEntry.id.slice(0, 12)}`;
       await tx
         .update(schema.emailLog)
         .set({

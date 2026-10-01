@@ -12,6 +12,10 @@ import {
   handleRefundProcessedJob,
 } from "../src/jobs.ts";
 
+import type { Transporter } from "nodemailer";
+import { setPlatformEmailTransportFactory } from "../src/system/platform-mailer.ts";
+import { encryptSecret } from "@bs/payments";
+
 const PW = {
   owner: "o_test",
   rw: "rw_test",
@@ -36,9 +40,6 @@ const tenantId = "0199a063-0000-7000-8000-000000000001";
 const orderId = "0199a063-0000-7000-8000-000000000100";
 const orderNumber = "ORD-0199a063-001";
 const customerEmail = "customer@example.com";
-
-let originalFetch: typeof globalThis.fetch;
-let originalResendKey: string | undefined;
 
 beforeAll(async () => {
   if (process.env.TEST_DATABASE_URL_SUPERUSER) {
@@ -71,6 +72,21 @@ beforeAll(async () => {
     ON CONFLICT DO NOTHING;
   `);
 
+  const enc = encryptSecret("mock-token-0199a063");
+  await pgClient.query(`
+    INSERT INTO platform_email_settings (
+      id, provider, host, port, secure_mode, username, password_ciphertext, password_iv, key_version,
+      from_email, from_name, reply_to, enabled
+    ) VALUES (
+      'default', 'zoho_zeptomail', 'smtp.zeptomail.in', 587, 'starttls', 'emailapikey',
+      '${enc.ciphertext}', '${enc.iv}', 1,
+      'no-reply@gobs.cloud', 'Brand Sewa', 'support@gobs.cloud', true
+    ) ON CONFLICT (id) DO UPDATE SET
+      password_ciphertext = EXCLUDED.password_ciphertext,
+      password_iv = EXCLUDED.password_iv,
+      enabled = true;
+  `);
+
   await pgClient.end();
 }, 180_000);
 
@@ -80,32 +96,17 @@ afterAll(async () => {
 });
 
 beforeEach(() => {
-  originalFetch = globalThis.fetch;
-  originalResendKey = process.env.RESEND_API_KEY;
-  process.env.RESEND_API_KEY = "re_test_mock_api_key_0199a063";
-
-  // Mock outer network edge: Resend API HTTP endpoint
-  globalThis.fetch = vi.fn().mockImplementation(async (url: string | URL | Request) => {
-    const urlStr = typeof url === "string" ? url : url.toString();
-    if (urlStr.includes("api.resend.com/emails")) {
-      return {
-        ok: true,
-        status: 200,
-        json: async () => ({ id: "msg_resend_mock_0199a063" }),
-        text: async () => JSON.stringify({ id: "msg_resend_mock_0199a063" }),
-      } as unknown as Response;
-    }
-    return originalFetch(url);
+  setPlatformEmailTransportFactory(() => {
+    return {
+      sendMail: async () => {
+        return { messageId: "msg_platform_mock_0199a063" };
+      },
+    } as unknown as Transporter;
   });
 });
 
 afterEach(() => {
-  globalThis.fetch = originalFetch;
-  if (originalResendKey !== undefined) {
-    process.env.RESEND_API_KEY = originalResendKey;
-  } else {
-    delete process.env.RESEND_API_KEY;
-  }
+  setPlatformEmailTransportFactory(null);
   vi.restoreAllMocks();
 });
 
@@ -133,7 +134,7 @@ describe("M5 carry-over: Email job handlers asserting real email_log rows (PLAN 
     expect(row.toEmail).toBe(customerEmail);
     expect(row.subject).toContain(orderNumber);
     expect(row.status).toBe("sent");
-    expect(row.providerId).toBe("msg_resend_mock_0199a063");
+    expect(row.providerId).toBe("msg_platform_mock_0199a063");
     expect(row.sentAt).not.toBeNull();
   });
 
@@ -158,7 +159,7 @@ describe("M5 carry-over: Email job handlers asserting real email_log rows (PLAN 
     expect(row.toEmail).toBe(customerEmail);
     expect(row.subject).toContain(orderNumber);
     expect(row.status).toBe("sent");
-    expect(row.providerId).toBe("msg_resend_mock_0199a063");
+    expect(row.providerId).toBe("msg_platform_mock_0199a063");
   });
 
   it("handleReturnRequestedJob creates sent email_log row with return number", async () => {
@@ -184,7 +185,7 @@ describe("M5 carry-over: Email job handlers asserting real email_log rows (PLAN 
     expect(row.toEmail).toBe(customerEmail);
     expect(row.subject).toContain(returnNumber);
     expect(row.status).toBe("sent");
-    expect(row.providerId).toBe("msg_resend_mock_0199a063");
+    expect(row.providerId).toBe("msg_platform_mock_0199a063");
   });
 
   it("handleRefundProcessedJob creates sent email_log row with refund amount", async () => {
@@ -210,7 +211,7 @@ describe("M5 carry-over: Email job handlers asserting real email_log rows (PLAN 
     expect(row.toEmail).toBe(customerEmail);
     expect(row.subject).toContain(orderNumber);
     expect(row.status).toBe("sent");
-    expect(row.providerId).toBe("msg_resend_mock_0199a063");
+    expect(row.providerId).toBe("msg_platform_mock_0199a063");
   });
 
   it("two different refunds on one order produce two email_log rows, and a retry of the same job produces one", async () => {

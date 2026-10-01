@@ -49,6 +49,7 @@ async function snapshot(): Promise<string> {
     "tenants", "tenant_notes", "platform_staff", "platform_staff_invitations", "feature_flags", "support_sessions",
     "tenant_deletions", "tenant_size_tiers", "subscriptions", "domains", "webhook_inbox", "memberships", "exports",
     "export_files", "tenant_owner_invites", "users", "sessions", "organizations", "store_settings", "roles", "theme_templates",
+    "platform_email_settings",
   ];
   const parts = tables.map((t) => `SELECT '${t}' || ':' || x::text AS r FROM ${t} x`);
   parts.push(`SELECT 'job:' || j.id::text || j.state::text FROM pgboss.job j`);
@@ -213,6 +214,29 @@ const CASES: Record<string, Case> = {
       return { userId: s.userId };
     },
   },
+  "email.update": {
+    role: "platform_admin",
+    action: "email_settings.update",
+    input: async () => ({
+      provider: "zoho_zeptomail",
+      host: "smtp.zeptomail.in",
+      port: 587,
+      secureMode: "starttls",
+      username: "emailapikey",
+      password: "test-token-12345",
+      fromEmail: "no-reply@gobs.cloud",
+      fromName: "Brand Sewa",
+      replyTo: "support@gobs.cloud",
+      enabled: true,
+    }),
+  },
+  "email.sendTest": {
+    role: "platform_admin",
+    action: "email_settings.test",
+    input: async () => ({
+      toEmail: `test-${++seq}@platform.test`,
+    }),
+  },
 };
 
 /** An active (emergency-consent) support session, so extend / elevate / end have something to act on. */
@@ -285,7 +309,7 @@ describe("platform mutation audit coverage (real database, real router)", () => 
         sql`SELECT actor_user_id, ip, request_id FROM platform_audit_logs WHERE action = ${c.action} AND created_at >= ${started.toISOString()}`,
       );
       expect(rows.rows.length, `audit rows for ${c.action}`).toBeGreaterThanOrEqual(1);
-      expect(rows.rows.some((r) => r.actor_user_id === staff.userId), "actor is the staff member").toBe(true);
+      expect(rows.rows.some((r: { actor_user_id: string | null }) => r.actor_user_id === staff.userId), "actor is the staff member").toBe(true);
     });
   }
 

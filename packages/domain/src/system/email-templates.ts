@@ -212,6 +212,45 @@ const TEMPLATES: Record<string, Builder> = {
     const text = `Did you leave something behind?\n\nYou added items to your cart but didn't finish checking out. They are still waiting for you.\n\nReturn to your cart: ${cta}${footerText(brand)}`;
     return { html, text };
   },
+  password_reset: (brand, data, subject) => {
+    const resetUrl = String(data.resetUrl ?? data.url ?? "");
+    const html = layout(
+      brand,
+      subject,
+      `${heading("Reset your password")}${para("We received a request to reset your password. This link will expire in 1 hour.")}${button("Reset password", resetUrl)}${para("If you didn't ask to reset your password, you can safely ignore this email.")}`,
+    );
+    const text = `Reset your password\n\nWe received a request to reset your password. This link will expire in 1 hour.\n\nReset password: ${resetUrl}\n\nIf you didn't ask to reset your password, you can safely ignore this email.${footerText(brand)}`;
+    return { html, text };
+  },
+  password_changed: (brand, _data, subject) => {
+    const html = layout(
+      brand,
+      subject,
+      `${heading("Your password was changed")}${para("Your password has been changed successfully. All other active sessions have been signed out.")}${para("If you did not make this change, please reset your password immediately or contact support.")}`,
+    );
+    const text = `Your password was changed\n\nYour password has been changed successfully. All other active sessions have been signed out.\n\nIf you did not make this change, please reset your password immediately or contact support.${footerText(brand)}`;
+    return { html, text };
+  },
+  customer_welcome: (brand, data, subject) => {
+    const verifyUrl = String(data.verifyUrl ?? "");
+    const html = layout(
+      brand,
+      subject,
+      `${heading(`Welcome to ${escapeHtml(brand.storeName)}!`)}${para("Thank you for creating an account with us. Please verify your email address to confirm your account.")}${verifyUrl ? button("Verify email", verifyUrl) : ""}`,
+    );
+    const text = `Welcome to ${brand.storeName}!\n\nThank you for creating an account with us. Please verify your email address to confirm your account.${verifyUrl ? `\n\nVerify email: ${verifyUrl}` : ""}${footerText(brand)}`;
+    return { html, text };
+  },
+  customer_password_reset: (brand, data, subject) => {
+    const resetUrl = String(data.resetUrl ?? data.url ?? "");
+    const html = layout(
+      brand,
+      subject,
+      `${heading("Reset your password")}${para(`We received a request to reset your password for ${escapeHtml(brand.storeName)}. This link will expire in 1 hour.`)}${button("Reset password", resetUrl)}${para("If you didn't ask to reset your password, you can safely ignore this email.")}`,
+    );
+    const text = `Reset your password\n\nWe received a request to reset your password for ${brand.storeName}. This link will expire in 1 hour.\n\nReset password: ${resetUrl}\n\nIf you didn't ask to reset your password, you can safely ignore this email.${footerText(brand)}`;
+    return { html, text };
+  },
 };
 
 /** The email content for a template. Unknown templates still produce a readable email instead of a debug string. */

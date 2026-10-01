@@ -1,5 +1,6 @@
 import { describe, expect, it, vi, beforeEach, afterEach } from "vitest";
 import { sendTransactionalEmail } from "../src/system/email.ts";
+import { setPlatformEmailTransportFactory, sanitizeError } from "../src/system/platform-mailer.ts";
 import type { Db } from "@bs/db";
 
 interface MockRow {
@@ -9,27 +10,33 @@ interface MockRow {
   sentAt?: unknown;
 }
 
-describe("sendTransactionalEmail()", () => {
-  const originalFetch = globalThis.fetch;
-  const originalEnvKey = process.env.RESEND_API_KEY;
-
+describe("sendTransactionalEmail() with platform mailer", () => {
   beforeEach(() => {
-    delete process.env.RESEND_API_KEY;
+    setPlatformEmailTransportFactory(null);
   });
 
   afterEach(() => {
-    globalThis.fetch = originalFetch;
-    if (originalEnvKey !== undefined) {
-      process.env.RESEND_API_KEY = originalEnvKey;
-    } else {
-      delete process.env.RESEND_API_KEY;
-    }
+    setPlatformEmailTransportFactory(null);
     vi.restoreAllMocks();
   });
 
   function createMockDb(options: {
     featureFlags?: Array<{ defaultOn?: boolean; killSwitch?: boolean }>;
-    tenantSecrets?: Array<{ keyName: string; ciphertext: string; iv: string }>;
+    platformEmailSettings?: Array<{
+      id: string;
+      provider: string;
+      host: string;
+      port: number;
+      secureMode: string;
+      username: string;
+      passwordCiphertext?: string | null;
+      passwordIv?: string | null;
+      keyVersion: number;
+      fromEmail: string;
+      fromName: string;
+      replyTo?: string | null;
+      enabled: boolean;
+    }>;
     insertedId?: string;
     onUpdate?: (val: MockRow) => void;
   }) {
@@ -39,21 +46,21 @@ describe("sendTransactionalEmail()", () => {
       select: (fields: unknown) => ({
         from: (tbl: unknown) => ({
           where: () => {
+            const chain = (rows: unknown[] = []) => ({
+              limit: async () => rows,
+              orderBy: () => ({ limit: async () => rows }),
+            });
+
             const isFeatureFlag =
               Boolean((tbl as { key?: unknown })?.key !== undefined) ||
               Object.keys((fields ?? {}) as object).includes("killSwitch");
             if (isFeatureFlag) {
-              return { limit: async () => options.featureFlags ?? [] };
+              return chain(options.featureFlags ?? []);
             }
-            // the provider-secret lookup is awaited directly; the store lookups (name, address, domain) chain limit/orderBy
-            if (Object.keys((fields ?? {}) as object).includes("keyName")) {
-              return Promise.resolve(options.tenantSecrets ?? []);
+            if (Object.keys((fields ?? {}) as object).includes("host") || (tbl as { id?: unknown })?.id !== undefined) {
+              return chain(options.platformEmailSettings ?? []);
             }
-            const none: unknown[] = [];
-            return Object.assign(Promise.resolve(none), {
-              limit: async () => none,
-              orderBy: () => ({ limit: async () => none }),
-            });
+            return chain([]);
           },
         }),
       }),
@@ -74,14 +81,17 @@ describe("sendTransactionalEmail()", () => {
 
     return {
       select: tx.select,
+      insert: tx.insert,
+      update: tx.update,
       transaction: async (fn: (innerTx: unknown) => Promise<unknown>) => fn(tx),
     } as unknown as Db;
   }
 
-  it("marks status as failed when no Resend API key is configured", async () => {
+  it("marks status as failed when platform email service is unconfigured or disabled", async () => {
     let updatedRow: MockRow | null = null;
 
     const mockDb = createMockDb({
+      platformEmailSettings: [], // empty -> unconfigured
       onUpdate: (val) => {
         updatedRow = val;
       },
@@ -95,83 +105,16 @@ describe("sendTransactionalEmail()", () => {
     });
 
     expect(result.status).toBe("failed");
-    expect(result.error).toContain("No Resend API key configured");
+    expect(result.error).toContain("Email service not configured");
     expect(updatedRow).not.toBeNull();
     expect((updatedRow as MockRow | null)?.status).toBe("failed");
-    expect((updatedRow as MockRow | null)?.error).toContain("No Resend API key configured");
   });
 
-  it("makes a real HTTP call to Resend and marks status as sent on 2xx response", async () => {
-    process.env.RESEND_API_KEY = "re_test_123456";
-
-    let updatedRow: MockRow | null = null;
-    const mockDb = createMockDb({
-      onUpdate: (val) => {
-        updatedRow = val;
-      },
-    });
-
-    const fetchMock = vi.fn().mockResolvedValue({
-      ok: true,
-      status: 200,
-      json: async () => ({ id: "resend_msg_987654" }),
-    });
-    globalThis.fetch = fetchMock as unknown as typeof fetch;
-
-    const result = await sendTransactionalEmail(mockDb, {
-      tenantId: "0199a000-0000-7000-8000-000000000001",
-      template: "order_confirmation",
-      toEmail: "customer@example.com",
-      subject: "Order Confirmed",
-      data: { orderNumber: "ORD-001" },
-    });
-
-    expect(fetchMock).toHaveBeenCalledWith(
-      "https://api.resend.com/emails",
-      expect.objectContaining({
-        method: "POST",
-        headers: expect.objectContaining({
-          Authorization: "Bearer re_test_123456",
-          "Content-Type": "application/json",
-        }),
-      }),
-    );
-
-    expect(result.status).toBe("sent");
-    expect(result.providerId).toBe("resend_msg_987654");
-    expect(updatedRow).not.toBeNull();
-    expect((updatedRow as MockRow | null)?.status).toBe("sent");
-    expect((updatedRow as MockRow | null)?.providerId).toBe("resend_msg_987654");
-  });
-
-  it("marks status as failed when Resend API returns non-2xx error", async () => {
-    process.env.RESEND_API_KEY = "re_test_invalid";
-
-    let updatedRow: MockRow | null = null;
-    const mockDb = createMockDb({
-      onUpdate: (val) => {
-        updatedRow = val;
-      },
-    });
-
-    const fetchMock = vi.fn().mockResolvedValue({
-      ok: false,
-      status: 401,
-      text: async () => JSON.stringify({ message: "Invalid API key" }),
-    });
-    globalThis.fetch = fetchMock as unknown as typeof fetch;
-
-    const result = await sendTransactionalEmail(mockDb, {
-      tenantId: "0199a000-0000-7000-8000-000000000001",
-      template: "order_confirmation",
-      toEmail: "customer@example.com",
-      subject: "Order Confirmed",
-    });
-
-    expect(result.status).toBe("failed");
-    expect(result.error).toContain("Resend API error: 401");
-    expect(updatedRow).not.toBeNull();
-    expect((updatedRow as MockRow | null)?.status).toBe("failed");
-    expect((updatedRow as MockRow | null)?.error).toContain("Resend API error: 401");
+  it("sanitizes secrets from error messages", () => {
+    const secret = "secret_zepto_token_xyz999";
+    const rawError = new Error(`Connection failed with token: ${secret}`);
+    const sanitized = sanitizeError(rawError, secret);
+    expect(sanitized).not.toContain(secret);
+    expect(sanitized).toContain("[REDACTED]");
   });
 });

@@ -1,4 +1,5 @@
 import { randomUUID } from "node:crypto";
+import { eq } from "drizzle-orm";
 import type { Db } from "../src/index.ts";
 import { schema } from "../src/index.ts";
 
@@ -30,6 +31,59 @@ export async function seedPlatformStaff(
   const mfa = opts.mfa ?? "complete";
   const now = Date.now();
   const completedAt = new Date(now - 60 * 60 * 1000);
+
+  const existing = await db
+    .select({ id: schema.users.id })
+    .from(schema.users)
+    .where(schema.users.email ? eq(schema.users.email, opts.email) : undefined)
+    .limit(1);
+
+  if (existing[0]) {
+    await db
+      .update(schema.users)
+      .set({
+        twoFactorEnabled: mfa === "complete" || mfa === "unverified" || mfa === "enrolled_not_completed",
+      })
+      .where(eq(schema.users.id, existing[0].id));
+
+    if (mfa !== "none") {
+      await db.delete(schema.twoFactors).where(eq(schema.twoFactors.userId, existing[0].id));
+      await db.insert(schema.twoFactors).values({
+        id: randomUUID(),
+        userId: existing[0].id,
+        secret: "encrypted-test-secret",
+        backupCodes: "encrypted-test-backup-codes",
+        verified: mfa !== "unverified",
+      });
+    } else {
+      await db.delete(schema.twoFactors).where(eq(schema.twoFactors.userId, existing[0].id));
+    }
+
+    await db
+      .insert(schema.platformStaff)
+      .values({
+        userId: existing[0].id,
+        role: opts.role ?? "platform_owner",
+        isActive: opts.active ?? true,
+        mfaRequired: true,
+        mfaVerifiedAt: mfa === "complete" ? completedAt : null,
+      })
+      .onConflictDoUpdate({
+        target: schema.platformStaff.userId,
+        set: {
+          role: opts.role ?? "platform_owner",
+          isActive: opts.active ?? true,
+          mfaVerifiedAt: mfa === "complete" ? completedAt : null,
+        },
+      });
+
+    return {
+      userId: existing[0].id,
+      email: opts.email,
+      freshSessionAt: new Date(now - 5 * 60 * 1000),
+      staleSessionAt: new Date(completedAt.getTime() - 60 * 60 * 1000),
+    };
+  }
 
   await db.insert(schema.users).values({
     id: userId,

@@ -627,3 +627,81 @@ export const platformAuditContract = {
     )
     .output(z.object({ csv: z.string() })),
 };
+
+export const PlatformEmailSettingsView = z.object({
+  provider: z.string(),
+  host: z.string(),
+  port: z.number(),
+  secureMode: z.enum(["starttls", "ssl"]),
+  username: z.string(),
+  passwordConfigured: z.boolean(),
+  passwordLastFour: z.string().nullable().optional(),
+  fromEmail: z.string(),
+  fromName: z.string(),
+  replyTo: z.string().nullable().optional(),
+  enabled: z.boolean(),
+  lastTestAt: z.string().nullable().optional(),
+  lastTestStatus: z.string().nullable().optional(),
+  lastTestError: z.string().nullable().optional(),
+  updatedAt: z.string().optional(),
+});
+export type PlatformEmailSettingsView = z.infer<typeof PlatformEmailSettingsView>;
+
+export const PlatformEmailLogEntry = z.object({
+  id: z.string(),
+  tenantId: z.string().nullable().optional(),
+  toEmail: z.string(),
+  template: z.string(),
+  status: z.string(),
+  providerMessageId: z.string().nullable().optional(),
+  error: z.string().nullable().optional(),
+  createdAt: z.string(),
+});
+export type PlatformEmailLogEntry = z.infer<typeof PlatformEmailLogEntry>;
+
+export const platformEmailContract = {
+  get: oc
+    .route({ method: "GET", path: "/platform/email/settings" })
+    .output(PlatformEmailSettingsView),
+  update: oc
+    .route({ method: "POST", path: "/platform/email/settings" })
+    .input(
+      z.object({
+        provider: z.string().default("zoho_zeptomail"),
+        host: z.string(),
+        port: z.number().int(),
+        secureMode: z.enum(["starttls", "ssl"]),
+        username: z.string(),
+        password: z.string().optional(), // write-only, optional on update if already saved
+        fromEmail: z.string().email(),
+        fromName: z.string(),
+        replyTo: z.string().email().nullable().optional().or(z.literal("")),
+        enabled: z.boolean(),
+      }),
+    )
+    .output(z.object({ ok: z.boolean() })),
+  sendTest: oc
+    .route({ method: "POST", path: "/platform/email/test" })
+    .input(
+      z.object({
+        toEmail: z.string().email(),
+      }),
+    )
+    .output(
+      z.object({
+        ok: z.boolean(),
+        status: z.string(),
+        error: z.string().optional(),
+        messageId: z.string().optional(),
+      }),
+    ),
+  recentDeliveries: oc
+    .route({ method: "GET", path: "/platform/email/deliveries" })
+    .input(
+      z.object({
+        failedOnly: z.boolean().optional(),
+        limit: z.number().int().optional(),
+      }).optional(),
+    )
+    .output(z.array(PlatformEmailLogEntry)),
+};

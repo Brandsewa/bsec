@@ -103,9 +103,44 @@ describe("other emails", () => {
   });
 
   it("every template used by the job handlers exists", () => {
-    for (const t of ["order_confirmation", "order_shipped", "order_delivered", "order_rto", "return_requested", "refund_processed", "abandoned_cart_recovery"]) {
+    for (const t of [
+      "order_confirmation",
+      "order_shipped",
+      "order_delivered",
+      "order_rto",
+      "return_requested",
+      "refund_processed",
+      "abandoned_cart_recovery",
+      "password_reset",
+      "password_changed",
+      "customer_welcome",
+      "customer_password_reset",
+    ]) {
       expect(EMAIL_TEMPLATES).toContain(t);
     }
+  });
+
+  it("password reset: includes the reset link and expiry note", () => {
+    const r = renderEmail("password_reset", brand, { resetUrl: "https://admin.gobs.cloud/reset-password?token=xyz" }, "Reset password");
+    expect(r.html).toContain('href="https://admin.gobs.cloud/reset-password?token=xyz"');
+    expect(r.text).toContain("https://admin.gobs.cloud/reset-password?token=xyz");
+    expect(r.text).toContain("expire in 1 hour");
+  });
+
+  it("password changed: security notice", () => {
+    const r = renderEmail("password_changed", brand, {}, "Password changed");
+    expect(r.text).toContain("Your password was changed");
+    expect(r.text).toContain("All other active sessions have been signed out");
+  });
+
+  it("customer welcome and customer password reset: branded for store", () => {
+    const welcome = renderEmail("customer_welcome", brand, { verifyUrl: "https://tasteofhills.gobs.cloud/account/verify-email/tok123" }, "Welcome");
+    expect(welcome.text).toContain("Welcome to Taste of Hills!");
+    expect(welcome.html).toContain("https://tasteofhills.gobs.cloud/account/verify-email/tok123");
+
+    const reset = renderEmail("customer_password_reset", brand, { resetUrl: "https://tasteofhills.gobs.cloud/account/reset-password/tok456" }, "Reset password");
+    expect(reset.text).toContain("Taste of Hills");
+    expect(reset.html).toContain("https://tasteofhills.gobs.cloud/account/reset-password/tok456");
   });
 });
 

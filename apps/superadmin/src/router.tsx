@@ -27,6 +27,7 @@ import { Quotas } from "./pages/Quotas.tsx";
 import { Features } from "./pages/Features.tsx";
 import { Staff } from "./pages/Staff.tsx";
 import { AuditLog } from "./pages/AuditLog.tsx";
+import { EmailSettings } from "./pages/EmailSettings.tsx";
 
 export interface RouterContext {
   queryClient: QueryClient;
@@ -188,6 +189,12 @@ const auditRoute = createRoute({
   component: AuditLog,
 });
 
+const emailRoute = createRoute({
+  getParentRoute: () => authLayoutRoute,
+  path: "/email",
+  component: EmailSettings,
+});
+
 export const routeTree = rootRoute.addChildren([
   loginRoute,
   templateEditorRoute,
@@ -207,6 +214,7 @@ export const routeTree = rootRoute.addChildren([
     featuresRoute,
     staffRoute,
     auditRoute,
+    emailRoute,
   ]),
 ]);
 

@@ -130,6 +130,7 @@ const NON_RLS_TABLES_WRITABLE_BY_APP_RW: string[] = [
   "accounts",
   "domains",
   "platform_audit_logs", // INSERT + SELECT only (append-only), asserted in the test above
+  "platform_email_log", // INSERT + SELECT for worker transactional mail diagnostics
   "rate_limit_counters",
   "sessions",
   "tenant_active_jobs",

@@ -36,11 +36,15 @@ export async function dispatchTransactionalEmailOrThrow(
 ): Promise<void> {
   const result = await sendTransactionalEmail(db, input);
   if (result.status === "failed") {
-    // Missing Resend API key or provider credentials cannot be resolved by retry
-    if (result.error?.includes("No Resend API key configured")) {
+    // Missing email configuration or disabled service cannot be resolved by immediate retry
+    if (
+      result.error?.includes("No Resend API key configured") ||
+      result.error?.includes("Email service not configured") ||
+      result.error?.includes("Email service disabled")
+    ) {
       log.warn(
         { template: input.template, toEmail: input.toEmail, error: result.error },
-        "Transactional email skipped: missing Resend API key",
+        "Transactional email skipped: email service not configured or disabled",
       );
       return;
     }

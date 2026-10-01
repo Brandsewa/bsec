@@ -18,6 +18,10 @@ import {
 import { addToCart, getOrCreateCart } from "../src/storefront/cart.ts";
 import { handleOrderCreatedJob, handleFulfillmentShippedJob } from "../src/jobs.ts";
 
+import type { Transporter } from "nodemailer";
+import { setPlatformEmailTransportFactory } from "../src/system/platform-mailer.ts";
+import { encryptSecret } from "@bs/payments";
+
 let env: TestDb;
 let rt: Runtime;
 let rtWeb: Runtime;
@@ -27,9 +31,9 @@ let variantId: string;
 let n = 0;
 
 const logger = pino({ level: "silent" });
-const originalFetch = globalThis.fetch;
-const originalKey = process.env.RESEND_API_KEY;
 const sent: Array<Record<string, unknown>> = [];
+
+let slugA: string;
 
 const buyer = (cartToken: string, name = "Asha Rana") => ({
   cartToken,
@@ -55,8 +59,10 @@ beforeAll(async () => {
   env = await startTestDb();
   rt = createRuntime({ service: "platform", databaseUrl: env.as("app_platform"), poolMax: 5 });
   rtWeb = createRuntime({ service: "web", databaseUrl: env.as("app_rw"), poolMax: 5 });
-  const a = await provisionTenant(rt, { storeName: "Taste of Hills", slug: "mail-a", owner: { email: "owner@mail-a.test", name: "A" }, planCode: "starter", source: "platform_admin" });
-  const b = await provisionTenant(rt, { storeName: "Other Shop", slug: "mail-b", owner: { email: "owner@mail-b.test", name: "B" }, planCode: "starter", source: "platform_admin" });
+  const runId = Math.random().toString(36).slice(2, 7);
+  slugA = `mail-a-${runId}`;
+  const a = await provisionTenant(rt, { storeName: "Taste of Hills", slug: slugA, owner: { email: `owner@${slugA}.test`, name: "A" }, planCode: "starter", source: "platform_admin" });
+  const b = await provisionTenant(rt, { storeName: "Other Shop", slug: `mail-b-${runId}`, owner: { email: `owner@mail-b-${runId}.test`, name: "B" }, planCode: "starter", source: "platform_admin" });
   const mk = (t: { tenantId: string; ownerId: string }): TenantContext => ({
     tenantId: t.tenantId,
     storeStatus: "live",
@@ -74,6 +80,30 @@ beforeAll(async () => {
   variantId = row.variantId;
   await adjustInventory(rtWeb, ctx, { variantId, locationId: row.locationId, quantityDelta: 100, reason: "received" });
   await createAdminDiscount(rtWeb, ctx, { code: "TEN", title: "10% off", type: "percent", value: 10 });
+
+  // Seed enabled platform_email_settings
+  const enc = encryptSecret("zepto-mail-token-secret");
+  await rt._db.db.insert(schema.platformEmailSettings).values({
+    id: "default",
+    provider: "zoho_zeptomail",
+    host: "smtp.zeptomail.in",
+    port: 587,
+    secureMode: "starttls",
+    username: "emailapikey",
+    passwordCiphertext: enc.ciphertext,
+    passwordIv: enc.iv,
+    keyVersion: enc.keyVersion,
+    fromEmail: "no-reply@gobs.cloud",
+    fromName: "Brand Sewa",
+    enabled: true,
+  }).onConflictDoUpdate({
+    target: schema.platformEmailSettings.id,
+    set: {
+      enabled: true,
+      passwordCiphertext: enc.ciphertext,
+      passwordIv: enc.iv,
+    },
+  });
 }, 180_000);
 
 afterAll(async () => {
@@ -84,17 +114,18 @@ afterAll(async () => {
 
 beforeEach(() => {
   sent.length = 0;
-  process.env.RESEND_API_KEY = "re_test_dummy_key";
-  globalThis.fetch = vi.fn().mockImplementation(async (_url: string, init?: RequestInit) => {
-    sent.push(JSON.parse(String(init?.body ?? "{}")));
-    return { ok: true, status: 200, json: async () => ({ id: `resend_${sent.length}` }) } as Response;
+  setPlatformEmailTransportFactory((config) => {
+    return {
+      sendMail: async (mailOpts: Record<string, unknown>) => {
+        sent.push({ ...mailOpts, _config: config });
+        return { messageId: `msg_${sent.length}` };
+      },
+    } as unknown as Transporter;
   });
 });
 
 afterEach(() => {
-  globalThis.fetch = originalFetch;
-  if (originalKey === undefined) delete process.env.RESEND_API_KEY;
-  else process.env.RESEND_API_KEY = originalKey;
+  setPlatformEmailTransportFactory(null);
   vi.restoreAllMocks();
 });
 
@@ -105,9 +136,9 @@ describe("order confirmation email", () => {
 
     expect(sent).toHaveLength(1);
     const mail = sent[0]!;
-    expect(mail.to).toEqual(["asha@customer.example"]);
+    expect(mail.to).toBe("asha@customer.example");
     expect(mail.subject).toBe(`Order ${placed.orderNumber} confirmed`);
-    expect(String(mail.from)).toMatch(/^Taste of Hills <.+@.+>$/);
+    expect(String(mail.from)).toMatch(/^"?Taste of Hills"? <.+@.+>$/);
     expect(mail.reply_to).toBe("help@tasteofhills.example");
 
     const text = String(mail.text);
@@ -121,7 +152,8 @@ describe("order confirmation email", () => {
 
     // the link in the email really opens this order on this store (a fresh token, not the checkout one)
     const link = /View your order: (https:\/\/\S+)/.exec(text)?.[1];
-    expect(link).toMatch(/^https:\/\/mail-a\.gobs\.cloud\/o\/ord_[0-9a-f]{48}$/);
+    const linkRegex = new RegExp(`^https://${slugA}\\.gobs\\.cloud/o/ord_[0-9a-f]{48}$`);
+    expect(link).toMatch(linkRegex);
     expect(link).not.toContain(placed.orderToken);
   });
 
@@ -147,11 +179,15 @@ describe("order confirmation email", () => {
     expect(sent).toHaveLength(0);
   });
 
-  it("without an email provider key the job ends quietly and nothing is sent", async () => {
-    delete process.env.RESEND_API_KEY;
-    const placed = await placeOne();
-    await expect(handleOrderCreatedJob(rt._db.db, logger, { tenantId: ctx.tenantId, orderId: placed.orderId })).resolves.toBeUndefined();
-    expect(sent).toHaveLength(0);
+  it("without an email provider configured/enabled the job ends quietly and nothing is sent", async () => {
+    await rt._db.db.update(schema.platformEmailSettings).set({ enabled: false }).where(eq(schema.platformEmailSettings.id, "default"));
+    try {
+      const placed = await placeOne();
+      await expect(handleOrderCreatedJob(rt._db.db, logger, { tenantId: ctx.tenantId, orderId: placed.orderId })).resolves.toBeUndefined();
+      expect(sent).toHaveLength(0);
+    } finally {
+      await rt._db.db.update(schema.platformEmailSettings).set({ enabled: true }).where(eq(schema.platformEmailSettings.id, "default"));
+    }
   });
 
   it("another store's order can't be emailed through this store's job", async () => {
@@ -173,7 +209,7 @@ describe("shipping email", () => {
     const text = String(sent[0]!.text);
     expect(text).toContain("Carrier: Delhivery.");
     expect(text).toContain("Tracking number: AWB-998877.");
-    expect(text).toContain("Track your order: https://mail-a.gobs.cloud/o/ord_");
+    expect(text).toContain(`Track your order: https://${slugA}.gobs.cloud/o/ord_`);
     expect(String(sent[0]!.subject)).toContain("has shipped");
   });
 });

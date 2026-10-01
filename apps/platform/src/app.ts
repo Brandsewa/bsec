@@ -65,6 +65,10 @@ import {
   saveThemeTemplateDraft,
   publishThemeTemplate,
   updateThemeTemplateMeta,
+  getPlatformEmailSettings,
+  updatePlatformEmailSettings,
+  sendPlatformTestEmail,
+  listRecentEmailDeliveries,
   requestLogger,
   resolveRequestId,
   getClientIp,
@@ -388,6 +392,24 @@ export const platformRouter = os.router({
       const staffUserId = actor(context);
       const csv = await exportPlatformAuditLogsCsv(context.rt, staffUserId, input);
       return { csv };
+    }),
+  },
+  email: {
+    get: os.email.get.use(requirePlatformStaff).handler(async ({ context }) => {
+      const staffUserId = actor(context);
+      return getPlatformEmailSettings(context.rt, staffUserId);
+    }),
+    update: os.email.update.use(requireStaff("platform_admin")).handler(async ({ context, input }) => {
+      const staffUserId = actor(context);
+      return updatePlatformEmailSettings(context.rt, staffUserId, input, context.meta);
+    }),
+    sendTest: os.email.sendTest.use(requireStaff("platform_admin")).handler(async ({ context, input }) => {
+      const staffUserId = actor(context);
+      return sendPlatformTestEmail(context.rt, staffUserId, input.toEmail, context.meta);
+    }),
+    recentDeliveries: os.email.recentDeliveries.use(requirePlatformStaff).handler(async ({ context, input }) => {
+      const staffUserId = actor(context);
+      return listRecentEmailDeliveries(context.rt, staffUserId, input);
     }),
   },
 });

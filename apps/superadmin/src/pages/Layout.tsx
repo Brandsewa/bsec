@@ -12,6 +12,7 @@ import {
   LayoutDashboard,
   Layers,
   LogOut,
+  Mail,
   Sliders,
   UserCheck,
   Users,
@@ -44,6 +45,7 @@ const navGroups: NavGroup[] = [
     items: [
       { label: "Support Sessions", href: "/support", icon: Headphones },
       { label: "System & Queues", href: "/system", icon: Activity },
+      { label: "Email (ZeptoMail)", href: "/email", icon: Mail },
       { label: "Quotas & Tiers", href: "/quotas", icon: Sliders },
       { label: "Feature Flags", href: "/features", icon: Flag },
     ],

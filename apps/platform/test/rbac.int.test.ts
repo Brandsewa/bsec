@@ -62,6 +62,10 @@ const MIN_ROLE: Record<string, Role | "public"> = {
   "staff.reactivate": "platform_owner",
   "audit.list": "platform_support",
   "audit.exportCsv": "platform_admin",
+  "email.get": "platform_support",
+  "email.update": "platform_admin",
+  "email.sendTest": "platform_admin",
+  "email.recentDeliveries": "platform_support",
 };
 
 /** Valid-shaped inputs, so the role check (which runs first) is what decides the outcome. */
@@ -98,6 +102,17 @@ const INPUT: Record<string, unknown> = {
   "staff.updateRole": { userId: U, role: "platform_admin" },
   "staff.deactivate": { userId: U },
   "staff.reactivate": { userId: U },
+  "email.update": {
+    provider: "zoho_zeptomail",
+    host: "smtp.zeptomail.in",
+    port: 587,
+    secureMode: "starttls",
+    username: "emailapikey",
+    fromEmail: "no-reply@gobs.cloud",
+    fromName: "Brand Sewa",
+    enabled: true,
+  },
+  "email.sendTest": { toEmail: "admin@platform.test" },
 };
 
 const RANK: Record<Role, number> = { platform_support: 1, platform_admin: 2, platform_owner: 3 };

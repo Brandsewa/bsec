@@ -9,6 +9,9 @@ import { runMigrations } from "@bs/db/migrate";
 import { pino } from "pino";
 import { handleFulfillmentRtoJob, handleCartAbandonedJob } from "../src/jobs.ts";
 import { sweepAbandonedCarts } from "../src/system/abandoned-carts.ts";
+import type { Transporter } from "nodemailer";
+import { setPlatformEmailTransportFactory } from "../src/system/platform-mailer.ts";
+import { encryptSecret } from "@bs/payments";
 
 const PW = { owner: "o_test", rw: "rw_test", platform: "p_test" };
 let container: StartedPostgreSqlContainer | undefined;
@@ -29,9 +32,6 @@ const locationId = "0199a0e1-0000-7000-8000-000000000010";
 const orderId = "0199a0e1-0000-7000-8000-000000000020";
 const fulfillmentId = "0199a0e1-0000-7000-8000-000000000030";
 const cartId = "0199a0e1-0000-7000-8000-000000000040";
-
-const originalFetch = globalThis.fetch;
-const originalEnvKey = process.env.RESEND_API_KEY;
 
 beforeAll(async () => {
   if (process.env.TEST_DATABASE_URL_SUPERUSER) {
@@ -70,6 +70,22 @@ beforeAll(async () => {
     VALUES ('${cartId}', '${tenantId}', 'cart_tok_e1', 'abandoned-cart@example.com', 'abandoned')
     ON CONFLICT DO NOTHING;
   `);
+
+  const enc = encryptSecret("mock-token-0199a0e1");
+  await pgClient.query(`
+    INSERT INTO platform_email_settings (
+      id, provider, host, port, secure_mode, username, password_ciphertext, password_iv, key_version,
+      from_email, from_name, reply_to, enabled
+    ) VALUES (
+      'default', 'zoho_zeptomail', 'smtp.zeptomail.in', 587, 'starttls', 'emailapikey',
+      '${enc.ciphertext}', '${enc.iv}', 1,
+      'no-reply@gobs.cloud', 'Brand Sewa', 'support@gobs.cloud', true
+    ) ON CONFLICT (id) DO UPDATE SET
+      password_ciphertext = EXCLUDED.password_ciphertext,
+      password_iv = EXCLUDED.password_iv,
+      enabled = true;
+  `);
+
   await pgClient.end();
 }, 180_000);
 
@@ -78,66 +94,45 @@ afterAll(async () => {
   await container?.stop();
 });
 
+const sentMails: Array<Record<string, unknown>> = [];
+
 beforeEach(() => {
-  process.env.RESEND_API_KEY = "re_test_dummy_key";
+  sentMails.length = 0;
+  setPlatformEmailTransportFactory((config) => {
+    return {
+      sendMail: async (opts: Record<string, unknown>) => {
+        sentMails.push({ ...opts, _config: config });
+        return { messageId: "msg_platform_mock_0199a0e1" };
+      },
+    } as unknown as Transporter;
+  });
 });
 
 afterEach(() => {
-  globalThis.fetch = originalFetch;
-  if (originalEnvKey !== undefined) {
-    process.env.RESEND_API_KEY = originalEnvKey;
-  } else {
-    delete process.env.RESEND_API_KEY;
-  }
+  setPlatformEmailTransportFactory(null);
   vi.restoreAllMocks();
 });
 
 describe("Queue Consumers Integration", () => {
   it("fulfillment.rto consumer looks up order and sends order_rto email", async () => {
-    let calledUrl = "";
-    let sentBody: Record<string, unknown> = {};
-
-    globalThis.fetch = vi.fn().mockImplementation(async (url: string, init?: RequestInit) => {
-      calledUrl = url;
-      sentBody = JSON.parse((init?.body as string) ?? "{}");
-      return {
-        ok: true,
-        status: 200,
-        json: async () => ({ id: "resend_rto_123" }),
-      } as Response;
-    });
-
     await handleFulfillmentRtoJob(rwDb.db, logger, {
       tenantId,
       fulfillmentId,
       orderId,
     });
 
-    expect(calledUrl).toBe("https://api.resend.com/emails");
-    expect(sentBody.to).toEqual(["rto-customer@example.com"]);
-    expect(sentBody.subject).toContain("Return to Origin Initiated");
-    // a real email: the store's name, the order, and what happened, as HTML and plain text
-    expect(String(sentBody.from)).toContain("Test Store E1");
-    expect(String(sentBody.html)).toContain("We couldn&#39;t deliver your order");
-    expect(String(sentBody.html)).toContain("ORD-E1-001");
-    expect(String(sentBody.text)).toContain("being returned to us");
-    expect(String(sentBody.text)).not.toContain("Template:");
+    expect(sentMails).toHaveLength(1);
+    const sent = sentMails[0]!;
+    expect(sent.to).toBe("rto-customer@example.com");
+    expect(sent.subject).toContain("Return to Origin Initiated");
+    expect(String(sent.from)).toContain("Test Store E1");
+    expect(String(sent.html)).toContain("We couldn&#39;t deliver your order");
+    expect(String(sent.html)).toContain("ORD-E1-001");
+    expect(String(sent.text)).toContain("being returned to us");
+    expect(String(sent.text)).not.toContain("Template:");
   });
 
   it("cart.abandoned consumer sends abandoned_cart_recovery email", async () => {
-    let calledUrl = "";
-    let sentBody: Record<string, unknown> = {};
-
-    globalThis.fetch = vi.fn().mockImplementation(async (url: string, init?: RequestInit) => {
-      calledUrl = url;
-      sentBody = JSON.parse((init?.body as string) ?? "{}");
-      return {
-        ok: true,
-        status: 200,
-        json: async () => ({ id: "resend_cart_123" }),
-      } as Response;
-    });
-
     await handleCartAbandonedJob(rwDb.db, logger, {
       tenantId,
       cartId,
@@ -145,34 +140,34 @@ describe("Queue Consumers Integration", () => {
       email: "abandoned-cart@example.com",
     });
 
-    expect(calledUrl).toBe("https://api.resend.com/emails");
-    expect(sentBody.to).toEqual(["abandoned-cart@example.com"]);
-    expect(sentBody.subject).toBe("Did you leave something behind?");
-    expect(String(sentBody.html)).toContain("Did you leave something behind?");
-    expect(String(sentBody.html)).toContain("https://test-store-e1.gobs.cloud/cart");
-    expect(String(sentBody.text)).toContain("Return to your cart: https://test-store-e1.gobs.cloud/cart");
-    expect(String(sentBody.text)).not.toContain("Template:");
+    expect(sentMails).toHaveLength(1);
+    const sent = sentMails[0]!;
+    expect(sent.to).toBe("abandoned-cart@example.com");
+    expect(sent.subject).toBe("Did you leave something behind?");
+    expect(String(sent.html)).toContain("Did you leave something behind?");
+    expect(String(sent.html)).toContain("https://test-store-e1.gobs.cloud/cart");
+    expect(String(sent.text)).toContain("Return to your cart: https://test-store-e1.gobs.cloud/cart");
+    expect(String(sent.text)).not.toContain("Template:");
   });
 
   it("cart.abandoned consumer skips email when no email address is on payload", async () => {
-    const fetchMock = vi.fn();
-    globalThis.fetch = fetchMock;
-
     await handleCartAbandonedJob(rwDb.db, logger, {
       tenantId,
       cartId,
       token: "cart_tok_no_email",
     });
 
-    expect(fetchMock).not.toHaveBeenCalled();
+    expect(sentMails).toHaveLength(0);
   });
 
   it("throws error on retryable email delivery failure to trigger pg-boss retry", async () => {
-    globalThis.fetch = vi.fn().mockResolvedValue({
-      ok: false,
-      status: 500,
-      text: async () => "Internal Server Error",
-    } as Response);
+    setPlatformEmailTransportFactory(() => {
+      return {
+        sendMail: async () => {
+          throw new Error("SMTP connection timeout");
+        },
+      } as unknown as Transporter;
+    });
 
     await expect(
       handleFulfillmentRtoJob(rwDb.db, logger, {
@@ -180,20 +175,31 @@ describe("Queue Consumers Integration", () => {
         fulfillmentId,
         orderId,
       }),
-    ).rejects.toThrow(/Transactional email \[order_rto\] delivery failed: Resend API error: 500 Internal Server Error/);
+    ).rejects.toThrow(/Transactional email \[order_rto\] delivery failed: SMTP connection timeout/);
   });
 
-  it("does not throw when Resend API key is unconfigured (non-retryable)", async () => {
-    delete process.env.RESEND_API_KEY;
+  it("does not throw when platform email is unconfigured (non-retryable)", async () => {
+    // Disable platform email settings in DB
+    const pgClient = new (await import("pg")).default.Client({ connectionString: superUrl });
+    await pgClient.connect();
+    await pgClient.query("UPDATE platform_email_settings SET enabled = false WHERE id = 'default'");
+    await pgClient.end();
 
-    // Should complete cleanly without throwing (logged as warning)
-    await expect(
-      handleFulfillmentRtoJob(rwDb.db, logger, {
-        tenantId,
-        fulfillmentId,
-        orderId,
-      }),
-    ).resolves.toBeUndefined();
+    try {
+      // Should complete cleanly without throwing (logged as warning)
+      await expect(
+        handleFulfillmentRtoJob(rwDb.db, logger, {
+          tenantId,
+          fulfillmentId,
+          orderId,
+        }),
+      ).resolves.toBeUndefined();
+    } finally {
+      const pgClient2 = new (await import("pg")).default.Client({ connectionString: superUrl });
+      await pgClient2.connect();
+      await pgClient2.query("UPDATE platform_email_settings SET enabled = true WHERE id = 'default'");
+      await pgClient2.end();
+    }
   });
 
   describe("sweepAbandonedCarts", () => {
@@ -236,11 +242,13 @@ describe("Queue Consumers Integration", () => {
 
     it("without a jobs provider, logs a warning and leaves recovery unsent when the email fails", async () => {
       await seedStaleCart(sweepCartB, "sweep_tok_b");
-      globalThis.fetch = vi.fn().mockResolvedValue({
-        ok: false,
-        status: 500,
-        text: async () => "boom",
-      } as Response);
+      setPlatformEmailTransportFactory(() => {
+        return {
+          sendMail: async () => {
+            throw new Error("boom");
+          },
+        } as unknown as Transporter;
+      });
       const warn = vi.fn();
 
       const res = await sweepAbandonedCarts(rwDb.db, tenantId, { log: { warn } });
