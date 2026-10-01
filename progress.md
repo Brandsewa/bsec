@@ -28,6 +28,29 @@ Source of truth: `docs/PLAN.html` v2.0 (build order in `docs/BUILD-PLAN-M2-M9.md
   - Domain integration tests in `packages/domain/test/admin-auth.int.test.ts` (14/14 passed) verifying token expiry, session revocation on reset/change, anti-enumeration, and preserved MFA.
   - Typecheck (15/15 packages clean), lint clean, all touched package tests verified sequentially.
 
+### Phase C: Customer Authentication (Storefront) — Complete
+- [x] **Database Schema & Migrations**:
+  - Altered `customers` table to make `phone` nullable (`text("phone")`) while preserving argon2id `passwordHash`, `emailVerified`, `phoneVerified`.
+  - Created migration `0018_customer_auth.sql` and updated `_journal.json`.
+- [x] **Domain Engine (`packages/domain/src/customers/auth.ts`)**:
+  - Customer registration (`registerCustomer`) with email + password, optional phone, anti-enumeration check (already registered returns success without leaking or issuing session).
+  - Email verification (`verifyCustomerEmail`) via single-use 24-hour `action_tokens` (`email_verification`), which activates past guest order adoption.
+  - Email + password login (`loginCustomer`) with rate limiting per (tenant, IP) and per (tenant, email) via `checkCustomerLoginRateLimit`.
+  - Password reset request (`requestCustomerPasswordReset`) minting 1-hour `action_tokens` (`password_reset`) and sending store-branded email.
+  - Password reset confirmation (`resetCustomerPassword`) consuming token atomically and revoking all active sessions in `customer_sessions`.
+  - Authenticated password change (`changeCustomerPassword`) verifying current password and revoking other sessions when requested.
+- [x] **Storefront Routes & Screens (`apps/web`)**:
+  - API routes under `/api/storefront/customer/`: `register`, `login`, `logout`, `forgot-password`, `reset-password`, `change-password`, `verify-email`. All enforce `sameOrigin`, rate limiting, and no tokens in responses.
+  - UI pages: `/account/login` (with tabs for Email & Password vs Phone Code), `/account/register`, `/account/forgot-password`, `/account/reset-password/[token]`, `/account/verify-email/[token]`. Each page has a matching skeleton in `loading.tsx`.
+  - Profile page with "Change password" form.
+  - Thank-you order page with optional "Create account" card for guest checkouts.
+- [x] **Security Invariants & Verification**:
+  - Host-only, httpOnly, SameSite=Lax customer session cookies.
+  - Cross-tenant rejection: sessions and tokens from Store A are strictly rejected on Store B.
+  - Real database integration tests in `customer-accounts.int.test.ts` (10/10 passed).
+  - Storefront web suite (`test/customer-pages.test.ts` and full `apps/web` suite 16/16 files, 158/158 tests passed).
+  - Turbo typecheck (15/15 packages passed) and Turbo lint (15/15 packages passed).
+
 ## M10 · Visual theme system (Puck) — shipped to production 2026-10-01
 
 Design and rationale: [`docs/adr/018-visual-theme-editor.md`](docs/adr/018-visual-theme-editor.md) (extends ADR-009 and ADR-010). Shipped in `5644b6c` (feature commit `f469208` + merge of main). CI green end to end; production health checked (web, platform, admin on `5644b6c`).

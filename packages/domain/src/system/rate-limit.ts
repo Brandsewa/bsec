@@ -364,6 +364,108 @@ export async function checkResetPasswordConfirmRateLimit(
 }
 
 /**
+ * Customer Password Reset Request Rate Limits (PLAN §5.4):
+ * - Per (tenant, IP): 5 requests / 15 min (900s)
+ * - Per (tenant, email): 3 requests / 15 min (900s)
+ */
+export async function checkCustomerPasswordResetRateLimit(
+  db: Db,
+  params: { tenantId: string; ip: string; email: string },
+): Promise<void> {
+  const { tenantId, ip, email } = params;
+  const ipRes = await checkRateLimit(db, {
+    key: `cust:reset:ip:${tenantId}:${ip}`,
+    limit: 5,
+    windowSeconds: 900,
+  });
+  if (!ipRes.allowed) {
+    throw new RateLimitExceededError(
+      `Too many password reset requests from this network. Please retry after ${ipRes.retryAfter} seconds.`,
+      ipRes.retryAfter,
+      ipRes.limit,
+      `cust:reset:ip:${tenantId}:${ip}`,
+    );
+  }
+
+  const emailRes = await checkRateLimit(db, {
+    key: `cust:reset:email:${tenantId}:${email.trim().toLowerCase()}`,
+    limit: 3,
+    windowSeconds: 900,
+  });
+  if (!emailRes.allowed) {
+    throw new RateLimitExceededError(
+      `Too many password reset requests for this email. Please retry after ${emailRes.retryAfter} seconds.`,
+      emailRes.retryAfter,
+      emailRes.limit,
+      `cust:reset:email:${tenantId}:${email}`,
+    );
+  }
+}
+
+/**
+ * Customer Registration Rate Limits (PLAN §5.4):
+ * - Per (tenant, IP): 5 registrations / 15 min (900s)
+ */
+export async function checkCustomerRegisterRateLimit(
+  db: Db,
+  params: { tenantId: string; ip: string },
+): Promise<void> {
+  const { tenantId, ip } = params;
+  const ipRes = await checkRateLimit(db, {
+    key: `cust:reg:ip:${tenantId}:${ip}`,
+    limit: 5,
+    windowSeconds: 900,
+  });
+  if (!ipRes.allowed) {
+    throw new RateLimitExceededError(
+      `Too many registration attempts. Please retry after ${ipRes.retryAfter} seconds.`,
+      ipRes.retryAfter,
+      ipRes.limit,
+      `cust:reg:ip:${tenantId}:${ip}`,
+    );
+  }
+}
+
+/**
+ * Customer Login Rate Limits (PLAN §5.4):
+ * - Per (tenant, IP): 10 attempts / 5 min (300s)
+ * - Per (tenant, email): 5 attempts / 5 min (300s)
+ */
+export async function checkCustomerLoginRateLimit(
+  db: Db,
+  params: { tenantId: string; ip: string; email: string },
+): Promise<void> {
+  const { tenantId, ip, email } = params;
+  const ipRes = await checkRateLimit(db, {
+    key: `cust:login:ip:${tenantId}:${ip}`,
+    limit: 10,
+    windowSeconds: 300,
+  });
+  if (!ipRes.allowed) {
+    throw new RateLimitExceededError(
+      `Too many sign in attempts. Please retry after ${ipRes.retryAfter} seconds.`,
+      ipRes.retryAfter,
+      ipRes.limit,
+      `cust:login:ip:${tenantId}:${ip}`,
+    );
+  }
+
+  const emailRes = await checkRateLimit(db, {
+    key: `cust:login:email:${tenantId}:${email.trim().toLowerCase()}`,
+    limit: 5,
+    windowSeconds: 300,
+  });
+  if (!emailRes.allowed) {
+    throw new RateLimitExceededError(
+      `Too many sign in attempts for this account. Please retry after ${emailRes.retryAfter} seconds.`,
+      emailRes.retryAfter,
+      emailRes.limit,
+      `cust:login:email:${tenantId}:${email}`,
+    );
+  }
+}
+
+/**
  * Admin and Staff Login Rate Limits:
  * - Per IP: 10 attempts / 15 min (900s)
  * - Per email: 5 attempts / 15 min (900s)

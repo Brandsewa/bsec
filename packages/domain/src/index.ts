@@ -36,6 +36,7 @@ export * from "./catalog/inventory-reservations.ts";
 export * from "./system/idempotency.ts";
 export * from "./system/webhooks.ts";
 export * from "./customers/otp.ts";
+export * from "./customers/auth.ts";
 export * from "./customers/addresses.ts";
 export * from "./customers/wishlist.ts";
 export * from "./customers/orders.ts";

@@ -30,11 +30,11 @@ interface FormState {
   isDefault: boolean;
 }
 
-const blank = (phone: string): FormState => ({ name: "", phone, line1: "", line2: "", landmark: "", city: "", stateCode: "", pincode: "", type: "home", isDefault: false });
+const blank = (phone: string | null): FormState => ({ name: "", phone: phone ?? "", line1: "", line2: "", landmark: "", city: "", stateCode: "", pincode: "", type: "home", isDefault: false });
 const inputClass = "w-full rounded-md border border-border bg-background px-3 py-2 text-sm";
 
 /** The shopper's saved addresses: add, edit, make default, remove. */
-export function AddressBook({ addresses, phone }: { addresses: SavedAddress[]; phone: string }) {
+export function AddressBook({ addresses, phone }: { addresses: SavedAddress[]; phone: string | null }) {
   const router = useRouter();
   const [editing, setEditing] = useState<string | "new" | null>(null);
   const [form, setForm] = useState<FormState>(blank(phone));

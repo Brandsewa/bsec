@@ -1,5 +1,5 @@
 import { createHash, randomBytes, randomUUID } from "node:crypto";
-import { and, eq, gt } from "drizzle-orm";
+import { and, eq, gt, sql } from "drizzle-orm";
 import { type Db, customerSessions, customers, withTenant } from "@bs/db";
 import type { CustomerRecord } from "./otp.ts";
 
@@ -43,6 +43,7 @@ export async function getCustomerBySession(db: Db, tenantId: string, rawToken: s
         email: customers.email,
         name: customers.name,
         phoneVerified: customers.phoneVerified,
+        emailVerified: customers.emailVerified,
       })
       .from(customerSessions)
       .innerJoin(customers, and(eq(customers.tenantId, customerSessions.tenantId), eq(customers.id, customerSessions.userId)))
@@ -64,3 +65,24 @@ export async function destroyCustomerSession(db: Db, tenantId: string, rawToken:
     await tx.delete(customerSessions).where(and(eq(customerSessions.tenantId, tenantId), eq(customerSessions.token, hashToken(rawToken))));
   });
 }
+
+/** Invalidate all sessions for a customer (e.g. on password reset or explicit sign out everywhere). */
+export async function destroyAllCustomerSessions(db: Db, tenantId: string, customerId: string): Promise<void> {
+  await withTenant(db, tenantId, async (tx) => {
+    await tx.delete(customerSessions).where(and(eq(customerSessions.tenantId, tenantId), eq(customerSessions.userId, customerId)));
+  });
+}
+
+/** Invalidate all sessions for a customer except the current session (e.g. on password change). */
+export async function destroyOtherCustomerSessions(db: Db, tenantId: string, customerId: string, currentRawToken: string): Promise<void> {
+  await withTenant(db, tenantId, async (tx) => {
+    await tx.delete(customerSessions).where(
+      and(
+        eq(customerSessions.tenantId, tenantId),
+        eq(customerSessions.userId, customerId),
+        sql`${customerSessions.token} != ${hashToken(currentRawToken)}`,
+      ),
+    );
+  });
+}
+

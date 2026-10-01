@@ -26,6 +26,14 @@ export function customerCookie(value: string, maxAgeMs = CUSTOMER_SESSION_TTL_MS
   };
 }
 
+export async function getRequestHeaders(req?: Request): Promise<Headers> {
+  try {
+    return await headers();
+  } catch {
+    return req?.headers ?? new Headers();
+  }
+}
+
 export interface StoreRequest {
   rt: Runtime;
   tenantId: string;

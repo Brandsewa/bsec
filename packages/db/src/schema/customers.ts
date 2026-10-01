@@ -22,7 +22,7 @@ export const customers = tenantTable(
   {
     id: uuid("id").default(sql`uuidv7()`).primaryKey(),
     email: citext("email").notNull(),
-    phone: text("phone").notNull(),
+    phone: text("phone"),
     name: text("name").notNull().default(""),
     emailVerified: boolean("email_verified").notNull().default(false),
     phoneVerified: boolean("phone_verified").notNull().default(false),

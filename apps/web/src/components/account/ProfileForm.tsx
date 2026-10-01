@@ -6,7 +6,7 @@ import { useRouter } from "next/navigation";
 const inputClass = "w-full rounded-md border border-border bg-background px-3 py-2 text-sm";
 
 export interface ProfileFormProps {
-  phone: string;
+  phone: string | null;
   name: string;
   /** Empty while the account still has the placeholder email made at sign-in. */
   email: string;
@@ -49,7 +49,7 @@ export function ProfileForm(props: ProfileFormProps) {
     <form onSubmit={submit} className="space-y-4" data-testid="profile-form">
       <label className="block text-sm">
         <span className="mb-1 block font-medium text-foreground">Mobile number</span>
-        <input value={props.phone} readOnly disabled className={`${inputClass} opacity-70`} />
+        <input value={props.phone ?? ""} placeholder="No phone number linked" readOnly disabled className={`${inputClass} opacity-70`} />
       </label>
       <label className="block text-sm">
         <span className="mb-1 block font-medium text-foreground">Name</span>

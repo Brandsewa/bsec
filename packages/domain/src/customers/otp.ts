@@ -11,10 +11,11 @@ export interface RequestOtpResult {
 
 export interface CustomerRecord {
   id: string;
-  phone: string;
+  phone: string | null;
   email: string;
   name: string;
   phoneVerified: boolean;
+  emailVerified: boolean;
 }
 
 export interface VerifyOtpResult {
@@ -125,6 +126,7 @@ export async function verifyCustomerOtp(
       email: cust.email,
       name: cust.name,
       phoneVerified: cust.phoneVerified,
+      emailVerified: cust.emailVerified,
     };
 
     // The token is an opaque session secret (only its hash is stored); it goes into an httpOnly cookie.

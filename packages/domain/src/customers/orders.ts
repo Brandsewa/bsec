@@ -42,12 +42,24 @@ export interface CustomerOrderDetail extends CustomerOrderSummary {
  */
 async function ownedBy(tx: Db, tenantId: string, customerId: string) {
   const [c] = await tx
-    .select({ phone: customers.phone, phoneVerified: customers.phoneVerified })
+    .select({
+      phone: customers.phone,
+      phoneVerified: customers.phoneVerified,
+      email: customers.email,
+      emailVerified: customers.emailVerified,
+    })
     .from(customers)
     .where(and(eq(customers.tenantId, tenantId), eq(customers.id, customerId)));
-  return c?.phoneVerified
-    ? or(eq(orders.customerId, customerId), eq(orders.phone, c.phone))
-    : eq(orders.customerId, customerId);
+
+  const conditions = [eq(orders.customerId, customerId)];
+  if (c?.phone && c.phoneVerified) {
+    conditions.push(eq(orders.phone, c.phone));
+  }
+  if (c?.email && c.emailVerified && !c.email.endsWith("@customer.store")) {
+    conditions.push(eq(orders.email, c.email));
+  }
+  const primary = conditions[0] ?? eq(orders.customerId, customerId);
+  return conditions.length > 1 ? or(...conditions) : primary;
 }
 
 export async function getCustomerOrders(

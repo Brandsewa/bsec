@@ -5,7 +5,7 @@ export interface CustomerProfile {
   id: string;
   name: string;
   email: string;
-  phone: string;
+  phone: string | null;
   acceptsMarketing: boolean;
   /** True while the email is still the placeholder made at OTP sign-in. */
   emailIsPlaceholder: boolean;

@@ -6,6 +6,7 @@ import { notFound } from "next/navigation";
 import { evaluateStorefrontAccess, getOrderByActionToken } from "@bs/domain";
 import { server } from "@/server/runtime.ts";
 import { describeOrderStatus, describePayment } from "@/components/orders/order-labels.ts";
+import { CreateAccountCard } from "@/components/orders/CreateAccountCard.tsx";
 
 interface ThankYouPageProps {
   params: Promise<{ token: string }>;
@@ -101,6 +102,8 @@ export default async function ThankYouPage({ params }: ThankYouPageProps) {
           ))}
         </div>
       </div>
+
+      <CreateAccountCard email={order.email} phone={order.phone} />
 
       <div className="mt-10 flex flex-col items-center justify-center gap-3 sm:flex-row">
         <Link
