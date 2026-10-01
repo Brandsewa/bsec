@@ -4,6 +4,7 @@ import { headers } from "next/headers";
 import { cacheTag } from "next/cache";
 import { evaluateStorefrontAccess, tenantTag, type getBrandSettings } from "@bs/domain";
 import { server } from "@/server/runtime.ts";
+import { isPlatformMarketingHost } from "@/server/hosts.ts";
 import { getCachedBrandSettings, getCachedStoreName } from "@/server/cached-storefront.ts";
 import { StoreHeader } from "@/components/storefront/StoreHeader.tsx";
 import { StoreFooter } from "@/components/storefront/StoreFooter.tsx";
@@ -24,6 +25,10 @@ export async function generateMetadata(): Promise<Metadata> {
   try {
     const h = await headers();
     const host = h.get("x-forwarded-host") ?? h.get("host") ?? "localhost";
+    // The platform's own public site is meant to be found: the page sets its title and description.
+    if (isPlatformMarketingHost(host)) {
+      return { title: "Bs Commerce", description: "Launch your online store in 10 minutes.", robots: { index: true, follow: true } };
+    }
     const { rt } = server();
     const access = await evaluateStorefrontAccess(rt, host, { headers: h });
     const isNoIndex = access.noindex ?? true;
@@ -50,6 +55,23 @@ export async function generateMetadata(): Promise<Metadata> {
 }
 
 export default async function RootLayout({ children }: { children: ReactNode }) {
+  // gobs.cloud and www.gobs.cloud are the platform's marketing site and signup, not a store: no store gate,
+  // header, footer or "coming soon" screen. (Without this the page was always hidden behind "Opening Soon".)
+  let isMarketing = false;
+  try {
+    const h = await headers();
+    isMarketing = isPlatformMarketingHost(h.get("x-forwarded-host") ?? h.get("host"));
+  } catch {
+    // no request context (static build): treat as a store host, as before
+  }
+  if (isMarketing) {
+    return (
+      <html lang="en">
+        <body className="min-h-dvh antialiased">{children}</body>
+      </html>
+    );
+  }
+
   let access: Awaited<ReturnType<typeof evaluateStorefrontAccess>>;
   let brandSettings: Awaited<ReturnType<typeof getBrandSettings>> | null = null;
   let storeName = "Store";
@@ -58,6 +80,7 @@ export default async function RootLayout({ children }: { children: ReactNode }) 
   try {
     const h = await headers();
     const host = h.get("x-forwarded-host") ?? h.get("host") ?? "localhost";
+
     const { rt } = server();
 
     access = await evaluateStorefrontAccess(rt, host, { headers: h });

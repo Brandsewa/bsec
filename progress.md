@@ -1,8 +1,69 @@
 # Progress
 
-Source of truth: `docs/PLAN.html` v2.0. Items are ticked only after verification; the evidence is noted next to each.
+Source of truth: `docs/PLAN.html` v2.0 (build order in `docs/BUILD-PLAN-M2-M9.md`). Items are ticked only after verification; the evidence is noted next to each. "From code" means it was read in the repo but not exercised live.
 
-## Current milestone: M0 · Platform boots
+## Status at 2026-10-01
+
+Live at **gobs.cloud** (web), **admin.gobs.cloud**, **platform.gobs.cloud**, **superadmin.gobs.cloud**, **media.gobs.cloud** (R2 images). Production runs `main`; every push passes CI (typecheck, lint, build, unit, heavy integration on real Postgres 18, ephemeral staging smoke test incl. admin + Super Admin Playwright e2e) before the Coolify deploy. First real store: **Taste of Hills** (`tasteofhills.gobs.cloud`), created through Super Admin.
+
+Test counts at this date: domain 930, db 41, platform 63, web 121, admin 23 (isolation suite 525 of the domain total).
+
+| Milestone | State | Notes |
+|---|---|---|
+| M0 Platform boots | Done, with open infra items | see "Open infra items" |
+| M1 Tenant isolation | Done | isolation suite green; customer sessions (ADR-012) not implemented |
+| M2 Catalog | Done, gaps | CSV import/export UI disabled; no Cloudflare Images re-encode; no stock field on product create |
+| M3 Storefront | Done, gaps | no SEO settings page, no CSP header, missing pages return 200 not 404 |
+| M4 Payments | **COD done, online payment not built** | real Razorpay order creation missing (online option hidden); no customer `/account` area; customer OTP cannot work in production (no SMS provider) |
+| M5 Fulfillment | **Mostly not built end to end** | Shiprocket never called; no way to create a return; emails are placeholder text; invoices have no PDF |
+| M6 Store #1 live | Partly | a real store exists; no real order history or 2-week run; restore drill at real volume not done |
+| M7 Hardening | Docs only | load / noisy-neighbour / capacity numbers deferred until after M9 (decision 2026-09-29) |
+| M8 Self-service SaaS | Built, **signup unreachable until the marketing-page fix deploys** | custom domains and merchant billing coded but never run live |
+| M9 SaaS launch | Done and verified live | ADR for M9 decisions still to write; GST doc pending chartered-accountant review |
+| M10 Theme editor (Puck) | Merged by a separate session | see ADR-018 for its known gaps |
+
+### Verified live, this week
+- **Super Admin** (2026-09-30): sign-in with password + authenticator, store creation, support session start, suspend/restore, audit log; Playwright superadmin spec 5/5 in CI.
+- **Store provisioning** through Super Admin: Taste of Hills created; owner invite link works.
+- **Wildcard store routing** (`*.gobs.cloud` → bsec-web) via manual Traefik labels; see DEPLOYMENT.md "Wildcard store routing".
+- **Storefront modes**: new stores start `coming_soon`; Settings → Storefront switches to live (tests + live).
+- **Catalog to order, COD**: product page, add to cart, cart, checkout with the store's own shipping rates, COD order placed, thank-you page with the real order number, order visible in admin, stock reserved, cancel releases stock and voids the payment. Placed and cancelled two test orders (ORD-00001/2) on the live store.
+- **Inventory**: variants that never had stock are listed so first stock can be added; product page shows stock.
+- **Product images**: upload from the product page to R2 (`bsec-media`), served from `media.gobs.cloud`, shown in admin, home grid, product page, cart and checkout. Tested with a real upload.
+
+### Bugs found by driving the app and fixed this week
+Cached "not found" never cleared after a draft product was published; Add to Cart sent an invented cart token (every add failed); checkout showed hardcoded shipping so the page said ₹150 and the order was ₹199; a "free above ₹999" rate looked free for every cart and the flat rate always won; cancelling an order left stock reserved and COD payment "pending"; inventory page hid never-stocked variants; demo blog articles and keyboard-store copy shown on every store; online payment option created a fake Razorpay order.
+
+### Known gaps, by area (nothing below is built unless stated)
+- **Payments / shipping (deferred by decision, needs provider keys):** real Razorpay checkout and webhooks end to end; Shiprocket labels, AWB, tracking, RTO; merchant billing via Razorpay Subscriptions.
+- **Customer side:** `/account/*` (login, orders, returns, addresses, wishlist, profile, privacy/data export); `/pay/{token}`, `/address/{token}`, `/unsubscribe/{token}`; discount code entry at cart/checkout (the discount engine and admin exist); reviews.
+- **Messaging:** transactional emails send only placeholder text (`Template: X. Subject: Y`); no HTML templates; Resend key not configured.
+- **Returns and invoices:** no return request flow or admin Returns screen; GST invoice has no PDF; GST scope awaits CA review.
+- **Store admin screens missing:** Abandoned checkouts, Shipments, Returns, Reviews, Analytics, merchant Features, Domains, SEO, Checkout, Notifications, Policies, Plan and billing, Activity log, Data export, Danger zone, Blog, Announcement bar, Redirects, Files. Fake or disabled controls: Customers/Orders "Export", Products Import/Export.
+- **Custom domains:** backend and Cloudflare for SaaS provider coded (needs `CLOUDFLARE_API_TOKEN`, `CLOUDFLARE_ZONE_ID`, the `stores.gobs.cloud` CNAME target); no admin Domains page; never run live.
+- **Security checklist items not verified:** Content-Security-Policy on the storefront; CSRF on mutations; rate limiting at Cloudflare.
+- **Platform:** invite links for owners/staff are shown once, not emailed; host-to-store cache means a suspend can take up to 60 s to reach the public storefront; media deletion from R2 on store deletion needs the `R2_*` keys on bsec-platform.
+
+### Open infra items
+- Sentry projects and DSNs, uptime monitors (deferred to the end, with provider keys).
+- Point-in-time recovery (pgBackRest/WAL): current RPO is 24 h (daily `pg_dump`), plan target is 15 min.
+- GitHub `production` environment has no required-reviewer gate (needs a paid plan).
+- Coolify's own healthcheck fails on this host; apps are verified through their `/health` endpoints instead.
+- `bsec-superadmin` GHCR package is private (Coolify uses a server-side `docker login`); other packages are public.
+- bsec-web uses manually managed Traefik labels for the wildcard route: editing its domains in Coolify does not regenerate them.
+- Load, noisy-neighbour and capacity tests, second restore drill, security penetration test: deferred.
+
+### Decisions on record
+- Razorpay, Shiprocket and Resend keys, Sentry and uptime accounts: set up at the very end (2026-09-29).
+- Hardening and load testing: after all phases are built (2026-09-29).
+- Shipping rates are per store, never hardcoded.
+- No legacy dataset to migrate: store #1 is the platform's own first tenant (PLAN §16 does not apply).
+
+---
+
+# History: M0 · Platform boots (detail)
+
+## M0 · Platform boots
 
 **Plan exit criterion:** push to main deploys web, platform, admin and worker to staging then production; a migration runs; a backup is restored into a scratch database.
 **Status:** code-side scaffold done and verified locally (2026-09-28). **M0 is not done yet**: the infra items below need the VPSs, the GitHub repo push, and accounts.
@@ -86,6 +147,3 @@ Source of truth: `docs/PLAN.html` v2.0. Items are ticked only after verification
 - Only the 6 M0 packages were created. payments, shipping, storage, email and blocks will be created in their milestones.
 - The `migrate` image is a fifth image beyond the four apps. It carries the owner credentials so that no runtime image does.
 - Local compose: if host port 5432 is taken, run with `POSTGRES_HOST_PORT=55432`. This machine needed it.
-
-## Next: M1 · Tenant isolation proven
-Schema for platform/identity/settings, full `tenantTable()` with composite FKs, `withTenant()`, host resolver, TenantContext, Better Auth staff and customer instances, memberships/roles, feature flags, and the generated isolation suite.

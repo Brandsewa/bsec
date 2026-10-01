@@ -1,4 +1,5 @@
 import { NextResponse, type NextRequest } from "next/server";
+import { isPlatformMarketingHost } from "./server/hosts.ts";
 
 export async function middleware(request: NextRequest) {
   const pathname = request.nextUrl.pathname;
@@ -15,14 +16,9 @@ export async function middleware(request: NextRequest) {
 
   const host = request.headers.get("x-forwarded-host") ?? request.headers.get("host") ?? "localhost";
   const hostname = host.split(":")[0]?.toLowerCase() ?? "localhost";
-  const platformDomain = (process.env.PLATFORM_DOMAIN || "gobs.cloud").toLowerCase();
-  const marketingHost = (process.env.MARKETING_HOST || platformDomain).toLowerCase();
-
   // Marketing platform host (e.g. gobs.cloud, www.gobs.cloud, or MARKETING_HOST) serves public SaaS pages
   const isMarketingHost =
-    hostname === marketingHost ||
-    hostname === platformDomain ||
-    hostname === `www.${platformDomain}` ||
+    isPlatformMarketingHost(hostname) ||
     (hostname === "localhost" && (
       pathname === "/" ||
       pathname.startsWith("/signup") ||
