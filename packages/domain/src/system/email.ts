@@ -1,6 +1,8 @@
 import { eq, and, sql } from "drizzle-orm";
 import { type Db, withTenant, schema } from "@bs/db";
 import { decryptSecret } from "@bs/payments";
+import { renderEmail, type EmailData } from "./email-templates.ts";
+import { loadEmailBrand, loadEmailOrder, mintOrderViewUrl } from "./email-context.ts";
 
 export interface SendEmailInput {
   tenantId: string;
@@ -53,7 +55,7 @@ export async function sendTransactionalEmail(
   db: Db,
   input: SendEmailInput,
 ): Promise<SendEmailResult> {
-  const { tenantId, template, toEmail, subject, data: _data = {}, eventRef } = input;
+  const { tenantId, template, toEmail, subject, data = {}, eventRef } = input;
 
   return await withTenant(db, tenantId, async (tx) => {
     // 1. Check integration kill switch for email provider
@@ -146,12 +148,26 @@ export async function sendTransactionalEmail(
 
     // 5. Dispatch real HTTP call to Resend
     try {
-      const fromEmail = process.env.RESEND_FROM_EMAIL ?? "orders@brandsewa.com";
+      // The content: the store's name and address, and (for order emails) the real order with a fresh view link.
+      const brand = await loadEmailBrand(tx, tenantId);
+      const emailData: EmailData = { ...data, cartUrl: `${brand.baseUrl}/cart` };
+      const orderId = typeof data.orderId === "string" ? data.orderId : undefined;
+      if (orderId) {
+        const order = await loadEmailOrder(tx, tenantId, orderId);
+        if (order) emailData.order = { ...order, orderUrl: await mintOrderViewUrl(tx, tenantId, orderId, brand.baseUrl) };
+      }
+      const rendered = renderEmail(template, brand, emailData, subject);
+
+      // "Store name <orders@platform-domain>": the sending address is the platform's verified one, the name is the store's.
+      const configuredFrom = process.env.RESEND_FROM_EMAIL ?? "orders@brandsewa.com";
+      const fromEmail = configuredFrom.includes("<") ? configuredFrom : `${brand.storeName.replace(/["<>]/g, "")} <${configuredFrom}>`;
       const payload: Record<string, unknown> = {
         from: fromEmail,
         to: [toEmail],
         subject,
-        text: `Template: ${template}. Subject: ${subject}`,
+        html: rendered.html,
+        text: rendered.text,
+        ...(brand.supportEmail ? { reply_to: brand.supportEmail } : {}),
       };
 
       const res = await fetch("https://api.resend.com/emails", {

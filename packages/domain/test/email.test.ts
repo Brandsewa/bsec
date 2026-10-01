@@ -41,11 +41,19 @@ describe("sendTransactionalEmail()", () => {
           where: () => {
             const isFeatureFlag =
               Boolean((tbl as { key?: unknown })?.key !== undefined) ||
-              JSON.stringify(fields).includes("killSwitch");
+              Object.keys((fields ?? {}) as object).includes("killSwitch");
             if (isFeatureFlag) {
               return { limit: async () => options.featureFlags ?? [] };
             }
-            return Promise.resolve(options.tenantSecrets ?? []);
+            // the provider-secret lookup is awaited directly; the store lookups (name, address, domain) chain limit/orderBy
+            if (Object.keys((fields ?? {}) as object).includes("keyName")) {
+              return Promise.resolve(options.tenantSecrets ?? []);
+            }
+            const none: unknown[] = [];
+            return Object.assign(Promise.resolve(none), {
+              limit: async () => none,
+              orderBy: () => ({ limit: async () => none }),
+            });
           },
         }),
       }),
