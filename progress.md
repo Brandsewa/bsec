@@ -59,7 +59,7 @@ Test counts at this date: domain 930, db 41, platform 63, web 121, admin 23 (iso
 | M1 Tenant isolation | Done | isolation suite green; customer sessions (ADR-012) not implemented |
 | M2 Catalog | Done, gaps | CSV import/export UI disabled; no Cloudflare Images re-encode; no stock field on product create |
 | M3 Storefront | Done, gaps | no SEO settings page, no CSP header, missing pages return 200 not 404 |
-| M4 Payments | **COD done, online payment not built** | real Razorpay order creation missing (online option hidden); no customer `/account` area; customer OTP cannot work in production (no SMS provider) |
+| M4 Payments | **COD done, online payment not built** | real Razorpay order creation missing (online option hidden); customer `/account` built (orders, addresses, profile) but sign-in codes cannot be delivered in production until an SMS/email provider is set up |
 | M5 Fulfillment | Manual flow done, courier not | Orders can be confirmed, shipped, delivered (COD collected) by hand; returns work end to end (shopper request, admin Returns page, restock, refund record). Shiprocket never called; invoices have no PDF. Not yet verified live |
 | M6 Store #1 live | Partly | a real store exists; no real order history or 2-week run; restore drill at real volume not done |
 | M7 Hardening | Docs only | load / noisy-neighbour / capacity numbers deferred until after M9 (decision 2026-09-29) |
@@ -81,13 +81,21 @@ Cached "not found" never cleared after a draft product was published; Add to Car
 
 ### Known gaps, by area (nothing below is built unless stated)
 - **Payments / shipping (deferred by decision, needs provider keys):** real Razorpay checkout and webhooks end to end; Shiprocket labels, AWB, tracking, RTO; merchant billing via Razorpay Subscriptions.
-- **Customer side:** `/account/*` (login, orders, returns, addresses, wishlist, profile, privacy/data export); `/pay/{token}`, `/address/{token}`, `/unsubscribe/{token}`; discount code entry at cart/checkout (the discount engine and admin exist); reviews.
+- **Customer side:** built 2026-10-01, not yet verified live: `/account` (orders, order detail, addresses, profile), `/address/{token}`, `/unsubscribe/{token}`. Still missing: `/pay/{token}` (needs Razorpay), account wishlist and data export, reviews. No email links to `/unsubscribe` or `/address` yet (token minting is ready: `mintUnsubscribeToken`, `mintAddressUpdateToken`).
 - **Messaging:** transactional emails send only placeholder text (`Template: X. Subject: Y`); no HTML templates; Resend key not configured.
 - **Returns and invoices:** returns built (7-day window after delivery; COD refunds are recorded, the merchant sends the money by hand; online refunds wait for Razorpay); the return emails are not sent yet; GST invoice has no PDF; GST scope awaits CA review.
 - **Store admin screens missing:** Abandoned checkouts, Shipments, Reviews, Analytics, merchant Features, Domains, SEO, Checkout, Notifications, Policies, Plan and billing, Activity log, Data export, Danger zone, Blog, Announcement bar, Redirects, Files. Orders, Customers and Products now export real CSV files; Products Import is still disabled.
 - **Custom domains:** backend and Cloudflare for SaaS provider coded (needs `CLOUDFLARE_API_TOKEN`, `CLOUDFLARE_ZONE_ID`, the `stores.gobs.cloud` CNAME target); no admin Domains page; never run live.
 - **Security checklist items not verified:** Content-Security-Policy on the storefront; CSRF on mutations; rate limiting at Cloudflare.
 - **Platform:** invite links for owners/staff are shown once, not emailed; host-to-store cache means a suspend can take up to 60 s to reach the public storefront; media deletion from R2 on store deletion needs the `R2_*` keys on bsec-platform.
+
+### Added 2026-10-01 (second pass), pushed to main, not yet verified live
+- **Order lifecycle by hand:** admin can confirm, mark shipped, mark delivered (COD recorded as collected); stock moves from reserved to sold on confirm. Domain: `orders/manual-lifecycle.ts`.
+- **Returns:** shopper request form on `/o/{token}` (7-day window, per-item quantity limits), admin Returns page (approve/reject, picked up, received with restock, refund record, close). COD refunds are recorded only; the merchant pays the shopper.
+- **Customer pages** (subagent, reviewed and merged): `/unsubscribe`, `/address`, `/account`. The old customer login token was unsigned and forgeable; it is now a server-side session (`customer_sessions`, hashed token, httpOnly cookie). OTP codes are no longer returned in HTTP responses (logged server-side in development only). Guest orders appear in the account when the phone is OTP-verified.
+- **Admin redesign and themes** (other session) merged; CSV export comes from that redesign.
+- **Tests:** real-database tests for the lifecycle, returns and customer pages; the admin-procedure isolation suite covers the new procedures (535 cases). Under full parallel `pnpm test` the platform and admin suites can time out from database contention; they pass when run one package at a time.
+- **Still open after this:** admin Domains page and custom domains, SEO settings, CSP header and CSRF review, 404 status for missing pages, return/refund emails, invoice PDF, product-create stock field, Products Import, ADR for M9. Razorpay, Shiprocket and Resend stay deferred.
 
 ### Open infra items
 - Sentry projects and DSNs, uptime monitors (deferred to the end, with provider keys).
