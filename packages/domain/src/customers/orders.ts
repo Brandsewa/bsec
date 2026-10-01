@@ -1,6 +1,6 @@
-import { createHash } from "node:crypto";
-import { and, eq, gt, sql } from "drizzle-orm";
-import { type Db, orders, orderItems, actionTokens, withTenant } from "@bs/db";
+import { createHash, randomBytes } from "node:crypto";
+import { and, eq, gt, or, sql } from "drizzle-orm";
+import { type Db, orders, orderItems, actionTokens, customers, withTenant } from "@bs/db";
 
 export interface OrderItemSummary {
   id: string;
@@ -36,12 +36,27 @@ export interface CustomerOrderDetail extends CustomerOrderSummary {
   items: OrderItemSummary[];
 }
 
+/**
+ * Orders that belong to a signed-in customer: those linked to them, plus guest orders placed with the phone number they
+ * just proved they own with an OTP (checkout does not link a guest order to an account).
+ */
+async function ownedBy(tx: Db, tenantId: string, customerId: string) {
+  const [c] = await tx
+    .select({ phone: customers.phone, phoneVerified: customers.phoneVerified })
+    .from(customers)
+    .where(and(eq(customers.tenantId, tenantId), eq(customers.id, customerId)));
+  return c?.phoneVerified
+    ? or(eq(orders.customerId, customerId), eq(orders.phone, c.phone))
+    : eq(orders.customerId, customerId);
+}
+
 export async function getCustomerOrders(
   db: Db,
   tenantId: string,
   customerId: string,
 ): Promise<CustomerOrderSummary[]> {
   return await withTenant(db, tenantId, async (tx) => {
+    const owned = await ownedBy(tx, tenantId, customerId);
     const rows = await tx
       .select({
         id: orders.id,
@@ -58,7 +73,7 @@ export async function getCustomerOrders(
       .where(
         and(
           eq(orders.tenantId, tenantId),
-          eq(orders.customerId, customerId),
+          owned,
         ),
       )
       .orderBy(sql`${orders.placedAt} DESC`);
@@ -74,6 +89,7 @@ export async function getCustomerOrderDetail(
   orderId: string,
 ): Promise<CustomerOrderDetail | null> {
   return await withTenant(db, tenantId, async (tx) => {
+    const owned = await ownedBy(tx, tenantId, customerId);
     const [order] = await tx
       .select()
       .from(orders)
@@ -81,7 +97,7 @@ export async function getCustomerOrderDetail(
         and(
           eq(orders.tenantId, tenantId),
           eq(orders.id, orderId),
-          eq(orders.customerId, customerId),
+          owned,
         ),
       );
 
@@ -197,5 +213,34 @@ export async function getOrderByActionToken(
         total: it.total,
       })),
     };
+  });
+}
+
+/**
+ * A fresh 30-day "view this order" token for an order the signed-in customer owns, so the account can link to the
+ * existing /o/{token} page (tracking, returns). Null when the order is not theirs.
+ */
+export async function mintOrderViewTokenForCustomer(
+  db: Db,
+  tenantId: string,
+  customerId: string,
+  orderId: string,
+): Promise<string | null> {
+  return await withTenant(db, tenantId, async (tx) => {
+    const owned = await ownedBy(tx, tenantId, customerId);
+    const [order] = await tx
+      .select({ id: orders.id })
+      .from(orders)
+      .where(and(eq(orders.tenantId, tenantId), eq(orders.id, orderId), owned));
+    if (!order) return null;
+    const raw = `ord_${randomBytes(24).toString("hex")}`;
+    await tx.insert(actionTokens).values({
+      tenantId,
+      purpose: "order_view",
+      targetId: orderId,
+      tokenHash: createHash("sha256").update(raw).digest("hex"),
+      expiresAt: new Date(Date.now() + 30 * 86_400_000),
+    });
+    return raw;
   });
 }

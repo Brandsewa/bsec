@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { z } from "zod";
 import { evaluateStorefrontAccess, requestCustomerOtp, getClientIp } from "@bs/domain";
 import { server } from "@/server/runtime.ts";
+import { sameOrigin } from "@/server/customer-session.ts";
 import { getRequestHeaders } from "../../../cart/route.ts";
 
 const RequestOtpSchema = z.object({
@@ -10,6 +11,7 @@ const RequestOtpSchema = z.object({
 
 export async function POST(req: Request) {
   try {
+    if (!sameOrigin(req)) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
     const h = await getRequestHeaders(req);
     const host = h.get("x-forwarded-host") ?? h.get("host") ?? "localhost";
 
@@ -53,11 +55,14 @@ export async function POST(req: Request) {
 
     const result = await requestCustomerOtp(rt._db.db, access.tenantId, parsed.data.phone);
 
+    // The code is never part of the response. Until SMS delivery is wired, local development reads it from the server log.
+    if (process.env.NODE_ENV === "development") {
+      server().log.info({ phone: parsed.data.phone, otp: result.devOtp }, "customer OTP (development only)");
+    }
+
     return NextResponse.json({
       success: true,
       expiresAt: result.expiresAt,
-      // Expose devOtp in non-production for local testing and automation
-      devOtp: process.env.NODE_ENV !== "production" ? result.devOtp : undefined,
     });
   } catch (err: unknown) {
     const message = err instanceof Error ? err.message : "Error requesting OTP";

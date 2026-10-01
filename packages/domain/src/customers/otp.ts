@@ -1,6 +1,7 @@
 import { createHash, randomInt } from "node:crypto";
 import { and, eq, gt, isNull, sql } from "drizzle-orm";
 import { type Db, customerOtps, customers, withTenant } from "@bs/db";
+import { createCustomerSession } from "./session.ts";
 
 export interface RequestOtpResult {
   success: boolean;
@@ -59,6 +60,7 @@ export async function verifyCustomerOtp(
   tenantId: string,
   phone: string,
   otp: string,
+  meta: { ip?: string | undefined; userAgent?: string | undefined } = {},
 ): Promise<VerifyOtpResult> {
   const cleanPhone = phone.trim().replace(/\D/g, "");
   const providedHash = hashOtp(otp);
@@ -125,9 +127,8 @@ export async function verifyCustomerOtp(
       phoneVerified: cust.phoneVerified,
     };
 
-    const token = Buffer.from(
-      JSON.stringify({ tenantId, customerId: cust.id, phone: cleanPhone, ts: Date.now() }),
-    ).toString("base64url");
+    // The token is an opaque session secret (only its hash is stored); it goes into an httpOnly cookie.
+    const { token } = await createCustomerSession(tx, tenantId, cust.id, meta);
 
     return {
       success: true,
