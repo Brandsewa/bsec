@@ -12,15 +12,18 @@ export interface BlockRendererProps {
   blocks: BlockInstance[];
   /** Store data and media URLs resolved on the server (see resolvePageRenderData). */
   renderData?: BlockRenderData | undefined;
+  /** Extra render hooks (store name, links, cart, product/collection cores). */
+  context?: Partial<RenderContext> | undefined;
 }
 
-export function BlockRenderer({ blocks, renderData }: BlockRendererProps) {
+export function BlockRenderer({ blocks, renderData, context }: BlockRendererProps) {
   if (!blocks || blocks.length === 0) {
     return null;
   }
 
   const media = renderData?.media ?? {};
   const base: RenderContext = {
+    ...context,
     data: renderData?.data,
     mediaUrl: (id) => media[id] ?? null,
   };

@@ -17,6 +17,22 @@ Design and rationale: [`docs/adr/018-visual-theme-editor.md`](docs/adr/018-visua
 - [x] **End-to-end run** on a real stack (Postgres, web, admin, platform, super admin). Bugs found and fixed: tsx JSX runtime, primary-foreground contrast, RichText `content` colliding with the layout slot (silent data loss), placeholder ids failing branding/theme output validation, legacy hero button props, editor reset after save.
 - [x] Production verified by the owner after deploy ("working well").
 
+### Theme builder follow-up (2026-10-01)
+- Super admin: **Themes -> New theme** (name, industry, description, optional copy of another theme) opens a builder with tabs: Theme settings (colours, fonts, corners, buttons, live preview), Home page, Collection page, Product page, Header, Footer. Save draft / Publish theme in the top bar; theme details editable from the list.
+- Store admin: Themes screen has a Customise panel (Theme settings + one editor per page); library preview shows each theme with its own settings across home/collection/product.
+- Storefront renders the theme's header, footer, product and collection layouts and applies its tokens; stores without them keep the built-in layouts and Branding look. See ADR-018 update.
+- Verified in the browser: create -> style -> edit header -> publish -> store sees it -> activate -> storefront (home, product, collection) -> store edits settings (platform copy and other stores untouched) -> platform republish shows "Newer version available".
+- Errors found while testing, and fixed:
+  - Storefront ignored theme tokens entirely (layout passed `null`) and the launch theme used a different token shape (`typography`/`shape`) than the reader (`fonts`/`radius`): one canonical shape now, legacy shape still read; theme tokens apply once a store opts in (`source: "theme"`).
+  - Pill corners turned product images and cards into circles: pill now applies to buttons only; cards cap at 1.25rem.
+  - `--font-heading`/`--font-body` briefly gained fallbacks and broke two web tests that rely on the bare-name contract: bare names restored, blocks use the new `--bs-font-*` variables.
+  - Super admin editor lint (refs read during render) and a status label stuck on "hidden from stores" after publishing: pages moved to state, status updates on publish.
+  - Preview and editor canvases showed "Your store" instead of the real name: store name passed through.
+  - Store library said customisations are "never overwritten" although re-applying replaces settings and layouts: copy corrected.
+  - Header/footer/product/collection layouts would have been reachable at `/pages/template-*`: excluded from public page lookup and from the Pages list.
+- Test-run notes: running all platform/domain integration suites in parallel against one reused Postgres container fails with "already exists" (schema/table collisions); run them with `--no-file-parallelism` (platform: 68 pass). One admin routes test times out only when the machine is busy; it passes alone.
+- Not done: merging a platform update into a store's customisations (re-applying replaces), other page types (cart, blog, search), theme preview thumbnails.
+
 ### Known gaps / next
 - [ ] Storefront-hosted draft preview (only the in-editor preview exists; the "Preview on store" button is not wired).
 - [ ] Merge a newer platform theme into stores that already customised it (version is tracked; today they only see the notice).

@@ -3,7 +3,6 @@ import type { Metadata } from "next";
 import { notFound } from "next/navigation";
 import { headers } from "next/headers";
 import { cacheTag } from "next/cache";
-import Link from "next/link";
 import {
   evaluateStorefrontAccess,
   getStorefrontCollection,
@@ -16,10 +15,9 @@ import {
   type CatalogListingOptions,
 } from "@bs/domain";
 import { server } from "@/server/runtime.ts";
-import { getCachedStorefrontCollection } from "@/server/cached-storefront.ts";
-import { ProductCard } from "@/components/catalog/ProductCard.tsx";
-import { ProductFilterSort } from "@/components/catalog/ProductFilterSort.tsx";
-import { Pagination } from "@/components/catalog/Pagination.tsx";
+import { getCachedStorefrontCollection, getCachedThemePage } from "@/server/cached-storefront.ts";
+import { BlockRenderer } from "@/components/blocks/BlockRenderer.tsx";
+import { CollectionListingSection } from "@/components/catalog/CollectionListingSection.tsx";
 
 interface CollectionPageProps {
   params: Promise<{ slug: string }>;
@@ -141,7 +139,6 @@ export default async function CollectionDetailPage({
   const collectionCacheTag = tenantTag(tenantId, "collection", collection.id);
 
   const storeUrl = `https://${host}`;
-  const totalPages = Math.ceil(products.total / limit);
 
   // Schema.org structured data
   const itemListJsonLd = generateItemListJsonLd(
@@ -159,96 +156,34 @@ export default async function CollectionDetailPage({
     { name: collection.title, url: `${storeUrl}/collections/${collection.slug}` },
   ]);
 
+  // The theme's own collection layout, when the store has one; the built-in layout otherwise.
+  const template = await getCachedThemePage(tenantId, "collection").catch(() => null);
+  const listing = (options?: Parameters<typeof CollectionListingSection>[0]["options"]) => (
+    <CollectionListingSection
+      collection={collection}
+      products={products}
+      page={page}
+      limit={limit}
+      rawSort={rawSort}
+      inStockOnly={inStockOnly}
+      options={options}
+    />
+  );
+
   return (
-    <div className="mx-auto max-w-7xl px-4 py-8 sm:px-6 lg:px-8" data-cache-tag={collectionCacheTag}>
-      {/* Schema.org Structured Data */}
-      <script
-        type="application/ld+json"
-        dangerouslySetInnerHTML={{ __html: JSON.stringify(itemListJsonLd) }}
-      />
-      <script
-        type="application/ld+json"
-        dangerouslySetInnerHTML={{ __html: JSON.stringify(breadcrumbsJsonLd) }}
-      />
-
-      {/* Breadcrumbs Navigation */}
-      <nav aria-label="Breadcrumb" className="mb-6 flex items-center gap-2 text-sm text-muted-foreground">
-        <Link href="/" className="hover:text-foreground transition-colors">
-          Home
-        </Link>
-        <span>/</span>
-        <Link href="/collections" className="hover:text-foreground transition-colors">
-          Collections
-        </Link>
-        <span>/</span>
-        <span className="font-medium text-foreground truncate max-w-[200px] sm:max-w-none">
-          {collection.title}
-        </span>
-      </nav>
-
-      {/* Collection Header */}
-      <div className="mb-6">
-        <h1 className="text-3xl font-extrabold tracking-tight text-foreground sm:text-4xl">
-          {collection.title}
-        </h1>
-      </div>
-
-      {/* Filter and Sort bar */}
-      <ProductFilterSort
-        currentSort={rawSort}
-        inStockOnly={inStockOnly}
-        totalCount={products.total}
-      />
-
-      {/* Products Grid or Empty State */}
-      {products.items.length > 0 ? (
-        <div className="mt-8 grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
-          {products.items.map((product) => (
-            <ProductCard key={product.id} product={product} />
-          ))}
-        </div>
+    <div data-cache-tag={collectionCacheTag}>
+      {/* Schema.org structured data */}
+      <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(itemListJsonLd) }} />
+      <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(breadcrumbsJsonLd) }} />
+      {template ? (
+        <BlockRenderer
+          blocks={template.blocks}
+          renderData={template.renderData}
+          context={{ renderCollectionListing: (options) => listing(options) }}
+        />
       ) : (
-        <div className="mt-16 text-center py-12 rounded-2xl border border-dashed border-border/80 bg-muted/20">
-          <svg
-            className="mx-auto h-12 w-12 text-muted-foreground/40 mb-3"
-            fill="none"
-            viewBox="0 0 24 24"
-            stroke="currentColor"
-            aria-hidden="true"
-          >
-            <path
-              strokeLinecap="round"
-              strokeLinejoin="round"
-              strokeWidth={1.5}
-              d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4"
-            />
-          </svg>
-          <h2 className="text-lg font-semibold text-foreground">No products found</h2>
-          <p className="mt-1 text-sm text-muted-foreground">
-            There are currently no products available in this collection.
-          </p>
-          <div className="mt-6">
-            <Link
-              href="/"
-              className="inline-flex items-center rounded-lg bg-primary px-4 py-2 text-sm font-medium text-primary-foreground hover:opacity-90 transition-opacity"
-            >
-              Continue Shopping
-            </Link>
-          </div>
-        </div>
+        listing()
       )}
-
-      {/* Pagination */}
-      <Pagination
-        currentPage={page}
-        totalPages={totalPages}
-        baseUrl={`/collections/${collection.slug}`}
-        searchParams={{
-          sort: rawSort !== "created_desc" ? rawSort : undefined,
-          inStockOnly: inStockOnly ? "true" : undefined,
-          limit: limit !== 24 ? limit : undefined,
-        }}
-      />
     </div>
   );
 }

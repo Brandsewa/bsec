@@ -1,6 +1,7 @@
 import { asc, eq, sql } from "drizzle-orm";
 import { schema } from "@bs/db";
-import { validateBlockDocument, type BlockInstance } from "@bs/blocks";
+import { getBlockDefinition, validateBlockDocument, type BlockInstance, type BlockType } from "@bs/blocks";
+import { LAUNCH_TEMPLATE_TOKENS } from "./launch-template.ts";
 import type { Runtime } from "../runtime.ts";
 import { assertPlatformStaff, writePlatformAudit, type AuditMeta } from "../platform-services.ts";
 
@@ -80,6 +81,24 @@ function detail(r: Row): TemplateDetail {
   };
 }
 
+/** A new theme starts with one sensible layout for every page, built from each block's defaults. */
+function starterPages(): TemplatePages {
+  const one = (id: string, type: BlockType): BlockInstance[] => [
+    { id, type, version: 1, props: structuredClone(getBlockDefinition(type).defaultProps) as Record<string, unknown> },
+  ];
+  return {
+    home: [
+      ...one("hero-1", "Hero"),
+      ...one("usp-1", "UspStrip"),
+      ...one("products-1", "ProductGrid"),
+    ],
+    collection: one("collection-1", "CollectionListing"),
+    product: one("product-1", "ProductDetail"),
+    header: one("header-1", "SiteHeader"),
+    footer: one("footer-1", "SiteFooter"),
+  };
+}
+
 /** Validates every page of a template. Returns cleaned pages or throws with a readable message. */
 export function validateTemplatePages(pages: TemplatePages): TemplatePages {
   const out: TemplatePages = {};
@@ -128,8 +147,8 @@ export async function createThemeTemplate(
   const code =
     input.name.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/(^-|-$)/g, "").slice(0, 40) || "theme";
 
-  let pages: TemplatePages = { home: [] };
-  let tokens: Record<string, unknown> = {};
+  let pages: TemplatePages = starterPages();
+  let tokens: Record<string, unknown> = structuredClone(LAUNCH_TEMPLATE_TOKENS) as Record<string, unknown>;
   if (input.cloneFromCode) {
     const [src] = await db.select().from(schema.themeTemplates).where(eq(schema.themeTemplates.code, input.cloneFromCode)).limit(1);
     if (!src) throw new Error(`Template not found: "${input.cloneFromCode}"`);

@@ -21,9 +21,9 @@ describe("Block Registry v1", () => {
     "UspStrip",
   ];
 
-  it("registers the 12 original home-page block types plus layout, content and conversion blocks", () => {
+  it("registers the 12 original home-page block types plus layout, content, conversion and store-chrome blocks", () => {
     expect(BLOCK_TYPES).toEqual(expect.arrayContaining(expectedBlockTypes));
-    expect(BLOCK_TYPES.length).toBe(27);
+    expect(BLOCK_TYPES.length).toBe(31);
   });
 
   for (const type of expectedBlockTypes) {

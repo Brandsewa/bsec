@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { BLOCK_TYPES, SLOT_BLOCK_TYPES, SLOT_PROP, getBlockDefinition, validateBlockDocument, type BlockInstance } from "@bs/blocks";
-import { BLOCK_SPECS, buildPuckConfig, dataSignature } from "../src/index.ts";
+import { BLOCK_SPECS, blockAllowed, buildPuckConfig, dataSignature, type EditorPageKind } from "../src/index.ts";
 
 describe("editor config", () => {
   it("has an editor panel for every registered block (none can be added without one)", () => {
@@ -33,14 +33,18 @@ describe("editor config", () => {
     }
   });
 
-  it("builds a Puck config with categories covering all components once", () => {
-    const config = buildPuckConfig({ themeVars: {} }) as unknown as {
-      components: Record<string, unknown>;
-      categories: Record<string, { components: string[] }>;
-    };
-    expect(Object.keys(config.components).sort()).toEqual([...BLOCK_TYPES].sort());
-    const listed = Object.values(config.categories).flatMap((c) => c.components);
-    expect([...listed].sort()).toEqual([...BLOCK_TYPES].sort());
+  it("builds a Puck config whose categories list each component exactly once, for every page kind", () => {
+    const union = new Set<string>();
+    for (const pageKind of ["home", "collection", "product", "header", "footer", "custom"] as const) {
+      const config = buildPuckConfig({ themeVars: {}, pageKind }) as unknown as {
+        components: Record<string, unknown>;
+        categories: Record<string, { components: string[] }>;
+      };
+      const listed = Object.values(config.categories).flatMap((c) => c.components);
+      expect([...listed].sort(), pageKind).toEqual(Object.keys(config.components).sort());
+      Object.keys(config.components).forEach((t) => union.add(t));
+    }
+    expect([...union].sort()).toEqual([...BLOCK_TYPES].sort());
   });
 });
 
@@ -58,5 +62,34 @@ describe("dataSignature", () => {
   it("sees blocks nested inside layout blocks", () => {
     const nested = [block("s", "Section", { content: [block("a", "ProductGrid", { title: "x", source: "manual", productSlugs: ["a"] })] })];
     expect(dataSignature(nested)).toContain('"a"');
+  });
+});
+
+describe("block picker by page kind", () => {
+  const offered = (kind: EditorPageKind) =>
+    Object.keys(buildPuckConfig({ themeVars: {}, pageKind: kind }).components);
+
+  it("header and footer pages only offer chrome-appropriate blocks", () => {
+    expect([...offered("header")].sort()).toEqual(["Banner", "SiteHeader"]);
+    expect(offered("footer")).toContain("SiteFooter");
+    expect(offered("footer")).not.toContain("ProductGrid");
+  });
+
+  it("the product core is only offered on the product page, the collection core on the collection page", () => {
+    expect(offered("product")).toContain("ProductDetail");
+    expect(offered("product")).not.toContain("CollectionListing");
+    expect(offered("collection")).toContain("CollectionListing");
+    expect(offered("collection")).not.toContain("ProductDetail");
+    for (const kind of ["home", "custom"] as const) {
+      expect(offered(kind)).not.toContain("ProductDetail");
+      expect(offered(kind)).not.toContain("SiteHeader");
+    }
+  });
+
+  it("every block is offered somewhere", () => {
+    for (const type of BLOCK_TYPES) {
+      const kinds = ["home", "collection", "product", "header", "footer"] as const;
+      expect(kinds.some((k) => blockAllowed(type, k)), type).toBe(true);
+    }
   });
 });

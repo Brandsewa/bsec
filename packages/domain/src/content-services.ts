@@ -1,9 +1,10 @@
-import { and, desc, eq } from "drizzle-orm";
+import { and, desc, eq, notInArray } from "drizzle-orm";
 import { schema, withTenant } from "@bs/db";
 import { validateBlockDocument } from "@bs/blocks";
 import type { Runtime } from "./runtime.ts";
 import { assertPermission, type TenantContext } from "./context.ts";
 import { invalidateCache } from "./cache-invalidation.ts";
+import { THEME_SYSTEM_PAGE_TYPES } from "./themes/system-pages.ts";
 
 export interface CreatePageInput {
   title: string;
@@ -153,6 +154,7 @@ export async function listPages(rt: Runtime, ctx: TenantContext) {
       id: r.id,
       slug: r.slug,
       title: r.title,
+      type: r.type,
       description: undefined,
       publishedVersionId: r.publishedVersionId,
       publishedAt: r.status === "published" ? r.updatedAt.toISOString() : undefined,
@@ -196,6 +198,7 @@ export async function getPage(
       id: p.id,
       slug: p.slug,
       title: p.title,
+      type: p.type,
       description: undefined,
       publishedVersionId: p.publishedVersionId,
       draftVersionId: p.draftVersionId,
@@ -541,6 +544,8 @@ export async function getStorefrontPage(
           eq(schema.pages.tenantId, ctx.tenantId),
           eq(schema.pages.slug, slug),
           eq(schema.pages.status, "published"),
+          // Header, footer and product/collection layouts are not public pages.
+          notInArray(schema.pages.type, [...THEME_SYSTEM_PAGE_TYPES]),
         ),
       )
       .limit(1);

@@ -32,7 +32,12 @@ export type BlockType =
   | "Icon"
   | "Link"
   // Conversion widgets
-  | "CallToAction";
+  | "CallToAction"
+  // Store chrome and page cores (theme header/footer, product page, collection page)
+  | "SiteHeader"
+  | "SiteFooter"
+  | "ProductDetail"
+  | "CollectionListing";
 
 /** Minimal product shape the product blocks need; the host supplies the real data. Prices are in paise. */
 export interface BlockProduct {
@@ -70,6 +75,30 @@ export interface RenderContext {
   renderProductCard?: ((product: BlockProduct, opts: { showPrice: boolean; showRating: boolean }) => ReactNode) | undefined;
   /** Stable id of the block being rendered (for data lookup). */
   blockId?: string | undefined;
+  /** Store details for the header and footer. */
+  storeName?: string | undefined;
+  logoUrl?: string | null | undefined;
+  /** Client-side navigation link (storefront passes next/link); plain anchors otherwise. */
+  renderLink?: ((p: { href: string; className?: string; children: ReactNode }) => ReactNode) | undefined;
+  /** Cart icon with live count (a client component supplied by the storefront). */
+  renderCart?: (() => ReactNode) | undefined;
+  /** The real product page body / collection listing; the editor draws labelled placeholders instead. */
+  renderProductDetail?: ((opts: ProductDetailOptions) => ReactNode) | undefined;
+  renderCollectionListing?: ((opts: CollectionListingOptions) => ReactNode) | undefined;
+}
+
+export interface ProductDetailOptions {
+  galleryPosition: "left" | "right";
+  showBreadcrumb: boolean;
+  showRating: boolean;
+  showDescription: boolean;
+  showTags: boolean;
+}
+
+export interface CollectionListingOptions {
+  columns: "2" | "3" | "4";
+  showFilters: boolean;
+  showDescription: boolean;
 }
 
 /**

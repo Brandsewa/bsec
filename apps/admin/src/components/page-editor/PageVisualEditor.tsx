@@ -1,8 +1,8 @@
 import { useMemo } from "react";
 import { useNavigate } from "@tanstack/react-router";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { BlockEditor } from "@bs/block-editor";
-import type { BlockInstance } from "@bs/blocks";
+import { BlockEditor, type EditorPageKind } from "@bs/block-editor";
+import { googleFontsHref, type BlockInstance } from "@bs/blocks";
 import { Button, EmptyState, PageContainer, PageSkeleton } from "@bs/ui";
 import { client, orpc } from "../../lib/orpc.ts";
 import { storeHost, themeVarsFor } from "./host.ts";
@@ -12,7 +12,7 @@ import { storeHost, themeVarsFor } from "./host.ts";
  * version live and refreshes the storefront cache. Permissions are enforced by the API, and the
  * Publish button is hidden for staff who can edit but not publish.
  */
-export default function PageVisualEditor({ pageId, canPublish }: { pageId: string; canPublish: boolean }) {
+export default function PageVisualEditor({ pageId, canPublish, storeName }: { pageId: string; canPublish: boolean; storeName?: string | undefined }) {
   const navigate = useNavigate();
   const queryClient = useQueryClient();
   const pageQuery = useQuery(orpc.admin.pages.get.queryOptions({ input: { id: pageId, draft: true } }));
@@ -20,7 +20,12 @@ export default function PageVisualEditor({ pageId, canPublish }: { pageId: strin
   const themeQuery = useQuery(orpc.admin.themes.get.queryOptions());
 
   const themeVars = useMemo(() => themeVarsFor(brandQuery.data, themeQuery.data), [brandQuery.data, themeQuery.data]);
-  const exit = () => void navigate({ to: "/online-store/pages" });
+  const pageType = pageQuery.data?.type ?? "custom";
+  const kind: EditorPageKind =
+    pageType === "home" ? "home" : pageType === "collection_template" ? "collection" : pageType === "product_template" ? "product" : pageType === "header" ? "header" : pageType === "footer" ? "footer" : "custom";
+  // Theme pages (header, footer, product, collection) are reached from the theme screen, not the Pages list.
+  const exit = () => void navigate({ to: kind === "header" || kind === "footer" || kind === "product" || kind === "collection" ? "/online-store/theme-library" : "/online-store/pages" });
+  const fontsHref = googleFontsHref((themeQuery.data?.tokens ?? null) as never);
 
   if (pageQuery.isError) {
     return (
@@ -55,6 +60,9 @@ export default function PageVisualEditor({ pageId, canPublish }: { pageId: strin
       initialBlocks={page.blocks as BlockInstance[]}
       host={storeHost}
       themeVars={themeVars}
+      storeName={storeName}
+      pageKind={kind}
+      fontsHref={fontsHref}
       onSaveDraft={saveDraft}
       onPublish={async (blocks) => {
         if (!canPublish) throw new Error("You do not have permission to publish. Save the draft and ask a store owner.");

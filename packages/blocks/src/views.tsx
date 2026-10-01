@@ -4,6 +4,8 @@ import type { CSSProperties, ReactNode } from "react";
 import { sanitizeRichText } from "./sanitize.ts";
 import type {
   BlockProduct,
+  CollectionListingOptions,
+  ProductDetailOptions,
   BlockRenderArgs,
   RenderContext,
   SlotRender,
@@ -649,5 +651,170 @@ export function CallToActionView({ props, ctx }: A<R.CallToActionProps>): ReactN
         ) : null}
       </div>
     </section>
+  );
+}
+
+/* ------------------- store chrome and page cores ------------------- */
+
+function NavLink({ ctx, href, className, children }: { ctx: RenderContext | undefined; href: string; className?: string; children: ReactNode }) {
+  if (ctx?.renderLink) return <>{ctx.renderLink({ href, ...(className ? { className } : {}), children })}</>;
+  return (
+    <a href={href} className={className} {...(isExternal(href) ? { rel: "noopener noreferrer" } : {})}>
+      {children}
+    </a>
+  );
+}
+
+const SearchIcon = (
+  <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+    <circle cx="11" cy="11" r="8" />
+    <line x1="21" y1="21" x2="16.65" y2="16.65" />
+  </svg>
+);
+const CartIcon = (
+  <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+    <circle cx="9" cy="21" r="1" />
+    <circle cx="20" cy="21" r="1" />
+    <path d="M1 1h4l2.68 13.39a2 2 0 0 0 2 1.61h9.72a2 2 0 0 0 2-1.61L23 6H6" />
+  </svg>
+);
+
+export function SiteHeaderView({ props, ctx }: A<R.SiteHeaderProps>): ReactNode {
+  const name = props.logoText || ctx?.storeName || "Your store";
+  return (
+    <header className={cx("bsb bs-block-site-header bsb-site-header", `bsb-tone-${props.tone}`, props.sticky && "bsb-sticky", props.layout === "center" && "bsb-site-header-center")}>
+      <div className="bsb-w bsb-w-wide bsb-site-header-row">
+        <NavLink ctx={ctx} href="/" className="bsb-site-logo">
+          {ctx?.logoUrl && !props.logoText ? <img src={ctx.logoUrl} alt={name} style={{ maxHeight: 40, width: "auto" }} /> : <span>{name}</span>}
+        </NavLink>
+        <nav className="bsb-site-nav" aria-label="Main">
+          {props.links.map((l, i) => (
+            <NavLink key={`${l.href}-${i}`} ctx={ctx} href={l.href}>
+              {l.label}
+            </NavLink>
+          ))}
+        </nav>
+        <div className="bsb-site-actions">
+          {props.showSearch ? (
+            <NavLink ctx={ctx} href="/search" className="bsb-site-icon">
+              <span className="bsb-sr">Search</span>
+              {SearchIcon}
+            </NavLink>
+          ) : null}
+          {props.showCart ? (
+            ctx?.renderCart ? (
+              ctx.renderCart()
+            ) : (
+              <NavLink ctx={ctx} href="/cart" className="bsb-site-icon">
+                <span className="bsb-sr">Cart</span>
+                {CartIcon}
+              </NavLink>
+            )
+          ) : null}
+        </div>
+      </div>
+    </header>
+  );
+}
+
+export function SiteFooterView({ props, ctx }: A<R.SiteFooterProps>): ReactNode {
+  const name = ctx?.storeName || "Your store";
+  const year = new Date().getFullYear();
+  return (
+    <footer className={cx("bsb bs-block-site-footer", `bsb-tone-${props.tone}`)}>
+      <div className="bsb-w bsb-w-wide bsb-py-lg">
+        <div className="bsb-site-footer-grid">
+          <div>
+            <p className="bsb-heading bsb-h-sm">{name}</p>
+            {props.about ? <p className="bsb-muted" style={{ marginTop: "0.5rem", fontSize: "0.875rem" }}>{props.about}</p> : null}
+          </div>
+          {props.columns.map((c, i) => (
+            <div key={`${c.title}-${i}`}>
+              <p className="bsb-site-footer-title">{c.title}</p>
+              <ul className="bsb-site-footer-links">
+                {c.links.map((l, j) => (
+                  <li key={`${l.href}-${j}`}>
+                    <NavLink ctx={ctx} href={l.href}>
+                      {l.label}
+                    </NavLink>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          ))}
+          {props.showNewsletter ? (
+            <div>
+              <p className="bsb-site-footer-title">{props.newsletterTitle}</p>
+              <p className="bsb-muted" style={{ fontSize: "0.8125rem", margin: "0.5rem 0 0.75rem" }}>{props.newsletterText}</p>
+              <form className="bsb-form" action="/api/storefront/newsletter/subscribe" method="post" style={{ margin: 0 }}>
+                <input className="bsb-input" type="email" name="email" required placeholder="Your email" aria-label="Email address" />
+                <button className="bsb-btn bsb-btn-primary bsb-btn-sm" type="submit">Subscribe</button>
+              </form>
+            </div>
+          ) : null}
+        </div>
+        <p className="bsb-muted bsb-align-center" style={{ marginTop: "2.5rem", fontSize: "0.75rem" }}>
+          {props.copyright || `© ${year} ${name}. All rights reserved.`}
+        </p>
+      </div>
+    </footer>
+  );
+}
+
+function Placeholder({ label, hint, children }: { label: string; hint: string; children: ReactNode }) {
+  return (
+    <section className="bsb bs-block-placeholder bsb-py-lg">
+      <div className="bsb-w bsb-w-wide">
+        {children}
+        <p className="bsb-muted bsb-align-center" style={{ fontSize: "0.75rem", marginTop: "1rem" }}>
+          <strong>{label}</strong> · {hint}
+        </p>
+      </div>
+    </section>
+  );
+}
+
+export function ProductDetailView({ props, ctx }: A<R.ProductDetailProps>): ReactNode {
+  if (ctx?.renderProductDetail) return <>{ctx.renderProductDetail(props as ProductDetailOptions)}</>;
+  const gallery = (
+    <div className="bsb-ph-box" style={{ aspectRatio: "1 / 1" }} aria-hidden="true">
+      <span>Product images</span>
+    </div>
+  );
+  const info = (
+    <div style={{ display: "flex", flexDirection: "column", gap: "1rem" }}>
+      <h1 className="bsb-heading bsb-h-lg">Product name</h1>
+      {props.showRating ? <Stars value={4} /> : null}
+      <p style={{ fontSize: "1.5rem", fontWeight: 700, margin: 0 }}>{money(129900)}</p>
+      {props.showDescription ? <p className="bsb-muted">A short product description appears here, written by the store for each product.</p> : null}
+      <div className="bsb-ph-box" style={{ height: 44 }}><span>Variant options</span></div>
+      <span className="bsb-btn bsb-btn-primary bsb-btn-lg" style={{ justifyContent: "center" }}>Add to cart</span>
+      {props.showTags ? <p className="bsb-muted" style={{ fontSize: "0.75rem" }}>#tag #another</p> : null}
+    </div>
+  );
+  return (
+    <Placeholder label="Product page" hint="Each product's own images, price and options fill this area.">
+      {props.showBreadcrumb ? <p className="bsb-muted" style={{ fontSize: "0.8125rem", marginBottom: "1rem" }}>Home / Products / Product name</p> : null}
+      <div className="bsb-ph-two">{props.galleryPosition === "left" ? <>{gallery}{info}</> : <>{info}{gallery}</>}</div>
+    </Placeholder>
+  );
+}
+
+export function CollectionListingView({ props, ctx }: A<R.CollectionListingProps>): ReactNode {
+  if (ctx?.renderCollectionListing) return <>{ctx.renderCollectionListing(props as CollectionListingOptions)}</>;
+  const cards = Array.from({ length: Number(props.columns) * 2 }, (_, i) => (
+    <div key={i}>
+      <div className="bsb-ph-box" style={{ aspectRatio: "4 / 5" }} aria-hidden="true" />
+      <p style={{ margin: "0.5rem 0 0.15rem", fontWeight: 600 }}>Sample product {i + 1}</p>
+      <p className="bsb-muted" style={{ margin: 0 }}>{money(49900 + i * 10000)}</p>
+    </div>
+  ));
+  return (
+    <Placeholder label="Collection page" hint="The collection's own products are listed here.">
+      <h1 className="bsb-heading bsb-h-lg">Collection name</h1>
+      {props.showDescription ? <p className="bsb-muted" style={{ margin: "0.5rem 0 1rem" }}>The collection description appears here.</p> : null}
+      {props.showFilters ? <p className="bsb-muted" style={{ fontSize: "0.8125rem", margin: "0 0 1rem" }}>Sort · In stock only</p> : null}
+      <div className="bsb-grid bsb-gap-md" style={{ ["--cols" as string]: props.columns, ["--cols-m" as string]: 2 }}>{cards}</div>
+    </Placeholder>
   );
 }

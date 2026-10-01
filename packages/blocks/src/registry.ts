@@ -569,6 +569,112 @@ export const CallToActionBlock: BlockDefinition<CallToActionProps> = {
   render: V.CallToActionView,
 };
 
+/* ------------------------------------------------------------------ */
+/* Store chrome and page cores. Header/footer live on the theme's own  */
+/* pages; ProductDetail / CollectionListing are the dynamic core of    */
+/* the product and collection pages, drawn by the storefront.          */
+/* ------------------------------------------------------------------ */
+
+const navLinkSchema = z.object({ label: z.string().min(1).max(60), href: hrefSchema });
+
+export const SiteHeaderSchema = z.object({
+  links: z.array(navLinkSchema).max(8).default([]),
+  logoText: z.string().max(60).optional(),
+  layout: z.enum(["left", "center"]).default("left"),
+  showSearch: z.boolean().default(true),
+  showCart: z.boolean().default(true),
+  sticky: z.boolean().default(true),
+  tone: toneSchema.default("default"),
+});
+export type SiteHeaderProps = z.infer<typeof SiteHeaderSchema>;
+export const SiteHeaderBlock: BlockDefinition<SiteHeaderProps> = {
+  type: "SiteHeader",
+  version: 1,
+  schema: SiteHeaderSchema,
+  defaultProps: {
+    links: [
+      { label: "Home", href: "/" },
+      { label: "Shop", href: "/collections/all" },
+      { label: "About", href: "/pages/about" },
+    ],
+    layout: "left",
+    showSearch: true,
+    showCart: true,
+    sticky: true,
+    tone: "default",
+  },
+  render: V.SiteHeaderView,
+};
+
+export const SiteFooterSchema = z.object({
+  about: z.string().max(300).optional(),
+  columns: z
+    .array(z.object({ title: z.string().min(1).max(60), links: z.array(navLinkSchema).max(8).default([]) }))
+    .max(4)
+    .default([]),
+  showNewsletter: z.boolean().default(true),
+  newsletterTitle: z.string().max(80).default("Newsletter"),
+  newsletterText: z.string().max(200).default("Subscribe for updates and exclusive offers."),
+  copyright: z.string().max(200).optional(),
+  tone: toneSchema.default("surface"),
+});
+export type SiteFooterProps = z.infer<typeof SiteFooterSchema>;
+export const SiteFooterBlock: BlockDefinition<SiteFooterProps> = {
+  type: "SiteFooter",
+  version: 1,
+  schema: SiteFooterSchema,
+  defaultProps: {
+    about: "Quality products, delivered with care.",
+    columns: [
+      { title: "Shop", links: [{ label: "All products", href: "/collections/all" }, { label: "Search", href: "/search" }] },
+      {
+        title: "Policies",
+        links: [
+          { label: "Privacy Policy", href: "/policies/privacy" },
+          { label: "Terms of Service", href: "/policies/terms" },
+          { label: "Refund Policy", href: "/policies/refund" },
+          { label: "Shipping Policy", href: "/policies/shipping" },
+        ],
+      },
+    ],
+    showNewsletter: true,
+    newsletterTitle: "Newsletter",
+    newsletterText: "Subscribe for updates and exclusive offers.",
+    tone: "surface",
+  },
+  render: V.SiteFooterView,
+};
+
+export const ProductDetailSchema = z.object({
+  galleryPosition: z.enum(["left", "right"]).default("left"),
+  showBreadcrumb: z.boolean().default(true),
+  showRating: z.boolean().default(true),
+  showDescription: z.boolean().default(true),
+  showTags: z.boolean().default(true),
+});
+export type ProductDetailProps = z.infer<typeof ProductDetailSchema>;
+export const ProductDetailBlock: BlockDefinition<ProductDetailProps> = {
+  type: "ProductDetail",
+  version: 1,
+  schema: ProductDetailSchema,
+  defaultProps: { galleryPosition: "left", showBreadcrumb: true, showRating: true, showDescription: true, showTags: true },
+  render: V.ProductDetailView,
+};
+
+export const CollectionListingSchema = z.object({
+  columns: z.enum(["2", "3", "4"]).default("4"),
+  showFilters: z.boolean().default(true),
+  showDescription: z.boolean().default(true),
+});
+export type CollectionListingProps = z.infer<typeof CollectionListingSchema>;
+export const CollectionListingBlock: BlockDefinition<CollectionListingProps> = {
+  type: "CollectionListing",
+  version: 1,
+  schema: CollectionListingSchema,
+  defaultProps: { columns: "4", showFilters: true, showDescription: true },
+  render: V.CollectionListingView,
+};
+
 export { type BlockType } from "./types.ts";
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -603,6 +709,10 @@ export const BLOCK_DEFINITIONS: Record<BlockType, AnyBlockDefinition> = {
   Icon: IconBlock,
   Link: LinkBlock,
   CallToAction: CallToActionBlock,
+  SiteHeader: SiteHeaderBlock,
+  SiteFooter: SiteFooterBlock,
+  ProductDetail: ProductDetailBlock,
+  CollectionListing: CollectionListingBlock,
 };
 
 export const BLOCK_TYPES = Object.keys(BLOCK_DEFINITIONS) as BlockType[];

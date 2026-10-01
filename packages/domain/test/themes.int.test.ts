@@ -9,12 +9,16 @@ import { validateBlockDocument, type BlockInstance } from "@bs/blocks";
 import {
   LAUNCH_TEMPLATE_CODE,
   LAUNCH_TEMPLATE_HOME,
+  LAUNCH_TEMPLATE_PAGES,
   LAUNCH_TEMPLATE_TOKENS,
   activateTheme,
   createRuntime,
   createThemeTemplate,
   getPage,
   getStorefrontHomePage,
+  getStorefrontPage,
+  getStorefrontThemePage,
+  getStorefrontThemeTokens,
   listPageVersions,
   listThemeLibrary,
   listThemeTemplates,
@@ -126,7 +130,7 @@ describe("launch theme", () => {
       `select default_pages, default_tokens from theme_templates where code = $1`,
       [LAUNCH_TEMPLATE_CODE],
     );
-    expect(row?.default_pages).toEqual({ home: LAUNCH_TEMPLATE_HOME });
+    expect(row?.default_pages).toEqual(LAUNCH_TEMPLATE_PAGES);
     expect(row?.default_tokens).toEqual(LAUNCH_TEMPLATE_TOKENS);
   });
 });
@@ -157,7 +161,9 @@ describe("store theme library and activation", () => {
       [TENANT_A],
     );
     expect(theme?.template_code).toBe(LAUNCH_TEMPLATE_CODE);
-    expect(theme?.tokens).toEqual(LAUNCH_TEMPLATE_TOKENS);
+    // Activating opts the store in to the theme system: its tokens now decide its look.
+    expect(theme?.tokens).toEqual({ ...LAUNCH_TEMPLATE_TOKENS, source: "theme" });
+    expect(await getStorefrontThemeTokens(web, storefrontCtx(TENANT_A))).toMatchObject({ source: "theme", colors: { primary: "#0b6b42" } });
 
     const home = await getStorefrontHomePage(web, storefrontCtx(TENANT_A));
     const ids = (home.document.blocks as BlockInstance[]).map((b) => b.id);
@@ -165,6 +171,29 @@ describe("store theme library and activation", () => {
 
     const lib = await listThemeLibrary(web, ctxFor(TENANT_A));
     expect(lib.find((t) => t.code === LAUNCH_TEMPLATE_CODE)).toMatchObject({ isCurrent: true, updateAvailable: false });
+  });
+
+  it("also copies the header, footer, product and collection layouts, and keeps them off the public /pages namespace", async () => {
+    for (const key of ["header", "footer", "product", "collection"] as const) {
+      const page = await getStorefrontThemePage(web, storefrontCtx(TENANT_A), key);
+      expect(page?.blocks.map((b) => b.id), key).toEqual(LAUNCH_TEMPLATE_PAGES[key].map((b) => b.id));
+    }
+    expect(await getStorefrontPage(web, storefrontCtx(TENANT_A), "template-header")).toBeNull();
+    expect(await getStorefrontPage(web, storefrontCtx(TENANT_A), "template-product")).toBeNull();
+    // Another store has none: it keeps the built-in layout.
+    expect(await getStorefrontThemePage(web, storefrontCtx(TENANT_B), "header")).toBeNull();
+    expect(await getStorefrontThemeTokens(web, storefrontCtx(TENANT_B))).toBeNull();
+  });
+
+  it("a store's edit to its own header survives a template update", async () => {
+    const [headerPage] = await rows<{ id: string }>(`select id from pages where tenant_id = $1 and type = 'header'`, [TENANT_A]);
+    const page = await getPage(web, ctxFor(TENANT_A), { id: headerPage!.id, draft: true });
+    expect(page.type).toBe("header");
+    const blocks = (page.blocks as BlockInstance[]).map((b) => ({ ...b, props: { ...b.props, logoText: "My Shop" } }));
+    await savePageDraft(web, ctxFor(TENANT_A), { id: headerPage!.id, blocks });
+    await publishPage(web, ctxFor(TENANT_A), { id: headerPage!.id });
+    const live = await getStorefrontThemePage(web, storefrontCtx(TENANT_A), "header");
+    expect(live?.blocks[0]?.props["logoText"]).toBe("My Shop");
   });
 
   it("does not touch another store", async () => {
@@ -188,14 +217,14 @@ describe("store theme library and activation", () => {
     const tpl = LAUNCH_TEMPLATE_HOME.map((b) => (b.id === "ec-hero" ? { ...b, props: { ...b.props, title: "Platform v2 headline" } } : b));
     await saveThemeTemplateDraft(platform, OWNER_STAFF, { code: LAUNCH_TEMPLATE_CODE, pages: { home: tpl } });
     const { version } = await publishThemeTemplate(platform, OWNER_STAFF, LAUNCH_TEMPLATE_CODE);
-    expect(version).toBe(2);
+    expect(version).toBe(3); // v1 seeded by 0015, v2 by 0016 (header/footer/product/collection pages)
 
     const home = await getStorefrontHomePage(web, storefrontCtx(TENANT_A));
     const hero = (home.document.blocks as BlockInstance[]).find((b) => b.id === "ec-hero");
     expect(hero?.props.title).toBe("My store's own headline");
 
     const lib = await listThemeLibrary(web, ctxFor(TENANT_A));
-    expect(lib.find((t) => t.code === LAUNCH_TEMPLATE_CODE)).toMatchObject({ isCurrent: true, updateAvailable: true, installedVersion: 1 });
+    expect(lib.find((t) => t.code === LAUNCH_TEMPLATE_CODE)).toMatchObject({ isCurrent: true, updateAvailable: true, installedVersion: 2 });
   });
 
   it("re-activating adds a version instead of deleting history, so the old design can be rolled back", async () => {
@@ -295,6 +324,60 @@ describe("platform template management", () => {
 
   it("lists templates with draft status", async () => {
     const list = await listThemeTemplates(platform, OWNER_STAFF);
-    expect(list.find((t) => t.code === LAUNCH_TEMPLATE_CODE)?.version).toBe(2);
+    expect(list.find((t) => t.code === LAUNCH_TEMPLATE_CODE)?.version).toBe(3);
+  });
+});
+
+describe("theme builder: every page of a theme", () => {
+  it("a blank new theme starts with a valid layout for every page and editable tokens", async () => {
+    const created = await createThemeTemplate(platform, OWNER_STAFF, { name: "Blank Starter" });
+    expect(Object.keys(created.draftPages).sort()).toEqual(["collection", "footer", "header", "home", "product"]);
+    expect(created.draftTokens).toMatchObject({ colors: { primary: expect.any(String) }, fonts: { heading: expect.any(String) }, buttons: { style: "solid" } });
+    for (const blocks of Object.values(created.draftPages)) {
+      expect(validateBlockDocument({ version: 1, blocks }).success).toBe(true);
+    }
+  });
+
+  it("saves and publishes changed tokens and pages; stores get them on activation", async () => {
+    const created = await createThemeTemplate(platform, OWNER_STAFF, { name: "Sunset Shop", industry: "fashion" });
+    const tokens = { ...created.draftTokens, colors: { ...(created.draftTokens["colors"] as object), primary: "#c2410c" }, fonts: { heading: "Playfair Display", body: "Lora" }, radius: "full", buttons: { style: "outline", uppercase: true } };
+    const header = [{ id: "h1", type: "SiteHeader" as const, version: 1, props: { links: [{ label: "Sale", href: "/collections/sale" }], logoText: "Sunset" } }];
+    await saveThemeTemplateDraft(platform, OWNER_STAFF, { code: created.code, pages: { ...created.draftPages, header }, tokens });
+    await publishThemeTemplate(platform, OWNER_STAFF, created.code);
+
+    await activateTheme(web, ctxFor(TENANT_B), { code: created.code });
+    expect(await getStorefrontThemeTokens(web, storefrontCtx(TENANT_B))).toMatchObject({
+      source: "theme",
+      colors: { primary: "#c2410c" },
+      fonts: { heading: "Playfair Display" },
+      buttons: { style: "outline", uppercase: true },
+    });
+    const live = await getStorefrontThemePage(web, storefrontCtx(TENANT_B), "header");
+    expect(live?.blocks[0]?.props["logoText"]).toBe("Sunset");
+    // Platform-side template is untouched by anything the store does.
+    const [tpl] = await rows<{ default_tokens: { colors: { primary: string } } }>(`select default_tokens from theme_templates where code = $1`, [created.code]);
+    expect(tpl?.default_tokens.colors.primary).toBe("#c2410c");
+  });
+
+  it("switching to a theme without a product layout hides the previous theme's layout (built-in applies)", async () => {
+    const created = await createThemeTemplate(platform, OWNER_STAFF, { name: "Home Only" });
+    await saveThemeTemplateDraft(platform, OWNER_STAFF, { code: created.code, pages: { home: created.draftPages["home"]! }, tokens: created.draftTokens });
+    await publishThemeTemplate(platform, OWNER_STAFF, created.code);
+
+    expect(await getStorefrontThemePage(web, storefrontCtx(TENANT_B), "footer")).not.toBeNull(); // from the previous theme
+    await activateTheme(web, ctxFor(TENANT_B), { code: created.code });
+    for (const key of ["header", "footer", "product", "collection"] as const) {
+      expect(await getStorefrontThemePage(web, storefrontCtx(TENANT_B), key), key).toBeNull();
+    }
+    // History is kept, not deleted.
+    const kept = await rows(`select 1 from pages where tenant_id = $1 and type in ('header','footer','product_template','collection_template')`, [TENANT_B]);
+    expect(kept.length).toBe(4);
+  });
+
+  it("preview returns every page and the theme's own tokens", async () => {
+    const { previewThemeTemplate } = await import("../src/index.ts");
+    const res = await previewThemeTemplate(web, ctxFor(TENANT_A), { code: LAUNCH_TEMPLATE_CODE });
+    expect(Object.keys(res.pages)).toContain("home");
+    expect(res.tokens).toBeTruthy();
   });
 });

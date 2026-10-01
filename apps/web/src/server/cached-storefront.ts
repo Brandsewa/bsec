@@ -8,6 +8,10 @@ import {
   getStorefrontHomePage,
   getStorefrontPage,
   getBrandSettings,
+  getStorefrontThemePage,
+  getStorefrontThemeTokens,
+  THEME_SYSTEM_PAGES,
+  type ThemeSystemPageKey,
   resolvePageRenderData,
   getStoreSettings,
   type CatalogListingOptions,
@@ -169,4 +173,29 @@ export async function getCachedStoreName(tenantId: string): Promise<string> {
   const { rt } = server();
   const settings = await getStoreSettings(rt, createStorefrontTenantContext(tenantId));
   return settings.storeName;
+}
+
+/**
+ * A store's header, footer, product or collection layout (published blocks plus the data its
+ * widgets need), or null when the store has none and the built-in layout applies. Tagged with
+ * the page's own tag so publishing it in the editor refreshes every page that uses it.
+ */
+export async function getCachedThemePage(tenantId: string, key: ThemeSystemPageKey) {
+  "use cache";
+  cacheTag(tenantTag(tenantId, "page", THEME_SYSTEM_PAGES[key].slug));
+  const { rt } = server();
+  const tenantCtx = createStorefrontTenantContext(tenantId);
+  const page = await getStorefrontThemePage(rt, tenantCtx, key);
+  if (!page) return null;
+  const renderData = await loadRenderData(tenantId, tenantCtx, { version: 1, blocks: page.blocks });
+  return { blocks: page.blocks, renderData };
+}
+
+/** Theme tokens when the store uses the theme system (see THEME_TOKENS_SOURCE), else null. */
+export async function getCachedThemeTokens(tenantId: string) {
+  "use cache";
+  cacheTag(tenantTag(tenantId, "theme"));
+  cacheTag(tenantTag(tenantId, "store-shell"));
+  const { rt } = server();
+  return getStorefrontThemeTokens(rt, createStorefrontTenantContext(tenantId));
 }

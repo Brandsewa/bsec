@@ -1,5 +1,5 @@
 import type { BlockEditorHost, MediaAsset } from "@bs/block-editor/preview";
-import { computeThemeTokens } from "@bs/blocks";
+import { resolveThemeTokens } from "@bs/blocks";
 import type { BrandSettings, Theme } from "@bs/contracts";
 import { client } from "../../lib/orpc.ts";
 
@@ -40,5 +40,5 @@ export const storeHost: BlockEditorHost & {
 
 /** --bs-* CSS variables for the store's current branding, so previews match the storefront. */
 export function themeVarsFor(brand: BrandSettings | undefined, theme: Theme | undefined): Record<string, string> {
-  return computeThemeTokens(brand ?? null, (theme?.tokens ?? null) as never);
+  return resolveThemeTokens(brand ?? null, (theme?.tokens ?? null) as never);
 }
