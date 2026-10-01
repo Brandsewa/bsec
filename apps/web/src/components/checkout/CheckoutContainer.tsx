@@ -1,6 +1,7 @@
 "use client";
 
 import React, { useState } from "react";
+import { useRouter } from "next/navigation";
 import type { StorefrontCart } from "@bs/domain";
 import { CheckoutForm, type CheckoutShippingRate, type CheckoutPaymentOptions } from "./CheckoutForm.tsx";
 import { OrderSummary } from "./OrderSummary.tsx";
@@ -14,6 +15,7 @@ export interface CheckoutContainerProps {
 }
 
 export function CheckoutContainer({ cart, shippingRates, paymentOptions }: CheckoutContainerProps) {
+  const router = useRouter();
   const [shippingMethod, setShippingMethod] = useState<string>(shippingRates[0]?.method ?? "");
 
   const [paymentMethod, setPaymentMethod] = useState<"cod" | "online">(paymentOptions.codEnabled ? "cod" : "online");
@@ -38,7 +40,7 @@ export function CheckoutContainer({ cart, shippingRates, paymentOptions }: Check
 
       {/* Order review & totals */}
       <div className="lg:col-span-5">
-        <OrderSummary cart={cart} shippingPaise={shippingPaise} codFeePaise={codFeePaise} />
+        <OrderSummary cart={cart} shippingPaise={shippingPaise} codFeePaise={codFeePaise} onCartChange={() => router.refresh()} />
       </div>
     </div>
   );

@@ -1,10 +1,11 @@
 import { and, eq, sql, inArray } from "drizzle-orm";
 import { STOREFRONT_PRODUCT_STATUSES } from "./product-status.ts";
-import { schema, withTenant } from "@bs/db";
+import { schema, withTenant, type Db } from "@bs/db";
 import type { Runtime } from "../runtime.ts";
 import type { TenantContext } from "../context.ts";
 import { getTenantShippingRates } from "../orders/shipping-rates.ts";
 import { publicMediaUrl } from "../media/storage.ts";
+import { evaluateDiscount } from "../orders/discounts.ts";
 
 export interface StorefrontCartItem {
   id: string;
@@ -35,6 +36,17 @@ export interface StorefrontCartItem {
   updatedAt: string;
 }
 
+/** A discount code that is on the cart and still valid for it. */
+export interface CartDiscount {
+  discountId: string;
+  code: string;
+  title: string;
+  type: string;
+  /** Goods discount in paise (0 for free shipping). */
+  amount: number;
+  freeShipping: boolean;
+}
+
 export interface StorefrontCart {
   id: string;
   token: string;
@@ -42,6 +54,10 @@ export interface StorefrontCart {
   items: StorefrontCartItem[];
   itemCount: number;
   subtotal: number;
+  /** The applied code, if it is still valid for this cart. */
+  discount?: CartDiscount | null | undefined;
+  /** Set when a code that was applied is no longer valid (expired, minimum no longer met...): the shopper must remove or fix it. */
+  discountNotice?: string | null | undefined;
   lastActivityAt: string;
   createdAt: string;
 }
@@ -187,6 +203,27 @@ async function loadCartWithItems(
     };
   });
 
+  // The code on the cart is re-checked on every read, so a code that expires or whose minimum is no longer met
+  // never silently stays applied.
+  let discount: CartDiscount | null = null;
+  let discountNotice: string | null = null;
+  const appliedCode = cartRecord.discountCodes?.[0];
+  if (appliedCode) {
+    const res = await evaluateDiscount(tx as unknown as Db, cartRecord.tenantId as string, { code: appliedCode, cartSubtotal: subtotal, cartTotalQty: itemCount });
+    if (res.valid && res.discountId) {
+      discount = {
+        discountId: res.discountId,
+        code: res.code ?? appliedCode,
+        title: res.title ?? appliedCode,
+        type: res.type ?? "",
+        amount: res.discountAmount,
+        freeShipping: Boolean(res.freeShipping),
+      };
+    } else {
+      discountNotice = `Code ${appliedCode} can't be used: ${res.reason ?? "no longer valid"}`;
+    }
+  }
+
   return {
     id: cartRecord.id,
     token: cartRecord.token,
@@ -194,6 +231,8 @@ async function loadCartWithItems(
     items,
     itemCount,
     subtotal,
+    discount,
+    discountNotice,
     lastActivityAt:
       cartRecord.lastActivityAt instanceof Date
         ? cartRecord.lastActivityAt.toISOString()
@@ -510,4 +549,46 @@ export async function estimateCartShipping(
       estimatedDays: r.estimatedDays,
     })),
   };
+}
+
+/**
+ * Puts a discount code on the cart (one code at a time: a new code replaces the old one). The code must be valid for
+ * the cart right now; otherwise the shopper gets the reason and the cart is unchanged.
+ */
+export async function applyCartDiscount(rt: Runtime, ctx: TenantContext, input: { token: string; code: string }): Promise<StorefrontCart> {
+  const code = input.code.trim();
+  if (!code) throw new Error("Bad Request: enter a discount code");
+  if (code.length > 64) throw new Error("Bad Request: that discount code is too long");
+
+  return withTenant(rt._db.db, ctx.tenantId, async (tx) => {
+    const [cartRecord] = await tx.select().from(schema.carts).where(eq(schema.carts.token, input.token)).limit(1);
+    if (!cartRecord) throw new Error("Not Found: cart not found");
+
+    // evaluate against the cart as it is (without the old code)
+    const current = await loadCartWithItems(tx, { ...cartRecord, discountCodes: [] });
+    if (current.items.length === 0) throw new Error("Bad Request: add something to your cart first");
+    const res = await evaluateDiscount(tx as unknown as Db, ctx.tenantId, { code, cartSubtotal: current.subtotal, cartTotalQty: current.itemCount });
+    if (!res.valid) throw new Error(`Bad Request: ${res.reason ?? "this code can't be used"}`);
+
+    const [updated] = await tx
+      .update(schema.carts)
+      .set({ discountCodes: [res.code ?? code], lastActivityAt: new Date() })
+      .where(eq(schema.carts.id, cartRecord.id))
+      .returning();
+    return loadCartWithItems(tx, updated ?? cartRecord);
+  });
+}
+
+/** Takes any discount code off the cart. */
+export async function removeCartDiscount(rt: Runtime, ctx: TenantContext, input: { token: string }): Promise<StorefrontCart> {
+  return withTenant(rt._db.db, ctx.tenantId, async (tx) => {
+    const [cartRecord] = await tx.select().from(schema.carts).where(eq(schema.carts.token, input.token)).limit(1);
+    if (!cartRecord) throw new Error("Not Found: cart not found");
+    const [updated] = await tx
+      .update(schema.carts)
+      .set({ discountCodes: [], lastActivityAt: new Date() })
+      .where(eq(schema.carts.id, cartRecord.id))
+      .returning();
+    return loadCartWithItems(tx, updated ?? cartRecord);
+  });
 }

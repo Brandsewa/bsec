@@ -73,6 +73,12 @@ export default async function OrderTrackingPage({ params }: OrderTrackingPagePro
             <span>Subtotal</span>
             <span>₹{(order.subtotal / 100).toFixed(2)}</span>
           </div>
+          {(order.discountTotal ?? 0) > 0 && (
+            <div className="flex justify-between text-muted-foreground">
+              <span>Discount</span>
+              <span>−₹{((order.discountTotal ?? 0) / 100).toFixed(2)}</span>
+            </div>
+          )}
           {order.shippingTotal > 0 && (
             <div className="flex justify-between text-muted-foreground">
               <span>Shipping</span>

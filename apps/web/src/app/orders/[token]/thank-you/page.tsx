@@ -77,6 +77,12 @@ export default async function ThankYouPage({ params }: ThankYouPageProps) {
             <span className="text-muted-foreground">Payment:</span>
             <span className="font-medium text-foreground">{cancelled ? "No payment due" : describePayment(order.paymentStatus)}</span>
           </div>
+          {(order.discountTotal ?? 0) > 0 && (
+            <div className="flex justify-between">
+              <span className="text-muted-foreground">Discount:</span>
+              <span className="font-medium text-emerald-700">−{inr(order.discountTotal ?? 0)}</span>
+            </div>
+          )}
           <div className="flex justify-between">
             <span className="text-muted-foreground">Total:</span>
             <span className="font-bold text-foreground">{inr(order.grandTotal)}</span>

@@ -20,6 +20,8 @@ export interface CustomerOrderSummary {
   paymentStatus: string;
   fulfillmentStatus: string;
   subtotal: number;
+  /** Goods discount from a code (0 when none). */
+  discountTotal?: number | undefined;
   shippingTotal: number;
   grandTotal: number;
   placedAt: Date;
@@ -102,6 +104,7 @@ export async function getCustomerOrderDetail(
       paymentStatus: order.paymentStatus,
       fulfillmentStatus: order.fulfillmentStatus,
       subtotal: order.subtotal,
+      discountTotal: Number(order.discountTotal ?? 0),
       shippingTotal: order.shippingTotal,
       grandTotal: order.grandTotal,
       placedAt: order.placedAt,
@@ -175,6 +178,7 @@ export async function getOrderByActionToken(
       paymentStatus: order.paymentStatus,
       fulfillmentStatus: order.fulfillmentStatus,
       subtotal: order.subtotal,
+      discountTotal: Number(order.discountTotal ?? 0),
       shippingTotal: order.shippingTotal,
       grandTotal: order.grandTotal,
       placedAt: order.placedAt,

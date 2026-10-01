@@ -43,6 +43,7 @@ export * from "./orders/fulfillment-state-machine.ts";
 export * from "./orders/return-state-machine.ts";
 export * from "./orders/invoices.ts";
 export * from "./orders/discounts.ts";
+export * from "./orders/pricing.ts";
 export * from "./admin/orders.ts";
 export * from "./admin/customers.ts";
 export * from "./admin/discounts.ts";
