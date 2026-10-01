@@ -1,21 +1,14 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { AlertTriangle, CheckCircle2, Image as ImageIcon, RotateCcw, Save, ShieldCheck, Sparkles, Upload } from "lucide-react";
+import { AlertTriangle, CheckCircle2, Image as ImageIcon, RotateCcw, Save, ShieldCheck, Upload } from "lucide-react";
 import { useId, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import {
-  Button,
-  FormSkeleton,
-  Input,
-  Label,
-  MetricCard,
-  MetricCardSkeleton,
-  PageBreadcrumbs,
-  PageContainer,
-  PageHeader,
-  PageSection,
-  PageSkeleton,
-  toast,
-} from "@bs/ui";
+import { FormSkeleton, PageSkeleton, toast } from "@bs/ui";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { FieldLabel } from "@/components/ui/field";
+import { Field } from "../../../components/field.tsx";
+import { HeaderActions, SettingsPageFrame, SettingsSection, useUnsavedGuard } from "../../../components/settings/settings-page.tsx";
+import { SimpleSelect } from "../../../components/simple-select.tsx";
 import type { BrandSettings } from "@bs/contracts";
 import { client, orpc } from "../../../lib/orpc.ts";
 
@@ -128,19 +121,16 @@ function fromServer(b: BrandSettings, storeName: string): FormState {
 
 function BrandingLoading() {
   return (
-    <PageSkeleton>
-      <div className="grid gap-4 sm:grid-cols-3">
-        <MetricCardSkeleton />
-        <MetricCardSkeleton />
-        <MetricCardSkeleton />
-      </div>
-      <FormSkeleton fields={6} />
-    </PageSkeleton>
+    <SettingsPageFrame title="Branding" description="Logos, colours and typography." width="wide">
+      <SettingsSection>
+        <FormSkeleton fields={6} />
+      </SettingsSection>
+    </SettingsPageFrame>
   );
 }
 
 export const Route = createFileRoute("/_store/settings/branding")({
-  pendingComponent: () => <BrandingLoading />,
+  pendingComponent: () => <PageSkeleton />,
   component: BrandingSettingsPage,
 });
 
@@ -152,23 +142,24 @@ export function BrandingSettingsPage() {
   const failed = brandQuery.isError ? brandQuery : settingsQuery.isError ? settingsQuery : null;
   if (failed) {
     return (
-      <PageContainer>
-        <PageBreadcrumbs items={[{ label: "Settings", href: "/settings" }, { label: "Branding" }]} />
-        <div role="alert" className="flex flex-col items-start gap-3 rounded-md border border-destructive/40 bg-destructive/5 p-4">
-          <p className="text-sm font-medium text-foreground">Could not load branding settings</p>
-          <p className="text-sm text-foreground-light">{failed.error?.message}</p>
-          <Button
-            size="sm"
-            onClick={() => {
-              void brandQuery.refetch();
-              void settingsQuery.refetch();
-            }}
-          >
-            <RotateCcw className="size-3.5" aria-hidden />
-            Retry
-          </Button>
-        </div>
-      </PageContainer>
+      <SettingsPageFrame title="Branding" description="Logos, colours and typography." width="wide">
+        <SettingsSection>
+          <div role="alert" className="flex flex-col items-start gap-3 rounded-md border border-destructive/40 bg-destructive/5 p-4">
+            <p className="text-xs font-medium text-foreground">Could not load branding settings</p>
+            <p className="text-xs text-muted-foreground">{failed.error?.message}</p>
+            <Button
+              size="sm"
+              onClick={() => {
+                void brandQuery.refetch();
+                void settingsQuery.refetch();
+              }}
+            >
+              <RotateCcw className="size-3.5" aria-hidden />
+              Retry
+            </Button>
+          </div>
+        </SettingsSection>
+      </SettingsPageFrame>
     );
   }
   if (!brandQuery.data || !settingsQuery.data) return <BrandingLoading />;
@@ -194,6 +185,7 @@ function BrandingEditor({ brand, storeName, media }: { brand: BrandSettings; sto
   const nameId = useId();
 
   const dirty = JSON.stringify(form) !== JSON.stringify(baseline);
+  const guard = useUnsavedGuard(dirty);
   const invalidColors = colorFields.filter((f) => !HEX.test(form[f.key]));
   const textBg = computeContrast(form.textColor, form.backgroundColor);
   const primaryBg = computeContrast(form.primaryColor, form.backgroundColor);
@@ -303,69 +295,54 @@ function BrandingEditor({ brand, storeName, media }: { brand: BrandSettings; sto
   const previewFont = form.fontBody;
 
   return (
-    <PageContainer size="full">
-      <PageBreadcrumbs
-        items={[{ label: "Settings", href: "/settings" }, { label: "Branding" }]}
-        actions={
-          <div className="flex items-center gap-2">
-            <Button size="sm" disabled={!dirty || busy} onClick={() => setForm(baseline)}>
-              <RotateCcw className="mr-1.5 size-3.5" aria-hidden />
-              Discard changes
-            </Button>
-            <Button size="sm" loading={updateBrand.isPending || updateSettings.isPending} disabled={!dirty || busy} onClick={() => void handleSave()}>
-              <Save className="mr-1.5 size-3.5" aria-hidden />
-              Save branding
-            </Button>
-            <Button size="sm" variant="primary" loading={publishBrand.isPending} disabled={busy} onClick={() => void handlePublish()}>
-              <Upload className="mr-1.5 size-3.5" aria-hidden />
-              Publish
-            </Button>
-          </div>
-        }
-      />
+    <SettingsPageFrame
+      title="Branding & visual identity"
+      width="wide"
+      description={`Logos, colours and typography. Published version ${brand.version}${brand.publishedAt ? `, last published ${new Date(brand.publishedAt).toLocaleDateString()}` : ", not published yet"}.`}
+    >
+      {guard}
+      <HeaderActions>
+        <Button variant="outline" disabled={!dirty || busy} onClick={() => setForm(baseline)}>
+          <RotateCcw className="mr-1.5 size-3.5" aria-hidden />
+          Discard
+        </Button>
+        <Button variant="outline" disabled={!dirty || busy} onClick={() => void handleSave()}>
+          <Save className="mr-1.5 size-3.5" aria-hidden />
+          {updateBrand.isPending || updateSettings.isPending ? "Saving…" : "Save branding"}
+        </Button>
+        <Button disabled={busy} onClick={() => void handlePublish()}>
+          <Upload className="mr-1.5 size-3.5" aria-hidden />
+          {publishBrand.isPending ? "Publishing…" : "Publish"}
+        </Button>
+      </HeaderActions>
 
-      <PageHeader
-        title="Branding & Visual Identity"
-        description={`Logos, colours and typography. Published version ${brand.version}${brand.publishedAt ? `, last published ${new Date(brand.publishedAt).toLocaleDateString()}` : ", not published yet"}.`}
-      />
-
-      <div className="grid gap-4 sm:grid-cols-3">
-        <MetricCard label="Store" value={form.storeName || "Not set"} icon={Sparkles} />
-        <MetricCard
-          label="Text / Bg Contrast"
-          value={`${textBg.toFixed(2)}:1`}
-          change={{ value: textPass ? "WCAG AA Pass" : "Fails AA (<4.5)", trend: textPass ? "up" : "down" }}
-        />
-        <MetricCard label="Heading font" value={form.fontHeading} change={{ value: `Body: ${form.fontBody}`, trend: "neutral" }} />
-      </div>
-
-      <div className="grid gap-6 lg:grid-cols-12">
-        <div className="space-y-6 lg:col-span-7">
-          <PageSection title="Store identity & images">
-            <div className="space-y-4">
-              <div className="space-y-1">
-                <Label htmlFor={nameId}>Store name</Label>
+      <div className="grid lg:grid-cols-12 lg:divide-x lg:divide-border">
+        <div className="lg:col-span-7">
+          <SettingsSection title="Store identity & images">
+            <div className="space-y-3">
+              <div className="grid gap-1.5">
+                <FieldLabel htmlFor={nameId}>Store name</FieldLabel>
                 <Input id={nameId} value={form.storeName} aria-invalid={!form.storeName.trim()} onChange={(e) => set("storeName", e.target.value)} required />
-                {form.storeName.trim() ? null : <p className="text-xs text-destructive">Store name is required</p>}
+                {form.storeName.trim() ? null : <p className="text-destructive">Store name is required</p>}
               </div>
-              <p className="text-xs text-foreground-lighter">A tagline is not stored by the backend yet, so it is not editable here.</p>
+              <p className="text-xs text-muted-foreground">A tagline is not stored by the backend yet, so it is not editable here.</p>
 
-              <div className="grid gap-4 sm:grid-cols-2">
+              <div className="grid gap-3 sm:grid-cols-2">
                 {IMAGE_SLOTS.map((slot) => {
                   const id = form[slot.key];
                   const url = urlFor(id);
                   return (
                     <div key={slot.key} className="space-y-2">
-                      <span className="text-sm font-medium text-foreground-light">{slot.label}</span>
+                      <span className="text-xs font-medium text-foreground">{slot.label}</span>
                       <div className="flex h-16 items-center justify-center rounded-lg border border-border bg-white p-2">
                         {url ? (
                           <img src={url} alt={`${slot.label} preview`} className="max-h-12 max-w-full object-contain" />
                         ) : (
-                          <ImageIcon className="size-6 text-foreground-lighter" aria-hidden />
+                          <ImageIcon className="size-6 text-muted-foreground" aria-hidden />
                         )}
                       </div>
                       <div className="flex items-center gap-2">
-                        <label className="inline-flex h-8 cursor-pointer items-center gap-1.5 rounded-md border border-border-control bg-control px-3 text-sm font-medium hover:bg-surface-200">
+                        <label className="inline-flex h-7 cursor-pointer items-center gap-1.5 rounded-md border border-border bg-background px-2.5 text-xs font-medium hover:bg-muted">
                           <Upload className="size-3.5" aria-hidden />
                           {uploading === slot.key ? "Uploading..." : id ? "Replace" : "Upload"}
                           <input
@@ -391,8 +368,8 @@ function BrandingEditor({ brand, storeName, media }: { brand: BrandSettings; sto
                 })}
               </div>
 
-              <div className="space-y-1">
-                <Label htmlFor="logo-width">Logo width (px)</Label>
+              <div className="grid gap-1.5">
+                <FieldLabel htmlFor="logo-width">Logo width (px)</FieldLabel>
                 <Input
                   id="logo-width"
                   type="number"
@@ -403,23 +380,23 @@ function BrandingEditor({ brand, storeName, media }: { brand: BrandSettings; sto
                 />
               </div>
             </div>
-          </PageSection>
+          </SettingsSection>
 
-          <PageSection title="Brand colours">
-            <div className="grid gap-4 sm:grid-cols-2">
+          <SettingsSection title="Brand colours">
+            <div className="grid gap-3 sm:grid-cols-2">
               {colorFields.map((f) => {
                 const value = form[f.key as ColorKey];
                 const valid = HEX.test(value);
                 return (
-                  <div key={f.key} className="space-y-1">
-                    <Label htmlFor={f.key}>{f.label}</Label>
+                  <div key={f.key} className="grid gap-1.5">
+                    <FieldLabel htmlFor={f.key}>{f.label}</FieldLabel>
                     <div className="flex items-center gap-2">
                       <input
                         id={f.key}
                         type="color"
                         value={valid && value.length === 7 ? value : "#000000"}
                         onChange={(e) => set(f.key, e.target.value)}
-                        className="size-9 cursor-pointer rounded border border-border"
+                        className="size-7 cursor-pointer rounded border border-border"
                       />
                       <Input aria-label={`${f.label} hex value`} value={value} aria-invalid={!valid} onChange={(e) => set(f.key, e.target.value)} className="font-mono" />
                     </div>
@@ -428,73 +405,80 @@ function BrandingEditor({ brand, storeName, media }: { brand: BrandSettings; sto
                 );
               })}
             </div>
-            <div className="mt-4 flex flex-wrap gap-4">
-              <div className="space-y-1">
-                <Label htmlFor="color-mode">Colour mode</Label>
-                <select id="color-mode" value={form.colorMode} onChange={(e) => set("colorMode", e.target.value as FormState["colorMode"])} className="h-9 rounded-md border border-border-control bg-control px-2 text-sm">
-                  <option value="light">Light</option>
-                  <option value="dark">Dark</option>
-                  <option value="auto">Match visitor device</option>
-                </select>
-              </div>
-              <div className="space-y-1">
-                <Label htmlFor="corner-radius">Corner radius</Label>
-                <select id="corner-radius" value={form.cornerRadius} onChange={(e) => set("cornerRadius", e.target.value as FormState["cornerRadius"])} className="h-9 rounded-md border border-border-control bg-control px-2 text-sm">
-                  {(["none", "small", "medium", "large", "full"] as const).map((r) => (
-                    <option key={r} value={r}>
-                      {r}
-                    </option>
-                  ))}
-                </select>
-              </div>
-              <div className="space-y-1">
-                <Label htmlFor="button-style">Button style</Label>
-                <select id="button-style" value={form.buttonStyle} onChange={(e) => set("buttonStyle", e.target.value as FormState["buttonStyle"])} className="h-9 rounded-md border border-border-control bg-control px-2 text-sm">
-                  {(["solid", "outline", "pill"] as const).map((r) => (
-                    <option key={r} value={r}>
-                      {r}
-                    </option>
-                  ))}
-                </select>
-              </div>
+            <div className="mt-4 flex flex-wrap gap-3">
+              <Field id="color-mode" label="Colour mode">
+                <SimpleSelect
+                  id="color-mode"
+                  className="w-44"
+                  value={form.colorMode}
+                  onChange={(v) => set("colorMode", v as FormState["colorMode"])}
+                  options={[
+                    { value: "light", label: "Light" },
+                    { value: "dark", label: "Dark" },
+                    { value: "auto", label: "Match visitor device" },
+                  ]}
+                />
+              </Field>
+              <Field id="corner-radius" label="Corner radius">
+                <SimpleSelect
+                  id="corner-radius"
+                  className="w-32"
+                  value={form.cornerRadius}
+                  onChange={(v) => set("cornerRadius", v as FormState["cornerRadius"])}
+                  options={(["none", "small", "medium", "large", "full"] as const).map((r) => ({ value: r, label: r }))}
+                />
+              </Field>
+              <Field id="button-style" label="Button style">
+                <SimpleSelect
+                  id="button-style"
+                  className="w-32"
+                  value={form.buttonStyle}
+                  onChange={(v) => set("buttonStyle", v as FormState["buttonStyle"])}
+                  options={(["solid", "outline", "pill"] as const).map((r) => ({ value: r, label: r }))}
+                />
+              </Field>
             </div>
-          </PageSection>
+          </SettingsSection>
 
-          <PageSection title="Typography">
-            <div className="grid gap-4 sm:grid-cols-3">
+          <SettingsSection title="Typography">
+            <div className="grid gap-3 sm:grid-cols-3">
               {(
                 [
                   { key: "fontHeading", label: "Heading font" },
                   { key: "fontBody", label: "Body font" },
                 ] as const
               ).map((f) => (
-                <div key={f.key} className="space-y-1">
-                  <Label htmlFor={f.key}>{f.label}</Label>
-                  <select id={f.key} value={form[f.key]} onChange={(e) => set(f.key, e.target.value)} className="h-9 w-full rounded-md border border-border-control bg-control px-2 text-sm">
-                    {!curatedFonts.some((c) => c.id === form[f.key]) ? <option value={form[f.key]}>{form[f.key]}</option> : null}
-                    {curatedFonts.map((c) => (
-                      <option key={c.id} value={c.id}>
-                        {c.name} ({c.category}){c.devanagari ? " - Devanagari" : ""}
-                      </option>
-                    ))}
-                  </select>
-                </div>
+                <Field key={f.key} id={f.key} label={f.label}>
+                  <SimpleSelect
+                    id={f.key}
+                    value={form[f.key]}
+                    onChange={(v) => set(f.key, v)}
+                    options={[
+                      ...(curatedFonts.some((c) => c.id === form[f.key]) ? [] : [{ value: form[f.key], label: form[f.key] }]),
+                      ...curatedFonts.map((c) => ({ value: c.id, label: `${c.name} (${c.category})${c.devanagari ? " - Devanagari" : ""}` })),
+                    ]}
+                  />
+                </Field>
               ))}
-              <div className="space-y-1">
-                <Label htmlFor="font-scale">Text size</Label>
-                <select id="font-scale" value={form.fontSizeScale} onChange={(e) => set("fontSizeScale", e.target.value)} className="h-9 w-full rounded-md border border-border-control bg-control px-2 text-sm">
-                  {!["small", "default", "large"].includes(form.fontSizeScale) ? <option value={form.fontSizeScale}>{form.fontSizeScale}</option> : null}
-                  <option value="small">Small</option>
-                  <option value="default">Default</option>
-                  <option value="large">Large</option>
-                </select>
-              </div>
+              <Field id="font-scale" label="Text size">
+                <SimpleSelect
+                  id="font-scale"
+                  value={form.fontSizeScale}
+                  onChange={(v) => set("fontSizeScale", v)}
+                  options={[
+                    ...(["small", "default", "large"].includes(form.fontSizeScale) ? [] : [{ value: form.fontSizeScale, label: form.fontSizeScale }]),
+                    { value: "small", label: "Small" },
+                    { value: "default", label: "Default" },
+                    { value: "large", label: "Large" },
+                  ]}
+                />
+              </Field>
             </div>
-          </PageSection>
+          </SettingsSection>
         </div>
 
-        <div className="space-y-6 lg:col-span-5">
-          <PageSection title="Accessibility check" description="Computed from the colours above (WCAG AA needs 4.5:1).">
+        <div className="border-t border-border lg:col-span-5 lg:border-t-0">
+          <SettingsSection title="Accessibility check" description="Computed from the colours above (WCAG AA needs 4.5:1).">
             <div className="space-y-3">
               {(
                 [
@@ -502,24 +486,24 @@ function BrandingEditor({ brand, storeName, media }: { brand: BrandSettings; sto
                   { label: "Primary on background", ratio: primaryBg, pass: primaryPass },
                 ] as const
               ).map((row) => (
-                <div key={row.label} className="flex items-center justify-between rounded-md border border-border p-3 text-sm">
+                <div key={row.label} className="flex items-center justify-between rounded-md border border-border p-3 text-xs">
                   <span className="flex items-center gap-2">
                     {row.pass ? <CheckCircle2 className="size-4 text-emerald-500" aria-hidden /> : <AlertTriangle className="size-4 text-amber-500" aria-hidden />}
                     {row.label}
                   </span>
-                  <span className="font-mono">{row.ratio.toFixed(2)}:1</span>
+                  <span className="font-mono">{`${row.ratio.toFixed(2)}:1`}</span>
                 </div>
               ))}
               {textPass ? null : (
-                <Button size="sm" onClick={fixTextColor}>
+                <Button size="sm" variant="outline" onClick={fixTextColor}>
                   <ShieldCheck className="mr-1.5 size-3.5" aria-hidden />
                   Fix text colour
                 </Button>
               )}
             </div>
-          </PageSection>
+          </SettingsSection>
 
-          <PageSection title="Preview">
+          <SettingsSection title="Preview">
             <div
               className="overflow-hidden rounded-lg border border-border"
               style={{ backgroundColor: form.backgroundColor, color: form.textColor, fontFamily: previewFont }}
@@ -548,9 +532,9 @@ function BrandingEditor({ brand, storeName, media }: { brand: BrandSettings; sto
                 </span>
               </div>
             </div>
-          </PageSection>
+          </SettingsSection>
         </div>
       </div>
-    </PageContainer>
+    </SettingsPageFrame>
   );
 }

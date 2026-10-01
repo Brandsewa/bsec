@@ -2,11 +2,18 @@ import { describe, expect, it } from "vitest";
 import React from "react";
 import { renderToString } from "react-dom/server";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import { createMemoryHistory, createRootRoute, createRouter, RouterProvider } from "@tanstack/react-router";
 
 const SAMPLE_TEXT = ["Acme", "Nepal", "Kathmandu", "Pokhara", "Free shipping across"];
 
 function render(client: QueryClient, component: React.ComponentType): string {
   return renderToString(React.createElement(QueryClientProvider, { client }, React.createElement(component)));
+}
+/** Settings sections guard unsaved changes through the router, so they render inside an in-memory one. */
+async function renderRouted(client: QueryClient, Page: () => React.ReactNode): Promise<string> {
+  const router = createRouter({ routeTree: createRootRoute({ component: Page }), history: createMemoryHistory({ initialEntries: ["/"] }) });
+  await router.load();
+  return renderToString(React.createElement(QueryClientProvider, { client }, React.createElement(RouterProvider, { router })));
 }
 const newClient = () => new QueryClient({ defaultOptions: { queries: { retry: false } } });
 
@@ -157,7 +164,7 @@ describe("Online store admin pages use real oRPC data", { timeout: 30000 }, () =
       items: [],
       total: 0,
     });
-    const html = render(client, BrandingSettingsPage);
+    const html = await renderRouted(client, BrandingSettingsPage);
     expect(html).toContain("Saree Studio");
     expect(html).toContain("#7c3aed");
     expect(html).toContain("21.00:1");

@@ -82,14 +82,18 @@ test("the demo store shows real products, orders, customers and discounts", asyn
 test("tax settings persist across a reload", async ({ page }) => {
   await signIn(page);
   await openDemoStore(page);
+  // Settings is one workspace: open it from the main sidebar, then pick the section on its left.
+  await page.getByRole("link", { name: "Settings", exact: true }).click();
   await page.getByRole("link", { name: "Taxes" }).click();
-  await page.getByLabel("Your state (place of supply)").selectOption("Maharashtra");
+  await page.getByLabel("Your state (place of supply)").click();
+  await page.getByRole("option", { name: "Maharashtra" }).click();
   await page.getByRole("button", { name: "Save changes" }).click();
   await expect(page.getByText("Tax settings saved")).toBeVisible();
   await page.reload();
-  await expect(page.getByLabel("Your state (place of supply)")).toHaveValue("Maharashtra");
+  await expect(page.getByLabel("Your state (place of supply)")).toContainText("Maharashtra");
   // put it back so re-runs start from the same state
-  await page.getByLabel("Your state (place of supply)").selectOption("Karnataka");
+  await page.getByLabel("Your state (place of supply)").click();
+  await page.getByRole("option", { name: "Karnataka" }).click();
   await page.getByRole("button", { name: "Save changes" }).click();
   await expect(page.getByText("Tax settings saved")).toBeVisible();
 });
@@ -98,6 +102,7 @@ test("team invite: create link, accept as a new person, they sign in and see the
   const inviteeEmail = `staff-${Date.now()}@e2e.example`;
   await signIn(page);
   await openDemoStore(page);
+  await page.getByRole("link", { name: "Settings", exact: true }).click();
   await page.getByRole("link", { name: "Team" }).click();
   await page.getByLabel("Email", { exact: true }).fill(inviteeEmail);
   await page.getByRole("button", { name: "Create invite" }).click();

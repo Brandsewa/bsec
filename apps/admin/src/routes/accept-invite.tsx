@@ -1,6 +1,9 @@
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useState, type FormEvent } from "react";
-import { Button, Input, Label, PageSkeleton } from "@bs/ui";
+import { PageSkeleton } from "@bs/ui";
+import { Button } from "@/components/ui/button";
+import { Field, FieldDescription, FieldError, FieldGroup, FieldLabel } from "@/components/ui/field";
+import { Input } from "@/components/ui/input";
 import { client } from "../lib/orpc.ts";
 import { errorMessage } from "../lib/errors.ts";
 import { apiBase } from "../lib/config.ts";
@@ -32,7 +35,7 @@ export function AcceptInvitePage() {
   if (!token) {
     return (
       <Shell title="Invitation link incomplete">
-        <p className="text-sm text-foreground-lighter">This link is missing an invitation token. Please check your invitation link or ask for a new invite.</p>
+        <FieldDescription>This link is missing an invitation token. Please check your invitation link or ask for a new invite.</FieldDescription>
       </Shell>
     );
   }
@@ -92,41 +95,39 @@ export function AcceptInvitePage() {
 
   return (
     <Shell title="Join the store">
-      <form onSubmit={onSubmit} className="grid gap-4">
-        {!showPassword ? (
-          <p className="text-sm text-foreground-lighter">
-            You will keep your existing password. After accepting, sign in with your usual email and password.
-          </p>
-        ) : (
-          <>
-            <div className="grid gap-1.5">
-              <Label htmlFor="name">Your name</Label>
-              <Input id="name" required value={name} onChange={(e) => setName(e.target.value)} />
-            </div>
-            <div className="grid gap-1.5">
-              <Label htmlFor="password">Choose a password</Label>
-              <Input id="password" type="password" autoComplete="new-password" required minLength={10} value={password} onChange={(e) => setPassword(e.target.value)} />
-              <p className="text-xs text-foreground-lighter">At least 10 characters.</p>
-            </div>
-            <div className="grid gap-1.5">
-              <Label htmlFor="confirm">Repeat password</Label>
-              <Input id="confirm" type="password" autoComplete="new-password" required value={confirm} onChange={(e) => setConfirm(e.target.value)} />
-            </div>
-          </>
-        )}
-        {error ? (
-          <p role="alert" className="text-sm text-destructive">
-            {error}
-          </p>
-        ) : null}
-        <Button type="submit" disabled={busy}>
-          {busy ? "Working…" : !showPassword ? "Accept invitation" : "Create account and join"}
-        </Button>
-        {store ? (
-          <button type="button" className="text-left text-xs text-foreground-lighter underline" onClick={() => setExisting((v) => !v)}>
-            {existing ? "I do not have an account yet" : "I already have an account with this email"}
-          </button>
-        ) : null}
+      <form onSubmit={onSubmit}>
+        <FieldGroup>
+          {!showPassword ? (
+            <FieldDescription>
+              You will keep your existing password. After accepting, sign in with your usual email and password.
+            </FieldDescription>
+          ) : (
+            <>
+              <Field>
+                <FieldLabel htmlFor="name">Your name</FieldLabel>
+                <Input id="name" required value={name} onChange={(e) => setName(e.target.value)} />
+              </Field>
+              <Field>
+                <FieldLabel htmlFor="password">Choose a password</FieldLabel>
+                <Input id="password" type="password" autoComplete="new-password" required minLength={10} value={password} onChange={(e) => setPassword(e.target.value)} />
+                <FieldDescription>At least 10 characters.</FieldDescription>
+              </Field>
+              <Field>
+                <FieldLabel htmlFor="confirm">Repeat password</FieldLabel>
+                <Input id="confirm" type="password" autoComplete="new-password" required value={confirm} onChange={(e) => setConfirm(e.target.value)} />
+              </Field>
+            </>
+          )}
+          {error ? <FieldError>{error}</FieldError> : null}
+          <Button type="submit" size="lg" disabled={busy}>
+            {busy ? "Working…" : !showPassword ? "Accept invitation" : "Create account and join"}
+          </Button>
+          {store ? (
+            <Button type="button" variant="link" size="sm" className="justify-start px-0 text-foreground-lighter" onClick={() => setExisting((v) => !v)}>
+              {existing ? "I do not have an account yet" : "I already have an account with this email"}
+            </Button>
+          ) : null}
+        </FieldGroup>
       </form>
     </Shell>
   );

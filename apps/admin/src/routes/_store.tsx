@@ -1,25 +1,20 @@
 import { Outlet, createFileRoute, redirect, useRouterState } from "@tanstack/react-router";
 import {
   BadgePercent,
-  RotateCcw,
-  CreditCard,
   FileText,
   Home,
-  Landmark,
   Menu,
   Package,
   Palette,
+  RotateCcw,
   Settings,
   ShoppingBag,
-  Sparkles,
-  Truck,
   Users,
-  UserCog,
-  LifeBuoy,
-  Store,
   Warehouse,
 } from "lucide-react";
-import { AppShell, Button, EmptyState, PageContainer, PageSkeleton, type NavGroup } from "@bs/ui";
+import { EmptyState, PageContainer, PageSkeleton, type NavGroup } from "@bs/ui";
+import { AppShell } from "@/components/app-shell";
+import { Button } from "@/components/ui/button";
 import { fetchMe, signOut } from "../lib/auth.ts";
 import { getActiveStoreId, setActiveStoreId } from "../lib/session.ts";
 import { clearSupportSession } from "../lib/support.ts";
@@ -58,17 +53,9 @@ const nav: GatedGroup[] = [
     ],
   },
   {
+    // One entry: the Settings workspace has its own section navigation.
     label: "Settings",
-    items: [
-      { label: "General", href: "/settings", icon: Settings, perm: "settings.write" },
-      { label: "Storefront", href: "/settings/storefront", icon: Store, perm: "settings.write" },
-      { label: "Branding", href: "/settings/branding", icon: Sparkles, perm: "settings.write" },
-      { label: "Shipping", href: "/settings/shipping", icon: Truck, perm: "settings.write" },
-      { label: "Payments", href: "/settings/payments", icon: CreditCard, perm: "settings.write" },
-      { label: "Taxes", href: "/settings/taxes", icon: Landmark, perm: "settings.write" },
-      { label: "Team", href: "/settings/team", icon: UserCog, perm: "staff.manage" },
-      { label: "Support access", href: "/settings/support", icon: LifeBuoy, perm: "settings.write" },
-    ],
+    items: [{ label: "Settings", href: "/settings", icon: Settings, perm: "settings.write" }],
   },
 ];
 
@@ -136,7 +123,7 @@ function StoreShell() {
               PLATFORM SUPPORT SESSION · {me.support.scope === "write" ? "read & WRITE access" : "read-only"} · ticket {me.support.ticketRef} · ends{" "}
               {new Date(me.support.expiresAt).toLocaleTimeString()} · everything you do here is recorded
             </span>
-            <Button size="sm" variant="default" onClick={onSignOut}>
+            <Button size="sm" variant="outline" onClick={onSignOut}>
               Leave support mode
             </Button>
           </div>

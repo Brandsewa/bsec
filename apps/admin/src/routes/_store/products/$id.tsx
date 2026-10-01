@@ -1,27 +1,16 @@
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { AlertTriangle, ArrowLeft, Archive, ImageIcon, Save, Trash2, Upload } from "lucide-react";
 import { useRef, useState } from "react";
-import {
-  Button,
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-  DetailSkeleton,
-  EmptyState,
-  Input,
-  Label,
-  PageBreadcrumbs,
-  PageContainer,
-  PageHeader,
-  PageSection,
-  PageSkeleton,
-  toast,
-} from "@bs/ui";
+import { DetailSkeleton, EmptyState, PageBreadcrumbs, PageContainer, PageHeader, PageSkeleton, toast } from "@bs/ui";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import type { ProductDetail } from "@bs/contracts";
+import { Button } from "@/components/ui/button";
+import { Checkbox } from "@/components/ui/checkbox";
+import { Field, FieldLabel } from "@/components/ui/field";
+import { Input } from "@/components/ui/input";
+import { Textarea } from "@/components/ui/textarea";
+import { SectionCard } from "../../../components/section-card.tsx";
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { orpc } from "../../../lib/orpc.ts";
 
 export const Route = createFileRoute("/_store/products/$id")({
@@ -42,9 +31,6 @@ function ProductDetailRoute() {
 const inr = new Intl.NumberFormat("en-IN", { style: "currency", currency: "INR" });
 const toPaise = (rupees: string) => Math.round(Number(rupees) * 100);
 const toRupees = (paise: number | null | undefined) => (paise == null ? "" : String(paise / 100));
-
-const textareaClass =
-  "w-full rounded-md border border-border bg-surface-100 px-3 py-2 text-sm text-foreground placeholder:text-foreground-muted focus:outline-none focus:ring-2 focus:ring-brand";
 
 function descriptionText(json: unknown): string {
   if (typeof json === "string") return json;
@@ -74,7 +60,7 @@ export function ProductDetailPage({ id, navigate }: { id: string; navigate?: (to
           description={query.error instanceof Error ? query.error.message : "The product could not be found."}
           action={
             <div className="flex gap-2">
-              <Button variant="default" size="sm" onClick={() => void query.refetch()}>
+              <Button variant="outline" size="sm" onClick={() => void query.refetch()}>
                 Retry
               </Button>
               <Button variant="ghost" size="sm" onClick={() => go("/products")}>
@@ -159,7 +145,7 @@ function ProductEditor({ product, go }: { product: ProductDetailData; go: (to: s
 
   const err = (k: string) =>
     errors[k] ? (
-      <p role="alert" className="text-xs text-rose-500">
+      <p role="alert" className="text-xs text-destructive">
         {errors[k]}
       </p>
     ) : null;
@@ -175,7 +161,7 @@ function ProductEditor({ product, go }: { product: ProductDetailData; go: (to: s
               Products
             </Button>
             <Button
-              variant="default"
+              variant="outline"
               size="sm"
               disabled={product.status === "archived" || updateMutation.isPending}
               onClick={() => save("archived")}
@@ -201,26 +187,26 @@ function ProductEditor({ product, go }: { product: ProductDetailData; go: (to: s
         className="grid gap-6"
         noValidate
       >
-        <PageSection title="Product Information" description="Title, URL and merchandising settings.">
+        <SectionCard title="Product Information" description="Title, URL and merchandising settings.">
           <div className="grid gap-4">
             <div className="grid gap-1.5">
-              <Label htmlFor="edit-title">Title *</Label>
+              <FieldLabel htmlFor="edit-title">Title *</FieldLabel>
               <Input id="edit-title" value={title} onChange={(e) => setTitle(e.target.value)} />
               {err("title")}
             </div>
             <div className="grid gap-1.5">
-              <Label htmlFor="edit-slug">Slug *</Label>
+              <FieldLabel htmlFor="edit-slug">Slug *</FieldLabel>
               <Input id="edit-slug" value={slug} onChange={(e) => setSlug(e.target.value)} />
               {err("slug")}
             </div>
             <div className="grid gap-1.5">
-              <Label htmlFor="edit-status">Status</Label>
+              <FieldLabel htmlFor="edit-status">Status</FieldLabel>
               <div id="edit-status" className="flex gap-2">
                 {(["draft", "active", "archived"] as const).map((s) => (
                   <Button
                     key={s}
                     type="button"
-                    variant={status === s ? "primary" : "default"}
+                    variant={status === s ? "default" : "outline"}
                     size="sm"
                     className="capitalize"
                     onClick={() => setStatus(s)}
@@ -231,21 +217,20 @@ function ProductEditor({ product, go }: { product: ProductDetailData; go: (to: s
               </div>
             </div>
             <div className="grid gap-1.5">
-              <Label htmlFor="edit-short">Short description</Label>
+              <FieldLabel htmlFor="edit-short">Short description</FieldLabel>
               <Input id="edit-short" value={shortDescription} onChange={(e) => setShortDescription(e.target.value)} />
             </div>
             <div className="grid gap-1.5">
-              <Label htmlFor="edit-desc">Description</Label>
-              <textarea
+              <FieldLabel htmlFor="edit-desc">Description</FieldLabel>
+              <Textarea
                 id="edit-desc"
                 rows={5}
-                className={textareaClass}
-                value={description}
+                  value={description}
                 onChange={(e) => setDescription(e.target.value)}
               />
             </div>
             <div className="grid gap-1.5">
-              <Label htmlFor="edit-tags">Tags</Label>
+              <FieldLabel htmlFor="edit-tags">Tags</FieldLabel>
               <Input
                 id="edit-tags"
                 value={tags}
@@ -253,22 +238,18 @@ function ProductEditor({ product, go }: { product: ProductDetailData; go: (to: s
                 placeholder="Comma separated"
               />
             </div>
-            <label className="flex items-center gap-2 text-sm text-foreground">
-              <input
-                type="checkbox"
-                checked={requiresShipping}
-                onChange={(e) => setRequiresShipping(e.target.checked)}
-              />
-              Requires shipping
-            </label>
+            <Field orientation="horizontal">
+              <Checkbox id="requires-shipping" checked={requiresShipping} onCheckedChange={(c) => setRequiresShipping(c)} />
+              <FieldLabel htmlFor="requires-shipping" className="font-normal">Requires shipping</FieldLabel>
+            </Field>
           </div>
-        </PageSection>
+        </SectionCard>
 
         <div className="flex items-center justify-end gap-3">
-          <Button type="button" variant="default" onClick={() => go("/products")}>
+          <Button type="button" variant="outline" onClick={() => go("/products")}>
             Back
           </Button>
-          <Button type="submit" variant="primary" disabled={updateMutation.isPending}>
+          <Button type="submit" variant="default" disabled={updateMutation.isPending}>
             <Save className="mr-1.5 size-3.5" aria-hidden />
             {updateMutation.isPending ? "Saving..." : "Save Changes"}
           </Button>
@@ -277,7 +258,7 @@ function ProductEditor({ product, go }: { product: ProductDetailData; go: (to: s
 
       <StockSummary product={product} onManage={() => go("/inventory")} />
 
-      <PageSection title="Variants" description="SKUs and pricing (in ₹). Stock is managed on the Inventory page.">
+      <SectionCard title="Variants" description="SKUs and pricing (in ₹). Stock is managed on the Inventory page.">
         {product.variants.length === 0 ? (
           <EmptyState title="No variants" description="This product has no variants yet." />
         ) : (
@@ -287,7 +268,7 @@ function ProductEditor({ product, go }: { product: ProductDetailData; go: (to: s
             ))}
           </div>
         )}
-      </PageSection>
+      </SectionCard>
 
       <MediaSection product={product} />
 
@@ -301,7 +282,7 @@ function ProductEditor({ product, go }: { product: ProductDetailData; go: (to: s
             </DialogDescription>
           </DialogHeader>
           <DialogFooter>
-            <Button type="button" variant="default" onClick={() => setConfirmDelete(false)}>
+            <Button type="button" variant="outline" onClick={() => setConfirmDelete(false)}>
               Cancel
             </Button>
             <Button
@@ -326,7 +307,7 @@ function StockSummary({ product, onManage }: { product: ProductDetailData; onMan
   const rows = (levels.data?.items ?? []).filter((r) => variantIds.has(r.variantId));
 
   return (
-    <PageSection title="Stock" description="Customers can only add a product to their cart while it has stock available.">
+    <SectionCard title="Stock" description="Customers can only add a product to their cart while it has stock available.">
       {levels.isLoading ? (
         <p className="text-sm text-foreground-lighter">Loading stock...</p>
       ) : rows.length === 0 ? (
@@ -346,11 +327,11 @@ function StockSummary({ product, onManage }: { product: ProductDetailData; onMan
         </ul>
       )}
       <div className="mt-3">
-        <Button type="button" variant="default" size="sm" onClick={onManage}>
+        <Button type="button" variant="outline" size="sm" onClick={onManage}>
           Manage stock
         </Button>
       </div>
-    </PageSection>
+    </SectionCard>
   );
 }
 
@@ -396,15 +377,15 @@ function VariantRow({
   return (
     <div className="grid gap-3 rounded-md border border-border p-3 sm:grid-cols-4">
       <div className="grid gap-1.5">
-        <Label htmlFor={`v-title-${variant.id}`}>Title</Label>
+        <FieldLabel htmlFor={`v-title-${variant.id}`}>Title</FieldLabel>
         <Input id={`v-title-${variant.id}`} value={vTitle} onChange={(e) => setVTitle(e.target.value)} />
       </div>
       <div className="grid gap-1.5">
-        <Label htmlFor={`v-sku-${variant.id}`}>SKU</Label>
+        <FieldLabel htmlFor={`v-sku-${variant.id}`}>SKU</FieldLabel>
         <Input id={`v-sku-${variant.id}`} value={sku} onChange={(e) => setSku(e.target.value)} />
       </div>
       <div className="grid gap-1.5">
-        <Label htmlFor={`v-price-${variant.id}`}>Price (₹)</Label>
+        <FieldLabel htmlFor={`v-price-${variant.id}`}>Price (₹)</FieldLabel>
         <Input
           id={`v-price-${variant.id}`}
           type="number"
@@ -415,7 +396,7 @@ function VariantRow({
         />
       </div>
       <div className="grid gap-1.5">
-        <Label htmlFor={`v-compare-${variant.id}`}>Compare-at (₹)</Label>
+        <FieldLabel htmlFor={`v-compare-${variant.id}`}>Compare-at (₹)</FieldLabel>
         <Input
           id={`v-compare-${variant.id}`}
           type="number"
@@ -428,9 +409,9 @@ function VariantRow({
       <div className="flex items-center justify-between sm:col-span-4">
         <span className="text-xs text-foreground-lighter">
           Current price {inr.format(variant.price / 100)}
-          {error ? <span role="alert" className="ml-3 text-rose-500">{error}</span> : null}
+          {error ? <span role="alert" className="ml-3 text-destructive">{error}</span> : null}
         </span>
-        <Button type="button" variant="default" size="sm" disabled={mutation.isPending} onClick={submit}>
+        <Button type="button" variant="outline" size="sm" disabled={mutation.isPending} onClick={submit}>
           {mutation.isPending ? "Saving..." : "Save variant"}
         </Button>
       </div>
@@ -483,7 +464,7 @@ function MediaSection({ product }: { product: ProductDetailData }) {
   };
 
   return (
-    <PageSection
+    <SectionCard
       title="Media"
       description="Images shown for this product in your store. The first image is the main one."
     >
@@ -509,7 +490,7 @@ function MediaSection({ product }: { product: ProductDetailData }) {
                   <span>{m.isPrimary ? "Main image" : ""}</span>
                   <button
                     type="button"
-                    className="text-rose-500 hover:underline disabled:opacity-50"
+                    className="text-destructive hover:underline disabled:opacity-50"
                     disabled={detachMedia.isPending}
                     onClick={() =>
                       detachMedia.mutate(
@@ -538,7 +519,7 @@ function MediaSection({ product }: { product: ProductDetailData }) {
           />
           <Button
             type="button"
-            variant="default"
+            variant="outline"
             size="sm"
             disabled={uploading}
             onClick={() => fileRef.current?.click()}
@@ -548,6 +529,6 @@ function MediaSection({ product }: { product: ProductDetailData }) {
           </Button>
         </div>
       </div>
-    </PageSection>
+    </SectionCard>
   );
 }

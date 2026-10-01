@@ -1,43 +1,92 @@
-import { createFileRoute, useNavigate } from "@tanstack/react-router";
-import { AlertTriangle, ArrowUpDown, Box, Warehouse } from "lucide-react";
-import { useEffect, useState } from "react";
-import {
-  Button,
-  DataTable,
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-  EmptyState,
-  FilterBar,
-  Input,
-  Label,
-  MetricCard,
-  MetricCardSkeleton,
-  PageBreadcrumbs,
-  PageContainer,
-  PageHeader,
-  PageSection,
-  PageSkeleton,
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-  TableSkeleton,
-  toast,
-  type ColumnDef,
-} from "@bs/ui";
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { orpc } from "../../../lib/orpc.ts";
+import { createFileRoute, Link } from "@tanstack/react-router";
+import { AlertTriangle, ArrowUpDown, Box, Download, PackageX, Warehouse } from "lucide-react";
+import { useMemo, useState } from "react";
+import { MetricCard, MetricCardSkeleton, PageContainer, PageHeader, PageSection, PageSkeleton, TableSkeleton, toast } from "@bs/ui";
+import { keepPreviousData, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { Button } from "@/components/ui/button";
+import { Checkbox } from "@/components/ui/checkbox";
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { Field, FieldError, FieldGroup, FieldLabel } from "@/components/ui/field";
+import { Input } from "@/components/ui/input";
+import { DataTable, type Column } from "../../../components/data-table/data-table.tsx";
+import { fetchAllPages } from "../../../components/data-table/fetch-all.ts";
+import { Pagination } from "../../../components/data-table/pagination.tsx";
+import { TableToolbar } from "../../../components/data-table/table-toolbar.tsx";
+import { BulkBar, ColumnsMenu, FilterChips, type FilterChip } from "../../../components/data-table/toolbar-parts.tsx";
+import { useBulkRunner } from "../../../components/data-table/use-bulk-runner.ts";
+import { useTableSelection } from "../../../components/data-table/use-table-selection.ts";
+import { compactSearch, oneOf, parsePaging, text, useColumnVisibility, useDebouncedValue, useUrlTableState } from "../../../components/data-table/use-table-state.ts";
+import { ScrollTabs } from "../../../components/scroll-tabs.tsx";
+import { SimpleSelect } from "../../../components/simple-select.tsx";
+import { downloadCsv, toCsv } from "../../../lib/csv.ts";
+import { errorMessage } from "../../../lib/errors.ts";
+import { client, orpc } from "../../../lib/orpc.ts";
 
-export const INVENTORY_PAGE_SIZE = 50;
+// ---------------------------------------------------------------------------------------------------------------
+// URL state
+// ---------------------------------------------------------------------------------------------------------------
 
+type Sort = "product_asc" | "product_desc" | "on_hand_desc" | "on_hand_asc" | "available_desc" | "available_asc";
+type StockFilter = "in_stock" | "low" | "out";
 type Reason = "received" | "sold" | "damaged" | "returned" | "correction" | "transfer";
 
+const SORTS: ReadonlyArray<{ id: Sort; label: string }> = [
+  { id: "product_asc", label: "Product (A to Z)" },
+  { id: "product_desc", label: "Product (Z to A)" },
+  { id: "on_hand_desc", label: "Most on hand" },
+  { id: "on_hand_asc", label: "Least on hand" },
+  { id: "available_desc", label: "Most available" },
+  { id: "available_asc", label: "Least available" },
+];
+const STOCK_TABS = [
+  { id: "all", label: "All" },
+  { id: "in_stock", label: "In stock" },
+  { id: "low", label: "Low stock" },
+  { id: "out", label: "Out of stock" },
+] as const;
+const REASONS: ReadonlyArray<{ value: Reason; label: string }> = [
+  { value: "received", label: "Received from supplier" },
+  { value: "sold", label: "Sold" },
+  { value: "damaged", label: "Damaged stock" },
+  { value: "returned", label: "Customer return" },
+  { value: "correction", label: "Inventory count correction" },
+  { value: "transfer", label: "Warehouse transfer" },
+];
+
+export interface InventorySearch {
+  stock: "all" | StockFilter;
+  q?: string | undefined;
+  sort: Sort;
+  page: number;
+  size: number;
+}
+
+export function parseInventorySearch(raw: Record<string, unknown>): InventorySearch {
+  return {
+    stock: oneOf(raw["stock"], ["all", "in_stock", "low", "out"] as const) ?? "all",
+    q: text(raw["q"]),
+    sort: oneOf(raw["sort"], SORTS.map((x) => x.id)) ?? "product_asc",
+    ...parsePaging(raw),
+  };
+}
+
+export function inventoryListInput(s: InventorySearch, paging: { limit: number; offset: number } = { limit: s.size, offset: (s.page - 1) * s.size }) {
+  return {
+    sort: s.sort,
+    ...(s.stock !== "all" ? { stock: s.stock } : {}),
+    ...(s.q ? { search: s.q } : {}),
+    ...paging,
+  };
+}
+
+type Row = Awaited<ReturnType<typeof client.admin.inventory.list>>["items"][number];
+
+const useStockCount = (stock?: StockFilter) =>
+  useQuery(orpc.admin.inventory.list.queryOptions({ input: { limit: 1, ...(stock ? { stock } : {}) } })).data?.total;
+
 export const Route = createFileRoute("/_store/inventory/")({
+  validateSearch: (raw: Record<string, unknown>): Partial<InventorySearch> =>
+    compactSearch(parseInventorySearch(raw), { stock: "all", sort: "product_asc", page: 1, size: 25 }),
   pendingComponent: () => (
     <PageSkeleton>
       <div className="grid gap-4 sm:grid-cols-3">
@@ -48,42 +97,41 @@ export const Route = createFileRoute("/_store/inventory/")({
       <TableSkeleton rows={10} columns={6} />
     </PageSkeleton>
   ),
-  component: InventoryRoute,
+  component: InventoryPage,
 });
 
-function InventoryRoute() {
-  const navigate = useNavigate();
-  return <InventoryPage navigate={(to) => void navigate({ to })} />;
-}
+const EXPORT_HEADER = ["Product", "Variant", "SKU", "Location", "On hand", "Reserved", "Available"];
+const exportRow = (r: Row) => [r.productTitle ?? "", r.variantTitle ?? "", r.variantSku ?? "", r.locationName ?? "", r.onHand, r.reserved, r.available];
 
-export function InventoryPage({ navigate }: { navigate?: (to: string) => void }) {
+// ---------------------------------------------------------------------------------------------------------------
+// Page
+// ---------------------------------------------------------------------------------------------------------------
+
+export function InventoryPage() {
   const queryClient = useQueryClient();
-  const [search, setSearch] = useState("");
-  const [debounced, setDebounced] = useState("");
-  const [page, setPage] = useState(0);
+  const [s, update] = useUrlTableState(parseInventorySearch);
+  const bulk = useBulkRunner();
+  const setFilter = (patch: Record<string, unknown>) => update({ ...patch, page: undefined });
 
-  useEffect(() => {
-    const t = setTimeout(() => {
-      setDebounced(search.trim());
-      setPage(0);
-    }, 300);
-    return () => clearTimeout(t);
-  }, [search]);
+  const [searchText, setSearchText] = useDebouncedValue(s.q ?? "", (v) => update({ q: v.trim() || undefined, page: undefined }));
 
-  const listQuery = useQuery(
-    orpc.admin.inventory.list.queryOptions({
-      input: {
-        search: debounced ? debounced : undefined,
-        limit: INVENTORY_PAGE_SIZE,
-        offset: page * INVENTORY_PAGE_SIZE,
-      },
-    }),
-  );
+  const list = useQuery({ ...orpc.admin.inventory.list.queryOptions({ input: inventoryListInput(s) }), placeholderData: keepPreviousData });
+  const rows = useMemo(() => list.data?.items ?? [], [list.data]);
+  const total = list.data?.total ?? 0;
 
-  const items = listQuery.data?.items ?? [];
-  const total = listQuery.data?.total ?? 0;
-  type Row = (typeof items)[number];
+  const allCount = useStockCount();
+  const lowCount = useStockCount("low");
+  const outCount = useStockCount("out");
 
+  const hasFilters = Boolean(s.q);
+  const clearFilters = () => {
+    setSearchText("");
+    update({ q: undefined, page: undefined });
+  };
+
+  const sel = useTableSelection({ rows, getId: (r: Row) => r.id, total, resetKey: JSON.stringify([s.stock, s.q]) });
+
+  // ----- adjust stock -----
   const [adjustItem, setAdjustItem] = useState<Row | null>(null);
   const [delta, setDelta] = useState("");
   const [reason, setReason] = useState<Reason>("received");
@@ -102,7 +150,8 @@ export function InventoryPage({ navigate }: { navigate?: (to: string) => void })
     orpc.admin.inventory.adjust.mutationOptions({
       onSuccess: (res) => {
         toast.success(`Stock adjusted. New on-hand quantity: ${res.newOnHand}`);
-        void queryClient.invalidateQueries({ queryKey: orpc.admin.inventory.list.key() });
+        void queryClient.invalidateQueries({ queryKey: orpc.admin.inventory.key() });
+        void queryClient.invalidateQueries({ queryKey: orpc.admin.products.key() });
         closeDialog();
       },
       onError: (err: Error) => toast.error(err.message || "Failed to adjust stock"),
@@ -135,176 +184,192 @@ export function InventoryPage({ navigate }: { navigate?: (to: string) => void })
     });
   };
 
-  const paged = total > items.length;
-  const suffix = paged ? " (this page)" : "";
-  const totalOnHand = items.reduce((acc, r) => acc + r.onHand, 0);
-  const totalReserved = items.reduce((acc, r) => acc + r.reserved, 0);
-  const totalAvailable = items.reduce((acc, r) => acc + r.available, 0);
+  async function exportInventory(source: "selection" | "matching") {
+    try {
+      if (source === "selection" && !sel.allResults) {
+        downloadCsv(`inventory-${new Date().toISOString().slice(0, 10)}.csv`, toCsv(EXPORT_HEADER, sel.picked.map(exportRow)));
+        toast.success(`Exported ${sel.picked.length} row${sel.picked.length === 1 ? "" : "s"}.`);
+        return;
+      }
+      const { rows: all, total: count } = await fetchAllPages((offset, limit) => client.admin.inventory.list(inventoryListInput(s, { limit, offset })), {
+        onProgress: (done, of) => bulk.setProgress({ label: "Exporting inventory", done, total: of }),
+      });
+      downloadCsv(`inventory-${new Date().toISOString().slice(0, 10)}.csv`, toCsv(EXPORT_HEADER, all.map(exportRow)));
+      toast.success(all.length < count ? `Exported the first ${all.length.toLocaleString("en-IN")} of ${count.toLocaleString("en-IN")} rows.` : `Exported ${all.length.toLocaleString("en-IN")} rows.`);
+    } catch (e) {
+      toast.error(errorMessage(e));
+    } finally {
+      bulk.setProgress(null);
+    }
+  }
 
-  const columns: ColumnDef<Row>[] = [
+  const columns: Column<Row>[] = [
     {
-      header: "Item & Variant",
-      cell: (item) => (
-        <div className="flex flex-col">
-          <span className="font-medium text-foreground">{item.productTitle ?? item.variantTitle ?? "Variant"}</span>
-          <span className="text-xs text-foreground-lighter">
-            {[item.variantTitle, item.variantSku].filter(Boolean).join(" · ")}
-          </span>
+      id: "item",
+      header: "Item & variant",
+      sort: { asc: "product_asc", desc: "product_desc" },
+      cell: (r) => (
+        <div className="flex max-w-72 flex-col">
+          <span className="truncate font-medium text-foreground">{r.productTitle ?? r.variantTitle ?? "Variant"}</span>
+          <span className="truncate text-muted-foreground">{[r.variantTitle, r.variantSku].filter(Boolean).join(" · ")}</span>
         </div>
       ),
     },
     {
+      id: "location",
       header: "Location",
-      cell: (item) => (
-        <span className="flex items-center gap-1.5 text-xs text-foreground-muted">
+      optional: true,
+      cell: (r) => (
+        <span className="flex items-center gap-1.5 text-muted-foreground">
           <Warehouse className="size-3.5" aria-hidden />
-          {item.locationName ?? "—"}
+          {r.locationName ?? "—"}
         </span>
       ),
     },
+    { id: "onHand", header: "On hand", sort: { asc: "on_hand_asc", desc: "on_hand_desc" }, className: "text-right font-mono text-foreground", cell: (r) => r.onHand },
+    { id: "reserved", header: "Reserved", optional: true, className: "text-right font-mono text-muted-foreground", cell: (r) => r.reserved },
     {
-      header: "On Hand",
-      className: "text-right",
-      headerClassName: "text-right",
-      cell: (item) => <span className="font-mono text-sm text-foreground">{item.onHand}</span>,
-    },
-    {
-      header: "Reserved",
-      className: "text-right",
-      headerClassName: "text-right",
-      cell: (item) => <span className="font-mono text-sm text-foreground-lighter">{item.reserved}</span>,
-    },
-    {
+      id: "available",
       header: "Available",
-      className: "text-right",
-      headerClassName: "text-right",
-      cell: (item) => (
-        <span className={`font-mono text-sm font-medium ${item.available <= 5 ? "text-amber-500" : "text-emerald-500"}`}>
-          {item.available}
-        </span>
-      ),
-    },
-    {
-      header: "Actions",
-      className: "text-right",
-      headerClassName: "text-right",
-      cell: (item) => (
-        <Button variant="default" size="sm" onClick={() => setAdjustItem(item)}>
-          <ArrowUpDown className="mr-1.5 size-3" aria-hidden />
-          Adjust
-        </Button>
-      ),
+      sort: { asc: "available_asc", desc: "available_desc" },
+      className: "text-right font-mono font-medium",
+      cell: (r) => <span className={r.available <= 0 ? "text-destructive" : r.available <= 5 ? "text-amber-600" : "text-emerald-600"}>{r.available}</span>,
     },
   ];
+  const visibility = useColumnVisibility("inventory", columns);
+  const shown = columns.filter((c) => !c.optional || visibility.isVisible(c.id));
 
-  const from = total === 0 ? 0 : page * INVENTORY_PAGE_SIZE + 1;
-  const to = Math.min(total, (page + 1) * INVENTORY_PAGE_SIZE);
-  const hasFilters = debounced.length > 0 || search.length > 0;
+  const chips: FilterChip[] = [
+    ...(s.q ? [{ key: "q", label: `Search: ${s.q}`, onRemove: () => { setSearchText(""); setFilter({ q: undefined }); } }] : []),
+  ];
 
-  let metrics = (
-    <div className="grid gap-4 sm:grid-cols-3">
-      <MetricCardSkeleton />
-      <MetricCardSkeleton />
-      <MetricCardSkeleton />
-    </div>
+  const adjustButton = (r: Row) => (
+    <Button variant="outline" size="sm" onClick={() => setAdjustItem(r)}>
+      <ArrowUpDown className="mr-1.5" aria-hidden />
+      Adjust
+    </Button>
   );
-  let body;
-  if (listQuery.isError) {
-    metrics = <></>;
-    body = (
-      <EmptyState
-        icon={AlertTriangle}
-        title="Could not load inventory"
-        description={listQuery.error instanceof Error ? listQuery.error.message : "Something went wrong."}
-        action={
-          <Button variant="default" size="sm" onClick={() => void listQuery.refetch()}>
-            Retry
+
+  const empty =
+    hasFilters || s.stock !== "all" ? (
+      <div className="grid justify-items-center gap-1">
+        <p className="text-sm font-medium text-foreground">No inventory levels match</p>
+        <p className="text-muted-foreground">Try a different SKU or product name.</p>
+        {hasFilters ? (
+          <Button variant="outline" size="sm" className="mt-2" onClick={clearFilters}>
+            Clear filters
           </Button>
-        }
-      />
-    );
-  } else if (listQuery.isLoading) {
-    body = <TableSkeleton rows={5} columns={6} />;
-  } else {
-    metrics = (
-      <div className="grid gap-4 sm:grid-cols-3">
-        <MetricCard label={`Total On Hand${suffix}`} value={totalOnHand} icon={Box} />
-        <MetricCard label={`Available to Sell${suffix}`} value={totalAvailable} />
-        <MetricCard label={`Reserved${suffix}`} value={totalReserved} />
+        ) : null}
+      </div>
+    ) : (
+      <div className="grid justify-items-center gap-1">
+        <Warehouse className="size-5 text-muted-foreground" aria-hidden />
+        <p className="text-sm font-medium text-foreground">No inventory yet</p>
+        <p className="text-muted-foreground">Inventory levels appear here once products with tracked variants exist.</p>
+        <Button size="sm" className="mt-2" nativeButton={false} render={<Link to="/products/new" />}>
+          Add a product
+        </Button>
       </div>
     );
-    if (total === 0 && !hasFilters) {
-      metrics = <></>;
-      body = (
-        <EmptyState
-          icon={Warehouse}
-          title="No inventory yet"
-          description="Inventory levels appear here once products with tracked variants exist. Create a product to get started."
-          action={
-            <Button variant="primary" size="sm" onClick={() => navigate?.("/products/new")}>
-              Add a product
-            </Button>
-          }
-        />
-      );
-    } else {
-      body = (
-        <>
-          <DataTable
-            data={items}
-            columns={columns}
-            keyExtractor={(item) => item.id}
-            emptyTitle="No inventory levels match"
-            emptyDescription="Try a different SKU or product name."
-          />
-          <div className="flex items-center justify-between text-xs text-foreground-muted">
-            <span>
-              {from}-{to} of {total}
-            </span>
-            <div className="flex gap-2">
-              <Button variant="default" size="sm" disabled={page === 0} onClick={() => setPage((p) => p - 1)}>
-                Previous
-              </Button>
-              <Button
-                variant="default"
-                size="sm"
-                disabled={(page + 1) * INVENTORY_PAGE_SIZE >= total}
-                onClick={() => setPage((p) => p + 1)}
-              >
-                Next
-              </Button>
-            </div>
-          </div>
-        </>
-      );
-    }
-  }
 
   return (
     <PageContainer size="full">
-      <PageBreadcrumbs items={[{ label: "Inventory" }]} />
-
       <PageHeader
         title="Inventory"
         description="Track on-hand stock and record inventory adjustments across warehouse locations."
+        aside={
+          <Button variant="outline" size="sm" disabled={bulk.busy || total === 0} onClick={() => void exportInventory("matching")}>
+            <Download className="mr-1.5 size-3.5" aria-hidden />
+            Export
+          </Button>
+        }
       />
 
-      {metrics}
+      <div className="grid grid-cols-2 gap-3 sm:gap-4 lg:grid-cols-3">
+        <MetricCard label="Tracked Items" value={allCount ?? "—"} icon={Box} />
+        <MetricCard label="Low Stock" value={lowCount ?? "—"} icon={AlertTriangle} />
+        <MetricCard label="Out of Stock" value={outCount ?? "—"} icon={PackageX} />
+      </div>
+
+      <ScrollTabs value={s.stock} onChange={(v) => setFilter({ stock: v === "all" ? undefined : v })} tabs={STOCK_TABS} />
 
       <PageSection>
-        <div className="grid gap-4">
-          <FilterBar
-            search={search}
-            onSearchChange={setSearch}
-            searchPlaceholder="Search by SKU or product..."
-            hasActiveFilters={hasFilters}
-            onReset={() => {
-              setSearch("");
-              setDebounced("");
-              setPage(0);
-            }}
+        <div className="grid gap-3">
+          <TableToolbar
+            searchLabel="Search inventory"
+            searchPlaceholder="Search SKU or product"
+            searchText={searchText}
+            onSearchText={setSearchText}
+            resultCount={total}
+            noun="items"
+            sortOptions={SORTS}
+            sort={s.sort}
+            defaultSort="product_asc"
+            onSort={(v) => setFilter({ sort: v })}
+            trailing={<ColumnsMenu columns={columns} isVisible={visibility.isVisible} onToggle={visibility.toggle} onReset={visibility.reset} />}
           />
-          {body}
+
+          <FilterChips chips={chips} onClear={clearFilters} />
+
+          <BulkBar
+            count={sel.count}
+            noun="row"
+            total={total}
+            allResults={sel.allResults}
+            pageFullySelected={sel.pageFullySelected}
+            onSelectAllResults={sel.selectAllResults}
+            onClear={sel.clear}
+          >
+            <Button variant="outline" size="sm" disabled={bulk.busy} onClick={() => void exportInventory("selection")}>
+              <Download className="mr-1.5" /> Export
+            </Button>
+            {bulk.progress ? (
+              <span role="status" className="text-muted-foreground">
+                {bulk.progress.label}… {bulk.progress.done}/{bulk.progress.total}
+              </span>
+            ) : null}
+          </BulkBar>
+
+          <DataTable
+            columns={shown}
+            rows={rows}
+            getRowId={(r) => r.id}
+            isLoading={list.isLoading}
+            isFetching={list.isFetching}
+            error={list.isError ? { message: errorMessage(list.error), onRetry: () => void list.refetch() } : null}
+            empty={empty}
+            selectedIds={sel.selectedIds}
+            onToggleRow={sel.toggleRow}
+            onTogglePage={sel.togglePage}
+            sort={s.sort}
+            onSortChange={(v) => setFilter({ sort: v === "product_asc" ? undefined : v })}
+            rowActions={adjustButton}
+            renderCard={(r, ctx) => (
+              <div className="flex items-start gap-3 p-3">
+                <div className="pt-0.5">
+                  <Checkbox aria-label={`Select ${r.productTitle ?? r.variantSku}`} checked={ctx.selected} onCheckedChange={() => ctx.toggle()} />
+                </div>
+                <div className="grid min-w-0 flex-1 gap-1">
+                  <p className="truncate font-medium text-foreground">{r.productTitle ?? r.variantTitle ?? "Variant"}</p>
+                  <p className="truncate text-muted-foreground">{[r.variantTitle, r.variantSku].filter(Boolean).join(" · ")}</p>
+                  <p className="text-muted-foreground">
+                    {r.locationName ?? "—"} · {r.onHand} on hand ·{" "}
+                    <span className={r.available <= 0 ? "text-destructive" : r.available <= 5 ? "text-amber-600" : "text-emerald-600"}>{r.available} available</span>
+                  </p>
+                </div>
+                {adjustButton(r)}
+              </div>
+            )}
+          />
+
+          <Pagination
+            page={s.page}
+            pageSize={s.size}
+            total={total}
+            disabled={list.isFetching}
+            onPageChange={(p) => update({ page: p === 1 ? undefined : p })}
+            onPageSizeChange={(n) => update({ size: n === 25 ? undefined : n, page: undefined })}
+          />
         </div>
       </PageSection>
 
@@ -319,59 +384,33 @@ export function InventoryPage({ navigate }: { navigate?: (to: string) => void })
               </DialogDescription>
             </DialogHeader>
 
-            <form onSubmit={handleAdjustSubmit} className="grid gap-4 py-2" noValidate>
-              <div className="grid gap-1.5">
-                <Label htmlFor="qty-delta">Adjustment quantity *</Label>
-                <Input
-                  id="qty-delta"
-                  type="number"
-                  value={delta}
-                  onChange={(e) => setDelta(e.target.value)}
-                  placeholder="e.g. 10 or -5"
-                  aria-invalid={Boolean(deltaError)}
-                />
-                {deltaError ? (
-                  <p role="alert" className="text-xs text-rose-500">
-                    {deltaError}
-                  </p>
-                ) : null}
-              </div>
+            <form onSubmit={handleAdjustSubmit} noValidate>
+              <FieldGroup>
+                <Field data-invalid={Boolean(deltaError)}>
+                  <FieldLabel htmlFor="qty-delta">Adjustment quantity *</FieldLabel>
+                  <Input id="qty-delta" type="number" value={delta} onChange={(e) => setDelta(e.target.value)} placeholder="e.g. 10 or -5" aria-invalid={Boolean(deltaError)} />
+                  {deltaError ? <FieldError>{deltaError}</FieldError> : null}
+                </Field>
 
-              <div className="grid gap-1.5">
-                <Label htmlFor="adj-reason">Reason *</Label>
-                <Select value={reason} onValueChange={(val) => setReason((val as Reason | null) ?? "received")}>
-                  <SelectTrigger id="adj-reason">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="received">Received from supplier</SelectItem>
-                    <SelectItem value="sold">Sold</SelectItem>
-                    <SelectItem value="damaged">Damaged stock</SelectItem>
-                    <SelectItem value="returned">Customer return</SelectItem>
-                    <SelectItem value="correction">Inventory count correction</SelectItem>
-                    <SelectItem value="transfer">Warehouse transfer</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
+                <Field>
+                  <FieldLabel htmlFor="adj-reason">Reason *</FieldLabel>
+                  <SimpleSelect id="adj-reason" value={reason} onChange={(v) => setReason(v as Reason)} options={REASONS} />
+                </Field>
 
-              <div className="grid gap-1.5">
-                <Label htmlFor="adj-note">Note (optional)</Label>
-                <Input
-                  id="adj-note"
-                  value={note}
-                  onChange={(e) => setNote(e.target.value)}
-                  placeholder="Audit reference or reason details..."
-                />
-              </div>
+                <Field>
+                  <FieldLabel htmlFor="adj-note">Note (optional)</FieldLabel>
+                  <Input id="adj-note" value={note} onChange={(e) => setNote(e.target.value)} placeholder="Audit reference or reason details..." />
+                </Field>
 
-              <DialogFooter>
-                <Button type="button" variant="default" onClick={closeDialog}>
-                  Cancel
-                </Button>
-                <Button type="submit" variant="primary" disabled={adjustMutation.isPending}>
-                  {adjustMutation.isPending ? "Adjusting..." : "Confirm Adjustment"}
-                </Button>
-              </DialogFooter>
+                <DialogFooter>
+                  <Button type="button" variant="outline" onClick={closeDialog}>
+                    Cancel
+                  </Button>
+                  <Button type="submit" disabled={adjustMutation.isPending}>
+                    {adjustMutation.isPending ? "Adjusting..." : "Confirm Adjustment"}
+                  </Button>
+                </DialogFooter>
+              </FieldGroup>
             </form>
           </DialogContent>
         </Dialog>
@@ -379,3 +418,4 @@ export function InventoryPage({ navigate }: { navigate?: (to: string) => void })
     </PageContainer>
   );
 }
+export default InventoryPage;

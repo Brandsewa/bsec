@@ -558,6 +558,11 @@ export const adminContract = {
             search: z.string().optional(),
             status: z.enum(["draft", "active", "archived"]).optional(),
             categoryId: z.string().uuid().optional(),
+            /** Sellable stock: in_stock (>5), low (1-5) or out (0 or less). */
+            stock: z.enum(["in_stock", "low", "out"]).optional(),
+            createdFrom: z.string().optional(),
+            createdTo: z.string().optional(),
+            sort: z.enum(["created_desc", "created_asc", "updated_desc", "updated_asc", "title_asc", "title_desc"]).default("created_desc"),
             limit: z.number().int().min(1).max(100).default(50),
             offset: z.number().int().min(0).default(0),
           })
@@ -772,6 +777,8 @@ export const adminContract = {
           .object({
             locationId: z.string().uuid().optional(),
             search: z.string().optional(),
+            stock: z.enum(["in_stock", "low", "out"]).optional(),
+            sort: z.enum(["product_asc", "product_desc", "on_hand_desc", "on_hand_asc", "available_desc", "available_asc"]).default("product_asc"),
             limit: z.number().int().min(1).max(100).default(50),
             offset: z.number().int().min(0).default(0),
           })
@@ -1016,6 +1023,12 @@ export const adminContract = {
             status: z.string().optional(),
             paymentStatus: z.string().optional(),
             fulfillmentStatus: z.string().optional(),
+            /** Cash-on-delivery orders only (payment status cod_*). */
+            cod: z.boolean().optional(),
+            /** ISO timestamps bounding placedAt (inclusive from, exclusive to). */
+            placedFrom: z.string().optional(),
+            placedTo: z.string().optional(),
+            sort: z.enum(["placed_desc", "placed_asc", "total_desc", "total_asc", "number_desc", "number_asc"]).default("placed_desc"),
             limit: z.number().int().min(1).max(100).default(50),
             offset: z.number().int().min(0).default(0),
           })
@@ -1029,6 +1042,8 @@ export const adminContract = {
               number: z.string(),
               customerEmail: z.string(),
               customerPhone: z.string(),
+              /** Name the customer gave at checkout (from the shipping address); null when none was given. */
+              customerName: z.string().nullable().optional(),
               status: z.string(),
               paymentStatus: z.string(),
               fulfillmentStatus: z.string(),
@@ -1212,14 +1227,6 @@ export const adminContract = {
       .output(z.object({ success: z.boolean(), status: z.string() })),
   },
 
-  // --- Exports ---
-  exports: {
-    csv: oc
-      .route({ method: "POST", path: "/admin/exports/{kind}" })
-      .input(z.object({ kind: z.enum(["orders", "customers", "products"]) }))
-      .output(z.object({ filename: z.string(), csv: z.string() })),
-  },
-
   // --- Returns ---
   returns: {
     list: oc
@@ -1267,6 +1274,12 @@ export const adminContract = {
           .object({
             search: z.string().optional(),
             tag: z.string().optional(),
+            /** Customers with more than one order. */
+            repeat: z.boolean().optional(),
+            acceptsMarketing: z.boolean().optional(),
+            createdFrom: z.string().optional(),
+            createdTo: z.string().optional(),
+            sort: z.enum(["created_desc", "created_asc", "name_asc", "name_desc", "spent_desc", "spent_asc", "orders_desc", "orders_asc"]).default("created_desc"),
             limit: z.number().int().min(1).max(100).default(50),
             offset: z.number().int().min(0).default(0),
           })
@@ -1343,6 +1356,8 @@ export const adminContract = {
           .object({
             search: z.string().optional(),
             status: z.string().optional(),
+            type: z.enum(["percent", "fixed", "free_shipping", "buy_x_get_y"]).optional(),
+            sort: z.enum(["created_desc", "created_asc", "title_asc", "title_desc", "used_desc", "used_asc"]).default("created_desc"),
             limit: z.number().int().min(1).max(100).default(50),
             offset: z.number().int().min(0).default(0),
           })

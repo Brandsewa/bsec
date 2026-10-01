@@ -1,19 +1,14 @@
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { ArrowLeft, Plus, Save, Trash2 } from "lucide-react";
 import { useState } from "react";
-import {
-  Button,
-  FormSkeleton,
-  Input,
-  Label,
-  PageBreadcrumbs,
-  PageContainer,
-  PageHeader,
-  PageSection,
-  PageSkeleton,
-  toast,
-} from "@bs/ui";
+import { FormSkeleton, PageBreadcrumbs, PageContainer, PageHeader, PageSkeleton, toast } from "@bs/ui";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
+import { Button } from "@/components/ui/button";
+import { Checkbox } from "@/components/ui/checkbox";
+import { Field, FieldLabel } from "@/components/ui/field";
+import { Input } from "@/components/ui/input";
+import { Textarea } from "@/components/ui/textarea";
+import { SectionCard } from "../../../components/section-card.tsx";
 import { orpc } from "../../../lib/orpc.ts";
 
 export const Route = createFileRoute("/_store/products/new")({
@@ -48,9 +43,6 @@ interface VariantDraft {
   price: string;
   compareAtPrice: string;
 }
-
-const textareaClass =
-  "w-full rounded-md border border-border bg-surface-100 px-3 py-2 text-sm text-foreground placeholder:text-foreground-muted focus:outline-none focus:ring-2 focus:ring-brand";
 
 export function NewProductPage({ navigate }: { navigate?: (to: string) => void }) {
   const go = navigate ?? (() => undefined);
@@ -154,7 +146,7 @@ export function NewProductPage({ navigate }: { navigate?: (to: string) => void }
 
   const err = (k: string) =>
     errors[k] ? (
-      <p role="alert" className="text-xs text-rose-500">
+      <p role="alert" className="text-xs text-destructive">
         {errors[k]}
       </p>
     ) : null;
@@ -177,10 +169,10 @@ export function NewProductPage({ navigate }: { navigate?: (to: string) => void }
       />
 
       <form onSubmit={handleSubmit} className="grid gap-6" noValidate>
-        <PageSection title="General Information" description="Basic product identity and URLs.">
+        <SectionCard title="General Information" description="Basic product identity and URLs.">
           <div className="grid gap-4">
             <div className="grid gap-1.5">
-              <Label htmlFor="product-title">Product Title *</Label>
+              <FieldLabel htmlFor="product-title">Product Title *</FieldLabel>
               <Input
                 id="product-title"
                 value={title}
@@ -192,7 +184,7 @@ export function NewProductPage({ navigate }: { navigate?: (to: string) => void }
             </div>
 
             <div className="grid gap-1.5">
-              <Label htmlFor="product-slug">URL Handle (Slug)</Label>
+              <FieldLabel htmlFor="product-slug">URL Handle (Slug)</FieldLabel>
               <Input
                 id="product-slug"
                 value={slug}
@@ -207,13 +199,13 @@ export function NewProductPage({ navigate }: { navigate?: (to: string) => void }
             </div>
 
             <div className="grid gap-1.5">
-              <Label htmlFor="product-status">Status</Label>
+              <FieldLabel htmlFor="product-status">Status</FieldLabel>
               <div id="product-status" className="flex gap-2">
                 {(["draft", "active", "archived"] as const).map((s) => (
                   <Button
                     key={s}
                     type="button"
-                    variant={status === s ? "primary" : "default"}
+                    variant={status === s ? "default" : "outline"}
                     size="sm"
                     className="capitalize"
                     onClick={() => setStatus(s)}
@@ -225,7 +217,7 @@ export function NewProductPage({ navigate }: { navigate?: (to: string) => void }
             </div>
 
             <div className="grid gap-1.5">
-              <Label htmlFor="product-short-desc">Short Description</Label>
+              <FieldLabel htmlFor="product-short-desc">Short Description</FieldLabel>
               <Input
                 id="product-short-desc"
                 value={shortDescription}
@@ -235,18 +227,17 @@ export function NewProductPage({ navigate }: { navigate?: (to: string) => void }
             </div>
 
             <div className="grid gap-1.5">
-              <Label htmlFor="product-desc">Description</Label>
-              <textarea
+              <FieldLabel htmlFor="product-desc">Description</FieldLabel>
+              <Textarea
                 id="product-desc"
                 rows={5}
-                className={textareaClass}
-                value={description}
+                  value={description}
                 onChange={(e) => setDescription(e.target.value)}
               />
             </div>
 
             <div className="grid gap-1.5">
-              <Label htmlFor="product-tags">Tags</Label>
+              <FieldLabel htmlFor="product-tags">Tags</FieldLabel>
               <Input
                 id="product-tags"
                 value={tags}
@@ -255,23 +246,19 @@ export function NewProductPage({ navigate }: { navigate?: (to: string) => void }
               />
             </div>
 
-            <label className="flex items-center gap-2 text-sm text-foreground">
-              <input
-                type="checkbox"
-                checked={requiresShipping}
-                onChange={(e) => setRequiresShipping(e.target.checked)}
-              />
-              This is a physical product that requires shipping
-            </label>
+            <Field orientation="horizontal">
+              <Checkbox id="requires-shipping" checked={requiresShipping} onCheckedChange={(c) => setRequiresShipping(c)} />
+              <FieldLabel htmlFor="requires-shipping" className="font-normal">This is a physical product that requires shipping</FieldLabel>
+            </Field>
           </div>
-        </PageSection>
+        </SectionCard>
 
-        <PageSection title="Options" description="Optional attributes such as Size or Colour.">
+        <SectionCard title="Options" description="Optional attributes such as Size or Colour.">
           <div className="grid gap-3">
             {options.map((o, i) => (
               <div key={i} className="grid gap-2 rounded-md border border-border p-3 sm:grid-cols-[1fr_2fr_auto]">
                 <div className="grid gap-1.5">
-                  <Label htmlFor={`option-name-${i}`}>Name</Label>
+                  <FieldLabel htmlFor={`option-name-${i}`}>Name</FieldLabel>
                   <Input
                     id={`option-name-${i}`}
                     value={o.name}
@@ -281,7 +268,7 @@ export function NewProductPage({ navigate }: { navigate?: (to: string) => void }
                   {err(`option-name-${i}`)}
                 </div>
                 <div className="grid gap-1.5">
-                  <Label htmlFor={`option-values-${i}`}>Values (comma separated)</Label>
+                  <FieldLabel htmlFor={`option-values-${i}`}>Values (comma separated)</FieldLabel>
                   <Input
                     id={`option-values-${i}`}
                     value={o.values}
@@ -306,7 +293,7 @@ export function NewProductPage({ navigate }: { navigate?: (to: string) => void }
             <div>
               <Button
                 type="button"
-                variant="default"
+                variant="outline"
                 size="sm"
                 onClick={() => setOptions((prev) => [...prev, { name: "", values: "" }])}
               >
@@ -315,14 +302,14 @@ export function NewProductPage({ navigate }: { navigate?: (to: string) => void }
               </Button>
             </div>
           </div>
-        </PageSection>
+        </SectionCard>
 
-        <PageSection title="Variants & Pricing" description="Each variant has its own SKU and price (in ₹).">
+        <SectionCard title="Variants & Pricing" description="Each variant has its own SKU and price (in ₹).">
           <div className="grid gap-3">
             {variants.map((v, i) => (
               <div key={i} className="grid gap-3 rounded-md border border-border p-3 sm:grid-cols-2">
                 <div className="grid gap-1.5">
-                  <Label htmlFor={`variant-title-${i}`}>Variant title *</Label>
+                  <FieldLabel htmlFor={`variant-title-${i}`}>Variant title *</FieldLabel>
                   <Input
                     id={`variant-title-${i}`}
                     value={v.title}
@@ -331,7 +318,7 @@ export function NewProductPage({ navigate }: { navigate?: (to: string) => void }
                   {err(`variant-title-${i}`)}
                 </div>
                 <div className="grid gap-1.5">
-                  <Label htmlFor={`variant-sku-${i}`}>SKU *</Label>
+                  <FieldLabel htmlFor={`variant-sku-${i}`}>SKU *</FieldLabel>
                   <Input
                     id={`variant-sku-${i}`}
                     value={v.sku}
@@ -341,7 +328,7 @@ export function NewProductPage({ navigate }: { navigate?: (to: string) => void }
                   {err(`variant-sku-${i}`)}
                 </div>
                 <div className="grid gap-1.5">
-                  <Label htmlFor={`variant-price-${i}`}>Price (₹) *</Label>
+                  <FieldLabel htmlFor={`variant-price-${i}`}>Price (₹) *</FieldLabel>
                   <Input
                     id={`variant-price-${i}`}
                     type="number"
@@ -354,7 +341,7 @@ export function NewProductPage({ navigate }: { navigate?: (to: string) => void }
                   {err(`variant-price-${i}`)}
                 </div>
                 <div className="grid gap-1.5">
-                  <Label htmlFor={`variant-compare-${i}`}>Compare-at price (₹)</Label>
+                  <FieldLabel htmlFor={`variant-compare-${i}`}>Compare-at price (₹)</FieldLabel>
                   <Input
                     id={`variant-compare-${i}`}
                     type="number"
@@ -384,7 +371,7 @@ export function NewProductPage({ navigate }: { navigate?: (to: string) => void }
             <div>
               <Button
                 type="button"
-                variant="default"
+                variant="outline"
                 size="sm"
                 onClick={() =>
                   setVariants((prev) => [...prev, { sku: "", title: "", price: "", compareAtPrice: "" }])
@@ -395,13 +382,13 @@ export function NewProductPage({ navigate }: { navigate?: (to: string) => void }
               </Button>
             </div>
           </div>
-        </PageSection>
+        </SectionCard>
 
         <div className="flex items-center justify-end gap-3 border-t border-border pt-4">
-          <Button type="button" variant="default" onClick={() => go("/products")}>
+          <Button type="button" variant="outline" onClick={() => go("/products")}>
             Cancel
           </Button>
-          <Button type="submit" variant="primary" disabled={createMutation.isPending}>
+          <Button type="submit" variant="default" disabled={createMutation.isPending}>
             <Save className="mr-1.5 size-3.5" aria-hidden />
             {createMutation.isPending ? "Saving..." : "Save Product"}
           </Button>

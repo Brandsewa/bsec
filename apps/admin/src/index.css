@@ -1,2 +1,84 @@
+@import "tailwindcss";
 @import "@bs/ui/tokens.css";
+@import "tw-animate-css";
+@import "shadcn/tailwind.css";
 @source "./";
+
+/*
+ * shadcn preset (b1D2d9ge, base-mira) mapped onto the Bs admin tokens (packages/ui tokens.css).
+ * Existing token names stay the source of truth; shadcn names below alias them so generated
+ * components pick up our theme, light/dark via <html data-theme>. Do not redeclare --primary,
+ * --background, --foreground, --destructive, --radius or --border here (tokens.css owns them).
+ */
+@theme inline {
+  --color-primary-foreground: var(--primary-foreground);
+  --color-secondary: var(--secondary);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-accent: var(--accent);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-card: var(--card);
+  --color-card-foreground: var(--card-foreground);
+  --color-popover: var(--popover);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-input: var(--input);
+  --color-ring: var(--ring);
+  --color-chart-1: var(--chart-1);
+  --color-chart-2: var(--chart-2);
+  --color-chart-3: var(--chart-3);
+  --color-chart-4: var(--chart-4);
+  --color-chart-5: var(--chart-5);
+  --color-sidebar: var(--sidebar);
+  --color-sidebar-foreground: var(--sidebar-foreground);
+  --color-sidebar-primary: var(--sidebar-primary);
+  --color-sidebar-primary-foreground: var(--sidebar-primary-foreground);
+  --color-sidebar-accent: var(--sidebar-accent);
+  --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
+  --color-sidebar-border: var(--sidebar-border);
+  --color-sidebar-ring: var(--sidebar-ring);
+  --font-heading: var(--font-sans);
+  --radius-xl: calc(var(--radius) * 1.4);
+  --radius-2xl: calc(var(--radius) * 1.8);
+  --radius-3xl: calc(var(--radius) * 2.2);
+  --radius-4xl: calc(var(--radius) * 2.6);
+}
+
+:root {
+  /* Admin chrome: white sidebar, grey canvas, so white cards stand out. (Tones swapped vs the shared tokens.) */
+  --dash-sidebar: var(--background);
+  --dash-canvas: oklch(0.962 0.005 var(--primary-hue));
+  --primary-foreground: var(--primary-solid-foreground);
+  --secondary: var(--surface-200);
+  --secondary-foreground: var(--foreground);
+  --muted: var(--surface-100);
+  --muted-foreground: var(--foreground-lighter);
+  --accent: var(--surface-200);
+  --accent-foreground: var(--foreground);
+  --card: var(--background);
+  --card-foreground: var(--foreground);
+  --popover: var(--overlay);
+  --popover-foreground: var(--foreground);
+  --input: var(--border-control);
+  --ring: var(--primary-bright);
+  --chart-1: var(--primary-bright);
+  --chart-2: var(--primary-solid);
+  --chart-3: var(--foreground-lighter);
+  --chart-4: var(--foreground-light);
+  --chart-5: var(--foreground);
+  --sidebar: var(--dash-sidebar);
+  --sidebar-foreground: var(--foreground);
+  --sidebar-primary: var(--primary-solid);
+  --sidebar-primary-foreground: var(--primary-solid-foreground);
+  --sidebar-accent: var(--surface-200);
+  --sidebar-accent-foreground: var(--foreground);
+  --sidebar-border: var(--border-default);
+  --sidebar-ring: var(--primary-bright);
+}
+
+/* --primary is a light ink in dark mode, so its foreground must be dark. */
+:root[data-theme="dark"] {
+  --dash-sidebar: var(--background);
+  --dash-canvas: oklch(0.15 0.006 var(--primary-hue));
+  --primary-foreground: oklch(0.2 0.03 var(--primary-hue));
+}

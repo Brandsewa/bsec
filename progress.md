@@ -2,6 +2,35 @@
 
 Source of truth: `docs/PLAN.html` v2.0 (build order in `docs/BUILD-PLAN-M2-M9.md`). Items are ticked only after verification; the evidence is noted next to each. "From code" means it was read in the repo but not exercised live.
 
+## M10 · Visual theme system (Puck) — shipped to production 2026-10-01
+
+Design and rationale: [`docs/adr/018-visual-theme-editor.md`](docs/adr/018-visual-theme-editor.md) (extends ADR-009 and ADR-010). Shipped in `5644b6c` (feature commit `f469208` + merge of main). CI green end to end; production health checked (web, platform, admin on `5644b6c`).
+
+### Done and verified
+- [x] **Platform themes**: `theme_templates` now has a draft and a published snapshot (+ description, features). Staff create, edit in Puck, publish and hide themes in the super admin (Themes). Audited (`theme_template.*`), role `platform_admin` or higher.
+- [x] **Launch theme** "Essential Commerce" seeded by migration `0015` (a test keeps the JSON in sync with `launch-template.ts`).
+- [x] **Store library and activation**: store admin Themes (preview with the store's own products, activate, "newer version available" notice). Activation copies tokens and pages into the store's own rows; templates are never edited by stores; re-activating adds a page version, so the previous design can be rolled back.
+- [x] **Visual editor** (`/online-store/editor/$pageId`, "Design visually" on Pages): drag and drop, nested layout blocks, live store data in the canvas, mobile/tablet/desktop viewports, save draft, publish. Lazy-loaded chunk (about 126 KB gzip); the storefront never ships Puck.
+- [x] **Blocks** (`@bs/blocks`): Section, Container, Grid, FlexRow/Column, Spacer, Divider, Heading, Text, Image, Video, Button, Icon, Link, CallToAction, plus upgraded ProductCarousel/ProductGrid/Testimonials and the 12 existing blocks. Recursive validation (depth 6, 300 blocks), enumerated props only, safe links and video hosts, own stylesheet driven by `--bs-*` brand tokens.
+- [x] **Storefront**: `renderBlockTree` with server-resolved products/collections/media in the same `"use cache"` scope as the page; non-home pages now invalidate `page:<slug>` on publish and rollback.
+- [x] **Tests**: blocks (78), editor config (7), domain integration (themes, isolation incl. the new procedures), platform audit/RBAC/read guards extended for the new procedures.
+- [x] **End-to-end run** on a real stack (Postgres, web, admin, platform, super admin). Bugs found and fixed: tsx JSX runtime, primary-foreground contrast, RichText `content` colliding with the layout slot (silent data loss), placeholder ids failing branding/theme output validation, legacy hero button props, editor reset after save.
+- [x] Production verified by the owner after deploy ("working well").
+
+### Known gaps / next
+- [ ] Storefront-hosted draft preview (only the in-editor preview exists; the "Preview on store" button is not wired).
+- [ ] Merge a newer platform theme into stores that already customised it (version is tracked; today they only see the notice).
+- [ ] Page types beyond home and custom pages (collection / product templates); the super admin editor edits only a theme's `home` page; no multi-page switcher in the store editor.
+- [ ] Theme tokens vs brand settings: a store's brand colours win over the theme's tokens.
+- [ ] Newsletter block form is not wired to the subscribe endpoint.
+- [ ] Media: needs `R2_PUBLIC_URL` (or `CF_IMAGES_DELIVERY_URL`) on the web service for block images.
+- [ ] Cache: `revalidateTag(..., "max")` serves one stale load after publish; consider `{ expire: 0 }` for page and theme tags.
+- [ ] Super admin in `vite dev` renders blank for signed-in users (React `removeChild` error); the production build works. Pre-existing, not investigated.
+- [ ] Next dev warning: homepage `generateMetadata` reads uncached data (pre-existing).
+- [ ] More themes and widgets (Phase 2): FAQ/brand-logo/social blocks, advanced styling, theme versioning and upgrade flow.
+
+## Current milestone: M0 · Platform boots
+
 ## Status at 2026-10-01
 
 Live at **gobs.cloud** (web), **admin.gobs.cloud**, **platform.gobs.cloud**, **superadmin.gobs.cloud**, **media.gobs.cloud** (R2 images). Production runs `main`; every push passes CI (typecheck, lint, build, unit, heavy integration on real Postgres 18, ephemeral staging smoke test incl. admin + Super Admin Playwright e2e) before the Coolify deploy. First real store: **Taste of Hills** (`tasteofhills.gobs.cloud`), created through Super Admin.
@@ -147,3 +176,22 @@ Cached "not found" never cleared after a draft product was published; Add to Car
 - Only the 6 M0 packages were created. payments, shipping, storage, email and blocks will be created in their milestones.
 - The `migrate` image is a fifth image beyond the four apps. It carries the owner credentials so that no runtime image does.
 - Local compose: if host port 5432 is taken, run with `POSTGRES_HOST_PORT=55432`. This machine needed it.
+
+## Next: M1 · Tenant isolation proven
+Schema for platform/identity/settings, full `tenantTable()` with composite FKs, `withTenant()`, host resolver, TenantContext, Better Auth staff and customer instances, memberships/roles, feature flags, and the generated isolation suite.
+
+## Admin UI refresh (2026-10-01)
+
+Store admin (`apps/admin`) moved to a new component system and layout. Standards and the "use this for everything new, upgrade old screens when touched" rule are in [docs/admin-ui-standards.md](docs/admin-ui-standards.md).
+
+- [x] shadcn (Base UI, preset `b1D2d9ge`/base-mira) added to the admin and mapped onto the existing Supabase-style tokens in `src/index.css` (our token names stay the source of truth). Light/dark still via `data-theme`.
+- [x] Shell: collapsible icon sidebar (Ctrl/Cmd+B, remembered), 25% narrower (12rem), white sidebar on a grey canvas so white cards stand out.
+- [x] Orders: server-driven table (search, filters, sort, paging, rows per page, selection and "select all results", bulk actions with progress, filter chips, Columns menu, sticky header, quick-actions menu, mobile cards and Filters/Sort sidebars, all state in the URL). Order detail and create-order are full pages (`/orders/$orderId`, `/orders/new`). Customer name shown first in the table.
+- [x] Same table system on Products (status/stock/created filters, bulk activate/draft/archive/delete), Inventory (stock tabs, adjust dialog), Customers (repeat/marketing/joined filters; detail is a page `/customers/$customerId`), Discounts (status/type; create is a page `/discounts/new` with minimum order value, per-customer limit, combinable, schedule).
+- [x] Shared kit: `components/data-table/*`, `simple-select`, `date-range-picker`, `scroll-tabs`, `confirm-dialog`, frosted popups.
+- [x] Settings is one workspace (`/settings/*`): compact left navigation (dropdown below `lg`), one route per section so back/forward work, consistent header with the primary action, single card with dividers, unsaved-changes warning when switching sections, 12px type scale like the tables.
+- [x] Backend (existing columns only, no migrations): orders list gained sort, date range, COD flag, customer name, name search and a single grouped query for item counts (was one query per row); products/inventory/customers/discounts lists gained sort and filters (stock, repeat, marketing, type, created range).
+- [ ] Not browser-tested: the Playwright e2e suite (two specs updated for the Settings workspace and the new state dropdown), CSV downloads, bulk fulfil/invoice/cancel on orders, dark mode, tablet widths.
+- [ ] Old-style screens still to upgrade: Online Store (Themes, Pages, Navigation, editors), superadmin and platform UIs; edit flows for customers and discounts; order refund/return actions.
+- Gotchas: after changing `packages/contracts` or `packages/domain`, restart the Next dev server (new query params are silently dropped otherwise). Pages that use the table kit or `useUnsavedGuard` must render inside a router in tests.
+

@@ -1,24 +1,94 @@
-import { createFileRoute } from "@tanstack/react-router";
-import { Check, Copy, Percent, Plus, Tag, Trash2, Power } from "lucide-react";
-import { useState } from "react";
-import {
-  Button,
-  DataTable,
-  FilterBar,
-  MetricCard,
-  MetricCardSkeleton,
-  PageBreadcrumbs,
-  PageContainer,
-  PageHeader,
-  PageSection,
-  PageSkeleton,
-  TableSkeleton,
-  type ColumnDef,
-} from "@bs/ui";
-import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { orpc } from "../../lib/orpc.ts";
+import { createFileRoute, Link } from "@tanstack/react-router";
+import { Check, Copy, Download, MoreHorizontal, Percent, Plus, Power, Tag, Trash2 } from "lucide-react";
+import { useMemo, useState } from "react";
+import { MetricCard, MetricCardSkeleton, PageContainer, PageHeader, PageSection, PageSkeleton, TableSkeleton, toast } from "@bs/ui";
+import { keepPreviousData, useQuery, useQueryClient } from "@tanstack/react-query";
+import { Button } from "@/components/ui/button";
+import { Checkbox } from "@/components/ui/checkbox";
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
+import { ConfirmDialog } from "../../components/confirm-dialog.tsx";
+import { DataTable, type Column } from "../../components/data-table/data-table.tsx";
+import { fetchAllPages } from "../../components/data-table/fetch-all.ts";
+import { Pagination } from "../../components/data-table/pagination.tsx";
+import { TableToolbar } from "../../components/data-table/table-toolbar.tsx";
+import { BulkBar, ColumnsMenu, FilterChips, type FilterChip } from "../../components/data-table/toolbar-parts.tsx";
+import { useBulkRunner } from "../../components/data-table/use-bulk-runner.ts";
+import { useTableSelection } from "../../components/data-table/use-table-selection.ts";
+import { compactSearch, oneOf, parsePaging, text, useColumnVisibility, useDebouncedValue, useUrlTableState } from "../../components/data-table/use-table-state.ts";
+import { StatusBadge } from "../../components/order-parts.tsx";
+import { ScrollTabs } from "../../components/scroll-tabs.tsx";
+import { SimpleSelect } from "../../components/simple-select.tsx";
+import { downloadCsv, toCsv } from "../../lib/csv.ts";
+import { errorMessage } from "../../lib/errors.ts";
+import { client, orpc } from "../../lib/orpc.ts";
+
+// ---------------------------------------------------------------------------------------------------------------
+// URL state
+// ---------------------------------------------------------------------------------------------------------------
+
+type Sort = "created_desc" | "created_asc" | "title_asc" | "title_desc" | "used_desc" | "used_asc";
+type DiscountStatus = "active" | "scheduled" | "expired" | "disabled";
+type DiscountType = "percent" | "fixed" | "free_shipping" | "buy_x_get_y";
+
+const SORTS: ReadonlyArray<{ id: Sort; label: string }> = [
+  { id: "created_desc", label: "Newest first" },
+  { id: "created_asc", label: "Oldest first" },
+  { id: "title_asc", label: "Title (A to Z)" },
+  { id: "title_desc", label: "Title (Z to A)" },
+  { id: "used_desc", label: "Most used" },
+  { id: "used_asc", label: "Least used" },
+];
+const STATUS_TABS = [
+  { id: "all", label: "All" },
+  { id: "active", label: "Active" },
+  { id: "scheduled", label: "Scheduled" },
+  { id: "expired", label: "Expired" },
+  { id: "disabled", label: "Disabled" },
+] as const;
+const TYPES = [
+  { value: "any", label: "Type: any" },
+  { value: "percent", label: "Percentage off" },
+  { value: "fixed", label: "Fixed amount off" },
+  { value: "free_shipping", label: "Free shipping" },
+] as const;
+
+export interface DiscountsSearch {
+  status: "all" | DiscountStatus;
+  q?: string | undefined;
+  type?: DiscountType | undefined;
+  sort: Sort;
+  page: number;
+  size: number;
+}
+
+export function parseDiscountsSearch(raw: Record<string, unknown>): DiscountsSearch {
+  return {
+    status: oneOf(raw["status"], ["all", "active", "scheduled", "expired", "disabled"] as const) ?? "all",
+    q: text(raw["q"]),
+    type: oneOf(raw["type"], ["percent", "fixed", "free_shipping", "buy_x_get_y"] as const),
+    sort: oneOf(raw["sort"], SORTS.map((x) => x.id)) ?? "created_desc",
+    ...parsePaging(raw),
+  };
+}
+
+export function discountsListInput(s: DiscountsSearch, paging: { limit: number; offset: number } = { limit: s.size, offset: (s.page - 1) * s.size }) {
+  return {
+    sort: s.sort,
+    ...(s.status !== "all" ? { status: s.status } : {}),
+    ...(s.q ? { search: s.q } : {}),
+    ...(s.type ? { type: s.type } : {}),
+    ...paging,
+  };
+}
+
+type DiscountRow = Awaited<ReturnType<typeof client.admin.discounts.list>>["items"][number];
+
+const useStatusCount = (status?: DiscountStatus) =>
+  useQuery(orpc.admin.discounts.list.queryOptions({ input: { limit: 1, ...(status ? { status } : {}) } })).data?.total;
 
 export const Route = createFileRoute("/_store/discounts")({
+  validateSearch: (raw: Record<string, unknown>): Partial<DiscountsSearch> =>
+    compactSearch(parseDiscountsSearch(raw), { status: "all", sort: "created_desc", page: 1, size: 25 }),
   pendingComponent: () => (
     <PageSkeleton>
       <div className="grid gap-4 sm:grid-cols-3">
@@ -32,175 +102,222 @@ export const Route = createFileRoute("/_store/discounts")({
   component: DiscountsPage,
 });
 
+const benefit = (d: DiscountRow) =>
+  d.type === "percent" ? `${d.value}% off` : d.type === "fixed" ? `₹${d.value / 100} off` : d.type === "free_shipping" ? "Free shipping" : "Buy X get Y";
+
+const EXPORT_HEADER = ["Code", "Title", "Type", "Value", "Used", "Usage limit", "Status", "Combinable", "Starts", "Ends", "Created"];
+const exportRow = (d: DiscountRow) => [
+  d.code ?? "",
+  d.title,
+  d.type,
+  d.type === "fixed" ? (d.value / 100).toFixed(2) : d.value,
+  d.usedCount,
+  d.usageLimit ?? "",
+  d.status,
+  d.combinable ? "yes" : "no",
+  d.startsAt ?? "",
+  d.endsAt ?? "",
+  d.createdAt,
+];
+
+// ---------------------------------------------------------------------------------------------------------------
+// Page
+// ---------------------------------------------------------------------------------------------------------------
+
 export function DiscountsPage() {
   const queryClient = useQueryClient();
-  const [search, setSearch] = useState("");
-  const [showModal, setShowModal] = useState(false);
-  const [code, setCode] = useState("");
-  const [title, setTitle] = useState("");
-  const [type, setType] = useState<"percent" | "fixed" | "free_shipping" | "buy_x_get_y">("percent");
-  const [value, setValue] = useState(10);
-  const [usageLimit, setUsageLimit] = useState<string>("100");
+  const [s, update] = useUrlTableState(parseDiscountsSearch);
+  const bulk = useBulkRunner();
+  const setFilter = (patch: Record<string, unknown>) => update({ ...patch, page: undefined });
   const [copiedId, setCopiedId] = useState<string | null>(null);
-  const [actionError, setActionError] = useState<string | null>(null);
+  const [toDelete, setToDelete] = useState<DiscountRow[] | null>(null);
 
-  // oRPC Queries
-  const { data, isLoading } = useQuery(
-    orpc.admin.discounts.list.queryOptions({
-      input: {
-        search: search.trim() ? search.trim() : undefined,
-      },
-    }),
-  );
+  const [searchText, setSearchText] = useDebouncedValue(s.q ?? "", (v) => update({ q: v.trim() || undefined, page: undefined }));
 
-  // Mutations
-  const createMutation = useMutation(
-    orpc.admin.discounts.create.mutationOptions({
-      onSuccess: () => {
-        queryClient.invalidateQueries({ queryKey: orpc.admin.discounts.list.key() });
-        setShowModal(false);
-        setCode("");
-        setTitle("");
-        setValue(10);
-        setUsageLimit("100");
-        setActionError(null);
-      },
-      onError: (err: Error) => {
-        setActionError(err.message || "Failed to create discount");
-      },
-    }),
-  );
+  const list = useQuery({ ...orpc.admin.discounts.list.queryOptions({ input: discountsListInput(s) }), placeholderData: keepPreviousData });
+  const rows = useMemo(() => list.data?.items ?? [], [list.data]);
+  const total = list.data?.total ?? 0;
 
-  const updateMutation = useMutation(
-    orpc.admin.discounts.update.mutationOptions({
-      onSuccess: () => {
-        queryClient.invalidateQueries({ queryKey: orpc.admin.discounts.list.key() });
-      },
-      onError: (err: Error) => {
-        setActionError(err.message || "Failed to update discount");
-      },
-    }),
-  );
+  const totalAll = useStatusCount();
+  const activeCount = useStatusCount("active");
+  const scheduledCount = useStatusCount("scheduled");
 
-  const deleteMutation = useMutation(
-    orpc.admin.discounts.delete.mutationOptions({
-      onSuccess: () => {
-        queryClient.invalidateQueries({ queryKey: orpc.admin.discounts.list.key() });
+  const hasFilters = Boolean(s.q || s.type);
+  const clearFilters = () => {
+    setSearchText("");
+    update({ q: undefined, type: undefined, page: undefined });
+  };
+
+  const sel = useTableSelection({ rows, getId: (d: DiscountRow) => d.id, total, resetKey: JSON.stringify([s.status, s.q, s.type]) });
+  const refresh = () => void queryClient.invalidateQueries({ queryKey: orpc.admin.discounts.key() });
+
+  const setStatus = (items: DiscountRow[], status: "active" | "disabled") =>
+    bulk.run({
+      rows: items,
+      getId: (d) => d.id,
+      getLabel: (d) => d.code ?? d.title,
+      verb: status === "active" ? "Enabling" : "Disabling",
+      done: status === "active" ? "enabled" : "disabled",
+      noun: "discount",
+      eligible: (d) => d.status !== status,
+      action: (d) => client.admin.discounts.update({ id: d.id, status }),
+      onFinished: (ok) => {
+        sel.release(ok);
+        refresh();
       },
-      onError: (err: Error) => {
-        setActionError(err.message || "Failed to delete discount");
+    });
+
+  const remove = (items: DiscountRow[]) =>
+    bulk.run({
+      rows: items,
+      getId: (d) => d.id,
+      getLabel: (d) => d.code ?? d.title,
+      verb: "Deleting",
+      done: "deleted",
+      noun: "discount",
+      action: (d) => client.admin.discounts.delete({ id: d.id }),
+      onFinished: (ok) => {
+        sel.release(ok);
+        refresh();
       },
-    }),
-  );
+    });
 
-  const discountsList = data?.items ?? [];
-  const totalCount = data?.total ?? discountsList.length;
+  async function exportDiscounts(source: "selection" | "matching") {
+    try {
+      if (source === "selection" && !sel.allResults) {
+        downloadCsv(`discounts-${new Date().toISOString().slice(0, 10)}.csv`, toCsv(EXPORT_HEADER, sel.picked.map(exportRow)));
+        toast.success(`Exported ${sel.picked.length} discount${sel.picked.length === 1 ? "" : "s"}.`);
+        return;
+      }
+      const { rows: all, total: count } = await fetchAllPages((offset, limit) => client.admin.discounts.list(discountsListInput(s, { limit, offset })), {
+        onProgress: (done, of) => bulk.setProgress({ label: "Exporting discounts", done, total: of }),
+      });
+      downloadCsv(`discounts-${new Date().toISOString().slice(0, 10)}.csv`, toCsv(EXPORT_HEADER, all.map(exportRow)));
+      toast.success(all.length < count ? `Exported the first ${all.length} of ${count} discounts.` : `Exported ${all.length} discounts.`);
+    } catch (e) {
+      toast.error(errorMessage(e));
+    } finally {
+      bulk.setProgress(null);
+    }
+  }
 
-  type DiscountRow = (typeof discountsList)[number];
-
-  const columns: ColumnDef<DiscountRow>[] = [
+  const columns: Column<DiscountRow>[] = [
     {
-      header: "Discount Code",
+      id: "code",
+      header: "Discount code",
       cell: (d) => (
         <div className="flex items-center gap-2">
-          <span className="font-mono font-bold text-foreground bg-surface-200 px-2 py-0.5 rounded text-xs">
-            {d.code ?? "AUTOMATIC"}
-          </span>
-          {d.code && (
-            <button
-              type="button"
+          <span className="rounded bg-muted px-2 py-0.5 font-mono font-semibold text-foreground">{d.code ?? "AUTOMATIC"}</span>
+          {d.code ? (
+            <Button
+              variant="ghost"
+              size="icon-xs"
+              aria-label={`Copy code ${d.code}`}
               onClick={(e) => {
                 e.stopPropagation();
-                if (d.code) {
-                  navigator.clipboard.writeText(d.code);
-                  setCopiedId(d.id);
-                  setTimeout(() => setCopiedId(null), 1500);
-                }
+                void navigator.clipboard.writeText(d.code ?? "");
+                setCopiedId(d.id);
+                setTimeout(() => setCopiedId(null), 1500);
               }}
-              className="text-foreground-muted hover:text-foreground"
             >
-              {copiedId === d.id ? <Check className="size-3.5 text-emerald-600" /> : <Copy className="size-3.5" />}
-            </button>
-          )}
+              {copiedId === d.id ? <Check className="text-emerald-600" /> : <Copy />}
+            </Button>
+          ) : null}
         </div>
       ),
     },
+    { id: "title", header: "Title", sort: { asc: "title_asc", desc: "title_desc" }, className: "font-medium text-foreground", cell: (d) => d.title },
+    { id: "benefit", header: "Benefit", className: "font-medium text-foreground", cell: benefit },
     {
-      header: "Title",
-      cell: (d) => <span className="text-sm font-medium text-foreground">{d.title}</span>,
-    },
-    {
-      header: "Benefit",
-      cell: (d) => {
-        if (d.type === "percent") return <span className="text-sm font-semibold">{d.value}% off</span>;
-        if (d.type === "fixed") return <span className="text-sm font-semibold">₹{d.value / 100} off</span>;
-        if (d.type === "free_shipping") return <span className="text-sm font-semibold text-emerald-600">Free Shipping</span>;
-        return <span className="text-sm">Buy X Get Y</span>;
-      },
-    },
-    {
+      id: "usage",
       header: "Usage",
-      cell: (d) => (
-        <span className="text-xs text-foreground-muted">
-          {d.usedCount} {d.usageLimit ? `/ ${d.usageLimit}` : "used"}
-        </span>
-      ),
+      sort: { asc: "used_asc", desc: "used_desc" },
+      className: "text-muted-foreground",
+      cell: (d) => `${d.usedCount} ${d.usageLimit ? `/ ${d.usageLimit}` : "used"}`,
     },
+    { id: "status", header: "Status", cell: (d) => <StatusBadge status={d.status} /> },
     {
-      header: "Status",
-      cell: (d) => {
-        const badgeColors: Record<string, string> = {
-          active: "bg-emerald-500/10 text-emerald-600 dark:text-emerald-400",
-          scheduled: "bg-blue-500/10 text-blue-600 dark:text-blue-400",
-          expired: "bg-surface-200 text-foreground-muted",
-          disabled: "bg-rose-500/10 text-rose-600 dark:text-rose-400",
-        };
-        return (
-          <span className={`inline-flex rounded-full px-2 py-0.5 text-xs font-medium capitalize ${badgeColors[d.status] ?? "bg-surface-200"}`}>
-            {d.status}
-          </span>
-        );
-      },
-    },
-    {
-      header: "Actions",
-      className: "text-right",
-      headerClassName: "text-right",
-      cell: (d) => (
-        <div className="flex items-center justify-end gap-2" onClick={(e) => e.stopPropagation()}>
-          <button
-            type="button"
-            title={d.status === "active" ? "Disable discount" : "Enable discount"}
-            className="text-foreground-muted hover:text-foreground p-1"
-            onClick={() =>
-              updateMutation.mutate({
-                id: d.id,
-                status: d.status === "active" ? "disabled" : "active",
-              })
-            }
-          >
-            <Power className="size-3.5" />
-          </button>
-          <button
-            type="button"
-            title="Delete discount"
-            className="text-foreground-muted hover:text-rose-600 p-1"
-            onClick={() => deleteMutation.mutate({ id: d.id })}
-          >
-            <Trash2 className="size-3.5" />
-          </button>
-        </div>
-      ),
+      id: "created",
+      header: "Created",
+      optional: true,
+      defaultHidden: true,
+      sort: { asc: "created_asc", desc: "created_desc" },
+      className: "text-muted-foreground",
+      cell: (d) => new Date(d.createdAt).toLocaleDateString("en-IN", { day: "2-digit", month: "short", year: "numeric" }),
     },
   ];
+  const visibility = useColumnVisibility("discounts", columns);
+  const shown = columns.filter((c) => !c.optional || visibility.isVisible(c.id));
+
+  const chips: FilterChip[] = [
+    ...(s.q ? [{ key: "q", label: `Search: ${s.q}`, onRemove: () => { setSearchText(""); setFilter({ q: undefined }); } }] : []),
+    ...(s.type ? [{ key: "type", label: `Type: ${TYPES.find((t) => t.value === s.type)?.label ?? s.type}`, onRemove: () => setFilter({ type: undefined }) }] : []),
+  ];
+
+  const filterControls = (
+    <SimpleSelect ariaLabel="Discount type" className="w-full md:w-auto md:min-w-40" value={s.type ?? "any"} options={TYPES} onChange={(v) => setFilter({ type: v === "any" ? undefined : v })} />
+  );
+
+  const rowMenu = (d: DiscountRow) => (
+    <DropdownMenu>
+      <DropdownMenuTrigger render={<Button variant="ghost" size="icon" aria-label={`Actions for ${d.code ?? d.title}`} />}>
+        <MoreHorizontal />
+      </DropdownMenuTrigger>
+      <DropdownMenuContent align="end" className="min-w-44">
+        {d.code ? (
+          <DropdownMenuItem
+            onClick={() => {
+              void navigator.clipboard.writeText(d.code ?? "");
+              toast.success(`Copied ${d.code}`);
+            }}
+          >
+            <Copy /> Copy code
+          </DropdownMenuItem>
+        ) : null}
+        <DropdownMenuItem disabled={bulk.busy} onClick={() => void setStatus([d], d.status === "active" ? "disabled" : "active")}>
+          <Power /> {d.status === "active" ? "Disable" : "Enable"}
+        </DropdownMenuItem>
+        <DropdownMenuSeparator />
+        <DropdownMenuItem variant="destructive" disabled={bulk.busy} onClick={() => setToDelete([d])}>
+          <Trash2 /> Delete
+        </DropdownMenuItem>
+      </DropdownMenuContent>
+    </DropdownMenu>
+  );
+
+  const empty =
+    hasFilters || s.status !== "all" ? (
+      <div className="grid justify-items-center gap-1">
+        <p className="text-sm font-medium text-foreground">No discounts match</p>
+        <p className="text-muted-foreground">Try a different search or remove some filters.</p>
+        {hasFilters ? (
+          <Button variant="outline" size="sm" className="mt-2" onClick={clearFilters}>
+            Clear filters
+          </Button>
+        ) : null}
+      </div>
+    ) : (
+      <div className="grid justify-items-center gap-1">
+        <p className="text-sm font-medium text-foreground">No discounts yet</p>
+        <p className="text-muted-foreground">Create your first promotional discount code.</p>
+        <Button size="sm" className="mt-2" nativeButton={false} render={<Link to="/discounts/new" />}>
+          <Plus className="mr-1.5 size-3.5" aria-hidden /> Create discount
+        </Button>
+      </div>
+    );
 
   return (
     <PageContainer size="full">
-      <PageBreadcrumbs
-        items={[{ label: "Discounts" }]}
-        actions={
+      <PageHeader
+        title="Discounts"
+        description="Promotional coupons, percentage off, fixed vouchers, and free shipping rules."
+        aside={
           <div className="flex items-center gap-2">
-            <Button variant="primary" size="sm" onClick={() => setShowModal(true)}>
+            <Button variant="outline" size="sm" disabled={bulk.busy || total === 0} onClick={() => void exportDiscounts("matching")}>
+              <Download className="mr-1.5 size-3.5" aria-hidden />
+              Export
+            </Button>
+            <Button size="sm" nativeButton={false} render={<Link to="/discounts/new" />}>
               <Plus className="mr-1.5 size-3.5" aria-hidden />
               Create discount
             </Button>
@@ -208,146 +325,124 @@ export function DiscountsPage() {
         }
       />
 
-      <PageHeader
-        title="Discounts"
-        description="Promotional coupons, percentage off, fixed vouchers, and free shipping rules."
-      />
-
-      {actionError && (
-        <div className="rounded-md bg-rose-500/10 p-3 text-xs text-rose-600">
-          {actionError}
-        </div>
-      )}
-
-      <div className="grid gap-4 sm:grid-cols-3">
-        <MetricCard label="Active Discounts" value={discountsList.filter((d) => d.status === "active").length} icon={Tag} />
-        <MetricCard
-          label="Total Redemptions"
-          value={discountsList.reduce((acc, d) => acc + d.usedCount, 0)}
-          icon={Percent}
-        />
-        <MetricCard
-          label="Total Vouchers"
-          value={totalCount}
-        />
+      <div className="grid grid-cols-2 gap-3 sm:gap-4 lg:grid-cols-3">
+        <MetricCard label="Active Discounts" value={activeCount ?? "—"} icon={Tag} />
+        <MetricCard label="Scheduled" value={scheduledCount ?? "—"} icon={Percent} />
+        <MetricCard label="Total Vouchers" value={totalAll ?? "—"} />
       </div>
 
+      <ScrollTabs value={s.status} onChange={(v) => setFilter({ status: v === "all" ? undefined : v })} tabs={STATUS_TABS} />
+
       <PageSection>
-        <div className="grid gap-4">
-          <FilterBar
-            search={search}
-            onSearchChange={setSearch}
-            searchPlaceholder="Search discounts by title or code..."
-            hasActiveFilters={search.length > 0}
-            onReset={() => setSearch("")}
+        <div className="grid gap-3">
+          <TableToolbar
+            searchLabel="Search discounts"
+            searchPlaceholder="Search title or code"
+            searchText={searchText}
+            onSearchText={setSearchText}
+            filters={filterControls}
+            activeFilterCount={s.type ? 1 : 0}
+            hasFilters={hasFilters}
+            onClearFilters={clearFilters}
+            resultCount={total}
+            noun="discounts"
+            sortOptions={SORTS}
+            sort={s.sort}
+            defaultSort="created_desc"
+            onSort={(v) => setFilter({ sort: v })}
+            trailing={<ColumnsMenu columns={columns} isVisible={visibility.isVisible} onToggle={visibility.toggle} onReset={visibility.reset} />}
           />
 
-          {isLoading ? (
-            <TableSkeleton rows={5} columns={6} />
-          ) : (
-            <DataTable
-              data={discountsList}
-              columns={columns}
-              keyExtractor={(d) => d.id}
-              emptyTitle="No discounts found"
-              emptyDescription="Create your first promotional discount code."
-            />
-          )}
+          <FilterChips chips={chips} onClear={clearFilters} />
+
+          <BulkBar
+            count={sel.count}
+            noun="discount"
+            total={total}
+            allResults={sel.allResults}
+            pageFullySelected={sel.pageFullySelected}
+            onSelectAllResults={sel.selectAllResults}
+            onClear={sel.clear}
+            note={sel.allResults ? "Enable, disable and delete work on discounts you tick yourself. Export covers every matching discount." : undefined}
+          >
+            <Button variant="outline" size="sm" disabled={bulk.busy || sel.allResults} onClick={() => void setStatus(sel.picked, "active")}>
+              <Power className="mr-1.5" /> Enable
+            </Button>
+            <Button variant="outline" size="sm" disabled={bulk.busy || sel.allResults} onClick={() => void setStatus(sel.picked, "disabled")}>
+              <Power className="mr-1.5" /> Disable
+            </Button>
+            <Button variant="outline" size="sm" disabled={bulk.busy} onClick={() => void exportDiscounts("selection")}>
+              <Download className="mr-1.5" /> Export
+            </Button>
+            <Button variant="destructive" size="sm" disabled={bulk.busy || sel.allResults} onClick={() => setToDelete(sel.picked)}>
+              <Trash2 className="mr-1.5" /> Delete
+            </Button>
+            {bulk.progress ? (
+              <span role="status" className="text-muted-foreground">
+                {bulk.progress.label}… {bulk.progress.done}/{bulk.progress.total}
+              </span>
+            ) : null}
+          </BulkBar>
+
+          <DataTable
+            columns={shown}
+            rows={rows}
+            getRowId={(d) => d.id}
+            isLoading={list.isLoading}
+            isFetching={list.isFetching}
+            error={list.isError ? { message: errorMessage(list.error), onRetry: () => void list.refetch() } : null}
+            empty={empty}
+            selectedIds={sel.selectedIds}
+            onToggleRow={sel.toggleRow}
+            onTogglePage={sel.togglePage}
+            sort={s.sort}
+            onSortChange={(v) => setFilter({ sort: v === "created_desc" ? undefined : v })}
+            rowActions={rowMenu}
+            renderCard={(d, ctx) => (
+              <div className="flex items-start gap-3 p-3">
+                <div className="pt-0.5">
+                  <Checkbox aria-label={`Select ${d.code ?? d.title}`} checked={ctx.selected} onCheckedChange={() => ctx.toggle()} />
+                </div>
+                <div className="grid min-w-0 flex-1 gap-1">
+                  <div className="flex items-center justify-between gap-2">
+                    <span className="rounded bg-muted px-2 py-0.5 font-mono font-semibold text-foreground">{d.code ?? "AUTOMATIC"}</span>
+                    <StatusBadge status={d.status} />
+                  </div>
+                  <p className="truncate text-foreground">{d.title}</p>
+                  <p className="text-muted-foreground">
+                    {benefit(d)} · {d.usedCount} {d.usageLimit ? `/ ${d.usageLimit}` : "used"}
+                  </p>
+                </div>
+                {rowMenu(d)}
+              </div>
+            )}
+          />
+
+          <Pagination
+            page={s.page}
+            pageSize={s.size}
+            total={total}
+            disabled={list.isFetching}
+            onPageChange={(p) => update({ page: p === 1 ? undefined : p })}
+            onPageSizeChange={(n) => update({ size: n === 25 ? undefined : n, page: undefined })}
+          />
         </div>
       </PageSection>
 
-      {/* Create Discount Modal */}
-      {showModal ? (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
-          <div className="w-full max-w-md rounded-xl bg-surface-50 p-6 shadow-xl border border-surface-200 space-y-4">
-            <h3 className="text-lg font-bold text-foreground">Create New Discount</h3>
-
-            <div className="space-y-3">
-              <div>
-                <label className="text-xs font-medium text-foreground-muted">Discount Code (Leave empty for automatic)</label>
-                <input
-                  type="text"
-                  value={code}
-                  onChange={(e) => setCode(e.target.value.toUpperCase())}
-                  placeholder="e.g. SUMMER50"
-                  className="w-full rounded-md border border-surface-200 px-3 py-1.5 text-sm uppercase font-mono bg-surface-100"
-                />
-              </div>
-
-              <div>
-                <label className="text-xs font-medium text-foreground-muted">Title / Description</label>
-                <input
-                  type="text"
-                  value={title}
-                  onChange={(e) => setTitle(e.target.value)}
-                  placeholder="e.g. Summer Flat 20% Off"
-                  className="w-full rounded-md border border-surface-200 px-3 py-1.5 text-sm bg-surface-100"
-                />
-              </div>
-
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <label className="text-xs font-medium text-foreground-muted">Type</label>
-                  <select
-                    value={type}
-                    onChange={(e) => setType(e.target.value as "percent" | "fixed" | "free_shipping" | "buy_x_get_y")}
-                    className="w-full rounded-md border border-surface-200 px-3 py-1.5 text-sm bg-surface-100"
-                  >
-                    <option value="percent">Percentage Off</option>
-                    <option value="fixed">Fixed Amount (₹)</option>
-                    <option value="free_shipping">Free Shipping</option>
-                  </select>
-                </div>
-
-                <div>
-                  <label className="text-xs font-medium text-foreground-muted">Value ({type === "percent" ? "%" : "₹"})</label>
-                  <input
-                    type="number"
-                    value={value}
-                    onChange={(e) => setValue(Number(e.target.value))}
-                    disabled={type === "free_shipping"}
-                    className="w-full rounded-md border border-surface-200 px-3 py-1.5 text-sm bg-surface-100 disabled:opacity-50"
-                  />
-                </div>
-              </div>
-
-              <div>
-                <label className="text-xs font-medium text-foreground-muted">Usage Limit (Leave blank for unlimited)</label>
-                <input
-                  type="number"
-                  value={usageLimit}
-                  onChange={(e) => setUsageLimit(e.target.value)}
-                  placeholder="e.g. 100"
-                  className="w-full rounded-md border border-surface-200 px-3 py-1.5 text-sm bg-surface-100"
-                />
-              </div>
-            </div>
-
-            <div className="flex justify-end gap-2 pt-2">
-              <Button variant="default" size="sm" onClick={() => setShowModal(false)}>
-                Cancel
-              </Button>
-              <Button
-                variant="primary"
-                size="sm"
-                disabled={!title || createMutation.isPending}
-                onClick={() => {
-                  createMutation.mutate({
-                    code: code ? code : undefined,
-                    title,
-                    type,
-                    value: type === "fixed" ? value * 100 : value,
-                    usageLimit: usageLimit ? Number(usageLimit) : undefined,
-                    combinable: false,
-                  });
-                }}
-              >
-                {createMutation.isPending ? "Saving..." : "Save Discount"}
-              </Button>
-            </div>
-          </div>
-        </div>
-      ) : null}
+      <ConfirmDialog
+        open={toDelete !== null}
+        onOpenChange={(open) => !open && setToDelete(null)}
+        title={toDelete?.length === 1 ? `Delete ${toDelete[0]?.code ?? toDelete[0]?.title}?` : `Delete ${toDelete?.length ?? 0} discounts?`}
+        description="Customers will no longer be able to use them. This cannot be undone."
+        confirmLabel="Delete"
+        cancelLabel="Keep"
+        destructive
+        onConfirm={() => {
+          const items = toDelete ?? [];
+          setToDelete(null);
+          void remove(items);
+        }}
+      />
     </PageContainer>
   );
 }

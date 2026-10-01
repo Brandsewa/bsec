@@ -130,7 +130,6 @@ import {
   type Runtime,
   type TenantContext,
   confirmAdminOrder,
-  exportCsv,
   advanceAdminOrder,
   listAdminReturns,
   requestReturn,
@@ -627,7 +626,6 @@ describe("Generated Isolation Test Suite (M1 Real Postgres 18 Proof)", () => {
     expect(adminProcedures).toContain("orders.createInvoice");
     expect(adminProcedures).toContain("orders.confirm");
     expect(adminProcedures).toContain("orders.advance");
-    expect(adminProcedures).toContain("exports.csv");
     expect(adminProcedures).toContain("returns.list");
     expect(adminProcedures).toContain("returns.act");
     expect(adminProcedures).toContain("customers.list");
@@ -910,8 +908,6 @@ describe("Generated Isolation Test Suite (M1 Real Postgres 18 Proof)", () => {
       case "orders.createInvoice": {
         return await createAdminOrderInvoice(rt, ctx, { id: testOrderA });
       }
-      case "exports.csv":
-        return await exportCsv(rt, ctx, { kind: "orders" });
       case "orders.confirm":
       case "orders.advance":
       case "returns.list":
