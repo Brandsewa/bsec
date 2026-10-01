@@ -96,17 +96,22 @@ export function OrdersPage() {
     }),
   );
 
-  const fulfillMutation = useMutation(
-    orpc.admin.orders.createFulfillment.mutationOptions({
-      onSuccess: () => {
-        queryClient.invalidateQueries({ queryKey: orpc.admin.orders.list.key() });
-        if (selectedOrderId) {
-          queryClient.invalidateQueries({ queryKey: orpc.admin.orders.get.key({ input: { id: selectedOrderId } }) });
-        }
-      },
-      onError: (err: Error) => {
-        setActionError(err.message || "Fulfillment failed");
-      },
+  const refreshOrder = () => {
+    queryClient.invalidateQueries({ queryKey: orpc.admin.orders.list.key() });
+    if (selectedOrderId) {
+      queryClient.invalidateQueries({ queryKey: orpc.admin.orders.get.key({ input: { id: selectedOrderId } }) });
+    }
+  };
+  const confirmMutation = useMutation(
+    orpc.admin.orders.confirm.mutationOptions({
+      onSuccess: refreshOrder,
+      onError: (err: Error) => setActionError(err.message || "Could not confirm the order"),
+    }),
+  );
+  const advanceMutation = useMutation(
+    orpc.admin.orders.advance.mutationOptions({
+      onSuccess: refreshOrder,
+      onError: (err: Error) => setActionError(err.message || "Could not update the order"),
     }),
   );
 
@@ -353,15 +358,21 @@ export function OrdersPage() {
             <div className="space-y-2">
               <h3 className="text-xs font-bold uppercase tracking-wider text-foreground-muted">Actions</h3>
               <div className="grid grid-cols-2 gap-2">
-                <Button
-                  variant="primary"
-                  size="sm"
-                  className="w-full"
-                  disabled={orderDetail.order.fulfillmentStatus === "delivered" || orderDetail.order.status === "cancelled"}
-                  onClick={() => fulfillMutation.mutate({ id: selectedOrderId })}
-                >
-                  <Truck className="mr-1.5 size-3.5" /> Fulfill (Shiprocket)
-                </Button>
+                {orderDetail.order.status === "pending" && (
+                  <Button variant="primary" size="sm" className="w-full" disabled={confirmMutation.isPending} onClick={() => { setActionError(null); confirmMutation.mutate({ id: selectedOrderId }); }}>
+                    <Truck className="mr-1.5 size-3.5" /> Confirm order
+                  </Button>
+                )}
+                {["pending", "confirmed", "processing", "partially_fulfilled"].includes(orderDetail.order.status) && (
+                  <Button variant="primary" size="sm" className="w-full" disabled={advanceMutation.isPending} onClick={() => { setActionError(null); advanceMutation.mutate({ id: selectedOrderId, to: "shipped" }); }}>
+                    <Truck className="mr-1.5 size-3.5" /> Mark shipped
+                  </Button>
+                )}
+                {["pending", "confirmed", "processing", "partially_fulfilled", "fulfilled"].includes(orderDetail.order.status) && (
+                  <Button variant="default" size="sm" className="w-full" disabled={advanceMutation.isPending} onClick={() => { setActionError(null); advanceMutation.mutate({ id: selectedOrderId, to: "delivered" }); }}>
+                    <Truck className="mr-1.5 size-3.5" /> Mark delivered{orderDetail.order.paymentStatus === "cod_pending" ? " & cash collected" : ""}
+                  </Button>
+                )}
                 <Button
                   variant="default"
                   size="sm"
@@ -370,9 +381,11 @@ export function OrdersPage() {
                 >
                   <FileText className="mr-1.5 size-3.5" /> GST Invoice
                 </Button>
-                <Button variant="default" size="sm" className="w-full">
-                  <RotateCcw className="mr-1.5 size-3.5" /> Process Return
-                </Button>
+                {orderDetail.order.status === "delivered" && (
+                  <a href="/returns" className="col-span-2 text-center text-xs font-medium text-primary hover:underline">
+                    <RotateCcw className="mr-1 inline size-3" /> Returns for this store
+                  </a>
+                )}
                 <Button
                   variant="destructive"
                   size="sm"

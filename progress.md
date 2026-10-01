@@ -15,7 +15,7 @@ Test counts at this date: domain 930, db 41, platform 63, web 121, admin 23 (iso
 | M2 Catalog | Done, gaps | CSV import/export UI disabled; no Cloudflare Images re-encode; no stock field on product create |
 | M3 Storefront | Done, gaps | no SEO settings page, no CSP header, missing pages return 200 not 404 |
 | M4 Payments | **COD done, online payment not built** | real Razorpay order creation missing (online option hidden); no customer `/account` area; customer OTP cannot work in production (no SMS provider) |
-| M5 Fulfillment | **Mostly not built end to end** | Shiprocket never called; no way to create a return; emails are placeholder text; invoices have no PDF |
+| M5 Fulfillment | Manual flow done, courier not | Orders can be confirmed, shipped, delivered (COD collected) by hand; returns work end to end (shopper request, admin Returns page, restock, refund record). Shiprocket never called; invoices have no PDF. Not yet verified live |
 | M6 Store #1 live | Partly | a real store exists; no real order history or 2-week run; restore drill at real volume not done |
 | M7 Hardening | Docs only | load / noisy-neighbour / capacity numbers deferred until after M9 (decision 2026-09-29) |
 | M8 Self-service SaaS | Built, **signup unreachable until the marketing-page fix deploys** | custom domains and merchant billing coded but never run live |
@@ -38,8 +38,8 @@ Cached "not found" never cleared after a draft product was published; Add to Car
 - **Payments / shipping (deferred by decision, needs provider keys):** real Razorpay checkout and webhooks end to end; Shiprocket labels, AWB, tracking, RTO; merchant billing via Razorpay Subscriptions.
 - **Customer side:** `/account/*` (login, orders, returns, addresses, wishlist, profile, privacy/data export); `/pay/{token}`, `/address/{token}`, `/unsubscribe/{token}`; discount code entry at cart/checkout (the discount engine and admin exist); reviews.
 - **Messaging:** transactional emails send only placeholder text (`Template: X. Subject: Y`); no HTML templates; Resend key not configured.
-- **Returns and invoices:** no return request flow or admin Returns screen; GST invoice has no PDF; GST scope awaits CA review.
-- **Store admin screens missing:** Abandoned checkouts, Shipments, Returns, Reviews, Analytics, merchant Features, Domains, SEO, Checkout, Notifications, Policies, Plan and billing, Activity log, Data export, Danger zone, Blog, Announcement bar, Redirects, Files. Fake or disabled controls: Customers/Orders "Export", Products Import/Export.
+- **Returns and invoices:** returns built (7-day window after delivery; COD refunds are recorded, the merchant sends the money by hand; online refunds wait for Razorpay); the return emails are not sent yet; GST invoice has no PDF; GST scope awaits CA review.
+- **Store admin screens missing:** Abandoned checkouts, Shipments, Reviews, Analytics, merchant Features, Domains, SEO, Checkout, Notifications, Policies, Plan and billing, Activity log, Data export, Danger zone, Blog, Announcement bar, Redirects, Files. Fake or disabled controls: Customers/Orders "Export", Products Import/Export.
 - **Custom domains:** backend and Cloudflare for SaaS provider coded (needs `CLOUDFLARE_API_TOKEN`, `CLOUDFLARE_ZONE_ID`, the `stores.gobs.cloud` CNAME target); no admin Domains page; never run live.
 - **Security checklist items not verified:** Content-Security-Policy on the storefront; CSRF on mutations; rate limiting at Cloudflare.
 - **Platform:** invite links for owners/staff are shown once, not emailed; host-to-store cache means a suspend can take up to 60 s to reach the public storefront; media deletion from R2 on store deletion needs the `R2_*` keys on bsec-platform.

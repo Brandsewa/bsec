@@ -106,6 +106,10 @@ import {
   cancelAdminOrder,
   refundAdminOrder,
   createAdminFulfillment,
+  confirmAdminOrder,
+  advanceAdminOrder,
+  listAdminReturns,
+  actOnReturn,
   createAdminOrderInvoice,
   listAdminCustomers,
   getAdminCustomerDetail,
@@ -176,6 +180,7 @@ function mapAuthError(err: unknown): unknown {
     if (m.startsWith("Bad Request")) return new ORPCError("BAD_REQUEST", { message: m.replace(/^Bad Request:\s*/, "") });
     if (m.startsWith("Not Found")) return new ORPCError("NOT_FOUND", { message: m.replace(/^Not Found:\s*/, "") });
     if (m.startsWith("Conflict")) return new ORPCError("CONFLICT", { message: m.replace(/^Conflict:\s*/, "") });
+    if (/^Invalid (order|fulfillment|return|payment)? ?(state )?transition/i.test(m)) return new ORPCError("PRECONDITION_FAILED", { message: m });
     if (m.startsWith("Precondition")) return new ORPCError("PRECONDITION_FAILED", { message: m.replace(/^Precondition:\s*/, "") });
   }
   return err;
@@ -928,6 +933,49 @@ export const storeRouter = os.router({
         .handler(({ context, input }) => {
           if (!context.tenantCtx) throw new Error("Missing tenant context");
           return createAdminOrderInvoice(context.rt, context.tenantCtx, input);
+        }),
+      confirm: os.admin.orders.confirm
+        .use(requireAdmin)
+        .use(requirePermission("orders.write"))
+        .handler(async ({ context, input }) => {
+          if (!context.tenantCtx) throw new Error("Missing tenant context");
+          try {
+            return await confirmAdminOrder(context.rt, context.tenantCtx, input);
+          } catch (err) {
+            throw mapAuthError(err);
+          }
+        }),
+      advance: os.admin.orders.advance
+        .use(requireAdmin)
+        .use(requirePermission("orders.write"))
+        .handler(async ({ context, input }) => {
+          if (!context.tenantCtx) throw new Error("Missing tenant context");
+          try {
+            return await advanceAdminOrder(context.rt, context.tenantCtx, input);
+          } catch (err) {
+            throw mapAuthError(err);
+          }
+        }),
+    },
+
+    returns: {
+      list: os.admin.returns.list
+        .use(requireAdmin)
+        .use(requirePermission("orders.read"))
+        .handler(async ({ context, input }) => {
+          if (!context.tenantCtx) throw new Error("Missing tenant context");
+          return { items: await listAdminReturns(context.rt, context.tenantCtx, input ?? {}) };
+        }),
+      act: os.admin.returns.act
+        .use(requireAdmin)
+        .use(requirePermission("orders.write"))
+        .handler(async ({ context, input }) => {
+          if (!context.tenantCtx) throw new Error("Missing tenant context");
+          try {
+            return await actOnReturn(context.rt, context.tenantCtx, input);
+          } catch (err) {
+            throw mapAuthError(err);
+          }
         }),
     },
 

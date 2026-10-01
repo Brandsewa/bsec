@@ -1,6 +1,7 @@
 import { Outlet, createFileRoute, redirect, useRouterState } from "@tanstack/react-router";
 import {
   BadgePercent,
+  RotateCcw,
   CreditCard,
   FileText,
   Home,
@@ -41,6 +42,7 @@ const nav: GatedGroup[] = [
     label: "Sell",
     items: [
       { label: "Orders", href: "/orders", icon: ShoppingBag, perm: "orders.read" },
+      { label: "Returns", href: "/returns", icon: RotateCcw, perm: "orders.read" },
       { label: "Products", href: "/products", icon: Package, perm: "products.read" },
       { label: "Inventory", href: "/inventory", icon: Warehouse, perm: "products.read" },
       { label: "Customers", href: "/customers", icon: Users, perm: "customers.read" },

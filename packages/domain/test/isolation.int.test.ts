@@ -129,6 +129,11 @@ import {
   assertPermission,
   type Runtime,
   type TenantContext,
+  confirmAdminOrder,
+  advanceAdminOrder,
+  listAdminReturns,
+  requestReturn,
+  actOnReturn,
 } from "../src/index.ts";
 
 const PW = { owner: "o_test", rw: "rw_test", platform: "p_test" };
@@ -619,6 +624,10 @@ describe("Generated Isolation Test Suite (M1 Real Postgres 18 Proof)", () => {
     expect(adminProcedures).toContain("orders.refund");
     expect(adminProcedures).toContain("orders.createFulfillment");
     expect(adminProcedures).toContain("orders.createInvoice");
+    expect(adminProcedures).toContain("orders.confirm");
+    expect(adminProcedures).toContain("orders.advance");
+    expect(adminProcedures).toContain("returns.list");
+    expect(adminProcedures).toContain("returns.act");
     expect(adminProcedures).toContain("customers.list");
     expect(adminProcedures).toContain("customers.get");
     expect(adminProcedures).toContain("discounts.list");
@@ -898,6 +907,24 @@ describe("Generated Isolation Test Suite (M1 Real Postgres 18 Proof)", () => {
       }
       case "orders.createInvoice": {
         return await createAdminOrderInvoice(rt, ctx, { id: testOrderA });
+      }
+      case "orders.confirm":
+      case "orders.advance":
+      case "returns.list":
+      case "returns.act": {
+        const draft = await createAdminDraftOrder(rt, ctx, {
+          email: `life-${Date.now()}@test.com`,
+          phone: "+919876543210",
+          shippingAddress: { line1: "123 MG Road", city: "Bengaluru", stateCode: "KA", pincode: "560001" },
+          items: [{ variantId: testVariantA, quantity: 1 }],
+        });
+        if (procPath === "orders.confirm") return await confirmAdminOrder(rt, ctx, { id: draft.orderId });
+        if (procPath === "orders.advance") return await advanceAdminOrder(rt, ctx, { id: draft.orderId, to: "shipped" });
+        if (procPath === "returns.list") return await listAdminReturns(rt, ctx);
+        await advanceAdminOrder(rt, ctx, { id: draft.orderId, to: "delivered" });
+        const [line] = await getAdminOrderDetail(rt, ctx, { id: draft.orderId }).then((d) => d.items);
+        const req = await requestReturn(rt, ctx, { orderId: draft.orderId, reason: "Damaged on arrival", items: [{ orderItemId: line!.id, quantity: 1 }] });
+        return await actOnReturn(rt, ctx, { id: req.returnId, action: "approve" });
       }
 
       // --- M5 Customers Admin ---

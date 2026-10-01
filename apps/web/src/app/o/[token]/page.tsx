@@ -3,7 +3,8 @@ import type { Metadata } from "next";
 import { headers } from "next/headers";
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { evaluateStorefrontAccess, getOrderByActionToken } from "@bs/domain";
+import { evaluateStorefrontAccess, getOrderByActionToken, getOrderReturnsByToken } from "@bs/domain";
+import { ReturnRequestForm } from "@/components/orders/ReturnRequestForm.tsx";
 import { server } from "@/server/runtime.ts";
 
 interface OrderTrackingPageProps {
@@ -31,6 +32,8 @@ export default async function OrderTrackingPage({ params }: OrderTrackingPagePro
   if (!order) {
     notFound();
   }
+
+  const returnsView = await getOrderReturnsByToken(rt, access.tenantId, token);
 
   return (
     <div className="mx-auto max-w-3xl px-4 py-16 sm:px-6 lg:px-8">
@@ -90,6 +93,27 @@ export default async function OrderTrackingPage({ params }: OrderTrackingPagePro
             <span>₹{(order.grandTotal / 100).toFixed(2)}</span>
           </div>
         </div>
+
+        {returnsView && (returnsView.returns.length > 0 || returnsView.canRequest) && (
+          <div className="mt-8 space-y-4 border-t border-border pt-6">
+            {returnsView.returns.length > 0 && (
+              <div>
+                <h2 className="text-sm font-semibold uppercase tracking-wider text-muted-foreground mb-3">Returns</h2>
+                <ul className="space-y-2 text-sm">
+                  {returnsView.returns.map((r) => (
+                    <li key={r.number} className="flex justify-between gap-3">
+                      <span>
+                        <span className="font-medium text-foreground">{r.number}</span> · {r.reason}
+                      </span>
+                      <span className="rounded-full bg-muted px-3 py-0.5 text-xs font-semibold uppercase text-muted-foreground">{r.status.replace(/_/g, " ")}</span>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            )}
+            {returnsView.canRequest && <ReturnRequestForm token={token} items={returnsView.items} />}
+          </div>
+        )}
 
         <div className="mt-8 pt-6 border-t border-border flex justify-between items-center">
           <Link
