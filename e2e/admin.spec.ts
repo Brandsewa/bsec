@@ -59,7 +59,7 @@ test("the demo store shows real products, orders, customers and discounts", asyn
   await openDemoStore(page);
 
   await page.getByRole("link", { name: "Products" }).click();
-  await expect(page.getByText("Cotton Kurta")).toBeVisible();
+  await expect(page.getByRole("table").getByText("Cotton Kurta")).toBeVisible();
   await expect(page.getByText("Out of stock").first()).toBeVisible();
 
   await page.getByRole("link", { name: "Orders" }).first().click();
