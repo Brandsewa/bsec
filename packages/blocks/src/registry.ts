@@ -1,19 +1,41 @@
 import { z } from "zod";
 import type { BlockDefinition, BlockType } from "./types.ts";
-import React from "react";
-import { sanitizeRichText } from "./sanitize.ts";
+import {
+  alignSchema,
+  gapSchema,
+  hrefSchema,
+  ICON_NAMES,
+  itemsSchema,
+  justifySchema,
+  slotSchema,
+  spacingSchema,
+  toneSchema,
+  videoUrlSchema,
+  widthSchema,
+} from "./common.ts";
+import * as V from "./views.tsx";
 
-// 1. Hero Block
+/* ------------------------------------------------------------------ */
+/* Sections and content blocks (M2). Schemas are additive-only: new    */
+/* optional fields with defaults never require a version bump.         */
+/* ------------------------------------------------------------------ */
+
+// 1. Hero
 export const HeroSchema = z.object({
   title: z.string().min(1),
   subtitle: z.string().optional(),
   ctaText: z.string().optional(),
-  ctaLink: z.string().optional(),
+  ctaLink: hrefSchema.optional(),
   secondaryCtaText: z.string().optional(),
-  secondaryCtaLink: z.string().optional(),
+  secondaryCtaLink: hrefSchema.optional(),
   backgroundMediaId: z.string().optional(),
-  alignment: z.enum(["left", "center", "right"]).default("center"),
+  alignment: alignSchema.default("center"),
   overlayOpacity: z.number().min(0).max(100).default(30),
+  eyebrow: z.string().optional(),
+  tone: toneSchema.default("primary"),
+  // Pre-registry starter templates and provisioning fallbacks used these names for the main button.
+  buttonText: z.string().optional(),
+  buttonUrl: hrefSchema.optional(),
 });
 export type HeroProps = z.infer<typeof HeroSchema>;
 
@@ -28,29 +50,15 @@ export const HeroBlock: BlockDefinition<HeroProps> = {
     ctaLink: "/collections/all",
     alignment: "center",
     overlayOpacity: 30,
+    tone: "primary",
   },
-  render: ({ props }) => {
-    return React.createElement(
-      "section",
-      { className: `bs-block-hero py-20 px-4 text-${props.alignment} bg-surface` },
-      React.createElement("div", { className: "max-w-4xl mx-auto space-y-4" },
-        React.createElement("h1", { className: "text-4xl md:text-6xl font-bold tracking-tight text-foreground" }, props.title),
-        props.subtitle && React.createElement("p", { className: "text-lg md:text-xl text-muted" }, props.subtitle),
-        props.ctaText && React.createElement(
-          "div",
-          { className: "pt-4 flex gap-4 justify-center" },
-          React.createElement("a", { href: props.ctaLink || "#", className: "px-6 py-3 rounded-md bg-primary text-primary-foreground font-medium" }, props.ctaText),
-          props.secondaryCtaText && React.createElement("a", { href: props.secondaryCtaLink || "#", className: "px-6 py-3 rounded-md border border-border text-foreground font-medium" }, props.secondaryCtaText),
-        ),
-      ),
-    );
-  },
+  render: V.HeroView,
 };
 
-// 2. Banner Block
+// 2. Banner
 export const BannerSchema = z.object({
   text: z.string().min(1),
-  link: z.string().optional(),
+  link: hrefSchema.optional(),
   dismissible: z.boolean().default(false),
   variant: z.enum(["info", "promo", "warning"]).default("promo"),
 });
@@ -65,26 +73,23 @@ export const BannerBlock: BlockDefinition<BannerProps> = {
     dismissible: false,
     variant: "promo",
   },
-  render: ({ props }) => {
-    return React.createElement(
-      "div",
-      { className: "bs-block-banner py-2.5 px-4 text-center text-sm font-medium bg-primary text-primary-foreground" },
-      props.link
-        ? React.createElement("a", { href: props.link, className: "underline" }, props.text)
-        : props.text,
-    );
-  },
+  render: V.BannerView,
 };
 
-// 3. ProductGrid Block
+const productSourceSchema = z.enum(["newest", "featured", "collection", "manual"]);
+
+// 3. ProductGrid
 export const ProductGridSchema = z.object({
   title: z.string().min(1),
   subtitle: z.string().optional(),
+  source: productSourceSchema.optional(), // absent = "collection" if collectionSlug else "newest"
   collectionSlug: z.string().optional(),
+  productSlugs: z.array(z.string().max(220)).max(24).default([]),
   limit: z.number().int().min(1).max(48).default(8),
   columns: z.enum(["2", "3", "4"]).default("4"),
   showPrice: z.boolean().default(true),
   showRating: z.boolean().default(true),
+  tone: toneSchema.default("default"),
 });
 export type ProductGridProps = z.infer<typeof ProductGridSchema>;
 
@@ -95,29 +100,18 @@ export const ProductGridBlock: BlockDefinition<ProductGridProps> = {
   defaultProps: {
     title: "Featured Products",
     subtitle: "Explore our latest arrivals",
+    source: "newest",
+    productSlugs: [],
     limit: 8,
     columns: "4",
     showPrice: true,
     showRating: true,
+    tone: "default",
   },
-  render: ({ props }) => {
-    return React.createElement(
-      "section",
-      { className: "bs-block-product-grid py-12 px-4 max-w-7xl mx-auto" },
-      React.createElement("div", { className: "text-center mb-8" },
-        React.createElement("h2", { className: "text-3xl font-bold tracking-tight text-foreground" }, props.title),
-        props.subtitle && React.createElement("p", { className: "text-muted mt-2" }, props.subtitle),
-      ),
-      React.createElement(
-        "div",
-        { className: `grid grid-cols-2 md:grid-cols-${props.columns} gap-6` },
-        React.createElement("div", { className: "text-sm text-muted col-span-full text-center py-8" }, "Products display placeholder"),
-      ),
-    );
-  },
+  render: V.ProductGridView,
 };
 
-// 4. CollectionGrid Block
+// 4. CollectionGrid
 export const CollectionGridSchema = z.object({
   title: z.string().min(1),
   subtitle: z.string().optional(),
@@ -136,23 +130,24 @@ export const CollectionGridBlock: BlockDefinition<CollectionGridProps> = {
     collectionSlugs: [],
     columns: "3",
   },
-  render: ({ props }) => {
-    return React.createElement(
-      "section",
-      { className: "bs-block-collection-grid py-12 px-4 max-w-7xl mx-auto" },
-      React.createElement("h2", { className: "text-2xl font-bold mb-6 text-foreground text-center" }, props.title),
-      React.createElement("div", { className: `grid grid-cols-1 md:grid-cols-${props.columns} gap-6` }),
-    );
-  },
+  render: V.CollectionGridView,
 };
 
-// 5. ProductCarousel Block
+// 5. ProductCarousel
 export const ProductCarouselSchema = z.object({
   title: z.string().min(1),
   subtitle: z.string().optional(),
+  source: productSourceSchema.optional(),
   collectionSlug: z.string().optional(),
+  productSlugs: z.array(z.string().max(220)).max(24).default([]),
   limit: z.number().int().min(1).max(24).default(8),
   autoPlay: z.boolean().default(false),
+  columns: z.enum(["2", "3", "4", "5"]).default("4"),
+  showPrice: z.boolean().default(true),
+  showRating: z.boolean().default(true),
+  viewAllLabel: z.string().max(60).optional(),
+  viewAllHref: hrefSchema.optional(),
+  tone: toneSchema.default("default"),
 });
 export type ProductCarouselProps = z.infer<typeof ProductCarouselSchema>;
 
@@ -163,29 +158,34 @@ export const ProductCarouselBlock: BlockDefinition<ProductCarouselProps> = {
   defaultProps: {
     title: "Trending Items",
     subtitle: "Best sellers this week",
+    source: "featured",
+    productSlugs: [],
     limit: 8,
     autoPlay: false,
+    columns: "4",
+    showPrice: true,
+    showRating: true,
+    tone: "default",
   },
-  render: ({ props }) => {
-    return React.createElement(
-      "section",
-      { className: "bs-block-product-carousel py-12 px-4 max-w-7xl mx-auto overflow-hidden" },
-      React.createElement("h2", { className: "text-2xl font-bold mb-4 text-foreground" }, props.title),
-    );
-  },
+  render: V.ProductCarouselView,
 };
 
-// 6. Testimonials Block
+// 6. Testimonials
 export const TestimonialsSchema = z.object({
   title: z.string().default("What Our Customers Say"),
-  items: z.array(
-    z.object({
-      quote: z.string().min(1),
-      author: z.string().min(1),
-      role: z.string().optional(),
-      avatarMediaId: z.string().optional(),
-    }),
-  ).min(1),
+  items: z
+    .array(
+      z.object({
+        quote: z.string().min(1),
+        author: z.string().min(1),
+        role: z.string().optional(),
+        avatarMediaId: z.string().optional(),
+        rating: z.number().int().min(1).max(5).default(5),
+      }),
+    )
+    .min(1),
+  layout: z.enum(["grid", "carousel", "single"]).default("grid"),
+  tone: toneSchema.default("surface"),
 });
 export type TestimonialsProps = z.infer<typeof TestimonialsSchema>;
 
@@ -200,32 +200,16 @@ export const TestimonialsBlock: BlockDefinition<TestimonialsProps> = {
         quote: "The quality of craftsmanship surpassed my expectations. Will definitely order again!",
         author: "Aarav Sharma",
         role: "Verified Buyer",
+        rating: 5,
       },
     ],
+    layout: "grid",
+    tone: "surface",
   },
-  render: ({ props }) => {
-    return React.createElement(
-      "section",
-      { className: "bs-block-testimonials py-16 px-4 bg-surface max-w-7xl mx-auto rounded-xl" },
-      React.createElement("h2", { className: "text-3xl font-bold text-center mb-10 text-foreground" }, props.title),
-      React.createElement(
-        "div",
-        { className: "grid grid-cols-1 md:grid-cols-3 gap-8" },
-        props.items.map((item, idx) =>
-          React.createElement(
-            "blockquote",
-            { key: idx, className: "p-6 rounded-lg border border-border bg-background" },
-            React.createElement("p", { className: "text-muted italic mb-4" }, `"${item.quote}"`),
-            React.createElement("div", { className: "font-semibold text-foreground text-sm" }, item.author),
-            item.role && React.createElement("div", { className: "text-xs text-muted" }, item.role),
-          ),
-        ),
-      ),
-    );
-  },
+  render: V.TestimonialsView,
 };
 
-// 7. Reviews Block
+// 7. Reviews
 export const ReviewsSchema = z.object({
   title: z.string().default("Customer Reviews"),
   showAggregate: z.boolean().default(true),
@@ -237,24 +221,14 @@ export const ReviewsBlock: BlockDefinition<ReviewsProps> = {
   type: "Reviews",
   version: 1,
   schema: ReviewsSchema,
-  defaultProps: {
-    title: "Customer Reviews",
-    showAggregate: true,
-    limit: 6,
-  },
-  render: ({ props }) => {
-    return React.createElement(
-      "section",
-      { className: "bs-block-reviews py-12 px-4 max-w-4xl mx-auto" },
-      React.createElement("h2", { className: "text-2xl font-bold mb-6 text-foreground" }, props.title),
-    );
-  },
+  defaultProps: { title: "Customer Reviews", showAggregate: true, limit: 6 },
+  render: V.ReviewsView,
 };
 
-// 8. RichText Block (Sanitized HTML only per ADR-009)
+// 8. RichText (sanitized HTML only per ADR-009)
 export const RichTextSchema = z.object({
   content: z.string().min(1),
-  alignment: z.enum(["left", "center", "right"]).default("left"),
+  alignment: alignSchema.default("left"),
 });
 export type RichTextProps = z.infer<typeof RichTextSchema>;
 
@@ -263,30 +237,17 @@ export const RichTextBlock: BlockDefinition<RichTextProps> = {
   version: 1,
   schema: RichTextSchema,
   defaultProps: {
-    content: "<h2>About Our Craft</h2><p>We pride ourselves on attention to detail, sustainably sourced materials, and enduring design.</p>",
+    content:
+      "<h2>About Our Craft</h2><p>We pride ourselves on attention to detail, sustainably sourced materials, and enduring design.</p>",
     alignment: "left",
   },
-  render: ({ props }) => {
-    const safeContent = sanitizeRichText(props.content);
-    return React.createElement(
-      "section",
-      {
-        className: `bs-block-richtext prose dark:prose-invert py-12 px-4 max-w-4xl mx-auto text-${props.alignment}`,
-        dangerouslySetInnerHTML: { __html: safeContent },
-      },
-    );
-  },
+  render: V.RichTextView,
 };
 
-// 9. FAQ Block
+// 9. FAQ
 export const FAQSchema = z.object({
   title: z.string().default("Frequently Asked Questions"),
-  items: z.array(
-    z.object({
-      question: z.string().min(1),
-      answer: z.string().min(1),
-    }),
-  ).min(1),
+  items: z.array(z.object({ question: z.string().min(1), answer: z.string().min(1) })).min(1),
 });
 export type FAQProps = z.infer<typeof FAQSchema>;
 
@@ -297,43 +258,22 @@ export const FAQBlock: BlockDefinition<FAQProps> = {
   defaultProps: {
     title: "Frequently Asked Questions",
     items: [
-      {
-        question: "How long does shipping take?",
-        answer: "Standard shipping takes 3-5 business days across India.",
-      },
+      { question: "How long does shipping take?", answer: "Standard shipping takes 3-5 business days across India." },
       {
         question: "What is your return policy?",
         answer: "We offer hassle-free returns within 7 days of delivery for unused items.",
       },
     ],
   },
-  render: ({ props }) => {
-    return React.createElement(
-      "section",
-      { className: "bs-block-faq py-12 px-4 max-w-3xl mx-auto space-y-6" },
-      React.createElement("h2", { className: "text-3xl font-bold text-center mb-8 text-foreground" }, props.title),
-      props.items.map((item, idx) =>
-        React.createElement(
-          "details",
-          { key: idx, className: "group border border-border rounded-lg p-4 bg-surface cursor-pointer" },
-          React.createElement("summary", { className: "font-semibold text-foreground" }, item.question),
-          React.createElement("p", { className: "mt-2 text-muted text-sm" }, item.answer),
-        ),
-      ),
-    );
-  },
+  render: V.FaqView,
 };
 
-// 10. Gallery Block
+// 10. Gallery
 export const GallerySchema = z.object({
   title: z.string().optional(),
-  images: z.array(
-    z.object({
-      mediaId: z.string().min(1),
-      caption: z.string().optional(),
-      link: z.string().optional(),
-    }),
-  ).default([]),
+  images: z
+    .array(z.object({ mediaId: z.string().min(1), caption: z.string().optional(), link: hrefSchema.optional() }))
+    .default([]),
   layout: z.enum(["grid", "masonry"]).default("grid"),
 });
 export type GalleryProps = z.infer<typeof GallerySchema>;
@@ -342,21 +282,11 @@ export const GalleryBlock: BlockDefinition<GalleryProps> = {
   type: "Gallery",
   version: 1,
   schema: GallerySchema,
-  defaultProps: {
-    title: "Lookbook",
-    images: [],
-    layout: "grid",
-  },
-  render: ({ props }) => {
-    return React.createElement(
-      "section",
-      { className: "bs-block-gallery py-12 px-4 max-w-7xl mx-auto" },
-      props.title && React.createElement("h2", { className: "text-2xl font-bold mb-6 text-foreground text-center" }, props.title),
-    );
-  },
+  defaultProps: { title: "Lookbook", images: [], layout: "grid" },
+  render: V.GalleryView,
 };
 
-// 11. Newsletter Block
+// 11. Newsletter
 export const NewsletterSchema = z.object({
   title: z.string().default("Subscribe to Our Newsletter"),
   subtitle: z.string().default("Get updates on new releases, special discounts, and seasonal collections."),
@@ -375,31 +305,14 @@ export const NewsletterBlock: BlockDefinition<NewsletterProps> = {
     buttonText: "Subscribe",
     placeholder: "Enter your email address",
   },
-  render: ({ props }) => {
-    return React.createElement(
-      "section",
-      { className: "bs-block-newsletter py-16 px-4 bg-surface text-center max-w-4xl mx-auto rounded-xl my-8 border border-border" },
-      React.createElement("h2", { className: "text-3xl font-bold mb-2 text-foreground" }, props.title),
-      props.subtitle && React.createElement("p", { className: "text-muted mb-6 max-w-xl mx-auto" }, props.subtitle),
-      React.createElement(
-        "form",
-        { className: "flex max-w-md mx-auto gap-2", onSubmit: (e) => e.preventDefault() },
-        React.createElement("input", { type: "email", placeholder: props.placeholder, className: "flex-1 px-4 py-2 rounded-md border border-border bg-background text-foreground" }),
-        React.createElement("button", { type: "submit", className: "px-6 py-2 rounded-md bg-primary text-primary-foreground font-medium" }, props.buttonText),
-      ),
-    );
-  },
+  render: V.NewsletterView,
 };
 
-// 12. UspStrip Block
+// 12. UspStrip
 export const UspStripSchema = z.object({
-  items: z.array(
-    z.object({
-      icon: z.string().min(1),
-      title: z.string().min(1),
-      description: z.string().min(1),
-    }),
-  ).min(1),
+  items: z
+    .array(z.object({ icon: z.string().min(1), title: z.string().min(1), description: z.string().min(1) }))
+    .min(1),
 });
 export type UspStripProps = z.infer<typeof UspStripSchema>;
 
@@ -415,41 +328,251 @@ export const UspStripBlock: BlockDefinition<UspStripProps> = {
       { icon: "Headphones", title: "Dedicated Support", description: "Friendly support via phone and WhatsApp" },
     ],
   },
-  render: ({ props }) => {
-    return React.createElement(
-      "section",
-      { className: "bs-block-usp-strip py-8 px-4 border-y border-border bg-surface" },
-      React.createElement(
-        "div",
-        { className: "max-w-7xl mx-auto grid grid-cols-2 md:grid-cols-4 gap-6" },
-        props.items.map((item, idx) =>
-          React.createElement(
-            "div",
-            { key: idx, className: "flex flex-col items-center text-center p-3" },
-            React.createElement("div", { className: "font-semibold text-foreground text-sm" }, item.title),
-            React.createElement("div", { className: "text-xs text-muted mt-1" }, item.description),
-          ),
-        ),
-      ),
-    );
+  render: V.UspStripView,
+};
+
+/* ------------------------------------------------------------------ */
+/* Layout primitives. Children live in the `content` slot.             */
+/* ------------------------------------------------------------------ */
+
+export const SectionSchema = z.object({
+  tone: toneSchema.default("default"),
+  paddingY: spacingSchema.default("lg"),
+  width: widthSchema.default("wide"),
+  backgroundMediaId: z.string().optional(),
+  overlayOpacity: z.number().min(0).max(100).default(0),
+  content: slotSchema,
+});
+export type SectionProps = z.infer<typeof SectionSchema>;
+export const SectionBlock: BlockDefinition<SectionProps> = {
+  type: "Section",
+  version: 1,
+  schema: SectionSchema,
+  defaultProps: { tone: "default", paddingY: "lg", width: "wide", overlayOpacity: 0, content: [] },
+  render: V.SectionView,
+};
+
+export const ContainerSchema = z.object({
+  width: widthSchema.default("default"),
+  tone: toneSchema.default("default"),
+  paddingY: spacingSchema.default("none"),
+  align: alignSchema.default("left"),
+  content: slotSchema,
+});
+export type ContainerProps = z.infer<typeof ContainerSchema>;
+export const ContainerBlock: BlockDefinition<ContainerProps> = {
+  type: "Container",
+  version: 1,
+  schema: ContainerSchema,
+  defaultProps: { width: "default", tone: "default", paddingY: "none", align: "left", content: [] },
+  render: V.ContainerView,
+};
+
+export const GridSchema = z.object({
+  columns: z.number().int().min(1).max(6).default(3),
+  columnsMobile: z.number().int().min(1).max(2).default(1),
+  gap: gapSchema.default("md"),
+  content: slotSchema,
+});
+export type GridProps = z.infer<typeof GridSchema>;
+export const GridBlock: BlockDefinition<GridProps> = {
+  type: "Grid",
+  version: 1,
+  schema: GridSchema,
+  defaultProps: { columns: 3, columnsMobile: 1, gap: "md", content: [] },
+  render: V.GridView,
+};
+
+export const FlexRowSchema = z.object({
+  gap: gapSchema.default("md"),
+  alignItems: itemsSchema.default("stretch"),
+  justify: justifySchema.default("start"),
+  content: slotSchema,
+});
+export type FlexRowProps = z.infer<typeof FlexRowSchema>;
+export const FlexRowBlock: BlockDefinition<FlexRowProps> = {
+  type: "FlexRow",
+  version: 1,
+  schema: FlexRowSchema,
+  defaultProps: { gap: "md", alignItems: "stretch", justify: "start", content: [] },
+  render: V.FlexRowView,
+};
+
+export const FlexColumnSchema = z.object({
+  gap: gapSchema.default("sm"),
+  alignItems: itemsSchema.default("stretch"),
+  content: slotSchema,
+});
+export type FlexColumnProps = z.infer<typeof FlexColumnSchema>;
+export const FlexColumnBlock: BlockDefinition<FlexColumnProps> = {
+  type: "FlexColumn",
+  version: 1,
+  schema: FlexColumnSchema,
+  defaultProps: { gap: "sm", alignItems: "stretch", content: [] },
+  render: V.FlexColumnView,
+};
+
+export const SpacerSchema = z.object({ size: z.enum(["sm", "md", "lg", "xl"]).default("md") });
+export type SpacerProps = z.infer<typeof SpacerSchema>;
+export const SpacerBlock: BlockDefinition<SpacerProps> = {
+  type: "Spacer",
+  version: 1,
+  schema: SpacerSchema,
+  defaultProps: { size: "md" },
+  render: V.SpacerView,
+};
+
+export const DividerSchema = z.object({ width: widthSchema.default("default") });
+export type DividerProps = z.infer<typeof DividerSchema>;
+export const DividerBlock: BlockDefinition<DividerProps> = {
+  type: "Divider",
+  version: 1,
+  schema: DividerSchema,
+  defaultProps: { width: "default" },
+  render: V.DividerView,
+};
+
+/* ------------------------------------------------------------------ */
+/* Content primitives                                                  */
+/* ------------------------------------------------------------------ */
+
+export const HeadingSchema = z.object({
+  text: z.string().min(1).max(300),
+  level: z.enum(["h1", "h2", "h3", "h4"]).default("h2"),
+  size: z.enum(["sm", "md", "lg", "xl"]).default("lg"),
+  align: alignSchema.default("left"),
+});
+export type HeadingProps = z.infer<typeof HeadingSchema>;
+export const HeadingBlock: BlockDefinition<HeadingProps> = {
+  type: "Heading",
+  version: 1,
+  schema: HeadingSchema,
+  defaultProps: { text: "Heading", level: "h2", size: "lg", align: "left" },
+  render: V.HeadingView,
+};
+
+export const TextSchema = z.object({
+  text: z.string().min(1).max(5000),
+  align: alignSchema.default("left"),
+  muted: z.boolean().default(false),
+});
+export type TextProps = z.infer<typeof TextSchema>;
+export const TextBlock: BlockDefinition<TextProps> = {
+  type: "Text",
+  version: 1,
+  schema: TextSchema,
+  defaultProps: { text: "Write something helpful for your customers.", align: "left", muted: false },
+  render: V.TextView,
+};
+
+export const ImageSchema = z.object({
+  mediaId: z.string().optional(),
+  alt: z.string().max(300).default(""),
+  ratio: z.enum(["auto", "square", "4-3", "16-9"]).default("auto"),
+  rounded: z.boolean().default(false),
+  href: hrefSchema.optional(),
+});
+export type ImageProps = z.infer<typeof ImageSchema>;
+export const ImageBlock: BlockDefinition<ImageProps> = {
+  type: "Image",
+  version: 1,
+  schema: ImageSchema,
+  defaultProps: { alt: "", ratio: "auto", rounded: false },
+  render: V.ImageView,
+};
+
+export const VideoSchema = z.object({ url: videoUrlSchema.default("") });
+export type VideoProps = z.infer<typeof VideoSchema>;
+export const VideoBlock: BlockDefinition<VideoProps> = {
+  type: "Video",
+  version: 1,
+  schema: VideoSchema,
+  defaultProps: { url: "" },
+  render: V.VideoView,
+};
+
+export const ButtonSchema = z.object({
+  label: z.string().min(1).max(80),
+  href: hrefSchema.default("/"),
+  variant: z.enum(["primary", "secondary", "outline"]).default("primary"),
+  size: z.enum(["sm", "md", "lg"]).default("md"),
+  fullWidth: z.boolean().default(false),
+  align: alignSchema.default("left"),
+});
+export type ButtonProps = z.infer<typeof ButtonSchema>;
+export const ButtonBlock: BlockDefinition<ButtonProps> = {
+  type: "Button",
+  version: 1,
+  schema: ButtonSchema,
+  defaultProps: { label: "Shop now", href: "/collections/all", variant: "primary", size: "md", fullWidth: false, align: "left" },
+  render: V.ButtonView,
+};
+
+export const IconSchema = z.object({
+  name: z.enum(ICON_NAMES).default("star"),
+  size: z.enum(["sm", "md", "lg"]).default("md"),
+  align: alignSchema.default("left"),
+});
+export type IconProps = z.infer<typeof IconSchema>;
+export const IconBlock: BlockDefinition<IconProps> = {
+  type: "Icon",
+  version: 1,
+  schema: IconSchema,
+  defaultProps: { name: "star", size: "md", align: "left" },
+  render: V.IconView,
+};
+
+export const LinkSchema = z.object({
+  label: z.string().min(1).max(120),
+  href: hrefSchema.default("/"),
+  newTab: z.boolean().default(false),
+});
+export type LinkProps = z.infer<typeof LinkSchema>;
+export const LinkBlock: BlockDefinition<LinkProps> = {
+  type: "Link",
+  version: 1,
+  schema: LinkSchema,
+  defaultProps: { label: "Learn more", href: "/", newTab: false },
+  render: V.LinkView,
+};
+
+/* ------------------------------------------------------------------ */
+/* Conversion widgets                                                  */
+/* ------------------------------------------------------------------ */
+
+export const CallToActionSchema = z.object({
+  heading: z.string().min(1).max(200),
+  text: z.string().max(600).optional(),
+  primaryLabel: z.string().max(80).optional(),
+  primaryHref: hrefSchema.optional(),
+  secondaryLabel: z.string().max(80).optional(),
+  secondaryHref: hrefSchema.optional(),
+  backgroundMediaId: z.string().optional(),
+  overlayOpacity: z.number().min(0).max(100).default(45),
+  tone: toneSchema.default("primary"),
+  align: alignSchema.default("center"),
+});
+export type CallToActionProps = z.infer<typeof CallToActionSchema>;
+export const CallToActionBlock: BlockDefinition<CallToActionProps> = {
+  type: "CallToAction",
+  version: 1,
+  schema: CallToActionSchema,
+  defaultProps: {
+    heading: "Ready to order?",
+    text: "Join thousands of happy customers.",
+    primaryLabel: "Shop now",
+    primaryHref: "/collections/all",
+    overlayOpacity: 45,
+    tone: "primary",
+    align: "center",
   },
+  render: V.CallToActionView,
 };
 
 export { type BlockType } from "./types.ts";
 
-export type AnyBlockDefinition =
-  | BlockDefinition<HeroProps>
-  | BlockDefinition<BannerProps>
-  | BlockDefinition<ProductGridProps>
-  | BlockDefinition<CollectionGridProps>
-  | BlockDefinition<ProductCarouselProps>
-  | BlockDefinition<TestimonialsProps>
-  | BlockDefinition<ReviewsProps>
-  | BlockDefinition<RichTextProps>
-  | BlockDefinition<FAQProps>
-  | BlockDefinition<GalleryProps>
-  | BlockDefinition<NewsletterProps>
-  | BlockDefinition<UspStripProps>;
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+export type AnyBlockDefinition = BlockDefinition<any>;
 
 // Registry Map
 export const BLOCK_DEFINITIONS: Record<BlockType, AnyBlockDefinition> = {
@@ -465,6 +588,21 @@ export const BLOCK_DEFINITIONS: Record<BlockType, AnyBlockDefinition> = {
   Gallery: GalleryBlock,
   Newsletter: NewsletterBlock,
   UspStrip: UspStripBlock,
+  Section: SectionBlock,
+  Container: ContainerBlock,
+  Grid: GridBlock,
+  FlexRow: FlexRowBlock,
+  FlexColumn: FlexColumnBlock,
+  Spacer: SpacerBlock,
+  Divider: DividerBlock,
+  Heading: HeadingBlock,
+  Text: TextBlock,
+  Image: ImageBlock,
+  Video: VideoBlock,
+  Button: ButtonBlock,
+  Icon: IconBlock,
+  Link: LinkBlock,
+  CallToAction: CallToActionBlock,
 };
 
 export const BLOCK_TYPES = Object.keys(BLOCK_DEFINITIONS) as BlockType[];

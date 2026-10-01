@@ -35,7 +35,7 @@ const navGroups: NavGroup[] = [
       { label: "Domains", href: "/domains", icon: Globe },
       { label: "Plans & Billing", href: "/plans", icon: CreditCard },
       { label: "Signups Funnel", href: "/signups", icon: Users },
-      { label: "Templates & Blocks", href: "/templates", icon: Layers },
+      { label: "Themes", href: "/templates", icon: Layers },
     ],
   },
   {

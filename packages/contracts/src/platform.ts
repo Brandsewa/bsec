@@ -396,18 +396,73 @@ export const platformSignupsContract = {
     }))),
 };
 
+export const ThemeTemplateSummary = z.object({
+  code: z.string(),
+  name: z.string(),
+  industry: z.string(),
+  description: z.string().nullable(),
+  features: z.array(z.string()),
+  version: z.number(),
+  isActive: z.boolean(),
+  hasUnpublishedChanges: z.boolean(),
+  publishedAt: z.string().nullable(),
+  updatedAt: z.string(),
+});
+export type ThemeTemplateSummary = z.infer<typeof ThemeTemplateSummary>;
+
+export const ThemeTemplateDetail = ThemeTemplateSummary.extend({
+  // One block list per page key ("home", plus any landing pages the theme ships).
+  draftPages: z.record(z.string(), z.array(z.unknown())),
+  draftTokens: z.record(z.string(), z.unknown()),
+});
+export type ThemeTemplateDetail = z.infer<typeof ThemeTemplateDetail>;
+
 export const platformTemplatesContract = {
   list: oc
     .route({ method: "GET", path: "/platform/templates" })
-    .output(z.array(z.object({
-      id: z.string(),
-      code: z.string(),
-      name: z.string(),
-      industry: z.string(),
-      previewImageKey: z.string().nullable().optional(),
-      version: z.number(),
-      isActive: z.boolean(),
-    }))),
+    .output(z.array(ThemeTemplateSummary)),
+  get: oc
+    .route({ method: "GET", path: "/platform/templates/{code}" })
+    .input(z.object({ code: z.string() }))
+    .output(ThemeTemplateDetail),
+  create: oc
+    .route({ method: "POST", path: "/platform/templates" })
+    .input(
+      z.object({
+        name: z.string().min(1).max(120),
+        industry: z.string().max(60).optional(),
+        description: z.string().max(500).optional(),
+        cloneFromCode: z.string().optional(),
+      }),
+    )
+    .output(ThemeTemplateDetail),
+  saveDraft: oc
+    .route({ method: "POST", path: "/platform/templates/{code}/draft" })
+    .input(
+      z.object({
+        code: z.string(),
+        pages: z.record(z.string(), z.array(z.unknown())),
+        tokens: z.record(z.string(), z.unknown()).optional(),
+      }),
+    )
+    .output(z.object({ ok: z.literal(true) })),
+  publish: oc
+    .route({ method: "POST", path: "/platform/templates/{code}/publish" })
+    .input(z.object({ code: z.string() }))
+    .output(z.object({ version: z.number() })),
+  updateMeta: oc
+    .route({ method: "PATCH", path: "/platform/templates/{code}" })
+    .input(
+      z.object({
+        code: z.string(),
+        name: z.string().min(1).max(120).optional(),
+        description: z.string().max(500).nullable().optional(),
+        industry: z.string().max(60).optional(),
+        features: z.array(z.string().max(80)).max(10).optional(),
+        isActive: z.boolean().optional(),
+      }),
+    )
+    .output(ThemeTemplateSummary),
 };
 
 export const platformSupportContract = {

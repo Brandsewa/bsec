@@ -1,5 +1,6 @@
 import { migrateBlockDocument, validateBlockDocument, type ValidationError } from "./document.ts";
 import type { BlockDocument, BlockInstance } from "./types.ts";
+import { filterVisibleBlocks } from "./tree.ts";
 
 export type RenderBlockResult =
   | { success: true; blocks: BlockInstance[]; errors?: never }
@@ -35,7 +36,7 @@ export function renderBlockDocument(doc: unknown): RenderBlockResult {
       };
     }
 
-    const visibleBlocks = validated.data.blocks.filter((block) => !block.hidden);
+    const visibleBlocks = filterVisibleBlocks(validated.data.blocks);
 
     return {
       success: true,

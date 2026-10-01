@@ -20,6 +20,9 @@ export const themes = tenantTable(
   {
     id: uuid("id").default(sql`uuidv7()`).primaryKey(),
     templateCode: text("template_code").notNull().default("default"),
+    // Version of the platform template this store last copied from (M10). Lets the admin show
+    // "a newer version exists" without ever overwriting the store's own customizations.
+    templateVersion: integer("template_version").notNull().default(1),
     name: text("name").notNull().default("Default Theme"),
     tokens: jsonb("tokens").notNull(),
     status: text("status").notNull().default("draft"), // draft, published

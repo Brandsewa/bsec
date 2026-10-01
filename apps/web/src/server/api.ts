@@ -53,6 +53,11 @@ import {
   listMemberships,
   listMenus,
   listPages,
+  listPageVersions,
+  listThemeLibrary,
+  activateTheme,
+  previewThemeTemplate,
+  previewPageRenderData,
   listProducts,
   listStoreFeatureFlags,
   publishBrandSettings,
@@ -627,6 +632,27 @@ export const storeRouter = os.router({
           if (!context.tenantCtx) throw new Error("Missing tenant context");
           return updateTheme(context.rt, context.tenantCtx, input);
         }),
+      library: os.admin.themes.library
+        .use(requireAdmin)
+        .use(requirePermission("content.write"))
+        .handler(({ context }) => {
+          if (!context.tenantCtx) throw new Error("Missing tenant context");
+          return listThemeLibrary(context.rt, context.tenantCtx);
+        }),
+      preview: os.admin.themes.preview
+        .use(requireAdmin)
+        .use(requirePermission("content.write"))
+        .handler(({ context, input }) => {
+          if (!context.tenantCtx) throw new Error("Missing tenant context");
+          return previewThemeTemplate(context.rt, context.tenantCtx, input);
+        }),
+      activate: os.admin.themes.activate
+        .use(requireAdmin)
+        .use(requirePermission("theme.publish"))
+        .handler(({ context, input }) => {
+          if (!context.tenantCtx) throw new Error("Missing tenant context");
+          return activateTheme(context.rt, context.tenantCtx, input);
+        }),
     },
 
     // Pages
@@ -644,6 +670,20 @@ export const storeRouter = os.router({
         .handler(({ context, input }) => {
           if (!context.tenantCtx) throw new Error("Missing tenant context");
           return getPage(context.rt, context.tenantCtx, input);
+        }),
+      versions: os.admin.pages.versions
+        .use(requireAdmin)
+        .use(requirePermission("content.write"))
+        .handler(({ context, input }) => {
+          if (!context.tenantCtx) throw new Error("Missing tenant context");
+          return listPageVersions(context.rt, context.tenantCtx, input);
+        }),
+      blockData: os.admin.pages.blockData
+        .use(requireAdmin)
+        .use(requirePermission("content.write"))
+        .handler(({ context, input }) => {
+          if (!context.tenantCtx) throw new Error("Missing tenant context");
+          return previewPageRenderData(context.rt, context.tenantCtx, input);
         }),
       create: os.admin.pages.create
         .use(requireAdmin)

@@ -1,5 +1,12 @@
 import { BLOCK_DEFINITIONS, type BlockType, BLOCK_TYPES } from "./registry.ts";
-import type { BlockInstance, BlockDocument } from "./types.ts";
+import {
+  MAX_BLOCKS_PER_DOCUMENT,
+  MAX_BLOCK_DEPTH,
+  SLOT_BLOCK_TYPES,
+  SLOT_PROP,
+  type BlockInstance,
+  type BlockDocument,
+} from "./types.ts";
 import { sanitizeRichText } from "./sanitize.ts";
 
 export type ValidationError = {
@@ -41,12 +48,11 @@ export function clearBlockMigrations(): void {
 
 /**
  * Validates a block document JSON payload against the block registry.
- * Validates document version, block schema props, enforces ID uniqueness,
- * and automatically sanitizes rich text blocks per ADR-009.
+ * Validates document version, block schema props, enforces ID uniqueness across the whole
+ * tree, recurses through layout-block slots (depth and total-count limits), and sanitizes
+ * rich text per ADR-009.
  */
 export function validateBlockDocument(doc: unknown): ValidationResult {
-  const errors: ValidationError[] = [];
-
   if (!doc || typeof doc !== "object" || Array.isArray(doc)) {
     return {
       success: false,
@@ -70,33 +76,66 @@ export function validateBlockDocument(doc: unknown): ValidationResult {
     };
   }
 
-  const seenIds = new Set<string>();
-  const validatedBlocks: BlockInstance[] = [];
+  const state: WalkState = { errors: [], seenIds: new Set<string>(), count: 0 };
+  const blocks = validateBlockList(rawDoc.blocks, "blocks", 1, state);
 
-  for (let idx = 0; idx < rawDoc.blocks.length; idx++) {
-    const rawBlock = rawDoc.blocks[idx] as Record<string, unknown> | null;
-    const blockPath = `blocks[${idx}]`;
+  if (state.errors.length > 0) {
+    return { success: false, errors: state.errors };
+  }
+
+  return { success: true, data: { version: 1, blocks } };
+}
+
+interface WalkState {
+  errors: ValidationError[];
+  seenIds: Set<string>;
+  count: number;
+}
+
+function validateBlockList(
+  rawList: unknown[],
+  listPath: string,
+  depth: number,
+  state: WalkState,
+): BlockInstance[] {
+  const out: BlockInstance[] = [];
+
+  if (depth > MAX_BLOCK_DEPTH) {
+    state.errors.push({ path: listPath, message: `Blocks are nested deeper than ${MAX_BLOCK_DEPTH} levels` });
+    return out;
+  }
+
+  for (let idx = 0; idx < rawList.length; idx++) {
+    const rawBlock = rawList[idx] as Record<string, unknown> | null;
+    const blockPath = `${listPath}[${idx}]`;
+
+    if (++state.count > MAX_BLOCKS_PER_DOCUMENT) {
+      if (state.count === MAX_BLOCKS_PER_DOCUMENT + 1) {
+        state.errors.push({ path: blockPath, message: `A page can hold at most ${MAX_BLOCKS_PER_DOCUMENT} blocks` });
+      }
+      continue;
+    }
 
     if (!rawBlock || typeof rawBlock !== "object") {
-      errors.push({ path: blockPath, message: "Block must be an object" });
+      state.errors.push({ path: blockPath, message: "Block must be an object" });
       continue;
     }
 
     const id = rawBlock.id;
     if (typeof id !== "string" || !id.trim()) {
-      errors.push({ path: `${blockPath}.id`, message: "Block ID must be a non-empty string" });
+      state.errors.push({ path: `${blockPath}.id`, message: "Block ID must be a non-empty string" });
       continue;
     }
 
-    if (seenIds.has(id)) {
-      errors.push({ path: `${blockPath}.id`, message: `Duplicate block ID: "${id}"` });
+    if (state.seenIds.has(id)) {
+      state.errors.push({ path: `${blockPath}.id`, message: `Duplicate block ID: "${id}"` });
     } else {
-      seenIds.add(id);
+      state.seenIds.add(id);
     }
 
     const type = rawBlock.type as BlockType;
     if (!type || !BLOCK_TYPES.includes(type)) {
-      errors.push({
+      state.errors.push({
         path: `${blockPath}.type`,
         message: `Unknown block type: "${String(type)}"`,
       });
@@ -115,10 +154,22 @@ export function validateBlockDocument(doc: unknown): ValidationResult {
       props.content = sanitizeRichText(props.content);
     }
 
+    // Children are validated by this walker, not by the block's zod schema.
+    let children: BlockInstance[] | undefined;
+    if (SLOT_BLOCK_TYPES.has(type)) {
+      const rawChildren = props[SLOT_PROP];
+      if (rawChildren !== undefined && !Array.isArray(rawChildren)) {
+        state.errors.push({ path: `${blockPath}.props.${SLOT_PROP}`, message: "Slot must be an array of blocks" });
+        continue;
+      }
+      children = validateBlockList((rawChildren as unknown[] | undefined) ?? [], `${blockPath}.props.${SLOT_PROP}`, depth + 1, state);
+      props[SLOT_PROP] = [];
+    }
+
     const parseResult = def.schema.safeParse(props);
     if (!parseResult.success) {
       for (const issue of parseResult.error.issues) {
-        errors.push({
+        state.errors.push({
           path: `${blockPath}.props.${issue.path.join(".")}`,
           message: issue.message,
         });
@@ -126,29 +177,19 @@ export function validateBlockDocument(doc: unknown): ValidationResult {
       continue;
     }
 
-    const validatedBlock: BlockInstance = {
-      id,
-      type,
-      version,
-      props: parseResult.data as Record<string, unknown>,
-    };
+    const parsed = parseResult.data as Record<string, unknown>;
+    if (children) {
+      parsed[SLOT_PROP] = children;
+    }
+
+    const validatedBlock: BlockInstance = { id, type, version, props: parsed };
     if (typeof rawBlock.hidden === "boolean") {
       validatedBlock.hidden = rawBlock.hidden;
     }
-    validatedBlocks.push(validatedBlock);
+    out.push(validatedBlock);
   }
 
-  if (errors.length > 0) {
-    return { success: false, errors };
-  }
-
-  return {
-    success: true,
-    data: {
-      version: 1,
-      blocks: validatedBlocks,
-    },
-  };
+  return out;
 }
 
 /**
@@ -175,6 +216,11 @@ export function migrateBlock(block: BlockInstance): BlockInstance {
     }
     currentProps = migrator(currentProps);
     currentVersion += 1;
+  }
+
+  const slot = currentProps[SLOT_PROP];
+  if (SLOT_BLOCK_TYPES.has(block.type) && Array.isArray(slot)) {
+    currentProps[SLOT_PROP] = (slot as BlockInstance[]).map(migrateBlock);
   }
 
   return {

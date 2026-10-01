@@ -8,12 +8,14 @@ import {
   getStorefrontHomePage,
   getStorefrontPage,
   getBrandSettings,
+  resolvePageRenderData,
   type CatalogListingOptions,
   type StorefrontProductDetail,
   type StorefrontCollectionDetail,
   type StorefrontCategoryDetail,
   type TenantContext,
 } from "@bs/domain";
+import { renderBlockDocument, walkBlocks, type BlockInstance } from "@bs/blocks";
 import { server } from "./runtime.ts";
 
 /**
@@ -95,6 +97,26 @@ export async function getCachedStorefrontCategory(
   return res;
 }
 
+/**
+ * Resolves store data + media URLs for a page's data-driven blocks inside the same cached
+ * scope as the page, and tags it so product/collection edits refresh the page. Pages without
+ * data blocks get no extra tags.
+ */
+async function loadRenderData(tenantId: string, tenantCtx: TenantContext, document: unknown) {
+  const rendered = renderBlockDocument(document);
+  if (!rendered.success) return { data: {}, media: {} };
+  let needsCatalog = false;
+  walkBlocks(rendered.blocks as BlockInstance[], (b) => {
+    if (b.type === "ProductGrid" || b.type === "ProductCarousel" || b.type === "CollectionGrid") needsCatalog = true;
+  });
+  if (needsCatalog) {
+    cacheTag(tenantTag(tenantId, "product"));
+    cacheTag(tenantTag(tenantId, "collection"));
+  }
+  const { rt } = server();
+  return resolvePageRenderData(rt, tenantCtx, rendered.blocks);
+}
+
 export async function getCachedStorefrontHomePage(tenantId: string) {
   "use cache";
   const { rt } = server();
@@ -104,7 +126,8 @@ export async function getCachedStorefrontHomePage(tenantId: string) {
   cacheTag(tenantTag(tenantId, "page", "home"));
   cacheTag(tenantTag(tenantId, "store-shell"));
 
-  return home;
+  const renderData = await loadRenderData(tenantId, tenantCtx, home.document);
+  return { ...home, renderData };
 }
 
 export async function getCachedStorefrontPage(tenantId: string, slug: string) {
@@ -116,6 +139,8 @@ export async function getCachedStorefrontPage(tenantId: string, slug: string) {
   if (page) {
     cacheTag(tenantTag(tenantId, "page", slug));
     cacheTag(tenantTag(tenantId, "store-shell"));
+    const renderData = await loadRenderData(tenantId, tenantCtx, page.document);
+    return { ...page, renderData };
   }
 
   return page;

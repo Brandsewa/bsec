@@ -32,6 +32,10 @@ export type CacheChange =
       type: "home_page_published";
     }
   | {
+      type: "page_published";
+      slug: string;
+    }
+  | {
       type: "nav_updated";
     }
   | {
@@ -106,6 +110,11 @@ export function computeInvalidationTags(
     case "home_page_published": {
       // Home page publish -> page:home
       tags.push(tenantTag(tenantId, "page", "home"));
+      break;
+    }
+    case "page_published": {
+      // Custom/landing page publish or rollback -> page:<slug>
+      tags.push(tenantTag(tenantId, "page", change.slug));
       break;
     }
     case "nav_updated": {

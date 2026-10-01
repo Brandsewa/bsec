@@ -39,6 +39,20 @@ describe("Admin Catalog & Inventory Routes", () => {
     expect(mod.Route.options.component).toBeDefined();
   });
 
+  it("exports valid Route definition with pendingComponent for the theme library", async () => {
+    const mod = await import("../src/routes/_store/online-store/theme-library.tsx");
+    expect(mod.Route.options.pendingComponent).toBeDefined();
+    expect(mod.Route.options.component).toBeDefined();
+  });
+
+  it("registers the full-screen visual editor route with a pending skeleton", async () => {
+    const mod = await import("../src/routes/_editor/online-store/editor/$pageId.tsx");
+    expect(mod.Route.options.pendingComponent).toBeDefined();
+    expect(mod.Route.options.component).toBeDefined();
+    const shell = await import("../src/routes/_editor.tsx");
+    expect(shell.Route.options.pendingComponent).toBeDefined();
+  });
+
   it("exports valid Route definition with pendingComponent for online-store pages", async () => {
     const mod = await import("../src/routes/_store/online-store/pages.tsx");
     expect(mod.Route).toBeDefined();

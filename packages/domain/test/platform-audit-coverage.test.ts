@@ -31,6 +31,10 @@ const EXPECTED_AUDIT_ACTIONS: Record<string, string> = {
   "staff.updateRole": "platform_staff.role_change",
   "staff.deactivate": "platform_staff.deactivate",
   "staff.reactivate": "platform_staff.reactivate",
+  "templates.create": "theme_template.create",
+  "templates.saveDraft": "theme_template.draft_save",
+  "templates.publish": "theme_template.publish",
+  "templates.updateMeta": "theme_template.update",
 };
 
 /**

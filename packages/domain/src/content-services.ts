@@ -34,6 +34,19 @@ export interface RollbackPageInput {
   targetVersionId: string;
 }
 
+/** Invalidates the cache tags for a page that was just published or rolled back. */
+async function invalidatePageCache(
+  rt: Runtime,
+  ctx: TenantContext,
+  page: { slug: string; type: string } | undefined,
+) {
+  if (!page || page.slug === "home" || page.type === "home") {
+    await invalidateCache(rt, ctx, { type: "home_page_published" });
+  } else {
+    await invalidateCache(rt, ctx, { type: "page_published", slug: page.slug });
+  }
+}
+
 // --- Theme Services ---
 export async function getTheme(rt: Runtime, ctx: TenantContext) {
   assertPermission(ctx, "content.write");
@@ -149,7 +162,11 @@ export async function listPages(rt: Runtime, ctx: TenantContext) {
   });
 }
 
-export async function getPage(rt: Runtime, ctx: TenantContext, input: { id: string }) {
+export async function getPage(
+  rt: Runtime,
+  ctx: TenantContext,
+  input: { id: string; draft?: boolean | undefined },
+) {
   assertPermission(ctx, "content.write");
   const db = rt._db.db;
 
@@ -157,9 +174,13 @@ export async function getPage(rt: Runtime, ctx: TenantContext, input: { id: stri
     const [p] = await tx.select().from(schema.pages).where(eq(schema.pages.id, input.id));
     if (!p) throw new Error(`Page not found: "${input.id}"`);
 
-    // Fetch published or latest version
-    const versionQuery = p.publishedVersionId
-      ? eq(schema.pageVersions.id, p.publishedVersionId)
+    // Fetch the version to show: the editor asks for the draft (falling back to published),
+    // everyone else gets the published version (falling back to the latest).
+    const wantedVersionId = input.draft
+      ? (p.draftVersionId ?? p.publishedVersionId)
+      : p.publishedVersionId;
+    const versionQuery = wantedVersionId
+      ? eq(schema.pageVersions.id, wantedVersionId)
       : eq(schema.pageVersions.pageId, p.id);
 
     const [ver] = await tx
@@ -177,12 +198,40 @@ export async function getPage(rt: Runtime, ctx: TenantContext, input: { id: stri
       title: p.title,
       description: undefined,
       publishedVersionId: p.publishedVersionId,
+      draftVersionId: p.draftVersionId,
+      hasUnpublishedChanges: !!p.draftVersionId && p.draftVersionId !== p.publishedVersionId,
       publishedAt: p.status === "published" ? p.updatedAt.toISOString() : undefined,
       createdAt: p.createdAt.toISOString(),
       updatedAt: p.updatedAt.toISOString(),
       blocks: doc.blocks ?? [],
       version: 1,
     };
+  });
+}
+
+/** Saved versions of a page, newest first (for rollback, including after a theme switch). */
+export async function listPageVersions(rt: Runtime, ctx: TenantContext, input: { id: string }) {
+  assertPermission(ctx, "content.write");
+  return withTenant(rt._db.db, ctx.tenantId, async (tx) => {
+    const [p] = await tx.select().from(schema.pages).where(eq(schema.pages.id, input.id));
+    if (!p) throw new Error(`Page not found: "${input.id}"`);
+    const rows = await tx
+      .select({
+        id: schema.pageVersions.id,
+        note: schema.pageVersions.note,
+        createdAt: schema.pageVersions.createdAt,
+      })
+      .from(schema.pageVersions)
+      .where(eq(schema.pageVersions.pageId, input.id))
+      .orderBy(desc(schema.pageVersions.createdAt))
+      .limit(30);
+    return rows.map((r) => ({
+      id: r.id,
+      note: r.note,
+      createdAt: r.createdAt.toISOString(),
+      isPublished: r.id === p.publishedVersionId,
+      isDraft: r.id === p.draftVersionId,
+    }));
   });
 }
 
@@ -313,9 +362,7 @@ export async function publishPage(rt: Runtime, ctx: TenantContext, input: Publis
       : await updateQuery;
     const updatedPage = Array.isArray(rows) ? rows[0] : undefined;
 
-    if (!updatedPage || updatedPage.slug === "home" || updatedPage.type === "home") {
-      await invalidateCache(rt, ctx, { type: "home_page_published" });
-    }
+    await invalidatePageCache(rt, ctx, updatedPage);
 
     return { success: true, publishedVersionId: targetVersionId };
   });
@@ -340,9 +387,7 @@ export async function rollbackPage(rt: Runtime, ctx: TenantContext, input: Rollb
       : await updateQuery;
     const updatedPage = Array.isArray(rows) ? rows[0] : undefined;
 
-    if (!updatedPage || updatedPage.slug === "home" || updatedPage.type === "home") {
-      await invalidateCache(rt, ctx, { type: "home_page_published" });
-    }
+    await invalidatePageCache(rt, ctx, updatedPage);
 
     return { success: true, publishedVersionId: input.targetVersionId };
   });

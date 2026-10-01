@@ -56,7 +56,7 @@ export async function generateMetadata({ params }: CustomPageProps): Promise<Met
 export default async function CustomContentPage({ params }: CustomPageProps) {
   const { slug } = await params;
 
-  let pageData: Awaited<ReturnType<typeof getStorefrontPage>> = null;
+  let pageData: Awaited<ReturnType<typeof getCachedStorefrontPage>> = null;
   let host = "localhost";
 
   try {
@@ -105,7 +105,7 @@ export default async function CustomContentPage({ params }: CustomPageProps) {
           {pageData.title}
         </h1>
       </header>
-      <BlockRenderer blocks={renderResult.blocks} />
+      <BlockRenderer blocks={renderResult.blocks} renderData={pageData.renderData} />
     </article>
   );
 }

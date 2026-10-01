@@ -47,7 +47,7 @@ const nav: GatedGroup[] = [
   {
     label: "Online Store",
     items: [
-      { label: "Themes", href: "/online-store/theme", icon: Palette, perm: "theme.publish" },
+      { label: "Themes", href: "/online-store/theme-library", icon: Palette, perm: "theme.publish" },
       { label: "Pages", href: "/online-store/pages", icon: FileText, perm: "content.write" },
       { label: "Navigation", href: "/online-store/menus", icon: Menu, perm: "content.write" },
     ],

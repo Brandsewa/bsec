@@ -220,7 +220,8 @@ export type PresignedUploadResponse = z.infer<typeof PresignedUploadResponse>;
 
 // --- M2 Branding Schemas ---
 export const BrandSettings = z.object({
-  id: z.string().uuid(),
+  // "default" until the store saves branding for the first time (no row yet), so not a uuid.
+  id: z.string(),
   logoLightMediaId: z.string().uuid().nullable().optional(),
   logoDarkMediaId: z.string().uuid().nullable().optional(),
   logoWidth: z.number(),
@@ -246,7 +247,8 @@ export type BrandSettings = z.infer<typeof BrandSettings>;
 
 // --- M2 Theme & Content Schemas ---
 export const Theme = z.object({
-  id: z.string().uuid(),
+  // "default-theme" until a theme is activated (no row yet), so not a uuid.
+  id: z.string(),
   name: z.string(),
   tokens: z.record(z.string(), z.unknown()),
   settings: z.record(z.string(), z.unknown()),
@@ -270,8 +272,33 @@ export type PageItem = z.infer<typeof PageItem>;
 export const PageDetail = PageItem.extend({
   blocks: z.array(z.unknown()),
   version: z.number(),
+  draftVersionId: z.string().uuid().nullable().optional(),
+  hasUnpublishedChanges: z.boolean().optional(),
 });
 export type PageDetail = z.infer<typeof PageDetail>;
+
+export const ThemeLibraryItem = z.object({
+  code: z.string(),
+  name: z.string(),
+  description: z.string().nullable(),
+  industry: z.string(),
+  features: z.array(z.string()),
+  previewImageKey: z.string().nullable(),
+  version: z.number(),
+  isCurrent: z.boolean(),
+  installedVersion: z.number().nullable(),
+  updateAvailable: z.boolean(),
+});
+export type ThemeLibraryItem = z.infer<typeof ThemeLibraryItem>;
+
+export const PageVersionItem = z.object({
+  id: z.string().uuid(),
+  note: z.string().nullable(),
+  createdAt: z.string(),
+  isPublished: z.boolean(),
+  isDraft: z.boolean(),
+});
+export type PageVersionItem = z.infer<typeof PageVersionItem>;
 
 export type MenuItem = {
   id: string;
@@ -800,6 +827,17 @@ export const adminContract = {
         }),
       )
       .output(Theme),
+    library: oc
+      .route({ method: "GET", path: "/admin/themes/library" })
+      .output(z.array(ThemeLibraryItem)),
+    preview: oc
+      .route({ method: "GET", path: "/admin/themes/{code}/preview" })
+      .input(z.object({ code: z.string().min(1).max(80) }))
+      .output(z.object({ name: z.string(), version: z.number(), blocks: z.array(z.unknown()) })),
+    activate: oc
+      .route({ method: "POST", path: "/admin/themes/activate" })
+      .input(z.object({ code: z.string().min(1).max(80) }))
+      .output(z.object({ code: z.string(), name: z.string(), version: z.number(), pages: z.array(z.string()) })),
   },
 
   // Pages
@@ -809,8 +847,17 @@ export const adminContract = {
       .output(z.array(PageItem)),
     get: oc
       .route({ method: "GET", path: "/admin/pages/{id}" })
-      .input(z.object({ id: z.string().uuid() }))
+      .input(z.object({ id: z.string().uuid(), draft: z.boolean().optional() }))
       .output(PageDetail),
+    versions: oc
+      .route({ method: "GET", path: "/admin/pages/{id}/versions" })
+      .input(z.object({ id: z.string().uuid() }))
+      .output(z.array(PageVersionItem)),
+    // Resolves store data (products, collections) for data-driven blocks in the visual editor.
+    blockData: oc
+      .route({ method: "POST", path: "/admin/pages/block-data" })
+      .input(z.object({ blocks: z.array(z.unknown()) }))
+      .output(z.object({ data: z.record(z.string(), z.unknown()), media: z.record(z.string(), z.string()) })),
     create: oc
       .route({ method: "POST", path: "/admin/pages" })
       .input(

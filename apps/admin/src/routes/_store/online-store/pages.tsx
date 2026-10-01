@@ -1,5 +1,5 @@
-import { createFileRoute } from "@tanstack/react-router";
-import { ArrowDown, ArrowUp, Eye, EyeOff, FileText, History, Plus, RotateCcw, Save, Trash2, Upload } from "lucide-react";
+import { createFileRoute, useNavigate } from "@tanstack/react-router";
+import { ArrowDown, ArrowUp, Eye, EyeOff, FileText, History, LayoutDashboard, Plus, RotateCcw, Save, Trash2, Upload } from "lucide-react";
 import { useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
@@ -560,6 +560,7 @@ function PageEditor({
     publishedVersionId ? [{ versionId: publishedVersionId, label: "Published version (loaded)" }] : [],
   );
 
+  const navigate = useNavigate();
   const blocksDirty = JSON.stringify(blocks) !== baseline;
   const detailsDirty = title !== initialTitle || slug !== initialSlug;
 
@@ -728,6 +729,15 @@ function PageEditor({
         description={published ? "This page is live. Publish again to release your changes." : "This page is not published yet."}
         actions={
           <div className="flex items-center gap-2">
+            <Button
+              size="sm"
+              disabled={blocksDirty || busy}
+              title={blocksDirty ? "Save your draft first, then open the visual editor" : undefined}
+              onClick={() => void navigate({ to: "/online-store/editor/$pageId", params: { pageId: id } })}
+            >
+              <LayoutDashboard className="mr-1.5 size-3.5" aria-hidden />
+              Design visually
+            </Button>
             <Button size="sm" loading={saveDraft.isPending} disabled={!blocksDirty || busy} onClick={() => void handleSaveDraft()}>
               <Save className="mr-1.5 size-3.5" aria-hidden />
               Save draft

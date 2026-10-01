@@ -9,7 +9,7 @@ import {
   getStoreSettings,
   tenantTag,
 } from "@bs/domain";
-import { renderBlockDocument } from "@bs/blocks";
+import { renderBlockDocument, type BlockData } from "@bs/blocks";
 import { server } from "@/server/runtime.ts";
 import { getCachedStorefrontHomePage } from "@/server/cached-storefront.ts";
 import { BlockRenderer } from "@/components/blocks/BlockRenderer.tsx";
@@ -56,6 +56,7 @@ export async function generateMetadata(): Promise<Metadata> {
 
 export default async function HomePage() {
   let blocksToRender = [] as ReturnType<typeof renderBlockDocument>["blocks"];
+  let renderData: { data: Record<string, BlockData>; media: Record<string, string> } | undefined;
   let host = "localhost";
   let storeName = "Store";
   const logoUrl: string | null = null;
@@ -96,6 +97,7 @@ export default async function HomePage() {
         const renderResult = renderBlockDocument(homeData.document);
         if (renderResult.success) {
           blocksToRender = renderResult.blocks;
+          renderData = homeData.renderData;
         }
       }
 
@@ -153,7 +155,7 @@ export default async function HomePage() {
         type="application/ld+json"
         dangerouslySetInnerHTML={{ __html: JSON.stringify(orgJsonLd) }}
       />
-      <BlockRenderer blocks={blocksToRender} />
+      <BlockRenderer blocks={blocksToRender} renderData={renderData} />
     </main>
   );
 }

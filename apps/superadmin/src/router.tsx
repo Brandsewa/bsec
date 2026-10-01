@@ -1,4 +1,4 @@
-import React from "react";
+import React, { Suspense, lazy } from "react";
 import {
   createRootRouteWithContext,
   createRoute,
@@ -72,6 +72,28 @@ const authLayoutRoute = createRoute({
     const { user, setUser } = rootRoute.useRouteContext();
     if (!user) return null;
     return <Layout user={user} onLogout={() => setUser(null)} />;
+  },
+});
+
+// The visual editor (Puck) is large: load it only when a theme is opened. It renders outside the
+// Layout shell so the canvas gets the whole window, with the same authentication guard.
+const TemplateEditor = lazy(() => import("./pages/TemplateEditor.tsx"));
+const templateEditorRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: "/templates/$code/editor",
+  beforeLoad: ({ context }) => {
+    if (!context.user) {
+      throw redirect({ to: "/login" });
+    }
+  },
+  pendingComponent: () => <PageSkeleton />,
+  component: function TemplateEditorRoute() {
+    const { code } = templateEditorRoute.useParams();
+    return (
+      <Suspense fallback={<PageSkeleton />}>
+        <TemplateEditor code={code} />
+      </Suspense>
+    );
   },
 });
 
@@ -161,6 +183,7 @@ const auditRoute = createRoute({
 
 export const routeTree = rootRoute.addChildren([
   loginRoute,
+  templateEditorRoute,
   authLayoutRoute.addChildren([
     overviewRoute,
     tenantsListRoute,

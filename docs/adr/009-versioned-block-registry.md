@@ -17,3 +17,6 @@ Merchants build home and landing pages from sections (Hero, ProductGrid, FAQ, â€
 ## Alternatives considered
 - **Unversioned JSON:** silent breakage on every component change.
 - **Merchant-authored templates (Liquid/JSX):** see ADR-010.
+
+## Update (2026-10-01)
+The Puck visual editor now sits on this registry: see [ADR-018](018-visual-theme-editor.md). Layout blocks hold children in a `content` slot; documents stay `version: 1`.

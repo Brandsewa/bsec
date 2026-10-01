@@ -14,3 +14,4 @@ New decisions get an ADR **before** code (PLAN §15). Copy `template.md`, take t
 | [008](008-payment-provider-adapter.md) | Payment provider adapter | Accepted |
 | [009](009-versioned-block-registry.md) | Versioned block registry | Accepted |
 | [010](010-no-merchant-code.md) | No merchant code execution | Accepted |
+| [018](018-visual-theme-editor.md) | Visual theme editor on the block registry | Accepted |

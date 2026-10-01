@@ -24,6 +24,11 @@ import {
 import { bootstrapRoles } from "@bs/db/bootstrap";
 import { runMigrations } from "@bs/db/migrate";
 import {
+  activateTheme,
+  listPageVersions,
+  listThemeLibrary,
+  previewPageRenderData,
+  previewThemeTemplate,
   addAdminOrderNote,
   adjustInventory,
   assertPlatformStaff,
@@ -758,6 +763,16 @@ describe("Generated Isolation Test Suite (M1 Real Postgres 18 Proof)", () => {
         return await getTheme(rt, ctx);
       case "themes.update":
         return await updateTheme(rt, ctx, { tokens: { primary: "#000" } });
+      case "themes.library":
+        return await listThemeLibrary(rt, ctx);
+      case "themes.preview":
+        return await previewThemeTemplate(rt, ctx, { code: "essential-commerce" });
+      case "themes.activate":
+        return await activateTheme(rt, ctx, { code: "essential-commerce" });
+      case "pages.versions":
+        return await listPageVersions(rt, ctx, { id: testPageA });
+      case "pages.blockData":
+        return await previewPageRenderData(rt, ctx, { blocks: [] });
       case "pages.list":
         return await listPages(rt, ctx);
       case "pages.get":

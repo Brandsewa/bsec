@@ -1,61 +1,44 @@
-import React from "react";
-import type { BlockInstance } from "@bs/blocks";
-import { getBlockDefinition } from "@bs/blocks";
+import type { ReactNode } from "react";
+import { renderBlockTree, type BlockData, type BlockInstance, type RenderContext } from "@bs/blocks";
 import { generateFaqJsonLd } from "@bs/domain";
+import "@bs/blocks/blocks.css";
+
+export interface BlockRenderData {
+  data: Record<string, BlockData>;
+  media: Record<string, string>;
+}
 
 export interface BlockRendererProps {
   blocks: BlockInstance[];
+  /** Store data and media URLs resolved on the server (see resolvePageRenderData). */
+  renderData?: BlockRenderData | undefined;
 }
 
-export function BlockRenderer({ blocks }: BlockRendererProps) {
+export function BlockRenderer({ blocks, renderData }: BlockRendererProps) {
   if (!blocks || blocks.length === 0) {
     return null;
   }
 
+  const media = renderData?.media ?? {};
+  const base: RenderContext = {
+    data: renderData?.data,
+    mediaUrl: (id) => media[id] ?? null,
+  };
+
   return (
     <div className="storefront-blocks flex flex-col w-full">
-      {blocks.map((block) => {
-        if (block.hidden) return null;
-
-        let def;
-        try {
-          def = getBlockDefinition(block.type);
-        } catch {
-          return null;
-        }
-
-        // Parse/merge props with defaults
-        const parsed = def.schema.safeParse(block.props);
-        const effectiveProps = parsed.success
-          ? parsed.data
-          : { ...def.defaultProps, ...block.props };
-
-        // For FAQ block, inject Schema.org FAQPage JSON-LD
-        let faqSchemaScript: React.ReactNode = null;
-        if (block.type === "FAQ") {
-          const faqProps = effectiveProps as {
-            items?: Array<{ question: string; answer: string }>;
-          };
-          if (faqProps.items && faqProps.items.length > 0) {
-            const faqJsonLd = generateFaqJsonLd(faqProps.items);
-            faqSchemaScript = (
-              <script
-                type="application/ld+json"
-                dangerouslySetInnerHTML={{ __html: JSON.stringify(faqJsonLd) }}
-              />
-            );
-          }
-        }
-
-        // Render registered block
-        const rendered = (def.render as (data: { props: unknown }) => React.ReactNode)({ props: effectiveProps });
-
-        return (
-          <React.Fragment key={block.id}>
-            {faqSchemaScript}
-            {rendered}
-          </React.Fragment>
-        );
+      {renderBlockTree(blocks, base, {
+        // FAQ blocks also emit Schema.org FAQPage JSON-LD
+        wrap: (block, rendered, props): ReactNode => {
+          const items = block.type === "FAQ" ? (props as { items?: Array<{ question: string; answer: string }> }).items : undefined;
+          if (!items || items.length === 0) return rendered;
+          return (
+            <>
+              <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(generateFaqJsonLd(items)) }} />
+              {rendered}
+            </>
+          );
+        },
       })}
     </div>
   );

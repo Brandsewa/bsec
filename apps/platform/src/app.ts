@@ -45,6 +45,12 @@ import {
   retryFailedJob,
   retryFailedWebhook,
   writePlatformAudit,
+  listThemeTemplates,
+  getThemeTemplate,
+  createThemeTemplate,
+  saveThemeTemplateDraft,
+  publishThemeTemplate,
+  updateThemeTemplateMeta,
   requestLogger,
   resolveRequestId,
   getClientIp,
@@ -83,6 +89,12 @@ export function getPlatformAuth(rt: Runtime): PlatformAuth {
 }
 
 const os = implement(platformContract).$context<PlatformContext>();
+
+// requirePlatformStaff has already verified the session; this narrows the type without a non-null assertion.
+const staffIdOf = (session: PlatformContext["session"]): string => {
+  if (!session) throw new Error("Unauthorized: platform access requires authenticated staff credentials");
+  return session.user.id;
+};
 
 export const requirePlatformStaff = os.middleware(async ({ context, next }) => {
   if (!context.session || context.session.type === "customer") {
@@ -332,17 +344,27 @@ export const platformRouter = os.router({
     }),
   },
   templates: {
-    list: os.templates.list.use(requirePlatformStaff).handler(async ({ context }) => {
-      const rows = await context.rt._db.db.select().from(schema.themeTemplates);
-      return rows.map((r) => ({
-        id: r.id,
-        code: r.code,
-        name: r.name,
-        industry: r.industry,
-        previewImageKey: r.previewImageKey,
-        version: r.version,
-        isActive: r.isActive,
-      }));
+    list: os.templates.list.use(requirePlatformStaff).handler(({ context }) => {
+      return listThemeTemplates(context.rt, staffIdOf(context.session));
+    }),
+    get: os.templates.get.use(requirePlatformStaff).handler(({ context, input }) => {
+      return getThemeTemplate(context.rt, staffIdOf(context.session), input.code);
+    }),
+    create: os.templates.create.use(requirePlatformStaff).handler(({ context, input }) => {
+      return createThemeTemplate(context.rt, staffIdOf(context.session), input, context.meta);
+    }),
+    saveDraft: os.templates.saveDraft.use(requirePlatformStaff).handler(({ context, input }) => {
+      return saveThemeTemplateDraft(context.rt, staffIdOf(context.session), {
+        code: input.code,
+        pages: input.pages as never,
+        tokens: input.tokens,
+      }, context.meta);
+    }),
+    publish: os.templates.publish.use(requirePlatformStaff).handler(({ context, input }) => {
+      return publishThemeTemplate(context.rt, staffIdOf(context.session), input.code, context.meta);
+    }),
+    updateMeta: os.templates.updateMeta.use(requirePlatformStaff).handler(({ context, input }) => {
+      return updateThemeTemplateMeta(context.rt, staffIdOf(context.session), input, context.meta);
     }),
   },
   support: {

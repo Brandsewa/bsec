@@ -4,7 +4,9 @@
   "private": true,
   "type": "module",
   "exports": {
-    ".": "./src/index.ts"
+    ".": "./src/index.ts",
+    "./blocks.css": "./src/blocks.css",
+    "./theme-vars": "./src/theme-vars.ts"
   },
   "scripts": {
     "typecheck": "tsc -p tsconfig.json",
@@ -21,8 +23,10 @@
     "@bs/config": "workspace:*",
     "@types/node": "24.19.0",
     "@types/react": "19.2.14",
+    "@types/react-dom": "19.2.3",
     "@types/sanitize-html": "2.16.1",
     "eslint": "10.11.0",
+    "react-dom": "19.2.4",
     "typescript": "6.0.3",
     "vitest": "5.0.2"
   }

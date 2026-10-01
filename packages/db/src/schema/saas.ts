@@ -111,6 +111,14 @@ export const themeTemplates = pgTable("theme_templates", {
   previewImageKey: text("preview_image_key"),
   defaultTokens: jsonb("default_tokens").notNull().default({}),
   defaultPages: jsonb("default_pages").notNull().default({}),
+  // Theme library fields (M10). `defaultPages`/`defaultTokens` are the PUBLISHED snapshot that
+  // stores copy on activation; the draft_* columns are the work-in-progress edited in the
+  // platform visual editor and only replace the snapshot on publish (which bumps `version`).
+  description: text("description"),
+  features: jsonb("features").$type<string[]>().notNull().default([]),
+  draftPages: jsonb("draft_pages"),
+  draftTokens: jsonb("draft_tokens"),
+  publishedAt: timestamp("published_at", { withTimezone: true }),
   version: integer("version").notNull().default(1),
   isActive: boolean("is_active").notNull().default(true),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().default(sql`now()`),
