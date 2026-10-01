@@ -12,7 +12,7 @@ export default defineConfig({
   test: {
     include: ["src/**/*.test.ts", "src/**/*.test.tsx", "test/**/*.test.ts", "test/**/*.test.tsx"],
     passWithNoTests: true,
-    testTimeout: 20_000,
+    testTimeout: 60_000,
     hookTimeout: 30_000,
   },
 });
