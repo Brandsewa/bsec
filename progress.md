@@ -2,6 +2,33 @@
 
 Source of truth: `docs/PLAN.html` v2.0. Items are ticked only after verification; the evidence is noted next to each.
 
+## M10 · Visual theme system (Puck) — shipped to production 2026-10-01
+
+Design and rationale: [`docs/adr/018-visual-theme-editor.md`](docs/adr/018-visual-theme-editor.md) (extends ADR-009 and ADR-010). Shipped in `5644b6c` (feature commit `f469208` + merge of main). CI green end to end; production health checked (web, platform, admin on `5644b6c`).
+
+### Done and verified
+- [x] **Platform themes**: `theme_templates` now has a draft and a published snapshot (+ description, features). Staff create, edit in Puck, publish and hide themes in the super admin (Themes). Audited (`theme_template.*`), role `platform_admin` or higher.
+- [x] **Launch theme** "Essential Commerce" seeded by migration `0015` (a test keeps the JSON in sync with `launch-template.ts`).
+- [x] **Store library and activation**: store admin Themes (preview with the store's own products, activate, "newer version available" notice). Activation copies tokens and pages into the store's own rows; templates are never edited by stores; re-activating adds a page version, so the previous design can be rolled back.
+- [x] **Visual editor** (`/online-store/editor/$pageId`, "Design visually" on Pages): drag and drop, nested layout blocks, live store data in the canvas, mobile/tablet/desktop viewports, save draft, publish. Lazy-loaded chunk (about 126 KB gzip); the storefront never ships Puck.
+- [x] **Blocks** (`@bs/blocks`): Section, Container, Grid, FlexRow/Column, Spacer, Divider, Heading, Text, Image, Video, Button, Icon, Link, CallToAction, plus upgraded ProductCarousel/ProductGrid/Testimonials and the 12 existing blocks. Recursive validation (depth 6, 300 blocks), enumerated props only, safe links and video hosts, own stylesheet driven by `--bs-*` brand tokens.
+- [x] **Storefront**: `renderBlockTree` with server-resolved products/collections/media in the same `"use cache"` scope as the page; non-home pages now invalidate `page:<slug>` on publish and rollback.
+- [x] **Tests**: blocks (78), editor config (7), domain integration (themes, isolation incl. the new procedures), platform audit/RBAC/read guards extended for the new procedures.
+- [x] **End-to-end run** on a real stack (Postgres, web, admin, platform, super admin). Bugs found and fixed: tsx JSX runtime, primary-foreground contrast, RichText `content` colliding with the layout slot (silent data loss), placeholder ids failing branding/theme output validation, legacy hero button props, editor reset after save.
+- [x] Production verified by the owner after deploy ("working well").
+
+### Known gaps / next
+- [ ] Storefront-hosted draft preview (only the in-editor preview exists; the "Preview on store" button is not wired).
+- [ ] Merge a newer platform theme into stores that already customised it (version is tracked; today they only see the notice).
+- [ ] Page types beyond home and custom pages (collection / product templates); the super admin editor edits only a theme's `home` page; no multi-page switcher in the store editor.
+- [ ] Theme tokens vs brand settings: a store's brand colours win over the theme's tokens.
+- [ ] Newsletter block form is not wired to the subscribe endpoint.
+- [ ] Media: needs `R2_PUBLIC_URL` (or `CF_IMAGES_DELIVERY_URL`) on the web service for block images.
+- [ ] Cache: `revalidateTag(..., "max")` serves one stale load after publish; consider `{ expire: 0 }` for page and theme tags.
+- [ ] Super admin in `vite dev` renders blank for signed-in users (React `removeChild` error); the production build works. Pre-existing, not investigated.
+- [ ] Next dev warning: homepage `generateMetadata` reads uncached data (pre-existing).
+- [ ] More themes and widgets (Phase 2): FAQ/brand-logo/social blocks, advanced styling, theme versioning and upgrade flow.
+
 ## Current milestone: M0 · Platform boots
 
 **Plan exit criterion:** push to main deploys web, platform, admin and worker to staging then production; a migration runs; a backup is restored into a scratch database.
