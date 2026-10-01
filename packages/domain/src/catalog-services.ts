@@ -1,4 +1,4 @@
-import { and, desc, eq, ilike, inArray, isNull, or, sql } from "drizzle-orm";
+import { and, asc, desc, eq, gte, ilike, inArray, isNull, lt, or, sql } from "drizzle-orm";
 import { schema, withTenant } from "@bs/db";
 import type { Runtime } from "./runtime.ts";
 import { assertPermission, type TenantContext } from "./context.ts";
@@ -10,6 +10,10 @@ export interface ListProductsQuery {
   search?: string | undefined;
   status?: "draft" | "active" | "archived" | undefined;
   categoryId?: string | undefined;
+  stock?: "in_stock" | "low" | "out" | undefined;
+  createdFrom?: string | undefined;
+  createdTo?: string | undefined;
+  sort?: "created_desc" | "created_asc" | "updated_desc" | "updated_asc" | "title_asc" | "title_desc" | undefined;
   limit?: number | undefined;
   offset?: number | undefined;
 }
@@ -94,15 +98,35 @@ export async function listProducts(
       conditions.push(ilike(schema.products.title, `%${query.search.trim()}%`));
     }
 
+    const from = query?.createdFrom ? new Date(query.createdFrom) : null;
+    const to = query?.createdTo ? new Date(query.createdTo) : null;
+    if (from && !Number.isNaN(from.getTime())) conditions.push(gte(schema.products.createdAt, from));
+    if (to && !Number.isNaN(to.getTime())) conditions.push(lt(schema.products.createdAt, to));
+    if (query?.stock) {
+      // Sellable stock across all of the product's variants and locations.
+      const stockOf = sql`coalesce((select sum(${schema.inventoryLevels.available}) from ${schema.inventoryLevels} join ${schema.variants} on ${schema.variants.id} = ${schema.inventoryLevels.variantId} where ${schema.variants.productId} = ${schema.products.id}), 0)`;
+      conditions.push(query.stock === "out" ? sql`${stockOf} <= 0` : query.stock === "low" ? sql`${stockOf} between 1 and 5` : sql`${stockOf} > 5`);
+    }
+
     const whereClause = conditions.length > 0 ? and(...conditions) : undefined;
     const limit = query?.limit ?? 50;
     const offset = query?.offset ?? 0;
+
+    // id tie-break keeps paging stable when many rows share a timestamp or title.
+    const orderBy = {
+      created_desc: [desc(schema.products.createdAt), desc(schema.products.id)],
+      created_asc: [asc(schema.products.createdAt), asc(schema.products.id)],
+      updated_desc: [desc(schema.products.updatedAt), desc(schema.products.id)],
+      updated_asc: [asc(schema.products.updatedAt), asc(schema.products.id)],
+      title_asc: [asc(schema.products.title), asc(schema.products.id)],
+      title_desc: [desc(schema.products.title), desc(schema.products.id)],
+    }[query?.sort ?? "created_desc"];
 
     const rows = await tx
       .select()
       .from(schema.products)
       .where(whereClause)
-      .orderBy(desc(schema.products.createdAt))
+      .orderBy(...orderBy)
       .limit(limit)
       .offset(offset);
 
@@ -693,7 +717,16 @@ export async function adjustInventory(
 export async function listInventoryLevels(
   rt: Runtime,
   ctx: TenantContext,
-  query?: { locationId?: string | undefined; search?: string | undefined; limit?: number | undefined; offset?: number | undefined } | undefined,
+  query?:
+    | {
+        locationId?: string | undefined;
+        search?: string | undefined;
+        stock?: "in_stock" | "low" | "out" | undefined;
+        sort?: "product_asc" | "product_desc" | "on_hand_desc" | "on_hand_asc" | "available_desc" | "available_asc" | undefined;
+        limit?: number | undefined;
+        offset?: number | undefined;
+      }
+    | undefined,
 ) {
   assertPermission(ctx, "products.read");
   const db = rt._db.db;
@@ -720,9 +753,25 @@ export async function listInventoryLevels(
       if (match) conditions.push(match);
     }
 
+    const onHandOf = sql<number>`coalesce(${schema.inventoryLevels.onHand}, 0)`;
+    const availableOf = sql<number>`(coalesce(${schema.inventoryLevels.onHand}, 0) - coalesce(${schema.inventoryLevels.reserved}, 0))`;
+    if (query?.stock) {
+      conditions.push(query.stock === "out" ? sql`${availableOf} <= 0` : query.stock === "low" ? sql`${availableOf} between 1 and 5` : sql`${availableOf} > 5`);
+    }
+
     const whereClause = and(...conditions);
     const limit = query?.limit ?? 50;
     const offset = query?.offset ?? 0;
+
+    const byName = [asc(schema.products.title), asc(schema.variants.title), asc(schema.locations.name)];
+    const orderBy = {
+      product_asc: byName,
+      product_desc: [desc(schema.products.title), desc(schema.variants.title), desc(schema.locations.name)],
+      on_hand_desc: [desc(onHandOf), ...byName],
+      on_hand_asc: [asc(onHandOf), ...byName],
+      available_desc: [desc(availableOf), ...byName],
+      available_asc: [asc(availableOf), ...byName],
+    }[query?.sort ?? "product_asc"];
 
     const rows = await tx
       .select({
@@ -744,7 +793,7 @@ export async function listInventoryLevels(
         and(eq(schema.inventoryLevels.variantId, schema.variants.id), eq(schema.inventoryLevels.locationId, schema.locations.id)),
       )
       .where(whereClause)
-      .orderBy(schema.products.title, schema.variants.title, schema.locations.name)
+      .orderBy(...orderBy)
       .limit(limit)
       .offset(offset);
 
@@ -753,6 +802,10 @@ export async function listInventoryLevels(
       .from(schema.variants)
       .innerJoin(schema.products, eq(schema.products.id, schema.variants.productId))
       .innerJoin(schema.locations, sql`true`)
+      .leftJoin(
+        schema.inventoryLevels,
+        and(eq(schema.inventoryLevels.variantId, schema.variants.id), eq(schema.inventoryLevels.locationId, schema.locations.id)),
+      )
       .where(whereClause);
 
     return {

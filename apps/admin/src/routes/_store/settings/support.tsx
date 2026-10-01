@@ -1,17 +1,12 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { AlertTriangle, LifeBuoy } from "lucide-react";
-import {
-  Button,
-  EmptyState,
-  PageBreadcrumbs,
-  PageContainer,
-  PageHeader,
-  PageSection,
-  PageSkeleton,
-  TableSkeleton,
-  toast,
-} from "@bs/ui";
+import { EmptyState, PageSkeleton, TableSkeleton, toast } from "@bs/ui";
+import { Button } from "@/components/ui/button";
+import { Checkbox } from "@/components/ui/checkbox";
+import { Field, FieldLabel } from "@/components/ui/field";
+import { SettingsPageFrame, SettingsSection } from "../../../components/settings/settings-page.tsx";
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { orpc } from "../../../lib/orpc.ts";
 import { errorMessage } from "../../../lib/errors.ts";
 
@@ -41,35 +36,36 @@ export function SupportAccessPage() {
   const pending = list.filter((s) => s.status === "pending_owner_approval");
 
   return (
-    <PageContainer size="small">
-      <PageBreadcrumbs items={[{ label: "Settings" }, { label: "Support access" }]} />
-      <PageHeader
-        title="Support access"
-        description="The platform team can look into your store only with your approval. Only the store owner can decide here, and every action they take is recorded."
-      />
-
+    <SettingsPageFrame
+      title="Support access"
+      description="The platform team can look into your store only with your approval. Only the store owner can decide here, and every action they take is recorded."
+    >
       {sessions.isLoading || standing.isLoading ? (
-        <TableSkeleton rows={3} columns={3} />
+        <SettingsSection>
+          <TableSkeleton rows={3} columns={3} />
+        </SettingsSection>
       ) : sessions.isError ? (
+        <SettingsSection>
         <EmptyState
           icon={AlertTriangle}
           title="Could not load support access"
           description={errorMessage(sessions.error)}
           action={<Button onClick={() => void sessions.refetch()}>Try again</Button>}
         />
+        </SettingsSection>
       ) : (
         <>
-          <PageSection title="Requests waiting for you" description="Approving starts a 60-minute, read-only session. You can deny any request.">
+          <SettingsSection title="Requests waiting for you" description="Approving starts a 60-minute, read-only session. You can deny any request.">
             {pending.length === 0 ? (
-              <p className="text-sm text-foreground-lighter">No requests are waiting.</p>
+              <p className="text-xs text-foreground-lighter">No requests are waiting.</p>
             ) : (
               <ul className="grid gap-3">
                 {pending.map((s) => (
                   <li key={s.id} className="grid gap-2 rounded-md border border-border p-3" data-testid="support-request">
-                    <div className="text-sm">
+                    <div className="text-xs">
                       <strong>{s.staffName}</strong> ({s.staffEmail}) asks to look into your store
                     </div>
-                    <div className="text-sm text-foreground-lighter">
+                    <div className="text-xs text-foreground-lighter">
                       Reason: {s.reason} · Ticket: {s.ticketRef} · Requested {new Date(s.requestedAt).toLocaleString("en-IN")}
                     </div>
                     <div className="flex gap-2">
@@ -87,7 +83,7 @@ export function SupportAccessPage() {
                       </Button>
                       <Button
                         size="sm"
-                        variant="default"
+                        variant="outline"
                         disabled={deny.isPending}
                         onClick={() =>
                           deny.mutate(
@@ -103,55 +99,57 @@ export function SupportAccessPage() {
                 ))}
               </ul>
             )}
-          </PageSection>
+          </SettingsSection>
 
-          <PageSection title="Standing consent" description="If you switch this on, the platform team can open read-only sessions without asking each time. Every session is still recorded and shown below.">
-            <label className="flex items-center gap-2 text-sm">
-              <input
-                type="checkbox"
+          <SettingsSection title="Standing consent" description="If you switch this on, the platform team can open read-only sessions without asking each time. Every session is still recorded and shown below.">
+            <Field orientation="horizontal">
+              <Checkbox
+                id="standing-consent"
                 checked={standing.data?.enabled ?? false}
                 disabled={setStanding.isPending}
-                onChange={(e) =>
+                onCheckedChange={(checked) =>
                   setStanding.mutate(
-                    { enabled: e.target.checked },
-                    { onSuccess: () => { toast.success(e.target.checked ? "Standing consent is on." : "Standing consent is off."); refresh(); }, onError: (err) => toast.error(errorMessage(err)) },
+                    { enabled: checked },
+                    { onSuccess: () => { toast.success(checked ? "Standing consent is on." : "Standing consent is off."); refresh(); }, onError: (err) => toast.error(errorMessage(err)) },
                   )
                 }
               />
-              Allow platform support to open read-only sessions without asking first
-            </label>
-          </PageSection>
+              <FieldLabel htmlFor="standing-consent" className="font-normal">
+                Allow platform support to open read-only sessions without asking first
+              </FieldLabel>
+            </Field>
+          </SettingsSection>
 
-          <PageSection title="History" description="Every support session on your store, newest first.">
+          <SettingsSection title="History" description="Every support session on your store, newest first.">
             {list.length === 0 ? (
               <EmptyState icon={LifeBuoy} title="No support sessions yet" description="If the platform team ever needs to look into your store, it will appear here." />
             ) : (
-              <table className="w-full text-sm">
-                <thead className="text-left text-foreground-lighter">
-                  <tr>
-                    <th className="py-1">Who</th>
-                    <th>Reason / ticket</th>
-                    <th>Access</th>
-                    <th>Status</th>
-                    <th>Requests</th>
-                  </tr>
-                </thead>
-                <tbody>
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>Who</TableHead>
+                    <TableHead>Reason / ticket</TableHead>
+                    <TableHead>Access</TableHead>
+                    <TableHead>Status</TableHead>
+                    <TableHead>Requests</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
                   {list.map((s) => (
-                    <tr key={s.id} className="border-t border-border align-top">
-                      <td className="py-1">{s.staffName}</td>
-                      <td>{s.reason} <span className="text-foreground-lighter">({s.ticketRef})</span></td>
-                      <td>{s.scope === "write" ? "read & write" : "read only"} · {s.consent.replace(/_/g, " ")}</td>
-                      <td>{STATUS_TEXT[s.status] ?? s.status}</td>
-                      <td>{s.actionsCount}</td>
-                    </tr>
+                    <TableRow key={s.id} className="align-top">
+                      <TableCell>{s.staffName}</TableCell>
+                      <TableCell className="whitespace-normal">{s.reason} <span className="text-muted-foreground">({s.ticketRef})</span></TableCell>
+                      <TableCell className="whitespace-normal">{s.scope === "write" ? "read & write" : "read only"} · {s.consent.replace(/_/g, " ")}</TableCell>
+                      <TableCell>{STATUS_TEXT[s.status] ?? s.status}</TableCell>
+                      <TableCell>{s.actionsCount}</TableCell>
+                    </TableRow>
                   ))}
-                </tbody>
-              </table>
+                </TableBody>
+              </Table>
             )}
-          </PageSection>
+          </SettingsSection>
         </>
       )}
-    </PageContainer>
+    </SettingsPageFrame>
   );
 }

@@ -2,20 +2,14 @@ import { createFileRoute } from "@tanstack/react-router";
 import { useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { AlertTriangle, CheckCircle2 } from "lucide-react";
-import {
-  Button,
-  EmptyState,
-  FormSkeleton,
-  Input,
-  Label,
-  PageBreadcrumbs,
-  PageContainer,
-  PageHeader,
-  PageSection,
-  PageSkeleton,
-  toast,
-} from "@bs/ui";
+import { EmptyState, FormSkeleton, PageSkeleton, toast } from "@bs/ui";
 import type { StorefrontStatus } from "@bs/contracts";
+import { Button } from "@/components/ui/button";
+import { Checkbox } from "@/components/ui/checkbox";
+import { Input } from "@/components/ui/input";
+import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
+import { Field } from "../../../components/field.tsx";
+import { HeaderActions, SettingsPageFrame, SettingsSection, useUnsavedGuard } from "../../../components/settings/settings-page.tsx";
 import { orpc } from "../../../lib/orpc.ts";
 import { errorMessage } from "../../../lib/errors.ts";
 
@@ -33,31 +27,36 @@ const MODES: Array<{ value: Mode; title: string; description: string }> = [
   { value: "password", title: "Password protected", description: "Only people with the password can see the store." },
 ];
 
+const TITLE = "Storefront";
+const DESCRIPTION = "Choose whether customers can see and buy from your store. New stores start on the coming-soon page.";
+
 export function StorefrontSettingsPage() {
   const status = useQuery(orpc.admin.storefront.getStatus.queryOptions());
 
-  return (
-    <PageContainer size="small">
-      <PageBreadcrumbs items={[{ label: "Settings" }, { label: "Storefront" }]} />
-      <PageHeader
-        title="Storefront"
-        description="Choose whether customers can see and buy from your store. New stores start on the coming-soon page."
-      />
-
-      {status.isLoading ? (
-        <FormSkeleton />
-      ) : status.isError || !status.data ? (
-        <EmptyState
-          icon={AlertTriangle}
-          title="Could not load storefront settings"
-          description={errorMessage(status.error)}
-          action={<Button onClick={() => void status.refetch()}>Try again</Button>}
-        />
-      ) : (
-        <StorefrontForm current={status.data} />
-      )}
-    </PageContainer>
-  );
+  if (status.isLoading) {
+    return (
+      <SettingsPageFrame title={TITLE} description={DESCRIPTION}>
+        <SettingsSection>
+          <FormSkeleton />
+        </SettingsSection>
+      </SettingsPageFrame>
+    );
+  }
+  if (status.isError || !status.data) {
+    return (
+      <SettingsPageFrame title={TITLE} description={DESCRIPTION}>
+        <SettingsSection>
+          <EmptyState
+            icon={AlertTriangle}
+            title="Could not load storefront settings"
+            description={errorMessage(status.error)}
+            action={<Button onClick={() => void status.refetch()}>Try again</Button>}
+          />
+        </SettingsSection>
+      </SettingsPageFrame>
+    );
+  }
+  return <StorefrontForm current={status.data} />;
 }
 
 function StorefrontForm({ current }: { current: StorefrontStatus }) {
@@ -70,11 +69,8 @@ function StorefrontForm({ current }: { current: StorefrontStatus }) {
   const [password, setPassword] = useState("");
 
   const needsPassword = mode === "password" && !current.hasPassword && password.length < 6;
-  const unchanged =
-    current.mode === mode &&
-    (current.headline ?? "") === headline &&
-    current.collectEmails === collectEmails &&
-    password === "";
+  const unchanged = current.mode === mode && (current.headline ?? "") === headline && current.collectEmails === collectEmails && password === "";
+  const guard = useUnsavedGuard(!unchanged);
 
   function save() {
     update.mutate(
@@ -96,80 +92,59 @@ function StorefrontForm({ current }: { current: StorefrontStatus }) {
   }
 
   return (
-    <>
-        {current.mode === "live" && (
-          <div className="flex items-center gap-2 rounded-md border border-border p-3 text-sm" role="status">
-            <CheckCircle2 className="h-4 w-4 text-primary" />
+    <SettingsPageFrame title={TITLE} description={DESCRIPTION}>
+      {guard}
+      <HeaderActions>
+        <Button onClick={save} disabled={update.isPending || unchanged || needsPassword}>
+          {update.isPending ? "Saving…" : mode === "live" && current.mode !== "live" ? "Take my store live" : "Save changes"}
+        </Button>
+      </HeaderActions>
+
+      {current.mode === "live" && (
+        <SettingsSection>
+          <div className="flex items-center gap-2 text-xs" role="status">
+            <CheckCircle2 className="size-4 text-primary" aria-hidden />
             Your store is live.
           </div>
-        )}
+        </SettingsSection>
+      )}
 
-        <PageSection title="Store visibility" description="You can change this at any time.">
-          <fieldset className="grid gap-2" aria-label="Store visibility">
-            {MODES.map((m) => (
-              <label key={m.value} className="flex cursor-pointer items-start gap-3 rounded-md border border-border p-3 text-sm">
-                <input
-                  type="radio"
-                  name="storefront-mode"
-                  className="mt-1"
-                  checked={mode === m.value}
-                  onChange={() => setMode(m.value)}
-                />
-                <span>
-                  <span className="block font-medium">{m.title}</span>
-                  <span className="block text-foreground-lighter">{m.description}</span>
-                </span>
-              </label>
-            ))}
-          </fieldset>
-        </PageSection>
+      <SettingsSection title="Store visibility" description="You can change this at any time.">
+        <RadioGroup aria-label="Store visibility" className="gap-2" value={mode} onValueChange={(v) => setMode(v as Mode)}>
+          {MODES.map((m) => (
+            <label key={m.value} className="flex cursor-pointer items-start gap-3 rounded-md border border-border p-3 has-data-checked:border-primary/50 has-data-checked:bg-muted">
+              <RadioGroupItem value={m.value} className="mt-0.5" />
+              <span>
+                <span className="block text-xs font-medium text-foreground">{m.title}</span>
+                <span className="block text-muted-foreground">{m.description}</span>
+              </span>
+            </label>
+          ))}
+        </RadioGroup>
+      </SettingsSection>
 
-        {mode !== "live" && (
-          <PageSection title="Holding page" description="What visitors see while the store is not live.">
-            <div className="grid gap-3">
-              <div className="grid gap-1.5">
-                <Label htmlFor="storefront-headline">Headline</Label>
-                <Input
-                  id="storefront-headline"
-                  value={headline}
-                  maxLength={120}
-                  placeholder="Opening soon"
-                  onChange={(e) => setHeadline(e.target.value)}
-                />
-              </div>
-              <label className="flex items-center gap-2 text-sm">
-                <input type="checkbox" checked={collectEmails} onChange={(e) => setCollectEmails(e.target.checked)} />
-                Let visitors leave their email to be notified
-              </label>
-            </div>
-          </PageSection>
-        )}
+      {mode !== "live" && (
+        <SettingsSection title="Holding page" description="What visitors see while the store is not live.">
+          <Field id="storefront-headline" label="Headline">
+            <Input id="storefront-headline" value={headline} maxLength={120} placeholder="Opening soon" onChange={(e) => setHeadline(e.target.value)} />
+          </Field>
+          <label className="flex items-center gap-2 text-xs text-foreground">
+            <Checkbox checked={collectEmails} onCheckedChange={(c) => setCollectEmails(c)} />
+            Let visitors leave their email to be notified
+          </label>
+        </SettingsSection>
+      )}
 
-        {mode === "password" && (
-          <PageSection
-            title="Store password"
-            description={current.hasPassword ? "A password is set. Enter a new one only if you want to change it." : "Set the password visitors must enter."}
-          >
-            <div className="grid gap-1.5">
-              <Label htmlFor="storefront-password">{current.hasPassword ? "New password" : "Password"}</Label>
-              <Input
-                id="storefront-password"
-                type="password"
-                autoComplete="new-password"
-                value={password}
-                minLength={6}
-                onChange={(e) => setPassword(e.target.value)}
-              />
-              <p className="text-xs text-foreground-lighter">At least 6 characters.</p>
-            </div>
-          </PageSection>
-        )}
-
-        <div className="flex justify-end">
-          <Button onClick={save} disabled={update.isPending || unchanged || needsPassword}>
-            {update.isPending ? "Saving…" : mode === "live" && current.mode !== "live" ? "Take my store live" : "Save"}
-          </Button>
-        </div>
-    </>
+      {mode === "password" && (
+        <SettingsSection
+          title="Store password"
+          description={current.hasPassword ? "A password is set. Enter a new one only if you want to change it." : "Set the password visitors must enter."}
+        >
+          <Field id="storefront-password" label={current.hasPassword ? "New password" : "Password"} hint="At least 6 characters.">
+            <Input id="storefront-password" type="password" autoComplete="new-password" value={password} minLength={6} onChange={(e) => setPassword(e.target.value)} />
+          </Field>
+        </SettingsSection>
+      )}
+    </SettingsPageFrame>
   );
 }

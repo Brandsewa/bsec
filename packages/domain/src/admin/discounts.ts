@@ -1,4 +1,4 @@
-import { and, desc, eq, sql } from "drizzle-orm";
+import { and, asc, desc, eq, sql } from "drizzle-orm";
 import { schema, withTenant } from "@bs/db";
 import type { Runtime } from "../runtime.ts";
 import { assertPermission, type TenantContext } from "../context.ts";
@@ -6,6 +6,8 @@ import { assertPermission, type TenantContext } from "../context.ts";
 export interface ListDiscountsInput {
   search?: string | undefined;
   status?: string | undefined;
+  type?: string | undefined;
+  sort?: "created_desc" | "created_asc" | "title_asc" | "title_desc" | "used_desc" | "used_asc" | undefined;
   limit?: number | undefined;
   offset?: number | undefined;
 }
@@ -27,6 +29,10 @@ export async function listAdminDiscounts(
       conditions.push(eq(schema.discounts.status, input.status));
     }
 
+    if (input.type) {
+      conditions.push(eq(schema.discounts.type, input.type));
+    }
+
     if (input.search) {
       conditions.push(
         sql`(${schema.discounts.title} ILIKE ${`%${input.search}%`} OR ${schema.discounts.code} ILIKE ${`%${input.search}%`})`,
@@ -34,6 +40,15 @@ export async function listAdminDiscounts(
     }
 
     const whereClause = conditions.length > 0 ? and(...conditions) : undefined;
+
+    const orderBy = {
+      created_desc: [desc(schema.discounts.createdAt), desc(schema.discounts.id)],
+      created_asc: [asc(schema.discounts.createdAt), asc(schema.discounts.id)],
+      title_asc: [asc(schema.discounts.title), asc(schema.discounts.id)],
+      title_desc: [desc(schema.discounts.title), desc(schema.discounts.id)],
+      used_desc: [desc(schema.discounts.usedCount), desc(schema.discounts.id)],
+      used_asc: [asc(schema.discounts.usedCount), asc(schema.discounts.id)],
+    }[input.sort ?? "created_desc"];
 
     const [countResult] = await tx
       .select({ count: sql<number>`count(*)::int` })
@@ -57,7 +72,7 @@ export async function listAdminDiscounts(
       })
       .from(schema.discounts)
       .where(whereClause)
-      .orderBy(desc(schema.discounts.createdAt))
+      .orderBy(...orderBy)
       .limit(limit)
       .offset(offset);
 

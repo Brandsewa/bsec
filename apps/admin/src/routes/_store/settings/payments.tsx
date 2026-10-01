@@ -2,55 +2,64 @@ import { createFileRoute } from "@tanstack/react-router";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useState, type FormEvent } from "react";
 import { AlertTriangle } from "lucide-react";
-import {
-  Button,
-  EmptyState,
-  FormSkeleton,
-  Input,
-  PageBreadcrumbs,
-  PageContainer,
-  PageHeader,
-  PageSection,
-  PageSkeleton,
-  toast,
-} from "@bs/ui";
+import { EmptyState, FormSkeleton, PageSkeleton, toast } from "@bs/ui";
+import { Alert } from "@/components/ui/alert";
+import { Button } from "@/components/ui/button";
+import { Checkbox } from "@/components/ui/checkbox";
+import { Input } from "@/components/ui/input";
+import { ConfirmDialog } from "../../../components/confirm-dialog.tsx";
+import { Field } from "../../../components/field.tsx";
+import { SettingsPageFrame, SettingsSection, useUnsavedGuard } from "../../../components/settings/settings-page.tsx";
 import { orpc } from "../../../lib/orpc.ts";
 import { errorMessage } from "../../../lib/errors.ts";
-import { Field } from "../../../components/field.tsx";
 
 export const Route = createFileRoute("/_store/settings/payments")({
   pendingComponent: () => <PageSkeleton />,
   component: PaymentsSettingsPage,
 });
 
+const TITLE = "Payments";
+const DESCRIPTION = "Choose how customers can pay and connect your own payment gateway.";
+
 export function PaymentsSettingsPage() {
   const status = useQuery(orpc.admin.payments.get.queryOptions());
+
+  if (status.isLoading) {
+    return (
+      <SettingsPageFrame title={TITLE} description={DESCRIPTION}>
+        <SettingsSection>
+          <FormSkeleton />
+        </SettingsSection>
+      </SettingsPageFrame>
+    );
+  }
+  if (status.isError || !status.data) {
+    return (
+      <SettingsPageFrame title={TITLE} description={DESCRIPTION}>
+        <SettingsSection>
+          <EmptyState
+            icon={AlertTriangle}
+            title="Could not load payment settings"
+            description={errorMessage(status.error)}
+            action={<Button onClick={() => void status.refetch()}>Try again</Button>}
+          />
+        </SettingsSection>
+      </SettingsPageFrame>
+    );
+  }
+
   return (
-    <PageContainer size="small">
-      <PageBreadcrumbs items={[{ label: "Settings" }, { label: "Payments" }]} />
-      <PageHeader title="Payments" description="Choose how customers can pay and connect your own payment gateway." />
-      {status.isLoading ? (
-        <FormSkeleton />
-      ) : status.isError || !status.data ? (
-        <EmptyState
-          icon={AlertTriangle}
-          title="Could not load payment settings"
-          description={errorMessage(status.error)}
-          action={<Button onClick={() => void status.refetch()}>Try again</Button>}
-        />
-      ) : (
-        <div className="grid gap-6">
-          {!status.data.encryptionKeyConfigured ? (
-            <div role="alert" className="rounded-md border border-warning/40 bg-warning/10 p-3 text-sm">
-              Saving payment keys is not available yet: the platform operator still has to configure the server encryption key
-              (TENANT_SECRETS_KEY). Cash on delivery settings below work now.
-            </div>
-          ) : null}
-          <CodForm initial={status.data.cod} />
-          <RazorpayForm razorpay={status.data.razorpay} keyMissing={!status.data.encryptionKeyConfigured} />
-        </div>
-      )}
-    </PageContainer>
+    <SettingsPageFrame title={TITLE} description={DESCRIPTION}>
+      {!status.data.encryptionKeyConfigured ? (
+        <SettingsSection>
+          <Alert role="alert">
+            Saving payment keys is not available yet: the platform operator still has to configure the server encryption key (TENANT_SECRETS_KEY). Cash on delivery settings below work now.
+          </Alert>
+        </SettingsSection>
+      ) : null}
+      <CodForm initial={status.data.cod} />
+      <RazorpayForm razorpay={status.data.razorpay} keyMissing={!status.data.encryptionKeyConfigured} />
+    </SettingsPageFrame>
   );
 }
 
@@ -59,6 +68,9 @@ function CodForm({ initial }: { initial: { enabled: boolean; feePaise: number } 
   const update = useMutation(orpc.admin.settings.update.mutationOptions());
   const [enabled, setEnabled] = useState(initial.enabled);
   const [fee, setFee] = useState(String(initial.feePaise / 100));
+
+  const dirty = enabled !== initial.enabled || fee !== String(initial.feePaise / 100);
+  const guard = useUnsavedGuard(dirty);
 
   function onSubmit(e: FormEvent) {
     e.preventDefault();
@@ -81,22 +93,25 @@ function CodForm({ initial }: { initial: { enabled: boolean; feePaise: number } 
   }
 
   return (
-    <PageSection title="Cash on delivery" description="Let customers pay when the order arrives.">
-      <form onSubmit={onSubmit} className="grid gap-4">
-        <label className="flex items-center gap-2 text-sm">
-          <input type="checkbox" checked={enabled} onChange={(e) => setEnabled(e.target.checked)} />
+    <SettingsSection title="Cash on delivery" description="Let customers pay when the order arrives.">
+      {guard}
+      <form onSubmit={onSubmit} className="grid gap-3">
+        <label className="flex items-center gap-2 text-xs text-foreground">
+          <Checkbox checked={enabled} onCheckedChange={(c) => setEnabled(c)} />
           Accept cash on delivery orders
         </label>
-        <Field id="codFee" label="COD handling fee (₹)" hint="Added to the order total for COD orders. Use 0 for no fee.">
-          <Input id="codFee" type="number" min={0} step="0.01" value={fee} disabled={!enabled} onChange={(e) => setFee(e.target.value)} />
-        </Field>
+        <div className="max-w-xs">
+          <Field id="codFee" label="COD handling fee (₹)" hint="Added to the order total for COD orders. Use 0 for no fee.">
+            <Input id="codFee" type="number" min={0} step="0.01" value={fee} disabled={!enabled} onChange={(e) => setFee(e.target.value)} />
+          </Field>
+        </div>
         <div>
-          <Button type="submit" disabled={update.isPending}>
+          <Button type="submit" disabled={update.isPending || !dirty}>
             {update.isPending ? "Saving…" : "Save COD settings"}
           </Button>
         </div>
       </form>
-    </PageSection>
+    </SettingsSection>
   );
 }
 
@@ -113,6 +128,7 @@ function RazorpayForm({
   const [keyId, setKeyId] = useState("");
   const [keySecret, setKeySecret] = useState("");
   const [webhookSecret, setWebhookSecret] = useState("");
+  const [confirmDisconnect, setConfirmDisconnect] = useState(false);
 
   const refresh = () => void queryClient.invalidateQueries({ queryKey: orpc.admin.payments.key() });
 
@@ -134,69 +150,59 @@ function RazorpayForm({
   }
 
   return (
-    <PageSection
+    <SettingsSection
       title="Razorpay"
       description="Your own Razorpay account receives customer payments directly. Keys are stored encrypted and are never shown again."
     >
-      <p className="text-sm">
+      <p className="text-xs">
         Status:{" "}
-        <span className={razorpay.configured ? "font-medium text-foreground" : "text-foreground-lighter"}>
+        <span className={razorpay.configured ? "font-medium text-foreground" : "text-muted-foreground"}>
           {razorpay.configured ? `Connected (key ${razorpay.keyIdHint ?? "saved"})` : "Not connected"}
         </span>
-        {razorpay.configured ? (
-          <span className="text-foreground-lighter"> · webhook secret {razorpay.hasWebhookSecret ? "saved" : "not set"}</span>
-        ) : null}
+        {razorpay.configured ? <span className="text-muted-foreground"> · webhook secret {razorpay.hasWebhookSecret ? "saved" : "not set"}</span> : null}
       </p>
-      <form onSubmit={onSubmit} className="grid gap-4">
+      <form onSubmit={onSubmit} className="grid gap-3">
         <Field id="keyId" label="Key ID" hint="Looks like rzp_test_… or rzp_live_…">
           <Input id="keyId" autoComplete="off" required value={keyId} disabled={keyMissing} onChange={(e) => setKeyId(e.target.value)} />
         </Field>
         <Field id="keySecret" label="Key secret">
-          <Input
-            id="keySecret"
-            type="password"
-            autoComplete="new-password"
-            required
-            value={keySecret}
-            disabled={keyMissing}
-            onChange={(e) => setKeySecret(e.target.value)}
-          />
+          <Input id="keySecret" type="password" autoComplete="new-password" required value={keySecret} disabled={keyMissing} onChange={(e) => setKeySecret(e.target.value)} />
         </Field>
         <Field id="webhookSecret" label="Webhook secret (optional)" hint="From Razorpay dashboard > Webhooks.">
-          <Input
-            id="webhookSecret"
-            type="password"
-            autoComplete="new-password"
-            value={webhookSecret}
-            disabled={keyMissing}
-            onChange={(e) => setWebhookSecret(e.target.value)}
-          />
+          <Input id="webhookSecret" type="password" autoComplete="new-password" value={webhookSecret} disabled={keyMissing} onChange={(e) => setWebhookSecret(e.target.value)} />
         </Field>
         <div className="flex gap-2">
           <Button type="submit" disabled={keyMissing || save.isPending || !keyId || !keySecret}>
             {save.isPending ? "Saving…" : razorpay.configured ? "Replace keys" : "Save keys"}
           </Button>
           {razorpay.configured ? (
-            <Button
-              type="button"
-              variant="default"
-              disabled={clear.isPending}
-              onClick={() => {
-                if (!window.confirm("Disconnect Razorpay? Online payments will stop working until you add keys again.")) return;
-                clear.mutate(undefined, {
-                  onSuccess: () => {
-                    toast.success("Razorpay disconnected");
-                    refresh();
-                  },
-                  onError: (err) => toast.error(errorMessage(err)),
-                });
-              }}
-            >
+            <Button type="button" variant="outline" disabled={clear.isPending} onClick={() => setConfirmDisconnect(true)}>
               Disconnect
             </Button>
           ) : null}
         </div>
       </form>
-    </PageSection>
+
+      <ConfirmDialog
+        open={confirmDisconnect}
+        onOpenChange={setConfirmDisconnect}
+        title="Disconnect Razorpay?"
+        description="Online payments will stop working until you add keys again."
+        confirmLabel="Disconnect"
+        cancelLabel="Keep connected"
+        destructive
+        pending={clear.isPending}
+        onConfirm={() => {
+          setConfirmDisconnect(false);
+          clear.mutate(undefined, {
+            onSuccess: () => {
+              toast.success("Razorpay disconnected");
+              refresh();
+            },
+            onError: (err) => toast.error(errorMessage(err)),
+          });
+        }}
+      />
+    </SettingsSection>
   );
 }

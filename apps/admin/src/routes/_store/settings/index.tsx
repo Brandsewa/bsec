@@ -2,22 +2,15 @@ import { createFileRoute } from "@tanstack/react-router";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useState, type FormEvent } from "react";
 import { AlertTriangle } from "lucide-react";
-import {
-  Button,
-  EmptyState,
-  FormSkeleton,
-  Input,
-  PageBreadcrumbs,
-  PageContainer,
-  PageHeader,
-  PageSection,
-  PageSkeleton,
-  toast,
-} from "@bs/ui";
+import { EmptyState, FormSkeleton, PageSkeleton, toast } from "@bs/ui";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { HeaderActions, SettingsPageFrame, SettingsSection, useUnsavedGuard } from "../../../components/settings/settings-page.tsx";
+import { Field } from "../../../components/field.tsx";
+import { SimpleSelect } from "../../../components/simple-select.tsx";
 import { orpc } from "../../../lib/orpc.ts";
 import { errorMessage } from "../../../lib/errors.ts";
 import { INDIAN_STATES } from "../../../lib/india.ts";
-import { Field } from "../../../components/field.tsx";
 
 export const Route = createFileRoute("/_store/settings/")({
   pendingComponent: () => <PageSkeleton />,
@@ -72,33 +65,47 @@ function toFormState(s: SettingsData): FormState {
   };
 }
 
+const TITLE = "General";
+const DESCRIPTION = "Your store name, contact details and address. These appear on invoices and emails.";
+
 export function GeneralSettingsPage() {
   const query = useQuery(orpc.admin.settings.get.queryOptions());
-  return (
-    <PageContainer size="small">
-      <PageBreadcrumbs items={[{ label: "Settings" }, { label: "General" }]} />
-      <PageHeader title="General" description="Your store name, contact details and address. These appear on invoices and emails." />
-      {query.isLoading ? (
-        <FormSkeleton />
-      ) : query.isError || !query.data ? (
-        <EmptyState
-          icon={AlertTriangle}
-          title="Could not load settings"
-          description={errorMessage(query.error)}
-          action={<Button onClick={() => void query.refetch()}>Try again</Button>}
-        />
-      ) : (
-        <GeneralForm data={query.data} />
-      )}
-    </PageContainer>
-  );
+
+  if (query.isLoading) {
+    return (
+      <SettingsPageFrame title={TITLE} description={DESCRIPTION}>
+        <SettingsSection>
+          <FormSkeleton />
+        </SettingsSection>
+      </SettingsPageFrame>
+    );
+  }
+  if (query.isError || !query.data) {
+    return (
+      <SettingsPageFrame title={TITLE} description={DESCRIPTION}>
+        <SettingsSection>
+          <EmptyState
+            icon={AlertTriangle}
+            title="Could not load settings"
+            description={errorMessage(query.error)}
+            action={<Button onClick={() => void query.refetch()}>Try again</Button>}
+          />
+        </SettingsSection>
+      </SettingsPageFrame>
+    );
+  }
+  return <GeneralForm data={query.data} />;
 }
 
 function GeneralForm({ data }: { data: SettingsData }) {
   const queryClient = useQueryClient();
   const update = useMutation(orpc.admin.settings.update.mutationOptions());
-  const [form, setForm] = useState<FormState>(() => toFormState(data));
+  const baseline = toFormState(data);
+  const [form, setForm] = useState<FormState>(baseline);
   const set = (k: keyof FormState) => (e: { target: { value: string } }) => setForm((f) => ({ ...f, [k]: e.target.value }));
+
+  const dirty = JSON.stringify(form) !== JSON.stringify(baseline);
+  const guard = useUnsavedGuard(dirty);
 
   function onSubmit(e: FormEvent) {
     e.preventDefault();
@@ -129,16 +136,23 @@ function GeneralForm({ data }: { data: SettingsData }) {
   }
 
   return (
-    <form onSubmit={onSubmit} className="grid gap-6">
-      <PageSection title="Store details">
-        <div className="grid gap-4">
+    <SettingsPageFrame title={TITLE} description={DESCRIPTION}>
+      {guard}
+      <HeaderActions>
+        <Button type="submit" form="settings-general" disabled={update.isPending || !dirty || !form.storeName.trim()}>
+          {update.isPending ? "Saving…" : "Save changes"}
+        </Button>
+      </HeaderActions>
+
+      <form id="settings-general" onSubmit={onSubmit}>
+        <SettingsSection title="Store details">
           <Field id="storeName" label="Store name">
             <Input id="storeName" required maxLength={120} value={form.storeName} onChange={set("storeName")} />
           </Field>
           <Field id="legalName" label="Legal business name" hint="Printed on tax invoices.">
             <Input id="legalName" maxLength={200} value={form.legalName} onChange={set("legalName")} />
           </Field>
-          <div className="grid gap-4 sm:grid-cols-2">
+          <div className="grid gap-3 sm:grid-cols-2">
             <Field id="supportEmail" label="Support email">
               <Input id="supportEmail" type="email" value={form.supportEmail} onChange={set("supportEmail")} />
             </Field>
@@ -146,62 +160,42 @@ function GeneralForm({ data }: { data: SettingsData }) {
               <Input id="supportPhone" type="tel" value={form.supportPhone} onChange={set("supportPhone")} />
             </Field>
           </div>
-        </div>
-      </PageSection>
+        </SettingsSection>
 
-      <PageSection title="Business address" description="Your registered or dispatch address.">
-        <div className="grid gap-4">
+        <SettingsSection title="Business address" description="Your registered or dispatch address.">
           <Field id="line1" label="Address line 1">
             <Input id="line1" value={form.line1} onChange={set("line1")} />
           </Field>
           <Field id="line2" label="Address line 2">
             <Input id="line2" value={form.line2} onChange={set("line2")} />
           </Field>
-          <div className="grid gap-4 sm:grid-cols-3">
+          <div className="grid gap-3 sm:grid-cols-3">
             <Field id="city" label="City">
               <Input id="city" value={form.city} onChange={set("city")} />
             </Field>
             <Field id="state" label="State">
-              <select
-                id="state"
-                className="h-9 w-full rounded-md border border-border-control bg-control px-3 text-sm"
-                value={form.state}
-                onChange={set("state")}
-              >
-                <option value="">Select state</option>
-                {INDIAN_STATES.map((s) => (
-                  <option key={s} value={s}>
-                    {s}
-                  </option>
-                ))}
-              </select>
+              <SimpleSelect id="state" value={form.state} placeholder="Select state" onChange={(v) => setForm((f) => ({ ...f, state: v }))} options={INDIAN_STATES.map((s) => ({ value: s, label: s }))} />
             </Field>
             <Field id="pincode" label="PIN code">
               <Input id="pincode" inputMode="numeric" maxLength={6} value={form.pincode} onChange={set("pincode")} />
             </Field>
           </div>
-        </div>
-      </PageSection>
+        </SettingsSection>
 
-      <PageSection title="Orders and currency">
-        <div className="grid gap-4 sm:grid-cols-3">
-          <Field id="orderPrefix" label="Order number prefix" hint="For example # or ORD-.">
-            <Input id="orderPrefix" maxLength={10} value={form.orderPrefix} onChange={set("orderPrefix")} />
-          </Field>
-          <Field id="currency" label="Currency">
-            <Input id="currency" disabled readOnly value={data.currency} />
-          </Field>
-          <Field id="timezone" label="Time zone">
-            <Input id="timezone" disabled readOnly value={data.timezone} />
-          </Field>
-        </div>
-      </PageSection>
-
-      <div className="flex justify-end">
-        <Button type="submit" disabled={update.isPending || !form.storeName.trim()}>
-          {update.isPending ? "Saving…" : "Save changes"}
-        </Button>
-      </div>
-    </form>
+        <SettingsSection title="Orders and currency">
+          <div className="grid gap-3 sm:grid-cols-3">
+            <Field id="orderPrefix" label="Order number prefix" hint="For example # or ORD-.">
+              <Input id="orderPrefix" maxLength={10} value={form.orderPrefix} onChange={set("orderPrefix")} />
+            </Field>
+            <Field id="currency" label="Currency">
+              <Input id="currency" disabled readOnly value={data.currency} />
+            </Field>
+            <Field id="timezone" label="Time zone">
+              <Input id="timezone" disabled readOnly value={data.timezone} />
+            </Field>
+          </div>
+        </SettingsSection>
+      </form>
+    </SettingsPageFrame>
   );
 }

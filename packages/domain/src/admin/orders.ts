@@ -1,4 +1,4 @@
-import { and, desc, eq, inArray, sql } from "drizzle-orm";
+import { and, asc, desc, eq, gte, inArray, lt, sql } from "drizzle-orm";
 import { schema, withTenant } from "@bs/db";
 import type { Runtime } from "../runtime.ts";
 import { assertPermission, type TenantContext } from "../context.ts";
@@ -14,6 +14,10 @@ export interface ListOrdersInput {
   status?: string | undefined;
   paymentStatus?: string | undefined;
   fulfillmentStatus?: string | undefined;
+  cod?: boolean | undefined;
+  placedFrom?: string | undefined;
+  placedTo?: string | undefined;
+  sort?: "placed_desc" | "placed_asc" | "total_desc" | "total_asc" | "number_desc" | "number_asc" | undefined;
   limit?: number | undefined;
   offset?: number | undefined;
 }
@@ -23,12 +27,21 @@ export interface OrderListItem {
   number: string;
   customerEmail: string;
   customerPhone: string;
+  customerName?: string | null;
   status: string;
   paymentStatus: string;
   fulfillmentStatus: string;
   grandTotal: number;
   placedAt: string;
   itemsCount: number;
+}
+
+/** The name entered at checkout, if any (checkout stores it as fullName; older rows may use name). */
+function nameFromAddress(address: unknown): string | null {
+  if (!address || typeof address !== "object") return null;
+  const a = address as Record<string, unknown>;
+  const raw = typeof a["fullName"] === "string" ? a["fullName"] : typeof a["name"] === "string" ? a["name"] : "";
+  return raw.trim() || null;
 }
 
 export async function listAdminOrders(
@@ -60,13 +73,28 @@ export async function listAdminOrders(
     if (input.status) conditions.push(eq(schema.orders.status, input.status));
     if (input.paymentStatus) conditions.push(eq(schema.orders.paymentStatus, input.paymentStatus));
     if (input.fulfillmentStatus) conditions.push(eq(schema.orders.fulfillmentStatus, input.fulfillmentStatus));
+    if (input.cod) conditions.push(inArray(schema.orders.paymentStatus, ["cod_pending", "cod_collected", "cod_failed"]));
+    const from = input.placedFrom ? new Date(input.placedFrom) : null;
+    const to = input.placedTo ? new Date(input.placedTo) : null;
+    if (from && !Number.isNaN(from.getTime())) conditions.push(gte(schema.orders.placedAt, from));
+    if (to && !Number.isNaN(to.getTime())) conditions.push(lt(schema.orders.placedAt, to));
     if (input.search) {
       conditions.push(
-        sql`(${schema.orders.number} ILIKE ${`%${input.search}%`} OR ${schema.orders.email} ILIKE ${`%${input.search}%`} OR ${schema.orders.phone} ILIKE ${`%${input.search}%`})`,
+        sql`(${schema.orders.number} ILIKE ${`%${input.search}%`} OR ${schema.orders.email} ILIKE ${`%${input.search}%`} OR ${schema.orders.phone} ILIKE ${`%${input.search}%`} OR ${schema.orders.shippingAddress}->>'fullName' ILIKE ${`%${input.search}%`})`,
       );
     }
 
     const whereClause = conditions.length > 0 ? and(...conditions) : undefined;
+
+    // Always tie-break on id so paging is stable when many orders share a timestamp/total.
+    const orderBy = {
+      placed_desc: [desc(schema.orders.placedAt), desc(schema.orders.id)],
+      placed_asc: [asc(schema.orders.placedAt), asc(schema.orders.id)],
+      total_desc: [desc(schema.orders.grandTotal), desc(schema.orders.id)],
+      total_asc: [asc(schema.orders.grandTotal), asc(schema.orders.id)],
+      number_desc: [desc(schema.orders.number), desc(schema.orders.id)],
+      number_asc: [asc(schema.orders.number), asc(schema.orders.id)],
+    }[input.sort ?? "placed_desc"];
 
     const [countResult] = await tx
       .select({ count: sql<number>`count(*)::int` })
@@ -79,6 +107,7 @@ export async function listAdminOrders(
         number: schema.orders.number,
         email: schema.orders.email,
         phone: schema.orders.phone,
+        shippingAddress: schema.orders.shippingAddress,
         status: schema.orders.status,
         paymentStatus: schema.orders.paymentStatus,
         fulfillmentStatus: schema.orders.fulfillmentStatus,
@@ -87,29 +116,38 @@ export async function listAdminOrders(
       })
       .from(schema.orders)
       .where(whereClause)
-      .orderBy(desc(schema.orders.placedAt))
+      .orderBy(...orderBy)
       .limit(limit)
       .offset(offset);
 
-    // Compute item counts for the page
+    // Item counts for the whole page in one query (not one per row).
+    const countRows =
+      rows.length === 0
+        ? []
+        : await tx
+            .select({
+              orderId: schema.orderItems.orderId,
+              count: sql<number>`coalesce(sum(${schema.orderItems.quantity}), 0)::int`,
+            })
+            .from(schema.orderItems)
+            .where(inArray(schema.orderItems.orderId, rows.map((r) => r.id)))
+            .groupBy(schema.orderItems.orderId);
+    const itemCounts = new Map(countRows.map((c) => [c.orderId, c.count]));
+
     const items: OrderListItem[] = [];
     for (const r of rows) {
-      const [itemCountRow] = await tx
-        .select({ count: sql<number>`coalesce(sum(${schema.orderItems.quantity}), 0)::int` })
-        .from(schema.orderItems)
-        .where(eq(schema.orderItems.orderId, r.id));
-
       items.push({
         id: r.id,
         number: r.number,
         customerEmail: r.email,
         customerPhone: r.phone,
+        customerName: nameFromAddress(r.shippingAddress),
         status: r.status,
         paymentStatus: r.paymentStatus,
         fulfillmentStatus: r.fulfillmentStatus,
         grandTotal: Number(r.grandTotal),
         placedAt: r.placedAt.toISOString(),
-        itemsCount: itemCountRow?.count ?? 0,
+        itemsCount: itemCounts.get(r.id) ?? 0,
       });
     }
 

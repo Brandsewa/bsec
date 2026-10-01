@@ -2,6 +2,17 @@ import { describe, expect, it } from "vitest";
 import React from "react";
 import { renderToString } from "react-dom/server";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import { createMemoryHistory, createRootRoute, createRouter, RouterProvider } from "@tanstack/react-router";
+
+/** Pages link to other routes and navigate, so they render inside an in-memory router. */
+async function renderInRouter(Page: () => React.ReactNode, queryClient: QueryClient): Promise<string> {
+  const root = createRootRoute({ component: Page });
+  const router = createRouter({ routeTree: root, history: createMemoryHistory({ initialEntries: ["/"] }) });
+  await router.load();
+  return renderToString(
+    React.createElement(QueryClientProvider, { client: queryClient }, React.createElement(RouterProvider, { router })),
+  );
+}
 
 describe("Admin Catalog & Inventory Routes", () => {
   it("exports valid Route definition with pendingComponent for products index", async () => {
@@ -77,16 +88,15 @@ describe("Admin Catalog & Inventory Routes", () => {
 
 describe("Admin M5 Routes (Orders, Customers, Discounts) oRPC Integration", () => {
   it("renders orders page with real data fetched from oRPC query", async () => {
-    const { OrdersPage } = await import("../src/routes/_store/orders.tsx");
+    const { OrdersPage, ordersListInput, parseOrdersSearch } = await import("../src/routes/_store/orders.tsx");
     const { orpc } = await import("../src/lib/orpc.ts");
 
     const queryClient = new QueryClient({
       defaultOptions: { queries: { retry: false } },
     });
 
-    const opts = orpc.admin.orders.list.queryOptions({
-      input: { view: "all", search: undefined },
-    });
+    // Same request the page makes for an address bar with no filters.
+    const opts = orpc.admin.orders.list.queryOptions({ input: ordersListInput(parseOrdersSearch({})) });
     queryClient.setQueryData(opts.queryKey, {
       items: [
         {
@@ -105,13 +115,7 @@ describe("Admin M5 Routes (Orders, Customers, Discounts) oRPC Integration", () =
       total: 1,
     });
 
-    const html = renderToString(
-      React.createElement(
-        QueryClientProvider,
-        { client: queryClient },
-        React.createElement(OrdersPage),
-      ),
-    );
+    const html = await renderInRouter(OrdersPage, queryClient);
 
     expect(html).toContain("ORD-2026-REAL-001");
     expect(html).toContain("real.customer@example.com");
@@ -119,16 +123,14 @@ describe("Admin M5 Routes (Orders, Customers, Discounts) oRPC Integration", () =
   });
 
   it("renders customers page with real data fetched from oRPC query", async () => {
-    const { CustomersPage } = await import("../src/routes/_store/customers.tsx");
+    const { CustomersPage, customersListInput, parseCustomersSearch } = await import("../src/routes/_store/customers.tsx");
     const { orpc } = await import("../src/lib/orpc.ts");
 
     const queryClient = new QueryClient({
       defaultOptions: { queries: { retry: false } },
     });
 
-    const opts = orpc.admin.customers.list.queryOptions({
-      input: { search: undefined },
-    });
+    const opts = orpc.admin.customers.list.queryOptions({ input: customersListInput(parseCustomersSearch({})) });
     queryClient.setQueryData(opts.queryKey, {
       items: [
         {
@@ -146,13 +148,7 @@ describe("Admin M5 Routes (Orders, Customers, Discounts) oRPC Integration", () =
       total: 1,
     });
 
-    const html = renderToString(
-      React.createElement(
-        QueryClientProvider,
-        { client: queryClient },
-        React.createElement(CustomersPage),
-      ),
-    );
+    const html = await renderInRouter(CustomersPage, queryClient);
 
     expect(html).toContain("Dr. Real Customer");
     expect(html).toContain("dr.real@example.com");
@@ -160,16 +156,14 @@ describe("Admin M5 Routes (Orders, Customers, Discounts) oRPC Integration", () =
   });
 
   it("renders discounts page with real data fetched from oRPC query", async () => {
-    const { DiscountsPage } = await import("../src/routes/_store/discounts.tsx");
+    const { DiscountsPage, discountsListInput, parseDiscountsSearch } = await import("../src/routes/_store/discounts.tsx");
     const { orpc } = await import("../src/lib/orpc.ts");
 
     const queryClient = new QueryClient({
       defaultOptions: { queries: { retry: false } },
     });
 
-    const opts = orpc.admin.discounts.list.queryOptions({
-      input: { search: undefined },
-    });
+    const opts = orpc.admin.discounts.list.queryOptions({ input: discountsListInput(parseDiscountsSearch({})) });
     queryClient.setQueryData(opts.queryKey, {
       items: [
         {
@@ -188,13 +182,7 @@ describe("Admin M5 Routes (Orders, Customers, Discounts) oRPC Integration", () =
       total: 1,
     });
 
-    const html = renderToString(
-      React.createElement(
-        QueryClientProvider,
-        { client: queryClient },
-        React.createElement(DiscountsPage),
-      ),
-    );
+    const html = await renderInRouter(DiscountsPage, queryClient);
 
     expect(html).toContain("FESTIVE50_REAL");
     expect(html).toContain("Real Diwali 50% Off");

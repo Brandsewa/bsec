@@ -1,54 +1,48 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { Check, RotateCcw, Save, Truck } from "lucide-react";
 import { useState } from "react";
-import {
-  Button,
-  Input,
-  Label,
-  MetricCard,
-  MetricCardSkeleton,
-  PageBreadcrumbs,
-  PageContainer,
-  PageHeader,
-  PageSection,
-  PageSkeleton,
-  toast,
-} from "@bs/ui";
+import { FormSkeleton, PageSkeleton, toast } from "@bs/ui";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import type { ShippingSettings } from "@bs/contracts";
+import { Button } from "@/components/ui/button";
+import { Checkbox } from "@/components/ui/checkbox";
+import { Input } from "@/components/ui/input";
+import { Field } from "../../../components/field.tsx";
+import { HeaderActions, SettingsPageFrame, SettingsSection, useUnsavedGuard } from "../../../components/settings/settings-page.tsx";
 import { orpc } from "../../../lib/orpc.ts";
 
 export const Route = createFileRoute("/_store/settings/shipping")({
-  pendingComponent: () => (
-    <PageSkeleton>
-      <div className="grid gap-4 sm:grid-cols-3">
-        <MetricCardSkeleton />
-        <MetricCardSkeleton />
-        <MetricCardSkeleton />
-      </div>
-    </PageSkeleton>
-  ),
+  pendingComponent: () => <PageSkeleton />,
   component: ShippingSettingsPage,
 });
 
-export function ShippingSettingsPage() {
-  const { data, isLoading } = useQuery(
-    orpc.admin.shipping.get.queryOptions({}),
-  );
+const TITLE = "Shipping & delivery";
+const DESCRIPTION = "Configure domestic shipping zones, flat delivery rates, and free delivery thresholds.";
 
-  if (isLoading || !data) {
+export function ShippingSettingsPage() {
+  const { data } = useQuery(orpc.admin.shipping.get.queryOptions({}));
+
+  if (!data) {
     return (
-      <PageSkeleton>
-        <div className="grid gap-4 sm:grid-cols-3">
-          <MetricCardSkeleton />
-          <MetricCardSkeleton />
-          <MetricCardSkeleton />
-        </div>
-      </PageSkeleton>
+      <SettingsPageFrame title={TITLE} description={DESCRIPTION}>
+        <SettingsSection>
+          <FormSkeleton />
+        </SettingsSection>
+      </SettingsPageFrame>
     );
   }
-
   return <ShippingSettingsForm initialData={data} />;
+}
+
+/** A rupee amount field with a fixed ₹ prefix. */
+function RupeeInput({ id, value, onChange, min = "0", required }: { id: string; value: string; onChange: (v: string) => void; min?: string; required?: boolean }) {
+  return (
+    <div className="relative">
+      <span className="pointer-events-none absolute top-1/2 left-2.5 -translate-y-1/2 text-muted-foreground" aria-hidden>
+        ₹
+      </span>
+      <Input id={id} type="number" min={min} step="1" value={value} onChange={(e) => onChange(e.target.value)} className="pl-6" required={required} />
+    </div>
+  );
 }
 
 function ShippingSettingsForm({ initialData }: { initialData: ShippingSettings }) {
@@ -58,31 +52,33 @@ function ShippingSettingsForm({ initialData }: { initialData: ShippingSettings }
   const initialStandard = defaultZone?.rates.find((r) => r.method === "standard");
   const initialExpress = defaultZone?.rates.find((r) => r.method === "express");
 
-  const [zoneName, setZoneName] = useState(defaultZone?.name ?? "Domestic (India)");
-  const [standardRupees, setStandardRupees] = useState(
-    initialStandard ? (initialStandard.pricePaise / 100).toString() : "0",
-  );
-  const [expressRupees, setExpressRupees] = useState(
-    initialExpress ? (initialExpress.pricePaise / 100).toString() : "150",
-  );
-  const [enableFreeShipping, setEnableFreeShipping] = useState(
-    initialStandard?.thresholdPaise != null,
-  );
-  const [thresholdRupees, setThresholdRupees] = useState(
-    initialStandard?.thresholdPaise != null
-      ? (initialStandard.thresholdPaise / 100).toString()
-      : "999",
-  );
-  const [isSaved, setIsSaved] = useState(false);
+  const base = {
+    zoneName: defaultZone?.name ?? "Domestic (India)",
+    standard: initialStandard ? (initialStandard.pricePaise / 100).toString() : "0",
+    express: initialExpress ? (initialExpress.pricePaise / 100).toString() : "150",
+    freeShipping: initialStandard?.thresholdPaise != null,
+    threshold: initialStandard?.thresholdPaise != null ? (initialStandard.thresholdPaise / 100).toString() : "999",
+  };
 
-  // Mutation
+  const [zoneName, setZoneName] = useState(base.zoneName);
+  const [standardRupees, setStandardRupees] = useState(base.standard);
+  const [expressRupees, setExpressRupees] = useState(base.express);
+  const [enableFreeShipping, setEnableFreeShipping] = useState(base.freeShipping);
+  const [thresholdRupees, setThresholdRupees] = useState(base.threshold);
+
+  const dirty =
+    zoneName !== base.zoneName ||
+    standardRupees !== base.standard ||
+    expressRupees !== base.express ||
+    enableFreeShipping !== base.freeShipping ||
+    (enableFreeShipping && thresholdRupees !== base.threshold);
+  const guard = useUnsavedGuard(dirty);
+
   const updateMutation = useMutation(
     orpc.admin.shipping.update.mutationOptions({
       onSuccess: () => {
-        queryClient.invalidateQueries({ queryKey: orpc.admin.shipping.get.key() });
-        setIsSaved(true);
-        toast.success("Store shipping rates saved successfully.");
-        setTimeout(() => setIsSaved(false), 3000);
+        void queryClient.invalidateQueries({ queryKey: orpc.admin.shipping.get.key() });
+        toast.success("Shipping rates saved.");
       },
       onError: (err) => {
         toast.error(err.message || "Failed to save shipping rates");
@@ -92,186 +88,57 @@ function ShippingSettingsForm({ initialData }: { initialData: ShippingSettings }
 
   const handleSave = (e: React.FormEvent) => {
     e.preventDefault();
-    const standardPaise = Math.round((parseFloat(standardRupees) || 0) * 100);
-    const expressPaise = Math.round((parseFloat(expressRupees) || 0) * 100);
-    const thresholdPaise = enableFreeShipping
-      ? Math.round((parseFloat(thresholdRupees) || 0) * 100)
-      : null;
-
     updateMutation.mutate({
       zoneName: zoneName.trim() || "Domestic (India)",
-      standardRatePaise: standardPaise,
-      expressRatePaise: expressPaise,
-      freeShippingThresholdPaise: thresholdPaise,
+      standardRatePaise: Math.round((parseFloat(standardRupees) || 0) * 100),
+      expressRatePaise: Math.round((parseFloat(expressRupees) || 0) * 100),
+      freeShippingThresholdPaise: enableFreeShipping ? Math.round((parseFloat(thresholdRupees) || 0) * 100) : null,
     });
   };
 
   return (
-    <PageContainer>
-      <PageBreadcrumbs
-        items={[
-          { label: "Home", href: "/" },
-          { label: "Settings", href: "/settings" },
-          { label: "Shipping", href: "/settings/shipping" },
-        ]}
-      />
+    <SettingsPageFrame title={TITLE} description={DESCRIPTION}>
+      {guard}
+      <HeaderActions>
+        <Button type="submit" form="shipping-form" disabled={updateMutation.isPending || !dirty}>
+          {updateMutation.isPending ? "Saving…" : "Save changes"}
+        </Button>
+      </HeaderActions>
 
-      <PageHeader
-        title="Shipping & Delivery"
-        description="Configure domestic shipping zones, flat delivery rates, and free delivery thresholds."
-        aside={
-          <Button
-            type="submit"
-            form="shipping-form"
-            disabled={updateMutation.isPending}
-          >
-            {updateMutation.isPending ? (
-              <>
-                <RotateCcw className="mr-2 h-4 w-4 animate-spin" />
-                Saving...
-              </>
-            ) : isSaved ? (
-              <>
-                <Check className="mr-2 h-4 w-4 text-emerald-500" />
-                Saved
-              </>
-            ) : (
-              <>
-                <Save className="mr-2 h-4 w-4" />
-                Save Changes
-              </>
-            )}
-          </Button>
-        }
-      />
-
-      <div className="grid gap-4 sm:grid-cols-3 mb-6">
-        <MetricCard
-          label="Active Zone"
-          value={zoneName}
-          icon={Truck}
-          description="Default delivery territory"
-        />
-        <MetricCard
-          label="Standard Delivery"
-          value={parseFloat(standardRupees) === 0 ? "Free" : `₹${standardRupees}`}
-          description="Default standard shipping rate"
-        />
-        <MetricCard
-          label="Free Delivery Threshold"
-          value={enableFreeShipping ? `₹${thresholdRupees}` : "Disabled"}
-          description={enableFreeShipping ? "Orders qualify for free delivery" : "Flat shipping applied"}
-        />
-      </div>
-
-      <form id="shipping-form" onSubmit={handleSave} className="space-y-6 max-w-4xl">
-        <PageSection
-          title="Shipping Zone"
-          description="Specify the primary region and country covered by these rates."
-        >
-          <div className="space-y-4 max-w-xl">
-            <div>
-              <Label htmlFor="zoneName">Zone Name</Label>
-              <Input
-                id="zoneName"
-                value={zoneName}
-                onChange={(e) => setZoneName(e.target.value)}
-                placeholder="e.g. Domestic (India)"
-                required
-              />
-            </div>
+      <form id="shipping-form" onSubmit={handleSave}>
+        <SettingsSection title="Shipping zone" description="The primary region covered by these rates.">
+          <div className="max-w-sm">
+            <Field id="zoneName" label="Zone name">
+              <Input id="zoneName" value={zoneName} onChange={(e) => setZoneName(e.target.value)} placeholder="e.g. Domestic (India)" required />
+            </Field>
           </div>
-        </PageSection>
+        </SettingsSection>
 
-        <PageSection
-          title="Delivery Rates (paise-accurate)"
-          description="Set the customer-facing shipping charges for Standard and Express delivery."
-        >
-          <div className="grid gap-6 sm:grid-cols-2 max-w-2xl">
-            <div className="space-y-2">
-              <Label htmlFor="standardRate">Standard Shipping Rate (₹)</Label>
-              <div className="relative">
-                <span className="absolute left-3 top-2.5 text-muted-foreground text-sm">₹</span>
-                <Input
-                  id="standardRate"
-                  type="number"
-                  min="0"
-                  step="1"
-                  value={standardRupees}
-                  onChange={(e) => setStandardRupees(e.target.value)}
-                  className="pl-7"
-                  required
-                />
-              </div>
-              <p className="text-xs text-muted-foreground">
-                Set to 0 for default free standard shipping.
-              </p>
-            </div>
-
-            <div className="space-y-2">
-              <Label htmlFor="expressRate">Express Shipping Rate (₹)</Label>
-              <div className="relative">
-                <span className="absolute left-3 top-2.5 text-muted-foreground text-sm">₹</span>
-                <Input
-                  id="expressRate"
-                  type="number"
-                  min="0"
-                  step="1"
-                  value={expressRupees}
-                  onChange={(e) => setExpressRupees(e.target.value)}
-                  className="pl-7"
-                  required
-                />
-              </div>
-              <p className="text-xs text-muted-foreground">
-                Expedited delivery (2-3 business days).
-              </p>
-            </div>
+        <SettingsSection title="Delivery rates" description="The shipping charges customers pay for Standard and Express delivery.">
+          <div className="grid gap-3 sm:grid-cols-2">
+            <Field id="standardRate" label="Standard shipping (₹)" hint="Set to 0 for free standard shipping.">
+              <RupeeInput id="standardRate" value={standardRupees} onChange={setStandardRupees} required />
+            </Field>
+            <Field id="expressRate" label="Express shipping (₹)" hint="Expedited delivery (2–3 business days).">
+              <RupeeInput id="expressRate" value={expressRupees} onChange={setExpressRupees} required />
+            </Field>
           </div>
-        </PageSection>
+        </SettingsSection>
 
-        <PageSection
-          title="Free Delivery Threshold"
-          description="Encourage higher order values by offering free shipping on cart subtotals over a threshold."
-        >
-          <div className="space-y-4 max-w-xl">
-            <div className="flex items-center space-x-2">
-              <input
-                type="checkbox"
-                id="enableFreeShipping"
-                checked={enableFreeShipping}
-                onChange={(e) => setEnableFreeShipping(e.target.checked)}
-                className="h-4 w-4 rounded border-gray-300 text-primary focus:ring-primary"
-              />
-              <Label htmlFor="enableFreeShipping" className="cursor-pointer font-medium">
-                Enable free standard shipping above minimum subtotal
-              </Label>
+        <SettingsSection title="Free delivery" description="Offer free standard shipping on carts over a minimum subtotal.">
+          <label className="flex items-center gap-2 text-xs font-medium text-foreground">
+            <Checkbox checked={enableFreeShipping} onCheckedChange={(c) => setEnableFreeShipping(c)} />
+            Free standard shipping above a minimum subtotal
+          </label>
+          {enableFreeShipping ? (
+            <div className="max-w-xs">
+              <Field id="threshold" label="Minimum order subtotal (₹)" hint="Orders at or above this subtotal ship free.">
+                <RupeeInput id="threshold" value={thresholdRupees} onChange={setThresholdRupees} min="1" required />
+              </Field>
             </div>
-
-            {enableFreeShipping && (
-              <div className="space-y-2 pl-6">
-                <Label htmlFor="threshold">Minimum Order Subtotal (₹)</Label>
-                <div className="relative max-w-xs">
-                  <span className="absolute left-3 top-2.5 text-muted-foreground text-sm">₹</span>
-                  <Input
-                    id="threshold"
-                    type="number"
-                    min="1"
-                    step="1"
-                    value={thresholdRupees}
-                    onChange={(e) => setThresholdRupees(e.target.value)}
-                    className="pl-7"
-                    required={enableFreeShipping}
-                  />
-                </div>
-                <p className="text-xs text-muted-foreground">
-                  Orders equal to or exceeding this subtotal receive free standard shipping.
-                </p>
-              </div>
-            )}
-          </div>
-        </PageSection>
+          ) : null}
+        </SettingsSection>
       </form>
-    </PageContainer>
+    </SettingsPageFrame>
   );
 }

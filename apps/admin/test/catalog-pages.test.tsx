@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import React from "react";
 import { renderToString } from "react-dom/server";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import { createMemoryHistory, createRootRoute, createRouter, RouterProvider } from "@tanstack/react-router";
 
 const PID = "0199a000-0000-7000-8000-0000000000a1";
 const VID = "0199a000-0000-7000-8000-0000000000b1";
@@ -12,6 +13,12 @@ const SAMPLE_TEXT = ["Organic Cotton T-Shirt", "Ceramic Coffee Mug", "TSHIRT-BLK
 
 function render(client: QueryClient, el: React.ReactElement) {
   return renderToString(React.createElement(QueryClientProvider, { client }, el));
+}
+/** List pages keep their state in the URL and link to other routes, so they render inside an in-memory router. */
+async function renderRouted(client: QueryClient, Page: () => React.ReactNode) {
+  const router = createRouter({ routeTree: createRootRoute({ component: Page }), history: createMemoryHistory({ initialEntries: ["/"] }) });
+  await router.load();
+  return renderToString(React.createElement(QueryClientProvider, { client }, React.createElement(RouterProvider, { router })));
 }
 const newClient = () => new QueryClient({ defaultOptions: { queries: { retry: false } } });
 
@@ -32,32 +39,22 @@ const product = {
 
 describe("Catalog pages render real query data", () => {
   it("products list shows seeded rows and no sample data", async () => {
-    const { ProductsPage, PRODUCTS_PAGE_SIZE } = await import("../src/routes/_store/products/index.tsx");
+    const { ProductsPage, productsListInput, parseProductsSearch } = await import("../src/routes/_store/products/index.tsx");
     const { orpc } = await import("../src/lib/orpc.ts");
     const qc = newClient();
-    qc.setQueryData(
-      orpc.admin.products.list.queryOptions({
-        input: { search: undefined, status: undefined, limit: PRODUCTS_PAGE_SIZE, offset: 0 },
-      }).queryKey,
-      { items: [product], total: 1 },
-    );
-    const html = render(qc, React.createElement(ProductsPage));
+    qc.setQueryData(orpc.admin.products.list.queryOptions({ input: productsListInput(parseProductsSearch({})) }).queryKey, { items: [product], total: 1 });
+    const html = await renderRouted(qc, ProductsPage);
     expect(html).toContain("Handloom Linen Kurta");
     expect(html).toContain("handloom-linen-kurta");
     for (const s of SAMPLE_TEXT) expect(html).not.toContain(s);
   });
 
   it("products list renders the empty state with a call to action", async () => {
-    const { ProductsPage, PRODUCTS_PAGE_SIZE } = await import("../src/routes/_store/products/index.tsx");
+    const { ProductsPage, productsListInput, parseProductsSearch } = await import("../src/routes/_store/products/index.tsx");
     const { orpc } = await import("../src/lib/orpc.ts");
     const qc = newClient();
-    qc.setQueryData(
-      orpc.admin.products.list.queryOptions({
-        input: { search: undefined, status: undefined, limit: PRODUCTS_PAGE_SIZE, offset: 0 },
-      }).queryKey,
-      { items: [], total: 0 },
-    );
-    const html = render(qc, React.createElement(ProductsPage));
+    qc.setQueryData(orpc.admin.products.list.queryOptions({ input: productsListInput(parseProductsSearch({})) }).queryKey, { items: [], total: 0 });
+    const html = await renderRouted(qc, ProductsPage);
     expect(html).toContain("No products yet");
     expect(html).toContain("Add product");
   });
@@ -100,13 +97,11 @@ describe("Catalog pages render real query data", () => {
   });
 
   it("inventory shows seeded levels and no sample data", async () => {
-    const { InventoryPage, INVENTORY_PAGE_SIZE } = await import("../src/routes/_store/inventory/index.tsx");
+    const { InventoryPage, inventoryListInput, parseInventorySearch } = await import("../src/routes/_store/inventory/index.tsx");
     const { orpc } = await import("../src/lib/orpc.ts");
     const qc = newClient();
     qc.setQueryData(
-      orpc.admin.inventory.list.queryOptions({
-        input: { search: undefined, limit: INVENTORY_PAGE_SIZE, offset: 0 },
-      }).queryKey,
+      orpc.admin.inventory.list.queryOptions({ input: inventoryListInput(parseInventorySearch({})) }).queryKey,
       {
         items: [
           {
@@ -125,7 +120,7 @@ describe("Catalog pages render real query data", () => {
         total: 1,
       },
     );
-    const html = render(qc, React.createElement(InventoryPage));
+    const html = await renderRouted(qc, InventoryPage);
     expect(html).toContain("Handloom Linen Kurta");
     expect(html).toContain("Bengaluru Hub");
     expect(html).toContain("KURTA-LIN-M");
@@ -133,16 +128,11 @@ describe("Catalog pages render real query data", () => {
   });
 
   it("inventory renders the empty state when there are no levels", async () => {
-    const { InventoryPage, INVENTORY_PAGE_SIZE } = await import("../src/routes/_store/inventory/index.tsx");
+    const { InventoryPage, inventoryListInput, parseInventorySearch } = await import("../src/routes/_store/inventory/index.tsx");
     const { orpc } = await import("../src/lib/orpc.ts");
     const qc = newClient();
-    qc.setQueryData(
-      orpc.admin.inventory.list.queryOptions({
-        input: { search: undefined, limit: INVENTORY_PAGE_SIZE, offset: 0 },
-      }).queryKey,
-      { items: [], total: 0 },
-    );
-    const html = render(qc, React.createElement(InventoryPage));
+    qc.setQueryData(orpc.admin.inventory.list.queryOptions({ input: inventoryListInput(parseInventorySearch({})) }).queryKey, { items: [], total: 0 });
+    const html = await renderRouted(qc, InventoryPage);
     expect(html).toContain("No inventory yet");
     expect(html).toContain("Add a product");
   });

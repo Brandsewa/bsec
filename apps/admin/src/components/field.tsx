@@ -1,13 +1,13 @@
 import type { ReactNode } from "react";
-import { Label } from "@bs/ui";
+import { Field as ShadField, FieldDescription, FieldLabel } from "@/components/ui/field";
 
-/** Label + control + optional hint, used by plain (non react-hook-form) settings forms. */
+/** Label + control + optional hint, used by plain (non react-hook-form) forms. */
 export function Field({ id, label, hint, children }: { id: string; label: string; hint?: string; children: ReactNode }) {
   return (
-    <div className="grid gap-1.5">
-      <Label htmlFor={id}>{label}</Label>
+    <ShadField>
+      <FieldLabel htmlFor={id}>{label}</FieldLabel>
       {children}
-      {hint ? <p className="text-xs text-foreground-lighter">{hint}</p> : null}
-    </div>
+      {hint ? <FieldDescription>{hint}</FieldDescription> : null}
+    </ShadField>
   );
 }

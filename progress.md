@@ -116,3 +116,18 @@ Design and rationale: [`docs/adr/018-visual-theme-editor.md`](docs/adr/018-visua
 
 ## Next: M1 · Tenant isolation proven
 Schema for platform/identity/settings, full `tenantTable()` with composite FKs, `withTenant()`, host resolver, TenantContext, Better Auth staff and customer instances, memberships/roles, feature flags, and the generated isolation suite.
+
+## Admin UI refresh (2026-10-01)
+
+Store admin (`apps/admin`) moved to a new component system and layout. Standards and the "use this for everything new, upgrade old screens when touched" rule are in [docs/admin-ui-standards.md](docs/admin-ui-standards.md).
+
+- [x] shadcn (Base UI, preset `b1D2d9ge`/base-mira) added to the admin and mapped onto the existing Supabase-style tokens in `src/index.css` (our token names stay the source of truth). Light/dark still via `data-theme`.
+- [x] Shell: collapsible icon sidebar (Ctrl/Cmd+B, remembered), 25% narrower (12rem), white sidebar on a grey canvas so white cards stand out.
+- [x] Orders: server-driven table (search, filters, sort, paging, rows per page, selection and "select all results", bulk actions with progress, filter chips, Columns menu, sticky header, quick-actions menu, mobile cards and Filters/Sort sidebars, all state in the URL). Order detail and create-order are full pages (`/orders/$orderId`, `/orders/new`). Customer name shown first in the table.
+- [x] Same table system on Products (status/stock/created filters, bulk activate/draft/archive/delete), Inventory (stock tabs, adjust dialog), Customers (repeat/marketing/joined filters; detail is a page `/customers/$customerId`), Discounts (status/type; create is a page `/discounts/new` with minimum order value, per-customer limit, combinable, schedule).
+- [x] Shared kit: `components/data-table/*`, `simple-select`, `date-range-picker`, `scroll-tabs`, `confirm-dialog`, frosted popups.
+- [x] Settings is one workspace (`/settings/*`): compact left navigation (dropdown below `lg`), one route per section so back/forward work, consistent header with the primary action, single card with dividers, unsaved-changes warning when switching sections, 12px type scale like the tables.
+- [x] Backend (existing columns only, no migrations): orders list gained sort, date range, COD flag, customer name, name search and a single grouped query for item counts (was one query per row); products/inventory/customers/discounts lists gained sort and filters (stock, repeat, marketing, type, created range).
+- [ ] Not browser-tested: the Playwright e2e suite (two specs updated for the Settings workspace and the new state dropdown), CSV downloads, bulk fulfil/invoice/cancel on orders, dark mode, tablet widths.
+- [ ] Old-style screens still to upgrade: Online Store (Themes, Pages, Navigation, editors), superadmin and platform UIs; edit flows for customers and discounts; order refund/return actions.
+- Gotchas: after changing `packages/contracts` or `packages/domain`, restart the Next dev server (new query params are silently dropped otherwise). Pages that use the table kit or `useUnsavedGuard` must render inside a router in tests.

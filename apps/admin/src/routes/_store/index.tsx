@@ -14,15 +14,19 @@ import {
 import { useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import {
-  Button,
   MetricCardSkeleton,
   PageBreadcrumbs,
   PageContainer,
   PageHeader,
   PageSection,
   PageSkeleton,
-  Skeleton,
 } from "@bs/ui";
+import { Alert } from "@/components/ui/alert";
+import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
+import { Card } from "@/components/ui/card";
+import { Progress } from "@/components/ui/progress";
+import { Skeleton } from "@/components/ui/skeleton";
 import { orpc } from "../../lib/orpc.ts";
 
 export const Route = createFileRoute("/_store/")({
@@ -137,8 +141,8 @@ function HomePage() {
       />
 
       {storefront.data && storefront.data.mode !== "live" && (
-        <div
-          className="flex flex-col gap-3 rounded-xl border border-border bg-card p-4 sm:flex-row sm:items-center sm:justify-between"
+        <Alert
+          className="flex flex-col gap-3 p-4 sm:flex-row sm:items-center sm:justify-between"
           role="status"
           data-testid="storefront-not-live"
         >
@@ -151,10 +155,10 @@ function HomePage() {
               Take it live when your products and payments are ready.
             </p>
           </div>
-          <Link to="/settings/storefront">
-            <Button size="sm">Go live</Button>
-          </Link>
-        </div>
+          <Button size="sm" nativeButton={false} render={<Link to="/settings/storefront" />}>
+            Go live
+          </Button>
+        </Alert>
       )}
 
       {/* Setup Checklist Section */}
@@ -167,7 +171,7 @@ function HomePage() {
         }
       >
         {isLoading ? (
-          <div className="space-y-4 rounded-xl border border-border bg-card p-6">
+          <Card className="space-y-4 p-6">
             <Skeleton className="h-6 w-48" />
             <Skeleton className="h-3 w-full" />
             <div className="space-y-3 pt-2">
@@ -175,7 +179,7 @@ function HomePage() {
               <Skeleton className="h-16 w-full" />
               <Skeleton className="h-16 w-full" />
             </div>
-          </div>
+          </Card>
         ) : isDismissed ? (
           <div className="flex items-center justify-between rounded-xl border border-border/60 bg-muted/30 p-4">
             <div className="flex items-center gap-3">
@@ -185,7 +189,7 @@ function HomePage() {
               </p>
             </div>
             <Button
-              variant="default"
+              variant="outline"
               size="sm"
               onClick={() => setShowDismissed(true)}
             >
@@ -193,7 +197,7 @@ function HomePage() {
             </Button>
           </div>
         ) : (
-          <div className="rounded-xl border border-border bg-card p-6 shadow-sm">
+          <Card className="p-6 shadow-sm">
             {/* Header with Progress Bar */}
             <div className="mb-6 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
               <div>
@@ -201,9 +205,9 @@ function HomePage() {
                   <h3 className="font-semibold text-foreground">
                     Get ready to launch
                   </h3>
-                  <span className="rounded-full bg-primary/10 px-2.5 py-0.5 text-xs font-semibold text-primary">
+                  <Badge variant="secondary">
                     {completedCount} of {totalCount} completed
-                  </span>
+                  </Badge>
                 </div>
                 <p className="mt-1 text-sm text-muted-foreground">
                   Follow these steps to set up your online store for customer orders.
@@ -224,12 +228,7 @@ function HomePage() {
 
             {/* Progress track */}
             <div className="mb-6">
-              <div className="h-2 w-full overflow-hidden rounded-full bg-muted">
-                <div
-                  className="h-full bg-primary transition-all duration-500 ease-out"
-                  style={{ width: `${progressPercent}%` }}
-                />
-              </div>
+              <Progress value={progressPercent} aria-label="Setup progress" />
             </div>
 
             {/* Steps list */}
@@ -273,12 +272,10 @@ function HomePage() {
                           Done
                         </span>
                       ) : step.href ? (
-                        <Link to={step.href}>
-                          <Button size="sm" variant="default" className="h-8 text-xs">
-                            {step.actionText ?? "Start"}
-                            <ArrowRight className="ml-1.5 h-3.5 w-3.5" />
-                          </Button>
-                        </Link>
+                        <Button size="lg" nativeButton={false} render={<Link to={step.href} />}>
+                          {step.actionText ?? "Start"}
+                          <ArrowRight className="ml-1.5 h-3.5 w-3.5" />
+                        </Button>
                       ) : null}
                     </div>
                   </div>
@@ -293,7 +290,7 @@ function HomePage() {
                 </p>
               </div>
             )}
-          </div>
+          </Card>
         )}
       </PageSection>
     </PageContainer>

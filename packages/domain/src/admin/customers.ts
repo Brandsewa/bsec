@@ -1,4 +1,4 @@
-import { and, desc, eq, sql } from "drizzle-orm";
+import { and, asc, desc, eq, gte, lt, sql } from "drizzle-orm";
 import { schema, withTenant } from "@bs/db";
 import type { Runtime } from "../runtime.ts";
 import { assertPermission, type TenantContext } from "../context.ts";
@@ -6,6 +6,11 @@ import { assertPermission, type TenantContext } from "../context.ts";
 export interface ListCustomersInput {
   search?: string | undefined;
   tag?: string | undefined;
+  repeat?: boolean | undefined;
+  acceptsMarketing?: boolean | undefined;
+  createdFrom?: string | undefined;
+  createdTo?: string | undefined;
+  sort?: "created_desc" | "created_asc" | "name_asc" | "name_desc" | "spent_desc" | "spent_asc" | "orders_desc" | "orders_asc" | undefined;
   limit?: number | undefined;
   offset?: number | undefined;
 }
@@ -27,6 +32,13 @@ export async function listAdminCustomers(
       conditions.push(sql`${input.tag} = ANY(${schema.customers.tags})`);
     }
 
+    if (input.repeat) conditions.push(sql`${schema.customers.ordersCount} > 1`);
+    if (input.acceptsMarketing !== undefined) conditions.push(eq(schema.customers.acceptsMarketing, input.acceptsMarketing));
+    const from = input.createdFrom ? new Date(input.createdFrom) : null;
+    const to = input.createdTo ? new Date(input.createdTo) : null;
+    if (from && !Number.isNaN(from.getTime())) conditions.push(gte(schema.customers.createdAt, from));
+    if (to && !Number.isNaN(to.getTime())) conditions.push(lt(schema.customers.createdAt, to));
+
     if (input.search) {
       conditions.push(
         sql`(${schema.customers.name} ILIKE ${`%${input.search}%`} OR ${schema.customers.email} ILIKE ${`%${input.search}%`} OR ${schema.customers.phone} ILIKE ${`%${input.search}%`})`,
@@ -34,6 +46,17 @@ export async function listAdminCustomers(
     }
 
     const whereClause = conditions.length > 0 ? and(...conditions) : undefined;
+
+    const orderBy = {
+      created_desc: [desc(schema.customers.createdAt), desc(schema.customers.id)],
+      created_asc: [asc(schema.customers.createdAt), asc(schema.customers.id)],
+      name_asc: [asc(schema.customers.name), asc(schema.customers.id)],
+      name_desc: [desc(schema.customers.name), desc(schema.customers.id)],
+      spent_desc: [desc(schema.customers.totalSpent), desc(schema.customers.id)],
+      spent_asc: [asc(schema.customers.totalSpent), asc(schema.customers.id)],
+      orders_desc: [desc(schema.customers.ordersCount), desc(schema.customers.id)],
+      orders_asc: [asc(schema.customers.ordersCount), asc(schema.customers.id)],
+    }[input.sort ?? "created_desc"];
 
     const [countResult] = await tx
       .select({ count: sql<number>`count(*)::int` })
@@ -54,7 +77,7 @@ export async function listAdminCustomers(
       })
       .from(schema.customers)
       .where(whereClause)
-      .orderBy(desc(schema.customers.createdAt))
+      .orderBy(...orderBy)
       .limit(limit)
       .offset(offset);
 
