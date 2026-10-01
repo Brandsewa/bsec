@@ -30,6 +30,8 @@ Design and rationale: [`docs/adr/018-visual-theme-editor.md`](docs/adr/018-visua
   - Preview and editor canvases showed "Your store" instead of the real name: store name passed through.
   - Store library said customisations are "never overwritten" although re-applying replaces settings and layouts: copy corrected.
   - Header/footer/product/collection layouts would have been reachable at `/pages/template-*`: excluded from public page lookup and from the Pages list.
+- Deploy bug found in production: the Super Admin still showed the old Themes page after the theme-builder deploy because CI's `APP_UUIDS` list (apps Coolify redeploys) did not include `bsec-superadmin`: its image was built every push but never pulled. Added `mvpbrx2k9jp3q1invu8ayk48` to the list, the RUNBOOK table and DEPLOYMENT.md.
+- CI e2e fixes after the admin redesign: product/order lookups matched twice (table + card) and the order filters became tabs; also raised flaky 15s/20s unit-test timeouts (cold route imports on busy runners).
 - Test-run notes: running all platform/domain integration suites in parallel against one reused Postgres container fails with "already exists" (schema/table collisions); run them with `--no-file-parallelism` (platform: 68 pass). One admin routes test times out only when the machine is busy; it passes alone.
 - Not done: merging a platform update into a store's customisations (re-applying replaces), other page types (cart, blog, search), theme preview thumbnails.
 
