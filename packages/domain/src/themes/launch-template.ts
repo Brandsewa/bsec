@@ -10,13 +10,15 @@ export const LAUNCH_TEMPLATE_CODE = "essential-commerce";
 export const LAUNCH_TEMPLATE_TOKENS = {
   colors: {
     primary: "#0b6b42",
+    secondary: "#334155",
     accent: "#f59e0b",
     background: "#ffffff",
     surface: "#f4f7f5",
     text: "#16201b",
   },
-  typography: { headingFont: "Inter", bodyFont: "Inter", scale: 1.0 },
-  shape: { radius: "0.5rem", buttonStyle: "rounded" },
+  fonts: { heading: "Inter", body: "Inter" },
+  radius: "md",
+  buttons: { style: "solid", uppercase: false },
 } as const;
 
 const b = (id: string, type: BlockInstance["type"], props: Record<string, unknown>): BlockInstance => ({
@@ -137,3 +139,82 @@ export const LAUNCH_TEMPLATE_HOME: BlockInstance[] = [
     ],
   }),
 ];
+
+export const LAUNCH_TEMPLATE_HEADER: BlockInstance[] = [
+  b("ec-header", "SiteHeader", {
+    links: [
+      { label: "Home", href: "/" },
+      { label: "Shop", href: "/collections/all" },
+      { label: "Our story", href: "/pages/about" },
+    ],
+    layout: "left",
+    showSearch: true,
+    showCart: true,
+    sticky: true,
+    tone: "default",
+  }),
+];
+
+export const LAUNCH_TEMPLATE_FOOTER: BlockInstance[] = [
+  b("ec-footer", "SiteFooter", {
+    about: "Small-batch products from makers you can trust, delivered across India.",
+    columns: [
+      { title: "Shop", links: [{ label: "All products", href: "/collections/all" }, { label: "Search", href: "/search" }] },
+      {
+        title: "Policies",
+        links: [
+          { label: "Privacy Policy", href: "/policies/privacy" },
+          { label: "Terms of Service", href: "/policies/terms" },
+          { label: "Refund Policy", href: "/policies/refund" },
+          { label: "Shipping Policy", href: "/policies/shipping" },
+        ],
+      },
+    ],
+    showNewsletter: true,
+    newsletterTitle: "Newsletter",
+    newsletterText: "Subscribe for updates and exclusive offers.",
+    tone: "surface",
+  }),
+];
+
+export const LAUNCH_TEMPLATE_PRODUCT: BlockInstance[] = [
+  b("ec-product", "ProductDetail", { galleryPosition: "left", showBreadcrumb: true, showRating: true, showDescription: true, showTags: true }),
+  b("ec-product-usp", "UspStrip", {
+    items: [
+      { icon: "Truck", title: "Free shipping", description: "On orders above ₹999" },
+      { icon: "ShieldCheck", title: "Secure checkout", description: "UPI, cards and cash on delivery" },
+      { icon: "RotateCcw", title: "Easy returns", description: "7-day return guarantee" },
+    ],
+  }),
+  b("ec-product-more", "ProductCarousel", {
+    title: "You may also like",
+    source: "newest",
+    limit: 8,
+    columns: "4",
+    showPrice: true,
+    showRating: false,
+    tone: "default",
+  }),
+];
+
+export const LAUNCH_TEMPLATE_COLLECTION: BlockInstance[] = [
+  b("ec-collection", "CollectionListing", { columns: "4", showFilters: true, showDescription: true }),
+  b("ec-collection-cta", "CallToAction", {
+    heading: "Can't find what you need?",
+    text: "Message us and we'll help you choose.",
+    primaryLabel: "Contact us",
+    primaryHref: "/pages/contact",
+    overlayOpacity: 45,
+    tone: "primary",
+    align: "center",
+  }),
+];
+
+/** Every page of the launch theme, keyed as theme_templates.default_pages stores them. */
+export const LAUNCH_TEMPLATE_PAGES = {
+  home: LAUNCH_TEMPLATE_HOME,
+  collection: LAUNCH_TEMPLATE_COLLECTION,
+  product: LAUNCH_TEMPLATE_PRODUCT,
+  header: LAUNCH_TEMPLATE_HEADER,
+  footer: LAUNCH_TEMPLATE_FOOTER,
+};

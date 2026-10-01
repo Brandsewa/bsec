@@ -97,6 +97,10 @@ export const BLOCK_SPECS: Record<BlockType, Spec> = {
   FAQ: { label: "FAQ", category: "store", fields: { title: text("Heading"), items: { type: "array", label: "Questions", getItemSummary: (i: { question?: string }) => i.question ?? "Question", arrayFields: { question: text("Question"), answer: area("Answer") }, defaultItemProps: { question: "Question", answer: "Answer" } } as Field } },
   Gallery: { label: "Gallery", category: "store", fields: { title: text("Heading"), images: { type: "array", label: "Images", getItemSummary: (i: { caption?: string }) => i.caption ?? "Image", arrayFields: { mediaId: mediaField("Image") as Field, caption: text("Caption"), link: link("Link") } } as Field } },
   Newsletter: { label: "Newsletter", category: "store", fields: { title: text("Heading"), subtitle: text("Subheading"), buttonText: text("Button"), placeholder: text("Email placeholder") } },
+  SiteHeader: { label: "Header", category: "store", fields: { logoText: text("Logo text (empty = store logo / name)"), layout: select("Layout", { left: "Logo left", center: "Centered" }), links: { type: "array", label: "Menu links", getItemSummary: (i: { label?: string }) => i.label ?? "Link", arrayFields: { label: text("Label"), href: link("Link") }, defaultItemProps: { label: "Link", href: "/" } } as Field, showSearch: radio("Search icon"), showCart: radio("Cart icon"), sticky: radio("Stay at top while scrolling"), tone: select("Background", TONE) } },
+  SiteFooter: { label: "Footer", category: "store", fields: { about: area("About text"), columns: { type: "array", label: "Link columns", getItemSummary: (i: { title?: string }) => i.title ?? "Column", arrayFields: { title: text("Column title"), links: { type: "array", label: "Links", getItemSummary: (i: { label?: string }) => i.label ?? "Link", arrayFields: { label: text("Label"), href: link("Link") }, defaultItemProps: { label: "Link", href: "/" } } as Field }, defaultItemProps: { title: "Column", links: [] } } as Field, showNewsletter: radio("Newsletter signup"), newsletterTitle: text("Newsletter heading"), newsletterText: text("Newsletter text"), copyright: text("Copyright line (empty = automatic)"), tone: select("Background", TONE) } },
+  ProductDetail: { label: "Product details", category: "store", fields: { galleryPosition: select("Images", { left: "Left", right: "Right" }), showBreadcrumb: radio("Breadcrumb"), showRating: radio("Rating"), showDescription: radio("Short description"), showTags: radio("Tags") } },
+  CollectionListing: { label: "Collection products", category: "store", fields: { columns: select("Columns", { "2": "2", "3": "3", "4": "4" }), showFilters: radio("Sort and filters"), showDescription: radio("Collection description") } },
   UspStrip: { label: "Trust strip", category: "store", fields: { items: { type: "array", label: "Points", getItemSummary: (i: { title?: string }) => i.title ?? "Point", arrayFields: { icon: select("Icon", ICONS), title: text("Title"), description: text("Description") }, defaultItemProps: { icon: "check", title: "Title", description: "Description" } } as Field } },
 };
 
@@ -106,7 +110,7 @@ type AnyProps = Record<string, unknown> & { id: string; puck?: unknown };
 
 function EditorBlock({ type, props }: { type: BlockType; props: AnyProps }): ReactNode {
   const def = getBlockDefinition(type);
-  const { data, media } = useRenderData();
+  const { data, media, storeName } = useRenderData();
   const { id, puck: _puck, ...rest } = props;
   void _puck;
 
@@ -123,7 +127,7 @@ function EditorBlock({ type, props }: { type: BlockType; props: AnyProps }): Rea
   const parsed = def.schema.safeParse(blockProps);
   const effective = parsed.success ? parsed.data : { ...def.defaultProps, ...blockProps };
 
-  const ctx: RenderContext = { blockId: id, data, mediaUrl: (mid) => media[mid] ?? null };
+  const ctx: RenderContext = { blockId: id, data, mediaUrl: (mid) => media[mid] ?? null, ...(storeName ? { storeName } : {}) };
   const children = slot
     ? ({ className, style }: { className?: string; style?: CSSProperties }) => {
         const Slot = slot;
@@ -134,11 +138,30 @@ function EditorBlock({ type, props }: { type: BlockType; props: AnyProps }): Rea
   return def.render({ props: effective, children, ctx });
 }
 
-export function buildPuckConfig(options: { themeVars: Record<string, string> }): Config {
+/** Which kind of theme page is being edited; limits the block picker to blocks that make sense there. */
+export type EditorPageKind = "home" | "collection" | "product" | "header" | "footer" | "custom";
+
+const ONLY: Record<"header" | "footer", BlockType[]> = {
+  header: ["SiteHeader", "Banner"],
+  footer: ["SiteFooter", "Newsletter", "UspStrip", "Banner", "Heading", "Text", "Divider", "Spacer"],
+};
+const CHROME: BlockType[] = ["SiteHeader", "SiteFooter"];
+
+export function blockAllowed(type: BlockType, kind: EditorPageKind): boolean {
+  if (kind === "header" || kind === "footer") return ONLY[kind].includes(type);
+  if (CHROME.includes(type)) return false;
+  if (type === "ProductDetail") return kind === "product";
+  if (type === "CollectionListing") return kind === "collection";
+  return true;
+}
+
+export function buildPuckConfig(options: { themeVars: Record<string, string>; pageKind?: EditorPageKind }): Config {
+  const kind = options.pageKind ?? "custom";
   const components: Record<string, unknown> = {};
   const byCategory: Record<string, string[]> = { layout: [], content: [], store: [] };
 
   for (const [type, spec] of Object.entries(BLOCK_SPECS) as Array<[BlockType, Spec]>) {
+    if (!blockAllowed(type, kind)) continue;
     const def = getBlockDefinition(type);
     byCategory[spec.category]?.push(type);
     components[type] = {

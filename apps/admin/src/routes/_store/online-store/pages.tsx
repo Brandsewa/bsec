@@ -23,6 +23,7 @@ import {
   TableSkeleton,
   toast,
 } from "@bs/ui";
+import { THEME_PAGE_TYPES } from "@bs/blocks";
 import { orpc } from "../../../lib/orpc.ts";
 
 // --- Block registry (mirrors the versioned schemas in @bs/blocks, document version 1) ---
@@ -370,7 +371,8 @@ export function PagesPage() {
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [createOpen, setCreateOpen] = useState(false);
 
-  const pages = listQuery.data ?? [];
+  // Header, footer, product and collection layouts are edited from the Themes screen.
+  const pages = (listQuery.data ?? []).filter((p) => !THEME_PAGE_TYPES.has(p.type ?? ""));
   const activeId = selectedId && pages.some((p) => p.id === selectedId) ? selectedId : (pages[0]?.id ?? null);
 
   const newButton = (

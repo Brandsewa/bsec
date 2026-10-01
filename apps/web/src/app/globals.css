@@ -21,7 +21,7 @@
 body {
   background: var(--store-bg);
   color: var(--store-fg);
-  font-family: ui-sans-serif, system-ui, sans-serif;
+  font-family: var(--bs-font-body, ui-sans-serif, system-ui, sans-serif);
 }
 
 @keyframes store-shimmer {

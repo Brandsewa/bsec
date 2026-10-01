@@ -273,6 +273,8 @@ export const PageItem = z.object({
   id: z.string().uuid(),
   slug: z.string(),
   title: z.string(),
+  /** home, landing, custom, or a theme system page (header, footer, product_template, collection_template). */
+  type: z.string().optional(),
   description: z.string().nullable().optional(),
   publishedVersionId: z.string().uuid().nullable().optional(),
   publishedAt: z.string().nullable().optional(),
@@ -900,7 +902,15 @@ export const adminContract = {
     preview: oc
       .route({ method: "GET", path: "/admin/themes/{code}/preview" })
       .input(z.object({ code: z.string().min(1).max(80) }))
-      .output(z.object({ name: z.string(), version: z.number(), blocks: z.array(z.unknown()) })),
+      .output(
+        z.object({
+          name: z.string(),
+          version: z.number(),
+          blocks: z.array(z.unknown()),
+          pages: z.record(z.string(), z.array(z.unknown())),
+          tokens: z.record(z.string(), z.unknown()),
+        }),
+      ),
     activate: oc
       .route({ method: "POST", path: "/admin/themes/activate" })
       .input(z.object({ code: z.string().min(1).max(80) }))

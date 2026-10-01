@@ -8,3 +8,4 @@ export * from "./tree.ts";
 export * from "./puck-adapter.ts";
 export * from "./theme-vars.ts";
 export * from "./render-tree.tsx";
+export * from "./theme-pages.ts";

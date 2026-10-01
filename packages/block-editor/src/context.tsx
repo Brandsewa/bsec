@@ -19,6 +19,8 @@ export interface BlockEditorHost {
 export interface EditorRenderData {
   data: Record<string, BlockData>;
   media: Record<string, string>;
+  /** Shown in the header and footer blocks. */
+  storeName?: string | undefined;
 }
 
 export const HostContext = createContext<BlockEditorHost | null>(null);

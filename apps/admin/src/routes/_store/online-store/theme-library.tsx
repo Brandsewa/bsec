@@ -1,9 +1,9 @@
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
-import { CheckCircle2, Laptop, Palette, RotateCcw, Smartphone } from "lucide-react";
+import { CheckCircle2, Laptop, LayoutTemplate, Palette, RotateCcw, Smartphone } from "lucide-react";
 import { useMemo, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { BlocksPreview } from "@bs/block-editor/preview";
-import type { BlockInstance } from "@bs/blocks";
+import { BlocksPreview, useFontLink } from "@bs/block-editor/preview";
+import { THEME_PAGE_LABELS, THEME_SYSTEM_PAGES, computeThemeTokens, googleFontsHref, type BlockInstance } from "@bs/blocks";
 import type { ThemeLibraryItem } from "@bs/contracts";
 import {
   Button,
@@ -22,7 +22,7 @@ import {
   toast,
 } from "@bs/ui";
 import { orpc } from "../../../lib/orpc.ts";
-import { storeHost, themeVarsFor } from "../../../components/page-editor/host.ts";
+import { storeHost } from "../../../components/page-editor/host.ts";
 
 export const Route = createFileRoute("/_store/online-store/theme-library")({
   pendingComponent: () => <PageSkeleton />,
@@ -31,6 +31,7 @@ export const Route = createFileRoute("/_store/online-store/theme-library")({
 
 export function ThemeLibraryPage() {
   const navigate = useNavigate();
+  const { store } = Route.useRouteContext();
   const queryClient = useQueryClient();
   const libraryQuery = useQuery(orpc.admin.themes.library.queryOptions());
   const pagesQuery = useQuery(orpc.admin.pages.list.queryOptions());
@@ -52,11 +53,20 @@ export function ThemeLibraryPage() {
     }),
   );
 
-  const homePage = pagesQuery.data?.find((p) => p.slug === "home");
+  const homePage = pagesQuery.data?.find((p) => p.type === "home" || p.slug === "home");
   const current = libraryQuery.data?.find((t) => t.isCurrent);
+  const openPage = (pageId: string) => void navigate({ to: "/online-store/editor/$pageId", params: { pageId } });
   const customise = () => {
-    if (homePage) void navigate({ to: "/online-store/editor/$pageId", params: { pageId: homePage.id } });
+    if (homePage) openPage(homePage.id);
   };
+  // The store's own copies of the theme's pages. A page the theme does not define is simply absent.
+  const themePages = (["home", "collection", "product", "header", "footer"] as const).map((key) => {
+    const page =
+      key === "home"
+        ? homePage
+        : pagesQuery.data?.find((p) => p.type === THEME_SYSTEM_PAGES[key].type && p.publishedVersionId);
+    return { key, label: THEME_PAGE_LABELS[key], page };
+  });
 
   return (
     <PageContainer size="full">
@@ -66,11 +76,11 @@ export function ThemeLibraryPage() {
           <div className="flex gap-2">
             <Button size="sm" onClick={() => void navigate({ to: "/online-store/theme" })}>
               <Palette className="mr-1.5 size-3.5" aria-hidden />
-              Colours and fonts
+              Brand and logo
             </Button>
-            {current && homePage ? (
-              <Button size="sm" variant="primary" onClick={customise}>
-                Customise homepage
+            {current ? (
+              <Button size="sm" variant="primary" onClick={() => void navigate({ to: "/online-store/theme-settings" })}>
+                Theme settings
               </Button>
             ) : null}
           </div>
@@ -80,6 +90,39 @@ export function ThemeLibraryPage() {
         title="Themes"
         description="Pick a theme, then customise every section of your storefront with the visual editor. Your changes stay in a draft until you publish."
       />
+
+      {current ? (
+        <section aria-label="Customise your theme" className="mb-6 rounded-lg border border-border bg-surface-50 p-4">
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <div>
+              <h2 className="text-sm font-semibold text-foreground">Customise {current.name}</h2>
+              <p className="text-sm text-foreground-light">
+                Change colours, fonts and buttons in theme settings, then edit the layout of each page. Changes to pages stay in a draft until you publish; theme settings apply when you save.
+              </p>
+            </div>
+            <Button size="sm" onClick={() => void navigate({ to: "/online-store/theme-settings" })}>
+              <Palette className="mr-1.5 size-3.5" aria-hidden />
+              Theme settings
+            </Button>
+          </div>
+          <ul className="mt-4 grid gap-2 sm:grid-cols-2 lg:grid-cols-5">
+            {themePages.map(({ key, label, page }) => (
+              <li key={key}>
+                <button
+                  type="button"
+                  disabled={!page}
+                  onClick={() => page && openPage(page.id)}
+                  className="flex w-full flex-col items-start gap-1 rounded-md border border-border bg-background p-3 text-left text-sm transition-colors hover:border-primary disabled:cursor-not-allowed disabled:opacity-60"
+                >
+                  <LayoutTemplate className="size-4 text-foreground-lighter" aria-hidden />
+                  <span className="font-medium text-foreground">{label}</span>
+                  <span className="text-xs text-foreground-lighter">{page ? "Open in editor" : "Built-in layout"}</span>
+                </button>
+              </li>
+            ))}
+          </ul>
+        </section>
+      ) : null}
 
       {libraryQuery.isError ? (
         <div role="alert" className="flex flex-col items-start gap-3 rounded-md border border-destructive/40 bg-destructive/5 p-4">
@@ -126,7 +169,7 @@ export function ThemeLibraryPage() {
                   </ul>
                 ) : null}
                 {t.updateAvailable ? (
-                  <p className="text-xs text-foreground-lighter">Your customisations are never overwritten. Activating again adds the new layout as a new page version you can roll back.</p>
+                  <p className="text-xs text-foreground-lighter">Nothing changes until you apply it. Applying replaces your theme settings and page layouts with the new version; each page's previous layout stays in its history so you can roll back.</p>
                 ) : null}
                 <div className="mt-auto flex flex-wrap gap-2 pt-1">
                   <Button size="sm" onClick={() => setPreviewing(t)}>
@@ -149,14 +192,14 @@ export function ThemeLibraryPage() {
         </div>
       )}
 
-      <ThemePreviewDialog theme={previewing} onClose={() => setPreviewing(null)} onActivate={(t) => { setPreviewing(null); setActivating(t); }} />
+      <ThemePreviewDialog storeName={store?.name} theme={previewing} onClose={() => setPreviewing(null)} onActivate={(t) => { setPreviewing(null); setActivating(t); }} />
 
       <Dialog open={!!activating} onOpenChange={(open) => !open && setActivating(null)}>
         <DialogContent>
           <DialogHeader>
             <DialogTitle>{activating?.isCurrent ? "Apply theme update?" : `Activate "${activating?.name}"?`}</DialogTitle>
             <DialogDescription>
-              Your homepage will use this theme&apos;s layout. Your current homepage is not deleted: it stays in the page history and you can roll back to it from the Pages screen. Your products, orders and settings are not affected.
+              Your colours, fonts, buttons, header, footer and the home, collection and product pages will use this theme. Your current homepage is not deleted: it stays in the page history and you can roll back to it from the Pages screen. Your products, orders and settings are not affected.
             </DialogDescription>
           </DialogHeader>
           <DialogFooter>
@@ -173,33 +216,47 @@ export function ThemeLibraryPage() {
   );
 }
 
+const PREVIEW_PAGES = ["home", "collection", "product"] as const;
+
 function ThemePreviewDialog({
   theme,
+  storeName,
   onClose,
   onActivate,
 }: {
   theme: ThemeLibraryItem | null;
+  storeName?: string | undefined;
   onClose: () => void;
   onActivate: (t: ThemeLibraryItem) => void;
 }) {
   const [mobile, setMobile] = useState(false);
+  const [pageKey, setPageKey] = useState<(typeof PREVIEW_PAGES)[number]>("home");
   const previewQuery = useQuery({
     ...orpc.admin.themes.preview.queryOptions({ input: { code: theme?.code ?? "" } }),
     enabled: !!theme,
   });
-  const brandQuery = useQuery(orpc.admin.branding.get.queryOptions());
-  const themeQuery = useQuery(orpc.admin.themes.get.queryOptions());
-  const vars = useMemo(() => themeVarsFor(brandQuery.data, themeQuery.data), [brandQuery.data, themeQuery.data]);
-  const blocks = (previewQuery.data?.blocks ?? []) as BlockInstance[];
+  // The preview uses the theme's own colours, fonts and buttons: that is what activating it gives you.
+  const vars = useMemo(() => computeThemeTokens(null, (previewQuery.data?.tokens ?? null) as never), [previewQuery.data]);
+  useFontLink(googleFontsHref((previewQuery.data?.tokens ?? null) as never));
+  const pages = (previewQuery.data?.pages ?? {}) as Record<string, BlockInstance[]>;
+  const available = PREVIEW_PAGES.filter((k) => (pages[k]?.length ?? 0) > 0);
+  const shown = available.includes(pageKey) ? pageKey : "home";
+  const blocks = [...(pages["header"] ?? []), ...(pages[shown] ?? []), ...(pages["footer"] ?? [])];
 
   return (
     <Dialog open={!!theme} onOpenChange={(open) => !open && onClose()}>
       <DialogContent className="max-w-5xl">
         <DialogHeader>
           <DialogTitle>{theme?.name} preview</DialogTitle>
-          <DialogDescription>Shown with your store&apos;s own products and colours. Nothing changes until you activate it.</DialogDescription>
+          <DialogDescription>Shown with your store&apos;s own products. Nothing changes until you activate it.</DialogDescription>
         </DialogHeader>
-        <div className="flex gap-2">
+        <div className="flex flex-wrap gap-2">
+          {available.map((k) => (
+            <Button key={k} size="sm" variant={shown === k ? "primary" : "default"} onClick={() => setPageKey(k)}>
+              {THEME_PAGE_LABELS[k]}
+            </Button>
+          ))}
+          <span className="mx-1 w-px bg-border" aria-hidden />
           <Button size="sm" variant={mobile ? "default" : "primary"} onClick={() => setMobile(false)}>
             <Laptop className="mr-1.5 size-3.5" aria-hidden /> Desktop
           </Button>
@@ -213,7 +270,7 @@ function ThemePreviewDialog({
           ) : !previewQuery.data ? (
             <PageSkeleton />
           ) : (
-            <BlocksPreview blocks={blocks} host={storeHost} themeVars={vars} width={mobile ? 375 : undefined} />
+            <BlocksPreview blocks={blocks} host={storeHost} themeVars={vars} storeName={storeName} width={mobile ? 375 : undefined} />
           )}
         </div>
         <DialogFooter>

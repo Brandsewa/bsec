@@ -9,10 +9,12 @@ export interface BlocksPreviewProps {
   themeVars?: Record<string, string> | undefined;
   /** Frame width in px (e.g. 375 for a phone); omit for full width. */
   width?: number | undefined;
+  /** Shown in the header and footer blocks. */
+  storeName?: string | undefined;
 }
 
 /** Read-only render of a block tree with the store's real data, e.g. to preview a theme before activating it. */
-export function BlocksPreview({ blocks, host, themeVars, width }: BlocksPreviewProps) {
+export function BlocksPreview({ blocks, host, themeVars, width, storeName }: BlocksPreviewProps) {
   const [render, setRender] = useState<{ data: Record<string, BlockData>; media: Record<string, string> }>({ data: {}, media: {} });
 
   useEffect(() => {
@@ -35,7 +37,7 @@ export function BlocksPreview({ blocks, host, themeVars, width }: BlocksPreviewP
       className="bsb"
       style={{ ...(themeVars as CSSProperties), background: "var(--bs-bg, #fff)", width: width ? `${width}px` : "100%", maxWidth: "100%", margin: "0 auto" }}
     >
-      {renderBlockTree(blocks, { data: render.data, mediaUrl: (id) => render.media[id] ?? null })}
+      {renderBlockTree(blocks, { data: render.data, mediaUrl: (id) => render.media[id] ?? null, ...(storeName ? { storeName } : {}) })}
     </div>
   );
 }

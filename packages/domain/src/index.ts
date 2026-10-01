@@ -18,6 +18,7 @@ export * from "./brand-services.ts";
 export * from "./content-services.ts";
 export * from "./themes/block-data.ts";
 export * from "./themes/library.ts";
+export * from "./themes/system-pages.ts";
 export * from "./themes/templates.ts";
 export * from "./themes/launch-template.ts";
 export * from "./storefront/lifecycle.ts";

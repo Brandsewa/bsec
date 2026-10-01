@@ -4,6 +4,8 @@ import { validateBlockDocument, type BlockInstance } from "@bs/blocks";
 import type { Runtime } from "../runtime.ts";
 import { assertPermission, type TenantContext } from "../context.ts";
 import { invalidateCache } from "../cache-invalidation.ts";
+import { THEME_SYSTEM_PAGES, THEME_SYSTEM_PAGE_KEYS, isThemeSystemPageKey } from "@bs/blocks";
+import { THEME_TOKENS_SOURCE } from "./system-pages.ts";
 
 /**
  * Store-side theme library (M10). The store sees only published platform templates and, when it
@@ -96,7 +98,7 @@ export async function activateTheme(
           templateCode: tpl.code,
           templateVersion: tpl.version,
           name: tpl.name,
-          tokens: tpl.defaultTokens,
+          tokens: { ...(tpl.defaultTokens as Record<string, unknown>), source: THEME_TOKENS_SOURCE },
           status: "published",
           publishedAt: new Date(),
           version: existingTheme.version + 1,
@@ -109,26 +111,36 @@ export async function activateTheme(
         templateCode: tpl.code,
         templateVersion: tpl.version,
         name: tpl.name,
-        tokens: tpl.defaultTokens,
+        tokens: { ...(tpl.defaultTokens as Record<string, unknown>), source: THEME_TOKENS_SOURCE },
         status: "published",
         publishedAt: new Date(),
       });
     }
 
-    // 2. Pages: home always gets the theme's layout (as a new version); landing pages are only
-    //    created when missing, so a store's own pages are never replaced.
+    // 2. Pages. Home and the theme's system pages (header, footer, product and collection layouts)
+    //    always take the theme's layout, as a new version so the old design stays in history.
+    //    Landing pages are only created when missing, so a store's own pages are never replaced.
     const touched: Array<{ slug: string; isHome: boolean }> = [];
     for (const [key, blocks] of validated) {
       const isHome = key === "home";
+      const system = isThemeSystemPageKey(key) ? THEME_SYSTEM_PAGES[key] : null;
+      const owned = isHome || system !== null;
+      const slug = system ? system.slug : key;
       const [page] = await tx
         .select()
         .from(schema.pages)
         // A page already using the slug "home" is the home page even if its type was set differently.
-        .where(isHome ? or(eq(schema.pages.type, "home"), eq(schema.pages.slug, "home")) : eq(schema.pages.slug, key))
+        .where(
+          isHome
+            ? or(eq(schema.pages.type, "home"), eq(schema.pages.slug, "home"))
+            : system
+              ? or(eq(schema.pages.type, system.type), eq(schema.pages.slug, system.slug))
+              : eq(schema.pages.slug, key),
+        )
         .orderBy(asc(schema.pages.createdAt))
         .limit(1);
 
-      if (page && !isHome) continue;
+      if (page && !owned) continue;
 
       const pageId =
         page?.id ??
@@ -137,9 +149,9 @@ export async function activateTheme(
             .insert(schema.pages)
             .values({
               tenantId: ctx.tenantId,
-              type: isHome ? "home" : "landing",
-              title: isHome ? "Home" : key.replace(/-/g, " ").replace(/^./, (c) => c.toUpperCase()),
-              slug: key,
+              type: isHome ? "home" : (system?.type ?? "landing"),
+              title: isHome ? "Home" : (system?.title ?? key.replace(/-/g, " ").replace(/^./, (c) => c.toUpperCase())),
+              slug,
               status: "published",
             })
             .returning({ id: schema.pages.id })
@@ -162,7 +174,20 @@ export async function activateTheme(
         .update(schema.pages)
         .set({ publishedVersionId: version.id, draftVersionId: version.id, status: "published", updatedAt: new Date() })
         .where(eq(schema.pages.id, pageId));
-      touched.push({ slug: key, isHome });
+      touched.push({ slug, isHome });
+    }
+
+    // A system page the new theme does not define must not keep the previous theme's layout:
+    // unpublish it so the storefront's built-in layout applies. Its history is kept.
+    for (const key of THEME_SYSTEM_PAGE_KEYS) {
+      if (validated.has(key)) continue;
+      const def = THEME_SYSTEM_PAGES[key];
+      const res = await tx
+        .update(schema.pages)
+        .set({ status: "draft", updatedAt: new Date() })
+        .where(and(eq(schema.pages.type, def.type), eq(schema.pages.status, "published")))
+        .returning({ id: schema.pages.id });
+      if (res.length > 0) touched.push({ slug: def.slug, isHome: false });
     }
 
     return { code: tpl.code, name: tpl.name, version: tpl.version, touched };
@@ -175,12 +200,15 @@ export async function activateTheme(
   return { code: result.code, name: result.name, version: result.version, pages: result.touched.map((p) => p.slug) };
 }
 
-/** The published home page of a library theme, for previewing before activation. */
+/**
+ * A library theme's published pages and tokens, for previewing before activation. `blocks` is
+ * the home page (kept for older callers); `pages` holds every page the theme defines.
+ */
 export async function previewThemeTemplate(
   rt: Runtime,
   ctx: TenantContext,
   input: { code: string },
-): Promise<{ name: string; version: number; blocks: BlockInstance[] }> {
+): Promise<{ name: string; version: number; blocks: BlockInstance[]; pages: Record<string, BlockInstance[]>; tokens: Record<string, unknown> }> {
   assertPermission(ctx, "content.write");
   return withTenant(rt._db.db, ctx.tenantId, async (tx) => {
     const [tpl] = await tx
@@ -189,9 +217,14 @@ export async function previewThemeTemplate(
       .where(and(eq(schema.themeTemplates.code, input.code), eq(schema.themeTemplates.isActive, true)))
       .limit(1);
     if (!tpl) throw new Error(`Theme not available: "${input.code}"`);
-    const blocks = blocksOf(tpl.defaultPages, "home");
-    const r = blocks ? validateBlockDocument({ version: 1, blocks }) : null;
-    if (!r?.success) throw new Error("Theme has no valid home page");
-    return { name: tpl.name, version: tpl.version, blocks: r.data.blocks };
+    const pages: Record<string, BlockInstance[]> = {};
+    for (const key of Object.keys((tpl.defaultPages as Record<string, unknown>) ?? {})) {
+      const blocks = blocksOf(tpl.defaultPages, key);
+      const r = blocks ? validateBlockDocument({ version: 1, blocks }) : null;
+      if (r?.success) pages[key] = r.data.blocks;
+    }
+    const home = pages["home"];
+    if (!home) throw new Error("Theme has no valid home page");
+    return { name: tpl.name, version: tpl.version, blocks: home, pages, tokens: (tpl.defaultTokens ?? {}) as Record<string, unknown> };
   });
 }

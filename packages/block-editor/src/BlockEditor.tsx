@@ -3,7 +3,8 @@ import { Puck } from "@puckeditor/core";
 import "@puckeditor/core/puck.css";
 import "@bs/blocks/blocks.css";
 import { documentToPuck, puckToDocument, type BlockInstance, type PuckData } from "@bs/blocks";
-import { buildPuckConfig } from "./config.tsx";
+import { buildPuckConfig, type EditorPageKind } from "./config.tsx";
+import { useFontLink } from "./fonts.ts";
 import { HostContext, RenderDataContext, type BlockEditorHost, type EditorRenderData } from "./context.tsx";
 import { dataSignature } from "./signature.ts";
 
@@ -19,6 +20,18 @@ export interface BlockEditorProps {
   /** Storefront URL that shows the saved draft (opened after saving). */
   previewHref?: string | undefined;
   publishLabel?: string | undefined;
+  /** Limits the block picker to what suits this page (header, footer, product, ...). */
+  pageKind?: EditorPageKind | undefined;
+  /** Google Fonts stylesheet for the theme's fonts, so the canvas shows the real typefaces. */
+  fontsHref?: string | null | undefined;
+  /** Called with the latest blocks on every edit, so a host with several pages can keep them all. */
+  onBlocksChange?: ((blocks: BlockInstance[]) => void) | undefined;
+  /** The host has unsaved work outside this canvas (other pages); keeps Save draft enabled. */
+  externalDirty?: boolean | undefined;
+  /** Shown in the header and footer blocks on the canvas. */
+  storeName?: string | undefined;
+  /** CSS height of the editor (default the full viewport). */
+  height?: string | undefined;
 }
 
 const VIEWPORTS = [
@@ -29,7 +42,8 @@ const VIEWPORTS = [
 
 const button = { border: "1px solid #ccc", background: "#fff", borderRadius: 6, padding: "6px 12px", fontSize: 13, fontWeight: 600, cursor: "pointer" } as const;
 
-export function BlockEditor({ title, initialBlocks: initialFromProps, host, themeVars, onSaveDraft, onPublish, onExit, previewHref, publishLabel }: BlockEditorProps) {
+export function BlockEditor({ title, initialBlocks: initialFromProps, host, themeVars, onSaveDraft, onPublish, onExit, previewHref, publishLabel, pageKind, fontsHref, onBlocksChange, externalDirty, height, storeName }: BlockEditorProps) {
+  useFontLink(fontsHref);
   // The canvas owns the document once mounted: a refetch after saving must not reset it.
   const [initialBlocks] = useState(initialFromProps);
   const blocksRef = useRef<BlockInstance[]>(initialBlocks);
@@ -39,7 +53,7 @@ export function BlockEditor({ title, initialBlocks: initialFromProps, host, them
   const [renderData, setRenderData] = useState<EditorRenderData>({ data: {}, media: {} });
   const [sig, setSig] = useState(() => dataSignature(initialBlocks));
 
-  const config = useMemo(() => buildPuckConfig({ themeVars: themeVars ?? {} }), [themeVars]);
+  const config = useMemo(() => buildPuckConfig({ themeVars: themeVars ?? {}, ...(pageKind ? { pageKind } : {}) }), [themeVars, pageKind]);
   const initialData = useMemo(() => documentToPuck({ version: 1, blocks: initialBlocks }), [initialBlocks]);
 
   // Refresh store data (products, images) only when what the widgets show actually changes.
@@ -92,8 +106,8 @@ export function BlockEditor({ title, initialBlocks: initialFromProps, host, them
 
   return (
     <HostContext.Provider value={host}>
-      <RenderDataContext.Provider value={renderData}>
-        <div style={{ height: "100vh" }}>
+      <RenderDataContext.Provider value={{ ...renderData, storeName }}>
+        <div style={{ height: height ?? "100vh" }}>
           <Puck
             config={config}
             data={initialData as never}
@@ -102,6 +116,7 @@ export function BlockEditor({ title, initialBlocks: initialFromProps, host, them
             onChange={(d) => {
               const blocks = puckToDocument(d as unknown as PuckData).blocks;
               blocksRef.current = blocks;
+              onBlocksChange?.(blocks);
               setDirty(true);
               setSig(dataSignature(blocks));
             }}
@@ -116,13 +131,13 @@ export function BlockEditor({ title, initialBlocks: initialFromProps, host, them
                       <span role="status" style={{ fontSize: 12, color: status.kind === "error" ? "#b00020" : "#0b6b42", maxWidth: 360 }}>
                         {status.text}
                       </span>
-                    ) : dirty ? (
+                    ) : dirty || externalDirty ? (
                       <span style={{ fontSize: 12, color: "#b26a00" }}>Unsaved changes</span>
                     ) : null}
                     <button type="button" style={button} onClick={exit} disabled={busy}>
                       Exit
                     </button>
-                    <button type="button" style={button} disabled={busy || !dirty} onClick={() => void run(() => onSaveDraft(blocksRef.current), "Draft saved")}>
+                    <button type="button" style={button} disabled={busy || !(dirty || externalDirty)} onClick={() => void run(() => onSaveDraft(blocksRef.current), "Draft saved")}>
                       Save draft
                     </button>
                     {previewHref ? (

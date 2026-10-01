@@ -5,9 +5,10 @@ import { cacheTag } from "next/cache";
 import { evaluateStorefrontAccess, tenantTag, type getBrandSettings } from "@bs/domain";
 import { server } from "@/server/runtime.ts";
 import { isPlatformMarketingHost } from "@/server/hosts.ts";
-import { getCachedBrandSettings, getCachedStoreName } from "@/server/cached-storefront.ts";
+import { getCachedBrandSettings, getCachedStoreName, getCachedThemePage, getCachedThemeTokens } from "@/server/cached-storefront.ts";
 import { StoreHeader } from "@/components/storefront/StoreHeader.tsx";
 import { StoreFooter } from "@/components/storefront/StoreFooter.tsx";
+import { ThemeChrome } from "@/components/storefront/ThemeChrome.tsx";
 import { StoreStatusBanner } from "@/components/storefront/StoreStatusBanner.tsx";
 import {
   ComingSoonScreen,
@@ -17,6 +18,7 @@ import {
   ProvisioningScreen,
 } from "@/components/storefront/StoreStatusScreens.tsx";
 import { computeThemeTokens } from "@/components/storefront/theme-tokens.ts";
+import { googleFontsHref } from "@bs/blocks/theme-vars";
 import "./globals.css";
 
 export const instant = false;
@@ -75,7 +77,11 @@ export default async function RootLayout({ children }: { children: ReactNode }) 
   let access: Awaited<ReturnType<typeof evaluateStorefrontAccess>>;
   let brandSettings: Awaited<ReturnType<typeof getBrandSettings>> | null = null;
   let storeName = "Store";
-  const activeThemeTokens: Record<string, unknown> | null = null;
+  // Set when the store uses the theme system (activated a library theme / saved theme settings);
+  // otherwise its Branding settings keep deciding the look, exactly as before.
+  let activeThemeTokens: Record<string, unknown> | null = null;
+  let themeHeader: Awaited<ReturnType<typeof getCachedThemePage>> = null;
+  let themeFooter: Awaited<ReturnType<typeof getCachedThemePage>> = null;
 
   try {
     const h = await headers();
@@ -102,6 +108,16 @@ export default async function RootLayout({ children }: { children: ReactNode }) 
       } catch {
         // Fallback to null brand settings
       }
+
+      try {
+        [activeThemeTokens, themeHeader, themeFooter] = await Promise.all([
+          getCachedThemeTokens(access.tenantId),
+          getCachedThemePage(access.tenantId, "header"),
+          getCachedThemePage(access.tenantId, "footer"),
+        ]);
+      } catch {
+        // Built-in header, footer and Branding colours apply
+      }
     }
   } catch {
     // If db/server is unconfigured during static build, fallback to allowed default
@@ -113,7 +129,8 @@ export default async function RootLayout({ children }: { children: ReactNode }) 
   }
 
   // Derive theme tokens
-  const themeVars = computeThemeTokens(brandSettings, activeThemeTokens);
+  const themeVars = activeThemeTokens ? computeThemeTokens(null, activeThemeTokens) : computeThemeTokens(brandSettings, null);
+  const fontsHref = googleFontsHref(activeThemeTokens);
 
   // Render blocked screens when access is not allowed and not in bypass mode
   if (!access.allowed && !access.isBypass) {
@@ -151,11 +168,20 @@ export default async function RootLayout({ children }: { children: ReactNode }) 
 
   return (
     <html lang="en" style={themeVars as React.CSSProperties}>
+      <head>{fontsHref ? <link rel="stylesheet" href={fontsHref} precedence="default" /> : null}</head>
       <body className="flex min-h-dvh flex-col antialiased">
         <StoreStatusBanner isBypass={access.isBypass} mode={access.mode} />
-        <StoreHeader storeName={storeName} logoWidth={logoWidth} />
+        {themeHeader ? (
+          <ThemeChrome blocks={themeHeader.blocks} renderData={themeHeader.renderData} storeName={storeName} />
+        ) : (
+          <StoreHeader storeName={storeName} logoWidth={logoWidth} />
+        )}
         <main className="flex-1">{children}</main>
-        <StoreFooter storeName={storeName} />
+        {themeFooter ? (
+          <ThemeChrome blocks={themeFooter.blocks} renderData={themeFooter.renderData} storeName={storeName} />
+        ) : (
+          <StoreFooter storeName={storeName} />
+        )}
       </body>
     </html>
   );

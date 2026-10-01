@@ -16,7 +16,7 @@ function EditorRoute() {
   const canPublish = store?.permissions.includes("theme.publish") ?? false;
   return (
     <Suspense fallback={<PageSkeleton />}>
-      <PageVisualEditor pageId={pageId} canPublish={canPublish} />
+      <PageVisualEditor pageId={pageId} canPublish={canPublish} storeName={store?.name} />
     </Suspense>
   );
 }
