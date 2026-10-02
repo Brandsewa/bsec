@@ -469,6 +469,27 @@ describe("Return Photo Upload Security & Limits", () => {
       }),
     ).rejects.toThrow("Bad Request: One or more photos are invalid or do not exist");
 
+    // Attempt return on Order A with unconfigured reason -> rejected
+    await expect(
+      requestReturn(rt, ctxA, {
+        orderId: orderAId,
+        reason: "Some random custom reason not in settings",
+        resolution: "refund",
+        items: [{ orderItemId: orderAItemId, quantity: 1 }],
+      }),
+    ).rejects.toThrow("Bad Request: Please choose a valid return reason configured by the store");
+
+    // Attempt return for reason requiring photo without attaching any photos -> rejected
+    await expect(
+      requestReturn(rt, ctxA, {
+        orderId: orderAId,
+        reason: "Damaged or defective", // photoRequirement is "required"
+        resolution: "refund",
+        items: [{ orderItemId: orderAItemId, quantity: 1 }],
+        photos: [],
+      }),
+    ).rejects.toThrow("Bad Request: Photos are required for this return reason");
+
     // Return with photo 1 -> succeeds
     const ret1 = await requestReturn(rt, ctxA, {
       orderId: orderAId,

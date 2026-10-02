@@ -225,6 +225,18 @@ export async function requestReturn(rt: Runtime, ctx: TenantContext, input: Retu
       throw new Error("Precondition: Return requests are not accepted by this store");
     }
 
+    // Reason validation: must match one of the store's configured reasons (by ID or label)
+    const matchedReason = settings.reasons.find(
+      (r) => r.id.toLowerCase() === reason.toLowerCase() || r.label.toLowerCase() === reason.toLowerCase(),
+    );
+    if (!matchedReason) {
+      throw new Error("Bad Request: Please choose a valid return reason configured by the store");
+    }
+
+    if (matchedReason.photoRequirement === "required" && photos.length === 0) {
+      throw new Error("Bad Request: Photos are required for this return reason");
+    }
+
     if (input.resolution === "replacement" && !settings.allowExchanges) {
       throw new Error("Precondition: Exchanges are not available for this store");
     }
