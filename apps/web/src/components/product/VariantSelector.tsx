@@ -61,6 +61,15 @@ export function VariantSelector({ product }: VariantSelectorProps) {
     ? Math.round(((currentCompareAt - currentPrice) / currentCompareAt) * 100)
     : 0;
 
+  const today = new Date().toISOString().slice(0, 10);
+  const isPreorder = Boolean(selectedVariant?.preorderEnabled);
+  const isPastShipDate = Boolean(selectedVariant?.preorderShipsOn && selectedVariant.preorderShipsOn < today);
+  const shipDateLabel = isPastShipDate
+    ? "Ships soon"
+    : selectedVariant?.preorderShipsOn
+      ? `Ships on ${new Date(`${selectedVariant.preorderShipsOn}T00:00:00`).toLocaleDateString("en-IN", { day: "numeric", month: "short", year: "numeric" })}`
+      : "Ships soon";
+
   return (
     <div className="flex flex-col gap-6">
       {/* Price and Compare At Price */}
@@ -116,11 +125,25 @@ export function VariantSelector({ product }: VariantSelectorProps) {
         </div>
       ))}
 
-      {/* Dynamic Stock & Delivery ETA Hole */}
-      <StockEtaHole
-        stockStatus={stockStatus}
-        availableQuantity={availableQuantity}
-      />
+      {/* Pre-order notification or Stock & Delivery ETA Hole */}
+      {isPreorder ? (
+        <div className="flex flex-col gap-1 rounded-xl border border-amber-500/30 bg-amber-500/10 p-3 text-amber-950 dark:text-amber-200">
+          <div className="flex items-center gap-2">
+            <span className="inline-flex items-center rounded-md bg-amber-500/20 px-2 py-0.5 text-xs font-semibold text-amber-800 dark:text-amber-300">
+              Pre-order
+            </span>
+            <span className="text-sm font-medium">{shipDateLabel}</span>
+          </div>
+          {selectedVariant?.preorderMessage ? (
+            <p className="text-xs text-amber-800/80 dark:text-amber-300/80">{selectedVariant.preorderMessage}</p>
+          ) : null}
+        </div>
+      ) : (
+        <StockEtaHole
+          stockStatus={stockStatus}
+          availableQuantity={availableQuantity}
+        />
+      )}
 
       {/* Add To Cart Button */}
       {selectedVariant && (
@@ -128,6 +151,7 @@ export function VariantSelector({ product }: VariantSelectorProps) {
           <AddToCartButton
             variantId={selectedVariant.id}
             available={isAvailable}
+            isPreorder={isPreorder}
           />
         </div>
       )}

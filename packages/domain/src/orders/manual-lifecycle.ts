@@ -85,6 +85,12 @@ export async function advanceAdminOrder(
   const before = await withTenant(db, ctx.tenantId, async (tx) => {
     const order = await loadOrder(tx, ctx.tenantId, input.id);
     if (NOT_SHIPPABLE.includes(order.status)) throw new Error(`Precondition: A ${order.status} order can't be shipped`);
+
+    const today = new Date().toISOString().slice(0, 10);
+    if (order.shipsOn && !order.preorderReleasedAt && String(order.shipsOn) > today) {
+      throw new Error(`Precondition: Pre-order ships on ${order.shipsOn}`);
+    }
+
     const fs = await tx
       .select({ id: schema.fulfillments.id, status: schema.fulfillments.status })
       .from(schema.fulfillments)

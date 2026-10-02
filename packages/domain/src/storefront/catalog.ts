@@ -44,6 +44,9 @@ export interface StorefrontVariant {
   dimensions?: Record<string, unknown> | null;
   trackInventory: boolean;
   allowBackorder: boolean;
+  preorderEnabled?: boolean | undefined;
+  preorderShipsOn?: string | null | undefined;
+  preorderMessage?: string | null | undefined;
   position: number;
   imageMediaId: string | null;
   stockStatus: "in_stock" | "low_stock" | "out_of_stock";
@@ -239,7 +242,7 @@ export async function getStorefrontProduct(
 
       if (!v.trackInventory) {
         stockStatus = "in_stock";
-      } else if (v.allowBackorder) {
+      } else if (v.allowBackorder || v.preorderEnabled) {
         stockStatus = "in_stock";
       } else if (!inv || inv.available <= 0) {
         stockStatus = "out_of_stock";
@@ -261,6 +264,9 @@ export async function getStorefrontProduct(
         dimensions: v.dimensions as Record<string, unknown> | null,
         trackInventory: v.trackInventory,
         allowBackorder: v.allowBackorder,
+        preorderEnabled: v.preorderEnabled,
+        preorderShipsOn: v.preorderShipsOn ? (typeof v.preorderShipsOn === "string" ? v.preorderShipsOn : (v.preorderShipsOn as Date).toISOString().slice(0, 10)) : null,
+        preorderMessage: v.preorderMessage,
         position: v.position,
         imageMediaId: v.imageMediaId,
         stockStatus,

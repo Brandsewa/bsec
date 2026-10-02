@@ -8,7 +8,7 @@ import { cleanupExpiredIdempotencyKeys } from "./system/idempotency.ts";
 import { sendTransactionalEmail } from "./system/email.ts";
 import { sweepAbandonedCarts } from "./system/abandoned-carts.ts";
 import { schema } from "@bs/db";
-import { eq, and } from "drizzle-orm";
+import { eq, and, notInArray } from "drizzle-orm";
 import { acquireTenantJobSlot, cleanExpiredRateLimits, reapStaleTenantJobSlots, releaseTenantJobSlot } from "./system/rate-limit.ts";
 import { runTrialExpirySweep } from "./saas/trial-expiry.ts";
 import { isMarketingAllowed } from "./system/tenant-lifecycle.ts";
@@ -265,6 +265,141 @@ export async function handleCartAbandonedJob(
       eventRef: `cart_abandoned_${cartId}`,
     });
   }
+}
+
+export async function handleOrderPreorderDateChangedJob(
+  db: Db,
+  log: Logger,
+  data: {
+    tenantId: string;
+    orderId: string;
+    orderNumber: string;
+    email: string;
+    shipsOn: string;
+    reason?: string | null;
+  },
+): Promise<void> {
+  const { tenantId, orderId, orderNumber, email, shipsOn, reason } = data;
+  if (!email) return;
+
+  const eventRef = `order_preorder_date_changed_${orderId}_${shipsOn}`;
+  const [alreadySent] = await withTenant(db, tenantId, async (tx) => {
+    return await tx
+      .select({ id: schema.emailLog.id })
+      .from(schema.emailLog)
+      .where(and(eq(schema.emailLog.tenantId, tenantId), eq(schema.emailLog.eventRef, eventRef), eq(schema.emailLog.status, "sent")))
+      .limit(1);
+  });
+  if (alreadySent) {
+    log.info({ orderId, eventRef }, "Pre-order date changed email already sent, skipping duplicate");
+    return;
+  }
+
+  await dispatchTransactionalEmailOrThrow(db, log, {
+    tenantId,
+    template: "order_preorder_date_changed",
+    toEmail: email,
+    subject: `Update on your order ${orderNumber}: New estimated dispatch date`,
+    data: {
+      orderId,
+      orderNumber,
+      shipsOn,
+      reason: reason ?? null,
+    },
+    eventRef,
+  });
+}
+
+export async function runPreorderReminderSweep(
+  db: Db,
+  log?: Logger,
+  tenantId?: string,
+): Promise<{ remindersSent: number }> {
+  // 2 days before promised ship date: target date is today + 2 days
+  const targetDateObj = new Date();
+  targetDateObj.setDate(targetDateObj.getDate() + 2);
+  const targetDate = targetDateObj.toISOString().slice(0, 10);
+
+  const tenants = tenantId
+    ? [{ id: tenantId }]
+    : await db.select({ id: schema.tenants.id }).from(schema.tenants);
+
+  let remindersSent = 0;
+
+  for (const t of tenants) {
+    await withTenant(db, t.id, async (tx) => {
+      const orders = await tx
+        .select({
+          id: schema.orders.id,
+          number: schema.orders.number,
+          email: schema.orders.email,
+          shipsOn: schema.orders.shipsOn,
+          status: schema.orders.status,
+        })
+        .from(schema.orders)
+        .where(
+          and(
+            eq(schema.orders.tenantId, t.id),
+            eq(schema.orders.shipsOn, targetDate),
+            notInArray(schema.orders.status, ["shipped", "delivered", "cancelled"]),
+          ),
+        );
+
+      for (const order of orders) {
+        // Idempotency: skip if reminder was already recorded
+        const [existingEvent] = await tx
+          .select({ id: schema.orderEvents.id })
+          .from(schema.orderEvents)
+          .where(
+            and(
+              eq(schema.orderEvents.tenantId, t.id),
+              eq(schema.orderEvents.orderId, order.id),
+              eq(schema.orderEvents.type, "order.preorder_reminder_sent"),
+            ),
+          )
+          .limit(1);
+
+        if (existingEvent) {
+          continue;
+        }
+
+        // Record order event for timeline and idempotency
+        await tx.insert(schema.orderEvents).values({
+          tenantId: t.id,
+          orderId: order.id,
+          type: "order.preorder_reminder_sent",
+          actorType: "system",
+          actorId: "system",
+          message: `2-day pre-order reminder: promised dispatch date is ${order.shipsOn}.`,
+          data: { shipsOn: order.shipsOn },
+          visibleToCustomer: true,
+        });
+
+        remindersSent++;
+
+        if (order.email) {
+          const eventRef = `preorder_reminder_${order.id}_${order.shipsOn}`;
+          const fallbackLog = log ?? ({ warn: () => {}, info: () => {}, error: () => {} } as unknown as Logger);
+          await dispatchTransactionalEmailOrThrow(db, fallbackLog, {
+            tenantId: t.id,
+            template: "order_preorder_reminder",
+            toEmail: order.email,
+            subject: `Your pre-order ${order.number} ships soon`,
+            data: {
+              orderId: order.id,
+              orderNumber: order.number,
+              shipsOn: order.shipsOn,
+            },
+            eventRef,
+          }).catch((err) => {
+            log?.warn({ err, orderId: order.id }, "Failed to send preorder reminder email");
+          });
+        }
+      }
+    });
+  }
+
+  return { remindersSent };
 }
 
 export async function startJobs(opts: {
@@ -541,13 +676,49 @@ export async function startJobs(opts: {
     }
   });
 
+  // Handle order.preorder_date_changed event
+  await boss.work<{
+    tenantId: string;
+    orderId: string;
+    orderNumber: string;
+    email: string;
+    shipsOn: string;
+    reason?: string | null;
+  }>(QUEUE_NAMES.ORDER_PREORDER_DATE_CHANGED, { localConcurrency: 2 }, async (batch) => {
+    for (const job of batch) {
+      try {
+        await withTenantJobSlot(job.data.tenantId, async () => {
+          await handleOrderPreorderDateChangedJob(db, opts.log, job.data);
+          opts.log.info({ job_id: job.id, orderId: job.data.orderId }, "order.preorder_date_changed processed");
+        });
+      } catch (err) {
+        opts.log.error({ err, job_id: job.id }, "order.preorder_date_changed failed");
+        throw err;
+      }
+    }
+  });
+
+  // Handle order.preorder_reminder_sweep recurring job
+  await boss.work<{ tenantId?: string }>(QUEUE_NAMES.ORDER_PREORDER_REMINDER_SWEEP, { localConcurrency: 1 }, async (batch) => {
+    for (const job of batch) {
+      try {
+        const res = await runPreorderReminderSweep(db, opts.log, job.data?.tenantId);
+        opts.log.info({ job_id: job.id, remindersSent: res.remindersSent }, "order.preorder_reminder_sweep processed");
+      } catch (err) {
+        opts.log.error({ err, job_id: job.id }, "order.preorder_reminder_sweep failed");
+        throw err;
+      }
+    }
+  });
+
   // Register recurring schedules and proof-of-life sweeps on boot (PLAN §5.10, §11.3)
   try {
     await boss.schedule(QUEUE_NAMES.RESERVATION_EXPIRY, "* * * * *", {});
     await boss.schedule(QUEUE_NAMES.IDEMPOTENCY_CLEANUP, "*/15 * * * *", {});
     await boss.schedule(QUEUE_NAMES.CART_RECOVERY_SWEEP, "0 * * * *", {});
     await boss.schedule(QUEUE_NAMES.SUBSCRIPTION_TRIAL_EXPIRY_SWEEP, "0 * * * *", {});
-    opts.log.info("Registered recurring cron: reservation.expiry (* * * * *), idempotency.cleanup (*/15 * * * *), cart.recovery_sweep (0 * * * *), subscription.trial_expiry_sweep (0 * * * *)");
+    await boss.schedule(QUEUE_NAMES.ORDER_PREORDER_REMINDER_SWEEP, "0 6 * * *", {});
+    opts.log.info("Registered recurring cron: reservation.expiry, idempotency.cleanup, cart.recovery_sweep, subscription.trial_expiry_sweep, preorder_reminder_sweep");
   } catch (err) {
     opts.log.warn({ err }, "Could not register recurring cron schedules with pg-boss");
   }

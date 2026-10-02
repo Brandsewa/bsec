@@ -53,13 +53,31 @@ export default async function OrderTrackingPage({ params }: OrderTrackingPagePro
           </div>
         </div>
 
+        {order.shipsOn && (
+          <div className="mt-4 rounded-xl border border-amber-500/30 bg-amber-500/10 p-3 text-sm text-amber-950 dark:text-amber-200">
+            <span className="font-semibold">Dispatch date:</span> Ships on or after{" "}
+            <span className="font-medium text-amber-900 dark:text-amber-100">
+              {order.shipsOn >= new Date().toISOString().slice(0, 10)
+                ? new Date(`${order.shipsOn}T00:00:00`).toLocaleDateString("en-IN", { day: "numeric", month: "short", year: "numeric" })
+                : "Ships soon"}
+            </span>
+          </div>
+        )}
+
         <div className="mt-6">
           <h2 className="text-sm font-semibold uppercase tracking-wider text-muted-foreground mb-4">Items</h2>
           <div className="divide-y divide-border">
             {order.items.map((item) => (
               <div key={item.id} className="py-3 flex justify-between items-center text-sm">
                 <div>
-                  <div className="font-medium text-foreground">{item.productTitle}</div>
+                  <div className="flex items-center gap-2">
+                    <span className="font-medium text-foreground">{item.productTitle}</span>
+                    {item.shipsOn ? (
+                      <span className="inline-flex items-center rounded bg-amber-500/10 px-1.5 py-0.25 text-[10px] font-medium text-amber-700 dark:text-amber-400">
+                        Pre-order
+                      </span>
+                    ) : null}
+                  </div>
                   {item.variantTitle && <div className="text-xs text-muted-foreground">{item.variantTitle}</div>}
                   <div className="text-xs text-muted-foreground">Qty: {item.quantity}</div>
                 </div>

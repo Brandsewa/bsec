@@ -1,5 +1,5 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
-import { CheckCircle2, FileText, PackageCheck, RotateCcw, Truck, XCircle } from "lucide-react";
+import { CheckCircle2, Clock, FileText, PackageCheck, RotateCcw, Truck, XCircle } from "lucide-react";
 import { useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { EmptyState, PageBreadcrumbs, PageContainer, PageHeader, PageSkeleton, toast } from "@bs/ui";
@@ -88,6 +88,15 @@ function OrderDetailPage() {
       onError,
     }),
   );
+  const releasePreorder = useMutation(
+    orpc.admin.preorders.releaseNow.mutationOptions({
+      onSuccess: () => {
+        toast.success("Pre-order released for shipping.");
+        refresh();
+      },
+      onError,
+    }),
+  );
 
   if (detail.isLoading) {
     return (
@@ -117,6 +126,8 @@ function OrderDetailPage() {
 
   const { order, items, fulfillments, invoices, events, notes } = detail.data;
   const cancelled = order.status === "cancelled";
+  const today = new Date().toISOString().slice(0, 10);
+  const isPreorderHold = Boolean(order.shipsOn && order.shipsOn > today && !order.preorderReleasedAt);
 
   return (
     <PageContainer>
@@ -135,6 +146,37 @@ function OrderDetailPage() {
 
       <div className="grid items-start gap-4 lg:grid-cols-[minmax(0,1fr)_20rem]">
         <div className="grid gap-4">
+          {order.shipsOn ? (
+            <div className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-amber-500/30 bg-amber-500/10 p-4 text-amber-950 dark:text-amber-200">
+              <div className="flex items-center gap-3">
+                <Clock className="h-5 w-5 shrink-0 text-amber-600 dark:text-amber-400" />
+                <div>
+                  <p className="text-sm font-semibold">
+                    Pre-order · Ships on {new Date(order.shipsOn).toLocaleDateString("en-IN", { day: "numeric", month: "short", year: "numeric" })}
+                  </p>
+                  <p className="text-xs text-amber-800 dark:text-amber-300">
+                    {order.preorderReleasedAt
+                      ? `Released early for fulfillment on ${new Date(order.preorderReleasedAt).toLocaleDateString("en-IN", { day: "numeric", month: "short" })}`
+                      : isPreorderHold
+                        ? "Held for fulfillment until the ship date or until released early."
+                        : "Ship date reached. Ready for fulfillment."}
+                  </p>
+                </div>
+              </div>
+              {isPreorderHold && (
+                <Button
+                  size="sm"
+                  variant="outline"
+                  className="border-amber-500/30 bg-background/50 hover:bg-amber-500/20"
+                  disabled={releasePreorder.isPending}
+                  onClick={() => releasePreorder.mutate({ id: order.id })}
+                >
+                  {releasePreorder.isPending ? "Releasing..." : "Release now"}
+                </Button>
+              )}
+            </div>
+          ) : null}
+
           <Card>
             <CardHeader>
               <CardTitle>Items</CardTitle>
@@ -143,7 +185,14 @@ function OrderDetailPage() {
               {items.map((it) => (
                 <div key={it.id} className="flex items-start justify-between gap-4 py-3 first:pt-0 last:pb-0">
                   <div>
-                    <p className="font-medium text-foreground">{it.productTitle}</p>
+                    <div className="flex items-center gap-2">
+                      <p className="font-medium text-foreground">{it.productTitle}</p>
+                      {it.shipsOn ? (
+                        <span className="inline-flex items-center rounded bg-amber-500/10 px-1.5 py-0.5 text-[10px] font-medium text-amber-700 dark:text-amber-400">
+                          Pre-order
+                        </span>
+                      ) : null}
+                    </div>
                     <p className="text-muted-foreground">{it.variantTitle ?? it.sku ?? "Default"}</p>
                     <p className="text-muted-foreground">
                       {money(it.unitPrice)} × {it.quantity}
@@ -261,8 +310,21 @@ function OrderDetailPage() {
                 </Button>
               ) : null}
               {["pending", "confirmed", "processing", "partially_fulfilled"].includes(order.status) ? (
-                <Button disabled={advance.isPending} onClick={() => advance.mutate({ id: orderId, to: "shipped" })}>
+                <Button
+                  disabled={advance.isPending || isPreorderHold}
+                  title={isPreorderHold ? `Pre-order ships on ${order.shipsOn}` : undefined}
+                  onClick={() => advance.mutate({ id: orderId, to: "shipped" })}
+                >
                   <Truck className="mr-1.5" /> Mark shipped
+                </Button>
+              ) : null}
+              {isPreorderHold ? (
+                <Button
+                  variant="outline"
+                  disabled={releasePreorder.isPending}
+                  onClick={() => releasePreorder.mutate({ id: order.id })}
+                >
+                  <Clock className="mr-1.5" /> Release pre-order now
                 </Button>
               ) : null}
               {["pending", "confirmed", "processing", "partially_fulfilled", "fulfilled"].includes(order.status) ? (

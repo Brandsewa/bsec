@@ -111,6 +111,10 @@ import {
   createAdminFulfillment,
   confirmAdminOrder,
   advanceAdminOrder,
+  listPreorders,
+  getPreorderStats,
+  changePreorderShipDate,
+  releasePreorderNow,
   listAdminReturns,
   actOnReturn,
   createAdminOrderInvoice,
@@ -982,6 +986,45 @@ export const storeRouter = os.router({
           if (!context.tenantCtx) throw new Error("Missing tenant context");
           try {
             return await advanceAdminOrder(context.rt, context.tenantCtx, input);
+          } catch (err) {
+            throw mapAuthError(err);
+          }
+        }),
+    },
+
+    preorders: {
+      list: os.admin.preorders.list
+        .use(requireAdmin)
+        .use(requirePermission("orders.read"))
+        .handler(({ context, input }) => {
+          if (!context.tenantCtx) throw new Error("Missing tenant context");
+          return listPreorders(context.rt, context.tenantCtx, input);
+        }),
+      stats: os.admin.preorders.stats
+        .use(requireAdmin)
+        .use(requirePermission("orders.read"))
+        .handler(({ context }) => {
+          if (!context.tenantCtx) throw new Error("Missing tenant context");
+          return getPreorderStats(context.rt, context.tenantCtx);
+        }),
+      changeShipDate: os.admin.preorders.changeShipDate
+        .use(requireAdmin)
+        .use(requirePermission("orders.write"))
+        .handler(async ({ context, input }) => {
+          if (!context.tenantCtx) throw new Error("Missing tenant context");
+          try {
+            return await changePreorderShipDate(context.rt, context.tenantCtx, input);
+          } catch (err) {
+            throw mapAuthError(err);
+          }
+        }),
+      releaseNow: os.admin.preorders.releaseNow
+        .use(requireAdmin)
+        .use(requirePermission("orders.write"))
+        .handler(async ({ context, input }) => {
+          if (!context.tenantCtx) throw new Error("Missing tenant context");
+          try {
+            return await releasePreorderNow(context.rt, context.tenantCtx, input);
           } catch (err) {
             throw mapAuthError(err);
           }

@@ -356,10 +356,17 @@ export function OrdersPage() {
         if (!o.firstItemTitle) return <span className="text-muted-foreground">—</span>;
         const extra = o.itemsCount > 1 ? ` +${o.itemsCount - 1} more` : "";
         return (
-          <span className="block max-w-56 truncate text-foreground" title={`${o.firstItemTitle}${extra}`}>
-            {o.firstItemTitle}
-            {extra && <span className="text-muted-foreground">{extra}</span>}
-          </span>
+          <div className="flex max-w-56 flex-col gap-0.5">
+            <span className="truncate text-foreground" title={`${o.firstItemTitle}${extra}`}>
+              {o.firstItemTitle}
+              {extra && <span className="text-muted-foreground">{extra}</span>}
+            </span>
+            {o.shipsOn && (
+              <span className="inline-flex w-fit items-center rounded bg-amber-500/10 px-1 py-0.25 text-[10px] font-medium text-amber-700 dark:text-amber-400">
+                Pre-order · ships {new Date(o.shipsOn).toLocaleDateString("en-IN", { day: "numeric", month: "short" })}
+              </span>
+            )}
+          </div>
         );
       },
     },

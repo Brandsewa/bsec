@@ -1,5 +1,5 @@
 import { createHash, randomBytes, randomUUID } from "node:crypto";
-import { eq, sql } from "drizzle-orm";
+import { and, eq, inArray, sql } from "drizzle-orm";
 import {
   actionTokens,
   locations,
@@ -8,6 +8,7 @@ import {
   orders,
   paymentIntents,
   tenants,
+  variants,
   withTenant,
   QUEUE_NAMES,
 } from "@bs/db";
@@ -153,18 +154,57 @@ export async function placeOrder(
     }
     const locationId = loc.id;
 
-    // 4. Reserve inventory atomically (PLAN §11.3)
+    // 4. Load variant configuration to identify pre-order and inventory policies
     const orderId = randomUUID();
-    const reserveItems = cart.items.map((it) => ({
-      variantId: it.variantId,
-      locationId,
-      qty: it.quantity,
-    }));
+    const variantIds = cart.items.map((it) => it.variantId);
+    const variantRows = await tx
+      .select({
+        id: variants.id,
+        trackInventory: variants.trackInventory,
+        allowBackorder: variants.allowBackorder,
+        preorderEnabled: variants.preorderEnabled,
+        preorderShipsOn: variants.preorderShipsOn,
+      })
+      .from(variants)
+      .where(and(eq(variants.tenantId, tenantId), inArray(variants.id, variantIds)));
 
-    await reserveInventory(tx, tenantId, reserveItems, {
-      orderId,
-      cartId: cart.id,
-    });
+    const variantMap = new Map(variantRows.map((v) => [v.id, v]));
+
+    // Limited variants that track inventory, do not allow backorder and are not pre-orders must reserve stock.
+    // Pre-orders commit stock when goods arrive, not at checkout time (ORDERS-PREORDERS-PLAN §3.2 rule 8).
+    const reserveItems = cart.items
+      .filter((it) => {
+        const v = variantMap.get(it.variantId);
+        if (!v) return true;
+        if (v.preorderEnabled) return false;
+        if (v.allowBackorder) return false;
+        if (!v.trackInventory) return false;
+        return true;
+      })
+      .map((it) => ({
+        variantId: it.variantId,
+        locationId,
+        qty: it.quantity,
+      }));
+
+    if (reserveItems.length > 0) {
+      await reserveInventory(tx, tenantId, reserveItems, {
+        orderId,
+        cartId: cart.id,
+      });
+    }
+
+    // Determine latest ships_on date across all pre-order items (mixed carts rule: latest date applies)
+    let orderShipsOn: string | null = null;
+    for (const it of cart.items) {
+      const v = variantMap.get(it.variantId);
+      if (v?.preorderEnabled && v.preorderShipsOn) {
+        const lineDate = typeof v.preorderShipsOn === "string" ? v.preorderShipsOn : (v.preorderShipsOn as Date).toISOString().slice(0, 10);
+        if (!orderShipsOn || lineDate > orderShipsOn) {
+          orderShipsOn = lineDate;
+        }
+      }
+    }
 
     // 5. Allocate gapless sequential order number respecting store settings (PLAN §11.2, ORDERS-SETTINGS-PLAN §4.1)
     const seq = await allocateOrderNumber(tx, tenantId);
@@ -186,6 +226,7 @@ export async function placeOrder(
       shippingTotal,
       codFee,
       grandTotal,
+      shipsOn: orderShipsOn,
       shippingAddress: {
         fullName: input.fullName,
         addressLine1: input.addressLine1,
@@ -213,6 +254,11 @@ export async function placeOrder(
     // 7. Insert Order Items (a goods discount is split across the lines in proportion to their totals)
     const lineDiscounts = allocateDiscount(cart.items.map((it) => it.lineTotal), discountTotal);
     for (const [index, it] of cart.items.entries()) {
+      const v = variantMap.get(it.variantId);
+      const lineShipsOn = v?.preorderEnabled && v.preorderShipsOn
+        ? (typeof v.preorderShipsOn === "string" ? v.preorderShipsOn : (v.preorderShipsOn as Date).toISOString().slice(0, 10))
+        : null;
+
       await tx.insert(orderItems).values({
         discountAmount: lineDiscounts[index] ?? 0,
         tenantId,
@@ -224,6 +270,7 @@ export async function placeOrder(
         quantity: it.quantity,
         unitPrice: it.unitPriceSnapshot,
         total: it.lineTotal,
+        shipsOn: lineShipsOn,
       });
     }
 

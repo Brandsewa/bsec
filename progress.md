@@ -81,7 +81,16 @@ Source of truth: `docs/PLAN.html` v2.0 (build order in `docs/BUILD-PLAN-M2-M9.md
 One line per piece of work that is started and not merged. Add yours before you start, remove it when merged or abandoned (`AGENTS.md` section 6). Format: `agent · branch · area · since · one-line goal`.
 
 - claude · `feat/themes-puck` · themes, docs · 2026-10-01 · theme builder follow-ups; agent docs and change log (`docs/changes/`)
-- antigravity · `feat/orders-phase1` · admin, orders, settings · 2026-10-02 · Orders Phase 1 (order numbering fix, All orders upgrades, Orders sidebar group)
+
+## Pre-orders (Simple "ships on" model) — Complete (2026-10-02)
+
+Spec: `docs/ORDERS-PREORDERS-PLAN.md`. Built on `feat/preorders-simple`.
+- [x] **Database & Migrations**: Expand-only migration `0020_preorders.sql` adding `preorder_enabled`, `preorder_ships_on`, `preorder_message` to `variants`; `ships_on` (with partial index) and `preorder_released_at` to `orders`; `ships_on` to `order_items`.
+- [x] **Checkout & Pricing**: Pre-orders sellable at 0 stock at regular price; no inventory reservation before goods received; snapshot `ships_on` on items and order (latest date); mixed-cart notice.
+- [x] **Order Lifecycle & Hold**: Pre-order hold prevents advancing fulfillment to `shipped` before promised dispatch date unless released early via `releasePreorderNow`. Audited and recorded on order timeline.
+- [x] **Admin Workbench & Management**: Dedicated Pre-orders route `/preorders` with 5 views (All, Waiting, Ready to ship, Shipped, Cancelled), 4 KPI cards, batch ship-date rescheduling (`changePreorderShipDate`), and early release. Products cell displays pre-order pill tags.
+- [x] **Background Jobs & Sweeps**: Daily sweep (`runPreorderReminderSweep`) at 06:00 sending idempotent 2-day reminder emails; ship-date change notifications via `order.preorder_date_changed`.
+- [x] **Verification**: Real Postgres integration suite (`packages/domain/test/preorders.int.test.ts`, 7/7 passed), `pnpm typecheck` (15/15 passed), `pnpm lint` (15/15 passed), `pnpm build` (all passed), `pnpm docs:check` (ok).
 
 ## M10 · Visual theme system (Puck) — shipped to production 2026-10-01
 

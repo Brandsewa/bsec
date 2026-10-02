@@ -6,6 +6,7 @@ export interface AddToCartButtonProps {
   variantId: string;
   available: boolean;
   quantity?: number;
+  isPreorder?: boolean;
 }
 
 /**
@@ -28,6 +29,7 @@ export function AddToCartButton({
   variantId,
   available,
   quantity = 1,
+  isPreorder = false,
 }: AddToCartButtonProps) {
   const [loading, setLoading] = useState(false);
   const [success, setSuccess] = useState(false);
@@ -134,7 +136,7 @@ export function AddToCartButton({
                 d="M16 11V7a4 4 0 00-8 0v4M5 9h14l1 12H4L5 9z"
               />
             </svg>
-            Add to Cart
+            {isPreorder ? "Pre-order" : "Add to Cart"}
           </span>
         )}
       </button>

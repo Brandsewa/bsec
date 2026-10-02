@@ -81,6 +81,33 @@ export const OrderStats = z.object({
 });
 export type OrderStats = z.infer<typeof OrderStats>;
 
+export const PreorderListItem = z.object({
+  id: z.string().uuid(),
+  number: z.string(),
+  customerEmail: z.string().nullable(),
+  customerPhone: z.string().nullable(),
+  customerName: z.string().nullable(),
+  status: z.string(),
+  paymentStatus: z.string(),
+  fulfillmentStatus: z.string(),
+  grandTotal: z.number(),
+  placedAt: z.string(),
+  shipsOn: z.string(),
+  preorderReleasedAt: z.string().nullable(),
+  itemsCount: z.number(),
+  preorderItemsCount: z.number(),
+  firstItemTitle: z.string().nullable(),
+});
+export type PreorderListItem = z.infer<typeof PreorderListItem>;
+
+export const PreorderStats = z.object({
+  openPreorders: z.number().int(),
+  readyToShip: z.number().int(),
+  dueNext14Days: z.number().int(),
+  overdue: z.number().int(),
+});
+export type PreorderStats = z.infer<typeof PreorderStats>;
+
 export const FeatureFlagItem = z.object({
   key: z.string(),
   enabled: z.boolean(),
@@ -102,6 +129,9 @@ export const ProductVariant = z.object({
   dimensions: z.record(z.string(), z.unknown()).nullable().optional(),
   trackInventory: z.boolean(),
   allowBackorder: z.boolean(),
+  preorderEnabled: z.boolean().default(false),
+  preorderShipsOn: z.string().nullable().optional(),
+  preorderMessage: z.string().nullable().optional(),
   position: z.number(),
   imageMediaId: z.string().uuid().nullable().optional(),
   createdAt: z.string(),
@@ -153,6 +183,7 @@ export const Product = z.object({
   priceMin: z.number().nullable().optional(),
   priceMax: z.number().nullable().optional(),
   stock: z.number().optional(),
+  preorderStatus: z.enum(["active", "passed"]).nullable().optional(),
 });
 export type Product = z.infer<typeof Product>;
 
@@ -640,6 +671,9 @@ export const adminContract = {
                 costPrice: z.number().int().min(0).optional(),
                 trackInventory: z.boolean().default(true),
                 allowBackorder: z.boolean().default(false),
+                preorderEnabled: z.boolean().default(false),
+                preorderShipsOn: z.string().nullable().optional(),
+                preorderMessage: z.string().max(200).nullable().optional(),
                 optionValues: z.record(z.string(), z.string()).optional(),
                 imageMediaId: z.string().uuid().optional(),
               }),
@@ -686,6 +720,9 @@ export const adminContract = {
           costPrice: z.number().int().min(0).nullable().optional(),
           trackInventory: z.boolean().optional(),
           allowBackorder: z.boolean().optional(),
+          preorderEnabled: z.boolean().optional(),
+          preorderShipsOn: z.string().nullable().optional(),
+          preorderMessage: z.string().max(200).nullable().optional(),
           imageMediaId: z.string().uuid().nullable().optional(),
         }),
       )
@@ -1093,6 +1130,7 @@ export const adminContract = {
               fulfillmentStatus: z.string(),
               grandTotal: z.number(),
               placedAt: z.string(),
+              shipsOn: z.string().nullable().optional(),
               itemsCount: z.number(),
               firstItemTitle: z.string().nullable().optional(),
             }),
@@ -1125,6 +1163,8 @@ export const adminContract = {
             shippingAddress: z.unknown(),
             billingAddress: z.unknown().nullable().optional(),
             placedAt: z.string(),
+            shipsOn: z.string().nullable().optional(),
+            preorderReleasedAt: z.string().nullable().optional(),
             cancelledAt: z.string().nullable().optional(),
             cancelReason: z.string().nullable().optional(),
           }),
@@ -1139,6 +1179,7 @@ export const adminContract = {
               total: z.number(),
               fulfilledQty: z.number(),
               returnedQty: z.number(),
+              shipsOn: z.string().nullable().optional(),
             }),
           ),
           fulfillments: z.array(
@@ -1273,6 +1314,61 @@ export const adminContract = {
         }),
       )
       .output(z.object({ success: z.boolean(), status: z.string() })),
+  },
+
+  // --- Pre-orders (ORDERS-PREORDERS-PLAN §3.3) ---
+  preorders: {
+    list: oc
+      .route({ method: "GET", path: "/admin/preorders" })
+      .input(
+        z
+          .object({
+            view: z.enum(["all", "waiting", "ready", "shipped", "cancelled"]).default("all"),
+            search: z.string().optional(),
+            page: z.number().int().min(1).default(1),
+            pageSize: z.number().int().min(1).max(100).default(50),
+            sort: z.enum(["ships_asc", "ships_desc", "placed_asc", "placed_desc"]).default("ships_asc"),
+          })
+          .optional(),
+      )
+      .output(
+        z.object({
+          items: z.array(PreorderListItem),
+          total: z.number(),
+          page: z.number(),
+          pageSize: z.number(),
+        }),
+      ),
+    stats: oc
+      .route({ method: "GET", path: "/admin/preorders/stats" })
+      .output(PreorderStats),
+    changeShipDate: oc
+      .route({ method: "POST", path: "/admin/preorders/change-ship-date" })
+      .input(
+        z.object({
+          orderIds: z.array(z.string().uuid()).min(1),
+          shipsOn: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "Invalid date format (YYYY-MM-DD)"),
+          reason: z.string().max(300).optional(),
+        }),
+      )
+      .output(
+        z.object({
+          updatedCount: z.number(),
+          skippedCount: z.number(),
+        }),
+      ),
+    releaseNow: oc
+      .route({ method: "POST", path: "/admin/preorders/release-now" })
+      .input(
+        z.object({
+          id: z.string().uuid(),
+        }),
+      )
+      .output(
+        z.object({
+          success: z.boolean(),
+        }),
+      ),
   },
 
   // --- Returns ---

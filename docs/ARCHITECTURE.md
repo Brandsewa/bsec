@@ -243,8 +243,9 @@ Drizzle schema files in `packages/db/src/schema/` (one Postgres database, `publi
 | 0017 | `platform_email` | `platform_email_settings` and email log (auth overhaul, phase A) |
 | 0018 | `customer_auth` | `customers.phone` nullable, so customers can register with email + password |
 | 0019 | `domain_bcom_si` | platform domain gobs.cloud -> bcom.si: rewrites platform `domains` hostnames and the default sender |
+| 0020 | `preorders` | preorder flags on variants, ships_on on variants/orders/order_items, preorder_released_at |
 
-How to write one (expand, migrate, contract; `forceRlsSql`): `docs/migrations.md`. **Never edit an applied migration.** Latest on disk: `0019` (the docs check keeps this list honest).
+How to write one (expand, migrate, contract; `forceRlsSql`): `docs/migrations.md`. **Never edit an applied migration.** Latest on disk: `0020` (the docs check keeps this list honest).
 
 ---
 
@@ -291,9 +292,9 @@ Theme flow: platform staff build `theme_templates` (draft + published snapshot, 
 
 `packages/db/src/queues.ts` is the queue registry (created by the migrate step, so runtime roles never need DDL). Handlers and schedules: `packages/domain/src/jobs.ts`, started by `apps/worker`.
 
-Queues: `system.ping`, `order.created`, `order.paid`, `order.cod_confirmed`, `order.cancelled`, `reservation.expiry`, `webhook.process`, `idempotency.cleanup`, `fulfillment.created`, `fulfillment.delivered`, `fulfillment.rto`, `return.requested`, `refund.processed`, `cart.abandoned`, `cart.recovery_sweep`, `subscription.trial_expiry_sweep`.
+Queues: `system.ping`, `order.created`, `order.paid`, `order.cod_confirmed`, `order.cancelled`, `reservation.expiry`, `webhook.process`, `idempotency.cleanup`, `fulfillment.created`, `fulfillment.delivered`, `fulfillment.rto`, `return.requested`, `refund.processed`, `cart.abandoned`, `cart.recovery_sweep`, `subscription.trial_expiry_sweep`, `order.preorder_date_changed`, `order.preorder_reminder_sweep`.
 
-Schedules: `reservation.expiry` every minute, `idempotency.cleanup` every 15 min, `cart.recovery_sweep` and `subscription.trial_expiry_sweep` hourly. Email handlers currently send placeholder text (no provider configured; see `progress.md`). Tenant deletion runs in the platform service on a timer (`DELETION_SWEEP_INTERVAL_MS`).
+Schedules: `reservation.expiry` every minute, `idempotency.cleanup` every 15 min, `cart.recovery_sweep` and `subscription.trial_expiry_sweep` hourly, `order.preorder_reminder_sweep` daily (06:00). Email handlers currently send placeholder text (no provider configured; see `progress.md`). Tenant deletion runs in the platform service on a timer (`DELETION_SWEEP_INTERVAL_MS`).
 
 **Adding a queue:** add to `QUEUES` and `QUEUE_NAMES`, add the handler in `jobs.ts`, add a test in `queue-consumers.int.test.ts`, and enqueue inside the business transaction.
 

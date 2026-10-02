@@ -11,6 +11,7 @@ export interface OrderItemSummary {
   quantity: number;
   unitPrice: number;
   total: number;
+  shipsOn?: string | null | undefined;
 }
 
 export interface CustomerOrderSummary {
@@ -25,6 +26,7 @@ export interface CustomerOrderSummary {
   shippingTotal: number;
   grandTotal: number;
   placedAt: Date;
+  shipsOn?: string | null | undefined;
   itemsCount?: number | undefined;
 }
 
@@ -136,6 +138,7 @@ export async function getCustomerOrderDetail(
       shippingTotal: order.shippingTotal,
       grandTotal: order.grandTotal,
       placedAt: order.placedAt,
+      shipsOn: order.shipsOn ? String(order.shipsOn) : null,
       email: order.email,
       phone: order.phone,
       shippingAddress: order.shippingAddress,
@@ -149,6 +152,7 @@ export async function getCustomerOrderDetail(
         quantity: it.quantity,
         unitPrice: it.unitPrice,
         total: it.total,
+        shipsOn: it.shipsOn ? String(it.shipsOn) : null,
       })),
     };
   });
@@ -210,6 +214,7 @@ export async function getOrderByActionToken(
       shippingTotal: order.shippingTotal,
       grandTotal: order.grandTotal,
       placedAt: order.placedAt,
+      shipsOn: order.shipsOn ? String(order.shipsOn) : null,
       email: order.email,
       phone: order.phone,
       shippingAddress: order.shippingAddress,
@@ -223,6 +228,7 @@ export async function getOrderByActionToken(
         quantity: it.quantity,
         unitPrice: it.unitPrice,
         total: it.total,
+        shipsOn: it.shipsOn ? String(it.shipsOn) : null,
       })),
     };
   });

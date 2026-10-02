@@ -34,6 +34,7 @@ export interface OrderListItem {
   fulfillmentStatus: string;
   grandTotal: number;
   placedAt: string;
+  shipsOn?: string | null | undefined;
   itemsCount: number;
   firstItemTitle?: string | null | undefined;
 }
@@ -128,6 +129,7 @@ export async function listAdminOrders(
         fulfillmentStatus: schema.orders.fulfillmentStatus,
         grandTotal: schema.orders.grandTotal,
         placedAt: schema.orders.placedAt,
+        shipsOn: schema.orders.shipsOn,
       })
       .from(schema.orders)
       .where(whereClause)
@@ -177,6 +179,7 @@ export async function listAdminOrders(
         fulfillmentStatus: r.fulfillmentStatus,
         grandTotal: Number(r.grandTotal),
         placedAt: r.placedAt.toISOString(),
+        shipsOn: r.shipsOn ? String(r.shipsOn) : null,
         itemsCount: itemCounts.get(r.id) ?? 0,
         firstItemTitle: firstItemTitles.get(r.id) ?? null,
       });
@@ -297,6 +300,8 @@ export async function getAdminOrderDetail(
         shippingAddress: order.shippingAddress,
         billingAddress: order.billingAddress,
         placedAt: order.placedAt.toISOString(),
+        shipsOn: order.shipsOn ? String(order.shipsOn) : null,
+        preorderReleasedAt: order.preorderReleasedAt ? order.preorderReleasedAt.toISOString() : null,
         cancelledAt: order.cancelledAt ? order.cancelledAt.toISOString() : null,
         cancelReason: order.cancelReason,
       },
@@ -310,6 +315,7 @@ export async function getAdminOrderDetail(
         total: Number(it.total),
         fulfilledQty: it.fulfilledQty,
         returnedQty: it.returnedQty,
+        shipsOn: it.shipsOn ? String(it.shipsOn) : null,
       })),
       fulfillments: fulfillments.map((f) => ({
         id: f.id,
@@ -612,6 +618,17 @@ export async function createAdminFulfillment(
   }
 
   return await withTenant(db, ctx.tenantId, async (tx) => {
+    const [ord] = await tx
+      .select({ shipsOn: schema.orders.shipsOn, preorderReleasedAt: schema.orders.preorderReleasedAt })
+      .from(schema.orders)
+      .where(and(eq(schema.orders.tenantId, ctx.tenantId), eq(schema.orders.id, input.id)))
+      .limit(1);
+
+    const today = new Date().toISOString().slice(0, 10);
+    if (ord?.shipsOn && !ord.preorderReleasedAt && String(ord.shipsOn) > today) {
+      throw new Error(`Precondition: Pre-order ships on ${ord.shipsOn}`);
+    }
+
     let locationId = input.locationId;
     if (!locationId) {
       const [loc] = await tx

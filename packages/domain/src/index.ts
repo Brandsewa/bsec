@@ -53,6 +53,7 @@ export * from "./orders/pricing.ts";
 export * from "./orders/manual-lifecycle.ts";
 export * from "./admin/orders.ts";
 export * from "./admin/order-settings.ts";
+export * from "./admin/preorders.ts";
 export * from "./admin/customers.ts";
 export * from "./admin/discounts.ts";
 export * from "./admin/me.ts";
