@@ -94,7 +94,7 @@ beforeAll(async () => {
   await pgClient.query(`
     INSERT INTO organizations (id, name) VALUES ('${orgId}', 'Test Org') ON CONFLICT DO NOTHING;
     INSERT INTO tenants (id, organization_id, slug, name) VALUES ('${tenantId}', '${orgId}', 'test-store-c2', 'Test Store') ON CONFLICT DO NOTHING;
-    INSERT INTO tenants (id, organization_id, slug, name) VALUES ('${tenantB}', '${orgId}', 'test-store-c3', 'Store B') ON CONFLICT DO NOTHING;
+    INSERT INTO tenants (id, organization_id, slug, name) VALUES ('${tenantB}', '${orgId}', 'test-store-c2b', 'Store B') ON CONFLICT DO NOTHING;
     SELECT set_config('app.tenant_id', '${tenantId}', false);
     INSERT INTO locations (id, tenant_id, name, is_default) VALUES ('${locationId}', '${tenantId}', 'Main Warehouse', true) ON CONFLICT DO NOTHING;
     INSERT INTO products (id, tenant_id, title, slug, status) VALUES ('${productId}', '${tenantId}', 'Premium T-Shirt', 'premium-t-shirt', 'published') ON CONFLICT (tenant_id, slug) DO UPDATE SET status = 'published';
