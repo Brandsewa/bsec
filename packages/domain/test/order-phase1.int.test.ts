@@ -83,7 +83,7 @@ beforeAll(async () => {
 
   // Create products in Tenant A
   const pA1 = await createProduct(rtWeb, ctxA, {
-    title: "Silk Scarf",
+    title: "Phase One Cotton Shawl",
     status: "active",
     variants: [{ sku: "SCARF-RED", title: "Default", price: 150000 }],
   });
