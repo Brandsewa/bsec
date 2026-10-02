@@ -81,9 +81,9 @@ describe("M8 Atomic Tenant Provisioning Engine (PLAN §5.1, §6.4, §7 / ADR-016
     expect(durationMs).toBeLessThan(60_000);
 
     expect(result.slug).toBe(slug);
-    expect(result.hostname).toBe(`${slug}.gobs.cloud`);
-    expect(result.storeUrl).toBe(`https://${slug}.gobs.cloud`);
-    expect(result.adminUrl).toBe("https://admin.gobs.cloud");
+    expect(result.hostname).toBe(`${slug}.bcom.si`);
+    expect(result.storeUrl).toBe(`https://${slug}.bcom.si`);
+    expect(result.adminUrl).toBe("https://admin.bcom.si");
     expect(result.tenantId).toBeDefined();
     expect(result.organizationId).toBeDefined();
     expect(result.ownerId).toBeDefined();
@@ -107,7 +107,7 @@ describe("M8 Atomic Tenant Provisioning Engine (PLAN §5.1, §6.4, §7 / ADR-016
       .from(schema.domains)
       .where(sql`tenant_id = ${result.tenantId}`);
     expect(domains).toHaveLength(1);
-    expect(domains[0]!.hostname).toBe(`${slug}.gobs.cloud`);
+    expect(domains[0]!.hostname).toBe(`${slug}.bcom.si`);
     expect(domains[0]!.type).toBe("subdomain");
     expect(domains[0]!.isPrimary).toBe(true);
     expect(domains[0]!.status).toBe("active");
@@ -321,7 +321,7 @@ describe("M8 Atomic Tenant Provisioning Engine (PLAN §5.1, §6.4, §7 / ADR-016
     const orphanedDomain = await platformDb.db
       .select()
       .from(schema.domains)
-      .where(sql`hostname = ${`${slug}.gobs.cloud`}`);
+      .where(sql`hostname = ${`${slug}.bcom.si`}`);
     expect(orphanedDomain).toHaveLength(0);
   });
 
@@ -340,12 +340,12 @@ describe("M8 Atomic Tenant Provisioning Engine (PLAN §5.1, §6.4, §7 / ADR-016
     });
 
     // Storefront immediately resolves and responds 200 on the new subdomain
-    const access = await evaluateStorefrontAccess(rt, `${slug}.gobs.cloud`);
+    const access = await evaluateStorefrontAccess(rt, `${slug}.bcom.si`);
     expect(access.httpStatus).toBe(200);
     expect(access.tenantId).toBe(result.tenantId);
 
     // With owner/staff session, full storefront access is allowed immediately
-    const staffAccess = await evaluateStorefrontAccess(rt, `${slug}.gobs.cloud`, {
+    const staffAccess = await evaluateStorefrontAccess(rt, `${slug}.bcom.si`, {
       session: {
         user: { id: result.ownerId, email: "speed@example.com" },
         type: "staff",

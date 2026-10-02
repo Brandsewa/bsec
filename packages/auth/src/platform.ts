@@ -57,12 +57,12 @@ export function createPlatformAuth(db: Db, opts: PlatformAuthOptions = {}) {
             try {
               const u = new URL(baseURL);
               const isLocal = u.hostname === "localhost" || u.hostname === "127.0.0.1";
-              superadminUrl = isLocal ? "http://localhost:5174" : "https://superadmin.gobs.cloud";
+              superadminUrl = isLocal ? "http://localhost:5174" : "https://superadmin.bcom.si";
             } catch {
-              superadminUrl = "https://superadmin.gobs.cloud";
+              superadminUrl = "https://superadmin.bcom.si";
             }
           } else {
-            superadminUrl = "https://superadmin.gobs.cloud";
+            superadminUrl = "https://superadmin.bcom.si";
           }
         }
         const resetUrl = `${superadminUrl}/reset-password?token=${token}`;

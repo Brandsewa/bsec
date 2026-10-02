@@ -43,7 +43,7 @@ const DEFAULT_PLANS: PlanItem[] = [
       "25 GB fast media storage",
       "3 Custom Domains included",
       "Shiprocket automated label printing & tracking",
-      "Remove 'Powered by gobs.cloud' branding",
+      "Remove 'Powered by bcom.si' branding",
       "Advanced discount engine (BXGY, fixed, %)",
       "Priority webhook dispatch",
     ],
@@ -95,7 +95,7 @@ const TEMPLATES = [
 const FAQS = [
   {
     q: "Can I connect my own custom domain like mystore.in?",
-    a: "Yes! Every store gets a free permanent {slug}.gobs.cloud address instantly. You can connect your custom domain (.in, .com, .store, etc.) at any time with automatic free Cloudflare SSL certificates.",
+    a: "Yes! Every store gets a free permanent {slug}.bcom.si address instantly. You can connect your custom domain (.in, .com, .store, etc.) at any time with automatic free Cloudflare SSL certificates.",
   },
   {
     q: "Do you take any transaction commission on my sales?",
@@ -103,7 +103,7 @@ const FAQS = [
   },
   {
     q: "What payment methods are supported for Indian customers?",
-    a: "Direct-to-consumer stores on gobs.cloud support Cash on Delivery (COD) out of the box with custom fee controls, alongside Instant UPI, RuPay, Credit/Debit cards, and Netbanking through Razorpay.",
+    a: "Direct-to-consumer stores on bcom.si support Cash on Delivery (COD) out of the box with custom fee controls, alongside Instant UPI, RuPay, Credit/Debit cards, and Netbanking through Razorpay.",
   },
   {
     q: "How does shipping and order tracking work?",
@@ -133,7 +133,7 @@ export function MarketingLandingPage() {
               g
             </span>
             <span className="text-xl font-bold tracking-tight text-slate-900">
-              gobs<span className="text-emerald-600">.cloud</span>
+              bcom<span className="text-emerald-600">.si</span>
             </span>
           </div>
 
@@ -147,7 +147,7 @@ export function MarketingLandingPage() {
 
           <div className="flex items-center gap-3">
             <a
-              href="https://admin.gobs.cloud"
+              href="https://admin.bcom.si"
               className="text-sm font-semibold text-slate-700 hover:text-slate-900 px-3.5 py-2 rounded-lg hover:bg-slate-100 transition-all"
             >
               Log in
@@ -182,7 +182,7 @@ export function MarketingLandingPage() {
           </p>
 
           {/* Subdomain check input (Step 1 of signup) */}
-          <SubdomainAvailabilityChecker platformDomain="gobs.cloud" />
+          <SubdomainAvailabilityChecker platformDomain="bcom.si" />
 
           <p className="mt-4 text-xs text-slate-500 font-medium">
             14-day free trial · No credit card required · Instant setup
@@ -352,7 +352,7 @@ export function MarketingLandingPage() {
             <div className="p-6 bg-white rounded-2xl border border-slate-200">
               <span className="inline-block w-8 h-8 rounded-full bg-emerald-100 text-emerald-800 font-bold text-sm leading-8 mb-4">1</span>
               <h4 className="font-bold text-base mb-1">Pick Subdomain</h4>
-              <p className="text-xs text-slate-500">Claim your instant brand address on gobs.cloud</p>
+              <p className="text-xs text-slate-500">Claim your instant brand address on bcom.si</p>
             </div>
             <div className="p-6 bg-white rounded-2xl border border-slate-200">
               <span className="inline-block w-8 h-8 rounded-full bg-emerald-100 text-emerald-800 font-bold text-sm leading-8 mb-4">2</span>
@@ -523,7 +523,7 @@ export function MarketingLandingPage() {
                 <span className="w-8 h-8 rounded-lg bg-emerald-500 flex items-center justify-center text-slate-950 font-black text-lg">
                   g
                 </span>
-                <span className="text-lg font-bold text-white tracking-tight">gobs.cloud</span>
+                <span className="text-lg font-bold text-white tracking-tight">bcom.si</span>
               </div>
               <p className="text-xs leading-relaxed text-slate-400">
                 The high-performance ecommerce platform designed for modern Indian D2C creators.
@@ -552,14 +552,14 @@ export function MarketingLandingPage() {
             <div>
               <h5 className="font-bold text-white mb-4 text-xs uppercase tracking-wider">Account</h5>
               <ul className="space-y-2.5 text-xs">
-                <li><a href="https://admin.gobs.cloud" className="hover:text-white transition-colors">Merchant Admin Login</a></li>
+                <li><a href="https://admin.bcom.si" className="hover:text-white transition-colors">Merchant Admin Login</a></li>
                 <li><Link href="/signup" className="hover:text-white transition-colors">Create Free Trial Store</Link></li>
               </ul>
             </div>
           </div>
 
           <div className="pt-8 border-t border-slate-800 text-xs flex flex-col sm:flex-row items-center justify-between gap-4">
-            <p>© {new Date().getFullYear()} gobs.cloud. All rights reserved.</p>
+            <p>© {new Date().getFullYear()} bcom.si. All rights reserved.</p>
             <p>Built with enterprise multi-tenant isolation on AWS Mumbai (ap-south-1).</p>
           </div>
         </div>

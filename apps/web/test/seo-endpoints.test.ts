@@ -32,8 +32,8 @@ describe("Storefront SEO Endpoints (/robots.txt & /sitemap.xml)", () => {
       });
 
       const { GET } = await import("../src/app/robots.txt/route.ts");
-      const req = new Request("https://unknown.gobs.cloud/robots.txt", {
-        headers: { host: "unknown.gobs.cloud" },
+      const req = new Request("https://unknown.bcom.si/robots.txt", {
+        headers: { host: "unknown.bcom.si" },
       });
       const res = await GET(req);
 
@@ -74,8 +74,8 @@ describe("Storefront SEO Endpoints (/robots.txt & /sitemap.xml)", () => {
       });
 
       const { GET } = await import("../src/app/robots.txt/route.ts");
-      const req = new Request("https://demo.gobs.cloud/robots.txt", {
-        headers: { host: "demo.gobs.cloud" },
+      const req = new Request("https://demo.bcom.si/robots.txt", {
+        headers: { host: "demo.bcom.si" },
       });
       const res = await GET(req);
 
@@ -148,8 +148,8 @@ describe("Storefront SEO Endpoints (/robots.txt & /sitemap.xml)", () => {
       });
 
       const { GET } = await import("../src/app/sitemap.xml/route.ts");
-      const req = new Request("https://unknown.gobs.cloud/sitemap.xml", {
-        headers: { host: "unknown.gobs.cloud" },
+      const req = new Request("https://unknown.bcom.si/sitemap.xml", {
+        headers: { host: "unknown.bcom.si" },
       });
       const res = await GET(req);
 
@@ -172,8 +172,8 @@ describe("Storefront SEO Endpoints (/robots.txt & /sitemap.xml)", () => {
       });
 
       const { GET } = await import("../src/app/sitemap.xml/route.ts");
-      const req = new Request("https://demo.gobs.cloud/sitemap.xml", {
-        headers: { host: "demo.gobs.cloud" },
+      const req = new Request("https://demo.bcom.si/sitemap.xml", {
+        headers: { host: "demo.bcom.si" },
       });
       const res = await GET(req);
 

@@ -16,7 +16,7 @@ export async function middleware(request: NextRequest) {
 
   const host = request.headers.get("x-forwarded-host") ?? request.headers.get("host") ?? "localhost";
   const hostname = host.split(":")[0]?.toLowerCase() ?? "localhost";
-  // Marketing platform host (e.g. gobs.cloud, www.gobs.cloud, or MARKETING_HOST) serves public SaaS pages
+  // Marketing platform host (e.g. bcom.si, www.bcom.si, or MARKETING_HOST) serves public SaaS pages
   const isMarketingHost =
     isPlatformMarketingHost(hostname) ||
     (hostname === "localhost" && (

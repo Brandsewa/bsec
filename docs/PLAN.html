@@ -611,7 +611,7 @@ CREATE POLICY tenant_isolation ON products
     └──────────────┴────► failed ◄───┴──────────────┘        active ──► removing ──► removed</pre>
 <ul class="tight">
   <li><b>New domain:</b> merchant adds a CNAME to <code>stores.bscommerce.in</code>; Cloudflare verifies ownership and issues SSL over HTTP. Worker polls every 5 min for 48 h.</li>
-  <li><b>Domain already live elsewhere</b> (e.g. gobs.cloud during migration): <code>prevalidate_txt</code> path. Merchant adds TXT records first, SSL is issued before DNS moves, then the CNAME switch causes no downtime.</li>
+  <li><b>Domain already live elsewhere</b> (e.g. bcom.si during migration): <code>prevalidate_txt</code> path. Merchant adds TXT records first, SSL is issued before DNS moves, then the CNAME switch causes no downtime.</li>
   <li>Becomes primary only in <code>active</code>. The old primary then 301-redirects.</li>
   <li>Cloudflare for SaaS custom-hostname fees are included in per-store unit economics.</li>
 </ul>
@@ -860,7 +860,7 @@ INSERT INTO inventory_reservations (…, status 'active', expires_at now()+30 mi
 <p><b>Minimum hardening before real customers</b> (moved here from M7): backup restore drill passed with RPO/RTO measured, isolation and concurrency suites green, Sentry and uptime alerts on, security review of auth, checkout and webhooks, payload sanitization verified.</p>
 <ul class="tight">
   <li>Migration script and cutover (section 16), behind feature flags so any area can fall back.</li>
-  <li>gobs.cloud moved with TXT pre-validation (no downtime).</li>
+  <li>bcom.si moved with TXT pre-validation (no downtime).</li>
 </ul>
 <div class="exit"><b>Exit:</b> real catalog, customers, historical orders and media on the platform; real orders flowing for 2 weeks with no data or payment incidents.</div></div>
 
@@ -970,7 +970,7 @@ INSERT INTO inventory_reservations (…, status 'active', expires_at now()+30 mi
   <li>Move files from the Coolify uploads volume to R2 and rewrite media keys.</li>
   <li>Admins become users with store_owner/store_admin memberships and must reset passwords (old hashes are bcrypt; Better Auth can verify bcrypt with a custom hasher if we want seamless login).</li>
   <li>Keep order numbers and product slugs; add redirects for any URL changes (<code>/product/[slug]</code> → <code>/products/[slug]</code>).</li>
-  <li>Dry run on the staging VPS, compare counts and totals; enable areas behind feature flags; cut over gobs.cloud using TXT pre-validation so SSL is ready before DNS moves.</li>
+  <li>Dry run on the staging VPS, compare counts and totals; enable areas behind feature flags; cut over bcom.si using TXT pre-validation so SSL is ready before DNS moves.</li>
   <li>This happens at M6, right after the commerce loop is proven, not at the end.</li>
 </ol>
 </section>

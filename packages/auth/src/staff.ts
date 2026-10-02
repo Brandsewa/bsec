@@ -12,7 +12,7 @@ export interface StaffAuthOptions {
   cookieDomain?: string;
   /** Force the Secure cookie flag. Defaults to true when baseURL is https. */
   secureCookies?: boolean;
-  /** URL of the Admin SPA, e.g. "https://admin.gobs.cloud" or "http://localhost:5173" */
+  /** URL of the Admin SPA, e.g. "https://admin.bcom.si" or "http://localhost:5173" */
   adminUrl?: string;
   /** Callback to send password reset email */
   onSendResetPassword?: (data: { user: { id: string; email: string; name?: string }; url: string; token: string }) => Promise<void> | void;
@@ -62,10 +62,10 @@ export function createStaffAuth(db: Db, opts: StaffAuthOptions = {}) {
               const isLocal = u.hostname === "localhost" || u.hostname === "127.0.0.1";
               adminUrl = isLocal ? "http://localhost:5173" : `${u.protocol}//admin.${u.hostname}`;
             } catch {
-              adminUrl = "https://admin.gobs.cloud";
+              adminUrl = "https://admin.bcom.si";
             }
           } else {
-            adminUrl = "https://admin.gobs.cloud";
+            adminUrl = "https://admin.bcom.si";
           }
         }
         const resetUrl = `${adminUrl}/reset-password?token=${token}`;

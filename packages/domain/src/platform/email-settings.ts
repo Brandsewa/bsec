@@ -42,7 +42,7 @@ export async function getPlatformEmailSettings(
       username: "emailapikey",
       passwordConfigured: false,
       passwordLastFour: null,
-      fromEmail: "no-reply@gobs.cloud",
+      fromEmail: "no-reply@bcom.si",
       fromName: "Brand Sewa",
       replyTo: null,
       enabled: false,

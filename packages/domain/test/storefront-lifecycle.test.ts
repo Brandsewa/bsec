@@ -12,7 +12,7 @@ import {
 
 describe("Storefront Lifecycle & Host Resolution", () => {
   const tenantId = "0199a000-0000-7000-8000-000000000001";
-  const host = "store.gobs.cloud";
+  const host = "store.bcom.si";
 
   beforeEach(() => {
     invalidateHostCache();
@@ -102,7 +102,7 @@ describe("Storefront Lifecycle & Host Resolution", () => {
 
     it("returns null for unknown domain", async () => {
       const mockDb = createLifecycleMockDb({ domain: null });
-      const res = await resolveHostToTenant(mockDb, "unknown.gobs.cloud");
+      const res = await resolveHostToTenant(mockDb, "unknown.bcom.si");
       expect(res).toBeNull();
     });
 
@@ -134,7 +134,7 @@ describe("Storefront Lifecycle & Host Resolution", () => {
   describe("evaluateStorefrontAccess() - Tenant Lifecycle", () => {
     it("returns 404 for unknown host", async () => {
       const mockDb = createLifecycleMockDb({ domain: null });
-      const access = await evaluateStorefrontAccess(mockDb, "nonexistent.gobs.cloud");
+      const access = await evaluateStorefrontAccess(mockDb, "nonexistent.bcom.si");
 
       expect(access.allowed).toBe(false);
       expect(access.httpStatus).toBe(404);

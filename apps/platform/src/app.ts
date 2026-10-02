@@ -97,21 +97,21 @@ export interface PlatformContext {
   } | undefined;
 }
 
-/** Origins allowed to call the platform API with credentials. Exact matches only (tenants own *.gobs.cloud subdomains). */
+/** Origins allowed to call the platform API with credentials. Exact matches only (tenants own *.bcom.si subdomains). */
 export function platformAllowedOrigins(): string[] {
   const configured = (process.env.SUPERADMIN_ORIGINS ?? "")
     .split(",")
     .map((v) => v.trim())
     .filter(Boolean);
   if (configured.length > 0) return configured;
-  return ["https://superadmin.gobs.cloud", ...(process.env.NODE_ENV !== "production" ? ["http://localhost:5174", "http://localhost:5173"] : [])];
+  return ["https://superadmin.bcom.si", ...(process.env.NODE_ENV !== "production" ? ["http://localhost:5174", "http://localhost:5173"] : [])];
 }
 
 const platformAuthLogger = createLogger("platform-auth");
 let _platformAuth: PlatformAuth | undefined;
 export function getPlatformAuth(rt: Runtime): PlatformAuth {
   if (!_platformAuth) {
-    const superadminUrl = platformAllowedOrigins()[0] ?? "https://superadmin.gobs.cloud";
+    const superadminUrl = platformAllowedOrigins()[0] ?? "https://superadmin.bcom.si";
     _platformAuth = createPlatformAuth(rt._db.db, {
       baseURL: process.env.PLATFORM_AUTH_URL ?? process.env.BETTER_AUTH_URL,
       secret: process.env.BETTER_AUTH_SECRET,
@@ -482,7 +482,7 @@ export function createApp(rt: Runtime, rootLog: Logger) {
   const app = new Hono<Env>();
   const allowedOrigins = platformAllowedOrigins();
 
-  // CORS: exact Super Admin origins only. Tenant stores live on other *.gobs.cloud subdomains and must never be
+  // CORS: exact Super Admin origins only. Tenant stores live on other *.bcom.si subdomains and must never be
   // able to make credentialed calls here.
   app.use(
     "*",
@@ -525,7 +525,7 @@ export function createApp(rt: Runtime, rootLog: Logger) {
         const session = await readPlatformSession(rt, c.req.raw.headers);
         if (session?.user?.email) {
           const email = session.user.email;
-          const superadminUrl = platformAllowedOrigins()[0] ?? "https://superadmin.gobs.cloud";
+          const superadminUrl = platformAllowedOrigins()[0] ?? "https://superadmin.bcom.si";
           const brand = { storeName: "Brand Sewa Platform", baseUrl: superadminUrl };
           const { html, text } = renderEmail("password_changed", brand, {}, "Your password was changed");
           queueMicrotask(async () => {

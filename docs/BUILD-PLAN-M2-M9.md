@@ -142,7 +142,7 @@ UI; Lighthouse mobile ≥ 90 on product page recorded as baseline.
   keep it schema-only, no login/session flow yet).
 - Abandoned-cart recovery, discounts (M5).
 - Custom domains (M8) — the storefront in M3 only needs to resolve `*.{platform-domain}`
-  subdomains via the `domains` table already built in M1; `gobs.cloud` itself stays on the M0/M1
+  subdomains via the `domains` table already built in M1; `bcom.si` itself stays on the M0/M1
   placeholder until the real cutover at M6.
 
 ---
@@ -284,7 +284,7 @@ checkout/webhooks, payload sanitization verified.
 - **Migration script and cutover** — follow PLAN §16 verbatim, it's already a numbered runbook:
   1. Freeze the current live store's data (there isn't a "current app" running anymore in this
      repo's timeline — the old `bsecom`/`Bs Ecommerce` single-store app was already decommissioned
-     during M0's `gobs.cloud` cutover, per `progress.md`. **Check with the human/Claude side before
+     during M0's `bcom.si` cutover, per `progress.md`. **Check with the human/Claude side before
      starting this milestone** whether there's still a real source dataset to migrate, or whether
      "store #1" is now just this platform's own first real tenant created fresh through the M8
      signup flow — PLAN §16 assumes the former, but the actual M0 history may have made that moot.
@@ -295,7 +295,7 @@ checkout/webhooks, payload sanitization verified.
      custom Better Auth hasher if seamless login matters), preserve order numbers/product slugs,
      add redirects for changed URL patterns.
   3. Dry run on staging, compare row counts and totals, enable areas behind feature flags, cut
-     over `gobs.cloud` with TXT pre-validation (PLAN §8's domain flow) so SSL is ready before DNS
+     over `bcom.si` with TXT pre-validation (PLAN §8's domain flow) so SSL is ready before DNS
      moves — no downtime.
 - **Feature-flagged rollout**: every new area (catalog, checkout, fulfillment) should be behind a
   flag from `tenant_feature_overrides` (already built in M1) so any part can be reverted without a
@@ -378,7 +378,7 @@ paid plan without help; quota limits block admin creation but never checkout.
 - **Custom domains** (PLAN §8's domain-connection-flow state machine:
   `requested → awaiting_dns → verifying → ssl_pending → active`, plus the `prevalidate_txt` path
   for a domain that's live elsewhere during migration — exactly the mechanism M0/M1's own
-  `gobs.cloud` cutover manually simulated, now built as a real feature). This is where
+  `bcom.si` cutover manually simulated, now built as a real feature). This is where
   ADR-007 (Cloudflare for SaaS) actually gets implemented — read it now if you skipped it earlier
   as "not yet relevant."
 

@@ -8,7 +8,7 @@ vi.mock("server-only", () => ({}));
 process.env.DATABASE_URL_RW = process.env.DATABASE_URL_RW ?? "postgres://x:y@127.0.0.1:1/none";
 
 // What the "request" looks like: the host and the customer cookie. Tests change these.
-const req = { host: "demo.gobs.cloud", cookie: undefined as string | undefined };
+const req = { host: "demo.bcom.si", cookie: undefined as string | undefined };
 
 vi.mock("next/headers", () => ({
   headers: async () => new Headers({ host: req.host }),
@@ -86,7 +86,7 @@ const rawParams = <T extends object>(p: T) => ({ params: Promise.resolve(p) });
 const ADDR_ID = "01a0f000-0000-7000-8000-000000000001";
 
 beforeEach(() => {
-  req.host = "demo.gobs.cloud";
+  req.host = "demo.bcom.si";
   req.cookie = undefined;
   vi.clearAllMocks();
 });
@@ -154,7 +154,7 @@ describe("unsubscribe page and POST", () => {
 
   it("POST unsubscribes, repeats safely, and refuses a bad link or a cross-site post", async () => {
     const { POST } = await import("../src/app/api/storefront/unsubscribe/[token]/route.ts");
-    const url = "https://demo.gobs.cloud/api/storefront/unsubscribe/unsub_ok";
+    const url = "https://demo.bcom.si/api/storefront/unsubscribe/unsub_ok";
     expect((await POST(json(url, undefined), rawParams({ token: "unsub_ok" }))).status).toBe(200);
     expect((await POST(json(url, undefined), rawParams({ token: "unsub_ok" }))).status).toBe(200);
     const bad = await POST(json(url, undefined), rawParams({ token: "unsub_bad" }));
@@ -181,7 +181,7 @@ describe("address correction page and POST", () => {
 
   it("POST saves, validates, and explains a locked or unknown link", async () => {
     const { POST } = await import("../src/app/api/storefront/address/[token]/route.ts");
-    const url = (t: string) => `https://demo.gobs.cloud/api/storefront/address/${t}`;
+    const url = (t: string) => `https://demo.bcom.si/api/storefront/address/${t}`;
     expect((await POST(json(url("adr_ok"), body), rawParams({ token: "adr_ok" }))).status).toBe(200);
     expect((await POST(json(url("adr_ok"), { ...body, pincode: "12" }), rawParams({ token: "adr_ok" }))).status).toBe(400);
     const locked = await POST(json(url("adr_locked"), body), rawParams({ token: "adr_locked" }));
@@ -195,7 +195,7 @@ describe("address correction page and POST", () => {
 describe("customer sign-in routes", () => {
   it("never puts the OTP in the response", async () => {
     const { POST } = await import("../src/app/api/storefront/customer/otp/request/route.ts");
-    const res = await POST(json("https://demo.gobs.cloud/api/storefront/customer/otp/request", { phone: "9876543210" }));
+    const res = await POST(json("https://demo.bcom.si/api/storefront/customer/otp/request", { phone: "9876543210" }));
     expect(res.status).toBe(200);
     const text = await res.text();
     expect(text).not.toContain("123456");
@@ -204,7 +204,7 @@ describe("customer sign-in routes", () => {
 
   it("verify sets an httpOnly session cookie holding the opaque token", async () => {
     const { POST } = await import("../src/app/api/storefront/customer/otp/verify/route.ts");
-    const url = "https://demo.gobs.cloud/api/storefront/customer/otp/verify";
+    const url = "https://demo.bcom.si/api/storefront/customer/otp/verify";
     const res = await POST(json(url, { phone: "9876543210", otp: "123456" }));
     expect(res.status).toBe(200);
     const cookie = res.headers.get("set-cookie") ?? "";
@@ -222,7 +222,7 @@ describe("customer sign-in routes", () => {
   it("logout forgets the session and clears the cookie", async () => {
     const { POST } = await import("../src/app/api/storefront/customer/logout/route.ts");
     req.cookie = "good";
-    const res = await POST(json("https://demo.gobs.cloud/api/storefront/customer/logout", undefined));
+    const res = await POST(json("https://demo.bcom.si/api/storefront/customer/logout", undefined));
     expect(res.status).toBe(200);
     expect(domain.destroyCustomerSession).toHaveBeenCalledWith(expect.anything(), "tenant-1", "good");
     expect(res.headers.get("set-cookie")).toMatch(/bs_customer_token=;/);
@@ -232,7 +232,7 @@ describe("customer sign-in routes", () => {
 describe("signed-in account endpoints", () => {
   it("refuse a visitor with no or a forged session", async () => {
     const { PUT } = await import("../src/app/api/storefront/customer/profile/route.ts");
-    const url = "https://demo.gobs.cloud/api/storefront/customer/profile";
+    const url = "https://demo.bcom.si/api/storefront/customer/profile";
     const body = { name: "A", email: "a@x.test", acceptsMarketing: false };
     expect((await PUT(json(url, body, "PUT"))).status).toBe(401);
     req.cookie = "forged";
@@ -242,7 +242,7 @@ describe("signed-in account endpoints", () => {
 
   it("save the profile, and turn a duplicate email into a readable 409", async () => {
     const { PUT } = await import("../src/app/api/storefront/customer/profile/route.ts");
-    const url = "https://demo.gobs.cloud/api/storefront/customer/profile";
+    const url = "https://demo.bcom.si/api/storefront/customer/profile";
     req.cookie = "good";
     expect((await PUT(json(url, { name: "A", email: "a@x.test", acceptsMarketing: true }, "PUT"))).status).toBe(200);
     const dup = await PUT(json(url, { name: "A", email: "taken@x.test", acceptsMarketing: true }, "PUT"));
@@ -255,7 +255,7 @@ describe("signed-in account endpoints", () => {
     const list = await import("../src/app/api/storefront/customer/addresses/route.ts");
     const one = await import("../src/app/api/storefront/customer/addresses/[id]/route.ts");
     const addr = { name: "Asha", phone: "9876543210", line1: "1 St", city: "Pune", stateCode: "MH", pincode: "411001" };
-    const base = "https://demo.gobs.cloud/api/storefront/customer/addresses";
+    const base = "https://demo.bcom.si/api/storefront/customer/addresses";
 
     expect((await list.POST(json(base, addr))).status).toBe(401);
     req.cookie = "good";
@@ -270,7 +270,7 @@ describe("signed-in account endpoints", () => {
 
   it("order tracking redirect mints a link only for the customer's own order", async () => {
     const { GET } = await import("../src/app/account/orders/[id]/track/route.ts");
-    const get = () => new Request(`https://demo.gobs.cloud/account/orders/${ADDR_ID}/track`, { headers: { host: req.host } });
+    const get = () => new Request(`https://demo.bcom.si/account/orders/${ADDR_ID}/track`, { headers: { host: req.host } });
     // signed out: back to sign-in, nothing minted
     let res = await GET(get(), rawParams({ id: ADDR_ID }));
     expect(res.status).toBe(302);

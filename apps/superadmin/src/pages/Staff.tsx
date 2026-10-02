@@ -248,7 +248,7 @@ export function Staff() {
                   type="email"
                   value={inviteEmail}
                   onChange={(e) => setInviteEmail(e.target.value)}
-                  placeholder="colleague@platform.gobs.cloud"
+                  placeholder="colleague@platform.bcom.si"
                   required
                 />
               </div>

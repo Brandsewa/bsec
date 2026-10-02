@@ -8,7 +8,7 @@
 ---
 
 ## 1. Acceptance of Terms
-By creating an account, accessing, or using the Brand Sewa E-Commerce Platform ("Platform", `gobs.cloud`, `bscommerce.in`), you ("Merchant", "You") agree to be bound by these Terms of Service ("Terms") and our Data Processing Agreement ("DPA").
+By creating an account, accessing, or using the Brand Sewa E-Commerce Platform ("Platform", `bcom.si`, `bscommerce.in`), you ("Merchant", "You") agree to be bound by these Terms of Service ("Terms") and our Data Processing Agreement ("DPA").
 
 ## 2. Description of Service
 Brand Sewa provides multi-tenant software-as-a-service (SaaS) e-commerce infrastructure, enabling Merchants to create, customize, and operate online storefronts, accept customer orders, manage catalog inventory, integrate payment gateways (e.g. Razorpay), and route logistics through shipping aggregators (e.g. Shiprocket).

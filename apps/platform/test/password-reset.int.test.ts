@@ -8,7 +8,7 @@ import { createLogger, createPlatformStaffMember, createRuntime, type Runtime } 
 const SPA = "http://localhost:5174";
 process.env.BETTER_AUTH_SECRET = "test-platform-auth-secret-0123456789abcdef0123";
 process.env.PLATFORM_AUTH_URL = "http://localhost:4000";
-process.env.SUPERADMIN_ORIGINS = `https://superadmin.gobs.cloud,${SPA}`;
+process.env.SUPERADMIN_ORIGINS = `https://superadmin.bcom.si,${SPA}`;
 
 let env: TestDb;
 let rt: Runtime;

@@ -266,7 +266,7 @@ export function TenantsList() {
                         {t.name}
                       </Link>
                       <span className="text-xs text-muted-foreground font-mono">
-                        {t.slug}.gobs.cloud
+                        {t.slug}.bcom.si
                       </span>
                     </div>
                   </TableCell>

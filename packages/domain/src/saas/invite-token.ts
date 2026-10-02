@@ -6,7 +6,7 @@ const INVITE_TTL_MS = 7 * 24 * 3600 * 1000;
 
 /** The link a store owner opens to set their password and enter their store admin. */
 export function buildOwnerInviteUrl(rawToken: string): string {
-  const platformDomain = process.env.PLATFORM_DOMAIN?.trim() || "gobs.cloud";
+  const platformDomain = process.env.PLATFORM_DOMAIN?.trim() || "bcom.si";
   const isLocal = platformDomain.includes("localhost") || platformDomain.includes("127.0.0.1");
   const protocol = isLocal ? "http" : "https";
   const adminHost = process.env.ADMIN_HOST?.trim() || (isLocal ? "localhost:5173" : `admin.${platformDomain}`);

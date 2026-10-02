@@ -302,7 +302,7 @@ export function TenantDetail() {
 
       <PageHeader
         title={tenant.name}
-        description={`Tenant ID: ${tenant.id} · Subdomain: ${tenant.slug}.gobs.cloud`}
+        description={`Tenant ID: ${tenant.id} · Subdomain: ${tenant.slug}.bcom.si`}
         meta={
           <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-semibold uppercase tracking-wider bg-primary/10 text-primary">
             {tenant.status}
@@ -427,7 +427,7 @@ export function TenantDetail() {
               </div>
               <div className="flex justify-between py-1 border-b">
                 <span className="text-muted-foreground">Subdomain:</span>
-                <span className="font-mono">{tenant.slug}.gobs.cloud</span>
+                <span className="font-mono">{tenant.slug}.bcom.si</span>
               </div>
               <div className="flex justify-between py-1 border-b">
                 <span className="text-muted-foreground">Lifecycle State:</span>

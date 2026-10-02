@@ -5,7 +5,7 @@
 - **Plan reference:** PLAN §2, §8 (domain flow), §14
 
 ## Context
-Every store needs HTTPS on `{slug}.bscommerce.in` and optionally on its own domain, including domains already live elsewhere (gobs.cloud during migration) with zero downtime. Issuing and renewing certificates on the VPS does not scale and exposes the origin.
+Every store needs HTTPS on `{slug}.bscommerce.in` and optionally on its own domain, including domains already live elsewhere (bcom.si during migration) with zero downtime. Issuing and renewing certificates on the VPS does not scale and exposes the origin.
 
 ## Decision
 Cloudflare for SaaS custom hostnames. Merchants CNAME to `stores.bscommerce.in`; Cloudflare verifies ownership and issues SSL. Domains already live use the **TXT pre-validation** path so SSL is ready before DNS moves. The `domains` table tracks the state machine (`requested → awaiting_dns → verifying → ssl_pending → active`, plus `failed`, `removing`, `removed`); a domain becomes primary only when `active`, and the old primary 301-redirects. The worker polls every 5 min for 48 h.

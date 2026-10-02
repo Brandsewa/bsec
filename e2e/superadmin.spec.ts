@@ -47,7 +47,7 @@ test.describe.serial("Super Admin (M9)", () => {
   test("the platform API refuses anonymous calls and other origins", async ({ request }) => {
     const anon = await request.get(`${PLATFORM_API}/platform/tenants`);
     expect(anon.status()).toBe(401);
-    const evil = await request.post(`${PLATFORM_API}/api/platform/mfa/complete`, { data: {}, headers: { origin: "https://evil-store.gobs.cloud" } });
+    const evil = await request.post(`${PLATFORM_API}/api/platform/mfa/complete`, { data: {}, headers: { origin: "https://evil-store.bcom.si" } });
     expect(evil.status()).toBe(403);
     expect(evil.headers()["access-control-allow-origin"]).toBeUndefined();
   });

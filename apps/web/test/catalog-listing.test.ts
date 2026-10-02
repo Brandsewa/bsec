@@ -239,12 +239,12 @@ describe("Catalog Listing & Search Components", () => {
     describe("GET /api/storefront/search/suggestions route handler", () => {
       it("returns empty suggestions when query is missing or shorter than 2 chars", async () => {
         const { GET } = await import("../src/app/api/storefront/search/suggestions/route.ts");
-        const reqShort = new Request("https://demo.gobs.cloud/api/storefront/search/suggestions?q=a");
+        const reqShort = new Request("https://demo.bcom.si/api/storefront/search/suggestions?q=a");
         const resShort = await GET(reqShort);
         const dataShort = await resShort.json();
         expect(dataShort).toEqual({ suggestions: [] });
 
-        const reqEmpty = new Request("https://demo.gobs.cloud/api/storefront/search/suggestions");
+        const reqEmpty = new Request("https://demo.bcom.si/api/storefront/search/suggestions");
         const resEmpty = await GET(reqEmpty);
         const dataEmpty = await resEmpty.json();
         expect(dataEmpty).toEqual({ suggestions: [] });
@@ -252,8 +252,8 @@ describe("Catalog Listing & Search Components", () => {
 
       it("returns suggestions for valid query", async () => {
         const { GET } = await import("../src/app/api/storefront/search/suggestions/route.ts");
-        const req = new Request("https://demo.gobs.cloud/api/storefront/search/suggestions?query=switch&limit=3", {
-          headers: { host: "demo.gobs.cloud" },
+        const req = new Request("https://demo.bcom.si/api/storefront/search/suggestions?query=switch&limit=3", {
+          headers: { host: "demo.bcom.si" },
         });
         const res = await GET(req);
         expect(res.status).toBe(200);

@@ -46,7 +46,7 @@ Three kinds of users:
 | **Merchant** (store owner/staff) | store admin at `admin.<root>` | `apps/admin` (UI), API in `apps/web` |
 | **Platform staff** (Brand Sewa) | Super Admin at `superadmin.<root>` | `apps/superadmin` (UI), API in `apps/platform` |
 
-Production root domain is `gobs.cloud` (web, `admin.`, `platform.`, `superadmin.`, `media.` for R2 images). Stores live at `<slug>.gobs.cloud` or a custom domain. First real store: **Taste of Hills** (`tasteofhills.gobs.cloud`).
+Production root domain is `bcom.si` (web, `admin.`, `platform.`, `superadmin.`, `media.` for R2 images). Stores live at `<slug>.bcom.si` or a custom domain. First real store: **Taste of Hills** (`tasteofhills.bcom.si`).
 
 **Sources of truth, in order:** `docs/PLAN.html` v2.0 (product and architecture plan, 17 sections), `docs/adr/` (decisions), then this file, then `progress.md` (status). If they disagree, the ADR wins over this file, and the code wins over everything, so fix the doc.
 
@@ -59,7 +59,7 @@ Production root domain is `gobs.cloud` (web, `admin.`, `platform.`, `superadmin.
 ## 2. System at a glance
 
 ```
-                       Cloudflare (DNS, TLS, R2 media.gobs.cloud, Turnstile)
+                       Cloudflare (DNS, TLS, R2 media.bcom.si, Turnstile)
                                           |
                                   Coolify / Traefik (single VPS)
         +--------------+----------------+----------------+----------------+
@@ -77,7 +77,7 @@ Production root domain is `gobs.cloud` (web, `admin.`, `platform.`, `superadmin.
 ```
 
 - **bsec-web** serves the storefront (server-rendered, Cache Components), the marketing/signup pages, the customer account, and the **Store API** (oRPC at `/api/rpc`, REST-ish routes under `/api/storefront`, Better Auth at `/api/auth`, webhooks at `/api/webhooks`).
-- **bsec-admin** is a static SPA that talks to the Store API on `<root>` with cookies shared across `.gobs.cloud` (ADR-014 admin auth).
+- **bsec-admin** is a static SPA that talks to the Store API on `<root>` with cookies shared across `.bcom.si` (ADR-014 admin auth).
 - **bsec-platform** is the only service holding `BYPASSRLS` credentials. The Super Admin SPA talks to it. Its session cookie is host-only.
 - **bsec-worker** runs side effects (email, reservation expiry, sweeps) after a business transaction commits, via pg-boss (transactional outbox, ADR-006).
 - There is **no staging server**: CI starts an ephemeral compose stack from the freshly built images, smoke-tests it, tears it down, then deploys production.
@@ -240,8 +240,9 @@ Drizzle schema files in `packages/db/src/schema/` (one Postgres database, `publi
 | 0016 | `m10_theme_pages` | theme pages |
 | 0017 | `platform_email` | `platform_email_settings` and email log (auth overhaul, phase A) |
 | 0018 | `customer_auth` | `customers.phone` nullable, so customers can register with email + password |
+| 0019 | `domain_bcom_si` | platform domain gobs.cloud -> bcom.si: rewrites platform `domains` hostnames and the default sender |
 
-How to write one (expand, migrate, contract; `forceRlsSql`): `docs/migrations.md`. **Never edit an applied migration.** Latest on disk: `0018` (the docs check keeps this list honest).
+How to write one (expand, migrate, contract; `forceRlsSql`): `docs/migrations.md`. **Never edit an applied migration.** Latest on disk: `0019` (the docs check keeps this list honest).
 
 ---
 

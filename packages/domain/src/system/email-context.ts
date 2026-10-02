@@ -17,7 +17,7 @@ export async function loadEmailBrand(tx: Q, tenantId: string): Promise<EmailBran
     .orderBy(desc(schema.domains.isPrimary), schema.domains.createdAt)
     .limit(1);
 
-  const platformDomain = (process.env.PLATFORM_DOMAIN?.trim() || "gobs.cloud").toLowerCase();
+  const platformDomain = (process.env.PLATFORM_DOMAIN?.trim() || "bcom.si").toLowerCase();
   const host = domain?.hostname ?? `${tenant?.slug ?? "store"}.${platformDomain}`;
   return {
     storeName: settings?.storeName || tenant?.name || "Our store",

@@ -315,8 +315,8 @@ describe("Storefront Cart & Checkout Flow", () => {
     describe("GET /api/storefront/cart", () => {
       it("creates or returns cart and sets bs_cart_token cookie if missing", async () => {
         const { GET } = await import("../src/app/api/storefront/cart/route.ts");
-        const req = new Request("https://demo.gobs.cloud/api/storefront/cart", {
-          headers: { host: "demo.gobs.cloud" },
+        const req = new Request("https://demo.bcom.si/api/storefront/cart", {
+          headers: { host: "demo.bcom.si" },
         });
         const res = await GET(req);
         if (res.status !== 200) {
@@ -338,9 +338,9 @@ describe("Storefront Cart & Checkout Flow", () => {
     describe("POST /api/storefront/cart/items", () => {
       it("validates variantId and positive quantity", async () => {
         const { POST } = await import("../src/app/api/storefront/cart/items/route.ts");
-        const badReq = new Request("https://demo.gobs.cloud/api/storefront/cart/items", {
+        const badReq = new Request("https://demo.bcom.si/api/storefront/cart/items", {
           method: "POST",
-          headers: { host: "demo.gobs.cloud", "content-type": "application/json" },
+          headers: { host: "demo.bcom.si", "content-type": "application/json" },
           body: JSON.stringify({ variantId: "", quantity: 0 }),
         });
         const res = await POST(badReq);
@@ -351,9 +351,9 @@ describe("Storefront Cart & Checkout Flow", () => {
     describe("PATCH /api/storefront/cart/items", () => {
       it("validates itemId and quantity", async () => {
         const { PATCH } = await import("../src/app/api/storefront/cart/items/route.ts");
-        const badReq = new Request("https://demo.gobs.cloud/api/storefront/cart/items", {
+        const badReq = new Request("https://demo.bcom.si/api/storefront/cart/items", {
           method: "PATCH",
-          headers: { host: "demo.gobs.cloud", "content-type": "application/json" },
+          headers: { host: "demo.bcom.si", "content-type": "application/json" },
           body: JSON.stringify({ itemId: "", quantity: -1 }),
         });
         const res = await PATCH(badReq);
@@ -364,9 +364,9 @@ describe("Storefront Cart & Checkout Flow", () => {
     describe("DELETE /api/storefront/cart/items", () => {
       it("validates itemId", async () => {
         const { DELETE } = await import("../src/app/api/storefront/cart/items/route.ts");
-        const badReq = new Request("https://demo.gobs.cloud/api/storefront/cart/items", {
+        const badReq = new Request("https://demo.bcom.si/api/storefront/cart/items", {
           method: "DELETE",
-          headers: { host: "demo.gobs.cloud", "content-type": "application/json" },
+          headers: { host: "demo.bcom.si", "content-type": "application/json" },
           body: JSON.stringify({ itemId: "" }),
         });
         const res = await DELETE(badReq);
@@ -377,9 +377,9 @@ describe("Storefront Cart & Checkout Flow", () => {
     describe("POST /api/storefront/cart/estimate-shipping", () => {
       it("validates 6-digit Indian pincode format", async () => {
         const { POST } = await import("../src/app/api/storefront/cart/estimate-shipping/route.ts");
-        const badReq = new Request("https://demo.gobs.cloud/api/storefront/cart/estimate-shipping", {
+        const badReq = new Request("https://demo.bcom.si/api/storefront/cart/estimate-shipping", {
           method: "POST",
-          headers: { host: "demo.gobs.cloud", "content-type": "application/json" },
+          headers: { host: "demo.bcom.si", "content-type": "application/json" },
           body: JSON.stringify({ pincode: "123" }),
         });
         const res = await POST(badReq);
@@ -390,10 +390,10 @@ describe("Storefront Cart & Checkout Flow", () => {
 
       it("returns shipping estimate for valid 6-digit Indian pincode", async () => {
         const { POST } = await import("../src/app/api/storefront/cart/estimate-shipping/route.ts");
-        const req = new Request("https://demo.gobs.cloud/api/storefront/cart/estimate-shipping", {
+        const req = new Request("https://demo.bcom.si/api/storefront/cart/estimate-shipping", {
           method: "POST",
           headers: {
-            host: "demo.gobs.cloud",
+            host: "demo.bcom.si",
             "content-type": "application/json",
             cookie: "bs_cart_token=cart-token-test",
           },
@@ -411,9 +411,9 @@ describe("Storefront Cart & Checkout Flow", () => {
     describe("POST /api/storefront/checkout/place-order", () => {
       it("validates Indian phone number and required address fields", async () => {
         const { POST } = await import("../src/app/api/storefront/checkout/place-order/route.ts");
-        const badReq = new Request("https://demo.gobs.cloud/api/storefront/checkout/place-order", {
+        const badReq = new Request("https://demo.bcom.si/api/storefront/checkout/place-order", {
           method: "POST",
-          headers: { host: "demo.gobs.cloud", "content-type": "application/json" },
+          headers: { host: "demo.bcom.si", "content-type": "application/json" },
           body: JSON.stringify({
             email: "invalid-email",
             phone: "12345",
@@ -432,10 +432,10 @@ describe("Storefront Cart & Checkout Flow", () => {
 
       it("creates order token and returns redirect URL on valid checkout", async () => {
         const { POST } = await import("../src/app/api/storefront/checkout/place-order/route.ts");
-        const validReq = new Request("https://demo.gobs.cloud/api/storefront/checkout/place-order", {
+        const validReq = new Request("https://demo.bcom.si/api/storefront/checkout/place-order", {
           method: "POST",
           headers: {
-            host: "demo.gobs.cloud",
+            host: "demo.bcom.si",
             "content-type": "application/json",
             cookie: "bs_cart_token=cart-token-1234",
           },
@@ -472,9 +472,9 @@ describe("Storefront Cart & Checkout Flow", () => {
         vi.mocked(domain.placeOrder).mockClear();
         const { POST } = await import("../src/app/api/storefront/checkout/place-order/route.ts");
         for (const paymentMethod of ["online", "razorpay"]) {
-          const req = new Request("https://demo.gobs.cloud/api/storefront/checkout/place-order", {
+          const req = new Request("https://demo.bcom.si/api/storefront/checkout/place-order", {
             method: "POST",
-            headers: { host: "demo.gobs.cloud", "content-type": "application/json", cookie: "bs_cart_token=cart-token-1234" },
+            headers: { host: "demo.bcom.si", "content-type": "application/json", cookie: "bs_cart_token=cart-token-1234" },
             body: JSON.stringify({
               email: "buyer@example.in",
               phone: "9876543210",
@@ -499,10 +499,10 @@ describe("Storefront Cart & Checkout Flow", () => {
           new domain.FeatureDisabledError("checkout", "Checkout is currently disabled for this store"),
         );
         const { POST } = await import("../src/app/api/storefront/checkout/place-order/route.ts");
-        const req = new Request("https://demo.gobs.cloud/api/storefront/checkout/place-order", {
+        const req = new Request("https://demo.bcom.si/api/storefront/checkout/place-order", {
           method: "POST",
           headers: {
-            host: "demo.gobs.cloud",
+            host: "demo.bcom.si",
             "content-type": "application/json",
             cookie: "bs_cart_token=cart-token-1234",
           },

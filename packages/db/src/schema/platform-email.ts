@@ -27,7 +27,7 @@ export const platformEmailSettings = pgTable("platform_email_settings", {
   passwordCiphertext: text("password_ciphertext"),
   passwordIv: text("password_iv"),
   keyVersion: integer("key_version").notNull().default(1),
-  fromEmail: citext("from_email").notNull().default("no-reply@gobs.cloud"),
+  fromEmail: citext("from_email").notNull().default("no-reply@bcom.si"),
   fromName: text("from_name").notNull().default("Brand Sewa"),
   replyTo: citext("reply_to"),
   enabled: boolean("enabled").notNull().default(false),

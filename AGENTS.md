@@ -131,4 +131,4 @@ apps/worker     pg-boss consumers                             app_rw
 packages/       db domain contracts auth blocks block-editor payments shipping ui config
 ```
 
-Dev ports: web 3000, platform 4000, worker health 4100, admin 5173 (dev) / 8080 (compose), superadmin 5174 (dev) / 8081. Node 24.15, pnpm 10.34.5. Production domain `gobs.cloud`. Live today: COD checkout, admin, Super Admin, themes. Not live: online payment, courier, email delivery.
+Dev ports: web 3000, platform 4000, worker health 4100, admin 5173 (dev) / 8080 (compose), superadmin 5174 (dev) / 8081. Node 24.15, pnpm 10.34.5. Production domain `bcom.si`. Live today: COD checkout, admin, Super Admin, themes. Not live: online payment, courier, email delivery.

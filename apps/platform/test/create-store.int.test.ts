@@ -66,8 +66,8 @@ describe("Create store on behalf of a client (Super Admin)", () => {
     expect(row).toMatchObject({ type: "custom", tenantId: ok.tenantId });
     expect(row!.status).not.toBe("active"); // never active without a real DNS/SSL check
 
-    const bad = await create({ slug: "cs-baddomain", customDomain: "gobs.cloud" });
-    expect(bad.customDomain).toMatchObject({ hostname: "gobs.cloud", status: "not_added" });
+    const bad = await create({ slug: "cs-baddomain", customDomain: "bcom.si" });
+    expect(bad.customDomain).toMatchObject({ hostname: "bcom.si", status: "not_added" });
     expect(bad.customDomain!.error).toMatch(/cannot be added as custom domains/);
     // the store itself was still created
     const [t] = await rt._db.db.select().from(schema.tenants).where(eq(schema.tenants.id, bad.tenantId));

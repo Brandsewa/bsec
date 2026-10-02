@@ -25,14 +25,14 @@ When an alert fires or an incident is reported, run through this sequence before
 Verify whether the services are responding to external HTTP probes:
 ```bash
 # Storefront and Store API
-curl -sS -I https://gobs.cloud/api/health
-curl -sS https://gobs.cloud/api/health | jq .
+curl -sS -I https://bcom.si/api/health
+curl -sS https://bcom.si/api/health | jq .
 
 # Platform API (Cloudflare Access protected in prod)
-curl -sS -I https://platform.gobs.cloud/health
+curl -sS -I https://platform.bcom.si/health
 
 # Admin Dashboard
-curl -sS -I https://admin.gobs.cloud/
+curl -sS -I https://admin.bcom.si/
 ```
 **Expected response:** HTTP 200 with JSON payload containing `status: "ok"`, `version`, `db: { ok: true, role: "app_rw" }`.
 

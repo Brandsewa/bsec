@@ -254,7 +254,7 @@ export async function acceptTenantOwnerInvite(
       diff: { email, slug: tenant.slug },
     });
 
-    const platformDomain = process.env.PLATFORM_DOMAIN?.trim() || "gobs.cloud";
+    const platformDomain = process.env.PLATFORM_DOMAIN?.trim() || "bcom.si";
     const isLocal = platformDomain.includes("localhost") || platformDomain.includes("127.0.0.1");
     const protocol = isLocal ? "http" : "https";
     const adminHost = process.env.ADMIN_HOST?.trim() || (isLocal ? "localhost:5173" : `admin.${platformDomain}`);

@@ -49,7 +49,7 @@ beforeAll(async () => {
   rt = createRuntime({ service: "web", databaseUrl: as("app_rw", PW.rw), poolMax: 15 });
   rtPlatform = createRuntime({ service: "platform", databaseUrl: as("app_platform", PW.platform), poolMax: 5 });
 
-  // Seed Store 1 (store101.gobs.cloud) to verify non-regression
+  // Seed Store 1 (store101.bcom.si) to verify non-regression
   const [store1Org] = await platformDb.db
     .insert(schema.organizations)
     .values({ name: "Store 101 Org" })
@@ -65,7 +65,7 @@ beforeAll(async () => {
     .returning();
   await rwDb.db.insert(schema.domains).values({
     tenantId: store1Tenant!.id,
-    hostname: "store101.gobs.cloud",
+    hostname: "store101.bcom.si",
     type: "platform_subdomain",
     isPrimary: true,
     status: "active",
@@ -94,7 +94,7 @@ class MockCustomDomainProvider implements CustomDomainProvider {
     return {
       providerHostnameId: `cf_mock_${hostname.replace(/[^a-zA-Z0-9]/g, "_")}`,
       hostname,
-      cnameTarget: "stores.gobs.cloud",
+      cnameTarget: "stores.bcom.si",
       ...(opts?.prevalidate
         ? {
             txtVerification: {
@@ -165,7 +165,7 @@ describe("M8 Custom Domains & Cloudflare for SaaS Integration (PLAN §8, ADR-007
     // Verify initial subdomain
     const domains = await listTenantDomains(rt, tenantId);
     expect(domains).toHaveLength(1);
-    expect(domains[0]!.hostname).toBe(`${slug}.gobs.cloud`);
+    expect(domains[0]!.hostname).toBe(`${slug}.bcom.si`);
     expect(domains[0]!.isPrimary).toBe(true);
     expect(domains[0]!.status).toBe("active");
 
@@ -194,7 +194,7 @@ describe("M8 Custom Domains & Cloudflare for SaaS Integration (PLAN §8, ADR-007
     expect(domainRecord.status).toBe("awaiting_dns");
     expect(domainRecord.isPrimary).toBe(false);
     expect(domainRecord.verification).toMatchObject({
-      cname: "stores.gobs.cloud",
+      cname: "stores.bcom.si",
     });
 
     customDomainId = domainRecord.id;
@@ -283,18 +283,18 @@ describe("M8 Custom Domains & Cloudflare for SaaS Integration (PLAN §8, ADR-007
     expect(domains[0]!.isPrimary).toBe(true); // Restored as primary!
   });
 
-  it("VERIFIES Store 1 (store101.gobs.cloud) non-regression", async () => {
+  it("VERIFIES Store 1 (store101.bcom.si) non-regression", async () => {
     const store1Rows = await rt._db.db.execute<{
       hostname: string;
       is_primary: boolean;
       status: string;
     }>(sql`
-      SELECT hostname, is_primary, status FROM domains WHERE hostname = 'store101.gobs.cloud' LIMIT 1;
+      SELECT hostname, is_primary, status FROM domains WHERE hostname = 'store101.bcom.si' LIMIT 1;
     `);
 
     expect(store1Rows.rows).toHaveLength(1);
     const store1Domain = store1Rows.rows[0]!;
-    expect(store1Domain.hostname).toBe("store101.gobs.cloud");
+    expect(store1Domain.hostname).toBe("store101.bcom.si");
     expect(store1Domain.is_primary).toBe(true);
     expect(store1Domain.status).toBe("active");
   });

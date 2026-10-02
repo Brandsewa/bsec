@@ -59,7 +59,7 @@ export function Signups() {
                     {s.businessName && <div className="text-muted-foreground text-[11px]">{s.businessName}</div>}
                   </TableCell>
                   <TableCell className="font-mono text-xs text-muted-foreground">
-                    {s.desiredSlug ? `${s.desiredSlug}.gobs.cloud` : "—"}
+                    {s.desiredSlug ? `${s.desiredSlug}.bcom.si` : "—"}
                   </TableCell>
                   <TableCell className="text-xs capitalize">{s.industry || "—"}</TableCell>
                   <TableCell>

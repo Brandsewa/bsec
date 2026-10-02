@@ -234,7 +234,7 @@ export async function sendPlatformEmail(
   });
 
   const senderDisplayName = fromName ?? settings.fromName ?? "Brand Sewa";
-  const senderEmail = settings.fromEmail ?? "no-reply@gobs.cloud";
+  const senderEmail = settings.fromEmail ?? "no-reply@bcom.si";
   const formattedFrom = `"${senderDisplayName.replace(/["<>]/g, "")}" <${senderEmail}>`;
 
   // 5. Send with 1 retry on transient error

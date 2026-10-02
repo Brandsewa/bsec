@@ -1125,7 +1125,7 @@ export async function invitePlatformStaffMember(
       expiresAt: expiresAt.toISOString(),
     }, meta);
 
-    const base = (process.env.SUPERADMIN_URL ?? process.env.SUPERADMIN_ORIGINS?.split(",")[0] ?? "https://platform.gobs.cloud").trim().replace(/\/$/, "");
+    const base = (process.env.SUPERADMIN_URL ?? process.env.SUPERADMIN_ORIGINS?.split(",")[0] ?? "https://platform.bcom.si").trim().replace(/\/$/, "");
     return {
       id: invite.id,
       email: invite.email,

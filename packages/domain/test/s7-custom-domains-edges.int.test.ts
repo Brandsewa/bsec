@@ -57,7 +57,7 @@ class MockEdgeDomainProvider implements CustomDomainProvider {
     return {
       providerHostnameId: `cf_${hostname}`,
       hostname,
-      cnameTarget: "stores.gobs.cloud",
+      cnameTarget: "stores.bcom.si",
       status: "awaiting_dns",
       sslStatus: "initializing",
     };

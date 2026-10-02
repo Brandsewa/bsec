@@ -8,8 +8,8 @@ Today all three sign-in surfaces have only a bare "log in" form. Make each compl
 
 | Surface | App | Who | Needs |
 |---|---|---|---|
-| Super admin | `apps/superadmin` (Vite SPA) on `superadmin.gobs.cloud`, API `apps/platform` | Platform staff | Forgot / reset password, change password, MFA kept, invite acceptance kept |
-| Store admin | `apps/admin` (Vite SPA) on `admin.gobs.cloud`, API in `apps/web` (`/api/auth`) | Store staff and owners | Forgot / reset password, change password, invite acceptance kept |
+| Super admin | `apps/superadmin` (Vite SPA) on `superadmin.bcom.si`, API `apps/platform` | Platform staff | Forgot / reset password, change password, MFA kept, invite acceptance kept |
+| Store admin | `apps/admin` (Vite SPA) on `admin.bcom.si`, API in `apps/web` (`/api/auth`) | Store staff and owners | Forgot / reset password, change password, invite acceptance kept |
 | Customer | `apps/web` storefront, per store domain | Shoppers | Register, sign in (password), forgot / reset password, change password, keep the existing phone-OTP sign-in |
 
 In parallel: one platform-wide **SMTP transactional email service**, configured by the super admin in the superadmin app. **Zoho ZeptoMail** is the provider. Stores do not configure email; every store's mail (auth mail and order mail) goes through this one platform setting. Replaces Resend for auth mail now; order mail moves to it too (section 3.5).
@@ -30,7 +30,7 @@ In parallel: one platform-wide **SMTP transactional email service**, configured 
 - `packages/auth/src/customer.ts`: Better Auth customer instance exists with `emailAndPassword.enabled` but is **not used by the storefront**. The storefront currently signs shoppers in with **phone OTP** (`packages/domain/src/customers/otp.ts`, session in `customer_sessions`, cookie set by `apps/web/src/app/api/storefront/customer/otp/verify`). The `customers` table already has a `passwordHash` column (unused).
 - Login screens: `apps/admin/src/routes/login.tsx`, `apps/superadmin/src/pages/Login.tsx`, storefront `/account` shows the OTP form. Invite acceptance exists for staff (`accept-invite.tsx`) and platform staff (`AcceptInvitation.tsx`).
 - Mail: `packages/domain/src/system/email.ts` posts to the Resend HTTP API using a per-tenant key from `tenant_secrets`. No SMTP code. No `nodemailer` dependency. Templates are pure functions in `system/email-templates.ts`; the context loader is `system/email-context.ts`.
-- The base URLs: customer reset links must use the store's own domain (`email-context.ts` already derives `baseUrl`); staff links use `admin.gobs.cloud`; platform links use `superadmin.gobs.cloud`.
+- The base URLs: customer reset links must use the store's own domain (`email-context.ts` already derives `baseUrl`); staff links use `admin.bcom.si`; platform links use `superadmin.bcom.si`.
 
 ## 3. Phase A: Platform email service (build first; everything else depends on it)
 
@@ -74,14 +74,14 @@ New page `apps/superadmin/src/pages/EmailSettings.tsx`, nav entry "Email" under 
 - API: new oRPC procedures in `packages/contracts/src/platform.ts` and handlers in `apps/platform` (`emailSettings.get`, `emailSettings.update`, `emailSettings.sendTest`, `emailSettings.recentDeliveries`). `get` never returns the password. Update the platform RBAC and isolation/audit test suites for the new procedures.
 
 ### 3.5 Switch existing order mail to the platform mailer
-`system/email.ts` (`sendEmail`) currently needs a per-tenant Resend key. Change it to render as today, then call `sendPlatformEmail` with the store name as the display name and the store's support email as reply-to; `from` stays the platform address (e.g. `"Taste of Hills" <orders@gobs.cloud>`). Keep the `email_log` table behaviour (dedupe by `eventRef`), keep the "no provider configured, skip quietly" behaviour. Remove the Resend call and per-tenant Resend secret usage; update `jobs.ts` tests and `email.test.ts` / `order-emails.int.test.ts` (they mock `fetch` for Resend; replace with a fake SMTP transport injected via the mailer's transport factory).
+`system/email.ts` (`sendEmail`) currently needs a per-tenant Resend key. Change it to render as today, then call `sendPlatformEmail` with the store name as the display name and the store's support email as reply-to; `from` stays the platform address (e.g. `"Taste of Hills" <orders@bcom.si>`). Keep the `email_log` table behaviour (dedupe by `eventRef`), keep the "no provider configured, skip quietly" behaviour. Remove the Resend call and per-tenant Resend secret usage; update `jobs.ts` tests and `email.test.ts` / `order-emails.int.test.ts` (they mock `fetch` for Resend; replace with a fake SMTP transport injected via the mailer's transport factory).
 
 ## 4. Phase B: Password reset and change for staff and platform staff
 
 ### 4.1 Forgot / reset flow (both staff apps)
 Use Better Auth's built-in reset flow rather than building our own:
 - `staff.ts`, `platform.ts`: add `emailAndPassword.sendResetPassword: async ({ user, url, token }) => ...` that calls `sendPlatformEmail` with new templates (4.3), `resetPasswordTokenExpiresIn: 3600` (1 hour), and `revokeSessionsOnPasswordReset: true`.
-- The `url` Better Auth builds must point at the right SPA: staff `https://admin.gobs.cloud/reset-password?token=…`, platform `https://superadmin.gobs.cloud/reset-password?token=…` (config via `redirectTo` / base URL options; read the Better Auth version in `node_modules` for exact option names).
+- The `url` Better Auth builds must point at the right SPA: staff `https://admin.bcom.si/reset-password?token=…`, platform `https://superadmin.bcom.si/reset-password?token=…` (config via `redirectTo` / base URL options; read the Better Auth version in `node_modules` for exact option names).
 - **No account enumeration:** the "forgot password" endpoint always answers the same success message and takes the same time whether or not the email exists. Test this explicitly.
 - The send must not run inside the request critical path timing difference: enqueue through pg-boss (existing queue pattern) or fire after responding; either way identical response time.
 - Platform staff with MFA: after reset the next login still requires the second factor. A reset never disables MFA.
@@ -163,7 +163,7 @@ Web/SPA component tests: each new screen renders, validates, shows generic error
 
 ## 10. Owner decisions (answered 2026-10-01)
 
-1. **Sender:** `no-reply@gobs.cloud` for **all** transactional email (auth mail and order mail). The store's name is the display name (`"Taste of Hills" <no-reply@gobs.cloud>`) and the store's support email is the reply-to. The `gobs.cloud` domain must be verified in ZeptoMail (SPF and DKIM in Cloudflare DNS) before the test email can pass. The `orders@` suggestion elsewhere in this plan is superseded.
+1. **Sender:** `no-reply@bcom.si` for **all** transactional email (auth mail and order mail). The store's name is the display name (`"Taste of Hills" <no-reply@bcom.si>`) and the store's support email is the reply-to. The `bcom.si` domain must be verified in ZeptoMail (SPF and DKIM in Cloudflare DNS) before the test email can pass. The `orders@` suggestion elsewhere in this plan is superseded.
 2. **Guests:** guest checkout is unchanged; unverified customers can still check out as guests with their email.
 3. **Phone number:** optional at registration and on the profile; **mandatory only at checkout** (as today). Phone-code sign-in is only offered to customers who have a verified phone on file.
 4. **Staff sign-up:** stays disabled, invite only. Same for platform staff.
