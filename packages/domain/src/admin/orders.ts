@@ -1,8 +1,14 @@
+import { randomUUID } from "node:crypto";
 import { and, asc, desc, eq, gte, inArray, lt, notInArray, sql } from "drizzle-orm";
 import { schema, withTenant } from "@bs/db";
 import type { Runtime } from "../runtime.ts";
 import { assertPermission, type TenantContext } from "../context.ts";
 import { allocateOrderNumber } from "./order-settings.ts";
+import { readStoreConfig } from "./store-config.ts";
+import { getTenantShippingRates } from "../orders/shipping-rates.ts";
+import { allocateDiscount } from "../orders/pricing.ts";
+import { calculateGstLineItem, normalizeState } from "../orders/invoices.ts";
+import { reserveInventory, commitReservation, InsufficientInventoryError } from "../catalog/inventory-reservations.ts";
 import { transitionOrder } from "../orders/state-machine.ts";
 import { transitionFulfillment } from "../orders/fulfillment-state-machine.ts";
 import { generateInvoice } from "../orders/invoices.ts";
@@ -15,6 +21,7 @@ export interface ListOrdersInput {
   paymentStatus?: string | undefined;
   fulfillmentStatus?: string | undefined;
   source?: string | undefined;
+  tag?: string | undefined;
   cod?: boolean | undefined;
   placedFrom?: string | undefined;
   placedTo?: string | undefined;
@@ -86,6 +93,7 @@ export async function listAdminOrders(
     }
 
     if (input.source) conditions.push(eq(schema.orders.source, input.source));
+    if (input.tag) conditions.push(sql`${input.tag} = ANY(${schema.orders.tags})`);
     if (input.status) conditions.push(eq(schema.orders.status, input.status));
     if (input.paymentStatus) conditions.push(eq(schema.orders.paymentStatus, input.paymentStatus));
     if (input.fulfillmentStatus) conditions.push(eq(schema.orders.fulfillmentStatus, input.fulfillmentStatus));
@@ -304,6 +312,7 @@ export async function getAdminOrderDetail(
         preorderReleasedAt: order.preorderReleasedAt ? order.preorderReleasedAt.toISOString() : null,
         cancelledAt: order.cancelledAt ? order.cancelledAt.toISOString() : null,
         cancelReason: order.cancelReason,
+        tags: order.tags ?? [],
       },
       items: items.map((it) => ({
         id: it.id,
@@ -350,26 +359,39 @@ export async function getAdminOrderDetail(
   });
 }
 
-export async function createAdminDraftOrder(
+export interface EstimateDraftOrderInput {
+  items: Array<{
+    variantId: string;
+    quantity: number;
+    unitPriceOverride?: number | undefined;
+  }>;
+  shippingAddress?: {
+    state?: string | undefined;
+    pincode?: string | undefined;
+    city?: string | undefined;
+  } | undefined;
+  manualDiscount?: {
+    type: "flat" | "percent";
+    value: number;
+  } | undefined;
+  shippingOverride?: {
+    amount: number;
+  } | undefined;
+  shippingMethod?: string | undefined;
+}
+
+export async function estimateAdminDraftOrder(
   rt: Runtime,
   ctx: TenantContext,
-  input: {
-    email: string;
-    phone: string;
-    shippingAddress: Record<string, unknown>;
-    items: Array<{ variantId: string; quantity: number }>;
-  },
+  input: EstimateDraftOrderInput,
 ) {
-  assertPermission(ctx, "orders.write");
+  assertPermission(ctx, "orders.read");
   const db = rt._db.db;
 
   return await withTenant(db, ctx.tenantId, async (tx) => {
-    const seq = await allocateOrderNumber(tx, ctx.tenantId);
-    const orderNumber = seq.formatted;
-
-    // Fetch variant details
     let subtotal = 0;
-    const itemRows = [];
+    const itemCalculations = [];
+
     for (const it of input.items) {
       const [variant] = await tx
         .select({
@@ -391,41 +413,421 @@ export async function createAdminDraftOrder(
         .where(eq(schema.products.id, variant.productId))
         .limit(1);
 
-      const price = Number(variant.price);
+      const price = it.unitPriceOverride != null ? it.unitPriceOverride : Number(variant.price);
       const lineTotal = price * it.quantity;
       subtotal += lineTotal;
 
-      itemRows.push({
+      itemCalculations.push({
         variantId: variant.id,
         productTitle: product?.title ?? "Product",
-        variantTitle: variant.title,
         sku: variant.sku,
         hsn: product?.hsn ?? null,
         quantity: it.quantity,
         unitPrice: price,
-        total: lineTotal,
+        lineTotal,
       });
     }
 
-    const grandTotal = subtotal; // 0 shipping/tax default on draft order
+    let discountTotal = 0;
+    if (input.manualDiscount) {
+      if (input.manualDiscount.type === "percent") {
+        const pct = Math.min(100, Math.max(0, input.manualDiscount.value));
+        discountTotal = Math.round((subtotal * pct) / 100);
+      } else {
+        discountTotal = Math.min(subtotal, Math.max(0, Math.round(input.manualDiscount.value)));
+      }
+    }
+
+    const netGoods = Math.max(0, subtotal - discountTotal);
+    const resolvedRates = await getTenantShippingRates(tx, ctx.tenantId, netGoods);
+    const availableShippingRates = resolvedRates
+      .filter((r) => r.applicable)
+      .map((r) => ({
+        method: r.method,
+        title: r.title,
+        amount: r.amount,
+        estimatedDays: r.estimatedDays,
+      }));
+
+    const shippingTotal = input.shippingOverride
+      ? Math.min(1_000_000, Math.max(0, Math.round(input.shippingOverride.amount)))
+      : input.shippingMethod
+        ? (availableShippingRates.find((r) => r.method === input.shippingMethod)?.amount ??
+            (availableShippingRates[0]?.amount ?? 0))
+        : (availableShippingRates[0]?.amount ?? 0);
+
+    const storeCfg = await readStoreConfig(tx);
+    const [settingsRow] = await tx
+      .select({ address: schema.storeSettings.address })
+      .from(schema.storeSettings)
+      .limit(1);
+    const originState =
+      storeCfg.tax.sellerState ??
+      (settingsRow?.address as { state?: string } | null | undefined)?.state ??
+      "Delhi";
+    const destinationState = input.shippingAddress?.state ?? "Delhi";
+    const pricesIncludeTax = storeCfg.tax.pricesIncludeTax;
+    const isInterState = normalizeState(originState) !== normalizeState(destinationState);
+
+    const lineTotals = itemCalculations.map((it) => it.lineTotal);
+    const allocatedDiscounts = allocateDiscount(lineTotals, discountTotal);
+
+    let totalCgst = 0;
+    let totalSgst = 0;
+    let totalIgst = 0;
+
+    itemCalculations.forEach((it, idx) => {
+      const calc = calculateGstLineItem({
+        orderItemId: it.variantId,
+        variantId: it.variantId,
+        sku: it.sku,
+        productTitle: it.productTitle,
+        hsn: it.hsn,
+        quantity: it.quantity,
+        unitPrice: it.unitPrice,
+        discountAmount: allocatedDiscounts[idx] ?? 0,
+        taxRateBps: 1800,
+        pricesIncludeTax,
+        isInterState,
+      });
+      totalCgst += calc.cgst;
+      totalSgst += calc.sgst;
+      totalIgst += calc.igst;
+    });
+
+    const shippingTaxRate = 1800;
+    let shippingCgst = 0;
+    let shippingSgst = 0;
+    let shippingIgst = 0;
+
+    if (shippingTotal > 0) {
+      const shippingTax = pricesIncludeTax
+        ? shippingTotal - Math.round((shippingTotal * 10000) / (10000 + shippingTaxRate))
+        : Math.round((shippingTotal * shippingTaxRate) / 10000);
+      if (isInterState) {
+        shippingIgst = shippingTax;
+      } else {
+        shippingCgst = Math.floor(shippingTax / 2);
+        shippingSgst = shippingTax - shippingCgst;
+      }
+    }
+
+    const grandCgst = totalCgst + shippingCgst;
+    const grandSgst = totalSgst + shippingSgst;
+    const grandIgst = totalIgst + shippingIgst;
+    const grandTax = grandCgst + grandSgst + grandIgst;
+
+    const grandTotal = pricesIncludeTax
+      ? subtotal - discountTotal + shippingTotal
+      : subtotal - discountTotal + shippingTotal + grandTax;
+
+    return {
+      subtotal,
+      discountTotal,
+      shippingTotal,
+      availableShippingRates,
+      tax: {
+        isInterState,
+        cgst: grandCgst,
+        sgst: grandSgst,
+        igst: grandIgst,
+        totalTax: grandTax,
+      },
+      grandTotal,
+    };
+  });
+}
+
+export interface CreateAdminDraftOrderInput {
+  customerId?: string | null | undefined;
+  email: string;
+  phone: string;
+  shippingAddress: Record<string, unknown>;
+  billingAddress?: Record<string, unknown> | undefined;
+  items: Array<{
+    variantId: string;
+    quantity: number;
+    unitPriceOverride?: number | undefined;
+    unitPriceOverrideReason?: string | undefined;
+  }>;
+  manualDiscount?: {
+    type: "flat" | "percent";
+    value: number;
+    reason: string;
+  } | undefined;
+  shippingOverride?: {
+    amount: number;
+    reason: string;
+  } | undefined;
+  shippingMethod?: string | undefined;
+  paymentOutcome?: "paid" | "pending" | "cod" | undefined;
+  paymentReference?: string | undefined;
+  notes?: string | undefined;
+  tags?: string[] | undefined;
+}
+
+export async function createAdminDraftOrder(
+  rt: Runtime,
+  ctx: TenantContext,
+  input: CreateAdminDraftOrderInput,
+) {
+  assertPermission(ctx, "orders.write");
+
+  if (input.items.length === 0) {
+    throw new Error("Order must contain at least one item");
+  }
+  if (input.shippingOverride) {
+    if (input.shippingOverride.amount > 1_000_000) {
+      throw new Error("Shipping override cannot exceed ₹10,000");
+    }
+    if (!input.shippingOverride.reason?.trim()) {
+      throw new Error("Shipping override requires a reason");
+    }
+  }
+  if (input.manualDiscount) {
+    if (!input.manualDiscount.reason?.trim()) {
+      throw new Error("Manual discount requires a reason");
+    }
+  }
+  for (const it of input.items) {
+    if (it.unitPriceOverride !== undefined && !it.unitPriceOverrideReason?.trim()) {
+      throw new Error("Unit price override requires a reason");
+    }
+  }
+
+  const db = rt._db.db;
+
+  return await withTenant(db, ctx.tenantId, async (tx) => {
+    const storeCfg = await readStoreConfig(tx);
+    const paymentOutcome = input.paymentOutcome ?? "pending";
+    if (paymentOutcome === "cod" && !storeCfg.cod.enabled) {
+      throw new Error("Cash on delivery is not available for this store");
+    }
+
+    let subtotal = 0;
+    const itemCalculations = [];
+
+    for (const it of input.items) {
+      const [variant] = await tx
+        .select({
+          id: schema.variants.id,
+          title: schema.variants.title,
+          sku: schema.variants.sku,
+          price: schema.variants.price,
+          trackInventory: schema.variants.trackInventory,
+          allowBackorder: schema.variants.allowBackorder,
+          preorderEnabled: schema.variants.preorderEnabled,
+          preorderShipsOn: schema.variants.preorderShipsOn,
+          productId: schema.variants.productId,
+        })
+        .from(schema.variants)
+        .where(eq(schema.variants.id, it.variantId))
+        .limit(1);
+
+      if (!variant) throw new Error(`Variant not found: ${it.variantId}`);
+
+      const [product] = await tx
+        .select({ title: schema.products.title, hsn: schema.products.hsn })
+        .from(schema.products)
+        .where(eq(schema.products.id, variant.productId))
+        .limit(1);
+
+      const unitPrice = it.unitPriceOverride != null ? it.unitPriceOverride : Number(variant.price);
+      const lineTotal = unitPrice * it.quantity;
+      subtotal += lineTotal;
+
+      itemCalculations.push({
+        variant,
+        productTitle: product?.title ?? "Product",
+        hsn: product?.hsn ?? null,
+        quantity: it.quantity,
+        unitPrice,
+        unitPriceOverride: it.unitPriceOverride,
+        unitPriceOverrideReason: it.unitPriceOverrideReason,
+        lineTotal,
+      });
+    }
+
+    let discountTotal = 0;
+    if (input.manualDiscount) {
+      if (input.manualDiscount.type === "percent") {
+        const pct = Math.min(100, Math.max(0, input.manualDiscount.value));
+        discountTotal = Math.round((subtotal * pct) / 100);
+      } else {
+        discountTotal = Math.min(subtotal, Math.max(0, Math.round(input.manualDiscount.value)));
+      }
+    }
+
+    const netGoods = Math.max(0, subtotal - discountTotal);
+    const resolvedRates = await getTenantShippingRates(tx, ctx.tenantId, netGoods);
+    const availableShippingRates = resolvedRates
+      .filter((r) => r.applicable)
+      .map((r) => ({
+        method: r.method,
+        title: r.title,
+        amount: r.amount,
+        estimatedDays: r.estimatedDays,
+      }));
+
+    const shippingTotal = input.shippingOverride
+      ? Math.min(1_000_000, Math.max(0, Math.round(input.shippingOverride.amount)))
+      : input.shippingMethod
+        ? (availableShippingRates.find((r) => r.method === input.shippingMethod)?.amount ??
+            (availableShippingRates[0]?.amount ?? 0))
+        : (availableShippingRates[0]?.amount ?? 0);
+
+    const [settingsRow] = await tx
+      .select({ address: schema.storeSettings.address })
+      .from(schema.storeSettings)
+      .limit(1);
+    const originState =
+      storeCfg.tax.sellerState ??
+      (settingsRow?.address as { state?: string } | null | undefined)?.state ??
+      "Delhi";
+    const shippingAddrState = (input.shippingAddress as Record<string, unknown>)?.state;
+    const destinationState = typeof shippingAddrState === "string" && shippingAddrState.trim() ? shippingAddrState.trim() : "Delhi";
+    const pricesIncludeTax = storeCfg.tax.pricesIncludeTax;
+    const isInterState = normalizeState(originState) !== normalizeState(destinationState);
+
+    const lineTotals = itemCalculations.map((it) => it.lineTotal);
+    const allocatedDiscounts = allocateDiscount(lineTotals, discountTotal);
+
+    let totalCgst = 0;
+    let totalSgst = 0;
+    let totalIgst = 0;
+
+    const lineTaxCalcs = itemCalculations.map((it, idx) => {
+      const calc = calculateGstLineItem({
+        orderItemId: it.variant.id,
+        variantId: it.variant.id,
+        sku: it.variant.sku,
+        productTitle: it.productTitle,
+        hsn: it.hsn,
+        quantity: it.quantity,
+        unitPrice: it.unitPrice,
+        discountAmount: allocatedDiscounts[idx] ?? 0,
+        taxRateBps: 1800,
+        pricesIncludeTax,
+        isInterState,
+      });
+      totalCgst += calc.cgst;
+      totalSgst += calc.sgst;
+      totalIgst += calc.igst;
+      return calc;
+    });
+
+    const shippingTaxRate = 1800;
+    let shippingCgst = 0;
+    let shippingSgst = 0;
+    let shippingIgst = 0;
+
+    if (shippingTotal > 0) {
+      const shippingTax = pricesIncludeTax
+        ? shippingTotal - Math.round((shippingTotal * 10000) / (10000 + shippingTaxRate))
+        : Math.round((shippingTotal * shippingTaxRate) / 10000);
+      if (isInterState) {
+        shippingIgst = shippingTax;
+      } else {
+        shippingCgst = Math.floor(shippingTax / 2);
+        shippingSgst = shippingTax - shippingCgst;
+      }
+    }
+
+    const grandCgst = totalCgst + shippingCgst;
+    const grandSgst = totalSgst + shippingSgst;
+    const grandIgst = totalIgst + shippingIgst;
+    const grandTax = grandCgst + grandSgst + grandIgst;
+
+    const codFee = paymentOutcome === "cod" ? storeCfg.cod.feePaise : 0;
+    const baseTotal = pricesIncludeTax
+      ? subtotal - discountTotal + shippingTotal
+      : subtotal - discountTotal + shippingTotal + grandTax;
+    const grandTotal = baseTotal + codFee;
+
+    // Inventory Location & Stock Reservation (PLAN §11.3, D7)
+    const [loc] = await tx
+      .select({ id: schema.locations.id })
+      .from(schema.locations)
+      .where(eq(schema.locations.tenantId, ctx.tenantId))
+      .orderBy(sql`${schema.locations.isDefault} DESC, ${schema.locations.createdAt} ASC`)
+      .limit(1);
+    const locationId = loc?.id ?? "00000000-0000-0000-0000-000000000001";
+
+    const reserveItems = [];
+    for (const it of itemCalculations) {
+      const v = it.variant;
+      if (!v.preorderEnabled && !v.allowBackorder && v.trackInventory) {
+        reserveItems.push({
+          variantId: v.id,
+          locationId,
+          qty: it.quantity,
+        });
+      }
+    }
+
+    const orderId = randomUUID();
+    if (reserveItems.length > 0) {
+      try {
+        await reserveInventory(tx, ctx.tenantId, reserveItems, { orderId });
+      } catch (err) {
+        if (err instanceof InsufficientInventoryError) {
+          throw new Error("Some selected items do not have enough stock", { cause: err });
+        }
+        throw err;
+      }
+    }
+
+    // Allocate sequential order number
+    const seq = await allocateOrderNumber(tx, ctx.tenantId);
+    const orderNumber = seq.formatted;
+
+    // Preorder latest ships_on date
+    let orderShipsOn: string | null = null;
+    for (const it of itemCalculations) {
+      if (it.variant.preorderEnabled && it.variant.preorderShipsOn) {
+        const d =
+          typeof it.variant.preorderShipsOn === "string"
+            ? it.variant.preorderShipsOn
+            : (it.variant.preorderShipsOn as Date).toISOString().slice(0, 10);
+        if (!orderShipsOn || d > orderShipsOn) orderShipsOn = d;
+      }
+    }
+
+    let status = "pending";
+    let paymentStatus = "pending";
+    if (paymentOutcome === "paid") {
+      status = "confirmed";
+      paymentStatus = "paid";
+    } else if (paymentOutcome === "cod") {
+      status = "pending";
+      paymentStatus = "cod_pending";
+    }
 
     const [order] = await tx
       .insert(schema.orders)
       .values({
+        id: orderId,
         tenantId: ctx.tenantId,
         number: orderNumber,
+        customerId: input.customerId ?? null,
         email: input.email,
         phone: input.phone,
-        status: "pending",
-        paymentStatus: "pending",
+        currency: "INR",
+        status,
+        paymentStatus,
         fulfillmentStatus: "unfulfilled",
         source: "admin",
         subtotal,
-        discountTotal: 0,
-        shippingTotal: 0,
-        taxTotal: 0,
+        discountTotal,
+        shippingTotal,
+        taxTotal: grandTax,
+        codFee,
         grandTotal,
+        shipsOn: orderShipsOn,
         shippingAddress: input.shippingAddress,
+        billingAddress: input.billingAddress ?? input.shippingAddress,
+        placeOfSupplyState: destinationState,
+        tags: input.tags ?? [],
       })
       .returning();
 
@@ -433,11 +835,85 @@ export async function createAdminDraftOrder(
       throw new Error("Failed to create draft order");
     }
 
-    for (const item of itemRows) {
+    for (let idx = 0; idx < itemCalculations.length; idx++) {
+      const it = itemCalculations[idx];
+      const calc = lineTaxCalcs[idx];
+      if (!it || !calc) continue;
       await tx.insert(schema.orderItems).values({
         tenantId: ctx.tenantId,
         orderId: order.id,
-        ...item,
+        variantId: it.variant.id,
+        productTitle: it.productTitle,
+        variantTitle: it.variant.title,
+        sku: it.variant.sku,
+        hsn: it.hsn,
+        quantity: it.quantity,
+        unitPrice: it.unitPrice,
+        discountAmount: calc.discountAmount,
+        taxRateBps: 1800,
+        cgst: calc.cgst,
+        sgst: calc.sgst,
+        igst: calc.igst,
+        total: it.lineTotal,
+        shipsOn:
+          it.variant.preorderEnabled && it.variant.preorderShipsOn
+            ? typeof it.variant.preorderShipsOn === "string"
+              ? it.variant.preorderShipsOn
+              : (it.variant.preorderShipsOn as Date).toISOString().slice(0, 10)
+            : null,
+      });
+    }
+
+    if (paymentOutcome === "paid") {
+      await tx.insert(schema.paymentIntents).values({
+        tenantId: ctx.tenantId,
+        orderId: order.id,
+        provider: "manual",
+        amount: grandTotal,
+        currency: "INR",
+        status: "captured",
+        providerOrderId: input.paymentReference ?? null,
+      });
+      await commitReservation(tx, ctx.tenantId, { orderId: order.id });
+      if (input.customerId) {
+        await tx
+          .update(schema.customers)
+          .set({
+            ordersCount: sql`${schema.customers.ordersCount} + 1`,
+            totalSpent: sql`${schema.customers.totalSpent} + ${grandTotal}`,
+            lastOrderAt: new Date(),
+            updatedAt: new Date(),
+          })
+          .where(eq(schema.customers.id, input.customerId));
+      }
+    } else if (paymentOutcome === "cod") {
+      await tx.insert(schema.paymentIntents).values({
+        tenantId: ctx.tenantId,
+        orderId: order.id,
+        provider: "cod",
+        amount: grandTotal,
+        currency: "INR",
+        status: "created",
+      });
+    } else {
+      await tx.insert(schema.paymentIntents).values({
+        tenantId: ctx.tenantId,
+        orderId: order.id,
+        provider: "manual",
+        amount: grandTotal,
+        currency: "INR",
+        status: "created",
+      });
+    }
+
+    if (input.notes) {
+      const authorId =
+        ctx.actor.type === "staff" ? ctx.actor.userId : "00000000-0000-0000-0000-000000000000";
+      await tx.insert(schema.orderNotes).values({
+        tenantId: ctx.tenantId,
+        orderId: order.id,
+        authorId,
+        body: input.notes,
       });
     }
 
@@ -452,6 +928,17 @@ export async function createAdminDraftOrder(
       actorId: staffId,
     });
 
+    if (paymentOutcome === "paid") {
+      await tx.insert(schema.orderEvents).values({
+        tenantId: ctx.tenantId,
+        orderId: order.id,
+        type: "order.payment_received",
+        message: `Payment marked as received by admin staff${input.paymentReference ? ` (Ref: ${input.paymentReference})` : ""}`,
+        actorType: "staff",
+        actorId: staffId,
+      });
+    }
+
     await tx.insert(schema.auditLogs).values({
       tenantId: ctx.tenantId,
       actorType: ctx.actor.type,
@@ -462,13 +949,71 @@ export async function createAdminDraftOrder(
       diff: {
         orderNumber,
         grandTotal,
-        itemsCount: itemRows.length,
+        paymentOutcome,
+        itemsCount: itemCalculations.length,
       },
     });
+
+    if (input.manualDiscount) {
+      await tx.insert(schema.auditLogs).values({
+        tenantId: ctx.tenantId,
+        actorType: ctx.actor.type,
+        actorId: ctx.actor.type === "staff" ? ctx.actor.userId : null,
+        action: "order.discount_applied",
+        targetType: "order",
+        targetId: order.id,
+        diff: {
+          discountTotal,
+          type: input.manualDiscount.type,
+          value: input.manualDiscount.value,
+          reason: input.manualDiscount.reason,
+        },
+      });
+    }
+
+    if (input.shippingOverride) {
+      await tx.insert(schema.auditLogs).values({
+        tenantId: ctx.tenantId,
+        actorType: ctx.actor.type,
+        actorId: ctx.actor.type === "staff" ? ctx.actor.userId : null,
+        action: "order.shipping_override",
+        targetType: "order",
+        targetId: order.id,
+        diff: {
+          shippingTotal,
+          reason: input.shippingOverride.reason,
+        },
+      });
+    }
+
+    for (const it of itemCalculations) {
+      if (it.unitPriceOverride != null) {
+        await tx.insert(schema.auditLogs).values({
+          tenantId: ctx.tenantId,
+          actorType: ctx.actor.type,
+          actorId: ctx.actor.type === "staff" ? ctx.actor.userId : null,
+          action: "order.item_price_override",
+          targetType: "order",
+          targetId: order.id,
+          diff: {
+            variantId: it.variant.id,
+            originalPrice: Number(it.variant.price),
+            overridePrice: Number(it.unitPrice),
+            reason: it.unitPriceOverrideReason,
+          },
+        });
+      }
+    }
 
     return {
       orderId: order.id,
       orderNumber,
+      status: order.status,
+      paymentStatus: order.paymentStatus,
+      subtotal,
+      discountTotal,
+      shippingTotal,
+      taxTotal: grandTax,
       grandTotal,
       payLink: `https://${ctx.tenantId}.bcom.si/checkout/pay/${order.id}`,
     };

@@ -244,8 +244,9 @@ Drizzle schema files in `packages/db/src/schema/` (one Postgres database, `publi
 | 0018 | `customer_auth` | `customers.phone` nullable, so customers can register with email + password |
 | 0019 | `domain_bcom_si` | platform domain gobs.cloud -> bcom.si: rewrites platform `domains` hostnames and the default sender |
 | 0020 | `preorders` | preorder flags on variants, ships_on on variants/orders/order_items, preorder_released_at |
+| 0021 | `order_tags` | orders.tags text[] array for categorization and filtering |
 
-How to write one (expand, migrate, contract; `forceRlsSql`): `docs/migrations.md`. **Never edit an applied migration.** Latest on disk: `0020` (the docs check keeps this list honest).
+How to write one (expand, migrate, contract; `forceRlsSql`): `docs/migrations.md`. **Never edit an applied migration.** Latest on disk: `0021` (the docs check keeps this list honest).
 
 ---
 

@@ -1104,6 +1104,7 @@ export const adminContract = {
             paymentStatus: z.string().optional(),
             fulfillmentStatus: z.string().optional(),
             source: z.string().optional(),
+            tag: z.string().optional(),
             /** Cash-on-delivery orders only (payment status cod_*). */
             cod: z.boolean().optional(),
             /** ISO timestamps bounding placedAt (inclusive from, exclusive to). */
@@ -1167,6 +1168,7 @@ export const adminContract = {
             preorderReleasedAt: z.string().nullable().optional(),
             cancelledAt: z.string().nullable().optional(),
             cancelReason: z.string().nullable().optional(),
+            tags: z.array(z.string()).default([]),
           }),
           items: z.array(
             z.object({
@@ -1221,25 +1223,108 @@ export const adminContract = {
           ),
         }),
       ),
-    createDraft: oc
-      .route({ method: "POST", path: "/admin/orders/draft" })
+    estimateDraft: oc
+      .route({ method: "POST", path: "/admin/orders/draft/estimate" })
       .input(
         z.object({
-          email: z.string().email(),
-          phone: z.string().min(5),
-          shippingAddress: z.record(z.string(), z.unknown()),
           items: z.array(
             z.object({
               variantId: z.string().uuid(),
               quantity: z.number().int().min(1),
+              unitPriceOverride: z.number().int().nonnegative().optional(),
             }),
           ),
+          shippingAddress: z
+            .object({
+              state: z.string().optional(),
+              pincode: z.string().optional(),
+              city: z.string().optional(),
+            })
+            .optional(),
+          manualDiscount: z
+            .object({
+              type: z.enum(["flat", "percent"]),
+              value: z.number().nonnegative(),
+            })
+            .optional(),
+          shippingOverride: z
+            .object({
+              amount: z.number().int().nonnegative(),
+            })
+            .optional(),
+          shippingMethod: z.string().optional(),
+        }),
+      )
+      .output(
+        z.object({
+          subtotal: z.number(),
+          discountTotal: z.number(),
+          shippingTotal: z.number(),
+          availableShippingRates: z.array(
+            z.object({
+              method: z.string(),
+              title: z.string(),
+              amount: z.number(),
+              estimatedDays: z.string().optional(),
+            }),
+          ),
+          tax: z.object({
+            isInterState: z.boolean(),
+            cgst: z.number(),
+            sgst: z.number(),
+            igst: z.number(),
+            totalTax: z.number(),
+          }),
+          grandTotal: z.number(),
+        }),
+      ),
+    createDraft: oc
+      .route({ method: "POST", path: "/admin/orders/draft" })
+      .input(
+        z.object({
+          customerId: z.string().uuid().nullable().optional(),
+          email: z.string().email(),
+          phone: z.string().min(5),
+          shippingAddress: z.record(z.string(), z.unknown()),
+          billingAddress: z.record(z.string(), z.unknown()).optional(),
+          items: z.array(
+            z.object({
+              variantId: z.string().uuid(),
+              quantity: z.number().int().min(1),
+              unitPriceOverride: z.number().int().nonnegative().optional(),
+              unitPriceOverrideReason: z.string().optional(),
+            }),
+          ),
+          manualDiscount: z
+            .object({
+              type: z.enum(["flat", "percent"]),
+              value: z.number().nonnegative(),
+              reason: z.string().min(1),
+            })
+            .optional(),
+          shippingOverride: z
+            .object({
+              amount: z.number().int().nonnegative(),
+              reason: z.string().min(1),
+            })
+            .optional(),
+          shippingMethod: z.string().optional(),
+          paymentOutcome: z.enum(["paid", "pending", "cod"]).default("pending"),
+          paymentReference: z.string().optional(),
+          notes: z.string().optional(),
+          tags: z.array(z.string()).optional(),
         }),
       )
       .output(
         z.object({
           orderId: z.string().uuid(),
           orderNumber: z.string(),
+          status: z.string(),
+          paymentStatus: z.string(),
+          subtotal: z.number(),
+          discountTotal: z.number(),
+          shippingTotal: z.number(),
+          taxTotal: z.number(),
           grandTotal: z.number(),
           payLink: z.string().optional(),
         }),
@@ -1487,6 +1572,41 @@ export const adminContract = {
               placedAt: z.string(),
             }),
           ),
+        }),
+      ),
+    create: oc
+      .route({ method: "POST", path: "/admin/customers" })
+      .input(
+        z.object({
+          name: z.string().min(1),
+          email: z.string().email(),
+          phone: z.string().optional(),
+          tags: z.array(z.string()).optional(),
+          note: z.string().optional(),
+          address: z
+            .object({
+              line1: z.string().min(1),
+              line2: z.string().optional(),
+              city: z.string().min(1),
+              stateCode: z.string().min(1),
+              pincode: z.string().min(1),
+              phone: z.string().optional(),
+              name: z.string().optional(),
+            })
+            .optional(),
+        }),
+      )
+      .output(
+        z.object({
+          customer: z.object({
+            id: z.string().uuid(),
+            name: z.string(),
+            email: z.string(),
+            phone: z.string().nullable(),
+            tags: z.array(z.string()),
+            note: z.string().nullable().optional(),
+          }),
+          addressId: z.string().uuid().optional(),
         }),
       ),
   },

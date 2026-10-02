@@ -81,6 +81,16 @@ Source of truth: `docs/PLAN.html` v2.0 (build order in `docs/BUILD-PLAN-M2-M9.md
 One line per piece of work that is started and not merged. Add yours before you start, remove it when merged or abandoned (`AGENTS.md` section 6). Format: `agent · branch · area · since · one-line goal`.
 
 - claude · `feat/themes-puck` · themes, docs · 2026-10-01 · theme builder follow-ups; agent docs and change log (`docs/changes/`)
+- antigravity · `feat/orders-phase2` · orders, create-order · 2026-10-02 · All orders Phase 2 (Create order parity, D1-D7)
+
+## All Orders Phase 2 (Create Order Parity D1-D7) — Complete (2026-10-02)
+
+Spec: `docs/ORDERS-ALL-ORDERS-PLAN.md` §4.2. Built on `feat/orders-phase2`.
+- [x] **Database & Migrations**: Migration `0021_order_tags.sql` adding `tags text[]` with GIN index on `orders`.
+- [x] **Contracts & API**: Added `admin.customers.create`, `admin.orders.estimateDraft`, updated `admin.orders.createDraft` with D1-D7 fields (discounts, overrides, shipping methods, payment outcome, tags), tag filtering in `admin.orders.list`.
+- [x] **Domain Services**: Handled D1 GST Tax calculation (CGST+SGST or IGST based on store and shipping state), D2 Shipping override (capped at ₹10,000 with mandatory reason), D3 Manual discounts & line price overrides with mandatory audit reasons, D4 Payment choice ("Payment received", "Payment pending", "Cash on delivery") with customer spend updates and inventory commitment, D5 Order tags, D6 Customer picker & inline customer creation with default address, D7 Inventory reservations with shortage rejection.
+- [x] **Admin UI**: Overhauled `/orders/new` (`apps/admin/src/routes/_store/orders_.new.tsx`) with customer selector/create dialog, item search/stock check, inline price override, order discount, shipping rate calculator/override, payment terms radio group, internal notes, tags, and sticky live summary.
+- [x] **Verification**: Real Postgres integration suite (`packages/domain/test/order-phase2.int.test.ts`, 9/9 passed), full fast suite (26 files, 205 passed), `pnpm typecheck` (15/15 passed), `pnpm lint` (15/15 passed), `pnpm build` (all passed), `pnpm docs:check` (ok).
 
 ## Pre-orders (Simple "ships on" model) — Complete (2026-10-02)
 

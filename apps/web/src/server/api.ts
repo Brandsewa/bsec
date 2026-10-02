@@ -102,6 +102,7 @@ import {
   listAdminOrders,
   getAdminOrderStats,
   getAdminOrderDetail,
+  estimateAdminDraftOrder,
   createAdminDraftOrder,
   getOrderSettings,
   updateOrderSettings,
@@ -120,6 +121,7 @@ import {
   createAdminOrderInvoice,
   listAdminCustomers,
   getAdminCustomerDetail,
+  createAdminCustomer,
   listAdminDiscounts,
   createAdminDiscount,
   updateAdminDiscount,
@@ -913,6 +915,13 @@ export const storeRouter = os.router({
           if (!context.tenantCtx) throw new Error("Missing tenant context");
           return getAdminOrderDetail(context.rt, context.tenantCtx, input);
         }),
+      estimateDraft: os.admin.orders.estimateDraft
+        .use(requireAdmin)
+        .use(requirePermission("orders.read"))
+        .handler(({ context, input }) => {
+          if (!context.tenantCtx) throw new Error("Missing tenant context");
+          return estimateAdminDraftOrder(context.rt, context.tenantCtx, input);
+        }),
       createDraft: os.admin.orders.createDraft
         .use(requireAdmin)
         .use(requirePermission("orders.write"))
@@ -1067,6 +1076,13 @@ export const storeRouter = os.router({
         .handler(({ context, input }) => {
           if (!context.tenantCtx) throw new Error("Missing tenant context");
           return getAdminCustomerDetail(context.rt, context.tenantCtx, input);
+        }),
+      create: os.admin.customers.create
+        .use(requireAdmin)
+        .use(requirePermission("customers.write"))
+        .handler(({ context, input }) => {
+          if (!context.tenantCtx) throw new Error("Missing tenant context");
+          return createAdminCustomer(context.rt, context.tenantCtx, input);
         }),
     },
 
