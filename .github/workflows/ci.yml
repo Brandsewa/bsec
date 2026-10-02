@@ -55,6 +55,7 @@ jobs:
           node-version-file: .nvmrc
           cache: pnpm
       - run: pnpm install --frozen-lockfile
+      - run: pnpm --filter "@bs/web..." build # perf-budget-bundle.int.test.ts reads .next
       - run: pnpm test:heavy
 
   images:

@@ -238,8 +238,10 @@ Drizzle schema files in `packages/db/src/schema/` (one Postgres database, `publi
 | 0014 | `m9_superadmin_saas` | super admin tables |
 | 0015 | `m10_theme_library` | `theme_templates` draft/published, launch theme "Essential Commerce" |
 | 0016 | `m10_theme_pages` | theme pages |
+| 0017 | `platform_email` | `platform_email_settings` and email log (auth overhaul, phase A) |
+| 0018 | `customer_auth` | `customers.phone` nullable, so customers can register with email + password |
 
-How to write one (expand, migrate, contract; `forceRlsSql`): `docs/migrations.md`. **Never edit an applied migration.** Latest on disk: `0016` (the docs check keeps this list honest).
+How to write one (expand, migrate, contract; `forceRlsSql`): `docs/migrations.md`. **Never edit an applied migration.** Latest on disk: `0018` (the docs check keeps this list honest).
 
 ---
 

@@ -23,5 +23,6 @@ New decisions get an ADR **before** code (PLAN §15). Copy `template.md`, take t
 | [016](016-tenant-provisioning-atomicity.md) | Tenant provisioning atomicity, idempotency and unified service architecture | Accepted |
 | [017](017-custom-domain-provider-adapter.md) | Custom domain provider adapter and verification state machine | Accepted |
 | [018](018-visual-theme-editor.md) | Visual theme editor on the block registry | Accepted |
+| [019](019-customer-auth-and-platform-mailer.md) | Customer authentication and platform transactional mailer | Accepted |
 
-**Next number: 019.**
+**Next number: 020.**

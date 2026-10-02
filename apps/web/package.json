@@ -10,7 +10,8 @@
     "typecheck": "next typegen && tsc -p tsconfig.json",
     "lint": "eslint . --cache --cache-location node_modules/.cache/eslint/",
     "test": "vitest run --passWithNoTests",
-    "test:fast": "vitest run --passWithNoTests"
+    "test:fast": "vitest run --passWithNoTests --exclude \"**/*.int.test.ts\"",
+    "test:heavy": "vitest run int.test.ts"
   },
   "dependencies": {
     "@bs/auth": "workspace:*",
