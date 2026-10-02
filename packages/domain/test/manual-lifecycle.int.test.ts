@@ -133,13 +133,13 @@ describe("returns", () => {
     const { placed, item } = await delivered(3);
     const onHandBefore = (await stock()).onHand;
 
-    const req = await requestReturn(rtWeb, ctx, { orderId: placed.orderId, reason: "Jar arrived broken", items: [{ orderItemId: item.id, quantity: 2 }] });
+    const req = await requestReturn(rtWeb, ctx, { orderId: placed.orderId, reason: "Changed my mind", items: [{ orderItemId: item.id, quantity: 2 }] });
     expect(req.number).toMatch(/^RET-\d+$/);
-    expect(await errorOf(requestReturn(rtWeb, ctx, { orderId: placed.orderId, reason: "again", items: [{ orderItemId: item.id, quantity: 2 }] }))).toMatch(/at most 1/);
+    expect(await errorOf(requestReturn(rtWeb, ctx, { orderId: placed.orderId, reason: "Changed my mind", items: [{ orderItemId: item.id, quantity: 2 }] }))).toMatch(/at most 1/);
 
     const listResult = await listAdminReturns(rtWeb, ctx, { view: "needs_review" });
     const listed = listResult.items.find((r) => r.id === req.returnId)!;
-    expect(listed).toMatchObject({ reason: "Jar arrived broken", items: [{ title: "Pickle", quantity: 2 }] });
+    expect(listed).toMatchObject({ reason: "Changed my mind", items: [{ title: "Pickle", quantity: 2 }] });
 
     for (const action of ["approve", "pick_up", "receive"] as const) await actOnReturn(rtWeb, ctx, { id: req.returnId, action });
     expect((await stock()).onHand).toBe(onHandBefore + 2); // restocked
@@ -155,17 +155,17 @@ describe("returns", () => {
 
   it("a rejected return can't be refunded, and a new request is still possible", async () => {
     const { placed, item } = await delivered(1);
-    const req = await requestReturn(rtWeb, ctx, { orderId: placed.orderId, reason: "no reason really", items: [{ orderItemId: item.id, quantity: 1 }] });
+    const req = await requestReturn(rtWeb, ctx, { orderId: placed.orderId, reason: "Changed my mind", items: [{ orderItemId: item.id, quantity: 1 }] });
     await actOnReturn(rtWeb, ctx, { id: req.returnId, action: "reject", note: "Outside policy" });
     expect(await errorOf(actOnReturn(rtWeb, ctx, { id: req.returnId, action: "refund" }))).toMatch(/Invalid return transition/);
-    const again = await requestReturn(rtWeb, ctx, { orderId: placed.orderId, reason: "second try", items: [{ orderItemId: item.id, quantity: 1 }] });
+    const again = await requestReturn(rtWeb, ctx, { orderId: placed.orderId, reason: "Size or fit", items: [{ orderItemId: item.id, quantity: 1 }] });
     expect(again.number).not.toBe(req.number);
   });
 
   it("an item that isn't on the order or an empty request is refused", async () => {
     const { placed } = await delivered(1);
-    expect(await errorOf(requestReturn(rtWeb, ctx, { orderId: placed.orderId, reason: "nope nope", items: [{ orderItemId: "01a0f000-0000-7000-8000-000000000000", quantity: 1 }] }))).toMatch(/isn't on this order/);
-    expect(await errorOf(requestReturn(rtWeb, ctx, { orderId: placed.orderId, reason: "nope nope", items: [] }))).toMatch(/at least one/);
+    expect(await errorOf(requestReturn(rtWeb, ctx, { orderId: placed.orderId, reason: "Changed my mind", items: [{ orderItemId: "01a0f000-0000-7000-8000-000000000000", quantity: 1 }] }))).toMatch(/isn't on this order/);
+    expect(await errorOf(requestReturn(rtWeb, ctx, { orderId: placed.orderId, reason: "Changed my mind", items: [] }))).toMatch(/at least one/);
     expect(await errorOf(requestReturn(rtWeb, ctx, { orderId: placed.orderId, reason: "x", items: [] }))).toMatch(/why/);
   });
 });

@@ -1,6 +1,7 @@
 "use client";
 
 import React, { useState, useRef } from "react";
+import Image from "next/image";
 import { useRouter } from "next/navigation";
 
 
@@ -436,12 +437,11 @@ export function ReturnRequestForm({
                   <div className="flex flex-wrap gap-2">
                     {photos.map((p) => (
                       <div key={p.id} className="relative size-16 overflow-hidden rounded-md border border-border">
-                        {/* eslint-disable-next-line @next/next/no-img-element */}
-                        <img src={p.url} alt={p.name} className="h-full w-full object-cover" />
+                        <Image src={p.url} alt={p.name} fill unoptimized className="object-cover" />
                         <button
                           type="button"
                           onClick={() => removePhoto(p.id)}
-                          className="absolute right-1 top-1 rounded-full bg-black/60 p-0.5 text-white hover:bg-black"
+                          className="absolute right-1 top-1 z-10 rounded-full bg-black/60 p-0.5 text-white hover:bg-black"
                           aria-label="Remove photo"
                         >
                           <svg className="size-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>

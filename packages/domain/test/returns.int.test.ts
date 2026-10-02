@@ -135,7 +135,7 @@ afterAll(async () => {
 });
 
 async function createDeliveredOrder(ctx: TenantContext, variantId: string, quantity = 1) {
-  const cart = await getOrCreateCart(rtWeb, ctx, null);
+  const cart = await getOrCreateCart(rtWeb, ctx, undefined);
   await addToCart(rtWeb, ctx, { token: cart.token, variantId, quantity });
   const placed = await placeOrder(rtWeb, ctx, buyer(cart.token));
 
@@ -438,6 +438,7 @@ describe("Returns Test Suite: End-to-End & Boundary Verification", () => {
     // Tenant A return list & stats
     const statsA = await getAdminReturnStats(rtWeb, ctxA);
     const listA = await listAdminReturns(rtWeb, ctxA);
+    expect(statsA.needsReview).toBeGreaterThanOrEqual(0);
 
     // Tenant B return list & stats
     const statsB = await getAdminReturnStats(rtWeb, ctxB);

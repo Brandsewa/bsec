@@ -1,5 +1,5 @@
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
-import { and, eq, sql } from "drizzle-orm";
+import { eq } from "drizzle-orm";
 import { schema, withTenant } from "@bs/db";
 import { startTestDb, type TestDb } from "@bs/db/test-env";
 import {
@@ -21,6 +21,7 @@ import {
 } from "../src/orders/return-photos.ts";
 import { createHash } from "node:crypto";
 import { STORE_PERMISSIONS } from "@bs/auth";
+import type { S3Client } from "@aws-sdk/client-s3";
 
 let env: TestDb;
 let rt: Runtime;
@@ -34,17 +35,27 @@ let orderBToken: string;
 let variantAId: string;
 let orderAItemId: string;
 
+interface S3CommandLike {
+  constructor?: { name?: string };
+  _cmd?: string;
+  input?: {
+    Key?: string;
+    Bucket?: string;
+  };
+}
+
 // Fake S3 client for tests
-function createMockS3(storage: Map<string, { body: Buffer; mime: string; size: number }>) {
+function createMockS3(storage: Map<string, { body: Buffer; mime: string; size: number }>): S3Client {
   return {
-    async send(command: any) {
+    async send(command: S3CommandLike) {
       const name = command.constructor?.name || "";
       const input = command.input || {};
+      const key = input.Key ?? "";
 
       if (name === "HeadObjectCommand" || command._cmd === "head") {
-        const item = storage.get(input.Key);
+        const item = storage.get(key);
         if (!item) {
-          const err: any = new Error("NotFound");
+          const err = new Error("NotFound") as Error & { $metadata?: { httpStatusCode: number } };
           err.name = "NotFound";
           err.$metadata = { httpStatusCode: 404 };
           throw err;
@@ -56,9 +67,9 @@ function createMockS3(storage: Map<string, { body: Buffer; mime: string; size: n
       }
 
       if (name === "GetObjectCommand" || command._cmd === "get") {
-        const item = storage.get(input.Key);
+        const item = storage.get(key);
         if (!item) {
-          const err: any = new Error("NotFound");
+          const err = new Error("NotFound");
           err.name = "NotFound";
           throw err;
         }
@@ -72,13 +83,13 @@ function createMockS3(storage: Map<string, { body: Buffer; mime: string; size: n
       }
 
       if (name === "DeleteObjectCommand" || command._cmd === "delete") {
-        storage.delete(input.Key);
+        storage.delete(key);
         return {};
       }
 
       throw new Error(`Unhandled mock command: ${name}`);
     },
-  };
+  } as unknown as S3Client;
 }
 
 beforeAll(async () => {
@@ -125,7 +136,7 @@ beforeAll(async () => {
     title: "Returnable Shirt",
     slug: "returnable-shirt",
     status: "active",
-    variants: [{ sku: "SHIRT-1", title: "Default", price: 1000, inventoryQuantity: 10 }],
+    variants: [{ sku: "SHIRT-1", title: "Default", price: 1000 }],
   });
   variantAId = pA.variants[0]!.id;
 
@@ -141,7 +152,7 @@ beforeAll(async () => {
   });
 
   // Place Order in Tenant A
-  const cartA = await getOrCreateCart(rtWeb, ctxA, null);
+  const cartA = await getOrCreateCart(rtWeb, ctxA, undefined);
   await addToCart(rtWeb, ctxA, { token: cartA.token, variantId: variantAId, quantity: 2 });
   const placedA = await placeOrder(rtWeb, ctxA, {
     cartToken: cartA.token,
@@ -189,7 +200,7 @@ beforeAll(async () => {
     title: "Product B",
     slug: "product-b",
     status: "active",
-    variants: [{ sku: "PROD-B", title: "Default", price: 500, inventoryQuantity: 10 }],
+    variants: [{ sku: "PROD-B", title: "Default", price: 500 }],
   });
   const locsB = await withTenant(rtWeb._db.db, ctxB.tenantId, async (tx) =>
     tx.select().from(schema.locations).where(eq(schema.locations.tenantId, ctxB.tenantId)).limit(1),
@@ -201,7 +212,7 @@ beforeAll(async () => {
     ]);
   });
 
-  const cartB = await getOrCreateCart(rtWeb, ctxB, null);
+  const cartB = await getOrCreateCart(rtWeb, ctxB, undefined);
   await addToCart(rtWeb, ctxB, { token: cartB.token, variantId: pB.variants[0]!.id, quantity: 1 });
   const placedB = await placeOrder(rtWeb, ctxB, {
     cartToken: cartB.token,
@@ -309,7 +320,7 @@ describe("Return Photo Upload Security & Limits", () => {
         orderId: orderAId,
         mediaId,
         storageKey: `tenants/${ctxA.tenantId}/returns/${orderBId}/${mediaId}.jpg`,
-        s3Client: fakeS3 as any,
+        s3Client: fakeS3,
       }),
     ).rejects.toThrow("Bad Request: Storage key does not match");
 
@@ -319,7 +330,7 @@ describe("Return Photo Upload Security & Limits", () => {
         orderId: orderAId,
         mediaId,
         storageKey: `tenants/${ctxB.tenantId}/returns/${orderAId}/${mediaId}.jpg`,
-        s3Client: fakeS3 as any,
+        s3Client: fakeS3,
       }),
     ).rejects.toThrow("Bad Request: Storage key does not match");
   });
@@ -335,7 +346,7 @@ describe("Return Photo Upload Security & Limits", () => {
         orderId: orderAId,
         mediaId,
         storageKey: key,
-        s3Client: fakeS3 as any,
+        s3Client: fakeS3,
       }),
     ).rejects.toThrow("Bad Request: Uploaded file not found in storage");
   });
@@ -355,7 +366,7 @@ describe("Return Photo Upload Security & Limits", () => {
         orderId: orderAId,
         mediaId: mediaId1,
         storageKey: svgKey,
-        s3Client: fakeS3 as any,
+        s3Client: fakeS3,
       }),
     ).rejects.toThrow("Bad Request: Invalid or corrupted image format");
 
@@ -368,7 +379,7 @@ describe("Return Photo Upload Security & Limits", () => {
         orderId: orderAId,
         mediaId: mediaId2,
         storageKey: gifKey,
-        s3Client: fakeS3 as any,
+        s3Client: fakeS3,
       }),
     ).rejects.toThrow("Bad Request: Invalid or corrupted image format");
   });
@@ -386,7 +397,7 @@ describe("Return Photo Upload Security & Limits", () => {
       orderId: orderAId,
       mediaId,
       storageKey: jpegKey,
-      s3Client: fakeS3 as any,
+      s3Client: fakeS3,
     });
 
     expect(finalized.id).toBe(mediaId);
@@ -438,13 +449,13 @@ describe("Return Photo Upload Security & Limits", () => {
       orderId: orderAId,
       mediaId: m1,
       storageKey: p1Key,
-      s3Client: fakeS3 as any,
+      s3Client: fakeS3,
     });
-    const photo2 = await finalizeReturnPhoto(rt, ctxA, {
+    const _photo2 = await finalizeReturnPhoto(rt, ctxA, {
       orderId: orderAId,
       mediaId: m2,
       storageKey: p2Key,
-      s3Client: fakeS3 as any,
+      s3Client: fakeS3,
     });
 
     // Finalize 1 photo for Order B
@@ -455,7 +466,7 @@ describe("Return Photo Upload Security & Limits", () => {
       orderId: orderBId,
       mediaId: mB,
       storageKey: pBKey,
-      s3Client: fakeS3 as any,
+      s3Client: fakeS3,
     });
 
     // Attempt return on Order A with photo from Order B (cross-tenant) -> rejected as invalid/non-existent in tenant A
@@ -526,7 +537,7 @@ describe("Return Photo Upload Security & Limits", () => {
       orderId: orderAId,
       mediaId: mOld,
       storageKey: oldKey,
-      s3Client: fakeS3 as any,
+      s3Client: fakeS3,
     });
 
     // Manually age the photo row to 25 hours ago
@@ -538,12 +549,12 @@ describe("Return Photo Upload Security & Limits", () => {
     });
 
     // Run cleanup once
-    const firstRun = await cleanupOrphanedReturnPhotos(rt._db.db, fakeS3 as any);
+    const firstRun = await cleanupOrphanedReturnPhotos(rt._db.db, fakeS3);
     expect(firstRun.deletedCount).toBeGreaterThanOrEqual(1);
     expect(storage.has(oldKey)).toBe(false);
 
     // Run cleanup again (idempotent)
-    const secondRun = await cleanupOrphanedReturnPhotos(rt._db.db, fakeS3 as any);
+    const secondRun = await cleanupOrphanedReturnPhotos(rt._db.db, fakeS3);
     expect(secondRun.deletedCount).toBe(0);
   });
 });

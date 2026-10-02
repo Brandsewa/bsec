@@ -227,11 +227,11 @@ export async function buildPresignedUploadDescriptor(params: {
   filename: string;
   mime: string;
   bytes: number;
-  id?: string;
-  expiresInSeconds?: number;
-  bucketBaseUrl?: string;
-  r2Config?: Partial<R2ClientConfig>;
-  s3Client?: S3Client;
+  id?: string | undefined;
+  expiresInSeconds?: number | undefined;
+  bucketBaseUrl?: string | undefined;
+  r2Config?: Partial<R2ClientConfig> | undefined;
+  s3Client?: S3Client | undefined;
 }): Promise<PresignedUploadDescriptor> {
   const { storageKey } = generateStorageKey(
     params.tenantId,
@@ -271,9 +271,9 @@ export async function buildPresignedUploadDescriptor(params: {
  */
 export async function buildPresignedDownloadUrl(params: {
   storageKey: string;
-  expiresInSeconds?: number;
-  r2Config?: Partial<R2ClientConfig>;
-  s3Client?: S3Client;
+  expiresInSeconds?: number | undefined;
+  r2Config?: Partial<R2ClientConfig> | undefined;
+  s3Client?: S3Client | undefined;
 }): Promise<string> {
   const expiresIn = params.expiresInSeconds ?? 900;
   const cfg = getR2Config(params.r2Config);

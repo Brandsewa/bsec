@@ -105,8 +105,9 @@ export async function checkReturnPhotoRateLimit(
   orderId: string,
   clientIp?: string | undefined,
 ): Promise<void> {
+  const orderKey = `return_photo:order:${tenantId}:${orderId}`;
   const orderRes = await checkRateLimit(db, {
-    key: `return_photo:order:${tenantId}:${orderId}`,
+    key: orderKey,
     limit: 20,
     windowSeconds: 3600,
   });
@@ -116,13 +117,14 @@ export async function checkReturnPhotoRateLimit(
       "Too many photo upload attempts for this order. Please try again later.",
       orderRes.retryAfter,
       orderRes.limit,
-      orderRes.key,
+      orderKey,
     );
   }
 
   if (clientIp && clientIp.trim()) {
+    const ipKey = `return_photo:ip:${tenantId}:${clientIp.trim()}`;
     const ipRes = await checkRateLimit(db, {
-      key: `return_photo:ip:${tenantId}:${clientIp.trim()}`,
+      key: ipKey,
       limit: 30,
       windowSeconds: 3600,
     });
@@ -131,7 +133,7 @@ export async function checkReturnPhotoRateLimit(
         "Too many photo upload attempts. Please try again later.",
         ipRes.retryAfter,
         ipRes.limit,
-        ipRes.key,
+        ipKey,
       );
     }
   }
@@ -296,7 +298,10 @@ export async function finalizeReturnPhoto(
     }
   } catch (err: unknown) {
     if (err instanceof Error && err.message.startsWith("Bad Request:")) throw err;
-    throw new Error(`Bad Request: Uploaded file not found in storage or failed verification: ${err instanceof Error ? err.message : String(err)}`);
+    throw new Error(
+      `Bad Request: Uploaded file not found in storage or failed verification: ${err instanceof Error ? err.message : String(err)}`,
+      { cause: err },
+    );
   }
 
   return await withTenant(rt._db.db, ctx.tenantId, async (tx) => {

@@ -948,7 +948,7 @@ describe("Generated Isolation Test Suite (M1 Real Postgres 18 Proof)", () => {
         if (procPath === "returns.list") return await listAdminReturns(rt, ctx);
         await advanceAdminOrder(rt, ctx, { id: draft.orderId, to: "delivered" });
         const [line] = await getAdminOrderDetail(rt, ctx, { id: draft.orderId }).then((d) => d.items);
-        const req = await requestReturn(rt, ctx, { orderId: draft.orderId, reason: "Damaged on arrival", items: [{ orderItemId: line!.id, quantity: 1 }] });
+        const req = await requestReturn(rt, ctx, { orderId: draft.orderId, reason: "Changed my mind", items: [{ orderItemId: line!.id, quantity: 1 }] });
         return await actOnReturn(rt, ctx, { id: req.returnId, action: "approve" });
       }
 
@@ -1240,7 +1240,7 @@ describe("Generated Isolation Test Suite (M1 Real Postgres 18 Proof)", () => {
         const [line] = await getAdminOrderDetail(rt, ctx, { id: draft.orderId }).then((d) => d.items);
         const req = await requestReturn(rt, ctx, {
           orderId: draft.orderId,
-          reason: "Damaged or defective",
+          reason: "Size or fit",
           items: [{ orderItemId: line!.id, quantity: 1 }],
         });
         return await getAdminReturnDetail(rt, ctx, { id: req.returnId });
