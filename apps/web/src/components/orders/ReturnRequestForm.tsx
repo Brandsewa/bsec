@@ -218,6 +218,10 @@ export function ReturnRequestForm({
     }
   }
 
+  if (available.length === 0 && existingReturns.length === 0) {
+    return null;
+  }
+
   return (
     <div className="space-y-4">
       {/* Existing Returns List */}
