@@ -343,12 +343,17 @@ export async function startJobs(opts: {
     for (const job of batch) {
       try {
         const res = await cleanupExpiredIdempotencyKeys(db, job.data?.tenantId);
-        // Same 15-minute maintenance pass: prune expired rate-limit counters and free job slots that a
-        // crashed worker never released (otherwise a store's background jobs could stay blocked).
+        // Same 15-minute maintenance pass: prune expired rate-limit counters, free job slots that a
+        // crashed worker never released, and prune platform_email_log older than 90 days (PLAN §3.1).
         const prunedCounters = await cleanExpiredRateLimits(db);
         const reapedSlots = await reapStaleTenantJobSlots(db);
+        const { prunePlatformEmailLogs } = await import("./system/platform-mailer.ts");
+        const prunedEmailLogs = await prunePlatformEmailLogs(db, 90).catch((err) => {
+          opts.log.warn({ err }, "platform_email_log prune failed during maintenance pass");
+          return { deletedCount: 0 };
+        });
         opts.log.info(
-          { job_id: job.id, deletedCount: res.deletedCount, prunedCounters, reapedSlots },
+          { job_id: job.id, deletedCount: res.deletedCount, prunedCounters, reapedSlots, prunedEmailLogs: prunedEmailLogs.deletedCount },
           "idempotency.cleanup processed",
         );
       } catch (err) {

@@ -24,7 +24,7 @@ export interface RegisterCustomerInput {
   name?: string | undefined;
   email: string;
   phone?: string | undefined;
-  password: string;
+  password?: string | undefined;
   acceptsMarketing?: boolean | undefined;
 }
 
@@ -32,6 +32,10 @@ export interface CustomerAuthResult {
   customer: CustomerRecord;
   token: string;
 }
+
+// Fixed dummy argon2 hash for constant-time dummy verification on non-existent or passwordless accounts
+const DUMMY_PASSWORD_HASH =
+  "effe979df6698effc2817aae5fa649e7:56efb2e65eeb262d220227dd1c4081596c6f089f7e31447f1c90a308d3f84bd0c13f1fae6c3778507858c52f5b87cc04eda02db0f5341217a6019200becf082f";
 
 const COMMON_PASSWORDS = new Set([
   "password",
@@ -68,10 +72,11 @@ function validateCustomerPassword(password: string): void {
 }
 
 /**
- * Register a customer with email + password (PLAN §5.2).
- * Normalises email, enforces password strength, hashes password, creates or upgrades existing guest row.
- * Sends email verification token (24 hour expiry).
- * Never enumerates existing accounts: if an account with a password already exists, responds identically.
+ * Register a customer with name + email (PLAN §5.2 + review security fix).
+ * Registration must NOT set a password or create a session.
+ * Collects name+email only, creates/keeps the customer row WITHOUT touching an existing row's name/phone/password.
+ * Sends an account setup link (action_tokens purpose 'password_reset') letting the customer set their password and mark emailVerified=true.
+ * Responds generically whether an account exists or not to prevent account enumeration.
  */
 export async function registerCustomer(
   db: Db,
@@ -84,15 +89,11 @@ export async function registerCustomer(
     throw new Error("Invalid email address");
   }
 
-  validateCustomerPassword(input.password);
-
   const phone = cleanPhone(input.phone);
   const ip = meta.ip ?? "127.0.0.1";
 
   // Rate limit registration per IP
   await checkCustomerRegisterRateLimit(db, { tenantId, ip });
-
-  const passwordHash = await hashPassword(input.password);
 
   const outcome = await withTenant(db, tenantId, async (tx) => {
     // Check if customer row exists for email
@@ -105,26 +106,18 @@ export async function registerCustomer(
 
     if (existing) {
       if (existing.passwordHash) {
-        // Customer already has a password account!
-        // To prevent enumeration, we do NOT throw an error.
-        // Instead, we don't change anything, don't issue a session, but send a notice or return generic success.
-        return { alreadyRegistered: true };
+        // Customer already has a registered password account.
+        // To prevent enumeration and pre-registration takeover:
+        // Do NOT touch existing row's name, phone, or passwordHash.
+        // Send a generic notification or return generic success.
+        return { alreadyRegistered: true, customerId: existing.id, email: existing.email };
       }
-      // Existing guest/phone row with no password yet -> upgrade account
+      // Existing guest/phone row with no password yet.
+      // Do NOT touch existing name, phone, or any details to prevent tampering.
+      // Mint setup link targeting existing row.
       customerId = existing.id;
-      await tx
-        .update(customers)
-        .set({
-          name: input.name?.trim() || existing.name,
-          phone: phone || existing.phone,
-          passwordHash,
-          acceptsMarketing: Boolean(input.acceptsMarketing),
-          marketingConsentAt: input.acceptsMarketing ? new Date() : existing.marketingConsentAt,
-          updatedAt: new Date(),
-        })
-        .where(and(eq(customers.tenantId, tenantId), eq(customers.id, existing.id)));
     } else {
-      // Create new customer
+      // Create new customer with unverified email and null passwordHash
       const [created] = await tx
         .insert(customers)
         .values({
@@ -132,7 +125,7 @@ export async function registerCustomer(
           email,
           phone,
           name: input.name?.trim() || "",
-          passwordHash,
+          passwordHash: null,
           emailVerified: false,
           phoneVerified: false,
           acceptsMarketing: Boolean(input.acceptsMarketing),
@@ -143,59 +136,42 @@ export async function registerCustomer(
       customerId = created.id;
     }
 
-    // Mint verification token (24 hours)
-    const rawVerificationToken = `cev_${randomBytes(32).toString("base64url")}`;
-    const tokenHash = hashToken(rawVerificationToken);
+    // Mint account setup token (24 hours expiry, purpose: 'password_reset' so resetCustomerPassword accepts it)
+    const rawSetupToken = `cst_${randomBytes(32).toString("base64url")}`;
+    const tokenHash = hashToken(rawSetupToken);
     const expiresAt = new Date(Date.now() + 24 * 60 * 60 * 1000);
 
     await tx.insert(actionTokens).values({
       tenantId,
-      purpose: "email_verification",
+      purpose: "password_reset",
       targetId: customerId,
       tokenHash,
       expiresAt,
     });
 
-    // Create session for immediate sign-in (unverified email can sign in, but guest orders require verification)
-    const { token } = await createCustomerSession(tx, tenantId, customerId, meta);
-
-    const [finalCust] = await tx
-      .select({
-        id: customers.id,
-        phone: customers.phone,
-        email: customers.email,
-        name: customers.name,
-        phoneVerified: customers.phoneVerified,
-        emailVerified: customers.emailVerified,
-      })
-      .from(customers)
-      .where(and(eq(customers.tenantId, tenantId), eq(customers.id, customerId)));
-
-    if (!finalCust) throw new Error("Customer record not found after creation");
-
     return {
       alreadyRegistered: false,
-      customer: finalCust,
-      token,
-      verificationToken: rawVerificationToken,
+      customerId,
+      email,
+      setupToken: rawSetupToken,
     };
   });
 
   if (outcome.alreadyRegistered) {
-    // Generic response to avoid enumeration
+    // Existing customer with password: send reminder or generic success without token/session
     return { success: true };
   }
 
-  // Send verification email via platform mailer
-  if (outcome.verificationToken) {
+  // Send account setup email via platform mailer
+  if (outcome.setupToken) {
     try {
       const brand = await loadEmailBrand(db, tenantId);
-      const verifyUrl = `${brand.baseUrl}/account/verify-email/${outcome.verificationToken}`;
+      const setupUrl = `${brand.baseUrl}/account/reset-password/${outcome.setupToken}`;
       const { html, text } = renderEmail(
-        "customer_welcome",
+        "customer_account_setup",
         brand,
-        { verifyUrl },
-        `Welcome to ${brand.storeName}!`,
+        { setupUrl, resetUrl: setupUrl },
+        `Set up your account for ${brand.storeName}`,
       );
 
       queueMicrotask(async () => {
@@ -203,32 +179,30 @@ export async function registerCustomer(
           await sendPlatformEmail(db, {
             tenantId,
             to: email,
-            subject: `Welcome to ${brand.storeName}! Please verify your email`,
+            subject: `Set up your account for ${brand.storeName}`,
             html,
             text,
             fromName: brand.storeName,
             replyTo: brand.supportEmail ?? undefined,
-            template: "customer_welcome",
+            template: "customer_account_setup",
           });
         } catch (err) {
-          logger.error({ err, email, tenantId }, "Failed to send customer verification email");
+          logger.error({ err, email, tenantId }, "Failed to send customer setup email");
         }
       });
     } catch (err) {
-      logger.error({ err, email, tenantId }, "Failed to prepare verification email");
+      logger.error({ err, email, tenantId }, "Failed to prepare setup email");
     }
   }
 
   return {
     success: true,
-    customer: outcome.customer,
-    token: outcome.token,
   };
 }
 
 /**
  * Verify customer email using action_tokens (PLAN §5.2).
- * Single use, verifies email, unlocks historical guest orders with this email.
+ * Single use, verifies email atomically via guarded UPDATE ... RETURNING, unlocks historical guest orders with this email.
  */
 export async function verifyCustomerEmail(
   db: Db,
@@ -238,9 +212,10 @@ export async function verifyCustomerEmail(
   const tokenHash = hashToken(rawToken);
 
   return await withTenant(db, tenantId, async (tx) => {
-    const [tokenRow] = await tx
-      .select()
-      .from(actionTokens)
+    // Single guarded UPDATE ... RETURNING to ensure atomic consumption and concurrency safety
+    const [consumed] = await tx
+      .update(actionTokens)
+      .set({ usedAt: new Date() })
       .where(
         and(
           eq(actionTokens.tenantId, tenantId),
@@ -249,31 +224,27 @@ export async function verifyCustomerEmail(
           isNull(actionTokens.usedAt),
           gt(actionTokens.expiresAt, new Date()),
         ),
-      );
+      )
+      .returning({ id: actionTokens.id, targetId: actionTokens.targetId });
 
-    if (!tokenRow) {
+    if (!consumed) {
       throw new Error("Invalid or expired verification link");
     }
-
-    // Mark token used atomically
-    await tx
-      .update(actionTokens)
-      .set({ usedAt: new Date() })
-      .where(and(eq(actionTokens.tenantId, tenantId), eq(actionTokens.id, tokenRow.id)));
 
     // Mark customer email verified
     await tx
       .update(customers)
       .set({ emailVerified: true, updatedAt: new Date() })
-      .where(and(eq(customers.tenantId, tenantId), eq(customers.id, tokenRow.targetId)));
+      .where(and(eq(customers.tenantId, tenantId), eq(customers.id, consumed.targetId)));
 
-    return { success: true, customerId: tokenRow.targetId };
+    return { success: true, customerId: consumed.targetId };
   });
 }
 
 /**
  * Customer email + password sign in (PLAN §5.2).
  * Generic "Invalid email or password" error on failures to prevent enumeration.
+ * Mitigates timing oracle by verifying against a fixed dummy argon2 hash when account/password does not exist.
  * Rate limited per (tenant, IP) and per (tenant, email).
  */
 export async function loginCustomer(
@@ -296,6 +267,11 @@ export async function loginCustomer(
       .where(and(eq(customers.tenantId, tenantId), eq(customers.email, email), eq(customers.status, "active")));
 
     if (!cust || !cust.passwordHash) {
+      // Defend against timing attacks: always run verifyPassword against dummy hash
+      await verifyPassword({
+        hash: DUMMY_PASSWORD_HASH,
+        password: credentials.password,
+      });
       return null;
     }
 
@@ -424,9 +400,10 @@ export async function resetCustomerPassword(
   const newHash = await hashPassword(params.password);
 
   const customerId = await withTenant(db, tenantId, async (tx) => {
-    const [tokenRow] = await tx
-      .select()
-      .from(actionTokens)
+    // Single guarded UPDATE ... RETURNING to ensure atomic consumption and concurrency safety
+    const [consumed] = await tx
+      .update(actionTokens)
+      .set({ usedAt: new Date() })
       .where(
         and(
           eq(actionTokens.tenantId, tenantId),
@@ -435,25 +412,20 @@ export async function resetCustomerPassword(
           isNull(actionTokens.usedAt),
           gt(actionTokens.expiresAt, new Date()),
         ),
-      );
+      )
+      .returning({ id: actionTokens.id, targetId: actionTokens.targetId });
 
-    if (!tokenRow) {
+    if (!consumed) {
       throw new Error("Invalid or expired password reset link");
     }
 
-    // Consume token atomically
-    await tx
-      .update(actionTokens)
-      .set({ usedAt: new Date() })
-      .where(and(eq(actionTokens.tenantId, tenantId), eq(actionTokens.id, tokenRow.id)));
-
-    // Update customer password
+    // Update customer password and set emailVerified = true (password reset / account setup confirms email control)
     await tx
       .update(customers)
-      .set({ passwordHash: newHash, updatedAt: new Date() })
-      .where(and(eq(customers.tenantId, tenantId), eq(customers.id, tokenRow.targetId)));
+      .set({ passwordHash: newHash, emailVerified: true, updatedAt: new Date() })
+      .where(and(eq(customers.tenantId, tenantId), eq(customers.id, consumed.targetId)));
 
-    return tokenRow.targetId;
+    return consumed.targetId;
   });
 
   // Invalidate all active customer sessions

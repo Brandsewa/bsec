@@ -115,6 +115,7 @@ describe("other emails", () => {
       "password_changed",
       "customer_welcome",
       "customer_password_reset",
+      "customer_account_setup",
     ]) {
       expect(EMAIL_TEMPLATES).toContain(t);
     }
@@ -141,6 +142,10 @@ describe("other emails", () => {
     const reset = renderEmail("customer_password_reset", brand, { resetUrl: "https://tasteofhills.gobs.cloud/account/reset-password/tok456" }, "Reset password");
     expect(reset.text).toContain("Taste of Hills");
     expect(reset.html).toContain("https://tasteofhills.gobs.cloud/account/reset-password/tok456");
+
+    const setup = renderEmail("customer_account_setup", brand, { setupUrl: "https://tasteofhills.gobs.cloud/account/reset-password/tok789" }, "Set up your account");
+    expect(setup.text).toContain("Taste of Hills");
+    expect(setup.html).toContain("https://tasteofhills.gobs.cloud/account/reset-password/tok789");
   });
 });
 

@@ -1,11 +1,12 @@
 /** One CSV cell. Quotes are doubled, and a leading = + - @ is neutralised so spreadsheets never run it as a formula. */
-function cell(value: string | number): string {
+function cell(value: string | number | null | undefined): string {
+  if (value === null || value === undefined) return "";
   let s = String(value);
   if (/^[=+\-@\t\r]/.test(s) && !/^-?\d+(\.\d+)?$/.test(s)) s = `'${s}`;
   return /[",\n\r]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
 }
 
-export function toCsv(header: string[], rows: Array<Array<string | number>>): string {
+export function toCsv(header: string[], rows: Array<Array<string | number | null | undefined>>): string {
   return [header, ...rows].map((r) => r.map(cell).join(",")).join("\r\n");
 }
 

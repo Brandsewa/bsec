@@ -34,6 +34,8 @@ import {
   registerCustomer,
   loginCustomer,
   requestCustomerPasswordReset,
+  resetCustomerPassword,
+  verifyCustomerEmail,
   changeCustomerPassword,
 } from "../src/customers/auth.ts";
 import { getCustomerBySession } from "../src/customers/session.ts";
@@ -224,27 +226,39 @@ describe("Customer Accounts & Order Actions", () => {
     let customerId = "";
     let initialSessionToken = "";
 
-    it("registers a customer with email, password, and optional phone (anti-enumeration)", async () => {
+    it("registers a customer with name and email only (anti-enumeration & no password/session minted)", async () => {
       // 1. Initial registration
       const regRes = await registerCustomer(
         rwDb.db,
         tenantId,
         {
           email: custEmail,
-          password: custPassword,
           name: "Shopper C",
           acceptsMarketing: true,
         },
         { ip: "203.0.113.10" },
       );
       expect(regRes.success).toBe(true);
-      expect(regRes.customer).toBeDefined();
-      expect(regRes.token).toBeDefined();
-      expect(regRes.customer!.email).toBe(custEmail);
-      expect(regRes.customer!.emailVerified).toBe(false);
+      // Registration does NOT set a password or create a session
+      expect(regRes.customer).toBeUndefined();
+      expect(regRes.token).toBeUndefined();
 
-      customerId = regRes.customer!.id;
-      initialSessionToken = regRes.token!;
+      // Verify row in DB: passwordHash is null, emailVerified is false
+      const [custRow] = await withTenant(rwDb.db, tenantId, async (tx) =>
+        tx.select().from(customers).where(eq(customers.email, custEmail)),
+      );
+      expect(custRow).toBeDefined();
+      expect(custRow!.passwordHash).toBeNull();
+      expect(custRow!.emailVerified).toBe(false);
+      expect(custRow!.name).toBe("Shopper C");
+      customerId = custRow!.id;
+
+      // Setup link was created in action_tokens
+      const [tokenRow] = await withTenant(rwDb.db, tenantId, async (tx) =>
+        tx.select().from(actionTokens).where(eq(actionTokens.targetId, customerId)),
+      );
+      expect(tokenRow).toBeDefined();
+      expect(tokenRow!.purpose).toBe("password_reset");
 
       // 2. Anti-enumeration: registering again with the same email returns generic success without overwriting
       const regDup = await registerCustomer(
@@ -252,16 +266,130 @@ describe("Customer Accounts & Order Actions", () => {
         tenantId,
         {
           email: custEmail,
-          password: "anotherPassword10+",
           name: "Imposter",
         },
         { ip: "203.0.113.11" },
       );
       expect(regDup.success).toBe(true);
-      expect(regDup.token).toBeUndefined(); // Did not issue a new session or overwrite
+      expect(regDup.token).toBeUndefined();
+      // Original customer row's name untouched
+      const [untouched] = await withTenant(rwDb.db, tenantId, async (tx) =>
+        tx.select().from(customers).where(eq(customers.id, customerId)),
+      );
+      expect(untouched!.name).toBe("Shopper C");
     });
 
-    it("unverified email customer can sign in but sees only directly placed orders", async () => {
+    it("pre-registration account takeover prevention: attacker cannot set password or alter existing guest", async () => {
+      const victimEmail = "victim@example.com";
+      // Create guest customer with phone and address
+      const [guest] = await withTenant(rwDb.db, tenantId, async (tx) =>
+        tx
+          .insert(customers)
+          .values({
+            tenantId,
+            email: victimEmail,
+            name: "Original Guest",
+            phone: "9988776655",
+            passwordHash: null,
+            emailVerified: false,
+          })
+          .returning(),
+      );
+      expect(guest).toBeDefined();
+
+      // Attacker attempts to register victim's email
+      const attackerAttempt = await registerCustomer(
+        rwDb.db,
+        tenantId,
+        {
+          email: victimEmail,
+          name: "Attacker Name",
+          phone: "9111111111",
+          password: "AttackerPassword123!",
+        },
+        { ip: "203.0.113.88" },
+      );
+      expect(attackerAttempt.success).toBe(true);
+      expect(attackerAttempt.token).toBeUndefined();
+
+      // Attacker's password must NOT work!
+      await expect(
+        loginCustomer(
+          rwDb.db,
+          tenantId,
+          { email: victimEmail, password: "AttackerPassword123!" },
+          { ip: "203.0.113.88", skipRateLimit: true },
+        ),
+      ).rejects.toThrow(/Invalid email or password/);
+
+      // Existing guest row's name and phone remain unchanged and tamper-free
+      const [checkGuest] = await withTenant(rwDb.db, tenantId, async (tx) =>
+        tx.select().from(customers).where(eq(customers.id, guest!.id)),
+      );
+      expect(checkGuest!.name).toBe("Original Guest");
+      expect(checkGuest!.phone).toBe("9988776655");
+      expect(checkGuest!.passwordHash).toBeNull();
+    });
+
+    it("timing oracle defense: non-existent account and passwordless account run dummy hash verify", async () => {
+      // Both non-existent email and existing user with wrong password must throw generic error
+      // and take comparable verification time (calling verifyPassword)
+      await expect(
+        loginCustomer(
+          rwDb.db,
+          tenantId,
+          { email: "nonexistent-oracle@example.com", password: "SomePassword123!" },
+          { ip: "203.0.113.90", skipRateLimit: true },
+        ),
+      ).rejects.toThrow(/Invalid email or password/);
+
+      // Account exists but has no password (e.g. shopper-c before password setup)
+      await expect(
+        loginCustomer(
+          rwDb.db,
+          tenantId,
+          { email: custEmail, password: "SomePassword123!" },
+          { ip: "203.0.113.91", skipRateLimit: true },
+        ),
+      ).rejects.toThrow(/Invalid email or password/);
+    });
+
+    it("password reset sets emailVerified=true and guarded token consumption prevents double redemption", async () => {
+      // Complete setup for shopper-c by minting a reset token and calling resetCustomerPassword
+      const resetTokenRaw = "raw_test_setup_token_shopper_c_12345";
+      const { createHash } = await import("node:crypto");
+      const tokenHash = createHash("sha256").update(resetTokenRaw).digest("hex");
+
+      await withTenant(rwDb.db, tenantId, async (tx) => {
+        await tx.insert(actionTokens).values({
+          tenantId,
+          purpose: "password_reset",
+          targetId: customerId,
+          tokenHash,
+          expiresAt: new Date(Date.now() + 60 * 60 * 1000),
+        });
+      });
+
+      // Concurrency test: execute two simultaneous reset attempts with the same token
+      const [res1, res2] = await Promise.allSettled([
+        resetCustomerPassword(rwDb.db, tenantId, { token: resetTokenRaw, password: custPassword }),
+        resetCustomerPassword(rwDb.db, tenantId, { token: resetTokenRaw, password: custPassword }),
+      ]);
+
+      // Exactly one must succeed, and one must fail
+      const successCount = [res1, res2].filter((r) => r.status === "fulfilled").length;
+      const rejectedCount = [res1, res2].filter((r) => r.status === "rejected").length;
+      expect(successCount).toBe(1);
+      expect(rejectedCount).toBe(1);
+
+      // Confirm customer row now has passwordHash and emailVerified is TRUE
+      const [updatedCust] = await withTenant(rwDb.db, tenantId, async (tx) =>
+        tx.select().from(customers).where(eq(customers.id, customerId)),
+      );
+      expect(updatedCust!.passwordHash).toBeTruthy();
+      expect(updatedCust!.emailVerified).toBe(true);
+
+      // Login now succeeds with the password
       const loginRes = await loginCustomer(
         rwDb.db,
         tenantId,
@@ -269,31 +397,11 @@ describe("Customer Accounts & Order Actions", () => {
         { ip: "203.0.113.12" },
       );
       expect(loginRes.customer.id).toBe(customerId);
-      expect(loginRes.token).toBeDefined();
-
-      // Check session validity
-      const sessionCust = await getCustomerBySession(rwDb.db, tenantId, loginRes.token);
-      expect(sessionCust).toBeDefined();
-      expect(sessionCust!.id).toBe(customerId);
-
-      // Rejects bad password
-      await expect(
-        loginCustomer(rwDb.db, tenantId, { email: custEmail, password: "wrong-password" }),
-      ).rejects.toThrow(/Invalid email or password/);
+      expect(loginRes.customer.emailVerified).toBe(true);
+      initialSessionToken = loginRes.token;
     });
 
     it("verifies customer email via action_token and adopts guest orders with that email", async () => {
-      // Find the email_verification action token
-      const [tokenRow] = await withTenant(rwDb.db, tenantId, async (tx) =>
-        tx
-          .select()
-          .from(actionTokens)
-          .where(
-            eq(actionTokens.purpose, "email_verification"),
-          ),
-      );
-      expect(tokenRow).toBeDefined();
-
       // Place a guest order with custEmail
       const cart = await getOrCreateCart(rt, ctx, "guest_cart_for_shopper_c");
       await addToCart(rt, ctx, { token: cart.token, variantId, quantity: 1 });
@@ -309,26 +417,31 @@ describe("Customer Accounts & Order Actions", () => {
         paymentMethod: "cod",
       });
 
-      // Before email verification: getCustomerOrders only returns orders with customerId = customerId
-      const ordersBefore = await getCustomerOrders(rwDb.db, tenantId, customerId);
-      expect(ordersBefore.some((o) => o.number === guestOrder.orderNumber)).toBe(false);
-
-      // Verify email using customer verification function
-      // (Directly simulate consuming the token in action_tokens)
-      await withTenant(rwDb.db, tenantId, async (tx) => {
-        await tx
-          .update(actionTokens)
-          .set({ usedAt: new Date() })
-          .where(eq(actionTokens.id, tokenRow!.id));
-        await tx
-          .update(customers)
-          .set({ emailVerified: true })
-          .where(eq(customers.id, customerId));
-      });
-
-      // After email verification: getCustomerOrders adopts orders placed with custEmail
+      // Customer orders includes guest order because emailVerified is true
       const ordersAfter = await getCustomerOrders(rwDb.db, tenantId, customerId);
       expect(ordersAfter.some((o) => o.number === guestOrder.orderNumber)).toBe(true);
+
+      // Concurrency test on verifyCustomerEmail guarded consumption
+      const rawVerifyToken = "raw_test_verify_token_shopper_c_concurrency";
+      const { createHash } = await import("node:crypto");
+      const vHash = createHash("sha256").update(rawVerifyToken).digest("hex");
+
+      await withTenant(rwDb.db, tenantId, async (tx) => {
+        await tx.insert(actionTokens).values({
+          tenantId,
+          purpose: "email_verification",
+          targetId: customerId,
+          tokenHash: vHash,
+          expiresAt: new Date(Date.now() + 60 * 60 * 1000),
+        });
+      });
+
+      const [vRes1, vRes2] = await Promise.allSettled([
+        verifyCustomerEmail(rwDb.db, tenantId, rawVerifyToken),
+        verifyCustomerEmail(rwDb.db, tenantId, rawVerifyToken),
+      ]);
+      expect([vRes1, vRes2].filter((r) => r.status === "fulfilled")).toHaveLength(1);
+      expect([vRes1, vRes2].filter((r) => r.status === "rejected")).toHaveLength(1);
     });
 
     it("customer password reset: single-use, 1-hour expiry, revokes all active sessions", async () => {

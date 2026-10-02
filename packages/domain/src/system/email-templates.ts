@@ -251,6 +251,16 @@ const TEMPLATES: Record<string, Builder> = {
     const text = `Reset your password\n\nWe received a request to reset your password for ${brand.storeName}. This link will expire in 1 hour.\n\nReset password: ${resetUrl}\n\nIf you didn't ask to reset your password, you can safely ignore this email.${footerText(brand)}`;
     return { html, text };
   },
+  customer_account_setup: (brand, data, subject) => {
+    const setupUrl = String(data.setupUrl ?? data.resetUrl ?? data.url ?? "");
+    const html = layout(
+      brand,
+      subject,
+      `${heading(`Set up your account for ${escapeHtml(brand.storeName)}`)}${para("Thank you for signing up! Please click the button below to set your password and complete setting up your account.")}${setupUrl ? button("Set your password", setupUrl) : ""}${para("This link will expire in 24 hours. If you didn't create an account, you can safely ignore this email.")}`,
+    );
+    const text = `Set up your account for ${brand.storeName}\n\nThank you for signing up! Please visit the link below to set your password and complete setting up your account:\n\n${setupUrl}\n\nThis link will expire in 24 hours. If you didn't create an account, you can safely ignore this email.${footerText(brand)}`;
+    return { html, text };
+  },
 };
 
 /** The email content for a template. Unknown templates still produce a readable email instead of a debug string. */

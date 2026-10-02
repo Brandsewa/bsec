@@ -1,7 +1,7 @@
 import nodemailer, { type Transporter } from "nodemailer";
 import { type Db, schema } from "@bs/db";
 import { decryptSecret } from "@bs/payments";
-import { eq } from "drizzle-orm";
+import { eq, sql } from "drizzle-orm";
 import { checkRateLimit, RateLimitExceededError } from "./rate-limit.ts";
 
 export interface SendPlatformEmailInput {
@@ -306,4 +306,20 @@ export async function sendPlatformEmail(
   } catch {
     return { status: "sent", providerMessageId };
   }
+}
+
+/**
+ * 90-day retention prune job for platform_email_log (PLAN §3.1).
+ * Deletes log entries older than retentionDays (default: 90 days).
+ */
+export async function prunePlatformEmailLogs(
+  db: Db,
+  retentionDays: number = 90,
+): Promise<{ deletedCount: number }> {
+  const days = Math.max(1, Math.floor(retentionDays));
+  const result = await db.execute(
+    sql`DELETE FROM platform_email_log WHERE created_at < NOW() - (${days} || ' days')::INTERVAL RETURNING id`,
+  );
+  const rows = (result as unknown as { rows?: unknown[] })?.rows ?? (Array.isArray(result) ? result : []);
+  return { deletedCount: rows.length };
 }

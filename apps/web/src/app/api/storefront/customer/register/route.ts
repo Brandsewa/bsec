@@ -2,13 +2,13 @@ import { NextResponse } from "next/server";
 import { z } from "zod";
 import { evaluateStorefrontAccess, registerCustomer, getClientIp } from "@bs/domain";
 import { server } from "@/server/runtime.ts";
-import { customerCookie, getRequestHeaders, sameOrigin } from "@/server/customer-session.ts";
+import { getRequestHeaders, sameOrigin } from "@/server/customer-session.ts";
 
 const RegisterSchema = z.object({
   name: z.string().max(120).optional(),
   email: z.string().email("A valid email address is required").max(254),
   phone: z.string().regex(/^[6-9][0-9]{9}$/, "Valid 10-digit Indian phone number").optional().or(z.literal("")),
-  password: z.string().min(10, "Password must be at least 10 characters").max(128),
+  password: z.string().min(10, "Password must be at least 10 characters").max(128).optional(),
   acceptsMarketing: z.boolean().optional(),
 });
 
@@ -36,23 +36,22 @@ export async function POST(req: Request) {
 
     const clientIp = getClientIp(req.headers);
 
-    const result = await registerCustomer(
+    await registerCustomer(
       rt._db.db,
       access.tenantId,
       {
         name: parsed.data.name,
         email: parsed.data.email,
         phone: parsed.data.phone || undefined,
-        password: parsed.data.password,
         acceptsMarketing: parsed.data.acceptsMarketing,
       },
       { ip: clientIp, userAgent: h.get("user-agent") ?? undefined },
     );
 
-    const response = NextResponse.json(
+    return NextResponse.json(
       {
         success: true,
-        ...(result.customer ? { customer: result.customer } : {}),
+        message: "An account setup link has been sent to your email.",
       },
       {
         headers: {
@@ -60,12 +59,6 @@ export async function POST(req: Request) {
         },
       },
     );
-
-    if (result.token) {
-      response.cookies.set(customerCookie(result.token));
-    }
-
-    return response;
   } catch (err: unknown) {
     const { RateLimitExceededError } = await import("@bs/domain");
     if (err instanceof RateLimitExceededError) {

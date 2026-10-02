@@ -12,6 +12,7 @@ import {
 import {
   sendPlatformEmail,
   setPlatformEmailTransportFactory,
+  prunePlatformEmailLogs,
 } from "../src/system/platform-mailer.ts";
 import { decryptSecret } from "@bs/payments";
 import { eq } from "drizzle-orm";
@@ -214,5 +215,47 @@ describe("platform email settings and mailer (Phase A real database)", () => {
     expect(result.status).toBe("failed");
     expect(result.error).not.toContain(token);
     expect(result.error).toContain("[REDACTED]");
+  });
+
+  it("prunePlatformEmailLogs deletes logs older than 90 days and leaves recent logs", async () => {
+    // Insert an old log (91 days ago) and a recent log (10 days ago) directly
+    const [oldRow] = await rt._db.db
+      .insert(schema.platformEmailLog)
+      .values({
+        toEmail: "old@test.com",
+        template: "order_confirmation",
+        status: "sent",
+        createdAt: new Date(Date.now() - 91 * 24 * 60 * 60 * 1000),
+      })
+      .returning({ id: schema.platformEmailLog.id });
+
+    const [recentRow] = await rt._db.db
+      .insert(schema.platformEmailLog)
+      .values({
+        toEmail: "recent@test.com",
+        template: "order_confirmation",
+        status: "sent",
+        createdAt: new Date(Date.now() - 10 * 24 * 60 * 60 * 1000),
+      })
+      .returning({ id: schema.platformEmailLog.id });
+
+    // Run prune job for 90 days
+    const pruneRes = await prunePlatformEmailLogs(rt._db.db, 90);
+    expect(pruneRes.deletedCount).toBeGreaterThanOrEqual(1);
+
+    // Old row should be gone
+    const [remainingOld] = await rt._db.db
+      .select()
+      .from(schema.platformEmailLog)
+      .where(eq(schema.platformEmailLog.id, oldRow!.id));
+    expect(remainingOld).toBeUndefined();
+
+    // Recent row should still exist
+    const [remainingRecent] = await rt._db.db
+      .select()
+      .from(schema.platformEmailLog)
+      .where(eq(schema.platformEmailLog.id, recentRow!.id));
+    expect(remainingRecent).toBeDefined();
+    expect(remainingRecent!.toEmail).toBe("recent@test.com");
   });
 });

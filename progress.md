@@ -47,9 +47,15 @@ Source of truth: `docs/PLAN.html` v2.0 (build order in `docs/BUILD-PLAN-M2-M9.md
 - [x] **Security Invariants & Verification**:
   - Host-only, httpOnly, SameSite=Lax customer session cookies.
   - Cross-tenant rejection: sessions and tokens from Store A are strictly rejected on Store B.
-  - Real database integration tests in `customer-accounts.int.test.ts` (10/10 passed).
+  - Real database integration tests in `customer-accounts.int.test.ts` (12/12 passed).
   - Storefront web suite (`test/customer-pages.test.ts` and full `apps/web` suite 16/16 files, 158/158 tests passed).
   - Turbo typecheck (15/15 packages passed) and Turbo lint (15/15 packages passed).
+- [x] **Review Security Hardening & Concurrency Fixes**:
+  - **Pre-registration Takeover Prevention**: `registerCustomer` collects name + email only, creates/keeps row without altering existing row's name, phone, passwordHash or addresses. Sends a setup link (`action_tokens` purpose `password_reset`) allowing customer to set a password and mark `emailVerified=true`.
+  - **Login Timing Oracle Defense**: Non-existent emails and passwordless accounts always verify against a constant dummy Argon2 hash (`DUMMY_PASSWORD_HASH`) to ensure indistinguishable execution time.
+  - **Guarded Atomic Token Consumption**: `verifyCustomerEmail` and `resetCustomerPassword` now execute single guarded `UPDATE ... WHERE used_at IS NULL AND expires_at > now() RETURNING` to guarantee atomicity and concurrency safety under simultaneous redemption.
+  - **Email Verified on Reset**: Successful password reset / setup link consumption sets `emailVerified = true`.
+  - **90-Day Retention Prune Job**: Implemented `prunePlatformEmailLogs(db, 90)` in `platform-mailer.ts` and integrated into the 15-minute maintenance pass in `jobs.ts`. Tested in `platform-mailer.int.test.ts`.
 
 ### Phase D: Cleanup, Invites, Documentation & Deployment Runbook — Complete
 - [x] **Cleanup & Dead Code Removal**:

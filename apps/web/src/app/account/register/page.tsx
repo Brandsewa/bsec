@@ -2,16 +2,13 @@
 
 import React, { useState } from "react";
 import Link from "next/link";
-import { useRouter } from "next/navigation";
 
 const inputClass = "w-full rounded-md border border-border bg-background px-3 py-2 text-sm";
 
 export default function RegisterPage() {
-  const router = useRouter();
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
   const [phone, setPhone] = useState("");
-  const [password, setPassword] = useState("");
   const [acceptsMarketing, setAcceptsMarketing] = useState(false);
 
   const [busy, setBusy] = useState(false);
@@ -31,7 +28,6 @@ export default function RegisterPage() {
           name: name.trim() || undefined,
           email,
           phone: phone || undefined,
-          password,
           acceptsMarketing,
         }),
       });
@@ -42,10 +38,6 @@ export default function RegisterPage() {
       }
 
       setRegistered(true);
-      setTimeout(() => {
-        router.push("/account");
-        router.refresh();
-      }, 1500);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Registration failed");
       setBusy(false);
@@ -58,8 +50,16 @@ export default function RegisterPage() {
       <p className="mt-1 text-sm text-muted-foreground">Sign up to track orders, save multiple addresses, and checkout faster.</p>
 
       {registered ? (
-        <div className="mt-5 rounded-lg bg-primary/10 p-4 text-center text-sm font-medium text-primary">
-          Account created! Verification link sent to your email. Redirecting…
+        <div className="mt-5 space-y-4">
+          <div className="rounded-lg bg-primary/10 p-4 text-center text-sm font-medium text-primary">
+            An account setup link has been sent to <strong className="text-foreground">{email}</strong>. Please check your inbox and click the link to set your password and complete your registration.
+          </div>
+          <Link
+            href="/account/login"
+            className="block text-center text-sm font-semibold text-primary hover:underline"
+          >
+            Return to sign in
+          </Link>
         </div>
       ) : (
         <form onSubmit={handleRegister} className="mt-5 space-y-4">
@@ -101,21 +101,6 @@ export default function RegisterPage() {
               placeholder="10-digit number"
             />
             <span className="mt-1 block text-xs text-muted-foreground">Mandatory only at checkout for delivery.</span>
-          </label>
-
-          <label className="block text-sm">
-            <span className="mb-1 block font-medium text-foreground">Password</span>
-            <input
-              required
-              type="password"
-              minLength={10}
-              maxLength={128}
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
-              className={inputClass}
-              autoComplete="new-password"
-            />
-            <span className="mt-1 block text-xs text-muted-foreground">Minimum 10 characters.</span>
           </label>
 
           <label className="flex items-start gap-2 pt-1 text-sm text-muted-foreground">
