@@ -134,6 +134,29 @@ import {
   listAdminReturns,
   requestReturn,
   actOnReturn,
+  getAdminAbandonedCheckoutStats,
+  listAdminAbandonedCheckouts,
+  createAdminCustomer,
+  getOrderSettings,
+  updateOrderSettings,
+  estimateAdminDraftOrder,
+  getAdminOrderStats,
+  changePreorderShipDate,
+  listPreorders,
+  releasePreorderNow,
+  getPreorderStats,
+  deleteAdminQuote,
+  getAdminQuoteDetail,
+  linkOrderToQuote,
+  listAdminQuotes,
+  markAdminQuoteLost,
+  reopenAdminQuote,
+  getAdminQuoteStats,
+  updateAdminQuoteNote,
+  getReturnSettings,
+  updateReturnSettings,
+  getAdminReturnDetail,
+  getAdminReturnStats,
 } from "../src/index.ts";
 
 const PW = { owner: "o_test", rw: "rw_test", platform: "p_test" };
@@ -367,6 +390,7 @@ describe("Generated Isolation Test Suite (M1 Real Postgres 18 Proof)", () => {
             "orders.write",
             "orders.refund",
             "customers.read",
+            "customers.write",
             "discounts.write",
           ],
         },
@@ -882,12 +906,13 @@ describe("Generated Isolation Test Suite (M1 Real Postgres 18 Proof)", () => {
         return await cancelAdminOrder(rt, ctx, { id: draft.orderId, reason: "Customer request" });
       }
       case "orders.refund": {
-        // Create and refund an order
+        // Create and refund a paid order
         const draft = await createAdminDraftOrder(rt, ctx, {
           email: `refund-${Date.now()}@test.com`,
           phone: "+919876543210",
           shippingAddress: { line1: "123 MG Road", city: "Bengaluru", stateCode: "KA", pincode: "560001" },
           items: [{ variantId: testVariantA, quantity: 1 }],
+          paymentOutcome: "paid",
         });
         return await refundAdminOrder(rt, ctx, { id: draft.orderId, amount: 500 });
       }
@@ -1081,6 +1106,146 @@ describe("Generated Isolation Test Suite (M1 Real Postgres 18 Proof)", () => {
       case "onboarding.dismiss":
         assertPermission(ctx, "settings.write");
         return await dismissOnboardingProgress(rt, ctx);
+
+      // --- Abandoned checkouts ---
+      case "abandonedCheckouts.list":
+        return await listAdminAbandonedCheckouts(rt, ctx);
+      case "abandonedCheckouts.stats":
+        return await getAdminAbandonedCheckoutStats(rt, ctx);
+
+      // --- Customers create ---
+      case "customers.create":
+        return await createAdminCustomer(rt, ctx, {
+          name: `Customer-${Date.now()}`,
+          email: `cust-${Date.now()}-${Math.random().toString(36).slice(2, 6)}@test.com`,
+          phone: `+9198${Math.floor(10000000 + Math.random() * 90000000)}`,
+        });
+
+      // --- Order settings & stats & draft estimate ---
+      case "orderSettings.get":
+        return await getOrderSettings(rt, ctx);
+      case "orderSettings.update":
+        return await updateOrderSettings(rt, ctx, { prefix: "ORD-" });
+      case "orders.estimateDraft":
+        return await estimateAdminDraftOrder(rt, ctx, {
+          shippingAddress: { state: "Delhi", pincode: "110001" },
+          items: [{ variantId: testVariantA, quantity: 1 }],
+        });
+      case "orders.stats":
+        return await getAdminOrderStats(rt, ctx);
+
+      // --- Preorders ---
+      case "preorders.list":
+        return await listPreorders(rt, ctx);
+      case "preorders.stats":
+        return await getPreorderStats(rt, ctx);
+      case "preorders.changeShipDate": {
+        const draft = await createAdminDraftOrder(rt, ctx, {
+          email: `pre-change-${Date.now()}@test.com`,
+          phone: "+919876543210",
+          shippingAddress: { line1: "123 MG Road", city: "Bengaluru", stateCode: "KA", pincode: "560001" },
+          items: [{ variantId: testVariantA, quantity: 1 }],
+        });
+        await withTenant(rt._db.db, ctx.tenantId, async (tx) => {
+          await tx
+            .update(schema.orders)
+            .set({ shipsOn: "2026-12-01" })
+            .where(eq(schema.orders.id, draft.orderId));
+          await tx
+            .update(schema.orderItems)
+            .set({ shipsOn: "2026-12-01" })
+            .where(eq(schema.orderItems.orderId, draft.orderId));
+        });
+        return await changePreorderShipDate(rt, ctx, {
+          orderIds: [draft.orderId],
+          shipsOn: "2026-12-15",
+          reason: "Factory delay",
+        });
+      }
+      case "preorders.releaseNow": {
+        const draft = await createAdminDraftOrder(rt, ctx, {
+          email: `pre-rel-${Date.now()}@test.com`,
+          phone: "+919876543210",
+          shippingAddress: { line1: "123 MG Road", city: "Bengaluru", stateCode: "KA", pincode: "560001" },
+          items: [{ variantId: testVariantA, quantity: 1 }],
+        });
+        await withTenant(rt._db.db, ctx.tenantId, async (tx) => {
+          await tx
+            .update(schema.orders)
+            .set({ shipsOn: "2026-12-01" })
+            .where(eq(schema.orders.id, draft.orderId));
+        });
+        return await releasePreorderNow(rt, ctx, { id: draft.orderId });
+      }
+
+      // --- Quotes ---
+      case "quotes.list":
+        return await listAdminQuotes(rt, ctx);
+      case "quotes.stats":
+        return await getAdminQuoteStats(rt, ctx);
+      case "quotes.get":
+      case "quotes.updateNote":
+      case "quotes.markLost":
+      case "quotes.reopen":
+      case "quotes.delete":
+      case "quotes.linkOrder": {
+        let quoteId = "";
+        await withTenant(rt._db.db, ctx.tenantId, async (tx) => {
+          const [q] = await tx
+            .insert(schema.quoteRequests)
+            .values({
+              tenantId: ctx.tenantId,
+              number: `QT-ISO-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
+              productId: testProductA,
+              variantId: testVariantA,
+              productTitle: "Sample T-Shirt",
+              variantTitle: "Small / Black",
+              quantity: 5,
+              name: "Quote Lead",
+              email: `quote-${Date.now()}@test.com`,
+              phone: "+919876543210",
+              status: "new",
+            })
+            .returning({ id: schema.quoteRequests.id });
+          quoteId = q!.id;
+        });
+
+        if (procPath === "quotes.get") return await getAdminQuoteDetail(rt, ctx, { id: quoteId });
+        if (procPath === "quotes.updateNote") return await updateAdminQuoteNote(rt, ctx, { id: quoteId, adminNote: "Follow up" });
+        if (procPath === "quotes.markLost") return await markAdminQuoteLost(rt, ctx, { id: quoteId, reason: "Too expensive" });
+        if (procPath === "quotes.reopen") {
+          await markAdminQuoteLost(rt, ctx, { id: quoteId, reason: "Test lost" });
+          return await reopenAdminQuote(rt, ctx, { id: quoteId });
+        }
+        if (procPath === "quotes.delete") return await deleteAdminQuote(rt, ctx, { id: quoteId });
+        if (procPath === "quotes.linkOrder") return await linkOrderToQuote(rt, ctx, { id: quoteId, orderId: testOrderA });
+        throw new Error(`Unhandled quotes proc: ${procPath}`);
+      }
+
+      // --- Return settings & return details/stats ---
+      case "returnSettings.get":
+        return await getReturnSettings(rt, ctx);
+      case "returnSettings.update":
+        return await updateReturnSettings(rt, ctx, { acceptReturns: true, returnWindowDays: 14 });
+      case "returns.stats":
+        return await getAdminReturnStats(rt, ctx);
+      case "returns.get": {
+        const draft = await createAdminDraftOrder(rt, ctx, {
+          email: `ret-get-${Date.now()}@test.com`,
+          phone: "+919876543210",
+          shippingAddress: { line1: "123 MG Road", city: "Bengaluru", stateCode: "KA", pincode: "560001" },
+          items: [{ variantId: testVariantA, quantity: 1 }],
+        });
+        await advanceAdminOrder(rt, ctx, { id: draft.orderId, to: "delivered" });
+        const [line] = await getAdminOrderDetail(rt, ctx, { id: draft.orderId }).then((d) => d.items);
+        const req = await requestReturn(rt, ctx, {
+          orderId: draft.orderId,
+          reason: "Damaged or defective",
+          items: [{ orderItemId: line!.id, quantity: 1 }],
+        });
+        return await getAdminReturnDetail(rt, ctx, { id: req.returnId });
+      }
+
       default:
         throw new Error(`Unmapped procedure in isolation test: ${procPath}`);
     }
@@ -1212,6 +1377,7 @@ describe("Generated Isolation Test Suite (M1 Real Postgres 18 Proof)", () => {
             "orders.write",
             "orders.refund",
             "customers.read",
+            "customers.write",
             "discounts.write",
           ]);
 
