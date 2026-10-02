@@ -1,0 +1,14 @@
+# Secret scan config (CI job `secret-scan`). Extends the default ruleset.
+# Test files hold fake keys and fixture identifiers (whsec_..., idemp_..., test secrets), which the generic
+# api-key rule flags. Real secrets must never be committed anywhere (AGENTS.md rule 7); this only silences
+# fixtures under test directories.
+[extend]
+useDefault = true
+
+[allowlist]
+description = "fixtures in test directories"
+paths = [
+  '''(^|/)test/''',
+  '''(^|/)e2e/''',
+  '''\.test\.tsx?$''',
+]

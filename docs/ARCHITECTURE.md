@@ -4,7 +4,7 @@
 
 | | |
 |---|---|
-| Last verified against | commit `036b148` on branch `feat/themes-puck`, 2026-10-01 |
+| Last verified against | commit `d730629` on branch `chore/repo-guardrails`, 2026-10-02 |
 | Verified how | files read from the working tree; `pnpm docs:check` for the mechanical parts. Facts marked *(from code)* were read, not run. |
 | Owner | whoever changes the area (see the update triggers in section 0) |
 
@@ -121,7 +121,8 @@ pnpm workspace + Turborepo. Node `24.15`, pnpm `10.34.5`, TypeScript 6, ESLint 1
 | `infra/` | `docker/` (one Dockerfile per app + nginx confs), `coolify/RUNBOOK.md` (real UUIDs and config), `backups/`, `loadtest/` (k6 scripts), `monitoring/`, `runbooks/`, `uptime/` |
 | `e2e/` | Playwright: `admin.spec.ts`, `superadmin.spec.ts` (run in CI against the ephemeral stack) |
 | `scripts/` | `extract-plan.cjs`, `check-docs.mjs` (docs freshness check) |
-| `.github/workflows/ci.yml` | The only pipeline: gates, images, staging smoke test, production deploy |
+| `.github/workflows/ci.yml` | The only pipeline: gates (incl. `secret-scan`), images, staging smoke test, production deploy |
+| `.github/` (other) | `dependabot.yml` (weekly updates), `CODEOWNERS`, `PULL_REQUEST_TEMPLATE.md`; `.gitleaks.toml` at the root configures the secret scan; `.claude/settings.json` denies agents reading `.env*`/keys and asks before force-push, `reset --hard`, `--no-verify` |
 | `docker-compose.yml`, `docker-compose.staging.yml`, `docker-compose.test-db.yml` | local stack, CI ephemeral stack, test database |
 | `DEPLOYMENT.md` | Env vars per service, DB role table, operator tools, wildcard routing |
 | `progress.md` | Milestone status board and known gaps |
@@ -145,6 +146,7 @@ Git: `main` is production (every push to `main` that passes CI **deploys**). Fea
 
 ```
 PR or push -> check-fast (typecheck, lint, build, test:fast) + check-heavy (test:heavy on real Postgres 18)
+             + secret-scan (Gitleaks CLI over full history, config .gitleaks.toml; images wait for it)
 push to main -> images (web, platform, worker, admin, superadmin, migrate -> ghcr.io/brandsewa/bsec-*)
              -> staging-smoke-test (ephemeral compose, /health checks, Playwright e2e)
              -> deploy production (Coolify: run bsec-migrate, then deploy the app UUIDs)

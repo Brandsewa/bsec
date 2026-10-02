@@ -1,0 +1,23 @@
+# Weekly dependency and security updates. Pins stay exact (AGENTS.md section 3), so Dependabot opens PRs
+# for the bumps; they go through the same CI gate as any change. Majors (Next.js, Turbo, Vite...) arrive
+# as their own PRs, never inside the grouped minor/patch one.
+version: 2
+updates:
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly
+
+  - package-ecosystem: npm
+    directory: /
+    schedule:
+      interval: weekly
+    open-pull-requests-limit: 5
+    groups:
+      minor-and-patch:
+        update-types: [minor, patch]
+
+  - package-ecosystem: docker
+    directory: /infra/docker
+    schedule:
+      interval: weekly
