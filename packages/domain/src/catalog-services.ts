@@ -30,6 +30,7 @@ export interface CreateProductInput {
   requiresShipping?: boolean | undefined;
   isFeatured?: boolean | undefined;
   priceOnRequest?: boolean | undefined;
+  returnable?: boolean | undefined;
   options?: Array<{ name: string; values: string[] }> | undefined;
   variants?: Array<{
     sku: string;
@@ -60,6 +61,7 @@ export interface UpdateProductInput {
   requiresShipping?: boolean | undefined;
   isFeatured?: boolean | undefined;
   priceOnRequest?: boolean | undefined;
+  returnable?: boolean | undefined;
 }
 
 export interface UpdateVariantInput {
@@ -355,6 +357,7 @@ export async function createProduct(
         requiresShipping: input.requiresShipping ?? true,
         isFeatured: input.isFeatured ?? false,
         priceOnRequest: input.priceOnRequest ?? false,
+        returnable: input.returnable ?? true,
       })
       .returning();
 
@@ -504,6 +507,7 @@ export async function updateProduct(
     if (input.requiresShipping !== undefined) updateValues.requiresShipping = input.requiresShipping;
     if (input.isFeatured !== undefined) updateValues.isFeatured = input.isFeatured;
     if (input.priceOnRequest !== undefined) updateValues.priceOnRequest = input.priceOnRequest;
+    if (input.returnable !== undefined) updateValues.returnable = input.returnable;
 
     const [row] = await tx
       .update(schema.products)
