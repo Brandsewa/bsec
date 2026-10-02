@@ -215,6 +215,7 @@ Drizzle schema files in `packages/db/src/schema/` (one Postgres database, `publi
 | `platform.ts` | `domains`, `feature_flags`, `tenant_feature_overrides`, `platform_staff`, `platform_staff_invitations`, `support_sessions`, `tenant_deletions`, `tenant_notes`, `export_files` |
 | `quotas.ts` | `rate_limit_counters`, `quota_definitions`, `tenant_size_tiers`, `tenant_quota_overrides`, `quota_events`, `tenant_active_jobs` |
 | `saas.ts` | `plans`, `subscriptions`, `platform_invoices`, `platform_audit_logs`, `theme_templates`, `signup_leads`, `slug_reservations`, `reserved_slugs`, `onboarding_progress`, `tenant_owner_invites`, `exports` |
+| `quotes.ts` | `quote_requests` T |
 | `index.ts` | `_platform_meta` |
 
 (Exact tenant/platform split per table: check the declaration, `tenantTable(` vs `pgTable(`. Column details: read the schema file.)
@@ -245,8 +246,9 @@ Drizzle schema files in `packages/db/src/schema/` (one Postgres database, `publi
 | 0019 | `domain_bcom_si` | platform domain gobs.cloud -> bcom.si: rewrites platform `domains` hostnames and the default sender |
 | 0020 | `preorders` | preorder flags on variants, ships_on on variants/orders/order_items, preorder_released_at |
 | 0021 | `order_tags` | orders.tags text[] array for categorization and filtering |
+| 0022 | `quotes` | products.price_on_request, quote_requests table with RLS and number sequences |
 
-How to write one (expand, migrate, contract; `forceRlsSql`): `docs/migrations.md`. **Never edit an applied migration.** Latest on disk: `0021` (the docs check keeps this list honest).
+How to write one (expand, migrate, contract; `forceRlsSql`): `docs/migrations.md`. **Never edit an applied migration.** Latest on disk: `0022` (the docs check keeps this list honest).
 
 ---
 

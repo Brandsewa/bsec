@@ -541,7 +541,7 @@ export async function estimateAdminDraftOrder(
 export interface CreateAdminDraftOrderInput {
   customerId?: string | null | undefined;
   email: string;
-  phone: string;
+  phone?: string | undefined;
   shippingAddress: Record<string, unknown>;
   billingAddress?: Record<string, unknown> | undefined;
   items: Array<{
@@ -564,6 +564,7 @@ export interface CreateAdminDraftOrderInput {
   paymentReference?: string | undefined;
   notes?: string | undefined;
   tags?: string[] | undefined;
+  quoteId?: string | undefined;
 }
 
 export async function createAdminDraftOrder(
@@ -811,7 +812,7 @@ export async function createAdminDraftOrder(
         number: orderNumber,
         customerId: input.customerId ?? null,
         email: input.email,
-        phone: input.phone,
+        phone: input.phone || "",
         currency: "INR",
         status,
         paymentStatus,
@@ -1003,6 +1004,34 @@ export async function createAdminDraftOrder(
           },
         });
       }
+    }
+
+    if (input.quoteId) {
+      await tx
+        .update(schema.quoteRequests)
+        .set({
+          orderId: order.id,
+          status: "quoted",
+          quotedTotal: grandTotal,
+          quotedAt: new Date(),
+          validUntil: sql`now() + make_interval(days => 7)`,
+          updatedAt: new Date(),
+        })
+        .where(and(eq(schema.quoteRequests.tenantId, ctx.tenantId), eq(schema.quoteRequests.id, input.quoteId)));
+
+      await tx.insert(schema.auditLogs).values({
+        tenantId: ctx.tenantId,
+        actorType: ctx.actor.type,
+        actorId: ctx.actor.type === "staff" ? ctx.actor.userId : null,
+        action: "quote.order_linked",
+        targetType: "quote",
+        targetId: input.quoteId,
+        diff: {
+          orderId: order.id,
+          orderNumber,
+          grandTotal,
+        },
+      });
     }
 
     return {

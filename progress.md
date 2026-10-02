@@ -81,7 +81,15 @@ Source of truth: `docs/PLAN.html` v2.0 (build order in `docs/BUILD-PLAN-M2-M9.md
 One line per piece of work that is started and not merged. Add yours before you start, remove it when merged or abandoned (`AGENTS.md` section 6). Format: `agent · branch · area · since · one-line goal`.
 
 - claude · `feat/themes-puck` · themes, docs · 2026-10-01 · theme builder follow-ups; agent docs and change log (`docs/changes/`)
-- antigravity · `feat/orders-phase2` · orders, create-order · 2026-10-02 · All orders Phase 2 (Create order parity, D1-D7)
+
+## Quotes (Lean, industry-standard model) — Complete (2026-10-02)
+
+Spec: `docs/ORDERS-QUOTES-PLAN.md`. Built on `feat/orders-quotes`.
+- [x] **Database & Migrations**: Expand-only migration `0022_quotes.sql` adding `price_on_request boolean not null default false` to `products`; new tenant table `quote_requests` with sequential gapless numbering `QT-00001` via `number_sequences`, product/variant snapshots, status machine (`new`, `quoted`, `accepted`, `lost`, `expired`), composite FKs, and RLS (`forceRlsSql`).
+- [x] **Storefront & Protection**: `addToCart` and `placeOrder` reject `price_on_request` variants; product cards and details show "Price on request" badge and accessible "Request a quote" modal dialog; public submission rate-limited by IP and email with client price override prevention.
+- [x] **Admin Workbench & Management**: Dedicated Quotes workbench at `/quotes` with 5 KPI cards (Needs reply, Quote sent, Expired, Accepted, Total quotes value), tabs, search, filter chips, DataTable, CSV export, and detail `Sheet` with notes, status transition controls (Mark lost, Reopen, Delete), and "Create quote order" button.
+- [x] **Order Conversion & Sweep**: Admin `/orders/new` prefilling customer, variant, price override from `quoteId`; linking quote creates pending order, sets `valid_until` (default 7 days); daily sweep / `runQuoteExpirySweep` cancels unconfirmed pending orders on expiry and releases reserved stock.
+- [x] **Verification**: Real Postgres integration suite (`packages/domain/test/quotes.int.test.ts`, 8/8 passed), `pnpm typecheck` (15/15 passed), `pnpm lint` (15/15 passed), `pnpm build` (all passed), `pnpm docs:check` (ok).
 
 ## All Orders Phase 2 (Create Order Parity D1-D7) — Complete (2026-10-02)
 

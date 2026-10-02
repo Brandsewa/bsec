@@ -227,5 +227,30 @@ export const storefrontContract = {
       .input(StatusVerifyPasswordInput)
       .output(StatusVerifyPasswordOutput),
   },
+
+  quotes: {
+    submit: oc
+      .route({ method: "POST", path: "/storefront/quotes/submit" })
+      .input(
+        z.object({
+          productId: z.string().uuid(),
+          variantId: z.string().uuid(),
+          quantity: z.number().int().min(1).max(100_000).default(1),
+          name: z.string().trim().min(1).max(100),
+          email: z.string().trim().email().max(255),
+          phone: z.string().trim().min(10).max(20),
+          company: z.string().trim().max(100).optional(),
+          message: z.string().trim().max(2000).optional(),
+        }),
+      )
+      .output(
+        z.object({
+          success: z.boolean(),
+          quoteNumber: z.string(),
+          message: z.string(),
+        }),
+      ),
+  },
 };
 export type StorefrontContract = typeof storefrontContract;
+

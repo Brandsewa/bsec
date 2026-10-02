@@ -29,6 +29,7 @@ export interface CreateProductInput {
   tags?: string[] | undefined;
   requiresShipping?: boolean | undefined;
   isFeatured?: boolean | undefined;
+  priceOnRequest?: boolean | undefined;
   options?: Array<{ name: string; values: string[] }> | undefined;
   variants?: Array<{
     sku: string;
@@ -58,6 +59,7 @@ export interface UpdateProductInput {
   tags?: string[] | undefined;
   requiresShipping?: boolean | undefined;
   isFeatured?: boolean | undefined;
+  priceOnRequest?: boolean | undefined;
 }
 
 export interface UpdateVariantInput {
@@ -193,6 +195,7 @@ export async function listProducts(
           hsn: r.hsn,
           requiresShipping: r.requiresShipping,
           isFeatured: r.isFeatured,
+          priceOnRequest: Boolean(r.priceOnRequest),
           publishedAt: r.publishedAt ? r.publishedAt.toISOString() : undefined,
           ratingAvg: r.ratingAvg,
           ratingCount: r.ratingCount,
@@ -269,6 +272,7 @@ export async function getProduct(
       hsn: p.hsn,
       requiresShipping: p.requiresShipping,
       isFeatured: p.isFeatured,
+      priceOnRequest: Boolean(p.priceOnRequest),
       publishedAt: p.publishedAt ? p.publishedAt.toISOString() : undefined,
       ratingAvg: p.ratingAvg,
       ratingCount: p.ratingCount,
@@ -350,6 +354,7 @@ export async function createProduct(
         tags: input.tags ?? [],
         requiresShipping: input.requiresShipping ?? true,
         isFeatured: input.isFeatured ?? false,
+        priceOnRequest: input.priceOnRequest ?? false,
       })
       .returning();
 
@@ -402,7 +407,7 @@ export async function createProduct(
           productId: product.id,
           sku: v.sku,
           title: v.title,
-          price: BigInt(v.price),
+          price: BigInt(input.priceOnRequest ? 0 : v.price),
           compareAtPrice: v.compareAtPrice ? BigInt(v.compareAtPrice) : null,
           costPrice: v.costPrice ? BigInt(v.costPrice) : null,
           trackInventory: v.trackInventory ?? true,
@@ -433,6 +438,7 @@ export async function createProduct(
       hsn: product.hsn,
       requiresShipping: product.requiresShipping,
       isFeatured: product.isFeatured,
+      priceOnRequest: Boolean(product.priceOnRequest),
       publishedAt: product.publishedAt ? product.publishedAt.toISOString() : undefined,
       ratingAvg: product.ratingAvg,
       ratingCount: product.ratingCount,
@@ -497,6 +503,7 @@ export async function updateProduct(
     if (input.tags !== undefined) updateValues.tags = input.tags;
     if (input.requiresShipping !== undefined) updateValues.requiresShipping = input.requiresShipping;
     if (input.isFeatured !== undefined) updateValues.isFeatured = input.isFeatured;
+    if (input.priceOnRequest !== undefined) updateValues.priceOnRequest = input.priceOnRequest;
 
     const [row] = await tx
       .update(schema.products)
@@ -506,6 +513,10 @@ export async function updateProduct(
 
     if (!row) {
       throw new Error(`Product not found: "${input.id}"`);
+    }
+
+    if (input.priceOnRequest) {
+      await tx.update(schema.variants).set({ price: 0n }).where(eq(schema.variants.productId, row.id));
     }
 
     const catRows = await tx
@@ -541,6 +552,7 @@ export async function updateProduct(
       hsn: row.hsn,
       requiresShipping: row.requiresShipping,
       isFeatured: row.isFeatured,
+      priceOnRequest: Boolean(row.priceOnRequest),
       publishedAt: row.publishedAt ? row.publishedAt.toISOString() : undefined,
       ratingAvg: row.ratingAvg,
       ratingCount: row.ratingCount,

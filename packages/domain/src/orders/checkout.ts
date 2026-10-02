@@ -7,6 +7,7 @@ import {
   orderItems,
   orders,
   paymentIntents,
+  products,
   tenants,
   variants,
   withTenant,
@@ -164,9 +165,18 @@ export async function placeOrder(
         allowBackorder: variants.allowBackorder,
         preorderEnabled: variants.preorderEnabled,
         preorderShipsOn: variants.preorderShipsOn,
+        priceOnRequest: products.priceOnRequest,
       })
       .from(variants)
+      .innerJoin(
+        products,
+        and(eq(products.tenantId, variants.tenantId), eq(products.id, variants.productId)),
+      )
       .where(and(eq(variants.tenantId, tenantId), inArray(variants.id, variantIds)));
+
+    if (variantRows.some((v) => v.priceOnRequest)) {
+      throw new Error("This product is price on request and cannot be ordered through standard checkout");
+    }
 
     const variantMap = new Map(variantRows.map((v) => [v.id, v]));
 

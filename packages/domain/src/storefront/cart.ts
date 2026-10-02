@@ -357,6 +357,10 @@ export async function addToCart(
       throw new Error("Variant not found or product is not available");
     }
 
+    if (variantData.product.priceOnRequest) {
+      throw new Error("This product is price on request and cannot be added to cart");
+    }
+
     const unitPriceSnapshot = Number(variantData.variant.price);
 
     // 3. Upsert into cartItems: increment quantity if already exists

@@ -58,6 +58,7 @@ export function NewProductPage({ navigate }: { navigate?: (to: string) => void }
   const [description, setDescription] = useState("");
   const [tags, setTags] = useState("");
   const [requiresShipping, setRequiresShipping] = useState(true);
+  const [priceOnRequest, setPriceOnRequest] = useState(false);
   const [options, setOptions] = useState<OptionDraft[]>([]);
   const [variants, setVariants] = useState<VariantDraft[]>([
     { sku: "", title: "Default", price: "", compareAtPrice: "" },
@@ -101,10 +102,10 @@ export function NewProductPage({ navigate }: { navigate?: (to: string) => void }
     variants.forEach((v, i) => {
       if (!v.sku.trim()) e[`variant-sku-${i}`] = "SKU is required";
       if (!v.title.trim()) e[`variant-title-${i}`] = "Variant title is required";
-      if (v.price === "" || !Number.isFinite(Number(v.price)) || Number(v.price) < 0) {
+      if (!priceOnRequest && (v.price === "" || !Number.isFinite(Number(v.price)) || Number(v.price) < 0)) {
         e[`variant-price-${i}`] = "Enter a valid price";
       }
-      if (v.compareAtPrice !== "" && (!Number.isFinite(Number(v.compareAtPrice)) || Number(v.compareAtPrice) < 0)) {
+      if (!priceOnRequest && v.compareAtPrice !== "" && (!Number.isFinite(Number(v.compareAtPrice)) || Number(v.compareAtPrice) < 0)) {
         e[`variant-compare-${i}`] = "Enter a valid compare-at price";
       }
       if (v.preorderEnabled) {
@@ -146,12 +147,13 @@ export function NewProductPage({ navigate }: { navigate?: (to: string) => void }
         .map((s) => s.trim())
         .filter(Boolean),
       requiresShipping,
+      priceOnRequest,
       ...(cleanOptions.length > 0 ? { options: cleanOptions } : {}),
       variants: variants.map((v) => ({
         sku: v.sku.trim(),
         title: v.title.trim(),
-        price: toPaise(v.price),
-        ...(v.compareAtPrice !== "" ? { compareAtPrice: toPaise(v.compareAtPrice) } : {}),
+        price: priceOnRequest ? 0 : toPaise(v.price),
+        ...(!priceOnRequest && v.compareAtPrice !== "" ? { compareAtPrice: toPaise(v.compareAtPrice) } : {}),
         trackInventory: true,
         allowBackorder: false,
         preorderEnabled: Boolean(v.preorderEnabled),
@@ -265,7 +267,14 @@ export function NewProductPage({ navigate }: { navigate?: (to: string) => void }
 
             <Field orientation="horizontal">
               <Checkbox id="requires-shipping" checked={requiresShipping} onCheckedChange={(c) => setRequiresShipping(c)} />
-              <FieldLabel htmlFor="requires-shipping" className="font-normal">This is a physical product that requires shipping</FieldLabel>
+              <FieldLabel htmlFor="requires-shipping" className="font-normal cursor-pointer">This is a physical product that requires shipping</FieldLabel>
+            </Field>
+
+            <Field orientation="horizontal">
+              <Checkbox id="price-on-request" checked={priceOnRequest} onCheckedChange={(c) => setPriceOnRequest(Boolean(c))} />
+              <FieldLabel htmlFor="price-on-request" className="font-normal cursor-pointer">
+                Price on request (hide prices and require customers to submit quote requests)
+              </FieldLabel>
             </Field>
           </div>
         </SectionCard>

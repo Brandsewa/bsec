@@ -69,6 +69,7 @@ export interface StorefrontProductDetail {
   seo: unknown;
   requiresShipping: boolean;
   isFeatured: boolean;
+  priceOnRequest: boolean;
   ratingAvg: string;
   ratingCount: number;
   createdAt: string;
@@ -88,6 +89,7 @@ export interface StorefrontProductSummary {
   compareAtPriceMin?: number | undefined;
   compareAtPriceMax?: number | undefined;
   isFeatured: boolean;
+  priceOnRequest?: boolean | undefined;
   ratingAvg: string;
   ratingCount: number;
   primaryImage?: {
@@ -315,6 +317,7 @@ export async function getStorefrontProduct(
       seo: p.seo,
       requiresShipping: p.requiresShipping,
       isFeatured: p.isFeatured,
+      priceOnRequest: Boolean(p.priceOnRequest),
       ratingAvg: p.ratingAvg,
       ratingCount: p.ratingCount,
       createdAt: p.createdAt.toISOString(),
@@ -691,6 +694,7 @@ export async function buildProductSummaries(
       compareAtPriceMin: prices.compareAtPriceMin,
       compareAtPriceMax: prices.compareAtPriceMax,
       isFeatured: p.isFeatured,
+      priceOnRequest: Boolean(p.priceOnRequest),
       ratingAvg: p.ratingAvg,
       ratingCount: p.ratingCount,
       primaryImage: primaryImg

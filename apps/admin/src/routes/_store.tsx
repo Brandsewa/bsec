@@ -7,6 +7,7 @@ import {
   Home,
   KeyRound,
   Menu,
+  MessageSquareQuote,
   Package,
   Palette,
   RotateCcw,
@@ -42,6 +43,7 @@ const nav: GatedGroup[] = [
     items: [
       { label: "All orders", href: "/orders", icon: ShoppingBag, perm: "orders.read" },
       { label: "Pre-orders", href: "/preorders", icon: Clock, perm: "orders.read" },
+      { label: "Quotes", href: "/quotes", icon: MessageSquareQuote, perm: "orders.read" },
       { label: "Returns", href: "/returns", icon: RotateCcw, perm: "orders.read" },
     ],
   },

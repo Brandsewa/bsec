@@ -86,6 +86,7 @@ function ProductEditor({ product, go }: { product: ProductDetailData; go: (to: s
   const [description, setDescription] = useState(descriptionText(product.descriptionJson));
   const [tags, setTags] = useState(product.tags.join(", "));
   const [requiresShipping, setRequiresShipping] = useState(product.requiresShipping);
+  const [priceOnRequest, setPriceOnRequest] = useState(Boolean(product.priceOnRequest));
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [confirmDelete, setConfirmDelete] = useState(false);
 
@@ -140,6 +141,7 @@ function ProductEditor({ product, go }: { product: ProductDetailData; go: (to: s
         .map((s) => s.trim())
         .filter(Boolean),
       requiresShipping,
+      priceOnRequest,
     });
   };
 
@@ -240,7 +242,14 @@ function ProductEditor({ product, go }: { product: ProductDetailData; go: (to: s
             </div>
             <Field orientation="horizontal">
               <Checkbox id="requires-shipping" checked={requiresShipping} onCheckedChange={(c) => setRequiresShipping(c)} />
-              <FieldLabel htmlFor="requires-shipping" className="font-normal">Requires shipping</FieldLabel>
+              <FieldLabel htmlFor="requires-shipping" className="font-normal cursor-pointer">Requires shipping</FieldLabel>
+            </Field>
+
+            <Field orientation="horizontal">
+              <Checkbox id="price-on-request" checked={priceOnRequest} onCheckedChange={(c) => setPriceOnRequest(Boolean(c))} />
+              <FieldLabel htmlFor="price-on-request" className="font-normal cursor-pointer">
+                Price on request (hide prices and require customers to submit quote requests)
+              </FieldLabel>
             </Field>
           </div>
         </SectionCard>

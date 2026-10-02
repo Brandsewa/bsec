@@ -174,6 +174,7 @@ export const Product = z.object({
   requiresShipping: z.boolean(),
   isFeatured: z.boolean(),
   publishedAt: z.string().nullable().optional(),
+  priceOnRequest: z.boolean().default(false),
   ratingAvg: z.string(),
   ratingCount: z.number(),
   createdAt: z.string(),
@@ -486,6 +487,48 @@ export const StoreSupportSession = z.object({
   actionsCount: z.number(),
 });
 
+// --- Quotes Schemas ---
+export const QuoteRequest = z.object({
+  id: z.string().uuid(),
+  number: z.string(),
+  productId: z.string().uuid(),
+  variantId: z.string().uuid(),
+  productTitle: z.string(),
+  variantTitle: z.string(),
+  quantity: z.number().int().min(1),
+  name: z.string(),
+  email: z.string(),
+  phone: z.string(),
+  company: z.string().nullable().optional(),
+  message: z.string().nullable().optional(),
+  status: z.enum(["new", "quoted", "accepted", "lost", "expired"]),
+  derivedStage: z.enum(["needs_reply", "quote_sent", "accepted", "expired", "closed"]),
+  adminNote: z.string().nullable().optional(),
+  quotedTotal: z.number().nullable().optional(),
+  quoteNote: z.string().nullable().optional(),
+  validUntil: z.string().nullable().optional(),
+  quotedAt: z.string().nullable().optional(),
+  orderId: z.string().uuid().nullable().optional(),
+  orderNumber: z.string().nullable().optional(),
+  orderStatus: z.string().nullable().optional(),
+  orderPaymentStatus: z.string().nullable().optional(),
+  orderConfirmUrl: z.string().nullable().optional(),
+  orderViewUrl: z.string().nullable().optional(),
+  customerId: z.string().uuid().nullable().optional(),
+  createdAt: z.string(),
+  updatedAt: z.string(),
+});
+export type QuoteRequest = z.infer<typeof QuoteRequest>;
+
+export const QuoteStats = z.object({
+  needsReply: z.number().int().min(0),
+  quoteSent: z.number().int().min(0),
+  expired: z.number().int().min(0),
+  accepted: z.number().int().min(0),
+  totalQuotesValue: z.number().int().min(0),
+});
+export type QuoteStats = z.infer<typeof QuoteStats>;
+
 export const adminContract = {
   support: {
     list: oc.route({ method: "GET", path: "/admin/support/sessions" }).output(z.array(StoreSupportSession)),
@@ -653,6 +696,7 @@ export const adminContract = {
           tags: z.array(z.string()).default([]),
           requiresShipping: z.boolean().default(true),
           isFeatured: z.boolean().default(false),
+          priceOnRequest: z.boolean().default(false),
           options: z
             .array(
               z.object({
@@ -697,6 +741,7 @@ export const adminContract = {
           tags: z.array(z.string()).optional(),
           requiresShipping: z.boolean().optional(),
           isFeatured: z.boolean().optional(),
+          priceOnRequest: z.boolean().optional(),
         }),
       )
       .output(Product),
@@ -1313,6 +1358,7 @@ export const adminContract = {
           paymentReference: z.string().optional(),
           notes: z.string().optional(),
           tags: z.array(z.string()).optional(),
+          quoteId: z.string().uuid().optional(),
         }),
       )
       .output(
@@ -1894,5 +1940,57 @@ export const adminContract = {
       .route({ method: "DELETE", path: "/admin/domains/{id}" })
       .input(z.object({ id: z.string().uuid() }))
       .output(z.object({ success: z.boolean() })),
+  },
+
+  quotes: {
+    stats: oc
+      .route({ method: "GET", path: "/admin/quotes/stats" })
+      .output(QuoteStats),
+    list: oc
+      .route({ method: "GET", path: "/admin/quotes" })
+      .input(
+        z
+          .object({
+            tab: z.enum(["all", "needs_reply", "quote_sent", "expired", "accepted", "closed"]).default("all"),
+            search: z.string().optional(),
+            dateRange: z.enum(["any", "7d", "30d", "90d"]).default("any"),
+            customerType: z.enum(["all", "account", "guest"]).default("all"),
+            limit: z.number().int().min(1).max(100).default(50),
+            offset: z.number().int().min(0).default(0),
+          })
+          .optional(),
+      )
+      .output(z.object({ items: z.array(QuoteRequest), total: z.number() })),
+    get: oc
+      .route({ method: "GET", path: "/admin/quotes/{id}" })
+      .input(z.object({ id: z.string().uuid() }))
+      .output(QuoteRequest),
+    updateNote: oc
+      .route({ method: "PATCH", path: "/admin/quotes/{id}/note" })
+      .input(z.object({ id: z.string().uuid(), adminNote: z.string().max(5000) }))
+      .output(QuoteRequest),
+    markLost: oc
+      .route({ method: "POST", path: "/admin/quotes/{id}/lost" })
+      .input(z.object({ id: z.string().uuid(), reason: z.string().optional() }))
+      .output(QuoteRequest),
+    reopen: oc
+      .route({ method: "POST", path: "/admin/quotes/{id}/reopen" })
+      .input(z.object({ id: z.string().uuid() }))
+      .output(QuoteRequest),
+    delete: oc
+      .route({ method: "DELETE", path: "/admin/quotes/{id}" })
+      .input(z.object({ id: z.string().uuid() }))
+      .output(z.object({ success: z.boolean() })),
+    linkOrder: oc
+      .route({ method: "POST", path: "/admin/quotes/{id}/link-order" })
+      .input(
+        z.object({
+          id: z.string().uuid(),
+          orderId: z.string().uuid(),
+          validDays: z.number().int().min(1).max(90).default(7),
+          quoteNote: z.string().optional(),
+        }),
+      )
+      .output(QuoteRequest),
   },
 };

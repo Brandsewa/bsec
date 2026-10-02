@@ -8,7 +8,7 @@ import {
   UserPlus,
   X,
 } from "lucide-react";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { PageBreadcrumbs, PageContainer, PageHeader, PageSkeleton, toast } from "@bs/ui";
 import { Alert } from "@/components/ui/alert";
@@ -34,7 +34,14 @@ import { INDIAN_STATES } from "../../lib/india.ts";
 import { money } from "../../components/order-parts.tsx";
 import { SimpleSelect } from "../../components/simple-select.tsx";
 
+export interface CreateOrderSearch {
+  quoteId?: string | undefined;
+}
+
 export const Route = createFileRoute("/_store/orders_/new")({
+  validateSearch: (raw: Record<string, unknown>): CreateOrderSearch => ({
+    quoteId: typeof raw["quoteId"] === "string" ? raw["quoteId"] : undefined,
+  }),
   pendingComponent: () => <PageSkeleton />,
   component: CreateOrderPage,
 });
@@ -288,6 +295,16 @@ function CreateCustomerDialog({
 function CreateOrderPage() {
   const navigate = useNavigate();
   const queryClient = useQueryClient();
+  const { quoteId } = Route.useSearch();
+
+  // Quote prefilling if navigated from Quotes workbench
+  const quoteQuery = useQuery(
+    orpc.admin.quotes.get.queryOptions({
+      input: { id: quoteId ?? "" },
+      enabled: Boolean(quoteId),
+    }),
+  );
+  const [quotePrefilled, setQuotePrefilled] = useState(false);
 
   // Customer state (D6)
   const [selectedCustomer, setSelectedCustomer] = useState<SelectedCustomer | null>(null);
@@ -346,6 +363,43 @@ function CreateOrderPage() {
       enabled: showCustomerSearch && customerSearch.trim().length > 0,
     }),
   );
+
+  useEffect(() => {
+    if (!quoteQuery.data || quotePrefilled) return;
+    const q = quoteQuery.data;
+    const timer = setTimeout(() => {
+      setEmail(q.email);
+      setPhone(q.phone ?? "");
+      setFullName(q.name);
+      if (q.customerId) {
+        setSelectedCustomer({
+          id: q.customerId,
+          name: q.name,
+          email: q.email,
+          phone: q.phone,
+        });
+      }
+      if (q.variantId) {
+        setLines([
+          {
+            variantId: q.variantId,
+            productTitle: q.productTitle,
+            variantTitle: q.variantTitle ?? "Default",
+            originalPrice: 0,
+            effectivePrice: q.quotedTotal ? Math.round(q.quotedTotal / q.quantity) : 0,
+            priceOverride: q.quotedTotal ? Math.round(q.quotedTotal / q.quantity) : undefined,
+            priceOverrideReason: `Quote ${q.number}`,
+            quantity: q.quantity,
+          },
+        ]);
+      }
+      if (q.message) {
+        setNotes(`Quote request ${q.number}: ${q.message}`);
+      }
+      setQuotePrefilled(true);
+    }, 0);
+    return () => clearTimeout(timer);
+  }, [quoteQuery.data, quotePrefilled]);
 
   // Estimate order calculation (D1, D2, D3)
   const numDiscountVal = Number(discountValue) || 0;
@@ -531,6 +585,7 @@ function CreateOrderPage() {
       paymentReference: paymentOutcome === "paid" && paymentReference.trim() ? paymentReference.trim() : undefined,
       notes: notes.trim() || undefined,
       tags: parsedTags.length > 0 ? parsedTags : undefined,
+      quoteId: quoteId || undefined,
     });
   }
 
