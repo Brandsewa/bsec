@@ -1,0 +1,6 @@
+---
+description: bsec repo rules (pointer to AGENTS.md)
+alwaysApply: true
+---
+
+Read and follow `AGENTS.md` at the repo root (the single rule book for all coding agents), then `docs/ARCHITECTURE.md`. Do not duplicate rules here. Add a record in `docs/changes/` for every change set and keep `docs/ARCHITECTURE.md` current.

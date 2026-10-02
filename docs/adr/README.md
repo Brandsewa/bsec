@@ -14,4 +14,14 @@ New decisions get an ADR **before** code (PLAN §15). Copy `template.md`, take t
 | [008](008-payment-provider-adapter.md) | Payment provider adapter | Accepted |
 | [009](009-versioned-block-registry.md) | Versioned block registry | Accepted |
 | [010](010-no-merchant-code.md) | No merchant code execution | Accepted |
+| [011](011-feature-flagged-rollout-and-fallbacks.md) | Feature-flagged rollout and per-tenant dynamic fallbacks | Accepted |
+| [012](012-customer-session-architecture.md) | Customer session architecture and documented authentication gap | Accepted (documented gap and planned design) |
+| [013](013-quota-and-rate-limit-architecture.md) | Platform-scoped quota and rate limit architecture | Accepted |
+| [014](014-admin-auth-and-api-access.md) | Admin sign-in and how the admin SPA reaches the API | Accepted |
+| [014](014-platform-billing-separation.md) | Platform billing separation from merchant customer billing | Accepted (number clash with the row above; kept so existing links work) |
+| [015](015-quota-resolution-hierarchy.md) | Quota resolution hierarchy and immutable checkout invariant | Accepted |
+| [016](016-tenant-provisioning-atomicity.md) | Tenant provisioning atomicity, idempotency and unified service architecture | Accepted |
+| [017](017-custom-domain-provider-adapter.md) | Custom domain provider adapter and verification state machine | Accepted |
 | [018](018-visual-theme-editor.md) | Visual theme editor on the block registry | Accepted |
+
+**Next number: 019.**
