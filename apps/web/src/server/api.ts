@@ -100,8 +100,11 @@ import {
   subscribeNewsletter,
   verifyStorefrontPassword,
   listAdminOrders,
+  getAdminOrderStats,
   getAdminOrderDetail,
   createAdminDraftOrder,
+  getOrderSettings,
+  updateOrderSettings,
   addAdminOrderNote,
   cancelAdminOrder,
   refundAdminOrder,
@@ -462,6 +465,22 @@ export const storeRouter = os.router({
         .handler(({ context, input }) => {
           if (!context.tenantCtx) throw new Error("Missing tenant context");
           return updateStoreSettings(context.rt, context.tenantCtx, input);
+        }),
+    },
+    orderSettings: {
+      get: os.admin.orderSettings.get
+        .use(requireAdmin)
+        .use(requirePermission("settings.write"))
+        .handler(({ context }) => {
+          if (!context.tenantCtx) throw new Error("Missing tenant context");
+          return getOrderSettings(context.rt, context.tenantCtx);
+        }),
+      update: os.admin.orderSettings.update
+        .use(requireAdmin)
+        .use(requirePermission("settings.write"))
+        .handler(({ context, input }) => {
+          if (!context.tenantCtx) throw new Error("Missing tenant context");
+          return updateOrderSettings(context.rt, context.tenantCtx, input);
         }),
     },
     featureFlags: {
@@ -875,6 +894,13 @@ export const storeRouter = os.router({
         .handler(({ context, input }) => {
           if (!context.tenantCtx) throw new Error("Missing tenant context");
           return listAdminOrders(context.rt, context.tenantCtx, input);
+        }),
+      stats: os.admin.orders.stats
+        .use(requireAdmin)
+        .use(requirePermission("orders.read"))
+        .handler(({ context }) => {
+          if (!context.tenantCtx) throw new Error("Missing tenant context");
+          return getAdminOrderStats(context.rt, context.tenantCtx);
         }),
       get: os.admin.orders.get
         .use(requireAdmin)

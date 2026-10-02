@@ -1,4 +1,4 @@
-import { createFileRoute } from "@tanstack/react-router";
+import { createFileRoute, Link } from "@tanstack/react-router";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useState, type FormEvent } from "react";
 import { AlertTriangle } from "lucide-react";
@@ -184,8 +184,20 @@ function GeneralForm({ data }: { data: SettingsData }) {
 
         <SettingsSection title="Orders and currency">
           <div className="grid gap-3 sm:grid-cols-3">
-            <Field id="orderPrefix" label="Order number prefix" hint="For example # or ORD-.">
-              <Input id="orderPrefix" maxLength={10} value={form.orderPrefix} onChange={set("orderPrefix")} />
+            <Field
+              id="orderPrefix"
+              label="Order number prefix"
+              hint={
+                <span>
+                  Configured in{" "}
+                  <Link to="/settings/orders" className="underline underline-offset-2 hover:text-foreground">
+                    Settings &gt; Orders
+                  </Link>
+                  .
+                </span>
+              }
+            >
+              <Input id="orderPrefix" disabled readOnly value={form.orderPrefix} />
             </Field>
             <Field id="currency" label="Currency">
               <Input id="currency" disabled readOnly value={data.currency} />

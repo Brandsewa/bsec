@@ -15,7 +15,7 @@ import type { Runtime } from "../runtime.ts";
 import type { TenantContext } from "../context.ts";
 import { clearCart, getOrCreateCart } from "../storefront/cart.ts";
 import { reserveInventory } from "../catalog/inventory-reservations.ts";
-import { allocateSequenceNumber } from "./sequences.ts";
+import { allocateOrderNumber } from "../admin/order-settings.ts";
 import { redeemDiscount } from "./discounts.ts";
 import { allocateDiscount, priceOrder } from "./pricing.ts";
 import { getTenantShippingRates } from "./shipping-rates.ts";
@@ -166,11 +166,8 @@ export async function placeOrder(
       cartId: cart.id,
     });
 
-    // 5. Allocate gapless sequential order number (PLAN §11.2)
-    const seq = await allocateSequenceNumber(tx, tenantId, "order", "", {
-      defaultPrefix: "ORD-",
-      defaultPadding: 5,
-    });
+    // 5. Allocate gapless sequential order number respecting store settings (PLAN §11.2, ORDERS-SETTINGS-PLAN §4.1)
+    const seq = await allocateOrderNumber(tx, tenantId);
 
     // 6. Insert Order
     await tx.insert(orders).values({

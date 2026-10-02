@@ -57,6 +57,30 @@ export const StoreSettings = z.object({
 });
 export type StoreSettings = z.infer<typeof StoreSettings>;
 
+export const OrderSettings = z.object({
+  prefix: z.string().max(10).regex(/^[A-Za-z0-9#\-_/]*$/, "Prefix can only contain letters, numbers, and # - _ /"),
+  padding: z.number().int().min(3).max(8),
+  nextValue: z.number().int().min(1),
+  currentNextValue: z.number().int().min(1),
+});
+export type OrderSettings = z.infer<typeof OrderSettings>;
+
+export const UpdateOrderSettingsInput = z.object({
+  prefix: z.string().max(10).regex(/^[A-Za-z0-9#\-_/]*$/, "Prefix can only contain letters, numbers, and # - _ /").optional(),
+  padding: z.number().int().min(3).max(8).optional(),
+  nextValue: z.number().int().min(1).optional(),
+});
+export type UpdateOrderSettingsInput = z.infer<typeof UpdateOrderSettingsInput>;
+
+export const OrderStats = z.object({
+  totalOrders: z.number().int(),
+  openOrders: z.number().int(),
+  paidOrders: z.number().int(),
+  totalRevenue: z.number().int(),
+  avgOrderValue: z.number().int(),
+});
+export type OrderStats = z.infer<typeof OrderStats>;
+
 export const FeatureFlagItem = z.object({
   key: z.string(),
   enabled: z.boolean(),
@@ -535,6 +559,15 @@ export const adminContract = {
         }),
       )
       .output(StoreSettings),
+  },
+  orderSettings: {
+    get: oc
+      .route({ method: "GET", path: "/admin/settings/orders" })
+      .output(OrderSettings),
+    update: oc
+      .route({ method: "PUT", path: "/admin/settings/orders" })
+      .input(UpdateOrderSettingsInput)
+      .output(OrderSettings),
   },
   featureFlags: {
     list: oc
@@ -1028,11 +1061,12 @@ export const adminContract = {
       .input(
         z
           .object({
-            view: z.enum(["all", "unfulfilled", "unpaid", "cod_to_confirm", "rto"]).default("all"),
+            view: z.enum(["all", "unfulfilled", "unpaid", "cod_to_confirm", "rto", "open", "archived"]).default("all"),
             search: z.string().optional(),
             status: z.string().optional(),
             paymentStatus: z.string().optional(),
             fulfillmentStatus: z.string().optional(),
+            source: z.string().optional(),
             /** Cash-on-delivery orders only (payment status cod_*). */
             cod: z.boolean().optional(),
             /** ISO timestamps bounding placedAt (inclusive from, exclusive to). */
@@ -1060,11 +1094,15 @@ export const adminContract = {
               grandTotal: z.number(),
               placedAt: z.string(),
               itemsCount: z.number(),
+              firstItemTitle: z.string().nullable().optional(),
             }),
           ),
           total: z.number(),
         }),
       ),
+    stats: oc
+      .route({ method: "GET", path: "/admin/orders/stats" })
+      .output(OrderStats),
     get: oc
       .route({ method: "GET", path: "/admin/orders/{id}" })
       .input(z.object({ id: z.string().uuid() }))

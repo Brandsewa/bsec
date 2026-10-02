@@ -1,4 +1,4 @@
-import { CreditCard, Landmark, LifeBuoy, Settings, Sparkles, Store, Truck, UserCog } from "lucide-react";
+import { CreditCard, Landmark, LifeBuoy, Settings, ShoppingBag, Sparkles, Store, Truck, UserCog } from "lucide-react";
 import type { ComponentType } from "react";
 
 export interface SettingsNavItem {
@@ -15,6 +15,7 @@ export interface SettingsNavItem {
 /** The sections of the Settings workspace, in display order. */
 export const SETTINGS_NAV: readonly SettingsNavItem[] = [
   { id: "general", label: "General", href: "/settings", description: "Store name, contact, address", icon: Settings, perm: "settings.write" },
+  { id: "orders", label: "Orders", href: "/settings/orders", description: "Numbering, processing, recovery", icon: ShoppingBag, perm: "settings.write" },
   { id: "storefront", label: "Storefront", href: "/settings/storefront", description: "Go live, coming soon, password", icon: Store, perm: "settings.write" },
   { id: "branding", label: "Branding", href: "/settings/branding", description: "Logo, colours, fonts", icon: Sparkles, perm: "settings.write" },
   { id: "shipping", label: "Shipping", href: "/settings/shipping", description: "Zones, rates, free delivery", icon: Truck, perm: "settings.write" },

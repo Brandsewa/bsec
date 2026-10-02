@@ -1,19 +1,20 @@
-import { and, asc, desc, eq, gte, inArray, lt, sql } from "drizzle-orm";
+import { and, asc, desc, eq, gte, inArray, lt, notInArray, sql } from "drizzle-orm";
 import { schema, withTenant } from "@bs/db";
 import type { Runtime } from "../runtime.ts";
 import { assertPermission, type TenantContext } from "../context.ts";
-import { allocateSequenceNumber } from "../orders/sequences.ts";
+import { allocateOrderNumber } from "./order-settings.ts";
 import { transitionOrder } from "../orders/state-machine.ts";
 import { transitionFulfillment } from "../orders/fulfillment-state-machine.ts";
 import { generateInvoice } from "../orders/invoices.ts";
 import { isFeatureEnabled, FeatureDisabledError } from "../features.ts";
 
 export interface ListOrdersInput {
-  view?: "all" | "unfulfilled" | "unpaid" | "cod_to_confirm" | "rto" | undefined;
+  view?: "all" | "unfulfilled" | "unpaid" | "cod_to_confirm" | "rto" | "open" | "archived" | undefined;
   search?: string | undefined;
   status?: string | undefined;
   paymentStatus?: string | undefined;
   fulfillmentStatus?: string | undefined;
+  source?: string | undefined;
   cod?: boolean | undefined;
   placedFrom?: string | undefined;
   placedTo?: string | undefined;
@@ -34,6 +35,15 @@ export interface OrderListItem {
   grandTotal: number;
   placedAt: string;
   itemsCount: number;
+  firstItemTitle?: string | null | undefined;
+}
+
+export interface OrderStatsRecord {
+  totalOrders: number;
+  openOrders: number;
+  paidOrders: number;
+  totalRevenue: number;
+  avgOrderValue: number;
 }
 
 /** The name entered at checkout, if any (checkout stores it as fullName; older rows may use name). */
@@ -68,8 +78,13 @@ export async function listAdminOrders(
       conditions.push(eq(schema.orders.paymentStatus, "cod_pending"));
     } else if (input.view === "rto") {
       conditions.push(eq(schema.orders.fulfillmentStatus, "rto"));
+    } else if (input.view === "open") {
+      conditions.push(notInArray(schema.orders.status, ["delivered", "cancelled", "returned"]));
+    } else if (input.view === "archived") {
+      conditions.push(inArray(schema.orders.status, ["delivered", "cancelled", "returned"]));
     }
 
+    if (input.source) conditions.push(eq(schema.orders.source, input.source));
     if (input.status) conditions.push(eq(schema.orders.status, input.status));
     if (input.paymentStatus) conditions.push(eq(schema.orders.paymentStatus, input.paymentStatus));
     if (input.fulfillmentStatus) conditions.push(eq(schema.orders.fulfillmentStatus, input.fulfillmentStatus));
@@ -134,6 +149,21 @@ export async function listAdminOrders(
             .groupBy(schema.orderItems.orderId);
     const itemCounts = new Map(countRows.map((c) => [c.orderId, c.count]));
 
+    // First item title for the whole page in one query (not one per row).
+    const firstItemRows: Array<{ order_id: string; product_title: string }> =
+      rows.length === 0
+        ? []
+        : (
+            await tx.execute<{ order_id: string; product_title: string }>(sql`
+              SELECT DISTINCT ON (order_id) order_id, product_title
+              FROM order_items
+              WHERE tenant_id = ${ctx.tenantId}
+                AND order_id IN ${rows.map((r) => r.id)}
+              ORDER BY order_id, id ASC
+            `)
+          ).rows;
+    const firstItemTitles = new Map<string, string>(firstItemRows.map((f) => [f.order_id, f.product_title]));
+
     const items: OrderListItem[] = [];
     for (const r of rows) {
       items.push({
@@ -148,12 +178,57 @@ export async function listAdminOrders(
         grandTotal: Number(r.grandTotal),
         placedAt: r.placedAt.toISOString(),
         itemsCount: itemCounts.get(r.id) ?? 0,
+        firstItemTitle: firstItemTitles.get(r.id) ?? null,
       });
     }
 
     return {
       items,
       total: countResult?.count ?? 0,
+    };
+  });
+}
+
+/**
+ * Returns revenue and status statistics for all placed orders for the tenant (ORDERS-ALL-ORDERS-PLAN §4.1).
+ * Computed in a single aggregate query; strictly tenant-scoped (RLS).
+ */
+export async function getAdminOrderStats(
+  rt: Runtime,
+  ctx: TenantContext,
+): Promise<OrderStatsRecord> {
+  assertPermission(ctx, "orders.read");
+  const db = rt._db.db;
+
+  return await withTenant(db, ctx.tenantId, async (tx) => {
+    const result = await tx.execute<{
+      total_orders: string | number;
+      open_orders: string | number;
+      paid_orders: string | number;
+      total_revenue: string | number;
+    }>(sql`
+      SELECT
+        COUNT(*)::int AS total_orders,
+        COUNT(*) FILTER (WHERE status NOT IN ('delivered', 'cancelled', 'returned'))::int AS open_orders,
+        COUNT(*) FILTER (WHERE payment_status IN ('paid', 'cod_collected'))::int AS paid_orders,
+        COALESCE(SUM(grand_total) FILTER (WHERE payment_status IN ('paid', 'cod_collected')), 0)::bigint AS total_revenue
+      FROM orders
+      WHERE tenant_id = ${ctx.tenantId}
+    `);
+
+    const row = result.rows[0];
+    const totalOrders = Number(row?.total_orders ?? 0);
+    const openOrders = Number(row?.open_orders ?? 0);
+    const paidOrders = Number(row?.paid_orders ?? 0);
+    const totalRevenue = Number(row?.total_revenue ?? 0);
+    const avgOrderValue = paidOrders > 0 ? Math.round(totalRevenue / paidOrders) : 0;
+
+    return {
+      totalOrders,
+      openOrders,
+      paidOrders,
+      totalRevenue,
+      avgOrderValue,
     };
   });
 }
@@ -283,10 +358,7 @@ export async function createAdminDraftOrder(
   const db = rt._db.db;
 
   return await withTenant(db, ctx.tenantId, async (tx) => {
-    const seq = await allocateSequenceNumber(tx, ctx.tenantId, "order", "", {
-      defaultPrefix: "ORD-",
-      defaultPadding: 5,
-    });
+    const seq = await allocateOrderNumber(tx, ctx.tenantId);
     const orderNumber = seq.formatted;
 
     // Fetch variant details
@@ -341,6 +413,7 @@ export async function createAdminDraftOrder(
         status: "pending",
         paymentStatus: "pending",
         fulfillmentStatus: "unfulfilled",
+        source: "admin",
         subtotal,
         discountTotal: 0,
         shippingTotal: 0,
@@ -371,6 +444,20 @@ export async function createAdminDraftOrder(
       message: `Draft order ${orderNumber} created by admin staff`,
       actorType: "staff",
       actorId: staffId,
+    });
+
+    await tx.insert(schema.auditLogs).values({
+      tenantId: ctx.tenantId,
+      actorType: ctx.actor.type,
+      actorId: ctx.actor.type === "staff" ? ctx.actor.userId : null,
+      action: "order.draft_created",
+      targetType: "order",
+      targetId: order.id,
+      diff: {
+        orderNumber,
+        grandTotal,
+        itemsCount: itemRows.length,
+      },
     });
 
     return {
