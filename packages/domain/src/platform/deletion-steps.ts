@@ -7,6 +7,7 @@ import { PURGE_KEEP_TABLES, purgeTenantData } from "../admin/tenant-purge.ts";
 import { CloudflareCustomDomainProvider, type CustomDomainProvider } from "../domains/provider.ts";
 import { RazorpaySubscriptionProvider, type SubscriptionBillingProvider } from "../saas/billing.ts";
 import { createR2Client, getR2Config } from "../media/storage.ts";
+import { getReturnPhotoStorageConfig } from "../orders/return-photos.ts";
 import { runStoreExport } from "./exports.ts";
 import type { DeletionRow, DeletionStep } from "./deletion-requests.ts";
 
@@ -20,16 +21,37 @@ export interface DeletionDeps {
   now?: Date | undefined;
 }
 
-async function deleteFromR2(keys: string[]): Promise<number> {
-  const cfg = getR2Config();
-  const client = createR2Client();
+/**
+ * Return photos live in a separate private bucket (see `getReturnPhotoStorageConfig`), everything
+ * else in the public media bucket, so a deleted store's objects have to be removed from both. When no
+ * private bucket is configured every key is deleted from the public bucket, as before.
+ */
+export function splitMediaKeysByBucket(keys: string[], privateBucketConfigured: boolean): { publicKeys: string[]; privateKeys: string[] } {
+  if (!privateBucketConfigured) return { publicKeys: keys, privateKeys: [] };
+  return {
+    publicKeys: keys.filter((k) => !k.includes("/returns/")),
+    privateKeys: keys.filter((k) => k.includes("/returns/")),
+  };
+}
+
+async function deleteKeysFromBucket(client: ReturnType<typeof createR2Client>, bucket: string, keys: string[]): Promise<number> {
   let deleted = 0;
   for (let i = 0; i < keys.length; i += 1000) {
     const batch = keys.slice(i, i + 1000);
-    const res = await client.send(new DeleteObjectsCommand({ Bucket: cfg.bucketName ?? "", Delete: { Objects: batch.map((Key) => ({ Key })), Quiet: true } }));
+    const res = await client.send(new DeleteObjectsCommand({ Bucket: bucket, Delete: { Objects: batch.map((Key) => ({ Key })), Quiet: true } }));
     if (res.Errors && res.Errors.length > 0) throw new Error(`R2 rejected ${res.Errors.length} deletions`);
     deleted += batch.length;
   }
+  return deleted;
+}
+
+async function deleteFromR2(keys: string[]): Promise<number> {
+  const cfg = getR2Config();
+  const privateCfg = getReturnPhotoStorageConfig();
+  const client = createR2Client();
+  const { publicKeys, privateKeys } = splitMediaKeysByBucket(keys, privateCfg !== null);
+  let deleted = await deleteKeysFromBucket(client, cfg.bucketName ?? "", publicKeys);
+  if (privateCfg?.bucketName) deleted += await deleteKeysFromBucket(client, privateCfg.bucketName, privateKeys);
   return deleted;
 }
 

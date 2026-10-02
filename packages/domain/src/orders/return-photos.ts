@@ -27,6 +27,29 @@ export const ALLOWED_RETURN_PHOTO_MIMES = [
 export const MAX_RETURN_PHOTO_BYTES = 5 * 1024 * 1024; // 5 MB
 export const MAX_RETURN_PHOTOS_COUNT = 5;
 
+/**
+ * Where return photos live. They are customer evidence (often showing a home or a person), so they
+ * must never sit in the public media bucket: `R2_PUBLIC_URL` serves that bucket whole, and a key
+ * leaked in any signed link would then be readable by anyone, forever. They go in a separate
+ * **private** bucket (`R2_PRIVATE_BUCKET_NAME`, no public address) and are read only through
+ * short-lived signed URLs. Returns null (feature unavailable) when none is configured, or when it
+ * is the same bucket as the public media bucket.
+ */
+export function getReturnPhotoStorageConfig(
+  override?: Partial<R2ClientConfig>,
+): Partial<R2ClientConfig> | null {
+  const bucketName = override?.bucketName || process.env.R2_PRIVATE_BUCKET_NAME;
+  if (!bucketName) return null;
+  const publicBucket = process.env.R2_BUCKET_NAME || "bsec-media";
+  if (!override?.bucketName && bucketName === publicBucket) return null;
+  return { ...override, bucketName, publicUrl: undefined };
+}
+
+/** True when customers can attach photos (a private bucket is configured). */
+export function isReturnPhotoStorageConfigured(): boolean {
+  return getReturnPhotoStorageConfig() !== null;
+}
+
 /** Magic byte verification for JPEG, PNG, and WebP */
 export function verifyImageMagicBytes(buffer: Uint8Array): "image/jpeg" | "image/png" | "image/webp" | null {
   if (buffer.length < 12) return null;
@@ -188,26 +211,31 @@ export async function createPresignedReturnPhotoUpload(
 
   const mediaId = crypto.randomUUID();
   const folder = `returns/${input.orderId}`;
-  const parts = input.filename.split(".");
-  const ext = (parts.length > 1 ? parts.pop() : "jpg")?.toLowerCase().trim() || "jpg";
-  const storageKey = `tenants/${ctx.tenantId}/${folder}/${mediaId}.${ext}`;
+  // The extension comes from the validated content type, never from the client's filename, so the
+  // key always matches what finalize expects (a filename with no dot used to yield mismatched keys).
+  const ext = mime === "image/png" ? "png" : mime === "image/webp" ? "webp" : "jpg";
+
+  const storageCfg = getReturnPhotoStorageConfig(input.r2Config);
+  if (!storageCfg) {
+    throw new Error("Bad Request: Photo uploads are not available for this store yet.");
+  }
 
   const descriptor = await buildPresignedUploadDescriptor({
     tenantId: `tenants/${ctx.tenantId}`,
     folder,
-    filename: input.filename,
+    filename: `photo.${ext}`,
     mime,
     bytes: input.bytes,
     id: mediaId,
     expiresInSeconds: 900,
     s3Client: input.s3Client,
-    r2Config: input.r2Config,
+    r2Config: storageCfg,
   });
 
   return {
     mediaId,
     uploadUrl: descriptor.uploadUrl,
-    storageKey,
+    storageKey: descriptor.storageKey,
     headers: descriptor.headers,
     expiresInSeconds: descriptor.expiresInSeconds,
   };
@@ -256,8 +284,12 @@ export async function finalizeReturnPhoto(
     }
   });
 
-  const cfg = getR2Config(input.r2Config);
-  const s3 = input.s3Client ?? (cfg.accessKeyId && cfg.secretAccessKey ? createR2Client(input.r2Config) : null);
+  const storageCfg = getReturnPhotoStorageConfig(input.r2Config);
+  if (!storageCfg) {
+    throw new Error("Bad Request: Photo uploads are not available for this store yet.");
+  }
+  const cfg = getR2Config(storageCfg);
+  const s3 = input.s3Client ?? (cfg.accessKeyId && cfg.secretAccessKey ? createR2Client(storageCfg) : null);
 
   if (!s3 || !cfg.bucketName) {
     throw new Error("Bad Request: Storage service is not configured.");
@@ -337,6 +369,8 @@ export async function getReturnPhotoUrls(
   opts?: { s3Client?: S3Client | undefined; r2Config?: Partial<R2ClientConfig> | undefined },
 ): Promise<Array<{ id: string; url: string; filename: string }>> {
   if (photoIds.length === 0) return [];
+  const storageCfg = getReturnPhotoStorageConfig(opts?.r2Config);
+  if (!storageCfg) return [];
 
   const mediaRows = await db
     .select({ id: schema.media.id, storageKey: schema.media.storageKey })
@@ -349,7 +383,7 @@ export async function getReturnPhotoUrls(
       storageKey: m.storageKey,
       expiresInSeconds: 900,
       s3Client: opts?.s3Client,
-      r2Config: opts?.r2Config,
+      r2Config: storageCfg,
     });
     const filename = m.storageKey.split("/").pop() ?? "photo.jpg";
     out.push({ id: m.id, url, filename });
@@ -358,48 +392,57 @@ export async function getReturnPhotoUrls(
 }
 
 /**
- * Cleans up unattached return photos older than 24 hours.
- * Idempotent.
+ * Cleans up unattached return photos older than 24 hours. Idempotent.
+ *
+ * Runs per tenant inside `withTenant`: `media` and `returns` are protected by row level
+ * security, and the worker connects as `app_rw`, so a query with no tenant context would see no
+ * rows at all. The stored file is deleted first; if that fails (or no storage client is
+ * available) the record is kept so the next run retries, instead of orphaning the file for good.
  */
 export async function cleanupOrphanedReturnPhotos(
   db: Db,
   opts?: { s3Client?: S3Client | undefined; r2Config?: Partial<R2ClientConfig> | undefined } | S3Client,
 ): Promise<{ deletedCount: number }> {
-  const orphanedMedia = await db.execute(sql`
-    SELECT m.id, m.tenant_id as "tenantId", m.storage_key as "storageKey"
-    FROM media m
-    WHERE m.folder = 'returns'
-      AND m.created_at < now() - interval '24 hours'
-      AND NOT EXISTS (
-        SELECT 1 FROM returns r
-        WHERE r.tenant_id = m.tenant_id
-          AND m.id = ANY(r.photos)
-      )
-  `);
-
-  const rows = (orphanedMedia.rows ?? []) as Array<{ id: string; tenantId: string; storageKey: string }>;
-  if (rows.length === 0) return { deletedCount: 0 };
-
-  const s3ClientInput = opts && "send" in opts ? opts : (opts as { s3Client?: S3Client })?.s3Client;
+  const s3ClientInput = opts && "send" in opts ? opts : (opts as { s3Client?: S3Client } | undefined)?.s3Client;
   const r2ConfigInput = opts && !("send" in opts) ? (opts as { r2Config?: Partial<R2ClientConfig> })?.r2Config : undefined;
-  const cfg = getR2Config(r2ConfigInput);
-  const s3 = s3ClientInput ?? (cfg.accessKeyId && cfg.secretAccessKey ? createR2Client(r2ConfigInput) : null);
+  const storageCfg = getReturnPhotoStorageConfig(r2ConfigInput);
+  if (!storageCfg) return { deletedCount: 0 };
+  const cfg = getR2Config(storageCfg);
+  const s3 = s3ClientInput ?? (cfg.accessKeyId && cfg.secretAccessKey ? createR2Client(storageCfg) : null);
+  if (!s3 || !cfg.bucketName) return { deletedCount: 0 };
 
-  for (const row of rows) {
-    if (s3 && cfg.bucketName) {
+  const tenants = await db.select({ id: schema.tenants.id }).from(schema.tenants);
+  let deletedCount = 0;
+
+  for (const t of tenants) {
+    const rows = await withTenant(db, t.id, async (tx) => {
+      const res = await tx.execute(sql`
+        SELECT m.id, m.storage_key AS "storageKey"
+        FROM media m
+        WHERE m.tenant_id = ${t.id}
+          AND m.folder = 'returns'
+          AND m.created_at < now() - interval '24 hours'
+          AND NOT EXISTS (
+            SELECT 1 FROM returns r
+            WHERE r.tenant_id = m.tenant_id
+              AND m.id = ANY(r.photos)
+          )
+      `);
+      return (res.rows ?? []) as Array<{ id: string; storageKey: string }>;
+    });
+
+    for (const row of rows) {
       try {
-        await s3.send(
-          new DeleteObjectCommand({
-            Bucket: cfg.bucketName,
-            Key: row.storageKey,
-          }),
-        );
+        await s3.send(new DeleteObjectCommand({ Bucket: cfg.bucketName, Key: row.storageKey }));
       } catch {
-        // Ignore S3 error on already deleted object
+        continue; // keep the record; the next run retries
       }
+      await withTenant(db, t.id, async (tx) => {
+        await tx.delete(schema.media).where(and(eq(schema.media.tenantId, t.id), eq(schema.media.id, row.id)));
+      });
+      deletedCount += 1;
     }
-    await db.delete(schema.media).where(and(eq(schema.media.tenantId, row.tenantId), eq(schema.media.id, row.id)));
   }
 
-  return { deletedCount: rows.length };
+  return { deletedCount };
 }

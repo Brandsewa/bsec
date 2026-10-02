@@ -8,6 +8,7 @@ import {
   placeOrder,
   provisionTenant,
   requestReturn,
+  getOrderReturnsByToken,
   type Runtime,
   type TenantContext,
 } from "../src/index.ts";
@@ -18,6 +19,7 @@ import {
   resolveOrderIdFromToken,
   cleanupOrphanedReturnPhotos,
   checkReturnPhotoRateLimit,
+  isReturnPhotoStorageConfigured,
 } from "../src/orders/return-photos.ts";
 import { createHash } from "node:crypto";
 import { STORE_PERMISSIONS } from "@bs/auth";
@@ -93,6 +95,7 @@ function createMockS3(storage: Map<string, { body: Buffer; mime: string; size: n
 }
 
 beforeAll(async () => {
+  process.env.R2_PRIVATE_BUCKET_NAME = "bsec-returns-private-test";
   env = await startTestDb();
   rt = createRuntime({ service: "platform", databaseUrl: env.as("app_platform"), poolMax: 10 });
   rtWeb = createRuntime({ service: "web", databaseUrl: env.as("app_rw"), poolMax: 10 });
@@ -556,5 +559,119 @@ describe("Return Photo Upload Security & Limits", () => {
     // Run cleanup again (idempotent)
     const secondRun = await cleanupOrphanedReturnPhotos(rt._db.db, fakeS3);
     expect(secondRun.deletedCount).toBe(0);
+  });
+
+  async function seedOldPhoto(storage: Map<string, { body: Buffer; mime: string; size: number }>, fakeS3: S3Client) {
+    const mediaId = crypto.randomUUID();
+    const key = `tenants/${ctxA.tenantId}/returns/${orderAId}/${mediaId}.jpg`;
+    const body = Buffer.concat([JPEG_HEADER, Buffer.alloc(100)]);
+    storage.set(key, { body, mime: "image/jpeg", size: body.length });
+    const photo = await finalizeReturnPhoto(rt, ctxA, { orderId: orderAId, mediaId, storageKey: key, s3Client: fakeS3 });
+    await withTenant(rt._db.db, ctxA.tenantId, async (tx) => {
+      await tx
+        .update(schema.media)
+        .set({ createdAt: new Date(Date.now() - 25 * 3600 * 1000) })
+        .where(eq(schema.media.id, photo.id));
+    });
+    return { key, id: photo.id };
+  }
+
+  it("cleanup works under the worker's row-level-security role (app_rw), not only as a bypass role", async () => {
+    const storage = new Map<string, { body: Buffer; mime: string; size: number }>();
+    const fakeS3 = createMockS3(storage);
+    const { key, id } = await seedOldPhoto(storage, fakeS3);
+
+    const run = await cleanupOrphanedReturnPhotos(rtWeb._db.db, fakeS3);
+    expect(run.deletedCount).toBeGreaterThanOrEqual(1);
+    expect(storage.has(key)).toBe(false);
+
+    const left = await withTenant(rt._db.db, ctxA.tenantId, (tx) =>
+      tx.select({ id: schema.media.id }).from(schema.media).where(eq(schema.media.id, id)),
+    );
+    expect(left).toHaveLength(0);
+  });
+
+  it("cleanup keeps the record when the stored file cannot be deleted, so the next run retries", async () => {
+    const storage = new Map<string, { body: Buffer; mime: string; size: number }>();
+    const fakeS3 = createMockS3(storage);
+    const { key, id } = await seedOldPhoto(storage, fakeS3);
+
+    const failingS3 = {
+      async send(command: { constructor?: { name?: string } }) {
+        if (command.constructor?.name === "DeleteObjectCommand") throw new Error("storage unavailable");
+        return fakeS3.send(command as never);
+      },
+    } as unknown as S3Client;
+
+    const run = await cleanupOrphanedReturnPhotos(rtWeb._db.db, failingS3);
+    expect(run.deletedCount).toBe(0);
+    expect(storage.has(key)).toBe(true);
+    const kept = await withTenant(rt._db.db, ctxA.tenantId, (tx) =>
+      tx.select({ id: schema.media.id }).from(schema.media).where(eq(schema.media.id, id)),
+    );
+    expect(kept).toHaveLength(1);
+
+    // Storage recovers: the next run removes both.
+    const retry = await cleanupOrphanedReturnPhotos(rtWeb._db.db, fakeS3);
+    expect(retry.deletedCount).toBeGreaterThanOrEqual(1);
+    expect(storage.has(key)).toBe(false);
+  });
+
+  it("never stores return photos in the public media bucket: unconfigured or same-as-public bucket is refused", async () => {
+    const saved = { priv: process.env.R2_PRIVATE_BUCKET_NAME, pub: process.env.R2_BUCKET_NAME };
+    try {
+      const input = { orderId: orderAId, filename: "p.jpg", mime: "image/jpeg", bytes: 1024 };
+
+      delete process.env.R2_PRIVATE_BUCKET_NAME;
+      await expect(createPresignedReturnPhotoUpload(rt, ctxA, input)).rejects.toThrow(
+        "Bad Request: Photo uploads are not available for this store yet.",
+      );
+      expect(isReturnPhotoStorageConfigured()).toBe(false);
+
+      process.env.R2_BUCKET_NAME = "shared-public-media";
+      process.env.R2_PRIVATE_BUCKET_NAME = "shared-public-media";
+      await expect(createPresignedReturnPhotoUpload(rt, ctxA, input)).rejects.toThrow(
+        "Bad Request: Photo uploads are not available for this store yet.",
+      );
+
+      const storage = new Map<string, { body: Buffer; mime: string; size: number }>();
+      await expect(
+        finalizeReturnPhoto(rt, ctxA, {
+          orderId: orderAId,
+          mediaId: crypto.randomUUID(),
+          storageKey: `tenants/${ctxA.tenantId}/returns/${orderAId}/x.jpg`,
+          s3Client: createMockS3(storage),
+        }),
+      ).rejects.toThrow("Bad Request");
+    } finally {
+      if (saved.priv === undefined) delete process.env.R2_PRIVATE_BUCKET_NAME;
+      else process.env.R2_PRIVATE_BUCKET_NAME = saved.priv;
+      if (saved.pub === undefined) delete process.env.R2_BUCKET_NAME;
+      else process.env.R2_BUCKET_NAME = saved.pub;
+    }
+  });
+
+  it("does not demand photos the customer cannot upload when private photo storage is not configured", async () => {
+    const saved = process.env.R2_PRIVATE_BUCKET_NAME;
+    try {
+      delete process.env.R2_PRIVATE_BUCKET_NAME;
+      const view = await getOrderReturnsByToken(rt, ctxA.tenantId, orderAToken);
+      expect(view).not.toBeNull();
+      expect(view!.reasons.every((r) => r.photoRequirement === "not_asked")).toBe(true);
+    } finally {
+      if (saved === undefined) delete process.env.R2_PRIVATE_BUCKET_NAME;
+      else process.env.R2_PRIVATE_BUCKET_NAME = saved;
+    }
+  });
+
+  it("presign builds the upload key from the content type, so a filename without a dot still matches finalize", async () => {
+    const presign = await createPresignedReturnPhotoUpload(rt, ctxA, {
+      orderId: orderAId,
+      filename: "IMG_0001",
+      mime: "image/webp",
+      bytes: 2048,
+    });
+    expect(presign.storageKey).toBe(`tenants/${ctxA.tenantId}/returns/${orderAId}/${presign.mediaId}.webp`);
+    expect(presign.uploadUrl).toContain(`${presign.mediaId}.webp`);
   });
 });

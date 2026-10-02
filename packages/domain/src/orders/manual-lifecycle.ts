@@ -7,6 +7,7 @@ import { commitReservation } from "../catalog/inventory-reservations.ts";
 import { transitionOrder, type OrderStatus } from "./state-machine.ts";
 import { transitionFulfillment, type FulfillmentTransitionEvent } from "./fulfillment-state-machine.ts";
 import { createAdminFulfillment } from "../admin/orders.ts";
+import { isReturnPhotoStorageConfigured } from "./return-photos.ts";
 
 /**
  * Hand-run order lifecycle for merchants who ship themselves (no courier integration):
@@ -233,7 +234,8 @@ export async function requestReturn(rt: Runtime, ctx: TenantContext, input: Retu
       throw new Error("Bad Request: Please choose a valid return reason configured by the store");
     }
 
-    if (matchedReason.photoRequirement === "required" && photos.length === 0) {
+    // Photos can only be attached when private photo storage is configured; until then the "required" rule cannot be met, so it is not enforced.
+    if (matchedReason.photoRequirement === "required" && photos.length === 0 && isReturnPhotoStorageConfigured()) {
       throw new Error("Bad Request: Photos are required for this return reason");
     }
 
@@ -658,7 +660,9 @@ export async function getOrderReturnsByToken(rt: Runtime, tenantId: string, toke
       canRequest: settings.acceptReturns && order.status === "delivered" && items.some((i) => i.returnable > 0),
       acceptReturns: settings.acceptReturns,
       allowExchanges: settings.allowExchanges,
-      reasons: settings.reasons,
+      reasons: isReturnPhotoStorageConfigured()
+        ? settings.reasons
+        : settings.reasons.map((r) => ({ ...r, photoRequirement: "not_asked" as const })),
       policyText: settings.policyText,
       instructions: settings.instructions,
       items,
