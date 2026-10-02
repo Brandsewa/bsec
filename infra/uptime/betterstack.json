@@ -11,7 +11,7 @@
         "role": "app_rw"
       }
     },
-    "interval_seconds": 60,
+    "interval_seconds": 180,
     "ssl_check": true,
     "alert_on": "status != 200 or body mismatch or ssl expiration < 14 days"
   },
@@ -22,7 +22,7 @@
     "expected_body": {
       "status": "ok"
     },
-    "interval_seconds": 60,
+    "interval_seconds": 180,
     "ssl_check": true,
     "alert_on": "status != 200 or body mismatch or ssl expiration < 14 days"
   },
@@ -38,8 +38,16 @@
         "role": "app_platform"
       }
     },
-    "interval_seconds": 60,
+    "interval_seconds": 180,
     "ssl_check": true,
     "alert_on": "status != 200 or body mismatch or ssl expiration < 14 days"
+  },
+  {
+    "service": "superadmin",
+    "url": "https://superadmin.bcom.si/",
+    "expected_status": 200,
+    "interval_seconds": 180,
+    "ssl_check": true,
+    "alert_on": "status != 200 or ssl expiration < 14 days"
   }
 ]
