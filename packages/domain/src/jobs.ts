@@ -711,6 +711,20 @@ export async function startJobs(opts: {
     }
   });
 
+  // Handle order.return_photo_cleanup recurring / triggered cleanup
+  await boss.work<{ tenantId?: string }>(QUEUE_NAMES.ORDER_RETURN_PHOTO_CLEANUP, { localConcurrency: 1 }, async (batch) => {
+    for (const job of batch) {
+      try {
+        const { cleanupOrphanedReturnPhotos } = await import("./orders/return-photos.ts");
+        const res = await cleanupOrphanedReturnPhotos(db);
+        opts.log.info({ job_id: job.id, deletedCount: res.deletedCount }, "order.return_photo_cleanup processed");
+      } catch (err) {
+        opts.log.error({ err, job_id: job.id }, "order.return_photo_cleanup failed");
+        throw err;
+      }
+    }
+  });
+
   // Register recurring schedules and proof-of-life sweeps on boot (PLAN §5.10, §11.3)
   try {
     await boss.schedule(QUEUE_NAMES.RESERVATION_EXPIRY, "* * * * *", {});
@@ -718,7 +732,8 @@ export async function startJobs(opts: {
     await boss.schedule(QUEUE_NAMES.CART_RECOVERY_SWEEP, "0 * * * *", {});
     await boss.schedule(QUEUE_NAMES.SUBSCRIPTION_TRIAL_EXPIRY_SWEEP, "0 * * * *", {});
     await boss.schedule(QUEUE_NAMES.ORDER_PREORDER_REMINDER_SWEEP, "0 6 * * *", {});
-    opts.log.info("Registered recurring cron: reservation.expiry, idempotency.cleanup, cart.recovery_sweep, subscription.trial_expiry_sweep, preorder_reminder_sweep");
+    await boss.schedule(QUEUE_NAMES.ORDER_RETURN_PHOTO_CLEANUP, "0 3 * * *", {});
+    opts.log.info("Registered recurring cron: reservation.expiry, idempotency.cleanup, cart.recovery_sweep, subscription.trial_expiry_sweep, preorder_reminder_sweep, return_photo_cleanup");
   } catch (err) {
     opts.log.warn({ err }, "Could not register recurring cron schedules with pg-boss");
   }

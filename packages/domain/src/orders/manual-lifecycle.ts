@@ -256,6 +256,45 @@ export async function requestReturn(rt: Runtime, ctx: TenantContext, input: Retu
       }
     }
 
+    // Validate attached return photos: must belong to this tenant, order, folder 'returns', and not already attached
+    if (photos.length > 0) {
+      const mediaRows = await tx
+        .select({ id: schema.media.id, folder: schema.media.folder, storageKey: schema.media.storageKey })
+        .from(schema.media)
+        .where(
+          and(
+            eq(schema.media.tenantId, ctx.tenantId),
+            inArray(schema.media.id, photos),
+          ),
+        );
+
+      if (mediaRows.length !== photos.length) {
+        throw new Error("Bad Request: One or more photos are invalid or do not exist");
+      }
+
+      const expectedPrefix = `tenants/${ctx.tenantId}/returns/${input.orderId}/`;
+      for (const m of mediaRows) {
+        if (m.folder !== "returns" || !m.storageKey.startsWith(expectedPrefix)) {
+          throw new Error("Bad Request: One or more photos do not belong to this order");
+        }
+      }
+
+      // Check if any photo is already attached to an existing return
+      const existingReturnsWithPhotos = await tx
+        .select({ photos: schema.returns.photos })
+        .from(schema.returns)
+        .where(
+          and(
+            eq(schema.returns.tenantId, ctx.tenantId),
+            sql`${schema.returns.photos} && ARRAY[${sql.join(photos.map((p) => sql`${p}::uuid`), sql`, `)}]::uuid[]`,
+          ),
+        );
+
+      if (existingReturnsWithPhotos.length > 0) {
+        throw new Error("Conflict: One or more photos are already attached to a return");
+      }
+    }
+
     const number = await nextReturnNumber(rt, ctx.tenantId);
     const resolution = input.resolution === "replacement" ? "replacement" : "refund";
     const [ret] = await tx
