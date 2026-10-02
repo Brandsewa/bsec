@@ -11,6 +11,7 @@
     "test": "turbo run test",
     "test:fast": "turbo run test:fast",
     "test:heavy": "turbo run test:heavy",
+    "docs:check": "node scripts/check-docs.mjs",
     "db:migrate": "pnpm --filter @bs/db migrate",
     "db:generate": "pnpm --filter @bs/db generate"
   },

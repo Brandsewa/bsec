@@ -74,6 +74,15 @@ Source of truth: `docs/PLAN.html` v2.0 (build order in `docs/BUILD-PLAN-M2-M9.md
     - `@bs/web` storefront suite (16/16 files, 158/158 passed).
   - Full production build: `pnpm build` across all workspace apps/packages completed cleanly.
 
+**How the tracking docs split (2026-10-01):** this file is the **status board** (milestones, known gaps, what is in flight). The detailed "who changed what, why, how verified" log is one file per change set in [`docs/changes/`](docs/changes/README.md), written by every agent. How the system is built is in [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md). Rules for all agents: [`AGENTS.md`](AGENTS.md).
+
+## In flight
+
+One line per piece of work that is started and not merged. Add yours before you start, remove it when merged or abandoned (`AGENTS.md` section 6). Format: `agent · branch · area · since · one-line goal`.
+
+- claude · `feat/themes-puck` · themes, docs · 2026-10-01 · theme builder follow-ups; agent docs and change log (`docs/changes/`)
+- antigravity · `feat/auth-email-overhaul` · auth, email · 2026-10-01 · forgot/reset password, customer password sign-in, ZeptoMail (`docs/AUTH-OVERHAUL-PLAN.md`) *(from git worktree list; confirm status)*
+
 ## M10 · Visual theme system (Puck) — shipped to production 2026-10-01
 
 Design and rationale: [`docs/adr/018-visual-theme-editor.md`](docs/adr/018-visual-theme-editor.md) (extends ADR-009 and ADR-010). Shipped in `5644b6c` (feature commit `f469208` + merge of main). CI green end to end; production health checked (web, platform, admin on `5644b6c`).
