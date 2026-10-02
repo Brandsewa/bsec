@@ -2,6 +2,7 @@ import { createHash, randomBytes, randomUUID } from "node:crypto";
 import { and, eq, inArray, sql } from "drizzle-orm";
 import {
   actionTokens,
+  carts,
   locations,
   orderEvents,
   orderItems,
@@ -353,7 +354,25 @@ export async function placeOrder(
       },
     });
 
-    // 11. Clear cart
+    // 11. Mark cart converted and, if it was abandoned, mark recovered (ORDERS-ABANDONED-CHECKOUTS-PLAN §4.1)
+    const [cartRow] = await tx
+      .select({ status: carts.status })
+      .from(carts)
+      .where(eq(carts.id, cart.id))
+      .limit(1);
+
+    const isAbandoned = cartRow?.status === "abandoned";
+
+    await tx
+      .update(carts)
+      .set({
+        status: "converted",
+        lastActivityAt: sql`now()`,
+        ...(isAbandoned ? { recoveredAt: sql`now()` } : {}),
+      })
+      .where(eq(carts.id, cart.id));
+
+    // Clear cart items
     await clearCart(rt, ctx, input.cartToken, tx);
 
     // 12. Enqueue order.created job if boss runtime is present

@@ -13,6 +13,7 @@ import {
   RotateCcw,
   Settings,
   ShoppingBag,
+  ShoppingCart,
   Users,
   Warehouse,
 } from "lucide-react";
@@ -44,6 +45,7 @@ const nav: GatedGroup[] = [
       { label: "All orders", href: "/orders", icon: ShoppingBag, perm: "orders.read" },
       { label: "Pre-orders", href: "/preorders", icon: Clock, perm: "orders.read" },
       { label: "Quotes", href: "/quotes", icon: MessageSquareQuote, perm: "orders.read" },
+      { label: "Abandoned checkouts", href: "/abandoned-checkouts", icon: ShoppingCart, perm: "orders.read" },
       { label: "Returns", href: "/returns", icon: RotateCcw, perm: "orders.read" },
     ],
   },

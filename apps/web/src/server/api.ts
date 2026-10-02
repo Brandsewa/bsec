@@ -127,6 +127,8 @@ import {
   reopenAdminQuote,
   deleteAdminQuote,
   linkOrderToQuote,
+  getAdminAbandonedCheckoutStats,
+  listAdminAbandonedCheckouts,
   createAdminOrderInvoice,
   listAdminCustomers,
   getAdminCustomerDetail,
@@ -1366,6 +1368,22 @@ export const storeRouter = os.router({
         .handler(({ context, input }) => {
           if (!context.tenantCtx) throw new Error("Missing tenant context");
           return linkOrderToQuote(context.rt, context.tenantCtx, input);
+        }),
+    },
+    abandonedCheckouts: {
+      stats: os.admin.abandonedCheckouts.stats
+        .use(requireAdmin)
+        .use(requirePermission("orders.read"))
+        .handler(({ context }) => {
+          if (!context.tenantCtx) throw new Error("Missing tenant context");
+          return getAdminAbandonedCheckoutStats(context.rt, context.tenantCtx);
+        }),
+      list: os.admin.abandonedCheckouts.list
+        .use(requireAdmin)
+        .use(requirePermission("orders.read"))
+        .handler(({ context, input }) => {
+          if (!context.tenantCtx) throw new Error("Missing tenant context");
+          return listAdminAbandonedCheckouts(context.rt, context.tenantCtx, input);
         }),
     },
   },

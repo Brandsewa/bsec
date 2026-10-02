@@ -55,6 +55,7 @@ export * from "./admin/orders.ts";
 export * from "./admin/order-settings.ts";
 export * from "./admin/preorders.ts";
 export * from "./admin/quotes.ts";
+export * from "./admin/abandoned-checkouts.ts";
 export * from "./admin/customers.ts";
 export * from "./admin/discounts.ts";
 export * from "./admin/me.ts";

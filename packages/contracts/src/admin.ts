@@ -529,6 +529,39 @@ export const QuoteStats = z.object({
 });
 export type QuoteStats = z.infer<typeof QuoteStats>;
 
+export const AbandonedCheckoutItem = z.object({
+  id: z.string().uuid(),
+  cartToken: z.string(),
+  customer: z.object({
+    name: z.string().nullable().optional(),
+    email: z.string().nullable().optional(),
+    phone: z.string().nullable().optional(),
+  }),
+  itemsSummary: z.object({
+    firstTitle: z.string().nullable().optional(),
+    count: z.number().int(),
+    productId: z.string().uuid().nullable().optional(),
+    productSlug: z.string().nullable().optional(),
+  }),
+  total: z.number().int(), // minor units / paise
+  currency: z.string().default("INR"),
+  abandonedAt: z.string(),
+  recovered: z.boolean(),
+  recoveredAt: z.string().nullable().optional(),
+  emailStatus: z.enum(["not_sent", "sent", "failed", "not_applicable"]),
+  recoverySentAt: z.string().nullable().optional(),
+});
+export type AbandonedCheckoutItem = z.infer<typeof AbandonedCheckoutItem>;
+
+export const AbandonedCheckoutStats = z.object({
+  abandoned: z.number().int().min(0),
+  open: z.number().int().min(0),
+  recovered: z.number().int().min(0),
+  emailsSent: z.number().int().min(0),
+  potentialRevenue: z.number().int().min(0), // paise
+});
+export type AbandonedCheckoutStats = z.infer<typeof AbandonedCheckoutStats>;
+
 export const adminContract = {
   support: {
     list: oc.route({ method: "GET", path: "/admin/support/sessions" }).output(z.array(StoreSupportSession)),
@@ -1992,5 +2025,26 @@ export const adminContract = {
         }),
       )
       .output(QuoteRequest),
+  },
+
+  abandonedCheckouts: {
+    stats: oc
+      .route({ method: "GET", path: "/admin/abandoned-checkouts/stats" })
+      .output(AbandonedCheckoutStats),
+    list: oc
+      .route({ method: "GET", path: "/admin/abandoned-checkouts" })
+      .input(
+        z
+          .object({
+            view: z.enum(["all", "open", "recovered"]).default("all"),
+            search: z.string().optional(),
+            emailStatus: z.enum(["all", "not_sent", "sent", "failed", "not_applicable"]).default("all"),
+            sort: z.enum(["abandoned_desc", "abandoned_asc", "total_desc", "total_asc"]).default("abandoned_desc"),
+            limit: z.number().int().min(1).max(100).default(50),
+            offset: z.number().int().min(0).default(0),
+          })
+          .optional(),
+      )
+      .output(z.object({ items: z.array(AbandonedCheckoutItem), total: z.number().int() })),
   },
 };
