@@ -59,24 +59,25 @@ test("the demo store shows real products, orders, customers and discounts", asyn
   await openDemoStore(page);
 
   await page.getByRole("link", { name: "Products" }).click();
-  await expect(page.getByText("Cotton Kurta")).toBeVisible();
+  await expect(page.getByRole("table").getByText("Cotton Kurta")).toBeVisible();
   await expect(page.getByText("Out of stock").first()).toBeVisible();
 
   await page.getByRole("link", { name: "Orders" }).first().click();
-  await expect(page.getByText("ORD-00019")).toBeVisible();
+  await expect(page.getByText("ORD-00019").first()).toBeVisible();
+  // the redesigned lists render some values twice (table + card/summary), so match the first
   // the first four demo orders are COD orders the customer has not confirmed yet
-  await page.getByRole("button", { name: "COD to confirm" }).click();
-  await expect(page.getByText("ORD-00001")).toBeVisible();
-  await expect(page.getByText("ORD-00019")).toBeHidden();
+  await page.getByRole("tab", { name: "COD to confirm" }).click();
+  await expect(page.getByText("ORD-00001").first()).toBeVisible();
+  await expect(page.getByText("ORD-00019").first()).toBeHidden();
 
   await page.getByRole("link", { name: "Customers" }).click();
-  await expect(page.getByText("aarav.sharma@demo.example")).toBeVisible();
+  await expect(page.getByText("aarav.sharma@demo.example").first()).toBeVisible();
 
   await page.getByRole("link", { name: "Discounts" }).click();
-  await expect(page.getByText("DEMOWELCOME10")).toBeVisible();
+  await expect(page.getByText("DEMOWELCOME10").first()).toBeVisible();
 
   await page.getByRole("link", { name: "Inventory" }).click();
-  await expect(page.getByText("DEMO-COTTON-1")).toBeVisible();
+  await expect(page.getByText("DEMO-COTTON-1").first()).toBeVisible();
 });
 
 test("tax settings persist across a reload", async ({ page }) => {

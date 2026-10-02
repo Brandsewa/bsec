@@ -44,7 +44,7 @@ Without `BETTER_AUTH_URL` / `BETTER_AUTH_SECRET` the site keeps serving but admi
 ### Super Admin (`bsec-superadmin`)
 - A static SPA (nginx) served at **`superadmin.gobs.cloud`** (port `8081` in staging/local). The platform **API stays at `platform.gobs.cloud`** and the SPA finds it by replacing the `superadmin.` prefix with `platform.` (or set `VITE_PLATFORM_API_URL` at build time).
 - The store admin link used for support sessions is derived as `admin.<domain>` (or `VITE_STORE_ADMIN_URL`).
-- No runtime environment variables. Create it in Coolify as a new application from `ghcr.io/brandsewa/bsec-superadmin`, domain `superadmin.gobs.cloud`, port `8081`, and add it to the deploy list after the first successful build.
+- No runtime environment variables. Create it in Coolify as a new application from `ghcr.io/brandsewa/bsec-superadmin`, domain `superadmin.gobs.cloud`, port `8081`, and add its Coolify application id to `APP_UUIDS` in `.github/workflows/ci.yml` (done: `mvpbrx2k9jp3q1invu8ayk48`). **Missing from that list = built but never redeployed**: on 2026-10-01 the Super Admin kept serving an old build for a day because it was left out.
 
 ### Migration Runner (`bsec-migrate`)
 - `DATABASE_URL_OWNER`: Connection string for PostgreSQL as `app_owner`.

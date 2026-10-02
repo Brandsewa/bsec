@@ -208,7 +208,7 @@ jobs:
     env:
       COOLIFY_URL: https://server.brandsewa.com
       MIGRATE_UUID: qqqlm48eqo7f8pnfwn766suc
-      APP_UUIDS: 7wuzc3xhtzhxud3315pjutnd,w4awz0y3fxzxtwstps1srgfi,ecfwkdh7citlanfto6gpgqdv,miz7k30kdqjwmqgiru4k9xtz
+      APP_UUIDS: 7wuzc3xhtzhxud3315pjutnd,w4awz0y3fxzxtwstps1srgfi,ecfwkdh7citlanfto6gpgqdv,miz7k30kdqjwmqgiru4k9xtz,mvpbrx2k9jp3q1invu8ayk48
     steps:
       - name: Run migration (bsec-migrate; bootstraps roles once, always migrates)
         env:
@@ -219,7 +219,7 @@ jobs:
           # No read-scoped token to poll deployment status; migrate finishes in ~15-20s
           # (observed). Give it comfortable headroom before the apps redeploy.
           sleep 45
-      - name: Deploy web, platform, worker, admin
+      - name: Deploy web, platform, worker, admin, superadmin
         env:
           COOLIFY_TOKEN: ${{ secrets.COOLIFY_TOKEN }}
         run: |

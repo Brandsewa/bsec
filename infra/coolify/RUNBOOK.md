@@ -12,6 +12,7 @@ Images are built by GitHub Actions and pulled from GHCR (`ghcr.io/brandsewa/bsec
 | `bsec-platform` | `w4awz0y3fxzxtwstps1srgfi` | Platform API | `app_platform` (BYPASSRLS) | 4000 | `platform.gobs.cloud` |
 | `bsec-worker` | `ecfwkdh7citlanfto6gpgqdv` | pg-boss consumers | `app_rw` | 4100 | none |
 | `bsec-admin` | `miz7k30kdqjwmqgiru4k9xtz` | static SPA (nginx) | none | 8080 | `admin.gobs.cloud` |
+| `bsec-superadmin` | `mvpbrx2k9jp3q1invu8ayk48` | static SPA (nginx), prebuilt image | none | 8081 | `superadmin.gobs.cloud` |
 
 ---
 
