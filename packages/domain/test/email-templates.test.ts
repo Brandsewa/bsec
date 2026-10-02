@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { EMAIL_TEMPLATES, escapeHtml, formatInr, renderEmail, type EmailBrand, type EmailOrder } from "../src/system/email-templates.ts";
 
-const brand: EmailBrand = { storeName: "Taste of Hills", baseUrl: "https://tasteofhills.gobs.cloud", supportEmail: "help@tasteofhills.example" };
+const brand: EmailBrand = { storeName: "Taste of Hills", baseUrl: "https://tasteofhills.bcom.si", supportEmail: "help@tasteofhills.example" };
 
 const order: EmailOrder = {
   number: "ORD-00007",
@@ -16,7 +16,7 @@ const order: EmailOrder = {
   grandTotal: 32400,
   paymentStatus: "cod_pending",
   shippingAddress: { fullName: "Asha Rana", addressLine1: "12 Hill Road", city: "Dehradun", state: "Uttarakhand", pincode: "248001" },
-  orderUrl: "https://tasteofhills.gobs.cloud/o/ord_abc",
+  orderUrl: "https://tasteofhills.bcom.si/o/ord_abc",
 };
 
 describe("money and escaping", () => {
@@ -53,9 +53,9 @@ describe("order confirmation email", () => {
   });
 
   it("links to the order and the delivery address, and has a plain-text twin", () => {
-    expect(html).toContain('href="https://tasteofhills.gobs.cloud/o/ord_abc"');
+    expect(html).toContain('href="https://tasteofhills.bcom.si/o/ord_abc"');
     expect(html).toContain("12 Hill Road");
-    expect(text).toContain("View your order: https://tasteofhills.gobs.cloud/o/ord_abc");
+    expect(text).toContain("View your order: https://tasteofhills.bcom.si/o/ord_abc");
     expect(text).toContain("Dehradun, Uttarakhand");
     expect(text).not.toContain("<");
   });
@@ -91,9 +91,9 @@ describe("other emails", () => {
   });
 
   it("abandoned cart: a button back to the cart", () => {
-    const r = renderEmail("abandoned_cart_recovery", brand, { cartUrl: "https://tasteofhills.gobs.cloud/cart" }, "x");
-    expect(r.html).toContain('href="https://tasteofhills.gobs.cloud/cart"');
-    expect(r.text).toContain("Return to your cart: https://tasteofhills.gobs.cloud/cart");
+    const r = renderEmail("abandoned_cart_recovery", brand, { cartUrl: "https://tasteofhills.bcom.si/cart" }, "x");
+    expect(r.html).toContain('href="https://tasteofhills.bcom.si/cart"');
+    expect(r.text).toContain("Return to your cart: https://tasteofhills.bcom.si/cart");
   });
 
   it("an unknown template still produces a readable email, never a debug string", () => {
@@ -122,9 +122,9 @@ describe("other emails", () => {
   });
 
   it("password reset: includes the reset link and expiry note", () => {
-    const r = renderEmail("password_reset", brand, { resetUrl: "https://admin.gobs.cloud/reset-password?token=xyz" }, "Reset password");
-    expect(r.html).toContain('href="https://admin.gobs.cloud/reset-password?token=xyz"');
-    expect(r.text).toContain("https://admin.gobs.cloud/reset-password?token=xyz");
+    const r = renderEmail("password_reset", brand, { resetUrl: "https://admin.bcom.si/reset-password?token=xyz" }, "Reset password");
+    expect(r.html).toContain('href="https://admin.bcom.si/reset-password?token=xyz"');
+    expect(r.text).toContain("https://admin.bcom.si/reset-password?token=xyz");
     expect(r.text).toContain("expire in 1 hour");
   });
 
@@ -135,17 +135,17 @@ describe("other emails", () => {
   });
 
   it("customer welcome and customer password reset: branded for store", () => {
-    const welcome = renderEmail("customer_welcome", brand, { verifyUrl: "https://tasteofhills.gobs.cloud/account/verify-email/tok123" }, "Welcome");
+    const welcome = renderEmail("customer_welcome", brand, { verifyUrl: "https://tasteofhills.bcom.si/account/verify-email/tok123" }, "Welcome");
     expect(welcome.text).toContain("Welcome to Taste of Hills!");
-    expect(welcome.html).toContain("https://tasteofhills.gobs.cloud/account/verify-email/tok123");
+    expect(welcome.html).toContain("https://tasteofhills.bcom.si/account/verify-email/tok123");
 
-    const reset = renderEmail("customer_password_reset", brand, { resetUrl: "https://tasteofhills.gobs.cloud/account/reset-password/tok456" }, "Reset password");
+    const reset = renderEmail("customer_password_reset", brand, { resetUrl: "https://tasteofhills.bcom.si/account/reset-password/tok456" }, "Reset password");
     expect(reset.text).toContain("Taste of Hills");
-    expect(reset.html).toContain("https://tasteofhills.gobs.cloud/account/reset-password/tok456");
+    expect(reset.html).toContain("https://tasteofhills.bcom.si/account/reset-password/tok456");
 
-    const setup = renderEmail("customer_account_setup", brand, { setupUrl: "https://tasteofhills.gobs.cloud/account/reset-password/tok789" }, "Set up your account");
+    const setup = renderEmail("customer_account_setup", brand, { setupUrl: "https://tasteofhills.bcom.si/account/reset-password/tok789" }, "Set up your account");
     expect(setup.text).toContain("Taste of Hills");
-    expect(setup.html).toContain("https://tasteofhills.gobs.cloud/account/reset-password/tok789");
+    expect(setup.html).toContain("https://tasteofhills.bcom.si/account/reset-password/tok789");
   });
 });
 

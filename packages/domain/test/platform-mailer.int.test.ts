@@ -65,9 +65,9 @@ describe("platform email settings and mailer (Phase A real database)", () => {
         secureMode: "starttls",
         username: "emailapikey",
         password: rawToken,
-        fromEmail: "no-reply@gobs.cloud",
+        fromEmail: "no-reply@bcom.si",
         fromName: "Brand Sewa",
-        replyTo: "support@gobs.cloud",
+        replyTo: "support@bcom.si",
         enabled: true,
       },
     );
@@ -110,7 +110,7 @@ describe("platform email settings and mailer (Phase A real database)", () => {
           port: 587,
           secureMode: "starttls",
           username: "emailapikey",
-          fromEmail: "no-reply@gobs.cloud",
+          fromEmail: "no-reply@bcom.si",
           fromName: "Brand Sewa",
           enabled: true,
         },
@@ -126,7 +126,7 @@ describe("platform email settings and mailer (Phase A real database)", () => {
     expect(result.status).toBe("success");
     expect(sentMails).toHaveLength(1);
     expect(sentMails[0]!.to).toBe(testRecipient);
-    expect(String(sentMails[0]!.from)).toContain("no-reply@gobs.cloud");
+    expect(String(sentMails[0]!.from)).toContain("no-reply@bcom.si");
 
     // Check last_test_* in database
     const [settings] = await rt._db.db
@@ -188,7 +188,7 @@ describe("platform email settings and mailer (Phase A real database)", () => {
         secureMode: "starttls",
         username: "emailapikey",
         password: token,
-        fromEmail: "no-reply@gobs.cloud",
+        fromEmail: "no-reply@bcom.si",
         fromName: "Brand Sewa",
         enabled: true,
       },

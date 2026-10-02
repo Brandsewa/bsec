@@ -234,14 +234,14 @@ describe("Storefront Status Middleware (PLAN §8.2, §8.3 & M3 Status Pipeline)"
     });
 
     it("allows /signup and /api/saas/* when accessed from the marketing host", async () => {
-      const req1 = new NextRequest("https://gobs.cloud/signup", {
-        headers: { host: "gobs.cloud" },
+      const req1 = new NextRequest("https://bcom.si/signup", {
+        headers: { host: "bcom.si" },
       });
       const res1 = await middleware(req1);
       expect(res1.status).toBe(200);
 
-      const req2 = new NextRequest("https://gobs.cloud/api/saas/plans", {
-        headers: { host: "gobs.cloud" },
+      const req2 = new NextRequest("https://bcom.si/api/saas/plans", {
+        headers: { host: "bcom.si" },
       });
       const res2 = await middleware(req2);
       expect(res2.status).toBe(200);

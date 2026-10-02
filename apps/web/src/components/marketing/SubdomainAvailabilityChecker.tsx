@@ -8,7 +8,7 @@ interface SubdomainAvailabilityCheckerProps {
 }
 
 export function SubdomainAvailabilityChecker({
-  platformDomain = "gobs.cloud",
+  platformDomain = "bcom.si",
 }: SubdomainAvailabilityCheckerProps) {
   const router = useRouter();
   const [storeName, setStoreName] = useState("");

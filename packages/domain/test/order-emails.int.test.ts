@@ -93,7 +93,7 @@ beforeAll(async () => {
     passwordCiphertext: enc.ciphertext,
     passwordIv: enc.iv,
     keyVersion: enc.keyVersion,
-    fromEmail: "no-reply@gobs.cloud",
+    fromEmail: "no-reply@bcom.si",
     fromName: "Brand Sewa",
     enabled: true,
   }).onConflictDoUpdate({
@@ -152,7 +152,7 @@ describe("order confirmation email", () => {
 
     // the link in the email really opens this order on this store (a fresh token, not the checkout one)
     const link = /View your order: (https:\/\/\S+)/.exec(text)?.[1];
-    const linkRegex = new RegExp(`^https://${slugA}\\.gobs\\.cloud/o/ord_[0-9a-f]{48}$`);
+    const linkRegex = new RegExp(`^https://${slugA}\\.bcom\\.si/o/ord_[0-9a-f]{48}$`);
     expect(link).toMatch(linkRegex);
     expect(link).not.toContain(placed.orderToken);
   });
@@ -209,7 +209,7 @@ describe("shipping email", () => {
     const text = String(sent[0]!.text);
     expect(text).toContain("Carrier: Delhivery.");
     expect(text).toContain("Tracking number: AWB-998877.");
-    expect(text).toContain(`Track your order: https://${slugA}.gobs.cloud/o/ord_`);
+    expect(text).toContain(`Track your order: https://${slugA}.bcom.si/o/ord_`);
     expect(String(sent[0]!.subject)).toContain("has shipped");
   });
 });

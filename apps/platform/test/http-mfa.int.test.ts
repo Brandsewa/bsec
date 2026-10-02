@@ -9,7 +9,7 @@ import { createLogger, createPlatformStaffMember, createRuntime, type Runtime } 
 const SPA = "http://localhost:5174";
 process.env.BETTER_AUTH_SECRET = "test-platform-auth-secret-0123456789abcdef0123";
 process.env.PLATFORM_AUTH_URL = "http://localhost:4000";
-process.env.SUPERADMIN_ORIGINS = `https://superadmin.gobs.cloud,${SPA}`;
+process.env.SUPERADMIN_ORIGINS = `https://superadmin.bcom.si,${SPA}`;
 
 let env: TestDb;
 let rt: Runtime;
@@ -170,14 +170,14 @@ describe("platform login with MFA, end to end over HTTP (real Better Auth, real 
 describe("origin, CORS and test-auth hardening", () => {
   it("refuses state-changing requests from a tenant storefront origin or with no origin, and never sends CORS headers to them", async () => {
     const jar = new Jar();
-    for (const origin of ["https://evil-store.gobs.cloud", "https://gobs.cloud", "http://localhost:9999"]) {
+    for (const origin of ["https://evil-store.bcom.si", "https://bcom.si", "http://localhost:9999"]) {
       const res = await send(jar, "/api/platform/mfa/complete", { method: "POST", body: {}, origin });
       expect(res.status, origin).toBe(403);
       expect(res.headers.get("access-control-allow-origin"), origin).toBeNull();
     }
     expect((await send(jar, "/api/platform/mfa/complete", { method: "POST", body: {}, origin: null })).status).toBe(403);
 
-    const preflightEvil = await app.request("http://localhost:4000/api/rpc/tenants/list", { method: "OPTIONS", headers: { origin: "https://evil-store.gobs.cloud", "access-control-request-method": "POST" } });
+    const preflightEvil = await app.request("http://localhost:4000/api/rpc/tenants/list", { method: "OPTIONS", headers: { origin: "https://evil-store.bcom.si", "access-control-request-method": "POST" } });
     expect(preflightEvil.headers.get("access-control-allow-origin")).toBeNull();
     const preflightOk = await app.request("http://localhost:4000/api/rpc/tenants/list", { method: "OPTIONS", headers: { origin: SPA, "access-control-request-method": "POST" } });
     expect(preflightOk.headers.get("access-control-allow-origin")).toBe(SPA);

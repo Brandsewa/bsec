@@ -48,7 +48,7 @@ export async function isIntegrationKilled(
  * Transactional Email Dispatcher (AUTH-OVERHAUL-PLAN §3.5).
  * Dispatches transactional store emails (order confirmation, shipping updates,
  * abandoned cart recovery, returns, refunds) through the platform-wide SMTP mailer (Zoho ZeptoMail).
- * From name is the store name; reply-to is the store's support email; from address is no-reply@gobs.cloud.
+ * From name is the store name; reply-to is the store's support email; from address is no-reply@bcom.si.
  * If mailer is disabled or unconfigured, logs and skips gracefully.
  */
 export async function sendTransactionalEmail(

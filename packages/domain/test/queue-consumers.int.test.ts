@@ -79,7 +79,7 @@ beforeAll(async () => {
     ) VALUES (
       'default', 'zoho_zeptomail', 'smtp.zeptomail.in', 587, 'starttls', 'emailapikey',
       '${enc.ciphertext}', '${enc.iv}', 1,
-      'no-reply@gobs.cloud', 'Brand Sewa', 'support@gobs.cloud', true
+      'no-reply@bcom.si', 'Brand Sewa', 'support@bcom.si', true
     ) ON CONFLICT (id) DO UPDATE SET
       password_ciphertext = EXCLUDED.password_ciphertext,
       password_iv = EXCLUDED.password_iv,
@@ -145,8 +145,8 @@ describe("Queue Consumers Integration", () => {
     expect(sent.to).toBe("abandoned-cart@example.com");
     expect(sent.subject).toBe("Did you leave something behind?");
     expect(String(sent.html)).toContain("Did you leave something behind?");
-    expect(String(sent.html)).toContain("https://test-store-e1.gobs.cloud/cart");
-    expect(String(sent.text)).toContain("Return to your cart: https://test-store-e1.gobs.cloud/cart");
+    expect(String(sent.html)).toContain("https://test-store-e1.bcom.si/cart");
+    expect(String(sent.text)).toContain("Return to your cart: https://test-store-e1.bcom.si/cart");
     expect(String(sent.text)).not.toContain("Template:");
   });
 

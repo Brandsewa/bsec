@@ -65,7 +65,7 @@ describe("buildTenantContext()", () => {
       const ctx = await buildTenantContext(mockDb, {
         entryPath: "storefront",
         headers: {
-          host: "alpha.gobs.cloud",
+          host: "alpha.bcom.si",
           "x-request-id": "req-12345",
         },
       });
@@ -91,7 +91,7 @@ describe("buildTenantContext()", () => {
 
       const ctx = await buildTenantContext(mockDb, {
         entryPath: "storefront",
-        headers: { host: "alpha.gobs.cloud" },
+        headers: { host: "alpha.bcom.si" },
         session: {
           user: { id: "cust-99" },
           type: "customer",
@@ -115,7 +115,7 @@ describe("buildTenantContext()", () => {
       const ctx = await buildTenantContext(mockDb, {
         entryPath: "storefront",
         headers: {
-          host: "alpha.gobs.cloud",
+          host: "alpha.bcom.si",
           "x-store-id": "0199a999-9999-7000-8000-999999999999", // Malicious / mismatch header
         },
       });
@@ -128,7 +128,7 @@ describe("buildTenantContext()", () => {
 
       const ctx = await buildTenantContext(mockDb, {
         entryPath: "storefront",
-        headers: { host: "unknown.gobs.cloud" },
+        headers: { host: "unknown.bcom.si" },
       });
 
       expect(ctx).toBeNull();

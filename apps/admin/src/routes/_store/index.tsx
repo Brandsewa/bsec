@@ -110,7 +110,7 @@ function HomePage() {
     {
       id: "domain_connected",
       title: "Connect a custom domain",
-      description: "Brand your store with your custom domain or gobs.cloud subdomain.",
+      description: "Brand your store with your custom domain or bcom.si subdomain.",
       icon: Globe,
       completed: Boolean(steps.domain_connected),
       href: "/settings/branding",

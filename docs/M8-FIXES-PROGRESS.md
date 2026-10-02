@@ -41,7 +41,7 @@ All work strictly adheres to the governing rules:
 | **S3** | **Slug Reservation Refresh & Hashed IP Rate Limiting** | **RESOLVED** | `test/s3-slug-reservations.int.test.ts` (3/3 passed). Repeated slug checks refresh reservation expiry window. IP addresses are hashed using salted SHA-256 before insertion into rate-limiting tables. |
 | **S4** | **Platform Audit Logging & Invite Resend Revocation** | **RESOLVED** | `test/s4-platform-audit.int.test.ts` (2/2 passed). Mutations to platform tables write audit records to `platform_audit_logs`. Re-issuing an owner invite explicitly revokes previous unaccepted invites. |
 | **S5** | **Migration Sequence & Journal Hygiene** | **RESOLVED** | `packages/db/migrations/meta/_journal.json` contains strictly increasing timestamps after `0012` (`0013` at timestamp `1759200000000`). Database test suite passed (37/37). |
-| **S6** | **Middleware Route Scoping** | **RESOLVED** | `apps/web/test/middleware-status.test.ts` (12/12 passed). `/signup` and `/api/saas/*` routes are strictly restricted to the platform marketing domain (`gobs.cloud`) and return 404 on store subdomains. |
+| **S6** | **Middleware Route Scoping** | **RESOLVED** | `apps/web/test/middleware-status.test.ts` (12/12 passed). `/signup` and `/api/saas/*` routes are strictly restricted to the platform marketing domain (`bcom.si`) and return 404 on store subdomains. |
 | **S7** | **Custom Domain Edge Cases & Constraints** | **RESOLVED** | `test/s7-custom-domains-edges.int.test.ts` (2/2 passed) and `test/custom-domains.int.test.ts` (9/9 passed). Case-insensitive `citext` uniqueness on domain names, `prevalidate_txt` validation, and state machine transitions. |
 
 ---

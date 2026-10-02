@@ -80,7 +80,7 @@ export async function provisionTenant(
   const templateCode = input.themeTemplate || "starter-minimal";
   const source = input.source || "self_service";
 
-  const platformDomain = process.env.PLATFORM_DOMAIN?.trim() || "gobs.cloud";
+  const platformDomain = process.env.PLATFORM_DOMAIN?.trim() || "bcom.si";
   const hostname = `${slug}.${platformDomain}`;
   const isLocal = platformDomain.includes("localhost") || platformDomain.includes("127.0.0.1");
   const protocol = isLocal ? "http" : "https";

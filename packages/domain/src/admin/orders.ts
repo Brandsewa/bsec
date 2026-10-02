@@ -377,7 +377,7 @@ export async function createAdminDraftOrder(
       orderId: order.id,
       orderNumber,
       grandTotal,
-      payLink: `https://${ctx.tenantId}.gobs.cloud/checkout/pay/${order.id}`,
+      payLink: `https://${ctx.tenantId}.bcom.si/checkout/pay/${order.id}`,
     };
   });
 }

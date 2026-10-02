@@ -192,7 +192,7 @@ describe("M8 Signup Pipeline & Abuse Protection (PLAN §5.2, §7 / ADR-016)", ()
     });
 
     expect(result.slug).toBe(slug);
-    expect(result.hostname).toBe(`${slug}.gobs.cloud`);
+    expect(result.hostname).toBe(`${slug}.bcom.si`);
     expect(result.tenantId).toBeDefined();
 
     // Verify lead status was updated to store_created

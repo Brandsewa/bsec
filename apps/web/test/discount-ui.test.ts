@@ -137,8 +137,8 @@ describe("the discount code box", () => {
 });
 
 describe("POST/DELETE /api/storefront/cart/discount", () => {
-  const url = "https://demo.gobs.cloud/api/storefront/cart/discount";
-  const headers = { host: "demo.gobs.cloud", "content-type": "application/json", cookie: "bs_cart_token=tok-1" };
+  const url = "https://demo.bcom.si/api/storefront/cart/discount";
+  const headers = { host: "demo.bcom.si", "content-type": "application/json", cookie: "bs_cart_token=tok-1" };
 
   it("applies a valid code and returns the cart with the discount", async () => {
     const { POST } = await import("../src/app/api/storefront/cart/discount/route.ts");
@@ -159,7 +159,7 @@ describe("POST/DELETE /api/storefront/cart/discount", () => {
     const { POST } = await import("../src/app/api/storefront/cart/discount/route.ts");
     const empty = await POST(new Request(url, { method: "POST", headers, body: JSON.stringify({ code: "   " }) }));
     expect(empty.status).toBe(400);
-    const noCart = await POST(new Request(url, { method: "POST", headers: { host: "demo.gobs.cloud", "content-type": "application/json" }, body: JSON.stringify({ code: "TEN" }) }));
+    const noCart = await POST(new Request(url, { method: "POST", headers: { host: "demo.bcom.si", "content-type": "application/json" }, body: JSON.stringify({ code: "TEN" }) }));
     expect(noCart.status).toBe(400);
     expect((await noCart.json()).error).toMatch(/cart is empty/i);
   });

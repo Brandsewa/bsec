@@ -226,7 +226,7 @@ export function TenantCreate() {
                   onChange={(e) => setSlug(autoSlug(e.target.value))}
                   required
                 />
-                <span className="text-xs text-muted-foreground shrink-0 font-mono">.gobs.cloud</span>
+                <span className="text-xs text-muted-foreground shrink-0 font-mono">.bcom.si</span>
               </div>
             </div>
           </div>

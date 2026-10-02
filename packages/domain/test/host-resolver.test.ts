@@ -33,20 +33,20 @@ describe("resolveHostToTenant()", () => {
     } as unknown as Db;
 
     // First call: hits DB
-    const res1 = await resolveHostToTenant(mockDb, "alpha.gobs.cloud:3000");
+    const res1 = await resolveHostToTenant(mockDb, "alpha.bcom.si:3000");
     expect(res1).toEqual({ tenantId, tenantStatus: "active" });
     expect(queryCount).toBe(1);
 
     // Second call with different casing/port: cache hit, no DB query
-    const res2 = await resolveHostToTenant(mockDb, "ALPHA.gobs.cloud");
+    const res2 = await resolveHostToTenant(mockDb, "ALPHA.bcom.si");
     expect(res2).toEqual({ tenantId, tenantStatus: "active" });
     expect(queryCount).toBe(1);
 
     // Invalidate cache
-    invalidateHostCache("alpha.gobs.cloud");
+    invalidateHostCache("alpha.bcom.si");
 
     // Third call: hits DB again
-    const res3 = await resolveHostToTenant(mockDb, "alpha.gobs.cloud");
+    const res3 = await resolveHostToTenant(mockDb, "alpha.bcom.si");
     expect(res3).toEqual({ tenantId, tenantStatus: "active" });
     expect(queryCount).toBe(2);
   });
@@ -64,7 +64,7 @@ describe("resolveHostToTenant()", () => {
       }),
     } as unknown as Db;
 
-    const res = await resolveHostToTenant(mockDb, "unknown.gobs.cloud");
+    const res = await resolveHostToTenant(mockDb, "unknown.bcom.si");
     expect(res).toBeNull();
   });
 
@@ -87,7 +87,7 @@ describe("resolveHostToTenant()", () => {
       }),
     } as unknown as Db;
 
-    const res = await resolveHostToTenant(mockDb, "pending.gobs.cloud");
+    const res = await resolveHostToTenant(mockDb, "pending.bcom.si");
     expect(res).toBeNull();
   });
 
@@ -111,7 +111,7 @@ describe("resolveHostToTenant()", () => {
       }),
     } as unknown as Db;
 
-    const res = await resolveHostToTenant(mockDb, "suspended.gobs.cloud");
+    const res = await resolveHostToTenant(mockDb, "suspended.bcom.si");
     expect(res).toEqual({ tenantId, tenantStatus: "suspended" });
   });
 });

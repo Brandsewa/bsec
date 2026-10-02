@@ -39,7 +39,7 @@ Prior to this overhaul:
 ### 5. Centralized Platform Transactional Mailer (Zoho ZeptoMail)
 - Platform-wide transactional emails are routed through a dedicated platform mailer (`packages/domain/src/system/platform-mailer.ts`) backed by `nodemailer` over SMTP (Zoho ZeptoMail).
 - SMTP credentials (including Send Mail Tokens) are configured by Super Admin at `/email` in the Superadmin UI, stored with AES-256-GCM symmetric encryption in `platform_email_settings`, and never displayed in plain text or returned across API boundaries.
-- All transactional emails originate from `no-reply@gobs.cloud`, using the specific store's name as the display name and the store's support email as the `reply-to` address.
+- All transactional emails originate from `no-reply@bcom.si`, using the specific store's name as the display name and the store's support email as the `reply-to` address.
 - Per-tenant Resend API keys are decommissioned and removed from order email workflows.
 
 ## Consequences

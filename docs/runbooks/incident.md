@@ -27,7 +27,7 @@
    curl -fsS http://127.0.0.1:3000/api/health
    curl -fsS http://127.0.0.1:4100/health
    ```
-2. Inspect Super Admin system health dashboard: `https://platform.gobs.cloud/system`.
+2. Inspect Super Admin system health dashboard: `https://platform.bcom.si/system`.
 3. Check Sentry alerts for uncaught exceptions or spikes in 500 errors.
 
 ### Step 2: Immediate Containment
@@ -67,7 +67,7 @@
   2. If caused by external provider downtime (e.g. Resend or Shiprocket API rate limit), wait for provider recovery.
   3. Use Super Admin System screen to click **Retry Job**, or trigger via platform API:
      ```bash
-     curl -X POST https://platform.gobs.cloud/rpc/platform/system/jobs/<jobId>/retry
+     curl -X POST https://platform.bcom.si/rpc/platform/system/jobs/<jobId>/retry
      ```
   4. *(Status: TESTED in domain queue suite)*.
 

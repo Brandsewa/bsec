@@ -997,7 +997,7 @@ describe("Generated Isolation Test Suite (M1 Real Postgres 18 Proof)", () => {
             createCustomHostname: async (h: string) => ({
               providerHostnameId: "cf_hn_iso_add",
               hostname: h,
-              cnameTarget: "stores.gobs.cloud",
+              cnameTarget: "stores.bcom.si",
               status: "awaiting_dns",
               sslStatus: "initializing",
             }),
@@ -1015,7 +1015,7 @@ describe("Generated Isolation Test Suite (M1 Real Postgres 18 Proof)", () => {
             createCustomHostname: async (h: string) => ({
               providerHostnameId: "cf_hn_iso_ver",
               hostname: h,
-              cnameTarget: "stores.gobs.cloud",
+              cnameTarget: "stores.bcom.si",
               status: "awaiting_dns",
               sslStatus: "initializing",
             }),
@@ -1044,7 +1044,7 @@ describe("Generated Isolation Test Suite (M1 Real Postgres 18 Proof)", () => {
             createCustomHostname: async (h: string) => ({
               providerHostnameId: "cf_hn_iso_rem",
               hostname: h,
-              cnameTarget: "stores.gobs.cloud",
+              cnameTarget: "stores.bcom.si",
               status: "awaiting_dns",
               sslStatus: "initializing",
             }),

@@ -1,7 +1,7 @@
 [
   {
     "service": "web",
-    "url": "https://gobs.cloud/api/health",
+    "url": "https://bcom.si/api/health",
     "expected_status": 200,
     "expected_body": {
       "status": "ok",
@@ -17,7 +17,7 @@
   },
   {
     "service": "admin",
-    "url": "https://admin.gobs.cloud/health",
+    "url": "https://admin.bcom.si/health",
     "expected_status": 200,
     "expected_body": {
       "status": "ok"
@@ -28,7 +28,7 @@
   },
   {
     "service": "platform",
-    "url": "https://platform.gobs.cloud/health",
+    "url": "https://platform.bcom.si/health",
     "expected_status": 200,
     "expected_body": {
       "status": "ok",

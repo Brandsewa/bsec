@@ -80,7 +80,7 @@ beforeAll(async () => {
     ) VALUES (
       'default', 'zoho_zeptomail', 'smtp.zeptomail.in', 587, 'starttls', 'emailapikey',
       '${enc.ciphertext}', '${enc.iv}', 1,
-      'no-reply@gobs.cloud', 'Brand Sewa', 'support@gobs.cloud', true
+      'no-reply@bcom.si', 'Brand Sewa', 'support@bcom.si', true
     ) ON CONFLICT (id) DO UPDATE SET
       password_ciphertext = EXCLUDED.password_ciphertext,
       password_iv = EXCLUDED.password_iv,

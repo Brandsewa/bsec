@@ -361,7 +361,7 @@ function SignupContent() {
             g
           </span>
           <span className="text-xl font-bold tracking-tight text-slate-900">
-            gobs<span className="text-emerald-600">.cloud</span>
+            bcom<span className="text-emerald-600">.si</span>
           </span>
         </Link>
         <h1 className="text-2xl sm:text-3xl font-extrabold text-slate-900 tracking-tight">
@@ -444,14 +444,14 @@ function SignupContent() {
                   required
                 />
                 <span className="text-slate-400 font-medium text-sm select-none pl-2 shrink-0">
-                  .gobs.cloud
+                  .bcom.si
                 </span>
               </div>
               <div className="mt-2 text-xs font-medium">
                 {isCheckingSlug ? (
                   <span className="text-slate-500">Checking availability...</span>
                 ) : slugStatus?.available ? (
-                  <span className="text-emerald-700">✓ {slug}.gobs.cloud is available</span>
+                  <span className="text-emerald-700">✓ {slug}.bcom.si is available</span>
                 ) : slugStatus ? (
                   <span className="text-rose-600">✕ {slugStatus.reason || "Subdomain is unavailable"}</span>
                 ) : (
@@ -702,7 +702,7 @@ function SignupContent() {
 
             <div className="p-4 rounded-xl bg-slate-50 border border-slate-200 text-xs text-slate-600 space-y-1">
               <div className="font-semibold text-slate-800">Launch Summary:</div>
-              <div>• Store: <strong>{storeName}</strong> ({slug}.gobs.cloud)</div>
+              <div>• Store: <strong>{storeName}</strong> ({slug}.bcom.si)</div>
               <div>• Owner: <strong>{email}</strong></div>
               <div>• Trial: <strong>14 days free</strong> on {selectedPlan.toUpperCase()} tier</div>
             </div>

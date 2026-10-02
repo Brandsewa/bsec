@@ -105,9 +105,9 @@ DELETE FROM \"drizzle\".\"__drizzle_migrations\" WHERE id = <latest_id>;
 
 Immediately after rollback completes, verify the following in sequence:
 
-- [ ] **Health Endpoint Version:** `curl -sS https://gobs.cloud/api/health | jq .version` confirms the running container is on the rollback version / commit SHA.
-- [ ] **Database Connection Health:** `curl -sS https://gobs.cloud/api/health | jq .db` returns `{"ok": true, "role": "app_rw"}`.
-- [ ] **Storefront Smoke Test:** Load home page `https://gobs.cloud/` and a product page. Verify HTTP 200 and valid rendered HTML.
-- [ ] **Admin Smoke Test:** Open `https://admin.gobs.cloud/` and log in. Verify order list loads cleanly.
+- [ ] **Health Endpoint Version:** `curl -sS https://bcom.si/api/health | jq .version` confirms the running container is on the rollback version / commit SHA.
+- [ ] **Database Connection Health:** `curl -sS https://bcom.si/api/health | jq .db` returns `{"ok": true, "role": "app_rw"}`.
+- [ ] **Storefront Smoke Test:** Load home page `https://bcom.si/` and a product page. Verify HTTP 200 and valid rendered HTML.
+- [ ] **Admin Smoke Test:** Open `https://admin.bcom.si/` and log in. Verify order list loads cleanly.
 - [ ] **Background Worker Logs:** Check `docker logs --tail 50 bsec-worker` to verify pg-boss consumers are processing jobs without errors.
 - [ ] **Git Alignment:** Open a revert PR on GitHub (`git revert <bad_commit>`) to keep git `main` aligned with the deployed state.

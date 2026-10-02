@@ -100,7 +100,7 @@ export function isMediaStorageConfigured(override?: Partial<R2ClientConfig>): bo
 }
 
 /**
- * The public address of a stored file (R2_PUBLIC_URL is the bucket's public domain, e.g. https://media.gobs.cloud).
+ * The public address of a stored file (R2_PUBLIC_URL is the bucket's public domain, e.g. https://media.bcom.si).
  * Undefined when no public address is configured, so callers show no image instead of a broken one.
  */
 export function publicMediaUrl(storageKey: string | null | undefined, override?: Partial<R2ClientConfig>): string | undefined {

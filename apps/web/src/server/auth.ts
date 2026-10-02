@@ -9,7 +9,7 @@ import type { ApiContext } from "./api.ts";
  * crashing the process.
  *
  * Required in production: BETTER_AUTH_SECRET (32+ chars), BETTER_AUTH_URL (public API origin,
- * e.g. https://gobs.cloud). Optional: ADMIN_ORIGINS (comma list, default https://admin.<host>),
+ * e.g. https://bcom.si). Optional: ADMIN_ORIGINS (comma list, default https://admin.<host>),
  * COOKIE_DOMAIN (default .<host> for https origins).
  */
 export interface AuthSettings {

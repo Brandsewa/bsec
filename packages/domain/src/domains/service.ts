@@ -43,7 +43,7 @@ export function normalizeCustomHostname(raw: string): string {
   }
 
   // The platform's own domain, its subdomains and the admin/marketing hosts can never be claimed by a store.
-  const platformDomain = (process.env.PLATFORM_DOMAIN?.trim() || "gobs.cloud").toLowerCase();
+  const platformDomain = (process.env.PLATFORM_DOMAIN?.trim() || "bcom.si").toLowerCase();
   const reservedExact = [process.env.ADMIN_HOST, process.env.MARKETING_HOST]
     .map((v) => v?.trim().toLowerCase().replace(/:\d+$/, ""))
     .filter((v): v is string => Boolean(v));

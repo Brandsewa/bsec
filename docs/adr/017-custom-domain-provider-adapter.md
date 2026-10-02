@@ -5,7 +5,7 @@
 - **Plan reference:** PLAN §8, ADR-007, ADR-008
 
 ## Context
-Custom domains allow merchants to serve storefront traffic on their own branded domain (e.g. `mystore.com`) rather than a platform subdomain (`{slug}.gobs.cloud`). Domain verification, TLS certificate issuance, and edge routing require integration with Cloudflare for SaaS custom hostnames.
+Custom domains allow merchants to serve storefront traffic on their own branded domain (e.g. `mystore.com`) rather than a platform subdomain (`{slug}.bcom.si`). Domain verification, TLS certificate issuance, and edge routing require integration with Cloudflare for SaaS custom hostnames.
 
 Live credentials for third-party providers (Cloudflare API token, Zone ID) will be configured at the end of the project. Per project rules, third-party integrations must use real SDK/HTTP code behind a provider adapter (ADR-008 pattern), testable at the network edge, and report an honest disabled/unverified status when credentials are missing without fabricating live external success.
 
@@ -18,7 +18,7 @@ Live credentials for third-party providers (Cloudflare API token, Zone ID) will 
        └──────────────┴─────► failed ◄─┴──────────────┘
                                active → removing → removed
    ```
-   - Standard CNAME path: Merchant points CNAME to `stores.gobs.cloud`.
+   - Standard CNAME path: Merchant points CNAME to `stores.bcom.si`.
    - `prevalidate_txt` path: Merchant creates TXT verification records first so SSL is active before switching traffic, allowing zero-downtime cutover.
    - Primary domain rule: A domain can only become `is_primary = true` when its status is `active`.
 2. **Provider Adapter Interface:**

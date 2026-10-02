@@ -27,7 +27,7 @@ export async function generateMetadata(): Promise<Metadata> {
 
     if (!access.tenantId) {
       return {
-        title: "gobs.cloud — Launch your online store in under 10 minutes",
+        title: "bcom.si — Launch your online store in under 10 minutes",
         description: "Fastest D2C commerce platform in India: UPI & COD payments, Shiprocket shipping automation, and automated GST invoices.",
       };
     }

@@ -10,9 +10,9 @@ The file `betterstack.json` provides the target configuration to translate into 
 
 | Service | Target URL | Expected Status | Payload Assertion | Cadence |
 |---|---|---|---|---|
-| **Web Storefront & Store API** | `https://gobs.cloud/api/health` | 200 OK | `{"status":"ok","service":"web","db":{"ok":true,"role":"app_rw"}}` | 60 seconds |
-| **Merchant Admin SPA** | `https://admin.gobs.cloud/health` | 200 OK | `{"status":"ok"}` | 60 seconds |
-| **Platform API** | `https://platform.gobs.cloud/health` | 200 OK | `{"status":"ok","service":"platform","db":{"ok":true,"role":"app_platform"}}` | 60 seconds |
+| **Web Storefront & Store API** | `https://bcom.si/api/health` | 200 OK | `{"status":"ok","service":"web","db":{"ok":true,"role":"app_rw"}}` | 60 seconds |
+| **Merchant Admin SPA** | `https://admin.bcom.si/health` | 200 OK | `{"status":"ok"}` | 60 seconds |
+| **Platform API** | `https://platform.bcom.si/health` | 200 OK | `{"status":"ok","service":"platform","db":{"ok":true,"role":"app_platform"}}` | 60 seconds |
 
 ## Health Checks & SSL Alerting Requirements
 

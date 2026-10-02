@@ -267,7 +267,7 @@ export function EmailSettings() {
                   <label className="font-semibold block mb-1">From Email (Verified) *</label>
                   <Input
                     value={current.fromEmail}
-                    placeholder="no-reply@gobs.cloud"
+                    placeholder="no-reply@bcom.si"
                     onChange={(e) => setForm({ ...current, fromEmail: e.target.value })}
                     disabled={!canEdit}
                     required
@@ -289,7 +289,7 @@ export function EmailSettings() {
                   <label className="font-semibold block mb-1">Default Reply-To</label>
                   <Input
                     value={current.replyTo}
-                    placeholder="support@gobs.cloud"
+                    placeholder="support@bcom.si"
                     onChange={(e) => setForm({ ...current, replyTo: e.target.value })}
                     disabled={!canEdit}
                   />
@@ -379,7 +379,7 @@ export function EmailSettings() {
               <span>DNS Verification Checklist</span>
             </div>
             <p className="text-muted-foreground">
-              For Zoho ZeptoMail to deliver emails from <strong>no-reply@gobs.cloud</strong> without rejection:
+              For Zoho ZeptoMail to deliver emails from <strong>no-reply@bcom.si</strong> without rejection:
             </p>
             <ul className="list-disc list-inside text-muted-foreground space-y-1">
               <li>SPF: TXT record with <code>include:zeptomail.net</code></li>

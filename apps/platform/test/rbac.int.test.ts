@@ -108,7 +108,7 @@ const INPUT: Record<string, unknown> = {
     port: 587,
     secureMode: "starttls",
     username: "emailapikey",
-    fromEmail: "no-reply@gobs.cloud",
+    fromEmail: "no-reply@bcom.si",
     fromName: "Brand Sewa",
     enabled: true,
   },

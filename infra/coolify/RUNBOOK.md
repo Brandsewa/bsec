@@ -8,11 +8,11 @@ Images are built by GitHub Actions and pulled from GHCR (`ghcr.io/brandsewa/bsec
 |---|---|---|---|---|---|
 | `bsec-postgres` | `jpukpasrsnmzzt6w2gshxktd` | Postgres 18, internal-only | superuser (Coolify-generated) | 5432 | none |
 | `bsec-migrate` | `qqqlm48eqo7f8pnfwn766suc` | one-shot, before every deploy | `app_owner` (+ superuser, first run only) | - | none |
-| `bsec-web` | `7wuzc3xhtzhxud3315pjutnd` | storefront, marketing, Store API | `app_rw` | 3000 | `gobs.cloud`, `www.gobs.cloud` |
-| `bsec-platform` | `w4awz0y3fxzxtwstps1srgfi` | Platform API | `app_platform` (BYPASSRLS) | 4000 | `platform.gobs.cloud` |
+| `bsec-web` | `7wuzc3xhtzhxud3315pjutnd` | storefront, marketing, Store API | `app_rw` | 3000 | `bcom.si`, `www.bcom.si` |
+| `bsec-platform` | `w4awz0y3fxzxtwstps1srgfi` | Platform API | `app_platform` (BYPASSRLS) | 4000 | `platform.bcom.si` |
 | `bsec-worker` | `ecfwkdh7citlanfto6gpgqdv` | pg-boss consumers | `app_rw` | 4100 | none |
-| `bsec-admin` | `miz7k30kdqjwmqgiru4k9xtz` | static SPA (nginx) | none | 8080 | `admin.gobs.cloud` |
-| `bsec-superadmin` | `mvpbrx2k9jp3q1invu8ayk48` | static SPA (nginx), prebuilt image | none | 8081 | `superadmin.gobs.cloud` |
+| `bsec-admin` | `miz7k30kdqjwmqgiru4k9xtz` | static SPA (nginx) | none | 8080 | `admin.bcom.si` |
+| `bsec-superadmin` | `mvpbrx2k9jp3q1invu8ayk48` | static SPA (nginx), prebuilt image | none | 8081 | `superadmin.bcom.si` |
 
 ---
 
@@ -73,10 +73,10 @@ One Coolify "Docker Image" resource per image (see the table above for images/po
 **Checklist (security):** `DATABASE_URL_PLATFORM` exists **only** on `bsec-platform`. `DATABASE_URL_OWNER`/`APP_*_PASSWORD` exist **only** on `bsec-migrate`, and its `DATABASE_URL_SUPERUSER` is removed after the first run (section 4, step 4).
 
 ### Domains
-- `gobs.cloud` / `www.gobs.cloud` -> `bsec-web`. **Live.** (Previously served the old single-store app; that Coolify project has been deleted.)
-- `admin.gobs.cloud` -> `bsec-admin`. **Live.** No `www.` variant (not needed for an admin/API subdomain).
-- `platform.gobs.cloud` -> `bsec-platform`. **Live.** No `www.` variant. Note PLAN section 14 wants the platform API behind Cloudflare Access or otherwise non-public - right now it's a public HTTPS endpoint requiring platform_staff auth at the application layer only (which doesn't exist yet - M1). Don't point real traffic at it until that's decided; consider adding Cloudflare Access in front of it.
-- **Gotcha (2026-09-28):** when `admin.gobs.cloud` was first added through Coolify's "Add Domain" dialog, a pre-filled/stale value in the input wasn't cleared before typing, so the saved value became the literal string `admin.gobs.cloudadmin.gobs.cloud` - Traefik had no router for the real hostname, giving a 503 until it was caught (from a screenshot) and fixed. Always reload and re-read a freshly-typed domain value in this UI before trusting it. The auto-added `www.admin.gobs.cloud` / `www.platform.gobs.cloud` entries were also removed as unneeded. While cleaning those up, `bsec-platform`'s auto-generated `sslip.io` fallback domain was accidentally deleted too (stale UI element reference) - harmless, it was only a diagnostic convenience.
+- `bcom.si` / `www.bcom.si` -> `bsec-web`. **Live.** (Previously served the old single-store app; that Coolify project has been deleted.)
+- `admin.bcom.si` -> `bsec-admin`. **Live.** No `www.` variant (not needed for an admin/API subdomain).
+- `platform.bcom.si` -> `bsec-platform`. **Live.** No `www.` variant. Note PLAN section 14 wants the platform API behind Cloudflare Access or otherwise non-public - right now it's a public HTTPS endpoint requiring platform_staff auth at the application layer only (which doesn't exist yet - M1). Don't point real traffic at it until that's decided; consider adding Cloudflare Access in front of it.
+- **Gotcha (2026-09-28):** when `admin.bcom.si` was first added through Coolify's "Add Domain" dialog, a pre-filled/stale value in the input wasn't cleared before typing, so the saved value became the literal string `admin.bcom.siadmin.bcom.si` - Traefik had no router for the real hostname, giving a 503 until it was caught (from a screenshot) and fixed. Always reload and re-read a freshly-typed domain value in this UI before trusting it. The auto-added `www.admin.bcom.si` / `www.platform.bcom.si` entries were also removed as unneeded. While cleaning those up, `bsec-platform`'s auto-generated `sslip.io` fallback domain was accidentally deleted too (stale UI element reference) - harmless, it was only a diagnostic convenience.
 - `bsec-worker`: no domain (internal only; its `/health` is reachable over the `coolify` network, not the public internet).
 
 ### Resource limits
@@ -97,7 +97,7 @@ CI (`.github/workflows/ci.yml`) on every push to `main` (and on PRs):
 
 **Approval gate caveat:** GitHub's required-reviewers protection rule on the `production` environment needs a paid plan for a private repo - attempting to set it returned a 422 ("Please ensure the billing plan supports the required reviewers protection rule"). Until the repo goes public or the org upgrades, **every push to `main` that passes CI deploys straight to production with no human approval step**, despite what the workflow's comments say. Either upgrade the plan, make the repo public, or add a manual `workflow_dispatch` gate if that risk needs closing sooner.
 
-**Verified for real (2026-09-28):** a genuine push to `main` (adding this workflow change itself) ran the whole pipeline end to end - typecheck/lint/test, build+push all 5 images, migrate, then redeploy all four apps via the Coolify API - and finished green (`gh run view`, all jobs succeeded). `gobs.cloud/api/health` afterwards reported the exact commit SHA that triggered the run, confirming the new build actually landed.
+**Verified for real (2026-09-28):** a genuine push to `main` (adding this workflow change itself) ran the whole pipeline end to end - typecheck/lint/test, build+push all 5 images, migrate, then redeploy all four apps via the Coolify API - and finished green (`gh run view`, all jobs succeeded). `bcom.si/api/health` afterwards reported the exact commit SHA that triggered the run, confirming the new build actually landed.
 
 ### Manual deploy (without CI)
 ```bash
@@ -107,9 +107,9 @@ curl -X POST "https://server.brandsewa.com/api/v1/deploy?uuid=<resource-uuid>[,<
 
 ### Verification after any deploy
 ```bash
-curl -s https://gobs.cloud/api/health          # web
-curl -s https://platform.gobs.cloud/health     # platform
-curl -s https://admin.gobs.cloud/health        # admin
+curl -s https://bcom.si/api/health          # web
+curl -s https://platform.bcom.si/health     # platform
+curl -s https://admin.bcom.si/health        # admin
 # worker has no public URL; check Coolify -> bsec-worker -> Runtime Logs for "worker started"
 ```
 Each app's `/health` returns `{"status":"ok","service":"...","db":{"ok":true,"role":"..."}}` (admin has no `db` field - it's static). Confirm `role` matches the table above (`app_rw` for web/worker, `app_platform` for platform) - a mismatch means the wrong `DATABASE_URL_*` landed on the wrong resource.
@@ -130,7 +130,7 @@ Each app's `/health` returns `{"status":"ok","service":"...","db":{"ok":true,"ro
 ## 9. Observability
 - Sentry: one project per service (`web`, `platform`, `worker`), `SENTRY_DSN` per resource. Code no-ops when unset - **not configured yet**, no DSNs set.
 - Logs: pino JSON on stdout with `request_id` (`tenant_id` populated from M1). Not yet shipped anywhere durable - only visible via Coolify's Runtime Logs, which don't persist long. Better Stack log drain still to do.
-- Uptime: not set up yet. Once it is: `https://gobs.cloud/api/health`, `https://admin.gobs.cloud/health`, `https://platform.gobs.cloud/health`.
+- Uptime: not set up yet. Once it is: `https://bcom.si/api/health`, `https://admin.bcom.si/health`, `https://platform.bcom.si/health`.
 
 ## 10. Gotchas (specific to this VPS/Coolify install, learned the hard way)
 - Only publish Postgres on the internal network; ufw does not protect Docker-published ports.

@@ -11,7 +11,7 @@ service container, then (on `main` only) builds images and deploys to production
 enough that it should land as a sequence of reviewed PRs, not one giant push.
 
 **Milestone owner context:** M0 (this repo's current state) is done and deployed — a working
-monorepo, empty schema-less Postgres roles, Docker images, CI/CD, and `gobs.cloud` live in
+monorepo, empty schema-less Postgres roles, Docker images, CI/CD, and `bcom.si` live in
 production showing only a placeholder. M1 is the first milestone that makes the platform actually
 multi-tenant. Nothing built in M1 is customer-facing yet (no products, no checkout) — M1's job is
 purely to prove that tenant A cannot touch tenant B's data through any code path, and to give every
@@ -33,7 +33,7 @@ Concretely, before you call M1 done, all of these must be true and demonstrated 
    queries a tenant table — it must return **zero rows**, not throw an error. (This is already
    proven for a scratch probe table in `packages/db/test/roles.int.test.ts` — M1 must prove it for
    the real tables it creates.)
-3. Host → tenant resolution works: hitting the web app with `Host: <slug>.gobs.cloud` (or a mapped
+3. Host → tenant resolution works: hitting the web app with `Host: <slug>.bcom.si` (or a mapped
    custom domain) resolves the correct `tenantId` and nothing else.
 4. Membership-based resolution works for the admin app: a staff session can only act on stores
    they have an active membership for, checked against `X-Store-Id`, never trusted from the client
@@ -301,7 +301,7 @@ Explicitly out of scope — do not let scope creep in from adjacent PLAN section
 - Super Admin UI screens beyond the bare `platform.tenants.list`/`get` procedures needed for the
   isolation suite — the actual dashboard is M9 (PLAN §6).
 - Custom domains / Cloudflare for SaaS (ADR-007) — `domains` table exists in M1 only to make the
-  host resolver work for `gobs.cloud`-pattern subdomains; the custom-domain *provisioning flow* is
+  host resolver work for `bcom.si`-pattern subdomains; the custom-domain *provisioning flow* is
   M8.
 - MFA enforcement on platform routes (leave the TODO marker per §3.6).
 - Rate limiting, CSRF tokens, CSP headers — PLAN §4's security checklist lists these but they're

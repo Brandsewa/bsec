@@ -57,7 +57,7 @@ export async function generateMetadata(): Promise<Metadata> {
 }
 
 export default async function RootLayout({ children }: { children: ReactNode }) {
-  // gobs.cloud and www.gobs.cloud are the platform's marketing site and signup, not a store: no store gate,
+  // bcom.si and www.bcom.si are the platform's marketing site and signup, not a store: no store gate,
   // header, footer or "coming soon" screen. (Without this the page was always hidden behind "Opening Soon".)
   let isMarketing = false;
   try {

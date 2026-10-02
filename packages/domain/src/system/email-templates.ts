@@ -6,7 +6,7 @@
 
 export interface EmailBrand {
   storeName: string;
-  /** The store's public address, e.g. https://tasteofhills.gobs.cloud (no trailing slash). */
+  /** The store's public address, e.g. https://tasteofhills.bcom.si (no trailing slash). */
   baseUrl: string;
   supportEmail?: string | null | undefined;
 }

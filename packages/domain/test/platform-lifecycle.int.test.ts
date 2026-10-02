@@ -50,7 +50,7 @@ afterAll(async () => {
   await env?.stop();
 });
 
-const host = () => `${store.slug}.gobs.cloud`;
+const host = () => `${store.slug}.bcom.si`;
 
 /** Expected behaviour per state, written out from PLAN §6.4 (not derived from the code under test). */
 const EXPECTED: Record<TenantLifecycleState, { storefront: number; checkout: boolean; admin: "none" | "full" | "read_only"; domains: boolean; marketing: boolean }> = {

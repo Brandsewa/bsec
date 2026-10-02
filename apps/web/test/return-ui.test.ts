@@ -45,10 +45,10 @@ describe("return request form", () => {
 });
 
 describe("POST /api/storefront/orders/[token]/return", () => {
-  const url = "https://demo.gobs.cloud/api/storefront/orders/tok/return";
+  const url = "https://demo.bcom.si/api/storefront/orders/tok/return";
   const post = async (body: unknown) => {
     const { POST } = await import("../src/app/api/storefront/orders/[token]/return/route.ts");
-    return POST(new Request(url, { method: "POST", headers: { host: "demo.gobs.cloud", "content-type": "application/json" }, body: JSON.stringify(body) }), {
+    return POST(new Request(url, { method: "POST", headers: { host: "demo.bcom.si", "content-type": "application/json" }, body: JSON.stringify(body) }), {
       params: Promise.resolve({ token: "tok" }),
     });
   };
