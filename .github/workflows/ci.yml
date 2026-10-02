@@ -58,9 +58,22 @@ jobs:
       - run: pnpm --filter "@bs/web..." build # perf-budget-bundle.int.test.ts reads .next
       - run: pnpm test:heavy
 
+  secret-scan:
+    name: secret-scan
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          fetch-depth: 0 # scan the whole history, not just the PR diff
+      # Gitleaks CLI image, not gitleaks-action: the action needs a paid license on organization repos.
+      # Config and fixture allowlist: .gitleaks.toml. Run as the runner uid so git trusts the checkout.
+      - run: >
+          docker run --rm -u "$(id -u):$(id -g)" -e HOME=/tmp -v "$PWD:/repo"
+          ghcr.io/gitleaks/gitleaks:v8.28.0 git /repo --config /repo/.gitleaks.toml --no-banner --redact
+
   images:
     name: build images → GHCR
-    needs: [check-fast, check-heavy]
+    needs: [check-fast, check-heavy, secret-scan]
     if: github.event_name == 'push' && github.ref == 'refs/heads/main'
     runs-on: ubuntu-24.04
     permissions:

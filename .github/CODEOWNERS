@@ -1,0 +1,19 @@
+# Who is requested for review on sensitive paths. Enforced only if branch protection on `main` enables
+# "Require review from Code Owners". Single-owner repo today, so everything maps to the owner.
+*                              @Brandsewa
+
+# Agent rules and architecture decisions
+/AGENTS.md                     @Brandsewa
+/CLAUDE.md                     @Brandsewa
+/docs/adr/                     @Brandsewa
+
+# Deploy pipeline and infrastructure (a push to main deploys to production)
+/.github/                      @Brandsewa
+/infra/                        @Brandsewa
+/DEPLOYMENT.md                 @Brandsewa
+
+# Tenancy, auth, money and migrations (AGENTS.md section 2)
+/packages/db/                  @Brandsewa
+/packages/auth/                @Brandsewa
+/packages/payments/            @Brandsewa
+/packages/domain/src/context.ts @Brandsewa
