@@ -137,7 +137,8 @@ describe("returns", () => {
     expect(req.number).toMatch(/^RET-\d+$/);
     expect(await errorOf(requestReturn(rtWeb, ctx, { orderId: placed.orderId, reason: "again", items: [{ orderItemId: item.id, quantity: 2 }] }))).toMatch(/at most 1/);
 
-    const listed = (await listAdminReturns(rtWeb, ctx, { status: "requested" })).find((r) => r.id === req.returnId)!;
+    const listResult = await listAdminReturns(rtWeb, ctx, { view: "needs_review" });
+    const listed = listResult.items.find((r) => r.id === req.returnId)!;
     expect(listed).toMatchObject({ reason: "Jar arrived broken", items: [{ title: "Pickle", quantity: 2 }] });
 
     for (const action of ["approve", "pick_up", "receive"] as const) await actOnReturn(rtWeb, ctx, { id: req.returnId, action });

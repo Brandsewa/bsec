@@ -13,6 +13,7 @@ export const RETURN_STATUSES = [
   "requested",
   "approved",
   "rejected",
+  "cancelled",
   "picked_up",
   "received",
   "refunded",
@@ -22,14 +23,18 @@ export const RETURN_STATUSES = [
 export type ReturnStatus = (typeof RETURN_STATUSES)[number];
 
 /**
- * Exact allowed return state transitions per PLAN §11.1:
- * - requested → approved | rejected
- * - approved → picked_up → received → refunded | replaced → closed
+ * Exact allowed return state transitions per ORDERS-RETURNS-PLAN §3.5:
+ * - requested → approved | rejected | cancelled
+ * - approved → received | refunded | replaced | picked_up
+ * - picked_up → received
+ * - received → refunded | replaced
+ * - refunded | replaced | rejected | cancelled → closed
  */
 const ALLOWED_RETURN_TRANSITIONS: Record<ReturnStatus, readonly ReturnStatus[]> = {
-  requested: ["approved", "rejected"],
-  approved: ["picked_up"],
+  requested: ["approved", "rejected", "cancelled"],
+  approved: ["received", "refunded", "replaced", "picked_up"],
   rejected: ["closed"],
+  cancelled: ["closed"],
   picked_up: ["received"],
   received: ["refunded", "replaced"],
   refunded: ["closed"],
@@ -52,12 +57,38 @@ export class InvalidReturnStateTransitionError extends Error {
 }
 
 export type ReturnTransitionEvent =
-  | { type: "return.approve"; adminNote?: string | undefined; data?: Record<string, unknown> | undefined }
-  | { type: "return.reject"; reason: string; adminNote?: string | undefined; data?: Record<string, unknown> | undefined }
+  | {
+      type: "return.approve";
+      resolution?: "refund" | "replacement" | undefined;
+      decisionMessage?: string | undefined;
+      adminNote?: string | undefined;
+      data?: Record<string, unknown> | undefined;
+    }
+  | {
+      type: "return.reject";
+      reason: string;
+      decisionMessage?: string | undefined;
+      adminNote?: string | undefined;
+      data?: Record<string, unknown> | undefined;
+    }
+  | { type: "return.cancel"; reason?: string | undefined; data?: Record<string, unknown> | undefined }
   | { type: "return.pick_up"; data?: Record<string, unknown> | undefined }
   | { type: "return.receive"; restock?: boolean | undefined; data?: Record<string, unknown> | undefined }
-  | { type: "return.refund"; refundAmount?: number | undefined; data?: Record<string, unknown> | undefined }
-  | { type: "return.replace"; replacementOrderId?: string | undefined; data?: Record<string, unknown> | undefined }
+  | {
+      type: "return.refund";
+      refundAmount?: number | undefined;
+      refundMethod?: string | undefined;
+      refundReference?: string | undefined;
+      adminNote?: string | undefined;
+      data?: Record<string, unknown> | undefined;
+    }
+  | {
+      type: "return.replace";
+      exchangeNote?: string | undefined;
+      exchangeOrderId?: string | undefined;
+      adminNote?: string | undefined;
+      data?: Record<string, unknown> | undefined;
+    }
   | { type: "return.close"; note?: string | undefined; data?: Record<string, unknown> | undefined };
 
 export interface TransitionReturnResult {
@@ -69,7 +100,7 @@ export interface TransitionReturnResult {
 }
 
 /**
- * Single authoritative transition function for returns (PLAN §11.1).
+ * Single authoritative transition function for returns (ORDERS-RETURNS-PLAN §3.5).
  * Checks the allowed transitions table, updates return status, logs order_events,
  * and emits domain events (return.requested, refund.processed).
  */
@@ -98,11 +129,17 @@ export async function transitionReturn(
     switch (event.type) {
       case "return.approve":
         targetStatus = "approved";
-        eventMessage = "Return request approved by merchant";
+        eventMessage = event.resolution === "replacement"
+          ? "Return request approved for exchange"
+          : "Return request approved for refund";
         break;
       case "return.reject":
         targetStatus = "rejected";
         eventMessage = `Return request rejected: ${event.reason}`;
+        break;
+      case "return.cancel":
+        targetStatus = "cancelled";
+        eventMessage = event.reason ? `Return request cancelled: ${event.reason}` : "Return request cancelled by customer";
         break;
       case "return.pick_up":
         targetStatus = "picked_up";
@@ -115,14 +152,16 @@ export async function transitionReturn(
       case "return.refund":
         targetStatus = "refunded";
         eventMessage = event.refundAmount
-          ? `Return refunded (₹${(event.refundAmount / 100).toFixed(2)})`
+          ? `Return refunded (₹${(event.refundAmount / 100).toFixed(2)}) via ${event.refundMethod ?? "manual"}`
           : "Return refunded";
         break;
       case "return.replace":
         targetStatus = "replaced";
-        eventMessage = event.replacementOrderId
-          ? `Replacement order created (${event.replacementOrderId})`
-          : "Replacement order created";
+        eventMessage = event.exchangeOrderId
+          ? `Exchange order created (${event.exchangeOrderId})`
+          : event.exchangeNote
+            ? `Exchange arranged: ${event.exchangeNote}`
+            : "Exchange arranged";
         break;
       case "return.close":
         targetStatus = "closed";
@@ -145,8 +184,28 @@ export async function transitionReturn(
       status: targetStatus,
       updatedAt: new Date(),
     };
-    if ("adminNote" in event && event.adminNote) {
+    if ("adminNote" in event && event.adminNote !== undefined) {
       updateValues.adminNote = event.adminNote;
+    }
+    if (event.type === "return.approve") {
+      if (event.resolution) updateValues.resolution = event.resolution;
+      if (event.decisionMessage) {
+        updateValues.decisionMessage = event.decisionMessage;
+        updateValues.instructionsSentAt = new Date();
+      }
+    }
+    if (event.type === "return.reject" && event.decisionMessage) {
+      updateValues.decisionMessage = event.decisionMessage;
+    }
+    if (event.type === "return.refund") {
+      if (event.refundAmount !== undefined) updateValues.refundAmount = event.refundAmount;
+      if (event.refundMethod !== undefined) updateValues.refundMethod = event.refundMethod;
+      if (event.refundReference !== undefined) updateValues.refundReference = event.refundReference;
+      updateValues.refundedAt = new Date();
+    }
+    if (event.type === "return.replace") {
+      if (event.exchangeNote !== undefined) updateValues.exchangeNote = event.exchangeNote;
+      if (event.exchangeOrderId !== undefined) updateValues.exchangeOrderId = event.exchangeOrderId;
     }
 
     await db

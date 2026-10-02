@@ -155,6 +155,7 @@ export const products = tenantTable(
     requiresShipping: boolean("requires_shipping").notNull().default(true),
     isFeatured: boolean("is_featured").notNull().default(false),
     priceOnRequest: boolean("price_on_request").notNull().default(false),
+    returnable: boolean("returnable").notNull().default(true),
     publishedAt: timestamp("published_at", { withTimezone: true }),
     searchVector: tsvector("search_vector").generatedAlwaysAs(
       sql`to_tsvector('english', coalesce("title", '') || ' ' || coalesce("short_description", ''))`,

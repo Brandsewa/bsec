@@ -562,6 +562,133 @@ export const AbandonedCheckoutStats = z.object({
 });
 export type AbandonedCheckoutStats = z.infer<typeof AbandonedCheckoutStats>;
 
+export const ReturnReasonConfig = z.object({
+  id: z.string(),
+  label: z.string(),
+  photoRequirement: z.enum(["required", "optional", "not_asked"]),
+});
+export type ReturnReasonConfig = z.infer<typeof ReturnReasonConfig>;
+
+export const ReturnSettings = z.object({
+  acceptReturns: z.boolean(),
+  allowExchanges: z.boolean(),
+  returnWindowDays: z.number().int().min(1).max(90),
+  reasons: z.array(ReturnReasonConfig),
+  instructions: z.string(),
+  policyText: z.string(),
+});
+export type ReturnSettings = z.infer<typeof ReturnSettings>;
+
+export const AdminReturnStats = z.object({
+  needsReview: z.number().int().min(0),
+  awaitingItem: z.number().int().min(0),
+  toResolve: z.number().int().min(0),
+  resolvedLast30Days: z.number().int().min(0),
+});
+export type AdminReturnStats = z.infer<typeof AdminReturnStats>;
+
+export const AdminReturnItem = z.object({
+  title: z.string(),
+  variantTitle: z.string().nullable().optional(),
+  quantity: z.number().int(),
+  unitPrice: z.number().int(),
+  lineTotal: z.number().int(),
+});
+export type AdminReturnItem = z.infer<typeof AdminReturnItem>;
+
+export const AdminReturnListItem = z.object({
+  id: z.string().uuid(),
+  number: z.string(),
+  status: z.string(),
+  reason: z.string(),
+  resolution: z.string(),
+  requestedResolution: z.string().nullable().optional(),
+  customerComment: z.string().nullable().optional(),
+  exchangeRequest: z.string().nullable().optional(),
+  decisionMessage: z.string().nullable().optional(),
+  adminNote: z.string().nullable().optional(),
+  refundMethod: z.string().nullable().optional(),
+  refundReference: z.string().nullable().optional(),
+  refundAmount: z.number().nullable().optional(),
+  refundedAt: z.string().nullable().optional(),
+  exchangeNote: z.string().nullable().optional(),
+  exchangeOrderId: z.string().uuid().nullable().optional(),
+  photosCount: z.number().int(),
+  createdAt: z.string(),
+  updatedAt: z.string(),
+  orderId: z.string().uuid(),
+  orderNumber: z.string(),
+  orderStatus: z.string(),
+  customerEmail: z.string().nullable().optional(),
+  customerName: z.string().nullable().optional(),
+  items: z.array(AdminReturnItem),
+  computedRefundAmount: z.number().int(),
+});
+export type AdminReturnListItem = z.infer<typeof AdminReturnListItem>;
+
+export const AdminReturnDetail = z.object({
+  id: z.string().uuid(),
+  number: z.string(),
+  status: z.string(),
+  reason: z.string(),
+  resolution: z.string(),
+  requestedResolution: z.string().nullable().optional(),
+  customerComment: z.string().nullable().optional(),
+  exchangeRequest: z.string().nullable().optional(),
+  decisionMessage: z.string().nullable().optional(),
+  adminNote: z.string().nullable().optional(),
+  refundMethod: z.string().nullable().optional(),
+  refundReference: z.string().nullable().optional(),
+  refundAmount: z.number().nullable().optional(),
+  refundedAt: z.string().nullable().optional(),
+  exchangeNote: z.string().nullable().optional(),
+  exchangeOrderId: z.string().uuid().nullable().optional(),
+  photos: z.array(z.object({ id: z.string(), url: z.string(), filename: z.string() })),
+  createdAt: z.string(),
+  updatedAt: z.string(),
+  order: z.object({
+    id: z.string().uuid(),
+    number: z.string(),
+    status: z.string(),
+    paymentStatus: z.string(),
+    grandTotal: z.number(),
+    totalAlreadyRefunded: z.number(),
+    maxRefundable: z.number(),
+    paymentMethod: z.string(),
+    customerEmail: z.string().nullable().optional(),
+    customerName: z.string().nullable().optional(),
+    customerPhone: z.string().nullable().optional(),
+    shippingAddress: z.record(z.string(), z.unknown()).nullable().optional(),
+    createdAt: z.string(),
+  }),
+  items: z.array(
+    z.object({
+      id: z.string().uuid(),
+      orderItemId: z.string().uuid(),
+      title: z.string(),
+      variantTitle: z.string().nullable().optional(),
+      quantity: z.number().int(),
+      bought: z.number().int(),
+      unitPrice: z.number().int(),
+      lineTotal: z.number().int(),
+      restock: z.boolean(),
+    }),
+  ),
+  computedRefundAmount: z.number().int(),
+  timeline: z.array(
+    z.object({
+      id: z.string().uuid(),
+      type: z.string(),
+      message: z.string(),
+      actorType: z.string(),
+      actorId: z.string().nullable().optional(),
+      createdAt: z.string(),
+      data: z.record(z.string(), z.unknown()).nullable().optional(),
+    }),
+  ),
+});
+export type AdminReturnDetail = z.infer<typeof AdminReturnDetail>;
+
 export const adminContract = {
   support: {
     list: oc.route({ method: "GET", path: "/admin/support/sessions" }).output(z.array(StoreSupportSession)),
@@ -1535,42 +1662,82 @@ export const adminContract = {
       ),
   },
 
-  // --- Returns ---
+  // --- Returns (ORDERS-RETURNS-PLAN §3.4) ---
   returns: {
+    stats: oc.route({ method: "GET", path: "/admin/returns/stats" }).output(AdminReturnStats),
     list: oc
       .route({ method: "GET", path: "/admin/returns" })
-      .input(z.object({ status: z.string().optional() }).optional())
+      .input(
+        z
+          .object({
+            view: z.enum(["all", "needs_review", "approved", "received", "resolved", "rejected_closed"]).default("all"),
+            search: z.string().optional(),
+            resolution: z.enum(["refund", "replacement"]).optional(),
+            dateFrom: z.string().optional(),
+            dateTo: z.string().optional(),
+            sort: z.enum(["created_desc", "created_asc", "amount_desc", "amount_asc"]).default("created_desc"),
+            page: z.number().int().min(1).default(1),
+            pageSize: z.number().int().min(1).max(100).default(50),
+          })
+          .optional(),
+      )
       .output(
         z.object({
-          items: z.array(
-            z.object({
-              id: z.string().uuid(),
-              number: z.string(),
-              status: z.string(),
-              reason: z.string(),
-              resolution: z.string(),
-              adminNote: z.string().nullable(),
-              createdAt: z.string(),
-              orderId: z.string().uuid(),
-              orderNumber: z.string(),
-              customerEmail: z.string().nullable(),
-              items: z.array(z.object({ title: z.string(), quantity: z.number() })),
-              refundAmount: z.number(),
-            }),
-          ),
+          items: z.array(AdminReturnListItem),
+          total: z.number().int(),
+          page: z.number().int(),
+          pageSize: z.number().int(),
         }),
       ),
+    get: oc
+      .route({ method: "GET", path: "/admin/returns/{id}" })
+      .input(z.object({ id: z.string().uuid() }))
+      .output(AdminReturnDetail),
     act: oc
       .route({ method: "POST", path: "/admin/returns/{id}/act" })
       .input(
         z.object({
           id: z.string().uuid(),
-          action: z.enum(["approve", "reject", "pick_up", "receive", "refund", "close"]),
+          action: z.enum(["approve", "reject", "pick_up", "receive", "refund", "replace", "close"]),
           note: z.string().trim().max(500).optional(),
+          resolution: z.enum(["refund", "replacement"]).optional(),
+          decisionMessage: z.string().trim().max(1000).optional(),
           restock: z.boolean().optional(),
+          refundAmount: z.number().int().min(1).optional(),
+          refundMethod: z.enum(["upi", "bank_transfer", "cash", "original_payment_method", "other"]).optional(),
+          refundReference: z.string().trim().max(100).optional(),
+          exchangeNote: z.string().trim().max(500).optional(),
+          exchangeOrderId: z.string().uuid().optional(),
         }),
       )
       .output(z.object({ success: z.boolean(), status: z.string() })),
+  },
+
+  // --- Return Settings (ORDERS-SETTINGS-PLAN §5) ---
+  returnSettings: {
+    get: oc.route({ method: "GET", path: "/admin/settings/returns" }).output(ReturnSettings),
+    update: oc
+      .route({ method: "PUT", path: "/admin/settings/returns" })
+      .input(
+        z.object({
+          acceptReturns: z.boolean().optional(),
+          allowExchanges: z.boolean().optional(),
+          returnWindowDays: z.number().int().min(1).max(90).optional(),
+          reasons: z
+            .array(
+              z.object({
+                id: z.string(),
+                label: z.string().trim().min(1).max(60),
+                photoRequirement: z.enum(["required", "optional", "not_asked"]),
+              }),
+            )
+            .max(12)
+            .optional(),
+          instructions: z.string().max(1000).optional(),
+          policyText: z.string().max(1000).optional(),
+        }),
+      )
+      .output(ReturnSettings),
   },
 
   // --- M5 Customers Admin ---

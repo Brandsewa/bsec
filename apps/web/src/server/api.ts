@@ -117,7 +117,11 @@ import {
   changePreorderShipDate,
   releasePreorderNow,
   listAdminReturns,
+  getAdminReturnStats,
+  getAdminReturnDetail,
   actOnReturn,
+  getReturnSettings,
+  updateReturnSettings,
   submitQuoteRequest,
   getAdminQuoteStats,
   listAdminQuotes,
@@ -1052,12 +1056,26 @@ export const storeRouter = os.router({
     },
 
     returns: {
+      stats: os.admin.returns.stats
+        .use(requireAdmin)
+        .use(requirePermission("orders.read"))
+        .handler(({ context }) => {
+          if (!context.tenantCtx) throw new Error("Missing tenant context");
+          return getAdminReturnStats(context.rt, context.tenantCtx);
+        }),
       list: os.admin.returns.list
         .use(requireAdmin)
         .use(requirePermission("orders.read"))
         .handler(async ({ context, input }) => {
           if (!context.tenantCtx) throw new Error("Missing tenant context");
-          return { items: await listAdminReturns(context.rt, context.tenantCtx, input ?? {}) };
+          return await listAdminReturns(context.rt, context.tenantCtx, input ?? {});
+        }),
+      get: os.admin.returns.get
+        .use(requireAdmin)
+        .use(requirePermission("orders.read"))
+        .handler(async ({ context, input }) => {
+          if (!context.tenantCtx) throw new Error("Missing tenant context");
+          return await getAdminReturnDetail(context.rt, context.tenantCtx, input);
         }),
       act: os.admin.returns.act
         .use(requireAdmin)
@@ -1069,6 +1087,23 @@ export const storeRouter = os.router({
           } catch (err) {
             throw mapAuthError(err);
           }
+        }),
+    },
+
+    returnSettings: {
+      get: os.admin.returnSettings.get
+        .use(requireAdmin)
+        .use(requirePermission("settings.write"))
+        .handler(({ context }) => {
+          if (!context.tenantCtx) throw new Error("Missing tenant context");
+          return getReturnSettings(context.rt, context.tenantCtx);
+        }),
+      update: os.admin.returnSettings.update
+        .use(requireAdmin)
+        .use(requirePermission("settings.write"))
+        .handler(({ context, input }) => {
+          if (!context.tenantCtx) throw new Error("Missing tenant context");
+          return updateReturnSettings(context.rt, context.tenantCtx, input);
         }),
     },
 

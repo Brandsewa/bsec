@@ -146,25 +146,39 @@ export async function advanceAdminOrder(
 // Returns
 // ---------------------------------------------------------------------------------------------
 
-export const RETURN_WINDOW_DAYS = 7;
-
 export interface ReturnRequestInput {
   orderId: string;
   reason: string;
   resolution?: "refund" | "replacement" | "store_credit" | undefined;
+  exchangeRequest?: string | undefined;
+  customerComment?: string | undefined;
+  photos?: string[] | undefined;
   items: Array<{ orderItemId: string; quantity: number }>;
 }
 
-/** Items of a delivered order still returnable: bought minus already returned or in a live return. */
+/** Items of a delivered order still returnable: bought minus already returned or in a live return. Non-returnable products have 0. */
 export async function getReturnableItems(
   tx: Parameters<Parameters<typeof withTenant>[2]>[0],
   tenantId: string,
   orderId: string,
 ) {
   const items = await tx
-    .select()
+    .select({
+      id: schema.orderItems.id,
+      orderId: schema.orderItems.orderId,
+      variantId: schema.orderItems.variantId,
+      productTitle: schema.orderItems.productTitle,
+      variantTitle: schema.orderItems.variantTitle,
+      quantity: schema.orderItems.quantity,
+      unitPrice: schema.orderItems.unitPrice,
+      total: schema.orderItems.total,
+      returnableFlag: schema.products.returnable,
+    })
     .from(schema.orderItems)
+    .innerJoin(schema.variants, and(eq(schema.variants.tenantId, schema.orderItems.tenantId), eq(schema.variants.id, schema.orderItems.variantId)))
+    .leftJoin(schema.products, and(eq(schema.products.tenantId, schema.variants.tenantId), eq(schema.products.id, schema.variants.productId)))
     .where(and(eq(schema.orderItems.tenantId, tenantId), eq(schema.orderItems.orderId, orderId)));
+
   const open = await tx
     .select({ orderItemId: schema.returnItems.orderItemId, quantity: schema.returnItems.quantity })
     .from(schema.returnItems)
@@ -178,7 +192,11 @@ export async function getReturnableItems(
     );
   const held = new Map<string, number>();
   for (const o of open) held.set(o.orderItemId, (held.get(o.orderItemId) ?? 0) + o.quantity);
-  return items.map((i) => ({ ...i, returnable: Math.max(0, i.quantity - (held.get(i.id) ?? 0)) }));
+  return items.map((i) => {
+    const isReturnableProduct = i.returnableFlag !== false;
+    const remaining = Math.max(0, i.quantity - (held.get(i.id) ?? 0));
+    return { ...i, returnable: isReturnableProduct ? remaining : 0, isNonReturnable: !isReturnableProduct };
+  });
 }
 
 async function nextReturnNumber(rt: Runtime, tenantId: string) {
@@ -197,7 +215,20 @@ export async function requestReturn(rt: Runtime, ctx: TenantContext, input: Retu
   const wanted = input.items.filter((i) => i.quantity > 0);
   if (wanted.length === 0) throw new Error("Bad Request: Choose at least one item to return");
 
+  const photos = Array.isArray(input.photos) ? input.photos.slice(0, 5) : [];
+
   return await withTenant(db, ctx.tenantId, async (tx) => {
+    const { readReturnSettings } = await import("../admin/return-settings.ts");
+    const settings = await readReturnSettings(tx, ctx.tenantId);
+
+    if (!settings.acceptReturns) {
+      throw new Error("Precondition: Return requests are not accepted by this store");
+    }
+
+    if (input.resolution === "replacement" && !settings.allowExchanges) {
+      throw new Error("Precondition: Exchanges are not available for this store");
+    }
+
     const order = await loadOrder(tx, ctx.tenantId, input.orderId);
     if (order.status !== "delivered") throw new Error("Precondition: Only delivered orders can be returned");
 
@@ -206,18 +237,27 @@ export async function requestReturn(rt: Runtime, ctx: TenantContext, input: Retu
       .from(schema.fulfillments)
       .where(and(eq(schema.fulfillments.tenantId, ctx.tenantId), eq(schema.fulfillments.orderId, input.orderId)));
     const since = delivered?.at ? new Date(delivered.at) : order.updatedAt;
-    if (Date.now() - since.getTime() > RETURN_WINDOW_DAYS * 86_400_000) {
-      throw new Error(`Precondition: The ${RETURN_WINDOW_DAYS}-day return window has passed`);
+    const windowDays = settings.returnWindowDays;
+    if (Date.now() - since.getTime() > windowDays * 86_400_000) {
+      throw new Error(`Precondition: The ${windowDays}-day return window has passed`);
     }
 
-    const returnable = new Map((await getReturnableItems(tx, ctx.tenantId, input.orderId)).map((i) => [i.id, i.returnable]));
+    const returnableItems = await getReturnableItems(tx, ctx.tenantId, input.orderId);
+    const returnableMap = new Map(returnableItems.map((i) => [i.id, i.returnable]));
     for (const w of wanted) {
-      const left = returnable.get(w.orderItemId);
+      const left = returnableMap.get(w.orderItemId);
       if (left === undefined) throw new Error("Bad Request: That item isn't on this order");
-      if (w.quantity > left) throw new Error(left === 0 ? "Conflict: That item has already been returned" : `Conflict: You can return at most ${left} of that item`);
+      const matchedItem = returnableItems.find((i) => i.id === w.orderItemId);
+      if (matchedItem?.isNonReturnable) {
+        throw new Error(`Precondition: "${matchedItem.productTitle}" is marked final sale and cannot be returned`);
+      }
+      if (w.quantity > left) {
+        throw new Error(left === 0 ? "Conflict: That item has already been returned" : `Conflict: You can return at most ${left} of that item`);
+      }
     }
 
     const number = await nextReturnNumber(rt, ctx.tenantId);
+    const resolution = input.resolution === "replacement" ? "replacement" : "refund";
     const [ret] = await tx
       .insert(schema.returns)
       .values({
@@ -226,71 +266,92 @@ export async function requestReturn(rt: Runtime, ctx: TenantContext, input: Retu
         customerId: order.customerId ?? null,
         number,
         reason,
-        resolution: input.resolution ?? "refund",
+        resolution,
+        requestedResolution: resolution,
+        customerComment: input.customerComment ? input.customerComment.trim().slice(0, 1000) : null,
+        exchangeRequest: input.exchangeRequest ? input.exchangeRequest.trim().slice(0, 1000) : null,
+        photos,
       })
       .returning();
     if (!ret) throw new Error("Failed to create return");
+
     for (const w of wanted) {
       await tx.insert(schema.returnItems).values({ tenantId: ctx.tenantId, returnId: ret.id, orderItemId: w.orderItemId, quantity: w.quantity });
     }
+
     await tx.insert(schema.orderEvents).values({
       tenantId: ctx.tenantId,
       orderId: input.orderId,
       type: "return.request",
-      message: `Return ${number} requested: ${reason}`,
-      data: { returnId: ret.id, returnNumber: number },
+      message: `Return ${number} requested (${resolution === "replacement" ? "exchange" : "refund"}): ${reason}`,
+      data: { returnId: ret.id, returnNumber: number, resolution },
       actorType: ctx.actor?.type ?? "customer",
       visibleToCustomer: true,
     });
+
     return { returnId: ret.id, number };
   });
 }
 
-export async function listAdminReturns(rt: Runtime, ctx: TenantContext, input: { status?: string | undefined } = {}) {
-  assertPermission(ctx, "orders.read");
-  return await withTenant(rt._db.db, ctx.tenantId, async (tx) => {
-    const rows = await tx
-      .select({
-        id: schema.returns.id,
-        number: schema.returns.number,
-        status: schema.returns.status,
-        reason: schema.returns.reason,
-        resolution: schema.returns.resolution,
-        adminNote: schema.returns.adminNote,
-        createdAt: schema.returns.createdAt,
-        orderId: schema.returns.orderId,
-        orderNumber: schema.orders.number,
-        customerEmail: schema.orders.email,
-      })
+/**
+ * A shopper or merchant cancels a pending return request (only before approval).
+ */
+export async function cancelReturn(
+  rt: Runtime,
+  ctx: TenantContext,
+  input: { returnId: string; reason?: string | undefined },
+) {
+  const db = rt._db.db;
+  return await withTenant(db, ctx.tenantId, async (tx) => {
+    const [ret] = await tx
+      .select()
       .from(schema.returns)
-      .innerJoin(schema.orders, and(eq(schema.orders.tenantId, schema.returns.tenantId), eq(schema.orders.id, schema.returns.orderId)))
-      .where(and(eq(schema.returns.tenantId, ctx.tenantId), input.status ? eq(schema.returns.status, input.status) : undefined))
-      .orderBy(sql`${schema.returns.createdAt} desc`)
-      .limit(200);
-    const ids = rows.map((r) => r.id);
-    const items = ids.length
-      ? await tx
-          .select({ returnId: schema.returnItems.returnId, quantity: schema.returnItems.quantity, title: schema.orderItems.productTitle, lineTotal: schema.orderItems.total, bought: schema.orderItems.quantity })
-          .from(schema.returnItems)
-          .innerJoin(schema.orderItems, and(eq(schema.orderItems.tenantId, schema.returnItems.tenantId), eq(schema.orderItems.id, schema.returnItems.orderItemId)))
-          .where(and(eq(schema.returnItems.tenantId, ctx.tenantId), inArray(schema.returnItems.returnId, ids)))
-      : [];
-    return rows.map((r) => ({
-      ...r,
-      createdAt: r.createdAt.toISOString(),
-      items: items.filter((i) => i.returnId === r.id).map((i) => ({ title: i.title, quantity: i.quantity })),
-      refundAmount: items.filter((i) => i.returnId === r.id).reduce((s, i) => s + Math.round((i.quantity * i.lineTotal) / Math.max(1, i.bought)), 0),
-    }));
+      .where(and(eq(schema.returns.tenantId, ctx.tenantId), eq(schema.returns.id, input.returnId)));
+    if (!ret) throw new Error("Not Found: Return not found");
+    if (ret.status !== "requested") {
+      throw new Error(`Precondition: Only requested returns can be cancelled (current status: ${ret.status})`);
+    }
+
+    const { transitionReturn } = await import("./return-state-machine.ts");
+    const result = await transitionReturn(rt, ctx, input.returnId, { type: "return.cancel", reason: input.reason }, tx);
+
+    if (ctx.actor.type === "staff") {
+      await tx.insert(schema.auditLogs).values({
+        tenantId: ctx.tenantId,
+        actorType: "staff",
+        actorId: ctx.actor.userId,
+        action: "returns.cancel",
+        targetType: "return",
+        targetId: input.returnId,
+        diff: { before: { status: ret.status }, after: { status: "cancelled", reason: input.reason } },
+      });
+    }
+
+    return { success: true as const, status: result.newStatus };
   });
 }
 
-export type ReturnAction = "approve" | "reject" | "pick_up" | "receive" | "refund" | "close";
+export type ReturnAction = "approve" | "reject" | "pick_up" | "receive" | "refund" | "replace" | "close";
 
-/** Move a return forward; `refund` also records the money going back and (when stock is restocked) puts items back on the shelf. */
+export interface ActOnReturnInput {
+  id: string;
+  action: ReturnAction;
+  note?: string | undefined;
+  resolution?: "refund" | "replacement" | undefined;
+  decisionMessage?: string | undefined;
+  restock?: boolean | undefined;
+  refundAmount?: number | undefined;
+  refundMethod?: string | undefined;
+  refundReference?: string | undefined;
+  exchangeNote?: string | undefined;
+  exchangeOrderId?: string | undefined;
+}
+
+/** Move a return forward; audited per Rule 6; recording a refund requires orders.refund. */
 export async function actOnReturn(
   rt: Runtime,
   ctx: TenantContext,
-  input: { id: string; action: ReturnAction; note?: string | undefined; restock?: boolean | undefined },
+  input: ActOnReturnInput,
 ) {
   assertPermission(ctx, input.action === "refund" ? "orders.refund" : "orders.write");
   const db = rt._db.db;
@@ -304,10 +365,35 @@ export async function actOnReturn(
 
     switch (input.action) {
       case "approve":
-        await transitionReturn(rt, ctx, input.id, { type: "return.approve", adminNote: input.note }, tx);
+        await transitionReturn(
+          rt,
+          ctx,
+          input.id,
+          {
+            type: "return.approve",
+            resolution: input.resolution ?? (ret.requestedResolution === "replacement" ? "replacement" : "refund"),
+            decisionMessage: input.decisionMessage,
+            adminNote: input.note,
+          },
+          tx,
+        );
         break;
       case "reject":
-        await transitionReturn(rt, ctx, input.id, { type: "return.reject", reason: input.note?.trim() || "Not eligible", adminNote: input.note }, tx);
+        if (!input.note?.trim() && !input.decisionMessage?.trim()) {
+          throw new Error("Bad Request: Please provide a reason for rejection");
+        }
+        await transitionReturn(
+          rt,
+          ctx,
+          input.id,
+          {
+            type: "return.reject",
+            reason: input.decisionMessage?.trim() || input.note?.trim() || "Not eligible",
+            decisionMessage: input.decisionMessage,
+            adminNote: input.note,
+          },
+          tx,
+        );
         break;
       case "pick_up":
         await transitionReturn(rt, ctx, input.id, { type: "return.pick_up" }, tx);
@@ -356,31 +442,93 @@ export async function actOnReturn(
           .from(schema.returnItems)
           .innerJoin(schema.orderItems, and(eq(schema.orderItems.tenantId, schema.returnItems.tenantId), eq(schema.orderItems.id, schema.returnItems.orderItemId)))
           .where(and(eq(schema.returnItems.tenantId, ctx.tenantId), eq(schema.returnItems.returnId, input.id)));
-        // what the shopper actually paid for those units (the line total already has any discount taken off)
-        const amount = Math.round(lines.reduce((s, l) => s + (l.quantity * l.lineTotal) / Math.max(1, l.bought), 0));
+        const computedDefault = Math.round(lines.reduce((s, l) => s + (l.quantity * l.lineTotal) / Math.max(1, l.bought), 0));
+        const amount = input.refundAmount !== undefined ? input.refundAmount : computedDefault;
+        if (amount <= 0) throw new Error("Bad Request: Refund amount must be greater than zero");
+
+        const [order] = await tx.select().from(schema.orders).where(and(eq(schema.orders.tenantId, ctx.tenantId), eq(schema.orders.id, ret.orderId)));
+        if (!order) throw new Error("Order not found");
+
+        const existingRefunds = await tx
+          .select({ amount: schema.refunds.amount })
+          .from(schema.refunds)
+          .where(and(eq(schema.refunds.tenantId, ctx.tenantId), eq(schema.refunds.orderId, ret.orderId), eq(schema.refunds.status, "succeeded")));
+        const totalAlreadyRefunded = existingRefunds.reduce((s, r) => s + Number(r.amount), 0);
+        const maxRefundable = Math.max(0, order.grandTotal - totalAlreadyRefunded);
+        if (amount > maxRefundable) {
+          throw new Error(`Conflict: Refund of ₹${(amount / 100).toFixed(2)} exceeds maximum refundable amount of ₹${(maxRefundable / 100).toFixed(2)}`);
+        }
+
         const [intent] = await tx
           .select()
           .from(schema.paymentIntents)
           .where(and(eq(schema.paymentIntents.tenantId, ctx.tenantId), eq(schema.paymentIntents.orderId, ret.orderId)))
           .limit(1);
-        if (!intent) throw new Error("Precondition: This order has no payment to refund");
-        await transitionReturn(rt, ctx, input.id, { type: "return.refund", refundAmount: amount }, tx);
-        // Online payments move through the payment state machine; cash on delivery is refunded by hand, so just record it.
-        if (intent.status === "captured" || intent.status === "partially_refunded") {
+
+        await transitionReturn(
+          rt,
+          ctx,
+          input.id,
+          {
+            type: "return.refund",
+            refundAmount: amount,
+            refundMethod: input.refundMethod ?? "manual",
+            refundReference: input.refundReference,
+            adminNote: input.note,
+          },
+          tx,
+        );
+
+        if (intent && (intent.status === "captured" || intent.status === "partially_refunded")) {
           await transitionOrder(rt, ctx, ret.orderId, { type: "payment.partial_refund", intentId: intent.id, amount, reason: `Return ${ret.number}` }, tx);
         }
+
         await tx.insert(schema.refunds).values({
           tenantId: ctx.tenantId,
           orderId: ret.orderId,
-          intentId: intent.id,
+          intentId: intent?.id ?? null,
           amount,
+          method: input.refundMethod ?? "manual",
+          reference: input.refundReference ?? null,
           status: "succeeded",
           reason: `Return ${ret.number}`,
           initiatedBy: "admin",
         });
         break;
       }
+      case "replace": {
+        await transitionReturn(
+          rt,
+          ctx,
+          input.id,
+          {
+            type: "return.replace",
+            exchangeNote: input.exchangeNote,
+            exchangeOrderId: input.exchangeOrderId,
+            adminNote: input.note,
+          },
+          tx,
+        );
+        break;
+      }
     }
+
+    // Rule 6: Audit log for all staff actions
+    if (ctx.actor.type === "staff") {
+      await tx.insert(schema.auditLogs).values({
+        tenantId: ctx.tenantId,
+        actorType: "staff",
+        actorId: ctx.actor.userId,
+        action: `returns.${input.action}`,
+        targetType: "return",
+        targetId: input.id,
+        diff: {
+          before: { status: ret.status },
+          after: { action: input.action, note: input.note, input },
+        },
+      });
+    }
+
     const [after] = await tx.select({ status: schema.returns.status }).from(schema.returns).where(eq(schema.returns.id, input.id));
     return { success: true as const, status: after?.status ?? ret.status };
   });
@@ -408,8 +556,27 @@ async function orderIdForToken(tx: Parameters<Parameters<typeof withTenant>[2]>[
 export interface OrderReturnsView {
   orderId: string;
   canRequest: boolean;
-  items: Array<{ id: string; title: string; variant: string | null; returnable: number }>;
-  returns: Array<{ number: string; status: string; reason: string; createdAt: string }>;
+  acceptReturns: boolean;
+  allowExchanges: boolean;
+  reasons: Array<{ id: string; label: string; photoRequirement: "required" | "optional" | "not_asked" }>;
+  policyText: string;
+  instructions: string;
+  items: Array<{ id: string; title: string; variant: string | null; returnable: number; isNonReturnable?: boolean }>;
+  returns: Array<{
+    id: string;
+    number: string;
+    status: string;
+    reason: string;
+    resolution: string;
+    requestedResolution: string | null;
+    customerComment: string | null;
+    exchangeRequest: string | null;
+    decisionMessage: string | null;
+    refundMethod: string | null;
+    refundAmount: number | null;
+    exchangeNote: string | null;
+    createdAt: string;
+  }>;
 }
 
 /** What the shopper sees under their order: what can still be returned and the returns already opened. */
@@ -418,22 +585,47 @@ export async function getOrderReturnsByToken(rt: Runtime, tenantId: string, toke
     const orderId = await orderIdForToken(tx, tenantId, token);
     if (!orderId) return null;
     const order = await loadOrder(tx, tenantId, orderId);
+
+    const { readReturnSettings } = await import("../admin/return-settings.ts");
+    const settings = await readReturnSettings(tx, tenantId);
+
     const items = (await getReturnableItems(tx, tenantId, orderId)).map((i) => ({
       id: i.id,
       title: i.productTitle,
       variant: i.variantTitle && i.variantTitle !== "Default" ? i.variantTitle : null,
       returnable: i.returnable,
+      isNonReturnable: i.isNonReturnable,
     }));
     const rows = await tx
       .select()
       .from(schema.returns)
       .where(and(eq(schema.returns.tenantId, tenantId), eq(schema.returns.orderId, orderId)))
       .orderBy(sql`${schema.returns.createdAt} desc`);
+
     return {
       orderId,
-      canRequest: order.status === "delivered" && items.some((i) => i.returnable > 0),
+      canRequest: settings.acceptReturns && order.status === "delivered" && items.some((i) => i.returnable > 0),
+      acceptReturns: settings.acceptReturns,
+      allowExchanges: settings.allowExchanges,
+      reasons: settings.reasons,
+      policyText: settings.policyText,
+      instructions: settings.instructions,
       items,
-      returns: rows.map((r) => ({ number: r.number, status: r.status, reason: r.reason, createdAt: r.createdAt.toISOString() })),
+      returns: rows.map((r) => ({
+        id: r.id,
+        number: r.number,
+        status: r.status,
+        reason: r.reason,
+        resolution: r.resolution,
+        requestedResolution: r.requestedResolution,
+        customerComment: r.customerComment,
+        exchangeRequest: r.exchangeRequest,
+        decisionMessage: r.decisionMessage,
+        refundMethod: r.refundMethod,
+        refundAmount: r.refundAmount,
+        exchangeNote: r.exchangeNote,
+        createdAt: r.createdAt.toISOString(),
+      })),
     };
   });
 }
@@ -441,9 +633,25 @@ export async function getOrderReturnsByToken(rt: Runtime, tenantId: string, toke
 export async function requestReturnByToken(
   rt: Runtime,
   ctx: TenantContext,
-  input: { token: string; reason: string; items: Array<{ orderItemId: string; quantity: number }> },
+  input: {
+    token: string;
+    reason: string;
+    resolution?: "refund" | "replacement" | undefined;
+    exchangeRequest?: string | undefined;
+    customerComment?: string | undefined;
+    photos?: string[] | undefined;
+    items: Array<{ orderItemId: string; quantity: number }>;
+  },
 ) {
   const orderId = await withTenant(rt._db.db, ctx.tenantId, (tx) => orderIdForToken(tx, ctx.tenantId, input.token));
   if (!orderId) throw new Error("Not Found: This order link is not valid any more");
-  return requestReturn(rt, ctx, { orderId, reason: input.reason, items: input.items });
+  return requestReturn(rt, ctx, {
+    orderId,
+    reason: input.reason,
+    resolution: input.resolution,
+    exchangeRequest: input.exchangeRequest,
+    customerComment: input.customerComment,
+    photos: input.photos,
+    items: input.items,
+  });
 }

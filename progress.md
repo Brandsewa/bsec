@@ -81,7 +81,17 @@ Source of truth: `docs/PLAN.html` v2.0 (build order in `docs/BUILD-PLAN-M2-M9.md
 One line per piece of work that is started and not merged. Add yours before you start, remove it when merged or abandoned (`AGENTS.md` section 6). Format: `agent · branch · area · since · one-line goal`.
 
 - claude · `feat/themes-puck` · themes, docs · 2026-10-01 · theme builder follow-ups; agent docs and change log (`docs/changes/`)
-- antigravity · `feat/orders-abandoned-checkouts` · abandoned-checkouts · 2026-10-02 · Abandoned checkouts (Phase 1 read-only workbench)
+- antigravity · `feat/orders-returns` · returns, orders, settings · 2026-10-02 · Returns and exchanges manual review model (plan, migration, admin workbench, settings, portal, photo upload)
+
+## Returns & Exchanges (Manual Review & Portal) — Complete (2026-10-02)
+
+Spec: `docs/ORDERS-RETURNS-PLAN.md`. Built on `feat/orders-returns`.
+- [x] **Database & Migrations**: Expand migration `0023_returns.sql` adding resolution columns (`requestedResolution`, `customerComment`, `exchangeRequest`, `decisionMessage`, `instructionsSentAt`, `refundMethod`, `refundReference`, `refundAmount`, `refundedAt`, `exchangeNote`, `exchangeOrderId`) to `returns`, `returnable` boolean to `products`, nullable `intentId` + `method` + `reference` to `refunds`, and `returnSettings` JSONB to `storeSettings`.
+- [x] **Domain Services**: State machine updated with `cancelled`, `pick_up`, `replace` transitions; manual lifecycle enhanced with return window validation, non-returnable product checks, restock inventory updates, manual refund recording for COD/offline orders, and audit logs; S3 presigned photo upload service; admin returns stats, list, and detail queries.
+- [x] **Contracts & API Endpoints**: Admin contracts for `returns.stats`, `returns.list`, `returns.get`, `returns.act`, `returnSettings.get`, `returnSettings.update`; Storefront API endpoints for return request, photo upload, finalize, and customer cancellation.
+- [x] **Store Admin Workbench & Settings**: Rebuilt `/returns` workbench with 4 KPI cards, status tabs, search & filters, CSV export, slide-out detail sheet with photo proof gallery and item breakdown, and action dialogs (approve, reject, mark picked up, receive with restock, refund, replace, close case); New `/settings/returns` page with unsaved guard, policy controls, customizable return reasons with photo requirements, and policy copy editors.
+- [x] **Storefront Portal**: Enriched guest return portal on `/o/[token]` with reason selection, exchange preferences, customer comments, photo uploads, store instructions for approved returns, and self-service cancellation.
+- [x] **Verification**: `pnpm typecheck` (15/15 passed), `pnpm lint` (15/15 passed), `pnpm --filter @bs/domain test:fast` (205 passed), `pnpm docs:check` (ok), `pnpm build` (6/6 passed).
 
 ## Quotes (Lean, industry-standard model) — Complete (2026-10-02)
 

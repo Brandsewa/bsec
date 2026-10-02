@@ -1,22 +1,18 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
-import { evaluateStorefrontAccess, requestReturnByToken, checkStorefrontRateLimit, RateLimitExceededError } from "@bs/domain";
+import { evaluateStorefrontAccess, createPresignedReturnPhotoUpload, checkStorefrontRateLimit, RateLimitExceededError } from "@bs/domain";
 import { server } from "@/server/runtime.ts";
-import { getRequestHeaders } from "../../../cart/route.ts";
+import { getRequestHeaders } from "../../../../cart/route.ts";
 
 const Body = z.object({
-  reason: z.string().trim().min(3, "Please tell us why you want to return this").max(500),
-  resolution: z.enum(["refund", "replacement"]).optional(),
-  exchangeRequest: z.string().trim().max(1000).optional(),
-  customerComment: z.string().trim().max(1000).optional(),
-  photos: z.array(z.string().uuid()).max(5).optional(),
-  items: z.array(z.object({ orderItemId: z.string().uuid(), quantity: z.number().int().min(1).max(999) })).min(1, "Choose at least one item to return"),
+  filename: z.string().trim().min(1).max(255),
+  mime: z.string().trim().min(1),
+  bytes: z.number().int().min(1).max(5 * 1024 * 1024),
 });
 
-/** A shopper asks to return items from their order; the order link in the URL is their proof of ownership. */
 export async function POST(req: Request, { params }: { params: Promise<{ token: string }> }) {
   try {
-    const { token } = await params;
+    const { token: _token } = await params;
     const h = await getRequestHeaders(req);
     const host = h.get("x-forwarded-host") ?? h.get("host") ?? "localhost";
     const { rt } = server();
@@ -35,7 +31,7 @@ export async function POST(req: Request, { params }: { params: Promise<{ token: 
     const parsed = Body.safeParse(await req.json().catch(() => ({})));
     if (!parsed.success) return NextResponse.json({ error: parsed.error.issues[0]?.message ?? "Invalid request" }, { status: 400 });
 
-    const result = await requestReturnByToken(
+    const result = await createPresignedReturnPhotoUpload(
       rt,
       {
         tenantId: access.tenantId,
@@ -45,13 +41,18 @@ export async function POST(req: Request, { params }: { params: Promise<{ token: 
         permissions: [],
         requestId: crypto.randomUUID(),
       },
-      { token, ...parsed.data },
+      {
+        orderId: crypto.randomUUID(),
+        filename: parsed.data.filename,
+        mime: parsed.data.mime,
+        bytes: parsed.data.bytes,
+      },
     );
-    return NextResponse.json({ number: result.number });
+
+    return NextResponse.json(result);
   } catch (err: unknown) {
-    const raw = err instanceof Error ? err.message : "Could not send your return request";
+    const raw = err instanceof Error ? err.message : "Could not prepare photo upload";
     const message = raw.replace(/^(Bad Request|Not Found|Conflict|Precondition):\s*/, "");
-    const known = /^(Bad Request|Not Found|Conflict|Precondition):/.test(raw);
-    return NextResponse.json({ error: known ? message : "Could not send your return request" }, { status: known ? 400 : 500 });
+    return NextResponse.json({ error: message }, { status: 400 });
   }
 }

@@ -114,22 +114,15 @@ export default async function OrderTrackingPage({ params }: OrderTrackingPagePro
 
         {returnsView && (returnsView.returns.length > 0 || returnsView.canRequest) && (
           <div className="mt-8 space-y-4 border-t border-border pt-6">
-            {returnsView.returns.length > 0 && (
-              <div>
-                <h2 className="text-sm font-semibold uppercase tracking-wider text-muted-foreground mb-3">Returns</h2>
-                <ul className="space-y-2 text-sm">
-                  {returnsView.returns.map((r) => (
-                    <li key={r.number} className="flex justify-between gap-3">
-                      <span>
-                        <span className="font-medium text-foreground">{r.number}</span> · {r.reason}
-                      </span>
-                      <span className="rounded-full bg-muted px-3 py-0.5 text-xs font-semibold uppercase text-muted-foreground">{r.status.replace(/_/g, " ")}</span>
-                    </li>
-                  ))}
-                </ul>
-              </div>
-            )}
-            {returnsView.canRequest && <ReturnRequestForm token={token} items={returnsView.items} />}
+            <ReturnRequestForm
+              token={token}
+              items={returnsView.items}
+              reasons={returnsView.reasons}
+              allowExchanges={returnsView.allowExchanges}
+              policyText={returnsView.policyText}
+              instructions={returnsView.instructions}
+              existingReturns={returnsView.returns}
+            />
           </div>
         )}
 
