@@ -48,9 +48,10 @@ export function useBulkRunner() {
     setProgress(null);
     opts.onFinished?.(succeeded);
     const parts = [`${succeeded.size} ${opts.noun}${succeeded.size === 1 ? "" : "s"} ${opts.done}`];
-    if (skipped > 0) parts.push(`${skipped} skipped (not eligible)`);
+    if (skipped > 0) parts.push(`${skipped} skipped`);
     if (failed.length > 0) {
-      toast.error(`${parts.join(", ")}. ${failed.length} failed. ${failed[0]}${failed.length > 1 ? ` (+${failed.length - 1} more)` : ""}`);
+      parts.push(`${failed.length} failed`);
+      toast.error(`${parts.join(", ")}. First issue: ${failed[0]}${failed.length > 1 ? ` (+${failed.length - 1} more)` : ""}`);
     } else {
       toast.success(`${parts.join(", ")}.`);
     }
