@@ -20,7 +20,7 @@ RUN --mount=type=cache,id=pnpm,target=/pnpm/store pnpm install --frozen-lockfile
 COPY --from=prune /repo/out/full/ .
 RUN pnpm turbo run build --filter=@bs/admin
 
-FROM nginxinc/nginx-unprivileged:1.29-alpine AS runtime
+FROM nginxinc/nginx-unprivileged:1.31-alpine AS runtime
 COPY infra/docker/admin.nginx.conf /etc/nginx/conf.d/default.conf
 COPY --from=build /repo/apps/admin/dist /usr/share/nginx/html
 EXPOSE 8080
