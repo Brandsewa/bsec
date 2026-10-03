@@ -7,6 +7,7 @@ import {
   FolderTree,
   Home,
   KeyRound,
+  Layers,
   Menu,
   MessageSquareQuote,
   Package,
@@ -55,6 +56,7 @@ const nav: GatedGroup[] = [
     items: [
       { label: "Products", href: "/products", icon: Package, perm: "products.read" },
       { label: "Categories", href: "/categories", icon: FolderTree, perm: "products.read" },
+      { label: "Collections", href: "/collections", icon: Layers, perm: "products.read" },
       { label: "Inventory", href: "/inventory", icon: Warehouse, perm: "products.read" },
       { label: "Customers", href: "/customers", icon: Users, perm: "customers.read" },
       { label: "Discounts", href: "/discounts", icon: BadgePercent, perm: "discounts.write" },

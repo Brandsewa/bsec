@@ -82,6 +82,7 @@ import {
   getCategory,
   getCategoryStats,
   updateCategory,
+  getCollectionStats,
   updateCollection,
   updateMenu,
   updatePage,
@@ -635,9 +636,16 @@ export const storeRouter = os.router({
       list: os.admin.collections.list
         .use(requireAdmin)
         .use(requirePermission("products.read"))
+        .handler(({ context, input }) => {
+          if (!context.tenantCtx) throw new Error("Missing tenant context");
+          return listCollections(context.rt, context.tenantCtx, input);
+        }),
+      stats: os.admin.collections.stats
+        .use(requireAdmin)
+        .use(requirePermission("products.read"))
         .handler(({ context }) => {
           if (!context.tenantCtx) throw new Error("Missing tenant context");
-          return listCollections(context.rt, context.tenantCtx);
+          return getCollectionStats(context.rt, context.tenantCtx);
         }),
       get: os.admin.collections.get
         .use(requireAdmin)

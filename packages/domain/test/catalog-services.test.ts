@@ -10,6 +10,12 @@ import {
   publishBrandSettings,
   savePageDraft,
   publishPage,
+  listCategories,
+  createCategory,
+  deleteCategory,
+  listCollections,
+  createCollection,
+  updateCollection,
 } from "../src/index.ts";
 
 describe("M2 Domain Services", () => {
@@ -394,6 +400,85 @@ describe("M2 Domain Services", () => {
       await expect(deleteCategory(rt, adminCtx, { id: "cat-with-products" })).rejects.toThrow(
         /products are assigned to it/,
       );
+    });
+  });
+
+  describe("Collection Services", () => {
+    it("throws Forbidden if products.read is missing for listCollections", async () => {
+      const rt = createMockRuntime({} as Db);
+      await expect(listCollections(rt, restrictedCtx)).rejects.toThrow(/Forbidden/);
+    });
+
+    it("throws Forbidden if products.write is missing for createCollection", async () => {
+      const rt = createMockRuntime({} as Db);
+      await expect(createCollection(rt, restrictedCtx, { title: "Featured Keyboards" })).rejects.toThrow(/Forbidden/);
+    });
+
+    it("creates collection with indexable defaulted to false", async () => {
+      let insertedValues: Record<string, unknown> | null = null;
+      const mockDb = {
+        transaction: async (cb: (tx: unknown) => Promise<unknown>) => {
+          return cb({
+            execute: async () => {},
+            insert: () => ({
+              values: (vals: Record<string, unknown>) => {
+                if ("title" in vals) {
+                  insertedValues = vals;
+                }
+                return {
+                  returning: () => [
+                    {
+                      id: "col-1",
+                      title: vals["title"],
+                      slug: "featured",
+                      type: vals["type"] ?? "manual",
+                      match: vals["match"] ?? "all",
+                      sortOrder: "manual",
+                      published: vals["published"] ?? true,
+                      indexable: vals["indexable"] ?? false,
+                      createdAt: new Date(),
+                      updatedAt: new Date(),
+                    },
+                  ],
+                };
+              },
+            }),
+            select: () => ({
+              from: () => ({
+                leftJoin: () => ({
+                  where: () => ({
+                    limit: () => [
+                      {
+                        id: "col-1",
+                        title: "Featured",
+                        slug: "featured",
+                        type: "manual",
+                        match: "all",
+                        sortOrder: "manual",
+                        published: true,
+                        indexable: false,
+                        createdAt: new Date(),
+                        updatedAt: new Date(),
+                      },
+                    ],
+                  }),
+                }),
+                innerJoin: () => ({
+                  where: () => ({
+                    orderBy: () => [],
+                  }),
+                }),
+              }),
+            }),
+          });
+        },
+      } as unknown as Db;
+
+      const rt = createMockRuntime(mockDb);
+      const res = await createCollection(rt, adminCtx, { title: "Featured" });
+      expect(insertedValues).toBeDefined();
+      expect(insertedValues!["indexable"]).toBe(false);
+      expect(res.indexable).toBe(false);
     });
   });
 });

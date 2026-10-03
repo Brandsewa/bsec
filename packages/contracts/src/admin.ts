@@ -230,23 +230,72 @@ export const CategoryStats = z.object({
 });
 export type CategoryStats = z.infer<typeof CategoryStats>;
 
+export const CollectionRule = z.object({
+  field: z.enum(["tag", "product_type", "brand", "category", "price", "in_stock", "title"]),
+  operator: z.enum([
+    "equals",
+    "not_equals",
+    "contains",
+    "not_contains",
+    "greater_than",
+    "less_than",
+    "is_set",
+    "is_not_set",
+  ]),
+  value: z.unknown(),
+});
+export type CollectionRule = z.infer<typeof CollectionRule>;
+
+export const CollectionSeo = z.object({
+  title: z.string().nullable().optional(),
+  description: z.string().nullable().optional(),
+});
+export type CollectionSeo = z.infer<typeof CollectionSeo>;
+
 export const Collection = z.object({
   id: z.string().uuid(),
   title: z.string(),
   slug: z.string(),
   description: z.string().nullable().optional(),
   imageMediaId: z.string().uuid().nullable().optional(),
-  isAutomated: z.boolean(),
-  rules: z.unknown().nullable().optional(),
+  imageUrl: z.string().nullable().optional(),
+  type: z.enum(["manual", "automated"]),
+  match: z.enum(["all", "any"]),
+  rules: z.array(CollectionRule).nullable().optional(),
   sortOrder: z.string(),
-  publishedAt: z.string().nullable().optional(),
+  published: z.boolean(),
+  indexable: z.boolean(),
+  productCount: z.number().int().optional(),
   createdAt: z.string(),
   updatedAt: z.string(),
 });
 export type Collection = z.infer<typeof Collection>;
 
+export const CollectionStats = z.object({
+  total: z.number().int(),
+  active: z.number().int(),
+  draft: z.number().int(),
+  manual: z.number().int(),
+  automated: z.number().int(),
+  indexable: z.number().int(),
+});
+export type CollectionStats = z.infer<typeof CollectionStats>;
+
 export const CollectionDetail = Collection.extend({
+  seo: CollectionSeo.nullable().optional(),
   productIds: z.array(z.string().uuid()),
+  products: z
+    .array(
+      z.object({
+        id: z.string().uuid(),
+        title: z.string(),
+        slug: z.string(),
+        status: z.string(),
+        imageUrl: z.string().nullable().optional(),
+        priceMin: z.number().nullable().optional(),
+      }),
+    )
+    .optional(),
 });
 export type CollectionDetail = z.infer<typeof CollectionDetail>;
 
@@ -1021,7 +1070,19 @@ export const adminContract = {
   collections: {
     list: oc
       .route({ method: "GET", path: "/admin/collections" })
+      .input(
+        z
+          .object({
+            status: z.enum(["all", "active", "draft"]).optional(),
+            type: z.enum(["all", "manual", "automated"]).optional(),
+            search: z.string().optional(),
+          })
+          .optional(),
+      )
       .output(z.array(Collection)),
+    stats: oc
+      .route({ method: "GET", path: "/admin/collections/stats" })
+      .output(CollectionStats),
     get: oc
       .route({ method: "GET", path: "/admin/collections/{id}" })
       .input(z.object({ id: z.string().uuid() }))
@@ -1033,8 +1094,25 @@ export const adminContract = {
           title: z.string().min(1),
           slug: z.string().optional(),
           description: z.string().optional(),
-          isAutomated: z.boolean().default(false),
-          rules: z.unknown().optional(),
+          imageMediaId: z.string().uuid().nullable().optional(),
+          type: z.enum(["manual", "automated"]).default("manual"),
+          match: z.enum(["all", "any"]).default("all"),
+          rules: z.array(CollectionRule).optional(),
+          sortOrder: z
+            .enum([
+              "manual",
+              "best_selling",
+              "title_asc",
+              "title_desc",
+              "price_asc",
+              "price_desc",
+              "created_desc",
+              "created_asc",
+            ])
+            .default("manual"),
+          published: z.boolean().default(true),
+          indexable: z.boolean().default(false),
+          seo: CollectionSeo.optional(),
           productIds: z.array(z.string().uuid()).optional(),
         }),
       )
@@ -1046,9 +1124,26 @@ export const adminContract = {
           id: z.string().uuid(),
           title: z.string().min(1).optional(),
           slug: z.string().optional(),
-          description: z.string().optional(),
-          isAutomated: z.boolean().optional(),
-          rules: z.unknown().optional(),
+          description: z.string().nullable().optional(),
+          imageMediaId: z.string().uuid().nullable().optional(),
+          type: z.enum(["manual", "automated"]).optional(),
+          match: z.enum(["all", "any"]).optional(),
+          rules: z.array(CollectionRule).nullable().optional(),
+          sortOrder: z
+            .enum([
+              "manual",
+              "best_selling",
+              "title_asc",
+              "title_desc",
+              "price_asc",
+              "price_desc",
+              "created_desc",
+              "created_asc",
+            ])
+            .optional(),
+          published: z.boolean().optional(),
+          indexable: z.boolean().optional(),
+          seo: CollectionSeo.nullable().optional(),
           productIds: z.array(z.string().uuid()).optional(),
         }),
       )

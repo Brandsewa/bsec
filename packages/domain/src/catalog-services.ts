@@ -1326,22 +1326,121 @@ export async function deleteCategory(rt: Runtime, ctx: TenantContext, input: { i
 }
 
 // --- Collections ---
-export async function listCollections(rt: Runtime, ctx: TenantContext) {
+export interface ListCollectionsQuery {
+  status?: "all" | "active" | "draft" | undefined;
+  type?: "all" | "manual" | "automated" | undefined;
+  search?: string | undefined;
+}
+
+export async function getCollectionStats(rt: Runtime, ctx: TenantContext) {
   assertPermission(ctx, "products.read");
   const db = rt._db.db;
 
   return withTenant(db, ctx.tenantId, async (tx) => {
-    const rows = await tx.select().from(schema.collections).orderBy(schema.collections.title);
+    const rows = await tx
+      .select({
+        id: schema.collections.id,
+        published: schema.collections.published,
+        type: schema.collections.type,
+        indexable: schema.collections.indexable,
+      })
+      .from(schema.collections);
+
+    const total = rows.length;
+    const active = rows.filter((r) => r.published).length;
+    const draft = total - active;
+    const manual = rows.filter((r) => r.type === "manual").length;
+    const automated = rows.filter((r) => r.type === "automated").length;
+    const indexable = rows.filter((r) => r.indexable).length;
+
+    return {
+      total,
+      active,
+      draft,
+      manual,
+      automated,
+      indexable,
+    };
+  });
+}
+
+export async function listCollections(
+  rt: Runtime,
+  ctx: TenantContext,
+  query?: ListCollectionsQuery | undefined,
+) {
+  assertPermission(ctx, "products.read");
+  const db = rt._db.db;
+
+  return withTenant(db, ctx.tenantId, async (tx) => {
+    const conditions = [];
+    if (query?.status) {
+      if (query.status === "active") conditions.push(eq(schema.collections.published, true));
+      if (query.status === "draft") conditions.push(eq(schema.collections.published, false));
+    }
+    if (query?.type && query.type !== "all") {
+      conditions.push(eq(schema.collections.type, query.type));
+    }
+    if (query?.search?.trim()) {
+      const term = `%${query.search.trim().toLowerCase()}%`;
+      conditions.push(
+        or(
+          ilike(schema.collections.title, term),
+          ilike(schema.collections.slug, term),
+        ),
+      );
+    }
+
+    const rows = await tx
+      .select({
+        id: schema.collections.id,
+        title: schema.collections.title,
+        slug: schema.collections.slug,
+        description: schema.collections.description,
+        imageMediaId: schema.collections.imageMediaId,
+        type: schema.collections.type,
+        match: schema.collections.match,
+        rules: schema.collections.rules,
+        sortOrder: schema.collections.sortOrder,
+        published: schema.collections.published,
+        indexable: schema.collections.indexable,
+        createdAt: schema.collections.createdAt,
+        updatedAt: schema.collections.updatedAt,
+        imageKey: schema.media.storageKey,
+      })
+      .from(schema.collections)
+      .leftJoin(schema.media, eq(schema.media.id, schema.collections.imageMediaId))
+      .where(conditions.length > 0 ? and(...conditions) : undefined)
+      .orderBy(desc(schema.collections.updatedAt));
+
+    // Get manual product counts
+    const manualCounts = await tx
+      .select({
+        collectionId: schema.collectionProducts.collectionId,
+        count: sql<number>`count(*)`,
+      })
+      .from(schema.collectionProducts)
+      .groupBy(schema.collectionProducts.collectionId);
+
+    const manualCountMap = new Map<string, number>();
+    for (const m of manualCounts) {
+      manualCountMap.set(m.collectionId, Number(m.count));
+    }
+
     return rows.map((r) => ({
       id: r.id,
       title: r.title,
       slug: r.slug,
-      description: undefined,
+      description: r.description,
       imageMediaId: r.imageMediaId,
-      isAutomated: r.type === "automated",
-      rules: r.rules,
+      imageUrl: r.imageKey ? publicMediaUrl(r.imageKey) : null,
+      type: r.type as "manual" | "automated",
+      match: (r.match ?? "all") as "all" | "any",
+      rules: (r.rules as any) ?? null,
       sortOrder: r.sortOrder,
-      publishedAt: r.published ? r.updatedAt.toISOString() : undefined,
+      published: r.published,
+      indexable: r.indexable,
+      productCount: r.type === "manual" ? manualCountMap.get(r.id) ?? 0 : undefined,
       createdAt: r.createdAt.toISOString(),
       updatedAt: r.updatedAt.toISOString(),
     }));
@@ -1353,42 +1452,100 @@ export async function getCollection(rt: Runtime, ctx: TenantContext, input: { id
   const db = rt._db.db;
 
   return withTenant(db, ctx.tenantId, async (tx) => {
-    const [row] = await tx.select().from(schema.collections).where(eq(schema.collections.id, input.id));
+    const [row] = await tx
+      .select({
+        id: schema.collections.id,
+        title: schema.collections.title,
+        slug: schema.collections.slug,
+        description: schema.collections.description,
+        imageMediaId: schema.collections.imageMediaId,
+        type: schema.collections.type,
+        match: schema.collections.match,
+        rules: schema.collections.rules,
+        sortOrder: schema.collections.sortOrder,
+        published: schema.collections.published,
+        indexable: schema.collections.indexable,
+        seo: schema.collections.seo,
+        createdAt: schema.collections.createdAt,
+        updatedAt: schema.collections.updatedAt,
+        imageKey: schema.media.storageKey,
+      })
+      .from(schema.collections)
+      .leftJoin(schema.media, eq(schema.media.id, schema.collections.imageMediaId))
+      .where(eq(schema.collections.id, input.id))
+      .limit(1);
+
     if (!row) throw new Error(`Collection not found: "${input.id}"`);
 
+    // Fetch manual assigned products in order
     const colProducts = await tx
-      .select({ productId: schema.collectionProducts.productId })
+      .select({
+        id: schema.products.id,
+        title: schema.products.title,
+        slug: schema.products.slug,
+        status: schema.products.status,
+        position: schema.collectionProducts.position,
+      })
       .from(schema.collectionProducts)
-      .where(eq(schema.collectionProducts.collectionId, input.id));
+      .innerJoin(
+        schema.products,
+        and(
+          eq(schema.products.tenantId, schema.collectionProducts.tenantId),
+          eq(schema.products.id, schema.collectionProducts.productId),
+        ),
+      )
+      .where(eq(schema.collectionProducts.collectionId, input.id))
+      .orderBy(asc(schema.collectionProducts.position));
 
     return {
       id: row.id,
       title: row.title,
       slug: row.slug,
-      description: undefined,
+      description: row.description,
       imageMediaId: row.imageMediaId,
-      isAutomated: row.type === "automated",
-      rules: row.rules,
+      imageUrl: row.imageKey ? publicMediaUrl(row.imageKey) : null,
+      type: row.type as "manual" | "automated",
+      match: (row.match ?? "all") as "all" | "any",
+      rules: (row.rules as any) ?? null,
       sortOrder: row.sortOrder,
-      publishedAt: row.published ? row.updatedAt.toISOString() : undefined,
+      published: row.published,
+      indexable: row.indexable,
+      seo: row.seo as { title?: string | null; description?: string | null } | null,
+      productCount: colProducts.length,
+      productIds: colProducts.map((p) => p.id),
+      products: colProducts.map((p) => ({
+        id: p.id,
+        title: p.title,
+        slug: p.slug,
+        status: p.status,
+        imageUrl: null,
+        priceMin: null,
+      })),
       createdAt: row.createdAt.toISOString(),
       updatedAt: row.updatedAt.toISOString(),
-      productIds: colProducts.map((p) => p.productId),
     };
   });
+}
+
+export interface CreateCollectionInput {
+  title: string;
+  slug?: string | undefined;
+  description?: string | undefined;
+  imageMediaId?: string | null | undefined;
+  type?: "manual" | "automated" | undefined;
+  match?: "all" | "any" | undefined;
+  rules?: any[] | undefined;
+  sortOrder?: string | undefined;
+  published?: boolean | undefined;
+  indexable?: boolean | undefined;
+  seo?: { title?: string | null | undefined; description?: string | null | undefined } | undefined;
+  productIds?: string[] | undefined;
 }
 
 export async function createCollection(
   rt: Runtime,
   ctx: TenantContext,
-  input: {
-    title: string;
-    slug?: string | undefined;
-    description?: string | undefined;
-    isAutomated?: boolean | undefined;
-    rules?: unknown;
-    productIds?: string[] | undefined;
-  },
+  input: CreateCollectionInput,
 ) {
   assertPermission(ctx, "products.write");
   const db = rt._db.db;
@@ -1401,21 +1558,29 @@ export async function createCollection(
         .replace(/[^a-z0-9]+/g, "-")
         .replace(/(^-|-$)/g, "");
 
+    const isAutomated = input.type === "automated";
+
     const [row] = await tx
       .insert(schema.collections)
       .values({
         tenantId: ctx.tenantId,
-        title: input.title,
+        title: input.title.trim(),
         slug,
-        type: input.isAutomated ? "automated" : "manual",
-        rules: input.rules,
-        published: true,
+        description: input.description?.trim() || null,
+        imageMediaId: input.imageMediaId || null,
+        type: isAutomated ? "automated" : "manual",
+        match: input.match ?? "all",
+        rules: isAutomated && input.rules ? input.rules : null,
+        sortOrder: input.sortOrder ?? "manual",
+        published: input.published ?? true,
+        indexable: input.indexable ?? false, // Defaults to not indexable (Owner decision)
+        seo: input.seo || null,
       })
       .returning();
 
     if (!row) throw new Error("Failed to create collection");
 
-    if (input.productIds && input.productIds.length > 0) {
+    if (!isAutomated && input.productIds && input.productIds.length > 0) {
       for (let i = 0; i < input.productIds.length; i++) {
         const pId = input.productIds[i];
         if (!pId) continue;
@@ -1428,44 +1593,68 @@ export async function createCollection(
       }
     }
 
-    return {
-      id: row.id,
-      title: row.title,
-      slug: row.slug,
-      description: undefined,
-      imageMediaId: row.imageMediaId,
-      isAutomated: row.type === "automated",
-      rules: row.rules,
-      sortOrder: row.sortOrder,
-      publishedAt: row.published ? row.updatedAt.toISOString() : undefined,
-      createdAt: row.createdAt.toISOString(),
-      updatedAt: row.updatedAt.toISOString(),
-    };
+    await tx.insert(schema.auditLogs).values({
+      tenantId: ctx.tenantId,
+      actorType: ctx.actor.type,
+      actorId: ctx.actor.type === "staff" ? ctx.actor.userId : null,
+      action: "collection.created",
+      targetType: "collection",
+      targetId: row.id,
+      diff: {
+        title: row.title,
+        slug: row.slug,
+        type: row.type,
+        indexable: row.indexable,
+        published: row.published,
+      },
+    });
+
+    await invalidateCache(rt, ctx, {
+      type: "collection_updated",
+      collectionId: row.id,
+    });
+
+    return getCollection(rt, ctx, { id: row.id });
   });
+}
+
+export interface UpdateCollectionInput {
+  id: string;
+  title?: string | undefined;
+  slug?: string | undefined;
+  description?: string | null | undefined;
+  imageMediaId?: string | null | undefined;
+  type?: "manual" | "automated" | undefined;
+  match?: "all" | "any" | undefined;
+  rules?: any[] | null | undefined;
+  sortOrder?: string | undefined;
+  published?: boolean | undefined;
+  indexable?: boolean | undefined;
+  seo?: { title?: string | null | undefined; description?: string | null | undefined } | null | undefined;
+  productIds?: string[] | undefined;
 }
 
 export async function updateCollection(
   rt: Runtime,
   ctx: TenantContext,
-  input: {
-    id: string;
-    title?: string | undefined;
-    slug?: string | undefined;
-    description?: string | undefined;
-    isAutomated?: boolean | undefined;
-    rules?: unknown;
-    productIds?: string[] | undefined;
-  },
+  input: UpdateCollectionInput,
 ) {
   assertPermission(ctx, "products.write");
   const db = rt._db.db;
 
   return withTenant(db, ctx.tenantId, async (tx) => {
     const updateValues: Record<string, unknown> = { updatedAt: new Date() };
-    if (input.title !== undefined) updateValues.title = input.title;
-    if (input.slug !== undefined) updateValues.slug = input.slug;
-    if (input.isAutomated !== undefined) updateValues.type = input.isAutomated ? "automated" : "manual";
+    if (input.title !== undefined) updateValues.title = input.title.trim();
+    if (input.slug !== undefined) updateValues.slug = input.slug.trim();
+    if (input.description !== undefined) updateValues.description = input.description ? input.description.trim() : null;
+    if (input.imageMediaId !== undefined) updateValues.imageMediaId = input.imageMediaId;
+    if (input.type !== undefined) updateValues.type = input.type;
+    if (input.match !== undefined) updateValues.match = input.match;
     if (input.rules !== undefined) updateValues.rules = input.rules;
+    if (input.sortOrder !== undefined) updateValues.sortOrder = input.sortOrder;
+    if (input.published !== undefined) updateValues.published = input.published;
+    if (input.indexable !== undefined) updateValues.indexable = input.indexable;
+    if (input.seo !== undefined) updateValues.seo = input.seo;
 
     const [row] = await tx
       .update(schema.collections)
@@ -1475,7 +1664,7 @@ export async function updateCollection(
 
     if (!row) throw new Error(`Collection not found: "${input.id}"`);
 
-    if (input.productIds !== undefined) {
+    if (input.productIds !== undefined && row.type === "manual") {
       await tx.delete(schema.collectionProducts).where(eq(schema.collectionProducts.collectionId, input.id));
       for (let i = 0; i < input.productIds.length; i++) {
         const pId = input.productIds[i];
@@ -1489,24 +1678,22 @@ export async function updateCollection(
       }
     }
 
+    await tx.insert(schema.auditLogs).values({
+      tenantId: ctx.tenantId,
+      actorType: ctx.actor.type,
+      actorId: ctx.actor.type === "staff" ? ctx.actor.userId : null,
+      action: "collection.updated",
+      targetType: "collection",
+      targetId: row.id,
+      diff: updateValues,
+    });
+
     await invalidateCache(rt, ctx, {
       type: "collection_updated",
       collectionId: row.id,
     });
 
-    return {
-      id: row.id,
-      title: row.title,
-      slug: row.slug,
-      description: undefined,
-      imageMediaId: row.imageMediaId,
-      isAutomated: row.type === "automated",
-      rules: row.rules,
-      sortOrder: row.sortOrder,
-      publishedAt: row.published ? row.updatedAt.toISOString() : undefined,
-      createdAt: row.createdAt.toISOString(),
-      updatedAt: row.updatedAt.toISOString(),
-    };
+    return getCollection(rt, ctx, { id: row.id });
   });
 }
 
@@ -1515,7 +1702,28 @@ export async function deleteCollection(rt: Runtime, ctx: TenantContext, input: {
   const db = rt._db.db;
 
   return withTenant(db, ctx.tenantId, async (tx) => {
-    await tx.delete(schema.collections).where(eq(schema.collections.id, input.id));
+    const [row] = await tx
+      .delete(schema.collections)
+      .where(eq(schema.collections.id, input.id))
+      .returning();
+
+    if (!row) throw new Error(`Collection not found: "${input.id}"`);
+
+    await tx.insert(schema.auditLogs).values({
+      tenantId: ctx.tenantId,
+      actorType: ctx.actor.type,
+      actorId: ctx.actor.type === "staff" ? ctx.actor.userId : null,
+      action: "collection.deleted",
+      targetType: "collection",
+      targetId: row.id,
+      diff: { title: row.title, slug: row.slug },
+    });
+
+    await invalidateCache(rt, ctx, {
+      type: "collection_updated",
+      collectionId: row.id,
+    });
+
     return { success: true };
   });
 }
