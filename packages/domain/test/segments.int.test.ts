@@ -12,6 +12,7 @@ import {
   adjustInventory,
   listInventoryLevels,
   listSegments,
+  listAdminCustomers,
   getSegment,
   createSegment,
   updateSegment,
@@ -514,5 +515,41 @@ describe("audit rows (PLAN §4)", () => {
     for (const expected of ["segment.created", "segment.updated", "segment.deleted", "segment.members_added", "segment.members_removed"]) {
       expect(seen.has(expected), expected).toBe(true);
     }
+  });
+});
+
+describe("Phase 2D: customers list segment filter", () => {
+  it("filters the customers list by manual membership and by automatic rules", async () => {
+    const manual = await createSegment(rtWeb, ctxA, { name: `2D Manual ${Date.now()}`, kind: "manual" });
+    await addCustomersToSegment(rtWeb, ctxA, { segmentId: manual.id, customerIds: [buyer] });
+    const auto = await createSegment(rtWeb, ctxA, {
+      name: `2D Auto ${Date.now()}`,
+      kind: "automatic",
+      rules: { match: "all", conditions: [{ field: "tags", op: "has", value: "VIP" }] },
+    });
+
+    const byManual = await listAdminCustomers(rtWeb, ctxA, { segmentId: manual.id, limit: 100 });
+    expect(byManual.items.map((c) => c.id)).toEqual([buyer]);
+    expect(byManual.total).toBe(1);
+
+    const byAuto = await listAdminCustomers(rtWeb, ctxA, { segmentId: auto.id, limit: 100 });
+    expect(byAuto.items.map((c) => c.id)).toEqual([buyer]);
+
+    // Combines with the other filters
+    const narrowed = await listAdminCustomers(rtWeb, ctxA, { segmentId: manual.id, view: "guests", limit: 100 });
+    expect(narrowed.items).toEqual([]);
+
+    // A read-only staff member can still filter (customers.read); mutations stay write-gated
+    const limited = await expect(listAdminCustomers(rtWeb, ctxLimited, { segmentId: manual.id, limit: 100 })).rejects.toThrow(/permission/i);
+    void limited;
+
+    await deleteSegment(rtWeb, ctxA, { id: auto.id });
+    await deleteSegment(rtWeb, ctxA, { id: manual.id });
+  });
+
+  it("fails closed for a segment id from another store", async () => {
+    const tB = await createSegment(rtWeb, ctxB, { name: `2D Foreign ${Date.now()}`, kind: "manual" });
+    await expect(listAdminCustomers(rtWeb, ctxA, { segmentId: tB.id, limit: 100 })).rejects.toThrow(/not found/i);
+    await deleteSegment(rtWeb, ctxB, { id: tB.id });
   });
 });

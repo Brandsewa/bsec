@@ -1,4 +1,4 @@
-import { and, asc, desc, eq, inArray, isNull, sql } from "drizzle-orm";
+import { and, asc, desc, eq, inArray, isNull, sql, type SQL } from "drizzle-orm";
 import { type Db, schema, withTenant } from "@bs/db";
 import type { Runtime } from "../runtime.ts";
 import { assertPermission, type TenantContext } from "../context.ts";
@@ -770,4 +770,19 @@ export async function getSegmentActivity(rt: Runtime, ctx: TenantContext, input:
       })),
     };
   });
+}
+
+/**
+ * The membership predicate for one segment, for use by other services (Customers Phase 2
+ * integration, step 2D): validates the segment belongs to this store and returns a
+ * self-contained `(SELECT …)` of member customer ids.
+ */
+export async function segmentMembershipSubquery(tx: Db, tenantId: string, segmentId: string): Promise<SQL> {
+  const map = await loadSegmentMap(tx, tenantId);
+  const seg = map.get(segmentId);
+  if (!seg) throw new Error(`Segment not found: ${segmentId}`);
+  if (seg.kind === "manual") {
+    return sql`(SELECT m.customer_id FROM ${schema.customerSegmentMembers} m WHERE m.tenant_id = ${tenantId} AND m.segment_id = ${segmentId})`;
+  }
+  return segmentMemberSubquery(tenantId, parseSegmentRules(seg.rules), makeResolver(map), { selfSegmentId: segmentId, allowInSegment: true });
 }

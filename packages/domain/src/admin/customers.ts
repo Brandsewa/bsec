@@ -4,6 +4,7 @@ import type { Runtime } from "../runtime.ts";
 import { assertPermission, type TenantContext } from "../context.ts";
 import { customerMetricsSql } from "../customers/metrics.ts";
 import { setMarketingConsent, type MarketingConsentState } from "../customers/consent.ts";
+import { segmentMembershipSubquery } from "../segments/service.ts";
 
 export interface ListCustomersInput {
   search?: string | undefined;
@@ -18,6 +19,8 @@ export interface ListCustomersInput {
   acceptsMarketing?: boolean | undefined;
   /** State code of one of the customer's addresses. */
   location?: string | undefined;
+  /** Only customers in this segment (manual members or matching an automatic segment's rules). */
+  segmentId?: string | undefined;
   createdFrom?: string | undefined;
   createdTo?: string | undefined;
   sort?: "created_desc" | "created_asc" | "name_asc" | "name_desc" | "spent_desc" | "spent_asc" | "orders_desc" | "orders_asc" | undefined;
@@ -50,6 +53,9 @@ export async function listAdminCustomers(
     if (input.repeat) conditions.push(sql`metrics.orders_count > 1`);
     if (input.marketingState) conditions.push(eq(schema.customers.marketingState, input.marketingState));
     if (input.acceptsMarketing !== undefined) conditions.push(eq(schema.customers.acceptsMarketing, input.acceptsMarketing));
+    if (input.segmentId) {
+      conditions.push(sql`${schema.customers.id} IN ${await segmentMembershipSubquery(tx, ctx.tenantId, input.segmentId)}`);
+    }
     if (input.location) {
       conditions.push(
         sql`EXISTS (SELECT 1 FROM ${schema.customerAddresses} a

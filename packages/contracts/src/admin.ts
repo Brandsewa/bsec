@@ -2134,6 +2134,8 @@ export const adminContract = {
             acceptsMarketing: z.boolean().optional(),
             /** State code of the customer's default address. */
             location: z.string().optional(),
+            /** Only customers in this segment (Customers Phase 2 integration). */
+            segmentId: z.string().uuid().optional(),
             createdFrom: z.string().optional(),
             createdTo: z.string().optional(),
             sort: z.enum(["created_desc", "created_asc", "name_asc", "name_desc", "spent_desc", "spent_asc", "orders_desc", "orders_asc"]).default("created_desc"),

@@ -125,7 +125,6 @@ import {
   previewCustomerImport,
   commitCustomerImport,
   deleteAdminCustomer,
->>>>>>> feat/customers-phase-1
   listAdminDiscounts,
   listAdminOrders,
   listInvitations,
