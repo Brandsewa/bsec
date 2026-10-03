@@ -2157,11 +2157,19 @@ export const adminContract = {
             name: z.string(),
             email: z.string(),
             phone: z.string().nullable(),
+            emailVerified: z.boolean(),
+            isGuest: z.boolean(),
+            status: z.string(),
             ordersCount: z.number(),
             totalSpent: z.number(),
+            averageOrderValue: z.number(),
+            firstOrderAt: z.string().nullable(),
+            lastOrderAt: z.string().nullable(),
+            returnsCount: z.number(),
+            marketingState: z.string(),
+            marketingSource: z.string().nullable(),
+            marketingUpdatedAt: z.string().nullable(),
             tags: z.array(z.string()),
-            note: z.string().nullable().optional(),
-            acceptsMarketing: z.boolean(),
             createdAt: z.string(),
           }),
           addresses: z.array(
@@ -2178,17 +2186,172 @@ export const adminContract = {
               isDefault: z.boolean(),
             }),
           ),
+          consentHistory: z.array(
+            z.object({
+              id: z.string().uuid(),
+              channel: z.string(),
+              state: z.string(),
+              source: z.string(),
+              actorType: z.string(),
+              at: z.string(),
+            }),
+          ),
           recentOrders: z.array(
             z.object({
               id: z.string().uuid(),
               number: z.string(),
               status: z.string(),
+              paymentStatus: z.string(),
+              fulfillmentStatus: z.string(),
               grandTotal: z.number(),
               placedAt: z.string(),
             }),
           ),
         }),
       ),
+    update: oc
+      .route({ method: "PATCH", path: "/admin/customers/{id}" })
+      .input(
+        z.object({
+          id: z.string().uuid(),
+          name: z.string().optional(),
+          /** Editable only for a guest or an unverified account; a change clears email verification. */
+          email: z.string().email().optional(),
+          phone: z.string().nullable().optional(),
+        }),
+      )
+      .output(
+        z.object({
+          id: z.string().uuid(),
+          name: z.string(),
+          email: z.string(),
+          phone: z.string().nullable(),
+          emailVerified: z.boolean(),
+        }),
+      ),
+    orders: oc
+      .route({ method: "GET", path: "/admin/customers/{id}/orders" })
+      .input(
+        z.object({
+          id: z.string().uuid(),
+          status: z.string().optional(),
+          limit: z.number().int().min(1).max(100).default(20),
+          offset: z.number().int().min(0).default(0),
+        }),
+      )
+      .output(
+        z.object({
+          items: z.array(
+            z.object({
+              id: z.string().uuid(),
+              number: z.string(),
+              status: z.string(),
+              paymentStatus: z.string(),
+              fulfillmentStatus: z.string(),
+              grandTotal: z.number(),
+              placedAt: z.string(),
+            }),
+          ),
+          total: z.number(),
+        }),
+      ),
+    activity: oc
+      .route({ method: "GET", path: "/admin/customers/{id}/activity" })
+      .input(
+        z.object({
+          id: z.string().uuid(),
+          limit: z.number().int().min(1).max(200).default(50),
+        }),
+      )
+      .output(
+        z.object({
+          items: z.array(
+            z.object({
+              kind: z.enum(["order", "return", "quote", "review", "abandoned_cart", "consent"]),
+              at: z.string(),
+              title: z.string(),
+              detail: z.string().nullable(),
+              ref: z.string().nullable(),
+            }),
+          ),
+        }),
+      ),
+    consentSet: oc
+      .route({ method: "POST", path: "/admin/customers/{id}/consent" })
+      .input(z.object({ id: z.string().uuid(), state: z.enum(["subscribed", "unsubscribed", "not_subscribed", "invalid"]) }))
+      .output(z.object({ id: z.string().uuid(), marketingState: z.string(), acceptsMarketing: z.boolean() })),
+    addresses: {
+      add: oc
+        .route({ method: "POST", path: "/admin/customers/{id}/addresses" })
+        .input(
+          z.object({
+            id: z.string().uuid(),
+            address: z.object({
+              name: z.string().min(1),
+              phone: z.string().min(1),
+              line1: z.string().min(1),
+              line2: z.string().optional(),
+              city: z.string().min(1),
+              stateCode: z.string().min(1),
+              pincode: z.string().min(1),
+              type: z.enum(["home", "work", "other"]).default("home"),
+              isDefault: z.boolean().default(false),
+            }),
+          }),
+        )
+        .output(z.object({ id: z.string().uuid() })),
+      update: oc
+        .route({ method: "PATCH", path: "/admin/customers/{id}/addresses/{addressId}" })
+        .input(
+          z.object({
+            id: z.string().uuid(),
+            addressId: z.string().uuid(),
+            address: z.object({
+              name: z.string().min(1),
+              phone: z.string().min(1),
+              line1: z.string().min(1),
+              line2: z.string().optional(),
+              city: z.string().min(1),
+              stateCode: z.string().min(1),
+              pincode: z.string().min(1),
+              type: z.enum(["home", "work", "other"]).default("home"),
+              isDefault: z.boolean().optional(),
+            }),
+          }),
+        )
+        .output(z.object({ success: z.boolean() })),
+      delete: oc
+        .route({ method: "DELETE", path: "/admin/customers/{id}/addresses/{addressId}" })
+        .input(z.object({ id: z.string().uuid(), addressId: z.string().uuid() }))
+        .output(z.object({ success: z.boolean() })),
+    },
+    notes: {
+      list: oc
+        .route({ method: "GET", path: "/admin/customers/{id}/notes" })
+        .input(z.object({ id: z.string().uuid() }))
+        .output(
+          z.object({
+            items: z.array(
+              z.object({
+                id: z.string().uuid(),
+                customerId: z.string().uuid(),
+                body: z.string(),
+                authorId: z.string().uuid().nullable(),
+                authorName: z.string().nullable(),
+                createdAt: z.string(),
+              }),
+            ),
+          }),
+        ),
+      add: oc
+        .route({ method: "POST", path: "/admin/customers/{id}/notes" })
+        .input(z.object({ id: z.string().uuid(), body: z.string().trim().min(1).max(1000) }))
+        .output(z.object({ id: z.string().uuid(), createdAt: z.string() })),
+      delete: oc
+        .route({ method: "DELETE", path: "/admin/customers/notes/{noteId}" })
+        .input(z.object({ noteId: z.string().uuid() }))
+        .output(z.object({ success: z.boolean() })),
+    },
     create: oc
       .route({ method: "POST", path: "/admin/customers" })
       .input(

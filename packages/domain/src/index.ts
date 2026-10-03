@@ -47,6 +47,7 @@ export * from "./customers/profile.ts";
 export * from "./customers/unsubscribe.ts";
 export * from "./customers/address-update.ts";
 export * from "./customers/consent.ts";
+export * from "./customers/notes.ts";
 export * from "./customers/metrics.ts";
 export * from "./payments/credentials.ts";
 export * from "./orders/fulfillment-state-machine.ts";

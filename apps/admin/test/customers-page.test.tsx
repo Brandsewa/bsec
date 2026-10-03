@@ -132,3 +132,75 @@ describe("Customers list (Phase 1A)", () => {
     expect(parsed.sort).toBe("created_desc");
   });
 });
+
+const CID2 = "0199a000-0000-7000-8000-000000000201";
+const detailData = {
+  customer: {
+    id: CID2,
+    name: "Ada Account",
+    email: "ada@example.com",
+    phone: "9600000001",
+    emailVerified: false,
+    isGuest: false,
+    status: "active",
+    ordersCount: 2,
+    totalSpent: 120000,
+    averageOrderValue: 60000,
+    firstOrderAt: NOW,
+    lastOrderAt: NOW,
+    returnsCount: 0,
+    marketingState: "subscribed",
+    marketingSource: "admin",
+    marketingUpdatedAt: NOW,
+    tags: ["VIP"],
+    createdAt: NOW,
+  },
+  addresses: [
+    { id: CID2, name: "Ada", phone: "9600000001", line1: "1 MG Road", city: "Bengaluru", stateCode: "KA", pincode: "560001", type: "home", isDefault: true },
+  ],
+  consentHistory: [
+    { id: CID2, channel: "email", state: "subscribed", source: "admin", actorType: "staff", at: NOW },
+  ],
+  recentOrders: [
+    { id: CID2, number: "ORD-1", status: "pending", paymentStatus: "cod_collected", fulfillmentStatus: "unfulfilled", grandTotal: 120000, placedAt: NOW },
+  ],
+};
+
+describe("Customer detail (Phase 1B)", () => {
+  it("registers the route with a pending skeleton", async () => {
+    const mod = await import("../src/routes/_store/customers_.$customerId.tsx");
+    expect(mod.Route.options.pendingComponent).toBeDefined();
+    expect(mod.Route.options.component).toBeDefined();
+  });
+
+  it("renders stat tiles, profile fields, addresses, marketing card, tags and notes composer", async () => {
+    const { CustomerDetailPage } = await import("../src/routes/_store/customers_.$customerId.tsx");
+    const { orpc } = await import("../src/lib/orpc.ts");
+    const Page = CustomerDetailPage as (props: { customerId?: string }) => React.ReactNode;
+    const qc = newClient();
+    qc.setQueryData(orpc.admin.customers.get.queryOptions({ input: { id: CID2 } }).queryKey, detailData);
+    qc.setQueryData(orpc.admin.customers.notes.list.queryOptions({ input: { id: CID2 } }).queryKey, {
+      items: [{ id: CID2, customerId: CID2, body: "Prefers evening calls", authorId: null, authorName: null, createdAt: NOW }],
+    });
+    qc.setQueryData(orpc.admin.customers.orders.queryOptions({ input: { id: CID2 } }).queryKey, { items: detailData.recentOrders, total: 1 });
+    qc.setQueryData(orpc.admin.customers.activity.queryOptions({ input: { id: CID2 } }).queryKey, {
+      items: [{ kind: "consent", at: NOW, title: "Marketing subscribed", detail: "admin", ref: CID2 }],
+    });
+    qc.setQueryData(orpc.admin.customers.tags.queryOptions().queryKey, tagsData);
+
+    // The page needs router context for Link and the unsaved-changes blocker; props supply the id.
+    const router = createRouter({
+      routeTree: createRootRoute({ component: () => Page({ customerId: CID2 }) }),
+      history: createMemoryHistory({ initialEntries: ["/"] }),
+    });
+    await router.load();
+    const html = renderToString(React.createElement(QueryClientProvider, { client: qc }, React.createElement(RouterProvider, { router })));
+
+    for (const tile of ["Orders", "Lifetime value", "Average order value", "Last order", "Customer since"]) expect(html).toContain(tile);
+    expect(html).toContain("Prefers evening calls"); // migrated note
+    expect(html).toContain("Consent history");
+    expect(html).toContain("Unsubscribe from marketing");
+    expect(html).toContain("Block customer");
+    expect(html).toContain("Add an internal note");
+  });
+});

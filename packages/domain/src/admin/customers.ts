@@ -1,8 +1,9 @@
-import { and, asc, desc, eq, gte, isNull, lt, sql } from "drizzle-orm";
+import { and, asc, desc, eq, gte, isNull, lt, ne, sql } from "drizzle-orm";
 import { schema, withTenant } from "@bs/db";
 import type { Runtime } from "../runtime.ts";
 import { assertPermission, type TenantContext } from "../context.ts";
 import { customerMetricsSql } from "../customers/metrics.ts";
+import { setMarketingConsent, type MarketingConsentState } from "../customers/consent.ts";
 
 export interface ListCustomersInput {
   search?: string | undefined;
@@ -294,10 +295,14 @@ export async function getAdminCustomerDetail(
         customer: schema.customers,
         ordersCount: sql<number>`metrics.orders_count`,
         totalSpent: sql<number>`metrics.total_spent`,
+        averageOrderValue: sql<number>`metrics.average_order_value`,
+        firstOrderAt: sql<Date | null>`metrics.first_order_at`,
+        lastOrderAt: sql<Date | null>`metrics.last_order_at`,
+        returnsCount: sql<number>`metrics.returns_count`,
       })
       .from(schema.customers)
       .leftJoin(customerMetricsSql(ctx.tenantId), sql`${schema.customers.id} = metrics.customer_id`)
-      .where(eq(schema.customers.id, input.id))
+      .where(and(eq(schema.customers.tenantId, ctx.tenantId), eq(schema.customers.id, input.id)))
       .limit(1);
 
     if (!row || !row.customer) {
@@ -308,32 +313,58 @@ export async function getAdminCustomerDetail(
     const addresses = await tx
       .select()
       .from(schema.customerAddresses)
-      .where(eq(schema.customerAddresses.customerId, input.id));
+      .where(and(eq(schema.customerAddresses.tenantId, ctx.tenantId), eq(schema.customerAddresses.customerId, input.id)))
+      .orderBy(desc(schema.customerAddresses.isDefault), desc(schema.customerAddresses.createdAt));
+
+    const consentHistory = await tx
+      .select({
+        id: schema.customerConsentEvents.id,
+        channel: schema.customerConsentEvents.channel,
+        state: schema.customerConsentEvents.state,
+        source: schema.customerConsentEvents.source,
+        actorType: schema.customerConsentEvents.actorType,
+        at: schema.customerConsentEvents.at,
+      })
+      .from(schema.customerConsentEvents)
+      .where(and(eq(schema.customerConsentEvents.tenantId, ctx.tenantId), eq(schema.customerConsentEvents.customerId, input.id)))
+      .orderBy(desc(schema.customerConsentEvents.at))
+      .limit(20);
 
     const recentOrders = await tx
       .select({
         id: schema.orders.id,
         number: schema.orders.number,
         status: schema.orders.status,
+        paymentStatus: schema.orders.paymentStatus,
+        fulfillmentStatus: schema.orders.fulfillmentStatus,
         grandTotal: schema.orders.grandTotal,
         placedAt: schema.orders.placedAt,
       })
       .from(schema.orders)
-      .where(eq(schema.orders.customerId, input.id))
+      .where(and(eq(schema.orders.tenantId, ctx.tenantId), eq(schema.orders.customerId, input.id)))
       .orderBy(desc(schema.orders.placedAt))
-      .limit(10);
+      .limit(20);
 
+    const iso = (d: Date | null | undefined) => (d ? new Date(d).toISOString() : null);
     return {
       customer: {
         id: customer.id,
         name: customer.name,
         email: customer.email,
         phone: customer.phone,
+        emailVerified: customer.emailVerified,
+        isGuest: customer.isGuest,
+        status: customer.status,
         ordersCount: Number(row.ordersCount || 0),
         totalSpent: Number(row.totalSpent || 0),
+        averageOrderValue: Number(row.averageOrderValue || 0),
+        firstOrderAt: iso(row.firstOrderAt ? new Date(row.firstOrderAt) : null),
+        lastOrderAt: iso(row.lastOrderAt ? new Date(row.lastOrderAt) : null),
+        returnsCount: Number(row.returnsCount || 0),
+        marketingState: customer.marketingState,
+        marketingSource: customer.marketingSource,
+        marketingUpdatedAt: iso(customer.marketingUpdatedAt),
         tags: customer.tags,
-        note: customer.note,
-        acceptsMarketing: customer.acceptsMarketing,
         createdAt: customer.createdAt.toISOString(),
       },
       addresses: addresses.map((a) => ({
@@ -348,14 +379,416 @@ export async function getAdminCustomerDetail(
         type: a.type,
         isDefault: a.isDefault,
       })),
+      consentHistory: consentHistory.map((e) => ({
+        id: e.id,
+        channel: e.channel,
+        state: e.state,
+        source: e.source,
+        actorType: e.actorType,
+        at: e.at.toISOString(),
+      })),
       recentOrders: recentOrders.map((o) => ({
         id: o.id,
         number: o.number,
         status: o.status,
+        paymentStatus: o.paymentStatus,
+        fulfillmentStatus: o.fulfillmentStatus,
         grandTotal: Number(o.grandTotal),
         placedAt: o.placedAt.toISOString(),
       })),
     };
+  });
+}
+
+export interface UpdateCustomerInput {
+  id: string;
+  name?: string | undefined;
+  email?: string | undefined;
+  phone?: string | null | undefined;
+}
+
+export interface UpdateCustomerResult {
+  id: string;
+  name: string;
+  email: string;
+  phone: string | null;
+  emailVerified: boolean;
+}
+
+/**
+ * Edits the customer profile. The email is editable only for a guest or an unverified account
+ * (a verified account changes it from their own account page); a change clears email_verified
+ * so the new address must be re-verified before it earns account features.
+ */
+export async function updateAdminCustomer(rt: Runtime, ctx: TenantContext, input: UpdateCustomerInput): Promise<UpdateCustomerResult> {
+  assertPermission(ctx, "customers.write");
+  const db = rt._db.db;
+
+  return await withTenant(db, ctx.tenantId, async (tx) => {
+    const [existing] = await tx
+      .select()
+      .from(schema.customers)
+      .where(and(eq(schema.customers.tenantId, ctx.tenantId), eq(schema.customers.id, input.id)))
+      .limit(1);
+    if (!existing) throw new Error(`Customer not found: ${input.id}`);
+
+    const updates: Record<string, unknown> = { updatedAt: new Date() };
+    const diff: Record<string, unknown> = {};
+    let emailVerified = existing.emailVerified;
+
+    if (input.name !== undefined) {
+      const name = input.name.trim();
+      if (name !== existing.name) {
+        updates.name = name;
+        diff.name = { from: existing.name, to: name };
+      }
+    }
+
+    if (input.email !== undefined) {
+      const email = input.email.trim().toLowerCase();
+      if (email !== existing.email) {
+        if (existing.emailVerified && !existing.isGuest) {
+          throw new Error("This account's email is verified. The customer can change it from their account page.");
+        }
+        const [taken] = await tx
+          .select({ id: schema.customers.id })
+          .from(schema.customers)
+          .where(and(eq(schema.customers.tenantId, ctx.tenantId), eq(schema.customers.email, email), ne(schema.customers.id, input.id)))
+          .limit(1);
+        if (taken) throw new Error(`A customer with email ${email} already exists`);
+        updates.email = email;
+        updates.emailVerified = false;
+        emailVerified = false;
+        diff.email = { from: existing.email, to: email, verificationReset: true };
+      }
+    }
+
+    if (input.phone !== undefined) {
+      const phone = input.phone === null || input.phone.trim() === "" ? null : input.phone.trim();
+      if (phone !== existing.phone) {
+        if (phone) {
+          const [taken] = await tx
+            .select({ id: schema.customers.id })
+            .from(schema.customers)
+            .where(and(eq(schema.customers.tenantId, ctx.tenantId), eq(schema.customers.phone, phone), ne(schema.customers.id, input.id)))
+            .limit(1);
+          if (taken) throw new Error(`A customer with phone number ${phone} already exists`);
+        }
+        updates.phone = phone;
+        diff.phone = { from: existing.phone, to: phone };
+      }
+    }
+
+    if (Object.keys(diff).length === 0) {
+      return { id: existing.id, name: existing.name, email: existing.email, phone: existing.phone, emailVerified: existing.emailVerified };
+    }
+
+    await tx.update(schema.customers).set(updates).where(and(eq(schema.customers.tenantId, ctx.tenantId), eq(schema.customers.id, input.id)));
+
+    await tx.insert(schema.auditLogs).values({
+      tenantId: ctx.tenantId,
+      actorType: ctx.actor.type,
+      actorId: ctx.actor.type === "staff" ? ctx.actor.userId : null,
+      action: "customer.updated",
+      targetType: "customer",
+      targetId: input.id,
+      diff,
+    });
+
+    return {
+      id: input.id,
+      name: (updates.name as string | undefined) ?? existing.name,
+      email: (updates.email as string | undefined) ?? existing.email,
+      phone: updates.phone !== undefined ? (updates.phone as string | null) : existing.phone,
+      emailVerified,
+    };
+  });
+}
+
+/** Admin switch on the marketing card: routed through the single consent writer (source `admin`). */
+export async function setAdminCustomerConsent(rt: Runtime, ctx: TenantContext, input: { id: string; state: MarketingConsentState }) {
+  assertPermission(ctx, "customers.write");
+  const actorId = ctx.actor.type === "staff" ? ctx.actor.userId : null;
+  const result = await setMarketingConsent(rt, ctx, {
+    customerId: input.id,
+    state: input.state,
+    source: "admin",
+    actorType: "staff",
+    actorId,
+  });
+  return { id: result.customerId, marketingState: result.marketingState, acceptsMarketing: result.acceptsMarketing };
+}
+
+export interface AdminAddressInput {
+  name: string;
+  phone: string;
+  line1: string;
+  line2?: string | undefined;
+  city: string;
+  stateCode: string;
+  pincode: string;
+  type?: string | undefined;
+  isDefault?: boolean | undefined;
+}
+
+export async function addAdminCustomerAddress(rt: Runtime, ctx: TenantContext, input: { customerId: string; address: AdminAddressInput }) {
+  assertPermission(ctx, "customers.write");
+  const db = rt._db.db;
+
+  return await withTenant(db, ctx.tenantId, async (tx) => {
+    const [customer] = await tx
+      .select({ id: schema.customers.id })
+      .from(schema.customers)
+      .where(and(eq(schema.customers.tenantId, ctx.tenantId), eq(schema.customers.id, input.customerId)))
+      .limit(1);
+    if (!customer) throw new Error(`Customer not found: ${input.customerId}`);
+
+    if (input.address.isDefault) {
+      await tx
+        .update(schema.customerAddresses)
+        .set({ isDefault: false })
+        .where(and(eq(schema.customerAddresses.tenantId, ctx.tenantId), eq(schema.customerAddresses.customerId, input.customerId)));
+    }
+
+    const [row] = await tx
+      .insert(schema.customerAddresses)
+      .values({
+        tenantId: ctx.tenantId,
+        customerId: input.customerId,
+        name: input.address.name,
+        phone: input.address.phone,
+        line1: input.address.line1,
+        line2: input.address.line2 ?? null,
+        city: input.address.city,
+        stateCode: input.address.stateCode,
+        pincode: input.address.pincode,
+        type: input.address.type ?? "home",
+        isDefault: input.address.isDefault ?? false,
+      })
+      .returning({ id: schema.customerAddresses.id });
+
+    await tx.insert(schema.auditLogs).values({
+      tenantId: ctx.tenantId,
+      actorType: ctx.actor.type,
+      actorId: ctx.actor.type === "staff" ? ctx.actor.userId : null,
+      action: "customer.address_added",
+      targetType: "customer",
+      targetId: input.customerId,
+      diff: { addressId: row!.id },
+    });
+
+    return { id: row!.id };
+  });
+}
+
+export async function updateAdminCustomerAddress(rt: Runtime, ctx: TenantContext, input: { customerId: string; addressId: string; address: AdminAddressInput }) {
+  assertPermission(ctx, "customers.write");
+  const db = rt._db.db;
+
+  return await withTenant(db, ctx.tenantId, async (tx) => {
+    const owned = and(
+      eq(schema.customerAddresses.tenantId, ctx.tenantId),
+      eq(schema.customerAddresses.customerId, input.customerId),
+      eq(schema.customerAddresses.id, input.addressId),
+    );
+    const [existing] = await tx.select({ id: schema.customerAddresses.id }).from(schema.customerAddresses).where(owned).limit(1);
+    if (!existing) throw new Error(`Address not found: ${input.addressId}`);
+
+    if (input.address.isDefault) {
+      await tx
+        .update(schema.customerAddresses)
+        .set({ isDefault: false })
+        .where(and(eq(schema.customerAddresses.tenantId, ctx.tenantId), eq(schema.customerAddresses.customerId, input.customerId)));
+    }
+
+    await tx
+      .update(schema.customerAddresses)
+      .set({
+        name: input.address.name,
+        phone: input.address.phone,
+        line1: input.address.line1,
+        line2: input.address.line2 ?? null,
+        city: input.address.city,
+        stateCode: input.address.stateCode,
+        pincode: input.address.pincode,
+        type: input.address.type ?? "home",
+        ...(input.address.isDefault !== undefined ? { isDefault: input.address.isDefault } : {}),
+        updatedAt: new Date(),
+      })
+      .where(owned);
+
+    await tx.insert(schema.auditLogs).values({
+      tenantId: ctx.tenantId,
+      actorType: ctx.actor.type,
+      actorId: ctx.actor.type === "staff" ? ctx.actor.userId : null,
+      action: "customer.address_updated",
+      targetType: "customer",
+      targetId: input.customerId,
+      diff: { addressId: input.addressId },
+    });
+
+    return { success: true };
+  });
+}
+
+export async function deleteAdminCustomerAddress(rt: Runtime, ctx: TenantContext, input: { customerId: string; addressId: string }) {
+  assertPermission(ctx, "customers.write");
+  const db = rt._db.db;
+
+  return await withTenant(db, ctx.tenantId, async (tx) => {
+    const [deleted] = await tx
+      .delete(schema.customerAddresses)
+      .where(
+        and(
+          eq(schema.customerAddresses.tenantId, ctx.tenantId),
+          eq(schema.customerAddresses.customerId, input.customerId),
+          eq(schema.customerAddresses.id, input.addressId),
+        ),
+      )
+      .returning({ id: schema.customerAddresses.id });
+    if (!deleted) throw new Error(`Address not found: ${input.addressId}`);
+
+    await tx.insert(schema.auditLogs).values({
+      tenantId: ctx.tenantId,
+      actorType: ctx.actor.type,
+      actorId: ctx.actor.type === "staff" ? ctx.actor.userId : null,
+      action: "customer.address_deleted",
+      targetType: "customer",
+      targetId: input.customerId,
+      diff: { addressId: input.addressId },
+    });
+
+    return { success: true };
+  });
+}
+
+/** Full order history for the detail page's orders card, optionally filtered by status. */
+export async function listAdminCustomerOrders(
+  rt: Runtime,
+  ctx: TenantContext,
+  input: { customerId: string; status?: string | undefined; limit?: number | undefined; offset?: number | undefined },
+) {
+  assertPermission(ctx, "customers.read");
+  const db = rt._db.db;
+  const limit = input.limit ?? 20;
+  const offset = input.offset ?? 0;
+
+  return await withTenant(db, ctx.tenantId, async (tx) => {
+    const conditions = [eq(schema.orders.tenantId, ctx.tenantId), eq(schema.orders.customerId, input.customerId)];
+    if (input.status) conditions.push(eq(schema.orders.status, input.status));
+    const where = and(...conditions);
+
+    const [countRow] = await tx.select({ count: sql<number>`count(*)::int` }).from(schema.orders).where(where);
+    const rows = await tx
+      .select({
+        id: schema.orders.id,
+        number: schema.orders.number,
+        status: schema.orders.status,
+        paymentStatus: schema.orders.paymentStatus,
+        fulfillmentStatus: schema.orders.fulfillmentStatus,
+        grandTotal: schema.orders.grandTotal,
+        placedAt: schema.orders.placedAt,
+      })
+      .from(schema.orders)
+      .where(where)
+      .orderBy(desc(schema.orders.placedAt), desc(schema.orders.id))
+      .limit(limit)
+      .offset(offset);
+
+    return {
+      items: rows.map((o) => ({
+        id: o.id,
+        number: o.number,
+        status: o.status,
+        paymentStatus: o.paymentStatus,
+        fulfillmentStatus: o.fulfillmentStatus,
+        grandTotal: Number(o.grandTotal),
+        placedAt: o.placedAt.toISOString(),
+      })),
+      total: countRow?.count ?? 0,
+    };
+  });
+}
+
+export interface ActivityItem {
+  kind: "order" | "return" | "quote" | "review" | "abandoned_cart" | "consent";
+  at: string;
+  title: string;
+  detail: string | null;
+  ref: string | null;
+}
+
+/** Timeline for the detail page, assembled from existing tables only (no new tables). */
+export async function getAdminCustomerActivity(rt: Runtime, ctx: TenantContext, input: { customerId: string; limit?: number | undefined }) {
+  assertPermission(ctx, "customers.read");
+  const db = rt._db.db;
+  const limit = input.limit ?? 50;
+
+  return await withTenant(db, ctx.tenantId, async (tx) => {
+    const items: ActivityItem[] = [];
+
+    const orders = await tx
+      .select({ id: schema.orders.id, number: schema.orders.number, status: schema.orders.status, grandTotal: schema.orders.grandTotal, placedAt: schema.orders.placedAt })
+      .from(schema.orders)
+      .where(and(eq(schema.orders.tenantId, ctx.tenantId), eq(schema.orders.customerId, input.customerId)))
+      .orderBy(desc(schema.orders.placedAt))
+      .limit(limit);
+    for (const o of orders) {
+      items.push({ kind: "order", at: o.placedAt.toISOString(), title: `Order ${o.number}`, detail: `${o.status} · ₹${(Number(o.grandTotal) / 100).toFixed(2)}`, ref: o.id });
+    }
+
+    const returnsRows = await tx
+      .select({ id: schema.returns.id, status: schema.returns.status, createdAt: schema.returns.createdAt })
+      .from(schema.returns)
+      .where(and(eq(schema.returns.tenantId, ctx.tenantId), eq(schema.returns.customerId, input.customerId)))
+      .orderBy(desc(schema.returns.createdAt))
+      .limit(limit);
+    for (const r of returnsRows) {
+      items.push({ kind: "return", at: r.createdAt.toISOString(), title: "Return requested", detail: r.status, ref: r.id });
+    }
+
+    const quotes = await tx
+      .select({ id: schema.quoteRequests.id, number: schema.quoteRequests.number, status: schema.quoteRequests.status, createdAt: schema.quoteRequests.createdAt })
+      .from(schema.quoteRequests)
+      .where(and(eq(schema.quoteRequests.tenantId, ctx.tenantId), eq(schema.quoteRequests.customerId, input.customerId)))
+      .orderBy(desc(schema.quoteRequests.createdAt))
+      .limit(limit);
+    for (const q of quotes) {
+      items.push({ kind: "quote", at: q.createdAt.toISOString(), title: `Quote ${q.number}`, detail: q.status, ref: q.id });
+    }
+
+    const reviewsRows = await tx
+      .select({ id: schema.reviews.id, rating: schema.reviews.rating, status: schema.reviews.status, createdAt: schema.reviews.createdAt })
+      .from(schema.reviews)
+      .where(and(eq(schema.reviews.tenantId, ctx.tenantId), eq(schema.reviews.customerId, input.customerId)))
+      .orderBy(desc(schema.reviews.createdAt))
+      .limit(limit);
+    for (const r of reviewsRows) {
+      items.push({ kind: "review", at: r.createdAt.toISOString(), title: `Review: ${r.rating}★`, detail: r.status, ref: r.id });
+    }
+
+    const cartsRows = await tx
+      .select({ id: schema.carts.id, status: schema.carts.status, createdAt: schema.carts.createdAt })
+      .from(schema.carts)
+      .where(and(eq(schema.carts.tenantId, ctx.tenantId), eq(schema.carts.customerId, input.customerId), eq(schema.carts.status, "abandoned")))
+      .orderBy(desc(schema.carts.createdAt))
+      .limit(limit);
+    for (const c of cartsRows) {
+      items.push({ kind: "abandoned_cart", at: c.createdAt.toISOString(), title: "Abandoned checkout", detail: null, ref: c.id });
+    }
+
+    const consent = await tx
+      .select({ id: schema.customerConsentEvents.id, state: schema.customerConsentEvents.state, source: schema.customerConsentEvents.source, at: schema.customerConsentEvents.at })
+      .from(schema.customerConsentEvents)
+      .where(and(eq(schema.customerConsentEvents.tenantId, ctx.tenantId), eq(schema.customerConsentEvents.customerId, input.customerId)))
+      .orderBy(desc(schema.customerConsentEvents.at))
+      .limit(limit);
+    for (const e of consent) {
+      items.push({ kind: "consent", at: e.at.toISOString(), title: `Marketing ${e.state.replace("_", " ")}`, detail: e.source, ref: e.id });
+    }
+
+    items.sort((a, b) => (a.at < b.at ? 1 : a.at > b.at ? -1 : 0));
+    return { items: items.slice(0, limit) };
   });
 }
 

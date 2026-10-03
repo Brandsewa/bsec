@@ -9,7 +9,18 @@ import {
   placeOrder,
   transitionOrder,
   listAdminCustomers,
+  getAdminCustomerDetail,
   getAdminCustomerStats,
+  updateAdminCustomer,
+  setAdminCustomerConsent,
+  addAdminCustomerAddress,
+  updateAdminCustomerAddress,
+  deleteAdminCustomerAddress,
+  listAdminCustomerOrders,
+  getAdminCustomerActivity,
+  listCustomerNotes,
+  addCustomerNote,
+  deleteCustomerNote,
   listAdminCustomerTags,
   setAdminCustomerStatus,
   setAdminCustomerTags,
@@ -402,5 +413,178 @@ describe("Blocked customers cannot sign in or check out", () => {
       paymentMethod: "cod",
     });
     expect(inB.orderId).toBeDefined();
+  });
+});
+
+// ---------------------------------------------------------------------------------------------------------------
+// Phase 1B: detail and edit
+// ---------------------------------------------------------------------------------------------------------------
+
+describe("Phase 1B: profile update", () => {
+  it("updates name and phone with an audit row, and refuses duplicate contact details", async () => {
+    const result = await updateAdminCustomer(rtWeb, ctxA, { id: old1, name: "  Ola Updated  ", phone: "9600000099" });
+    expect(result).toMatchObject({ id: old1, name: "Ola Updated", phone: "9600000099", emailVerified: false });
+
+    const audits = await withTenant(rtWeb._db.db, ctxA.tenantId, (tx) =>
+      tx.select().from(schema.auditLogs).where(and(eq(schema.auditLogs.action, "customer.updated"), eq(schema.auditLogs.targetId, old1))),
+    );
+    expect(audits).toHaveLength(1);
+    expect(audits[0]?.diff).toMatchObject({ name: { from: "Ola Old", to: "Ola Updated" }, phone: { to: "9600000099" } });
+
+    await expect(updateAdminCustomer(rtWeb, ctxA, { id: old1, phone: "9600000001" })).rejects.toThrow(/already exists/);
+    await expect(updateAdminCustomer(rtWeb, ctxA, { id: old1, email: "acct-1@phase1.test" })).rejects.toThrow(/already exists/);
+  });
+
+  it("lets staff fix a guest's email but clears verification; a verified account's email is staff-immutable", async () => {
+    const [guest] = await withTenant(rtWeb._db.db, ctxA.tenantId, (tx) =>
+      tx.insert(schema.customers).values({ tenantId: ctxA.tenantId, email: "guest-edit@phase1.test", name: "Edit Guest", isGuest: true, emailVerified: true }).returning(),
+    );
+    const changed = await updateAdminCustomer(rtWeb, ctxA, { id: guest!.id, email: "guest-fixed@phase1.test" });
+    expect(changed.email).toBe("guest-fixed@phase1.test");
+    expect(changed.emailVerified).toBe(false);
+
+    // A verified, non-guest account's email is not staff-editable
+    const [verified] = await withTenant(rtWeb._db.db, ctxA.tenantId, (tx) =>
+      tx
+        .insert(schema.customers)
+        .values({ tenantId: ctxA.tenantId, email: "verified-immutable@phase1.test", name: "Verified Account", emailVerified: true })
+        .returning(),
+    );
+    await expect(updateAdminCustomer(rtWeb, ctxA, { id: verified!.id, email: "acct-1-new@phase1.test" })).rejects.toThrow(/verified/i);
+
+    // Store isolation: store B cannot edit store A's customer
+    await expect(updateAdminCustomer(rtWeb, ctxB, { id: old1, name: "Hacked" })).rejects.toThrow(/not found/i);
+  });
+});
+
+describe("Phase 1B: consent switch", () => {
+  it("subscribes through the single writer with source admin, history and audit; SMS is refused", async () => {
+    const result = await setAdminCustomerConsent(rtWeb, ctxA, { id: old1, state: "subscribed" });
+    expect(result).toMatchObject({ id: old1, marketingState: "subscribed", acceptsMarketing: true });
+
+    const events = await withTenant(rtWeb._db.db, ctxA.tenantId, (tx) =>
+      tx.select().from(schema.customerConsentEvents).where(eq(schema.customerConsentEvents.customerId, old1)),
+    );
+    expect(events.filter((e) => e.source === "admin").length).toBeGreaterThanOrEqual(1);
+
+    await expect(setMarketingConsent(rtWeb, ctxA, { customerId: old1, state: "subscribed", source: "admin", channel: "sms" })).rejects.toThrow(/channel/i);
+  });
+});
+
+describe("Phase 1B: staff addresses", () => {
+  it("adds, updates and deletes addresses with audit rows", async () => {
+    const added = await addAdminCustomerAddress(rtWeb, ctxA, {
+      customerId: old1,
+      address: { name: "Staff Added", phone: "9600000077", line1: "9 Note Road", city: "Bengaluru", stateCode: "KA", pincode: "560002", isDefault: true },
+    });
+    expect(added.id).toBeDefined();
+
+    const [afterAdd] = await withTenant(rtWeb._db.db, ctxA.tenantId, (tx) =>
+      tx.select().from(schema.customerAddresses).where(eq(schema.customerAddresses.id, added.id)),
+    );
+    expect(afterAdd?.isDefault).toBe(true);
+
+    await updateAdminCustomerAddress(rtWeb, ctxA, {
+      customerId: old1,
+      addressId: added.id,
+      address: { name: "Staff Updated", phone: "9600000077", line1: "9 Note Road", city: "Bengaluru", stateCode: "KA", pincode: "560002", type: "work" },
+    });
+    const [afterUpdate] = await withTenant(rtWeb._db.db, ctxA.tenantId, (tx) =>
+      tx.select().from(schema.customerAddresses).where(eq(schema.customerAddresses.id, added.id)),
+    );
+    expect(afterUpdate?.name).toBe("Staff Updated");
+    expect(afterUpdate?.type).toBe("work");
+
+    await deleteAdminCustomerAddress(rtWeb, ctxA, { customerId: old1, addressId: added.id });
+    const [gone] = await withTenant(rtWeb._db.db, ctxA.tenantId, (tx) =>
+      tx.select().from(schema.customerAddresses).where(eq(schema.customerAddresses.id, added.id)),
+    );
+    expect(gone).toBeUndefined();
+
+    const audits = await withTenant(rtWeb._db.db, ctxA.tenantId, (tx) =>
+      tx.select().from(schema.auditLogs).where(and(eq(schema.auditLogs.targetId, old1), sql`${schema.auditLogs.action} LIKE 'customer.address%'`)),
+    );
+    expect(audits.map((a) => a.action).sort()).toEqual(["customer.address_added", "customer.address_deleted", "customer.address_updated"]);
+
+    await expect(deleteAdminCustomerAddress(rtWeb, ctxA, { customerId: old1, addressId: added.id })).rejects.toThrow(/not found/i);
+    await expect(
+      addAdminCustomerAddress(rtWeb, ctxB, { customerId: old1, address: { name: "X", phone: "1", line1: "1", city: "C", stateCode: "KA", pincode: "1" } }),
+    ).rejects.toThrow(/not found/i);
+  });
+});
+
+describe("Phase 1B: staff notes timeline", () => {
+  it("adds notes with author and audit, orders newest first, and enforces the author-or-owner delete rule", async () => {
+    const added = await addCustomerNote(rtWeb, ctxA, { customerId: old1, body: "First note" });
+    expect(added.id).toBeDefined();
+
+    const list = await listCustomerNotes(rtWeb, ctxA, { customerId: old1 });
+    expect(list.items[0]?.body).toBe("First note");
+
+    // A second staff member (neither author nor owner) may not delete it
+    const staff2: TenantContext = { ...ctxA, actor: { type: "staff", userId: "0199a000-0000-7000-8000-beef00000099" }, roles: ["store_admin"] };
+    await expect(deleteCustomerNote(rtWeb, staff2, { id: added.id })).rejects.toThrow(/author or the store owner/i);
+
+    // The owner can delete anyone's note
+    await deleteCustomerNote(rtWeb, ctxA, { id: added.id });
+    const after = await listCustomerNotes(rtWeb, ctxA, { customerId: old1 });
+    expect(after.items.find((n) => n.id === added.id)).toBeUndefined();
+
+    await expect(addCustomerNote(rtWeb, ctxA, { customerId: old1, body: "" })).rejects.toThrow(/empty/i);
+    await expect(addCustomerNote(rtWeb, ctxA, { customerId: old1, body: "x".repeat(1001) })).rejects.toThrow(/1000/i);
+    await expect(addCustomerNote(rtWeb, ctxB, { customerId: old1, body: "cross-store" })).rejects.toThrow(/not found/i);
+  });
+
+  it("migrates the legacy single note into the first note, idempotently", async () => {
+    const [leg] = await withTenant(rtWeb._db.db, ctxA.tenantId, (tx) =>
+      tx
+        .insert(schema.customers)
+        .values({ tenantId: ctxA.tenantId, email: `legacy-note-${Date.now()}@phase1.test`, name: "Legacy Note", note: "Prefers evening calls" })
+        .returning(),
+    );
+
+    const { readFileSync } = await import("node:fs");
+    const file = readFileSync(new URL("../../db/migrations/0029_customers_phase1.sql", import.meta.url), "utf8");
+    const start = file.indexOf('INSERT INTO "customer_notes"');
+    expect(start).toBeGreaterThan(-1);
+    const statement = file.slice(start);
+
+    await withTenant(rtWeb._db.db, ctxA.tenantId, (tx) => tx.execute(sql.raw(statement)));
+    let notes = await listCustomerNotes(rtWeb, ctxA, { customerId: leg!.id });
+    expect(notes.items).toHaveLength(1);
+    expect(notes.items[0]?.body).toBe("Prefers evening calls");
+    expect(notes.items[0]?.authorId).toBeNull();
+
+    // Running the migration statement a second time must not duplicate the note
+    await withTenant(rtWeb._db.db, ctxA.tenantId, (tx) => tx.execute(sql.raw(statement)));
+    notes = await listCustomerNotes(rtWeb, ctxA, { customerId: leg!.id });
+    expect(notes.items).toHaveLength(1);
+  });
+});
+
+describe("Phase 1B: orders history and activity timeline", () => {
+  it("lists the customer's orders with status filter and merges an ordered activity timeline", async () => {
+    const history = await listAdminCustomerOrders(rtWeb, ctxA, { customerId: acct1 });
+    expect(history.total).toBe(1);
+    expect(history.items[0]).toMatchObject({ paymentStatus: "cod_collected" });
+
+    const cancelledOnly = await listAdminCustomerOrders(rtWeb, ctxA, { customerId: acct1, status: "cancelled" });
+    expect(cancelledOnly.items).toHaveLength(0);
+
+    const activity = await getAdminCustomerActivity(rtWeb, ctxA, { customerId: acct1 });
+    const kinds = activity.items.map((i) => i.kind);
+    expect(kinds).toContain("order");
+    expect(kinds).toContain("consent");
+    // Newest first
+    const times = activity.items.map((i) => i.at);
+    expect([...times].sort().reverse()).toEqual(times);
+  });
+
+  it("returns the full detail payload including consent history", async () => {
+    const detail = await getAdminCustomerDetail(rtWeb, ctxA, { id: acct1 });
+    expect(detail.customer).toMatchObject({ emailVerified: false, isGuest: false, status: "active", marketingState: "subscribed" });
+    expect(detail.customer.averageOrderValue).toBeGreaterThan(0);
+    expect(detail.consentHistory.length).toBeGreaterThanOrEqual(1);
+    expect(detail.recentOrders).toHaveLength(1);
   });
 });

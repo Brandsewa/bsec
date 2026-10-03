@@ -99,6 +99,16 @@ import {
   listAdminCustomerTags,
   setAdminCustomerStatus,
   setAdminCustomerTags,
+  updateAdminCustomer,
+  setAdminCustomerConsent,
+  addAdminCustomerAddress,
+  updateAdminCustomerAddress,
+  deleteAdminCustomerAddress,
+  listAdminCustomerOrders,
+  getAdminCustomerActivity,
+  listCustomerNotes,
+  addCustomerNote,
+  deleteCustomerNote,
   listAdminDiscounts,
   listAdminOrders,
   listInvitations,
@@ -990,6 +1000,45 @@ describe("Generated Isolation Test Suite (M1 Real Postgres 18 Proof)", () => {
         return await setAdminCustomerStatus(rt, ctx, { id: testCustomerA, status: "active" });
       case "customers.setTags":
         return await setAdminCustomerTags(rt, ctx, { id: testCustomerA, tags: ["vip"] });
+      case "customers.update":
+        return await updateAdminCustomer(rt, ctx, { id: testCustomerA, name: "Isolation Update" });
+      case "customers.orders":
+        return await listAdminCustomerOrders(rt, ctx, { customerId: testCustomerA });
+      case "customers.activity":
+        return await getAdminCustomerActivity(rt, ctx, { customerId: testCustomerA });
+      case "customers.consentSet":
+        return await setAdminCustomerConsent(rt, ctx, { id: testCustomerA, state: "subscribed" });
+      case "customers.addresses.add":
+        return await addAdminCustomerAddress(rt, ctx, {
+          customerId: testCustomerA,
+          address: { name: "Iso Staff", phone: "9600011111", line1: "1 Iso Road", city: "Bengaluru", stateCode: "KA", pincode: "560001", isDefault: true },
+        });
+      case "customers.addresses.update": {
+        const added = await addAdminCustomerAddress(rt, ctx, {
+          customerId: testCustomerA,
+          address: { name: "Iso Staff", phone: "9600011112", line1: "2 Iso Road", city: "Bengaluru", stateCode: "KA", pincode: "560001" },
+        });
+        return await updateAdminCustomerAddress(rt, ctx, {
+          customerId: testCustomerA,
+          addressId: added.id,
+          address: { name: "Iso Staff Updated", phone: "9600011112", line1: "2 Iso Road", city: "Bengaluru", stateCode: "KA", pincode: "560001" },
+        });
+      }
+      case "customers.addresses.delete": {
+        const added = await addAdminCustomerAddress(rt, ctx, {
+          customerId: testCustomerA,
+          address: { name: "Iso Staff", phone: "9600011113", line1: "3 Iso Road", city: "Bengaluru", stateCode: "KA", pincode: "560001" },
+        });
+        return await deleteAdminCustomerAddress(rt, ctx, { customerId: testCustomerA, addressId: added.id });
+      }
+      case "customers.notes.list":
+        return await listCustomerNotes(rt, ctx, { customerId: testCustomerA });
+      case "customers.notes.add":
+        return await addCustomerNote(rt, ctx, { customerId: testCustomerA, body: "Isolation note" });
+      case "customers.notes.delete": {
+        const note = await addCustomerNote(rt, ctx, { customerId: testCustomerA, body: "Isolation note to delete" });
+        return await deleteCustomerNote(rt, ctx, { id: note.id });
+      }
 
       // --- M5 Discounts Admin ---
       case "discounts.list":
