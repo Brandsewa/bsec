@@ -110,7 +110,7 @@ Spec: `docs/CUSTOMERS-IMPLEMENTATION-PLAN.md` & `docs/CUSTOMERS-SECTION-FINDINGS
 
 One line per piece of work that is started and not merged. Add yours before you start, remove it when merged or abandoned (`AGENTS.md` section 6). Format: `agent · branch · area · since · one-line goal`.
 
-- antigravity · `feat/customers-phase-0` · customers, db, domain, checkout · 2026-10-03 · Customers Phase 0: truthful metrics, guests, consent record & history
+- zcode · `feat/customers-phase-1` · customers, db, domain, admin · 2026-10-03 · Customers Phase 1: rebuilt list, detail/edit, CSV import, delete/anonymise (antigravity's merged Phase 0 line removed)
 - claude · `feat/themes-puck` · themes, docs · 2026-10-01 · theme builder follow-ups; agent docs and change log (`docs/changes/`)
 
 ## Returns & Exchanges (Manual Review & Portal) — Complete (2026-10-02)
