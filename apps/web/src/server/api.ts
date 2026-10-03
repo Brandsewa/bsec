@@ -158,6 +158,18 @@ import {
   listAdminAbandonedCheckouts,
   createAdminOrderInvoice,
   listAdminCustomers,
+  listSegments,
+  getSegment,
+  createSegment,
+  updateSegment,
+  deleteSegment,
+  previewSegmentRules,
+  listSegmentMembers,
+  addCustomersToSegment,
+  removeCustomersFromSegment,
+  refreshSegmentCount,
+  getCustomerSegments,
+  createPresetSegments,
   getAdminCustomerDetail,
   createAdminCustomer,
   listAdminDiscounts,
@@ -1309,6 +1321,104 @@ export const storeRouter = os.router({
           if (!context.tenantCtx) throw new Error("Missing tenant context");
           return createAdminCustomer(context.rt, context.tenantCtx, input);
         }),
+    },
+
+    // --- Customers Segments (Phase 2) ---
+    segments: {
+      list: os.admin.segments.list
+        .use(requireAdmin)
+        .use(requirePermission("customers.read"))
+        .handler(({ context, input }) => {
+          if (!context.tenantCtx) throw new Error("Missing tenant context");
+          return listSegments(context.rt, context.tenantCtx, input);
+        }),
+      get: os.admin.segments.get
+        .use(requireAdmin)
+        .use(requirePermission("customers.read"))
+        .handler(({ context, input }) => {
+          if (!context.tenantCtx) throw new Error("Missing tenant context");
+          return getSegment(context.rt, context.tenantCtx, input);
+        }),
+      create: os.admin.segments.create
+        .use(requireAdmin)
+        .use(requirePermission("customers.write"))
+        .handler(({ context, input }) => {
+          if (!context.tenantCtx) throw new Error("Missing tenant context");
+          return createSegment(context.rt, context.tenantCtx, input);
+        }),
+      update: os.admin.segments.update
+        .use(requireAdmin)
+        .use(requirePermission("customers.write"))
+        .handler(({ context, input }) => {
+          if (!context.tenantCtx) throw new Error("Missing tenant context");
+          return updateSegment(context.rt, context.tenantCtx, input);
+        }),
+      delete: os.admin.segments.delete
+        .use(requireAdmin)
+        .use(requirePermission("customers.write"))
+        .handler(({ context, input }) => {
+          if (!context.tenantCtx) throw new Error("Missing tenant context");
+          return deleteSegment(context.rt, context.tenantCtx, input);
+        }),
+      preview: os.admin.segments.preview
+        .use(requireAdmin)
+        .use(requirePermission("customers.read"))
+        .handler(({ context, input }) => {
+          if (!context.tenantCtx) throw new Error("Missing tenant context");
+          return previewSegmentRules(context.rt, context.tenantCtx, input);
+        }),
+      members: {
+        list: os.admin.segments.members.list
+          .use(requireAdmin)
+          .use(requirePermission("customers.read"))
+          .handler(({ context, input }) => {
+            if (!context.tenantCtx) throw new Error("Missing tenant context");
+            return listSegmentMembers(context.rt, context.tenantCtx, {
+              segmentId: input.id,
+              search: input.search,
+              sort: input.sort,
+              limit: input.limit,
+              offset: input.offset,
+            });
+          }),
+        add: os.admin.segments.members.add
+          .use(requireAdmin)
+          .use(requirePermission("customers.write"))
+          .handler(({ context, input }) => {
+            if (!context.tenantCtx) throw new Error("Missing tenant context");
+            return addCustomersToSegment(context.rt, context.tenantCtx, { segmentId: input.id, customerIds: input.customerIds, emails: input.emails });
+          }),
+        remove: os.admin.segments.members.remove
+          .use(requireAdmin)
+          .use(requirePermission("customers.write"))
+          .handler(({ context, input }) => {
+            if (!context.tenantCtx) throw new Error("Missing tenant context");
+            return removeCustomersFromSegment(context.rt, context.tenantCtx, { segmentId: input.id, customerIds: input.customerIds });
+          }),
+      },
+      refreshCount: os.admin.segments.refreshCount
+        .use(requireAdmin)
+        .use(requirePermission("customers.read"))
+        .handler(({ context, input }) => {
+          if (!context.tenantCtx) throw new Error("Missing tenant context");
+          return refreshSegmentCount(context.rt, context.tenantCtx, input);
+        }),
+      forCustomer: os.admin.segments.forCustomer
+        .use(requireAdmin)
+        .use(requirePermission("customers.read"))
+        .handler(({ context, input }) => {
+          if (!context.tenantCtx) throw new Error("Missing tenant context");
+          return getCustomerSegments(context.rt, context.tenantCtx, input);
+        }),
+      presets: {
+        create: os.admin.segments.presets.create
+          .use(requireAdmin)
+          .use(requirePermission("customers.write"))
+          .handler(({ context }) => {
+            if (!context.tenantCtx) throw new Error("Missing tenant context");
+            return createPresetSegments(context.rt, context.tenantCtx);
+          }),
+      },
     },
 
     // --- M5 Discounts Admin ---

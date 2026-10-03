@@ -418,6 +418,13 @@ export async function handleCustomerRefreshMetricsJob(
   log.info({ tenantId, customerId, ordersCount: res.ordersCount, totalSpent: res.totalSpent }, "Customer metrics refreshed");
 }
 
+// Refresh cached segment member counts (Customers Segments PLAN §4); scheduled every 6 hours.
+export async function handleSegmentRefreshCountsJob(db: Db, log: Logger, data: { tenantId?: string }): Promise<void> {
+  const { refreshAllSegmentCounts } = await import("./segments/service.ts");
+  const res = await refreshAllSegmentCounts(db, data.tenantId);
+  log.info({ processed: res.processed, tenantId: data.tenantId ?? "all" }, "segments.refresh_counts processed");
+}
+
 export async function startJobs(opts: {
   databaseUrl: string;
   log: Logger;
@@ -760,6 +767,19 @@ export async function startJobs(opts: {
     },
   );
 
+  // Handle segments.refresh_counts (Customers Segments PLAN §4): recurring every 6 hours.
+  await boss.work<{ tenantId?: string }>(QUEUE_NAMES.SEGMENTS_REFRESH_COUNTS, { localConcurrency: 1 }, async (batch) => {
+    for (const job of batch) {
+      try {
+        await handleSegmentRefreshCountsJob(db, opts.log, job.data ?? {});
+        opts.log.info({ job_id: job.id }, "segments.refresh_counts dispatched");
+      } catch (err) {
+        opts.log.error({ err, job_id: job.id }, "segments.refresh_counts failed");
+        throw err;
+      }
+    }
+  });
+
   // Register recurring schedules and proof-of-life sweeps on boot (PLAN §5.10, §11.3)
   try {
     await boss.schedule(QUEUE_NAMES.RESERVATION_EXPIRY, "* * * * *", {});
@@ -768,6 +788,7 @@ export async function startJobs(opts: {
     await boss.schedule(QUEUE_NAMES.SUBSCRIPTION_TRIAL_EXPIRY_SWEEP, "0 * * * *", {});
     await boss.schedule(QUEUE_NAMES.ORDER_PREORDER_REMINDER_SWEEP, "0 6 * * *", {});
     await boss.schedule(QUEUE_NAMES.ORDER_RETURN_PHOTO_CLEANUP, "0 3 * * *", {});
+    await boss.schedule(QUEUE_NAMES.SEGMENTS_REFRESH_COUNTS, "0 */6 * * *", {});
     opts.log.info("Registered recurring cron: reservation.expiry, idempotency.cleanup, cart.recovery_sweep, subscription.trial_expiry_sweep, preorder_reminder_sweep, return_photo_cleanup");
   } catch (err) {
     opts.log.warn({ err }, "Could not register recurring cron schedules with pg-boss");

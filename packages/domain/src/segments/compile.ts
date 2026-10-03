@@ -117,7 +117,8 @@ function conditionSql(
     // Location — the default address.
     case "state": {
       if (c.op === "in") {
-        return defaultAddressExists(tenantId, sql`a.state_code = ANY(${v})`);
+        const list = (v as string[]).map((code) => sql`${code}`);
+        return defaultAddressExists(tenantId, sql`a.state_code IN (${sql.join(list, sql`, `)})`);
       }
       return c.op === "is"
         ? defaultAddressExists(tenantId, sql`a.state_code = ${v}`)
@@ -132,14 +133,14 @@ function conditionSql(
     case "bought_product": {
       const exists = customerOrderExists(
         tenantId,
-        sql`AND EXISTS (SELECT 1 FROM ${schema.orderItems} oi JOIN ${schema.variants} var ON var.tenant_id = ${tenantId} AND var.id = oi.variant_id WHERE oi.tenant_id = ${tenantId} AND oi.order_id = o.id AND var.product_id = ${v})`,
+        sql`EXISTS (SELECT 1 FROM ${schema.orderItems} oi JOIN ${schema.variants} var ON var.tenant_id = ${tenantId} AND var.id = oi.variant_id WHERE oi.tenant_id = ${tenantId} AND oi.order_id = o.id AND var.product_id = ${v})`,
       );
       return c.op === "has" ? exists : sql`NOT ${exists}`;
     }
     case "bought_collection": {
       const exists = customerOrderExists(
         tenantId,
-        sql`AND EXISTS (
+        sql`EXISTS (
           SELECT 1 FROM ${schema.orderItems} oi
           JOIN ${schema.variants} var ON var.tenant_id = ${tenantId} AND var.id = oi.variant_id
           JOIN ${schema.collectionProducts} cp ON cp.tenant_id = ${tenantId} AND cp.product_id = var.product_id
