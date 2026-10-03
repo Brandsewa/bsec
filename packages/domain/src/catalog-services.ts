@@ -250,35 +250,36 @@ export async function listProducts(
 }
 
 /**
- * Get product detail by ID including options, variants, and media.
+ * Internal loader for full product detail after a transaction commit.
+ * Used internally by getProduct (which asserts products.read) and by createProduct / updateProduct
+ * so actors with write-only permissions (products.write) do not get Forbidden on post-commit read-backs.
  */
-export async function getProduct(
+export async function loadProductDetailInternal(
   rt: Runtime,
-  ctx: TenantContext,
-  input: { id: string },
+  tenantId: string,
+  productId: string,
 ) {
-  assertPermission(ctx, "products.read");
   const db = rt._db.db;
 
-  return withTenant(db, ctx.tenantId, async (tx) => {
+  return withTenant(db, tenantId, async (tx) => {
     const [p] = await tx
       .select()
       .from(schema.products)
-      .where(eq(schema.products.id, input.id));
+      .where(eq(schema.products.id, productId));
 
     if (!p) {
-      throw new Error(`Product not found: "${input.id}"`);
+      throw new Error(`Product not found: "${productId}"`);
     }
 
     const options = await tx
       .select()
       .from(schema.productOptions)
-      .where(eq(schema.productOptions.productId, input.id));
+      .where(eq(schema.productOptions.productId, productId));
 
     const variants = await tx
       .select()
       .from(schema.variants)
-      .where(eq(schema.variants.productId, input.id));
+      .where(eq(schema.variants.productId, productId));
 
     const mediaRows = await tx
       .select({
@@ -290,7 +291,7 @@ export async function getProduct(
       })
       .from(schema.productMedia)
       .innerJoin(schema.media, eq(schema.media.id, schema.productMedia.mediaId))
-      .where(eq(schema.productMedia.productId, input.id))
+      .where(eq(schema.productMedia.productId, productId))
       .orderBy(schema.productMedia.position);
 
     const prodCategories = await tx
@@ -303,8 +304,8 @@ export async function getProduct(
       .innerJoin(schema.categories, eq(schema.categories.id, schema.productCategories.categoryId))
       .where(
         and(
-          eq(schema.productCategories.tenantId, ctx.tenantId),
-          eq(schema.productCategories.productId, input.id),
+          eq(schema.productCategories.tenantId, tenantId),
+          eq(schema.productCategories.productId, productId),
         ),
       );
 
@@ -316,8 +317,8 @@ export async function getProduct(
       .from(schema.collectionProducts)
       .where(
         and(
-          eq(schema.collectionProducts.tenantId, ctx.tenantId),
-          eq(schema.collectionProducts.productId, input.id),
+          eq(schema.collectionProducts.tenantId, tenantId),
+          eq(schema.collectionProducts.productId, productId),
         ),
       );
     const collectionIds = prodCollections.map((c) => c.collectionId);
@@ -387,6 +388,18 @@ export async function getProduct(
       })),
     };
   });
+}
+
+/**
+ * Get product detail by ID including options, variants, and media.
+ */
+export async function getProduct(
+  rt: Runtime,
+  ctx: TenantContext,
+  input: { id: string },
+) {
+  assertPermission(ctx, "products.read");
+  return loadProductDetailInternal(rt, ctx.tenantId, input.id);
 }
 
 /**
@@ -543,7 +556,7 @@ export async function createProduct(
 
     return product.id;
   });
-  return getProduct(rt, ctx, { id: createdId });
+  return loadProductDetailInternal(rt, ctx.tenantId, createdId);
 }
 
 /**
@@ -557,7 +570,7 @@ export async function updateProduct(
   assertPermission(ctx, "products.write");
   const db = rt._db.db;
 
-  const updatedId = await withTenant(db, ctx.tenantId, async (tx) => {
+  const result = await withTenant(db, ctx.tenantId, async (tx) => {
     const [existing] = await tx
       .select()
       .from(schema.products)
@@ -691,17 +704,23 @@ export async function updateProduct(
       .from(schema.collectionProducts)
       .where(eq(schema.collectionProducts.productId, row.id));
 
-    await invalidateCache(rt, ctx, {
-      type: "product_updated",
-      productId: row.id,
+    return {
+      id: row.id,
       categoryIds: catRows.map((c) => c.categoryId),
       collectionIds: colRows.map((c) => c.collectionId),
       isFeatured: row.isFeatured,
-    });
-
-    return row.id;
+    };
   });
-  return getProduct(rt, ctx, { id: updatedId });
+
+  await invalidateCache(rt, ctx, {
+    type: "product_updated",
+    productId: result.id,
+    categoryIds: result.categoryIds,
+    collectionIds: result.collectionIds,
+    isFeatured: result.isFeatured,
+  });
+
+  return loadProductDetailInternal(rt, ctx.tenantId, result.id);
 }
 
 /**
@@ -716,7 +735,8 @@ export async function deleteProduct(
   const db = rt._db.db;
 
   return withTenant(db, ctx.tenantId, async (tx) => {
-    await tx.delete(schema.products).where(eq(schema.products.id, input.id));
+    const [row] = await tx.delete(schema.products).where(eq(schema.products.id, input.id)).returning();
+    if (!row) throw new Error(`Product not found: "${input.id}"`);
     return { success: true };
   });
 }
@@ -732,7 +752,7 @@ export async function updateVariant(
   assertPermission(ctx, "products.write");
   const db = rt._db.db;
 
-  return withTenant(db, ctx.tenantId, async (tx) => {
+  const result = await withTenant(db, ctx.tenantId, async (tx) => {
     const updateValues: Record<string, unknown> = {
       updatedAt: new Date(),
     };
@@ -775,43 +795,51 @@ export async function updateVariant(
       input.price === undefined &&
       input.compareAtPrice === undefined;
 
-    if (isImageOnly) {
-      await invalidateCache(rt, ctx, {
-        type: "product_image_updated",
-        productId: row.productId,
-      });
-    } else {
-      await invalidateCache(rt, ctx, {
-        type: "product_price_changed",
-        productId: row.productId,
-        categoryIds: catRows.map((c) => c.categoryId),
-        collectionIds: colRows.map((c) => c.collectionId),
-      });
-    }
-
     return {
-      id: row.id,
-      productId: row.productId,
-      sku: row.sku,
-      barcode: row.barcode,
-      title: row.title,
-      optionValues: row.optionValues as Record<string, string> | null,
-      price: Number(row.price),
-      compareAtPrice: row.compareAtPrice ? Number(row.compareAtPrice) : undefined,
-      costPrice: row.costPrice ? Number(row.costPrice) : undefined,
-      weightGrams: row.weightGrams,
-      dimensions: row.dimensions as Record<string, unknown> | null,
-      trackInventory: row.trackInventory,
-      allowBackorder: row.allowBackorder,
-      preorderEnabled: row.preorderEnabled,
-      preorderShipsOn: row.preorderShipsOn ? String(row.preorderShipsOn).slice(0, 10) : null,
-      preorderMessage: row.preorderMessage,
-      position: row.position,
-      imageMediaId: row.imageMediaId,
-      createdAt: row.createdAt.toISOString(),
-      updatedAt: row.updatedAt.toISOString(),
+      row,
+      isImageOnly,
+      categoryIds: catRows.map((c) => c.categoryId),
+      collectionIds: colRows.map((c) => c.collectionId),
     };
   });
+
+  if (result.isImageOnly) {
+    await invalidateCache(rt, ctx, {
+      type: "product_image_updated",
+      productId: result.row.productId,
+    });
+  } else {
+    await invalidateCache(rt, ctx, {
+      type: "product_price_changed",
+      productId: result.row.productId,
+      categoryIds: result.categoryIds,
+      collectionIds: result.collectionIds,
+    });
+  }
+
+  const row = result.row;
+  return {
+    id: row.id,
+    productId: row.productId,
+    sku: row.sku,
+    barcode: row.barcode,
+    title: row.title,
+    optionValues: row.optionValues as Record<string, string> | null,
+    price: Number(row.price),
+    compareAtPrice: row.compareAtPrice ? Number(row.compareAtPrice) : undefined,
+    costPrice: row.costPrice ? Number(row.costPrice) : undefined,
+    weightGrams: row.weightGrams,
+    dimensions: row.dimensions as Record<string, unknown> | null,
+    trackInventory: row.trackInventory,
+    allowBackorder: row.allowBackorder,
+    preorderEnabled: row.preorderEnabled,
+    preorderShipsOn: row.preorderShipsOn ? String(row.preorderShipsOn).slice(0, 10) : null,
+    preorderMessage: row.preorderMessage,
+    position: row.position,
+    imageMediaId: row.imageMediaId,
+    createdAt: row.createdAt.toISOString(),
+    updatedAt: row.updatedAt.toISOString(),
+  };
 }
 
 /**
@@ -825,7 +853,7 @@ export async function adjustInventory(
   assertPermission(ctx, "products.write");
   const db = rt._db.db;
 
-  return withTenant(db, ctx.tenantId, async (tx) => {
+  const result = await withTenant(db, ctx.tenantId, async (tx) => {
     // Find or create inventory level
     const [existing] = await tx
       .select()
@@ -869,30 +897,44 @@ export async function adjustInventory(
     });
 
     const isFlip = (currentOnHand === 0 && newOnHand > 0) || (currentOnHand > 0 && newOnHand === 0);
+    let flipProductId: string | null = null;
+    let flipCollectionIds: string[] = [];
     if (isFlip) {
       const [v] = await tx
         .select({ productId: schema.variants.productId })
         .from(schema.variants)
         .where(eq(schema.variants.id, input.variantId));
       if (v) {
+        flipProductId = v.productId;
         const colRows = await tx
           .select({ collectionId: schema.collectionProducts.collectionId })
           .from(schema.collectionProducts)
           .where(eq(schema.collectionProducts.productId, v.productId));
-
-        await invalidateCache(rt, ctx, {
-          type: "inventory_out_of_stock_flip",
-          productId: v.productId,
-          collectionIds: colRows.map((c) => c.collectionId),
-        });
+        flipCollectionIds = colRows.map((c) => c.collectionId);
       }
     }
 
     return {
       success: true,
       newOnHand,
+      isFlip,
+      flipProductId,
+      flipCollectionIds,
     };
   });
+
+  if (result.isFlip && result.flipProductId) {
+    await invalidateCache(rt, ctx, {
+      type: "inventory_out_of_stock_flip",
+      productId: result.flipProductId,
+      collectionIds: result.flipCollectionIds,
+    });
+  }
+
+  return {
+    success: true,
+    newOnHand: result.newOnHand,
+  };
 }
 
 /**
@@ -1155,11 +1197,14 @@ export async function listCategories(rt: Runtime, ctx: TenantContext, query?: Li
   });
 }
 
-export async function getCategory(rt: Runtime, ctx: TenantContext, input: { id: string }) {
-  assertPermission(ctx, "products.read");
+export async function loadCategoryDetailInternal(
+  rt: Runtime,
+  tenantId: string,
+  categoryId: string,
+) {
   const db = rt._db.db;
 
-  return withTenant(db, ctx.tenantId, async (tx) => {
+  return withTenant(db, tenantId, async (tx) => {
     const [row] = await tx
       .select({
         id: schema.categories.id,
@@ -1179,10 +1224,10 @@ export async function getCategory(rt: Runtime, ctx: TenantContext, input: { id: 
       })
       .from(schema.categories)
       .leftJoin(schema.media, eq(schema.media.id, schema.categories.imageMediaId))
-      .where(eq(schema.categories.id, input.id))
+      .where(eq(schema.categories.id, categoryId))
       .limit(1);
 
-    if (!row) throw new Error(`Category not found: "${input.id}"`);
+    if (!row) throw new Error(`Category not found: "${categoryId}"`);
 
     const [prodCount, childCount] = await Promise.all([
       tx
@@ -1214,6 +1259,11 @@ export async function getCategory(rt: Runtime, ctx: TenantContext, input: { id: 
       updatedAt: row.updatedAt.toISOString(),
     };
   });
+}
+
+export async function getCategory(rt: Runtime, ctx: TenantContext, input: { id: string }) {
+  assertPermission(ctx, "products.read");
+  return loadCategoryDetailInternal(rt, ctx.tenantId, input.id);
 }
 
 /**
@@ -1266,7 +1316,7 @@ export async function createCategory(
   assertPermission(ctx, "products.write");
   const db = rt._db.db;
 
-  return withTenant(db, ctx.tenantId, async (tx) => {
+  const savedId = await withTenant(db, ctx.tenantId, async (tx) => {
     const slug =
       input.slug?.trim() ||
       input.name
@@ -1310,30 +1360,15 @@ export async function createCategory(
       },
     });
 
-    await invalidateCache(rt, ctx, {
-      type: "category_updated",
-      categoryId: row.id,
-    });
-
-    return {
-      id: row.id,
-      parentId: row.parentId,
-      name: row.name,
-      slug: row.slug,
-      description: row.description,
-      imageMediaId: row.imageMediaId,
-      imageUrl: null,
-      position: row.position,
-      path: row.path,
-      isActive: row.isActive,
-      isFeatured: row.isFeatured,
-      seo: row.seo as { title?: string | null; description?: string | null } | null,
-      productCount: 0,
-      childrenCount: 0,
-      createdAt: row.createdAt.toISOString(),
-      updatedAt: row.updatedAt.toISOString(),
-    };
+    return row.id;
   });
+
+  await invalidateCache(rt, ctx, {
+    type: "category_updated",
+    categoryId: savedId,
+  });
+
+  return loadCategoryDetailInternal(rt, ctx.tenantId, savedId);
 }
 
 export interface UpdateCategoryInput {
@@ -1404,21 +1439,22 @@ export async function updateCategory(
       diff: updateValues,
     });
 
-    await invalidateCache(rt, ctx, {
-      type: "category_updated",
-      categoryId: row.id,
-    });
-
     return row.id;
   });
-  return getCategory(rt, ctx, { id: savedId });
+
+  await invalidateCache(rt, ctx, {
+    type: "category_updated",
+    categoryId: savedId,
+  });
+
+  return loadCategoryDetailInternal(rt, ctx.tenantId, savedId);
 }
 
 export async function deleteCategory(rt: Runtime, ctx: TenantContext, input: { id: string }) {
   assertPermission(ctx, "products.write");
   const db = rt._db.db;
 
-  return withTenant(db, ctx.tenantId, async (tx) => {
+  const deletedId = await withTenant(db, ctx.tenantId, async (tx) => {
     // 1. Guard against child categories
     const [hasChildren] = await tx
       .select({ count: sql<number>`count(*)` })
@@ -1456,13 +1492,15 @@ export async function deleteCategory(rt: Runtime, ctx: TenantContext, input: { i
       diff: { name: row.name, slug: row.slug },
     });
 
-    await invalidateCache(rt, ctx, {
-      type: "category_updated",
-      categoryId: row.id,
-    });
-
-    return { success: true };
+    return row.id;
   });
+
+  await invalidateCache(rt, ctx, {
+    type: "category_updated",
+    categoryId: deletedId,
+  });
+
+  return { success: true };
 }
 
 // --- Collections ---
@@ -1585,11 +1623,14 @@ export async function listCollections(
   });
 }
 
-export async function getCollection(rt: Runtime, ctx: TenantContext, input: { id: string }) {
-  assertPermission(ctx, "products.read");
+export async function loadCollectionDetailInternal(
+  rt: Runtime,
+  tenantId: string,
+  collectionId: string,
+) {
   const db = rt._db.db;
 
-  return withTenant(db, ctx.tenantId, async (tx) => {
+  return withTenant(db, tenantId, async (tx) => {
     const [row] = await tx
       .select({
         id: schema.collections.id,
@@ -1609,10 +1650,10 @@ export async function getCollection(rt: Runtime, ctx: TenantContext, input: { id
       })
       .from(schema.collections)
       .leftJoin(schema.media, eq(schema.media.id, schema.collections.imageMediaId))
-      .where(eq(schema.collections.id, input.id))
+      .where(eq(schema.collections.id, collectionId))
       .limit(1);
 
-    if (!row) throw new Error(`Collection not found: "${input.id}"`);
+    if (!row) throw new Error(`Collection not found: "${collectionId}"`);
 
     // Fetch manual assigned products in order
     const colProducts = await tx
@@ -1631,7 +1672,7 @@ export async function getCollection(rt: Runtime, ctx: TenantContext, input: { id
           eq(schema.products.id, schema.collectionProducts.productId),
         ),
       )
-      .where(eq(schema.collectionProducts.collectionId, input.id))
+      .where(eq(schema.collectionProducts.collectionId, collectionId))
       .orderBy(asc(schema.collectionProducts.position));
 
     return {
@@ -1663,6 +1704,11 @@ export async function getCollection(rt: Runtime, ctx: TenantContext, input: { id
   });
 }
 
+export async function getCollection(rt: Runtime, ctx: TenantContext, input: { id: string }) {
+  assertPermission(ctx, "products.read");
+  return loadCollectionDetailInternal(rt, ctx.tenantId, input.id);
+}
+
 export interface CreateCollectionInput {
   title: string;
   slug?: string | undefined;
@@ -1686,7 +1732,6 @@ export async function createCollection(
   assertPermission(ctx, "products.write");
   const db = rt._db.db;
 
-  // the getter opens its own transaction, so it runs after this one commits
   const savedId = await withTenant(db, ctx.tenantId, async (tx) => {
     const slug =
       input.slug?.trim() ||
@@ -1745,14 +1790,15 @@ export async function createCollection(
       },
     });
 
-    await invalidateCache(rt, ctx, {
-      type: "collection_updated",
-      collectionId: row.id,
-    });
-
     return row.id;
   });
-  return getCollection(rt, ctx, { id: savedId });
+
+  await invalidateCache(rt, ctx, {
+    type: "collection_updated",
+    collectionId: savedId,
+  });
+
+  return loadCollectionDetailInternal(rt, ctx.tenantId, savedId);
 }
 
 export interface UpdateCollectionInput {
@@ -1778,7 +1824,6 @@ export async function updateCollection(
   assertPermission(ctx, "products.write");
   const db = rt._db.db;
 
-  // the getter opens its own transaction, so it runs after this one commits
   const savedId = await withTenant(db, ctx.tenantId, async (tx) => {
     const updateValues: Record<string, unknown> = { updatedAt: new Date() };
     if (input.title !== undefined) updateValues.title = input.title.trim();
@@ -1824,21 +1869,22 @@ export async function updateCollection(
       diff: updateValues,
     });
 
-    await invalidateCache(rt, ctx, {
-      type: "collection_updated",
-      collectionId: row.id,
-    });
-
     return row.id;
   });
-  return getCollection(rt, ctx, { id: savedId });
+
+  await invalidateCache(rt, ctx, {
+    type: "collection_updated",
+    collectionId: savedId,
+  });
+
+  return loadCollectionDetailInternal(rt, ctx.tenantId, savedId);
 }
 
 export async function deleteCollection(rt: Runtime, ctx: TenantContext, input: { id: string }) {
   assertPermission(ctx, "products.write");
   const db = rt._db.db;
 
-  return withTenant(db, ctx.tenantId, async (tx) => {
+  const deletedId = await withTenant(db, ctx.tenantId, async (tx) => {
     const [row] = await tx
       .delete(schema.collections)
       .where(eq(schema.collections.id, input.id))
@@ -1856,13 +1902,15 @@ export async function deleteCollection(rt: Runtime, ctx: TenantContext, input: {
       diff: { title: row.title, slug: row.slug },
     });
 
-    await invalidateCache(rt, ctx, {
-      type: "collection_updated",
-      collectionId: row.id,
-    });
-
-    return { success: true };
+    return row.id;
   });
+
+  await invalidateCache(rt, ctx, {
+    type: "collection_updated",
+    collectionId: deletedId,
+  });
+
+  return { success: true };
 }
 
 // --- Brands ---
@@ -1941,11 +1989,14 @@ export async function listBrands(rt: Runtime, ctx: TenantContext, query?: { sear
   });
 }
 
-export async function getBrand(rt: Runtime, ctx: TenantContext, input: { id: string }) {
-  assertPermission(ctx, "products.read");
+export async function loadBrandDetailInternal(
+  rt: Runtime,
+  tenantId: string,
+  brandId: string,
+) {
   const db = rt._db.db;
 
-  return withTenant(db, ctx.tenantId, async (tx) => {
+  return withTenant(db, tenantId, async (tx) => {
     const [row] = await tx
       .select({
         id: schema.brands.id,
@@ -1958,10 +2009,10 @@ export async function getBrand(rt: Runtime, ctx: TenantContext, input: { id: str
       })
       .from(schema.brands)
       .leftJoin(schema.media, eq(schema.media.id, schema.brands.logoMediaId))
-      .where(eq(schema.brands.id, input.id))
+      .where(eq(schema.brands.id, brandId))
       .limit(1);
 
-    if (!row) throw new Error(`Brand not found: "${input.id}"`);
+    if (!row) throw new Error(`Brand not found: "${brandId}"`);
 
     const [prodCount] = await tx
       .select({ count: sql<number>`count(*)` })
@@ -1981,6 +2032,11 @@ export async function getBrand(rt: Runtime, ctx: TenantContext, input: { id: str
   });
 }
 
+export async function getBrand(rt: Runtime, ctx: TenantContext, input: { id: string }) {
+  assertPermission(ctx, "products.read");
+  return loadBrandDetailInternal(rt, ctx.tenantId, input.id);
+}
+
 export async function createBrand(
   rt: Runtime,
   ctx: TenantContext,
@@ -1989,7 +2045,6 @@ export async function createBrand(
   assertPermission(ctx, "products.write");
   const db = rt._db.db;
 
-  // the getter opens its own transaction, so it runs after this one commits
   const savedId = await withTenant(db, ctx.tenantId, async (tx) => {
     const slug =
       input.slug?.trim() ||
@@ -2022,7 +2077,7 @@ export async function createBrand(
 
     return row.id;
   });
-  return getBrand(rt, ctx, { id: savedId });
+  return loadBrandDetailInternal(rt, ctx.tenantId, savedId);
 }
 
 export async function updateBrand(
@@ -2033,7 +2088,6 @@ export async function updateBrand(
   assertPermission(ctx, "products.write");
   const db = rt._db.db;
 
-  // the getter opens its own transaction, so it runs after this one commits
   const savedId = await withTenant(db, ctx.tenantId, async (tx) => {
     const updateValues: Record<string, unknown> = { updatedAt: new Date() };
     if (input.name !== undefined) updateValues.name = input.name.trim();
@@ -2060,7 +2114,7 @@ export async function updateBrand(
 
     return row.id;
   });
-  return getBrand(rt, ctx, { id: savedId });
+  return loadBrandDetailInternal(rt, ctx.tenantId, savedId);
 }
 
 export async function deleteBrand(rt: Runtime, ctx: TenantContext, input: { id: string }) {
@@ -2074,6 +2128,18 @@ export async function deleteBrand(rt: Runtime, ctx: TenantContext, input: { id: 
       .where(eq(schema.products.brandId, input.id));
 
     const affected = Number(prodCount?.count ?? 0);
+
+    if (affected > 0) {
+      await tx
+        .update(schema.products)
+        .set({ brandId: null, updatedAt: new Date() })
+        .where(
+          and(
+            eq(schema.products.tenantId, ctx.tenantId),
+            eq(schema.products.brandId, input.id),
+          ),
+        );
+    }
 
     const [row] = await tx.delete(schema.brands).where(eq(schema.brands.id, input.id)).returning();
     if (!row) throw new Error(`Brand not found: "${input.id}"`);
@@ -2154,18 +2220,21 @@ export async function listLocations(rt: Runtime, ctx: TenantContext, query?: Lis
   });
 }
 
-export async function getLocation(rt: Runtime, ctx: TenantContext, input: { id: string }) {
-  assertPermission(ctx, "products.read");
+export async function loadLocationDetailInternal(
+  rt: Runtime,
+  tenantId: string,
+  locationId: string,
+) {
   const db = rt._db.db;
 
-  return withTenant(db, ctx.tenantId, async (tx) => {
+  return withTenant(db, tenantId, async (tx) => {
     const [row] = await tx
       .select()
       .from(schema.locations)
-      .where(eq(schema.locations.id, input.id))
+      .where(eq(schema.locations.id, locationId))
       .limit(1);
 
-    if (!row) throw new Error(`Location not found: "${input.id}"`);
+    if (!row) throw new Error(`Location not found: "${locationId}"`);
 
     const [stockCount] = await tx
       .select({
@@ -2186,6 +2255,11 @@ export async function getLocation(rt: Runtime, ctx: TenantContext, input: { id: 
       updatedAt: row.updatedAt.toISOString(),
     };
   });
+}
+
+export async function getLocation(rt: Runtime, ctx: TenantContext, input: { id: string }) {
+  assertPermission(ctx, "products.read");
+  return loadLocationDetailInternal(rt, ctx.tenantId, input.id);
 }
 
 export interface CreateLocationInput {
@@ -2210,7 +2284,6 @@ export async function createLocation(
   assertPermission(ctx, "products.write");
   const db = rt._db.db;
 
-  // the getter opens its own transaction, so it runs after this one commits
   const savedId = await withTenant(db, ctx.tenantId, async (tx) => {
     // If setting as default, clear existing default in same transaction
     if (input.isDefault) {
@@ -2246,7 +2319,7 @@ export async function createLocation(
 
     return row.id;
   });
-  return getLocation(rt, ctx, { id: savedId });
+  return loadLocationDetailInternal(rt, ctx.tenantId, savedId);
 }
 
 export interface UpdateLocationInput {
@@ -2272,7 +2345,6 @@ export async function updateLocation(
   assertPermission(ctx, "products.write");
   const db = rt._db.db;
 
-  // the getter opens its own transaction, so it runs after this one commits
   const savedId = await withTenant(db, ctx.tenantId, async (tx) => {
     const [existing] = await tx
       .select()
@@ -2334,7 +2406,7 @@ export async function updateLocation(
 
     return row.id;
   });
-  return getLocation(rt, ctx, { id: savedId });
+  return loadLocationDetailInternal(rt, ctx.tenantId, savedId);
 }
 
 export async function deleteLocation(rt: Runtime, ctx: TenantContext, input: { id: string }) {

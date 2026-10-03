@@ -222,7 +222,7 @@ export async function submitProductReview(
     throw new Error("Bad Request: Rating must be between 1 and 5.");
   }
 
-  return withTenant(rt._db.db, tenantId, async (tx) => {
+  const result = await withTenant(rt._db.db, tenantId, async (tx) => {
     // 3. Verify Product exists
     const [product] = await tx
       .select({ id: schema.products.id })
@@ -339,7 +339,6 @@ export async function submitProductReview(
     // 8. Recompute rating aggregate if published
     if (status === "published") {
       await recomputeProductRatingAggregate(tx, tenantId, input.productId);
-      await invalidateCache(rt, tenantId, { type: "review_updated", productId: input.productId });
     }
 
     return {
@@ -351,6 +350,12 @@ export async function submitProductReview(
           : "Thank you! Your review has been submitted for moderation.",
     };
   });
+
+  if (result.status === "published") {
+    await invalidateCache(rt, tenantId, { type: "review_updated", productId: input.productId });
+  }
+
+  return result;
 }
 
 /**
