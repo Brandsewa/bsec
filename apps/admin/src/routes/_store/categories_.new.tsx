@@ -162,7 +162,7 @@ export function CreateCategoryPage() {
       <PageHeader
         title="Add category"
         description="Create a category to group related products."
-        actions={
+        aside={
           <div className="flex items-center gap-2">
             <Button render={<Link to="/categories" />} variant="outline" size="sm">
               <ArrowLeft className="mr-1.5 size-3.5" aria-hidden />
@@ -235,7 +235,7 @@ export function CreateCategoryPage() {
               <SimpleSelect
                 value={parentId}
                 options={parentOptions}
-                onValueChange={(val) => setParentId(val)}
+                onChange={(val) => setParentId(val)}
               />
               <p className="text-xs text-muted-foreground">
                 Category hierarchy allows up to 3 levels deep.

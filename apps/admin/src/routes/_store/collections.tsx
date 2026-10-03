@@ -106,16 +106,18 @@ export function CollectionsPage() {
   const handleSearchSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     void navigate({
-      search: (prev) => ({ ...prev, q: queryText.trim() || undefined }),
+      to: ".",
+      replace: true,
+      search: ((prev: any) => ({ ...prev, q: queryText.trim() || undefined })) as never,
     });
   };
 
   return (
-    <PageContainer size="wide">
+    <PageContainer size="default">
       <PageHeader
         title="Collections"
         description="Group products manually or with automated condition rules to build merchandising pages."
-        actions={
+        aside={
           <Button render={<Link to="/collections/new" />} size="default">
             <Plus className="mr-1.5 size-4" aria-hidden />
             Create collection
@@ -136,12 +138,12 @@ export function CollectionsPage() {
           </>
         ) : (
           <>
-            <MetricCard title="Total Collections" value={statsQuery.data?.total ?? 0} />
-            <MetricCard title="Active" value={statsQuery.data?.active ?? 0} />
-            <MetricCard title="Drafts" value={statsQuery.data?.draft ?? 0} />
-            <MetricCard title="Manual" value={statsQuery.data?.manual ?? 0} />
-            <MetricCard title="Automated" value={statsQuery.data?.automated ?? 0} />
-            <MetricCard title="Indexed by Google" value={statsQuery.data?.indexable ?? 0} />
+            <MetricCard label="Total Collections" value={statsQuery.data?.total ?? 0} />
+            <MetricCard label="Active" value={statsQuery.data?.active ?? 0} />
+            <MetricCard label="Drafts" value={statsQuery.data?.draft ?? 0} />
+            <MetricCard label="Manual" value={statsQuery.data?.manual ?? 0} />
+            <MetricCard label="Automated" value={statsQuery.data?.automated ?? 0} />
+            <MetricCard label="Indexed by Google" value={statsQuery.data?.indexable ?? 0} />
           </>
         )}
       </div>
@@ -149,11 +151,13 @@ export function CollectionsPage() {
       {/* Tabs & Search Toolbar */}
       <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
         <ScrollTabs
-          items={STATUS_TABS}
+          tabs={STATUS_TABS}
           value={status}
-          onValueChange={(val) => {
+          onChange={(val) => {
             void navigate({
-              search: (prev) => ({ ...prev, status: val as CollectionStatusFilter }),
+              to: ".",
+              replace: true,
+              search: ((prev: any) => ({ ...prev, status: val as CollectionStatusFilter })) as never,
             });
           }}
         />
@@ -175,7 +179,11 @@ export function CollectionsPage() {
               size="sm"
               onClick={() => {
                 setQueryText("");
-                void navigate({ search: (prev) => ({ ...prev, q: undefined }) });
+                void navigate({
+                  to: ".",
+                  replace: true,
+                  search: ((prev: any) => ({ ...prev, q: undefined })) as never,
+                });
               }}
             >
               Clear

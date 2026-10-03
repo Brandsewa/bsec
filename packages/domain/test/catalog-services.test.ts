@@ -16,6 +16,13 @@ import {
   listCollections,
   createCollection,
   updateCollection,
+  listBrands,
+  createBrand,
+  deleteBrand,
+  listLocations,
+  createLocation,
+  updateLocation,
+  deleteLocation,
 } from "../src/index.ts";
 
 describe("M2 Domain Services", () => {
@@ -479,6 +486,63 @@ describe("M2 Domain Services", () => {
       expect(insertedValues).toBeDefined();
       expect(insertedValues!["indexable"]).toBe(false);
       expect(res.indexable).toBe(false);
+    });
+  });
+
+  describe("Brand Services", () => {
+    it("throws Forbidden if products.read is missing on listBrands", async () => {
+      const rt = createMockRuntime({} as Db);
+      await expect(listBrands(rt, restrictedCtx)).rejects.toThrow(/Forbidden/);
+    });
+
+    it("throws Forbidden if products.write is missing on createBrand", async () => {
+      const rt = createMockRuntime({} as Db);
+      await expect(createBrand(rt, restrictedCtx, { name: "Nike", slug: "nike" })).rejects.toThrow(/Forbidden/);
+    });
+  });
+
+  describe("Location Services", () => {
+    it("throws Forbidden if products.read is missing on listLocations", async () => {
+      const rt = createMockRuntime({} as Db);
+      await expect(listLocations(rt, restrictedCtx)).rejects.toThrow(/Forbidden/);
+    });
+
+    it("throws Forbidden if products.write is missing on createLocation", async () => {
+      const rt = createMockRuntime({} as Db);
+      await expect(
+        createLocation(rt, restrictedCtx, {
+          name: "Main",
+          address: { line1: "123 St", city: "Mumbai", stateCode: "MH", countryCode: "IN" },
+          pincode: "400001",
+        })
+      ).rejects.toThrow(/Forbidden/);
+    });
+
+    it("prevents deleting default location", async () => {
+      const mockDb = {
+        transaction: async (fn: (tx: unknown) => Promise<unknown>) => {
+          return fn({
+            execute: async () => {},
+            select: () => ({
+              from: () => ({
+                where: () => ({
+                  limit: () => [
+                    {
+                      id: "loc-default",
+                      name: "Main Hub",
+                      isDefault: true,
+                      isActive: true,
+                    },
+                  ],
+                }),
+              }),
+            }),
+          });
+        },
+      } as unknown as Db;
+
+      const rt = createMockRuntime(mockDb);
+      await expect(deleteLocation(rt, adminCtx, { id: "loc-default" })).rejects.toThrow(/default location cannot be deleted/);
     });
   });
 });

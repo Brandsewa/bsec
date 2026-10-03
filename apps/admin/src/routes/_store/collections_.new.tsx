@@ -73,7 +73,6 @@ export function CreateCollectionPage() {
 
   const [title, setTitle] = useState("");
   const [slug, setSlug] = useState("");
-  const [description, setDescription] = useState("");
   const [type, setType] = useState<"manual" | "automated">("manual");
   const [match, setMatch] = useState<"all" | "any">("all");
   const [sortOrder, setSortOrder] = useState("manual");
@@ -216,7 +215,6 @@ export function CreateCollectionPage() {
     createMutation.mutate({
       title: title.trim(),
       slug: slug.trim() || undefined,
-      description: description.trim() || undefined,
       imageMediaId: imageMediaId || null,
       type,
       match,
@@ -247,7 +245,7 @@ export function CreateCollectionPage() {
       <PageHeader
         title="Create collection"
         description="Build a curated or dynamic product showcase page."
-        actions={
+        aside={
           <div className="flex items-center gap-2">
             <Button render={<Link to="/collections" />} variant="outline" size="sm">
               <ArrowLeft className="mr-1.5 size-3.5" aria-hidden />
@@ -271,7 +269,7 @@ export function CreateCollectionPage() {
         <Card>
           <CardHeader>
             <CardTitle className="text-base font-semibold">General Information</CardTitle>
-            <CardDescription>Title, handle, and description for this collection.</CardDescription>
+            <CardDescription>Title, handle, and default sorting for this collection.</CardDescription>
           </CardHeader>
           <CardContent className="grid gap-4">
             <div className="grid gap-1.5">
@@ -292,22 +290,11 @@ export function CreateCollectionPage() {
             </div>
 
             <div className="grid gap-1.5">
-              <FieldLabel htmlFor="col-desc">Description</FieldLabel>
-              <Textarea
-                id="col-desc"
-                rows={4}
-                value={description}
-                onChange={(e) => setDescription(e.target.value)}
-                placeholder="Summary description shown on the collection page..."
-              />
-            </div>
-
-            <div className="grid gap-1.5">
               <FieldLabel htmlFor="col-sort">Default sort order</FieldLabel>
               <SimpleSelect
                 value={sortOrder}
                 options={SORT_OPTIONS}
-                onValueChange={(val) => setSortOrder(val)}
+                onChange={(val: string) => setSortOrder(val)}
               />
             </div>
           </CardContent>
@@ -433,14 +420,14 @@ export function CreateCollectionPage() {
                         <SimpleSelect
                           value={rule.field}
                           options={RULE_FIELDS}
-                          onValueChange={(val) => updateRule(idx, { field: val })}
+                          onChange={(val: string) => updateRule(idx, { field: val as any })}
                         />
                       </div>
                       <div className="w-36">
                         <SimpleSelect
                           value={rule.operator}
                           options={RULE_OPERATORS}
-                          onValueChange={(val) => updateRule(idx, { operator: val })}
+                          onChange={(val: string) => updateRule(idx, { operator: val as any })}
                         />
                       </div>
                       {!["is_set", "is_not_set"].includes(rule.operator) && (
@@ -591,7 +578,6 @@ export function CreateCollectionPage() {
         {/* SEO Card with the mandatory "Allow search engines to index this page" switch (off by default) */}
         <SeoCard
           defaultTitle={title}
-          defaultDescription={description}
           pathPrefix="/collections"
           slug={slug}
           onSlugChange={setSlug}

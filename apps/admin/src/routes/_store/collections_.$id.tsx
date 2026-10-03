@@ -84,7 +84,6 @@ export function EditCollectionPage() {
 
   const [title, setTitle] = useState("");
   const [slug, setSlug] = useState("");
-  const [description, setDescription] = useState("");
   const [type, setType] = useState<"manual" | "automated">("manual");
   const [match, setMatch] = useState<"all" | "any">("all");
   const [sortOrder, setSortOrder] = useState("manual");
@@ -126,7 +125,6 @@ export function EditCollectionPage() {
     if (collection) {
       setTitle(collection.title);
       setSlug(collection.slug);
-      setDescription(collection.description ?? "");
       setType(collection.type);
       setMatch(collection.match ?? "all");
       setSortOrder(collection.sortOrder ?? "manual");
@@ -264,7 +262,6 @@ export function EditCollectionPage() {
       id,
       title: title.trim(),
       slug: slug.trim() || undefined,
-      description: description.trim() ? description.trim() : null,
       imageMediaId: imageMediaId || null,
       type,
       match,
@@ -319,7 +316,7 @@ export function EditCollectionPage() {
       <PageHeader
         title={collection.title}
         description={`ID: ${collection.id}`}
-        actions={
+        aside={
           <div className="flex items-center gap-2">
             <Button render={<Link to="/collections" />} variant="outline" size="sm">
               <ArrowLeft className="mr-1.5 size-3.5" aria-hidden />
@@ -367,22 +364,11 @@ export function EditCollectionPage() {
             </div>
 
             <div className="grid gap-1.5">
-              <FieldLabel htmlFor="col-desc">Description</FieldLabel>
-              <Textarea
-                id="col-desc"
-                rows={4}
-                value={description}
-                onChange={(e) => setDescription(e.target.value)}
-                placeholder="Summary description shown on the collection page..."
-              />
-            </div>
-
-            <div className="grid gap-1.5">
               <FieldLabel htmlFor="col-sort">Default sort order</FieldLabel>
               <SimpleSelect
                 value={sortOrder}
                 options={SORT_OPTIONS}
-                onValueChange={(val) => setSortOrder(val)}
+                onChange={(val: string) => setSortOrder(val)}
               />
             </div>
           </CardContent>
@@ -508,14 +494,14 @@ export function EditCollectionPage() {
                         <SimpleSelect
                           value={rule.field}
                           options={RULE_FIELDS}
-                          onValueChange={(val) => updateRule(idx, { field: val })}
+                          onChange={(val: string) => updateRule(idx, { field: val as any })}
                         />
                       </div>
                       <div className="w-36">
                         <SimpleSelect
                           value={rule.operator}
                           options={RULE_OPERATORS}
-                          onValueChange={(val) => updateRule(idx, { operator: val })}
+                          onChange={(val: string) => updateRule(idx, { operator: val as any })}
                         />
                       </div>
                       {!["is_set", "is_not_set"].includes(rule.operator) && (
@@ -666,7 +652,6 @@ export function EditCollectionPage() {
         {/* SEO Card with the "Allow search engines to index this page" switch */}
         <SeoCard
           defaultTitle={title}
-          defaultDescription={description}
           pathPrefix="/collections"
           slug={slug}
           onSlugChange={setSlug}

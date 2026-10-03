@@ -1396,7 +1396,6 @@ export async function listCollections(
         id: schema.collections.id,
         title: schema.collections.title,
         slug: schema.collections.slug,
-        description: schema.collections.description,
         imageMediaId: schema.collections.imageMediaId,
         type: schema.collections.type,
         match: schema.collections.match,
@@ -1431,7 +1430,6 @@ export async function listCollections(
       id: r.id,
       title: r.title,
       slug: r.slug,
-      description: r.description,
       imageMediaId: r.imageMediaId,
       imageUrl: r.imageKey ? publicMediaUrl(r.imageKey) : null,
       type: r.type as "manual" | "automated",
@@ -1457,7 +1455,6 @@ export async function getCollection(rt: Runtime, ctx: TenantContext, input: { id
         id: schema.collections.id,
         title: schema.collections.title,
         slug: schema.collections.slug,
-        description: schema.collections.description,
         imageMediaId: schema.collections.imageMediaId,
         type: schema.collections.type,
         match: schema.collections.match,
@@ -1501,7 +1498,6 @@ export async function getCollection(rt: Runtime, ctx: TenantContext, input: { id
       id: row.id,
       title: row.title,
       slug: row.slug,
-      description: row.description,
       imageMediaId: row.imageMediaId,
       imageUrl: row.imageKey ? publicMediaUrl(row.imageKey) : null,
       type: row.type as "manual" | "automated",
@@ -1566,7 +1562,6 @@ export async function createCollection(
         tenantId: ctx.tenantId,
         title: input.title.trim(),
         slug,
-        description: input.description?.trim() || null,
         imageMediaId: input.imageMediaId || null,
         type: isAutomated ? "automated" : "manual",
         match: input.match ?? "all",
@@ -1622,7 +1617,6 @@ export interface UpdateCollectionInput {
   id: string;
   title?: string | undefined;
   slug?: string | undefined;
-  description?: string | null | undefined;
   imageMediaId?: string | null | undefined;
   type?: "manual" | "automated" | undefined;
   match?: "all" | "any" | undefined;
@@ -1646,7 +1640,6 @@ export async function updateCollection(
     const updateValues: Record<string, unknown> = { updatedAt: new Date() };
     if (input.title !== undefined) updateValues.title = input.title.trim();
     if (input.slug !== undefined) updateValues.slug = input.slug.trim();
-    if (input.description !== undefined) updateValues.description = input.description ? input.description.trim() : null;
     if (input.imageMediaId !== undefined) updateValues.imageMediaId = input.imageMediaId;
     if (input.type !== undefined) updateValues.type = input.type;
     if (input.match !== undefined) updateValues.match = input.match;
@@ -1729,26 +1722,125 @@ export async function deleteCollection(rt: Runtime, ctx: TenantContext, input: {
 }
 
 // --- Brands ---
-export async function listBrands(rt: Runtime, ctx: TenantContext) {
+export async function getBrandStats(rt: Runtime, ctx: TenantContext) {
   assertPermission(ctx, "products.read");
   const db = rt._db.db;
 
   return withTenant(db, ctx.tenantId, async (tx) => {
-    const rows = await tx.select().from(schema.brands).orderBy(schema.brands.name);
+    const [allBrands, usedBrands] = await Promise.all([
+      tx.select({ id: schema.brands.id }).from(schema.brands),
+      tx
+        .select({ brandId: schema.products.brandId })
+        .from(schema.products)
+        .where(sql`${schema.products.brandId} IS NOT NULL`)
+        .groupBy(schema.products.brandId),
+    ]);
+
+    const total = allBrands.length;
+    const used = usedBrands.length;
+    const unused = Math.max(0, total - used);
+
+    return { total, used, unused };
+  });
+}
+
+export async function listBrands(rt: Runtime, ctx: TenantContext, query?: { search?: string | undefined } | undefined) {
+  assertPermission(ctx, "products.read");
+  const db = rt._db.db;
+
+  return withTenant(db, ctx.tenantId, async (tx) => {
+    const conditions = [];
+    if (query?.search?.trim()) {
+      const term = `%${query.search.trim().toLowerCase()}%`;
+      conditions.push(or(ilike(schema.brands.name, term), ilike(schema.brands.slug, term)));
+    }
+
+    const rows = await tx
+      .select({
+        id: schema.brands.id,
+        name: schema.brands.name,
+        slug: schema.brands.slug,
+        logoMediaId: schema.brands.logoMediaId,
+        createdAt: schema.brands.createdAt,
+        updatedAt: schema.brands.updatedAt,
+        logoKey: schema.media.storageKey,
+      })
+      .from(schema.brands)
+      .leftJoin(schema.media, eq(schema.media.id, schema.brands.logoMediaId))
+      .where(conditions.length > 0 ? and(...conditions) : undefined)
+      .orderBy(asc(schema.brands.name));
+
+    const productCounts = await tx
+      .select({
+        brandId: schema.products.brandId,
+        count: sql<number>`count(*)`,
+      })
+      .from(schema.products)
+      .where(sql`${schema.products.brandId} IS NOT NULL`)
+      .groupBy(schema.products.brandId);
+
+    const countMap = new Map<string, number>();
+    for (const p of productCounts) {
+      if (p.brandId) countMap.set(p.brandId, Number(p.count));
+    }
+
     return rows.map((r) => ({
       id: r.id,
       name: r.name,
       slug: r.slug,
       logoMediaId: r.logoMediaId,
+      logoUrl: r.logoKey ? publicMediaUrl(r.logoKey) : null,
+      productCount: countMap.get(r.id) ?? 0,
       createdAt: r.createdAt.toISOString(),
+      updatedAt: r.updatedAt.toISOString(),
     }));
+  });
+}
+
+export async function getBrand(rt: Runtime, ctx: TenantContext, input: { id: string }) {
+  assertPermission(ctx, "products.read");
+  const db = rt._db.db;
+
+  return withTenant(db, ctx.tenantId, async (tx) => {
+    const [row] = await tx
+      .select({
+        id: schema.brands.id,
+        name: schema.brands.name,
+        slug: schema.brands.slug,
+        logoMediaId: schema.brands.logoMediaId,
+        createdAt: schema.brands.createdAt,
+        updatedAt: schema.brands.updatedAt,
+        logoKey: schema.media.storageKey,
+      })
+      .from(schema.brands)
+      .leftJoin(schema.media, eq(schema.media.id, schema.brands.logoMediaId))
+      .where(eq(schema.brands.id, input.id))
+      .limit(1);
+
+    if (!row) throw new Error(`Brand not found: "${input.id}"`);
+
+    const [prodCount] = await tx
+      .select({ count: sql<number>`count(*)` })
+      .from(schema.products)
+      .where(eq(schema.products.brandId, row.id));
+
+    return {
+      id: row.id,
+      name: row.name,
+      slug: row.slug,
+      logoMediaId: row.logoMediaId,
+      logoUrl: row.logoKey ? publicMediaUrl(row.logoKey) : null,
+      productCount: Number(prodCount?.count ?? 0),
+      createdAt: row.createdAt.toISOString(),
+      updatedAt: row.updatedAt.toISOString(),
+    };
   });
 }
 
 export async function createBrand(
   rt: Runtime,
   ctx: TenantContext,
-  input: { name: string; slug?: string | undefined; logoMediaId?: string | undefined },
+  input: { name: string; slug?: string | undefined; logoMediaId?: string | null | undefined },
 ) {
   assertPermission(ctx, "products.write");
   const db = rt._db.db;
@@ -1765,20 +1857,25 @@ export async function createBrand(
       .insert(schema.brands)
       .values({
         tenantId: ctx.tenantId,
-        name: input.name,
+        name: input.name.trim(),
         slug,
-        logoMediaId: input.logoMediaId,
+        logoMediaId: input.logoMediaId || null,
       })
       .returning();
 
     if (!row) throw new Error("Failed to create brand");
-    return {
-      id: row.id,
-      name: row.name,
-      slug: row.slug,
-      logoMediaId: row.logoMediaId,
-      createdAt: row.createdAt.toISOString(),
-    };
+
+    await tx.insert(schema.auditLogs).values({
+      tenantId: ctx.tenantId,
+      actorType: ctx.actor.type,
+      actorId: ctx.actor.type === "staff" ? ctx.actor.userId : null,
+      action: "brand.created",
+      targetType: "brand",
+      targetId: row.id,
+      diff: { name: row.name, slug: row.slug },
+    });
+
+    return getBrand(rt, ctx, { id: row.id });
   });
 }
 
@@ -1791,9 +1888,9 @@ export async function updateBrand(
   const db = rt._db.db;
 
   return withTenant(db, ctx.tenantId, async (tx) => {
-    const updateValues: Record<string, unknown> = {};
-    if (input.name !== undefined) updateValues.name = input.name;
-    if (input.slug !== undefined) updateValues.slug = input.slug;
+    const updateValues: Record<string, unknown> = { updatedAt: new Date() };
+    if (input.name !== undefined) updateValues.name = input.name.trim();
+    if (input.slug !== undefined) updateValues.slug = input.slug.trim();
     if (input.logoMediaId !== undefined) updateValues.logoMediaId = input.logoMediaId;
 
     const [row] = await tx
@@ -1803,13 +1900,18 @@ export async function updateBrand(
       .returning();
 
     if (!row) throw new Error(`Brand not found: "${input.id}"`);
-    return {
-      id: row.id,
-      name: row.name,
-      slug: row.slug,
-      logoMediaId: row.logoMediaId,
-      createdAt: row.createdAt.toISOString(),
-    };
+
+    await tx.insert(schema.auditLogs).values({
+      tenantId: ctx.tenantId,
+      actorType: ctx.actor.type,
+      actorId: ctx.actor.type === "staff" ? ctx.actor.userId : null,
+      action: "brand.updated",
+      targetType: "brand",
+      targetId: row.id,
+      diff: updateValues,
+    });
+
+    return getBrand(rt, ctx, { id: row.id });
   });
 }
 
@@ -1818,7 +1920,325 @@ export async function deleteBrand(rt: Runtime, ctx: TenantContext, input: { id: 
   const db = rt._db.db;
 
   return withTenant(db, ctx.tenantId, async (tx) => {
-    await tx.delete(schema.brands).where(eq(schema.brands.id, input.id));
+    const [prodCount] = await tx
+      .select({ count: sql<number>`count(*)` })
+      .from(schema.products)
+      .where(eq(schema.products.brandId, input.id));
+
+    const affected = Number(prodCount?.count ?? 0);
+
+    const [row] = await tx.delete(schema.brands).where(eq(schema.brands.id, input.id)).returning();
+    if (!row) throw new Error(`Brand not found: "${input.id}"`);
+
+    await tx.insert(schema.auditLogs).values({
+      tenantId: ctx.tenantId,
+      actorType: ctx.actor.type,
+      actorId: ctx.actor.type === "staff" ? ctx.actor.userId : null,
+      action: "brand.deleted",
+      targetType: "brand",
+      targetId: row.id,
+      diff: { name: row.name, slug: row.slug, affectedProducts: affected },
+    });
+
+    return { success: true, affectedProducts: affected };
+  });
+}
+
+// --- Locations ---
+export interface ListLocationsQuery {
+  status?: "all" | "active" | "inactive" | undefined;
+}
+
+export async function getLocationStats(rt: Runtime, ctx: TenantContext) {
+  assertPermission(ctx, "products.read");
+  const db = rt._db.db;
+
+  return withTenant(db, ctx.tenantId, async (tx) => {
+    const rows = await tx.select({ isActive: schema.locations.isActive }).from(schema.locations);
+    const total = rows.length;
+    const active = rows.filter((r) => r.isActive).length;
+    const inactive = total - active;
+
+    return { total, active, inactive };
+  });
+}
+
+export async function listLocations(rt: Runtime, ctx: TenantContext, query?: ListLocationsQuery | undefined) {
+  assertPermission(ctx, "products.read");
+  const db = rt._db.db;
+
+  return withTenant(db, ctx.tenantId, async (tx) => {
+    const conditions = [];
+    if (query?.status === "active") conditions.push(eq(schema.locations.isActive, true));
+    if (query?.status === "inactive") conditions.push(eq(schema.locations.isActive, false));
+
+    const rows = await tx
+      .select()
+      .from(schema.locations)
+      .where(conditions.length > 0 ? and(...conditions) : undefined)
+      .orderBy(desc(schema.locations.isDefault), asc(schema.locations.name));
+
+    // Get stock on hand per location
+    const stockCounts = await tx
+      .select({
+        locationId: schema.inventoryLevels.locationId,
+        totalOnHand: sql<number>`sum(${schema.inventoryLevels.onHand})`,
+      })
+      .from(schema.inventoryLevels)
+      .groupBy(schema.inventoryLevels.locationId);
+
+    const stockMap = new Map<string, number>();
+    for (const s of stockCounts) {
+      stockMap.set(s.locationId, Number(s.totalOnHand ?? 0));
+    }
+
+    return rows.map((r) => ({
+      id: r.id,
+      name: r.name,
+      address: (r.address as any) ?? null,
+      pincode: r.pincode,
+      isDefault: r.isDefault,
+      isActive: r.isActive,
+      stockCount: stockMap.get(r.id) ?? 0,
+      createdAt: r.createdAt.toISOString(),
+      updatedAt: r.updatedAt.toISOString(),
+    }));
+  });
+}
+
+export async function getLocation(rt: Runtime, ctx: TenantContext, input: { id: string }) {
+  assertPermission(ctx, "products.read");
+  const db = rt._db.db;
+
+  return withTenant(db, ctx.tenantId, async (tx) => {
+    const [row] = await tx
+      .select()
+      .from(schema.locations)
+      .where(eq(schema.locations.id, input.id))
+      .limit(1);
+
+    if (!row) throw new Error(`Location not found: "${input.id}"`);
+
+    const [stockCount] = await tx
+      .select({
+        totalOnHand: sql<number>`sum(${schema.inventoryLevels.onHand})`,
+      })
+      .from(schema.inventoryLevels)
+      .where(eq(schema.inventoryLevels.locationId, row.id));
+
+    return {
+      id: row.id,
+      name: row.name,
+      address: (row.address as any) ?? null,
+      pincode: row.pincode,
+      isDefault: row.isDefault,
+      isActive: row.isActive,
+      stockCount: Number(stockCount?.totalOnHand ?? 0),
+      createdAt: row.createdAt.toISOString(),
+      updatedAt: row.updatedAt.toISOString(),
+    };
+  });
+}
+
+export interface CreateLocationInput {
+  name: string;
+  address?: {
+    line1?: string | undefined;
+    line2?: string | null | undefined;
+    city?: string | undefined;
+    stateCode?: string | undefined;
+    countryCode?: string | undefined;
+  } | undefined;
+  pincode?: string | undefined;
+  isDefault?: boolean | undefined;
+  isActive?: boolean | undefined;
+}
+
+export async function createLocation(
+  rt: Runtime,
+  ctx: TenantContext,
+  input: CreateLocationInput,
+) {
+  assertPermission(ctx, "products.write");
+  const db = rt._db.db;
+
+  return withTenant(db, ctx.tenantId, async (tx) => {
+    // If setting as default, clear existing default in same transaction
+    if (input.isDefault) {
+      await tx
+        .update(schema.locations)
+        .set({ isDefault: false, updatedAt: new Date() })
+        .where(eq(schema.locations.isDefault, true));
+    }
+
+    const [row] = await tx
+      .insert(schema.locations)
+      .values({
+        tenantId: ctx.tenantId,
+        name: input.name.trim(),
+        address: input.address || null,
+        pincode: input.pincode?.trim() || null,
+        isDefault: input.isDefault ?? false,
+        isActive: input.isActive ?? true,
+      })
+      .returning();
+
+    if (!row) throw new Error("Failed to create location");
+
+    await tx.insert(schema.auditLogs).values({
+      tenantId: ctx.tenantId,
+      actorType: ctx.actor.type,
+      actorId: ctx.actor.type === "staff" ? ctx.actor.userId : null,
+      action: "location.created",
+      targetType: "location",
+      targetId: row.id,
+      diff: { name: row.name, isDefault: row.isDefault, isActive: row.isActive },
+    });
+
+    return getLocation(rt, ctx, { id: row.id });
+  });
+}
+
+export interface UpdateLocationInput {
+  id: string;
+  name?: string | undefined;
+  address?: {
+    line1?: string | undefined;
+    line2?: string | null | undefined;
+    city?: string | undefined;
+    stateCode?: string | undefined;
+    countryCode?: string | undefined;
+  } | null | undefined;
+  pincode?: string | null | undefined;
+  isDefault?: boolean | undefined;
+  isActive?: boolean | undefined;
+}
+
+export async function updateLocation(
+  rt: Runtime,
+  ctx: TenantContext,
+  input: UpdateLocationInput,
+) {
+  assertPermission(ctx, "products.write");
+  const db = rt._db.db;
+
+  return withTenant(db, ctx.tenantId, async (tx) => {
+    const [existing] = await tx
+      .select()
+      .from(schema.locations)
+      .where(eq(schema.locations.id, input.id))
+      .limit(1);
+
+    if (!existing) throw new Error(`Location not found: "${input.id}"`);
+
+    // Rule: The default location cannot be deactivated
+    if (existing.isDefault && input.isActive === false) {
+      throw new Error("The default location cannot be deactivated. Set another location as default first.");
+    }
+
+    // Rule: The last active location cannot be deactivated
+    if (existing.isActive && input.isActive === false) {
+      const [activeCount] = await tx
+        .select({ count: sql<number>`count(*)` })
+        .from(schema.locations)
+        .where(eq(schema.locations.isActive, true));
+
+      if (Number(activeCount?.count ?? 0) <= 1) {
+        throw new Error("Cannot deactivate the only active location. Stores must have at least one active location.");
+      }
+    }
+
+    // If making this location default, clear other default in same transaction
+    if (input.isDefault && !existing.isDefault) {
+      await tx
+        .update(schema.locations)
+        .set({ isDefault: false, updatedAt: new Date() })
+        .where(eq(schema.locations.isDefault, true));
+    }
+
+    const updateValues: Record<string, unknown> = { updatedAt: new Date() };
+    if (input.name !== undefined) updateValues.name = input.name.trim();
+    if (input.address !== undefined) updateValues.address = input.address;
+    if (input.pincode !== undefined) updateValues.pincode = input.pincode ? input.pincode.trim() : null;
+    if (input.isDefault !== undefined) updateValues.isDefault = input.isDefault;
+    if (input.isActive !== undefined) updateValues.isActive = input.isActive;
+
+    const [row] = await tx
+      .update(schema.locations)
+      .set(updateValues)
+      .where(eq(schema.locations.id, input.id))
+      .returning();
+
+    if (!row) throw new Error(`Location not found: "${input.id}"`);
+
+    await tx.insert(schema.auditLogs).values({
+      tenantId: ctx.tenantId,
+      actorType: ctx.actor.type,
+      actorId: ctx.actor.type === "staff" ? ctx.actor.userId : null,
+      action: "location.updated",
+      targetType: "location",
+      targetId: row.id,
+      diff: updateValues,
+    });
+
+    return getLocation(rt, ctx, { id: row.id });
+  });
+}
+
+export async function deleteLocation(rt: Runtime, ctx: TenantContext, input: { id: string }) {
+  assertPermission(ctx, "products.write");
+  const db = rt._db.db;
+
+  return withTenant(db, ctx.tenantId, async (tx) => {
+    const [existing] = await tx
+      .select()
+      .from(schema.locations)
+      .where(eq(schema.locations.id, input.id))
+      .limit(1);
+
+    if (!existing) throw new Error(`Location not found: "${input.id}"`);
+
+    // Rule: The default location cannot be deleted
+    if (existing.isDefault) {
+      throw new Error("The default location cannot be deleted. Set another location as default first.");
+    }
+
+    // Rule: A location holding stock cannot be deleted
+    const [stock] = await tx
+      .select({ total: sql<number>`sum(${schema.inventoryLevels.onHand})` })
+      .from(schema.inventoryLevels)
+      .where(eq(schema.inventoryLevels.locationId, input.id));
+
+    if (Number(stock?.total ?? 0) > 0) {
+      throw new Error("Cannot delete a location with stock on hand. Adjust or transfer stock to zero first, or deactivate the location instead.");
+    }
+
+    // Rule: The last active location cannot be deleted
+    const [activeCount] = await tx
+      .select({ count: sql<number>`count(*)` })
+      .from(schema.locations)
+      .where(eq(schema.locations.isActive, true));
+
+    if (existing.isActive && Number(activeCount?.count ?? 0) <= 1) {
+      throw new Error("Cannot delete the only active location.");
+    }
+
+    // Delete inventory level zero-rows linked to this location before deleting location
+    await tx.delete(schema.inventoryLevels).where(eq(schema.inventoryLevels.locationId, input.id));
+
+    const [row] = await tx.delete(schema.locations).where(eq(schema.locations.id, input.id)).returning();
+    if (!row) throw new Error(`Location not found: "${input.id}"`);
+
+    await tx.insert(schema.auditLogs).values({
+      tenantId: ctx.tenantId,
+      actorType: ctx.actor.type,
+      actorId: ctx.actor.type === "staff" ? ctx.actor.userId : null,
+      action: "location.deleted",
+      targetType: "location",
+      targetId: row.id,
+      diff: { name: row.name },
+    });
+
     return { success: true };
   });
 }

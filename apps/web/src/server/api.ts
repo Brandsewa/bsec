@@ -78,12 +78,20 @@ import {
   rollbackPage,
   savePageDraft,
   updateBrand,
+  getBrand,
+  getBrandStats,
   updateBrandSettings,
   getCategory,
   getCategoryStats,
   updateCategory,
   getCollectionStats,
   updateCollection,
+  listLocations,
+  getLocationStats,
+  getLocation,
+  createLocation,
+  updateLocation,
+  deleteLocation,
   updateMenu,
   updatePage,
   updateProduct,
@@ -686,6 +694,20 @@ export const storeRouter = os.router({
           if (!context.tenantCtx) throw new Error("Missing tenant context");
           return listBrands(context.rt, context.tenantCtx);
         }),
+      stats: os.admin.brands.stats
+        .use(requireAdmin)
+        .use(requirePermission("products.read"))
+        .handler(({ context }) => {
+          if (!context.tenantCtx) throw new Error("Missing tenant context");
+          return getBrandStats(context.rt, context.tenantCtx);
+        }),
+      get: os.admin.brands.get
+        .use(requireAdmin)
+        .use(requirePermission("products.read"))
+        .handler(({ context, input }) => {
+          if (!context.tenantCtx) throw new Error("Missing tenant context");
+          return getBrand(context.rt, context.tenantCtx, input);
+        }),
       create: os.admin.brands.create
         .use(requireAdmin)
         .use(requirePermission("products.write"))
@@ -706,6 +728,52 @@ export const storeRouter = os.router({
         .handler(({ context, input }) => {
           if (!context.tenantCtx) throw new Error("Missing tenant context");
           return deleteBrand(context.rt, context.tenantCtx, input);
+        }),
+    },
+
+    // Catalog: Locations
+    locations: {
+      list: os.admin.locations.list
+        .use(requireAdmin)
+        .use(requirePermission("products.read"))
+        .handler(({ context }) => {
+          if (!context.tenantCtx) throw new Error("Missing tenant context");
+          return listLocations(context.rt, context.tenantCtx);
+        }),
+      stats: os.admin.locations.stats
+        .use(requireAdmin)
+        .use(requirePermission("products.read"))
+        .handler(({ context }) => {
+          if (!context.tenantCtx) throw new Error("Missing tenant context");
+          return getLocationStats(context.rt, context.tenantCtx);
+        }),
+      get: os.admin.locations.get
+        .use(requireAdmin)
+        .use(requirePermission("products.read"))
+        .handler(({ context, input }) => {
+          if (!context.tenantCtx) throw new Error("Missing tenant context");
+          return getLocation(context.rt, context.tenantCtx, input);
+        }),
+      create: os.admin.locations.create
+        .use(requireAdmin)
+        .use(requirePermission("products.write"))
+        .handler(({ context, input }) => {
+          if (!context.tenantCtx) throw new Error("Missing tenant context");
+          return createLocation(context.rt, context.tenantCtx, input);
+        }),
+      update: os.admin.locations.update
+        .use(requireAdmin)
+        .use(requirePermission("products.write"))
+        .handler(({ context, input }) => {
+          if (!context.tenantCtx) throw new Error("Missing tenant context");
+          return updateLocation(context.rt, context.tenantCtx, input);
+        }),
+      delete: os.admin.locations.delete
+        .use(requireAdmin)
+        .use(requirePermission("products.write"))
+        .handler(({ context, input }) => {
+          if (!context.tenantCtx) throw new Error("Missing tenant context");
+          return deleteLocation(context.rt, context.tenantCtx, input);
         }),
     },
 

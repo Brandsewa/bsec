@@ -256,7 +256,6 @@ export const Collection = z.object({
   id: z.string().uuid(),
   title: z.string(),
   slug: z.string(),
-  description: z.string().nullable().optional(),
   imageMediaId: z.string().uuid().nullable().optional(),
   imageUrl: z.string().nullable().optional(),
   type: z.enum(["manual", "automated"]),
@@ -299,14 +298,53 @@ export const CollectionDetail = Collection.extend({
 });
 export type CollectionDetail = z.infer<typeof CollectionDetail>;
 
+export const BrandStats = z.object({
+  total: z.number().int(),
+  used: z.number().int(),
+  unused: z.number().int(),
+});
+export type BrandStats = z.infer<typeof BrandStats>;
+
 export const Brand = z.object({
   id: z.string().uuid(),
   name: z.string(),
   slug: z.string(),
   logoMediaId: z.string().uuid().nullable().optional(),
+  logoUrl: z.string().nullable().optional(),
+  productCount: z.number().int().optional(),
   createdAt: z.string(),
+  updatedAt: z.string().optional(),
 });
 export type Brand = z.infer<typeof Brand>;
+
+export const LocationAddress = z.object({
+  line1: z.string().optional(),
+  line2: z.string().nullable().optional(),
+  city: z.string().optional(),
+  stateCode: z.string().optional(),
+  countryCode: z.string().default("IN"),
+});
+export type LocationAddress = z.infer<typeof LocationAddress>;
+
+export const Location = z.object({
+  id: z.string().uuid(),
+  name: z.string(),
+  address: LocationAddress.nullable().optional(),
+  pincode: z.string().nullable().optional(),
+  isDefault: z.boolean(),
+  isActive: z.boolean(),
+  stockCount: z.number().int().optional(),
+  createdAt: z.string(),
+  updatedAt: z.string(),
+});
+export type Location = z.infer<typeof Location>;
+
+export const LocationStats = z.object({
+  total: z.number().int(),
+  active: z.number().int(),
+  inactive: z.number().int(),
+});
+export type LocationStats = z.infer<typeof LocationStats>;
 
 // --- M2 Inventory Schemas ---
 export const InventoryLevelItem = z.object({
@@ -1093,7 +1131,6 @@ export const adminContract = {
         z.object({
           title: z.string().min(1),
           slug: z.string().optional(),
-          description: z.string().optional(),
           imageMediaId: z.string().uuid().nullable().optional(),
           type: z.enum(["manual", "automated"]).default("manual"),
           match: z.enum(["all", "any"]).default("all"),
@@ -1124,7 +1161,6 @@ export const adminContract = {
           id: z.string().uuid(),
           title: z.string().min(1).optional(),
           slug: z.string().optional(),
-          description: z.string().nullable().optional(),
           imageMediaId: z.string().uuid().nullable().optional(),
           type: z.enum(["manual", "automated"]).optional(),
           match: z.enum(["all", "any"]).optional(),
@@ -1158,14 +1194,22 @@ export const adminContract = {
   brands: {
     list: oc
       .route({ method: "GET", path: "/admin/brands" })
+      .input(z.object({ search: z.string().optional() }).optional())
       .output(z.array(Brand)),
+    stats: oc
+      .route({ method: "GET", path: "/admin/brands/stats" })
+      .output(BrandStats),
+    get: oc
+      .route({ method: "GET", path: "/admin/brands/{id}" })
+      .input(z.object({ id: z.string().uuid() }))
+      .output(Brand),
     create: oc
       .route({ method: "POST", path: "/admin/brands" })
       .input(
         z.object({
           name: z.string().min(1),
           slug: z.string().optional(),
-          logoMediaId: z.string().uuid().optional(),
+          logoMediaId: z.string().uuid().nullable().optional(),
         }),
       )
       .output(Brand),
@@ -1182,6 +1226,50 @@ export const adminContract = {
       .output(Brand),
     delete: oc
       .route({ method: "DELETE", path: "/admin/brands/{id}" })
+      .input(z.object({ id: z.string().uuid() }))
+      .output(z.object({ success: z.boolean(), affectedProducts: z.number().int() })),
+  },
+
+  // Catalog: Locations
+  locations: {
+    list: oc
+      .route({ method: "GET", path: "/admin/locations" })
+      .input(z.object({ status: z.enum(["all", "active", "inactive"]).optional() }).optional())
+      .output(z.array(Location)),
+    stats: oc
+      .route({ method: "GET", path: "/admin/locations/stats" })
+      .output(LocationStats),
+    get: oc
+      .route({ method: "GET", path: "/admin/locations/{id}" })
+      .input(z.object({ id: z.string().uuid() }))
+      .output(Location),
+    create: oc
+      .route({ method: "POST", path: "/admin/locations" })
+      .input(
+        z.object({
+          name: z.string().min(1),
+          address: LocationAddress.optional(),
+          pincode: z.string().optional(),
+          isDefault: z.boolean().default(false),
+          isActive: z.boolean().default(true),
+        }),
+      )
+      .output(Location),
+    update: oc
+      .route({ method: "PATCH", path: "/admin/locations/{id}" })
+      .input(
+        z.object({
+          id: z.string().uuid(),
+          name: z.string().min(1).optional(),
+          address: LocationAddress.nullable().optional(),
+          pincode: z.string().nullable().optional(),
+          isDefault: z.boolean().optional(),
+          isActive: z.boolean().optional(),
+        }),
+      )
+      .output(Location),
+    delete: oc
+      .route({ method: "DELETE", path: "/admin/locations/{id}" })
       .input(z.object({ id: z.string().uuid() }))
       .output(z.object({ success: z.boolean() })),
   },

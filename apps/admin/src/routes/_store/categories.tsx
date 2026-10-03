@@ -116,7 +116,9 @@ export function CategoriesPage() {
   const handleSearchSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     void navigate({
-      search: (prev) => ({ ...prev, q: queryText.trim() || undefined }),
+      to: ".",
+      replace: true,
+      search: ((prev: any) => ({ ...prev, q: queryText.trim() || undefined })) as never,
     });
   };
 
@@ -185,11 +187,11 @@ export function CategoriesPage() {
   };
 
   return (
-    <PageContainer size="wide">
+    <PageContainer size="default">
       <PageHeader
         title="Categories"
         description="Organize your products into a clean, searchable hierarchy for storefront navigation."
-        actions={
+        aside={
           <Button render={<Link to="/categories/new" />} size="default">
             <Plus className="mr-1.5 size-4" aria-hidden />
             Add category
@@ -209,11 +211,11 @@ export function CategoriesPage() {
           </>
         ) : (
           <>
-            <MetricCard title="Total Categories" value={statsQuery.data?.total ?? 0} />
-            <MetricCard title="Active" value={statsQuery.data?.active ?? 0} />
-            <MetricCard title="Inactive" value={statsQuery.data?.inactive ?? 0} />
-            <MetricCard title="Top-level Parents" value={statsQuery.data?.parents ?? 0} />
-            <MetricCard title="Products Assigned" value={statsQuery.data?.productsAssigned ?? 0} />
+            <MetricCard label="Total Categories" value={statsQuery.data?.total ?? 0} />
+            <MetricCard label="Active" value={statsQuery.data?.active ?? 0} />
+            <MetricCard label="Inactive" value={statsQuery.data?.inactive ?? 0} />
+            <MetricCard label="Top-level Parents" value={statsQuery.data?.parents ?? 0} />
+            <MetricCard label="Products Assigned" value={statsQuery.data?.productsAssigned ?? 0} />
           </>
         )}
       </div>
@@ -221,11 +223,13 @@ export function CategoriesPage() {
       {/* Tabs & Search Toolbar */}
       <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
         <ScrollTabs
-          items={STATUS_TABS}
+          tabs={STATUS_TABS}
           value={status}
-          onValueChange={(val) => {
+          onChange={(val: string) => {
             void navigate({
-              search: (prev) => ({ ...prev, status: val as CategoryStatusFilter }),
+              to: ".",
+              replace: true,
+              search: ((prev: any) => ({ ...prev, status: val as CategoryStatusFilter })) as never,
             });
           }}
         />
@@ -247,7 +251,7 @@ export function CategoriesPage() {
               size="sm"
               onClick={() => {
                 setQueryText("");
-                void navigate({ search: (prev) => ({ ...prev, q: undefined }) });
+                void navigate({ to: ".", replace: true, search: ((prev: any) => ({ ...prev, q: undefined })) as never });
               }}
             >
               Clear
