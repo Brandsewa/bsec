@@ -201,7 +201,7 @@ Drizzle schema files in `packages/db/src/schema/` (one Postgres database, `publi
 | `catalog.ts` | `media`, `brands`, `locations`, `categories`, `products`, `product_options`, `variants`, `product_media`, `product_categories`, `collections`, `collection_products`, `inventory_levels`, `inventory_movements`, `reviews` T |
 | `inventory-reservations.ts` | `inventory_reservations` T |
 | `cart.ts` | `carts`, `cart_items` T |
-| `customers.ts` | `customers`, `customer_addresses`, `wishlist_items`, `customer_otps` T |
+| `customers.ts` | `customers`, `customer_addresses`, `customer_consent_events`, `wishlist_items`, `customer_otps` T |
 | `orders.ts` | `orders`, `order_items`, `order_events`, `order_notes`, `number_sequences`, `action_tokens` T |
 | `payments.ts` | `payment_intents`, `payment_attempts`, `refunds` T |
 | `shipping.ts` | `fulfillments`, `fulfillment_items`, `tracking_events`, `returns`, `return_items`, `invoices`, `shipping_zones`, `shipping_rates` T |
@@ -252,8 +252,9 @@ Drizzle schema files in `packages/db/src/schema/` (one Postgres database, `publi
 | 0025 | `categories_active_featured` | categories.is_active and is_featured columns |
 | 0026 | `reviews` | reviews table with RLS, ratings check constraint, store_settings.auto_publish_reviews |
 | 0027 | `product_categories_primary` | product_categories.is_primary column with unique index per product |
+| 0028 | `customers_phase0` | customers is_guest, marketing consent fields, and customer_consent_events table |
 
-How to write one (expand, migrate, contract; `forceRlsSql`): `docs/migrations.md`. **Never edit an applied migration.** Latest on disk: `0027` (the docs check keeps this list honest).
+How to write one (expand, migrate, contract; `forceRlsSql`): `docs/migrations.md`. **Never edit an applied migration.** Latest on disk: `0028` (the docs check keeps this list honest).
 
 ---
 
@@ -300,7 +301,7 @@ Theme flow: platform staff build `theme_templates` (draft + published snapshot, 
 
 `packages/db/src/queues.ts` is the queue registry (created by the migrate step, so runtime roles never need DDL). Handlers and schedules: `packages/domain/src/jobs.ts`, started by `apps/worker`.
 
-Queues: `system.ping`, `order.created`, `order.paid`, `order.cod_confirmed`, `order.cancelled`, `reservation.expiry`, `webhook.process`, `idempotency.cleanup`, `fulfillment.created`, `fulfillment.delivered`, `fulfillment.rto`, `return.requested`, `refund.processed`, `cart.abandoned`, `cart.recovery_sweep`, `subscription.trial_expiry_sweep`, `order.preorder_date_changed`, `order.preorder_reminder_sweep`, `order.return_photo_cleanup`.
+Queues: `system.ping`, `order.created`, `order.paid`, `order.cod_confirmed`, `order.cancelled`, `reservation.expiry`, `webhook.process`, `idempotency.cleanup`, `fulfillment.created`, `fulfillment.delivered`, `fulfillment.rto`, `return.requested`, `refund.processed`, `cart.abandoned`, `cart.recovery_sweep`, `subscription.trial_expiry_sweep`, `order.preorder_date_changed`, `order.preorder_reminder_sweep`, `order.return_photo_cleanup`, `customers.refresh_metrics`.
 
 Schedules: `reservation.expiry` every minute, `idempotency.cleanup` every 15 min, `cart.recovery_sweep` and `subscription.trial_expiry_sweep` hourly, `order.preorder_reminder_sweep` daily (06:00), `order.return_photo_cleanup` daily (03:00). Email handlers currently send placeholder text (no provider configured; see `progress.md`). Tenant deletion runs in the platform service on a timer (`DELETION_SWEEP_INTERVAL_MS`).
 

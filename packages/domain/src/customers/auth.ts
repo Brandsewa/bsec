@@ -7,6 +7,7 @@ import {
   destroyAllCustomerSessions,
   destroyOtherCustomerSessions,
 } from "./session.ts";
+import type { Runtime } from "../runtime.ts";
 import type { CustomerRecord } from "./otp.ts";
 import { loadEmailBrand } from "../system/email-context.ts";
 import { renderEmail } from "../system/email-templates.ts";
@@ -128,12 +129,20 @@ export async function registerCustomer(
           passwordHash: null,
           emailVerified: false,
           phoneVerified: false,
-          acceptsMarketing: Boolean(input.acceptsMarketing),
-          marketingConsentAt: input.acceptsMarketing ? new Date() : null,
         })
         .returning();
       if (!created) throw new Error("Failed to create customer record");
       customerId = created.id;
+      // Consent has one writer (PLAN 0c): it keeps accepts_marketing, the state and the history in step.
+      if (input.acceptsMarketing) {
+        const { setMarketingConsent } = await import("./consent.ts");
+        await setMarketingConsent(
+          { _db: { db: tx } } as unknown as Runtime,
+          { tenantId, actor: { type: "customer", userId: created.id } },
+          { customerId: created.id, state: "subscribed", source: "account_page", channel: "email", ip },
+          tx,
+        );
+      }
     }
 
     // Mint account setup token (24 hours expiry, purpose: 'password_reset' so resetCustomerPassword accepts it)
@@ -231,10 +240,10 @@ export async function verifyCustomerEmail(
       throw new Error("Invalid or expired verification link");
     }
 
-    // Mark customer email verified
+    // Mark customer email verified and clear isGuest
     await tx
       .update(customers)
-      .set({ emailVerified: true, updatedAt: new Date() })
+      .set({ emailVerified: true, isGuest: false, updatedAt: new Date() })
       .where(and(eq(customers.tenantId, tenantId), eq(customers.id, consumed.targetId)));
 
     return { success: true, customerId: consumed.targetId };
@@ -419,10 +428,10 @@ export async function resetCustomerPassword(
       throw new Error("Invalid or expired password reset link");
     }
 
-    // Update customer password and set emailVerified = true (password reset / account setup confirms email control)
+    // Update customer password and set emailVerified = true, isGuest = false (password reset / account setup confirms email control)
     await tx
       .update(customers)
-      .set({ passwordHash: newHash, emailVerified: true, updatedAt: new Date() })
+      .set({ passwordHash: newHash, emailVerified: true, isGuest: false, updatedAt: new Date() })
       .where(and(eq(customers.tenantId, tenantId), eq(customers.id, consumed.targetId)));
 
     return consumed.targetId;

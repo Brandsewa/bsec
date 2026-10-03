@@ -109,10 +109,11 @@ export async function verifyCustomerOtp(
         email: `${cleanPhone}@customer.store`,
         name: "",
         phoneVerified: true,
+        isGuest: false,
       })
       .onConflictDoUpdate({
         target: [customers.tenantId, customers.phone],
-        set: { phoneVerified: true, updatedAt: new Date() },
+        set: { phoneVerified: true, isGuest: false, updatedAt: new Date() },
       })
       .returning();
 
