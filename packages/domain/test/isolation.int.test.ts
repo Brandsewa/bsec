@@ -107,6 +107,7 @@ import {
   refreshSegmentCount,
   getCustomerSegments,
   createPresetSegments,
+  getSegmentActivity,
   listAdminDiscounts,
   listAdminOrders,
   listInvitations,
@@ -1032,6 +1033,10 @@ describe("Generated Isolation Test Suite (M1 Real Postgres 18 Proof)", () => {
         return await getCustomerSegments(rt, ctx, { customerId: testCustomerA });
       case "segments.presets.create":
         return await createPresetSegments(rt, ctx);
+      case "segments.activity": {
+        const created = await createSegment(rt, ctx, { name: `Iso Seg Act ${Date.now()}`, kind: "manual" });
+        return await getSegmentActivity(rt, ctx, { segmentId: created.id });
+      }
 
       // --- M5 Discounts Admin ---
       case "discounts.list":

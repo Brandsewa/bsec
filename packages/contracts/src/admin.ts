@@ -2353,6 +2353,23 @@ export const adminContract = {
         .route({ method: "POST", path: "/admin/segments/presets" })
         .output(z.object({ created: z.number(), skipped: z.number() })),
     },
+    activity: oc
+      .route({ method: "GET", path: "/admin/segments/{id}/activity" })
+      .input(z.object({ id: z.string().uuid(), limit: z.number().int().min(1).max(200).default(50) }))
+      .output(
+        z.object({
+          items: z.array(
+            z.object({
+              id: z.string().uuid(),
+              action: z.string(),
+              actorType: z.string(),
+              actorId: z.string().nullable(),
+              diff: z.record(z.string(), z.unknown()),
+              at: z.string(),
+            }),
+          ),
+        }),
+      ),
   },
 
   // --- M5 Discounts Admin ---

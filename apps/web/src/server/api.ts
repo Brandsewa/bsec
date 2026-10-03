@@ -170,6 +170,7 @@ import {
   refreshSegmentCount,
   getCustomerSegments,
   createPresetSegments,
+  getSegmentActivity,
   getAdminCustomerDetail,
   createAdminCustomer,
   listAdminDiscounts,
@@ -1409,6 +1410,13 @@ export const storeRouter = os.router({
         .handler(({ context, input }) => {
           if (!context.tenantCtx) throw new Error("Missing tenant context");
           return getCustomerSegments(context.rt, context.tenantCtx, input);
+        }),
+      activity: os.admin.segments.activity
+        .use(requireAdmin)
+        .use(requirePermission("customers.read"))
+        .handler(({ context, input }) => {
+          if (!context.tenantCtx) throw new Error("Missing tenant context");
+          return getSegmentActivity(context.rt, context.tenantCtx, { segmentId: input.id, limit: input.limit });
         }),
       presets: {
         create: os.admin.segments.presets.create
