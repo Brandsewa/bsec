@@ -9,8 +9,9 @@ import { SegmentRuleError, type SegmentRuleCondition, type SegmentRules } from "
  * become bound parameters here and column names come from the whitelist, never from input.
  *
  * Output shape: a WHERE predicate over the unaliased `customers` table, which must appear
- * in a query that also joins the Phase 0 metrics lateral (`customerMetricsSql(tenantId)`)
- * for the metric fields. `segmentMemberSubquery` returns a self-contained
+ * in a query that also joins the Phase 0 metrics fragment (`customerMetricsSql(tenantId)`)
+ * on `metrics.customer_id = customers.id` for the metric fields. `segmentMemberSubquery`
+ * returns a self-contained
  * `(SELECT customers.id …)` used for previews, `in_segment` expansion and count refresh.
  */
 
@@ -33,7 +34,7 @@ export function segmentMemberSubquery(tenantId: string, rules: SegmentRules, res
   return sql`(
     SELECT customers.id
     FROM ${schema.customers}
-    LEFT JOIN ${customerMetricsSql(tenantId)} ON true
+    LEFT JOIN ${customerMetricsSql(tenantId)} ON metrics.customer_id = customers.id
     WHERE ${predicate}
   )`;
 }

@@ -476,7 +476,7 @@ export async function listSegmentMembers(
     const [countRow] = await tx
       .select({ n: sql<number>`count(*)::int` })
       .from(schema.customers)
-      .leftJoin(customerMetricsSql(ctx.tenantId), sql`true`)
+      .leftJoin(customerMetricsSql(ctx.tenantId), sql`${schema.customers.id} = metrics.customer_id`)
       .where(where);
     const rows = await tx
       .select({
@@ -492,7 +492,7 @@ export async function listSegmentMembers(
         tags: schema.customers.tags,
       })
       .from(schema.customers)
-      .leftJoin(customerMetricsSql(ctx.tenantId), sql`true`)
+      .leftJoin(customerMetricsSql(ctx.tenantId), sql`${schema.customers.id} = metrics.customer_id`)
       .where(where)
       .orderBy(...orderBy)
       .limit(limit)
