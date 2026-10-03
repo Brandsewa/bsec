@@ -65,10 +65,10 @@ All functions check `assertPermission(ctx, "customers.read")` (reads) or `"custo
 - `listSegmentMembers(segmentId, { search, limit, offset, sort })`: for a manual segment reads the membership table; for an automatic segment runs the compiled query. Same row shape as the customers list.
 - `addCustomersToSegment(segmentId, customerIds | emails)` and `removeCustomersFromSegment`: manual segments only; idempotent; returns `{ added, alreadyIn, notFound }`. Cap 5000 per call.
 - `refreshSegmentCount(segmentId)` and a pg-boss recurring job `segments.refresh_counts` (every 6 hours, per tenant, enqueued in the business transaction path per rule 13) that updates `member_count` and `counted_at`.
-- `getCustomerSegments(customerId)`: manual memberships plus the automatic segments that currently match this customer (one query per automatic segment, capped at 50 automatic segments per store).
+- `getCustomerSegments(customerId)`: manual memberships plus the automatic segments that currently match this customer (one query per automatic segment, capped by the 20-segment limit).
 - `createPresetSegments()`: see section 6.
 
-Quota: at most 50 segments per store (constant now; becomes a plan quota key later). Document it.
+Quota: at most **20 segments per store** (owner decision 2026-10-03; a constant now, a plan quota key later). Creating a 21st is refused with a clear message.
 
 ## 5. Contracts and API
 
@@ -128,5 +128,5 @@ Real database (`*.int.test.ts`, `startTestDb`): each field and operator returns 
 1. **Live automatic segments instead of stored member lists?** Yes (always current, no trust in a job).
 2. **Flat conditions only (all or any), no nested groups, in v1?** Yes.
 3. **Segments are grouping and export only until email sending is live?** Yes.
-4. **Limit of 50 segments per store?** Yes for now.
+4. **Limit per store:** 20 segments (owner decision).
 5. **Presets as editable templates, not locked system segments?** Yes.

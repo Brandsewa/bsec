@@ -48,7 +48,7 @@ Delete: soft delete only when the customer has orders, and it means **anonymise*
 See [CUSTOMERS-SEGMENTS-PLAN.md](CUSTOMERS-SEGMENTS-PLAN.md).
 
 ### Phase 3: optional, ask the owner first
-Store credit ledger (useful for the manual returns flow: refund to credit), settings page "Customers" (guest checkout allowed, account login methods, default consent tick-box off, default tags), duplicate merge, loyalty points.
+Settings page "Customers" (guest checkout allowed, account login methods, default consent tick-box off, default tags), duplicate merge. **Store credit and loyalty points are out of scope (owner decision 2026-10-03): do not build, do not add tables, tabs or settings for them.**
 
 ## 5. What not to copy from Storify
 Vendor and staff-scoped customer views (bsec has no vendors), loyalty tiers (a points programme is a product decision, not an upgrade), preferences like sizes and currency (no shopper-facing use yet), the wishlist counters, the single-boolean `marketingOptIn` legacy shim, and the `Mixed`-typed fields.
@@ -58,10 +58,11 @@ Vendor and staff-scoped customer views (bsec has no vendors), loyalty tiers (a p
 1. **Create guest customers at checkout?** Yes: the list is empty of most buyers otherwise. Costs a migration and a backfill.
 2. **Compute customer stats from orders instead of trusting cached counters?** Yes: it is the only way segments are correct.
 3. **One consent record with history now?** Yes, before any email is sent: it is cheap now and impossible to reconstruct later.
-4. **Store credit now or later?** Later, after Returns is used in real life.
-5. **Loyalty points?** Not now.
-6. **Customer import from CSV?** Yes, in Phase 1, consent only when the file proves it.
-7. **Delete means anonymise when orders exist?** Yes (DPDP erasure without breaking accounts).
+4. ~~Store credit~~ and ~~loyalty points~~: **removed from scope by the owner (2026-10-03).**
+5. **Customer import from CSV?** Yes, in Phase 1, consent only when the file proves it.
+6. **Delete means anonymise when orders exist?** Yes (DPDP erasure without breaking accounts).
+
+All decisions above are confirmed by the owner. The build plan is [CUSTOMERS-IMPLEMENTATION-PLAN.md](CUSTOMERS-IMPLEMENTATION-PLAN.md).
 
 ## 7. Acceptance criteria (Phase 0 and 1)
 - [ ] A storefront COD order that is delivered raises that customer's orders and spend; a cancelled or refunded order lowers or excludes it; a real-database test per case.
