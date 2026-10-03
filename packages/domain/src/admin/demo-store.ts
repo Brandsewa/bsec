@@ -121,6 +121,8 @@ export async function seedDemoStore(rt: Runtime, input: SeedDemoInput): Promise<
 
   await updateStoreSettings(rt, ctx, {
     storeName: "Demo Store",
+    // Order numbers follow the store setting now, so the demo store says what it uses (the demo, docs and e2e all show ORD-).
+    orderPrefix: "ORD-",
     legalName: "Demo Traders Private Limited",
     supportEmail: `support@${DEMO_EMAIL_DOMAIN}`,
     supportPhone: "+919800000000",
