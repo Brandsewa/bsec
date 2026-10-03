@@ -2,6 +2,7 @@ import { and, asc, desc, eq, gte, lt, sql } from "drizzle-orm";
 import { schema, withTenant } from "@bs/db";
 import type { Runtime } from "../runtime.ts";
 import { assertPermission, type TenantContext } from "../context.ts";
+import { customerMetricsSql } from "../customers/metrics.ts";
 
 export interface ListCustomersInput {
   search?: string | undefined;
@@ -32,7 +33,7 @@ export async function listAdminCustomers(
       conditions.push(sql`${input.tag} = ANY(${schema.customers.tags})`);
     }
 
-    if (input.repeat) conditions.push(sql`${schema.customers.ordersCount} > 1`);
+    if (input.repeat) conditions.push(sql`metrics.orders_count > 1`);
     if (input.acceptsMarketing !== undefined) conditions.push(eq(schema.customers.acceptsMarketing, input.acceptsMarketing));
     const from = input.createdFrom ? new Date(input.createdFrom) : null;
     const to = input.createdTo ? new Date(input.createdTo) : null;
@@ -52,15 +53,16 @@ export async function listAdminCustomers(
       created_asc: [asc(schema.customers.createdAt), asc(schema.customers.id)],
       name_asc: [asc(schema.customers.name), asc(schema.customers.id)],
       name_desc: [desc(schema.customers.name), desc(schema.customers.id)],
-      spent_desc: [desc(schema.customers.totalSpent), desc(schema.customers.id)],
-      spent_asc: [asc(schema.customers.totalSpent), asc(schema.customers.id)],
-      orders_desc: [desc(schema.customers.ordersCount), desc(schema.customers.id)],
-      orders_asc: [asc(schema.customers.ordersCount), asc(schema.customers.id)],
+      spent_desc: [desc(sql`metrics.total_spent`), desc(schema.customers.id)],
+      spent_asc: [asc(sql`metrics.total_spent`), asc(schema.customers.id)],
+      orders_desc: [desc(sql`metrics.orders_count`), desc(schema.customers.id)],
+      orders_asc: [asc(sql`metrics.orders_count`), asc(schema.customers.id)],
     }[input.sort ?? "created_desc"];
 
     const [countResult] = await tx
       .select({ count: sql<number>`count(*)::int` })
       .from(schema.customers)
+      .leftJoin(customerMetricsSql(ctx.tenantId), sql`true`)
       .where(whereClause);
 
     const rows = await tx
@@ -69,13 +71,14 @@ export async function listAdminCustomers(
         name: schema.customers.name,
         email: schema.customers.email,
         phone: schema.customers.phone,
-        ordersCount: schema.customers.ordersCount,
-        totalSpent: schema.customers.totalSpent,
+        ordersCount: sql<number>`metrics.orders_count`,
+        totalSpent: sql<number>`metrics.total_spent`,
         tags: schema.customers.tags,
         status: schema.customers.status,
         createdAt: schema.customers.createdAt,
       })
       .from(schema.customers)
+      .leftJoin(customerMetricsSql(ctx.tenantId), sql`true`)
       .where(whereClause)
       .orderBy(...orderBy)
       .limit(limit)
@@ -87,8 +90,8 @@ export async function listAdminCustomers(
         name: r.name,
         email: r.email,
         phone: r.phone,
-        ordersCount: r.ordersCount,
-        totalSpent: Number(r.totalSpent),
+        ordersCount: Number(r.ordersCount || 0),
+        totalSpent: Number(r.totalSpent || 0),
         tags: r.tags,
         status: r.status,
         createdAt: r.createdAt.toISOString(),
@@ -107,15 +110,21 @@ export async function getAdminCustomerDetail(
   const db = rt._db.db;
 
   return await withTenant(db, ctx.tenantId, async (tx) => {
-    const [customer] = await tx
-      .select()
+    const [row] = await tx
+      .select({
+        customer: schema.customers,
+        ordersCount: sql<number>`metrics.orders_count`,
+        totalSpent: sql<number>`metrics.total_spent`,
+      })
       .from(schema.customers)
+      .leftJoin(customerMetricsSql(ctx.tenantId), sql`true`)
       .where(eq(schema.customers.id, input.id))
       .limit(1);
 
-    if (!customer) {
+    if (!row || !row.customer) {
       throw new Error(`Customer not found: ${input.id}`);
     }
+    const customer = row.customer;
 
     const addresses = await tx
       .select()
@@ -141,8 +150,8 @@ export async function getAdminCustomerDetail(
         name: customer.name,
         email: customer.email,
         phone: customer.phone,
-        ordersCount: customer.ordersCount,
-        totalSpent: Number(customer.totalSpent),
+        ordersCount: Number(row.ordersCount || 0),
+        totalSpent: Number(row.totalSpent || 0),
         tags: customer.tags,
         note: customer.note,
         acceptsMarketing: customer.acceptsMarketing,
