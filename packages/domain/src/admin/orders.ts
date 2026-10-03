@@ -1,6 +1,6 @@
 import { randomUUID } from "node:crypto";
 import { and, asc, desc, eq, gte, inArray, lt, notInArray, sql } from "drizzle-orm";
-import { schema, withTenant } from "@bs/db";
+import { schema, withTenant, QUEUE_NAMES } from "@bs/db";
 import type { Runtime } from "../runtime.ts";
 import { assertPermission, type TenantContext } from "../context.ts";
 import { allocateOrderNumber } from "./order-settings.ts";
@@ -878,16 +878,11 @@ export async function createAdminDraftOrder(
         providerOrderId: input.paymentReference ?? null,
       });
       await commitReservation(tx, ctx.tenantId, { orderId: order.id });
-      if (input.customerId) {
-        await tx
-          .update(schema.customers)
-          .set({
-            ordersCount: sql`${schema.customers.ordersCount} + 1`,
-            totalSpent: sql`${schema.customers.totalSpent} + ${grandTotal}`,
-            lastOrderAt: new Date(),
-            updatedAt: new Date(),
-          })
-          .where(eq(schema.customers.id, input.customerId));
+      if (input.customerId && rt._jobs) {
+        await rt._jobs.send(QUEUE_NAMES.CUSTOMERS_REFRESH_METRICS, {
+          tenantId: ctx.tenantId,
+          customerId: input.customerId,
+        });
       }
     } else if (paymentOutcome === "cod") {
       await tx.insert(schema.paymentIntents).values({

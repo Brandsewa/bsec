@@ -6,6 +6,7 @@ import {
   refunds,
   withTenant,
   type Db,
+  QUEUE_NAMES,
 } from "@bs/db";
 import type { Runtime } from "../runtime.ts";
 import { releaseReservation } from "../catalog/inventory-reservations.ts";
@@ -497,6 +498,13 @@ export async function transitionOrder(
         visibleToCustomer: true,
       })
       .returning({ id: orderEvents.id });
+
+    if (order.customerId && rt._jobs) {
+      await rt._jobs.send(QUEUE_NAMES.CUSTOMERS_REFRESH_METRICS, {
+        tenantId: ctx.tenantId,
+        customerId: order.customerId,
+      });
+    }
 
     return {
       orderId,

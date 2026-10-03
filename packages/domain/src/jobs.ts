@@ -402,6 +402,22 @@ export async function runPreorderReminderSweep(
   return { remindersSent };
 }
 
+// Handle customer metrics recalculation (PLAN §0a)
+export async function handleCustomerRefreshMetricsJob(
+  db: Db,
+  log: Logger,
+  data: { tenantId: string; customerId: string },
+): Promise<void> {
+  const { tenantId, customerId } = data;
+  const { refreshCustomerMetrics } = await import("./customers/metrics.ts");
+  const res = await refreshCustomerMetrics(db, tenantId, customerId);
+  if (!res) {
+    log.warn({ tenantId, customerId }, "Customer not found for metrics refresh; skipping");
+    return;
+  }
+  log.info({ tenantId, customerId, ordersCount: res.ordersCount, totalSpent: res.totalSpent }, "Customer metrics refreshed");
+}
+
 export async function startJobs(opts: {
   databaseUrl: string;
   log: Logger;
@@ -724,6 +740,25 @@ export async function startJobs(opts: {
       }
     }
   });
+
+  // Handle customers.refresh_metrics domain event (PLAN §0a)
+  await boss.work<{ tenantId: string; customerId: string }>(
+    QUEUE_NAMES.CUSTOMERS_REFRESH_METRICS,
+    { localConcurrency: 2 },
+    async (batch) => {
+      for (const job of batch) {
+        try {
+          await withTenantJobSlot(job.data.tenantId, async () => {
+            await handleCustomerRefreshMetricsJob(db, opts.log, job.data);
+            opts.log.info({ job_id: job.id, customerId: job.data.customerId }, "customers.refresh_metrics processed");
+          });
+        } catch (err) {
+          opts.log.error({ err, job_id: job.id }, "customers.refresh_metrics failed");
+          throw err;
+        }
+      }
+    },
+  );
 
   // Register recurring schedules and proof-of-life sweeps on boot (PLAN §5.10, §11.3)
   try {
