@@ -82,10 +82,12 @@ export const refunds = tenantTable(
   {
     id: uuid("id").default(sql`uuidv7()`).primaryKey(),
     orderId: uuid("order_id").notNull(),
-    intentId: uuid("intent_id").notNull(),
+    intentId: uuid("intent_id"),
     amount: bigint("amount", { mode: "number" }).notNull(),
     reason: text("reason"),
     status: text("status").notNull().default("pending"),
+    method: text("method"), // upi, bank_transfer, cash, original_payment_method, other
+    reference: text("reference"),
     providerRefundId: text("provider_refund_id"),
     initiatedBy: text("initiated_by").notNull().default("admin"),
     restock: boolean("restock").notNull().default(false),

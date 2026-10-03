@@ -170,3 +170,122 @@ export async function getAdminCustomerDetail(
     };
   });
 }
+
+export interface CreateCustomerInput {
+  name: string;
+  email: string;
+  phone?: string | undefined;
+  tags?: string[] | undefined;
+  note?: string | undefined;
+  address?: {
+    line1: string;
+    line2?: string | undefined;
+    city: string;
+    stateCode: string;
+    pincode: string;
+    phone?: string | undefined;
+    name?: string | undefined;
+  } | undefined;
+}
+
+export async function createAdminCustomer(
+  rt: Runtime,
+  ctx: TenantContext,
+  input: CreateCustomerInput,
+) {
+  assertPermission(ctx, "customers.write");
+  const db = rt._db.db;
+
+  const email = input.email.trim().toLowerCase();
+  const phone = input.phone?.trim() || null;
+  const name = input.name.trim();
+
+  return await withTenant(db, ctx.tenantId, async (tx) => {
+    // Check email uniqueness
+    const [existingEmail] = await tx
+      .select({ id: schema.customers.id })
+      .from(schema.customers)
+      .where(and(eq(schema.customers.tenantId, ctx.tenantId), eq(schema.customers.email, email)))
+      .limit(1);
+
+    if (existingEmail) {
+      throw new Error(`A customer with email ${email} already exists`);
+    }
+
+    if (phone) {
+      const [existingPhone] = await tx
+        .select({ id: schema.customers.id })
+        .from(schema.customers)
+        .where(and(eq(schema.customers.tenantId, ctx.tenantId), eq(schema.customers.phone, phone)))
+        .limit(1);
+
+      if (existingPhone) {
+        throw new Error(`A customer with phone number ${phone} already exists`);
+      }
+    }
+
+    const [customer] = await tx
+      .insert(schema.customers)
+      .values({
+        tenantId: ctx.tenantId,
+        name,
+        email,
+        phone,
+        tags: input.tags ?? [],
+        note: input.note?.trim() || null,
+      })
+      .returning();
+
+    if (!customer) {
+      throw new Error("Failed to create customer record");
+    }
+
+    let addressId: string | undefined;
+    if (input.address) {
+      const [addr] = await tx
+        .insert(schema.customerAddresses)
+        .values({
+          tenantId: ctx.tenantId,
+          customerId: customer.id,
+          name: input.address.name || name,
+          phone: input.address.phone || phone || "",
+          line1: input.address.line1,
+          line2: input.address.line2 || null,
+          city: input.address.city,
+          stateCode: input.address.stateCode,
+          pincode: input.address.pincode,
+          isDefault: true,
+          type: "shipping",
+        })
+        .returning({ id: schema.customerAddresses.id });
+      addressId = addr?.id;
+    }
+
+    await tx.insert(schema.auditLogs).values({
+      tenantId: ctx.tenantId,
+      actorType: ctx.actor.type,
+      actorId: ctx.actor.type === "staff" ? ctx.actor.userId : null,
+      action: "customer.created",
+      targetType: "customer",
+      targetId: customer.id,
+      diff: {
+        name: customer.name,
+        email: customer.email,
+        phone: customer.phone,
+      },
+    });
+
+    return {
+      customer: {
+        id: customer.id,
+        name: customer.name,
+        email: customer.email,
+        phone: customer.phone,
+        tags: customer.tags,
+        note: customer.note,
+      },
+      addressId,
+    };
+  });
+}
+

@@ -2,15 +2,18 @@ import { useState } from "react";
 import { Outlet, createFileRoute, redirect, useRouterState } from "@tanstack/react-router";
 import {
   BadgePercent,
+  Clock,
   FileText,
   Home,
   KeyRound,
   Menu,
+  MessageSquareQuote,
   Package,
   Palette,
   RotateCcw,
   Settings,
   ShoppingBag,
+  ShoppingCart,
   Users,
   Warehouse,
 } from "lucide-react";
@@ -37,10 +40,18 @@ interface GatedGroup {
 const nav: GatedGroup[] = [
   { items: [{ label: "Home", href: "/", icon: Home }] },
   {
+    label: "Orders",
+    items: [
+      { label: "All orders", href: "/orders", icon: ShoppingBag, perm: "orders.read" },
+      { label: "Pre-orders", href: "/preorders", icon: Clock, perm: "orders.read" },
+      { label: "Quotes", href: "/quotes", icon: MessageSquareQuote, perm: "orders.read" },
+      { label: "Abandoned checkouts", href: "/abandoned-checkouts", icon: ShoppingCart, perm: "orders.read" },
+      { label: "Returns", href: "/returns", icon: RotateCcw, perm: "orders.read" },
+    ],
+  },
+  {
     label: "Sell",
     items: [
-      { label: "Orders", href: "/orders", icon: ShoppingBag, perm: "orders.read" },
-      { label: "Returns", href: "/returns", icon: RotateCcw, perm: "orders.read" },
       { label: "Products", href: "/products", icon: Package, perm: "products.read" },
       { label: "Inventory", href: "/inventory", icon: Warehouse, perm: "products.read" },
       { label: "Customers", href: "/customers", icon: Users, perm: "customers.read" },

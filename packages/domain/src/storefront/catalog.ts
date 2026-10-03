@@ -44,6 +44,9 @@ export interface StorefrontVariant {
   dimensions?: Record<string, unknown> | null;
   trackInventory: boolean;
   allowBackorder: boolean;
+  preorderEnabled?: boolean | undefined;
+  preorderShipsOn?: string | null | undefined;
+  preorderMessage?: string | null | undefined;
   position: number;
   imageMediaId: string | null;
   stockStatus: "in_stock" | "low_stock" | "out_of_stock";
@@ -66,6 +69,7 @@ export interface StorefrontProductDetail {
   seo: unknown;
   requiresShipping: boolean;
   isFeatured: boolean;
+  priceOnRequest: boolean;
   ratingAvg: string;
   ratingCount: number;
   createdAt: string;
@@ -85,6 +89,7 @@ export interface StorefrontProductSummary {
   compareAtPriceMin?: number | undefined;
   compareAtPriceMax?: number | undefined;
   isFeatured: boolean;
+  priceOnRequest?: boolean | undefined;
   ratingAvg: string;
   ratingCount: number;
   primaryImage?: {
@@ -239,7 +244,7 @@ export async function getStorefrontProduct(
 
       if (!v.trackInventory) {
         stockStatus = "in_stock";
-      } else if (v.allowBackorder) {
+      } else if (v.allowBackorder || v.preorderEnabled) {
         stockStatus = "in_stock";
       } else if (!inv || inv.available <= 0) {
         stockStatus = "out_of_stock";
@@ -261,6 +266,9 @@ export async function getStorefrontProduct(
         dimensions: v.dimensions as Record<string, unknown> | null,
         trackInventory: v.trackInventory,
         allowBackorder: v.allowBackorder,
+        preorderEnabled: v.preorderEnabled,
+        preorderShipsOn: v.preorderShipsOn ? (typeof v.preorderShipsOn === "string" ? v.preorderShipsOn : (v.preorderShipsOn as Date).toISOString().slice(0, 10)) : null,
+        preorderMessage: v.preorderMessage,
         position: v.position,
         imageMediaId: v.imageMediaId,
         stockStatus,
@@ -309,6 +317,7 @@ export async function getStorefrontProduct(
       seo: p.seo,
       requiresShipping: p.requiresShipping,
       isFeatured: p.isFeatured,
+      priceOnRequest: Boolean(p.priceOnRequest),
       ratingAvg: p.ratingAvg,
       ratingCount: p.ratingCount,
       createdAt: p.createdAt.toISOString(),
@@ -685,6 +694,7 @@ export async function buildProductSummaries(
       compareAtPriceMin: prices.compareAtPriceMin,
       compareAtPriceMax: prices.compareAtPriceMax,
       isFeatured: p.isFeatured,
+      priceOnRequest: Boolean(p.priceOnRequest),
       ratingAvg: p.ratingAvg,
       ratingCount: p.ratingCount,
       primaryImage: primaryImg

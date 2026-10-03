@@ -4,7 +4,7 @@
 
 | | |
 |---|---|
-| Last verified against | commit `d730629` on branch `chore/repo-guardrails`, 2026-10-02 |
+| Last verified against | commit `6ce29ca` on branch `fix/orders-verification` plus Claude's verification fixes, 2026-10-03 |
 | Verified how | files read from the working tree; `pnpm docs:check` for the mechanical parts. Facts marked *(from code)* were read, not run. |
 | Owner | whoever changes the area (see the update triggers in section 0) |
 
@@ -103,7 +103,7 @@ pnpm workspace + Turborepo. Node `24.15`, pnpm `10.34.5`, TypeScript 6, ESLint 1
 | Path | Package | What it holds |
 |---|---|---|
 | `packages/db` | `@bs/db` | Drizzle schema (`src/schema/*`), `tenantTable()` helper, migrations (`migrations/`), role bootstrap and migrate scripts (`src/scripts`), queue registry (`src/queues.ts`) |
-| `packages/domain` | `@bs/domain` | **All business logic.** Services per area (catalog, orders, customers, themes, saas, platform, system), `TenantContext`, `withTenant` runtime, cache tags and invalidation, job handlers (`jobs.ts`), logger |
+| `packages/domain` | `@bs/domain` | **All business logic.** Services per area (catalog, orders, returns, return-photos, return-settings, order-settings, preorders, quotes, customers, themes, saas, platform, system), `TenantContext`, `withTenant` runtime, cache tags and invalidation, job handlers (`jobs.ts`), logger |
 | `packages/contracts` | `@bs/contracts` | oRPC contracts + Zod schemas: `admin.ts`, `storefront.ts`, `platform.ts`, `index.ts` (`storeContract`, `platformContract`) |
 | `packages/auth` | `@bs/auth` | Better Auth configs (`staff.ts`, `platform.ts`, `customer.ts`), `STORE_PERMISSIONS`, `PLATFORM_ROLES`, system roles |
 | `packages/blocks` | `@bs/blocks` | Versioned block registry (Zod schemas + views), document validation, sanitiser, tree renderer, theme page templates, `--bs-*` theme variables |
@@ -208,13 +208,14 @@ Drizzle schema files in `packages/db/src/schema/` (one Postgres database, `publi
 | `marketing.ts` | `newsletter_subscribers`, `discounts`, `discount_redemptions` T |
 | `content.ts` | `themes`, `pages`, `page_versions`, `menus` T |
 | `branding.ts` | `brand_settings` T |
-| `settings.ts` | `store_settings`, `store_status`, `seo_settings` T |
+| `settings.ts` | `store_settings` (including `return_settings` JSONB), `store_status`, `seo_settings` T |
 | `search.ts` | `search_queries` T |
 | `system.ts` | `webhook_inbox`, `idempotency_keys`, `email_log` |
 | `tenant-secrets.ts` | `tenant_secrets` T |
 | `platform.ts` | `domains`, `feature_flags`, `tenant_feature_overrides`, `platform_staff`, `platform_staff_invitations`, `support_sessions`, `tenant_deletions`, `tenant_notes`, `export_files` |
 | `quotas.ts` | `rate_limit_counters`, `quota_definitions`, `tenant_size_tiers`, `tenant_quota_overrides`, `quota_events`, `tenant_active_jobs` |
 | `saas.ts` | `plans`, `subscriptions`, `platform_invoices`, `platform_audit_logs`, `theme_templates`, `signup_leads`, `slug_reservations`, `reserved_slugs`, `onboarding_progress`, `tenant_owner_invites`, `exports` |
+| `quotes.ts` | `quote_requests` T |
 | `index.ts` | `_platform_meta` |
 
 (Exact tenant/platform split per table: check the declaration, `tenantTable(` vs `pgTable(`. Column details: read the schema file.)
@@ -243,8 +244,12 @@ Drizzle schema files in `packages/db/src/schema/` (one Postgres database, `publi
 | 0017 | `platform_email` | `platform_email_settings` and email log (auth overhaul, phase A) |
 | 0018 | `customer_auth` | `customers.phone` nullable, so customers can register with email + password |
 | 0019 | `domain_bcom_si` | platform domain gobs.cloud -> bcom.si: rewrites platform `domains` hostnames and the default sender |
+| 0020 | `preorders` | preorder flags on variants, ships_on on variants/orders/order_items, preorder_released_at |
+| 0021 | `order_tags` | orders.tags text[] array for categorization and filtering |
+| 0022 | `quotes` | products.price_on_request, quote_requests table with RLS and number sequences |
+| 0023 | `returns` | returns & return_items resolution columns, product returnable flag, store returnSettings |
 
-How to write one (expand, migrate, contract; `forceRlsSql`): `docs/migrations.md`. **Never edit an applied migration.** Latest on disk: `0019` (the docs check keeps this list honest).
+How to write one (expand, migrate, contract; `forceRlsSql`): `docs/migrations.md`. **Never edit an applied migration.** Latest on disk: `0023` (the docs check keeps this list honest).
 
 ---
 
@@ -255,9 +260,9 @@ Contracts are the single source of truth (`packages/contracts`); handlers are in
 **`storeContract`** (`@bs/contracts`, mounted in web at `/api`)
 - `system.health`
 - `storefront.*`: `search`, `searchSuggestions`, `cart.{get,addItem,updateItem,removeItem,clear,estimateShipping}`, `newsletter.subscribe`, `status.verifyPassword`
-- `admin.*` (membership + `X-Store-Id`): `support`, `me`, `payments` (Razorpay credentials), `memberships`/`roles`/`invitations`, `settings`, `featureFlags`, `products` (+ `variants`, media attach/detach), `categories`, `collections`, `brands`, `inventory`, `media` (R2 presigned upload), `branding`, `themes` (`get`, `update`, `library`, `preview`, `activate`), `pages` (`list`, `get`, `versions`, `blockData`, `create`, `update`, `saveDraft`, `publish`, `rollback`), `menus`, `orders` (list, get, createDraft, notes, cancel, refund, fulfillment, invoice, confirm, advance), `returns`, `customers`, `discounts`, `shipping`, `storefront` (status), `onboarding`, `billing`, `domains`
+- `admin.*` (membership + `X-Store-Id`): `support`, `me`, `payments` (Razorpay credentials), `memberships`/`roles`/`invitations`, `settings`, `orderSettings` (`get`, `update`), `returnSettings` (`get`, `update`), `featureFlags`, `products` (+ `variants`, media attach/detach), `categories`, `collections`, `brands`, `inventory`, `media` (R2 presigned upload), `branding`, `themes` (`get`, `update`, `library`, `preview`, `activate`), `pages` (`list`, `get`, `versions`, `blockData`, `create`, `update`, `saveDraft`, `publish`, `rollback`), `menus`, `orders` (list, stats, get, createDraft, notes, cancel, refund, fulfillment, invoice, confirm, advance), `abandonedCheckouts` (stats, list), `returns` (stats, list, get, act), `customers`, `discounts`, `shipping`, `storefront` (status), `onboarding`, `billing`, `domains`
 
-**Non-oRPC routes in web** (`apps/web/src/app/api/`): `storefront/cart/*`, `storefront/checkout/place-order`, `storefront/customer/*` (OTP request/verify, profile, addresses, logout), `storefront/orders/[token]/return`, `storefront/address/[token]`, `storefront/unsubscribe/[token]`, `storefront/search/suggestions`, `storefront/status/evaluate`, `webhooks/[provider]`, `webhooks/platform-billing`, `health`, and the catch-all `[[...route]]` that mounts the Hono app (Better Auth at `/api/auth/*`, oRPC).
+**Non-oRPC routes in web** (`apps/web/src/app/api/`): `storefront/cart/*`, `storefront/checkout/place-order`, `storefront/customer/*` (OTP request/verify, profile, addresses, logout), `storefront/orders/[token]/return` (+ `/photo`, `/photo/finalize`, `/cancel`), `storefront/address/[token]`, `storefront/unsubscribe/[token]`, `storefront/search/suggestions`, `storefront/status/evaluate`, `webhooks/[provider]`, `webhooks/platform-billing`, `health`, and the catch-all `[[...route]]` that mounts the Hono app (Better Auth at `/api/auth/*`, oRPC).
 
 **`platformContract`** (`apps/platform`): `system` (health, data, retryJob, retryWebhook), `overview`, `tenants` (list/detail/create-for-client/suspend/restore/archive/plan/trial/ownership/notes/bulk ops/schedule deletion), `domains`, `plans`, `signups`, `templates` (theme templates: create, edit in Puck, publish, hide), `support`, `quotas`, `features`, `staff`, `audit`. Plain HTTP: `/api/auth/*`, `/api/platform/me`, `/api/platform/mfa/complete`, `/api/platform/staff/accept-invitation`, `/api/platform/exports/:id/download`, `/health`.
 
@@ -269,7 +274,7 @@ Procedure-level detail: open the contract file; do not duplicate it here.
 
 **Storefront (`apps/web/src/app`)**: `/` (home), `/products/[slug]`, `/collections/[slug]`, `/categories/[slug]`, `/search`, `/cart`, `/checkout`, `/orders/[token]/thank-you`, `/o/[token]` (guest order view + return request), `/cod/[token]`, `/account` (+ `orders/[id]`, `addresses`, `profile`), `/address/[token]`, `/unsubscribe/[token]`, `/pages/[slug]`, `/policies/[type]`, `/blog`, `/blog/[slug]`, `/signup` (marketing host only), `robots.txt`, `sitemap.xml`. Every `page.tsx` needs a sibling `loading.tsx` (`bs/route-pending`).
 
-**Store admin (`apps/admin/src/routes`, TanStack file routes; `routeTree.gen.ts` is generated, not committed)**: `login`, `accept-invite`, `_store/` (dashboard `index`, `orders` + `orders_.$orderId` + `orders_.new`, `products` (+ `new`, `$id`), `inventory`, `customers` (+ detail), `discounts` (+ `new`), `returns`, `online-store/{theme, theme-library, pages, menus}`, `settings/{index, branding, payments, shipping, storefront, support, taxes, team}`), `_editor/online-store/{editor/$pageId, theme-settings}` (Puck), `platform` and `support` shells. UI conventions: `docs/admin-ui-standards.md`.
+**Store admin (`apps/admin/src/routes`, TanStack file routes; `routeTree.gen.ts` is generated, not committed)**: `login`, `accept-invite`, `_store/` (dashboard `index`, `orders` + `orders_.$orderId` + `orders_.new`, `products` (+ `new`, `$id`), `inventory`, `customers` (+ detail), `discounts` (+ `new`), `returns`, `abandoned-checkouts`, `online-store/{theme, theme-library, pages, menus}`, `settings/{index, orders, returns, branding, payments, shipping, storefront, support, taxes, team}`), `_editor/online-store/{editor/$pageId, theme-settings}` (Puck), `platform` and `support` shells. UI conventions: `docs/admin-ui-standards.md`.
 
 **Super Admin (`apps/superadmin/src/pages`)**: Overview, TenantsList, TenantDetail, TenantCreate, Signups, Plans, Quotas, Features, Domains, Support, System, Staff, AuditLog, Templates, TemplateEditor, Login, AcceptInvitation.
 
@@ -291,9 +296,11 @@ Theme flow: platform staff build `theme_templates` (draft + published snapshot, 
 
 `packages/db/src/queues.ts` is the queue registry (created by the migrate step, so runtime roles never need DDL). Handlers and schedules: `packages/domain/src/jobs.ts`, started by `apps/worker`.
 
-Queues: `system.ping`, `order.created`, `order.paid`, `order.cod_confirmed`, `order.cancelled`, `reservation.expiry`, `webhook.process`, `idempotency.cleanup`, `fulfillment.created`, `fulfillment.delivered`, `fulfillment.rto`, `return.requested`, `refund.processed`, `cart.abandoned`, `cart.recovery_sweep`, `subscription.trial_expiry_sweep`.
+Queues: `system.ping`, `order.created`, `order.paid`, `order.cod_confirmed`, `order.cancelled`, `reservation.expiry`, `webhook.process`, `idempotency.cleanup`, `fulfillment.created`, `fulfillment.delivered`, `fulfillment.rto`, `return.requested`, `refund.processed`, `cart.abandoned`, `cart.recovery_sweep`, `subscription.trial_expiry_sweep`, `order.preorder_date_changed`, `order.preorder_reminder_sweep`, `order.return_photo_cleanup`.
 
-Schedules: `reservation.expiry` every minute, `idempotency.cleanup` every 15 min, `cart.recovery_sweep` and `subscription.trial_expiry_sweep` hourly. Email handlers currently send placeholder text (no provider configured; see `progress.md`). Tenant deletion runs in the platform service on a timer (`DELETION_SWEEP_INTERVAL_MS`).
+Schedules: `reservation.expiry` every minute, `idempotency.cleanup` every 15 min, `cart.recovery_sweep` and `subscription.trial_expiry_sweep` hourly, `order.preorder_reminder_sweep` daily (06:00), `order.return_photo_cleanup` daily (03:00). Email handlers currently send placeholder text (no provider configured; see `progress.md`). Tenant deletion runs in the platform service on a timer (`DELETION_SWEEP_INTERVAL_MS`).
+
+**Return photos (customer evidence).** Presign and finalize run under the order link token (`resolveOrderIdFromToken`), keys are `tenants/<tenantId>/returns/<orderId>/<mediaId>.<jpg|png|webp>`, finalize looks the real object up in storage and checks its magic bytes (fails closed). Photos live in a **separate private R2 bucket** (`R2_PRIVATE_BUCKET_NAME`, never the public media bucket); the admin reads them through 15-minute signed URLs; with no private bucket configured the portal does not ask for photos. `order.return_photo_cleanup` (daily) deletes finalized-but-unattached photos older than 24 hours per tenant under RLS and keeps the record if the file cannot be deleted; store deletion (`platform/deletion-steps.ts`) removes photos from both buckets. Objects uploaded but never finalized need a bucket lifecycle rule (see `DEPLOYMENT.md`).
 
 **Adding a queue:** add to `QUEUES` and `QUEUE_NAMES`, add the handler in `jobs.ts`, add a test in `queue-consumers.int.test.ts`, and enqueue inside the business transaction.
 

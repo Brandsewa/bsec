@@ -29,6 +29,8 @@ export interface CreateProductInput {
   tags?: string[] | undefined;
   requiresShipping?: boolean | undefined;
   isFeatured?: boolean | undefined;
+  priceOnRequest?: boolean | undefined;
+  returnable?: boolean | undefined;
   options?: Array<{ name: string; values: string[] }> | undefined;
   variants?: Array<{
     sku: string;
@@ -38,6 +40,9 @@ export interface CreateProductInput {
     costPrice?: number | undefined;
     trackInventory?: boolean | undefined;
     allowBackorder?: boolean | undefined;
+    preorderEnabled?: boolean | undefined;
+    preorderShipsOn?: string | null | undefined;
+    preorderMessage?: string | null | undefined;
     optionValues?: Record<string, string> | undefined;
     imageMediaId?: string | undefined;
   }> | undefined;
@@ -55,6 +60,8 @@ export interface UpdateProductInput {
   tags?: string[] | undefined;
   requiresShipping?: boolean | undefined;
   isFeatured?: boolean | undefined;
+  priceOnRequest?: boolean | undefined;
+  returnable?: boolean | undefined;
 }
 
 export interface UpdateVariantInput {
@@ -66,6 +73,9 @@ export interface UpdateVariantInput {
   costPrice?: number | null | undefined;
   trackInventory?: boolean | undefined;
   allowBackorder?: boolean | undefined;
+  preorderEnabled?: boolean | undefined;
+  preorderShipsOn?: string | null | undefined;
+  preorderMessage?: string | null | undefined;
   imageMediaId?: string | null | undefined;
 }
 
@@ -135,9 +145,9 @@ export async function listProducts(
       .from(schema.products)
       .where(whereClause);
 
-    // One aggregate per page for price range, variant count and sellable stock.
+    // One aggregate per page for price range, variant count, sellable stock, and preorder status.
     const ids = rows.map((r) => r.id);
-    const summary = new Map<string, { variantCount: number; priceMin: number | null; priceMax: number | null; stock: number }>();
+    const summary = new Map<string, { variantCount: number; priceMin: number | null; priceMax: number | null; stock: number; preorderStatus: "active" | "passed" | null }>();
     if (ids.length > 0) {
       const agg = await tx
         .select({
@@ -146,6 +156,13 @@ export async function listProducts(
           priceMin: sql<string | null>`min(${schema.variants.price})`,
           priceMax: sql<string | null>`max(${schema.variants.price})`,
           stock: sql<string>`coalesce(sum(${schema.inventoryLevels.available}), 0)`,
+          preorderStatus: sql<string | null>`
+            case
+              when bool_or(${schema.variants.preorderEnabled} and ${schema.variants.preorderShipsOn} < current_date) then 'passed'
+              when bool_or(${schema.variants.preorderEnabled}) then 'active'
+              else null
+            end
+          `,
         })
         .from(schema.variants)
         .leftJoin(schema.inventoryLevels, eq(schema.inventoryLevels.variantId, schema.variants.id))
@@ -157,6 +174,7 @@ export async function listProducts(
           priceMin: a.priceMin === null ? null : Number(a.priceMin),
           priceMax: a.priceMax === null ? null : Number(a.priceMax),
           stock: Number(a.stock),
+          preorderStatus: (a.preorderStatus as "active" | "passed" | null) ?? null,
         });
       }
     }
@@ -179,6 +197,7 @@ export async function listProducts(
           hsn: r.hsn,
           requiresShipping: r.requiresShipping,
           isFeatured: r.isFeatured,
+          priceOnRequest: Boolean(r.priceOnRequest),
           publishedAt: r.publishedAt ? r.publishedAt.toISOString() : undefined,
           ratingAvg: r.ratingAvg,
           ratingCount: r.ratingCount,
@@ -188,6 +207,7 @@ export async function listProducts(
           priceMin: sm?.priceMin ?? null,
           priceMax: sm?.priceMax ?? null,
           stock: sm?.stock ?? 0,
+          preorderStatus: sm?.preorderStatus ?? null,
         };
       }),
       total,
@@ -254,6 +274,7 @@ export async function getProduct(
       hsn: p.hsn,
       requiresShipping: p.requiresShipping,
       isFeatured: p.isFeatured,
+      priceOnRequest: Boolean(p.priceOnRequest),
       publishedAt: p.publishedAt ? p.publishedAt.toISOString() : undefined,
       ratingAvg: p.ratingAvg,
       ratingCount: p.ratingCount,
@@ -280,6 +301,9 @@ export async function getProduct(
         dimensions: v.dimensions as Record<string, unknown> | null,
         trackInventory: v.trackInventory,
         allowBackorder: v.allowBackorder,
+        preorderEnabled: v.preorderEnabled,
+        preorderShipsOn: v.preorderShipsOn ? String(v.preorderShipsOn).slice(0, 10) : null,
+        preorderMessage: v.preorderMessage,
         position: v.position,
         imageMediaId: v.imageMediaId,
         createdAt: v.createdAt.toISOString(),
@@ -332,6 +356,8 @@ export async function createProduct(
         tags: input.tags ?? [],
         requiresShipping: input.requiresShipping ?? true,
         isFeatured: input.isFeatured ?? false,
+        priceOnRequest: input.priceOnRequest ?? false,
+        returnable: input.returnable ?? true,
       })
       .returning();
 
@@ -384,11 +410,14 @@ export async function createProduct(
           productId: product.id,
           sku: v.sku,
           title: v.title,
-          price: BigInt(v.price),
+          price: BigInt(input.priceOnRequest ? 0 : v.price),
           compareAtPrice: v.compareAtPrice ? BigInt(v.compareAtPrice) : null,
           costPrice: v.costPrice ? BigInt(v.costPrice) : null,
           trackInventory: v.trackInventory ?? true,
           allowBackorder: v.allowBackorder ?? false,
+          preorderEnabled: v.preorderEnabled ?? false,
+          preorderShipsOn: v.preorderShipsOn ? v.preorderShipsOn : null,
+          preorderMessage: v.preorderMessage ? v.preorderMessage : null,
           optionValues: v.optionValues,
           position: i,
           imageMediaId: v.imageMediaId,
@@ -412,6 +441,7 @@ export async function createProduct(
       hsn: product.hsn,
       requiresShipping: product.requiresShipping,
       isFeatured: product.isFeatured,
+      priceOnRequest: Boolean(product.priceOnRequest),
       publishedAt: product.publishedAt ? product.publishedAt.toISOString() : undefined,
       ratingAvg: product.ratingAvg,
       ratingCount: product.ratingCount,
@@ -438,6 +468,9 @@ export async function createProduct(
         dimensions: v.dimensions as Record<string, unknown> | null,
         trackInventory: v.trackInventory,
         allowBackorder: v.allowBackorder,
+        preorderEnabled: v.preorderEnabled,
+        preorderShipsOn: v.preorderShipsOn ? String(v.preorderShipsOn).slice(0, 10) : null,
+        preorderMessage: v.preorderMessage,
         position: v.position,
         imageMediaId: v.imageMediaId,
         createdAt: v.createdAt.toISOString(),
@@ -473,6 +506,8 @@ export async function updateProduct(
     if (input.tags !== undefined) updateValues.tags = input.tags;
     if (input.requiresShipping !== undefined) updateValues.requiresShipping = input.requiresShipping;
     if (input.isFeatured !== undefined) updateValues.isFeatured = input.isFeatured;
+    if (input.priceOnRequest !== undefined) updateValues.priceOnRequest = input.priceOnRequest;
+    if (input.returnable !== undefined) updateValues.returnable = input.returnable;
 
     const [row] = await tx
       .update(schema.products)
@@ -482,6 +517,10 @@ export async function updateProduct(
 
     if (!row) {
       throw new Error(`Product not found: "${input.id}"`);
+    }
+
+    if (input.priceOnRequest) {
+      await tx.update(schema.variants).set({ price: 0n }).where(eq(schema.variants.productId, row.id));
     }
 
     const catRows = await tx
@@ -517,6 +556,7 @@ export async function updateProduct(
       hsn: row.hsn,
       requiresShipping: row.requiresShipping,
       isFeatured: row.isFeatured,
+      priceOnRequest: Boolean(row.priceOnRequest),
       publishedAt: row.publishedAt ? row.publishedAt.toISOString() : undefined,
       ratingAvg: row.ratingAvg,
       ratingCount: row.ratingCount,
@@ -567,6 +607,9 @@ export async function updateVariant(
       updateValues.costPrice = input.costPrice !== null ? BigInt(input.costPrice) : null;
     if (input.trackInventory !== undefined) updateValues.trackInventory = input.trackInventory;
     if (input.allowBackorder !== undefined) updateValues.allowBackorder = input.allowBackorder;
+    if (input.preorderEnabled !== undefined) updateValues.preorderEnabled = input.preorderEnabled;
+    if (input.preorderShipsOn !== undefined) updateValues.preorderShipsOn = input.preorderShipsOn;
+    if (input.preorderMessage !== undefined) updateValues.preorderMessage = input.preorderMessage;
     if (input.imageMediaId !== undefined) updateValues.imageMediaId = input.imageMediaId;
 
     const [row] = await tx
@@ -622,6 +665,9 @@ export async function updateVariant(
       dimensions: row.dimensions as Record<string, unknown> | null,
       trackInventory: row.trackInventory,
       allowBackorder: row.allowBackorder,
+      preorderEnabled: row.preorderEnabled,
+      preorderShipsOn: row.preorderShipsOn ? String(row.preorderShipsOn).slice(0, 10) : null,
+      preorderMessage: row.preorderMessage,
       position: row.position,
       imageMediaId: row.imageMediaId,
       createdAt: row.createdAt.toISOString(),

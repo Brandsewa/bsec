@@ -107,6 +107,7 @@ describe("Storefront SEO & JSON-LD Structured Data", () => {
         shortDescription: "Tactile clicky mechanical keyboard",
         ratingAvg: "4.75",
         ratingCount: 28,
+        priceOnRequest: false,
         brand: {
           id: "brand-1",
           name: "Keychron",

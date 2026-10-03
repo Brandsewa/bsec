@@ -1,5 +1,5 @@
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
-import { CheckCircle2, Clock, Copy, Download, ExternalLink, FileText, MoreHorizontal, Package, PackageCheck, Plus, RotateCcw, ShoppingBag, Truck, XCircle } from "lucide-react";
+import { CheckCircle2, Clock, Copy, Download, ExternalLink, FileText, MoreHorizontal, PackageCheck, Plus, ShoppingBag, Truck, XCircle } from "lucide-react";
 import { useMemo, useState } from "react";
 import { MetricCard, MetricCardSkeleton, PageContainer, PageHeader, PageSection, PageSkeleton, TableSkeleton, toast } from "@bs/ui";
 import { keepPreviousData, useQuery, useQueryClient } from "@tanstack/react-query";
@@ -7,6 +7,7 @@ import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { Input } from "@/components/ui/input";
+import { Field } from "../../components/field.tsx";
 import { ConfirmDialog } from "../../components/confirm-dialog.tsx";
 import { DataTable, type Column } from "../../components/data-table/data-table.tsx";
 import { fetchAllPages } from "../../components/data-table/fetch-all.ts";
@@ -40,15 +41,17 @@ import { client, orpc } from "../../lib/orpc.ts";
 // URL state (the source of truth for filters, sort, search and paging)
 // ---------------------------------------------------------------------------------------------------------------
 
-type SavedView = "all" | "unfulfilled" | "unpaid" | "cod_to_confirm" | "rto";
+type SavedView = "all" | "unfulfilled" | "unpaid" | "cod_to_confirm" | "rto" | "open" | "archived";
 type Sort = "placed_desc" | "placed_asc" | "total_desc" | "total_asc" | "number_desc" | "number_asc";
 
 const VIEWS: ReadonlyArray<{ id: SavedView; label: string }> = [
   { id: "all", label: "All orders" },
+  { id: "open", label: "Open" },
   { id: "unfulfilled", label: "Unfulfilled" },
   { id: "unpaid", label: "Unpaid" },
   { id: "cod_to_confirm", label: "COD to confirm" },
   { id: "rto", label: "RTO / Returns" },
+  { id: "archived", label: "Archived" },
 ];
 const SORTS: ReadonlyArray<{ id: Sort; label: string }> = [
   { id: "placed_desc", label: "Newest first" },
@@ -84,12 +87,17 @@ const STATUS_OPTIONS = [
   ["cancelled", "Cancelled"],
   ["returned", "Returned"],
 ] as const;
+const CHANNEL_OPTIONS = [
+  ["web", "Online Store"],
+  ["admin", "Admin draft"],
+] as const;
 
 const labelOf = (opts: ReadonlyArray<readonly [string, string]>, v: string) => opts.find(([k]) => k === v)?.[1] ?? v;
 const withAny = (any: string, opts: ReadonlyArray<readonly [string, string]>) => [{ value: "any", label: any }, ...opts.map(([value, label]) => ({ value, label }))];
 const PAYMENT_SELECT = withAny("Payment: any", PAYMENT_OPTIONS);
 const FULFILLMENT_SELECT = withAny("Fulfillment: any", FULFILLMENT_OPTIONS);
 const STATUS_SELECT = withAny("Status: any", STATUS_OPTIONS);
+const CHANNEL_SELECT = withAny("Channel: all", CHANNEL_OPTIONS);
 
 export interface OrdersSearch {
   view: SavedView;
@@ -97,6 +105,7 @@ export interface OrdersSearch {
   pay?: string | undefined;
   ful?: string | undefined;
   st?: string | undefined;
+  src?: string | undefined;
   cod?: true | undefined;
   from?: string | undefined;
   to?: string | undefined;
@@ -113,6 +122,7 @@ export function parseOrdersSearch(raw: Record<string, unknown>): OrdersSearch {
     pay: oneOf(raw["pay"], PAYMENT_OPTIONS.map(([k]) => k)),
     ful: oneOf(raw["ful"], FULFILLMENT_OPTIONS.map(([k]) => k)),
     st: oneOf(raw["st"], STATUS_OPTIONS.map(([k]) => k)),
+    src: oneOf(raw["src"], CHANNEL_OPTIONS.map(([k]) => k)),
     cod: flag(raw["cod"]),
     from: day(raw["from"]),
     to: day(raw["to"]),
@@ -130,6 +140,7 @@ export function ordersListInput(s: OrdersSearch, paging: { limit: number; offset
     ...(s.st ? { status: s.st } : {}),
     ...(s.pay ? { paymentStatus: s.pay } : {}),
     ...(s.ful ? { fulfillmentStatus: s.ful } : {}),
+    ...(s.src ? { source: s.src } : {}),
     ...(s.cod ? { cod: true } : {}),
     ...(s.from ? { placedFrom: dayStartIso(s.from) } : {}),
     ...(s.to ? { placedTo: dayAfterIso(s.to) } : {}),
@@ -139,8 +150,29 @@ export function ordersListInput(s: OrdersSearch, paging: { limit: number; offset
 
 type OrderRow = Awaited<ReturnType<typeof client.admin.orders.list>>["items"][number];
 
-function useOrderViewCount(view: SavedView): number {
-  return useQuery(orpc.admin.orders.list.queryOptions({ input: { view, limit: 1 } })).data?.total ?? 0;
+function OrderStatsStrip() {
+  const stats = useQuery(orpc.admin.orders.stats.queryOptions());
+  if (stats.isLoading) {
+    return (
+      <div className="grid grid-cols-2 gap-3 sm:gap-4 lg:grid-cols-5">
+        <MetricCardSkeleton />
+        <MetricCardSkeleton />
+        <MetricCardSkeleton />
+        <MetricCardSkeleton />
+        <MetricCardSkeleton />
+      </div>
+    );
+  }
+  const data = stats.data ?? { totalOrders: 0, openOrders: 0, paidOrders: 0, totalRevenue: 0, avgOrderValue: 0 };
+  return (
+    <div className="grid grid-cols-2 gap-3 sm:gap-4 lg:grid-cols-5">
+      <MetricCard label="Total orders" value={data.totalOrders.toLocaleString("en-IN")} icon={ShoppingBag} />
+      <MetricCard label="Open orders" value={data.openOrders.toLocaleString("en-IN")} icon={Clock} />
+      <MetricCard label="Paid orders" value={data.paidOrders.toLocaleString("en-IN")} icon={PackageCheck} />
+      <MetricCard label="Total revenue" value={money(data.totalRevenue)} />
+      <MetricCard label="Average order value" value={money(data.avgOrderValue)} />
+    </div>
+  );
 }
 
 export const Route = createFileRoute("/_store/orders")({
@@ -148,7 +180,8 @@ export const Route = createFileRoute("/_store/orders")({
     compactSearch(parseOrdersSearch(raw), { view: "all", sort: "placed_desc", page: 1, size: 25 }),
   pendingComponent: () => (
     <PageSkeleton>
-      <div className="grid gap-4 sm:grid-cols-4">
+      <div className="grid grid-cols-2 gap-3 sm:gap-4 lg:grid-cols-5">
+        <MetricCardSkeleton />
         <MetricCardSkeleton />
         <MetricCardSkeleton />
         <MetricCardSkeleton />
@@ -169,7 +202,7 @@ type AskKind = "ship" | "deliver" | "cancel";
 
 // The order lifecycle is hand-run: confirm, then mark shipped, then mark delivered (which also collects COD cash).
 const OPEN_STATES = ["pending", "confirmed", "processing", "partially_fulfilled"];
-const ACTIONS: Record<ActionKind, { verb: string; done: string; eligible: (o: OrderRow) => boolean; run: (o: OrderRow, reason?: string) => Promise<unknown> }> = {
+const ACTIONS: Record<ActionKind, { verb: string; done: string; eligible: (o: OrderRow) => boolean; run: (o: OrderRow, extra?: unknown) => Promise<unknown> }> = {
   confirm: {
     verb: "Confirming",
     done: "confirmed",
@@ -180,7 +213,10 @@ const ACTIONS: Record<ActionKind, { verb: string; done: string; eligible: (o: Or
     verb: "Marking shipped",
     done: "marked shipped",
     eligible: (o) => OPEN_STATES.includes(o.status),
-    run: (o) => client.admin.orders.advance({ id: o.id, to: "shipped" }),
+    run: (o, extra) => {
+      const { carrier, awb } = (typeof extra === "object" && extra ? extra : {}) as { carrier?: string; awb?: string };
+      return client.admin.orders.advance({ id: o.id, to: "shipped", carrier, awb });
+    },
   },
   deliver: {
     verb: "Marking delivered",
@@ -198,7 +234,7 @@ const ACTIONS: Record<ActionKind, { verb: string; done: string; eligible: (o: Or
     verb: "Cancelling",
     done: "cancelled",
     eligible: (o) => o.status !== "cancelled" && o.fulfillmentStatus !== "delivered",
-    run: (o, reason) => client.admin.orders.cancel({ id: o.id, reason: reason?.trim() || "Cancelled by store staff" }),
+    run: (o, reason) => client.admin.orders.cancel({ id: o.id, reason: typeof reason === "string" && reason.trim() ? reason.trim() : "Cancelled by store staff" }),
   },
 };
 
@@ -242,31 +278,27 @@ export function OrdersPage() {
   const rows = useMemo(() => list.data?.items ?? [], [list.data]);
   const total = list.data?.total ?? 0;
 
-  // Counts on the cards come from the server per saved view, independent of the filters in use.
-  const allCount = useOrderViewCount("all");
-  const unfulfilledCount = useOrderViewCount("unfulfilled");
-  const unpaidCount = useOrderViewCount("unpaid");
-  const rtoCount = useOrderViewCount("rto");
-
-  const hasFilters = Boolean(s.q || s.pay || s.ful || s.st || s.cod || s.from || s.to);
-  const activeFilterCount = [s.pay, s.ful, s.st, s.cod, s.from || s.to].filter(Boolean).length;
+  const hasFilters = Boolean(s.q || s.pay || s.ful || s.st || s.src || s.cod || s.from || s.to);
+  const activeFilterCount = [s.pay, s.ful, s.st, s.src, s.cod, s.from || s.to].filter(Boolean).length;
   const clearFilters = () => {
     setSearchText("");
-    update({ q: undefined, pay: undefined, ful: undefined, st: undefined, cod: undefined, from: undefined, to: undefined, page: undefined });
+    update({ q: undefined, pay: undefined, ful: undefined, st: undefined, src: undefined, cod: undefined, from: undefined, to: undefined, page: undefined });
   };
 
   const sel = useTableSelection({
     rows,
     getId: (o: OrderRow) => o.id,
     total,
-    resetKey: JSON.stringify([s.view, s.q, s.pay, s.ful, s.st, s.cod, s.from, s.to]),
+    resetKey: JSON.stringify([s.view, s.q, s.pay, s.ful, s.st, s.src, s.cod, s.from, s.to]),
   });
 
   // ----- actions -----
   const [confirm, setConfirm] = useState<{ kind: AskKind; orders: OrderRow[] } | null>(null);
   const [cancelReason, setCancelReason] = useState("");
+  const [shipCarrier, setShipCarrier] = useState("");
+  const [shipAwb, setShipAwb] = useState("");
 
-  const runAction = (kind: ActionKind, orders: OrderRow[], reason?: string) =>
+  const runAction = (kind: ActionKind, orders: OrderRow[], extra?: unknown) =>
     bulk.run({
       rows: orders,
       getId: (o) => o.id,
@@ -275,7 +307,7 @@ export function OrdersPage() {
       done: ACTIONS[kind].done,
       noun: "order",
       eligible: ACTIONS[kind].eligible,
-      action: (o) => ACTIONS[kind].run(o, reason),
+      action: (o) => ACTIONS[kind].run(o, extra),
       onFinished: (ok) => {
         sel.release(ok);
         void queryClient.invalidateQueries({ queryKey: orpc.admin.orders.key() });
@@ -303,6 +335,8 @@ export function OrdersPage() {
 
   function ask(kind: AskKind, orders: OrderRow[]) {
     setCancelReason("");
+    setShipCarrier("");
+    setShipAwb("");
     setConfirm({ kind, orders });
   }
 
@@ -314,6 +348,27 @@ export function OrdersPage() {
       sort: { asc: "number_asc", desc: "number_desc" },
       className: "font-medium text-foreground",
       cell: (o) => o.number,
+    },
+    {
+      id: "products",
+      header: "Products",
+      cell: (o) => {
+        if (!o.firstItemTitle) return <span className="text-muted-foreground">—</span>;
+        const extra = o.itemsCount > 1 ? ` +${o.itemsCount - 1} more` : "";
+        return (
+          <div className="flex max-w-56 flex-col gap-0.5">
+            <span className="truncate text-foreground" title={`${o.firstItemTitle}${extra}`}>
+              {o.firstItemTitle}
+              {extra && <span className="text-muted-foreground">{extra}</span>}
+            </span>
+            {o.shipsOn && (
+              <span className="inline-flex w-fit items-center rounded bg-amber-500/10 px-1 py-0.25 text-[10px] font-medium text-amber-700 dark:text-amber-400">
+                Pre-order · ships {new Date(o.shipsOn).toLocaleDateString("en-IN", { day: "numeric", month: "short" })}
+              </span>
+            )}
+          </div>
+        );
+      },
     },
     {
       id: "date",
@@ -359,6 +414,7 @@ export function OrdersPage() {
     ...(s.pay ? [{ key: "pay", label: `Payment: ${labelOf(PAYMENT_OPTIONS, s.pay)}`, onRemove: () => setFilter({ pay: undefined }) }] : []),
     ...(s.ful ? [{ key: "ful", label: `Fulfillment: ${labelOf(FULFILLMENT_OPTIONS, s.ful)}`, onRemove: () => setFilter({ ful: undefined }) }] : []),
     ...(s.st ? [{ key: "st", label: `Status: ${labelOf(STATUS_OPTIONS, s.st)}`, onRemove: () => setFilter({ st: undefined }) }] : []),
+    ...(s.src ? [{ key: "src", label: `Channel: ${labelOf(CHANNEL_OPTIONS, s.src)}`, onRemove: () => setFilter({ src: undefined }) }] : []),
     ...(s.cod ? [{ key: "cod", label: "COD only", onRemove: () => setFilter({ cod: undefined }) }] : []),
     ...(s.from || s.to
       ? [{ key: "placed", label: `Placed: ${s.from ? fmtDay(s.from) : "…"} – ${s.to ? fmtDay(s.to) : "…"}`, onRemove: () => setFilter({ from: undefined, to: undefined }) }]
@@ -371,6 +427,7 @@ export function OrdersPage() {
       <SimpleSelect ariaLabel="Payment status" className="w-full md:w-auto md:min-w-32" value={s.pay ?? "any"} options={PAYMENT_SELECT} onChange={(v) => setFilter({ pay: v === "any" ? undefined : v })} />
       <SimpleSelect ariaLabel="Fulfillment status" className="w-full md:w-auto md:min-w-36" value={s.ful ?? "any"} options={FULFILLMENT_SELECT} onChange={(v) => setFilter({ ful: v === "any" ? undefined : v })} />
       <SimpleSelect ariaLabel="Order status" className="w-full md:w-auto md:min-w-32" value={s.st ?? "any"} options={STATUS_SELECT} onChange={(v) => setFilter({ st: v === "any" ? undefined : v })} />
+      <SimpleSelect ariaLabel="Channel" className="w-full md:w-auto md:min-w-32" value={s.src ?? "any"} options={CHANNEL_SELECT} onChange={(v) => setFilter({ src: v === "any" ? undefined : v })} />
       <Button variant={s.cod ? "default" : "outline"} size="sm" className="justify-start md:justify-center" aria-pressed={Boolean(s.cod)} onClick={() => setFilter({ cod: s.cod ? undefined : true })}>
         COD only
       </Button>
@@ -458,12 +515,7 @@ export function OrdersPage() {
         }
       />
 
-      <div className="grid grid-cols-2 gap-3 sm:gap-4 lg:grid-cols-4">
-        <MetricCard label="Total Orders" value={allCount} icon={ShoppingBag} />
-        <MetricCard label="Unfulfilled" value={unfulfilledCount} icon={Package} />
-        <MetricCard label="Unpaid / COD" value={unpaidCount} icon={Clock} />
-        <MetricCard label="RTO / Returns" value={rtoCount} icon={RotateCcw} />
-      </div>
+      <OrderStatsStrip />
 
       <ScrollTabs value={s.view} onChange={(v) => setFilter({ view: v === "all" ? undefined : v })} tabs={VIEWS} />
 
@@ -590,11 +642,41 @@ export function OrdersPage() {
         onConfirm={() => {
           const c = confirm;
           setConfirm(null);
-          if (c) void runAction(c.kind, c.orders, cancelReason);
+          if (c) {
+            if (c.kind === "ship") {
+              void runAction("ship", c.orders, { carrier: shipCarrier.trim() || undefined, awb: shipAwb.trim() || undefined });
+            } else if (c.kind === "cancel") {
+              void runAction("cancel", c.orders, cancelReason);
+            } else {
+              void runAction(c.kind, c.orders);
+            }
+          }
         }}
       >
         {confirm?.kind === "cancel" ? (
           <Input aria-label="Cancellation reason" value={cancelReason} onChange={(e) => setCancelReason(e.target.value)} placeholder="Reason (optional): Cancelled by store staff" />
+        ) : null}
+        {confirm?.kind === "ship" ? (
+          <div className="grid gap-3 pt-2">
+            <Field id="ship-carrier" label="Carrier">
+              <Input
+                id="ship-carrier"
+                aria-label="Carrier"
+                value={shipCarrier}
+                onChange={(e) => setShipCarrier(e.target.value)}
+                placeholder="e.g. Blue Dart, Delhivery, DTDC"
+              />
+            </Field>
+            <Field id="ship-awb" label="Tracking number (AWB)">
+              <Input
+                id="ship-awb"
+                aria-label="Tracking number (AWB)"
+                value={shipAwb}
+                onChange={(e) => setShipAwb(e.target.value)}
+                placeholder="e.g. 1234567890"
+              />
+            </Field>
+          </div>
         ) : null}
       </ConfirmDialog>
     </PageContainer>

@@ -206,6 +206,16 @@ const TEMPLATES: Record<string, Builder> = {
     intro: (d) =>
       `We have processed a refund${typeof d.refundAmount === "number" && d.refundAmount > 0 ? ` of ${formatInr(d.refundAmount)}` : ""}${d.order ? ` for order ${d.order.number}` : ""}. It can take a few days to show in your account.`,
   }),
+  order_preorder_date_changed: orderEmail({
+    title: "Update on your pre-order ship date",
+    intro: (d) =>
+      `The dispatch date for order${d.order ? ` ${d.order.number}` : ""} has changed. It is now expected to ship on or after ${String(d.shipsOn ?? "")}.${d.reason ? ` Reason: ${String(d.reason)}.` : ""}`,
+  }),
+  order_preorder_reminder: orderEmail({
+    title: "Your pre-order ships soon",
+    intro: (d) =>
+      `Your pre-order${d.order ? ` ${d.order.number}` : ""} is scheduled to ship soon (expected on or after ${String(d.shipsOn ?? "")}). We will send tracking details as soon as it is dispatched.`,
+  }),
   abandoned_cart_recovery: (brand, data, subject) => {
     const cta = data.cartUrl ?? `${brand.baseUrl}/cart`;
     const html = layout(brand, subject, `${heading("Did you leave something behind?")}${para("You added items to your cart but didn't finish checking out. They are still waiting for you.")}${button("Return to your cart", cta)}`);

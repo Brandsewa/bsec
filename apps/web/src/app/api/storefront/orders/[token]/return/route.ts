@@ -6,6 +6,10 @@ import { getRequestHeaders } from "../../../cart/route.ts";
 
 const Body = z.object({
   reason: z.string().trim().min(3, "Please tell us why you want to return this").max(500),
+  resolution: z.enum(["refund", "replacement"]).optional(),
+  exchangeRequest: z.string().trim().max(1000).optional(),
+  customerComment: z.string().trim().max(1000).optional(),
+  photos: z.array(z.string().uuid()).max(5).optional(),
   items: z.array(z.object({ orderItemId: z.string().uuid(), quantity: z.number().int().min(1).max(999) })).min(1, "Choose at least one item to return"),
 });
 

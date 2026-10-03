@@ -22,11 +22,16 @@ for (const base of ["apps", "packages"]) {
   }
 }
 
-// 2. Every migration is in the migration table.
+// 2. Every migration is in the migration table and in _journal.json.
 const migrations = readdirSync(join(root, "packages/db/migrations")).filter((f) => /^\d{4}_.+\.sql$/.test(f));
+const journal = JSON.parse(read("packages/db/migrations/meta/_journal.json"));
+const journalTags = new Set(journal.entries.map((e) => e.tag));
+
 for (const f of migrations) {
   const num = f.slice(0, 4);
+  const tag = f.replace(/\.sql$/, "");
   if (!arch.includes(`| ${num} |`)) fail(`docs/ARCHITECTURE.md migration table is missing ${f} (section 7).`);
+  if (!journalTags.has(tag)) fail(`packages/db/migrations/meta/_journal.json is missing migration entry for ${f}.`);
 }
 
 // 3. Every queue is documented.

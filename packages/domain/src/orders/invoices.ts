@@ -87,7 +87,7 @@ export interface GenerateInvoiceResult {
 /**
  * Normalizes state name to compare place of supply.
  */
-function normalizeState(state?: string | null): string {
+export function normalizeState(state?: string | null): string {
   if (!state) return "";
   return state.trim().toLowerCase().replace(/[^a-z0-9]/g, "");
 }

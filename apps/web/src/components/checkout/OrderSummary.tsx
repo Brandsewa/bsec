@@ -25,6 +25,13 @@ export function OrderSummary({ cart, shippingPaise = 0, codFeePaise = 0, onCartC
   const formattedShipping =
     pricing.shippingTotal === 0 ? "Free" : `₹${(pricing.shippingTotal / 100).toLocaleString("en-IN")}`;
 
+  const preorderItems = cart.items.filter((it) => it.variant.preorderEnabled);
+  const latestShipDate = preorderItems.reduce<string | null>((latest, it) => {
+    const d = it.variant.preorderShipsOn;
+    if (!d) return latest;
+    return !latest || d > latest ? d : latest;
+  }, null);
+
   return (
     <div className="rounded-2xl border border-border bg-card p-6 shadow-sm">
       <h2 className="text-lg font-bold text-foreground mb-4">Order Summary</h2>
@@ -54,6 +61,11 @@ export function OrderSummary({ cart, shippingPaise = 0, codFeePaise = 0, onCartC
               <p className="text-xs font-semibold text-foreground truncate">{item.product.title}</p>
               {item.variant.title && (
                 <p className="text-[11px] text-muted-foreground truncate">{item.variant.title}</p>
+              )}
+              {item.variant.preorderEnabled && (
+                <span className="inline-flex items-center rounded bg-amber-500/10 px-1 py-0.25 text-[9px] font-medium text-amber-700 dark:text-amber-400">
+                  Pre-order
+                </span>
               )}
             </div>
             <span className="text-xs font-medium text-foreground">
@@ -90,6 +102,26 @@ export function OrderSummary({ cart, shippingPaise = 0, codFeePaise = 0, onCartC
         </div>
         <p className="text-xs text-muted-foreground mt-1">Inclusive of all taxes (GST)</p>
       </div>
+
+      {latestShipDate && (
+        <div className="mt-4 rounded-xl border border-amber-500/30 bg-amber-500/10 p-3 text-xs text-amber-950 dark:text-amber-200">
+          <p className="font-semibold">Pre-order dispatch notice</p>
+          <p className="mt-0.5 text-amber-900/90 dark:text-amber-300">
+            {latestShipDate >= new Date().toISOString().slice(0, 10) ? (
+              <>
+                Your order ships on or after{" "}
+                <span className="font-semibold text-amber-950 dark:text-amber-100">
+                  {new Date(`${latestShipDate}T00:00:00`).toLocaleDateString("en-IN", { day: "numeric", month: "short", year: "numeric" })}
+                </span>{" "}
+                because it includes a pre-order item.
+              </>
+            ) : (
+              "Your order ships soon because it includes a pre-order item."
+            )}
+          </p>
+        </div>
+      )}
+
       {onCartChange && (
         <div className="mt-4">
           <DiscountCodeBox cart={cart} onChange={onCartChange} />

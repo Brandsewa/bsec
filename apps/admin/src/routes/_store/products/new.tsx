@@ -42,6 +42,9 @@ interface VariantDraft {
   title: string;
   price: string;
   compareAtPrice: string;
+  preorderEnabled?: boolean;
+  preorderShipsOn?: string;
+  preorderMessage?: string;
 }
 
 export function NewProductPage({ navigate }: { navigate?: (to: string) => void }) {
@@ -55,6 +58,7 @@ export function NewProductPage({ navigate }: { navigate?: (to: string) => void }
   const [description, setDescription] = useState("");
   const [tags, setTags] = useState("");
   const [requiresShipping, setRequiresShipping] = useState(true);
+  const [priceOnRequest, setPriceOnRequest] = useState(false);
   const [options, setOptions] = useState<OptionDraft[]>([]);
   const [variants, setVariants] = useState<VariantDraft[]>([
     { sku: "", title: "Default", price: "", compareAtPrice: "" },
@@ -94,14 +98,25 @@ export function NewProductPage({ navigate }: { navigate?: (to: string) => void }
       if (!o.name.trim()) e[`option-name-${i}`] = "Option name is required";
       if (!o.values.split(",").some((s) => s.trim())) e[`option-values-${i}`] = "Add at least one value";
     });
+    const today = new Date().toISOString().slice(0, 10);
     variants.forEach((v, i) => {
       if (!v.sku.trim()) e[`variant-sku-${i}`] = "SKU is required";
       if (!v.title.trim()) e[`variant-title-${i}`] = "Variant title is required";
-      if (v.price === "" || !Number.isFinite(Number(v.price)) || Number(v.price) < 0) {
+      if (!priceOnRequest && (v.price === "" || !Number.isFinite(Number(v.price)) || Number(v.price) < 0)) {
         e[`variant-price-${i}`] = "Enter a valid price";
       }
-      if (v.compareAtPrice !== "" && (!Number.isFinite(Number(v.compareAtPrice)) || Number(v.compareAtPrice) < 0)) {
+      if (!priceOnRequest && v.compareAtPrice !== "" && (!Number.isFinite(Number(v.compareAtPrice)) || Number(v.compareAtPrice) < 0)) {
         e[`variant-compare-${i}`] = "Enter a valid compare-at price";
+      }
+      if (v.preorderEnabled) {
+        if (!v.preorderShipsOn) {
+          e[`variant-ships-on-${i}`] = "Pre-order ship date is required";
+        } else if (v.preorderShipsOn <= today) {
+          e[`variant-ships-on-${i}`] = "Pre-order ship date must be in the future";
+        }
+        if (v.preorderMessage && v.preorderMessage.length > 200) {
+          e[`variant-msg-${i}`] = "Pre-order message cannot exceed 200 characters";
+        }
       }
     });
     setErrors(e);
@@ -132,14 +147,18 @@ export function NewProductPage({ navigate }: { navigate?: (to: string) => void }
         .map((s) => s.trim())
         .filter(Boolean),
       requiresShipping,
+      priceOnRequest,
       ...(cleanOptions.length > 0 ? { options: cleanOptions } : {}),
       variants: variants.map((v) => ({
         sku: v.sku.trim(),
         title: v.title.trim(),
-        price: toPaise(v.price),
-        ...(v.compareAtPrice !== "" ? { compareAtPrice: toPaise(v.compareAtPrice) } : {}),
+        price: priceOnRequest ? 0 : toPaise(v.price),
+        ...(!priceOnRequest && v.compareAtPrice !== "" ? { compareAtPrice: toPaise(v.compareAtPrice) } : {}),
         trackInventory: true,
         allowBackorder: false,
+        preorderEnabled: Boolean(v.preorderEnabled),
+        preorderShipsOn: v.preorderEnabled && v.preorderShipsOn ? v.preorderShipsOn : null,
+        preorderMessage: v.preorderEnabled && v.preorderMessage ? v.preorderMessage.trim() : null,
       })),
     });
   };
@@ -248,7 +267,14 @@ export function NewProductPage({ navigate }: { navigate?: (to: string) => void }
 
             <Field orientation="horizontal">
               <Checkbox id="requires-shipping" checked={requiresShipping} onCheckedChange={(c) => setRequiresShipping(c)} />
-              <FieldLabel htmlFor="requires-shipping" className="font-normal">This is a physical product that requires shipping</FieldLabel>
+              <FieldLabel htmlFor="requires-shipping" className="font-normal cursor-pointer">This is a physical product that requires shipping</FieldLabel>
+            </Field>
+
+            <Field orientation="horizontal">
+              <Checkbox id="price-on-request" checked={priceOnRequest} onCheckedChange={(c) => setPriceOnRequest(Boolean(c))} />
+              <FieldLabel htmlFor="price-on-request" className="font-normal cursor-pointer">
+                Price on request (hide prices and require customers to submit quote requests)
+              </FieldLabel>
             </Field>
           </div>
         </SectionCard>
@@ -353,6 +379,48 @@ export function NewProductPage({ navigate }: { navigate?: (to: string) => void }
                   />
                   {err(`variant-compare-${i}`)}
                 </div>
+
+                <div className="border-t border-border pt-3 sm:col-span-2 flex flex-col gap-3">
+                  <div className="flex items-center gap-2">
+                    <Checkbox
+                      id={`v-preorder-${i}`}
+                      checked={Boolean(v.preorderEnabled)}
+                      onCheckedChange={(c) => updateVariant(i, { preorderEnabled: Boolean(c) })}
+                    />
+                    <FieldLabel htmlFor={`v-preorder-${i}`} className="font-normal cursor-pointer text-sm">
+                      Enable pre-order (sell at zero stock with expected ship date)
+                    </FieldLabel>
+                  </div>
+
+                  {v.preorderEnabled && (
+                    <div className="grid gap-3 sm:grid-cols-2 rounded-md bg-muted/40 p-3 border border-border">
+                      <div className="grid gap-1.5">
+                        <FieldLabel htmlFor={`variant-ships-on-${i}`}>Expected ship date *</FieldLabel>
+                        <Input
+                          id={`variant-ships-on-${i}`}
+                          type="date"
+                          value={v.preorderShipsOn ?? ""}
+                          onChange={(e) => updateVariant(i, { preorderShipsOn: e.target.value })}
+                        />
+                        {err(`variant-ships-on-${i}`)}
+                      </div>
+                      <div className="grid gap-1.5">
+                        <FieldLabel htmlFor={`variant-msg-${i}`}>
+                          Customer message (optional, max 200 chars)
+                        </FieldLabel>
+                        <Input
+                          id={`variant-msg-${i}`}
+                          placeholder="e.g. Handmade in small batches"
+                          maxLength={200}
+                          value={v.preorderMessage ?? ""}
+                          onChange={(e) => updateVariant(i, { preorderMessage: e.target.value })}
+                        />
+                        {err(`variant-msg-${i}`)}
+                      </div>
+                    </div>
+                  )}
+                </div>
+
                 {variants.length > 1 ? (
                   <div className="sm:col-span-2">
                     <Button

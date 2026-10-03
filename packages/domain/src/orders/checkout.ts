@@ -1,13 +1,16 @@
 import { createHash, randomBytes, randomUUID } from "node:crypto";
-import { eq, sql } from "drizzle-orm";
+import { and, eq, inArray, sql } from "drizzle-orm";
 import {
   actionTokens,
+  carts,
   locations,
   orderEvents,
   orderItems,
   orders,
   paymentIntents,
+  products,
   tenants,
+  variants,
   withTenant,
   QUEUE_NAMES,
 } from "@bs/db";
@@ -15,7 +18,7 @@ import type { Runtime } from "../runtime.ts";
 import type { TenantContext } from "../context.ts";
 import { clearCart, getOrCreateCart } from "../storefront/cart.ts";
 import { reserveInventory } from "../catalog/inventory-reservations.ts";
-import { allocateSequenceNumber } from "./sequences.ts";
+import { allocateOrderNumber } from "../admin/order-settings.ts";
 import { redeemDiscount } from "./discounts.ts";
 import { allocateDiscount, priceOrder } from "./pricing.ts";
 import { getTenantShippingRates } from "./shipping-rates.ts";
@@ -153,24 +156,69 @@ export async function placeOrder(
     }
     const locationId = loc.id;
 
-    // 4. Reserve inventory atomically (PLAN §11.3)
+    // 4. Load variant configuration to identify pre-order and inventory policies
     const orderId = randomUUID();
-    const reserveItems = cart.items.map((it) => ({
-      variantId: it.variantId,
-      locationId,
-      qty: it.quantity,
-    }));
+    const variantIds = cart.items.map((it) => it.variantId);
+    const variantRows = await tx
+      .select({
+        id: variants.id,
+        trackInventory: variants.trackInventory,
+        allowBackorder: variants.allowBackorder,
+        preorderEnabled: variants.preorderEnabled,
+        preorderShipsOn: variants.preorderShipsOn,
+        priceOnRequest: products.priceOnRequest,
+      })
+      .from(variants)
+      .innerJoin(
+        products,
+        and(eq(products.tenantId, variants.tenantId), eq(products.id, variants.productId)),
+      )
+      .where(and(eq(variants.tenantId, tenantId), inArray(variants.id, variantIds)));
 
-    await reserveInventory(tx, tenantId, reserveItems, {
-      orderId,
-      cartId: cart.id,
-    });
+    if (variantRows.some((v) => v.priceOnRequest)) {
+      throw new Error("This product is price on request and cannot be ordered through standard checkout");
+    }
 
-    // 5. Allocate gapless sequential order number (PLAN §11.2)
-    const seq = await allocateSequenceNumber(tx, tenantId, "order", "", {
-      defaultPrefix: "ORD-",
-      defaultPadding: 5,
-    });
+    const variantMap = new Map(variantRows.map((v) => [v.id, v]));
+
+    // Limited variants that track inventory, do not allow backorder and are not pre-orders must reserve stock.
+    // Pre-orders commit stock when goods arrive, not at checkout time (ORDERS-PREORDERS-PLAN §3.2 rule 8).
+    const reserveItems = cart.items
+      .filter((it) => {
+        const v = variantMap.get(it.variantId);
+        if (!v) return true;
+        if (v.preorderEnabled) return false;
+        if (v.allowBackorder) return false;
+        if (!v.trackInventory) return false;
+        return true;
+      })
+      .map((it) => ({
+        variantId: it.variantId,
+        locationId,
+        qty: it.quantity,
+      }));
+
+    if (reserveItems.length > 0) {
+      await reserveInventory(tx, tenantId, reserveItems, {
+        orderId,
+        cartId: cart.id,
+      });
+    }
+
+    // Determine latest ships_on date across all pre-order items (mixed carts rule: latest date applies)
+    let orderShipsOn: string | null = null;
+    for (const it of cart.items) {
+      const v = variantMap.get(it.variantId);
+      if (v?.preorderEnabled && v.preorderShipsOn) {
+        const lineDate = typeof v.preorderShipsOn === "string" ? v.preorderShipsOn : (v.preorderShipsOn as Date).toISOString().slice(0, 10);
+        if (!orderShipsOn || lineDate > orderShipsOn) {
+          orderShipsOn = lineDate;
+        }
+      }
+    }
+
+    // 5. Allocate gapless sequential order number respecting store settings (PLAN §11.2, ORDERS-SETTINGS-PLAN §4.1)
+    const seq = await allocateOrderNumber(tx, tenantId);
 
     // 6. Insert Order
     await tx.insert(orders).values({
@@ -189,6 +237,7 @@ export async function placeOrder(
       shippingTotal,
       codFee,
       grandTotal,
+      shipsOn: orderShipsOn,
       shippingAddress: {
         fullName: input.fullName,
         addressLine1: input.addressLine1,
@@ -216,6 +265,11 @@ export async function placeOrder(
     // 7. Insert Order Items (a goods discount is split across the lines in proportion to their totals)
     const lineDiscounts = allocateDiscount(cart.items.map((it) => it.lineTotal), discountTotal);
     for (const [index, it] of cart.items.entries()) {
+      const v = variantMap.get(it.variantId);
+      const lineShipsOn = v?.preorderEnabled && v.preorderShipsOn
+        ? (typeof v.preorderShipsOn === "string" ? v.preorderShipsOn : (v.preorderShipsOn as Date).toISOString().slice(0, 10))
+        : null;
+
       await tx.insert(orderItems).values({
         discountAmount: lineDiscounts[index] ?? 0,
         tenantId,
@@ -227,6 +281,7 @@ export async function placeOrder(
         quantity: it.quantity,
         unitPrice: it.unitPriceSnapshot,
         total: it.lineTotal,
+        shipsOn: lineShipsOn,
       });
     }
 
@@ -299,7 +354,25 @@ export async function placeOrder(
       },
     });
 
-    // 11. Clear cart
+    // 11. Mark cart converted and, if it was abandoned, mark recovered (ORDERS-ABANDONED-CHECKOUTS-PLAN §4.1)
+    const [cartRow] = await tx
+      .select({ status: carts.status })
+      .from(carts)
+      .where(eq(carts.id, cart.id))
+      .limit(1);
+
+    const isAbandoned = cartRow?.status === "abandoned";
+
+    await tx
+      .update(carts)
+      .set({
+        status: "converted",
+        lastActivityAt: sql`now()`,
+        ...(isAbandoned ? { recoveredAt: sql`now()` } : {}),
+      })
+      .where(eq(carts.id, cart.id));
+
+    // Clear cart items
     await clearCart(rt, ctx, input.cartToken, tx);
 
     // 12. Enqueue order.created job if boss runtime is present

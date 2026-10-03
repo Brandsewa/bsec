@@ -141,6 +141,34 @@
       "when": 1790900000000,
       "tag": "0019_domain_bcom_si",
       "breakpoints": true
+    },
+    {
+      "idx": 20,
+      "version": "7",
+      "when": 1790910000000,
+      "tag": "0020_preorders",
+      "breakpoints": true
+    },
+    {
+      "idx": 21,
+      "version": "7",
+      "when": 1790920000000,
+      "tag": "0021_order_tags",
+      "breakpoints": true
+    },
+    {
+      "idx": 22,
+      "version": "7",
+      "when": 1790930000000,
+      "tag": "0022_quotes",
+      "breakpoints": true
+    },
+    {
+      "idx": 23,
+      "version": "7",
+      "when": 1790940000000,
+      "tag": "0023_returns",
+      "breakpoints": true
     }
   ]
 }

@@ -86,6 +86,7 @@ function ProductEditor({ product, go }: { product: ProductDetailData; go: (to: s
   const [description, setDescription] = useState(descriptionText(product.descriptionJson));
   const [tags, setTags] = useState(product.tags.join(", "));
   const [requiresShipping, setRequiresShipping] = useState(product.requiresShipping);
+  const [priceOnRequest, setPriceOnRequest] = useState(Boolean(product.priceOnRequest));
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [confirmDelete, setConfirmDelete] = useState(false);
 
@@ -140,6 +141,7 @@ function ProductEditor({ product, go }: { product: ProductDetailData; go: (to: s
         .map((s) => s.trim())
         .filter(Boolean),
       requiresShipping,
+      priceOnRequest,
     });
   };
 
@@ -240,7 +242,14 @@ function ProductEditor({ product, go }: { product: ProductDetailData; go: (to: s
             </div>
             <Field orientation="horizontal">
               <Checkbox id="requires-shipping" checked={requiresShipping} onCheckedChange={(c) => setRequiresShipping(c)} />
-              <FieldLabel htmlFor="requires-shipping" className="font-normal">Requires shipping</FieldLabel>
+              <FieldLabel htmlFor="requires-shipping" className="font-normal cursor-pointer">Requires shipping</FieldLabel>
+            </Field>
+
+            <Field orientation="horizontal">
+              <Checkbox id="price-on-request" checked={priceOnRequest} onCheckedChange={(c) => setPriceOnRequest(Boolean(c))} />
+              <FieldLabel htmlFor="price-on-request" className="font-normal cursor-pointer">
+                Price on request (hide prices and require customers to submit quote requests)
+              </FieldLabel>
             </Field>
           </div>
         </SectionCard>
@@ -346,6 +355,9 @@ function VariantRow({
   const [vTitle, setVTitle] = useState(variant.title);
   const [price, setPrice] = useState(toRupees(variant.price));
   const [compare, setCompare] = useState(toRupees(variant.compareAtPrice));
+  const [preorderEnabled, setPreorderEnabled] = useState(Boolean(variant.preorderEnabled));
+  const [preorderShipsOn, setPreorderShipsOn] = useState(variant.preorderShipsOn ?? "");
+  const [preorderMessage, setPreorderMessage] = useState(variant.preorderMessage ?? "");
   const [error, setError] = useState<string | null>(null);
 
   const mutation = useMutation(
@@ -358,11 +370,22 @@ function VariantRow({
     }),
   );
 
+  const today = new Date().toISOString().slice(0, 10);
+
   const submit = () => {
     if (!sku.trim() || !vTitle.trim()) return setError("SKU and title are required");
     if (price === "" || !Number.isFinite(Number(price)) || Number(price) < 0) return setError("Enter a valid price");
     if (compare !== "" && (!Number.isFinite(Number(compare)) || Number(compare) < 0)) {
       return setError("Enter a valid compare-at price");
+    }
+    if (preorderEnabled) {
+      if (!preorderShipsOn) return setError("Ship date is required for pre-orders");
+      if (!variant.preorderEnabled && preorderShipsOn <= today) {
+        return setError("Pre-order ship date must be in the future when enabling");
+      }
+      if (preorderMessage.length > 200) {
+        return setError("Pre-order message cannot exceed 200 characters");
+      }
     }
     setError(null);
     mutation.mutate({
@@ -371,6 +394,9 @@ function VariantRow({
       title: vTitle.trim(),
       price: toPaise(price),
       compareAtPrice: compare === "" ? null : toPaise(compare),
+      preorderEnabled,
+      preorderShipsOn: preorderEnabled ? (preorderShipsOn || null) : null,
+      preorderMessage: preorderEnabled ? (preorderMessage.trim() || null) : null,
     });
   };
 
@@ -406,7 +432,47 @@ function VariantRow({
           onChange={(e) => setCompare(e.target.value)}
         />
       </div>
-      <div className="flex items-center justify-between sm:col-span-4">
+
+      <div className="border-t border-border pt-3 sm:col-span-4 flex flex-col gap-3">
+        <div className="flex items-center gap-2">
+          <Checkbox
+            id={`v-preorder-${variant.id}`}
+            checked={preorderEnabled}
+            onCheckedChange={(c) => setPreorderEnabled(Boolean(c))}
+          />
+          <FieldLabel htmlFor={`v-preorder-${variant.id}`} className="font-normal cursor-pointer text-sm">
+            Enable pre-order (sell at zero stock with expected ship date)
+          </FieldLabel>
+        </div>
+
+        {preorderEnabled && (
+          <div className="grid gap-3 sm:grid-cols-2 rounded-md bg-muted/40 p-3 border border-border">
+            <div className="grid gap-1.5">
+              <FieldLabel htmlFor={`v-ships-on-${variant.id}`}>Expected ship date *</FieldLabel>
+              <Input
+                id={`v-ships-on-${variant.id}`}
+                type="date"
+                value={preorderShipsOn}
+                onChange={(e) => setPreorderShipsOn(e.target.value)}
+              />
+            </div>
+            <div className="grid gap-1.5">
+              <FieldLabel htmlFor={`v-preorder-msg-${variant.id}`}>
+                Customer message (optional, max 200 chars)
+              </FieldLabel>
+              <Input
+                id={`v-preorder-msg-${variant.id}`}
+                placeholder="e.g. Handmade in small batches"
+                maxLength={200}
+                value={preorderMessage}
+                onChange={(e) => setPreorderMessage(e.target.value)}
+              />
+            </div>
+          </div>
+        )}
+      </div>
+
+      <div className="flex items-center justify-between sm:col-span-4 border-t border-border pt-2">
         <span className="text-xs text-foreground-lighter">
           Current price {inr.format(variant.price / 100)}
           {error ? <span role="alert" className="ml-3 text-destructive">{error}</span> : null}

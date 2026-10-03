@@ -100,19 +100,43 @@ import {
   subscribeNewsletter,
   verifyStorefrontPassword,
   listAdminOrders,
+  getAdminOrderStats,
   getAdminOrderDetail,
+  estimateAdminDraftOrder,
   createAdminDraftOrder,
+  getOrderSettings,
+  updateOrderSettings,
   addAdminOrderNote,
   cancelAdminOrder,
   refundAdminOrder,
   createAdminFulfillment,
   confirmAdminOrder,
   advanceAdminOrder,
+  listPreorders,
+  getPreorderStats,
+  changePreorderShipDate,
+  releasePreorderNow,
   listAdminReturns,
+  getAdminReturnStats,
+  getAdminReturnDetail,
   actOnReturn,
+  getReturnSettings,
+  updateReturnSettings,
+  submitQuoteRequest,
+  getAdminQuoteStats,
+  listAdminQuotes,
+  getAdminQuoteDetail,
+  updateAdminQuoteNote,
+  markAdminQuoteLost,
+  reopenAdminQuote,
+  deleteAdminQuote,
+  linkOrderToQuote,
+  getAdminAbandonedCheckoutStats,
+  listAdminAbandonedCheckouts,
   createAdminOrderInvoice,
   listAdminCustomers,
   getAdminCustomerDetail,
+  createAdminCustomer,
   listAdminDiscounts,
   createAdminDiscount,
   updateAdminDiscount,
@@ -462,6 +486,22 @@ export const storeRouter = os.router({
         .handler(({ context, input }) => {
           if (!context.tenantCtx) throw new Error("Missing tenant context");
           return updateStoreSettings(context.rt, context.tenantCtx, input);
+        }),
+    },
+    orderSettings: {
+      get: os.admin.orderSettings.get
+        .use(requireAdmin)
+        .use(requirePermission("settings.write"))
+        .handler(({ context }) => {
+          if (!context.tenantCtx) throw new Error("Missing tenant context");
+          return getOrderSettings(context.rt, context.tenantCtx);
+        }),
+      update: os.admin.orderSettings.update
+        .use(requireAdmin)
+        .use(requirePermission("settings.write"))
+        .handler(({ context, input }) => {
+          if (!context.tenantCtx) throw new Error("Missing tenant context");
+          return updateOrderSettings(context.rt, context.tenantCtx, input);
         }),
     },
     featureFlags: {
@@ -876,12 +916,26 @@ export const storeRouter = os.router({
           if (!context.tenantCtx) throw new Error("Missing tenant context");
           return listAdminOrders(context.rt, context.tenantCtx, input);
         }),
+      stats: os.admin.orders.stats
+        .use(requireAdmin)
+        .use(requirePermission("orders.read"))
+        .handler(({ context }) => {
+          if (!context.tenantCtx) throw new Error("Missing tenant context");
+          return getAdminOrderStats(context.rt, context.tenantCtx);
+        }),
       get: os.admin.orders.get
         .use(requireAdmin)
         .use(requirePermission("orders.read"))
         .handler(({ context, input }) => {
           if (!context.tenantCtx) throw new Error("Missing tenant context");
           return getAdminOrderDetail(context.rt, context.tenantCtx, input);
+        }),
+      estimateDraft: os.admin.orders.estimateDraft
+        .use(requireAdmin)
+        .use(requirePermission("orders.read"))
+        .handler(({ context, input }) => {
+          if (!context.tenantCtx) throw new Error("Missing tenant context");
+          return estimateAdminDraftOrder(context.rt, context.tenantCtx, input);
         }),
       createDraft: os.admin.orders.createDraft
         .use(requireAdmin)
@@ -962,13 +1016,66 @@ export const storeRouter = os.router({
         }),
     },
 
+    preorders: {
+      list: os.admin.preorders.list
+        .use(requireAdmin)
+        .use(requirePermission("orders.read"))
+        .handler(({ context, input }) => {
+          if (!context.tenantCtx) throw new Error("Missing tenant context");
+          return listPreorders(context.rt, context.tenantCtx, input);
+        }),
+      stats: os.admin.preorders.stats
+        .use(requireAdmin)
+        .use(requirePermission("orders.read"))
+        .handler(({ context }) => {
+          if (!context.tenantCtx) throw new Error("Missing tenant context");
+          return getPreorderStats(context.rt, context.tenantCtx);
+        }),
+      changeShipDate: os.admin.preorders.changeShipDate
+        .use(requireAdmin)
+        .use(requirePermission("orders.write"))
+        .handler(async ({ context, input }) => {
+          if (!context.tenantCtx) throw new Error("Missing tenant context");
+          try {
+            return await changePreorderShipDate(context.rt, context.tenantCtx, input);
+          } catch (err) {
+            throw mapAuthError(err);
+          }
+        }),
+      releaseNow: os.admin.preorders.releaseNow
+        .use(requireAdmin)
+        .use(requirePermission("orders.write"))
+        .handler(async ({ context, input }) => {
+          if (!context.tenantCtx) throw new Error("Missing tenant context");
+          try {
+            return await releasePreorderNow(context.rt, context.tenantCtx, input);
+          } catch (err) {
+            throw mapAuthError(err);
+          }
+        }),
+    },
+
     returns: {
+      stats: os.admin.returns.stats
+        .use(requireAdmin)
+        .use(requirePermission("orders.read"))
+        .handler(({ context }) => {
+          if (!context.tenantCtx) throw new Error("Missing tenant context");
+          return getAdminReturnStats(context.rt, context.tenantCtx);
+        }),
       list: os.admin.returns.list
         .use(requireAdmin)
         .use(requirePermission("orders.read"))
         .handler(async ({ context, input }) => {
           if (!context.tenantCtx) throw new Error("Missing tenant context");
-          return { items: await listAdminReturns(context.rt, context.tenantCtx, input ?? {}) };
+          return await listAdminReturns(context.rt, context.tenantCtx, input ?? {});
+        }),
+      get: os.admin.returns.get
+        .use(requireAdmin)
+        .use(requirePermission("orders.read"))
+        .handler(async ({ context, input }) => {
+          if (!context.tenantCtx) throw new Error("Missing tenant context");
+          return await getAdminReturnDetail(context.rt, context.tenantCtx, input);
         }),
       act: os.admin.returns.act
         .use(requireAdmin)
@@ -980,6 +1087,23 @@ export const storeRouter = os.router({
           } catch (err) {
             throw mapAuthError(err);
           }
+        }),
+    },
+
+    returnSettings: {
+      get: os.admin.returnSettings.get
+        .use(requireAdmin)
+        .use(requirePermission("settings.write"))
+        .handler(({ context }) => {
+          if (!context.tenantCtx) throw new Error("Missing tenant context");
+          return getReturnSettings(context.rt, context.tenantCtx);
+        }),
+      update: os.admin.returnSettings.update
+        .use(requireAdmin)
+        .use(requirePermission("settings.write"))
+        .handler(({ context, input }) => {
+          if (!context.tenantCtx) throw new Error("Missing tenant context");
+          return updateReturnSettings(context.rt, context.tenantCtx, input);
         }),
     },
 
@@ -998,6 +1122,13 @@ export const storeRouter = os.router({
         .handler(({ context, input }) => {
           if (!context.tenantCtx) throw new Error("Missing tenant context");
           return getAdminCustomerDetail(context.rt, context.tenantCtx, input);
+        }),
+      create: os.admin.customers.create
+        .use(requireAdmin)
+        .use(requirePermission("customers.write"))
+        .handler(({ context, input }) => {
+          if (!context.tenantCtx) throw new Error("Missing tenant context");
+          return createAdminCustomer(context.rt, context.tenantCtx, input);
         }),
     },
 
@@ -1216,6 +1347,80 @@ export const storeRouter = os.router({
           return removeCustomDomain(context.rt, context.tenantCtx.tenantId, input.id);
         }),
     },
+    quotes: {
+      stats: os.admin.quotes.stats
+        .use(requireAdmin)
+        .use(requirePermission("orders.read"))
+        .handler(({ context }) => {
+          if (!context.tenantCtx) throw new Error("Missing tenant context");
+          return getAdminQuoteStats(context.rt, context.tenantCtx);
+        }),
+      list: os.admin.quotes.list
+        .use(requireAdmin)
+        .use(requirePermission("orders.read"))
+        .handler(({ context, input }) => {
+          if (!context.tenantCtx) throw new Error("Missing tenant context");
+          return listAdminQuotes(context.rt, context.tenantCtx, input);
+        }),
+      get: os.admin.quotes.get
+        .use(requireAdmin)
+        .use(requirePermission("orders.read"))
+        .handler(({ context, input }) => {
+          if (!context.tenantCtx) throw new Error("Missing tenant context");
+          return getAdminQuoteDetail(context.rt, context.tenantCtx, input);
+        }),
+      updateNote: os.admin.quotes.updateNote
+        .use(requireAdmin)
+        .use(requirePermission("orders.write"))
+        .handler(({ context, input }) => {
+          if (!context.tenantCtx) throw new Error("Missing tenant context");
+          return updateAdminQuoteNote(context.rt, context.tenantCtx, input);
+        }),
+      markLost: os.admin.quotes.markLost
+        .use(requireAdmin)
+        .use(requirePermission("orders.write"))
+        .handler(({ context, input }) => {
+          if (!context.tenantCtx) throw new Error("Missing tenant context");
+          return markAdminQuoteLost(context.rt, context.tenantCtx, input);
+        }),
+      reopen: os.admin.quotes.reopen
+        .use(requireAdmin)
+        .use(requirePermission("orders.write"))
+        .handler(({ context, input }) => {
+          if (!context.tenantCtx) throw new Error("Missing tenant context");
+          return reopenAdminQuote(context.rt, context.tenantCtx, input);
+        }),
+      delete: os.admin.quotes.delete
+        .use(requireAdmin)
+        .use(requirePermission("orders.write"))
+        .handler(({ context, input }) => {
+          if (!context.tenantCtx) throw new Error("Missing tenant context");
+          return deleteAdminQuote(context.rt, context.tenantCtx, input);
+        }),
+      linkOrder: os.admin.quotes.linkOrder
+        .use(requireAdmin)
+        .use(requirePermission("orders.write"))
+        .handler(({ context, input }) => {
+          if (!context.tenantCtx) throw new Error("Missing tenant context");
+          return linkOrderToQuote(context.rt, context.tenantCtx, input);
+        }),
+    },
+    abandonedCheckouts: {
+      stats: os.admin.abandonedCheckouts.stats
+        .use(requireAdmin)
+        .use(requirePermission("orders.read"))
+        .handler(({ context }) => {
+          if (!context.tenantCtx) throw new Error("Missing tenant context");
+          return getAdminAbandonedCheckoutStats(context.rt, context.tenantCtx);
+        }),
+      list: os.admin.abandonedCheckouts.list
+        .use(requireAdmin)
+        .use(requirePermission("orders.read"))
+        .handler(({ context, input }) => {
+          if (!context.tenantCtx) throw new Error("Missing tenant context");
+          return listAdminAbandonedCheckouts(context.rt, context.tenantCtx, input);
+        }),
+    },
   },
   storefront: {
     search: os.storefront.search
@@ -1330,6 +1535,18 @@ export const storeRouter = os.router({
         .handler(async ({ context, input }) => {
           if (!context.tenantCtx) throw new Error("Missing tenant context");
           return verifyStorefrontPassword(context.rt, context.tenantCtx, input.password);
+        }),
+    },
+    quotes: {
+      submit: os.storefront.quotes.submit
+        .use(requireStorefront)
+        .handler(async ({ context, input }) => {
+          if (!context.tenantCtx) throw new Error("Missing tenant context");
+          const ip = clientIp(context.headers ?? new Headers());
+          return submitQuoteRequest(context.rt, context.tenantCtx, {
+            ...input,
+            ip,
+          });
         }),
     },
   },

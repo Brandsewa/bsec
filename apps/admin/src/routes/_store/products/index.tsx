@@ -229,7 +229,18 @@ export function ProductsPage() {
       sort: { asc: "title_asc", desc: "title_desc" },
       cell: (p) => (
         <div className="flex max-w-72 flex-col">
-          <span className="truncate font-medium text-foreground">{p.title}</span>
+          <div className="flex items-center gap-1.5">
+            <span className="truncate font-medium text-foreground">{p.title}</span>
+            {p.preorderStatus === "passed" ? (
+              <span className="inline-flex shrink-0 items-center rounded bg-rose-500/10 px-1.5 py-0.25 text-[10px] font-medium text-rose-700 dark:text-rose-400">
+                Pre-order date passed
+              </span>
+            ) : p.preorderStatus === "active" ? (
+              <span className="inline-flex shrink-0 items-center rounded bg-amber-500/10 px-1.5 py-0.25 text-[10px] font-medium text-amber-700 dark:text-amber-400">
+                Pre-order
+              </span>
+            ) : null}
+          </div>
           <span className="truncate text-muted-foreground">{p.slug}</span>
         </div>
       ),

@@ -57,6 +57,57 @@ export const StoreSettings = z.object({
 });
 export type StoreSettings = z.infer<typeof StoreSettings>;
 
+export const OrderSettings = z.object({
+  prefix: z.string().max(10).regex(/^[A-Za-z0-9#\-_/]*$/, "Prefix can only contain letters, numbers, and # - _ /"),
+  padding: z.number().int().min(3).max(8),
+  nextValue: z.number().int().min(1),
+  currentNextValue: z.number().int().min(1),
+});
+export type OrderSettings = z.infer<typeof OrderSettings>;
+
+export const UpdateOrderSettingsInput = z.object({
+  prefix: z.string().max(10).regex(/^[A-Za-z0-9#\-_/]*$/, "Prefix can only contain letters, numbers, and # - _ /").optional(),
+  padding: z.number().int().min(3).max(8).optional(),
+  nextValue: z.number().int().min(1).optional(),
+});
+export type UpdateOrderSettingsInput = z.infer<typeof UpdateOrderSettingsInput>;
+
+export const OrderStats = z.object({
+  totalOrders: z.number().int(),
+  openOrders: z.number().int(),
+  paidOrders: z.number().int(),
+  totalRevenue: z.number().int(),
+  avgOrderValue: z.number().int(),
+});
+export type OrderStats = z.infer<typeof OrderStats>;
+
+export const PreorderListItem = z.object({
+  id: z.string().uuid(),
+  number: z.string(),
+  customerEmail: z.string().nullable(),
+  customerPhone: z.string().nullable(),
+  customerName: z.string().nullable(),
+  status: z.string(),
+  paymentStatus: z.string(),
+  fulfillmentStatus: z.string(),
+  grandTotal: z.number(),
+  placedAt: z.string(),
+  shipsOn: z.string(),
+  preorderReleasedAt: z.string().nullable(),
+  itemsCount: z.number(),
+  preorderItemsCount: z.number(),
+  firstItemTitle: z.string().nullable(),
+});
+export type PreorderListItem = z.infer<typeof PreorderListItem>;
+
+export const PreorderStats = z.object({
+  openPreorders: z.number().int(),
+  readyToShip: z.number().int(),
+  dueNext14Days: z.number().int(),
+  overdue: z.number().int(),
+});
+export type PreorderStats = z.infer<typeof PreorderStats>;
+
 export const FeatureFlagItem = z.object({
   key: z.string(),
   enabled: z.boolean(),
@@ -78,6 +129,9 @@ export const ProductVariant = z.object({
   dimensions: z.record(z.string(), z.unknown()).nullable().optional(),
   trackInventory: z.boolean(),
   allowBackorder: z.boolean(),
+  preorderEnabled: z.boolean().default(false),
+  preorderShipsOn: z.string().nullable().optional(),
+  preorderMessage: z.string().nullable().optional(),
   position: z.number(),
   imageMediaId: z.string().uuid().nullable().optional(),
   createdAt: z.string(),
@@ -120,6 +174,7 @@ export const Product = z.object({
   requiresShipping: z.boolean(),
   isFeatured: z.boolean(),
   publishedAt: z.string().nullable().optional(),
+  priceOnRequest: z.boolean().default(false),
   ratingAvg: z.string(),
   ratingCount: z.number(),
   createdAt: z.string(),
@@ -129,6 +184,7 @@ export const Product = z.object({
   priceMin: z.number().nullable().optional(),
   priceMax: z.number().nullable().optional(),
   stock: z.number().optional(),
+  preorderStatus: z.enum(["active", "passed"]).nullable().optional(),
 });
 export type Product = z.infer<typeof Product>;
 
@@ -431,6 +487,208 @@ export const StoreSupportSession = z.object({
   actionsCount: z.number(),
 });
 
+// --- Quotes Schemas ---
+export const QuoteRequest = z.object({
+  id: z.string().uuid(),
+  number: z.string(),
+  productId: z.string().uuid(),
+  variantId: z.string().uuid(),
+  productTitle: z.string(),
+  variantTitle: z.string(),
+  quantity: z.number().int().min(1),
+  name: z.string(),
+  email: z.string(),
+  phone: z.string(),
+  company: z.string().nullable().optional(),
+  message: z.string().nullable().optional(),
+  status: z.enum(["new", "quoted", "accepted", "lost", "expired"]),
+  derivedStage: z.enum(["needs_reply", "quote_sent", "accepted", "expired", "closed"]),
+  adminNote: z.string().nullable().optional(),
+  quotedTotal: z.number().nullable().optional(),
+  quoteNote: z.string().nullable().optional(),
+  validUntil: z.string().nullable().optional(),
+  quotedAt: z.string().nullable().optional(),
+  orderId: z.string().uuid().nullable().optional(),
+  orderNumber: z.string().nullable().optional(),
+  orderStatus: z.string().nullable().optional(),
+  orderPaymentStatus: z.string().nullable().optional(),
+  orderConfirmUrl: z.string().nullable().optional(),
+  orderViewUrl: z.string().nullable().optional(),
+  customerId: z.string().uuid().nullable().optional(),
+  createdAt: z.string(),
+  updatedAt: z.string(),
+});
+export type QuoteRequest = z.infer<typeof QuoteRequest>;
+
+export const QuoteStats = z.object({
+  needsReply: z.number().int().min(0),
+  quoteSent: z.number().int().min(0),
+  expired: z.number().int().min(0),
+  accepted: z.number().int().min(0),
+  totalQuotesValue: z.number().int().min(0),
+});
+export type QuoteStats = z.infer<typeof QuoteStats>;
+
+export const AbandonedCheckoutItem = z.object({
+  id: z.string().uuid(),
+  cartToken: z.string(),
+  customer: z.object({
+    name: z.string().nullable().optional(),
+    email: z.string().nullable().optional(),
+    phone: z.string().nullable().optional(),
+  }),
+  itemsSummary: z.object({
+    firstTitle: z.string().nullable().optional(),
+    count: z.number().int(),
+    productId: z.string().uuid().nullable().optional(),
+    productSlug: z.string().nullable().optional(),
+  }),
+  total: z.number().int(), // minor units / paise
+  currency: z.string().default("INR"),
+  abandonedAt: z.string(),
+  recovered: z.boolean(),
+  recoveredAt: z.string().nullable().optional(),
+  emailStatus: z.enum(["not_sent", "sent", "failed", "not_applicable"]),
+  recoverySentAt: z.string().nullable().optional(),
+});
+export type AbandonedCheckoutItem = z.infer<typeof AbandonedCheckoutItem>;
+
+export const AbandonedCheckoutStats = z.object({
+  abandoned: z.number().int().min(0),
+  open: z.number().int().min(0),
+  recovered: z.number().int().min(0),
+  emailsSent: z.number().int().min(0),
+  potentialRevenue: z.number().int().min(0), // paise
+});
+export type AbandonedCheckoutStats = z.infer<typeof AbandonedCheckoutStats>;
+
+export const ReturnReasonConfig = z.object({
+  id: z.string(),
+  label: z.string(),
+  photoRequirement: z.enum(["required", "optional", "not_asked"]),
+});
+export type ReturnReasonConfig = z.infer<typeof ReturnReasonConfig>;
+
+export const ReturnSettings = z.object({
+  acceptReturns: z.boolean(),
+  allowExchanges: z.boolean(),
+  returnWindowDays: z.number().int().min(1).max(90),
+  reasons: z.array(ReturnReasonConfig),
+  instructions: z.string(),
+  policyText: z.string(),
+});
+export type ReturnSettings = z.infer<typeof ReturnSettings>;
+
+export const AdminReturnStats = z.object({
+  needsReview: z.number().int().min(0),
+  awaitingItem: z.number().int().min(0),
+  toResolve: z.number().int().min(0),
+  resolvedLast30Days: z.number().int().min(0),
+});
+export type AdminReturnStats = z.infer<typeof AdminReturnStats>;
+
+export const AdminReturnItem = z.object({
+  title: z.string(),
+  variantTitle: z.string().nullable().optional(),
+  quantity: z.number().int(),
+  unitPrice: z.number().int(),
+  lineTotal: z.number().int(),
+});
+export type AdminReturnItem = z.infer<typeof AdminReturnItem>;
+
+export const AdminReturnListItem = z.object({
+  id: z.string().uuid(),
+  number: z.string(),
+  status: z.string(),
+  reason: z.string(),
+  resolution: z.string(),
+  requestedResolution: z.string().nullable().optional(),
+  customerComment: z.string().nullable().optional(),
+  exchangeRequest: z.string().nullable().optional(),
+  decisionMessage: z.string().nullable().optional(),
+  adminNote: z.string().nullable().optional(),
+  refundMethod: z.string().nullable().optional(),
+  refundReference: z.string().nullable().optional(),
+  refundAmount: z.number().nullable().optional(),
+  refundedAt: z.string().nullable().optional(),
+  exchangeNote: z.string().nullable().optional(),
+  exchangeOrderId: z.string().uuid().nullable().optional(),
+  photosCount: z.number().int(),
+  createdAt: z.string(),
+  updatedAt: z.string(),
+  orderId: z.string().uuid(),
+  orderNumber: z.string(),
+  orderStatus: z.string(),
+  customerEmail: z.string().nullable().optional(),
+  customerName: z.string().nullable().optional(),
+  items: z.array(AdminReturnItem),
+  computedRefundAmount: z.number().int(),
+});
+export type AdminReturnListItem = z.infer<typeof AdminReturnListItem>;
+
+export const AdminReturnDetail = z.object({
+  id: z.string().uuid(),
+  number: z.string(),
+  status: z.string(),
+  reason: z.string(),
+  resolution: z.string(),
+  requestedResolution: z.string().nullable().optional(),
+  customerComment: z.string().nullable().optional(),
+  exchangeRequest: z.string().nullable().optional(),
+  decisionMessage: z.string().nullable().optional(),
+  adminNote: z.string().nullable().optional(),
+  refundMethod: z.string().nullable().optional(),
+  refundReference: z.string().nullable().optional(),
+  refundAmount: z.number().nullable().optional(),
+  refundedAt: z.string().nullable().optional(),
+  exchangeNote: z.string().nullable().optional(),
+  exchangeOrderId: z.string().uuid().nullable().optional(),
+  photos: z.array(z.object({ id: z.string(), url: z.string(), filename: z.string() })),
+  createdAt: z.string(),
+  updatedAt: z.string(),
+  order: z.object({
+    id: z.string().uuid(),
+    number: z.string(),
+    status: z.string(),
+    paymentStatus: z.string(),
+    grandTotal: z.number(),
+    totalAlreadyRefunded: z.number(),
+    maxRefundable: z.number(),
+    paymentMethod: z.string(),
+    customerEmail: z.string().nullable().optional(),
+    customerName: z.string().nullable().optional(),
+    customerPhone: z.string().nullable().optional(),
+    shippingAddress: z.record(z.string(), z.unknown()).nullable().optional(),
+    createdAt: z.string(),
+  }),
+  items: z.array(
+    z.object({
+      id: z.string().uuid(),
+      orderItemId: z.string().uuid(),
+      title: z.string(),
+      variantTitle: z.string().nullable().optional(),
+      quantity: z.number().int(),
+      bought: z.number().int(),
+      unitPrice: z.number().int(),
+      lineTotal: z.number().int(),
+      restock: z.boolean(),
+    }),
+  ),
+  computedRefundAmount: z.number().int(),
+  timeline: z.array(
+    z.object({
+      id: z.string().uuid(),
+      type: z.string(),
+      message: z.string(),
+      actorType: z.string(),
+      actorId: z.string().nullable().optional(),
+      createdAt: z.string(),
+      data: z.record(z.string(), z.unknown()).nullable().optional(),
+    }),
+  ),
+});
+export type AdminReturnDetail = z.infer<typeof AdminReturnDetail>;
+
 export const adminContract = {
   support: {
     list: oc.route({ method: "GET", path: "/admin/support/sessions" }).output(z.array(StoreSupportSession)),
@@ -536,6 +794,15 @@ export const adminContract = {
       )
       .output(StoreSettings),
   },
+  orderSettings: {
+    get: oc
+      .route({ method: "GET", path: "/admin/settings/orders" })
+      .output(OrderSettings),
+    update: oc
+      .route({ method: "PUT", path: "/admin/settings/orders" })
+      .input(UpdateOrderSettingsInput)
+      .output(OrderSettings),
+  },
   featureFlags: {
     list: oc
       .route({ method: "GET", path: "/admin/feature-flags" })
@@ -589,6 +856,7 @@ export const adminContract = {
           tags: z.array(z.string()).default([]),
           requiresShipping: z.boolean().default(true),
           isFeatured: z.boolean().default(false),
+          priceOnRequest: z.boolean().default(false),
           options: z
             .array(
               z.object({
@@ -607,6 +875,9 @@ export const adminContract = {
                 costPrice: z.number().int().min(0).optional(),
                 trackInventory: z.boolean().default(true),
                 allowBackorder: z.boolean().default(false),
+                preorderEnabled: z.boolean().default(false),
+                preorderShipsOn: z.string().nullable().optional(),
+                preorderMessage: z.string().max(200).nullable().optional(),
                 optionValues: z.record(z.string(), z.string()).optional(),
                 imageMediaId: z.string().uuid().optional(),
               }),
@@ -630,6 +901,7 @@ export const adminContract = {
           tags: z.array(z.string()).optional(),
           requiresShipping: z.boolean().optional(),
           isFeatured: z.boolean().optional(),
+          priceOnRequest: z.boolean().optional(),
         }),
       )
       .output(Product),
@@ -653,6 +925,9 @@ export const adminContract = {
           costPrice: z.number().int().min(0).nullable().optional(),
           trackInventory: z.boolean().optional(),
           allowBackorder: z.boolean().optional(),
+          preorderEnabled: z.boolean().optional(),
+          preorderShipsOn: z.string().nullable().optional(),
+          preorderMessage: z.string().max(200).nullable().optional(),
           imageMediaId: z.string().uuid().nullable().optional(),
         }),
       )
@@ -1028,11 +1303,13 @@ export const adminContract = {
       .input(
         z
           .object({
-            view: z.enum(["all", "unfulfilled", "unpaid", "cod_to_confirm", "rto"]).default("all"),
+            view: z.enum(["all", "unfulfilled", "unpaid", "cod_to_confirm", "rto", "open", "archived"]).default("all"),
             search: z.string().optional(),
             status: z.string().optional(),
             paymentStatus: z.string().optional(),
             fulfillmentStatus: z.string().optional(),
+            source: z.string().optional(),
+            tag: z.string().optional(),
             /** Cash-on-delivery orders only (payment status cod_*). */
             cod: z.boolean().optional(),
             /** ISO timestamps bounding placedAt (inclusive from, exclusive to). */
@@ -1059,12 +1336,17 @@ export const adminContract = {
               fulfillmentStatus: z.string(),
               grandTotal: z.number(),
               placedAt: z.string(),
+              shipsOn: z.string().nullable().optional(),
               itemsCount: z.number(),
+              firstItemTitle: z.string().nullable().optional(),
             }),
           ),
           total: z.number(),
         }),
       ),
+    stats: oc
+      .route({ method: "GET", path: "/admin/orders/stats" })
+      .output(OrderStats),
     get: oc
       .route({ method: "GET", path: "/admin/orders/{id}" })
       .input(z.object({ id: z.string().uuid() }))
@@ -1087,8 +1369,11 @@ export const adminContract = {
             shippingAddress: z.unknown(),
             billingAddress: z.unknown().nullable().optional(),
             placedAt: z.string(),
+            shipsOn: z.string().nullable().optional(),
+            preorderReleasedAt: z.string().nullable().optional(),
             cancelledAt: z.string().nullable().optional(),
             cancelReason: z.string().nullable().optional(),
+            tags: z.array(z.string()).default([]),
           }),
           items: z.array(
             z.object({
@@ -1101,6 +1386,7 @@ export const adminContract = {
               total: z.number(),
               fulfilledQty: z.number(),
               returnedQty: z.number(),
+              shipsOn: z.string().nullable().optional(),
             }),
           ),
           fulfillments: z.array(
@@ -1142,25 +1428,109 @@ export const adminContract = {
           ),
         }),
       ),
-    createDraft: oc
-      .route({ method: "POST", path: "/admin/orders/draft" })
+    estimateDraft: oc
+      .route({ method: "POST", path: "/admin/orders/draft/estimate" })
       .input(
         z.object({
-          email: z.string().email(),
-          phone: z.string().min(5),
-          shippingAddress: z.record(z.string(), z.unknown()),
           items: z.array(
             z.object({
               variantId: z.string().uuid(),
               quantity: z.number().int().min(1),
+              unitPriceOverride: z.number().int().nonnegative().optional(),
             }),
           ),
+          shippingAddress: z
+            .object({
+              state: z.string().optional(),
+              pincode: z.string().optional(),
+              city: z.string().optional(),
+            })
+            .optional(),
+          manualDiscount: z
+            .object({
+              type: z.enum(["flat", "percent"]),
+              value: z.number().nonnegative(),
+            })
+            .optional(),
+          shippingOverride: z
+            .object({
+              amount: z.number().int().nonnegative(),
+            })
+            .optional(),
+          shippingMethod: z.string().optional(),
+        }),
+      )
+      .output(
+        z.object({
+          subtotal: z.number(),
+          discountTotal: z.number(),
+          shippingTotal: z.number(),
+          availableShippingRates: z.array(
+            z.object({
+              method: z.string(),
+              title: z.string(),
+              amount: z.number(),
+              estimatedDays: z.string().optional(),
+            }),
+          ),
+          tax: z.object({
+            isInterState: z.boolean(),
+            cgst: z.number(),
+            sgst: z.number(),
+            igst: z.number(),
+            totalTax: z.number(),
+          }),
+          grandTotal: z.number(),
+        }),
+      ),
+    createDraft: oc
+      .route({ method: "POST", path: "/admin/orders/draft" })
+      .input(
+        z.object({
+          customerId: z.string().uuid().nullable().optional(),
+          email: z.string().email(),
+          phone: z.string().min(5),
+          shippingAddress: z.record(z.string(), z.unknown()),
+          billingAddress: z.record(z.string(), z.unknown()).optional(),
+          items: z.array(
+            z.object({
+              variantId: z.string().uuid(),
+              quantity: z.number().int().min(1),
+              unitPriceOverride: z.number().int().nonnegative().optional(),
+              unitPriceOverrideReason: z.string().optional(),
+            }),
+          ),
+          manualDiscount: z
+            .object({
+              type: z.enum(["flat", "percent"]),
+              value: z.number().nonnegative(),
+              reason: z.string().min(1),
+            })
+            .optional(),
+          shippingOverride: z
+            .object({
+              amount: z.number().int().nonnegative(),
+              reason: z.string().min(1),
+            })
+            .optional(),
+          shippingMethod: z.string().optional(),
+          paymentOutcome: z.enum(["paid", "pending", "cod"]).default("pending"),
+          paymentReference: z.string().optional(),
+          notes: z.string().optional(),
+          tags: z.array(z.string()).optional(),
+          quoteId: z.string().uuid().optional(),
         }),
       )
       .output(
         z.object({
           orderId: z.string().uuid(),
           orderNumber: z.string(),
+          status: z.string(),
+          paymentStatus: z.string(),
+          subtotal: z.number(),
+          discountTotal: z.number(),
+          shippingTotal: z.number(),
+          taxTotal: z.number(),
           grandTotal: z.number(),
           payLink: z.string().optional(),
         }),
@@ -1237,42 +1607,137 @@ export const adminContract = {
       .output(z.object({ success: z.boolean(), status: z.string() })),
   },
 
-  // --- Returns ---
-  returns: {
+  // --- Pre-orders (ORDERS-PREORDERS-PLAN §3.3) ---
+  preorders: {
     list: oc
-      .route({ method: "GET", path: "/admin/returns" })
-      .input(z.object({ status: z.string().optional() }).optional())
+      .route({ method: "GET", path: "/admin/preorders" })
+      .input(
+        z
+          .object({
+            view: z.enum(["all", "waiting", "ready", "shipped", "cancelled"]).default("all"),
+            search: z.string().optional(),
+            page: z.number().int().min(1).default(1),
+            pageSize: z.number().int().min(1).max(100).default(50),
+            sort: z.enum(["ships_asc", "ships_desc", "placed_asc", "placed_desc"]).default("ships_asc"),
+          })
+          .optional(),
+      )
       .output(
         z.object({
-          items: z.array(
-            z.object({
-              id: z.string().uuid(),
-              number: z.string(),
-              status: z.string(),
-              reason: z.string(),
-              resolution: z.string(),
-              adminNote: z.string().nullable(),
-              createdAt: z.string(),
-              orderId: z.string().uuid(),
-              orderNumber: z.string(),
-              customerEmail: z.string().nullable(),
-              items: z.array(z.object({ title: z.string(), quantity: z.number() })),
-              refundAmount: z.number(),
-            }),
-          ),
+          items: z.array(PreorderListItem),
+          total: z.number(),
+          page: z.number(),
+          pageSize: z.number(),
         }),
       ),
+    stats: oc
+      .route({ method: "GET", path: "/admin/preorders/stats" })
+      .output(PreorderStats),
+    changeShipDate: oc
+      .route({ method: "POST", path: "/admin/preorders/change-ship-date" })
+      .input(
+        z.object({
+          orderIds: z.array(z.string().uuid()).min(1),
+          shipsOn: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "Invalid date format (YYYY-MM-DD)"),
+          reason: z.string().max(300).optional(),
+        }),
+      )
+      .output(
+        z.object({
+          updatedCount: z.number(),
+          skippedCount: z.number(),
+        }),
+      ),
+    releaseNow: oc
+      .route({ method: "POST", path: "/admin/preorders/release-now" })
+      .input(
+        z.object({
+          id: z.string().uuid(),
+        }),
+      )
+      .output(
+        z.object({
+          success: z.boolean(),
+        }),
+      ),
+  },
+
+  // --- Returns (ORDERS-RETURNS-PLAN §3.4) ---
+  returns: {
+    stats: oc.route({ method: "GET", path: "/admin/returns/stats" }).output(AdminReturnStats),
+    list: oc
+      .route({ method: "GET", path: "/admin/returns" })
+      .input(
+        z
+          .object({
+            view: z.enum(["all", "needs_review", "approved", "received", "resolved", "rejected_closed"]).default("all"),
+            search: z.string().optional(),
+            resolution: z.enum(["refund", "replacement"]).optional(),
+            dateFrom: z.string().optional(),
+            dateTo: z.string().optional(),
+            sort: z.enum(["created_desc", "created_asc", "amount_desc", "amount_asc"]).default("created_desc"),
+            page: z.number().int().min(1).default(1),
+            pageSize: z.number().int().min(1).max(100).default(50),
+          })
+          .optional(),
+      )
+      .output(
+        z.object({
+          items: z.array(AdminReturnListItem),
+          total: z.number().int(),
+          page: z.number().int(),
+          pageSize: z.number().int(),
+        }),
+      ),
+    get: oc
+      .route({ method: "GET", path: "/admin/returns/{id}" })
+      .input(z.object({ id: z.string().uuid() }))
+      .output(AdminReturnDetail),
     act: oc
       .route({ method: "POST", path: "/admin/returns/{id}/act" })
       .input(
         z.object({
           id: z.string().uuid(),
-          action: z.enum(["approve", "reject", "pick_up", "receive", "refund", "close"]),
+          action: z.enum(["approve", "reject", "pick_up", "receive", "refund", "replace", "close"]),
           note: z.string().trim().max(500).optional(),
+          resolution: z.enum(["refund", "replacement"]).optional(),
+          decisionMessage: z.string().trim().max(1000).optional(),
           restock: z.boolean().optional(),
+          refundAmount: z.number().int().min(1).optional(),
+          refundMethod: z.enum(["upi", "bank_transfer", "cash", "original_payment_method", "other"]).optional(),
+          refundReference: z.string().trim().max(100).optional(),
+          exchangeNote: z.string().trim().max(500).optional(),
+          exchangeOrderId: z.string().uuid().optional(),
         }),
       )
       .output(z.object({ success: z.boolean(), status: z.string() })),
+  },
+
+  // --- Return Settings (ORDERS-SETTINGS-PLAN §5) ---
+  returnSettings: {
+    get: oc.route({ method: "GET", path: "/admin/settings/returns" }).output(ReturnSettings),
+    update: oc
+      .route({ method: "PUT", path: "/admin/settings/returns" })
+      .input(
+        z.object({
+          acceptReturns: z.boolean().optional(),
+          allowExchanges: z.boolean().optional(),
+          returnWindowDays: z.number().int().min(1).max(90).optional(),
+          reasons: z
+            .array(
+              z.object({
+                id: z.string(),
+                label: z.string().trim().min(1).max(60),
+                photoRequirement: z.enum(["required", "optional", "not_asked"]),
+              }),
+            )
+            .max(12)
+            .optional(),
+          instructions: z.string().max(1000).optional(),
+          policyText: z.string().max(1000).optional(),
+        }),
+      )
+      .output(ReturnSettings),
   },
 
   // --- M5 Customers Admin ---
@@ -1353,6 +1818,41 @@ export const adminContract = {
               placedAt: z.string(),
             }),
           ),
+        }),
+      ),
+    create: oc
+      .route({ method: "POST", path: "/admin/customers" })
+      .input(
+        z.object({
+          name: z.string().min(1),
+          email: z.string().email(),
+          phone: z.string().optional(),
+          tags: z.array(z.string()).optional(),
+          note: z.string().optional(),
+          address: z
+            .object({
+              line1: z.string().min(1),
+              line2: z.string().optional(),
+              city: z.string().min(1),
+              stateCode: z.string().min(1),
+              pincode: z.string().min(1),
+              phone: z.string().optional(),
+              name: z.string().optional(),
+            })
+            .optional(),
+        }),
+      )
+      .output(
+        z.object({
+          customer: z.object({
+            id: z.string().uuid(),
+            name: z.string(),
+            email: z.string(),
+            phone: z.string().nullable(),
+            tags: z.array(z.string()),
+            note: z.string().nullable().optional(),
+          }),
+          addressId: z.string().uuid().optional(),
         }),
       ),
   },
@@ -1640,5 +2140,78 @@ export const adminContract = {
       .route({ method: "DELETE", path: "/admin/domains/{id}" })
       .input(z.object({ id: z.string().uuid() }))
       .output(z.object({ success: z.boolean() })),
+  },
+
+  quotes: {
+    stats: oc
+      .route({ method: "GET", path: "/admin/quotes/stats" })
+      .output(QuoteStats),
+    list: oc
+      .route({ method: "GET", path: "/admin/quotes" })
+      .input(
+        z
+          .object({
+            tab: z.enum(["all", "needs_reply", "quote_sent", "expired", "accepted", "closed"]).default("all"),
+            search: z.string().optional(),
+            dateRange: z.enum(["any", "7d", "30d", "90d"]).default("any"),
+            customerType: z.enum(["all", "account", "guest"]).default("all"),
+            limit: z.number().int().min(1).max(100).default(50),
+            offset: z.number().int().min(0).default(0),
+          })
+          .optional(),
+      )
+      .output(z.object({ items: z.array(QuoteRequest), total: z.number() })),
+    get: oc
+      .route({ method: "GET", path: "/admin/quotes/{id}" })
+      .input(z.object({ id: z.string().uuid() }))
+      .output(QuoteRequest),
+    updateNote: oc
+      .route({ method: "PATCH", path: "/admin/quotes/{id}/note" })
+      .input(z.object({ id: z.string().uuid(), adminNote: z.string().max(5000) }))
+      .output(QuoteRequest),
+    markLost: oc
+      .route({ method: "POST", path: "/admin/quotes/{id}/lost" })
+      .input(z.object({ id: z.string().uuid(), reason: z.string().optional() }))
+      .output(QuoteRequest),
+    reopen: oc
+      .route({ method: "POST", path: "/admin/quotes/{id}/reopen" })
+      .input(z.object({ id: z.string().uuid() }))
+      .output(QuoteRequest),
+    delete: oc
+      .route({ method: "DELETE", path: "/admin/quotes/{id}" })
+      .input(z.object({ id: z.string().uuid() }))
+      .output(z.object({ success: z.boolean() })),
+    linkOrder: oc
+      .route({ method: "POST", path: "/admin/quotes/{id}/link-order" })
+      .input(
+        z.object({
+          id: z.string().uuid(),
+          orderId: z.string().uuid(),
+          validDays: z.number().int().min(1).max(90).default(7),
+          quoteNote: z.string().optional(),
+        }),
+      )
+      .output(QuoteRequest),
+  },
+
+  abandonedCheckouts: {
+    stats: oc
+      .route({ method: "GET", path: "/admin/abandoned-checkouts/stats" })
+      .output(AbandonedCheckoutStats),
+    list: oc
+      .route({ method: "GET", path: "/admin/abandoned-checkouts" })
+      .input(
+        z
+          .object({
+            view: z.enum(["all", "open", "recovered"]).default("all"),
+            search: z.string().optional(),
+            emailStatus: z.enum(["all", "not_sent", "sent", "failed", "not_applicable"]).default("all"),
+            sort: z.enum(["abandoned_desc", "abandoned_asc", "total_desc", "total_asc"]).default("abandoned_desc"),
+            limit: z.number().int().min(1).max(100).default(50),
+            offset: z.number().int().min(0).default(0),
+          })
+          .optional(),
+      )
+      .output(z.object({ items: z.array(AbandonedCheckoutItem), total: z.number().int() })),
   },
 };

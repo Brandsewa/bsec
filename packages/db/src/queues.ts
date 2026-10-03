@@ -20,6 +20,9 @@ export const QUEUES = [
   { name: "cart.abandoned", options: { retryLimit: 5, retryBackoff: true, retryDelay: 5 } },
   { name: "cart.recovery_sweep", options: { retryLimit: 5, retryBackoff: true, retryDelay: 5 } },
   { name: "subscription.trial_expiry_sweep", options: { retryLimit: 5, retryBackoff: true, retryDelay: 5 } },
+  { name: "order.preorder_date_changed", options: { retryLimit: 5, retryBackoff: true, retryDelay: 5 } },
+  { name: "order.preorder_reminder_sweep", options: { retryLimit: 5, retryBackoff: true, retryDelay: 5 } },
+  { name: "order.return_photo_cleanup", options: { retryLimit: 3, retryBackoff: true, retryDelay: 10 } },
 ] as const;
 
 export type QueueName = (typeof QUEUES)[number]["name"];
@@ -41,4 +44,7 @@ export const QUEUE_NAMES = {
   CART_ABANDONED: "cart.abandoned",
   CART_RECOVERY_SWEEP: "cart.recovery_sweep",
   SUBSCRIPTION_TRIAL_EXPIRY_SWEEP: "subscription.trial_expiry_sweep",
+  ORDER_PREORDER_DATE_CHANGED: "order.preorder_date_changed",
+  ORDER_PREORDER_REMINDER_SWEEP: "order.preorder_reminder_sweep",
+  ORDER_RETURN_PHOTO_CLEANUP: "order.return_photo_cleanup",
 } as const;

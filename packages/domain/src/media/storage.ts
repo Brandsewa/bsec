@@ -2,7 +2,7 @@
  * Media Storage & Cloudflare Images Helpers per PLAN §5.5 & §8.1.
  * Supports S3/R2 SigV4 presigned PUT uploads and Cloudflare Images API integration.
  */
-import { PutObjectCommand, S3Client } from "@aws-sdk/client-s3";
+import { GetObjectCommand, PutObjectCommand, S3Client } from "@aws-sdk/client-s3";
 import { getSignedUrl } from "@aws-sdk/s3-request-presigner";
 
 /**
@@ -227,11 +227,11 @@ export async function buildPresignedUploadDescriptor(params: {
   filename: string;
   mime: string;
   bytes: number;
-  id?: string;
-  expiresInSeconds?: number;
-  bucketBaseUrl?: string;
-  r2Config?: Partial<R2ClientConfig>;
-  s3Client?: S3Client;
+  id?: string | undefined;
+  expiresInSeconds?: number | undefined;
+  bucketBaseUrl?: string | undefined;
+  r2Config?: Partial<R2ClientConfig> | undefined;
+  s3Client?: S3Client | undefined;
 }): Promise<PresignedUploadDescriptor> {
   const { storageKey } = generateStorageKey(
     params.tenantId,
@@ -264,6 +264,29 @@ export async function buildPresignedUploadDescriptor(params: {
     },
     expiresInSeconds: expiresIn,
   };
+}
+
+/**
+ * Generates a short-lived S3/R2 SigV4 presigned GET download URL for private files (such as return photos).
+ */
+export async function buildPresignedDownloadUrl(params: {
+  storageKey: string;
+  expiresInSeconds?: number | undefined;
+  r2Config?: Partial<R2ClientConfig> | undefined;
+  s3Client?: S3Client | undefined;
+}): Promise<string> {
+  const expiresIn = params.expiresInSeconds ?? 900;
+  const cfg = getR2Config(params.r2Config);
+  const client = params.s3Client ?? createR2Client(params.r2Config);
+
+  const command = new GetObjectCommand({
+    Bucket: cfg.bucketName,
+    Key: params.storageKey,
+  });
+
+  return await getSignedUrl(client, command, {
+    expiresIn,
+  });
 }
 
 export interface CloudflareImageUploadResult {

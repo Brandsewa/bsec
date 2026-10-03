@@ -2,6 +2,7 @@ import { sql } from "drizzle-orm";
 import {
   bigint,
   boolean,
+  date,
   index,
   integer,
   jsonb,
@@ -42,8 +43,11 @@ export const orders = tenantTable(
     source: text("source").notNull().default("web"),
     cartId: uuid("cart_id"),
     idempotencyKey: text("idempotency_key"),
+    shipsOn: date("ships_on"),
+    preorderReleasedAt: timestamp("preorder_released_at", { withTimezone: true }),
     cancelledAt: timestamp("cancelled_at", { withTimezone: true }),
     cancelReason: text("cancel_reason"),
+    tags: text("tags").array().notNull().default(sql`ARRAY[]::text[]`),
     placedAt: timestamp("placed_at", { withTimezone: true }).notNull().default(sql`now()`),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().default(sql`now()`),
     updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().default(sql`now()`),
@@ -56,6 +60,7 @@ export const orders = tenantTable(
     index("orders_tenant_payment_status_idx").on(t.tenantId, t.paymentStatus),
     index("orders_tenant_customer_id_idx").on(t.tenantId, t.customerId),
     index("orders_tenant_placed_at_idx").on(t.tenantId, t.placedAt),
+    index("orders_tenant_ships_on_idx").on(t.tenantId, t.shipsOn).where(sql`ships_on is not null`),
   ],
 );
 
@@ -75,6 +80,7 @@ export const orderItems = tenantTable(
     hsn: text("hsn"),
     quantity: integer("quantity").notNull(),
     unitPrice: bigint("unit_price", { mode: "number" }).notNull(),
+    shipsOn: date("ships_on"),
     discountAmount: bigint("discount_amount", { mode: "number" }).notNull().default(0),
     taxRateBps: integer("tax_rate_bps").notNull().default(0),
     cgst: bigint("cgst", { mode: "number" }).notNull().default(0),

@@ -26,6 +26,9 @@ export interface StorefrontCartItem {
     title: string;
     optionValues: Record<string, string> | null;
     price: number;
+    preorderEnabled?: boolean | undefined;
+    preorderShipsOn?: string | null | undefined;
+    preorderMessage?: string | null | undefined;
   };
   primaryImage: {
     mediaId: string;
@@ -115,6 +118,9 @@ async function loadCartWithItems(
         title: schema.variants.title,
         optionValues: schema.variants.optionValues,
         price: schema.variants.price,
+        preorderEnabled: schema.variants.preorderEnabled,
+        preorderShipsOn: schema.variants.preorderShipsOn,
+        preorderMessage: schema.variants.preorderMessage,
       },
       product: {
         id: schema.products.id,
@@ -184,6 +190,9 @@ async function loadCartWithItems(
         title: r.variant.title,
         optionValues: (r.variant.optionValues as Record<string, string>) ?? null,
         price: Number(r.variant.price),
+        preorderEnabled: r.variant.preorderEnabled,
+        preorderShipsOn: r.variant.preorderShipsOn ? (typeof r.variant.preorderShipsOn === "string" ? r.variant.preorderShipsOn : (r.variant.preorderShipsOn as Date).toISOString().slice(0, 10)) : null,
+        preorderMessage: r.variant.preorderMessage,
       },
       primaryImage: r.primaryMedia?.mediaId
         ? {
@@ -346,6 +355,10 @@ export async function addToCart(
     const variantData = variantRows[0];
     if (!variantData) {
       throw new Error("Variant not found or product is not available");
+    }
+
+    if (variantData.product.priceOnRequest) {
+      throw new Error("This product is price on request and cannot be added to cart");
     }
 
     const unitPriceSnapshot = Number(variantData.variant.price);
