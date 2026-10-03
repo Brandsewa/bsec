@@ -2,11 +2,14 @@ import { sql } from "drizzle-orm";
 import {
   bigint,
   boolean,
+  check,
   index,
   integer,
+  jsonb,
   text,
   timestamp,
   unique,
+  uniqueIndex,
   uuid,
 } from "drizzle-orm/pg-core";
 import { tenantForeignKey, tenantTable } from "../tenant-table.ts";
@@ -146,6 +149,70 @@ export const wishlistItems = tenantTable(
       column: t.variantId,
       target: variants,
       name: "wishlist_items_variant_fk",
+      onDelete: "cascade",
+    }),
+  ],
+);
+
+/**
+ * Customer Segments (Customers Phase 2, PLAN §2).
+ * Manual segments hold explicit membership rows (`customer_segment_members`);
+ * automatic segments hold a validated JSON rule set on `rules` and are evaluated
+ * live (no membership rows, enforced in the domain service). At most 20 per store.
+ */
+export const customerSegments = tenantTable(
+  "customer_segments",
+  {
+    id: uuid("id").default(sql`uuidv7()`).primaryKey(),
+    name: text("name").notNull(),
+    description: text("description"),
+    kind: text("kind").notNull().default("manual"), // 'manual' | 'automatic'
+    rules: jsonb("rules"), // rule set for automatic segments; null for manual
+    isPreset: boolean("is_preset").notNull().default(false),
+    memberCount: integer("member_count").notNull().default(0),
+    countedAt: timestamp("counted_at", { withTimezone: true }),
+    createdBy: uuid("created_by"),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().default(sql`now()`),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().default(sql`now()`),
+  },
+  (t) => [
+    unique("customer_segments_tenant_id_uniq").on(t.tenantId, t.id),
+    // Name is unique per store case-insensitively (PLAN §2).
+    uniqueIndex("customer_segments_tenant_name_ci_uniq").on(t.tenantId, sql`lower(${t.name})`),
+    index("customer_segments_tenant_kind_idx").on(t.tenantId, t.kind),
+    check("customer_segments_kind_chk", sql`${t.kind} IN ('manual', 'automatic')`),
+    check("customer_segments_rules_chk", sql`(${t.kind} = 'manual' AND ${t.rules} IS NULL) OR (${t.kind} = 'automatic' AND ${t.rules} IS NOT NULL)`),
+  ],
+);
+
+/**
+ * Customer Segment Members (Customers Phase 2, PLAN §2). Manual segments only;
+ * membership rows cascade away with the segment or the customer.
+ */
+export const customerSegmentMembers = tenantTable(
+  "customer_segment_members",
+  {
+    id: uuid("id").default(sql`uuidv7()`).primaryKey(),
+    segmentId: uuid("segment_id").notNull(),
+    customerId: uuid("customer_id").notNull(),
+    addedBy: uuid("added_by"),
+    addedAt: timestamp("added_at", { withTimezone: true }).notNull().default(sql`now()`),
+  },
+  (t) => [
+    unique("customer_segment_members_uniq").on(t.tenantId, t.segmentId, t.customerId),
+    index("customer_segment_members_tenant_cust_idx").on(t.tenantId, t.customerId),
+    tenantForeignKey({
+      tableTenantId: t.tenantId,
+      column: t.segmentId,
+      target: customerSegments,
+      name: "customer_segment_members_segment_fk",
+      onDelete: "cascade",
+    }),
+    tenantForeignKey({
+      tableTenantId: t.tenantId,
+      column: t.customerId,
+      target: customers,
+      name: "customer_segment_members_customer_fk",
       onDelete: "cascade",
     }),
   ],

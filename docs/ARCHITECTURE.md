@@ -201,7 +201,7 @@ Drizzle schema files in `packages/db/src/schema/` (one Postgres database, `publi
 | `catalog.ts` | `media`, `brands`, `locations`, `categories`, `products`, `product_options`, `variants`, `product_media`, `product_categories`, `collections`, `collection_products`, `inventory_levels`, `inventory_movements`, `reviews` T |
 | `inventory-reservations.ts` | `inventory_reservations` T |
 | `cart.ts` | `carts`, `cart_items` T |
-| `customers.ts` | `customers`, `customer_addresses`, `customer_consent_events`, `wishlist_items`, `customer_otps` T |
+| `customers.ts` | `customers`, `customer_addresses`, `customer_consent_events`, `customer_segments`, `customer_segment_members`, `wishlist_items`, `customer_otps` T |
 | `orders.ts` | `orders`, `order_items`, `order_events`, `order_notes`, `number_sequences`, `action_tokens` T |
 | `payments.ts` | `payment_intents`, `payment_attempts`, `refunds` T |
 | `shipping.ts` | `fulfillments`, `fulfillment_items`, `tracking_events`, `returns`, `return_items`, `invoices`, `shipping_zones`, `shipping_rates` T |
@@ -253,8 +253,10 @@ Drizzle schema files in `packages/db/src/schema/` (one Postgres database, `publi
 | 0026 | `reviews` | reviews table with RLS, ratings check constraint, store_settings.auto_publish_reviews |
 | 0027 | `product_categories_primary` | product_categories.is_primary column with unique index per product |
 | 0028 | `customers_phase0` | customers is_guest, marketing consent fields, and customer_consent_events table |
+| 0029 | `customers_phase1` | customer_notes table (Customers Phase 1; reserved until that PR merges) |
+| 0030 | `customers_segments` | customer_segments and customer_segment_members tables (Customers Phase 2) |
 
-How to write one (expand, migrate, contract; `forceRlsSql`): `docs/migrations.md`. **Never edit an applied migration.** Latest on disk: `0028` (the docs check keeps this list honest).
+How to write one (expand, migrate, contract; `forceRlsSql`): `docs/migrations.md`. **Never edit an applied migration.** Latest on disk: `0030` (0029 lands with the Customers Phase 1 PR; the docs check keeps this list honest).
 
 ---
 
