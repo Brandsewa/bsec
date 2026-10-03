@@ -1,5 +1,5 @@
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
-import { and, eq } from "drizzle-orm";
+import { and, eq, sql } from "drizzle-orm";
 import { schema, withTenant } from "@bs/db";
 import { startTestDb, type TestDb } from "@bs/db/test-env";
 import { STORE_PERMISSIONS } from "@bs/auth";
@@ -14,6 +14,8 @@ import {
   setAdminCustomerStatus,
   setAdminCustomerTags,
   setMarketingConsent,
+  requestCustomerOtp,
+  verifyCustomerOtp,
   createProduct,
   adjustInventory,
   listInventoryLevels,
@@ -30,6 +32,7 @@ let ctxA: TenantContext;
 let ctxB: TenantContext;
 let ctxLimited: TenantContext;
 let variantAId: string;
+let variantBId: string;
 
 // Seeded fixtures (ids resolved in beforeAll)
 let acct1: string; // account, subscribed, 1 collected order, tag VIP, address in KA
@@ -89,6 +92,18 @@ beforeAll(async () => {
   variantAId = pA.variants[0]!.id;
   const locA = (await listInventoryLevels(rtWeb, ctxA, {})).items[0]!;
   await adjustInventory(rtWeb, ctxA, { variantId: variantAId, locationId: locA.locationId, quantityDelta: 100, reason: "received" });
+
+  const catB = await primaryCategory(rtWeb, ctxB);
+  const pB = await createProduct(rtWeb, ctxB, {
+    title: "Product B",
+    slug: "product-b",
+    status: "active",
+    primaryCategoryId: catB,
+    variants: [{ title: "Default", sku: "SKU-P1-B", price: paise(1000), trackInventory: true }],
+  });
+  variantBId = pB.variants[0]!.id;
+  const locB = (await listInventoryLevels(rtWeb, ctxB, {})).items[0]!;
+  await adjustInventory(rtWeb, ctxB, { variantId: variantBId, locationId: locB.locationId, quantityDelta: 100, reason: "received" });
 
   // ---- seed customers -----------------------------------------------------
   const insert = async (values: Partial<typeof schema.customers.$inferInsert> & { email: string }) => {
@@ -309,5 +324,83 @@ describe("Phase 1A: status and tag mutations", () => {
     await expect(setAdminCustomerTags(rtWeb, ctxB, { id: acct1, tags: ["hacked"] })).rejects.toThrow(/not found/i);
     const fromB = await listAdminCustomers(rtWeb, ctxB, { limit: 100 });
     expect(idsOf(fromB)).not.toContain(acct1);
+  });
+});
+
+describe("Blocked customers cannot sign in or check out", () => {
+  it("refuses phone OTP login for a blocked customer with the same message as a wrong code, and recovers after unblocking", async () => {
+    const phone = "9611100222";
+    const email = "otp-blocked@phase1.test";
+    const [row] = await withTenant(rtWeb._db.db, ctxA.tenantId, (tx) =>
+      tx.insert(schema.customers).values({ tenantId: ctxA.tenantId, email, phone, name: "Otp Blocked" }).returning(),
+    );
+    const customerId = row!.id;
+
+    const block = async (status: "active" | "blocked") => setAdminCustomerStatus(rtWeb, ctxA, { id: customerId, status });
+    await block("blocked");
+
+    // A blocked customer's valid code fails with exactly the wrong-code error.
+    const denied = await requestCustomerOtp(rtWeb._db.db, ctxA.tenantId, phone);
+    await expect(verifyCustomerOtp(rtWeb._db.db, ctxA.tenantId, phone, denied.devOtp!)).rejects.toThrow(/invalid or expired/i);
+    // No session was created for the blocked customer.
+    const [sessions] = await withTenant(rtWeb._db.db, ctxA.tenantId, (tx) =>
+      tx.select({ n: sql<number>`count(*)::int` }).from(schema.customerSessions).where(eq(schema.customerSessions.userId, customerId)),
+    );
+    expect(sessions?.n).toBe(0);
+
+    // After unblocking, a fresh code signs them in.
+    await block("active");
+    const allowed = await requestCustomerOtp(rtWeb._db.db, ctxA.tenantId, phone);
+    const ok = await verifyCustomerOtp(rtWeb._db.db, ctxA.tenantId, phone, allowed.devOtp!);
+    expect(ok.success).toBe(true);
+    expect(ok.customer.id).toBe(customerId);
+  });
+
+  it("refuses checkout for a blocked customer's email with a neutral message, while other stores stay unaffected", async () => {
+    const blockedEmail = "blocked-checkout@phase1.test";
+    const [row] = await withTenant(rtWeb._db.db, ctxA.tenantId, (tx) =>
+      tx.insert(schema.customers).values({ tenantId: ctxA.tenantId, email: blockedEmail, name: "Blocked Shopper" }).returning(),
+    );
+    await setAdminCustomerStatus(rtWeb, ctxA, { id: row!.id, status: "blocked" });
+
+    const cart = await getOrCreateCart(rtWeb, ctxA);
+    await addToCart(rtWeb, ctxA, { token: cart.token, variantId: variantAId, quantity: 1 });
+    await expect(
+      placeOrder(rtWeb, ctxA, {
+        cartToken: cart.token,
+        idempotencyKey: `idem-blocked-${Date.now()}`,
+        email: blockedEmail,
+        phone: "9611100333",
+        fullName: "Blocked Shopper",
+        addressLine1: "1 Test Road",
+        city: "Bengaluru",
+        state: "Karnataka",
+        pincode: "560001",
+        paymentMethod: "cod",
+      }),
+    ).rejects.toThrow(/could not be completed/i);
+
+    // The refusal left no order behind.
+    const orders = await withTenant(rtWeb._db.db, ctxA.tenantId, (tx) =>
+      tx.select().from(schema.orders).where(eq(schema.orders.email, blockedEmail)),
+    );
+    expect(orders).toHaveLength(0);
+
+    // The same email is welcome in store B: blocking is per store.
+    const cartB = await getOrCreateCart(rtWeb, ctxB);
+    await addToCart(rtWeb, ctxB, { token: cartB.token, variantId: variantBId, quantity: 1 });
+    const inB = await placeOrder(rtWeb, ctxB, {
+      cartToken: cartB.token,
+      idempotencyKey: `idem-blocked-b-${Date.now()}`,
+      email: blockedEmail,
+      phone: "9611100444",
+      fullName: "Blocked Shopper",
+      addressLine1: "2 Park Street",
+      city: "Kolkata",
+      state: "West Bengal",
+      pincode: "700016",
+      paymentMethod: "cod",
+    });
+    expect(inB.orderId).toBeDefined();
   });
 });
