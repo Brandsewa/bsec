@@ -3,6 +3,7 @@ import { and, eq, inArray, sql } from "drizzle-orm";
 import {
   actionTokens,
   carts,
+  customers,
   locations,
   orderEvents,
   orderItems,
@@ -220,12 +221,95 @@ export async function placeOrder(
     // 5. Allocate gapless sequential order number respecting store settings (PLAN §11.2, ORDERS-SETTINGS-PLAN §4.1)
     const seq = await allocateOrderNumber(tx, tenantId);
 
+    // 5b. Resolve or create customer (PLAN §0b)
+    let effectiveCustomerId = input.customerId ?? null;
+    const checkoutEmail = input.email?.trim().toLowerCase();
+    const checkoutPhone = input.phone?.trim() ? input.phone.trim().replace(/\D/g, "") : null;
+    const checkoutName = input.fullName?.trim() || "";
+
+    if (!effectiveCustomerId && (checkoutEmail || checkoutPhone)) {
+      // Find existing customer by email, then by phone
+      let existingCust: typeof customers.$inferSelect | undefined;
+      if (checkoutEmail) {
+        const [byEmail] = await tx
+          .select()
+          .from(customers)
+          .where(and(eq(customers.tenantId, tenantId), eq(customers.email, checkoutEmail)))
+          .limit(1);
+        existingCust = byEmail;
+      }
+      if (!existingCust && checkoutPhone) {
+        const [byPhone] = await tx
+          .select()
+          .from(customers)
+          .where(and(eq(customers.tenantId, tenantId), eq(customers.phone, checkoutPhone)))
+          .limit(1);
+        existingCust = byPhone;
+      }
+
+      if (existingCust) {
+        effectiveCustomerId = existingCust.id;
+        // Never overwrite existing name or phone if already populated; fill only when empty
+        const updates: Record<string, unknown> = {};
+        if (!existingCust.name && checkoutName) {
+          updates.name = checkoutName;
+        }
+        if (!existingCust.phone && checkoutPhone) {
+          const [phoneTaken] = await tx
+            .select({ id: customers.id })
+            .from(customers)
+            .where(and(eq(customers.tenantId, tenantId), eq(customers.phone, checkoutPhone)))
+            .limit(1);
+          if (!phoneTaken || phoneTaken.id === existingCust.id) {
+            updates.phone = checkoutPhone;
+          }
+        }
+        if (Object.keys(updates).length > 0) {
+          updates.updatedAt = new Date();
+          await tx
+            .update(customers)
+            .set(updates)
+            .where(and(eq(customers.tenantId, tenantId), eq(customers.id, existingCust.id)));
+        }
+      } else if (checkoutEmail) {
+        let safePhone = checkoutPhone;
+        if (checkoutPhone) {
+          const [phoneTaken] = await tx
+            .select({ id: customers.id })
+            .from(customers)
+            .where(and(eq(customers.tenantId, tenantId), eq(customers.phone, checkoutPhone)))
+            .limit(1);
+          if (phoneTaken) {
+            safePhone = null;
+          }
+        }
+
+        const [newGuest] = await tx
+          .insert(customers)
+          .values({
+            tenantId,
+            email: checkoutEmail,
+            phone: safePhone,
+            name: checkoutName,
+            isGuest: true,
+            emailVerified: false,
+            phoneVerified: false,
+            acceptsMarketing: false,
+            marketingState: "not_subscribed",
+          })
+          .returning({ id: customers.id });
+        if (newGuest) {
+          effectiveCustomerId = newGuest.id;
+        }
+      }
+    }
+
     // 6. Insert Order
     await tx.insert(orders).values({
       id: orderId,
       tenantId,
       number: seq.formatted,
-      customerId: input.customerId ?? null,
+      customerId: effectiveCustomerId,
       email: input.email,
       phone: input.phone,
       currency: "INR",
