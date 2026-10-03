@@ -79,6 +79,8 @@ import {
   savePageDraft,
   updateBrand,
   updateBrandSettings,
+  getCategory,
+  getCategoryStats,
   updateCategory,
   updateCollection,
   updateMenu,
@@ -590,6 +592,20 @@ export const storeRouter = os.router({
         .handler(({ context, input }) => {
           if (!context.tenantCtx) throw new Error("Missing tenant context");
           return listCategories(context.rt, context.tenantCtx, input);
+        }),
+      stats: os.admin.categories.stats
+        .use(requireAdmin)
+        .use(requirePermission("products.read"))
+        .handler(({ context }) => {
+          if (!context.tenantCtx) throw new Error("Missing tenant context");
+          return getCategoryStats(context.rt, context.tenantCtx);
+        }),
+      get: os.admin.categories.get
+        .use(requireAdmin)
+        .use(requirePermission("products.read"))
+        .handler(({ context, input }) => {
+          if (!context.tenantCtx) throw new Error("Missing tenant context");
+          return getCategory(context.rt, context.tenantCtx, input);
         }),
       create: os.admin.categories.create
         .use(requireAdmin)

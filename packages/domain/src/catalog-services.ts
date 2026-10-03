@@ -878,7 +878,47 @@ export async function listInventoryLevels(
 }
 
 // --- Categories ---
-export async function listCategories(rt: Runtime, ctx: TenantContext, query?: { parentId?: string | null | undefined } | undefined) {
+export interface ListCategoriesQuery {
+  parentId?: string | null | undefined;
+  status?: "all" | "active" | "featured" | "inactive" | undefined;
+  search?: string | undefined;
+}
+
+export async function getCategoryStats(rt: Runtime, ctx: TenantContext) {
+  assertPermission(ctx, "products.read");
+  const db = rt._db.db;
+
+  return withTenant(db, ctx.tenantId, async (tx) => {
+    const [allCategories, assignedProducts] = await Promise.all([
+      tx
+        .select({
+          id: schema.categories.id,
+          parentId: schema.categories.parentId,
+          isActive: schema.categories.isActive,
+        })
+        .from(schema.categories),
+      tx
+        .select({ count: sql<number>`count(distinct ${schema.productCategories.productId})` })
+        .from(schema.productCategories),
+    ]);
+
+    const total = allCategories.length;
+    const active = allCategories.filter((c) => c.isActive).length;
+    const inactive = total - active;
+    const parents = allCategories.filter((c) => c.parentId === null).length;
+    const productsAssigned = Number(assignedProducts[0]?.count ?? 0);
+
+    return {
+      total,
+      active,
+      inactive,
+      parents,
+      productsAssigned,
+    };
+  });
+}
+
+export async function listCategories(rt: Runtime, ctx: TenantContext, query?: ListCategoriesQuery | undefined) {
   assertPermission(ctx, "products.read");
   const db = rt._db.db;
 
@@ -891,11 +931,70 @@ export async function listCategories(rt: Runtime, ctx: TenantContext, query?: { 
         conditions.push(eq(schema.categories.parentId, query.parentId));
       }
     }
+    if (query?.status) {
+      if (query.status === "active") conditions.push(eq(schema.categories.isActive, true));
+      if (query.status === "featured") conditions.push(eq(schema.categories.isFeatured, true));
+      if (query.status === "inactive") conditions.push(eq(schema.categories.isActive, false));
+    }
+    if (query?.search?.trim()) {
+      const term = `%${query.search.trim().toLowerCase()}%`;
+      conditions.push(
+        or(
+          ilike(schema.categories.name, term),
+          ilike(schema.categories.slug, term),
+        ),
+      );
+    }
+
     const rows = await tx
-      .select()
+      .select({
+        id: schema.categories.id,
+        parentId: schema.categories.parentId,
+        name: schema.categories.name,
+        slug: schema.categories.slug,
+        description: schema.categories.description,
+        imageMediaId: schema.categories.imageMediaId,
+        position: schema.categories.position,
+        path: schema.categories.path,
+        isActive: schema.categories.isActive,
+        isFeatured: schema.categories.isFeatured,
+        seo: schema.categories.seo,
+        createdAt: schema.categories.createdAt,
+        updatedAt: schema.categories.updatedAt,
+        imageKey: schema.media.storageKey,
+      })
       .from(schema.categories)
+      .leftJoin(schema.media, eq(schema.media.id, schema.categories.imageMediaId))
       .where(conditions.length > 0 ? and(...conditions) : undefined)
-      .orderBy(schema.categories.position);
+      .orderBy(asc(schema.categories.position), asc(schema.categories.name));
+
+    // Also get productCount and childrenCount for each category
+    const [productCounts, childCounts] = await Promise.all([
+      tx
+        .select({
+          categoryId: schema.productCategories.categoryId,
+          count: sql<number>`count(distinct ${schema.productCategories.productId})`,
+        })
+        .from(schema.productCategories)
+        .groupBy(schema.productCategories.categoryId),
+      tx
+        .select({
+          parentId: schema.categories.parentId,
+          count: sql<number>`count(*)`,
+        })
+        .from(schema.categories)
+        .where(sql`${schema.categories.parentId} IS NOT NULL`)
+        .groupBy(schema.categories.parentId),
+    ]);
+
+    const prodCountMap = new Map<string, number>();
+    for (const p of productCounts) {
+      prodCountMap.set(p.categoryId, Number(p.count));
+    }
+    const childCountMap = new Map<string, number>();
+    for (const c of childCounts) {
+      if (c.parentId) childCountMap.set(c.parentId, Number(c.count));
+    }
 
     return rows.map((r) => ({
       id: r.id,
@@ -903,17 +1002,128 @@ export async function listCategories(rt: Runtime, ctx: TenantContext, query?: { 
       name: r.name,
       slug: r.slug,
       description: r.description,
+      imageMediaId: r.imageMediaId,
+      imageUrl: r.imageKey ? publicMediaUrl(r.imageKey) : null,
       position: r.position,
+      path: r.path,
+      isActive: r.isActive,
+      isFeatured: r.isFeatured,
+      seo: r.seo as { title?: string | null; description?: string | null } | null,
+      productCount: prodCountMap.get(r.id) ?? 0,
+      childrenCount: childCountMap.get(r.id) ?? 0,
       createdAt: r.createdAt.toISOString(),
       updatedAt: r.updatedAt.toISOString(),
     }));
   });
 }
 
+export async function getCategory(rt: Runtime, ctx: TenantContext, input: { id: string }) {
+  assertPermission(ctx, "products.read");
+  const db = rt._db.db;
+
+  return withTenant(db, ctx.tenantId, async (tx) => {
+    const [row] = await tx
+      .select({
+        id: schema.categories.id,
+        parentId: schema.categories.parentId,
+        name: schema.categories.name,
+        slug: schema.categories.slug,
+        description: schema.categories.description,
+        imageMediaId: schema.categories.imageMediaId,
+        position: schema.categories.position,
+        path: schema.categories.path,
+        isActive: schema.categories.isActive,
+        isFeatured: schema.categories.isFeatured,
+        seo: schema.categories.seo,
+        createdAt: schema.categories.createdAt,
+        updatedAt: schema.categories.updatedAt,
+        imageKey: schema.media.storageKey,
+      })
+      .from(schema.categories)
+      .leftJoin(schema.media, eq(schema.media.id, schema.categories.imageMediaId))
+      .where(eq(schema.categories.id, input.id))
+      .limit(1);
+
+    if (!row) throw new Error(`Category not found: "${input.id}"`);
+
+    const [prodCount, childCount] = await Promise.all([
+      tx
+        .select({ count: sql<number>`count(distinct ${schema.productCategories.productId})` })
+        .from(schema.productCategories)
+        .where(eq(schema.productCategories.categoryId, row.id)),
+      tx
+        .select({ count: sql<number>`count(*)` })
+        .from(schema.categories)
+        .where(eq(schema.categories.parentId, row.id)),
+    ]);
+
+    return {
+      id: row.id,
+      parentId: row.parentId,
+      name: row.name,
+      slug: row.slug,
+      description: row.description,
+      imageMediaId: row.imageMediaId,
+      imageUrl: row.imageKey ? publicMediaUrl(row.imageKey) : null,
+      position: row.position,
+      path: row.path,
+      isActive: row.isActive,
+      isFeatured: row.isFeatured,
+      seo: row.seo as { title?: string | null; description?: string | null } | null,
+      productCount: Number(prodCount[0]?.count ?? 0),
+      childrenCount: Number(childCount[0]?.count ?? 0),
+      createdAt: row.createdAt.toISOString(),
+      updatedAt: row.updatedAt.toISOString(),
+    };
+  });
+}
+
+/**
+ * Helper to calculate tree depth and build path. Refuses depth > 3 levels.
+ */
+async function calculateCategoryTreePath(
+  tx: any,
+  parentId?: string | null,
+): Promise<{ path: string; depth: number }> {
+  if (!parentId) {
+    return { path: "/", depth: 1 };
+  }
+  const [parent] = await tx
+    .select({ id: schema.categories.id, path: schema.categories.path, parentId: schema.categories.parentId })
+    .from(schema.categories)
+    .where(eq(schema.categories.id, parentId))
+    .limit(1);
+
+  if (!parent) {
+    throw new Error(`Parent category not found: "${parentId}"`);
+  }
+
+  // Calculate parent depth by counting segments in path
+  const parentDepth = (parent.path.match(/\//g) || []).length;
+  if (parentDepth >= 3) {
+    throw new Error("Category tree maximum depth is 3 levels. Cannot create subcategories beyond 3 levels.");
+  }
+
+  const path = `${parent.path.replace(/\/$/, "")}/${parent.id}/`;
+  return { path, depth: parentDepth + 1 };
+}
+
+export interface CreateCategoryInput {
+  name: string;
+  slug?: string | undefined;
+  description?: string | undefined;
+  parentId?: string | null | undefined;
+  imageMediaId?: string | null | undefined;
+  position?: number | undefined;
+  isActive?: boolean | undefined;
+  isFeatured?: boolean | undefined;
+  seo?: { title?: string | null | undefined; description?: string | null | undefined } | undefined;
+}
+
 export async function createCategory(
   rt: Runtime,
   ctx: TenantContext,
-  input: { name: string; slug?: string | undefined; description?: string | undefined; parentId?: string | undefined; position?: number | undefined },
+  input: CreateCategoryInput,
 ) {
   assertPermission(ctx, "products.write");
   const db = rt._db.db;
@@ -926,47 +1136,116 @@ export async function createCategory(
         .replace(/[^a-z0-9]+/g, "-")
         .replace(/(^-|-$)/g, "");
 
+    const { path } = await calculateCategoryTreePath(tx, input.parentId);
+
     const [row] = await tx
       .insert(schema.categories)
       .values({
         tenantId: ctx.tenantId,
-        name: input.name,
+        name: input.name.trim(),
         slug,
-        description: input.description,
-        parentId: input.parentId,
+        description: input.description?.trim() || null,
+        parentId: input.parentId || null,
+        imageMediaId: input.imageMediaId || null,
         position: input.position ?? 0,
+        path,
+        isActive: input.isActive ?? true,
+        isFeatured: input.isFeatured ?? false,
+        seo: input.seo || null,
       })
       .returning();
 
     if (!row) throw new Error("Failed to create category");
+
+    await tx.insert(schema.auditLogs).values({
+      tenantId: ctx.tenantId,
+      actorType: ctx.actor.type,
+      actorId: ctx.actor.type === "staff" ? ctx.actor.userId : null,
+      action: "category.created",
+      targetType: "category",
+      targetId: row.id,
+      diff: {
+        name: row.name,
+        slug: row.slug,
+        parentId: row.parentId,
+        isActive: row.isActive,
+      },
+    });
+
+    await invalidateCache(rt, ctx, {
+      type: "category_updated",
+      categoryId: row.id,
+    });
+
     return {
       id: row.id,
       parentId: row.parentId,
       name: row.name,
       slug: row.slug,
       description: row.description,
+      imageMediaId: row.imageMediaId,
+      imageUrl: null,
       position: row.position,
+      path: row.path,
+      isActive: row.isActive,
+      isFeatured: row.isFeatured,
+      seo: row.seo as { title?: string | null; description?: string | null } | null,
+      productCount: 0,
+      childrenCount: 0,
       createdAt: row.createdAt.toISOString(),
       updatedAt: row.updatedAt.toISOString(),
     };
   });
 }
 
+export interface UpdateCategoryInput {
+  id: string;
+  name?: string | undefined;
+  slug?: string | undefined;
+  description?: string | null | undefined;
+  parentId?: string | null | undefined;
+  imageMediaId?: string | null | undefined;
+  position?: number | undefined;
+  isActive?: boolean | undefined;
+  isFeatured?: boolean | undefined;
+  seo?: { title?: string | null | undefined; description?: string | null | undefined } | null | undefined;
+}
+
 export async function updateCategory(
   rt: Runtime,
   ctx: TenantContext,
-  input: { id: string; name?: string | undefined; slug?: string | undefined; description?: string | undefined; parentId?: string | null | undefined; position?: number | undefined },
+  input: UpdateCategoryInput,
 ) {
   assertPermission(ctx, "products.write");
   const db = rt._db.db;
 
   return withTenant(db, ctx.tenantId, async (tx) => {
+    const [existing] = await tx
+      .select()
+      .from(schema.categories)
+      .where(eq(schema.categories.id, input.id))
+      .limit(1);
+
+    if (!existing) throw new Error(`Category not found: "${input.id}"`);
+
     const updateValues: Record<string, unknown> = { updatedAt: new Date() };
-    if (input.name !== undefined) updateValues.name = input.name;
-    if (input.slug !== undefined) updateValues.slug = input.slug;
-    if (input.description !== undefined) updateValues.description = input.description;
-    if (input.parentId !== undefined) updateValues.parentId = input.parentId;
+    if (input.name !== undefined) updateValues.name = input.name.trim();
+    if (input.slug !== undefined) updateValues.slug = input.slug.trim();
+    if (input.description !== undefined) updateValues.description = input.description ? input.description.trim() : null;
+    if (input.imageMediaId !== undefined) updateValues.imageMediaId = input.imageMediaId;
     if (input.position !== undefined) updateValues.position = input.position;
+    if (input.isActive !== undefined) updateValues.isActive = input.isActive;
+    if (input.isFeatured !== undefined) updateValues.isFeatured = input.isFeatured;
+    if (input.seo !== undefined) updateValues.seo = input.seo;
+
+    if (input.parentId !== undefined && input.parentId !== existing.parentId) {
+      if (input.parentId === input.id) {
+        throw new Error("A category cannot be its own parent");
+      }
+      const { path } = await calculateCategoryTreePath(tx, input.parentId);
+      updateValues.parentId = input.parentId;
+      updateValues.path = path;
+    }
 
     const [row] = await tx
       .update(schema.categories)
@@ -975,16 +1254,23 @@ export async function updateCategory(
       .returning();
 
     if (!row) throw new Error(`Category not found: "${input.id}"`);
-    return {
-      id: row.id,
-      parentId: row.parentId,
-      name: row.name,
-      slug: row.slug,
-      description: row.description,
-      position: row.position,
-      createdAt: row.createdAt.toISOString(),
-      updatedAt: row.updatedAt.toISOString(),
-    };
+
+    await tx.insert(schema.auditLogs).values({
+      tenantId: ctx.tenantId,
+      actorType: ctx.actor.type,
+      actorId: ctx.actor.type === "staff" ? ctx.actor.userId : null,
+      action: "category.updated",
+      targetType: "category",
+      targetId: row.id,
+      diff: updateValues,
+    });
+
+    await invalidateCache(rt, ctx, {
+      type: "category_updated",
+      categoryId: row.id,
+    });
+
+    return getCategory(rt, ctx, { id: row.id });
   });
 }
 
@@ -993,7 +1279,48 @@ export async function deleteCategory(rt: Runtime, ctx: TenantContext, input: { i
   const db = rt._db.db;
 
   return withTenant(db, ctx.tenantId, async (tx) => {
-    await tx.delete(schema.categories).where(eq(schema.categories.id, input.id));
+    // 1. Guard against child categories
+    const [hasChildren] = await tx
+      .select({ count: sql<number>`count(*)` })
+      .from(schema.categories)
+      .where(eq(schema.categories.parentId, input.id));
+
+    if (Number(hasChildren?.count ?? 0) > 0) {
+      throw new Error("Cannot delete category with subcategories. Reassign or delete the subcategories first.");
+    }
+
+    // 2. Guard against primary category on any product (or assigned products)
+    const [assignedProd] = await tx
+      .select({ count: sql<number>`count(*)` })
+      .from(schema.productCategories)
+      .where(eq(schema.productCategories.categoryId, input.id));
+
+    if (Number(assignedProd?.count ?? 0) > 0) {
+      throw new Error("Cannot delete category because products are assigned to it. Reassign or remove products from this category first.");
+    }
+
+    const [row] = await tx
+      .delete(schema.categories)
+      .where(eq(schema.categories.id, input.id))
+      .returning();
+
+    if (!row) throw new Error(`Category not found: "${input.id}"`);
+
+    await tx.insert(schema.auditLogs).values({
+      tenantId: ctx.tenantId,
+      actorType: ctx.actor.type,
+      actorId: ctx.actor.type === "staff" ? ctx.actor.userId : null,
+      action: "category.deleted",
+      targetType: "category",
+      targetId: row.id,
+      diff: { name: row.name, slug: row.slug },
+    });
+
+    await invalidateCache(rt, ctx, {
+      type: "category_updated",
+      categoryId: row.id,
+    });
+
     return { success: true };
   });
 }

@@ -4,6 +4,7 @@ import {
   BadgePercent,
   Clock,
   FileText,
+  FolderTree,
   Home,
   KeyRound,
   Menu,
@@ -53,6 +54,7 @@ const nav: GatedGroup[] = [
     label: "Sell",
     items: [
       { label: "Products", href: "/products", icon: Package, perm: "products.read" },
+      { label: "Categories", href: "/categories", icon: FolderTree, perm: "products.read" },
       { label: "Inventory", href: "/inventory", icon: Warehouse, perm: "products.read" },
       { label: "Customers", href: "/customers", icon: Users, perm: "customers.read" },
       { label: "Discounts", href: "/discounts", icon: BadgePercent, perm: "discounts.write" },

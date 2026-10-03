@@ -308,4 +308,92 @@ describe("M2 Domain Services", () => {
       expect(publishedId).toBe("ver-latest");
     });
   });
+
+  describe("Category Services", () => {
+    it("throws Forbidden if products.read is missing for listCategories", async () => {
+      const rt = createMockRuntime({} as Db);
+      await expect(listCategories(rt, restrictedCtx)).rejects.toThrow(/Forbidden/);
+    });
+
+    it("throws Forbidden if products.write is missing for createCategory", async () => {
+      const rt = createMockRuntime({} as Db);
+      await expect(createCategory(rt, restrictedCtx, { name: "Keyboards" })).rejects.toThrow(/Forbidden/);
+    });
+
+    it("refuses subcategories beyond 3 levels deep", async () => {
+      // Level 1: "/", Level 2: "/id1/", Level 3: "/id1/id2/"
+      // Parent at level 3 (path "/id1/id2/") should reject child
+      const mockDb = {
+        transaction: async (cb: (tx: unknown) => Promise<unknown>) => {
+          return cb({
+            execute: async () => {},
+            select: () => ({
+              from: () => ({
+                where: () => ({
+                  limit: () => [{ id: "cat-3", path: "/id1/id2/", parentId: "id2" }],
+                }),
+              }),
+            }),
+          });
+        },
+      } as unknown as Db;
+
+      const rt = createMockRuntime(mockDb);
+      await expect(
+        createCategory(rt, adminCtx, {
+          name: "Level 4 Subcategory",
+          parentId: "cat-3",
+        }),
+      ).rejects.toThrow(/maximum depth is 3 levels/);
+    });
+
+    it("refuses deleting category with subcategories", async () => {
+      const mockDb = {
+        transaction: async (cb: (tx: unknown) => Promise<unknown>) => {
+          return cb({
+            execute: async () => {},
+            select: () => ({
+              from: () => ({
+                where: () => [{ count: 2 }],
+              }),
+            }),
+          });
+        },
+      } as unknown as Db;
+
+      const rt = createMockRuntime(mockDb);
+      await expect(deleteCategory(rt, adminCtx, { id: "cat-with-children" })).rejects.toThrow(
+        /Cannot delete category with subcategories/,
+      );
+    });
+
+    it("refuses deleting category with assigned products", async () => {
+      let queryCount = 0;
+      const mockDb = {
+        transaction: async (cb: (tx: unknown) => Promise<unknown>) => {
+          return cb({
+            execute: async () => {},
+            select: () => ({
+              from: () => ({
+                where: () => {
+                  queryCount++;
+                  if (queryCount === 1) {
+                    // child categories count = 0
+                    return [{ count: 0 }];
+                  }
+                  // assigned products count = 5
+                  return [{ count: 5 }];
+                },
+              }),
+            }),
+          });
+        },
+      } as unknown as Db;
+
+      const rt = createMockRuntime(mockDb);
+      await expect(deleteCategory(rt, adminCtx, { id: "cat-with-products" })).rejects.toThrow(
+        /products are assigned to it/,
+      );
+    });
+  });
 });

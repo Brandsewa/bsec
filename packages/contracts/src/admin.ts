@@ -195,17 +195,40 @@ export const ProductDetail = Product.extend({
 });
 export type ProductDetail = z.infer<typeof ProductDetail>;
 
+export const CategorySeo = z.object({
+  title: z.string().nullable().optional(),
+  description: z.string().nullable().optional(),
+});
+export type CategorySeo = z.infer<typeof CategorySeo>;
+
 export const Category = z.object({
   id: z.string().uuid(),
   parentId: z.string().uuid().nullable().optional(),
   name: z.string(),
   slug: z.string(),
   description: z.string().nullable().optional(),
+  imageMediaId: z.string().uuid().nullable().optional(),
+  imageUrl: z.string().nullable().optional(),
   position: z.number(),
+  path: z.string().optional(),
+  isActive: z.boolean(),
+  isFeatured: z.boolean(),
+  seo: CategorySeo.nullable().optional(),
+  productCount: z.number().int().optional(),
+  childrenCount: z.number().int().optional(),
   createdAt: z.string(),
   updatedAt: z.string(),
 });
 export type Category = z.infer<typeof Category>;
+
+export const CategoryStats = z.object({
+  total: z.number().int(),
+  active: z.number().int(),
+  inactive: z.number().int(),
+  parents: z.number().int(),
+  productsAssigned: z.number().int(),
+});
+export type CategoryStats = z.infer<typeof CategoryStats>;
 
 export const Collection = z.object({
   id: z.string().uuid(),
@@ -938,17 +961,36 @@ export const adminContract = {
   categories: {
     list: oc
       .route({ method: "GET", path: "/admin/categories" })
-      .input(z.object({ parentId: z.string().uuid().nullable().optional() }).optional())
+      .input(
+        z
+          .object({
+            parentId: z.string().uuid().nullable().optional(),
+            status: z.enum(["all", "active", "featured", "inactive"]).optional(),
+            search: z.string().optional(),
+          })
+          .optional(),
+      )
       .output(z.array(Category)),
+    stats: oc
+      .route({ method: "GET", path: "/admin/categories/stats" })
+      .output(CategoryStats),
+    get: oc
+      .route({ method: "GET", path: "/admin/categories/{id}" })
+      .input(z.object({ id: z.string().uuid() }))
+      .output(Category),
     create: oc
       .route({ method: "POST", path: "/admin/categories" })
       .input(
         z.object({
           name: z.string().min(1),
           slug: z.string().optional(),
-          description: z.string().optional(),
-          parentId: z.string().uuid().optional(),
+          description: z.string().max(500).optional(),
+          parentId: z.string().uuid().nullable().optional(),
+          imageMediaId: z.string().uuid().nullable().optional(),
           position: z.number().int().default(0),
+          isActive: z.boolean().default(true),
+          isFeatured: z.boolean().default(false),
+          seo: CategorySeo.optional(),
         }),
       )
       .output(Category),
@@ -959,9 +1001,13 @@ export const adminContract = {
           id: z.string().uuid(),
           name: z.string().min(1).optional(),
           slug: z.string().optional(),
-          description: z.string().optional(),
+          description: z.string().max(500).nullable().optional(),
           parentId: z.string().uuid().nullable().optional(),
+          imageMediaId: z.string().uuid().nullable().optional(),
           position: z.number().int().optional(),
+          isActive: z.boolean().optional(),
+          isFeatured: z.boolean().optional(),
+          seo: CategorySeo.nullable().optional(),
         }),
       )
       .output(Category),

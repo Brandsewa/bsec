@@ -44,6 +44,10 @@ export type CacheChange =
       isHomeFeatured?: boolean | undefined;
     }
   | {
+      type: "category_updated";
+      categoryId: string;
+    }
+  | {
       type: "store_or_seo_updated";
     };
 
@@ -127,6 +131,13 @@ export function computeInvalidationTags(
       tags.push(tenantTag(tenantId, "collection", change.collectionId));
       tags.push(tenantTag(tenantId, "collection"));
       tags.push(tenantTag(tenantId, "page", "home"));
+      break;
+    }
+    case "category_updated": {
+      // Category details, active/featured, position -> category, all categories, nav
+      tags.push(tenantTag(tenantId, "category", change.categoryId));
+      tags.push(tenantTag(tenantId, "category"));
+      tags.push(tenantTag(tenantId, "nav"));
       break;
     }
     case "store_or_seo_updated": {

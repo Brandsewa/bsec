@@ -110,6 +110,8 @@ export const categories = tenantTable(
     imageMediaId: uuid("image_media_id"),
     position: integer("position").notNull().default(0),
     path: text("path").notNull().default("/"),
+    isActive: boolean("is_active").notNull().default(true),
+    isFeatured: boolean("is_featured").notNull().default(false),
     seo: jsonb("seo"),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().default(sql`now()`),
     updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().default(sql`now()`),
