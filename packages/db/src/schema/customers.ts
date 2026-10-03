@@ -87,6 +87,34 @@ export const customerConsentEvents = tenantTable(
 );
 
 /**
+ * Customer Notes (Customers Phase 1, step 1B).
+ * Staff-visible timeline of internal notes about a customer; replaces the single
+ * `customers.note` column (which is migrated into the first note by migration 0029).
+ */
+export const customerNotes = tenantTable(
+  "customer_notes",
+  {
+    id: uuid("id").default(sql`uuidv7()`).primaryKey(),
+    customerId: uuid("customer_id").notNull(),
+    /** Staff author; null for the migrated legacy note or system-written notes. */
+    authorId: uuid("author_id"),
+    body: text("body").notNull(),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().default(sql`now()`),
+  },
+  (t) => [
+    unique("customer_notes_tenant_id_uniq").on(t.tenantId, t.id),
+    index("customer_notes_tenant_cust_created_idx").on(t.tenantId, t.customerId, t.createdAt),
+    tenantForeignKey({
+      tableTenantId: t.tenantId,
+      column: t.customerId,
+      target: customers,
+      name: "customer_notes_customer_fk",
+      onDelete: "cascade",
+    }),
+  ],
+);
+
+/**
  * Customer Addresses (PLAN §5.6 / M4).
  * Shipping and billing address book per customer.
  */

@@ -425,6 +425,17 @@ export async function handleSegmentRefreshCountsJob(db: Db, log: Logger, data: {
   log.info({ processed: res.processed, tenantId: data.tenantId ?? "all" }, "segments.refresh_counts processed");
 }
 
+// Handle the CSV customer import for large files (Customers Phase 1, step 1C)
+export async function handleCustomerImportJob(
+  db: Db,
+  log: Logger,
+  data: { tenantId: string; rows: { name?: string; email: string; phone?: string; tags?: string[]; marketingConsent?: string }[]; actorId: string | null },
+): Promise<void> {
+  const { commitImportRows } = await import("./customers/import.ts");
+  const res = await commitImportRows(db, data.tenantId, { type: "staff", userId: data.actorId }, data.rows);
+  log.info({ tenantId: data.tenantId, created: res.created, updated: res.updated, failed: res.errors.length }, "customers.import processed");
+}
+
 export async function startJobs(opts: {
   databaseUrl: string;
   log: Logger;
@@ -779,6 +790,24 @@ export async function startJobs(opts: {
       }
     }
   });
+  // Handle customers.import domain event (Customers Phase 1, step 1C)
+  await boss.work<{ tenantId: string; rows: { name?: string; email: string; phone?: string; tags?: string[]; marketingConsent?: string }[]; actorId: string | null }>(
+    QUEUE_NAMES.CUSTOMERS_IMPORT,
+    { localConcurrency: 1 },
+    async (batch) => {
+      for (const job of batch) {
+        try {
+          await withTenantJobSlot(job.data.tenantId, async () => {
+            await handleCustomerImportJob(db, opts.log, job.data);
+            opts.log.info({ job_id: job.id }, "customers.import dispatched");
+          });
+        } catch (err) {
+          opts.log.error({ err, job_id: job.id }, "customers.import failed");
+          throw err;
+        }
+      }
+    },
+  );
 
   // Register recurring schedules and proof-of-life sweeps on boot (PLAN §5.10, §11.3)
   try {

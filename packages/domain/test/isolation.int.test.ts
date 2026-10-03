@@ -108,6 +108,24 @@ import {
   getCustomerSegments,
   createPresetSegments,
   getSegmentActivity,
+  getAdminCustomerStats,
+  listAdminCustomerTags,
+  setAdminCustomerStatus,
+  setAdminCustomerTags,
+  updateAdminCustomer,
+  setAdminCustomerConsent,
+  addAdminCustomerAddress,
+  updateAdminCustomerAddress,
+  deleteAdminCustomerAddress,
+  listAdminCustomerOrders,
+  getAdminCustomerActivity,
+  listCustomerNotes,
+  addCustomerNote,
+  deleteCustomerNote,
+  previewCustomerImport,
+  commitCustomerImport,
+  deleteAdminCustomer,
+>>>>>>> feat/customers-phase-1
   listAdminDiscounts,
   listAdminOrders,
   listInvitations,
@@ -989,8 +1007,70 @@ describe("Generated Isolation Test Suite (M1 Real Postgres 18 Proof)", () => {
       // --- M5 Customers Admin ---
       case "customers.list":
         return await listAdminCustomers(rt, ctx);
+      case "customers.stats":
+        return await getAdminCustomerStats(rt, ctx);
+      case "customers.tags":
+        return await listAdminCustomerTags(rt, ctx);
       case "customers.get":
         return await getAdminCustomerDetail(rt, ctx, { id: testCustomerA });
+      case "customers.setStatus":
+        return await setAdminCustomerStatus(rt, ctx, { id: testCustomerA, status: "active" });
+      case "customers.setTags":
+        return await setAdminCustomerTags(rt, ctx, { id: testCustomerA, tags: ["vip"] });
+      case "customers.update":
+        return await updateAdminCustomer(rt, ctx, { id: testCustomerA, name: "Isolation Update" });
+      case "customers.orders":
+        return await listAdminCustomerOrders(rt, ctx, { customerId: testCustomerA });
+      case "customers.activity":
+        return await getAdminCustomerActivity(rt, ctx, { customerId: testCustomerA });
+      case "customers.consentSet":
+        return await setAdminCustomerConsent(rt, ctx, { id: testCustomerA, state: "subscribed" });
+      case "customers.addresses.add":
+        return await addAdminCustomerAddress(rt, ctx, {
+          customerId: testCustomerA,
+          address: { name: "Iso Staff", phone: "9600011111", line1: "1 Iso Road", city: "Bengaluru", stateCode: "KA", pincode: "560001", isDefault: true },
+        });
+      case "customers.addresses.update": {
+        const added = await addAdminCustomerAddress(rt, ctx, {
+          customerId: testCustomerA,
+          address: { name: "Iso Staff", phone: "9600011112", line1: "2 Iso Road", city: "Bengaluru", stateCode: "KA", pincode: "560001" },
+        });
+        return await updateAdminCustomerAddress(rt, ctx, {
+          customerId: testCustomerA,
+          addressId: added.id,
+          address: { name: "Iso Staff Updated", phone: "9600011112", line1: "2 Iso Road", city: "Bengaluru", stateCode: "KA", pincode: "560001" },
+        });
+      }
+      case "customers.addresses.delete": {
+        const added = await addAdminCustomerAddress(rt, ctx, {
+          customerId: testCustomerA,
+          address: { name: "Iso Staff", phone: "9600011113", line1: "3 Iso Road", city: "Bengaluru", stateCode: "KA", pincode: "560001" },
+        });
+        return await deleteAdminCustomerAddress(rt, ctx, { customerId: testCustomerA, addressId: added.id });
+      }
+      case "customers.notes.list":
+        return await listCustomerNotes(rt, ctx, { customerId: testCustomerA });
+      case "customers.notes.add":
+        return await addCustomerNote(rt, ctx, { customerId: testCustomerA, body: "Isolation note" });
+      case "customers.notes.delete": {
+        const note = await addCustomerNote(rt, ctx, { customerId: testCustomerA, body: "Isolation note to delete" });
+        return await deleteCustomerNote(rt, ctx, { id: note.id });
+      }
+      case "customers.importPreview":
+        return await previewCustomerImport(rt, ctx, {
+          rows: [{ name: "Iso Import", email: `iso-import-${Date.now()}@test.com`, tags: ["iso"], marketingConsent: "no" }],
+        });
+      case "customers.importCommit":
+        return await commitCustomerImport(rt, ctx, {
+          rows: [{ name: "Iso Import", email: `iso-import-commit-${Date.now()}@test.com`, tags: ["iso"], marketingConsent: "no" }],
+        });
+      case "customers.delete": {
+        // A customer without orders is hard-deleted, so create a throwaway row for this check.
+        const [row] = await withTenant(rt._db.db, ctx.tenantId, (tx) =>
+          tx.insert(schema.customers).values({ tenantId: ctx.tenantId, email: `iso-delete-${Date.now()}@test.com`, name: "Iso Delete" }).returning(),
+        );
+        return await deleteAdminCustomer(rt, ctx, { id: row!.id });
+      }
 
       // --- Customers Segments (Phase 2) ---
       case "segments.list":
