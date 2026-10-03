@@ -82,7 +82,7 @@ export async function listAdminCustomers(
     const [countResult] = await tx
       .select({ count: sql<number>`count(*)::int` })
       .from(schema.customers)
-      .leftJoin(customerMetricsSql(ctx.tenantId), sql`true`)
+      .leftJoin(customerMetricsSql(ctx.tenantId), sql`${schema.customers.id} = metrics.customer_id`)
       .where(whereClause);
 
     const rows = await tx
@@ -102,7 +102,7 @@ export async function listAdminCustomers(
         createdAt: schema.customers.createdAt,
       })
       .from(schema.customers)
-      .leftJoin(customerMetricsSql(ctx.tenantId), sql`true`)
+      .leftJoin(customerMetricsSql(ctx.tenantId), sql`${schema.customers.id} = metrics.customer_id`)
       .where(whereClause)
       .orderBy(...orderBy)
       .limit(limit)
@@ -148,7 +148,7 @@ export async function getAdminCustomerStats(rt: Runtime, ctx: TenantContext) {
         averageOrderValue: sql<number>`COALESCE(SUM(metrics.total_spent) / NULLIF(SUM(metrics.orders_count), 0), 0)::bigint`,
       })
       .from(schema.customers)
-      .leftJoin(customerMetricsSql(ctx.tenantId), sql`true`)
+      .leftJoin(customerMetricsSql(ctx.tenantId), sql`${schema.customers.id} = metrics.customer_id`)
       .where(isNull(schema.customers.deletedAt));
 
     return {
@@ -296,7 +296,7 @@ export async function getAdminCustomerDetail(
         totalSpent: sql<number>`metrics.total_spent`,
       })
       .from(schema.customers)
-      .leftJoin(customerMetricsSql(ctx.tenantId), sql`true`)
+      .leftJoin(customerMetricsSql(ctx.tenantId), sql`${schema.customers.id} = metrics.customer_id`)
       .where(eq(schema.customers.id, input.id))
       .limit(1);
 
