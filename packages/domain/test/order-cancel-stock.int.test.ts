@@ -1,5 +1,6 @@
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { startTestDb, type TestDb } from "@bs/db/test-env";
+import { primaryCategory } from "./helpers/primary-category.ts";
 import {
   adjustInventory,
   cancelAdminOrder,
@@ -49,7 +50,7 @@ beforeAll(async () => {
     permissions: ["products.read", "products.write", "orders.read", "orders.write", "settings.write"],
     requestId: "req-test",
   };
-  await createProduct(rtWeb, ctx, { title: "Pickle", status: "active", variants: [{ sku: "CANCEL-1", title: "Default", price: 10000 }] });
+  await createProduct(rtWeb, ctx, { title: "Pickle", status: "active", primaryCategoryId: await primaryCategory(rtWeb, ctx), variants: [{ sku: "CANCEL-1", title: "Default", price: 10000 }] });
   const row = (await listInventoryLevels(rtWeb, ctx, {})).items[0]!;
   variantId = row.variantId;
   locationId = row.locationId;

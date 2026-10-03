@@ -1,5 +1,6 @@
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { and, eq } from "drizzle-orm";
+import { primaryCategory } from "./helpers/primary-category.ts";
 import { schema, withTenant } from "@bs/db";
 import { startTestDb, type TestDb } from "@bs/db/test-env";
 import {
@@ -93,7 +94,7 @@ beforeAll(async () => {
   // 1. Normal product with stock
   const pNormal = await createProduct(rtWeb, ctxA, {
     title: "Normal In-Stock Mug",
-    status: "active",
+    status: "active", primaryCategoryId: await primaryCategory(rtWeb, ctxA),
     variants: [{ sku: "MUG-01", title: "Default", price: 50000 }],
   });
   normalVariantId = pNormal.variants[0]!.id;
@@ -106,7 +107,7 @@ beforeAll(async () => {
   // 2. Normal product with 0 stock
   const pOutOfStock = await createProduct(rtWeb, ctxA, {
     title: "Normal Zero Stock Plate",
-    status: "active",
+    status: "active", primaryCategoryId: await primaryCategory(rtWeb, ctxA),
     variants: [{ sku: "PLATE-01", title: "Default", price: 60000 }],
   });
   outOfStockNormalVariantId = pOutOfStock.variants[0]!.id;
@@ -115,7 +116,7 @@ beforeAll(async () => {
   // 3. Preorder product 1 (ships 2026-12-01)
   const pPreorder1 = await createProduct(rtWeb, ctxA, {
     title: "Artisan Ceramic Bowl (Pre-order)",
-    status: "active",
+    status: "active", primaryCategoryId: await primaryCategory(rtWeb, ctxA),
     variants: [
       {
         sku: "BOWL-PRE-1",
@@ -132,7 +133,7 @@ beforeAll(async () => {
   // 4. Preorder product 2 (ships 2026-12-15)
   const pPreorder2 = await createProduct(rtWeb, ctxA, {
     title: "Handmade Teapot (Pre-order)",
-    status: "active",
+    status: "active", primaryCategoryId: await primaryCategory(rtWeb, ctxA),
     variants: [
       {
         sku: "TEAPOT-PRE-2",
@@ -149,7 +150,7 @@ beforeAll(async () => {
   // Create product in Tenant B
   const pTenantB = await createProduct(rtWeb, ctxB, {
     title: "Tenant B Product",
-    status: "active",
+    status: "active", primaryCategoryId: await primaryCategory(rtWeb, ctxB),
     variants: [
       {
         sku: "TB-01",

@@ -25,6 +25,27 @@ import { bootstrapRoles } from "@bs/db/bootstrap";
 import { runMigrations } from "@bs/db/migrate";
 import {
   activateTheme,
+  getCategoryStats,
+  getCategory,
+  getCollectionStats,
+  getBrandStats,
+  getBrand,
+  getLocationStats,
+  listLocations,
+  getLocation,
+  createLocation,
+  updateLocation,
+  deleteLocation,
+  listAdminReviews,
+  getAdminReviewStats,
+  getAdminReviewDetail,
+  publishAdminReview,
+  holdAdminReview,
+  deleteAdminReview,
+  replyAdminReview,
+  bulkPublishAdminReviews,
+  bulkHoldAdminReviews,
+  bulkDeleteAdminReviews,
   listPageVersions,
   listThemeLibrary,
   previewPageRenderData,
@@ -1246,6 +1267,59 @@ describe("Generated Isolation Test Suite (M1 Real Postgres 18 Proof)", () => {
         return await getAdminReturnDetail(rt, ctx, { id: req.returnId });
       }
 
+      case "categories.stats":
+        return await getCategoryStats(rt, ctx);
+      case "categories.get":
+        return await getCategory(rt, ctx, { id: testCategoryA });
+      case "collections.stats":
+        return await getCollectionStats(rt, ctx);
+      case "brands.stats":
+        return await getBrandStats(rt, ctx);
+      case "brands.get":
+        return await getBrand(rt, ctx, { id: testBrandA });
+      case "locations.stats":
+        return await getLocationStats(rt, ctx);
+      case "locations.list":
+        return await listLocations(rt, ctx);
+      case "locations.get":
+        return await getLocation(rt, ctx, { id: testLocationA });
+      case "locations.create":
+        return await createLocation(rt, ctx, { name: `Loc-${Date.now()}` });
+      case "locations.update":
+        return await updateLocation(rt, ctx, { id: testLocationA, name: "Updated Location" });
+      case "locations.delete": {
+        const l = await createLocation(rt, ctx, { name: `Del Loc-${Date.now()}` });
+        return await deleteLocation(rt, ctx, { id: l.id });
+      }
+      case "reviews.list":
+        return await listAdminReviews(rt, ctx);
+      case "reviews.stats":
+        return await getAdminReviewStats(rt, ctx);
+      case "reviews.get":
+      case "reviews.publish":
+      case "reviews.hold":
+      case "reviews.delete":
+      case "reviews.reply":
+      case "reviews.bulkPublish":
+      case "reviews.bulkHold":
+      case "reviews.bulkDelete": {
+        let reviewId = "";
+        await withTenant(rt._db.db, ctx.tenantId, async (tx) => {
+          const [r] = await tx
+            .insert(schema.reviews)
+            .values({ tenantId: ctx.tenantId, productId: testProductA, reviewerName: "Iso Reviewer", rating: 4, body: "Isolation review", status: "on_hold" })
+            .returning({ id: schema.reviews.id });
+          reviewId = r!.id;
+        });
+        if (procPath === "reviews.get") return await getAdminReviewDetail(rt, ctx, reviewId);
+        if (procPath === "reviews.publish") return await publishAdminReview(rt, ctx, reviewId);
+        if (procPath === "reviews.hold") return await holdAdminReview(rt, ctx, reviewId);
+        if (procPath === "reviews.delete") return await deleteAdminReview(rt, ctx, reviewId);
+        if (procPath === "reviews.reply") return await replyAdminReview(rt, ctx, { id: reviewId, replyText: "Thanks" });
+        if (procPath === "reviews.bulkPublish") return await bulkPublishAdminReviews(rt, ctx, [reviewId]);
+        if (procPath === "reviews.bulkHold") return await bulkHoldAdminReviews(rt, ctx, [reviewId]);
+        return await bulkDeleteAdminReviews(rt, ctx, [reviewId]);
+      }
       default:
         throw new Error(`Unmapped procedure in isolation test: ${procPath}`);
     }

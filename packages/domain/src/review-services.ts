@@ -2,6 +2,7 @@ import { and, desc, eq, ilike, inArray, or, sql, type SQL } from "drizzle-orm";
 import { schema, withTenant, type Db } from "@bs/db";
 import type { Runtime } from "./runtime.ts";
 import { assertPermission, type TenantContext } from "./context.ts";
+import { checkRateLimit, RateLimitExceededError } from "./system/rate-limit.ts";
 import { invalidateCache } from "./cache-invalidation.ts";
 
 export interface ListReviewsQuery {
@@ -23,6 +24,8 @@ export interface SubmitReviewInput {
   body: string;
   orderNumber?: string | undefined;
   honeypot?: string | undefined;
+  /** Client IP, for rate limiting. */
+  ip?: string | undefined;
 }
 
 export interface ReviewReplyInput {
@@ -191,6 +194,19 @@ export async function submitProductReview(
     };
   }
 
+  // Rate limit: a public form must not let one client flood the moderation queue.
+  const db = rt._db.db;
+  if (input.ip && input.ip !== "unknown") {
+    const ipKey = `review_submit:ip:${tenantId}:${input.ip}`;
+    const ipRes = await checkRateLimit(db, { key: ipKey, limit: 10, windowSeconds: 3600 });
+    if (!ipRes.allowed) throw new RateLimitExceededError("Too many reviews from this connection. Please try again later.", ipRes.retryAfter, 10, ipKey);
+  }
+  if (input.email) {
+    const emailKey = `review_submit:email:${tenantId}:${input.email.trim().toLowerCase()}`;
+    const emailRes = await checkRateLimit(db, { key: emailKey, limit: 5, windowSeconds: 3600 });
+    if (!emailRes.allowed) throw new RateLimitExceededError("Too many reviews from this email. Please try again later.", emailRes.retryAfter, 5, emailKey);
+  }
+
   // 2. Sanitize plain text
   const cleanReviewerName = sanitizePlainText(input.reviewerName);
   const cleanTitle = input.title ? sanitizePlainText(input.title) : undefined;
@@ -234,7 +250,8 @@ export async function submitProductReview(
     }
 
     // Find delivered order item matching this customer or order number
-    if (matchedCustomerId || input.orderNumber || input.email) {
+    const canProveOrder = Boolean(customerId) || Boolean(input.email && input.orderNumber);
+    if (canProveOrder) {
       const orderConditions: SQL[] = [eq(schema.orders.tenantId, tenantId)];
       if (matchedCustomerId) {
         orderConditions.push(eq(schema.orders.customerId, matchedCustomerId));

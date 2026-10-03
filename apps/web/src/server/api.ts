@@ -1740,7 +1740,8 @@ export const storeRouter = os.router({
         .handler(async ({ context, input }) => {
           if (!context.tenantCtx) throw new Error("Missing tenant context");
           const customerId = context.session?.type === "customer" ? context.session.user.id : undefined;
-          return submitProductReview(context.rt, context.tenantCtx.tenantId, input, customerId);
+          const ip = clientIp(context.headers ?? new Headers());
+          return submitProductReview(context.rt, context.tenantCtx.tenantId, { ...input, ip }, customerId);
         }),
     },
   },

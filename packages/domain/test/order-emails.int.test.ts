@@ -1,5 +1,6 @@
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 import { eq } from "drizzle-orm";
+import { primaryCategory } from "./helpers/primary-category.ts";
 import { pino } from "pino";
 import { schema } from "@bs/db";
 import { startTestDb, type TestDb } from "@bs/db/test-env";
@@ -75,7 +76,7 @@ beforeAll(async () => {
   other = mk(b);
   // the store's support address, as set in Settings
   await rt._db.db.update(schema.storeSettings).set({ supportEmail: "help@tasteofhills.example" }).where(eq(schema.storeSettings.tenantId, a.tenantId));
-  await createProduct(rtWeb, ctx, { title: "Dalle Timboor Chok Pickle | Powder", status: "active", variants: [{ sku: "MAIL-1", title: "Default", price: 10000 }] });
+  await createProduct(rtWeb, ctx, { title: "Dalle Timboor Chok Pickle | Powder", status: "active", primaryCategoryId: await primaryCategory(rtWeb, ctx), variants: [{ sku: "MAIL-1", title: "Default", price: 10000 }] });
   const row = (await listInventoryLevels(rtWeb, ctx, {})).items[0]!;
   variantId = row.variantId;
   await adjustInventory(rtWeb, ctx, { variantId, locationId: row.locationId, quantityDelta: 100, reason: "received" });

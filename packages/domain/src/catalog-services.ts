@@ -408,7 +408,8 @@ export async function createProduct(
     throw new Error("A primary category is required to publish or list a product.");
   }
 
-  return withTenant(db, ctx.tenantId, async (tx) => {
+  // getProduct opens its own transaction, so it must run after this one commits or it cannot see the new rows.
+  const createdId = await withTenant(db, ctx.tenantId, async (tx) => {
     const slug =
       input.slug?.trim() ||
       input.title
@@ -524,7 +525,7 @@ export async function createProduct(
           productId: product.id,
           sku: v.sku,
           title: v.title,
-          price: BigInt(input.priceOnRequest ? 0 : v.price),
+          price: BigInt(v.price),
           compareAtPrice: v.compareAtPrice ? BigInt(v.compareAtPrice) : null,
           costPrice: v.costPrice ? BigInt(v.costPrice) : null,
           trackInventory: v.trackInventory ?? true,
@@ -540,8 +541,9 @@ export async function createProduct(
       if (variant) createdVariants.push(variant);
     }
 
-    return getProduct(rt, ctx, { id: product.id });
+    return product.id;
   });
+  return getProduct(rt, ctx, { id: createdId });
 }
 
 /**
@@ -555,7 +557,7 @@ export async function updateProduct(
   assertPermission(ctx, "products.write");
   const db = rt._db.db;
 
-  return withTenant(db, ctx.tenantId, async (tx) => {
+  const updatedId = await withTenant(db, ctx.tenantId, async (tx) => {
     const [existing] = await tx
       .select()
       .from(schema.products)
@@ -586,7 +588,10 @@ export async function updateProduct(
     }
 
     // If moving to active/unlisted from draft/archived, or updating an active/unlisted product, require primary category
-    if ((nextStatus === "active" || nextStatus === "unlisted") && !effectivePrimaryCatId) {
+    // Grandfathering (plan Q2): only a status change into active/unlisted needs a primary category, so editing an existing
+    // uncategorised product (price, stock, title) keeps working.
+    const statusChanging = input.status !== undefined && input.status !== existing.status;
+    if (statusChanging && (nextStatus === "active" || nextStatus === "unlisted") && !effectivePrimaryCatId) {
       throw new Error("A primary category is required to publish or list a product.");
     }
 
@@ -615,10 +620,6 @@ export async function updateProduct(
 
     if (!row) {
       throw new Error(`Product not found: "${input.id}"`);
-    }
-
-    if (input.priceOnRequest) {
-      await tx.update(schema.variants).set({ price: 0n }).where(eq(schema.variants.productId, row.id));
     }
 
     // Update product_categories if primary or extra categories are passed
@@ -698,8 +699,9 @@ export async function updateProduct(
       isFeatured: row.isFeatured,
     });
 
-    return getProduct(rt, ctx, { id: row.id });
+    return row.id;
   });
+  return getProduct(rt, ctx, { id: updatedId });
 }
 
 /**
@@ -1355,7 +1357,8 @@ export async function updateCategory(
   assertPermission(ctx, "products.write");
   const db = rt._db.db;
 
-  return withTenant(db, ctx.tenantId, async (tx) => {
+  // the getter opens its own transaction, so it runs after this one commits
+  const savedId = await withTenant(db, ctx.tenantId, async (tx) => {
     const [existing] = await tx
       .select()
       .from(schema.categories)
@@ -1406,8 +1409,9 @@ export async function updateCategory(
       categoryId: row.id,
     });
 
-    return getCategory(rt, ctx, { id: row.id });
+    return row.id;
   });
+  return getCategory(rt, ctx, { id: savedId });
 }
 
 export async function deleteCategory(rt: Runtime, ctx: TenantContext, input: { id: string }) {
@@ -1682,7 +1686,8 @@ export async function createCollection(
   assertPermission(ctx, "products.write");
   const db = rt._db.db;
 
-  return withTenant(db, ctx.tenantId, async (tx) => {
+  // the getter opens its own transaction, so it runs after this one commits
+  const savedId = await withTenant(db, ctx.tenantId, async (tx) => {
     const slug =
       input.slug?.trim() ||
       input.title
@@ -1745,8 +1750,9 @@ export async function createCollection(
       collectionId: row.id,
     });
 
-    return getCollection(rt, ctx, { id: row.id });
+    return row.id;
   });
+  return getCollection(rt, ctx, { id: savedId });
 }
 
 export interface UpdateCollectionInput {
@@ -1772,7 +1778,8 @@ export async function updateCollection(
   assertPermission(ctx, "products.write");
   const db = rt._db.db;
 
-  return withTenant(db, ctx.tenantId, async (tx) => {
+  // the getter opens its own transaction, so it runs after this one commits
+  const savedId = await withTenant(db, ctx.tenantId, async (tx) => {
     const updateValues: Record<string, unknown> = { updatedAt: new Date() };
     if (input.title !== undefined) updateValues.title = input.title.trim();
     if (input.slug !== undefined) updateValues.slug = input.slug.trim();
@@ -1822,8 +1829,9 @@ export async function updateCollection(
       collectionId: row.id,
     });
 
-    return getCollection(rt, ctx, { id: row.id });
+    return row.id;
   });
+  return getCollection(rt, ctx, { id: savedId });
 }
 
 export async function deleteCollection(rt: Runtime, ctx: TenantContext, input: { id: string }) {
@@ -1981,7 +1989,8 @@ export async function createBrand(
   assertPermission(ctx, "products.write");
   const db = rt._db.db;
 
-  return withTenant(db, ctx.tenantId, async (tx) => {
+  // the getter opens its own transaction, so it runs after this one commits
+  const savedId = await withTenant(db, ctx.tenantId, async (tx) => {
     const slug =
       input.slug?.trim() ||
       input.name
@@ -2011,8 +2020,9 @@ export async function createBrand(
       diff: { name: row.name, slug: row.slug },
     });
 
-    return getBrand(rt, ctx, { id: row.id });
+    return row.id;
   });
+  return getBrand(rt, ctx, { id: savedId });
 }
 
 export async function updateBrand(
@@ -2023,7 +2033,8 @@ export async function updateBrand(
   assertPermission(ctx, "products.write");
   const db = rt._db.db;
 
-  return withTenant(db, ctx.tenantId, async (tx) => {
+  // the getter opens its own transaction, so it runs after this one commits
+  const savedId = await withTenant(db, ctx.tenantId, async (tx) => {
     const updateValues: Record<string, unknown> = { updatedAt: new Date() };
     if (input.name !== undefined) updateValues.name = input.name.trim();
     if (input.slug !== undefined) updateValues.slug = input.slug.trim();
@@ -2047,8 +2058,9 @@ export async function updateBrand(
       diff: updateValues,
     });
 
-    return getBrand(rt, ctx, { id: row.id });
+    return row.id;
   });
+  return getBrand(rt, ctx, { id: savedId });
 }
 
 export async function deleteBrand(rt: Runtime, ctx: TenantContext, input: { id: string }) {
@@ -2198,7 +2210,8 @@ export async function createLocation(
   assertPermission(ctx, "products.write");
   const db = rt._db.db;
 
-  return withTenant(db, ctx.tenantId, async (tx) => {
+  // the getter opens its own transaction, so it runs after this one commits
+  const savedId = await withTenant(db, ctx.tenantId, async (tx) => {
     // If setting as default, clear existing default in same transaction
     if (input.isDefault) {
       await tx
@@ -2231,8 +2244,9 @@ export async function createLocation(
       diff: { name: row.name, isDefault: row.isDefault, isActive: row.isActive },
     });
 
-    return getLocation(rt, ctx, { id: row.id });
+    return row.id;
   });
+  return getLocation(rt, ctx, { id: savedId });
 }
 
 export interface UpdateLocationInput {
@@ -2258,7 +2272,8 @@ export async function updateLocation(
   assertPermission(ctx, "products.write");
   const db = rt._db.db;
 
-  return withTenant(db, ctx.tenantId, async (tx) => {
+  // the getter opens its own transaction, so it runs after this one commits
+  const savedId = await withTenant(db, ctx.tenantId, async (tx) => {
     const [existing] = await tx
       .select()
       .from(schema.locations)
@@ -2317,8 +2332,9 @@ export async function updateLocation(
       diff: updateValues,
     });
 
-    return getLocation(rt, ctx, { id: row.id });
+    return row.id;
   });
+  return getLocation(rt, ctx, { id: savedId });
 }
 
 export async function deleteLocation(rt: Runtime, ctx: TenantContext, input: { id: string }) {
