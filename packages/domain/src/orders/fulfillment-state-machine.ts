@@ -1,7 +1,8 @@
-import { eq, and } from "drizzle-orm";
+import { eq, and, sql } from "drizzle-orm";
 import {
   fulfillments,
   orders,
+  orderItems,
   orderEvents,
   trackingEvents,
   withTenant,
@@ -200,11 +201,27 @@ export async function transitionFulfillment(
       const anyDelivered = nonCancelled.some((f) => f.status === "delivered");
       const anyShipped = nonCancelled.some((f) => ["picked_up", "in_transit", "out_for_delivery"].includes(f.status));
       const anyRto = nonCancelled.some((f) => f.status === "rto" || f.status === "rto_delivered");
+      const allShipped = nonCancelled.every((f) =>
+        ["picked_up", "in_transit", "out_for_delivery", "delivered"].includes(f.status),
+      );
+      // "Partially fulfilled" means some units are still unshipped, not "no shipment has been delivered yet": an order
+      // whose every unit is on its way is fulfilled. Units are counted, so a split order stays partial until the last
+      // parcel is created.
+      const [units] = await db
+        .select({
+          ordered: sql<number>`coalesce(sum(${orderItems.quantity}), 0)::int`,
+          fulfilled: sql<number>`coalesce(sum(${orderItems.fulfilledQty}), 0)::int`,
+        })
+        .from(orderItems)
+        .where(and(eq(orderItems.tenantId, ctx.tenantId), eq(orderItems.orderId, fulfillment.orderId)));
+      const allUnitsShipped = (units?.ordered ?? 0) > 0 && (units?.fulfilled ?? 0) >= (units?.ordered ?? 0);
 
       if (allDelivered) {
         rollupStatus = "delivered";
       } else if (anyRto) {
         rollupStatus = "rto";
+      } else if (allShipped && allUnitsShipped) {
+        rollupStatus = "fulfilled";
       } else if (anyDelivered || anyShipped) {
         rollupStatus = "partially_fulfilled";
       } else if (nonCancelled.every((f) => f.status === "label_created")) {

@@ -5,6 +5,7 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { evaluateStorefrontAccess, getOrderByActionToken, getOrderReturnsByToken } from "@bs/domain";
 import { ReturnRequestForm } from "@/components/orders/ReturnRequestForm.tsx";
+import { describeOrderStatus, describePayment } from "@/components/orders/order-labels.ts";
 import { server } from "@/server/runtime.ts";
 
 interface OrderTrackingPageProps {
@@ -45,10 +46,10 @@ export default async function OrderTrackingPage({ params }: OrderTrackingPagePro
           </div>
           <div className="flex items-center gap-2">
             <span className="inline-flex items-center rounded-full bg-primary/10 text-primary px-3 py-1 text-xs font-semibold uppercase">
-              {order.status}
+              {describeOrderStatus(order.status).label}
             </span>
             <span className="inline-flex items-center rounded-full bg-muted text-muted-foreground px-3 py-1 text-xs font-semibold">
-              Payment: {order.paymentStatus}
+              Payment: {describePayment(order.paymentStatus)}
             </span>
           </div>
         </div>

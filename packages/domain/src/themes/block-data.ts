@@ -26,6 +26,7 @@ const toBlockProduct = (s: StorefrontProductSummary): BlockProduct => ({
   slug: s.slug,
   priceMin: s.priceMin,
   compareAtPriceMin: s.compareAtPriceMin,
+  priceOnRequest: s.priceOnRequest,
   ratingAvg: s.ratingAvg,
   ratingCount: s.ratingCount,
   imageMediaId: s.primaryImage?.mediaId,

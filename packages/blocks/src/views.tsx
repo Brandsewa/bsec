@@ -143,8 +143,14 @@ function defaultCard(p: BlockProduct, o: { showPrice: boolean; showRating: boole
         ) : null}
         {o.showPrice ? (
           <div className="bsb-price">
-            {money(p.priceMin)}
-            {p.compareAtPriceMin && p.compareAtPriceMin > p.priceMin ? <s>{money(p.compareAtPriceMin)}</s> : null}
+            {p.priceOnRequest ? (
+              <span className="bsb-muted">Price on request</span>
+            ) : (
+              <>
+                {money(p.priceMin)}
+                {p.compareAtPriceMin && p.compareAtPriceMin > p.priceMin ? <s>{money(p.compareAtPriceMin)}</s> : null}
+              </>
+            )}
           </div>
         ) : null}
       </div>

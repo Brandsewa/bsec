@@ -125,17 +125,25 @@ export async function advanceAdminOrder(
     await walkOrder(rt, ctx, tx, input.id, order.status, input.to === "delivered" ? "delivered" : "fulfilled");
 
     if (input.to === "delivered") {
+      // "created" is included: orders made in the admin before this was fixed recorded their COD payment that way,
+      // and delivering them must still collect the cash instead of leaving the order "COD pending" for good.
       const due = await tx
-        .select({ id: schema.paymentIntents.id })
+        .select({ id: schema.paymentIntents.id, status: schema.paymentIntents.status })
         .from(schema.paymentIntents)
         .where(
           and(
             eq(schema.paymentIntents.tenantId, ctx.tenantId),
             eq(schema.paymentIntents.orderId, input.id),
-            eq(schema.paymentIntents.status, "cod_pending"),
+            eq(schema.paymentIntents.provider, "cod"),
+            inArray(schema.paymentIntents.status, ["created", "cod_pending"]),
           ),
         );
       for (const p of due) {
+        if (p.status === "created") {
+          // Repair, not a transition: the payment state machine (PLAN 11.1) has no created -> cod_pending step because a COD
+          // payment is cod_pending from the start. These rows were mis-recorded as "created" by the admin order form.
+          await tx.update(schema.paymentIntents).set({ status: "cod_pending", updatedAt: new Date() }).where(eq(schema.paymentIntents.id, p.id));
+        }
         await transitionOrder(rt, ctx, input.id, { type: "payment.cod_collect", intentId: p.id }, tx);
       }
     }

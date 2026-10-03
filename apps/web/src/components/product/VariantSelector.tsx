@@ -158,15 +158,15 @@ export function VariantSelector({ product }: VariantSelectorProps) {
         <>
           {/* Pre-order notification or Stock & Delivery ETA Hole */}
           {isPreorder ? (
-            <div className="flex flex-col gap-1 rounded-xl border border-amber-500/30 bg-amber-500/10 p-3 text-amber-950 dark:text-amber-200">
+            <div className="flex flex-col gap-1 rounded-xl border border-amber-500/30 bg-amber-500/10 p-3 text-amber-950">
               <div className="flex items-center gap-2">
-                <span className="inline-flex items-center rounded-md bg-amber-500/20 px-2 py-0.5 text-xs font-semibold text-amber-800 dark:text-amber-300">
+                <span className="inline-flex items-center rounded-md bg-amber-500/20 px-2 py-0.5 text-xs font-semibold text-amber-800">
                   Pre-order
                 </span>
                 <span className="text-sm font-medium">{shipDateLabel}</span>
               </div>
               {selectedVariant?.preorderMessage ? (
-                <p className="text-xs text-amber-800/80 dark:text-amber-300/80">{selectedVariant.preorderMessage}</p>
+                <p className="text-xs text-amber-800/80/80">{selectedVariant.preorderMessage}</p>
               ) : null}
             </div>
           ) : (
