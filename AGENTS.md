@@ -105,24 +105,30 @@ Several agents and the owner work on this repo at the same time, in different wo
 | Claude Code | `CLAUDE.md` (imports this file), `apps/web/CLAUDE.md` | `Co-Authored-By: Claude <noreply@anthropic.com>` (use the exact trailer your session is configured with) | Per-project memory lives outside the repo; anything another agent needs must be in the repo docs |
 | Google Antigravity | `AGENTS.md`, `GEMINI.md` | `Co-Authored-By: Antigravity <noreply@google.com>` | Hand-off plans for it live in `docs/*-PLAN.md`; Claude verifies against acceptance criteria |
 | OpenAI Codex | `AGENTS.md` | `Co-Authored-By: Codex <noreply@openai.com>` | |
-| ZCode | `AGENTS.md` | `Co-Authored-By: ZCode` (use the exact trailer your session is configured with) | **Testing and QA agent** (owner decision 2026-10-03): see the roles table below |
+| ZCode | `AGENTS.md` | `Co-Authored-By: ZCode` (use the exact trailer your session is configured with) | Builder and tester (owner decision 2026-10-03): see the roles table below |
 | Cursor / Copilot | `.cursor/rules/bsec.mdc`, `.github/copilot-instructions.md` | own trailer | Pointer files only |
 
-### Roles (owner decision 2026-10-03)
+### Roles (owner decisions 2026-10-03)
 
 | Who | Role | Does | Does not |
 |---|---|---|---|
 | Owner | Decides | Pricing, legal, providers, deleting data, priorities | |
-| Claude Code | Plans and verifies | Writes plans and prompts, reviews and fixes builds, runs the gate, merges when CI is green | |
-| Google Antigravity | Builds | Implements the plans in `docs/*-PLAN.md` | Does not merge its own PR |
-| ZCode | Tests and QA | Runs the gate, writes and extends tests (real-database tests for tenancy, money, auth, permissions), walks the admin and storefront locally (375 px and desktop), reports defects with steps to reproduce and the failing output | Does not build features or change product behaviour; a fix for a defect it finds goes to the owning builder or to Claude unless it is a test-only change |
+| Claude Code | **Primary coding agent** | Plans, writes the plans and prompts, builds, reviews and fixes the other agents' work, runs the full gate, merges when CI is green | |
+| Google Antigravity | Builder and tester | Implements assigned plans in `docs/*-PLAN.md` and `docs/prompts/`; writes and runs tests | Never merges its own PR; Claude verifies before the next phase starts |
+| ZCode | Builder and tester | Same as Antigravity: implements assigned plans, writes tests, walks the admin and storefront locally (375 px and desktop), reports defects with steps and output | Never merges its own PR; Claude verifies before the next phase starts |
 
-ZCode's rules:
-1. **Own worktree, always.** Never work in another agent's checkout or on another agent's branch (a stray `git add` in a shared checkout already swept one agent's files into another's commit and failed CI). Stage files by explicit path; never `git add -A` or `git add .`.
-2. **Test only against local or ephemeral data.** Never drive the live production store, never create records there, never rotate secrets or touch Coolify/Cloudflare. A live check needs the owner's explicit yes in the session.
-3. **Findings go in the repo.** One record per test round in `docs/changes/` (`YYYY-MM-DD-zcode-<slug>.md`, "Type: test"): what was run, what passed, each defect (severity, steps, expected, actual, evidence), and what was not tested. Never claim "verified" for something not run.
-4. **Test-only changes** (new tests, fixtures, test helpers) can be committed on a `test/...` branch and opened as a PR; production code changes are not part of its role.
-5. Plan docs for it go in `docs/*-PLAN.md` or `docs/prompts/`, like the other agents.
+How the three agents share work:
+1. **One plan, one owner.** A plan or phase is assigned to exactly one builder (Claude, Antigravity or ZCode) in the prompt the owner hands over. Nobody builds another agent's phase. Claim it in `progress.md` "In flight".
+2. **Claude verifies every other agent's build** against the plan's acceptance criteria and the gate before the next phase starts, and fixes what fails or sends it back. A builder's "done" means "ready to verify".
+3. **Testing is everyone's job and independent of the builder:** a builder tests its own work; a second agent may be asked to run a test round (gate, real-database tests, local walkthrough) and report in `docs/changes/`.
+
+Rules for every agent, ZCode included (these came from real failures):
+1. **Own worktree, always.** Never work in another agent's checkout or on another agent's branch. A stray `git add` in a shared checkout already swept one agent's files into another's commit and failed CI (secret-scan and `docs:check`). Stage files by explicit path; never `git add -A`, `git add .` or `git add <directory>`; read `git status` for files you did not write before every commit.
+2. **Test only against local or ephemeral data.** Never drive the live production store, never create records there, never rotate secrets or touch Coolify or Cloudflare. A live check needs the owner's explicit yes in the session.
+3. **Findings go in the repo.** One change record per change set or test round in `docs/changes/` (`YYYY-MM-DD-<agent>-<slug>.md`; "Type: test" for a test round): what was run, what passed, each defect (severity, steps, expected, actual, evidence), what was not tested. Never claim "verified" for something not run.
+4. **Real-database tests are part of the gate** (`pnpm --filter @bs/domain test:heavy`); mock-only tests prove nothing about the database. Paste the counts.
+5. **Commit before read-back.** A getter opens its own transaction; do not call one inside the transaction that wrote the row. Invalidate caches after commit.
+6. Plan docs and prompts for any agent go in `docs/*-PLAN.md` or `docs/prompts/`.
 
 ## 7. Definition of done
 
