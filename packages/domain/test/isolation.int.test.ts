@@ -109,6 +109,9 @@ import {
   listCustomerNotes,
   addCustomerNote,
   deleteCustomerNote,
+  previewCustomerImport,
+  commitCustomerImport,
+  deleteAdminCustomer,
   listAdminDiscounts,
   listAdminOrders,
   listInvitations,
@@ -1038,6 +1041,21 @@ describe("Generated Isolation Test Suite (M1 Real Postgres 18 Proof)", () => {
       case "customers.notes.delete": {
         const note = await addCustomerNote(rt, ctx, { customerId: testCustomerA, body: "Isolation note to delete" });
         return await deleteCustomerNote(rt, ctx, { id: note.id });
+      }
+      case "customers.importPreview":
+        return await previewCustomerImport(rt, ctx, {
+          rows: [{ name: "Iso Import", email: `iso-import-${Date.now()}@test.com`, tags: ["iso"], marketingConsent: "no" }],
+        });
+      case "customers.importCommit":
+        return await commitCustomerImport(rt, ctx, {
+          rows: [{ name: "Iso Import", email: `iso-import-commit-${Date.now()}@test.com`, tags: ["iso"], marketingConsent: "no" }],
+        });
+      case "customers.delete": {
+        // A customer without orders is hard-deleted, so create a throwaway row for this check.
+        const [row] = await withTenant(rt._db.db, ctx.tenantId, (tx) =>
+          tx.insert(schema.customers).values({ tenantId: ctx.tenantId, email: `iso-delete-${Date.now()}@test.com`, name: "Iso Delete" }).returning(),
+        );
+        return await deleteAdminCustomer(rt, ctx, { id: row!.id });
       }
 
       // --- M5 Discounts Admin ---

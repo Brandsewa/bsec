@@ -174,6 +174,9 @@ import {
   listCustomerNotes,
   addCustomerNote,
   deleteCustomerNote,
+  previewCustomerImport,
+  commitCustomerImport,
+  deleteAdminCustomer,
   listAdminDiscounts,
   createAdminDiscount,
   updateAdminDiscount,
@@ -1416,6 +1419,27 @@ export const storeRouter = os.router({
             return deleteCustomerNote(context.rt, context.tenantCtx, { id: input.noteId });
           }),
       },
+      importPreview: os.admin.customers.importPreview
+        .use(requireAdmin)
+        .use(requirePermission("customers.write"))
+        .handler(({ context, input }) => {
+          if (!context.tenantCtx) throw new Error("Missing tenant context");
+          return previewCustomerImport(context.rt, context.tenantCtx, input);
+        }),
+      importCommit: os.admin.customers.importCommit
+        .use(requireAdmin)
+        .use(requirePermission("customers.write"))
+        .handler(({ context, input }) => {
+          if (!context.tenantCtx) throw new Error("Missing tenant context");
+          return commitCustomerImport(context.rt, context.tenantCtx, input);
+        }),
+      delete: os.admin.customers.delete
+        .use(requireAdmin)
+        .use(requirePermission("customers.write"))
+        .handler(({ context, input }) => {
+          if (!context.tenantCtx) throw new Error("Missing tenant context");
+          return deleteAdminCustomer(context.rt, context.tenantCtx, input);
+        }),
       setStatus: os.admin.customers.setStatus
         .use(requireAdmin)
         .use(requirePermission("customers.write"))

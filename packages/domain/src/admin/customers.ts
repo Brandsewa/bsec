@@ -910,3 +910,87 @@ export async function createAdminCustomer(
   });
 }
 
+
+export interface DeleteCustomerResult {
+  /** "deleted" when the customer had no orders; "anonymised" when orders were kept. */
+  mode: "deleted" | "anonymised";
+  id: string;
+}
+
+/**
+ * Delete a customer (Customers Phase 1, step 1C; the DPDP erasure path).
+ * With orders: anonymise — identity replaced with a placeholder, consent unsubscribed,
+ * sessions destroyed, addresses/notes/wishlist removed, `deleted_at` set, orders kept for
+ * accounts and tax. Without orders: the row is hard-deleted (children cascade).
+ */
+export async function deleteAdminCustomer(rt: Runtime, ctx: TenantContext, input: { id: string }): Promise<DeleteCustomerResult> {
+  assertPermission(ctx, "customers.write");
+  const db = rt._db.db;
+  const actorId = ctx.actor.type === "staff" ? ctx.actor.userId : null;
+
+  return await withTenant(db, ctx.tenantId, async (tx) => {
+    const [existing] = await tx
+      .select({ id: schema.customers.id, email: schema.customers.email, name: schema.customers.name })
+      .from(schema.customers)
+      .where(and(eq(schema.customers.tenantId, ctx.tenantId), eq(schema.customers.id, input.id)))
+      .limit(1);
+    if (!existing) throw new Error(`Customer not found: ${input.id}`);
+
+    const [orderCount] = await tx
+      .select({ count: sql<number>`count(*)::int` })
+      .from(schema.orders)
+      .where(and(eq(schema.orders.tenantId, ctx.tenantId), eq(schema.orders.customerId, input.id)));
+    const hasOrders = (orderCount?.count ?? 0) > 0;
+
+    if (!hasOrders) {
+      await tx.delete(schema.customerSessions).where(and(eq(schema.customerSessions.tenantId, ctx.tenantId), eq(schema.customerSessions.userId, input.id)));
+      await tx.delete(schema.customers).where(and(eq(schema.customers.tenantId, ctx.tenantId), eq(schema.customers.id, input.id)));
+      await tx.insert(schema.auditLogs).values({
+        tenantId: ctx.tenantId,
+        actorType: ctx.actor.type,
+        actorId,
+        action: "customer.deleted",
+        targetType: "customer",
+        targetId: input.id,
+        diff: { mode: "deleted", email: existing.email },
+      });
+      return { mode: "deleted", id: input.id };
+    }
+
+    const shortId = input.id.replaceAll("-", "").slice(0, 8);
+    await tx.delete(schema.customerAddresses).where(and(eq(schema.customerAddresses.tenantId, ctx.tenantId), eq(schema.customerAddresses.customerId, input.id)));
+    await tx.delete(schema.customerNotes).where(and(eq(schema.customerNotes.tenantId, ctx.tenantId), eq(schema.customerNotes.customerId, input.id)));
+    await tx.delete(schema.wishlistItems).where(and(eq(schema.wishlistItems.tenantId, ctx.tenantId), eq(schema.wishlistItems.customerId, input.id)));
+    await tx.delete(schema.customerSessions).where(and(eq(schema.customerSessions.tenantId, ctx.tenantId), eq(schema.customerSessions.userId, input.id)));
+    await tx
+      .update(schema.customers)
+      .set({
+        name: "Deleted customer",
+        email: `deleted-${shortId}@invalid`,
+        phone: null,
+        passwordHash: null,
+        emailVerified: false,
+        phoneVerified: false,
+        isGuest: true,
+        tags: [],
+        note: null,
+        deletedAt: new Date(),
+        updatedAt: new Date(),
+      })
+      .where(and(eq(schema.customers.tenantId, ctx.tenantId), eq(schema.customers.id, input.id)));
+
+    // Consent goes through the single writer so the history records the erasure (source: admin).
+    await setMarketingConsent(rt, ctx, { customerId: input.id, state: "unsubscribed", source: "admin", actorType: "staff", actorId }, tx);
+
+    await tx.insert(schema.auditLogs).values({
+      tenantId: ctx.tenantId,
+      actorType: ctx.actor.type,
+      actorId,
+      action: "customer.deleted",
+      targetType: "customer",
+      targetId: input.id,
+      diff: { mode: "anonymised", email: existing.email },
+    });
+    return { mode: "anonymised", id: input.id };
+  });
+}

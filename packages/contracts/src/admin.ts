@@ -2395,6 +2395,72 @@ export const adminContract = {
       .route({ method: "PUT", path: "/admin/customers/{id}/tags" })
       .input(z.object({ id: z.string().uuid(), tags: z.array(z.string()).max(30) }))
       .output(z.object({ id: z.string().uuid(), tags: z.array(z.string()) })),
+    /** Dry run for the CSV import: counts and row issues without writing anything. */
+    importPreview: oc
+      .route({ method: "POST", path: "/admin/customers/import/preview" })
+      .input(
+        z.object({
+          rows: z
+            .array(
+              z.object({
+                name: z.string().optional(),
+                email: z.string(),
+                phone: z.string().optional(),
+                tags: z.array(z.string()).optional(),
+                marketingConsent: z.string().optional(),
+              }),
+            )
+            .max(10_000),
+        }),
+      )
+      .output(
+        z.object({
+          total: z.number(),
+          created: z.number(),
+          updated: z.number(),
+          duplicatesInFile: z.number(),
+          subscribeCount: z.number(),
+          invalid: z.array(z.object({ row: z.number(), email: z.string(), error: z.string() })),
+        }),
+      ),
+    /** Commits the import; files over 500 rows are queued and the response says so. */
+    importCommit: oc
+      .route({ method: "POST", path: "/admin/customers/import/commit" })
+      .input(
+        z.object({
+          rows: z
+            .array(
+              z.object({
+                name: z.string().optional(),
+                email: z.string(),
+                phone: z.string().optional(),
+                tags: z.array(z.string()).optional(),
+                marketingConsent: z.string().optional(),
+              }),
+            )
+            .max(10_000),
+        }),
+      )
+      .output(
+        z.union([
+          z.object({ queued: z.literal(true), total: z.number() }),
+          z.object({
+            queued: z.literal(false).optional(),
+            created: z.number(),
+            updated: z.number(),
+            skipped: z.number(),
+            errors: z.array(z.object({ row: z.number(), email: z.string(), error: z.string() })),
+          }),
+        ]),
+      ),
+    /**
+     * Deletes a customer: hard delete without orders, anonymise with orders
+     * (identity replaced, sessions destroyed, orders kept for accounts and tax).
+     */
+    delete: oc
+      .route({ method: "DELETE", path: "/admin/customers/{id}" })
+      .input(z.object({ id: z.string().uuid() }))
+      .output(z.object({ id: z.string().uuid(), mode: z.enum(["deleted", "anonymised"]) })),
   },
 
   // --- M5 Discounts Admin ---

@@ -21,6 +21,9 @@ import {
   listCustomerNotes,
   addCustomerNote,
   deleteCustomerNote,
+  previewCustomerImport,
+  commitCustomerImport,
+  deleteAdminCustomer,
   listAdminCustomerTags,
   setAdminCustomerStatus,
   setAdminCustomerTags,
@@ -586,5 +589,202 @@ describe("Phase 1B: orders history and activity timeline", () => {
     expect(detail.customer.averageOrderValue).toBeGreaterThan(0);
     expect(detail.consentHistory.length).toBeGreaterThanOrEqual(1);
     expect(detail.recentOrders).toHaveLength(1);
+  });
+});
+
+describe("Phase 1C: CSV import", () => {
+  const rowsFor = (stamp: number) => [
+    { name: "Import One", email: `imp-one-${stamp}@phase1.test`, phone: "9620000001", tags: ["imported", "retail"], marketingConsent: "yes" },
+    { name: "Import Two", email: `imp-two-${stamp}@phase1.test`, marketingConsent: "SUBSCRIBED" },
+    { name: "Import Three", email: `imp-three-${stamp}@phase1.test`, marketingConsent: "" },
+    { name: "Import Four", email: `imp-one-${stamp}@phase1.test`, marketingConsent: "true" }, // duplicate in file
+    { name: "Import Five", email: "not-an-email", marketingConsent: "yes" }, // invalid
+    { name: "Import Six", email: "", marketingConsent: "yes" }, // missing email
+  ];
+
+  it("previews counts and issues without writing anything", async () => {
+    const stamp = Date.now();
+    const preview = await previewCustomerImport(rtWeb, ctxA, { rows: rowsFor(stamp) });
+    expect(preview.total).toBe(6);
+    expect(preview.created).toBe(3);
+    expect(preview.updated).toBe(0);
+    expect(preview.duplicatesInFile).toBe(1);
+    expect(preview.subscribeCount).toBe(2); // yes and SUBSCRIBED; the duplicate row is skipped entirely
+    expect(preview.invalid.map((i) => i.error)).toEqual(
+      expect.arrayContaining([expect.stringMatching(/duplicate/), expect.stringMatching(/not a valid email/), expect.stringMatching(/email is required/)]),
+    );
+
+    // Dry run wrote nothing
+    const rows = await withTenant(rtWeb._db.db, ctxA.tenantId, (tx) =>
+      tx.select().from(schema.customers).where(sql`${schema.customers.email} LIKE ${"imp-%-" + stamp + "%@phase1.test"}`),
+    );
+    expect(rows).toHaveLength(0);
+  });
+
+  it("commits exactly what the preview promised, subscribes only rows that say so, and never overwrites consent or phone of existing customers", async () => {
+    const stamp = Date.now();
+    const preview = await previewCustomerImport(rtWeb, ctxA, { rows: rowsFor(stamp) });
+    const result = await commitCustomerImport(rtWeb, ctxA, { rows: rowsFor(stamp) });
+    if ("queued" in result) throw new Error("small import should not be queued");
+    expect(result.created).toBe(preview.created);
+    expect(result.errors.map((e) => e.error)).toEqual(preview.invalid.map((i) => i.error));
+
+    const [one] = await withTenant(rtWeb._db.db, ctxA.tenantId, (tx) =>
+      tx.select().from(schema.customers).where(eq(schema.customers.email, `imp-one-${stamp}@phase1.test`)),
+    );
+    expect(one?.marketingState).toBe("subscribed");
+    expect(one?.acceptsMarketing).toBe(true);
+    expect(one?.marketingSource).toBe("import");
+    expect(one?.phone).toBe("9620000001");
+    expect(one?.tags).toEqual(expect.arrayContaining(["imported", "retail"]));
+
+    const [three] = await withTenant(rtWeb._db.db, ctxA.tenantId, (tx) =>
+      tx.select().from(schema.customers).where(eq(schema.customers.email, `imp-three-${stamp}@phase1.test`)),
+    );
+    expect(three?.marketingState).toBe("not_subscribed");
+    expect(three?.acceptsMarketing).toBe(false);
+
+    // An existing customer: name/tags merged, consent untouched unless the row says so
+    await commitCustomerImport(rtWeb, ctxA, {
+      rows: [{ name: "Ada Renamed", email: "acct-1@phase1.test", phone: "9999999999", tags: ["imported"], marketingConsent: "" }],
+    });
+    const [ada] = await withTenant(rtWeb._db.db, ctxA.tenantId, (tx) => tx.select().from(schema.customers).where(eq(schema.customers.id, acct1)));
+    expect(ada?.name).toBe("Ada Renamed");
+    expect(ada?.tags).toContain("imported");
+    expect(ada?.tags).toContain("VIP"); // existing tags kept
+    expect(ada?.phone).toBe("9600000001"); // phone never overwritten from a file
+    expect(ada?.marketingState).toBe("subscribed"); // unchanged
+
+    // Consent history only has admin/import rows from earlier steps, no new one for this commit
+    const events = await withTenant(rtWeb._db.db, ctxA.tenantId, (tx) =>
+      tx.select().from(schema.customerConsentEvents).where(eq(schema.customerConsentEvents.customerId, acct1)),
+    );
+    expect(events.filter((e) => e.source === "import")).toHaveLength(0);
+
+    // Second commit of the same file: no new rows, no duplicate keys
+    const again = await commitCustomerImport(rtWeb, ctxA, { rows: rowsFor(stamp) });
+    if ("queued" in again) throw new Error("small import should not be queued");
+    expect(again.created).toBe(0);
+    expect(again.updated).toBe(3);
+  });
+
+  it("refuses more than 10,000 rows and reports phone collisions per row", async () => {
+    const tooMany = Array.from({ length: 10_001 }, (_, i) => ({ email: `bulk-${i}@phase1.test` }));
+    await expect(previewCustomerImport(rtWeb, ctxA, { rows: tooMany })).rejects.toThrow(/10,000/);
+    await expect(commitCustomerImport(rtWeb, ctxA, { rows: tooMany })).rejects.toThrow(/10,000/);
+
+    const result = await commitCustomerImport(rtWeb, ctxA, {
+      rows: [
+        { name: "Phone A", email: `phone-a-${Date.now()}@phase1.test`, phone: "9630000001" },
+        { name: "Phone B", email: `phone-b-${Date.now()}@phase1.test`, phone: "9630000001" },
+      ],
+    });
+    if ("queued" in result) throw new Error("small import should not be queued");
+    expect(result.created).toBe(1);
+    expect(result.errors).toHaveLength(1);
+    expect(result.errors[0]?.error).toMatch(/already belongs to another customer/);
+  });
+
+  it("refuses a read-only staff member and keeps stores isolated", async () => {
+    await expect(previewCustomerImport(rtWeb, ctxLimited, { rows: [{ email: "x@y.test" }] })).rejects.toThrow(/permission/i);
+    await expect(commitCustomerImport(rtWeb, ctxLimited, { rows: [{ email: "x@y.test" }] })).rejects.toThrow(/permission/i);
+    // Store B's import never touches store A rows with the same email
+    const stamp = Date.now();
+    await commitCustomerImport(rtWeb, ctxA, { rows: [{ name: "Store A", email: `cross-${stamp}@phase1.test` }] });
+    await commitCustomerImport(rtWeb, ctxB, { rows: [{ name: "Store B", email: `cross-${stamp}@phase1.test` }] });
+    const [a] = await withTenant(rtWeb._db.db, ctxA.tenantId, (tx) => tx.select().from(schema.customers).where(eq(schema.customers.email, `cross-${stamp}@phase1.test`)));
+    const [b] = await withTenant(rtWeb._db.db, ctxB.tenantId, (tx) => tx.select().from(schema.customers).where(eq(schema.customers.email, `cross-${stamp}@phase1.test`)));
+    expect(a?.name).toBe("Store A");
+    expect(b?.name).toBe("Store B");
+    expect(a?.id).not.toBe(b?.id);
+  });
+});
+
+describe("Phase 1C: delete and anonymise", () => {
+  it("hard-deletes a customer without orders, cascading their addresses, notes and sessions", async () => {
+    const [row] = await withTenant(rtWeb._db.db, ctxA.tenantId, (tx) =>
+      tx.insert(schema.customers).values({ tenantId: ctxA.tenantId, email: `del-hard-${Date.now()}@phase1.test`, name: "Hard Delete" }).returning(),
+    );
+    const id = row!.id;
+    await withTenant(rtWeb._db.db, ctxA.tenantId, async (tx) => {
+      await tx.insert(schema.customerAddresses).values({ tenantId: ctxA.tenantId, customerId: id, name: "A", phone: "1", line1: "L1", city: "C", stateCode: "KA", pincode: "1" });
+      await tx.insert(schema.customerNotes).values({ tenantId: ctxA.tenantId, customerId: id, body: "note" });
+      await tx.insert(schema.customerSessions).values({ id: `sess-hard-${Date.now()}`, tenantId: ctxA.tenantId, userId: id, token: `deadbeef-${Date.now()}`, expiresAt: new Date(Date.now() + 86_400_000) });
+    });
+
+    const result = await deleteAdminCustomer(rtWeb, ctxA, { id });
+    expect(result.mode).toBe("deleted");
+
+    const [gone] = await withTenant(rtWeb._db.db, ctxA.tenantId, (tx) => tx.select().from(schema.customers).where(eq(schema.customers.id, id)));
+    expect(gone).toBeUndefined();
+    const [addr] = await withTenant(rtWeb._db.db, ctxA.tenantId, (tx) => tx.select().from(schema.customerAddresses).where(eq(schema.customerAddresses.customerId, id)));
+    expect(addr).toBeUndefined();
+
+    const audits = await withTenant(rtWeb._db.db, ctxA.tenantId, (tx) =>
+      tx.select().from(schema.auditLogs).where(and(eq(schema.auditLogs.action, "customer.deleted"), eq(schema.auditLogs.targetId, id))),
+    );
+    expect(audits).toHaveLength(1);
+    expect(audits[0]?.diff).toMatchObject({ mode: "deleted" });
+  });
+
+  it("anonymises a customer with orders: identity replaced, sessions destroyed, orders kept and still linked", async () => {
+    // acct1 has one collected order from the seed
+    const before = await getAdminCustomerDetail(rtWeb, ctxA, { id: acct1 });
+    expect(before.customer.ordersCount).toBe(1);
+    const [order] = await withTenant(rtWeb._db.db, ctxA.tenantId, (tx) =>
+      tx.select().from(schema.orders).where(eq(schema.orders.customerId, acct1)),
+    );
+    expect(order).toBeDefined();
+
+    // A live session that must die with the account
+    await withTenant(rtWeb._db.db, ctxA.tenantId, async (tx) => {
+      await tx.insert(schema.customerSessions).values({ id: `sess-anon-${Date.now()}`, tenantId: ctxA.tenantId, userId: acct1, token: `tok-anon-${Date.now()}`, expiresAt: new Date(Date.now() + 86_400_000) });
+    });
+
+    const result = await deleteAdminCustomer(rtWeb, ctxA, { id: acct1 });
+    expect(result.mode).toBe("anonymised");
+
+    const [anon] = await withTenant(rtWeb._db.db, ctxA.tenantId, (tx) => tx.select().from(schema.customers).where(eq(schema.customers.id, acct1)));
+    expect(anon?.email).toMatch(/^deleted-[0-9a-f]{8}@invalid$/);
+    expect(anon?.name).toBe("Deleted customer");
+    expect(anon?.phone).toBeNull();
+    expect(anon?.passwordHash).toBeNull();
+    expect(anon?.isGuest).toBe(true);
+    expect(anon?.deletedAt).not.toBeNull();
+    expect(anon?.marketingState).toBe("unsubscribed");
+    expect(anon?.tags).toEqual([]);
+
+    const [sessions] = await withTenant(rtWeb._db.db, ctxA.tenantId, (tx) =>
+      tx.select({ n: sql<number>`count(*)::int` }).from(schema.customerSessions).where(eq(schema.customerSessions.userId, acct1)),
+    );
+    expect(sessions?.n).toBe(0);
+
+    // Orders are untouched and still point at the (now anonymised) customer
+    const [kept] = await withTenant(rtWeb._db.db, ctxA.tenantId, (tx) => tx.select().from(schema.orders).where(eq(schema.orders.id, order!.id)));
+    expect(kept?.customerId).toBe(acct1);
+
+    // The anonymised customer disappears from the list
+    const list = await listAdminCustomers(rtWeb, ctxA, { limit: 100 });
+    expect(list.items.find((c) => c.id === acct1)).toBeUndefined();
+
+    // Consent history records the erasure
+    const events = await withTenant(rtWeb._db.db, ctxA.tenantId, (tx) =>
+      tx.select().from(schema.customerConsentEvents).where(eq(schema.customerConsentEvents.customerId, acct1)),
+    );
+    expect(events.some((e) => e.state === "unsubscribed" && e.source === "admin")).toBe(true);
+
+    const audits = await withTenant(rtWeb._db.db, ctxA.tenantId, (tx) =>
+      tx.select().from(schema.auditLogs).where(and(eq(schema.auditLogs.action, "customer.deleted"), eq(schema.auditLogs.targetId, acct1))),
+    );
+    expect(audits[0]?.diff).toMatchObject({ mode: "anonymised" });
+  });
+
+  it("refuses a read-only staff member and cross-store deletes", async () => {
+    const [row] = await withTenant(rtWeb._db.db, ctxA.tenantId, (tx) =>
+      tx.insert(schema.customers).values({ tenantId: ctxA.tenantId, email: `del-guard-${Date.now()}@phase1.test`, name: "Guard" }).returning(),
+    );
+    await expect(deleteAdminCustomer(rtWeb, ctxLimited, { id: row!.id })).rejects.toThrow(/permission/i);
+    await expect(deleteAdminCustomer(rtWeb, ctxB, { id: row!.id })).rejects.toThrow(/not found/i);
+    await expect(deleteAdminCustomer(rtWeb, ctxA, { id: "0199a000-0000-7000-8000-beef00000dea" })).rejects.toThrow(/not found/i);
   });
 });

@@ -1,6 +1,6 @@
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
-import { Ban, Copy, Download, ExternalLink, MoreHorizontal, ShieldCheck, ShoppingBag, Tag, UserCheck, Users, UsersRound } from "lucide-react";
-import { useMemo, useState } from "react";
+import { Ban, Copy, Download, ExternalLink, MoreHorizontal, ShieldCheck, ShoppingBag, Tag, Trash2, Upload, UserCheck, Users, UsersRound } from "lucide-react";
+import { useMemo, useRef, useState } from "react";
 import { MetricCard, MetricCardSkeleton, PageContainer, PageHeader, PageSection, PageSkeleton, TableSkeleton, toast } from "@bs/ui";
 import { keepPreviousData, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Badge } from "@/components/ui/badge";
@@ -10,6 +10,8 @@ import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSepara
 import { Input } from "@/components/ui/input";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { ConfirmDialog } from "../../components/confirm-dialog.tsx";
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { parseCsv } from "../../lib/csv.ts";
 import { DataTable, type Column } from "../../components/data-table/data-table.tsx";
 import { fetchAllPages } from "../../components/data-table/fetch-all.ts";
 import { Pagination } from "../../components/data-table/pagination.tsx";
@@ -176,7 +178,171 @@ function CustomerStatsStrip() {
   );
 }
 
+// ---------------------------------------------------------------------------------------------------------------
+// CSV import: parse in the browser, dry-run preview, then commit (over 500 rows the server queues it).
+// ---------------------------------------------------------------------------------------------------------------
+
+const IMPORT_HEADERS = ["name", "email", "phone", "tags", "marketing_consent"];
+
+type ImportRowPayload = { name?: string; email: string; phone?: string; tags?: string[]; marketingConsent?: string };
+type ImportPhase =
+  | { step: "pick" }
+  | { step: "preview"; preview: Awaited<ReturnType<typeof client.admin.customers.importPreview>>; rows: ImportRowPayload[] }
+  | { step: "committing" }
+  | { step: "done"; message: string; errors: Array<{ row: number; email: string; error: string }> };
+
+function ImportDialog({ open, onOpenChange, onImported }: { open: boolean; onOpenChange: (open: boolean) => void; onImported: () => void }) {
+  const [phase, setPhase] = useState<ImportPhase>({ step: "pick" });
+  const [fileName, setFileName] = useState("");
+  const fileRef = useRef<HTMLInputElement>(null);
+
+  const reset = () => {
+    setPhase({ step: "pick" });
+    setFileName("");
+    if (fileRef.current) fileRef.current.value = "";
+  };
+
+  const readFile = async (file: File) => {
+    setFileName(file.name);
+    const text = await file.text();
+    const table = parseCsv(text);
+    if (table.length < 2) {
+      toast.error("The file needs a header row and at least one customer row.");
+      return;
+    }
+    const header = table[0]!.map((h) => h.trim().toLowerCase().replaceAll(" ", "_"));
+    const emailIdx = header.indexOf("email");
+    if (emailIdx === -1) {
+      toast.error('The file needs an "email" column.');
+      return;
+    }
+    const idx = (name: string) => header.indexOf(name);
+    const rows = table.slice(1).map((cells) => ({
+      name: idx("name") >= 0 ? (cells[idx("name")] ?? "").trim() : undefined,
+      email: (cells[emailIdx] ?? "").trim(),
+      phone: idx("phone") >= 0 ? (cells[idx("phone")] ?? "").trim() : undefined,
+      tags: idx("tags") >= 0 ? (cells[idx("tags")] ?? "").split(/[;|]/).map((t) => t.trim()).filter(Boolean) : undefined,
+      marketingConsent: idx("marketing_consent") >= 0 ? (cells[idx("marketing_consent")] ?? "").trim() : undefined,
+    }));
+    try {
+      const preview = await client.admin.customers.importPreview({ rows });
+      setPhase({ step: "preview", preview, rows: rows as ImportRowPayload[] });
+    } catch (e) {
+      toast.error(errorMessage(e));
+    }
+  };
+
+  const commit = async (rows: ImportRowPayload[]) => {
+    setPhase({ step: "committing" });
+    try {
+      const result = await client.admin.customers.importCommit({ rows });
+      if ("queued" in result && result.queued) {
+        setPhase({ step: "done", message: `The file is queued for import (${result.total.toLocaleString("en-IN")} rows). It will appear in the list as it is processed.`, errors: [] });
+      } else {
+        const r = result as { created: number; updated: number; errors: Array<{ row: number; email: string; error: string }> };
+        setPhase({
+          step: "done",
+          message: `${r.created} customer${r.created === 1 ? "" : "s"} created, ${r.updated} updated${r.errors.length ? `, ${r.errors.length} failed` : ""}.`,
+          errors: r.errors,
+        });
+      }
+      onImported();
+    } catch (e) {
+      toast.error(errorMessage(e));
+      setPhase({ step: "pick" });
+    }
+  };
+
+  const downloadErrors = (errors: Array<{ row: number; email: string; error: string }>) => {
+    downloadCsv(`customers-import-errors-${stamp()}.csv`, toCsv(["Row", "Email", "Problem"], errors.map((e) => [e.row, e.email, e.error])));
+  };
+
+  return (
+    <Dialog open={open} onOpenChange={(o) => { if (!o) reset(); onOpenChange(o); }}>
+      <DialogContent className="max-w-lg">
+        <DialogHeader>
+          <DialogTitle>Import customers from CSV</DialogTitle>
+          <DialogDescription>
+            Columns: {IMPORT_HEADERS.join(", ")}. Email is required; tags are separated with ; or |.
+          </DialogDescription>
+        </DialogHeader>
+
+        {phase.step === "pick" ? (
+          <div className="grid gap-3">
+            <p className="text-sm text-muted-foreground">
+              You are responsible for having the customer&apos;s consent before importing them as marketing subscribers.
+              Consent is only recorded for rows whose <code className="text-xs">marketing_consent</code> is yes, subscribed or true.
+            </p>
+            <input
+              ref={fileRef}
+              type="file"
+              accept=".csv,text/csv"
+              aria-label="CSV file"
+              className="text-sm file:mr-3 file:rounded-md file:border-0 file:bg-muted file:px-3 file:py-1.5 file:text-sm"
+              onChange={(e) => {
+                const f = e.target.files?.[0];
+                if (f) void readFile(f);
+              }}
+            />
+            {fileName ? <p className="text-xs text-muted-foreground">{fileName}</p> : null}
+          </div>
+        ) : null}
+
+        {phase.step === "preview" ? (
+          <div className="grid gap-3">
+            <div className="grid grid-cols-2 gap-2 text-sm">
+              <p>{phase.preview.total.toLocaleString("en-IN")} rows in the file</p>
+              <p>{phase.preview.created.toLocaleString("en-IN")} new customers</p>
+              <p>{phase.preview.updated.toLocaleString("en-IN")} existing updated (name and tags only)</p>
+              <p>{phase.preview.subscribeCount.toLocaleString("en-IN")} will be marked subscribed</p>
+              {phase.preview.duplicatesInFile > 0 ? <p className="text-amber-600">{phase.preview.duplicatesInFile} duplicate rows skipped</p> : null}
+              {phase.preview.invalid.length > 0 ? <p className="text-destructive">{phase.preview.invalid.length} invalid rows</p> : null}
+            </div>
+            {phase.preview.invalid.length > 0 ? (
+              <div className="max-h-32 overflow-auto rounded-md border border-border p-2 text-xs text-muted-foreground">
+                {phase.preview.invalid.slice(0, 10).map((e, i) => (
+                  <p key={i}>
+                    Row {e.row}: {e.email || "(no email)"} — {e.error}
+                  </p>
+                ))}
+                {phase.preview.invalid.length > 10 ? <p>…and {phase.preview.invalid.length - 10} more</p> : null}
+              </div>
+            ) : null}
+            <div className="flex justify-end gap-2">
+              <Button variant="outline" size="sm" onClick={reset}>
+                Pick another file
+              </Button>
+              <Button size="sm" disabled={phase.preview.created + phase.preview.updated === 0} onClick={() => void commit(phase.rows)}>
+                Import {phase.preview.created + phase.preview.updated > 500 ? `${(phase.preview.created + phase.preview.updated).toLocaleString("en-IN")} rows` : "customers"}
+              </Button>
+            </div>
+          </div>
+        ) : null}
+
+        {phase.step === "committing" ? <p className="text-sm text-muted-foreground">Importing…</p> : null}
+
+        {phase.step === "done" ? (
+          <div className="grid gap-3">
+            <p className="text-sm text-foreground">{phase.message}</p>
+            {phase.errors.length > 0 ? (
+              <Button variant="outline" size="sm" className="justify-start" onClick={() => downloadErrors(phase.errors)}>
+                <Download className="mr-1.5 size-3.5" aria-hidden /> Download error file
+              </Button>
+            ) : null}
+            <div className="flex justify-end">
+              <Button size="sm" onClick={() => { reset(); onOpenChange(false); }}>
+                Close
+              </Button>
+            </div>
+          </div>
+        ) : null}
+      </DialogContent>
+    </Dialog>
+  );
+}
+
 export const Route = createFileRoute("/_store/customers")({
+
   validateSearch: (raw: Record<string, unknown>): Partial<CustomersSearch> =>
     compactSearch(parseCustomersSearch(raw), { view: "all", sort: "created_desc", page: 1, size: 25 }),
   pendingComponent: () => (
@@ -235,6 +401,8 @@ export function CustomersPage() {
   const [blockAsk, setBlockAsk] = useState<CustomerRow[] | null>(null);
   const [exportOpen, setExportOpen] = useState(false);
   const [subscribedOnly, setSubscribedOnly] = useState(true);
+  const [deleteAsk, setDeleteAsk] = useState<CustomerRow[] | null>(null);
+  const [importOpen, setImportOpen] = useState(false);
 
   const refresh = (succeeded: Iterable<string>) => {
     sel.release(succeeded);
@@ -266,6 +434,18 @@ export function CustomersPage() {
       noun: "customer",
       eligible: (c) => c.status !== status,
       action: (c) => client.admin.customers.setStatus({ id: c.id, status }),
+      onFinished: refresh,
+    });
+
+  const runDelete = (targets: CustomerRow[]) =>
+    bulk.run({
+      rows: targets,
+      getId: (c) => c.id,
+      getLabel: (c) => c.name || c.email,
+      verb: "Deleting",
+      done: "deleted",
+      noun: "customer",
+      action: (c) => client.admin.customers.delete({ id: c.id }),
       onFinished: refresh,
     });
 
@@ -416,6 +596,10 @@ export function CustomersPage() {
             <Ban /> Block customer
           </DropdownMenuItem>
         )}
+        <DropdownMenuSeparator />
+        <DropdownMenuItem variant="destructive" disabled={bulk.busy} onClick={() => setDeleteAsk([c])}>
+          <Trash2 /> Delete customer
+        </DropdownMenuItem>
       </DropdownMenuContent>
     </DropdownMenu>
   );
@@ -437,13 +621,25 @@ export function CustomersPage() {
     );
 
   const blockedTargets = blockAsk ?? [];
+  const deleteTargets = deleteAsk ?? [];
+  const deleteSummary =
+    deleteTargets.length === 1
+      ? deleteTargets[0] && deleteTargets[0].ordersCount > 0
+        ? "This customer has orders: their personal details are erased and replaced with a placeholder, their sessions are destroyed, and their orders are kept for accounts and tax. This cannot be undone."
+        : "This customer has no orders: their record is deleted completely. This cannot be undone."
+      : `${deleteTargets.filter((c) => c.ordersCount > 0).length} of the selected customers have orders and will be anonymised (details erased, orders kept); the rest are deleted completely. This cannot be undone.`;
   return (
     <PageContainer size="full">
       <PageHeader
         title="Customers"
         description="Profiles, order history, addresses, tags and marketing consent for everyone who bought or signed up."
         aside={
-          <Popover open={exportOpen} onOpenChange={setExportOpen}>
+          <div className="flex items-center gap-2">
+            <Button variant="outline" size="sm" onClick={() => setImportOpen(true)}>
+              <Upload className="mr-1.5 size-3.5" aria-hidden />
+              Import CSV
+            </Button>
+            <Popover open={exportOpen} onOpenChange={setExportOpen}>
             <PopoverTrigger render={<Button variant="outline" size="sm" disabled={bulk.busy || total === 0} />}>
               <Download className="mr-1.5 size-3.5" aria-hidden />
               Export CSV
@@ -459,6 +655,7 @@ export function CustomersPage() {
               </Button>
             </PopoverContent>
           </Popover>
+          </div>
         }
       />
 
@@ -512,6 +709,9 @@ export function CustomersPage() {
             </Button>
             <Button variant="outline" size="sm" disabled={bulk.busy} onClick={() => void exportCustomers("selection")}>
               <Download className="mr-1.5" /> Export
+            </Button>
+            <Button variant="destructive" size="sm" disabled={bulk.busy || sel.allResults} onClick={() => setDeleteAsk(sel.picked)}>
+              <Trash2 className="mr-1.5" /> Delete
             </Button>
             {bulk.progress ? (
               <span role="status" className="text-muted-foreground">
@@ -592,6 +792,22 @@ export function CustomersPage() {
           const targets = blockAsk ?? [];
           setBlockAsk(null);
           void runStatus("blocked", targets);
+        }}
+      />
+
+      <ImportDialog open={importOpen} onOpenChange={setImportOpen} onImported={() => refresh([])} />
+
+      <ConfirmDialog
+        open={deleteAsk !== null}
+        onOpenChange={(open) => !open && setDeleteAsk(null)}
+        title={deleteTargets.length === 1 ? `Delete ${deleteTargets[0]?.name || deleteTargets[0]?.email}?` : `Delete ${deleteTargets.length} customers?`}
+        description={deleteSummary}
+        confirmLabel={deleteTargets.length === 1 ? "Delete customer" : "Delete customers"}
+        destructive
+        onConfirm={() => {
+          const targets = deleteAsk ?? [];
+          setDeleteAsk(null);
+          void runDelete(targets);
         }}
       />
     </PageContainer>
