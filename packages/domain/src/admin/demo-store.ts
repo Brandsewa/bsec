@@ -149,6 +149,7 @@ export async function seedDemoStore(rt: Runtime, input: SeedDemoInput): Promise<
     const created = await createProduct(rt, ctx, {
       title: p.title,
       status: p.status,
+      primaryCategoryId: categoryIds.get(p.category),
       tags: ["demo"],
       variants: p.variants.map((v, i) => ({ sku: `DEMO-${p.title.replace(/[^A-Za-z]/g, "").slice(0, 6).toUpperCase()}-${i + 1}`, title: v.title, price: v.price })),
     });

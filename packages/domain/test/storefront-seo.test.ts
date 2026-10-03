@@ -21,6 +21,9 @@ import {
   getStorefrontSeoSettings,
   generateSitemapXml,
   getStorefrontSitemapUrls,
+  buildCategorySeoMetadata,
+  buildCollectionSeoMetadata,
+  buildProductSeoMetadata,
 } from "../src/index.ts";
 
 describe("Storefront SEO & JSON-LD Structured Data", () => {
@@ -527,37 +530,47 @@ describe("Storefront SEO & JSON-LD Structured Data", () => {
       let callCount = 0;
       const mockDb = {
         transaction: async (cb: (tx: unknown) => Promise<unknown>) => {
+          const createQueryChain = (result: unknown) => {
+            const chain: Record<string, unknown> = {
+              from: () => chain,
+              innerJoin: () => chain,
+              where: () => chain,
+              orderBy: () => Promise.resolve(result),
+              limit: () => Promise.resolve(result),
+              then: (resolve: (val: unknown) => unknown) => Promise.resolve(result).then(resolve),
+            };
+            return chain;
+          };
+
           return cb({
             execute: async () => {},
-            select: () => ({
-              from: () => ({
-                where: () => ({
-                  orderBy: () => {
-                    callCount++;
-                    if (callCount === 1) {
-                      // products
-                      return [{ slug: "custom-board", updatedAt: now }];
-                    }
-                    if (callCount === 2) {
-                      // collections
-                      return [{ slug: "keyboards", updatedAt: now }];
-                    }
-                    if (callCount === 3) {
-                      // categories
-                      return [{ slug: "switches", updatedAt: now }];
-                    }
-                    if (callCount === 4) {
-                      // pages
-                      return [
-                        { slug: "home", type: "home", updatedAt: now },
-                        { slug: "about-us", type: "custom", updatedAt: now },
-                      ];
-                    }
-                    return [];
-                  },
-                }),
-              }),
-            }),
+            select: () => {
+              callCount++;
+              if (callCount === 1) {
+                // products
+                return createQueryChain([{ slug: "custom-board", updatedAt: now }]);
+              }
+              if (callCount === 2) {
+                // collections
+                return createQueryChain([{ id: "col-1", slug: "keyboards", type: "manual", updatedAt: now }]);
+              }
+              if (callCount === 3) {
+                // collection products check
+                return createQueryChain([{ id: "p-1" }]);
+              }
+              if (callCount === 4) {
+                // categories
+                return createQueryChain([{ slug: "switches", updatedAt: now }]);
+              }
+              if (callCount === 5) {
+                // pages
+                return createQueryChain([
+                  { slug: "home", type: "home", updatedAt: now },
+                  { slug: "about-us", type: "custom", updatedAt: now },
+                ]);
+              }
+              return createQueryChain([]);
+            },
           });
         },
       } as unknown as Db;
@@ -575,5 +588,178 @@ describe("Storefront SEO & JSON-LD Structured Data", () => {
       expect(urls.find((u) => u.loc === "https://shop.example.com/policies/terms")?.priority).toBe(0.3);
     });
   });
+
+  describe("buildCategorySeoMetadata", () => {
+    it("uses default templates and marks non-empty category as index, follow with clean canonical", () => {
+      const meta = buildCategorySeoMetadata({
+        category: { name: "Keycaps", slug: "keycaps", description: "PBT keycaps" },
+        seoSettings: null,
+        storeSettings: { storeName: "Clicky Store" },
+        productsCount: 5,
+        host: "clicky.com",
+      });
+
+      expect(meta.title).toBe("Keycaps | Clicky Store");
+      expect(meta.description).toBe("PBT keycaps");
+      expect(meta.robots).toEqual({ index: true, follow: true });
+      expect(meta.alternates.canonical).toBe("https://clicky.com/categories/keycaps");
+    });
+
+    it("uses stored seo.title and seo.description when provided", () => {
+      const meta = buildCategorySeoMetadata({
+        category: {
+          name: "Keycaps",
+          slug: "keycaps",
+          description: "PBT keycaps",
+          seo: { title: "Custom SEO Title", description: "Custom SEO Desc" },
+        },
+        seoSettings: null,
+        storeSettings: { storeName: "Clicky Store" },
+        productsCount: 5,
+        host: "clicky.com",
+      });
+
+      expect(meta.title).toBe("Custom SEO Title");
+      expect(meta.description).toBe("Custom SEO Desc");
+    });
+
+    it("serves empty category as noindex, follow (soft 404 rule)", () => {
+      const meta = buildCategorySeoMetadata({
+        category: { name: "Empty Category", slug: "empty-cat" },
+        seoSettings: null,
+        storeSettings: { storeName: "Clicky Store" },
+        productsCount: 0,
+        host: "clicky.com",
+      });
+
+      expect(meta.robots).toEqual({ index: false, follow: true });
+    });
+
+    it("serves filtered or sorted category as noindex, follow with clean canonical URL", () => {
+      const meta = buildCategorySeoMetadata({
+        category: { name: "Keycaps", slug: "keycaps" },
+        seoSettings: null,
+        storeSettings: { storeName: "Clicky Store" },
+        productsCount: 12,
+        hasFilterOrSortParams: true,
+        page: 1,
+        host: "clicky.com",
+      });
+
+      expect(meta.robots).toEqual({ index: false, follow: true });
+      expect(meta.alternates.canonical).toBe("https://clicky.com/categories/keycaps");
+    });
+
+    it("serves page 2 as index, follow with its own canonical when not filtered", () => {
+      const meta = buildCategorySeoMetadata({
+        category: { name: "Keycaps", slug: "keycaps" },
+        seoSettings: null,
+        storeSettings: { storeName: "Clicky Store" },
+        productsCount: 50,
+        hasFilterOrSortParams: false,
+        page: 2,
+        host: "clicky.com",
+      });
+
+      expect(meta.robots).toEqual({ index: true, follow: true });
+      expect(meta.alternates.canonical).toBe("https://clicky.com/categories/keycaps?page=2");
+    });
+
+    it("serves noindex, nofollow if store is coming_soon, password, maintenance or access.noindex is true", () => {
+      const meta = buildCategorySeoMetadata({
+        category: { name: "Keycaps", slug: "keycaps" },
+        seoSettings: null,
+        storeSettings: { storeName: "Clicky Store" },
+        storeStatusMode: "coming_soon",
+        productsCount: 10,
+        host: "clicky.com",
+      });
+
+      expect(meta.robots).toEqual({ index: false, follow: false });
+    });
+  });
+
+  describe("buildCollectionSeoMetadata", () => {
+    it("serves newly created or non-indexable collection as noindex, follow", () => {
+      const meta = buildCollectionSeoMetadata({
+        collection: { title: "Summer Deals", slug: "summer-deals", published: true, indexable: false },
+        seoSettings: null,
+        storeSettings: { storeName: "Clicky Store" },
+        productsCount: 10,
+        host: "clicky.com",
+      });
+
+      expect(meta.robots).toEqual({ index: false, follow: true });
+      expect(meta.alternates.canonical).toBe("https://clicky.com/collections/summer-deals");
+    });
+
+    it("serves published, indexable, non-empty collection as index, follow", () => {
+      const meta = buildCollectionSeoMetadata({
+        collection: { title: "Summer Deals", slug: "summer-deals", published: true, indexable: true },
+        seoSettings: null,
+        storeSettings: { storeName: "Clicky Store" },
+        productsCount: 10,
+        host: "clicky.com",
+      });
+
+      expect(meta.robots).toEqual({ index: true, follow: true });
+      expect(meta.alternates.canonical).toBe("https://clicky.com/collections/summer-deals");
+    });
+
+    it("serves empty indexable collection as noindex, follow", () => {
+      const meta = buildCollectionSeoMetadata({
+        collection: { title: "Summer Deals", slug: "summer-deals", published: true, indexable: true },
+        seoSettings: null,
+        storeSettings: { storeName: "Clicky Store" },
+        productsCount: 0,
+        host: "clicky.com",
+      });
+
+      expect(meta.robots).toEqual({ index: false, follow: true });
+    });
+
+    it("serves filtered indexable collection as noindex, follow with clean canonical", () => {
+      const meta = buildCollectionSeoMetadata({
+        collection: { title: "Summer Deals", slug: "summer-deals", published: true, indexable: true },
+        seoSettings: null,
+        storeSettings: { storeName: "Clicky Store" },
+        productsCount: 10,
+        hasFilterOrSortParams: true,
+        host: "clicky.com",
+      });
+
+      expect(meta.robots).toEqual({ index: false, follow: true });
+      expect(meta.alternates.canonical).toBe("https://clicky.com/collections/summer-deals");
+    });
+  });
+
+  describe("buildProductSeoMetadata", () => {
+    it("serves active product as index, follow with clean canonical", () => {
+      const meta = buildProductSeoMetadata({
+        product: { title: "Lubed Switch", slug: "lubed-switch", status: "active", shortDescription: "Smooth linear switch" },
+        seoSettings: null,
+        storeSettings: { storeName: "Clicky Store" },
+        host: "clicky.com",
+      });
+
+      expect(meta.title).toBe("Lubed Switch | Clicky Store");
+      expect(meta.description).toBe("Smooth linear switch");
+      expect(meta.robots).toEqual({ index: true, follow: true });
+      expect(meta.alternates.canonical).toBe("https://clicky.com/products/lubed-switch");
+    });
+
+    it("serves unlisted product as noindex, follow with clean canonical", () => {
+      const meta = buildProductSeoMetadata({
+        product: { title: "Secret Prototype", slug: "secret-prototype", status: "unlisted" },
+        seoSettings: null,
+        storeSettings: { storeName: "Clicky Store" },
+        host: "clicky.com",
+      });
+
+      expect(meta.robots).toEqual({ index: false, follow: true });
+      expect(meta.alternates.canonical).toBe("https://clicky.com/products/secret-prototype");
+    });
+  });
 });
+
 

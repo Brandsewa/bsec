@@ -1,10 +1,14 @@
-import { and, desc, eq, isNull, inArray } from "drizzle-orm";
-import { STOREFRONT_PRODUCT_STATUSES } from "./product-status.ts";
+import { and, desc, eq, isNull, inArray, or, sql } from "drizzle-orm";
+import { LISTED_PRODUCT_STATUSES } from "./product-status.ts";
 import { schema, withTenant } from "@bs/db";
 import type { Runtime } from "../runtime.ts";
 import type { TenantContext } from "../context.ts";
 import { invalidateCache } from "../cache-invalidation.ts";
-import type { StorefrontProductDetail } from "./catalog.ts";
+import {
+  parseCollectionRules,
+  buildSingleRuleCondition,
+  type StorefrontProductDetail,
+} from "./catalog.ts";
 
 export interface SeoSettings {
   id?: string;
@@ -664,6 +668,217 @@ export const STATIC_BLOG_POSTS = [
  * - Published blog posts (/blog/[slug], monthly, 0.6)
  * - Static policy pages (/policies/..., yearly, 0.3)
  */
+export interface SeoMetadataResult {
+  title: string;
+  description: string;
+  robots: {
+    index: boolean;
+    follow: boolean;
+  };
+  openGraph: {
+    title: string;
+    description: string;
+    images?: Array<{ url: string }> | undefined;
+  };
+  alternates: {
+    canonical: string;
+  };
+}
+
+/**
+ * Builds standard SEO metadata for a Category page according to Section 3 rules:
+ * - Uses seo.title / seo.description when set, falls back to templates
+ * - Sets robots to index, follow unless store blocked, category is empty (no active listed products), or filtered/sorted
+ * - Sets canonical URL (clean path for page 1/filtered, ?page=N for pagination without filters)
+ */
+export function buildCategorySeoMetadata(opts: {
+  category: {
+    name: string;
+    slug: string;
+    description?: string | null | undefined;
+    seo?: unknown;
+  };
+  seoSettings: SeoSettings | null;
+  storeSettings: { storeName: string } | null;
+  storeStatusMode?: string | undefined;
+  noindex?: boolean | undefined;
+  productsCount: number;
+  hasFilterOrSortParams?: boolean | undefined;
+  page?: number | undefined;
+  host: string;
+}): SeoMetadataResult {
+  const cleanHost = opts.host.replace(/^https?:\/\//, "").replace(/\/$/, "");
+  const storeName = opts.storeSettings?.storeName ?? "Store";
+  const seoObj = (typeof opts.category.seo === "object" && opts.category.seo !== null) ? (opts.category.seo as Record<string, unknown>) : {};
+  const storedTitle = typeof seoObj.title === "string" && seoObj.title.trim().length > 0 ? seoObj.title.trim() : null;
+  const storedDescription = typeof seoObj.description === "string" && seoObj.description.trim().length > 0 ? seoObj.description.trim() : null;
+
+  const title = storedTitle ?? formatTitle(opts.seoSettings?.titleTemplate, opts.category.name, storeName);
+  const description = storedDescription ?? opts.category.description ?? `Browse ${opts.category.name} at ${storeName}. High-quality products and great deals.`;
+
+  const isStoreBlocked = opts.noindex === true || opts.storeStatusMode === "coming_soon" || opts.storeStatusMode === "password" || opts.storeStatusMode === "maintenance" || opts.storeStatusMode === "suspended" || opts.seoSettings?.indexingEnabled === false;
+
+  const isEmpty = opts.productsCount <= 0;
+  const isFiltered = Boolean(opts.hasFilterOrSortParams);
+  const pageNum = opts.page ?? 1;
+
+  const shouldIndex = !isStoreBlocked && !isEmpty && !isFiltered;
+  const shouldFollow = !isStoreBlocked;
+
+  let canonicalUrl = `https://${cleanHost}/categories/${opts.category.slug}`;
+  if (!isFiltered && pageNum > 1 && !isEmpty) {
+    canonicalUrl = `https://${cleanHost}/categories/${opts.category.slug}?page=${pageNum}`;
+  }
+
+  return {
+    title,
+    description,
+    robots: {
+      index: shouldIndex,
+      follow: shouldFollow,
+    },
+    openGraph: {
+      title,
+      description,
+    },
+    alternates: {
+      canonical: canonicalUrl,
+    },
+  };
+}
+
+/**
+ * Builds standard SEO metadata for a Collection page according to Section 3 rules:
+ * - Uses seo.title / seo.description when set, falls back to templates
+ * - Indexable ONLY when indexable === true AND published === true AND productsCount > 0
+ * - Sets robots to noindex if not indexable, empty, store blocked, or filtered/sorted
+ * - Sets canonical URL
+ */
+export function buildCollectionSeoMetadata(opts: {
+  collection: {
+    title: string;
+    slug: string;
+    description?: string | null | undefined;
+    published: boolean;
+    indexable: boolean;
+    seo?: unknown;
+  };
+  seoSettings: SeoSettings | null;
+  storeSettings: { storeName: string } | null;
+  storeStatusMode?: string | undefined;
+  noindex?: boolean | undefined;
+  productsCount: number;
+  hasFilterOrSortParams?: boolean | undefined;
+  page?: number | undefined;
+  host: string;
+}): SeoMetadataResult {
+  const cleanHost = opts.host.replace(/^https?:\/\//, "").replace(/\/$/, "");
+  const storeName = opts.storeSettings?.storeName ?? "Store";
+  const seoObj = (typeof opts.collection.seo === "object" && opts.collection.seo !== null) ? (opts.collection.seo as Record<string, unknown>) : {};
+  const storedTitle = typeof seoObj.title === "string" && seoObj.title.trim().length > 0 ? seoObj.title.trim() : null;
+  const storedDescription = typeof seoObj.description === "string" && seoObj.description.trim().length > 0 ? seoObj.description.trim() : null;
+
+  const title = storedTitle ?? formatTitle(opts.seoSettings?.titleTemplate, opts.collection.title, storeName);
+  const description = storedDescription ?? opts.collection.description ?? `Shop ${opts.collection.title} at ${storeName}. High-quality products and great deals.`;
+
+  const isStoreBlocked = opts.noindex === true || opts.storeStatusMode === "coming_soon" || opts.storeStatusMode === "password" || opts.storeStatusMode === "maintenance" || opts.storeStatusMode === "suspended" || opts.seoSettings?.indexingEnabled === false;
+
+  const isEmpty = opts.productsCount <= 0;
+  const isFiltered = Boolean(opts.hasFilterOrSortParams);
+  const pageNum = opts.page ?? 1;
+
+  const isEligible = opts.collection.published && opts.collection.indexable && !isEmpty;
+  const shouldIndex = !isStoreBlocked && isEligible && !isFiltered;
+  const shouldFollow = !isStoreBlocked;
+
+  let canonicalUrl = `https://${cleanHost}/collections/${opts.collection.slug}`;
+  if (!isFiltered && pageNum > 1 && isEligible) {
+    canonicalUrl = `https://${cleanHost}/collections/${opts.collection.slug}?page=${pageNum}`;
+  }
+
+  return {
+    title,
+    description,
+    robots: {
+      index: shouldIndex,
+      follow: shouldFollow,
+    },
+    openGraph: {
+      title,
+      description,
+    },
+    alternates: {
+      canonical: canonicalUrl,
+    },
+  };
+}
+
+/**
+ * Builds standard SEO metadata for a Product page:
+ * - Uses seo.title / seo.description when set, falls back to templates
+ * - Unlisted products are served with noindex
+ * - Canonical is clean absolute URL https://${host}/products/${slug}
+ */
+export function buildProductSeoMetadata(opts: {
+  product: {
+    title: string;
+    slug: string;
+    status: string;
+    shortDescription?: string | null | undefined;
+    seo?: unknown;
+    media?: Array<{ url?: string | undefined }> | undefined;
+  };
+  seoSettings: SeoSettings | null;
+  storeSettings: { storeName: string } | null;
+  storeStatusMode?: string | undefined;
+  noindex?: boolean | undefined;
+  host: string;
+}): SeoMetadataResult {
+  const cleanHost = opts.host.replace(/^https?:\/\//, "").replace(/\/$/, "");
+  const storeName = opts.storeSettings?.storeName ?? "Store";
+  const seoObj = (typeof opts.product.seo === "object" && opts.product.seo !== null) ? (opts.product.seo as Record<string, unknown>) : {};
+  const storedTitle = typeof seoObj.title === "string" && seoObj.title.trim().length > 0 ? seoObj.title.trim() : null;
+  const storedDescription = typeof seoObj.description === "string" && seoObj.description.trim().length > 0 ? seoObj.description.trim() : null;
+
+  const title = storedTitle ?? formatTitle(opts.seoSettings?.titleTemplate, opts.product.title, storeName);
+  const description = storedDescription ?? opts.product.shortDescription ?? `Buy ${opts.product.title} at ${storeName}.`;
+
+  const isStoreBlocked = opts.noindex === true || opts.storeStatusMode === "coming_soon" || opts.storeStatusMode === "password" || opts.storeStatusMode === "maintenance" || opts.storeStatusMode === "suspended" || opts.seoSettings?.indexingEnabled === false;
+
+  const isUnlisted = opts.product.status === "unlisted";
+  const shouldIndex = !isStoreBlocked && !isUnlisted;
+  const shouldFollow = !isStoreBlocked;
+
+  const firstImage = opts.product.media?.[0]?.url;
+
+  return {
+    title,
+    description,
+    robots: {
+      index: shouldIndex,
+      follow: shouldFollow,
+    },
+    openGraph: {
+      title,
+      description,
+      images: firstImage ? [{ url: firstImage }] : undefined,
+    },
+    alternates: {
+      canonical: `https://${cleanHost}/products/${opts.product.slug}`,
+    },
+  };
+}
+
+/**
+ * Queries all published entities for a tenant and builds a complete sitemap list:
+ * - Home page (/, daily, 1.0)
+ * - Published products (listed statuses only, weekly, 0.8)
+ * - Published, indexable, non-empty collections (/collections/[slug], weekly, 0.7)
+ * - Active, non-empty categories (/categories/[slug], weekly, 0.7)
+ * - Published custom pages (/pages/[slug], monthly, 0.5)
+ * - Published blog posts (/blog/[slug], monthly, 0.6)
+ * - Static policy pages (/policies/..., yearly, 0.3)
+ */
 export async function getStorefrontSitemapUrls(
   rt: Runtime,
   ctx: TenantContext,
@@ -674,7 +889,7 @@ export async function getStorefrontSitemapUrls(
   const db = rt._db.db;
 
   return withTenant(db, ctx.tenantId, async (tx) => {
-    // 1. Published Products
+    // 1. Published Products (Listed statuses only)
     const productRows = await tx
       .select({
         slug: schema.products.slug,
@@ -684,35 +899,87 @@ export async function getStorefrontSitemapUrls(
       .where(
         and(
           eq(schema.products.tenantId, ctx.tenantId),
-          inArray(schema.products.status, [...STOREFRONT_PRODUCT_STATUSES]),
+          inArray(schema.products.status, [...LISTED_PRODUCT_STATUSES]),
           isNull(schema.products.deletedAt),
         ),
       )
       .orderBy(desc(schema.products.updatedAt));
 
-    // 2. Published Collections
+    // 2. Published & Indexable Collections
     const collectionRows = await tx
-      .select({
-        slug: schema.collections.slug,
-        updatedAt: schema.collections.updatedAt,
-      })
+      .select()
       .from(schema.collections)
       .where(
         and(
           eq(schema.collections.tenantId, ctx.tenantId),
           eq(schema.collections.published, true),
+          eq(schema.collections.indexable, true),
         ),
       )
       .orderBy(desc(schema.collections.updatedAt));
 
-    // 3. Published Categories
+    const eligibleCollections: typeof collectionRows = [];
+    for (const col of collectionRows) {
+      if (col.type === "automated" && col.rules) {
+        const parsed = parseCollectionRules(col.rules);
+        const conds = parsed.map((r) => buildSingleRuleCondition(r, schema.products));
+        const combined = col.match === "any" ? (conds.length > 0 ? or(...conds) : undefined) : (conds.length > 0 ? and(...conds) : undefined);
+        const [p] = await tx
+          .select({ id: schema.products.id })
+          .from(schema.products)
+          .where(
+            and(
+              eq(schema.products.tenantId, ctx.tenantId),
+              inArray(schema.products.status, [...LISTED_PRODUCT_STATUSES]),
+              isNull(schema.products.deletedAt),
+              combined,
+            ),
+          )
+          .limit(1);
+        if (p) eligibleCollections.push(col);
+      } else {
+        const [p] = await tx
+          .select({ id: schema.products.id })
+          .from(schema.collectionProducts)
+          .innerJoin(
+            schema.products,
+            and(
+              eq(schema.products.tenantId, schema.collectionProducts.tenantId),
+              eq(schema.products.id, schema.collectionProducts.productId),
+            ),
+          )
+          .where(
+            and(
+              eq(schema.collectionProducts.collectionId, col.id),
+              inArray(schema.products.status, [...LISTED_PRODUCT_STATUSES]),
+              isNull(schema.products.deletedAt),
+            ),
+          )
+          .limit(1);
+        if (p) eligibleCollections.push(col);
+      }
+    }
+
+    // 3. Active, Non-empty Categories
     const categoryRows = await tx
       .select({
         slug: schema.categories.slug,
         updatedAt: schema.categories.updatedAt,
       })
       .from(schema.categories)
-      .where(eq(schema.categories.tenantId, ctx.tenantId))
+      .where(
+        and(
+          eq(schema.categories.tenantId, ctx.tenantId),
+          sql`exists (
+            select 1 from ${schema.productCategories} pc
+            join ${schema.products} p on p.tenant_id = pc.tenant_id and p.id = pc.product_id
+            where pc.tenant_id = ${schema.categories.tenantId}
+              and pc.category_id = ${schema.categories.id}
+              and p.status in ('active', 'published')
+              and p.deleted_at is null
+          )`,
+        ),
+      )
       .orderBy(desc(schema.categories.updatedAt));
 
     // 4. Published Custom Pages (excluding "home" which is mapped to /)
@@ -753,7 +1020,7 @@ export async function getStorefrontSitemapUrls(
     }
 
     // Collections
-    for (const c of collectionRows) {
+    for (const c of eligibleCollections) {
       sitemapItems.push({
         loc: `${baseUrl}/collections/${c.slug}`,
         lastmod: c.updatedAt.toISOString(),

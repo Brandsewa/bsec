@@ -1,5 +1,6 @@
 import { beforeAll, describe, expect, it } from "vitest";
 import { and, eq } from "drizzle-orm";
+import { primaryCategory } from "./helpers/primary-category.ts";
 import { schema, withTenant } from "@bs/db";
 import { startTestDb, type TestDb } from "@bs/db/test-env";
 import {
@@ -81,7 +82,7 @@ beforeAll(async () => {
   // 1. Create a Price on Request product
   const pPor = await createProduct(rtWeb, ctxA, {
     title: "Custom Industrial Machinery",
-    status: "active",
+    status: "active", primaryCategoryId: await primaryCategory(rtWeb, ctxA),
     priceOnRequest: true,
     variants: [{ sku: "IND-MACH-01", title: "Standard Spec", price: 0 }],
   });
@@ -90,7 +91,7 @@ beforeAll(async () => {
   // 2. Create a Normal in-stock product
   const pNormal = await createProduct(rtWeb, ctxA, {
     title: "Standard Accessory Cable",
-    status: "active",
+    status: "active", primaryCategoryId: await primaryCategory(rtWeb, ctxA),
     priceOnRequest: false,
     variants: [{ sku: "CABLE-01", title: "Default", price: 25000 }],
   });

@@ -55,6 +55,7 @@ const REASONS: ReadonlyArray<{ value: Reason; label: string }> = [
 
 export interface InventorySearch {
   stock: "all" | StockFilter;
+  locationId?: string | undefined;
   q?: string | undefined;
   sort: Sort;
   page: number;
@@ -64,6 +65,7 @@ export interface InventorySearch {
 export function parseInventorySearch(raw: Record<string, unknown>): InventorySearch {
   return {
     stock: oneOf(raw["stock"], ["all", "in_stock", "low", "out"] as const) ?? "all",
+    locationId: text(raw["locationId"]),
     q: text(raw["q"]),
     sort: oneOf(raw["sort"], SORTS.map((x) => x.id)) ?? "product_asc",
     ...parsePaging(raw),
@@ -74,6 +76,7 @@ export function inventoryListInput(s: InventorySearch, paging: { limit: number; 
   return {
     sort: s.sort,
     ...(s.stock !== "all" ? { stock: s.stock } : {}),
+    ...(s.locationId ? { locationId: s.locationId } : {}),
     ...(s.q ? { search: s.q } : {}),
     ...paging,
   };
@@ -81,8 +84,8 @@ export function inventoryListInput(s: InventorySearch, paging: { limit: number; 
 
 type Row = Awaited<ReturnType<typeof client.admin.inventory.list>>["items"][number];
 
-const useStockCount = (stock?: StockFilter) =>
-  useQuery(orpc.admin.inventory.list.queryOptions({ input: { limit: 1, ...(stock ? { stock } : {}) } })).data?.total;
+const useStockCount = (stock?: StockFilter, locationId?: string) =>
+  useQuery(orpc.admin.inventory.list.queryOptions({ input: { limit: 1, ...(stock ? { stock } : {}), ...(locationId ? { locationId } : {}) } })).data?.total;
 
 export const Route = createFileRoute("/_store/inventory/")({
   validateSearch: (raw: Record<string, unknown>): Partial<InventorySearch> =>
@@ -113,23 +116,26 @@ export function InventoryPage() {
   const bulk = useBulkRunner();
   const setFilter = (patch: Record<string, unknown>) => update({ ...patch, page: undefined });
 
+  const locationsQuery = useQuery(orpc.admin.locations.list.queryOptions({ input: { status: "all" } }));
+  const locations = locationsQuery.data ?? [];
+
   const [searchText, setSearchText] = useDebouncedValue(s.q ?? "", (v) => update({ q: v.trim() || undefined, page: undefined }));
 
   const list = useQuery({ ...orpc.admin.inventory.list.queryOptions({ input: inventoryListInput(s) }), placeholderData: keepPreviousData });
   const rows = useMemo(() => list.data?.items ?? [], [list.data]);
   const total = list.data?.total ?? 0;
 
-  const allCount = useStockCount();
-  const lowCount = useStockCount("low");
-  const outCount = useStockCount("out");
+  const allCount = useStockCount(undefined, s.locationId);
+  const lowCount = useStockCount("low", s.locationId);
+  const outCount = useStockCount("out", s.locationId);
 
-  const hasFilters = Boolean(s.q);
+  const hasFilters = Boolean(s.q || s.locationId);
   const clearFilters = () => {
     setSearchText("");
-    update({ q: undefined, page: undefined });
+    update({ q: undefined, locationId: undefined, page: undefined });
   };
 
-  const sel = useTableSelection({ rows, getId: (r: Row) => r.id, total, resetKey: JSON.stringify([s.stock, s.q]) });
+  const sel = useTableSelection({ rows, getId: (r: Row) => r.id, total, resetKey: JSON.stringify([s.stock, s.locationId, s.q]) });
 
   // ----- adjust stock -----
   const [adjustItem, setAdjustItem] = useState<Row | null>(null);
@@ -239,13 +245,16 @@ export function InventoryPage() {
   const visibility = useColumnVisibility("inventory", columns);
   const shown = columns.filter((c) => !c.optional || visibility.isVisible(c.id));
 
+  const activeLocation = locations.find((l) => l.id === s.locationId);
+
   const chips: FilterChip[] = [
     ...(s.q ? [{ key: "q", label: `Search: ${s.q}`, onRemove: () => { setSearchText(""); setFilter({ q: undefined }); } }] : []),
+    ...(s.locationId && activeLocation ? [{ key: "location", label: `Location: ${activeLocation.name}`, onRemove: () => setFilter({ locationId: undefined }) }] : []),
   ];
 
   const adjustButton = (r: Row) => (
     <Button variant="outline" size="sm" onClick={() => setAdjustItem(r)}>
-      <ArrowUpDown className="mr-1.5" aria-hidden />
+      <ArrowUpDown className="mr-1.5 size-3.5" aria-hidden />
       Adjust
     </Button>
   );
@@ -254,7 +263,7 @@ export function InventoryPage() {
     hasFilters || s.stock !== "all" ? (
       <div className="grid justify-items-center gap-1">
         <p className="text-sm font-medium text-foreground">No inventory levels match</p>
-        <p className="text-muted-foreground">Try a different SKU or product name.</p>
+        <p className="text-muted-foreground">Try a different SKU, product name, or location filter.</p>
         {hasFilters ? (
           <Button variant="outline" size="sm" className="mt-2" onClick={clearFilters}>
             Clear filters
@@ -276,7 +285,7 @@ export function InventoryPage() {
     <PageContainer size="full">
       <PageHeader
         title="Inventory"
-        description="Track on-hand stock and record inventory adjustments across warehouse locations."
+        description="Track on-hand stock, committed reservations, and record stock adjustments across locations."
         aside={
           <Button variant="outline" size="sm" disabled={bulk.busy || total === 0} onClick={() => void exportInventory("matching")}>
             <Download className="mr-1.5 size-3.5" aria-hidden />
@@ -295,19 +304,39 @@ export function InventoryPage() {
 
       <PageSection>
         <div className="grid gap-3">
-          <TableToolbar
-            searchLabel="Search inventory"
-            searchPlaceholder="Search SKU or product"
-            searchText={searchText}
-            onSearchText={setSearchText}
-            resultCount={total}
-            noun="items"
-            sortOptions={SORTS}
-            sort={s.sort}
-            defaultSort="product_asc"
-            onSort={(v) => setFilter({ sort: v })}
-            trailing={<ColumnsMenu columns={columns} isVisible={visibility.isVisible} onToggle={visibility.toggle} onReset={visibility.reset} />}
-          />
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+            <div className="flex-1">
+              <TableToolbar
+                searchLabel="Search inventory"
+                searchPlaceholder="Search SKU or product"
+                searchText={searchText}
+                onSearchText={setSearchText}
+                resultCount={total}
+                noun="items"
+                sortOptions={SORTS}
+                sort={s.sort}
+                defaultSort="product_asc"
+                onSort={(v) => setFilter({ sort: v })}
+                trailing={
+                  <div className="flex items-center gap-2">
+                    {locations.length > 1 && (
+                      <div className="w-48">
+                        <SimpleSelect
+                          value={s.locationId ?? ""}
+                          onChange={(val) => setFilter({ locationId: val || undefined })}
+                          options={[
+                            { value: "", label: "All locations" },
+                            ...locations.map((loc) => ({ value: loc.id, label: loc.name })),
+                          ]}
+                        />
+                      </div>
+                    )}
+                    <ColumnsMenu columns={columns} isVisible={visibility.isVisible} onToggle={visibility.toggle} onReset={visibility.reset} />
+                  </div>
+                }
+              />
+            </div>
+          </div>
 
           <FilterChips chips={chips} onClear={clearFilters} />
 
@@ -321,10 +350,10 @@ export function InventoryPage() {
             onClear={sel.clear}
           >
             <Button variant="outline" size="sm" disabled={bulk.busy} onClick={() => void exportInventory("selection")}>
-              <Download className="mr-1.5" /> Export
+              <Download className="mr-1.5 size-3.5" aria-hidden /> Export
             </Button>
             {bulk.progress ? (
-              <span role="status" className="text-muted-foreground">
+              <span role="status" className="text-muted-foreground text-xs">
                 {bulk.progress.label}… {bulk.progress.done}/{bulk.progress.total}
               </span>
             ) : null}
@@ -352,9 +381,11 @@ export function InventoryPage() {
                 <div className="grid min-w-0 flex-1 gap-1">
                   <p className="truncate font-medium text-foreground">{r.productTitle ?? r.variantTitle ?? "Variant"}</p>
                   <p className="truncate text-muted-foreground">{[r.variantTitle, r.variantSku].filter(Boolean).join(" · ")}</p>
-                  <p className="text-muted-foreground">
-                    {r.locationName ?? "—"} · {r.onHand} on hand ·{" "}
-                    <span className={r.available <= 0 ? "text-destructive" : r.available <= 5 ? "text-amber-600" : "text-emerald-600"}>{r.available} available</span>
+                  <p className="text-muted-foreground text-xs">
+                    {r.locationName ?? "—"} · {r.onHand} on hand · {r.reserved} reserved ·{" "}
+                    <span className={r.available <= 0 ? "text-destructive font-medium" : r.available <= 5 ? "text-amber-600 font-medium" : "text-emerald-600 font-medium"}>
+                      {r.available} available
+                    </span>
                   </p>
                 </div>
                 {adjustButton(r)}

@@ -47,6 +47,7 @@ export const StoreSettings = z.object({
   address: StoreAddress.nullable().optional(),
   orderPrefix: z.string().optional(),
   cod: z.object({ enabled: z.boolean(), feePaise: z.number().int().min(0) }).optional(),
+  autoPublishReviews: z.boolean().default(false),
   tax: z
     .object({
       gstin: z.string().nullable(),
@@ -162,7 +163,7 @@ export const Product = z.object({
   id: z.string().uuid(),
   title: z.string(),
   slug: z.string(),
-  status: z.enum(["draft", "active", "archived"]),
+  status: z.enum(["draft", "active", "unlisted", "archived"]),
   descriptionJson: z.unknown().nullable().optional(),
   shortDescription: z.string().nullable().optional(),
   brandId: z.string().uuid().nullable().optional(),
@@ -175,6 +176,7 @@ export const Product = z.object({
   isFeatured: z.boolean(),
   publishedAt: z.string().nullable().optional(),
   priceOnRequest: z.boolean().default(false),
+  returnable: z.boolean().default(true),
   ratingAvg: z.string(),
   ratingCount: z.number(),
   createdAt: z.string(),
@@ -185,6 +187,8 @@ export const Product = z.object({
   priceMax: z.number().nullable().optional(),
   stock: z.number().optional(),
   preorderStatus: z.enum(["active", "passed"]).nullable().optional(),
+  primaryCategoryId: z.string().uuid().nullable().optional(),
+  primaryCategoryName: z.string().nullable().optional(),
 });
 export type Product = z.infer<typeof Product>;
 
@@ -192,8 +196,16 @@ export const ProductDetail = Product.extend({
   options: z.array(ProductOption),
   variants: z.array(ProductVariant),
   media: z.array(ProductMedia),
+  extraCategoryIds: z.array(z.string().uuid()).default([]),
+  collectionIds: z.array(z.string().uuid()).default([]),
 });
 export type ProductDetail = z.infer<typeof ProductDetail>;
+
+export const CategorySeo = z.object({
+  title: z.string().nullable().optional(),
+  description: z.string().nullable().optional(),
+});
+export type CategorySeo = z.infer<typeof CategorySeo>;
 
 export const Category = z.object({
   id: z.string().uuid(),
@@ -201,40 +213,144 @@ export const Category = z.object({
   name: z.string(),
   slug: z.string(),
   description: z.string().nullable().optional(),
+  imageMediaId: z.string().uuid().nullable().optional(),
+  imageUrl: z.string().nullable().optional(),
   position: z.number(),
+  path: z.string().optional(),
+  isActive: z.boolean(),
+  isFeatured: z.boolean(),
+  seo: CategorySeo.nullable().optional(),
+  productCount: z.number().int().optional(),
+  childrenCount: z.number().int().optional(),
   createdAt: z.string(),
   updatedAt: z.string(),
 });
 export type Category = z.infer<typeof Category>;
 
+export const CategoryStats = z.object({
+  total: z.number().int(),
+  active: z.number().int(),
+  inactive: z.number().int(),
+  parents: z.number().int(),
+  productsAssigned: z.number().int(),
+});
+export type CategoryStats = z.infer<typeof CategoryStats>;
+
+export const CollectionRule = z.object({
+  field: z.enum(["tag", "product_type", "brand", "category", "price", "in_stock", "title"]),
+  operator: z.enum([
+    "equals",
+    "not_equals",
+    "contains",
+    "not_contains",
+    "greater_than",
+    "less_than",
+    "is_set",
+    "is_not_set",
+  ]),
+  value: z.unknown(),
+});
+export type CollectionRule = z.infer<typeof CollectionRule>;
+
+export const CollectionSeo = z.object({
+  title: z.string().nullable().optional(),
+  description: z.string().nullable().optional(),
+});
+export type CollectionSeo = z.infer<typeof CollectionSeo>;
+
 export const Collection = z.object({
   id: z.string().uuid(),
   title: z.string(),
   slug: z.string(),
-  description: z.string().nullable().optional(),
   imageMediaId: z.string().uuid().nullable().optional(),
-  isAutomated: z.boolean(),
-  rules: z.unknown().nullable().optional(),
+  imageUrl: z.string().nullable().optional(),
+  type: z.enum(["manual", "automated"]),
+  match: z.enum(["all", "any"]),
+  rules: z.array(CollectionRule).nullable().optional(),
   sortOrder: z.string(),
-  publishedAt: z.string().nullable().optional(),
+  published: z.boolean(),
+  indexable: z.boolean(),
+  productCount: z.number().int().optional(),
   createdAt: z.string(),
   updatedAt: z.string(),
 });
 export type Collection = z.infer<typeof Collection>;
 
+export const CollectionStats = z.object({
+  total: z.number().int(),
+  active: z.number().int(),
+  draft: z.number().int(),
+  manual: z.number().int(),
+  automated: z.number().int(),
+  indexable: z.number().int(),
+});
+export type CollectionStats = z.infer<typeof CollectionStats>;
+
 export const CollectionDetail = Collection.extend({
+  seo: CollectionSeo.nullable().optional(),
   productIds: z.array(z.string().uuid()),
+  products: z
+    .array(
+      z.object({
+        id: z.string().uuid(),
+        title: z.string(),
+        slug: z.string(),
+        status: z.string(),
+        imageUrl: z.string().nullable().optional(),
+        priceMin: z.number().nullable().optional(),
+      }),
+    )
+    .optional(),
 });
 export type CollectionDetail = z.infer<typeof CollectionDetail>;
+
+export const BrandStats = z.object({
+  total: z.number().int(),
+  used: z.number().int(),
+  unused: z.number().int(),
+});
+export type BrandStats = z.infer<typeof BrandStats>;
 
 export const Brand = z.object({
   id: z.string().uuid(),
   name: z.string(),
   slug: z.string(),
   logoMediaId: z.string().uuid().nullable().optional(),
+  logoUrl: z.string().nullable().optional(),
+  productCount: z.number().int().optional(),
   createdAt: z.string(),
+  updatedAt: z.string().optional(),
 });
 export type Brand = z.infer<typeof Brand>;
+
+export const LocationAddress = z.object({
+  line1: z.string().optional(),
+  line2: z.string().nullable().optional(),
+  city: z.string().optional(),
+  stateCode: z.string().optional(),
+  countryCode: z.string().default("IN"),
+});
+export type LocationAddress = z.infer<typeof LocationAddress>;
+
+export const Location = z.object({
+  id: z.string().uuid(),
+  name: z.string(),
+  address: LocationAddress.nullable().optional(),
+  pincode: z.string().nullable().optional(),
+  isDefault: z.boolean(),
+  isActive: z.boolean(),
+  stockCount: z.number().int().optional(),
+  createdAt: z.string(),
+  updatedAt: z.string(),
+});
+export type Location = z.infer<typeof Location>;
+
+export const LocationStats = z.object({
+  total: z.number().int(),
+  active: z.number().int(),
+  inactive: z.number().int(),
+});
+export type LocationStats = z.infer<typeof LocationStats>;
 
 // --- M2 Inventory Schemas ---
 export const InventoryLevelItem = z.object({
@@ -486,6 +602,46 @@ export const StoreSupportSession = z.object({
   expiresAt: z.string(),
   actionsCount: z.number(),
 });
+
+// --- Review Schemas (Phase E) ---
+export const Review = z.object({
+  id: z.string().uuid(),
+  productId: z.string().uuid(),
+  productTitle: z.string().optional(),
+  productSlug: z.string().optional(),
+  variantId: z.string().uuid().nullable().optional(),
+  variantTitle: z.string().nullable().optional(),
+  customerId: z.string().uuid().nullable().optional(),
+  orderItemId: z.string().uuid().nullable().optional(),
+  reviewerName: z.string(),
+  rating: z.number().int().min(1).max(5),
+  title: z.string().nullable().optional(),
+  body: z.string(),
+  status: z.enum(["published", "on_hold"]),
+  replyText: z.string().nullable().optional(),
+  repliedAt: z.string().nullable().optional(),
+  isVerifiedPurchase: z.boolean(),
+  createdAt: z.string(),
+  updatedAt: z.string(),
+});
+export type Review = z.infer<typeof Review>;
+
+export const ReviewStats = z.object({
+  total: z.number().int(),
+  published: z.number().int(),
+  onHold: z.number().int(),
+  replied: z.number().int(),
+  awaitingReply: z.number().int(),
+  averageRating: z.number(),
+  ratingCounts: z.object({
+    5: z.number().int(),
+    4: z.number().int(),
+    3: z.number().int(),
+    2: z.number().int(),
+    1: z.number().int(),
+  }),
+});
+export type ReviewStats = z.infer<typeof ReviewStats>;
 
 // --- Quotes Schemas ---
 export const QuoteRequest = z.object({
@@ -783,6 +939,7 @@ export const adminContract = {
           address: StoreAddress.nullable().optional(),
           orderPrefix: z.string().max(10).optional(),
           cod: z.object({ enabled: z.boolean(), feePaise: z.number().int().min(0).max(1_000_000) }).optional(),
+          autoPublishReviews: z.boolean().optional(),
           tax: z
             .object({
               gstin: z.string().regex(GSTIN_PATTERN, "Enter a valid 15-character GSTIN").nullable(),
@@ -825,7 +982,7 @@ export const adminContract = {
         z
           .object({
             search: z.string().optional(),
-            status: z.enum(["draft", "active", "archived"]).optional(),
+            status: z.enum(["draft", "active", "unlisted", "archived"]).optional(),
             categoryId: z.string().uuid().optional(),
             /** Sellable stock: in_stock (>5), low (1-5) or out (0 or less). */
             stock: z.enum(["in_stock", "low", "out"]).optional(),
@@ -848,7 +1005,7 @@ export const adminContract = {
         z.object({
           title: z.string().min(1),
           slug: z.string().optional(),
-          status: z.enum(["draft", "active", "archived"]).default("draft"),
+          status: z.enum(["draft", "active", "unlisted", "archived"]).default("draft"),
           descriptionJson: z.unknown().optional(),
           shortDescription: z.string().optional(),
           brandId: z.string().uuid().optional(),
@@ -857,6 +1014,11 @@ export const adminContract = {
           requiresShipping: z.boolean().default(true),
           isFeatured: z.boolean().default(false),
           priceOnRequest: z.boolean().default(false),
+          returnable: z.boolean().default(true),
+          seo: z.unknown().optional(),
+          primaryCategoryId: z.string().uuid().optional(),
+          extraCategoryIds: z.array(z.string().uuid()).optional(),
+          collectionIds: z.array(z.string().uuid()).optional(),
           options: z
             .array(
               z.object({
@@ -893,7 +1055,7 @@ export const adminContract = {
           id: z.string().uuid(),
           title: z.string().min(1).optional(),
           slug: z.string().optional(),
-          status: z.enum(["draft", "active", "archived"]).optional(),
+          status: z.enum(["draft", "active", "unlisted", "archived"]).optional(),
           descriptionJson: z.unknown().optional(),
           shortDescription: z.string().optional(),
           brandId: z.string().uuid().nullable().optional(),
@@ -902,9 +1064,14 @@ export const adminContract = {
           requiresShipping: z.boolean().optional(),
           isFeatured: z.boolean().optional(),
           priceOnRequest: z.boolean().optional(),
+          returnable: z.boolean().optional(),
+          seo: z.unknown().optional(),
+          primaryCategoryId: z.string().uuid().nullable().optional(),
+          extraCategoryIds: z.array(z.string().uuid()).optional(),
+          collectionIds: z.array(z.string().uuid()).optional(),
         }),
       )
-      .output(Product),
+      .output(ProductDetail),
     delete: oc
       .route({ method: "DELETE", path: "/admin/products/{id}" })
       .input(z.object({ id: z.string().uuid() }))
@@ -938,17 +1105,36 @@ export const adminContract = {
   categories: {
     list: oc
       .route({ method: "GET", path: "/admin/categories" })
-      .input(z.object({ parentId: z.string().uuid().nullable().optional() }).optional())
+      .input(
+        z
+          .object({
+            parentId: z.string().uuid().nullable().optional(),
+            status: z.enum(["all", "active", "featured", "inactive"]).optional(),
+            search: z.string().optional(),
+          })
+          .optional(),
+      )
       .output(z.array(Category)),
+    stats: oc
+      .route({ method: "GET", path: "/admin/categories/stats" })
+      .output(CategoryStats),
+    get: oc
+      .route({ method: "GET", path: "/admin/categories/{id}" })
+      .input(z.object({ id: z.string().uuid() }))
+      .output(Category),
     create: oc
       .route({ method: "POST", path: "/admin/categories" })
       .input(
         z.object({
           name: z.string().min(1),
           slug: z.string().optional(),
-          description: z.string().optional(),
-          parentId: z.string().uuid().optional(),
+          description: z.string().max(500).optional(),
+          parentId: z.string().uuid().nullable().optional(),
+          imageMediaId: z.string().uuid().nullable().optional(),
           position: z.number().int().default(0),
+          isActive: z.boolean().default(true),
+          isFeatured: z.boolean().default(false),
+          seo: CategorySeo.optional(),
         }),
       )
       .output(Category),
@@ -959,9 +1145,13 @@ export const adminContract = {
           id: z.string().uuid(),
           name: z.string().min(1).optional(),
           slug: z.string().optional(),
-          description: z.string().optional(),
+          description: z.string().max(500).nullable().optional(),
           parentId: z.string().uuid().nullable().optional(),
+          imageMediaId: z.string().uuid().nullable().optional(),
           position: z.number().int().optional(),
+          isActive: z.boolean().optional(),
+          isFeatured: z.boolean().optional(),
+          seo: CategorySeo.nullable().optional(),
         }),
       )
       .output(Category),
@@ -975,7 +1165,19 @@ export const adminContract = {
   collections: {
     list: oc
       .route({ method: "GET", path: "/admin/collections" })
+      .input(
+        z
+          .object({
+            status: z.enum(["all", "active", "draft"]).optional(),
+            type: z.enum(["all", "manual", "automated"]).optional(),
+            search: z.string().optional(),
+          })
+          .optional(),
+      )
       .output(z.array(Collection)),
+    stats: oc
+      .route({ method: "GET", path: "/admin/collections/stats" })
+      .output(CollectionStats),
     get: oc
       .route({ method: "GET", path: "/admin/collections/{id}" })
       .input(z.object({ id: z.string().uuid() }))
@@ -986,13 +1188,29 @@ export const adminContract = {
         z.object({
           title: z.string().min(1),
           slug: z.string().optional(),
-          description: z.string().optional(),
-          isAutomated: z.boolean().default(false),
-          rules: z.unknown().optional(),
+          imageMediaId: z.string().uuid().nullable().optional(),
+          type: z.enum(["manual", "automated"]).default("manual"),
+          match: z.enum(["all", "any"]).default("all"),
+          rules: z.array(CollectionRule).optional(),
+          sortOrder: z
+            .enum([
+              "manual",
+              "best_selling",
+              "title_asc",
+              "title_desc",
+              "price_asc",
+              "price_desc",
+              "created_desc",
+              "created_asc",
+            ])
+            .default("manual"),
+          published: z.boolean().default(true),
+          indexable: z.boolean().default(false),
+          seo: CollectionSeo.optional(),
           productIds: z.array(z.string().uuid()).optional(),
         }),
       )
-      .output(Collection),
+      .output(CollectionDetail),
     update: oc
       .route({ method: "PATCH", path: "/admin/collections/{id}" })
       .input(
@@ -1000,13 +1218,29 @@ export const adminContract = {
           id: z.string().uuid(),
           title: z.string().min(1).optional(),
           slug: z.string().optional(),
-          description: z.string().optional(),
-          isAutomated: z.boolean().optional(),
-          rules: z.unknown().optional(),
+          imageMediaId: z.string().uuid().nullable().optional(),
+          type: z.enum(["manual", "automated"]).optional(),
+          match: z.enum(["all", "any"]).optional(),
+          rules: z.array(CollectionRule).nullable().optional(),
+          sortOrder: z
+            .enum([
+              "manual",
+              "best_selling",
+              "title_asc",
+              "title_desc",
+              "price_asc",
+              "price_desc",
+              "created_desc",
+              "created_asc",
+            ])
+            .optional(),
+          published: z.boolean().optional(),
+          indexable: z.boolean().optional(),
+          seo: CollectionSeo.nullable().optional(),
           productIds: z.array(z.string().uuid()).optional(),
         }),
       )
-      .output(Collection),
+      .output(CollectionDetail),
     delete: oc
       .route({ method: "DELETE", path: "/admin/collections/{id}" })
       .input(z.object({ id: z.string().uuid() }))
@@ -1017,14 +1251,22 @@ export const adminContract = {
   brands: {
     list: oc
       .route({ method: "GET", path: "/admin/brands" })
+      .input(z.object({ search: z.string().optional() }).optional())
       .output(z.array(Brand)),
+    stats: oc
+      .route({ method: "GET", path: "/admin/brands/stats" })
+      .output(BrandStats),
+    get: oc
+      .route({ method: "GET", path: "/admin/brands/{id}" })
+      .input(z.object({ id: z.string().uuid() }))
+      .output(Brand),
     create: oc
       .route({ method: "POST", path: "/admin/brands" })
       .input(
         z.object({
           name: z.string().min(1),
           slug: z.string().optional(),
-          logoMediaId: z.string().uuid().optional(),
+          logoMediaId: z.string().uuid().nullable().optional(),
         }),
       )
       .output(Brand),
@@ -1042,7 +1284,106 @@ export const adminContract = {
     delete: oc
       .route({ method: "DELETE", path: "/admin/brands/{id}" })
       .input(z.object({ id: z.string().uuid() }))
+      .output(z.object({ success: z.boolean(), affectedProducts: z.number().int() })),
+  },
+
+  // Catalog: Locations
+  locations: {
+    list: oc
+      .route({ method: "GET", path: "/admin/locations" })
+      .input(z.object({ status: z.enum(["all", "active", "inactive"]).optional() }).optional())
+      .output(z.array(Location)),
+    stats: oc
+      .route({ method: "GET", path: "/admin/locations/stats" })
+      .output(LocationStats),
+    get: oc
+      .route({ method: "GET", path: "/admin/locations/{id}" })
+      .input(z.object({ id: z.string().uuid() }))
+      .output(Location),
+    create: oc
+      .route({ method: "POST", path: "/admin/locations" })
+      .input(
+        z.object({
+          name: z.string().min(1),
+          address: LocationAddress.optional(),
+          pincode: z.string().optional(),
+          isDefault: z.boolean().default(false),
+          isActive: z.boolean().default(true),
+        }),
+      )
+      .output(Location),
+    update: oc
+      .route({ method: "PATCH", path: "/admin/locations/{id}" })
+      .input(
+        z.object({
+          id: z.string().uuid(),
+          name: z.string().min(1).optional(),
+          address: LocationAddress.nullable().optional(),
+          pincode: z.string().nullable().optional(),
+          isDefault: z.boolean().optional(),
+          isActive: z.boolean().optional(),
+        }),
+      )
+      .output(Location),
+    delete: oc
+      .route({ method: "DELETE", path: "/admin/locations/{id}" })
+      .input(z.object({ id: z.string().uuid() }))
       .output(z.object({ success: z.boolean() })),
+  },
+
+  // Reviews (Phase E)
+  reviews: {
+    list: oc
+      .route({ method: "GET", path: "/admin/reviews" })
+      .input(
+        z
+          .object({
+            productId: z.string().uuid().optional(),
+            status: z.enum(["all", "published", "on_hold", "replied", "awaiting_reply"]).optional(),
+            rating: z.number().int().min(1).max(5).optional(),
+            search: z.string().optional(),
+            limit: z.number().int().min(1).max(100).default(50),
+            offset: z.number().int().min(0).default(0),
+          })
+          .optional(),
+      )
+      .output(z.object({ items: z.array(Review), total: z.number() })),
+    stats: oc
+      .route({ method: "GET", path: "/admin/reviews/stats" })
+      .input(z.object({ productId: z.string().uuid().optional() }).optional())
+      .output(ReviewStats),
+    get: oc
+      .route({ method: "GET", path: "/admin/reviews/{id}" })
+      .input(z.object({ id: z.string().uuid() }))
+      .output(Review),
+    publish: oc
+      .route({ method: "POST", path: "/admin/reviews/{id}/publish" })
+      .input(z.object({ id: z.string().uuid() }))
+      .output(Review),
+    hold: oc
+      .route({ method: "POST", path: "/admin/reviews/{id}/hold" })
+      .input(z.object({ id: z.string().uuid() }))
+      .output(Review),
+    delete: oc
+      .route({ method: "DELETE", path: "/admin/reviews/{id}" })
+      .input(z.object({ id: z.string().uuid() }))
+      .output(z.object({ success: z.boolean() })),
+    reply: oc
+      .route({ method: "POST", path: "/admin/reviews/{id}/reply" })
+      .input(z.object({ id: z.string().uuid(), replyText: z.string().trim().max(1000) }))
+      .output(Review),
+    bulkPublish: oc
+      .route({ method: "POST", path: "/admin/reviews/bulk-publish" })
+      .input(z.object({ ids: z.array(z.string().uuid()).min(1) }))
+      .output(z.object({ count: z.number() })),
+    bulkHold: oc
+      .route({ method: "POST", path: "/admin/reviews/bulk-hold" })
+      .input(z.object({ ids: z.array(z.string().uuid()).min(1) }))
+      .output(z.object({ count: z.number() })),
+    bulkDelete: oc
+      .route({ method: "POST", path: "/admin/reviews/bulk-delete" })
+      .input(z.object({ ids: z.array(z.string().uuid()).min(1) }))
+      .output(z.object({ count: z.number() })),
   },
 
   // Inventory

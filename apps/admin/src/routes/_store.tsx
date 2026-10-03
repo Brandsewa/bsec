@@ -4,8 +4,11 @@ import {
   BadgePercent,
   Clock,
   FileText,
+  FolderTree,
   Home,
   KeyRound,
+  Layers,
+  MapPin,
   Menu,
   MessageSquareQuote,
   Package,
@@ -14,6 +17,7 @@ import {
   Settings,
   ShoppingBag,
   ShoppingCart,
+  Tag,
   Users,
   Warehouse,
 } from "lucide-react";
@@ -50,10 +54,20 @@ const nav: GatedGroup[] = [
     ],
   },
   {
-    label: "Sell",
+    label: "Catalog",
     items: [
       { label: "Products", href: "/products", icon: Package, perm: "products.read" },
+      { label: "Categories", href: "/categories", icon: FolderTree, perm: "products.read" },
+      { label: "Collections", href: "/collections", icon: Layers, perm: "products.read" },
+      { label: "Brands", href: "/brands", icon: Tag, perm: "products.read" },
+      { label: "Locations", href: "/locations", icon: MapPin, perm: "products.read" },
       { label: "Inventory", href: "/inventory", icon: Warehouse, perm: "products.read" },
+      { label: "Reviews", href: "/reviews", icon: MessageSquareQuote, perm: "products.read" },
+    ],
+  },
+  {
+    label: "Sell",
+    items: [
       { label: "Customers", href: "/customers", icon: Users, perm: "customers.read" },
       { label: "Discounts", href: "/discounts", icon: BadgePercent, perm: "discounts.write" },
     ],

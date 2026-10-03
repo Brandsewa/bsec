@@ -1,16 +1,18 @@
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
-import { AlertTriangle, ArrowLeft, Archive, ImageIcon, Save, Trash2, Upload } from "lucide-react";
+import { AlertTriangle, Archive, ArrowLeft, ImageIcon, Save, Trash2, Upload } from "lucide-react";
 import { useRef, useState } from "react";
 import { DetailSkeleton, EmptyState, PageBreadcrumbs, PageContainer, PageHeader, PageSkeleton, toast } from "@bs/ui";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import type { ProductDetail } from "@bs/contracts";
 import { Button } from "@/components/ui/button";
-import { Checkbox } from "@/components/ui/checkbox";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Field, FieldLabel } from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
+import { Switch } from "@/components/ui/switch";
 import { Textarea } from "@/components/ui/textarea";
-import { SectionCard } from "../../../components/section-card.tsx";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { SeoCard } from "../../../components/seo-card.tsx";
+import { SimpleSelect } from "../../../components/simple-select.tsx";
 import { orpc } from "../../../lib/orpc.ts";
 
 export const Route = createFileRoute("/_store/products/$id")({
@@ -79,14 +81,39 @@ type ProductDetailData = ProductDetail;
 
 function ProductEditor({ product, go }: { product: ProductDetailData; go: (to: string) => void }) {
   const queryClient = useQueryClient();
+
+  // Queries for selectors
+  const categoriesQuery = useQuery(orpc.admin.categories.list.queryOptions({ input: { status: "all" } }));
+  const brandsQuery = useQuery(orpc.admin.brands.list.queryOptions());
+  const collectionsQuery = useQuery(orpc.admin.collections.list.queryOptions({ input: { status: "all" } }));
+
+  const categories = categoriesQuery.data ?? [];
+  const brands = brandsQuery.data ?? [];
+  const collections = collectionsQuery.data ?? [];
+
+  // Form State
   const [title, setTitle] = useState(product.title);
   const [slug, setSlug] = useState(product.slug);
-  const [status, setStatus] = useState<"draft" | "active" | "archived">(product.status);
+  const [status, setStatus] = useState<"draft" | "active" | "unlisted" | "archived">(product.status);
   const [shortDescription, setShortDescription] = useState(product.shortDescription ?? "");
   const [description, setDescription] = useState(descriptionText(product.descriptionJson));
   const [tags, setTags] = useState(product.tags.join(", "));
   const [requiresShipping, setRequiresShipping] = useState(product.requiresShipping);
   const [priceOnRequest, setPriceOnRequest] = useState(Boolean(product.priceOnRequest));
+  const [returnable, setReturnable] = useState(product.returnable ?? true);
+  const [isFeatured, setIsFeatured] = useState(product.isFeatured ?? false);
+
+  // Organization
+  const [primaryCategoryId, setPrimaryCategoryId] = useState<string>(product.primaryCategoryId ?? "");
+  const [extraCategoryIds, setExtraCategoryIds] = useState<string[]>(product.extraCategoryIds ?? []);
+  const [brandId, setBrandId] = useState<string>(product.brandId ?? "");
+  const [collectionIds, setCollectionIds] = useState<string[]>(product.collectionIds ?? []);
+
+  // SEO State
+  const initialSeo = (product.seo as { title?: string; description?: string } | null) ?? {};
+  const [seoTitle, setSeoTitle] = useState(initialSeo.title ?? "");
+  const [seoDescription, setSeoDescription] = useState(initialSeo.description ?? "");
+
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [confirmDelete, setConfirmDelete] = useState(false);
 
@@ -117,18 +144,25 @@ function ProductEditor({ product, go }: { product: ProductDetailData; go: (to: s
     }),
   );
 
-  const save = (nextStatus?: "draft" | "active" | "archived") => {
+  const save = (nextStatus?: "draft" | "active" | "unlisted" | "archived") => {
+    const finalStatus = nextStatus ?? status;
     const e: Record<string, string> = {};
     if (!title.trim()) e["title"] = "Title is required";
     if (!slug.trim()) e["slug"] = "Slug is required";
     else if (!/^[a-z0-9]+(?:-[a-z0-9]+)*$/.test(slug)) e["slug"] = "Use lowercase letters, numbers and hyphens only";
+
+    if ((finalStatus === "active" || finalStatus === "unlisted") && !primaryCategoryId) {
+      e["primaryCategory"] = "A primary category is required to publish or list a product";
+    }
+
     setErrors(e);
     if (Object.keys(e).length > 0) {
       toast.error("Please fix the highlighted fields");
       return;
     }
-    const finalStatus = nextStatus ?? status;
+
     if (nextStatus) setStatus(nextStatus);
+
     updateMutation.mutate({
       id: product.id,
       title: title.trim(),
@@ -142,6 +176,16 @@ function ProductEditor({ product, go }: { product: ProductDetailData; go: (to: s
         .filter(Boolean),
       requiresShipping,
       priceOnRequest,
+      returnable,
+      isFeatured,
+      primaryCategoryId: primaryCategoryId || null,
+      extraCategoryIds: extraCategoryIds.filter((cid) => cid !== primaryCategoryId),
+      brandId: brandId || null,
+      collectionIds,
+      seo: {
+        title: seoTitle.trim() || undefined,
+        description: seoDescription.trim() || undefined,
+      },
     });
   };
 
@@ -152,8 +196,17 @@ function ProductEditor({ product, go }: { product: ProductDetailData; go: (to: s
       </p>
     ) : null;
 
+  const statusBadgeColor =
+    product.status === "active"
+      ? "bg-emerald-500/15 text-emerald-700 dark:text-emerald-400 border-emerald-500/30"
+      : product.status === "unlisted"
+        ? "bg-amber-500/15 text-amber-700 dark:text-amber-400 border-amber-500/30"
+        : product.status === "archived"
+          ? "bg-muted text-muted-foreground border-border"
+          : "bg-blue-500/15 text-blue-700 dark:text-blue-400 border-blue-500/30";
+
   return (
-    <PageContainer size="default">
+    <PageContainer size="full">
       <PageBreadcrumbs
         items={[{ label: "Products", href: "/products" }, { label: product.title }]}
         actions={
@@ -175,111 +228,383 @@ function ProductEditor({ product, go }: { product: ProductDetailData; go: (to: s
               <Trash2 className="mr-1.5 size-3.5" aria-hidden />
               Delete
             </Button>
+            <Button type="button" variant="default" size="sm" disabled={updateMutation.isPending} onClick={() => save()}>
+              <Save className="mr-1.5 size-3.5" aria-hidden />
+              {updateMutation.isPending ? "Saving..." : "Save Changes"}
+            </Button>
           </div>
         }
       />
 
-      <PageHeader title={product.title} description={`ID: ${product.id}`} />
+      <div className="flex items-center gap-3">
+        <PageHeader title={product.title} description={`ID: ${product.id}`} />
+        <span className={`inline-flex items-center rounded-full border px-2.5 py-0.5 text-xs font-semibold uppercase tracking-wider ${statusBadgeColor}`}>
+          {product.status}
+        </span>
+      </div>
 
       <form
         onSubmit={(ev) => {
           ev.preventDefault();
           save();
         }}
-        className="grid gap-6"
+        className="grid grid-cols-1 lg:grid-cols-3 gap-6"
         noValidate
       >
-        <SectionCard title="Product Information" description="Title, URL and merchandising settings.">
-          <div className="grid gap-4">
-            <div className="grid gap-1.5">
-              <FieldLabel htmlFor="edit-title">Title *</FieldLabel>
-              <Input id="edit-title" value={title} onChange={(e) => setTitle(e.target.value)} />
-              {err("title")}
-            </div>
-            <div className="grid gap-1.5">
-              <FieldLabel htmlFor="edit-slug">Slug *</FieldLabel>
-              <Input id="edit-slug" value={slug} onChange={(e) => setSlug(e.target.value)} />
-              {err("slug")}
-            </div>
-            <div className="grid gap-1.5">
-              <FieldLabel htmlFor="edit-status">Status</FieldLabel>
-              <div id="edit-status" className="flex gap-2">
-                {(["draft", "active", "archived"] as const).map((s) => (
-                  <Button
-                    key={s}
-                    type="button"
-                    variant={status === s ? "default" : "outline"}
-                    size="sm"
-                    className="capitalize"
-                    onClick={() => setStatus(s)}
-                  >
-                    {s}
-                  </Button>
-                ))}
+        {/* Left Column (2 spans): Primary details, media, pricing, variants, inventory, shipping, SEO */}
+        <div className="lg:col-span-2 flex flex-col gap-6">
+          {/* General Information Card */}
+          <Card>
+            <CardHeader>
+              <CardTitle className="text-base font-semibold">General Information</CardTitle>
+              <CardDescription>Title, handle, and product descriptions.</CardDescription>
+            </CardHeader>
+            <CardContent className="grid gap-4">
+              <div className="grid gap-1.5">
+                <FieldLabel htmlFor="edit-title">Title *</FieldLabel>
+                <Input
+                  id="edit-title"
+                  value={title}
+                  onChange={(e) => setTitle(e.target.value)}
+                  aria-invalid={Boolean(errors["title"])}
+                />
+                {err("title")}
               </div>
-            </div>
-            <div className="grid gap-1.5">
-              <FieldLabel htmlFor="edit-short">Short description</FieldLabel>
-              <Input id="edit-short" value={shortDescription} onChange={(e) => setShortDescription(e.target.value)} />
-            </div>
-            <div className="grid gap-1.5">
-              <FieldLabel htmlFor="edit-desc">Description</FieldLabel>
-              <Textarea
-                id="edit-desc"
-                rows={5}
+
+              <div className="grid gap-1.5">
+                <FieldLabel htmlFor="edit-slug">URL Handle (Slug) *</FieldLabel>
+                <Input
+                  id="edit-slug"
+                  value={slug}
+                  onChange={(e) => setSlug(e.target.value)}
+                  aria-invalid={Boolean(errors["slug"])}
+                />
+                {err("slug")}
+              </div>
+
+              <div className="grid gap-1.5">
+                <FieldLabel htmlFor="edit-short">Short Description</FieldLabel>
+                <Input
+                  id="edit-short"
+                  value={shortDescription}
+                  onChange={(e) => setShortDescription(e.target.value)}
+                  placeholder="Brief summary used in cards and search engine snippets..."
+                />
+              </div>
+
+              <div className="grid gap-1.5">
+                <FieldLabel htmlFor="edit-desc">Description</FieldLabel>
+                <Textarea
+                  id="edit-desc"
+                  rows={6}
                   value={description}
-                onChange={(e) => setDescription(e.target.value)}
-              />
-            </div>
-            <div className="grid gap-1.5">
-              <FieldLabel htmlFor="edit-tags">Tags</FieldLabel>
-              <Input
-                id="edit-tags"
-                value={tags}
-                onChange={(e) => setTags(e.target.value)}
-                placeholder="Comma separated"
-              />
-            </div>
-            <Field orientation="horizontal">
-              <Checkbox id="requires-shipping" checked={requiresShipping} onCheckedChange={(c) => setRequiresShipping(c)} />
-              <FieldLabel htmlFor="requires-shipping" className="font-normal cursor-pointer">Requires shipping</FieldLabel>
-            </Field>
+                  onChange={(e) => setDescription(e.target.value)}
+                  placeholder="Detailed product story, specifications, and care instructions..."
+                />
+              </div>
 
-            <Field orientation="horizontal">
-              <Checkbox id="price-on-request" checked={priceOnRequest} onCheckedChange={(c) => setPriceOnRequest(Boolean(c))} />
-              <FieldLabel htmlFor="price-on-request" className="font-normal cursor-pointer">
-                Price on request (hide prices and require customers to submit quote requests)
-              </FieldLabel>
-            </Field>
-          </div>
-        </SectionCard>
+              <div className="grid gap-1.5">
+                <FieldLabel htmlFor="edit-tags">Tags</FieldLabel>
+                <Input
+                  id="edit-tags"
+                  value={tags}
+                  onChange={(e) => setTags(e.target.value)}
+                  placeholder="Comma separated, e.g. silk, festive, bestseller"
+                />
+              </div>
+            </CardContent>
+          </Card>
 
-        <div className="flex items-center justify-end gap-3">
-          <Button type="button" variant="outline" onClick={() => go("/products")}>
-            Back
-          </Button>
-          <Button type="submit" variant="default" disabled={updateMutation.isPending}>
-            <Save className="mr-1.5 size-3.5" aria-hidden />
-            {updateMutation.isPending ? "Saving..." : "Save Changes"}
-          </Button>
+          {/* Media Section */}
+          <MediaSection product={product} />
+
+          {/* Pricing & Quotes Card */}
+          <Card>
+            <CardHeader>
+              <CardTitle className="text-base font-semibold">Pricing & Quotes</CardTitle>
+              <CardDescription>Price on request hides checkout prices and routes buyers to quotes.</CardDescription>
+            </CardHeader>
+            <CardContent className="grid gap-4">
+              <Field orientation="horizontal" className="justify-between">
+                <div>
+                  <FieldLabel htmlFor="price-on-request" className="cursor-pointer font-medium">
+                    Price on request
+                  </FieldLabel>
+                  <p className="text-xs text-muted-foreground">
+                    Hide pricing and require buyers to submit a quote request instead of checkout.
+                  </p>
+                </div>
+                <Switch
+                  id="price-on-request"
+                  checked={priceOnRequest}
+                  onCheckedChange={(c) => setPriceOnRequest(Boolean(c))}
+                />
+              </Field>
+            </CardContent>
+          </Card>
+
+          {/* Variants Section */}
+          <Card>
+            <CardHeader>
+              <CardTitle className="text-base font-semibold">Variants & Pricing</CardTitle>
+              <CardDescription>SKUs, pricing (in ₹), and pre-order settings per variant.</CardDescription>
+            </CardHeader>
+            <CardContent className="grid gap-4">
+              {product.variants.length === 0 ? (
+                <EmptyState title="No variants" description="This product has no variants yet." />
+              ) : (
+                <div className="grid gap-4">
+                  {product.variants.map((v) => (
+                    <VariantRow key={v.id} variant={v} priceOnRequest={priceOnRequest} onSaved={invalidate} />
+                  ))}
+                </div>
+              )}
+            </CardContent>
+          </Card>
+
+          {/* Stock / Inventory Summary */}
+          <StockSummary product={product} onManage={() => go("/inventory")} />
+
+          {/* Shipping Card */}
+          <Card>
+            <CardHeader>
+              <CardTitle className="text-base font-semibold">Shipping</CardTitle>
+              <CardDescription>Physical delivery requirements.</CardDescription>
+            </CardHeader>
+            <CardContent>
+              <Field orientation="horizontal" className="justify-between">
+                <div>
+                  <FieldLabel htmlFor="requires-shipping" className="cursor-pointer font-medium">
+                    Requires shipping
+                  </FieldLabel>
+                  <p className="text-xs text-muted-foreground">
+                    This is a physical item that requires shipping or courier dispatch.
+                  </p>
+                </div>
+                <Switch
+                  id="requires-shipping"
+                  checked={requiresShipping}
+                  onCheckedChange={(c) => setRequiresShipping(Boolean(c))}
+                />
+              </Field>
+            </CardContent>
+          </Card>
+
+          {/* Search Engine Listing (SEO Card) */}
+          <SeoCard
+            defaultTitle={title || product.title}
+            defaultDescription={shortDescription || description.slice(0, 160)}
+            pathPrefix="/products"
+            slug={slug}
+            title={seoTitle}
+            onTitleChange={setSeoTitle}
+            description={seoDescription}
+            onDescriptionChange={setSeoDescription}
+          />
+        </div>
+
+        {/* Right Column (1 span): Status, Organization, Returns */}
+        <div className="flex flex-col gap-6">
+          {/* Status & Visibility Card */}
+          <Card>
+            <CardHeader>
+              <CardTitle className="text-base font-semibold">Status & Visibility</CardTitle>
+              <CardDescription>Control how and where this product is listed.</CardDescription>
+            </CardHeader>
+            <CardContent className="grid gap-4">
+              <div className="grid gap-1.5">
+                <FieldLabel htmlFor="product-status">Product Status</FieldLabel>
+                <div id="product-status" className="grid grid-cols-2 gap-2">
+                  {(["draft", "active", "unlisted", "archived"] as const).map((s) => (
+                    <Button
+                      key={s}
+                      type="button"
+                      variant={status === s ? "default" : "outline"}
+                      size="sm"
+                      className="capitalize text-xs"
+                      onClick={() => setStatus(s)}
+                    >
+                      {s}
+                    </Button>
+                  ))}
+                </div>
+                {status === "unlisted" && (
+                  <p className="text-xs text-amber-600 dark:text-amber-400 mt-1">
+                    Unlisted products are reachable only by direct URL link; hidden from catalog lists, search, and sitemap.
+                  </p>
+                )}
+                {(status === "active" || status === "unlisted") && !primaryCategoryId && (
+                  <p className="text-xs text-destructive mt-1">
+                    A primary category is required to publish or list this product.
+                  </p>
+                )}
+              </div>
+
+              <Field orientation="horizontal" className="justify-between border-t border-border pt-3">
+                <div>
+                  <FieldLabel htmlFor="is-featured" className="cursor-pointer font-medium text-sm">
+                    Featured product
+                  </FieldLabel>
+                  <p className="text-xs text-muted-foreground">
+                    Highlight this product on the home page and featured grids.
+                  </p>
+                </div>
+                <Switch
+                  id="is-featured"
+                  checked={isFeatured}
+                  onCheckedChange={(c) => setIsFeatured(Boolean(c))}
+                />
+              </Field>
+            </CardContent>
+          </Card>
+
+          {/* Organization Card */}
+          <Card>
+            <CardHeader>
+              <CardTitle className="text-base font-semibold">Organization</CardTitle>
+              <CardDescription>Primary category, extra categories, brand, and collections.</CardDescription>
+            </CardHeader>
+            <CardContent className="grid gap-4">
+              {/* Primary Category */}
+              <div className="grid gap-1.5">
+                <FieldLabel htmlFor="primary-category">
+                  Primary Category <span className="text-destructive">*</span>
+                </FieldLabel>
+                <SimpleSelect
+                  id="primary-category"
+                  value={primaryCategoryId}
+                  onChange={(val) => {
+                    setPrimaryCategoryId(val);
+                    setExtraCategoryIds((prev) => prev.filter((id) => id !== val));
+                  }}
+                  options={[
+                    { value: "", label: "Select primary category..." },
+                    ...categories.map((c) => ({
+                      value: c.id,
+                      label: c.path ? `${c.path} (${c.name})` : c.name,
+                    })),
+                  ]}
+                />
+                <p className="text-xs text-muted-foreground">
+                  Used as the main navigation breadcrumb and primary canonical taxonomy.
+                </p>
+                {err("primaryCategory")}
+              </div>
+
+              {/* Extra Categories */}
+              <div className="grid gap-1.5 border-t border-border pt-3">
+                <FieldLabel>Additional Categories</FieldLabel>
+                <p className="text-xs text-muted-foreground mb-1.5">
+                  Optional extra categories this product also belongs to.
+                </p>
+                <div className="max-h-40 overflow-y-auto rounded-md border border-border p-2 grid gap-2">
+                  {categories
+                    .filter((c) => c.id !== primaryCategoryId)
+                    .map((c) => {
+                      const checked = extraCategoryIds.includes(c.id);
+                      return (
+                        <label key={c.id} className="flex items-center gap-2 text-xs cursor-pointer select-none">
+                          <input
+                            type="checkbox"
+                            checked={checked}
+                            onChange={(e) => {
+                              if (e.target.checked) {
+                                setExtraCategoryIds((prev) => [...prev, c.id]);
+                              } else {
+                                setExtraCategoryIds((prev) => prev.filter((id) => id !== c.id));
+                              }
+                            }}
+                            className="rounded border-border text-primary focus:ring-primary"
+                          />
+                          <span className="truncate">{c.path ? `${c.path} (${c.name})` : c.name}</span>
+                        </label>
+                      );
+                    })}
+                  {categories.filter((c) => c.id !== primaryCategoryId).length === 0 && (
+                    <span className="text-xs text-muted-foreground">No additional categories</span>
+                  )}
+                </div>
+              </div>
+
+              {/* Brand */}
+              <div className="grid gap-1.5 border-t border-border pt-3">
+                <FieldLabel htmlFor="product-brand">Brand</FieldLabel>
+                <SimpleSelect
+                  id="product-brand"
+                  value={brandId}
+                  onChange={(val) => setBrandId(val)}
+                  options={[
+                    { value: "", label: "No brand" },
+                    ...brands.map((b) => ({ value: b.id, label: b.name })),
+                  ]}
+                />
+              </div>
+
+              {/* Collections */}
+              <div className="grid gap-1.5 border-t border-border pt-3">
+                <FieldLabel>Manual Collections</FieldLabel>
+                <p className="text-xs text-muted-foreground mb-1.5">
+                  Assign this product to specific curated collections.
+                </p>
+                <div className="max-h-40 overflow-y-auto rounded-md border border-border p-2 grid gap-2">
+                  {collections
+                    .filter((c) => c.type === "manual")
+                    .map((c) => {
+                      const checked = collectionIds.includes(c.id);
+                      return (
+                        <label key={c.id} className="flex items-center gap-2 text-xs cursor-pointer select-none">
+                          <input
+                            type="checkbox"
+                            checked={checked}
+                            onChange={(e) => {
+                              if (e.target.checked) {
+                                setCollectionIds((prev) => [...prev, c.id]);
+                              } else {
+                                setCollectionIds((prev) => prev.filter((id) => id !== c.id));
+                              }
+                            }}
+                            className="rounded border-border text-primary focus:ring-primary"
+                          />
+                          <span className="truncate">{c.title}</span>
+                        </label>
+                      );
+                    })}
+                  {collections.filter((c) => c.type === "manual").length === 0 && (
+                    <span className="text-xs text-muted-foreground">No manual collections</span>
+                  )}
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+
+          {/* Returns & Policy Card */}
+          <Card>
+            <CardHeader>
+              <CardTitle className="text-base font-semibold">Returns & Policy</CardTitle>
+              <CardDescription>Determine whether customers can request returns.</CardDescription>
+            </CardHeader>
+            <CardContent>
+              <Field orientation="horizontal" className="justify-between">
+                <div>
+                  <FieldLabel htmlFor="returnable-switch" className="cursor-pointer font-medium text-sm">
+                    Returnable item
+                  </FieldLabel>
+                  <p className="text-xs text-muted-foreground">
+                    {returnable
+                      ? "Eligible for standard return requests per store return policy."
+                      : "Final sale · Customers cannot request a return for this item."}
+                  </p>
+                </div>
+                <Switch
+                  id="returnable-switch"
+                  checked={returnable}
+                  onCheckedChange={(c) => setReturnable(Boolean(c))}
+                />
+              </Field>
+            </CardContent>
+          </Card>
         </div>
       </form>
-
-      <StockSummary product={product} onManage={() => go("/inventory")} />
-
-      <SectionCard title="Variants" description="SKUs and pricing (in ₹). Stock is managed on the Inventory page.">
-        {product.variants.length === 0 ? (
-          <EmptyState title="No variants" description="This product has no variants yet." />
-        ) : (
-          <div className="grid gap-3">
-            {product.variants.map((v) => (
-              <VariantRow key={v.id} variant={v} onSaved={invalidate} />
-            ))}
-          </div>
-        )}
-      </SectionCard>
-
-      <MediaSection product={product} />
 
       <Dialog open={confirmDelete} onOpenChange={(open) => !open && setConfirmDelete(false)}>
         <DialogContent>
@@ -287,7 +612,7 @@ function ProductEditor({ product, go }: { product: ProductDetailData; go: (to: s
             <DialogTitle>Delete product?</DialogTitle>
             <DialogDescription>
               "{product.title}" and its variants will be removed. To hide it from the store without deleting it,
-              archive it instead.
+              archive it or set it to draft.
             </DialogDescription>
           </DialogHeader>
           <DialogFooter>
@@ -316,39 +641,47 @@ function StockSummary({ product, onManage }: { product: ProductDetailData; onMan
   const rows = (levels.data?.items ?? []).filter((r) => variantIds.has(r.variantId));
 
   return (
-    <SectionCard title="Stock" description="Customers can only add a product to their cart while it has stock available.">
-      {levels.isLoading ? (
-        <p className="text-sm text-foreground-lighter">Loading stock...</p>
-      ) : rows.length === 0 ? (
-        <p className="text-sm text-foreground-lighter">This product does not track stock.</p>
-      ) : (
-        <ul className="grid gap-1 text-sm" data-testid="product-stock">
-          {rows.map((r) => (
-            <li key={r.id} className="flex items-center justify-between gap-3">
-              <span>
-                {r.variantTitle ?? r.variantSku} · {r.locationName}
-              </span>
-              <span className={r.available > 0 ? "font-medium" : "font-medium text-destructive"}>
-                {r.available > 0 ? `${r.available} available` : "Out of stock"}
-              </span>
-            </li>
-          ))}
-        </ul>
-      )}
-      <div className="mt-3">
+    <Card>
+      <CardHeader className="flex flex-row items-center justify-between pb-2">
+        <div>
+          <CardTitle className="text-base font-semibold">Stock & Inventory</CardTitle>
+          <CardDescription>Live stock levels tracked across store locations.</CardDescription>
+        </div>
         <Button type="button" variant="outline" size="sm" onClick={onManage}>
-          Manage stock
+          Manage inventory
         </Button>
-      </div>
-    </SectionCard>
+      </CardHeader>
+      <CardContent>
+        {levels.isLoading ? (
+          <p className="text-sm text-muted-foreground">Loading stock...</p>
+        ) : rows.length === 0 ? (
+          <p className="text-sm text-muted-foreground">This product does not track stock.</p>
+        ) : (
+          <ul className="grid gap-2 text-sm" data-testid="product-stock">
+            {rows.map((r) => (
+              <li key={r.id} className="flex items-center justify-between gap-3 border-b border-border/50 pb-2 last:border-0 last:pb-0">
+                <span className="text-foreground">
+                  {r.variantTitle ?? r.variantSku} <span className="text-muted-foreground">· {r.locationName}</span>
+                </span>
+                <span className={r.available > 0 ? "font-medium text-emerald-600" : "font-medium text-destructive"}>
+                  {r.available > 0 ? `${r.available} available` : "Out of stock"}
+                </span>
+              </li>
+            ))}
+          </ul>
+        )}
+      </CardContent>
+    </Card>
   );
 }
 
 function VariantRow({
   variant,
+  priceOnRequest,
   onSaved,
 }: {
   variant: ProductDetailData["variants"][number];
+  priceOnRequest: boolean;
   onSaved: () => void;
 }) {
   const [sku, setSku] = useState(variant.sku);
@@ -374,8 +707,10 @@ function VariantRow({
 
   const submit = () => {
     if (!sku.trim() || !vTitle.trim()) return setError("SKU and title are required");
-    if (price === "" || !Number.isFinite(Number(price)) || Number(price) < 0) return setError("Enter a valid price");
-    if (compare !== "" && (!Number.isFinite(Number(compare)) || Number(compare) < 0)) {
+    if (!priceOnRequest && (price === "" || !Number.isFinite(Number(price)) || Number(price) < 0)) {
+      return setError("Enter a valid price");
+    }
+    if (!priceOnRequest && compare !== "" && (!Number.isFinite(Number(compare)) || Number(compare) < 0)) {
       return setError("Enter a valid compare-at price");
     }
     if (preorderEnabled) {
@@ -392,8 +727,8 @@ function VariantRow({
       id: variant.id,
       sku: sku.trim(),
       title: vTitle.trim(),
-      price: toPaise(price),
-      compareAtPrice: compare === "" ? null : toPaise(compare),
+      price: priceOnRequest ? 0 : toPaise(price),
+      compareAtPrice: priceOnRequest || compare === "" ? null : toPaise(compare),
       preorderEnabled,
       preorderShipsOn: preorderEnabled ? (preorderShipsOn || null) : null,
       preorderMessage: preorderEnabled ? (preorderMessage.trim() || null) : null,
@@ -401,7 +736,7 @@ function VariantRow({
   };
 
   return (
-    <div className="grid gap-3 rounded-md border border-border p-3 sm:grid-cols-4">
+    <div className="grid gap-3 rounded-md border border-border p-3.5 bg-muted/20 sm:grid-cols-4">
       <div className="grid gap-1.5">
         <FieldLabel htmlFor={`v-title-${variant.id}`}>Title</FieldLabel>
         <Input id={`v-title-${variant.id}`} value={vTitle} onChange={(e) => setVTitle(e.target.value)} />
@@ -417,7 +752,8 @@ function VariantRow({
           type="number"
           step="0.01"
           min="0"
-          value={price}
+          disabled={priceOnRequest}
+          value={priceOnRequest ? "0.00" : price}
           onChange={(e) => setPrice(e.target.value)}
         />
       </div>
@@ -428,22 +764,26 @@ function VariantRow({
           type="number"
           step="0.01"
           min="0"
-          value={compare}
+          disabled={priceOnRequest}
+          value={priceOnRequest ? "" : compare}
           onChange={(e) => setCompare(e.target.value)}
         />
       </div>
 
       <div className="border-t border-border pt-3 sm:col-span-4 flex flex-col gap-3">
-        <div className="flex items-center gap-2">
-          <Checkbox
+        <Field orientation="horizontal" className="justify-between">
+          <div>
+            <FieldLabel htmlFor={`v-preorder-${variant.id}`} className="cursor-pointer font-normal text-sm">
+              Enable pre-order
+            </FieldLabel>
+            <p className="text-xs text-muted-foreground">Sell at zero stock with an expected dispatch date.</p>
+          </div>
+          <Switch
             id={`v-preorder-${variant.id}`}
             checked={preorderEnabled}
             onCheckedChange={(c) => setPreorderEnabled(Boolean(c))}
           />
-          <FieldLabel htmlFor={`v-preorder-${variant.id}`} className="font-normal cursor-pointer text-sm">
-            Enable pre-order (sell at zero stock with expected ship date)
-          </FieldLabel>
-        </div>
+        </Field>
 
         {preorderEnabled && (
           <div className="grid gap-3 sm:grid-cols-2 rounded-md bg-muted/40 p-3 border border-border">
@@ -462,7 +802,7 @@ function VariantRow({
               </FieldLabel>
               <Input
                 id={`v-preorder-msg-${variant.id}`}
-                placeholder="e.g. Handmade in small batches"
+                placeholder="e.g. Dispatches in 2 weeks"
                 maxLength={200}
                 value={preorderMessage}
                 onChange={(e) => setPreorderMessage(e.target.value)}
@@ -473,9 +813,9 @@ function VariantRow({
       </div>
 
       <div className="flex items-center justify-between sm:col-span-4 border-t border-border pt-2">
-        <span className="text-xs text-foreground-lighter">
-          Current price {inr.format(variant.price / 100)}
-          {error ? <span role="alert" className="ml-3 text-destructive">{error}</span> : null}
+        <span className="text-xs text-muted-foreground">
+          {priceOnRequest ? "Quote only" : `Current: ${inr.format(variant.price / 100)}`}
+          {error ? <span role="alert" className="ml-3 text-destructive font-medium">{error}</span> : null}
         </span>
         <Button type="button" variant="outline" size="sm" disabled={mutation.isPending} onClick={submit}>
           {mutation.isPending ? "Saving..." : "Save variant"}
@@ -530,29 +870,30 @@ function MediaSection({ product }: { product: ProductDetailData }) {
   };
 
   return (
-    <SectionCard
-      title="Media"
-      description="Images shown for this product in your store. The first image is the main one."
-    >
-      <div className="grid gap-4">
+    <Card>
+      <CardHeader>
+        <CardTitle className="text-base font-semibold">Media</CardTitle>
+        <CardDescription>Images shown on your storefront. The first image is the main card image.</CardDescription>
+      </CardHeader>
+      <CardContent className="grid gap-4">
         {product.media.length === 0 ? (
           <EmptyState
             icon={ImageIcon}
             title="No images attached"
-            description="Upload an image to show it on your product."
+            description="Upload images to display on your product page and collections."
           />
         ) : (
           <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
             {product.media.map((m) => (
-              <div key={m.id} className="overflow-hidden rounded-md border border-border">
+              <div key={m.id} className="overflow-hidden rounded-md border border-border bg-muted/20">
                 {m.url ? (
                   <img src={m.url} alt={product.title} className="aspect-square w-full object-cover" />
                 ) : (
-                  <div className="flex aspect-square items-center justify-center text-foreground-muted">
+                  <div className="flex aspect-square items-center justify-center text-muted-foreground">
                     <ImageIcon className="size-6" aria-hidden />
                   </div>
                 )}
-                <div className="flex items-center justify-between px-2 py-1 text-xs text-foreground-muted">
+                <div className="flex items-center justify-between px-2 py-1 text-xs text-muted-foreground">
                   <span>{m.isPrimary ? "Main image" : ""}</span>
                   <button
                     type="button"
@@ -561,7 +902,13 @@ function MediaSection({ product }: { product: ProductDetailData }) {
                     onClick={() =>
                       detachMedia.mutate(
                         { id: product.id, productMediaId: m.id },
-                        { onSuccess: () => { toast.success("Image removed"); refresh(); }, onError: (e) => toast.error(e instanceof Error ? e.message : "Could not remove the image") },
+                        {
+                          onSuccess: () => {
+                            toast.success("Image removed");
+                            refresh();
+                          },
+                          onError: (e) => toast.error(e instanceof Error ? e.message : "Could not remove the image"),
+                        },
                       )
                     }
                   >
@@ -594,7 +941,7 @@ function MediaSection({ product }: { product: ProductDetailData }) {
             {uploading ? "Uploading..." : "Upload image"}
           </Button>
         </div>
-      </div>
-    </SectionCard>
+      </CardContent>
+    </Card>
   );
 }

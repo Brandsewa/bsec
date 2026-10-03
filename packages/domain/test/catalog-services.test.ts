@@ -10,6 +10,16 @@ import {
   publishBrandSettings,
   savePageDraft,
   publishPage,
+  listCategories,
+  createCategory,
+  deleteCategory,
+  listCollections,
+  createCollection,
+  listBrands,
+  createBrand,
+  listLocations,
+  createLocation,
+  deleteLocation,
 } from "../src/index.ts";
 
 describe("M2 Domain Services", () => {
@@ -54,6 +64,108 @@ describe("M2 Domain Services", () => {
     it("throws Forbidden if products.write is missing", async () => {
       const rt = createMockRuntime({} as Db);
       await expect(createProduct(rt, restrictedCtx, { title: "Test" })).rejects.toThrow(/Forbidden/);
+    });
+
+    it("rejects creating active product without primary category", async () => {
+      const mockDb = {
+        execute: async () => ({ rows: [] }),
+        transaction: async (cb: (tx: unknown) => Promise<unknown>) => {
+          return cb({
+            execute: async () => ({ rows: [] }),
+          });
+        },
+      } as unknown as Db;
+
+      const rt = createMockRuntime(mockDb);
+      await expect(
+        createProduct(rt, adminCtx, {
+          title: "Sneakers",
+          status: "active",
+        }),
+      ).rejects.toThrow(/A primary category is required to publish or list a product/);
+    });
+
+    it("rejects creating unlisted product without primary category", async () => {
+      const mockDb = {
+        execute: async () => ({ rows: [] }),
+        transaction: async (cb: (tx: unknown) => Promise<unknown>) => {
+          return cb({
+            execute: async () => ({ rows: [] }),
+          });
+        },
+      } as unknown as Db;
+
+      const rt = createMockRuntime(mockDb);
+      await expect(
+        createProduct(rt, adminCtx, {
+          title: "Private Item",
+          status: "unlisted",
+        }),
+      ).rejects.toThrow(/A primary category is required to publish or list a product/);
+    });
+
+    it("allows creating draft product without primary category", async () => {
+      let insertedProduct: Record<string, unknown> | null = null;
+      const productRow = {
+        id: "prod-1",
+        title: "Draft Item",
+        slug: "draft-item",
+        status: "draft",
+        tags: [],
+        requiresShipping: true,
+        isFeatured: false,
+        priceOnRequest: false,
+        returnable: true,
+        ratingAvg: "0",
+        ratingCount: 0,
+        createdAt: new Date(),
+        updatedAt: new Date(),
+      };
+
+      const makeQuery = (data: unknown[]) => {
+        const p = Promise.resolve(data);
+        const obj = Object.assign(p, {
+          where: () => makeQuery(data),
+          leftJoin: () => makeQuery(data),
+          innerJoin: () => makeQuery(data),
+          orderBy: () => makeQuery(data),
+          limit: () => makeQuery(data),
+          from: () => makeQuery(data),
+          [Symbol.iterator]: () => data[Symbol.iterator](),
+        });
+        return obj;
+      };
+
+      const mockDb = {
+        execute: async () => ({ rows: [] }),
+        transaction: async (cb: (tx: unknown) => Promise<unknown>) => {
+          return cb({
+            execute: async () => ({ rows: [] }),
+            select: () => makeQuery([productRow]),
+            insert: () => ({
+              values: (vals: Record<string, unknown>) => {
+                if ("slug" in vals && "returnable" in vals) {
+                  insertedProduct = vals;
+                }
+                return {
+                  returning: () => [productRow],
+                };
+              },
+            }),
+          });
+        },
+      } as unknown as Db;
+
+      const rt = createMockRuntime(mockDb);
+      const res = await createProduct(rt, adminCtx, {
+        title: "Draft Item",
+        status: "draft",
+      });
+
+      expect(insertedProduct).toBeDefined();
+      expect(insertedProduct!["status"]).toBe("draft");
+      expect(insertedProduct!["returnable"]).toBe(true);
+      expect(res.id).toBe("prod-1");
     });
   });
 
@@ -306,6 +418,230 @@ describe("M2 Domain Services", () => {
       const res = await publishPage(rt, adminCtx, { id: pageId });
       expect(res.success).toBe(true);
       expect(publishedId).toBe("ver-latest");
+    });
+  });
+
+  describe("Category Services", () => {
+    it("throws Forbidden if products.read is missing for listCategories", async () => {
+      const rt = createMockRuntime({} as Db);
+      await expect(listCategories(rt, restrictedCtx)).rejects.toThrow(/Forbidden/);
+    });
+
+    it("throws Forbidden if products.write is missing for createCategory", async () => {
+      const rt = createMockRuntime({} as Db);
+      await expect(createCategory(rt, restrictedCtx, { name: "Keyboards" })).rejects.toThrow(/Forbidden/);
+    });
+
+    it("refuses subcategories beyond 3 levels deep", async () => {
+      // Level 1: "/", Level 2: "/id1/", Level 3: "/id1/id2/"
+      // Parent at level 3 (path "/id1/id2/") should reject child
+      const mockDb = {
+        transaction: async (cb: (tx: unknown) => Promise<unknown>) => {
+          return cb({
+            execute: async () => {},
+            select: () => ({
+              from: () => ({
+                where: () => ({
+                  limit: () => [{ id: "cat-3", path: "/id1/id2/", parentId: "id2" }],
+                }),
+              }),
+            }),
+          });
+        },
+      } as unknown as Db;
+
+      const rt = createMockRuntime(mockDb);
+      await expect(
+        createCategory(rt, adminCtx, {
+          name: "Level 4 Subcategory",
+          parentId: "cat-3",
+        }),
+      ).rejects.toThrow(/maximum depth is 3 levels/);
+    });
+
+    it("refuses deleting category with subcategories", async () => {
+      const mockDb = {
+        transaction: async (cb: (tx: unknown) => Promise<unknown>) => {
+          return cb({
+            execute: async () => {},
+            select: () => ({
+              from: () => ({
+                where: () => [{ count: 2 }],
+              }),
+            }),
+          });
+        },
+      } as unknown as Db;
+
+      const rt = createMockRuntime(mockDb);
+      await expect(deleteCategory(rt, adminCtx, { id: "cat-with-children" })).rejects.toThrow(
+        /Cannot delete category with subcategories/,
+      );
+    });
+
+    it("refuses deleting category with assigned products", async () => {
+      let queryCount = 0;
+      const mockDb = {
+        transaction: async (cb: (tx: unknown) => Promise<unknown>) => {
+          return cb({
+            execute: async () => {},
+            select: () => ({
+              from: () => ({
+                where: () => {
+                  queryCount++;
+                  if (queryCount === 1) {
+                    // child categories count = 0
+                    return [{ count: 0 }];
+                  }
+                  // assigned products count = 5
+                  return [{ count: 5 }];
+                },
+              }),
+            }),
+          });
+        },
+      } as unknown as Db;
+
+      const rt = createMockRuntime(mockDb);
+      await expect(deleteCategory(rt, adminCtx, { id: "cat-with-products" })).rejects.toThrow(
+        /products are assigned to it/,
+      );
+    });
+  });
+
+  describe("Collection Services", () => {
+    it("throws Forbidden if products.read is missing for listCollections", async () => {
+      const rt = createMockRuntime({} as Db);
+      await expect(listCollections(rt, restrictedCtx)).rejects.toThrow(/Forbidden/);
+    });
+
+    it("throws Forbidden if products.write is missing for createCollection", async () => {
+      const rt = createMockRuntime({} as Db);
+      await expect(createCollection(rt, restrictedCtx, { title: "Featured Keyboards" })).rejects.toThrow(/Forbidden/);
+    });
+
+    it("creates collection with indexable defaulted to false", async () => {
+      let insertedValues: Record<string, unknown> | null = null;
+      const mockDb = {
+        transaction: async (cb: (tx: unknown) => Promise<unknown>) => {
+          return cb({
+            execute: async () => {},
+            insert: () => ({
+              values: (vals: Record<string, unknown>) => {
+                if ("title" in vals) {
+                  insertedValues = vals;
+                }
+                return {
+                  returning: () => [
+                    {
+                      id: "col-1",
+                      title: vals["title"],
+                      slug: "featured",
+                      type: vals["type"] ?? "manual",
+                      match: vals["match"] ?? "all",
+                      sortOrder: "manual",
+                      published: vals["published"] ?? true,
+                      indexable: vals["indexable"] ?? false,
+                      createdAt: new Date(),
+                      updatedAt: new Date(),
+                    },
+                  ],
+                };
+              },
+            }),
+            select: () => ({
+              from: () => ({
+                leftJoin: () => ({
+                  where: () => ({
+                    limit: () => [
+                      {
+                        id: "col-1",
+                        title: "Featured",
+                        slug: "featured",
+                        type: "manual",
+                        match: "all",
+                        sortOrder: "manual",
+                        published: true,
+                        indexable: false,
+                        createdAt: new Date(),
+                        updatedAt: new Date(),
+                      },
+                    ],
+                  }),
+                }),
+                innerJoin: () => ({
+                  where: () => ({
+                    orderBy: () => [],
+                  }),
+                }),
+              }),
+            }),
+          });
+        },
+      } as unknown as Db;
+
+      const rt = createMockRuntime(mockDb);
+      const res = await createCollection(rt, adminCtx, { title: "Featured" });
+      expect(insertedValues).toBeDefined();
+      expect(insertedValues!["indexable"]).toBe(false);
+      expect(res.indexable).toBe(false);
+    });
+  });
+
+  describe("Brand Services", () => {
+    it("throws Forbidden if products.read is missing on listBrands", async () => {
+      const rt = createMockRuntime({} as Db);
+      await expect(listBrands(rt, restrictedCtx)).rejects.toThrow(/Forbidden/);
+    });
+
+    it("throws Forbidden if products.write is missing on createBrand", async () => {
+      const rt = createMockRuntime({} as Db);
+      await expect(createBrand(rt, restrictedCtx, { name: "Nike", slug: "nike" })).rejects.toThrow(/Forbidden/);
+    });
+  });
+
+  describe("Location Services", () => {
+    it("throws Forbidden if products.read is missing on listLocations", async () => {
+      const rt = createMockRuntime({} as Db);
+      await expect(listLocations(rt, restrictedCtx)).rejects.toThrow(/Forbidden/);
+    });
+
+    it("throws Forbidden if products.write is missing on createLocation", async () => {
+      const rt = createMockRuntime({} as Db);
+      await expect(
+        createLocation(rt, restrictedCtx, {
+          name: "Main",
+          address: { line1: "123 St", city: "Mumbai", stateCode: "MH", countryCode: "IN" },
+          pincode: "400001",
+        })
+      ).rejects.toThrow(/Forbidden/);
+    });
+
+    it("prevents deleting default location", async () => {
+      const mockDb = {
+        transaction: async (fn: (tx: unknown) => Promise<unknown>) => {
+          return fn({
+            execute: async () => {},
+            select: () => ({
+              from: () => ({
+                where: () => ({
+                  limit: () => [
+                    {
+                      id: "loc-default",
+                      name: "Main Hub",
+                      isDefault: true,
+                      isActive: true,
+                    },
+                  ],
+                }),
+              }),
+            }),
+          });
+        },
+      } as unknown as Db;
+
+      const rt = createMockRuntime(mockDb);
+      await expect(deleteLocation(rt, adminCtx, { id: "loc-default" })).rejects.toThrow(/default location cannot be deleted/);
     });
   });
 });

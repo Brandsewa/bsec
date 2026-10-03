@@ -1,5 +1,6 @@
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { eq } from "drizzle-orm";
+import { primaryCategory } from "./helpers/primary-category.ts";
 import { schema, withTenant } from "@bs/db";
 import { startTestDb, type TestDb } from "@bs/db/test-env";
 import {
@@ -84,14 +85,14 @@ beforeAll(async () => {
   // Create products in Tenant A
   const pA1 = await createProduct(rtWeb, ctxA, {
     title: "Phase One Cotton Shawl",
-    status: "active",
+    status: "active", primaryCategoryId: await primaryCategory(rtWeb, ctxA),
     variants: [{ sku: "SCARF-RED", title: "Default", price: 150000 }],
   });
   variantAId = pA1.variants[0]!.id;
 
   const pA2 = await createProduct(rtWeb, ctxA, {
     title: "Wool Beanie",
-    status: "active",
+    status: "active", primaryCategoryId: await primaryCategory(rtWeb, ctxA),
     variants: [{ sku: "BEANIE-BLU", title: "Default", price: 80000 }],
   });
   variantA2Id = pA2.variants[0]!.id;
@@ -112,7 +113,7 @@ beforeAll(async () => {
   // Create product in Tenant B
   const pB1 = await createProduct(rtWeb, ctxB, {
     title: "Cotton Shirt",
-    status: "active",
+    status: "active", primaryCategoryId: await primaryCategory(rtWeb, ctxB),
     variants: [{ sku: "SHIRT-WHT", title: "Default", price: 120000 }],
   });
   variantBId = pB1.variants[0]!.id;

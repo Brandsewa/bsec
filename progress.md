@@ -76,6 +76,21 @@ Source of truth: `docs/PLAN.html` v2.0 (build order in `docs/BUILD-PLAN-M2-M9.md
 
 **How the tracking docs split (2026-10-01):** this file is the **status board** (milestones, known gaps, what is in flight). The detailed "who changed what, why, how verified" log is one file per change set in [`docs/changes/`](docs/changes/README.md), written by every agent. How the system is built is in [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md). Rules for all agents: [`AGENTS.md`](AGENTS.md).
 
+## Catalog Phases A to F (Indexing, Categories, Collections, Brands, Locations, Reviews, Products) — Complete (2026-10-03)
+
+Spec: `docs/PRODUCTS-CATALOG-PLAN.md` & `docs/PRODUCTS-SECTION-FINDINGS.md`. Built on `feat/catalog-a-f`.
+- [x] **Database & Migrations**: Migrations `0024_catalog_indexing.sql` (`collections.indexable`), `0025_categories_active_featured.sql` (`categories.is_active`, `is_featured`), `0026_reviews.sql` (`reviews` tenant table with RLS, check constraint, `store_settings.auto_publish_reviews`), `0027_product_categories_primary.sql` (`is_primary` with partial unique index).
+- [x] **Storefront & SEO Foundations**: `DIRECT_PRODUCT_STATUSES` vs `LISTED_PRODUCT_STATUSES`; robots meta (categories indexable, collections configurable, soft-404 on empty); canonical URLs; sitemap excludes unlisted and empty collections; reviews section with AggregateRating and verified buyer labels.
+- [x] **Admin Workbenches**:
+  - Categories (`/categories`, `/categories/new`, `/categories/$id`): 3-level tree, drag/reorder, delete guards.
+  - Collections (`/collections`, `/collections/new`, `/collections/$id`): Manual vs Automated condition builder, indexable switch, sorting.
+  - Brands (`/brands`): Logo upload, product count, delete guard.
+  - Locations (`/locations`, `/locations/new`, `/locations/$id`): Default location constraint, stock delete protection.
+  - Reviews (`/reviews`): 4 KPI cards, moderation tabs, approve, hold, reply dialog, delete.
+  - Products (`/products/new`, `/products/$id`): 2-column layout, primary & extra categories, SEO card, returns policy toggle.
+  - Inventory (`/inventory`): Multi-location selector filter.
+- [x] **Verification**: `pnpm typecheck` (15/15 passed), `pnpm lint` (15/15 passed), `pnpm --filter @bs/domain test:fast` (238/238 passed), `pnpm docs:check` (ok), `pnpm build` (6/6 passed).
+
 ## In flight
 
 One line per piece of work that is started and not merged. Add yours before you start, remove it when merged or abandoned (`AGENTS.md` section 6). Format: `agent · branch · area · since · one-line goal`.

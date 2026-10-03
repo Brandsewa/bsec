@@ -1,5 +1,6 @@
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { eq } from "drizzle-orm";
+import { primaryCategory } from "./helpers/primary-category.ts";
 import { schema } from "@bs/db";
 import { startTestDb, type TestDb } from "@bs/db/test-env";
 import {
@@ -61,7 +62,7 @@ beforeAll(async () => {
     permissions: ["products.read", "products.write", "orders.read", "orders.write", "discounts.write", "settings.write"],
     requestId: "req-test",
   };
-  await createProduct(rtWeb, ctx, { title: "Pickle", status: "active", variants: [{ sku: "DISC-1", title: "Default", price: 10000 }] });
+  await createProduct(rtWeb, ctx, { title: "Pickle", status: "active", primaryCategoryId: await primaryCategory(rtWeb, ctx), variants: [{ sku: "DISC-1", title: "Default", price: 10000 }] });
   const row = (await listInventoryLevels(rtWeb, ctx, {})).items[0]!;
   variantId = row.variantId;
   locationId = row.locationId;
