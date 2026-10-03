@@ -4,12 +4,41 @@ import { describe, it } from "vitest";
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
-import tenantCacheTag from "../eslint/rules/tenant-cache-tag.js";
+import noServiceCallInTx from "../eslint/rules/no-service-call-in-tx.js";
 import routePending from "../eslint/rules/route-pending.js";
+import tenantCacheTag from "../eslint/rules/tenant-cache-tag.js";
 
 RuleTester.describe = describe;
 RuleTester.it = it;
 const tester = new RuleTester({ languageOptions: { parser: tseslint.parser } });
+
+tester.run("no-service-call-in-tx", noServiceCallInTx, {
+  valid: [
+    "await withTenant(db, tenantId, async (tx) => { await doInternal(tx, data); })",
+    "await db.transaction(async (tx) => { await insertRow(tx); })",
+    "await withTenant(db, tenantId, async (tx) => { await doWork({ _db: { db: tx } } as unknown as Runtime); })",
+    "const res = await withTenant(db, tenantId, async (tx) => { return 1; }); await invalidateCache(tags);",
+    "await getProduct(rt, ctx, id);",
+  ],
+  invalid: [
+    {
+      code: "await withTenant(db, tenantId, async (tx) => { await getProduct(rt, ctx, id); })",
+      errors: [{ messageId: "noTxServiceCall" }],
+    },
+    {
+      code: "await db.transaction(async (tx) => { await invalidateCache(['tag']); })",
+      errors: [{ messageId: "noTxServiceCall" }],
+    },
+    {
+      code: "await withTenant(db, tenantId, async (tx) => { await revalidateTags(['tag']); })",
+      errors: [{ messageId: "noTxServiceCall" }],
+    },
+    {
+      code: "await withTenant(db, tenantId, async (tx) => { await doSomething(rt as any); })",
+      errors: [{ messageId: "noTxServiceCall" }],
+    },
+  ],
+});
 
 tester.run("tenant-cache-tag", tenantCacheTag, {
   valid: [

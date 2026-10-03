@@ -1,10 +1,8 @@
 import { beforeAll, describe, expect, it } from "vitest";
 import { eq } from "drizzle-orm";
-import { primaryCategory } from "./helpers/primary-category.ts";
 import { schema, withTenant } from "@bs/db";
 import { startTestDb, type TestDb } from "@bs/db/test-env";
 import {
-  createProduct,
   createRuntime,
   getAdminAbandonedCheckoutStats,
   listAdminAbandonedCheckouts,
@@ -16,6 +14,8 @@ import {
 import { addToCart, getOrCreateCart } from "../src/storefront/cart.ts";
 import { STORE_PERMISSIONS } from "@bs/auth";
 
+import { createActiveProduct } from "./helpers/factories.ts";
+
 let env: TestDb;
 let rt: Runtime;
 let rtWeb: Runtime;
@@ -23,7 +23,7 @@ let ctxA: TenantContext;
 let ctxB: TenantContext;
 let tShirtVariantId: string;
 let shoesVariantId: string;
-let locAId: string;
+let hatVariantBId: string;
 
 let cart1Id: string;
 let cart2Id: string;
@@ -74,54 +74,31 @@ beforeAll(async () => {
     requestId: "req-abandoned-b",
   };
 
-  // Warehouse location for Tenant A
-  const locsA = await withTenant(rtWeb._db.db, ctxA.tenantId, async (tx) =>
-    tx.select().from(schema.locations).where(eq(schema.locations.tenantId, ctxA.tenantId)).limit(1),
-  );
-  locAId = locsA[0]!.id;
-
-  // Warehouse location for Tenant B
-  const locsB = await withTenant(rtWeb._db.db, ctxB.tenantId, async (tx) =>
-    tx.select().from(schema.locations).where(eq(schema.locations.tenantId, ctxB.tenantId)).limit(1),
-  );
-  const locBId = locsB[0]!.id;
-
   // Products for Tenant A
-  const p1 = await createProduct(rtWeb, ctxA, {
+  const p1 = await createActiveProduct(rtWeb, ctxA, {
     title: "Classic Cotton T-Shirt",
-    status: "active", primaryCategoryId: await primaryCategory(rtWeb, ctxA),
-    variants: [{ sku: "TSHIRT-01", title: "M / White", price: 50000 }], // ₹500
+    sku: "TSHIRT-01",
+    price: 50000,
+    stock: 100,
   });
-  tShirtVariantId = p1.variants[0]!.id;
+  tShirtVariantId = p1.variantId;
 
-  const p2 = await createProduct(rtWeb, ctxA, {
+  const p2 = await createActiveProduct(rtWeb, ctxA, {
     title: "Urban Running Shoes",
-    status: "active", primaryCategoryId: await primaryCategory(rtWeb, ctxA),
-    variants: [{ sku: "SHOES-01", title: "42 / Blue", price: 120000 }], // ₹1200
+    sku: "SHOES-01",
+    price: 120000,
+    stock: 50,
   });
-  shoesVariantId = p2.variants[0]!.id;
+  shoesVariantId = p2.variantId;
 
   // Product for Tenant B
-  const pB = await createProduct(rtWeb, ctxB, {
+  const pB = await createActiveProduct(rtWeb, ctxB, {
     title: "Store B Hat",
-    status: "active", primaryCategoryId: await primaryCategory(rtWeb, ctxB),
-    variants: [{ sku: "HAT-01", title: "Default", price: 30000 }],
+    sku: "HAT-01",
+    price: 30000,
+    stock: 20,
   });
-  const hatVariantBId = pB.variants[0]!.id;
-
-  // Stock inventory
-  await withTenant(rtWeb._db.db, ctxA.tenantId, async (tx) => {
-    await tx.insert(schema.inventoryLevels).values([
-      { tenantId: ctxA.tenantId, variantId: tShirtVariantId, locationId: locAId, onHand: 100, reserved: 0 },
-      { tenantId: ctxA.tenantId, variantId: shoesVariantId, locationId: locAId, onHand: 50, reserved: 0 },
-    ]);
-  });
-
-  await withTenant(rtWeb._db.db, ctxB.tenantId, async (tx) => {
-    await tx.insert(schema.inventoryLevels).values([
-      { tenantId: ctxB.tenantId, variantId: hatVariantBId, locationId: locBId, onHand: 20, reserved: 0 },
-    ]);
-  });
+  hatVariantBId = pB.variantId;
 
   // Seed Cart 1: Open, Not sent (Alice Smith, 2x T-Shirt = 100000 paise)
   const cart1 = await getOrCreateCart(rtWeb, ctxA);

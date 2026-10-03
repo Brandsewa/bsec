@@ -346,9 +346,12 @@ Full per-service env var list, with what breaks when each is missing: **`DEPLOYM
 | Layer | Command | Notes |
 |---|---|---|
 | Typecheck | `pnpm typecheck` | per package `tsc` |
-| Lint | `pnpm lint` | includes `bs/*` rules and the DB import ban |
+| Lint | `pnpm lint` | includes `bs/*` rules (e.g. `bs/no-service-call-in-tx`) and DB import ban |
 | Build | `pnpm build` | turbo; web, admin, superadmin, platform, worker, db |
 | Unit | `pnpm test:fast` | excludes `*.int.test.ts` |
+| Affected | `pnpm test:affected` | runs fast tests affected against `origin/main` (or `--heavy` for int tests) |
+| Quick Gate | `pnpm gate:quick` | typecheck + lint + docs:check + test:affected |
+| Fast Local Heavy | `pnpm test:heavy:local` | in-memory shared Postgres container (`docker-compose.test-db.yml`) |
 | Integration | `pnpm test:heavy` | real Postgres 18 via Testcontainers or `TEST_DATABASE_URL_SUPERUSER`; needs Docker |
 | Browser e2e | `e2e/` (Playwright) | runs in CI against the ephemeral stack |
 | Docs | `pnpm docs:check` | structure vs docs (this file, ADR index, change fragments) |

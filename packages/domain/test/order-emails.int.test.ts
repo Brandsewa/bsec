@@ -1,21 +1,18 @@
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 import { eq } from "drizzle-orm";
-import { primaryCategory } from "./helpers/primary-category.ts";
 import { pino } from "pino";
 import { schema } from "@bs/db";
 import { startTestDb, type TestDb } from "@bs/db/test-env";
 import {
-  adjustInventory,
   applyCartDiscount,
   createAdminDiscount,
-  createProduct,
   createRuntime,
-  listInventoryLevels,
   placeOrder,
   provisionTenant,
   type Runtime,
   type TenantContext,
 } from "../src/index.ts";
+import { createActiveProduct } from "./helpers/factories.ts";
 import { addToCart, getOrCreateCart } from "../src/storefront/cart.ts";
 import { handleOrderCreatedJob, handleFulfillmentShippedJob } from "../src/jobs.ts";
 
@@ -76,10 +73,8 @@ beforeAll(async () => {
   other = mk(b);
   // the store's support address, as set in Settings
   await rt._db.db.update(schema.storeSettings).set({ supportEmail: "help@tasteofhills.example" }).where(eq(schema.storeSettings.tenantId, a.tenantId));
-  await createProduct(rtWeb, ctx, { title: "Dalle Timboor Chok Pickle | Powder", status: "active", primaryCategoryId: await primaryCategory(rtWeb, ctx), variants: [{ sku: "MAIL-1", title: "Default", price: 10000 }] });
-  const row = (await listInventoryLevels(rtWeb, ctx, {})).items[0]!;
-  variantId = row.variantId;
-  await adjustInventory(rtWeb, ctx, { variantId, locationId: row.locationId, quantityDelta: 100, reason: "received" });
+  const p = await createActiveProduct(rtWeb, ctx, { title: "Dalle Timboor Chok Pickle | Powder", sku: "MAIL-1", price: 10000, stock: 100 });
+  variantId = p.variantId;
   await createAdminDiscount(rtWeb, ctx, { code: "TEN", title: "10% off", type: "percent", value: 10 });
 
   // Seed enabled platform_email_settings

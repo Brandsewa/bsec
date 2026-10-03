@@ -408,9 +408,9 @@ export async function processWebhookInboxItem(
             });
 
             // Map status to fulfillment transition
-            const rt = {
+            const webhookRt = {
               service: "worker",
-              _db: { db, close: async () => {} },
+              _db: { db: tx, close: async () => {} },
               close: async () => {},
             } as unknown as Runtime;
             const ctx = {
@@ -424,7 +424,7 @@ export async function processWebhookInboxItem(
 
             if (currentStatus.includes("delivered") && fulfillment.status !== "delivered") {
               try {
-                await transitionFulfillment(rt, ctx, fulfillment.id, {
+                await transitionFulfillment(webhookRt, ctx, fulfillment.id, {
                   type: "fulfillment.deliver",
                   deliveredAt: new Date(),
                   data: { awb, provider: "shiprocket" },
@@ -434,7 +434,7 @@ export async function processWebhookInboxItem(
               }
             } else if (currentStatus.includes("rto") && !fulfillment.status.startsWith("rto")) {
               try {
-                await transitionFulfillment(rt, ctx, fulfillment.id, {
+                await transitionFulfillment(webhookRt, ctx, fulfillment.id, {
                   type: "fulfillment.rto",
                   reason: message,
                   data: { awb, provider: "shiprocket" },
@@ -447,7 +447,7 @@ export async function processWebhookInboxItem(
               fulfillment.status === "label_created"
             ) {
               try {
-                await transitionFulfillment(rt, ctx, fulfillment.id, {
+                await transitionFulfillment(webhookRt, ctx, fulfillment.id, {
                   type: "fulfillment.pick_up",
                   data: { awb, provider: "shiprocket" },
                 }, tx);

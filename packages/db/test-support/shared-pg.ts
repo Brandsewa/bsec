@@ -114,6 +114,13 @@ export function useFreshDatabase(hooks: {
   }, 120_000);
 
   hooks.afterAll(async () => {
-    await withAdmin(url, (c) => c.query(`drop database if exists "${db}" with (force)`)).catch(() => undefined);
+    await withAdmin(url, async (c) => {
+      await c.query(`alter database "${db}" with allow_connections false`).catch(() => undefined);
+      await c.query(
+        `select pg_terminate_backend(pid) from pg_stat_activity where datname = $1 and pid <> pg_backend_pid()`,
+        [db],
+      ).catch(() => undefined);
+      await c.query(`drop database if exists "${db}" with (force)`).catch(() => undefined);
+    }).catch(() => undefined);
   }, 60_000);
 }

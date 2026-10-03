@@ -93,11 +93,12 @@ export async function runDueTenantDeletions(
   rt: Runtime,
   opts: { deps?: DeletionDeps | undefined; onError?: ((deletionId: string, err: unknown) => void) | undefined; limit?: number | undefined } = {},
 ): Promise<{ completed: number; failed: number }> {
-  return rt._db.db.transaction(async (lockTx) => {
-    const lock = await lockTx.execute<{ locked: boolean }>(sql`SELECT pg_try_advisory_xact_lock(${SWEEP_LOCK_KEY}) AS locked`);
-    if (!lock.rows[0]?.locked) return { completed: 0, failed: 0 };
+  const db = rt._db.db;
+  const lock = await db.execute<{ locked: boolean }>(sql`SELECT pg_try_advisory_lock(${SWEEP_LOCK_KEY}) AS locked`);
+  if (!lock.rows[0]?.locked) return { completed: 0, failed: 0 };
 
-    const due = await rt._db.db
+  try {
+    const due = await db
       .select({ id: schema.tenantDeletions.id })
       .from(schema.tenantDeletions)
       .where(
@@ -122,5 +123,7 @@ export async function runDueTenantDeletions(
       }
     }
     return { completed, failed };
-  });
+  } finally {
+    await db.execute(sql`SELECT pg_advisory_unlock(${SWEEP_LOCK_KEY})`).catch(() => undefined);
+  }
 }

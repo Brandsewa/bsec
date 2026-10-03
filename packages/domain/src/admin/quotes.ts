@@ -517,8 +517,7 @@ export async function updateAdminQuoteNote(
 ): Promise<QuoteRecord> {
   assertPermission(ctx, "orders.write");
   const db = rt._db.db;
-
-  return await withTenant(db, ctx.tenantId, async (tx) => {
+  await withTenant(db, ctx.tenantId, async (tx) => {
     const [row] = await tx
       .update(quoteRequests)
       .set({
@@ -539,9 +538,9 @@ export async function updateAdminQuoteNote(
       targetId: input.id,
       diff: { adminNote: input.adminNote },
     });
-
-    return await getAdminQuoteDetail(rt, ctx, { id: input.id }, tx);
   });
+
+  return await getAdminQuoteDetail(rt, ctx, { id: input.id });
 }
 
 /**
@@ -555,7 +554,7 @@ export async function markAdminQuoteLost(
   assertPermission(ctx, "orders.write");
   const db = rt._db.db;
 
-  return await withTenant(db, ctx.tenantId, async (tx) => {
+  await withTenant(db, ctx.tenantId, async (tx) => {
     const [quote] = await tx
       .select()
       .from(quoteRequests)
@@ -584,9 +583,9 @@ export async function markAdminQuoteLost(
       targetId: input.id,
       diff: { reason: input.reason ?? "Marked lost by staff" },
     });
-
-    return await getAdminQuoteDetail(rt, ctx, { id: input.id }, tx);
   });
+
+  return await getAdminQuoteDetail(rt, ctx, { id: input.id });
 }
 
 /**
@@ -600,7 +599,7 @@ export async function reopenAdminQuote(
   assertPermission(ctx, "orders.write");
   const db = rt._db.db;
 
-  return await withTenant(db, ctx.tenantId, async (tx) => {
+  await withTenant(db, ctx.tenantId, async (tx) => {
     const [quote] = await tx
       .select()
       .from(quoteRequests)
@@ -628,9 +627,9 @@ export async function reopenAdminQuote(
       targetId: input.id,
       diff: { status: newStatus },
     });
-
-    return await getAdminQuoteDetail(rt, ctx, { id: input.id }, tx);
   });
+
+  return await getAdminQuoteDetail(rt, ctx, { id: input.id });
 }
 
 /**
@@ -693,7 +692,7 @@ export async function linkOrderToQuote(
   const db = rt._db.db;
   const validDays = Math.max(1, Math.min(90, input.validDays ?? 7));
 
-  return await withTenant(db, ctx.tenantId, async (tx) => {
+  await withTenant(db, ctx.tenantId, async (tx) => {
     const [order] = await tx
       .select()
       .from(orders)
@@ -731,9 +730,9 @@ export async function linkOrderToQuote(
         validDays,
       },
     });
-
-    return await getAdminQuoteDetail(rt, ctx, { id: input.id }, tx);
   });
+
+  return await getAdminQuoteDetail(rt, ctx, { id: input.id });
 }
 
 /**
@@ -782,7 +781,7 @@ export async function runQuoteExpirySweep(
 
         if (ord && ord.status === "pending") {
           await transitionOrder(
-            rt,
+            { ...rt, _db: { db: tx } } as unknown as Runtime,
             systemCtx,
             ord.id,
             { type: "order.cancel", reason: "Quote offer expired" },

@@ -1,19 +1,15 @@
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { eq } from "drizzle-orm";
-import { primaryCategory } from "./helpers/primary-category.ts";
 import { schema, withTenant } from "@bs/db";
 import { startTestDb, type TestDb } from "@bs/db/test-env";
 import {
-  createProduct,
   createRuntime,
-  placeOrder,
   provisionTenant,
   requestReturn,
   getOrderReturnsByToken,
   type Runtime,
   type TenantContext,
 } from "../src/index.ts";
-import { addToCart, getOrCreateCart } from "../src/storefront/cart.ts";
 import {
   createPresignedReturnPhotoUpload,
   finalizeReturnPhoto,
@@ -22,6 +18,7 @@ import {
   checkReturnPhotoRateLimit,
   isReturnPhotoStorageConfigured,
 } from "../src/orders/return-photos.ts";
+import { createActiveProduct, createDeliveredCodOrder, createGuestCheckout } from "./helpers/factories.ts";
 import { createHash } from "node:crypto";
 import { STORE_PERMISSIONS } from "@bs/auth";
 import type { S3Client } from "@aws-sdk/client-s3";
@@ -135,56 +132,23 @@ beforeAll(async () => {
     requestId: "req-photo-b",
   };
 
-  // Create Product in Tenant A
-  const pA = await createProduct(rt, ctxA, {
+  // Create Product and delivered order in Tenant A
+  const pA = await createActiveProduct(rtWeb, ctxA, {
     title: "Returnable Shirt",
-    slug: "returnable-shirt",
-    status: "active", primaryCategoryId: await primaryCategory(rt, ctxA),
-    variants: [{ sku: "SHIRT-1", title: "Default", price: 1000 }],
+    price: 1000,
+    stock: 100,
   });
-  variantAId = pA.variants[0]!.id;
+  variantAId = pA.variantId;
 
-  // Stock inventory for Tenant A
-  const locsA = await withTenant(rtWeb._db.db, ctxA.tenantId, async (tx) =>
-    tx.select().from(schema.locations).where(eq(schema.locations.tenantId, ctxA.tenantId)).limit(1),
-  );
-  const locA = locsA[0]!;
-  await withTenant(rtWeb._db.db, ctxA.tenantId, async (tx) => {
-    await tx.insert(schema.inventoryLevels).values([
-      { tenantId: ctxA.tenantId, locationId: locA.id, variantId: variantAId, onHand: 100 },
-    ]);
-  });
-
-  // Place Order in Tenant A
-  const cartA = await getOrCreateCart(rtWeb, ctxA, undefined);
-  await addToCart(rtWeb, ctxA, { token: cartA.token, variantId: variantAId, quantity: 2 });
-  const placedA = await placeOrder(rtWeb, ctxA, {
-    cartToken: cartA.token,
-    idempotencyKey: `idem_a_${Date.now()}`,
+  const deliveredA = await createDeliveredCodOrder(rtWeb, ctxA, {
+    variantId: variantAId,
+    quantity: 2,
     email: "shopper@photos.test",
+    name: "Shopper A",
     phone: "9876543210",
-    fullName: "Shopper A",
-    addressLine1: "123 Main St",
-    city: "Bengaluru",
-    state: "Karnataka",
-    pincode: "560001",
-    paymentMethod: "cod",
   });
-  orderAId = placedA.orderId;
-
-  // Mark Order A as delivered and get orderItemId
-  await withTenant(rt._db.db, ctxA.tenantId, async (tx) => {
-    await tx.update(schema.orders).set({ status: "delivered" }).where(eq(schema.orders.id, orderAId));
-    await tx.insert(schema.fulfillments).values({
-      tenantId: ctxA.tenantId,
-      orderId: orderAId,
-      locationId: locA.id,
-      status: "delivered",
-      deliveredAt: new Date(),
-    });
-    const items = await tx.select().from(schema.orderItems).where(eq(schema.orderItems.orderId, orderAId));
-    orderAItemId = items[0]!.id;
-  });
+  orderAId = deliveredA.orderId;
+  orderAItemId = deliveredA.orderItemId;
 
   // Create Action Token for Order A
   orderAToken = "token_order_a_photo_test";
@@ -199,38 +163,22 @@ beforeAll(async () => {
     });
   });
 
-  // Create Order in Tenant B
-  const pB = await createProduct(rt, ctxB, {
+  // Create Product and Order in Tenant B
+  const pB = await createActiveProduct(rtWeb, ctxB, {
     title: "Product B",
-    slug: "product-b",
-    status: "active", primaryCategoryId: await primaryCategory(rt, ctxB),
-    variants: [{ sku: "PROD-B", title: "Default", price: 500 }],
-  });
-  const locsB = await withTenant(rtWeb._db.db, ctxB.tenantId, async (tx) =>
-    tx.select().from(schema.locations).where(eq(schema.locations.tenantId, ctxB.tenantId)).limit(1),
-  );
-  const locB = locsB[0]!;
-  await withTenant(rtWeb._db.db, ctxB.tenantId, async (tx) => {
-    await tx.insert(schema.inventoryLevels).values([
-      { tenantId: ctxB.tenantId, locationId: locB.id, variantId: pB.variants[0]!.id, onHand: 50 },
-    ]);
+    price: 500,
+    stock: 50,
   });
 
-  const cartB = await getOrCreateCart(rtWeb, ctxB, undefined);
-  await addToCart(rtWeb, ctxB, { token: cartB.token, variantId: pB.variants[0]!.id, quantity: 1 });
-  const placedB = await placeOrder(rtWeb, ctxB, {
-    cartToken: cartB.token,
-    idempotencyKey: `idem_b_${Date.now()}`,
+  const placedB = await createGuestCheckout(rtWeb, ctxB, {
+    variantId: pB.variantId,
+    quantity: 1,
     email: "shopper_b@photos.test",
     phone: "9876543211",
-    fullName: "Shopper B",
-    addressLine1: "456 Side St",
-    city: "Mumbai",
-    state: "Maharashtra",
-    pincode: "400001",
-    paymentMethod: "cod",
+    name: "Shopper B",
   });
   orderBId = placedB.orderId;
+
   orderBToken = "token_order_b_photo_test";
   const tokenHashB = createHash("sha256").update(orderBToken).digest("hex");
   await withTenant(rt._db.db, ctxB.tenantId, async (tx) => {

@@ -1,12 +1,9 @@
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { and, eq } from "drizzle-orm";
-import { primaryCategory } from "./helpers/primary-category.ts";
 import { schema } from "@bs/db";
 import { startTestDb, type TestDb } from "@bs/db/test-env";
 import {
-  adjustInventory,
   createCustomerAddress,
-  createProduct,
   createRuntime,
   destroyCustomerSession,
   getAddressUpdateView,
@@ -17,7 +14,6 @@ import {
   getCustomerProfile,
   getOrderByActionToken,
   getUnsubscribeView,
-  listInventoryLevels,
   mintAddressUpdateToken,
   mintOrderViewTokenForCustomer,
   mintUnsubscribeToken,
@@ -32,6 +28,7 @@ import {
   type Runtime,
   type TenantContext,
 } from "../src/index.ts";
+import { createActiveProduct } from "./helpers/factories.ts";
 import { addToCart, getOrCreateCart } from "../src/storefront/cart.ts";
 
 let env: TestDb;
@@ -94,11 +91,9 @@ beforeAll(async () => {
   const b = await provisionTenant(rt, { storeName: "scp-b", slug: "scp-b", owner: { email: "o@scp-b.test", name: "B" }, planCode: "starter", source: "platform_admin" });
   ctxA = ctxFor(a.tenantId, a.ownerId);
   ctxB = ctxFor(b.tenantId, b.ownerId);
-  await createProduct(rtWeb, ctxA, { title: "Pickle", status: "active", primaryCategoryId: await primaryCategory(rtWeb, ctxA), variants: [{ sku: "SCP-1", title: "Default", price: 10000 }] });
-  const row = (await listInventoryLevels(rtWeb, ctxA, {})).items[0]!;
-  variantA = row.variantId;
-  locationA = row.locationId;
-  await adjustInventory(rtWeb, ctxA, { variantId: variantA, locationId: locationA, quantityDelta: 100, reason: "received" });
+  const p = await createActiveProduct(rtWeb, ctxA, { title: "Pickle", sku: "SCP-1", price: 10000, stock: 100 });
+  variantA = p.variantId;
+  locationA = p.locationId;
 }, 180_000);
 
 afterAll(async () => {
