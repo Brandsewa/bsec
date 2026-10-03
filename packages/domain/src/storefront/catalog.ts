@@ -1,10 +1,94 @@
-import { and, asc, desc, eq, inArray, isNull, sql } from "drizzle-orm";
-import { STOREFRONT_PRODUCT_STATUSES } from "./product-status.ts";
+import { and, asc, desc, eq, ilike, inArray, isNull, or, sql, type SQL } from "drizzle-orm";
+import { DIRECT_PRODUCT_STATUSES, LISTED_PRODUCT_STATUSES } from "./product-status.ts";
 import { schema, withTenant } from "@bs/db";
 import type { Runtime } from "../runtime.ts";
 import type { TenantContext } from "../context.ts";
 import { isFeatureEnabled } from "../features.ts";
 import { publicMediaUrl } from "../media/storage.ts";
+
+export interface CollectionRule {
+  field: "tag" | "product_type" | "brand" | "category" | "price" | "in_stock" | "title" | string;
+  operator: "equals" | "not_equals" | "contains" | "not_contains" | "greater_than" | "less_than" | "is_set" | "is_not_set" | string;
+  value: unknown;
+}
+
+export function parseCollectionRules(rules: unknown): CollectionRule[] {
+  if (!rules) return [];
+  if (Array.isArray(rules)) {
+    return rules.filter((r): r is CollectionRule => typeof r === "object" && r !== null && "field" in r && "operator" in r);
+  }
+  if (typeof rules === "object" && rules !== null && "rules" in rules && Array.isArray((rules as { rules: unknown[] }).rules)) {
+    return ((rules as { rules: unknown[] }).rules).filter((r): r is CollectionRule => typeof r === "object" && r !== null && "field" in r && "operator" in r);
+  }
+  return [];
+}
+
+export function buildSingleRuleCondition(rule: CollectionRule, productsTable: typeof schema.products): SQL | undefined {
+  const val = rule.value;
+  const strVal = String(val ?? "").trim();
+  const escaped = strVal.replace(/[%_\\]/g, "\\$&");
+
+  switch (rule.field) {
+    case "tag": {
+      if (rule.operator === "equals" || rule.operator === "contains") {
+        return sql`${strVal} = ANY(${productsTable.tags})`;
+      }
+      if (rule.operator === "not_equals" || rule.operator === "not_contains") {
+        return sql`NOT (${strVal} = ANY(${productsTable.tags}))`;
+      }
+      return undefined;
+    }
+    case "product_type": {
+      if (rule.operator === "equals") return eq(productsTable.productType, strVal);
+      if (rule.operator === "not_equals") return sql`${productsTable.productType} IS DISTINCT FROM ${strVal}`;
+      if (rule.operator === "contains") return ilike(productsTable.productType, `%${escaped}%`);
+      if (rule.operator === "not_contains") return sql`NOT (${productsTable.productType} ILIKE ${`%${escaped}%`})`;
+      return undefined;
+    }
+    case "brand": {
+      if (rule.operator === "equals") return eq(productsTable.brandId, strVal);
+      if (rule.operator === "not_equals") return sql`${productsTable.brandId} IS DISTINCT FROM ${strVal}`;
+      return undefined;
+    }
+    case "category": {
+      if (rule.operator === "equals") {
+        return sql`EXISTS (SELECT 1 FROM product_categories pc WHERE pc.tenant_id = ${productsTable.tenantId} AND pc.product_id = ${productsTable.id} AND pc.category_id = ${strVal}::uuid)`;
+      }
+      if (rule.operator === "not_equals") {
+        return sql`NOT EXISTS (SELECT 1 FROM product_categories pc WHERE pc.tenant_id = ${productsTable.tenantId} AND pc.product_id = ${productsTable.id} AND pc.category_id = ${strVal}::uuid)`;
+      }
+      return undefined;
+    }
+    case "title": {
+      if (rule.operator === "equals") return eq(productsTable.title, strVal);
+      if (rule.operator === "not_equals") return sql`${productsTable.title} != ${strVal}`;
+      if (rule.operator === "contains") return ilike(productsTable.title, `%${escaped}%`);
+      if (rule.operator === "not_contains") return sql`NOT (${productsTable.title} ILIKE ${`%${escaped}%`})`;
+      return undefined;
+    }
+    case "price": {
+      const num = typeof val === "number" ? val : Number(val) || 0;
+      if (rule.operator === "greater_than") {
+        return sql`EXISTS (SELECT 1 FROM variants v WHERE v.tenant_id = ${productsTable.tenantId} AND v.product_id = ${productsTable.id} AND v.price >= ${num})`;
+      }
+      if (rule.operator === "less_than") {
+        return sql`EXISTS (SELECT 1 FROM variants v WHERE v.tenant_id = ${productsTable.tenantId} AND v.product_id = ${productsTable.id} AND v.price <= ${num})`;
+      }
+      if (rule.operator === "equals") {
+        return sql`EXISTS (SELECT 1 FROM variants v WHERE v.tenant_id = ${productsTable.tenantId} AND v.product_id = ${productsTable.id} AND v.price = ${num})`;
+      }
+      return undefined;
+    }
+    case "in_stock": {
+      if (val === true || strVal === "true") {
+        return sql`EXISTS (SELECT 1 FROM variants v JOIN inventory_levels il ON il.tenant_id = v.tenant_id AND il.variant_id = v.id WHERE v.tenant_id = ${productsTable.tenantId} AND v.product_id = ${productsTable.id} AND (il.on_hand - il.reserved) > 0)`;
+      }
+      return undefined;
+    }
+    default:
+      return undefined;
+  }
+}
 
 export interface StorefrontBrand {
   id: string;
@@ -111,6 +195,7 @@ export interface StorefrontCollectionDetail {
     imageMediaId: string | null;
     seo: unknown;
     published: boolean;
+    indexable: boolean;
     createdAt: string;
     updatedAt: string;
   };
@@ -130,6 +215,8 @@ export interface StorefrontCategoryDetail {
     slug: string;
     description: string | null;
     position: number;
+    imageMediaId: string | null;
+    seo: unknown;
     createdAt: string;
     updatedAt: string;
   };
@@ -180,7 +267,7 @@ export async function getStorefrontProduct(
       .where(
         and(
           eq(schema.products.slug, slug),
-          inArray(schema.products.status, [...STOREFRONT_PRODUCT_STATUSES]),
+          inArray(schema.products.status, [...DIRECT_PRODUCT_STATUSES]),
           isNull(schema.products.deletedAt),
         ),
       )
@@ -364,57 +451,97 @@ export async function getStorefrontCollection(
       ? sql`exists (select 1 from variants v join inventory_levels il on il.tenant_id = v.tenant_id and il.variant_id = v.id where v.tenant_id = ${schema.products.tenantId} and v.product_id = ${schema.products.id} and (il.on_hand - il.reserved) > 0)`
       : undefined;
 
-    const baseWhere = and(
-      eq(schema.collectionProducts.collectionId, col.id),
-      inArray(schema.products.status, [...STOREFRONT_PRODUCT_STATUSES]),
-      isNull(schema.products.deletedAt),
-      inStockCondition,
-    );
-
-    // Order clause mapping
     const minPriceSql = sql`(select min(v.price) from variants v where v.tenant_id = ${schema.products.tenantId} and v.product_id = ${schema.products.id})`;
-    let orderClause = asc(schema.collectionProducts.position);
-    if (opts?.sort === "price_asc") {
+
+    const effectiveSort = opts?.sort ?? col.sortOrder;
+    let orderClause = asc(schema.products.createdAt);
+    if (effectiveSort === "price_asc") {
       orderClause = asc(minPriceSql);
-    } else if (opts?.sort === "price_desc") {
+    } else if (effectiveSort === "price_desc") {
       orderClause = desc(minPriceSql);
-    } else if (opts?.sort === "newest") {
+    } else if (effectiveSort === "newest" || effectiveSort === "created_desc") {
       orderClause = desc(schema.products.createdAt);
-    } else if (opts?.sort === "title") {
+    } else if (effectiveSort === "oldest" || effectiveSort === "created_asc") {
+      orderClause = asc(schema.products.createdAt);
+    } else if (effectiveSort === "title" || effectiveSort === "title_asc") {
       orderClause = asc(schema.products.title);
+    } else if (effectiveSort === "title_desc") {
+      orderClause = desc(schema.products.title);
     }
 
-    const prodRows = await tx
-      .select({
-        product: schema.products,
-      })
-      .from(schema.collectionProducts)
-      .innerJoin(
-        schema.products,
-        and(
-          eq(schema.products.tenantId, schema.collectionProducts.tenantId),
-          eq(schema.products.id, schema.collectionProducts.productId),
-        ),
-      )
-      .where(baseWhere)
-      .orderBy(orderClause)
-      .limit(limit)
-      .offset(offset);
+    let prodRows: Array<{ product: typeof schema.products.$inferSelect }> = [];
+    let total = 0;
 
-    // Count total products in collection
-    const countRows = await tx
-      .select({ count: sql<number>`count(*)::int` })
-      .from(schema.collectionProducts)
-      .innerJoin(
-        schema.products,
-        and(
-          eq(schema.products.tenantId, schema.collectionProducts.tenantId),
-          eq(schema.products.id, schema.collectionProducts.productId),
-        ),
-      )
-      .where(baseWhere);
+    if (col.type === "automated" && col.rules) {
+      const parsedRules = parseCollectionRules(col.rules);
+      const ruleConditions = parsedRules.map((rule) => buildSingleRuleCondition(rule, schema.products));
+      const combinedRules = col.match === "any" ? (ruleConditions.length > 0 ? or(...ruleConditions) : undefined) : (ruleConditions.length > 0 ? and(...ruleConditions) : undefined);
 
-    const total = Number(countRows[0]?.count ?? prodRows.length);
+      const autoWhere = and(
+        eq(schema.products.tenantId, ctx.tenantId),
+        inArray(schema.products.status, [...LISTED_PRODUCT_STATUSES]),
+        isNull(schema.products.deletedAt),
+        inStockCondition,
+        combinedRules,
+      );
+
+      prodRows = await tx
+        .select({ product: schema.products })
+        .from(schema.products)
+        .where(autoWhere)
+        .orderBy(orderClause)
+        .limit(limit)
+        .offset(offset);
+
+      const countRows = await tx
+        .select({ count: sql<number>`count(*)::int` })
+        .from(schema.products)
+        .where(autoWhere);
+
+      total = Number(countRows[0]?.count ?? prodRows.length);
+    } else {
+      const baseWhere = and(
+        eq(schema.collectionProducts.collectionId, col.id),
+        inArray(schema.products.status, [...LISTED_PRODUCT_STATUSES]),
+        isNull(schema.products.deletedAt),
+        inStockCondition,
+      );
+
+      const manualOrderClause = (effectiveSort === "manual")
+        ? asc(schema.collectionProducts.position)
+        : orderClause;
+
+      prodRows = await tx
+        .select({
+          product: schema.products,
+        })
+        .from(schema.collectionProducts)
+        .innerJoin(
+          schema.products,
+          and(
+            eq(schema.products.tenantId, schema.collectionProducts.tenantId),
+            eq(schema.products.id, schema.collectionProducts.productId),
+          ),
+        )
+        .where(baseWhere)
+        .orderBy(manualOrderClause)
+        .limit(limit)
+        .offset(offset);
+
+      const countRows = await tx
+        .select({ count: sql<number>`count(*)::int` })
+        .from(schema.collectionProducts)
+        .innerJoin(
+          schema.products,
+          and(
+            eq(schema.products.tenantId, schema.collectionProducts.tenantId),
+            eq(schema.products.id, schema.collectionProducts.productId),
+          ),
+        )
+        .where(baseWhere);
+
+      total = Number(countRows[0]?.count ?? prodRows.length);
+    }
 
     const productList = prodRows.map((r) => r.product);
     const productIds = productList.map((p) => p.id);
@@ -431,6 +558,7 @@ export async function getStorefrontCollection(
         imageMediaId: col.imageMediaId,
         seo: col.seo,
         published: col.published,
+        indexable: col.indexable,
         createdAt: col.createdAt.toISOString(),
         updatedAt: col.updatedAt.toISOString(),
       },
@@ -481,7 +609,7 @@ export async function getStorefrontCategory(
 
     const baseWhere = and(
       eq(schema.productCategories.categoryId, cat.id),
-      inArray(schema.products.status, [...STOREFRONT_PRODUCT_STATUSES]),
+      inArray(schema.products.status, [...LISTED_PRODUCT_STATUSES]),
       isNull(schema.products.deletedAt),
       inStockCondition,
     );
@@ -541,6 +669,8 @@ export async function getStorefrontCategory(
         slug: cat.slug,
         description: cat.description,
         position: cat.position,
+        imageMediaId: cat.imageMediaId,
+        seo: cat.seo,
         createdAt: cat.createdAt.toISOString(),
         updatedAt: cat.updatedAt.toISOString(),
       },
@@ -590,7 +720,7 @@ export async function getStorefrontFeaturedProducts(
     const rows = await tx
       .select()
       .from(schema.products)
-      .where(and(inArray(schema.products.status, [...STOREFRONT_PRODUCT_STATUSES]), isNull(schema.products.deletedAt)))
+      .where(and(inArray(schema.products.status, [...LISTED_PRODUCT_STATUSES]), isNull(schema.products.deletedAt)))
       .orderBy(desc(schema.products.isFeatured), desc(schema.products.createdAt))
       .limit(limit);
     return buildProductSummaries(tx, rows.map((r) => r.id), rows);

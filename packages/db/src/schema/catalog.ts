@@ -345,6 +345,7 @@ export const collections = tenantTable(
     imageMediaId: uuid("image_media_id"),
     seo: jsonb("seo"),
     published: boolean("published").notNull().default(true),
+    indexable: boolean("indexable").notNull().default(false),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().default(sql`now()`),
     updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().default(sql`now()`),
   },

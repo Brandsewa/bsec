@@ -162,7 +162,7 @@ export const Product = z.object({
   id: z.string().uuid(),
   title: z.string(),
   slug: z.string(),
-  status: z.enum(["draft", "active", "archived"]),
+  status: z.enum(["draft", "active", "unlisted", "archived"]),
   descriptionJson: z.unknown().nullable().optional(),
   shortDescription: z.string().nullable().optional(),
   brandId: z.string().uuid().nullable().optional(),
@@ -825,7 +825,7 @@ export const adminContract = {
         z
           .object({
             search: z.string().optional(),
-            status: z.enum(["draft", "active", "archived"]).optional(),
+            status: z.enum(["draft", "active", "unlisted", "archived"]).optional(),
             categoryId: z.string().uuid().optional(),
             /** Sellable stock: in_stock (>5), low (1-5) or out (0 or less). */
             stock: z.enum(["in_stock", "low", "out"]).optional(),
@@ -848,7 +848,7 @@ export const adminContract = {
         z.object({
           title: z.string().min(1),
           slug: z.string().optional(),
-          status: z.enum(["draft", "active", "archived"]).default("draft"),
+          status: z.enum(["draft", "active", "unlisted", "archived"]).default("draft"),
           descriptionJson: z.unknown().optional(),
           shortDescription: z.string().optional(),
           brandId: z.string().uuid().optional(),
@@ -893,7 +893,7 @@ export const adminContract = {
           id: z.string().uuid(),
           title: z.string().min(1).optional(),
           slug: z.string().optional(),
-          status: z.enum(["draft", "active", "archived"]).optional(),
+          status: z.enum(["draft", "active", "unlisted", "archived"]).optional(),
           descriptionJson: z.unknown().optional(),
           shortDescription: z.string().optional(),
           brandId: z.string().uuid().nullable().optional(),

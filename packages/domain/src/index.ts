@@ -22,6 +22,7 @@ export * from "./themes/system-pages.ts";
 export * from "./themes/templates.ts";
 export * from "./themes/launch-template.ts";
 export * from "./storefront/lifecycle.ts";
+export * from "./storefront/product-status.ts";
 export * from "./storefront/catalog.ts";
 export * from "./storefront/search.ts";
 export * from "./storefront/cart.ts";

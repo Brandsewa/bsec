@@ -8,7 +8,7 @@ import { assertProductQuota } from "./system/quotas.ts";
 
 export interface ListProductsQuery {
   search?: string | undefined;
-  status?: "draft" | "active" | "archived" | undefined;
+  status?: "draft" | "active" | "unlisted" | "archived" | undefined;
   categoryId?: string | undefined;
   stock?: "in_stock" | "low" | "out" | undefined;
   createdFrom?: string | undefined;
@@ -21,7 +21,7 @@ export interface ListProductsQuery {
 export interface CreateProductInput {
   title: string;
   slug?: string | undefined;
-  status?: "draft" | "active" | "archived" | undefined;
+  status?: "draft" | "active" | "unlisted" | "archived" | undefined;
   descriptionJson?: unknown;
   shortDescription?: string | undefined;
   brandId?: string | undefined;
@@ -52,7 +52,7 @@ export interface UpdateProductInput {
   id: string;
   title?: string | undefined;
   slug?: string | undefined;
-  status?: "draft" | "active" | "archived" | undefined;
+  status?: "draft" | "active" | "unlisted" | "archived" | undefined;
   descriptionJson?: unknown;
   shortDescription?: string | undefined;
   brandId?: string | null | undefined;
@@ -186,7 +186,7 @@ export async function listProducts(
           id: r.id,
           title: r.title,
           slug: r.slug,
-          status: r.status as "draft" | "active" | "archived",
+          status: r.status as "draft" | "active" | "unlisted" | "archived",
           descriptionJson: r.descriptionJson,
           shortDescription: r.shortDescription,
           brandId: r.brandId,

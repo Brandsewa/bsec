@@ -1,5 +1,5 @@
 import { and, eq, sql, inArray } from "drizzle-orm";
-import { STOREFRONT_PRODUCT_STATUSES } from "./product-status.ts";
+import { DIRECT_PRODUCT_STATUSES } from "./product-status.ts";
 import { schema, withTenant, type Db } from "@bs/db";
 import type { Runtime } from "../runtime.ts";
 import type { TenantContext } from "../context.ts";
@@ -346,7 +346,7 @@ export async function addToCart(
       .where(
         and(
           eq(schema.variants.id, input.variantId),
-          inArray(schema.products.status, [...STOREFRONT_PRODUCT_STATUSES]),
+          inArray(schema.products.status, [...DIRECT_PRODUCT_STATUSES]),
           sql`${schema.products.deletedAt} IS NULL`,
         ),
       )

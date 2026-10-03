@@ -169,6 +169,13 @@
       "when": 1790940000000,
       "tag": "0023_returns",
       "breakpoints": true
+    },
+    {
+      "idx": 24,
+      "version": "7",
+      "when": 1790950000000,
+      "tag": "0024_catalog_indexing",
+      "breakpoints": true
     }
   ]
 }
