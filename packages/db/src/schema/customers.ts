@@ -27,8 +27,12 @@ export const customers = tenantTable(
     emailVerified: boolean("email_verified").notNull().default(false),
     phoneVerified: boolean("phone_verified").notNull().default(false),
     passwordHash: text("password_hash"),
+    isGuest: boolean("is_guest").notNull().default(false),
     acceptsMarketing: boolean("accepts_marketing").notNull().default(false),
     marketingConsentAt: timestamp("marketing_consent_at", { withTimezone: true }),
+    marketingState: text("marketing_state").notNull().default("not_subscribed"), // subscribed, unsubscribed, not_subscribed, invalid
+    marketingSource: text("marketing_source"),
+    marketingUpdatedAt: timestamp("marketing_updated_at", { withTimezone: true }),
     tags: text("tags").array().notNull().default(sql`ARRAY[]::text[]`),
     note: text("note"),
     totalSpent: bigint("total_spent", { mode: "number" }).notNull().default(0),
@@ -44,6 +48,38 @@ export const customers = tenantTable(
     unique("customers_tenant_phone_uniq").on(t.tenantId, t.phone),
     unique("customers_tenant_id_uniq").on(t.tenantId, t.id),
     index("customers_tenant_status_idx").on(t.tenantId, t.status),
+    index("customers_tenant_guest_idx").on(t.tenantId, t.isGuest),
+    index("customers_tenant_marketing_state_idx").on(t.tenantId, t.marketingState),
+  ],
+);
+
+/**
+ * Customer Consent Events (PLAN §0c / DPDP Compliance).
+ * Immutable append-only audit trail of customer marketing consent transitions.
+ */
+export const customerConsentEvents = tenantTable(
+  "customer_consent_events",
+  {
+    id: uuid("id").default(sql`uuidv7()`).primaryKey(),
+    customerId: uuid("customer_id").notNull(),
+    channel: text("channel").notNull().default("email"), // email, sms
+    state: text("state").notNull(), // subscribed, unsubscribed, not_subscribed, invalid
+    source: text("source").notNull(), // checkout, storefront_form, account_page, admin, import, unsubscribe_link, legacy
+    actorType: text("actor_type").notNull().default("customer"), // customer, staff, system
+    actorId: text("actor_id"),
+    ip: text("ip"),
+    at: timestamp("at", { withTimezone: true }).notNull().default(sql`now()`),
+  },
+  (t) => [
+    unique("customer_consent_events_tenant_id_uniq").on(t.tenantId, t.id),
+    index("customer_consent_events_tenant_cust_at_idx").on(t.tenantId, t.customerId, t.at),
+    tenantForeignKey({
+      tableTenantId: t.tenantId,
+      column: t.customerId,
+      target: customers,
+      name: "customer_consent_events_customer_fk",
+      onDelete: "cascade",
+    }),
   ],
 );
 

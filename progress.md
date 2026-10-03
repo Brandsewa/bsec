@@ -91,10 +91,26 @@ Spec: `docs/PRODUCTS-CATALOG-PLAN.md` & `docs/PRODUCTS-SECTION-FINDINGS.md`. Bui
   - Inventory (`/inventory`): Multi-location selector filter.
 - [x] **Verification**: `pnpm typecheck` (15/15 passed), `pnpm lint` (15/15 passed), `pnpm --filter @bs/domain test:fast` (238/238 passed), `pnpm docs:check` (ok), `pnpm build` (6/6 passed).
 
+## Customers Phase 0 · Foundations (2026-10-03)
+
+Spec: `docs/CUSTOMERS-IMPLEMENTATION-PLAN.md` & `docs/CUSTOMERS-SECTION-FINDINGS.md`. Built on `feat/customers-phase-0`.
+- [x] **Phase 0a (Truthful Metrics & Sorting Cache)**:
+  - Computed real-time metrics (`orders_count`, `total_spend`, `last_order_at`) via lateral SQL fragment `customerMetricsSql(tenantId)`.
+  - Asynchronous sorting copy on `customers` table kept up-to-date with `customers.refresh_metrics` pg-boss queue and `runCustomerMetricsSweep` drift repairs.
+- [x] **Phase 0b (Guest Customers & Account Claim)**:
+  - Added `is_guest` column to `customers` table with partial index.
+  - Guest checkout creates/updates guest customer record without overwriting name or phone of existing registered accounts.
+  - Customer email verification (`verifyCustomerEmail`) securely claims guest record and attaches past orders without account takeover.
+- [x] **Phase 0c (Single Marketing Consent Record with History)**:
+  - Tenant table `customer_consent_events` recording state transitions, sources, timestamps, and staff actor IDs.
+  - Single writer `setMarketingConsent` keeps `marketing_state` and `accepts_marketing` synchronized across all consent touchpoints.
+- [x] **Verification**: `pnpm typecheck` (15/15 passed), `pnpm lint` (15/15 passed), `pnpm build` (6/6 passed), `pnpm docs:check` (ok), `@bs/domain` test:fast (28/28 files, 238 passed), `@bs/admin` test:fast (3/3 files, 25 passed), `@bs/web` test:fast (17/17 files, 163 passed), `@bs/domain` test:heavy (63/63 files, 1190 passed), `@bs/domain` isolation suite (755/755 passed).
+
 ## In flight
 
 One line per piece of work that is started and not merged. Add yours before you start, remove it when merged or abandoned (`AGENTS.md` section 6). Format: `agent · branch · area · since · one-line goal`.
 
+- antigravity · `feat/customers-phase-0` · customers, db, domain, checkout · 2026-10-03 · Customers Phase 0: truthful metrics, guests, consent record & history
 - claude · `feat/themes-puck` · themes, docs · 2026-10-01 · theme builder follow-ups; agent docs and change log (`docs/changes/`)
 
 ## Returns & Exchanges (Manual Review & Portal) — Complete (2026-10-02)
