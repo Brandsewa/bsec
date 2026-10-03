@@ -111,7 +111,7 @@ describe("unsubscribe link", () => {
   it("unsubscribes the customer from marketing, idempotently, and drops them from the newsletter", async () => {
     const { customer } = await login(ctxA.tenantId, "9000000001");
     await updateCustomerProfile(rtWeb._db.db, ctxA.tenantId, customer.id, { name: "Uma", email: "uma@scp.example", acceptsMarketing: true });
-    await rt._db.db.insert(schema.newsletterSubscribers).values({ tenantId: ctxA.tenantId, email: "uma@scp.example" });
+    await rt._db.db.insert(schema.newsletterSubscribers).values({ tenantId: ctxA.tenantId, email: "uma@scp.example" }).onConflictDoNothing();
 
     const token = await mintUnsubscribeToken(rtWeb._db.db, ctxA.tenantId, customer.id);
     expect(token.startsWith("unsub_")).toBe(true);
@@ -345,7 +345,7 @@ describe("account: profile, addresses, orders", () => {
     // A customer row that never proved the phone (e.g. created by an admin) only sees orders linked to it.
     const [c] = await rt._db.db
       .insert(schema.customers)
-      .values({ tenantId: ctxA.tenantId, phone, email: "unverified@scp.example", name: "U", phoneVerified: false })
+      .values({ tenantId: ctxA.tenantId, phone: "9222222207", email: "unverified@scp.example", name: "U", phoneVerified: false })
       .returning();
     expect(await getCustomerOrders(rtWeb._db.db, ctxA.tenantId, c!.id)).toEqual([]);
     expect(placed.orderId).toBeDefined();

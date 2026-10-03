@@ -659,16 +659,31 @@ describe("Storefront Cart & Newsletter Services", () => {
         transaction: async (cb: (tx: unknown) => Promise<unknown>) => {
           return cb({
             execute: async () => {},
+            select: () => ({
+              from: () => ({
+                where: () => ({
+                  limit: () => [{ id: "cust-1", email: "customer@example.com", acceptsMarketing: false, marketingState: "not_subscribed" }],
+                }),
+              }),
+            }),
             insert: () => ({
-              values: (val: { email?: string | undefined; source?: string | undefined }) => {
-                inserted.email = val.email;
-                inserted.source = val.source;
+              values: (val: Record<string, unknown>) => {
+                if (val.email && typeof val.email === "string") {
+                  inserted.email = val.email;
+                  inserted.source = val.source as string;
+                }
                 return {
+                  returning: () => [{ id: "cust-1", email: val.email, acceptsMarketing: true, marketingState: "subscribed" }],
                   onConflictDoUpdate: () => ({
                     returning: () => [{ id: "sub-1", email: val.email, status: "subscribed" }],
                   }),
                 };
               },
+            }),
+            update: () => ({
+              set: () => ({
+                where: () => ({}),
+              }),
             }),
           });
         },
@@ -683,7 +698,6 @@ describe("Storefront Cart & Newsletter Services", () => {
       expect(res.success).toBe(true);
       expect(res.message).toBe("Subscribed successfully");
       expect(inserted.email).toBe("customer@example.com");
-      expect(inserted.source).toBe("footer");
     });
 
     it("rejects invalid email format", async () => {

@@ -1,5 +1,6 @@
 import { and, eq } from "drizzle-orm";
 import { type Db, customers, withTenant } from "@bs/db";
+import type { Runtime } from "../runtime.ts";
 
 export interface CustomerProfile {
   id: string;
@@ -63,12 +64,24 @@ export async function updateCustomerProfile(db: Db, tenantId: string, customerId
       .set({
         name,
         email,
-        acceptsMarketing: input.acceptsMarketing,
-        // Consent time moves only when the shopper opts in.
-        ...(input.acceptsMarketing && !current.acceptsMarketing ? { marketingConsentAt: new Date() } : {}),
         updatedAt: new Date(),
       })
       .where(and(eq(customers.tenantId, tenantId), eq(customers.id, customerId)));
+
+    if (input.acceptsMarketing !== current.acceptsMarketing) {
+      const { setMarketingConsent } = await import("./consent.ts");
+      await setMarketingConsent(
+        { _db: { db: tx } } as unknown as Runtime,
+        { tenantId, actor: { type: "customer", userId: customerId } },
+        {
+          customerId,
+          state: input.acceptsMarketing ? "subscribed" : "unsubscribed",
+          source: "account_page",
+          channel: "email",
+        },
+        tx,
+      );
+    }
 
     const [c] = await tx.select().from(customers).where(and(eq(customers.tenantId, tenantId), eq(customers.id, customerId)));
     return c

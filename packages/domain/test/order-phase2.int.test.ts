@@ -9,6 +9,7 @@ import {
   createProduct,
   createRuntime,
   estimateAdminDraftOrder,
+  getAdminCustomerDetail,
   getAdminOrderDetail,
   listAdminOrders,
   provisionTenant,
@@ -290,12 +291,10 @@ describe("Orders Phase 2 (Create Order Parity: D1 to D7)", () => {
     expect(paidOrder.status).toBe("confirmed");
     expect(paidOrder.paymentStatus).toBe("paid");
 
-    // Verify customer spend updated
-    const [custAfter] = await withTenant(rtWeb._db.db, ctxA.tenantId, async (tx) => {
-      return await tx.select().from(schema.customers).where(eq(schema.customers.id, customerAId));
-    });
-    expect(Number(custAfter?.ordersCount)).toBe(initialOrders + 1);
-    expect(Number(custAfter?.totalSpent)).toBe(initialSpent + paidOrder.grandTotal);
+    // Verify customer spend updated (via truthful metrics query)
+    const custDetail = await getAdminCustomerDetail(rtWeb, ctxA, { id: customerAId });
+    expect(Number(custDetail.customer.ordersCount)).toBe(initialOrders + 1);
+    expect(Number(custDetail.customer.totalSpent)).toBe(initialSpent + paidOrder.grandTotal);
 
     // Verify payment intent is captured
     const [paymentIntent] = await withTenant(rtWeb._db.db, ctxA.tenantId, async (tx) => {
