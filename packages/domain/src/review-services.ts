@@ -1,4 +1,4 @@
-import { and, asc, desc, eq, gte, ilike, inArray, isNull, lte, or, sql, type SQL } from "drizzle-orm";
+import { and, desc, eq, ilike, inArray, or, sql, type SQL } from "drizzle-orm";
 import { schema, withTenant, type Db } from "@bs/db";
 import type { Runtime } from "./runtime.ts";
 import { assertPermission, type TenantContext } from "./context.ts";
@@ -371,14 +371,13 @@ export async function listAdminReviews(
 
     if (query.search?.trim()) {
       const q = `%${query.search.trim().replace(/[%_\\]/g, "\\$&")}%`;
-      conditions.push(
-        or(
-          ilike(schema.reviews.reviewerName, q),
-          ilike(schema.reviews.title, q),
-          ilike(schema.reviews.body, q),
-          ilike(schema.products.title, q),
-        )!,
+      const searchMatch = or(
+        ilike(schema.reviews.reviewerName, q),
+        ilike(schema.reviews.title, q),
+        ilike(schema.reviews.body, q),
+        ilike(schema.products.title, q),
       );
+      if (searchMatch) conditions.push(searchMatch);
     }
 
     const whereClause = and(...conditions);

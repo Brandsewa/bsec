@@ -15,13 +15,10 @@ import {
   deleteCategory,
   listCollections,
   createCollection,
-  updateCollection,
   listBrands,
   createBrand,
-  deleteBrand,
   listLocations,
   createLocation,
-  updateLocation,
   deleteLocation,
 } from "../src/index.ts";
 
@@ -67,6 +64,108 @@ describe("M2 Domain Services", () => {
     it("throws Forbidden if products.write is missing", async () => {
       const rt = createMockRuntime({} as Db);
       await expect(createProduct(rt, restrictedCtx, { title: "Test" })).rejects.toThrow(/Forbidden/);
+    });
+
+    it("rejects creating active product without primary category", async () => {
+      const mockDb = {
+        execute: async () => ({ rows: [] }),
+        transaction: async (cb: (tx: unknown) => Promise<unknown>) => {
+          return cb({
+            execute: async () => ({ rows: [] }),
+          });
+        },
+      } as unknown as Db;
+
+      const rt = createMockRuntime(mockDb);
+      await expect(
+        createProduct(rt, adminCtx, {
+          title: "Sneakers",
+          status: "active",
+        }),
+      ).rejects.toThrow(/A primary category is required to publish or list a product/);
+    });
+
+    it("rejects creating unlisted product without primary category", async () => {
+      const mockDb = {
+        execute: async () => ({ rows: [] }),
+        transaction: async (cb: (tx: unknown) => Promise<unknown>) => {
+          return cb({
+            execute: async () => ({ rows: [] }),
+          });
+        },
+      } as unknown as Db;
+
+      const rt = createMockRuntime(mockDb);
+      await expect(
+        createProduct(rt, adminCtx, {
+          title: "Private Item",
+          status: "unlisted",
+        }),
+      ).rejects.toThrow(/A primary category is required to publish or list a product/);
+    });
+
+    it("allows creating draft product without primary category", async () => {
+      let insertedProduct: Record<string, unknown> | null = null;
+      const productRow = {
+        id: "prod-1",
+        title: "Draft Item",
+        slug: "draft-item",
+        status: "draft",
+        tags: [],
+        requiresShipping: true,
+        isFeatured: false,
+        priceOnRequest: false,
+        returnable: true,
+        ratingAvg: "0",
+        ratingCount: 0,
+        createdAt: new Date(),
+        updatedAt: new Date(),
+      };
+
+      const makeQuery = (data: unknown[]) => {
+        const p = Promise.resolve(data);
+        const obj = Object.assign(p, {
+          where: () => makeQuery(data),
+          leftJoin: () => makeQuery(data),
+          innerJoin: () => makeQuery(data),
+          orderBy: () => makeQuery(data),
+          limit: () => makeQuery(data),
+          from: () => makeQuery(data),
+          [Symbol.iterator]: () => data[Symbol.iterator](),
+        });
+        return obj;
+      };
+
+      const mockDb = {
+        execute: async () => ({ rows: [] }),
+        transaction: async (cb: (tx: unknown) => Promise<unknown>) => {
+          return cb({
+            execute: async () => ({ rows: [] }),
+            select: () => makeQuery([productRow]),
+            insert: () => ({
+              values: (vals: Record<string, unknown>) => {
+                if ("slug" in vals && "returnable" in vals) {
+                  insertedProduct = vals;
+                }
+                return {
+                  returning: () => [productRow],
+                };
+              },
+            }),
+          });
+        },
+      } as unknown as Db;
+
+      const rt = createMockRuntime(mockDb);
+      const res = await createProduct(rt, adminCtx, {
+        title: "Draft Item",
+        status: "draft",
+      });
+
+      expect(insertedProduct).toBeDefined();
+      expect(insertedProduct!["status"]).toBe("draft");
+      expect(insertedProduct!["returnable"]).toBe(true);
+      expect(res.id).toBe("prod-1");
     });
   });
 

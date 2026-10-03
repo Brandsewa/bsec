@@ -1,8 +1,9 @@
-import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
+import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { ArrowLeft, CheckCircle2, Save, Trash2 } from "lucide-react";
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { PageBreadcrumbs, PageContainer, PageHeader, PageSkeleton, toast } from "@bs/ui";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import type { Location } from "@bs/contracts";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -15,46 +16,61 @@ import { orpc } from "../../lib/orpc.ts";
 
 export const Route = createFileRoute("/_store/locations_/$id")({
   pendingComponent: () => <PageSkeleton />,
-  component: EditLocationPage,
+  component: EditLocationRoute,
 });
 
-export function EditLocationPage() {
+function EditLocationRoute() {
   const { id } = Route.useParams();
   const navigate = useNavigate();
+  return <EditLocationPage id={id} navigate={(to) => void navigate({ to })} />;
+}
+
+export function EditLocationPage({ id, navigate }: { id: string; navigate?: (to: string) => void }) {
+  const go = navigate ?? (() => undefined);
+  const locationQuery = useQuery(orpc.admin.locations.get.queryOptions({ input: { id } }));
+
+  if (locationQuery.isLoading) {
+    return <PageSkeleton />;
+  }
+
+  if (locationQuery.isError || !locationQuery.data) {
+    return (
+      <PageContainer size="default" className="space-y-6">
+        <PageBreadcrumbs items={[{ label: "Locations", href: "/locations" }, { label: "Not found" }]} />
+        <Card>
+          <CardContent className="py-12 text-center">
+            <p className="text-muted-foreground">Location not found or deleted.</p>
+            <Button className="mt-4" onClick={() => go("/locations")}>
+              Back to locations
+            </Button>
+          </CardContent>
+        </Card>
+      </PageContainer>
+    );
+  }
+
+  return <LocationEditor key={locationQuery.data.id} location={locationQuery.data} go={go} />;
+}
+
+function LocationEditor({ location, go }: { location: Location; go: (to: string) => void }) {
   const queryClient = useQueryClient();
 
-  const [name, setName] = useState("");
-  const [line1, setLine1] = useState("");
-  const [line2, setLine2] = useState("");
-  const [city, setCity] = useState("");
-  const [state, setState] = useState("");
-  const [pincode, setPincode] = useState("");
-  const [isActive, setIsActive] = useState(true);
-  const [isDefault, setIsDefault] = useState(false);
+  const [name, setName] = useState(location.name);
+  const [line1, setLine1] = useState(location.address?.line1 ?? "");
+  const [line2, setLine2] = useState(location.address?.line2 ?? "");
+  const [city, setCity] = useState(location.address?.city ?? "");
+  const [state, setState] = useState(location.address?.stateCode ?? "");
+  const [pincode, setPincode] = useState(location.pincode ?? "");
+  const [isActive, setIsActive] = useState(location.isActive);
+  const [isDefault, setIsDefault] = useState(location.isDefault);
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [deleteOpen, setDeleteOpen] = useState(false);
-
-  const locationQuery = useQuery(orpc.admin.locations.get.queryOptions({ input: { id } }));
-  const location = locationQuery.data;
-
-  useEffect(() => {
-    if (location) {
-      setName(location.name);
-      setLine1(location.address?.line1 ?? "");
-      setLine2(location.address?.line2 ?? "");
-      setCity(location.address?.city ?? "");
-      setState(location.address?.stateCode ?? "");
-      setPincode(location.pincode ?? "");
-      setIsActive(location.isActive);
-      setIsDefault(location.isDefault);
-    }
-  }, [location]);
 
   const updateMutation = useMutation(
     orpc.admin.locations.update.mutationOptions({
       onSuccess: (loc) => {
         toast.success(`Location updated: ${loc.name}`);
-        void queryClient.invalidateQueries({ queryKey: orpc.admin.locations.get.key({ input: { id } }) });
+        void queryClient.invalidateQueries({ queryKey: orpc.admin.locations.get.key({ input: { id: location.id } }) });
         void queryClient.invalidateQueries({ queryKey: orpc.admin.locations.list.key() });
         void queryClient.invalidateQueries({ queryKey: orpc.admin.locations.stats.key() });
       },
@@ -70,7 +86,7 @@ export function EditLocationPage() {
         toast.success("Location deleted");
         void queryClient.invalidateQueries({ queryKey: orpc.admin.locations.list.key() });
         void queryClient.invalidateQueries({ queryKey: orpc.admin.locations.stats.key() });
-        void navigate({ to: "/locations" });
+        go("/locations");
       },
       onError: (err) => {
         toast.error(errorMessage(err, "Failed to delete location"));
@@ -93,7 +109,7 @@ export function EditLocationPage() {
     }
 
     updateMutation.mutate({
-      id,
+      id: location.id,
       name: name.trim(),
       address: {
         line1: line1.trim(),
@@ -107,26 +123,6 @@ export function EditLocationPage() {
       isDefault,
     });
   };
-
-  if (locationQuery.isLoading) {
-    return <PageSkeleton />;
-  }
-
-  if (locationQuery.isError || !location) {
-    return (
-      <PageContainer size="default" className="space-y-6">
-        <PageBreadcrumbs items={[{ label: "Locations", href: "/locations" }, { label: "Not found" }]} />
-        <Card>
-          <CardContent className="py-12 text-center">
-            <p className="text-muted-foreground">Location not found or deleted.</p>
-            <Button className="mt-4" onClick={() => void navigate({ to: "/locations" })}>
-              Back to locations
-            </Button>
-          </CardContent>
-        </Card>
-      </PageContainer>
-    );
-  }
 
   return (
     <PageContainer size="default" className="space-y-6 pb-16">
@@ -152,7 +148,7 @@ export function EditLocationPage() {
         description={`Location ID: ${location.id}`}
         aside={
           <div className="flex items-center gap-2">
-            <Button variant="outline" onClick={() => void navigate({ to: "/locations" })}>
+            <Button variant="outline" onClick={() => go("/locations")}>
               <ArrowLeft className="mr-1.5 h-4 w-4" />
               Back
             </Button>
@@ -288,7 +284,6 @@ export function EditLocationPage() {
                 <Switch
                   checked={isDefault}
                   onCheckedChange={(val) => {
-                    // Cannot unset default directly, must set another location as default
                     if (!val && location.isDefault) {
                       toast.error("Set another location as default instead.");
                       return;
@@ -318,7 +313,7 @@ export function EditLocationPage() {
         confirmLabel="Delete location"
         destructive
         pending={deleteMutation.isPending}
-        onConfirm={() => deleteMutation.mutate({ id })}
+        onConfirm={() => deleteMutation.mutate({ id: location.id })}
       />
     </PageContainer>
   );

@@ -11,7 +11,6 @@ import {
   generateProductJsonLd,
   generateBreadcrumbJsonLd,
   buildProductSeoMetadata,
-  formatTitle,
   tenantTag,
 } from "@bs/domain";
 import { server } from "@/server/runtime.ts";

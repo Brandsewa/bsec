@@ -1,5 +1,6 @@
 import { and, asc, desc, eq, gte, ilike, inArray, isNull, lt, or, sql } from "drizzle-orm";
-import { schema, withTenant } from "@bs/db";
+import { schema, withTenant, type Db } from "@bs/db";
+import type { CollectionRule } from "@bs/contracts";
 import type { Runtime } from "./runtime.ts";
 import { assertPermission, type TenantContext } from "./context.ts";
 import { invalidateCache } from "./cache-invalidation.ts";
@@ -31,6 +32,10 @@ export interface CreateProductInput {
   isFeatured?: boolean | undefined;
   priceOnRequest?: boolean | undefined;
   returnable?: boolean | undefined;
+  seo?: unknown | undefined;
+  primaryCategoryId?: string | undefined;
+  extraCategoryIds?: string[] | undefined;
+  collectionIds?: string[] | undefined;
   options?: Array<{ name: string; values: string[] }> | undefined;
   variants?: Array<{
     sku: string;
@@ -62,6 +67,10 @@ export interface UpdateProductInput {
   isFeatured?: boolean | undefined;
   priceOnRequest?: boolean | undefined;
   returnable?: boolean | undefined;
+  seo?: unknown | undefined;
+  primaryCategoryId?: string | null | undefined;
+  extraCategoryIds?: string[] | undefined;
+  collectionIds?: string[] | undefined;
 }
 
 export interface UpdateVariantInput {
@@ -145,9 +154,11 @@ export async function listProducts(
       .from(schema.products)
       .where(whereClause);
 
-    // One aggregate per page for price range, variant count, sellable stock, and preorder status.
+    // Fetch primary category and aggregates for listed products
     const ids = rows.map((r) => r.id);
     const summary = new Map<string, { variantCount: number; priceMin: number | null; priceMax: number | null; stock: number; preorderStatus: "active" | "passed" | null }>();
+    const primaryCatMap = new Map<string, { id: string; name: string }>();
+
     if (ids.length > 0) {
       const agg = await tx
         .select({
@@ -177,11 +188,31 @@ export async function listProducts(
           preorderStatus: (a.preorderStatus as "active" | "passed" | null) ?? null,
         });
       }
+
+      const primaryCategories = await tx
+        .select({
+          productId: schema.productCategories.productId,
+          categoryId: schema.categories.id,
+          categoryName: schema.categories.name,
+        })
+        .from(schema.productCategories)
+        .innerJoin(schema.categories, eq(schema.categories.id, schema.productCategories.categoryId))
+        .where(
+          and(
+            eq(schema.productCategories.tenantId, ctx.tenantId),
+            inArray(schema.productCategories.productId, ids),
+            eq(schema.productCategories.isPrimary, true),
+          ),
+        );
+      for (const pc of primaryCategories) {
+        primaryCatMap.set(pc.productId, { id: pc.categoryId, name: pc.categoryName });
+      }
     }
 
     return {
       items: rows.map((r) => {
         const sm = summary.get(r.id);
+        const pCat = primaryCatMap.get(r.id);
         return {
           id: r.id,
           title: r.title,
@@ -198,6 +229,7 @@ export async function listProducts(
           requiresShipping: r.requiresShipping,
           isFeatured: r.isFeatured,
           priceOnRequest: Boolean(r.priceOnRequest),
+          returnable: r.returnable,
           publishedAt: r.publishedAt ? r.publishedAt.toISOString() : undefined,
           ratingAvg: r.ratingAvg,
           ratingCount: r.ratingCount,
@@ -208,6 +240,8 @@ export async function listProducts(
           priceMax: sm?.priceMax ?? null,
           stock: sm?.stock ?? 0,
           preorderStatus: sm?.preorderStatus ?? null,
+          primaryCategoryId: pCat?.id ?? null,
+          primaryCategoryName: pCat?.name ?? null,
         };
       }),
       total,
@@ -259,11 +293,40 @@ export async function getProduct(
       .where(eq(schema.productMedia.productId, input.id))
       .orderBy(schema.productMedia.position);
 
+    const prodCategories = await tx
+      .select({
+        categoryId: schema.productCategories.categoryId,
+        categoryName: schema.categories.name,
+        isPrimary: schema.productCategories.isPrimary,
+      })
+      .from(schema.productCategories)
+      .innerJoin(schema.categories, eq(schema.categories.id, schema.productCategories.categoryId))
+      .where(
+        and(
+          eq(schema.productCategories.tenantId, ctx.tenantId),
+          eq(schema.productCategories.productId, input.id),
+        ),
+      );
+
+    const primaryCat = prodCategories.find((c) => c.isPrimary);
+    const extraCategoryIds = prodCategories.filter((c) => !c.isPrimary).map((c) => c.categoryId);
+
+    const prodCollections = await tx
+      .select({ collectionId: schema.collectionProducts.collectionId })
+      .from(schema.collectionProducts)
+      .where(
+        and(
+          eq(schema.collectionProducts.tenantId, ctx.tenantId),
+          eq(schema.collectionProducts.productId, input.id),
+        ),
+      );
+    const collectionIds = prodCollections.map((c) => c.collectionId);
+
     return {
       id: p.id,
       title: p.title,
       slug: p.slug,
-      status: p.status as "draft" | "active" | "archived",
+      status: p.status as "draft" | "active" | "unlisted" | "archived",
       descriptionJson: p.descriptionJson,
       shortDescription: p.shortDescription,
       brandId: p.brandId,
@@ -275,11 +338,16 @@ export async function getProduct(
       requiresShipping: p.requiresShipping,
       isFeatured: p.isFeatured,
       priceOnRequest: Boolean(p.priceOnRequest),
+      returnable: p.returnable,
       publishedAt: p.publishedAt ? p.publishedAt.toISOString() : undefined,
       ratingAvg: p.ratingAvg,
       ratingCount: p.ratingCount,
       createdAt: p.createdAt.toISOString(),
       updatedAt: p.updatedAt.toISOString(),
+      primaryCategoryId: primaryCat?.categoryId ?? null,
+      primaryCategoryName: primaryCat?.categoryName ?? null,
+      extraCategoryIds,
+      collectionIds,
       options: options.map((o) => ({
         id: o.id,
         productId: o.productId,
@@ -334,6 +402,12 @@ export async function createProduct(
 
   await assertProductQuota(db, ctx.tenantId);
 
+  // Enforce primary category requirement to move to active or unlisted
+  const targetStatus = input.status ?? "draft";
+  if ((targetStatus === "active" || targetStatus === "unlisted") && !input.primaryCategoryId) {
+    throw new Error("A primary category is required to publish or list a product.");
+  }
+
   return withTenant(db, ctx.tenantId, async (tx) => {
     const slug =
       input.slug?.trim() ||
@@ -358,11 +432,51 @@ export async function createProduct(
         isFeatured: input.isFeatured ?? false,
         priceOnRequest: input.priceOnRequest ?? false,
         returnable: input.returnable ?? true,
+        seo: input.seo,
       })
       .returning();
 
     if (!product) {
       throw new Error("Failed to create product");
+    }
+
+    // Save primary category and extra categories
+    if (input.primaryCategoryId) {
+      await tx.insert(schema.productCategories).values({
+        tenantId: ctx.tenantId,
+        productId: product.id,
+        categoryId: input.primaryCategoryId,
+        position: 0,
+        isPrimary: true,
+      });
+    }
+
+    if (input.extraCategoryIds && input.extraCategoryIds.length > 0) {
+      for (let i = 0; i < input.extraCategoryIds.length; i++) {
+        const catId = input.extraCategoryIds[i];
+        if (!catId || catId === input.primaryCategoryId) continue;
+        await tx.insert(schema.productCategories).values({
+          tenantId: ctx.tenantId,
+          productId: product.id,
+          categoryId: catId,
+          position: i + 1,
+          isPrimary: false,
+        });
+      }
+    }
+
+    // Save collection associations
+    if (input.collectionIds && input.collectionIds.length > 0) {
+      for (let i = 0; i < input.collectionIds.length; i++) {
+        const colId = input.collectionIds[i];
+        if (!colId) continue;
+        await tx.insert(schema.collectionProducts).values({
+          tenantId: ctx.tenantId,
+          productId: product.id,
+          collectionId: colId,
+          position: i,
+        });
+      }
     }
 
     // Insert options if provided
@@ -426,58 +540,7 @@ export async function createProduct(
       if (variant) createdVariants.push(variant);
     }
 
-    return {
-      id: product.id,
-      title: product.title,
-      slug: product.slug,
-      status: product.status as "draft" | "active" | "archived",
-      descriptionJson: product.descriptionJson,
-      shortDescription: product.shortDescription,
-      brandId: product.brandId,
-      productType: product.productType,
-      tags: product.tags,
-      seo: product.seo,
-      taxClassId: product.taxClassId,
-      hsn: product.hsn,
-      requiresShipping: product.requiresShipping,
-      isFeatured: product.isFeatured,
-      priceOnRequest: Boolean(product.priceOnRequest),
-      publishedAt: product.publishedAt ? product.publishedAt.toISOString() : undefined,
-      ratingAvg: product.ratingAvg,
-      ratingCount: product.ratingCount,
-      createdAt: product.createdAt.toISOString(),
-      updatedAt: product.updatedAt.toISOString(),
-      options: createdOptions.map((o) => ({
-        id: o.id,
-        productId: o.productId,
-        name: o.name,
-        position: o.position,
-        values: o.values,
-      })),
-      variants: createdVariants.map((v) => ({
-        id: v.id,
-        productId: v.productId,
-        sku: v.sku,
-        barcode: v.barcode,
-        title: v.title,
-        optionValues: v.optionValues as Record<string, string> | null,
-        price: Number(v.price),
-        compareAtPrice: v.compareAtPrice ? Number(v.compareAtPrice) : undefined,
-        costPrice: v.costPrice ? Number(v.costPrice) : undefined,
-        weightGrams: v.weightGrams,
-        dimensions: v.dimensions as Record<string, unknown> | null,
-        trackInventory: v.trackInventory,
-        allowBackorder: v.allowBackorder,
-        preorderEnabled: v.preorderEnabled,
-        preorderShipsOn: v.preorderShipsOn ? String(v.preorderShipsOn).slice(0, 10) : null,
-        preorderMessage: v.preorderMessage,
-        position: v.position,
-        imageMediaId: v.imageMediaId,
-        createdAt: v.createdAt.toISOString(),
-        updatedAt: v.updatedAt.toISOString(),
-      })),
-      media: [],
-    };
+    return getProduct(rt, ctx, { id: product.id });
   });
 }
 
@@ -493,6 +556,40 @@ export async function updateProduct(
   const db = rt._db.db;
 
   return withTenant(db, ctx.tenantId, async (tx) => {
+    const [existing] = await tx
+      .select()
+      .from(schema.products)
+      .where(eq(schema.products.id, input.id));
+
+    if (!existing) {
+      throw new Error(`Product not found: "${input.id}"`);
+    }
+
+    const nextStatus = input.status ?? existing.status;
+
+    // Determine primary category
+    let effectivePrimaryCatId: string | null;
+    if (input.primaryCategoryId !== undefined) {
+      effectivePrimaryCatId = input.primaryCategoryId;
+    } else {
+      const [currentPrimary] = await tx
+        .select({ categoryId: schema.productCategories.categoryId })
+        .from(schema.productCategories)
+        .where(
+          and(
+            eq(schema.productCategories.tenantId, ctx.tenantId),
+            eq(schema.productCategories.productId, input.id),
+            eq(schema.productCategories.isPrimary, true),
+          ),
+        );
+      effectivePrimaryCatId = currentPrimary?.categoryId ?? null;
+    }
+
+    // If moving to active/unlisted from draft/archived, or updating an active/unlisted product, require primary category
+    if ((nextStatus === "active" || nextStatus === "unlisted") && !effectivePrimaryCatId) {
+      throw new Error("A primary category is required to publish or list a product.");
+    }
+
     const updateValues: Record<string, unknown> = {
       updatedAt: new Date(),
     };
@@ -508,6 +605,7 @@ export async function updateProduct(
     if (input.isFeatured !== undefined) updateValues.isFeatured = input.isFeatured;
     if (input.priceOnRequest !== undefined) updateValues.priceOnRequest = input.priceOnRequest;
     if (input.returnable !== undefined) updateValues.returnable = input.returnable;
+    if (input.seo !== undefined) updateValues.seo = input.seo;
 
     const [row] = await tx
       .update(schema.products)
@@ -521,6 +619,65 @@ export async function updateProduct(
 
     if (input.priceOnRequest) {
       await tx.update(schema.variants).set({ price: 0n }).where(eq(schema.variants.productId, row.id));
+    }
+
+    // Update product_categories if primary or extra categories are passed
+    if (input.primaryCategoryId !== undefined || input.extraCategoryIds !== undefined) {
+      await tx
+        .delete(schema.productCategories)
+        .where(
+          and(
+            eq(schema.productCategories.tenantId, ctx.tenantId),
+            eq(schema.productCategories.productId, row.id),
+          ),
+        );
+
+      if (effectivePrimaryCatId) {
+        await tx.insert(schema.productCategories).values({
+          tenantId: ctx.tenantId,
+          productId: row.id,
+          categoryId: effectivePrimaryCatId,
+          position: 0,
+          isPrimary: true,
+        });
+      }
+
+      if (input.extraCategoryIds && input.extraCategoryIds.length > 0) {
+        for (let i = 0; i < input.extraCategoryIds.length; i++) {
+          const catId = input.extraCategoryIds[i];
+          if (!catId || catId === effectivePrimaryCatId) continue;
+          await tx.insert(schema.productCategories).values({
+            tenantId: ctx.tenantId,
+            productId: row.id,
+            categoryId: catId,
+            position: i + 1,
+            isPrimary: false,
+          });
+        }
+      }
+    }
+
+    // Update collection_products if collectionIds are passed
+    if (input.collectionIds !== undefined) {
+      await tx
+        .delete(schema.collectionProducts)
+        .where(
+          and(
+            eq(schema.collectionProducts.tenantId, ctx.tenantId),
+            eq(schema.collectionProducts.productId, row.id),
+          ),
+        );
+
+      for (let i = 0; i < input.collectionIds.length; i++) {
+        const colId = input.collectionIds[i];
+        if (!colId) continue;
+        await tx.insert(schema.collectionProducts).values({
+          tenantId: ctx.tenantId,
+          productId: row.id,
+          collectionId: colId,
+          position: i,
+        });
+      }
     }
 
     const catRows = await tx
@@ -541,28 +698,7 @@ export async function updateProduct(
       isFeatured: row.isFeatured,
     });
 
-    return {
-      id: row.id,
-      title: row.title,
-      slug: row.slug,
-      status: row.status as "draft" | "active" | "archived",
-      descriptionJson: row.descriptionJson,
-      shortDescription: row.shortDescription,
-      brandId: row.brandId,
-      productType: row.productType,
-      tags: row.tags,
-      seo: row.seo,
-      taxClassId: row.taxClassId,
-      hsn: row.hsn,
-      requiresShipping: row.requiresShipping,
-      isFeatured: row.isFeatured,
-      priceOnRequest: Boolean(row.priceOnRequest),
-      publishedAt: row.publishedAt ? row.publishedAt.toISOString() : undefined,
-      ratingAvg: row.ratingAvg,
-      ratingCount: row.ratingCount,
-      createdAt: row.createdAt.toISOString(),
-      updatedAt: row.updatedAt.toISOString(),
-    };
+    return getProduct(rt, ctx, { id: row.id });
   });
 }
 
@@ -1082,7 +1218,7 @@ export async function getCategory(rt: Runtime, ctx: TenantContext, input: { id: 
  * Helper to calculate tree depth and build path. Refuses depth > 3 levels.
  */
 async function calculateCategoryTreePath(
-  tx: any,
+  tx: Db,
   parentId?: string | null,
 ): Promise<{ path: string; depth: number }> {
   if (!parentId) {
@@ -1434,7 +1570,7 @@ export async function listCollections(
       imageUrl: r.imageKey ? publicMediaUrl(r.imageKey) : null,
       type: r.type as "manual" | "automated",
       match: (r.match ?? "all") as "all" | "any",
-      rules: (r.rules as any) ?? null,
+      rules: (r.rules as CollectionRule[] | null) ?? null,
       sortOrder: r.sortOrder,
       published: r.published,
       indexable: r.indexable,
@@ -1502,7 +1638,7 @@ export async function getCollection(rt: Runtime, ctx: TenantContext, input: { id
       imageUrl: row.imageKey ? publicMediaUrl(row.imageKey) : null,
       type: row.type as "manual" | "automated",
       match: (row.match ?? "all") as "all" | "any",
-      rules: (row.rules as any) ?? null,
+      rules: (row.rules as CollectionRule[] | null) ?? null,
       sortOrder: row.sortOrder,
       published: row.published,
       indexable: row.indexable,
@@ -1530,7 +1666,7 @@ export interface CreateCollectionInput {
   imageMediaId?: string | null | undefined;
   type?: "manual" | "automated" | undefined;
   match?: "all" | "any" | undefined;
-  rules?: any[] | undefined;
+  rules?: unknown[] | undefined;
   sortOrder?: string | undefined;
   published?: boolean | undefined;
   indexable?: boolean | undefined;
@@ -1620,7 +1756,7 @@ export interface UpdateCollectionInput {
   imageMediaId?: string | null | undefined;
   type?: "manual" | "automated" | undefined;
   match?: "all" | "any" | undefined;
-  rules?: any[] | null | undefined;
+  rules?: unknown[] | null | undefined;
   sortOrder?: string | undefined;
   published?: boolean | undefined;
   indexable?: boolean | undefined;
@@ -1995,7 +2131,7 @@ export async function listLocations(rt: Runtime, ctx: TenantContext, query?: Lis
     return rows.map((r) => ({
       id: r.id,
       name: r.name,
-      address: (r.address as any) ?? null,
+      address: (r.address as { line1?: string; line2?: string | null; city?: string; stateCode?: string; countryCode?: string } | null) ?? null,
       pincode: r.pincode,
       isDefault: r.isDefault,
       isActive: r.isActive,
@@ -2029,7 +2165,7 @@ export async function getLocation(rt: Runtime, ctx: TenantContext, input: { id: 
     return {
       id: row.id,
       name: row.name,
-      address: (row.address as any) ?? null,
+      address: (row.address as { line1?: string; line2?: string | null; city?: string; stateCode?: string; countryCode?: string } | null) ?? null,
       pincode: row.pincode,
       isDefault: row.isDefault,
       isActive: row.isActive,

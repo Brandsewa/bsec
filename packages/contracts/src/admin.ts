@@ -176,6 +176,7 @@ export const Product = z.object({
   isFeatured: z.boolean(),
   publishedAt: z.string().nullable().optional(),
   priceOnRequest: z.boolean().default(false),
+  returnable: z.boolean().default(true),
   ratingAvg: z.string(),
   ratingCount: z.number(),
   createdAt: z.string(),
@@ -186,6 +187,8 @@ export const Product = z.object({
   priceMax: z.number().nullable().optional(),
   stock: z.number().optional(),
   preorderStatus: z.enum(["active", "passed"]).nullable().optional(),
+  primaryCategoryId: z.string().uuid().nullable().optional(),
+  primaryCategoryName: z.string().nullable().optional(),
 });
 export type Product = z.infer<typeof Product>;
 
@@ -193,6 +196,8 @@ export const ProductDetail = Product.extend({
   options: z.array(ProductOption),
   variants: z.array(ProductVariant),
   media: z.array(ProductMedia),
+  extraCategoryIds: z.array(z.string().uuid()).default([]),
+  collectionIds: z.array(z.string().uuid()).default([]),
 });
 export type ProductDetail = z.infer<typeof ProductDetail>;
 
@@ -1009,6 +1014,11 @@ export const adminContract = {
           requiresShipping: z.boolean().default(true),
           isFeatured: z.boolean().default(false),
           priceOnRequest: z.boolean().default(false),
+          returnable: z.boolean().default(true),
+          seo: z.unknown().optional(),
+          primaryCategoryId: z.string().uuid().optional(),
+          extraCategoryIds: z.array(z.string().uuid()).optional(),
+          collectionIds: z.array(z.string().uuid()).optional(),
           options: z
             .array(
               z.object({
@@ -1054,9 +1064,14 @@ export const adminContract = {
           requiresShipping: z.boolean().optional(),
           isFeatured: z.boolean().optional(),
           priceOnRequest: z.boolean().optional(),
+          returnable: z.boolean().optional(),
+          seo: z.unknown().optional(),
+          primaryCategoryId: z.string().uuid().nullable().optional(),
+          extraCategoryIds: z.array(z.string().uuid()).optional(),
+          collectionIds: z.array(z.string().uuid()).optional(),
         }),
       )
-      .output(Product),
+      .output(ProductDetail),
     delete: oc
       .route({ method: "DELETE", path: "/admin/products/{id}" })
       .input(z.object({ id: z.string().uuid() }))
@@ -1195,7 +1210,7 @@ export const adminContract = {
           productIds: z.array(z.string().uuid()).optional(),
         }),
       )
-      .output(Collection),
+      .output(CollectionDetail),
     update: oc
       .route({ method: "PATCH", path: "/admin/collections/{id}" })
       .input(
@@ -1225,7 +1240,7 @@ export const adminContract = {
           productIds: z.array(z.string().uuid()).optional(),
         }),
       )
-      .output(Collection),
+      .output(CollectionDetail),
     delete: oc
       .route({ method: "DELETE", path: "/admin/collections/{id}" })
       .input(z.object({ id: z.string().uuid() }))

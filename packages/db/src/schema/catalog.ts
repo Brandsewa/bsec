@@ -12,6 +12,7 @@ import {
   text,
   timestamp,
   unique,
+  uniqueIndex,
   uuid,
 } from "drizzle-orm/pg-core";
 import { tenantForeignKey, tenantTable } from "../tenant-table.ts";
@@ -309,11 +310,15 @@ export const productCategories = tenantTable(
     productId: uuid("product_id").notNull(),
     categoryId: uuid("category_id").notNull(),
     position: integer("position").notNull().default(0),
+    isPrimary: boolean("is_primary").notNull().default(false),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().default(sql`now()`),
     updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().default(sql`now()`),
   },
   (t) => [
     unique("product_categories_tenant_prod_cat_uniq").on(t.tenantId, t.productId, t.categoryId),
+    uniqueIndex("product_categories_tenant_prod_primary_uniq")
+      .on(t.tenantId, t.productId)
+      .where(sql`${t.isPrimary} = true`),
     tenantForeignKey({
       tableTenantId: t.tenantId,
       column: t.productId,

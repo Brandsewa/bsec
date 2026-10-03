@@ -1,4 +1,4 @@
-import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
+import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import {
   CheckCircle2,
   Clock,
@@ -8,7 +8,7 @@ import {
   Star,
   Trash2,
 } from "lucide-react";
-import { useMemo, useState } from "react";
+import { useState } from "react";
 import {
   MetricCard,
   MetricCardSkeleton,
@@ -199,7 +199,7 @@ export function ReviewsPage() {
     void navigate({
       to: ".",
       replace: true,
-      search: ((prev: any) => ({
+      search: ((prev: Record<string, unknown>) => ({
         ...prev,
         status: next.status !== undefined ? next.status : search.status,
         q: next.q !== undefined ? next.q : search.q,

@@ -71,7 +71,7 @@ export function CategoriesPage() {
     placeholderData: keepPreviousData,
   });
 
-  const categories = categoriesQuery.data ?? [];
+  const categories = useMemo(() => categoriesQuery.data ?? [], [categoriesQuery.data]);
 
   // Reorder / move mutation
   const updateMutation = useMutation(
@@ -118,7 +118,7 @@ export function CategoriesPage() {
     void navigate({
       to: ".",
       replace: true,
-      search: ((prev: any) => ({ ...prev, q: queryText.trim() || undefined })) as never,
+      search: ((prev: Record<string, unknown>) => ({ ...prev, q: queryText.trim() || undefined })) as never,
     });
   };
 
@@ -229,7 +229,7 @@ export function CategoriesPage() {
             void navigate({
               to: ".",
               replace: true,
-              search: ((prev: any) => ({ ...prev, status: val as CategoryStatusFilter })) as never,
+              search: ((prev: Record<string, unknown>) => ({ ...prev, status: val as CategoryStatusFilter })) as never,
             });
           }}
         />
@@ -251,7 +251,7 @@ export function CategoriesPage() {
               size="sm"
               onClick={() => {
                 setQueryText("");
-                void navigate({ to: ".", replace: true, search: ((prev: any) => ({ ...prev, q: undefined })) as never });
+                void navigate({ to: ".", replace: true, search: ((prev: Record<string, unknown>) => ({ ...prev, q: undefined })) as never });
               }}
             >
               Clear

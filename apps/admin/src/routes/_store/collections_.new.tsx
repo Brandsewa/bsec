@@ -1,7 +1,9 @@
-import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
+import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import {
   ArrowLeft,
   Boxes,
+  Eye,
+  EyeOff,
   GripVertical,
   Image as ImageIcon,
   Plus,
@@ -16,14 +18,12 @@ import { useRef, useState } from "react";
 import { PageBreadcrumbs, PageContainer, PageHeader, PageSkeleton, toast } from "@bs/ui";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import type { CollectionRule } from "@bs/contracts";
-import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Field, FieldLabel } from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { Switch } from "@/components/ui/switch";
-import { Textarea } from "@/components/ui/textarea";
 import { SeoCard } from "../../components/seo-card.tsx";
 import { SimpleSelect } from "../../components/simple-select.tsx";
 import { errorMessage } from "../../lib/errors.ts";
@@ -75,9 +75,11 @@ export function CreateCollectionPage() {
   const [slug, setSlug] = useState("");
   const [type, setType] = useState<"manual" | "automated">("manual");
   const [match, setMatch] = useState<"all" | "any">("all");
-  const [sortOrder, setSortOrder] = useState("manual");
+  const [sortOrder, setSortOrder] = useState<
+    "manual" | "best_selling" | "title_asc" | "title_desc" | "price_asc" | "price_desc" | "created_desc" | "created_asc"
+  >("manual");
   const [published, setPublished] = useState(true);
-  const [indexable, setIndexable] = useState(false); // DEFAULT FALSE (Owner Decision)
+  const [indexable, setIndexable] = useState(false);
 
   // Media
   const [imageMediaId, setImageMediaId] = useState<string | null>(null);
@@ -109,7 +111,20 @@ export function CreateCollectionPage() {
 
   const [errors, setErrors] = useState<Record<string, string>>({});
 
-  // Media upload
+  // Mutations
+  const createMutation = useMutation(
+    orpc.admin.collections.create.mutationOptions({
+      onSuccess: () => {
+        toast.success("Collection created successfully");
+        void queryClient.invalidateQueries({ queryKey: orpc.admin.collections.key() });
+        void navigate({ to: "/collections" });
+      },
+      onError: (err) => {
+        toast.error(errorMessage(err, "Failed to create collection"));
+      },
+    }),
+  );
+
   const requestUpload = useMutation(orpc.admin.media.requestUpload.mutationOptions());
   const createMedia = useMutation(orpc.admin.media.create.mutationOptions());
 
@@ -119,65 +134,52 @@ export function CreateCollectionPage() {
 
     setUploading(true);
     try {
-      const descriptor = await requestUpload.mutateAsync({
+      const { uploadUrl, storageKey } = await requestUpload.mutateAsync({
         filename: file.name,
-        mime: file.type || "application/octet-stream",
+        mime: file.type,
         bytes: file.size,
         folder: "collections",
       });
 
-      const res = await fetch(descriptor.uploadUrl, {
+      const uploadRes = await fetch(uploadUrl, {
         method: "PUT",
-        headers: descriptor.headers,
         body: file,
+        headers: { "Content-Type": file.type },
       });
-      if (!res.ok) throw new Error(`Upload failed (${res.status})`);
 
-      const created = await createMedia.mutateAsync({
-        storageKey: descriptor.storageKey,
-        mime: file.type || "application/octet-stream",
+      if (!uploadRes.ok) {
+        throw new Error("Failed to upload image file to storage.");
+      }
+
+      const media = await createMedia.mutateAsync({
+        storageKey,
+        mime: file.type,
         bytes: file.size,
-        alt: title || "Collection image",
+        alt: title.trim() || "Collection image",
         folder: "collections",
       });
 
-      setImageMediaId(created.id);
+      setImageMediaId(media.id);
       setImageUrl(URL.createObjectURL(file));
-      toast.success("Image uploaded");
+      toast.success("Image uploaded successfully");
     } catch (err) {
-      toast.error(errorMessage(err, "Image upload failed"));
+      toast.error(errorMessage(err, "Failed to upload image"));
     } finally {
       setUploading(false);
       if (fileRef.current) fileRef.current.value = "";
     }
   };
 
-  const createMutation = useMutation(
-    orpc.admin.collections.create.mutationOptions({
-      onSuccess: () => {
-        toast.success("Collection created");
-        void queryClient.invalidateQueries({ queryKey: orpc.admin.collections.list.key() });
-        void queryClient.invalidateQueries({ queryKey: orpc.admin.collections.stats.key() });
-        void navigate({ to: "/collections" });
-      },
-      onError: (err) => {
-        toast.error(errorMessage(err, "Failed to create collection"));
-      },
-    }),
-  );
-
   const addRule = () => {
     setRules((prev) => [...prev, { field: "tag", operator: "equals", value: "" }]);
   };
 
-  const removeRule = (idx: number) => {
-    setRules((prev) => prev.filter((_, i) => i !== idx));
+  const updateRule = (index: number, patch: Partial<CollectionRule>) => {
+    setRules((prev) => prev.map((r, i) => (i === index ? { ...r, ...patch } : r)));
   };
 
-  const updateRule = (idx: number, patch: Partial<CollectionRule>) => {
-    setRules((prev) =>
-      prev.map((r, i) => (i === idx ? ({ ...r, ...patch } as CollectionRule) : r)),
-    );
+  const removeRule = (index: number) => {
+    setRules((prev) => prev.filter((_, i) => i !== index));
   };
 
   const addProduct = (productId: string) => {
@@ -190,13 +192,12 @@ export function CreateCollectionPage() {
     setProductIds((prev) => prev.filter((id) => id !== productId));
   };
 
-  const moveProductOrder = (index: number, delta: number) => {
+  const moveProduct = (fromIndex: number, toIndex: number) => {
+    if (toIndex < 0 || toIndex >= productIds.length) return;
     setProductIds((prev) => {
       const next = [...prev];
-      const target = index + delta;
-      if (target < 0 || target >= next.length) return prev;
-      const [moved] = next.splice(index, 1);
-      if (moved) next.splice(target, 0, moved);
+      const [item] = next.splice(fromIndex, 1);
+      if (item) next.splice(toIndex, 0, item);
       return next;
     });
   };
@@ -219,14 +220,14 @@ export function CreateCollectionPage() {
       type,
       match,
       rules: type === "automated" ? rules : undefined,
-      sortOrder: sortOrder as any,
+      sortOrder,
       published,
-      indexable, // Respects "Allow search engines to index this page"
+      indexable,
       seo:
         seoTitle.trim() || seoDescription.trim()
           ? {
-              title: seoTitle.trim() || null,
-              description: seoDescription.trim() || null,
+              title: seoTitle.trim() || undefined,
+              description: seoDescription.trim() || undefined,
             }
           : undefined,
       productIds: type === "manual" ? productIds : undefined,
@@ -234,28 +235,23 @@ export function CreateCollectionPage() {
   };
 
   return (
-    <PageContainer size="default">
+    <PageContainer size="full">
       <PageBreadcrumbs
         items={[
           { label: "Collections", href: "/collections" },
-          { label: "New collection" },
+          { label: "New Collection" },
         ]}
-      />
-
-      <PageHeader
-        title="Create collection"
-        description="Build a curated or dynamic product showcase page."
-        aside={
+        actions={
           <div className="flex items-center gap-2">
-            <Button render={<Link to="/collections" />} variant="outline" size="sm">
+            <Button variant="ghost" size="sm" onClick={() => void navigate({ to: "/collections" })}>
               <ArrowLeft className="mr-1.5 size-3.5" aria-hidden />
-              Cancel
+              Collections
             </Button>
             <Button
               type="submit"
-              form="collection-form"
+              form="create-collection-form"
               size="sm"
-              disabled={createMutation.isPending || uploading}
+              disabled={createMutation.isPending}
             >
               <Save className="mr-1.5 size-3.5" aria-hidden />
               {createMutation.isPending ? "Saving..." : "Save Collection"}
@@ -264,153 +260,227 @@ export function CreateCollectionPage() {
         }
       />
 
-      <form id="collection-form" onSubmit={handleSubmit} className="grid gap-6">
-        {/* General Information */}
-        <Card>
-          <CardHeader>
-            <CardTitle className="text-base font-semibold">General Information</CardTitle>
-            <CardDescription>Title, handle, and default sorting for this collection.</CardDescription>
-          </CardHeader>
-          <CardContent className="grid gap-4">
-            <div className="grid gap-1.5">
-              <FieldLabel htmlFor="col-title">Title *</FieldLabel>
-              <Input
-                id="col-title"
-                value={title}
-                onChange={(e) => {
-                  setTitle(e.target.value);
-                  if (!slug || slug === title.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/(^-|-$)/g, "")) {
-                    setSlug(e.target.value.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/(^-|-$)/g, ""));
-                  }
-                }}
-                placeholder="e.g. Summer Essentials, Mechanical Keyboards"
-                required
-              />
-              {errors["title"] && <p className="text-xs text-destructive">{errors["title"]}</p>}
-            </div>
+      <PageHeader
+        title="Create Collection"
+        description="Group products manually or create automated condition rules to build merchandising pages."
+      />
 
-            <div className="grid gap-1.5">
-              <FieldLabel htmlFor="col-sort">Default sort order</FieldLabel>
-              <SimpleSelect
-                value={sortOrder}
-                options={SORT_OPTIONS}
-                onChange={(val: string) => setSortOrder(val)}
-              />
-            </div>
-          </CardContent>
-        </Card>
-
-        {/* Collection Image */}
-        <Card>
-          <CardHeader>
-            <CardTitle className="text-base font-semibold">Collection Image</CardTitle>
-            <CardDescription>Hero banner or header image for this collection.</CardDescription>
-          </CardHeader>
-          <CardContent>
-            {imageUrl ? (
-              <div className="relative inline-block overflow-hidden rounded-lg border border-border">
-                <img src={imageUrl} alt="Collection preview" className="size-32 object-cover" />
-                <button
-                  type="button"
-                  onClick={() => {
-                    setImageMediaId(null);
-                    setImageUrl(null);
-                  }}
-                  className="absolute top-1.5 right-1.5 rounded-full bg-black/60 p-1 text-white hover:bg-black"
-                  aria-label="Remove image"
-                >
-                  <X className="size-3.5" />
-                </button>
-              </div>
-            ) : (
-              <div className="flex flex-col items-center justify-center rounded-lg border border-dashed border-border p-6 text-center">
-                <ImageIcon className="size-8 text-muted-foreground/60" aria-hidden />
-                <p className="mt-2 text-sm font-medium">Upload collection image</p>
-                <p className="text-xs text-muted-foreground">PNG, JPG, WebP up to 5MB</p>
-                <input
-                  ref={fileRef}
-                  type="file"
-                  accept="image/*"
-                  onChange={handleFileUpload}
-                  className="hidden"
+      <form id="create-collection-form" onSubmit={handleSubmit} className="grid grid-cols-1 lg:grid-cols-3 gap-6" noValidate>
+        {/* Left 2 Columns: Main Details, Type, Rules/Picker, SEO */}
+        <div className="lg:col-span-2 flex flex-col gap-6">
+          <Card>
+            <CardHeader>
+              <CardTitle className="text-base font-semibold">General Information</CardTitle>
+              <CardDescription>Title and optional custom handle.</CardDescription>
+            </CardHeader>
+            <CardContent className="grid gap-4">
+              <div className="grid gap-1.5">
+                <FieldLabel htmlFor="col-title">Title *</FieldLabel>
+                <Input
+                  id="col-title"
+                  value={title}
+                  onChange={(e) => setTitle(e.target.value)}
+                  placeholder="e.g. Summer Essentials"
+                  aria-invalid={Boolean(errors["title"])}
                 />
-                <Button
-                  type="button"
-                  variant="outline"
-                  size="sm"
-                  disabled={uploading}
-                  onClick={() => fileRef.current?.click()}
-                  className="mt-4"
+                {errors["title"] && (
+                  <p role="alert" className="text-xs text-destructive">
+                    {errors["title"]}
+                  </p>
+                )}
+              </div>
+
+              <div className="grid gap-1.5">
+                <FieldLabel htmlFor="col-slug">URL Handle (Slug)</FieldLabel>
+                <Input
+                  id="col-slug"
+                  value={slug}
+                  onChange={(e) => setSlug(e.target.value)}
+                  placeholder="e.g. summer-essentials"
+                />
+              </div>
+            </CardContent>
+          </Card>
+
+          {/* Collection Type Selector */}
+          <Card>
+            <CardHeader>
+              <CardTitle className="text-base font-semibold">Collection Type</CardTitle>
+              <CardDescription>Choose how products are added to this collection.</CardDescription>
+            </CardHeader>
+            <CardContent>
+              <RadioGroup
+                value={type}
+                onValueChange={(val: string) => setType(val as "manual" | "automated")}
+                className="grid gap-4"
+              >
+                <label
+                  htmlFor="create-type-manual"
+                  className={`flex cursor-pointer items-start gap-3 rounded-lg border p-4 transition-colors ${
+                    type === "manual" ? "border-primary bg-primary/5" : "border-border hover:bg-muted/50"
+                  }`}
                 >
-                  <Upload className="mr-1.5 size-3.5" />
-                  {uploading ? "Uploading..." : "Select image"}
-                </Button>
-              </div>
-            )}
-          </CardContent>
-        </Card>
-
-        {/* Collection Type: Manual vs Automated */}
-        <Card>
-          <CardHeader>
-            <CardTitle className="text-base font-semibold">Collection Type</CardTitle>
-            <CardDescription>Choose how products are added to this collection.</CardDescription>
-          </CardHeader>
-          <CardContent className="grid gap-6">
-            <RadioGroup
-              value={type}
-              onValueChange={(val) => setType(val as "manual" | "automated")}
-              className="grid gap-4 sm:grid-cols-2"
-            >
-              <div className="flex items-start space-x-3 rounded-lg border border-border p-4 hover:bg-muted/30">
-                <RadioGroupItem value="manual" id="type-manual" className="mt-1" />
-                <label htmlFor="type-manual" className="cursor-pointer space-y-1">
-                  <div className="flex items-center gap-1.5 font-medium">
-                    <Boxes className="size-4 text-muted-foreground" />
-                    Manual
+                  <RadioGroupItem value="manual" id="create-type-manual" className="mt-1" />
+                  <div className="space-y-1">
+                    <div className="flex items-center gap-1.5 font-medium">
+                      <Boxes className="size-4 text-muted-foreground" aria-hidden />
+                      Manual Collection
+                    </div>
+                    <p className="text-xs text-muted-foreground">
+                      Add products to this collection one by one and custom order them.
+                    </p>
                   </div>
-                  <p className="text-xs text-muted-foreground leading-relaxed">
-                    Add products one by one and drag them into any custom order.
-                  </p>
                 </label>
-              </div>
 
-              <div className="flex items-start space-x-3 rounded-lg border border-border p-4 hover:bg-muted/30">
-                <RadioGroupItem value="automated" id="type-automated" className="mt-1" />
-                <label htmlFor="type-automated" className="cursor-pointer space-y-1">
-                  <div className="flex items-center gap-1.5 font-medium">
-                    <Zap className="size-4 text-purple-600 dark:text-purple-400" />
-                    Automated
+                <label
+                  htmlFor="create-type-auto"
+                  className={`flex cursor-pointer items-start gap-3 rounded-lg border p-4 transition-colors ${
+                    type === "automated" ? "border-primary bg-primary/5" : "border-border hover:bg-muted/50"
+                  }`}
+                >
+                  <RadioGroupItem value="automated" id="create-type-auto" className="mt-1" />
+                  <div className="space-y-1">
+                    <div className="flex items-center gap-1.5 font-medium">
+                      <Zap className="size-4 text-muted-foreground" aria-hidden />
+                      Automated Collection
+                    </div>
+                    <p className="text-xs text-muted-foreground">
+                      Existing and future products matching conditions will be automatically added.
+                    </p>
                   </div>
-                  <p className="text-xs text-muted-foreground leading-relaxed">
-                    Existing and future products that match your condition rules will automatically be included.
-                  </p>
                 </label>
-              </div>
-            </RadioGroup>
+              </RadioGroup>
+            </CardContent>
+          </Card>
 
-            {/* Condition Builder for Automated */}
-            {type === "automated" && (
-              <div className="space-y-4 rounded-lg border border-border bg-muted/20 p-4">
-                <div className="flex items-center justify-between">
-                  <h4 className="text-sm font-semibold">Conditions</h4>
-                  <div className="flex items-center gap-2 text-xs">
-                    <span>Products must match:</span>
-                    <RadioGroup
-                      value={match}
-                      onValueChange={(val) => setMatch(val as "all" | "any")}
-                      className="flex items-center gap-4"
-                    >
-                      <div className="flex items-center gap-1.5">
-                        <RadioGroupItem value="all" id="match-all" />
-                        <label htmlFor="match-all" className="cursor-pointer">All conditions</label>
-                      </div>
-                      <div className="flex items-center gap-1.5">
-                        <RadioGroupItem value="any" id="match-any" />
-                        <label htmlFor="match-any" className="cursor-pointer">Any condition</label>
-                      </div>
-                    </RadioGroup>
+          {/* Type-Specific Builder: Manual Picker or Automated Condition Builder */}
+          {type === "manual" ? (
+            <Card>
+              <CardHeader>
+                <CardTitle className="text-base font-semibold">Product Assignments</CardTitle>
+                <CardDescription>Search and select products included in this collection.</CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                <div className="relative">
+                  <Search className="absolute left-3 top-2.5 size-4 text-muted-foreground" />
+                  <Input
+                    placeholder="Search products to add..."
+                    value={productSearch}
+                    onChange={(e) => setProductSearch(e.target.value)}
+                    className="pl-9"
+                  />
+                </div>
+
+                {productSearch.trim() && (
+                  <div className="max-h-48 overflow-y-auto rounded-md border border-border bg-muted/20 p-2 space-y-1">
+                    {availableProducts.length === 0 ? (
+                      <div className="p-3 text-center text-xs text-muted-foreground">No matching products found</div>
+                    ) : (
+                      availableProducts.map((p) => {
+                        const isSelected = productIds.includes(p.id);
+                        return (
+                          <div
+                            key={p.id}
+                            className="flex items-center justify-between rounded p-2 text-sm hover:bg-muted/50"
+                          >
+                            <span className="truncate">{p.title}</span>
+                            <Button
+                              type="button"
+                              variant={isSelected ? "secondary" : "outline"}
+                              size="sm"
+                              disabled={isSelected}
+                              onClick={() => addProduct(p.id)}
+                            >
+                              {isSelected ? "Added" : "Add"}
+                            </Button>
+                          </div>
+                        );
+                      })
+                    )}
                   </div>
+                )}
+
+                <div className="space-y-2">
+                  <div className="text-xs font-semibold uppercase text-muted-foreground tracking-wider">
+                    Selected Products ({productIds.length})
+                  </div>
+                  {productIds.length === 0 ? (
+                    <div className="rounded-lg border border-dashed border-border p-6 text-center text-sm text-muted-foreground">
+                      No products added yet. Use the search above to pick products.
+                    </div>
+                  ) : (
+                    <div className="space-y-1">
+                      {productIds.map((pid, idx) => {
+                        const prod = availableProducts.find((p) => p.id === pid);
+                        return (
+                          <div
+                            key={pid}
+                            className="flex items-center justify-between rounded-md border border-border bg-card p-2 text-sm"
+                          >
+                            <div className="flex items-center gap-2 truncate">
+                              <GripVertical className="size-4 text-muted-foreground cursor-grab" />
+                              <span className="text-xs font-mono text-muted-foreground">{idx + 1}.</span>
+                              <span className="truncate font-medium">{prod?.title ?? pid}</span>
+                            </div>
+                            <div className="flex items-center gap-1">
+                              <Button
+                                type="button"
+                                variant="ghost"
+                                size="sm"
+                                disabled={idx === 0}
+                                onClick={() => moveProduct(idx, idx - 1)}
+                              >
+                                ↑
+                              </Button>
+                              <Button
+                                type="button"
+                                variant="ghost"
+                                size="sm"
+                                disabled={idx === productIds.length - 1}
+                                onClick={() => moveProduct(idx, idx + 1)}
+                              >
+                                ↓
+                              </Button>
+                              <Button
+                                type="button"
+                                variant="ghost"
+                                size="sm"
+                                onClick={() => removeProduct(pid)}
+                              >
+                                <X className="size-4 text-destructive" />
+                              </Button>
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  )}
+                </div>
+              </CardContent>
+            </Card>
+          ) : (
+            <Card>
+              <CardHeader>
+                <CardTitle className="text-base font-semibold">Conditions</CardTitle>
+                <CardDescription>Products must match these criteria to be included.</CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                <div className="flex items-center gap-4 text-sm">
+                  <span className="text-muted-foreground">Products must match:</span>
+                  <RadioGroup
+                    value={match}
+                    onValueChange={(val: string) => setMatch(val as "all" | "any")}
+                    className="flex items-center gap-4"
+                  >
+                    <div className="flex items-center gap-1.5">
+                      <RadioGroupItem value="all" id="create-match-all" />
+                      <label htmlFor="create-match-all" className="cursor-pointer">All conditions</label>
+                    </div>
+                    <div className="flex items-center gap-1.5">
+                      <RadioGroupItem value="any" id="create-match-any" />
+                      <label htmlFor="create-match-any" className="cursor-pointer">Any condition</label>
+                    </div>
+                  </RadioGroup>
                 </div>
 
                 <div className="space-y-3">
@@ -420,14 +490,14 @@ export function CreateCollectionPage() {
                         <SimpleSelect
                           value={rule.field}
                           options={RULE_FIELDS}
-                          onChange={(val: string) => updateRule(idx, { field: val as any })}
+                          onChange={(val: string) => updateRule(idx, { field: val as CollectionRule["field"] })}
                         />
                       </div>
                       <div className="w-36">
                         <SimpleSelect
                           value={rule.operator}
                           options={RULE_OPERATORS}
-                          onChange={(val: string) => updateRule(idx, { operator: val as any })}
+                          onChange={(val: string) => updateRule(idx, { operator: val as CollectionRule["operator"] })}
                         />
                       </div>
                       {!["is_set", "is_not_set"].includes(rule.operator) && (
@@ -444,162 +514,167 @@ export function CreateCollectionPage() {
                           variant="ghost"
                           size="sm"
                           onClick={() => removeRule(idx)}
-                          className="size-9 p-0 text-muted-foreground hover:text-destructive"
                         >
-                          <X className="size-4" />
+                          <Trash2 className="size-4 text-destructive" />
                         </Button>
                       )}
                     </div>
                   ))}
 
-                  <Button
-                    type="button"
-                    variant="outline"
-                    size="sm"
-                    onClick={addRule}
-                    className="mt-2"
-                  >
+                  <Button type="button" variant="outline" size="sm" onClick={addRule}>
                     <Plus className="mr-1.5 size-3.5" />
                     Add another condition
                   </Button>
                 </div>
-              </div>
-            )}
+              </CardContent>
+            </Card>
+          )}
 
-            {/* Product Picker for Manual */}
-            {type === "manual" && (
-              <div className="space-y-4 rounded-lg border border-border bg-muted/20 p-4">
-                <h4 className="text-sm font-semibold">Products in collection ({productIds.length})</h4>
-
-                {/* Product Search Bar */}
-                <div className="flex items-center gap-2">
-                  <Input
-                    placeholder="Search catalog to add products..."
-                    value={productSearch}
-                    onChange={(e) => setProductSearch(e.target.value)}
-                  />
-                </div>
-
-                {/* Search Results Dropdown / Picker List */}
-                {productSearch.trim() && (
-                  <div className="max-h-48 overflow-y-auto rounded-md border border-border bg-background p-2">
-                    {availableProducts.length === 0 ? (
-                      <p className="p-2 text-xs text-muted-foreground">No products found</p>
+          {/* Search Engine Optimization Card (Configurable Indexing) */}
+          <SeoCard
+            defaultTitle={title}
+            pathPrefix="/collections"
+            slug={slug}
+            onSlugChange={setSlug}
+            title={seoTitle}
+            onTitleChange={setSeoTitle}
+            description={seoDescription}
+            onDescriptionChange={setSeoDescription}
+          >
+            <div className="border-t border-border pt-4">
+              <Field orientation="horizontal" className="justify-between">
+                <div>
+                  <div className="flex items-center gap-2">
+                    {indexable ? (
+                      <Eye className="size-4 text-emerald-600" aria-hidden />
                     ) : (
-                      availableProducts.map((p) => {
-                        const isAdded = productIds.includes(p.id);
-                        return (
-                          <div
-                            key={p.id}
-                            className="flex items-center justify-between p-1.5 hover:bg-muted rounded"
-                          >
-                            <span className="text-sm truncate">{p.title}</span>
-                            <Button
-                              type="button"
-                              size="sm"
-                              variant={isAdded ? "ghost" : "outline"}
-                              disabled={isAdded}
-                              onClick={() => addProduct(p.id)}
-                            >
-                              {isAdded ? "Added" : "Add"}
-                            </Button>
-                          </div>
-                        );
-                      })
+                      <EyeOff className="size-4 text-amber-600" aria-hidden />
                     )}
+                    <FieldLabel htmlFor="create-indexable-switch" className="cursor-pointer font-medium text-sm">
+                      Allow search engines to index this collection page
+                    </FieldLabel>
                   </div>
-                )}
+                  <p className="text-xs text-muted-foreground mt-1">
+                    {indexable
+                      ? "Search engines are allowed to crawl, index, and surface this collection in search results."
+                      : "Served with 'noindex, follow' and omitted from sitemap.xml. Useful for seasonal or temporary merchandising."}
+                  </p>
+                </div>
+                <Switch
+                  id="create-indexable-switch"
+                  checked={indexable}
+                  onCheckedChange={(c) => setIndexable(Boolean(c))}
+                />
+              </Field>
+            </div>
+          </SeoCard>
+        </div>
 
-                {/* Selected Products List */}
-                {productIds.length > 0 && (
-                  <div className="divide-y divide-border rounded-md border border-border bg-background">
-                    {productIds.map((pId, idx) => (
-                      <div key={pId} className="flex items-center justify-between p-2.5">
-                        <div className="flex items-center gap-2">
-                          <span className="text-xs font-mono text-muted-foreground">#{idx + 1}</span>
-                          <span className="text-sm font-medium">Product ID: {pId.slice(0, 8)}...</span>
-                        </div>
-                        <div className="flex items-center gap-1">
-                          <button
-                            type="button"
-                            disabled={idx === 0}
-                            onClick={() => moveProductOrder(idx, -1)}
-                            className="rounded p-1 text-muted-foreground hover:bg-muted disabled:opacity-30"
-                          >
-                            ↑
-                          </button>
-                          <button
-                            type="button"
-                            disabled={idx === productIds.length - 1}
-                            onClick={() => moveProductOrder(idx, 1)}
-                            className="rounded p-1 text-muted-foreground hover:bg-muted disabled:opacity-30"
-                          >
-                            ↓
-                          </button>
-                          <button
-                            type="button"
-                            onClick={() => removeProduct(pId)}
-                            className="rounded p-1 text-destructive hover:bg-destructive/10"
-                          >
-                            <Trash2 className="size-3.5" />
-                          </button>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                )}
-              </div>
-            )}
-          </CardContent>
-        </Card>
-
-        {/* Visibility */}
-        <Card>
-          <CardHeader>
-            <CardTitle className="text-base font-semibold">Publishing</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="flex items-center justify-between">
-              <div>
-                <FieldLabel htmlFor="col-published">Active (Published)</FieldLabel>
-                <p className="text-xs text-muted-foreground">
-                  Draft collections are hidden from the storefront.
-                </p>
-              </div>
-              <Switch
-                id="col-published"
-                checked={published}
-                onCheckedChange={(c) => setPublished(c)}
+        {/* Right 1 Column: Image, Sort Order, Status */}
+        <div className="flex flex-col gap-6">
+          {/* Collection Image */}
+          <Card>
+            <CardHeader>
+              <CardTitle className="text-base font-semibold">Featured Image</CardTitle>
+              <CardDescription>Hero banner or tile image for this collection.</CardDescription>
+            </CardHeader>
+            <CardContent>
+              {imageUrl ? (
+                <div className="relative inline-block overflow-hidden rounded-lg border border-border">
+                  <img src={imageUrl} alt={title} className="h-40 w-72 object-cover" />
+                  <Button
+                    type="button"
+                    variant="destructive"
+                    size="icon"
+                    className="absolute right-2 top-2 size-7"
+                    onClick={() => {
+                      setImageMediaId(null);
+                      setImageUrl(null);
+                    }}
+                  >
+                    <X className="size-4" />
+                  </Button>
+                </div>
+              ) : (
+                <div className="flex flex-col items-center justify-center rounded-lg border border-dashed border-border p-6 text-center">
+                  <ImageIcon className="size-8 text-muted-foreground mb-2" aria-hidden />
+                  <p className="text-sm font-medium text-foreground">No image uploaded</p>
+                  <p className="text-xs text-muted-foreground mt-0.5">PNG, JPG, WebP up to 5MB</p>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    className="mt-3"
+                    disabled={uploading}
+                    onClick={() => fileRef.current?.click()}
+                  >
+                    <Upload className="mr-1.5 size-3.5" aria-hidden />
+                    {uploading ? "Uploading..." : "Upload Image"}
+                  </Button>
+                </div>
+              )}
+              <input
+                ref={fileRef}
+                type="file"
+                accept="image/*"
+                className="hidden"
+                onChange={handleFileUpload}
               />
-            </div>
-          </CardContent>
-        </Card>
+            </CardContent>
+          </Card>
 
-        {/* SEO Card with the mandatory "Allow search engines to index this page" switch (off by default) */}
-        <SeoCard
-          defaultTitle={title}
-          pathPrefix="/collections"
-          slug={slug}
-          onSlugChange={setSlug}
-          title={seoTitle}
-          onTitleChange={setSeoTitle}
-          description={seoDescription}
-          onDescriptionChange={setSeoDescription}
-        >
-          <div className="flex items-center justify-between border-t border-border pt-4">
-            <div>
-              <FieldLabel htmlFor="col-indexable">Allow search engines to index this page</FieldLabel>
-              <p className="text-xs text-muted-foreground">
-                When disabled, search engines will be served a <code>noindex</code> tag and this collection will be excluded from your sitemap.
-              </p>
-            </div>
-            <Switch
-              id="col-indexable"
-              checked={indexable}
-              onCheckedChange={(c) => setIndexable(c)}
-            />
-          </div>
-        </SeoCard>
+          {/* Sort Order */}
+          <Card>
+            <CardHeader>
+              <CardTitle className="text-base font-semibold">Product Sorting</CardTitle>
+              <CardDescription>Default display order of products in this collection.</CardDescription>
+            </CardHeader>
+            <CardContent>
+              <SimpleSelect
+                value={sortOrder}
+                options={SORT_OPTIONS}
+                onChange={(val: string) =>
+                  setSortOrder(
+                    val as
+                      | "manual"
+                      | "best_selling"
+                      | "title_asc"
+                      | "title_desc"
+                      | "price_asc"
+                      | "price_desc"
+                      | "created_desc"
+                      | "created_asc",
+                  )
+                }
+              />
+            </CardContent>
+          </Card>
+
+          {/* Status & Visibility */}
+          <Card>
+            <CardHeader>
+              <CardTitle className="text-base font-semibold">Status & Visibility</CardTitle>
+              <CardDescription>Control collection visibility in your storefront.</CardDescription>
+            </CardHeader>
+            <CardContent>
+              <Field orientation="horizontal" className="justify-between">
+                <div>
+                  <FieldLabel htmlFor="create-status-switch" className="cursor-pointer font-medium text-sm">
+                    Published collection
+                  </FieldLabel>
+                  <p className="text-xs text-muted-foreground">
+                    Available to customers and visible on your store.
+                  </p>
+                </div>
+                <Switch
+                  id="create-status-switch"
+                  checked={published}
+                  onCheckedChange={(c) => setPublished(Boolean(c))}
+                />
+              </Field>
+            </CardContent>
+          </Card>
+        </div>
       </form>
     </PageContainer>
   );

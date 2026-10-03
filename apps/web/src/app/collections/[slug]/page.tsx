@@ -11,7 +11,6 @@ import {
   generateItemListJsonLd,
   generateBreadcrumbJsonLd,
   buildCollectionSeoMetadata,
-  formatTitle,
   tenantTag,
   type CatalogListingOptions,
 } from "@bs/domain";

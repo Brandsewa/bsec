@@ -469,8 +469,8 @@ export async function getStorefrontCollection(
       orderClause = desc(schema.products.title);
     }
 
-    let prodRows: Array<{ product: typeof schema.products.$inferSelect }> = [];
-    let total = 0;
+    let prodRows: Array<{ product: typeof schema.products.$inferSelect }>;
+    let total: number;
 
     if (col.type === "automated" && col.rules) {
       const parsedRules = parseCollectionRules(col.rules);

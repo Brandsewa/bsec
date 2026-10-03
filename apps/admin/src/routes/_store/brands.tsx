@@ -1,4 +1,4 @@
-import { createFileRoute, useNavigate } from "@tanstack/react-router";
+import { createFileRoute } from "@tanstack/react-router";
 import { Image as ImageIcon, MoreHorizontal, Pencil, Plus, Tag, Trash2, Upload, X } from "lucide-react";
 import { useMemo, useRef, useState } from "react";
 import { MetricCard, MetricCardSkeleton, PageContainer, PageHeader, PageSkeleton, toast } from "@bs/ui";
@@ -39,12 +39,13 @@ export function BrandsPage() {
   const statsQuery = useQuery(orpc.admin.brands.stats.queryOptions());
   const brandsQuery = useQuery(orpc.admin.brands.list.queryOptions());
 
-  const brands = brandsQuery.data ?? [];
+  const brands = brandsQuery.data;
 
   const filteredBrands = useMemo(() => {
-    if (!queryText.trim()) return brands;
+    const list = brands ?? [];
+    if (!queryText.trim()) return list;
     const q = queryText.toLowerCase().trim();
-    return brands.filter((b) => b.name.toLowerCase().includes(q) || b.slug.toLowerCase().includes(q));
+    return list.filter((b) => b.name.toLowerCase().includes(q) || b.slug.toLowerCase().includes(q));
   }, [brands, queryText]);
 
   const openCreateDialog = () => {

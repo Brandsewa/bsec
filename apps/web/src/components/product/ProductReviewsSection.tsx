@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useEffect, useState } from "react";
-import type { Review, ReviewStats } from "@bs/contracts";
+import type { Review } from "@bs/contracts";
 
 interface ProductReviewsProps {
   productId: string;
@@ -18,8 +18,11 @@ interface ReviewsResponse {
 export function ProductReviewsSection({ productId, productTitle }: ProductReviewsProps) {
   const [page, setPage] = useState(1);
   const [isOpenForm, setIsOpenForm] = useState(false);
-  const [isLoading, setIsLoading] = useState(false);
+  const [loadedKey, setLoadedKey] = useState<string | null>(null);
   const [reviewsData, setReviewsData] = useState<ReviewsResponse | null>(null);
+
+  const currentKey = `${productId}:${page}`;
+  const isLoading = loadedKey !== currentKey;
 
   // Form state
   const [rating, setRating] = useState(5);
@@ -33,23 +36,26 @@ export function ProductReviewsSection({ productId, productTitle }: ProductReview
   const [formSuccess, setFormSuccess] = useState<string | null>(null);
   const [formError, setFormError] = useState<string | null>(null);
 
-  const fetchReviews = async (p: number) => {
-    setIsLoading(true);
-    try {
-      const res = await fetch(`/api/storefront/reviews?productId=${encodeURIComponent(productId)}&page=${p}&limit=10`);
-      if (res.ok) {
-        const data = (await res.json()) as ReviewsResponse;
-        setReviewsData(data);
-      }
-    } catch {
-      // ignore fetch errors
-    } finally {
-      setIsLoading(false);
-    }
-  };
-
   useEffect(() => {
-    void fetchReviews(page);
+    let cancelled = false;
+
+    fetch(`/api/storefront/reviews?productId=${encodeURIComponent(productId)}&page=${page}&limit=10`)
+      .then(async (res) => {
+        if (res.ok && !cancelled) {
+          const data = (await res.json()) as ReviewsResponse;
+          setReviewsData(data);
+          setLoadedKey(`${productId}:${page}`);
+        }
+      })
+      .catch(() => {
+        if (!cancelled) {
+          setLoadedKey(`${productId}:${page}`);
+        }
+      });
+
+    return () => {
+      cancelled = true;
+    };
   }, [productId, page]);
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -94,7 +100,18 @@ export function ProductReviewsSection({ productId, productTitle }: ProductReview
         setTitle("");
         setBody("");
         setRating(5);
-        void fetchReviews(1);
+        if (page === 1) {
+          fetch(`/api/storefront/reviews?productId=${encodeURIComponent(productId)}&page=1&limit=10`)
+            .then(async (r) => {
+              if (r.ok) {
+                const data = (await r.json()) as ReviewsResponse;
+                setReviewsData(data);
+              }
+            })
+            .catch(() => {});
+        } else {
+          setPage(1);
+        }
       }
     } catch {
       setFormError("An unexpected error occurred. Please try again.");

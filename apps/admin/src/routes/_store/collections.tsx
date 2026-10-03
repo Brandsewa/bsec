@@ -3,17 +3,15 @@ import {
   Boxes,
   Eye,
   EyeOff,
-  FolderTree,
   Image as ImageIcon,
   Layers,
   MoreHorizontal,
   Package,
   Plus,
-  Sparkles,
   Trash2,
   Zap,
 } from "lucide-react";
-import { useMemo, useState } from "react";
+import { useState } from "react";
 import { MetricCard, MetricCardSkeleton, PageContainer, PageHeader, PageSkeleton, toast } from "@bs/ui";
 import { keepPreviousData, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import type { Collection } from "@bs/contracts";
@@ -27,6 +25,7 @@ import { errorMessage } from "../../lib/errors.ts";
 import { orpc } from "../../lib/orpc.ts";
 
 type CollectionStatusFilter = "all" | "active" | "draft";
+type CollectionTypeFilter = "all" | "manual" | "automated";
 
 const STATUS_TABS: ReadonlyArray<{ id: CollectionStatusFilter; label: string }> = [
   { id: "all", label: "All" },
@@ -36,7 +35,7 @@ const STATUS_TABS: ReadonlyArray<{ id: CollectionStatusFilter; label: string }> 
 
 export interface CollectionsSearch {
   status?: CollectionStatusFilter | undefined;
-  type?: "all" | "manual" | "automated" | undefined;
+  type?: CollectionTypeFilter | undefined;
   q?: string | undefined;
 }
 
@@ -45,8 +44,8 @@ export const Route = createFileRoute("/_store/collections")({
     status: (["all", "active", "draft"] as const).includes(raw["status"] as CollectionStatusFilter)
       ? (raw["status"] as CollectionStatusFilter)
       : "all",
-    type: (["all", "manual", "automated"] as const).includes(raw["type"] as any)
-      ? (raw["type"] as any)
+    type: (["all", "manual", "automated"] as const).includes(raw["type"] as CollectionTypeFilter)
+      ? (raw["type"] as CollectionTypeFilter)
       : "all",
     q: typeof raw["q"] === "string" ? raw["q"] : undefined,
   }),
@@ -108,7 +107,7 @@ export function CollectionsPage() {
     void navigate({
       to: ".",
       replace: true,
-      search: ((prev: any) => ({ ...prev, q: queryText.trim() || undefined })) as never,
+      search: ((prev: Record<string, unknown>) => ({ ...prev, q: queryText.trim() || undefined })) as never,
     });
   };
 
@@ -157,7 +156,7 @@ export function CollectionsPage() {
             void navigate({
               to: ".",
               replace: true,
-              search: ((prev: any) => ({ ...prev, status: val as CollectionStatusFilter })) as never,
+              search: ((prev: Record<string, unknown>) => ({ ...prev, status: val as CollectionStatusFilter })) as never,
             });
           }}
         />
@@ -182,7 +181,7 @@ export function CollectionsPage() {
                 void navigate({
                   to: ".",
                   replace: true,
-                  search: ((prev: any) => ({ ...prev, q: undefined })) as never,
+                  search: ((prev: Record<string, unknown>) => ({ ...prev, q: undefined })) as never,
                 });
               }}
             >

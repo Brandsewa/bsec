@@ -54,7 +54,7 @@ const nav: GatedGroup[] = [
     ],
   },
   {
-    label: "Sell",
+    label: "Catalog",
     items: [
       { label: "Products", href: "/products", icon: Package, perm: "products.read" },
       { label: "Categories", href: "/categories", icon: FolderTree, perm: "products.read" },
@@ -63,6 +63,11 @@ const nav: GatedGroup[] = [
       { label: "Locations", href: "/locations", icon: MapPin, perm: "products.read" },
       { label: "Inventory", href: "/inventory", icon: Warehouse, perm: "products.read" },
       { label: "Reviews", href: "/reviews", icon: MessageSquareQuote, perm: "products.read" },
+    ],
+  },
+  {
+    label: "Sell",
+    items: [
       { label: "Customers", href: "/customers", icon: Users, perm: "customers.read" },
       { label: "Discounts", href: "/discounts", icon: BadgePercent, perm: "discounts.write" },
     ],
