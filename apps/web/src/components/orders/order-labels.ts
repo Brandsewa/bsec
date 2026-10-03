@@ -20,9 +20,16 @@ export function describePayment(paymentStatus: string): string {
   switch (paymentStatus) {
     case "cod_pending":
       return "Cash on delivery: pay when your order arrives";
+    case "cod_collected":
+      return "Paid in cash on delivery";
     case "paid":
     case "captured":
       return "Paid";
+    case "partially_refunded":
+      return "Partially refunded";
+    case "failed":
+    case "cod_failed":
+      return "Payment failed";
     case "refunded":
       return "Refunded";
     case "cancelled":

@@ -77,6 +77,8 @@ export async function listAdminOrders(
 
     if (input.view === "unfulfilled") {
       conditions.push(eq(schema.orders.fulfillmentStatus, "unfulfilled"));
+      // a cancelled or returned order has nothing left to fulfil
+      conditions.push(sql`${schema.orders.status} not in ('cancelled', 'returned')`);
     } else if (input.view === "unpaid") {
       // Online payments awaiting capture, and COD orders whose cash has not been collected yet.
       conditions.push(inArray(schema.orders.paymentStatus, ["pending", "cod_pending"]));
@@ -894,7 +896,7 @@ export async function createAdminDraftOrder(
         provider: "cod",
         amount: grandTotal,
         currency: "INR",
-        status: "created",
+        status: "cod_pending",
       });
     } else {
       await tx.insert(schema.paymentIntents).values({

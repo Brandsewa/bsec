@@ -200,6 +200,7 @@ import {
 } from "@bs/domain";
 import { server } from "./runtime.ts";
 import { allowedApiOrigins, getStaffAuth, resolveStaffSession } from "./auth.ts";
+import { isForbiddenStaffOrigin } from "./csrf.ts";
 import { clientIp } from "./client-ip.ts";
 
 /**
@@ -1781,12 +1782,16 @@ api.use(
 
 /** CSRF defence in depth: a state-changing request that carries a staff cookie must come from an allowed origin. */
 api.use("*", async (c, next) => {
-  const method = c.req.method;
-  if (method !== "GET" && method !== "HEAD" && method !== "OPTIONS" && (c.req.header("cookie") ?? "").includes("bs-staff")) {
-    const origin = c.req.header("origin");
-    if (origin && !allowedApiOrigins().includes(origin)) {
-      return c.json({ error: "Origin not allowed" }, 403);
-    }
+  if (
+    isForbiddenStaffOrigin({
+      method: c.req.method,
+      path: c.req.path,
+      cookie: c.req.header("cookie"),
+      origin: c.req.header("origin"),
+      allowedOrigins: allowedApiOrigins(),
+    })
+  ) {
+    return c.json({ error: "Origin not allowed" }, 403);
   }
   await next();
 });
