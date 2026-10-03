@@ -47,6 +47,7 @@ export const StoreSettings = z.object({
   address: StoreAddress.nullable().optional(),
   orderPrefix: z.string().optional(),
   cod: z.object({ enabled: z.boolean(), feePaise: z.number().int().min(0) }).optional(),
+  autoPublishReviews: z.boolean().default(false),
   tax: z
     .object({
       gstin: z.string().nullable(),
@@ -597,6 +598,46 @@ export const StoreSupportSession = z.object({
   actionsCount: z.number(),
 });
 
+// --- Review Schemas (Phase E) ---
+export const Review = z.object({
+  id: z.string().uuid(),
+  productId: z.string().uuid(),
+  productTitle: z.string().optional(),
+  productSlug: z.string().optional(),
+  variantId: z.string().uuid().nullable().optional(),
+  variantTitle: z.string().nullable().optional(),
+  customerId: z.string().uuid().nullable().optional(),
+  orderItemId: z.string().uuid().nullable().optional(),
+  reviewerName: z.string(),
+  rating: z.number().int().min(1).max(5),
+  title: z.string().nullable().optional(),
+  body: z.string(),
+  status: z.enum(["published", "on_hold"]),
+  replyText: z.string().nullable().optional(),
+  repliedAt: z.string().nullable().optional(),
+  isVerifiedPurchase: z.boolean(),
+  createdAt: z.string(),
+  updatedAt: z.string(),
+});
+export type Review = z.infer<typeof Review>;
+
+export const ReviewStats = z.object({
+  total: z.number().int(),
+  published: z.number().int(),
+  onHold: z.number().int(),
+  replied: z.number().int(),
+  awaitingReply: z.number().int(),
+  averageRating: z.number(),
+  ratingCounts: z.object({
+    5: z.number().int(),
+    4: z.number().int(),
+    3: z.number().int(),
+    2: z.number().int(),
+    1: z.number().int(),
+  }),
+});
+export type ReviewStats = z.infer<typeof ReviewStats>;
+
 // --- Quotes Schemas ---
 export const QuoteRequest = z.object({
   id: z.string().uuid(),
@@ -893,6 +934,7 @@ export const adminContract = {
           address: StoreAddress.nullable().optional(),
           orderPrefix: z.string().max(10).optional(),
           cod: z.object({ enabled: z.boolean(), feePaise: z.number().int().min(0).max(1_000_000) }).optional(),
+          autoPublishReviews: z.boolean().optional(),
           tax: z
             .object({
               gstin: z.string().regex(GSTIN_PATTERN, "Enter a valid 15-character GSTIN").nullable(),
@@ -1272,6 +1314,61 @@ export const adminContract = {
       .route({ method: "DELETE", path: "/admin/locations/{id}" })
       .input(z.object({ id: z.string().uuid() }))
       .output(z.object({ success: z.boolean() })),
+  },
+
+  // Reviews (Phase E)
+  reviews: {
+    list: oc
+      .route({ method: "GET", path: "/admin/reviews" })
+      .input(
+        z
+          .object({
+            productId: z.string().uuid().optional(),
+            status: z.enum(["all", "published", "on_hold", "replied", "awaiting_reply"]).optional(),
+            rating: z.number().int().min(1).max(5).optional(),
+            search: z.string().optional(),
+            limit: z.number().int().min(1).max(100).default(50),
+            offset: z.number().int().min(0).default(0),
+          })
+          .optional(),
+      )
+      .output(z.object({ items: z.array(Review), total: z.number() })),
+    stats: oc
+      .route({ method: "GET", path: "/admin/reviews/stats" })
+      .input(z.object({ productId: z.string().uuid().optional() }).optional())
+      .output(ReviewStats),
+    get: oc
+      .route({ method: "GET", path: "/admin/reviews/{id}" })
+      .input(z.object({ id: z.string().uuid() }))
+      .output(Review),
+    publish: oc
+      .route({ method: "POST", path: "/admin/reviews/{id}/publish" })
+      .input(z.object({ id: z.string().uuid() }))
+      .output(Review),
+    hold: oc
+      .route({ method: "POST", path: "/admin/reviews/{id}/hold" })
+      .input(z.object({ id: z.string().uuid() }))
+      .output(Review),
+    delete: oc
+      .route({ method: "DELETE", path: "/admin/reviews/{id}" })
+      .input(z.object({ id: z.string().uuid() }))
+      .output(z.object({ success: z.boolean() })),
+    reply: oc
+      .route({ method: "POST", path: "/admin/reviews/{id}/reply" })
+      .input(z.object({ id: z.string().uuid(), replyText: z.string().trim().max(1000) }))
+      .output(Review),
+    bulkPublish: oc
+      .route({ method: "POST", path: "/admin/reviews/bulk-publish" })
+      .input(z.object({ ids: z.array(z.string().uuid()).min(1) }))
+      .output(z.object({ count: z.number() })),
+    bulkHold: oc
+      .route({ method: "POST", path: "/admin/reviews/bulk-hold" })
+      .input(z.object({ ids: z.array(z.string().uuid()).min(1) }))
+      .output(z.object({ count: z.number() })),
+    bulkDelete: oc
+      .route({ method: "POST", path: "/admin/reviews/bulk-delete" })
+      .input(z.object({ ids: z.array(z.string().uuid()).min(1) }))
+      .output(z.object({ count: z.number() })),
   },
 
   // Inventory

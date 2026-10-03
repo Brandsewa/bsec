@@ -30,6 +30,7 @@ export interface StoreSettingsRecord extends StoreConfig {
   supportPhone: string | null;
   address: StoreAddressRecord | null;
   orderPrefix: string;
+  autoPublishReviews: boolean;
 }
 
 export interface UpdateStoreSettingsInput {
@@ -41,6 +42,7 @@ export interface UpdateStoreSettingsInput {
   supportPhone?: string | null | undefined;
   address?: StoreAddressRecord | null | undefined;
   orderPrefix?: string | undefined;
+  autoPublishReviews?: boolean | undefined;
   cod?: { enabled: boolean; feePaise: number } | undefined;
   tax?: { gstin: string | null; sellerState: string | null; pricesIncludeTax: boolean } | undefined;
 }
@@ -96,6 +98,7 @@ function toRecord(row: SettingsRow, tenantId: string): StoreSettingsRecord {
     supportPhone: row.supportPhone ?? null,
     address: toAddress(row.address),
     orderPrefix: row.orderPrefix,
+    autoPublishReviews: Boolean(row.autoPublishReviews),
     ...parseStoreConfig(row.checkout),
   };
 }
@@ -128,6 +131,7 @@ export async function getStoreSettings(rt: Runtime, ctx: TenantContext): Promise
       supportPhone: null,
       address: null,
       orderPrefix: "#",
+      autoPublishReviews: false,
       ...parseStoreConfig(null),
     };
   });
@@ -156,6 +160,7 @@ export async function updateStoreSettings(
       ...(input.supportPhone !== undefined ? { supportPhone: input.supportPhone } : {}),
       ...(input.address !== undefined ? { address: input.address } : {}),
       ...(input.orderPrefix !== undefined ? { orderPrefix: input.orderPrefix } : {}),
+      ...(input.autoPublishReviews !== undefined ? { autoPublishReviews: input.autoPublishReviews } : {}),
       checkout,
       updatedAt: new Date(),
     };
@@ -169,6 +174,7 @@ export async function updateStoreSettings(
           storeName: input.storeName ?? d.storeName,
           currency: input.currency ?? d.currency,
           timezone: input.timezone ?? d.timezone,
+          autoPublishReviews: input.autoPublishReviews ?? false,
           ...fields,
         })
         .returning();

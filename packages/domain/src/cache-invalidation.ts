@@ -49,6 +49,10 @@ export type CacheChange =
     }
   | {
       type: "store_or_seo_updated";
+    }
+  | {
+      type: "review_updated";
+      productId: string;
     };
 
 /**
@@ -144,6 +148,12 @@ export function computeInvalidationTags(
       // Store settings, status, SEO settings -> store-shell, seo
       tags.push(tenantTag(tenantId, "store-shell"));
       tags.push(tenantTag(tenantId, "seo"));
+      break;
+    }
+    case "review_updated": {
+      // Product reviews updated -> product page, all products list (for stars)
+      tags.push(tenantTag(tenantId, "product", change.productId));
+      tags.push(tenantTag(tenantId, "product"));
       break;
     }
   }

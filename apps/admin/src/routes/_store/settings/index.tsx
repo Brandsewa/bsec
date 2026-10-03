@@ -5,6 +5,7 @@ import { AlertTriangle } from "lucide-react";
 import { EmptyState, FormSkeleton, PageSkeleton, toast } from "@bs/ui";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { Switch } from "@/components/ui/switch";
 import { HeaderActions, SettingsPageFrame, SettingsSection, useUnsavedGuard } from "../../../components/settings/settings-page.tsx";
 import { Field } from "../../../components/field.tsx";
 import { SimpleSelect } from "../../../components/simple-select.tsx";
@@ -28,6 +29,7 @@ interface FormState {
   state: string;
   pincode: string;
   orderPrefix: string;
+  autoPublishReviews: boolean;
 }
 
 interface SettingsData {
@@ -46,6 +48,7 @@ interface SettingsData {
     | null
     | undefined;
   orderPrefix?: string | undefined;
+  autoPublishReviews?: boolean | undefined;
   currency: string;
   timezone: string;
 }
@@ -62,6 +65,7 @@ function toFormState(s: SettingsData): FormState {
     state: s.address?.state ?? "",
     pincode: s.address?.pincode ?? "",
     orderPrefix: s.orderPrefix ?? "#",
+    autoPublishReviews: Boolean(s.autoPublishReviews),
   };
 }
 
@@ -124,6 +128,7 @@ function GeneralForm({ data }: { data: SettingsData }) {
         supportPhone: form.supportPhone.trim() || null,
         address: Object.keys(address).length ? address : null,
         orderPrefix: form.orderPrefix || "#",
+        autoPublishReviews: form.autoPublishReviews,
       },
       {
         onSuccess: () => {
@@ -205,6 +210,25 @@ function GeneralForm({ data }: { data: SettingsData }) {
             <Field id="timezone" label="Time zone">
               <Input id="timezone" disabled readOnly value={data.timezone} />
             </Field>
+          </div>
+        </SettingsSection>
+
+        <SettingsSection
+          title="Customer Reviews"
+          description="Control how product reviews submitted by customers are moderated."
+        >
+          <div className="flex items-center justify-between">
+            <div className="space-y-0.5">
+              <span className="text-sm font-medium text-foreground">Publish reviews automatically</span>
+              <p className="text-xs text-muted-foreground">
+                When enabled, reviews from verified purchases (delivered orders) are published immediately without manual approval.
+              </p>
+            </div>
+            <Switch
+              id="autoPublishReviews"
+              checked={form.autoPublishReviews}
+              onCheckedChange={(checked) => setForm((f) => ({ ...f, autoPublishReviews: checked }))}
+            />
           </div>
         </SettingsSection>
       </form>

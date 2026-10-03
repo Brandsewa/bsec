@@ -62,6 +62,7 @@ const nav: GatedGroup[] = [
       { label: "Brands", href: "/brands", icon: Tag, perm: "products.read" },
       { label: "Locations", href: "/locations", icon: MapPin, perm: "products.read" },
       { label: "Inventory", href: "/inventory", icon: Warehouse, perm: "products.read" },
+      { label: "Reviews", href: "/reviews", icon: MessageSquareQuote, perm: "products.read" },
       { label: "Customers", href: "/customers", icon: Users, perm: "customers.read" },
       { label: "Discounts", href: "/discounts", icon: BadgePercent, perm: "discounts.write" },
     ],

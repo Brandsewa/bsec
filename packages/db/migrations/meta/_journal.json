@@ -183,6 +183,13 @@
       "when": 1790960000000,
       "tag": "0025_categories_active_featured",
       "breakpoints": true
+    },
+    {
+      "idx": 26,
+      "version": "7",
+      "when": 1790970000000,
+      "tag": "0026_reviews",
+      "breakpoints": true
     }
   ]
 }

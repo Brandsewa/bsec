@@ -92,6 +92,18 @@ import {
   createLocation,
   updateLocation,
   deleteLocation,
+  listAdminReviews,
+  getAdminReviewStats,
+  getAdminReviewDetail,
+  publishAdminReview,
+  holdAdminReview,
+  deleteAdminReview,
+  replyAdminReview,
+  bulkPublishAdminReviews,
+  bulkHoldAdminReviews,
+  bulkDeleteAdminReviews,
+  getStorefrontReviews,
+  submitProductReview,
   updateMenu,
   updatePage,
   updateProduct,
@@ -774,6 +786,80 @@ export const storeRouter = os.router({
         .handler(({ context, input }) => {
           if (!context.tenantCtx) throw new Error("Missing tenant context");
           return deleteLocation(context.rt, context.tenantCtx, input);
+        }),
+    },
+
+    // Reviews (Phase E)
+    reviews: {
+      list: os.admin.reviews.list
+        .use(requireAdmin)
+        .use(requirePermission("products.read"))
+        .handler(({ context, input }) => {
+          if (!context.tenantCtx) throw new Error("Missing tenant context");
+          return listAdminReviews(context.rt, context.tenantCtx, input);
+        }),
+      stats: os.admin.reviews.stats
+        .use(requireAdmin)
+        .use(requirePermission("products.read"))
+        .handler(({ context, input }) => {
+          if (!context.tenantCtx) throw new Error("Missing tenant context");
+          return getAdminReviewStats(context.rt, context.tenantCtx, input);
+        }),
+      get: os.admin.reviews.get
+        .use(requireAdmin)
+        .use(requirePermission("products.read"))
+        .handler(({ context, input }) => {
+          if (!context.tenantCtx) throw new Error("Missing tenant context");
+          return getAdminReviewDetail(context.rt, context.tenantCtx, input.id);
+        }),
+      publish: os.admin.reviews.publish
+        .use(requireAdmin)
+        .use(requirePermission("products.write"))
+        .handler(({ context, input }) => {
+          if (!context.tenantCtx) throw new Error("Missing tenant context");
+          return publishAdminReview(context.rt, context.tenantCtx, input.id);
+        }),
+      hold: os.admin.reviews.hold
+        .use(requireAdmin)
+        .use(requirePermission("products.write"))
+        .handler(({ context, input }) => {
+          if (!context.tenantCtx) throw new Error("Missing tenant context");
+          return holdAdminReview(context.rt, context.tenantCtx, input.id);
+        }),
+      delete: os.admin.reviews.delete
+        .use(requireAdmin)
+        .use(requirePermission("products.write"))
+        .handler(({ context, input }) => {
+          if (!context.tenantCtx) throw new Error("Missing tenant context");
+          return deleteAdminReview(context.rt, context.tenantCtx, input.id);
+        }),
+      reply: os.admin.reviews.reply
+        .use(requireAdmin)
+        .use(requirePermission("products.write"))
+        .handler(({ context, input }) => {
+          if (!context.tenantCtx) throw new Error("Missing tenant context");
+          return replyAdminReview(context.rt, context.tenantCtx, input);
+        }),
+      bulkPublish: os.admin.reviews.bulkPublish
+        .use(requireAdmin)
+        .use(requirePermission("products.write"))
+        .handler(({ context, input }) => {
+          if (!context.tenantCtx) throw new Error("Missing tenant context");
+          return bulkPublishAdminReviews(context.rt, context.tenantCtx, input.ids);
+        }),
+      bulkHold: os.admin.reviews.bulkHold
+        .use(requireAdmin)
+        .use(requirePermission("products.write"))
+        .handler(({ context, input }) => {
+          if (!context.tenantCtx) throw new Error("Missing tenant context");
+          return bulkHoldAdminReviews(context.rt, context.tenantCtx, input.ids);
+        }),
+      bulkDelete: os.admin.reviews.bulkDelete
+        .use(requireAdmin)
+        .use(requirePermission("products.write"))
+        .handler(({ context, input }) => {
+          if (!context.tenantCtx) throw new Error("Missing tenant context");
+          return bulkDeleteAdminReviews(context.rt, context.tenantCtx, input.ids);
         }),
     },
 
@@ -1639,6 +1725,22 @@ export const storeRouter = os.router({
             ...input,
             ip,
           });
+        }),
+    },
+
+    reviews: {
+      list: os.storefront.reviews.list
+        .use(requireStorefront)
+        .handler(({ context, input }) => {
+          if (!context.tenantCtx) throw new Error("Missing tenant context");
+          return getStorefrontReviews(context.rt, context.tenantCtx.tenantId, input);
+        }),
+      submit: os.storefront.reviews.submit
+        .use(requireStorefront)
+        .handler(async ({ context, input }) => {
+          if (!context.tenantCtx) throw new Error("Missing tenant context");
+          const customerId = context.session?.type === "customer" ? context.session.user.id : undefined;
+          return submitProductReview(context.rt, context.tenantCtx.tenantId, input, customerId);
         }),
     },
   },

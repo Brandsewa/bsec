@@ -5,6 +5,7 @@ import type { ProductDetailOptions } from "@bs/blocks";
 import { ProductGallery } from "./ProductGallery.tsx";
 import { VariantSelector } from "./VariantSelector.tsx";
 import { StockEtaSkeleton } from "./StockEtaHole.tsx";
+import { ProductReviewsSection } from "./ProductReviewsSection.tsx";
 
 export const DEFAULT_PRODUCT_DETAIL_OPTIONS: ProductDetailOptions = {
   galleryPosition: "left",
@@ -95,6 +96,9 @@ export function ProductDetailSection({
           )}
         </div>
       </div>
+
+      {/* Product Reviews & Rating Summary */}
+      <ProductReviewsSection productId={product.id} productTitle={product.title} />
     </div>
   );
 }
