@@ -17,7 +17,7 @@ The shared, append-only log of **what changed, by which agent, and why**. It exi
 ## Rules
 
 1. **Every change set that is merged (or handed off) gets one record.** A "change set" is one branch or one coherent piece of work, not one commit. Typos and pure formatting do not need one.
-2. File name: `YYYY-MM-DD-<agent>-<short-slug>.md`, for example `2026-10-01-claude-themes-builder.md`. `<agent>` is one of `claude`, `antigravity`, `codex`, `cursor`, `copilot`, `human`.
+2. File name: `YYYY-MM-DD-<agent>-<short-slug>.md`, for example `2026-10-01-claude-themes-builder.md`. `<agent>` is one of `claude`, `antigravity`, `codex`, `cursor`, `copilot`, `zcode`, `human`.
 3. Copy [`TEMPLATE.md`](TEMPLATE.md). Keep it short: a record is a pointer plus the non-obvious facts, not a diff. If it takes more than a screen, link a plan or ADR.
 4. **Never edit someone else's record.** To correct or reverse one, write a new record and add `Supersedes: <file>` (and add `Superseded by: <file>` to the old one's header line only).
 5. Write it **before you push or hand off**, in the same branch as the code, so it merges with the code.

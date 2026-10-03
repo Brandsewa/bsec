@@ -105,7 +105,24 @@ Several agents and the owner work on this repo at the same time, in different wo
 | Claude Code | `CLAUDE.md` (imports this file), `apps/web/CLAUDE.md` | `Co-Authored-By: Claude <noreply@anthropic.com>` (use the exact trailer your session is configured with) | Per-project memory lives outside the repo; anything another agent needs must be in the repo docs |
 | Google Antigravity | `AGENTS.md`, `GEMINI.md` | `Co-Authored-By: Antigravity <noreply@google.com>` | Hand-off plans for it live in `docs/*-PLAN.md`; Claude verifies against acceptance criteria |
 | OpenAI Codex | `AGENTS.md` | `Co-Authored-By: Codex <noreply@openai.com>` | |
+| ZCode | `AGENTS.md` | `Co-Authored-By: ZCode` (use the exact trailer your session is configured with) | **Testing and QA agent** (owner decision 2026-10-03): see the roles table below |
 | Cursor / Copilot | `.cursor/rules/bsec.mdc`, `.github/copilot-instructions.md` | own trailer | Pointer files only |
+
+### Roles (owner decision 2026-10-03)
+
+| Who | Role | Does | Does not |
+|---|---|---|---|
+| Owner | Decides | Pricing, legal, providers, deleting data, priorities | |
+| Claude Code | Plans and verifies | Writes plans and prompts, reviews and fixes builds, runs the gate, merges when CI is green | |
+| Google Antigravity | Builds | Implements the plans in `docs/*-PLAN.md` | Does not merge its own PR |
+| ZCode | Tests and QA | Runs the gate, writes and extends tests (real-database tests for tenancy, money, auth, permissions), walks the admin and storefront locally (375 px and desktop), reports defects with steps to reproduce and the failing output | Does not build features or change product behaviour; a fix for a defect it finds goes to the owning builder or to Claude unless it is a test-only change |
+
+ZCode's rules:
+1. **Own worktree, always.** Never work in another agent's checkout or on another agent's branch (a stray `git add` in a shared checkout already swept one agent's files into another's commit and failed CI). Stage files by explicit path; never `git add -A` or `git add .`.
+2. **Test only against local or ephemeral data.** Never drive the live production store, never create records there, never rotate secrets or touch Coolify/Cloudflare. A live check needs the owner's explicit yes in the session.
+3. **Findings go in the repo.** One record per test round in `docs/changes/` (`YYYY-MM-DD-zcode-<slug>.md`, "Type: test"): what was run, what passed, each defect (severity, steps, expected, actual, evidence), and what was not tested. Never claim "verified" for something not run.
+4. **Test-only changes** (new tests, fixtures, test helpers) can be committed on a `test/...` branch and opened as a PR; production code changes are not part of its role.
+5. Plan docs for it go in `docs/*-PLAN.md` or `docs/prompts/`, like the other agents.
 
 ## 7. Definition of done
 

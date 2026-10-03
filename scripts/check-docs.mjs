@@ -56,7 +56,7 @@ for (const p of new Set(perms)) {
 }
 
 // 7. Change records: name pattern + required header fields.
-const AGENTS = ["claude", "antigravity", "codex", "cursor", "copilot", "human"];
+const AGENTS = ["claude", "antigravity", "codex", "cursor", "copilot", "zcode", "human"];
 const NAME = new RegExp(String.raw`^\d{4}-\d{2}-\d{2}-(${AGENTS.join("|")})-[a-z0-9][a-z0-9-]*\.md$`);
 for (const f of readdirSync(join(root, "docs/changes"))) {
   if (f === "README.md" || f === "TEMPLATE.md") continue;
