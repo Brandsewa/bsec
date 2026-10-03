@@ -45,7 +45,8 @@ function rulePredicate(
   opts: Required<Pick<CompileOptions, "allowInSegment">> & CompileOptions,
 ): SQL {
   const parts = rules.conditions.map((c) => conditionSql(tenantId, c, resolve, opts));
-  if (parts.length === 1) return parts[0]!;
+  const first = parts[0];
+  if (parts.length === 1 && first) return first;
   const joined = sql.join(parts, rules.match === "all" ? sql` AND ` : sql` OR `);
   return rules.match === "all" ? joined : sql`(${joined})`;
 }
@@ -179,10 +180,12 @@ function conditionSql(
         throw new SegmentRuleError("A segment cannot include itself");
       }
       const ref = resolve(v as string);
-      const members =
-        ref.kind === "manual"
-          ? sql`(SELECT m.customer_id FROM ${schema.customerSegmentMembers} m WHERE m.tenant_id = ${tenantId} AND m.segment_id = ${v})`
-          : segmentMemberSubquery(tenantId, ref.rules!, resolve, { selfSegmentId: opts.selfSegmentId, allowInSegment: false });
+      if (ref.kind === "manual") {
+        const members = sql`(SELECT m.customer_id FROM ${schema.customerSegmentMembers} m WHERE m.tenant_id = ${tenantId} AND m.segment_id = ${v})`;
+        return c.op === "is" ? sql`${schema.customers.id} IN ${members}` : sql`${schema.customers.id} NOT IN ${members}`;
+      }
+      if (!ref.rules) throw new SegmentRuleError(`Referenced segment "${ref.kind}" has no rules`);
+      const members = segmentMemberSubquery(tenantId, ref.rules, resolve, { selfSegmentId: opts.selfSegmentId, allowInSegment: false });
       return c.op === "is" ? sql`${schema.customers.id} IN ${members}` : sql`${schema.customers.id} NOT IN ${members}`;
     }
 

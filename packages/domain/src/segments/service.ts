@@ -336,7 +336,8 @@ export async function updateSegment(rt: Runtime, ctx: TenantContext, input: Upda
       .from(schema.customerSegments)
       .where(and(eq(schema.customerSegments.tenantId, ctx.tenantId), eq(schema.customerSegments.id, input.id)))
       .limit(1);
-    return toRecord(fresh!);
+    if (!fresh) throw new Error(`Segment not found: ${input.id}`);
+    return toRecord(fresh);
   });
 }
 
@@ -409,7 +410,7 @@ export async function previewSegmentRules(rt: Runtime, ctx: TenantContext, input
       };
     } catch (e) {
       if (e && typeof e === "object" && "code" in e && (e as { code?: string }).code === "57014") {
-        throw new Error("The preview took too long and was stopped. Try fewer or simpler conditions.");
+        throw new Error("The preview took too long and was stopped. Try fewer or simpler conditions.", { cause: e });
       }
       throw e;
     }
@@ -729,4 +730,44 @@ export async function refreshAllSegmentCounts(db: Db, tenantId?: string): Promis
     });
   }
   return { processed };
+}
+
+/** Audit entries for one segment (the detail page's Activity tab). */
+export async function getSegmentActivity(rt: Runtime, ctx: TenantContext, input: { segmentId: string; limit?: number | undefined }) {
+  assertPermission(ctx, "customers.read");
+  const db = rt._db.db;
+  const limit = input.limit ?? 50;
+
+  return await withTenant(db, ctx.tenantId, async (tx) => {
+    const [seg] = await tx
+      .select({ id: schema.customerSegments.id })
+      .from(schema.customerSegments)
+      .where(and(eq(schema.customerSegments.tenantId, ctx.tenantId), eq(schema.customerSegments.id, input.segmentId)))
+      .limit(1);
+    if (!seg) throw new Error(`Segment not found: ${input.segmentId}`);
+
+    const rows = await tx
+      .select({
+        id: schema.auditLogs.id,
+        action: schema.auditLogs.action,
+        actorType: schema.auditLogs.actorType,
+        actorId: schema.auditLogs.actorId,
+        diff: schema.auditLogs.diff,
+        createdAt: schema.auditLogs.createdAt,
+      })
+      .from(schema.auditLogs)
+      .where(and(eq(schema.auditLogs.tenantId, ctx.tenantId), eq(schema.auditLogs.targetType, "segment"), eq(schema.auditLogs.targetId, input.segmentId)))
+      .orderBy(desc(schema.auditLogs.createdAt))
+      .limit(limit);
+    return {
+      items: rows.map((r) => ({
+        id: r.id,
+        action: r.action,
+        actorType: r.actorType,
+        actorId: r.actorId,
+        diff: (r.diff as Record<string, unknown> | null) ?? {},
+        at: r.createdAt.toISOString(),
+      })),
+    };
+  });
 }

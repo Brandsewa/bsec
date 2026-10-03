@@ -9,7 +9,6 @@ import { Button } from "@/components/ui/button";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { ConfirmDialog } from "../../components/confirm-dialog.tsx";
 import { DataTable, type Column } from "../../components/data-table/data-table.tsx";
-import { TableToolbar } from "../../components/data-table/table-toolbar.tsx";
 import { useUrlTableState, compactSearch, oneOf, parsePaging, text } from "../../components/data-table/use-table-state.ts";
 import { ScrollTabs } from "../../components/scroll-tabs.tsx";
 import { errorMessage } from "../../lib/errors.ts";
@@ -99,7 +98,6 @@ export function SegmentsPage() {
 
   const list = useQuery({ ...orpc.admin.segments.list.queryOptions({ input: segmentsListInput(s) }), placeholderData: keepPreviousData });
   const rows = useMemo(() => list.data?.items ?? [], [list.data]);
-  const total = list.data?.total ?? 0;
 
   const refresh = () => void queryClient.invalidateQueries({ queryKey: orpc.admin.segments.key() });
 

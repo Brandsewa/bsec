@@ -193,7 +193,7 @@ beforeAll(async () => {
   );
 
   // --- orders ---
-  const buyerOrder = await codOrder("buyer@seg.test", "9650000001", variantAId, "collected");
+  await codOrder("buyer@seg.test", "9650000001", variantAId, "collected");
   const refundedOrder = await codOrder("refunded@seg.test", "9650000002", variantAId, "collected");
   await codOrder("cancelled@seg.test", "9650000003", variantAId, "cancelled");
   await codOrder("boughtb@seg.test", "9650000004", variantBId, "collected");
