@@ -29,9 +29,20 @@ No store credit, loyalty points or email sending anywhere. Segments group and ex
 - Isolation suite — **815 tests** on its own file (13 new procedures mapped); the three segments files together total **852 tests**.
 - `pnpm --filter @bs/web test` — **PASS** (18 files, 164 tests). `pnpm --filter @bs/admin test` — **PASS** (4 files, 34 tests; builder defaults validated against the API contract, 10-condition lock, list empty state).
 
-## Browser check
+## Browser check (run 2026-10-03, admin 1280 px and 375 px against the local demo store)
 
-**Not run for Stage A** — I spent the session's browser-check budget on Phase 1 and ran out of room before wiring the Segments screens into a running stack here. What I verified instead: component tests render the list (rows, badges, counts, empty state, template action) and the builder (rows, match selector, 10-condition lock, valueless editors). The screens need a real browser pass at 375 px and desktop (list, form, preview panel, members editor, export) — **Claude should treat the browser criterion for Stage A as open**, or I can run it on request before verification.
+Ran this branch's web (3010) and admin (5175) dev servers against the local demo database with migration 0030 applied. Verified in a real browser, with screenshots in the session:
+
+- **List, empty state**: stat cards 0/0/0, tabs, search, empty state with "Start from a template" and "Create segment"; Segments sidebar entry present under Customers.
+- **Templates**: "Start from a template" created all 7 presets as Automatic segments with truthful live counts against the demo store (New customers = 8, Never purchased = 2, Marketing subscribers = 1 — the customer who subscribed during Phase 1 testing — the rest 0).
+- **Create form (automatic)**: condition builder renders (match all, field/operator/value row); the live preview ran immediately ("Matches 6 customers" — the two zero-order demo customers correctly excluded); changing the value to 2 updated the preview to "Matches 0" after the debounce; **Add condition** produced a second row whose defaults were right; **changing condition 2's field to Marketing consent reset its operator to "is" and value to "subscribed"** and the AND preview narrowed to exactly 1 customer (Meera Das). Save created the segment and landed on its detail with the count computed.
+- **Segment detail**: header with type badge and "as of" count; Customers tab members table with real data; **Subscribed only on by default** with the consent wording; Activity tab shows "Segment created · staff"; rail: Summary with Refresh count, View customers, **Send email rendered disabled with "Email sending is not set up yet."**, Danger zone.
+- **Create form (manual)**: type card switches the form to the Members-explainer; after save, the detail's edit mode shows the Members tab: **paste emails** ("valid, valid, unknown") added 2 with a toast "0 added, 1 already in, 1 not found (ghost@nowhere.test)" on re-paste; **search-and-add** found Sneha Reddy and added her ("1 added"); **remove** showed the confirm dialog and removed with counts consistent everywhere (Members (2), rail Customers: 2, As-of filled).
+- **Delete**: row-action Delete on both GUI test segments named the segment in the ConfirmDialog and returned the list to exactly the 7 presets.
+- **375 px**: list stacks to two-column stat cards and mobile cards (no horizontal overflow); detail and the members editor stack cleanly. One cosmetic finding, not fixed: in the detail header the type badge truncates ("Manua") next to "Done editing" at 375 px; the "1 customers" string is not singularised (same pre-existing pattern as the Orders cell).
+- Not drivable in the browser: the CSV export download itself (download saving is not exposed by the test browser); its server round-trip is exercised by the integration suite. Console logs could not be collected in this runtime; no visible error states occurred.
+
+This closes the browser criterion for Stage A; the change record's earlier "not run" note is superseded by this section.
 
 ## Deviations and notes for the verifier
 
@@ -50,4 +61,4 @@ No store credit, loyalty points or email sending anywhere. Segments group and ex
 - [x] `DEPLOYMENT.md`/RUNBOOK unchanged (the new queue is created by the migrate step).
 - [x] Change record written; `progress.md` In-flight updated.
 - [x] No secrets, no generated files; staged by explicit path; `git status` checked before every commit.
-- [x] Honest status: browser pass for the new screens not done (stated above); heavy-suite teardown noise explained, not masked.
+- [x] Honest status: browser pass completed (section above); heavy-suite teardown noise explained, not masked.
