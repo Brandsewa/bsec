@@ -226,17 +226,18 @@ export async function commitImportRows(
             .insert(schema.customers)
             .values({ tenantId, email: r.email, name: r.name, phone: r.phone, tags: r.tags, isGuest: false })
             .returning({ id: schema.customers.id });
+          if (!row) throw new Error("Failed to create imported customer");
           await tx.insert(schema.auditLogs).values({
             tenantId,
             actorType: actor.type,
             actorId: actor.userId,
             action: "customer.created",
             targetType: "customer",
-            targetId: row!.id,
+            targetId: row.id,
             diff: { source: "import", name: r.name, email: r.email },
           });
           if (r.consent) {
-            await setMarketingConsent(rtShim, consentCtx, { customerId: row!.id, state: "subscribed", source: "import", actorType: actor.type === "staff" ? "staff" : "system", actorId: actor.userId }, tx);
+            await setMarketingConsent(rtShim, consentCtx, { customerId: row.id, state: "subscribed", source: "import", actorType: actor.type === "staff" ? "staff" : "system", actorId: actor.userId }, tx);
           }
           created++;
         }

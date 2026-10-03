@@ -210,7 +210,7 @@ function ImportDialog({ open, onOpenChange, onImported }: { open: boolean; onOpe
       toast.error("The file needs a header row and at least one customer row.");
       return;
     }
-    const header = table[0]!.map((h) => h.trim().toLowerCase().replaceAll(" ", "_"));
+    const header = (table[0] ?? []).map((h) => h.trim().toLowerCase().replaceAll(" ", "_"));
     const emailIdx = header.indexOf("email");
     if (emailIdx === -1) {
       toast.error('The file needs an "email" column.');

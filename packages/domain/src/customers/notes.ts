@@ -66,6 +66,7 @@ export async function addCustomerNote(rt: Runtime, ctx: TenantContext, input: { 
       .insert(schema.customerNotes)
       .values({ tenantId: ctx.tenantId, customerId: input.customerId, authorId, body })
       .returning({ id: schema.customerNotes.id, createdAt: schema.customerNotes.createdAt });
+    if (!row) throw new Error("Failed to create note");
 
     await tx.insert(schema.auditLogs).values({
       tenantId: ctx.tenantId,
@@ -74,10 +75,10 @@ export async function addCustomerNote(rt: Runtime, ctx: TenantContext, input: { 
       action: "customer.note_added",
       targetType: "customer",
       targetId: input.customerId,
-      diff: { noteId: row!.id },
+      diff: { noteId: row.id },
     });
 
-    return { id: row!.id, createdAt: row!.createdAt.toISOString() };
+    return { id: row.id, createdAt: row.createdAt.toISOString() };
   });
 }
 

@@ -1,5 +1,5 @@
-import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
-import { ArrowLeft, Ban, ExternalLink, MapPin, Pencil, Plus, ShieldCheck, Tag, Trash2, X } from "lucide-react";
+import { createFileRoute, Link } from "@tanstack/react-router";
+import { ArrowLeft, Ban, MapPin, MoreHorizontal, Pencil, Plus, ShieldCheck, Tag, Trash2, X } from "lucide-react";
 import { useMemo, useState } from "react";
 import { EmptyState, PageBreadcrumbs, PageContainer, PageSkeleton, toast } from "@bs/ui";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
@@ -8,9 +8,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
-import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { Input } from "@/components/ui/input";
-import { MoreHorizontal } from "lucide-react";
 import { ConfirmDialog } from "../../components/confirm-dialog.tsx";
 import { Field } from "../../components/field.tsx";
 import { SectionCard } from "../../components/section-card.tsx";
@@ -307,7 +305,7 @@ function OrdersCard({ customerId }: { customerId: string }) {
           <p className="text-muted-foreground">No orders{status !== "any" ? " with this status" : " yet"}.</p>
         ) : (
           <div className="divide-y divide-border rounded-lg border border-border">
-            {orders.data!.items.map((o) => (
+            {(orders.data?.items ?? []).map((o) => (
               <Link key={o.id} to="/orders/$orderId" params={{ orderId: o.id }} className="flex items-center justify-between gap-4 p-3 hover:bg-muted">
                 <div>
                   <p className="font-medium text-foreground">{o.number}</p>
@@ -355,7 +353,7 @@ function ActivityCard({ customerId }: { customerId: string }) {
           <p className="text-muted-foreground">Nothing yet.</p>
         ) : (
           <ol className="relative grid gap-3 border-l border-border pl-4">
-            {activity.data!.items.map((item, i) => (
+            {(activity.data?.items ?? []).map((item, i) => (
               <li key={`${item.kind}-${item.ref ?? i}`} className="relative">
                 <span className="absolute -left-[21px] top-1.5 size-2 rounded-full bg-muted-foreground/40" aria-hidden />
                 <p className="text-sm font-medium text-foreground">{item.title}</p>
@@ -593,7 +591,7 @@ function NotesCard({ customerId }: { customerId: string }) {
           <p className="mt-3 text-muted-foreground">No notes yet.</p>
         ) : (
           <ol className="mt-3 grid gap-3">
-            {notes.data!.items.map((n) => (
+            {(notes.data?.items ?? []).map((n) => (
               <li key={n.id} className="rounded-md border border-border p-3">
                 <p className="text-sm text-foreground">{n.body}</p>
                 <p className="mt-1 flex items-center justify-between gap-2 text-xs text-muted-foreground">
@@ -639,8 +637,9 @@ function NotesCard({ customerId }: { customerId: string }) {
 // ---------------------------------------------------------------------------------------------------------------
 
 export function CustomerDetailPage(props: { customerId?: string } = {}) {
-  const customerId = props.customerId ?? Route.useParams().customerId;
-  const navigate = useNavigate();
+  // Route.useParams must run on every render (rules of hooks); the prop overrides it for tests.
+  const params = Route.useParams();
+  const customerId = props.customerId ?? params.customerId;
   const detail = useQuery(orpc.admin.customers.get.queryOptions({ input: { id: customerId } }));
 
   if (detail.isLoading) {

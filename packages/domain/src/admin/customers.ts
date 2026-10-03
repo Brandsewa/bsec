@@ -566,6 +566,7 @@ export async function addAdminCustomerAddress(rt: Runtime, ctx: TenantContext, i
         isDefault: input.address.isDefault ?? false,
       })
       .returning({ id: schema.customerAddresses.id });
+    if (!row) throw new Error("Failed to create customer address");
 
     await tx.insert(schema.auditLogs).values({
       tenantId: ctx.tenantId,
@@ -574,10 +575,10 @@ export async function addAdminCustomerAddress(rt: Runtime, ctx: TenantContext, i
       action: "customer.address_added",
       targetType: "customer",
       targetId: input.customerId,
-      diff: { addressId: row!.id },
+      diff: { addressId: row.id },
     });
 
-    return { id: row!.id };
+    return { id: row.id };
   });
 }
 
