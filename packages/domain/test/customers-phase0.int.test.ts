@@ -1,5 +1,6 @@
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
-import { and, eq } from "drizzle-orm";
+import { readFileSync } from "node:fs";
+import { and, eq, sql } from "drizzle-orm";
 import { schema, withTenant } from "@bs/db";
 import { startTestDb, type TestDb } from "@bs/db/test-env";
 import {
@@ -16,6 +17,7 @@ import {
   getUnsubscribeView,
   unsubscribeByToken,
   updateCustomerProfile,
+  registerCustomer,
   subscribeNewsletter,
   createProduct,
   adjustInventory,
@@ -433,5 +435,66 @@ describe("Phase 0c: One consent record with history", () => {
     });
     expect(staffAudits.length).toBeGreaterThanOrEqual(1);
     expect(staffAudits[0]?.actorType).toBe("staff");
+  });
+});
+
+describe("Phase 0 verification additions", () => {
+  async function guestCheckout(email: string, phone: string) {
+    const cart = await getOrCreateCart(rtWeb, ctxA);
+    await addToCart(rtWeb, ctxA, { token: cart.token, variantId: variantAId, quantity: 1 });
+    return placeOrder(rtWeb, ctxA, {
+      cartToken: cart.token,
+      idempotencyKey: `idem_ver_${email}_${Date.now()}`,
+      email,
+      phone,
+      fullName: "Backfill Guest",
+      addressLine1: "1 Test Road",
+      city: "Pune",
+      state: "Maharashtra",
+      pincode: "411001",
+      paymentMethod: "cod",
+    });
+  }
+
+  it("registering with the marketing box ticked goes through the consent writer (state, flag and history agree)", async () => {
+    const email = `register-consent-${Date.now()}@example.com`;
+    await registerCustomer(rtWeb._db.db, ctxA.tenantId, { email, name: "Reg Consent", acceptsMarketing: true }, { ip: "198.51.100.7" });
+    const [c] = await withTenant(rtWeb._db.db, ctxA.tenantId, (tx) => tx.select().from(schema.customers).where(eq(schema.customers.email, email)));
+    expect(c?.marketingState).toBe("subscribed");
+    expect(c?.acceptsMarketing).toBe(true);
+    const events = await withTenant(rtWeb._db.db, ctxA.tenantId, (tx) => tx.select().from(schema.customerConsentEvents).where(eq(schema.customerConsentEvents.customerId, c!.id)));
+    expect(events.map((e) => e.state)).toEqual(["subscribed"]);
+
+    const email2 = `register-noconsent-${Date.now()}@example.com`;
+    await registerCustomer(rtWeb._db.db, ctxA.tenantId, { email: email2, name: "No Consent" }, { ip: "198.51.100.8" });
+    const [c2] = await withTenant(rtWeb._db.db, ctxA.tenantId, (tx) => tx.select().from(schema.customers).where(eq(schema.customers.email, email2)));
+    expect(c2?.marketingState).toBe("not_subscribed");
+    expect(c2?.acceptsMarketing).toBe(false);
+  });
+
+  it("the guest backfill survives two order emails sharing a phone, and is idempotent", async () => {
+    const stamp = Date.now();
+    const emails = [`bf-one-${stamp}@example.com`, `bf-two-${stamp}@example.com`];
+    for (const e of emails) await guestCheckout(e, "9000000555");
+    const db = rtPlatform._db.db;
+    // put the store back into its pre-migration state: orders without customers
+    await db.execute(sql`UPDATE orders SET customer_id = NULL WHERE tenant_id = ${ctxA.tenantId} AND email IN (${emails[0]}, ${emails[1]})`);
+    await db.execute(sql`DELETE FROM customers WHERE tenant_id = ${ctxA.tenantId} AND email IN (${emails[0]}, ${emails[1]})`);
+
+    const file = readFileSync(new URL("../../db/migrations/0028_customers_phase0.sql", import.meta.url), "utf8");
+    const start = file.indexOf('INSERT INTO "customers" ("tenant_id", "email", "phone", "name", "is_guest"');
+    const end = file.indexOf("FROM ranked r;", start) + "FROM ranked r;".length;
+    expect(start).toBeGreaterThan(-1);
+    const statement = file.slice(start, end);
+
+    await db.execute(sql.raw(statement));
+    const rows = await db.execute(sql`SELECT email, phone, is_guest FROM customers WHERE tenant_id = ${ctxA.tenantId} AND email IN (${emails[0]}, ${emails[1]})`);
+    expect(rows.rows.length).toBe(2);
+    expect(rows.rows.every((r) => r.is_guest === true)).toBe(true);
+    expect(rows.rows.filter((r) => r.phone !== null).length).toBe(1);
+
+    await db.execute(sql.raw(statement));
+    const again = await db.execute(sql`SELECT count(*)::int AS n FROM customers WHERE tenant_id = ${ctxA.tenantId} AND email IN (${emails[0]}, ${emails[1]})`);
+    expect(again.rows[0]?.n).toBe(2);
   });
 });

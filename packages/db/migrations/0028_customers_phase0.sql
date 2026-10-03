@@ -82,23 +82,43 @@ WHERE c."tenant_id" = ns."tenant_id"
 -- 4. Idempotent Backfill for Guests from Existing Orders:
 -- Insert customers for distinct order emails that don't yet exist in customers
 INSERT INTO "customers" ("tenant_id", "email", "phone", "name", "is_guest", "email_verified", "phone_verified", "created_at", "updated_at")
-SELECT DISTINCT ON (o.tenant_id, o.email)
-  o.tenant_id,
-  o.email,
-  NULLIF(o.phone, ''),
-  COALESCE(NULLIF(o.shipping_address->>'fullName', ''), ''),
+WITH first_orders AS (
+  SELECT DISTINCT ON (o.tenant_id, o.email)
+    o.tenant_id,
+    o.email,
+    NULLIF(regexp_replace(COALESCE(o.phone, ''), 'D', '', 'g'), '') AS phone,
+    COALESCE(NULLIF(o.shipping_address->>'fullName', ''), '') AS name,
+    o.placed_at
+  FROM "orders" o
+  WHERE o.email IS NOT NULL AND o.email <> ''
+    AND NOT EXISTS (
+      SELECT 1 FROM "customers" c
+      WHERE c.tenant_id = o.tenant_id AND c.email = o.email
+    )
+  ORDER BY o.tenant_id, o.email, o.placed_at ASC
+),
+ranked AS (
+  SELECT f.*,
+    row_number() OVER (PARTITION BY f.tenant_id, f.phone ORDER BY f.placed_at, f.email) AS phone_rank
+  FROM first_orders f
+)
+-- customers has a unique (tenant_id, phone): a phone already on a customer, or shared by two order emails, is left off
+SELECT
+  r.tenant_id,
+  r.email,
+  CASE
+    WHEN r.phone IS NOT NULL AND r.phone_rank = 1
+      AND NOT EXISTS (SELECT 1 FROM "customers" c2 WHERE c2.tenant_id = r.tenant_id AND c2.phone = r.phone)
+    THEN r.phone
+    ELSE NULL
+  END,
+  r.name,
   true,
   false,
   false,
-  o.placed_at,
-  o.placed_at
-FROM "orders" o
-WHERE o.email IS NOT NULL AND o.email <> ''
-  AND NOT EXISTS (
-    SELECT 1 FROM "customers" c
-    WHERE c.tenant_id = o.tenant_id AND c.email = o.email
-  )
-ORDER BY o.tenant_id, o.email, o.placed_at ASC;
+  r.placed_at,
+  r.placed_at
+FROM ranked r;
 --> statement-breakpoint
 
 -- Link orders with null customer_id to their customer record by email

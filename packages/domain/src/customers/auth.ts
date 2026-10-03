@@ -7,6 +7,7 @@ import {
   destroyAllCustomerSessions,
   destroyOtherCustomerSessions,
 } from "./session.ts";
+import type { Runtime } from "../runtime.ts";
 import type { CustomerRecord } from "./otp.ts";
 import { loadEmailBrand } from "../system/email-context.ts";
 import { renderEmail } from "../system/email-templates.ts";
@@ -128,12 +129,20 @@ export async function registerCustomer(
           passwordHash: null,
           emailVerified: false,
           phoneVerified: false,
-          acceptsMarketing: Boolean(input.acceptsMarketing),
-          marketingConsentAt: input.acceptsMarketing ? new Date() : null,
         })
         .returning();
       if (!created) throw new Error("Failed to create customer record");
       customerId = created.id;
+      // Consent has one writer (PLAN 0c): it keeps accepts_marketing, the state and the history in step.
+      if (input.acceptsMarketing) {
+        const { setMarketingConsent } = await import("./consent.ts");
+        await setMarketingConsent(
+          { _db: { db: tx } } as unknown as Runtime,
+          { tenantId, actor: { type: "customer", userId: created.id } },
+          { customerId: created.id, state: "subscribed", source: "account_page", channel: "email", ip },
+          tx,
+        );
+      }
     }
 
     // Mint account setup token (24 hours expiry, purpose: 'password_reset' so resetCustomerPassword accepts it)
