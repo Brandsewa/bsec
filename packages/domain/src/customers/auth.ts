@@ -231,10 +231,10 @@ export async function verifyCustomerEmail(
       throw new Error("Invalid or expired verification link");
     }
 
-    // Mark customer email verified
+    // Mark customer email verified and clear isGuest
     await tx
       .update(customers)
-      .set({ emailVerified: true, updatedAt: new Date() })
+      .set({ emailVerified: true, isGuest: false, updatedAt: new Date() })
       .where(and(eq(customers.tenantId, tenantId), eq(customers.id, consumed.targetId)));
 
     return { success: true, customerId: consumed.targetId };
@@ -419,10 +419,10 @@ export async function resetCustomerPassword(
       throw new Error("Invalid or expired password reset link");
     }
 
-    // Update customer password and set emailVerified = true (password reset / account setup confirms email control)
+    // Update customer password and set emailVerified = true, isGuest = false (password reset / account setup confirms email control)
     await tx
       .update(customers)
-      .set({ passwordHash: newHash, emailVerified: true, updatedAt: new Date() })
+      .set({ passwordHash: newHash, emailVerified: true, isGuest: false, updatedAt: new Date() })
       .where(and(eq(customers.tenantId, tenantId), eq(customers.id, consumed.targetId)));
 
     return consumed.targetId;
