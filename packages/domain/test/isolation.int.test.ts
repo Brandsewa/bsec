@@ -95,6 +95,10 @@ import {
   getTheme,
   inviteStaff,
   listAdminCustomers,
+  getAdminCustomerStats,
+  listAdminCustomerTags,
+  setAdminCustomerStatus,
+  setAdminCustomerTags,
   listAdminDiscounts,
   listAdminOrders,
   listInvitations,
@@ -976,8 +980,16 @@ describe("Generated Isolation Test Suite (M1 Real Postgres 18 Proof)", () => {
       // --- M5 Customers Admin ---
       case "customers.list":
         return await listAdminCustomers(rt, ctx);
+      case "customers.stats":
+        return await getAdminCustomerStats(rt, ctx);
+      case "customers.tags":
+        return await listAdminCustomerTags(rt, ctx);
       case "customers.get":
         return await getAdminCustomerDetail(rt, ctx, { id: testCustomerA });
+      case "customers.setStatus":
+        return await setAdminCustomerStatus(rt, ctx, { id: testCustomerA, status: "active" });
+      case "customers.setTags":
+        return await setAdminCustomerTags(rt, ctx, { id: testCustomerA, tags: ["vip"] });
 
       // --- M5 Discounts Admin ---
       case "discounts.list":

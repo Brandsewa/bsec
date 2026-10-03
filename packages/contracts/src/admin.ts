@@ -2081,7 +2081,7 @@ export const adminContract = {
       .output(ReturnSettings),
   },
 
-  // --- M5 Customers Admin ---
+  // --- Customers Admin (Phase 1) ---
   customers: {
     list: oc
       .route({ method: "GET", path: "/admin/customers" })
@@ -2092,7 +2092,14 @@ export const adminContract = {
             tag: z.string().optional(),
             /** Customers with more than one order. */
             repeat: z.boolean().optional(),
+            /** Tab: every customer, accounts only (not guests), guests only, blocked only. */
+            view: z.enum(["all", "accounts", "guests", "blocked"]).default("all"),
+            /** Marketing consent state (the Phase 0 single record, not the legacy boolean). */
+            marketingState: z.enum(["subscribed", "unsubscribed", "not_subscribed", "invalid"]).optional(),
+            /** Kept for compatibility with the pre-Phase-1 page (accepts marketing yes/no). */
             acceptsMarketing: z.boolean().optional(),
+            /** State code of the customer's default address. */
+            location: z.string().optional(),
             createdFrom: z.string().optional(),
             createdTo: z.string().optional(),
             sort: z.enum(["created_desc", "created_asc", "name_asc", "name_desc", "spent_desc", "spent_asc", "orders_desc", "orders_asc"]).default("created_desc"),
@@ -2109,16 +2116,37 @@ export const adminContract = {
               name: z.string(),
               email: z.string(),
               phone: z.string().nullable(),
+              isGuest: z.boolean(),
+              status: z.string(),
               ordersCount: z.number(),
               totalSpent: z.number(),
+              lastOrderAt: z.string().nullable(),
+              marketingState: z.string(),
+              marketingUpdatedAt: z.string().nullable(),
               tags: z.array(z.string()),
-              status: z.string(),
               createdAt: z.string(),
             }),
           ),
           total: z.number(),
         }),
       ),
+    /** Counts for the list page's stat strip; every value comes from the Phase 0 metrics fragment. */
+    stats: oc
+      .route({ method: "GET", path: "/admin/customers/stats" })
+      .output(
+        z.object({
+          total: z.number(),
+          newThisMonth: z.number(),
+          repeat: z.number(),
+          subscribers: z.number(),
+          totalSpend: z.number(),
+          averageOrderValue: z.number(),
+        }),
+      ),
+    /** Store-wide filter options: every distinct tag and every default-address state, not just those on the current page. */
+    tags: oc
+      .route({ method: "GET", path: "/admin/customers/tags" })
+      .output(z.object({ tags: z.array(z.string()), locationStates: z.array(z.string()) })),
     get: oc
       .route({ method: "GET", path: "/admin/customers/{id}" })
       .input(z.object({ id: z.string().uuid() }))
@@ -2196,6 +2224,14 @@ export const adminContract = {
           addressId: z.string().uuid().optional(),
         }),
       ),
+    setStatus: oc
+      .route({ method: "POST", path: "/admin/customers/{id}/status" })
+      .input(z.object({ id: z.string().uuid(), status: z.enum(["active", "blocked"]) }))
+      .output(z.object({ id: z.string().uuid(), status: z.string() })),
+    setTags: oc
+      .route({ method: "PUT", path: "/admin/customers/{id}/tags" })
+      .input(z.object({ id: z.string().uuid(), tags: z.array(z.string()).max(30) }))
+      .output(z.object({ id: z.string().uuid(), tags: z.array(z.string()) })),
   },
 
   // --- M5 Discounts Admin ---

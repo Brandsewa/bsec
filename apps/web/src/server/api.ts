@@ -160,6 +160,10 @@ import {
   listAdminCustomers,
   getAdminCustomerDetail,
   createAdminCustomer,
+  getAdminCustomerStats,
+  listAdminCustomerTags,
+  setAdminCustomerStatus,
+  setAdminCustomerTags,
   listAdminDiscounts,
   createAdminDiscount,
   updateAdminDiscount,
@@ -1295,6 +1299,20 @@ export const storeRouter = os.router({
           if (!context.tenantCtx) throw new Error("Missing tenant context");
           return listAdminCustomers(context.rt, context.tenantCtx, input);
         }),
+      stats: os.admin.customers.stats
+        .use(requireAdmin)
+        .use(requirePermission("customers.read"))
+        .handler(({ context }) => {
+          if (!context.tenantCtx) throw new Error("Missing tenant context");
+          return getAdminCustomerStats(context.rt, context.tenantCtx);
+        }),
+      tags: os.admin.customers.tags
+        .use(requireAdmin)
+        .use(requirePermission("customers.read"))
+        .handler(({ context }) => {
+          if (!context.tenantCtx) throw new Error("Missing tenant context");
+          return listAdminCustomerTags(context.rt, context.tenantCtx);
+        }),
       get: os.admin.customers.get
         .use(requireAdmin)
         .use(requirePermission("customers.read"))
@@ -1308,6 +1326,20 @@ export const storeRouter = os.router({
         .handler(({ context, input }) => {
           if (!context.tenantCtx) throw new Error("Missing tenant context");
           return createAdminCustomer(context.rt, context.tenantCtx, input);
+        }),
+      setStatus: os.admin.customers.setStatus
+        .use(requireAdmin)
+        .use(requirePermission("customers.write"))
+        .handler(({ context, input }) => {
+          if (!context.tenantCtx) throw new Error("Missing tenant context");
+          return setAdminCustomerStatus(context.rt, context.tenantCtx, input);
+        }),
+      setTags: os.admin.customers.setTags
+        .use(requireAdmin)
+        .use(requirePermission("customers.write"))
+        .handler(({ context, input }) => {
+          if (!context.tenantCtx) throw new Error("Missing tenant context");
+          return setAdminCustomerTags(context.rt, context.tenantCtx, input);
         }),
     },
 
