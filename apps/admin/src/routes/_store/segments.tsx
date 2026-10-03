@@ -9,6 +9,8 @@ import { Button } from "@/components/ui/button";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { ConfirmDialog } from "../../components/confirm-dialog.tsx";
 import { DataTable, type Column } from "../../components/data-table/data-table.tsx";
+import { useTableSelection } from "../../components/data-table/use-table-selection.ts";
+import { BulkBar } from "../../components/data-table/toolbar-parts.tsx";
 import { useUrlTableState, compactSearch, oneOf, parsePaging, text } from "../../components/data-table/use-table-state.ts";
 import { ScrollTabs } from "../../components/scroll-tabs.tsx";
 import { errorMessage } from "../../lib/errors.ts";
@@ -98,6 +100,9 @@ export function SegmentsPage() {
 
   const list = useQuery({ ...orpc.admin.segments.list.queryOptions({ input: segmentsListInput(s) }), placeholderData: keepPreviousData });
   const rows = useMemo(() => list.data?.items ?? [], [list.data]);
+  const total = list.data?.total ?? 0;
+  const sel = useTableSelection({ rows, getId: (seg: SegmentRow) => seg.id, total, resetKey: JSON.stringify([s.view]) });
+  const [bulkDeleting, setBulkDeleting] = useState(false);
 
   const refresh = () => void queryClient.invalidateQueries({ queryKey: orpc.admin.segments.key() });
 
@@ -127,6 +132,25 @@ export function SegmentsPage() {
     } catch (e) {
       toast.error(errorMessage(e));
     }
+  };
+
+  const runBulkDelete = () => {
+    const targets = sel.picked;
+    void (async () => {
+      let done = 0;
+      for (const seg of targets) {
+        try {
+          await client.admin.segments.delete({ id: seg.id });
+          done++;
+        } catch (e) {
+          toast.error(`${seg.name}: ${errorMessage(e)}`);
+        }
+      }
+      toast.success(`Deleted ${done} segment${done === 1 ? "" : "s"}.`);
+      sel.release([]);
+      setBulkDeleting(false);
+      refresh();
+    })();
   };
 
   const createPresets = async () => {
@@ -244,6 +268,21 @@ export function SegmentsPage() {
         <div className="grid gap-3">
           <Input aria-label="Search segments" placeholder="Search segments" className="max-w-xs" value={s.q ?? ""} onChange={(e) => setSearchText(e.target.value)} />
 
+          <BulkBar
+            count={sel.count}
+            noun="segment"
+            total={total}
+            allResults={sel.allResults}
+            pageFullySelected={sel.pageFullySelected}
+            onSelectAllResults={sel.selectAllResults}
+            onClear={sel.clear}
+            note="Bulk actions work on segments you tick yourself."
+          >
+            <Button variant="destructive" size="sm" disabled={bulkDeleting || sel.allResults || sel.picked.length === 0} onClick={() => setBulkDeleting(true)}>
+              <Trash2 className="mr-1.5" /> Delete selected
+            </Button>
+          </BulkBar>
+
           <DataTable
             columns={columns}
             rows={rows.filter((r) => !s.q || r.name.toLowerCase().includes(s.q.toLowerCase()))}
@@ -252,6 +291,9 @@ export function SegmentsPage() {
             isFetching={list.isFetching}
             error={list.isError ? { message: errorMessage(list.error), onRetry: () => void list.refetch() } : null}
             empty={empty}
+            selectedIds={sel.selectedIds}
+            onToggleRow={sel.toggleRow}
+            onTogglePage={sel.togglePage}
             onRowClick={(seg) => open(seg.id)}
             rowActions={rowMenu}
             renderCard={(seg) => (
@@ -294,6 +336,16 @@ export function SegmentsPage() {
               .catch((e: unknown) => toast.error(errorMessage(e)));
           }
         }}
+      />
+
+      <ConfirmDialog
+        open={bulkDeleting}
+        onOpenChange={setBulkDeleting}
+        title={`Delete ${sel.picked.length} segments?`}
+        description="The segments and their conditions or member lists are deleted. Customers themselves are not touched."
+        confirmLabel="Delete segments"
+        destructive
+        onConfirm={runBulkDelete}
       />
     </PageContainer>
   );

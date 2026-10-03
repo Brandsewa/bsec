@@ -46,7 +46,7 @@ function SegmentNewPage() {
       });
       toast.success(`Segment "${created.name}" created.`);
       queryClient.invalidateQueries({ queryKey: orpc.admin.segments.key() });
-      void navigate({ to: "/segments/$segmentId", params: { segmentId: created.id }, search: { edit: true } });
+      void navigate({ to: "/segments/$segmentId", params: { segmentId: created.id }, search: { edit: 1 } });
     } catch (e) {
       toast.error(errorMessage(e));
       setSaving(false);
