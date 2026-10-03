@@ -92,6 +92,9 @@ describe("demo store", () => {
     const statuses = orderStatuses.map((r) => r.status);
     for (const s of ["pending", "confirmed", "cancelled"]) expect(statuses).toContain(s);
     expect((await one<{ n: number }>(`select count(*)::int n from orders where tenant_id = $1`, [tenantId]))[0]!.n).toBe(res.orders);
+    // order numbers follow the store's prefix setting; the demo store uses ORD- (the e2e suite looks for ORD-00019)
+    expect((await one<{ n: number }>(`select count(*)::int n from orders where tenant_id = $1 and number like 'ORD-%'`, [tenantId]))[0]!.n).toBe(res.orders);
+    expect((await one<{ number: string }>(`select number from orders where tenant_id = $1 and number = 'ORD-00019'`, [tenantId]))).toHaveLength(1);
 
     const fulfillmentStatuses = (await one<{ status: string }>(`select distinct status from fulfillments where tenant_id = $1`, [tenantId])).map((r) => r.status);
     for (const s of ["label_created", "in_transit", "delivered", "rto"]) expect(fulfillmentStatuses).toContain(s);
