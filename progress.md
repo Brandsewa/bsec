@@ -83,6 +83,7 @@ One line per piece of work that is started and not merged. Add yours before you 
 - claude · `feat/themes-puck` · themes, docs · 2026-10-01 · theme builder follow-ups; agent docs and change log (`docs/changes/`)
 - claude · `feat/commerce-page-templates` · themes, web · 2026-10-02 · cart as a theme page (`CartContents`), sticky buy box, "Modern Commerce" draft theme with collection, product and cart layouts (`docs/changes/2026-10-02-claude-commerce-page-templates.md`)
 - antigravity · `feat/auth-email-overhaul` · auth, email · 2026-10-01 · forgot/reset password, customer password sign-in, ZeptoMail (`docs/AUTH-OVERHAUL-PLAN.md`) *(from git worktree list; confirm status)*
+- zcode · `feat/commerce-page-templates` · infra, ops · 2026-10-04 · preserved this branch's uncommitted theme-builder work (b7b8d36), restored the bsec-dev DB into the VMM stack which now runs this branch (`docs/changes/2026-10-04-zcode-handoff-theme-builder-restored.md`)
 
 ## M10 · Visual theme system (Puck) — shipped to production 2026-10-01
 
