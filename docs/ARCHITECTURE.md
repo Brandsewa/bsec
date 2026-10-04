@@ -184,7 +184,7 @@ Read ADR-002 before touching anything here. The invariants:
 4. **Cache tags are tenant-prefixed**: `tenantTag(ctx, kind, id?)` -> `t:{tenantId}:{kind}[:{id}]`. Kinds: product, collection, category, page, theme, nav, store-shell, seo. Rule `bs/tenant-cache-tag`.
 5. **No merchant code runs on our servers** (ADR-010): themes and pages are validated JSON blocks with enumerated props, safe links and allow-listed video hosts. No custom JS/CSS/Liquid.
 6. **Secrets**: tenant provider credentials are AES-256-GCM encrypted in `tenant_secrets` (`TENANT_SECRETS_KEY`, alias `ENCRYPTION_KEY`) and never returned to a browser (UI sees set/not-set).
-7. **Platform isolation**: platform session cookie is host-only; only `SUPERADMIN_ORIGINS` may call it with credentials; MFA required; support access to a store needs the merchant's consent (`support_sessions`, standing consent).
+7. **Platform isolation**: platform session cookie is host-only; only `SUPERADMIN_ORIGINS` may call it with credentials; MFA required unless the platform owner turns it off in the Super Admin (Platform Staff page; `platform_settings.require_staff_mfa`, audited `platform_settings.update` — absence of the row means required in production, optional when `APP_ENV=local`, so local stacks skip the authenticator dance); support access to a store needs the merchant's consent (`support_sessions`, standing consent).
 8. **Quotas and rate limits** (ADR-013, ADR-015): per-tenant quotas, size tiers, `rate_limit_counters`; login failure limiter for admin.
 9. Tests that guard this: `packages/domain/test/isolation.int.test.ts` (525+ cases), `storefront-isolation.int.test.ts`, `apps/platform/test/rbac.int.test.ts`, `audit-coverage.int.test.ts`.
 
@@ -253,8 +253,9 @@ Drizzle schema files in `packages/db/src/schema/` (one Postgres database, `publi
 | 0026 | `reviews` | reviews table with RLS, ratings check constraint, store_settings.auto_publish_reviews |
 | 0027 | `product_categories_primary` | product_categories.is_primary column with unique index per product |
 | 0028 | `customers_phase0` | customers is_guest, marketing consent fields, and customer_consent_events table |
+| 0031 | `platform_settings` | single-row platform settings: require_staff_mfa toggle (Super Admin), updated_by/updated_at |
 
-How to write one (expand, migrate, contract; `forceRlsSql`): `docs/migrations.md`. **Never edit an applied migration.** Latest on disk: `0028` (the docs check keeps this list honest).
+How to write one (expand, migrate, contract; `forceRlsSql`): `docs/migrations.md`. **Never edit an applied migration.** Latest on disk: `0031` (the docs check keeps this list honest).
 
 ---
 

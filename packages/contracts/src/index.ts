@@ -16,6 +16,7 @@ import {
   platformStaffContract,
   platformAuditContract,
   platformEmailContract,
+  platformSettingsContract,
 } from "./platform.ts";
 import { storefrontContract } from "./storefront.ts";
 
@@ -66,6 +67,7 @@ export const platformContract = {
   staff: platformStaffContract,
   audit: platformAuditContract,
   email: platformEmailContract,
+  settings: platformSettingsContract,
 };
 
 export type StoreContract = typeof storeContract;

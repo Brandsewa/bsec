@@ -46,12 +46,30 @@ export interface PlatformStaffIdentity {
 }
 
 /**
+ * Whether platform staff must enrol in and sign in with TOTP. An explicit platform_settings row (the
+ * Super Admin toggle) wins; absence means the environment default: required everywhere except
+ * APP_ENV=local, so fresh local stacks never force the authenticator dance.
+ */
+export async function isStaffMfaRequired(db: Db): Promise<boolean> {
+  const [row] = await db
+    .select({ requireStaffMfa: schema.platformSettings.requireStaffMfa })
+    .from(schema.platformSettings)
+    .where(eq(schema.platformSettings.id, "default"))
+    .limit(1);
+  if (row) return row.requireStaffMfa;
+  return process.env.APP_ENV !== "local";
+}
+
+/**
  * Asserts that the authenticated user is an active platform staff member with COMPLETED and CURRENT MFA (PLAN §4, §6):
  *  - the account is an active platform_staff row;
  *  - TOTP is enabled and verified (Better Auth two_factors);
  *  - enrolment was completed (mfa_verified_at), which also killed every earlier password-only session;
  *  - if a session is given, it was created after that moment, i.e. it went through password AND TOTP.
- * Internal service functions call this without a session (the router middleware already checked it).
+ * When the platform settings toggle turns MFA off (or APP_ENV=local has no row), only the active-staff
+ * and role checks apply: sign-in is email + password, and enrolled authenticators keep working but are
+ * never demanded. Internal service functions call this without a session (the router middleware already
+ * checked it).
  */
 export async function assertPlatformStaff(
   rt: Runtime,
@@ -73,6 +91,9 @@ export async function assertPlatformStaff(
 
   if (!staff) {
     throw new Error("Forbidden: user is not an active platform staff member");
+  }
+  if (!(await isStaffMfaRequired(db))) {
+    return { userId, role: staff.role as PlatformRole };
   }
   if (!staff.twoFactorEnabled) {
     throw new Error("Forbidden: platform staff requires verified MFA (two-factor authentication not enabled)");
@@ -137,6 +158,7 @@ export async function getPlatformLoginStatus(
 ): Promise<{
   isPlatformStaff: boolean;
   role: PlatformRole | null;
+  mfaRequired: boolean;
   mfaEnrolled: boolean;
   mfaComplete: boolean;
   sessionValid: boolean;
@@ -152,7 +174,15 @@ export async function getPlatformLoginStatus(
     .innerJoin(schema.users, eq(schema.users.id, schema.platformStaff.userId))
     .where(and(eq(schema.platformStaff.userId, userId), eq(schema.platformStaff.isActive, true)))
     .limit(1);
-  if (!staff) return { isPlatformStaff: false, role: null, mfaEnrolled: false, mfaComplete: false, sessionValid: false };
+  if (!staff) {
+    return { isPlatformStaff: false, role: null, mfaRequired: true, mfaEnrolled: false, mfaComplete: false, sessionValid: false };
+  }
+
+  const mfaRequired = await isStaffMfaRequired(db);
+  if (!mfaRequired) {
+    // MFA is toggled off platform-wide (or a local default): a password session of active staff is enough.
+    return { isPlatformStaff: true, role: staff.role as PlatformRole, mfaRequired, mfaEnrolled: Boolean(staff.twoFactorEnabled), mfaComplete: true, sessionValid: true };
+  }
 
   const [tf] = await db
     .select({ verified: schema.twoFactors.verified })
@@ -164,6 +194,7 @@ export async function getPlatformLoginStatus(
   return {
     isPlatformStaff: true,
     role: staff.role as PlatformRole,
+    mfaRequired,
     mfaEnrolled,
     mfaComplete,
     sessionValid: mfaComplete && sessionCreatedAt.getTime() >= (staff.mfaVerifiedAt?.getTime() ?? Infinity),

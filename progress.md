@@ -112,7 +112,7 @@ One line per piece of work that is started and not merged. Add yours before you 
 
 - antigravity · `feat/customers-phase-0` · customers, db, domain, checkout · 2026-10-03 · Customers Phase 0: truthful metrics, guests, consent record & history
 - claude · `feat/themes-puck` · themes, docs · 2026-10-01 · theme builder follow-ups; agent docs and change log (`docs/changes/`)
-- zcode · `feat/superadmin-themes` · superadmin themes (worktree `C:\dev\bsec-themes`) · 2026-10-03 · theme settings customisation in the super admin Themes section; local stack + seeded platform admin in that worktree
+- zcode · `feat/superadmin-themes` · superadmin themes (worktree `C:\dev\bsec-themes`) · 2026-10-03 · theme settings customisation + platform staff MFA toggle (`platform_settings`, local-friendly default) in the super admin
 
 ## Returns & Exchanges (Manual Review & Portal) — Complete (2026-10-02)
 

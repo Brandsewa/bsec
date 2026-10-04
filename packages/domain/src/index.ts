@@ -121,6 +121,7 @@ export * from "./platform/create-staff.ts";
 export * from "./platform/system.ts";
 export * from "./platform/catalog-reads.ts";
 export * from "./platform/email-settings.ts";
+export * from "./platform/settings.ts";
 export * from "./system/platform-mailer.ts";
 
 

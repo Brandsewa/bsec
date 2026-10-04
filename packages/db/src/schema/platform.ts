@@ -175,3 +175,16 @@ export const exportFiles = pgTable("export_files", {
   data: bytea("data").notNull(),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().default(sql`now()`),
 });
+
+/**
+ * Platform Settings (single row, id = 'default'): platform-wide operational toggles.
+ * Created empty by migration 0031 on purpose — absence means the environment default
+ * (required in production, optional when APP_ENV=local). The Super Admin toggle writes the row.
+ * Platform-level: no tenant column, writable only by app_platform, no RLS.
+ */
+export const platformSettings = pgTable("platform_settings", {
+  id: text("id").primaryKey().default("default"), // Enforces single row
+  requireStaffMfa: boolean("require_staff_mfa").notNull().default(true),
+  updatedBy: uuid("updated_by").references(() => users.id, { onDelete: "set null" }),
+  updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().default(sql`now()`),
+});

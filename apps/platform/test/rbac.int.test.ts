@@ -66,6 +66,8 @@ const MIN_ROLE: Record<string, Role | "public"> = {
   "email.update": "platform_admin",
   "email.sendTest": "platform_admin",
   "email.recentDeliveries": "platform_support",
+  "settings.get": "platform_support",
+  "settings.update": "platform_owner",
 };
 
 /** Valid-shaped inputs, so the role check (which runs first) is what decides the outcome. */
@@ -98,6 +100,7 @@ const INPUT: Record<string, unknown> = {
   "templates.publish": { code: "essential-commerce" },
   "templates.updateMeta": { code: "essential-commerce", name: "Renamed" },
   "features.update": { featureKey: "k", defaultOn: true },
+  "settings.update": { requireStaffMfa: true },
   "staff.invite": { email: "i@x.test", role: "platform_support" },
   "staff.updateRole": { userId: U, role: "platform_admin" },
   "staff.deactivate": { userId: U },

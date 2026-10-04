@@ -85,6 +85,7 @@ async function mkTemplate(): Promise<string> {
 }
 
 const CASES: Record<string, Case> = {
+  "settings.update": { role: "platform_owner", action: "platform_settings.update", input: async () => ({ requireStaffMfa: true }) },
   "templates.create": { role: "platform_admin", action: "theme_template.create", input: async () => ({ name: `Created Theme ${++seq}` }) },
   "templates.saveDraft": {
     role: "platform_admin",

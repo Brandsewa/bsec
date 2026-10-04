@@ -705,3 +705,26 @@ export const platformEmailContract = {
     )
     .output(z.array(PlatformEmailLogEntry)),
 };
+
+/** Platform-wide operational settings (Super Admin toggle). Security posture: owner-only updates. */
+export const platformSettingsContract = {
+  get: oc
+    .route({ method: "GET", path: "/platform/settings" })
+    .output(
+      z.object({
+        requireStaffMfa: z.boolean(),
+        /** True when the toggle row exists; false means the value is the environment default. */
+        explicit: z.boolean(),
+        updatedAt: z.string().nullable(),
+        updatedByEmail: z.string().nullable(),
+      }),
+    ),
+  update: oc
+    .route({ method: "POST", path: "/platform/settings" })
+    .input(
+      z.object({
+        requireStaffMfa: z.boolean(),
+      }),
+    )
+    .output(z.object({ ok: z.boolean(), requireStaffMfa: z.boolean() })),
+};

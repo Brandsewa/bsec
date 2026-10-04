@@ -4,7 +4,7 @@ import { eq } from "drizzle-orm";
 import { schema } from "@bs/db";
 import { startTestDb, type TestDb } from "@bs/db/test-env";
 import { hashPassword } from "@bs/auth";
-import { createLogger, createPlatformStaffMember, createRuntime, type Runtime } from "@bs/domain";
+import { createLogger, createPlatformStaffMember, createRuntime, updatePlatformSettings, type Runtime } from "@bs/domain";
 
 const SPA = "http://localhost:5174";
 process.env.BETTER_AUTH_SECRET = "test-platform-auth-secret-0123456789abcdef0123";
@@ -198,5 +198,46 @@ describe("origin, CORS and test-auth hardening", () => {
     }
     expect(statuses.slice(0, 5).every((s) => s === 401 || s === 400 || s === 403)).toBe(true);
     expect(statuses.slice(5).some((s) => s === 429)).toBe(true);
+  });
+
+  it("with staff MFA toggled off, password-only sign-in is enough and nothing demands enrolment", async () => {
+    await createPlatformStaffMember(rt._db.db, { email: "relaxed@platform.test", name: "Relaxed", password: "relaxed staff password 1", role: "platform_admin" });
+    const [ownerUser] = await rt._db.db.select({ id: schema.users.id }).from(schema.users).where(eq(schema.users.email, "owner@platform.test"));
+
+    // Toggle MFA off through the real owner-only service (also flips two_factor_enabled for all staff).
+    await updatePlatformSettings(rt, ownerUser!.id, { requireStaffMfa: false });
+    expect(await (await send(new Jar(), "/api/platform/me")).json()).toMatchObject({ authenticated: false });
+
+    const jar = new Jar();
+    const signIn = await send(jar, "/api/auth/sign-in/email", { body: { email: "relaxed@platform.test", password: "relaxed staff password 1" }, ip: IP(150) });
+    expect(signIn.status).toBe(200);
+    const signInBody = (await signIn.json()) as { twoFactorRedirect?: boolean };
+    expect(signInBody.twoFactorRedirect ?? false).toBe(false); // no challenge: the flag is off for every staff user
+
+    const me = await (await send(jar, "/api/platform/me")).json();
+    expect(me).toMatchObject({ authenticated: true, isPlatformStaff: true, mfaRequired: false, mfaComplete: true, sessionValid: true, role: "platform_admin" });
+    expect((await send(jar, "/platform/tenants")).status).toBe(200);
+
+    // Even a user whose authenticator WAS enrolled signs in password-only while the toggle is off.
+    const ownerJar = new Jar();
+    const ownerSignIn = await send(ownerJar, "/api/auth/sign-in/email", { body: { email: "owner@platform.test", password: "correct horse battery staple" }, ip: IP(151) });
+    expect(ownerSignIn.status).toBe(200);
+    const ownerBody = (await ownerSignIn.json()) as { twoFactorRedirect?: boolean };
+    expect(ownerBody.twoFactorRedirect ?? false).toBe(false); // enrolled, but the toggle is off
+    expect(await (await send(ownerJar, "/api/platform/me")).json()).toMatchObject({ mfaRequired: false, mfaComplete: true, sessionValid: true });
+
+    // Turning it back on: only verified authenticators re-arm, password-era sessions are refused again.
+    await updatePlatformSettings(rt, ownerUser!.id, { requireStaffMfa: true });
+    const meAfter = await (await send(jar, "/api/platform/me")).json();
+    expect(meAfter).toMatchObject({ mfaRequired: true, mfaEnrolled: false, mfaComplete: false, sessionValid: false });
+    expect((await send(jar, "/platform/tenants")).status).toBe(403);
+    const [relaxedUser] = await rt._db.db.select({ enabled: schema.users.twoFactorEnabled }).from(schema.users).where(eq(schema.users.email, "relaxed@platform.test"));
+    expect(relaxedUser!.enabled).toBe(false);
+    const [ownerFlag] = await rt._db.db.select({ enabled: schema.users.twoFactorEnabled }).from(schema.users).where(eq(schema.users.email, "owner@platform.test"));
+    expect(ownerFlag!.enabled).toBe(true);
+
+    // The toggles left an audit trail.
+    const audit = await rt._db.db.select().from(schema.platformAuditLogs).where(eq(schema.platformAuditLogs.action, "platform_settings.update"));
+    expect(audit).toHaveLength(2);
   });
 });

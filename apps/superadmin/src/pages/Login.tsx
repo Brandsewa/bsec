@@ -57,12 +57,13 @@ export function Login({ onSuccess }: LoginProps) {
     try {
       const res = await signIn(email, password);
       if (res.ok) {
-        // A session exists. Decide what it may do: only a fully enrolled, fresh session enters the app.
+        // A session exists. Decide what it may do: with MFA required, only a fully enrolled, fresh
+        // session enters the app; with the platform toggle off, password-only is enough.
         const status = await fetchLoginStatus();
         if (!status.isPlatformStaff) {
           await signOut();
           setError("This account is not a platform staff account.");
-        } else if (!status.mfaEnrolled) {
+        } else if (status.mfaRequired !== false && !status.mfaEnrolled) {
           setStep("setupIntro");
         } else if (status.sessionValid) {
           toast.success("Welcome to Super Admin");

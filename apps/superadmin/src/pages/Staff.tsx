@@ -1,6 +1,6 @@
 import React, { useState } from "react";
-import { useQuery } from "@tanstack/react-query";
-import { UserPlus, KeyRound, CheckCircle2, UserX } from "lucide-react";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { ShieldCheck, ShieldOff, UserPlus, KeyRound, CheckCircle2, UserX } from "lucide-react";
 import {
   Button,
   Dialog,
@@ -26,7 +26,7 @@ import {
   TableRow,
   toast,
 } from "@bs/ui";
-import { client } from "../lib/orpc.ts";
+import { client, orpc } from "../lib/orpc.ts";
 import { messageOf } from "../lib/errors.ts";
 import { useHasRole, useStaff } from "../lib/user-context.tsx";
 
@@ -35,16 +35,33 @@ type StaffRole = "platform_owner" | "platform_admin" | "platform_support";
 export function Staff() {
   const me = useStaff();
   const isOwner = useHasRole("platform_owner");
+  const queryClient = useQueryClient();
   const [inviteOpen, setInviteOpen] = useState(false);
   const [inviteEmail, setInviteEmail] = useState("");
   const [inviteRole, setInviteRole] = useState<StaffRole>("platform_support");
 
   const [createdInvite, setCreatedInvite] = useState<{ email: string; url: string } | null>(null);
   const [actionLoading, setActionLoading] = useState(false);
+  const [mfaConfirm, setMfaConfirm] = useState<{ requireStaffMfa: boolean } | null>(null);
 
   const { data: staffList, isLoading, refetch } = useQuery({
     queryKey: ["platform", "staff"],
     queryFn: () => client.staff.list(),
+  });
+
+  const settingsQuery = useQuery(orpc.settings.get.queryOptions());
+
+  const updateMfa = useMutation({
+    mutationFn: (input: { requireStaffMfa: boolean }) => client.settings.update(input),
+    onSuccess: async (res) => {
+      setMfaConfirm(null);
+      toast.success(res.requireStaffMfa ? "Two-factor authentication is now required." : "Two-factor authentication is now optional.");
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: orpc.settings.get.key() }),
+        queryClient.invalidateQueries({ queryKey: ["platform", "staff"] }),
+      ]);
+    },
+    onError: (err) => toast.error(messageOf(err, "Failed to update the platform settings")),
   });
 
   const handleInvite = async (e: React.FormEvent) => {
@@ -119,6 +136,56 @@ export function Staff() {
           </Button>
         }
       />
+
+      <div className="mb-4 rounded-xl border bg-card p-4">
+        <div className="flex flex-wrap items-start justify-between gap-3">
+          <div className="max-w-2xl">
+            <div className="flex items-center gap-2">
+              {settingsQuery.data?.requireStaffMfa === false ? (
+                <ShieldOff className="h-4 w-4 text-amber-600 dark:text-amber-400" />
+              ) : (
+                <ShieldCheck className="h-4 w-4 text-emerald-600 dark:text-emerald-400" />
+              )}
+              <h2 className="text-sm font-semibold">Two-factor authentication (TOTP)</h2>
+              <span
+                className={`inline-flex rounded-full px-2 py-0.5 text-[11px] font-medium ${
+                  settingsQuery.data?.requireStaffMfa === false
+                    ? "bg-amber-500/10 text-amber-700 dark:text-amber-400"
+                    : "bg-emerald-500/10 text-emerald-700 dark:text-emerald-400"
+                }`}
+              >
+                {settingsQuery.isLoading ? "Loading…" : settingsQuery.data?.requireStaffMfa === false ? "Optional" : "Required"}
+              </span>
+            </div>
+            <p className="mt-1 text-xs text-muted-foreground">
+              When required, every platform staff member enrols an authenticator at first sign-in and confirms a 6-digit
+              code on every login. When optional, email and password are enough; enrolled authenticators keep working but
+              are never asked for, and enabling it again demands a fresh code sign-in from everyone.
+              {settingsQuery.data?.explicit && settingsQuery.data.updatedAt ? (
+                <>
+                  {" "}Last changed{" "}
+                  {settingsQuery.data.updatedByEmail ? `by ${settingsQuery.data.updatedByEmail} ` : ""}
+                  {new Date(settingsQuery.data.updatedAt).toLocaleString()}.
+                </>
+              ) : settingsQuery.data ? (
+                " Currently following the environment default (no explicit choice saved)."
+              ) : null}
+            </p>
+          </div>
+          {isOwner ? (
+            <Button
+              size="sm"
+              variant={settingsQuery.data?.requireStaffMfa === false ? "primary" : "ghost"}
+              disabled={settingsQuery.isLoading || updateMfa.isPending}
+              onClick={() => setMfaConfirm({ requireStaffMfa: settingsQuery.data?.requireStaffMfa === false })}
+            >
+              {settingsQuery.data?.requireStaffMfa === false ? "Enable two-factor" : "Disable two-factor"}
+            </Button>
+          ) : (
+            <span className="text-[11px] text-muted-foreground">Only a platform owner can change this.</span>
+          )}
+        </div>
+      </div>
 
       <div className="rounded-xl border bg-card overflow-hidden">
         <Table>
@@ -212,6 +279,28 @@ export function Staff() {
           </TableBody>
         </Table>
       </div>
+
+      {/* Toggle two-factor confirmation (security-relevant: owner-only) */}
+      <Dialog open={mfaConfirm !== null} onOpenChange={(o) => !o && setMfaConfirm(null)}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>{mfaConfirm?.requireStaffMfa ? "Require two-factor authentication?" : "Make two-factor authentication optional?"}</DialogTitle>
+            <DialogDescription>
+              {mfaConfirm?.requireStaffMfa
+                ? "Staff with a verified authenticator are challenged for a code at every sign-in again; everyone else enrols at next sign-in. Sessions created while it was optional stop working and need a fresh code sign-in."
+                : "Staff can then sign in with email and password alone. Enrolled authenticators keep working but are never asked for, and everyone's current sessions stay valid. This is typical for local development, not for production."}
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button variant="ghost" onClick={() => setMfaConfirm(null)} disabled={updateMfa.isPending}>
+              Cancel
+            </Button>
+            <Button variant={mfaConfirm?.requireStaffMfa ? "default" : "destructive"} disabled={updateMfa.isPending} onClick={() => mfaConfirm && updateMfa.mutate(mfaConfirm)}>
+              {updateMfa.isPending ? "Saving…" : mfaConfirm?.requireStaffMfa ? "Require two-factor" : "Make optional"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       {/* Invite Staff Dialog */}
       <Dialog open={inviteOpen} onOpenChange={setInviteOpen}>

@@ -18,6 +18,7 @@ export interface LoginStatus {
   name?: string | null;
   isPlatformStaff?: boolean;
   role?: PlatformRole | null;
+  mfaRequired?: boolean;
   mfaEnrolled?: boolean;
   mfaComplete?: boolean;
   sessionValid?: boolean;
