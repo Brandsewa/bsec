@@ -11,4 +11,8 @@ paths = [
   '''(^|/)test/''',
   '''(^|/)e2e/''',
   '''\.test\.tsx?$''',
+  # Prose false positive: the finance-plan change record on feat/superadmin-themes mentions
+  # "idempotency keys, own/marketplace books", which the generic-api-key rule flags. The commit
+  # is pushed history, so the line cannot be rephrased away; only this file's path is silenced.
+  '''(^|/)docs/changes/2026-10-03-zcode-finance-plan\.md$''',
 ]
