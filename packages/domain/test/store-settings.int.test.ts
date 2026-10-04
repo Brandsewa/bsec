@@ -2,7 +2,7 @@ import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { PostgreSqlContainer, type StartedPostgreSqlContainer } from "@testcontainers/postgresql";
 import { createHash } from "node:crypto";
 import { eq } from "drizzle-orm";
-import { createDb, invoices, staffInvitations, tenantSecrets, withTenant, type DbHandle } from "@bs/db";
+import { auditLogs, createDb, invoices, schema, staffInvitations, tenantSecrets, withTenant, type DbHandle } from "@bs/db";
 import { bootstrapRoles } from "@bs/db/bootstrap";
 import { runMigrations } from "@bs/db/migrate";
 import { decryptSecret } from "@bs/payments";
@@ -293,5 +293,54 @@ describe("product list summaries", () => {
     const first = all.items.find((p) => p.title === "Settings Tee")!;
     expect(first.priceMin).toBe(100000);
     expect(first.stock).toBeGreaterThan(0);
+  });
+});
+
+describe("store settings audit trail and Phase 0-1 fields", () => {
+  it("writes an audit_logs row with a before/after diff (no secrets) on every settings update", async () => {
+    const before = await getStoreSettings(rt, ctx);
+    await updateStoreSettings(rt, ctx, {
+      storeName: "Audited Store",
+      timezone: "Asia/Kolkata",
+      address: { line1: "9 Audit Lane", city: "Mumbai", state: "Maharashtra", pincode: "400001" },
+    });
+    const rows = await withTenant(rwDb.db, tenantId, (tx) =>
+      tx.select().from(auditLogs).where(eq(auditLogs.action, "store_settings.update")),
+    );
+    const latest = rows.at(-1);
+    expect(latest).toBeDefined();
+    const diff = latest!.diff as { storeName?: { before: string; after: string } };
+    expect(diff.storeName).toEqual({ before: before.storeName, after: "Audited Store" });
+    // No credential-shaped values anywhere in the audit diff.
+    expect(JSON.stringify(latest!.diff)).not.toMatch(/secret|key_secret|whsec/i);
+
+    // Restoring keeps the trail append-only.
+    await updateStoreSettings(rt, ctx, { storeName: before.storeName });
+    const rowsAfter = await withTenant(rwDb.db, tenantId, (tx) =>
+      tx.select().from(auditLogs).where(eq(auditLogs.action, "store_settings.update")),
+    );
+    expect(rowsAfter.length).toBeGreaterThan(rows.length);
+  });
+
+  it("defaults the address countryCode to IN on save and preserves an existing one", async () => {
+    await updateStoreSettings(rt, ctx, { address: { line1: "5 India Gate", city: "Delhi", state: "Delhi", pincode: "110001" } });
+    const s = await getStoreSettings(rt, ctx);
+    expect(s.address?.countryCode).toBe("IN");
+    await updateStoreSettings(rt, ctx, { address: { countryCode: "IN", line1: "5 India Gate", city: "Delhi", state: "Delhi", pincode: "110001" } });
+    const s2 = await getStoreSettings(rt, ctx);
+    expect(s2.address?.countryCode).toBe("IN");
+  });
+
+  it("persists a timezone change from the curated list", async () => {
+    await updateStoreSettings(rt, ctx, { timezone: "Asia/Kolkata" });
+    expect((await getStoreSettings(rt, ctx)).timezone).toBe("Asia/Kolkata");
+  });
+
+  it("keeps orderPrefix untouched when the caller omits it (Orders is the canonical editor)", async () => {
+    const before = await getStoreSettings(rt, ctx);
+    await updateStoreSettings(rt, ctx, { storeName: "Prefix Untouched Store" });
+    const after = await getStoreSettings(rt, ctx);
+    expect(after.orderPrefix).toBe(before.orderPrefix);
+    void schema;
   });
 });

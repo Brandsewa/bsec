@@ -104,7 +104,7 @@ test("team invite: create link, accept as a new person, they sign in and see the
   await signIn(page);
   await openDemoStore(page);
   await page.getByRole("link", { name: "Settings", exact: true }).click();
-  await page.getByRole("link", { name: "Team" }).click();
+  await page.getByRole("link", { name: "Users", exact: true }).click();
   await page.getByLabel("Email", { exact: true }).fill(inviteeEmail);
   await page.getByRole("button", { name: "Create invite" }).click();
   const link = await page.getByLabel("Invite link").inputValue();

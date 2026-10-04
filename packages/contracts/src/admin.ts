@@ -61,7 +61,76 @@ const SegmentCreateInput = z.object({
 
 export const GSTIN_PATTERN = /^\d{2}[A-Z]{5}\d{4}[A-Z][1-9A-Z]Z[0-9A-Z]$/;
 
+/**
+ * Curated IANA identifiers for the store timezone selector (V1; the selector is a controlled list,
+ * not free text, per the Settings rebuild prompt §D). `Asia/Kolkata` is the platform default.
+ */
+export const STORE_TIMEZONES = [
+  "Asia/Kolkata",
+  "Asia/Karachi",
+  "Asia/Dhaka",
+  "Asia/Kathmandu",
+  "Asia/Colombo",
+  "Asia/Dubai",
+  "Asia/Muscat",
+  "Asia/Riyadh",
+  "Asia/Qatar",
+  "Asia/Kuwait",
+  "Asia/Bangkok",
+  "Asia/Jakarta",
+  "Asia/Singapore",
+  "Asia/Hong_Kong",
+  "Asia/Shanghai",
+  "Asia/Taipei",
+  "Asia/Manila",
+  "Asia/Kuala_Lumpur",
+  "Asia/Seoul",
+  "Asia/Tokyo",
+  "Asia/Tehran",
+  "Asia/Jerusalem",
+  "Australia/Perth",
+  "Australia/Adelaide",
+  "Australia/Brisbane",
+  "Australia/Sydney",
+  "Australia/Melbourne",
+  "Pacific/Auckland",
+  "Europe/Istanbul",
+  "Europe/Moscow",
+  "Europe/London",
+  "Europe/Dublin",
+  "Europe/Lisbon",
+  "Europe/Madrid",
+  "Europe/Paris",
+  "Europe/Brussels",
+  "Europe/Amsterdam",
+  "Europe/Berlin",
+  "Europe/Zurich",
+  "Europe/Rome",
+  "Europe/Stockholm",
+  "Europe/Warsaw",
+  "America/New_York",
+  "America/Toronto",
+  "America/Chicago",
+  "America/Denver",
+  "America/Phoenix",
+  "America/Los_Angeles",
+  "America/Vancouver",
+  "America/Mexico_City",
+  "America/Sao_Paulo",
+  "UTC",
+] as const;
+
+export const STORE_TIMEZONE_SET: ReadonlySet<string> = new Set(STORE_TIMEZONES);
+
+/** The store timezone must be one of the curated IANA identifiers. */
+export const StoreTimezone = z.string().refine((v) => STORE_TIMEZONE_SET.has(v), {
+  message: "Choose a time zone from the list",
+});
+export type StoreTimezone = z.infer<typeof StoreTimezone>;
+
 export const StoreAddress = z.object({
+  /** ISO 3166-1 alpha-2. V1 is India-only; the editor sends "IN" and the domain defaults it on save. */
+  countryCode: z.string().length(2).optional(),
   line1: z.string().max(200).optional(),
   line2: z.string().max(200).optional(),
   city: z.string().max(100).optional(),
@@ -91,6 +160,67 @@ export const StoreSettings = z.object({
     .optional(),
 });
 export type StoreSettings = z.infer<typeof StoreSettings>;
+
+/**
+ * Server-verified readiness snapshot for the Settings Overview (one narrow read model; the SPA must not
+ * query database-like endpoints separately). Facts are derived from the real sources of truth
+ * (store_status, store_settings.checkout, shipping zones/rates, products, domains, plans/subscriptions),
+ * never from the mere existence of a settings row.
+ */
+export const SettingsOverviewAction = z.object({
+  id: z.string(),
+  title: z.string(),
+  description: z.string().nullable(),
+  /** Route to fix the condition. Null when no in-app page exists yet (explained in `description`). */
+  href: z.string().nullable(),
+  kind: z.enum(["required", "informational"]),
+});
+export type SettingsOverviewAction = z.infer<typeof SettingsOverviewAction>;
+
+export const SettingsOverview = z.object({
+  storeStatus: z.object({
+    mode: z.enum(["live", "coming_soon", "maintenance", "password"]),
+    /** Safe shopper-facing link built from the tenant's primary active domain (or platform subdomain). */
+    storefrontUrl: z.string().nullable(),
+  }),
+  payments: z.object({
+    codEnabled: z.boolean(),
+    onlinePaymentAvailable: z.boolean(),
+  }),
+  shipping: z.object({
+    hasDefaultRate: z.boolean(),
+  }),
+  products: z.object({
+    hasProducts: z.boolean(),
+  }),
+  domains: z.object({
+    hasCustomDomain: z.boolean(),
+    storefrontHostname: z.string().nullable(),
+  }),
+  /** Null when no plan/subscription data is available; the card is omitted rather than faked. */
+  plan: z
+    .object({
+      name: z.string(),
+      status: z.string(),
+      interval: z.string(),
+    })
+    .nullable(),
+  onboarding: z.object({
+    steps: z.record(z.string(), z.boolean()),
+    completedCount: z.number().int(),
+    totalCount: z.number().int(),
+    dismissed: z.boolean(),
+    allCompleted: z.boolean(),
+  }),
+  actions: z.array(SettingsOverviewAction),
+  quickLinks: z.array(
+    z.object({
+      href: z.string(),
+      label: z.string(),
+    }),
+  ),
+});
+export type SettingsOverview = z.infer<typeof SettingsOverview>;
 
 export const OrderSettings = z.object({
   prefix: z.string().max(10).regex(/^[A-Za-z0-9#\-_/]*$/, "Prefix can only contain letters, numbers, and # - _ /"),
@@ -966,7 +1096,7 @@ export const adminContract = {
         z.object({
           storeName: z.string().min(1).max(120).optional(),
           currency: z.string().min(3).max(3).optional(),
-          timezone: z.string().optional(),
+          timezone: StoreTimezone.optional(),
           legalName: z.string().max(200).nullable().optional(),
           supportEmail: z.string().email().nullable().optional(),
           supportPhone: z.string().max(30).nullable().optional(),
@@ -984,6 +1114,12 @@ export const adminContract = {
         }),
       )
       .output(StoreSettings),
+  },
+  // --- Settings Overview (Settings rebuild Phases 0-1, docs/prompts/settings-rebuild-phase-0-1.md §C) ---
+  settingsOverview: {
+    get: oc
+      .route({ method: "GET", path: "/admin/settings/overview" })
+      .output(SettingsOverview),
   },
   orderSettings: {
     get: oc
