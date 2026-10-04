@@ -33,69 +33,98 @@ export interface CustomerMetricsRecord {
 }
 
 /**
- * Generates the lateral SQL subquery fragment computing customer metrics from orders and returns in real-time.
+ * Generates the metrics subquery computing customer metrics from orders and returns in real-time.
  * Used by customer list, detail, search, sorting, and segmentation.
+ *
+ * Join it to the customers table on `metrics.customer_id = customers.id` (single equality):
+ *
+ *   .leftJoin(customerMetricsSql(tenantId), sql`${schema.customers.id} = metrics.customer_id`)
+ *
+ * Shape: grouped aggregates over the tenant's orders and returns (a constant number of linear
+ * scans), joined back to customers by customer_id and email. The previous per-customer LATERAL
+ * re-scanned the whole orders table once per customer (measured: 6k customers x 24k orders =
+ * 13.1M buffer hits for one page of 25) because the OR in the match condition defeats indexes.
  */
 export function customerMetricsSql(tenantId: string): SQL {
+  // Net spend and "counts as an order" per the rule documented above, shared by both match paths.
+  // keySelect/groupKey differ per path: the by-id path groups on customer_id, the guest path on email.
+  const ordersAggregate = (match: SQL, keySelect: SQL, groupKey: SQL) => sql`
+    SELECT
+      ${keySelect},
+      COUNT(*) FILTER (WHERE o.counts AND o.net > 0)::int AS orders_count,
+      COALESCE(SUM(o.net) FILTER (WHERE o.counts), 0)::bigint AS total_spent,
+      MIN(o.placed_at) FILTER (WHERE o.counts AND o.net > 0) AS first_order_at,
+      MAX(o.placed_at) FILTER (WHERE o.counts AND o.net > 0) AS last_order_at
+    FROM (
+      SELECT o2.customer_id, o2.email, o2.placed_at,
+        o2.grand_total - COALESCE(ref.refunded, 0) AS net,
+        (o2.payment_status IN ('paid', 'partially_refunded') OR o2.payment_status = 'cod_collected')
+          AND o2.status <> 'cancelled' AS counts
+      FROM ${schema.orders} o2
+      LEFT JOIN (
+        SELECT order_id, SUM(amount) AS refunded
+        FROM ${schema.refunds}
+        WHERE tenant_id = ${tenantId} AND status IN ('succeeded', 'processed')
+        GROUP BY order_id
+      ) ref ON ref.order_id = o2.id
+      WHERE o2.tenant_id = ${tenantId} AND ${match}
+    ) o
+    GROUP BY ${groupKey}
+  `;
+
   return sql`
-    LATERAL (
+    (
       SELECT
-        COUNT(ord.id) FILTER (
-          WHERE (ord.payment_status IN ('paid', 'partially_refunded') OR ord.payment_status = 'cod_collected')
-            AND ord.status <> 'cancelled'
-            AND (ord.grand_total - COALESCE(ref.refunded, 0)) > 0
-        )::int AS orders_count,
-        COALESCE(
-          SUM(ord.grand_total - COALESCE(ref.refunded, 0)) FILTER (
-            WHERE (ord.payment_status IN ('paid', 'partially_refunded') OR ord.payment_status = 'cod_collected')
-              AND ord.status <> 'cancelled'
-          ),
-          0
-        )::bigint AS total_spent,
-        COALESCE(
-          ROUND(
-            AVG(ord.grand_total - COALESCE(ref.refunded, 0)) FILTER (
-              WHERE (ord.payment_status IN ('paid', 'partially_refunded') OR ord.payment_status = 'cod_collected')
-                AND ord.status <> 'cancelled'
-                AND (ord.grand_total - COALESCE(ref.refunded, 0)) > 0
-            )
-          ),
-          0
-        )::bigint AS average_order_value,
-        MIN(ord.placed_at) FILTER (
-          WHERE (ord.payment_status IN ('paid', 'partially_refunded') OR ord.payment_status = 'cod_collected')
-            AND ord.status <> 'cancelled'
-            AND (ord.grand_total - COALESCE(ref.refunded, 0)) > 0
-        ) AS first_order_at,
-        MAX(ord.placed_at) FILTER (
-          WHERE (ord.payment_status IN ('paid', 'partially_refunded') OR ord.payment_status = 'cod_collected')
-            AND ord.status <> 'cancelled'
-            AND (ord.grand_total - COALESCE(ref.refunded, 0)) > 0
-        ) AS last_order_at,
-        (
-          SELECT COUNT(*)::int
+        cx.id AS customer_id,
+        COALESCE(by_id.orders_count, 0) + COALESCE(by_email.orders_count, 0) AS orders_count,
+        COALESCE(by_id.total_spent, 0) + COALESCE(by_email.total_spent, 0) AS total_spent,
+        CASE
+          WHEN COALESCE(by_id.orders_count, 0) + COALESCE(by_email.orders_count, 0) > 0
+          THEN ROUND(
+            (COALESCE(by_id.total_spent, 0) + COALESCE(by_email.total_spent, 0))::numeric
+            / (COALESCE(by_id.orders_count, 0) + COALESCE(by_email.orders_count, 0))
+          )
+          ELSE 0
+        END::bigint AS average_order_value,
+        LEAST(by_id.first_order_at, by_email.first_order_at) AS first_order_at,
+        GREATEST(by_id.last_order_at, by_email.last_order_at) AS last_order_at,
+        COALESCE(returns_by_customer.returns_count, 0) + COALESCE(returns_by_email.returns_count, 0) AS returns_count
+      FROM ${schema.customers} cx
+      LEFT JOIN (
+        ${ordersAggregate(
+          sql`o2.customer_id IS NOT NULL`,
+          sql`o.customer_id AS customer_id, NULL::citext AS email`,
+          sql`o.customer_id`,
+        )}
+      ) by_id ON by_id.customer_id = cx.id
+      LEFT JOIN (
+        ${ordersAggregate(
+          sql`o2.customer_id IS NULL`,
+          sql`NULL::uuid AS customer_id, o.email AS email`,
+          sql`o.email`,
+        )}
+      ) by_email ON by_email.email = cx.email
+      LEFT JOIN (
+        SELECT key, COUNT(*)::int AS returns_count
+        FROM (
+          SELECT ret.customer_id AS key
           FROM ${schema.returns} ret
-          WHERE ret.tenant_id = ${tenantId}
-            AND (ret.customer_id = ${schema.customers.id} OR ret.order_id IN (
-              SELECT o2.id FROM ${schema.orders} o2
-              WHERE o2.tenant_id = ${tenantId}
-                AND (o2.customer_id = ${schema.customers.id} OR (o2.customer_id IS NULL AND o2.email = ${schema.customers.email}))
-            ))
-            AND ret.status <> 'cancelled'
-        )::int AS returns_count
-      FROM (
-        SELECT id, payment_status, status, grand_total, placed_at, tenant_id
-        FROM ${schema.orders} o
-        WHERE o.tenant_id = ${tenantId}
-          AND (o.customer_id = ${schema.customers.id} OR (o.customer_id IS NULL AND o.email = ${schema.customers.email}))
-      ) ord
-      LEFT JOIN LATERAL (
-        SELECT COALESCE(SUM(r.amount), 0)::bigint AS refunded
-        FROM ${schema.refunds} r
-        WHERE r.tenant_id = ${tenantId}
-          AND r.order_id = ord.id
-          AND r.status IN ('succeeded', 'processed')
-      ) ref ON true
+          WHERE ret.tenant_id = ${tenantId} AND ret.status <> 'cancelled' AND ret.customer_id IS NOT NULL
+          UNION ALL
+          SELECT o.customer_id
+          FROM ${schema.returns} ret
+          JOIN ${schema.orders} o ON o.tenant_id = ${tenantId} AND o.id = ret.order_id
+          WHERE ret.tenant_id = ${tenantId} AND ret.status <> 'cancelled' AND ret.customer_id IS NULL AND o.customer_id IS NOT NULL
+        ) k
+        GROUP BY key
+      ) returns_by_customer ON returns_by_customer.key = cx.id
+      LEFT JOIN (
+        SELECT o.email, COUNT(*)::int AS returns_count
+        FROM ${schema.returns} ret
+        JOIN ${schema.orders} o ON o.tenant_id = ${tenantId} AND o.id = ret.order_id
+        WHERE ret.tenant_id = ${tenantId} AND ret.status <> 'cancelled' AND ret.customer_id IS NULL AND o.customer_id IS NULL
+        GROUP BY o.email
+      ) returns_by_email ON returns_by_email.email = cx.email
     ) metrics
   `;
 }
@@ -120,7 +149,7 @@ export async function refreshCustomerMetrics(
         metrics.last_order_at,
         metrics.returns_count
       FROM ${schema.customers}
-      CROSS JOIN ${customerMetricsSql(tenantId)}
+      LEFT JOIN ${customerMetricsSql(tenantId)} ON ${schema.customers.id} = metrics.customer_id
       WHERE ${schema.customers.tenantId} = ${tenantId} AND ${schema.customers.id} = ${customerId}
       LIMIT 1
     `;
@@ -191,7 +220,7 @@ export async function runCustomerMetricsSweep(
             metrics.total_spent,
             metrics.last_order_at
           FROM ${schema.customers}
-          CROSS JOIN ${customerMetricsSql(t.id)}
+          LEFT JOIN ${customerMetricsSql(t.id)} ON ${schema.customers.id} = metrics.customer_id
           WHERE ${schema.customers.tenantId} = ${t.id}
         )
         UPDATE ${schema.customers}

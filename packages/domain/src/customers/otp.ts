@@ -100,6 +100,16 @@ export async function verifyCustomerOtp(
       .set({ consumedAt: new Date() })
       .where(eq(customerOtps.id, record.id));
 
+    // A blocked customer cannot sign in; the failure looks exactly like a wrong code.
+    const [blocked] = await tx
+      .select({ id: customers.id, status: customers.status })
+      .from(customers)
+      .where(and(eq(customers.tenantId, tenantId), eq(customers.phone, cleanPhone)))
+      .limit(1);
+    if (blocked && blocked.status !== "active") {
+      return { failed: true };
+    }
+
     // Upsert customer
     const [cust] = await tx
       .insert(customers)

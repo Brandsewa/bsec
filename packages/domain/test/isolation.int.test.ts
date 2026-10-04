@@ -91,10 +91,41 @@ import {
   getPlatformTenant,
   getProduct,
   getAdminShippingSettings,
+  getSettingsOverview,
   getStoreSettings,
   getTheme,
   inviteStaff,
   listAdminCustomers,
+  listSegments,
+  getSegment,
+  createSegment,
+  updateSegment,
+  deleteSegment,
+  previewSegmentRules,
+  listSegmentMembers,
+  addCustomersToSegment,
+  removeCustomersFromSegment,
+  refreshSegmentCount,
+  getCustomerSegments,
+  createPresetSegments,
+  getSegmentActivity,
+  getAdminCustomerStats,
+  listAdminCustomerTags,
+  setAdminCustomerStatus,
+  setAdminCustomerTags,
+  updateAdminCustomer,
+  setAdminCustomerConsent,
+  addAdminCustomerAddress,
+  updateAdminCustomerAddress,
+  deleteAdminCustomerAddress,
+  listAdminCustomerOrders,
+  getAdminCustomerActivity,
+  listCustomerNotes,
+  addCustomerNote,
+  deleteCustomerNote,
+  previewCustomerImport,
+  commitCustomerImport,
+  deleteAdminCustomer,
   listAdminDiscounts,
   listAdminOrders,
   listInvitations,
@@ -105,6 +136,7 @@ import {
   listInventoryLevels,
   listMedia,
   listMemberships,
+  listSettingsActivity,
   listMenus,
   listPages,
   listPlatformTenants,
@@ -646,6 +678,8 @@ describe("Generated Isolation Test Suite (M1 Real Postgres 18 Proof)", () => {
     expect(adminProcedures.length).toBeGreaterThanOrEqual(40);
     expect(adminProcedures).toContain("memberships.list");
     expect(adminProcedures).toContain("memberships.invite");
+    expect(adminProcedures).toContain("settingsOverview.get");
+    expect(adminProcedures).toContain("settingsActivity.list");
     expect(adminProcedures).toContain("settings.get");
     expect(adminProcedures).toContain("settings.update");
     expect(adminProcedures).toContain("featureFlags.list");
@@ -755,6 +789,10 @@ describe("Generated Isolation Test Suite (M1 Real Postgres 18 Proof)", () => {
           email: `invite-${Date.now()}-${Math.random().toString(36).slice(2, 6)}@test.com`,
           roleId: roleLimitedA,
         });
+      case "settingsOverview.get":
+        return await getSettingsOverview(rt, ctx);
+      case "settingsActivity.list":
+        return await listSettingsActivity(rt, ctx);
       case "settings.get":
         return await getStoreSettings(rt, ctx);
       case "settings.update":
@@ -976,8 +1014,116 @@ describe("Generated Isolation Test Suite (M1 Real Postgres 18 Proof)", () => {
       // --- M5 Customers Admin ---
       case "customers.list":
         return await listAdminCustomers(rt, ctx);
+      case "customers.stats":
+        return await getAdminCustomerStats(rt, ctx);
+      case "customers.tags":
+        return await listAdminCustomerTags(rt, ctx);
       case "customers.get":
         return await getAdminCustomerDetail(rt, ctx, { id: testCustomerA });
+      case "customers.setStatus":
+        return await setAdminCustomerStatus(rt, ctx, { id: testCustomerA, status: "active" });
+      case "customers.setTags":
+        return await setAdminCustomerTags(rt, ctx, { id: testCustomerA, tags: ["vip"] });
+      case "customers.update":
+        return await updateAdminCustomer(rt, ctx, { id: testCustomerA, name: "Isolation Update" });
+      case "customers.orders":
+        return await listAdminCustomerOrders(rt, ctx, { customerId: testCustomerA });
+      case "customers.activity":
+        return await getAdminCustomerActivity(rt, ctx, { customerId: testCustomerA });
+      case "customers.consentSet":
+        return await setAdminCustomerConsent(rt, ctx, { id: testCustomerA, state: "subscribed" });
+      case "customers.addresses.add":
+        return await addAdminCustomerAddress(rt, ctx, {
+          customerId: testCustomerA,
+          address: { name: "Iso Staff", phone: "9600011111", line1: "1 Iso Road", city: "Bengaluru", stateCode: "KA", pincode: "560001", isDefault: true },
+        });
+      case "customers.addresses.update": {
+        const added = await addAdminCustomerAddress(rt, ctx, {
+          customerId: testCustomerA,
+          address: { name: "Iso Staff", phone: "9600011112", line1: "2 Iso Road", city: "Bengaluru", stateCode: "KA", pincode: "560001" },
+        });
+        return await updateAdminCustomerAddress(rt, ctx, {
+          customerId: testCustomerA,
+          addressId: added.id,
+          address: { name: "Iso Staff Updated", phone: "9600011112", line1: "2 Iso Road", city: "Bengaluru", stateCode: "KA", pincode: "560001" },
+        });
+      }
+      case "customers.addresses.delete": {
+        const added = await addAdminCustomerAddress(rt, ctx, {
+          customerId: testCustomerA,
+          address: { name: "Iso Staff", phone: "9600011113", line1: "3 Iso Road", city: "Bengaluru", stateCode: "KA", pincode: "560001" },
+        });
+        return await deleteAdminCustomerAddress(rt, ctx, { customerId: testCustomerA, addressId: added.id });
+      }
+      case "customers.notes.list":
+        return await listCustomerNotes(rt, ctx, { customerId: testCustomerA });
+      case "customers.notes.add":
+        return await addCustomerNote(rt, ctx, { customerId: testCustomerA, body: "Isolation note" });
+      case "customers.notes.delete": {
+        const note = await addCustomerNote(rt, ctx, { customerId: testCustomerA, body: "Isolation note to delete" });
+        return await deleteCustomerNote(rt, ctx, { id: note.id });
+      }
+      case "customers.importPreview":
+        return await previewCustomerImport(rt, ctx, {
+          rows: [{ name: "Iso Import", email: `iso-import-${Date.now()}@test.com`, tags: ["iso"], marketingConsent: "no" }],
+        });
+      case "customers.importCommit":
+        return await commitCustomerImport(rt, ctx, {
+          rows: [{ name: "Iso Import", email: `iso-import-commit-${Date.now()}@test.com`, tags: ["iso"], marketingConsent: "no" }],
+        });
+      case "customers.delete": {
+        // A customer without orders is hard-deleted, so create a throwaway row for this check.
+        const [row] = await withTenant(rt._db.db, ctx.tenantId, (tx) =>
+          tx.insert(schema.customers).values({ tenantId: ctx.tenantId, email: `iso-delete-${Date.now()}@test.com`, name: "Iso Delete" }).returning(),
+        );
+        return await deleteAdminCustomer(rt, ctx, { id: row!.id });
+      }
+
+      // --- Customers Segments (Phase 2) ---
+      case "segments.list":
+        return await listSegments(rt, ctx);
+      case "segments.get": {
+        const created = await createSegment(rt, ctx, { name: `Iso Seg ${Date.now()}`, kind: "manual" });
+        return await getSegment(rt, ctx, { id: created.id });
+      }
+      case "segments.create":
+        return await createSegment(rt, ctx, { name: `Iso Seg Create ${Date.now()}`, kind: "manual" });
+      case "segments.update": {
+        const created = await createSegment(rt, ctx, { name: `Iso Seg Upd ${Date.now()}`, kind: "manual" });
+        return await updateSegment(rt, ctx, { id: created.id, description: "updated by isolation" });
+      }
+      case "segments.delete": {
+        const created = await createSegment(rt, ctx, { name: `Iso Seg Del ${Date.now()}`, kind: "manual" });
+        return await deleteSegment(rt, ctx, { id: created.id });
+      }
+      case "segments.preview":
+        return await previewSegmentRules(rt, ctx, { rules: { match: "all", conditions: [{ field: "orders_count", op: "gte", value: 0 }] } });
+      case "segments.members.list": {
+        const created = await createSegment(rt, ctx, { name: `Iso Seg Members ${Date.now()}`, kind: "manual" });
+        await addCustomersToSegment(rt, ctx, { segmentId: created.id, customerIds: [testCustomerA] });
+        return await listSegmentMembers(rt, ctx, { segmentId: created.id });
+      }
+      case "segments.members.add": {
+        const created = await createSegment(rt, ctx, { name: `Iso Seg Add ${Date.now()}`, kind: "manual" });
+        return await addCustomersToSegment(rt, ctx, { segmentId: created.id, customerIds: [testCustomerA] });
+      }
+      case "segments.members.remove": {
+        const created = await createSegment(rt, ctx, { name: `Iso Seg Rem ${Date.now()}`, kind: "manual" });
+        await addCustomersToSegment(rt, ctx, { segmentId: created.id, customerIds: [testCustomerA] });
+        return await removeCustomersFromSegment(rt, ctx, { segmentId: created.id, customerIds: [testCustomerA] });
+      }
+      case "segments.refreshCount": {
+        const created = await createSegment(rt, ctx, { name: `Iso Seg Ref ${Date.now()}`, kind: "automatic", rules: { match: "all", conditions: [{ field: "orders_count", op: "gte", value: 0 }] } });
+        return await refreshSegmentCount(rt, ctx, { id: created.id });
+      }
+      case "segments.forCustomer":
+        return await getCustomerSegments(rt, ctx, { customerId: testCustomerA });
+      case "segments.presets.create":
+        return await createPresetSegments(rt, ctx);
+      case "segments.activity": {
+        const created = await createSegment(rt, ctx, { name: `Iso Seg Act ${Date.now()}`, kind: "manual" });
+        return await getSegmentActivity(rt, ctx, { segmentId: created.id });
+      }
 
       // --- M5 Discounts Admin ---
       case "discounts.list":
@@ -1369,6 +1515,139 @@ describe("Generated Isolation Test Suite (M1 Real Postgres 18 Proof)", () => {
     });
   });
 
+  describe("settingsOverview.get tenant-scoped readiness", () => {
+    it("derives facts per tenant and never mixes readiness state across tenants", async () => {
+      // Distinct state: tenant A goes live with a default shipping rate; tenant B stays coming_soon without one.
+      await withTenant(rtApp._db.db, tenantA, async (tx) => {
+        await tx.insert(schema.storeStatus).values({ tenantId: tenantA, mode: "live" });
+        const [zone] = await tx
+          .insert(schema.shippingZones)
+          .values({ tenantId: tenantA, name: "Default zone", isDefault: true, countries: ["IN"] })
+          .returning();
+        await tx.insert(schema.shippingRates).values({ tenantId: tenantA, zoneId: zone!.id, name: "Standard", pricePaise: 5000 });
+      });
+
+      const ctxABuilt = await buildTenantContext(rtApp._db.db, {
+        entryPath: "admin",
+        headers: { "x-store-id": tenantA },
+        session: { user: { id: userA }, type: "staff" },
+      });
+      const ctxBBuilt = await buildTenantContext(rtApp._db.db, {
+        entryPath: "admin",
+        headers: { "x-store-id": tenantB },
+        session: { user: { id: userB }, type: "staff" },
+      });
+      expect(ctxABuilt).not.toBeNull();
+      expect(ctxBBuilt).not.toBeNull();
+      const ctxA = ctxABuilt!;
+      const ctxB = ctxBBuilt!;
+
+      const a = await getSettingsOverview(rtApp, ctxA);
+      const b = await getSettingsOverview(rtApp, ctxB);
+
+      expect(a.storeStatus.mode).toBe("live");
+      expect(a.shipping.hasDefaultRate).toBe(true);
+      expect(a.products.hasProducts).toBe(true);
+      expect(a.payments.codEnabled).toBe(true); // parseStoreConfig default: COD enabled
+      expect(a.actions.map((x) => x.id)).not.toContain("no_shipping_rate");
+      expect(a.actions.map((x) => x.id)).not.toContain("no_payment_method");
+
+      expect(b.storeStatus.mode).toBe("coming_soon");
+      expect(b.shipping.hasDefaultRate).toBe(false);
+      expect(b.actions.map((x) => x.id)).toContain("store_not_live");
+      expect(b.actions.map((x) => x.id)).toContain("no_shipping_rate");
+      // Tenant B must never observe tenant A's live status or shipping rate.
+      expect(b.storeStatus.mode).not.toBe(a.storeStatus.mode);
+      expect(b.shipping.hasDefaultRate).not.toBe(a.shipping.hasDefaultRate);
+    });
+  });
+
+  describe("settingsActivity.list tenant-scoped audit projection and redaction", () => {
+    it("returns only caller's tenant rows, redacts secret-shaped diff values, and handles filters", async () => {
+      // Seed audit rows in tenant A and tenant B
+      await withTenant(rtApp._db.db, tenantA, async (tx) => {
+        await tx.insert(schema.auditLogs).values([
+          {
+            tenantId: tenantA,
+            actorType: "staff",
+            actorId: userA,
+            action: "store_settings.update",
+            targetType: "store_settings",
+            targetId: tenantA,
+            diff: {
+              storeName: { before: "Old Name", after: "New Name" },
+              apiKey: { before: "secret-key-123", after: "secret-key-456" },
+            },
+          },
+          {
+            tenantId: tenantA,
+            actorType: "staff",
+            actorId: userA,
+            action: "order_settings.update",
+            targetType: "order_settings",
+            targetId: tenantA,
+            diff: {
+              prefix: { before: "ORD-", after: "INV-" },
+            },
+          },
+        ]);
+      });
+
+      await withTenant(rtApp._db.db, tenantB, async (tx) => {
+        await tx.insert(schema.auditLogs).values({
+          tenantId: tenantB,
+          actorType: "staff",
+          actorId: userB,
+          action: "store_settings.update",
+          targetType: "store_settings",
+          targetId: tenantB,
+          diff: {
+            storeName: { before: "Beta Old", after: "Beta New" },
+          },
+        });
+      });
+
+      const ctxA = await buildTenantContext(rtApp._db.db, {
+        entryPath: "admin",
+        headers: { "x-store-id": tenantA },
+        session: { user: { id: userA }, type: "staff" },
+      });
+      const ctxB = await buildTenantContext(rtApp._db.db, {
+        entryPath: "admin",
+        headers: { "x-store-id": tenantB },
+        session: { user: { id: userB }, type: "staff" },
+      });
+
+      expect(ctxA).not.toBeNull();
+      expect(ctxB).not.toBeNull();
+
+      // Tenant A only sees tenant A logs
+      const resA = await listSettingsActivity(rtApp, ctxA!);
+      expect(resA.items.length).toBeGreaterThanOrEqual(2);
+      expect(resA.total).toBeGreaterThanOrEqual(2);
+      for (const item of resA.items) {
+        expect(item.targetId === tenantA || item.actorId === userA).toBe(true);
+        expect(item.targetId).not.toBe(tenantB);
+      }
+
+      // Check redaction of secret key
+      const storeUpdateItem = resA.items.find((i) => i.action === "store_settings.update");
+      expect(storeUpdateItem).toBeDefined();
+      expect(storeUpdateItem!.diff?.storeName).toEqual({ before: "Old Name", after: "New Name" });
+      expect(storeUpdateItem!.diff?.apiKey).toEqual({ before: "[REDACTED]", after: "[REDACTED]" });
+
+      // Filter by area
+      const ordersOnly = await listSettingsActivity(rtApp, ctxA!, { area: "Orders" });
+      expect(ordersOnly.items.every((i) => i.area === "Orders")).toBe(true);
+
+      // Tenant B sees only tenant B rows
+      const resB = await listSettingsActivity(rtApp, ctxB!);
+      for (const item of resB.items) {
+        expect(item.targetId).not.toBe(tenantA);
+      }
+    });
+  });
+
   describe("Admin Procedures Dynamic Isolation & Authorization Invariants", () => {
     for (const proc of adminProcedures.filter((p) => !SESSION_ONLY.has(p) && !PUBLIC.has(p))) {
       describe(`Procedure: admin.${proc}`, () => {
@@ -1455,7 +1734,14 @@ describe("Generated Isolation Test Suite (M1 Real Postgres 18 Proof)", () => {
             "discounts.write",
           ]);
 
-          const result = await executeAdminProcedure(proc, rtApp, authCtx!);
+          // Credential writes are owner-only (ADR-020): store_admin's set lacks payments.manage, so prove the
+          // denial first, then run the procedure as an owner-level context.
+          const ownerOnly = proc === "payments.saveRazorpay" || proc === "payments.clearRazorpay";
+          if (ownerOnly) {
+            await expect(executeAdminProcedure(proc, rtApp, authCtx!)).rejects.toThrow(/payments\.manage/);
+          }
+          const runCtx = ownerOnly ? { ...authCtx!, permissions: [...authCtx!.permissions, "payments.manage"] } : authCtx!;
+          const result = await executeAdminProcedure(proc, rtApp, runCtx);
           expect(result).toBeDefined();
         });
       });

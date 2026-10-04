@@ -13,6 +13,28 @@ describe("Contracts", () => {
       expect(storeContract.admin.settings.update).toBeDefined();
     });
 
+    it("defines the settingsOverview procedure", () => {
+      expect(storeContract.admin.settingsOverview.get).toBeDefined();
+    });
+
+    it("rejects an unknown timezone and accepts a curated IANA identifier on settings.update", async () => {
+      const { SettingsOverview, STORE_TIMEZONES } = await import("../src/index.ts");
+      const update = storeContract.admin.settings.update;
+      expect(update).toBeDefined();
+      expect(STORE_TIMEZONES).toContain("Asia/Kolkata");
+
+      const { z } = await import("zod");
+      // The contract input schema is available through oRPC; validate via a reconstructed parse of the
+      // exported StoreTimezone used inside it.
+      const { StoreTimezone, StoreAddress } = await import("../src/index.ts");
+      expect(StoreTimezone.parse("Asia/Kolkata")).toBe("Asia/Kolkata");
+      expect(() => StoreTimezone.parse("Mars/Olympus")).toThrow();
+      expect(StoreAddress.parse({ countryCode: "IN", line1: "a" }).countryCode).toBe("IN");
+      expect(() => StoreAddress.parse({ countryCode: "IND" })).toThrow();
+      void z;
+      void SettingsOverview;
+    });
+
     it("defines featureFlags list procedure", () => {
       expect(storeContract.admin.featureFlags.list).toBeDefined();
     });

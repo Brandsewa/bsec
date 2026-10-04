@@ -25,9 +25,112 @@ export const StaffInvitation = z.object({
 });
 export type StaffInvitation = z.infer<typeof StaffInvitation>;
 
+/** Segment rules (Customers Segments PLAN §3): validated strictly again in the domain service. */
+export const SegmentRulesInput = z.object({
+  match: z.enum(["all", "any"]),
+  conditions: z
+    .array(z.object({ field: z.string(), op: z.string(), value: z.unknown() }))
+    .min(1)
+    .max(10),
+});
+export type SegmentRulesInput = z.infer<typeof SegmentRulesInput>;
+
+const SegmentSummary = z.object({
+  id: z.string().uuid(),
+  name: z.string(),
+  description: z.string().nullable(),
+  kind: z.enum(["manual", "automatic"]),
+  isPreset: z.boolean(),
+  memberCount: z.number(),
+  countedAt: z.string().nullable(),
+  createdAt: z.string(),
+  updatedAt: z.string(),
+});
+
+const SegmentDetail = SegmentSummary.extend({
+  rules: SegmentRulesInput.nullable(),
+});
+
+const SegmentCreateInput = z.object({
+  name: z.string().min(1).max(100),
+  description: z.string().max(200).optional(),
+  kind: z.enum(["manual", "automatic"]),
+  rules: SegmentRulesInput.optional(),
+  isPreset: z.boolean().optional(),
+});
+
 export const GSTIN_PATTERN = /^\d{2}[A-Z]{5}\d{4}[A-Z][1-9A-Z]Z[0-9A-Z]$/;
 
+/**
+ * Curated IANA identifiers for the store timezone selector (V1; the selector is a controlled list,
+ * not free text, per the Settings rebuild prompt §D). `Asia/Kolkata` is the platform default.
+ */
+export const STORE_TIMEZONES = [
+  "Asia/Kolkata",
+  "Asia/Karachi",
+  "Asia/Dhaka",
+  "Asia/Kathmandu",
+  "Asia/Colombo",
+  "Asia/Dubai",
+  "Asia/Muscat",
+  "Asia/Riyadh",
+  "Asia/Qatar",
+  "Asia/Kuwait",
+  "Asia/Bangkok",
+  "Asia/Jakarta",
+  "Asia/Singapore",
+  "Asia/Hong_Kong",
+  "Asia/Shanghai",
+  "Asia/Taipei",
+  "Asia/Manila",
+  "Asia/Kuala_Lumpur",
+  "Asia/Seoul",
+  "Asia/Tokyo",
+  "Asia/Tehran",
+  "Asia/Jerusalem",
+  "Australia/Perth",
+  "Australia/Adelaide",
+  "Australia/Brisbane",
+  "Australia/Sydney",
+  "Australia/Melbourne",
+  "Pacific/Auckland",
+  "Europe/Istanbul",
+  "Europe/Moscow",
+  "Europe/London",
+  "Europe/Dublin",
+  "Europe/Lisbon",
+  "Europe/Madrid",
+  "Europe/Paris",
+  "Europe/Brussels",
+  "Europe/Amsterdam",
+  "Europe/Berlin",
+  "Europe/Zurich",
+  "Europe/Rome",
+  "Europe/Stockholm",
+  "Europe/Warsaw",
+  "America/New_York",
+  "America/Toronto",
+  "America/Chicago",
+  "America/Denver",
+  "America/Phoenix",
+  "America/Los_Angeles",
+  "America/Vancouver",
+  "America/Mexico_City",
+  "America/Sao_Paulo",
+  "UTC",
+] as const;
+
+export const STORE_TIMEZONE_SET: ReadonlySet<string> = new Set(STORE_TIMEZONES);
+
+/** The store timezone must be one of the curated IANA identifiers. */
+export const StoreTimezone = z.string().refine((v) => STORE_TIMEZONE_SET.has(v), {
+  message: "Choose a time zone from the list",
+});
+export type StoreTimezone = z.infer<typeof StoreTimezone>;
+
 export const StoreAddress = z.object({
+  /** ISO 3166-1 alpha-2. V1 is India-only; the editor sends "IN" and the domain defaults it on save. */
+  countryCode: z.string().length(2).optional(),
   line1: z.string().max(200).optional(),
   line2: z.string().max(200).optional(),
   city: z.string().max(100).optional(),
@@ -57,6 +160,104 @@ export const StoreSettings = z.object({
     .optional(),
 });
 export type StoreSettings = z.infer<typeof StoreSettings>;
+
+/**
+ * Server-verified readiness snapshot for the Settings Overview (one narrow read model; the SPA must not
+ * query database-like endpoints separately). Facts are derived from the real sources of truth
+ * (store_status, store_settings.checkout, shipping zones/rates, products, domains, plans/subscriptions),
+ * never from the mere existence of a settings row.
+ */
+export const SettingsOverviewAction = z.object({
+  id: z.string(),
+  title: z.string(),
+  description: z.string().nullable(),
+  /** Route to fix the condition. Null when no in-app page exists yet (explained in `description`). */
+  href: z.string().nullable(),
+  kind: z.enum(["required", "informational"]),
+});
+export type SettingsOverviewAction = z.infer<typeof SettingsOverviewAction>;
+
+export const SettingsOverview = z.object({
+  storeStatus: z.object({
+    mode: z.enum(["live", "coming_soon", "maintenance", "password"]),
+    /** Safe shopper-facing link built from the tenant's primary active domain (or platform subdomain). */
+    storefrontUrl: z.string().nullable(),
+  }),
+  payments: z.object({
+    codEnabled: z.boolean(),
+    onlinePaymentAvailable: z.boolean(),
+  }),
+  shipping: z.object({
+    hasDefaultRate: z.boolean(),
+  }),
+  products: z.object({
+    hasProducts: z.boolean(),
+  }),
+  domains: z.object({
+    hasCustomDomain: z.boolean(),
+    storefrontHostname: z.string().nullable(),
+  }),
+  /** Null when no plan/subscription data is available; the card is omitted rather than faked. */
+  plan: z
+    .object({
+      name: z.string(),
+      status: z.string(),
+      interval: z.string(),
+    })
+    .nullable(),
+  onboarding: z.object({
+    steps: z.record(z.string(), z.boolean()),
+    completedCount: z.number().int(),
+    totalCount: z.number().int(),
+    dismissed: z.boolean(),
+    allCompleted: z.boolean(),
+  }),
+  actions: z.array(SettingsOverviewAction),
+  quickLinks: z.array(
+    z.object({
+      href: z.string(),
+      label: z.string(),
+    }),
+  ),
+});
+export type SettingsOverview = z.infer<typeof SettingsOverview>;
+
+export const SettingsActivityDiffEntry = z.object({
+  before: z.unknown(),
+  after: z.unknown(),
+});
+export type SettingsActivityDiffEntry = z.infer<typeof SettingsActivityDiffEntry>;
+
+export const SettingsActivityItem = z.object({
+  id: z.string().uuid(),
+  action: z.string(),
+  area: z.string(),
+  actorType: z.string(),
+  actorId: z.string().uuid().nullable(),
+  actorEmail: z.string().nullable(),
+  targetType: z.string(),
+  targetId: z.string(),
+  diff: z.record(z.string(), SettingsActivityDiffEntry).nullable(),
+  createdAt: z.string(),
+});
+export type SettingsActivityItem = z.infer<typeof SettingsActivityItem>;
+
+export const ListSettingsActivityInput = z.object({
+  area: z.string().optional(),
+  actorId: z.string().uuid().optional(),
+  dateFrom: z.string().optional(),
+  dateTo: z.string().optional(),
+  limit: z.number().int().min(1).max(100).default(50),
+  offset: z.number().int().min(0).default(0),
+});
+export type ListSettingsActivityInput = z.infer<typeof ListSettingsActivityInput>;
+export type ListSettingsActivityArgs = z.input<typeof ListSettingsActivityInput>;
+
+export const ListSettingsActivityOutput = z.object({
+  items: z.array(SettingsActivityItem),
+  total: z.number().int(),
+});
+export type ListSettingsActivityOutput = z.infer<typeof ListSettingsActivityOutput>;
 
 export const OrderSettings = z.object({
   prefix: z.string().max(10).regex(/^[A-Za-z0-9#\-_/]*$/, "Prefix can only contain letters, numbers, and # - _ /"),
@@ -932,7 +1133,7 @@ export const adminContract = {
         z.object({
           storeName: z.string().min(1).max(120).optional(),
           currency: z.string().min(3).max(3).optional(),
-          timezone: z.string().optional(),
+          timezone: StoreTimezone.optional(),
           legalName: z.string().max(200).nullable().optional(),
           supportEmail: z.string().email().nullable().optional(),
           supportPhone: z.string().max(30).nullable().optional(),
@@ -950,6 +1151,18 @@ export const adminContract = {
         }),
       )
       .output(StoreSettings),
+  },
+  // --- Settings Overview (Settings rebuild Phases 0-1, docs/prompts/settings-rebuild-phase-0-1.md §C) ---
+  settingsOverview: {
+    get: oc
+      .route({ method: "GET", path: "/admin/settings/overview" })
+      .output(SettingsOverview),
+  },
+  settingsActivity: {
+    list: oc
+      .route({ method: "GET", path: "/admin/settings/activity" })
+      .input(ListSettingsActivityInput.optional())
+      .output(ListSettingsActivityOutput),
   },
   orderSettings: {
     get: oc
@@ -2081,7 +2294,7 @@ export const adminContract = {
       .output(ReturnSettings),
   },
 
-  // --- M5 Customers Admin ---
+  // --- Customers Admin (Phase 1) ---
   customers: {
     list: oc
       .route({ method: "GET", path: "/admin/customers" })
@@ -2092,7 +2305,16 @@ export const adminContract = {
             tag: z.string().optional(),
             /** Customers with more than one order. */
             repeat: z.boolean().optional(),
+            /** Tab: every customer, accounts only (not guests), guests only, blocked only. */
+            view: z.enum(["all", "accounts", "guests", "blocked"]).default("all"),
+            /** Marketing consent state (the Phase 0 single record, not the legacy boolean). */
+            marketingState: z.enum(["subscribed", "unsubscribed", "not_subscribed", "invalid"]).optional(),
+            /** Kept for compatibility with the pre-Phase-1 page (accepts marketing yes/no). */
             acceptsMarketing: z.boolean().optional(),
+            /** State code of the customer's default address. */
+            location: z.string().optional(),
+            /** Only customers in this segment (Customers Phase 2 integration). */
+            segmentId: z.string().uuid().optional(),
             createdFrom: z.string().optional(),
             createdTo: z.string().optional(),
             sort: z.enum(["created_desc", "created_asc", "name_asc", "name_desc", "spent_desc", "spent_asc", "orders_desc", "orders_asc"]).default("created_desc"),
@@ -2109,16 +2331,37 @@ export const adminContract = {
               name: z.string(),
               email: z.string(),
               phone: z.string().nullable(),
+              isGuest: z.boolean(),
+              status: z.string(),
               ordersCount: z.number(),
               totalSpent: z.number(),
+              lastOrderAt: z.string().nullable(),
+              marketingState: z.string(),
+              marketingUpdatedAt: z.string().nullable(),
               tags: z.array(z.string()),
-              status: z.string(),
               createdAt: z.string(),
             }),
           ),
           total: z.number(),
         }),
       ),
+    /** Counts for the list page's stat strip; every value comes from the Phase 0 metrics fragment. */
+    stats: oc
+      .route({ method: "GET", path: "/admin/customers/stats" })
+      .output(
+        z.object({
+          total: z.number(),
+          newThisMonth: z.number(),
+          repeat: z.number(),
+          subscribers: z.number(),
+          totalSpend: z.number(),
+          averageOrderValue: z.number(),
+        }),
+      ),
+    /** Store-wide filter options: every distinct tag and every default-address state, not just those on the current page. */
+    tags: oc
+      .route({ method: "GET", path: "/admin/customers/tags" })
+      .output(z.object({ tags: z.array(z.string()), locationStates: z.array(z.string()) })),
     get: oc
       .route({ method: "GET", path: "/admin/customers/{id}" })
       .input(z.object({ id: z.string().uuid() }))
@@ -2129,11 +2372,19 @@ export const adminContract = {
             name: z.string(),
             email: z.string(),
             phone: z.string().nullable(),
+            emailVerified: z.boolean(),
+            isGuest: z.boolean(),
+            status: z.string(),
             ordersCount: z.number(),
             totalSpent: z.number(),
+            averageOrderValue: z.number(),
+            firstOrderAt: z.string().nullable(),
+            lastOrderAt: z.string().nullable(),
+            returnsCount: z.number(),
+            marketingState: z.string(),
+            marketingSource: z.string().nullable(),
+            marketingUpdatedAt: z.string().nullable(),
             tags: z.array(z.string()),
-            note: z.string().nullable().optional(),
-            acceptsMarketing: z.boolean(),
             createdAt: z.string(),
           }),
           addresses: z.array(
@@ -2150,17 +2401,172 @@ export const adminContract = {
               isDefault: z.boolean(),
             }),
           ),
+          consentHistory: z.array(
+            z.object({
+              id: z.string().uuid(),
+              channel: z.string(),
+              state: z.string(),
+              source: z.string(),
+              actorType: z.string(),
+              at: z.string(),
+            }),
+          ),
           recentOrders: z.array(
             z.object({
               id: z.string().uuid(),
               number: z.string(),
               status: z.string(),
+              paymentStatus: z.string(),
+              fulfillmentStatus: z.string(),
               grandTotal: z.number(),
               placedAt: z.string(),
             }),
           ),
         }),
       ),
+    update: oc
+      .route({ method: "PATCH", path: "/admin/customers/{id}" })
+      .input(
+        z.object({
+          id: z.string().uuid(),
+          name: z.string().optional(),
+          /** Editable only for a guest or an unverified account; a change clears email verification. */
+          email: z.string().email().optional(),
+          phone: z.string().nullable().optional(),
+        }),
+      )
+      .output(
+        z.object({
+          id: z.string().uuid(),
+          name: z.string(),
+          email: z.string(),
+          phone: z.string().nullable(),
+          emailVerified: z.boolean(),
+        }),
+      ),
+    orders: oc
+      .route({ method: "GET", path: "/admin/customers/{id}/orders" })
+      .input(
+        z.object({
+          id: z.string().uuid(),
+          status: z.string().optional(),
+          limit: z.number().int().min(1).max(100).default(20),
+          offset: z.number().int().min(0).default(0),
+        }),
+      )
+      .output(
+        z.object({
+          items: z.array(
+            z.object({
+              id: z.string().uuid(),
+              number: z.string(),
+              status: z.string(),
+              paymentStatus: z.string(),
+              fulfillmentStatus: z.string(),
+              grandTotal: z.number(),
+              placedAt: z.string(),
+            }),
+          ),
+          total: z.number(),
+        }),
+      ),
+    activity: oc
+      .route({ method: "GET", path: "/admin/customers/{id}/activity" })
+      .input(
+        z.object({
+          id: z.string().uuid(),
+          limit: z.number().int().min(1).max(200).default(50),
+        }),
+      )
+      .output(
+        z.object({
+          items: z.array(
+            z.object({
+              kind: z.enum(["order", "return", "quote", "review", "abandoned_cart", "consent"]),
+              at: z.string(),
+              title: z.string(),
+              detail: z.string().nullable(),
+              ref: z.string().nullable(),
+            }),
+          ),
+        }),
+      ),
+    consentSet: oc
+      .route({ method: "POST", path: "/admin/customers/{id}/consent" })
+      .input(z.object({ id: z.string().uuid(), state: z.enum(["subscribed", "unsubscribed", "not_subscribed", "invalid"]) }))
+      .output(z.object({ id: z.string().uuid(), marketingState: z.string(), acceptsMarketing: z.boolean() })),
+    addresses: {
+      add: oc
+        .route({ method: "POST", path: "/admin/customers/{id}/addresses" })
+        .input(
+          z.object({
+            id: z.string().uuid(),
+            address: z.object({
+              name: z.string().min(1),
+              phone: z.string().min(1),
+              line1: z.string().min(1),
+              line2: z.string().optional(),
+              city: z.string().min(1),
+              stateCode: z.string().min(1),
+              pincode: z.string().min(1),
+              type: z.enum(["home", "work", "other"]).default("home"),
+              isDefault: z.boolean().default(false),
+            }),
+          }),
+        )
+        .output(z.object({ id: z.string().uuid() })),
+      update: oc
+        .route({ method: "PATCH", path: "/admin/customers/{id}/addresses/{addressId}" })
+        .input(
+          z.object({
+            id: z.string().uuid(),
+            addressId: z.string().uuid(),
+            address: z.object({
+              name: z.string().min(1),
+              phone: z.string().min(1),
+              line1: z.string().min(1),
+              line2: z.string().optional(),
+              city: z.string().min(1),
+              stateCode: z.string().min(1),
+              pincode: z.string().min(1),
+              type: z.enum(["home", "work", "other"]).default("home"),
+              isDefault: z.boolean().optional(),
+            }),
+          }),
+        )
+        .output(z.object({ success: z.boolean() })),
+      delete: oc
+        .route({ method: "DELETE", path: "/admin/customers/{id}/addresses/{addressId}" })
+        .input(z.object({ id: z.string().uuid(), addressId: z.string().uuid() }))
+        .output(z.object({ success: z.boolean() })),
+    },
+    notes: {
+      list: oc
+        .route({ method: "GET", path: "/admin/customers/{id}/notes" })
+        .input(z.object({ id: z.string().uuid() }))
+        .output(
+          z.object({
+            items: z.array(
+              z.object({
+                id: z.string().uuid(),
+                customerId: z.string().uuid(),
+                body: z.string(),
+                authorId: z.string().uuid().nullable(),
+                authorName: z.string().nullable(),
+                createdAt: z.string(),
+              }),
+            ),
+          }),
+        ),
+      add: oc
+        .route({ method: "POST", path: "/admin/customers/{id}/notes" })
+        .input(z.object({ id: z.string().uuid(), body: z.string().trim().min(1).max(1000) }))
+        .output(z.object({ id: z.string().uuid(), createdAt: z.string() })),
+      delete: oc
+        .route({ method: "DELETE", path: "/admin/customers/notes/{noteId}" })
+        .input(z.object({ noteId: z.string().uuid() }))
+        .output(z.object({ success: z.boolean() })),
+    },
     create: oc
       .route({ method: "POST", path: "/admin/customers" })
       .input(
@@ -2194,6 +2600,220 @@ export const adminContract = {
             note: z.string().nullable().optional(),
           }),
           addressId: z.string().uuid().optional(),
+        }),
+      ),
+    setStatus: oc
+      .route({ method: "POST", path: "/admin/customers/{id}/status" })
+      .input(z.object({ id: z.string().uuid(), status: z.enum(["active", "blocked"]) }))
+      .output(z.object({ id: z.string().uuid(), status: z.string() })),
+    setTags: oc
+      .route({ method: "PUT", path: "/admin/customers/{id}/tags" })
+      .input(z.object({ id: z.string().uuid(), tags: z.array(z.string()).max(30) }))
+      .output(z.object({ id: z.string().uuid(), tags: z.array(z.string()) })),
+    /** Dry run for the CSV import: counts and row issues without writing anything. */
+    importPreview: oc
+      .route({ method: "POST", path: "/admin/customers/import/preview" })
+      .input(
+        z.object({
+          rows: z
+            .array(
+              z.object({
+                name: z.string().optional(),
+                email: z.string(),
+                phone: z.string().optional(),
+                tags: z.array(z.string()).optional(),
+                marketingConsent: z.string().optional(),
+              }),
+            )
+            .max(10_000),
+        }),
+      )
+      .output(
+        z.object({
+          total: z.number(),
+          created: z.number(),
+          updated: z.number(),
+          duplicatesInFile: z.number(),
+          subscribeCount: z.number(),
+          invalid: z.array(z.object({ row: z.number(), email: z.string(), error: z.string() })),
+        }),
+      ),
+    /** Commits the import; files over 500 rows are queued and the response says so. */
+    importCommit: oc
+      .route({ method: "POST", path: "/admin/customers/import/commit" })
+      .input(
+        z.object({
+          rows: z
+            .array(
+              z.object({
+                name: z.string().optional(),
+                email: z.string(),
+                phone: z.string().optional(),
+                tags: z.array(z.string()).optional(),
+                marketingConsent: z.string().optional(),
+              }),
+            )
+            .max(10_000),
+        }),
+      )
+      .output(
+        z.union([
+          z.object({ queued: z.literal(true), total: z.number() }),
+          z.object({
+            queued: z.literal(false).optional(),
+            created: z.number(),
+            updated: z.number(),
+            skipped: z.number(),
+            errors: z.array(z.object({ row: z.number(), email: z.string(), error: z.string() })),
+          }),
+        ]),
+      ),
+    /**
+     * Deletes a customer: hard delete without orders, anonymise with orders
+     * (identity replaced, sessions destroyed, orders kept for accounts and tax).
+     */
+    delete: oc
+      .route({ method: "DELETE", path: "/admin/customers/{id}" })
+      .input(z.object({ id: z.string().uuid() }))
+      .output(z.object({ id: z.string().uuid(), mode: z.enum(["deleted", "anonymised"]) })),
+  },
+
+  // --- Customers Segments (Phase 2) ---
+  segments: {
+    list: oc
+      .route({ method: "GET", path: "/admin/segments" })
+      .input(
+        z
+          .object({
+            kind: z.enum(["manual", "automatic"]).optional(),
+            limit: z.number().int().min(1).max(100).default(100),
+            offset: z.number().int().min(0).default(0),
+          })
+          .optional(),
+      )
+      .output(
+        z.object({
+          items: z.array(SegmentSummary),
+          total: z.number(),
+        }),
+      ),
+    get: oc
+      .route({ method: "GET", path: "/admin/segments/detail" })
+      .input(z.object({ id: z.string().uuid() }))
+      .output(SegmentDetail),
+    create: oc
+      .route({ method: "POST", path: "/admin/segments" })
+      .input(SegmentCreateInput)
+      .output(SegmentDetail),
+    update: oc
+      .route({ method: "PATCH", path: "/admin/segments/{id}" })
+      .input(
+        z.object({
+          id: z.string().uuid(),
+          name: z.string().optional(),
+          description: z.string().nullable().optional(),
+          rules: SegmentRulesInput.optional(),
+        }),
+      )
+      .output(SegmentDetail),
+    delete: oc
+      .route({ method: "DELETE", path: "/admin/segments/{id}" })
+      .input(z.object({ id: z.string().uuid() }))
+      .output(z.object({ success: z.boolean() })),
+    preview: oc
+      .route({ method: "POST", path: "/admin/segments/preview" })
+      .input(z.object({ rules: SegmentRulesInput }))
+      .output(
+        z.object({
+          count: z.number(),
+          sample: z.array(z.object({ id: z.string().uuid(), name: z.string(), email: z.string() })),
+        }),
+      ),
+    members: {
+      list: oc
+        .route({ method: "GET", path: "/admin/segments/{id}/members" })
+        .input(
+          z.object({
+            id: z.string().uuid(),
+            search: z.string().optional(),
+            sort: z.enum(["created_desc", "name_asc", "name_desc", "spent_desc", "orders_desc"]).default("created_desc"),
+            limit: z.number().int().min(1).max(100).default(50),
+            offset: z.number().int().min(0).default(0),
+          }),
+        )
+        .output(
+          z.object({
+            items: z.array(
+              z.object({
+                id: z.string().uuid(),
+                name: z.string(),
+                email: z.string(),
+                phone: z.string().nullable(),
+                isGuest: z.boolean(),
+                ordersCount: z.number(),
+                totalSpent: z.number(),
+                lastOrderAt: z.string().nullable(),
+                marketingState: z.string(),
+                tags: z.array(z.string()),
+              }),
+            ),
+            total: z.number(),
+          }),
+        ),
+      add: oc
+        .route({ method: "POST", path: "/admin/segments/{id}/members" })
+        .input(
+          z.object({
+            id: z.string().uuid(),
+            customerIds: z.array(z.string().uuid()).max(5000).optional(),
+            emails: z.array(z.string()).max(5000).optional(),
+          }),
+        )
+        .output(
+          z.object({
+            added: z.number(),
+            alreadyIn: z.number(),
+            notFound: z.array(z.string()),
+          }),
+        ),
+      remove: oc
+        .route({ method: "POST", path: "/admin/segments/{id}/members/remove" })
+        .input(z.object({ id: z.string().uuid(), customerIds: z.array(z.string().uuid()).max(5000) }))
+        .output(z.object({ removed: z.number() })),
+    },
+    refreshCount: oc
+      .route({ method: "POST", path: "/admin/segments/{id}/refresh" })
+      .input(z.object({ id: z.string().uuid() }))
+      .output(z.object({ memberCount: z.number(), countedAt: z.string() })),
+    forCustomer: oc
+      .route({ method: "GET", path: "/admin/segments/for-customer/{customerId}" })
+      .input(z.object({ customerId: z.string().uuid() }))
+      .output(
+        z.object({
+          manual: z.array(z.object({ id: z.string().uuid(), name: z.string() })),
+          automatic: z.array(z.object({ id: z.string().uuid(), name: z.string() })),
+        }),
+      ),
+    presets: {
+      create: oc
+        .route({ method: "POST", path: "/admin/segments/presets" })
+        .output(z.object({ created: z.number(), skipped: z.number() })),
+    },
+    activity: oc
+      .route({ method: "GET", path: "/admin/segments/{id}/activity" })
+      .input(z.object({ id: z.string().uuid(), limit: z.number().int().min(1).max(200).default(50) }))
+      .output(
+        z.object({
+          items: z.array(
+            z.object({
+              id: z.string().uuid(),
+              action: z.string(),
+              actorType: z.string(),
+              actorId: z.string().nullable(),
+              diff: z.record(z.string(), z.unknown()),
+              at: z.string(),
+            }),
+          ),
         }),
       ),
   },

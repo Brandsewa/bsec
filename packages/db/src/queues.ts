@@ -23,7 +23,9 @@ export const QUEUES = [
   { name: "order.preorder_date_changed", options: { retryLimit: 5, retryBackoff: true, retryDelay: 5 } },
   { name: "order.preorder_reminder_sweep", options: { retryLimit: 5, retryBackoff: true, retryDelay: 5 } },
   { name: "order.return_photo_cleanup", options: { retryLimit: 3, retryBackoff: true, retryDelay: 10 } },
+  { name: "segments.refresh_counts", options: { retryLimit: 3, retryBackoff: true, retryDelay: 10 } },
   { name: "customers.refresh_metrics", options: { retryLimit: 5, retryBackoff: true, retryDelay: 5 } },
+  { name: "customers.import", options: { retryLimit: 3, retryBackoff: true, retryDelay: 10 } },
 ] as const;
 
 export type QueueName = (typeof QUEUES)[number]["name"];
@@ -48,5 +50,7 @@ export const QUEUE_NAMES = {
   ORDER_PREORDER_DATE_CHANGED: "order.preorder_date_changed",
   ORDER_PREORDER_REMINDER_SWEEP: "order.preorder_reminder_sweep",
   ORDER_RETURN_PHOTO_CLEANUP: "order.return_photo_cleanup",
+  SEGMENTS_REFRESH_COUNTS: "segments.refresh_counts",
   CUSTOMERS_REFRESH_METRICS: "customers.refresh_metrics",
+  CUSTOMERS_IMPORT: "customers.import",
 } as const;

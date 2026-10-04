@@ -1,8 +1,14 @@
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Select, SelectContent, SelectGroup, SelectItem, SelectLabel, SelectTrigger, SelectValue } from "@/components/ui/select";
 
 export interface SelectOption {
   value: string;
   label: string;
+}
+
+/** Optional grouping for the dropdown (rendered as labelled, non-selectable headings). */
+export interface SelectOptionGroup {
+  label: string;
+  options: ReadonlyArray<SelectOption>;
 }
 
 /**
@@ -14,6 +20,7 @@ export function SimpleSelect({
   value,
   onChange,
   options,
+  groups,
   placeholder,
   ariaLabel,
   className,
@@ -22,21 +29,34 @@ export function SimpleSelect({
   value: string;
   onChange: (value: string) => void;
   options: ReadonlyArray<SelectOption>;
+  groups?: ReadonlyArray<SelectOptionGroup>;
   placeholder?: string;
   ariaLabel?: string;
   className?: string;
 }) {
+  const flat = groups ? groups.flatMap((g) => g.options) : options;
   return (
-    <Select items={options} value={value === "" ? null : value} onValueChange={(v) => onChange(v ?? "")}>
+    <Select items={flat} value={value === "" ? null : value} onValueChange={(v) => onChange(v ?? "")}>
       <SelectTrigger id={id} aria-label={ariaLabel} className={className ?? "w-full"}>
         <SelectValue placeholder={placeholder} />
       </SelectTrigger>
       <SelectContent alignItemWithTrigger={false} className="max-h-72 min-w-44">
-        {options.map((o) => (
-          <SelectItem key={o.value} value={o.value}>
-            {o.label}
-          </SelectItem>
-        ))}
+        {groups
+          ? groups.map((g) => (
+              <SelectGroup key={g.label} aria-label={g.label}>
+                <SelectLabel>{g.label}</SelectLabel>
+                {g.options.map((o) => (
+                  <SelectItem key={o.value} value={o.value}>
+                    {o.label}
+                  </SelectItem>
+                ))}
+              </SelectGroup>
+            ))
+          : options.map((o) => (
+              <SelectItem key={o.value} value={o.value}>
+                {o.label}
+              </SelectItem>
+            ))}
       </SelectContent>
     </Select>
   );

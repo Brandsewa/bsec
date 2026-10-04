@@ -17,6 +17,7 @@ import {
   Settings,
   ShoppingBag,
   ShoppingCart,
+  Slice,
   Tag,
   Users,
   Warehouse,
@@ -69,6 +70,7 @@ const nav: GatedGroup[] = [
     label: "Sell",
     items: [
       { label: "Customers", href: "/customers", icon: Users, perm: "customers.read" },
+      { label: "Segments", href: "/segments", icon: Slice, perm: "customers.read" },
       { label: "Discounts", href: "/discounts", icon: BadgePercent, perm: "discounts.write" },
     ],
   },
