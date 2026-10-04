@@ -52,6 +52,7 @@ import {
   getMenu,
   getPage,
   getProduct,
+  getSettingsOverview,
   getStoreSettings,
   getTheme,
   inviteStaff,
@@ -510,6 +511,15 @@ export const storeRouter = os.router({
         .handler(({ context, input }) => {
           if (!context.tenantCtx) throw new Error("Missing tenant context");
           return updateStoreSettings(context.rt, context.tenantCtx, input);
+        }),
+    },
+    settingsOverview: {
+      get: os.admin.settingsOverview.get
+        .use(requireAdmin)
+        .use(requirePermission("settings.write"))
+        .handler(({ context }) => {
+          if (!context.tenantCtx) throw new Error("Missing tenant context");
+          return getSettingsOverview(context.rt, context.tenantCtx);
         }),
     },
     orderSettings: {
