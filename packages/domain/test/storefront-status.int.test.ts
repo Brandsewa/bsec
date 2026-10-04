@@ -1,13 +1,14 @@
 import { createHash } from "node:crypto";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
-import { eq } from "drizzle-orm";
-import { schema } from "@bs/db";
+import { desc, eq } from "drizzle-orm";
+import { schema, withTenant } from "@bs/db";
 import { startTestDb, type TestDb } from "@bs/db/test-env";
 import {
   createRuntime,
   evaluateStorefrontAccess,
   getStoreStatus,
   invalidateHostCache,
+  listSettingsActivity,
   needsStorePasswordRehash,
   provisionTenant,
   tenantTag,
@@ -127,9 +128,60 @@ describe("storefront mode (going live)", () => {
     expect(needsStorePasswordRehash(row!.passwordHash!)).toBe(false);
   });
 
-  it("needs the settings permission to read or change it", async () => {
+  it("needs settings.read to read and storefront.manage to change it", async () => {
     const nobody = ctxFor(storeA, ["products.read"]);
     expect(await errorOf(getStoreStatus(rtWeb, nobody))).toMatch(/Forbidden/);
     expect(await errorOf(updateStoreStatus(rtWeb, nobody, { mode: "live" }))).toMatch(/Forbidden/);
+
+    const reader = ctxFor(storeA, ["settings.read"]);
+    const status = await getStoreStatus(rtWeb, reader);
+    expect(status).toBeDefined();
+    expect(await errorOf(updateStoreStatus(rtWeb, reader, { mode: "live" }))).toMatch(/Forbidden/);
+
+    const manager = ctxFor(storeA, ["storefront.manage"]);
+    const updateResult = await updateStoreStatus(rtWeb, manager, { headline: "Updated by manager" });
+    expect(updateResult.success).toBe(true);
+  });
+
+  it("writes a store_status.update audit log with sanitized diff", async () => {
+    const adminCtx = ctxFor(storeA, ["storefront.manage", "audit.read"]);
+    await updateStoreStatus(rtWeb, adminCtx, {
+      mode: "coming_soon",
+      headline: "Audit test headline",
+      password: "secret-password-123",
+    });
+
+    // Verify stored DB audit log row
+    const [rawAudit] = await withTenant(rtWeb._db.db, storeA.tenantId, (tx) =>
+      tx
+        .select()
+        .from(schema.auditLogs)
+        .where(eq(schema.auditLogs.tenantId, storeA.tenantId))
+        .orderBy(desc(schema.auditLogs.createdAt), desc(schema.auditLogs.id))
+        .limit(1),
+    );
+
+    expect(rawAudit?.action).toBe("store_status.update");
+    expect(rawAudit?.targetType).toBe("store_status");
+    const rawDiff = rawAudit!.diff as Record<string, { before: unknown; after: unknown }>;
+    expect(rawDiff.headline?.after).toBe("Audit test headline");
+    // Verify password is stored in audit log ONLY as "set", never plaintext or hash
+    expect(rawDiff.password?.after).toBe("set");
+    expect(JSON.stringify(rawDiff)).not.toContain("secret-password-123");
+    expect(JSON.stringify(rawDiff)).not.toContain("$scrypt$");
+
+    // Verify listSettingsActivity also returns this under area Storefront
+    const activity = await listSettingsActivity(rtWeb, adminCtx, { area: "Storefront" });
+    expect(activity.total).toBeGreaterThanOrEqual(1);
+
+    const latest = activity.items[0];
+    expect(latest?.action).toBe("store_status.update");
+    expect(latest?.area).toBe("Storefront");
+    // listSettingsActivity additionally sanitizes all secret-like keys to [REDACTED]
+    const activityDiff = latest!.diff as Record<string, { before: unknown; after: unknown }>;
+    expect(activityDiff.password?.after).toBe("[REDACTED]");
+    expect(JSON.stringify(activity)).not.toContain("secret-password-123");
+    expect(JSON.stringify(activity)).not.toContain("$scrypt$");
   });
 });
+

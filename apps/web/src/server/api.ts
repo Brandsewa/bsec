@@ -11,6 +11,7 @@ import {
   buildTenantContext,
   getAdminMe,
   getStoreStatus,
+  getStoreStatusInternal,
   attachProductMedia,
   detachProductMedia,
   updateStoreStatus,
@@ -1644,7 +1645,7 @@ export const storeRouter = os.router({
     storefront: {
       getStatus: os.admin.storefront.getStatus
         .use(requireAdmin)
-        .use(requirePermission("settings.write"))
+        .use(requirePermission("settings.read"))
         .handler(({ context }) => {
           if (!context.tenantCtx) throw new Error("Missing tenant context");
           return getStoreStatus(context.rt, context.tenantCtx).catch((e) => {
@@ -1653,7 +1654,7 @@ export const storeRouter = os.router({
         }),
       updateStatus: os.admin.storefront.updateStatus
         .use(requireAdmin)
-        .use(requirePermission("settings.write"))
+        .use(requirePermission("storefront.manage"))
         .handler(async ({ context, input }) => {
           if (!context.tenantCtx) throw new Error("Missing tenant context");
           const { launchAt, ...rest } = input;
@@ -1665,7 +1666,7 @@ export const storeRouter = os.router({
           } catch (e) {
             throw mapAuthError(e);
           }
-          return getStoreStatus(context.rt, context.tenantCtx);
+          return getStoreStatusInternal(context.rt, context.tenantCtx.tenantId);
         }),
     },
     onboarding: {

@@ -604,32 +604,6 @@ export const StorefrontStatus = z.object({
 
 export type StorefrontStatus = z.infer<typeof StorefrontStatus>;
 
-export const BrandSettings = z.object({
-  // "default" until the store saves branding for the first time (no row yet), so not a uuid.
-  id: z.string(),
-  logoLightMediaId: z.string().uuid().nullable().optional(),
-  logoDarkMediaId: z.string().uuid().nullable().optional(),
-  logoWidth: z.number(),
-  faviconMediaId: z.string().uuid().nullable().optional(),
-  socialImageMediaId: z.string().uuid().nullable().optional(),
-  fontHeading: z.string(),
-  fontBody: z.string(),
-  fontSizeScale: z.string(),
-  colorSchemeName: z.string(),
-  primaryColor: z.string(),
-  secondaryColor: z.string(),
-  accentColor: z.string(),
-  backgroundColor: z.string(),
-  surfaceColor: z.string(),
-  textColor: z.string(),
-  colorMode: z.enum(["light", "dark", "auto"]),
-  cornerRadius: z.enum(["none", "small", "medium", "large", "full"]),
-  buttonStyle: z.enum(["solid", "outline", "pill"]),
-  version: z.number(),
-  publishedAt: z.string().nullable().optional(),
-});
-export type BrandSettings = z.infer<typeof BrandSettings>;
-
 export const APPROVED_BRAND_FONTS = [
   "Inter",
   "Plus Jakarta Sans",
@@ -645,6 +619,34 @@ export const APPROVED_BRAND_FONTS = [
   "Lora",
   "Merriweather",
 ] as const;
+
+export type BrandFont = (typeof APPROVED_BRAND_FONTS)[number];
+
+export const BrandSettings = z.object({
+  // "default" until the store saves branding for the first time (no row yet), so not a uuid.
+  id: z.string(),
+  logoLightMediaId: z.string().uuid().nullable().optional(),
+  logoDarkMediaId: z.string().uuid().nullable().optional(),
+  logoWidth: z.number(),
+  faviconMediaId: z.string().uuid().nullable().optional(),
+  socialImageMediaId: z.string().uuid().nullable().optional(),
+  fontHeading: z.enum(APPROVED_BRAND_FONTS),
+  fontBody: z.enum(APPROVED_BRAND_FONTS),
+  fontSizeScale: z.string(),
+  colorSchemeName: z.string(),
+  primaryColor: z.string(),
+  secondaryColor: z.string(),
+  accentColor: z.string(),
+  backgroundColor: z.string(),
+  surfaceColor: z.string(),
+  textColor: z.string(),
+  colorMode: z.enum(["light", "dark", "auto"]),
+  cornerRadius: z.enum(["none", "small", "medium", "large", "full"]),
+  buttonStyle: z.enum(["solid", "outline", "pill"]),
+  version: z.number(),
+  publishedAt: z.string().nullable().optional(),
+});
+export type BrandSettings = z.infer<typeof BrandSettings>;
 
 export const HexColorCode = z.string().regex(/^#[0-9a-fA-F]{6}$/, "Must be a 6-digit hex color code (#rrggbb)");
 

@@ -517,11 +517,14 @@ export interface StoreStatusView {
   hasPassword: boolean;
 }
 
-/** The store's current storefront mode and public message. A store that has no row yet is in "coming_soon" (the default). */
-export async function getStoreStatus(rt: Runtime, ctx: TenantContext): Promise<StoreStatusView> {
-  assertPermission(ctx, "settings.write");
-  return withTenant(rt._db.db, ctx.tenantId, async (tx) => {
-    const [row] = await tx.select().from(schema.storeStatus).where(eq(schema.storeStatus.tenantId, ctx.tenantId)).limit(1);
+/** The store's current storefront mode and public message without permission assertion. */
+export async function getStoreStatusInternal(rt: Runtime, tenantId: string): Promise<StoreStatusView> {
+  return withTenant(rt._db.db, tenantId, async (tx) => {
+    const [row] = await tx
+      .select()
+      .from(schema.storeStatus)
+      .where(eq(schema.storeStatus.tenantId, tenantId))
+      .limit(1);
     return {
       mode: (row?.mode as StorefrontMode | undefined) ?? "coming_soon",
       headline: row?.headline ?? null,
@@ -531,6 +534,12 @@ export async function getStoreStatus(rt: Runtime, ctx: TenantContext): Promise<S
       hasPassword: Boolean(row?.passwordHash),
     };
   });
+}
+
+/** The store's current storefront mode and public message. A store that has no row yet is in "coming_soon" (the default). */
+export async function getStoreStatus(rt: Runtime, ctx: TenantContext): Promise<StoreStatusView> {
+  assertPermission(ctx, "settings.read");
+  return getStoreStatusInternal(rt, ctx.tenantId);
 }
 
 /**
@@ -551,7 +560,7 @@ export async function updateStoreStatus(
     bypassToken?: string | null | undefined;
   },
 ): Promise<{ success: boolean }> {
-  assertPermission(ctx, "settings.write");
+  assertPermission(ctx, "storefront.manage");
   const db = rt._db.db;
 
   await withTenant(db, ctx.tenantId, async (tx) => {
@@ -574,41 +583,100 @@ export async function updateStoreStatus(
     }
 
     const [existing] = await tx
-      .select({ id: schema.storeStatus.id })
+      .select()
       .from(schema.storeStatus)
       .where(eq(schema.storeStatus.tenantId, ctx.tenantId))
       .limit(1);
 
     if (input.mode === "password") {
-      const [current] = await tx
-        .select({ passwordHash: schema.storeStatus.passwordHash })
-        .from(schema.storeStatus)
-        .where(eq(schema.storeStatus.tenantId, ctx.tenantId))
-        .limit(1);
-      const willHavePassword = input.password !== undefined ? Boolean(input.password) : Boolean(current?.passwordHash);
-      if (!willHavePassword) throw new Error("Bad Request: set a password before switching the storefront to password mode");
+      const willHavePassword =
+        input.password !== undefined ? Boolean(input.password) : Boolean(existing?.passwordHash);
+      if (!willHavePassword) {
+        throw new Error("Bad Request: set a password before switching the storefront to password mode");
+      }
     }
 
+    let statusId: string;
+
     if (existing) {
+      statusId = existing.id;
       await tx
         .update(schema.storeStatus)
         .set(updateValues)
         .where(eq(schema.storeStatus.id, existing.id));
     } else {
-      await tx.insert(schema.storeStatus).values({
-        tenantId: ctx.tenantId,
-        mode: input.mode ?? "coming_soon",
-        changedBy: "userId" in ctx.actor ? ctx.actor.userId : null,
-        headline: input.headline ?? null,
-        messageJson: input.messageJson,
-        launchAt: input.launchAt ?? null,
-        showCountdown: input.showCountdown ?? false,
-        collectEmails: input.collectEmails ?? true,
-        retryAfterMinutes: input.retryAfterMinutes ?? 60,
-        passwordHash: (updateValues.passwordHash as string | null) ?? null,
-        bypassTokenHash: (updateValues.bypassTokenHash as string | null) ?? null,
-      });
+      const [inserted] = await tx
+        .insert(schema.storeStatus)
+        .values({
+          tenantId: ctx.tenantId,
+          mode: input.mode ?? "coming_soon",
+          changedBy: "userId" in ctx.actor ? ctx.actor.userId : null,
+          headline: input.headline ?? null,
+          messageJson: input.messageJson,
+          launchAt: input.launchAt ?? null,
+          showCountdown: input.showCountdown ?? false,
+          collectEmails: input.collectEmails ?? true,
+          retryAfterMinutes: input.retryAfterMinutes ?? 60,
+          passwordHash: (updateValues.passwordHash as string | null) ?? null,
+          bypassTokenHash: (updateValues.bypassTokenHash as string | null) ?? null,
+        })
+        .returning({ id: schema.storeStatus.id });
+      statusId = inserted!.id;
     }
+
+    // Build sanitized audit diff (ADR-020, AGENTS.md rule 7)
+    // Log mode, headline, message, launch time, showCountdown, collectEmails;
+    // for password and bypass token, log ONLY whether set or cleared, NEVER values or hashes.
+    const before: Record<string, unknown> = {
+      mode: existing?.mode ?? "coming_soon",
+      headline: existing?.headline ?? null,
+      message: existing?.messageJson ?? null,
+      launchTime: existing?.launchAt ? existing.launchAt.toISOString() : null,
+      showCountdown: existing?.showCountdown ?? false,
+      collectEmails: existing?.collectEmails ?? true,
+      password: existing?.passwordHash ? "set" : "not_set",
+      bypassToken: existing?.bypassTokenHash ? "set" : "not_set",
+    };
+
+    const after: Record<string, unknown> = {
+      mode: input.mode !== undefined ? input.mode : (existing?.mode ?? "coming_soon"),
+      headline: input.headline !== undefined ? input.headline : (existing?.headline ?? null),
+      message: input.messageJson !== undefined ? input.messageJson : (existing?.messageJson ?? null),
+      launchTime:
+        input.launchAt !== undefined
+          ? (input.launchAt ? input.launchAt.toISOString() : null)
+          : (existing?.launchAt ? existing.launchAt.toISOString() : null),
+      showCountdown:
+        input.showCountdown !== undefined ? input.showCountdown : (existing?.showCountdown ?? false),
+      collectEmails:
+        input.collectEmails !== undefined ? input.collectEmails : (existing?.collectEmails ?? true),
+      password:
+        input.password !== undefined
+          ? (input.password ? "set" : "cleared")
+          : (existing?.passwordHash ? "set" : "not_set"),
+      bypassToken:
+        input.bypassToken !== undefined
+          ? (input.bypassToken ? "set" : "cleared")
+          : (existing?.bypassTokenHash ? "set" : "not_set"),
+    };
+
+    const diff: Record<string, { before: unknown; after: unknown }> = {};
+    for (const [key, beforeVal] of Object.entries(before)) {
+      const afterVal = after[key];
+      if (JSON.stringify(beforeVal) !== JSON.stringify(afterVal)) {
+        diff[key] = { before: beforeVal, after: afterVal };
+      }
+    }
+
+    await tx.insert(schema.auditLogs).values({
+      tenantId: ctx.tenantId,
+      actorType: "staff",
+      actorId: "userId" in ctx.actor ? ctx.actor.userId : null,
+      action: "store_status.update",
+      targetType: "store_status",
+      targetId: statusId,
+      diff,
+    });
   });
 
   await invalidateCache(rt, ctx, { type: "store_or_seo_updated" });

@@ -8,6 +8,7 @@ import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
+import { ConfirmDialog } from "../../../components/confirm-dialog.tsx";
 import { Field } from "../../../components/field.tsx";
 import { HeaderActions, SettingsPageFrame, SettingsSection, useUnsavedGuard } from "../../../components/settings/settings-page.tsx";
 import { orpc } from "../../../lib/orpc.ts";
@@ -21,10 +22,10 @@ export const Route = createFileRoute("/_store/settings/storefront")({
 type Mode = "live" | "coming_soon" | "maintenance" | "password";
 
 const MODES: Array<{ value: Mode; title: string; description: string }> = [
-  { value: "live", title: "Live", description: "Anyone can browse and buy from your store." },
-  { value: "coming_soon", title: "Coming soon", description: "Visitors see a holding page, and can leave their email if you allow it." },
-  { value: "maintenance", title: "Maintenance", description: "Visitors see a temporary \"back shortly\" page." },
-  { value: "password", title: "Password protected", description: "Only people with the password can see the store." },
+  { value: "live", title: "Live", description: "Anyone can browse, add to cart, and checkout." },
+  { value: "coming_soon", title: "Coming soon", description: "Visitors see your holding page. They cannot browse products or checkout." },
+  { value: "password", title: "Password protected", description: "Only visitors with the password can enter. Staff with admin sessions always have access." },
+  { value: "maintenance", title: "Maintenance", description: "Returns a 503 Service Unavailable with Retry-After header. Use during planned maintenance." },
 ];
 
 const TITLE = "Storefront";
@@ -67,12 +68,13 @@ function StorefrontForm({ current }: { current: StorefrontStatus }) {
   const [headline, setHeadline] = useState(current.headline ?? "");
   const [collectEmails, setCollectEmails] = useState(current.collectEmails);
   const [password, setPassword] = useState("");
+  const [confirmOfflineOpen, setConfirmOfflineOpen] = useState(false);
 
   const needsPassword = mode === "password" && !current.hasPassword && password.length < 6;
   const unchanged = current.mode === mode && (current.headline ?? "") === headline && current.collectEmails === collectEmails && password === "";
   const guard = useUnsavedGuard(!unchanged);
 
-  function save() {
+  function doSave() {
     update.mutate(
       {
         mode,
@@ -81,21 +83,43 @@ function StorefrontForm({ current }: { current: StorefrontStatus }) {
         ...(password ? { password } : {}),
       },
       {
-        onSuccess: (next) => {
+        onSuccess: () => {
           setPassword("");
+          setConfirmOfflineOpen(false);
           void queryClient.invalidateQueries({ queryKey: orpc.admin.storefront.key() });
-          toast.success(next.mode === "live" ? "Your store is live." : "Storefront settings saved.");
+          toast.success("Saved. Live to shoppers within a minute");
         },
-        onError: (e) => toast.error(errorMessage(e)),
+        onError: (e) => {
+          setConfirmOfflineOpen(false);
+          toast.error(errorMessage(e));
+        },
       },
     );
+  }
+
+  function handleSave() {
+    if (current.mode === "live" && mode !== "live") {
+      setConfirmOfflineOpen(true);
+    } else {
+      doSave();
+    }
   }
 
   return (
     <SettingsPageFrame title={TITLE} description={DESCRIPTION}>
       {guard}
+      <ConfirmDialog
+        open={confirmOfflineOpen}
+        onOpenChange={setConfirmOfflineOpen}
+        title="Take store offline?"
+        description="Taking your store offline will prevent customers from browsing and purchasing."
+        confirmLabel="Take offline"
+        destructive
+        pending={update.isPending}
+        onConfirm={doSave}
+      />
       <HeaderActions>
-        <Button onClick={save} disabled={update.isPending || unchanged || needsPassword}>
+        <Button onClick={handleSave} disabled={update.isPending || unchanged || needsPassword}>
           {update.isPending ? "Saving…" : mode === "live" && current.mode !== "live" ? "Take my store live" : "Save changes"}
         </Button>
       </HeaderActions>
@@ -122,6 +146,17 @@ function StorefrontForm({ current }: { current: StorefrontStatus }) {
           ))}
         </RadioGroup>
       </SettingsSection>
+
+      {mode === "maintenance" && (
+        <SettingsSection
+          title="Maintenance mode"
+          description="Maintenance mode serves an HTTP 503 Service Unavailable status with a Retry-After header so search engines do not de-index your site during brief downtime."
+        >
+          <p className="text-xs text-muted-foreground">
+            Staff with active admin sessions can still browse and test the store. Regular visitors will receive an HTTP 503 response.
+          </p>
+        </SettingsSection>
+      )}
 
       {mode !== "live" && (
         <SettingsSection title="Holding page" description="What visitors see while the store is not live.">
