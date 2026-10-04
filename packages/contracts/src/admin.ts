@@ -58,6 +58,67 @@ export const StoreSettings = z.object({
 });
 export type StoreSettings = z.infer<typeof StoreSettings>;
 
+/**
+ * Server-verified readiness snapshot for the Settings Overview (one narrow read model; the SPA must not
+ * query database-like endpoints separately). Facts are derived from the real sources of truth
+ * (store_status, store_settings.checkout, shipping zones/rates, products, domains, plans/subscriptions),
+ * never from the mere existence of a settings row.
+ */
+export const SettingsOverviewAction = z.object({
+  id: z.string(),
+  title: z.string(),
+  description: z.string().nullable(),
+  /** Route to fix the condition. Null when no in-app page exists yet (explained in `description`). */
+  href: z.string().nullable(),
+  kind: z.enum(["required", "informational"]),
+});
+export type SettingsOverviewAction = z.infer<typeof SettingsOverviewAction>;
+
+export const SettingsOverview = z.object({
+  storeStatus: z.object({
+    mode: z.enum(["live", "coming_soon", "maintenance", "password"]),
+    /** Safe shopper-facing link built from the tenant's primary active domain (or platform subdomain). */
+    storefrontUrl: z.string().nullable(),
+  }),
+  payments: z.object({
+    codEnabled: z.boolean(),
+    onlinePaymentAvailable: z.boolean(),
+  }),
+  shipping: z.object({
+    hasDefaultRate: z.boolean(),
+  }),
+  products: z.object({
+    hasProducts: z.boolean(),
+  }),
+  domains: z.object({
+    hasCustomDomain: z.boolean(),
+    storefrontHostname: z.string().nullable(),
+  }),
+  /** Null when no plan/subscription data is available; the card is omitted rather than faked. */
+  plan: z
+    .object({
+      name: z.string(),
+      status: z.string(),
+      interval: z.string(),
+    })
+    .nullable(),
+  onboarding: z.object({
+    steps: z.record(z.string(), z.boolean()),
+    completedCount: z.number().int(),
+    totalCount: z.number().int(),
+    dismissed: z.boolean(),
+    allCompleted: z.boolean(),
+  }),
+  actions: z.array(SettingsOverviewAction),
+  quickLinks: z.array(
+    z.object({
+      href: z.string(),
+      label: z.string(),
+    }),
+  ),
+});
+export type SettingsOverview = z.infer<typeof SettingsOverview>;
+
 export const OrderSettings = z.object({
   prefix: z.string().max(10).regex(/^[A-Za-z0-9#\-_/]*$/, "Prefix can only contain letters, numbers, and # - _ /"),
   padding: z.number().int().min(3).max(8),
@@ -950,6 +1011,12 @@ export const adminContract = {
         }),
       )
       .output(StoreSettings),
+  },
+  // --- Settings Overview (Settings rebuild Phases 0-1, docs/prompts/settings-rebuild-phase-0-1.md §C) ---
+  settingsOverview: {
+    get: oc
+      .route({ method: "GET", path: "/admin/settings/overview" })
+      .output(SettingsOverview),
   },
   orderSettings: {
     get: oc
