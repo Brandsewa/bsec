@@ -15,6 +15,10 @@ FROM base AS build
 WORKDIR /repo
 ARG VITE_SENTRY_DSN
 ENV VITE_SENTRY_DSN=$VITE_SENTRY_DSN
+# Local-only additive arg: bake the platform API URL into the super admin SPA for
+# shifted-port local stacks. Empty in CI -> the localhost:4000 fallback applies unchanged.
+ARG VITE_PLATFORM_API_URL
+ENV VITE_PLATFORM_API_URL=$VITE_PLATFORM_API_URL
 COPY --from=prune /repo/out/json/ .
 RUN --mount=type=cache,id=pnpm,target=/pnpm/store pnpm install --frozen-lockfile
 COPY --from=prune /repo/out/full/ .
