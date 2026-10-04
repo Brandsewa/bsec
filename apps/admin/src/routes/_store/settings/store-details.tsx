@@ -1,4 +1,4 @@
-import { createFileRoute } from "@tanstack/react-router";
+import { createFileRoute, Link } from "@tanstack/react-router";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useState, type FormEvent } from "react";
 import { AlertTriangle } from "lucide-react";
@@ -12,6 +12,7 @@ import { SimpleSelect } from "../../../components/simple-select.tsx";
 import { orpc } from "../../../lib/orpc.ts";
 import { errorMessage } from "../../../lib/errors.ts";
 import { INDIAN_STATES } from "../../../lib/india.ts";
+import { STORE_TIMEZONES } from "@bs/contracts";
 
 export const Route = createFileRoute("/_store/settings/store-details")({
   pendingComponent: () => <PageSkeleton />,
@@ -28,6 +29,7 @@ interface FormState {
   city: string;
   state: string;
   pincode: string;
+  timezone: string;
   autoPublishReviews: boolean;
 }
 
@@ -38,6 +40,7 @@ interface SettingsData {
   supportPhone?: string | null | undefined;
   address?:
     | {
+        countryCode?: string | undefined;
         line1?: string | undefined;
         line2?: string | undefined;
         city?: string | undefined;
@@ -46,10 +49,10 @@ interface SettingsData {
       }
     | null
     | undefined;
-  orderPrefix?: string | undefined;
   autoPublishReviews?: boolean | undefined;
   currency: string;
   timezone: string;
+  tax?: { gstin?: string | null | undefined } | undefined;
 }
 function toFormState(s: SettingsData): FormState {
   return {
@@ -62,6 +65,7 @@ function toFormState(s: SettingsData): FormState {
     city: s.address?.city ?? "",
     state: s.address?.state ?? "",
     pincode: s.address?.pincode ?? "",
+    timezone: s.timezone,
     autoPublishReviews: Boolean(s.autoPublishReviews),
   };
 }
@@ -111,6 +115,7 @@ function StoreDetailsForm({ data }: { data: SettingsData }) {
   function onSubmit(e: FormEvent) {
     e.preventDefault();
     const address = {
+      countryCode: "IN",
       ...(form.line1 ? { line1: form.line1 } : {}),
       ...(form.line2 ? { line2: form.line2 } : {}),
       ...(form.city ? { city: form.city } : {}),
@@ -123,7 +128,8 @@ function StoreDetailsForm({ data }: { data: SettingsData }) {
         legalName: form.legalName.trim() || null,
         supportEmail: form.supportEmail.trim() || null,
         supportPhone: form.supportPhone.trim() || null,
-        address: Object.keys(address).length ? address : null,
+        address: Object.keys(address).length > 1 || data.address ? address : null,
+        timezone: form.timezone,
         autoPublishReviews: form.autoPublishReviews,
       },
       {
@@ -183,19 +189,34 @@ function StoreDetailsForm({ data }: { data: SettingsData }) {
           </div>
         </SettingsSection>
 
-        <SettingsSection title="Orders and currency">
+        <SettingsSection title="Regional defaults">
           <div className="grid gap-3 sm:grid-cols-3">
             <Field id="currency" label="Currency" hint="Currency cannot be changed after your store has orders.">
               <Input id="currency" disabled readOnly value={data.currency} />
             </Field>
             <Field id="timezone" label="Time zone">
-              <Input id="timezone" disabled readOnly value={data.timezone} />
+              <SimpleSelect
+                id="timezone"
+                value={form.timezone}
+                placeholder="Select time zone"
+                onChange={(v) => setForm((f) => ({ ...f, timezone: v }))}
+                options={STORE_TIMEZONES.map((tz) => ({ value: tz, label: tz.replace(/_/g, " ") }))}
+              />
+            </Field>
+            <Field id="country" label="Country" hint="More countries are not supported yet.">
+              <Input id="country" disabled readOnly value="India" />
             </Field>
           </div>
         </SettingsSection>
 
+        <SettingsSection title="Tax identity" description="GST registration is managed with the rest of your tax settings.">
+          <Field id="gstin" label="GSTIN" hint={<span>Managed in <Link to="/settings/taxes" className="underline underline-offset-2 hover:text-foreground">Settings &gt; Taxes</Link>. Invoices print it from there.</span>}>
+            <Input id="gstin" disabled readOnly value={data.tax?.gstin ?? "Not set"} />
+          </Field>
+        </SettingsSection>
+
         <SettingsSection
-          title="Customer Reviews"
+          title="Review moderation"
           description="Control how product reviews submitted by customers are moderated."
         >
           <div className="flex items-center justify-between">

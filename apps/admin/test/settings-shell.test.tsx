@@ -136,9 +136,9 @@ describe("Store details page (/settings/store-details)", () => {
     legalName: "Alpha Retail Pvt Ltd",
     supportEmail: "help@alpha.test",
     supportPhone: "+919876543210",
-    address: { line1: "12 MG Road", city: "Bengaluru", state: "Karnataka", pincode: "560001" },
-    orderPrefix: "#ALP-",
+    address: { countryCode: "IN", line1: "12 MG Road", city: "Bengaluru", state: "Karnataka", pincode: "560001" },
     autoPublishReviews: true,
+    tax: { gstin: "29ABCDE1234F1Z5", sellerState: "Karnataka", pricesIncludeTax: true },
   };
 
   it("renders every migrated General field with current values, no order-prefix editor", async () => {
@@ -154,9 +154,14 @@ describe("Store details page (/settings/store-details)", () => {
     expect(html).toContain('value="12 MG Road"');
     expect(html).toContain('value="560001"');
     expect(html).toContain('value="INR"');
-    expect(html).toContain('value="Asia/Kolkata"');
-    expect(html).toContain("Publish reviews automatically");
+    expect(html).toContain("Review moderation");
+    expect(html).toContain('value="29ABCDE1234F1Z5"');
+    expect(html).toContain("Managed in");
+    expect(html).toContain('value="India"');
+    // Timezone is now an editable controlled list (not free text).
+    expect(html).toContain("Asia/Kolkata");
     // The order prefix is not editable here (canonical editor: Settings > Orders).
     expect(html).not.toContain('id="orderPrefix"');
+    expect(html).not.toContain('id="timezone" disabled');
   }, 60_000);
 });

@@ -44,7 +44,22 @@ Replaces the flat Settings workspace with a grouped, permission-aware shell, add
 - `packages/domain/test/isolation.int.test.ts`: dispatcher case + presence assertions + tenant-scoped readiness data test.
 - `packages/domain/test/settings-overview.test.ts`: unit matrix for every readiness condition (shown/omitted) + contract parse tests.
 
-(Commits 2–4 sections are appended as they land.)
+### Commit 2 — shell and Overview UI
+- `apps/admin/src/components/settings/settings-nav.ts`: `SETTINGS_NAV_GROUPS` (Overview / Store / Selling / Operations / People & account / Compliance & advanced), `visibleSettingsGroups` omitting empty groups after permission filtering; team item relabelled **Users** (route unchanged).
+- `settings-layout.tsx`: grouped sticky desktop sidebar + grouped mobile/tablet chooser; `simple-select.tsx` gains optional `groups` (existing flat `options` API untouched).
+- `/settings` renders the Overview (loading / error-retry / populated / nothing-to-do states).
+- General editor moved to `/settings/store-details`; order-prefix field dropped (Orders canonical), currency read-only with hint.
+- `apps/admin/test/settings-shell.test.tsx`: nav grouping/permission matrix, Overview states, store-details migration rendering — inside the in-memory router.
+
+### Commit 3 — Store Details completion
+- Contracts: `STORE_TIMEZONES` curated IANA list + `StoreTimezone` validator now guarding `settings.update.timezone`; `StoreAddress.countryCode` (alpha-2, optional).
+- Domain (`store-config.ts`): **`updateStoreSettings` now writes `audit_logs`** (`store_settings.update`, before/after diff of the aggregate's own fields, no secret-shaped values); address writes default `countryCode` to the existing value or `"IN"`; orderPrefix untouched when omitted.
+- Store details UI: editable timezone `SimpleSelect` (curated list, was a read-only input), read-only Country (India), **Tax identity** section showing the GSTIN read-only with a "Managed in Settings > Taxes" link (no second editor), review section retitled **Review moderation**.
+- Compatibility: the old General entry `/settings` now shows the Overview (by design); the editor lives at `/settings/store-details`; no legacy `/settings/general` route ever existed, so no redirect is required — covered by the UI tests.
+- Int tests (`store-settings.int.test.ts`): audit row with before/after diff and no secret-shaped values, append-only on re-save, `countryCode` defaulting/preserving, timezone persistence, orderPrefix untouched when omitted.
+
+### Deliberately not built (prompt's conditional fields)
+`businessType`, `ownerProfile`, `locale`, `dateFormat`, `timeFormat`, `unitSystem` and `weightUnit` in the UI: none has a domain consumer this phase, and SETTINGS-SCHEMA.md §1 rule 5 forbids rendering a setting before a domain consumer enforces it. Migration slot 0032 remains free because no new column/table was needed (countryCode lives in the address jsonb; timezone already existed).
 
 ## Verification
 
