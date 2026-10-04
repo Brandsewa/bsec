@@ -5,8 +5,8 @@ import { useRouter } from "next/navigation";
 
 interface SubdomainAvailabilityCheckerProps {
   platformDomain?: string;
-  /** "block" = Block-Print Bazaar (design 1), "ledger" = Bahi-Khata (design 2), "riso" = Riso Zine (design 3), "neo" = Neubrutalist Grid (design 4). */
-  variant?: "block" | "ledger" | "riso" | "neo";
+  /** "block" = Block-Print Bazaar (design 1), "ledger" = Bahi-Khata (design 2), "riso" = Riso Zine (design 3), "neo" = Neubrutalist Grid (design 4), "sky" = Night Sky (design 5). */
+  variant?: "block" | "ledger" | "riso" | "neo" | "sky";
 }
 
 export function SubdomainAvailabilityChecker({
@@ -74,6 +74,46 @@ export function SubdomainAvailabilityChecker({
       router.push(`/signup?slug=${encodeURIComponent(slug)}&storeName=${encodeURIComponent(storeName || slug)}`);
     });
   };
+
+  if (variant === "sky") {
+    return (
+      <div className="w-full max-w-xl">
+        <form onSubmit={handleSubmit} className="flex flex-col gap-3 rounded-2xl p-2.5 sm:flex-row sm:items-center" style={{ background: "var(--sk-panel)", border: "1px solid rgb(190 200 255 / 0.32)" }}>
+          <label className="flex flex-1 items-center gap-2 px-3">
+            <span className="sr-only">Store name</span>
+            <input
+              type="text"
+              placeholder="Your store name"
+              value={storeName}
+              onChange={(e) => handleStoreNameChange(e.target.value)}
+              className="min-h-[3rem] w-full bg-transparent text-lg font-medium outline-none placeholder:opacity-50"
+              style={{ color: "var(--sk-text)" }}
+              autoComplete="off"
+              required
+            />
+            <span className="shrink-0 text-sm font-semibold" style={{ color: "var(--sk-dim)" }}>.{platformDomain}</span>
+          </label>
+          <button
+            type="submit"
+            disabled={!slug || slug.length < 3 || (checkResult !== null && !checkResult.available)}
+            className="sk-btn"
+          >
+            Start free trial
+          </button>
+        </form>
+        <p className="mt-3 min-h-[1.75rem] text-[0.98rem] font-medium" role="status" aria-live="polite">
+          {slug.length >= 3 &&
+            (isChecking ? (
+              <span style={{ color: "var(--sk-dim)" }}>Checking {slug}.{platformDomain}…</span>
+            ) : checkResult?.available ? (
+              <span style={{ color: "var(--sk-teal)" }}>✓ {slug}.{platformDomain} is available</span>
+            ) : checkResult ? (
+              <span style={{ color: "#ff9db8" }}>{checkResult.reason || "That name is taken"}</span>
+            ) : null)}
+        </p>
+      </div>
+    );
+  }
 
   if (variant === "neo") {
     return (

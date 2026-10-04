@@ -1,0 +1,98 @@
+/*
+ * bcom.si landing, design 5: "Night Sky".
+ * World: a modern dark SaaS with a celestial layer. Midnight ground, a deterministic starfield, constellation line art,
+ * slow orbits, moon-phase plan tiers. Panels are solid with fine star-chart borders (no decorative glass). Scoped under .sk.
+ */
+.sk {
+  --sk-bg: #060818;
+  --sk-panel: #0d1233;
+  --sk-panel-2: #131a45;
+  --sk-line: rgb(190 200 255 / 0.18);
+  --sk-text: #eaedff;
+  --sk-dim: #a9b1d9; /* secondary text, tinted from the ground hue (8:1) */
+  --sk-violet: #8b7bff;
+  --sk-gold: #ffc766;
+  --sk-teal: #5eead4;
+  --sk-ink: #1a1230;
+  --sk-ease: cubic-bezier(0.16, 1, 0.3, 1);
+  --sk-display: var(--font-sk-display), ui-sans-serif, system-ui, sans-serif;
+  --sk-body: var(--font-sk-body), ui-sans-serif, system-ui, sans-serif;
+
+  position: relative; min-height: 100vh; overflow-x: clip;
+  background-color: var(--sk-bg); color: var(--sk-text);
+  font-family: var(--sk-body); font-size: 1.0625rem; line-height: 1.6; -webkit-font-smoothing: antialiased;
+  /* two faint nebulae, nothing more */
+  background-image:
+    radial-gradient(ellipse 60% 45% at 78% -5%, rgb(139 123 255 / 0.16), transparent 70%),
+    radial-gradient(ellipse 55% 40% at 5% 62%, rgb(94 234 212 / 0.07), transparent 70%);
+}
+:root:has(.sk) { scrollbar-color: #3a4290 var(--sk-bg); scroll-behavior: smooth; scroll-padding-top: 5rem; }
+.sk ::selection { background: var(--sk-gold); color: var(--sk-ink); }
+.sk :focus-visible { outline: 3px solid var(--sk-gold); outline-offset: 3px; border-radius: 6px; }
+.sk input { caret-color: var(--sk-gold); }
+.sk-num { font-variant-numeric: tabular-nums lining-nums; }
+.sk-display { font-family: var(--sk-display); font-weight: 600; letter-spacing: -0.035em; line-height: 1.02; text-wrap: balance; }
+.sk-h2 { font-family: var(--sk-display); font-weight: 600; letter-spacing: -0.03em; line-height: 1.06; text-wrap: balance; font-size: clamp(1.9rem, 4.2vw, 3.2rem); }
+.sk-dim { color: var(--sk-dim); }
+.sk > * { position: relative; z-index: 2; }
+
+/* Starfield: fixed behind everything. A few stars twinkle; the rest are still. */
+.sk-stars { position: fixed; inset: 0; z-index: 0 !important; pointer-events: none; }
+@keyframes sk-twinkle { 0%, 100% { opacity: var(--o, 0.9); } 50% { opacity: 0.2; } }
+.sk-tw { animation: sk-twinkle var(--t, 4s) ease-in-out var(--dl, 0s) infinite; }
+
+/* Surfaces */
+.sk-panel { background: var(--sk-panel); border: 1px solid var(--sk-line); border-radius: 18px; transition: border-color 300ms var(--sk-ease), transform 400ms var(--sk-ease); }
+.sk-panel:hover { border-color: rgb(190 200 255 / 0.4); transform: translateY(-3px); }
+.sk-hair { border-top: 1px solid var(--sk-line); }
+
+/* Buttons */
+.sk-btn {
+  display: inline-flex; align-items: center; justify-content: center; gap: 0.5rem; white-space: nowrap;
+  min-height: 3rem; padding: 0.7rem 1.5rem; border: 0; border-radius: 999px; cursor: pointer; text-decoration: none;
+  font-family: var(--sk-display); font-weight: 600; font-size: 0.98rem; letter-spacing: -0.01em;
+  background: var(--sk-gold); color: var(--sk-ink);
+  box-shadow: 0 10px 24px -10px rgb(255 199 102 / 0.55), 0 1px 0 rgb(255 255 255 / 0.5) inset;
+  transition: transform 220ms var(--sk-ease), box-shadow 220ms var(--sk-ease), background-color 200ms;
+}
+.sk-btn:hover { transform: translateY(-2px); background: #ffd283; box-shadow: 0 16px 30px -12px rgb(255 199 102 / 0.6), 0 1px 0 rgb(255 255 255 / 0.5) inset; }
+.sk-btn:active { transform: translateY(0); }
+.sk-btn[disabled] { background: #2a3066; color: #8089c4; cursor: not-allowed; box-shadow: none; transform: none; }
+.sk-btn-sm { min-height: 2.6rem; padding: 0.4rem 1.1rem; }
+.sk-btn-ghost { background: transparent; color: var(--sk-text); box-shadow: inset 0 0 0 1px var(--sk-line); }
+.sk-btn-ghost:hover { background: rgb(190 200 255 / 0.08); box-shadow: inset 0 0 0 1px rgb(190 200 255 / 0.4); transform: translateY(-2px); }
+
+/* Orbits: slow rotation; labels counter-rotate so text stays upright. */
+@keyframes sk-spin { to { transform: rotate(360deg); } }
+@keyframes sk-unspin { to { transform: rotate(-360deg); } }
+.sk-orbit { transform-origin: center; transform-box: fill-box; animation: sk-spin var(--sp, 60s) linear infinite; }
+.sk-orbit-label { transform-origin: center; transform-box: fill-box; animation: sk-unspin var(--sp, 60s) linear infinite; }
+.sk-orbit-wrap:hover .sk-orbit, .sk-orbit-wrap:hover .sk-orbit-label { animation-play-state: paused; }
+
+/* Headline: words resolve from blur, once. */
+@keyframes sk-resolve { from { opacity: 0; filter: blur(10px); transform: translateY(0.25em); } to { opacity: 1; filter: blur(0); transform: none; } }
+.sk-word { display: inline-block; animation: sk-resolve 900ms var(--sk-ease) both; animation-delay: calc(var(--i, 0) * 70ms + 100ms); }
+
+/* New log entries arrive like a comet: from the right, settling. */
+@keyframes sk-entry { from { transform: translateX(26px); opacity: 0; } to { transform: none; opacity: 1; } }
+.sk-row-new { animation: sk-entry 700ms var(--sk-ease) both; }
+
+/* Constellation lines draw themselves when revealed. */
+.sk-line path, .sk-line line { stroke-dasharray: 1; stroke-dashoffset: 0; }
+.sk-armed .sk-rv:not(.is-in) .sk-line path, .sk-armed .sk-rv:not(.is-in) .sk-line line { stroke-dashoffset: 1; }
+.sk-rv.is-in .sk-line path, .sk-rv.is-in .sk-line line { animation: sk-draw 1400ms var(--sk-ease) 150ms both; }
+@keyframes sk-draw { from { stroke-dashoffset: 1; } to { stroke-dashoffset: 0; } }
+
+.sk-rv { transition: opacity 700ms var(--sk-ease), transform 900ms var(--sk-ease); }
+.sk-armed .sk-rv:not(.is-in) { opacity: 0; transform: translateY(26px); }
+
+.sk-faq summary { cursor: pointer; list-style: none; }
+.sk-faq summary::-webkit-details-marker { display: none; }
+.sk-faq[open] .sk-plus { transform: rotate(45deg); }
+.sk-plus { transition: transform 260ms var(--sk-ease); }
+
+@media (prefers-reduced-motion: reduce) {
+  :root:has(.sk) { scroll-behavior: auto; }
+  .sk *, .sk *::before, .sk *::after { animation: none !important; transition: none !important; }
+  .sk-armed .sk-rv:not(.is-in) { opacity: 1; transform: none; }
+}

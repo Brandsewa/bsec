@@ -14,6 +14,7 @@ export const MARKETING_DESIGNS: readonly MarketingDesign[] = [
   { id: "2", label: "Home 2", note: "The Bahi-Khata (red ledger, ruled paper)", built: true },
   { id: "3", label: "Home 3", note: "Riso Zine (spot inks, overprint, halftone)", built: true },
   { id: "4", label: "Home 4", note: "Neubrutalist Grid (outlines, hard shadows, solids)", built: true },
+  { id: "5", label: "Home 5", note: "Night Sky (dark SaaS, orbits, constellations)", built: true },
 ];
 
 export const DEFAULT_DESIGN = "1";
