@@ -1178,11 +1178,9 @@ describe("Generated Isolation Test Suite (M1 Real Postgres 18 Proof)", () => {
 
       // --- M8 Custom Domains ---
       case "domains.list":
-        assertPermission(ctx, "settings.write");
-        return await listTenantDomains(rt, ctx.tenantId);
+        return await listTenantDomains(rt, ctx);
       case "domains.add": {
-        assertPermission(ctx, "settings.write");
-        return await addCustomDomain(rt, ctx.tenantId, {
+        return await addCustomDomain(rt, ctx, {
           hostname: `iso-add-${Date.now()}-${Math.random().toString(36).slice(2, 6)}.storetest.org`,
           provider: {
             isConfigured: () => true,
@@ -1199,8 +1197,7 @@ describe("Generated Isolation Test Suite (M1 Real Postgres 18 Proof)", () => {
         });
       }
       case "domains.verify": {
-        assertPermission(ctx, "settings.write");
-        const d = await addCustomDomain(rt, ctx.tenantId, {
+        const d = await addCustomDomain(rt, ctx, {
           hostname: `iso-ver-${Date.now()}-${Math.random().toString(36).slice(2, 6)}.storetest.org`,
           provider: {
             isConfigured: () => true,
@@ -1215,21 +1212,19 @@ describe("Generated Isolation Test Suite (M1 Real Postgres 18 Proof)", () => {
             deleteCustomHostname: async () => ({ deleted: true }),
           },
         });
-        return await verifyCustomDomain(rt, ctx.tenantId, d.id);
+        return await verifyCustomDomain(rt, ctx, d.id);
       }
       case "domains.setPrimary": {
-        assertPermission(ctx, "settings.write");
         const [activeDomain] = await rt._db.db
           .select()
           .from(schema.domains)
           .where(and(eq(schema.domains.tenantId, ctx.tenantId), eq(schema.domains.status, "active")))
           .limit(1);
         if (!activeDomain) throw new Error("No active domain found");
-        return await setPrimaryDomain(rt, ctx.tenantId, activeDomain.id);
+        return await setPrimaryDomain(rt, ctx, activeDomain.id);
       }
       case "domains.remove": {
-        assertPermission(ctx, "settings.write");
-        const d = await addCustomDomain(rt, ctx.tenantId, {
+        const d = await addCustomDomain(rt, ctx, {
           hostname: `iso-rem-${Date.now()}-${Math.random().toString(36).slice(2, 6)}.storetest.org`,
           provider: {
             isConfigured: () => true,
@@ -1244,7 +1239,7 @@ describe("Generated Isolation Test Suite (M1 Real Postgres 18 Proof)", () => {
             deleteCustomHostname: async () => ({ deleted: true }),
           },
         });
-        return await removeCustomDomain(rt, ctx.tenantId, d.id);
+        return await removeCustomDomain(rt, ctx, d.id);
       }
 
       // --- Product images ---

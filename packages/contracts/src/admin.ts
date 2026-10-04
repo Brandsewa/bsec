@@ -1046,6 +1046,39 @@ export const AdminReturnDetail = z.object({
 });
 export type AdminReturnDetail = z.infer<typeof AdminReturnDetail>;
 
+// --- M8 Custom Domains Schemas (PLAN §8, ADR-007, ADR-017) ---
+export const CustomDomainItem = z.object({
+  id: z.string().uuid(),
+  hostname: z.string(),
+  type: z.string(),
+  isPrimary: z.boolean(),
+  status: z.string(),
+  sslStatus: z.string().nullable().optional(),
+  prevalidateTxt: z.boolean().nullable().optional(),
+  verification: z
+    .object({
+      cname: z.string().optional(),
+      txt: z
+        .object({
+          name: z.string(),
+          value: z.string(),
+        })
+        .optional(),
+    })
+    .nullable()
+    .optional(),
+  createdAt: z.string(),
+});
+export type CustomDomainItem = z.infer<typeof CustomDomainItem>;
+
+export const CustomDomainVerifyResult = z.object({
+  id: z.string().uuid(),
+  hostname: z.string(),
+  status: z.string(),
+  sslStatus: z.string().nullable().optional(),
+});
+export type CustomDomainVerifyResult = z.infer<typeof CustomDomainVerifyResult>;
+
 export const adminContract = {
   support: {
     list: oc.route({ method: "GET", path: "/admin/support/sessions" }).output(z.array(StoreSupportSession)),
@@ -3019,32 +3052,7 @@ export const adminContract = {
   domains: {
     list: oc
       .route({ method: "GET", path: "/admin/domains" })
-      .output(
-        z.array(
-          z.object({
-            id: z.string().uuid(),
-            hostname: z.string(),
-            type: z.string(),
-            isPrimary: z.boolean(),
-            status: z.string(),
-            sslStatus: z.string().nullable().optional(),
-            prevalidateTxt: z.boolean().nullable().optional(),
-            verification: z
-              .object({
-                cname: z.string().optional(),
-                txt: z
-                  .object({
-                    name: z.string(),
-                    value: z.string(),
-                  })
-                  .optional(),
-              })
-              .nullable()
-              .optional(),
-            createdAt: z.string(),
-          }),
-        ),
-      ),
+      .output(z.array(CustomDomainItem)),
     add: oc
       .route({ method: "POST", path: "/admin/domains" })
       .input(
@@ -3053,41 +3061,11 @@ export const adminContract = {
           prevalidateTxt: z.boolean().optional(),
         }),
       )
-      .output(
-        z.object({
-          id: z.string().uuid(),
-          hostname: z.string(),
-          type: z.string(),
-          isPrimary: z.boolean(),
-          status: z.string(),
-          sslStatus: z.string().nullable().optional(),
-          prevalidateTxt: z.boolean().nullable().optional(),
-          verification: z
-            .object({
-              cname: z.string().optional(),
-              txt: z
-                .object({
-                  name: z.string(),
-                  value: z.string(),
-                })
-                .optional(),
-            })
-            .nullable()
-            .optional(),
-          createdAt: z.string(),
-        }),
-      ),
+      .output(CustomDomainItem),
     verify: oc
       .route({ method: "POST", path: "/admin/domains/{id}/verify" })
       .input(z.object({ id: z.string().uuid() }))
-      .output(
-        z.object({
-          id: z.string().uuid(),
-          hostname: z.string(),
-          status: z.string(),
-          sslStatus: z.string().nullable().optional(),
-        }),
-      ),
+      .output(CustomDomainVerifyResult),
     setPrimary: oc
       .route({ method: "POST", path: "/admin/domains/{id}/set-primary" })
       .input(z.object({ id: z.string().uuid() }))

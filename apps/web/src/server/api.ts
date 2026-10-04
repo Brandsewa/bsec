@@ -1745,9 +1745,10 @@ export const storeRouter = os.router({
     domains: {
       list: os.admin.domains.list
         .use(requireAdmin)
+        .use(requirePermission("settings.read"))
         .handler(async ({ context }) => {
           if (!context.tenantCtx) throw new Error("Missing tenant context");
-          const rows = await listTenantDomains(context.rt, context.tenantCtx.tenantId);
+          const rows = await listTenantDomains(context.rt, context.tenantCtx);
           return rows.map((r) => ({
             id: r.id,
             hostname: r.hostname,
@@ -1762,10 +1763,10 @@ export const storeRouter = os.router({
         }),
       add: os.admin.domains.add
         .use(requireAdmin)
-        .use(requirePermission("settings.write"))
+        .use(requirePermission("domains.manage"))
         .handler(async ({ context, input }) => {
           if (!context.tenantCtx) throw new Error("Missing tenant context");
-          const created = await addCustomDomain(context.rt, context.tenantCtx.tenantId, {
+          const created = await addCustomDomain(context.rt, context.tenantCtx, {
             hostname: input.hostname,
             ...(input.prevalidateTxt !== undefined ? { prevalidateTxt: input.prevalidateTxt } : {}),
           });
@@ -1783,10 +1784,10 @@ export const storeRouter = os.router({
         }),
       verify: os.admin.domains.verify
         .use(requireAdmin)
-        .use(requirePermission("settings.write"))
+        .use(requirePermission("domains.manage"))
         .handler(async ({ context, input }) => {
           if (!context.tenantCtx) throw new Error("Missing tenant context");
-          const updated = await verifyCustomDomain(context.rt, context.tenantCtx.tenantId, input.id);
+          const updated = await verifyCustomDomain(context.rt, context.tenantCtx, input.id);
           return {
             id: updated.id,
             hostname: updated.hostname,
@@ -1796,17 +1797,17 @@ export const storeRouter = os.router({
         }),
       setPrimary: os.admin.domains.setPrimary
         .use(requireAdmin)
-        .use(requirePermission("settings.write"))
+        .use(requirePermission("domains.manage"))
         .handler(async ({ context, input }) => {
           if (!context.tenantCtx) throw new Error("Missing tenant context");
-          return setPrimaryDomain(context.rt, context.tenantCtx.tenantId, input.id);
+          return setPrimaryDomain(context.rt, context.tenantCtx, input.id);
         }),
       remove: os.admin.domains.remove
         .use(requireAdmin)
-        .use(requirePermission("settings.write"))
+        .use(requirePermission("domains.manage"))
         .handler(async ({ context, input }) => {
           if (!context.tenantCtx) throw new Error("Missing tenant context");
-          return removeCustomDomain(context.rt, context.tenantCtx.tenantId, input.id);
+          return removeCustomDomain(context.rt, context.tenantCtx, input.id);
         }),
     },
     quotes: {

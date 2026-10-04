@@ -1,9 +1,10 @@
 import { randomUUID } from "node:crypto";
 import { and, eq, ne, sql } from "drizzle-orm";
-import { schema } from "@bs/db";
+import { schema, withTenant } from "@bs/db";
 import type { Runtime } from "../runtime.ts";
 import { assertCustomDomainQuota } from "../system/quotas.ts";
 import { isDomainManagementAllowed } from "../system/tenant-lifecycle.ts";
+import { assertPermission, type TenantContext } from "../context.ts";
 import {
   type CustomDomainProvider,
   CloudflareCustomDomainProvider,
@@ -59,6 +60,17 @@ export function normalizeCustomHostname(raw: string): string {
  */
 export async function listTenantDomains(
   rt: Runtime,
+  ctxOrTenantId: TenantContext | string,
+): Promise<CustomDomainRecord[]> {
+  const tenantId = typeof ctxOrTenantId === "string" ? ctxOrTenantId : ctxOrTenantId.tenantId;
+  if (typeof ctxOrTenantId !== "string") {
+    assertPermission(ctxOrTenantId, "settings.read");
+  }
+  return listTenantDomainsInternal(rt, tenantId);
+}
+
+export async function listTenantDomainsInternal(
+  rt: Runtime,
   tenantId: string,
 ): Promise<CustomDomainRecord[]> {
   const db = rt._db.db;
@@ -77,11 +89,64 @@ export async function listTenantDomains(
   return rows as CustomDomainRecord[];
 }
 
+async function writeDomainAudit(
+  rt: Runtime,
+  ctxOrTenantId: TenantContext | string,
+  log: {
+    action: string;
+    targetId: string;
+    diff: Record<string, unknown>;
+  },
+) {
+  if (typeof ctxOrTenantId === "string") return;
+  const ctx = ctxOrTenantId;
+  await withTenant(rt._db.db, ctx.tenantId, async (tx) => {
+    await tx.insert(schema.auditLogs).values({
+      tenantId: ctx.tenantId,
+      actorType: ctx.actor.type,
+      actorId: ctx.actor.type === "staff" ? ctx.actor.userId : null,
+      action: log.action,
+      targetType: "custom_domain",
+      targetId: log.targetId,
+      diff: log.diff,
+    });
+  });
+}
+
 /**
  * Adds a custom domain to a tenant store (PLAN §8, ADR-007, ADR-017).
  * Enforces custom_domains quota, verifies hostname uniqueness, and registers with Cloudflare for SaaS adapter.
  */
 export async function addCustomDomain(
+  rt: Runtime,
+  ctxOrTenantId: TenantContext | string,
+  input: {
+    hostname: string;
+    prevalidateTxt?: boolean;
+    provider?: CustomDomainProvider;
+  },
+): Promise<CustomDomainRecord> {
+  const tenantId = typeof ctxOrTenantId === "string" ? ctxOrTenantId : ctxOrTenantId.tenantId;
+  if (typeof ctxOrTenantId !== "string") {
+    assertPermission(ctxOrTenantId, "domains.manage");
+  }
+
+  const inserted = await addCustomDomainInternal(rt, tenantId, input);
+
+  await writeDomainAudit(rt, ctxOrTenantId, {
+    action: "domain.add",
+    targetId: inserted.id,
+    diff: {
+      hostname: { before: null, after: inserted.hostname },
+      type: { before: null, after: inserted.type },
+      status: { before: null, after: inserted.status },
+    },
+  });
+
+  return inserted;
+}
+
+export async function addCustomDomainInternal(
   rt: Runtime,
   tenantId: string,
   input: {
@@ -163,10 +228,47 @@ export async function addCustomDomain(
  */
 export async function verifyCustomDomain(
   rt: Runtime,
-  tenantId: string,
+  ctxOrTenantId: TenantContext | string,
   domainId: string,
   providerOverride?: CustomDomainProvider,
 ): Promise<CustomDomainRecord> {
+  const tenantId = typeof ctxOrTenantId === "string" ? ctxOrTenantId : ctxOrTenantId.tenantId;
+  if (typeof ctxOrTenantId !== "string") {
+    assertPermission(ctxOrTenantId, "domains.manage");
+  }
+
+  const { domain, updated, nextStatus, statusRes } = await verifyCustomDomainInternal(
+    rt,
+    tenantId,
+    domainId,
+    providerOverride,
+  );
+
+  if (updated) {
+    await writeDomainAudit(rt, ctxOrTenantId, {
+      action: "domain.verify",
+      targetId: updated.id,
+      diff: {
+        status: { before: domain.status, after: nextStatus },
+        sslStatus: { before: domain.sslStatus, after: statusRes.sslStatus },
+      },
+    });
+  }
+
+  return updated;
+}
+
+export async function verifyCustomDomainInternal(
+  rt: Runtime,
+  tenantId: string,
+  domainId: string,
+  providerOverride?: CustomDomainProvider,
+): Promise<{
+  domain: typeof schema.domains.$inferSelect;
+  updated: CustomDomainRecord;
+  nextStatus: string;
+  statusRes: { status: string; sslStatus?: string | null };
+}> {
   const db = rt._db.db;
   const provider = providerOverride ?? new CloudflareCustomDomainProvider();
 
@@ -185,14 +287,22 @@ export async function verifyCustomDomain(
     throw new Error("Domain not found or access denied.");
   }
 
+  if (domain.type === "platform_subdomain" || domain.type === "subdomain") {
+    throw new Error("Cannot verify or modify the default platform subdomain.");
+  }
+
   if (domain.type !== "custom" || !domain.cfCustomHostnameId) {
-    return domain as CustomDomainRecord;
+    return {
+      domain,
+      updated: domain as CustomDomainRecord,
+      nextStatus: domain.status,
+      statusRes: { status: domain.status, sslStatus: domain.sslStatus },
+    };
   }
 
   const statusRes = await provider.getCustomHostnameStatus(domain.cfCustomHostnameId);
 
-  // State machine: requested -> awaiting_dns -> verifying -> ssl_pending -> active. A provider poll can move a
-  // domain forward (or to failed) but never silently back, e.g. an active domain does not regress to pending.
+  // State machine: requested -> awaiting_dns -> verifying -> ssl_pending -> active.
   const rank: Record<string, number> = { requested: 0, awaiting_dns: 1, verifying: 2, ssl_pending: 3, active: 4 };
   const currentRank = rank[domain.status] ?? -1;
   const nextRank = rank[statusRes.status] ?? -1;
@@ -219,7 +329,12 @@ export async function verifyCustomDomain(
     `);
   }
 
-  return updated as CustomDomainRecord;
+  return {
+    domain,
+    updated: updated as CustomDomainRecord,
+    nextStatus,
+    statusRes,
+  };
 }
 
 /**
@@ -228,8 +343,27 @@ export async function verifyCustomDomain(
  */
 export async function setPrimaryDomain(
   rt: Runtime,
+  ctxOrTenantId: TenantContext | string,
+  domainId: string,
+): Promise<{ success: boolean; primaryHostname: string }> {
+  const tenantId = typeof ctxOrTenantId === "string" ? ctxOrTenantId : ctxOrTenantId.tenantId;
+  if (typeof ctxOrTenantId !== "string") {
+    assertPermission(ctxOrTenantId, "domains.manage");
+  }
+
+  return setPrimaryDomainInternal(
+    rt,
+    tenantId,
+    domainId,
+    typeof ctxOrTenantId !== "string" ? ctxOrTenantId : undefined,
+  );
+}
+
+export async function setPrimaryDomainInternal(
+  rt: Runtime,
   tenantId: string,
   domainId: string,
+  ctx?: TenantContext,
 ): Promise<{ success: boolean; primaryHostname: string }> {
   const db = rt._db.db;
 
@@ -256,7 +390,7 @@ export async function setPrimaryDomain(
   }
 
   // Atomic primary switch
-  await db.transaction(async (tx) => {
+  await withTenant(db, tenantId, async (tx) => {
     // 1. Remove primary status from all other domains for this tenant
     await tx
       .update(schema.domains)
@@ -268,6 +402,22 @@ export async function setPrimaryDomain(
       .update(schema.domains)
       .set({ isPrimary: true, updatedAt: new Date() })
       .where(eq(schema.domains.id, domain.id));
+
+    // 3. Write audit log
+    if (ctx) {
+      await tx.insert(schema.auditLogs).values({
+        tenantId,
+        actorType: ctx.actor.type,
+        actorId: ctx.actor.type === "staff" ? ctx.actor.userId : null,
+        action: "domain.set_primary",
+        targetType: "custom_domain",
+        targetId: domain.id,
+        diff: {
+          isPrimary: { before: false, after: true },
+          hostname: { before: null, after: domain.hostname },
+        },
+      });
+    }
   });
 
   return { success: true, primaryHostname: domain.hostname };
@@ -278,10 +428,35 @@ export async function setPrimaryDomain(
  */
 export async function removeCustomDomain(
   rt: Runtime,
-  tenantId: string,
+  ctxOrTenantId: TenantContext | string,
   domainId: string,
   providerOverride?: CustomDomainProvider,
 ): Promise<{ success: boolean }> {
+  const tenantId = typeof ctxOrTenantId === "string" ? ctxOrTenantId : ctxOrTenantId.tenantId;
+  if (typeof ctxOrTenantId !== "string") {
+    assertPermission(ctxOrTenantId, "domains.manage");
+  }
+
+  const { domain } = await removeCustomDomainInternal(rt, tenantId, domainId, providerOverride);
+
+  await writeDomainAudit(rt, ctxOrTenantId, {
+    action: "domain.remove",
+    targetId: domain.id,
+    diff: {
+      hostname: { before: domain.hostname, after: null },
+      isPrimary: { before: domain.isPrimary, after: false },
+    },
+  });
+
+  return { success: true };
+}
+
+export async function removeCustomDomainInternal(
+  rt: Runtime,
+  tenantId: string,
+  domainId: string,
+  providerOverride?: CustomDomainProvider,
+): Promise<{ domain: typeof schema.domains.$inferSelect; success: boolean }> {
   const db = rt._db.db;
   const provider = providerOverride ?? new CloudflareCustomDomainProvider();
 
@@ -337,5 +512,5 @@ export async function removeCustomDomain(
   // Delete record from domains
   await db.delete(schema.domains).where(eq(schema.domains.id, domain.id));
 
-  return { success: true };
+  return { domain, success: true };
 }
