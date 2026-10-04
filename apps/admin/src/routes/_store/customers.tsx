@@ -39,6 +39,7 @@ import { SimpleSelect } from "../../components/simple-select.tsx";
 import { downloadCsv, toCsv } from "../../lib/csv.ts";
 import { errorMessage } from "../../lib/errors.ts";
 import { client, orpc } from "../../lib/orpc.ts";
+import { useQuery as useSegmentsQuery } from "@tanstack/react-query";
 
 // ---------------------------------------------------------------------------------------------------------------
 // URL state
@@ -82,7 +83,7 @@ export interface CustomersSearch {
   repeat?: true | undefined;
   from?: string | undefined;
   to?: string | undefined;
-  /** Reserved for the Phase 2 segment filter; parsed so the param stays stable until then. */
+  /** Phase 2: filter by segment (manual members or automatic rules). */
   segment?: string | undefined;
   sort: Sort;
   page: number;
@@ -115,6 +116,7 @@ export function customersListInput(s: CustomersSearch, paging: { limit: number; 
     ...(s.tag ? { tag: s.tag } : {}),
     ...(s.mkt ? { marketingState: s.mkt } : {}),
     ...(s.loc ? { location: s.loc } : {}),
+    ...(s.segment ? { segmentId: s.segment } : {}),
     ...(s.repeat ? { repeat: true } : {}),
     ...(s.from ? { createdFrom: dayStartIso(s.from) } : {}),
     ...(s.to ? { createdTo: dayAfterIso(s.to) } : {}),
@@ -380,19 +382,21 @@ export function CustomersPage() {
   const rows = useMemo(() => list.data?.items ?? [], [list.data]);
   const total = list.data?.total ?? 0;
   const options = useQuery(orpc.admin.customers.tags.queryOptions());
+  const segmentOptions = useSegmentsQuery(orpc.admin.segments.list.queryOptions({ input: { limit: 100 } }));
+  const manualSegments = (segmentOptions.data?.items ?? []).filter((sg) => sg.kind === "manual");
 
-  const hasFilters = Boolean(s.q || s.tag || s.mkt || s.loc || s.repeat || s.from || s.to);
-  const activeFilterCount = [s.tag, s.mkt, s.loc, s.repeat, s.from || s.to].filter(Boolean).length;
+  const hasFilters = Boolean(s.q || s.tag || s.mkt || s.loc || s.repeat || s.from || s.to || s.segment);
+  const activeFilterCount = [s.tag, s.mkt, s.loc, s.repeat, s.from || s.to, s.segment].filter(Boolean).length;
   const clearFilters = () => {
     setSearchText("");
-    update({ q: undefined, tag: undefined, mkt: undefined, loc: undefined, repeat: undefined, from: undefined, to: undefined, page: undefined });
+    update({ q: undefined, tag: undefined, mkt: undefined, loc: undefined, repeat: undefined, from: undefined, to: undefined, segment: undefined, page: undefined });
   };
 
   const sel = useTableSelection({
     rows,
     getId: (c: CustomerRow) => c.id,
     total,
-    resetKey: JSON.stringify([s.view, s.q, s.tag, s.mkt, s.loc, s.repeat, s.from, s.to]),
+    resetKey: JSON.stringify([s.view, s.q, s.tag, s.mkt, s.loc, s.repeat, s.from, s.to, s.segment]),
   });
 
   // ----- bulk and row actions -----
@@ -401,6 +405,9 @@ export function CustomersPage() {
   const [blockAsk, setBlockAsk] = useState<CustomerRow[] | null>(null);
   const [exportOpen, setExportOpen] = useState(false);
   const [subscribedOnly, setSubscribedOnly] = useState(true);
+  const [addToSegmentOpen, setAddToSegmentOpen] = useState(false);
+  const [pickedSegmentId, setPickedSegmentId] = useState("");
+  const [newSegmentName, setNewSegmentName] = useState("");
   const [deleteAsk, setDeleteAsk] = useState<CustomerRow[] | null>(null);
   const [importOpen, setImportOpen] = useState(false);
 
@@ -436,6 +443,31 @@ export function CustomersPage() {
       action: (c) => client.admin.customers.setStatus({ id: c.id, status }),
       onFinished: refresh,
     });
+
+  const runAddToSegment = async () => {
+    const customerIds = sel.picked.map((c) => c.id);
+    try {
+      let segmentId = pickedSegmentId;
+      if (!segmentId && newSegmentName.trim()) {
+        const created = await client.admin.segments.create({ name: newSegmentName.trim(), kind: "manual" });
+        segmentId = created.id;
+      }
+      if (!segmentId) {
+        toast.error("Pick a segment or name a new one.");
+        return;
+      }
+      const res = await client.admin.segments.members.add({ id: segmentId, customerIds });
+      const parts = [`${res.added} added`, res.alreadyIn > 0 ? `${res.alreadyIn} already in` : "", res.notFound.length > 0 ? `${res.notFound.length} not found` : ""].filter(Boolean);
+      toast.success(`Added to segment: ${parts.join(", ")}.`);
+      sel.release([]);
+      setAddToSegmentOpen(false);
+      setPickedSegmentId("");
+      setNewSegmentName("");
+      void queryClient.invalidateQueries({ queryKey: orpc.admin.segments.key() });
+    } catch (e) {
+      toast.error(errorMessage(e));
+    }
+  };
 
   const runDelete = (targets: CustomerRow[]) =>
     bulk.run({
@@ -542,6 +574,7 @@ export function CustomersPage() {
     ...(s.tag ? [{ key: "tag", label: `Tag: ${s.tag}`, onRemove: () => setFilter({ tag: undefined }) }] : []),
     ...(s.mkt ? [{ key: "mkt", label: `Marketing: ${mktLabel}`, onRemove: () => setFilter({ mkt: undefined }) }] : []),
     ...(s.loc ? [{ key: "loc", label: `Location: ${s.loc}`, onRemove: () => setFilter({ loc: undefined }) }] : []),
+    ...(s.segment ? [{ key: "segment", label: `Segment: ${segmentOptions.data?.items.find((sg) => sg.id === s.segment)?.name ?? "selected"}`, onRemove: () => setFilter({ segment: undefined }) }] : []),
     ...(s.repeat ? [{ key: "repeat", label: "Repeat customers", onRemove: () => setFilter({ repeat: undefined }) }] : []),
     ...(s.from || s.to
       ? [{ key: "joined", label: `Joined: ${s.from ? fmtDay(s.from) : "…"} – ${s.to ? fmtDay(s.to) : "…"}`, onRemove: () => setFilter({ from: undefined, to: undefined }) }]
@@ -562,6 +595,7 @@ export function CustomersPage() {
       <SimpleSelect ariaLabel="Tag" className="w-full md:w-auto md:min-w-32" value={s.tag ?? "any"} options={tagSelect} onChange={(v) => setFilter({ tag: v === "any" ? undefined : v })} />
       <SimpleSelect ariaLabel="Marketing consent" className="w-full md:w-auto md:min-w-40" value={s.mkt ?? "any"} options={MARKETING_SELECT} onChange={(v) => setFilter({ mkt: v === "any" ? undefined : (v as CustomersSearch["mkt"]) })} />
       <SimpleSelect ariaLabel="Location" className="w-full md:w-auto md:min-w-32" value={s.loc ?? "any"} options={locationSelect} onChange={(v) => setFilter({ loc: v === "any" ? undefined : v })} />
+      <SimpleSelect ariaLabel="Segment" className="w-full md:w-auto md:min-w-40" value={s.segment ?? "any"} options={[{ value: "any", label: "Segment: any" }, ...(segmentOptions.data?.items ?? []).map((sg) => ({ value: sg.id, label: sg.name }))]} onChange={(v) => setFilter({ segment: v === "any" ? undefined : v })} />
       <Button variant={s.repeat ? "default" : "outline"} size="sm" className="justify-start md:justify-center" aria-pressed={Boolean(s.repeat)} onClick={() => setFilter({ repeat: s.repeat ? undefined : true })}>
         Repeat customers
       </Button>
@@ -710,6 +744,9 @@ export function CustomersPage() {
             <Button variant="outline" size="sm" disabled={bulk.busy} onClick={() => void exportCustomers("selection")}>
               <Download className="mr-1.5" /> Export
             </Button>
+            <Button variant="outline" size="sm" disabled={bulk.busy || sel.allResults} onClick={() => { setPickedSegmentId(""); setNewSegmentName(""); setAddToSegmentOpen(true); }}>
+              <Tag className="mr-1.5" /> Add to segment
+            </Button>
             <Button variant="destructive" size="sm" disabled={bulk.busy || sel.allResults} onClick={() => setDeleteAsk(sel.picked)}>
               <Trash2 className="mr-1.5" /> Delete
             </Button>
@@ -810,6 +847,25 @@ export function CustomersPage() {
           void runDelete(targets);
         }}
       />
+
+      <ConfirmDialog
+        open={addToSegmentOpen}
+        onOpenChange={setAddToSegmentOpen}
+        title={`Add ${sel.picked.length} customer${sel.picked.length === 1 ? "" : "s"} to a segment`}
+        description="Pick a manual segment, or name a new one to create and fill. Automatic segments cannot be edited by hand."
+        confirmLabel="Add to segment"
+        onConfirm={() => void runAddToSegment()}
+      >
+        <div className="grid gap-3">
+          <SimpleSelect
+            ariaLabel="Pick a segment"
+            value={pickedSegmentId || "any"}
+            options={[{ value: "any", label: newSegmentName.trim() ? "Create a new segment" : "Pick a segment…" }, ...manualSegments.map((sg) => ({ value: sg.id, label: sg.name }))]}
+            onChange={setPickedSegmentId}
+          />
+          <Input aria-label="New segment name" value={newSegmentName} onChange={(e) => setNewSegmentName(e.target.value)} placeholder="…or name a new manual segment" maxLength={100} />
+        </div>
+      </ConfirmDialog>
     </PageContainer>
   );
 }

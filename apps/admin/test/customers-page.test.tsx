@@ -5,6 +5,7 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { createMemoryHistory, createRootRoute, createRouter, RouterProvider } from "@tanstack/react-router";
 
 const ADA = "0199a000-0000-7000-8000-000000000101";
+const SEGID = "0199a000-0000-7000-8000-000000000301";
 const GIA = "0199a000-0000-7000-8000-000000000102";
 const NOW = "2026-10-03T10:00:00.000Z";
 
@@ -124,6 +125,26 @@ describe("Customers list (Phase 1A)", () => {
     expect(full).not.toHaveProperty("segment");
   });
 
+  it("passes the segment filter into the API request and shows it as a chip", async () => {
+    const { CustomersPage, customersListInput, parseCustomersSearch } = await seedPage();
+    const { orpc } = await import("../src/lib/orpc.ts");
+    const qc = newClient();
+    const search = parseCustomersSearch({ segment: SEGID });
+    qc.setQueryData(orpc.admin.customers.list.queryOptions({ input: customersListInput(search) }).queryKey, listData);
+    qc.setQueryData(orpc.admin.customers.stats.queryOptions().queryKey, statsData);
+    qc.setQueryData(orpc.admin.customers.tags.queryOptions().queryKey, tagsData);
+    qc.setQueryData(orpc.admin.segments.list.queryOptions({ input: { limit: 100 } }).queryKey, {
+      items: [{ id: SEGID, name: "VIP customers", description: null, kind: "automatic", isPreset: true, memberCount: 1, countedAt: NOW, createdAt: NOW, updatedAt: NOW }],
+      total: 1,
+    });
+    const html = await renderRouted(qc, CustomersPage);
+    // The filter select renders (closed selects show only the trigger in SSR)
+    expect(html).toContain("Segment:");
+    // The mapping is the contract: segment param in, segmentId out; absent otherwise.
+    expect(customersListInput(search)).toMatchObject({ segmentId: SEGID });
+    expect(customersListInput(parseCustomersSearch({}))).not.toHaveProperty("segmentId");
+  });
+
   it("drops unknown filter values back to defaults", async () => {
     const { parseCustomersSearch } = await seedPage();
     const parsed = parseCustomersSearch({ view: "nonsense", mkt: "sometimes", sort: "chaos" });
@@ -171,6 +192,36 @@ describe("Customer detail (Phase 1B)", () => {
     const mod = await import("../src/routes/_store/customers_.$customerId.tsx");
     expect(mod.Route.options.pendingComponent).toBeDefined();
     expect(mod.Route.options.component).toBeDefined();
+  });
+
+  it("renders the segments card with manual memberships and automatic chips", async () => {
+    const { CustomerDetailPage } = await import("../src/routes/_store/customers_.$customerId.tsx");
+    const { orpc } = await import("../src/lib/orpc.ts");
+    const qc = newClient();
+    qc.setQueryData(orpc.admin.customers.get.queryOptions({ input: { id: CID2 } }).queryKey, detailData);
+    qc.setQueryData(orpc.admin.segments.forCustomer.queryOptions({ input: { customerId: CID2 } }).queryKey, {
+      manual: [{ id: SEGID, name: "Manual picks" }],
+      automatic: [{ id: "0199a000-0000-7000-8000-000000000302", name: "VIP customers" }],
+    });
+    qc.setQueryData(orpc.admin.customers.notes.list.queryOptions({ input: { id: CID2 } }).queryKey, { items: [] });
+    qc.setQueryData(orpc.admin.customers.orders.queryOptions({ input: { id: CID2 } }).queryKey, { items: detailData.recentOrders, total: 1 });
+    qc.setQueryData(orpc.admin.customers.activity.queryOptions({ input: { id: CID2 } }).queryKey, { items: [] });
+    qc.setQueryData(orpc.admin.customers.tags.queryOptions().queryKey, tagsData);
+    const qcProvider = React.createElement(
+      QueryClientProvider,
+      { client: qc },
+      React.createElement(CustomerDetailPage as (props: { customerId?: string }) => React.ReactNode, { customerId: CID2 }),
+    );
+    const router = createRouter({
+      routeTree: createRootRoute({ component: () => qcProvider }),
+      history: createMemoryHistory({ initialEntries: ["/"] }),
+    });
+    await router.load();
+    const html = renderToString(React.createElement(RouterProvider, { router }));
+    expect(html).toContain("Segments");
+    expect(html).toContain("Manual picks"); // manual membership with remove
+    expect(html).toContain("VIP customers"); // automatic chip links to the segment
+    expect(html).toContain("Automatic segments are read-only");
   });
 
   it("renders stat tiles, profile fields, addresses, marketing card, tags and notes composer", async () => {
