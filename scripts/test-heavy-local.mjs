@@ -1,5 +1,6 @@
 #!/usr/bin/env node
-import { execSync, spawnSync } from "node:child_process";
+import { execSync } from "node:child_process";
+import { runCommand } from "./lib/run-command.mjs";
 import net from "node:net";
 
 const start = Date.now();
@@ -76,16 +77,10 @@ const env = {
   TEST_PG_ADMIN_URL,
 };
 
-const domainRes = spawnSync(
-  process.platform === "win32" ? "pnpm.cmd" : "pnpm",
-  ["--filter", "@bs/domain", "test:heavy", ...args],
-  {
-    stdio: "inherit",
-    env,
-  },
-);
+const code = runCommand("pnpm", ["--filter", "@bs/domain", "test:heavy", ...args], { env });
 
 const elapsedSec = ((Date.now() - start) / 1000).toFixed(2);
-console.log(`\n[test:heavy:local] Finished in ${elapsedSec}s with exit code ${domainRes.status ?? 0}`);
+console.log(`
+[test:heavy:local] Finished in ${elapsedSec}s with exit code ${code}`);
 
-process.exit(domainRes.status ?? 0);
+process.exit(code);

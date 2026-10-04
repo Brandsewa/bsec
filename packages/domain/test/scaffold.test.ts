@@ -3,7 +3,7 @@ import { describe, expect, it } from "vitest";
 // Dynamic import for .mjs script file in test
 const { generateDomainServiceCode, generateIntegrationTestCode, generateSnippets } =
   // @ts-expect-error dynamic import of root mjs script
-  await import("../../scripts/scaffold-admin-procedure.mjs");
+  await import("../../../scripts/scaffold-admin-procedure.mjs");
 
 describe("scaffold-admin-procedure unit tests", () => {
   const params = {
