@@ -92,6 +92,8 @@ const CASES: Record<string, Case> = {
     input: async () => ({ code: await mkTemplate(), pages: { home: [{ id: "h1", type: "Heading", version: 1, props: { text: "Hello" } }] } }),
   },
   "templates.publish": { role: "platform_admin", action: "theme_template.publish", input: async () => ({ code: await mkTemplate() }) },
+  "templates.createPreview": { role: "platform_admin", action: "theme_template.preview_create", input: async () => ({ code: await mkTemplate() }) },
+  "templates.delete": { role: "platform_admin", action: "theme_template.delete", input: async () => ({ code: await mkTemplate() }) },
   "templates.updateMeta": { role: "platform_admin", action: "theme_template.update", input: async () => ({ code: await mkTemplate(), name: "Renamed theme" }) },
   "system.retryJob": {
     role: "platform_admin",

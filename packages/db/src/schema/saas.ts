@@ -3,6 +3,7 @@ import {
   bigint,
   boolean,
   char,
+  index,
   integer,
   jsonb,
   pgTable,
@@ -119,11 +120,35 @@ export const themeTemplates = pgTable("theme_templates", {
   draftPages: jsonb("draft_pages"),
   draftTokens: jsonb("draft_tokens"),
   publishedAt: timestamp("published_at", { withTimezone: true }),
+  // Set when staff archive a theme (hidden from stores, kept for later or for deletion). Null = published or still a draft.
+  archivedAt: timestamp("archived_at", { withTimezone: true }),
   version: integer("version").notNull().default(1),
   isActive: boolean("is_active").notNull().default(true),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().default(sql`now()`),
   updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().default(sql`now()`),
 });
+
+/**
+ * Theme previews: a short-lived, immutable snapshot of a theme's draft pages and tokens that Super Admin
+ * shares as a link (/preview/<code> on the marketing host) so a theme can be viewed in any browser before
+ * it is published. Platform-wide, no RLS. The code is an unguessable random token; rows expire and are
+ * pruned. The storefront only reads this table (insert/update/delete from app_rw are revoked in 0021).
+ */
+export const themePreviews = pgTable(
+  "theme_previews",
+  {
+    id: uuid("id").default(sql`uuidv7()`).primaryKey(),
+    code: text("code").notNull().unique(),
+    templateCode: text("template_code").notNull(),
+    name: text("name").notNull(),
+    pages: jsonb("pages").notNull(),
+    tokens: jsonb("tokens").notNull(),
+    createdBy: uuid("created_by"),
+    expiresAt: timestamp("expires_at", { withTimezone: true }).notNull(),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().default(sql`now()`),
+  },
+  (t) => [index("theme_previews_expires_idx").on(t.expiresAt)],
+);
 
 /**
  * Signup Leads: Captures partial signups for analytics and follow-up (PLAN §5.2, §7).

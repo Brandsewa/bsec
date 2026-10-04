@@ -17,6 +17,7 @@
   --fh: var(--bs-font-heading, inherit);
   --br: var(--bs-btn-radius, var(--bs-radius, 0.5rem));
   font-family: var(--bs-font-body, inherit);
+  font-weight: var(--bs-body-weight, 400);
   color: var(--t);
   box-sizing: border-box;
 }
@@ -79,16 +80,40 @@
 }
 
 /* typography */
-.bsb-heading { font-family: var(--fh); font-weight: 700; line-height: 1.15; margin: 0; }
-.bsb-h-sm { font-size: 1.125rem; }
-.bsb-h-md { font-size: 1.5rem; }
-.bsb-h-lg { font-size: clamp(1.75rem, 4vw, 2.25rem); }
-.bsb-h-xl { font-size: clamp(2.25rem, 6vw, 3.75rem); }
+.bsb-heading { font-family: var(--fh); font-weight: var(--bs-heading-weight, 700); line-height: 1.15; margin: 0; }
+/*
+ * Heading sizes come from the theme (theme-vars.ts: --bs-h1-m/-t/-d ... --bs-h6-*), mobile first:
+ * below 768px the mobile size, from 768px the tablet size, from 1024px the desktop size.
+ * The block's Size options map onto levels: Extra large = H1, Large = H2, Medium = H3, Small = H4;
+ * "Match level" (.bsb-lvl-hN) follows the heading's own level.
+ */
+.bsb-h-xl, .bsb-lvl-h1, .bsb-richtext h1 { font-size: var(--bs-h1-m, 2.25rem); }
+.bsb-h-lg, .bsb-lvl-h2, .bsb-richtext h2 { font-size: var(--bs-h2-m, 1.75rem); }
+.bsb-h-md, .bsb-lvl-h3, .bsb-richtext h3 { font-size: var(--bs-h3-m, 1.375rem); }
+.bsb-h-sm, .bsb-lvl-h4, .bsb-richtext h4 { font-size: var(--bs-h4-m, 1.125rem); }
+.bsb-lvl-h5, .bsb-richtext h5 { font-size: var(--bs-h5-m, 1rem); }
+.bsb-lvl-h6, .bsb-richtext h6 { font-size: var(--bs-h6-m, 0.875rem); }
+@media (min-width: 768px) {
+  .bsb-h-xl, .bsb-lvl-h1, .bsb-richtext h1 { font-size: var(--bs-h1-t, 3rem); }
+  .bsb-h-lg, .bsb-lvl-h2, .bsb-richtext h2 { font-size: var(--bs-h2-t, 2rem); }
+  .bsb-h-md, .bsb-lvl-h3, .bsb-richtext h3 { font-size: var(--bs-h3-t, 1.5rem); }
+  .bsb-h-sm, .bsb-lvl-h4, .bsb-richtext h4 { font-size: var(--bs-h4-t, 1.125rem); }
+  .bsb-lvl-h5, .bsb-richtext h5 { font-size: var(--bs-h5-t, 1rem); }
+  .bsb-lvl-h6, .bsb-richtext h6 { font-size: var(--bs-h6-t, 0.875rem); }
+}
+@media (min-width: 1024px) {
+  .bsb-h-xl, .bsb-lvl-h1, .bsb-richtext h1 { font-size: var(--bs-h1-d, 3.75rem); }
+  .bsb-h-lg, .bsb-lvl-h2, .bsb-richtext h2 { font-size: var(--bs-h2-d, 2.25rem); }
+  .bsb-h-md, .bsb-lvl-h3, .bsb-richtext h3 { font-size: var(--bs-h3-d, 1.5rem); }
+  .bsb-h-sm, .bsb-lvl-h4, .bsb-richtext h4 { font-size: var(--bs-h4-d, 1.125rem); }
+  .bsb-lvl-h5, .bsb-richtext h5 { font-size: var(--bs-h5-d, 1rem); }
+  .bsb-lvl-h6, .bsb-richtext h6 { font-size: var(--bs-h6-d, 0.875rem); }
+}
 .bsb-text { line-height: 1.65; margin: 0; }
 .bsb-text + .bsb-text { margin-top: 0.75rem; }
 .bsb-muted { color: var(--m); }
 .bsb-richtext { line-height: 1.65; }
-.bsb-richtext h1, .bsb-richtext h2, .bsb-richtext h3 { font-family: var(--fh); line-height: 1.2; margin: 1.25em 0 0.5em; }
+.bsb-richtext h1, .bsb-richtext h2, .bsb-richtext h3, .bsb-richtext h4, .bsb-richtext h5, .bsb-richtext h6 { font-family: var(--fh); line-height: 1.2; margin: 1.25em 0 0.5em; }
 .bsb-richtext a { color: var(--p); text-decoration: underline; }
 .bsb-richtext ul, .bsb-richtext ol { padding-left: 1.25rem; }
 
@@ -103,14 +128,15 @@
 .bsb-icon { display: inline-flex; color: var(--p); }
 
 /* buttons */
-.bsb-btn { display: inline-flex; align-items: center; justify-content: center; gap: 0.5rem; padding: 0.75rem 1.5rem; border-radius: var(--br); font-weight: 600; text-decoration: none; border: 2px solid var(--p); text-transform: var(--bs-btn-case, none); transition: opacity 0.15s; }
+.bsb-btn { display: inline-flex; align-items: center; justify-content: center; gap: 0.5rem; padding: var(--bs-btn-pad, 0.75rem 1.5rem); font-size: var(--bs-btn-fs, 1rem); border-radius: var(--br); font-weight: 600; text-decoration: none; border: 2px solid var(--p); text-transform: var(--bs-btn-case, none); transition: opacity 0.15s; }
 .bsb-btn:hover { opacity: 0.88; }
 .bsb-btn-primary { background: var(--bs-btn-bg, var(--p)); color: var(--bs-btn-fg, var(--pf)); border-color: var(--bs-btn-bd, var(--p)); }
-.bsb-btn-secondary { background: var(--s); color: var(--t); border-color: var(--b); }
+.bsb-btn-secondary { background: var(--bs-btn-light-bg, var(--s)); color: var(--bs-btn-light-fg, var(--t)); border-color: var(--bs-btn-light-bd, var(--b)); }
 .bsb-btn-outline { background: transparent; color: var(--p); }
 .bsb-tone-primary .bsb-btn-primary { background: var(--pf); color: var(--p); border-color: var(--pf); }
 .bsb-tone-primary .bsb-btn-outline { color: var(--pf); border-color: var(--pf); }
 .bsb-btn-sm { padding: 0.5rem 1rem; font-size: 0.875rem; }
+.bsb-btn-md { padding: 0.75rem 1.5rem; font-size: 1rem; }
 .bsb-btn-lg { padding: 1rem 2rem; font-size: 1.0625rem; }
 .bsb-btn-block { display: flex; width: 100%; }
 .bsb-link { color: var(--p); text-decoration: underline; font-weight: 500; }
@@ -180,3 +206,235 @@
 .bsb-ph-box { background: var(--s); border: 1px dashed var(--b); border-radius: var(--r); display: flex; align-items: center; justify-content: center; color: var(--m); font-size: 0.8125rem; }
 .bsb-ph-two { display: grid; gap: 2rem; grid-template-columns: 1fr; align-items: start; }
 @media (min-width: 768px) { .bsb-ph-two { grid-template-columns: 1fr 1fr; gap: 3rem; } }
+
+/* ------------------------------------------------------------------ */
+/* Hero slider. A native scroll-snap track (swipe, keyboard and         */
+/* no-JS all work); the host adds autoplay, arrows and dots on top.     */
+/* ------------------------------------------------------------------ */
+.bsb-hs { position: relative; color: #fff; background: #1f2937; --hs-h: 380px; overflow: hidden; }
+.bsb-hs-h-sm { --hs-h: 300px; } .bsb-hs-h-md { --hs-h: 380px; } .bsb-hs-h-lg { --hs-h: 460px; } .bsb-hs-h-screen { --hs-h: 85svh; }
+@media (min-width: 768px) {
+  .bsb-hs-h-sm { --hs-h: 360px; } .bsb-hs-h-md { --hs-h: 460px; } .bsb-hs-h-lg { --hs-h: 560px; } .bsb-hs-h-screen { --hs-h: 80svh; }
+}
+@media (min-width: 1024px) {
+  .bsb-hs-h-sm { --hs-h: 400px; } .bsb-hs-h-md { --hs-h: 520px; } .bsb-hs-h-lg { --hs-h: 640px; } .bsb-hs-h-screen { --hs-h: max(560px, 90svh); }
+}
+.bsb-hs-track { display: flex; overflow-x: auto; scroll-snap-type: x mandatory; scrollbar-width: none; overscroll-behavior-x: contain; -webkit-overflow-scrolling: touch; outline-offset: -3px; }
+.bsb-hs-track::-webkit-scrollbar { display: none; }
+@media (prefers-reduced-motion: no-preference) { .bsb-hs-track { scroll-behavior: smooth; } }
+.bsb-hs-slide { position: relative; flex: 0 0 100%; min-width: 0; scroll-snap-align: start; scroll-snap-stop: always; }
+.bsb-hs-media { position: absolute; inset: 0; background: #1f2937; }
+.bsb-hs-media img, .bsb-hs-media video { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; }
+.bsb-hs-media::after { content: ""; position: absolute; inset: 0; background: rgba(0, 0, 0, var(--hs-dim, 0)); pointer-events: none; }
+/* Bottom shade: an eased gradient (several stops) so it fades into the picture instead of showing an edge. */
+.bsb-hs-shade { position: absolute; left: 0; right: 0; bottom: 0; height: var(--hs-shade-h, 55%); pointer-events: none;
+  background: linear-gradient(to top,
+    rgba(0, 0, 0, var(--hs-shade-o, 0.7)) 0%,
+    rgba(0, 0, 0, calc(var(--hs-shade-o, 0.7) * 0.74)) 25%,
+    rgba(0, 0, 0, calc(var(--hs-shade-o, 0.7) * 0.4)) 55%,
+    rgba(0, 0, 0, calc(var(--hs-shade-o, 0.7) * 0.14)) 80%,
+    rgba(0, 0, 0, 0) 100%); }
+.bsb-hs-content { position: absolute; inset: 0; display: flex; justify-content: center; align-items: flex-end; padding: 1.25rem clamp(1rem, 4vw, 3rem) clamp(2.75rem, 6vw, 4rem); pointer-events: none; }
+.bsb-hs-pos-center .bsb-hs-content { align-items: center; padding-bottom: 1.25rem; }
+.bsb-hs-inner { width: 100%; display: flex; flex-direction: column; gap: 1rem; pointer-events: auto; }
+.bsb-hs-w-default .bsb-hs-inner { max-width: 64rem; }
+.bsb-hs-w-wide .bsb-hs-inner { max-width: 80rem; }
+.bsb-hs-w-full .bsb-hs-inner { max-width: none; }
+.bsb-hs-text { max-width: 46rem; }
+.bsb-hs-text .bsb-heading { color: #fff; text-shadow: 0 1px 12px rgba(0, 0, 0, 0.35); }
+.bsb-hs-sub { margin: 0.5rem 0 0; font-size: clamp(0.9375rem, 1.6vw, 1.0625rem); line-height: 1.55; text-shadow: 0 1px 8px rgba(0, 0, 0, 0.4); }
+.bsb-hs-actions { display: flex; flex-wrap: wrap; gap: 0.75rem; }
+/* Split: text on the left, buttons on the right, both on the bottom edge. Stacked: one column. */
+@media (min-width: 768px) {
+  .bsb-hs-layout-split .bsb-hs-inner { flex-direction: row; justify-content: space-between; align-items: flex-end; gap: 2rem; }
+  .bsb-hs-layout-split .bsb-hs-actions { flex: none; justify-content: flex-end; }
+}
+.bsb-hs-layout-stacked.bsb-hs-align-center .bsb-hs-inner { align-items: center; text-align: center; }
+.bsb-hs-layout-stacked.bsb-hs-align-center .bsb-hs-actions { justify-content: center; }
+.bsb-hs-layout-stacked.bsb-hs-align-right .bsb-hs-inner { align-items: flex-end; text-align: right; }
+.bsb-hs-layout-stacked.bsb-hs-align-right .bsb-hs-actions { justify-content: flex-end; }
+/* On phones the two buttons share one row, each half the width, so the text keeps the room. */
+@media (max-width: 767px) {
+  .bsb-hs-actions { flex-wrap: nowrap; gap: 0.5rem; }
+  .bsb-hs-actions .bsb-btn { flex: 1 1 0; min-width: 0; justify-content: center; text-align: center; padding-inline: 0.75rem; font-size: 0.9rem; }
+}
+/* Buttons keep their theme styling; outline needs light ink on a picture. */
+.bsb-hs .bsb-btn-outline { color: #fff; border-color: #fff; background: transparent; }
+.bsb-hs .bsb-hs-custom-p { background: var(--hs-p-bg, var(--bs-btn-dark-bg)); color: var(--hs-p-fg, var(--bs-btn-dark-fg)); border-color: var(--hs-p-bg, var(--bs-btn-dark-bg)); }
+.bsb-hs .bsb-hs-custom-s { background: var(--hs-s-bg, var(--bs-btn-light-bg)); color: var(--hs-s-fg, var(--bs-btn-light-fg)); border-color: var(--hs-s-bg, var(--bs-btn-light-bd)); }
+
+/* Arrows */
+.bsb-hs-arrows { position: absolute; inset: 0; pointer-events: none; display: none; }
+@media (min-width: 768px) { .bsb-hs-arrows { display: block; } }
+.bsb-hs-arrows-m { display: block; }
+.bsb-hs-arrow { position: absolute; top: 50%; transform: translateY(-50%); display: inline-flex; align-items: center; justify-content: center; border: 0; cursor: pointer; pointer-events: auto; transition: background-color 0.15s, opacity 0.15s; font-size: 1.25rem; width: 2.5rem; height: 2.5rem; padding: 0; }
+.bsb-hs-prev { left: 0.75rem; } .bsb-hs-next { right: 0.75rem; }
+.bsb-hs-arrow:disabled { opacity: 0.35; cursor: default; }
+.bsb-hs-arrow:focus-visible, .bsb-hs-dotbtn:focus-visible { outline: 2px solid #fff; outline-offset: 2px; }
+.bsb-hs-arrow-sm .bsb-hs-arrow { width: 2rem; height: 2rem; font-size: 1rem; }
+.bsb-hs-arrow-lg .bsb-hs-arrow { width: 3.25rem; height: 3.25rem; font-size: 1.5rem; }
+.bsb-hs-arrow-circle .bsb-hs-arrow { border-radius: 9999px; }
+.bsb-hs-arrow-square .bsb-hs-arrow { border-radius: 0.375rem; }
+.bsb-hs-arrow-plain .bsb-hs-arrow { background: transparent !important; box-shadow: none; filter: drop-shadow(0 1px 3px rgba(0, 0, 0, 0.5)); }
+.bsb-hs-arrow-c-light .bsb-hs-arrow { background: rgba(255, 255, 255, 0.9); color: #111827; }
+.bsb-hs-arrow-c-dark .bsb-hs-arrow { background: rgba(17, 24, 39, 0.72); color: #fff; }
+.bsb-hs-arrow-c-brand .bsb-hs-arrow { background: var(--bs-btn-dark-bg, var(--p)); color: var(--bs-btn-dark-fg, var(--pf)); }
+.bsb-hs-arrow-plain.bsb-hs-arrow-c-light .bsb-hs-arrow { color: #fff; }
+.bsb-hs-arrow-plain.bsb-hs-arrow-c-dark .bsb-hs-arrow { color: #111827; }
+.bsb-hs-arrow-plain.bsb-hs-arrow-c-brand .bsb-hs-arrow { color: var(--bs-btn-dark-bg, var(--p)); }
+.bsb-hs-arrow:hover:not(:disabled) { opacity: 0.88; }
+
+/* Dots */
+.bsb-hs-dots { position: absolute; bottom: 0.9rem; display: flex; gap: 0.5rem; align-items: center; z-index: 2; }
+.bsb-hs-dots-center { left: 50%; transform: translateX(-50%); }
+.bsb-hs-dots-left { left: clamp(1rem, 4vw, 3rem); }
+.bsb-hs-dots-right { right: clamp(1rem, 4vw, 3rem); }
+.bsb-hs-dotbtn { --d: 0.5rem; width: var(--d); height: var(--d); padding: 0; border: 0; border-radius: 9999px; cursor: pointer; background: var(--dc); opacity: 0.5; transition: opacity 0.2s, width 0.25s; position: relative; }
+/* A larger tap target without a larger dot. */
+.bsb-hs-dotbtn::before { content: ""; position: absolute; inset: -0.6rem -0.25rem; }
+.bsb-hs-dotbtn[aria-current="true"] { opacity: 1; }
+.bsb-hs-dots-sm { --d: 0.375rem; } .bsb-hs-dots-md { --d: 0.5rem; } .bsb-hs-dots-lg { --d: 0.75rem; }
+.bsb-hs-dots-sm .bsb-hs-dotbtn { --d: 0.375rem; } .bsb-hs-dots-md .bsb-hs-dotbtn { --d: 0.5rem; } .bsb-hs-dots-lg .bsb-hs-dotbtn { --d: 0.75rem; }
+.bsb-hs-dot-pill .bsb-hs-dotbtn[aria-current="true"] { width: calc(var(--d) * 2.6); }
+.bsb-hs-dot-line .bsb-hs-dotbtn { border-radius: 9999px; width: calc(var(--d) * 3.5); height: calc(var(--d) * 0.4); min-height: 3px; }
+.bsb-hs-dots-c-light { --dc: #fff; } .bsb-hs-dots-c-dark { --dc: #111827; } .bsb-hs-dots-c-brand { --dc: var(--bs-btn-dark-bg, var(--p)); }
+@media (prefers-reduced-motion: reduce) { .bsb-hs-dotbtn, .bsb-hs-arrow { transition: none; } }
+
+/* ------------------------------------------------------------------ */
+/* Product showcase: scroll-snap carousel with tabs, cards and dots.    */
+/* ------------------------------------------------------------------ */
+.bsb-psc { --psc-gap: 1rem; }
+.bsb-psc-gap-sm { --psc-gap: 0.625rem; } .bsb-psc-gap-md { --psc-gap: 1rem; } .bsb-psc-gap-lg { --psc-gap: 1.5rem; }
+.bsb-psc-head { display: flex; flex-wrap: wrap; align-items: flex-end; justify-content: space-between; gap: 1rem 2rem; margin-bottom: 1.5rem; }
+.bsb-psc-headtext p { margin: 0.5rem 0 0; }
+.bsb-psc-head-center { flex-direction: column; align-items: center; text-align: center; }
+.bsb-psc-head-right { flex-direction: row-reverse; text-align: right; }
+.bsb-psc-tabs { display: flex; gap: 1.25rem; flex-wrap: wrap; }
+.bsb-psc-tab { background: none; border: 0; padding: 0.25rem 0; font: inherit; font-family: var(--fh); font-size: 1.125rem; color: var(--m); cursor: pointer; border-bottom: 2px solid transparent; transition: color 0.15s, border-color 0.15s; }
+.bsb-psc-tab:hover { color: var(--t); }
+.bsb-psc-tab[aria-selected="true"] { color: var(--t); border-bottom-color: var(--t); }
+.bsb-psc-tab:focus-visible { outline: 2px solid var(--p); outline-offset: 3px; }
+.bsb-psc-tabs-pill { gap: 0.5rem; }
+.bsb-psc-tabs-pill .bsb-psc-tab { padding: 0.4rem 1rem; border: 1px solid var(--b); border-radius: 9999px; font-size: 0.9375rem; }
+.bsb-psc-tabs-pill .bsb-psc-tab[aria-selected="true"] { background: var(--bs-btn-dark-bg, var(--p)); color: var(--bs-btn-dark-fg, var(--pf)); border-color: var(--bs-btn-dark-bg, var(--p)); }
+.bsb-psc-panel[hidden] { display: none; }
+
+.bsb-psc-viewport { position: relative; }
+.bsb-psc-track { --n: var(--psc-m, 2); display: flex; gap: var(--psc-gap); overflow-x: auto; scroll-snap-type: x mandatory; scrollbar-width: none; overscroll-behavior-x: contain; -webkit-overflow-scrolling: touch; padding-bottom: 2px; outline-offset: 4px; }
+.bsb-psc-track::-webkit-scrollbar { display: none; }
+@media (min-width: 768px) { .bsb-psc-track { --n: var(--psc-t, 3); } }
+@media (min-width: 1024px) { .bsb-psc-track { --n: var(--psc-d, 4); } }
+@media (prefers-reduced-motion: no-preference) { .bsb-psc-track { scroll-behavior: smooth; } }
+.bsb-psc-item { flex: 0 0 calc((100% - (var(--n) - 1) * var(--psc-gap)) / var(--n)); min-width: 0; scroll-snap-align: start; }
+.bsb-psc-arrows { inset: 0; }
+.bsb-psc-arrows .bsb-hs-prev { left: -0.5rem; } .bsb-psc-arrows .bsb-hs-next { right: -0.5rem; }
+@media (min-width: 768px) { .bsb-psc-arrows .bsb-hs-prev { left: -1rem; } .bsb-psc-arrows .bsb-hs-next { right: -1rem; } }
+.bsb-psc-arrows .bsb-hs-arrow { top: calc(var(--psc-media-h, 50%)); }
+.bsb-psc-dots { position: static; transform: none; margin-top: 1.25rem; justify-content: center; }
+.bsb-psc-dots.bsb-hs-dots-left { justify-content: flex-start; } .bsb-psc-dots.bsb-hs-dots-right { justify-content: flex-end; }
+.bsb-psc-dots:empty { display: none; }
+.bsb-tone-primary .bsb-psc-tab, .bsb-tone-primary .bsb-psc-tab:hover { color: inherit; opacity: 0.75; }
+.bsb-tone-primary .bsb-psc-tab[aria-selected="true"] { opacity: 1; border-bottom-color: currentColor; }
+
+/* Card */
+.bsb-psc-card { display: flex; flex-direction: column; gap: 0.75rem; height: 100%; }
+.bsb-psc-media { position: relative; overflow: hidden; border-radius: calc(var(--r) * 1.5); background: var(--s); }
+.bsb-psc-ratio-square { aspect-ratio: 1 / 1; } .bsb-psc-ratio-portrait { aspect-ratio: 4 / 5; } .bsb-psc-ratio-landscape { aspect-ratio: 4 / 3; }
+.bsb-psc-imglink { position: absolute; inset: 0; display: block; }
+.bsb-psc-imglink img { width: 100%; height: 100%; object-fit: contain; padding: 4%; transition: transform 0.35s; }
+.bsb-psc-card:hover .bsb-psc-imglink img { transform: scale(1.04); }
+.bsb-psc-noimg { display: block; width: 100%; height: 100%; background: linear-gradient(135deg, var(--s), color-mix(in srgb, var(--s) 70%, var(--b))); }
+.bsb-psc-card-soft .bsb-psc-media { border: 1px solid var(--b); }
+.bsb-psc-card-bordered { border: 1px solid var(--b); border-radius: calc(var(--r) * 1.5); padding: 0.625rem; background: var(--bg); }
+.bsb-psc-card-bordered .bsb-psc-media { border-radius: var(--r); }
+.bsb-psc-card-minimal .bsb-psc-media { background: transparent; }
+.bsb-psc-badge { position: absolute; top: 0.625rem; z-index: 1; max-width: 70%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; padding: 0.2rem 0.6rem; border-radius: 9999px; font-size: 0.625rem; font-weight: 700; letter-spacing: 0.05em; text-transform: uppercase; background: var(--bs-btn-dark-bg, var(--p)); color: var(--bs-btn-dark-fg, var(--pf)); pointer-events: none; }
+.bsb-psc-badge-l { left: 0.625rem; } .bsb-psc-badge-r { right: 0.625rem; background: #b45309; color: #fff; }
+.bsb-psc-add { position: absolute; right: 0.625rem; bottom: 0.625rem; z-index: 2; display: inline-flex; align-items: center; justify-content: center; width: 2.5rem; height: 2.5rem; padding: 0; border: 0; border-radius: 9999px; background: rgba(255, 255, 255, 0.96); color: #111827; font-size: 1.125rem; cursor: pointer; box-shadow: 0 2px 8px rgba(0, 0, 0, 0.18); transition: transform 0.15s, background-color 0.15s, color 0.15s; }
+.bsb-psc-add:hover { transform: scale(1.08); }
+.bsb-psc-add:focus-visible { outline: 2px solid var(--p); outline-offset: 2px; }
+.bsb-psc-add[data-state="busy"] { opacity: 0.6; cursor: progress; }
+.bsb-psc-add[data-state="done"] { background: var(--bs-btn-dark-bg, var(--p)); color: var(--bs-btn-dark-fg, var(--pf)); }
+.bsb-psc-info { display: flex; flex-direction: column; gap: 0.35rem; min-width: 0; }
+.bsb-psc-rating { display: flex; align-items: center; gap: 0.375rem; font-size: 0.8125rem; }
+.bsb-psc-rating .bsb-stars { color: #d97706; letter-spacing: 0.04em; }
+.bsb-psc-rating-num { font-weight: 600; }
+.bsb-psc-title { margin: 0; font-family: var(--fh); font-weight: 600; line-height: 1.3; }
+.bsb-psc-title a { color: inherit; text-decoration: none; }
+.bsb-psc-title a:hover { text-decoration: underline; }
+.bsb-psc-title-sm { font-size: 0.9375rem; } .bsb-psc-title-md { font-size: 1.0625rem; } .bsb-psc-title-lg { font-size: 1.25rem; }
+.bsb-psc-title { display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 1; overflow: hidden; }
+.bsb-psc-lines-2 { -webkit-line-clamp: 2; }
+.bsb-psc-price { display: flex; align-items: baseline; flex-wrap: wrap; gap: 0.4rem; }
+.bsb-psc-price strong { font-weight: 700; }
+.bsb-psc-price s { color: var(--m); font-weight: 400; }
+.bsb-psc-from { font-size: 0.75rem; color: var(--m); }
+.bsb-psc-price-sm strong { font-size: 0.9375rem; } .bsb-psc-price-md strong { font-size: 1.0625rem; } .bsb-psc-price-lg strong { font-size: 1.25rem; }
+
+/* Per-widget layout (margin, padding, sizing per device). The block sets only the values it has, as
+   --l-d-*, --l-t-* and --l-m-* (desktop, tablet, phone); a smaller device inherits what it does not set. */
+.bsb-lay {
+  --mt: var(--l-d-mt);
+  --mr: var(--l-d-mr);
+  --mb: var(--l-d-mb);
+  --ml: var(--l-d-ml);
+  --pt: var(--l-d-pt);
+  --pr: var(--l-d-pr);
+  --pb: var(--l-d-pb);
+  --pl: var(--l-d-pl);
+  --w: var(--l-d-w);
+  --mnw: var(--l-d-mnw);
+  --mxw: var(--l-d-mxw);
+  --h: var(--l-d-h);
+  --mnh: var(--l-d-mnh);
+  --mxh: var(--l-d-mxh);
+  --ar: var(--l-d-ar);
+  margin-top: var(--mt); margin-bottom: var(--mb);
+  margin-left: var(--ml, auto); margin-right: var(--mr, auto);
+  padding-top: var(--pt); padding-right: var(--pr); padding-bottom: var(--pb); padding-left: var(--pl);
+  width: var(--w); min-width: var(--mnw); max-width: var(--mxw);
+  box-sizing: border-box;
+}
+@media (max-width: 1023px) {
+  .bsb-lay {
+    --mt: var(--l-t-mt, var(--l-d-mt));
+    --mr: var(--l-t-mr, var(--l-d-mr));
+    --mb: var(--l-t-mb, var(--l-d-mb));
+    --ml: var(--l-t-ml, var(--l-d-ml));
+    --pt: var(--l-t-pt, var(--l-d-pt));
+    --pr: var(--l-t-pr, var(--l-d-pr));
+    --pb: var(--l-t-pb, var(--l-d-pb));
+    --pl: var(--l-t-pl, var(--l-d-pl));
+    --w: var(--l-t-w, var(--l-d-w));
+    --mnw: var(--l-t-mnw, var(--l-d-mnw));
+    --mxw: var(--l-t-mxw, var(--l-d-mxw));
+    --h: var(--l-t-h, var(--l-d-h));
+    --mnh: var(--l-t-mnh, var(--l-d-mnh));
+    --mxh: var(--l-t-mxh, var(--l-d-mxh));
+    --ar: var(--l-t-ar, var(--l-d-ar));
+  }
+}
+@media (max-width: 767px) {
+  .bsb-lay {
+    --mt: var(--l-m-mt, var(--l-t-mt, var(--l-d-mt)));
+    --mr: var(--l-m-mr, var(--l-t-mr, var(--l-d-mr)));
+    --mb: var(--l-m-mb, var(--l-t-mb, var(--l-d-mb)));
+    --ml: var(--l-m-ml, var(--l-t-ml, var(--l-d-ml)));
+    --pt: var(--l-m-pt, var(--l-t-pt, var(--l-d-pt)));
+    --pr: var(--l-m-pr, var(--l-t-pr, var(--l-d-pr)));
+    --pb: var(--l-m-pb, var(--l-t-pb, var(--l-d-pb)));
+    --pl: var(--l-m-pl, var(--l-t-pl, var(--l-d-pl)));
+    --w: var(--l-m-w, var(--l-t-w, var(--l-d-w)));
+    --mnw: var(--l-m-mnw, var(--l-t-mnw, var(--l-d-mnw)));
+    --mxw: var(--l-m-mxw, var(--l-t-mxw, var(--l-d-mxw)));
+    --h: var(--l-m-h, var(--l-t-h, var(--l-d-h)));
+    --mnh: var(--l-m-mnh, var(--l-t-mnh, var(--l-d-mnh)));
+    --mxh: var(--l-m-mxh, var(--l-t-mxh, var(--l-d-mxh)));
+    --ar: var(--l-m-ar, var(--l-t-ar, var(--l-d-ar)));
+  }
+}
+/* Height, min/max height and aspect ratio apply to the slider's slides (its own preset height gives way). */
+.bsb-hs .bsb-hs-slide { height: var(--h, var(--hs-h)); min-height: var(--mnh, 0px); max-height: var(--mxh, none); }
+.bsb-hs-ar .bsb-hs-slide { height: auto; aspect-ratio: var(--ar); }
+/* ...and to the showcase box itself. */
+.bsb-psc.bsb-lay { height: var(--h); min-height: var(--mnh); max-height: var(--mxh); aspect-ratio: var(--ar); }

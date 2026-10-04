@@ -38,6 +38,7 @@ Applies to `apps/admin` (store admin). The same direction is intended for `apps/
 - **Type scale:** page title 20px, description 14px, tables, forms and body text 12px, section titles 14px semibold. Settings follows the same scale.
 - **Canvas:** grey page canvas, white cards (tokens `--dash-canvas`, `--dash-sidebar`, `--card` in `src/index.css`).
 - **Popups:** menus, selects and popovers share the frosted, rounded, soft-shadow style in `components/ui/{dropdown-menu,select,popover}.tsx`.
+- **Instructions and hints:** never leave an instruction paragraph or helper note in a panel. Put it behind a small (i) icon that shows the text in a dark pop-up on hover or keyboard focus (`InfoTip` in `packages/block-editor/src/LayoutField.tsx`, e.g. beside the "Spacing" heading and opposite the "Reset" link in the page-editor layout panel). Reuse that pattern in the page editor and theme editor.
 - **Main sidebar:** 12rem wide, collapses to icons (Ctrl/Cmd+B), remembered in a cookie.
 - **Mobile:** tables become cards; a list toolbar is search on row 1, then Filters and Sort buttons that open sidebars; tab rows scroll horizontally.
 - **Do not** put `@bs/ui` form controls in new code. `@bs/ui` is still used for page layout pieces (`PageContainer`, `PageHeader`, `PageSection`, `MetricCard`, skeletons, `toast`) and by `apps/superadmin`.

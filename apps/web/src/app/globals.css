@@ -16,6 +16,22 @@
   --color-store-fg: var(--store-fg);
   --color-store-muted: var(--store-muted);
   --color-store-primary: var(--store-primary);
+
+  /*
+   * Semantic colours used by the commerce page components (bg-primary, text-foreground, border-border...).
+   * They resolve only inside a .bs-skin wrapper (below); anywhere else the variables are undefined and
+   * these classes behave as they always did, so pages that are not wrapped (checkout, account...) are untouched.
+   */
+  --color-primary: var(--bs-skin-primary);
+  --color-primary-foreground: var(--bs-skin-primary-fg);
+  --color-background: var(--bs-skin-bg);
+  --color-foreground: var(--bs-skin-text);
+  --color-text: var(--bs-skin-text);
+  --color-surface: var(--bs-skin-surface);
+  --color-card: var(--bs-skin-bg);
+  --color-muted: var(--bs-skin-surface);
+  --color-muted-foreground: var(--bs-skin-muted);
+  --color-border: var(--bs-skin-border);
 }
 
 body {
@@ -36,4 +52,15 @@ body {
 }
 @media (prefers-reduced-motion: reduce) {
   .store-skeleton { animation: none; }
+}
+
+/* Wrap a page in .bs-skin to give its semantic colour classes the store's theme colours (set on <html> by layout.tsx). */
+.bs-skin {
+  --bs-skin-primary: var(--bs-btn-dark-bg, var(--bs-primary, #0f172a));
+  --bs-skin-primary-fg: var(--bs-btn-dark-fg, var(--bs-primary-fg, #ffffff));
+  --bs-skin-bg: var(--bs-bg, #ffffff);
+  --bs-skin-text: var(--bs-text, #0f172a);
+  --bs-skin-surface: var(--bs-surface, #f8fafc);
+  --bs-skin-muted: var(--bs-muted, #64748b);
+  --bs-skin-border: var(--bs-border, #e2e8f0);
 }

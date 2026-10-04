@@ -1,7 +1,7 @@
 import { walkBlocks, type BlockInstance } from "@bs/blocks";
 
-const DATA_TYPES = new Set(["ProductGrid", "ProductCarousel", "CollectionGrid"]);
-const DATA_PROPS = ["source", "collectionSlug", "productSlugs", "collectionSlugs", "limit"] as const;
+const DATA_TYPES = new Set(["ProductGrid", "ProductCarousel", "CollectionGrid", "ProductShowcase"]);
+const DATA_PROPS = ["source", "collectionSlug", "productSlugs", "collectionSlugs", "limit", "tabs"] as const;
 const MEDIA_PROPS = ["backgroundMediaId", "mediaId"] as const;
 
 /**
@@ -13,12 +13,13 @@ export function dataSignature(blocks: BlockInstance[]): string {
   walkBlocks(blocks, (b) => {
     if (DATA_TYPES.has(b.type)) parts.push([b.id, b.type, ...DATA_PROPS.map((k) => b.props[k])]);
     const media = MEDIA_PROPS.map((k) => b.props[k]).filter(Boolean);
-    for (const list of [b.props.items, b.props.images]) {
+    for (const list of [b.props.items, b.props.images, b.props.slides]) {
       if (Array.isArray(list)) {
         for (const it of list) {
           const r = it as Record<string, unknown>;
           if (r?.avatarMediaId) media.push(r.avatarMediaId);
           if (r?.mediaId) media.push(r.mediaId);
+          if (r?.backgroundMediaId) media.push(r.backgroundMediaId);
         }
       }
     }

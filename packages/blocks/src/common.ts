@@ -24,6 +24,16 @@ export const videoUrlSchema = z
     message: "Use a YouTube, Vimeo or direct .mp4/.webm https link",
   });
 
+// Background video: a direct .mp4 / .webm file on https (YouTube and Vimeo cannot autoplay silently as a background).
+const SAFE_BG_VIDEO = /^https:\/\/[^\s]+\.(mp4|webm)(\?[^\s]*)?$/i;
+export const bgVideoUrlSchema = z
+  .string()
+  .max(2000)
+  .refine((v) => v === "" || SAFE_BG_VIDEO.test(v), { message: "Use a direct .mp4 or .webm https link" });
+
+/** A colour as #rrggbb. Used where a block lets a merchant override a theme colour; never free-form CSS. */
+export const hexColorSchema = z.string().regex(/^#[0-9a-fA-F]{6}$/, "Use a colour like #1f3a5f");
+
 export const alignSchema = z.enum(["left", "center", "right"]);
 export const toneSchema = z.enum(["default", "surface", "primary"]);
 export const spacingSchema = z.enum(["none", "sm", "md", "lg", "xl"]);

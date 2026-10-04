@@ -65,6 +65,8 @@ import {
   saveThemeTemplateDraft,
   publishThemeTemplate,
   updateThemeTemplateMeta,
+  deleteThemeTemplate,
+  createThemePreview,
   getPlatformEmailSettings,
   updatePlatformEmailSettings,
   sendPlatformTestEmail,
@@ -368,6 +370,15 @@ export const platformRouter = os.router({
     }),
     publish: os.templates.publish.use(requireStaff("platform_admin")).handler(({ context, input }) => {
       return publishThemeTemplate(context.rt, actor(context), input.code, context.meta);
+    }),
+    createPreview: os.templates.createPreview.use(requireStaff("platform_admin")).handler(async ({ context, input }) => {
+      const p = await createThemePreview(context.rt, actor(context), input, context.meta);
+      // Previews are served by the storefront app on the platform's marketing host.
+      const base = (process.env.PREVIEW_BASE_URL || `https://${process.env.MARKETING_HOST || process.env.PLATFORM_DOMAIN || "bcom.si"}`).replace(/\/+$/, "");
+      return { code: p.code, url: `${base}/preview/${p.code}`, expiresAt: p.expiresAt, pages: p.pages };
+    }),
+    delete: os.templates.delete.use(requireStaff("platform_admin")).handler(({ context, input }) => {
+      return deleteThemeTemplate(context.rt, actor(context), input.code, context.meta);
     }),
     updateMeta: os.templates.updateMeta.use(requireStaff("platform_admin")).handler(({ context, input }) => {
       return updateThemeTemplateMeta(context.rt, actor(context), input, context.meta);

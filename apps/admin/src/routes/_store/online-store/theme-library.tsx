@@ -60,7 +60,7 @@ export function ThemeLibraryPage() {
     if (homePage) openPage(homePage.id);
   };
   // The store's own copies of the theme's pages. A page the theme does not define is simply absent.
-  const themePages = (["home", "collection", "product", "header", "footer"] as const).map((key) => {
+  const themePages = (["home", "collection", "product", "cart", "header", "footer"] as const).map((key) => {
     const page =
       key === "home"
         ? homePage

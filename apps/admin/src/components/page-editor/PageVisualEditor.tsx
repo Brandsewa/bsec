@@ -1,7 +1,7 @@
-import { useMemo } from "react";
+import { useMemo, useState } from "react";
 import { useNavigate } from "@tanstack/react-router";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { BlockEditor, type EditorPageKind } from "@bs/block-editor";
+import { BlockEditor, type EditorPageKind, type ThemeTokens } from "@bs/block-editor";
 import { googleFontsHref, type BlockInstance } from "@bs/blocks";
 import { Button, EmptyState, PageContainer, PageSkeleton } from "@bs/ui";
 import { client, orpc } from "../../lib/orpc.ts";
@@ -19,13 +19,20 @@ export default function PageVisualEditor({ pageId, canPublish, storeName }: { pa
   const brandQuery = useQuery(orpc.admin.branding.get.queryOptions());
   const themeQuery = useQuery(orpc.admin.themes.get.queryOptions());
 
-  const themeVars = useMemo(() => themeVarsFor(brandQuery.data, themeQuery.data), [brandQuery.data, themeQuery.data]);
+  // Theme settings edited from the sidebar's Theme tab. They go live when the page is published (like the
+  // separate Theme settings screen, they have no draft), so they are held here until then.
+  const [editedTokens, setEditedTokens] = useState<ThemeTokens | null>(null);
+  const tokens = editedTokens ?? ((themeQuery.data?.tokens ?? null) as ThemeTokens | null);
+  const themeVars = useMemo(
+    () => themeVarsFor(brandQuery.data, themeQuery.data && tokens ? { ...themeQuery.data, tokens } : themeQuery.data),
+    [brandQuery.data, themeQuery.data, tokens],
+  );
   const pageType = pageQuery.data?.type ?? "custom";
   const kind: EditorPageKind =
-    pageType === "home" ? "home" : pageType === "collection_template" ? "collection" : pageType === "product_template" ? "product" : pageType === "header" ? "header" : pageType === "footer" ? "footer" : "custom";
+    pageType === "home" ? "home" : pageType === "collection_template" ? "collection" : pageType === "product_template" ? "product" : pageType === "cart_template" ? "cart" : pageType === "header" ? "header" : pageType === "footer" ? "footer" : "custom";
   // Theme pages (header, footer, product, collection) are reached from the theme screen, not the Pages list.
-  const exit = () => void navigate({ to: kind === "header" || kind === "footer" || kind === "product" || kind === "collection" ? "/online-store/theme-library" : "/online-store/pages" });
-  const fontsHref = googleFontsHref((themeQuery.data?.tokens ?? null) as never);
+  const exit = () => void navigate({ to: kind === "header" || kind === "footer" || kind === "product" || kind === "collection" || kind === "cart" ? "/online-store/theme-library" : "/online-store/pages" });
+  const fontsHref = googleFontsHref((tokens ?? null) as never);
 
   if (pageQuery.isError) {
     return (
@@ -69,9 +76,22 @@ export default function PageVisualEditor({ pageId, canPublish, storeName }: { pa
         // Publish exactly what is on the canvas: save it as a new version, then point the page at it.
         const { versionId } = await client.admin.pages.saveDraft({ id: pageId, blocks });
         await client.admin.pages.publish({ id: pageId, versionId });
+        if (editedTokens) {
+          await client.admin.themes.update({ tokens: editedTokens });
+          await Promise.all([
+            queryClient.invalidateQueries({ queryKey: orpc.admin.themes.get.key() }),
+            queryClient.invalidateQueries({ queryKey: orpc.admin.themes.library.key() }),
+          ]);
+          setEditedTokens(null);
+        }
         await refresh();
       }}
       onExit={exit}
+      externalDirty={editedTokens !== null}
+      themeTokens={tokens ?? undefined}
+      onThemeTokensChange={setEditedTokens}
+      themeSettingsDisabled={!canPublish}
+      themeSettingsNote={canPublish ? "Applies to every page of your store. Saved and live when you publish." : "You can view but not change theme settings."}
       publishLabel={page.hasUnpublishedChanges ? "Draft differs from live page" : undefined}
     />
   );

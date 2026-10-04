@@ -4,7 +4,7 @@
 
 | | |
 |---|---|
-| Last verified against | commit `d730629` on branch `chore/repo-guardrails`, 2026-10-02 |
+| Last verified against | commit `f4b9b4f` on branch `feat/commerce-page-templates`, 2026-10-02 |
 | Verified how | files read from the working tree; `pnpm docs:check` for the mechanical parts. Facts marked *(from code)* were read, not run. |
 | Owner | whoever changes the area (see the update triggers in section 0) |
 
@@ -243,8 +243,10 @@ Drizzle schema files in `packages/db/src/schema/` (one Postgres database, `publi
 | 0017 | `platform_email` | `platform_email_settings` and email log (auth overhaul, phase A) |
 | 0018 | `customer_auth` | `customers.phone` nullable, so customers can register with email + password |
 | 0019 | `domain_bcom_si` | platform domain gobs.cloud -> bcom.si: rewrites platform `domains` hostnames and the default sender |
+| 0020 | `theme_template_archive` | `theme_templates.archived_at` (library draft / published / archived states) |
+| 0021 | `theme_previews` | `theme_previews`: short-lived shareable snapshots of a theme draft (`/preview/<code>`); the web role can only read it |
 
-How to write one (expand, migrate, contract; `forceRlsSql`): `docs/migrations.md`. **Never edit an applied migration.** Latest on disk: `0019` (the docs check keeps this list honest).
+How to write one (expand, migrate, contract; `forceRlsSql`): `docs/migrations.md`. **Never edit an applied migration.** Latest on disk: `0021` (the docs check keeps this list honest).
 
 ---
 
@@ -279,9 +281,9 @@ Procedure-level detail: open the contract file; do not duplicate it here.
 
 `@bs/blocks` is a **versioned block registry** (ADR-009): page documents are JSON; each block has a Zod schema and a view; validation is recursive (depth 6, 300 blocks), props are enumerated, links and video hosts are allow-listed (ADR-010). The storefront renders trees with `renderBlockTree`, products/collections/media resolved server-side in the same `"use cache"` scope as the page. The editor (Puck, ADR-018) lives in `packages/block-editor`, lazy-loaded by the admin; shoppers never download it.
 
-Block types in `packages/blocks/src/registry.ts`: content (Hero, Banner, ProductGrid, CollectionGrid, ProductCarousel, Testimonials, Reviews, RichText, FAQ, Gallery, Newsletter, UspStrip), layout (Section, Container, Grid, FlexRow, FlexColumn, Spacer, Divider), atoms (Heading, Text, Image, Video, Button, Icon, Link, CallToAction), theme chrome (SiteHeader, SiteFooter, ProductDetail, CollectionListing).
+Block types in `packages/blocks/src/registry.ts`: content (Hero, HeroSlider, ProductShowcase, Banner, ProductGrid, CollectionGrid, ProductCarousel, Testimonials, Reviews, RichText, FAQ, Gallery, Newsletter, UspStrip), layout (Section, Container, Grid, FlexRow, FlexColumn, Spacer, Divider), atoms (Heading, Text, Image, Video, Button, Icon, Link, CallToAction), theme chrome and page cores (SiteHeader, SiteFooter, ProductDetail, CollectionListing, CartContents).
 
-Theme flow: platform staff build `theme_templates` (draft + published snapshot, home/collection/product/header/footer pages + tokens) in Super Admin. A store *activates* a template: tokens and pages are **copied** into the store's own rows (templates are never edited by stores; re-applying replaces customisations and adds a page version, so it can be rolled back). The storefront applies a theme's tokens once the store opts in (`source: "theme"`); otherwise built-in layouts and Branding apply. Theme CSS variables are `--bs-*` (`theme-vars.ts`). Domain code: `packages/domain/src/themes/`. Cache tags `page:<slug>` and `theme` are invalidated on publish and rollback.
+Theme flow: platform staff build `theme_templates` (draft + published snapshot, home/collection/product/cart/header/footer pages + tokens) in Super Admin. A store *activates* a template: tokens and pages are **copied** into the store's own rows (templates are never edited by stores; re-applying replaces customisations and adds a page version, so it can be rolled back). The storefront applies a theme's tokens once the store opts in (`source: "theme"`); otherwise built-in layouts and Branding apply. Theme CSS variables are `--bs-*` (`theme-vars.ts`). Domain code: `packages/domain/src/themes/`. Cache tags `page:<slug>` and `theme` are invalidated on publish and rollback. **Theme previews:** Super Admin's theme editor Preview button saves the draft, then `templates.createPreview` stores an immutable snapshot (`theme_previews`, 24 h by default, unguessable 11-character code) and the tab opens `/preview/<code>?page=<page>` on the marketing host, where `apps/web/src/app/preview/[code]/page.tsx` draws the pages with sample products, collection, product and cart (`server/preview-samples.ts`); other hosts get a 404, pages are noindex, expired or unknown codes show a notice.
 
 **Adding a block:** schema + view in `packages/blocks`, register it, add editor config in `packages/block-editor/src/config.tsx`, add tests (`packages/blocks/test`), bump the block version if the schema changes shape, update this section.
 
@@ -325,7 +327,7 @@ In flight: an auth overhaul (forgot/reset password, customer password sign-in, p
 
 ## 14. Configuration
 
-Full per-service env var list, with what breaks when each is missing: **`DEPLOYMENT.md`**. Example local values: `.env.example`. Key groups: DB URLs per role, `BETTER_AUTH_URL`/`BETTER_AUTH_SECRET` (web and platform use *different* secrets), `TENANT_SECRETS_KEY`, R2 (`R2_*`, `R2_PUBLIC_URL`), Turnstile, Cloudflare custom-domain keys, Razorpay platform billing keys, `PLATFORM_DOMAIN`/`ADMIN_HOST`/`MARKETING_HOST`, `SUPERADMIN_ORIGINS`, Sentry DSN. Never commit `.env*` (only `.env.example`).
+Full per-service env var list, with what breaks when each is missing: **`DEPLOYMENT.md`**. Example local values: `.env.example`. Key groups: DB URLs per role, `PREVIEW_BASE_URL` (theme preview links), `BETTER_AUTH_URL`/`BETTER_AUTH_SECRET` (web and platform use *different* secrets), `TENANT_SECRETS_KEY`, R2 (`R2_*`, `R2_PUBLIC_URL`), Turnstile, Cloudflare custom-domain keys, Razorpay platform billing keys, `PLATFORM_DOMAIN`/`ADMIN_HOST`/`MARKETING_HOST`, `SUPERADMIN_ORIGINS`, Sentry DSN. Never commit `.env*` (only `.env.example`).
 
 ---
 

@@ -1,9 +1,11 @@
 import React from "react";
 import type { Metadata } from "next";
 import { headers, cookies } from "next/headers";
-import { evaluateStorefrontAccess, getOrCreateCart } from "@bs/domain";
+import { evaluateStorefrontAccess, getFreeShippingThresholdPaise, getOrCreateCart } from "@bs/domain";
 import { server } from "@/server/runtime.ts";
 import { CartView } from "@/components/cart/CartView.tsx";
+import { BlockRenderer } from "@/components/blocks/BlockRenderer.tsx";
+import { getCachedThemePage } from "@/server/cached-storefront.ts";
 import { CART_COOKIE_NAME } from "@/app/api/storefront/cart/route.ts";
 
 export const metadata: Metadata = {
@@ -49,5 +51,23 @@ export default async function CartPage() {
 
   const cart = await getOrCreateCart(rt, tenantCtx, token);
 
-  return <CartView cart={cart} />;
+  // The theme's own cart layout, when the store has one; the built-in layout otherwise.
+  const template = await getCachedThemePage(access.tenantId, "cart").catch(() => null);
+  if (!template) {
+    return (
+      <div className="bs-skin">
+        <CartView cart={cart} />
+      </div>
+    );
+  }
+  const freeShippingThresholdPaise = await getFreeShippingThresholdPaise(rt._db.db, access.tenantId).catch(() => null);
+  return (
+    <div className="bs-skin">
+      <BlockRenderer
+        blocks={template.blocks}
+        renderData={template.renderData}
+        context={{ renderCartContents: (options) => <CartView cart={cart} options={options} freeShippingThresholdPaise={freeShippingThresholdPaise} /> }}
+      />
+    </div>
+  );
 }

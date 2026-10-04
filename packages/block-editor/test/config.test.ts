@@ -12,6 +12,7 @@ describe("editor config", () => {
       const def = getBlockDefinition(type);
       const shape = (def.schema as unknown as { shape: Record<string, unknown> }).shape;
       for (const field of Object.keys(BLOCK_SPECS[type].fields)) {
+        if (field.startsWith("__section_")) continue; // accordion headers: display only, no data
         expect(Object.keys(shape), `${type}.${field}`).toContain(field);
       }
     }
@@ -35,7 +36,7 @@ describe("editor config", () => {
 
   it("builds a Puck config whose categories list each component exactly once, for every page kind", () => {
     const union = new Set<string>();
-    for (const pageKind of ["home", "collection", "product", "header", "footer", "custom"] as const) {
+    for (const pageKind of ["home", "collection", "product", "cart", "header", "footer", "custom"] as const) {
       const config = buildPuckConfig({ themeVars: {}, pageKind }) as unknown as {
         components: Record<string, unknown>;
         categories: Record<string, { components: string[] }>;
@@ -88,7 +89,7 @@ describe("block picker by page kind", () => {
 
   it("every block is offered somewhere", () => {
     for (const type of BLOCK_TYPES) {
-      const kinds = ["home", "collection", "product", "header", "footer"] as const;
+      const kinds = ["home", "collection", "product", "cart", "header", "footer"] as const;
       expect(kinds.some((k) => blockAllowed(type, k)), type).toBe(true);
     }
   });

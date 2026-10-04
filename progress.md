@@ -81,6 +81,7 @@ Source of truth: `docs/PLAN.html` v2.0 (build order in `docs/BUILD-PLAN-M2-M9.md
 One line per piece of work that is started and not merged. Add yours before you start, remove it when merged or abandoned (`AGENTS.md` section 6). Format: `agent · branch · area · since · one-line goal`.
 
 - claude · `feat/themes-puck` · themes, docs · 2026-10-01 · theme builder follow-ups; agent docs and change log (`docs/changes/`)
+- claude · `feat/commerce-page-templates` · themes, web · 2026-10-02 · cart as a theme page (`CartContents`), sticky buy box, "Modern Commerce" draft theme with collection, product and cart layouts (`docs/changes/2026-10-02-claude-commerce-page-templates.md`)
 - antigravity · `feat/auth-email-overhaul` · auth, email · 2026-10-01 · forgot/reset password, customer password sign-in, ZeptoMail (`docs/AUTH-OVERHAUL-PLAN.md`) *(from git worktree list; confirm status)*
 
 ## M10 · Visual theme system (Puck) — shipped to production 2026-10-01

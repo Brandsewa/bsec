@@ -1,6 +1,8 @@
 import type { ReactNode } from "react";
 import { renderBlockTree, type BlockData, type BlockInstance, type RenderContext } from "@bs/blocks";
 import { generateFaqJsonLd } from "@bs/domain";
+import { HeroSliderClient } from "./HeroSliderClient.tsx";
+import { ProductShowcaseClient } from "./ProductShowcaseClient.tsx";
 import "@bs/blocks/blocks.css";
 
 export interface BlockRenderData {
@@ -23,6 +25,10 @@ export function BlockRenderer({ blocks, renderData, context }: BlockRendererProp
 
   const media = renderData?.media ?? {};
   const base: RenderContext = {
+    // The hero slider's autoplay / arrows / dots (a small client component around the server-rendered slides).
+    renderHeroSlider: ({ options, children }) => <HeroSliderClient options={options}>{children}</HeroSliderClient>,
+    // The product showcase's tabs / dots / arrows / quick add to cart.
+    renderProductShowcase: ({ options, children }) => <ProductShowcaseClient options={options}>{children}</ProductShowcaseClient>,
     ...context,
     data: renderData?.data,
     mediaUrl: (id) => media[id] ?? null,

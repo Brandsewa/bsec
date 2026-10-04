@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { useNavigate } from "@tanstack/react-router";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Layers, Pencil, Plus, Settings2 } from "lucide-react";
+import { Archive, Layers, Pencil, Plus, Settings2, Trash2 } from "lucide-react";
 import {
   Button,
   Dialog,
@@ -27,6 +27,13 @@ import {
 } from "@bs/ui";
 import { client, orpc } from "../lib/orpc.ts";
 
+type Tab = "published" | "draft" | "archived";
+const TABS: ReadonlyArray<{ key: Tab; label: string; empty: string }> = [
+  { key: "published", label: "Published", empty: "No published themes. Publish a draft to offer it to stores." },
+  { key: "draft", label: "Drafts", empty: "No drafts. Use New theme to start building one." },
+  { key: "archived", label: "Archive", empty: "Nothing archived. Archiving a published theme moves it here and hides it from stores." },
+];
+
 const INDUSTRIES = ["general", "fashion", "food", "beauty", "electronics", "home", "other"];
 
 export function Templates() {
@@ -40,6 +47,9 @@ export function Templates() {
   const [description, setDescription] = useState("");
   // Library card details of an existing theme (name, description, industry).
   const [editing, setEditing] = useState<{ code: string; name: string; description: string; industry: string } | null>(null);
+
+  const [tab, setTab] = useState<Tab>("published");
+  const [deleting, setDeleting] = useState<{ code: string; name: string } | null>(null);
 
   const refresh = () => queryClient.invalidateQueries({ queryKey: orpc.templates.list.key() });
   const fail = (what: string) => (err: Error) => toast.error(`Could not ${what}: ${err.message}`);
@@ -77,33 +87,66 @@ export function Templates() {
     },
     onError: fail("save details"),
   });
-  const setActive = useMutation({
-    mutationFn: (v: { code: string; isActive: boolean }) => client.templates.updateMeta(v),
-    onSuccess: refresh,
+  const remove = useMutation({
+    mutationFn: (code: string) => client.templates.delete({ code }),
+    onSuccess: async () => {
+      toast.success("Theme deleted. Stores that already used it keep their own copy.");
+      setDeleting(null);
+      await refresh();
+    },
+    onError: fail("delete theme"),
+  });
+  const setArchived = useMutation({
+    mutationFn: (v: { code: string; archived: boolean }) => client.templates.updateMeta(v),
+    onSuccess: async (_t, v) => {
+      toast.success(v.archived ? "Archived. It is hidden from stores; stores that use it keep their copy." : "Moved back to Drafts.");
+      await refresh();
+    },
     onError: fail("update theme"),
   });
 
   if (isLoading) return <PageSkeleton />;
 
+  const visible = (templates ?? []).filter((t) => t.status === tab);
+
   return (
     <PageContainer>
       <PageHeader
         title="Themes"
-        description="Themes stores can pick from their dashboard. Each theme has its own colours, fonts, buttons, corners and layouts for the home, collection and product pages, header and footer. Build it visually, then publish it to the store theme library."
+        description="Themes stores can pick from their dashboard. Each theme has its own colours, fonts, buttons, corners and layouts for the home, collection, product and cart pages, header and footer. Build it visually, then publish it to the store theme library."
         aside={
-          <Button variant="primary" size="sm" onClick={() => setCreating(true)}>
+          <Button variant="primary" size="sm" onClick={() => { setTab("draft"); setCreating(true); }}>
             <Plus className="mr-1.5 size-3.5" aria-hidden />
             New theme
           </Button>
         }
       />
 
+      <div role="tablist" aria-label="Theme status" className="mb-4 flex gap-1 border-b">
+        {TABS.map((t) => {
+          const count = (templates ?? []).filter((x) => x.status === t.key).length;
+          const on = tab === t.key;
+          return (
+            <button
+              key={t.key}
+              type="button"
+              role="tab"
+              aria-selected={on}
+              onClick={() => setTab(t.key)}
+              className={`-mb-px border-b-2 px-3 py-2 text-sm font-medium ${on ? "border-primary text-foreground" : "border-transparent text-muted-foreground hover:text-foreground"}`}
+            >
+              {t.label} <span className="ml-1 rounded-full bg-muted px-1.5 py-0.5 text-xs">{count}</span>
+            </button>
+          );
+        })}
+      </div>
+
       {isError ? (
         <div role="alert" className="rounded-md border border-destructive/40 bg-destructive/5 p-4 text-sm">
           Could not load themes: {error.message}
         </div>
-      ) : !templates || templates.length === 0 ? (
-        <EmptyState icon={Layers} title="No themes yet" description="Create the first theme to offer stores." />
+      ) : visible.length === 0 ? (
+        <EmptyState icon={Layers} title={`No ${TABS.find((x) => x.key === tab)?.label.toLowerCase()} themes`} description={TABS.find((x) => x.key === tab)?.empty ?? ""} />
       ) : (
         <div className="overflow-hidden rounded-xl border bg-card">
           <Table>
@@ -118,7 +161,7 @@ export function Templates() {
               </TableRow>
             </TableHeader>
             <TableBody>
-              {templates.map((t) => (
+              {visible.map((t) => (
                 <TableRow key={t.code}>
                   <TableCell className="text-xs">
                     <div className="font-semibold">{t.name}</div>
@@ -128,10 +171,10 @@ export function Templates() {
                   <TableCell className="font-mono text-xs text-muted-foreground">{t.code}</TableCell>
                   <TableCell className="font-mono text-xs">v{t.version}</TableCell>
                   <TableCell className="text-xs">
-                    <span className={`inline-flex rounded-full px-2 py-0.5 font-medium ${t.isActive ? "bg-emerald-500/10 text-emerald-700" : "bg-muted text-muted-foreground"}`}>
-                      {t.isActive ? "Published" : "Hidden from stores"}
+                    <span className={`inline-flex rounded-full px-2 py-0.5 font-medium ${t.status === "published" ? "bg-emerald-500/10 text-emerald-700" : t.status === "draft" ? "bg-amber-500/10 text-amber-700" : "bg-muted text-muted-foreground"}`}>
+                      {t.status === "published" ? "Published" : t.status === "draft" ? "Draft: hidden from stores" : "Archived: hidden from stores"}
                     </span>
-                    {t.hasUnpublishedChanges ? (
+                    {t.status === "published" && t.hasUnpublishedChanges ? (
                       <span className="ml-2 rounded-full bg-amber-500/10 px-2 py-0.5 font-medium text-amber-700">Unpublished changes</span>
                     ) : null}
                   </TableCell>
@@ -150,9 +193,21 @@ export function Templates() {
                           Publish
                         </Button>
                       ) : null}
-                      {t.isActive ? (
-                        <Button size="sm" onClick={() => setActive.mutate({ code: t.code, isActive: false })}>
-                          Hide
+                      {t.status === "published" ? (
+                        <Button size="sm" loading={setArchived.isPending && setArchived.variables?.code === t.code} onClick={() => setArchived.mutate({ code: t.code, archived: true })}>
+                          <Archive className="mr-1.5 size-3.5" aria-hidden />
+                          Archive
+                        </Button>
+                      ) : null}
+                      {t.status === "archived" ? (
+                        <Button size="sm" onClick={() => setArchived.mutate({ code: t.code, archived: false })}>
+                          Move to drafts
+                        </Button>
+                      ) : null}
+                      {t.status !== "published" ? (
+                        <Button size="sm" onClick={() => setDeleting({ code: t.code, name: t.name })}>
+                          <Trash2 className="mr-1.5 size-3.5" aria-hidden />
+                          Delete
                         </Button>
                       ) : null}
                     </div>
@@ -168,7 +223,7 @@ export function Templates() {
         <DialogContent>
           <DialogHeader>
             <DialogTitle>New theme</DialogTitle>
-            <DialogDescription>It starts hidden from stores until you publish it.</DialogDescription>
+            <DialogDescription>It starts as a draft, hidden from stores until you publish it.</DialogDescription>
           </DialogHeader>
           <div className="grid gap-3">
             <div className="grid gap-1">
@@ -208,6 +263,25 @@ export function Templates() {
             </DialogClose>
             <Button variant="primary" loading={create.isPending} disabled={!name.trim()} onClick={() => create.mutate()}>
               Create and open editor
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={deleting !== null} onOpenChange={(o) => !o && setDeleting(null)}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Delete theme</DialogTitle>
+            <DialogDescription>
+              {deleting ? `Permanently delete "${deleting.name}"? Its layouts and draft are removed and cannot be recovered. Stores that already activated it keep their own copy of the pages and settings; they just can no longer pick it from the library.` : null}
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <DialogClose asChild>
+              <Button>Cancel</Button>
+            </DialogClose>
+            <Button variant="primary" loading={remove.isPending} onClick={() => deleting && remove.mutate(deleting.code)}>
+              Delete theme
             </Button>
           </DialogFooter>
         </DialogContent>

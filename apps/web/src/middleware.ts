@@ -48,6 +48,11 @@ export async function middleware(request: NextRequest) {
     return NextResponse.next();
   }
 
+  // Theme previews (Super Admin > theme editor > Preview) are served on the marketing host, outside any store.
+  if (isMarketingHost && pathname.startsWith("/preview/")) {
+    return NextResponse.next();
+  }
+
   if (isMarketingHost && pathname === "/") {
     return NextResponse.next();
   }
