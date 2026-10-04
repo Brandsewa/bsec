@@ -126,6 +126,36 @@ describe("Contracts", () => {
       expect(keys).not.toContain("bypassToken");
       expect(keys).not.toContain("bypassTokenHash");
     });
+
+    it("validates branding colors as #rrggbb and fonts against approved list", async () => {
+      const { UpdateBrandSettingsInput, APPROVED_BRAND_FONTS } = await import("../src/index.ts");
+      expect(APPROVED_BRAND_FONTS).toContain("Inter");
+      expect(APPROVED_BRAND_FONTS).toContain("Poppins");
+
+      // Valid input
+      const valid = UpdateBrandSettingsInput.safeParse({
+        primaryColor: "#ff0077",
+        fontHeading: "Poppins",
+      });
+      expect(valid.success).toBe(true);
+
+      // Invalid color format (e.g. 3-hex, rgba, rgb, named, invalid chars)
+      const invalidColor = UpdateBrandSettingsInput.safeParse({
+        primaryColor: "#f07",
+      });
+      expect(invalidColor.success).toBe(false);
+
+      const invalidColor2 = UpdateBrandSettingsInput.safeParse({
+        primaryColor: "rgb(255, 0, 0)",
+      });
+      expect(invalidColor2.success).toBe(false);
+
+      // Disallowed font
+      const invalidFont = UpdateBrandSettingsInput.safeParse({
+        fontHeading: "Comic Sans MS",
+      });
+      expect(invalidFont.success).toBe(false);
+    });
   });
 
   describe("Platform contracts", () => {

@@ -970,21 +970,21 @@ export const storeRouter = os.router({
     branding: {
       get: os.admin.branding.get
         .use(requireAdmin)
-        .use(requirePermission("settings.write"))
+        .use(requirePermission("settings.read"))
         .handler(({ context }) => {
           if (!context.tenantCtx) throw new Error("Missing tenant context");
           return getBrandSettings(context.rt, context.tenantCtx);
         }),
       update: os.admin.branding.update
         .use(requireAdmin)
-        .use(requirePermission("settings.write"))
+        .use(requirePermission("branding.manage"))
         .handler(({ context, input }) => {
           if (!context.tenantCtx) throw new Error("Missing tenant context");
           return updateBrandSettings(context.rt, context.tenantCtx, input);
         }),
       publish: os.admin.branding.publish
         .use(requireAdmin)
-        .use(requirePermission("settings.write"))
+        .use(requirePermission("branding.manage"))
         .handler(({ context }) => {
           if (!context.tenantCtx) throw new Error("Missing tenant context");
           return publishBrandSettings(context.rt, context.tenantCtx);

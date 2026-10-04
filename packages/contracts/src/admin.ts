@@ -630,6 +630,46 @@ export const BrandSettings = z.object({
 });
 export type BrandSettings = z.infer<typeof BrandSettings>;
 
+export const APPROVED_BRAND_FONTS = [
+  "Inter",
+  "Plus Jakarta Sans",
+  "DM Sans",
+  "Poppins",
+  "Mukta",
+  "Rozha One",
+  "Work Sans",
+  "Montserrat",
+  "Nunito",
+  "Space Grotesk",
+  "Playfair Display",
+  "Lora",
+  "Merriweather",
+] as const;
+
+export const HexColorCode = z.string().regex(/^#[0-9a-fA-F]{6}$/, "Must be a 6-digit hex color code (#rrggbb)");
+
+export const UpdateBrandSettingsInput = z.object({
+  logoLightMediaId: z.string().uuid().nullable().optional(),
+  logoDarkMediaId: z.string().uuid().nullable().optional(),
+  logoWidth: z.number().int().min(20).max(1000).optional(),
+  faviconMediaId: z.string().uuid().nullable().optional(),
+  socialImageMediaId: z.string().uuid().nullable().optional(),
+  fontHeading: z.enum(APPROVED_BRAND_FONTS).optional(),
+  fontBody: z.enum(APPROVED_BRAND_FONTS).optional(),
+  fontSizeScale: z.string().optional(),
+  colorSchemeName: z.string().optional(),
+  primaryColor: HexColorCode.optional(),
+  secondaryColor: HexColorCode.optional(),
+  accentColor: HexColorCode.optional(),
+  backgroundColor: HexColorCode.optional(),
+  surfaceColor: HexColorCode.optional(),
+  textColor: HexColorCode.optional(),
+  colorMode: z.enum(["light", "dark", "auto"]).optional(),
+  cornerRadius: z.enum(["none", "small", "medium", "large", "full"]).optional(),
+  buttonStyle: z.enum(["solid", "outline", "pill"]).optional(),
+});
+export type UpdateBrandSettingsInput = z.infer<typeof UpdateBrandSettingsInput>;
+
 // --- M2 Theme & Content Schemas ---
 export const Theme = z.object({
   // "default-theme" until a theme is activated (no row yet), so not a uuid.
@@ -1716,28 +1756,7 @@ export const adminContract = {
       .output(BrandSettings),
     update: oc
       .route({ method: "PATCH", path: "/admin/branding" })
-      .input(
-        z.object({
-          logoLightMediaId: z.string().uuid().nullable().optional(),
-          logoDarkMediaId: z.string().uuid().nullable().optional(),
-          logoWidth: z.number().int().min(20).max(1000).optional(),
-          faviconMediaId: z.string().uuid().nullable().optional(),
-          socialImageMediaId: z.string().uuid().nullable().optional(),
-          fontHeading: z.string().optional(),
-          fontBody: z.string().optional(),
-          fontSizeScale: z.string().optional(),
-          colorSchemeName: z.string().optional(),
-          primaryColor: z.string().optional(),
-          secondaryColor: z.string().optional(),
-          accentColor: z.string().optional(),
-          backgroundColor: z.string().optional(),
-          surfaceColor: z.string().optional(),
-          textColor: z.string().optional(),
-          colorMode: z.enum(["light", "dark", "auto"]).optional(),
-          cornerRadius: z.enum(["none", "small", "medium", "large", "full"]).optional(),
-          buttonStyle: z.enum(["solid", "outline", "pill"]).optional(),
-        }),
-      )
+      .input(UpdateBrandSettingsInput)
       .output(BrandSettings),
     publish: oc
       .route({ method: "POST", path: "/admin/branding/publish" })

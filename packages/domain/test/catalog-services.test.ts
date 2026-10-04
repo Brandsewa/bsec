@@ -268,6 +268,11 @@ describe("M2 Domain Services", () => {
                 },
               }),
             }),
+            insert: () => ({
+              values: () => ({
+                returning: () => [{ id: "b-1" }],
+              }),
+            }),
           });
         },
       } as unknown as Db;
@@ -298,6 +303,11 @@ describe("M2 Domain Services", () => {
                   updatedVersion = vals.version;
                   return [{ id: "b-1" }];
                 },
+              }),
+            }),
+            insert: () => ({
+              values: () => ({
+                returning: () => [{ id: "b-1" }],
               }),
             }),
           });
