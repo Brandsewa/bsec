@@ -63,7 +63,29 @@ Replaces the flat Settings workspace with a grouped, permission-aware shell, add
 
 ## Verification
 
-Filled in at hand-off (see "Gate" below).
+### Gate
+
+| Check | Command | Result |
+|---|---|---|
+| Typecheck | `pnpm typecheck` | 15/15 packages pass |
+| Lint | `pnpm lint` | pass (0 errors) |
+| Build | `pnpm build` | 6/6 pass |
+| Docs | `pnpm docs:check` | ok |
+| Contracts tests | `pnpm --filter @bs/contracts test` | 17/17 (3 new: overview procedure, timezone/countryCode) |
+| Domain fast | `pnpm --filter @bs/domain test:fast` | 247/247 incl. 10 new settings-overview unit tests |
+| Admin tests | `pnpm --filter @bs/admin test:fast` | 32/32 incl. 7 new shell/overview/store-details router tests |
+| Web tests | `pnpm --filter @bs/web test:fast` | 17/17 files pass |
+| Real-DB isolation | `vitest run test/isolation.int.test.ts` | 761/761 (incl. 5 auto security tests for `settingsOverview.get` + tenant-scoped readiness data test) |
+| Real-DB store settings | `vitest run test/store-settings.int.test.ts` | 16/16 (incl. 4 new audit/countryCode/timezone/orderPrefix tests) |
+| Full heavy suite | `pnpm --filter @bs/domain test:heavy` | **63/63 files, 1202/1202 tests, 0 failures, exit 0** (12m35s, Testcontainers Postgres 18). A first run during the local walkthrough showed the known Windows teardown/worker flake (non-zero exit, no test failures); the clean rerun above is the reported result. |
+
+### Browser walkthrough (local docker Postgres 55432 + `@bs/web dev` + `@bs/admin dev`, seeded demo store — never production)
+
+1. Desktop 1280px light: `/settings` Overview — grouped sidebar (6 groups), "Store is not live" with working **Fix** → `/settings/storefront`, honest "Using the platform subdomain" informational card (no link), status grid (Coming soon / walkthrough.bcom.si / Cash on delivery / 4/5 steps), 2 qualifying quick links. `/settings/store-details` — all fields populated, Save disabled when clean.
+2. 375px light + dark, 768px tablet dark: grouped chooser above content, preserves the active route, form single-column and readable.
+3. Dirty-form guard: editing Support phone enables Save; SPA sidebar click → "Discard unsaved changes?" dialog (Keep editing keeps, Discard leaves); hard `goto` while dirty aborted by the beforeunload handler.
+4. Save: phone change persisted across reload; audit row verified in psql — `store_settings.update` with a minimal `{"supportPhone": {"before", "after"}}` diff on update (full diff with nulls on row creation), no secret-shaped values; address jsonb gained `"countryCode": "IN"`.
+5. Not manually exercised in the browser: save-server-error retry state (covered by the admin router error-state test) and a role without `settings.write` (nav filtering covered by unit tests, 403s by the isolation suite). No production store or credentials were touched; the walkthrough stack was a disposable docker container.
 
 ## Open questions for the owner
 
@@ -72,9 +94,9 @@ Filled in at hand-off (see "Gate" below).
 
 ## Definition of done
 
-- [ ] Code follows AGENTS.md §2/§3; gate passes.
-- [ ] Tests added (real-DB isolation for the new procedure).
-- [ ] `docs/ARCHITECTURE.md` updated (routes/API sections) and "Last verified" bumped.
-- [ ] Change record (this file) and `progress.md` updated.
-- [ ] No secrets, generated files or unrelated edits in the diff.
-- [ ] Honest status below: what was run live, what was only read, what was not done.
+- [x] Code follows AGENTS.md §2/§3; gate passes (counts above).
+- [x] Tests added, including real-DB isolation for the new procedure.
+- [x] `docs/ARCHITECTURE.md` updated (routes/API sections) and "Last verified" bumped.
+- [x] Change record (this file) and `progress.md` In-flight updated (claim stays until merge).
+- [x] No secrets, generated files or unrelated edits in the diff (the temporary walkthrough seed script and docker container were removed after verification).
+- [x] Honest status in Verification: browser walkthrough items 1–5 exercised live; item 5 lists the two states covered by tests but not driven by hand.
