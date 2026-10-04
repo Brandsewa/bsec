@@ -116,11 +116,33 @@ Spec: `docs/CUSTOMERS-IMPLEMENTATION-PLAN.md` Phase 1 (1A, 1B, 1C) with the ZCod
 - [x] **Phase 1C (Import and delete)**: CSV import with dry run, error file, >500-row queue (`customers.import`), consent only when the file says so, existing customers updated on name/tags only; delete hard-deletes without orders and anonymises with orders (sessions destroyed, orders kept).
 - [x] **Verification**: typecheck 15/15, lint, build, docs:check, domain fast 238, domain heavy 1,303 (64 files; three documented Windows worker-crash flakes pass alone), web 164, admin 32, isolation 840 (85 new cases). Browser-checked at 1280px and 375px on the local demo store; CSV file upload itself not drivable in the test browser (covered by real-DB tests). Ready for Claude's verification before Phase 2.
 
+## Customers Segments (Stages A and B) — Complete (2026-10-04)
+
+Records: `docs/changes/2026-10-03-zcode-customers-segments-stage-a.md`, `2026-10-04-zcode-customers-segments-stage-b.md`. Migration `0030_customers_segments.sql`. Manual and automatic segments (rule whitelist compiled to SQL), segment list/detail with rich tables, count-refresh job, segment filter and "Add to segment" on Customers, Segments card on customer detail. CI green, merged as PR #23; heavy 1,397 tests at hand-off.
+
+## Settings rebuild Phases 0-2 — merged (2026-10-04)
+
+Plan: `docs/SETTINGS-REBUILD-PLAN.md`, `SETTINGS-REMAINING-PHASES`; records `2026-10-04-zcode-settings-rebuild-phase-0-1.md`, `2026-10-04-antigravity-settings-rebuild-phase-2.md`, `2026-10-04-claude-settings-phase-2-verification.md`.
+- [x] Phases 0-1 (PR #25): grouped shell, `/settings` Overview (`settingsOverview.get`), `/settings/store-details`, audit on store settings.
+- [x] Phase 2 (PR #29): ADR-020 capability families, `/settings/users`, `/settings/activity`. Verification found and fixed: red typecheck, and `payments.manage` enforced nowhere (now enforced on Razorpay save/clear in route and service; the ADR lists exactly which families are enforced today).
+- [ ] Phases 3-8 not started. Phase 3 prompt: `docs/prompts/settings-rebuild-phase-3.md`. Owner decisions still open: plan §11 items 2-10.
+- Browser walkthrough of Phase 2 roles still pending (ZCode, `docs/prompts/zcode-verification-round-2026-10-04.md`).
+
+## Dev speed (PR #22) — merged (2026-10-04)
+
+`pnpm test:heavy:local`, `test:affected`, `gate:quick`, CI docs-only path, lint rule `bs/no-service-call-in-tx` (allows services handed `tx`), db pool idle-error logging, deletion-sweep advisory lock on one connection. Integration found three defects fixed before merge: invalid `ci.yml` (unquoted colons), tooling that reported success when tests never ran on Windows, and one false positive of the new lint rule. Record: `2026-10-04-claude-dev-speed-integration.md`.
+
+## Known open items after this pass (2026-10-04)
+- Theme builder (`integrate/theme-builder`, PR #30, migrations 0031/0032): code-verified (typecheck, lint, build, fast and real-DB suites), **browser walkthrough pending** before merge.
+- CI e2e only runs on `main`: a PR that renames admin UI labels must grep `e2e/` first (two follow-up fixes were needed after Settings 0-1).
+- Windows heavy-suite worker crash `3221226505` remains a local flake (rerun the file alone); CI on Linux is unaffected.
+- COD fee/enable is still saved through the generic `settings.update` (`settings.write`); owner-only treatment is part of Settings Phase 5.
+
 ## In flight
 
 One line per piece of work that is started and not merged. Add yours before you start, remove it when merged or abandoned (`AGENTS.md` section 6). Format: `agent · branch · area · since · one-line goal`.
 
-- claude · `feat/themes-puck` · themes, docs · 2026-10-01 · theme builder follow-ups; agent docs and change log (`docs/changes/`)
+- claude · `integrate/theme-builder` (PR #30) · themes, web, db · 2026-10-04 · theme builder merged with current main (migrations 0031/0032); awaiting ZCode browser walkthrough before merge
 
 ## Returns & Exchanges (Manual Review & Portal) — Complete (2026-10-02)
 
