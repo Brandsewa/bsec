@@ -1,12 +1,9 @@
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { and, eq } from "drizzle-orm";
-import { primaryCategory } from "./helpers/primary-category.ts";
 import { schema, withTenant } from "@bs/db";
 import { startTestDb, type TestDb } from "@bs/db/test-env";
 import {
-  createProduct,
   createRuntime,
-  placeOrder,
   provisionTenant,
   requestReturn,
   cancelReturn,
@@ -19,8 +16,9 @@ import {
   type Runtime,
   type TenantContext,
 } from "../src/index.ts";
-import { addToCart, getOrCreateCart } from "../src/storefront/cart.ts";
 import { STORE_PERMISSIONS } from "@bs/auth";
+
+import { createActiveProduct, createDeliveredCodOrder } from "./helpers/factories.ts";
 
 let env: TestDb;
 let rt: Runtime;
@@ -29,21 +27,7 @@ let ctxA: TenantContext;
 let ctxB: TenantContext;
 let variantA1Id: string;
 let variantA2NonReturnableId: string;
-let variantBId: string;
 let locAId: string;
-
-const buyer = (cartToken: string, email = "buyer@returns.example") => ({
-  cartToken,
-  idempotencyKey: `idem_${cartToken}_${Date.now()}`,
-  email,
-  phone: "9876543210",
-  fullName: "Return Test Buyer",
-  addressLine1: "123 Indiranagar",
-  city: "Bengaluru",
-  state: "Karnataka",
-  pincode: "560038",
-  paymentMethod: "cod" as const,
-});
 
 beforeAll(async () => {
   env = await startTestDb();
@@ -85,47 +69,30 @@ beforeAll(async () => {
   };
 
   // Create products in Tenant A
-  const pA1 = await createProduct(rtWeb, ctxA, {
+  const prodA1 = await createActiveProduct(rtWeb, ctxA, {
     title: "Returnable Jacket",
-    status: "active", primaryCategoryId: await primaryCategory(rtWeb, ctxA),
-    variants: [{ sku: "JKT-001", title: "Default", price: 500000 }], // ₹5000.00
+    sku: "JKT-001",
+    price: 500000,
+    stock: 50,
   });
-  variantA1Id = pA1.variants[0]!.id;
+  variantA1Id = prodA1.variantId;
+  locAId = prodA1.locationId;
 
-  const pA2 = await createProduct(rtWeb, ctxA, {
+  const prodA2 = await createActiveProduct(rtWeb, ctxA, {
     title: "Final Sale Socks",
-    status: "active", primaryCategoryId: await primaryCategory(rtWeb, ctxA),
+    sku: "SOX-001",
+    price: 30000,
     returnable: false,
-    variants: [{ sku: "SOX-001", title: "Default", price: 30000 }], // ₹300.00
+    stock: 50,
   });
-  variantA2NonReturnableId = pA2.variants[0]!.id;
-
-  // Stock inventory for Tenant A
-  const locsA = await withTenant(rtWeb._db.db, ctxA.tenantId, async (tx) =>
-    tx.select().from(schema.locations).where(eq(schema.locations.tenantId, ctxA.tenantId)).limit(1),
-  );
-  locAId = locsA[0]!.id;
-  await withTenant(rtWeb._db.db, ctxA.tenantId, async (tx) => {
-    await tx.insert(schema.inventoryLevels).values([
-      { tenantId: ctxA.tenantId, locationId: locAId, variantId: variantA1Id, onHand: 50 },
-      { tenantId: ctxA.tenantId, locationId: locAId, variantId: variantA2NonReturnableId, onHand: 50 },
-    ]);
-  });
+  variantA2NonReturnableId = prodA2.variantId;
 
   // Create product in Tenant B
-  const pB = await createProduct(rtWeb, ctxB, {
+  await createActiveProduct(rtWeb, ctxB, {
     title: "Tenant B Item",
-    status: "active", primaryCategoryId: await primaryCategory(rtWeb, ctxB),
-    variants: [{ sku: "B-ITEM", title: "Default", price: 200000 }],
-  });
-  variantBId = pB.variants[0]!.id;
-  const locsB = await withTenant(rtWeb._db.db, ctxB.tenantId, async (tx) =>
-    tx.select().from(schema.locations).where(eq(schema.locations.tenantId, ctxB.tenantId)).limit(1),
-  );
-  await withTenant(rtWeb._db.db, ctxB.tenantId, async (tx) => {
-    await tx.insert(schema.inventoryLevels).values([
-      { tenantId: ctxB.tenantId, locationId: locsB[0]!.id, variantId: variantBId, onHand: 50 },
-    ]);
+    sku: "B-ITEM",
+    price: 200000,
+    stock: 50,
   });
 }, 180_000);
 
@@ -136,30 +103,29 @@ afterAll(async () => {
 });
 
 async function createDeliveredOrder(ctx: TenantContext, variantId: string, quantity = 1) {
-  const cart = await getOrCreateCart(rtWeb, ctx, undefined);
-  await addToCart(rtWeb, ctx, { token: cart.token, variantId, quantity });
-  const placed = await placeOrder(rtWeb, ctx, buyer(cart.token));
-
-  await withTenant(rtWeb._db.db, ctx.tenantId, async (tx) => {
-    await tx.update(schema.orders).set({ status: "delivered" }).where(eq(schema.orders.id, placed.orderId));
-    await tx.insert(schema.fulfillments).values({
-      tenantId: ctx.tenantId,
-      orderId: placed.orderId,
-      locationId: locAId,
-      status: "delivered",
-      deliveredAt: new Date(),
-    });
+  const delivered = await createDeliveredCodOrder(rtWeb, ctx, {
+    variantId,
+    quantity,
+    locationId: locAId,
+    name: "Return Test Buyer",
+    shippingAddress: {
+      line1: "123 Indiranagar",
+      city: "Bengaluru",
+      state: "Karnataka",
+      pincode: "560038",
+      country: "IN",
+    },
   });
 
-  const [orderItem] = await withTenant(rtWeb._db.db, ctx.tenantId, async (tx) =>
-    tx.select().from(schema.orderItems).where(eq(schema.orderItems.orderId, placed.orderId)),
+  const [order] = await withTenant(rtWeb._db.db, ctx.tenantId, async (tx) =>
+    tx.select().from(schema.orders).where(eq(schema.orders.id, delivered.orderId)),
   );
 
   return {
-    orderId: placed.orderId,
-    orderNumber: placed.orderNumber,
-    orderItemId: orderItem!.id,
-    grandTotal: placed.grandTotal,
+    orderId: delivered.orderId,
+    orderNumber: delivered.orderNumber,
+    orderItemId: delivered.orderItemId,
+    grandTotal: order!.grandTotal,
   };
 }
 

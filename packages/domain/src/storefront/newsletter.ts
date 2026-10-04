@@ -64,7 +64,7 @@ export async function subscribeNewsletter(
     // 2. Set marketing consent via single writer
     const consentSource = source === "storefront" ? "storefront_form" : (source as "storefront_form");
     await setMarketingConsent(
-      rt,
+      { ...rt, _db: { db: tx } } as unknown as Runtime,
       ctx,
       {
         customerId: c.id,

@@ -126,7 +126,7 @@ export async function updateBrandSettings(
   assertPermission(ctx, "settings.write");
   const db = rt._db.db;
 
-  return withTenant(db, ctx.tenantId, async (tx) => {
+  await withTenant(db, ctx.tenantId, async (tx) => {
     const [existing] = await tx
       .select()
       .from(schema.brandSettings)
@@ -206,11 +206,11 @@ export async function updateBrandSettings(
         version: 1,
       });
     }
-
-    await invalidateCache(rt, ctx, { type: "theme_or_brand_published" });
-
-    return getBrandSettings(rt, ctx);
   });
+
+  await invalidateCache(rt, ctx, { type: "theme_or_brand_published" });
+
+  return getBrandSettings(rt, ctx);
 }
 
 /**
@@ -220,31 +220,33 @@ export async function publishBrandSettings(rt: Runtime, ctx: TenantContext) {
   assertPermission(ctx, "settings.write");
   const db = rt._db.db;
 
-  return withTenant(db, ctx.tenantId, async (tx) => {
+  const nextVersion = await withTenant(db, ctx.tenantId, async (tx) => {
     const [existing] = await tx
       .select()
       .from(schema.brandSettings)
       .where(eq(schema.brandSettings.tenantId, ctx.tenantId));
 
-    const nextVersion = (existing?.version ?? 0) + 1;
+    const version = (existing?.version ?? 0) + 1;
 
     if (existing) {
       await tx
         .update(schema.brandSettings)
         .set({
-          version: nextVersion,
+          version,
           updatedAt: new Date(),
         })
         .where(eq(schema.brandSettings.id, existing.id));
     } else {
       await tx.insert(schema.brandSettings).values({
         tenantId: ctx.tenantId,
-        version: nextVersion,
+        version,
       });
     }
 
-    await invalidateCache(rt, ctx, { type: "theme_or_brand_published" });
-
-    return { version: nextVersion };
+    return version;
   });
+
+  await invalidateCache(rt, ctx, { type: "theme_or_brand_published" });
+
+  return { version: nextVersion };
 }

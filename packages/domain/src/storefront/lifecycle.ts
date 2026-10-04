@@ -540,8 +540,10 @@ export async function updateStoreStatus(
       });
     }
 
-    await invalidateCache(rt, ctx, { type: "store_or_seo_updated" });
     return { success: true };
   });
+
+  await invalidateCache(rt, ctx, { type: "store_or_seo_updated" });
+  return { success: true };
 }
 

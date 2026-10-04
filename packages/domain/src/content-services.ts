@@ -89,7 +89,7 @@ export async function updateTheme(
   assertPermission(ctx, "theme.publish");
   const db = rt._db.db;
 
-  return withTenant(db, ctx.tenantId, async (tx) => {
+  const res = await withTenant(db, ctx.tenantId, async (tx) => {
     const [existing] = await tx
       .select()
       .from(schema.themes)
@@ -108,7 +108,6 @@ export async function updateTheme(
         .returning();
 
       if (!row) throw new Error("Failed to update theme");
-      await invalidateCache(rt, ctx, { type: "theme_or_brand_published" });
       return {
         id: row.id,
         name: row.name,
@@ -131,7 +130,6 @@ export async function updateTheme(
       .returning();
 
     if (!row) throw new Error("Failed to create theme");
-    await invalidateCache(rt, ctx, { type: "theme_or_brand_published" });
     return {
       id: row.id,
       name: row.name,
@@ -141,6 +139,9 @@ export async function updateTheme(
       version: row.version,
     };
   });
+
+  await invalidateCache(rt, ctx, { type: "theme_or_brand_published" });
+  return res;
 }
 
 // --- Page Services ---
@@ -336,7 +337,7 @@ export async function publishPage(rt: Runtime, ctx: TenantContext, input: Publis
   assertPermission(ctx, "theme.publish");
   const db = rt._db.db;
 
-  return withTenant(db, ctx.tenantId, async (tx) => {
+  const { updatedPage, targetVersionId: finalVersionId } = await withTenant(db, ctx.tenantId, async (tx) => {
     let targetVersionId = input.versionId;
 
     if (!targetVersionId) {
@@ -363,19 +364,21 @@ export async function publishPage(rt: Runtime, ctx: TenantContext, input: Publis
     const rows = typeof updateQuery.returning === "function"
       ? await updateQuery.returning()
       : await updateQuery;
-    const updatedPage = Array.isArray(rows) ? rows[0] : undefined;
+    const updated = Array.isArray(rows) ? rows[0] : undefined;
 
-    await invalidatePageCache(rt, ctx, updatedPage);
-
-    return { success: true, publishedVersionId: targetVersionId };
+    return { updatedPage: updated, targetVersionId };
   });
+
+  await invalidatePageCache(rt, ctx, updatedPage);
+
+  return { success: true, publishedVersionId: finalVersionId };
 }
 
 export async function rollbackPage(rt: Runtime, ctx: TenantContext, input: RollbackPageInput) {
   assertPermission(ctx, "theme.publish");
   const db = rt._db.db;
 
-  return withTenant(db, ctx.tenantId, async (tx) => {
+  const updatedPage = await withTenant(db, ctx.tenantId, async (tx) => {
     const updateQuery = tx
       .update(schema.pages)
       .set({
@@ -388,12 +391,12 @@ export async function rollbackPage(rt: Runtime, ctx: TenantContext, input: Rollb
     const rows = typeof updateQuery.returning === "function"
       ? await updateQuery.returning()
       : await updateQuery;
-    const updatedPage = Array.isArray(rows) ? rows[0] : undefined;
-
-    await invalidatePageCache(rt, ctx, updatedPage);
-
-    return { success: true, publishedVersionId: input.targetVersionId };
+    return Array.isArray(rows) ? rows[0] : undefined;
   });
+
+  await invalidatePageCache(rt, ctx, updatedPage);
+
+  return { success: true, publishedVersionId: input.targetVersionId };
 }
 
 // --- Menu Services ---
@@ -475,29 +478,30 @@ export async function updateMenu(
   assertPermission(ctx, "content.write");
   const db = rt._db.db;
 
-  return withTenant(db, ctx.tenantId, async (tx) => {
+  const row = await withTenant(db, ctx.tenantId, async (tx) => {
     const updateData: Record<string, unknown> = { updatedAt: new Date() };
     if (input.name !== undefined) updateData.title = input.name;
     if (input.items !== undefined) updateData.items = input.items;
 
-    const [row] = await tx
+    const [updated] = await tx
       .update(schema.menus)
       .set(updateData)
       .where(eq(schema.menus.id, input.id))
       .returning();
 
-    if (!row) throw new Error(`Menu not found: "${input.id}"`);
-
-    await invalidateCache(rt, ctx, { type: "nav_updated" });
-
-    return {
-      id: row.id,
-      name: row.title,
-      handle: row.handle,
-      createdAt: row.createdAt.toISOString(),
-      updatedAt: row.updatedAt.toISOString(),
-    };
+    if (!updated) throw new Error(`Menu not found: "${input.id}"`);
+    return updated;
   });
+
+  await invalidateCache(rt, ctx, { type: "nav_updated" });
+
+  return {
+    id: row.id,
+    name: row.title,
+    handle: row.handle,
+    createdAt: row.createdAt.toISOString(),
+    updatedAt: row.updatedAt.toISOString(),
+  };
 }
 
 export async function deleteMenu(rt: Runtime, ctx: TenantContext, input: { id: string }) {
