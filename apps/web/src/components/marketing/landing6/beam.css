@@ -52,12 +52,8 @@
   background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='200' height='200'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.9' numOctaves='2' stitchTiles='stitch'/%3E%3CfeColorMatrix values='0 0 0 0 1 0 0 0 0 1 0 0 0 0 1 0 0 0 .7 0'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E"); }
 
 /* the beam: a thin bright core, a soft halo, and a bloom where it lands on the window's top edge */
-.bm-beam { position: absolute; left: var(--bm-beam-x); top: 0; bottom: var(--bm-foot, 8rem); width: 0; pointer-events: none; transform-origin: top; animation: bm-ignite 1500ms var(--bm-ease) 150ms both; }
-.bm-beam-halo { position: absolute; left: -26px; top: 0; bottom: 0; width: 52px; filter: blur(18px);
-  background: linear-gradient(to bottom, rgb(150 160 255 / 0.35) 0%, rgb(160 170 255 / 0.65) 55%, rgb(200 208 255 / 1) 100%); animation: bm-pulse 5.5s ease-in-out infinite; }
 .bm-bloom { position: absolute; left: var(--bm-beam-x); bottom: calc(var(--bm-foot, 8rem) - 7rem); width: min(78rem, 130%); height: 15rem; transform: translateX(-50%); pointer-events: none; filter: blur(8px);
-  background: radial-gradient(ellipse 50% 48% at 50% 62%, #fff 0%, rgb(205 215 255 / 0.95) 14%, rgb(130 145 255 / 0.8) 30%, rgb(95 70 235 / 0.45) 52%, transparent 74%); animation: bm-bloom 5.5s ease-in-out infinite; }
-@keyframes bm-ignite { from { transform: scaleY(0); opacity: 0; } 60% { opacity: 1; } to { transform: scaleY(1); opacity: 1; } }
+  background: radial-gradient(ellipse 50% 48% at 50% 62%, rgb(150 160 255 / 0.7) 0%, rgb(125 140 255 / 0.6) 30%, rgb(95 70 235 / 0.4) 52%, transparent 74%); animation: bm-bloom 5.5s ease-in-out infinite; }
 @keyframes bm-pulse { 0%, 100% { opacity: 0.86; } 50% { opacity: 1; } }
 @keyframes bm-bloom { 0%, 100% { opacity: 0.88; transform: translateX(-50%) scale(1); } 50% { opacity: 1; transform: translateX(-50%) scale(1.04); } }
 /* as the page scrolls the light falls away (scroll-driven where supported) */
@@ -118,12 +114,4 @@
 .bm-flare > * { position: absolute; mix-blend-mode: screen; }
 .bm-flare-wide { left: -42rem; bottom: -7rem; width: 84rem; height: 17rem; filter: blur(26px);
   background: radial-gradient(ellipse 50% 50% at 50% 58%, rgb(150 165 255 / 0.85) 0%, rgb(105 120 255 / 0.5) 34%, rgb(85 60 230 / 0.22) 58%, transparent 76%); animation: bm-flare 5.5s ease-in-out infinite; }
-.bm-flare-glow { left: -26rem; bottom: -5rem; width: 52rem; height: 12.5rem; filter: blur(12px);
-  background: radial-gradient(ellipse 50% 50% at 50% 56%, #fff 0%, rgb(225 232 255 / 0.98) 12%, rgb(165 178 255 / 0.9) 30%, rgb(110 125 255 / 0.55) 52%, transparent 76%); animation: bm-flare 5.5s ease-in-out infinite; }
-.bm-flare-core { left: -6.5rem; bottom: -1.9rem; width: 13rem; height: 4.2rem; filter: blur(6px); border-radius: 50%;
-  background: radial-gradient(ellipse 50% 50% at 50% 55%, #fff 0%, #fff 30%, rgb(235 240 255 / 0.8) 58%, transparent 100%); animation: bm-flare 5.5s ease-in-out infinite; }
-.bm-flare-streak { left: -24rem; bottom: -0.05rem; width: 48rem; height: 4px; border-radius: 4px; filter: blur(1.4px);
-  background: linear-gradient(90deg, transparent, rgb(255 255 255 / 0.85) 24%, #fff 50%, rgb(255 255 255 / 0.85) 76%, transparent); animation: bm-flare 5.5s ease-in-out infinite; }
-.bm-flare-streak-2 { left: -34rem; bottom: -0.45rem; width: 68rem; height: 10px; filter: blur(7px); opacity: 0.7;
-  background: linear-gradient(90deg, transparent, rgb(150 165 255 / 0.9) 30%, rgb(220 228 255 / 1) 50%, rgb(150 165 255 / 0.9) 70%, transparent); }
 @keyframes bm-flare { 0%, 100% { opacity: 0.88; } 50% { opacity: 1; } }

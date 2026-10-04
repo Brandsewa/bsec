@@ -57,19 +57,12 @@ export function MarketingLandingBeam({ plans }: { plans?: LandingPlan[] | undefi
           <div className="bm-smoke bm-smoke-c" />
           <Smoke beamX={0.57} />
           <div className="bm-grid" />
-          <div className="bm-beam">
-            <div className="bm-beam-halo" />
-          </div>
           <div className="bm-bloom" />
           <Dust beamX={0.57} foot={544} />
         </div>
         <div className="bm-grain" aria-hidden="true" />
         <div className="bm-flare bm-light" aria-hidden="true">
           <div className="bm-flare-wide" />
-          <div className="bm-flare-glow" />
-          <div className="bm-flare-core" />
-          <div className="bm-flare-streak" />
-          <div className="bm-flare-streak bm-flare-streak-2" />
         </div>
 
         {/* nav */}
