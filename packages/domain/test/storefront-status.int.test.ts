@@ -1,3 +1,4 @@
+import { createHash } from "node:crypto";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { eq } from "drizzle-orm";
 import { schema } from "@bs/db";
@@ -7,8 +8,11 @@ import {
   evaluateStorefrontAccess,
   getStoreStatus,
   invalidateHostCache,
+  needsStorePasswordRehash,
   provisionTenant,
+  tenantTag,
   updateStoreStatus,
+  verifyStorefrontPassword,
   type Runtime,
   type TenantContext,
 } from "../src/index.ts";
@@ -18,6 +22,7 @@ let rt: Runtime; // platform service: provisions the stores
 let rtWeb: Runtime; // tenant runtime (app_rw), like apps/web
 let storeA: { tenantId: string; ownerId: string; host: string };
 let storeB: { tenantId: string; ownerId: string; host: string };
+const invalidatedTags: string[][] = [];
 
 const errorOf = async (p: Promise<unknown>) => (await p.then(() => null, (e: Error) => e))?.message ?? null;
 
@@ -40,7 +45,14 @@ async function mkStore(slug: string) {
 beforeAll(async () => {
   env = await startTestDb();
   rt = createRuntime({ service: "platform", databaseUrl: env.as("app_platform"), poolMax: 5 });
-  rtWeb = createRuntime({ service: "web", databaseUrl: env.as("app_rw"), poolMax: 5 });
+  rtWeb = createRuntime({
+    service: "web",
+    databaseUrl: env.as("app_rw"),
+    poolMax: 5,
+    revalidateTags: (tags) => {
+      invalidatedTags.push(tags);
+    },
+  });
   storeA = await mkStore("status-a");
   storeB = await mkStore("status-b");
 }, 180_000);
@@ -61,8 +73,12 @@ describe("storefront mode (going live)", () => {
   });
 
   it("switching to live opens the public storefront, and only that store", async () => {
+    invalidatedTags.length = 0;
     await updateStoreStatus(rtWeb, ctxFor(storeA), { mode: "live" });
     expect((await getStoreStatus(rtWeb, ctxFor(storeA))).mode).toBe("live");
+    expect(invalidatedTags.length).toBeGreaterThan(0);
+    expect(invalidatedTags[0]).toContain(tenantTag(storeA.tenantId, "store-shell"));
+    expect(invalidatedTags[0]).toContain(tenantTag(storeA.tenantId, "seo"));
     invalidateHostCache();
     expect(await evaluateStorefrontAccess(rt._db.db, storeA.host)).toMatchObject({ allowed: true, httpStatus: 200 });
     // the other store is untouched
@@ -86,6 +102,29 @@ describe("storefront mode (going live)", () => {
     await updateStoreStatus(rtWeb, ctxFor(storeB), { mode: "live" });
     await updateStoreStatus(rtWeb, ctxFor(storeB), { mode: "password" });
     expect((await getStoreStatus(rtWeb, ctxFor(storeB))).mode).toBe("password");
+  });
+
+  it("lazy re-hashes a legacy SHA-256 password upon successful verification", async () => {
+    const legacyPlain = "legacy-pass-123";
+    const legacyHash = createHash("sha256").update(legacyPlain).digest("hex");
+    await rt._db.db
+      .update(schema.storeStatus)
+      .set({ passwordHash: legacyHash, mode: "password" })
+      .where(eq(schema.storeStatus.tenantId, storeB.tenantId));
+
+    expect(needsStorePasswordRehash(legacyHash)).toBe(true);
+
+    const result = await verifyStorefrontPassword(rtWeb, ctxFor(storeB), legacyPlain);
+    expect(result.success).toBe(true);
+
+    const [row] = await rt._db.db
+      .select({ passwordHash: schema.storeStatus.passwordHash })
+      .from(schema.storeStatus)
+      .where(eq(schema.storeStatus.tenantId, storeB.tenantId));
+
+    expect(row?.passwordHash).toBeTruthy();
+    expect(row!.passwordHash!.startsWith("$scrypt$")).toBe(true);
+    expect(needsStorePasswordRehash(row!.passwordHash!)).toBe(false);
   });
 
   it("needs the settings permission to read or change it", async () => {

@@ -1,4 +1,5 @@
-import { createHash, timingSafeEqual } from "node:crypto";
+import { createHash, randomBytes, scrypt, timingSafeEqual } from "node:crypto";
+import { promisify } from "node:util";
 import { eq } from "drizzle-orm";
 import type { Db } from "@bs/db";
 import { schema, withTenant } from "@bs/db";
@@ -8,6 +9,11 @@ import { assertPermission } from "../context.ts";
 import type { Runtime } from "../runtime.ts";
 import { invalidateCache } from "../cache-invalidation.ts";
 import { storefrontLifecycleDecision } from "../system/tenant-lifecycle.ts";
+
+const scryptAsync = promisify(scrypt);
+const SCRYPT_PREFIX = "$scrypt$";
+const SCRYPT_SALT_BYTES = 16;
+const SCRYPT_KEYLEN = 64;
 
 export type StorefrontMode = "live" | "coming_soon" | "maintenance" | "password";
 
@@ -128,18 +134,49 @@ function safeEqual(a: string, b: string): boolean {
 }
 
 /**
- * Hashes a plaintext store password using SHA-256.
+ * Indicates whether a stored password hash is using the legacy SHA-256 scheme and needs rehash.
  */
-export async function hashStorePassword(plain: string): Promise<string> {
-  return createHash("sha256").update(plain).digest("hex");
+export function needsStorePasswordRehash(hash: string): boolean {
+  if (!hash) return false;
+  return !hash.startsWith(SCRYPT_PREFIX);
 }
 
 /**
- * Verifies a plaintext store password against a stored SHA-256 hash or plain string.
+ * Hashes a plaintext store password using salted scrypt.
+ */
+export async function hashStorePassword(plain: string): Promise<string> {
+  const salt = randomBytes(SCRYPT_SALT_BYTES).toString("hex");
+  const derived = (await scryptAsync(plain, salt, SCRYPT_KEYLEN)) as Buffer;
+  return `${SCRYPT_PREFIX}${salt}$${derived.toString("hex")}`;
+}
+
+/**
+ * Verifies a plaintext store password against a stored scrypt hash ($scrypt$...)
+ * or legacy 64-hex SHA-256 hash.
+ * Does NOT permit plain === hash replay.
  */
 export async function verifyStorePassword(plain: string, hash: string): Promise<boolean> {
   if (!plain || !hash) return false;
-  if (plain === hash) return true;
+
+  // Modern salted scrypt format: $scrypt$<saltHex>$<derivedKeyHex>
+  if (hash.startsWith(SCRYPT_PREFIX)) {
+    const parts = hash.split("$");
+    if (parts.length !== 4) return false;
+    const [, , saltHex, keyHex] = parts;
+    if (!saltHex || !keyHex) return false;
+    try {
+      const derived = (await scryptAsync(plain, saltHex, SCRYPT_KEYLEN)) as Buffer;
+      const expected = Buffer.from(keyHex, "hex");
+      if (derived.length !== expected.length) return false;
+      return timingSafeEqual(derived, expected);
+    } catch {
+      return false;
+    }
+  }
+
+  // Legacy SHA-256 format (must be 64 hex characters)
+  // plain === hash is intentionally NOT checked so stored hashes cannot be replayed as passwords.
+  if (!/^[0-9a-f]{64}$/i.test(hash)) return false;
   const computed = createHash("sha256").update(plain).digest("hex");
   return safeEqual(computed, hash);
 }
@@ -152,13 +189,14 @@ export function hashBypassToken(token: string): string {
 }
 
 /**
- * Verifies a preview bypass token against a stored token hash or plain token.
+ * Verifies a preview bypass token against a stored token hash in constant time.
+ * Does NOT permit token === hash replay.
  */
 export function verifyBypassToken(token: string, hash: string): boolean {
   if (!token || !hash) return false;
-  if (token === hash) return true;
+  if (!/^[0-9a-f]{64}$/i.test(hash)) return false;
   const computed = hashBypassToken(token);
-  return safeEqual(computed, hash) || safeEqual(token, hash);
+  return safeEqual(computed, hash);
 }
 
 /**
@@ -365,6 +403,23 @@ export async function evaluateStorefrontAccess(
       (await verifyStorePassword(candidatePassword, passwordHash));
 
     if (passwordMatches) {
+      if (passwordHash && needsStorePasswordRehash(passwordHash)) {
+        hashStorePassword(candidatePassword)
+          .then((newHash) => {
+            const updatePass = async (qdb: Db) => {
+              await qdb
+                .update(schema.storeStatus)
+                .set({ passwordHash: newHash })
+                .where(eq(schema.storeStatus.tenantId, tenantId));
+            };
+            if (typeof db.transaction === "function") {
+              withTenant(db, tenantId, updatePass).catch(() => {});
+            } else {
+              updatePass(db).catch(() => {});
+            }
+          })
+          .catch(() => {});
+      }
       return {
         allowed: true,
         httpStatus: 200,
@@ -432,6 +487,21 @@ export async function verifyStorefrontPassword(
     return { success: false };
   }
 
+  if (needsStorePasswordRehash(passwordHash)) {
+    const newHash = await hashStorePassword(password);
+    const updatePass = async (qdb: Db) => {
+      await qdb
+        .update(schema.storeStatus)
+        .set({ passwordHash: newHash })
+        .where(eq(schema.storeStatus.tenantId, ctx.tenantId));
+    };
+    if (typeof db.transaction === "function") {
+      await withTenant(db, ctx.tenantId, updatePass).catch(() => {});
+    } else {
+      await updatePass(db).catch(() => {});
+    }
+  }
+
   return {
     success: true,
     token: password,
@@ -484,7 +554,7 @@ export async function updateStoreStatus(
   assertPermission(ctx, "settings.write");
   const db = rt._db.db;
 
-  return withTenant(db, ctx.tenantId, async (tx) => {
+  await withTenant(db, ctx.tenantId, async (tx) => {
     const updateValues: Record<string, unknown> = {
       changedAt: new Date(),
       changedBy: "userId" in ctx.actor ? ctx.actor.userId : null,
@@ -539,8 +609,6 @@ export async function updateStoreStatus(
         bypassTokenHash: (updateValues.bypassTokenHash as string | null) ?? null,
       });
     }
-
-    return { success: true };
   });
 
   await invalidateCache(rt, ctx, { type: "store_or_seo_updated" });
