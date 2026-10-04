@@ -17,13 +17,6 @@ import { getCachedStorefrontHomePage } from "@/server/cached-storefront.ts";
 import { BlockRenderer } from "@/components/blocks/BlockRenderer.tsx";
 import { MarketingLandingPage } from "@/components/marketing/MarketingLandingPage.tsx";
 import type { LandingPlan } from "@/components/marketing/landing/content.ts";
-import { MarketingLandingBahi } from "@/components/marketing/MarketingLandingBahi.tsx";
-import { MarketingLandingRiso } from "@/components/marketing/MarketingLandingRiso.tsx";
-import { MarketingLandingNeo } from "@/components/marketing/MarketingLandingNeo.tsx";
-import { MarketingLandingSky } from "@/components/marketing/MarketingLandingSky.tsx";
-import { MarketingLandingBeam } from "@/components/marketing/MarketingLandingBeam.tsx";
-import { DesignSwitcher } from "@/components/marketing/DesignSwitcher.tsx";
-import { designSwitcherEnabled, resolveDesign } from "@/components/marketing/designs.ts";
 
 export async function generateMetadata(): Promise<Metadata> {
   let title = "Home";
@@ -81,7 +74,7 @@ async function loadLandingPlans(): Promise<LandingPlan[]> {
   }
 }
 
-export default async function HomePage({ searchParams }: { searchParams?: Promise<{ design?: string | string[] }> }) {
+export default async function HomePage() {
   let blocksToRender = [] as ReturnType<typeof renderBlockDocument>["blocks"];
   let renderData: { data: Record<string, BlockData>; media: Record<string, string> } | undefined;
   let host = "localhost";
@@ -157,17 +150,7 @@ export default async function HomePage({ searchParams }: { searchParams?: Promis
   }
 
   if (isMarketing) {
-    const plans = await loadLandingPlans();
-    // Design testing: only when NEXT_PUBLIC_MARKETING_DESIGN_SWITCHER=1; production always renders the default design.
-    const requested = (await searchParams)?.design;
-    const fromQuery = Array.isArray(requested) ? requested[0] : requested;
-    const design = resolveDesign(fromQuery);
-    return (
-      <>
-        {design === "6" ? <MarketingLandingBeam plans={plans} /> : design === "5" ? <MarketingLandingSky plans={plans} /> : design === "4" ? <MarketingLandingNeo plans={plans} /> : design === "3" ? <MarketingLandingRiso plans={plans} /> : design === "2" ? <MarketingLandingBahi plans={plans} /> : <MarketingLandingPage plans={plans} />}
-        {designSwitcherEnabled() ? <DesignSwitcher current={design} /> : null}
-      </>
-    );
+    return <MarketingLandingPage plans={await loadLandingPlans()} />;
   }
 
   const storeUrl = `https://${host}`;
