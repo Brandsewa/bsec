@@ -35,6 +35,11 @@ function isInvalidationCall(node) {
   return false;
 }
 
+/** A service that is handed the open transaction (`tx`) joins it instead of opening its own, so that is safe. */
+function passesTx(node) {
+  return node.arguments.some((arg) => arg.type === "Identifier" && arg.name === "tx");
+}
+
 function passesRt(node) {
   for (const arg of node.arguments) {
     if (arg.type === "Identifier" && arg.name === "rt") return true;
@@ -87,7 +92,7 @@ export default {
 
       CallExpression(node) {
         if (txDepth <= 0) return;
-        if (isInvalidationCall(node) || passesRt(node)) {
+        if (isInvalidationCall(node) || (passesRt(node) && !passesTx(node))) {
           context.report({ node, messageId: "noTxServiceCall" });
         }
       },

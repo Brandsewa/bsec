@@ -19,6 +19,7 @@ tester.run("no-service-call-in-tx", noServiceCallInTx, {
     "await withTenant(db, tenantId, async (tx) => { await doWork({ _db: { db: tx } } as unknown as Runtime); })",
     "const res = await withTenant(db, tenantId, async (tx) => { return 1; }); await invalidateCache(tags);",
     "await getProduct(rt, ctx, id);",
+    "await withTenant(db, tenantId, async (tx) => { await setMarketingConsent(rt, ctx, input, tx); })",
   ],
   invalid: [
     {
