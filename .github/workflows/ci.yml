@@ -74,9 +74,9 @@ jobs:
           node-version-file: .nvmrc
           cache: pnpm
       - run: pnpm install --frozen-lockfile
-      - name: Fast check: docs:check
+      - name: "Fast check - docs:check"
         run: pnpm docs:check
-      - name: Fast check: lint
+      - name: "Fast check - lint"
         if: needs.changes.outputs.docs_only != 'true'
         run: pnpm lint
       - name: Typecheck
@@ -90,7 +90,7 @@ jobs:
         run: pnpm test:fast
       - name: Fast path notice
         if: needs.changes.outputs.docs_only == 'true'
-        run: echo "Docs-only PR: docs:check succeeded; skipping lint, typecheck, build, and unit tests."
+        run: 'echo "Docs-only PR: docs:check succeeded; skipping lint, typecheck, build, and unit tests."'
 
   check-heavy:
     name: heavy integration tests (real postgres)
@@ -127,7 +127,7 @@ jobs:
         if: needs.changes.outputs.docs_only != 'true'
       - name: Fast path notice
         if: needs.changes.outputs.docs_only == 'true'
-        run: echo "Docs-only PR: skipping heavy integration test suite."
+        run: 'echo "Docs-only PR: skipping heavy integration test suite."'
 
   secret-scan:
     name: secret-scan

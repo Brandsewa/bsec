@@ -25,3 +25,6 @@ Merged current `main` (Customers, Segments, Settings 0-1 and 2 are in) into the 
 
 ## Definition of done
 - [x] Gate passes. [x] Tests added (rule case, deletion lock). [x] Docs/progress updated. [x] No secrets or generated files.
+
+## Correction: `ci.yml` was invalid YAML
+GitHub rejected the workflow ("workflow file issue", no jobs started) because the docs-only path added unquoted colons in `name:` and `run:` values (`Fast check: lint`, `echo "Docs-only PR: ..."`). Merged to `main` this would have stopped all CI and deploys. Quoted the four values and validated the file with the `yaml` parser (no errors). Lesson: parse any edited workflow locally (`yaml` is in the pnpm store) before pushing.
