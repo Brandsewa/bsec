@@ -19,7 +19,7 @@ Phase 2: red typecheck; `payments.manage` unenforced. Settings 0-1: e2e `team in
 ## Left open on purpose
 - PR #30 (theme builder integration): needs the browser walkthrough first.
 - Settings Phases 3-8; prompts: `docs/prompts/settings-rebuild-phase-3.md`. Phases 4-8 are blocked on owner decisions (plan §11 items 2-10).
-- Verification round for ZCode: `docs/prompts/zcode-verification-round-2026-10-04.md`.
+- Browser verification (PR #30 theme builder, Settings Phase 2 roles, Customers/Segments): owner is testing manually on the local stack (see `progress.md`); the earlier tester prompt was withdrawn.
 - Branches kept as preservation, not for merge: `claude-ds` (its useful commit was cherry-picked), `test/vmm-local-stack`, `feat/superadmin-themes`, `feat/commerce-page-templates` (superseded by `integrate/theme-builder`), old merged feature branches.
 
 ## Verification
