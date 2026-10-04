@@ -19,9 +19,38 @@ export { hasPermission, type StorePermission };
  * Read-only sessions get the *.read permissions. Write sessions (second confirmation) add everyday store work, but
  * never team management, payment/settings credentials, data exports or refunds: those stay with the store's owner.
  */
-export const SUPPORT_READ_PERMISSIONS: readonly StorePermission[] = STORE_PERMISSIONS.filter((p) => p.endsWith(".read"));
-const SUPPORT_WRITE_DENIED: readonly StorePermission[] = ["staff.manage", "settings.write", "exports.run", "orders.refund"];
-export const SUPPORT_WRITE_PERMISSIONS: readonly StorePermission[] = STORE_PERMISSIONS.filter((p) => !SUPPORT_WRITE_DENIED.includes(p));
+// Settings/configuration families excluded from both support scopes (AGENTS.md rule 9, ADR-020)
+const SETTINGS_CAPABILITY_FAMILIES: readonly StorePermission[] = [
+  "settings.read",
+  "settings.manage",
+  "branding.manage",
+  "storefront.manage",
+  "checkout.manage",
+  "payments.manage",
+  "shipping.manage",
+  "taxes.manage",
+  "orders.settings.manage",
+  "returns.manage",
+  "notifications.manage",
+  "domains.manage",
+  "policies.manage",
+  "privacy.manage",
+  "audit.read",
+];
+
+export const SUPPORT_READ_PERMISSIONS: readonly StorePermission[] = STORE_PERMISSIONS.filter(
+  (p) => p.endsWith(".read") && p !== "settings.read" && p !== "audit.read",
+);
+const SUPPORT_WRITE_DENIED: readonly StorePermission[] = [
+  "staff.manage",
+  "settings.write",
+  "exports.run",
+  "orders.refund",
+  ...SETTINGS_CAPABILITY_FAMILIES,
+];
+export const SUPPORT_WRITE_PERMISSIONS: readonly StorePermission[] = STORE_PERMISSIONS.filter(
+  (p) => !SUPPORT_WRITE_DENIED.includes(p),
+);
 
 export type Actor =
   | { type: "anonymous" }
