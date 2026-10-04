@@ -15,6 +15,7 @@ export const MARKETING_DESIGNS: readonly MarketingDesign[] = [
   { id: "3", label: "Home 3", note: "Riso Zine (spot inks, overprint, halftone)", built: true },
   { id: "4", label: "Home 4", note: "Neubrutalist Grid (outlines, hard shadows, solids)", built: true },
   { id: "5", label: "Home 5", note: "Night Sky (dark SaaS, orbits, constellations)", built: true },
+  { id: "6", label: "Home 6", note: "Beam (light shaft onto a lit product window)", built: true },
 ];
 
 export const DEFAULT_DESIGN = "1";

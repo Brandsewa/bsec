@@ -1,0 +1,126 @@
+/*
+ * bcom.si landing, design 6: "Beam". A near-black hero lit by one vertical beam that falls onto the top edge of the
+ * product window and blooms there, with slow violet smoke, a fine dot grid and a warm-glow pill. Original build in the
+ * style of modern dark developer-tool heroes. Scoped under .bm.
+ */
+.bm {
+  --bm-bg: #090a0c;
+  --bm-panel: #101218;
+  --bm-panel-2: #151823;
+  --bm-line: rgb(255 255 255 / 0.1);
+  --bm-text: #f3f4fa;
+  --bm-dim: #9ea4bd; /* secondary text on near-black (7.6:1) */
+  --bm-violet: #8f8dff;
+  --bm-blue: #6f8bff;
+  --bm-warm: #ff9a4d;
+  --bm-ease: cubic-bezier(0.16, 1, 0.3, 1);
+  --bm-beam-x: 57%; /* the beam's horizontal position, shared by every layer that lines up with it */
+  --bm-font: var(--font-bm), ui-sans-serif, system-ui, sans-serif;
+
+  position: relative; min-height: 100vh; overflow-x: clip;
+  background: var(--bm-bg); color: var(--bm-text);
+  font-family: var(--bm-font); font-size: 1.0625rem; line-height: 1.6; -webkit-font-smoothing: antialiased;
+}
+:root:has(.bm) { scrollbar-color: #2b2f45 var(--bm-bg); scroll-behavior: smooth; scroll-padding-top: 5rem; }
+.bm ::selection { background: var(--bm-violet); color: #0a0a12; }
+.bm :focus-visible { outline: 2px solid var(--bm-blue); outline-offset: 3px; border-radius: 8px; }
+.bm input { caret-color: var(--bm-warm); }
+.bm-num { font-variant-numeric: tabular-nums lining-nums; }
+.bm-dim { color: var(--bm-dim); }
+.bm-h1 { font-weight: 600; letter-spacing: -0.045em; line-height: 0.98; font-size: clamp(2.7rem, 6.4vw, 5.25rem); text-wrap: balance;
+  color: #f6f7ff; }
+.bm-h2 { font-weight: 600; letter-spacing: -0.04em; line-height: 1.04; font-size: clamp(1.9rem, 4vw, 3rem); text-wrap: balance; }
+
+/* ---------- Hero stage ---------- */
+.bm-hero { position: relative; isolation: isolate; overflow: hidden; min-height: min(100svh, 62rem); }
+
+/* smoke: three blurred masses drifting slowly; heavier on the beam's right, as the light spills */
+.bm-smoke { position: absolute; border-radius: 50%; filter: blur(70px); pointer-events: none; will-change: transform; }
+.bm-smoke-a { width: 46rem; height: 34rem; right: -8%; top: 4%; background: radial-gradient(closest-side, rgb(120 108 240 / 0.42), transparent 72%); animation: bm-drift-a 34s ease-in-out infinite alternate; }
+.bm-smoke-b { width: 40rem; height: 30rem; left: 38%; top: 22%; background: radial-gradient(closest-side, rgb(70 100 220 / 0.34), transparent 72%); animation: bm-drift-b 42s ease-in-out infinite alternate; }
+.bm-smoke-c { width: 30rem; height: 26rem; left: -6%; top: 40%; background: radial-gradient(closest-side, rgb(150 120 255 / 0.16), transparent 70%); animation: bm-drift-a 50s ease-in-out infinite alternate-reverse; }
+@keyframes bm-drift-a { from { transform: translate3d(0, 0, 0) scale(1); } to { transform: translate3d(-5rem, 3rem, 0) scale(1.18); } }
+@keyframes bm-drift-b { from { transform: translate3d(0, 0, 0) scale(1.1); } to { transform: translate3d(4rem, -2.5rem, 0) scale(0.92); } }
+
+/* fine dot grid, visible only in the light around the beam */
+.bm-grid { position: absolute; inset: 0; pointer-events: none; opacity: 0.55;
+  background-image: radial-gradient(circle, rgb(190 200 255 / 0.5) 0 0.8px, transparent 1.2px); background-size: 9px 9px;
+  -webkit-mask-image: radial-gradient(ellipse 34% 48% at var(--bm-beam-x) 62%, #000, transparent 72%); mask-image: radial-gradient(ellipse 34% 48% at var(--bm-beam-x) 62%, #000, transparent 72%); }
+
+/* grain over the stage */
+.bm-grain { position: absolute; inset: 0; pointer-events: none; opacity: 0.12; mix-blend-mode: overlay;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='200' height='200'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.9' numOctaves='2' stitchTiles='stitch'/%3E%3CfeColorMatrix values='0 0 0 0 1 0 0 0 0 1 0 0 0 0 1 0 0 0 .7 0'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E"); }
+
+/* the beam: a thin bright core, a soft halo, and a bloom where it lands on the window's top edge */
+.bm-beam { position: absolute; left: var(--bm-beam-x); top: 0; bottom: var(--bm-foot, 8rem); width: 0; pointer-events: none; transform-origin: top; animation: bm-ignite 1500ms var(--bm-ease) 150ms both; }
+.bm-beam-core { position: absolute; left: -1.5px; top: 0; bottom: 0; width: 3px; border-radius: 3px;
+  background: linear-gradient(to bottom, rgb(215 224 255 / 0.55) 0%, rgb(225 232 255 / 0.85) 40%, #fff 80%, #fff 100%); animation: bm-pulse 5.5s ease-in-out infinite; }
+.bm-beam-halo { position: absolute; left: -26px; top: 0; bottom: 0; width: 52px; filter: blur(18px);
+  background: linear-gradient(to bottom, rgb(140 150 255 / 0.25) 0%, rgb(140 150 255 / 0.5) 55%, rgb(170 180 255 / 0.9) 100%); animation: bm-pulse 5.5s ease-in-out infinite; }
+.bm-beam-cone { position: absolute; left: -7rem; bottom: 0; width: 14rem; height: 42%; filter: blur(28px);
+  background: linear-gradient(to top, rgb(150 150 255 / 0.4), transparent 92%); clip-path: polygon(44% 0, 56% 0, 100% 100%, 0 100%); }
+.bm-bloom { position: absolute; left: var(--bm-beam-x); bottom: calc(var(--bm-foot, 8rem) - 7rem); width: min(78rem, 130%); height: 15rem; transform: translateX(-50%); pointer-events: none; filter: blur(8px);
+  background: radial-gradient(ellipse 50% 48% at 50% 62%, rgb(230 235 255 / 0.95) 0%, rgb(125 140 255 / 0.7) 22%, rgb(95 70 235 / 0.34) 48%, transparent 72%); animation: bm-bloom 5.5s ease-in-out infinite; }
+@keyframes bm-ignite { from { transform: scaleY(0); opacity: 0; } 60% { opacity: 1; } to { transform: scaleY(1); opacity: 1; } }
+@keyframes bm-pulse { 0%, 100% { opacity: 0.86; } 50% { opacity: 1; } }
+@keyframes bm-bloom { 0%, 100% { opacity: 0.88; transform: translateX(-50%) scale(1); } 50% { opacity: 1; transform: translateX(-50%) scale(1.04); } }
+/* as the page scrolls the light falls away (scroll-driven where supported) */
+@keyframes bm-fade { to { opacity: 0.08; } }
+@supports (animation-timeline: scroll()) {
+  .bm-light { animation: bm-fade linear both; animation-timeline: scroll(root); animation-range: 0 90vh; }
+}
+
+/* headline and copy settle in once */
+@keyframes bm-rise { from { opacity: 0; transform: translateY(22px); filter: blur(8px); } to { opacity: 1; transform: none; filter: blur(0); } }
+.bm-rise { animation: bm-rise 1000ms var(--bm-ease) both; animation-delay: var(--d, 0ms); }
+
+/* ---------- Pill button with a warm lit edge ---------- */
+.bm-pill {
+  position: relative; display: inline-flex; align-items: center; justify-content: center; gap: 0.55rem; white-space: nowrap; isolation: isolate;
+  min-height: 3rem; padding: 0.7rem 1.55rem; border-radius: 999px; border: 0; cursor: pointer; text-decoration: none;
+  font-weight: 600; font-size: 0.82rem; letter-spacing: 0.1em; text-transform: uppercase; color: #15161c;
+  background: linear-gradient(180deg, #f3f1ee 0%, #cfccc8 100%);
+  box-shadow: 0 0 0 1px rgb(255 255 255 / 0.35) inset, 0 0 22px 2px rgb(255 154 77 / 0.55), 0 10px 30px -8px rgb(255 120 40 / 0.5);
+  transition: transform 220ms var(--bm-ease), box-shadow 220ms var(--bm-ease);
+  animation: bm-warm 4.5s ease-in-out infinite;
+}
+.bm-pill:hover { transform: translateY(-2px); box-shadow: 0 0 0 1px rgb(255 255 255 / 0.5) inset, 0 0 30px 5px rgb(255 154 77 / 0.7), 0 14px 34px -8px rgb(255 120 40 / 0.6); }
+.bm-pill:active { transform: translateY(0); }
+.bm-pill[disabled] { background: #262a38; color: #7d839c; box-shadow: none; cursor: not-allowed; animation: none; }
+@keyframes bm-warm { 0%, 100% { box-shadow: 0 0 0 1px rgb(255 255 255 / 0.35) inset, 0 0 22px 2px rgb(255 154 77 / 0.5), 0 10px 30px -8px rgb(255 120 40 / 0.45); } 50% { box-shadow: 0 0 0 1px rgb(255 255 255 / 0.35) inset, 0 0 30px 4px rgb(255 154 77 / 0.75), 0 10px 30px -8px rgb(255 120 40 / 0.55); } }
+.bm-pill-sm { min-height: 2.5rem; padding: 0.4rem 1.1rem; font-size: 0.74rem; }
+.bm-outline { display: inline-flex; align-items: center; min-height: 2.5rem; padding: 0.4rem 1.1rem; border-radius: 999px; border: 1px solid rgb(255 255 255 / 0.35); color: var(--bm-text); font-weight: 600; font-size: 0.74rem; letter-spacing: 0.1em; text-transform: uppercase; text-decoration: none; transition: background-color 200ms, border-color 200ms; }
+.bm-outline:hover { background: rgb(255 255 255 / 0.08); border-color: rgb(255 255 255 / 0.6); }
+
+/* ---------- Product window ---------- */
+.bm-window { position: relative; border-radius: 20px 20px 0 0; background: #0c0e13; border: 1px solid rgb(255 255 255 / 0.12); border-bottom: 0;
+  box-shadow: 0 -1px 0 rgb(220 228 255 / 0.95), 0 -2px 18px rgb(150 165 255 / 0.9), 0 -26px 80px -12px rgb(120 135 255 / 0.65), 0 40px 80px rgb(0 0 0 / 0.6); }
+.bm-window::before { content: ""; position: absolute; left: 6%; right: 6%; top: -1px; height: 2px; border-radius: 2px; background: linear-gradient(90deg, transparent, #fff 20%, #fff 80%, transparent); filter: blur(0.5px); }
+@keyframes bm-card-in { from { opacity: 0; transform: translateY(14px); } to { opacity: 1; transform: none; } }
+.bm-card-in { animation: bm-card-in 800ms var(--bm-ease) both; animation-delay: var(--d, 0ms); }
+@keyframes bm-new { from { opacity: 0; transform: translateY(-18px) scale(0.97); background: rgb(143 141 255 / 0.35); } to { opacity: 1; transform: none; background: transparent; } }
+.bm-card-new { animation: bm-new 700ms var(--bm-ease) both; }
+
+/* ---------- Page chrome below the hero ---------- */
+.bm-panel { background: var(--bm-panel); border: 1px solid var(--bm-line); border-radius: 18px; transition: border-color 300ms var(--bm-ease), transform 400ms var(--bm-ease); }
+.bm-panel:hover { border-color: rgb(255 255 255 / 0.22); transform: translateY(-3px); }
+.bm-rv { transition: opacity 700ms var(--bm-ease), transform 900ms var(--bm-ease); }
+.bm-armed .bm-rv:not(.is-in) { opacity: 0; transform: translateY(26px); }
+.bm-faq summary { cursor: pointer; list-style: none; }
+.bm-faq summary::-webkit-details-marker { display: none; }
+.bm-faq[open] .bm-plus { transform: rotate(45deg); }
+.bm-plus { transition: transform 260ms var(--bm-ease); }
+
+@media (prefers-reduced-motion: reduce) {
+  :root:has(.bm) { scroll-behavior: auto; }
+  .bm *, .bm *::before, .bm *::after { animation: none !important; transition: none !important; }
+  .bm-armed .bm-rv:not(.is-in) { opacity: 1; transform: none; }
+}
+
+/* the flare where the beam lands: sits above the window's top edge, blended with screen */
+.bm-flare { position: absolute; left: var(--bm-beam-x); bottom: calc(var(--bm-window-h) - 0.2rem); width: 0; z-index: 25; pointer-events: none; }
+.bm-flare-glow { position: absolute; left: -22rem; bottom: -4.2rem; width: 44rem; height: 10rem; mix-blend-mode: screen; filter: blur(14px);
+  background: radial-gradient(ellipse 50% 50% at 50% 55%, rgb(255 255 255 / 0.95) 0%, rgb(190 200 255 / 0.85) 16%, rgb(120 135 255 / 0.55) 40%, transparent 72%); animation: bm-flare 5.5s ease-in-out infinite; }
+.bm-flare-streak { position: absolute; left: -17rem; bottom: 0; width: 34rem; height: 3px; mix-blend-mode: screen; border-radius: 3px; filter: blur(1.2px);
+  background: linear-gradient(90deg, transparent, rgb(255 255 255 / 0.95) 30%, #fff 50%, rgb(255 255 255 / 0.95) 70%, transparent); animation: bm-flare 5.5s ease-in-out infinite; }
+@keyframes bm-flare { 0%, 100% { opacity: 0.85; } 50% { opacity: 1; } }
