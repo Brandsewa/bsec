@@ -91,6 +91,7 @@ import {
   getPlatformTenant,
   getProduct,
   getAdminShippingSettings,
+  getSettingsOverview,
   getStoreSettings,
   getTheme,
   inviteStaff,
@@ -663,6 +664,7 @@ describe("Generated Isolation Test Suite (M1 Real Postgres 18 Proof)", () => {
     expect(adminProcedures.length).toBeGreaterThanOrEqual(40);
     expect(adminProcedures).toContain("memberships.list");
     expect(adminProcedures).toContain("memberships.invite");
+    expect(adminProcedures).toContain("settingsOverview.get");
     expect(adminProcedures).toContain("settings.get");
     expect(adminProcedures).toContain("settings.update");
     expect(adminProcedures).toContain("featureFlags.list");
@@ -772,6 +774,8 @@ describe("Generated Isolation Test Suite (M1 Real Postgres 18 Proof)", () => {
           email: `invite-${Date.now()}-${Math.random().toString(36).slice(2, 6)}@test.com`,
           roleId: roleLimitedA,
         });
+      case "settingsOverview.get":
+        return await getSettingsOverview(rt, ctx);
       case "settings.get":
         return await getStoreSettings(rt, ctx);
       case "settings.update":
@@ -1445,6 +1449,53 @@ describe("Generated Isolation Test Suite (M1 Real Postgres 18 Proof)", () => {
       await expect(
         acceptInvitation(rtApp, { storeId: tenantA, token: invite.token!, name: "Y", password: "long-enough-password" }),
       ).rejects.toThrow(/invalid or has expired/i);
+    });
+  });
+
+  describe("settingsOverview.get tenant-scoped readiness", () => {
+    it("derives facts per tenant and never mixes readiness state across tenants", async () => {
+      // Distinct state: tenant A goes live with a default shipping rate; tenant B stays coming_soon without one.
+      await withTenant(rtApp._db.db, tenantA, async (tx) => {
+        await tx.insert(schema.storeStatus).values({ tenantId: tenantA, mode: "live" });
+        const [zone] = await tx
+          .insert(schema.shippingZones)
+          .values({ tenantId: tenantA, name: "Default zone", isDefault: true, countries: ["IN"] })
+          .returning();
+        await tx.insert(schema.shippingRates).values({ tenantId: tenantA, zoneId: zone!.id, name: "Standard", pricePaise: 5000 });
+      });
+
+      const ctxABuilt = await buildTenantContext(rtApp._db.db, {
+        entryPath: "admin",
+        headers: { "x-store-id": tenantA },
+        session: { user: { id: userA }, type: "staff" },
+      });
+      const ctxBBuilt = await buildTenantContext(rtApp._db.db, {
+        entryPath: "admin",
+        headers: { "x-store-id": tenantB },
+        session: { user: { id: userB }, type: "staff" },
+      });
+      expect(ctxABuilt).not.toBeNull();
+      expect(ctxBBuilt).not.toBeNull();
+      const ctxA = ctxABuilt!;
+      const ctxB = ctxBBuilt!;
+
+      const a = await getSettingsOverview(rtApp, ctxA);
+      const b = await getSettingsOverview(rtApp, ctxB);
+
+      expect(a.storeStatus.mode).toBe("live");
+      expect(a.shipping.hasDefaultRate).toBe(true);
+      expect(a.products.hasProducts).toBe(true);
+      expect(a.payments.codEnabled).toBe(true); // parseStoreConfig default: COD enabled
+      expect(a.actions.map((x) => x.id)).not.toContain("no_shipping_rate");
+      expect(a.actions.map((x) => x.id)).not.toContain("no_payment_method");
+
+      expect(b.storeStatus.mode).toBe("coming_soon");
+      expect(b.shipping.hasDefaultRate).toBe(false);
+      expect(b.actions.map((x) => x.id)).toContain("store_not_live");
+      expect(b.actions.map((x) => x.id)).toContain("no_shipping_rate");
+      // Tenant B must never observe tenant A's live status or shipping rate.
+      expect(b.storeStatus.mode).not.toBe(a.storeStatus.mode);
+      expect(b.shipping.hasDefaultRate).not.toBe(a.shipping.hasDefaultRate);
     });
   });
 

@@ -13,6 +13,7 @@ export interface StoreConfig {
 }
 
 export interface StoreAddressRecord {
+  countryCode?: string | undefined;
   line1?: string | undefined;
   line2?: string | undefined;
   city?: string | undefined;
@@ -82,7 +83,14 @@ function toAddress(raw: unknown): StoreAddressRecord | null {
   if (!raw || typeof raw !== "object") return null;
   const a = raw as Record<string, unknown>;
   const pick = (k: string) => (typeof a[k] === "string" && a[k] ? (a[k] as string) : undefined);
-  return { line1: pick("line1"), line2: pick("line2"), city: pick("city"), state: pick("state"), pincode: pick("pincode") };
+  return {
+    countryCode: pick("countryCode"),
+    line1: pick("line1"),
+    line2: pick("line2"),
+    city: pick("city"),
+    state: pick("state"),
+    pincode: pick("pincode"),
+  };
 }
 
 type SettingsRow = typeof schema.storeSettings.$inferSelect;
@@ -137,6 +145,38 @@ export async function getStoreSettings(rt: Runtime, ctx: TenantContext): Promise
   });
 }
 
+const AUDIT_FIELDS = ["storeName", "currency", "timezone", "legalName", "supportEmail", "supportPhone", "address", "autoPublishReviews"] as const;
+
+/** Writes the audit_logs row for a store settings change (AGENTS.md rule 6). No secrets exist here; the
+ * checkout/tax groups are audited through their own canonical editors, not this aggregate's diff. */
+async function writeSettingsAudit(tx: Db, ctx: TenantContext, before: StoreSettingsRecord | null, after: StoreSettingsRecord) {
+  const pickChanges = (r: StoreSettingsRecord) => ({
+    storeName: r.storeName,
+    currency: r.currency,
+    timezone: r.timezone,
+    legalName: r.legalName,
+    supportEmail: r.supportEmail,
+    supportPhone: r.supportPhone,
+    address: r.address,
+    autoPublishReviews: r.autoPublishReviews,
+  });
+  const diff: Record<string, { before: unknown; after: unknown }> = {};
+  for (const key of AUDIT_FIELDS) {
+    const b = before ? pickChanges(before)[key] : undefined;
+    const a = pickChanges(after)[key];
+    if (JSON.stringify(b) !== JSON.stringify(a)) diff[key] = { before: b ?? null, after: a };
+  }
+  await tx.insert(schema.auditLogs).values({
+    tenantId: ctx.tenantId,
+    actorType: ctx.actor.type,
+    actorId: ctx.actor.type === "staff" ? ctx.actor.userId : null,
+    action: "store_settings.update",
+    targetType: "store_settings",
+    targetId: ctx.tenantId,
+    diff,
+  });
+}
+
 /** Updates (or creates on first save) store settings for the current tenant. */
 export async function updateStoreSettings(
   rt: Runtime,
@@ -146,6 +186,7 @@ export async function updateStoreSettings(
   assertPermission(ctx, "settings.write");
   const result = await withTenant(rt._db.db, ctx.tenantId, async (tx) => {
     const [existing] = await tx.select().from(schema.storeSettings).limit(1);
+    const before = existing ? toRecord(existing, ctx.tenantId) : null;
     const current = parseStoreConfig(existing?.checkout);
     const rawCheckout = (existing?.checkout && typeof existing.checkout === "object" ? existing.checkout : {}) as Record<string, unknown>;
     const checkout = {
@@ -154,11 +195,20 @@ export async function updateStoreSettings(
       tax: input.tax ?? current.tax,
     };
 
+    // The address jsonb gains countryCode "IN" (V1 India-only) unless the caller set one; existing
+    // stored values are never rewritten (Settings rebuild prompt §D).
+    const address =
+      input.address === undefined
+        ? undefined
+        : input.address === null
+          ? null
+          : { countryCode: input.address.countryCode ?? before?.address?.countryCode ?? "IN", ...input.address };
+
     const fields = {
       ...(input.legalName !== undefined ? { legalName: input.legalName } : {}),
       ...(input.supportEmail !== undefined ? { supportEmail: input.supportEmail } : {}),
       ...(input.supportPhone !== undefined ? { supportPhone: input.supportPhone } : {}),
-      ...(input.address !== undefined ? { address: input.address } : {}),
+      ...(address !== undefined ? { address } : {}),
       ...(input.orderPrefix !== undefined ? { orderPrefix: input.orderPrefix } : {}),
       ...(input.autoPublishReviews !== undefined ? { autoPublishReviews: input.autoPublishReviews } : {}),
       checkout,
@@ -179,7 +229,9 @@ export async function updateStoreSettings(
         })
         .returning();
       if (!created) throw new Error("Failed to initialize store settings");
-      return toRecord(created, ctx.tenantId);
+      const record = toRecord(created, ctx.tenantId);
+      await writeSettingsAudit(tx, ctx, null, record);
+      return record;
     }
 
     const [updated] = await tx
@@ -193,7 +245,9 @@ export async function updateStoreSettings(
       .where(eq(schema.storeSettings.id, existing.id))
       .returning();
     if (!updated) throw new Error("Failed to update store settings");
-    return toRecord(updated, ctx.tenantId);
+    const after = toRecord(updated, ctx.tenantId);
+    await writeSettingsAudit(tx, ctx, before, after);
+    return after;
   });
   await invalidateCache(rt, ctx, { type: "store_or_seo_updated" });
   return result;
