@@ -1194,6 +1194,107 @@ export const CustomDomainVerifyResult = z.object({
 });
 export type CustomDomainVerifyResult = z.infer<typeof CustomDomainVerifyResult>;
 
+// --- Settings Phase 5 Payment Methods Schemas (Slice 5A, SETTINGS-SCHEMA §6.1) ---
+export const PaymentMethodItem = z.object({
+  id: z.string().uuid(),
+  provider: z.enum(["cod", "razorpay"]),
+  displayName: z.string(),
+  status: z.enum(["disabled", "pending_setup", "active", "unavailable", "error"]),
+  mode: z.enum(["live", "test"]).nullable().optional(),
+  sortOrder: z.number().int(),
+  publicConfig: z.record(z.string(), z.unknown()),
+  setupState: z.record(z.string(), z.unknown()),
+  version: z.number().int(),
+  enabledAt: z.string().nullable().optional(),
+  disabledAt: z.string().nullable().optional(),
+  createdAt: z.string(),
+  updatedAt: z.string(),
+});
+export type PaymentMethodItem = z.infer<typeof PaymentMethodItem>;
+
+export const UpdateCodInput = z.object({
+  enabled: z.boolean(),
+  displayName: z.string().min(1).max(80).optional(),
+  feePaise: z.number().int().min(0).max(50000),
+  minOrderPaise: z.number().int().min(0).nullable().optional(),
+  maxOrderPaise: z.number().int().min(0).nullable().optional(),
+});
+export type UpdateCodInput = z.infer<typeof UpdateCodInput>;
+
+// --- Settings Phase 5 Plan & Billing Schemas (Slice 5C & 5D, SETTINGS-SCHEMA §4.1) ---
+export const PlanAndBillingUsageItem = z.object({
+  key: z.enum(["products", "staff_seats", "storage_mb", "orders_month", "emails_month", "custom_domains"]),
+  description: z.string(),
+  used: z.number(),
+  limit: z.number().nullable(),
+  unit: z.string(),
+  enforcement: z.enum(["hard", "soft", "notify"]),
+  percentUsed: z.number(),
+});
+export type PlanAndBillingUsageItem = z.infer<typeof PlanAndBillingUsageItem>;
+
+export const PlanAndBillingInvoiceItem = z.object({
+  id: z.string().uuid(),
+  number: z.string(),
+  issuedAt: z.string(),
+  paidAt: z.string().nullable().optional(),
+  amountPaise: z.number().int(),
+  taxPaise: z.number().int(),
+  status: z.enum(["issued", "paid", "void"]),
+  downloadable: z.boolean(),
+});
+export type PlanAndBillingInvoiceItem = z.infer<typeof PlanAndBillingInvoiceItem>;
+
+export const PlanAndBillingView = z.object({
+  plan: z
+    .object({
+      code: z.string(),
+      name: z.string(),
+      interval: z.enum(["monthly", "yearly"]),
+      status: z.enum(["trialing", "active", "past_due", "suspended", "cancelled"]),
+      currentPeriodEnd: z.string().nullable().optional(),
+      features: z.record(z.string(), z.unknown()),
+      limits: z.record(z.string(), z.unknown()),
+      daysLeftInTrial: z.number().int().optional(),
+    })
+    .nullable(),
+  usage: z.array(PlanAndBillingUsageItem),
+  invoices: z.array(PlanAndBillingInvoiceItem),
+  openPlanChangeRequest: z
+    .object({
+      id: z.string().uuid(),
+      requestedBy: z.string().uuid(),
+      fromPlanId: z.string().uuid().nullable().optional(),
+      toPlanId: z.string().uuid(),
+      toPlanCode: z.string(),
+      toPlanName: z.string(),
+      interval: z.enum(["monthly", "yearly"]),
+      note: z.string().nullable().optional(),
+      status: z.enum(["open", "approved", "declined", "cancelled"]),
+      createdAt: z.string(),
+    })
+    .nullable(),
+});
+export type PlanAndBillingView = z.infer<typeof PlanAndBillingView>;
+
+export const AvailablePlanSummary = z.object({
+  id: z.string().uuid(),
+  code: z.string(),
+  name: z.string(),
+  priceMonthlyPaise: z.number().int(),
+  priceYearlyPaise: z.number().int(),
+  isCurrent: z.boolean(),
+});
+export type AvailablePlanSummary = z.infer<typeof AvailablePlanSummary>;
+
+export const RequestPlanChangeInput = z.object({
+  toPlanId: z.string().uuid(),
+  interval: z.enum(["monthly", "yearly"]),
+  note: z.string().max(500).optional(),
+});
+export type RequestPlanChangeInput = z.infer<typeof RequestPlanChangeInput>;
+
+
 export const adminContract = {
   support: {
     list: oc.route({ method: "GET", path: "/admin/support/sessions" }).output(z.array(StoreSupportSession)),
@@ -1227,6 +1328,15 @@ export const adminContract = {
       )
       .output(PaymentsStatus),
     clearRazorpay: oc.route({ method: "DELETE", path: "/admin/payments/razorpay" }).output(PaymentsStatus),
+  },
+  paymentMethods: {
+    list: oc
+      .route({ method: "GET", path: "/admin/payment-methods" })
+      .output(z.array(PaymentMethodItem)),
+    updateCod: oc
+      .route({ method: "PUT", path: "/admin/payment-methods/cod" })
+      .input(UpdateCodInput)
+      .output(PaymentMethodItem),
   },
   memberships: {
     list: oc
@@ -3115,7 +3225,6 @@ export const adminContract = {
               interval: z.string(),
               currentPeriodStart: z.string().nullable().optional(),
               currentPeriodEnd: z.string().nullable().optional(),
-              provider: z.string(),
             })
             .nullable(),
           plan: z
@@ -3143,21 +3252,29 @@ export const adminContract = {
           daysLeftInTrial: z.number(),
         }),
       ),
-    changePlan: oc
-      .route({ method: "POST", path: "/admin/billing/plan" })
-      .input(
-        z.object({
-          planCode: z.string(),
-          interval: z.enum(["monthly", "yearly"]),
-        }),
-      )
+  },
+
+  planAndBilling: {
+    get: oc
+      .route({ method: "GET", path: "/admin/plan-and-billing" })
+      .output(PlanAndBillingView),
+    availablePlans: oc
+      .route({ method: "GET", path: "/admin/plan-and-billing/plans" })
+      .output(z.array(AvailablePlanSummary)),
+    requestChange: oc
+      .route({ method: "POST", path: "/admin/plan-and-billing/request-change" })
+      .input(RequestPlanChangeInput)
       .output(
         z.object({
-          providerSubscriptionId: z.string(),
-          shortUrl: z.string().optional(),
-          status: z.string(),
+          id: z.string().uuid(),
+          status: z.literal("open"),
+          message: z.string(),
         }),
       ),
+    cancelRequest: oc
+      .route({ method: "POST", path: "/admin/plan-and-billing/cancel-request" })
+      .input(z.object({ id: z.string().uuid() }))
+      .output(z.object({ ok: z.boolean() })),
   },
 
   // --- M8 Custom Domains (PLAN §8, ADR-007, ADR-017) ---

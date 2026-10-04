@@ -26,9 +26,13 @@ import { allocateDiscount, priceOrder } from "./pricing.ts";
 import { getTenantShippingRates } from "./shipping-rates.ts";
 import { withIdempotencyKey } from "../system/idempotency.ts";
 import { isFeatureEnabled, FeatureDisabledError } from "../features.ts";
-import { readStoreConfig } from "../admin/store-config.ts";
 import { parseCheckoutSettings } from "../admin/checkout-config.ts";
 import { parseOrderProcessingConfig } from "../admin/order-settings-config.ts";
+import {
+  getTenantPaymentMethods,
+  parseCodPublicConfig,
+  hasEnabledPaymentAdapter,
+} from "../admin/payment-methods.ts";
 import { setMarketingConsent } from "../customers/consent.ts";
 import { trackSoftQuotaUsage } from "../system/quotas.ts";
 import { isCheckoutAllowed } from "../system/tenant-lifecycle.ts";
@@ -135,11 +139,23 @@ export async function placeOrder(
     const shipping = (input.shippingMethod ? resolvedRates.find((r) => r.method === input.shippingMethod) : undefined) ?? resolvedRates[0];
     const shippingBase = shipping ? shipping.amount : 0;
     const isCod = input.paymentMethod === "cod";
-    const storeConfig = await readStoreConfig(tx);
-    if (isCod && !storeConfig.cod.enabled) {
-      throw new Error("Cash on delivery is not available for this store");
+    const paymentMethodsList = await getTenantPaymentMethods(tx, tenantId);
+
+    if (isCod) {
+      const codMethod = paymentMethodsList.find((m) => m.provider === "cod");
+      if (!codMethod || codMethod.status !== "active") {
+        throw new Error("Cash on delivery is not available for this store");
+      }
+    } else {
+      const onlineMethod = paymentMethodsList.find((m) => m.provider === "razorpay");
+      if (!onlineMethod || onlineMethod.status !== "active" || !hasEnabledPaymentAdapter("razorpay")) {
+        throw new Error("Online payment is not available for this store. Please choose Cash on Delivery.");
+      }
     }
-    const codFee = isCod ? storeConfig.cod.feePaise : 0;
+
+    const codMethodRecord = paymentMethodsList.find((m) => m.provider === "cod");
+    const codCfg = parseCodPublicConfig(codMethodRecord?.publicConfig);
+    const codFee = isCod ? codCfg.feePaise : 0;
 
     const [stRow] = await tx
       .select({
@@ -179,6 +195,20 @@ export async function placeOrder(
       throw new Error(
         `Order total (₹${(goodsTotal / 100).toFixed(2)}) is below the minimum required order amount of ₹${(orderSettings.minimumOrderPaise / 100).toFixed(2)}. Please add ₹${(shortfallPaise / 100).toFixed(2)} more to your cart.`
       );
+    }
+
+    // COD min/max order value enforcement (on grand total or goods total)
+    if (isCod) {
+      if (codCfg.minOrderPaise != null && grandTotal < codCfg.minOrderPaise) {
+        throw new Error(
+          `Order total (₹${(grandTotal / 100).toFixed(2)}) is below the minimum COD amount of ₹${(codCfg.minOrderPaise / 100).toFixed(2)}.`
+        );
+      }
+      if (codCfg.maxOrderPaise != null && grandTotal > codCfg.maxOrderPaise) {
+        throw new Error(
+          `Order total (₹${(grandTotal / 100).toFixed(2)}) exceeds the maximum allowed COD amount of ₹${(codCfg.maxOrderPaise / 100).toFixed(2)}.`
+        );
+      }
     }
 
     // 3. Find default inventory location for tenant
@@ -450,7 +480,7 @@ export async function placeOrder(
 
     // 8. Payment Intent
     const intentId = randomUUID();
-    const providerOrderId = !isCod ? `rzp_order_${orderId.replace(/-/g, "").slice(0, 14)}` : null;
+    const providerOrderId: string | null = null;
 
     await tx.insert(paymentIntents).values({
       id: intentId,

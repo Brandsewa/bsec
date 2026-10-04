@@ -258,8 +258,9 @@ Drizzle schema files in `packages/db/src/schema/` (one Postgres database, `publi
 | 0031 | `theme_template_archive` | `theme_templates.archived_at` (library draft / published / archived states) |
 | 0032 | `theme_previews` | `theme_previews`: short-lived shareable snapshots of a theme draft (`/preview/<code>`); the web role can only read it |
 | 0033 | `settings_phase4` | `customer_account_settings` table (RLS), `store_settings.order_settings` JSONB, `customer_consent_events.text_version`/`ip_hash` |
+| 0034 | `settings_phase5` | `payment_methods` catalogue table (RLS), `plan_change_requests` table (RLS) |
 
-How to write one (expand, migrate, contract; `forceRlsSql`): `docs/migrations.md`. **Never edit an applied migration.** Latest on disk: `0033` (the docs check keeps this list honest).
+How to write one (expand, migrate, contract; `forceRlsSql`): `docs/migrations.md`. **Never edit an applied migration.** Latest on disk: `0034` (the docs check keeps this list honest).
 
 ---
 
@@ -320,7 +321,7 @@ Theme flow: platform staff build `theme_templates` (draft + published snapshot, 
 
 `packages/db/src/queues.ts` is the queue registry (created by the migrate step, so runtime roles never need DDL). Handlers and schedules: `packages/domain/src/jobs.ts`, started by `apps/worker`.
 
-Queues: `system.ping`, `segments.refresh_counts`, `order.created`, `order.paid`, `order.cod_confirmed`, `order.cancelled`, `reservation.expiry`, `webhook.process`, `idempotency.cleanup`, `fulfillment.created`, `fulfillment.delivered`, `fulfillment.rto`, `return.requested`, `refund.processed`, `cart.abandoned`, `cart.recovery_sweep`, `subscription.trial_expiry_sweep`, `order.preorder_date_changed`, `order.preorder_reminder_sweep`, `order.return_photo_cleanup`, `customers.refresh_metrics`, `customers.import` (CSV imports over 500 rows).
+Queues: `system.ping`, `segments.refresh_counts`, `order.created`, `order.paid`, `order.cod_confirmed`, `order.cancelled`, `reservation.expiry`, `webhook.process`, `idempotency.cleanup`, `fulfillment.created`, `fulfillment.delivered`, `fulfillment.rto`, `return.requested`, `refund.processed`, `cart.abandoned`, `cart.recovery_sweep`, `subscription.trial_expiry_sweep`, `order.preorder_date_changed`, `order.preorder_reminder_sweep`, `order.return_photo_cleanup`, `customers.refresh_metrics`, `customers.import` (CSV imports over 500 rows), `plan.change_requested`.
 
 Schedules: `reservation.expiry` every minute, `idempotency.cleanup` every 15 min, `cart.recovery_sweep` and `subscription.trial_expiry_sweep` hourly, `segments.refresh_counts` every 6 hours, `order.preorder_reminder_sweep` daily (06:00), `order.return_photo_cleanup` daily (03:00). Email handlers currently send placeholder text (no provider configured; see `progress.md`). Tenant deletion runs in the platform service on a timer (`DELETION_SWEEP_INTERVAL_MS`).
 

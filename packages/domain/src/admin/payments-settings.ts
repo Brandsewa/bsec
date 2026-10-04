@@ -4,6 +4,11 @@ import { decryptSecret, encryptSecret, isEncryptionKeyConfigured } from "@bs/pay
 import type { Runtime } from "../runtime.ts";
 import { assertPermission, type TenantContext } from "../context.ts";
 import { readStoreConfig } from "./store-config.ts";
+import {
+  getTenantPaymentMethods,
+  parseCodPublicConfig,
+  hasEnabledPaymentAdapter,
+} from "./payment-methods.ts";
 
 export interface PaymentsStatusRecord {
   razorpay: { configured: boolean; keyIdHint: string | null; hasWebhookSecret: boolean };
@@ -21,16 +26,34 @@ const RAZORPAY_KEY_ID = /^rzp_(test|live)_[A-Za-z0-9]{6,}$/;
 export const ONLINE_PAYMENT_AVAILABLE = false;
 
 export interface StorefrontPaymentOptions {
-  cod: { enabled: boolean; feePaise: number };
+  cod: {
+    enabled: boolean;
+    feePaise: number;
+    minOrderPaise?: number | null | undefined;
+    maxOrderPaise?: number | null | undefined;
+  };
   online: { available: boolean };
 }
 
 /** The payment methods a shopper may choose at this store's checkout (no secrets, no permission needed). */
 export async function getStorefrontPaymentOptions(rt: Runtime, tenantId: string): Promise<StorefrontPaymentOptions> {
-  const cfg = await withTenant(rt._db.db, tenantId, (tx) => readStoreConfig(tx));
+  const methods = await withTenant(rt._db.db, tenantId, (tx) => getTenantPaymentMethods(tx, tenantId));
+  const codMethod = methods.find((m) => m.provider === "cod");
+  const codCfg = parseCodPublicConfig(codMethod?.publicConfig);
+  const codEnabled = codMethod ? codMethod.status === "active" : true;
+
+  // Online payment is available only if an active adapter exists in the registry AND the method is active
+  const razorpayMethod = methods.find((m) => m.provider === "razorpay");
+  const onlineAvailable = Boolean(razorpayMethod && razorpayMethod.status === "active" && hasEnabledPaymentAdapter("razorpay"));
+
   return {
-    cod: { enabled: cfg.cod.enabled, feePaise: cfg.cod.feePaise },
-    online: { available: ONLINE_PAYMENT_AVAILABLE },
+    cod: {
+      enabled: codEnabled,
+      feePaise: codCfg.feePaise,
+      minOrderPaise: codCfg.minOrderPaise,
+      maxOrderPaise: codCfg.maxOrderPaise,
+    },
+    online: { available: onlineAvailable },
   };
 }
 

@@ -3,6 +3,7 @@ import {
   bigint,
   boolean,
   index,
+  integer,
   jsonb,
   text,
   timestamp,
@@ -112,3 +113,31 @@ export const refunds = tenantTable(
     }),
   ],
 );
+
+/**
+ * Payment Methods (Settings Phase 5 / SETTINGS-SCHEMA §6.1).
+ * Metadata and merchant-configuration for checkout payment methods.
+ */
+export const paymentMethods = tenantTable(
+  "payment_methods",
+  {
+    id: uuid("id").default(sql`uuidv7()`).primaryKey(),
+    provider: text("provider").notNull(), // 'cod' | 'razorpay'
+    displayName: text("display_name").notNull(),
+    status: text("status").notNull().default("disabled"), // 'disabled' | 'pending_setup' | 'active' | 'unavailable' | 'error'
+    mode: text("mode"), // 'live' | 'test' | null
+    sortOrder: integer("sort_order").notNull().default(0),
+    publicConfig: jsonb("public_config").notNull().default(sql`'{}'::jsonb`),
+    setupState: jsonb("setup_state").notNull().default(sql`'{}'::jsonb`),
+    version: integer("version").notNull().default(1),
+    enabledAt: timestamp("enabled_at", { withTimezone: true }),
+    disabledAt: timestamp("disabled_at", { withTimezone: true }),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().default(sql`now()`),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().default(sql`now()`),
+  },
+  (t) => [
+    unique("payment_methods_tenant_provider_uniq").on(t.tenantId, t.provider),
+    unique("payment_methods_tenant_id_id_uniq").on(t.tenantId, t.id),
+  ],
+);
+

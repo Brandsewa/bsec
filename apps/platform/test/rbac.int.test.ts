@@ -40,6 +40,8 @@ const MIN_ROLE: Record<string, Role | "public"> = {
   "domains.list": "platform_support",
   "plans.list": "platform_support",
   "plans.invoices": "platform_support",
+  "plans.listRequests": "platform_support",
+  "plans.decideRequest": "platform_admin",
   "signups.list": "platform_support",
   "templates.list": "platform_support",
   "templates.get": "platform_support",

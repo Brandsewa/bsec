@@ -169,7 +169,6 @@ import {
   updateTheme,
   updateVariant,
   getTenantSubscription,
-  changeTenantPlan,
   approveStoreSupportSession,
   denyStoreSupportSession,
   getStandingSupportConsent,
@@ -214,6 +213,12 @@ import {
   updateReturnSettings,
   getAdminReturnDetail,
   getAdminReturnStats,
+  listPaymentMethods,
+  updateCodMethod,
+  getPlanAndBilling,
+  listAvailablePlans,
+  requestPlanChange,
+  cancelPlanChangeRequest,
 } from "../src/index.ts";
 
 const PW = { owner: "o_test", rw: "rw_test", platform: "p_test" };
@@ -631,7 +636,7 @@ describe("Generated Isolation Test Suite (M1 Real Postgres 18 Proof)", () => {
           tenantId: tenantB,
           name: "store_admin",
           isSystem: true,
-          permissions: ["staff.manage", "settings.write"],
+          permissions: ["staff.manage", "settings.write", "settings.read", "payments.manage"],
         },
       ]);
 
@@ -1166,22 +1171,55 @@ describe("Generated Isolation Test Suite (M1 Real Postgres 18 Proof)", () => {
 
       // --- M8 Billing & Subscriptions ---
       case "billing.getSubscription":
-        assertPermission(ctx, "settings.write");
+        assertPermission(ctx, "settings.read");
         return await getTenantSubscription(rt, ctx.tenantId);
-      case "billing.changePlan": {
-        assertPermission(ctx, "settings.write");
-        return await changeTenantPlan(rtPlatform, {
-          tenantId: ctx.tenantId,
-          planCode: "growth",
-          interval: "monthly",
-          customerEmail: "admin@alpha.test",
-          provider: {
-            isConfigured: () => true,
-            createSubscription: async () => ({ providerSubscriptionId: "sub_iso_test_123", status: "created" }),
-            cancelSubscription: async () => ({ status: "cancelled" }),
-            verifyWebhookSignature: () => true,
-          },
+
+      // --- Settings Phase 5: Payment Methods Catalogue & COD ---
+      case "paymentMethods.list":
+        return await listPaymentMethods(rt, ctx);
+      case "paymentMethods.updateCod":
+        return await updateCodMethod(rt, ctx, {
+          enabled: true,
+          displayName: "Cash on Delivery",
+          feePaise: 5000,
+          minOrderPaise: 10000,
+          maxOrderPaise: 500000,
         });
+
+      // --- Settings Phase 5: Plan and Billing View & Request Flow ---
+      case "planAndBilling.get":
+        return await getPlanAndBilling(rt, ctx);
+      case "planAndBilling.availablePlans":
+        return await listAvailablePlans(rt, ctx);
+      case "planAndBilling.requestChange": {
+        const plans = await listAvailablePlans(rt, ctx);
+        const target = plans[0];
+        if (!target) throw new Error("No available plans");
+        return await requestPlanChange(rt, asOwner(ctx), {
+          toPlanId: target.id,
+          interval: "monthly",
+          note: "Isolation test request",
+        });
+      }
+      case "planAndBilling.cancelRequest": {
+        // Need an open request to cancel
+        const plans = await listAvailablePlans(rt, ctx);
+        const target = plans[0];
+        if (!target) throw new Error("No available plans");
+        let reqId: string;
+        try {
+          const req = await requestPlanChange(rt, asOwner(ctx), {
+            toPlanId: target.id,
+            interval: "monthly",
+            note: "To cancel",
+          });
+          reqId = req.id;
+        } catch {
+          // If already open, get it from view
+          const view = await getPlanAndBilling(rt, ctx);
+          reqId = view.openPlanChangeRequest!.id;
+        }
+        return await cancelPlanChangeRequest(rt, asOwner(ctx), { id: reqId });
       }
 
       // --- M8 Custom Domains ---
@@ -1747,7 +1785,7 @@ describe("Generated Isolation Test Suite (M1 Real Postgres 18 Proof)", () => {
 
           // Credential writes are owner-only (ADR-020): store_admin's set lacks payments.manage, so prove the
           // denial first, then run the procedure as an owner-level context.
-          const ownerOnly = proc === "payments.saveRazorpay" || proc === "payments.clearRazorpay";
+          const ownerOnly = proc === "payments.saveRazorpay" || proc === "payments.clearRazorpay" || proc === "paymentMethods.updateCod";
           if (ownerOnly) {
             await expect(executeAdminProcedure(proc, rtApp, authCtx!)).rejects.toThrow(/payments\.manage/);
           }

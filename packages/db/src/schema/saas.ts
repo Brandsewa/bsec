@@ -245,3 +245,32 @@ export const exports = tenantTable(
   ],
 );
 
+/**
+ * Plan Change Requests (Settings Phase 5 / SETTINGS-SCHEMA §4, Slice 5D).
+ * Tenant table: isolated to merchant side, read by platform staff through app_platform / BYPASSRLS.
+ */
+export const planChangeRequests = tenantTable(
+  "plan_change_requests",
+  {
+    id: uuid("id").default(sql`uuidv7()`).primaryKey(),
+    requestedBy: uuid("requested_by")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    fromPlanId: uuid("from_plan_id"),
+    toPlanId: uuid("to_plan_id").notNull(),
+    interval: text("interval").notNull(), // 'monthly' | 'yearly'
+    note: text("note"),
+    status: text("status").notNull().default("open"), // 'open' | 'approved' | 'declined' | 'cancelled'
+    decidedBy: uuid("decided_by").references(() => users.id, { onDelete: "set null" }),
+    decidedAt: timestamp("decided_at", { withTimezone: true }),
+    decisionNote: text("decision_note"),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().default(sql`now()`),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().default(sql`now()`),
+  },
+  (t) => [
+    unique("plan_change_requests_tenant_id_id_uniq").on(t.tenantId, t.id),
+    index("plan_change_requests_tenant_status_idx").on(t.tenantId, t.status),
+  ],
+);
+
+

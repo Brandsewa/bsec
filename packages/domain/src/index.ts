@@ -136,5 +136,8 @@ export * from "./platform/system.ts";
 export * from "./platform/catalog-reads.ts";
 export * from "./platform/email-settings.ts";
 export * from "./system/platform-mailer.ts";
+export * from "./admin/payment-methods.ts";
+export * from "./admin/plan-and-billing.ts";
+export * from "./platform/plan-change-requests.ts";
 
 

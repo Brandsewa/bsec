@@ -217,7 +217,6 @@ import {
   getOnboardingProgress,
   dismissOnboardingProgress,
   getTenantSubscription,
-  changeTenantPlan,
   listTenantDomains,
   addCustomDomain,
   verifyCustomDomain,
@@ -231,6 +230,12 @@ import {
   sendPlatformEmail,
   renderEmail,
   hashIpWithSalt,
+  listPaymentMethods,
+  updateCodMethod,
+  getPlanAndBilling,
+  listAvailablePlans,
+  requestPlanChange,
+  cancelPlanChangeRequest,
   type Logger,
   type Runtime,
   type TenantContext,
@@ -613,6 +618,22 @@ export const storeRouter = os.router({
         .handler(({ context, input }) => {
           if (!context.tenantCtx) throw new Error("Missing tenant context");
           return updateCustomerAccountSettings(context.rt, context.tenantCtx, input);
+        }),
+    },
+    paymentMethods: {
+      list: os.admin.paymentMethods.list
+        .use(requireAdmin)
+        .use(requirePermission("settings.read"))
+        .handler(({ context }) => {
+          if (!context.tenantCtx) throw new Error("Missing tenant context");
+          return listPaymentMethods(context.rt, context.tenantCtx);
+        }),
+      updateCod: os.admin.paymentMethods.updateCod
+        .use(requireAdmin)
+        .use(requirePermission("payments.manage"))
+        .handler(({ context, input }) => {
+          if (!context.tenantCtx) throw new Error("Missing tenant context");
+          return updateCodMethod(context.rt, context.tenantCtx, input);
         }),
     },
     featureFlags: {
@@ -1722,6 +1743,7 @@ export const storeRouter = os.router({
     billing: {
       getSubscription: os.admin.billing.getSubscription
         .use(requireAdmin)
+        .use(requirePermission("settings.read"))
         .handler(async ({ context }) => {
           if (!context.tenantCtx) throw new Error("Missing tenant context");
           const data = await getTenantSubscription(context.rt, context.tenantCtx.tenantId);
@@ -1733,7 +1755,6 @@ export const storeRouter = os.router({
                   interval: data.subscription.interval,
                   currentPeriodStart: data.subscription.currentPeriodStart?.toISOString() ?? null,
                   currentPeriodEnd: data.subscription.currentPeriodEnd?.toISOString() ?? null,
-                  provider: data.subscription.provider,
                 }
               : null,
             plan: data.plan
@@ -1759,24 +1780,35 @@ export const storeRouter = os.router({
             daysLeftInTrial: data.daysLeftInTrial,
           };
         }),
-      changePlan: os.admin.billing.changePlan
+    },
+    planAndBilling: {
+      get: os.admin.planAndBilling.get
         .use(requireAdmin)
-        .use(requirePermission("settings.write"))
+        .use(requirePermission("settings.read"))
+        .handler(async ({ context }) => {
+          if (!context.tenantCtx) throw new Error("Missing tenant context");
+          return getPlanAndBilling(context.rt, context.tenantCtx);
+        }),
+      availablePlans: os.admin.planAndBilling.availablePlans
+        .use(requireAdmin)
+        .use(requirePermission("settings.read"))
+        .handler(async ({ context }) => {
+          if (!context.tenantCtx) throw new Error("Missing tenant context");
+          return listAvailablePlans(context.rt, context.tenantCtx);
+        }),
+      requestChange: os.admin.planAndBilling.requestChange
+        .use(requireAdmin)
+        .use(requirePermission("settings.read"))
         .handler(async ({ context, input }) => {
           if (!context.tenantCtx) throw new Error("Missing tenant context");
-          const session = context.session;
-          const userEmail = session?.user?.email ?? "merchant@example.com";
-          const res = await changeTenantPlan(context.rt, {
-            tenantId: context.tenantCtx.tenantId,
-            planCode: input.planCode,
-            interval: input.interval,
-            customerEmail: userEmail,
-          });
-          return {
-            providerSubscriptionId: res.providerSubscriptionId,
-            shortUrl: res.shortUrl ?? undefined,
-            status: res.status,
-          };
+          return requestPlanChange(context.rt, context.tenantCtx, input);
+        }),
+      cancelRequest: os.admin.planAndBilling.cancelRequest
+        .use(requireAdmin)
+        .use(requirePermission("settings.read"))
+        .handler(async ({ context, input }) => {
+          if (!context.tenantCtx) throw new Error("Missing tenant context");
+          return cancelPlanChangeRequest(context.rt, context.tenantCtx, input);
         }),
     },
     domains: {

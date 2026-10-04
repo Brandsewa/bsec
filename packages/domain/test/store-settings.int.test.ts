@@ -24,6 +24,7 @@ import {
   saveRazorpayCredentials,
   setMemberRole,
   updateStoreSettings,
+  updateCodMethod,
   type Runtime,
   type TenantContext,
 } from "../src/index.ts";
@@ -160,20 +161,26 @@ describe("store settings", () => {
 });
 
 describe("Cash on Delivery settings are enforced at checkout", () => {
+  it("rejects cod update through generic updateStoreSettings", async () => {
+    await expect(
+      updateStoreSettings(rt, ctx, { cod: { enabled: true, feePaise: 0 } as never }),
+    ).rejects.toThrow(/Cash on Delivery settings must be updated via admin.paymentMethods.updateCod/);
+  });
+
   it("charges the default fee until the store sets its own, then the configured fee", async () => {
     const withDefault = await order("Karnataka", "cart_fee_default");
-    await updateStoreSettings(rt, ctx, { cod: { enabled: true, feePaise: 0 } });
+    await updateCodMethod(rt, ctx, { enabled: true, feePaise: 0 });
     const noFee = await order("Karnataka", "cart_fee_zero");
-    await updateStoreSettings(rt, ctx, { cod: { enabled: true, feePaise: 7500 } });
+    await updateCodMethod(rt, ctx, { enabled: true, feePaise: 7500 });
     const custom = await order("Karnataka", "cart_fee_custom");
     expect(withDefault.grandTotal - noFee.grandTotal).toBe(5000);
     expect(custom.grandTotal - noFee.grandTotal).toBe(7500);
   });
 
   it("refuses COD orders once the store turns COD off", async () => {
-    await updateStoreSettings(rt, ctx, { cod: { enabled: false, feePaise: 5000 } });
+    await updateCodMethod(rt, ctx, { enabled: false, feePaise: 5000 });
     await expect(order("Karnataka", "cart_cod_off")).rejects.toThrow(/Cash on delivery is not available/);
-    await updateStoreSettings(rt, ctx, { cod: { enabled: true, feePaise: 5000 } });
+    await updateCodMethod(rt, ctx, { enabled: true, feePaise: 5000 });
     await expect(order("Karnataka", "cart_cod_on_again")).resolves.toMatchObject({ success: true });
   });
 });
