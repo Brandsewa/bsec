@@ -26,7 +26,7 @@ Platform staff always had to enrol a TOTP authenticator and confirm a code at ev
 ## Verification
 - Ran: `pnpm typecheck` 15/15, `pnpm lint` 15/15, `pnpm build` 6/6. Tests added: `packages/domain/test/platform-settings.int.test.ts` (5 cases: env defaults incl. `APP_ENV=local`, explicit row wins, owner-only, flag flips + audit, re-arm semantics), `apps/platform/test/http-mfa.int.test.ts` new end-to-end case (password-only sign-in works while off, enrolled user skips the challenge, re-enable refuses password-era sessions, 2 audit rows), `rbac.int.test.ts` MIN_ROLE entries (`settings.get` support, `settings.update` owner), `audit-coverage.int.test.ts` case (`settings.update` → `platform_settings.update`).
 - NOT yet run at the time of writing: `pnpm --filter @bs/domain test:heavy` and the platform suite (run right after this record; results land in the PR description). Browser check of the toggle + password-only login on the local Docker stack happens after the image rebuild.
-- Deployed locally by rebuilding the platform + superadmin images of the `bsecvmm` stack from this worktree (see the VMM change record for the stack).
+- Deployed locally on 2026-10-04 by rebuilding the platform + superadmin images of the `bsecvmm` stack from this worktree. **Later the same day the stack switched to `feat/commerce-page-templates` images for the owner's theme-builder review — that branch does NOT include this toggle, so TOTP is required on the live stack again.** This feature remains on this branch pending merge (see `feat/commerce-page-templates` docs/changes 2026-10-04 hand-off).
 
 ## Docs updated
 - [x] `docs/ARCHITECTURE.md` (hard rules item 7)
