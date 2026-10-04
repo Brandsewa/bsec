@@ -53,12 +53,8 @@
 
 /* the beam: a thin bright core, a soft halo, and a bloom where it lands on the window's top edge */
 .bm-beam { position: absolute; left: var(--bm-beam-x); top: 0; bottom: var(--bm-foot, 8rem); width: 0; pointer-events: none; transform-origin: top; animation: bm-ignite 1500ms var(--bm-ease) 150ms both; }
-.bm-beam-core { position: absolute; left: -1.5px; top: 0; bottom: 0; width: 3px; border-radius: 3px;
-  background: linear-gradient(to bottom, rgb(215 224 255 / 0.55) 0%, rgb(225 232 255 / 0.85) 40%, #fff 80%, #fff 100%); animation: bm-pulse 5.5s ease-in-out infinite; }
 .bm-beam-halo { position: absolute; left: -26px; top: 0; bottom: 0; width: 52px; filter: blur(18px);
   background: linear-gradient(to bottom, rgb(150 160 255 / 0.35) 0%, rgb(160 170 255 / 0.65) 55%, rgb(200 208 255 / 1) 100%); animation: bm-pulse 5.5s ease-in-out infinite; }
-.bm-beam-cone { position: absolute; left: -7rem; bottom: 0; width: 14rem; height: 42%; filter: blur(28px);
-  background: linear-gradient(to top, rgb(150 150 255 / 0.4), transparent 92%); clip-path: polygon(44% 0, 56% 0, 100% 100%, 0 100%); }
 .bm-bloom { position: absolute; left: var(--bm-beam-x); bottom: calc(var(--bm-foot, 8rem) - 7rem); width: min(78rem, 130%); height: 15rem; transform: translateX(-50%); pointer-events: none; filter: blur(8px);
   background: radial-gradient(ellipse 50% 48% at 50% 62%, #fff 0%, rgb(205 215 255 / 0.95) 14%, rgb(130 145 255 / 0.8) 30%, rgb(95 70 235 / 0.45) 52%, transparent 74%); animation: bm-bloom 5.5s ease-in-out infinite; }
 @keyframes bm-ignite { from { transform: scaleY(0); opacity: 0; } 60% { opacity: 1; } to { transform: scaleY(1); opacity: 1; } }

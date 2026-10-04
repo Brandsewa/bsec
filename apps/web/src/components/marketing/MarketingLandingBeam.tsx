@@ -58,9 +58,7 @@ export function MarketingLandingBeam({ plans }: { plans?: LandingPlan[] | undefi
           <Smoke beamX={0.57} />
           <div className="bm-grid" />
           <div className="bm-beam">
-            <div className="bm-beam-cone" />
             <div className="bm-beam-halo" />
-            <div className="bm-beam-core" />
           </div>
           <div className="bm-bloom" />
           <Dust beamX={0.57} foot={544} />
