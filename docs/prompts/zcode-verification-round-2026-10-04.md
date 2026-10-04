@@ -1,5 +1,7 @@
 # ZCode verification round — 2026-10-04 (browser walkthroughs, no product code)
 
+(A fuller, self-contained version for a stand-alone session: `verification-round-full-session.md`.)
+
 You are the tester for this round. Do not change product code. Report defects in a change record (`docs/changes/2026-10-04-zcode-verification-round.md`, "Type: test"): per defect, severity, steps, expected, actual, evidence; plus what you did not test. Local or ephemeral data only; never drive the live store (AGENTS §6). Use your own worktree; stage exact files only.
 
 ## A. Theme builder integration (`integrate/theme-builder`, PR #30, not merged)
