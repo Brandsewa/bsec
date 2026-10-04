@@ -1,5 +1,6 @@
-import { CreditCard, History, Landmark, LayoutDashboard, LifeBuoy, RotateCcw, ShoppingBag, Sparkles, Store, Truck, UserCog } from "lucide-react";
+import { CreditCard, Globe, History, Landmark, LayoutDashboard, LifeBuoy, RotateCcw, ShoppingBag, Sparkles, Store, Truck, UserCog } from "lucide-react";
 import type { ComponentType } from "react";
+import { hasPermission, type StorePermission } from "@bs/auth";
 
 export interface SettingsNavItem {
   id: string;
@@ -36,8 +37,9 @@ export const SETTINGS_NAV_GROUPS: readonly SettingsNavGroup[] = [
     label: "Store",
     items: [
       { id: "store-details", label: "Store details", href: "/settings/store-details", description: "Name, contact, address", icon: Store, perm: "settings.write" },
-      { id: "branding", label: "Branding", href: "/settings/branding", description: "Logo, colours, fonts", icon: Sparkles, perm: "settings.write" },
-      { id: "storefront", label: "Storefront", href: "/settings/storefront", description: "Go live, coming soon, password", icon: Store, perm: "settings.write" },
+      { id: "branding", label: "Branding", href: "/settings/branding", description: "Logo, colours, fonts", icon: Sparkles, perm: "branding.manage" },
+      { id: "storefront", label: "Storefront", href: "/settings/storefront", description: "Go live, coming soon, password", icon: Store, perm: "storefront.manage" },
+      { id: "domains", label: "Domains", href: "/settings/domains", description: "Custom domains and DNS", icon: Globe, perm: "domains.manage" },
     ],
   },
   {
@@ -82,9 +84,10 @@ export const SETTINGS_NAV: readonly SettingsNavItem[] = SETTINGS_NAV_GROUPS.flat
  * (prompt §B: "omitting empty groups after permission filtering").
  */
 export function visibleSettingsGroups(permissions: readonly string[]): readonly SettingsNavGroup[] {
-  return SETTINGS_NAV_GROUPS.map((g) => ({ ...g, items: g.items.filter((i) => !i.perm || permissions.includes(i.perm)) })).filter(
-    (g) => g.items.length > 0,
-  );
+  return SETTINGS_NAV_GROUPS.map((g) => ({
+    ...g,
+    items: g.items.filter((i) => !i.perm || hasPermission(permissions, i.perm as StorePermission)),
+  })).filter((g) => g.items.length > 0);
 }
 
 /** The section that matches the current path best (/settings must not stay lit on /settings/taxes). */

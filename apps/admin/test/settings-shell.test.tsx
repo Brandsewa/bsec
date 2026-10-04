@@ -53,7 +53,15 @@ describe("Settings shell: grouped navigation", () => {
     const noStaff = visibleSettingsGroups(["settings.write"]);
     expect(noStaff.map((g) => g.id)).not.toContain("people");
     // Every visible item passes the permission filter.
-    for (const g of noStaff) for (const i of g.items) expect(i.perm).toBe("settings.write");
+    const { hasPermission } = await import("@bs/auth");
+    for (const g of noStaff) for (const i of g.items) expect(hasPermission(["settings.write"], i.perm as any)).toBe(true);
+
+    const domainsItem = SETTINGS_NAV.find((i) => i.id === "domains");
+    expect(domainsItem).toMatchObject({
+      label: "Domains",
+      href: "/settings/domains",
+      perm: "domains.manage",
+    });
   });
 
   it("nav labels the users route Users with /settings/users path", async () => {
