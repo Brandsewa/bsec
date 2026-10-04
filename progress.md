@@ -106,13 +106,21 @@ Spec: `docs/CUSTOMERS-IMPLEMENTATION-PLAN.md` & `docs/CUSTOMERS-SECTION-FINDINGS
   - Single writer `setMarketingConsent` keeps `marketing_state` and `accepts_marketing` synchronized across all consent touchpoints.
 - [x] **Verification**: `pnpm typecheck` (15/15 passed), `pnpm lint` (15/15 passed), `pnpm build` (6/6 passed), `pnpm docs:check` (ok), `@bs/domain` test:fast (28/28 files, 238 passed), `@bs/admin` test:fast (3/3 files, 25 passed), `@bs/web` test:fast (17/17 files, 163 passed), `@bs/domain` test:heavy (63/63 files, 1190 passed), `@bs/domain` isolation suite (755/755 passed).
 
+## Customers Phase 1 · List, Detail, Import, Delete (2026-10-03)
+
+Spec: `docs/CUSTOMERS-IMPLEMENTATION-PLAN.md` Phase 1 (1A, 1B, 1C) with the ZCode prompt (`docs/prompts/customers-phase1-zcode.md`). Built on `feat/customers-phase-1`; change record `docs/changes/2026-10-03-zcode-customers-phase-1.md`.
+- [x] **Phase 1A (Customers list)**: tabs All/Customers/Guests/Blocked; stats strip from the metrics fragment; marketing-state, store-wide tag and location filters; guest/blocked badges; bulk tag/status with skipped-row reporting; filtered CSV export (subscribers-only default). New procedures `customers.stats/tags/setStatus/setTags`.
+- [x] **Blocked enforcement**: phone-OTP login and storefront checkout now refuse blocked customers (password login and sessions already did); per-store isolation tested end to end.
+- [x] **Metrics fragment rewrite**: per-customer lateral replaced with grouped aggregates after measuring 13.1M buffer hits per list page at 6k customers × 24k orders; identical semantics, 2,448 buffer hits measured.
+- [x] **Phase 1B (Detail and edit)**: editable profile (verification-aware email), staff address CRUD, order history, activity timeline, status with blocked behaviour, marketing card with consent history, tags editor, notes timeline in new `customer_notes` table (migration `0029_customers_phase1`, legacy note migrated idempotently); `setMarketingConsent` refuses non-email channels (Phase 0 follow-up).
+- [x] **Phase 1C (Import and delete)**: CSV import with dry run, error file, >500-row queue (`customers.import`), consent only when the file says so, existing customers updated on name/tags only; delete hard-deletes without orders and anonymises with orders (sessions destroyed, orders kept).
+- [x] **Verification**: typecheck 15/15, lint, build, docs:check, domain fast 238, domain heavy 1,303 (64 files; three documented Windows worker-crash flakes pass alone), web 164, admin 32, isolation 840 (85 new cases). Browser-checked at 1280px and 375px on the local demo store; CSV file upload itself not drivable in the test browser (covered by real-DB tests). Ready for Claude's verification before Phase 2.
+
 ## In flight
 
 One line per piece of work that is started and not merged. Add yours before you start, remove it when merged or abandoned (`AGENTS.md` section 6). Format: `agent · branch · area · since · one-line goal`.
 
 - antigravity · `feat/settings-rebuild-phase-2` · permissions, users & accounts, settings activity · 2026-10-04 · Settings rebuild Phase 2: capability families ADR & check-time aggregate, Users & Accounts route migration, Settings Activity history
-- zcode · `feat/settings-rebuild-phase-0-1` · admin settings shell/overview/store-details, contracts, domain · 2026-10-04 · Settings rebuild Phases 0+1: grouped nav, server-verified Overview, Store Details migration (prompt: docs/prompts/settings-rebuild-phase-0-1.md)
-- antigravity · `feat/customers-phase-0` · customers, db, domain, checkout · 2026-10-03 · Customers Phase 0: truthful metrics, guests, consent record & history
 - claude · `feat/themes-puck` · themes, docs · 2026-10-01 · theme builder follow-ups; agent docs and change log (`docs/changes/`)
 
 ## Returns & Exchanges (Manual Review & Portal) — Complete (2026-10-02)

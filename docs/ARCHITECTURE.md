@@ -201,7 +201,7 @@ Drizzle schema files in `packages/db/src/schema/` (one Postgres database, `publi
 | `catalog.ts` | `media`, `brands`, `locations`, `categories`, `products`, `product_options`, `variants`, `product_media`, `product_categories`, `collections`, `collection_products`, `inventory_levels`, `inventory_movements`, `reviews` T |
 | `inventory-reservations.ts` | `inventory_reservations` T |
 | `cart.ts` | `carts`, `cart_items` T |
-| `customers.ts` | `customers`, `customer_addresses`, `customer_consent_events`, `wishlist_items`, `customer_otps` T |
+| `customers.ts` | `customers`, `customer_notes`, `customer_addresses`, `customer_consent_events`, `wishlist_items`, `customer_otps` T |
 | `orders.ts` | `orders`, `order_items`, `order_events`, `order_notes`, `number_sequences`, `action_tokens` T |
 | `payments.ts` | `payment_intents`, `payment_attempts`, `refunds` T |
 | `shipping.ts` | `fulfillments`, `fulfillment_items`, `tracking_events`, `returns`, `return_items`, `invoices`, `shipping_zones`, `shipping_rates` T |
@@ -253,8 +253,9 @@ Drizzle schema files in `packages/db/src/schema/` (one Postgres database, `publi
 | 0026 | `reviews` | reviews table with RLS, ratings check constraint, store_settings.auto_publish_reviews |
 | 0027 | `product_categories_primary` | product_categories.is_primary column with unique index per product |
 | 0028 | `customers_phase0` | customers is_guest, marketing consent fields, and customer_consent_events table |
+| 0029 | `customers_phase1` | customer_notes table (staff notes timeline); migrates the single customers.note into the first note |
 
-How to write one (expand, migrate, contract; `forceRlsSql`): `docs/migrations.md`. **Never edit an applied migration.** Latest on disk: `0028` (the docs check keeps this list honest).
+How to write one (expand, migrate, contract; `forceRlsSql`): `docs/migrations.md`. **Never edit an applied migration.** Latest on disk: `0029` (the docs check keeps this list honest).
 
 ---
 
@@ -265,7 +266,7 @@ Contracts are the single source of truth (`packages/contracts`); handlers are in
 **`storeContract`** (`@bs/contracts`, mounted in web at `/api`)
 - `system.health`
 - `storefront.*`: `search`, `searchSuggestions`, `cart.{get,addItem,updateItem,removeItem,clear,estimateShipping}`, `newsletter.subscribe`, `status.verifyPassword`
-- `admin.*` (membership + `X-Store-Id`): `support`, `me`, `payments` (Razorpay credentials), `memberships`/`roles`/`invitations`, `settings`, `settingsOverview`, `settingsActivity` (`list`), `orderSettings` (`get`, `update`), `returnSettings` (`get`, `update`), `featureFlags`, `products` (+ `variants`, media attach/detach), `categories`, `collections`, `brands`, `locations`, `reviews`, `inventory`, `media` (R2 presigned upload), `branding`, `themes` (`get`, `update`, `library`, `preview`, `activate`), `pages` (`list`, `get`, `versions`, `blockData`, `create`, `update`, `saveDraft`, `publish`, `rollback`), `menus`, `orders` (list, stats, get, createDraft, notes, cancel, refund, fulfillment, invoice, confirm, advance), `abandonedCheckouts` (stats, list), `returns` (stats, list, get, act), `customers`, `discounts`, `shipping`, `storefront` (status), `onboarding`, `billing`, `domains`
+- `admin.*` (membership + `X-Store-Id`): `support`, `me`, `payments` (Razorpay credentials), `memberships`/`roles`/`invitations`, `settings`, `settingsOverview`, `settingsActivity` (`list`), `orderSettings` (`get`, `update`), `returnSettings` (`get`, `update`), `featureFlags`, `products` (+ `variants`, media attach/detach), `categories`, `collections`, `brands`, `locations`, `reviews`, `inventory`, `media` (R2 presigned upload), `branding`, `themes` (`get`, `update`, `library`, `preview`, `activate`), `pages` (`list`, `get`, `versions`, `blockData`, `create`, `update`, `saveDraft`, `publish`, `rollback`), `menus`, `orders` (list, stats, get, createDraft, notes, cancel, refund, fulfillment, invoice, confirm, advance), `abandonedCheckouts` (stats, list), `returns` (stats, list, get, act), `customers` (list, stats, tags, get, create, update, orders, activity, consent, addresses, notes, status, set tags, import preview/commit, delete), `discounts`, `shipping`, `storefront` (status), `onboarding`, `billing`, `domains`
 
 **Non-oRPC routes in web** (`apps/web/src/app/api/`): `storefront/cart/*`, `storefront/checkout/place-order`, `storefront/customer/*` (OTP request/verify, profile, addresses, logout), `storefront/orders/[token]/return` (+ `/photo`, `/photo/finalize`, `/cancel`), `storefront/reviews` (GET list, POST create), `storefront/address/[token]`, `storefront/unsubscribe/[token]`, `storefront/search/suggestions`, `storefront/status/evaluate`, `webhooks/[provider]`, `webhooks/platform-billing`, `health`, and the catch-all `[[...route]]` that mounts the Hono app (Better Auth at `/api/auth/*`, oRPC).
 
@@ -301,7 +302,7 @@ Theme flow: platform staff build `theme_templates` (draft + published snapshot, 
 
 `packages/db/src/queues.ts` is the queue registry (created by the migrate step, so runtime roles never need DDL). Handlers and schedules: `packages/domain/src/jobs.ts`, started by `apps/worker`.
 
-Queues: `system.ping`, `order.created`, `order.paid`, `order.cod_confirmed`, `order.cancelled`, `reservation.expiry`, `webhook.process`, `idempotency.cleanup`, `fulfillment.created`, `fulfillment.delivered`, `fulfillment.rto`, `return.requested`, `refund.processed`, `cart.abandoned`, `cart.recovery_sweep`, `subscription.trial_expiry_sweep`, `order.preorder_date_changed`, `order.preorder_reminder_sweep`, `order.return_photo_cleanup`, `customers.refresh_metrics`.
+Queues: `system.ping`, `order.created`, `order.paid`, `order.cod_confirmed`, `order.cancelled`, `reservation.expiry`, `webhook.process`, `idempotency.cleanup`, `fulfillment.created`, `fulfillment.delivered`, `fulfillment.rto`, `return.requested`, `refund.processed`, `cart.abandoned`, `cart.recovery_sweep`, `subscription.trial_expiry_sweep`, `order.preorder_date_changed`, `order.preorder_reminder_sweep`, `order.return_photo_cleanup`, `customers.refresh_metrics`, `customers.import` (CSV imports over 500 rows).
 
 Schedules: `reservation.expiry` every minute, `idempotency.cleanup` every 15 min, `cart.recovery_sweep` and `subscription.trial_expiry_sweep` hourly, `order.preorder_reminder_sweep` daily (06:00), `order.return_photo_cleanup` daily (03:00). Email handlers currently send placeholder text (no provider configured; see `progress.md`). Tenant deletion runs in the platform service on a timer (`DELETION_SWEEP_INTERVAL_MS`).
 
