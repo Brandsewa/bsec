@@ -5,10 +5,13 @@ import { useRouter } from "next/navigation";
 
 interface SubdomainAvailabilityCheckerProps {
   platformDomain?: string;
+  /** "block" = Block-Print Bazaar (design 1), "ledger" = Bahi-Khata (design 2). */
+  variant?: "block" | "ledger";
 }
 
 export function SubdomainAvailabilityChecker({
   platformDomain = "bcom.si",
+  variant = "block",
 }: SubdomainAvailabilityCheckerProps) {
   const router = useRouter();
   const [storeName, setStoreName] = useState("");
@@ -72,55 +75,97 @@ export function SubdomainAvailabilityChecker({
     });
   };
 
+  if (variant === "ledger") {
+    return (
+      <div className="w-full max-w-xl">
+        <form onSubmit={handleSubmit} className="bk-paper bk-corners rounded-md p-3 sm:p-4" style={{ ["--bk-m" as string]: "1.1rem" } as React.CSSProperties}>
+          <label className="block">
+            <span className="bk-muted block pb-1 text-[0.85rem] font-semibold uppercase tracking-wider">Name of your firm</span>
+            <span className="flex items-end gap-2 border-b-2 pb-1" style={{ borderColor: "var(--bk-ink)" }}>
+              <input
+                type="text"
+                placeholder="e.g. Kolkata Handlooms"
+                value={storeName}
+                onChange={(e) => handleStoreNameChange(e.target.value)}
+                className="bk-pen min-h-[2.75rem] w-full bg-transparent text-[1.35rem] outline-none placeholder:opacity-50"
+                style={{ color: "var(--bk-ink)" }}
+                autoComplete="off"
+                required
+              />
+              <span className="shrink-0 pb-2 text-sm font-semibold" style={{ color: "var(--bk-ink-soft)" }}>.{platformDomain}</span>
+            </span>
+          </label>
+          <div className="mt-4 flex flex-wrap items-center gap-x-4 gap-y-2">
+            <button
+              type="submit"
+              disabled={!slug || slug.length < 3 || (checkResult !== null && !checkResult.available)}
+              className="bk-btn"
+            >
+              Open my khata
+            </button>
+            <p className="bk-pen min-h-[1.6rem] text-[1.05rem]" style={{ color: "var(--bk-ink)" }} role="status" aria-live="polite">
+              {slug.length >= 3 &&
+                (isChecking ? (
+                  <span className="bk-muted">Checking {slug}.{platformDomain}…</span>
+                ) : checkResult?.available ? (
+                  <span style={{ color: "#1f5a2c" }}>✓ {slug}.{platformDomain} is free</span>
+                ) : checkResult ? (
+                  <span style={{ color: "#9a1f1a" }}>{checkResult.reason || "That name is taken"}</span>
+                ) : null)}
+            </p>
+          </div>
+        </form>
+      </div>
+    );
+  }
+
   return (
-    <div className="w-full max-w-xl mx-auto">
-      <form onSubmit={handleSubmit} className="flex flex-col sm:flex-row gap-3 shadow-lg rounded-2xl bg-white p-2.5 border border-slate-200">
-        <div className="flex-1 flex items-center px-4 py-2 bg-slate-50 rounded-xl border border-slate-200 focus-within:border-emerald-600 focus-within:bg-white transition-all">
+    <div className="w-full max-w-xl">
+      <form
+        onSubmit={handleSubmit}
+        className="bz-cotton flex flex-col gap-3 rounded-2xl p-2.5 sm:flex-row"
+        style={{ boxShadow: "0 18px 34px -18px rgb(0 0 0 / 0.6)" }}
+      >
+        <label className="flex flex-1 items-center rounded-xl px-4 py-1" style={{ background: "rgb(20 28 85 / 0.07)" }}>
+          <span className="sr-only">Store name</span>
           <input
             type="text"
-            placeholder="Enter store name..."
+            placeholder="Your store name"
             value={storeName}
             onChange={(e) => handleStoreNameChange(e.target.value)}
-            className="w-full bg-transparent text-slate-900 placeholder:text-slate-400 font-medium text-base outline-none"
-            aria-label="Store name"
+            className="min-h-[3rem] w-full bg-transparent text-base font-semibold outline-none"
+            style={{ color: "#141c55" }}
+            autoComplete="off"
             required
           />
-          <span className="text-slate-400 font-medium text-sm select-none shrink-0 pl-2">
+          <span className="shrink-0 pl-2 text-sm font-semibold select-none" style={{ color: "#4a5083" }}>
             .{platformDomain}
           </span>
-        </div>
-
+        </label>
         <button
           type="submit"
           disabled={!slug || slug.length < 3 || (checkResult !== null && !checkResult.available)}
-          className="px-6 py-3.5 bg-emerald-600 hover:bg-emerald-700 disabled:bg-slate-300 disabled:cursor-not-allowed text-white font-semibold text-base rounded-xl shadow-md hover:shadow-lg transition-all duration-200 shrink-0 text-center"
+          className="bz-btn sm:min-w-[11rem]"
         >
-          Start Free Trial
+          Start free trial
         </button>
       </form>
 
-      {/* Subdomain status pill */}
-      {slug.length >= 3 && (
-        <div className="mt-3 flex items-center justify-center gap-2 text-sm font-medium">
-          {isChecking ? (
-            <span className="text-slate-500 animate-pulse">Checking {slug}.{platformDomain}...</span>
+      <div className="mt-3 min-h-[2rem] text-[0.95rem] font-medium" role="status" aria-live="polite">
+        {slug.length >= 3 &&
+          (isChecking ? (
+            <span style={{ color: "var(--bz-cotton-dim)" }}>Checking {slug}.{platformDomain}…</span>
           ) : checkResult?.available ? (
-            <span className="text-emerald-700 bg-emerald-50 border border-emerald-200 px-3 py-1 rounded-full flex items-center gap-1.5">
-              <svg className="w-4 h-4 text-emerald-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M5 13l4 4L19 7" />
-              </svg>
-              <strong>{slug}.{platformDomain}</strong> is available!
+            <span className="inline-flex items-center gap-2 rounded-full px-3 py-1" style={{ background: "var(--bz-indigo-deep)", color: "var(--bz-turmeric)" }}>
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="m5 12.5 4.5 4.5L19 7.5" /></svg>
+              <strong>{slug}.{platformDomain}</strong> is available
             </span>
           ) : checkResult ? (
-            <span className="text-amber-800 bg-amber-50 border border-amber-200 px-3 py-1 rounded-full flex items-center gap-1.5">
-              <svg className="w-4 h-4 text-amber-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M6 18L18 6M6 6l12 12" />
-              </svg>
-              {checkResult.reason || "Subdomain is unavailable"}
+            <span className="inline-flex items-center gap-2 rounded-full px-3 py-1" style={{ background: "var(--bz-indigo-deep)", color: "var(--bz-madder-bright)" }}>
+              {checkResult.reason || "That name is not available"}
             </span>
-          ) : null}
-        </div>
-      )}
+          ) : null)}
+      </div>
     </div>
   );
 }

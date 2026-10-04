@@ -1,0 +1,124 @@
+/*
+ * bcom.si marketing landing, design 2: "The Bahi-Khata".
+ * World: the red book-cloth ledger every Indian trader keeps. Ruled yellowed paper with double red margin lines,
+ * a brass-cornered spine, entries written in the shopkeeper's pen, rubber stamps, and a rate card.
+ * Scoped under .bk; nothing here touches the storefront or the other design.
+ */
+
+.bk {
+  --bk-cloth: #86191b;
+  --bk-cloth-deep: #5a0f12;
+  --bk-paper: #efe2a8;
+  --bk-paper-dim: #e3d38f;
+  --bk-ink: #1c1b2b; /* blue-black ink */
+  --bk-ink-soft: #4a4560;
+  --bk-rule: rgb(78 60 22 / 0.3);
+  --bk-margin: #b02a24;
+  --bk-brass: #c9992e;
+  --bk-brass-deep: #8d6a1a;
+  --bk-line: 2rem; /* one ruled line; type and rows sit on this rhythm */
+  --bk-m: 3.4rem; /* left margin before the double rule */
+  --bk-ease: cubic-bezier(0.16, 1, 0.3, 1);
+  --bk-display: var(--font-bk-display), ui-serif, Georgia, serif;
+  --bk-body: var(--font-bk-body), ui-sans-serif, system-ui, sans-serif;
+  --bk-pen: var(--font-bk-pen), "Segoe Print", cursive;
+
+  position: relative;
+  min-height: 100vh;
+  overflow-x: clip;
+  color: #f6ecc4;
+  font-family: var(--bk-body);
+  font-size: 1.0625rem;
+  line-height: 1.65;
+  background-color: var(--bk-cloth);
+  /* book-cloth weave */
+  background-image:
+    repeating-linear-gradient(0deg, rgb(0 0 0 / 0.14) 0 1px, transparent 1px 3px),
+    repeating-linear-gradient(90deg, rgb(0 0 0 / 0.12) 0 1px, transparent 1px 3px),
+    radial-gradient(ellipse 80% 40% at 50% 0, rgb(255 255 255 / 0.07), transparent 70%);
+  -webkit-font-smoothing: antialiased;
+}
+@media (max-width: 640px) { .bk { --bk-m: 2.1rem; --bk-line: 1.85rem; } }
+
+:root:has(.bk) { scrollbar-color: var(--bk-brass) #3e0a0c; scroll-behavior: smooth; scroll-padding-top: 5rem; }
+.bk ::selection { background: var(--bk-brass); color: var(--bk-cloth-deep); }
+.bk :focus-visible { outline: 3px solid var(--bk-brass); outline-offset: 3px; border-radius: 4px; }
+.bk input { caret-color: var(--bk-margin); }
+.bk-num { font-variant-numeric: tabular-nums lining-nums; }
+.bk-display { font-family: var(--bk-display); font-weight: 400; letter-spacing: -0.012em; line-height: 1.04; text-wrap: balance; }
+.bk-pen { font-family: var(--bk-pen); }
+.bk-h2 { font-family: var(--bk-display); font-weight: 400; letter-spacing: -0.012em; line-height: 1.06; text-wrap: balance; font-size: clamp(2rem, 4.4vw, 3.4rem); }
+
+/* ---------- Ruled paper with a double red margin ---------- */
+.bk-paper {
+  position: relative;
+  color: var(--bk-ink);
+  background-color: var(--bk-paper);
+  background-image:
+    linear-gradient(to right, transparent calc(var(--bk-m) - 0.34rem), var(--bk-margin) calc(var(--bk-m) - 0.34rem), var(--bk-margin) calc(var(--bk-m) - 0.34rem + 1.5px), transparent calc(var(--bk-m) - 0.34rem + 1.5px), transparent calc(var(--bk-m) - 0.1rem), var(--bk-margin) calc(var(--bk-m) - 0.1rem), var(--bk-margin) calc(var(--bk-m) - 0.1rem + 1.5px), transparent calc(var(--bk-m) - 0.1rem + 1.5px)),
+    repeating-linear-gradient(to bottom, transparent 0, transparent calc(var(--bk-line) - 1px), var(--bk-rule) calc(var(--bk-line) - 1px), var(--bk-rule) var(--bk-line));
+  box-shadow: 0 1px 0 rgb(255 255 255 / 0.5) inset, 0 30px 50px -28px rgb(0 0 0 / 0.7), 0 3px 0 rgb(0 0 0 / 0.12);
+  border-radius: 6px;
+}
+.bk-paper .bk-in { padding-left: calc(var(--bk-m) + 0.9rem); padding-right: 1.25rem; }
+.bk-muted { color: var(--bk-ink-soft); }
+.bk-soft { color: #e7d6a0; } /* secondary text on cloth, tinted from the paper colour */
+
+/* Brass corners, as on a bound account book. */
+.bk-corners::before, .bk-corners::after {
+  content: ""; position: absolute; width: 2.2rem; height: 2.2rem; pointer-events: none;
+  background: linear-gradient(135deg, #e9c867, var(--bk-brass) 45%, var(--bk-brass-deep));
+  clip-path: polygon(0 0, 100% 0, 0 100%);
+}
+.bk-corners::before { top: -3px; left: -3px; }
+.bk-corners::after { bottom: -3px; right: -3px; transform: rotate(180deg); }
+
+/* ---------- Controls ---------- */
+.bk-btn {
+  display: inline-flex; align-items: center; justify-content: center; gap: 0.5rem; white-space: nowrap;
+  min-height: 3rem; padding: 0.7rem 1.5rem; border: 2px solid var(--bk-brass-deep); border-radius: 6px; cursor: pointer;
+  font-family: var(--bk-display); font-size: 1.1rem; text-decoration: none;
+  background: var(--bk-cloth); color: #f6ecc4;
+  box-shadow: 0 0 0 3px var(--bk-cloth), 0 0 0 4px var(--bk-brass), 0 8px 14px -8px rgb(0 0 0 / 0.6);
+  transition: transform 160ms var(--bk-ease), background-color 160ms, box-shadow 160ms;
+}
+.bk-btn:hover { background: #9a2022; transform: translateY(-1px); }
+.bk-btn:active { transform: translateY(2px); box-shadow: 0 0 0 3px var(--bk-cloth), 0 0 0 4px var(--bk-brass); }
+.bk-btn[disabled] { background: #6a5a5a; border-color: #6a5a5a; color: #cfc3a0; box-shadow: none; cursor: not-allowed; transform: none; }
+.bk-btn-gilt { background: var(--bk-brass); color: var(--bk-cloth-deep); border-color: var(--bk-brass-deep); box-shadow: 0 0 0 3px var(--bk-cloth), 0 0 0 4px var(--bk-brass), 0 8px 14px -8px rgb(0 0 0 / 0.6); }
+.bk-btn-gilt:hover { background: #d8a937; }
+.bk-btn-sm { min-height: 2.6rem; padding: 0.4rem 1rem; font-size: 1rem; }
+.bk-link { color: inherit; text-decoration: underline; text-decoration-color: var(--bk-brass); text-decoration-thickness: 2px; text-underline-offset: 0.22em; }
+
+/* ---------- Motion: ink written into the book, one stamp thump ---------- */
+@keyframes bk-write { from { clip-path: inset(-0.2em 100% -0.2em 0); } to { clip-path: inset(-0.2em 0 -0.2em 0); } }
+.bk-written { display: inline-block; animation: bk-write 900ms steps(28, end) both; animation-delay: var(--d, 0ms); }
+@keyframes bk-thump { 0% { transform: rotate(-12deg) scale(1.9); opacity: 0; } 55% { transform: rotate(-9deg) scale(0.94); opacity: 1; } 100% { transform: rotate(-9deg) scale(1); opacity: 0.92; } }
+.bk-stamp { animation: bk-thump 520ms var(--bk-ease) 1500ms both; }
+@keyframes bk-row-in { from { clip-path: inset(0 0 100% 0); background: #f6d77a; } to { clip-path: inset(0 0 0 0); background: transparent; } }
+.bk-row-new { animation: bk-row-in 800ms var(--bk-ease) both; }
+@keyframes bk-underline { from { stroke-dashoffset: 1; } to { stroke-dashoffset: 0; } }
+.bk-pen-underline path { stroke-dasharray: 1; stroke-dashoffset: 0; }
+.bk-armed .bk-rv:not(.is-in) .bk-pen-underline path { stroke-dashoffset: 1; }
+.bk-rv.is-in .bk-pen-underline path { animation: bk-underline 900ms var(--bk-ease) 250ms both; }
+
+/* Section reveal: written in from the left, like a line being entered. */
+.bk-rv { transition: opacity 500ms var(--bk-ease), clip-path 900ms var(--bk-ease), transform 800ms var(--bk-ease); }
+.bk-armed .bk-rv:not(.is-in) { opacity: 0; clip-path: inset(0 99% 0 0); transform: translateX(-10px); }
+.bk-rv.is-in { clip-path: inset(0 0 0 0); }
+
+.bk-faq summary { cursor: pointer; list-style: none; }
+.bk-faq summary::-webkit-details-marker { display: none; }
+.bk-faq[open] .bk-tick { transform: rotate(90deg); }
+.bk-tick { transition: transform 260ms var(--bk-ease); }
+
+.bk-tape { position: absolute; top: -0.6rem; left: 50%; width: 5rem; height: 1.4rem; transform: translateX(-50%) rotate(-2deg); background: rgb(201 153 46 / 0.55); box-shadow: 0 1px 2px rgb(0 0 0 / 0.25); }
+.bk-swatch { transition: transform 480ms var(--bk-ease), box-shadow 480ms var(--bk-ease); }
+.bk-swatch:hover, .bk-swatch:focus-within { transform: translateY(-8px) rotate(0.8deg); box-shadow: 0 28px 36px -24px rgb(0 0 0 / 0.6); }
+
+@media (prefers-reduced-motion: reduce) {
+  :root:has(.bk) { scroll-behavior: auto; }
+  .bk *, .bk *::before, .bk *::after { animation: none !important; transition: none !important; }
+  .bk-armed .bk-rv:not(.is-in) { opacity: 1; clip-path: none; transform: none; }
+  .bk-stamp { opacity: 0.92; transform: rotate(-9deg); }
+}

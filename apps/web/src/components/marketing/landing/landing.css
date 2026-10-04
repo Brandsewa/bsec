@@ -1,0 +1,182 @@
+/*
+ * bcom.si marketing landing: "Block-Print Bazaar".
+ * World: indigo-dyed cotton, hand-carved wooden blocks, resist print in cotton white, madder red and turmeric.
+ * Everything is scoped under .bz so the storefront and signup styles are untouched.
+ */
+
+.bz {
+  --bz-indigo: #141c55;
+  --bz-indigo-deep: #0d1340;
+  --bz-indigo-lift: #1f2a7a;
+  --bz-cotton: #f1e9d6;
+  --bz-cotton-dim: #b9bde0; /* secondary text on indigo, tinted from the ground hue */
+  --bz-madder: #b8301f; /* fills that carry cotton text (5.0:1) */
+  --bz-madder-bright: #ee6a52; /* red used as text/ink on indigo */
+  --bz-turmeric: #f2b22d;
+  --bz-ease: cubic-bezier(0.16, 1, 0.3, 1);
+  --bz-display: var(--font-bz-display), ui-sans-serif, system-ui, sans-serif;
+  --bz-body: var(--font-bz-body), ui-sans-serif, system-ui, sans-serif;
+
+  /* Printed tiles: the carved motifs, authored as SVG and repeated like a block repeat. */
+  --bz-tile-jaal: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='56' height='56' viewBox='0 0 56 56'%3E%3Cpath d='M28 0 56 28 28 56 0 28Z' fill='none' stroke='%23f1e9d6' stroke-opacity='.07' stroke-width='1.4'/%3E%3Ccircle cx='28' cy='28' r='2.4' fill='%23f2b22d' fill-opacity='.4'/%3E%3Ccircle cx='0' cy='0' r='2' fill='%23f1e9d6' fill-opacity='.1'/%3E%3Ccircle cx='56' cy='0' r='2' fill='%23f1e9d6' fill-opacity='.1'/%3E%3Ccircle cx='0' cy='56' r='2' fill='%23f1e9d6' fill-opacity='.1'/%3E%3Ccircle cx='56' cy='56' r='2' fill='%23f1e9d6' fill-opacity='.1'/%3E%3C/svg%3E");
+  --bz-tile-jaal-ink: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='56' height='56' viewBox='0 0 56 56'%3E%3Cpath d='M28 0 56 28 28 56 0 28Z' fill='none' stroke='%23141c55' stroke-opacity='.07' stroke-width='1.4'/%3E%3Ccircle cx='28' cy='28' r='2.4' fill='%23b8301f' fill-opacity='.3'/%3E%3C/svg%3E");
+  --bz-tile-booti: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='72' height='72' viewBox='0 0 72 72'%3E%3Cg transform='translate(36 36)' fill='%23f1e9d6' fill-opacity='.09'%3E%3Cellipse rx='3.6' ry='11'/%3E%3Cellipse rx='3.6' ry='11' transform='rotate(45)'/%3E%3Cellipse rx='3.6' ry='11' transform='rotate(90)'/%3E%3Cellipse rx='3.6' ry='11' transform='rotate(135)'/%3E%3Ccircle r='3' fill='%23f2b22d' fill-opacity='.6'/%3E%3C/g%3E%3C/svg%3E");
+  --bz-tile-zigzag: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='28' height='14' viewBox='0 0 28 14'%3E%3Cpath d='M0 14 7 0l7 14 7-14 7 14' fill='none' stroke='%23f2b22d' stroke-width='2' stroke-linejoin='round'/%3E%3C/svg%3E");
+  --bz-grain: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='180' height='180'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.85' numOctaves='2' stitchTiles='stitch'/%3E%3CfeColorMatrix values='0 0 0 0 1 0 0 0 0 1 0 0 0 0 1 0 0 0 .6 0'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
+
+  position: relative;
+  min-height: 100vh;
+  overflow-x: clip;
+  background: var(--bz-indigo);
+  color: var(--bz-cotton);
+  font-family: var(--bz-body);
+  font-size: 1.0625rem;
+  line-height: 1.6;
+  text-rendering: optimizeLegibility;
+  -webkit-font-smoothing: antialiased;
+}
+
+/* Browser surfaces that are not drawn by us still carry the design. */
+:root:has(.bz) {
+  scrollbar-color: var(--bz-turmeric) #0d1340;
+  scroll-behavior: smooth;
+  scroll-padding-top: 5rem;
+}
+.bz ::selection { background: var(--bz-turmeric); color: var(--bz-indigo-deep); }
+.bz :focus-visible { outline: 3px solid var(--bz-turmeric); outline-offset: 3px; border-radius: 6px; }
+.bz input { caret-color: var(--bz-turmeric); }
+.bz a { text-underline-offset: 0.2em; }
+.bz-num { font-variant-numeric: tabular-nums; }
+
+/* Fine ink grain over the whole cloth. */
+.bz::before {
+  content: "";
+  position: fixed;
+  inset: 0;
+  z-index: 1;
+  pointer-events: none;
+  background-image: var(--bz-grain);
+  opacity: 0.06;
+  mix-blend-mode: overlay;
+}
+.bz > * { position: relative; z-index: 2; }
+
+.bz-display { font-family: var(--bz-display); font-weight: 700; letter-spacing: -0.03em; line-height: 0.98; text-wrap: balance; }
+.bz-h2 { font-family: var(--bz-display); font-weight: 700; letter-spacing: -0.028em; line-height: 1.02; text-wrap: balance; font-size: clamp(2rem, 4.6vw, 3.6rem); }
+.bz-lede { color: var(--bz-cotton-dim); max-width: 62ch; }
+.bz-muted { color: var(--bz-cotton-dim); }
+
+/* Carved-block button: the primary action presses into the cloth. */
+.bz-btn {
+  display: inline-flex; align-items: center; justify-content: center; gap: 0.5rem; white-space: nowrap;
+  min-height: 3rem; padding: 0.75rem 1.5rem;
+  background: var(--bz-madder); color: var(--bz-cotton);
+  font-family: var(--bz-display); font-weight: 700; font-size: 1.0625rem; letter-spacing: -0.01em;
+  border-radius: 10px; border: 0; cursor: pointer; text-decoration: none;
+  box-shadow: 0 6px 0 -1px #6f1a10, 0 14px 24px -10px rgb(0 0 0 / 0.5);
+  transition: transform 160ms var(--bz-ease), box-shadow 160ms var(--bz-ease), background-color 160ms;
+}
+.bz-btn:hover { background: #c9392a; transform: translateY(-1px); }
+.bz-btn:active { transform: translateY(5px); box-shadow: 0 1px 0 -1px #6f1a10, 0 6px 12px -8px rgb(0 0 0 / 0.5); }
+.bz-btn[disabled] { background: #3a4284; color: #9aa0cf; cursor: not-allowed; box-shadow: none; transform: none; }
+.bz-btn-sm { min-height: 2.75rem; padding: 0.5rem 1rem; font-size: 0.95rem; }
+.bz-btn-quiet {
+  align-items: center; white-space: nowrap; min-height: 2.75rem; padding: 0.5rem 1rem; border-radius: 10px;
+  color: var(--bz-cotton); font-weight: 600; text-decoration: none; transition: background-color 160ms;
+}
+.bz-btn-quiet:hover { background: rgb(241 233 214 / 0.1); }
+
+/* Cotton panels are the undyed stripes of the cloth: quiet, legible, and they carry the product UI. */
+.bz-cotton { background: var(--bz-cotton); color: var(--bz-indigo); }
+.bz-cotton .bz-muted, .bz-cotton .bz-lede, .bz-panel-cotton .bz-muted, .bz-panel-cotton .bz-lede { color: #3f4577; }
+
+/* ---------- Hero motion: one orchestrated moment ---------- */
+@keyframes bz-ink {
+  from { clip-path: inset(0 100% 0 0); transform: translateY(0.14em); opacity: 0.2; }
+  to { clip-path: inset(0 0 0 0); transform: translateY(0); opacity: 1; }
+}
+.bz-word { display: inline-block; animation: bz-ink 820ms var(--bz-ease) both; animation-delay: calc(var(--i, 0) * 90ms + 120ms); }
+
+@keyframes bz-stamp-drop {
+  0% { transform: translate(34px, -150px) rotate(8deg); opacity: 0; }
+  14% { opacity: 1; }
+  58% { transform: translate(0, 0) rotate(0deg); }
+  66% { transform: translate(0, 6px) rotate(0deg) scale(0.97, 0.94); }
+  100% { transform: translate(40px, -190px) rotate(-6deg); opacity: 0; }
+}
+@keyframes bz-imprint {
+  0% { opacity: 0; transform: scale(0.94); filter: blur(3px); }
+  100% { opacity: 1; transform: scale(1); filter: blur(0); }
+}
+.bz-stamp-block { animation: bz-stamp-drop 1700ms cubic-bezier(0.5, 0, 0.2, 1) 500ms both; will-change: transform, opacity; }
+.bz-imprint { animation: bz-imprint 520ms var(--bz-ease) 1180ms both; }
+
+/* New orders are printed into the sample admin: the row is pressed in from the block's edge. */
+@keyframes bz-row-in {
+  from { clip-path: inset(0 0 100% 0); opacity: 0; transform: translateY(-8px); background: #f4d9a0; }
+  to { clip-path: inset(0 0 0 0); opacity: 1; transform: translateY(0); background: transparent; }
+}
+.bz-row-new { animation: bz-row-in 760ms var(--bz-ease) both; }
+
+/* ---------- Scroll thread: a running stitch through the whole page ---------- */
+.bz-thread { position: fixed; left: 14px; top: 0; bottom: 0; width: 10px; z-index: 3; pointer-events: none; display: none; }
+@media (min-width: 1100px) { .bz-thread { display: block; } }
+.bz-thread-line {
+  position: absolute; inset: 0 auto 0 4px; width: 2px;
+  background: repeating-linear-gradient(to bottom, var(--bz-turmeric) 0 9px, transparent 9px 17px);
+  transform-origin: top; opacity: 0.9;
+}
+.bz-thread-ghost {
+  position: absolute; inset: 0 auto 0 4px; width: 2px;
+  background: repeating-linear-gradient(to bottom, rgb(241 233 214 / 0.16) 0 9px, transparent 9px 17px);
+}
+@keyframes bz-draw { from { transform: scaleY(0); } to { transform: scaleY(1); } }
+@supports (animation-timeline: scroll()) {
+  .bz-thread-line { animation: bz-draw linear both; animation-timeline: scroll(root); }
+}
+
+/* ---------- Section reveals (armed by JS only after mount; content is visible by default) ---------- */
+.bz-armed .bz-rv:not(.is-in) { opacity: 0; }
+.bz-rv { transition: opacity 600ms var(--bz-ease), transform 800ms var(--bz-ease), clip-path 900ms var(--bz-ease); }
+.bz-armed .bz-rv[data-rv="print"]:not(.is-in) { clip-path: inset(0 99% 0 0); transform: translateX(-12px); }
+.bz-armed .bz-rv[data-rv="unroll"]:not(.is-in) { clip-path: inset(0 0 99% 0); transform: translateY(-14px); }
+.bz-armed .bz-rv[data-rv="rise"]:not(.is-in) { transform: translateY(28px) rotate(0.6deg); }
+.bz-rv.is-in { clip-path: inset(0 0 0 0); }
+
+/* ---------- Panels and swatches ---------- */
+.bz-panel { position: relative; border-radius: 18px; padding: clamp(1.25rem, 2.4vw, 2rem); transition: transform 420ms var(--bz-ease); }
+.bz-panel:hover { transform: translateY(-4px) rotate(-0.35deg); }
+.bz-panel-indigo { background: var(--bz-indigo-lift); background-image: var(--bz-tile-jaal); }
+.bz-panel-deep { background: var(--bz-indigo-deep); }
+.bz-panel-cotton { background: var(--bz-cotton); color: var(--bz-indigo); background-image: var(--bz-tile-jaal-ink); }
+.bz-panel-madder { background: var(--bz-madder); color: var(--bz-cotton); background-image: var(--bz-tile-booti); }
+.bz-border-zigzag { height: 14px; background-image: var(--bz-tile-zigzag); background-repeat: repeat-x; opacity: 0.9; }
+
+.bz-soon {
+  border: 2px dashed rgb(241 233 214 / 0.35); border-radius: 14px; padding: 1rem 1.1rem;
+  background: repeating-linear-gradient(135deg, transparent 0 9px, rgb(241 233 214 / 0.04) 9px 10px);
+}
+
+/* Theme swatches lift like bolts of cloth taken from the shelf. */
+.bz-swatch { transition: transform 520ms var(--bz-ease), box-shadow 520ms var(--bz-ease); transform-origin: 50% 100%; }
+.bz-swatch:hover, .bz-swatch:focus-within { transform: translateY(-10px) rotate(-1.2deg); box-shadow: 0 30px 40px -24px rgb(0 0 0 / 0.65); }
+
+.bz-faq summary { cursor: pointer; list-style: none; }
+.bz-faq summary::-webkit-details-marker { display: none; }
+.bz-faq[open] .bz-plus { transform: rotate(45deg); }
+.bz-plus { transition: transform 280ms var(--bz-ease); }
+
+@media (prefers-reduced-motion: reduce) {
+  :root:has(.bz) { scroll-behavior: auto; }
+  .bz *, .bz *::before, .bz *::after { animation: none !important; transition: none !important; }
+  .bz-thread-line { transform: none; }
+  .bz-armed .bz-rv:not(.is-in) { opacity: 1; clip-path: none; transform: none; }
+  .bz-stamp-block { display: none; }
+}
+
+/* The accent word is printed in turmeric with a madder under-print slightly out of register, as on real block work. */
+.bz-accent { position: relative; color: var(--bz-turmeric); }
+.bz-accent::after {
+  content: attr(data-text); position: absolute; left: 0; top: 0; z-index: -1;
+  color: var(--bz-madder-bright); transform: translate(0.03em, 0.03em); opacity: 0.7;
+}
