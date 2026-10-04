@@ -1675,7 +1675,14 @@ describe("Generated Isolation Test Suite (M1 Real Postgres 18 Proof)", () => {
             "discounts.write",
           ]);
 
-          const result = await executeAdminProcedure(proc, rtApp, authCtx!);
+          // Credential writes are owner-only (ADR-020): store_admin's set lacks payments.manage, so prove the
+          // denial first, then run the procedure as an owner-level context.
+          const ownerOnly = proc === "payments.saveRazorpay" || proc === "payments.clearRazorpay";
+          if (ownerOnly) {
+            await expect(executeAdminProcedure(proc, rtApp, authCtx!)).rejects.toThrow(/payments\.manage/);
+          }
+          const runCtx = ownerOnly ? { ...authCtx!, permissions: [...authCtx!.permissions, "payments.manage"] } : authCtx!;
+          const result = await executeAdminProcedure(proc, rtApp, runCtx);
           expect(result).toBeDefined();
         });
       });

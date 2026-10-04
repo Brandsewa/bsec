@@ -202,7 +202,7 @@ describe("Users & Accounts page (/settings/users)", () => {
     expect(Route.options.beforeLoad).toBeDefined();
     let redirectedTo: { options?: { to?: string; replace?: boolean } } | undefined;
     try {
-      Route.options.beforeLoad?.({} as Parameters<NonNullable<typeof Route.options.beforeLoad>>[0]);
+      Route.options.beforeLoad?.({} as never);
     } catch (err: unknown) {
       redirectedTo = err as { options?: { to?: string; replace?: boolean } };
     }

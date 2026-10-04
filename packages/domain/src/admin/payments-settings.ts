@@ -71,7 +71,7 @@ export async function saveRazorpayCredentials(
   ctx: TenantContext,
   input: { keyId: string; keySecret: string; webhookSecret?: string | undefined },
 ): Promise<PaymentsStatusRecord> {
-  assertPermission(ctx, "settings.write");
+  assertPermission(ctx, "payments.manage");
   if (!RAZORPAY_KEY_ID.test(input.keyId)) {
     throw new Error("Bad Request: Razorpay key id should look like rzp_test_XXXX or rzp_live_XXXX");
   }
@@ -108,7 +108,7 @@ export async function saveRazorpayCredentials(
 }
 
 export async function clearRazorpayCredentials(rt: Runtime, ctx: TenantContext): Promise<PaymentsStatusRecord> {
-  assertPermission(ctx, "settings.write");
+  assertPermission(ctx, "payments.manage");
   await withTenant(rt._db.db, ctx.tenantId, (tx) =>
     tx
       .delete(schema.tenantSecrets)

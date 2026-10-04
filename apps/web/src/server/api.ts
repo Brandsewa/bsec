@@ -438,14 +438,14 @@ export const storeRouter = os.router({
         }),
       saveRazorpay: os.admin.payments.saveRazorpay
         .use(requireAdmin)
-        .use(requirePermission("settings.write"))
+        .use(requirePermission("payments.manage"))
         .handler(({ context, input }) => {
           if (!context.tenantCtx) throw new Error("Missing tenant context");
           return saveRazorpayCredentials(context.rt, context.tenantCtx, input);
         }),
       clearRazorpay: os.admin.payments.clearRazorpay
         .use(requireAdmin)
-        .use(requirePermission("settings.write"))
+        .use(requirePermission("payments.manage"))
         .handler(({ context }) => {
           if (!context.tenantCtx) throw new Error("Missing tenant context");
           return clearRazorpayCredentials(context.rt, context.tenantCtx);

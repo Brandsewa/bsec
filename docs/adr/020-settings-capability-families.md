@@ -74,3 +74,12 @@ Per `AGENTS.md` and `packages/domain/src/context.ts`, platform support sessions 
 - Backward compatibility is preserved for existing stores and roles holding `settings.write` without requiring database migration scripts.
 - `store_admin` can safely manage users and view settings activity, but cannot configure or view payment gateway secrets (`payments.manage`).
 - New procedures (like `settingsActivity.list`) enforce least-privilege using `audit.read`.
+
+## Enforcement status (added at verification, 2026-10-04)
+
+The families are *defined* for every area, but only enforced where a procedure has been moved to them:
+- `audit.read`: `settingsActivity.list` (route and domain service).
+- `payments.manage`: `payments.saveRazorpay` and `payments.clearRazorpay` (route and domain service); the Payments page hides the credential form without it. `payments.get` (status only, no secrets) stays on `settings.write` because the create-order screen reads it.
+- `staff.manage`: unchanged.
+- Every other settings procedure still checks `settings.write`. Each later Settings phase moves its own procedures to its family as it is rebuilt, then the contract phase removes the aggregate fallback.
+- COD fee/enable is saved through the generic `settings.update` (`settings.write`), so COD is not owner-only yet. Splitting it is part of Phase 5 (Payments).
