@@ -19,6 +19,7 @@ import { MarketingLandingPage } from "@/components/marketing/MarketingLandingPag
 import type { LandingPlan } from "@/components/marketing/landing/content.ts";
 import { MarketingLandingBahi } from "@/components/marketing/MarketingLandingBahi.tsx";
 import { MarketingLandingRiso } from "@/components/marketing/MarketingLandingRiso.tsx";
+import { MarketingLandingNeo } from "@/components/marketing/MarketingLandingNeo.tsx";
 import { DesignSwitcher } from "@/components/marketing/DesignSwitcher.tsx";
 import { designSwitcherEnabled, resolveDesign } from "@/components/marketing/designs.ts";
 
@@ -161,7 +162,7 @@ export default async function HomePage({ searchParams }: { searchParams?: Promis
     const design = resolveDesign(fromQuery);
     return (
       <>
-        {design === "3" ? <MarketingLandingRiso plans={plans} /> : design === "2" ? <MarketingLandingBahi plans={plans} /> : <MarketingLandingPage plans={plans} />}
+        {design === "4" ? <MarketingLandingNeo plans={plans} /> : design === "3" ? <MarketingLandingRiso plans={plans} /> : design === "2" ? <MarketingLandingBahi plans={plans} /> : <MarketingLandingPage plans={plans} />}
         {designSwitcherEnabled() ? <DesignSwitcher current={design} /> : null}
       </>
     );

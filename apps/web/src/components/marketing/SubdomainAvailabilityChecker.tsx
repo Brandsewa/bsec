@@ -5,8 +5,8 @@ import { useRouter } from "next/navigation";
 
 interface SubdomainAvailabilityCheckerProps {
   platformDomain?: string;
-  /** "block" = Block-Print Bazaar (design 1), "ledger" = Bahi-Khata (design 2), "riso" = Riso Zine (design 3). */
-  variant?: "block" | "ledger" | "riso";
+  /** "block" = Block-Print Bazaar (design 1), "ledger" = Bahi-Khata (design 2), "riso" = Riso Zine (design 3), "neo" = Neubrutalist Grid (design 4). */
+  variant?: "block" | "ledger" | "riso" | "neo";
 }
 
 export function SubdomainAvailabilityChecker({
@@ -74,6 +74,46 @@ export function SubdomainAvailabilityChecker({
       router.push(`/signup?slug=${encodeURIComponent(slug)}&storeName=${encodeURIComponent(storeName || slug)}`);
     });
   };
+
+  if (variant === "neo") {
+    return (
+      <div className="w-full max-w-xl">
+        <form onSubmit={handleSubmit} className="nb-box flex flex-col gap-3 p-3 sm:flex-row sm:items-center">
+          <label className="nb-flat flex flex-1 items-center gap-2 bg-[var(--nb-bg)] px-3">
+            <span className="sr-only">Store name</span>
+            <input
+              type="text"
+              placeholder="Your store name"
+              value={storeName}
+              onChange={(e) => handleStoreNameChange(e.target.value)}
+              className="min-h-[3rem] w-full bg-transparent text-lg font-bold outline-none placeholder:opacity-45"
+              style={{ color: "var(--nb-ink)" }}
+              autoComplete="off"
+              required
+            />
+            <span className="shrink-0 text-sm font-bold">.{platformDomain}</span>
+          </label>
+          <button
+            type="submit"
+            disabled={!slug || slug.length < 3 || (checkResult !== null && !checkResult.available)}
+            className="nb-btn nb-btn-pink"
+          >
+            Start free trial
+          </button>
+        </form>
+        <p className="mt-3 min-h-[2rem] text-[0.98rem] font-bold" role="status" aria-live="polite">
+          {slug.length >= 3 &&
+            (isChecking ? (
+              <span className="nb-flat bg-white px-2 py-0.5">Checking {slug}.{platformDomain}…</span>
+            ) : checkResult?.available ? (
+              <span className="nb-flat nb-l px-2 py-0.5">{slug}.{platformDomain} is available</span>
+            ) : checkResult ? (
+              <span className="nb-flat nb-p px-2 py-0.5">{checkResult.reason || "That name is taken"}</span>
+            ) : null)}
+        </p>
+      </div>
+    );
+  }
 
   if (variant === "riso") {
     return (

@@ -13,7 +13,7 @@ export const MARKETING_DESIGNS: readonly MarketingDesign[] = [
   { id: "1", label: "Home 1", note: "Block-Print Bazaar (indigo cloth, carved blocks)", built: true },
   { id: "2", label: "Home 2", note: "The Bahi-Khata (red ledger, ruled paper)", built: true },
   { id: "3", label: "Home 3", note: "Riso Zine (spot inks, overprint, halftone)", built: true },
-  { id: "4", label: "Home 4", note: "Neubrutalist Grid (not built yet)", built: false },
+  { id: "4", label: "Home 4", note: "Neubrutalist Grid (outlines, hard shadows, solids)", built: true },
 ];
 
 export const DEFAULT_DESIGN = "1";

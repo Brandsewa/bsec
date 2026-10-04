@@ -1,0 +1,79 @@
+/*
+ * bcom.si landing, design 4: "Neubrutalist Grid".
+ * World: heavy black outlines, hard offset shadows and flat solid colour on one strict grid; every control is a
+ * physical click. Hard shadows are this world's depth system (a chosen neubrutalist world, not a default). Scoped under .nb.
+ */
+.nb {
+  --nb-bg: #fffbea;
+  --nb-ink: #111111;
+  --nb-yellow: #ffd23f;
+  --nb-pink: #ff6f9c;
+  --nb-blue: #4a7cff;
+  --nb-lime: #bdf53d;
+  --nb-b: 3px; /* outline weight, one value everywhere */
+  --nb-s: 6px; /* shadow offset, one value everywhere */
+  --nb-ease: cubic-bezier(0.2, 0.9, 0.2, 1);
+  --nb-display: var(--font-nb-display), ui-sans-serif, system-ui, sans-serif;
+  --nb-body: var(--font-nb-body), ui-sans-serif, system-ui, sans-serif;
+
+  position: relative; min-height: 100vh; overflow-x: clip;
+  background: var(--nb-bg); color: var(--nb-ink);
+  font-family: var(--nb-body); font-size: 1.0625rem; line-height: 1.55; -webkit-font-smoothing: antialiased;
+}
+:root:has(.nb) { scrollbar-color: var(--nb-ink) var(--nb-yellow); scroll-behavior: smooth; scroll-padding-top: 5.5rem; }
+.nb ::selection { background: var(--nb-ink); color: var(--nb-yellow); }
+.nb :focus-visible { outline: 4px solid var(--nb-blue); outline-offset: 3px; }
+.nb input { caret-color: var(--nb-ink); }
+.nb-num { font-variant-numeric: tabular-nums lining-nums; }
+
+.nb-display { font-family: var(--nb-display); font-weight: 900; letter-spacing: -0.04em; line-height: 0.96; text-wrap: balance; }
+.nb-h2 { font-family: var(--nb-display); font-weight: 900; letter-spacing: -0.035em; line-height: 1; text-wrap: balance; font-size: clamp(2rem, 4.6vw, 3.5rem); }
+
+/* Surfaces: outline + hard shadow. */
+.nb-box { border: var(--nb-b) solid var(--nb-ink); box-shadow: var(--nb-s) var(--nb-s) 0 var(--nb-ink); background: #fff; }
+.nb-flat { border: var(--nb-b) solid var(--nb-ink); }
+.nb-y { background: var(--nb-yellow); } .nb-p { background: var(--nb-pink); } .nb-bl { background: var(--nb-blue); color: #fff; } .nb-l { background: var(--nb-lime); }
+.nb-hl { background: var(--nb-yellow); padding: 0 0.12em; box-decoration-break: clone; -webkit-box-decoration-break: clone; border: 0; }
+.nb-hl-p { background: var(--nb-pink); } .nb-hl-l { background: var(--nb-lime); }
+
+/* Buttons: resting offset shadow; on press the block travels into it and the shadow collapses. */
+.nb-btn {
+  display: inline-flex; align-items: center; justify-content: center; gap: 0.5rem; white-space: nowrap;
+  min-height: 3rem; padding: 0.65rem 1.4rem; cursor: pointer; text-decoration: none;
+  font-family: var(--nb-display); font-weight: 800; font-size: 1rem; letter-spacing: -0.02em;
+  background: var(--nb-yellow); color: var(--nb-ink); border: var(--nb-b) solid var(--nb-ink);
+  box-shadow: var(--nb-s) var(--nb-s) 0 var(--nb-ink);
+  transition: transform 90ms var(--nb-ease), box-shadow 90ms var(--nb-ease), background-color 120ms;
+}
+.nb-btn:hover { transform: translate(-2px, -2px); box-shadow: calc(var(--nb-s) + 2px) calc(var(--nb-s) + 2px) 0 var(--nb-ink); }
+.nb-btn:active { transform: translate(var(--nb-s), var(--nb-s)); box-shadow: 0 0 0 var(--nb-ink); }
+.nb-btn-pink { background: var(--nb-pink); } .nb-btn-blue { background: var(--nb-blue); color: #fff; } .nb-btn-lime { background: var(--nb-lime); }
+.nb-btn[disabled] { background: #e4e0cf; color: #77735f; cursor: not-allowed; transform: none; box-shadow: 3px 3px 0 #77735f; border-color: #77735f; }
+.nb-btn-sm { min-height: 2.6rem; padding: 0.35rem 1rem; box-shadow: 4px 4px 0 var(--nb-ink); }
+
+.nb-cell { transition: transform 110ms var(--nb-ease), box-shadow 110ms var(--nb-ease); }
+.nb-cell:hover { transform: translate(-3px, -3px); box-shadow: calc(var(--nb-s) + 3px) calc(var(--nb-s) + 3px) 0 var(--nb-ink); }
+
+/* Snappy motion only: stepped translate-in, a ticking counter, a press. */
+@keyframes nb-pop { 0% { transform: translate(-10px, 10px); opacity: 0; box-shadow: 0 0 0 var(--nb-ink); } 60% { opacity: 1; } 100% { transform: none; opacity: 1; } }
+.nb-pop { animation: nb-pop 420ms steps(5, end) both; animation-delay: var(--d, 0ms); }
+.nb-rv { transition: transform 260ms steps(5, end), opacity 200ms steps(3, end); }
+.nb-armed .nb-rv:not(.is-in) { opacity: 0; transform: translate(-14px, 14px); }
+@keyframes nb-blink { 50% { background: var(--nb-lime); } }
+.nb-live { animation: nb-blink 1.4s steps(1, end) infinite; }
+@keyframes nb-row { from { transform: translateX(-24px); opacity: 0; background: var(--nb-lime); } to { transform: none; opacity: 1; background: transparent; } }
+.nb-row-new { animation: nb-row 420ms steps(6, end) both; }
+@keyframes nb-ticker { to { transform: translateX(-50%); } }
+.nb-ticker-track { display: flex; width: max-content; animation: nb-ticker 34s linear infinite; }
+.nb-ticker:hover .nb-ticker-track { animation-play-state: paused; }
+
+.nb-faq summary { cursor: pointer; list-style: none; }
+.nb-faq summary::-webkit-details-marker { display: none; }
+.nb-faq[open] .nb-sign { background: var(--nb-pink); }
+.nb-faq[open] .nb-sign-v { display: none; }
+
+@media (prefers-reduced-motion: reduce) {
+  :root:has(.nb) { scroll-behavior: auto; }
+  .nb *, .nb *::before, .nb *::after { animation: none !important; transition: none !important; }
+  .nb-armed .nb-rv:not(.is-in) { opacity: 1; transform: none; }
+}
