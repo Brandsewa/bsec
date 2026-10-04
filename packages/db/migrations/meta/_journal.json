@@ -232,6 +232,13 @@
       "when": 1792020000000,
       "tag": "0032_theme_previews",
       "breakpoints": true
+    },
+    {
+      "idx": 33,
+      "version": "7",
+      "when": 1792030000000,
+      "tag": "0033_settings_phase4",
+      "breakpoints": true
     }
   ]
 }

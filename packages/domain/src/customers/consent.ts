@@ -1,3 +1,4 @@
+import { createHash } from "node:crypto";
 import { eq, and } from "drizzle-orm";
 import { schema, withTenant, type Db } from "@bs/db";
 import type { Runtime } from "../runtime.ts";
@@ -20,6 +21,7 @@ export interface SetMarketingConsentInput {
   source: MarketingConsentSource;
   channel?: "email" | "sms" | undefined;
   ip?: string | undefined;
+  textVersion?: string | undefined;
   actorType?: "customer" | "staff" | "system" | undefined;
   actorId?: string | null | undefined;
 }
@@ -129,6 +131,8 @@ export async function setMarketingConsent(
     const actorType = input.actorType ?? (ctx.actor?.type ?? "customer");
     const actorId = input.actorId ?? (ctx.actor && "userId" in ctx.actor ? ctx.actor.userId : null);
 
+    const ipHash = input.ip ? createHash("sha256").update(`${tenantId}:${input.ip}`).digest("hex") : null;
+
     const [eventRow] = await d
       .insert(schema.customerConsentEvents)
       .values({
@@ -140,6 +144,8 @@ export async function setMarketingConsent(
         actorType,
         actorId: actorId ?? null,
         ip: input.ip ?? null,
+        textVersion: input.textVersion ?? null,
+        ipHash,
         at: now,
       })
       .returning({ id: schema.customerConsentEvents.id });

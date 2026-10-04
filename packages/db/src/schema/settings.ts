@@ -31,6 +31,7 @@ export const storeSettings = tenantTable(
     orderPrefix: text("order_prefix").notNull().default("#"),
     social: jsonb("social"),
     checkout: jsonb("checkout"),
+    orderSettings: jsonb("order_settings"),
     notifications: jsonb("notifications"),
     returnSettings: jsonb("return_settings"),
     autoPublishReviews: boolean("auto_publish_reviews").notNull().default(false),
@@ -106,5 +107,28 @@ export const seoSettings = tenantTable(
       name: "seo_settings_default_og_image_media_fk",
       onDelete: "set null",
     }),
+  ],
+);
+
+/**
+ * Customer account settings (PLAN §5.2 / Settings Phase 4).
+ * Controls login methods, self-service returns/cancellation, and sign-in links visibility.
+ */
+export const customerAccountSettings = tenantTable(
+  "customer_account_settings",
+  {
+    id: uuid("id").default(sql`uuidv7()`).primaryKey(),
+    showSignInLinks: boolean("show_sign_in_links").notNull().default(true),
+    emailPasswordEnabled: boolean("email_password_enabled").notNull().default(true),
+    phoneOtpEnabled: boolean("phone_otp_enabled").notNull().default(true),
+    allowSelfServeReturns: boolean("allow_self_serve_returns").notNull().default(true),
+    allowSelfServeCancellation: boolean("allow_self_serve_cancellation").notNull().default(false),
+    version: integer("version").notNull().default(1),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().default(sql`now()`),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().default(sql`now()`),
+  },
+  (t) => [
+    unique("customer_account_settings_tenant_id_uniq").on(t.tenantId),
+    unique("customer_account_settings_tenant_id_id_uniq").on(t.tenantId, t.id),
   ],
 );

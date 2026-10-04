@@ -2,6 +2,7 @@ import { createHash, randomInt } from "node:crypto";
 import { and, eq, gt, isNull, sql } from "drizzle-orm";
 import { type Db, customerOtps, customers, withTenant } from "@bs/db";
 import { createCustomerSession } from "./session.ts";
+import { readCustomerAccountSettingsInternal } from "../admin/customer-account-settings.ts";
 
 export interface RequestOtpResult {
   success: boolean;
@@ -33,6 +34,11 @@ export async function requestCustomerOtp(
   tenantId: string,
   phone: string,
 ): Promise<RequestOtpResult> {
+  const acctSettings = await readCustomerAccountSettingsInternal(db, tenantId);
+  if (!acctSettings.phoneOtpEnabled) {
+    throw new Error("Phone OTP sign-in is disabled for this store");
+  }
+
   const cleanPhone = phone.trim().replace(/\D/g, "");
   // Generate 6 digit OTP
   const rawOtp = String(randomInt(100000, 999999));
@@ -63,6 +69,11 @@ export async function verifyCustomerOtp(
   otp: string,
   meta: { ip?: string | undefined; userAgent?: string | undefined } = {},
 ): Promise<VerifyOtpResult> {
+  const acctSettings = await readCustomerAccountSettingsInternal(db, tenantId);
+  if (!acctSettings.phoneOtpEnabled) {
+    throw new Error("Phone OTP sign-in is disabled for this store");
+  }
+
   const cleanPhone = phone.trim().replace(/\D/g, "");
   const providedHash = hashOtp(otp);
 

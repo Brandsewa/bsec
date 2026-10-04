@@ -143,6 +143,7 @@ Plan: `docs/SETTINGS-REBUILD-PLAN.md`, `SETTINGS-REMAINING-PHASES`; records `202
 
 One line per piece of work that is started and not merged. Add yours before you start, remove it when merged or abandoned (`AGENTS.md` section 6). Format: `agent · branch · area · since · one-line goal`.
 
+- antigravity · `feat/settings-rebuild-phase-4` · settings (checkout, customer accounts, orders) · 2026-10-04 · Settings Phase 4 rebuild (ready to verify)
 - antigravity · `feat/settings-rebuild-phase-3` · settings (branding, storefront, domains) · 2026-10-04 · Settings Phase 3 rebuild (ready to verify)
 
 ## Returns & Exchanges (Manual Review & Portal) — Complete (2026-10-02)

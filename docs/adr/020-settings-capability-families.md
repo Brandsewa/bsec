@@ -75,7 +75,7 @@ Per `AGENTS.md` and `packages/domain/src/context.ts`, platform support sessions 
 - `store_admin` can safely manage users and view settings activity, but cannot configure or view payment gateway secrets (`payments.manage`).
 - New procedures (like `settingsActivity.list`) enforce least-privilege using `audit.read`.
 
-## Enforcement status (updated at Phase 3, 2026-10-04)
+## Enforcement status (updated at Phase 4, 2026-10-05)
 
 The families are *defined* for every area, and enforced where procedures have been migrated:
 - `audit.read`: `settingsActivity.list` (route and domain service).
@@ -83,7 +83,9 @@ The families are *defined* for every area, and enforced where procedures have be
 - `branding.manage`: `branding.update` and `branding.publish` (route and domain services `updateBrandSettings` and `publishBrandSettings` with media slot validation and audit diffs). `branding.get` enforces `settings.read`.
 - `storefront.manage`: `storefront.updateStatus` (route and domain service `updateStoreStatus` with sanitized audit diffs). `storefront.getStatus` enforces `settings.read`.
 - `domains.manage`: `domains.add`, `domains.verify`, `domains.setPrimary`, and `domains.remove` (routes and domain services `addCustomDomain`, `verifyCustomDomain`, `setPrimaryDomain`, `removeCustomDomain` with audit logging). `domains.list` enforces `settings.read`.
-- `settings.read`: non-sensitive getters across branding, storefront, and domains enforce `settings.read`.
+- `checkout.manage`: `checkoutSettings.update` and `customerAccountSettings.update` (routes and domain services `updateCheckoutSettings` and `updateCustomerAccountSettings` with stale-write protection, phone/COD invariant guards, and non-lockout guards).
+- `orders.settings.manage`: `orderSettings.update` (route and domain service `updateOrderSettings` controlling stock hold duration and minimum order value).
+- `settings.read`: non-sensitive getters across branding, storefront, domains, checkout, and order settings enforce `settings.read`.
 - `staff.manage`: unchanged.
 - Every other settings procedure still checks `settings.write`. Each later Settings phase moves its own procedures to its family as it is rebuilt, then the contract phase removes the aggregate fallback.
 - COD fee/enable is saved through the generic `settings.update` (`settings.write`), so COD is not owner-only yet. Splitting it is part of Phase 5 (Payments).

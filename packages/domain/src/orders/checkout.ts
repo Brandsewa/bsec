@@ -13,6 +13,7 @@ import {
   tenants,
   variants,
   withTenant,
+  schema,
   QUEUE_NAMES,
 } from "@bs/db";
 import type { Runtime } from "../runtime.ts";
@@ -26,6 +27,9 @@ import { getTenantShippingRates } from "./shipping-rates.ts";
 import { withIdempotencyKey } from "../system/idempotency.ts";
 import { isFeatureEnabled, FeatureDisabledError } from "../features.ts";
 import { readStoreConfig } from "../admin/store-config.ts";
+import { parseCheckoutSettings } from "../admin/checkout-config.ts";
+import { parseOrderProcessingConfig } from "../admin/order-settings-config.ts";
+import { setMarketingConsent } from "../customers/consent.ts";
 import { trackSoftQuotaUsage } from "../system/quotas.ts";
 import { isCheckoutAllowed } from "../system/tenant-lifecycle.ts";
 
@@ -33,7 +37,7 @@ export interface PlaceOrderInput {
   cartToken: string;
   idempotencyKey?: string | undefined;
   email: string;
-  phone: string;
+  phone?: string | undefined;
   fullName: string;
   addressLine1: string;
   addressLine2?: string | undefined;
@@ -46,6 +50,7 @@ export interface PlaceOrderInput {
   paymentMethod: "cod" | "razorpay" | "online";
   notes?: string | undefined;
   customerId?: string | undefined;
+  marketingConsent?: boolean | undefined;
 }
 
 export interface PlaceOrderResult {
@@ -135,6 +140,29 @@ export async function placeOrder(
       throw new Error("Cash on delivery is not available for this store");
     }
     const codFee = isCod ? storeConfig.cod.feePaise : 0;
+
+    const [stRow] = await tx
+      .select({
+        checkout: schema.storeSettings.checkout,
+        orderSettings: schema.storeSettings.orderSettings,
+      })
+      .from(schema.storeSettings)
+      .where(eq(schema.storeSettings.tenantId, tenantId))
+      .limit(1);
+
+    const checkoutSettings = parseCheckoutSettings(stRow?.checkout);
+    const orderSettings = parseOrderProcessingConfig(stRow?.orderSettings);
+
+    // Guest checkout enforcement
+    if (!checkoutSettings.guestCheckout && !input.customerId) {
+      throw new Error("Guest checkout is not permitted for this store. Please sign in to place an order.");
+    }
+
+    // Phone required enforcement
+    if (checkoutSettings.phoneRequired && (!input.phone || !input.phone.trim())) {
+      throw new Error("Phone number is required to complete checkout");
+    }
+
     // The same function the cart and checkout pages use, so the total shown is the total charged.
     const pricing = priceOrder({
       subtotal,
@@ -143,6 +171,15 @@ export async function placeOrder(
       discount: cart.discount ? { type: cart.discount.type, discountAmount: cart.discount.amount } : null,
     });
     const { shippingTotal, grandTotal, discountTotal } = pricing;
+
+    // Minimum order value enforcement (on server-computed goods total after discount)
+    const goodsTotal = Math.max(0, subtotal - (discountTotal ?? 0));
+    if (orderSettings.minimumOrderPaise > 0 && goodsTotal < orderSettings.minimumOrderPaise) {
+      const shortfallPaise = orderSettings.minimumOrderPaise - goodsTotal;
+      throw new Error(
+        `Order total (₹${(goodsTotal / 100).toFixed(2)}) is below the minimum required order amount of ₹${(orderSettings.minimumOrderPaise / 100).toFixed(2)}. Please add ₹${(shortfallPaise / 100).toFixed(2)} more to your cart.`
+      );
+    }
 
     // 3. Find default inventory location for tenant
     const [loc] = await tx
@@ -203,6 +240,7 @@ export async function placeOrder(
       await reserveInventory(tx, tenantId, reserveItems, {
         orderId,
         cartId: cart.id,
+        ttlMinutes: orderSettings.stockHoldMinutes,
       });
     }
 
@@ -308,6 +346,29 @@ export async function placeOrder(
       }
     }
 
+    // 5c. Record marketing consent if opted in (Settings Phase 4 / DPDP Compliance)
+    if (input.marketingConsent && effectiveCustomerId && checkoutSettings.marketingEmail.enabled) {
+      await setMarketingConsent(
+        rt,
+        {
+          tenantId,
+          storeStatus: "live",
+          actor: { type: "customer", customerId: effectiveCustomerId },
+          roles: [],
+          permissions: [],
+          requestId: crypto.randomUUID(),
+        },
+        {
+          customerId: effectiveCustomerId,
+          state: "subscribed",
+          source: "checkout",
+          channel: "email",
+          textVersion: checkoutSettings.marketingEmail.label,
+        },
+        tx,
+      );
+    }
+
     // 6. Insert Order
     await tx.insert(orders).values({
       id: orderId,
@@ -315,7 +376,7 @@ export async function placeOrder(
       number: seq.formatted,
       customerId: effectiveCustomerId,
       email: input.email,
-      phone: input.phone,
+      phone: input.phone ?? "",
       currency: "INR",
       status: "pending",
       paymentStatus: isCod ? "cod_pending" : "pending",

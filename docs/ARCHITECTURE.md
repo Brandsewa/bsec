@@ -208,7 +208,7 @@ Drizzle schema files in `packages/db/src/schema/` (one Postgres database, `publi
 | `marketing.ts` | `newsletter_subscribers`, `discounts`, `discount_redemptions` T |
 | `content.ts` | `themes`, `pages`, `page_versions`, `menus` T |
 | `branding.ts` | `brand_settings` T |
-| `settings.ts` | `store_settings` (including `return_settings` JSONB, `auto_publish_reviews`), `store_status`, `seo_settings` T |
+| `settings.ts` | `store_settings` (including `return_settings` JSONB, `order_settings` JSONB, `auto_publish_reviews`), `customer_account_settings`, `store_status`, `seo_settings` T |
 | `search.ts` | `search_queries` T |
 | `system.ts` | `webhook_inbox`, `idempotency_keys`, `email_log` |
 | `tenant-secrets.ts` | `tenant_secrets` T |
@@ -257,8 +257,9 @@ Drizzle schema files in `packages/db/src/schema/` (one Postgres database, `publi
 | 0030 | `customers_segments` | customer_segments and customer_segment_members tables (Customers Phase 2) |
 | 0031 | `theme_template_archive` | `theme_templates.archived_at` (library draft / published / archived states) |
 | 0032 | `theme_previews` | `theme_previews`: short-lived shareable snapshots of a theme draft (`/preview/<code>`); the web role can only read it |
+| 0033 | `settings_phase4` | `customer_account_settings` table (RLS), `store_settings.order_settings` JSONB, `customer_consent_events.text_version`/`ip_hash` |
 
-How to write one (expand, migrate, contract; `forceRlsSql`): `docs/migrations.md`. **Never edit an applied migration.** Latest on disk: `0030` (the docs check keeps this list honest).
+How to write one (expand, migrate, contract; `forceRlsSql`): `docs/migrations.md`. **Never edit an applied migration.** Latest on disk: `0033` (the docs check keeps this list honest).
 
 ---
 

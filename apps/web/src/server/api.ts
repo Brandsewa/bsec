@@ -132,6 +132,10 @@ import {
   createAdminDraftOrder,
   getOrderSettings,
   updateOrderSettings,
+  getCheckoutSettings,
+  updateCheckoutSettings,
+  getCustomerAccountSettings,
+  updateCustomerAccountSettings,
   addAdminOrderNote,
   cancelAdminOrder,
   refundAdminOrder,
@@ -566,17 +570,49 @@ export const storeRouter = os.router({
     orderSettings: {
       get: os.admin.orderSettings.get
         .use(requireAdmin)
-        .use(requirePermission("settings.write"))
+        .use(requirePermission("settings.read"))
         .handler(({ context }) => {
           if (!context.tenantCtx) throw new Error("Missing tenant context");
           return getOrderSettings(context.rt, context.tenantCtx);
         }),
       update: os.admin.orderSettings.update
         .use(requireAdmin)
-        .use(requirePermission("settings.write"))
+        .use(requirePermission("orders.settings.manage"))
         .handler(({ context, input }) => {
           if (!context.tenantCtx) throw new Error("Missing tenant context");
           return updateOrderSettings(context.rt, context.tenantCtx, input);
+        }),
+    },
+    checkoutSettings: {
+      get: os.admin.checkoutSettings.get
+        .use(requireAdmin)
+        .use(requirePermission("settings.read"))
+        .handler(({ context }) => {
+          if (!context.tenantCtx) throw new Error("Missing tenant context");
+          return getCheckoutSettings(context.rt, context.tenantCtx);
+        }),
+      update: os.admin.checkoutSettings.update
+        .use(requireAdmin)
+        .use(requirePermission("checkout.manage"))
+        .handler(({ context, input }) => {
+          if (!context.tenantCtx) throw new Error("Missing tenant context");
+          return updateCheckoutSettings(context.rt, context.tenantCtx, input);
+        }),
+    },
+    customerAccountSettings: {
+      get: os.admin.customerAccountSettings.get
+        .use(requireAdmin)
+        .use(requirePermission("settings.read"))
+        .handler(({ context }) => {
+          if (!context.tenantCtx) throw new Error("Missing tenant context");
+          return getCustomerAccountSettings(context.rt, context.tenantCtx);
+        }),
+      update: os.admin.customerAccountSettings.update
+        .use(requireAdmin)
+        .use(requirePermission("checkout.manage"))
+        .handler(({ context, input }) => {
+          if (!context.tenantCtx) throw new Error("Missing tenant context");
+          return updateCustomerAccountSettings(context.rt, context.tenantCtx, input);
         }),
     },
     featureFlags: {

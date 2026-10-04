@@ -652,6 +652,9 @@ export async function getOrderReturnsByToken(rt: Runtime, tenantId: string, toke
     const { readReturnSettings } = await import("../admin/return-settings.ts");
     const settings = await readReturnSettings(tx, tenantId);
 
+    const { readCustomerAccountSettingsInternal } = await import("../admin/customer-account-settings.ts");
+    const accountSettings = await readCustomerAccountSettingsInternal(tx, tenantId);
+
     const items = (await getReturnableItems(tx, tenantId, orderId)).map((i) => ({
       id: i.id,
       title: i.productTitle,
@@ -667,7 +670,7 @@ export async function getOrderReturnsByToken(rt: Runtime, tenantId: string, toke
 
     return {
       orderId,
-      canRequest: settings.acceptReturns && order.status === "delivered" && items.some((i) => i.returnable > 0),
+      canRequest: accountSettings.allowSelfServeReturns && settings.acceptReturns && order.status === "delivered" && items.some((i) => i.returnable > 0),
       acceptReturns: settings.acceptReturns,
       allowExchanges: settings.allowExchanges,
       reasons: isReturnPhotoStorageConfigured()
@@ -708,6 +711,12 @@ export async function requestReturnByToken(
     items: Array<{ orderItemId: string; quantity: number }>;
   },
 ) {
+  const { readCustomerAccountSettingsInternal } = await import("../admin/customer-account-settings.ts");
+  const accountSettings = await withTenant(rt._db.db, ctx.tenantId, (tx) => readCustomerAccountSettingsInternal(tx, ctx.tenantId));
+  if (!accountSettings.allowSelfServeReturns) {
+    throw new Error("Precondition: Self-service returns are disabled for this store");
+  }
+
   const orderId = await withTenant(rt._db.db, ctx.tenantId, (tx) => orderIdForToken(tx, ctx.tenantId, input.token));
   if (!orderId) throw new Error("Not Found: This order link is not valid any more");
   return requestReturn(rt, ctx, {
@@ -718,5 +727,94 @@ export async function requestReturnByToken(
     customerComment: input.customerComment,
     photos: input.photos,
     items: input.items,
+  });
+}
+
+/**
+ * A shopper cancels their order using the secure order-view link/token.
+ * Allowed only when allowSelfServeCancellation is enabled, order is not fulfilled/shipped,
+ * and payment is unpaid/pending/COD-pending.
+ */
+export async function cancelOrderByToken(
+  rt: Runtime,
+  tenantId: string,
+  token: string,
+  input?: { reason?: string | undefined },
+) {
+  const { readCustomerAccountSettingsInternal } = await import("../admin/customer-account-settings.ts");
+  const accountSettings = await withTenant(rt._db.db, tenantId, (tx) => readCustomerAccountSettingsInternal(tx, tenantId));
+  if (!accountSettings.allowSelfServeCancellation) {
+    throw new Error("Precondition: Self-service order cancellation is disabled for this store");
+  }
+
+  return await withTenant(rt._db.db, tenantId, async (tx) => {
+    const orderId = await orderIdForToken(tx, tenantId, token);
+    if (!orderId) throw new Error("Not Found: This order link is not valid any more");
+
+    const order = await loadOrder(tx, tenantId, orderId);
+
+    if (order.status === "cancelled") {
+      throw new Error("Precondition: Order is already cancelled");
+    }
+    if (["fulfilled", "delivered", "returned"].includes(order.status)) {
+      throw new Error(`Precondition: Cannot cancel an order that is ${order.status}`);
+    }
+
+    const shippedStatuses = [
+      "shipped",
+      "partially_shipped",
+      "picked_up",
+      "in_transit",
+      "out_for_delivery",
+      "delivered",
+      "rto",
+      "rto_delivered",
+    ];
+    if (shippedStatuses.includes(order.fulfillmentStatus)) {
+      throw new Error("Precondition: Cannot cancel an order that is already shipped or fulfilled");
+    }
+
+    const cancellablePaymentStatuses = ["pending", "unpaid", "cod_pending", "failed"];
+    if (order.paymentStatus && !cancellablePaymentStatuses.includes(order.paymentStatus)) {
+      throw new Error(`Precondition: Cannot cancel an order with payment status '${order.paymentStatus}'`);
+    }
+
+    const customerCtx: TenantContext = {
+      tenantId,
+      storeStatus: "live",
+      actor: order.customerId ? { type: "customer", customerId: order.customerId } : { type: "anonymous" },
+      roles: [],
+      permissions: [],
+      requestId: crypto.randomUUID(),
+    };
+
+    const cancelReason = input?.reason?.trim() || "Cancelled by customer";
+
+    const txRt = { ...rt, _db: { db: tx } } as unknown as Runtime;
+    await transitionOrder(
+      txRt,
+      customerCtx,
+      orderId,
+      {
+        type: "order.cancel",
+        reason: cancelReason,
+      },
+      tx,
+    );
+
+    await tx.insert(schema.auditLogs).values({
+      tenantId,
+      actorType: "customer",
+      actorId: order.customerId ?? null,
+      action: "orders.cancel",
+      targetType: "order",
+      targetId: orderId,
+      diff: {
+        before: { status: order.status, paymentStatus: order.paymentStatus },
+        after: { status: "cancelled", cancelReason },
+      },
+    });
+
+    return { success: true as const, orderId, status: "cancelled" as const };
   });
 }

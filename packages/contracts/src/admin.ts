@@ -264,6 +264,8 @@ export const OrderSettings = z.object({
   padding: z.number().int().min(3).max(8),
   nextValue: z.number().int().min(1),
   currentNextValue: z.number().int().min(1),
+  stockHoldMinutes: z.number().int().min(5).max(120).default(30),
+  minimumOrderPaise: z.number().int().min(0).max(10_000_00).default(0),
 });
 export type OrderSettings = z.infer<typeof OrderSettings>;
 
@@ -271,8 +273,79 @@ export const UpdateOrderSettingsInput = z.object({
   prefix: z.string().max(10).regex(/^[A-Za-z0-9#\-_/]*$/, "Prefix can only contain letters, numbers, and # - _ /").optional(),
   padding: z.number().int().min(3).max(8).optional(),
   nextValue: z.number().int().min(1).optional(),
+  stockHoldMinutes: z.number().int().min(5).max(120).optional(),
+  minimumOrderPaise: z.number().int().min(0).max(10_000_00).optional(),
 });
 export type UpdateOrderSettingsInput = z.infer<typeof UpdateOrderSettingsInput>;
+
+// Settings Rebuild Phase 4: Checkout Settings
+export const AbandonedCheckoutStep = z.object({
+  delayHours: z.number().int().min(1).max(720),
+});
+export type AbandonedCheckoutStep = z.infer<typeof AbandonedCheckoutStep>;
+
+export const CheckoutSettings = z.object({
+  v: z.literal(1).default(1),
+  guestCheckout: z.boolean().default(true),
+  accountCreation: z.enum(["none", "after_completed_order"]).default("after_completed_order"),
+  phoneRequired: z.boolean().default(true),
+  addressLine2: z.enum(["hidden", "optional"]).default("optional"),
+  companyName: z.enum(["hidden", "optional"]).default("hidden"),
+  marketingEmail: z.object({
+    enabled: z.boolean().default(false),
+    label: z.string().min(1).max(120).default("Keep me updated on news and exclusive offers"),
+  }),
+  abandoned: z.object({
+    detectAfterMinutes: z.number().int().min(15).max(10080).default(60),
+    recoveryEnabled: z.boolean().default(false),
+    steps: z.array(AbandonedCheckoutStep).max(3).default([]),
+  }),
+  updatedAt: z.string().optional(),
+});
+export type CheckoutSettings = z.infer<typeof CheckoutSettings>;
+
+export const UpdateCheckoutSettingsInput = z.object({
+  guestCheckout: z.boolean().optional(),
+  accountCreation: z.enum(["none", "after_completed_order"]).optional(),
+  phoneRequired: z.boolean().optional(),
+  addressLine2: z.enum(["hidden", "optional"]).optional(),
+  companyName: z.enum(["hidden", "optional"]).optional(),
+  marketingEmail: z.object({
+    enabled: z.boolean(),
+    label: z.string().min(1).max(120),
+  }).optional(),
+  abandoned: z.object({
+    detectAfterMinutes: z.number().int().min(15).max(10080),
+    recoveryEnabled: z.boolean(),
+    steps: z.array(AbandonedCheckoutStep).max(3),
+  }).optional(),
+  expectedUpdatedAt: z.string().optional(),
+});
+export type UpdateCheckoutSettingsInput = z.infer<typeof UpdateCheckoutSettingsInput>;
+
+// Settings Rebuild Phase 4: Customer Account Settings
+export const CustomerAccountSettings = z.object({
+  id: z.string(),
+  showSignInLinks: z.boolean(),
+  emailPasswordEnabled: z.boolean(),
+  phoneOtpEnabled: z.boolean(),
+  allowSelfServeReturns: z.boolean(),
+  allowSelfServeCancellation: z.boolean(),
+  version: z.number(),
+  updatedAt: z.string(),
+  createdAt: z.string(),
+});
+export type CustomerAccountSettings = z.infer<typeof CustomerAccountSettings>;
+
+export const UpdateCustomerAccountSettingsInput = z.object({
+  showSignInLinks: z.boolean().optional(),
+  emailPasswordEnabled: z.boolean().optional(),
+  phoneOtpEnabled: z.boolean().optional(),
+  allowSelfServeReturns: z.boolean().optional(),
+  allowSelfServeCancellation: z.boolean().optional(),
+  expectedVersion: z.number().optional(),
+});
+export type UpdateCustomerAccountSettingsInput = z.infer<typeof UpdateCustomerAccountSettingsInput>;
 
 export const OrderStats = z.object({
   totalOrders: z.number().int(),
@@ -1247,6 +1320,24 @@ export const adminContract = {
       .route({ method: "PUT", path: "/admin/settings/orders" })
       .input(UpdateOrderSettingsInput)
       .output(OrderSettings),
+  },
+  checkoutSettings: {
+    get: oc
+      .route({ method: "GET", path: "/admin/settings/checkout" })
+      .output(CheckoutSettings),
+    update: oc
+      .route({ method: "PUT", path: "/admin/settings/checkout" })
+      .input(UpdateCheckoutSettingsInput)
+      .output(CheckoutSettings),
+  },
+  customerAccountSettings: {
+    get: oc
+      .route({ method: "GET", path: "/admin/settings/customer-accounts" })
+      .output(CustomerAccountSettings),
+    update: oc
+      .route({ method: "PUT", path: "/admin/settings/customer-accounts" })
+      .input(UpdateCustomerAccountSettingsInput)
+      .output(CustomerAccountSettings),
   },
   featureFlags: {
     list: oc

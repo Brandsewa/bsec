@@ -1,4 +1,4 @@
-import { CreditCard, Globe, History, Landmark, LayoutDashboard, LifeBuoy, RotateCcw, ShoppingBag, Sparkles, Store, Truck, UserCog } from "lucide-react";
+import { CreditCard, Globe, History, Landmark, LayoutDashboard, LifeBuoy, RotateCcw, ShoppingBag, ShoppingCart, Sparkles, Store, Truck, UserCheck, UserCog } from "lucide-react";
 import type { ComponentType } from "react";
 import { hasPermission, type StorePermission } from "@bs/auth";
 
@@ -46,6 +46,8 @@ export const SETTINGS_NAV_GROUPS: readonly SettingsNavGroup[] = [
     id: "selling",
     label: "Selling",
     items: [
+      { id: "checkout", label: "Checkout", href: "/settings/checkout", description: "Fields, account options, recovery", icon: ShoppingCart, perm: "checkout.manage" },
+      { id: "customer-accounts", label: "Customer accounts", href: "/settings/customer-accounts", description: "Sign-in methods, returns, portal", icon: UserCheck, perm: "checkout.manage" },
       { id: "payments", label: "Payments", href: "/settings/payments", description: "COD and Razorpay", icon: CreditCard, perm: "settings.write" },
       { id: "shipping", label: "Shipping", href: "/settings/shipping", description: "Zones, rates, free delivery", icon: Truck, perm: "settings.write" },
       { id: "taxes", label: "Taxes", href: "/settings/taxes", description: "GST and place of supply", icon: Landmark, perm: "settings.write" },
@@ -55,7 +57,7 @@ export const SETTINGS_NAV_GROUPS: readonly SettingsNavGroup[] = [
     id: "operations",
     label: "Operations",
     items: [
-      { id: "orders", label: "Orders", href: "/settings/orders", description: "Numbering, processing, recovery", icon: ShoppingBag, perm: "settings.write" },
+      { id: "orders", label: "Orders", href: "/settings/orders", description: "Numbering, processing, recovery", icon: ShoppingBag, perm: "orders.settings.manage" },
       { id: "returns", label: "Returns", href: "/settings/returns", description: "Returns and exchanges", icon: RotateCcw, perm: "settings.write" },
     ],
   },

@@ -93,6 +93,10 @@ import {
   getAdminShippingSettings,
   getSettingsOverview,
   getStoreSettings,
+  getCheckoutSettings,
+  updateCheckoutSettings,
+  getCustomerAccountSettings,
+  updateCustomerAccountSettings,
   getTheme,
   inviteStaff,
   listAdminCustomers,
@@ -682,6 +686,10 @@ describe("Generated Isolation Test Suite (M1 Real Postgres 18 Proof)", () => {
     expect(adminProcedures).toContain("settingsActivity.list");
     expect(adminProcedures).toContain("settings.get");
     expect(adminProcedures).toContain("settings.update");
+    expect(adminProcedures).toContain("checkoutSettings.get");
+    expect(adminProcedures).toContain("checkoutSettings.update");
+    expect(adminProcedures).toContain("customerAccountSettings.get");
+    expect(adminProcedures).toContain("customerAccountSettings.update");
     expect(adminProcedures).toContain("featureFlags.list");
     expect(adminProcedures).toContain("products.list");
     expect(adminProcedures).toContain("products.get");
@@ -1288,6 +1296,14 @@ describe("Generated Isolation Test Suite (M1 Real Postgres 18 Proof)", () => {
         return await getOrderSettings(rt, ctx);
       case "orderSettings.update":
         return await updateOrderSettings(rt, ctx, { prefix: "ORD-" });
+      case "checkoutSettings.get":
+        return await getCheckoutSettings(rt, ctx);
+      case "checkoutSettings.update":
+        return await updateCheckoutSettings(rt, ctx, { guestCheckout: true });
+      case "customerAccountSettings.get":
+        return await getCustomerAccountSettings(rt, ctx);
+      case "customerAccountSettings.update":
+        return await updateCustomerAccountSettings(rt, ctx, { showSignInLinks: true });
       case "orders.estimateDraft":
         return await estimateAdminDraftOrder(rt, ctx, {
           shippingAddress: { state: "Delhi", pincode: "110001" },
