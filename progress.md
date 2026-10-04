@@ -120,7 +120,6 @@ Spec: `docs/CUSTOMERS-IMPLEMENTATION-PLAN.md` Phase 1 (1A, 1B, 1C) with the ZCod
 
 One line per piece of work that is started and not merged. Add yours before you start, remove it when merged or abandoned (`AGENTS.md` section 6). Format: `agent · branch · area · since · one-line goal`.
 
-- antigravity · `chore/dev-speed` · tooling, ci, tests, lint · 2026-10-03 · Development speed tooling, CI fast path, ESLint transaction guard, factories and scaffold
 - claude · `feat/themes-puck` · themes, docs · 2026-10-01 · theme builder follow-ups; agent docs and change log (`docs/changes/`)
 
 ## Returns & Exchanges (Manual Review & Portal) — Complete (2026-10-02)
