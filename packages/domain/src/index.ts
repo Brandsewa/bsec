@@ -69,6 +69,7 @@ export * from "./admin/me.ts";
 export * from "./admin/support-access.ts";
 export * from "./admin/store-config.ts";
 export * from "./admin/settings-overview.ts";
+export * from "./admin/settings-activity.ts";
 export * from "./admin/team.ts";
 export * from "./admin/payments-settings.ts";
 export * from "./admin/create-owner.ts";
