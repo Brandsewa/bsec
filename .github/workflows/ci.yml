@@ -32,11 +32,13 @@ jobs:
             exit 0
           fi
 
-          git fetch origin ${{ github.base_ref || 'main' }} --depth=1
-          base_commit="origin/${{ github.base_ref || 'main' }}"
-
-          # List changed files against base
-          changed=$(git diff --name-only "$base_commit"...HEAD)
+          # The checkout is the PR merge commit (depth 2): its first parent is the base the PR merges into, so this diff
+          # needs no extra fetch and cannot fail with "no merge base" when the base branch moved after the run started.
+          if ! changed=$(git diff --name-only HEAD^1 HEAD); then
+            echo "Could not list changed files: running the full suite."
+            echo "docs_only=false" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
           echo "Changed files in PR:"
           echo "$changed"
 

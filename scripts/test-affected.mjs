@@ -1,5 +1,6 @@
 #!/usr/bin/env node
-import { execSync, spawnSync } from "node:child_process";
+import { execSync } from "node:child_process";
+import { runCommand } from "./lib/run-command.mjs";
 
 const args = process.argv.slice(2);
 const isHeavy = args.includes("--heavy");
@@ -43,12 +44,7 @@ if (changedFiles.length === 0) {
 if (reasonsForFull.length > 0) {
   console.log(`[test:affected] Core files modified (${reasonsForFull.join(", ")}). Running full test suite.`);
   const scriptToRun = isHeavy ? "test:heavy" : "test:fast";
-  const res = spawnSync(
-    process.platform === "win32" ? "pnpm.cmd" : "pnpm",
-    [scriptToRun, ...extraVitestArgs],
-    { stdio: "inherit" }
-  );
-  process.exit(res.status ?? 0);
+  process.exit(runCommand("pnpm", [scriptToRun, ...extraVitestArgs]));
 }
 
 console.log(`[test:affected] ${changedFiles.length} files changed. Running affected tests via vitest --changed origin/main...`);
@@ -59,10 +55,4 @@ if (!isHeavy) {
   vitestArgs.push("--exclude", "**/*.int.test.ts");
 }
 
-const res = spawnSync(
-  process.platform === "win32" ? "npx.cmd" : "npx",
-  ["vitest", "run", ...vitestArgs],
-  { stdio: "inherit" }
-);
-
-process.exit(res.status ?? 0);
+process.exit(runCommand("npx", ["vitest", "run", ...vitestArgs]));
