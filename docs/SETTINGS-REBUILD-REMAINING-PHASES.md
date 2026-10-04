@@ -336,3 +336,7 @@ Do not parallelize phases that edit the same data/permission/navigation files. A
 8. Independent verifier: Phase 8 hardening plus full Settings walkthrough.
 
 The primary coding agent verifies each external builder's output against the relevant phase acceptance criteria and the full repository gate before the next dependent phase begins.
+
+## 13. Owner decisions recorded (2026-10-04)
+
+The owner accepted the recommended defaults for every question in section 11. The authoritative table, the consequences for each phase and the per-phase builder prompts are in [SETTINGS-PHASES-3-8-HANDOFF.md](SETTINGS-PHASES-3-8-HANDOFF.md) (prompts `docs/prompts/settings-rebuild-phase-3.md` to `-8.md`). In short: India only (INR, English, GST); guest checkout on with an optional verified account after a completed order; COD is the only manual payment method; Razorpay first but only after explicit authorisation in a session; plan changes are request-only; default shipping zones and rates only for V1; the owner approves policy wording; email is the only channel; maintenance is owner-only with no automatic customer notice. Where the prompts differ from the scope sketches above, **the prompts win** (they are written against the audited code).

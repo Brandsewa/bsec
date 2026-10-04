@@ -125,7 +125,7 @@ Records: `docs/changes/2026-10-03-zcode-customers-segments-stage-a.md`, `2026-10
 Plan: `docs/SETTINGS-REBUILD-PLAN.md`, `SETTINGS-REMAINING-PHASES`; records `2026-10-04-zcode-settings-rebuild-phase-0-1.md`, `2026-10-04-antigravity-settings-rebuild-phase-2.md`, `2026-10-04-claude-settings-phase-2-verification.md`.
 - [x] Phases 0-1 (PR #25): grouped shell, `/settings` Overview (`settingsOverview.get`), `/settings/store-details`, audit on store settings.
 - [x] Phase 2 (PR #29): ADR-020 capability families, `/settings/users`, `/settings/activity`. Verification found and fixed: red typecheck, and `payments.manage` enforced nowhere (now enforced on Razorpay save/clear in route and service; the ADR lists exactly which families are enforced today).
-- [ ] Phases 3-8 not started. Phase 3 prompt: `docs/prompts/settings-rebuild-phase-3.md`. Owner decisions still open: plan §11 items 2-10.
+- [ ] Phases 3-8 not started. Owner decisions recorded 2026-10-04 (accepted recommended defaults). Hand-off for Antigravity: `docs/SETTINGS-PHASES-3-8-HANDOFF.md` with builder prompts `docs/prompts/settings-rebuild-phase-3.md` to `-8.md` (schema per phase, audited defects, tests, acceptance). Phase 5B (Razorpay) and Phase 6E/6F (shipping profiles, packages) are gated on explicit owner go. Claude verifies each phase before the next starts.
 - Browser walkthrough of Phase 2 roles still pending (owner is testing manually).
 
 ## Dev speed (PR #22) — merged (2026-10-04)

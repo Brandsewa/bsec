@@ -534,3 +534,22 @@ For payments, taxes, shipping, checkout, customer identity and privacy requests,
 - Razorpay, Stripe, PayPal, Shiprocket, SMS or WhatsApp implementation without explicit owner approval and provider-specific plans.
 - International taxes/duties, multi-currency settlement or localisation before the underlying tax/market engine exists.
 - Loyalty points and store credit settings; current owner direction excludes them.
+
+## 17. Refinements decided while writing the Phase 3-8 prompts (2026-10-04; these win over sections 5-13)
+
+Written after auditing the code, to avoid duplicate sources of truth and settings with no behaviour:
+
+| Topic | Refinement |
+|---|---|
+| Marketing consent history (§9.2 `marketing_consents`) | **Do not create it.** `customer_consent_events` (Customers Phase 0c) is the single history; Phase 7 adds `text_version` and `ip_hash` to it and stops writing the raw `ip`. |
+| Delivery history (§9.2 `notification_deliveries`) | **Do not create it.** Extend `email_log` (add `event_key`, `channel`, `suppressed_reason`, status `skipped`) and add a 180-day retention job. |
+| `notification_templates` (§9.2) | **Not built** in V1: one approved template per event exists; only sender name, reply-to and a plain-text footer note are configurable. Add the table when a second template per event exists. |
+| Checkout JSON (§5.1) | Only keys with an enforcing consumer ship: `guestCheckout`, `accountCreation` (`none` or `after_completed_order`; default the latter), `phoneRequired`, `addressLine2`, `companyName` (only if collected), `marketingEmail`, `abandoned`, later `termsConsent` (Phase 7). SMS and WhatsApp consent, `billingAddress` and `contactMethod` are **not** in V1. COD moves to `payment_methods` (Phase 5, dual-read) and tax to its own contract (Phase 6). |
+| `customer_account_settings` (§5.2) | Adds `version` (optimistic concurrency) and `check (email_password_enabled or phone_otp_enabled)`; Google and Facebook columns are **not** created. |
+| `order_settings` (§8.1) | V1 has only `stockHoldMinutes` and `minimumOrderPaise`; auto-deliver, auto-cancel and the staff alert (a notification preference) are not in this group. |
+| `payment_methods` (§6.1) | `provider` limited to `cod` and `razorpay` by CHECK (widen later); `unique (tenant_id, provider)`; `version` column. |
+| Plan change | New tenant table `plan_change_requests` (RLS; one open request per tenant) read by platform staff through the platform role; Super Admin decides, charges stay in existing plan tools. |
+| Tax | New `tax_classes` table (GST slab allow-list as a CHECK), `order_items.taxable_value_paise` and `tax_paise` snapshots, flag `settings.gst_v2`; credit notes reuse `invoices.type = 'credit_note'`. |
+| Policies (§12.1) | `store_policies` plus append-only `store_policy_versions` (grants `SELECT, INSERT` only); `orders.terms_policy_version_id` and `terms_accepted_at` as evidence. Starter drafts live in code, never auto-published. |
+| Privacy (§12.2) | `privacy_settings` is **contact, grievance officer and SLA only**: there is **no cookie banner** and **no analytics/marketing toggle** because the storefront sets only necessary cookies and merchants cannot add scripts; the cookie inventory is a test-locked table. **No data-sharing opt-out switch** (no sharing exists). New `privacy_requests` (verified, SLA-tracked data-principal requests). |
+| Maintenance (§10.2) | `store_status` gains schedule fields, `mode_before_maintenance`, `maintenance_allow_staff_preview`; new append-only `store_status_transitions`; owner-only mutation; maximum window 72 hours. |
