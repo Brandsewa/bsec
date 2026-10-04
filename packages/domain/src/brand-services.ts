@@ -6,14 +6,32 @@ import { assertPermission, type TenantContext } from "./context.ts";
 import { invalidateCache } from "./cache-invalidation.ts";
 import { createR2Client, getR2Config, isMediaStorageConfigured } from "./media/storage.ts";
 
+export const APPROVED_BRAND_FONTS = [
+  "Inter",
+  "Montserrat",
+  "Poppins",
+  "Nunito",
+  "Work Sans",
+  "Plus Jakarta Sans",
+  "DM Sans",
+  "Mukta",
+  "Playfair Display",
+  "Lora",
+  "Rozha One",
+  "Space Grotesk",
+  "Merriweather",
+] as const;
+
+export type BrandFont = (typeof APPROVED_BRAND_FONTS)[number];
+
 export interface UpdateBrandSettingsInput {
   logoLightMediaId?: string | null | undefined;
   logoDarkMediaId?: string | null | undefined;
   logoWidth?: number | undefined;
   faviconMediaId?: string | null | undefined;
   socialImageMediaId?: string | null | undefined;
-  fontHeading?: string | undefined;
-  fontBody?: string | undefined;
+  fontHeading?: BrandFont | undefined;
+  fontBody?: BrandFont | undefined;
   fontSizeScale?: string | undefined;
   colorSchemeName?: string | undefined;
   primaryColor?: string | undefined;
@@ -64,8 +82,8 @@ export function isUnsafeSvgContent(content: string): boolean {
 
 const DEFAULT_BRAND_SETTINGS = {
   logoWidth: 150,
-  fontHeading: "Inter",
-  fontBody: "Inter",
+  fontHeading: "Inter" as BrandFont,
+  fontBody: "Inter" as BrandFont,
   fontSizeScale: "default",
   colorSchemeName: "Classic",
   primaryColor: "#0f172a",
@@ -137,8 +155,12 @@ export async function getBrandSettingsInternal(rt: Runtime, tenantId: string) {
       logoWidth: existing.logoWidthPx,
       faviconMediaId: existing.faviconMediaId,
       socialImageMediaId: existing.socialImageMediaId,
-      fontHeading: existing.fontHeading,
-      fontBody: existing.fontBody,
+      fontHeading: (existing.fontHeading && (APPROVED_BRAND_FONTS as readonly string[]).includes(existing.fontHeading)
+        ? existing.fontHeading
+        : DEFAULT_BRAND_SETTINGS.fontHeading) as BrandFont,
+      fontBody: (existing.fontBody && (APPROVED_BRAND_FONTS as readonly string[]).includes(existing.fontBody)
+        ? existing.fontBody
+        : DEFAULT_BRAND_SETTINGS.fontBody) as BrandFont,
       fontSizeScale: existing.fontScale,
       colorSchemeName: existing.presetCode || "Custom",
       primaryColor: colors.primary,

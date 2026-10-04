@@ -494,6 +494,9 @@ describe("Storefront Lifecycle & Host Resolution", () => {
                 where: async () => {},
               }),
             }),
+            insert: () => ({
+              values: async () => {},
+            }),
           });
         },
       } as unknown as Db;
