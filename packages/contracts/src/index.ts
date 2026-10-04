@@ -19,6 +19,7 @@ import {
   platformEmailContract,
   platformStorageContract,
   platformIntegrationsContract,
+  platformSettingsContract,
 } from "./platform.ts";
 import { storefrontContract } from "./storefront.ts";
 
@@ -75,6 +76,7 @@ export const platformContract = {
   email: platformEmailContract,
   storage: platformStorageContract,
   integrations: platformIntegrationsContract,
+  settings: platformSettingsContract,
 };
 
 export type StoreContract = typeof storeContract;

@@ -69,6 +69,7 @@ import {
   runStoreExport,
   verifyExportSignature,
   getPlatformSystemData,
+  updatePlatformSettings,
   retryFailedJob,
   retryFailedWebhook,
   listThemeTemplates,
@@ -85,6 +86,7 @@ import {
   syncBillingPlans,
   updatePlatformBillingSettings,
   testPlatformBillingConnection,
+  getPlatformSettings,
   updatePlatformEmailSettings,
   sendPlatformTestEmail,
   listRecentEmailDeliveries,
@@ -664,6 +666,16 @@ export const platformRouter = os.router({
     testProvider: os.integrations.testProvider.use(requirePlatformStaff).handler(async ({ context, input }) => {
       const staffUserId = actor(context);
       return testPlatformChannelProvider(context.rt, staffUserId, input, context.meta);
+    }),
+  },
+  settings: {
+    get: os.settings.get.use(requirePlatformStaff).handler(async ({ context }) => {
+      const staffUserId = actor(context);
+      return getPlatformSettings(context.rt, staffUserId);
+    }),
+    update: os.settings.update.use(requireStaff("platform_owner")).handler(async ({ context, input }) => {
+      const staffUserId = actor(context);
+      return updatePlatformSettings(context.rt, staffUserId, input, context.meta);
     }),
   },
 });

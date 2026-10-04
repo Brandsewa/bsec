@@ -186,7 +186,7 @@ Read ADR-002 before touching anything here. The invariants:
 4. **Cache tags are tenant-prefixed**: `tenantTag(ctx, kind, id?)` -> `t:{tenantId}:{kind}[:{id}]`. Kinds: product, collection, category, page, theme, nav, store-shell, seo, storage, blog. Rule `bs/tenant-cache-tag`.
 5. **No merchant code runs on our servers** (ADR-010): themes and pages are validated JSON blocks with enumerated props, safe links and allow-listed video hosts. No custom JS/CSS/Liquid.
 6. **Secrets**: tenant provider credentials are AES-256-GCM encrypted in `tenant_secrets` (`TENANT_SECRETS_KEY`, alias `ENCRYPTION_KEY`) and never returned to a browser (UI sees set/not-set).
-7. **Platform isolation**: platform session cookie is host-only; only `SUPERADMIN_ORIGINS` may call it with credentials; MFA required; support access to a store needs the merchant's consent (`support_sessions`, standing consent).
+7. **Platform isolation**: platform session cookie is host-only; only `SUPERADMIN_ORIGINS` may call it with credentials; MFA required unless the platform owner turns it off in the Super Admin (Platform Staff page; `platform_settings.require_staff_mfa`, audited `platform_settings.update` — absence of the row means required in production, optional when `APP_ENV=local`, so local stacks skip the authenticator dance); support access to a store needs the merchant's consent (`support_sessions`, standing consent).
 8. **Quotas and rate limits** (ADR-013, ADR-015): per-tenant quotas, size tiers, `rate_limit_counters`; login failure limiter for admin.
 9. Tests that guard this: `packages/domain/test/isolation.int.test.ts` (525+ cases), `storefront-isolation.int.test.ts`, `apps/platform/test/rbac.int.test.ts`, `audit-coverage.int.test.ts`.
 
@@ -298,8 +298,9 @@ Drizzle schema files in `packages/db/src/schema/` (one Postgres database, `publi
 | 0070 | `billing_plans_and_invoice_series` | `platform_razorpay_plans` (Razorpay plan ids per plan, interval, mode and amount), `platform_invoices.provider_payment_id` (unique: one invoice per payment), `platform_invoice_counters` (gapless financial-year invoice numbers) |
 | 0072 | `cashfree_gateway` | `platform_billing_settings` Cashfree test and live App ID and encrypted secret columns, `provider` check (`razorpay`, `cashfree`); `payment_methods.provider` check widened to include `cashfree`; `platform_payment_providers` row `cashfree` (disabled, live mode closed) (ADR-037) |
 | 0071 | `billing_dunning_and_invoice_profile` | `subscriptions.past_due_since` and `dunning_stage` (billing B5); `platform_billing_settings` invoice issuer columns (`invoice_legal_name`, `invoice_address`, `invoice_state`, `invoice_gstin`, `invoice_sac`, `gst_rate_bps`) (billing B6) |
+| 0073 | `platform_settings` | single-row `platform_settings` (id `default`): `require_staff_mfa` toggle for platform staff TOTP (Super Admin, platform_owner only); table created empty so absence means the environment default |
 
-How to write one (expand, migrate, contract; `forceRlsSql`): `docs/migrations.md`. **Never edit an applied migration.** Latest on disk: `0071` (the docs check keeps this list honest).
+How to write one (expand, migrate, contract; `forceRlsSql`): `docs/migrations.md`. **Never edit an applied migration.** Latest on disk: `0073` (the docs check keeps this list honest).
 
 ---
 

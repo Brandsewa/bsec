@@ -112,6 +112,8 @@ const MIN_ROLE: Record<string, Role | "public"> = {
   "integrations.syncBillingPlans": "platform_owner",
   "integrations.updateBillingSettings": "platform_owner",
   "integrations.testBillingConnection": "platform_owner",
+  "settings.get": "platform_support",
+  "settings.update": "platform_owner",
 };
 
 /** Valid-shaped inputs, so the role check (which runs first) is what decides the outcome. */
@@ -158,6 +160,7 @@ const INPUT: Record<string, unknown> = {
   "audit.unarchive": { ids: [U] },
   "features.restore": { featureKey: "k" },
   "plans.decideRequest": { id: U, decision: "declined" },
+  "settings.update": { requireStaffMfa: true },
   "staff.invite": { email: "i@x.test", role: "platform_support" },
   "staff.updateRole": { userId: U, role: "platform_admin" },
   "staff.deactivate": { userId: U },

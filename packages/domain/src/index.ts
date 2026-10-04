@@ -152,6 +152,7 @@ export * from "./saas/dunning.ts";
 export * from "./saas/invoice-pdf.ts";
 export * from "./saas/promotion-math.ts";
 export * from "./platform/email-settings.ts";
+export * from "./platform/settings.ts";
 export * from "./system/platform-mailer.ts";
 export * from "./admin/payment-methods.ts";
 export * from "./admin/payment-providers.ts";
