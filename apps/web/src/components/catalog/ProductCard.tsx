@@ -123,11 +123,17 @@ export function ProductCard({ product, imageRatio = "square", cardStyle = "borde
 
         {/* Price & Savings */}
         <div className="mt-auto pt-3 flex items-baseline gap-2">
-          <span className="text-base font-bold text-foreground">{formattedPrice}</span>
-          {formattedCompareAt && (
-            <span className="text-xs text-muted-foreground line-through">
-              {formattedCompareAt}
-            </span>
+          {product.priceOnRequest ? (
+            <span className="text-sm font-semibold text-muted-foreground">Price on request</span>
+          ) : (
+            <>
+              <span className="text-base font-bold text-foreground">{formattedPrice}</span>
+              {formattedCompareAt && (
+                <span className="text-xs text-muted-foreground line-through">
+                  {formattedCompareAt}
+                </span>
+              )}
+            </>
           )}
         </div>
       </div>

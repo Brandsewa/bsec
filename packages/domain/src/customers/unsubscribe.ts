@@ -1,6 +1,7 @@
 import { createHash, randomBytes } from "node:crypto";
 import { and, eq, gt, isNull, sql } from "drizzle-orm";
-import { type Db, actionTokens, customers, newsletterSubscribers, withTenant } from "@bs/db";
+import { type Db, actionTokens, customers, withTenant } from "@bs/db";
+import type { Runtime } from "../runtime.ts";
 
 /** Unsubscribe links sit in every marketing email for a long time, so they live a year. */
 const UNSUBSCRIBE_TTL_MS = 365 * 86_400_000;
@@ -76,14 +77,19 @@ export async function unsubscribeByToken(db: Db, tenantId: string, token: string
     const row = await lookup(tx, tenantId, token);
     if (!row) return false;
 
-    await tx
-      .update(customers)
-      .set({ acceptsMarketing: false, updatedAt: new Date() })
-      .where(and(eq(customers.tenantId, tenantId), eq(customers.id, row.id)));
-    await tx
-      .update(newsletterSubscribers)
-      .set({ status: "unsubscribed", unsubscribedAt: new Date() })
-      .where(and(eq(newsletterSubscribers.tenantId, tenantId), eq(newsletterSubscribers.email, row.email), eq(newsletterSubscribers.status, "subscribed")));
+    const { setMarketingConsent } = await import("./consent.ts");
+    await setMarketingConsent(
+      { _db: { db: tx } } as unknown as Runtime,
+      { tenantId, actor: { type: "customer", userId: row.id } },
+      {
+        customerId: row.id,
+        state: "unsubscribed",
+        source: "unsubscribe_link",
+        channel: "email",
+      },
+      tx,
+    );
+
     // Remember the first use; later uses keep working so a double click or a forwarded email stays harmless.
     await tx
       .update(actionTokens)

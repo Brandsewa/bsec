@@ -2,15 +2,23 @@ import { useState } from "react";
 import { Outlet, createFileRoute, redirect, useRouterState } from "@tanstack/react-router";
 import {
   BadgePercent,
+  Clock,
   FileText,
+  FolderTree,
   Home,
   KeyRound,
+  Layers,
+  MapPin,
   Menu,
+  MessageSquareQuote,
   Package,
   Palette,
   RotateCcw,
   Settings,
   ShoppingBag,
+  ShoppingCart,
+  Slice,
+  Tag,
   Users,
   Warehouse,
 } from "lucide-react";
@@ -37,13 +45,32 @@ interface GatedGroup {
 const nav: GatedGroup[] = [
   { items: [{ label: "Home", href: "/", icon: Home }] },
   {
+    label: "Orders",
+    items: [
+      { label: "All orders", href: "/orders", icon: ShoppingBag, perm: "orders.read" },
+      { label: "Pre-orders", href: "/preorders", icon: Clock, perm: "orders.read" },
+      { label: "Quotes", href: "/quotes", icon: MessageSquareQuote, perm: "orders.read" },
+      { label: "Abandoned checkouts", href: "/abandoned-checkouts", icon: ShoppingCart, perm: "orders.read" },
+      { label: "Returns", href: "/returns", icon: RotateCcw, perm: "orders.read" },
+    ],
+  },
+  {
+    label: "Catalog",
+    items: [
+      { label: "Products", href: "/products", icon: Package, perm: "products.read" },
+      { label: "Categories", href: "/categories", icon: FolderTree, perm: "products.read" },
+      { label: "Collections", href: "/collections", icon: Layers, perm: "products.read" },
+      { label: "Brands", href: "/brands", icon: Tag, perm: "products.read" },
+      { label: "Locations", href: "/locations", icon: MapPin, perm: "products.read" },
+      { label: "Inventory", href: "/inventory", icon: Warehouse, perm: "products.read" },
+      { label: "Reviews", href: "/reviews", icon: MessageSquareQuote, perm: "products.read" },
+    ],
+  },
+  {
     label: "Sell",
     items: [
-      { label: "Orders", href: "/orders", icon: ShoppingBag, perm: "orders.read" },
-      { label: "Returns", href: "/returns", icon: RotateCcw, perm: "orders.read" },
-      { label: "Products", href: "/products", icon: Package, perm: "products.read" },
-      { label: "Inventory", href: "/inventory", icon: Warehouse, perm: "products.read" },
       { label: "Customers", href: "/customers", icon: Users, perm: "customers.read" },
+      { label: "Segments", href: "/segments", icon: Slice, perm: "customers.read" },
       { label: "Discounts", href: "/discounts", icon: BadgePercent, perm: "discounts.write" },
     ],
   },

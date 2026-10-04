@@ -20,6 +20,7 @@ let container: StartedPostgreSqlContainer | undefined;
 let superUrl: string;
 let rwDb: DbHandle;
 let rt: Runtime;
+let rtStorefront: Runtime;
 let pg: PgClient;
 
 function as(role: "app_owner" | "app_rw" | "app_platform", password: string): string {
@@ -49,6 +50,9 @@ beforeAll(async () => {
   await runMigrations(as("app_owner", PW.owner));
   rwDb = createDb(as("app_rw", PW.rw), { max: 5 });
   rt = createRuntime({ service: "platform", databaseUrl: as("app_platform", PW.platform), poolMax: 5 });
+  // The storefront reads as app_rw, where row level security scopes every query to one store. The platform role bypasses it
+  // and would see other stores' products when test files share a database (as they do in CI).
+  rtStorefront = createRuntime({ service: "web", databaseUrl: as("app_rw", PW.rw), poolMax: 5 });
 
   pg = new (await import("pg")).default.Client({ connectionString: superUrl });
   await pg.connect();
@@ -67,6 +71,7 @@ afterAll(async () => {
   await pg?.end();
   await rwDb?.close();
   await rt?.close();
+  await rtStorefront?.close();
   await container?.stop();
 });
 
@@ -87,6 +92,9 @@ describe("demo store", () => {
     const statuses = orderStatuses.map((r) => r.status);
     for (const s of ["pending", "confirmed", "cancelled"]) expect(statuses).toContain(s);
     expect((await one<{ n: number }>(`select count(*)::int n from orders where tenant_id = $1`, [tenantId]))[0]!.n).toBe(res.orders);
+    // order numbers follow the store's prefix setting; the demo store uses ORD- (the e2e suite looks for ORD-00019)
+    expect((await one<{ n: number }>(`select count(*)::int n from orders where tenant_id = $1 and number like 'ORD-%'`, [tenantId]))[0]!.n).toBe(res.orders);
+    expect((await one<{ number: string }>(`select number from orders where tenant_id = $1 and number = 'ORD-00019'`, [tenantId]))).toHaveLength(1);
 
     const fulfillmentStatuses = (await one<{ status: string }>(`select distinct status from fulfillments where tenant_id = $1`, [tenantId])).map((r) => r.status);
     for (const s of ["label_created", "in_transit", "delivered", "rto"]) expect(fulfillmentStatuses).toContain(s);
@@ -110,7 +118,7 @@ describe("demo store", () => {
       permissions: [],
       requestId: "req_storefront_check",
     };
-    const find = async (q: string) => (await searchStorefrontProducts(rt, ctx, q, { page: 1, limit: 20 })).items.map((p) => p.title);
+    const find = async (q: string) => (await searchStorefrontProducts(rtStorefront, ctx, q, { page: 1, limit: 20 })).items.map((p) => p.title);
     expect(await find("Kurta")).toContain("Cotton Kurta");
     expect(await find("Wallet")).toContain("Leather Wallet");
     expect(await find("Scarf")).not.toContain("Silk Scarf"); // draft

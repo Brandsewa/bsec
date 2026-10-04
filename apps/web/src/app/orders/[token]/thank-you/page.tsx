@@ -84,6 +84,16 @@ export default async function ThankYouPage({ params }: ThankYouPageProps) {
               <span className="font-medium text-emerald-700">−{inr(order.discountTotal ?? 0)}</span>
             </div>
           )}
+          {order.shipsOn && (
+            <div className="flex justify-between">
+              <span className="text-muted-foreground">Estimated dispatch:</span>
+              <span className="font-semibold text-amber-700 dark:text-amber-400">
+                {order.shipsOn >= new Date().toISOString().slice(0, 10)
+                  ? `Ships on or after ${new Date(`${order.shipsOn}T00:00:00`).toLocaleDateString("en-IN", { day: "numeric", month: "short", year: "numeric" })}`
+                  : "Ships soon"}
+              </span>
+            </div>
+          )}
           <div className="flex justify-between">
             <span className="text-muted-foreground">Total:</span>
             <span className="font-bold text-foreground">{inr(order.grandTotal)}</span>
@@ -92,10 +102,15 @@ export default async function ThankYouPage({ params }: ThankYouPageProps) {
 
         <div className="mt-5 divide-y divide-border border-t border-border">
           {order.items.map((item) => (
-            <div key={item.id} className="flex justify-between py-2.5 text-sm">
-              <span className="text-foreground">
+            <div key={item.id} className="flex justify-between items-center py-2.5 text-sm">
+              <span className="text-foreground flex items-center gap-1.5 flex-wrap">
                 {item.productTitle}
                 {item.variantTitle && item.variantTitle !== "Default" ? ` (${item.variantTitle})` : ""} × {item.quantity}
+                {item.shipsOn ? (
+                  <span className="inline-flex items-center rounded bg-amber-500/10 px-1.5 py-0.25 text-[10px] font-medium text-amber-700 dark:text-amber-400">
+                    Pre-order
+                  </span>
+                ) : null}
               </span>
               <span className="text-muted-foreground">{inr(item.total)}</span>
             </div>

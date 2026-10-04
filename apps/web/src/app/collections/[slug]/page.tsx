@@ -10,7 +10,7 @@ import {
   getStorefrontSeoSettings,
   generateItemListJsonLd,
   generateBreadcrumbJsonLd,
-  formatTitle,
+  buildCollectionSeoMetadata,
   tenantTag,
   type CatalogListingOptions,
 } from "@bs/domain";
@@ -29,8 +29,9 @@ interface CollectionPageProps {
   }>;
 }
 
-export async function generateMetadata({ params }: CollectionPageProps): Promise<Metadata> {
+export async function generateMetadata({ params, searchParams }: CollectionPageProps): Promise<Metadata> {
   const { slug } = await params;
+  const sp = await searchParams;
 
   try {
     const h = await headers();
@@ -55,17 +56,27 @@ export async function generateMetadata({ params }: CollectionPageProps): Promise
       ]);
 
       if (res?.collection) {
-        const storeName = storeSettings?.storeName ?? "Store";
-        const metaTitle = formatTitle(seoSettings?.titleTemplate, res.collection.title, storeName);
-        const description = `Shop ${res.collection.title} at ${storeName}. High-quality products and great deals.`;
+        const page = sp.page ? parseInt(sp.page, 10) : 1;
+        const hasFilterOrSortParams = Boolean(sp.sort || sp.inStockOnly);
+
+        const seoMeta = buildCollectionSeoMetadata({
+          collection: res.collection,
+          seoSettings,
+          storeSettings,
+          storeStatusMode: access.mode,
+          noindex: access.noindex,
+          productsCount: res.products.total,
+          hasFilterOrSortParams,
+          page,
+          host,
+        });
 
         return {
-          title: metaTitle,
-          description,
-          openGraph: {
-            title: metaTitle,
-            description,
-          },
+          title: seoMeta.title,
+          description: seoMeta.description,
+          robots: seoMeta.robots,
+          openGraph: seoMeta.openGraph,
+          alternates: seoMeta.alternates,
         };
       }
     }

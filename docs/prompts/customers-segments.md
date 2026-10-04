@@ -1,0 +1,16 @@
+# Antigravity prompt: Customer segments (Phase 2)
+
+Prerequisite: Phases 0 and 1 are merged and verified by Claude. Branch `feat/customers-segments` from the latest `origin/main`. Read `AGENTS.md`, `docs/CUSTOMERS-SEGMENTS-PLAN.md` (the design: follow it exactly), `docs/CUSTOMERS-IMPLEMENTATION-PLAN.md` (Phase 2: steps 2A to 2D, one commit each), `docs/admin-ui-standards.md`, and `docs/prompts/catalog-revision.md`.
+
+Scope: manual and automatic customer segments, **at most 20 per store** (owner decision; the 21st is refused with a clear message). **No store credit, no loyalty points, no email sending.** Segments are for grouping and export only; the export defaults to subscribed customers only and the "Send email" action is shown disabled with "Email sending is not set up yet".
+
+Key requirements:
+1. **Automatic segments are saved rules evaluated live** (no stored member list). Manual segments use `customer_segment_members`. Rules are a flat list (match all or any, maximum 10 conditions) from the whitelisted fields and operators in the plan; the Zod schema rejects anything else.
+2. **The compiler (`segments/compile.ts`) is the only place SQL is built from rules**, with parameter binding, no client-supplied column names, a 5 second statement timeout on previews, and rule fields that read the Phase 0 metrics fragment. Hostile-input tests are mandatory: unknown field, SQL in a value, 11 conditions, an `in_segment` cycle, a segment id from another store.
+3. Tables use `tenantTable()` plus `forceRlsSql` and composite foreign keys; migration journal entry; docs updated (`docs:check` enforces the table list). Count cache (`member_count`, `counted_at`) refreshed by a pg-boss job every 6 hours and a Refresh action; the list never runs one query per segment on load.
+4. Domain functions check `customers.read` or `customers.write`, audit every mutation (`segment.created`, `updated`, `deleted`, `members_added`, `members_removed`), commit before read-back, and are mapped in the isolation suite. Kind cannot change after the first save; delete is refused while another segment references it.
+5. UI exactly as the plan section 6 describes: Segments list (stat cards in their own boundary, tabs, count with "as of", templates empty state), create and edit form (Details, Type, Conditions builder with live debounced preview or Members search plus paste-by-email report "12 added, 2 already in, 1 not found"), segment detail with members table and export, presets as editable templates, and the Customers list integration (Segment filter, Add to segment bulk action, Segments card on the customer page). Kit components only; `pendingComponent` on every route; 375 px and desktop checked in a browser, or say plainly what you could not run.
+6. Tests per plan section 8 and 8b, real database for every field and operator (include a guest, a refunded order and a cancelled order), `match any` versus `all`, the 20 limit, cross-store isolation of every procedure, audit rows. Component tests for the condition builder.
+7. Gate with the heavy suite counts pasted. A single Windows worker crash (3221226505) is a known flake: rerun that file alone and say so.
+
+Write the change record, update `docs/ARCHITECTURE.md` and `progress.md`, open a PR, do not merge it. Claude verifies against the acceptance criteria.

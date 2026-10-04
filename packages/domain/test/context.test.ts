@@ -249,4 +249,40 @@ describe("buildTenantContext()", () => {
       ).rejects.toThrow(/membership/i);
     });
   });
+
+  describe("Platform support permission sets invariant (AGENTS.md rule 9, ADR-020)", () => {
+    it("never includes any settings capability family in support read or write permissions", async () => {
+      const { SUPPORT_READ_PERMISSIONS, SUPPORT_WRITE_PERMISSIONS } = await import("../src/context.ts");
+
+      const settingsFamilies = [
+        "settings.read",
+        "settings.manage",
+        "branding.manage",
+        "storefront.manage",
+        "checkout.manage",
+        "payments.manage",
+        "shipping.manage",
+        "taxes.manage",
+        "orders.settings.manage",
+        "returns.manage",
+        "notifications.manage",
+        "domains.manage",
+        "policies.manage",
+        "privacy.manage",
+        "audit.read",
+      ];
+
+      for (const family of settingsFamilies) {
+        expect(SUPPORT_READ_PERMISSIONS).not.toContain(family);
+        expect(SUPPORT_WRITE_PERMISSIONS).not.toContain(family);
+      }
+
+      // Legacy sensitive permissions also remain excluded
+      for (const denied of ["staff.manage", "settings.write", "exports.run", "orders.refund"]) {
+        expect(SUPPORT_READ_PERMISSIONS).not.toContain(denied);
+        expect(SUPPORT_WRITE_PERMISSIONS).not.toContain(denied);
+      }
+    });
+  });
 });
+

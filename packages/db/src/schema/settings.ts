@@ -32,6 +32,8 @@ export const storeSettings = tenantTable(
     social: jsonb("social"),
     checkout: jsonb("checkout"),
     notifications: jsonb("notifications"),
+    returnSettings: jsonb("return_settings"),
+    autoPublishReviews: boolean("auto_publish_reviews").notNull().default(false),
     standingConsentForSupport: boolean("standing_consent_for_support").notNull().default(false),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().default(sql`now()`),
     updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().default(sql`now()`),

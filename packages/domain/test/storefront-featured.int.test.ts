@@ -1,5 +1,6 @@
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { startTestDb, type TestDb } from "@bs/db/test-env";
+import { primaryCategory } from "./helpers/primary-category.ts";
 import {
   createProduct,
   createRuntime,
@@ -51,9 +52,9 @@ describe("storefront home page product grid", () => {
 
   it("lists active products with their price, featured first, newest next, and honours the limit", async () => {
     const c = ctxFor(storeA);
-    await createProduct(rtWeb, c, { title: "Plain tea", status: "active", variants: [{ sku: "FEAT-1", title: "One", price: 25000 }] });
-    await createProduct(rtWeb, c, { title: "Star tea", status: "active", isFeatured: true, variants: [{ sku: "FEAT-2", title: "A", price: 30000 }, { sku: "FEAT-3", title: "B", price: 50000 }] });
-    await createProduct(rtWeb, c, { title: "Newest tea", status: "active", variants: [{ sku: "FEAT-4", title: "One", price: 15000 }] });
+    await createProduct(rtWeb, c, { title: "Plain tea", status: "active", primaryCategoryId: await primaryCategory(rtWeb, c), variants: [{ sku: "FEAT-1", title: "One", price: 25000 }] });
+    await createProduct(rtWeb, c, { title: "Star tea", status: "active", primaryCategoryId: await primaryCategory(rtWeb, c), isFeatured: true, variants: [{ sku: "FEAT-2", title: "A", price: 30000 }, { sku: "FEAT-3", title: "B", price: 50000 }] });
+    await createProduct(rtWeb, c, { title: "Newest tea", status: "active", primaryCategoryId: await primaryCategory(rtWeb, c), variants: [{ sku: "FEAT-4", title: "One", price: 15000 }] });
 
     const all = await getStorefrontFeaturedProducts(rtWeb, c, { limit: 8 });
     expect(all.map((p) => p.title)).toEqual(["Star tea", "Newest tea", "Plain tea"]);

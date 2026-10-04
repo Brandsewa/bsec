@@ -7,9 +7,10 @@ import {
 
 describe("Return State Machine Transitions (PLAN §11.1)", () => {
   const allowedReturnTransitions: Record<ReturnStatus, ReturnStatus[]> = {
-    requested: ["approved", "rejected"],
-    approved: ["picked_up"],
+    requested: ["approved", "rejected", "cancelled"],
+    approved: ["received", "refunded", "replaced", "picked_up"],
     rejected: ["closed"],
+    cancelled: ["closed"],
     picked_up: ["received"],
     received: ["refunded", "replaced"],
     refunded: ["closed"],

@@ -13,7 +13,7 @@ import { assertPermission, type TenantContext } from "../context.ts";
 import { isFeatureEnabled } from "../features.ts";
 import { buildCloudflareImageUrl, publicMediaUrl } from "../media/storage.ts";
 import { buildProductSummaries, type StorefrontProductSummary } from "../storefront/catalog.ts";
-import { STOREFRONT_PRODUCT_STATUSES } from "../storefront/product-status.ts";
+import { LISTED_PRODUCT_STATUSES } from "../storefront/product-status.ts";
 
 type Tx = Parameters<Parameters<typeof withTenant>[2]>[0];
 type ProductRow = typeof schema.products.$inferSelect;
@@ -26,6 +26,7 @@ const toBlockProduct = (s: StorefrontProductSummary): BlockProduct => ({
   slug: s.slug,
   priceMin: s.priceMin,
   compareAtPriceMin: s.compareAtPriceMin,
+  priceOnRequest: s.priceOnRequest,
   ratingAvg: s.ratingAvg,
   ratingCount: s.ratingCount,
   imageMediaId: s.primaryImage?.mediaId,
@@ -36,7 +37,7 @@ const toBlockProduct = (s: StorefrontProductSummary): BlockProduct => ({
 });
 
 const liveProducts = () =>
-  and(inArray(schema.products.status, [...STOREFRONT_PRODUCT_STATUSES]), isNull(schema.products.deletedAt));
+  and(inArray(schema.products.status, [...LISTED_PRODUCT_STATUSES]), isNull(schema.products.deletedAt));
 
 async function newest(tx: Tx, limit: number): Promise<ProductRow[]> {
   return tx.select().from(schema.products).where(liveProducts()).orderBy(desc(schema.products.createdAt)).limit(limit);

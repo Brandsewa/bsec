@@ -151,7 +151,7 @@ describe("PLAN §6.1 Quotas & Size Tiers Engine (Milestone M8)", () => {
       storeStatus: "live",
       actor: { type: "staff", userId: userA },
       roles: ["store_owner"],
-      permissions: ["products.write", "staff.manage"],
+      permissions: ["products.read", "products.write", "staff.manage"],
       requestId: "0199a081-req-001",
     };
 

@@ -49,6 +49,8 @@ export interface BlockProduct {
   slug: string;
   priceMin: number;
   compareAtPriceMin?: number | undefined;
+  /** A "price on request" product has no public price; the card shows a label instead of a zero price. */
+  priceOnRequest?: boolean | undefined;
   ratingAvg?: string | undefined;
   ratingCount?: number | undefined;
   imageMediaId?: string | undefined;

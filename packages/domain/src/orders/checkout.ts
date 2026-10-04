@@ -1,13 +1,17 @@
 import { createHash, randomBytes, randomUUID } from "node:crypto";
-import { eq, sql } from "drizzle-orm";
+import { and, eq, inArray, sql } from "drizzle-orm";
 import {
   actionTokens,
+  carts,
+  customers,
   locations,
   orderEvents,
   orderItems,
   orders,
   paymentIntents,
+  products,
   tenants,
+  variants,
   withTenant,
   QUEUE_NAMES,
 } from "@bs/db";
@@ -15,7 +19,7 @@ import type { Runtime } from "../runtime.ts";
 import type { TenantContext } from "../context.ts";
 import { clearCart, getOrCreateCart } from "../storefront/cart.ts";
 import { reserveInventory } from "../catalog/inventory-reservations.ts";
-import { allocateSequenceNumber } from "./sequences.ts";
+import { allocateOrderNumber } from "../admin/order-settings.ts";
 import { redeemDiscount } from "./discounts.ts";
 import { allocateDiscount, priceOrder } from "./pricing.ts";
 import { getTenantShippingRates } from "./shipping-rates.ts";
@@ -153,31 +157,163 @@ export async function placeOrder(
     }
     const locationId = loc.id;
 
-    // 4. Reserve inventory atomically (PLAN §11.3)
+    // 4. Load variant configuration to identify pre-order and inventory policies
     const orderId = randomUUID();
-    const reserveItems = cart.items.map((it) => ({
-      variantId: it.variantId,
-      locationId,
-      qty: it.quantity,
-    }));
+    const variantIds = cart.items.map((it) => it.variantId);
+    const variantRows = await tx
+      .select({
+        id: variants.id,
+        trackInventory: variants.trackInventory,
+        allowBackorder: variants.allowBackorder,
+        preorderEnabled: variants.preorderEnabled,
+        preorderShipsOn: variants.preorderShipsOn,
+        priceOnRequest: products.priceOnRequest,
+      })
+      .from(variants)
+      .innerJoin(
+        products,
+        and(eq(products.tenantId, variants.tenantId), eq(products.id, variants.productId)),
+      )
+      .where(and(eq(variants.tenantId, tenantId), inArray(variants.id, variantIds)));
 
-    await reserveInventory(tx, tenantId, reserveItems, {
-      orderId,
-      cartId: cart.id,
-    });
+    if (variantRows.some((v) => v.priceOnRequest)) {
+      throw new Error("This product is price on request and cannot be ordered through standard checkout");
+    }
 
-    // 5. Allocate gapless sequential order number (PLAN §11.2)
-    const seq = await allocateSequenceNumber(tx, tenantId, "order", "", {
-      defaultPrefix: "ORD-",
-      defaultPadding: 5,
-    });
+    const variantMap = new Map(variantRows.map((v) => [v.id, v]));
+
+    // Limited variants that track inventory, do not allow backorder and are not pre-orders must reserve stock.
+    // Pre-orders commit stock when goods arrive, not at checkout time (ORDERS-PREORDERS-PLAN §3.2 rule 8).
+    const reserveItems = cart.items
+      .filter((it) => {
+        const v = variantMap.get(it.variantId);
+        if (!v) return true;
+        if (v.preorderEnabled) return false;
+        if (v.allowBackorder) return false;
+        if (!v.trackInventory) return false;
+        return true;
+      })
+      .map((it) => ({
+        variantId: it.variantId,
+        locationId,
+        qty: it.quantity,
+      }));
+
+    if (reserveItems.length > 0) {
+      await reserveInventory(tx, tenantId, reserveItems, {
+        orderId,
+        cartId: cart.id,
+      });
+    }
+
+    // Determine latest ships_on date across all pre-order items (mixed carts rule: latest date applies)
+    let orderShipsOn: string | null = null;
+    for (const it of cart.items) {
+      const v = variantMap.get(it.variantId);
+      if (v?.preorderEnabled && v.preorderShipsOn) {
+        const lineDate = typeof v.preorderShipsOn === "string" ? v.preorderShipsOn : (v.preorderShipsOn as Date).toISOString().slice(0, 10);
+        if (!orderShipsOn || lineDate > orderShipsOn) {
+          orderShipsOn = lineDate;
+        }
+      }
+    }
+
+    // 5. Allocate gapless sequential order number respecting store settings (PLAN §11.2, ORDERS-SETTINGS-PLAN §4.1)
+    const seq = await allocateOrderNumber(tx, tenantId);
+
+    // 5b. Resolve or create customer (PLAN §0b)
+    let effectiveCustomerId = input.customerId ?? null;
+    const checkoutEmail = input.email?.trim().toLowerCase();
+    const checkoutPhone = input.phone?.trim() ? input.phone.trim().replace(/\D/g, "") : null;
+    const checkoutName = input.fullName?.trim() || "";
+
+    if (!effectiveCustomerId && (checkoutEmail || checkoutPhone)) {
+      // Find existing customer by email, then by phone
+      let existingCust: typeof customers.$inferSelect | undefined;
+      if (checkoutEmail) {
+        const [byEmail] = await tx
+          .select()
+          .from(customers)
+          .where(and(eq(customers.tenantId, tenantId), eq(customers.email, checkoutEmail)))
+          .limit(1);
+        existingCust = byEmail;
+      }
+      if (!existingCust && checkoutPhone) {
+        const [byPhone] = await tx
+          .select()
+          .from(customers)
+          .where(and(eq(customers.tenantId, tenantId), eq(customers.phone, checkoutPhone)))
+          .limit(1);
+        existingCust = byPhone;
+      }
+
+      if (existingCust) {
+        // Blocked customers cannot check out; the message stays neutral so the store's reason is not disclosed.
+        if (existingCust.status !== "active") {
+          throw new Error("Your order could not be completed. Please contact the store for help.");
+        }
+        effectiveCustomerId = existingCust.id;
+        // Never overwrite existing name or phone if already populated; fill only when empty
+        const updates: Record<string, unknown> = {};
+        if (!existingCust.name && checkoutName) {
+          updates.name = checkoutName;
+        }
+        if (!existingCust.phone && checkoutPhone) {
+          const [phoneTaken] = await tx
+            .select({ id: customers.id })
+            .from(customers)
+            .where(and(eq(customers.tenantId, tenantId), eq(customers.phone, checkoutPhone)))
+            .limit(1);
+          if (!phoneTaken || phoneTaken.id === existingCust.id) {
+            updates.phone = checkoutPhone;
+          }
+        }
+        if (Object.keys(updates).length > 0) {
+          updates.updatedAt = new Date();
+          await tx
+            .update(customers)
+            .set(updates)
+            .where(and(eq(customers.tenantId, tenantId), eq(customers.id, existingCust.id)));
+        }
+      } else if (checkoutEmail) {
+        let safePhone = checkoutPhone;
+        if (checkoutPhone) {
+          const [phoneTaken] = await tx
+            .select({ id: customers.id })
+            .from(customers)
+            .where(and(eq(customers.tenantId, tenantId), eq(customers.phone, checkoutPhone)))
+            .limit(1);
+          if (phoneTaken) {
+            safePhone = null;
+          }
+        }
+
+        const [newGuest] = await tx
+          .insert(customers)
+          .values({
+            tenantId,
+            email: checkoutEmail,
+            phone: safePhone,
+            name: checkoutName,
+            isGuest: true,
+            emailVerified: false,
+            phoneVerified: false,
+            acceptsMarketing: false,
+            marketingState: "not_subscribed",
+          })
+          .returning({ id: customers.id });
+        if (newGuest) {
+          effectiveCustomerId = newGuest.id;
+        }
+      }
+    }
 
     // 6. Insert Order
     await tx.insert(orders).values({
       id: orderId,
       tenantId,
       number: seq.formatted,
-      customerId: input.customerId ?? null,
+      customerId: effectiveCustomerId,
       email: input.email,
       phone: input.phone,
       currency: "INR",
@@ -189,6 +325,7 @@ export async function placeOrder(
       shippingTotal,
       codFee,
       grandTotal,
+      shipsOn: orderShipsOn,
       shippingAddress: {
         fullName: input.fullName,
         addressLine1: input.addressLine1,
@@ -216,6 +353,11 @@ export async function placeOrder(
     // 7. Insert Order Items (a goods discount is split across the lines in proportion to their totals)
     const lineDiscounts = allocateDiscount(cart.items.map((it) => it.lineTotal), discountTotal);
     for (const [index, it] of cart.items.entries()) {
+      const v = variantMap.get(it.variantId);
+      const lineShipsOn = v?.preorderEnabled && v.preorderShipsOn
+        ? (typeof v.preorderShipsOn === "string" ? v.preorderShipsOn : (v.preorderShipsOn as Date).toISOString().slice(0, 10))
+        : null;
+
       await tx.insert(orderItems).values({
         discountAmount: lineDiscounts[index] ?? 0,
         tenantId,
@@ -227,6 +369,7 @@ export async function placeOrder(
         quantity: it.quantity,
         unitPrice: it.unitPriceSnapshot,
         total: it.lineTotal,
+        shipsOn: lineShipsOn,
       });
     }
 
@@ -299,7 +442,25 @@ export async function placeOrder(
       },
     });
 
-    // 11. Clear cart
+    // 11. Mark cart converted and, if it was abandoned, mark recovered (ORDERS-ABANDONED-CHECKOUTS-PLAN §4.1)
+    const [cartRow] = await tx
+      .select({ status: carts.status })
+      .from(carts)
+      .where(eq(carts.id, cart.id))
+      .limit(1);
+
+    const isAbandoned = cartRow?.status === "abandoned";
+
+    await tx
+      .update(carts)
+      .set({
+        status: "converted",
+        lastActivityAt: sql`now()`,
+        ...(isAbandoned ? { recoveredAt: sql`now()` } : {}),
+      })
+      .where(eq(carts.id, cart.id));
+
+    // Clear cart items
     await clearCart(rt, ctx, input.cartToken, tx);
 
     // 12. Enqueue order.created job if boss runtime is present

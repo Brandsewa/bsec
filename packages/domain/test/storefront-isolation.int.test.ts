@@ -266,6 +266,7 @@ describe("Storefront Integration & Tenant Isolation Suite (Real PostgreSQL 18)",
         title: "Alpha Featured Collection",
         slug: "alpha-featured",
         published: true,
+        indexable: true,
         sortOrder: "manual",
       });
 
@@ -373,6 +374,7 @@ describe("Storefront Integration & Tenant Isolation Suite (Real PostgreSQL 18)",
         title: "Beta Limited Drops",
         slug: "beta-limited-drops",
         published: true,
+        indexable: true,
         sortOrder: "manual",
       });
 

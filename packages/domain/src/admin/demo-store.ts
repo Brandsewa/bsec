@@ -121,6 +121,8 @@ export async function seedDemoStore(rt: Runtime, input: SeedDemoInput): Promise<
 
   await updateStoreSettings(rt, ctx, {
     storeName: "Demo Store",
+    // Order numbers follow the store setting now, so the demo store says what it uses (the demo, docs and e2e all show ORD-).
+    orderPrefix: "ORD-",
     legalName: "Demo Traders Private Limited",
     supportEmail: `support@${DEMO_EMAIL_DOMAIN}`,
     supportPhone: "+919800000000",
@@ -147,6 +149,7 @@ export async function seedDemoStore(rt: Runtime, input: SeedDemoInput): Promise<
     const created = await createProduct(rt, ctx, {
       title: p.title,
       status: p.status,
+      primaryCategoryId: categoryIds.get(p.category),
       tags: ["demo"],
       variants: p.variants.map((v, i) => ({ sku: `DEMO-${p.title.replace(/[^A-Za-z]/g, "").slice(0, 6).toUpperCase()}-${i + 1}`, title: v.title, price: v.price })),
     });

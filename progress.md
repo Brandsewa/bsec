@@ -76,14 +76,89 @@ Source of truth: `docs/PLAN.html` v2.0 (build order in `docs/BUILD-PLAN-M2-M9.md
 
 **How the tracking docs split (2026-10-01):** this file is the **status board** (milestones, known gaps, what is in flight). The detailed "who changed what, why, how verified" log is one file per change set in [`docs/changes/`](docs/changes/README.md), written by every agent. How the system is built is in [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md). Rules for all agents: [`AGENTS.md`](AGENTS.md).
 
+## Catalog Phases A to F (Indexing, Categories, Collections, Brands, Locations, Reviews, Products) — Complete (2026-10-03)
+
+Spec: `docs/PRODUCTS-CATALOG-PLAN.md` & `docs/PRODUCTS-SECTION-FINDINGS.md`. Built on `feat/catalog-a-f`.
+- [x] **Database & Migrations**: Migrations `0024_catalog_indexing.sql` (`collections.indexable`), `0025_categories_active_featured.sql` (`categories.is_active`, `is_featured`), `0026_reviews.sql` (`reviews` tenant table with RLS, check constraint, `store_settings.auto_publish_reviews`), `0027_product_categories_primary.sql` (`is_primary` with partial unique index).
+- [x] **Storefront & SEO Foundations**: `DIRECT_PRODUCT_STATUSES` vs `LISTED_PRODUCT_STATUSES`; robots meta (categories indexable, collections configurable, soft-404 on empty); canonical URLs; sitemap excludes unlisted and empty collections; reviews section with AggregateRating and verified buyer labels.
+- [x] **Admin Workbenches**:
+  - Categories (`/categories`, `/categories/new`, `/categories/$id`): 3-level tree, drag/reorder, delete guards.
+  - Collections (`/collections`, `/collections/new`, `/collections/$id`): Manual vs Automated condition builder, indexable switch, sorting.
+  - Brands (`/brands`): Logo upload, product count, delete guard.
+  - Locations (`/locations`, `/locations/new`, `/locations/$id`): Default location constraint, stock delete protection.
+  - Reviews (`/reviews`): 4 KPI cards, moderation tabs, approve, hold, reply dialog, delete.
+  - Products (`/products/new`, `/products/$id`): 2-column layout, primary & extra categories, SEO card, returns policy toggle.
+  - Inventory (`/inventory`): Multi-location selector filter.
+- [x] **Verification**: `pnpm typecheck` (15/15 passed), `pnpm lint` (15/15 passed), `pnpm --filter @bs/domain test:fast` (238/238 passed), `pnpm docs:check` (ok), `pnpm build` (6/6 passed).
+
+## Customers Phase 0 · Foundations (2026-10-03)
+
+Spec: `docs/CUSTOMERS-IMPLEMENTATION-PLAN.md` & `docs/CUSTOMERS-SECTION-FINDINGS.md`. Built on `feat/customers-phase-0`.
+- [x] **Phase 0a (Truthful Metrics & Sorting Cache)**:
+  - Computed real-time metrics (`orders_count`, `total_spend`, `last_order_at`) via lateral SQL fragment `customerMetricsSql(tenantId)`.
+  - Asynchronous sorting copy on `customers` table kept up-to-date with `customers.refresh_metrics` pg-boss queue and `runCustomerMetricsSweep` drift repairs.
+- [x] **Phase 0b (Guest Customers & Account Claim)**:
+  - Added `is_guest` column to `customers` table with partial index.
+  - Guest checkout creates/updates guest customer record without overwriting name or phone of existing registered accounts.
+  - Customer email verification (`verifyCustomerEmail`) securely claims guest record and attaches past orders without account takeover.
+- [x] **Phase 0c (Single Marketing Consent Record with History)**:
+  - Tenant table `customer_consent_events` recording state transitions, sources, timestamps, and staff actor IDs.
+  - Single writer `setMarketingConsent` keeps `marketing_state` and `accepts_marketing` synchronized across all consent touchpoints.
+- [x] **Verification**: `pnpm typecheck` (15/15 passed), `pnpm lint` (15/15 passed), `pnpm build` (6/6 passed), `pnpm docs:check` (ok), `@bs/domain` test:fast (28/28 files, 238 passed), `@bs/admin` test:fast (3/3 files, 25 passed), `@bs/web` test:fast (17/17 files, 163 passed), `@bs/domain` test:heavy (63/63 files, 1190 passed), `@bs/domain` isolation suite (755/755 passed).
+
+## Customers Phase 1 · List, Detail, Import, Delete (2026-10-03)
+
+Spec: `docs/CUSTOMERS-IMPLEMENTATION-PLAN.md` Phase 1 (1A, 1B, 1C) with the ZCode prompt (`docs/prompts/customers-phase1-zcode.md`). Built on `feat/customers-phase-1`; change record `docs/changes/2026-10-03-zcode-customers-phase-1.md`.
+- [x] **Phase 1A (Customers list)**: tabs All/Customers/Guests/Blocked; stats strip from the metrics fragment; marketing-state, store-wide tag and location filters; guest/blocked badges; bulk tag/status with skipped-row reporting; filtered CSV export (subscribers-only default). New procedures `customers.stats/tags/setStatus/setTags`.
+- [x] **Blocked enforcement**: phone-OTP login and storefront checkout now refuse blocked customers (password login and sessions already did); per-store isolation tested end to end.
+- [x] **Metrics fragment rewrite**: per-customer lateral replaced with grouped aggregates after measuring 13.1M buffer hits per list page at 6k customers × 24k orders; identical semantics, 2,448 buffer hits measured.
+- [x] **Phase 1B (Detail and edit)**: editable profile (verification-aware email), staff address CRUD, order history, activity timeline, status with blocked behaviour, marketing card with consent history, tags editor, notes timeline in new `customer_notes` table (migration `0029_customers_phase1`, legacy note migrated idempotently); `setMarketingConsent` refuses non-email channels (Phase 0 follow-up).
+- [x] **Phase 1C (Import and delete)**: CSV import with dry run, error file, >500-row queue (`customers.import`), consent only when the file says so, existing customers updated on name/tags only; delete hard-deletes without orders and anonymises with orders (sessions destroyed, orders kept).
+- [x] **Verification**: typecheck 15/15, lint, build, docs:check, domain fast 238, domain heavy 1,303 (64 files; three documented Windows worker-crash flakes pass alone), web 164, admin 32, isolation 840 (85 new cases). Browser-checked at 1280px and 375px on the local demo store; CSV file upload itself not drivable in the test browser (covered by real-DB tests). Ready for Claude's verification before Phase 2.
+
 ## In flight
 
 One line per piece of work that is started and not merged. Add yours before you start, remove it when merged or abandoned (`AGENTS.md` section 6). Format: `agent · branch · area · since · one-line goal`.
 
-- claude · `feat/themes-puck` · themes, docs · 2026-10-01 · theme builder follow-ups; agent docs and change log (`docs/changes/`)
-- claude · `feat/commerce-page-templates` · themes, web · 2026-10-02 · cart as a theme page (`CartContents`), sticky buy box, "Modern Commerce" draft theme with collection, product and cart layouts (`docs/changes/2026-10-02-claude-commerce-page-templates.md`)
-- antigravity · `feat/auth-email-overhaul` · auth, email · 2026-10-01 · forgot/reset password, customer password sign-in, ZeptoMail (`docs/AUTH-OVERHAUL-PLAN.md`) *(from git worktree list; confirm status)*
-- zcode · `feat/commerce-page-templates` · infra, ops · 2026-10-04 · preserved this branch's uncommitted theme-builder work (b7b8d36), restored the bsec-dev DB into the VMM stack which now runs this branch (`docs/changes/2026-10-04-zcode-handoff-theme-builder-restored.md`)
+- claude · `integrate/theme-builder` · themes, web, db · 2026-10-04 · merge feat/commerce-page-templates (theme builder work) into current main; migrations renumbered 0031/0032
+
+## Returns & Exchanges (Manual Review & Portal) — Complete (2026-10-02)
+
+Spec: `docs/ORDERS-RETURNS-PLAN.md`. Built on `feat/orders-returns`.
+- [x] **Database & Migrations**: Expand migration `0023_returns.sql` adding resolution columns (`requestedResolution`, `customerComment`, `exchangeRequest`, `decisionMessage`, `instructionsSentAt`, `refundMethod`, `refundReference`, `refundAmount`, `refundedAt`, `exchangeNote`, `exchangeOrderId`) to `returns`, `returnable` boolean to `products`, nullable `intentId` + `method` + `reference` to `refunds`, and `returnSettings` JSONB to `storeSettings`.
+- [x] **Domain Services**: State machine updated with `cancelled`, `pick_up`, `replace` transitions; manual lifecycle enhanced with return window validation, non-returnable product checks, restock inventory updates, manual refund recording for COD/offline orders, and audit logs; S3 presigned photo upload service; admin returns stats, list, and detail queries.
+- [x] **Contracts & API Endpoints**: Admin contracts for `returns.stats`, `returns.list`, `returns.get`, `returns.act`, `returnSettings.get`, `returnSettings.update`; Storefront API endpoints for return request, photo upload, finalize, and customer cancellation.
+- [x] **Store Admin Workbench & Settings**: Rebuilt `/returns` workbench with 4 KPI cards, status tabs, search & filters, CSV export, slide-out detail sheet with photo proof gallery and item breakdown, and action dialogs (approve, reject, mark picked up, receive with restock, refund, replace, close case); New `/settings/returns` page with unsaved guard, policy controls, customizable return reasons with photo requirements, and policy copy editors.
+- [x] **Storefront Portal**: Enriched guest return portal on `/o/[token]` with reason selection, exchange preferences, customer comments, photo uploads, store instructions for approved returns, and self-service cancellation.
+- [x] **Verification**: `pnpm typecheck` (15/15 passed), `pnpm lint` (15/15 passed), `pnpm --filter @bs/domain test:fast` (205 passed), `pnpm docs:check` (ok), `pnpm build` (6/6 passed).
+
+## Quotes (Lean, industry-standard model) — Complete (2026-10-02)
+
+Spec: `docs/ORDERS-QUOTES-PLAN.md`. Built on `feat/orders-quotes`.
+- [x] **Database & Migrations**: Expand-only migration `0022_quotes.sql` adding `price_on_request boolean not null default false` to `products`; new tenant table `quote_requests` with sequential gapless numbering `QT-00001` via `number_sequences`, product/variant snapshots, status machine (`new`, `quoted`, `accepted`, `lost`, `expired`), composite FKs, and RLS (`forceRlsSql`).
+- [x] **Storefront & Protection**: `addToCart` and `placeOrder` reject `price_on_request` variants; product cards and details show "Price on request" badge and accessible "Request a quote" modal dialog; public submission rate-limited by IP and email with client price override prevention.
+- [x] **Admin Workbench & Management**: Dedicated Quotes workbench at `/quotes` with 5 KPI cards (Needs reply, Quote sent, Expired, Accepted, Total quotes value), tabs, search, filter chips, DataTable, CSV export, and detail `Sheet` with notes, status transition controls (Mark lost, Reopen, Delete), and "Create quote order" button.
+- [x] **Order Conversion & Sweep**: Admin `/orders/new` prefilling customer, variant, price override from `quoteId`; linking quote creates pending order, sets `valid_until` (default 7 days); daily sweep / `runQuoteExpirySweep` cancels unconfirmed pending orders on expiry and releases reserved stock.
+- [x] **Verification**: Real Postgres integration suite (`packages/domain/test/quotes.int.test.ts`, 8/8 passed), `pnpm typecheck` (15/15 passed), `pnpm lint` (15/15 passed), `pnpm build` (all passed), `pnpm docs:check` (ok).
+
+## All Orders Phase 2 (Create Order Parity D1-D7) — Complete (2026-10-02)
+
+Spec: `docs/ORDERS-ALL-ORDERS-PLAN.md` §4.2. Built on `feat/orders-phase2`.
+- [x] **Database & Migrations**: Migration `0021_order_tags.sql` adding `tags text[]` with GIN index on `orders`.
+- [x] **Contracts & API**: Added `admin.customers.create`, `admin.orders.estimateDraft`, updated `admin.orders.createDraft` with D1-D7 fields (discounts, overrides, shipping methods, payment outcome, tags), tag filtering in `admin.orders.list`.
+- [x] **Domain Services**: Handled D1 GST Tax calculation (CGST+SGST or IGST based on store and shipping state), D2 Shipping override (capped at ₹10,000 with mandatory reason), D3 Manual discounts & line price overrides with mandatory audit reasons, D4 Payment choice ("Payment received", "Payment pending", "Cash on delivery") with customer spend updates and inventory commitment, D5 Order tags, D6 Customer picker & inline customer creation with default address, D7 Inventory reservations with shortage rejection.
+- [x] **Admin UI**: Overhauled `/orders/new` (`apps/admin/src/routes/_store/orders_.new.tsx`) with customer selector/create dialog, item search/stock check, inline price override, order discount, shipping rate calculator/override, payment terms radio group, internal notes, tags, and sticky live summary.
+- [x] **Verification**: Real Postgres integration suite (`packages/domain/test/order-phase2.int.test.ts`, 9/9 passed), full fast suite (26 files, 205 passed), `pnpm typecheck` (15/15 passed), `pnpm lint` (15/15 passed), `pnpm build` (all passed), `pnpm docs:check` (ok).
+
+## Pre-orders (Simple "ships on" model) — Complete (2026-10-02)
+
+Spec: `docs/ORDERS-PREORDERS-PLAN.md`. Built on `feat/preorders-simple`.
+- [x] **Database & Migrations**: Expand-only migration `0020_preorders.sql` adding `preorder_enabled`, `preorder_ships_on`, `preorder_message` to `variants`; `ships_on` (with partial index) and `preorder_released_at` to `orders`; `ships_on` to `order_items`.
+- [x] **Checkout & Pricing**: Pre-orders sellable at 0 stock at regular price; no inventory reservation before goods received; snapshot `ships_on` on items and order (latest date); mixed-cart notice.
+- [x] **Order Lifecycle & Hold**: Pre-order hold prevents advancing fulfillment to `shipped` before promised dispatch date unless released early via `releasePreorderNow`. Audited and recorded on order timeline.
+- [x] **Admin Workbench & Management**: Dedicated Pre-orders route `/preorders` with 5 views (All, Waiting, Ready to ship, Shipped, Cancelled), 4 KPI cards, batch ship-date rescheduling (`changePreorderShipDate`), and early release. Products cell displays pre-order pill tags.
+- [x] **Background Jobs & Sweeps**: Daily sweep (`runPreorderReminderSweep`) at 06:00 sending idempotent 2-day reminder emails; ship-date change notifications via `order.preorder_date_changed`.
+- [x] **Verification**: Real Postgres integration suite (`packages/domain/test/preorders.int.test.ts`, 7/7 passed), `pnpm typecheck` (15/15 passed), `pnpm lint` (15/15 passed), `pnpm build` (all passed), `pnpm docs:check` (ok).
 
 ## M10 · Visual theme system (Puck) — shipped to production 2026-10-01
 

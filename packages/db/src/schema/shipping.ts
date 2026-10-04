@@ -133,6 +133,17 @@ export const returns = tenantTable(
     status: text("status").notNull().default("requested"),
     reason: text("reason").notNull(),
     resolution: text("resolution").notNull().default("refund"), // refund, replacement, store_credit
+    requestedResolution: text("requested_resolution"), // customer's requested resolution
+    customerComment: text("customer_comment"),
+    exchangeRequest: text("exchange_request"), // text description of requested exchange item
+    decisionMessage: text("decision_message"), // message shown to customer on approve/reject
+    instructionsSentAt: timestamp("instructions_sent_at", { withTimezone: true }),
+    refundMethod: text("refund_method"), // upi, bank_transfer, cash, original_payment_method, other
+    refundReference: text("refund_reference"),
+    refundAmount: integer("refund_amount"), // in paise
+    refundedAt: timestamp("refunded_at", { withTimezone: true }),
+    exchangeNote: text("exchange_note"),
+    exchangeOrderId: uuid("exchange_order_id"),
     photos: uuid("photos").array().notNull().default(sql`ARRAY[]::uuid[]`),
     adminNote: text("admin_note"),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().default(sql`now()`),
@@ -155,6 +166,13 @@ export const returns = tenantTable(
       column: t.customerId,
       target: customers,
       name: "returns_customer_fk",
+      onDelete: "set null",
+    }),
+    tenantForeignKey({
+      tableTenantId: t.tenantId,
+      column: t.exchangeOrderId,
+      target: orders,
+      name: "returns_exchange_order_fk",
       onDelete: "set null",
     }),
   ],

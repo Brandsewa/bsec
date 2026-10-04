@@ -1,5 +1,6 @@
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { eq } from "drizzle-orm";
+import { primaryCategory } from "./helpers/primary-category.ts";
 import { schema } from "@bs/db";
 import { startTestDb, type TestDb } from "@bs/db/test-env";
 import {
@@ -49,7 +50,7 @@ afterAll(async () => {
 
 describe("a new product's first stock", () => {
   it("lists a variant that has never had stock (0 on hand) so the owner can add the first stock", async () => {
-    await createProduct(rtWeb, ctx, { title: "Pickle", status: "active", variants: [{ sku: "PICKLE-1", title: "Default", price: 10000 }] });
+    await createProduct(rtWeb, ctx, { title: "Pickle", status: "active", primaryCategoryId: await primaryCategory(rtWeb, ctx), variants: [{ sku: "PICKLE-1", title: "Default", price: 10000 }] });
     const list = await listInventoryLevels(rtWeb, ctx, {});
     expect(list.total).toBe(1);
     expect(list.items[0]).toMatchObject({ variantSku: "PICKLE-1", productTitle: "Pickle", onHand: 0, reserved: 0, available: 0, locationId });
@@ -73,7 +74,7 @@ describe("a new product's first stock", () => {
   });
 
   it("variants that do not track stock are not listed", async () => {
-    await createProduct(rtWeb, ctx, { title: "Gift card", status: "active", variants: [{ sku: "GIFT-1", title: "Card", price: 50000, trackInventory: false }] });
+    await createProduct(rtWeb, ctx, { title: "Gift card", status: "active", primaryCategoryId: await primaryCategory(rtWeb, ctx), variants: [{ sku: "GIFT-1", title: "Card", price: 50000, trackInventory: false }] });
     const list = await listInventoryLevels(rtWeb, ctx, {});
     expect(list.items.map((i) => i.variantSku)).toEqual(["PICKLE-1"]);
   });

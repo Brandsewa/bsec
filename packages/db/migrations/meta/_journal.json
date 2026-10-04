@@ -145,15 +145,92 @@
     {
       "idx": 20,
       "version": "7",
-      "when": 1790950000000,
-      "tag": "0020_theme_template_archive",
+      "when": 1790910000000,
+      "tag": "0020_preorders",
       "breakpoints": true
     },
     {
       "idx": 21,
       "version": "7",
+      "when": 1790920000000,
+      "tag": "0021_order_tags",
+      "breakpoints": true
+    },
+    {
+      "idx": 22,
+      "version": "7",
+      "when": 1790930000000,
+      "tag": "0022_quotes",
+      "breakpoints": true
+    },
+    {
+      "idx": 23,
+      "version": "7",
+      "when": 1790940000000,
+      "tag": "0023_returns",
+      "breakpoints": true
+    },
+    {
+      "idx": 24,
+      "version": "7",
+      "when": 1790950000000,
+      "tag": "0024_catalog_indexing",
+      "breakpoints": true
+    },
+    {
+      "idx": 25,
+      "version": "7",
       "when": 1790960000000,
-      "tag": "0021_theme_previews",
+      "tag": "0025_categories_active_featured",
+      "breakpoints": true
+    },
+    {
+      "idx": 26,
+      "version": "7",
+      "when": 1790970000000,
+      "tag": "0026_reviews",
+      "breakpoints": true
+    },
+    {
+      "idx": 27,
+      "version": "7",
+      "when": 1790980000000,
+      "tag": "0027_product_categories_primary",
+      "breakpoints": true
+    },
+    {
+      "idx": 28,
+      "version": "7",
+      "when": 1790990000000,
+      "tag": "0028_customers_phase0",
+      "breakpoints": true
+    },
+    {
+      "idx": 29,
+      "version": "7",
+      "when": 1791000000000,
+      "tag": "0029_customers_phase1",
+      "breakpoints": true
+    },
+    {
+      "idx": 30,
+      "version": "7",
+      "when": 1792000000000,
+      "tag": "0030_customers_segments",
+      "breakpoints": true
+    },
+    {
+      "idx": 31,
+      "version": "7",
+      "when": 1792010000000,
+      "tag": "0031_theme_template_archive",
+      "breakpoints": true
+    },
+    {
+      "idx": 32,
+      "version": "7",
+      "when": 1792020000000,
+      "tag": "0032_theme_previews",
       "breakpoints": true
     }
   ]

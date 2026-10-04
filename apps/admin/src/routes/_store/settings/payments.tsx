@@ -1,4 +1,4 @@
-import { createFileRoute } from "@tanstack/react-router";
+import { createFileRoute, useRouteContext } from "@tanstack/react-router";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useState, type FormEvent } from "react";
 import { AlertTriangle } from "lucide-react";
@@ -23,6 +23,9 @@ const DESCRIPTION = "Choose how customers can pay and connect your own payment g
 
 export function PaymentsSettingsPage() {
   const status = useQuery(orpc.admin.payments.get.queryOptions());
+  const { store } = useRouteContext({ from: "/_store" });
+  // ADR-020: gateway credentials are owner-only; others see status, not the form.
+  const canManageCredentials = (store?.permissions ?? []).includes("payments.manage");
 
   if (status.isLoading) {
     return (
@@ -58,7 +61,13 @@ export function PaymentsSettingsPage() {
         </SettingsSection>
       ) : null}
       <CodForm initial={status.data.cod} />
-      <RazorpayForm razorpay={status.data.razorpay} keyMissing={!status.data.encryptionKeyConfigured} />
+      {canManageCredentials ? (
+        <RazorpayForm razorpay={status.data.razorpay} keyMissing={!status.data.encryptionKeyConfigured} />
+      ) : (
+        <SettingsSection title="Razorpay" description="Payment gateway keys can only be changed by the Store Owner.">
+          <p className="text-xs">Status: {status.data.razorpay.configured ? `Connected (key ${status.data.razorpay.keyIdHint ?? ""})` : "Not connected"}</p>
+        </SettingsSection>
+      )}
     </SettingsPageFrame>
   );
 }

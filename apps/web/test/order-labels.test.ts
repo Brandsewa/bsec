@@ -15,3 +15,14 @@ describe("thank-you page wording", () => {
     expect(describePayment("cancelled")).toBe("No payment due");
   });
 });
+
+describe("order status page wording", () => {
+  it("never shows a raw system value for a payment", () => {
+    expect(describePayment("cod_collected")).toBe("Paid in cash on delivery");
+    expect(describePayment("partially_refunded")).toBe("Partially refunded");
+    expect(describePayment("failed")).toBe("Payment failed");
+    for (const s of ["cod_pending", "cod_collected", "paid", "refunded", "partially_refunded", "failed", "pending"]) {
+      expect(describePayment(s)).not.toMatch(/_/);
+    }
+  });
+});

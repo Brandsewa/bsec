@@ -2,11 +2,14 @@ import { sql } from "drizzle-orm";
 import {
   bigint,
   boolean,
+  check,
   index,
   integer,
+  jsonb,
   text,
   timestamp,
   unique,
+  uniqueIndex,
   uuid,
 } from "drizzle-orm/pg-core";
 import { tenantForeignKey, tenantTable } from "../tenant-table.ts";
@@ -27,8 +30,12 @@ export const customers = tenantTable(
     emailVerified: boolean("email_verified").notNull().default(false),
     phoneVerified: boolean("phone_verified").notNull().default(false),
     passwordHash: text("password_hash"),
+    isGuest: boolean("is_guest").notNull().default(false),
     acceptsMarketing: boolean("accepts_marketing").notNull().default(false),
     marketingConsentAt: timestamp("marketing_consent_at", { withTimezone: true }),
+    marketingState: text("marketing_state").notNull().default("not_subscribed"), // subscribed, unsubscribed, not_subscribed, invalid
+    marketingSource: text("marketing_source"),
+    marketingUpdatedAt: timestamp("marketing_updated_at", { withTimezone: true }),
     tags: text("tags").array().notNull().default(sql`ARRAY[]::text[]`),
     note: text("note"),
     totalSpent: bigint("total_spent", { mode: "number" }).notNull().default(0),
@@ -44,6 +51,66 @@ export const customers = tenantTable(
     unique("customers_tenant_phone_uniq").on(t.tenantId, t.phone),
     unique("customers_tenant_id_uniq").on(t.tenantId, t.id),
     index("customers_tenant_status_idx").on(t.tenantId, t.status),
+    index("customers_tenant_guest_idx").on(t.tenantId, t.isGuest),
+    index("customers_tenant_marketing_state_idx").on(t.tenantId, t.marketingState),
+  ],
+);
+
+/**
+ * Customer Consent Events (PLAN §0c / DPDP Compliance).
+ * Immutable append-only audit trail of customer marketing consent transitions.
+ */
+export const customerConsentEvents = tenantTable(
+  "customer_consent_events",
+  {
+    id: uuid("id").default(sql`uuidv7()`).primaryKey(),
+    customerId: uuid("customer_id").notNull(),
+    channel: text("channel").notNull().default("email"), // email, sms
+    state: text("state").notNull(), // subscribed, unsubscribed, not_subscribed, invalid
+    source: text("source").notNull(), // checkout, storefront_form, account_page, admin, import, unsubscribe_link, legacy
+    actorType: text("actor_type").notNull().default("customer"), // customer, staff, system
+    actorId: text("actor_id"),
+    ip: text("ip"),
+    at: timestamp("at", { withTimezone: true }).notNull().default(sql`now()`),
+  },
+  (t) => [
+    unique("customer_consent_events_tenant_id_uniq").on(t.tenantId, t.id),
+    index("customer_consent_events_tenant_cust_at_idx").on(t.tenantId, t.customerId, t.at),
+    tenantForeignKey({
+      tableTenantId: t.tenantId,
+      column: t.customerId,
+      target: customers,
+      name: "customer_consent_events_customer_fk",
+      onDelete: "cascade",
+    }),
+  ],
+);
+
+/**
+ * Customer Notes (Customers Phase 1, step 1B).
+ * Staff-visible timeline of internal notes about a customer; replaces the single
+ * `customers.note` column (which is migrated into the first note by migration 0029).
+ */
+export const customerNotes = tenantTable(
+  "customer_notes",
+  {
+    id: uuid("id").default(sql`uuidv7()`).primaryKey(),
+    customerId: uuid("customer_id").notNull(),
+    /** Staff author; null for the migrated legacy note or system-written notes. */
+    authorId: uuid("author_id"),
+    body: text("body").notNull(),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().default(sql`now()`),
+  },
+  (t) => [
+    unique("customer_notes_tenant_id_uniq").on(t.tenantId, t.id),
+    index("customer_notes_tenant_cust_created_idx").on(t.tenantId, t.customerId, t.createdAt),
+    tenantForeignKey({
+      tableTenantId: t.tenantId,
+      column: t.customerId,
+      target: customers,
+      name: "customer_notes_customer_fk",
+      onDelete: "cascade",
+    }),
   ],
 );
 
@@ -110,6 +177,70 @@ export const wishlistItems = tenantTable(
       column: t.variantId,
       target: variants,
       name: "wishlist_items_variant_fk",
+      onDelete: "cascade",
+    }),
+  ],
+);
+
+/**
+ * Customer Segments (Customers Phase 2, PLAN §2).
+ * Manual segments hold explicit membership rows (`customer_segment_members`);
+ * automatic segments hold a validated JSON rule set on `rules` and are evaluated
+ * live (no membership rows, enforced in the domain service). At most 20 per store.
+ */
+export const customerSegments = tenantTable(
+  "customer_segments",
+  {
+    id: uuid("id").default(sql`uuidv7()`).primaryKey(),
+    name: text("name").notNull(),
+    description: text("description"),
+    kind: text("kind").notNull().default("manual"), // 'manual' | 'automatic'
+    rules: jsonb("rules"), // rule set for automatic segments; null for manual
+    isPreset: boolean("is_preset").notNull().default(false),
+    memberCount: integer("member_count").notNull().default(0),
+    countedAt: timestamp("counted_at", { withTimezone: true }),
+    createdBy: uuid("created_by"),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().default(sql`now()`),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().default(sql`now()`),
+  },
+  (t) => [
+    unique("customer_segments_tenant_id_uniq").on(t.tenantId, t.id),
+    // Name is unique per store case-insensitively (PLAN §2).
+    uniqueIndex("customer_segments_tenant_name_ci_uniq").on(t.tenantId, sql`lower(${t.name})`),
+    index("customer_segments_tenant_kind_idx").on(t.tenantId, t.kind),
+    check("customer_segments_kind_chk", sql`${t.kind} IN ('manual', 'automatic')`),
+    check("customer_segments_rules_chk", sql`(${t.kind} = 'manual' AND ${t.rules} IS NULL) OR (${t.kind} = 'automatic' AND ${t.rules} IS NOT NULL)`),
+  ],
+);
+
+/**
+ * Customer Segment Members (Customers Phase 2, PLAN §2). Manual segments only;
+ * membership rows cascade away with the segment or the customer.
+ */
+export const customerSegmentMembers = tenantTable(
+  "customer_segment_members",
+  {
+    id: uuid("id").default(sql`uuidv7()`).primaryKey(),
+    segmentId: uuid("segment_id").notNull(),
+    customerId: uuid("customer_id").notNull(),
+    addedBy: uuid("added_by"),
+    addedAt: timestamp("added_at", { withTimezone: true }).notNull().default(sql`now()`),
+  },
+  (t) => [
+    unique("customer_segment_members_uniq").on(t.tenantId, t.segmentId, t.customerId),
+    index("customer_segment_members_tenant_cust_idx").on(t.tenantId, t.customerId),
+    tenantForeignKey({
+      tableTenantId: t.tenantId,
+      column: t.segmentId,
+      target: customerSegments,
+      name: "customer_segment_members_segment_fk",
+      onDelete: "cascade",
+    }),
+    tenantForeignKey({
+      tableTenantId: t.tenantId,
+      column: t.customerId,
+      target: customers,
+      name: "customer_segment_members_customer_fk",
       onDelete: "cascade",
     }),
   ],

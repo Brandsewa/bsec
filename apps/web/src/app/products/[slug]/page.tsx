@@ -10,7 +10,7 @@ import {
   getStorefrontSeoSettings,
   generateProductJsonLd,
   generateBreadcrumbJsonLd,
-  formatTitle,
+  buildProductSeoMetadata,
   tenantTag,
 } from "@bs/domain";
 import { server } from "@/server/runtime.ts";
@@ -48,19 +48,21 @@ export async function generateMetadata({ params }: ProductPageProps): Promise<Me
       ]);
 
       if (product) {
-        const storeName = storeSettings?.storeName ?? "Store";
-        const metaTitle = formatTitle(seoSettings?.titleTemplate, product.title, storeName);
-        const description = product.shortDescription ?? `Buy ${product.title} at ${storeName}.`;
-        const firstImage = product.media?.[0]?.url;
+        const seoMeta = buildProductSeoMetadata({
+          product,
+          seoSettings,
+          storeSettings,
+          storeStatusMode: access.mode,
+          noindex: access.noindex,
+          host,
+        });
 
         return {
-          title: metaTitle,
-          description,
-          openGraph: {
-            title: metaTitle,
-            description,
-            images: firstImage ? [{ url: firstImage }] : undefined,
-          },
+          title: seoMeta.title,
+          description: seoMeta.description,
+          robots: seoMeta.robots,
+          openGraph: seoMeta.openGraph,
+          alternates: seoMeta.alternates,
         };
       }
     }

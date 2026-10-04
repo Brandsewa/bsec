@@ -11,6 +11,7 @@ export interface OrderItemSummary {
   quantity: number;
   unitPrice: number;
   total: number;
+  shipsOn?: string | null | undefined;
 }
 
 export interface CustomerOrderSummary {
@@ -25,6 +26,7 @@ export interface CustomerOrderSummary {
   shippingTotal: number;
   grandTotal: number;
   placedAt: Date;
+  shipsOn?: string | null | undefined;
   itemsCount?: number | undefined;
 }
 
@@ -47,15 +49,27 @@ async function ownedBy(tx: Db, tenantId: string, customerId: string) {
       phoneVerified: customers.phoneVerified,
       email: customers.email,
       emailVerified: customers.emailVerified,
+      isGuest: customers.isGuest,
     })
     .from(customers)
     .where(and(eq(customers.tenantId, tenantId), eq(customers.id, customerId)));
 
+  if (!c) {
+    return eq(orders.customerId, customerId);
+  }
+
+  // An unverified registration / account must NOT show historical or guest orders until email/phone is verified
+  const isVerified = Boolean(c.emailVerified || c.phoneVerified);
+  if (!isVerified) {
+    // Return empty condition (matching impossible order id) to prevent leaking orders to unverified claimants
+    return sql`1 = 0`;
+  }
+
   const conditions = [eq(orders.customerId, customerId)];
-  if (c?.phone && c.phoneVerified) {
+  if (c.phone && c.phoneVerified) {
     conditions.push(eq(orders.phone, c.phone));
   }
-  if (c?.email && c.emailVerified && !c.email.endsWith("@customer.store")) {
+  if (c.email && c.emailVerified && !c.email.endsWith("@customer.store")) {
     conditions.push(eq(orders.email, c.email));
   }
   const primary = conditions[0] ?? eq(orders.customerId, customerId);
@@ -136,6 +150,7 @@ export async function getCustomerOrderDetail(
       shippingTotal: order.shippingTotal,
       grandTotal: order.grandTotal,
       placedAt: order.placedAt,
+      shipsOn: order.shipsOn ? String(order.shipsOn) : null,
       email: order.email,
       phone: order.phone,
       shippingAddress: order.shippingAddress,
@@ -149,6 +164,7 @@ export async function getCustomerOrderDetail(
         quantity: it.quantity,
         unitPrice: it.unitPrice,
         total: it.total,
+        shipsOn: it.shipsOn ? String(it.shipsOn) : null,
       })),
     };
   });
@@ -210,6 +226,7 @@ export async function getOrderByActionToken(
       shippingTotal: order.shippingTotal,
       grandTotal: order.grandTotal,
       placedAt: order.placedAt,
+      shipsOn: order.shipsOn ? String(order.shipsOn) : null,
       email: order.email,
       phone: order.phone,
       shippingAddress: order.shippingAddress,
@@ -223,6 +240,7 @@ export async function getOrderByActionToken(
         quantity: it.quantity,
         unitPrice: it.unitPrice,
         total: it.total,
+        shipsOn: it.shipsOn ? String(it.shipsOn) : null,
       })),
     };
   });

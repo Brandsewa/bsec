@@ -4,7 +4,7 @@
 
 | | |
 |---|---|
-| Last verified against | commit `f4b9b4f` on branch `feat/commerce-page-templates`, 2026-10-02 |
+| Last verified against | commit `4706032` on `feat/settings-rebuild-phase-2` (Settings rebuild Phase 2: permissions, users & accounts, activity), 2026-10-04 |
 | Verified how | files read from the working tree; `pnpm docs:check` for the mechanical parts. Facts marked *(from code)* were read, not run. |
 | Owner | whoever changes the area (see the update triggers in section 0) |
 
@@ -103,7 +103,7 @@ pnpm workspace + Turborepo. Node `24.15`, pnpm `10.34.5`, TypeScript 6, ESLint 1
 | Path | Package | What it holds |
 |---|---|---|
 | `packages/db` | `@bs/db` | Drizzle schema (`src/schema/*`), `tenantTable()` helper, migrations (`migrations/`), role bootstrap and migrate scripts (`src/scripts`), queue registry (`src/queues.ts`) |
-| `packages/domain` | `@bs/domain` | **All business logic.** Services per area (catalog, orders, customers, themes, saas, platform, system), `TenantContext`, `withTenant` runtime, cache tags and invalidation, job handlers (`jobs.ts`), logger |
+| `packages/domain` | `@bs/domain` | **All business logic.** Services per area (catalog, orders, returns, return-photos, return-settings, order-settings, preorders, quotes, customers, themes, saas, platform, system), `TenantContext`, `withTenant` runtime, cache tags and invalidation, job handlers (`jobs.ts`), logger |
 | `packages/contracts` | `@bs/contracts` | oRPC contracts + Zod schemas: `admin.ts`, `storefront.ts`, `platform.ts`, `index.ts` (`storeContract`, `platformContract`) |
 | `packages/auth` | `@bs/auth` | Better Auth configs (`staff.ts`, `platform.ts`, `customer.ts`), `STORE_PERMISSIONS`, `PLATFORM_ROLES`, system roles |
 | `packages/blocks` | `@bs/blocks` | Versioned block registry (Zod schemas + views), document validation, sanitiser, tree renderer, theme page templates, `--bs-*` theme variables |
@@ -198,23 +198,24 @@ Drizzle schema files in `packages/db/src/schema/` (one Postgres database, `publi
 |---|---|
 | `tenants.ts` | `organizations` P, `tenants` P |
 | `identity.ts` | `users`, `sessions`, `accounts`, `verifications`, `two_factors` (Better Auth, store staff) P; `roles`, `memberships`, `staff_invitations`, `audit_logs`, `customer_sessions` T |
-| `catalog.ts` | `media`, `brands`, `locations`, `categories`, `products`, `product_options`, `variants`, `product_media`, `product_categories`, `collections`, `collection_products`, `inventory_levels`, `inventory_movements` T |
+| `catalog.ts` | `media`, `brands`, `locations`, `categories`, `products`, `product_options`, `variants`, `product_media`, `product_categories`, `collections`, `collection_products`, `inventory_levels`, `inventory_movements`, `reviews` T |
 | `inventory-reservations.ts` | `inventory_reservations` T |
 | `cart.ts` | `carts`, `cart_items` T |
-| `customers.ts` | `customers`, `customer_addresses`, `wishlist_items`, `customer_otps` T |
+| `customers.ts` | `customers`, `customer_notes`, `customer_addresses`, `customer_consent_events`, `customer_segments`, `customer_segment_members`, `wishlist_items`, `customer_otps` T |
 | `orders.ts` | `orders`, `order_items`, `order_events`, `order_notes`, `number_sequences`, `action_tokens` T |
 | `payments.ts` | `payment_intents`, `payment_attempts`, `refunds` T |
 | `shipping.ts` | `fulfillments`, `fulfillment_items`, `tracking_events`, `returns`, `return_items`, `invoices`, `shipping_zones`, `shipping_rates` T |
 | `marketing.ts` | `newsletter_subscribers`, `discounts`, `discount_redemptions` T |
 | `content.ts` | `themes`, `pages`, `page_versions`, `menus` T |
 | `branding.ts` | `brand_settings` T |
-| `settings.ts` | `store_settings`, `store_status`, `seo_settings` T |
+| `settings.ts` | `store_settings` (including `return_settings` JSONB, `auto_publish_reviews`), `store_status`, `seo_settings` T |
 | `search.ts` | `search_queries` T |
 | `system.ts` | `webhook_inbox`, `idempotency_keys`, `email_log` |
 | `tenant-secrets.ts` | `tenant_secrets` T |
 | `platform.ts` | `domains`, `feature_flags`, `tenant_feature_overrides`, `platform_staff`, `platform_staff_invitations`, `support_sessions`, `tenant_deletions`, `tenant_notes`, `export_files` |
 | `quotas.ts` | `rate_limit_counters`, `quota_definitions`, `tenant_size_tiers`, `tenant_quota_overrides`, `quota_events`, `tenant_active_jobs` |
 | `saas.ts` | `plans`, `subscriptions`, `platform_invoices`, `platform_audit_logs`, `theme_templates`, `signup_leads`, `slug_reservations`, `reserved_slugs`, `onboarding_progress`, `tenant_owner_invites`, `exports` |
+| `quotes.ts` | `quote_requests` T |
 | `index.ts` | `_platform_meta` |
 
 (Exact tenant/platform split per table: check the declaration, `tenantTable(` vs `pgTable(`. Column details: read the schema file.)
@@ -243,10 +244,21 @@ Drizzle schema files in `packages/db/src/schema/` (one Postgres database, `publi
 | 0017 | `platform_email` | `platform_email_settings` and email log (auth overhaul, phase A) |
 | 0018 | `customer_auth` | `customers.phone` nullable, so customers can register with email + password |
 | 0019 | `domain_bcom_si` | platform domain gobs.cloud -> bcom.si: rewrites platform `domains` hostnames and the default sender |
-| 0020 | `theme_template_archive` | `theme_templates.archived_at` (library draft / published / archived states) |
-| 0021 | `theme_previews` | `theme_previews`: short-lived shareable snapshots of a theme draft (`/preview/<code>`); the web role can only read it |
+| 0020 | `preorders` | preorder flags on variants, ships_on on variants/orders/order_items, preorder_released_at |
+| 0021 | `order_tags` | orders.tags text[] array for categorization and filtering |
+| 0022 | `quotes` | products.price_on_request, quote_requests table with RLS and number sequences |
+| 0023 | `returns` | returns & return_items resolution columns, product returnable flag, store returnSettings |
+| 0024 | `catalog_indexing` | collections.indexable boolean for SEO indexing controls |
+| 0025 | `categories_active_featured` | categories.is_active and is_featured columns |
+| 0026 | `reviews` | reviews table with RLS, ratings check constraint, store_settings.auto_publish_reviews |
+| 0027 | `product_categories_primary` | product_categories.is_primary column with unique index per product |
+| 0028 | `customers_phase0` | customers is_guest, marketing consent fields, and customer_consent_events table |
+| 0029 | `customers_phase1` | customer_notes table (staff notes timeline); migrates the single customers.note into the first note |
+| 0030 | `customers_segments` | customer_segments and customer_segment_members tables (Customers Phase 2) |
+| 0031 | `theme_template_archive` | `theme_templates.archived_at` (library draft / published / archived states) |
+| 0032 | `theme_previews` | `theme_previews`: short-lived shareable snapshots of a theme draft (`/preview/<code>`); the web role can only read it |
 
-How to write one (expand, migrate, contract; `forceRlsSql`): `docs/migrations.md`. **Never edit an applied migration.** Latest on disk: `0021` (the docs check keeps this list honest).
+How to write one (expand, migrate, contract; `forceRlsSql`): `docs/migrations.md`. **Never edit an applied migration.** Latest on disk: `0030` (the docs check keeps this list honest).
 
 ---
 
@@ -257,9 +269,9 @@ Contracts are the single source of truth (`packages/contracts`); handlers are in
 **`storeContract`** (`@bs/contracts`, mounted in web at `/api`)
 - `system.health`
 - `storefront.*`: `search`, `searchSuggestions`, `cart.{get,addItem,updateItem,removeItem,clear,estimateShipping}`, `newsletter.subscribe`, `status.verifyPassword`
-- `admin.*` (membership + `X-Store-Id`): `support`, `me`, `payments` (Razorpay credentials), `memberships`/`roles`/`invitations`, `settings`, `featureFlags`, `products` (+ `variants`, media attach/detach), `categories`, `collections`, `brands`, `inventory`, `media` (R2 presigned upload), `branding`, `themes` (`get`, `update`, `library`, `preview`, `activate`), `pages` (`list`, `get`, `versions`, `blockData`, `create`, `update`, `saveDraft`, `publish`, `rollback`), `menus`, `orders` (list, get, createDraft, notes, cancel, refund, fulfillment, invoice, confirm, advance), `returns`, `customers`, `discounts`, `shipping`, `storefront` (status), `onboarding`, `billing`, `domains`
+- `admin.*` (membership + `X-Store-Id`): `support`, `me`, `payments` (Razorpay credentials), `memberships`/`roles`/`invitations`, `settings`, `settingsOverview`, `settingsActivity` (`list`), `orderSettings` (`get`, `update`), `returnSettings` (`get`, `update`), `featureFlags`, `products` (+ `variants`, media attach/detach), `categories`, `collections`, `brands`, `locations`, `reviews`, `inventory`, `media` (R2 presigned upload), `branding`, `themes` (`get`, `update`, `library`, `preview`, `activate`), `pages` (`list`, `get`, `versions`, `blockData`, `create`, `update`, `saveDraft`, `publish`, `rollback`), `menus`, `orders` (list, stats, get, createDraft, notes, cancel, refund, fulfillment, invoice, confirm, advance), `abandonedCheckouts` (stats, list), `returns` (stats, list, get, act), `customers` (list, stats, tags, get, create, update, orders, activity, consent, addresses, notes, status, set tags, import preview/commit, delete), `segments` (list, get, create, update, delete, preview, members list/add/remove, refreshCount, forCustomer, activity, presets create), `discounts`, `shipping`, `storefront` (status), `onboarding`, `billing`, `domains`
 
-**Non-oRPC routes in web** (`apps/web/src/app/api/`): `storefront/cart/*`, `storefront/checkout/place-order`, `storefront/customer/*` (OTP request/verify, profile, addresses, logout), `storefront/orders/[token]/return`, `storefront/address/[token]`, `storefront/unsubscribe/[token]`, `storefront/search/suggestions`, `storefront/status/evaluate`, `webhooks/[provider]`, `webhooks/platform-billing`, `health`, and the catch-all `[[...route]]` that mounts the Hono app (Better Auth at `/api/auth/*`, oRPC).
+**Non-oRPC routes in web** (`apps/web/src/app/api/`): `storefront/cart/*`, `storefront/checkout/place-order`, `storefront/customer/*` (OTP request/verify, profile, addresses, logout), `storefront/orders/[token]/return` (+ `/photo`, `/photo/finalize`, `/cancel`), `storefront/reviews` (GET list, POST create), `storefront/address/[token]`, `storefront/unsubscribe/[token]`, `storefront/search/suggestions`, `storefront/status/evaluate`, `webhooks/[provider]`, `webhooks/platform-billing`, `health`, and the catch-all `[[...route]]` that mounts the Hono app (Better Auth at `/api/auth/*`, oRPC).
 
 **`platformContract`** (`apps/platform`): `system` (health, data, retryJob, retryWebhook), `overview`, `tenants` (list/detail/create-for-client/suspend/restore/archive/plan/trial/ownership/notes/bulk ops/schedule deletion), `domains`, `plans`, `signups`, `templates` (theme templates: create, edit in Puck, publish, hide), `support`, `quotas`, `features`, `staff`, `audit`. Plain HTTP: `/api/auth/*`, `/api/platform/me`, `/api/platform/mfa/complete`, `/api/platform/staff/accept-invitation`, `/api/platform/exports/:id/download`, `/health`.
 
@@ -271,7 +283,7 @@ Procedure-level detail: open the contract file; do not duplicate it here.
 
 **Storefront (`apps/web/src/app`)**: `/` (home), `/products/[slug]`, `/collections/[slug]`, `/categories/[slug]`, `/search`, `/cart`, `/checkout`, `/orders/[token]/thank-you`, `/o/[token]` (guest order view + return request), `/cod/[token]`, `/account` (+ `orders/[id]`, `addresses`, `profile`), `/address/[token]`, `/unsubscribe/[token]`, `/pages/[slug]`, `/policies/[type]`, `/blog`, `/blog/[slug]`, `/signup` (marketing host only), `robots.txt`, `sitemap.xml`. Every `page.tsx` needs a sibling `loading.tsx` (`bs/route-pending`).
 
-**Store admin (`apps/admin/src/routes`, TanStack file routes; `routeTree.gen.ts` is generated, not committed)**: `login`, `accept-invite`, `_store/` (dashboard `index`, `orders` + `orders_.$orderId` + `orders_.new`, `products` (+ `new`, `$id`), `inventory`, `customers` (+ detail), `discounts` (+ `new`), `returns`, `online-store/{theme, theme-library, pages, menus}`, `settings/{index, branding, payments, shipping, storefront, support, taxes, team}`), `_editor/online-store/{editor/$pageId, theme-settings}` (Puck), `platform` and `support` shells. UI conventions: `docs/admin-ui-standards.md`.
+**Store admin (`apps/admin/src/routes`, TanStack file routes; `routeTree.gen.ts` is generated, not committed)**: `login`, `accept-invite`, `_store/` (dashboard `index`, `orders` + `orders_.$orderId` + `orders_.new`, `products` (+ `new`, `$id`), `categories` (+ `categories_.new`, `categories_.$id`), `collections` (+ `collections_.new`, `collections_.$id`), `brands`, `locations` (+ `locations_.new`, `locations_.$id`), `reviews`, `inventory`, `customers` (+ detail), `segments` (+ `new`, `$segmentId`), `discounts` (+ `new`), `returns`, `abandoned-checkouts`, `online-store/{theme, theme-library, pages, menus}`, `settings/{index (Overview), store-details, orders, returns, branding, payments, shipping, storefront, support, taxes, users (Users & accounts, legacy /settings/team redirects), activity}`), `_editor/online-store/{editor/$pageId, theme-settings}` (Puck), `platform` and `support` shells. UI conventions: `docs/admin-ui-standards.md`.
 
 **Super Admin (`apps/superadmin/src/pages`)**: Overview, TenantsList, TenantDetail, TenantCreate, Signups, Plans, Quotas, Features, Domains, Support, System, Staff, AuditLog, Templates, TemplateEditor, Login, AcceptInvitation.
 
@@ -293,9 +305,11 @@ Theme flow: platform staff build `theme_templates` (draft + published snapshot, 
 
 `packages/db/src/queues.ts` is the queue registry (created by the migrate step, so runtime roles never need DDL). Handlers and schedules: `packages/domain/src/jobs.ts`, started by `apps/worker`.
 
-Queues: `system.ping`, `order.created`, `order.paid`, `order.cod_confirmed`, `order.cancelled`, `reservation.expiry`, `webhook.process`, `idempotency.cleanup`, `fulfillment.created`, `fulfillment.delivered`, `fulfillment.rto`, `return.requested`, `refund.processed`, `cart.abandoned`, `cart.recovery_sweep`, `subscription.trial_expiry_sweep`.
+Queues: `system.ping`, `segments.refresh_counts`, `order.created`, `order.paid`, `order.cod_confirmed`, `order.cancelled`, `reservation.expiry`, `webhook.process`, `idempotency.cleanup`, `fulfillment.created`, `fulfillment.delivered`, `fulfillment.rto`, `return.requested`, `refund.processed`, `cart.abandoned`, `cart.recovery_sweep`, `subscription.trial_expiry_sweep`, `order.preorder_date_changed`, `order.preorder_reminder_sweep`, `order.return_photo_cleanup`, `customers.refresh_metrics`, `customers.import` (CSV imports over 500 rows).
 
-Schedules: `reservation.expiry` every minute, `idempotency.cleanup` every 15 min, `cart.recovery_sweep` and `subscription.trial_expiry_sweep` hourly. Email handlers currently send placeholder text (no provider configured; see `progress.md`). Tenant deletion runs in the platform service on a timer (`DELETION_SWEEP_INTERVAL_MS`).
+Schedules: `reservation.expiry` every minute, `idempotency.cleanup` every 15 min, `cart.recovery_sweep` and `subscription.trial_expiry_sweep` hourly, `segments.refresh_counts` every 6 hours, `order.preorder_reminder_sweep` daily (06:00), `order.return_photo_cleanup` daily (03:00). Email handlers currently send placeholder text (no provider configured; see `progress.md`). Tenant deletion runs in the platform service on a timer (`DELETION_SWEEP_INTERVAL_MS`).
+
+**Return photos (customer evidence).** Presign and finalize run under the order link token (`resolveOrderIdFromToken`), keys are `tenants/<tenantId>/returns/<orderId>/<mediaId>.<jpg|png|webp>`, finalize looks the real object up in storage and checks its magic bytes (fails closed). Photos live in a **separate private R2 bucket** (`R2_PRIVATE_BUCKET_NAME`, never the public media bucket); the admin reads them through 15-minute signed URLs; with no private bucket configured the portal does not ask for photos. `order.return_photo_cleanup` (daily) deletes finalized-but-unattached photos older than 24 hours per tenant under RLS and keeps the record if the file cannot be deleted; store deletion (`platform/deletion-steps.ts`) removes photos from both buckets. Objects uploaded but never finalized need a bucket lifecycle rule (see `DEPLOYMENT.md`).
 
 **Adding a queue:** add to `QUEUES` and `QUEUE_NAMES`, add the handler in `jobs.ts`, add a test in `queue-consumers.int.test.ts`, and enqueue inside the business transaction.
 
@@ -310,7 +324,7 @@ Schedules: `reservation.expiry` every minute, `idempotency.cleanup` every 15 min
 | Shopper | Phone OTP -> server-side `customer_sessions` row (hashed token, httpOnly cookie). OTP codes are never returned over HTTP | `packages/domain/src/customers/{otp,session}.ts`, ADR-012 |
 | Guests | Signed action tokens (`/o/`, `/cod/`, `/address/`, `/unsubscribe/`) | `orders/actions.ts`, `action_tokens` |
 
-Store permissions (`STORE_PERMISSIONS`): `products.read/write`, `orders.read/write/refund`, `customers.read/write`, `discounts.write`, `content.write`, `theme.publish`, `settings.write`, `staff.manage`, `analytics.read`, `exports.run`. System roles: `store_owner`, `store_admin`. Support sessions get read permissions plus a restricted write set (`context.ts`). Enforce with `assertPermission(ctx, "...")` in the **domain service**, not only in the route.
+Store permissions (`STORE_PERMISSIONS`): `products.read/write`, `orders.read/write/refund`, `customers.read/write`, `discounts.write`, `content.write`, `theme.publish`, `settings.write`, `staff.manage`, `analytics.read`, `exports.run`, plus settings capability families (Phase 2, ADR-020): `settings.read/manage`, `branding.manage`, `storefront.manage`, `checkout.manage`, `payments.manage`, `shipping.manage`, `taxes.manage`, `orders.settings.manage`, `returns.manage`, `notifications.manage`, `domains.manage`, `policies.manage`, `privacy.manage`, `audit.read`. System roles: `store_owner` (all), `store_admin` (all except `payments.manage`). Support sessions get read permissions plus a restricted write set (`context.ts`), strictly excluding all settings capability families. Enforce with `assertPermission(ctx, "...")` in the **domain service**, not only in the route. Check-time aggregate in `@bs/auth` maps legacy `settings.write` to migrated families.
 
 In flight: an auth overhaul (forgot/reset password, customer password sign-in, platform ZeptoMail email) is planned in `docs/AUTH-OVERHAUL-PLAN.md`, being built on branch `feat/auth-email-overhaul`.
 
@@ -351,7 +365,7 @@ Guard tests worth knowing: isolation suites (tenant leakage), `audit-coverage` (
 
 ## 16. Decisions (ADRs)
 
-Index and statuses: [`docs/adr/README.md`](adr/README.md). Summary of what each fixes in place: 001 modular monolith, 002 RLS isolation, 003 Postgres is the source of truth, 004 Cache Components, 005 oRPC, 006 pg-boss, 007 Cloudflare for SaaS, 008 payment adapter, 009 versioned block registry, 010 no merchant code, 011 feature flags and fallbacks, 012 customer sessions, 013 quotas and rate limits, 014 admin auth (and a separate 014 on platform billing separation, see gaps), 015 quota hierarchy, 016 provisioning atomicity, 017 custom domain adapter, 018 visual theme editor. New architectural decisions need an ADR **before** the code.
+Index and statuses: [`docs/adr/README.md`](adr/README.md). Summary of what each fixes in place: 001 modular monolith, 002 RLS isolation, 003 Postgres is the source of truth, 004 Cache Components, 005 oRPC, 006 pg-boss, 007 Cloudflare for SaaS, 008 payment adapter, 009 versioned block registry, 010 no merchant code, 011 feature flags and fallbacks, 012 customer sessions, 013 quotas and rate limits, 014 admin auth (and a separate 014 on platform billing separation, see gaps), 015 quota hierarchy, 016 provisioning atomicity, 017 custom domain adapter, 018 visual theme editor, 019 customer auth and platform mailer, 020 settings capability families and granular authorization. New architectural decisions need an ADR **before** the code.
 
 ---
 
@@ -359,7 +373,7 @@ Index and statuses: [`docs/adr/README.md`](adr/README.md). Summary of what each 
 
 Keep this list honest; remove an item when fixed.
 
-- Two ADRs are numbered 014 (`014-admin-auth-and-api-access.md`, `014-platform-billing-separation.md`). Not renumbered because other docs link to them; the next ADR is **019**.
+- Two ADRs are numbered 014 (`014-admin-auth-and-api-access.md`, `014-platform-billing-separation.md`). Not renumbered because other docs link to them; the next ADR is **021**.
 - ADR for M9 decisions is still to be written (`progress.md`).
 - `progress.md` and `DEPLOYMENT.md` contain test counts and dates that go stale; prefer CI.
 - Procedure-level API docs are the contract files themselves; there is no generated OpenAPI doc checked in.

@@ -6,6 +6,7 @@ import { ProductGallery } from "./ProductGallery.tsx";
 import { VariantSelector } from "./VariantSelector.tsx";
 import { MobileBuyBar } from "./MobileBuyBar.tsx";
 import { StockEtaSkeleton } from "./StockEtaHole.tsx";
+import { ProductReviewsSection } from "./ProductReviewsSection.tsx";
 
 // Server-side copy of the price format (VariantSelector's is a client module and cannot be called from here).
 const formatInr = (paise: number) =>
@@ -112,6 +113,9 @@ export function ProductDetailSection({
         </div>
       </div>
       {options.stickyMobileBar ? <MobileBuyBar title={product.title} priceLabel={priceLabel} /> : null}
+
+      {/* Product Reviews & Rating Summary */}
+      <ProductReviewsSection productId={product.id} productTitle={product.title} />
     </div>
   );
 }

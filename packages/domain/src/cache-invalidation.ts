@@ -44,7 +44,15 @@ export type CacheChange =
       isHomeFeatured?: boolean | undefined;
     }
   | {
+      type: "category_updated";
+      categoryId: string;
+    }
+  | {
       type: "store_or_seo_updated";
+    }
+  | {
+      type: "review_updated";
+      productId: string;
     };
 
 /**
@@ -129,10 +137,23 @@ export function computeInvalidationTags(
       tags.push(tenantTag(tenantId, "page", "home"));
       break;
     }
+    case "category_updated": {
+      // Category details, active/featured, position -> category, all categories, nav
+      tags.push(tenantTag(tenantId, "category", change.categoryId));
+      tags.push(tenantTag(tenantId, "category"));
+      tags.push(tenantTag(tenantId, "nav"));
+      break;
+    }
     case "store_or_seo_updated": {
       // Store settings, status, SEO settings -> store-shell, seo
       tags.push(tenantTag(tenantId, "store-shell"));
       tags.push(tenantTag(tenantId, "seo"));
+      break;
+    }
+    case "review_updated": {
+      // Product reviews updated -> product page, all products list (for stars)
+      tags.push(tenantTag(tenantId, "product", change.productId));
+      tags.push(tenantTag(tenantId, "product"));
       break;
     }
   }

@@ -77,6 +77,18 @@ export function CartItemRow({ item, onUpdateQuantity, onRemove }: CartItemRowPro
               SKU: {item.variant.sku}
             </p>
           )}
+          {item.variant.preorderEnabled && (
+            <div className="mt-1 flex items-center gap-1.5">
+              <span className="inline-flex items-center rounded bg-amber-500/10 px-1.5 py-0.5 text-[10px] font-semibold text-amber-700 dark:text-amber-400">
+                Pre-order
+              </span>
+              <span className="text-[11px] text-amber-800 dark:text-amber-300">
+                {item.variant.preorderShipsOn && item.variant.preorderShipsOn >= new Date().toISOString().slice(0, 10)
+                  ? `Ships on ${new Date(`${item.variant.preorderShipsOn}T00:00:00`).toLocaleDateString("en-IN", { day: "numeric", month: "short" })}`
+                  : "Ships soon"}
+              </span>
+            </div>
+          )}
           <p className="text-xs text-muted-foreground sm:hidden mt-1">
             Unit Price: {formattedUnitPrice}
           </p>
