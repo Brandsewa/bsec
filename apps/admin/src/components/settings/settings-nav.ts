@@ -1,4 +1,4 @@
-import { CreditCard, Landmark, LayoutDashboard, LifeBuoy, RotateCcw, ShoppingBag, Sparkles, Store, Truck, UserCog } from "lucide-react";
+import { CreditCard, History, Landmark, LayoutDashboard, LifeBuoy, RotateCcw, ShoppingBag, Sparkles, Store, Truck, UserCog } from "lucide-react";
 import type { ComponentType } from "react";
 
 export interface SettingsNavItem {
@@ -61,14 +61,14 @@ export const SETTINGS_NAV_GROUPS: readonly SettingsNavGroup[] = [
     id: "people",
     label: "People & account",
     items: [
-      // Route stays /settings/team this phase; the nav label becomes "Users" (prompt §A compatibility note).
-      { id: "team", label: "Users", href: "/settings/team", description: "Members and invitations", icon: UserCog, perm: "staff.manage" },
+      { id: "users", label: "Users", href: "/settings/users", description: "Members and invitations", icon: UserCog, perm: "staff.manage" },
     ],
   },
   {
     id: "compliance",
     label: "Compliance & advanced",
     items: [
+      { id: "activity", label: "Activity", href: "/settings/activity", description: "Settings audit history", icon: History, perm: "audit.read" },
       { id: "support", label: "Support access", href: "/settings/support", description: "Platform support sessions", icon: LifeBuoy, perm: "settings.write" },
     ],
   },
