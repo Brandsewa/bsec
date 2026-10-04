@@ -126,14 +126,14 @@ Plan: `docs/SETTINGS-REBUILD-PLAN.md`, `SETTINGS-REMAINING-PHASES`; records `202
 - [x] Phases 0-1 (PR #25): grouped shell, `/settings` Overview (`settingsOverview.get`), `/settings/store-details`, audit on store settings.
 - [x] Phase 2 (PR #29): ADR-020 capability families, `/settings/users`, `/settings/activity`. Verification found and fixed: red typecheck, and `payments.manage` enforced nowhere (now enforced on Razorpay save/clear in route and service; the ADR lists exactly which families are enforced today).
 - [ ] Phases 3-8 not started. Phase 3 prompt: `docs/prompts/settings-rebuild-phase-3.md`. Owner decisions still open: plan §11 items 2-10.
-- Browser walkthrough of Phase 2 roles still pending (ZCode, `docs/prompts/zcode-verification-round-2026-10-04.md`).
+- Browser walkthrough of Phase 2 roles still pending (owner is testing manually).
 
 ## Dev speed (PR #22) — merged (2026-10-04)
 
 `pnpm test:heavy:local`, `test:affected`, `gate:quick`, CI docs-only path, lint rule `bs/no-service-call-in-tx` (allows services handed `tx`), db pool idle-error logging, deletion-sweep advisory lock on one connection. Integration found three defects fixed before merge: invalid `ci.yml` (unquoted colons), tooling that reported success when tests never ran on Windows, and one false positive of the new lint rule. Record: `2026-10-04-claude-dev-speed-integration.md`.
 
 ## Known open items after this pass (2026-10-04)
-- Theme builder (`integrate/theme-builder`, PR #30, migrations 0031/0032): code-verified (typecheck, lint, build, fast and real-DB suites), **browser walkthrough pending** before merge.
+- Theme builder (`integrate/theme-builder`, PR #30, migrations 0031/0032): code-verified (typecheck, lint, build, fast and real-DB suites); **owner browser walkthrough pending** before merge (local stack, compose project `bsecint`).
 - CI e2e only runs on `main`: a PR that renames admin UI labels must grep `e2e/` first (two follow-up fixes were needed after Settings 0-1).
 - Windows heavy-suite worker crash `3221226505` remains a local flake (rerun the file alone); CI on Linux is unaffected.
 - COD fee/enable is still saved through the generic `settings.update` (`settings.write`); owner-only treatment is part of Settings Phase 5.
