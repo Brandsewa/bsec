@@ -77,18 +77,20 @@ Implemented Settings Rebuild Phase 3 according to `docs/SETTINGS-PHASES-3-8-HAND
 
 ## Verification
 
-- `pnpm --filter @bs/contracts test` -> 20/20 passed.
-- `pnpm --filter @bs/domain test test/storefront-lifecycle.test.ts` -> 28/28 passed (Defects 1 & 2 verified).
-- `pnpm --filter @bs/domain test test/custom-domains.int.test.ts` -> 11/11 passed (Defect 3 verified).
-- `pnpm --filter @bs/domain test test/branding.int.test.ts` -> 8/8 passed (Defect 4 verified).
-- `pnpm --filter @bs/domain test test/storefront-status.int.test.ts` -> 7/7 passed (§3.2 permissions and audit verified).
-- `pnpm --filter @bs/domain test test/isolation.int.test.ts` -> 917/917 passed.
-- `pnpm --filter @bs/admin test test/storefront-settings.test.tsx` -> 3/3 passed.
-- `pnpm --filter @bs/admin test test/domains-settings.test.tsx` -> 6/6 passed.
-- `pnpm --filter @bs/admin test test/settings-shell.test.tsx` -> 10/10 passed.
-- `pnpm --filter @bs/admin test` -> 8/8 test files, 62/62 tests passed.
-- `pnpm --filter @bs/admin build` -> passed (10.83s).
-- `pnpm typecheck` -> passed across all 16 packages.
+- `pnpm typecheck` -> passed across all packages.
+- `pnpm lint` -> passed across all 15 packages.
+- `pnpm docs:check` -> `docs:check ok`.
+- `pnpm build` -> all 6 build targets passed (`@bs/admin`, `@bs/platform`, `@bs/superadmin`, `@bs/web`, `@bs/worker`, `@bs/docs`).
+- `pnpm --filter @bs/admin test` -> 8 test files passed, 62/62 tests passed.
+  - `domains-settings.test.tsx`: 6/6 passed (pending component, empty, pending verification, active, error, provider notice).
+  - `storefront-settings.test.tsx`: 3/3 passed (pending component, status copy, confirm dialog).
+  - `settings-shell.test.tsx`: 10/10 passed (grouped navigation, least privilege visibility).
+- `pnpm --filter @bs/domain test:fast` -> 33 test files passed, 273/273 tests passed.
+  - `storefront-lifecycle.test.ts`: 25/25 passed (Defect 1 cache invalidation & Defect 2 constant-time crypto verified).
+- `pnpm --filter @bs/domain test:heavy` -> 68 test files passed, 1,435/1,435 real Postgres tests passed.
+  - `custom-domains.int.test.ts`: 11/11 passed (Defect 3 permissions, audit logs, tenant context verified).
+  - `branding.int.test.ts`: 8/8 passed (Defect 4 media slot MIME/size/SVG validation, audit diffs, `branding.manage` verified).
+  - `storefront-status.int.test.ts`: 7/7 passed (`settings.read`, `storefront.manage`, audit diffs verified).
 
 ## Docs updated
 

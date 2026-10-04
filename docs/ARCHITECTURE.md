@@ -4,7 +4,7 @@
 
 | | |
 |---|---|
-| Last verified against | commit `a48c778` on `feat/settings-rebuild-phase-3` (Settings rebuild Phase 3: branding, storefront status, domains, defects 1-4), 2026-10-04 |
+| Last verified against | commit `faa4e00` on `feat/settings-rebuild-phase-3` (Settings rebuild Phase 3: branding, storefront status, domains, defects 1-4), 2026-10-04 |
 | Verified how | files read from the working tree; `pnpm docs:check` for the mechanical parts. Facts marked *(from code)* were read, not run. |
 | Owner | whoever changes the area (see the update triggers in section 0) |
 
