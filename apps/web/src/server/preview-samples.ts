@@ -21,7 +21,7 @@ export function sampleCollection(): StorefrontCollectionDetail {
     ratingCount: 10 + i * 3,
   }));
   return {
-    collection: { id: "sample-collection", title: "Bestsellers", slug: "bestsellers", type: "manual", rules: null, sortOrder: "manual", imageMediaId: null, seo: null, published: true, createdAt: NOW, updatedAt: NOW },
+    collection: { id: "sample-collection", title: "Bestsellers", slug: "bestsellers", type: "manual", rules: null, sortOrder: "manual", imageMediaId: null, seo: null, indexable: true, published: true, createdAt: NOW, updatedAt: NOW },
     products: { items, total: items.length, page: 1, limit: 24 },
   };
 }
@@ -58,6 +58,7 @@ export function sampleProductDetail(): StorefrontProductDetail {
     tags: ["cotton", "summer"],
     seo: null,
     requiresShipping: true,
+    priceOnRequest: false,
     isFeatured: true,
     ratingAvg: "4.6",
     ratingCount: 128,
