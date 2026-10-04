@@ -222,6 +222,43 @@ export const SettingsOverview = z.object({
 });
 export type SettingsOverview = z.infer<typeof SettingsOverview>;
 
+export const SettingsActivityDiffEntry = z.object({
+  before: z.unknown(),
+  after: z.unknown(),
+});
+export type SettingsActivityDiffEntry = z.infer<typeof SettingsActivityDiffEntry>;
+
+export const SettingsActivityItem = z.object({
+  id: z.string().uuid(),
+  action: z.string(),
+  area: z.string(),
+  actorType: z.string(),
+  actorId: z.string().uuid().nullable(),
+  actorEmail: z.string().nullable(),
+  targetType: z.string(),
+  targetId: z.string(),
+  diff: z.record(z.string(), SettingsActivityDiffEntry).nullable(),
+  createdAt: z.string(),
+});
+export type SettingsActivityItem = z.infer<typeof SettingsActivityItem>;
+
+export const ListSettingsActivityInput = z.object({
+  area: z.string().optional(),
+  actorId: z.string().uuid().optional(),
+  dateFrom: z.string().optional(),
+  dateTo: z.string().optional(),
+  limit: z.number().int().min(1).max(100).default(50),
+  offset: z.number().int().min(0).default(0),
+});
+export type ListSettingsActivityInput = z.infer<typeof ListSettingsActivityInput>;
+export type ListSettingsActivityArgs = z.input<typeof ListSettingsActivityInput>;
+
+export const ListSettingsActivityOutput = z.object({
+  items: z.array(SettingsActivityItem),
+  total: z.number().int(),
+});
+export type ListSettingsActivityOutput = z.infer<typeof ListSettingsActivityOutput>;
+
 export const OrderSettings = z.object({
   prefix: z.string().max(10).regex(/^[A-Za-z0-9#\-_/]*$/, "Prefix can only contain letters, numbers, and # - _ /"),
   padding: z.number().int().min(3).max(8),
@@ -1120,6 +1157,12 @@ export const adminContract = {
     get: oc
       .route({ method: "GET", path: "/admin/settings/overview" })
       .output(SettingsOverview),
+  },
+  settingsActivity: {
+    list: oc
+      .route({ method: "GET", path: "/admin/settings/activity" })
+      .input(ListSettingsActivityInput.optional())
+      .output(ListSettingsActivityOutput),
   },
   orderSettings: {
     get: oc

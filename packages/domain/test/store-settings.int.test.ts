@@ -111,7 +111,7 @@ beforeAll(async () => {
     storeStatus: "live",
     actor: { type: "staff", userId: owner.userId },
     roles: ["store_owner"],
-    permissions: ["settings.write", "staff.manage", "orders.read", "orders.write", "products.read", "products.write"],
+    permissions: ["settings.write", "payments.manage", "staff.manage", "orders.read", "orders.write", "products.read", "products.write"],
     requestId: "req_settings",
   };
 }, 180_000);
@@ -230,6 +230,15 @@ describe("payment credentials", () => {
 
   it("rejects a malformed Razorpay key id", async () => {
     await expect(saveRazorpayCredentials(rt, ctx, { keyId: "not-a-key", keySecret: "secret-value-long" })).rejects.toThrow(/rzp_/);
+  });
+
+  it("keeps credential writes owner-only: settings.write alone (e.g. store_admin) may read status but not save or clear (ADR-020)", async () => {
+    const admin: TenantContext = { ...ctx, permissions: ["settings.write", "staff.manage"] };
+    await expect(getPaymentsStatus(rt, admin)).resolves.toBeDefined();
+    await expect(
+      saveRazorpayCredentials(rt, admin, { keyId: "rzp_test_Denied123456", keySecret: "denied-secret-value" }),
+    ).rejects.toThrow(/payments\.manage/);
+    await expect(clearRazorpayCredentials(rt, admin)).rejects.toThrow(/payments\.manage/);
   });
 });
 

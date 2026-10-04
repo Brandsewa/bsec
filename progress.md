@@ -120,7 +120,7 @@ Spec: `docs/CUSTOMERS-IMPLEMENTATION-PLAN.md` Phase 1 (1A, 1B, 1C) with the ZCod
 
 One line per piece of work that is started and not merged. Add yours before you start, remove it when merged or abandoned (`AGENTS.md` section 6). Format: `agent · branch · area · since · one-line goal`.
 
-- zcode · `feat/customers-segments` · db, domain, contracts, web, admin · 2026-10-03 · Customers Segments complete (Stage A 2A-2C + Stage B 2D) incl. merged Customers Phase 1; one PR (#23) covers all of it for review
+- antigravity · `feat/settings-rebuild-phase-2` · permissions, users & accounts, settings activity · 2026-10-04 · Settings rebuild Phase 2: capability families ADR & check-time aggregate, Users & Accounts route migration, Settings Activity history
 - claude · `feat/themes-puck` · themes, docs · 2026-10-01 · theme builder follow-ups; agent docs and change log (`docs/changes/`)
 
 ## Returns & Exchanges (Manual Review & Portal) — Complete (2026-10-02)

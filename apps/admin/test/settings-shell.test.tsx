@@ -56,11 +56,11 @@ describe("Settings shell: grouped navigation", () => {
     for (const g of noStaff) for (const i of g.items) expect(i.perm).toBe("settings.write");
   });
 
-  it("nav labels the team route Users while keeping the /settings/team path", async () => {
+  it("nav labels the users route Users with /settings/users path", async () => {
     const { SETTINGS_NAV } = await import("../src/components/settings/settings-nav.ts");
-    const team = SETTINGS_NAV.find((i) => i.id === "team");
-    expect(team!.label).toBe("Users");
-    expect(team!.href).toBe("/settings/team");
+    const usersItem = SETTINGS_NAV.find((i) => i.id === "users");
+    expect(usersItem!.label).toBe("Users");
+    expect(usersItem!.href).toBe("/settings/users");
   });
 });
 
@@ -124,6 +124,92 @@ describe("Settings Overview page (/settings)", () => {
     expect(mod.Route.options.pendingComponent).toBeDefined();
     const storeDetails = await import("../src/routes/_store/settings/store-details.tsx");
     expect(storeDetails.Route.options.pendingComponent).toBeDefined();
+    const users = await import("../src/routes/_store/settings/users.tsx");
+    expect(users.Route.options.pendingComponent).toBeDefined();
+    const team = await import("../src/routes/_store/settings/team.tsx");
+    expect(team.Route.options.pendingComponent).toBeDefined();
+    const activity = await import("../src/routes/_store/settings/activity.tsx");
+    expect(activity.Route.options.pendingComponent).toBeDefined();
+  });
+});
+
+describe("Settings Activity page (/settings/activity)", () => {
+  it("renders activity logs with area badge, diff details, and pagination", async () => {
+    const { Route } = await import("../src/routes/_store/settings/activity.tsx");
+    const { orpc } = await import("../src/lib/orpc.ts");
+    const qc = newClient();
+    qc.setQueryData(
+      orpc.admin.settingsActivity.list.queryOptions({
+        input: { area: undefined, limit: 25, offset: 0 },
+      }).queryKey,
+      {
+        items: [
+          {
+            id: "0199a000-0000-7000-8000-000000000001",
+            action: "store_settings.update",
+            area: "Store details",
+            actorType: "staff",
+            actorId: "0199a000-0000-7000-8000-000000000099",
+            actorEmail: "alice@alpha.test",
+            targetType: "store_settings",
+            targetId: "0199a000-0000-7000-8000-000000000010",
+            diff: {
+              storeName: { before: "Old Store", after: "New Store" },
+            },
+            createdAt: "2026-10-04T12:00:00.000Z",
+          },
+        ],
+        total: 1,
+      },
+    );
+
+    const Page = Route.options.component as () => React.ReactNode;
+    const html = await renderRouted(Page, qc);
+    expect(html).toContain("Settings Activity");
+    expect(html).toContain("Store details");
+    expect(html).toContain("store_settings.update");
+    expect(html).toContain("alice@alpha.test");
+  });
+});
+
+describe("Users & Accounts page (/settings/users)", () => {
+  it("renders Store Owner summary, members and invite form", async () => {
+    const { Route } = await import("../src/routes/_store/settings/users.tsx");
+    const { orpc } = await import("../src/lib/orpc.ts");
+    const qc = newClient();
+    qc.setQueryData(orpc.admin.memberships.list.queryOptions().queryKey, [
+      { id: "m-1", userId: "u-1", roleId: "r-1", status: "active", email: "owner@alpha.test", name: "Alice Owner", roleName: "store_owner" },
+      { id: "m-2", userId: "u-2", roleId: "r-2", status: "active", email: "staff@alpha.test", name: "Bob Staff", roleName: "store_admin" },
+    ]);
+    qc.setQueryData(orpc.admin.memberships.roles.queryOptions().queryKey, [
+      { id: "r-1", name: "store_owner" },
+      { id: "r-2", name: "store_admin" },
+    ]);
+    qc.setQueryData(orpc.admin.memberships.invitations.queryOptions().queryKey, []);
+
+    const Page = Route.options.component as () => React.ReactNode;
+    const html = await renderRouted(Page, qc);
+    expect(html).toContain("Store Owner");
+    expect(html).toContain("Alice Owner");
+    expect(html).toContain("owner@alpha.test");
+    expect(html).toContain("Bob Staff");
+    expect(html).toContain("staff@alpha.test");
+    expect(html).toContain("Invite someone");
+  });
+
+  it("legacy /settings/team declares a redirect to /settings/users", async () => {
+    const { Route } = await import("../src/routes/_store/settings/team.tsx");
+    expect(Route.options.beforeLoad).toBeDefined();
+    let redirectedTo: { options?: { to?: string; replace?: boolean } } | undefined;
+    try {
+      Route.options.beforeLoad?.({} as never);
+    } catch (err: unknown) {
+      redirectedTo = err as { options?: { to?: string; replace?: boolean } };
+    }
+    expect(redirectedTo?.options).toMatchObject({
+      to: "/settings/users",
+      replace: true,
+    });
   });
 });
 

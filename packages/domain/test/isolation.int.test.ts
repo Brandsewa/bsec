@@ -136,6 +136,7 @@ import {
   listInventoryLevels,
   listMedia,
   listMemberships,
+  listSettingsActivity,
   listMenus,
   listPages,
   listPlatformTenants,
@@ -678,6 +679,7 @@ describe("Generated Isolation Test Suite (M1 Real Postgres 18 Proof)", () => {
     expect(adminProcedures).toContain("memberships.list");
     expect(adminProcedures).toContain("memberships.invite");
     expect(adminProcedures).toContain("settingsOverview.get");
+    expect(adminProcedures).toContain("settingsActivity.list");
     expect(adminProcedures).toContain("settings.get");
     expect(adminProcedures).toContain("settings.update");
     expect(adminProcedures).toContain("featureFlags.list");
@@ -789,6 +791,8 @@ describe("Generated Isolation Test Suite (M1 Real Postgres 18 Proof)", () => {
         });
       case "settingsOverview.get":
         return await getSettingsOverview(rt, ctx);
+      case "settingsActivity.list":
+        return await listSettingsActivity(rt, ctx);
       case "settings.get":
         return await getStoreSettings(rt, ctx);
       case "settings.update":
@@ -1558,6 +1562,92 @@ describe("Generated Isolation Test Suite (M1 Real Postgres 18 Proof)", () => {
     });
   });
 
+  describe("settingsActivity.list tenant-scoped audit projection and redaction", () => {
+    it("returns only caller's tenant rows, redacts secret-shaped diff values, and handles filters", async () => {
+      // Seed audit rows in tenant A and tenant B
+      await withTenant(rtApp._db.db, tenantA, async (tx) => {
+        await tx.insert(schema.auditLogs).values([
+          {
+            tenantId: tenantA,
+            actorType: "staff",
+            actorId: userA,
+            action: "store_settings.update",
+            targetType: "store_settings",
+            targetId: tenantA,
+            diff: {
+              storeName: { before: "Old Name", after: "New Name" },
+              apiKey: { before: "secret-key-123", after: "secret-key-456" },
+            },
+          },
+          {
+            tenantId: tenantA,
+            actorType: "staff",
+            actorId: userA,
+            action: "order_settings.update",
+            targetType: "order_settings",
+            targetId: tenantA,
+            diff: {
+              prefix: { before: "ORD-", after: "INV-" },
+            },
+          },
+        ]);
+      });
+
+      await withTenant(rtApp._db.db, tenantB, async (tx) => {
+        await tx.insert(schema.auditLogs).values({
+          tenantId: tenantB,
+          actorType: "staff",
+          actorId: userB,
+          action: "store_settings.update",
+          targetType: "store_settings",
+          targetId: tenantB,
+          diff: {
+            storeName: { before: "Beta Old", after: "Beta New" },
+          },
+        });
+      });
+
+      const ctxA = await buildTenantContext(rtApp._db.db, {
+        entryPath: "admin",
+        headers: { "x-store-id": tenantA },
+        session: { user: { id: userA }, type: "staff" },
+      });
+      const ctxB = await buildTenantContext(rtApp._db.db, {
+        entryPath: "admin",
+        headers: { "x-store-id": tenantB },
+        session: { user: { id: userB }, type: "staff" },
+      });
+
+      expect(ctxA).not.toBeNull();
+      expect(ctxB).not.toBeNull();
+
+      // Tenant A only sees tenant A logs
+      const resA = await listSettingsActivity(rtApp, ctxA!);
+      expect(resA.items.length).toBeGreaterThanOrEqual(2);
+      expect(resA.total).toBeGreaterThanOrEqual(2);
+      for (const item of resA.items) {
+        expect(item.targetId === tenantA || item.actorId === userA).toBe(true);
+        expect(item.targetId).not.toBe(tenantB);
+      }
+
+      // Check redaction of secret key
+      const storeUpdateItem = resA.items.find((i) => i.action === "store_settings.update");
+      expect(storeUpdateItem).toBeDefined();
+      expect(storeUpdateItem!.diff?.storeName).toEqual({ before: "Old Name", after: "New Name" });
+      expect(storeUpdateItem!.diff?.apiKey).toEqual({ before: "[REDACTED]", after: "[REDACTED]" });
+
+      // Filter by area
+      const ordersOnly = await listSettingsActivity(rtApp, ctxA!, { area: "Orders" });
+      expect(ordersOnly.items.every((i) => i.area === "Orders")).toBe(true);
+
+      // Tenant B sees only tenant B rows
+      const resB = await listSettingsActivity(rtApp, ctxB!);
+      for (const item of resB.items) {
+        expect(item.targetId).not.toBe(tenantA);
+      }
+    });
+  });
+
   describe("Admin Procedures Dynamic Isolation & Authorization Invariants", () => {
     for (const proc of adminProcedures.filter((p) => !SESSION_ONLY.has(p) && !PUBLIC.has(p))) {
       describe(`Procedure: admin.${proc}`, () => {
@@ -1644,7 +1734,14 @@ describe("Generated Isolation Test Suite (M1 Real Postgres 18 Proof)", () => {
             "discounts.write",
           ]);
 
-          const result = await executeAdminProcedure(proc, rtApp, authCtx!);
+          // Credential writes are owner-only (ADR-020): store_admin's set lacks payments.manage, so prove the
+          // denial first, then run the procedure as an owner-level context.
+          const ownerOnly = proc === "payments.saveRazorpay" || proc === "payments.clearRazorpay";
+          if (ownerOnly) {
+            await expect(executeAdminProcedure(proc, rtApp, authCtx!)).rejects.toThrow(/payments\.manage/);
+          }
+          const runCtx = ownerOnly ? { ...authCtx!, permissions: [...authCtx!.permissions, "payments.manage"] } : authCtx!;
+          const result = await executeAdminProcedure(proc, rtApp, runCtx);
           expect(result).toBeDefined();
         });
       });
