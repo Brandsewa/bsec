@@ -54,7 +54,7 @@ describe("Settings shell: grouped navigation", () => {
     expect(noStaff.map((g) => g.id)).not.toContain("people");
     // Every visible item passes the permission filter.
     const { hasPermission } = await import("@bs/auth");
-    for (const g of noStaff) for (const i of g.items) expect(hasPermission(["settings.write"], i.perm as any)).toBe(true);
+    for (const g of noStaff) for (const i of g.items) expect(hasPermission(["settings.write"], i.perm as Parameters<typeof hasPermission>[1])).toBe(true);
 
     const domainsItem = SETTINGS_NAV.find((i) => i.id === "domains");
     expect(domainsItem).toMatchObject({

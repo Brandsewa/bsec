@@ -370,7 +370,7 @@ export function DomainsSettingsPage() {
                         </div>
 
                         {/* TXT Record if pre-validation requested */}
-                        {d.verification?.txt && (
+                        {d.verification?.txt ? (
                           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 rounded bg-background p-2.5 border border-border">
                             <div className="flex flex-wrap items-center gap-3">
                               <span className="font-bold text-foreground">TXT</span>
@@ -383,13 +383,16 @@ export function DomainsSettingsPage() {
                               type="button"
                               size="sm"
                               variant="ghost"
-                              onClick={() => copy(d.verification!.txt!.value, "TXT verification value")}
+                              onClick={() => {
+                                const val = d.verification?.txt?.value;
+                                if (val) copy(val, "TXT verification value");
+                              }}
                             >
                               <Copy className="size-3.5 mr-1" aria-hidden />
                               Copy value
                             </Button>
                           </div>
-                        )}
+                        ) : null}
                       </div>
 
                       <div className="mt-4 flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-t border-border pt-3">

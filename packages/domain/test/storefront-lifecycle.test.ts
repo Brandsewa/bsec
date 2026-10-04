@@ -479,7 +479,7 @@ describe("Storefront Lifecycle & Host Resolution", () => {
     it("invalidates cache after status update is committed", async () => {
       const revalidatedTags: string[][] = [];
       const mockDb = {
-        transaction: async (cb: any) => {
+        transaction: async (cb: (tx: unknown) => Promise<unknown>) => {
           return await cb({
             execute: async () => {},
             select: () => ({

@@ -621,7 +621,7 @@ export async function updateStoreStatus(
           bypassTokenHash: (updateValues.bypassTokenHash as string | null) ?? null,
         })
         .returning({ id: schema.storeStatus.id });
-      statusId = inserted!.id;
+      statusId = inserted?.id ?? ctx.tenantId;
     }
 
     // Build sanitized audit diff (ADR-020, AGENTS.md rule 7)

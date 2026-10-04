@@ -4,7 +4,7 @@
 
 | | |
 |---|---|
-| Last verified against | commit `4706032` on `feat/settings-rebuild-phase-2` (Settings rebuild Phase 2: permissions, users & accounts, activity), 2026-10-04 |
+| Last verified against | commit `a48c778` on `feat/settings-rebuild-phase-3` (Settings rebuild Phase 3: branding, storefront status, domains, defects 1-4), 2026-10-04 |
 | Verified how | files read from the working tree; `pnpm docs:check` for the mechanical parts. Facts marked *(from code)* were read, not run. |
 | Owner | whoever changes the area (see the update triggers in section 0) |
 
@@ -296,6 +296,20 @@ Procedure-level detail: open the contract file; do not duplicate it here.
 Block types in `packages/blocks/src/registry.ts`: content (Hero, HeroSlider, ProductShowcase, Banner, ProductGrid, CollectionGrid, ProductCarousel, Testimonials, Reviews, RichText, FAQ, Gallery, Newsletter, UspStrip), layout (Section, Container, Grid, FlexRow, FlexColumn, Spacer, Divider), atoms (Heading, Text, Image, Video, Button, Icon, Link, CallToAction), theme chrome and page cores (SiteHeader, SiteFooter, ProductDetail, CollectionListing, CartContents).
 
 Theme flow: platform staff build `theme_templates` (draft + published snapshot, home/collection/product/cart/header/footer pages + tokens) in Super Admin. A store *activates* a template: tokens and pages are **copied** into the store's own rows (templates are never edited by stores; re-applying replaces customisations and adds a page version, so it can be rolled back). The storefront applies a theme's tokens once the store opts in (`source: "theme"`); otherwise built-in layouts and Branding apply. Theme CSS variables are `--bs-*` (`theme-vars.ts`). Domain code: `packages/domain/src/themes/`. Cache tags `page:<slug>` and `theme` are invalidated on publish and rollback. **Theme previews:** Super Admin's theme editor Preview button saves the draft, then `templates.createPreview` stores an immutable snapshot (`theme_previews`, 24 h by default, unguessable 11-character code) and the tab opens `/preview/<code>?page=<page>` on the marketing host, where `apps/web/src/app/preview/[code]/page.tsx` draws the pages with sample products, collection, product and cart (`server/preview-samples.ts`); other hosts get a 404, pages are noindex, expired or unknown codes show a notice.
+
+### Branding vs Theme Settings Boundary
+
+| Concern | Branding (`/settings/branding`) | Theme Settings (`/online-store/theme`) |
+|---|---|---|
+| **Authority** | Store Owner / Staff (`branding.manage`) | Store Owner / Staff (`content.write` / `theme.publish`) |
+| **Identity Assets** | Primary & dark logos (`logoLightMediaId`, `logoDarkMediaId`), logo display width | Header layout, announcement bars, menu navigation links |
+| **App Icons & Metadata** | Browser favicon (`faviconMediaId`), Open Graph social sharing image (`socialImageMediaId`) | Page-specific SEO metadata and social overrides per block/page |
+| **Typography Tokens** | Base heading font (`fontHeading`), body font (`fontBody`), base font scale | Section heading sizes, typographic weights per block |
+| **Global Color System** | Core palette (primary, secondary, accent, background, surface, text), color mode (`light`, `dark`, `auto`) | Section-specific background colors, block container color schemes |
+| **Surface Tokens** | Corner radius token (`cornerRadius`), primary button style (`buttonStyle`) | Block padding, section margins, container max-widths, grid columns |
+| **Templates & Blocks** | None (pure tokens and assets; versioned snapshot on publish) | Puck block trees, page layouts, section ordering, widget visibility |
+| **Storage & Table** | `brand_settings` (tenant-scoped row, published snapshot) | `theme_templates`, `pages`, `theme_settings` |
+| **Precedence** | Global baseline design tokens | Overrides token values when active theme provides token values |
 
 **Adding a block:** schema + view in `packages/blocks`, register it, add editor config in `packages/block-editor/src/config.tsx`, add tests (`packages/blocks/test`), bump the block version if the schema changes shape, update this section.
 
