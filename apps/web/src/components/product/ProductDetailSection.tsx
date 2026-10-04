@@ -4,8 +4,13 @@ import type { StorefrontProductDetail } from "@bs/domain";
 import type { ProductDetailOptions } from "@bs/blocks";
 import { ProductGallery } from "./ProductGallery.tsx";
 import { VariantSelector } from "./VariantSelector.tsx";
+import { MobileBuyBar } from "./MobileBuyBar.tsx";
 import { StockEtaSkeleton } from "./StockEtaHole.tsx";
 import { ProductReviewsSection } from "./ProductReviewsSection.tsx";
+
+// Server-side copy of the price format (VariantSelector's is a client module and cannot be called from here).
+const formatInr = (paise: number) =>
+  new Intl.NumberFormat("en-IN", { style: "currency", currency: "INR", maximumFractionDigits: paise % 100 === 0 ? 0 : 2 }).format(paise / 100);
 
 export const DEFAULT_PRODUCT_DETAIL_OPTIONS: ProductDetailOptions = {
   galleryPosition: "left",
@@ -13,6 +18,10 @@ export const DEFAULT_PRODUCT_DETAIL_OPTIONS: ProductDetailOptions = {
   showRating: true,
   showDescription: true,
   showTags: true,
+  stickyBuyBox: false,
+  showTrustPoints: false,
+  stickyMobileBar: false,
+  showSku: true,
 };
 
 /**
@@ -27,6 +36,9 @@ export function ProductDetailSection({
   product: StorefrontProductDetail;
   options?: ProductDetailOptions | undefined;
 }) {
+  const prices = (product.variants ?? []).map((v) => v.price);
+  const lowest = prices.length > 0 ? Math.min(...prices) : 0;
+  const priceLabel = prices.length > 1 && Math.max(...prices) !== lowest ? `From ${formatInr(lowest)}` : formatInr(lowest);
   const gallery = (
     <div className={options.galleryPosition === "right" ? "lg:order-2" : undefined}>
       <ProductGallery media={product.media} title={product.title} />
@@ -34,7 +46,7 @@ export function ProductDetailSection({
   );
 
   return (
-    <div className="mx-auto max-w-7xl px-4 py-8 sm:px-6 lg:px-8">
+    <div className={`mx-auto max-w-7xl px-4 py-8 sm:px-6 lg:px-8 ${options.stickyMobileBar ? "pb-24 lg:pb-8" : ""}`}>
       {options.showBreadcrumb ? (
         <nav aria-label="Breadcrumb" className="mb-6 flex items-center gap-2 text-sm text-muted-foreground">
           <Link href="/" className="hover:text-foreground transition-colors">
@@ -52,7 +64,7 @@ export function ProductDetailSection({
       <div className="grid grid-cols-1 gap-12 lg:grid-cols-2 lg:gap-16 items-start">
         {gallery}
 
-        <div className="flex flex-col gap-6">
+        <div className={`flex flex-col gap-6 ${options.stickyBuyBox ? "lg:sticky lg:top-24" : ""}`}>
           <div>
             {product.brand && (
               <p className="text-xs font-semibold uppercase tracking-wider text-primary mb-1.5">{product.brand.name}</p>
@@ -79,7 +91,11 @@ export function ProductDetailSection({
           )}
 
           <Suspense fallback={<StockEtaSkeleton />}>
-            <VariantSelector product={product} />
+            <VariantSelector
+              product={product}
+              showSku={options.showSku !== false}
+              trustPoints={options.showTrustPoints ? options.trustPoints : undefined}
+            />
           </Suspense>
 
           {options.showTags && product.tags && product.tags.length > 0 && (
@@ -96,6 +112,7 @@ export function ProductDetailSection({
           )}
         </div>
       </div>
+      {options.stickyMobileBar ? <MobileBuyBar title={product.title} priceLabel={priceLabel} /> : null}
 
       {/* Product Reviews & Rating Summary */}
       <ProductReviewsSection productId={product.id} productTitle={product.title} />

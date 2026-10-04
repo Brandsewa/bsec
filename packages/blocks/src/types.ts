@@ -37,7 +37,10 @@ export type BlockType =
   | "SiteHeader"
   | "SiteFooter"
   | "ProductDetail"
-  | "CollectionListing";
+  | "CollectionListing"
+  | "CartContents"
+  | "HeroSlider"
+  | "ProductShowcase";
 
 /** Minimal product shape the product blocks need; the host supplies the real data. Prices are in paise. */
 export interface BlockProduct {
@@ -54,6 +57,13 @@ export interface BlockProduct {
   /** Ready-to-use public URL of the primary image, when the host already knows it. */
   imageUrl?: string | undefined;
   imageAlt?: string | null | undefined;
+  /** Highest variant price (a range shows "Starts from"). */
+  priceMax?: number | undefined;
+  brandName?: string | undefined;
+  /** First category's name, for the card's badge. */
+  categoryName?: string | undefined;
+  /** Set only when the product has exactly one variant: the card can then add it to the cart straight away. */
+  quickAddVariantId?: string | undefined;
 }
 
 export interface BlockCollectionSummary {
@@ -65,7 +75,9 @@ export interface BlockCollectionSummary {
 /** Server-resolved data for blocks that need store data, keyed by block id. */
 export type BlockData =
   | { kind: "products"; products: BlockProduct[] }
-  | { kind: "collections"; collections: BlockCollectionSummary[] };
+  | { kind: "collections"; collections: BlockCollectionSummary[] }
+  /** One product list per tab of a product showcase, in tab order. */
+  | { kind: "product-tabs"; tabs: Array<{ products: BlockProduct[] }> };
 
 /**
  * Host-provided rendering context. Blocks stay UI-agnostic: the storefront and the
@@ -87,6 +99,30 @@ export interface RenderContext {
   /** The real product page body / collection listing; the editor draws labelled placeholders instead. */
   renderProductDetail?: ((opts: ProductDetailOptions) => ReactNode) | undefined;
   renderCollectionListing?: ((opts: CollectionListingOptions) => ReactNode) | undefined;
+  /** The real cart (items, totals, discount code); the editor draws a labelled placeholder instead. */
+  renderCartContents?: ((opts: CartContentsOptions) => ReactNode) | undefined;
+  /** Wraps the hero slider's server-rendered markup with its autoplay / navigation behaviour (a client component). The editor draws it static. */
+  renderHeroSlider?: ((p: { options: HeroSliderBehavior; children: ReactNode }) => ReactNode) | undefined;
+  /** Same for the product showcase: tab switching, page dots, arrows, autoplay and quick add to cart. */
+  renderProductShowcase?: ((p: { options: ProductShowcaseBehavior; children: ReactNode }) => ReactNode) | undefined;
+}
+
+/** How a hero slider behaves in the browser. The markup is server-rendered; the host adds this behaviour. */
+export interface HeroSliderBehavior {
+  autoplay: boolean;
+  /** Seconds each slide stays. */
+  interval: number;
+  loop: boolean;
+  pauseOnHover: boolean;
+}
+
+/** Behaviour of a product showcase in the browser (tabs, autoplay, looping); the host adds it to the server-rendered markup. */
+export interface ProductShowcaseBehavior {
+  tabs: boolean;
+  autoplay: boolean;
+  interval: number;
+  loop: boolean;
+  pauseOnHover: boolean;
 }
 
 export interface ProductDetailOptions {
@@ -95,12 +131,42 @@ export interface ProductDetailOptions {
   showRating: boolean;
   showDescription: boolean;
   showTags: boolean;
+  /** Desktop: the buy box stays in view while the gallery scrolls. */
+  stickyBuyBox?: boolean | undefined;
+  /** Short reassurance lines under the add-to-cart button (e.g. "Secure checkout"). */
+  showTrustPoints?: boolean | undefined;
+  trustPoints?: string[] | undefined;
+  /** Phone: a bar with the price and an add-to-cart button appears once the main button scrolls out of view. */
+  stickyMobileBar?: boolean | undefined;
+  showSku?: boolean | undefined;
+}
+
+export interface CartContentsOptions {
+  summaryPosition: "right" | "left";
+  stickySummary: boolean;
+  showDiscountCode: boolean;
+  showShippingEstimator: boolean;
+  heading?: string | undefined;
+  checkoutLabel?: string | undefined;
+  /** Progress towards the store's own free-shipping threshold (from its shipping settings), when it has one. */
+  showFreeShippingBar?: boolean | undefined;
+  showTrustPoints?: boolean | undefined;
+  trustPoints?: string[] | undefined;
+  /** Phone: the total and checkout button stay at the bottom of the screen. */
+  stickyMobileCheckout?: boolean | undefined;
+  showContinueShopping?: boolean | undefined;
 }
 
 export interface CollectionListingOptions {
   columns: "2" | "3" | "4";
   showFilters: boolean;
   showDescription: boolean;
+  columnsMobile?: "1" | "2" | undefined;
+  imageRatio?: "square" | "portrait" | undefined;
+  cardStyle?: "bordered" | "minimal" | undefined;
+  showSaleBadge?: boolean | undefined;
+  showRatings?: boolean | undefined;
+  showBreadcrumb?: boolean | undefined;
 }
 
 /**

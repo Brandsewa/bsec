@@ -61,6 +61,47 @@ describe("header, footer, product and collection blocks", () => {
   });
 });
 
+describe("cart contents block", () => {
+  it("validates with defaults, and the cart is a theme system page", () => {
+    expect(validateBlockDocument({ version: 1, blocks: [block("c", "CartContents", {})] }).success).toBe(true);
+    expect(THEME_SYSTEM_PAGES.cart.type).toBe("cart_template");
+  });
+
+  it("uses the storefront cart when provided and draws a placeholder in the editor", () => {
+    const doc = [block("c", "CartContents", { summaryPosition: "left" })];
+    const host = renderToStaticMarkup(<>{renderBlockTree(doc, { renderCartContents: (o) => <div data-cart-core={o.summaryPosition} /> })}</>);
+    expect(host).toContain('data-cart-core="left"');
+    expect(renderToStaticMarkup(<>{renderBlockTree(doc, {})}</>)).toContain("Cart page");
+  });
+});
+
+describe("conversion settings", () => {
+  it("keeps documents saved before the settings existed valid, with the old look as defaults", () => {
+    const r = validateBlockDocument({ version: 1, blocks: [block("p", "ProductDetail", { galleryPosition: "left" }), block("c", "CollectionListing", {}), block("k", "CartContents", {})] });
+    expect(r.success).toBe(true);
+    if (r.success) {
+      expect(r.data.blocks[0]?.props).toMatchObject({ stickyMobileBar: false, showTrustPoints: false, showSku: true });
+      expect(r.data.blocks[1]?.props).toMatchObject({ columnsMobile: "1", cardStyle: "bordered", imageRatio: "square" });
+      expect(r.data.blocks[2]?.props).toMatchObject({ checkoutLabel: "Proceed to Checkout", showFreeShippingBar: false });
+    }
+  });
+
+  it("limits reassurance lines to four short ones", () => {
+    const many = ["a", "b", "c", "d", "e"];
+    expect(validateBlockDocument({ version: 1, blocks: [block("k", "CartContents", { trustPoints: many })] }).success).toBe(false);
+    expect(validateBlockDocument({ version: 1, blocks: [block("p", "ProductDetail", { trustPoints: ["x".repeat(61)] })] }).success).toBe(false);
+  });
+});
+
+describe("heading levels and sizes", () => {
+  it("supports H1 to H6 and a size that follows the level", () => {
+    const doc = { version: 1 as const, blocks: [block("h", "Heading", { text: "Hi", level: "h5", size: "auto" })] };
+    expect(validateBlockDocument(doc).success).toBe(true);
+    expect(renderToStaticMarkup(<>{renderBlockTree(doc.blocks, {})}</>)).toContain("bsb-lvl-h5");
+    expect(validateBlockDocument({ version: 1, blocks: [block("h", "Heading", { text: "Hi", level: "h7" })] }).success).toBe(false);
+  });
+});
+
 describe("theme system pages", () => {
   it("keeps header, footer and layouts off the public /pages/<slug> namespace", () => {
     for (const def of Object.values(THEME_SYSTEM_PAGES)) {

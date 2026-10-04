@@ -7,12 +7,30 @@ import { CartItemRow } from "./CartItemRow.tsx";
 import { ShippingEstimator } from "./ShippingEstimator.tsx";
 import { DiscountCodeBox } from "./DiscountCodeBox.tsx";
 import { priceOrder } from "@bs/domain/pricing";
+import type { CartContentsOptions } from "@bs/blocks";
+
+export const DEFAULT_CART_CONTENTS_OPTIONS: CartContentsOptions = {
+  summaryPosition: "right",
+  stickySummary: true,
+  showDiscountCode: true,
+  showShippingEstimator: true,
+  heading: "Shopping Cart",
+  checkoutLabel: "Proceed to Checkout",
+  showFreeShippingBar: false,
+  showTrustPoints: false,
+  stickyMobileCheckout: false,
+  showContinueShopping: true,
+};
 
 export interface CartViewProps {
   cart: StorefrontCart;
+  /** Layout choices from the theme's cart template; the defaults reproduce the built-in layout. */
+  options?: CartContentsOptions | undefined;
+  /** The store's own free-shipping threshold in paise (from its shipping settings), when it has one. */
+  freeShippingThresholdPaise?: number | null | undefined;
 }
 
-export function CartView({ cart: initialCart }: CartViewProps) {
+export function CartView({ cart: initialCart, options = DEFAULT_CART_CONTENTS_OPTIONS, freeShippingThresholdPaise }: CartViewProps) {
   const [cart, setCart] = useState<StorefrontCart>(initialCart);
   const [loading, setLoading] = useState(false);
 
@@ -101,14 +119,18 @@ export function CartView({ cart: initialCart }: CartViewProps) {
   });
 
   return (
-    <div className="mx-auto max-w-7xl px-4 py-8 sm:px-6 lg:px-8">
-      <h1 className="text-2xl sm:text-3xl font-extrabold tracking-tight text-foreground mb-8">
-        Shopping Cart ({cart.itemCount} {cart.itemCount === 1 ? "item" : "items"})
+    <div className={`mx-auto max-w-7xl px-4 py-8 sm:px-6 lg:px-8 ${options.stickyMobileCheckout ? "pb-28 lg:pb-8" : ""}`}>
+      <h1 className="text-2xl sm:text-3xl font-extrabold tracking-tight text-foreground mb-6">
+        {options.heading ?? "Shopping Cart"} ({cart.itemCount} {cart.itemCount === 1 ? "item" : "items"})
       </h1>
+
+      {options.showFreeShippingBar && freeShippingThresholdPaise ? (
+        <FreeShippingBar subtotal={cart.subtotal} thresholdPaise={freeShippingThresholdPaise} inr={inr} />
+      ) : null}
 
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 lg:gap-12 items-start">
         {/* Cart items list */}
-        <div className={`lg:col-span-8 flex flex-col ${loading ? "opacity-60 pointer-events-none" : ""}`}>
+        <div className={`lg:col-span-8 flex flex-col ${options.summaryPosition === "left" ? "lg:order-2" : ""} ${loading ? "opacity-60 pointer-events-none" : ""}`}>
           <div className="divide-y divide-border">
             {cart.items.map((item) => (
               <CartItemRow
@@ -122,7 +144,7 @@ export function CartView({ cart: initialCart }: CartViewProps) {
         </div>
 
         {/* Order summary sidebar */}
-        <div className="lg:col-span-4 flex flex-col gap-6">
+        <div className={`lg:col-span-4 flex flex-col gap-6 ${options.summaryPosition === "left" ? "lg:order-1" : ""} ${options.stickySummary ? "lg:sticky lg:top-24" : ""}`}>
           <div className="rounded-2xl border border-border bg-card p-6 shadow-sm">
             <h2 className="text-lg font-bold text-foreground mb-4">Order Summary</h2>
 
@@ -150,9 +172,11 @@ export function CartView({ cart: initialCart }: CartViewProps) {
               <span className="text-xl text-foreground">{inr(estimate.grandTotal)}</span>
             </div>
 
-            <div className="mb-4">
-              <DiscountCodeBox cart={cart} onChange={setCart} />
-            </div>
+            {options.showDiscountCode ? (
+              <div className="mb-4">
+                <DiscountCodeBox cart={cart} onChange={setCart} />
+              </div>
+            ) : null}
 
             <p className="text-xs text-muted-foreground mb-6">
               GST included. Delivery options are calculated at checkout.
@@ -162,19 +186,64 @@ export function CartView({ cart: initialCart }: CartViewProps) {
               href="/checkout"
               className="w-full flex items-center justify-center rounded-xl bg-primary py-3.5 px-6 text-sm font-semibold text-primary-foreground shadow-sm hover:opacity-90 transition-opacity"
             >
-              Proceed to Checkout
+              {options.checkoutLabel ?? "Proceed to Checkout"}
             </Link>
 
-            <div className="mt-4 text-center">
-              <Link href="/" className="text-xs text-primary hover:underline">
-                or Continue Shopping
-              </Link>
-            </div>
+            {options.showTrustPoints && options.trustPoints && options.trustPoints.length > 0 ? (
+              <ul className="mt-4 flex flex-col gap-1.5 text-xs text-muted-foreground">
+                {options.trustPoints.map((point) => (
+                  <li key={point} className="inline-flex items-center gap-1.5">
+                    <svg className="h-3.5 w-3.5 text-emerald-600" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true">
+                      <path fillRule="evenodd" d="M16.7 5.3a1 1 0 010 1.4l-7.5 7.5a1 1 0 01-1.4 0L3.3 9.7a1 1 0 011.4-1.4l3.8 3.8 6.8-6.8a1 1 0 011.4 0z" clipRule="evenodd" />
+                    </svg>
+                    {point}
+                  </li>
+                ))}
+              </ul>
+            ) : null}
+
+            {options.showContinueShopping !== false ? (
+              <div className="mt-4 text-center">
+                <Link href="/" className="text-xs text-primary hover:underline">
+                  or Continue Shopping
+                </Link>
+              </div>
+            ) : null}
           </div>
 
           {/* Shipping estimator box */}
-          <ShippingEstimator />
+          {options.showShippingEstimator ? <ShippingEstimator /> : null}
         </div>
+      </div>
+
+      {options.stickyMobileCheckout ? (
+        <div className="fixed inset-x-0 bottom-0 z-40 border-t border-border bg-background/95 px-4 py-3 shadow-[0_-4px_16px_rgba(0,0,0,0.08)] backdrop-blur lg:hidden">
+          <div className="mx-auto flex max-w-xl items-center gap-3">
+            <div className="flex-1">
+              <p className="text-xs text-muted-foreground">Estimated total</p>
+              <p className="text-base font-bold text-foreground">{inr(estimate.grandTotal)}</p>
+            </div>
+            <Link href="/checkout" className="rounded-xl bg-primary px-5 py-3 text-sm font-semibold text-primary-foreground shadow-sm">
+              {options.checkoutLabel ?? "Proceed to Checkout"}
+            </Link>
+          </div>
+        </div>
+      ) : null}
+    </div>
+  );
+}
+
+/** Progress towards the store's free-shipping threshold; the real shipping price is still decided at checkout. */
+function FreeShippingBar({ subtotal, thresholdPaise, inr }: { subtotal: number; thresholdPaise: number; inr: (paise: number) => string }) {
+  const reached = subtotal >= thresholdPaise;
+  const percent = Math.min(100, Math.round((subtotal / thresholdPaise) * 100));
+  return (
+    <div className="mb-8 rounded-xl border border-border bg-surface/60 p-4" data-testid="free-shipping-bar">
+      <p className="text-sm font-medium text-foreground">
+        {reached ? "You have unlocked free shipping" : `Add ${inr(thresholdPaise - subtotal)} more for free shipping`}
+      </p>
+      <div className="mt-2 h-2 overflow-hidden rounded-full bg-border" role="progressbar" aria-valuemin={0} aria-valuemax={100} aria-valuenow={percent}>
+        <div className="h-full rounded-full bg-primary transition-all duration-300" style={{ width: `${percent}%` }} />
       </div>
     </div>
   );

@@ -1,4 +1,4 @@
-import { and, eq, sql } from "drizzle-orm";
+import { and, eq, isNotNull, min, sql } from "drizzle-orm";
 import { type Db, shippingZones, shippingRates, withTenant } from "@bs/db";
 import type { ShippingSettings, UpdateShippingInput } from "@bs/contracts";
 import { assertPermission, type TenantContext } from "../context.ts";
@@ -335,5 +335,21 @@ export async function updateAdminShippingSettings(
       success: true,
       message: "Shipping settings updated successfully",
     };
+  });
+}
+
+/**
+ * The cart value (paise) at which the store's own shipping rules turn free, or null when it has no
+ * such rule. Read-only: the storefront cart uses it for a progress bar; checkout still prices
+ * shipping from the rates themselves (getTenantShippingRates).
+ */
+export async function getFreeShippingThresholdPaise(db: Db, tenantId: string): Promise<number | null> {
+  return withTenant(db, tenantId, async (tx) => {
+    const [row] = await tx
+      .select({ threshold: min(shippingRates.thresholdPaise) })
+      .from(shippingRates)
+      .where(and(eq(shippingRates.tenantId, tenantId), isNotNull(shippingRates.thresholdPaise)));
+    const t = row?.threshold;
+    return t != null && Number(t) > 0 ? Number(t) : null;
   });
 }

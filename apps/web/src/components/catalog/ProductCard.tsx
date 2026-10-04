@@ -4,6 +4,11 @@ import type { StorefrontProductSummary } from "@bs/domain";
 
 export interface ProductCardProps {
   product: StorefrontProductSummary;
+  /** Look chosen by the theme's collection template; the defaults are the built-in card. */
+  imageRatio?: "square" | "portrait" | undefined;
+  cardStyle?: "bordered" | "minimal" | undefined;
+  showSaleBadge?: boolean | undefined;
+  showRatings?: boolean | undefined;
 }
 
 /**
@@ -18,7 +23,7 @@ export function formatInrPrice(paise: number): string {
   }).format(rupees);
 }
 
-export function ProductCard({ product }: ProductCardProps) {
+export function ProductCard({ product, imageRatio = "square", cardStyle = "bordered", showSaleBadge = true, showRatings = true }: ProductCardProps) {
   const isRange = product.priceMin !== product.priceMax;
   const formattedPrice = isRange
     ? `${formatInrPrice(product.priceMin)} - ${formatInrPrice(product.priceMax)}`
@@ -38,11 +43,15 @@ export function ProductCard({ product }: ProductCardProps) {
   const imageAlt = product.primaryImage?.alt ?? product.title;
 
   return (
-    <article className="group relative flex flex-col overflow-hidden rounded-xl border border-border/70 bg-card transition-all duration-200 hover:shadow-md hover:border-border">
+    <article
+      className={`group relative flex flex-col overflow-hidden rounded-xl transition-all duration-200 ${
+        cardStyle === "minimal" ? "bg-transparent" : "border border-border/70 bg-card hover:shadow-md hover:border-border"
+      }`}
+    >
       {/* Product Image */}
       <Link
         href={`/products/${product.slug}`}
-        className="relative aspect-square w-full overflow-hidden bg-surface"
+        className={`relative w-full overflow-hidden bg-surface ${imageRatio === "portrait" ? "aspect-[4/5]" : "aspect-square"} ${cardStyle === "minimal" ? "rounded-xl" : ""}`}
         aria-label={product.title}
       >
         {imageUrl ? (
@@ -76,7 +85,7 @@ export function ProductCard({ product }: ProductCardProps) {
         )}
 
         {/* Savings Badge */}
-        {savingsPercent !== null && savingsPercent > 0 && (
+        {showSaleBadge && savingsPercent !== null && savingsPercent > 0 && (
           <span className="absolute top-2.5 right-2.5 rounded-md bg-emerald-600 px-2 py-0.5 text-xs font-semibold text-white shadow-xs">
             Save {savingsPercent}%
           </span>
@@ -91,7 +100,7 @@ export function ProductCard({ product }: ProductCardProps) {
       </Link>
 
       {/* Product Info */}
-      <div className="flex flex-1 flex-col p-4">
+      <div className={`flex flex-1 flex-col ${cardStyle === "minimal" ? "px-0.5 pt-3 pb-1" : "p-4"}`}>
         {product.brand && (
           <p className="mb-1 text-xs font-semibold uppercase tracking-wider text-muted-foreground">
             {product.brand.name}
@@ -103,7 +112,7 @@ export function ProductCard({ product }: ProductCardProps) {
         </h3>
 
         {/* Rating if present */}
-        {Number(product.ratingCount) > 0 && (
+        {showRatings && Number(product.ratingCount) > 0 && (
           <div className="mt-1.5 flex items-center gap-1.5 text-xs text-muted-foreground">
             <span className="flex items-center text-amber-500">
               ★ <span className="ml-0.5 font-medium text-foreground">{product.ratingAvg}</span>

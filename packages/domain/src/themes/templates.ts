@@ -24,6 +24,8 @@ export interface TemplateSummary {
   features: string[];
   version: number;
   isActive: boolean;
+  /** published: stores can pick it. draft: being built, never published. archived: taken down by staff. */
+  status: "draft" | "published" | "archived";
   hasUnpublishedChanges: boolean;
   publishedAt: string | null;
   updatedAt: string;
@@ -38,7 +40,7 @@ type Row = typeof schema.themeTemplates.$inferSelect;
 
 const PAGE_KEY = /^[a-z0-9-]{1,60}$/;
 
-async function assertThemeEditor(rt: Runtime, staffUserId: string): Promise<void> {
+export async function assertThemeEditor(rt: Runtime, staffUserId: string): Promise<void> {
   const { role } = await assertPlatformStaff(rt, staffUserId);
   if (role !== "platform_owner" && role !== "platform_admin") {
     throw new Error("Forbidden: editing theme templates requires platform_admin or platform_owner");
@@ -65,6 +67,7 @@ function summarize(r: Row): TemplateSummary {
     features: r.features ?? [],
     version: r.version,
     isActive: r.isActive,
+    status: r.isActive ? "published" : r.archivedAt ? "archived" : "draft",
     hasUnpublishedChanges:
       (r.draftPages != null && !sameJson(r.draftPages, r.defaultPages)) ||
       (r.draftTokens != null && !sameJson(r.draftTokens, r.defaultTokens)),
@@ -94,6 +97,7 @@ function starterPages(): TemplatePages {
     ],
     collection: one("collection-1", "CollectionListing"),
     product: one("product-1", "ProductDetail"),
+    cart: one("cart-1", "CartContents"),
     header: one("header-1", "SiteHeader"),
     footer: one("footer-1", "SiteFooter"),
   };
@@ -103,14 +107,14 @@ function starterPages(): TemplatePages {
 export function validateTemplatePages(pages: TemplatePages): TemplatePages {
   const out: TemplatePages = {};
   for (const [key, blocks] of Object.entries(pages)) {
-    if (!PAGE_KEY.test(key)) throw new Error(`Invalid page key "${key}" (use lowercase letters, numbers and dashes)`);
+    if (!PAGE_KEY.test(key)) throw new Error(`Bad Request: Invalid page key "${key}" (use lowercase letters, numbers and dashes)`);
     const result = validateBlockDocument({ version: 1, blocks });
     if (!result.success) {
-      throw new Error(`Page "${key}" is invalid: ${result.errors.map((e) => `${e.path}: ${e.message}`).join(", ")}`);
+      throw new Error(`Bad Request: Page "${key}" is invalid: ${result.errors.map((e) => `${e.path}: ${e.message}`).join(", ")}`);
     }
     out[key] = result.data.blocks;
   }
-  if (!out.home) throw new Error('A theme must define a "home" page');
+  if (!out.home) throw new Error('Bad Request: A theme must define a "home" page');
   return out;
 }
 
@@ -232,6 +236,7 @@ export async function publishThemeTemplate(
         draftPages: pages,
         draftTokens: tokens,
         isActive: true,
+        archivedAt: null,
         publishedAt: new Date(),
         version: sql`${schema.themeTemplates.version} + 1`,
         updatedAt: new Date(),
@@ -251,6 +256,30 @@ export interface UpdateTemplateMetaInput {
   industry?: string | undefined;
   features?: string[] | undefined;
   isActive?: boolean | undefined;
+  /** true: archive (hidden from stores, moves to the Archive tab); false: restore it to Drafts. */
+  archived?: boolean | undefined;
+}
+
+/**
+ * Permanently deletes a theme from the platform. Only a theme stores cannot pick (a draft or an archived
+ * one) can be deleted, so a theme stores can still pick is never removed by accident. Stores that already activated it keep their
+ * own copy of its pages and settings; they just stop seeing it in the library. Audited.
+ */
+export async function deleteThemeTemplate(
+  rt: Runtime,
+  staffUserId: string,
+  code: string,
+  meta?: AuditMeta,
+): Promise<{ ok: true }> {
+  await assertThemeEditor(rt, staffUserId);
+  return rt._db.db.transaction(async (tx) => {
+    const [row] = await tx.select().from(schema.themeTemplates).where(eq(schema.themeTemplates.code, code)).limit(1);
+    if (!row) throw new Error(`Template not found: "${code}"`);
+    if (row.isActive) throw new Error("Archive this theme before deleting it");
+    await tx.delete(schema.themeTemplates).where(eq(schema.themeTemplates.id, row.id));
+    await writePlatformAudit(tx, staffUserId, "theme_template.delete", "theme_template", code, null, { name: row.name, version: row.version }, meta);
+    return { ok: true as const };
+  });
 }
 
 /** Edits library card details, or hides/shows a published theme (unpublish keeps store copies). */
@@ -267,6 +296,12 @@ export async function updateThemeTemplateMeta(
   if (input.industry !== undefined) set.industry = input.industry;
   if (input.features !== undefined) set.features = input.features.slice(0, 10);
   if (input.isActive !== undefined) set.isActive = input.isActive;
+  if (input.archived === true) {
+    set.isActive = false;
+    set.archivedAt = new Date();
+  } else if (input.archived === false) {
+    set.archivedAt = null;
+  }
   return rt._db.db.transaction(async (tx) => {
     const [row] = await tx.update(schema.themeTemplates).set(set).where(eq(schema.themeTemplates.code, input.code)).returning();
     if (!row) throw new Error(`Template not found: "${input.code}"`);

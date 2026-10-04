@@ -426,6 +426,7 @@ export const ThemeTemplateSummary = z.object({
   features: z.array(z.string()),
   version: z.number(),
   isActive: z.boolean(),
+  status: z.enum(["draft", "published", "archived"]),
   hasUnpublishedChanges: z.boolean(),
   publishedAt: z.string().nullable(),
   updatedAt: z.string(),
@@ -472,6 +473,14 @@ export const platformTemplatesContract = {
     .route({ method: "POST", path: "/platform/templates/{code}/publish" })
     .input(z.object({ code: z.string() }))
     .output(z.object({ version: z.number() })),
+  createPreview: oc
+    .route({ method: "POST", path: "/platform/templates/{code}/preview" })
+    .input(z.object({ code: z.string(), ttlHours: z.number().int().min(1).max(168).optional() }))
+    .output(z.object({ code: z.string(), url: z.string(), expiresAt: z.string(), pages: z.array(z.string()) })),
+  delete: oc
+    .route({ method: "DELETE", path: "/platform/templates/{code}" })
+    .input(z.object({ code: z.string() }))
+    .output(z.object({ ok: z.literal(true) })),
   updateMeta: oc
     .route({ method: "PATCH", path: "/platform/templates/{code}" })
     .input(
@@ -482,6 +491,7 @@ export const platformTemplatesContract = {
         industry: z.string().max(60).optional(),
         features: z.array(z.string().max(80)).max(10).optional(),
         isActive: z.boolean().optional(),
+        archived: z.boolean().optional(),
       }),
     )
     .output(ThemeTemplateSummary),

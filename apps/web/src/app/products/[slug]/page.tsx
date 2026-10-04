@@ -127,7 +127,7 @@ export default async function ProductDetailPage({ params }: ProductPageProps) {
   );
 
   return (
-    <div data-cache-tag={productCacheTag}>
+    <div data-cache-tag={productCacheTag} className="bs-skin">
       {/* Schema.org Structured Data */}
       <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(productJsonLd) }} />
       <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(breadcrumbsJsonLd) }} />

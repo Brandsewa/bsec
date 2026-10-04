@@ -61,6 +61,7 @@ Until step 3 the site works normally; only the self-service endpoints answer 503
 
 ### Other deployment settings that change behaviour
 - `PLATFORM_DOMAIN` (default `bcom.si`): root domain for store subdomains; it and its subdomains can never be claimed as custom domains.
+- `PREVIEW_BASE_URL` (platform, optional): where theme preview links point, with no trailing slash. Default `https://<MARKETING_HOST or PLATFORM_DOMAIN>`; set it for local development (for example `http://localhost:3000`). The preview page itself is served by the web app on the marketing host at `/preview/<code>`.
 - `ADMIN_HOST` (default `admin.<PLATFORM_DOMAIN>`) and `MARKETING_HOST` (default `PLATFORM_DOMAIN`): also reserved; `MARKETING_HOST` is the only host that serves `/signup` and `/api/saas/*`.
 - `CUSTOM_DOMAIN_CNAME_TARGET` (default `stores.<PLATFORM_DOMAIN>`): the hostname customers point their domain at; it must exist in the Cloudflare zone.
 - `CLOUDFLARE_API_TOKEN` / `CLOUDFLARE_ZONE_ID`: custom domains stay in `requested` ("not configured") until both are set.

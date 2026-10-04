@@ -28,6 +28,9 @@ import {
   savePageDraft,
   saveThemeTemplateDraft,
   updateThemeTemplateMeta,
+  deleteThemeTemplate,
+  createThemePreview,
+  getThemePreview,
   type Runtime,
   type TenantContext,
 } from "../src/index.ts";
@@ -331,11 +334,60 @@ describe("platform template management", () => {
 describe("theme builder: every page of a theme", () => {
   it("a blank new theme starts with a valid layout for every page and editable tokens", async () => {
     const created = await createThemeTemplate(platform, OWNER_STAFF, { name: "Blank Starter" });
-    expect(Object.keys(created.draftPages).sort()).toEqual(["collection", "footer", "header", "home", "product"]);
+    expect(Object.keys(created.draftPages).sort()).toEqual(["cart", "collection", "footer", "header", "home", "product"]);
     expect(created.draftTokens).toMatchObject({ colors: { primary: expect.any(String) }, fonts: { heading: expect.any(String) }, buttons: { style: "solid" } });
     for (const blocks of Object.values(created.draftPages)) {
       expect(validateBlockDocument({ version: 1, blocks }).success).toBe(true);
     }
+  });
+
+  it("moves a theme through draft, published and archived, and only deletes one stores cannot pick", async () => {
+    const statusOf = async (code: string) => (await listThemeTemplates(platform, OWNER_STAFF)).find((t) => t.code === code)?.status;
+    const created = await createThemeTemplate(platform, OWNER_STAFF, { name: "Lifecycle Theme" });
+    expect(await statusOf(created.code)).toBe("draft");
+
+    await publishThemeTemplate(platform, OWNER_STAFF, created.code);
+    expect(await statusOf(created.code)).toBe("published");
+    await expect(deleteThemeTemplate(platform, OWNER_STAFF, created.code)).rejects.toThrow(/Archive this theme/);
+
+    await updateThemeTemplateMeta(platform, OWNER_STAFF, { code: created.code, archived: true });
+    expect(await statusOf(created.code)).toBe("archived");
+    await updateThemeTemplateMeta(platform, OWNER_STAFF, { code: created.code, archived: false });
+    expect(await statusOf(created.code)).toBe("draft");
+
+    await updateThemeTemplateMeta(platform, OWNER_STAFF, { code: created.code, archived: true });
+    await deleteThemeTemplate(platform, OWNER_STAFF, created.code);
+    expect(await statusOf(created.code)).toBeUndefined();
+    const audit = await rows<{ action: string }>(`select action from platform_audit_logs where target_id = $1 order by created_at`, [created.code]);
+    expect(audit.map((a) => a.action)).toContain("theme_template.delete");
+  });
+
+  it("shares a theme draft as a short-lived preview link the storefront can read", async () => {
+    const created = await createThemeTemplate(platform, OWNER_STAFF, { name: "Previewable" });
+    const p = await createThemePreview(platform, OWNER_STAFF, { code: created.code, ttlHours: 2 });
+    expect(p.code).toMatch(/^[A-Za-z0-9_-]{11}$/);
+    expect(p.pages).toEqual(expect.arrayContaining(["home", "collection", "product", "cart"]));
+    expect(p.pages).not.toContain("header");
+
+    // The web runtime reads it (read-only) with no staff session at all.
+    const seen = await getThemePreview(web, p.code);
+    expect(seen?.templateCode).toBe(created.code);
+    expect(Object.keys(seen?.pages ?? {})).toContain("home");
+
+    // A snapshot: later edits to the draft do not change what the link shows.
+    await saveThemeTemplateDraft(platform, OWNER_STAFF, { code: created.code, pages: { home: [{ id: "h", type: "Heading", version: 1, props: { text: "Changed" } }] }, tokens: created.draftTokens });
+    expect(Object.keys((await getThemePreview(web, p.code))?.pages ?? {})).toContain("collection");
+
+    expect(await getThemePreview(web, "not-a-real-code")).toBeNull();
+    expect(await getThemePreview(web, "bad code!")).toBeNull();
+    await pg.query(`update theme_previews set expires_at = now() - interval '1 minute' where code = $1`, [p.code]);
+    expect(await getThemePreview(web, p.code)).toBeNull();
+
+    // The web role cannot create, change or delete previews.
+    await expect(pg.query("set role app_rw; insert into theme_previews (code, template_code, name, pages, tokens, expires_at) values ('x', 'x', 'x', '{}', '{}', now())")).rejects.toThrow(/permission denied/);
+    await pg.query("reset role");
+    const audit = await rows<{ action: string }>(`select action from platform_audit_logs where target_id = $1`, [created.code]);
+    expect(audit.map((a) => a.action)).toContain("theme_template.preview_create");
   });
 
   it("saves and publishes changed tokens and pages; stores get them on activation", async () => {

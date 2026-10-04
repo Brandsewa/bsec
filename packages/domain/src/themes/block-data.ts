@@ -32,6 +32,8 @@ const toBlockProduct = (s: StorefrontProductSummary): BlockProduct => ({
   imageMediaId: s.primaryImage?.mediaId,
   imageUrl: s.primaryImage?.url,
   imageAlt: s.primaryImage?.alt,
+  priceMax: s.priceMax,
+  ...(s.brand?.name ? { brandName: s.brand.name } : null),
 });
 
 const liveProducts = () =>
@@ -94,6 +96,31 @@ async function loadProducts(tx: Tx, props: Record<string, unknown>): Promise<Pro
   }
 }
 
+/**
+ * Adds what the showcase card needs beyond the product summary: the first category's name (for the badge)
+ * and, for single-variant products, the variant id so the card's cart button can add it directly.
+ */
+async function enrichShowcaseProducts(tx: Tx, products: BlockProduct[]): Promise<BlockProduct[]> {
+  if (products.length === 0) return products;
+  const ids = products.map((p) => p.id);
+  const variantRows = await tx.select({ id: schema.variants.id, productId: schema.variants.productId }).from(schema.variants).where(inArray(schema.variants.productId, ids));
+  const variantsBy = new Map<string, string[]>();
+  for (const v of variantRows) variantsBy.set(v.productId, [...(variantsBy.get(v.productId) ?? []), v.id]);
+  const catRows = await tx
+    .select({ productId: schema.productCategories.productId, name: schema.categories.name, position: schema.productCategories.position })
+    .from(schema.productCategories)
+    .innerJoin(schema.categories, and(eq(schema.categories.tenantId, schema.productCategories.tenantId), eq(schema.categories.id, schema.productCategories.categoryId)))
+    .where(inArray(schema.productCategories.productId, ids))
+    .orderBy(asc(schema.productCategories.position));
+  const categoryBy = new Map<string, string>();
+  for (const c of catRows) if (!categoryBy.has(c.productId)) categoryBy.set(c.productId, c.name);
+  return products.map((p) => {
+    const vs = variantsBy.get(p.id) ?? [];
+    const category = categoryBy.get(p.id);
+    return { ...p, ...(category ? { categoryName: category } : null), ...(vs.length === 1 && vs[0] ? { quickAddVariantId: vs[0] } : null) };
+  });
+}
+
 async function loadCollections(tx: Tx, props: Record<string, unknown>): Promise<BlockCollectionSummary[]> {
   const slugs = Array.isArray(props.collectionSlugs) ? (props.collectionSlugs as unknown[]).filter((s): s is string => typeof s === "string").slice(0, 12) : [];
   if (slugs.length === 0) return [];
@@ -121,12 +148,14 @@ export async function resolveBlockData(
 ): Promise<Record<string, BlockData>> {
   const productBlocks: BlockInstance[] = [];
   const collectionBlocks: BlockInstance[] = [];
+  const showcaseBlocks: BlockInstance[] = [];
   walkBlocks(blocks, (b) => {
     if (b.hidden) return;
-    if (b.type === "ProductGrid" || b.type === "ProductCarousel") productBlocks.push(b);
+    if (b.type === "ProductShowcase") showcaseBlocks.push(b);
+    else if (b.type === "ProductGrid" || b.type === "ProductCarousel") productBlocks.push(b);
     else if (b.type === "CollectionGrid") collectionBlocks.push(b);
   });
-  if (productBlocks.length === 0 && collectionBlocks.length === 0) return {};
+  if (productBlocks.length === 0 && collectionBlocks.length === 0 && showcaseBlocks.length === 0) return {};
 
   const db = rt._db.db;
   if (!(await isFeatureEnabled(db, ctx.tenantId, "catalog"))) return {};
@@ -142,6 +171,18 @@ export async function resolveBlockData(
         rows,
       );
       out[b.id] = { kind: "products", products: summaries.map(toBlockProduct) };
+    }
+
+    for (const b of showcaseBlocks) {
+      const tabs = Array.isArray(b.props["tabs"]) ? (b.props["tabs"] as Array<Record<string, unknown>>).slice(0, 6) : [];
+      const limit = Number(b.props["limit"]) || 10;
+      const resolved: Array<{ products: BlockProduct[] }> = [];
+      for (const tab of tabs.length > 0 ? tabs : [{ source: "newest" }]) {
+        const rows = await loadProducts(tx, { source: tab["source"], collectionSlug: tab["collectionSlug"], limit });
+        const summaries = await buildProductSummaries(tx, rows.map((r) => r.id), rows);
+        resolved.push({ products: await enrichShowcaseProducts(tx, summaries.map(toBlockProduct)) });
+      }
+      out[b.id] = { kind: "product-tabs", tabs: resolved };
     }
 
     for (const b of collectionBlocks) {
@@ -162,13 +203,14 @@ function collectMediaIds(blocks: BlockInstance[], data: Record<string, BlockData
     if (b.hidden) return;
     add(b.props.backgroundMediaId);
     add(b.props.mediaId);
-    for (const key of ["items", "images"] as const) {
+    for (const key of ["items", "images", "slides"] as const) {
       const list = b.props[key];
       if (Array.isArray(list)) {
         for (const it of list) {
           if (it && typeof it === "object") {
             add((it as Record<string, unknown>).avatarMediaId);
             add((it as Record<string, unknown>).mediaId);
+            add((it as Record<string, unknown>).backgroundMediaId);
           }
         }
       }
@@ -176,6 +218,7 @@ function collectMediaIds(blocks: BlockInstance[], data: Record<string, BlockData
   });
   for (const d of Object.values(data)) {
     if (d.kind === "products") for (const p of d.products) add(p.imageMediaId);
+    else if (d.kind === "product-tabs") for (const tab of d.tabs) for (const p of tab.products) add(p.imageMediaId);
     else for (const c of d.collections) add(c.imageMediaId);
   }
   return [...ids].slice(0, 500);

@@ -133,7 +133,7 @@ Plan: `docs/SETTINGS-REBUILD-PLAN.md`, `SETTINGS-REMAINING-PHASES`; records `202
 `pnpm test:heavy:local`, `test:affected`, `gate:quick`, CI docs-only path, lint rule `bs/no-service-call-in-tx` (allows services handed `tx`), db pool idle-error logging, deletion-sweep advisory lock on one connection. Integration found three defects fixed before merge: invalid `ci.yml` (unquoted colons), tooling that reported success when tests never ran on Windows, and one false positive of the new lint rule. Record: `2026-10-04-claude-dev-speed-integration.md`.
 
 ## Known open items after this pass (2026-10-04)
-- Theme builder (`integrate/theme-builder`, PR #30, migrations 0031/0032): code-verified (typecheck, lint, build, fast and real-DB suites); **owner browser walkthrough pending** before merge (local stack, compose project `bsecint`).
+- Theme builder merged (PR #30, migrations 0031/0032) on the owner's instruction to release. Verified by typecheck, lint, build and fast and real-database suites; the browser walkthrough was done (or not) by the owner, not by an agent.
 - CI e2e only runs on `main`: a PR that renames admin UI labels must grep `e2e/` first (two follow-up fixes were needed after Settings 0-1).
 - Windows heavy-suite worker crash `3221226505` remains a local flake (rerun the file alone); CI on Linux is unaffected.
 - COD fee/enable is still saved through the generic `settings.update` (`settings.write`); owner-only treatment is part of Settings Phase 5.
@@ -142,7 +142,6 @@ Plan: `docs/SETTINGS-REBUILD-PLAN.md`, `SETTINGS-REMAINING-PHASES`; records `202
 
 One line per piece of work that is started and not merged. Add yours before you start, remove it when merged or abandoned (`AGENTS.md` section 6). Format: `agent · branch · area · since · one-line goal`.
 
-- claude · `integrate/theme-builder` (PR #30) · themes, web, db · 2026-10-04 · theme builder merged with current main (migrations 0031/0032); awaiting ZCode browser walkthrough before merge
 
 ## Returns & Exchanges (Manual Review & Portal) — Complete (2026-10-02)
 

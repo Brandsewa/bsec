@@ -218,6 +218,20 @@
       "when": 1792000000000,
       "tag": "0030_customers_segments",
       "breakpoints": true
+    },
+    {
+      "idx": 31,
+      "version": "7",
+      "when": 1792010000000,
+      "tag": "0031_theme_template_archive",
+      "breakpoints": true
+    },
+    {
+      "idx": 32,
+      "version": "7",
+      "when": 1792020000000,
+      "tag": "0032_theme_previews",
+      "breakpoints": true
     }
   ]
 }

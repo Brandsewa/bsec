@@ -4,12 +4,14 @@ import type { CSSProperties, ReactNode } from "react";
 import { sanitizeRichText } from "./sanitize.ts";
 import type {
   BlockProduct,
+  CartContentsOptions,
   CollectionListingOptions,
   ProductDetailOptions,
   BlockRenderArgs,
   RenderContext,
   SlotRender,
 } from "./types.ts";
+import { layoutHasAspectRatio, layoutStyle } from "./layout.ts";
 import type * as R from "./registry.ts";
 
 /**
@@ -542,7 +544,7 @@ export function HeadingView({ props }: A<R.HeadingProps>): ReactNode {
   const Tag = props.level;
   return (
     <div className={cx("bsb", `bsb-align-${props.align}`)}>
-      <Tag className={cx("bsb-heading", `bsb-h-${props.size}`)}>{props.text}</Tag>
+      <Tag className={cx("bsb-heading", props.size === "auto" ? `bsb-lvl-${props.level}` : `bsb-h-${props.size}`)}>{props.text}</Tag>
     </div>
   );
 }
@@ -599,7 +601,7 @@ export function ButtonView({ props }: A<R.ButtonProps>): ReactNode {
     <div className={cx("bsb", `bsb-align-${props.align}`)}>
       <a
         href={props.href}
-        className={cx("bsb-btn", `bsb-btn-${props.variant}`, props.size !== "md" && `bsb-btn-${props.size}`, props.fullWidth && "bsb-btn-block")}
+        className={cx("bsb-btn", `bsb-btn-${props.variant}`, props.size !== "auto" && `bsb-btn-${props.size}`, props.fullWidth && "bsb-btn-block")}
       >
         {props.label}
       </a>
@@ -795,6 +797,7 @@ export function ProductDetailView({ props, ctx }: A<R.ProductDetailProps>): Reac
       {props.showDescription ? <p className="bsb-muted">A short product description appears here, written by the store for each product.</p> : null}
       <div className="bsb-ph-box" style={{ height: 44 }}><span>Variant options</span></div>
       <span className="bsb-btn bsb-btn-primary bsb-btn-lg" style={{ justifyContent: "center" }}>Add to cart</span>
+      {props.showTrustPoints ? <p className="bsb-muted" style={{ fontSize: "0.75rem", margin: 0 }}>{props.trustPoints.join(" · ")}</p> : null}
       {props.showTags ? <p className="bsb-muted" style={{ fontSize: "0.75rem" }}>#tag #another</p> : null}
     </div>
   );
@@ -823,4 +826,305 @@ export function CollectionListingView({ props, ctx }: A<R.CollectionListingProps
       <div className="bsb-grid bsb-gap-md" style={{ ["--cols" as string]: props.columns, ["--cols-m" as string]: 2 }}>{cards}</div>
     </Placeholder>
   );
+}
+
+export function CartContentsView({ props, ctx }: A<R.CartContentsProps>): ReactNode {
+  if (ctx?.renderCartContents) return <>{ctx.renderCartContents(props as CartContentsOptions)}</>;
+  const items = (
+    <div style={{ display: "flex", flexDirection: "column", gap: "0.75rem" }}>
+      {[1, 2].map((n) => (
+        <div key={n} style={{ display: "flex", gap: "1rem", alignItems: "center" }}>
+          <div className="bsb-ph-box" style={{ width: 88, height: 88, flex: "none" }} aria-hidden="true" />
+          <div style={{ flex: 1 }}>
+            <p style={{ margin: 0, fontWeight: 600 }}>Product {n}</p>
+            <p className="bsb-muted" style={{ margin: "0.15rem 0 0" }}>Qty 1 · {money(129900)}</p>
+          </div>
+        </div>
+      ))}
+    </div>
+  );
+  const summary = (
+    <div className="bsb-ph-box" style={{ display: "block", padding: "1.25rem", textAlign: "left" }}>
+      <p style={{ margin: 0, fontWeight: 700 }}>Order summary</p>
+      <p className="bsb-muted" style={{ margin: "0.5rem 0" }}>Subtotal {money(259800)}</p>
+      {props.showDiscountCode ? <p className="bsb-muted" style={{ margin: "0.25rem 0" }}>Discount code</p> : null}
+      <span className="bsb-btn bsb-btn-primary bsb-btn-lg" style={{ justifyContent: "center", marginTop: "0.75rem", display: "flex" }}>{props.checkoutLabel}</span>
+      {props.showTrustPoints ? <p className="bsb-muted" style={{ fontSize: "0.75rem", marginTop: "0.75rem" }}>{props.trustPoints.join(" · ")}</p> : null}
+      {props.showShippingEstimator ? <p className="bsb-muted" style={{ fontSize: "0.75rem", marginTop: "0.75rem" }}>Shipping estimator</p> : null}
+    </div>
+  );
+  return (
+    <Placeholder label="Cart page" hint="The shopper's own cart, totals and checkout button fill this area.">
+      <h1 className="bsb-heading bsb-h-lg" style={{ marginBottom: "1rem" }}>{props.heading}</h1>
+      <div className="bsb-ph-two">{props.summaryPosition === "left" ? <>{summary}{items}</> : <>{items}{summary}</>}</div>
+    </Placeholder>
+  );
+}
+
+/* ------------------------------ hero slider ----------------------------- */
+
+const SHADE_HEIGHT = { sm: "35%", md: "55%", lg: "80%" } as const;
+const BTN_VARIANT = { dark: "bsb-btn-primary", light: "bsb-btn-secondary", outline: "bsb-btn-outline" } as const;
+
+function slideButton(label: string, href: string, variant: keyof typeof BTN_VARIANT, size: string, custom: boolean, which: "p" | "s"): ReactNode {
+  if (!label) return null;
+  return (
+    <a
+      className={cx("bsb-btn", BTN_VARIANT[variant], size !== "auto" && `bsb-btn-${size}`, custom && `bsb-hs-custom-${which}`)}
+      href={href || "#"}
+      rel={rel(href)}
+    >
+      {label}
+    </a>
+  );
+}
+
+export function HeroSliderView({ props, ctx }: A<R.HeroSliderProps>): ReactNode {
+  const n = props.slides.length;
+  const editorPreview = !ctx?.renderHeroSlider;
+  const style = {
+    "--hs-shade-h": SHADE_HEIGHT[props.shadeHeight],
+    "--hs-shade-o": props.shade ? props.shadeStrength / 100 : 0,
+    "--hs-dim": props.dim / 100,
+    ...(props.primaryBg ? { "--hs-p-bg": props.primaryBg } : null),
+    ...(props.primaryText ? { "--hs-p-fg": props.primaryText } : null),
+    ...(props.secondaryBg ? { "--hs-s-bg": props.secondaryBg } : null),
+    ...(props.secondaryText ? { "--hs-s-fg": props.secondaryText } : null),
+  } as CSSProperties;
+  const customP = Boolean(props.primaryBg || props.primaryText);
+  const customS = Boolean(props.secondaryBg || props.secondaryText);
+
+  const markup = (
+    <div className={cx("bsb-lay", layoutHasAspectRatio(props.box) && "bsb-hs-ar")} style={layoutStyle(props.box)}>
+    <section
+      className={cx(
+        "bsb bsb-hs",
+        `bsb-hs-h-${props.height}`,
+        `bsb-hs-layout-${props.layout}`,
+        `bsb-hs-align-${props.align}`,
+        `bsb-hs-pos-${props.contentPosition}`,
+        `bsb-hs-w-${props.contentWidth}`,
+      )}
+      style={style}
+      data-hs=""
+      aria-roledescription="carousel"
+      aria-label="Featured"
+    >
+      <div className="bsb-hs-track" data-hs-track="" tabIndex={n > 1 ? 0 : undefined}>
+        {props.slides.map((s, i) => {
+          const img = mediaSrc(ctx, s.backgroundMediaId);
+          const Title = i === 0 ? props.titleTag : "h2";
+          return (
+            <div key={i} className="bsb-hs-slide" role="group" aria-roledescription="slide" aria-label={`${i + 1} of ${n}`} data-hs-slide="">
+              <div className="bsb-hs-media">
+                {img ? (
+                  // The first slide is the page's largest paint: load it eagerly and early; the rest wait until they are near.
+                  <img src={img} alt="" decoding="async" loading={i === 0 ? "eager" : "lazy"} {...(i === 0 ? { fetchPriority: "high" as const } : null)} />
+                ) : null}
+                {s.videoUrl ? (
+                  <video
+                    muted
+                    loop
+                    playsInline
+                    preload={i === 0 ? "metadata" : "none"}
+                    {...(img ? { poster: img } : null)}
+                    {...(editorPreview && i === 0 ? { autoPlay: true } : null)}
+                    data-hs-video=""
+                    aria-hidden="true"
+                  >
+                    <source src={s.videoUrl} />
+                  </video>
+                ) : null}
+              </div>
+              <div className="bsb-hs-shade" aria-hidden="true" />
+              <div className="bsb-hs-content">
+                <div className="bsb-hs-inner">
+                  {s.title || s.subtitle ? (
+                    <div className="bsb-hs-text">
+                      {s.title ? <Title className={cx("bsb-heading", props.titleSize === "xl" ? "bsb-lvl-h1" : "bsb-lvl-h2")}>{s.title}</Title> : null}
+                      {s.subtitle ? <p className="bsb-hs-sub">{s.subtitle}</p> : null}
+                    </div>
+                  ) : null}
+                  {s.primaryLabel || s.secondaryLabel ? (
+                    <div className="bsb-hs-actions">
+                      {slideButton(s.primaryLabel, s.primaryHref, props.primaryStyle, props.buttonSize, customP, "p")}
+                      {slideButton(s.secondaryLabel, s.secondaryHref, props.secondaryStyle, props.buttonSize, customS, "s")}
+                    </div>
+                  ) : null}
+                </div>
+              </div>
+            </div>
+          );
+        })}
+      </div>
+      {n > 1 && props.arrows ? (
+        <div className={cx("bsb-hs-arrows", `bsb-hs-arrow-${props.arrowStyle}`, `bsb-hs-arrow-${props.arrowSize}`, `bsb-hs-arrow-c-${props.arrowColor}`, props.arrowsOnMobile && "bsb-hs-arrows-m")}>
+          <button type="button" className="bsb-hs-arrow bsb-hs-prev" data-hs-prev="" aria-label="Previous slide">
+            <svg viewBox="0 0 24 24" width="1em" height="1em" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+              <path d="M15 5l-7 7 7 7" />
+            </svg>
+          </button>
+          <button type="button" className="bsb-hs-arrow bsb-hs-next" data-hs-next="" aria-label="Next slide">
+            <svg viewBox="0 0 24 24" width="1em" height="1em" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+              <path d="M9 5l7 7-7 7" />
+            </svg>
+          </button>
+        </div>
+      ) : null}
+      {n > 1 && props.dots ? (
+        <div className={cx("bsb-hs-dots", `bsb-hs-dots-${props.dotsPosition}`, `bsb-hs-dot-${props.dotsStyle}`, `bsb-hs-dots-${props.dotsSize}`, `bsb-hs-dots-c-${props.dotsColor}`)} role="group" aria-label="Choose slide">
+          {props.slides.map((_, i) => (
+            <button key={i} type="button" className="bsb-hs-dotbtn" data-hs-dot="" aria-label={`Go to slide ${i + 1}`} {...(i === 0 ? { "aria-current": "true" as const } : null)} />
+          ))}
+        </div>
+      ) : null}
+    </section>
+    </div>
+  );
+
+  const behavior = { autoplay: props.autoplay && n > 1, interval: props.interval, loop: props.loop, pauseOnHover: props.pauseOnHover };
+  return ctx?.renderHeroSlider ? <>{ctx.renderHeroSlider({ options: behavior, children: markup })}</> : markup;
+}
+
+/* --------------------------- product showcase --------------------------- */
+
+const BAG_ICON = (
+  <svg viewBox="0 0 24 24" width="1em" height="1em" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+    <path d="M6 7h12l1 13H5L6 7z" />
+    <path d="M9 7a3 3 0 0 1 6 0" />
+  </svg>
+);
+
+function ShowcaseCard({ p, props, ctx, eager }: { p: BlockProduct; props: R.ProductShowcaseProps; ctx: RenderContext | undefined; eager: boolean }): ReactNode {
+  const img = p.imageUrl ?? mediaSrc(ctx, p.imageMediaId);
+  const href = `/products/${p.slug}`;
+  const hasCompare = props.showCompareAt && p.compareAtPriceMin !== undefined && p.compareAtPriceMin > p.priceMin;
+  const saving = p.compareAtPriceMin && p.compareAtPriceMin > p.priceMin ? Math.round(((p.compareAtPriceMin - p.priceMin) / p.compareAtPriceMin) * 100) : 0;
+  const isRange = p.priceMax !== undefined && p.priceMax > p.priceMin;
+  const showFrom = props.startsFrom === "always" || (props.startsFrom === "auto" && isRange);
+  const badge = props.badge === "category" ? p.categoryName : props.badge === "brand" ? p.brandName : undefined;
+  const link = (children: ReactNode, className?: string, label?: string) =>
+    ctx?.renderLink ? ctx.renderLink({ href, ...(className ? { className } : {}), children }) : <a href={href} className={className} {...(label ? { "aria-label": label } : null)}>{children}</a>;
+
+  const rows = props.cardOrder
+    .filter((c) => c.show)
+    .map((c) => {
+      if (c.item === "title") {
+        return (
+          <h3 key="title" className={cx("bsb-psc-title", `bsb-psc-title-${props.titleSize}`, props.titleLines === "2" && "bsb-psc-lines-2")}>
+            {link(p.title)}
+          </h3>
+        );
+      }
+      if (c.item === "rating") {
+        return Number(p.ratingCount) > 0 ? (
+          <div key="rating" className="bsb-psc-rating">
+            <Stars value={Number(p.ratingAvg ?? 0)} />
+            <span className="bsb-psc-rating-num">{Number(p.ratingAvg ?? 0).toFixed(1)}</span>
+            <span className="bsb-muted">({p.ratingCount})</span>
+          </div>
+        ) : null;
+      }
+      return (
+        <div key="price" className={cx("bsb-psc-price", `bsb-psc-price-${props.priceSize}`)}>
+          {showFrom ? <span className="bsb-psc-from">Starts from</span> : null}
+          <strong>{money(p.priceMin)}</strong>
+          {hasCompare ? <s>{money(p.compareAtPriceMin as number)}</s> : null}
+        </div>
+      );
+    });
+
+  return (
+    <article className={cx("bsb-psc-card", `bsb-psc-card-${props.cardStyle}`)}>
+      <div className={cx("bsb-psc-media", `bsb-psc-ratio-${props.imageRatio}`)}>
+        {link(
+          img ? <img src={img} alt={p.imageAlt ?? p.title} decoding="async" loading={eager ? "eager" : "lazy"} /> : <span className="bsb-psc-noimg" aria-hidden="true" />,
+          "bsb-psc-imglink",
+          p.title,
+        )}
+        {badge ? <span className="bsb-psc-badge bsb-psc-badge-l">{badge}</span> : null}
+        {props.showSaleBadge && saving > 0 ? <span className="bsb-psc-badge bsb-psc-badge-r">Save {saving}%</span> : null}
+        {props.showAddToCart ? (
+          <button
+            type="button"
+            className="bsb-psc-add"
+            data-psc-add=""
+            data-href={href}
+            {...(p.quickAddVariantId ? { "data-variant": p.quickAddVariantId } : null)}
+            aria-label={p.quickAddVariantId ? `Add ${p.title} to cart` : `Choose options for ${p.title}`}
+          >
+            {BAG_ICON}
+          </button>
+        ) : null}
+      </div>
+      {rows.length > 0 ? <div className="bsb-psc-info">{rows}</div> : null}
+    </article>
+  );
+}
+
+export function ProductShowcaseView({ props, ctx, }: A<R.ProductShowcaseProps>): ReactNode {
+  const d = ctx?.blockId ? ctx.data?.[ctx.blockId] : undefined;
+  const tabData = d && d.kind === "product-tabs" ? d.tabs : [];
+  const tabs = props.tabs;
+  const hasTabs = tabs.length > 1;
+  const style = { "--psc-d": props.perViewDesktop, "--psc-t": props.perViewTablet, "--psc-m": props.perViewMobile } as CSSProperties;
+
+  const markup = (
+    <section className={cx("bsb bsb-psc", `bsb-tone-${props.tone}`, "bsb-lay", `bsb-psc-gap-${props.gap}`)} style={{ ...style, ...layoutStyle(props.box) }} data-psc="" aria-roledescription="carousel" aria-label={props.title || "Products"}>
+      <div className="bsb-w bsb-w-wide">
+        {props.title || props.subtitle || hasTabs ? (
+          <div className={cx("bsb-psc-head", `bsb-psc-head-${props.headerAlign}`)}>
+            <div className="bsb-psc-headtext">
+              {props.title ? <h2 className="bsb-heading bsb-lvl-h2">{props.title}</h2> : null}
+              {props.subtitle ? <p className="bsb-muted">{props.subtitle}</p> : null}
+            </div>
+            {hasTabs ? (
+              <div className={cx("bsb-psc-tabs", `bsb-psc-tabs-${props.tabsStyle}`)} role="tablist" aria-label="Product groups">
+                {tabs.map((t, i) => (
+                  <button key={i} type="button" role="tab" className="bsb-psc-tab" data-psc-tab="" aria-selected={i === 0} tabIndex={i === 0 ? 0 : -1}>
+                    {t.label || (t.source === "collection" ? t.collectionSlug : t.source === "featured" ? "Featured" : "New arrivals") || `Tab ${i + 1}`}
+                  </button>
+                ))}
+              </div>
+            ) : null}
+          </div>
+        ) : null}
+        {tabs.map((_, ti) => {
+          const products = tabData[ti]?.products ?? [];
+          return (
+            <div key={ti} className="bsb-psc-panel" data-psc-panel="" role="tabpanel" {...(ti > 0 ? { hidden: true } : null)}>
+              {products.length === 0 ? (
+                <p className="bsb-muted">No products to show yet.</p>
+              ) : (
+                <div className="bsb-psc-viewport">
+                  <div className="bsb-psc-track" data-psc-track="" tabIndex={0}>
+                    {products.map((p, i) => (
+                      <div key={p.id} className="bsb-psc-item" data-psc-item="">
+                        <ShowcaseCard p={p} props={props} ctx={ctx} eager={ti === 0 && i < props.perViewDesktop} />
+                      </div>
+                    ))}
+                  </div>
+                  {props.arrows ? (
+                    <div className={cx("bsb-hs-arrows", "bsb-psc-arrows", `bsb-hs-arrow-${props.arrowStyle}`, `bsb-hs-arrow-${props.arrowSize}`, `bsb-hs-arrow-c-${props.arrowColor}`, props.arrowsOnMobile && "bsb-hs-arrows-m")}>
+                      <button type="button" className="bsb-hs-arrow bsb-hs-prev" data-psc-prev="" aria-label="Previous products">
+                        <svg viewBox="0 0 24 24" width="1em" height="1em" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M15 5l-7 7 7 7" /></svg>
+                      </button>
+                      <button type="button" className="bsb-hs-arrow bsb-hs-next" data-psc-next="" aria-label="Next products">
+                        <svg viewBox="0 0 24 24" width="1em" height="1em" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M9 5l7 7-7 7" /></svg>
+                      </button>
+                    </div>
+                  ) : null}
+                </div>
+              )}
+              {/* The host fills the dots: how many pages there are depends on the screen. */}
+              {props.dots ? <div className={cx("bsb-hs-dots", "bsb-psc-dots", `bsb-hs-dots-${props.dotsPosition}`, `bsb-hs-dot-${props.dotsStyle}`, `bsb-hs-dots-${props.dotsSize}`, `bsb-hs-dots-c-${props.dotsColor}`)} data-psc-dots="" role="group" aria-label="Choose page" /> : null}
+            </div>
+          );
+        })}
+      </div>
+    </section>
+  );
+
+  const behavior = { tabs: hasTabs, autoplay: props.autoplay, interval: props.interval, loop: props.loop, pauseOnHover: props.pauseOnHover };
+  return ctx?.renderProductShowcase ? <>{ctx.renderProductShowcase({ options: behavior, children: markup })}</> : markup;
 }

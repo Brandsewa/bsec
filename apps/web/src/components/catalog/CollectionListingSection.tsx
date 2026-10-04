@@ -12,10 +12,18 @@ export const DEFAULT_COLLECTION_LISTING_OPTIONS: CollectionListingOptions = {
   showDescription: true,
 };
 
-const GRID: Record<CollectionListingOptions["columns"], string> = {
-  "2": "grid-cols-1 gap-6 sm:grid-cols-2",
-  "3": "grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-3",
-  "4": "grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4",
+// Phone columns come first (1 by default, 2 when the template asks for it), then the desktop count.
+const GRID: Record<"1" | "2", Record<CollectionListingOptions["columns"], string>> = {
+  "1": {
+    "2": "grid-cols-1 gap-6 sm:grid-cols-2",
+    "3": "grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-3",
+    "4": "grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4",
+  },
+  "2": {
+    "2": "grid-cols-2 gap-3 sm:gap-6",
+    "3": "grid-cols-2 gap-3 sm:gap-6 lg:grid-cols-3",
+    "4": "grid-cols-2 gap-3 sm:gap-6 lg:grid-cols-3 xl:grid-cols-4",
+  },
 };
 
 /**
@@ -45,6 +53,7 @@ export function CollectionListingSection({
 
   return (
     <div className="mx-auto max-w-7xl px-4 py-8 sm:px-6 lg:px-8">
+      {options.showBreadcrumb !== false ? (
       <nav aria-label="Breadcrumb" className="mb-6 flex items-center gap-2 text-sm text-muted-foreground">
         <Link href="/" className="hover:text-foreground transition-colors">
           Home
@@ -56,6 +65,7 @@ export function CollectionListingSection({
         <span>/</span>
         <span className="font-medium text-foreground truncate max-w-[200px] sm:max-w-none">{collection.title}</span>
       </nav>
+      ) : null}
 
       <div className="mb-6">
         <h1 className="text-3xl font-extrabold tracking-tight text-foreground sm:text-4xl" style={{ fontFamily: "var(--bs-font-heading, inherit)" }}>
@@ -67,9 +77,16 @@ export function CollectionListingSection({
       {options.showFilters ? <ProductFilterSort currentSort={rawSort} inStockOnly={inStockOnly} totalCount={products.total} /> : null}
 
       {products.items.length > 0 ? (
-        <div className={`mt-8 grid ${GRID[options.columns]}`}>
+        <div className={`mt-8 grid ${GRID[options.columnsMobile ?? "1"][options.columns]}`}>
           {products.items.map((product) => (
-            <ProductCard key={product.id} product={product} />
+            <ProductCard
+              key={product.id}
+              product={product}
+              imageRatio={options.imageRatio}
+              cardStyle={options.cardStyle}
+              showSaleBadge={options.showSaleBadge}
+              showRatings={options.showRatings}
+            />
           ))}
         </div>
       ) : (

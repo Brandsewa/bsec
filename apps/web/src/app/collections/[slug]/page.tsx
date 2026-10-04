@@ -182,7 +182,7 @@ export default async function CollectionDetailPage({
   );
 
   return (
-    <div data-cache-tag={collectionCacheTag}>
+    <div data-cache-tag={collectionCacheTag} className="bs-skin">
       {/* Schema.org structured data */}
       <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(itemListJsonLd) }} />
       <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(breadcrumbsJsonLd) }} />

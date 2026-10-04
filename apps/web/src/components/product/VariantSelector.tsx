@@ -8,6 +8,9 @@ import { RequestQuoteDialog } from "./RequestQuoteDialog.tsx";
 
 export interface VariantSelectorProps {
   product: StorefrontProductDetail;
+  showSku?: boolean | undefined;
+  /** Reassurance lines shown under the add-to-cart button (from the theme's product template). */
+  trustPoints?: string[] | undefined;
 }
 
 /** Formats minor unit paise into standard ₹ Indian Rupee format */
@@ -20,7 +23,7 @@ export function formatInr(paise: number): string {
   }).format(rupees);
 }
 
-export function VariantSelector({ product }: VariantSelectorProps) {
+export function VariantSelector({ product, showSku = true, trustPoints }: VariantSelectorProps) {
   const [quoteOpen, setQuoteOpen] = useState(false);
   const variants = product.variants ?? [];
   const options = product.options ?? [];
@@ -99,7 +102,7 @@ export function VariantSelector({ product }: VariantSelectorProps) {
             )}
           </div>
         )}
-        {currentSku && (
+        {showSku && currentSku && (
           <p className="text-xs font-mono text-muted-foreground">SKU: {currentSku}</p>
         )}
       </div>
@@ -178,7 +181,7 @@ export function VariantSelector({ product }: VariantSelectorProps) {
 
           {/* Add To Cart Button */}
           {selectedVariant && (
-            <div className="pt-2">
+            <div id="buy-box" className="pt-2 scroll-mt-24">
               <AddToCartButton
                 variantId={selectedVariant.id}
                 available={isAvailable}
@@ -188,6 +191,19 @@ export function VariantSelector({ product }: VariantSelectorProps) {
           )}
         </>
       )}
+
+      {trustPoints && trustPoints.length > 0 ? (
+        <ul className="flex flex-wrap gap-x-5 gap-y-2 text-xs text-muted-foreground">
+          {trustPoints.map((point) => (
+            <li key={point} className="inline-flex items-center gap-1.5">
+              <svg className="h-3.5 w-3.5 text-emerald-600" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true">
+                <path fillRule="evenodd" d="M16.7 5.3a1 1 0 010 1.4l-7.5 7.5a1 1 0 01-1.4 0L3.3 9.7a1 1 0 011.4-1.4l3.8 3.8 6.8-6.8a1 1 0 011.4 0z" clipRule="evenodd" />
+              </svg>
+              {point}
+            </li>
+          ))}
+        </ul>
+      ) : null}
     </div>
   );
 }

@@ -2,6 +2,8 @@ import { z } from "zod";
 import type { BlockDefinition, BlockType } from "./types.ts";
 import {
   alignSchema,
+  bgVideoUrlSchema,
+  hexColorSchema,
   gapSchema,
   hrefSchema,
   ICON_NAMES,
@@ -13,6 +15,7 @@ import {
   videoUrlSchema,
   widthSchema,
 } from "./common.ts";
+import { layoutSchema } from "./layout.ts";
 import * as V from "./views.tsx";
 
 /* ------------------------------------------------------------------ */
@@ -438,8 +441,9 @@ export const DividerBlock: BlockDefinition<DividerProps> = {
 
 export const HeadingSchema = z.object({
   text: z.string().min(1).max(300),
-  level: z.enum(["h1", "h2", "h3", "h4"]).default("h2"),
-  size: z.enum(["sm", "md", "lg", "xl"]).default("lg"),
+  level: z.enum(["h1", "h2", "h3", "h4", "h5", "h6"]).default("h2"),
+  // "auto" follows the heading level's size from the theme settings; the others keep the older fixed steps.
+  size: z.enum(["sm", "md", "lg", "xl", "auto"]).default("lg"),
   align: alignSchema.default("left"),
 });
 export type HeadingProps = z.infer<typeof HeadingSchema>;
@@ -495,7 +499,8 @@ export const ButtonSchema = z.object({
   label: z.string().min(1).max(80),
   href: hrefSchema.default("/"),
   variant: z.enum(["primary", "secondary", "outline"]).default("primary"),
-  size: z.enum(["sm", "md", "lg"]).default("md"),
+  // "auto" follows the theme's button size; the others are fixed sizes.
+  size: z.enum(["auto", "sm", "md", "lg"]).default("md"),
   fullWidth: z.boolean().default(false),
   align: alignSchema.default("left"),
 });
@@ -504,7 +509,7 @@ export const ButtonBlock: BlockDefinition<ButtonProps> = {
   type: "Button",
   version: 1,
   schema: ButtonSchema,
-  defaultProps: { label: "Shop now", href: "/collections/all", variant: "primary", size: "md", fullWidth: false, align: "left" },
+  defaultProps: { label: "Shop now", href: "/collections/all", variant: "primary", size: "auto", fullWidth: false, align: "left" },
   render: V.ButtonView,
 };
 
@@ -574,6 +579,8 @@ export const CallToActionBlock: BlockDefinition<CallToActionProps> = {
 /* pages; ProductDetail / CollectionListing are the dynamic core of    */
 /* the product and collection pages, drawn by the storefront.          */
 /* ------------------------------------------------------------------ */
+
+const DEFAULT_TRUST_POINTS = ["Secure checkout", "Easy returns", "Fast dispatch"];
 
 const navLinkSchema = z.object({ label: z.string().min(1).max(60), href: hrefSchema });
 
@@ -651,13 +658,18 @@ export const ProductDetailSchema = z.object({
   showRating: z.boolean().default(true),
   showDescription: z.boolean().default(true),
   showTags: z.boolean().default(true),
+  stickyBuyBox: z.boolean().default(false),
+  showTrustPoints: z.boolean().default(false),
+  trustPoints: z.array(z.string().min(1).max(60)).max(4).default(DEFAULT_TRUST_POINTS),
+  stickyMobileBar: z.boolean().default(false),
+  showSku: z.boolean().default(true),
 });
 export type ProductDetailProps = z.infer<typeof ProductDetailSchema>;
 export const ProductDetailBlock: BlockDefinition<ProductDetailProps> = {
   type: "ProductDetail",
   version: 1,
   schema: ProductDetailSchema,
-  defaultProps: { galleryPosition: "left", showBreadcrumb: true, showRating: true, showDescription: true, showTags: true },
+  defaultProps: { galleryPosition: "left", showBreadcrumb: true, showRating: true, showDescription: true, showTags: true, stickyBuyBox: false, showTrustPoints: false, trustPoints: DEFAULT_TRUST_POINTS, stickyMobileBar: false, showSku: true },
   render: V.ProductDetailView,
 };
 
@@ -665,14 +677,219 @@ export const CollectionListingSchema = z.object({
   columns: z.enum(["2", "3", "4"]).default("4"),
   showFilters: z.boolean().default(true),
   showDescription: z.boolean().default(true),
+  columnsMobile: z.enum(["1", "2"]).default("1"),
+  imageRatio: z.enum(["square", "portrait"]).default("square"),
+  cardStyle: z.enum(["bordered", "minimal"]).default("bordered"),
+  showSaleBadge: z.boolean().default(true),
+  showRatings: z.boolean().default(true),
+  showBreadcrumb: z.boolean().default(true),
 });
 export type CollectionListingProps = z.infer<typeof CollectionListingSchema>;
 export const CollectionListingBlock: BlockDefinition<CollectionListingProps> = {
   type: "CollectionListing",
   version: 1,
   schema: CollectionListingSchema,
-  defaultProps: { columns: "4", showFilters: true, showDescription: true },
+  defaultProps: { columns: "4", showFilters: true, showDescription: true, columnsMobile: "1", imageRatio: "square", cardStyle: "bordered", showSaleBadge: true, showRatings: true, showBreadcrumb: true },
   render: V.CollectionListingView,
+};
+
+// The cart page's core: items, totals, discount code and checkout button stay in storefront code
+// (prices are recomputed on the server, rule 12); the template only places it and picks its layout.
+export const CartContentsSchema = z.object({
+  summaryPosition: z.enum(["right", "left"]).default("right"),
+  stickySummary: z.boolean().default(true),
+  showDiscountCode: z.boolean().default(true),
+  showShippingEstimator: z.boolean().default(true),
+  heading: z.string().min(1).max(60).default("Shopping Cart"),
+  checkoutLabel: z.string().min(1).max(40).default("Proceed to Checkout"),
+  showFreeShippingBar: z.boolean().default(false),
+  showTrustPoints: z.boolean().default(false),
+  trustPoints: z.array(z.string().min(1).max(60)).max(4).default(DEFAULT_TRUST_POINTS),
+  stickyMobileCheckout: z.boolean().default(false),
+  showContinueShopping: z.boolean().default(true),
+});
+export type CartContentsProps = z.infer<typeof CartContentsSchema>;
+export const CartContentsBlock: BlockDefinition<CartContentsProps> = {
+  type: "CartContents",
+  version: 1,
+  schema: CartContentsSchema,
+  defaultProps: {
+    summaryPosition: "right",
+    stickySummary: true,
+    showDiscountCode: true,
+    showShippingEstimator: true,
+    heading: "Shopping Cart",
+    checkoutLabel: "Proceed to Checkout",
+    showFreeShippingBar: false,
+    showTrustPoints: false,
+    trustPoints: DEFAULT_TRUST_POINTS,
+    stickyMobileCheckout: false,
+    showContinueShopping: true,
+  },
+  render: V.CartContentsView,
+};
+
+/* ------------------------------------------------------------------ */
+/* Hero slider: full-width slides with image or video backgrounds, a    */
+/* bottom shade, two buttons, optional autoplay / dots / arrows.        */
+/* ------------------------------------------------------------------ */
+
+export const HeroSlideSchema = z.object({
+  backgroundMediaId: z.string().optional(),
+  // A background video plays over the image, which stays as its poster (and as the fallback on slow or reduced-motion connections).
+  videoUrl: bgVideoUrlSchema.optional(),
+  title: z.string().max(160).default(""),
+  subtitle: z.string().max(400).default(""),
+  primaryLabel: z.string().max(40).default(""),
+  primaryHref: hrefSchema.default(""),
+  secondaryLabel: z.string().max(40).default(""),
+  secondaryHref: hrefSchema.default(""),
+});
+export type HeroSlide = z.infer<typeof HeroSlideSchema>;
+
+const DEFAULT_SLIDES: HeroSlide[] = [
+  {
+    title: "Pure quality, delivered with care",
+    subtitle: "Small-batch products from makers you can trust.",
+    primaryLabel: "Shop now",
+    primaryHref: "/collections/all",
+    secondaryLabel: "Our story",
+    secondaryHref: "/pages/about",
+  },
+];
+
+export const HeroSliderSchema = z.object({
+  slides: z.array(HeroSlideSchema).min(1).max(6).default(DEFAULT_SLIDES),
+  // Layout
+  layout: z.enum(["split", "stacked"]).default("split"), // split: text left, buttons right; stacked: text, then buttons
+  align: alignSchema.default("left"), // for the stacked layout
+  contentPosition: z.enum(["bottom", "center"]).default("bottom"),
+  height: z.enum(["sm", "md", "lg", "screen"]).default("md"),
+  contentWidth: z.enum(["default", "wide", "full"]).default("wide"),
+  titleSize: z.enum(["lg", "xl"]).default("lg"),
+  titleTag: z.enum(["h1", "h2"]).default("h2"), // first slide only; the others are always h2
+  // Image and shade
+  dim: z.number().int().min(0).max(80).default(0), // overall darkening, %
+  shade: z.boolean().default(true), // gradient from the bottom edge
+  shadeStrength: z.number().int().min(0).max(100).default(70),
+  shadeHeight: z.enum(["sm", "md", "lg"]).default("md"),
+  // Buttons
+  buttonSize: z.enum(["auto", "sm", "md", "lg"]).default("auto"),
+  primaryStyle: z.enum(["dark", "light", "outline"]).default("dark"),
+  secondaryStyle: z.enum(["dark", "light", "outline"]).default("light"),
+  primaryBg: hexColorSchema.optional(),
+  primaryText: hexColorSchema.optional(),
+  secondaryBg: hexColorSchema.optional(),
+  secondaryText: hexColorSchema.optional(),
+  // Margin, padding and sizing per device (default: none, edge to edge, as before)
+  box: layoutSchema.default({}),
+  // Behaviour
+  autoplay: z.boolean().default(true),
+  interval: z.number().int().min(2).max(20).default(6),
+  loop: z.boolean().default(true),
+  pauseOnHover: z.boolean().default(true),
+  // Pagination dots
+  dots: z.boolean().default(true),
+  dotsStyle: z.enum(["dot", "pill", "line"]).default("dot"),
+  dotsSize: z.enum(["sm", "md", "lg"]).default("md"),
+  dotsColor: z.enum(["light", "dark", "brand"]).default("light"),
+  dotsPosition: z.enum(["left", "center", "right"]).default("center"),
+  // Arrows
+  arrows: z.boolean().default(true),
+  arrowStyle: z.enum(["circle", "square", "plain"]).default("circle"),
+  arrowSize: z.enum(["sm", "md", "lg"]).default("md"),
+  arrowColor: z.enum(["light", "dark", "brand"]).default("light"),
+  arrowsOnMobile: z.boolean().default(false),
+});
+export type HeroSliderProps = z.infer<typeof HeroSliderSchema>;
+
+export const HeroSliderBlock: BlockDefinition<HeroSliderProps> = {
+  type: "HeroSlider",
+  version: 1,
+  schema: HeroSliderSchema,
+  defaultProps: HeroSliderSchema.parse({}),
+  render: V.HeroSliderView,
+};
+
+/* ------------------------------------------------------------------ */
+/* Product showcase: a product carousel with optional collection tabs,  */
+/* a configurable card (order and visibility of rating, title, price),  */
+/* quick add to cart, arrows and pagination dots.                       */
+/* ------------------------------------------------------------------ */
+
+export const ShowcaseTabSchema = z.object({
+  label: z.string().max(40).default(""),
+  source: z.enum(["newest", "featured", "collection"]).default("collection"),
+  collectionSlug: z.string().max(120).default(""),
+});
+export type ShowcaseTab = z.infer<typeof ShowcaseTabSchema>;
+
+export const ShowcaseCardItemSchema = z.object({
+  item: z.enum(["rating", "title", "price"]),
+  show: z.boolean().default(true),
+});
+export type ShowcaseCardItem = z.infer<typeof ShowcaseCardItemSchema>;
+
+const DEFAULT_CARD_ORDER: ShowcaseCardItem[] = [
+  { item: "rating", show: true },
+  { item: "title", show: true },
+  { item: "price", show: true },
+];
+
+export const ProductShowcaseSchema = z.object({
+  title: z.string().max(120).default("Fresh from the collection"),
+  subtitle: z.string().max(300).default(""),
+  headerAlign: alignSchema.default("left"),
+  tone: toneSchema.default("default"),
+  // Products. More than one tab turns the tab bar on; one tab shows no tabs.
+  tabs: z.array(ShowcaseTabSchema).min(1).max(6).default([{ label: "New arrivals", source: "newest", collectionSlug: "" }]),
+  limit: z.number().int().min(2).max(24).default(10),
+  tabsStyle: z.enum(["text", "pill"]).default("text"),
+  // Card: the order of the rows below the image is the order of this list (drag to reorder in the editor).
+  cardOrder: z.array(ShowcaseCardItemSchema).min(1).max(3).default(DEFAULT_CARD_ORDER),
+  badge: z.enum(["none", "category", "brand"]).default("category"),
+  showSaleBadge: z.boolean().default(true),
+  showCompareAt: z.boolean().default(true),
+  startsFrom: z.enum(["auto", "always", "never"]).default("auto"),
+  showAddToCart: z.boolean().default(true),
+  imageRatio: z.enum(["square", "portrait", "landscape"]).default("square"),
+  cardStyle: z.enum(["soft", "bordered", "minimal"]).default("soft"),
+  titleSize: z.enum(["sm", "md", "lg"]).default("md"),
+  titleLines: z.enum(["1", "2"]).default("1"),
+  priceSize: z.enum(["sm", "md", "lg"]).default("md"),
+  // Margin, padding and sizing per device. The defaults are the section padding it always had (64px, 48px on phones).
+  box: layoutSchema.default({ desktop: { paddingTop: "64px", paddingBottom: "64px" }, mobile: { paddingTop: "48px", paddingBottom: "48px" } }),
+  // Layout: cards visible at once on each device
+  perViewDesktop: z.number().int().min(2).max(6).default(4),
+  perViewTablet: z.number().int().min(1).max(4).default(3),
+  perViewMobile: z.number().int().min(1).max(3).default(2),
+  gap: z.enum(["sm", "md", "lg"]).default("md"),
+  // Autoplay
+  autoplay: z.boolean().default(false),
+  interval: z.number().int().min(2).max(20).default(5),
+  loop: z.boolean().default(true),
+  pauseOnHover: z.boolean().default(true),
+  // Arrows
+  arrows: z.boolean().default(true),
+  arrowStyle: z.enum(["circle", "square", "plain"]).default("circle"),
+  arrowSize: z.enum(["sm", "md", "lg"]).default("md"),
+  arrowColor: z.enum(["light", "dark", "brand"]).default("light"),
+  arrowsOnMobile: z.boolean().default(false),
+  // Pagination dots
+  dots: z.boolean().default(true),
+  dotsStyle: z.enum(["dot", "pill", "line"]).default("dot"),
+  dotsSize: z.enum(["sm", "md", "lg"]).default("md"),
+  dotsColor: z.enum(["light", "dark", "brand"]).default("dark"),
+  dotsPosition: z.enum(["left", "center", "right"]).default("center"),
+});
+export type ProductShowcaseProps = z.infer<typeof ProductShowcaseSchema>;
+
+export const ProductShowcaseBlock: BlockDefinition<ProductShowcaseProps> = {
+  type: "ProductShowcase",
+  version: 1,
+  schema: ProductShowcaseSchema,
+  defaultProps: ProductShowcaseSchema.parse({}),
+  render: V.ProductShowcaseView,
 };
 
 export { type BlockType } from "./types.ts";
@@ -713,6 +930,9 @@ export const BLOCK_DEFINITIONS: Record<BlockType, AnyBlockDefinition> = {
   SiteFooter: SiteFooterBlock,
   ProductDetail: ProductDetailBlock,
   CollectionListing: CollectionListingBlock,
+  CartContents: CartContentsBlock,
+  HeroSlider: HeroSliderBlock,
+  ProductShowcase: ProductShowcaseBlock,
 };
 
 export const BLOCK_TYPES = Object.keys(BLOCK_DEFINITIONS) as BlockType[];
