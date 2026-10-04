@@ -112,6 +112,7 @@ One line per piece of work that is started and not merged. Add yours before you 
 
 - antigravity · `feat/customers-phase-0` · customers, db, domain, checkout · 2026-10-03 · Customers Phase 0: truthful metrics, guests, consent record & history
 - claude · `feat/themes-puck` · themes, docs · 2026-10-01 · theme builder follow-ups; agent docs and change log (`docs/changes/`)
+- zcode · `test/vmm-local-stack` · infra, docs (worktree `C:\dev\bsec-vmm`) · 2026-10-04 · fresh all-Docker local stack (project `bsecvmm`) to test the new Docker VMM backend and re-check the super admin white screen
 
 ## Returns & Exchanges (Manual Review & Portal) — Complete (2026-10-02)
 
