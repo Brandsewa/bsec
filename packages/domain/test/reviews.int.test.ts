@@ -5,8 +5,6 @@ import { startTestDb, type TestDb } from "@bs/db/test-env";
 import { STORE_PERMISSIONS } from "@bs/auth";
 import {
   createAdminDraftOrder,
-  createCategory,
-  createProduct,
   createRuntime,
   getStorefrontReviews,
   provisionTenant,
@@ -15,6 +13,7 @@ import {
   type Runtime,
   type TenantContext,
 } from "../src/index.ts";
+import { createActiveProduct } from "./helpers/factories.ts";
 import { RateLimitExceededError } from "../src/system/rate-limit.ts";
 
 /** Real-database checks for reviews: tenant isolation, "verified purchase" proof, moderation, rate limit. */
@@ -54,12 +53,9 @@ beforeAll(async () => {
   rt = createRuntime({ service: "platform", databaseUrl: env.as("app_platform"), poolMax: 10 });
   ctxA = await tenant("a");
   ctxB = await tenant("b");
-  const cat = await createCategory(rt, ctxA, { name: "Things" });
-  const p = await createProduct(rt, ctxA, { title: "Reviewed Thing", status: "active", primaryCategoryId: cat.id, variants: [{ sku: "REV-1", title: "Default", price: 10000 }] });
-  productA = p.id;
-  variantA = p.variants[0]!.id;
-  const [loc] = await withTenant(rt._db.db, ctxA.tenantId, (tx) => tx.select().from(schema.locations).where(eq(schema.locations.tenantId, ctxA.tenantId)).limit(1));
-  await withTenant(rt._db.db, ctxA.tenantId, (tx) => tx.insert(schema.inventoryLevels).values({ tenantId: ctxA.tenantId, locationId: loc!.id, variantId: variantA, onHand: 20 }));
+  const p = await createActiveProduct(rt, ctxA, { title: "Reviewed Thing", sku: "REV-1", price: 10000, stock: 20 });
+  productA = p.productId;
+  variantA = p.variantId;
   const o = await createAdminDraftOrder(rt, ctxA, {
     email: "buyer@reviews.test",
     phone: "9800000002",

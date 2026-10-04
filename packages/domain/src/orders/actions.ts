@@ -22,7 +22,7 @@ export async function confirmCodOrder(
   const tokenHash = createHash("sha256").update(rawToken.trim()).digest("hex");
   const tenantId = ctx.tenantId;
 
-  return await withTenant(rt._db.db, tenantId, async (tx) => {
+  const orderId = await withTenant(rt._db.db, tenantId, async (tx) => {
     // Single guarded UPDATE claims the token, so two concurrent clicks cannot both succeed.
     const [actionToken] = await tx
       .update(actionTokens)
@@ -42,20 +42,20 @@ export async function confirmCodOrder(
       throw new Error("Invalid, expired, or already used COD confirmation link");
     }
 
-    const orderId = actionToken.targetId;
-
-    // Transition order to confirmed
-    await transitionOrder(rt, ctx, orderId, {
-      type: "order.confirm",
-      reason: "COD confirmed via customer action link",
-    });
-
-    // Commit inventory reservation
-    await commitReservation(rt._db.db, tenantId, { orderId });
-
-    return {
-      success: true,
-      orderId,
-    };
+    return actionToken.targetId;
   });
+
+  // Transition order to confirmed
+  await transitionOrder(rt, ctx, orderId, {
+    type: "order.confirm",
+    reason: "COD confirmed via customer action link",
+  });
+
+  // Commit inventory reservation
+  await commitReservation(rt._db.db, tenantId, { orderId });
+
+  return {
+    success: true,
+    orderId,
+  };
 }

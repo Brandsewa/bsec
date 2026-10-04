@@ -27,6 +27,9 @@ export function createDb(url: string, opts: { max?: number; applicationName?: st
     // A DB outage or bad host should fail requests fast, not hang the process indefinitely.
     connectionTimeoutMillis: 5000,
   });
+  // pg emits "error" on an idle client when the server drops it (restart, failover, test teardown); with no listener the
+  // process crashes. Handle it so the pool can replace the client, but never silently: a real outage must show in the logs.
+  pool.on("error", (err) => console.error(`[db] idle client error (${opts.applicationName ?? "unnamed"}): ${err.message}`));
   const db = drizzle(pool, { schema });
   return { db, pool, close: () => pool.end() };
 }

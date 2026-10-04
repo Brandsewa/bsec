@@ -93,34 +93,43 @@ export async function runDueTenantDeletions(
   rt: Runtime,
   opts: { deps?: DeletionDeps | undefined; onError?: ((deletionId: string, err: unknown) => void) | undefined; limit?: number | undefined } = {},
 ): Promise<{ completed: number; failed: number }> {
-  return rt._db.db.transaction(async (lockTx) => {
-    const lock = await lockTx.execute<{ locked: boolean }>(sql`SELECT pg_try_advisory_xact_lock(${SWEEP_LOCK_KEY}) AS locked`);
+  // The advisory lock must be taken and released on ONE connection. A session-level lock taken through the pool
+  // would be unlocked on whichever connection the pool hands out next, leaving the lock held on the first one and
+  // every later sweep skipped. So hold a dedicated client for the lock and do the work through the pool.
+  const lockClient = await rt._db.pool.connect();
+  try {
+    const lock = await lockClient.query<{ locked: boolean }>("SELECT pg_try_advisory_lock($1) AS locked", [SWEEP_LOCK_KEY]);
     if (!lock.rows[0]?.locked) return { completed: 0, failed: 0 };
+    try {
+      const due = await rt._db.db
+        .select({ id: schema.tenantDeletions.id })
+        .from(schema.tenantDeletions)
+        .where(
+          and(
+            isNull(schema.tenantDeletions.cancelledAt),
+            isNull(schema.tenantDeletions.completedAt),
+            lte(schema.tenantDeletions.scheduledFor, opts.deps?.now ?? new Date()),
+          ),
+        )
+        .orderBy(asc(schema.tenantDeletions.scheduledFor))
+        .limit(opts.limit ?? 5);
 
-    const due = await rt._db.db
-      .select({ id: schema.tenantDeletions.id })
-      .from(schema.tenantDeletions)
-      .where(
-        and(
-          isNull(schema.tenantDeletions.cancelledAt),
-          isNull(schema.tenantDeletions.completedAt),
-          lte(schema.tenantDeletions.scheduledFor, opts.deps?.now ?? new Date()),
-        ),
-      )
-      .orderBy(asc(schema.tenantDeletions.scheduledFor))
-      .limit(opts.limit ?? 5);
-
-    let completed = 0;
-    let failed = 0;
-    for (const row of due) {
-      try {
-        await executeTenantDeletionWorkflow(rt, row.id, opts.deps);
-        completed++;
-      } catch (err) {
-        failed++;
-        opts.onError?.(row.id, err);
+      let completed = 0;
+      let failed = 0;
+      for (const row of due) {
+        try {
+          await executeTenantDeletionWorkflow(rt, row.id, opts.deps);
+          completed++;
+        } catch (err) {
+          failed++;
+          opts.onError?.(row.id, err);
+        }
       }
+      return { completed, failed };
+    } finally {
+      await lockClient.query("SELECT pg_advisory_unlock($1)", [SWEEP_LOCK_KEY]).catch(() => undefined);
     }
-    return { completed, failed };
-  });
+  } finally {
+    lockClient.release();
+  }
 }

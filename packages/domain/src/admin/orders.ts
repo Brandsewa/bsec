@@ -1083,22 +1083,17 @@ export async function cancelAdminOrder(
   input: { id: string; reason: string },
 ) {
   assertPermission(ctx, "orders.write");
-  const db = rt._db.db;
+  await transitionOrder(
+    rt,
+    ctx,
+    input.id,
+    {
+      type: "order.cancel",
+      reason: input.reason,
+    },
+  );
 
-  return await withTenant(db, ctx.tenantId, async (tx) => {
-    await transitionOrder(
-      rt,
-      ctx,
-      input.id,
-      {
-        type: "order.cancel",
-        reason: input.reason,
-      },
-      tx,
-    );
-
-    return { success: true };
-  });
+  return { success: true };
 }
 
 export async function refundAdminOrder(
@@ -1138,7 +1133,7 @@ export async function refundAdminOrder(
 
     // 1. Transition order and payment intent status (locks row and enforces guards)
     await transitionOrder(
-      rt,
+      { ...rt, _db: { db: tx } } as unknown as Runtime,
       ctx,
       input.id,
       {
@@ -1259,7 +1254,7 @@ export async function createAdminFulfillment(
 
     // Progress fulfillment to label_created
     await transitionFulfillment(
-      rt,
+      { ...rt, _db: { db: tx } } as unknown as Runtime,
       ctx,
       fulfillment.id,
       {
@@ -1291,13 +1286,9 @@ export async function createAdminOrderInvoice(
   input: { id: string },
 ) {
   assertPermission(ctx, "orders.write");
-  const db = rt._db.db;
-
-  return await withTenant(db, ctx.tenantId, async (tx) => {
-    const inv = await generateInvoice(rt, ctx, { orderId: input.id }, tx);
-    return {
-      invoiceId: inv.invoiceId,
-      invoiceNumber: inv.number,
-    };
-  });
+  const inv = await generateInvoice(rt, ctx, { orderId: input.id });
+  return {
+    invoiceId: inv.invoiceId,
+    invoiceNumber: inv.number,
+  };
 }

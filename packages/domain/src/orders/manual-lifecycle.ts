@@ -1,6 +1,6 @@
 import { createHash } from "node:crypto";
 import { and, eq, gt, inArray, sql } from "drizzle-orm";
-import { schema, withTenant } from "@bs/db";
+import { schema, withTenant, type Db } from "@bs/db";
 import type { Runtime } from "../runtime.ts";
 import { assertPermission, type TenantContext } from "../context.ts";
 import { commitReservation } from "../catalog/inventory-reservations.ts";
@@ -64,7 +64,7 @@ export async function confirmAdminOrder(rt: Runtime, ctx: TenantContext, input: 
   await withTenant(db, ctx.tenantId, async (tx) => {
     const order = await loadOrder(tx, ctx.tenantId, input.id);
     if (order.status !== "pending") throw new Error(`Precondition: Order is already ${order.status}`);
-    await transitionOrder(rt, ctx, input.id, { type: "order.confirm", reason: "Confirmed by the store" }, tx);
+    await transitionOrder({ ...rt, _db: { db: tx } } as unknown as Runtime, ctx, input.id, { type: "order.confirm", reason: "Confirmed by the store" }, tx);
   });
   // stock moves from "reserved" to sold
   await commitReservation(db, ctx.tenantId, { orderId: input.id });
@@ -105,6 +105,7 @@ export async function advanceAdminOrder(
   }
 
   return await withTenant(db, ctx.tenantId, async (tx) => {
+    const txRt = { ...rt, _db: { db: tx } } as unknown as Runtime;
     const fs = await tx
       .select()
       .from(schema.fulfillments)
@@ -114,15 +115,15 @@ export async function advanceAdminOrder(
       if (f.status === "delivered") continue;
       if (f.status === "rto" || f.status === "rto_delivered") throw new Error("Precondition: This shipment is being returned to origin");
       for (const ev of FULFILLMENT_CHAIN[f.status] ?? []) {
-        await transitionFulfillment(rt, ctx, f.id, ev, tx);
+        await transitionFulfillment(txRt, ctx, f.id, ev, tx);
       }
       if (input.to === "delivered") {
-        await transitionFulfillment(rt, ctx, f.id, { type: "fulfillment.deliver" }, tx);
+        await transitionFulfillment(txRt, ctx, f.id, { type: "fulfillment.deliver" }, tx);
       }
     }
 
     const order = await loadOrder(tx, ctx.tenantId, input.id);
-    await walkOrder(rt, ctx, tx, input.id, order.status, input.to === "delivered" ? "delivered" : "fulfilled");
+    await walkOrder(txRt, ctx, tx, input.id, order.status, input.to === "delivered" ? "delivered" : "fulfilled");
 
     if (input.to === "delivered") {
       // "created" is included: orders made in the admin before this was fixed recorded their COD payment that way,
@@ -144,7 +145,7 @@ export async function advanceAdminOrder(
           // payment is cod_pending from the start. These rows were mis-recorded as "created" by the admin order form.
           await tx.update(schema.paymentIntents).set({ status: "cod_pending", updatedAt: new Date() }).where(eq(schema.paymentIntents.id, p.id));
         }
-        await transitionOrder(rt, ctx, input.id, { type: "payment.cod_collect", intentId: p.id }, tx);
+        await transitionOrder(txRt, ctx, input.id, { type: "payment.cod_collect", intentId: p.id }, tx);
       }
     }
     return { success: true as const, status: input.to };
@@ -208,9 +209,9 @@ export async function getReturnableItems(
   });
 }
 
-async function nextReturnNumber(rt: Runtime, tenantId: string) {
+async function nextReturnNumber(db: Db, tenantId: string) {
   const { allocateSequenceNumber } = await import("./sequences.ts");
-  return (await allocateSequenceNumber(rt._db.db, tenantId, "return", "", { defaultPrefix: "RET-", defaultPadding: 4 })).formatted;
+  return (await allocateSequenceNumber(db, tenantId, "return", "", { defaultPrefix: "RET-", defaultPadding: 4 })).formatted;
 }
 
 /**
@@ -317,7 +318,7 @@ export async function requestReturn(rt: Runtime, ctx: TenantContext, input: Retu
       }
     }
 
-    const number = await nextReturnNumber(rt, ctx.tenantId);
+    const number = await nextReturnNumber(tx, ctx.tenantId);
     const resolution = input.resolution === "replacement" ? "replacement" : "refund";
     const [ret] = await tx
       .insert(schema.returns)
@@ -374,7 +375,7 @@ export async function cancelReturn(
     }
 
     const { transitionReturn } = await import("./return-state-machine.ts");
-    const result = await transitionReturn(rt, ctx, input.returnId, { type: "return.cancel", reason: input.reason }, tx);
+    const result = await transitionReturn({ ...rt, _db: { db: tx } } as unknown as Runtime, ctx, input.returnId, { type: "return.cancel", reason: input.reason }, tx);
 
     if (ctx.actor.type === "staff") {
       await tx.insert(schema.auditLogs).values({
@@ -423,11 +424,12 @@ export async function actOnReturn(
       .where(and(eq(schema.returns.tenantId, ctx.tenantId), eq(schema.returns.id, input.id)));
     if (!ret) throw new Error("Not Found: Return not found");
     const { transitionReturn } = await import("./return-state-machine.ts");
+    const txRt = { ...rt, _db: { db: tx } } as unknown as Runtime;
 
     switch (input.action) {
       case "approve":
         await transitionReturn(
-          rt,
+          txRt,
           ctx,
           input.id,
           {
@@ -444,7 +446,7 @@ export async function actOnReturn(
           throw new Error("Bad Request: Please provide a reason for rejection");
         }
         await transitionReturn(
-          rt,
+          txRt,
           ctx,
           input.id,
           {
@@ -457,13 +459,13 @@ export async function actOnReturn(
         );
         break;
       case "pick_up":
-        await transitionReturn(rt, ctx, input.id, { type: "return.pick_up" }, tx);
+        await transitionReturn(txRt, ctx, input.id, { type: "return.pick_up" }, tx);
         break;
       case "close":
-        await transitionReturn(rt, ctx, input.id, { type: "return.close", note: input.note }, tx);
+        await transitionReturn(txRt, ctx, input.id, { type: "return.close", note: input.note }, tx);
         break;
       case "receive": {
-        await transitionReturn(rt, ctx, input.id, { type: "return.receive", restock: input.restock }, tx);
+        await transitionReturn(txRt, ctx, input.id, { type: "return.receive", restock: input.restock }, tx);
         const lines = await tx
           .select({ ri: schema.returnItems, oi: schema.orderItems })
           .from(schema.returnItems)
@@ -527,7 +529,7 @@ export async function actOnReturn(
           .limit(1);
 
         await transitionReturn(
-          rt,
+          txRt,
           ctx,
           input.id,
           {
@@ -541,7 +543,7 @@ export async function actOnReturn(
         );
 
         if (intent && (intent.status === "captured" || intent.status === "partially_refunded")) {
-          await transitionOrder(rt, ctx, ret.orderId, { type: "payment.partial_refund", intentId: intent.id, amount, reason: `Return ${ret.number}` }, tx);
+          await transitionOrder(txRt, ctx, ret.orderId, { type: "payment.partial_refund", intentId: intent.id, amount, reason: `Return ${ret.number}` }, tx);
         }
 
         await tx.insert(schema.refunds).values({
@@ -559,7 +561,7 @@ export async function actOnReturn(
       }
       case "replace": {
         await transitionReturn(
-          rt,
+          txRt,
           ctx,
           input.id,
           {

@@ -68,8 +68,9 @@ pnpm lint
 pnpm build
 pnpm docs:check
 # tests: one package at a time, only the packages you touched plus anything that depends on them
+pnpm test:affected                      # or pnpm gate:quick before push
 pnpm --filter @bs/domain test:fast
-pnpm --filter @bs/domain test:heavy     # needs Docker (Testcontainers) or TEST_DATABASE_URL_SUPERUSER
+pnpm test:heavy:local                   # fast shared local Postgres (or pnpm --filter @bs/domain test:heavy)
 ```
 
 - Do **not** run the whole suite in parallel against one database: it causes collision and timeout flakes (`docs/FAST-LOCAL-TESTS.md`). Platform integration suites need `--no-file-parallelism`.

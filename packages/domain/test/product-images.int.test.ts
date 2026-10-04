@@ -1,10 +1,8 @@
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { startTestDb, type TestDb } from "@bs/db/test-env";
-import { primaryCategory } from "./helpers/primary-category.ts";
 import {
   attachProductMedia,
   createMediaRecord,
-  createProduct,
   createRuntime,
   detachProductMedia,
   getProduct,
@@ -18,6 +16,8 @@ import {
   type Runtime,
   type TenantContext,
 } from "../src/index.ts";
+
+import { createActiveProduct } from "./helpers/factories.ts";
 
 let env: TestDb;
 let rt: Runtime;
@@ -48,8 +48,8 @@ beforeAll(async () => {
   const b = await provisionTenant(rt, { storeName: "img-b", slug: "img-b", owner: { email: "owner@img-b.test", name: "B" }, planCode: "starter", source: "platform_admin" });
   ctx = mk(a);
   other = mk(b);
-  const p = await createProduct(rtWeb, ctx, { title: "Pickle", status: "active", primaryCategoryId: await primaryCategory(rtWeb, ctx), variants: [{ sku: "IMG-1", title: "Default", price: 10000 }] });
-  productId = p.id;
+  const p = await createActiveProduct(rtWeb, ctx, { title: "Pickle", sku: "IMG-1", price: 10000 });
+  productId = p.productId;
 }, 180_000);
 
 afterAll(async () => {

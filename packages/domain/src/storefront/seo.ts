@@ -605,9 +605,9 @@ export async function updateStorefrontSeoSettings(
         faqSchemaEnabled: input.faqSchemaEnabled ?? true,
       });
     }
-
-    await invalidateCache(rt, ctx, { type: "store_or_seo_updated" });
   });
+
+  await invalidateCache(rt, ctx, { type: "store_or_seo_updated" });
 }
 
 export interface SitemapUrlItem {

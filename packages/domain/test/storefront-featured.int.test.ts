@@ -10,6 +10,8 @@ import {
   type TenantContext,
 } from "../src/index.ts";
 
+import { createActiveProduct } from "./helpers/factories.ts";
+
 let env: TestDb;
 let rt: Runtime;
 let rtWeb: Runtime;
@@ -52,9 +54,9 @@ describe("storefront home page product grid", () => {
 
   it("lists active products with their price, featured first, newest next, and honours the limit", async () => {
     const c = ctxFor(storeA);
-    await createProduct(rtWeb, c, { title: "Plain tea", status: "active", primaryCategoryId: await primaryCategory(rtWeb, c), variants: [{ sku: "FEAT-1", title: "One", price: 25000 }] });
+    await createActiveProduct(rtWeb, c, { title: "Plain tea", sku: "FEAT-1", price: 25000 });
     await createProduct(rtWeb, c, { title: "Star tea", status: "active", primaryCategoryId: await primaryCategory(rtWeb, c), isFeatured: true, variants: [{ sku: "FEAT-2", title: "A", price: 30000 }, { sku: "FEAT-3", title: "B", price: 50000 }] });
-    await createProduct(rtWeb, c, { title: "Newest tea", status: "active", primaryCategoryId: await primaryCategory(rtWeb, c), variants: [{ sku: "FEAT-4", title: "One", price: 15000 }] });
+    await createActiveProduct(rtWeb, c, { title: "Newest tea", sku: "FEAT-4", price: 15000 });
 
     const all = await getStorefrontFeaturedProducts(rtWeb, c, { limit: 8 });
     expect(all.map((p) => p.title)).toEqual(["Star tea", "Newest tea", "Plain tea"]);

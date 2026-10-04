@@ -13,8 +13,58 @@ permissions:
   contents: read
 
 jobs:
+  changes:
+    name: detect changes
+    runs-on: ubuntu-24.04
+    outputs:
+      docs_only: ${{ steps.filter.outputs.docs_only }}
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          fetch-depth: 2
+      - id: filter
+        name: Check for docs-only PR
+        shell: bash
+        run: |
+          if [ "${{ github.event_name }}" = "push" ] && [ "${{ github.ref }}" = "refs/heads/main" ]; then
+            echo "Push to main: running full suite."
+            echo "docs_only=false" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          # The checkout is the PR merge commit (depth 2): its first parent is the base the PR merges into, so this diff
+          # needs no extra fetch and cannot fail with "no merge base" when the base branch moved after the run started.
+          if ! changed=$(git diff --name-only HEAD^1 HEAD); then
+            echo "Could not list changed files: running the full suite."
+            echo "docs_only=false" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          echo "Changed files in PR:"
+          echo "$changed"
+
+          # Check if all changed files match docs-only pattern (docs/**, *.md, .github/ISSUE_TEMPLATE/**)
+          docs_only=true
+          if [ -z "$changed" ]; then
+            docs_only=false
+          fi
+
+          while IFS= read -r file; do
+            [ -z "$file" ] && continue
+            if [[ "$file" =~ ^docs/ ]] || [[ "$file" =~ \.md$ ]] || [[ "$file" =~ ^\.github/ISSUE_TEMPLATE/ ]]; then
+              continue
+            else
+              echo "Non-docs file detected: $file"
+              docs_only=false
+              break
+            fi
+          done <<< "$changed"
+
+          echo "docs_only=$docs_only"
+          echo "docs_only=$docs_only" >> "$GITHUB_OUTPUT"
+
   check-fast:
     name: typecheck · lint · build · unit-test
+    needs: changes
     runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v5
@@ -24,14 +74,27 @@ jobs:
           node-version-file: .nvmrc
           cache: pnpm
       - run: pnpm install --frozen-lockfile
-      - run: pnpm typecheck
-      - run: pnpm lint
-      - run: pnpm build
-      - run: pnpm test:fast
-      - run: pnpm docs:check
+      - name: "Fast check - docs:check"
+        run: pnpm docs:check
+      - name: "Fast check - lint"
+        if: needs.changes.outputs.docs_only != 'true'
+        run: pnpm lint
+      - name: Typecheck
+        if: needs.changes.outputs.docs_only != 'true'
+        run: pnpm typecheck
+      - name: Build
+        if: needs.changes.outputs.docs_only != 'true'
+        run: pnpm build
+      - name: Unit Tests
+        if: needs.changes.outputs.docs_only != 'true'
+        run: pnpm test:fast
+      - name: Fast path notice
+        if: needs.changes.outputs.docs_only == 'true'
+        run: 'echo "Docs-only PR: docs:check succeeded; skipping lint, typecheck, build, and unit tests."'
 
   check-heavy:
     name: heavy integration tests (real postgres)
+    needs: changes
     runs-on: ubuntu-24.04
     services:
       postgres:
@@ -50,13 +113,21 @@ jobs:
     steps:
       - uses: actions/checkout@v5
       - uses: pnpm/action-setup@v4
+        if: needs.changes.outputs.docs_only != 'true'
       - uses: actions/setup-node@v5
+        if: needs.changes.outputs.docs_only != 'true'
         with:
           node-version-file: .nvmrc
           cache: pnpm
       - run: pnpm install --frozen-lockfile
+        if: needs.changes.outputs.docs_only != 'true'
       - run: pnpm --filter "@bs/web..." build # perf-budget-bundle.int.test.ts reads .next
+        if: needs.changes.outputs.docs_only != 'true'
       - run: pnpm test:heavy
+        if: needs.changes.outputs.docs_only != 'true'
+      - name: Fast path notice
+        if: needs.changes.outputs.docs_only == 'true'
+        run: 'echo "Docs-only PR: skipping heavy integration test suite."'
 
   secret-scan:
     name: secret-scan
