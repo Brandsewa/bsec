@@ -55,6 +55,12 @@ export async function setMarketingConsent(
   const acceptsMarketing = state === "subscribed";
   const now = new Date();
 
+  // SMS consent has its own columns yet (Phase 0 follow-up); writing it here would overwrite the
+  // email consent record, so every non-email channel is refused until SMS exists.
+  if (channel !== "email") {
+    throw new Error(`Unsupported marketing consent channel: ${channel}. Only email consent is recorded today.`);
+  }
+
   const runner = async (d: Db): Promise<SetMarketingConsentResult> => {
     // 1. Fetch customer
     const [c] = await d

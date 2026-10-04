@@ -248,6 +248,10 @@ export async function placeOrder(
       }
 
       if (existingCust) {
+        // Blocked customers cannot check out; the message stays neutral so the store's reason is not disclosed.
+        if (existingCust.status !== "active") {
+          throw new Error("Your order could not be completed. Please contact the store for help.");
+        }
         effectiveCustomerId = existingCust.id;
         // Never overwrite existing name or phone if already populated; fill only when empty
         const updates: Record<string, unknown> = {};
