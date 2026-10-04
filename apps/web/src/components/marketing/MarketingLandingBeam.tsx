@@ -20,6 +20,7 @@ import Link from "next/link";
 import { SubdomainAvailabilityChecker } from "./SubdomainAvailabilityChecker.tsx";
 import { AppWindow } from "./landing6/AppWindow.tsx";
 import { Dust } from "./landing6/Dust.tsx";
+import { Smoke } from "./landing6/Smoke.tsx";
 import { useRevealMotion } from "./landing/motion.ts";
 import { COMING_SOON, FAQS, FALLBACK_PLANS, INCLUDED_IN_ALL, STEPS, THEMES, planBullets, type LandingPlan } from "./landing/content.ts";
 import { bmFont } from "./landing6/fonts.ts";
@@ -54,6 +55,7 @@ export function MarketingLandingBeam({ plans }: { plans?: LandingPlan[] | undefi
           <div className="bm-smoke bm-smoke-a" />
           <div className="bm-smoke bm-smoke-b" />
           <div className="bm-smoke bm-smoke-c" />
+          <Smoke beamX={0.57} />
           <div className="bm-grid" />
           <div className="bm-beam">
             <div className="bm-beam-cone" />
@@ -65,8 +67,11 @@ export function MarketingLandingBeam({ plans }: { plans?: LandingPlan[] | undefi
         </div>
         <div className="bm-grain" aria-hidden="true" />
         <div className="bm-flare bm-light" aria-hidden="true">
+          <div className="bm-flare-wide" />
           <div className="bm-flare-glow" />
+          <div className="bm-flare-core" />
           <div className="bm-flare-streak" />
+          <div className="bm-flare-streak bm-flare-streak-2" />
         </div>
 
         {/* nav */}
