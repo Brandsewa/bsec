@@ -5,8 +5,8 @@ import { useRouter } from "next/navigation";
 
 interface SubdomainAvailabilityCheckerProps {
   platformDomain?: string;
-  /** "block" = Block-Print Bazaar (design 1), "ledger" = Bahi-Khata (design 2). */
-  variant?: "block" | "ledger";
+  /** "block" = Block-Print Bazaar (design 1), "ledger" = Bahi-Khata (design 2), "riso" = Riso Zine (design 3). */
+  variant?: "block" | "ledger" | "riso";
 }
 
 export function SubdomainAvailabilityChecker({
@@ -74,6 +74,46 @@ export function SubdomainAvailabilityChecker({
       router.push(`/signup?slug=${encodeURIComponent(slug)}&storeName=${encodeURIComponent(storeName || slug)}`);
     });
   };
+
+  if (variant === "riso") {
+    return (
+      <div className="w-full max-w-xl">
+        <form onSubmit={handleSubmit} className="flex flex-col gap-3 bg-white p-3 sm:flex-row sm:items-center" style={{ border: "2.5px solid var(--rz-ink)", borderRadius: "1.2rem" }}>
+          <label className="flex flex-1 items-center gap-2 px-2">
+            <span className="sr-only">Store name</span>
+            <input
+              type="text"
+              placeholder="Your store name"
+              value={storeName}
+              onChange={(e) => handleStoreNameChange(e.target.value)}
+              className="min-h-[3rem] w-full bg-transparent text-lg font-semibold outline-none placeholder:opacity-45"
+              style={{ color: "var(--rz-ink)" }}
+              autoComplete="off"
+              required
+            />
+            <span className="shrink-0 text-sm font-bold" style={{ color: "var(--rz-blue)" }}>.{platformDomain}</span>
+          </label>
+          <button
+            type="submit"
+            disabled={!slug || slug.length < 3 || (checkResult !== null && !checkResult.available)}
+            className="rz-btn"
+          >
+            Start free trial
+          </button>
+        </form>
+        <p className="rz-scrawl mt-2 min-h-[2rem] text-2xl" style={{ lineHeight: 1 }} role="status" aria-live="polite">
+          {slug.length >= 3 &&
+            (isChecking ? (
+              <span className="rz-soft">checking {slug}.{platformDomain}…</span>
+            ) : checkResult?.available ? (
+              <span style={{ color: "#0a7a43" }}>yes! {slug}.{platformDomain} is free</span>
+            ) : checkResult ? (
+              <span style={{ color: "#c2127a" }}>{checkResult.reason || "that name is taken"}</span>
+            ) : null)}
+        </p>
+      </div>
+    );
+  }
 
   if (variant === "ledger") {
     return (

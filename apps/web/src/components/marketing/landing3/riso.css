@@ -1,0 +1,108 @@
+/*
+ * bcom.si landing, design 3: "Riso Zine".
+ * World: a risograph-printed zine. Fluorescent spot inks (pink, blue, sunflower) overprint with multiply on toothy
+ * paper, slightly out of register, with halftone dots and grain. Scoped under .rz.
+ */
+.rz {
+  --rz-paper: #f3ecda;
+  --rz-ink: #14142b;
+  --rz-ink-soft: #46466a;
+  --rz-pink: #ff48b0;
+  --rz-blue: #0078bf;
+  --rz-yellow: #ffb511;
+  --rz-ease: cubic-bezier(0.16, 1, 0.3, 1);
+  --rz-display: var(--font-rz-display), ui-sans-serif, system-ui, sans-serif;
+  --rz-body: var(--font-rz-body), ui-sans-serif, system-ui, sans-serif;
+  --rz-scrawl: var(--font-rz-scrawl), "Segoe Print", cursive;
+  --rz-dots-ink: radial-gradient(circle at 50% 50%, rgb(20 20 43 / 0.55) 0 1.3px, transparent 1.6px);
+  --rz-dots-pink: radial-gradient(circle at 50% 50%, var(--rz-pink) 0 2px, transparent 2.3px);
+  --rz-grain: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='220' height='220'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.9' numOctaves='3' stitchTiles='stitch'/%3E%3CfeColorMatrix values='0 0 0 0 .2 0 0 0 0 .18 0 0 0 0 .3 0 0 0 .9 0'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
+
+  position: relative; min-height: 100vh; overflow-x: clip;
+  background: var(--rz-paper); color: var(--rz-ink);
+  font-family: var(--rz-body); font-size: 1.0625rem; line-height: 1.55;
+  -webkit-font-smoothing: antialiased;
+}
+:root:has(.rz) { scrollbar-color: var(--rz-pink) var(--rz-paper); scroll-behavior: smooth; scroll-padding-top: 5rem; }
+.rz ::selection { background: var(--rz-yellow); color: var(--rz-ink); }
+.rz :focus-visible { outline: 3px solid var(--rz-blue); outline-offset: 3px; border-radius: 4px; }
+.rz input { caret-color: var(--rz-pink); }
+.rz-num { font-variant-numeric: tabular-nums lining-nums; }
+
+/* Paper tooth over everything: ink grain, printed on top. */
+.rz::before {
+  content: ""; position: fixed; inset: 0; z-index: 60; pointer-events: none;
+  background-image: var(--rz-grain); opacity: 0.1; mix-blend-mode: multiply;
+}
+
+.rz-display { font-family: var(--rz-display); font-weight: 800; letter-spacing: -0.045em; line-height: 0.95; text-wrap: balance; text-transform: none; }
+.rz-h2 { font-family: var(--rz-display); font-weight: 800; letter-spacing: -0.04em; line-height: 1; text-wrap: balance; font-size: clamp(1.9rem, 4.4vw, 3.4rem); }
+.rz-scrawl { font-family: var(--rz-scrawl); }
+.rz-soft { color: var(--rz-ink-soft); }
+
+/* Overprint: two ink layers of the same word, the second slightly out of register, blended with multiply. */
+.rz-over { position: relative; display: inline-block; isolation: isolate; color: var(--rz-pink); mix-blend-mode: multiply; }
+.rz-over::after {
+  content: attr(data-text); position: absolute; left: 0; top: 0; z-index: -1; color: var(--rz-blue);
+  mix-blend-mode: multiply; transform: translate(0.035em, 0.03em);
+}
+@keyframes rz-register-a { from { transform: translate(-0.16em, 0.1em); opacity: 0.4; } to { transform: translate(0, 0); opacity: 1; } }
+@keyframes rz-register-b { from { transform: translate(0.22em, -0.14em); opacity: 0.4; } to { transform: translate(0.035em, 0.03em); opacity: 1; } }
+.rz-over.rz-load { animation: rz-register-a 1100ms var(--rz-ease) 250ms both; }
+.rz-over.rz-load::after { animation: rz-register-b 1100ms var(--rz-ease) 250ms both; }
+
+/* Colour fields: the spot inks as whole regions, with a halftone overlay. */
+.rz-field-blue { background: var(--rz-blue); color: #fff; }
+.rz-field-pink { background: var(--rz-pink); color: var(--rz-ink); }
+.rz-field-yellow { background: var(--rz-yellow); color: var(--rz-ink); }
+.rz-halftone { position: relative; }
+.rz-halftone::before {
+  content: ""; position: absolute; inset: 0; pointer-events: none; opacity: 0.35; mix-blend-mode: multiply;
+  background-image: var(--rz-dots-ink); background-size: 8px 8px;
+  -webkit-mask-image: linear-gradient(115deg, #000 0%, transparent 62%); mask-image: linear-gradient(115deg, #000 0%, transparent 62%);
+}
+
+/* Buttons: a printed pink block; hover knocks the blue plate out of register. */
+.rz-btn {
+  position: relative; display: inline-flex; align-items: center; justify-content: center; gap: 0.5rem; white-space: nowrap;
+  min-height: 3rem; padding: 0.7rem 1.5rem; border: 2.5px solid var(--rz-ink); border-radius: 999px; cursor: pointer; isolation: isolate;
+  font-family: var(--rz-display); font-weight: 800; font-size: 0.98rem; letter-spacing: -0.02em; text-decoration: none;
+  background: var(--rz-pink); color: var(--rz-ink);
+  transition: transform 180ms var(--rz-ease);
+}
+.rz-btn::after { content: ""; position: absolute; inset: -2.5px; border-radius: inherit; background: var(--rz-blue); mix-blend-mode: multiply; z-index: -1; transform: translate(0, 0); transition: transform 220ms var(--rz-ease); }
+.rz-btn:hover::after, .rz-btn:focus-visible::after { transform: translate(5px, 4px); }
+.rz-btn:active { transform: translate(1px, 1px); }
+.rz-btn[disabled] { background: #d9d2bf; color: #8a8672; border-color: #8a8672; cursor: not-allowed; }
+.rz-btn[disabled]::after { display: none; }
+.rz-btn-sm { min-height: 2.6rem; padding: 0.4rem 1.1rem; }
+.rz-btn-ink { background: var(--rz-yellow); }
+
+/* Sticker blocks: irregular cut-paper shapes, rotated like they were stuck on by hand. */
+.rz-sticker { position: relative; padding: clamp(1.25rem, 2.4vw, 1.9rem); border: 2.5px solid var(--rz-ink); transition: transform 380ms var(--rz-ease); }
+.rz-sticker:hover { transform: rotate(0deg) translateY(-4px) !important; }
+
+/* Ticker band. */
+@keyframes rz-marquee { to { transform: translateX(-50%); } }
+.rz-marquee-track { display: flex; width: max-content; animation: rz-marquee 38s linear infinite; }
+.rz-marquee:hover .rz-marquee-track { animation-play-state: paused; }
+
+/* New orders are stamped onto the slip. */
+@keyframes rz-slip-in { from { transform: translateY(-14px) rotate(-2deg); opacity: 0; background: var(--rz-yellow); } to { transform: none; opacity: 1; background: transparent; } }
+.rz-row-new { animation: rz-slip-in 700ms var(--rz-ease) both; }
+
+/* Reveals: ink laid down, an offset first then settling into register. */
+.rz-rv { transition: opacity 600ms var(--rz-ease), transform 800ms var(--rz-ease); }
+.rz-armed .rz-rv:not(.is-in) { opacity: 0; transform: translate(-14px, 18px) rotate(-0.6deg); }
+
+.rz-faq summary { cursor: pointer; list-style: none; }
+.rz-faq summary::-webkit-details-marker { display: none; }
+.rz-faq[open] .rz-plus { transform: rotate(45deg); }
+.rz-plus { transition: transform 260ms var(--rz-ease); }
+
+@media (prefers-reduced-motion: reduce) {
+  :root:has(.rz) { scroll-behavior: auto; }
+  .rz *, .rz *::before, .rz *::after { animation: none !important; transition: none !important; }
+  .rz-armed .rz-rv:not(.is-in) { opacity: 1; transform: none; }
+  .rz-marquee-track { transform: none; }
+}
