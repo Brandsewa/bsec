@@ -3,6 +3,7 @@ import { ArrowLeft, Ban, MapPin, MoreHorizontal, Pencil, Plus, ShieldCheck, Tag,
 import { useMemo, useState } from "react";
 import { EmptyState, PageBreadcrumbs, PageContainer, PageSkeleton, toast } from "@bs/ui";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { UsersRound } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -633,6 +634,80 @@ function NotesCard({ customerId }: { customerId: string }) {
 }
 
 // ---------------------------------------------------------------------------------------------------------------
+// Segments card (Customers Phase 2 integration): manual memberships with remove, automatic
+// matches as read-only chips linking to the segment.
+// ---------------------------------------------------------------------------------------------------------------
+
+function SegmentsCard({ customerId }: { customerId: string }) {
+  const queryClient = useQueryClient();
+  const segments = useQuery(orpc.admin.segments.forCustomer.queryOptions({ input: { customerId } }));
+  const [removing, setRemoving] = useState<{ id: string; name: string } | null>(null);
+
+  const refresh = () => void queryClient.invalidateQueries({ queryKey: orpc.admin.segments.key() });
+
+  const remove = () => {
+    const target = removing;
+    setRemoving(null);
+    if (target) {
+      void client.admin.segments.members
+        .remove({ id: target.id, customerIds: [customerId] })
+        .then(() => {
+          toast.success(`Removed from "${target.name}".`);
+          refresh();
+        })
+        .catch((e: unknown) => toast.error(errorMessage(e)));
+    }
+  };
+
+  const manual = segments.data?.manual ?? [];
+  const automatic = segments.data?.automatic ?? [];
+  const empty = manual.length === 0 && automatic.length === 0;
+
+  return (
+    <Card>
+      <CardHeader>
+        <CardTitle className="flex items-center gap-1.5">
+          <UsersRound className="size-4 text-muted-foreground" aria-hidden /> Segments
+        </CardTitle>
+      </CardHeader>
+      <CardContent>
+        {empty ? (
+          <p className="text-muted-foreground">Not in any segment.</p>
+        ) : (
+          <div className="grid gap-2">
+            {manual.map((seg) => (
+              <div key={seg.id} className="flex items-center justify-between gap-2">
+                <Badge variant="secondary">{seg.name}</Badge>
+                <Button variant="ghost" size="sm" className="h-6 px-1.5" aria-label={`Remove from ${seg.name}`} onClick={() => setRemoving(seg)}>
+                  <X className="size-3" aria-hidden />
+                </Button>
+              </div>
+            ))}
+            {automatic.map((seg) => (
+              <div key={seg.id}>
+                <Badge variant="outline" render={<Link to="/segments/$segmentId" params={{ segmentId: seg.id }} />}>
+                  {seg.name}
+                </Badge>
+              </div>
+            ))}
+            <p className="text-xs text-muted-foreground">Automatic segments are read-only: membership comes from their conditions.</p>
+          </div>
+        )}
+        <ConfirmDialog
+          open={removing !== null}
+          onOpenChange={(open) => !open && setRemoving(null)}
+          title={removing ? `Remove this customer from "${removing.name}"?` : ""}
+          description="They keep all their data; they are just no longer in this segment."
+          confirmLabel="Remove"
+          destructive
+          onConfirm={remove}
+        />
+      </CardContent>
+    </Card>
+  );
+}
+
+// ---------------------------------------------------------------------------------------------------------------
 // Page
 // ---------------------------------------------------------------------------------------------------------------
 
@@ -705,6 +780,7 @@ export function CustomerDetailPage(props: { customerId?: string } = {}) {
           <StatusCard detail={detail.data} />
           <MarketingCard detail={detail.data} />
           <TagsCard detail={detail.data} />
+          <SegmentsCard customerId={c.id} />
           <NotesCard customerId={c.id} />
         </div>
       </div>

@@ -96,6 +96,19 @@ import {
   getTheme,
   inviteStaff,
   listAdminCustomers,
+  listSegments,
+  getSegment,
+  createSegment,
+  updateSegment,
+  deleteSegment,
+  previewSegmentRules,
+  listSegmentMembers,
+  addCustomersToSegment,
+  removeCustomersFromSegment,
+  refreshSegmentCount,
+  getCustomerSegments,
+  createPresetSegments,
+  getSegmentActivity,
   getAdminCustomerStats,
   listAdminCustomerTags,
   setAdminCustomerStatus,
@@ -1064,6 +1077,52 @@ describe("Generated Isolation Test Suite (M1 Real Postgres 18 Proof)", () => {
           tx.insert(schema.customers).values({ tenantId: ctx.tenantId, email: `iso-delete-${Date.now()}@test.com`, name: "Iso Delete" }).returning(),
         );
         return await deleteAdminCustomer(rt, ctx, { id: row!.id });
+      }
+
+      // --- Customers Segments (Phase 2) ---
+      case "segments.list":
+        return await listSegments(rt, ctx);
+      case "segments.get": {
+        const created = await createSegment(rt, ctx, { name: `Iso Seg ${Date.now()}`, kind: "manual" });
+        return await getSegment(rt, ctx, { id: created.id });
+      }
+      case "segments.create":
+        return await createSegment(rt, ctx, { name: `Iso Seg Create ${Date.now()}`, kind: "manual" });
+      case "segments.update": {
+        const created = await createSegment(rt, ctx, { name: `Iso Seg Upd ${Date.now()}`, kind: "manual" });
+        return await updateSegment(rt, ctx, { id: created.id, description: "updated by isolation" });
+      }
+      case "segments.delete": {
+        const created = await createSegment(rt, ctx, { name: `Iso Seg Del ${Date.now()}`, kind: "manual" });
+        return await deleteSegment(rt, ctx, { id: created.id });
+      }
+      case "segments.preview":
+        return await previewSegmentRules(rt, ctx, { rules: { match: "all", conditions: [{ field: "orders_count", op: "gte", value: 0 }] } });
+      case "segments.members.list": {
+        const created = await createSegment(rt, ctx, { name: `Iso Seg Members ${Date.now()}`, kind: "manual" });
+        await addCustomersToSegment(rt, ctx, { segmentId: created.id, customerIds: [testCustomerA] });
+        return await listSegmentMembers(rt, ctx, { segmentId: created.id });
+      }
+      case "segments.members.add": {
+        const created = await createSegment(rt, ctx, { name: `Iso Seg Add ${Date.now()}`, kind: "manual" });
+        return await addCustomersToSegment(rt, ctx, { segmentId: created.id, customerIds: [testCustomerA] });
+      }
+      case "segments.members.remove": {
+        const created = await createSegment(rt, ctx, { name: `Iso Seg Rem ${Date.now()}`, kind: "manual" });
+        await addCustomersToSegment(rt, ctx, { segmentId: created.id, customerIds: [testCustomerA] });
+        return await removeCustomersFromSegment(rt, ctx, { segmentId: created.id, customerIds: [testCustomerA] });
+      }
+      case "segments.refreshCount": {
+        const created = await createSegment(rt, ctx, { name: `Iso Seg Ref ${Date.now()}`, kind: "automatic", rules: { match: "all", conditions: [{ field: "orders_count", op: "gte", value: 0 }] } });
+        return await refreshSegmentCount(rt, ctx, { id: created.id });
+      }
+      case "segments.forCustomer":
+        return await getCustomerSegments(rt, ctx, { customerId: testCustomerA });
+      case "segments.presets.create":
+        return await createPresetSegments(rt, ctx);
+      case "segments.activity": {
+        const created = await createSegment(rt, ctx, { name: `Iso Seg Act ${Date.now()}`, kind: "manual" });
+        return await getSegmentActivity(rt, ctx, { segmentId: created.id });
       }
 
       // --- M5 Discounts Admin ---

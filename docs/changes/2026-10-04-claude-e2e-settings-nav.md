@@ -19,3 +19,6 @@ Settings rebuild Phase 0-1 (PR #25) relabelled the Team nav item to "Users". PR 
 
 ## Definition of done
 - [x] Gate unaffected (test-only change); change record written; no secrets or generated files.
+
+## Correction (same day, branch `fix/e2e-settings-nav-2`)
+The first fix used `{ name: "Users", exact: true }` and still timed out on `main`: each Settings nav link's accessible name includes its description ("Users Members and invitations"), so an exact match finds nothing. The locator is now the prefix match `/^Users/`. Lesson: locate Settings nav links by prefix, never `exact`.

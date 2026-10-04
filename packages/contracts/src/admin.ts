@@ -25,6 +25,40 @@ export const StaffInvitation = z.object({
 });
 export type StaffInvitation = z.infer<typeof StaffInvitation>;
 
+/** Segment rules (Customers Segments PLAN §3): validated strictly again in the domain service. */
+export const SegmentRulesInput = z.object({
+  match: z.enum(["all", "any"]),
+  conditions: z
+    .array(z.object({ field: z.string(), op: z.string(), value: z.unknown() }))
+    .min(1)
+    .max(10),
+});
+export type SegmentRulesInput = z.infer<typeof SegmentRulesInput>;
+
+const SegmentSummary = z.object({
+  id: z.string().uuid(),
+  name: z.string(),
+  description: z.string().nullable(),
+  kind: z.enum(["manual", "automatic"]),
+  isPreset: z.boolean(),
+  memberCount: z.number(),
+  countedAt: z.string().nullable(),
+  createdAt: z.string(),
+  updatedAt: z.string(),
+});
+
+const SegmentDetail = SegmentSummary.extend({
+  rules: SegmentRulesInput.nullable(),
+});
+
+const SegmentCreateInput = z.object({
+  name: z.string().min(1).max(100),
+  description: z.string().max(200).optional(),
+  kind: z.enum(["manual", "automatic"]),
+  rules: SegmentRulesInput.optional(),
+  isPreset: z.boolean().optional(),
+});
+
 export const GSTIN_PATTERN = /^\d{2}[A-Z]{5}\d{4}[A-Z][1-9A-Z]Z[0-9A-Z]$/;
 
 /**
@@ -2279,6 +2313,8 @@ export const adminContract = {
             acceptsMarketing: z.boolean().optional(),
             /** State code of the customer's default address. */
             location: z.string().optional(),
+            /** Only customers in this segment (Customers Phase 2 integration). */
+            segmentId: z.string().uuid().optional(),
             createdFrom: z.string().optional(),
             createdTo: z.string().optional(),
             sort: z.enum(["created_desc", "created_asc", "name_asc", "name_desc", "spent_desc", "spent_asc", "orders_desc", "orders_asc"]).default("created_desc"),
@@ -2640,6 +2676,146 @@ export const adminContract = {
       .route({ method: "DELETE", path: "/admin/customers/{id}" })
       .input(z.object({ id: z.string().uuid() }))
       .output(z.object({ id: z.string().uuid(), mode: z.enum(["deleted", "anonymised"]) })),
+  },
+
+  // --- Customers Segments (Phase 2) ---
+  segments: {
+    list: oc
+      .route({ method: "GET", path: "/admin/segments" })
+      .input(
+        z
+          .object({
+            kind: z.enum(["manual", "automatic"]).optional(),
+            limit: z.number().int().min(1).max(100).default(100),
+            offset: z.number().int().min(0).default(0),
+          })
+          .optional(),
+      )
+      .output(
+        z.object({
+          items: z.array(SegmentSummary),
+          total: z.number(),
+        }),
+      ),
+    get: oc
+      .route({ method: "GET", path: "/admin/segments/detail" })
+      .input(z.object({ id: z.string().uuid() }))
+      .output(SegmentDetail),
+    create: oc
+      .route({ method: "POST", path: "/admin/segments" })
+      .input(SegmentCreateInput)
+      .output(SegmentDetail),
+    update: oc
+      .route({ method: "PATCH", path: "/admin/segments/{id}" })
+      .input(
+        z.object({
+          id: z.string().uuid(),
+          name: z.string().optional(),
+          description: z.string().nullable().optional(),
+          rules: SegmentRulesInput.optional(),
+        }),
+      )
+      .output(SegmentDetail),
+    delete: oc
+      .route({ method: "DELETE", path: "/admin/segments/{id}" })
+      .input(z.object({ id: z.string().uuid() }))
+      .output(z.object({ success: z.boolean() })),
+    preview: oc
+      .route({ method: "POST", path: "/admin/segments/preview" })
+      .input(z.object({ rules: SegmentRulesInput }))
+      .output(
+        z.object({
+          count: z.number(),
+          sample: z.array(z.object({ id: z.string().uuid(), name: z.string(), email: z.string() })),
+        }),
+      ),
+    members: {
+      list: oc
+        .route({ method: "GET", path: "/admin/segments/{id}/members" })
+        .input(
+          z.object({
+            id: z.string().uuid(),
+            search: z.string().optional(),
+            sort: z.enum(["created_desc", "name_asc", "name_desc", "spent_desc", "orders_desc"]).default("created_desc"),
+            limit: z.number().int().min(1).max(100).default(50),
+            offset: z.number().int().min(0).default(0),
+          }),
+        )
+        .output(
+          z.object({
+            items: z.array(
+              z.object({
+                id: z.string().uuid(),
+                name: z.string(),
+                email: z.string(),
+                phone: z.string().nullable(),
+                isGuest: z.boolean(),
+                ordersCount: z.number(),
+                totalSpent: z.number(),
+                lastOrderAt: z.string().nullable(),
+                marketingState: z.string(),
+                tags: z.array(z.string()),
+              }),
+            ),
+            total: z.number(),
+          }),
+        ),
+      add: oc
+        .route({ method: "POST", path: "/admin/segments/{id}/members" })
+        .input(
+          z.object({
+            id: z.string().uuid(),
+            customerIds: z.array(z.string().uuid()).max(5000).optional(),
+            emails: z.array(z.string()).max(5000).optional(),
+          }),
+        )
+        .output(
+          z.object({
+            added: z.number(),
+            alreadyIn: z.number(),
+            notFound: z.array(z.string()),
+          }),
+        ),
+      remove: oc
+        .route({ method: "POST", path: "/admin/segments/{id}/members/remove" })
+        .input(z.object({ id: z.string().uuid(), customerIds: z.array(z.string().uuid()).max(5000) }))
+        .output(z.object({ removed: z.number() })),
+    },
+    refreshCount: oc
+      .route({ method: "POST", path: "/admin/segments/{id}/refresh" })
+      .input(z.object({ id: z.string().uuid() }))
+      .output(z.object({ memberCount: z.number(), countedAt: z.string() })),
+    forCustomer: oc
+      .route({ method: "GET", path: "/admin/segments/for-customer/{customerId}" })
+      .input(z.object({ customerId: z.string().uuid() }))
+      .output(
+        z.object({
+          manual: z.array(z.object({ id: z.string().uuid(), name: z.string() })),
+          automatic: z.array(z.object({ id: z.string().uuid(), name: z.string() })),
+        }),
+      ),
+    presets: {
+      create: oc
+        .route({ method: "POST", path: "/admin/segments/presets" })
+        .output(z.object({ created: z.number(), skipped: z.number() })),
+    },
+    activity: oc
+      .route({ method: "GET", path: "/admin/segments/{id}/activity" })
+      .input(z.object({ id: z.string().uuid(), limit: z.number().int().min(1).max(200).default(50) }))
+      .output(
+        z.object({
+          items: z.array(
+            z.object({
+              id: z.string().uuid(),
+              action: z.string(),
+              actorType: z.string(),
+              actorId: z.string().nullable(),
+              diff: z.record(z.string(), z.unknown()),
+              at: z.string(),
+            }),
+          ),
+        }),
+      ),
   },
 
   // --- M5 Discounts Admin ---
