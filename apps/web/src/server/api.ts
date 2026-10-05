@@ -236,6 +236,13 @@ import {
   listAvailablePlans,
   requestPlanChange,
   cancelPlanChangeRequest,
+  previewShippingRate,
+  getTaxSettings,
+  updateTaxSettings,
+  listTaxClasses,
+  createTaxClass,
+  updateTaxClass,
+  deleteTaxClass,
   type Logger,
   type Runtime,
   type TenantContext,
@@ -634,6 +641,52 @@ export const storeRouter = os.router({
         .handler(({ context, input }) => {
           if (!context.tenantCtx) throw new Error("Missing tenant context");
           return updateCodMethod(context.rt, context.tenantCtx, input);
+        }),
+    },
+    taxSettings: {
+      get: os.admin.taxSettings.get
+        .use(requireAdmin)
+        .use(requirePermission("settings.read"))
+        .handler(({ context }) => {
+          if (!context.tenantCtx) throw new Error("Missing tenant context");
+          return getTaxSettings(context.rt, context.tenantCtx);
+        }),
+      update: os.admin.taxSettings.update
+        .use(requireAdmin)
+        .use(requirePermission("taxes.manage"))
+        .handler(({ context, input }) => {
+          if (!context.tenantCtx) throw new Error("Missing tenant context");
+          return updateTaxSettings(context.rt, context.tenantCtx, input);
+        }),
+    },
+    taxClasses: {
+      list: os.admin.taxClasses.list
+        .use(requireAdmin)
+        .use(requirePermission("settings.read"))
+        .handler(({ context }) => {
+          if (!context.tenantCtx) throw new Error("Missing tenant context");
+          return listTaxClasses(context.rt, context.tenantCtx);
+        }),
+      create: os.admin.taxClasses.create
+        .use(requireAdmin)
+        .use(requirePermission("taxes.manage"))
+        .handler(({ context, input }) => {
+          if (!context.tenantCtx) throw new Error("Missing tenant context");
+          return createTaxClass(context.rt, context.tenantCtx, input);
+        }),
+      update: os.admin.taxClasses.update
+        .use(requireAdmin)
+        .use(requirePermission("taxes.manage"))
+        .handler(({ context, input }) => {
+          if (!context.tenantCtx) throw new Error("Missing tenant context");
+          return updateTaxClass(context.rt, context.tenantCtx, input);
+        }),
+      delete: os.admin.taxClasses.delete
+        .use(requireAdmin)
+        .use(requirePermission("taxes.manage"))
+        .handler(({ context, input }) => {
+          if (!context.tenantCtx) throw new Error("Missing tenant context");
+          return deleteTaxClass(context.rt, context.tenantCtx, input.id);
         }),
     },
     featureFlags: {
@@ -1686,17 +1739,24 @@ export const storeRouter = os.router({
     shipping: {
       get: os.admin.shipping.get
         .use(requireAdmin)
-        .use(requirePermission("settings.write"))
+        .use(requirePermission("settings.read"))
         .handler(({ context }) => {
           if (!context.tenantCtx) throw new Error("Missing tenant context");
           return getAdminShippingSettings(context.rt._db.db, context.tenantCtx.tenantId);
         }),
       update: os.admin.shipping.update
         .use(requireAdmin)
-        .use(requirePermission("settings.write"))
+        .use(requirePermission("shipping.manage"))
         .handler(({ context, input }) => {
           if (!context.tenantCtx) throw new Error("Missing tenant context");
           return updateAdminShippingSettings(context.rt._db.db, context.tenantCtx.tenantId, input);
+        }),
+      preview: os.admin.shipping.preview
+        .use(requireAdmin)
+        .use(requirePermission("shipping.manage"))
+        .handler(({ context, input }) => {
+          if (!context.tenantCtx) throw new Error("Missing tenant context");
+          return previewShippingRate(context.rt, context.tenantCtx, input);
         }),
     },
     storefront: {

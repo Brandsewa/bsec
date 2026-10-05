@@ -1294,6 +1294,104 @@ export const RequestPlanChangeInput = z.object({
 });
 export type RequestPlanChangeInput = z.infer<typeof RequestPlanChangeInput>;
 
+// --- Settings Phase 6 Tax & Shipping Schemas (Slice 6A, 6B, 6C) ---
+export const TaxClassItem = z.object({
+  id: z.string().uuid(),
+  name: z.string().min(1).max(60),
+  rateBps: z.number().int().refine((val) => [0, 250, 300, 500, 1200, 1800, 2800].includes(val), {
+    message: "Rate must be one of the standard GST slabs: 0%, 2.5%, 3%, 5%, 12%, 18%, 28%",
+  }),
+  defaultHsn: z
+    .string()
+    .regex(/^[0-9]{4}([0-9]{2}([0-9]{2})?)?$/, "HSN must be 4, 6, or 8 digits")
+    .nullable()
+    .optional(),
+  isDefault: z.boolean(),
+  createdAt: z.string(),
+  updatedAt: z.string(),
+});
+export type TaxClassItem = z.infer<typeof TaxClassItem>;
+
+export const CreateTaxClassInput = z.object({
+  name: z.string().min(1).max(60),
+  rateBps: z.number().int().refine((val) => [0, 250, 300, 500, 1200, 1800, 2800].includes(val), {
+    message: "Rate must be one of the standard GST slabs: 0%, 2.5%, 3%, 5%, 12%, 18%, 28%",
+  }),
+  defaultHsn: z
+    .string()
+    .regex(/^[0-9]{4}([0-9]{2}([0-9]{2})?)?$/, "HSN must be 4, 6, or 8 digits")
+    .nullable()
+    .optional(),
+  isDefault: z.boolean().optional(),
+});
+export type CreateTaxClassInput = z.infer<typeof CreateTaxClassInput>;
+
+export const UpdateTaxClassInput = z.object({
+  id: z.string().uuid(),
+  name: z.string().min(1).max(60).optional(),
+  rateBps: z
+    .number()
+    .int()
+    .refine((val) => [0, 250, 300, 500, 1200, 1800, 2800].includes(val), {
+      message: "Rate must be one of the standard GST slabs",
+    })
+    .optional(),
+  defaultHsn: z
+    .string()
+    .regex(/^[0-9]{4}([0-9]{2}([0-9]{2})?)?$/, "HSN must be 4, 6, or 8 digits")
+    .nullable()
+    .optional(),
+  isDefault: z.boolean().optional(),
+});
+export type UpdateTaxClassInput = z.infer<typeof UpdateTaxClassInput>;
+
+export const TaxSettings = z.object({
+  taxCollection: z.boolean(),
+  gstin: z.string().nullable(),
+  sellerState: z.string().nullable(),
+  pricesIncludeTax: z.boolean(),
+  shippingTax: z.enum(["highest_line_rate", "none"]),
+  defaultTaxClassId: z.string().uuid().nullable().optional(),
+  classes: z.array(TaxClassItem),
+  version: z.number().int(),
+});
+export type TaxSettings = z.infer<typeof TaxSettings>;
+
+export const UpdateTaxSettingsInput = z.object({
+  taxCollection: z.boolean().optional(),
+  gstin: z.string().nullable().optional(),
+  sellerState: z.string().nullable().optional(),
+  pricesIncludeTax: z.boolean().optional(),
+  shippingTax: z.enum(["highest_line_rate", "none"]).optional(),
+  defaultTaxClassId: z.string().uuid().nullable().optional(),
+  expectedVersion: z.number().int().optional(),
+});
+export type UpdateTaxSettingsInput = z.infer<typeof UpdateTaxSettingsInput>;
+
+export const ShippingPreviewInput = z.object({
+  subtotalPaise: z.number().int().min(0),
+  destinationState: z.string().optional(),
+  destinationPincode: z.string().optional(),
+});
+export type ShippingPreviewInput = z.infer<typeof ShippingPreviewInput>;
+
+export const ShippingPreviewRateResult = z.object({
+  method: z.string(),
+  title: z.string(),
+  amountPaise: z.number().int(),
+  isFree: z.boolean(),
+  estimatedDays: z.string(),
+  applicable: z.boolean(),
+  trace: z.string(),
+});
+export type ShippingPreviewRateResult = z.infer<typeof ShippingPreviewRateResult>;
+
+export const ShippingPreviewResult = z.object({
+  zoneName: z.string(),
+  rates: z.array(ShippingPreviewRateResult),
+});
+export type ShippingPreviewResult = z.infer<typeof ShippingPreviewResult>;
+
 
 export const adminContract = {
   support: {
@@ -1449,6 +1547,32 @@ export const adminContract = {
       .input(UpdateCustomerAccountSettingsInput)
       .output(CustomerAccountSettings),
   },
+  taxSettings: {
+    get: oc
+      .route({ method: "GET", path: "/admin/settings/taxes" })
+      .output(TaxSettings),
+    update: oc
+      .route({ method: "PUT", path: "/admin/settings/taxes" })
+      .input(UpdateTaxSettingsInput)
+      .output(TaxSettings),
+  },
+  taxClasses: {
+    list: oc
+      .route({ method: "GET", path: "/admin/settings/taxes/classes" })
+      .output(z.array(TaxClassItem)),
+    create: oc
+      .route({ method: "POST", path: "/admin/settings/taxes/classes" })
+      .input(CreateTaxClassInput)
+      .output(TaxClassItem),
+    update: oc
+      .route({ method: "PATCH", path: "/admin/settings/taxes/classes/{id}" })
+      .input(UpdateTaxClassInput)
+      .output(TaxClassItem),
+    delete: oc
+      .route({ method: "DELETE", path: "/admin/settings/taxes/classes/{id}" })
+      .input(z.object({ id: z.string().uuid() }))
+      .output(z.object({ ok: z.literal(true) })),
+  },
   featureFlags: {
     list: oc
       .route({ method: "GET", path: "/admin/feature-flags" })
@@ -1504,6 +1628,8 @@ export const adminContract = {
           isFeatured: z.boolean().default(false),
           priceOnRequest: z.boolean().default(false),
           returnable: z.boolean().default(true),
+          taxClassId: z.string().uuid().nullable().optional(),
+          hsn: z.string().nullable().optional(),
           seo: z.unknown().optional(),
           primaryCategoryId: z.string().uuid().optional(),
           extraCategoryIds: z.array(z.string().uuid()).optional(),
@@ -1554,6 +1680,8 @@ export const adminContract = {
           isFeatured: z.boolean().optional(),
           priceOnRequest: z.boolean().optional(),
           returnable: z.boolean().optional(),
+          taxClassId: z.string().uuid().nullable().optional(),
+          hsn: z.string().nullable().optional(),
           seo: z.unknown().optional(),
           primaryCategoryId: z.string().uuid().nullable().optional(),
           extraCategoryIds: z.array(z.string().uuid()).optional(),
@@ -3172,6 +3300,10 @@ export const adminContract = {
           message: z.string(),
         }),
       ),
+    preview: oc
+      .route({ method: "POST", path: "/admin/settings/shipping/preview" })
+      .input(ShippingPreviewInput)
+      .output(ShippingPreviewResult),
   },
 
   // --- Storefront mode: live / coming soon / maintenance / password ---

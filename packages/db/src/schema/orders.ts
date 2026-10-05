@@ -83,6 +83,8 @@ export const orderItems = tenantTable(
     shipsOn: date("ships_on"),
     discountAmount: bigint("discount_amount", { mode: "number" }).notNull().default(0),
     taxRateBps: integer("tax_rate_bps").notNull().default(0),
+    taxableValuePaise: integer("taxable_value_paise"),
+    taxPaise: integer("tax_paise"),
     cgst: bigint("cgst", { mode: "number" }).notNull().default(0),
     sgst: bigint("sgst", { mode: "number" }).notNull().default(0),
     igst: bigint("igst", { mode: "number" }).notNull().default(0),

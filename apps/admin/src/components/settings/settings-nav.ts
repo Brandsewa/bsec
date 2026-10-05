@@ -49,8 +49,8 @@ export const SETTINGS_NAV_GROUPS: readonly SettingsNavGroup[] = [
       { id: "checkout", label: "Checkout", href: "/settings/checkout", description: "Fields, account options, recovery", icon: ShoppingCart, perm: "checkout.manage" },
       { id: "customer-accounts", label: "Customer accounts", href: "/settings/customer-accounts", description: "Sign-in methods, returns, portal", icon: UserCheck, perm: "checkout.manage" },
       { id: "payments", label: "Payments", href: "/settings/payments", description: "COD and Razorpay", icon: CreditCard, perm: "payments.manage" },
-      { id: "shipping", label: "Shipping", href: "/settings/shipping", description: "Zones, rates, free delivery", icon: Truck, perm: "settings.write" },
-      { id: "taxes", label: "Taxes", href: "/settings/taxes", description: "GST and place of supply", icon: Landmark, perm: "settings.write" },
+      { id: "shipping", label: "Shipping", href: "/settings/shipping", description: "Zones, rates, free delivery", icon: Truck, perm: "shipping.manage" },
+      { id: "taxes", label: "Taxes", href: "/settings/taxes", description: "GST and place of supply", icon: Landmark, perm: "taxes.manage" },
     ],
   },
   {

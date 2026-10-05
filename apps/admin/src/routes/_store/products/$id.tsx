@@ -86,10 +86,12 @@ function ProductEditor({ product, go }: { product: ProductDetailData; go: (to: s
   const categoriesQuery = useQuery(orpc.admin.categories.list.queryOptions({ input: { status: "all" } }));
   const brandsQuery = useQuery(orpc.admin.brands.list.queryOptions());
   const collectionsQuery = useQuery(orpc.admin.collections.list.queryOptions({ input: { status: "all" } }));
+  const taxClassesQuery = useQuery(orpc.admin.taxClasses.list.queryOptions({}));
 
   const categories = categoriesQuery.data ?? [];
   const brands = brandsQuery.data ?? [];
   const collections = collectionsQuery.data ?? [];
+  const taxClasses = taxClassesQuery.data ?? [];
 
   // Form State
   const [title, setTitle] = useState(product.title);
@@ -102,6 +104,8 @@ function ProductEditor({ product, go }: { product: ProductDetailData; go: (to: s
   const [priceOnRequest, setPriceOnRequest] = useState(Boolean(product.priceOnRequest));
   const [returnable, setReturnable] = useState(product.returnable ?? true);
   const [isFeatured, setIsFeatured] = useState(product.isFeatured ?? false);
+  const [taxClassId, setTaxClassId] = useState<string>(product.taxClassId ?? "");
+  const [hsn, setHsn] = useState<string>(product.hsn ?? "");
 
   // Organization
   const [primaryCategoryId, setPrimaryCategoryId] = useState<string>(product.primaryCategoryId ?? "");
@@ -178,6 +182,8 @@ function ProductEditor({ product, go }: { product: ProductDetailData; go: (to: s
       priceOnRequest,
       returnable,
       isFeatured,
+      taxClassId: taxClassId || null,
+      hsn: hsn.trim() || null,
       primaryCategoryId: primaryCategoryId || null,
       extraCategoryIds: extraCategoryIds.filter((cid) => cid !== primaryCategoryId),
       brandId: brandId || null,
@@ -601,6 +607,50 @@ function ProductEditor({ product, go }: { product: ProductDetailData; go: (to: s
                   onCheckedChange={(c) => setReturnable(Boolean(c))}
                 />
               </Field>
+            </CardContent>
+          </Card>
+
+          {/* Tax & GST Card */}
+          <Card>
+            <CardHeader>
+              <CardTitle className="text-base font-semibold">Taxes & GST</CardTitle>
+              <CardDescription>Tax slab and HSN code for GST invoicing.</CardDescription>
+            </CardHeader>
+            <CardContent className="grid gap-3">
+              <div className="grid gap-1.5">
+                <FieldLabel htmlFor="tax-class">Tax Class</FieldLabel>
+                <SimpleSelect
+                  id="tax-class"
+                  value={taxClassId}
+                  onChange={(val) => {
+                    setTaxClassId(val);
+                    const selected = taxClasses.find((tc) => tc.id === val);
+                    if (selected?.defaultHsn && !hsn) {
+                      setHsn(selected.defaultHsn);
+                    }
+                  }}
+                  options={[
+                    { value: "", label: "Default store tax class" },
+                    ...taxClasses.map((tc) => ({
+                      value: tc.id,
+                      label: `${tc.name} (${(tc.rateBps / 100).toFixed(tc.rateBps % 100 === 0 ? 0 : 2)}%)`,
+                    })),
+                  ]}
+                />
+              </div>
+              <div className="grid gap-1.5">
+                <FieldLabel htmlFor="product-hsn">HSN Code</FieldLabel>
+                <Input
+                  id="product-hsn"
+                  value={hsn}
+                  onChange={(e) => setHsn(e.target.value)}
+                  placeholder="e.g. 61091000"
+                  maxLength={8}
+                />
+                <p className="text-xs text-muted-foreground">
+                  4, 6 or 8 digit Harmonised System of Nomenclature code.
+                </p>
+              </div>
             </CardContent>
           </Card>
         </div>

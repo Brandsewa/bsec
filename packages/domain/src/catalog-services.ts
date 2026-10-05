@@ -32,6 +32,8 @@ export interface CreateProductInput {
   isFeatured?: boolean | undefined;
   priceOnRequest?: boolean | undefined;
   returnable?: boolean | undefined;
+  taxClassId?: string | null | undefined;
+  hsn?: string | null | undefined;
   seo?: unknown | undefined;
   primaryCategoryId?: string | undefined;
   extraCategoryIds?: string[] | undefined;
@@ -67,6 +69,8 @@ export interface UpdateProductInput {
   isFeatured?: boolean | undefined;
   priceOnRequest?: boolean | undefined;
   returnable?: boolean | undefined;
+  taxClassId?: string | null | undefined;
+  hsn?: string | null | undefined;
   seo?: unknown | undefined;
   primaryCategoryId?: string | null | undefined;
   extraCategoryIds?: string[] | undefined;
@@ -446,6 +450,8 @@ export async function createProduct(
         isFeatured: input.isFeatured ?? false,
         priceOnRequest: input.priceOnRequest ?? false,
         returnable: input.returnable ?? true,
+        taxClassId: input.taxClassId ?? null,
+        hsn: input.hsn ? input.hsn.trim() : null,
         seo: input.seo,
       })
       .returning();
@@ -623,6 +629,8 @@ export async function updateProduct(
     if (input.isFeatured !== undefined) updateValues.isFeatured = input.isFeatured;
     if (input.priceOnRequest !== undefined) updateValues.priceOnRequest = input.priceOnRequest;
     if (input.returnable !== undefined) updateValues.returnable = input.returnable;
+    if (input.taxClassId !== undefined) updateValues.taxClassId = input.taxClassId;
+    if (input.hsn !== undefined) updateValues.hsn = input.hsn ? input.hsn.trim() : null;
     if (input.seo !== undefined) updateValues.seo = input.seo;
 
     const [row] = await tx

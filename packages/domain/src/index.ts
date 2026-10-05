@@ -139,5 +139,8 @@ export * from "./system/platform-mailer.ts";
 export * from "./admin/payment-methods.ts";
 export * from "./admin/plan-and-billing.ts";
 export * from "./platform/plan-change-requests.ts";
+export * from "./admin/tax-settings.ts";
+export * from "./orders/tax-engine.ts";
+export * from "./orders/gst-validation.ts";
 
 

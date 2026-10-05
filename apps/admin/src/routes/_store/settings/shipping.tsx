@@ -139,6 +139,73 @@ function ShippingSettingsForm({ initialData }: { initialData: ShippingSettings }
           ) : null}
         </SettingsSection>
       </form>
+
+      <ShippingPreviewCalculator />
     </SettingsPageFrame>
+  );
+}
+
+function ShippingPreviewCalculator() {
+  const [testSubtotal, setTestSubtotal] = useState("500");
+  const [testPincode, setTestPincode] = useState("");
+  const previewMutation = useMutation(orpc.admin.shipping.preview.mutationOptions());
+
+  const handlePreview = (e: React.FormEvent) => {
+    e.preventDefault();
+    const paise = Math.round((parseFloat(testSubtotal) || 0) * 100);
+    previewMutation.mutate({
+      subtotalPaise: paise,
+      destinationPincode: testPincode.trim() || undefined,
+    });
+  };
+
+  return (
+    <SettingsSection
+      title="Rate preview & calculation trace"
+      description="Simulate cart checkout to test how rates and free shipping rules are evaluated."
+    >
+      <form onSubmit={handlePreview} className="grid gap-3 sm:grid-cols-3 items-end">
+        <Field id="testSubtotal" label="Test order subtotal (₹)">
+          <RupeeInput id="testSubtotal" value={testSubtotal} onChange={setTestSubtotal} min="0" required />
+        </Field>
+        <Field id="testPincode" label="Destination PIN (optional)">
+          <Input
+            id="testPincode"
+            value={testPincode}
+            onChange={(e) => setTestPincode(e.target.value)}
+            placeholder="e.g. 110001"
+            maxLength={6}
+          />
+        </Field>
+        <Button type="submit" variant="secondary" disabled={previewMutation.isPending}>
+          {previewMutation.isPending ? "Calculating…" : "Calculate rates"}
+        </Button>
+      </form>
+
+      {previewMutation.isError ? (
+        <p className="text-xs text-destructive mt-2">{previewMutation.error.message}</p>
+      ) : null}
+
+      {previewMutation.data ? (
+        <div className="mt-3 rounded border border-border bg-muted/40 p-3 text-xs space-y-2">
+          <div className="font-medium text-foreground">
+            Zone: <span className="font-semibold">{previewMutation.data.zoneName}</span>
+          </div>
+          <div className="divide-y divide-border/60">
+            {previewMutation.data.rates.map((r, i) => (
+              <div key={i} className="py-2 first:pt-0 last:pb-0 flex flex-col gap-1">
+                <div className="flex justify-between font-medium text-foreground">
+                  <span>{r.title} ({r.estimatedDays})</span>
+                  <span>{r.isFree ? "Free" : `₹${(r.amountPaise / 100).toFixed(0)}`}</span>
+                </div>
+                <div className="text-muted-foreground text-[11px] font-mono bg-background/60 p-1.5 rounded border border-border/40">
+                  {r.trace}
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      ) : null}
+    </SettingsSection>
   );
 }

@@ -557,6 +557,69 @@ export async function actOnReturn(
           reason: `Return ${ret.number}`,
           initiatedBy: "admin",
         });
+
+        // Slice 6D: Credit notes on refunds (flagged behind settings.gst_v2)
+        // If the order has an issued invoice, issue a credit note linked to original invoice and return
+        const { isFeatureEnabled } = await import("../features.ts");
+        const gstV2Enabled = await isFeatureEnabled(tx, ctx.tenantId, "settings.gst_v2");
+        if (gstV2Enabled) {
+          const [parentInvoice] = await tx
+            .select()
+            .from(schema.invoices)
+            .where(
+              and(
+                eq(schema.invoices.tenantId, ctx.tenantId),
+                eq(schema.invoices.orderId, ret.orderId),
+                eq(schema.invoices.type, "invoice"),
+              ),
+            )
+            .orderBy(schema.invoices.createdAt)
+            .limit(1);
+
+          if (parentInvoice) {
+            // Check if credit note already issued for this return (idempotency)
+            const [existingCn] = await tx
+              .select({ id: schema.invoices.id })
+              .from(schema.invoices)
+              .where(
+                and(
+                  eq(schema.invoices.tenantId, ctx.tenantId),
+                  eq(schema.invoices.returnId, input.id),
+                  eq(schema.invoices.type, "credit_note"),
+                ),
+              )
+              .limit(1);
+
+            if (!existingCn) {
+              const { generateInvoice } = await import("./invoices.ts");
+              const returnedLines = await tx
+                .select({
+                  orderItemId: schema.returnItems.orderItemId,
+                  quantity: schema.returnItems.quantity,
+                })
+                .from(schema.returnItems)
+                .where(
+                  and(
+                    eq(schema.returnItems.tenantId, ctx.tenantId),
+                    eq(schema.returnItems.returnId, input.id),
+                  ),
+                );
+
+              await generateInvoice(
+                txRt,
+                ctx,
+                {
+                  orderId: ret.orderId,
+                  type: "credit_note",
+                  returnId: input.id,
+                  parentInvoiceId: parentInvoice.id,
+                  creditLines: returnedLines,
+                },
+                tx,
+              );
+            }
+          }
+        }
         break;
       }
       case "replace": {

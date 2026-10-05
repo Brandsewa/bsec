@@ -36,6 +36,8 @@ import {
 import { setMarketingConsent } from "../customers/consent.ts";
 import { trackSoftQuotaUsage } from "../system/quotas.ts";
 import { isCheckoutAllowed } from "../system/tenant-lifecycle.ts";
+import { calculateTax } from "./tax-engine.ts";
+import { resolveTaxClass } from "../admin/tax-settings.ts";
 
 export interface PlaceOrderInput {
   cartToken: string;
@@ -161,6 +163,7 @@ export async function placeOrder(
       .select({
         checkout: schema.storeSettings.checkout,
         orderSettings: schema.storeSettings.orderSettings,
+        address: schema.storeSettings.address,
       })
       .from(schema.storeSettings)
       .where(eq(schema.storeSettings.tenantId, tenantId))
@@ -235,6 +238,8 @@ export async function placeOrder(
         preorderEnabled: variants.preorderEnabled,
         preorderShipsOn: variants.preorderShipsOn,
         priceOnRequest: products.priceOnRequest,
+        taxClassId: products.taxClassId,
+        hsn: products.hsn,
       })
       .from(variants)
       .innerJoin(
@@ -399,7 +404,64 @@ export async function placeOrder(
       );
     }
 
-    // 6. Insert Order
+    // 6. Tax calculation & snapshotting (Settings Rebuild Phase 6 / gst_v2)
+    const gstV2Enabled = await isFeatureEnabled(tx, tenantId, "settings.gst_v2");
+    const rawTaxConfig = ((stRow?.checkout ?? {}) as Record<string, unknown>).tax as Record<string, unknown> | undefined;
+    const sellerState = (rawTaxConfig?.sellerState as string | undefined) ?? ((stRow?.address as { state?: string } | null | undefined)?.state);
+    const destinationState = input.state?.trim();
+
+    if (gstV2Enabled) {
+      if (!sellerState || !sellerState.trim()) {
+        throw new Error("Bad Request: Seller state is missing. Please configure your registered state in Settings > Taxes.");
+      }
+      if (!destinationState) {
+        throw new Error("Bad Request: Shipping destination state is required to calculate GST.");
+      }
+    }
+
+    const lineDiscounts = allocateDiscount(cart.items.map((it) => it.lineTotal), discountTotal);
+    
+    // Resolve tax classes for items if gst_v2 is active
+    interface ItemTaxResolved {
+      hsn: string | null;
+      rateBps: number;
+    }
+    const itemTaxInfo: ItemTaxResolved[] = [];
+    if (gstV2Enabled) {
+      for (const it of cart.items) {
+        const v = variantMap.get(it.variantId);
+        const resolved = await resolveTaxClass(tx, tenantId, v?.taxClassId);
+        itemTaxInfo.push({
+          hsn: v?.hsn ?? resolved.defaultHsn ?? null,
+          rateBps: resolved.rateBps,
+        });
+      }
+    }
+
+    const taxCalc = gstV2Enabled
+      ? calculateTax({
+          lines: cart.items.map((it, idx) => {
+            const taxInfo = itemTaxInfo[idx];
+            return {
+              quantity: it.quantity,
+              unitPrice: it.unitPriceSnapshot,
+              discountAmount: lineDiscounts[idx] ?? 0,
+              taxRateBps: taxInfo?.rateBps ?? 1800,
+              hsn: taxInfo?.hsn ?? null,
+            };
+          }),
+          shippingTotal,
+          shippingTaxMode: rawTaxConfig?.shippingTax === "none" ? "none" : "highest_line_rate",
+          taxCollectionEnabled: typeof rawTaxConfig?.taxCollection === "boolean" ? rawTaxConfig.taxCollection : true,
+          pricesIncludeTax: typeof rawTaxConfig?.pricesIncludeTax === "boolean" ? rawTaxConfig.pricesIncludeTax : true,
+          sellerState,
+          destinationState,
+        })
+      : null;
+
+    const orderTaxTotal = taxCalc ? taxCalc.totalTax : 0;
+
+    // 6b. Insert Order
     await tx.insert(orders).values({
       id: orderId,
       tenantId,
@@ -414,6 +476,7 @@ export async function placeOrder(
       subtotal,
       discountTotal,
       shippingTotal,
+      taxTotal: orderTaxTotal,
       codFee,
       grandTotal,
       shipsOn: orderShipsOn,
@@ -441,13 +504,14 @@ export async function placeOrder(
       idempotencyKey: input.idempotencyKey ?? null,
     });
 
-    // 7. Insert Order Items (a goods discount is split across the lines in proportion to their totals)
-    const lineDiscounts = allocateDiscount(cart.items.map((it) => it.lineTotal), discountTotal);
+    // 7. Insert Order Items (with snapshotted tax if gst_v2)
     for (const [index, it] of cart.items.entries()) {
       const v = variantMap.get(it.variantId);
       const lineShipsOn = v?.preorderEnabled && v.preorderShipsOn
         ? (typeof v.preorderShipsOn === "string" ? v.preorderShipsOn : (v.preorderShipsOn as Date).toISOString().slice(0, 10))
         : null;
+
+      const lineTax = taxCalc?.lines[index];
 
       await tx.insert(orderItems).values({
         discountAmount: lineDiscounts[index] ?? 0,
@@ -457,6 +521,13 @@ export async function placeOrder(
         productTitle: it.product.title,
         variantTitle: it.variant.title,
         sku: it.variant.sku,
+        hsn: lineTax?.hsn ?? null,
+        taxRateBps: lineTax?.taxRateBps ?? 0,
+        taxableValuePaise: lineTax?.taxableAmount ?? null,
+        taxPaise: lineTax?.totalTax ?? null,
+        cgst: lineTax?.cgst ?? 0,
+        sgst: lineTax?.sgst ?? 0,
+        igst: lineTax?.igst ?? 0,
         quantity: it.quantity,
         unitPrice: it.unitPriceSnapshot,
         total: it.lineTotal,

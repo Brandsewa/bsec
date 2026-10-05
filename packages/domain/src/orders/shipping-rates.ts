@@ -1,8 +1,14 @@
 import { and, eq, isNotNull, min, sql } from "drizzle-orm";
-import { type Db, shippingZones, shippingRates, withTenant } from "@bs/db";
-import type { ShippingSettings, UpdateShippingInput } from "@bs/contracts";
+import { type Db, schema, shippingZones, shippingRates, withTenant } from "@bs/db";
+import type {
+  ShippingSettings,
+  UpdateShippingInput,
+  ShippingPreviewInput,
+  ShippingPreviewResult,
+} from "@bs/contracts";
 import { assertPermission, type TenantContext } from "../context.ts";
 import type { Runtime } from "../runtime.ts";
+import { invalidateCache } from "../cache-invalidation.ts";
 
 export type ShippingMethod = "standard" | "express" | string;
 
@@ -163,7 +169,7 @@ export async function getAdminShippingSettings(
   const db = "service" in rtOrDb ? rtOrDb._db.db : rtOrDb;
   const tenantId = typeof ctxOrTenantId === "string" ? ctxOrTenantId : ctxOrTenantId.tenantId;
   if (typeof ctxOrTenantId !== "string") {
-    assertPermission(ctxOrTenantId, "settings.write");
+    assertPermission(ctxOrTenantId, "settings.read");
   }
   return withTenant(db, tenantId, async (tx) => {
     let zones = await tx
@@ -222,10 +228,11 @@ export async function updateAdminShippingSettings(
 ): Promise<{ success: boolean; message: string }> {
   const db = "service" in rtOrDb ? rtOrDb._db.db : rtOrDb;
   const tenantId = typeof ctxOrTenantId === "string" ? ctxOrTenantId : ctxOrTenantId.tenantId;
-  if (typeof ctxOrTenantId !== "string") {
-    assertPermission(ctxOrTenantId, "settings.write");
+  const ctx = typeof ctxOrTenantId === "string" ? null : ctxOrTenantId;
+  if (ctx) {
+    assertPermission(ctx, "shipping.manage");
   }
-  return withTenant(db, tenantId, async (tx) => {
+  const result = await withTenant(db, tenantId, async (tx) => {
     let [defaultZone] = await tx
       .select()
       .from(shippingZones)
@@ -331,9 +338,86 @@ export async function updateAdminShippingSettings(
       });
     }
 
+    // Audit log
+    await tx.insert(schema.auditLogs).values({
+      tenantId,
+      actorType: ctx && ctx.actor.type === "staff" ? "staff" : "system",
+      actorId: ctx && ctx.actor.type === "staff" ? ctx.actor.userId : null,
+      action: "shipping.update",
+      targetType: "shipping_settings",
+      targetId: defaultZone.id,
+      diff: {
+        after: {
+          zoneName: input.zoneName,
+          standardRatePaise: input.standardRatePaise,
+          expressRatePaise: input.expressRatePaise,
+          freeShippingThresholdPaise: input.freeShippingThresholdPaise ?? null,
+        },
+      },
+    });
+
     return {
       success: true,
       message: "Shipping settings updated successfully",
+    };
+  });
+
+  if (ctx && "service" in rtOrDb) {
+    await invalidateCache(rtOrDb, ctx, { type: "store_or_seo_updated" });
+  }
+
+  return result;
+}
+
+/**
+ * Admin preview: evaluates shipping rates against a hypothetical subtotal and destination,
+ * returning the exact rate list and human-readable explanation trace.
+ */
+export async function previewShippingRate(
+  rtOrDb: Runtime | Db,
+  ctxOrTenantId: TenantContext | string,
+  input: ShippingPreviewInput,
+): Promise<ShippingPreviewResult> {
+  const db = "service" in rtOrDb ? rtOrDb._db.db : rtOrDb;
+  const tenantId = typeof ctxOrTenantId === "string" ? ctxOrTenantId : ctxOrTenantId.tenantId;
+  if (typeof ctxOrTenantId !== "string") {
+    assertPermission(ctxOrTenantId, "settings.read");
+  }
+
+  return withTenant(db, tenantId, async (tx) => {
+    const rawRates = await getTenantShippingRates(tx, tenantId, input.subtotalPaise);
+    const [zone] = await tx
+      .select({ name: shippingZones.name })
+      .from(shippingZones)
+      .where(and(eq(shippingZones.tenantId, tenantId), eq(shippingZones.isDefault, true)))
+      .limit(1);
+
+    const zoneName = zone?.name ?? "Domestic (India)";
+
+    const previewRates = rawRates.map((r) => {
+      let trace = `Zone: ${zoneName}; Rate: ${r.title} ₹${(r.amount / 100).toFixed(0)}`;
+      if (r.isFree) {
+        trace += ` (Free delivery applied)`;
+      } else if (!r.applicable) {
+        trace += ` (Threshold not reached; rate not offered)`;
+      } else {
+        trace += ` (Standard flat fee)`;
+      }
+
+      return {
+        method: r.method,
+        title: r.title,
+        amountPaise: r.amount,
+        isFree: r.isFree,
+        estimatedDays: r.estimatedDays,
+        applicable: r.applicable,
+        trace,
+      };
+    });
+
+    return {
+      zoneName,
+      rates: previewRates,
     };
   });
 }

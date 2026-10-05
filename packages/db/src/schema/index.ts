@@ -31,3 +31,4 @@ export * from "./saas.ts";
 export * from "./platform-email.ts";
 export * from "./quotes.ts";
 export * from "./reviews.ts";
+export * from "./tax.ts";
