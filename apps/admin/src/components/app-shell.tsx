@@ -94,11 +94,11 @@ export function AppShell({
         <SidebarInset className="min-w-0 bg-dash-canvas">
           {banner}
           <header className="flex h-12 items-center justify-between gap-2 border-b border-border bg-background px-3 md:px-4">
-            <div className="flex items-center gap-2">
+            <div className="flex min-w-0 items-center gap-2">
               <SidebarTrigger aria-label="Toggle sidebar" />
-              <span className="md:hidden">{brand}</span>
+              <span className="min-w-0 max-w-[7rem] truncate md:hidden">{brand}</span>
             </div>
-            <div className="ml-auto flex items-center gap-2">{topRight}</div>
+            <div className="ml-auto flex min-w-0 shrink-0 items-center gap-2">{topRight}</div>
           </header>
           <main className="min-w-0 flex-1">{children}</main>
         </SidebarInset>

@@ -19,7 +19,8 @@ async function signIn(page: Page, email = EMAIL, password = PASSWORD) {
 
 async function openDemoStore(page: Page) {
   await expect(page.getByLabel("Switch store")).toBeVisible();
-  await page.getByLabel("Switch store").selectOption({ label: "Demo Store" });
+  await page.getByLabel("Switch store").click();
+  await page.getByRole("option", { name: "Demo Store" }).click();
   await expect(page.getByText("Demo Store").first()).toBeVisible();
 }
 

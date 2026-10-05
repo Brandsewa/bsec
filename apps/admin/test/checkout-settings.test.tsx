@@ -53,8 +53,9 @@ describe("Checkout Settings Page (/settings/checkout)", () => {
     expect(html).toContain("Checkout settings");
     expect(html).toContain("Allow guest checkout");
     expect(html).toContain("Require phone number at checkout");
-    expect(html).toContain("Marketing consent");
+    expect(html).toContain("Consent at checkout");
     expect(html).toContain("Email marketing opt-in checkbox");
+    expect(html).toContain("Require agreement to Terms");
     expect(html).toContain("Abandoned checkouts");
     expect(html).toContain("Enable abandoned checkout recovery emails");
     expect(html).toContain("Email delivery notice");

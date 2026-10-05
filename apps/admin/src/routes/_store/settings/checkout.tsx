@@ -1,7 +1,7 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useState, type FormEvent } from "react";
-import { AlertCircle, AlertTriangle, Clock, Mail, Phone, UserCheck } from "lucide-react";
+import { AlertCircle, AlertTriangle, Clock, FileText, Mail, Phone, UserCheck } from "lucide-react";
 import { EmptyState, FormSkeleton, PageSkeleton, toast } from "@bs/ui";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -29,6 +29,7 @@ interface CheckoutFormState {
   companyName: "hidden" | "optional";
   marketingEmailEnabled: boolean;
   marketingEmailLabel: string;
+  termsConsentEnabled: boolean;
   recoveryEnabled: boolean;
   detectAfterMinutes: number;
 }
@@ -79,6 +80,7 @@ function CheckoutSettingsForm({
     companyName: initial.companyName,
     marketingEmailEnabled: initial.marketingEmail.enabled,
     marketingEmailLabel: initial.marketingEmail.label,
+    termsConsentEnabled: initial.termsConsent?.enabled === true,
     recoveryEnabled: initial.abandoned.recoveryEnabled,
     detectAfterMinutes: initial.abandoned.detectAfterMinutes,
   });
@@ -91,6 +93,7 @@ function CheckoutSettingsForm({
     form.companyName !== initial.companyName ||
     form.marketingEmailEnabled !== initial.marketingEmail.enabled ||
     form.marketingEmailLabel !== initial.marketingEmail.label ||
+    form.termsConsentEnabled !== (initial.termsConsent?.enabled === true) ||
     form.recoveryEnabled !== initial.abandoned.recoveryEnabled ||
     form.detectAfterMinutes !== initial.abandoned.detectAfterMinutes;
 
@@ -118,6 +121,7 @@ function CheckoutSettingsForm({
         enabled: form.marketingEmailEnabled,
         label: form.marketingEmailLabel,
       },
+      termsConsent: { enabled: form.termsConsentEnabled },
       abandoned: {
         recoveryEnabled: form.recoveryEnabled,
         detectAfterMinutes: form.detectAfterMinutes,
@@ -230,10 +234,27 @@ function CheckoutSettingsForm({
         </SettingsSection>
 
         <SettingsSection
-          title="Marketing consent"
-          description="Capture email marketing permissions at checkout in compliance with data privacy regulations."
+          title="Consent at checkout"
+          description="Terms agreement and optional email marketing permission, shown above the Place Order button."
         >
           <div className="space-y-4">
+            <div className="flex items-center justify-between gap-4 rounded-lg border border-border p-4">
+              <div className="space-y-0.5">
+                <label htmlFor="terms-consent" className="text-sm font-medium text-foreground cursor-pointer flex items-center gap-2">
+                  <FileText className="h-4 w-4 text-muted-foreground" />
+                  Require agreement to Terms
+                </label>
+                <p className="text-xs text-muted-foreground">
+                  Customers must tick a box agreeing to your Terms and Conditions, and to receive order emails, before they can place an order. Publish your Terms policy first (Settings, Policies).
+                </p>
+              </div>
+              <Switch
+                id="terms-consent"
+                checked={form.termsConsentEnabled}
+                onCheckedChange={(checked) => setForm((prev) => ({ ...prev, termsConsentEnabled: Boolean(checked) }))}
+              />
+            </div>
+
             <div className="flex items-center justify-between gap-4 rounded-lg border border-border p-4">
               <div className="space-y-0.5">
                 <label htmlFor="marketing-enabled" className="text-sm font-medium text-foreground cursor-pointer flex items-center gap-2">
