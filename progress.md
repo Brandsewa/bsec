@@ -142,7 +142,6 @@ Plan: `docs/SETTINGS-REBUILD-PLAN.md`, `SETTINGS-REMAINING-PHASES`; records `202
 
 One line per piece of work that is started and not merged. Add yours before you start, remove it when merged or abandoned (`AGENTS.md` section 6). Format: `agent · branch · area · since · one-line goal`.
 
-- claude · `design/marketing-landing` · web marketing page · 2026-10-05 · landing redesign (Home 1 Block-Print Bazaar, Home 2 Bahi-Khata) with a testing-only design switcher; not merged, owner comparing locally
 
 ## Returns & Exchanges (Manual Review & Portal) — Complete (2026-10-02)
 

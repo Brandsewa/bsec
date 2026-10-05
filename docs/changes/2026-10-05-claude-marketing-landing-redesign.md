@@ -2,8 +2,8 @@
 
 - **Date:** 2026-10-05
 - **Agent:** claude
-- **Branch:** `design/marketing-landing` (not merged yet)
-- **Area:** web (marketing page), docs
+- **Branch:** `design/marketing-landing` (merged to main on the owner's instruction, 2026-10-05)
+- **Area:** web (marketing page and /signup look), docs
 - **Type:** feature (design)
 - **Supersedes:** none
 
@@ -12,7 +12,10 @@ Redesigned the bcom.si marketing landing page as **"Beam"**: a near-black hero w
 
 Beam is an original build in the style of modern dark developer-tool heroes (studied from public pages): no third-party code, copy, logo, screenshots or assets.
 
-## What the page is
+## What the page is (final, after owner iterations)
+- **Hero (centered):** headline "Launch your Idea Today", one sentence, store-name field with the warm-glow pill, then a **module orbit**: eight modules (Orders, Inventory, Customers, Sales, Finance, Shipping, Payments, Support) as planets on three tilted orbits around a plain glowing core, drifting slowly. Hover, focus or tap freezes the system and opens a detail card that says only what is live today, with Live / Live more coming / Coming soon badges (PRODUCT.md). Sparks (up to three, with short tails) travel between planets to suggest orders moving through the modules. A deep-blue glow sits behind the system. The sample order window moved below "Everything here works today." and fades out at the bottom. The header wordmark reads "Bs Commerce".
+- **Form fields:** no hard focus ring; fields glow like the buttons. **/signup** (all five steps and the success screen) is restyled in the Beam look; its logic is unchanged.
+- **Earlier hero description (superseded by the above):**
 - **Hero:** left-aligned headline, one sentence, store-name field with a "See it in action" warm-glow pill (the existing `/signup` flow), the lit order-board window with sample orders dropping in (labelled "Sample data"). Violet smoke is a small WebGL domain-warped noise shader lit along the beam axis (CSS haze underneath as fallback), plus a dot grid that only exists in the light, grain, rising light motes (small canvas), and a violet bloom and wash at the window edge. The earlier hard white beam line, cone, soft beam column and white-hot flare were removed at the owner's request.
 - **Below the hero (dark, minimal):** strip of what bcom.si does; "what works today" panels (COD, GST invoices, no-code theme builder, orders/returns/quotes/pre-orders, customers and segments, shipping rates) with example UI; a Coming-soon row; theme previews; steps; pricing from the live `plans` table (fallback = migration 0012 values; bullets derived from each plan's limits); every-plan-includes; FAQ; closing field; footer.
 - **Fonts:** Geist via `next/font/google` (self-hosted at build time; no request from visitors' browsers to Google).
@@ -41,3 +44,8 @@ Truthful claims with "Coming soon" badges (owner decision): Razorpay/UPI, Shipro
 
 ## Definition of done
 - [x] Typecheck, lint, detector, docs check. [ ] Full gate and Lighthouse (not run). [x] Change record. No secrets; `.env.local` is gitignored; `.claude/launch.json` local edit and `apps/web/.impeccable/` are not committed.
+
+## Known gaps at merge
+- /signup plan cards still list features that are not live ("Shiprocket automation", "Custom Domains"); the owner will update the copy.
+- The orbit and the signup page were checked at desktop width only (not on a phone or by touch); no Lighthouse, screen-reader or cross-browser pass.
+- Signup logic was not changed; the pre-existing `/signup` `generateMetadata` dev error is untouched.
