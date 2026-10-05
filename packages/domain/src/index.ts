@@ -132,5 +132,6 @@ export * from "./platform/system.ts";
 export * from "./platform/catalog-reads.ts";
 export * from "./platform/email-settings.ts";
 export * from "./system/platform-mailer.ts";
+export * from "./finance/index.ts";
 
 

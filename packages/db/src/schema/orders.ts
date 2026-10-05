@@ -89,6 +89,7 @@ export const orderItems = tenantTable(
     total: bigint("total", { mode: "number" }).notNull(),
     fulfilledQty: integer("fulfilled_qty").notNull().default(0),
     returnedQty: integer("returned_qty").notNull().default(0),
+    costPrice: bigint("cost_price", { mode: "number" }),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().default(sql`now()`),
     updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().default(sql`now()`),
   },

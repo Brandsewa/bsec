@@ -1,7 +1,7 @@
 import { randomUUID } from "node:crypto";
 import { eq, sql } from "drizzle-orm";
 import { schema } from "@bs/db";
-import { hashPassword, STORE_PERMISSIONS } from "@bs/auth";
+import { hashPassword, STORE_PERMISSIONS, SYSTEM_STORE_ROLES } from "@bs/auth";
 import { saasDb, type Runtime } from "../runtime.ts";
 import { tierForPlan } from "./plan-tiers.ts";
 import { buildOwnerInviteUrl, issueOwnerInviteInTx } from "./invite-token.ts";
@@ -209,6 +209,13 @@ export async function provisionTenant(
       name: "store_admin",
       isSystem: true,
       permissions: [...STORE_PERMISSIONS],
+    });
+
+    await tx.insert(schema.roles).values({
+      tenantId,
+      name: "store_finance",
+      isSystem: true,
+      permissions: [...SYSTEM_STORE_ROLES.store_finance],
     });
 
     // Membership: if existing user in self-service, mark invited until invite is accepted

@@ -7,7 +7,7 @@ import type { Runtime } from "./runtime.ts";
  * Every domain service takes ctx first (PLAN §3). The tenant is never taken from the client:
  * it comes from the host (storefront) or session membership + X-Store-Id (admin). Built in M1.
  */
-import { hasPermission, STORE_PERMISSIONS, type StorePermission } from "@bs/auth";
+import { hasPermission, STORE_PERMISSIONS, systemRoleFinancePermissions, type StorePermission } from "@bs/auth";
 
 import { validateSupportSessionToken } from "./platform/support-sessions.ts";
 import { isAdminAccessAllowed, isAdminReadOnly } from "./system/tenant-lifecycle.ts";
@@ -39,13 +39,15 @@ const SETTINGS_CAPABILITY_FAMILIES: readonly StorePermission[] = [
 ];
 
 export const SUPPORT_READ_PERMISSIONS: readonly StorePermission[] = STORE_PERMISSIONS.filter(
-  (p) => p.endsWith(".read") && p !== "settings.read" && p !== "audit.read",
+  (p) => p.endsWith(".read") && p !== "settings.read" && p !== "audit.read" && p !== "finance.read",
 );
 const SUPPORT_WRITE_DENIED: readonly StorePermission[] = [
   "staff.manage",
   "settings.write",
   "exports.run",
   "orders.refund",
+  "finance.read",
+  "finance.write",
   ...SETTINGS_CAPABILITY_FAMILIES,
 ];
 export const SUPPORT_WRITE_PERMISSIONS: readonly StorePermission[] = STORE_PERMISSIONS.filter(
@@ -231,6 +233,9 @@ export async function buildTenantContext(
       row.tenantStatus === "active" ? "live" : (row.tenantStatus as StoreStatus);
 
     let permissions = row.permissions ?? [];
+    // finance.* come from the system role definition, so stores that predate the Finance section keep working.
+    const finance = systemRoleFinancePermissions(row.roleName);
+    if (finance.length > 0) permissions = [...new Set([...permissions, ...finance])];
     if (isAdminReadOnly(row.tenantStatus)) {
       permissions = permissions.filter((p) => p.endsWith(".read"));
     }

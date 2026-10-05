@@ -26,6 +26,9 @@ export const QUEUES = [
   { name: "segments.refresh_counts", options: { retryLimit: 3, retryBackoff: true, retryDelay: 10 } },
   { name: "customers.refresh_metrics", options: { retryLimit: 5, retryBackoff: true, retryDelay: 5 } },
   { name: "customers.import", options: { retryLimit: 3, retryBackoff: true, retryDelay: 10 } },
+  // Finance queues (docs/FINANCE-PLAN.md §3.5)
+  { name: "finance.post", options: { retryLimit: 5, retryBackoff: true, retryDelay: 5 } },
+  { name: "finance.reconcile", options: { retryLimit: 3, retryBackoff: true, retryDelay: 10 } },
 ] as const;
 
 export type QueueName = (typeof QUEUES)[number]["name"];
@@ -53,4 +56,6 @@ export const QUEUE_NAMES = {
   SEGMENTS_REFRESH_COUNTS: "segments.refresh_counts",
   CUSTOMERS_REFRESH_METRICS: "customers.refresh_metrics",
   CUSTOMERS_IMPORT: "customers.import",
+  FINANCE_POST: "finance.post",
+  FINANCE_RECONCILE: "finance.reconcile",
 } as const;

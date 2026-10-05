@@ -167,6 +167,7 @@ export async function placeOrder(
         allowBackorder: variants.allowBackorder,
         preorderEnabled: variants.preorderEnabled,
         preorderShipsOn: variants.preorderShipsOn,
+        costPrice: variants.costPrice,
         priceOnRequest: products.priceOnRequest,
       })
       .from(variants)
@@ -370,6 +371,7 @@ export async function placeOrder(
         unitPrice: it.unitPriceSnapshot,
         total: it.lineTotal,
         shipsOn: lineShipsOn,
+        costPrice: v?.costPrice != null ? Number(v.costPrice) : null,
       });
     }
 
