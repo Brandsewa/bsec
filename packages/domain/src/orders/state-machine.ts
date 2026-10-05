@@ -9,7 +9,7 @@ import {
   QUEUE_NAMES,
 } from "@bs/db";
 import type { Runtime } from "../runtime.ts";
-import { releaseReservation } from "../catalog/inventory-reservations.ts";
+import { releaseReservation, restoreCommittedStock } from "../catalog/inventory-reservations.ts";
 import type { TenantContext } from "../context.ts";
 
 export const ORDER_STATUSES = [
@@ -315,6 +315,16 @@ export async function transitionOrder(
       // A cancelled order must give its reserved stock back, otherwise it keeps blocking real sales.
       if (targetStatus === "cancelled") {
         await releaseReservation(db, ctx.tenantId, { orderId, reason: "cancelled" });
+
+        // Stock that was already taken (COD confirmed, or paid) is still on the shelf: put it back, and let the
+        // books return the cost of those goods (finance.post, plan section 3.4). Nothing shipped, by the guard above.
+        const restored = await restoreCommittedStock(db, ctx.tenantId, { orderId });
+        if (restored.restoredLines > 0) {
+          eventData.stockRestoredUnits = restored.restoredUnits;
+          if (rt._jobs) {
+            await rt._jobs.send(QUEUE_NAMES.FINANCE_POST, { tenantId: ctx.tenantId, kind: "cancel_restock", id: orderId });
+          }
+        }
 
         // ...and any payment that has not been paid yet is void: nothing is due (a COD order would otherwise stay
         // "cod_pending" forever). Paid or authorised money is left alone: refunding is a separate step.
