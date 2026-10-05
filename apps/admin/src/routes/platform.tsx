@@ -1,6 +1,6 @@
 import { Outlet, createFileRoute, useRouterState } from "@tanstack/react-router";
 import { Activity, Building2, Flag, LayoutDashboard } from "lucide-react";
-import { AppShell, PageSkeleton, type NavGroup } from "@bs/ui";
+import { AppShell, PageHeaderSkeleton, type NavGroup } from "@bs/ui";
 
 /**
  * Super Admin shell at /platform (PLAN §6). Talks only to the Platform API container.
@@ -19,7 +19,7 @@ const nav: NavGroup[] = [
 ];
 
 export const Route = createFileRoute("/platform")({
-  pendingComponent: () => <PageSkeleton />,
+  pendingComponent: () => <PageHeaderSkeleton />,
   component: PlatformShell,
 });
 
@@ -30,7 +30,7 @@ function PlatformShell() {
       brand={<span className="text-sm font-semibold">Bs Platform</span>}
       groups={nav}
       activeHref={pathname}
-      banner={<div className="bg-warning-soft px-4 py-1.5 text-xs text-warning">Super Admin · every action is audited</div>}
+      banner={<div className="bg-[var(--warning-soft)] px-4 py-1.5 text-xs text-[var(--warning)] font-medium border-b border-[var(--border)]">Super Admin · every action is audited</div>}
     >
       <Outlet />
     </AppShell>

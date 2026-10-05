@@ -15,8 +15,11 @@ export default {
   },
   create(context) {
     const file = context.filename.replaceAll("\\", "/");
-    // Only apply in apps/*/src/
-    if (!/\/apps\/[^/]+\/src\//.test(file)) return {};
+    // Per Guide Section 0 D1 & Part 5 scope: enforce on apps/admin and apps/superadmin.
+    // Part 6 will migrate customer account and auth in apps/web.
+    if (!/\/apps\/(?:admin|superadmin)\/src\//.test(file)) {
+      return {};
+    }
 
     // Allowlist Appearance preview, theme tokens, theme editors, and color pickers where merchant sets brand hex
     const isAppearancePreview = /appearance|theme-tokens|boot-shell|online-store\/theme|settings\/branding/i.test(file);

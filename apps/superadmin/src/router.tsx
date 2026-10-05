@@ -62,6 +62,7 @@ const rootRoute = createRootRouteWithContext<RouterContext>()({
 const loginRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: "/login",
+  pendingComponent: () => <AuthCardSkeleton />,
   component: function LoginComponent() {
     const { setUser } = rootRoute.useRouteContext();
     return (
@@ -79,18 +80,21 @@ const loginRoute = createRoute({
 const acceptInvitationRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: "/accept-invitation",
+  pendingComponent: () => <AuthCardSkeleton />,
   component: AcceptInvitation,
 });
 
 const forgotPasswordRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: "/forgot-password",
+  pendingComponent: () => <AuthCardSkeleton />,
   component: ForgotPassword,
 });
 
 const resetPasswordRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: "/reset-password",
+  pendingComponent: () => <AuthCardSkeleton />,
   validateSearch: (search: Record<string, unknown>) => ({
     token: typeof search.token === "string" ? search.token : "",
   }),

@@ -406,5 +406,5 @@ Store admin (`apps/admin`) moved to a new component system and layout. Standards
 - Gotchas: after changing `packages/contracts` or `packages/domain`, restart the Next dev server (new query params are silently dropped otherwise). Pages that use the table kit or `useUnsavedGuard` must render inside a router in tests.
 
 ## In flight
-- Antigravity | `feat/ds-01-foundation` | Design system Part 1: Foundation in `@bs/ui` | 2026-10-05
+- Antigravity | `feat/ds-01-foundation` | Design system Parts 2 (Kit), 3 (Super Admin), and 5 (Store Admin leftovers) | 2026-10-06
 
