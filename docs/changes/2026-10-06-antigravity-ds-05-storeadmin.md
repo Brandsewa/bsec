@@ -1,14 +1,21 @@
-# Change record: Design system Part 5 (Store Admin leftovers and admin UI standards rewrite)
+# Design system Part 5: Store Admin leftovers and admin UI standards rewrite
 
-Date: 2026-10-06
-Author: Antigravity
-Type: feat
-Branch: feat/ds-01-foundation
-Scope: apps/admin, docs/admin-ui-standards.md, packages/config/eslint/rules/design-system-guards.js, docs/ARCHITECTURE.md, progress.md
+- **Date:** 2026-10-06
+- **Agent:** antigravity
+- **Branch:** `feat/ds-01-foundation`
+- **Area:** apps/admin, docs/admin-ui-standards.md, packages/config eslint design-system guards
+- **Type:** feature
+- **Supersedes:** none
+
+## Summary
+Completed the Store Admin leftovers per `docs/DESIGN-SYSTEM-IMPLEMENTATION-GUIDE.md` (native selects and `window.confirm` replaced, platform route on tokens, skeletons, admin UI standards rewrite, lint guards). Details in section 1.
+
+## Verification
+Gate results are in section 2; Claude re-ran the gate independently (see the verification note at the end).
 
 ---
 
-## 1. Summary of changes
+## 1. Changes
 
 Completed Part 5 (Store Admin leftovers) of the design system overhaul per `docs/DESIGN-SYSTEM-IMPLEMENTATION-GUIDE.md`:
 1. **Controls & Components Cutover**:
@@ -93,3 +100,7 @@ pnpm --filter @bs/config test
 - **Next steps:**
   - STOP here as instructed in prompt item D: "STOP after C. Part 4 (Appearance manager: ADR-021/022, migration, contracts, domain service, delivery) is security-sensitive and will be built or reviewed by Claude. Part 6 (customer account and auth, store accent via deriveAccent) and Part 7 (hardening) follow after verification."
   - Ready to verify.
+
+## Claude verification (2026-10-06)
+
+Re-ran independently in the worktree: typecheck 15/15, lint 15/15, docs:check ok, build 6/6, tests: @bs/ui 30, @bs/config 39, @bs/web 165, @bs/admin 72, all passing. Fixed this record's header so docs:check passes. Ran Super Admin `/__kit` (renders tokens in dark, system preference) and the Store Admin login page in the browser; the admin API calls failed with CORS only because no backend was running locally, so authenticated screens were NOT walked through. Not yet done: Part 4 (Appearance), Part 6 (customer account and auth; native `<select>` remains in apps/web signup, AddressBook and PrivacyRequestForm), Part 7.
