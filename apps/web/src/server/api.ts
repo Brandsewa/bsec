@@ -243,6 +243,22 @@ import {
   createTaxClass,
   updateTaxClass,
   deleteTaxClass,
+  getNotificationSettings,
+  updateNotificationSettings,
+  listPolicies,
+  getPolicy,
+  savePolicyDraft,
+  publishPolicy,
+  getPolicyVersions,
+  restorePolicyDraft,
+  getPrivacySettings,
+  updatePrivacySettings,
+  listPrivacyRequests,
+  updatePrivacyRequestStatus,
+  executePrivacyExport,
+  executePrivacyErasure,
+  executePrivacyWithdrawConsent,
+  TEST_LOCKED_COOKIE_INVENTORY,
   type Logger,
   type Runtime,
   type TenantContext,
@@ -687,6 +703,123 @@ export const storeRouter = os.router({
         .handler(({ context, input }) => {
           if (!context.tenantCtx) throw new Error("Missing tenant context");
           return deleteTaxClass(context.rt, context.tenantCtx, input.id);
+        }),
+    },
+    notificationSettings: {
+      get: os.admin.notificationSettings.get
+        .use(requireAdmin)
+        .use(requirePermission("settings.read"))
+        .handler(({ context }) => {
+          if (!context.tenantCtx) throw new Error("Missing tenant context");
+          return getNotificationSettings(context.rt, context.tenantCtx);
+        }),
+      update: os.admin.notificationSettings.update
+        .use(requireAdmin)
+        .use(requirePermission("notifications.manage"))
+        .handler(({ context, input }) => {
+          if (!context.tenantCtx) throw new Error("Missing tenant context");
+          return updateNotificationSettings(context.rt, context.tenantCtx, input);
+        }),
+    },
+    policies: {
+      list: os.admin.policies.list
+        .use(requireAdmin)
+        .use(requirePermission("settings.read"))
+        .handler(({ context }) => {
+          if (!context.tenantCtx) throw new Error("Missing tenant context");
+          return listPolicies(context.rt, context.tenantCtx);
+        }),
+      get: os.admin.policies.get
+        .use(requireAdmin)
+        .use(requirePermission("settings.read"))
+        .handler(({ context, input }) => {
+          if (!context.tenantCtx) throw new Error("Missing tenant context");
+          return getPolicy(context.rt, context.tenantCtx, input.handle);
+        }),
+      saveDraft: os.admin.policies.saveDraft
+        .use(requireAdmin)
+        .use(requirePermission("policies.manage"))
+        .handler(({ context, input }) => {
+          if (!context.tenantCtx) throw new Error("Missing tenant context");
+          return savePolicyDraft(context.rt, context.tenantCtx, input);
+        }),
+      publish: os.admin.policies.publish
+        .use(requireAdmin)
+        .use(requirePermission("policies.manage"))
+        .handler(({ context, input }) => {
+          if (!context.tenantCtx) throw new Error("Missing tenant context");
+          return publishPolicy(context.rt, context.tenantCtx, input.handle);
+        }),
+      versions: os.admin.policies.versions
+        .use(requireAdmin)
+        .use(requirePermission("settings.read"))
+        .handler(({ context, input }) => {
+          if (!context.tenantCtx) throw new Error("Missing tenant context");
+          return getPolicyVersions(context.rt, context.tenantCtx, input.handle);
+        }),
+      restoreDraft: os.admin.policies.restoreDraft
+        .use(requireAdmin)
+        .use(requirePermission("policies.manage"))
+        .handler(({ context, input }) => {
+          if (!context.tenantCtx) throw new Error("Missing tenant context");
+          return restorePolicyDraft(context.rt, context.tenantCtx, input);
+        }),
+    },
+    customerPrivacy: {
+      getSettings: os.admin.customerPrivacy.getSettings
+        .use(requireAdmin)
+        .use(requirePermission("settings.read"))
+        .handler(({ context }) => {
+          if (!context.tenantCtx) throw new Error("Missing tenant context");
+          return getPrivacySettings(context.rt, context.tenantCtx);
+        }),
+      updateSettings: os.admin.customerPrivacy.updateSettings
+        .use(requireAdmin)
+        .use(requirePermission("privacy.manage"))
+        .handler(({ context, input }) => {
+          if (!context.tenantCtx) throw new Error("Missing tenant context");
+          return updatePrivacySettings(context.rt, context.tenantCtx, input);
+        }),
+      listRequests: os.admin.customerPrivacy.listRequests
+        .use(requireAdmin)
+        .use(requirePermission("privacy.manage"))
+        .handler(({ context, input }) => {
+          if (!context.tenantCtx) throw new Error("Missing tenant context");
+          return listPrivacyRequests(context.rt, context.tenantCtx, input);
+        }),
+      updateRequestStatus: os.admin.customerPrivacy.updateRequestStatus
+        .use(requireAdmin)
+        .use(requirePermission("privacy.manage"))
+        .handler(({ context, input }) => {
+          if (!context.tenantCtx) throw new Error("Missing tenant context");
+          return updatePrivacyRequestStatus(context.rt, context.tenantCtx, input);
+        }),
+      exportCustomerData: os.admin.customerPrivacy.exportCustomerData
+        .use(requireAdmin)
+        .use(requirePermission("privacy.manage"))
+        .handler(({ context, input }) => {
+          if (!context.tenantCtx) throw new Error("Missing tenant context");
+          return executePrivacyExport(context.rt, context.tenantCtx, input.id);
+        }),
+      eraseCustomerData: os.admin.customerPrivacy.eraseCustomerData
+        .use(requireAdmin)
+        .use(requirePermission("privacy.manage"))
+        .handler(({ context, input }) => {
+          if (!context.tenantCtx) throw new Error("Missing tenant context");
+          return executePrivacyErasure(context.rt, context.tenantCtx, input.id);
+        }),
+      withdrawConsent: os.admin.customerPrivacy.withdrawConsent
+        .use(requireAdmin)
+        .use(requirePermission("privacy.manage"))
+        .handler(({ context, input }) => {
+          if (!context.tenantCtx) throw new Error("Missing tenant context");
+          return executePrivacyWithdrawConsent(context.rt, context.tenantCtx, input.id);
+        }),
+      cookieInventory: os.admin.customerPrivacy.cookieInventory
+        .use(requireAdmin)
+        .use(requirePermission("settings.read"))
+        .handler(() => {
+          return TEST_LOCKED_COOKIE_INVENTORY;
         }),
     },
     featureFlags: {

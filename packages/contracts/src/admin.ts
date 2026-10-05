@@ -295,6 +295,11 @@ export const CheckoutSettings = z.object({
     enabled: z.boolean().default(false),
     label: z.string().min(1).max(120).default("Keep me updated on news and exclusive offers"),
   }),
+  termsConsent: z
+    .object({
+      enabled: z.boolean().default(false),
+    })
+    .optional(),
   abandoned: z.object({
     detectAfterMinutes: z.number().int().min(15).max(10080).default(60),
     recoveryEnabled: z.boolean().default(false),
@@ -314,6 +319,11 @@ export const UpdateCheckoutSettingsInput = z.object({
     enabled: z.boolean(),
     label: z.string().min(1).max(120),
   }).optional(),
+  termsConsent: z
+    .object({
+      enabled: z.boolean(),
+    })
+    .optional(),
   abandoned: z.object({
     detectAfterMinutes: z.number().int().min(15).max(10080),
     recoveryEnabled: z.boolean(),
@@ -1392,6 +1402,226 @@ export const ShippingPreviewResult = z.object({
 });
 export type ShippingPreviewResult = z.infer<typeof ShippingPreviewResult>;
 
+// --- Notification Settings (Slice 7A) ---
+export const NotificationSender = z.object({
+  displayName: z.string().min(1).max(60).optional(),
+  replyToEmail: z.string().email().optional(),
+});
+
+export const NotificationCustomerEvents = z.object({
+  orderConfirmation: z.boolean(),
+  shipment: z.boolean(),
+  delivery: z.boolean(),
+  cancellation: z.boolean(),
+  refund: z.boolean(),
+  returnUpdates: z.boolean(),
+  preorderReminders: z.boolean(),
+  accountSecurity: z.literal(true),
+});
+
+export const NotificationStaffEvents = z.object({
+  newOrder: z.object({
+    enabled: z.boolean(),
+    recipients: z.array(z.string().email()).max(5),
+  }),
+});
+
+export const NotificationPreferences = z.object({
+  v: z.literal(1),
+  sender: NotificationSender,
+  customer: NotificationCustomerEvents,
+  staff: NotificationStaffEvents,
+  footerNote: z.string().max(300).optional(),
+  channels: z.object({ email: z.literal(true) }),
+});
+
+export const EmailLogEntry = z.object({
+  id: z.string().uuid(),
+  template: z.string(),
+  toEmailMasked: z.string(),
+  subject: z.string(),
+  status: z.string(),
+  channel: z.string(),
+  eventKey: z.string().nullable(),
+  suppressedReason: z.string().nullable(),
+  createdAt: z.string(),
+  sentAt: z.string().nullable(),
+});
+
+export const NotificationSettings = z.object({
+  preferences: NotificationPreferences,
+  platformMailerConfigured: z.boolean(),
+  recentDeliveries: z.array(EmailLogEntry),
+});
+
+export const UpdateNotificationSettingsInput = z.object({
+  sender: z
+    .object({
+      displayName: z.string().min(1).max(60).optional(),
+      replyToEmail: z.string().email().optional(),
+    })
+    .optional(),
+  customer: z
+    .object({
+      orderConfirmation: z.boolean().optional(),
+      shipment: z.boolean().optional(),
+      delivery: z.boolean().optional(),
+      cancellation: z.boolean().optional(),
+      refund: z.boolean().optional(),
+      returnUpdates: z.boolean().optional(),
+      preorderReminders: z.boolean().optional(),
+    })
+    .optional(),
+  staff: z
+    .object({
+      newOrder: z
+        .object({
+          enabled: z.boolean().optional(),
+          recipients: z.array(z.string().email()).max(5).optional(),
+        })
+        .optional(),
+    })
+    .optional(),
+  footerNote: z.string().max(300).optional(),
+});
+
+// --- Store Policies (Slice 7B) ---
+export const PolicyMark = z.object({
+  type: z.enum(["bold", "italic", "link"]),
+  start: z.number().int().min(0),
+  end: z.number().int().min(0),
+  href: z.string().optional(),
+});
+
+export const PolicyBlock = z.discriminatedUnion("type", [
+  z.object({
+    type: z.literal("heading"),
+    level: z.union([z.literal(2), z.literal(3)]),
+    text: z.string().min(1).max(300),
+  }),
+  z.object({
+    type: z.literal("paragraph"),
+    text: z.string().min(1).max(2000),
+    marks: z.array(PolicyMark).optional(),
+  }),
+  z.object({
+    type: z.literal("list"),
+    style: z.enum(["ordered", "unordered"]).default("unordered"),
+    items: z.array(z.string().min(1).max(500)).min(1).max(50),
+  }),
+  z.object({
+    type: z.literal("divider"),
+  }),
+]);
+
+export const PolicyContent = z.object({
+  v: z.literal(1),
+  blocks: z.array(PolicyBlock).min(1).max(80),
+});
+
+export const PolicySummaryItem = z.object({
+  id: z.string().uuid(),
+  handle: z.enum(["refund", "privacy", "terms", "shipping", "legal_notice"]),
+  title: z.string(),
+  hasDraft: z.boolean(),
+  publishedVersion: z.number().int().nullable(),
+  publishedAt: z.string().nullable(),
+  draftUpdatedAt: z.string(),
+});
+
+export const PolicyDetail = z.object({
+  id: z.string().uuid(),
+  handle: z.enum(["refund", "privacy", "terms", "shipping", "legal_notice"]),
+  title: z.string(),
+  draftContent: PolicyContent,
+  publishedVersion: z
+    .object({
+      id: z.string().uuid(),
+      version: z.number().int(),
+      title: z.string(),
+      content: PolicyContent,
+      contentSha256: z.string(),
+      publishedAt: z.string(),
+    })
+    .nullable(),
+  draftUpdatedAt: z.string(),
+});
+
+export const SavePolicyDraftInput = z.object({
+  handle: z.enum(["refund", "privacy", "terms", "shipping", "legal_notice"]),
+  title: z.string().min(1).max(120).optional(),
+  content: PolicyContent,
+});
+
+export const PolicyVersionItem = z.object({
+  id: z.string().uuid(),
+  version: z.number().int(),
+  title: z.string(),
+  content: PolicyContent,
+  contentSha256: z.string(),
+  publishedBy: z.string().uuid().nullable(),
+  publishedAt: z.string(),
+});
+
+// --- Customer Privacy (Slice 7C) ---
+export const PrivacySettings = z.object({
+  privacyContactEmail: z.string().email().nullable(),
+  grievanceOfficerName: z.string().nullable(),
+  requestSlaDays: z.number().int().min(7).max(90),
+  version: z.number().int(),
+});
+
+export const UpdatePrivacySettingsInput = z.object({
+  privacyContactEmail: z.string().email().nullable().optional(),
+  grievanceOfficerName: z.string().max(120).nullable().optional(),
+  requestSlaDays: z.number().int().min(7).max(90).optional(),
+  expectedVersion: z.number().int().optional(),
+});
+
+export const PrivacyRequestItem = z.object({
+  id: z.string().uuid(),
+  requesterEmail: z.string().email(),
+  kind: z.enum(["access", "correction", "erasure", "grievance", "withdraw_consent"]),
+  details: z.string().nullable(),
+  status: z.enum(["pending_verification", "open", "in_progress", "completed", "rejected"]),
+  verifiedAt: z.string().nullable(),
+  dueAt: z.string(),
+  handledBy: z.string().uuid().nullable(),
+  handledAt: z.string().nullable(),
+  resolutionNote: z.string().nullable(),
+  customerId: z.string().uuid().nullable(),
+  createdAt: z.string(),
+});
+
+export const CookieInventoryItem = z.object({
+  name: z.string(),
+  purpose: z.string(),
+  duration: z.string(),
+  category: z.literal("strictly_necessary"),
+});
+
+export type NotificationSender = z.infer<typeof NotificationSender>;
+export type NotificationCustomerEvents = z.infer<typeof NotificationCustomerEvents>;
+export type NotificationStaffEvents = z.infer<typeof NotificationStaffEvents>;
+export type NotificationPreferences = z.infer<typeof NotificationPreferences>;
+export type EmailLogEntry = z.infer<typeof EmailLogEntry>;
+export type NotificationSettings = z.infer<typeof NotificationSettings>;
+export type UpdateNotificationSettingsInput = z.infer<typeof UpdateNotificationSettingsInput>;
+
+export type PolicyMark = z.infer<typeof PolicyMark>;
+export type PolicyBlock = z.infer<typeof PolicyBlock>;
+export type PolicyContent = z.infer<typeof PolicyContent>;
+export type PolicySummaryItem = z.infer<typeof PolicySummaryItem>;
+export type PolicyItem = PolicySummaryItem;
+export type PolicyDetail = z.infer<typeof PolicyDetail>;
+export type SavePolicyDraftInput = z.infer<typeof SavePolicyDraftInput>;
+export type PolicyVersionItem = z.infer<typeof PolicyVersionItem>;
+export type PolicyHandle = "refund" | "privacy" | "terms" | "shipping" | "legal_notice";
+
+export type PrivacySettings = z.infer<typeof PrivacySettings>;
+export type UpdatePrivacySettingsInput = z.infer<typeof UpdatePrivacySettingsInput>;
+export type PrivacyRequestItem = z.infer<typeof PrivacyRequestItem>;
+export type CookieInventoryItem = z.infer<typeof CookieInventoryItem>;
 
 export const adminContract = {
   support: {
@@ -1572,6 +1802,78 @@ export const adminContract = {
       .route({ method: "DELETE", path: "/admin/settings/taxes/classes/{id}" })
       .input(z.object({ id: z.string().uuid() }))
       .output(z.object({ ok: z.literal(true) })),
+  },
+  notificationSettings: {
+    get: oc
+      .route({ method: "GET", path: "/admin/settings/notifications" })
+      .output(NotificationSettings),
+    update: oc
+      .route({ method: "PUT", path: "/admin/settings/notifications" })
+      .input(UpdateNotificationSettingsInput)
+      .output(NotificationPreferences),
+  },
+  policies: {
+    list: oc
+      .route({ method: "GET", path: "/admin/settings/policies" })
+      .output(z.array(PolicySummaryItem)),
+    get: oc
+      .route({ method: "GET", path: "/admin/settings/policies/{handle}" })
+      .input(z.object({ handle: z.string() }))
+      .output(PolicyDetail),
+    saveDraft: oc
+      .route({ method: "PUT", path: "/admin/settings/policies/draft" })
+      .input(SavePolicyDraftInput)
+      .output(PolicyDetail),
+    publish: oc
+      .route({ method: "POST", path: "/admin/settings/policies/{handle}/publish" })
+      .input(z.object({ handle: z.enum(["refund", "privacy", "terms", "shipping", "legal_notice"]) }))
+      .output(PolicyDetail),
+    versions: oc
+      .route({ method: "GET", path: "/admin/settings/policies/{handle}/versions" })
+      .input(z.object({ handle: z.enum(["refund", "privacy", "terms", "shipping", "legal_notice"]) }))
+      .output(z.array(PolicyVersionItem)),
+    restoreDraft: oc
+      .route({ method: "POST", path: "/admin/settings/policies/restore-draft" })
+      .input(z.object({ handle: z.enum(["refund", "privacy", "terms", "shipping", "legal_notice"]), versionId: z.string().uuid() }))
+      .output(PolicyDetail),
+  },
+  customerPrivacy: {
+    getSettings: oc
+      .route({ method: "GET", path: "/admin/settings/privacy" })
+      .output(PrivacySettings),
+    updateSettings: oc
+      .route({ method: "PUT", path: "/admin/settings/privacy" })
+      .input(UpdatePrivacySettingsInput)
+      .output(PrivacySettings),
+    listRequests: oc
+      .route({ method: "GET", path: "/admin/settings/privacy/requests" })
+      .input(z.object({ status: z.enum(["pending_verification", "open", "in_progress", "completed", "rejected"]).optional() }).optional())
+      .output(z.object({ items: z.array(PrivacyRequestItem), overdueCount: z.number().int() })),
+    updateRequestStatus: oc
+      .route({ method: "PATCH", path: "/admin/settings/privacy/requests/{id}" })
+      .input(
+        z.object({
+          id: z.string().uuid(),
+          status: z.enum(["pending_verification", "open", "in_progress", "completed", "rejected"]),
+          resolutionNote: z.string().max(1000).optional(),
+        }),
+      )
+      .output(PrivacyRequestItem),
+    exportCustomerData: oc
+      .route({ method: "POST", path: "/admin/settings/privacy/requests/{id}/export" })
+      .input(z.object({ id: z.string().uuid() }))
+      .output(z.object({ success: z.boolean(), exportBundle: z.record(z.string(), z.unknown()) })),
+    eraseCustomerData: oc
+      .route({ method: "POST", path: "/admin/settings/privacy/requests/{id}/erase" })
+      .input(z.object({ id: z.string().uuid() }))
+      .output(z.object({ success: z.boolean(), mode: z.enum(["deleted", "anonymised", "no_customer"]) })),
+    withdrawConsent: oc
+      .route({ method: "POST", path: "/admin/settings/privacy/requests/{id}/withdraw-consent" })
+      .input(z.object({ id: z.string().uuid() }))
+      .output(z.object({ success: z.boolean() })),
+    cookieInventory: oc
+      .route({ method: "GET", path: "/admin/settings/privacy/cookies" })
+      .output(z.array(CookieInventoryItem)),
   },
   featureFlags: {
     list: oc

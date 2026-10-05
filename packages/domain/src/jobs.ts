@@ -94,6 +94,58 @@ export async function handleOrderCreatedJob(
     data: { orderId, orderNumber: order.number },
     eventRef,
   });
+
+  // Staff new-order alert (Slice 7A, PLAN §3)
+  try {
+    const { readNotificationPreferences } = await import("./admin/notification-settings.ts");
+    const prefs = await withTenant(db, tenantId, async (tx) => readNotificationPreferences(tx, tenantId));
+    if (prefs.staff.newOrder.enabled && prefs.staff.newOrder.recipients.length > 0) {
+      const [fullOrder] = await withTenant(db, tenantId, async (tx) => {
+        return await tx
+          .select({
+            number: schema.orders.number,
+            grandTotal: schema.orders.grandTotal,
+            shippingAddress: schema.orders.shippingAddress,
+          })
+          .from(schema.orders)
+          .where(and(eq(schema.orders.tenantId, tenantId), eq(schema.orders.id, orderId)))
+          .limit(1);
+      });
+
+      const customerName = (fullOrder?.shippingAddress as Record<string, unknown> | null)?.fullName ?? "Customer";
+      const grandTotal = fullOrder?.grandTotal ?? 0;
+
+      for (const recipient of prefs.staff.newOrder.recipients) {
+        const staffRef = `staff_order_${orderId}_${recipient.trim().toLowerCase()}`;
+        const [alreadySentStaff] = await withTenant(db, tenantId, async (tx) => {
+          return await tx
+            .select({ id: schema.emailLog.id })
+            .from(schema.emailLog)
+            .where(and(eq(schema.emailLog.tenantId, tenantId), eq(schema.emailLog.eventRef, staffRef), eq(schema.emailLog.status, "sent")))
+            .limit(1);
+        });
+
+        if (!alreadySentStaff) {
+          await dispatchTransactionalEmailOrThrow(db, log, {
+            tenantId,
+            template: "staff_new_order",
+            toEmail: recipient.trim(),
+            subject: `New order ${order.number} received (${customerName})`,
+            data: {
+              order: { number: order.number, grandTotal, items: [], subtotal: 0, discountTotal: 0, shippingTotal: 0, codFee: 0, paymentStatus: "pending" },
+              customerName: String(customerName),
+              adminUrl: `/orders/${orderId}`,
+            },
+            eventRef: staffRef,
+          }).catch((err) => {
+            log.warn({ err, recipient, orderId }, "Staff new-order email alert failed");
+          });
+        }
+      }
+    }
+  } catch (err) {
+    log.warn({ err, orderId }, "Failed to process staff new order alerts");
+  }
 }
 
 export async function handleFulfillmentRtoJob(
@@ -521,8 +573,25 @@ export async function startJobs(opts: {
           opts.log.warn({ err }, "platform_email_log prune failed during maintenance pass");
           return { deletedCount: 0 };
         });
+        const { pruneEmailLogs, prunePrivacyRequests } = await import("./system/retention.ts");
+        const prunedTenantEmailLogs = await pruneEmailLogs(db, 180).catch((err) => {
+          opts.log.warn({ err }, "email_log prune failed during maintenance pass");
+          return { deletedCount: 0 };
+        });
+        const prunedReqs = await prunePrivacyRequests(db, 1095).catch((err) => {
+          opts.log.warn({ err }, "privacy_requests prune failed during maintenance pass");
+          return { deletedCount: 0 };
+        });
         opts.log.info(
-          { job_id: job.id, deletedCount: res.deletedCount, prunedCounters, reapedSlots, prunedEmailLogs: prunedEmailLogs.deletedCount },
+          {
+            job_id: job.id,
+            deletedCount: res.deletedCount,
+            prunedCounters,
+            reapedSlots,
+            prunedEmailLogs: prunedEmailLogs.deletedCount,
+            prunedTenantEmailLogs: prunedTenantEmailLogs.deletedCount,
+            prunedReqs: prunedReqs.deletedCount,
+          },
           "idempotency.cleanup processed",
         );
       } catch (err) {

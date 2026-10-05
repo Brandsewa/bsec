@@ -57,6 +57,7 @@ export interface PlaceOrderInput {
   notes?: string | undefined;
   customerId?: string | undefined;
   marketingConsent?: boolean | undefined;
+  termsConsent?: boolean | undefined;
 }
 
 export interface PlaceOrderResult {
@@ -180,6 +181,26 @@ export async function placeOrder(
     // Phone required enforcement
     if (checkoutSettings.phoneRequired && (!input.phone || !input.phone.trim())) {
       throw new Error("Phone number is required to complete checkout");
+    }
+
+    // Terms of Service consent enforcement (Slice 7B)
+    let termsPolicyVersionId: string | null = null;
+    let termsAcceptedAt: Date | null = null;
+    if (checkoutSettings.termsConsent?.enabled) {
+      const [termsPolicy] = await tx
+        .select({ publishedVersionId: schema.storePolicies.publishedVersionId })
+        .from(schema.storePolicies)
+        .where(and(eq(schema.storePolicies.tenantId, tenantId), eq(schema.storePolicies.handle, "terms")))
+        .limit(1);
+
+      if (!termsPolicy?.publishedVersionId) {
+        throw new Error("Terms of Service consent is required by store settings, but no Terms policy is published yet");
+      }
+      if (!input.termsConsent) {
+        throw new Error("You must agree to the Terms of Service to place this order");
+      }
+      termsPolicyVersionId = termsPolicy.publishedVersionId;
+      termsAcceptedAt = new Date();
     }
 
     // The same function the cart and checkout pages use, so the total shown is the total charged.
@@ -499,6 +520,8 @@ export async function placeOrder(
         country: input.country ?? "IN",
       },
       placeOfSupplyState: input.state,
+      termsPolicyVersionId,
+      termsAcceptedAt,
       source: "web",
       cartId: cart.id,
       idempotencyKey: input.idempotencyKey ?? null,

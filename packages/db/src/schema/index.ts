@@ -32,3 +32,5 @@ export * from "./platform-email.ts";
 export * from "./quotes.ts";
 export * from "./reviews.ts";
 export * from "./tax.ts";
+export * from "./policies.ts";
+export * from "./privacy.ts";

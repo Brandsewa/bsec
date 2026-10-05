@@ -48,6 +48,8 @@ export const orders = tenantTable(
     cancelledAt: timestamp("cancelled_at", { withTimezone: true }),
     cancelReason: text("cancel_reason"),
     tags: text("tags").array().notNull().default(sql`ARRAY[]::text[]`),
+    termsPolicyVersionId: uuid("terms_policy_version_id"),
+    termsAcceptedAt: timestamp("terms_accepted_at", { withTimezone: true }),
     placedAt: timestamp("placed_at", { withTimezone: true }).notNull().default(sql`now()`),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().default(sql`now()`),
     updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().default(sql`now()`),

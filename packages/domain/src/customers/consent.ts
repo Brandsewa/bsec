@@ -4,6 +4,11 @@ import { schema, withTenant, type Db } from "@bs/db";
 import type { Runtime } from "../runtime.ts";
 import { type TenantContext } from "../context.ts";
 
+export function hashConsentIp(ip: string, tenantId: string, secretKey?: string): string {
+  const salt = secretKey || process.env.TENANT_SECRETS_KEY || "bsec-default-tenant-secrets-key-salt";
+  return createHash("sha256").update(`consent-ip:${tenantId}:${salt}:${ip}`).digest("hex");
+}
+
 export type MarketingConsentState = "subscribed" | "unsubscribed" | "not_subscribed" | "invalid";
 
 export type MarketingConsentSource =
@@ -127,11 +132,11 @@ export async function setMarketingConsent(
       }
     }
 
-    // 4. Record customer_consent_events row
+    // 4. Record customer_consent_events row (Slice 7C: stop writing raw IP, store HMAC-SHA-256 hash)
     const actorType = input.actorType ?? (ctx.actor?.type ?? "customer");
     const actorId = input.actorId ?? (ctx.actor && "userId" in ctx.actor ? ctx.actor.userId : null);
 
-    const ipHash = input.ip ? createHash("sha256").update(`${tenantId}:${input.ip}`).digest("hex") : null;
+    const ipHash = input.ip ? hashConsentIp(input.ip, tenantId) : null;
 
     const [eventRow] = await d
       .insert(schema.customerConsentEvents)
@@ -143,7 +148,7 @@ export async function setMarketingConsent(
         source,
         actorType,
         actorId: actorId ?? null,
-        ip: input.ip ?? null,
+        ip: null, // stop writing raw IP going forward (ADR-021)
         textVersion: input.textVersion ?? null,
         ipHash,
         at: now,

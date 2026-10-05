@@ -59,6 +59,7 @@ export const SETTINGS_NAV_GROUPS: readonly SettingsNavGroup[] = [
     items: [
       { id: "orders", label: "Orders", href: "/settings/orders", description: "Numbering, processing, recovery", icon: ShoppingBag, perm: "orders.settings.manage" },
       { id: "returns", label: "Returns", href: "/settings/returns", description: "Returns and exchanges", icon: RotateCcw, perm: "settings.write" },
+      { id: "notifications", label: "Notifications", href: "/settings/notifications", description: "Customer & staff emails", icon: LifeBuoy, perm: "notifications.manage" },
     ],
   },
   {
@@ -73,6 +74,8 @@ export const SETTINGS_NAV_GROUPS: readonly SettingsNavGroup[] = [
     id: "compliance",
     label: "Compliance & advanced",
     items: [
+      { id: "policies", label: "Policies", href: "/settings/policies", description: "Terms, privacy, refund, shipping", icon: Store, perm: "policies.manage" },
+      { id: "customer-privacy", label: "Customer privacy", href: "/settings/customer-privacy", description: "DPDP requests and cookies", icon: UserCheck, perm: "privacy.manage" },
       { id: "activity", label: "Activity", href: "/settings/activity", description: "Settings audit history", icon: History, perm: "audit.read" },
       { id: "support", label: "Support access", href: "/settings/support", description: "Platform support sessions", icon: LifeBuoy, perm: "settings.write" },
     ],

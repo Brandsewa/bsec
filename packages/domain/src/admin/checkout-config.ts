@@ -19,6 +19,9 @@ export interface CheckoutSettingsConfig {
     enabled: boolean;
     label: string;
   };
+  termsConsent?: {
+    enabled: boolean;
+  } | undefined;
   abandoned: {
     detectAfterMinutes: number;
     recoveryEnabled: boolean;
@@ -37,6 +40,9 @@ export const DEFAULT_CHECKOUT_SETTINGS: CheckoutSettingsConfig = {
   marketingEmail: {
     enabled: false,
     label: "Keep me updated on news and exclusive offers",
+  },
+  termsConsent: {
+    enabled: false,
   },
   abandoned: {
     detectAfterMinutes: 60,
@@ -115,6 +121,12 @@ export function parseCheckoutSettings(raw: unknown, updatedAt?: Date | null): Ch
     addressLine2,
     companyName,
     marketingEmail,
+    termsConsent: {
+      enabled:
+        typeof (c.termsConsent as Record<string, unknown> | undefined)?.enabled === "boolean"
+          ? Boolean((c.termsConsent as Record<string, unknown>).enabled)
+          : false,
+    },
     abandoned: {
       detectAfterMinutes,
       recoveryEnabled,

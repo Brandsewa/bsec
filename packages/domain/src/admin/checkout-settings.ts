@@ -1,4 +1,4 @@
-import { eq } from "drizzle-orm";
+import { and, eq } from "drizzle-orm";
 import { schema, withTenant } from "@bs/db";
 import type { Runtime } from "../runtime.ts";
 import { assertPermission, type TenantContext } from "../context.ts";
@@ -19,6 +19,9 @@ export interface UpdateCheckoutSettingsInput {
   marketingEmail?: {
     enabled: boolean;
     label: string;
+  } | undefined;
+  termsConsent?: {
+    enabled: boolean;
   } | undefined;
   abandoned?: {
     detectAfterMinutes: number;
@@ -120,6 +123,32 @@ export async function updateCheckoutSettings(
         }
       : currentParsed.abandoned;
 
+    const nextTermsConsent = input.termsConsent
+      ? {
+          enabled: input.termsConsent.enabled,
+        }
+      : currentParsed.termsConsent;
+
+    // Allowed to enable terms consent only when terms policy is published
+    if (nextTermsConsent?.enabled) {
+      const [termsPolicy] = await tx
+        .select({ publishedVersionId: schema.storePolicies.publishedVersionId })
+        .from(schema.storePolicies)
+        .where(
+          and(
+            eq(schema.storePolicies.tenantId, ctx.tenantId),
+            eq(schema.storePolicies.handle, "terms"),
+          ),
+        )
+        .limit(1);
+
+      if (!termsPolicy?.publishedVersionId) {
+        throw new Error(
+          "Cannot require Terms of Service agreement at checkout: No Terms of Service policy has been published yet. Please publish your Terms policy in Settings > Policies first.",
+        );
+      }
+    }
+
     const mergedCheckout: Record<string, unknown> = {
       ...rawCheckout,
       v: 1,
@@ -129,6 +158,7 @@ export async function updateCheckoutSettings(
       addressLine2: input.addressLine2 !== undefined ? input.addressLine2 : currentParsed.addressLine2,
       companyName: input.companyName !== undefined ? input.companyName : currentParsed.companyName,
       marketingEmail: nextMarketing,
+      termsConsent: nextTermsConsent,
       abandoned: nextAbandoned,
     };
 

@@ -1,10 +1,17 @@
 import type { Metadata } from "next";
 import { notFound } from "next/navigation";
 import { headers } from "next/headers";
-import { evaluateStorefrontAccess, generateBreadcrumbJsonLd } from "@bs/domain";
+import {
+  evaluateStorefrontAccess,
+  generateBreadcrumbJsonLd,
+  getPublishedPolicy,
+  isFeatureEnabled,
+  type PolicyBlock,
+  type PolicyContent,
+} from "@bs/domain";
 import { server } from "@/server/runtime.ts";
 
-export const ALLOWED_POLICY_TYPES = ["privacy", "terms", "refund", "shipping"] as const;
+export const ALLOWED_POLICY_TYPES = ["privacy", "terms", "refund", "shipping", "legal_notice"] as const;
 export type PolicyType = (typeof ALLOWED_POLICY_TYPES)[number];
 
 export function isValidPolicyType(type: string): type is PolicyType {
@@ -17,7 +24,7 @@ export interface PolicyDefinition {
   body: string;
 }
 
-export const policyContent: Record<PolicyType, PolicyDefinition> = {
+export const fallbackPolicyContent: Record<string, PolicyDefinition> = {
   privacy: {
     title: "Privacy Policy",
     lastUpdated: "2026-09-01",
@@ -78,7 +85,12 @@ All orders are processed within 1–2 business days. Orders placed over weekends
 - Express Delivery (1–2 business days): Flat rate calculated at checkout depending on your pincode.
 
 ### Shipment Confirmation & Order Tracking
-You will receive a shipment confirmation email and WhatsApp message containing your tracking number once your order has dispatched.`,
+You will receive a shipment confirmation email and tracking number once your order has dispatched.`,
+  },
+  legal_notice: {
+    title: "Legal Notice",
+    lastUpdated: "2026-09-01",
+    body: `This storefront is an independent merchant store hosted on the bsec platform. For legal, registration, or business queries, please contact the merchant via their customer support email.`,
   },
 };
 
@@ -92,11 +104,61 @@ export async function generateMetadata({ params }: PolicyPageProps): Promise<Met
     return { title: "Policy Not Found" };
   }
 
-  const policy = policyContent[type];
+  const fallback = fallbackPolicyContent[type];
   return {
-    title: `${policy.title} | Store Policies`,
-    description: `Read our ${policy.title.toLowerCase()} and customer commitments.`,
+    title: `${fallback?.title ?? "Policy"} | Store Policies`,
+    description: `Read our ${fallback?.title.toLowerCase() ?? "policy"} and customer commitments.`,
   };
+}
+
+function renderBlock(block: PolicyBlock, index: number) {
+  if (block.type === "heading") {
+    if (block.level === 3) {
+      return (
+        <h3 key={index} className="text-xl font-semibold mt-6 mb-3 text-foreground">
+          {block.text}
+        </h3>
+      );
+    }
+    return (
+      <h2 key={index} className="text-2xl font-bold mt-8 mb-4 text-foreground">
+        {block.text}
+      </h2>
+    );
+  }
+
+  if (block.type === "paragraph") {
+    return (
+      <p key={index} className="my-4 text-foreground/90 leading-relaxed">
+        {block.text}
+      </p>
+    );
+  }
+
+  if (block.type === "list") {
+    if (block.style === "ordered") {
+      return (
+        <ol key={index} className="list-decimal pl-6 my-4 space-y-2 text-foreground/90">
+          {block.items.map((item, i) => (
+            <li key={i}>{item}</li>
+          ))}
+        </ol>
+      );
+    }
+    return (
+      <ul key={index} className="list-disc pl-6 my-4 space-y-2 text-foreground/90">
+        {block.items.map((item, i) => (
+          <li key={i}>{item}</li>
+        ))}
+      </ul>
+    );
+  }
+
+  if (block.type === "divider") {
+    return <hr key={index} className="my-8 border-border" />;
+  }
+
+  return null;
 }
 
 export default async function PolicyPage({ params }: PolicyPageProps) {
@@ -106,23 +168,56 @@ export default async function PolicyPage({ params }: PolicyPageProps) {
     notFound();
   }
 
-  const policy = policyContent[type];
-
-  // Resolve tenant domain for breadcrumbs
   let host = "localhost";
+  let tenantId: string | undefined;
+
   try {
     const h = await headers();
     host = h.get("x-forwarded-host") ?? h.get("host") ?? "localhost";
     const { rt } = server();
-    await evaluateStorefrontAccess(rt, host, { headers: h });
+    const access = await evaluateStorefrontAccess(rt, host, { headers: h });
+    tenantId = access.tenantId;
   } catch {
     // Non-fatal fallback
   }
 
+  let publishedPolicy: { title: string; content: PolicyContent; version: number; publishedAt: string } | null = null;
+  let policiesFlagOn = false;
+
+  if (tenantId) {
+    const { rt } = server();
+    policiesFlagOn = await isFeatureEnabled(rt._db.db, tenantId, "settings.policies").catch(() => false);
+    publishedPolicy = await getPublishedPolicy(rt._db.db, tenantId, type).catch(() => null);
+  }
+
+  // Fallback decision (ADR-011 / PLAN Slice 7B):
+  // With flag ON: unpublished handle returns 404!
+  // With flag OFF: show legacy boilerplate if nothing published.
+  if (!publishedPolicy) {
+    if (policiesFlagOn) {
+      notFound();
+    }
+  }
+
+  const fallback = fallbackPolicyContent[type] ?? {
+    title: "Policy",
+    lastUpdated: "2026-09-01",
+    body: "",
+  };
+
+  const title = publishedPolicy?.title ?? fallback.title;
+  const lastUpdated = publishedPolicy
+    ? new Date(publishedPolicy.publishedAt).toLocaleDateString("en-IN", {
+        year: "numeric",
+        month: "short",
+        day: "numeric",
+      })
+    : fallback.lastUpdated;
+
   const breadcrumbsJsonLd = generateBreadcrumbJsonLd([
     { name: "Home", url: `https://${host}` },
     { name: "Policies", url: `https://${host}/policies/${type}` },
-    { name: policy.title, url: `https://${host}/policies/${type}` },
+    { name: title, url: `https://${host}/policies/${type}` },
   ]);
 
   return (
@@ -133,15 +228,26 @@ export default async function PolicyPage({ params }: PolicyPageProps) {
       />
       <header className="mb-8 border-b border-border pb-6">
         <h1 className="text-3xl md:text-4xl font-bold tracking-tight text-foreground">
-          {policy.title}
+          {title}
         </h1>
-        <p className="mt-2 text-sm text-muted">
-          Last updated: {policy.lastUpdated}
-        </p>
+        <div className="mt-2 flex items-center gap-3 text-sm text-muted">
+          <span>Last updated: {lastUpdated}</span>
+          {publishedPolicy && (
+            <span className="rounded bg-muted/20 px-2 py-0.5 text-xs font-mono">
+              Version {publishedPolicy.version}
+            </span>
+          )}
+        </div>
       </header>
-      <div className="prose dark:prose-invert max-w-none whitespace-pre-line text-foreground/90 leading-relaxed">
-        {policy.body}
-      </div>
+      {publishedPolicy ? (
+        <div className="prose dark:prose-invert max-w-none text-foreground/90">
+          {publishedPolicy.content.blocks.map((block, idx) => renderBlock(block, idx))}
+        </div>
+      ) : (
+        <div className="prose dark:prose-invert max-w-none whitespace-pre-line text-foreground/90 leading-relaxed">
+          {fallback.body}
+        </div>
+      )}
     </article>
   );
 }
