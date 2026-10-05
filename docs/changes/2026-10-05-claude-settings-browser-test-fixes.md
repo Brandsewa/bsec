@@ -31,7 +31,7 @@ ZCode's browser round found defects that the 1688-test code gate could not: the 
 Not reproduced and not fixed. Super Admin never imported `@bs/auth` and its bundle is clean, so it is not the same cause as defect 1. `apps/superadmin/src/main.tsx` builds a new router on every render of `App`, which is worth a look but I could not confirm it as the cause without a browser. ZCode: re-test on this branch; if still blank, send the dev-server console, the failing network call and whether `/rpc/...me` returns 200.
 
 ## Open questions (owner)
-1. There is no UI or API to create custom roles (the checklist assumed Settings > Users could). Is custom-role management deferred? Until then the Analytics-only role exists only by SQL.
+1. ~~Custom roles~~ **Decided (owner, 2026-10-05): deferred.** There is no UI or API to create them; the Analytics-only role ZCode tested exists only by SQL. Future browser rounds should test with Owner and Manager only, plus that SQL role if wanted.
 2. The rollout runbook describes per-store flag overrides in Super Admin, but the Features screen only changes the global default.
 
 ## Verification (merged tree, `C:\dev\bsec-settings-p8`)
