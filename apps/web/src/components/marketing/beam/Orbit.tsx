@@ -89,6 +89,17 @@ function phaseOf(mod: Mod): number {
   return mod.ring * 1.1 + 0.5 + (i * Math.PI * 2) / same.length;
 }
 
+/** Routes the sparks travel: an order or a transaction moving from one module to the next. */
+const ROUTES: [string, string][] = [
+  ["sales", "orders"], ["customers", "sales"], ["orders", "inventory"], ["orders", "shipping"],
+  ["orders", "finance"], ["shipping", "customers"], ["support", "customers"], ["inventory", "sales"], ["finance", "customers"],
+];
+const ROUTE_IDX = ROUTES.map(([a, b]) => [MODULES.findIndex((m) => m.id === a), MODULES.findIndex((m) => m.id === b)] as const);
+const SPARKS = 3; // at most this many in flight
+const TAIL = 7; // head plus trailing dots
+
+interface Slot { active: boolean; from: number; to: number; start: number; dur: number; bend: number; next: number }
+
 interface Open { id: string; x: number; y: number; half: number }
 
 export function Orbit() {
@@ -98,6 +109,8 @@ export function Orbit() {
   const size = useRef({ w: 0, h: 0 });
   const frozen = useRef(false);
   const lastType = useRef("mouse");
+  const dots = useRef<(HTMLSpanElement | null)[]>([]);
+  const slots = useRef<Slot[]>(Array.from({ length: SPARKS }, (_, i) => ({ active: false, from: 0, to: 0, start: 0, dur: 2, bend: 0.2, next: 1 + i * 1.3 })));
   const [dims, setDims] = useState({ w: 0, h: 0 });
   const [open, setOpen] = useState<Open | null>(null);
 
@@ -127,6 +140,38 @@ export function Orbit() {
     });
   }, []);
 
+  /** Advance the sparks: each one rides a curve between two planets, following them as they drift. */
+  const sparks = useCallback((t: number) => {
+    slots.current.forEach((s, k) => {
+      if (!s.active && t >= s.next) {
+        const busy = slots.current.filter((o) => o.active).map((o) => o.from + "-" + o.to);
+        const options = ROUTE_IDX.filter(([a, b]) => !busy.includes(a + "-" + b));
+        const pick = options[Math.floor(Math.random() * options.length)];
+        if (pick) {
+          s.active = true; s.from = pick[0]; s.to = pick[1]; s.start = t;
+          s.dur = 2.2 + Math.random() * 1.4; s.bend = (Math.random() < 0.5 ? -1 : 1) * (0.16 + Math.random() * 0.14);
+        }
+      }
+      const a = pos.current[s.from];
+      const b = pos.current[s.to];
+      for (let j = 0; j < TAIL; j++) {
+        const el = dots.current[k * TAIL + j];
+        if (!el) continue;
+        const u = s.active ? (t - s.start) / s.dur - j * 0.022 : -1;
+        if (!a || !b || u < 0 || u > 1) { el.style.opacity = "0"; continue; }
+        const ease = u * u * (3 - 2 * u);
+        const mx = (a.x + b.x) / 2 - (b.y - a.y) * s.bend;
+        const my = (a.y + b.y) / 2 + (b.x - a.x) * s.bend;
+        const x = (1 - ease) * (1 - ease) * a.x + 2 * (1 - ease) * ease * mx + ease * ease * b.x;
+        const y = (1 - ease) * (1 - ease) * a.y + 2 * (1 - ease) * ease * my + ease * ease * b.y;
+        const fade = Math.min(1, u * 8, (1 - u) * 8);
+        el.style.transform = "translate3d(" + (x - 3).toFixed(1) + "px," + (y - 3).toFixed(1) + "px,0) scale(" + (1 - j / TAIL * 0.7).toFixed(2) + ")";
+        el.style.opacity = (fade * (1 - j / TAIL)).toFixed(2);
+      }
+      if (s.active && (t - s.start) / s.dur > 1.12) { s.active = false; s.next = t + 0.3 + Math.random() * 1.6; }
+    });
+  }, []);
+
   useEffect(() => {
     const stage = stageRef.current;
     if (!stage) return;
@@ -148,6 +193,7 @@ export function Orbit() {
       if (!frozen.current && visible) {
         t += dt;
         place(t);
+        sparks(t);
       }
       raf = requestAnimationFrame(frame);
     };
@@ -166,7 +212,7 @@ export function Orbit() {
       ro.disconnect();
       io.disconnect();
     };
-  }, [place]);
+  }, [place, sparks]);
 
   const show = useCallback((i: number) => {
     const m = MODULES[i];
@@ -216,16 +262,22 @@ export function Orbit() {
             transform={`rotate(${(TILT * 180) / Math.PI} ${dims.w / 2} ${dims.h / 2})`}
             fill="none"
             stroke="rgb(190 200 255)"
-            strokeOpacity={0.16 - i * 0.03}
-            strokeDasharray={i === 2 ? "2 7" : undefined}
+            strokeOpacity={0.2}
+            strokeDasharray={i === 2 ? "1 6" : undefined}
+            strokeLinecap="round"
           />
         ))}
       </svg>
 
+      {/* sparks: orders and transactions moving between modules */}
+      {Array.from({ length: SPARKS * TAIL }, (_, i) => (
+        <span key={i} ref={(el) => { dots.current[i] = el; }} className="bm-spark" aria-hidden="true" />
+      ))}
+
       {/* the store at the centre */}
       <div className="bm-sun" aria-hidden="true">
         <span className="bm-sun-ring" />
-        <span className="bm-sun-core">B</span>
+        <span className="bm-sun-core" />
       </div>
 
       {MODULES.map((m, i) => (
