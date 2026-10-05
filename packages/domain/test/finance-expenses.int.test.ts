@@ -15,7 +15,7 @@ import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { and, eq, sql } from "drizzle-orm";
 import { createDb, schema, withTenant, type DbHandle } from "@bs/db";
 import { ExpenseItem } from "@bs/contracts";
-import { getExpenseReceiptUrl } from "../src/finance/index.ts";
+import { finalizeExpenseReceipt, getExpenseReceiptUrl } from "../src/finance/index.ts";
 import { startTestDb, type TestDb } from "@bs/db/test-env";
 import { createRuntime, type Runtime } from "../src/runtime.ts";
 import { provisionTenant } from "../src/saas/provisioning.ts";
@@ -294,6 +294,7 @@ describe("Finance Expenses Domain Service", () => {
         enabled: true,
         interval: "monthly",
         intervalCount: 1,
+        backfillDue: true, // the merchant asked for the periods already past
       },
     });
 
@@ -373,5 +374,47 @@ describe("Finance Expenses Domain Service", () => {
       date: "2026-10-01", category: "other", paidFrom: "cash_bank", amount: 100, currency: "INR", receiptMediaId: evilId,
     });
     await expect(getExpenseReceiptUrl(dbRw, ctx, { expenseId: evil.id, r2Config })).rejects.toThrow(/outside this store/);
+  });
+
+  it("without backfill, a past-dated recurring expense only schedules future copies", async () => {
+    const fourMonthsAgo = new Date(Date.now() - 120 * 24 * 60 * 60 * 1000);
+    const tmpl = await createExpense(dbRw, ctx, {
+      date: fourMonthsAgo.toISOString().slice(0, 10),
+      category: "rent",
+      paidFrom: "cash_bank",
+      amount: 100000,
+      currency: "INR",
+      recurring: { enabled: true, interval: "monthly", intervalCount: 1 },
+    });
+    expect(new Date(tmpl.recurring!.nextDueAt!).getTime()).toBeGreaterThan(Date.now());
+    await withTenant(dbRw.db, tenantId, async (tx) => {
+      await runRecurringExpenses(tx, tenantId, new Date());
+      const copies = await tx
+        .select()
+        .from(schema.expenses)
+        .where(and(eq(schema.expenses.tenantId, tenantId), eq(schema.expenses.templateId, tmpl.id)));
+      expect(copies.length).toBe(0);
+    });
+  });
+
+  it("finalize rejects a file whose bytes are not an allowed type and deletes the stored object", async () => {
+    const mediaId = crypto.randomUUID();
+    const key = `tenants/${tenantId}/expense-receipts/${mediaId}.png`;
+    const sent: string[] = [];
+    const text = new TextEncoder().encode("plain text pretending to be a png file, not an image at all");
+    const s3Client = {
+      send: async (cmd: { constructor: { name: string } }) => {
+        sent.push(cmd.constructor.name);
+        if (cmd.constructor.name === "HeadObjectCommand") return { ContentLength: text.length };
+        if (cmd.constructor.name === "GetObjectCommand") return { Body: { transformToByteArray: async () => text } };
+        return {};
+      },
+    } as never;
+    await expect(
+      finalizeExpenseReceipt(dbRw, ctx, { mediaId, key, s3Client, r2Config: { accessKeyId: "k", secretAccessKey: "s", accountId: "a", bucketName: "b" } }),
+    ).rejects.toThrow(/does not match allowed/);
+    expect(sent).toContain("DeleteObjectCommand");
+    const rows = await withTenant(dbRw.db, tenantId, (tx) => tx.select().from(schema.media).where(eq(schema.media.id, mediaId)));
+    expect(rows.length).toBe(0);
   });
 });

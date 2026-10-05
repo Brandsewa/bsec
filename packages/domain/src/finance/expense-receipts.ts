@@ -18,6 +18,7 @@ import {
   type R2ClientConfig,
 } from "../media/storage.ts";
 import {
+  DeleteObjectCommand,
   HeadObjectCommand,
   GetObjectCommand,
   type S3Client,
@@ -171,6 +172,16 @@ export async function finalizeExpenseReceipt(
   let detectedMime: "application/pdf" | "image/jpeg" | "image/png" | "image/webp" | null = null;
 
   if (s3 && cfg.bucketName) {
+    // A rejected upload must not stay in the private bucket as an unreferenced object.
+    const reject = async (message: string): Promise<never> => {
+      try {
+        await s3.send(new DeleteObjectCommand({ Bucket: cfg.bucketName, Key: input.key }));
+      } catch {
+        // best effort: the object is private and unreferenced either way
+      }
+      throw new Error(message);
+    };
+
     const head = await s3.send(
       new HeadObjectCommand({
         Bucket: cfg.bucketName,
@@ -180,7 +191,7 @@ export async function finalizeExpenseReceipt(
 
     realBytes = head.ContentLength ?? 0;
     if (realBytes <= 0 || realBytes > MAX_RECEIPT_BYTES) {
-      throw new Error(`Bad Request: File size (${realBytes} bytes) exceeds the 5 MB limit.`);
+      await reject(`Bad Request: File size (${realBytes} bytes) exceeds the 5 MB limit.`);
     }
 
     const getCmd = new GetObjectCommand({
@@ -191,12 +202,12 @@ export async function finalizeExpenseReceipt(
     const res = await s3.send(getCmd);
     const bodyBytes = await res.Body?.transformToByteArray();
     if (!bodyBytes) {
-      throw new Error("Bad Request: Could not read file content for validation.");
+      await reject("Bad Request: Could not read file content for validation.");
     }
 
-    detectedMime = verifyReceiptMagicBytes(bodyBytes);
+    detectedMime = verifyReceiptMagicBytes(bodyBytes as Uint8Array);
     if (!detectedMime) {
-      throw new Error("Bad Request: File content does not match allowed PDF, JPEG, PNG, or WebP formats.");
+      await reject("Bad Request: File content does not match allowed PDF, JPEG, PNG, or WebP formats.");
     }
   } else {
     // Development or fallback: derive from extension

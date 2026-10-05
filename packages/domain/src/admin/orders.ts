@@ -1169,6 +1169,10 @@ export async function refundAdminOrder(
 
     if (!refund) throw new Error("Failed to insert refund record");
 
+    if (rt._jobs) {
+      await rt._jobs.send(QUEUE_NAMES.FINANCE_POST, { tenantId: ctx.tenantId, kind: "refund", id: refund.id });
+    }
+
     return { success: true, refundId: refund.id };
   });
 }

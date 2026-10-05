@@ -19,7 +19,7 @@ import {
   toast,
 } from "@bs/ui";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import type { ExpenseItem } from "@bs/contracts";
+import { addRecurringInterval, firstRecurringDue, type ExpenseItem } from "@bs/contracts";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
@@ -522,6 +522,8 @@ function ExpenseFormModal({
   const [note, setNote] = useState(expense?.note ?? "");
   const [isRecurring, setIsRecurring] = useState(false);
   const [interval, setInterval] = useState<"monthly" | "quarterly" | "yearly">("monthly");
+  const [backfill, setBackfill] = useState(false);
+  const [openedAt] = useState(() => Date.now());
   const [receiptMediaId, setReceiptMediaId] = useState<string | null>(expense?.receiptMediaId ?? null);
   const [receiptName, setReceiptName] = useState<string | null>(expense?.receiptMediaId ? "Receipt attached" : null);
   const [uploading, setUploading] = useState(false);
@@ -551,6 +553,20 @@ function ExpenseFormModal({
       },
     }),
   );
+
+  // Same schedule maths as the server (shared in @bs/contracts): the first copy is one interval after the expense.
+  const schedule = (() => {
+    if (!isRecurring || !date) return null;
+    const anchorDay = new Date(`${date}T00:00:00.000Z`).getUTCDate();
+    const now = openedAt;
+    let due = firstRecurringDue(date, interval, 1);
+    let pastDue = 0;
+    while (due.getTime() <= now && pastDue < 240) {
+      pastDue++;
+      due = addRecurringInterval(due, interval, 1, anchorDay);
+    }
+    return { nextFuture: due, pastDue, firstDue: firstRecurringDue(date, interval, 1) };
+  })();
 
   /** Presign, PUT straight to the private bucket, then finalize (magic-byte check) before attaching. */
   const handleReceiptFile = async (file: File | undefined) => {
@@ -618,6 +634,7 @@ function ExpenseFormModal({
             enabled: true,
             interval,
             intervalCount: 1,
+            backfillDue: backfill,
           }
         : undefined,
     });
@@ -777,6 +794,25 @@ function ExpenseFormModal({
                       { value: "yearly", label: "Yearly" },
                     ]}
                   />
+                  {schedule && (
+                    <div className="mt-2 space-y-2 text-xs text-muted-foreground">
+                      <p>
+                        Next copy:{" "}
+                        <strong className="text-foreground">
+                          {(backfill && schedule.pastDue > 0 ? schedule.firstDue : schedule.nextFuture).toISOString().slice(0, 10)}
+                        </strong>
+                      </p>
+                      {schedule.pastDue > 0 && (
+                        <div className="flex items-start space-x-2">
+                          <Checkbox id="backfill" checked={backfill} onCheckedChange={(c) => setBackfill(!!c)} />
+                          <label htmlFor="backfill" className="leading-snug cursor-pointer">
+                            {schedule.pastDue} {schedule.pastDue === 1 ? "copy is" : "copies are"} already due. Also create{" "}
+                            {schedule.pastDue === 1 ? "it" : "them"} now (up to 12 per day until caught up).
+                          </label>
+                        </div>
+                      )}
+                    </div>
+                  )}
                 </div>
               )}
             </div>

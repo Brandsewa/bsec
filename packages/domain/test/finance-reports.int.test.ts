@@ -10,7 +10,7 @@ import { createDb, schema, withTenant, type DbHandle } from "@bs/db";
 import { startTestDb, type TestDb } from "@bs/db/test-env";
 import { createRuntime } from "../src/runtime.ts";
 import { provisionTenant } from "../src/saas/provisioning.ts";
-import { createAdminDraftOrder } from "../src/index.ts";
+import { cancelAdminOrder, createAdminDraftOrder } from "../src/index.ts";
 import type { TenantContext } from "../src/context.ts";
 import {
   closeFiscalPeriod,
@@ -185,5 +185,50 @@ describe("Cost snapshot on order creation", () => {
     );
     expect(lines.length).toBe(1);
     expect(Number(lines[0]?.costPrice)).toBe(100000);
+  });
+});
+
+describe("Cancelling a paid order", () => {
+  it("records a refund for the collected money and the books stop counting the sale", async () => {
+    await withTenant(dbRw.db, tenantId, async (tx) => {
+      const [loc] = await tx.select({ id: schema.locations.id }).from(schema.locations).limit(1);
+      await tx.insert(schema.inventoryLevels).values({ tenantId, variantId, locationId: loc!.id, onHand: 50 }).onConflictDoNothing();
+    });
+    const draft = await createAdminDraftOrder(rtApp, ctx, {
+      email: "cancel@example.com",
+      phone: "+919876543210",
+      shippingAddress: { line1: "1 MG Road", city: "Pune", stateCode: "MH", pincode: "411001" },
+      items: [{ variantId, quantity: 1 }],
+      paymentOutcome: "paid",
+    });
+    await withTenant(dbRw.db, tenantId, (tx) => handleFinancePost(tx, tenantId, { kind: "order", id: draft.orderId }));
+    const [order] = await withTenant(dbRw.db, tenantId, (tx) =>
+      tx.select().from(schema.orders).where(eq(schema.orders.id, draft.orderId)),
+    );
+    expect(order?.paymentStatus).toBe("paid");
+
+    await cancelAdminOrder(rtApp, ctx, { id: draft.orderId, reason: "Customer changed their mind" });
+
+    const after = await withTenant(dbRw.db, tenantId, async (tx) => ({
+      order: (await tx.select().from(schema.orders).where(eq(schema.orders.id, draft.orderId)))[0],
+      refunds: await tx.select().from(schema.refunds).where(eq(schema.refunds.orderId, draft.orderId)),
+      intents: await tx.select().from(schema.paymentIntents).where(eq(schema.paymentIntents.orderId, draft.orderId)),
+      events: await tx.select().from(schema.orderEvents).where(eq(schema.orderEvents.orderId, draft.orderId)),
+    }));
+    expect(after.order?.status).toBe("cancelled");
+    expect(after.order?.paymentStatus).toBe("refunded");
+    expect(after.intents[0]?.status).toBe("refunded");
+    expect(after.refunds.length).toBe(1);
+    expect(after.refunds[0]?.status).toBe("succeeded");
+    expect(Number(after.refunds[0]?.amount)).toBe(Number(order?.grandTotal));
+    expect(after.events.find((e) => e.type === "order.cancel")?.message).toMatch(/Refund of .* recorded/);
+
+    // The finance.post job for the refund (enqueued by the cancel) reverses the sale on the ledger.
+    const written = await withTenant(dbRw.db, tenantId, (tx) => handleFinancePost(tx, tenantId, { kind: "refund", id: after.refunds[0]!.id }));
+    expect(written).toBeGreaterThan(0);
+    const refundEntries = await withTenant(dbRw.db, tenantId, (tx) =>
+      tx.select().from(schema.ledgerEntries).where(and(eq(schema.ledgerEntries.tenantId, tenantId), eq(schema.ledgerEntries.sourceId, after.refunds[0]!.id))),
+    );
+    expect(refundEntries.reduce((n, e) => n + e.amount, 0)).toBe(Number(order?.grandTotal));
   });
 });

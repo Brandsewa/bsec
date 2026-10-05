@@ -13,7 +13,7 @@
 
 import { and, desc, eq, gte, ilike, isNull, lte, or, sql } from "drizzle-orm";
 import { schema, withTenant, type DbHandle } from "@bs/db";
-import type { ExpenseItem } from "@bs/contracts";
+import { addRecurringInterval, firstRecurringDue, type RecurringInterval, type ExpenseItem } from "@bs/contracts";
 import { assertPermission, type TenantContext } from "../context.ts";
 import { resolvePeriod } from "./period-resolution.ts";
 import {
@@ -191,7 +191,9 @@ export async function createExpense(
         enabled: true,
         interval: opts.recurring.interval,
         intervalCount: opts.recurring.intervalCount ?? 1,
-        nextDueAt: calculateNextDueAt(new Date(dateStr), opts.recurring.interval, opts.recurring.intervalCount ?? 1).toISOString(),
+        // The first copy is one interval after this expense. Unless the merchant asked to backfill periods
+        // that are already past, start from the first interval that is still in the future.
+        nextDueAt: firstDueFrom(dateStr, opts.recurring.interval, opts.recurring.intervalCount ?? 1, opts.recurring.backfillDue === true).toISOString(),
         endsAt: opts.recurring.endsAt ?? null,
       }
     : null;
@@ -704,18 +706,14 @@ export async function unsettleExpense(
   });
 }
 
-function calculateNextDueAt(current: Date, interval: string, intervalCount: number): Date {
-  const next = new Date(current.getTime());
-  if (interval === "monthly") {
-    next.setMonth(next.getMonth() + intervalCount);
-  } else if (interval === "quarterly") {
-    next.setMonth(next.getMonth() + 3 * intervalCount);
-  } else if (interval === "yearly") {
-    next.setFullYear(next.getFullYear() + intervalCount);
-  } else {
-    next.setMonth(next.getMonth() + 1);
+function firstDueFrom(start: string, interval: RecurringInterval, count: number, backfill: boolean, now: Date = new Date()): Date {
+  const anchorDay = new Date(`${start.slice(0, 10)}T00:00:00.000Z`).getUTCDate();
+  let due = firstRecurringDue(start, interval, count);
+  if (backfill) return due;
+  while (due.getTime() <= now.getTime()) {
+    due = addRecurringInterval(due, interval, count, anchorDay);
   }
-  return next;
+  return due;
 }
 
 /**
@@ -748,6 +746,7 @@ export async function runRecurringExpenses(
     const endsAt = rec.endsAt ? new Date(rec.endsAt) : null;
     const interval = rec.interval || "monthly";
     const intervalCount = rec.intervalCount || 1;
+    const anchorDay = new Date(tmpl.date).getUTCDate();
 
     let iterations = 0;
     while (nextDue.getTime() <= now.getTime() && iterations < 12) {
@@ -814,7 +813,7 @@ export async function runRecurringExpenses(
         await postLedgerEntries(tx, tenantId, postings, { strict: false });
       }
 
-      nextDue = calculateNextDueAt(nextDue, interval, intervalCount);
+      nextDue = addRecurringInterval(nextDue, interval as RecurringInterval, intervalCount, anchorDay);
       iterations++;
     }
 

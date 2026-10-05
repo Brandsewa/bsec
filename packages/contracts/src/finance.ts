@@ -408,3 +408,33 @@ export const financeContract = {
       .output(z.object({ reopenedLabel: z.string() })),
   },
 };
+
+/**
+ * Recurring-expense schedule maths, shared by the server (which books the copies) and the admin form
+ * (which previews them), so the two can never disagree. All in UTC, whole days.
+ *
+ * Month arithmetic keeps the original day-of-month where the month has it and clamps otherwise
+ * (monthly from 31 Jan: 28 Feb, 31 Mar, 30 Apr), without drifting: the anchor day is passed in, not
+ * re-derived from the previous clamped date.
+ */
+export type RecurringInterval = "monthly" | "quarterly" | "yearly";
+
+export function addRecurringInterval(
+  current: Date,
+  interval: RecurringInterval,
+  count: number,
+  anchorDay: number,
+): Date {
+  const months = interval === "monthly" ? count : interval === "quarterly" ? 3 * count : 12 * count;
+  const total = current.getUTCFullYear() * 12 + current.getUTCMonth() + months;
+  const year = Math.floor(total / 12);
+  const month = total % 12;
+  const lastDay = new Date(Date.UTC(year, month + 1, 0)).getUTCDate();
+  return new Date(Date.UTC(year, month, Math.min(anchorDay, lastDay)));
+}
+
+/** The first date a recurring expense is due after `start` (a "YYYY-MM-DD" or ISO date). */
+export function firstRecurringDue(start: string, interval: RecurringInterval, count: number): Date {
+  const d = new Date(start.length === 10 ? `${start}T00:00:00.000Z` : start);
+  return addRecurringInterval(d, interval, count, d.getUTCDate());
+}
