@@ -188,6 +188,29 @@ export async function reconcileTenant(
           });
           written += count;
         }
+
+        // Orders cancelled in the window: the same idempotent cost-back as the live cancel path.
+        const cancelledToReplay = await tx
+          .select({ id: schema.orders.id })
+          .from(schema.orders)
+          .where(
+            and(
+              eq(schema.orders.tenantId, tenantId),
+              eq(schema.orders.status, "cancelled"),
+              gte(schema.orders.updatedAt, win.since),
+              lte(schema.orders.updatedAt, win.until),
+            ),
+          )
+          .orderBy(desc(schema.orders.updatedAt))
+          .limit(PAGE_LIMIT);
+        for (const ord of cancelledToReplay) {
+          if (isBudgetExceeded()) {
+            stoppedEarly = true;
+            break;
+          }
+          scannedRestocks++;
+          written += await handleFinancePost(tx, tenantId, { kind: "cancel_restock", id: ord.id });
+        }
       }
     }
   });

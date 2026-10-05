@@ -299,6 +299,61 @@ export async function postRestockEvent(
 }
 
 /**
+ * A cancelled order's goods are back on the shelf: debit inventory, credit cost of goods, capped at the
+ * COGS actually posted for the order. Only when stock really was restored (an inventory movement with
+ * reason "cancelled" exists for the order), so orders cancelled before stock was restored on cancel are
+ * not given an inventory asset that was never returned. Idempotent through its key.
+ */
+export async function postCancelRestockEvent(
+  tx: Tx,
+  tenantId: string,
+  orderId: string,
+): Promise<number> {
+  const [moved] = await tx
+    .select({ id: schema.inventoryMovements.id })
+    .from(schema.inventoryMovements)
+    .where(
+      and(
+        eq(schema.inventoryMovements.tenantId, tenantId),
+        eq(schema.inventoryMovements.referenceType, "order"),
+        eq(schema.inventoryMovements.referenceId, orderId),
+        eq(schema.inventoryMovements.reason, "cancelled"),
+      ),
+    )
+    .limit(1);
+  if (!moved) return 0;
+
+  const [order] = await tx
+    .select({ number: schema.orders.number, currency: schema.orders.currency })
+    .from(schema.orders)
+    .where(and(eq(schema.orders.tenantId, tenantId), eq(schema.orders.id, orderId)))
+    .limit(1);
+  if (!order) return 0;
+
+  const lines = await tx
+    .select({ quantity: schema.orderItems.quantity, costPrice: schema.orderItems.costPrice })
+    .from(schema.orderItems)
+    .where(and(eq(schema.orderItems.tenantId, tenantId), eq(schema.orderItems.orderId, orderId)));
+
+  const cogsKey = `order:${orderId}:cogs`.toLowerCase();
+  const [cogsRow] = await tx
+    .select({ total: sql<number>`coalesce(sum(${schema.ledgerEntries.amount}), 0)::float8` })
+    .from(schema.ledgerEntries)
+    .where(and(eq(schema.ledgerEntries.tenantId, tenantId), eq(schema.ledgerEntries.key, cogsKey)));
+
+  const postings = restockCostPostings({
+    orderId,
+    orderNumber: order.number,
+    reason: "cancel",
+    items: lines.map((l) => ({ quantity: l.quantity, costPrice: l.costPrice != null ? Number(l.costPrice) : null })),
+    postedCogs: Number(cogsRow?.total ?? 0),
+    alreadyRestockedCogs: 0,
+    currency: order.currency,
+  });
+  return await postLedgerEntries(tx, tenantId, postings, { strict: false });
+}
+
+/**
  * Loads an expense row and posts its initial ledger entry.
  */
 export async function postExpenseEvent(
@@ -339,6 +394,8 @@ export async function handleFinancePost(
       return await postRefundEvent(tx, tenantId, id);
     case "restock":
       return await postRestockEvent(tx, tenantId, id);
+    case "cancel_restock":
+      return await postCancelRestockEvent(tx, tenantId, id);
     case "expense":
       return await postExpenseEvent(tx, tenantId, id);
     case "adjustment":
