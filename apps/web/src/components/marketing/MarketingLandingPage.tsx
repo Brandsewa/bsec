@@ -44,13 +44,12 @@ export function MarketingLandingPage({ plans }: { plans?: LandingPlan[] | undefi
   useRevealMotion(rootRef, { item: ".bm-rv", armedClass: "bm-armed" });
   const [interval, setInterval_] = useState<"monthly" | "yearly">("monthly");
   const planList = useMemo(() => (plans && plans.length > 0 ? plans : FALLBACK_PLANS), [plans]);
-  const cheapest = Math.min(...planList.map((p) => p.monthlyPaise));
 
   return (
     <div ref={rootRef} className={`bm ${bmFont.variable}`} id="top">
       {/* ---------- Hero ---------- */}
       <section className="bm-hero" style={{ ["--bm-foot" as string]: "var(--bm-window-h)" } as React.CSSProperties}>
-        <style>{`.bm-hero{--bm-window-h:calc(min(100vw,90rem)*0.5 + 2.8rem)}@media(min-width:640px){.bm-hero{--bm-window-h:calc(min(100vw,90rem)*0.2 + 2.8rem)}}`}</style>
+        <style>{`.bm-hero{--bm-window-h:calc(min(100vw,90rem)*0.5 - 3.2rem)}@media(min-width:640px){.bm-hero{--bm-window-h:calc(min(100vw,90rem)*0.2 - 6.5rem)}}`}</style>
 
         {/* light layers (they fall away as the page scrolls) */}
         <div className="bm-light absolute inset-0" aria-hidden="true">
@@ -60,7 +59,7 @@ export function MarketingLandingPage({ plans }: { plans?: LandingPlan[] | undefi
           <Smoke beamX={0.5} />
           <div className="bm-grid" />
           <div className="bm-bloom" />
-          <Dust beamX={0.5} foot={220} />
+          <Dust beamX={0.5} foot={120} />
         </div>
         <div className="bm-grain" aria-hidden="true" />
         <div className="bm-flare bm-light" aria-hidden="true">
@@ -87,9 +86,9 @@ export function MarketingLandingPage({ plans }: { plans?: LandingPlan[] | undefi
         </header>
 
         {/* copy */}
-        <div className="relative z-20 mx-auto flex max-w-7xl flex-col items-center px-5 pb-2 pt-8 text-center sm:px-8 sm:pt-10 lg:pt-10">
+        <div className="relative z-20 mx-auto flex max-w-7xl flex-col items-center px-5 pb-2 pt-16 text-center sm:px-8 sm:pt-20 lg:pt-24">
           <h1 className="bm-h1 bm-rise max-w-[30ch]" style={{ ["--d" as string]: "100ms" } as React.CSSProperties}>
-            Open your Indian online store today.
+            Launch your Idea Today
           </h1>
           <p className="bm-dim bm-rise mt-4 max-w-[46rem] text-[1.05rem]" style={{ ["--d" as string]: "300ms" } as React.CSSProperties}>
             bcom.si gives Indian D2C brands a themed storefront, cash on delivery and GST invoices in one admin. Choose a
@@ -97,12 +96,8 @@ export function MarketingLandingPage({ plans }: { plans?: LandingPlan[] | undefi
           </p>
           <div className="bm-rise mt-6 w-full max-w-[36rem]" style={{ ["--d" as string]: "500ms" } as React.CSSProperties}>
             <SubdomainAvailabilityChecker platformDomain="bcom.si" />
-            <p className="bm-dim mt-2.5 text-[0.9rem]">14 days free · no card needed · plans from {inr(cheapest)} a month + GST</p>
           </div>
         </div>
-
-        {/* the lit horizon under the orbit */}
-        <div className="bm-horizon" aria-hidden="true"><span /></div>
 
         {/* the module orbit */}
         <div className="relative z-20 pb-8">
