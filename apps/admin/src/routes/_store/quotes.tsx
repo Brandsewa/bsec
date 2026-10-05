@@ -525,7 +525,7 @@ export function QuotesPage({
       </PageSection>
 
       <PageSection>
-        <div className="grid gap-3">
+        <div className="grid grid-cols-1 gap-3">
           <ScrollTabs
             tabs={VIEWS}
             value={s.view}

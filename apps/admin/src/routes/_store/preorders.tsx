@@ -369,7 +369,7 @@ export function PreordersPage() {
       <ScrollTabs value={s.view} onChange={(v) => update({ view: v as PreorderView, page: undefined })} tabs={VIEWS} />
 
       <PageSection>
-        <div className="grid gap-3">
+        <div className="grid grid-cols-1 gap-3">
           <TableToolbar
             searchLabel="Search pre-orders"
             searchPlaceholder="Search order #, customer, item..."
