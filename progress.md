@@ -136,13 +136,13 @@ Plan: `docs/SETTINGS-REBUILD-PLAN.md`, `SETTINGS-REMAINING-PHASES`; records `202
 - Theme builder merged (PR #30, migrations 0031/0032) on the owner's instruction to release. Verified by typecheck, lint, build and fast and real-database suites; the browser walkthrough was done (or not) by the owner, not by an agent.
 - CI e2e only runs on `main`: a PR that renames admin UI labels must grep `e2e/` first (two follow-up fixes were needed after Settings 0-1).
 - Windows heavy-suite worker crash `3221226505` remains a local flake (rerun the file alone); CI on Linux is unaffected.
+- Finance (merged 2026-10-05, PR #39, ADR-022): cancelling a paid order records a refund but does not restore stock (`releaseReservation` only releases active reservations), so cancel-time COGS is not posted back; receipt upload was tested against a local S3 stand-in, not real R2; the `store_finance` role was tested through the API and tests, not in a browser; Finance pages overflow horizontally at 375 px (as the Returns page does). Details in `docs/changes/2026-10-05-claude-finance-verification.md` and ADR-022 "Known gaps".
 - COD fee/enable is still saved through the generic `settings.update` (`settings.write`); owner-only treatment is part of Settings Phase 5.
 
 ## In flight
 
 One line per piece of work that is started and not merged. Add yours before you start, remove it when merged or abandoned (`AGENTS.md` section 6). Format: `agent · branch · area · since · one-line goal`.
 
-- antigravity · feat/finance-phases-1-4 · finance · 2026-10-05 · Phases 0-4: Double-entry finance engine, reports, expenses & UI (ready for verification)
 
 
 ## Returns & Exchanges (Manual Review & Portal) — Complete (2026-10-02)
