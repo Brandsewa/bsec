@@ -1,8 +1,10 @@
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { PostgreSqlContainer, type StartedPostgreSqlContainer } from "@testcontainers/postgresql";
 import { eq, desc } from "drizzle-orm";
-import { createDb, schema, type DbHandle } from "@bs/db";
+import { createDb, schema, withTenant, type DbHandle } from "@bs/db";
+import { SYSTEM_STORE_ROLES } from "@bs/auth";
 import { bootstrapRoles } from "@bs/db/bootstrap";
+import { enableTenantFlags } from "./helpers/feature-flags.ts";
 import { runMigrations } from "@bs/db/migrate";
 import {
   createRuntime,
@@ -34,6 +36,7 @@ let container: StartedPostgreSqlContainer | undefined;
 let superUrl: string;
 let rwDb: DbHandle;
 let rt: Runtime;
+let rtPlatform: Runtime;
 
 function as(role: "app_owner" | "app_rw" | "app_platform", password: string): string {
   const u = new URL(superUrl);
@@ -46,6 +49,18 @@ let tenantId: string;
 let ownerUserId: string;
 let ownerCtx: TenantContext;
 
+// audit_logs is a tenant table under forced RLS: reads must carry the tenant context.
+async function latestAuditRows() {
+  return withTenant(rt._db.db, tenantId, (tx) =>
+    tx
+      .select()
+      .from(schema.auditLogs)
+      .where(eq(schema.auditLogs.tenantId, tenantId))
+      .orderBy(desc(schema.auditLogs.createdAt), desc(schema.auditLogs.id))
+      .limit(1),
+  );
+}
+
 beforeAll(async () => {
   if (process.env.TEST_DATABASE_URL_SUPERUSER) {
     superUrl = process.env.TEST_DATABASE_URL_SUPERUSER;
@@ -57,14 +72,16 @@ beforeAll(async () => {
   await runMigrations(as("app_owner", PW.owner));
   rwDb = createDb(as("app_rw", PW.rw), { max: 10 });
   rt = createRuntime({ service: "web", databaseUrl: as("app_rw", PW.rw), poolMax: 10 });
+  rtPlatform = createRuntime({ service: "platform", databaseUrl: as("app_platform", PW.platform), poolMax: 5 });
 
-  const p = await provisionTenant(rt, {
+  const p = await provisionTenant(rtPlatform, {
     storeName: "Settings Audit Tenant",
     slug: "settings-audit-test",
     owner: { email: "audit-owner@test.example", name: "Audit Owner" },
     planCode: "starter",
   });
   tenantId = p.tenantId;
+  await enableTenantFlags(rtPlatform._db.db, tenantId, ["settings.maintenance"]);
   ownerUserId = p.ownerId;
 
   ownerCtx = {
@@ -72,7 +89,7 @@ beforeAll(async () => {
     storeStatus: "live",
     actor: { type: "staff", userId: ownerUserId },
     roles: ["store_owner"],
-    permissions: ["*"],
+    permissions: [...SYSTEM_STORE_ROLES.store_owner],
     requestId: crypto.randomUUID(),
   };
 });
@@ -107,12 +124,7 @@ describe("Slice 8D: Settings Audit Coverage & Sanitization Invariant", () => {
         bypassToken: "super-secret-token-preview-xyz",
       });
 
-      const [latest] = await rt._db.db
-        .select()
-        .from(schema.auditLogs)
-        .where(eq(schema.auditLogs.tenantId, tenantId))
-        .orderBy(desc(schema.auditLogs.createdAt), desc(schema.auditLogs.id))
-        .limit(1);
+      const [latest] = await latestAuditRows();
 
       expect(latest).toBeDefined();
       expect(latest?.action).toBe("store_status.update");
@@ -132,34 +144,19 @@ describe("Slice 8D: Settings Audit Coverage & Sanitization Invariant", () => {
 
       // 1. Schedule
       await scheduleMaintenance(rt, ownerCtx, { startsAt, endsAt, allowStaffPreview: true });
-      const [schedLog] = await rt._db.db
-        .select()
-        .from(schema.auditLogs)
-        .where(eq(schema.auditLogs.tenantId, tenantId))
-        .orderBy(desc(schema.auditLogs.createdAt), desc(schema.auditLogs.id))
-        .limit(1);
+      const [schedLog] = await latestAuditRows();
       expect(schedLog?.action).toBe("store_status.schedule_maintenance");
       expect(schedLog?.diff).toBeDefined();
 
       // 2. Cancel schedule
       await cancelScheduledMaintenance(rt, ownerCtx);
-      const [cancelLog] = await rt._db.db
-        .select()
-        .from(schema.auditLogs)
-        .where(eq(schema.auditLogs.tenantId, tenantId))
-        .orderBy(desc(schema.auditLogs.createdAt), desc(schema.auditLogs.id))
-        .limit(1);
+      const [cancelLog] = await latestAuditRows();
       expect(cancelLog?.action).toBe("store_status.cancel_scheduled_maintenance");
 
       // 3. Set maintenance and end it
       await updateStoreStatus(rt, ownerCtx, { mode: "maintenance" });
       await endMaintenance(rt, ownerCtx);
-      const [endLog] = await rt._db.db
-        .select()
-        .from(schema.auditLogs)
-        .where(eq(schema.auditLogs.tenantId, tenantId))
-        .orderBy(desc(schema.auditLogs.createdAt), desc(schema.auditLogs.id))
-        .limit(1);
+      const [endLog] = await latestAuditRows();
       expect(endLog?.action).toBe("store_status.end_maintenance");
     });
   });
@@ -172,12 +169,7 @@ describe("Slice 8D: Settings Audit Coverage & Sanitization Invariant", () => {
         companyName: "optional",
       });
 
-      const [latest] = await rt._db.db
-        .select()
-        .from(schema.auditLogs)
-        .where(eq(schema.auditLogs.tenantId, tenantId))
-        .orderBy(desc(schema.auditLogs.createdAt), desc(schema.auditLogs.id))
-        .limit(1);
+      const [latest] = await latestAuditRows();
 
       expect(latest?.action).toBe("checkout_settings.update");
       expect(latest?.actorId).toBe(ownerUserId);
@@ -191,14 +183,9 @@ describe("Slice 8D: Settings Audit Coverage & Sanitization Invariant", () => {
         allowSelfServeReturns: true,
       });
 
-      const [latest] = await rt._db.db
-        .select()
-        .from(schema.auditLogs)
-        .where(eq(schema.auditLogs.tenantId, tenantId))
-        .orderBy(desc(schema.auditLogs.createdAt), desc(schema.auditLogs.id))
-        .limit(1);
+      const [latest] = await latestAuditRows();
 
-      expect(latest?.action).toBe("customer_account_settings.update");
+      expect(latest?.action).toBe("checkout_settings.update");
       assertNoSecretsInDiff(latest?.diff);
     });
   });
@@ -212,14 +199,9 @@ describe("Slice 8D: Settings Audit Coverage & Sanitization Invariant", () => {
         maxOrderPaise: 500000,
       });
 
-      const [latest] = await rt._db.db
-        .select()
-        .from(schema.auditLogs)
-        .where(eq(schema.auditLogs.tenantId, tenantId))
-        .orderBy(desc(schema.auditLogs.createdAt), desc(schema.auditLogs.id))
-        .limit(1);
+      const [latest] = await latestAuditRows();
 
-      expect(latest?.action).toBe("payments.cod_update");
+      expect(latest?.action).toBe("payment_methods.cod_update");
       assertNoSecretsInDiff(latest?.diff);
     });
 
@@ -229,12 +211,7 @@ describe("Slice 8D: Settings Audit Coverage & Sanitization Invariant", () => {
         minimumOrderPaise: 20000,
       });
 
-      const [latest] = await rt._db.db
-        .select()
-        .from(schema.auditLogs)
-        .where(eq(schema.auditLogs.tenantId, tenantId))
-        .orderBy(desc(schema.auditLogs.createdAt), desc(schema.auditLogs.id))
-        .limit(1);
+      const [latest] = await latestAuditRows();
 
       expect(latest?.action).toBe("order_settings.update");
       assertNoSecretsInDiff(latest?.diff);
@@ -248,14 +225,9 @@ describe("Slice 8D: Settings Audit Coverage & Sanitization Invariant", () => {
         freeShippingThresholdPaise: null,
       });
 
-      const [latest] = await rt._db.db
-        .select()
-        .from(schema.auditLogs)
-        .where(eq(schema.auditLogs.tenantId, tenantId))
-        .orderBy(desc(schema.auditLogs.createdAt), desc(schema.auditLogs.id))
-        .limit(1);
+      const [latest] = await latestAuditRows();
 
-      expect(latest?.action).toBe("shipping_settings.update");
+      expect(latest?.action).toBe("shipping.update");
       assertNoSecretsInDiff(latest?.diff);
     });
   });
@@ -264,18 +236,13 @@ describe("Slice 8D: Settings Audit Coverage & Sanitization Invariant", () => {
     it("writes audit row on updateTaxSettings and tax classes", async () => {
       await updateTaxSettings(rt, ownerCtx, {
         taxCollection: true,
-        gstin: "27AABCU9603R1ZM",
+        gstin: "27AAPFU0955L1ZI",
         sellerState: "Maharashtra",
         pricesIncludeTax: true,
       });
 
-      const [latestTax] = await rt._db.db
-        .select()
-        .from(schema.auditLogs)
-        .where(eq(schema.auditLogs.tenantId, tenantId))
-        .orderBy(desc(schema.auditLogs.createdAt), desc(schema.auditLogs.id))
-        .limit(1);
-      expect(latestTax?.action).toBe("tax_settings.update");
+      const [latestTax] = await latestAuditRows();
+      expect(latestTax?.action).toBe("taxes.update");
 
       const created = await createTaxClass(rt, ownerCtx, {
         name: "Luxury Tax",
@@ -283,12 +250,7 @@ describe("Slice 8D: Settings Audit Coverage & Sanitization Invariant", () => {
         defaultHsn: "9999",
         isDefault: false,
       });
-      const [createLog] = await rt._db.db
-        .select()
-        .from(schema.auditLogs)
-        .where(eq(schema.auditLogs.tenantId, tenantId))
-        .orderBy(desc(schema.auditLogs.createdAt), desc(schema.auditLogs.id))
-        .limit(1);
+      const [createLog] = await latestAuditRows();
       expect(createLog?.action).toBe("tax_class.create");
 
       await updateTaxClass(rt, ownerCtx, {
@@ -296,21 +258,11 @@ describe("Slice 8D: Settings Audit Coverage & Sanitization Invariant", () => {
         name: "Ultra Luxury",
         rateBps: 2800,
       });
-      const [updateLog] = await rt._db.db
-        .select()
-        .from(schema.auditLogs)
-        .where(eq(schema.auditLogs.tenantId, tenantId))
-        .orderBy(desc(schema.auditLogs.createdAt), desc(schema.auditLogs.id))
-        .limit(1);
+      const [updateLog] = await latestAuditRows();
       expect(updateLog?.action).toBe("tax_class.update");
 
       await deleteTaxClass(rt, ownerCtx, created.id);
-      const [deleteLog] = await rt._db.db
-        .select()
-        .from(schema.auditLogs)
-        .where(eq(schema.auditLogs.tenantId, tenantId))
-        .orderBy(desc(schema.auditLogs.createdAt), desc(schema.auditLogs.id))
-        .limit(1);
+      const [deleteLog] = await latestAuditRows();
       expect(deleteLog?.action).toBe("tax_class.delete");
     });
 
@@ -321,14 +273,9 @@ describe("Slice 8D: Settings Audit Coverage & Sanitization Invariant", () => {
         },
       });
 
-      const [latest] = await rt._db.db
-        .select()
-        .from(schema.auditLogs)
-        .where(eq(schema.auditLogs.tenantId, tenantId))
-        .orderBy(desc(schema.auditLogs.createdAt), desc(schema.auditLogs.id))
-        .limit(1);
+      const [latest] = await latestAuditRows();
 
-      expect(latest?.action).toBe("notification_settings.update");
+      expect(latest?.action).toBe("settings.notifications_updated");
       assertNoSecretsInDiff(latest?.diff);
     });
   });
@@ -346,34 +293,19 @@ describe("Slice 8D: Settings Audit Coverage & Sanitization Invariant", () => {
           ],
         },
       });
-      const [saveLog] = await rt._db.db
-        .select()
-        .from(schema.auditLogs)
-        .where(eq(schema.auditLogs.tenantId, tenantId))
-        .orderBy(desc(schema.auditLogs.createdAt), desc(schema.auditLogs.id))
-        .limit(1);
+      const [saveLog] = await latestAuditRows();
       expect(saveLog?.action).toBe("policy.draft_saved");
 
       const pub = await publishPolicy(rt, ownerCtx, "privacy");
-      const [pubLog] = await rt._db.db
-        .select()
-        .from(schema.auditLogs)
-        .where(eq(schema.auditLogs.tenantId, tenantId))
-        .orderBy(desc(schema.auditLogs.createdAt), desc(schema.auditLogs.id))
-        .limit(1);
+      const [pubLog] = await latestAuditRows();
       expect(pubLog?.action).toBe("policy.published");
 
       await restorePolicyDraft(rt, ownerCtx, {
         handle: "privacy",
         versionId: pub.publishedVersion!.id,
       });
-      const [resLog] = await rt._db.db
-        .select()
-        .from(schema.auditLogs)
-        .where(eq(schema.auditLogs.tenantId, tenantId))
-        .orderBy(desc(schema.auditLogs.createdAt), desc(schema.auditLogs.id))
-        .limit(1);
-      expect(resLog?.action).toBe("policy.draft_restored");
+      const [resLog] = await latestAuditRows();
+      expect(resLog?.action).toBe("policy.restored_as_draft");
     });
 
     it("writes audit row on updatePrivacySettings", async () => {
@@ -383,14 +315,9 @@ describe("Slice 8D: Settings Audit Coverage & Sanitization Invariant", () => {
         requestSlaDays: 30,
       });
 
-      const [latest] = await rt._db.db
-        .select()
-        .from(schema.auditLogs)
-        .where(eq(schema.auditLogs.tenantId, tenantId))
-        .orderBy(desc(schema.auditLogs.createdAt), desc(schema.auditLogs.id))
-        .limit(1);
+      const [latest] = await latestAuditRows();
 
-      expect(latest?.action).toBe("privacy_settings.update");
+      expect(latest?.action).toBe("settings.privacy_updated");
       assertNoSecretsInDiff(latest?.diff);
     });
   });

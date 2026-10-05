@@ -7,6 +7,7 @@ import { invalidateCache } from "../cache-invalidation.ts";
 import { deleteAdminCustomer } from "../admin/customers.ts";
 import { setMarketingConsent } from "../customers/consent.ts";
 import { sendTransactionalEmail } from "../system/email.ts";
+import { checkRateLimit, RateLimitExceededError } from "../system/rate-limit.ts";
 
 export interface PrivacySettingsView {
   privacyContactEmail: string | null;
@@ -72,6 +73,12 @@ export const TEST_LOCKED_COOKIE_INVENTORY: CookieInventoryItem[] = [
     category: "strictly_necessary",
   },
 ];
+
+/** Static cookie inventory shown to merchants; permission-checked here so the route is not the only gate. */
+export function getCookieInventory(ctx: TenantContext): CookieInventoryItem[] {
+  assertPermission(ctx, "settings.read");
+  return TEST_LOCKED_COOKIE_INVENTORY;
+}
 
 /**
  * Ensures a single privacy_settings row exists per tenant.
@@ -204,9 +211,25 @@ export async function createPrivacyRequestPublic(
     kind: PrivacyRequestKind;
     details?: string | undefined;
     baseUrl?: string | undefined;
+    ip?: string | undefined;
   },
 ): Promise<{ success: true; message: string }> {
   const email = input.email.trim().toLowerCase();
+
+  // Each request mails a verification link to an address the visitor typed, so cap it per address and per IP
+  // (the route's tenant-wide limiter alone lets one visitor aim every request at a single victim).
+  const emailKey = `privacy_req:email:${tenantId}:${email}`;
+  const emailRes = await checkRateLimit(db, { key: emailKey, limit: 3, windowSeconds: 3600 });
+  if (!emailRes.allowed) {
+    throw new RateLimitExceededError("Too many privacy requests for this email. Please try again later.", emailRes.retryAfter, 3, emailKey);
+  }
+  if (input.ip && input.ip !== "unknown") {
+    const ipKey = `privacy_req:ip:${tenantId}:${input.ip}`;
+    const ipRes = await checkRateLimit(db, { key: ipKey, limit: 10, windowSeconds: 3600 });
+    if (!ipRes.allowed) {
+      throw new RateLimitExceededError("Too many privacy requests from this network. Please try again later.", ipRes.retryAfter, 10, ipKey);
+    }
+  }
   const kind = input.kind;
   const details = input.details?.trim().slice(0, 2000) || null;
 

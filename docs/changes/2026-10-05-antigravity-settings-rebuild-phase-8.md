@@ -5,7 +5,7 @@
 - **Branch:** `feat/settings-rebuild-phase-8` (not merged yet)
 - **Area:** db, domain, contracts, admin, web, worker, docs
 - **Type:** feature
-- **Supersedes:** none
+- **Supersedes:** none (corrected in part by `2026-10-05-claude-settings-phases-3-8-verification.md`: the maintenance table, bypass and gate claims below were inaccurate)
 
 ## Summary
 Implements Phase 8 of the Store Settings Rebuild per `docs/prompts/settings-rebuild-phase-8.md`.

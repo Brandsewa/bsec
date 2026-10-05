@@ -19,6 +19,7 @@ import {
   type Runtime,
   type TenantContext,
 } from "../src/index.ts";
+import { enableTenantFlags } from "./helpers/feature-flags.ts";
 
 let env: TestDb;
 let rtPlatform: Runtime;
@@ -54,6 +55,7 @@ beforeAll(async () => {
   rtWeb = createRuntime({ service: "web", databaseUrl: env.as("app_rw"), poolMax: 5 });
   storeA = await mkStore("acc-a");
   storeB = await mkStore("acc-b");
+  await enableTenantFlags(rtPlatform._db.db, storeA.tenantId, ["settings.customer_accounts"]);
 
   // Create product and variant in Store A for order tests
   await withTenant(rtWeb._db.db, storeA.tenantId, async (tx) => {

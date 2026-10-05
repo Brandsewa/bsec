@@ -2,6 +2,7 @@ import { sql } from "drizzle-orm";
 import { withTenant } from "@bs/db";
 import type { Runtime } from "../runtime.ts";
 import { assertPermission, type TenantContext } from "../context.ts";
+import { FeatureDisabledError, isFeatureEnabled } from "../features.ts";
 import { resolveEffectiveQuota } from "../system/quotas.ts";
 import type { StorageUsageBreakdownItem, StorageUsageView } from "@bs/contracts";
 
@@ -15,6 +16,9 @@ export async function getStorageUsage(
   ctx: TenantContext,
 ): Promise<StorageUsageView> {
   assertPermission(ctx, "settings.read");
+  if (!(await isFeatureEnabled(rt._db.db, ctx.tenantId, "settings.storage"))) {
+    throw new FeatureDisabledError("settings.storage");
+  }
 
   // 1. Single indexed aggregate grouping by folder under withTenant isolation
   const rows = await withTenant(rt._db.db, ctx.tenantId, async (tx) => {

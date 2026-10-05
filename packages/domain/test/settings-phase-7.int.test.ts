@@ -18,6 +18,7 @@ import {
   getPrivacySettings,
   updatePrivacySettings,
   createPrivacyRequestPublic,
+  RateLimitExceededError,
   executePrivacyErasure,
   setMarketingConsent,
   pruneEmailLogs,
@@ -328,6 +329,25 @@ describe("Phase 7 Integration Tests (Real Postgres)", () => {
         [tenantId],
       );
       expect(reqRes.rows[0]?.status).toBe("pending_verification");
+    });
+
+    it("public intake caps requests per address and per IP so a victim's inbox cannot be flooded", async () => {
+      const run = Math.random().toString(36).slice(2, 8); // counters live an hour in a reused container
+      const victim = `victim-${run}@example.com`;
+      for (let i = 0; i < 3; i++) {
+        await createPrivacyRequestPublic(rwDb.db, tenantId, { email: victim, kind: "access", ip: `10.0.0.${i}` });
+      }
+      await expect(
+        createPrivacyRequestPublic(rwDb.db, tenantId, { email: victim, kind: "access", ip: "10.0.0.99" }),
+      ).rejects.toBeInstanceOf(RateLimitExceededError);
+
+      // One IP aimed at many different addresses is capped too.
+      for (let i = 0; i < 10; i++) {
+        await createPrivacyRequestPublic(rwDb.db, tenantId, { email: `spray-${run}-${i}@example.com`, kind: "access", ip: `10.9.${run}` });
+      }
+      await expect(
+        createPrivacyRequestPublic(rwDb.db, tenantId, { email: `spray-${run}-x@example.com`, kind: "access", ip: `10.9.${run}` }),
+      ).rejects.toBeInstanceOf(RateLimitExceededError);
     });
 
     it("anonymises customer on erasure if orders exist, hard deletes otherwise", async () => {

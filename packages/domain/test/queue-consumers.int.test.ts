@@ -52,6 +52,8 @@ beforeAll(async () => {
     DELETE FROM fulfillments WHERE tenant_id = '${tenantId}';
     DELETE FROM orders WHERE tenant_id = '${tenantId}';
     DELETE FROM carts WHERE tenant_id = '${tenantId}';
+    DELETE FROM customers WHERE tenant_id = '${tenantId}';
+    DELETE FROM tenant_feature_overrides WHERE tenant_id = '${tenantId}';
     DELETE FROM locations WHERE tenant_id = '${tenantId}';
   `);
   await pgClient.query("SET session_replication_role = 'origin'");
@@ -66,6 +68,10 @@ beforeAll(async () => {
     INSERT INTO fulfillments (id, tenant_id, order_id, location_id, status)
     VALUES ('${fulfillmentId}', '${tenantId}', '${orderId}', '${locationId}', 'shipped')
     ON CONFLICT DO NOTHING;
+    -- Abandoned-cart recovery is a marketing email (Settings Phase 7): only shoppers who subscribed receive it.
+    INSERT INTO customers (tenant_id, email, accepts_marketing, marketing_state)
+    VALUES ('${tenantId}', 'abandoned-cart@example.com', true, 'subscribed'),
+           ('${tenantId}', 'sweep@example.com', true, 'subscribed');
     INSERT INTO carts (id, tenant_id, token, email, status)
     VALUES ('${cartId}', '${tenantId}', 'cart_tok_e1', 'abandoned-cart@example.com', 'abandoned')
     ON CONFLICT DO NOTHING;
@@ -148,6 +154,25 @@ describe("Queue Consumers Integration", () => {
     expect(String(sent.html)).toContain("https://test-store-e1.bcom.si/cart");
     expect(String(sent.text)).toContain("Return to your cart: https://test-store-e1.bcom.si/cart");
     expect(String(sent.text)).not.toContain("Template:");
+  });
+
+  it("cart.abandoned consumer sends nothing to a shopper who has not subscribed (settings.notifications on)", async () => {
+    const flagClient = new (await import("pg")).default.Client({ connectionString: superUrl });
+    await flagClient.connect();
+    await flagClient.query(
+      `INSERT INTO tenant_feature_overrides (tenant_id, key, enabled) VALUES ($1, 'settings.notifications', true)
+       ON CONFLICT (tenant_id, key) DO UPDATE SET enabled = true`,
+      [tenantId],
+    );
+    await flagClient.end();
+    await handleCartAbandonedJob(rwDb.db, logger, {
+      tenantId,
+      cartId,
+      token: "cart_tok_e1",
+      email: "never-subscribed@example.com",
+    });
+
+    expect(sentMails).toHaveLength(0);
   });
 
   it("cart.abandoned consumer skips email when no email address is on payload", async () => {

@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { checkStorefrontRateLimit, createPrivacyRequestPublic } from "@bs/domain";
+import { checkStorefrontRateLimit, createPrivacyRequestPublic, getClientIp } from "@bs/domain";
 import { errorResponse, resolveStore, sameOrigin } from "@/server/customer-session.ts";
 
 export async function POST(req: Request) {
@@ -39,6 +39,7 @@ export async function POST(req: Request) {
       kind: kind as "access" | "correction" | "erasure" | "grievance" | "withdraw_consent",
       details: typeof details === "string" ? details : undefined,
       baseUrl,
+      ip: getClientIp(req.headers),
     });
 
     return NextResponse.json(res);

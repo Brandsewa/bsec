@@ -6,6 +6,7 @@ import { schema, withTenant } from "@bs/db";
 import { resolveHostToTenant } from "../host-resolver.ts";
 import type { HeaderValues, TenantContext } from "../context.ts";
 import { assertPermission } from "../context.ts";
+import { FeatureDisabledError, isFeatureEnabled } from "../features.ts";
 import type { Runtime } from "../runtime.ts";
 import { invalidateCache } from "../cache-invalidation.ts";
 import { storefrontLifecycleDecision } from "../system/tenant-lifecycle.ts";
@@ -760,6 +761,9 @@ export async function scheduleMaintenance(
   assertPermission(ctx, "storefront.manage");
   if (!ctx.roles.includes("store_owner") || ctx.actor.type !== "staff") {
     throw new Error("Forbidden: only store owners can schedule maintenance");
+  }
+  if (!(await isFeatureEnabled(rt._db.db, ctx.tenantId, "settings.maintenance"))) {
+    throw new FeatureDisabledError("settings.maintenance");
   }
 
   const startsAt = new Date(input.startsAt);

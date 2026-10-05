@@ -2,6 +2,7 @@ import { eq, sql, and } from "drizzle-orm";
 import { type Db, withTenant, schema } from "@bs/db";
 import { renderEmail, type EmailData } from "./email-templates.ts";
 import { loadEmailBrand, loadEmailOrder, mintOrderViewUrl } from "./email-context.ts";
+import { isFeatureEnabled } from "../features.ts";
 import { sendPlatformEmail } from "./platform-mailer.ts";
 import {
   EMAIL_CLASS,
@@ -66,6 +67,9 @@ export async function sendTransactionalEmail(
 ): Promise<SendEmailResult> {
   const { tenantId, template, toEmail, subject, data = {}, eventRef, eventKey } = input;
   const emailClass: EmailClass = EMAIL_CLASS[template] ?? "transactional";
+  // Preference and marketing-consent evaluation is new behaviour (Settings Phase 7). Flag off = every email is
+  // sent as before, so enabling it is a deliberate per-store rollout (docs/runbooks/settings-rollout.md).
+  const notificationRulesOn = await isFeatureEnabled(db, tenantId, "settings.notifications");
 
   return await withTenant(db, tenantId, async (tx) => {
     // 1. Check integration kill switch for email
@@ -111,7 +115,7 @@ export async function sendTransactionalEmail(
 
     // If customer-facing transactional email, check if preference is disabled
     const prefField = getTemplatePreferenceField(template);
-    if (emailClass === "transactional" && prefField && prefField !== "accountSecurity") {
+    if (notificationRulesOn && emailClass === "transactional" && prefField && prefField !== "accountSecurity") {
       const isEnabled = preferences.customer[prefField];
       if (!isEnabled) {
         const [skippedLog] = await tx
@@ -140,7 +144,7 @@ export async function sendTransactionalEmail(
 
     // 3. Marketing email verification: require subscribed consent
     let unsubscribeToken: string | undefined;
-    if (emailClass === "marketing") {
+    if (notificationRulesOn && emailClass === "marketing") {
       // Look up customer by email and check current consent
       const [cust] = await tx
         .select({

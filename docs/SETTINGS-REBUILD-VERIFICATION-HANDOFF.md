@@ -98,7 +98,7 @@ feat/settings-rebuild-phase-8 ──► Rebase/Merge main ──► Merge to mai
 ### Phase 8 Verification (`feat/settings-rebuild-phase-8`)
 - [ ] **Prompt Reference:** [`docs/prompts/settings-rebuild-phase-8.md`](file:///C:/dev/bsec-settings-p8/docs/prompts/settings-rebuild-phase-8.md)
 - [ ] **Storage Usage:** Verify `getStorageUsageSummary` bounded count (<5,000 files/products/themes) and quota alerts (>80% amber, >95% red).
-- [ ] **Scheduled Maintenance:** Verify `store_maintenance_windows` table, owner-only scheduling, pg-boss watchdog sweep (1 min), cart/order checkout blocking (`STORE_IN_MAINTENANCE`), and HTTP 503 `Retry-After` header.
+- [ ] **Scheduled Maintenance:** Verify the `store_status` window columns and `store_status_transitions` table, owner-only scheduling, pg-boss watchdog sweep (1 min), cart/order checkout blocking (`STORE_IN_MAINTENANCE`), and HTTP 503 `Retry-After` header.
 - [ ] **Auth Matrix:** Run `pnpm --filter @bs/domain test:fast` and check `packages/domain/test/settings-authorization.int.test.ts`.
 - [ ] **Audit Coverage:** Run `packages/domain/test/settings-audit-coverage.int.test.ts` to confirm all mutations log audit rows.
 - [ ] **Rollout & ADRs:** Review [`docs/runbooks/settings-rollout.md`](file:///C:/dev/bsec-settings-p8/docs/runbooks/settings-rollout.md) and [`docs/adr/021-settings-contract-schedule.md`](file:///C:/dev/bsec-settings-p8/docs/adr/021-settings-contract-schedule.md).

@@ -263,7 +263,7 @@ import {
   endMaintenance,
   listStoreStatusTransitions,
   getStorageUsage,
-  TEST_LOCKED_COOKIE_INVENTORY,
+  getCookieInventory,
   type Logger,
   type Runtime,
   type TenantContext,
@@ -823,8 +823,9 @@ export const storeRouter = os.router({
       cookieInventory: os.admin.customerPrivacy.cookieInventory
         .use(requireAdmin)
         .use(requirePermission("settings.read"))
-        .handler(() => {
-          return TEST_LOCKED_COOKIE_INVENTORY;
+        .handler(({ context }) => {
+          if (!context.tenantCtx) throw new Error("Missing tenant context");
+          return getCookieInventory(context.tenantCtx);
         }),
     },
     featureFlags: {
@@ -1880,14 +1881,14 @@ export const storeRouter = os.router({
         .use(requirePermission("settings.read"))
         .handler(({ context }) => {
           if (!context.tenantCtx) throw new Error("Missing tenant context");
-          return getAdminShippingSettings(context.rt._db.db, context.tenantCtx.tenantId);
+          return getAdminShippingSettings(context.rt, context.tenantCtx);
         }),
       update: os.admin.shipping.update
         .use(requireAdmin)
         .use(requirePermission("shipping.manage"))
         .handler(({ context, input }) => {
           if (!context.tenantCtx) throw new Error("Missing tenant context");
-          return updateAdminShippingSettings(context.rt._db.db, context.tenantCtx.tenantId, input);
+          return updateAdminShippingSettings(context.rt, context.tenantCtx, input);
         }),
       preview: os.admin.shipping.preview
         .use(requireAdmin)

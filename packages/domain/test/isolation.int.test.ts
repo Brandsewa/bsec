@@ -22,8 +22,37 @@ import {
   type DbHandle,
 } from "@bs/db";
 import { bootstrapRoles } from "@bs/db/bootstrap";
+import { enableTenantFlags } from "./helpers/feature-flags.ts";
 import { runMigrations } from "@bs/db/migrate";
 import {
+  getTaxSettings,
+  updateTaxSettings,
+  listTaxClasses,
+  createTaxClass,
+  updateTaxClass,
+  deleteTaxClass,
+  getNotificationSettings,
+  updateNotificationSettings,
+  listPolicies,
+  getPolicy,
+  savePolicyDraft,
+  publishPolicy,
+  getPolicyVersions,
+  restorePolicyDraft,
+  getPrivacySettings,
+  updatePrivacySettings,
+  listPrivacyRequests,
+  updatePrivacyRequestStatus,
+  executePrivacyExport,
+  executePrivacyErasure,
+  executePrivacyWithdrawConsent,
+  getCookieInventory,
+  previewShippingRate,
+  getStorageUsage,
+  scheduleMaintenance,
+  cancelScheduledMaintenance,
+  endMaintenance,
+  listStoreStatusTransitions,
   activateTheme,
   getCategoryStats,
   getCategory,
@@ -365,6 +394,9 @@ describe("Generated Isolation Test Suite (M1 Real Postgres 18 Proof)", () => {
         },
       ])
       .onConflictDoNothing();
+
+    // Settings-rebuild features seed default-off; this suite exercises their live behaviour.
+    await enableTenantFlags(dbPlatform.db, tenantA, ["settings.storage", "settings.maintenance"]);
 
     await dbPlatform.db
       .insert(schema.domains)
@@ -1515,6 +1547,95 @@ describe("Generated Isolation Test Suite (M1 Real Postgres 18 Proof)", () => {
         if (procPath === "reviews.bulkHold") return await bulkHoldAdminReviews(rt, ctx, [reviewId]);
         return await bulkDeleteAdminReviews(rt, ctx, [reviewId]);
       }
+      // --- Settings rebuild phases 4-8: every procedure runs through the real permission and tenant checks ---
+      case "taxSettings.get":
+        return await getTaxSettings(rt, ctx);
+      case "taxSettings.update":
+        return await updateTaxSettings(rt, ctx, { pricesIncludeTax: true });
+      case "taxClasses.list":
+        return await listTaxClasses(rt, ctx);
+      case "taxClasses.create":
+        return await createTaxClass(rt, ctx, { name: `Iso Class ${Date.now()}`, rateBps: 500, isDefault: false });
+      case "taxClasses.update":
+      case "taxClasses.delete": {
+        const c = await createTaxClass(rt, ctx, { name: `Iso Class ${Date.now()}`, rateBps: 500, isDefault: false });
+        if (procPath === "taxClasses.update") return await updateTaxClass(rt, ctx, { id: c.id, name: `${c.name} v2` });
+        return await deleteTaxClass(rt, ctx, c.id);
+      }
+      case "notificationSettings.get":
+        return await getNotificationSettings(rt, ctx);
+      case "notificationSettings.update":
+        return await updateNotificationSettings(rt, ctx, { staff: { newOrder: { enabled: true, recipients: ["ops@iso.test"] } } });
+      case "policies.list":
+        return await listPolicies(rt, ctx);
+      case "policies.get":
+        return await getPolicy(rt, ctx, "privacy");
+      case "policies.versions":
+        return await getPolicyVersions(rt, ctx, "privacy");
+      case "policies.saveDraft":
+      case "policies.publish":
+      case "policies.restoreDraft": {
+        const content = { v: 1, blocks: [{ type: "heading", level: 2, text: "Iso" }, { type: "paragraph", text: "Isolation policy body." }] };
+        const saved = await savePolicyDraft(rt, ctx, { handle: "privacy", title: "Privacy Policy", content });
+        if (procPath === "policies.saveDraft") return saved;
+        const pub = await publishPolicy(rt, ctx, "privacy");
+        if (procPath === "policies.publish") return pub;
+        return await restorePolicyDraft(rt, ctx, { handle: "privacy", versionId: pub.publishedVersion!.id });
+      }
+      case "customerPrivacy.getSettings":
+        return await getPrivacySettings(rt, ctx);
+      case "customerPrivacy.updateSettings":
+        return await updatePrivacySettings(rt, ctx, { requestSlaDays: 30 });
+      case "customerPrivacy.listRequests":
+        return await listPrivacyRequests(rt, ctx);
+      case "customerPrivacy.cookieInventory":
+        return getCookieInventory(ctx);
+      case "customerPrivacy.updateRequestStatus":
+      case "customerPrivacy.exportCustomerData":
+      case "customerPrivacy.eraseCustomerData":
+      case "customerPrivacy.withdrawConsent": {
+        let requestId = "";
+        await withTenant(rt._db.db, ctx.tenantId, async (tx) => {
+          const [r] = await tx
+            .insert(schema.privacyRequests)
+            .values({
+              tenantId: ctx.tenantId,
+              requesterEmail: `iso-priv-${Date.now()}@nobody.test`,
+              kind: procPath === "customerPrivacy.eraseCustomerData" ? "erasure" : procPath === "customerPrivacy.withdrawConsent" ? "withdraw_consent" : "access",
+              status: "open",
+              verifiedAt: new Date(),
+              dueAt: new Date(Date.now() + 30 * 86_400_000),
+            })
+            .returning({ id: schema.privacyRequests.id });
+          requestId = r!.id;
+        });
+        if (procPath === "customerPrivacy.updateRequestStatus") return await updatePrivacyRequestStatus(rt, ctx, { id: requestId, status: "in_progress" });
+        if (procPath === "customerPrivacy.exportCustomerData") return await executePrivacyExport(rt, ctx, requestId);
+        if (procPath === "customerPrivacy.eraseCustomerData") return await executePrivacyErasure(rt, ctx, requestId);
+        return await executePrivacyWithdrawConsent(rt, ctx, requestId);
+      }
+      case "shipping.preview":
+        return await previewShippingRate(rt, ctx, { subtotalPaise: 100000 });
+      case "storageUsage.get":
+        return await getStorageUsage(rt, ctx);
+      case "storefront.listTransitions":
+        return await listStoreStatusTransitions(rt, ctx, { limit: 5 });
+      case "storefront.scheduleMaintenance":
+      case "storefront.cancelScheduledMaintenance":
+      case "storefront.endMaintenance": {
+        // Owner-only; leaves the store as it found it so later procedures see a live store.
+        const win = { startsAt: new Date(Date.now() + 3_600_000).toISOString(), endsAt: new Date(Date.now() + 7_200_000).toISOString() };
+        if (procPath === "storefront.scheduleMaintenance") {
+          const r = await scheduleMaintenance(rt, ctx, win);
+          await cancelScheduledMaintenance(rt, ctx);
+          return r;
+        }
+        if (procPath === "storefront.cancelScheduledMaintenance") {
+          await scheduleMaintenance(rt, ctx, win);
+          return await cancelScheduledMaintenance(rt, ctx);
+        }
+        return await endMaintenance(rt, ctx);
+      }
       default:
         throw new Error(`Unmapped procedure in isolation test: ${procPath}`);
     }
@@ -1786,10 +1907,19 @@ describe("Generated Isolation Test Suite (M1 Real Postgres 18 Proof)", () => {
           // Credential writes are owner-only (ADR-020): store_admin's set lacks payments.manage, so prove the
           // denial first, then run the procedure as an owner-level context.
           const ownerOnly = proc === "payments.saveRazorpay" || proc === "payments.clearRazorpay" || proc === "paymentMethods.updateCod";
+          // Maintenance mutations additionally require the store_owner role (decision 10), not just the family.
+          const maintenanceOwnerOnly = proc === "storefront.scheduleMaintenance" || proc === "storefront.cancelScheduledMaintenance" || proc === "storefront.endMaintenance";
           if (ownerOnly) {
             await expect(executeAdminProcedure(proc, rtApp, authCtx!)).rejects.toThrow(/payments\.manage/);
           }
-          const runCtx = ownerOnly ? { ...authCtx!, permissions: [...authCtx!.permissions, "payments.manage"] } : authCtx!;
+          if (maintenanceOwnerOnly) {
+            await expect(executeAdminProcedure(proc, rtApp, authCtx!)).rejects.toThrow(/only store owners/i);
+          }
+          const runCtx = ownerOnly
+            ? { ...authCtx!, permissions: [...authCtx!.permissions, "payments.manage"] }
+            : maintenanceOwnerOnly
+              ? { ...authCtx!, roles: ["store_owner"] }
+              : authCtx!;
           const result = await executeAdminProcedure(proc, rtApp, runCtx);
           expect(result).toBeDefined();
         });

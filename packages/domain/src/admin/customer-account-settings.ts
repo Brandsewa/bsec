@@ -1,4 +1,5 @@
 import { eq } from "drizzle-orm";
+import { isFeatureEnabled } from "../features.ts";
 import { schema, withTenant, type Db } from "@bs/db";
 import type { Runtime } from "../runtime.ts";
 import { assertPermission, type TenantContext } from "../context.ts";
@@ -38,6 +39,20 @@ export const DEFAULT_CUSTOMER_ACCOUNT_SETTINGS = {
  * Internal reader for customer account settings.
  * If no row exists yet for this store, falls back to defaults preserving today's behavior.
  */
+/**
+ * True when the store has switched this sign-in method off. Enforcement is new behaviour (Settings Phase 4), so
+ * with `settings.customer_accounts` off every method stays available exactly as before the toggles existed.
+ */
+export async function isSignInMethodBlocked(
+  db: Db,
+  tenantId: string,
+  method: "emailPasswordEnabled" | "phoneOtpEnabled",
+): Promise<boolean> {
+  if (!(await isFeatureEnabled(db, tenantId, "settings.customer_accounts"))) return false;
+  const settings = await readCustomerAccountSettingsInternal(db, tenantId);
+  return !settings[method];
+}
+
 export async function readCustomerAccountSettingsInternal(
   tx: Db,
   tenantId: string,
