@@ -84,7 +84,7 @@ export function SettingsActivityPage() {
       cell: (row) => (
         <div className="grid gap-0.5">
           <span className="text-xs text-foreground">{row.actorEmail ?? row.actorType}</span>
-          {row.actorId ? <span className="font-mono text-[10px] text-muted-foreground">{row.actorId}</span> : null}
+          {row.actorId && !row.actorEmail ? <span className="font-mono text-[10px] text-muted-foreground">{row.actorId}</span> : null}
         </div>
       ),
     },
