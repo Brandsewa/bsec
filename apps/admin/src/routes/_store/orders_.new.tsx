@@ -11,11 +11,11 @@ import {
 import { useEffect, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { PageBreadcrumbs, PageContainer, PageHeader, PageSkeleton, toast } from "@bs/ui";
-import { Alert } from "@/components/ui/alert";
-import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { Checkbox } from "@/components/ui/checkbox";
+import { Alert } from "@bs/ui";
+import { Badge } from "@bs/ui";
+import { Button } from "@bs/ui";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@bs/ui";
+import { Checkbox } from "@bs/ui";
 import {
   Dialog,
   DialogContent,
@@ -23,11 +23,11 @@ import {
   DialogFooter,
   DialogHeader,
   DialogTitle,
-} from "@/components/ui/dialog";
-import { Field, FieldDescription, FieldGroup, FieldLabel } from "@/components/ui/field";
-import { Input } from "@/components/ui/input";
-import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
-import { Textarea } from "@/components/ui/textarea";
+} from "@bs/ui";
+import { Field, FieldDescription, FieldGroup, FieldLabel } from "@bs/ui";
+import { Input } from "@bs/ui";
+import { RadioGroup, RadioGroupItem } from "@bs/ui";
+import { Textarea } from "@bs/ui";
 import { orpc } from "../../lib/orpc.ts";
 import { errorMessage } from "../../lib/errors.ts";
 import { INDIAN_STATES } from "../../lib/india.ts";

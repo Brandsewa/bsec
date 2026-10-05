@@ -2,11 +2,11 @@ import { createFileRoute } from "@tanstack/react-router";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { AlertTriangle, LifeBuoy } from "lucide-react";
 import { EmptyState, PageSkeleton, TableSkeleton, toast } from "@bs/ui";
-import { Button } from "@/components/ui/button";
-import { Checkbox } from "@/components/ui/checkbox";
-import { Field, FieldLabel } from "@/components/ui/field";
+import { Button } from "@bs/ui";
+import { Checkbox } from "@bs/ui";
+import { Field, FieldLabel } from "@bs/ui";
 import { SettingsPageFrame, SettingsSection } from "../../../components/settings/settings-page.tsx";
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@bs/ui";
 import { orpc } from "../../../lib/orpc.ts";
 import { errorMessage } from "../../../lib/errors.ts";
 

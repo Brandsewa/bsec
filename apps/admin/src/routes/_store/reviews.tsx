@@ -19,8 +19,8 @@ import {
 } from "@bs/ui";
 import { keepPreviousData, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import type { Review } from "@bs/contracts";
-import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
+import { Badge } from "@bs/ui";
+import { Button } from "@bs/ui";
 import {
   Dialog,
   DialogContent,
@@ -28,16 +28,16 @@ import {
   DialogFooter,
   DialogHeader,
   DialogTitle,
-} from "@/components/ui/dialog";
+} from "@bs/ui";
 import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuSeparator,
   DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu";
-import { Input } from "@/components/ui/input";
-import { Textarea } from "@/components/ui/textarea";
+} from "@bs/ui";
+import { Input } from "@bs/ui";
+import { Textarea } from "@bs/ui";
 import { ConfirmDialog } from "../../components/confirm-dialog.tsx";
 import { ScrollTabs } from "../../components/scroll-tabs.tsx";
 import { errorMessage } from "../../lib/errors.ts";

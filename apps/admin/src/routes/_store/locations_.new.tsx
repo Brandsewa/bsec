@@ -3,11 +3,11 @@ import { ArrowLeft, Save } from "lucide-react";
 import { useState } from "react";
 import { PageBreadcrumbs, PageContainer, PageHeader, PageSkeleton, toast } from "@bs/ui";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
-import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { Field, FieldLabel } from "@/components/ui/field";
-import { Input } from "@/components/ui/input";
-import { Switch } from "@/components/ui/switch";
+import { Button } from "@bs/ui";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@bs/ui";
+import { Field, FieldLabel } from "@bs/ui";
+import { Input } from "@bs/ui";
+import { Switch } from "@bs/ui";
 import { errorMessage } from "../../lib/errors.ts";
 import { orpc } from "../../lib/orpc.ts";
 

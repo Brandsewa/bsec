@@ -1,4 +1,4 @@
-import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Tabs, TabsList, TabsTrigger } from "@bs/ui";
 
 /** Saved-view tabs: one line, scrolls sideways on phones instead of wrapping. */
 export function ScrollTabs({

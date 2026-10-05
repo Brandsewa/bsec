@@ -1,9 +1,9 @@
 import type { ReactNode } from "react";
 import { Globe } from "lucide-react";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { FieldLabel } from "@/components/ui/field";
-import { Input } from "@/components/ui/input";
-import { Textarea } from "@/components/ui/textarea";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@bs/ui";
+import { FieldLabel } from "@bs/ui";
+import { Input } from "@bs/ui";
+import { Textarea } from "@bs/ui";
 
 export interface SeoCardProps {
   /** The fallback title when title is empty (usually product / category / collection name) */

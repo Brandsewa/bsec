@@ -14,8 +14,8 @@ import {
   SidebarProvider,
   SidebarRail,
   SidebarTrigger,
-} from "@/components/ui/sidebar";
-import { TooltipProvider } from "@/components/ui/tooltip";
+} from "@bs/ui";
+import { TooltipProvider } from "@bs/ui";
 
 /** The one item that matches the current path best (longest matching href), so /settings does not stay lit on /settings/taxes. */
 function bestMatch(groups: NavGroup[], activeHref: string): string | undefined {

@@ -24,6 +24,7 @@ import {
   TableHeader,
   TableRow,
   toast,
+  SimpleSelect,
 } from "@bs/ui";
 import { client, orpc } from "../lib/orpc.ts";
 
@@ -232,14 +233,15 @@ export function Templates() {
             </div>
             <div className="grid gap-1">
               <Label htmlFor="theme-industry">Best for</Label>
-              <select id="theme-industry" value={industry} onChange={(e) => setIndustry(e.target.value)} className="h-9 rounded-md border bg-background px-2 text-sm">
-                {INDUSTRIES.map((i) => (
-                  <option key={i} value={i}>
-                    {i[0]?.toUpperCase()}
-                    {i.slice(1)}
-                  </option>
-                ))}
-              </select>
+              <SimpleSelect
+                id="theme-industry"
+                value={industry}
+                onChange={setIndustry}
+                options={INDUSTRIES.map((i) => ({
+                  value: i,
+                  label: (i[0]?.toUpperCase() ?? "") + i.slice(1),
+                }))}
+              />
             </div>
             <div className="grid gap-1">
               <Label htmlFor="theme-desc">Short description (shown to stores)</Label>
@@ -247,14 +249,18 @@ export function Templates() {
             </div>
             <div className="grid gap-1">
               <Label htmlFor="theme-clone">Start from</Label>
-              <select id="theme-clone" value={cloneFrom} onChange={(e) => setCloneFrom(e.target.value)} className="h-9 rounded-md border bg-background px-2 text-sm">
-                <option value="">Starter layout (all pages)</option>
-                {(templates ?? []).map((t) => (
-                  <option key={t.code} value={t.code}>
-                    Copy of {t.name}
-                  </option>
-                ))}
-              </select>
+              <SimpleSelect
+                id="theme-clone"
+                value={cloneFrom}
+                onChange={setCloneFrom}
+                options={[
+                  { value: "", label: "Starter layout (all pages)" },
+                  ...(templates ?? []).map((t) => ({
+                    value: t.code,
+                    label: `Copy of ${t.name}`,
+                  })),
+                ]}
+              />
             </div>
           </div>
           <DialogFooter>
@@ -297,13 +303,15 @@ export function Templates() {
               </div>
               <div className="grid gap-1">
                 <Label htmlFor="edit-industry">Best for</Label>
-                <select id="edit-industry" value={editing.industry} onChange={(e) => setEditing({ ...editing, industry: e.target.value })} className="h-9 rounded-md border bg-background px-2 text-sm">
-                  {[...new Set([...INDUSTRIES, editing.industry])].map((i) => (
-                    <option key={i} value={i}>
-                      {i}
-                    </option>
-                  ))}
-                </select>
+                <SimpleSelect
+                  id="edit-industry"
+                  value={editing.industry}
+                  onChange={(val) => setEditing({ ...editing, industry: val })}
+                  options={[...new Set([...INDUSTRIES, editing.industry])].map((i) => ({
+                    value: i,
+                    label: (i[0]?.toUpperCase() ?? "") + i.slice(1),
+                  }))}
+                />
               </div>
               <div className="grid gap-1">
                 <Label htmlFor="edit-desc">Short description</Label>

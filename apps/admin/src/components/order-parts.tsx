@@ -1,4 +1,4 @@
-import { Badge } from "@/components/ui/badge";
+import { Badge } from "@bs/ui";
 
 /** Paise → "₹1,234" (en-IN grouping). */
 export const money = (paise: number) => `₹${(paise / 100).toLocaleString("en-IN")}`;

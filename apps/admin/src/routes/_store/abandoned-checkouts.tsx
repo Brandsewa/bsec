@@ -20,14 +20,14 @@ import {
 } from "@bs/ui";
 import { keepPreviousData, useQuery } from "@tanstack/react-query";
 import type { AbandonedCheckoutItem } from "@bs/contracts";
-import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
+import { Badge } from "@bs/ui";
+import { Button } from "@bs/ui";
 import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu";
+} from "@bs/ui";
 import { DataTable, type Column } from "../../components/data-table/data-table.tsx";
 import { fetchAllPages } from "../../components/data-table/fetch-all.ts";
 import { Pagination } from "../../components/data-table/pagination.tsx";

@@ -6,10 +6,10 @@ import {
   DialogFooter,
   DialogHeader,
   DialogTitle,
-} from "@/components/ui/dialog";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Field, FieldDescription, FieldError, FieldGroup, FieldLabel } from "@/components/ui/field";
+} from "@bs/ui";
+import { Button } from "@bs/ui";
+import { Input } from "@bs/ui";
+import { Field, FieldDescription, FieldError, FieldGroup, FieldLabel } from "@bs/ui";
 import { changePassword } from "../../lib/auth.ts";
 
 interface ChangePasswordDialogProps {

@@ -1,9 +1,9 @@
 import { createFileRoute, Link, redirect, useNavigate } from "@tanstack/react-router";
 import { useState, type FormEvent } from "react";
 import { PageSkeleton } from "@bs/ui";
-import { Button } from "@/components/ui/button";
-import { Field, FieldDescription, FieldError, FieldGroup, FieldLabel } from "@/components/ui/field";
-import { Input } from "@/components/ui/input";
+import { Button } from "@bs/ui";
+import { Field, FieldDescription, FieldError, FieldGroup, FieldLabel } from "@bs/ui";
+import { Input } from "@bs/ui";
 import { fetchMe, signIn } from "../lib/auth.ts";
 
 export const Route = createFileRoute("/login")({

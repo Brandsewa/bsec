@@ -3,11 +3,11 @@ import { AlertTriangle, ArrowUpDown, Box, Download, PackageX, Warehouse } from "
 import { useMemo, useState } from "react";
 import { MetricCard, MetricCardSkeleton, PageContainer, PageHeader, PageSection, PageSkeleton, TableSkeleton, toast } from "@bs/ui";
 import { keepPreviousData, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Button } from "@/components/ui/button";
-import { Checkbox } from "@/components/ui/checkbox";
-import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
-import { Field, FieldError, FieldGroup, FieldLabel } from "@/components/ui/field";
-import { Input } from "@/components/ui/input";
+import { Button } from "@bs/ui";
+import { Checkbox } from "@bs/ui";
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@bs/ui";
+import { Field, FieldError, FieldGroup, FieldLabel } from "@bs/ui";
+import { Input } from "@bs/ui";
 import { DataTable, type Column } from "../../../components/data-table/data-table.tsx";
 import { fetchAllPages } from "../../../components/data-table/fetch-all.ts";
 import { Pagination } from "../../../components/data-table/pagination.tsx";

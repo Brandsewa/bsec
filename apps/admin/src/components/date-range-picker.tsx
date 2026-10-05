@@ -2,9 +2,9 @@ import { endOfMonth, format, isValid, parse, startOfMonth, startOfToday, subDays
 import { CalendarDays } from "lucide-react";
 import { useState } from "react";
 import type { DateRange } from "react-day-picker";
-import { Button } from "@/components/ui/button";
-import { Calendar } from "@/components/ui/calendar";
-import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { Button } from "@bs/ui";
+import { Calendar } from "@bs/ui";
+import { Popover, PopoverContent, PopoverTrigger } from "@bs/ui";
 import { useIsMobile } from "@/hooks/use-mobile";
 
 const ISO = "yyyy-MM-dd";

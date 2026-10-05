@@ -27,7 +27,7 @@ import {
 } from "lucide-react";
 import { EmptyState, PageContainer, PageSkeleton, ThemeToggle, type NavGroup } from "@bs/ui";
 import { AppShell } from "@/components/app-shell";
-import { Button } from "@/components/ui/button";
+import { Button } from "@bs/ui";
 import { fetchMe, signOut } from "../lib/auth.ts";
 import { getActiveStoreId, setActiveStoreId } from "../lib/session.ts";
 import { clearSupportSession } from "../lib/support.ts";

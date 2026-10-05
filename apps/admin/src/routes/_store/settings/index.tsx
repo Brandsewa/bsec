@@ -2,7 +2,7 @@ import { createFileRoute, Link } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
 import { AlertTriangle, ArrowRight, CircleCheck, ExternalLink } from "lucide-react";
 import { EmptyState, FormSkeleton, PageSkeleton } from "@bs/ui";
-import { Button } from "@/components/ui/button";
+import { Button } from "@bs/ui";
 import { SettingsPageFrame, SettingsSection } from "../../../components/settings/settings-page.tsx";
 import { orpc } from "../../../lib/orpc.ts";
 import { errorMessage } from "../../../lib/errors.ts";

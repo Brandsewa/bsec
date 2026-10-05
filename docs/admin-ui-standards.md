@@ -18,30 +18,31 @@ Applies to `apps/admin` (store admin). The same direction is intended for `apps/
 
 | Need | Use |
 |---|---|
-| Base components | `components/ui/*` (shadcn on Base UI), styled by the preset in `components.json` and mapped to our tokens in `src/index.css` |
+| Base components | `@bs/ui` (shadcn on Base UI), styled by the unified design system in `packages/ui` and tokens |
 | Table | `components/data-table/data-table.tsx` (selection, sortable headers, sticky header, row click, row actions, mobile cards) |
 | Table state | `use-table-state.ts` (URL state, debounced search, column visibility, parse helpers), `use-table-selection.ts`, `use-bulk-runner.ts`, `fetch-all.ts` |
 | Table chrome | `table-toolbar.tsx` (search, filters, mobile Filters/Sort sidebars), `toolbar-parts.tsx` (filter chips, Columns menu, bulk bar), `pagination.tsx` (25/50/100) |
-| Dropdown | `components/simple-select.tsx`. Never a native `<select>`: its popup cannot be themed |
-| Date range | `components/date-range-picker.tsx` (one calendar, from and to, presets) |
-| Saved-view tabs | `components/scroll-tabs.tsx` (single line, scrolls sideways on phones) |
-| Confirmations | `components/confirm-dialog.tsx`. Never `window.confirm` |
+| Dropdown | `SimpleSelect` or `Select` from `@bs/ui`. Never a native `<select>`: its popup cannot be themed |
+| Date range | `DateRangePicker` from `@bs/ui` (one calendar, from and to, presets) |
+| Saved-view tabs | `ScrollTabs` from `@bs/ui` (single line, scrolls sideways on phones) |
+| Confirmations | `ConfirmDialog` from `@bs/ui`. Never `window.confirm` |
 | Status pills, money | `components/order-parts.tsx` |
-| Form fields | `components/field.tsx`, or `ui/field` directly |
-| Titled form groups | `components/section-card.tsx` |
+| Form fields | `Field` from `@bs/ui` |
+| Titled form groups | `SectionCard` from `@bs/ui` |
 | Settings pages | `components/settings/settings-page.tsx` (`SettingsPageFrame`, `SettingsSection`, `HeaderActions`, `useUnsavedGuard`) |
 | CSV export | `lib/csv.ts` |
 
 ## Layout and style conventions
 
 - **Page header:** `PageHeader` from `@bs/ui` with `aside` for buttons. Title and description on the left, buttons on the right. No breadcrumb on list pages.
-- **Type scale:** page title 20px, description 14px, tables, forms and body text 12px, section titles 14px semibold. Settings follows the same scale.
-- **Canvas:** grey page canvas, white cards (tokens `--dash-canvas`, `--dash-sidebar`, `--card` in `src/index.css`).
-- **Popups:** menus, selects and popovers share the frosted, rounded, soft-shadow style in `components/ui/{dropdown-menu,select,popover}.tsx`.
-- **Instructions and hints:** never leave an instruction paragraph or helper note in a panel. Put it behind a small (i) icon that shows the text in a dark pop-up on hover or keyboard focus (`InfoTip` in `packages/block-editor/src/LayoutField.tsx`, e.g. beside the "Spacing" heading and opposite the "Reset" link in the page-editor layout panel). Reuse that pattern in the page editor and theme editor.
+- **Type scale:** page title 20px, description 14px, tables, forms and body text 12px/13px, section titles 14px semibold. Settings follows the same scale.
+- **Buttons:** 6px radius (`--radius-button`), no pill buttons, 40px height standard (`md`), 32px height small (`sm`). Mintlify mint accent `#00d4a4` for brand variant.
+- **Canvas:** semantic tokens (`--background`, `--sidebar`, `--card`, `--border`).
+- **Popups:** menus, selects and popovers share the frosted, rounded, soft-shadow style in `@bs/ui`.
+- **Instructions and hints:** never leave an instruction paragraph or helper note in a panel. Put it behind an `InfoTip` from `@bs/ui`.
 - **Main sidebar:** 12rem wide, collapses to icons (Ctrl/Cmd+B), remembered in a cookie.
 - **Mobile:** tables become cards; a list toolbar is search on row 1, then Filters and Sort buttons that open sidebars; tab rows scroll horizontally.
-- **Do not** put `@bs/ui` form controls in new code. `@bs/ui` is still used for page layout pieces (`PageContainer`, `PageHeader`, `PageSection`, `MetricCard`, skeletons, `toast`) and by `apps/superadmin`.
+- `@bs/ui` is the **single unified component package** across Store Admin, Super Admin, and Customer storefront/account apps.
 
 ## Building a new list screen (checklist)
 

@@ -3,7 +3,7 @@ import { useQuery } from "@tanstack/react-query";
 import { useState } from "react";
 import { AlertTriangle, Clock, History } from "lucide-react";
 import { EmptyState, PageSkeleton } from "@bs/ui";
-import { Button } from "@/components/ui/button";
+import { Button } from "@bs/ui";
 import { DataTable, type Column } from "../../../components/data-table/data-table.tsx";
 import { Pagination } from "../../../components/data-table/pagination.tsx";
 import { SettingsPageFrame, SettingsSection } from "../../../components/settings/settings-page.tsx";

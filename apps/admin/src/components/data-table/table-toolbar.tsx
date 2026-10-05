@@ -1,9 +1,9 @@
 import { ArrowUpDown, SlidersHorizontal } from "lucide-react";
 import { useState, type ReactNode } from "react";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
-import { Sheet, SheetContent, SheetDescription, SheetFooter, SheetHeader, SheetTitle } from "@/components/ui/sheet";
+import { Button } from "@bs/ui";
+import { Input } from "@bs/ui";
+import { RadioGroup, RadioGroupItem } from "@bs/ui";
+import { Sheet, SheetContent, SheetDescription, SheetFooter, SheetHeader, SheetTitle } from "@bs/ui";
 
 export interface SortOption {
   id: string;

@@ -21,12 +21,12 @@ import {
   PageSection,
   PageSkeleton,
 } from "@bs/ui";
-import { Alert } from "@/components/ui/alert";
-import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
-import { Card } from "@/components/ui/card";
-import { Progress } from "@/components/ui/progress";
-import { Skeleton } from "@/components/ui/skeleton";
+import { Alert } from "@bs/ui";
+import { Badge } from "@bs/ui";
+import { Button } from "@bs/ui";
+import { Card } from "@bs/ui";
+import { Progress } from "@bs/ui";
+import { Skeleton } from "@bs/ui";
 import { orpc } from "../../lib/orpc.ts";
 
 export const Route = createFileRoute("/_store/")({

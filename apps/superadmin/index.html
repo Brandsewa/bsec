@@ -20,13 +20,13 @@
       })();
     </script>
     <style>
-      :root { --s-bg: #fbfcfb; --s-side: #f6f8f7; --s-line: #e3e8e5; --s-fill: #eceff0; }
-      [data-theme="dark"] { --s-bg: #131815; --s-side: #111512; --s-line: #262d29; --s-fill: #222a26; }
-      html, body { margin: 0; background: var(--s-bg); font-family: ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif; }
+      :root { --background: #fcfdfc; --sidebar: #f7f9f8; --border: #e3e8e5; --muted: #edf1ee; }
+      [data-theme="dark"] { --background: #0f1311; --sidebar: #131715; --border: #222925; --muted: #1c221e; }
+      html, body { margin: 0; background: var(--background); font-family: var(--font-sans, "Geist", system-ui, sans-serif); }
       #boot { display: grid; grid-template-columns: 16rem 1fr; min-height: 100dvh; }
-      #boot aside { background: var(--s-side); border-right: 1px solid var(--s-line); padding: 16px; }
-      #boot header { height: 48px; border-bottom: 1px solid var(--s-line); background: var(--s-bg); }
-      #boot .b { background: var(--s-fill); border-radius: 6px; margin: 0 0 10px; }
+      #boot aside { background: var(--sidebar); border-right: 1px solid var(--border); padding: 16px; }
+      #boot header { height: 48px; border-bottom: 1px solid var(--border); background: var(--background); }
+      #boot .b { background: var(--muted); border-radius: 6px; margin: 0 0 10px; }
       #boot .page { max-width: 80rem; margin: 0 auto; padding: 24px 32px; }
     </style>
   </head>

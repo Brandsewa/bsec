@@ -57,7 +57,7 @@ export {
   DropdownMenuRadioGroup,
 } from "./components/ui/dropdown-menu.tsx";
 export {
-  Select as ShadcnSelect,
+  Select,
   SelectGroup,
   SelectValue,
   SelectTrigger,
@@ -76,6 +76,45 @@ export {
   TableCell,
   TableCaption,
 } from "./components/ui/table.tsx";
+export {
+  Field,
+  FieldLabel,
+  FieldDescription,
+  FieldError,
+  FieldGroup,
+  FieldLegend,
+  FieldSeparator,
+  FieldSet,
+  FieldContent,
+  FieldTitle,
+} from "./components/ui/field.tsx";
+export {
+  Sidebar,
+  SidebarContent,
+  SidebarFooter,
+  SidebarGroup,
+  SidebarGroupAction,
+  SidebarGroupContent,
+  SidebarGroupLabel,
+  SidebarHeader,
+  SidebarInput,
+  SidebarInset,
+  SidebarMenu,
+  SidebarMenuAction,
+  SidebarMenuBadge,
+  SidebarMenuButton,
+  SidebarMenuItem,
+  SidebarMenuSkeleton,
+  SidebarMenuSub,
+  SidebarMenuSubButton,
+  SidebarMenuSubItem,
+  SidebarProvider,
+  SidebarRail,
+  SidebarSeparator,
+  SidebarTrigger,
+  useSidebar,
+} from "./components/ui/sidebar.tsx";
+export { Progress } from "./components/ui/progress.tsx";
 export { Skeleton } from "./components/ui/skeleton.tsx";
 export { Tooltip, TooltipTrigger, TooltipContent, TooltipProvider } from "./components/ui/tooltip.tsx";
 export { Toaster as SonnerToaster } from "./components/ui/sonner.tsx";
@@ -92,7 +131,7 @@ export { InfoTip, type InfoTipProps } from "./components/info-tip.tsx";
 export { ImageUploader, type ImageUploaderProps, type UploadAdapter } from "./components/image-uploader.tsx";
 
 // Legacy components maintained for backwards compatibility
-export { Select } from "./components/select.tsx";
+export { Select as LegacySelect } from "./components/select.tsx";
 export { Form, FormField, FormItemLayout } from "./components/form.tsx";
 export { EmptyState } from "./components/empty-state.tsx";
 export { DetailSkeleton, FormSkeleton, MetricCardSkeleton, TableSkeleton } from "./components/skeleton.tsx";

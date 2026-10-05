@@ -1,6 +1,6 @@
 import type { ReactNode } from "react";
-import { Button } from "@/components/ui/button";
-import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { Button } from "@bs/ui";
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@bs/ui";
 
 /** "Are you sure?" dialog for destructive or irreversible actions. Pass `children` for an extra field (e.g. a reason). */
 export function ConfirmDialog({

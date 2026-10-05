@@ -3,9 +3,9 @@ import { AlertTriangle, CheckCircle2, Image as ImageIcon, RotateCcw, Save, Shiel
 import { useId, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { FormSkeleton, PageSkeleton, toast } from "@bs/ui";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { FieldLabel } from "@/components/ui/field";
+import { Button } from "@bs/ui";
+import { Input } from "@bs/ui";
+import { FieldLabel } from "@bs/ui";
 import { Field } from "../../../components/field.tsx";
 import { HeaderActions, SettingsPageFrame, SettingsSection, useUnsavedGuard } from "../../../components/settings/settings-page.tsx";
 import { SimpleSelect } from "../../../components/simple-select.tsx";

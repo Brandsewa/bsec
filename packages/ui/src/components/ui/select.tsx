@@ -3,7 +3,21 @@ import { Select as SelectPrimitive } from "@base-ui/react/select"
 import { cn } from "../../lib/cn"
 import { ChevronDownIcon, CheckIcon, ChevronUpIcon } from "lucide-react"
 
-const Select = SelectPrimitive.Root
+function Select<Value = unknown, Multiple extends boolean | undefined = false>({
+  onValueChange,
+  ...props
+}: Omit<SelectPrimitive.Root.Props<Value, Multiple>, "onValueChange"> & {
+  onValueChange?: ((value: Value | (Multiple extends true ? never : null), eventDetails?: unknown) => void) | undefined
+}) {
+  return (
+    <SelectPrimitive.Root<Value, Multiple>
+      onValueChange={(val, details) => {
+        onValueChange?.(val, details)
+      }}
+      {...(props as SelectPrimitive.Root.Props<Value, Multiple>)}
+    />
+  )
+}
 
 function SelectGroup({ className, ...props }: SelectPrimitive.Group.Props) {
   return (

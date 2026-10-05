@@ -1,5 +1,5 @@
 import type { ReactNode } from "react";
-import { Field as ShadField, FieldDescription, FieldLabel } from "@/components/ui/field";
+import { Field as ShadField, FieldDescription, FieldLabel } from "@bs/ui";
 
 /** Label + control + optional hint, used by plain (non react-hook-form) forms. */
 export function Field({

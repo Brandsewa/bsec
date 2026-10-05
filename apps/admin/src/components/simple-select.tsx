@@ -1,4 +1,4 @@
-import { Select, SelectContent, SelectGroup, SelectItem, SelectLabel, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Select, SelectContent, SelectGroup, SelectItem, SelectLabel, SelectTrigger, SelectValue } from "@bs/ui";
 
 export interface SelectOption {
   value: string;
@@ -36,7 +36,7 @@ export function SimpleSelect({
 }) {
   const flat = groups ? groups.flatMap((g) => g.options) : options;
   return (
-    <Select items={flat} value={value === "" ? null : value} onValueChange={(v) => onChange(v ?? "")}>
+    <Select<string> items={flat} value={value === "" ? null : value} onValueChange={(v) => onChange(v ?? "")}>
       <SelectTrigger id={id} aria-label={ariaLabel} className={className ?? "w-full"}>
         <SelectValue placeholder={placeholder} />
       </SelectTrigger>

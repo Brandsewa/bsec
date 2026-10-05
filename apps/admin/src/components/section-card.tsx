@@ -1,5 +1,5 @@
 import type { ReactNode } from "react";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@bs/ui";
 
 /** A titled white card used to group the fields of a long form. */
 export function SectionCard({ title, description, children }: { title: string; description?: string; children: ReactNode }) {

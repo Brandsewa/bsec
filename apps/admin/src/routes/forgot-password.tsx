@@ -1,9 +1,9 @@
 import { createFileRoute, Link, redirect } from "@tanstack/react-router";
 import { useState, type FormEvent } from "react";
 import { PageSkeleton } from "@bs/ui";
-import { Button } from "@/components/ui/button";
-import { Field, FieldDescription, FieldError, FieldGroup, FieldLabel } from "@/components/ui/field";
-import { Input } from "@/components/ui/input";
+import { Button } from "@bs/ui";
+import { Field, FieldDescription, FieldError, FieldGroup, FieldLabel } from "@bs/ui";
+import { Input } from "@bs/ui";
 import { fetchMe, requestPasswordReset } from "../lib/auth.ts";
 
 export const Route = createFileRoute("/forgot-password")({

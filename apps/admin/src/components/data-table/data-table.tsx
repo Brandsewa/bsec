@@ -1,9 +1,9 @@
 import { AlertTriangle, ArrowDown, ArrowUp, ArrowUpDown } from "lucide-react";
 import type { ReactNode } from "react";
-import { Button } from "@/components/ui/button";
-import { Checkbox } from "@/components/ui/checkbox";
-import { Skeleton } from "@/components/ui/skeleton";
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { Button } from "@bs/ui";
+import { Checkbox } from "@bs/ui";
+import { Skeleton } from "@bs/ui";
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@bs/ui";
 import { cn } from "@/lib/utils";
 
 export interface Column<T> {
