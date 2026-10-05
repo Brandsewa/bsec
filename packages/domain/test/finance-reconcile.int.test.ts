@@ -2,6 +2,8 @@ import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { and, eq } from "drizzle-orm";
 import { createDb, schema, withTenant, type DbHandle } from "@bs/db";
 import { startTestDb, type TestDb } from "@bs/db/test-env";
+import { createRuntime } from "../src/runtime.ts";
+import { provisionTenant } from "../src/saas/provisioning.ts";
 import {
   deepSweepWindow,
   reconcileTenant,
@@ -11,8 +13,7 @@ import {
 let env: TestDb;
 let dbRw: DbHandle;
 
-const orgId = "0199a0e3-0000-7000-8000-000000000000";
-const tenantId = "0199a0e3-0000-7000-8000-000000000001";
+let tenantId: string;
 const orderId1 = "0199a0e3-0000-7000-8000-000000000010";
 const orderId2 = "0199a0e3-0000-7000-8000-000000000020";
 
@@ -20,19 +21,17 @@ beforeAll(async () => {
   env = await startTestDb();
   dbRw = createDb(env.as("app_rw"), { applicationName: "bsec-test-rw" });
 
-  // Insert tenant
-  await dbRw.db.insert(schema.organizations).values({
-    id: orgId,
-    name: "Finance Test Org",
-  }).onConflictDoNothing();
-
-  await dbRw.db.insert(schema.tenants).values({
-    id: tenantId,
-    organizationId: orgId,
-    slug: "reconcile-test-store",
-    name: "Reconcile Test Store",
-    status: "active",
-  }).onConflictDoNothing();
+  // Tenants are created by the platform provisioning path (app_rw cannot insert organizations/tenants).
+  const rtPlatform = createRuntime({ service: "platform", databaseUrl: env.as("app_platform"), poolMax: 5 });
+  const rand = Math.random().toString(36).slice(2, 7);
+  const t = await provisionTenant(rtPlatform, {
+    storeName: "Reconcile Test Store",
+    slug: `fin-rec-${rand}`,
+    owner: { email: `owner-${rand}@finance-reconcile.test`, name: "Owner" },
+    planCode: "starter",
+    source: "platform_admin",
+  });
+  tenantId = t.tenantId;
 
   // Seed two delivered orders
   await withTenant(dbRw.db, tenantId, async (tx) => {

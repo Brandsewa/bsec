@@ -229,8 +229,8 @@ import {
   resolvePeriod,
   getFinanceOverview,
   getDistinctCurrencies,
-  listLedgerEntries,
-  getTrialBalance,
+  listLedgerEntriesForAdmin,
+  getTrialBalanceForAdmin,
   listAdjustments,
   createAdjustment,
   listExpenses,
@@ -1923,7 +1923,7 @@ export const storeRouter = os.router({
           .use(requirePermission("finance.read"))
           .handler(({ context, input }) => {
             if (!context.tenantCtx) throw new Error("Missing tenant context");
-            return listLedgerEntries(context.rt._db.db, context.tenantCtx.tenantId, {
+            return listLedgerEntriesForAdmin(context.rt._db, context.tenantCtx, {
               ...input,
               from: input?.from ? new Date(input.from) : undefined,
               to: input?.to ? new Date(input.to) : undefined,
@@ -1934,7 +1934,7 @@ export const storeRouter = os.router({
           .use(requirePermission("finance.read"))
           .handler(async ({ context, input }) => {
             if (!context.tenantCtx) throw new Error("Missing tenant context");
-            const res = await getTrialBalance(context.rt._db.db, context.tenantCtx.tenantId, {
+            const res = await getTrialBalanceForAdmin(context.rt._db, context.tenantCtx, {
               from: input?.from ? new Date(input.from) : undefined,
               to: input?.to ? new Date(input.to) : undefined,
             });
@@ -2543,7 +2543,7 @@ api.get("/admin/finance/export", async (c) => {
   }
 
   // Ledger export (default)
-  const res = await listLedgerEntries(server().rt._db.db, tenantCtx.tenantId, {
+  const res = await listLedgerEntriesForAdmin(server().rt._db, tenantCtx, {
     from: resolution.from,
     to: resolution.to,
     limit: MAX_EXPORT_ROWS + 1,

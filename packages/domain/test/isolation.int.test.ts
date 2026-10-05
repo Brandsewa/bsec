@@ -210,7 +210,25 @@ import {
   updateReturnSettings,
   getAdminReturnDetail,
   getAdminReturnStats,
+  getFinanceOverview,
+  getDistinctCurrencies,
+  listLedgerEntriesForAdmin,
+  getTrialBalanceForAdmin,
+  listAdjustments,
+  createAdjustment,
+  listExpenses,
+  createExpense,
+  updateExpense,
+  deleteExpense,
+  settleExpense,
+  unsettleExpense,
+  createPresignedExpenseReceiptUpload,
+  finalizeExpenseReceipt,
+  listFiscalPeriods,
+  closeFiscalPeriod,
+  reopenFiscalPeriod,
 } from "../src/index.ts";
+import { createR2Client } from "../src/media/storage.ts";
 
 const PW = { owner: "o_test", rw: "rw_test", platform: "p_test" };
 let container: StartedPostgreSqlContainer | undefined;
@@ -445,6 +463,8 @@ describe("Generated Isolation Test Suite (M1 Real Postgres 18 Proof)", () => {
             "customers.read",
             "customers.write",
             "discounts.write",
+            "finance.read",
+            "finance.write",
           ],
         },
         {
@@ -1466,6 +1486,89 @@ describe("Generated Isolation Test Suite (M1 Real Postgres 18 Proof)", () => {
         if (procPath === "reviews.bulkHold") return await bulkHoldAdminReviews(rt, ctx, [reviewId]);
         return await bulkDeleteAdminReviews(rt, ctx, [reviewId]);
       }
+      // --- Finance (docs/FINANCE-PLAN.md) ---
+      case "finance.overview":
+        return await getFinanceOverview(rt._db, ctx, { named: "30d" });
+      case "finance.currencies":
+        return await getDistinctCurrencies(rt._db, ctx);
+      case "finance.ledger.list":
+        return await listLedgerEntriesForAdmin(rt._db, ctx, {});
+      case "finance.ledger.trialBalance":
+        return await getTrialBalanceForAdmin(rt._db, ctx, {});
+      case "finance.adjustments.list":
+        return await listAdjustments(rt._db, ctx, {});
+      case "finance.adjustments.create":
+        return await createAdjustment(rt._db, ctx, {
+          date: new Date().toISOString().slice(0, 10),
+          accountDebit: "cash_bank",
+          accountCredit: "cash_gateway",
+          amount: 1000,
+          currency: "INR",
+          reason: "Isolation test adjustment",
+        });
+      case "finance.expenses.list":
+        return await listExpenses(rt._db, ctx, {});
+      case "finance.expenses.create":
+      case "finance.expenses.update":
+      case "finance.expenses.delete":
+      case "finance.expenses.settle":
+      case "finance.expenses.unsettle": {
+        const created = await createExpense(rt._db, ctx, {
+          date: new Date().toISOString().slice(0, 10),
+          amount: 5000,
+          currency: "INR",
+          category: "other",
+          paidFrom: procPath === "finance.expenses.settle" || procPath === "finance.expenses.unsettle" ? "unpaid" : "cash_bank",
+          payee: "Isolation Test Vendor",
+        });
+        if (procPath === "finance.expenses.create") return created;
+        if (procPath === "finance.expenses.update") return await updateExpense(rt._db, ctx, { id: created.id, note: "edited" });
+        if (procPath === "finance.expenses.delete") return await deleteExpense(rt._db, ctx, created.id);
+        const settleInput = {
+          id: created.id,
+          settledAt: new Date().toISOString().slice(0, 10),
+          paidFrom: "cash_bank" as const,
+        };
+        if (procPath === "finance.expenses.settle") return await settleExpense(rt._db, ctx, settleInput);
+        await settleExpense(rt._db, ctx, settleInput);
+        return await unsettleExpense(rt._db, ctx, created.id);
+      }
+      case "finance.expenses.receiptPresign":
+        return await createPresignedExpenseReceiptUpload(ctx, {
+          fileName: "receipt.png",
+          contentType: "image/png",
+          sizeBytes: 1024,
+          r2Config: { accessKeyId: "isolation-test-key", secretAccessKey: "isolation-test-secret", accountId: "isolation", bucketName: "isolation-private" },
+        });
+      case "finance.expenses.receiptFinalize": {
+        const mediaId = crypto.randomUUID();
+        // stub storage: a tiny PNG header so the magic-byte check passes without real R2
+        const png = new Uint8Array([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 0, 0, 0, 0]);
+        const r2Config = { accessKeyId: "isolation-test-key", secretAccessKey: "isolation-test-secret", accountId: "isolation", bucketName: "isolation-private" };
+        // real client config (needed to presign the view URL) with only the network calls stubbed
+        const s3Client = createR2Client(r2Config);
+        s3Client.send = (async (cmd: { constructor: { name: string } }) =>
+          cmd.constructor.name === "HeadObjectCommand"
+            ? { ContentLength: png.length }
+            : { Body: { transformToByteArray: async () => png } }) as never;
+        return await finalizeExpenseReceipt(rt._db, ctx, {
+          mediaId,
+          key: `tenants/${ctx.tenantId}/expense-receipts/${mediaId}.png`,
+          s3Client,
+          r2Config,
+        });
+      }
+      case "finance.periods.list":
+        return await listFiscalPeriods(rt._db, ctx);
+      case "finance.periods.close":
+      case "finance.periods.reopen": {
+        const label = "2024-01";
+        const closed = await closeFiscalPeriod(rt._db, ctx, { label, note: "isolation" });
+        // leave the tenant open so both procedures can run in any order
+        const reopened = await reopenFiscalPeriod(rt._db, ctx, { label, reason: "Isolation test reopen" });
+        return procPath === "finance.periods.close" ? closed : reopened;
+      }
+
       default:
         throw new Error(`Unmapped procedure in isolation test: ${procPath}`);
     }
@@ -1732,6 +1835,8 @@ describe("Generated Isolation Test Suite (M1 Real Postgres 18 Proof)", () => {
             "customers.read",
             "customers.write",
             "discounts.write",
+            "finance.read",
+            "finance.write",
           ]);
 
           // Credential writes are owner-only (ADR-020): store_admin's set lacks payments.manage, so prove the

@@ -2,6 +2,8 @@ import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { and, eq } from "drizzle-orm";
 import { createDb, schema, withTenant, type DbHandle } from "@bs/db";
 import { startTestDb, type TestDb } from "@bs/db/test-env";
+import { createRuntime } from "../src/runtime.ts";
+import { provisionTenant } from "../src/saas/provisioning.ts";
 import {
   LEDGER_ACCOUNT,
   handleFinancePost,
@@ -13,7 +15,7 @@ import {
 let env: TestDb;
 let dbRw: DbHandle;
 
-const tenantId = "0199a0e2-0000-7000-8000-000000000001";
+let tenantId: string;
 const locationId = "0199a0e2-0000-7000-8000-000000000002";
 const productId = "0199a0e2-0000-7000-8000-000000000003";
 const variantId = "0199a0e2-0000-7000-8000-000000000004";
@@ -21,6 +23,18 @@ const variantId = "0199a0e2-0000-7000-8000-000000000004";
 beforeAll(async () => {
   env = await startTestDb();
   dbRw = createDb(env.as("app_rw"), { applicationName: "bsec-test-rw" });
+
+  // Tenants are created by the platform provisioning path (app_rw cannot insert tenants).
+  const rtPlatform = createRuntime({ service: "platform", databaseUrl: env.as("app_platform"), poolMax: 5 });
+  const rand = Math.random().toString(36).slice(2, 7);
+  const t = await provisionTenant(rtPlatform, {
+    storeName: "Finance Postings Store",
+    slug: `fin-post-${rand}`,
+    owner: { email: `owner-${rand}@finance-postings.test`, name: "Owner" },
+    planCode: "starter",
+    source: "platform_admin",
+  });
+  tenantId = t.tenantId;
 
   // Seed baseline tenant, location, product, and variant with cost price
   await withTenant(dbRw.db, tenantId, async (tx) => {
@@ -293,8 +307,16 @@ describe("Finance Real Money Event Postings", () => {
         restock: true, // Restocked to inventory
       });
 
+      // No COGS booked yet for this order: nothing to restock against (cap is the ledger, not the lines).
+      expect(await postRestockEvent(tx, tenantId, returnId)).toBe(0);
+
+      // Book the sale (revenue, tax, shipping, COGS), then the restock is allowed.
+      await postOrderEvent(tx, tenantId, orderId);
       const written = await postRestockEvent(tx, tenantId, returnId);
       expect(written).toBe(1);
+
+      // Replay is idempotent, and a second return of the same line cannot exceed posted COGS.
+      expect(await postRestockEvent(tx, tenantId, returnId)).toBe(0);
     });
 
     const entries = await withTenant(dbRw.db, tenantId, async (tx) => {
@@ -304,13 +326,14 @@ describe("Finance Real Money Event Postings", () => {
         .where(
           and(
             eq(schema.ledgerEntries.tenantId, tenantId),
-            eq(schema.ledgerEntries.sourceId, returnId),
+            eq(schema.ledgerEntries.sourceId, orderId),
+            eq(schema.ledgerEntries.debit, LEDGER_ACCOUNT.INVENTORY),
           ),
         );
     });
 
     expect(entries.length).toBe(1);
-    expect(entries[0]?.debit).toBe(LEDGER_ACCOUNT.INVENTORY);
+    expect(entries[0]?.key).toBe(`order:${orderId}:cogs-back:return-${returnId}`);
     expect(entries[0]?.credit).toBe(LEDGER_ACCOUNT.COST_OF_GOODS);
     expect(entries[0]?.amount).toBe(100000);
   });

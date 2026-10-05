@@ -1,4 +1,4 @@
-import { and, eq, lte, ne } from "drizzle-orm";
+import { and, eq, like, lte, ne, sql } from "drizzle-orm";
 import { schema, type withTenant } from "@bs/db";
 import {
   decomposeOrder,
@@ -264,6 +264,26 @@ export async function postRestockEvent(
 
   if (restockedCost <= 0) return 0;
 
+  // Cap against what the ledger actually booked (plan 3.4): COGS posted for the order, minus
+  // restocks already booked under other reasons. Reading the ledger (not the lines being
+  // restocked) is what makes the cap real; with no COGS posted yet nothing is restocked.
+  const cogsKey = `order:${ret.orderId}:cogs`.toLowerCase();
+  const thisKey = `order:${ret.orderId}:cogs-back:return-${returnId}`.toLowerCase();
+  const [cogsRow] = await tx
+    .select({ total: sql<number>`coalesce(sum(${schema.ledgerEntries.amount}), 0)::float8` })
+    .from(schema.ledgerEntries)
+    .where(and(eq(schema.ledgerEntries.tenantId, tenantId), eq(schema.ledgerEntries.key, cogsKey)));
+  const [backRow] = await tx
+    .select({ total: sql<number>`coalesce(sum(${schema.ledgerEntries.amount}), 0)::float8` })
+    .from(schema.ledgerEntries)
+    .where(
+      and(
+        eq(schema.ledgerEntries.tenantId, tenantId),
+        like(schema.ledgerEntries.key, `order:${ret.orderId}:cogs-back:%`.toLowerCase()),
+        ne(schema.ledgerEntries.key, thisKey),
+      ),
+    );
+
   const postings = restockCostPostings({
     orderId: ret.orderId,
     reason: `return-${returnId}`,
@@ -271,8 +291,8 @@ export async function postRestockEvent(
       quantity: l.quantity,
       costPrice: l.costPrice != null ? Number(l.costPrice) : null,
     })),
-    postedCogs: restockedCost,
-    alreadyRestockedCogs: 0,
+    postedCogs: Number(cogsRow?.total ?? 0),
+    alreadyRestockedCogs: Number(backRow?.total ?? 0),
   });
 
   return await postLedgerEntries(tx, tenantId, postings, { strict: false });

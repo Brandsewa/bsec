@@ -16,6 +16,12 @@ import { and, eq, gte, lte, ne, sql } from "drizzle-orm";
 import { schema, withTenant, type DbHandle } from "@bs/db";
 import { assertPermission, type TenantContext } from "../context.ts";
 import {
+  getTrialBalance,
+  listLedgerEntries,
+  type ListLedgerEntriesFilter,
+  type TrialBalanceFilter,
+} from "./ledger.ts";
+import {
   LEDGER_ACCOUNT,
   debitSign,
   type LedgerAccount,
@@ -463,4 +469,26 @@ export async function getFinanceOverview(
       },
     };
   });
+}
+
+/**
+ * Permission-checked entry points for the ledger list and trial balance. The raw readers in
+ * ledger.ts take no context, so the check (rule 4) lives here and the API handlers call these.
+ */
+export async function listLedgerEntriesForAdmin(
+  dbRw: DbHandle,
+  ctx: TenantContext,
+  filter: ListLedgerEntriesFilter = {},
+) {
+  assertPermission(ctx, "finance.read");
+  return listLedgerEntries(dbRw.db, ctx.tenantId, filter);
+}
+
+export async function getTrialBalanceForAdmin(
+  dbRw: DbHandle,
+  ctx: TenantContext,
+  filter: TrialBalanceFilter = {},
+) {
+  assertPermission(ctx, "finance.read");
+  return getTrialBalance(dbRw.db, ctx.tenantId, filter);
 }

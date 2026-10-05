@@ -208,6 +208,7 @@ export async function finalizeExpenseReceipt(
   return withTenant(dbRw.db, ctx.tenantId, async (tx) => {
     // Insert media row
     await tx.insert(schema.media).values({
+      tenantId: ctx.tenantId,
       id: input.mediaId,
       storageKey: input.key,
       mime: detectedMime ?? "application/octet-stream",
