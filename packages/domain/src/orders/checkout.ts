@@ -122,6 +122,25 @@ export async function placeOrder(
       throw new Error(`Checkout is not available for store in '${t.status}' state`);
     }
 
+    // Assert storefront maintenance mode gating (Settings Phase 8 / ADR-011)
+    const [maintenanceStatusRow] = await tx
+      .select({
+        mode: schema.storeStatus.mode,
+        allowStaffPreview: schema.storeStatus.maintenanceAllowStaffPreview,
+      })
+      .from(schema.storeStatus)
+      .where(eq(schema.storeStatus.tenantId, tenantId))
+      .limit(1);
+
+    if (maintenanceStatusRow?.mode === "maintenance" || ctx.storeStatus === "maintenance") {
+      const isStaffPreview = ctx.actor.type === "staff" && (maintenanceStatusRow?.allowStaffPreview ?? true);
+      if (!isStaffPreview) {
+        const error = new Error("Store is currently undergoing scheduled maintenance");
+        (error as unknown as { status: number }).status = 503;
+        throw error;
+      }
+    }
+
     // 1. Fetch cart
     const cart = await getOrCreateCart(rt, ctx, input.cartToken, tx);
     if (!cart || cart.items.length === 0) {

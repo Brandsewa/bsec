@@ -258,6 +258,11 @@ import {
   executePrivacyExport,
   executePrivacyErasure,
   executePrivacyWithdrawConsent,
+  scheduleMaintenance,
+  cancelScheduledMaintenance,
+  endMaintenance,
+  listStoreStatusTransitions,
+  getStorageUsage,
   TEST_LOCKED_COOKIE_INVENTORY,
   type Logger,
   type Runtime,
@@ -1917,6 +1922,62 @@ export const storeRouter = os.router({
             throw mapAuthError(e);
           }
           return getStoreStatusInternal(context.rt, context.tenantCtx.tenantId);
+        }),
+      scheduleMaintenance: os.admin.storefront.scheduleMaintenance
+        .use(requireAdmin)
+        .use(requirePermission("storefront.manage"))
+        .handler(({ context, input }) => {
+          if (!context.tenantCtx) throw new Error("Missing tenant context");
+          if (!context.tenantCtx.roles.includes("store_owner")) {
+            throw new ORPCError("FORBIDDEN", { message: "Only store owners can schedule maintenance" });
+          }
+          return scheduleMaintenance(context.rt, context.tenantCtx, input).catch((e) => {
+            throw mapAuthError(e);
+          });
+        }),
+      cancelScheduledMaintenance: os.admin.storefront.cancelScheduledMaintenance
+        .use(requireAdmin)
+        .use(requirePermission("storefront.manage"))
+        .handler(({ context }) => {
+          if (!context.tenantCtx) throw new Error("Missing tenant context");
+          if (!context.tenantCtx.roles.includes("store_owner")) {
+            throw new ORPCError("FORBIDDEN", { message: "Only store owners can manage maintenance mode" });
+          }
+          return cancelScheduledMaintenance(context.rt, context.tenantCtx).catch((e) => {
+            throw mapAuthError(e);
+          });
+        }),
+      endMaintenance: os.admin.storefront.endMaintenance
+        .use(requireAdmin)
+        .use(requirePermission("storefront.manage"))
+        .handler(({ context }) => {
+          if (!context.tenantCtx) throw new Error("Missing tenant context");
+          if (!context.tenantCtx.roles.includes("store_owner")) {
+            throw new ORPCError("FORBIDDEN", { message: "Only store owners can manage maintenance mode" });
+          }
+          return endMaintenance(context.rt, context.tenantCtx).catch((e) => {
+            throw mapAuthError(e);
+          });
+        }),
+      listTransitions: os.admin.storefront.listTransitions
+        .use(requireAdmin)
+        .use(requirePermission("storefront.manage"))
+        .handler(({ context, input }) => {
+          if (!context.tenantCtx) throw new Error("Missing tenant context");
+          return listStoreStatusTransitions(context.rt, context.tenantCtx, input).catch((e) => {
+            throw mapAuthError(e);
+          });
+        }),
+    },
+    storageUsage: {
+      get: os.admin.storageUsage.get
+        .use(requireAdmin)
+        .use(requirePermission("settings.read"))
+        .handler(({ context }) => {
+          if (!context.tenantCtx) throw new Error("Missing tenant context");
+          return getStorageUsage(context.rt, context.tenantCtx).catch((e) => {
+            throw mapAuthError(e);
+          });
         }),
     },
     onboarding: {

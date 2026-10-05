@@ -45,7 +45,7 @@ describe("Storefront Settings Page (/settings/storefront)", () => {
     expect(html).toContain("Visitors see your holding page. They cannot browse products or checkout.");
     expect(html).toContain("Only visitors with the password can enter. Staff with admin sessions always have access.");
     expect(html).toContain("Returns a 503 Service Unavailable with Retry-After header. Use during planned maintenance.");
-    expect(html).toContain("Maintenance mode serves an HTTP 503 Service Unavailable status with a Retry-After header so search engines do not de-index your site during brief downtime.");
+    expect(html).toContain("Public shoppers receive an HTTP 503 Service Unavailable status.");
   });
 
   it("renders live status indicator when store is live", async () => {

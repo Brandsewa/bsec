@@ -683,9 +683,44 @@ export const StorefrontStatus = z.object({
   collectEmails: z.boolean(),
   launchAt: z.string().nullable(),
   hasPassword: z.boolean(),
+  maintenanceStartsAt: z.string().nullable().optional(),
+  maintenanceEndsAt: z.string().nullable().optional(),
+  modeBeforeMaintenance: z.string().nullable().optional(),
+  maintenanceAllowStaffPreview: z.boolean().optional(),
 });
 
 export type StorefrontStatus = z.infer<typeof StorefrontStatus>;
+
+export const StoreStatusTransitionItem = z.object({
+  id: z.string(),
+  fromMode: z.string(),
+  toMode: z.string(),
+  reason: z.enum(["manual", "scheduled_start", "scheduled_end", "watchdog_restore", "platform"]),
+  actorType: z.string(),
+  actorId: z.string().nullable(),
+  at: z.string(),
+});
+export type StoreStatusTransitionItem = z.infer<typeof StoreStatusTransitionItem>;
+
+export const StorageUsageBreakdownItem = z.object({
+  kind: z.enum(["product_images", "brand_assets", "theme_assets", "other"]),
+  bytes: z.number(),
+  count: z.number(),
+});
+export type StorageUsageBreakdownItem = z.infer<typeof StorageUsageBreakdownItem>;
+
+export const StorageUsageView = z.object({
+  usedBytes: z.number(),
+  limitBytes: z.number().nullable(),
+  mediaCount: z.number(),
+  percentUsed: z.number().nullable(),
+  state: z.enum(["ok", "warning", "critical", "over"]),
+  providerLabel: z.literal("Platform managed storage"),
+  publicMediaConfigured: z.boolean(),
+  maxUploadBytes: z.number(),
+  breakdown: z.array(StorageUsageBreakdownItem),
+});
+export type StorageUsageView = z.infer<typeof StorageUsageView>;
 
 export const APPROVED_BRAND_FONTS = [
   "Inter",
@@ -3626,6 +3661,45 @@ export const adminContract = {
         }),
       )
       .output(StorefrontStatus),
+    scheduleMaintenance: oc
+      .route({ method: "POST", path: "/admin/storefront/maintenance/schedule" })
+      .input(
+        z.object({
+          startsAt: z.string().datetime(),
+          endsAt: z.string().datetime(),
+          allowStaffPreview: z.boolean().default(true),
+        }),
+      )
+      .output(StorefrontStatus),
+    cancelScheduledMaintenance: oc
+      .route({ method: "POST", path: "/admin/storefront/maintenance/cancel-schedule" })
+      .input(z.object({}).optional())
+      .output(StorefrontStatus),
+    endMaintenance: oc
+      .route({ method: "POST", path: "/admin/storefront/maintenance/end" })
+      .input(z.object({}).optional())
+      .output(StorefrontStatus),
+    listTransitions: oc
+      .route({ method: "GET", path: "/admin/storefront/transitions" })
+      .input(
+        z.object({
+          limit: z.number().int().min(1).max(100).default(20),
+          offset: z.number().int().min(0).default(0),
+        }).optional(),
+      )
+      .output(
+        z.object({
+          items: z.array(StoreStatusTransitionItem),
+          total: z.number(),
+        }),
+      ),
+  },
+
+  // --- Storage usage visibility (PLAN §10.2 / Settings Phase 8) ---
+  storageUsage: {
+    get: oc
+      .route({ method: "GET", path: "/admin/storage/usage" })
+      .output(StorageUsageView),
   },
 
   // --- M8 Onboarding Setup Checklist (PLAN §5.2, §8) ---

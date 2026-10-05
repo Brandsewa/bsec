@@ -260,6 +260,20 @@
       "when": 1792060000000,
       "tag": "0036_settings_phase7",
       "breakpoints": true
+    },
+    {
+      "idx": 37,
+      "version": "7",
+      "when": 1792070000000,
+      "tag": "0037_settings_phase8",
+      "breakpoints": true
+    },
+    {
+      "idx": 38,
+      "version": "7",
+      "when": 1792080000000,
+      "tag": "0038_settings_flags_seed",
+      "breakpoints": true
     }
   ]
 }

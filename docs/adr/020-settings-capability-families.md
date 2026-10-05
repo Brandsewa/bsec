@@ -75,17 +75,25 @@ Per `AGENTS.md` and `packages/domain/src/context.ts`, platform support sessions 
 - `store_admin` can safely manage users and view settings activity, but cannot configure or view payment gateway secrets (`payments.manage`).
 - New procedures (like `settingsActivity.list`) enforce least-privilege using `audit.read`.
 
-## Enforcement status (updated at Phase 4, 2026-10-05)
+## Enforcement status (updated at Phase 8, 2026-10-05)
 
-The families are *defined* for every area, and enforced where procedures have been migrated:
-- `audit.read`: `settingsActivity.list` (route and domain service).
-- `payments.manage`: `payments.saveRazorpay` and `payments.clearRazorpay` (route and domain service); the Payments page hides the credential form without it. `payments.get` (status only, no secrets) stays on `settings.write` because the create-order screen reads it.
-- `branding.manage`: `branding.update` and `branding.publish` (route and domain services `updateBrandSettings` and `publishBrandSettings` with media slot validation and audit diffs). `branding.get` enforces `settings.read`.
-- `storefront.manage`: `storefront.updateStatus` (route and domain service `updateStoreStatus` with sanitized audit diffs). `storefront.getStatus` enforces `settings.read`.
-- `domains.manage`: `domains.add`, `domains.verify`, `domains.setPrimary`, and `domains.remove` (routes and domain services `addCustomDomain`, `verifyCustomDomain`, `setPrimaryDomain`, `removeCustomDomain` with audit logging). `domains.list` enforces `settings.read`.
-- `checkout.manage`: `checkoutSettings.update` and `customerAccountSettings.update` (routes and domain services `updateCheckoutSettings` and `updateCustomerAccountSettings` with stale-write protection, phone/COD invariant guards, and non-lockout guards).
-- `orders.settings.manage`: `orderSettings.update` (route and domain service `updateOrderSettings` controlling stock hold duration and minimum order value).
-- `settings.read`: non-sensitive getters across branding, storefront, domains, checkout, and order settings enforce `settings.read`.
-- `staff.manage`: unchanged.
-- Every other settings procedure still checks `settings.write`. Each later Settings phase moves its own procedures to its family as it is rebuilt, then the contract phase removes the aggregate fallback.
-- COD fee/enable is saved through the generic `settings.update` (`settings.write`), so COD is not owner-only yet. Splitting it is part of Phase 5 (Payments).
+The capability families are *defined* for every area, and enforced across all settings domain services and API routes:
+- `settings.read`: non-sensitive getters across all settings domains (`branding.get`, `storefront.getStatus`, `domains.list`, `checkoutSettings.get`, `customerAccountSettings.get`, `orderSettings.get`, `shippingSettings.get`, `taxSettings.get`, `returns.getSettings`, `notificationSettings.get`, `policySettings.list`, `privacySettings.get`, `storageUsage.get`, `storefront.listTransitions`).
+- `audit.read`: `settingsActivity.list` (tenant-scoped audit trail, route and domain service).
+- `payments.manage` (**Store Owner only**): `payments.saveRazorpay`, `payments.clearRazorpay`, and payment credential mutations.
+- `storefront.manage`: `storefront.updateStatus` (live/password/coming_soon modes).
+- `storefront.manage` + **Store Owner only** (Decision 10): `storefront.scheduleMaintenance`, `storefront.cancelScheduledMaintenance`, `storefront.endMaintenance` (route and domain service enforce `ctx.roles.includes("store_owner")`; Manager `store_admin` denied).
+- `branding.manage`: `branding.update` and `branding.publish`.
+- `domains.manage`: `domains.add`, `domains.verify`, `domains.setPrimary`, and `domains.remove`.
+- `checkout.manage`: `checkoutSettings.update` and `customerAccountSettings.update`.
+- `shipping.manage`: `shippingSettings.updateRates`, `shippingSettings.updateZones`.
+- `taxes.manage`: `taxSettings.update`.
+- `orders.settings.manage`: `orderSettings.update` (stock hold duration, minimum order value).
+- `returns.manage`: `returns.updateSettings`.
+- `notifications.manage`: `notificationSettings.update` (granular store and customer alert preferences).
+- `policies.manage`: `policySettings.createDraft`, `policySettings.publish`, `policySettings.archive`.
+- `privacy.manage`: `privacySettings.updateControls`, `privacyRequests.process`.
+- `storageUsage.get`: read-only, enforces `settings.read`. Has no mutation procedure.
+- `staff.manage`: team membership and roles.
+- Support session invariant holds: support read/write sessions are forbidden from all settings capabilities.
+- All settings procedures are locked and verified by the declarative authorization matrix suite (`packages/domain/test/settings-authorization.int.test.ts`).

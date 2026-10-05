@@ -1,6 +1,6 @@
 import { createHash, randomBytes, scrypt, timingSafeEqual } from "node:crypto";
 import { promisify } from "node:util";
-import { eq } from "drizzle-orm";
+import { and, desc, eq, gt, isNotNull, isNull, lte, ne, or, sql } from "drizzle-orm";
 import type { Db } from "@bs/db";
 import { schema, withTenant } from "@bs/db";
 import { resolveHostToTenant } from "../host-resolver.ts";
@@ -9,6 +9,8 @@ import { assertPermission } from "../context.ts";
 import type { Runtime } from "../runtime.ts";
 import { invalidateCache } from "../cache-invalidation.ts";
 import { storefrontLifecycleDecision } from "../system/tenant-lifecycle.ts";
+import { recordHostMode } from "./lookup-fallback.ts";
+import type { StoreStatusTransitionItem } from "@bs/contracts";
 
 const scryptAsync = promisify(scrypt);
 const SCRYPT_PREFIX = "$scrypt$";
@@ -253,6 +255,10 @@ export async function evaluateStorefrontAccess(
         passwordHash?: string | null;
         retryAfterMinutes?: number | null;
         bypassTokenHash?: string | null;
+        maintenanceStartsAt?: Date | null;
+        maintenanceEndsAt?: Date | null;
+        modeBeforeMaintenance?: string | null;
+        maintenanceAllowStaffPreview?: boolean | null;
       }
     | undefined = undefined;
 
@@ -269,6 +275,10 @@ export async function evaluateStorefrontAccess(
           passwordHash: schema.storeStatus.passwordHash,
           retryAfterMinutes: schema.storeStatus.retryAfterMinutes,
           bypassTokenHash: schema.storeStatus.bypassTokenHash,
+          maintenanceStartsAt: schema.storeStatus.maintenanceStartsAt,
+          maintenanceEndsAt: schema.storeStatus.maintenanceEndsAt,
+          modeBeforeMaintenance: schema.storeStatus.modeBeforeMaintenance,
+          maintenanceAllowStaffPreview: schema.storeStatus.maintenanceAllowStaffPreview,
         })
         .from(schema.storeStatus)
         .where(eq(schema.storeStatus.tenantId, tenantId))
@@ -286,6 +296,7 @@ export async function evaluateStorefrontAccess(
   }
 
   const mode: StorefrontMode = (statusRow?.mode as StorefrontMode) ?? "coming_soon";
+  recordHostMode(rawHost, mode);
 
   // 4. SEO & Robots Policy (PLAN §8.3)
   let indexingEnabled = true;
@@ -328,7 +339,9 @@ export async function evaluateStorefrontAccess(
     !!candidatePreviewToken &&
     verifyBypassToken(candidatePreviewToken, bypassTokenHash);
 
-  const isBypass = isStaff || isTokenBypass;
+  const allowStaffPreview =
+    mode === "maintenance" ? (statusRow?.maintenanceAllowStaffPreview ?? true) : true;
+  const isBypass = (isStaff || isTokenBypass) && allowStaffPreview;
 
   const noindex = !indexingEnabled || mode === "coming_soon" || mode === "password";
 
@@ -378,7 +391,14 @@ export async function evaluateStorefrontAccess(
   }
 
   if (mode === "maintenance") {
-    const retryAfterMinutes = statusRow?.retryAfterMinutes ?? 60;
+    let retryAfterSeconds: number;
+    if (statusRow?.maintenanceEndsAt) {
+      const remaining = Math.floor((statusRow.maintenanceEndsAt.getTime() - Date.now()) / 1000);
+      retryAfterSeconds = Math.min(24 * 3600, Math.max(60, remaining));
+    } else {
+      const retryAfterMinutes = statusRow?.retryAfterMinutes ?? 60;
+      retryAfterSeconds = retryAfterMinutes * 60;
+    }
     return {
       allowed: false,
       reason: "maintenance",
@@ -387,7 +407,7 @@ export async function evaluateStorefrontAccess(
       mode: "maintenance",
       tenantId,
       tenantStatus,
-      retryAfterSeconds: retryAfterMinutes * 60,
+      retryAfterSeconds,
       message:
         typeof statusRow?.messageJson === "string" ? statusRow.messageJson : undefined,
     };
@@ -515,6 +535,10 @@ export interface StoreStatusView {
   collectEmails: boolean;
   launchAt: string | null;
   hasPassword: boolean;
+  maintenanceStartsAt?: string | null;
+  maintenanceEndsAt?: string | null;
+  modeBeforeMaintenance?: string | null;
+  maintenanceAllowStaffPreview?: boolean;
 }
 
 /** The store's current storefront mode and public message without permission assertion. */
@@ -532,6 +556,10 @@ export async function getStoreStatusInternal(rt: Runtime, tenantId: string): Pro
       collectEmails: row?.collectEmails ?? true,
       launchAt: row?.launchAt ? row.launchAt.toISOString() : null,
       hasPassword: Boolean(row?.passwordHash),
+      maintenanceStartsAt: row?.maintenanceStartsAt ? row.maintenanceStartsAt.toISOString() : null,
+      maintenanceEndsAt: row?.maintenanceEndsAt ? row.maintenanceEndsAt.toISOString() : null,
+      modeBeforeMaintenance: row?.modeBeforeMaintenance ?? null,
+      maintenanceAllowStaffPreview: row?.maintenanceAllowStaffPreview ?? true,
     };
   });
 }
@@ -564,6 +592,20 @@ export async function updateStoreStatus(
   const db = rt._db.db;
 
   await withTenant(db, ctx.tenantId, async (tx) => {
+    const [existing] = await tx
+      .select()
+      .from(schema.storeStatus)
+      .where(eq(schema.storeStatus.tenantId, ctx.tenantId))
+      .limit(1);
+
+    // Maintenance mutations allowed only for Store Owner (decision 10)
+    if (
+      (input.mode === "maintenance" || existing?.mode === "maintenance") &&
+      (!ctx.roles.includes("store_owner") || ctx.actor.type !== "staff")
+    ) {
+      throw new Error("Forbidden: only store owners can manage maintenance mode");
+    }
+
     const updateValues: Record<string, unknown> = {
       changedAt: new Date(),
       changedBy: "userId" in ctx.actor ? ctx.actor.userId : null,
@@ -582,11 +624,17 @@ export async function updateStoreStatus(
       updateValues.bypassTokenHash = input.bypassToken ? hashBypassToken(input.bypassToken) : null;
     }
 
-    const [existing] = await tx
-      .select()
-      .from(schema.storeStatus)
-      .where(eq(schema.storeStatus.tenantId, ctx.tenantId))
-      .limit(1);
+    if (input.mode === "maintenance" && existing?.mode !== "maintenance") {
+      updateValues.modeBeforeMaintenance = existing?.mode ?? "live";
+      if (!existing?.maintenanceEndsAt) {
+        // Auto-restore safeguard: default 24h
+        updateValues.maintenanceEndsAt = new Date(Date.now() + 24 * 60 * 60 * 1000);
+      }
+    } else if (input.mode !== undefined && input.mode !== "maintenance" && existing?.mode === "maintenance") {
+      updateValues.maintenanceStartsAt = null;
+      updateValues.maintenanceEndsAt = null;
+      updateValues.modeBeforeMaintenance = null;
+    }
 
     if (input.mode === "password") {
       const willHavePassword =
@@ -619,14 +667,27 @@ export async function updateStoreStatus(
           retryAfterMinutes: input.retryAfterMinutes ?? 60,
           passwordHash: (updateValues.passwordHash as string | null) ?? null,
           bypassTokenHash: (updateValues.bypassTokenHash as string | null) ?? null,
+          modeBeforeMaintenance: (updateValues.modeBeforeMaintenance as string | null) ?? null,
+          maintenanceEndsAt: (updateValues.maintenanceEndsAt as Date | null) ?? null,
         })
         .returning({ id: schema.storeStatus.id });
       statusId = inserted?.id ?? ctx.tenantId;
     }
 
+    // Record transition if mode changed
+    if (input.mode !== undefined && input.mode !== existing?.mode) {
+      await tx.insert(schema.storeStatusTransitions).values({
+        tenantId: ctx.tenantId,
+        fromMode: existing?.mode ?? "coming_soon",
+        toMode: input.mode,
+        reason: "manual",
+        actorType: ctx.actor.type,
+        actorId: "userId" in ctx.actor ? ctx.actor.userId : null,
+        at: new Date(),
+      });
+    }
+
     // Build sanitized audit diff (ADR-020, AGENTS.md rule 7)
-    // Log mode, headline, message, launch time, showCountdown, collectEmails;
-    // for password and bypass token, log ONLY whether set or cleared, NEVER values or hashes.
     const before: Record<string, unknown> = {
       mode: existing?.mode ?? "coming_soon",
       headline: existing?.headline ?? null,
@@ -681,5 +742,394 @@ export async function updateStoreStatus(
 
   await invalidateCache(rt, ctx, { type: "store_or_seo_updated" });
   return { success: true };
+}
+
+/**
+ * Schedules maintenance for a future window (at most 72 hours long, starts at least 2 minutes in future).
+ * Owner-only mutation (decision 10).
+ */
+export async function scheduleMaintenance(
+  rt: Runtime,
+  ctx: TenantContext,
+  input: {
+    startsAt: string;
+    endsAt: string;
+    allowStaffPreview?: boolean;
+  },
+): Promise<StoreStatusView> {
+  assertPermission(ctx, "storefront.manage");
+  if (!ctx.roles.includes("store_owner") || ctx.actor.type !== "staff") {
+    throw new Error("Forbidden: only store owners can schedule maintenance");
+  }
+
+  const startsAt = new Date(input.startsAt);
+  const endsAt = new Date(input.endsAt);
+  if (isNaN(startsAt.getTime()) || isNaN(endsAt.getTime())) {
+    throw new Error("Bad Request: invalid startsAt or endsAt date");
+  }
+  if (endsAt.getTime() <= startsAt.getTime()) {
+    throw new Error("Bad Request: maintenance end time must be after start time");
+  }
+  const maxWindowMs = 72 * 60 * 60 * 1000;
+  if (endsAt.getTime() - startsAt.getTime() > maxWindowMs) {
+    throw new Error("Bad Request: maintenance window cannot exceed 72 hours");
+  }
+  const minFutureMs = 2 * 60 * 1000 - 15000;
+  if (startsAt.getTime() < Date.now() + minFutureMs) {
+    throw new Error("Bad Request: scheduled maintenance start must be at least 2 minutes in the future");
+  }
+
+  const db = rt._db.db;
+  await withTenant(db, ctx.tenantId, async (tx) => {
+    const [existing] = await tx
+      .select()
+      .from(schema.storeStatus)
+      .where(eq(schema.storeStatus.tenantId, ctx.tenantId))
+      .limit(1);
+
+    const updateValues = {
+      maintenanceStartsAt: startsAt,
+      maintenanceEndsAt: endsAt,
+      maintenanceAllowStaffPreview: input.allowStaffPreview ?? true,
+      changedAt: new Date(),
+      changedBy: "userId" in ctx.actor ? ctx.actor.userId : null,
+    };
+
+    let statusId: string;
+    if (existing) {
+      statusId = existing.id;
+      await tx
+        .update(schema.storeStatus)
+        .set(updateValues)
+        .where(eq(schema.storeStatus.id, existing.id));
+    } else {
+      const [inserted] = await tx
+        .insert(schema.storeStatus)
+        .values({
+          tenantId: ctx.tenantId,
+          mode: "coming_soon",
+          ...updateValues,
+        })
+        .returning({ id: schema.storeStatus.id });
+      statusId = inserted?.id ?? ctx.tenantId;
+    }
+
+    await tx.insert(schema.auditLogs).values({
+      tenantId: ctx.tenantId,
+      actorType: "staff",
+      actorId: "userId" in ctx.actor ? ctx.actor.userId : null,
+      action: "store_status.schedule_maintenance",
+      targetType: "store_status",
+      targetId: statusId,
+      diff: {
+        maintenanceStartsAt: { before: existing?.maintenanceStartsAt?.toISOString() ?? null, after: startsAt.toISOString() },
+        maintenanceEndsAt: { before: existing?.maintenanceEndsAt?.toISOString() ?? null, after: endsAt.toISOString() },
+        maintenanceAllowStaffPreview: { before: existing?.maintenanceAllowStaffPreview ?? true, after: input.allowStaffPreview ?? true },
+      },
+    });
+  });
+
+  if (rt._jobs) {
+    try {
+      await rt._jobs.send("maintenance.start", {
+        tenantId: ctx.tenantId,
+        startsAt: startsAt.toISOString(),
+        endsAt: endsAt.toISOString(),
+      });
+      await rt._jobs.send("maintenance.end", {
+        tenantId: ctx.tenantId,
+        endsAt: endsAt.toISOString(),
+      });
+    } catch {
+      // Watchdog sweep ensures recovery
+    }
+  }
+
+  await invalidateCache(rt, ctx, { type: "store_or_seo_updated" });
+  return getStoreStatusInternal(rt, ctx.tenantId);
+}
+
+/**
+ * Cancels scheduled maintenance. Owner-only mutation (decision 10).
+ */
+export async function cancelScheduledMaintenance(
+  rt: Runtime,
+  ctx: TenantContext,
+): Promise<StoreStatusView> {
+  assertPermission(ctx, "storefront.manage");
+  if (!ctx.roles.includes("store_owner") || ctx.actor.type !== "staff") {
+    throw new Error("Forbidden: only store owners can manage maintenance mode");
+  }
+
+  const db = rt._db.db;
+  await withTenant(db, ctx.tenantId, async (tx) => {
+    const [existing] = await tx
+      .select()
+      .from(schema.storeStatus)
+      .where(eq(schema.storeStatus.tenantId, ctx.tenantId))
+      .limit(1);
+
+    if (!existing || (!existing.maintenanceStartsAt && !existing.maintenanceEndsAt)) {
+      return;
+    }
+
+    await tx
+      .update(schema.storeStatus)
+      .set({
+        maintenanceStartsAt: null,
+        maintenanceEndsAt: null,
+        changedAt: new Date(),
+        changedBy: "userId" in ctx.actor ? ctx.actor.userId : null,
+      })
+      .where(eq(schema.storeStatus.id, existing.id));
+
+    await tx.insert(schema.auditLogs).values({
+      tenantId: ctx.tenantId,
+      actorType: "staff",
+      actorId: "userId" in ctx.actor ? ctx.actor.userId : null,
+      action: "store_status.cancel_scheduled_maintenance",
+      targetType: "store_status",
+      targetId: existing.id,
+      diff: {
+        maintenanceStartsAt: { before: existing.maintenanceStartsAt?.toISOString() ?? null, after: null },
+        maintenanceEndsAt: { before: existing.maintenanceEndsAt?.toISOString() ?? null, after: null },
+      },
+    });
+  });
+
+  await invalidateCache(rt, ctx, { type: "store_or_seo_updated" });
+  return getStoreStatusInternal(rt, ctx.tenantId);
+}
+
+/**
+ * Ends ongoing maintenance, restoring mode_before_maintenance (or live).
+ * Owner-only mutation (decision 10).
+ */
+export async function endMaintenance(
+  rt: Runtime,
+  ctx: TenantContext,
+): Promise<StoreStatusView> {
+  assertPermission(ctx, "storefront.manage");
+  if (!ctx.roles.includes("store_owner") || ctx.actor.type !== "staff") {
+    throw new Error("Forbidden: only store owners can manage maintenance mode");
+  }
+
+  const db = rt._db.db;
+  await withTenant(db, ctx.tenantId, async (tx) => {
+    const [existing] = await tx
+      .select()
+      .from(schema.storeStatus)
+      .where(eq(schema.storeStatus.tenantId, ctx.tenantId))
+      .limit(1);
+
+    if (!existing) return;
+
+    const restoreMode: StorefrontMode = (existing.modeBeforeMaintenance as StorefrontMode) || "live";
+    const previousMode = existing.mode as StorefrontMode;
+
+    await tx
+      .update(schema.storeStatus)
+      .set({
+        mode: restoreMode,
+        maintenanceStartsAt: null,
+        maintenanceEndsAt: null,
+        modeBeforeMaintenance: null,
+        changedAt: new Date(),
+        changedBy: "userId" in ctx.actor ? ctx.actor.userId : null,
+      })
+      .where(eq(schema.storeStatus.id, existing.id));
+
+    if (previousMode !== restoreMode) {
+      await tx.insert(schema.storeStatusTransitions).values({
+        tenantId: ctx.tenantId,
+        fromMode: previousMode,
+        toMode: restoreMode,
+        reason: "manual",
+        actorType: ctx.actor.type,
+        actorId: "userId" in ctx.actor ? ctx.actor.userId : null,
+        at: new Date(),
+      });
+    }
+
+    await tx.insert(schema.auditLogs).values({
+      tenantId: ctx.tenantId,
+      actorType: "staff",
+      actorId: "userId" in ctx.actor ? ctx.actor.userId : null,
+      action: "store_status.end_maintenance",
+      targetType: "store_status",
+      targetId: existing.id,
+      diff: {
+        mode: { before: previousMode, after: restoreMode },
+        maintenanceEndsAt: { before: existing.maintenanceEndsAt?.toISOString() ?? null, after: null },
+      },
+    });
+  });
+
+  await invalidateCache(rt, ctx, { type: "store_or_seo_updated" });
+  return getStoreStatusInternal(rt, ctx.tenantId);
+}
+
+/**
+ * Paged list of store status transitions.
+ */
+export async function listStoreStatusTransitions(
+  rt: Runtime,
+  ctx: TenantContext,
+  opts?: { limit?: number; offset?: number },
+): Promise<{ items: StoreStatusTransitionItem[]; total: number }> {
+  assertPermission(ctx, "storefront.manage");
+  const limit = Math.min(Math.max(opts?.limit ?? 20, 1), 100);
+  const offset = Math.max(opts?.offset ?? 0, 0);
+
+  return withTenant(rt._db.db, ctx.tenantId, async (tx) => {
+    const [totalRow] = await tx
+      .select({ count: sql<number>`count(*)::int` })
+      .from(schema.storeStatusTransitions)
+      .where(eq(schema.storeStatusTransitions.tenantId, ctx.tenantId));
+
+    const rows = await tx
+      .select()
+      .from(schema.storeStatusTransitions)
+      .where(eq(schema.storeStatusTransitions.tenantId, ctx.tenantId))
+      .orderBy(desc(schema.storeStatusTransitions.at))
+      .limit(limit)
+      .offset(offset);
+
+    const items: StoreStatusTransitionItem[] = rows.map((r) => ({
+      id: r.id,
+      fromMode: r.fromMode,
+      toMode: r.toMode,
+      reason: r.reason as StoreStatusTransitionItem["reason"],
+      actorType: r.actorType,
+      actorId: r.actorId,
+      at: r.at.toISOString(),
+    }));
+
+    return {
+      items,
+      total: totalRow?.count ?? 0,
+    };
+  });
+}
+
+/**
+ * Watchdog sweep to ensure stores are never stranded in maintenance mode.
+ * Restores expired windows and triggers due scheduled maintenance.
+ */
+export async function executeMaintenanceWatchdogSweep(
+  db: Db,
+): Promise<{ restoredCount: number; startedCount: number }> {
+  const now = new Date();
+  let restoredCount = 0;
+  let startedCount = 0;
+
+  // 1. Restore stores whose maintenance window has passed
+  const expiredMaintenance = await db
+    .select()
+    .from(schema.storeStatus)
+    .where(
+      and(
+        eq(schema.storeStatus.mode, "maintenance"),
+        isNotNull(schema.storeStatus.maintenanceEndsAt),
+        lte(schema.storeStatus.maintenanceEndsAt, now),
+      ),
+    );
+
+  for (const row of expiredMaintenance) {
+    if (!row.tenantId) continue;
+    const restoreMode: StorefrontMode = (row.modeBeforeMaintenance as StorefrontMode) || "live";
+    await withTenant(db, row.tenantId, async (tx) => {
+      await tx
+        .update(schema.storeStatus)
+        .set({
+          mode: restoreMode,
+          maintenanceStartsAt: null,
+          maintenanceEndsAt: null,
+          modeBeforeMaintenance: null,
+          changedAt: now,
+          changedBy: null,
+        })
+        .where(eq(schema.storeStatus.id, row.id));
+
+      await tx.insert(schema.storeStatusTransitions).values({
+        tenantId: row.tenantId,
+        fromMode: "maintenance",
+        toMode: restoreMode,
+        reason: "watchdog_restore",
+        actorType: "system",
+        actorId: null,
+        at: now,
+      });
+
+      await tx.insert(schema.auditLogs).values({
+        tenantId: row.tenantId,
+        actorType: "system",
+        actorId: null,
+        action: "store_status.watchdog_restore",
+        targetType: "store_status",
+        targetId: row.id,
+        diff: {
+          mode: { before: "maintenance", after: restoreMode },
+          reason: { before: null, after: "watchdog_restore" },
+        },
+      });
+    });
+    restoredCount++;
+  }
+
+  // 2. Start scheduled maintenance that has arrived but not yet started
+  const dueScheduled = await db
+    .select()
+    .from(schema.storeStatus)
+    .where(
+      and(
+        ne(schema.storeStatus.mode, "maintenance"),
+        isNotNull(schema.storeStatus.maintenanceStartsAt),
+        lte(schema.storeStatus.maintenanceStartsAt, now),
+        or(isNull(schema.storeStatus.maintenanceEndsAt), gt(schema.storeStatus.maintenanceEndsAt, now)),
+      ),
+    );
+
+  for (const row of dueScheduled) {
+    if (!row.tenantId) continue;
+    const currentMode = row.mode as StorefrontMode;
+    await withTenant(db, row.tenantId, async (tx) => {
+      await tx
+        .update(schema.storeStatus)
+        .set({
+          mode: "maintenance",
+          modeBeforeMaintenance: currentMode,
+          changedAt: now,
+          changedBy: null,
+        })
+        .where(eq(schema.storeStatus.id, row.id));
+
+      await tx.insert(schema.storeStatusTransitions).values({
+        tenantId: row.tenantId,
+        fromMode: currentMode,
+        toMode: "maintenance",
+        reason: "scheduled_start",
+        actorType: "system",
+        actorId: null,
+        at: now,
+      });
+
+      await tx.insert(schema.auditLogs).values({
+        tenantId: row.tenantId,
+        actorType: "system",
+        actorId: null,
+        action: "store_status.scheduled_start",
+        targetType: "store_status",
+        targetId: row.id,
+        diff: {
+          mode: { before: currentMode, after: "maintenance" },
+          reason: { before: null, after: "scheduled_start" },
+        },
+      });
+    });
+    startedCount++;
+  }
+
+  return { restoredCount, startedCount };
 }
 

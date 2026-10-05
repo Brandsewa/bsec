@@ -25,5 +25,6 @@ New decisions get an ADR **before** code (PLAN §15). Copy `template.md`, take t
 | [018](018-visual-theme-editor.md) | Visual theme editor on the block registry | Accepted |
 | [019](019-customer-auth-and-platform-mailer.md) | Customer authentication and platform transactional mailer | Accepted |
 | [020](020-settings-capability-families.md) | Settings capability families and granular authorization | Accepted |
+| [021](021-settings-contract-schedule.md) | Settings rebuild deprecation and contract schedule | Accepted |
 
-**Next number: 021.**
+**Next number: 022.**

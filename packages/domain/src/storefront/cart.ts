@@ -303,6 +303,31 @@ export async function getOrCreateCart(
   return withTenant(db, ctx.tenantId, runWithTx);
 }
 
+async function assertNotMaintenance(tx: Parameters<Parameters<typeof withTenant>[2]>[0], ctx: TenantContext): Promise<void> {
+  if (ctx.storeStatus === "maintenance" && ctx.actor.type !== "staff") {
+    const err = new Error("Store is currently undergoing scheduled maintenance");
+    (err as unknown as { status: number }).status = 503;
+    throw err;
+  }
+  const [stRow] = await tx
+    .select({
+      mode: schema.storeStatus.mode,
+      allowStaffPreview: schema.storeStatus.maintenanceAllowStaffPreview,
+    })
+    .from(schema.storeStatus)
+    .where(eq(schema.storeStatus.tenantId, ctx.tenantId))
+    .limit(1);
+
+  if (stRow?.mode === "maintenance") {
+    const isStaffPreview = ctx.actor.type === "staff" && (stRow.allowStaffPreview ?? true);
+    if (!isStaffPreview) {
+      const err = new Error("Store is currently undergoing scheduled maintenance");
+      (err as unknown as { status: number }).status = 503;
+      throw err;
+    }
+  }
+}
+
 /**
  * Adds an item to a cart or increments quantity if it already exists.
  */
@@ -318,6 +343,8 @@ export async function addToCart(
   const db = rt._db.db;
 
   return withTenant(db, ctx.tenantId, async (tx) => {
+    await assertNotMaintenance(tx, ctx);
+
     // 1. Verify cart exists
     const [cartRecord] = await tx
       .select()
@@ -406,6 +433,7 @@ export async function updateCartItemQuantity(
   const db = rt._db.db;
 
   return withTenant(db, ctx.tenantId, async (tx) => {
+    await assertNotMaintenance(tx, ctx);
     const [cartRecord] = await tx
       .select()
       .from(schema.carts)
@@ -462,6 +490,7 @@ export async function removeCartItem(
   const db = rt._db.db;
 
   return withTenant(db, ctx.tenantId, async (tx) => {
+    await assertNotMaintenance(tx, ctx);
     const [cartRecord] = await tx
       .select()
       .from(schema.carts)
@@ -502,6 +531,7 @@ export async function clearCart(
   txOrDb?: Parameters<Parameters<typeof withTenant>[2]>[0],
 ): Promise<StorefrontCart> {
   const runWithTx = async (tx: Parameters<Parameters<typeof withTenant>[2]>[0]) => {
+    await assertNotMaintenance(tx, ctx);
     const [cartRecord] = await tx
       .select()
       .from(schema.carts)

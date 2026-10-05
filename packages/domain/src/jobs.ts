@@ -488,6 +488,132 @@ export async function handleCustomerImportJob(
   log.info({ tenantId: data.tenantId, created: res.created, updated: res.updated, failed: res.errors.length }, "customers.import processed");
 }
 
+export async function handleMaintenanceStartJob(
+  db: Db,
+  log: Logger,
+  data: { tenantId: string; startsAt?: string; endsAt?: string },
+): Promise<void> {
+  const { tenantId } = data;
+  await withTenant(db, tenantId, async (tx) => {
+    const [row] = await tx
+      .select()
+      .from(schema.storeStatus)
+      .where(eq(schema.storeStatus.tenantId, tenantId))
+      .limit(1);
+
+    if (!row) return;
+    if (row.mode === "maintenance") {
+      log.info({ tenantId }, "maintenance.start: store already in maintenance mode");
+      return;
+    }
+
+    const currentMode = row.mode;
+    const now = new Date();
+
+    await tx
+      .update(schema.storeStatus)
+      .set({
+        mode: "maintenance",
+        modeBeforeMaintenance: currentMode,
+        changedAt: now,
+        changedBy: null,
+      })
+      .where(eq(schema.storeStatus.id, row.id));
+
+    await tx.insert(schema.storeStatusTransitions).values({
+      tenantId,
+      fromMode: currentMode,
+      toMode: "maintenance",
+      reason: "scheduled_start",
+      actorType: "system",
+      actorId: null,
+      at: now,
+    });
+
+    await tx.insert(schema.auditLogs).values({
+      tenantId,
+      actorType: "system",
+      actorId: null,
+      action: "store_status.scheduled_start",
+      targetType: "store_status",
+      targetId: row.id,
+      diff: {
+        mode: { before: currentMode, after: "maintenance" },
+        reason: { before: null, after: "scheduled_start" },
+      },
+    });
+  });
+}
+
+export async function handleMaintenanceEndJob(
+  db: Db,
+  log: Logger,
+  data: { tenantId: string; endsAt?: string },
+): Promise<void> {
+  const { tenantId } = data;
+  await withTenant(db, tenantId, async (tx) => {
+    const [row] = await tx
+      .select()
+      .from(schema.storeStatus)
+      .where(eq(schema.storeStatus.tenantId, tenantId))
+      .limit(1);
+
+    if (!row) return;
+    const now = new Date();
+
+    if (row.mode !== "maintenance") {
+      log.info({ tenantId, mode: row.mode }, "maintenance.end: mode already changed manually during window");
+      await tx
+        .update(schema.storeStatus)
+        .set({
+          maintenanceStartsAt: null,
+          maintenanceEndsAt: null,
+          modeBeforeMaintenance: null,
+          changedAt: now,
+          changedBy: null,
+        })
+        .where(eq(schema.storeStatus.id, row.id));
+      return;
+    }
+
+    const restoreMode = row.modeBeforeMaintenance || "live";
+    await tx
+      .update(schema.storeStatus)
+      .set({
+        mode: restoreMode,
+        maintenanceStartsAt: null,
+        maintenanceEndsAt: null,
+        modeBeforeMaintenance: null,
+        changedAt: now,
+        changedBy: null,
+      })
+      .where(eq(schema.storeStatus.id, row.id));
+
+    await tx.insert(schema.storeStatusTransitions).values({
+      tenantId,
+      fromMode: "maintenance",
+      toMode: restoreMode,
+      reason: "scheduled_end",
+      actorType: "system",
+      actorId: null,
+      at: now,
+    });
+
+    await tx.insert(schema.auditLogs).values({
+      tenantId,
+      actorType: "system",
+      actorId: null,
+      action: "store_status.scheduled_end",
+      targetType: "store_status",
+      targetId: row.id,
+      diff: {
+        mode: { before: "maintenance", after: restoreMode },
+        reason: { before: null, after: "scheduled_end" },
+      },
+    });
+  });
+}
+
 export async function startJobs(opts: {
   databaseUrl: string;
   log: Logger;
@@ -878,6 +1004,58 @@ export async function startJobs(opts: {
     },
   );
 
+  // Handle maintenance.start (Settings Phase 8 / Slice 8B)
+  await boss.work<{ tenantId: string; startsAt?: string; endsAt?: string }>(
+    QUEUE_NAMES.MAINTENANCE_START,
+    { localConcurrency: 2 },
+    async (batch) => {
+      for (const job of batch) {
+        try {
+          await handleMaintenanceStartJob(db, opts.log, job.data);
+          opts.log.info({ job_id: job.id, tenantId: job.data.tenantId }, "maintenance.start processed");
+        } catch (err) {
+          opts.log.error({ err, job_id: job.id }, "maintenance.start failed");
+          throw err;
+        }
+      }
+    },
+  );
+
+  // Handle maintenance.end (Settings Phase 8 / Slice 8B)
+  await boss.work<{ tenantId: string; endsAt?: string }>(
+    QUEUE_NAMES.MAINTENANCE_END,
+    { localConcurrency: 2 },
+    async (batch) => {
+      for (const job of batch) {
+        try {
+          await handleMaintenanceEndJob(db, opts.log, job.data);
+          opts.log.info({ job_id: job.id, tenantId: job.data.tenantId }, "maintenance.end processed");
+        } catch (err) {
+          opts.log.error({ err, job_id: job.id }, "maintenance.end failed");
+          throw err;
+        }
+      }
+    },
+  );
+
+  // Handle maintenance.watchdog_sweep recurring job (Settings Phase 8 / Slice 8B)
+  await boss.work(
+    QUEUE_NAMES.MAINTENANCE_WATCHDOG_SWEEP,
+    { localConcurrency: 1 },
+    async (batch) => {
+      for (const job of batch) {
+        try {
+          const { executeMaintenanceWatchdogSweep } = await import("./storefront/lifecycle.ts");
+          const res = await executeMaintenanceWatchdogSweep(db);
+          opts.log.info({ job_id: job.id, ...res }, "maintenance.watchdog_sweep processed");
+        } catch (err) {
+          opts.log.error({ err, job_id: job.id }, "maintenance.watchdog_sweep failed");
+          throw err;
+        }
+      }
+    },
+  );
+
   // Register recurring schedules and proof-of-life sweeps on boot (PLAN §5.10, §11.3)
   try {
     await boss.schedule(QUEUE_NAMES.RESERVATION_EXPIRY, "* * * * *", {});
@@ -887,7 +1065,8 @@ export async function startJobs(opts: {
     await boss.schedule(QUEUE_NAMES.ORDER_PREORDER_REMINDER_SWEEP, "0 6 * * *", {});
     await boss.schedule(QUEUE_NAMES.ORDER_RETURN_PHOTO_CLEANUP, "0 3 * * *", {});
     await boss.schedule(QUEUE_NAMES.SEGMENTS_REFRESH_COUNTS, "0 */6 * * *", {});
-    opts.log.info("Registered recurring cron: reservation.expiry, idempotency.cleanup, cart.recovery_sweep, subscription.trial_expiry_sweep, preorder_reminder_sweep, return_photo_cleanup");
+    await boss.schedule(QUEUE_NAMES.MAINTENANCE_WATCHDOG_SWEEP, "* * * * *", {});
+    opts.log.info("Registered recurring cron: reservation.expiry, idempotency.cleanup, cart.recovery_sweep, subscription.trial_expiry_sweep, preorder_reminder_sweep, return_photo_cleanup, maintenance.watchdog_sweep");
   } catch (err) {
     opts.log.warn({ err }, "Could not register recurring cron schedules with pg-boss");
   }
@@ -907,6 +1086,7 @@ export async function startJobs(opts: {
   await boss.send(QUEUE_NAMES.IDEMPOTENCY_CLEANUP, {});
   await boss.send(QUEUE_NAMES.CART_RECOVERY_SWEEP, {});
   await boss.send(QUEUE_NAMES.SUBSCRIPTION_TRIAL_EXPIRY_SWEEP, {});
+  await boss.send(QUEUE_NAMES.MAINTENANCE_WATCHDOG_SWEEP, {});
   opts.log.info({ concurrency: opts.concurrency }, "worker started");
 
   return {

@@ -1,4 +1,4 @@
-import { CreditCard, Globe, History, Landmark, LayoutDashboard, LifeBuoy, Receipt, RotateCcw, ShoppingBag, ShoppingCart, Sparkles, Store, Truck, UserCheck, UserCog } from "lucide-react";
+import { CreditCard, Globe, HardDrive, History, Landmark, LayoutDashboard, LifeBuoy, Receipt, RotateCcw, ShoppingBag, ShoppingCart, Sparkles, Store, Truck, UserCheck, UserCog } from "lucide-react";
 import type { ComponentType } from "react";
 import { hasPermission, type StorePermission } from "@bs/auth";
 
@@ -60,6 +60,7 @@ export const SETTINGS_NAV_GROUPS: readonly SettingsNavGroup[] = [
       { id: "orders", label: "Orders", href: "/settings/orders", description: "Numbering, processing, recovery", icon: ShoppingBag, perm: "orders.settings.manage" },
       { id: "returns", label: "Returns", href: "/settings/returns", description: "Returns and exchanges", icon: RotateCcw, perm: "settings.write" },
       { id: "notifications", label: "Notifications", href: "/settings/notifications", description: "Customer & staff emails", icon: LifeBuoy, perm: "notifications.manage" },
+      { id: "storage", label: "Storage", href: "/settings/storage", description: "Media files and usage limit", icon: HardDrive, perm: "settings.read" },
     ],
   },
   {

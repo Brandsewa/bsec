@@ -49,9 +49,14 @@ describe("Settings shell: grouped navigation", () => {
     const owner = visibleSettingsGroups(["settings.write", "staff.manage"]);
     expect(owner.map((g) => g.id)).toEqual(["overview", "store", "selling", "operations", "people", "compliance"]);
 
-    // Without staff.manage the People group disappears entirely (empty groups are omitted).
+    // Without staff.manage or settings.read, the People group disappears entirely (empty groups are omitted).
+    const noStaffOrBilling = visibleSettingsGroups(["analytics.read"]);
+    expect(noStaffOrBilling.map((g) => g.id)).not.toContain("people");
+
+    // With settings.write but without staff.manage, Users is hidden while Plan & billing is visible.
     const noStaff = visibleSettingsGroups(["settings.write"]);
-    expect(noStaff.map((g) => g.id)).not.toContain("people");
+    const peopleGroup = noStaff.find((g) => g.id === "people");
+    expect(peopleGroup?.items.map((i) => i.id)).toEqual(["plan-and-billing"]);
     // Every visible item passes the permission filter.
     const { hasPermission } = await import("@bs/auth");
     for (const g of noStaff) for (const i of g.items) expect(hasPermission(["settings.write"], i.perm as Parameters<typeof hasPermission>[1])).toBe(true);

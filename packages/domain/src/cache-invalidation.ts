@@ -53,6 +53,9 @@ export type CacheChange =
   | {
       type: "review_updated";
       productId: string;
+    }
+  | {
+      type: "media_updated";
     };
 
 /**
@@ -154,6 +157,10 @@ export function computeInvalidationTags(
       // Product reviews updated -> product page, all products list (for stars)
       tags.push(tenantTag(tenantId, "product", change.productId));
       tags.push(tenantTag(tenantId, "product"));
+      break;
+    }
+    case "media_updated": {
+      tags.push(tenantTag(tenantId, "storage"));
       break;
     }
   }

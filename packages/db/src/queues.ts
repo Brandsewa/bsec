@@ -28,6 +28,9 @@ export const QUEUES = [
   { name: "customers.import", options: { retryLimit: 3, retryBackoff: true, retryDelay: 10 } },
   { name: "plan.change_requested", options: { retryLimit: 5, retryBackoff: true, retryDelay: 5 } },
   { name: "system.retention_sweep", options: { retryLimit: 3, retryBackoff: true, retryDelay: 10 } },
+  { name: "maintenance.start", options: { retryLimit: 5, retryBackoff: true, retryDelay: 5 } },
+  { name: "maintenance.end", options: { retryLimit: 5, retryBackoff: true, retryDelay: 5 } },
+  { name: "maintenance.watchdog_sweep", options: { retryLimit: 3, retryBackoff: true, retryDelay: 10 } },
 ] as const;
 
 export type QueueName = (typeof QUEUES)[number]["name"];
@@ -57,4 +60,7 @@ export const QUEUE_NAMES = {
   CUSTOMERS_IMPORT: "customers.import",
   PLAN_CHANGE_REQUESTED: "plan.change_requested",
   RETENTION_SWEEP: "system.retention_sweep",
+  MAINTENANCE_START: "maintenance.start",
+  MAINTENANCE_END: "maintenance.end",
+  MAINTENANCE_WATCHDOG_SWEEP: "maintenance.watchdog_sweep",
 } as const;

@@ -1,5 +1,5 @@
 import { NextResponse, type NextRequest } from "next/server";
-import { evaluateStorefrontAccess } from "@bs/domain";
+import { evaluateStorefrontAccess, recordLookupFailure } from "@bs/domain";
 import { server } from "@/server/runtime.ts";
 
 export async function GET(request: NextRequest) {
@@ -39,6 +39,36 @@ export async function GET(request: NextRequest) {
 
     return NextResponse.json(access);
   } catch (error) {
+    const { fallbackMode } = recordLookupFailure(host, error);
+
+    // Fail closed if store was previously in password mode to prevent unauthenticated access
+    if (fallbackMode === "password") {
+      return NextResponse.json({
+        allowed: false,
+        reason: "password_required",
+        status: "password_required",
+        httpStatus: 200,
+        mode: "password",
+        noindex: true,
+        error: error instanceof Error ? error.message : "Internal error",
+      });
+    }
+
+    // Fail closed if store was previously in maintenance mode
+    if (fallbackMode === "maintenance") {
+      return NextResponse.json({
+        allowed: false,
+        reason: "maintenance",
+        status: "maintenance",
+        httpStatus: 503,
+        mode: "maintenance",
+        retryAfterSeconds: 60,
+        noindex: true,
+        error: error instanceof Error ? error.message : "Internal error",
+      });
+    }
+
+    // Default fail-open for live stores during brief DB timeouts so live stores stay up
     return NextResponse.json({
       allowed: true,
       httpStatus: 200,
