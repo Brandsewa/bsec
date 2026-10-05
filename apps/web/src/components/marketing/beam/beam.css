@@ -53,7 +53,7 @@
 
 /* the beam: a thin bright core, a soft halo, and a bloom where it lands on the window's top edge */
 .bm-bloom { position: absolute; left: var(--bm-beam-x); bottom: calc(var(--bm-foot, 8rem) - 7rem); width: min(110rem, 170%); height: 15rem; transform: translateX(-50%) rotate(-6deg); pointer-events: none; filter: blur(8px);
-  background: radial-gradient(ellipse 50% 48% at 50% 62%, rgb(150 160 255 / 0.7) 0%, rgb(125 140 255 / 0.6) 30%, rgb(95 70 235 / 0.4) 52%, transparent 74%); animation: bm-bloom 5.5s ease-in-out infinite; }
+  background: radial-gradient(ellipse 50% 48% at 50% 62%, rgb(90 118 245 / 0.55) 0%, rgb(72 98 235 / 0.5) 30%, rgb(58 56 200 / 0.35) 52%, transparent 74%); animation: bm-bloom 5.5s ease-in-out infinite; }
 @keyframes bm-pulse { 0%, 100% { opacity: 0.86; } 50% { opacity: 1; } }
 @keyframes bm-bloom { 0%, 100% { opacity: 0.88; transform: translateX(-50%) rotate(-6deg) scale(1); } 50% { opacity: 1; transform: translateX(-50%) rotate(-6deg) scale(1.04); } }
 /* as the page scrolls the light falls away (scroll-driven where supported) */
@@ -109,10 +109,10 @@
 }
 
 /* the flare where the beam lands: sits above the window's top edge, blended with screen */
-.bm-flare { position: absolute; left: var(--bm-beam-x); bottom: calc(var(--bm-window-h) - 0.2rem); width: 0; z-index: 25; pointer-events: none; }
+.bm-flare { position: absolute; left: var(--bm-beam-x); bottom: calc(var(--bm-window-h) - 0.2rem); width: 0; z-index: 15; pointer-events: none; }
 .bm-flare > * { position: absolute; mix-blend-mode: screen; }
 .bm-flare-wide { left: -62rem; bottom: -7rem; width: 124rem; height: 17rem; filter: blur(26px); transform: rotate(-6deg);
-  background: radial-gradient(ellipse 50% 50% at 50% 58%, rgb(150 165 255 / 0.85) 0%, rgb(105 120 255 / 0.5) 34%, rgb(85 60 230 / 0.22) 58%, transparent 76%); animation: bm-flare 5.5s ease-in-out infinite; }
+  background: radial-gradient(ellipse 50% 50% at 50% 58%, rgb(80 108 245 / 0.7) 0%, rgb(62 88 225 / 0.45) 34%, rgb(50 52 190 / 0.2) 58%, transparent 76%); animation: bm-flare 5.5s ease-in-out infinite; }
 @keyframes bm-flare { 0%, 100% { opacity: 0.88; } 50% { opacity: 1; } }
 
 /* ---------- Module orbit (planets are positioned from script; styles here are look only) ---------- */
