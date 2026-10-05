@@ -136,13 +136,13 @@ Plan: `docs/SETTINGS-REBUILD-PLAN.md`, `SETTINGS-REMAINING-PHASES`; records `202
 - Theme builder merged (PR #30, migrations 0031/0032) on the owner's instruction to release. Verified by typecheck, lint, build and fast and real-database suites; the browser walkthrough was done (or not) by the owner, not by an agent.
 - CI e2e only runs on `main`: a PR that renames admin UI labels must grep `e2e/` first (two follow-up fixes were needed after Settings 0-1).
 - Windows heavy-suite worker crash `3221226505` remains a local flake (rerun the file alone); CI on Linux is unaffected.
+- Finance (merged 2026-10-05, PR #39, ADR-022). **Pending checks, to do later** (owner: not yet scheduled): (1) receipt upload against real Cloudflare R2: it was tested only against a local S3 stand-in that does not verify SigV4 signatures, so signature acceptance and the bucket's CORS rules for a browser PUT are untested; (2) the `store_finance` role in a browser: tested through the API and `finance-roles.int.test.ts` only (sign in as a finance member, check the nav shows Finance only and the Export buttons are hidden). Two other Finance gaps are fixed in open PRs: cancelling a confirmed or paid order restores its stock (PR #41) and Finance/Returns/Pre-orders/Quotes no longer overflow horizontally at 375 px (PR #42). Details: `docs/changes/2026-10-05-claude-finance-verification.md`, ADR-022 "Known gaps".
 - COD fee/enable is still saved through the generic `settings.update` (`settings.write`); owner-only treatment is part of Settings Phase 5.
 
 ## In flight
 
 One line per piece of work that is started and not merged. Add yours before you start, remove it when merged or abandoned (`AGENTS.md` section 6). Format: `agent · branch · area · since · one-line goal`.
 
-- antigravity · feat/finance-phases-1-4 · finance · 2026-10-05 · Phases 0-4: Double-entry finance engine, reports, expenses & UI (ready for verification)
 
 
 ## Returns & Exchanges (Manual Review & Portal) — Complete (2026-10-02)
