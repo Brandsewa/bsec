@@ -148,7 +148,7 @@ Plan: `docs/SETTINGS-REBUILD-PLAN.md`, `SETTINGS-REMAINING-PHASES`; records `202
 
 One line per piece of work that is started and not merged. Add yours before you start, remove it when merged or abandoned (`AGENTS.md` section 6). Format: `agent · branch · area · since · one-line goal`.
 
-- zcode · `feat/settings-rebuild-phase-8` · settings browser test round · 2026-10-05 · test round done, report in docs/changes/2026-10-05-zcode-settings-browser-test.md — awaiting Claude
+- zcode · `feat/settings-rebuild-phase-8` · settings browser test rounds · 2026-10-05 · round 1 + re-test done: all 7 fixes verified, reports in docs/changes/2026-10-05-zcode-settings-browser-test*.md — awaiting Claude
 - antigravity · `feat/settings-rebuild-phase-8` · settings (storage view, maintenance, hardening, rollout) · 2026-10-05 · Settings Phase 8 rebuild (ready to verify)
 - antigravity · `feat/settings-rebuild-phase-7` · settings (notifications, policies, customer privacy) · 2026-10-05 · Settings Phase 7 rebuild (ready to verify)
 - antigravity · `feat/settings-rebuild-phase-6` · settings (shipping, delivery, taxes, credit notes) · 2026-10-05 · Settings Phase 6 rebuild (ready to verify)
