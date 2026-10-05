@@ -1,5 +1,6 @@
 import { oc } from "@orpc/contract";
 import { z } from "zod";
+import { financeContract } from "./finance.ts";
 
 // --- Existing M1 Models ---
 export const Membership = z.object({
@@ -3909,4 +3910,6 @@ export const adminContract = {
       )
       .output(z.object({ items: z.array(AbandonedCheckoutItem), total: z.number().int() })),
   },
+
+  finance: financeContract,
 };

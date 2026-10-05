@@ -49,7 +49,7 @@ Flag `settings.update_offer` (Super Admin -> Features). Owner only; Managers see
 
 ## 4. Setup (learned the hard way by ZCode)
 
-- **Database:** Docker Desktop on this machine has hung before. If `docker ps` hangs, use a native PostgreSQL (the installed `postgresql-x64-16` binaries) on a spare port, create db `bsec`, then bootstrap and migrate with the built scripts in `packages/db/dist` (bootstrap, then deploy). Migrations through **0041** must be applied (`migrations ok`).
+- **Database:** Docker Desktop on this machine has hung before. If `docker ps` hangs, use a native PostgreSQL (the installed `postgresql-x64-16` binaries) on a spare port, create db `bsec`, then bootstrap and migrate with the built scripts in `packages/db/dist` (bootstrap, then deploy). Migrations through **0048** must be applied (`migrations ok`).
 - **Servers** (ports 3000/5173 may be taken by other worktrees; pick free ones): web (3000), platform (4000), worker (4100 health; **start it**, maintenance and email jobs need it), admin (5173), superadmin (5174). Root `.env` (uncommitted, never commit it) needs `BETTER_AUTH_URL` for the web origin, `ADMIN_ORIGINS`, `SUPERADMIN_ORIGINS`, `PREVIEW_BASE_URL`.
 - **Quirks:** `/api/saas/*` is only served for host `localhost` (or the marketing host), so send `x-forwarded-host: localhost:<port>` from curl. Admin API calls need header `x-store-id` (the SPA sets it). Super Admin sign-in needs TOTP.
 - **Data:** seed the Demo Store per `DEPLOYMENT.md`; create two extra stores with an Owner each (via Super Admin) so you can test "only this store changes". Create a Manager by inviting someone with the `store_admin` role from Settings -> Users. Custom roles do not exist (deferred by the owner); skip the Analytics-only role.

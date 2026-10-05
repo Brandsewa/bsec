@@ -9,7 +9,7 @@ import {
   QUEUE_NAMES,
 } from "@bs/db";
 import type { Runtime } from "../runtime.ts";
-import { releaseReservation } from "../catalog/inventory-reservations.ts";
+import { releaseReservation, restoreCommittedStock } from "../catalog/inventory-reservations.ts";
 import type { TenantContext } from "../context.ts";
 
 export const ORDER_STATUSES = [
@@ -316,6 +316,16 @@ export async function transitionOrder(
       if (targetStatus === "cancelled") {
         await releaseReservation(db, ctx.tenantId, { orderId, reason: "cancelled" });
 
+        // Stock that was already taken (COD confirmed, or paid) is still on the shelf: put it back, and let the
+        // books return the cost of those goods (finance.post, plan section 3.4). Nothing shipped, by the guard above.
+        const restored = await restoreCommittedStock(db, ctx.tenantId, { orderId });
+        if (restored.restoredLines > 0) {
+          eventData.stockRestoredUnits = restored.restoredUnits;
+          if (rt._jobs) {
+            await rt._jobs.send(QUEUE_NAMES.FINANCE_POST, { tenantId: ctx.tenantId, kind: "cancel_restock", id: orderId });
+          }
+        }
+
         // ...and any payment that has not been paid yet is void: nothing is due (a COD order would otherwise stay
         // "cod_pending" forever). Paid or authorised money is left alone: refunding is a separate step.
         const voided = await db
@@ -334,6 +344,66 @@ export async function transitionOrder(
             .update(orders)
             .set({ paymentStatus: "cancelled", updatedAt: new Date() })
             .where(and(eq(orders.tenantId, ctx.tenantId), eq(orders.id, orderId)));
+        }
+
+        // ...but money that was already collected (a manual order recorded as paid, or a captured payment)
+        // has to go back to the customer. Record that as a refund for what is still unrefunded, so the order
+        // and the books (finance.post, plan section 3.4) stop counting the sale. It is a record, like every
+        // manual refund here: the merchant returns the money, nothing is sent to a payment provider.
+        const paidIntents = await db
+          .select()
+          .from(paymentIntents)
+          .where(
+            and(
+              eq(paymentIntents.tenantId, ctx.tenantId),
+              eq(paymentIntents.orderId, orderId),
+              inArray(paymentIntents.status, ["captured", "partially_refunded", "cod_collected"]),
+            ),
+          );
+        let refundedOnCancel = 0;
+        for (const intent of paidIntents) {
+          const [already] = await db
+            .select({ total: sql<string>`coalesce(sum(${refunds.amount}), 0)` })
+            .from(refunds)
+            .where(
+              and(
+                eq(refunds.tenantId, ctx.tenantId),
+                eq(refunds.intentId, intent.id),
+                inArray(refunds.status, ["succeeded", "processed"]),
+              ),
+            );
+          const owed = Number(intent.amount) - Number(already?.total ?? 0);
+          if (owed <= 0) continue;
+          const [refund] = await db
+            .insert(refunds)
+            .values({
+              tenantId: ctx.tenantId,
+              orderId,
+              intentId: intent.id,
+              amount: owed,
+              status: "succeeded",
+              method: "other",
+              initiatedBy: "system",
+              reason: `Order cancelled: ${"reason" in event ? (event.reason ?? "no reason given") : "no reason given"}`,
+              restock: false,
+            })
+            .returning({ id: refunds.id });
+          await db
+            .update(paymentIntents)
+            .set({ status: "refunded", updatedAt: new Date() })
+            .where(and(eq(paymentIntents.tenantId, ctx.tenantId), eq(paymentIntents.id, intent.id)));
+          refundedOnCancel += owed;
+          if (refund && rt._jobs) {
+            await rt._jobs.send(QUEUE_NAMES.FINANCE_POST, { tenantId: ctx.tenantId, kind: "refund", id: refund.id });
+          }
+        }
+        if (refundedOnCancel > 0) {
+          await db
+            .update(orders)
+            .set({ paymentStatus: "refunded", updatedAt: new Date() })
+            .where(and(eq(orders.tenantId, ctx.tenantId), eq(orders.id, orderId)));
+          eventData.refundRecordedPaise = refundedOnCancel;
+          eventMessage = `${eventMessage}. Refund of ${(refundedOnCancel / 100).toFixed(2)} INR recorded: return it to the customer`;
         }
       }
     } else if (event.type.startsWith("payment.")) {
@@ -477,6 +547,14 @@ export async function transitionOrder(
           updatedAt: new Date(),
         })
         .where(and(eq(orders.tenantId, ctx.tenantId), eq(orders.id, orderId)));
+
+      if (rt._jobs && (orderPaymentStatus === "paid" || orderPaymentStatus === "cod_collected")) {
+        await rt._jobs.send(QUEUE_NAMES.FINANCE_POST, {
+          tenantId: ctx.tenantId,
+          kind: "order",
+          id: orderId,
+        });
+      }
     }
 
     // Write audit event

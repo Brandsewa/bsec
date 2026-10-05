@@ -20,6 +20,7 @@ import {
 import { storefrontContract } from "./storefront.ts";
 
 export * from "./admin.ts";
+export * from "./finance.ts";
 export * from "./platform.ts";
 export * from "./storefront.ts";
 

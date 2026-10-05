@@ -1,4 +1,4 @@
--- 0038_settings_flags_seed.sql
+-- 0045_settings_flags_seed.sql
 -- Seed feature flags for Settings rebuild phases 3-8 (ADR-011, default_on = false)
 
 INSERT INTO "feature_flags" ("key", "default_on", "rules", "kill_switch", "created_at", "updated_at")

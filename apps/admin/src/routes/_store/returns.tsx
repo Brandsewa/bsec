@@ -644,7 +644,7 @@ export function ReturnsWorkbenchPage() {
       </div>
 
       <PageSection>
-        <div className="grid gap-3">
+        <div className="grid grid-cols-1 gap-3">
           {/* Status Navigation Tabs */}
           <ScrollTabs
             tabs={VIEWS.map((v) => ({ id: v.id, label: v.label }))}

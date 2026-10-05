@@ -95,7 +95,7 @@ describe("Slice 8C: Settings Authorization (role definitions and owner-only runt
     expect(hasPermission(["settings.write"], "staff.manage")).toBe(false);
   });
 
-  it("a provisioned store's store_admin role lacks payments.manage, and migration 0039 repairs older stores", async () => {
+  it("a provisioned store's store_admin role lacks payments.manage, and migration 0046 repairs older stores", async () => {
     const adminPerms = async () => {
       const [row] = await withTenant(rtPlatform._db.db, tenantIdA, (tx) =>
         tx.select({ p: schema.roles.permissions }).from(schema.roles).where(and(eq(schema.roles.tenantId, tenantIdA), eq(schema.roles.name, "store_admin"))),
@@ -113,7 +113,7 @@ describe("Slice 8C: Settings Authorization (role definitions and owner-only runt
     const client = new pg.Client({ connectionString: as("app_owner", PW.owner) });
     await client.connect();
     try {
-      await client.query(readFileSync(new URL("../../db/migrations/0039_store_admin_no_payments.sql", import.meta.url), "utf8"));
+      await client.query(readFileSync(new URL("../../db/migrations/0046_store_admin_no_payments.sql", import.meta.url), "utf8"));
     } finally {
       await client.end();
     }

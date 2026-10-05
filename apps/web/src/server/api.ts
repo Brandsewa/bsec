@@ -266,6 +266,26 @@ import {
   getSettingsUpdate,
   applySettingsUpdate,
   getCookieInventory,
+  resolvePeriod,
+  getFinanceOverview,
+  getDistinctCurrencies,
+  listLedgerEntriesForAdmin,
+  getTrialBalanceForAdmin,
+  listAdjustments,
+  createAdjustment,
+  listExpenses,
+  createExpense,
+  updateExpense,
+  deleteExpense,
+  settleExpense,
+  unsettleExpense,
+  createPresignedExpenseReceiptUpload,
+  finalizeExpenseReceipt,
+  getExpenseReceiptUrl,
+  assertCanExportFinance,
+  listFiscalPeriods,
+  closeFiscalPeriod,
+  reopenFiscalPeriod,
   type Logger,
   type Runtime,
   type TenantContext,
@@ -2228,6 +2248,163 @@ export const storeRouter = os.router({
           return listAdminAbandonedCheckouts(context.rt, context.tenantCtx, input);
         }),
     },
+    finance: {
+      overview: os.admin.finance.overview
+        .use(requireAdmin)
+        .use(requirePermission("finance.read"))
+        .handler(({ context, input }) => {
+          if (!context.tenantCtx) throw new Error("Missing tenant context");
+          return getFinanceOverview(context.rt._db, context.tenantCtx, input);
+        }),
+      currencies: os.admin.finance.currencies
+        .use(requireAdmin)
+        .use(requirePermission("finance.read"))
+        .handler(async ({ context }) => {
+          if (!context.tenantCtx) throw new Error("Missing tenant context");
+          const currs = await getDistinctCurrencies(context.rt._db, context.tenantCtx);
+          return { currencies: currs };
+        }),
+      ledger: {
+        list: os.admin.finance.ledger.list
+          .use(requireAdmin)
+          .use(requirePermission("finance.read"))
+          .handler(({ context, input }) => {
+            if (!context.tenantCtx) throw new Error("Missing tenant context");
+            return listLedgerEntriesForAdmin(context.rt._db, context.tenantCtx, {
+              ...input,
+              from: input?.from ? new Date(input.from) : undefined,
+              to: input?.to ? new Date(input.to) : undefined,
+            });
+          }),
+        trialBalance: os.admin.finance.ledger.trialBalance
+          .use(requireAdmin)
+          .use(requirePermission("finance.read"))
+          .handler(async ({ context, input }) => {
+            if (!context.tenantCtx) throw new Error("Missing tenant context");
+            const res = await getTrialBalanceForAdmin(context.rt._db, context.tenantCtx, {
+              from: input?.from ? new Date(input.from) : undefined,
+              to: input?.to ? new Date(input.to) : undefined,
+            });
+            return {
+              balanced: res.balanced,
+              totalDebitPaise: res.accounts.reduce((sum, a) => sum + a.debitSum, 0),
+              totalCreditPaise: res.accounts.reduce((sum, a) => sum + a.creditSum, 0),
+              rows: res.accounts.map((a) => ({
+                account: a.account,
+                label: a.account.replace(/_/g, " "),
+                accountType: "asset",
+                totalDebitPaise: a.debitSum,
+                totalCreditPaise: a.creditSum,
+                balancePaise: a.balance,
+              })),
+            };
+          }),
+      },
+      adjustments: {
+        list: os.admin.finance.adjustments.list
+          .use(requireAdmin)
+          .use(requirePermission("finance.read"))
+          .handler(({ context, input }) => {
+            if (!context.tenantCtx) throw new Error("Missing tenant context");
+            return listAdjustments(context.rt._db, context.tenantCtx, input);
+          }),
+        create: os.admin.finance.adjustments.create
+          .use(requireAdmin)
+          .use(requirePermission("finance.write"))
+          .handler(({ context, input }) => {
+            if (!context.tenantCtx) throw new Error("Missing tenant context");
+            return createAdjustment(context.rt._db, context.tenantCtx, input);
+          }),
+      },
+      expenses: {
+        list: os.admin.finance.expenses.list
+          .use(requireAdmin)
+          .use(requirePermission("finance.read"))
+          .handler(({ context, input }) => {
+            if (!context.tenantCtx) throw new Error("Missing tenant context");
+            return listExpenses(context.rt._db, context.tenantCtx, input);
+          }),
+        create: os.admin.finance.expenses.create
+          .use(requireAdmin)
+          .use(requirePermission("finance.write"))
+          .handler(({ context, input }) => {
+            if (!context.tenantCtx) throw new Error("Missing tenant context");
+            return createExpense(context.rt._db, context.tenantCtx, input);
+          }),
+        update: os.admin.finance.expenses.update
+          .use(requireAdmin)
+          .use(requirePermission("finance.write"))
+          .handler(({ context, input }) => {
+            if (!context.tenantCtx) throw new Error("Missing tenant context");
+            return updateExpense(context.rt._db, context.tenantCtx, input);
+          }),
+        delete: os.admin.finance.expenses.delete
+          .use(requireAdmin)
+          .use(requirePermission("finance.write"))
+          .handler(({ context, input }) => {
+            if (!context.tenantCtx) throw new Error("Missing tenant context");
+            return deleteExpense(context.rt._db, context.tenantCtx, input.id);
+          }),
+        settle: os.admin.finance.expenses.settle
+          .use(requireAdmin)
+          .use(requirePermission("finance.write"))
+          .handler(({ context, input }) => {
+            if (!context.tenantCtx) throw new Error("Missing tenant context");
+            return settleExpense(context.rt._db, context.tenantCtx, input);
+          }),
+        unsettle: os.admin.finance.expenses.unsettle
+          .use(requireAdmin)
+          .use(requirePermission("finance.write"))
+          .handler(({ context, input }) => {
+            if (!context.tenantCtx) throw new Error("Missing tenant context");
+            return unsettleExpense(context.rt._db, context.tenantCtx, input.id);
+          }),
+        receiptPresign: os.admin.finance.expenses.receiptPresign
+          .use(requireAdmin)
+          .use(requirePermission("finance.write"))
+          .handler(({ context, input }) => {
+            if (!context.tenantCtx) throw new Error("Missing tenant context");
+            return createPresignedExpenseReceiptUpload(context.tenantCtx, input);
+          }),
+        receiptUrl: os.admin.finance.expenses.receiptUrl
+          .use(requireAdmin)
+          .use(requirePermission("finance.read"))
+          .handler(({ context, input }) => {
+            if (!context.tenantCtx) throw new Error("Missing tenant context");
+            return getExpenseReceiptUrl(context.rt._db, context.tenantCtx, { expenseId: input.id });
+          }),
+        receiptFinalize: os.admin.finance.expenses.receiptFinalize
+          .use(requireAdmin)
+          .use(requirePermission("finance.write"))
+          .handler(({ context, input }) => {
+            if (!context.tenantCtx) throw new Error("Missing tenant context");
+            return finalizeExpenseReceipt(context.rt._db, context.tenantCtx, input);
+          }),
+      },
+      periods: {
+        list: os.admin.finance.periods.list
+          .use(requireAdmin)
+          .use(requirePermission("finance.read"))
+          .handler(({ context }) => {
+            if (!context.tenantCtx) throw new Error("Missing tenant context");
+            return listFiscalPeriods(context.rt._db, context.tenantCtx);
+          }),
+        close: os.admin.finance.periods.close
+          .use(requireAdmin)
+          .use(requirePermission("finance.write"))
+          .handler(({ context, input }) => {
+            if (!context.tenantCtx) throw new Error("Missing tenant context");
+            return closeFiscalPeriod(context.rt._db, context.tenantCtx, input);
+          }),
+        reopen: os.admin.finance.periods.reopen
+          .use(requireAdmin)
+          .use(requirePermission("finance.write"))
+          .handler(({ context, input }) => {
+            if (!context.tenantCtx) throw new Error("Missing tenant context");
+            return reopenFiscalPeriod(context.rt._db, context.tenantCtx, input);
+          }),
+      },
+    },
   },
   storefront: {
     search: os.storefront.search
@@ -2403,7 +2580,7 @@ api.use(
     credentials: true,
     allowHeaders: ["content-type", "x-store-id", "x-request-id", "x-support-token"],
     allowMethods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
-    exposeHeaders: ["x-request-id", "retry-after"],
+    exposeHeaders: ["x-request-id", "retry-after", "content-disposition"],
     maxAge: 600,
   }),
 );
@@ -2629,6 +2806,141 @@ api.post("/saas/invite/accept", async (c) => {
 api.get("/health", async (c) => {
   const h = await checkHealth(server().rt);
   return c.json(h, h.db.ok ? 200 : 503);
+});
+
+/**
+ * CSV export route for Finance (docs/FINANCE-PLAN.md §3.10).
+ * Downloads ledger entries or expenses with BOM + RFC 4180 quoting and 20,000-row ceiling.
+ */
+api.get("/admin/finance/export", async (c) => {
+  const session = await resolveStaffSession(c.req.raw.headers);
+  if (!session) return c.json({ error: "Unauthorized" }, 401);
+
+  const tenantCtx = await buildTenantContext(server().rt._db.db, {
+    entryPath: "admin",
+    headers: c.req.raw.headers,
+    session,
+    request: { method: c.req.method, path: c.req.path },
+  });
+  if (!tenantCtx) return c.json({ error: "Store context required" }, 400);
+
+  // D10: owner and admin roles only, with exports.run and finance.read (checked in the domain).
+  try {
+    assertCanExportFinance(tenantCtx);
+  } catch (err) {
+    return c.json({ error: err instanceof Error ? err.message : "Forbidden" }, 403);
+  }
+
+  const exportType = c.req.query("type") ?? "ledger";
+  const periodNamed = c.req.query("period") as "7d" | "30d" | "90d" | "ytd" | "all" | undefined;
+  const fromParam = c.req.query("from");
+  const toParam = c.req.query("to");
+
+  const resolution = resolvePeriod({
+    named: periodNamed,
+    from: fromParam,
+    to: toParam,
+  });
+
+  const MAX_EXPORT_ROWS = 20_000;
+  const BOM = "\uFEFF";
+  const escapeCsv = (val: unknown): string => {
+    if (val === null || val === undefined) return "";
+    const str = String(val);
+    if (str.includes(",") || str.includes('"') || str.includes("\n") || str.includes("\r")) {
+      return `"${str.replace(/"/g, '""')}"`;
+    }
+    return str;
+  };
+
+  if (exportType === "expenses") {
+    const res = await listExpenses(server().rt._db, tenantCtx, {
+      from: resolution.from.toISOString().slice(0, 10),
+      to: resolution.to.toISOString().slice(0, 10),
+      limit: MAX_EXPORT_ROWS + 1,
+      offset: 0,
+    });
+
+    const isTruncated = res.items.length > MAX_EXPORT_ROWS;
+    const slice = res.items.slice(0, MAX_EXPORT_ROWS);
+
+    const headers = ["Number", "Date", "Category", "Paid From", "Payee", "Amount (INR)", "Currency", "Settled", "Note"];
+    const rows = [headers.join(",")];
+
+    for (const exp of slice) {
+      rows.push(
+        [
+          escapeCsv(exp.number),
+          escapeCsv(exp.date),
+          escapeCsv(exp.category),
+          escapeCsv(exp.paidFrom),
+          escapeCsv(exp.payee),
+          escapeCsv((exp.amount / 100).toFixed(2)),
+          escapeCsv(exp.currency),
+          escapeCsv(exp.settlement ? `Yes (${exp.settlement.settledAt})` : "No"),
+          escapeCsv(exp.note),
+        ].join(","),
+      );
+    }
+
+    if (isTruncated) {
+      rows.push(`"TRUNCATED: export capped at ${MAX_EXPORT_ROWS} rows. Use a narrower date range."`);
+    }
+
+    const csvContent = BOM + rows.join("\r\n");
+    const filename = `expenses-${resolution.from.toISOString().slice(0, 10)}-to-${resolution.to.toISOString().slice(0, 10)}${isTruncated ? `-partial-${slice.length}-of-${res.total}` : ""}.csv`;
+
+    return new Response(csvContent, {
+      headers: {
+        "Content-Type": "text/csv; charset=utf-8",
+        "Content-Disposition": `attachment; filename="${filename}"`,
+      },
+    });
+  }
+
+  // Ledger export (default)
+  const res = await listLedgerEntriesForAdmin(server().rt._db, tenantCtx, {
+    from: resolution.from,
+    to: resolution.to,
+    limit: MAX_EXPORT_ROWS + 1,
+    offset: 0,
+  });
+
+  const isTruncated = res.items.length > MAX_EXPORT_ROWS;
+  const slice = res.items.slice(0, MAX_EXPORT_ROWS);
+
+  const headers = ["Date", "Debit Account", "Credit Account", "Amount (INR)", "Currency", "Source Kind", "Source ID", "Reference", "Note"];
+  const rows = [headers.join(",")];
+
+  for (const entry of slice) {
+    rows.push(
+      [
+        escapeCsv(entry.date),
+        escapeCsv(entry.accountDebit),
+        escapeCsv(entry.accountCredit),
+        escapeCsv((entry.amount / 100).toFixed(2)),
+        escapeCsv(entry.currency),
+        escapeCsv(entry.sourceKind),
+        escapeCsv(entry.sourceId),
+        escapeCsv(entry.reason),
+        escapeCsv(entry.note),
+      ].join(","),
+    );
+  }
+
+  if (isTruncated) {
+    rows.push(`"TRUNCATED: export capped at ${MAX_EXPORT_ROWS} rows. Use a narrower date range."`);
+  }
+
+  const csvContent = BOM + rows.join("\r\n");
+  const filename = `ledger-${resolution.from.toISOString().slice(0, 10)}-to-${resolution.to.toISOString().slice(0, 10)}${isTruncated ? `-partial-${slice.length}-of-${res.total}` : ""}.csv`;
+
+  return new Response(csvContent, {
+    headers: {
+      "Content-Type": "text/csv; charset=utf-8",
+      "Content-Disposition": `attachment; filename="${filename}"`,
+    },
+  });
 });
 
 api.all("/rpc/*", async (c, next) => {

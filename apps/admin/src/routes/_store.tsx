@@ -2,6 +2,8 @@ import { useState } from "react";
 import { Outlet, createFileRoute, redirect, useRouterState } from "@tanstack/react-router";
 import {
   BadgePercent,
+  Banknote,
+  BarChart3,
   Clock,
   FileText,
   FolderTree,
@@ -13,6 +15,7 @@ import {
   MessageSquareQuote,
   Package,
   Palette,
+  Receipt,
   RotateCcw,
   Settings,
   ShoppingBag,
@@ -53,6 +56,14 @@ const nav: GatedGroup[] = [
       { label: "Quotes", href: "/quotes", icon: MessageSquareQuote, perm: "orders.read" },
       { label: "Abandoned checkouts", href: "/abandoned-checkouts", icon: ShoppingCart, perm: "orders.read" },
       { label: "Returns", href: "/returns", icon: RotateCcw, perm: "orders.read" },
+    ],
+  },
+  {
+    label: "Finance",
+    items: [
+      { label: "Overview", href: "/finance", icon: Banknote, perm: "finance.read" },
+      { label: "Expenses", href: "/finance/expenses", icon: Receipt, perm: "finance.read" },
+      { label: "Reports", href: "/finance/reports", icon: BarChart3, perm: "finance.read" },
     ],
   },
   {

@@ -20,6 +20,7 @@ export interface CreateOwnerResult {
 const SYSTEM_ROLES: Array<{ name: string; permissions: readonly string[] }> = [
   { name: "store_owner", permissions: SYSTEM_STORE_ROLES.store_owner },
   { name: "store_admin", permissions: SYSTEM_STORE_ROLES.store_admin },
+  { name: "store_finance", permissions: SYSTEM_STORE_ROLES.store_finance },
 ];
 
 /** Makes sure the store has its system roles and gives the user an active owner membership. Idempotent. */

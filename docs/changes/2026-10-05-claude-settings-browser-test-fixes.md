@@ -68,3 +68,15 @@ Antigravity ran sections 1-10 in headed Chrome and found 3 defects; I checked ea
 - **Independent proof instead:** new real-database test `checkout-terms.int.test.ts` (5 tests, passing): without the setting an order needs and records no consent; enabling Terms with nothing published is refused with the Precondition message; with the setting on, an order without consent (missing or false) is refused and creates **no** order; an accepted order stores the acceptance time and the exact published version; republishing gives new orders the new version while the earlier order keeps its old one; switching the setting off removes the requirement. This covers A6-A8 at the domain level.
 - **Remaining, small:** a browser run that publishes Terms version 2 **through the Policies screen** and shows both orders' version ids matching the versions listed in the UI, if the owner wants UI-level proof of A8. Not blocking given the test above.
 
+## Merge with `main` (Finance) and migration renumbering
+`main` gained the Finance module (migration `0039_finance`, journal timestamp 1792090000000, already deployed by the Finance merge) while this branch was open. Drizzle only applies a migration whose journal timestamp is newer than the last one applied, so the settings migrations (timestamps 1792030000000 to 1792110000000) would have been **silently skipped** on production. They are renumbered after Finance with newer timestamps:
+
+| Was | Now |
+|---|---|
+| 0033 settings_phase4 ... 0038 settings_flags_seed | 0040 settings_phase4 ... 0045 settings_flags_seed |
+| 0039 store_admin_no_payments | 0046 |
+| 0040 platform_email_log_prune | 0047 |
+| 0041 settings_update_offer_flag | 0048 |
+
+Older change records and ZCode/Antigravity reports quote the old numbers; they are historical and left as written. Local test databases that already applied the old files need a fresh database (the migrations use `IF NOT EXISTS` in most places but not all). Other merge decisions: `store_admin` is seeded from `SYSTEM_STORE_ROLES` (so it keeps no `payments.manage` while gaining the finance permissions), the new `store_finance` role is kept, the worker registers both maintenance and finance jobs, and the permission model lives in `@bs/auth/permissions` with Finance's additions.
+

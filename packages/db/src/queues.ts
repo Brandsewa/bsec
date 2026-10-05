@@ -31,6 +31,9 @@ export const QUEUES = [
   { name: "maintenance.start", options: { retryLimit: 5, retryBackoff: true, retryDelay: 5 } },
   { name: "maintenance.end", options: { retryLimit: 5, retryBackoff: true, retryDelay: 5 } },
   { name: "maintenance.watchdog_sweep", options: { retryLimit: 3, retryBackoff: true, retryDelay: 10 } },
+  // Finance queues (docs/FINANCE-PLAN.md §3.5)
+  { name: "finance.post", options: { retryLimit: 5, retryBackoff: true, retryDelay: 5 } },
+  { name: "finance.reconcile", options: { retryLimit: 3, retryBackoff: true, retryDelay: 10 } },
 ] as const;
 
 export type QueueName = (typeof QUEUES)[number]["name"];
@@ -63,4 +66,6 @@ export const QUEUE_NAMES = {
   MAINTENANCE_START: "maintenance.start",
   MAINTENANCE_END: "maintenance.end",
   MAINTENANCE_WATCHDOG_SWEEP: "maintenance.watchdog_sweep",
+  FINANCE_POST: "finance.post",
+  FINANCE_RECONCILE: "finance.reconcile",
 } as const;

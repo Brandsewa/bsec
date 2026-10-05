@@ -211,6 +211,13 @@ export async function provisionTenant(
       permissions: [...SYSTEM_STORE_ROLES.store_admin],
     });
 
+    await tx.insert(schema.roles).values({
+      tenantId,
+      name: "store_finance",
+      isSystem: true,
+      permissions: [...SYSTEM_STORE_ROLES.store_finance],
+    });
+
     // Membership: if existing user in self-service, mark invited until invite is accepted
     await tx.insert(schema.memberships).values({
       tenantId,

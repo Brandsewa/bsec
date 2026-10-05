@@ -210,6 +210,60 @@ export async function commitReservation(
 }
 
 /**
+ * Gives back stock an order already took. Confirming (COD) or paying an order commits its reservations:
+ * the units leave on_hand and the reservation becomes 'committed', which releaseReservation (active only)
+ * never touches. When the order is cancelled before anything shipped, those units are still on the shelf,
+ * so they go back to on_hand, one movement per line, and the reservation is closed as 'returned_to_stock'.
+ * Idempotent: a second call finds nothing committed.
+ */
+export async function restoreCommittedStock(
+  db: Db,
+  tenantId: string,
+  opts: { orderId: string },
+): Promise<{ restoredLines: number; restoredUnits: number }> {
+  return await withTenant(db, tenantId, async (tx) => {
+    const res = await tx.execute<{ id: string; variant_id: string; location_id: string; qty: number }>(sql`
+      SELECT id, variant_id, location_id, qty
+        FROM inventory_reservations
+       WHERE tenant_id = ${tenantId}
+         AND order_id = ${opts.orderId}
+         AND status = 'committed'
+         FOR UPDATE
+    `);
+
+    let units = 0;
+    for (const row of res.rows) {
+      await tx
+        .update(inventoryReservations)
+        .set({ status: "returned_to_stock", updatedAt: new Date() })
+        .where(eq(inventoryReservations.id, row.id));
+
+      await tx.execute(sql`
+        UPDATE inventory_levels
+           SET on_hand = on_hand + ${row.qty},
+               updated_at = now()
+         WHERE tenant_id = ${tenantId}
+           AND variant_id = ${row.variant_id}
+           AND location_id = ${row.location_id};
+      `);
+
+      await tx.insert(inventoryMovements).values({
+        tenantId,
+        variantId: row.variant_id,
+        locationId: row.location_id,
+        delta: row.qty,
+        reason: "cancelled",
+        referenceType: "order",
+        referenceId: opts.orderId,
+      });
+      units += row.qty;
+    }
+
+    return { restoredLines: res.rows.length, restoredUnits: units };
+  });
+}
+
+/**
  * Release reservations manually (e.g. order cancelled, checkout abandoned) (PLAN §11.3).
  * Idempotent: only active reservations are released and reserved count decremented.
  */

@@ -34,3 +34,4 @@ export * from "./reviews.ts";
 export * from "./tax.ts";
 export * from "./policies.ts";
 export * from "./privacy.ts";
+export * from "./finance.ts";

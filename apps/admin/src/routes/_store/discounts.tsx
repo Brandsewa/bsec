@@ -334,7 +334,7 @@ export function DiscountsPage() {
       <ScrollTabs value={s.status} onChange={(v) => setFilter({ status: v === "all" ? undefined : v })} tabs={STATUS_TABS} />
 
       <PageSection>
-        <div className="grid gap-3">
+        <div className="grid grid-cols-1 gap-3">
           <TableToolbar
             searchLabel="Search discounts"
             searchPlaceholder="Search title or code"

@@ -12,6 +12,7 @@ import { eq, and, notInArray } from "drizzle-orm";
 import { acquireTenantJobSlot, cleanExpiredRateLimits, reapStaleTenantJobSlots, releaseTenantJobSlot } from "./system/rate-limit.ts";
 import { runTrialExpirySweep } from "./saas/trial-expiry.ts";
 import { isMarketingAllowed } from "./system/tenant-lifecycle.ts";
+import { handleFinancePost, runFinanceReconcileSweep } from "./finance/index.ts";
 
 /**
  * Job runtime (PLAN §11). Queues are created by the migrate step (as app_owner); workers run
@@ -1004,6 +1005,27 @@ export async function startJobs(opts: {
     },
   );
 
+  // Handle finance.post job (docs/FINANCE-PLAN.md §3.3, §3.5)
+  await boss.work<{ tenantId: string; kind: string; id: string }>(
+    QUEUE_NAMES.FINANCE_POST,
+    { localConcurrency: 4 },
+    async (batch) => {
+      for (const job of batch) {
+        try {
+          await withTenantJobSlot(job.data.tenantId, async () => {
+            await withTenant(db, job.data.tenantId, async (tx) => {
+              await handleFinancePost(tx, job.data.tenantId, job.data);
+            });
+            opts.log.info({ job_id: job.id, kind: job.data.kind, id: job.data.id }, "finance.post processed");
+          });
+        } catch (err) {
+          opts.log.error({ err, job_id: job.id }, "finance.post failed");
+          // Fire-and-forget: log and continue
+        }
+      }
+    },
+  );
+
   // Handle maintenance.start (Settings Phase 8 / Slice 8B)
   await boss.work<{ tenantId: string; startsAt?: string; endsAt?: string }>(
     QUEUE_NAMES.MAINTENANCE_START,
@@ -1056,6 +1078,23 @@ export async function startJobs(opts: {
     },
   );
 
+  // Handle finance.reconcile recurring sweep (docs/FINANCE-PLAN.md §3.5)
+  await boss.work(
+    QUEUE_NAMES.FINANCE_RECONCILE,
+    { localConcurrency: 1 },
+    async (batch) => {
+      for (const job of batch) {
+        try {
+          const res = await runFinanceReconcileSweep(db, opts.log);
+          opts.log.info({ job_id: job.id, ...res }, "finance.reconcile sweep finished");
+        } catch (err) {
+          opts.log.error({ err, job_id: job.id }, "finance.reconcile sweep failed");
+          throw err;
+        }
+      }
+    },
+  );
+
   // Register recurring schedules and proof-of-life sweeps on boot (PLAN §5.10, §11.3)
   try {
     await boss.schedule(QUEUE_NAMES.RESERVATION_EXPIRY, "* * * * *", {});
@@ -1066,7 +1105,8 @@ export async function startJobs(opts: {
     await boss.schedule(QUEUE_NAMES.ORDER_RETURN_PHOTO_CLEANUP, "0 3 * * *", {});
     await boss.schedule(QUEUE_NAMES.SEGMENTS_REFRESH_COUNTS, "0 */6 * * *", {});
     await boss.schedule(QUEUE_NAMES.MAINTENANCE_WATCHDOG_SWEEP, "* * * * *", {});
-    opts.log.info("Registered recurring cron: reservation.expiry, idempotency.cleanup, cart.recovery_sweep, subscription.trial_expiry_sweep, preorder_reminder_sweep, return_photo_cleanup, maintenance.watchdog_sweep");
+    await boss.schedule(QUEUE_NAMES.FINANCE_RECONCILE, "0 4 * * *", {});
+    opts.log.info("Registered recurring cron: reservation.expiry, idempotency.cleanup, cart.recovery_sweep, subscription.trial_expiry_sweep, preorder_reminder_sweep, return_photo_cleanup, maintenance.watchdog_sweep, finance.reconcile");
   } catch (err) {
     opts.log.warn({ err }, "Could not register recurring cron schedules with pg-boss");
   }

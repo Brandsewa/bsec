@@ -18,7 +18,9 @@ export function PageContainer({
   className,
   ...props
 }: ComponentProps<"div"> & { size?: keyof typeof widths }) {
-  return <div className={cn("mx-auto grid w-full gap-6 px-4 py-6 md:px-8", widths[size], className)} {...props} />;
+  // grid-cols-1 gives the single column minmax(0, 1fr). Without it the implicit column is `auto`, which grows to
+  // the widest unshrinkable child (a row of tabs, a toolbar) and pushes the whole page past a phone's width.
+  return <div className={cn("mx-auto grid w-full grid-cols-1 gap-6 px-4 py-6 md:px-8", widths[size], className)} {...props} />;
 }
 
 export interface Crumb {
@@ -101,7 +103,7 @@ export function PageSection({
 }) {
   const body = fallback === undefined ? children : <Suspense fallback={<div aria-busy="true">{fallback}</div>}>{children}</Suspense>;
   return (
-    <section className={cn("grid gap-3", className)}>
+    <section className={cn("grid grid-cols-1 gap-3", className)}>
       {title || actions ? (
         <div className="flex items-end justify-between gap-4">
           <div className="grid gap-0.5">

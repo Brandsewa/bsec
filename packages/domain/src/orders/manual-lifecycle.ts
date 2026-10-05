@@ -1,6 +1,6 @@
 import { createHash } from "node:crypto";
 import { and, eq, gt, inArray, sql } from "drizzle-orm";
-import { schema, withTenant, type Db } from "@bs/db";
+import { schema, withTenant, type Db, QUEUE_NAMES } from "@bs/db";
 import type { Runtime } from "../runtime.ts";
 import { assertPermission, type TenantContext } from "../context.ts";
 import { commitReservation } from "../catalog/inventory-reservations.ts";
@@ -497,6 +497,13 @@ export async function actOnReturn(
             });
           }
         }
+        if (lines.some(({ ri }) => input.restock !== false && ri.restock && shelf !== undefined) && rt._jobs) {
+          await rt._jobs.send(QUEUE_NAMES.FINANCE_POST, {
+            tenantId: ctx.tenantId,
+            kind: "restock",
+            id: input.id,
+          });
+        }
         break;
       }
       case "refund": {
@@ -546,7 +553,7 @@ export async function actOnReturn(
           await transitionOrder(txRt, ctx, ret.orderId, { type: "payment.partial_refund", intentId: intent.id, amount, reason: `Return ${ret.number}` }, tx);
         }
 
-        await tx.insert(schema.refunds).values({
+        const [insertedRefund] = await tx.insert(schema.refunds).values({
           tenantId: ctx.tenantId,
           orderId: ret.orderId,
           intentId: intent?.id ?? null,
@@ -556,7 +563,15 @@ export async function actOnReturn(
           status: "succeeded",
           reason: `Return ${ret.number}`,
           initiatedBy: "admin",
-        });
+        }).returning({ id: schema.refunds.id });
+
+        if (rt._jobs && insertedRefund) {
+          await rt._jobs.send(QUEUE_NAMES.FINANCE_POST, {
+            tenantId: ctx.tenantId,
+            kind: "refund",
+            id: insertedRefund.id,
+          });
+        }
 
         // Slice 6D: Credit notes on refunds (flagged behind settings.gst_v2)
         // If the order has an issued invoice, issue a credit note linked to original invoice and return
