@@ -29,7 +29,15 @@ The Phase 8 record, `progress.md` and the verification hand-off named a `store_m
 2. Customer-account settings updates write the audit action `checkout_settings.update`; it should probably be its own action. Left as is (not blocking).
 
 ## Verification (run in `C:\dev\bsec-settings-p8`)
-See the final gate numbers appended in the PR description. Not run: browser walkthrough (ZCode), live store (rule: no live testing), Razorpay and Shiprocket (gated).
+Run after merging `origin/main`.
+
+Two more never-run tests surfaced after the merge, both fixed in the tests only: `apps/web/test/storefront-pages.test.ts` (Phase 7 renamed `policyContent` to `fallbackPolicyContent`) and the platform `rbac` / `read-endpoints` suites (Phase 5 added `plans.listRequests` and `plans.decideRequest` without test inputs).
+
+- `pnpm typecheck` 15/15, `pnpm lint` 15/15, `pnpm build` ok, `pnpm docs:check` ok.
+- `pnpm test:heavy:local` (real Postgres 18): **76 files, 1688 tests passed** (was 58 failed). The total dropped from 2021 because the 343 tautological matrix tests were removed.
+- `@bs/domain test:fast` 320, `@bs/admin` 69, `@bs/web` 164, `@bs/contracts` 20, `@bs/db` 41, `@bs/auth` 6, `@bs/platform` 75 (`--no-file-parallelism`; 5 tests skipped by the suites themselves) all pass.
+- A reused-container run of one int file once failed on a stale migration collision (`_platform_meta`); the managed `test:heavy:local` run is the one that counts. A Windows worker crash on the first run of `settings-phase-7.int.test.ts` was the known flake and passed on rerun.
+- Not run: Playwright e2e (CI runs it only on `main`; I read `e2e/admin.spec.ts` against the new Settings labels and found no conflict, but did not run it), browser walkthrough (ZCode), live store (rule: no live testing), Razorpay and Shiprocket (gated).
 
 ## Definition of done
 - [x] Code follows rules 2-6 and 10-13; no secrets; no unrelated edits.
