@@ -241,6 +241,7 @@ import {
   unsettleExpense,
   createPresignedExpenseReceiptUpload,
   finalizeExpenseReceipt,
+  getExpenseReceiptUrl,
   listFiscalPeriods,
   closeFiscalPeriod,
   reopenFiscalPeriod,
@@ -2019,6 +2020,13 @@ export const storeRouter = os.router({
             if (!context.tenantCtx) throw new Error("Missing tenant context");
             return createPresignedExpenseReceiptUpload(context.tenantCtx, input);
           }),
+        receiptUrl: os.admin.finance.expenses.receiptUrl
+          .use(requireAdmin)
+          .use(requirePermission("finance.read"))
+          .handler(({ context, input }) => {
+            if (!context.tenantCtx) throw new Error("Missing tenant context");
+            return getExpenseReceiptUrl(context.rt._db, context.tenantCtx, { expenseId: input.id });
+          }),
         receiptFinalize: os.admin.finance.expenses.receiptFinalize
           .use(requireAdmin)
           .use(requirePermission("finance.write"))
@@ -2226,7 +2234,7 @@ api.use(
     credentials: true,
     allowHeaders: ["content-type", "x-store-id", "x-request-id", "x-support-token"],
     allowMethods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
-    exposeHeaders: ["x-request-id", "retry-after"],
+    exposeHeaders: ["x-request-id", "retry-after", "content-disposition"],
     maxAge: 600,
   }),
 );

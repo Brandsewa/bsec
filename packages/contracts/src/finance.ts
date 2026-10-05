@@ -382,6 +382,10 @@ export const financeContract = {
       .route({ method: "POST", path: "/admin/finance/expenses/receipts/finalize" })
       .input(z.object({ mediaId: z.string().uuid(), key: z.string() }))
       .output(z.object({ mediaId: z.string().uuid(), viewUrl: z.string() })),
+    receiptUrl: oc
+      .route({ method: "GET", path: "/admin/finance/expenses/{id}/receipt" })
+      .input(z.object({ id: z.string().uuid() }))
+      .output(z.object({ url: z.string().nullable() })),
   },
 
   periods: {

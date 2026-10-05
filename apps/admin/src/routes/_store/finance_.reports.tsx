@@ -29,6 +29,7 @@ import { Label } from "@/components/ui/label";
 import { ConfirmDialog } from "../../components/confirm-dialog.tsx";
 import { DataTable, type Column } from "../../components/data-table/data-table.tsx";
 import { ScrollTabs } from "../../components/scroll-tabs.tsx";
+import { downloadFinanceCsv } from "../../lib/finance-export.ts";
 import { SimpleSelect } from "../../components/simple-select.tsx";
 import { errorMessage } from "../../lib/errors.ts";
 import { orpc } from "../../lib/orpc.ts";
@@ -270,7 +271,7 @@ export function FinanceReportsPage() {
                 variant="outline"
                 size="sm"
                 onClick={() => {
-                  window.location.href = `/api/admin/finance/export?type=ledger&period=${search.period ?? "30d"}`;
+                  downloadFinanceCsv("ledger", search.period ?? "30d").catch((err) => toast.error(errorMessage(err, "Export failed")));
                 }}
                 className="gap-1.5"
               >
@@ -288,7 +289,7 @@ export function FinanceReportsPage() {
                 variant="outline"
                 size="sm"
                 onClick={() => {
-                  window.location.href = `/api/admin/finance/export?type=expenses&period=${search.period ?? "30d"}`;
+                  downloadFinanceCsv("expenses", search.period ?? "30d").catch((err) => toast.error(errorMessage(err, "Export failed")));
                 }}
                 className="gap-1.5"
               >

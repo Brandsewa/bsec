@@ -15,6 +15,7 @@ import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { and, eq, sql } from "drizzle-orm";
 import { createDb, schema, withTenant, type DbHandle } from "@bs/db";
 import { ExpenseItem } from "@bs/contracts";
+import { getExpenseReceiptUrl } from "../src/finance/index.ts";
 import { startTestDb, type TestDb } from "@bs/db/test-env";
 import { createRuntime, type Runtime } from "../src/runtime.ts";
 import { provisionTenant } from "../src/saas/provisioning.ts";
@@ -341,5 +342,36 @@ describe("Finance Expenses Domain Service", () => {
       recurring: { enabled: true, interval: "monthly", intervalCount: 1, backfillDue: false },
     });
     expect(() => ExpenseItem.parse(recurring)).not.toThrow();
+  });
+
+  it("serves a receipt only as a 15-minute signed URL inside the tenant's receipt folder", async () => {
+    const r2Config = { accessKeyId: "test-key", secretAccessKey: "test-secret", accountId: "acct", bucketName: "private-receipts" };
+    const mediaId = crypto.randomUUID();
+    const key = `tenants/${tenantId}/expense-receipts/${mediaId}.png`;
+    await withTenant(dbRw.db, tenantId, (tx) =>
+      tx.insert(schema.media).values({ tenantId, id: mediaId, storageKey: key, mime: "image/png", bytes: 1024, folder: "expense-receipts" }),
+    );
+    const withReceipt = await createExpense(dbRw, ctx, {
+      date: "2026-10-01", category: "other", paidFrom: "cash_bank", amount: 5000, currency: "INR", receiptMediaId: mediaId,
+    });
+    const { url } = await getExpenseReceiptUrl(dbRw, ctx, { expenseId: withReceipt.id, r2Config });
+    expect(url).toContain(encodeURIComponent(key).replace(/%2F/g, "/"));
+    expect(url).toContain("X-Amz-Expires=900");
+
+    // No receipt: null. Without finance.read: refused.
+    const plain = await createExpense(dbRw, ctx, { date: "2026-10-01", category: "other", paidFrom: "cash_bank", amount: 100, currency: "INR" });
+    expect((await getExpenseReceiptUrl(dbRw, ctx, { expenseId: plain.id, r2Config })).url).toBeNull();
+    const denied = { ...ctx, permissions: [] } as typeof ctx;
+    await expect(getExpenseReceiptUrl(dbRw, denied, { expenseId: withReceipt.id, r2Config })).rejects.toThrow(/finance\.read/);
+
+    // A media row pointing outside the tenant's receipt folder is never signed.
+    const evilId = crypto.randomUUID();
+    await withTenant(dbRw.db, tenantId, (tx) =>
+      tx.insert(schema.media).values({ tenantId, id: evilId, storageKey: `tenants/someone-else/expense-receipts/${evilId}.png`, mime: "image/png", bytes: 1, folder: "expense-receipts" }),
+    );
+    const evil = await createExpense(dbRw, ctx, {
+      date: "2026-10-01", category: "other", paidFrom: "cash_bank", amount: 100, currency: "INR", receiptMediaId: evilId,
+    });
+    await expect(getExpenseReceiptUrl(dbRw, ctx, { expenseId: evil.id, r2Config })).rejects.toThrow(/outside this store/);
   });
 });

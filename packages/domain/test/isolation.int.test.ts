@@ -224,6 +224,7 @@ import {
   unsettleExpense,
   createPresignedExpenseReceiptUpload,
   finalizeExpenseReceipt,
+  getExpenseReceiptUrl,
   listFiscalPeriods,
   closeFiscalPeriod,
   reopenFiscalPeriod,
@@ -1540,6 +1541,17 @@ describe("Generated Isolation Test Suite (M1 Real Postgres 18 Proof)", () => {
           sizeBytes: 1024,
           r2Config: { accessKeyId: "isolation-test-key", secretAccessKey: "isolation-test-secret", accountId: "isolation", bucketName: "isolation-private" },
         });
+      case "finance.expenses.receiptUrl": {
+        // an expense without a receipt resolves to null; the signed-URL path is covered in finance-expenses.int.test.ts
+        const e = await createExpense(rt._db, ctx, {
+          date: new Date().toISOString().slice(0, 10),
+          amount: 1000,
+          currency: "INR",
+          category: "other",
+          paidFrom: "cash_bank",
+        });
+        return await getExpenseReceiptUrl(rt._db, ctx, { expenseId: e.id });
+      }
       case "finance.expenses.receiptFinalize": {
         const mediaId = crypto.randomUUID();
         // stub storage: a tiny PNG header so the magic-byte check passes without real R2

@@ -1,6 +1,8 @@
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import {
   Download,
+  Paperclip,
+  Pencil,
   Plus,
   Receipt,
   Trash2,
@@ -40,9 +42,10 @@ import {
   text,
 } from "../../components/data-table/use-table-state.ts";
 import { ScrollTabs } from "../../components/scroll-tabs.tsx";
+import { downloadFinanceCsv } from "../../lib/finance-export.ts";
 import { SimpleSelect } from "../../components/simple-select.tsx";
 import { errorMessage } from "../../lib/errors.ts";
-import { orpc } from "../../lib/orpc.ts";
+import { client, orpc } from "../../lib/orpc.ts";
 
 export type ExpensePeriod = "all" | "7d" | "30d" | "90d" | "ytd";
 
@@ -92,6 +95,7 @@ export function ExpensesPage() {
   const queryClient = useQueryClient();
 
   const [createOpen, setCreateOpen] = useState(false);
+  const [editTarget, setEditTarget] = useState<ExpenseItem | null>(null);
   const [settleTarget, setSettleTarget] = useState<ExpenseItem | null>(null);
   const [unsettleTarget, setUnsettleTarget] = useState<ExpenseItem | null>(null);
   const [deleteTarget, setDeleteTarget] = useState<ExpenseItem | null>(null);
@@ -222,9 +226,43 @@ export function ExpensesPage() {
               Unsettle
             </Button>
           )}
+          {row.receiptMediaId && (
+            <Button
+              variant="ghost"
+              size="sm"
+              aria-label="View receipt"
+              title="View receipt"
+              onClick={() => {
+                client.admin.finance.expenses
+                  .receiptUrl({ id: row.id })
+                  .then((r) => {
+                    if (r.url) window.open(r.url, "_blank", "noopener,noreferrer");
+                    else toast.error("No receipt found for this expense");
+                  })
+                  .catch((err) => toast.error(errorMessage(err, "Could not open the receipt")));
+              }}
+              className="h-7 w-7 p-0 text-muted-foreground"
+            >
+              <Paperclip className="h-3.5 w-3.5" />
+            </Button>
+          )}
+          {!row.settlement && (
+            <Button
+              variant="ghost"
+              size="sm"
+              aria-label="Edit expense"
+              title="Edit expense"
+              onClick={() => setEditTarget(row)}
+              className="h-7 w-7 p-0 text-muted-foreground"
+            >
+              <Pencil className="h-3.5 w-3.5" />
+            </Button>
+          )}
           <Button
             variant="ghost"
             size="sm"
+            aria-label="Delete expense"
+            title="Delete expense"
             onClick={() => setDeleteTarget(row)}
             className="h-7 w-7 p-0 text-muted-foreground hover:text-destructive"
           >
@@ -246,7 +284,7 @@ export function ExpensesPage() {
               variant="outline"
               size="sm"
               onClick={() => {
-                window.location.href = `/api/admin/finance/export?type=expenses&period=${search.period}`;
+                downloadFinanceCsv("expenses", search.period).catch((err) => toast.error(errorMessage(err, "Export failed")));
               }}
               className="gap-1.5"
             >
@@ -379,13 +417,25 @@ export function ExpensesPage() {
       </div>
 
       {/* Create Expense Dialog */}
-      <CreateExpenseModal
+      <ExpenseFormModal
         open={createOpen}
         onOpenChange={setCreateOpen}
         onSuccess={() => {
           queryClient.invalidateQueries({ queryKey: orpc.admin.finance.expenses.list.key() });
         }}
       />
+
+      {/* Edit Expense Dialog (revision bump: the ledger gets a reversal plus a new posting) */}
+      {editTarget && (
+        <ExpenseFormModal
+          expense={editTarget}
+          open={!!editTarget}
+          onOpenChange={(o) => !o && setEditTarget(null)}
+          onSuccess={() => {
+            queryClient.invalidateQueries({ queryKey: orpc.admin.finance.expenses.list.key() });
+          }}
+        />
+      )}
 
       {/* Settle Expense Dialog */}
       {settleTarget && (
@@ -448,23 +498,33 @@ type ExpenseCategoryChoice =
 
 type PaidFromChoice = "cash_bank" | "cash_gateway" | "cash_on_hand" | "unpaid";
 
-function CreateExpenseModal({
+const RECEIPT_TYPES = ["application/pdf", "image/jpeg", "image/png", "image/webp"] as const;
+type ReceiptType = (typeof RECEIPT_TYPES)[number];
+const MAX_RECEIPT_BYTES = 5 * 1024 * 1024;
+
+function ExpenseFormModal({
+  expense,
   open,
   onOpenChange,
   onSuccess,
 }: {
+  expense?: ExpenseItem;
   open: boolean;
   onOpenChange: (open: boolean) => void;
   onSuccess: () => void;
 }) {
-  const [date, setDate] = useState(new Date().toISOString().slice(0, 10));
-  const [category, setCategory] = useState<ExpenseCategoryChoice>("rent");
-  const [paidFrom, setPaidFrom] = useState<PaidFromChoice>("cash_bank");
-  const [amountRupees, setAmountRupees] = useState("");
-  const [payee, setPayee] = useState("");
-  const [note, setNote] = useState("");
+  const editing = !!expense;
+  const [date, setDate] = useState(expense?.date ?? new Date().toISOString().slice(0, 10));
+  const [category, setCategory] = useState<ExpenseCategoryChoice>((expense?.category as ExpenseCategoryChoice | undefined) ?? "rent");
+  const [paidFrom, setPaidFrom] = useState<PaidFromChoice>((expense?.paidFrom as PaidFromChoice | undefined) ?? "cash_bank");
+  const [amountRupees, setAmountRupees] = useState(expense ? String(expense.amount / 100) : "");
+  const [payee, setPayee] = useState(expense?.payee ?? "");
+  const [note, setNote] = useState(expense?.note ?? "");
   const [isRecurring, setIsRecurring] = useState(false);
   const [interval, setInterval] = useState<"monthly" | "quarterly" | "yearly">("monthly");
+  const [receiptMediaId, setReceiptMediaId] = useState<string | null>(expense?.receiptMediaId ?? null);
+  const [receiptName, setReceiptName] = useState<string | null>(expense?.receiptMediaId ? "Receipt attached" : null);
+  const [uploading, setUploading] = useState(false);
 
   const createMutation = useMutation(
     orpc.admin.finance.expenses.create.mutationOptions({
@@ -479,11 +539,68 @@ function CreateExpenseModal({
     }),
   );
 
+  const updateMutation = useMutation(
+    orpc.admin.finance.expenses.update.mutationOptions({
+      onSuccess: () => {
+        toast.success("Expense updated: the ledger has a reversal and a new posting");
+        onOpenChange(false);
+        onSuccess();
+      },
+      onError: (err) => {
+        toast.error(errorMessage(err, "Failed to update expense"));
+      },
+    }),
+  );
+
+  /** Presign, PUT straight to the private bucket, then finalize (magic-byte check) before attaching. */
+  const handleReceiptFile = async (file: File | undefined) => {
+    if (!file) return;
+    if (!(RECEIPT_TYPES as readonly string[]).includes(file.type)) {
+      toast.error("Receipts must be a PDF, JPEG, PNG or WebP file");
+      return;
+    }
+    if (file.size > MAX_RECEIPT_BYTES) {
+      toast.error("Receipts can be at most 5 MB");
+      return;
+    }
+    setUploading(true);
+    try {
+      const presigned = await client.admin.finance.expenses.receiptPresign({
+        fileName: file.name,
+        contentType: file.type as ReceiptType,
+        sizeBytes: file.size,
+      });
+      const put = await fetch(presigned.uploadUrl, { method: "PUT", headers: { "Content-Type": file.type }, body: file });
+      if (!put.ok) throw new Error(`Upload failed (${put.status})`);
+      const done = await client.admin.finance.expenses.receiptFinalize({ mediaId: presigned.mediaId, key: presigned.key });
+      setReceiptMediaId(done.mediaId);
+      setReceiptName(file.name);
+    } catch (err) {
+      toast.error(errorMessage(err, "Receipt upload failed"));
+    } finally {
+      setUploading(false);
+    }
+  };
+
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     const paise = Math.round(parseFloat(amountRupees || "0") * 100);
     if (isNaN(paise) || paise <= 0) {
       toast.error("Please enter a valid positive amount");
+      return;
+    }
+
+    if (expense) {
+      updateMutation.mutate({
+        id: expense.id,
+        date,
+        category,
+        paidFrom,
+        amount: paise,
+        payee: payee.trim() || null,
+        note: note.trim() || null,
+        receiptMediaId,
+      });
       return;
     }
 
@@ -495,6 +612,7 @@ function CreateExpenseModal({
       currency: "INR",
       payee: payee.trim() || undefined,
       note: note.trim() || undefined,
+      receiptMediaId: receiptMediaId ?? undefined,
       recurring: isRecurring
         ? {
             enabled: true,
@@ -522,9 +640,9 @@ function CreateExpenseModal({
   ];
 
   const PAID_FROM_OPTIONS = [
-    { value: "cash_bank", label: "Bank Account (cash_bank)" },
-    { value: "cash_gateway", label: "Payment Gateway Balance (cash_gateway)" },
-    { value: "cash_on_hand", label: "Cash on Hand (cash_on_hand)" },
+    { value: "cash_bank", label: "Bank Account" },
+    { value: "cash_gateway", label: "Payment Gateway Balance" },
+    { value: "cash_on_hand", label: "Cash on Hand" },
     { value: "unpaid", label: "Unpaid Bill (Accounts Payable)" },
   ];
 
@@ -533,9 +651,11 @@ function CreateExpenseModal({
       <DialogContent className="sm:max-w-md">
         <form onSubmit={handleSubmit} className="space-y-4">
           <DialogHeader>
-            <DialogTitle>Record Operational Expense</DialogTitle>
+            <DialogTitle>{editing ? "Edit Expense" : "Record Operational Expense"}</DialogTitle>
             <DialogDescription>
-              Record an operational, supply, inventory, or marketing cost into the ledger.
+              {editing
+                ? "Saving reverses the previous ledger posting and posts the corrected amount."
+                : "Record an operational, supply, inventory, or marketing cost into the ledger."}
             </DialogDescription>
           </DialogHeader>
 
@@ -605,6 +725,31 @@ function CreateExpenseModal({
               />
             </div>
 
+            <div>
+              <Label>Receipt (Optional)</Label>
+              <div className="flex items-center gap-2">
+                <Input
+                  type="file"
+                  accept=".pdf,.jpg,.jpeg,.png,.webp,application/pdf,image/jpeg,image/png,image/webp"
+                  aria-label="Upload receipt"
+                  disabled={uploading}
+                  onChange={(e) => {
+                    void handleReceiptFile(e.target.files?.[0]);
+                    e.target.value = "";
+                  }}
+                />
+                {receiptMediaId && (
+                  <Button type="button" variant="ghost" size="sm" onClick={() => { setReceiptMediaId(null); setReceiptName(null); }}>
+                    Remove
+                  </Button>
+                )}
+              </div>
+              <p className="text-[11px] text-muted-foreground mt-1">
+                {uploading ? "Uploading..." : receiptName ?? "PDF, JPEG, PNG or WebP, up to 5 MB. Stored privately."}
+              </p>
+            </div>
+
+            {!editing && (
             <div className="pt-2 border-t space-y-2">
               <div className="flex items-center space-x-2">
                 <Checkbox
@@ -635,6 +780,7 @@ function CreateExpenseModal({
                 </div>
               )}
             </div>
+            )}
           </div>
 
           <DialogFooter>
@@ -645,8 +791,8 @@ function CreateExpenseModal({
             >
               Cancel
             </Button>
-            <Button type="submit" disabled={createMutation.isPending}>
-              {createMutation.isPending ? "Recording..." : "Record Expense"}
+            <Button type="submit" disabled={createMutation.isPending || updateMutation.isPending || uploading}>
+              {createMutation.isPending || updateMutation.isPending ? "Saving..." : editing ? "Save changes" : "Record Expense"}
             </Button>
           </DialogFooter>
         </form>

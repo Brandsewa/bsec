@@ -46,7 +46,7 @@ We adopt an append-only double-entry ledger adapted from the Storify architectur
    Closing a fiscal period (`fiscal_periods`) snapshots P&L metrics and advances the closed boundary. Postings dated within a closed period are shifted to `closedThrough + 1s` with an explanatory audit note rather than rejected or backdated. A 60-second in-process cache for `closedThrough` is maintained and invalidated on close/reopen.
 
 10. **Export Authorization (D10):**
-    CSV ledger and expense exports require the `exports.run` permission.
+    CSV ledger and expense exports require both `exports.run` and `finance.read`.
 
 11. **Granular Permissions (D14):**
     `finance.read` and `finance.write` permissions are added to `STORE_PERMISSIONS`. They are granted to store owners and store admins, but explicitly excluded from platform support sessions (`SUPPORT_READ_PERMISSIONS` and `SUPPORT_WRITE_PERMISSIONS`).
@@ -62,6 +62,19 @@ We adopt an append-only double-entry ledger adapted from the Storify architectur
   - Database-level check constraints enforce `amount > 0` and `debit <> credit`.
   - Direct updates or deletions on `ledger_entries` are prohibited; corrections require reversal entries.
   - Every tenant table enforces PostgreSQL RLS via `forceRlsSql()`.
+
+## Deviations from `docs/FINANCE-PLAN.md` (recorded 2026-10-05 after verification)
+
+- **Expense categories and paid-from values.** The contract and UI use `rent, utilities, salaries, contractor, software_tools, marketing_ads, packaging, office_supplies, logistics_courier, inventory_purchase, professional_fees, travel, other` and `paid_from` of `cash_bank | cash_gateway | cash_on_hand | unpaid`, not the plan's `premises, people, marketing, ...` and `bank | cash | gateway | unpaid`. Contract, UI and ledger agree with each other; the plan lists are superseded. The ledger account for each paid-from value is stored on the expense row (`debit_account`), so changing these lists later does not break reversals.
+- **Tax-inclusive orders.** Real checkout computes `grandTotal = subtotal - discountTotal + shippingTotal + codFee` (tax is inside the price; `pricesIncludeTax` on admin orders). The plan's identity `merchandise + shipping + tax = grandTotal` therefore does not hold for the normal case. `decomposeOrder` handles it with its residual rule: the tax is removed from `product_revenue`, so revenue is booked ex-tax and the entries sum to `grandTotal`. This is the expected path, not an error path. Known simplification: tax charged on shipping is also taken out of merchandise revenue rather than shipping income.
+- **Recurring expenses.** Intervals are `monthly | quarterly | yearly` (no weekly). "Backfill already-due copies" is done by the daily reconcile tick (at most 12 copies per template per tick), not at create time, and the create dialog has no next-copy preview yet.
+- **CSV export permission (D10).** Requires `exports.run` and `finance.read` together (verification fix; the first build allowed either).
+
+## Known gaps (not built)
+
+- **Cancelled-after-payment orders.** COGS is posted when payment is collected. COD orders cannot be cancelled after delivery, so this only matters for orders recorded as paid by hand and then cancelled: their revenue stays booked unless a refund is recorded. Needs an owner decision on whether cancelling a paid order should create a refund record. Return-time restocks are wired; cancel-time restocks are not.
+- **Settlement of COD cash.** COD collections book to `cash_on_hand`; recording the courier remittance to the bank is a manual adjustment ("Cash deposited to bank / COD remittance received"). Until it is recorded, a manual UPI or bank refund of a COD order shows the bank balance as negative (an anomaly banner, by design).
+- **Inventory purchases.** `inventory` goes negative until stock purchases are recorded as `inventory_purchase` expenses; the overview shows it as a negative asset.
 
 ## Alternatives Considered
 

@@ -7,6 +7,7 @@
  * 3. 15-minute signed URL through dedicated route or helper.
  */
 
+import { and, eq } from "drizzle-orm";
 import { schema, withTenant, type DbHandle } from "@bs/db";
 import { assertPermission, type TenantContext } from "../context.ts";
 import {
@@ -229,4 +230,51 @@ export async function finalizeExpenseReceipt(
       viewUrl,
     };
   });
+}
+
+/**
+ * Short-lived (15 min) signed view URL for an expense's receipt, for finance.read holders only.
+ * There is no public URL for a receipt: the object lives in the private bucket and is only ever
+ * reachable through this call. Returns null when the expense has no receipt attached.
+ */
+export async function getExpenseReceiptUrl(
+  dbRw: DbHandle,
+  ctx: TenantContext,
+  input: {
+    expenseId: string;
+    s3Client?: S3Client;
+    r2Config?: Partial<R2ClientConfig>;
+  },
+): Promise<{ url: string | null }> {
+  assertPermission(ctx, "finance.read");
+
+  const row = await withTenant(dbRw.db, ctx.tenantId, async (tx) => {
+    const [r] = await tx
+      .select({ storageKey: schema.media.storageKey })
+      .from(schema.expenses)
+      .innerJoin(
+        schema.media,
+        and(
+          eq(schema.media.tenantId, schema.expenses.tenantId),
+          eq(schema.media.id, schema.expenses.receiptMediaId),
+        ),
+      )
+      .where(and(eq(schema.expenses.tenantId, ctx.tenantId), eq(schema.expenses.id, input.expenseId)))
+      .limit(1);
+    return r ?? null;
+  });
+  if (!row) return { url: null };
+
+  // Defence in depth: never sign a key outside this tenant's receipt folder.
+  if (!row.storageKey.startsWith(`tenants/${ctx.tenantId}/expense-receipts/`)) {
+    throw new Error("Forbidden: receipt storage key is outside this store's receipt folder");
+  }
+
+  const url = await buildPresignedDownloadUrl({
+    storageKey: row.storageKey,
+    expiresInSeconds: 900,
+    s3Client: input.s3Client,
+    r2Config: getReceiptStorageConfig(input.r2Config) ?? undefined,
+  });
+  return { url };
 }
