@@ -104,8 +104,8 @@ function Workspace({
   const active = TABS.find((t) => t.key === tab) ?? TABS[0];
 
   return (
-    <div style={{ height: "100vh", display: "flex", flexDirection: "column", background: "#fafafa" }}>
-      <div style={{ flex: 1, minHeight: 0 }}>
+    <div className="h-screen flex flex-col bg-[var(--background)]">
+      <div className="flex-1 min-h-0">
           <BlockEditor
             key={tab}
             title={`${active.label} · ${name}`}

@@ -7,7 +7,18 @@ import {
   redirect,
 } from "@tanstack/react-router";
 import type { QueryClient } from "@tanstack/react-query";
-import { PageSkeleton, Toaster, UiLinkProvider } from "@bs/ui";
+import {
+  AuthCardSkeleton,
+  DataTableSkeleton,
+  DetailPageSkeleton,
+  FormSectionSkeleton,
+  MetricCardsSkeleton,
+  PageContainer,
+  PageHeaderSkeleton,
+  PageSkeleton,
+  Toaster,
+  UiLinkProvider,
+} from "@bs/ui";
 import { RouterLink } from "./lib/router-link.tsx";
 import { fetchPlatformMe, type PlatformUser } from "./lib/auth.ts";
 import { Layout } from "./pages/Layout.tsx";
@@ -130,96 +141,187 @@ const overviewRoute = createRoute({
   getParentRoute: () => authLayoutRoute,
   path: "/",
   component: Overview,
+  pendingComponent: () => (
+    <PageContainer>
+      <PageHeaderSkeleton />
+      <MetricCardsSkeleton count={4} className="mb-6" />
+      <MetricCardsSkeleton count={4} className="mb-8" />
+    </PageContainer>
+  ),
 });
 
 const tenantsListRoute = createRoute({
   getParentRoute: () => authLayoutRoute,
   path: "/tenants",
   component: TenantsList,
+  pendingComponent: () => (
+    <PageContainer>
+      <PageHeaderSkeleton />
+      <DataTableSkeleton columns={6} rows={8} />
+    </PageContainer>
+  ),
 });
 
 const tenantCreateRoute = createRoute({
   getParentRoute: () => authLayoutRoute,
   path: "/tenants/create",
   component: TenantCreate,
+  pendingComponent: () => (
+    <PageContainer size="small">
+      <PageHeaderSkeleton />
+      <FormSectionSkeleton fields={5} />
+    </PageContainer>
+  ),
 });
 
 const tenantDetailRoute = createRoute({
   getParentRoute: () => authLayoutRoute,
   path: "/tenants/$id",
   component: TenantDetail,
+  pendingComponent: () => (
+    <PageContainer>
+      <DetailPageSkeleton />
+    </PageContainer>
+  ),
 });
 
 const domainsRoute = createRoute({
   getParentRoute: () => authLayoutRoute,
   path: "/domains",
   component: Domains,
+  pendingComponent: () => (
+    <PageContainer>
+      <PageHeaderSkeleton />
+      <DataTableSkeleton columns={5} rows={6} />
+    </PageContainer>
+  ),
 });
 
 const plansRoute = createRoute({
   getParentRoute: () => authLayoutRoute,
   path: "/plans",
   component: Plans,
+  pendingComponent: () => (
+    <PageContainer>
+      <PageHeaderSkeleton />
+      <DataTableSkeleton columns={4} rows={4} />
+    </PageContainer>
+  ),
 });
 
 const signupsRoute = createRoute({
   getParentRoute: () => authLayoutRoute,
   path: "/signups",
   component: Signups,
+  pendingComponent: () => (
+    <PageContainer>
+      <PageHeaderSkeleton />
+      <DataTableSkeleton columns={5} rows={6} />
+    </PageContainer>
+  ),
 });
 
 const templatesRoute = createRoute({
   getParentRoute: () => authLayoutRoute,
   path: "/templates",
   component: Templates,
+  pendingComponent: () => (
+    <PageContainer>
+      <PageHeaderSkeleton />
+      <DataTableSkeleton columns={4} rows={5} />
+    </PageContainer>
+  ),
 });
 
 const supportRoute = createRoute({
   getParentRoute: () => authLayoutRoute,
   path: "/support",
   component: Support,
+  pendingComponent: () => (
+    <PageContainer>
+      <PageHeaderSkeleton />
+      <DataTableSkeleton columns={5} rows={4} />
+    </PageContainer>
+  ),
 });
 
 const systemRoute = createRoute({
   getParentRoute: () => authLayoutRoute,
   path: "/system",
   component: System,
+  pendingComponent: () => (
+    <PageContainer>
+      <PageHeaderSkeleton />
+      <DataTableSkeleton columns={4} rows={6} />
+    </PageContainer>
+  ),
 });
 
 const quotasRoute = createRoute({
   getParentRoute: () => authLayoutRoute,
   path: "/quotas",
   component: Quotas,
+  pendingComponent: () => (
+    <PageContainer>
+      <PageHeaderSkeleton />
+      <DataTableSkeleton columns={4} rows={4} />
+    </PageContainer>
+  ),
 });
 
 const featuresRoute = createRoute({
   getParentRoute: () => authLayoutRoute,
   path: "/features",
   component: Features,
+  pendingComponent: () => (
+    <PageContainer>
+      <PageHeaderSkeleton />
+      <DataTableSkeleton columns={4} rows={6} />
+    </PageContainer>
+  ),
 });
 
 const staffRoute = createRoute({
   getParentRoute: () => authLayoutRoute,
   path: "/staff",
   component: Staff,
+  pendingComponent: () => (
+    <PageContainer>
+      <PageHeaderSkeleton />
+      <DataTableSkeleton columns={5} rows={5} />
+    </PageContainer>
+  ),
 });
 
 const auditRoute = createRoute({
   getParentRoute: () => authLayoutRoute,
   path: "/audit",
   component: AuditLog,
+  pendingComponent: () => (
+    <PageContainer>
+      <PageHeaderSkeleton />
+      <DataTableSkeleton columns={5} rows={10} />
+    </PageContainer>
+  ),
 });
 
 const emailRoute = createRoute({
   getParentRoute: () => authLayoutRoute,
   path: "/email",
   component: EmailSettings,
+  pendingComponent: () => (
+    <PageContainer size="small">
+      <PageHeaderSkeleton />
+      <FormSectionSkeleton fields={4} />
+    </PageContainer>
+  ),
 });
 
 const kitRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: "/__kit",
   component: Kit,
+  pendingComponent: () => <PageSkeleton />,
 });
 
 const baseRoutes = [

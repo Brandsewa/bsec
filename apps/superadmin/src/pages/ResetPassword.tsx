@@ -1,7 +1,7 @@
 import React, { useState } from "react";
 import { Link, useNavigate } from "@tanstack/react-router";
 import { Database } from "lucide-react";
-import { Button, Input, Label } from "@bs/ui";
+import { AuthShell, Button, Input, Label } from "@bs/ui";
 import { resetPassword } from "../lib/auth.ts";
 
 export function ResetPassword({ token }: { token?: string }) {
@@ -14,26 +14,26 @@ export function ResetPassword({ token }: { token?: string }) {
 
   if (!token) {
     return (
-      <div className="flex min-h-screen items-center justify-center bg-muted/40 p-4">
-        <div className="w-full max-w-md rounded-xl border bg-card p-6 shadow-sm">
-          <div className="mb-4 text-center">
-            <h1 className="text-xl font-bold tracking-tight text-destructive">Invalid or Missing Token</h1>
-            <p className="text-sm text-muted-foreground mt-1">
-              This password reset link is invalid or has expired. Please request a new link.
-            </p>
-          </div>
-          <div className="space-y-2">
-            <Button render={<Link to="/forgot-password" />} className="w-full">
-              Request a new link
-            </Button>
-            <div className="text-center pt-2">
-              <Link to="/login" className="text-xs text-muted-foreground hover:text-foreground hover:underline">
-                Back to sign in
-              </Link>
-            </div>
+      <AuthShell
+        brand={{
+          logo: <Database className="h-6 w-6 text-primary" />,
+          name: "Bs Commerce",
+        }}
+        title="Invalid or Missing Token"
+        description="This password reset link is invalid or has expired. Please request a new link."
+        variant="platform"
+      >
+        <div className="space-y-4">
+          <Button render={<Link to="/forgot-password" />} className="w-full">
+            Request a new link
+          </Button>
+          <div className="text-center pt-2">
+            <Link to="/login" className="text-xs text-muted-foreground hover:text-foreground hover:underline">
+              Back to sign in
+            </Link>
           </div>
         </div>
-      </div>
+      </AuthShell>
     );
   }
 
@@ -67,16 +67,16 @@ export function ResetPassword({ token }: { token?: string }) {
   };
 
   return (
-    <div className="flex min-h-screen items-center justify-center bg-muted/40 p-4">
-      <div className="w-full max-w-md rounded-xl border bg-card p-6 shadow-sm">
-        <div className="mb-6 flex flex-col items-center text-center">
-          <div className="mb-2 flex h-12 w-12 items-center justify-center rounded-lg bg-primary/10 text-primary">
-            <Database className="h-6 w-6" />
-          </div>
-          <h1 className="text-xl font-bold tracking-tight">Set New Platform Password</h1>
-          <p className="text-sm text-muted-foreground">Bs Commerce Super Admin Portal</p>
-        </div>
-
+    <AuthShell
+      brand={{
+        logo: <Database className="h-6 w-6 text-primary" />,
+        name: "Bs Commerce",
+      }}
+      title="Set New Platform Password"
+      description="Bs Commerce Super Admin Portal"
+      variant="platform"
+    >
+      <div>
         {error && (
           <div role="alert" className="mb-4 rounded-md bg-destructive/10 p-3 text-sm text-destructive font-medium border border-destructive/20">
             {error}
@@ -138,6 +138,6 @@ export function ResetPassword({ token }: { token?: string }) {
           </form>
         )}
       </div>
-    </div>
+    </AuthShell>
   );
 }

@@ -3,6 +3,7 @@ import { useQuery } from "@tanstack/react-query";
 import { UserPlus, KeyRound, CheckCircle2, UserX } from "lucide-react";
 import {
   Button,
+  ConfirmDialog,
   Dialog,
   DialogContent,
   DialogDescription,
@@ -41,6 +42,7 @@ export function Staff() {
 
   const [createdInvite, setCreatedInvite] = useState<{ email: string; url: string } | null>(null);
   const [actionLoading, setActionLoading] = useState(false);
+  const [deactivateTarget, setDeactivateTarget] = useState<{ userId: string; email: string } | null>(null);
 
   const { data: staffList, isLoading, refetch } = useQuery({
     queryKey: ["platform", "staff"],
@@ -66,8 +68,7 @@ export function Staff() {
     }
   };
 
-  const handleDeactivate = async (userId: string, email: string) => {
-    if (!confirm(`Are you sure you want to deactivate ${email}? All their active sessions will be terminated immediately.`)) return;
+  const executeDeactivate = async (userId: string, email: string) => {
     setActionLoading(true);
     try {
       await client.staff.deactivate({ userId });
@@ -77,6 +78,7 @@ export function Staff() {
       toast.error(messageOf(err, "Failed to deactivate staff member"));
     } finally {
       setActionLoading(false);
+      setDeactivateTarget(null);
     }
   };
 
@@ -190,7 +192,7 @@ export function Staff() {
                         variant="ghost"
                         className="h-7 text-xs text-destructive hover:bg-destructive/10"
                         disabled={actionLoading}
-                        onClick={() => handleDeactivate(s.userId, s.email)}
+                        onClick={() => setDeactivateTarget({ userId: s.userId, email: s.email })}
                       >
                         <UserX className="mr-1 h-3 w-3" /> Deactivate
                       </Button>
@@ -212,6 +214,26 @@ export function Staff() {
           </TableBody>
         </Table>
       </div>
+
+      <ConfirmDialog
+        open={Boolean(deactivateTarget)}
+        onOpenChange={(open) => {
+          if (!open) setDeactivateTarget(null);
+        }}
+        title="Deactivate staff member?"
+        description={
+          deactivateTarget
+            ? `Are you sure you want to deactivate ${deactivateTarget.email}? All their active sessions will be terminated immediately.`
+            : ""
+        }
+        confirmLabel="Deactivate"
+        destructive
+        onConfirm={async () => {
+          if (deactivateTarget) {
+            await executeDeactivate(deactivateTarget.userId, deactivateTarget.email);
+          }
+        }}
+      />
 
       {/* Invite Staff Dialog */}
       <Dialog open={inviteOpen} onOpenChange={setInviteOpen}>

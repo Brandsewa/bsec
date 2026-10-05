@@ -21,6 +21,7 @@ import {
 import {
   AppShell,
   Button,
+  CommandPalette,
   Dialog,
   DialogContent,
   DialogDescription,
@@ -134,6 +135,27 @@ export function Layout({ user, onLogout }: LayoutProps) {
     navigate({ to: "/login" });
   };
 
+  const [commandPaletteOpen, setCommandPaletteOpen] = useState(false);
+
+  const commandActions = [
+    { id: "overview", label: "Overview", icon: LayoutDashboard, onSelect: () => navigate({ to: "/" }), group: "Navigation" },
+    { id: "tenants", label: "Tenants", icon: Building2, onSelect: () => navigate({ to: "/tenants" }), group: "Commerce" },
+    { id: "tenant-create", label: "Create Store", icon: Building2, onSelect: () => navigate({ to: "/tenants/create" }), group: "Commerce" },
+    { id: "domains", label: "Domains", icon: Globe, onSelect: () => navigate({ to: "/domains" }), group: "Commerce" },
+    { id: "plans", label: "Plans & Billing", icon: CreditCard, onSelect: () => navigate({ to: "/plans" }), group: "Commerce" },
+    { id: "signups", label: "Signups Funnel", icon: Users, onSelect: () => navigate({ to: "/signups" }), group: "Commerce" },
+    { id: "templates", label: "Themes Library", icon: Layers, onSelect: () => navigate({ to: "/templates" }), group: "Commerce" },
+    { id: "support", label: "Support Sessions", icon: Headphones, onSelect: () => navigate({ to: "/support" }), group: "Operations" },
+    { id: "system", label: "System & Queues", icon: Activity, onSelect: () => navigate({ to: "/system" }), group: "Operations" },
+    { id: "email", label: "Email (ZeptoMail)", icon: Mail, onSelect: () => navigate({ to: "/email" }), group: "Operations" },
+    { id: "quotas", label: "Quotas & Tiers", icon: Sliders, onSelect: () => navigate({ to: "/quotas" }), group: "Operations" },
+    { id: "features", label: "Feature Flags", icon: Flag, onSelect: () => navigate({ to: "/features" }), group: "Operations" },
+    ...(user.role !== "platform_support"
+      ? [{ id: "staff", label: "Platform Staff", icon: UserCheck, onSelect: () => navigate({ to: "/staff" }), group: "Administration" }]
+      : []),
+    { id: "audit", label: "Audit Log", icon: FileSpreadsheet, onSelect: () => navigate({ to: "/audit" }), group: "Administration" },
+  ];
+
   return (
     <UserContext.Provider value={user}>
       <AppShell
@@ -145,6 +167,22 @@ export function Layout({ user, onLogout }: LayoutProps) {
         }
         groups={groups}
         activeHref={location.pathname}
+        topRight={
+          <div className="flex items-center gap-2">
+            <Button
+              variant="default"
+              size="sm"
+              onClick={() => setCommandPaletteOpen(true)}
+              className="h-8 gap-2 px-2.5 text-xs text-muted-foreground border border-border"
+            >
+              <span>Quick search...</span>
+              <kbd className="pointer-events-none hidden h-4 select-none items-center gap-1 rounded bg-muted px-1.5 font-mono text-[10px] font-medium opacity-100 sm:inline-flex">
+                Ctrl K
+              </kbd>
+            </Button>
+            <ThemeToggle />
+          </div>
+        }
         banner={
           <div className="flex items-center justify-between bg-amber-500/10 px-4 py-1.5 text-xs font-medium text-amber-700 dark:text-amber-400 border-b border-amber-500/20">
             <span>Super Admin Mode · Every privileged action is audited under platform BYPASSRLS</span>
@@ -162,7 +200,6 @@ export function Layout({ user, onLogout }: LayoutProps) {
                 <KeyRound className="mr-1 h-3 w-3" />
                 Change Password
               </Button>
-              <ThemeToggle />
               <Button
                 variant="ghost"
                 size="sm"
@@ -178,6 +215,12 @@ export function Layout({ user, onLogout }: LayoutProps) {
       >
         <Outlet />
       </AppShell>
+
+      <CommandPalette
+        open={commandPaletteOpen}
+        onOpenChange={setCommandPaletteOpen}
+        actions={commandActions}
+      />
 
       <Dialog open={passwordOpen} onOpenChange={(open) => {
         if (!open) resetPasswordForm();

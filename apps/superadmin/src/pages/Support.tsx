@@ -3,6 +3,7 @@ import { useQuery } from "@tanstack/react-query";
 import { Headphones } from "lucide-react";
 import {
   Button,
+  ConfirmDialog,
   EmptyState,
   PageContainer,
   PageHeader,
@@ -29,6 +30,7 @@ const STATUS_LABEL: Record<string, { text: string; className: string }> = {
 
 export function Support() {
   const [loadingId, setLoadingId] = useState<string | null>(null);
+  const [elevateSessionId, setElevateSessionId] = useState<string | null>(null);
   const staff = useStaff();
   const isAdmin = useHasRole("platform_admin");
 
@@ -117,11 +119,7 @@ export function Support() {
                               size="sm"
                               className="h-7 text-xs px-2"
                               disabled={loadingId === s.id}
-                              onClick={() => {
-                                if (window.confirm("Grant WRITE access for this session? Every change will be made in the store's name and audited.")) {
-                                  void run(s.id, () => client.support.elevateWrite({ id: s.id }), "Write access granted", "Failed to grant write access");
-                                }
-                              }}
+                              onClick={() => setElevateSessionId(s.id)}
                             >
                               Allow write
                             </Button>
@@ -139,6 +137,27 @@ export function Support() {
           </Table>
         </div>
       )}
+
+      <ConfirmDialog
+        open={Boolean(elevateSessionId)}
+        onOpenChange={(open) => {
+          if (!open) setElevateSessionId(null);
+        }}
+        title="Grant write access for support session?"
+        description="Grant WRITE access for this session? Every change will be made in the store's name and audited."
+        confirmLabel="Grant write access"
+        onConfirm={async () => {
+          if (elevateSessionId) {
+            await run(
+              elevateSessionId,
+              () => client.support.elevateWrite({ id: elevateSessionId }),
+              "Write access granted",
+              "Failed to grant write access",
+            );
+            setElevateSessionId(null);
+          }
+        }}
+      />
     </PageContainer>
   );
 }

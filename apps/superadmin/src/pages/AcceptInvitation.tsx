@@ -1,6 +1,6 @@
 import React, { useState } from "react";
 import { Database } from "lucide-react";
-import { Button, Input, Label } from "@bs/ui";
+import { AuthShell, Button, Input, Label } from "@bs/ui";
 import { acceptStaffInvitation } from "../lib/auth.ts";
 
 /** Public page: a platform staff invitation is accepted here (choose a password, then sign in and set up MFA). */
@@ -23,16 +23,16 @@ export function AcceptInvitation() {
   };
 
   return (
-    <div className="flex min-h-screen items-center justify-center bg-muted/40 p-4">
-      <div className="w-full max-w-md rounded-xl border bg-card p-6 shadow-sm">
-        <div className="mb-6 flex flex-col items-center text-center">
-          <div className="mb-2 flex h-12 w-12 items-center justify-center rounded-lg bg-primary/10 text-primary">
-            <Database className="h-6 w-6" />
-          </div>
-          <h1 className="text-xl font-bold tracking-tight">Join the platform team</h1>
-          <p className="text-sm text-muted-foreground">Accept your Super Admin invitation</p>
-        </div>
-
+    <AuthShell
+      brand={{
+        logo: <Database className="h-6 w-6 text-primary" />,
+        name: "Bs Commerce",
+      }}
+      title="Join the platform team"
+      description="Accept your Super Admin invitation"
+      variant="platform"
+    >
+      <div>
         {!token ? (
           <p role="alert" className="text-sm text-destructive">This invitation link is incomplete. Ask a platform owner to send it again.</p>
         ) : doneEmail ? (
@@ -62,6 +62,6 @@ export function AcceptInvitation() {
           </form>
         )}
       </div>
-    </div>
+    </AuthShell>
   );
 }

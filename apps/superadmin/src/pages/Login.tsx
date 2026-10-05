@@ -1,7 +1,7 @@
 import React, { useState } from "react";
 import { Link } from "@tanstack/react-router";
 import { Database, ShieldCheck } from "lucide-react";
-import { Button, Input, Label, toast } from "@bs/ui";
+import { AuthShell, Button, Input, Label, toast } from "@bs/ui";
 import {
   fetchLoginStatus,
   finishMfaSetup,
@@ -134,15 +134,16 @@ export function Login({ onSuccess }: LoginProps) {
   };
 
   return (
-    <div className="flex min-h-screen items-center justify-center bg-muted/40 p-4">
-      <div className="w-full max-w-md rounded-xl border bg-card p-6 shadow-sm">
-        <div className="mb-6 flex flex-col items-center text-center">
-          <div className="mb-2 flex h-12 w-12 items-center justify-center rounded-lg bg-primary/10 text-primary">
-            <Database className="h-6 w-6" />
-          </div>
-          <h1 className="text-xl font-bold tracking-tight">Bs Commerce Super Admin</h1>
-          <p className="text-sm text-muted-foreground">Platform Operations & Management Portal</p>
-        </div>
+    <AuthShell
+      brand={{
+        logo: <Database className="h-6 w-6 text-primary" />,
+        name: "Bs Commerce",
+      }}
+      title="Bs Commerce Super Admin"
+      description="Platform Operations & Management Portal"
+      variant="platform"
+    >
+      <div>
 
         {error && (
           <div role="alert" className="mb-4 rounded-md bg-destructive/10 p-3 text-sm text-destructive font-medium border border-destructive/20">
@@ -260,6 +261,6 @@ export function Login({ onSuccess }: LoginProps) {
           </form>
         )}
       </div>
-    </div>
+    </AuthShell>
   );
 }

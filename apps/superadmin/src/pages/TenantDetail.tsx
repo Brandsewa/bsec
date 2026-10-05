@@ -44,6 +44,7 @@ import {
   TableHead,
   TableHeader,
   TableRow,
+  ConfirmDialog,
   toast,
 } from "@bs/ui";
 import { client } from "../lib/orpc.ts";
@@ -59,6 +60,9 @@ export function TenantDetail() {
   >("overview");
 
   // Dialog states
+  const [archiveConfirmOpen, setArchiveConfirmOpen] = useState(false);
+  const [transferConfirmOpen, setTransferConfirmOpen] = useState(false);
+
   const [suspendOpen, setSuspendOpen] = useState(false);
   const [suspendReason, setSuspendReason] = useState("");
 
@@ -217,8 +221,7 @@ export function TenantDetail() {
     }
   };
 
-  const handleArchive = async () => {
-    if (!window.confirm(`Archive ${tenant.name}? The storefront goes offline and custom domains are released. It can be restored later.`)) return;
+  const executeArchive = async () => {
     setActionLoading(true);
     try {
       await client.tenants.archive({ id: tenant.id });
@@ -228,6 +231,7 @@ export function TenantDetail() {
       toast.error(messageOf(err, "Failed to archive store"));
     } finally {
       setActionLoading(false);
+      setArchiveConfirmOpen(false);
     }
   };
 
@@ -245,9 +249,8 @@ export function TenantDetail() {
     }
   };
 
-  const handleTransfer = async () => {
+  const executeTransfer = async () => {
     if (!newOwnerEmail.trim()) return;
-    if (!window.confirm(`Make ${newOwnerEmail.trim()} the owner of ${tenant.name}? They must already have an account.`)) return;
     setActionLoading(true);
     try {
       await client.tenants.transferOwnership({ id: tenant.id, newOwnerEmail: newOwnerEmail.trim() });
@@ -259,6 +262,7 @@ export function TenantDetail() {
       toast.error(messageOf(err, "Failed to transfer ownership"));
     } finally {
       setActionLoading(false);
+      setTransferConfirmOpen(false);
     }
   };
 
@@ -321,7 +325,7 @@ export function TenantDetail() {
               </Button>
             )}
             {isAdmin && !["archived", "deletion_requested", "deleted"].includes(tenant.status) && (
-              <Button size="sm" variant="default" onClick={handleArchive} disabled={actionLoading}>
+              <Button size="sm" variant="default" onClick={() => setArchiveConfirmOpen(true)} disabled={actionLoading}>
                 <Archive className="mr-1.5 h-3.5 w-3.5" /> Archive
               </Button>
             )}
@@ -872,10 +876,29 @@ export function TenantDetail() {
           </div>
           <DialogFooter>
             <Button variant="default" onClick={() => setTransferOpen(false)}>Cancel</Button>
-            <Button onClick={handleTransfer} disabled={actionLoading || !newOwnerEmail.trim()}>Transfer</Button>
+            <Button onClick={() => setTransferConfirmOpen(true)} disabled={actionLoading || !newOwnerEmail.trim()}>Transfer</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      <ConfirmDialog
+        open={archiveConfirmOpen}
+        onOpenChange={setArchiveConfirmOpen}
+        title={`Archive ${tenant.name}?`}
+        description="The storefront goes offline and custom domains are released. It can be restored later."
+        confirmLabel="Archive Store"
+        destructive
+        onConfirm={executeArchive}
+      />
+
+      <ConfirmDialog
+        open={transferConfirmOpen}
+        onOpenChange={setTransferConfirmOpen}
+        title={`Transfer ownership of ${tenant.name}?`}
+        description={`Make ${newOwnerEmail.trim()} the owner of ${tenant.name}? They must already have an account.`}
+        confirmLabel="Transfer Ownership"
+        onConfirm={executeTransfer}
+      />
 
       {/* Deletion Dialog */}
       <Dialog open={deletionOpen} onOpenChange={setDeletionOpen}>

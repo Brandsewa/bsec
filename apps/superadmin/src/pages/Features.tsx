@@ -1,8 +1,8 @@
 import React, { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { } from "lucide-react";
 import {
   Button,
+  ConfirmDialog,
   PageContainer,
   PageHeader,
   PageSkeleton,
@@ -19,6 +19,11 @@ import { messageOf } from "../lib/errors.ts";
 
 export function Features() {
   const [updatingKey, setUpdatingKey] = useState<string | null>(null);
+  const [killSwitchConfirm, setKillSwitchConfirm] = useState<{
+    key: string;
+    currentKill: boolean;
+    defaultOn: boolean;
+  } | null>(null);
 
   const { data: flags, isLoading, refetch } = useQuery({
     queryKey: ["platform", "features"],
@@ -41,8 +46,7 @@ export function Features() {
     }
   };
 
-  const handleKillSwitch = async (key: string, currentKill: boolean, defaultOn: boolean) => {
-    if (!confirm(`Are you sure you want to flip the kill switch for '${key}'? This will globally disable the feature.`)) return;
+  const executeKillSwitch = async (key: string, currentKill: boolean, defaultOn: boolean) => {
     setUpdatingKey(key);
     try {
       await client.features.update({
@@ -56,6 +60,7 @@ export function Features() {
       toast.error(messageOf(err, "Failed to toggle kill switch"));
     } finally {
       setUpdatingKey(null);
+      setKillSwitchConfirm(null);
     }
   };
 
@@ -123,7 +128,13 @@ export function Features() {
                         variant="default"
                         className={`h-7 text-xs px-2 ${f.killSwitch ? "text-primary" : "text-destructive hover:bg-destructive/10"}`}
                         disabled={updatingKey === f.key}
-                        onClick={() => handleKillSwitch(f.key, f.killSwitch, f.defaultOn)}
+                        onClick={() =>
+                          setKillSwitchConfirm({
+                            key: f.key,
+                            currentKill: f.killSwitch,
+                            defaultOn: f.defaultOn,
+                          })
+                        }
                       >
                         {f.killSwitch ? "Deactivate Kill Switch" : "Trigger Kill Switch"}
                       </Button>
@@ -135,6 +146,30 @@ export function Features() {
           </TableBody>
         </Table>
       </div>
+
+      <ConfirmDialog
+        open={Boolean(killSwitchConfirm)}
+        onOpenChange={(open) => {
+          if (!open) setKillSwitchConfirm(null);
+        }}
+        title="Toggle feature kill switch?"
+        description={
+          killSwitchConfirm
+            ? `Are you sure you want to flip the kill switch for '${killSwitchConfirm.key}'? This will globally disable the feature.`
+            : ""
+        }
+        confirmLabel="Confirm"
+        destructive={Boolean(killSwitchConfirm && !killSwitchConfirm.currentKill)}
+        onConfirm={async () => {
+          if (killSwitchConfirm) {
+            await executeKillSwitch(
+              killSwitchConfirm.key,
+              killSwitchConfirm.currentKill,
+              killSwitchConfirm.defaultOn,
+            );
+          }
+        }}
+      />
     </PageContainer>
   );
 }
