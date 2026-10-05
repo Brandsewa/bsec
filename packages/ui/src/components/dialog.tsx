@@ -44,3 +44,4 @@ export function DialogTitle({ className, ...props }: ComponentProps<typeof D.Tit
 export function DialogDescription({ className, ...props }: ComponentProps<typeof D.Description>) {
   return <D.Description className={cn("text-sm text-foreground-light", className)} {...props} />;
 }
+

@@ -258,9 +258,7 @@ export function Templates() {
             </div>
           </div>
           <DialogFooter>
-            <DialogClose asChild>
-              <Button>Cancel</Button>
-            </DialogClose>
+            <DialogClose render={<Button>Cancel</Button>} />
             <Button variant="primary" loading={create.isPending} disabled={!name.trim()} onClick={() => create.mutate()}>
               Create and open editor
             </Button>
@@ -277,9 +275,7 @@ export function Templates() {
             </DialogDescription>
           </DialogHeader>
           <DialogFooter>
-            <DialogClose asChild>
-              <Button>Cancel</Button>
-            </DialogClose>
+            <DialogClose render={<Button>Cancel</Button>} />
             <Button variant="primary" loading={remove.isPending} onClick={() => deleting && remove.mutate(deleting.code)}>
               Delete theme
             </Button>
@@ -316,9 +312,7 @@ export function Templates() {
             </div>
           ) : null}
           <DialogFooter>
-            <DialogClose asChild>
-              <Button>Cancel</Button>
-            </DialogClose>
+            <DialogClose render={<Button>Cancel</Button>} />
             <Button variant="primary" loading={saveDetails.isPending} disabled={!editing?.name.trim()} onClick={() => editing && saveDetails.mutate(editing)}>
               Save
             </Button>

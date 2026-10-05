@@ -27,3 +27,4 @@ export function TableHead({ className, ...props }: ComponentProps<"th">) {
 export function TableCell({ className, ...props }: ComponentProps<"td">) {
   return <td className={cn("px-3 py-2.5 align-middle", className)} {...props} />;
 }
+

@@ -23,8 +23,8 @@ export function ResetPassword({ token }: { token?: string }) {
             </p>
           </div>
           <div className="space-y-2">
-            <Button asChild className="w-full">
-              <Link to="/forgot-password">Request a new link</Link>
+            <Button render={<Link to="/forgot-password" />} className="w-full">
+              Request a new link
             </Button>
             <div className="text-center pt-2">
               <Link to="/login" className="text-xs text-muted-foreground hover:text-foreground hover:underline">
@@ -122,8 +122,8 @@ export function ResetPassword({ token }: { token?: string }) {
               />
             </div>
             {error && error.includes("expired") ? (
-              <Button asChild variant="ghost" className="w-full">
-                <Link to="/forgot-password">Request a new link</Link>
+              <Button render={<Link to="/forgot-password" />} variant="ghost" className="w-full">
+                Request a new link
               </Button>
             ) : (
               <Button type="submit" disabled={busy || !newPassword || !confirmPassword} className="w-full">

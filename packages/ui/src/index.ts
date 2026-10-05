@@ -1,23 +1,101 @@
 export { cn } from "./lib/cn.ts";
 export { UiLink, UiLinkProvider, type UiLinkProps } from "./lib/link.tsx";
-export { Button, buttonVariants, type ButtonProps } from "./components/button.tsx";
-export { Input } from "./components/input.tsx";
-export { Select, SelectContent, SelectGroup, SelectItem, SelectTrigger, SelectValue } from "./components/select.tsx";
+
+// shadcn UI primitives (Base UI flavored)
+export { Button, buttonVariants, type ButtonProps } from "./components/ui/button.tsx";
+export { Input, type InputProps } from "./components/ui/input.tsx";
+export { Textarea, type TextareaProps } from "./components/ui/textarea.tsx";
+export { Label } from "./components/ui/label.tsx";
+export { Card, CardHeader, CardFooter, CardTitle, CardDescription, CardContent } from "./components/ui/card.tsx";
+export { Badge, badgeVariants } from "./components/ui/badge.tsx";
+export { Alert, AlertTitle, AlertDescription } from "./components/ui/alert.tsx";
+export { Separator } from "./components/ui/separator.tsx";
+export { Switch } from "./components/ui/switch.tsx";
+export { Checkbox } from "./components/ui/checkbox.tsx";
+export { RadioGroup, RadioGroupItem } from "./components/ui/radio-group.tsx";
+export { Tabs, TabsList, TabsTrigger, TabsContent } from "./components/ui/tabs.tsx";
 export {
   Dialog,
-  DialogClose,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
   DialogTrigger,
-} from "./components/dialog.tsx";
-export { Sheet, SheetClose, SheetContent, SheetDescription, SheetTitle, SheetTrigger } from "./components/sheet.tsx";
-export { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "./components/table.tsx";
-export { Form, FormField, FormItemLayout, Label } from "./components/form.tsx";
+  DialogContent,
+  DialogHeader,
+  DialogFooter,
+  DialogTitle,
+  DialogDescription,
+  DialogClose,
+} from "./components/ui/dialog.tsx";
+export {
+  Sheet,
+  SheetTrigger,
+  SheetClose,
+  SheetContent,
+  SheetHeader,
+  SheetFooter,
+  SheetTitle,
+  SheetDescription,
+} from "./components/ui/sheet.tsx";
+export {
+  Popover,
+  PopoverTrigger,
+  PopoverContent,
+} from "./components/ui/popover.tsx";
+export {
+  DropdownMenu,
+  DropdownMenuTrigger,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuCheckboxItem,
+  DropdownMenuRadioItem,
+  DropdownMenuLabel,
+  DropdownMenuSeparator,
+  DropdownMenuShortcut,
+  DropdownMenuGroup,
+  DropdownMenuPortal,
+  DropdownMenuSub,
+  DropdownMenuSubContent,
+  DropdownMenuSubTrigger,
+  DropdownMenuRadioGroup,
+} from "./components/ui/dropdown-menu.tsx";
+export {
+  Select as ShadcnSelect,
+  SelectGroup,
+  SelectValue,
+  SelectTrigger,
+  SelectContent,
+  SelectLabel,
+  SelectItem,
+  SelectSeparator,
+} from "./components/ui/select.tsx";
+export {
+  Table,
+  TableHeader,
+  TableBody,
+  TableFooter,
+  TableHead,
+  TableRow,
+  TableCell,
+  TableCaption,
+} from "./components/ui/table.tsx";
+export { Skeleton } from "./components/ui/skeleton.tsx";
+export { Tooltip, TooltipTrigger, TooltipContent, TooltipProvider } from "./components/ui/tooltip.tsx";
+export { Toaster as SonnerToaster } from "./components/ui/sonner.tsx";
+export { Calendar } from "./components/ui/calendar.tsx";
+
+// Composed shared components
+export { ConfirmDialog, type ConfirmDialogProps } from "./components/confirm-dialog.tsx";
+export { SimpleSelect, type SimpleSelectProps, type SelectOption } from "./components/simple-select.tsx";
+export { DateRangePicker, type DateRangePickerProps } from "./components/date-range-picker.tsx";
+export { DatePicker, type DatePickerProps } from "./components/date-picker.tsx";
+export { ScrollTabs, type ScrollTabsProps } from "./components/scroll-tabs.tsx";
+export { SectionCard, type SectionCardProps } from "./components/section-card.tsx";
+export { InfoTip, type InfoTipProps } from "./components/info-tip.tsx";
+export { ImageUploader, type ImageUploaderProps, type UploadAdapter } from "./components/image-uploader.tsx";
+
+// Legacy components maintained for backwards compatibility
+export { Select } from "./components/select.tsx";
+export { Form, FormField, FormItemLayout } from "./components/form.tsx";
 export { EmptyState } from "./components/empty-state.tsx";
-export { DetailSkeleton, FormSkeleton, MetricCardSkeleton, Skeleton, TableSkeleton } from "./components/skeleton.tsx";
+export { DetailSkeleton, FormSkeleton, MetricCardSkeleton, TableSkeleton } from "./components/skeleton.tsx";
 export { Toaster, toast } from "./components/toast.tsx";
 export { PageBreadcrumbs, PageContainer, PageHeader, PageSection, type Crumb } from "./layout/page.tsx";
 export { AppShell, type NavGroup, type NavItem } from "./layout/sidebar.tsx";
@@ -25,5 +103,16 @@ export { PageSkeleton, ROUTE_PENDING_MIN_MS, ROUTE_PENDING_MS } from "./patterns
 export { MetricCard, type MetricCardProps } from "./patterns/metric-card.tsx";
 export { FilterBar, type FilterBarProps } from "./patterns/filter-bar.tsx";
 export { DataTable, type ColumnDef, type DataTableProps } from "./patterns/data-table.tsx";
-export { THEME_STORAGE_KEY, themeBootScript, ThemeProvider, useTheme, ThemeToggle, type ThemePreference, type ResolvedTheme, type ThemeContextValue, type ThemeToggleProps } from "./theme/index.ts";
 
+// Theme exports
+export {
+  THEME_STORAGE_KEY,
+  themeBootScript,
+  ThemeProvider,
+  useTheme,
+  ThemeToggle,
+  type ThemePreference,
+  type ResolvedTheme,
+  type ThemeContextValue,
+  type ThemeToggleProps,
+} from "./theme/index.ts";
