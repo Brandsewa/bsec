@@ -22,8 +22,41 @@ import {
   type DbHandle,
 } from "@bs/db";
 import { bootstrapRoles } from "@bs/db/bootstrap";
+import { enableTenantFlags } from "./helpers/feature-flags.ts";
 import { runMigrations } from "@bs/db/migrate";
 import {
+  getSettingsUpdate,
+  applySettingsUpdate,
+  SETTINGS_UPDATE_FEATURES,
+  SETTINGS_UPDATE_OFFER_FLAG,
+  getTaxSettings,
+  updateTaxSettings,
+  listTaxClasses,
+  createTaxClass,
+  updateTaxClass,
+  deleteTaxClass,
+  getNotificationSettings,
+  updateNotificationSettings,
+  listPolicies,
+  getPolicy,
+  savePolicyDraft,
+  publishPolicy,
+  getPolicyVersions,
+  restorePolicyDraft,
+  getPrivacySettings,
+  updatePrivacySettings,
+  listPrivacyRequests,
+  updatePrivacyRequestStatus,
+  executePrivacyExport,
+  executePrivacyErasure,
+  executePrivacyWithdrawConsent,
+  getCookieInventory,
+  previewShippingRate,
+  getStorageUsage,
+  scheduleMaintenance,
+  cancelScheduledMaintenance,
+  endMaintenance,
+  listStoreStatusTransitions,
   activateTheme,
   getCategoryStats,
   getCategory,
@@ -93,6 +126,10 @@ import {
   getAdminShippingSettings,
   getSettingsOverview,
   getStoreSettings,
+  getCheckoutSettings,
+  updateCheckoutSettings,
+  getCustomerAccountSettings,
+  updateCustomerAccountSettings,
   getTheme,
   inviteStaff,
   listAdminCustomers,
@@ -165,7 +202,6 @@ import {
   updateTheme,
   updateVariant,
   getTenantSubscription,
-  changeTenantPlan,
   approveStoreSupportSession,
   denyStoreSupportSession,
   getStandingSupportConsent,
@@ -210,6 +246,12 @@ import {
   updateReturnSettings,
   getAdminReturnDetail,
   getAdminReturnStats,
+  listPaymentMethods,
+  updateCodMethod,
+  getPlanAndBilling,
+  listAvailablePlans,
+  requestPlanChange,
+  cancelPlanChangeRequest,
   getFinanceOverview,
   getDistinctCurrencies,
   listLedgerEntriesForAdmin,
@@ -375,6 +417,9 @@ describe("Generated Isolation Test Suite (M1 Real Postgres 18 Proof)", () => {
         },
       ])
       .onConflictDoNothing();
+
+    // Settings-rebuild features seed default-off; this suite exercises their live behaviour.
+    await enableTenantFlags(dbPlatform.db, tenantA, ["settings.storage", "settings.maintenance"]);
 
     await dbPlatform.db
       .insert(schema.domains)
@@ -648,7 +693,7 @@ describe("Generated Isolation Test Suite (M1 Real Postgres 18 Proof)", () => {
           tenantId: tenantB,
           name: "store_admin",
           isSystem: true,
-          permissions: ["staff.manage", "settings.write"],
+          permissions: ["staff.manage", "settings.write", "settings.read", "payments.manage"],
         },
       ]);
 
@@ -703,6 +748,10 @@ describe("Generated Isolation Test Suite (M1 Real Postgres 18 Proof)", () => {
     expect(adminProcedures).toContain("settingsActivity.list");
     expect(adminProcedures).toContain("settings.get");
     expect(adminProcedures).toContain("settings.update");
+    expect(adminProcedures).toContain("checkoutSettings.get");
+    expect(adminProcedures).toContain("checkoutSettings.update");
+    expect(adminProcedures).toContain("customerAccountSettings.get");
+    expect(adminProcedures).toContain("customerAccountSettings.update");
     expect(adminProcedures).toContain("featureFlags.list");
     expect(adminProcedures).toContain("products.list");
     expect(adminProcedures).toContain("products.get");
@@ -1179,31 +1228,62 @@ describe("Generated Isolation Test Suite (M1 Real Postgres 18 Proof)", () => {
 
       // --- M8 Billing & Subscriptions ---
       case "billing.getSubscription":
-        assertPermission(ctx, "settings.write");
+        assertPermission(ctx, "settings.read");
         return await getTenantSubscription(rt, ctx.tenantId);
-      case "billing.changePlan": {
-        assertPermission(ctx, "settings.write");
-        return await changeTenantPlan(rtPlatform, {
-          tenantId: ctx.tenantId,
-          planCode: "growth",
-          interval: "monthly",
-          customerEmail: "admin@alpha.test",
-          provider: {
-            isConfigured: () => true,
-            createSubscription: async () => ({ providerSubscriptionId: "sub_iso_test_123", status: "created" }),
-            cancelSubscription: async () => ({ status: "cancelled" }),
-            verifyWebhookSignature: () => true,
-          },
+
+      // --- Settings Phase 5: Payment Methods Catalogue & COD ---
+      case "paymentMethods.list":
+        return await listPaymentMethods(rt, ctx);
+      case "paymentMethods.updateCod":
+        return await updateCodMethod(rt, ctx, {
+          enabled: true,
+          displayName: "Cash on Delivery",
+          feePaise: 5000,
+          minOrderPaise: 10000,
+          maxOrderPaise: 500000,
         });
+
+      // --- Settings Phase 5: Plan and Billing View & Request Flow ---
+      case "planAndBilling.get":
+        return await getPlanAndBilling(rt, ctx);
+      case "planAndBilling.availablePlans":
+        return await listAvailablePlans(rt, ctx);
+      case "planAndBilling.requestChange": {
+        const plans = await listAvailablePlans(rt, ctx);
+        const target = plans[0];
+        if (!target) throw new Error("No available plans");
+        return await requestPlanChange(rt, asOwner(ctx), {
+          toPlanId: target.id,
+          interval: "monthly",
+          note: "Isolation test request",
+        });
+      }
+      case "planAndBilling.cancelRequest": {
+        // Need an open request to cancel
+        const plans = await listAvailablePlans(rt, ctx);
+        const target = plans[0];
+        if (!target) throw new Error("No available plans");
+        let reqId: string;
+        try {
+          const req = await requestPlanChange(rt, asOwner(ctx), {
+            toPlanId: target.id,
+            interval: "monthly",
+            note: "To cancel",
+          });
+          reqId = req.id;
+        } catch {
+          // If already open, get it from view
+          const view = await getPlanAndBilling(rt, ctx);
+          reqId = view.openPlanChangeRequest!.id;
+        }
+        return await cancelPlanChangeRequest(rt, asOwner(ctx), { id: reqId });
       }
 
       // --- M8 Custom Domains ---
       case "domains.list":
-        assertPermission(ctx, "settings.write");
-        return await listTenantDomains(rt, ctx.tenantId);
+        return await listTenantDomains(rt, ctx);
       case "domains.add": {
-        assertPermission(ctx, "settings.write");
-        return await addCustomDomain(rt, ctx.tenantId, {
+        return await addCustomDomain(rt, ctx, {
           hostname: `iso-add-${Date.now()}-${Math.random().toString(36).slice(2, 6)}.storetest.org`,
           provider: {
             isConfigured: () => true,
@@ -1220,8 +1300,7 @@ describe("Generated Isolation Test Suite (M1 Real Postgres 18 Proof)", () => {
         });
       }
       case "domains.verify": {
-        assertPermission(ctx, "settings.write");
-        const d = await addCustomDomain(rt, ctx.tenantId, {
+        const d = await addCustomDomain(rt, ctx, {
           hostname: `iso-ver-${Date.now()}-${Math.random().toString(36).slice(2, 6)}.storetest.org`,
           provider: {
             isConfigured: () => true,
@@ -1236,21 +1315,19 @@ describe("Generated Isolation Test Suite (M1 Real Postgres 18 Proof)", () => {
             deleteCustomHostname: async () => ({ deleted: true }),
           },
         });
-        return await verifyCustomDomain(rt, ctx.tenantId, d.id);
+        return await verifyCustomDomain(rt, ctx, d.id);
       }
       case "domains.setPrimary": {
-        assertPermission(ctx, "settings.write");
         const [activeDomain] = await rt._db.db
           .select()
           .from(schema.domains)
           .where(and(eq(schema.domains.tenantId, ctx.tenantId), eq(schema.domains.status, "active")))
           .limit(1);
         if (!activeDomain) throw new Error("No active domain found");
-        return await setPrimaryDomain(rt, ctx.tenantId, activeDomain.id);
+        return await setPrimaryDomain(rt, ctx, activeDomain.id);
       }
       case "domains.remove": {
-        assertPermission(ctx, "settings.write");
-        const d = await addCustomDomain(rt, ctx.tenantId, {
+        const d = await addCustomDomain(rt, ctx, {
           hostname: `iso-rem-${Date.now()}-${Math.random().toString(36).slice(2, 6)}.storetest.org`,
           provider: {
             isConfigured: () => true,
@@ -1265,7 +1342,7 @@ describe("Generated Isolation Test Suite (M1 Real Postgres 18 Proof)", () => {
             deleteCustomHostname: async () => ({ deleted: true }),
           },
         });
-        return await removeCustomDomain(rt, ctx.tenantId, d.id);
+        return await removeCustomDomain(rt, ctx, d.id);
       }
 
       // --- Product images ---
@@ -1314,6 +1391,14 @@ describe("Generated Isolation Test Suite (M1 Real Postgres 18 Proof)", () => {
         return await getOrderSettings(rt, ctx);
       case "orderSettings.update":
         return await updateOrderSettings(rt, ctx, { prefix: "ORD-" });
+      case "checkoutSettings.get":
+        return await getCheckoutSettings(rt, ctx);
+      case "checkoutSettings.update":
+        return await updateCheckoutSettings(rt, ctx, { guestCheckout: true });
+      case "customerAccountSettings.get":
+        return await getCustomerAccountSettings(rt, ctx);
+      case "customerAccountSettings.update":
+        return await updateCustomerAccountSettings(rt, ctx, { showSignInLinks: true });
       case "orders.estimateDraft":
         return await estimateAdminDraftOrder(rt, ctx, {
           shippingAddress: { state: "Delhi", pincode: "110001" },
@@ -1486,6 +1571,115 @@ describe("Generated Isolation Test Suite (M1 Real Postgres 18 Proof)", () => {
         if (procPath === "reviews.bulkPublish") return await bulkPublishAdminReviews(rt, ctx, [reviewId]);
         if (procPath === "reviews.bulkHold") return await bulkHoldAdminReviews(rt, ctx, [reviewId]);
         return await bulkDeleteAdminReviews(rt, ctx, [reviewId]);
+      }
+      // --- Settings rebuild phases 4-8: every procedure runs through the real permission and tenant checks ---
+      case "taxSettings.get":
+        return await getTaxSettings(rt, ctx);
+      case "taxSettings.update":
+        return await updateTaxSettings(rt, ctx, { pricesIncludeTax: true });
+      case "taxClasses.list":
+        return await listTaxClasses(rt, ctx);
+      case "taxClasses.create":
+        return await createTaxClass(rt, ctx, { name: `Iso Class ${Date.now()}`, rateBps: 500, isDefault: false });
+      case "taxClasses.update":
+      case "taxClasses.delete": {
+        const c = await createTaxClass(rt, ctx, { name: `Iso Class ${Date.now()}`, rateBps: 500, isDefault: false });
+        if (procPath === "taxClasses.update") return await updateTaxClass(rt, ctx, { id: c.id, name: `${c.name} v2` });
+        return await deleteTaxClass(rt, ctx, c.id);
+      }
+      case "notificationSettings.get":
+        return await getNotificationSettings(rt, ctx);
+      case "notificationSettings.update":
+        return await updateNotificationSettings(rt, ctx, { staff: { newOrder: { enabled: true, recipients: ["ops@iso.test"] } } });
+      case "policies.list":
+        return await listPolicies(rt, ctx);
+      case "policies.get":
+        return await getPolicy(rt, ctx, "privacy");
+      case "policies.versions":
+        return await getPolicyVersions(rt, ctx, "privacy");
+      case "policies.saveDraft":
+      case "policies.publish":
+      case "policies.restoreDraft": {
+        const content = { v: 1, blocks: [{ type: "heading", level: 2, text: "Iso" }, { type: "paragraph", text: "Isolation policy body." }] };
+        const saved = await savePolicyDraft(rt, ctx, { handle: "privacy", title: "Privacy Policy", content });
+        if (procPath === "policies.saveDraft") return saved;
+        const pub = await publishPolicy(rt, ctx, "privacy");
+        if (procPath === "policies.publish") return pub;
+        return await restorePolicyDraft(rt, ctx, { handle: "privacy", versionId: pub.publishedVersion!.id });
+      }
+      case "customerPrivacy.getSettings":
+        return await getPrivacySettings(rt, ctx);
+      case "customerPrivacy.updateSettings":
+        return await updatePrivacySettings(rt, ctx, { requestSlaDays: 30 });
+      case "customerPrivacy.listRequests":
+        return await listPrivacyRequests(rt, ctx);
+      case "customerPrivacy.cookieInventory":
+        return getCookieInventory(ctx);
+      case "customerPrivacy.updateRequestStatus":
+      case "customerPrivacy.exportCustomerData":
+      case "customerPrivacy.eraseCustomerData":
+      case "customerPrivacy.withdrawConsent": {
+        let requestId = "";
+        await withTenant(rt._db.db, ctx.tenantId, async (tx) => {
+          const [r] = await tx
+            .insert(schema.privacyRequests)
+            .values({
+              tenantId: ctx.tenantId,
+              requesterEmail: `iso-priv-${Date.now()}@nobody.test`,
+              kind: procPath === "customerPrivacy.eraseCustomerData" ? "erasure" : procPath === "customerPrivacy.withdrawConsent" ? "withdraw_consent" : "access",
+              status: "open",
+              verifiedAt: new Date(),
+              dueAt: new Date(Date.now() + 30 * 86_400_000),
+            })
+            .returning({ id: schema.privacyRequests.id });
+          requestId = r!.id;
+        });
+        if (procPath === "customerPrivacy.updateRequestStatus") return await updatePrivacyRequestStatus(rt, ctx, { id: requestId, status: "in_progress" });
+        if (procPath === "customerPrivacy.exportCustomerData") return await executePrivacyExport(rt, ctx, requestId);
+        if (procPath === "customerPrivacy.eraseCustomerData") return await executePrivacyErasure(rt, ctx, requestId);
+        return await executePrivacyWithdrawConsent(rt, ctx, requestId);
+      }
+      case "shipping.preview":
+        return await previewShippingRate(rt, ctx, { subtotalPaise: 100000 });
+      case "settingsUpdate.get":
+        return await getSettingsUpdate(rt, ctx);
+      case "settingsUpdate.apply": {
+        // Owner-only. Opens the offer, applies, then removes the overrides so tenant A's flags are as they were.
+        const keys = [SETTINGS_UPDATE_OFFER_FLAG, ...SETTINGS_UPDATE_FEATURES.map((f) => f.key)];
+        const before = await dbPlatform.db.select().from(schema.tenantFeatureOverrides).where(eq(schema.tenantFeatureOverrides.tenantId, ctx.tenantId));
+        await enableTenantFlags(dbPlatform.db, ctx.tenantId, [SETTINGS_UPDATE_OFFER_FLAG]);
+        try {
+          return await applySettingsUpdate(rt, ctx);
+        } finally {
+          const kept = new Set(before.map((r) => r.key));
+          for (const key of keys) {
+            if (!kept.has(key)) {
+              await dbPlatform.db
+                .delete(schema.tenantFeatureOverrides)
+                .where(and(eq(schema.tenantFeatureOverrides.tenantId, ctx.tenantId), eq(schema.tenantFeatureOverrides.key, key)));
+            }
+          }
+        }
+      }
+      case "storageUsage.get":
+        return await getStorageUsage(rt, ctx);
+      case "storefront.listTransitions":
+        return await listStoreStatusTransitions(rt, ctx, { limit: 5 });
+      case "storefront.scheduleMaintenance":
+      case "storefront.cancelScheduledMaintenance":
+      case "storefront.endMaintenance": {
+        // Owner-only; leaves the store as it found it so later procedures see a live store.
+        const win = { startsAt: new Date(Date.now() + 3_600_000).toISOString(), endsAt: new Date(Date.now() + 7_200_000).toISOString() };
+        if (procPath === "storefront.scheduleMaintenance") {
+          const r = await scheduleMaintenance(rt, ctx, win);
+          await cancelScheduledMaintenance(rt, ctx);
+          return r;
+        }
+        if (procPath === "storefront.cancelScheduledMaintenance") {
+          await scheduleMaintenance(rt, ctx, win);
+          return await cancelScheduledMaintenance(rt, ctx);
+        }
+        return await endMaintenance(rt, ctx);
       }
       // --- Finance (docs/FINANCE-PLAN.md) ---
       case "finance.overview":
@@ -1853,11 +2047,20 @@ describe("Generated Isolation Test Suite (M1 Real Postgres 18 Proof)", () => {
 
           // Credential writes are owner-only (ADR-020): store_admin's set lacks payments.manage, so prove the
           // denial first, then run the procedure as an owner-level context.
-          const ownerOnly = proc === "payments.saveRazorpay" || proc === "payments.clearRazorpay";
+          const ownerOnly = proc === "payments.saveRazorpay" || proc === "payments.clearRazorpay" || proc === "paymentMethods.updateCod";
+          // Maintenance mutations additionally require the store_owner role (decision 10), not just the family.
+          const maintenanceOwnerOnly = proc === "settingsUpdate.apply" || proc === "storefront.scheduleMaintenance" || proc === "storefront.cancelScheduledMaintenance" || proc === "storefront.endMaintenance";
           if (ownerOnly) {
             await expect(executeAdminProcedure(proc, rtApp, authCtx!)).rejects.toThrow(/payments\.manage/);
           }
-          const runCtx = ownerOnly ? { ...authCtx!, permissions: [...authCtx!.permissions, "payments.manage"] } : authCtx!;
+          if (maintenanceOwnerOnly) {
+            await expect(executeAdminProcedure(proc, rtApp, authCtx!)).rejects.toThrow(/only (the )?store owners?/i);
+          }
+          const runCtx = ownerOnly
+            ? { ...authCtx!, permissions: [...authCtx!.permissions, "payments.manage"] }
+            : maintenanceOwnerOnly
+              ? { ...authCtx!, roles: ["store_owner"] }
+              : authCtx!;
           const result = await executeAdminProcedure(proc, rtApp, runCtx);
           expect(result).toBeDefined();
         });

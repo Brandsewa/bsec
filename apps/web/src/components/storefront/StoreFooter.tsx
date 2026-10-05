@@ -77,6 +77,11 @@ export function StoreFooter({ storeName = "Store" }: StoreFooterProps) {
                   Shipping Policy
                 </Link>
               </li>
+              <li>
+                <Link href="/privacy-request" className="hover:underline">
+                  Privacy Rights & Requests
+                </Link>
+              </li>
             </ul>
           </div>
 

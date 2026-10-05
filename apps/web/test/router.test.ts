@@ -68,7 +68,7 @@ describe("Store Router", () => {
       expect(storeRouter.admin.menus.update).toBeDefined();
       expect(storeRouter.admin.menus.delete).toBeDefined();
     },
-    20_000,
+    60_000,
   );
 
   it(

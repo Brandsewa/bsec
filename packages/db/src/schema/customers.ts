@@ -71,6 +71,8 @@ export const customerConsentEvents = tenantTable(
     actorType: text("actor_type").notNull().default("customer"), // customer, staff, system
     actorId: text("actor_id"),
     ip: text("ip"),
+    textVersion: text("text_version"),
+    ipHash: text("ip_hash"),
     at: timestamp("at", { withTimezone: true }).notNull().default(sql`now()`),
   },
   (t) => [

@@ -13,6 +13,7 @@ export interface SendPlatformEmailInput {
   fromName?: string | undefined;
   replyTo?: string | null | undefined;
   template: string;
+  headers?: Record<string, string> | undefined;
 }
 
 export type PlatformEmailStatus = "sent" | "failed" | "skipped";
@@ -143,7 +144,7 @@ export async function sendPlatformEmail(
   input: SendPlatformEmailInput,
   options?: { ip?: string | undefined; bypassRateLimit?: boolean },
 ): Promise<SendPlatformEmailResult> {
-  const { tenantId, to, subject, html, text, fromName, replyTo, template } = input;
+  const { tenantId, to, subject, html, text, fromName, replyTo, template, headers } = input;
 
   // 1. Check rate limits unless explicitly bypassed
   if (!options?.bypassRateLimit) {
@@ -252,6 +253,7 @@ export async function sendPlatformEmail(
         text,
         replyTo: resolvedReplyTo,
         reply_to: resolvedReplyTo,
+        ...(headers ? { headers } : {}),
       };
       const info = (await transport.sendMail(mailOptions as unknown as Parameters<typeof transport.sendMail>[0])) as { messageId?: string } | undefined;
       providerMessageId = info?.messageId;

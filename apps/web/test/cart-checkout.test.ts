@@ -211,10 +211,11 @@ describe("Storefront Cart & Checkout Flow", () => {
   ];
 
   const codOnly = { codEnabled: true, codFeePaise: 0, onlineAvailable: false };
+const noConsent = { termsRequired: false, marketing: null };
 
   describe("CheckoutForm", () => {
     it("shows the store's own shipping options and prices, never made-up ones", () => {
-      const html = renderToString(React.createElement(CheckoutForm, { cart: mockCart, shippingRates: storeRates, paymentOptions: codOnly }));
+      const html = renderToString(React.createElement(CheckoutForm, { cart: mockCart, shippingRates: storeRates, paymentOptions: codOnly, consent: noConsent }));
       expect(html).toContain("Standard Shipping");
       expect(html).toContain("Express Shipping");
       expect(html).toContain("₹99");
@@ -224,9 +225,26 @@ describe("Storefront Cart & Checkout Flow", () => {
       expect(html).not.toContain("₹120");
     });
 
+    it("asks for one terms box that also covers order emails when the store requires it", () => {
+      const html = renderToString(
+        React.createElement(CheckoutForm, { cart: mockCart, shippingRates: storeRates, paymentOptions: codOnly, consent: { termsRequired: true, marketing: null } }),
+      );
+      expect(html).toContain("Terms and Conditions");
+      expect(html).toContain("email me about my order");
+      expect(html).toContain("reminder if I leave items in my cart");
+    });
+
+    it("shows a plain order-email notice and the optional marketing box otherwise", () => {
+      const html = renderToString(
+        React.createElement(CheckoutForm, { cart: mockCart, shippingRates: storeRates, paymentOptions: codOnly, consent: { termsRequired: false, marketing: { label: "Send me offers" } } }),
+      );
+      expect(html).toContain("We will email you about your order");
+      expect(html).toContain("Send me offers");
+    });
+
     it("offers only the payment methods the store can take", () => {
       const render = (paymentOptions: { codEnabled: boolean; codFeePaise: number; onlineAvailable: boolean }) =>
-        renderToString(React.createElement(CheckoutForm, { cart: mockCart, shippingRates: storeRates, paymentOptions }));
+        renderToString(React.createElement(CheckoutForm, { cart: mockCart, shippingRates: storeRates, paymentOptions, consent: noConsent }));
 
       const both = render({ codEnabled: true, codFeePaise: 0, onlineAvailable: true });
       expect(both).toContain("Cash on Delivery (COD)");
@@ -243,14 +261,14 @@ describe("Storefront Cart & Checkout Flow", () => {
 
     it("tells the shopper about a COD handling fee and includes it in the total", () => {
       const html = renderToString(
-        React.createElement(CheckoutForm, { cart: mockCart, shippingRates: storeRates, paymentOptions: { codEnabled: true, codFeePaise: 4000, onlineAvailable: false } }),
+        React.createElement(CheckoutForm, { cart: mockCart, shippingRates: storeRates, paymentOptions: { codEnabled: true, codFeePaise: 4000, onlineAvailable: false }, consent: noConsent }),
       );
       expect(html).toContain("₹40 handling fee");
     });
 
     it("shows Free for a zero-cost option", () => {
       const html = renderToString(
-        React.createElement(CheckoutForm, { cart: mockCart, shippingRates: [{ ...storeRates[0]!, amount: 0 }], paymentOptions: codOnly }),
+        React.createElement(CheckoutForm, { cart: mockCart, shippingRates: [{ ...storeRates[0]!, amount: 0 }], paymentOptions: codOnly, consent: noConsent }),
       );
       expect(html).toContain("Free");
     });
@@ -260,7 +278,7 @@ describe("Storefront Cart & Checkout Flow", () => {
         React.createElement(CheckoutForm, {
           cart: mockCart,
           shippingRates: storeRates,
-          paymentOptions: codOnly,
+          paymentOptions: codOnly, consent: noConsent,
         }),
       );
 
@@ -297,7 +315,7 @@ describe("Storefront Cart & Checkout Flow", () => {
         React.createElement(CheckoutContainer, {
           cart: mockCart,
           shippingRates: [{ ...storeRates[0]!, amount: 0 }, storeRates[1]!],
-          paymentOptions: codOnly,
+          paymentOptions: codOnly, consent: noConsent,
         }),
       );
 

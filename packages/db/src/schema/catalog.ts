@@ -17,6 +17,7 @@ import {
 } from "drizzle-orm/pg-core";
 import { tenantForeignKey, tenantTable } from "../tenant-table.ts";
 import { citext } from "./custom-types.ts";
+import { taxClasses } from "./tax.ts";
 
 export const tsvector = customType<{ data: string }>({
   dataType() {
@@ -177,6 +178,13 @@ export const products = tenantTable(
       column: t.brandId,
       target: brands,
       name: "products_brand_fk",
+      onDelete: "set null",
+    }),
+    tenantForeignKey({
+      tableTenantId: t.tenantId,
+      column: t.taxClassId,
+      target: taxClasses,
+      name: "products_tax_class_fk",
       onDelete: "set null",
     }),
     index("products_tenant_status_idx").on(t.tenantId, t.status),

@@ -9,6 +9,10 @@ export interface EmailBrand {
   /** The store's public address, e.g. https://tasteofhills.bcom.si (no trailing slash). */
   baseUrl: string;
   supportEmail?: string | null | undefined;
+  /** Optional custom footer note from store notification settings (0..300 chars, escaped). */
+  footerNote?: string | null | undefined;
+  /** Optional unsubscribe URL for marketing emails. */
+  unsubscribeUrl?: string | null | undefined;
 }
 
 export interface EmailOrderLine {
@@ -93,6 +97,8 @@ const ACCENT = "#1f6f4a";
 
 function layout(brand: EmailBrand, title: string, bodyHtml: string): string {
   const support = brand.supportEmail ? `<p style="margin:8px 0 0">Questions? Reply to this email or write to <a href="mailto:${escapeHtml(brand.supportEmail)}" style="color:${ACCENT}">${escapeHtml(brand.supportEmail)}</a>.</p>` : "";
+  const footerNote = brand.footerNote ? `<p style="margin:8px 0 0;color:#6b726e;font-size:11px">${escapeHtml(brand.footerNote)}</p>` : "";
+  const unsub = brand.unsubscribeUrl ? `<p style="margin:8px 0 0;font-size:11px"><a href="${escapeHtml(brand.unsubscribeUrl)}" style="color:#6b726e;text-decoration:underline">Unsubscribe from marketing emails</a></p>` : "";
   return `<!doctype html>
 <html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>${escapeHtml(title)}</title></head>
 <body style="margin:0;background:#f4f5f4;font-family:-apple-system,Segoe UI,Helvetica,Arial,sans-serif;color:#1c1f1d">
@@ -101,7 +107,7 @@ function layout(brand: EmailBrand, title: string, bodyHtml: string): string {
 <tr><td style="padding:20px 28px;border-bottom:1px solid #e6e8e6"><a href="${escapeHtml(brand.baseUrl)}" style="font-size:20px;font-weight:700;color:#1c1f1d;text-decoration:none">${escapeHtml(brand.storeName)}</a></td></tr>
 <tr><td style="padding:28px">${bodyHtml}</td></tr>
 <tr><td style="padding:18px 28px;background:#fafbfa;font-size:12px;color:#6b726e;border-top:1px solid #e6e8e6">
-<p style="margin:0">${escapeHtml(brand.storeName)} · <a href="${escapeHtml(brand.baseUrl)}" style="color:#6b726e">${escapeHtml(brand.baseUrl.replace(/^https?:\/\//, ""))}</a></p>${support}
+<p style="margin:0">${escapeHtml(brand.storeName)} · <a href="${escapeHtml(brand.baseUrl)}" style="color:#6b726e">${escapeHtml(brand.baseUrl.replace(/^https?:\/\//, ""))}</a></p>${support}${footerNote}${unsub}
 </td></tr></table></td></tr></table></body></html>`;
 }
 
@@ -154,7 +160,11 @@ ${addr.length ? `<p style="margin:14px 0 0;font-size:13px;color:#4b524e"><strong
 }
 
 function footerText(brand: EmailBrand): string {
-  return `\n\n${brand.storeName}\n${brand.baseUrl}${brand.supportEmail ? `\nQuestions? ${brand.supportEmail}` : ""}\n`;
+  const parts = [`\n\n${brand.storeName}`, brand.baseUrl];
+  if (brand.supportEmail) parts.push(`Questions? ${brand.supportEmail}`);
+  if (brand.footerNote) parts.push(brand.footerNote);
+  if (brand.unsubscribeUrl) parts.push(`Unsubscribe: ${brand.unsubscribeUrl}`);
+  return `${parts.join("\n")}\n`;
 }
 
 // --- templates ------------------------------------------------------------------------------------------------------
@@ -269,6 +279,18 @@ const TEMPLATES: Record<string, Builder> = {
       `${heading(`Set up your account for ${escapeHtml(brand.storeName)}`)}${para("Thank you for signing up! Please click the button below to set your password and complete setting up your account.")}${setupUrl ? button("Set your password", setupUrl) : ""}${para("This link will expire in 24 hours. If you didn't create an account, you can safely ignore this email.")}`,
     );
     const text = `Set up your account for ${brand.storeName}\n\nThank you for signing up! Please visit the link below to set your password and complete setting up your account:\n\n${setupUrl}\n\nThis link will expire in 24 hours. If you didn't create an account, you can safely ignore this email.${footerText(brand)}`;
+    return { html, text };
+  },
+  staff_new_order: (brand, data, subject) => {
+    const o = data.order;
+    const adminUrl = String(data.adminUrl ?? "");
+    const customerName = String(data.customerName ?? "Customer");
+    const html = layout(
+      brand,
+      subject,
+      `${heading("New order received!")}${para(`Order ${o?.number ? escapeHtml(o.number) : ""} was placed by ${escapeHtml(customerName)} for ${o ? formatInr(o.grandTotal) : ""}.`)}${adminUrl ? button("View order in admin", adminUrl) : ""}`,
+    );
+    const text = `New order received!\n\nOrder ${o?.number ?? ""} was placed by ${customerName} for ${o ? formatInr(o.grandTotal) : ""}.\n\n${adminUrl ? `View order in admin: ${adminUrl}` : ""}${footerText(brand)}`;
     return { html, text };
   },
 };

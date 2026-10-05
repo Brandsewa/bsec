@@ -7,6 +7,7 @@ import {
   text,
   timestamp,
   unique,
+  uniqueIndex,
   uuid,
 } from "drizzle-orm/pg-core";
 import { tenantForeignKey, tenantTable } from "../tenant-table.ts";
@@ -224,6 +225,8 @@ export const invoices = tenantTable(
     number: text("number").notNull(),
     fy: text("fy").notNull(),
     type: text("type").notNull().default("invoice"), // invoice, credit_note
+    returnId: uuid("return_id"),
+    parentInvoiceId: uuid("parent_invoice_id"),
     issuedAt: timestamp("issued_at", { withTimezone: true }).notNull().default(sql`now()`),
     sellerGstin: text("seller_gstin"),
     buyerGstin: text("buyer_gstin"),
@@ -236,6 +239,9 @@ export const invoices = tenantTable(
   (t) => [
     unique("invoices_tenant_type_fy_number_uniq").on(t.tenantId, t.type, t.fy, t.number),
     unique("invoices_tenant_id_uniq").on(t.tenantId, t.id),
+    uniqueIndex("invoices_tenant_return_credit_note_uniq")
+      .on(t.tenantId, t.returnId)
+      .where(sql`"type" = 'credit_note'`),
     index("invoices_tenant_order_idx").on(t.tenantId, t.orderId),
     index("invoices_tenant_fy_idx").on(t.tenantId, t.fy),
     tenantForeignKey({
@@ -244,6 +250,20 @@ export const invoices = tenantTable(
       target: orders,
       name: "invoices_order_fk",
       onDelete: "cascade",
+    }),
+    tenantForeignKey({
+      tableTenantId: t.tenantId,
+      column: t.returnId,
+      target: returns,
+      name: "invoices_return_fk",
+      onDelete: "set null",
+    }),
+    tenantForeignKey({
+      tableTenantId: t.tenantId,
+      column: t.parentInvoiceId,
+      target: { tenantId: t.tenantId, id: t.id },
+      name: "invoices_parent_invoice_fk",
+      onDelete: "set null",
     }),
   ],
 );

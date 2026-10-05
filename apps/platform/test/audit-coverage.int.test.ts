@@ -49,7 +49,7 @@ async function snapshot(): Promise<string> {
     "tenants", "tenant_notes", "platform_staff", "platform_staff_invitations", "feature_flags", "support_sessions",
     "tenant_deletions", "tenant_size_tiers", "subscriptions", "domains", "webhook_inbox", "memberships", "exports",
     "export_files", "tenant_owner_invites", "users", "sessions", "organizations", "store_settings", "roles", "theme_templates",
-    "platform_email_settings",
+    "platform_email_settings", "plan_change_requests",
   ];
   const parts = tables.map((t) => `SELECT '${t}' || ':' || x::text AS r FROM ${t} x`);
   parts.push(`SELECT 'job:' || j.id::text || j.state::text FROM pgboss.job j`);
@@ -202,6 +202,26 @@ const CASES: Record<string, Case> = {
       const key = `flag_${++seq}`;
       await rt._db.db.insert(schema.featureFlags).values({ key, defaultOn: false });
       return { featureKey: key, defaultOn: true };
+    },
+  },
+  "plans.decideRequest": {
+    role: "platform_admin",
+    action: "plan_change_request.approved",
+    input: async () => {
+      const s = await mkStore();
+      const [growthPlan] = await rt._db.db.select().from(schema.plans).where(eq(schema.plans.code, "growth")).limit(1);
+      const [req] = await rt._db.db
+        .insert(schema.planChangeRequests)
+        .values({
+          tenantId: s.tenantId,
+          requestedBy: s.ownerId,
+          toPlanId: growthPlan!.id,
+          interval: "monthly",
+          note: "Need growth tier",
+          status: "open",
+        })
+        .returning({ id: schema.planChangeRequests.id });
+      return { id: req!.id, decision: "approved" as const, note: "Approved" };
     },
   },
   "staff.invite": { role: "platform_admin", action: "platform_staff.invite", input: async () => ({ email: `invitee${++seq}@platform.test`, role: "platform_support" }) },

@@ -572,6 +572,69 @@ export async function actOnReturn(
             id: insertedRefund.id,
           });
         }
+
+        // Slice 6D: Credit notes on refunds (flagged behind settings.gst_v2)
+        // If the order has an issued invoice, issue a credit note linked to original invoice and return
+        const { isFeatureEnabled } = await import("../features.ts");
+        const gstV2Enabled = await isFeatureEnabled(tx, ctx.tenantId, "settings.gst_v2");
+        if (gstV2Enabled) {
+          const [parentInvoice] = await tx
+            .select()
+            .from(schema.invoices)
+            .where(
+              and(
+                eq(schema.invoices.tenantId, ctx.tenantId),
+                eq(schema.invoices.orderId, ret.orderId),
+                eq(schema.invoices.type, "invoice"),
+              ),
+            )
+            .orderBy(schema.invoices.createdAt)
+            .limit(1);
+
+          if (parentInvoice) {
+            // Check if credit note already issued for this return (idempotency)
+            const [existingCn] = await tx
+              .select({ id: schema.invoices.id })
+              .from(schema.invoices)
+              .where(
+                and(
+                  eq(schema.invoices.tenantId, ctx.tenantId),
+                  eq(schema.invoices.returnId, input.id),
+                  eq(schema.invoices.type, "credit_note"),
+                ),
+              )
+              .limit(1);
+
+            if (!existingCn) {
+              const { generateInvoice } = await import("./invoices.ts");
+              const returnedLines = await tx
+                .select({
+                  orderItemId: schema.returnItems.orderItemId,
+                  quantity: schema.returnItems.quantity,
+                })
+                .from(schema.returnItems)
+                .where(
+                  and(
+                    eq(schema.returnItems.tenantId, ctx.tenantId),
+                    eq(schema.returnItems.returnId, input.id),
+                  ),
+                );
+
+              await generateInvoice(
+                txRt,
+                ctx,
+                {
+                  orderId: ret.orderId,
+                  type: "credit_note",
+                  returnId: input.id,
+                  parentInvoiceId: parentInvoice.id,
+                  creditLines: returnedLines,
+                },
+                tx,
+              );
+            }
+          }
+        }
         break;
       }
       case "replace": {
@@ -667,6 +730,9 @@ export async function getOrderReturnsByToken(rt: Runtime, tenantId: string, toke
     const { readReturnSettings } = await import("../admin/return-settings.ts");
     const settings = await readReturnSettings(tx, tenantId);
 
+    const { readCustomerAccountSettingsInternal } = await import("../admin/customer-account-settings.ts");
+    const accountSettings = await readCustomerAccountSettingsInternal(tx, tenantId);
+
     const items = (await getReturnableItems(tx, tenantId, orderId)).map((i) => ({
       id: i.id,
       title: i.productTitle,
@@ -682,7 +748,7 @@ export async function getOrderReturnsByToken(rt: Runtime, tenantId: string, toke
 
     return {
       orderId,
-      canRequest: settings.acceptReturns && order.status === "delivered" && items.some((i) => i.returnable > 0),
+      canRequest: accountSettings.allowSelfServeReturns && settings.acceptReturns && order.status === "delivered" && items.some((i) => i.returnable > 0),
       acceptReturns: settings.acceptReturns,
       allowExchanges: settings.allowExchanges,
       reasons: isReturnPhotoStorageConfigured()
@@ -723,6 +789,12 @@ export async function requestReturnByToken(
     items: Array<{ orderItemId: string; quantity: number }>;
   },
 ) {
+  const { readCustomerAccountSettingsInternal } = await import("../admin/customer-account-settings.ts");
+  const accountSettings = await withTenant(rt._db.db, ctx.tenantId, (tx) => readCustomerAccountSettingsInternal(tx, ctx.tenantId));
+  if (!accountSettings.allowSelfServeReturns) {
+    throw new Error("Precondition: Self-service returns are disabled for this store");
+  }
+
   const orderId = await withTenant(rt._db.db, ctx.tenantId, (tx) => orderIdForToken(tx, ctx.tenantId, input.token));
   if (!orderId) throw new Error("Not Found: This order link is not valid any more");
   return requestReturn(rt, ctx, {
@@ -733,5 +805,94 @@ export async function requestReturnByToken(
     customerComment: input.customerComment,
     photos: input.photos,
     items: input.items,
+  });
+}
+
+/**
+ * A shopper cancels their order using the secure order-view link/token.
+ * Allowed only when allowSelfServeCancellation is enabled, order is not fulfilled/shipped,
+ * and payment is unpaid/pending/COD-pending.
+ */
+export async function cancelOrderByToken(
+  rt: Runtime,
+  tenantId: string,
+  token: string,
+  input?: { reason?: string | undefined },
+) {
+  const { readCustomerAccountSettingsInternal } = await import("../admin/customer-account-settings.ts");
+  const accountSettings = await withTenant(rt._db.db, tenantId, (tx) => readCustomerAccountSettingsInternal(tx, tenantId));
+  if (!accountSettings.allowSelfServeCancellation) {
+    throw new Error("Precondition: Self-service order cancellation is disabled for this store");
+  }
+
+  return await withTenant(rt._db.db, tenantId, async (tx) => {
+    const orderId = await orderIdForToken(tx, tenantId, token);
+    if (!orderId) throw new Error("Not Found: This order link is not valid any more");
+
+    const order = await loadOrder(tx, tenantId, orderId);
+
+    if (order.status === "cancelled") {
+      throw new Error("Precondition: Order is already cancelled");
+    }
+    if (["fulfilled", "delivered", "returned"].includes(order.status)) {
+      throw new Error(`Precondition: Cannot cancel an order that is ${order.status}`);
+    }
+
+    const shippedStatuses = [
+      "shipped",
+      "partially_shipped",
+      "picked_up",
+      "in_transit",
+      "out_for_delivery",
+      "delivered",
+      "rto",
+      "rto_delivered",
+    ];
+    if (shippedStatuses.includes(order.fulfillmentStatus)) {
+      throw new Error("Precondition: Cannot cancel an order that is already shipped or fulfilled");
+    }
+
+    const cancellablePaymentStatuses = ["pending", "unpaid", "cod_pending", "failed"];
+    if (order.paymentStatus && !cancellablePaymentStatuses.includes(order.paymentStatus)) {
+      throw new Error(`Precondition: Cannot cancel an order with payment status '${order.paymentStatus}'`);
+    }
+
+    const customerCtx: TenantContext = {
+      tenantId,
+      storeStatus: "live",
+      actor: order.customerId ? { type: "customer", customerId: order.customerId } : { type: "anonymous" },
+      roles: [],
+      permissions: [],
+      requestId: crypto.randomUUID(),
+    };
+
+    const cancelReason = input?.reason?.trim() || "Cancelled by customer";
+
+    const txRt = { ...rt, _db: { db: tx } } as unknown as Runtime;
+    await transitionOrder(
+      txRt,
+      customerCtx,
+      orderId,
+      {
+        type: "order.cancel",
+        reason: cancelReason,
+      },
+      tx,
+    );
+
+    await tx.insert(schema.auditLogs).values({
+      tenantId,
+      actorType: "customer",
+      actorId: order.customerId ?? null,
+      action: "orders.cancel",
+      targetType: "order",
+      targetId: orderId,
+      diff: {
+        before: { status: order.status, paymentStatus: order.paymentStatus },
+        after: { status: "cancelled", cancelReason },
+      },
+    });
+
+    return { success: true as const, orderId, status: "cancelled" as const };
   });
 }

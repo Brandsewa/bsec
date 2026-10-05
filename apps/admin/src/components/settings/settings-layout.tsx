@@ -1,7 +1,10 @@
 import { Link, Outlet, useNavigate, useRouterState } from "@tanstack/react-router";
+import { ShieldAlert } from "lucide-react";
+import { EmptyState } from "@bs/ui";
 import { SimpleSelect } from "../simple-select.tsx";
 import { cn } from "@/lib/utils";
-import { activeSettingsItem, visibleSettingsGroups } from "./settings-nav.ts";
+import { SettingsUpdateBanner } from "./settings-update.tsx";
+import { activeSettingsItem, canOpenSettingsPath, visibleSettingsGroups } from "./settings-nav.ts";
 
 /**
  * The Settings workspace. Desktop: a compact grouped navigation column that stays put while the content
@@ -19,6 +22,8 @@ export function SettingsLayout({ permissions }: { permissions: readonly string[]
 
   return (
     <div className="mx-auto grid w-full max-w-6xl gap-3 px-4 py-6 md:px-8 lg:grid-cols-[13rem_minmax(0,1fr)] lg:gap-6">
+      <SettingsUpdateBanner />
+
       {/* Tablet / phone: one grouped section chooser above the content */}
       <div className="lg:hidden">
         <SimpleSelect
@@ -68,7 +73,15 @@ export function SettingsLayout({ permissions }: { permissions: readonly string[]
       </nav>
 
       <main className="min-w-0">
-        <Outlet />
+        {canOpenSettingsPath(permissions, pathname) ? (
+          <Outlet />
+        ) : (
+          <EmptyState
+            icon={ShieldAlert}
+            title="You do not have access to this section"
+            description="Ask the store owner if you need to change these settings."
+          />
+        )}
       </main>
     </div>
   );

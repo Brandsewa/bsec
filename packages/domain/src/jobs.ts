@@ -95,6 +95,58 @@ export async function handleOrderCreatedJob(
     data: { orderId, orderNumber: order.number },
     eventRef,
   });
+
+  // Staff new-order alert (Slice 7A, PLAN §3)
+  try {
+    const { readNotificationPreferences } = await import("./admin/notification-settings.ts");
+    const prefs = await withTenant(db, tenantId, async (tx) => readNotificationPreferences(tx, tenantId));
+    if (prefs.staff.newOrder.enabled && prefs.staff.newOrder.recipients.length > 0) {
+      const [fullOrder] = await withTenant(db, tenantId, async (tx) => {
+        return await tx
+          .select({
+            number: schema.orders.number,
+            grandTotal: schema.orders.grandTotal,
+            shippingAddress: schema.orders.shippingAddress,
+          })
+          .from(schema.orders)
+          .where(and(eq(schema.orders.tenantId, tenantId), eq(schema.orders.id, orderId)))
+          .limit(1);
+      });
+
+      const customerName = (fullOrder?.shippingAddress as Record<string, unknown> | null)?.fullName ?? "Customer";
+      const grandTotal = fullOrder?.grandTotal ?? 0;
+
+      for (const recipient of prefs.staff.newOrder.recipients) {
+        const staffRef = `staff_order_${orderId}_${recipient.trim().toLowerCase()}`;
+        const [alreadySentStaff] = await withTenant(db, tenantId, async (tx) => {
+          return await tx
+            .select({ id: schema.emailLog.id })
+            .from(schema.emailLog)
+            .where(and(eq(schema.emailLog.tenantId, tenantId), eq(schema.emailLog.eventRef, staffRef), eq(schema.emailLog.status, "sent")))
+            .limit(1);
+        });
+
+        if (!alreadySentStaff) {
+          await dispatchTransactionalEmailOrThrow(db, log, {
+            tenantId,
+            template: "staff_new_order",
+            toEmail: recipient.trim(),
+            subject: `New order ${order.number} received (${customerName})`,
+            data: {
+              order: { number: order.number, grandTotal, items: [], subtotal: 0, discountTotal: 0, shippingTotal: 0, codFee: 0, paymentStatus: "pending" },
+              customerName: String(customerName),
+              adminUrl: `/orders/${orderId}`,
+            },
+            eventRef: staffRef,
+          }).catch((err) => {
+            log.warn({ err, recipient, orderId }, "Staff new-order email alert failed");
+          });
+        }
+      }
+    }
+  } catch (err) {
+    log.warn({ err, orderId }, "Failed to process staff new order alerts");
+  }
 }
 
 export async function handleFulfillmentRtoJob(
@@ -437,6 +489,132 @@ export async function handleCustomerImportJob(
   log.info({ tenantId: data.tenantId, created: res.created, updated: res.updated, failed: res.errors.length }, "customers.import processed");
 }
 
+export async function handleMaintenanceStartJob(
+  db: Db,
+  log: Logger,
+  data: { tenantId: string; startsAt?: string; endsAt?: string },
+): Promise<void> {
+  const { tenantId } = data;
+  await withTenant(db, tenantId, async (tx) => {
+    const [row] = await tx
+      .select()
+      .from(schema.storeStatus)
+      .where(eq(schema.storeStatus.tenantId, tenantId))
+      .limit(1);
+
+    if (!row) return;
+    if (row.mode === "maintenance") {
+      log.info({ tenantId }, "maintenance.start: store already in maintenance mode");
+      return;
+    }
+
+    const currentMode = row.mode;
+    const now = new Date();
+
+    await tx
+      .update(schema.storeStatus)
+      .set({
+        mode: "maintenance",
+        modeBeforeMaintenance: currentMode,
+        changedAt: now,
+        changedBy: null,
+      })
+      .where(eq(schema.storeStatus.id, row.id));
+
+    await tx.insert(schema.storeStatusTransitions).values({
+      tenantId,
+      fromMode: currentMode,
+      toMode: "maintenance",
+      reason: "scheduled_start",
+      actorType: "system",
+      actorId: null,
+      at: now,
+    });
+
+    await tx.insert(schema.auditLogs).values({
+      tenantId,
+      actorType: "system",
+      actorId: null,
+      action: "store_status.scheduled_start",
+      targetType: "store_status",
+      targetId: row.id,
+      diff: {
+        mode: { before: currentMode, after: "maintenance" },
+        reason: { before: null, after: "scheduled_start" },
+      },
+    });
+  });
+}
+
+export async function handleMaintenanceEndJob(
+  db: Db,
+  log: Logger,
+  data: { tenantId: string; endsAt?: string },
+): Promise<void> {
+  const { tenantId } = data;
+  await withTenant(db, tenantId, async (tx) => {
+    const [row] = await tx
+      .select()
+      .from(schema.storeStatus)
+      .where(eq(schema.storeStatus.tenantId, tenantId))
+      .limit(1);
+
+    if (!row) return;
+    const now = new Date();
+
+    if (row.mode !== "maintenance") {
+      log.info({ tenantId, mode: row.mode }, "maintenance.end: mode already changed manually during window");
+      await tx
+        .update(schema.storeStatus)
+        .set({
+          maintenanceStartsAt: null,
+          maintenanceEndsAt: null,
+          modeBeforeMaintenance: null,
+          changedAt: now,
+          changedBy: null,
+        })
+        .where(eq(schema.storeStatus.id, row.id));
+      return;
+    }
+
+    const restoreMode = row.modeBeforeMaintenance || "live";
+    await tx
+      .update(schema.storeStatus)
+      .set({
+        mode: restoreMode,
+        maintenanceStartsAt: null,
+        maintenanceEndsAt: null,
+        modeBeforeMaintenance: null,
+        changedAt: now,
+        changedBy: null,
+      })
+      .where(eq(schema.storeStatus.id, row.id));
+
+    await tx.insert(schema.storeStatusTransitions).values({
+      tenantId,
+      fromMode: "maintenance",
+      toMode: restoreMode,
+      reason: "scheduled_end",
+      actorType: "system",
+      actorId: null,
+      at: now,
+    });
+
+    await tx.insert(schema.auditLogs).values({
+      tenantId,
+      actorType: "system",
+      actorId: null,
+      action: "store_status.scheduled_end",
+      targetType: "store_status",
+      targetId: row.id,
+      diff: {
+        mode: { before: "maintenance", after: restoreMode },
+        reason: { before: null, after: "scheduled_end" },
+      },
+    });
+  });
+}
+
 export async function startJobs(opts: {
   databaseUrl: string;
   log: Logger;
@@ -522,8 +700,25 @@ export async function startJobs(opts: {
           opts.log.warn({ err }, "platform_email_log prune failed during maintenance pass");
           return { deletedCount: 0 };
         });
+        const { pruneEmailLogs, prunePrivacyRequests } = await import("./system/retention.ts");
+        const prunedTenantEmailLogs = await pruneEmailLogs(db, 180).catch((err) => {
+          opts.log.warn({ err }, "email_log prune failed during maintenance pass");
+          return { deletedCount: 0 };
+        });
+        const prunedReqs = await prunePrivacyRequests(db, 1095).catch((err) => {
+          opts.log.warn({ err }, "privacy_requests prune failed during maintenance pass");
+          return { deletedCount: 0 };
+        });
         opts.log.info(
-          { job_id: job.id, deletedCount: res.deletedCount, prunedCounters, reapedSlots, prunedEmailLogs: prunedEmailLogs.deletedCount },
+          {
+            job_id: job.id,
+            deletedCount: res.deletedCount,
+            prunedCounters,
+            reapedSlots,
+            prunedEmailLogs: prunedEmailLogs.deletedCount,
+            prunedTenantEmailLogs: prunedTenantEmailLogs.deletedCount,
+            prunedReqs: prunedReqs.deletedCount,
+          },
           "idempotency.cleanup processed",
         );
       } catch (err) {
@@ -831,6 +1026,58 @@ export async function startJobs(opts: {
     },
   );
 
+  // Handle maintenance.start (Settings Phase 8 / Slice 8B)
+  await boss.work<{ tenantId: string; startsAt?: string; endsAt?: string }>(
+    QUEUE_NAMES.MAINTENANCE_START,
+    { localConcurrency: 2 },
+    async (batch) => {
+      for (const job of batch) {
+        try {
+          await handleMaintenanceStartJob(db, opts.log, job.data);
+          opts.log.info({ job_id: job.id, tenantId: job.data.tenantId }, "maintenance.start processed");
+        } catch (err) {
+          opts.log.error({ err, job_id: job.id }, "maintenance.start failed");
+          throw err;
+        }
+      }
+    },
+  );
+
+  // Handle maintenance.end (Settings Phase 8 / Slice 8B)
+  await boss.work<{ tenantId: string; endsAt?: string }>(
+    QUEUE_NAMES.MAINTENANCE_END,
+    { localConcurrency: 2 },
+    async (batch) => {
+      for (const job of batch) {
+        try {
+          await handleMaintenanceEndJob(db, opts.log, job.data);
+          opts.log.info({ job_id: job.id, tenantId: job.data.tenantId }, "maintenance.end processed");
+        } catch (err) {
+          opts.log.error({ err, job_id: job.id }, "maintenance.end failed");
+          throw err;
+        }
+      }
+    },
+  );
+
+  // Handle maintenance.watchdog_sweep recurring job (Settings Phase 8 / Slice 8B)
+  await boss.work(
+    QUEUE_NAMES.MAINTENANCE_WATCHDOG_SWEEP,
+    { localConcurrency: 1 },
+    async (batch) => {
+      for (const job of batch) {
+        try {
+          const { executeMaintenanceWatchdogSweep } = await import("./storefront/lifecycle.ts");
+          const res = await executeMaintenanceWatchdogSweep(db);
+          opts.log.info({ job_id: job.id, ...res }, "maintenance.watchdog_sweep processed");
+        } catch (err) {
+          opts.log.error({ err, job_id: job.id }, "maintenance.watchdog_sweep failed");
+          throw err;
+        }
+      }
+    },
+  );
+
   // Handle finance.reconcile recurring sweep (docs/FINANCE-PLAN.md §3.5)
   await boss.work(
     QUEUE_NAMES.FINANCE_RECONCILE,
@@ -857,8 +1104,9 @@ export async function startJobs(opts: {
     await boss.schedule(QUEUE_NAMES.ORDER_PREORDER_REMINDER_SWEEP, "0 6 * * *", {});
     await boss.schedule(QUEUE_NAMES.ORDER_RETURN_PHOTO_CLEANUP, "0 3 * * *", {});
     await boss.schedule(QUEUE_NAMES.SEGMENTS_REFRESH_COUNTS, "0 */6 * * *", {});
+    await boss.schedule(QUEUE_NAMES.MAINTENANCE_WATCHDOG_SWEEP, "* * * * *", {});
     await boss.schedule(QUEUE_NAMES.FINANCE_RECONCILE, "0 4 * * *", {});
-    opts.log.info("Registered recurring cron: reservation.expiry, idempotency.cleanup, cart.recovery_sweep, subscription.trial_expiry_sweep, preorder_reminder_sweep, return_photo_cleanup, finance.reconcile");
+    opts.log.info("Registered recurring cron: reservation.expiry, idempotency.cleanup, cart.recovery_sweep, subscription.trial_expiry_sweep, preorder_reminder_sweep, return_photo_cleanup, maintenance.watchdog_sweep, finance.reconcile");
   } catch (err) {
     opts.log.warn({ err }, "Could not register recurring cron schedules with pg-boss");
   }
@@ -878,6 +1126,7 @@ export async function startJobs(opts: {
   await boss.send(QUEUE_NAMES.IDEMPOTENCY_CLEANUP, {});
   await boss.send(QUEUE_NAMES.CART_RECOVERY_SWEEP, {});
   await boss.send(QUEUE_NAMES.SUBSCRIPTION_TRIAL_EXPIRY_SWEEP, {});
+  await boss.send(QUEUE_NAMES.MAINTENANCE_WATCHDOG_SWEEP, {});
   opts.log.info({ concurrency: opts.concurrency }, "worker started");
 
   return {

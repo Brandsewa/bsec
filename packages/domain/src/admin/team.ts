@@ -96,6 +96,25 @@ async function activeOwnerCount(tx: Parameters<Parameters<typeof withTenant>[2]>
   return rows.length;
 }
 
+/** Access changes are audited (AGENTS.md rule 6): who changed whose role or invitation, never a token or email. */
+async function auditAccess(
+  tx: Parameters<Parameters<typeof withTenant>[2]>[0],
+  ctx: TenantContext,
+  action: string,
+  targetId: string,
+  diff: Record<string, { before: unknown; after: unknown }>,
+): Promise<void> {
+  await tx.insert(schema.auditLogs).values({
+    tenantId: ctx.tenantId,
+    actorType: ctx.actor.type === "staff" ? "staff" : ctx.actor.type,
+    actorId: ctx.actor.type === "staff" ? ctx.actor.userId : null,
+    action,
+    targetType: "memberships",
+    targetId,
+    diff,
+  });
+}
+
 export async function setMemberRole(
   rt: Runtime,
   ctx: TenantContext,
@@ -132,6 +151,7 @@ export async function setMemberRole(
       .update(schema.memberships)
       .set({ roleId: input.roleId, updatedAt: sql`now()` })
       .where(eq(schema.memberships.id, input.id));
+    await auditAccess(tx, ctx, "staff_membership.role_change", input.id, { role: { before: target.roleName, after: newRole.name } });
   });
   const all = await listMemberships(rt, ctx);
   const updated = all.find((m) => m.id === input.id);
@@ -163,6 +183,7 @@ export async function removeMember(rt: Runtime, ctx: TenantContext, input: { id:
       throw new Error("Conflict: a store must keep at least one owner");
     }
     await tx.delete(schema.memberships).where(eq(schema.memberships.id, input.id));
+    await auditAccess(tx, ctx, "staff_membership.remove", input.id, { role: { before: target.roleName, after: null } });
   });
   return { ok: true };
 }
@@ -206,6 +227,7 @@ export async function inviteStaff(
       })
       .returning();
     if (!row) throw new Error("Failed to create staff invitation");
+    await auditAccess(tx, ctx, "staff_invitation.create", row.id, { role: { before: null, after: role.name } });
     return { id: row.id, email: row.email, roleId: row.roleId, expiresAt: row.expiresAt.toISOString(), token, acceptedAt: null };
   });
 }
@@ -229,9 +251,10 @@ export async function listInvitations(rt: Runtime, ctx: TenantContext): Promise<
 
 export async function revokeInvitation(rt: Runtime, ctx: TenantContext, input: { id: string }): Promise<{ ok: true }> {
   assertPermission(ctx, "staff.manage");
-  await withTenant(rt._db.db, ctx.tenantId, (tx) =>
-    tx.delete(schema.staffInvitations).where(eq(schema.staffInvitations.id, input.id)),
-  );
+  await withTenant(rt._db.db, ctx.tenantId, async (tx) => {
+    const removed = await tx.delete(schema.staffInvitations).where(eq(schema.staffInvitations.id, input.id)).returning({ id: schema.staffInvitations.id });
+    if (removed.length > 0) await auditAccess(tx, ctx, "staff_invitation.revoke", input.id, { invitation: { before: "pending", after: "revoked" } });
+  });
   return { ok: true };
 }
 

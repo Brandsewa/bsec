@@ -1,32 +1,42 @@
-import { and, desc, eq, gte, inArray, lte, sql } from "drizzle-orm";
+import { and, desc, eq, gte, like, lte, or, sql } from "drizzle-orm";
 import { schema, withTenant } from "@bs/db";
 import type { ListSettingsActivityArgs, ListSettingsActivityOutput, SettingsActivityItem } from "@bs/contracts";
 import type { Runtime } from "../runtime.ts";
 import { assertPermission, type TenantContext } from "../context.ts";
 
-/** Actions recognized as settings activity across the platform (Phase 2, ADR-020). */
-export const SETTINGS_ACTIVITY_ACTIONS: Record<string, string> = {
-  "store_settings.update": "Store details",
-  "order_settings.update": "Orders",
-  "return_settings.update": "Returns",
-  "store_status.update": "Storefront",
-  "brand_settings.update": "Branding",
-  "brand_settings.publish": "Branding",
-  "shipping_settings.update": "Shipping",
-  "shipping_zone.update": "Shipping",
-  "shipping_rates.update": "Shipping",
-  "tax_settings.update": "Taxes",
-  "razorpay_credentials.saved": "Payments",
-  "custom_domain.add": "Domains",
-  "custom_domain.verify": "Domains",
-  "custom_domain.primary": "Domains",
-  "custom_domain.remove": "Domains",
-  "staff_membership.role_change": "Users",
-  "staff_membership.remove": "Users",
-  "staff_invitation.create": "Users",
-  "staff_invitation.revoke": "Users",
-  "support_consent.update": "Support access",
-};
+/**
+ * Settings activity = audit rows whose action starts with one of these prefixes, grouped into the area shown in
+ * Settings. Keep in step with the `action:` strings the settings services write (the first version listed
+ * guessed names that nothing writes, so the page was empty). Legacy names stay so old rows still show.
+ */
+export const SETTINGS_ACTION_AREAS: ReadonlyArray<readonly [prefix: string, area: string]> = [
+  ["store_settings.", "Store details"],
+  ["settings.notifications_", "Notifications"],
+  ["settings.privacy_", "Customer privacy"],
+  ["settings.", "Store details"],
+  ["order_settings.", "Orders"],
+  ["return_settings.", "Returns"],
+  ["brand_settings.", "Branding"],
+  ["store_status.", "Storefront"],
+  ["domain.", "Domains"],
+  ["custom_domain.", "Domains"],
+  ["checkout_settings.", "Checkout"],
+  ["customer_account_settings.", "Customer accounts"],
+  ["payment_methods.", "Payments"],
+  ["razorpay_credentials.", "Payments"],
+  ["shipping", "Shipping"],
+  ["taxes.", "Taxes"],
+  ["tax_", "Taxes"],
+  ["policy.", "Policies"],
+  ["privacy_request.", "Customer privacy"],
+  ["plan_change.", "Plan & billing"],
+  ["staff_membership.", "Users"],
+  ["staff_invitation.", "Users"],
+  ["membership.", "Users"],
+  ["support_consent.", "Support access"],
+  ["support_access.", "Support access"],
+  ["support_session.", "Support access"],
+];
 
 const SECRET_PATTERNS = [
   /key/i,
@@ -91,17 +101,7 @@ export function sanitizeDiff(diff: unknown): Record<string, { before: unknown; a
 }
 
 export function mapActionToArea(action: string): string {
-  if (SETTINGS_ACTIVITY_ACTIONS[action]) return SETTINGS_ACTIVITY_ACTIONS[action];
-  if (action.startsWith("store_settings.") || action.startsWith("settings.")) return "Store details";
-  if (action.startsWith("order_settings.")) return "Orders";
-  if (action.startsWith("return_settings.")) return "Returns";
-  if (action.startsWith("shipping_")) return "Shipping";
-  if (action.startsWith("brand_settings.")) return "Branding";
-  if (action.startsWith("custom_domain.")) return "Domains";
-  if (action.startsWith("staff_") || action.startsWith("membership.")) return "Users";
-  if (action.startsWith("tax_")) return "Taxes";
-  if (action.startsWith("payment_") || action.startsWith("razorpay_")) return "Payments";
-  return "General";
+  return SETTINGS_ACTION_AREAS.find(([prefix]) => action.startsWith(prefix))?.[1] ?? "General";
 }
 
 /** Lists tenant-scoped settings activity log entries (Phase 2, ADR-020). */
@@ -120,25 +120,15 @@ export async function listSettingsActivity(
       eq(schema.auditLogs.tenantId, ctx.tenantId),
     ];
 
-    // Filter by area: map area string to known actions, or filter by prefix
-    if (input.area) {
-      const matchedActions = Object.entries(SETTINGS_ACTIVITY_ACTIONS)
-        .filter(([, area]) => area.toLowerCase() === input.area?.toLowerCase())
-        .map(([action]) => action);
-
-      if (matchedActions.length > 0) {
-        conditions.push(inArray(schema.auditLogs.action, matchedActions));
-      } else {
-        // Fallback: area name matching action prefix
-        conditions.push(sql`${schema.auditLogs.action} ILIKE ${`%${input.area}%`}`);
-      }
-    } else {
-      // By default restrict to settings-relevant mutation actions or target types
-      const knownActionKeys = Object.keys(SETTINGS_ACTIVITY_ACTIONS);
-      conditions.push(
-        sql`(${inArray(schema.auditLogs.action, knownActionKeys)} OR ${schema.auditLogs.targetType} IN ('store_settings', 'order_settings', 'return_settings', 'brand_settings', 'shipping_zones', 'shipping_rates', 'custom_domains', 'staff_invitations', 'memberships'))`,
-      );
-    }
+    // Area filter: the prefixes that map to that area; default: every settings prefix.
+    const wanted = input.area
+      ? SETTINGS_ACTION_AREAS.filter(([, area]) => area.toLowerCase() === input.area?.toLowerCase())
+      : SETTINGS_ACTION_AREAS;
+    conditions.push(
+      wanted.length > 0
+        ? (or(...wanted.map(([prefix]) => like(schema.auditLogs.action, `${prefix}%`))) ?? sql`false`)
+        : sql`false`,
+    );
 
     if (input.actorId) {
       conditions.push(eq(schema.auditLogs.actorId, input.actorId));

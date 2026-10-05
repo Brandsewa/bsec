@@ -125,7 +125,13 @@ Records: `docs/changes/2026-10-03-zcode-customers-segments-stage-a.md`, `2026-10
 Plan: `docs/SETTINGS-REBUILD-PLAN.md`, `SETTINGS-REMAINING-PHASES`; records `2026-10-04-zcode-settings-rebuild-phase-0-1.md`, `2026-10-04-antigravity-settings-rebuild-phase-2.md`, `2026-10-04-claude-settings-phase-2-verification.md`.
 - [x] Phases 0-1 (PR #25): grouped shell, `/settings` Overview (`settingsOverview.get`), `/settings/store-details`, audit on store settings.
 - [x] Phase 2 (PR #29): ADR-020 capability families, `/settings/users`, `/settings/activity`. Verification found and fixed: red typecheck, and `payments.manage` enforced nowhere (now enforced on Razorpay save/clear in route and service; the ADR lists exactly which families are enforced today).
-- [ ] Phases 3-8 not started. Owner decisions recorded 2026-10-04 (accepted recommended defaults). Hand-off for Antigravity: `docs/SETTINGS-PHASES-3-8-HANDOFF.md` with builder prompts `docs/prompts/settings-rebuild-phase-3.md` to `-8.md` (schema per phase, audited defects, tests, acceptance). Phase 5B (Razorpay) and Phase 6E/6F (shipping profiles, packages) are gated on explicit owner go. Claude verifies each phase before the next starts.
+- [x] Phase 3 (`feat/settings-rebuild-phase-3`): Branding, storefront status, domains, defects 1-4. Built and tested by Antigravity, record `docs/changes/2026-10-04-antigravity-settings-rebuild-phase-3.md`; ready for Claude verification.
+- [x] Phase 4 (`feat/settings-rebuild-phase-4`): Checkout preferences, customer accounts (after completed order default), order lifecycle & hold timers, return policies. Record `docs/changes/2026-10-05-antigravity-settings-rebuild-phase-4.md`; ready for Claude verification.
+- [x] Phase 5 (`feat/settings-rebuild-phase-5`): Payments catalogue, owner-only COD fee/limits, plan & billing, request-only plan changes (`plan_change_requests`, migration 0034). Record `docs/changes/2026-10-05-antigravity-settings-rebuild-phase-5.md`; ready for Claude verification.
+- [x] Phase 6 (`feat/settings-rebuild-phase-6`): Shipping default zones & rates, India GST dual-tax engine, tax classes, credit notes issuance (migration 0035). Record `docs/changes/2026-10-05-antigravity-settings-rebuild-phase-6.md`; ready for Claude verification.
+- [x] Phase 7 (`feat/settings-rebuild-phase-7`): Notifications & sender sanitization, append-only policies (`store_policies`, `store_policy_versions`), DPDP customer privacy requests (`privacy_requests`, retention sweep, migration 0036). Record `docs/changes/2026-10-05-antigravity-settings-rebuild-phase-7.md`; ready for Claude verification.
+- [x] Phase 8 (`feat/settings-rebuild-phase-8`): Storage usage breakdown (<5k bounded), owner storefront maintenance schedule (`store_status` window columns + append-only `store_status_transitions`, migration 0037), settings feature flags (`feature_flags`, migration 0038), cross-cutting auth matrix and audit coverage test suites, rollout runbook (`docs/runbooks/settings-rollout.md`), ADR-021 contract schedule (`docs/adr/021-settings-contract-schedule.md`). Record `docs/changes/2026-10-05-antigravity-settings-rebuild-phase-8.md`; ready for Claude verification.
+- Master verification guide for Claude: `docs/SETTINGS-REBUILD-VERIFICATION-HANDOFF.md`.
 - Browser walkthrough of Phase 2 roles still pending (owner is testing manually).
 
 ## Dev speed (PR #22) — merged (2026-10-04)
@@ -143,6 +149,14 @@ Plan: `docs/SETTINGS-REBUILD-PLAN.md`, `SETTINGS-REMAINING-PHASES`; records `202
 
 One line per piece of work that is started and not merged. Add yours before you start, remove it when merged or abandoned (`AGENTS.md` section 6). Format: `agent · branch · area · since · one-line goal`.
 
+- antigravity · test/antigravity-settings-browser · settings browser test round (phases 3-8) · 2026-10-05 · browser re-test completed, report in docs/changes/2026-10-05-antigravity-settings-browser-retest.md
+- zcode · `feat/settings-rebuild-phase-8` · settings browser test rounds · 2026-10-05 · round 1 + re-test done: all 7 fixes verified, reports in docs/changes/2026-10-05-zcode-settings-browser-test*.md — awaiting Claude
+- antigravity · `feat/settings-rebuild-phase-8` · settings (storage view, maintenance, hardening, rollout) · 2026-10-05 · Settings Phase 8 rebuild (ready to verify)
+- antigravity · `feat/settings-rebuild-phase-7` · settings (notifications, policies, customer privacy) · 2026-10-05 · Settings Phase 7 rebuild (ready to verify)
+- antigravity · `feat/settings-rebuild-phase-6` · settings (shipping, delivery, taxes, credit notes) · 2026-10-05 · Settings Phase 6 rebuild (ready to verify)
+- antigravity · `feat/settings-rebuild-phase-5` · settings (payments, plan and billing, plan change requests) · 2026-10-05 · Settings Phase 5 rebuild (ready to verify)
+- antigravity · `feat/settings-rebuild-phase-4` · settings (checkout, customer accounts, orders) · 2026-10-04 · Settings Phase 4 rebuild (ready to verify)
+- antigravity · `feat/settings-rebuild-phase-3` · settings (branding, storefront, domains) · 2026-10-04 · Settings Phase 3 rebuild (ready to verify)
 
 
 ## Returns & Exchanges (Manual Review & Portal) — Complete (2026-10-02)

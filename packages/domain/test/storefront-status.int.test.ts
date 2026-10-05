@@ -1,14 +1,19 @@
+import { createHash } from "node:crypto";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
-import { eq } from "drizzle-orm";
-import { schema } from "@bs/db";
+import { desc, eq } from "drizzle-orm";
+import { schema, withTenant } from "@bs/db";
 import { startTestDb, type TestDb } from "@bs/db/test-env";
 import {
   createRuntime,
   evaluateStorefrontAccess,
   getStoreStatus,
   invalidateHostCache,
+  listSettingsActivity,
+  needsStorePasswordRehash,
   provisionTenant,
+  tenantTag,
   updateStoreStatus,
+  verifyStorefrontPassword,
   type Runtime,
   type TenantContext,
 } from "../src/index.ts";
@@ -18,6 +23,7 @@ let rt: Runtime; // platform service: provisions the stores
 let rtWeb: Runtime; // tenant runtime (app_rw), like apps/web
 let storeA: { tenantId: string; ownerId: string; host: string };
 let storeB: { tenantId: string; ownerId: string; host: string };
+const invalidatedTags: string[][] = [];
 
 const errorOf = async (p: Promise<unknown>) => (await p.then(() => null, (e: Error) => e))?.message ?? null;
 
@@ -40,7 +46,14 @@ async function mkStore(slug: string) {
 beforeAll(async () => {
   env = await startTestDb();
   rt = createRuntime({ service: "platform", databaseUrl: env.as("app_platform"), poolMax: 5 });
-  rtWeb = createRuntime({ service: "web", databaseUrl: env.as("app_rw"), poolMax: 5 });
+  rtWeb = createRuntime({
+    service: "web",
+    databaseUrl: env.as("app_rw"),
+    poolMax: 5,
+    revalidateTags: (tags) => {
+      invalidatedTags.push(tags);
+    },
+  });
   storeA = await mkStore("status-a");
   storeB = await mkStore("status-b");
 }, 180_000);
@@ -61,8 +74,12 @@ describe("storefront mode (going live)", () => {
   });
 
   it("switching to live opens the public storefront, and only that store", async () => {
+    invalidatedTags.length = 0;
     await updateStoreStatus(rtWeb, ctxFor(storeA), { mode: "live" });
     expect((await getStoreStatus(rtWeb, ctxFor(storeA))).mode).toBe("live");
+    expect(invalidatedTags.length).toBeGreaterThan(0);
+    expect(invalidatedTags[0]).toContain(tenantTag(storeA.tenantId, "store-shell"));
+    expect(invalidatedTags[0]).toContain(tenantTag(storeA.tenantId, "seo"));
     invalidateHostCache();
     expect(await evaluateStorefrontAccess(rt._db.db, storeA.host)).toMatchObject({ allowed: true, httpStatus: 200 });
     // the other store is untouched
@@ -88,9 +105,83 @@ describe("storefront mode (going live)", () => {
     expect((await getStoreStatus(rtWeb, ctxFor(storeB))).mode).toBe("password");
   });
 
-  it("needs the settings permission to read or change it", async () => {
+  it("lazy re-hashes a legacy SHA-256 password upon successful verification", async () => {
+    const legacyPlain = "legacy-pass-123";
+    const legacyHash = createHash("sha256").update(legacyPlain).digest("hex");
+    await rt._db.db
+      .update(schema.storeStatus)
+      .set({ passwordHash: legacyHash, mode: "password" })
+      .where(eq(schema.storeStatus.tenantId, storeB.tenantId));
+
+    expect(needsStorePasswordRehash(legacyHash)).toBe(true);
+
+    const result = await verifyStorefrontPassword(rtWeb, ctxFor(storeB), legacyPlain);
+    expect(result.success).toBe(true);
+
+    const [row] = await rt._db.db
+      .select({ passwordHash: schema.storeStatus.passwordHash })
+      .from(schema.storeStatus)
+      .where(eq(schema.storeStatus.tenantId, storeB.tenantId));
+
+    expect(row?.passwordHash).toBeTruthy();
+    expect(row!.passwordHash!.startsWith("$scrypt$")).toBe(true);
+    expect(needsStorePasswordRehash(row!.passwordHash!)).toBe(false);
+  });
+
+  it("needs settings.read to read and storefront.manage to change it", async () => {
     const nobody = ctxFor(storeA, ["products.read"]);
     expect(await errorOf(getStoreStatus(rtWeb, nobody))).toMatch(/Forbidden/);
     expect(await errorOf(updateStoreStatus(rtWeb, nobody, { mode: "live" }))).toMatch(/Forbidden/);
+
+    const reader = ctxFor(storeA, ["settings.read"]);
+    const status = await getStoreStatus(rtWeb, reader);
+    expect(status).toBeDefined();
+    expect(await errorOf(updateStoreStatus(rtWeb, reader, { mode: "live" }))).toMatch(/Forbidden/);
+
+    const manager = ctxFor(storeA, ["storefront.manage"]);
+    const updateResult = await updateStoreStatus(rtWeb, manager, { headline: "Updated by manager" });
+    expect(updateResult.success).toBe(true);
+  });
+
+  it("writes a store_status.update audit log with sanitized diff", async () => {
+    const adminCtx = ctxFor(storeA, ["storefront.manage", "audit.read"]);
+    await updateStoreStatus(rtWeb, adminCtx, {
+      mode: "coming_soon",
+      headline: "Audit test headline",
+      password: "secret-password-123",
+    });
+
+    // Verify stored DB audit log row
+    const [rawAudit] = await withTenant(rtWeb._db.db, storeA.tenantId, (tx) =>
+      tx
+        .select()
+        .from(schema.auditLogs)
+        .where(eq(schema.auditLogs.tenantId, storeA.tenantId))
+        .orderBy(desc(schema.auditLogs.createdAt), desc(schema.auditLogs.id))
+        .limit(1),
+    );
+
+    expect(rawAudit?.action).toBe("store_status.update");
+    expect(rawAudit?.targetType).toBe("store_status");
+    const rawDiff = rawAudit!.diff as Record<string, { before: unknown; after: unknown }>;
+    expect(rawDiff.headline?.after).toBe("Audit test headline");
+    // Verify password is stored in audit log ONLY as "set", never plaintext or hash
+    expect(rawDiff.password?.after).toBe("set");
+    expect(JSON.stringify(rawDiff)).not.toContain("secret-password-123");
+    expect(JSON.stringify(rawDiff)).not.toContain("$scrypt$");
+
+    // Verify listSettingsActivity also returns this under area Storefront
+    const activity = await listSettingsActivity(rtWeb, adminCtx, { area: "Storefront" });
+    expect(activity.total).toBeGreaterThanOrEqual(1);
+
+    const latest = activity.items[0];
+    expect(latest?.action).toBe("store_status.update");
+    expect(latest?.area).toBe("Storefront");
+    // listSettingsActivity additionally sanitizes all secret-like keys to [REDACTED]
+    const activityDiff = latest!.diff as Record<string, { before: unknown; after: unknown }>;
+    expect(activityDiff.password?.after).toBe("[REDACTED]");
+    expect(JSON.stringify(activity)).not.toContain("secret-password-123");
+    expect(JSON.stringify(activity)).not.toContain("$scrypt$");
   });
 });
+

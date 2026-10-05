@@ -26,6 +26,11 @@ export const QUEUES = [
   { name: "segments.refresh_counts", options: { retryLimit: 3, retryBackoff: true, retryDelay: 10 } },
   { name: "customers.refresh_metrics", options: { retryLimit: 5, retryBackoff: true, retryDelay: 5 } },
   { name: "customers.import", options: { retryLimit: 3, retryBackoff: true, retryDelay: 10 } },
+  { name: "plan.change_requested", options: { retryLimit: 5, retryBackoff: true, retryDelay: 5 } },
+  { name: "system.retention_sweep", options: { retryLimit: 3, retryBackoff: true, retryDelay: 10 } },
+  { name: "maintenance.start", options: { retryLimit: 5, retryBackoff: true, retryDelay: 5 } },
+  { name: "maintenance.end", options: { retryLimit: 5, retryBackoff: true, retryDelay: 5 } },
+  { name: "maintenance.watchdog_sweep", options: { retryLimit: 3, retryBackoff: true, retryDelay: 10 } },
   // Finance queues (docs/FINANCE-PLAN.md §3.5)
   { name: "finance.post", options: { retryLimit: 5, retryBackoff: true, retryDelay: 5 } },
   { name: "finance.reconcile", options: { retryLimit: 3, retryBackoff: true, retryDelay: 10 } },
@@ -56,6 +61,11 @@ export const QUEUE_NAMES = {
   SEGMENTS_REFRESH_COUNTS: "segments.refresh_counts",
   CUSTOMERS_REFRESH_METRICS: "customers.refresh_metrics",
   CUSTOMERS_IMPORT: "customers.import",
+  PLAN_CHANGE_REQUESTED: "plan.change_requested",
+  RETENTION_SWEEP: "system.retention_sweep",
+  MAINTENANCE_START: "maintenance.start",
+  MAINTENANCE_END: "maintenance.end",
+  MAINTENANCE_WATCHDOG_SWEEP: "maintenance.watchdog_sweep",
   FINANCE_POST: "finance.post",
   FINANCE_RECONCILE: "finance.reconcile",
 } as const;

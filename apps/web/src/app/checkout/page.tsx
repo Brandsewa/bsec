@@ -2,7 +2,7 @@ import React from "react";
 import type { Metadata } from "next";
 import { headers, cookies } from "next/headers";
 import { redirect } from "next/navigation";
-import { evaluateStorefrontAccess, getOrCreateCart, getTenantShippingRates, getStorefrontPaymentOptions } from "@bs/domain";
+import { evaluateStorefrontAccess, getOrCreateCart, getTenantShippingRates, getStorefrontPaymentOptions, getStorefrontCheckoutConsent } from "@bs/domain";
 import { server } from "@/server/runtime.ts";
 import { CheckoutContainer } from "@/components/checkout/CheckoutContainer.tsx";
 import { CART_COOKIE_NAME } from "@/app/api/storefront/cart/route.ts";
@@ -55,6 +55,7 @@ export default async function CheckoutPage() {
     amount: r.amount,
   }));
 
+  const consent = await getStorefrontCheckoutConsent(rt, access.tenantId);
   const options = await getStorefrontPaymentOptions(rt, access.tenantId);
   const paymentOptions = { codEnabled: options.cod.enabled, codFeePaise: options.cod.feePaise, onlineAvailable: options.online.available };
 
@@ -64,7 +65,7 @@ export default async function CheckoutPage() {
         Checkout
       </h1>
 
-      <CheckoutContainer cart={cart} shippingRates={shippingRates} paymentOptions={paymentOptions} />
+      <CheckoutContainer cart={cart} shippingRates={shippingRates} paymentOptions={paymentOptions} consent={consent} />
     </div>
   );
 }

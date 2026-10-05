@@ -26,6 +26,12 @@ const AREA_OPTIONS = [
   { value: "Orders", label: "Orders" },
   { value: "Returns", label: "Returns" },
   { value: "Storefront", label: "Storefront" },
+  { value: "Checkout", label: "Checkout" },
+  { value: "Customer accounts", label: "Customer accounts" },
+  { value: "Notifications", label: "Notifications" },
+  { value: "Policies", label: "Policies" },
+  { value: "Customer privacy", label: "Customer privacy" },
+  { value: "Plan & billing", label: "Plan & billing" },
   { value: "Branding", label: "Branding" },
   { value: "Shipping", label: "Shipping" },
   { value: "Taxes", label: "Taxes" },
@@ -78,7 +84,7 @@ export function SettingsActivityPage() {
       cell: (row) => (
         <div className="grid gap-0.5">
           <span className="text-xs text-foreground">{row.actorEmail ?? row.actorType}</span>
-          {row.actorId ? <span className="font-mono text-[10px] text-muted-foreground">{row.actorId}</span> : null}
+          {row.actorId && !row.actorEmail ? <span className="font-mono text-[10px] text-muted-foreground">{row.actorId}</span> : null}
         </div>
       ),
     },

@@ -265,6 +265,8 @@ export const OrderSettings = z.object({
   padding: z.number().int().min(3).max(8),
   nextValue: z.number().int().min(1),
   currentNextValue: z.number().int().min(1),
+  stockHoldMinutes: z.number().int().min(5).max(120).default(30),
+  minimumOrderPaise: z.number().int().min(0).max(10_000_00).default(0),
 });
 export type OrderSettings = z.infer<typeof OrderSettings>;
 
@@ -272,8 +274,98 @@ export const UpdateOrderSettingsInput = z.object({
   prefix: z.string().max(10).regex(/^[A-Za-z0-9#\-_/]*$/, "Prefix can only contain letters, numbers, and # - _ /").optional(),
   padding: z.number().int().min(3).max(8).optional(),
   nextValue: z.number().int().min(1).optional(),
+  stockHoldMinutes: z.number().int().min(5).max(120).optional(),
+  minimumOrderPaise: z.number().int().min(0).max(10_000_00).optional(),
 });
 export type UpdateOrderSettingsInput = z.infer<typeof UpdateOrderSettingsInput>;
+
+// Settings Rebuild Phase 4: Checkout Settings
+export const AbandonedCheckoutStep = z.object({
+  delayHours: z.number().int().min(1).max(720),
+});
+export type AbandonedCheckoutStep = z.infer<typeof AbandonedCheckoutStep>;
+
+export const SettingsUpdateView = z.object({
+  /** An update is on offer for this store: the platform has opened it and some new features are still off. */
+  available: z.boolean(),
+  /** Only the store owner can apply it; everyone else sees nothing. */
+  canApply: z.boolean(),
+  features: z.array(z.object({ key: z.string(), label: z.string() })),
+});
+export type SettingsUpdateView = z.infer<typeof SettingsUpdateView>;
+
+export const CheckoutSettings = z.object({
+  v: z.literal(1).default(1),
+  guestCheckout: z.boolean().default(true),
+  accountCreation: z.enum(["none", "after_completed_order"]).default("after_completed_order"),
+  phoneRequired: z.boolean().default(true),
+  addressLine2: z.enum(["hidden", "optional"]).default("optional"),
+  companyName: z.enum(["hidden", "optional"]).default("hidden"),
+  marketingEmail: z.object({
+    enabled: z.boolean().default(false),
+    label: z.string().min(1).max(120).default("Keep me updated on news and exclusive offers"),
+  }),
+  termsConsent: z
+    .object({
+      enabled: z.boolean().default(false),
+    })
+    .optional(),
+  abandoned: z.object({
+    detectAfterMinutes: z.number().int().min(15).max(10080).default(60),
+    recoveryEnabled: z.boolean().default(false),
+    steps: z.array(AbandonedCheckoutStep).max(3).default([]),
+  }),
+  updatedAt: z.string().optional(),
+});
+export type CheckoutSettings = z.infer<typeof CheckoutSettings>;
+
+export const UpdateCheckoutSettingsInput = z.object({
+  guestCheckout: z.boolean().optional(),
+  accountCreation: z.enum(["none", "after_completed_order"]).optional(),
+  phoneRequired: z.boolean().optional(),
+  addressLine2: z.enum(["hidden", "optional"]).optional(),
+  companyName: z.enum(["hidden", "optional"]).optional(),
+  marketingEmail: z.object({
+    enabled: z.boolean(),
+    label: z.string().min(1).max(120),
+  }).optional(),
+  termsConsent: z
+    .object({
+      enabled: z.boolean(),
+    })
+    .optional(),
+  abandoned: z.object({
+    detectAfterMinutes: z.number().int().min(15).max(10080),
+    recoveryEnabled: z.boolean(),
+    steps: z.array(AbandonedCheckoutStep).max(3),
+  }).optional(),
+  expectedUpdatedAt: z.string().optional(),
+});
+export type UpdateCheckoutSettingsInput = z.infer<typeof UpdateCheckoutSettingsInput>;
+
+// Settings Rebuild Phase 4: Customer Account Settings
+export const CustomerAccountSettings = z.object({
+  id: z.string(),
+  showSignInLinks: z.boolean(),
+  emailPasswordEnabled: z.boolean(),
+  phoneOtpEnabled: z.boolean(),
+  allowSelfServeReturns: z.boolean(),
+  allowSelfServeCancellation: z.boolean(),
+  version: z.number(),
+  updatedAt: z.string(),
+  createdAt: z.string(),
+});
+export type CustomerAccountSettings = z.infer<typeof CustomerAccountSettings>;
+
+export const UpdateCustomerAccountSettingsInput = z.object({
+  showSignInLinks: z.boolean().optional(),
+  emailPasswordEnabled: z.boolean().optional(),
+  phoneOtpEnabled: z.boolean().optional(),
+  allowSelfServeReturns: z.boolean().optional(),
+  allowSelfServeCancellation: z.boolean().optional(),
+  expectedVersion: z.number().optional(),
+});
+export type UpdateCustomerAccountSettingsInput = z.infer<typeof UpdateCustomerAccountSettingsInput>;
 
 export const OrderStats = z.object({
   totalOrders: z.number().int(),
@@ -601,9 +693,62 @@ export const StorefrontStatus = z.object({
   collectEmails: z.boolean(),
   launchAt: z.string().nullable(),
   hasPassword: z.boolean(),
+  maintenanceStartsAt: z.string().nullable().optional(),
+  maintenanceEndsAt: z.string().nullable().optional(),
+  modeBeforeMaintenance: z.string().nullable().optional(),
+  maintenanceAllowStaffPreview: z.boolean().optional(),
 });
 
 export type StorefrontStatus = z.infer<typeof StorefrontStatus>;
+
+export const StoreStatusTransitionItem = z.object({
+  id: z.string(),
+  fromMode: z.string(),
+  toMode: z.string(),
+  reason: z.enum(["manual", "scheduled_start", "scheduled_end", "watchdog_restore", "platform"]),
+  actorType: z.string(),
+  actorId: z.string().nullable(),
+  at: z.string(),
+});
+export type StoreStatusTransitionItem = z.infer<typeof StoreStatusTransitionItem>;
+
+export const StorageUsageBreakdownItem = z.object({
+  kind: z.enum(["product_images", "brand_assets", "theme_assets", "other"]),
+  bytes: z.number(),
+  count: z.number(),
+});
+export type StorageUsageBreakdownItem = z.infer<typeof StorageUsageBreakdownItem>;
+
+export const StorageUsageView = z.object({
+  usedBytes: z.number(),
+  limitBytes: z.number().nullable(),
+  mediaCount: z.number(),
+  percentUsed: z.number().nullable(),
+  state: z.enum(["ok", "warning", "critical", "over"]),
+  providerLabel: z.literal("Platform managed storage"),
+  publicMediaConfigured: z.boolean(),
+  maxUploadBytes: z.number(),
+  breakdown: z.array(StorageUsageBreakdownItem),
+});
+export type StorageUsageView = z.infer<typeof StorageUsageView>;
+
+export const APPROVED_BRAND_FONTS = [
+  "Inter",
+  "Plus Jakarta Sans",
+  "DM Sans",
+  "Poppins",
+  "Mukta",
+  "Rozha One",
+  "Work Sans",
+  "Montserrat",
+  "Nunito",
+  "Space Grotesk",
+  "Playfair Display",
+  "Lora",
+  "Merriweather",
+] as const;
+
+export type BrandFont = (typeof APPROVED_BRAND_FONTS)[number];
 
 export const BrandSettings = z.object({
   // "default" until the store saves branding for the first time (no row yet), so not a uuid.
@@ -613,8 +758,8 @@ export const BrandSettings = z.object({
   logoWidth: z.number(),
   faviconMediaId: z.string().uuid().nullable().optional(),
   socialImageMediaId: z.string().uuid().nullable().optional(),
-  fontHeading: z.string(),
-  fontBody: z.string(),
+  fontHeading: z.enum(APPROVED_BRAND_FONTS),
+  fontBody: z.enum(APPROVED_BRAND_FONTS),
   fontSizeScale: z.string(),
   colorSchemeName: z.string(),
   primaryColor: z.string(),
@@ -630,6 +775,30 @@ export const BrandSettings = z.object({
   publishedAt: z.string().nullable().optional(),
 });
 export type BrandSettings = z.infer<typeof BrandSettings>;
+
+export const HexColorCode = z.string().regex(/^#[0-9a-fA-F]{6}$/, "Must be a 6-digit hex color code (#rrggbb)");
+
+export const UpdateBrandSettingsInput = z.object({
+  logoLightMediaId: z.string().uuid().nullable().optional(),
+  logoDarkMediaId: z.string().uuid().nullable().optional(),
+  logoWidth: z.number().int().min(20).max(1000).optional(),
+  faviconMediaId: z.string().uuid().nullable().optional(),
+  socialImageMediaId: z.string().uuid().nullable().optional(),
+  fontHeading: z.enum(APPROVED_BRAND_FONTS).optional(),
+  fontBody: z.enum(APPROVED_BRAND_FONTS).optional(),
+  fontSizeScale: z.string().optional(),
+  colorSchemeName: z.string().optional(),
+  primaryColor: HexColorCode.optional(),
+  secondaryColor: HexColorCode.optional(),
+  accentColor: HexColorCode.optional(),
+  backgroundColor: HexColorCode.optional(),
+  surfaceColor: HexColorCode.optional(),
+  textColor: HexColorCode.optional(),
+  colorMode: z.enum(["light", "dark", "auto"]).optional(),
+  cornerRadius: z.enum(["none", "small", "medium", "large", "full"]).optional(),
+  buttonStyle: z.enum(["solid", "outline", "pill"]).optional(),
+});
+export type UpdateBrandSettingsInput = z.infer<typeof UpdateBrandSettingsInput>;
 
 // --- M2 Theme & Content Schemas ---
 export const Theme = z.object({
@@ -1047,6 +1216,458 @@ export const AdminReturnDetail = z.object({
 });
 export type AdminReturnDetail = z.infer<typeof AdminReturnDetail>;
 
+// --- M8 Custom Domains Schemas (PLAN §8, ADR-007, ADR-017) ---
+export const CustomDomainItem = z.object({
+  id: z.string().uuid(),
+  hostname: z.string(),
+  type: z.string(),
+  isPrimary: z.boolean(),
+  status: z.string(),
+  sslStatus: z.string().nullable().optional(),
+  prevalidateTxt: z.boolean().nullable().optional(),
+  verification: z
+    .object({
+      cname: z.string().optional(),
+      txt: z
+        .object({
+          name: z.string(),
+          value: z.string(),
+        })
+        .optional(),
+    })
+    .nullable()
+    .optional(),
+  createdAt: z.string(),
+});
+export type CustomDomainItem = z.infer<typeof CustomDomainItem>;
+
+export const CustomDomainVerifyResult = z.object({
+  id: z.string().uuid(),
+  hostname: z.string(),
+  status: z.string(),
+  sslStatus: z.string().nullable().optional(),
+});
+export type CustomDomainVerifyResult = z.infer<typeof CustomDomainVerifyResult>;
+
+// --- Settings Phase 5 Payment Methods Schemas (Slice 5A, SETTINGS-SCHEMA §6.1) ---
+export const PaymentMethodItem = z.object({
+  id: z.string().uuid(),
+  provider: z.enum(["cod", "razorpay"]),
+  displayName: z.string(),
+  status: z.enum(["disabled", "pending_setup", "active", "unavailable", "error"]),
+  mode: z.enum(["live", "test"]).nullable().optional(),
+  sortOrder: z.number().int(),
+  publicConfig: z.record(z.string(), z.unknown()),
+  setupState: z.record(z.string(), z.unknown()),
+  version: z.number().int(),
+  enabledAt: z.string().nullable().optional(),
+  disabledAt: z.string().nullable().optional(),
+  createdAt: z.string(),
+  updatedAt: z.string(),
+});
+export type PaymentMethodItem = z.infer<typeof PaymentMethodItem>;
+
+export const UpdateCodInput = z.object({
+  enabled: z.boolean(),
+  displayName: z.string().min(1).max(80).optional(),
+  feePaise: z.number().int().min(0).max(50000),
+  minOrderPaise: z.number().int().min(0).nullable().optional(),
+  maxOrderPaise: z.number().int().min(0).nullable().optional(),
+});
+export type UpdateCodInput = z.infer<typeof UpdateCodInput>;
+
+// --- Settings Phase 5 Plan & Billing Schemas (Slice 5C & 5D, SETTINGS-SCHEMA §4.1) ---
+export const PlanAndBillingUsageItem = z.object({
+  key: z.enum(["products", "staff_seats", "storage_mb", "orders_month", "emails_month", "custom_domains"]),
+  description: z.string(),
+  used: z.number(),
+  limit: z.number().nullable(),
+  unit: z.string(),
+  enforcement: z.enum(["hard", "soft", "notify"]),
+  percentUsed: z.number(),
+});
+export type PlanAndBillingUsageItem = z.infer<typeof PlanAndBillingUsageItem>;
+
+export const PlanAndBillingInvoiceItem = z.object({
+  id: z.string().uuid(),
+  number: z.string(),
+  issuedAt: z.string(),
+  paidAt: z.string().nullable().optional(),
+  amountPaise: z.number().int(),
+  taxPaise: z.number().int(),
+  status: z.enum(["issued", "paid", "void"]),
+  downloadable: z.boolean(),
+});
+export type PlanAndBillingInvoiceItem = z.infer<typeof PlanAndBillingInvoiceItem>;
+
+export const PlanAndBillingView = z.object({
+  plan: z
+    .object({
+      code: z.string(),
+      name: z.string(),
+      interval: z.enum(["monthly", "yearly"]),
+      status: z.enum(["trialing", "active", "past_due", "suspended", "cancelled"]),
+      currentPeriodEnd: z.string().nullable().optional(),
+      features: z.record(z.string(), z.unknown()),
+      limits: z.record(z.string(), z.unknown()),
+      daysLeftInTrial: z.number().int().optional(),
+    })
+    .nullable(),
+  usage: z.array(PlanAndBillingUsageItem),
+  invoices: z.array(PlanAndBillingInvoiceItem),
+  openPlanChangeRequest: z
+    .object({
+      id: z.string().uuid(),
+      requestedBy: z.string().uuid(),
+      fromPlanId: z.string().uuid().nullable().optional(),
+      toPlanId: z.string().uuid(),
+      toPlanCode: z.string(),
+      toPlanName: z.string(),
+      interval: z.enum(["monthly", "yearly"]),
+      note: z.string().nullable().optional(),
+      status: z.enum(["open", "approved", "declined", "cancelled"]),
+      createdAt: z.string(),
+    })
+    .nullable(),
+});
+export type PlanAndBillingView = z.infer<typeof PlanAndBillingView>;
+
+export const AvailablePlanSummary = z.object({
+  id: z.string().uuid(),
+  code: z.string(),
+  name: z.string(),
+  priceMonthlyPaise: z.number().int(),
+  priceYearlyPaise: z.number().int(),
+  isCurrent: z.boolean(),
+});
+export type AvailablePlanSummary = z.infer<typeof AvailablePlanSummary>;
+
+export const RequestPlanChangeInput = z.object({
+  toPlanId: z.string().uuid(),
+  interval: z.enum(["monthly", "yearly"]),
+  note: z.string().max(500).optional(),
+});
+export type RequestPlanChangeInput = z.infer<typeof RequestPlanChangeInput>;
+
+// --- Settings Phase 6 Tax & Shipping Schemas (Slice 6A, 6B, 6C) ---
+export const TaxClassItem = z.object({
+  id: z.string().uuid(),
+  name: z.string().min(1).max(60),
+  rateBps: z.number().int().refine((val) => [0, 250, 300, 500, 1200, 1800, 2800].includes(val), {
+    message: "Rate must be one of the standard GST slabs: 0%, 2.5%, 3%, 5%, 12%, 18%, 28%",
+  }),
+  defaultHsn: z
+    .string()
+    .regex(/^[0-9]{4}([0-9]{2}([0-9]{2})?)?$/, "HSN must be 4, 6, or 8 digits")
+    .nullable()
+    .optional(),
+  isDefault: z.boolean(),
+  createdAt: z.string(),
+  updatedAt: z.string(),
+});
+export type TaxClassItem = z.infer<typeof TaxClassItem>;
+
+export const CreateTaxClassInput = z.object({
+  name: z.string().min(1).max(60),
+  rateBps: z.number().int().refine((val) => [0, 250, 300, 500, 1200, 1800, 2800].includes(val), {
+    message: "Rate must be one of the standard GST slabs: 0%, 2.5%, 3%, 5%, 12%, 18%, 28%",
+  }),
+  defaultHsn: z
+    .string()
+    .regex(/^[0-9]{4}([0-9]{2}([0-9]{2})?)?$/, "HSN must be 4, 6, or 8 digits")
+    .nullable()
+    .optional(),
+  isDefault: z.boolean().optional(),
+});
+export type CreateTaxClassInput = z.infer<typeof CreateTaxClassInput>;
+
+export const UpdateTaxClassInput = z.object({
+  id: z.string().uuid(),
+  name: z.string().min(1).max(60).optional(),
+  rateBps: z
+    .number()
+    .int()
+    .refine((val) => [0, 250, 300, 500, 1200, 1800, 2800].includes(val), {
+      message: "Rate must be one of the standard GST slabs",
+    })
+    .optional(),
+  defaultHsn: z
+    .string()
+    .regex(/^[0-9]{4}([0-9]{2}([0-9]{2})?)?$/, "HSN must be 4, 6, or 8 digits")
+    .nullable()
+    .optional(),
+  isDefault: z.boolean().optional(),
+});
+export type UpdateTaxClassInput = z.infer<typeof UpdateTaxClassInput>;
+
+export const TaxSettings = z.object({
+  taxCollection: z.boolean(),
+  gstin: z.string().nullable(),
+  sellerState: z.string().nullable(),
+  pricesIncludeTax: z.boolean(),
+  shippingTax: z.enum(["highest_line_rate", "none"]),
+  defaultTaxClassId: z.string().uuid().nullable().optional(),
+  classes: z.array(TaxClassItem),
+  version: z.number().int(),
+});
+export type TaxSettings = z.infer<typeof TaxSettings>;
+
+export const UpdateTaxSettingsInput = z.object({
+  taxCollection: z.boolean().optional(),
+  gstin: z.string().nullable().optional(),
+  sellerState: z.string().nullable().optional(),
+  pricesIncludeTax: z.boolean().optional(),
+  shippingTax: z.enum(["highest_line_rate", "none"]).optional(),
+  defaultTaxClassId: z.string().uuid().nullable().optional(),
+  expectedVersion: z.number().int().optional(),
+});
+export type UpdateTaxSettingsInput = z.infer<typeof UpdateTaxSettingsInput>;
+
+export const ShippingPreviewInput = z.object({
+  subtotalPaise: z.number().int().min(0),
+  destinationState: z.string().optional(),
+  destinationPincode: z.string().optional(),
+});
+export type ShippingPreviewInput = z.infer<typeof ShippingPreviewInput>;
+
+export const ShippingPreviewRateResult = z.object({
+  method: z.string(),
+  title: z.string(),
+  amountPaise: z.number().int(),
+  isFree: z.boolean(),
+  estimatedDays: z.string(),
+  applicable: z.boolean(),
+  trace: z.string(),
+});
+export type ShippingPreviewRateResult = z.infer<typeof ShippingPreviewRateResult>;
+
+export const ShippingPreviewResult = z.object({
+  zoneName: z.string(),
+  rates: z.array(ShippingPreviewRateResult),
+});
+export type ShippingPreviewResult = z.infer<typeof ShippingPreviewResult>;
+
+// --- Notification Settings (Slice 7A) ---
+export const NotificationSender = z.object({
+  displayName: z.string().min(1).max(60).optional(),
+  replyToEmail: z.string().email().optional(),
+});
+
+export const NotificationCustomerEvents = z.object({
+  orderConfirmation: z.boolean(),
+  shipment: z.boolean(),
+  delivery: z.boolean(),
+  cancellation: z.boolean(),
+  refund: z.boolean(),
+  returnUpdates: z.boolean(),
+  preorderReminders: z.boolean(),
+  accountSecurity: z.literal(true),
+});
+
+export const NotificationStaffEvents = z.object({
+  newOrder: z.object({
+    enabled: z.boolean(),
+    recipients: z.array(z.string().email()).max(5),
+  }),
+});
+
+export const NotificationPreferences = z.object({
+  v: z.literal(1),
+  sender: NotificationSender,
+  customer: NotificationCustomerEvents,
+  staff: NotificationStaffEvents,
+  footerNote: z.string().max(300).optional(),
+  channels: z.object({ email: z.literal(true) }),
+});
+
+export const EmailLogEntry = z.object({
+  id: z.string().uuid(),
+  template: z.string(),
+  toEmailMasked: z.string(),
+  subject: z.string(),
+  status: z.string(),
+  channel: z.string(),
+  eventKey: z.string().nullable(),
+  suppressedReason: z.string().nullable(),
+  createdAt: z.string(),
+  sentAt: z.string().nullable(),
+});
+
+export const NotificationSettings = z.object({
+  preferences: NotificationPreferences,
+  platformMailerConfigured: z.boolean(),
+  recentDeliveries: z.array(EmailLogEntry),
+});
+
+export const UpdateNotificationSettingsInput = z.object({
+  sender: z
+    .object({
+      displayName: z.string().min(1).max(60).optional(),
+      replyToEmail: z.string().email().optional(),
+    })
+    .optional(),
+  customer: z
+    .object({
+      orderConfirmation: z.boolean().optional(),
+      shipment: z.boolean().optional(),
+      delivery: z.boolean().optional(),
+      cancellation: z.boolean().optional(),
+      refund: z.boolean().optional(),
+      returnUpdates: z.boolean().optional(),
+      preorderReminders: z.boolean().optional(),
+    })
+    .optional(),
+  staff: z
+    .object({
+      newOrder: z
+        .object({
+          enabled: z.boolean().optional(),
+          recipients: z.array(z.string().email()).max(5).optional(),
+        })
+        .optional(),
+    })
+    .optional(),
+  footerNote: z.string().max(300).optional(),
+});
+
+// --- Store Policies (Slice 7B) ---
+export const PolicyMark = z.object({
+  type: z.enum(["bold", "italic", "link"]),
+  start: z.number().int().min(0),
+  end: z.number().int().min(0),
+  href: z.string().optional(),
+});
+
+export const PolicyBlock = z.discriminatedUnion("type", [
+  z.object({
+    type: z.literal("heading"),
+    level: z.union([z.literal(2), z.literal(3)]),
+    text: z.string().min(1).max(300),
+  }),
+  z.object({
+    type: z.literal("paragraph"),
+    text: z.string().min(1).max(2000),
+    marks: z.array(PolicyMark).optional(),
+  }),
+  z.object({
+    type: z.literal("list"),
+    style: z.enum(["ordered", "unordered"]).default("unordered"),
+    items: z.array(z.string().min(1).max(500)).min(1).max(50),
+  }),
+  z.object({
+    type: z.literal("divider"),
+  }),
+]);
+
+export const PolicyContent = z.object({
+  v: z.literal(1),
+  blocks: z.array(PolicyBlock).min(1).max(80),
+});
+
+export const PolicySummaryItem = z.object({
+  id: z.string().uuid(),
+  handle: z.enum(["refund", "privacy", "terms", "shipping", "legal_notice"]),
+  title: z.string(),
+  hasDraft: z.boolean(),
+  publishedVersion: z.number().int().nullable(),
+  publishedAt: z.string().nullable(),
+  draftUpdatedAt: z.string(),
+});
+
+export const PolicyDetail = z.object({
+  id: z.string().uuid(),
+  handle: z.enum(["refund", "privacy", "terms", "shipping", "legal_notice"]),
+  title: z.string(),
+  draftContent: PolicyContent,
+  publishedVersion: z
+    .object({
+      id: z.string().uuid(),
+      version: z.number().int(),
+      title: z.string(),
+      content: PolicyContent,
+      contentSha256: z.string(),
+      publishedAt: z.string(),
+    })
+    .nullable(),
+  draftUpdatedAt: z.string(),
+});
+
+export const SavePolicyDraftInput = z.object({
+  handle: z.enum(["refund", "privacy", "terms", "shipping", "legal_notice"]),
+  title: z.string().min(1).max(120).optional(),
+  content: PolicyContent,
+});
+
+export const PolicyVersionItem = z.object({
+  id: z.string().uuid(),
+  version: z.number().int(),
+  title: z.string(),
+  content: PolicyContent,
+  contentSha256: z.string(),
+  publishedBy: z.string().uuid().nullable(),
+  publishedAt: z.string(),
+});
+
+// --- Customer Privacy (Slice 7C) ---
+export const PrivacySettings = z.object({
+  privacyContactEmail: z.string().email().nullable(),
+  grievanceOfficerName: z.string().nullable(),
+  requestSlaDays: z.number().int().min(7).max(90),
+  version: z.number().int(),
+});
+
+export const UpdatePrivacySettingsInput = z.object({
+  privacyContactEmail: z.string().email().nullable().optional(),
+  grievanceOfficerName: z.string().max(120).nullable().optional(),
+  requestSlaDays: z.number().int().min(7).max(90).optional(),
+  expectedVersion: z.number().int().optional(),
+});
+
+export const PrivacyRequestItem = z.object({
+  id: z.string().uuid(),
+  requesterEmail: z.string().email(),
+  kind: z.enum(["access", "correction", "erasure", "grievance", "withdraw_consent"]),
+  details: z.string().nullable(),
+  status: z.enum(["pending_verification", "open", "in_progress", "completed", "rejected"]),
+  verifiedAt: z.string().nullable(),
+  dueAt: z.string(),
+  handledBy: z.string().uuid().nullable(),
+  handledAt: z.string().nullable(),
+  resolutionNote: z.string().nullable(),
+  customerId: z.string().uuid().nullable(),
+  createdAt: z.string(),
+});
+
+export const CookieInventoryItem = z.object({
+  name: z.string(),
+  purpose: z.string(),
+  duration: z.string(),
+  category: z.literal("strictly_necessary"),
+});
+
+export type NotificationSender = z.infer<typeof NotificationSender>;
+export type NotificationCustomerEvents = z.infer<typeof NotificationCustomerEvents>;
+export type NotificationStaffEvents = z.infer<typeof NotificationStaffEvents>;
+export type NotificationPreferences = z.infer<typeof NotificationPreferences>;
+export type EmailLogEntry = z.infer<typeof EmailLogEntry>;
+export type NotificationSettings = z.infer<typeof NotificationSettings>;
+export type UpdateNotificationSettingsInput = z.infer<typeof UpdateNotificationSettingsInput>;
+
+export type PolicyMark = z.infer<typeof PolicyMark>;
+export type PolicyBlock = z.infer<typeof PolicyBlock>;
+export type PolicyContent = z.infer<typeof PolicyContent>;
+export type PolicySummaryItem = z.infer<typeof PolicySummaryItem>;
+export type PolicyItem = PolicySummaryItem;
+export type PolicyDetail = z.infer<typeof PolicyDetail>;
+export type SavePolicyDraftInput = z.infer<typeof SavePolicyDraftInput>;
+export type PolicyVersionItem = z.infer<typeof PolicyVersionItem>;
+export type PolicyHandle = "refund" | "privacy" | "terms" | "shipping" | "legal_notice";
+
+export type PrivacySettings = z.infer<typeof PrivacySettings>;
+export type UpdatePrivacySettingsInput = z.infer<typeof UpdatePrivacySettingsInput>;
+export type PrivacyRequestItem = z.infer<typeof PrivacyRequestItem>;
+export type CookieInventoryItem = z.infer<typeof CookieInventoryItem>;
+
 export const adminContract = {
   support: {
     list: oc.route({ method: "GET", path: "/admin/support/sessions" }).output(z.array(StoreSupportSession)),
@@ -1080,6 +1701,15 @@ export const adminContract = {
       )
       .output(PaymentsStatus),
     clearRazorpay: oc.route({ method: "DELETE", path: "/admin/payments/razorpay" }).output(PaymentsStatus),
+  },
+  paymentMethods: {
+    list: oc
+      .route({ method: "GET", path: "/admin/payment-methods" })
+      .output(z.array(PaymentMethodItem)),
+    updateCod: oc
+      .route({ method: "PUT", path: "/admin/payment-methods/cod" })
+      .input(UpdateCodInput)
+      .output(PaymentMethodItem),
   },
   memberships: {
     list: oc
@@ -1174,6 +1804,122 @@ export const adminContract = {
       .input(UpdateOrderSettingsInput)
       .output(OrderSettings),
   },
+  checkoutSettings: {
+    get: oc
+      .route({ method: "GET", path: "/admin/settings/checkout" })
+      .output(CheckoutSettings),
+    update: oc
+      .route({ method: "PUT", path: "/admin/settings/checkout" })
+      .input(UpdateCheckoutSettingsInput)
+      .output(CheckoutSettings),
+  },
+  customerAccountSettings: {
+    get: oc
+      .route({ method: "GET", path: "/admin/settings/customer-accounts" })
+      .output(CustomerAccountSettings),
+    update: oc
+      .route({ method: "PUT", path: "/admin/settings/customer-accounts" })
+      .input(UpdateCustomerAccountSettingsInput)
+      .output(CustomerAccountSettings),
+  },
+  taxSettings: {
+    get: oc
+      .route({ method: "GET", path: "/admin/settings/taxes" })
+      .output(TaxSettings),
+    update: oc
+      .route({ method: "PUT", path: "/admin/settings/taxes" })
+      .input(UpdateTaxSettingsInput)
+      .output(TaxSettings),
+  },
+  taxClasses: {
+    list: oc
+      .route({ method: "GET", path: "/admin/settings/taxes/classes" })
+      .output(z.array(TaxClassItem)),
+    create: oc
+      .route({ method: "POST", path: "/admin/settings/taxes/classes" })
+      .input(CreateTaxClassInput)
+      .output(TaxClassItem),
+    update: oc
+      .route({ method: "PATCH", path: "/admin/settings/taxes/classes/{id}" })
+      .input(UpdateTaxClassInput)
+      .output(TaxClassItem),
+    delete: oc
+      .route({ method: "DELETE", path: "/admin/settings/taxes/classes/{id}" })
+      .input(z.object({ id: z.string().uuid() }))
+      .output(z.object({ ok: z.literal(true) })),
+  },
+  notificationSettings: {
+    get: oc
+      .route({ method: "GET", path: "/admin/settings/notifications" })
+      .output(NotificationSettings),
+    update: oc
+      .route({ method: "PUT", path: "/admin/settings/notifications" })
+      .input(UpdateNotificationSettingsInput)
+      .output(NotificationPreferences),
+  },
+  policies: {
+    list: oc
+      .route({ method: "GET", path: "/admin/settings/policies" })
+      .output(z.array(PolicySummaryItem)),
+    get: oc
+      .route({ method: "GET", path: "/admin/settings/policies/{handle}" })
+      .input(z.object({ handle: z.string() }))
+      .output(PolicyDetail),
+    saveDraft: oc
+      .route({ method: "PUT", path: "/admin/settings/policies/draft" })
+      .input(SavePolicyDraftInput)
+      .output(PolicyDetail),
+    publish: oc
+      .route({ method: "POST", path: "/admin/settings/policies/{handle}/publish" })
+      .input(z.object({ handle: z.enum(["refund", "privacy", "terms", "shipping", "legal_notice"]) }))
+      .output(PolicyDetail),
+    versions: oc
+      .route({ method: "GET", path: "/admin/settings/policies/{handle}/versions" })
+      .input(z.object({ handle: z.enum(["refund", "privacy", "terms", "shipping", "legal_notice"]) }))
+      .output(z.array(PolicyVersionItem)),
+    restoreDraft: oc
+      .route({ method: "POST", path: "/admin/settings/policies/restore-draft" })
+      .input(z.object({ handle: z.enum(["refund", "privacy", "terms", "shipping", "legal_notice"]), versionId: z.string().uuid() }))
+      .output(PolicyDetail),
+  },
+  customerPrivacy: {
+    getSettings: oc
+      .route({ method: "GET", path: "/admin/settings/privacy" })
+      .output(PrivacySettings),
+    updateSettings: oc
+      .route({ method: "PUT", path: "/admin/settings/privacy" })
+      .input(UpdatePrivacySettingsInput)
+      .output(PrivacySettings),
+    listRequests: oc
+      .route({ method: "GET", path: "/admin/settings/privacy/requests" })
+      .input(z.object({ status: z.enum(["pending_verification", "open", "in_progress", "completed", "rejected"]).optional() }).optional())
+      .output(z.object({ items: z.array(PrivacyRequestItem), overdueCount: z.number().int() })),
+    updateRequestStatus: oc
+      .route({ method: "PATCH", path: "/admin/settings/privacy/requests/{id}" })
+      .input(
+        z.object({
+          id: z.string().uuid(),
+          status: z.enum(["pending_verification", "open", "in_progress", "completed", "rejected"]),
+          resolutionNote: z.string().max(1000).optional(),
+        }),
+      )
+      .output(PrivacyRequestItem),
+    exportCustomerData: oc
+      .route({ method: "POST", path: "/admin/settings/privacy/requests/{id}/export" })
+      .input(z.object({ id: z.string().uuid() }))
+      .output(z.object({ success: z.boolean(), exportBundle: z.record(z.string(), z.unknown()) })),
+    eraseCustomerData: oc
+      .route({ method: "POST", path: "/admin/settings/privacy/requests/{id}/erase" })
+      .input(z.object({ id: z.string().uuid() }))
+      .output(z.object({ success: z.boolean(), mode: z.enum(["deleted", "anonymised", "no_customer"]) })),
+    withdrawConsent: oc
+      .route({ method: "POST", path: "/admin/settings/privacy/requests/{id}/withdraw-consent" })
+      .input(z.object({ id: z.string().uuid() }))
+      .output(z.object({ success: z.boolean() })),
+    cookieInventory: oc
+      .route({ method: "GET", path: "/admin/settings/privacy/cookies" })
+      .output(z.array(CookieInventoryItem)),
+  },
   featureFlags: {
     list: oc
       .route({ method: "GET", path: "/admin/feature-flags" })
@@ -1229,6 +1975,8 @@ export const adminContract = {
           isFeatured: z.boolean().default(false),
           priceOnRequest: z.boolean().default(false),
           returnable: z.boolean().default(true),
+          taxClassId: z.string().uuid().nullable().optional(),
+          hsn: z.string().nullable().optional(),
           seo: z.unknown().optional(),
           primaryCategoryId: z.string().uuid().optional(),
           extraCategoryIds: z.array(z.string().uuid()).optional(),
@@ -1279,6 +2027,8 @@ export const adminContract = {
           isFeatured: z.boolean().optional(),
           priceOnRequest: z.boolean().optional(),
           returnable: z.boolean().optional(),
+          taxClassId: z.string().uuid().nullable().optional(),
+          hsn: z.string().nullable().optional(),
           seo: z.unknown().optional(),
           primaryCategoryId: z.string().uuid().nullable().optional(),
           extraCategoryIds: z.array(z.string().uuid()).optional(),
@@ -1684,28 +2434,7 @@ export const adminContract = {
       .output(BrandSettings),
     update: oc
       .route({ method: "PATCH", path: "/admin/branding" })
-      .input(
-        z.object({
-          logoLightMediaId: z.string().uuid().nullable().optional(),
-          logoDarkMediaId: z.string().uuid().nullable().optional(),
-          logoWidth: z.number().int().min(20).max(1000).optional(),
-          faviconMediaId: z.string().uuid().nullable().optional(),
-          socialImageMediaId: z.string().uuid().nullable().optional(),
-          fontHeading: z.string().optional(),
-          fontBody: z.string().optional(),
-          fontSizeScale: z.string().optional(),
-          colorSchemeName: z.string().optional(),
-          primaryColor: z.string().optional(),
-          secondaryColor: z.string().optional(),
-          accentColor: z.string().optional(),
-          backgroundColor: z.string().optional(),
-          surfaceColor: z.string().optional(),
-          textColor: z.string().optional(),
-          colorMode: z.enum(["light", "dark", "auto"]).optional(),
-          cornerRadius: z.enum(["none", "small", "medium", "large", "full"]).optional(),
-          buttonStyle: z.enum(["solid", "outline", "pill"]).optional(),
-        }),
-      )
+      .input(UpdateBrandSettingsInput)
       .output(BrandSettings),
     publish: oc
       .route({ method: "POST", path: "/admin/branding/publish" })
@@ -2918,6 +3647,10 @@ export const adminContract = {
           message: z.string(),
         }),
       ),
+    preview: oc
+      .route({ method: "POST", path: "/admin/settings/shipping/preview" })
+      .input(ShippingPreviewInput)
+      .output(ShippingPreviewResult),
   },
 
   // --- Storefront mode: live / coming soon / maintenance / password ---
@@ -2938,6 +3671,55 @@ export const adminContract = {
         }),
       )
       .output(StorefrontStatus),
+    scheduleMaintenance: oc
+      .route({ method: "POST", path: "/admin/storefront/maintenance/schedule" })
+      .input(
+        z.object({
+          startsAt: z.string().datetime(),
+          endsAt: z.string().datetime(),
+          allowStaffPreview: z.boolean().default(true),
+        }),
+      )
+      .output(StorefrontStatus),
+    cancelScheduledMaintenance: oc
+      .route({ method: "POST", path: "/admin/storefront/maintenance/cancel-schedule" })
+      .input(z.object({}).optional())
+      .output(StorefrontStatus),
+    endMaintenance: oc
+      .route({ method: "POST", path: "/admin/storefront/maintenance/end" })
+      .input(z.object({}).optional())
+      .output(StorefrontStatus),
+    listTransitions: oc
+      .route({ method: "GET", path: "/admin/storefront/transitions" })
+      .input(
+        z.object({
+          limit: z.number().int().min(1).max(100).default(20),
+          offset: z.number().int().min(0).default(0),
+        }).optional(),
+      )
+      .output(
+        z.object({
+          items: z.array(StoreStatusTransitionItem),
+          total: z.number(),
+        }),
+      ),
+  },
+
+  // --- Opt-in "Settings update available" prompt (owner decision 2026-10-05, ADR-011 rollout) ---
+  settingsUpdate: {
+    get: oc
+      .route({ method: "GET", path: "/admin/settings-update" })
+      .output(SettingsUpdateView),
+    apply: oc
+      .route({ method: "POST", path: "/admin/settings-update/apply" })
+      .output(SettingsUpdateView),
+  },
+
+  // --- Storage usage visibility (PLAN §10.2 / Settings Phase 8) ---
+  storageUsage: {
+    get: oc
+      .route({ method: "GET", path: "/admin/storage/usage" })
+      .output(StorageUsageView),
   },
 
   // --- M8 Onboarding Setup Checklist (PLAN §5.2, §8) ---
@@ -2971,7 +3753,6 @@ export const adminContract = {
               interval: z.string(),
               currentPeriodStart: z.string().nullable().optional(),
               currentPeriodEnd: z.string().nullable().optional(),
-              provider: z.string(),
             })
             .nullable(),
           plan: z
@@ -2999,53 +3780,36 @@ export const adminContract = {
           daysLeftInTrial: z.number(),
         }),
       ),
-    changePlan: oc
-      .route({ method: "POST", path: "/admin/billing/plan" })
-      .input(
-        z.object({
-          planCode: z.string(),
-          interval: z.enum(["monthly", "yearly"]),
-        }),
-      )
+  },
+
+  planAndBilling: {
+    get: oc
+      .route({ method: "GET", path: "/admin/plan-and-billing" })
+      .output(PlanAndBillingView),
+    availablePlans: oc
+      .route({ method: "GET", path: "/admin/plan-and-billing/plans" })
+      .output(z.array(AvailablePlanSummary)),
+    requestChange: oc
+      .route({ method: "POST", path: "/admin/plan-and-billing/request-change" })
+      .input(RequestPlanChangeInput)
       .output(
         z.object({
-          providerSubscriptionId: z.string(),
-          shortUrl: z.string().optional(),
-          status: z.string(),
+          id: z.string().uuid(),
+          status: z.literal("open"),
+          message: z.string(),
         }),
       ),
+    cancelRequest: oc
+      .route({ method: "POST", path: "/admin/plan-and-billing/cancel-request" })
+      .input(z.object({ id: z.string().uuid() }))
+      .output(z.object({ ok: z.boolean() })),
   },
 
   // --- M8 Custom Domains (PLAN §8, ADR-007, ADR-017) ---
   domains: {
     list: oc
       .route({ method: "GET", path: "/admin/domains" })
-      .output(
-        z.array(
-          z.object({
-            id: z.string().uuid(),
-            hostname: z.string(),
-            type: z.string(),
-            isPrimary: z.boolean(),
-            status: z.string(),
-            sslStatus: z.string().nullable().optional(),
-            prevalidateTxt: z.boolean().nullable().optional(),
-            verification: z
-              .object({
-                cname: z.string().optional(),
-                txt: z
-                  .object({
-                    name: z.string(),
-                    value: z.string(),
-                  })
-                  .optional(),
-              })
-              .nullable()
-              .optional(),
-            createdAt: z.string(),
-          }),
-        ),
-      ),
+      .output(z.array(CustomDomainItem)),
     add: oc
       .route({ method: "POST", path: "/admin/domains" })
       .input(
@@ -3054,41 +3818,11 @@ export const adminContract = {
           prevalidateTxt: z.boolean().optional(),
         }),
       )
-      .output(
-        z.object({
-          id: z.string().uuid(),
-          hostname: z.string(),
-          type: z.string(),
-          isPrimary: z.boolean(),
-          status: z.string(),
-          sslStatus: z.string().nullable().optional(),
-          prevalidateTxt: z.boolean().nullable().optional(),
-          verification: z
-            .object({
-              cname: z.string().optional(),
-              txt: z
-                .object({
-                  name: z.string(),
-                  value: z.string(),
-                })
-                .optional(),
-            })
-            .nullable()
-            .optional(),
-          createdAt: z.string(),
-        }),
-      ),
+      .output(CustomDomainItem),
     verify: oc
       .route({ method: "POST", path: "/admin/domains/{id}/verify" })
       .input(z.object({ id: z.string().uuid() }))
-      .output(
-        z.object({
-          id: z.string().uuid(),
-          hostname: z.string(),
-          status: z.string(),
-          sslStatus: z.string().nullable().optional(),
-        }),
-      ),
+      .output(CustomDomainVerifyResult),
     setPrimary: oc
       .route({ method: "POST", path: "/admin/domains/{id}/set-primary" })
       .input(z.object({ id: z.string().uuid() }))
