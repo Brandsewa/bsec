@@ -8,6 +8,8 @@
   ],
   "exports": {
     ".": "./src/index.ts",
+    "./server": "./src/server.ts",
+    "./styles.css": "./src/styles/index.css",
     "./tokens.css": "./src/styles/tokens.css",
     "./skeleton-shell.html": "./src/skeleton-shell.html"
   },
@@ -22,7 +24,10 @@
     "react-dom": "19.3.0"
   },
   "dependencies": {
+    "@fontsource-variable/geist": "5.3.0",
+    "@fontsource-variable/geist-mono": "5.3.0",
     "class-variance-authority": "0.7.1",
+    "geist": "1.7.2",
     "lucide-react": "1.48.0",
     "radix-ui": "1.6.7",
     "react-hook-form": "7.89.0",

@@ -5,13 +5,19 @@
     <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
     <meta name="robots" content="noindex" />
     <title>Bs Commerce Admin</title>
+    <link rel="preload" href="/node_modules/geist/dist/fonts/geist-sans/Geist-Variable.woff2" as="font" type="font/woff2" crossorigin />
     <script>
-      // Resolve the stored theme before first paint (light default, PLAN §12).
-      try {
-        var t = localStorage.getItem("bs-theme") || "light";
-        if (t === "system") t = matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light";
-        document.documentElement.dataset.theme = t;
-      } catch (e) {}
+      (function() {
+        try {
+          var stored = localStorage.getItem("bs-theme") || "system";
+          var resolved = stored;
+          if (stored === "system") {
+            resolved = window.matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light";
+          }
+          document.documentElement.dataset.theme = resolved;
+          document.documentElement.style.colorScheme = resolved;
+        } catch (e) {}
+      })();
     </script>
     <style>
       /* Static shell skeleton: paints before any JavaScript downloads (PLAN §12). Replaced on mount. */

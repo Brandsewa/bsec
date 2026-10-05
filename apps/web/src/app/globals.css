@@ -3,6 +3,9 @@
  * per-store theme tokens are injected as CSS variables in M2/M3 (PLAN §10, §12).
  */
 @import "tailwindcss";
+@import "@bs/ui/styles.css";
+@source "./";
+@source "../../../../packages/ui/src";
 
 :root {
   --store-bg: #ffffff;

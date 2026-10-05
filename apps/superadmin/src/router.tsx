@@ -30,6 +30,7 @@ import { AuditLog } from "./pages/AuditLog.tsx";
 import { EmailSettings } from "./pages/EmailSettings.tsx";
 import { ForgotPassword } from "./pages/ForgotPassword.tsx";
 import { ResetPassword } from "./pages/ResetPassword.tsx";
+import { Kit } from "./pages/Kit.tsx";
 
 export interface RouterContext {
   queryClient: QueryClient;
@@ -215,12 +216,23 @@ const emailRoute = createRoute({
   component: EmailSettings,
 });
 
-export const routeTree = rootRoute.addChildren([
+const kitRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: "/__kit",
+  component: Kit,
+});
+
+const baseRoutes = [
   loginRoute,
   forgotPasswordRoute,
   resetPasswordRoute,
   templateEditorRoute,
   acceptInvitationRoute,
+  ...(import.meta.env.DEV ? [kitRoute] : []),
+];
+
+export const routeTree = rootRoute.addChildren([
+  ...baseRoutes,
   authLayoutRoute.addChildren([
     overviewRoute,
     tenantsListRoute,

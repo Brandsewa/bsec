@@ -1,0 +1,7 @@
+/*
+ * Single stylesheet entry point for @bs/ui design system.
+ * Apps import "@bs/ui/styles.css" after Tailwind.
+ */
+@import "./tokens.css";
+@import "./base.css";
+@import "./motion.css";

@@ -402,3 +402,6 @@ Store admin (`apps/admin`) moved to a new component system and layout. Standards
 - [ ] Old-style screens still to upgrade: Online Store (Themes, Pages, Navigation, editors), superadmin and platform UIs; edit flows for customers and discounts; order refund/return actions.
 - Gotchas: after changing `packages/contracts` or `packages/domain`, restart the Next dev server (new query params are silently dropped otherwise). Pages that use the table kit or `useUnsavedGuard` must render inside a router in tests.
 
+## In flight
+- Antigravity | `feat/ds-01-foundation` | Design system Part 1: Foundation in `@bs/ui` | 2026-10-05
+

@@ -25,7 +25,7 @@ import {
   Users,
   Warehouse,
 } from "lucide-react";
-import { EmptyState, PageContainer, PageSkeleton, type NavGroup } from "@bs/ui";
+import { EmptyState, PageContainer, PageSkeleton, ThemeToggle, type NavGroup } from "@bs/ui";
 import { AppShell } from "@/components/app-shell";
 import { Button } from "@/components/ui/button";
 import { fetchMe, signOut } from "../lib/auth.ts";
@@ -198,6 +198,7 @@ function StoreShell() {
                   <KeyRound className="mr-1 h-3.5 w-3.5" />
                   Password
                 </Button>
+                <ThemeToggle />
                 <Button variant="ghost" size="sm" onClick={onSignOut}>
                   Sign out
                 </Button>

@@ -1,8 +1,9 @@
 @import "tailwindcss";
-@import "@bs/ui/tokens.css";
+@import "@bs/ui/styles.css";
 @import "tw-animate-css";
 @import "shadcn/tailwind.css";
 @source "./";
+@source "../../../packages/ui/src";
 
 /*
  * shadcn preset (b1D2d9ge, base-mira) mapped onto the Bs admin tokens (packages/ui tokens.css).

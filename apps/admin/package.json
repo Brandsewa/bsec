@@ -40,6 +40,8 @@
   },
   "devDependencies": {
     "@bs/config": "workspace:*",
+    "@fontsource-variable/geist": "5.3.0",
+    "@fontsource-variable/geist-mono": "5.3.0",
     "@tailwindcss/vite": "4.3.3",
     "@tanstack/router-cli": "1.167.39",
     "@tanstack/router-plugin": "1.168.41",

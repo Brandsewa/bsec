@@ -8,6 +8,7 @@ const config: NextConfig = {
   output: "standalone",
   outputFileTracingRoot: path.join(import.meta.dirname, "../.."),
   poweredByHeader: false,
+  transpilePackages: ["@bs/ui"],
   // pg + pino use Node internals; keep them as runtime requires instead of bundling.
   serverExternalPackages: ["pg", "pino", "pg-boss"],
 };

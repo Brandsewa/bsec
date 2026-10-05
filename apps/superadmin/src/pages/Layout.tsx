@@ -29,6 +29,7 @@ import {
   DialogTitle,
   Input,
   Label,
+  ThemeToggle,
   type NavGroup,
 } from "@bs/ui";
 import { changePassword, signOut, type PlatformUser } from "../lib/auth.ts";
@@ -161,6 +162,7 @@ export function Layout({ user, onLogout }: LayoutProps) {
                 <KeyRound className="mr-1 h-3 w-3" />
                 Change Password
               </Button>
+              <ThemeToggle />
               <Button
                 variant="ghost"
                 size="sm"

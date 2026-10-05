@@ -3,7 +3,7 @@ import { createRoot } from "react-dom/client";
 import * as Sentry from "@sentry/react";
 import { QueryCache, QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { RouterProvider, createRouter } from "@tanstack/react-router";
-import { ROUTE_PENDING_MIN_MS, ROUTE_PENDING_MS } from "@bs/ui";
+import { ROUTE_PENDING_MIN_MS, ROUTE_PENDING_MS, ThemeProvider } from "@bs/ui";
 import { routeTree } from "./routeTree.gen.ts";
 import { isUnauthorized } from "./lib/auth.ts";
 import "./index.css";
@@ -48,7 +48,9 @@ if (!root) throw new Error("#root missing");
 createRoot(root).render(
   <StrictMode>
     <QueryClientProvider client={queryClient}>
-      <RouterProvider router={router} />
+      <ThemeProvider>
+        <RouterProvider router={router} />
+      </ThemeProvider>
     </QueryClientProvider>
   </StrictMode>,
 );

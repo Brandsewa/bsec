@@ -19,6 +19,7 @@
     "@bs/contracts": "workspace:*",
     "@bs/domain": "workspace:*",
     "@bs/payments": "workspace:*",
+    "@bs/ui": "workspace:*",
     "@orpc/openapi": "1.15.4",
     "@orpc/server": "1.15.4",
     "@sentry/nextjs": "11.0.0",

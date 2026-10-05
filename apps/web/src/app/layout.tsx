@@ -19,6 +19,8 @@ import {
 } from "@/components/storefront/StoreStatusScreens.tsx";
 import { computeThemeTokens } from "@/components/storefront/theme-tokens.ts";
 import { googleFontsHref } from "@bs/blocks/theme-vars";
+import { fontSans, fontMono } from "@/lib/fonts.ts";
+import { themeBootScript } from "@bs/ui/server";
 import "./globals.css";
 
 export const instant = false;
@@ -68,7 +70,10 @@ export default async function RootLayout({ children }: { children: ReactNode }) 
   }
   if (isMarketing) {
     return (
-      <html lang="en">
+      <html lang="en" suppressHydrationWarning className={`${fontSans.variable} ${fontMono.variable}`}>
+        <head>
+          <script dangerouslySetInnerHTML={{ __html: themeBootScript }} />
+        </head>
         <body className="min-h-dvh antialiased">{children}</body>
       </html>
     );
@@ -158,7 +163,10 @@ export default async function RootLayout({ children }: { children: ReactNode }) 
     }
 
     return (
-      <html lang="en" style={themeVars as React.CSSProperties}>
+      <html lang="en" suppressHydrationWarning className={`${fontSans.variable} ${fontMono.variable}`} style={themeVars as React.CSSProperties}>
+        <head>
+          <script dangerouslySetInnerHTML={{ __html: themeBootScript }} />
+        </head>
         <body className="min-h-dvh antialiased">{screenContent}</body>
       </html>
     );
@@ -167,8 +175,11 @@ export default async function RootLayout({ children }: { children: ReactNode }) 
   const logoWidth = typeof brandSettings?.logoWidth === "number" ? brandSettings.logoWidth : 150;
 
   return (
-    <html lang="en" style={themeVars as React.CSSProperties}>
-      <head>{fontsHref ? <link rel="stylesheet" href={fontsHref} precedence="default" /> : null}</head>
+    <html lang="en" suppressHydrationWarning className={`${fontSans.variable} ${fontMono.variable}`} style={themeVars as React.CSSProperties}>
+      <head>
+        <script dangerouslySetInnerHTML={{ __html: themeBootScript }} />
+        {fontsHref ? <link rel="stylesheet" href={fontsHref} precedence="default" /> : null}
+      </head>
       <body className="flex min-h-dvh flex-col antialiased">
         <StoreStatusBanner isBypass={access.isBypass} mode={access.mode} />
         {themeHeader ? (

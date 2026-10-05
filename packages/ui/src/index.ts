@@ -25,4 +25,5 @@ export { PageSkeleton, ROUTE_PENDING_MIN_MS, ROUTE_PENDING_MS } from "./patterns
 export { MetricCard, type MetricCardProps } from "./patterns/metric-card.tsx";
 export { FilterBar, type FilterBarProps } from "./patterns/filter-bar.tsx";
 export { DataTable, type ColumnDef, type DataTableProps } from "./patterns/data-table.tsx";
+export { THEME_STORAGE_KEY, themeBootScript, ThemeProvider, useTheme, ThemeToggle, type ThemePreference, type ResolvedTheme, type ThemeContextValue, type ThemeToggleProps } from "./theme/index.ts";
 

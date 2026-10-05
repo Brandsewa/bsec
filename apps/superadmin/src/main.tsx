@@ -3,7 +3,7 @@ import { createRoot } from "react-dom/client";
 import * as Sentry from "@sentry/react";
 import { QueryCache, QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { RouterProvider } from "@tanstack/react-router";
-import { PageSkeleton } from "@bs/ui";
+import { PageSkeleton, ThemeProvider } from "@bs/ui";
 import { fetchPlatformMe, type PlatformUser } from "./lib/auth.ts";
 import { createAppRouter } from "./router.tsx";
 import "./index.css";
@@ -53,7 +53,11 @@ function App() {
     setUser,
   });
 
-  return <RouterProvider router={router} />;
+  return (
+    <ThemeProvider>
+      <RouterProvider router={router} />
+    </ThemeProvider>
+  );
 }
 
 const rootElement = document.getElementById("root");

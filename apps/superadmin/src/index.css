@@ -1,2 +1,4 @@
-@import "@bs/ui/tokens.css";
+@import "tailwindcss";
+@import "@bs/ui/styles.css";
 @source "./";
+@source "../../../packages/ui/src";
