@@ -101,6 +101,61 @@ describe("Contracts", () => {
       expect(storeContract.admin.menus.update).toBeDefined();
       expect(storeContract.admin.menus.delete).toBeDefined();
     });
+
+    it("ensures domain output schemas never expose provider identifiers", async () => {
+      const { CustomDomainItem, CustomDomainVerifyResult } = await import("../src/index.ts");
+      const itemKeys = Object.keys(CustomDomainItem.shape);
+      expect(itemKeys).not.toContain("cfCustomHostnameId");
+      expect(itemKeys).not.toContain("providerHostnameId");
+      expect(itemKeys).not.toContain("zoneId");
+      expect(itemKeys).not.toContain("token");
+
+      const verifyKeys = Object.keys(CustomDomainVerifyResult.shape);
+      expect(verifyKeys).not.toContain("cfCustomHostnameId");
+      expect(verifyKeys).not.toContain("providerHostnameId");
+      expect(verifyKeys).not.toContain("zoneId");
+      expect(verifyKeys).not.toContain("token");
+    });
+
+    it("ensures storefront status output schema never exposes passwords or hashes", async () => {
+      const { StorefrontStatus } = await import("../src/index.ts");
+      const keys = Object.keys(StorefrontStatus.shape);
+      expect(keys).toContain("hasPassword");
+      expect(keys).not.toContain("password");
+      expect(keys).not.toContain("passwordHash");
+      expect(keys).not.toContain("bypassToken");
+      expect(keys).not.toContain("bypassTokenHash");
+    });
+
+    it("validates branding colors as #rrggbb and fonts against approved list", async () => {
+      const { UpdateBrandSettingsInput, APPROVED_BRAND_FONTS } = await import("../src/index.ts");
+      expect(APPROVED_BRAND_FONTS).toContain("Inter");
+      expect(APPROVED_BRAND_FONTS).toContain("Poppins");
+
+      // Valid input
+      const valid = UpdateBrandSettingsInput.safeParse({
+        primaryColor: "#ff0077",
+        fontHeading: "Poppins",
+      });
+      expect(valid.success).toBe(true);
+
+      // Invalid color format (e.g. 3-hex, rgba, rgb, named, invalid chars)
+      const invalidColor = UpdateBrandSettingsInput.safeParse({
+        primaryColor: "#f07",
+      });
+      expect(invalidColor.success).toBe(false);
+
+      const invalidColor2 = UpdateBrandSettingsInput.safeParse({
+        primaryColor: "rgb(255, 0, 0)",
+      });
+      expect(invalidColor2.success).toBe(false);
+
+      // Disallowed font
+      const invalidFont = UpdateBrandSettingsInput.safeParse({
+        fontHeading: "Comic Sans MS",
+      });
+      expect(invalidFont.success).toBe(false);
+    });
   });
 
   describe("Platform contracts", () => {

@@ -217,6 +217,23 @@ describe("platform email settings and mailer (Phase A real database)", () => {
     expect(result.error).toContain("[REDACTED]");
   });
 
+  it("the worker role (app_rw) can run the prune, and still cannot read recipient addresses", async () => {
+    const worker = createRuntime({ service: "worker", databaseUrl: env.as("app_rw"), poolMax: 2 });
+    try {
+      const [oldRow] = await rt._db.db
+        .insert(schema.platformEmailLog)
+        .values({ toEmail: "worker-prune@test.com", template: "order_confirmation", status: "sent", createdAt: new Date(Date.now() - 120 * 24 * 60 * 60 * 1000) })
+        .returning({ id: schema.platformEmailLog.id });
+      const res = await prunePlatformEmailLogs(worker._db.db, 90);
+      expect(res.deletedCount).toBeGreaterThanOrEqual(1);
+      const [gone] = await rt._db.db.select().from(schema.platformEmailLog).where(eq(schema.platformEmailLog.id, oldRow!.id));
+      expect(gone).toBeUndefined();
+      await expect(worker._db.db.select({ to: schema.platformEmailLog.toEmail }).from(schema.platformEmailLog)).rejects.toThrow();
+    } finally {
+      await worker.close();
+    }
+  });
+
   it("prunePlatformEmailLogs deletes logs older than 90 days and leaves recent logs", async () => {
     // Insert an old log (91 days ago) and a recent log (10 days ago) directly
     const [oldRow] = await rt._db.db

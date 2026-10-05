@@ -6,7 +6,6 @@ import {
   type DbHandle,
   orders,
   orderItems,
-  paymentIntents,
   actionTokens,
   inventoryLevels,
   withTenant,
@@ -166,7 +165,7 @@ describe("End-to-End Checkout Place Order", () => {
     });
   });
 
-  it("places a Razorpay test order awaiting payment intent capture", async () => {
+  it("rejects online payment when no active live adapter is registered (gated Razorpay)", async () => {
     // 1. Create new cart and add 1 unit
     const cart = await getOrCreateCart(rt, ctx, "cart_rzp_token_456");
     await addToCart(rt, ctx, {
@@ -188,25 +187,9 @@ describe("End-to-End Checkout Place Order", () => {
       paymentMethod: "razorpay" as const,
     };
 
-    const result = await placeOrder(rt, ctx, checkoutInput);
-
-    expect(result.success).toBe(true);
-    expect(result.orderNumber).toBe("ORD-00002");
-    expect(result.paymentMethod).toBe("razorpay");
-    expect(result.razorpay).toBeDefined();
-    expect(result.razorpay?.amount).toBe(result.grandTotal);
-    expect(result.razorpay?.orderId).toBeDefined();
-
-    // Verify DB: payment intent created with provider razorpay
-    await withTenant(rwDb.db, tenantId, async (tx) => {
-      const [intent] = await tx
-        .select()
-        .from(paymentIntents)
-        .where(eq(paymentIntents.orderId, result.orderId));
-      expect(intent).toBeDefined();
-      expect(intent?.provider).toBe("razorpay");
-      expect(intent?.status).toBe("created");
-    });
+    await expect(placeOrder(rt, ctx, checkoutInput)).rejects.toThrow(
+      /Online payment is not available for this store/,
+    );
   });
 
   it("concurrent checkout idempotency: multiple simultaneous placeOrder calls with same key produce exactly one order and all callers receive identical response", async () => {
@@ -242,7 +225,7 @@ describe("End-to-End Checkout Place Order", () => {
     const firstOrderId = results[0]?.orderId;
     const firstOrderNumber = results[0]?.orderNumber;
     expect(firstOrderId).toBeDefined();
-    expect(firstOrderNumber).toBe("ORD-00003");
+    expect(firstOrderNumber).toBe("ORD-00002");
 
     for (const res of results) {
       expect(res.success).toBe(true);
@@ -256,10 +239,10 @@ describe("End-to-End Checkout Place Order", () => {
       const orderRows = await tx.select().from(orders).where(eq(orders.id, firstOrderId!));
       expect(orderRows).toHaveLength(1);
 
-      // Verify inventory: reserved = 5 (2 from test 1 + 1 from test 2 + 2 from this test), NOT 23!
+      // Verify inventory: reserved = 4 (2 from test 1 + 2 from this test), NOT 22!
       const [inv] = await tx.select().from(inventoryLevels).where(eq(inventoryLevels.variantId, variantId));
-      expect(inv?.reserved).toBe(5);
-      expect(inv?.available).toBe(5);
+      expect(inv?.reserved).toBe(4);
+      expect(inv?.available).toBe(6);
     });
   });
 });

@@ -49,11 +49,41 @@ describe("Settings shell: grouped navigation", () => {
     const owner = visibleSettingsGroups(["settings.write", "staff.manage"]);
     expect(owner.map((g) => g.id)).toEqual(["overview", "store", "selling", "operations", "people", "compliance"]);
 
-    // Without staff.manage the People group disappears entirely (empty groups are omitted).
+    // Without staff.manage or settings.read, the People group disappears entirely (empty groups are omitted).
+    const noStaffOrBilling = visibleSettingsGroups(["analytics.read"]);
+    expect(noStaffOrBilling.map((g) => g.id)).not.toContain("people");
+
+    // With settings.write but without staff.manage, Users is hidden while Plan & billing is visible.
     const noStaff = visibleSettingsGroups(["settings.write"]);
-    expect(noStaff.map((g) => g.id)).not.toContain("people");
+    const peopleGroup = noStaff.find((g) => g.id === "people");
+    expect(peopleGroup?.items.map((i) => i.id)).toEqual(["plan-and-billing"]);
     // Every visible item passes the permission filter.
-    for (const g of noStaff) for (const i of g.items) expect(i.perm).toBe("settings.write");
+    const { hasPermission } = await import("@bs/auth/permissions");
+    for (const g of noStaff) for (const i of g.items) expect(hasPermission(["settings.write"], i.perm as Parameters<typeof hasPermission>[1])).toBe(true);
+
+    const domainsItem = SETTINGS_NAV.find((i) => i.id === "domains");
+    expect(domainsItem).toMatchObject({
+      label: "Domains",
+      href: "/settings/domains",
+      perm: "domains.manage",
+    });
+  });
+
+  it("Managers (store_admin) do not see Payments, and a pasted Payments URL is a no-access state", async () => {
+    const { SYSTEM_STORE_ROLES } = await import("@bs/auth/permissions");
+    const { visibleSettingsGroups, canOpenSettingsPath } = await import("../src/components/settings/settings-nav.ts");
+    const manager = [...SYSTEM_STORE_ROLES.store_admin];
+    const owner = [...SYSTEM_STORE_ROLES.store_owner];
+
+    const ids = (perms: string[]) => visibleSettingsGroups(perms).flatMap((g) => g.items.map((i) => i.id));
+    expect(ids(owner)).toContain("payments");
+    expect(ids(manager)).not.toContain("payments");
+    expect(ids(manager)).toContain("taxes");
+
+    expect(canOpenSettingsPath(owner, "/settings/payments")).toBe(true);
+    expect(canOpenSettingsPath(manager, "/settings/payments")).toBe(false);
+    expect(canOpenSettingsPath(manager, "/settings/taxes")).toBe(true);
+    expect(canOpenSettingsPath(["analytics.read"], "/settings/taxes")).toBe(false);
   });
 
   it("nav labels the users route Users with /settings/users path", async () => {
@@ -250,4 +280,25 @@ describe("Store details page (/settings/store-details)", () => {
     expect(html).not.toContain('id="orderPrefix"');
     expect(html).not.toContain('id="timezone" disabled');
   }, 60_000);
+});
+
+describe("Settings update prompt", () => {
+  async function renderBanner(data: { available: boolean; canApply: boolean; features: { key: string; label: string }[] }) {
+    const { SettingsUpdateBanner } = await import("../src/components/settings/settings-update.tsx");
+    const { orpc } = await import("../src/lib/orpc.ts");
+    const qc = newClient();
+    qc.setQueryData(orpc.admin.settingsUpdate.get.queryOptions().queryKey, data);
+    return renderRouted(() => React.createElement(SettingsUpdateBanner), qc);
+  }
+
+  it("shows an Update available button when an update is on offer to the owner", async () => {
+    const html = await renderBanner({ available: true, canApply: true, features: [{ key: "settings.storage", label: "Storage usage page" }] });
+    expect(html).toContain("Update available");
+    expect(html).toContain("New Settings features are ready for your store");
+  });
+
+  it("shows nothing when there is no offer, or the viewer cannot apply it", async () => {
+    expect(await renderBanner({ available: false, canApply: false, features: [] })).not.toContain("Update available");
+    expect(await renderBanner({ available: true, canApply: false, features: [] })).not.toContain("Update available");
+  });
 });

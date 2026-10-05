@@ -4,7 +4,7 @@
 
 | | |
 |---|---|
-| Last verified against | branch `feat/finance-phases-1-4` (Finance phases 0-4 double-entry engine, reports, expenses & UI), 2026-10-05 |
+| Last verified against | `feat/settings-rebuild-phase-8` (Settings rebuild Phase 8: storage visibility, owner-only scheduled maintenance, hardening and rollout), 2026-10-05 |
 | Verified how | files read from the working tree; `pnpm docs:check` for the mechanical parts. Facts marked *(from code)* were read, not run. |
 | Owner | whoever changes the area (see the update triggers in section 0) |
 
@@ -105,7 +105,7 @@ pnpm workspace + Turborepo. Node `24.15`, pnpm `10.34.5`, TypeScript 6, ESLint 1
 | `packages/db` | `@bs/db` | Drizzle schema (`src/schema/*`), `tenantTable()` helper, migrations (`migrations/`), role bootstrap and migrate scripts (`src/scripts`), queue registry (`src/queues.ts`) |
 | `packages/domain` | `@bs/domain` | **All business logic.** Services per area (catalog, orders, returns, return-photos, return-settings, order-settings, preorders, quotes, customers, themes, saas, platform, system), `TenantContext`, `withTenant` runtime, cache tags and invalidation, job handlers (`jobs.ts`), logger |
 | `packages/contracts` | `@bs/contracts` | oRPC contracts + Zod schemas: `admin.ts`, `storefront.ts`, `platform.ts`, `index.ts` (`storeContract`, `platformContract`) |
-| `packages/auth` | `@bs/auth` | Better Auth configs (`staff.ts`, `platform.ts`, `customer.ts`), `STORE_PERMISSIONS`, `PLATFORM_ROLES`, system roles (`store_owner`, `store_admin`, `store_finance`; finance.* follow the role definition, CSV export is owner/admin only, ADR-022) |
+| `packages/auth` | `@bs/auth` | Better Auth configs (`staff.ts`, `platform.ts`, `customer.ts`), plus the pure permission model in `permissions.ts` (`STORE_PERMISSIONS`, `PLATFORM_ROLES`, system roles `store_owner`, `store_admin`, `store_finance`; finance.* follow the role definition, CSV export is owner/admin only, ADR-022). **Browser code imports `@bs/auth/permissions`, never the package root** (the root pulls pg and drizzle into the bundle and crashes Settings with "Buffer is not defined") |
 | `packages/blocks` | `@bs/blocks` | Versioned block registry (Zod schemas + views), document validation, sanitiser, tree renderer, theme page templates, `--bs-*` theme variables |
 | `packages/block-editor` | `@bs/block-editor` | Puck-based visual editor config, theme settings panel, media field, preview. Lazy-loaded by the admin; never shipped to shoppers |
 | `packages/payments` | `@bs/payments` | Provider adapter (ADR-008): `cod`, `razorpay`, `mock`; secret encryption helper |
@@ -204,11 +204,11 @@ Drizzle schema files in `packages/db/src/schema/` (one Postgres database, `publi
 | `customers.ts` | `customers`, `customer_notes`, `customer_addresses`, `customer_consent_events`, `customer_segments`, `customer_segment_members`, `wishlist_items`, `customer_otps` T |
 | `orders.ts` | `orders`, `order_items`, `order_events`, `order_notes`, `number_sequences`, `action_tokens` T |
 | `payments.ts` | `payment_intents`, `payment_attempts`, `refunds` T |
-| `shipping.ts` | `fulfillments`, `fulfillment_items`, `tracking_events`, `returns`, `return_items`, `invoices`, `shipping_zones`, `shipping_rates` T |
+| `shipping.ts` | `fulfillments`, `fulfillment_items`, `tracking_events`, `returns`, `return_items`, `invoices`, `shipping_zones`, `shipping_rates`, `tax_classes` T |
 | `marketing.ts` | `newsletter_subscribers`, `discounts`, `discount_redemptions` T |
 | `content.ts` | `themes`, `pages`, `page_versions`, `menus` T |
 | `branding.ts` | `brand_settings` T |
-| `settings.ts` | `store_settings` (including `return_settings` JSONB, `auto_publish_reviews`), `store_status`, `seo_settings` T |
+| `settings.ts` | `store_settings` (including `return_settings` JSONB, `order_settings` JSONB, `auto_publish_reviews`), `customer_account_settings`, `store_status`, `seo_settings` T |
 | `search.ts` | `search_queries` T |
 | `system.ts` | `webhook_inbox`, `idempotency_keys`, `email_log` |
 | `tenant-secrets.ts` | `tenant_secrets` T |
@@ -259,8 +259,17 @@ Drizzle schema files in `packages/db/src/schema/` (one Postgres database, `publi
 | 0031 | `theme_template_archive` | `theme_templates.archived_at` (library draft / published / archived states) |
 | 0032 | `theme_previews` | `theme_previews`: short-lived shareable snapshots of a theme draft (`/preview/<code>`); the web role can only read it |
 | 0039 | `finance` | `ledger_entries`, `expenses`, `fiscal_periods` double-entry finance engine tables; expands `order_items.cost_price` (ADR-022) |
+| 0040 | `settings_phase4` | `customer_account_settings` table (RLS), `store_settings.order_settings` JSONB, `customer_consent_events.text_version`/`ip_hash` |
+| 0041 | `settings_phase5` | `payment_methods` catalogue table (RLS), `plan_change_requests` table (RLS) |
+| 0042 | `settings_phase6` | `tax_classes` table (RLS), `order_items` tax snapshot (`taxable_value_paise`, `tax_paise`), `invoices.return_id`/`parent_invoice_id` |
+| 0043 | `settings_phase7` | `store_policies` and `store_policy_versions` (append-only versions, no UPDATE/DELETE on versions for app_rw), `privacy_requests` table with anti-enumeration intake, action tokens, DPDP retention sweeps |
+| 0044 | `settings_phase8` | `store_status` maintenance columns (`maintenance_starts_at`, `maintenance_ends_at`, `mode_before_maintenance`, `maintenance_allow_staff_preview`), `store_status_transitions` table (append-only, no UPDATE/DELETE for app_rw) |
+| 0045 | `settings_flags_seed` | Seeds feature flags (`settings.gst_v2`, `settings.policies`, `settings.customer_accounts`, `settings.notifications`, `settings.storage`, `settings.maintenance`) with default_on = false |
+| 0046 | `store_admin_no_payments` | Data fix: removes `payments.manage` from every existing `store_admin` system role (the seed had granted the full list); runs per tenant because `roles` is under forced RLS |
+| 0047 | `platform_email_log_prune` | `app_rw` gets DELETE and column-level SELECT (`id`, `created_at`) on `platform_email_log` so the worker's 90-day retention prune can run, without reading recipient addresses |
+| 0048 | `settings_update_offer_flag` | Seeds the `settings.update_offer` flag (default off): while on for a store, its owner is offered the new Settings features with an Update now / Don't update prompt (`admin.settingsUpdate.get/apply`, `admin/settings-update.ts`; applying writes per-store overrides for the six `settings.*` flags and audits `settings.update_applied`) |
 
-How to write one (expand, migrate, contract; `forceRlsSql`): `docs/migrations.md`. **Never edit an applied migration.** Latest on disk: `0039` (the docs check keeps this list honest).
+How to write one (expand, migrate, contract; `forceRlsSql`): `docs/migrations.md`. **Never edit an applied migration.** Latest on disk: `0048` (the docs check keeps this list honest).
 
 ---
 
@@ -271,7 +280,7 @@ Contracts are the single source of truth (`packages/contracts`); handlers are in
 **`storeContract`** (`@bs/contracts`, mounted in web at `/api`)
 - `system.health`
 - `storefront.*`: `search`, `searchSuggestions`, `cart.{get,addItem,updateItem,removeItem,clear,estimateShipping}`, `newsletter.subscribe`, `status.verifyPassword`
-- `admin.*` (membership + `X-Store-Id`): `support`, `me`, `payments` (Razorpay credentials), `memberships`/`roles`/`invitations`, `settings`, `settingsOverview`, `settingsActivity` (`list`), `orderSettings` (`get`, `update`), `returnSettings` (`get`, `update`), `featureFlags`, `products` (+ `variants`, media attach/detach), `categories`, `collections`, `brands`, `locations`, `reviews`, `inventory`, `media` (R2 presigned upload), `branding`, `themes` (`get`, `update`, `library`, `preview`, `activate`), `pages` (`list`, `get`, `versions`, `blockData`, `create`, `update`, `saveDraft`, `publish`, `rollback`), `menus`, `orders` (list, stats, get, createDraft, notes, cancel, refund, fulfillment, invoice, confirm, advance), `abandonedCheckouts` (stats, list), `returns` (stats, list, get, act), `customers` (list, stats, tags, get, create, update, orders, activity, consent, addresses, notes, status, set tags, import preview/commit, delete), `segments` (list, get, create, update, delete, preview, members list/add/remove, refreshCount, forCustomer, activity, presets create), `finance` (overview, currencies, ledger, trialBalance, adjustments, expenses, settle/unsettle, receipts, periods close/reopen), `discounts`, `shipping`, `storefront` (status), `onboarding`, `billing`, `domains`
+- `admin.*` (membership + `X-Store-Id`): `support`, `me`, `payments` (Razorpay credentials), `paymentMethods` (list, updateCod), `planAndBilling` (get, availablePlans, requestChange, cancelRequest), `memberships`/`roles`/`invitations`, `settings`, `settingsOverview`, `settingsActivity` (`list`), `orderSettings` (`get`, `update`), `returnSettings` (`get`, `update`), `taxSettings` (`get`, `update`), `taxClasses` (`list`, `create`, `update`, `delete`), `notificationSettings` (`get`, `update`), `policySettings` (`list`, `createDraft`, `publish`, `archive`), `privacySettings` (`get`, `updateControls`), `privacyRequests` (`list`, `process`), `storageUsage` (`get`), `featureFlags`, `products` (+ `variants`, media attach/detach), `categories`, `collections`, `brands`, `locations`, `reviews`, `inventory`, `media` (R2 presigned upload), `branding`, `themes` (`get`, `update`, `library`, `preview`, `activate`), `pages` (`list`, `get`, `versions`, `blockData`, `create`, `update`, `saveDraft`, `publish`, `rollback`), `menus`, `orders` (list, stats, get, createDraft, notes, cancel, refund, fulfillment, invoice, confirm, advance), `abandonedCheckouts` (stats, list), `returns` (stats, list, get, act), `customers` (list, stats, tags, get, create, update, orders, activity, consent, addresses, notes, status, set tags, import preview/commit, delete), `segments` (list, get, create, update, delete, preview, members list/add/remove, refreshCount, forCustomer, activity, presets create), `finance` (overview, currencies, ledger, trialBalance, adjustments, expenses, settle/unsettle, receipts, periods close/reopen), `discounts`, `shipping` (`settings`, `updateSettings`, `preview`), `storefront` (`status`, `scheduleMaintenance`, `cancelScheduledMaintenance`, `endMaintenance`, `listTransitions`), `onboarding`, `billing`, `domains`
 
 **Non-oRPC routes in web** (`apps/web/src/app/api/`): `storefront/cart/*`, `storefront/checkout/place-order`, `storefront/customer/*` (OTP request/verify, profile, addresses, logout), `storefront/orders/[token]/return` (+ `/photo`, `/photo/finalize`, `/cancel`), `storefront/reviews` (GET list, POST create), `storefront/address/[token]`, `storefront/unsubscribe/[token]`, `storefront/search/suggestions`, `storefront/status/evaluate`, `admin/finance/export` (RFC 4180 streaming CSV export), `webhooks/[provider]`, `webhooks/platform-billing`, `health`, and the catch-all `[[...route]]` that mounts the Hono app (Better Auth at `/api/auth/*`, oRPC).
 
@@ -285,7 +294,7 @@ Procedure-level detail: open the contract file; do not duplicate it here.
 
 **Storefront (`apps/web/src/app`)**: `/` (home), `/products/[slug]`, `/collections/[slug]`, `/categories/[slug]`, `/search`, `/cart`, `/checkout`, `/orders/[token]/thank-you`, `/o/[token]` (guest order view + return request), `/cod/[token]`, `/account` (+ `orders/[id]`, `addresses`, `profile`), `/address/[token]`, `/unsubscribe/[token]`, `/pages/[slug]`, `/policies/[type]`, `/blog`, `/blog/[slug]`, `/signup` (marketing host only), `robots.txt`, `sitemap.xml`. Every `page.tsx` needs a sibling `loading.tsx` (`bs/route-pending`).
 
-**Store admin (`apps/admin/src/routes`, TanStack file routes; `routeTree.gen.ts` is generated, not committed)**: `login`, `accept-invite`, `_store/` (dashboard `index`, `orders` + `orders_.$orderId` + `orders_.new`, `products` (+ `new`, `$id`), `categories` (+ `categories_.new`, `categories_.$id`), `collections` (+ `collections_.new`, `collections_.$id`), `brands`, `locations` (+ `locations_.new`, `locations_.$id`), `reviews`, `inventory`, `customers` (+ detail), `segments` (+ `new`, `$segmentId`), `discounts` (+ `new`), `returns`, `abandoned-checkouts`, `finance` (+ `expenses`, `reports`), `online-store/{theme, theme-library, pages, menus}`, `settings/{index (Overview), store-details, orders, returns, branding, payments, shipping, storefront, support, taxes, users (Users & accounts, legacy /settings/team redirects), activity}`), `_editor/online-store/{editor/$pageId, theme-settings}` (Puck), `platform` and `support` shells. UI conventions: `docs/admin-ui-standards.md`.
+**Store admin (`apps/admin/src/routes`, TanStack file routes; `routeTree.gen.ts` is generated, not committed)**: `login`, `accept-invite`, `_store/` (dashboard `index`, `orders` + `orders_.$orderId` + `orders_.new`, `products` (+ `new`, `$id`), `categories` (+ `categories_.new`, `categories_.$id`), `collections` (+ `collections_.new`, `collections_.$id`), `brands`, `locations` (+ `locations_.new`, `locations_.$id`), `reviews`, `inventory`, `customers` (+ detail), `segments` (+ `new`, `$segmentId`), `discounts` (+ `new`), `returns`, `abandoned-checkouts`, `finance` (+ `expenses`, `reports`), `online-store/{theme, theme-library, pages, menus}`, `settings/{index (Overview), store-details, orders, returns, branding, payments, shipping, storefront, domains, storage, notifications, policies, customer-privacy, plan-and-billing, support, taxes, users (Users & accounts, legacy /settings/team redirects), activity}`), `_editor/online-store/{editor/$pageId, theme-settings}` (Puck), `platform` and `support` shells. UI conventions: `docs/admin-ui-standards.md`.
 
 **Super Admin (`apps/superadmin/src/pages`)**: Overview, TenantsList, TenantDetail, TenantCreate, Signups, Plans, Quotas, Features, Domains, Support, System, Staff, AuditLog, Templates, TemplateEditor, Login, AcceptInvitation.
 
@@ -299,6 +308,20 @@ Block types in `packages/blocks/src/registry.ts`: content (Hero, HeroSlider, Pro
 
 Theme flow: platform staff build `theme_templates` (draft + published snapshot, home/collection/product/cart/header/footer pages + tokens) in Super Admin. A store *activates* a template: tokens and pages are **copied** into the store's own rows (templates are never edited by stores; re-applying replaces customisations and adds a page version, so it can be rolled back). The storefront applies a theme's tokens once the store opts in (`source: "theme"`); otherwise built-in layouts and Branding apply. Theme CSS variables are `--bs-*` (`theme-vars.ts`). Domain code: `packages/domain/src/themes/`. Cache tags `page:<slug>` and `theme` are invalidated on publish and rollback. **Theme previews:** Super Admin's theme editor Preview button saves the draft, then `templates.createPreview` stores an immutable snapshot (`theme_previews`, 24 h by default, unguessable 11-character code) and the tab opens `/preview/<code>?page=<page>` on the marketing host, where `apps/web/src/app/preview/[code]/page.tsx` draws the pages with sample products, collection, product and cart (`server/preview-samples.ts`); other hosts get a 404, pages are noindex, expired or unknown codes show a notice.
 
+### Branding vs Theme Settings Boundary
+
+| Concern | Branding (`/settings/branding`) | Theme Settings (`/online-store/theme`) |
+|---|---|---|
+| **Authority** | Store Owner / Staff (`branding.manage`) | Store Owner / Staff (`content.write` / `theme.publish`) |
+| **Identity Assets** | Primary & dark logos (`logoLightMediaId`, `logoDarkMediaId`), logo display width | Header layout, announcement bars, menu navigation links |
+| **App Icons & Metadata** | Browser favicon (`faviconMediaId`), Open Graph social sharing image (`socialImageMediaId`) | Page-specific SEO metadata and social overrides per block/page |
+| **Typography Tokens** | Base heading font (`fontHeading`), body font (`fontBody`), base font scale | Section heading sizes, typographic weights per block |
+| **Global Color System** | Core palette (primary, secondary, accent, background, surface, text), color mode (`light`, `dark`, `auto`) | Section-specific background colors, block container color schemes |
+| **Surface Tokens** | Corner radius token (`cornerRadius`), primary button style (`buttonStyle`) | Block padding, section margins, container max-widths, grid columns |
+| **Templates & Blocks** | None (pure tokens and assets; versioned snapshot on publish) | Puck block trees, page layouts, section ordering, widget visibility |
+| **Storage & Table** | `brand_settings` (tenant-scoped row, published snapshot) | `theme_templates`, `pages`, `theme_settings` |
+| **Precedence** | Global baseline design tokens | Overrides token values when active theme provides token values |
+
 **Adding a block:** schema + view in `packages/blocks`, register it, add editor config in `packages/block-editor/src/config.tsx`, add tests (`packages/blocks/test`), bump the block version if the schema changes shape, update this section.
 
 ---
@@ -307,9 +330,9 @@ Theme flow: platform staff build `theme_templates` (draft + published snapshot, 
 
 `packages/db/src/queues.ts` is the queue registry (created by the migrate step, so runtime roles never need DDL). Handlers and schedules: `packages/domain/src/jobs.ts`, started by `apps/worker`.
 
-Queues: `system.ping`, `segments.refresh_counts`, `order.created`, `order.paid`, `order.cod_confirmed`, `order.cancelled`, `reservation.expiry`, `webhook.process`, `idempotency.cleanup`, `fulfillment.created`, `fulfillment.delivered`, `fulfillment.rto`, `return.requested`, `refund.processed`, `cart.abandoned`, `cart.recovery_sweep`, `subscription.trial_expiry_sweep`, `order.preorder_date_changed`, `order.preorder_reminder_sweep`, `order.return_photo_cleanup`, `customers.refresh_metrics`, `customers.import` (CSV imports over 500 rows), `finance.post`, `finance.reconcile`.
- 
-Schedules: `reservation.expiry` every minute, `idempotency.cleanup` every 15 min, `cart.recovery_sweep` and `subscription.trial_expiry_sweep` hourly, `segments.refresh_counts` every 6 hours, `order.preorder_reminder_sweep` daily (06:00), `order.return_photo_cleanup` daily (03:00), `finance.reconcile` daily (04:00). Email handlers currently send placeholder text (no provider configured; see `progress.md`). Tenant deletion runs in the platform service on a timer (`DELETION_SWEEP_INTERVAL_MS`).
+Queues: `system.ping`, `segments.refresh_counts`, `order.created`, `order.paid`, `order.cod_confirmed`, `order.cancelled`, `reservation.expiry`, `webhook.process`, `idempotency.cleanup`, `fulfillment.created`, `fulfillment.delivered`, `fulfillment.rto`, `return.requested`, `refund.processed`, `cart.abandoned`, `cart.recovery_sweep`, `subscription.trial_expiry_sweep`, `order.preorder_date_changed`, `order.preorder_reminder_sweep`, `order.return_photo_cleanup`, `customers.refresh_metrics`, `customers.import` (CSV imports over 500 rows), `plan.change_requested`, `system.retention_sweep`, `maintenance.start`, `maintenance.end`, `maintenance.watchdog_sweep`, `finance.post`, `finance.reconcile`.
+
+Schedules: `reservation.expiry` every minute, `maintenance.watchdog_sweep` every minute, `idempotency.cleanup` every 15 min, `cart.recovery_sweep` and `subscription.trial_expiry_sweep` hourly, `segments.refresh_counts` every 6 hours, `order.preorder_reminder_sweep` daily (06:00), `order.return_photo_cleanup` daily (03:00), `finance.reconcile` daily (04:00), `system.retention_sweep` daily (02:00 for email_log and privacy_requests retention). Email handlers currently send placeholder text (no provider configured; see `progress.md`). Tenant deletion runs in the platform service on a timer (`DELETION_SWEEP_INTERVAL_MS`).
 
 **Return photos (customer evidence).** Presign and finalize run under the order link token (`resolveOrderIdFromToken`), keys are `tenants/<tenantId>/returns/<orderId>/<mediaId>.<jpg|png|webp>`, finalize looks the real object up in storage and checks its magic bytes (fails closed). Photos live in a **separate private R2 bucket** (`R2_PRIVATE_BUCKET_NAME`, never the public media bucket); the admin reads them through 15-minute signed URLs; with no private bucket configured the portal does not ask for photos. `order.return_photo_cleanup` (daily) deletes finalized-but-unattached photos older than 24 hours per tenant under RLS and keeps the record if the file cannot be deleted; store deletion (`platform/deletion-steps.ts`) removes photos from both buckets. Objects uploaded but never finalized need a bucket lifecycle rule (see `DEPLOYMENT.md`).
 
@@ -326,7 +349,7 @@ Schedules: `reservation.expiry` every minute, `idempotency.cleanup` every 15 min
 | Shopper | Phone OTP -> server-side `customer_sessions` row (hashed token, httpOnly cookie). OTP codes are never returned over HTTP | `packages/domain/src/customers/{otp,session}.ts`, ADR-012 |
 | Guests | Signed action tokens (`/o/`, `/cod/`, `/address/`, `/unsubscribe/`) | `orders/actions.ts`, `action_tokens` |
 
-Store permissions (`STORE_PERMISSIONS`): `products.read/write`, `orders.read/write/refund`, `customers.read/write`, `discounts.write`, `content.write`, `theme.publish`, `settings.write`, `staff.manage`, `analytics.read`, `exports.run`, `finance.read/write`, plus settings capability families (Phase 2, ADR-020): `settings.read/manage`, `branding.manage`, `storefront.manage`, `checkout.manage`, `payments.manage`, `shipping.manage`, `taxes.manage`, `orders.settings.manage`, `returns.manage`, `notifications.manage`, `domains.manage`, `policies.manage`, `privacy.manage`, `audit.read`. System roles: `store_owner` (all), `store_admin` (all except `payments.manage`). Support sessions get read permissions plus a restricted write set (`context.ts`), strictly excluding all settings capability families and finance permissions. Enforce with `assertPermission(ctx, "...")` in the **domain service**, not only in the route. Check-time aggregate in `@bs/auth` maps legacy `settings.write` to migrated families.
+Store permissions (`STORE_PERMISSIONS`): `products.read/write`, `orders.read/write/refund`, `customers.read/write`, `discounts.write`, `content.write`, `theme.publish`, `settings.write`, `staff.manage`, `analytics.read`, `exports.run`, `finance.read/write`, plus settings capability families (Phase 2, ADR-020): `settings.read/manage`, `branding.manage`, `storefront.manage`, `checkout.manage`, `payments.manage`, `shipping.manage`, `taxes.manage`, `orders.settings.manage`, `returns.manage`, `notifications.manage`, `domains.manage`, `policies.manage`, `privacy.manage`, `audit.read`. System roles: `store_owner` (all), `store_admin` (all except `payments.manage`), `store_finance` (`finance.read/write` only). Support sessions get read permissions plus a restricted write set (`context.ts`), strictly excluding all settings capability families and finance permissions. Enforce with `assertPermission(ctx, "...")` in the **domain service**, not only in the route. Check-time aggregate in `@bs/auth` maps legacy `settings.write` to migrated families.
 
 In flight: an auth overhaul (forgot/reset password, customer password sign-in, platform ZeptoMail email) is planned in `docs/AUTH-OVERHAUL-PLAN.md`, being built on branch `feat/auth-email-overhaul`.
 
@@ -370,7 +393,7 @@ Guard tests worth knowing: isolation suites (tenant leakage), `audit-coverage` (
 
 ## 16. Decisions (ADRs)
 
-Index and statuses: [`docs/adr/README.md`](adr/README.md). Summary of what each fixes in place: 001 modular monolith, 002 RLS isolation, 003 Postgres is the source of truth, 004 Cache Components, 005 oRPC, 006 pg-boss, 007 Cloudflare for SaaS, 008 payment adapter, 009 versioned block registry, 010 no merchant code, 011 feature flags and fallbacks, 012 customer sessions, 013 quotas and rate limits, 014 admin auth (and a separate 014 on platform billing separation, see gaps), 015 quota hierarchy, 016 provisioning atomicity, 017 custom domain adapter, 018 visual theme editor, 019 customer auth and platform mailer, 020 settings capability families and granular authorization. New architectural decisions need an ADR **before** the code.
+Index and statuses: [`docs/adr/README.md`](adr/README.md). Summary of what each fixes in place: 001 modular monolith, 002 RLS isolation, 003 Postgres is the source of truth, 004 Cache Components, 005 oRPC, 006 pg-boss, 007 Cloudflare for SaaS, 008 payment adapter, 009 versioned block registry, 010 no merchant code, 011 feature flags and fallbacks, 012 customer sessions, 013 quotas and rate limits, 014 admin auth (and a separate 014 on platform billing separation, see gaps), 015 quota hierarchy, 016 provisioning atomicity, 017 custom domain adapter, 018 visual theme editor, 019 customer auth and platform mailer, 020 settings capability families and granular authorization, 021 settings rebuild deprecation and contract schedule. New architectural decisions need an ADR **before** the code.
 
 ---
 
@@ -378,7 +401,7 @@ Index and statuses: [`docs/adr/README.md`](adr/README.md). Summary of what each 
 
 Keep this list honest; remove an item when fixed.
 
-- Two ADRs are numbered 014 (`014-admin-auth-and-api-access.md`, `014-platform-billing-separation.md`). Not renumbered because other docs link to them; the next ADR is **021**.
+- Two ADRs are numbered 014 (`014-admin-auth-and-api-access.md`, `014-platform-billing-separation.md`). Not renumbered because other docs link to them; the next ADR is **022**.
 - ADR for M9 decisions is still to be written (`progress.md`).
 - `progress.md` and `DEPLOYMENT.md` contain test counts and dates that go stale; prefer CI.
 - Procedure-level API docs are the contract files themselves; there is no generated OpenAPI doc checked in.

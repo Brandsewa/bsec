@@ -8,6 +8,8 @@ import { readStoreConfig } from "./store-config.ts";
 import { getTenantShippingRates } from "../orders/shipping-rates.ts";
 import { allocateDiscount } from "../orders/pricing.ts";
 import { calculateGstLineItem, normalizeState } from "../orders/invoices.ts";
+import { calculateTax } from "../orders/tax-engine.ts";
+import { resolveTaxClass } from "./tax-settings.ts";
 import { reserveInventory, commitReservation, InsufficientInventoryError } from "../catalog/inventory-reservations.ts";
 import { transitionOrder } from "../orders/state-machine.ts";
 import { transitionFulfillment } from "../orders/fulfillment-state-machine.ts";
@@ -410,7 +412,11 @@ export async function estimateAdminDraftOrder(
       if (!variant) throw new Error(`Variant not found: ${it.variantId}`);
 
       const [product] = await tx
-        .select({ title: schema.products.title, hsn: schema.products.hsn })
+        .select({
+          title: schema.products.title,
+          hsn: schema.products.hsn,
+          taxClassId: schema.products.taxClassId,
+        })
         .from(schema.products)
         .where(eq(schema.products.id, variant.productId))
         .limit(1);
@@ -424,6 +430,7 @@ export async function estimateAdminDraftOrder(
         productTitle: product?.title ?? "Product",
         sku: variant.sku,
         hsn: product?.hsn ?? null,
+        taxClassId: product?.taxClassId ?? null,
         quantity: it.quantity,
         unitPrice: price,
         lineTotal,
@@ -460,14 +467,35 @@ export async function estimateAdminDraftOrder(
 
     const storeCfg = await readStoreConfig(tx);
     const [settingsRow] = await tx
-      .select({ address: schema.storeSettings.address })
+      .select({
+        address: schema.storeSettings.address,
+        checkout: schema.storeSettings.checkout,
+      })
       .from(schema.storeSettings)
       .limit(1);
-    const originState =
-      storeCfg.tax.sellerState ??
-      (settingsRow?.address as { state?: string } | null | undefined)?.state ??
-      "Delhi";
-    const destinationState = input.shippingAddress?.state ?? "Delhi";
+
+    const gstV2Enabled = await isFeatureEnabled(tx, ctx.tenantId, "settings.gst_v2");
+    const rawTaxConfig = ((settingsRow?.checkout ?? {}) as Record<string, unknown>).tax as Record<string, unknown> | undefined;
+    const configuredSellerState = storeCfg.tax.sellerState ?? (settingsRow?.address as { state?: string } | null | undefined)?.state;
+    const inputDestState = input.shippingAddress?.state;
+
+    let originState: string;
+    let destinationState: string;
+
+    if (gstV2Enabled) {
+      if (!configuredSellerState || !configuredSellerState.trim()) {
+        throw new Error("Bad Request: Seller state is missing. Please configure your registered state in Settings > Taxes.");
+      }
+      if (!inputDestState || !inputDestState.trim()) {
+        throw new Error("Bad Request: Shipping destination state is required to calculate GST.");
+      }
+      originState = configuredSellerState.trim();
+      destinationState = inputDestState.trim();
+    } else {
+      originState = configuredSellerState ?? "Delhi";
+      destinationState = inputDestState ?? "Delhi";
+    }
+
     const pricesIncludeTax = storeCfg.tax.pricesIncludeTax;
     const isInterState = normalizeState(originState) !== normalizeState(destinationState);
 
@@ -477,47 +505,84 @@ export async function estimateAdminDraftOrder(
     let totalCgst = 0;
     let totalSgst = 0;
     let totalIgst = 0;
+    let grandTax: number;
 
-    itemCalculations.forEach((it, idx) => {
-      const calc = calculateGstLineItem({
-        orderItemId: it.variantId,
-        variantId: it.variantId,
-        sku: it.sku,
-        productTitle: it.productTitle,
-        hsn: it.hsn,
-        quantity: it.quantity,
-        unitPrice: it.unitPrice,
-        discountAmount: allocatedDiscounts[idx] ?? 0,
-        taxRateBps: 1800,
-        pricesIncludeTax,
-        isInterState,
-      });
-      totalCgst += calc.cgst;
-      totalSgst += calc.sgst;
-      totalIgst += calc.igst;
-    });
-
-    const shippingTaxRate = 1800;
-    let shippingCgst = 0;
-    let shippingSgst = 0;
-    let shippingIgst = 0;
-
-    if (shippingTotal > 0) {
-      const shippingTax = pricesIncludeTax
-        ? shippingTotal - Math.round((shippingTotal * 10000) / (10000 + shippingTaxRate))
-        : Math.round((shippingTotal * shippingTaxRate) / 10000);
-      if (isInterState) {
-        shippingIgst = shippingTax;
-      } else {
-        shippingCgst = Math.floor(shippingTax / 2);
-        shippingSgst = shippingTax - shippingCgst;
+    if (gstV2Enabled) {
+      // Resolve tax classes
+      const itemTaxLines = [];
+      for (let idx = 0; idx < itemCalculations.length; idx++) {
+        const it = itemCalculations[idx];
+        if (!it) continue;
+        const resolved = await resolveTaxClass(tx, ctx.tenantId, it.taxClassId);
+        itemTaxLines.push({
+          quantity: it.quantity,
+          unitPrice: it.unitPrice,
+          discountAmount: allocatedDiscounts[idx] ?? 0,
+          taxRateBps: resolved.rateBps,
+          hsn: it.hsn ?? resolved.defaultHsn ?? null,
+        });
       }
-    }
 
-    const grandCgst = totalCgst + shippingCgst;
-    const grandSgst = totalSgst + shippingSgst;
-    const grandIgst = totalIgst + shippingIgst;
-    const grandTax = grandCgst + grandSgst + grandIgst;
+      const taxCalc = calculateTax({
+        lines: itemTaxLines,
+        shippingTotal,
+        shippingTaxMode: rawTaxConfig?.shippingTax === "none" ? "none" : "highest_line_rate",
+        taxCollectionEnabled: typeof rawTaxConfig?.taxCollection === "boolean" ? rawTaxConfig.taxCollection : true,
+        pricesIncludeTax,
+        sellerState: originState,
+        destinationState,
+      });
+
+      totalCgst = taxCalc.cgst;
+      totalSgst = taxCalc.sgst;
+      totalIgst = taxCalc.igst;
+      grandTax = taxCalc.totalTax;
+    } else {
+      // Flag off: preserve legacy 1800 hard-coded numbers and Delhi fallback
+      itemCalculations.forEach((it, idx) => {
+        const calc = calculateGstLineItem({
+          orderItemId: it.variantId,
+          variantId: it.variantId,
+          sku: it.sku,
+          productTitle: it.productTitle,
+          hsn: it.hsn,
+          quantity: it.quantity,
+          unitPrice: it.unitPrice,
+          discountAmount: allocatedDiscounts[idx] ?? 0,
+          taxRateBps: 1800,
+          pricesIncludeTax,
+          isInterState,
+        });
+        totalCgst += calc.cgst;
+        totalSgst += calc.sgst;
+        totalIgst += calc.igst;
+      });
+
+      const shippingTaxRate = 1800;
+      let shippingCgst = 0;
+      let shippingSgst = 0;
+      let shippingIgst = 0;
+
+      if (shippingTotal > 0) {
+        const shippingTax = pricesIncludeTax
+          ? shippingTotal - Math.round((shippingTotal * 10000) / (10000 + shippingTaxRate))
+          : Math.round((shippingTotal * shippingTaxRate) / 10000);
+        if (isInterState) {
+          shippingIgst = shippingTax;
+        } else {
+          shippingCgst = Math.floor(shippingTax / 2);
+          shippingSgst = shippingTax - shippingCgst;
+        }
+      }
+
+      const finalCgst = totalCgst + shippingCgst;
+      const finalSgst = totalSgst + shippingSgst;
+      const finalIgst = totalIgst + shippingIgst;
+      grandTax = finalCgst + finalSgst + finalIgst;
+      totalCgst = finalCgst;
+      totalSgst = finalSgst;
+      totalIgst = finalIgst;
+    }
 
     const grandTotal = pricesIncludeTax
       ? subtotal - discountTotal + shippingTotal
@@ -530,9 +595,9 @@ export async function estimateAdminDraftOrder(
       availableShippingRates,
       tax: {
         isInterState,
-        cgst: grandCgst,
-        sgst: grandSgst,
-        igst: grandIgst,
+        cgst: totalCgst,
+        sgst: totalSgst,
+        igst: totalIgst,
         totalTax: grandTax,
       },
       grandTotal,
@@ -631,7 +696,11 @@ export async function createAdminDraftOrder(
       if (!variant) throw new Error(`Variant not found: ${it.variantId}`);
 
       const [product] = await tx
-        .select({ title: schema.products.title, hsn: schema.products.hsn })
+        .select({
+          title: schema.products.title,
+          hsn: schema.products.hsn,
+          taxClassId: schema.products.taxClassId,
+        })
         .from(schema.products)
         .where(eq(schema.products.id, variant.productId))
         .limit(1);
@@ -644,6 +713,7 @@ export async function createAdminDraftOrder(
         variant,
         productTitle: product?.title ?? "Product",
         hsn: product?.hsn ?? null,
+        taxClassId: product?.taxClassId ?? null,
         quantity: it.quantity,
         unitPrice,
         unitPriceOverride: it.unitPriceOverride,
@@ -681,15 +751,35 @@ export async function createAdminDraftOrder(
         : (availableShippingRates[0]?.amount ?? 0);
 
     const [settingsRow] = await tx
-      .select({ address: schema.storeSettings.address })
+      .select({
+        address: schema.storeSettings.address,
+        checkout: schema.storeSettings.checkout,
+      })
       .from(schema.storeSettings)
       .limit(1);
-    const originState =
-      storeCfg.tax.sellerState ??
-      (settingsRow?.address as { state?: string } | null | undefined)?.state ??
-      "Delhi";
+
+    const gstV2Enabled = await isFeatureEnabled(tx, ctx.tenantId, "settings.gst_v2");
+    const rawTaxConfig = ((settingsRow?.checkout ?? {}) as Record<string, unknown>).tax as Record<string, unknown> | undefined;
+    const configuredSellerState = storeCfg.tax.sellerState ?? (settingsRow?.address as { state?: string } | null | undefined)?.state;
     const shippingAddrState = (input.shippingAddress as Record<string, unknown>)?.state;
-    const destinationState = typeof shippingAddrState === "string" && shippingAddrState.trim() ? shippingAddrState.trim() : "Delhi";
+
+    let originState: string;
+    let destinationState: string;
+
+    if (gstV2Enabled) {
+      if (!configuredSellerState || !configuredSellerState.trim()) {
+        throw new Error("Bad Request: Seller state is missing. Please configure your registered state in Settings > Taxes.");
+      }
+      if (typeof shippingAddrState !== "string" || !shippingAddrState.trim()) {
+        throw new Error("Bad Request: Shipping destination state is required to calculate GST.");
+      }
+      originState = configuredSellerState.trim();
+      destinationState = shippingAddrState.trim();
+    } else {
+      originState = configuredSellerState ?? "Delhi";
+      destinationState = typeof shippingAddrState === "string" && shippingAddrState.trim() ? shippingAddrState.trim() : "Delhi";
+    }
+
     const pricesIncludeTax = storeCfg.tax.pricesIncludeTax;
     const isInterState = normalizeState(originState) !== normalizeState(destinationState);
 
@@ -699,48 +789,120 @@ export async function createAdminDraftOrder(
     let totalCgst = 0;
     let totalSgst = 0;
     let totalIgst = 0;
+    let grandTax: number;
 
-    const lineTaxCalcs = itemCalculations.map((it, idx) => {
-      const calc = calculateGstLineItem({
-        orderItemId: it.variant.id,
-        variantId: it.variant.id,
-        sku: it.variant.sku,
-        productTitle: it.productTitle,
-        hsn: it.hsn,
-        quantity: it.quantity,
-        unitPrice: it.unitPrice,
-        discountAmount: allocatedDiscounts[idx] ?? 0,
-        taxRateBps: 1800,
-        pricesIncludeTax,
-        isInterState,
-      });
-      totalCgst += calc.cgst;
-      totalSgst += calc.sgst;
-      totalIgst += calc.igst;
-      return calc;
-    });
-
-    const shippingTaxRate = 1800;
-    let shippingCgst = 0;
-    let shippingSgst = 0;
-    let shippingIgst = 0;
-
-    if (shippingTotal > 0) {
-      const shippingTax = pricesIncludeTax
-        ? shippingTotal - Math.round((shippingTotal * 10000) / (10000 + shippingTaxRate))
-        : Math.round((shippingTotal * shippingTaxRate) / 10000);
-      if (isInterState) {
-        shippingIgst = shippingTax;
-      } else {
-        shippingCgst = Math.floor(shippingTax / 2);
-        shippingSgst = shippingTax - shippingCgst;
-      }
+    interface LineTaxSnapshot {
+      taxRateBps: number;
+      hsn: string | null;
+      discountAmount: number;
+      taxableAmount: number | null;
+      taxPaise: number | null;
+      cgst: number;
+      sgst: number;
+      igst: number;
     }
+    const lineTaxCalcs: LineTaxSnapshot[] = [];
 
-    const grandCgst = totalCgst + shippingCgst;
-    const grandSgst = totalSgst + shippingSgst;
-    const grandIgst = totalIgst + shippingIgst;
-    const grandTax = grandCgst + grandSgst + grandIgst;
+    if (gstV2Enabled) {
+      const itemTaxLines = [];
+      for (let idx = 0; idx < itemCalculations.length; idx++) {
+        const it = itemCalculations[idx];
+        if (!it) continue;
+        const resolved = await resolveTaxClass(tx, ctx.tenantId, it.taxClassId);
+        itemTaxLines.push({
+          quantity: it.quantity,
+          unitPrice: it.unitPrice,
+          discountAmount: allocatedDiscounts[idx] ?? 0,
+          taxRateBps: resolved.rateBps,
+          hsn: it.hsn ?? resolved.defaultHsn ?? null,
+        });
+      }
+
+      const taxCalc = calculateTax({
+        lines: itemTaxLines,
+        shippingTotal,
+        shippingTaxMode: rawTaxConfig?.shippingTax === "none" ? "none" : "highest_line_rate",
+        taxCollectionEnabled: typeof rawTaxConfig?.taxCollection === "boolean" ? rawTaxConfig.taxCollection : true,
+        pricesIncludeTax,
+        sellerState: originState,
+        destinationState,
+      });
+
+      totalCgst = taxCalc.cgst;
+      totalSgst = taxCalc.sgst;
+      totalIgst = taxCalc.igst;
+      grandTax = taxCalc.totalTax;
+
+      for (let idx = 0; idx < itemCalculations.length; idx++) {
+        const lRes = taxCalc.lines[idx];
+        if (!lRes) continue;
+        lineTaxCalcs.push({
+          taxRateBps: lRes.taxRateBps,
+          hsn: lRes.hsn ?? null,
+          discountAmount: lRes.discountAmount,
+          taxableAmount: lRes.taxableAmount,
+          taxPaise: lRes.totalTax,
+          cgst: lRes.cgst,
+          sgst: lRes.sgst,
+          igst: lRes.igst,
+        });
+      }
+    } else {
+      // Legacy flag-off path: 1800 hard-coded and legacy calculation
+      itemCalculations.forEach((it, idx) => {
+        const calc = calculateGstLineItem({
+          orderItemId: it.variant.id,
+          variantId: it.variant.id,
+          sku: it.variant.sku,
+          productTitle: it.productTitle,
+          hsn: it.hsn,
+          quantity: it.quantity,
+          unitPrice: it.unitPrice,
+          discountAmount: allocatedDiscounts[idx] ?? 0,
+          taxRateBps: 1800,
+          pricesIncludeTax,
+          isInterState,
+        });
+        totalCgst += calc.cgst;
+        totalSgst += calc.sgst;
+        totalIgst += calc.igst;
+        lineTaxCalcs.push({
+          taxRateBps: 1800,
+          hsn: it.hsn,
+          discountAmount: calc.discountAmount,
+          taxableAmount: null,
+          taxPaise: null,
+          cgst: calc.cgst,
+          sgst: calc.sgst,
+          igst: calc.igst,
+        });
+      });
+
+      const shippingTaxRate = 1800;
+      let shippingCgst = 0;
+      let shippingSgst = 0;
+      let shippingIgst = 0;
+
+      if (shippingTotal > 0) {
+        const shippingTax = pricesIncludeTax
+          ? shippingTotal - Math.round((shippingTotal * 10000) / (10000 + shippingTaxRate))
+          : Math.round((shippingTotal * shippingTaxRate) / 10000);
+        if (isInterState) {
+          shippingIgst = shippingTax;
+        } else {
+          shippingCgst = Math.floor(shippingTax / 2);
+          shippingSgst = shippingTax - shippingCgst;
+        }
+      }
+
+      const finalCgst = totalCgst + shippingCgst;
+      const finalSgst = totalSgst + shippingSgst;
+      const finalIgst = totalIgst + shippingIgst;
+      grandTax = finalCgst + finalSgst + finalIgst;
+      totalCgst = finalCgst;
+      totalSgst = finalSgst;
+      totalIgst = finalIgst;
+    }
 
     const codFee = paymentOutcome === "cod" ? storeCfg.cod.feePaise : 0;
     const baseTotal = pricesIncludeTax
@@ -850,11 +1012,13 @@ export async function createAdminDraftOrder(
         productTitle: it.productTitle,
         variantTitle: it.variant.title,
         sku: it.variant.sku,
-        hsn: it.hsn,
+        hsn: calc.hsn,
         quantity: it.quantity,
         unitPrice: it.unitPrice,
         discountAmount: calc.discountAmount,
-        taxRateBps: 1800,
+        taxRateBps: calc.taxRateBps,
+        taxableValuePaise: calc.taxableAmount,
+        taxPaise: calc.taxPaise,
         cgst: calc.cgst,
         sgst: calc.sgst,
         igst: calc.igst,

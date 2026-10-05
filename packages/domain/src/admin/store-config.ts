@@ -184,6 +184,11 @@ export async function updateStoreSettings(
   input: UpdateStoreSettingsInput,
 ): Promise<StoreSettingsRecord> {
   assertPermission(ctx, "settings.write");
+  if (input.cod !== undefined) {
+    throw new Error(
+      "Cash on Delivery settings must be updated via admin.paymentMethods.updateCod with payments.manage permission.",
+    );
+  }
   const result = await withTenant(rt._db.db, ctx.tenantId, async (tx) => {
     const [existing] = await tx.select().from(schema.storeSettings).limit(1);
     const before = existing ? toRecord(existing, ctx.tenantId) : null;

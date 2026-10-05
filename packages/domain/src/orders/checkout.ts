@@ -13,6 +13,7 @@ import {
   tenants,
   variants,
   withTenant,
+  schema,
   QUEUE_NAMES,
 } from "@bs/db";
 import type { Runtime } from "../runtime.ts";
@@ -25,15 +26,24 @@ import { allocateDiscount, priceOrder } from "./pricing.ts";
 import { getTenantShippingRates } from "./shipping-rates.ts";
 import { withIdempotencyKey } from "../system/idempotency.ts";
 import { isFeatureEnabled, FeatureDisabledError } from "../features.ts";
-import { readStoreConfig } from "../admin/store-config.ts";
+import { parseCheckoutSettings } from "../admin/checkout-config.ts";
+import { parseOrderProcessingConfig } from "../admin/order-settings-config.ts";
+import {
+  getTenantPaymentMethods,
+  parseCodPublicConfig,
+  hasEnabledPaymentAdapter,
+} from "../admin/payment-methods.ts";
+import { setMarketingConsent } from "../customers/consent.ts";
 import { trackSoftQuotaUsage } from "../system/quotas.ts";
 import { isCheckoutAllowed } from "../system/tenant-lifecycle.ts";
+import { calculateTax } from "./tax-engine.ts";
+import { resolveTaxClass } from "../admin/tax-settings.ts";
 
 export interface PlaceOrderInput {
   cartToken: string;
   idempotencyKey?: string | undefined;
   email: string;
-  phone: string;
+  phone?: string | undefined;
   fullName: string;
   addressLine1: string;
   addressLine2?: string | undefined;
@@ -46,6 +56,8 @@ export interface PlaceOrderInput {
   paymentMethod: "cod" | "razorpay" | "online";
   notes?: string | undefined;
   customerId?: string | undefined;
+  marketingConsent?: boolean | undefined;
+  termsConsent?: boolean | undefined;
 }
 
 export interface PlaceOrderResult {
@@ -110,6 +122,25 @@ export async function placeOrder(
       throw new Error(`Checkout is not available for store in '${t.status}' state`);
     }
 
+    // Assert storefront maintenance mode gating (Settings Phase 8 / ADR-011)
+    const [maintenanceStatusRow] = await tx
+      .select({
+        mode: schema.storeStatus.mode,
+        allowStaffPreview: schema.storeStatus.maintenanceAllowStaffPreview,
+      })
+      .from(schema.storeStatus)
+      .where(eq(schema.storeStatus.tenantId, tenantId))
+      .limit(1);
+
+    if (maintenanceStatusRow?.mode === "maintenance" || ctx.storeStatus === "maintenance") {
+      const isStaffPreview = ctx.actor.type === "staff" && (maintenanceStatusRow?.allowStaffPreview ?? true);
+      if (!isStaffPreview) {
+        const error = new Error("Store is currently undergoing scheduled maintenance");
+        (error as unknown as { status: number }).status = 503;
+        throw error;
+      }
+    }
+
     // 1. Fetch cart
     const cart = await getOrCreateCart(rt, ctx, input.cartToken, tx);
     if (!cart || cart.items.length === 0) {
@@ -130,11 +161,67 @@ export async function placeOrder(
     const shipping = (input.shippingMethod ? resolvedRates.find((r) => r.method === input.shippingMethod) : undefined) ?? resolvedRates[0];
     const shippingBase = shipping ? shipping.amount : 0;
     const isCod = input.paymentMethod === "cod";
-    const storeConfig = await readStoreConfig(tx);
-    if (isCod && !storeConfig.cod.enabled) {
-      throw new Error("Cash on delivery is not available for this store");
+    const paymentMethodsList = await getTenantPaymentMethods(tx, tenantId);
+
+    if (isCod) {
+      const codMethod = paymentMethodsList.find((m) => m.provider === "cod");
+      if (!codMethod || codMethod.status !== "active") {
+        throw new Error("Cash on delivery is not available for this store");
+      }
+    } else {
+      const onlineMethod = paymentMethodsList.find((m) => m.provider === "razorpay");
+      if (!onlineMethod || onlineMethod.status !== "active" || !hasEnabledPaymentAdapter("razorpay")) {
+        throw new Error("Online payment is not available for this store. Please choose Cash on Delivery.");
+      }
     }
-    const codFee = isCod ? storeConfig.cod.feePaise : 0;
+
+    const codMethodRecord = paymentMethodsList.find((m) => m.provider === "cod");
+    const codCfg = parseCodPublicConfig(codMethodRecord?.publicConfig);
+    const codFee = isCod ? codCfg.feePaise : 0;
+
+    const [stRow] = await tx
+      .select({
+        checkout: schema.storeSettings.checkout,
+        orderSettings: schema.storeSettings.orderSettings,
+        address: schema.storeSettings.address,
+      })
+      .from(schema.storeSettings)
+      .where(eq(schema.storeSettings.tenantId, tenantId))
+      .limit(1);
+
+    const checkoutSettings = parseCheckoutSettings(stRow?.checkout);
+    const orderSettings = parseOrderProcessingConfig(stRow?.orderSettings);
+
+    // Guest checkout enforcement
+    if (!checkoutSettings.guestCheckout && !input.customerId) {
+      throw new Error("Guest checkout is not permitted for this store. Please sign in to place an order.");
+    }
+
+    // Phone required enforcement
+    if (checkoutSettings.phoneRequired && (!input.phone || !input.phone.trim())) {
+      throw new Error("Phone number is required to complete checkout");
+    }
+
+    // Terms of Service consent enforcement (Slice 7B)
+    let termsPolicyVersionId: string | null = null;
+    let termsAcceptedAt: Date | null = null;
+    if (checkoutSettings.termsConsent?.enabled) {
+      const [termsPolicy] = await tx
+        .select({ publishedVersionId: schema.storePolicies.publishedVersionId })
+        .from(schema.storePolicies)
+        .where(and(eq(schema.storePolicies.tenantId, tenantId), eq(schema.storePolicies.handle, "terms")))
+        .limit(1);
+
+      if (!termsPolicy?.publishedVersionId) {
+        throw new Error("Terms of Service consent is required by store settings, but no Terms policy is published yet");
+      }
+      if (!input.termsConsent) {
+        throw new Error("You must agree to the Terms of Service to place this order");
+      }
+      termsPolicyVersionId = termsPolicy.publishedVersionId;
+      termsAcceptedAt = new Date();
+    }
+
     // The same function the cart and checkout pages use, so the total shown is the total charged.
     const pricing = priceOrder({
       subtotal,
@@ -143,6 +230,29 @@ export async function placeOrder(
       discount: cart.discount ? { type: cart.discount.type, discountAmount: cart.discount.amount } : null,
     });
     const { shippingTotal, grandTotal, discountTotal } = pricing;
+
+    // Minimum order value enforcement (on server-computed goods total after discount)
+    const goodsTotal = Math.max(0, subtotal - (discountTotal ?? 0));
+    if (orderSettings.minimumOrderPaise > 0 && goodsTotal < orderSettings.minimumOrderPaise) {
+      const shortfallPaise = orderSettings.minimumOrderPaise - goodsTotal;
+      throw new Error(
+        `Order total (₹${(goodsTotal / 100).toFixed(2)}) is below the minimum required order amount of ₹${(orderSettings.minimumOrderPaise / 100).toFixed(2)}. Please add ₹${(shortfallPaise / 100).toFixed(2)} more to your cart.`
+      );
+    }
+
+    // COD min/max order value enforcement (on grand total or goods total)
+    if (isCod) {
+      if (codCfg.minOrderPaise != null && grandTotal < codCfg.minOrderPaise) {
+        throw new Error(
+          `Order total (₹${(grandTotal / 100).toFixed(2)}) is below the minimum COD amount of ₹${(codCfg.minOrderPaise / 100).toFixed(2)}.`
+        );
+      }
+      if (codCfg.maxOrderPaise != null && grandTotal > codCfg.maxOrderPaise) {
+        throw new Error(
+          `Order total (₹${(grandTotal / 100).toFixed(2)}) exceeds the maximum allowed COD amount of ₹${(codCfg.maxOrderPaise / 100).toFixed(2)}.`
+        );
+      }
+    }
 
     // 3. Find default inventory location for tenant
     const [loc] = await tx
@@ -169,6 +279,8 @@ export async function placeOrder(
         preorderShipsOn: variants.preorderShipsOn,
         costPrice: variants.costPrice,
         priceOnRequest: products.priceOnRequest,
+        taxClassId: products.taxClassId,
+        hsn: products.hsn,
       })
       .from(variants)
       .innerJoin(
@@ -204,6 +316,7 @@ export async function placeOrder(
       await reserveInventory(tx, tenantId, reserveItems, {
         orderId,
         cartId: cart.id,
+        ttlMinutes: orderSettings.stockHoldMinutes,
       });
     }
 
@@ -309,14 +422,94 @@ export async function placeOrder(
       }
     }
 
-    // 6. Insert Order
+    // 5c. Record marketing consent if opted in (Settings Phase 4 / DPDP Compliance)
+    if (input.marketingConsent && effectiveCustomerId && checkoutSettings.marketingEmail.enabled) {
+      await setMarketingConsent(
+        rt,
+        {
+          tenantId,
+          storeStatus: "live",
+          actor: { type: "customer", customerId: effectiveCustomerId },
+          roles: [],
+          permissions: [],
+          requestId: crypto.randomUUID(),
+        },
+        {
+          customerId: effectiveCustomerId,
+          state: "subscribed",
+          source: "checkout",
+          channel: "email",
+          textVersion: checkoutSettings.marketingEmail.label,
+        },
+        tx,
+      );
+    }
+
+    // 6. Tax calculation & snapshotting (Settings Rebuild Phase 6 / gst_v2)
+    const gstV2Enabled = await isFeatureEnabled(tx, tenantId, "settings.gst_v2");
+    const rawTaxConfig = ((stRow?.checkout ?? {}) as Record<string, unknown>).tax as Record<string, unknown> | undefined;
+    const sellerState = (rawTaxConfig?.sellerState as string | undefined) ?? ((stRow?.address as { state?: string } | null | undefined)?.state);
+    const destinationState = input.state?.trim();
+
+    if (gstV2Enabled) {
+      if (!sellerState || !sellerState.trim()) {
+        throw new Error("Bad Request: Seller state is missing. Please configure your registered state in Settings > Taxes.");
+      }
+      if (!destinationState) {
+        throw new Error("Bad Request: Shipping destination state is required to calculate GST.");
+      }
+    }
+
+    const lineDiscounts = allocateDiscount(cart.items.map((it) => it.lineTotal), discountTotal);
+    
+    // Resolve tax classes for items if gst_v2 is active
+    interface ItemTaxResolved {
+      hsn: string | null;
+      rateBps: number;
+    }
+    const itemTaxInfo: ItemTaxResolved[] = [];
+    if (gstV2Enabled) {
+      for (const it of cart.items) {
+        const v = variantMap.get(it.variantId);
+        const resolved = await resolveTaxClass(tx, tenantId, v?.taxClassId);
+        itemTaxInfo.push({
+          hsn: v?.hsn ?? resolved.defaultHsn ?? null,
+          rateBps: resolved.rateBps,
+        });
+      }
+    }
+
+    const taxCalc = gstV2Enabled
+      ? calculateTax({
+          lines: cart.items.map((it, idx) => {
+            const taxInfo = itemTaxInfo[idx];
+            return {
+              quantity: it.quantity,
+              unitPrice: it.unitPriceSnapshot,
+              discountAmount: lineDiscounts[idx] ?? 0,
+              taxRateBps: taxInfo?.rateBps ?? 1800,
+              hsn: taxInfo?.hsn ?? null,
+            };
+          }),
+          shippingTotal,
+          shippingTaxMode: rawTaxConfig?.shippingTax === "none" ? "none" : "highest_line_rate",
+          taxCollectionEnabled: typeof rawTaxConfig?.taxCollection === "boolean" ? rawTaxConfig.taxCollection : true,
+          pricesIncludeTax: typeof rawTaxConfig?.pricesIncludeTax === "boolean" ? rawTaxConfig.pricesIncludeTax : true,
+          sellerState,
+          destinationState,
+        })
+      : null;
+
+    const orderTaxTotal = taxCalc ? taxCalc.totalTax : 0;
+
+    // 6b. Insert Order
     await tx.insert(orders).values({
       id: orderId,
       tenantId,
       number: seq.formatted,
       customerId: effectiveCustomerId,
       email: input.email,
-      phone: input.phone,
+      phone: input.phone ?? "",
       currency: "INR",
       status: "pending",
       paymentStatus: isCod ? "cod_pending" : "pending",
@@ -324,6 +517,7 @@ export async function placeOrder(
       subtotal,
       discountTotal,
       shippingTotal,
+      taxTotal: orderTaxTotal,
       codFee,
       grandTotal,
       shipsOn: orderShipsOn,
@@ -346,18 +540,21 @@ export async function placeOrder(
         country: input.country ?? "IN",
       },
       placeOfSupplyState: input.state,
+      termsPolicyVersionId,
+      termsAcceptedAt,
       source: "web",
       cartId: cart.id,
       idempotencyKey: input.idempotencyKey ?? null,
     });
 
-    // 7. Insert Order Items (a goods discount is split across the lines in proportion to their totals)
-    const lineDiscounts = allocateDiscount(cart.items.map((it) => it.lineTotal), discountTotal);
+    // 7. Insert Order Items (with snapshotted tax if gst_v2)
     for (const [index, it] of cart.items.entries()) {
       const v = variantMap.get(it.variantId);
       const lineShipsOn = v?.preorderEnabled && v.preorderShipsOn
         ? (typeof v.preorderShipsOn === "string" ? v.preorderShipsOn : (v.preorderShipsOn as Date).toISOString().slice(0, 10))
         : null;
+
+      const lineTax = taxCalc?.lines[index];
 
       await tx.insert(orderItems).values({
         discountAmount: lineDiscounts[index] ?? 0,
@@ -367,6 +564,13 @@ export async function placeOrder(
         productTitle: it.product.title,
         variantTitle: it.variant.title,
         sku: it.variant.sku,
+        hsn: lineTax?.hsn ?? null,
+        taxRateBps: lineTax?.taxRateBps ?? 0,
+        taxableValuePaise: lineTax?.taxableAmount ?? null,
+        taxPaise: lineTax?.totalTax ?? null,
+        cgst: lineTax?.cgst ?? 0,
+        sgst: lineTax?.sgst ?? 0,
+        igst: lineTax?.igst ?? 0,
         quantity: it.quantity,
         unitPrice: it.unitPriceSnapshot,
         total: it.lineTotal,
@@ -391,7 +595,7 @@ export async function placeOrder(
 
     // 8. Payment Intent
     const intentId = randomUUID();
-    const providerOrderId = !isCod ? `rzp_order_${orderId.replace(/-/g, "").slice(0, 14)}` : null;
+    const providerOrderId: string | null = null;
 
     await tx.insert(paymentIntents).values({
       id: intentId,

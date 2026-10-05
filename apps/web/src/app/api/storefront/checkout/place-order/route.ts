@@ -24,6 +24,8 @@ const PlaceOrderSchema = z.object({
   shippingMethod: z.string().min(1).max(64).optional(),
   paymentMethod: z.enum(["cod", "razorpay", "online"]).default("cod"),
   notes: z.string().optional(),
+  termsConsent: z.boolean().optional(),
+  marketingConsent: z.boolean().optional(),
 });
 
 export async function POST(req: Request) {
@@ -96,6 +98,8 @@ export async function POST(req: Request) {
       shippingMethod: parsed.data.shippingMethod,
       paymentMethod,
       notes: parsed.data.notes,
+      termsConsent: parsed.data.termsConsent,
+      marketingConsent: parsed.data.marketingConsent,
     });
 
     const response = NextResponse.json(orderResult, { status: 200 });

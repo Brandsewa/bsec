@@ -82,8 +82,8 @@ interface FormState {
   faviconMediaId: string | null;
   socialImageMediaId: string | null;
   logoWidth: number;
-  fontHeading: string;
-  fontBody: string;
+  fontHeading: BrandSettings["fontHeading"];
+  fontBody: BrandSettings["fontBody"];
   fontSizeScale: string;
   primaryColor: string;
   secondaryColor: string;
@@ -452,7 +452,7 @@ function BrandingEditor({ brand, storeName, media }: { brand: BrandSettings; sto
                   <SimpleSelect
                     id={f.key}
                     value={form[f.key]}
-                    onChange={(v) => set(f.key, v)}
+                    onChange={(v) => set(f.key, v as BrandSettings[typeof f.key])}
                     options={[
                       ...(curatedFonts.some((c) => c.id === form[f.key]) ? [] : [{ value: form[f.key], label: form[f.key] }]),
                       ...curatedFonts.map((c) => ({ value: c.id, label: `${c.name} (${c.category})${c.devanagari ? " - Devanagari" : ""}` })),

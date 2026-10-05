@@ -208,7 +208,7 @@ export async function provisionTenant(
       tenantId,
       name: "store_admin",
       isSystem: true,
-      permissions: [...STORE_PERMISSIONS],
+      permissions: [...SYSTEM_STORE_ROLES.store_admin],
     });
 
     await tx.insert(schema.roles).values({

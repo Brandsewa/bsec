@@ -19,7 +19,8 @@ async function signIn(page: Page, email = EMAIL, password = PASSWORD) {
 
 async function openDemoStore(page: Page) {
   await expect(page.getByLabel("Switch store")).toBeVisible();
-  await page.getByLabel("Switch store").selectOption({ label: "Demo Store" });
+  await page.getByLabel("Switch store").click();
+  await page.getByRole("option", { name: "Demo Store" }).click();
   await expect(page.getByText("Demo Store").first()).toBeVisible();
 }
 
@@ -86,6 +87,9 @@ test("tax settings persist across a reload", async ({ page }) => {
   // Settings is one workspace: open it from the main sidebar, then pick the section on its left.
   await page.getByRole("link", { name: "Settings", exact: true }).click();
   await page.getByRole("link", { name: "Taxes" }).click();
+  // GST rules (Settings phase 6) refuse a state that contradicts the GSTIN's state code, so a registered store
+  // changes state by clearing the GSTIN here and restoring a valid Karnataka one below.
+  await page.getByLabel("GSTIN").fill("");
   await page.getByLabel("Your state (place of supply)").click();
   await page.getByRole("option", { name: "Maharashtra" }).click();
   await page.getByRole("button", { name: "Save changes" }).click();
@@ -93,6 +97,7 @@ test("tax settings persist across a reload", async ({ page }) => {
   await page.reload();
   await expect(page.getByLabel("Your state (place of supply)")).toContainText("Maharashtra");
   // put it back so re-runs start from the same state
+  await page.getByLabel("GSTIN").fill("29AAFCD5862R1ZR");
   await page.getByLabel("Your state (place of supply)").click();
   await page.getByRole("option", { name: "Karnataka" }).click();
   await page.getByRole("button", { name: "Save changes" }).click();

@@ -1,3 +1,4 @@
+import { createHash } from "node:crypto";
 import { beforeEach, describe, expect, it } from "vitest";
 import { schema, type Db } from "@bs/db";
 import {
@@ -5,9 +6,14 @@ import {
   hashBypassToken,
   hashStorePassword,
   invalidateHostCache,
+  needsStorePasswordRehash,
   resolveHostToTenant,
+  tenantTag,
+  updateStoreStatus,
   verifyBypassToken,
   verifyStorePassword,
+  type Runtime,
+  type TenantContext,
 } from "../src/index.ts";
 
 describe("Storefront Lifecycle & Host Resolution", () => {
@@ -435,7 +441,7 @@ describe("Storefront Lifecycle & Host Resolution", () => {
   });
 
   describe("Password and Bypass Token Crypto Helpers", () => {
-    it("hashes and verifies store passwords", async () => {
+    it("hashes and verifies store passwords and prevents hash replay", async () => {
       const password = "my-secret-store-password-2026";
       const hash = await hashStorePassword(password);
 
@@ -443,9 +449,11 @@ describe("Storefront Lifecycle & Host Resolution", () => {
       expect(await verifyStorePassword(password, hash)).toBe(true);
       expect(await verifyStorePassword("wrong-password", hash)).toBe(false);
       expect(await verifyStorePassword("", hash)).toBe(false);
+      // DEFECT 2: Replaying the hash as the plaintext password must be rejected!
+      expect(await verifyStorePassword(hash, hash)).toBe(false);
     });
 
-    it("hashes and verifies preview bypass tokens", () => {
+    it("hashes and verifies preview bypass tokens and prevents hash replay", () => {
       const token = "preview-token-12345";
       const hash = hashBypassToken(token);
 
@@ -453,6 +461,68 @@ describe("Storefront Lifecycle & Host Resolution", () => {
       expect(verifyBypassToken(token, hash)).toBe(true);
       expect(verifyBypassToken("wrong-token", hash)).toBe(false);
       expect(verifyBypassToken("", hash)).toBe(false);
+      // DEFECT 2: Replaying the bypass token hash as the plaintext token must be rejected!
+      expect(verifyBypassToken(hash, hash)).toBe(false);
+    });
+
+    it("verifies legacy sha256 password hash without plain equality shortcut and recognizes rehash needed", async () => {
+      const password = "legacy-store-password";
+      const legacyHash = createHash("sha256").update(password).digest("hex");
+      expect(needsStorePasswordRehash(legacyHash)).toBe(true);
+      expect(await verifyStorePassword(password, legacyHash)).toBe(true);
+      // Legacy hash replay must also be rejected
+      expect(await verifyStorePassword(legacyHash, legacyHash)).toBe(false);
+    });
+  });
+
+  describe("updateStoreStatus() - Cache Invalidation (Defect 1)", () => {
+    it("invalidates cache after status update is committed", async () => {
+      const revalidatedTags: string[][] = [];
+      const mockDb = {
+        transaction: async (cb: (tx: unknown) => Promise<unknown>) => {
+          return await cb({
+            execute: async () => {},
+            select: () => ({
+              from: () => ({
+                where: () => ({
+                  limit: async () => [{ id: "status-row-1" }],
+                }),
+              }),
+            }),
+            update: () => ({
+              set: () => ({
+                where: async () => {},
+              }),
+            }),
+            insert: () => ({
+              values: async () => {},
+            }),
+          });
+        },
+      } as unknown as Db;
+
+      const mockRt = {
+        service: "web",
+        _db: { db: mockDb },
+        revalidateTags: async (tags: string[]) => {
+          revalidatedTags.push(tags);
+        },
+        close: async () => {},
+      } as unknown as Runtime;
+
+      const ctx: TenantContext = {
+        tenantId,
+        storeStatus: "live",
+        actor: { type: "staff", userId: "user-1" },
+        roles: ["store_owner"],
+        permissions: ["settings.write", "storefront.manage"],
+        requestId: "req-1",
+      };
+
+      await updateStoreStatus(mockRt, ctx, { mode: "live" });
+      expect(revalidatedTags.length).toBe(1);
+      expect(revalidatedTags[0]).toContain(tenantTag(tenantId, "store-shell"));
+      expect(revalidatedTags[0]).toContain(tenantTag(tenantId, "seo"));
     });
   });
 });

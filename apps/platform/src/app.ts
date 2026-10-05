@@ -73,6 +73,8 @@ import {
   listRecentEmailDeliveries,
   sendPlatformEmail,
   renderEmail,
+  listPlatformPlanChangeRequests,
+  decidePlatformPlanChangeRequest,
   createLogger,
   requestLogger,
   resolveRequestId,
@@ -346,6 +348,14 @@ export const platformRouter = os.router({
   plans: {
     list: os.plans.list.use(requirePlatformStaff).handler(({ context }) => listPlatformPlans(context.rt)),
     invoices: os.plans.invoices.use(requirePlatformStaff).handler(({ context, input }) => listPlatformInvoices(context.rt, input)),
+    listRequests: os.plans.listRequests.use(requirePlatformStaff).handler(({ context, input }) => {
+      const staffUserId = actor(context);
+      return listPlatformPlanChangeRequests(context.rt, staffUserId, input?.status);
+    }),
+    decideRequest: os.plans.decideRequest.use(requireStaff("platform_admin")).handler(({ context, input }) => {
+      const staffUserId = actor(context);
+      return decidePlatformPlanChangeRequest(context.rt, staffUserId, input, context.meta);
+    }),
   },
   signups: {
     list: os.signups.list.use(requirePlatformStaff).handler(({ context, input }) => listPlatformSignups(context.rt, input)),

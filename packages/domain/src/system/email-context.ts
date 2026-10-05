@@ -9,7 +9,15 @@ type Q = Db;
 /** The store's name, public address and support address, for the email header and footer. */
 export async function loadEmailBrand(tx: Q, tenantId: string): Promise<EmailBrand> {
   const [tenant] = await tx.select({ slug: schema.tenants.slug, name: schema.tenants.name }).from(schema.tenants).where(eq(schema.tenants.id, tenantId)).limit(1);
-  const [settings] = await tx.select({ storeName: schema.storeSettings.storeName, supportEmail: schema.storeSettings.supportEmail }).from(schema.storeSettings).where(eq(schema.storeSettings.tenantId, tenantId)).limit(1);
+  const [settings] = await tx
+    .select({
+      storeName: schema.storeSettings.storeName,
+      supportEmail: schema.storeSettings.supportEmail,
+      notifications: schema.storeSettings.notifications,
+    })
+    .from(schema.storeSettings)
+    .where(eq(schema.storeSettings.tenantId, tenantId))
+    .limit(1);
   const [domain] = await tx
     .select({ hostname: schema.domains.hostname })
     .from(schema.domains)
@@ -19,10 +27,14 @@ export async function loadEmailBrand(tx: Q, tenantId: string): Promise<EmailBran
 
   const platformDomain = (process.env.PLATFORM_DOMAIN?.trim() || "bcom.si").toLowerCase();
   const host = domain?.hostname ?? `${tenant?.slug ?? "store"}.${platformDomain}`;
+  const notifObj = (settings?.notifications && typeof settings.notifications === "object" ? settings.notifications : {}) as Record<string, unknown>;
+  const footerNote = typeof notifObj.footerNote === "string" && notifObj.footerNote.trim() ? notifObj.footerNote.trim() : null;
+
   return {
     storeName: settings?.storeName || tenant?.name || "Our store",
     baseUrl: `https://${host}`,
     supportEmail: settings?.supportEmail ?? null,
+    footerNote,
   };
 }
 

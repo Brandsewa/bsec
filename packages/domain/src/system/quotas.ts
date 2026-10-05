@@ -59,7 +59,7 @@ export interface TenantUsageReport {
   warnings: string[];
 }
 
-const DEFAULT_TIER_TABLE: Record<
+export const DEFAULT_TIER_TABLE: Record<
   PlanQuotaKey,
   { unit: string; enforcement: "hard" | "soft" | "notify"; XS: number; S: number; M: number; L: number; desc: string }
 > = {

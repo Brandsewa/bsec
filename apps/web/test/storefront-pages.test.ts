@@ -6,7 +6,7 @@ vi.mock("server-only", () => ({}));
 
 import type { BlockInstance } from "@bs/blocks";
 import { BlockRenderer } from "../src/components/blocks/BlockRenderer.tsx";
-import { policyContent, isValidPolicyType } from "../src/app/policies/[type]/page.tsx";
+import { fallbackPolicyContent, isValidPolicyType } from "../src/app/policies/[type]/page.tsx";
 
 describe("Storefront Pages & Block Rendering", () => {
   describe("BlockRenderer", () => {
@@ -237,7 +237,7 @@ describe("Storefront Pages & Block Rendering", () => {
 
     it("provides fallback content and metadata for all valid policies", () => {
       for (const type of ["privacy", "terms", "refund", "shipping"] as const) {
-        const policy = policyContent[type];
+        const policy = fallbackPolicyContent[type];
         expect(policy).toBeDefined();
         expect(policy.title.length).toBeGreaterThan(0);
         expect(policy.body.length).toBeGreaterThan(0);

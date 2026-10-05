@@ -64,6 +64,10 @@ export interface InvoiceTotals {
   isInterState: boolean;
 }
 
+import { isFeatureEnabled } from "../features.ts";
+import { normalizeState } from "./tax-engine.ts";
+import { resolveTaxClass } from "../admin/tax-settings.ts";
+
 export interface GenerateInvoiceInput {
   orderId: string;
   type?: "invoice" | "credit_note" | undefined;
@@ -72,6 +76,9 @@ export interface GenerateInvoiceInput {
   buyerGstin?: string | undefined;
   placeOfSupplyState?: string | undefined;
   pricesIncludeTax?: boolean | undefined;
+  returnId?: string | undefined;
+  parentInvoiceId?: string | undefined;
+  creditLines?: Array<{ orderItemId: string; quantity: number }> | undefined;
 }
 
 export interface GenerateInvoiceResult {
@@ -84,13 +91,7 @@ export interface GenerateInvoiceResult {
   lineItems: TaxLineCalculation[];
 }
 
-/**
- * Normalizes state name to compare place of supply.
- */
-export function normalizeState(state?: string | null): string {
-  if (!state) return "";
-  return state.trim().toLowerCase().replace(/[^a-z0-9]/g, "");
-}
+export { normalizeState } from "./tax-engine.ts";
 
 /**
  * Calculates GST line item amounts according strictly to PLAN §15 V1 rules:
@@ -196,20 +197,70 @@ export async function generateInvoice(
       throw new Error(`Order not found: ${input.orderId}`);
     }
 
+    // Idempotency: if credit note for this return already exists, return it
+    if (input.type === "credit_note" && input.returnId) {
+      const [existingCn] = await db
+        .select()
+        .from(invoices)
+        .where(
+          and(
+            eq(invoices.tenantId, ctx.tenantId),
+            eq(invoices.returnId, input.returnId),
+            eq(invoices.type, "credit_note"),
+          ),
+        )
+        .limit(1);
+
+      if (existingCn) {
+        return {
+          invoiceId: existingCn.id,
+          number: existingCn.number,
+          fy: existingCn.fy,
+          type: "credit_note",
+          issuedAt: existingCn.issuedAt,
+          totals: existingCn.totals as unknown as InvoiceTotals,
+          lineItems: [],
+        };
+      }
+    }
+
     const items = await db
       .select()
       .from(orderItems)
       .where(and(eq(orderItems.tenantId, ctx.tenantId), eq(orderItems.orderId, input.orderId)));
 
-    // 2. Resolve place of supply (seller vs ship-to state). Seller details come from the store's own
-    // tax settings (Settings > Taxes); explicit input still wins. "Delhi" is only the last-resort default
-    // for stores that have not configured a seller state or address yet.
+    // 2. Check feature flag & resolve place of supply
+    const gstV2Enabled = await isFeatureEnabled(db, ctx.tenantId, "settings.gst_v2");
     const storeCfg = await readStoreConfig(db);
-    const [settingsRow] = await db.select({ address: storeSettings.address }).from(storeSettings).limit(1);
+    const [settingsRow] = await db
+      .select({ address: storeSettings.address, checkout: storeSettings.checkout })
+      .from(storeSettings)
+      .limit(1);
     const addressState = (settingsRow?.address as { state?: string } | null | undefined)?.state;
     const shippingAddr = (order.shippingAddress ?? {}) as { state?: string };
-    const destinationState = input.placeOfSupplyState ?? order.placeOfSupplyState ?? shippingAddr.state ?? "Delhi";
-    const originState = input.sellerState ?? storeCfg.tax.sellerState ?? addressState ?? "Delhi";
+    const rawTaxObj = ((settingsRow?.checkout ?? {}) as Record<string, unknown>).tax as Record<string, unknown> | undefined;
+
+    let destinationState: string;
+    let originState: string;
+
+    if (gstV2Enabled) {
+      const explicitDest = input.placeOfSupplyState ?? order.placeOfSupplyState ?? shippingAddr.state;
+      if (!explicitDest || !explicitDest.trim()) {
+        throw new Error("Bad Request: Shipping destination state is required to calculate GST.");
+      }
+      destinationState = explicitDest.trim();
+
+      const explicitOrigin = input.sellerState ?? storeCfg.tax.sellerState ?? addressState;
+      if (!explicitOrigin || !explicitOrigin.trim()) {
+        throw new Error("Bad Request: Seller state is missing. Please configure your registered state in Settings > Taxes.");
+      }
+      originState = explicitOrigin.trim();
+    } else {
+      // Flag-off: preserve legacy Delhi default
+      destinationState = input.placeOfSupplyState ?? order.placeOfSupplyState ?? shippingAddr.state ?? "Delhi";
+      originState = input.sellerState ?? storeCfg.tax.sellerState ?? addressState ?? "Delhi";
+    }
+
     const sellerGstin = input.sellerGstin ?? storeCfg.tax.gstin ?? undefined;
     const pricesIncludeTax = input.pricesIncludeTax ?? storeCfg.tax.pricesIncludeTax;
     const isInterState = normalizeState(originState) !== normalizeState(destinationState);
@@ -231,41 +282,90 @@ export async function generateInvoice(
     let totalSgst = 0;
     let totalIgst = 0;
     let totalDiscount = 0;
+    let computedSubtotal = 0;
 
-    const lineCalculations = items.map((it) => {
-      totalDiscount += it.discountAmount;
+    // Credit Note quantity mapping if creditLines provided
+    const creditQtyMap = input.creditLines
+      ? new Map(input.creditLines.map((cl) => [cl.orderItemId, cl.quantity]))
+      : null;
+
+    const lineCalculations: TaxLineCalculation[] = [];
+
+    for (const it of items) {
+      // If generating credit note with specific returned items, filter/scale
+      let qty = it.quantity;
+      if (creditQtyMap) {
+        qty = creditQtyMap.get(it.id) ?? 0;
+        if (qty <= 0) continue;
+      }
+
+      // Proportional discount for partial return
+      const proportionalDiscount = Math.round((it.discountAmount * qty) / Math.max(1, it.quantity));
+      totalDiscount += proportionalDiscount;
+
+      let rateBps: number;
+      let hsn: string | null = it.hsn ?? null;
+
+      if (gstV2Enabled) {
+        if (it.taxRateBps != null && it.taxRateBps > 0) {
+          rateBps = it.taxRateBps;
+        } else {
+          // Resolve from store tax classes
+          const resolved = await resolveTaxClass(db, ctx.tenantId, null);
+          rateBps = resolved.rateBps;
+          if (!hsn) hsn = resolved.defaultHsn;
+        }
+      } else {
+        rateBps = it.taxRateBps || 1800; // Legacy default
+      }
+
       const calc = calculateGstLineItem({
         orderItemId: it.id,
         variantId: it.variantId,
         sku: it.sku,
         productTitle: it.productTitle,
-        hsn: it.hsn,
-        quantity: it.quantity,
+        hsn,
+        quantity: qty,
         unitPrice: it.unitPrice,
-        discountAmount: it.discountAmount,
-        taxRateBps: it.taxRateBps || 1800, // default 18% standard GST if unset
+        discountAmount: proportionalDiscount,
+        taxRateBps: rateBps,
         pricesIncludeTax,
         isInterState,
       });
 
+      computedSubtotal += it.unitPrice * qty;
       totalTaxable += calc.taxableAmount;
       totalCgst += calc.cgst;
       totalSgst += calc.sgst;
       totalIgst += calc.igst;
 
-      return calc;
-    });
+      lineCalculations.push(calc);
+    }
 
-    // 5. Shipping tax treatment (standard 18% GST on freight)
-    const shippingTotal = order.shippingTotal;
-    const shippingTaxRate = 1800; // 18%
+    // 5. Shipping tax treatment
+    // Credit notes do not credit shipping unless explicitly specified (no freight return)
+    const isCreditNote = invoiceType === "credit_note";
+    const shippingTotal = isCreditNote ? 0 : order.shippingTotal;
     let shippingTaxable = shippingTotal;
     let shippingCgst = 0;
     let shippingSgst = 0;
     let shippingIgst = 0;
 
     if (shippingTotal > 0) {
-      if (pricesIncludeTax) {
+      let shippingTaxRate = 1800;
+      if (gstV2Enabled) {
+        const rawShippingTaxMode = (rawTaxObj?.shippingTax as string | undefined) ?? "highest_line_rate";
+        if (rawShippingTaxMode === "none") {
+          shippingTaxRate = 0;
+        } else {
+          // Highest line rate
+          shippingTaxRate = lineCalculations.reduce((max, l) => Math.max(max, l.taxRateBps), 0);
+        }
+      }
+
+      if (shippingTaxRate === 0) {
+        shippingTaxable = shippingTotal;
+      } else if (pricesIncludeTax) {
         shippingTaxable = Math.round((shippingTotal * 10000) / (10000 + shippingTaxRate));
         const shippingTax = shippingTotal - shippingTaxable;
         if (isInterState) {
@@ -292,24 +392,26 @@ export async function generateInvoice(
     const grandTax = grandCgst + grandSgst + grandIgst;
     const grandTotal = grandTaxable + grandTax;
 
+    const multiplier = isCreditNote ? -1 : 1;
+
     const totals: InvoiceTotals = {
-      subtotal: order.subtotal,
-      discountTotal: totalDiscount,
-      taxableAmount: grandTaxable,
-      cgst: grandCgst,
-      sgst: grandSgst,
-      igst: grandIgst,
-      totalTax: grandTax,
-      shippingTaxable,
-      shippingCgst,
-      shippingSgst,
-      shippingIgst,
-      shippingTotal,
-      grandTotal,
+      subtotal: multiplier * (isCreditNote ? computedSubtotal : order.subtotal),
+      discountTotal: multiplier * totalDiscount,
+      taxableAmount: multiplier * grandTaxable,
+      cgst: multiplier * grandCgst,
+      sgst: multiplier * grandSgst,
+      igst: multiplier * grandIgst,
+      totalTax: multiplier * grandTax,
+      shippingTaxable: multiplier * shippingTaxable,
+      shippingCgst: multiplier * shippingCgst,
+      shippingSgst: multiplier * shippingSgst,
+      shippingIgst: multiplier * shippingIgst,
+      shippingTotal: multiplier * shippingTotal,
+      grandTotal: multiplier * grandTotal,
       isInterState,
     };
 
-    // 6. Insert invoice record
+    // 6. Insert invoice / credit note record
     const [inserted] = await db
       .insert(invoices)
       .values({
@@ -322,6 +424,8 @@ export async function generateInvoice(
         buyerGstin: input.buyerGstin ?? null,
         placeOfSupplyState: destinationState,
         totals: totals as unknown as Record<string, unknown>,
+        returnId: input.returnId ?? null,
+        parentInvoiceId: input.parentInvoiceId ?? null,
       })
       .returning();
 

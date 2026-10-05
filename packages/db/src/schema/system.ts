@@ -81,8 +81,11 @@ export const emailLog = tenantTable(
     toEmail: text("to_email").notNull(),
     subject: text("subject").notNull(),
     providerId: text("provider_id"),
-    status: text("status").notNull().default("queued"), // queued, sent, failed
+    status: text("status").notNull().default("queued"), // queued, sent, failed, skipped
     eventRef: text("event_ref"),
+    eventKey: text("event_key"),
+    channel: text("channel").notNull().default("email"),
+    suppressedReason: text("suppressed_reason"),
     error: text("error"),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().default(sql`now()`),
     sentAt: timestamp("sent_at", { withTimezone: true }),

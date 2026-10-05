@@ -2,7 +2,7 @@
 
 import React, { useState } from "react";
 import { useRouter } from "next/navigation";
-import type { StorefrontCart } from "@bs/domain";
+import type { StorefrontCart, StorefrontCheckoutConsent } from "@bs/domain";
 import { CheckoutForm, type CheckoutShippingRate, type CheckoutPaymentOptions } from "./CheckoutForm.tsx";
 import { OrderSummary } from "./OrderSummary.tsx";
 
@@ -12,9 +12,11 @@ export interface CheckoutContainerProps {
   shippingRates: CheckoutShippingRate[];
   /** Which payment methods this store offers. */
   paymentOptions: CheckoutPaymentOptions;
+  /** Which consent boxes the store shows above the Place Order button. */
+  consent: StorefrontCheckoutConsent;
 }
 
-export function CheckoutContainer({ cart, shippingRates, paymentOptions }: CheckoutContainerProps) {
+export function CheckoutContainer({ cart, shippingRates, paymentOptions, consent }: CheckoutContainerProps) {
   const router = useRouter();
   const [shippingMethod, setShippingMethod] = useState<string>(shippingRates[0]?.method ?? "");
 
@@ -31,6 +33,7 @@ export function CheckoutContainer({ cart, shippingRates, paymentOptions }: Check
           cart={cart}
           shippingRates={shippingRates}
           paymentOptions={paymentOptions}
+          consent={consent}
           paymentMethod={paymentMethod}
           onPaymentMethodChange={setPaymentMethod}
           shippingMethod={shippingMethod}

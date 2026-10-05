@@ -18,6 +18,7 @@ import {
   checkCustomerRegisterRateLimit,
 } from "../system/rate-limit.ts";
 import { createLogger } from "../logger.ts";
+import { isSignInMethodBlocked } from "../admin/customer-account-settings.ts";
 
 const logger = createLogger("customer-auth");
 
@@ -95,6 +96,10 @@ export async function registerCustomer(
 
   // Rate limit registration per IP
   await checkCustomerRegisterRateLimit(db, { tenantId, ip });
+
+  if (await isSignInMethodBlocked(db, tenantId, "emailPasswordEnabled")) {
+    throw new Error("Email and password registration is disabled for this store");
+  }
 
   const outcome = await withTenant(db, tenantId, async (tx) => {
     // Check if customer row exists for email
@@ -267,6 +272,10 @@ export async function loginCustomer(
 
   if (!meta.skipRateLimit) {
     await checkCustomerLoginRateLimit(db, { tenantId, ip, email });
+  }
+
+  if (await isSignInMethodBlocked(db, tenantId, "emailPasswordEnabled")) {
+    throw new Error("Email and password sign-in is disabled for this store");
   }
 
   const result = await withTenant(db, tenantId, async (tx): Promise<CustomerAuthResult | null> => {

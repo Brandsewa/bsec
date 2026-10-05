@@ -1,6 +1,8 @@
 import { sql } from "drizzle-orm";
 import {
   boolean,
+  check,
+  index,
   integer,
   jsonb,
   text,
@@ -31,6 +33,7 @@ export const storeSettings = tenantTable(
     orderPrefix: text("order_prefix").notNull().default("#"),
     social: jsonb("social"),
     checkout: jsonb("checkout"),
+    orderSettings: jsonb("order_settings"),
     notifications: jsonb("notifications"),
     returnSettings: jsonb("return_settings"),
     autoPublishReviews: boolean("auto_publish_reviews").notNull().default(false),
@@ -61,11 +64,19 @@ export const storeStatus = tenantTable(
     passwordHash: text("password_hash"),
     retryAfterMinutes: integer("retry_after_minutes").notNull().default(60),
     bypassTokenHash: text("bypass_token_hash"),
+    maintenanceStartsAt: timestamp("maintenance_starts_at", { withTimezone: true }),
+    maintenanceEndsAt: timestamp("maintenance_ends_at", { withTimezone: true }),
+    modeBeforeMaintenance: text("mode_before_maintenance"),
+    maintenanceAllowStaffPreview: boolean("maintenance_allow_staff_preview").notNull().default(true),
     changedBy: uuid("changed_by"),
     changedAt: timestamp("changed_at", { withTimezone: true }).notNull().default(sql`now()`),
   },
   (t) => [
     unique("store_status_tenant_id_uniq").on(t.tenantId),
+    check(
+      "store_status_maintenance_window_chk",
+      sql`maintenance_ends_at is null or maintenance_starts_at is null or maintenance_ends_at > maintenance_starts_at`,
+    ),
     tenantForeignKey({
       tableTenantId: t.tenantId,
       column: t.backgroundMediaId,
@@ -73,6 +84,31 @@ export const storeStatus = tenantTable(
       name: "store_status_background_media_fk",
       onDelete: "set null",
     }),
+  ],
+);
+
+/**
+ * Store status transitions (PLAN §5.4 / Settings Phase 8).
+ * Append-only log of operational mode changes.
+ */
+export const storeStatusTransitions = tenantTable(
+  "store_status_transitions",
+  {
+    id: uuid("id").default(sql`uuidv7()`).primaryKey(),
+    fromMode: text("from_mode").notNull(),
+    toMode: text("to_mode").notNull(),
+    reason: text("reason").notNull(),
+    actorType: text("actor_type").notNull(),
+    actorId: text("actor_id"),
+    at: timestamp("at", { withTimezone: true }).notNull().default(sql`now()`),
+  },
+  (t) => [
+    unique("store_status_transitions_tenant_id_id_uniq").on(t.tenantId, t.id),
+    index("store_status_transitions_tenant_at_idx").on(t.tenantId, t.at),
+    check(
+      "store_status_transitions_reason_chk",
+      sql`reason IN ('manual', 'scheduled_start', 'scheduled_end', 'watchdog_restore', 'platform')`,
+    ),
   ],
 );
 
@@ -106,5 +142,28 @@ export const seoSettings = tenantTable(
       name: "seo_settings_default_og_image_media_fk",
       onDelete: "set null",
     }),
+  ],
+);
+
+/**
+ * Customer account settings (PLAN §5.2 / Settings Phase 4).
+ * Controls login methods, self-service returns/cancellation, and sign-in links visibility.
+ */
+export const customerAccountSettings = tenantTable(
+  "customer_account_settings",
+  {
+    id: uuid("id").default(sql`uuidv7()`).primaryKey(),
+    showSignInLinks: boolean("show_sign_in_links").notNull().default(true),
+    emailPasswordEnabled: boolean("email_password_enabled").notNull().default(true),
+    phoneOtpEnabled: boolean("phone_otp_enabled").notNull().default(true),
+    allowSelfServeReturns: boolean("allow_self_serve_returns").notNull().default(true),
+    allowSelfServeCancellation: boolean("allow_self_serve_cancellation").notNull().default(false),
+    version: integer("version").notNull().default(1),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().default(sql`now()`),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().default(sql`now()`),
+  },
+  (t) => [
+    unique("customer_account_settings_tenant_id_uniq").on(t.tenantId),
+    unique("customer_account_settings_tenant_id_id_uniq").on(t.tenantId, t.id),
   ],
 );

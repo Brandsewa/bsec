@@ -398,6 +398,49 @@ export const platformPlansContract = {
       status: z.string(),
       issuedAt: z.string(),
     }))),
+  listRequests: oc
+    .route({ method: "GET", path: "/platform/plans/requests" })
+    .input(z.object({ status: z.enum(["open", "approved", "declined", "cancelled"]).optional() }).optional())
+    .output(
+      z.array(
+        z.object({
+          id: z.string().uuid(),
+          tenantId: z.string().uuid(),
+          tenantSlug: z.string(),
+          tenantName: z.string(),
+          requestedBy: z.string().uuid(),
+          requestedByEmail: z.string(),
+          fromPlanId: z.string().uuid().nullable().optional(),
+          fromPlanCode: z.string().nullable().optional(),
+          toPlanId: z.string().uuid(),
+          toPlanCode: z.string(),
+          toPlanName: z.string(),
+          interval: z.enum(["monthly", "yearly"]),
+          note: z.string().nullable().optional(),
+          status: z.enum(["open", "approved", "declined", "cancelled"]),
+          decidedBy: z.string().uuid().nullable().optional(),
+          decidedAt: z.string().nullable().optional(),
+          decisionNote: z.string().nullable().optional(),
+          createdAt: z.string(),
+        }),
+      ),
+    ),
+  decideRequest: oc
+    .route({ method: "POST", path: "/platform/plans/requests/{id}/decide" })
+    .input(
+      z.object({
+        id: z.string().uuid(),
+        decision: z.enum(["approved", "declined"]),
+        note: z.string().max(500).optional(),
+      }),
+    )
+    .output(
+      z.object({
+        id: z.string().uuid(),
+        status: z.enum(["approved", "declined"]),
+        message: z.string(),
+      }),
+    ),
 };
 
 export const platformSignupsContract = {

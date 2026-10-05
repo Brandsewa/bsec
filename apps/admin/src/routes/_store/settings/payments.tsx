@@ -1,15 +1,15 @@
 import { createFileRoute, useRouteContext } from "@tanstack/react-router";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useState, type FormEvent } from "react";
-import { AlertTriangle } from "lucide-react";
+import { AlertTriangle, CheckCircle2, Clock, ShieldAlert, Sparkles, AlertCircle } from "lucide-react";
 import { EmptyState, FormSkeleton, PageSkeleton, toast } from "@bs/ui";
+import { Badge } from "@bs/ui";
 import { Alert } from "@bs/ui";
 import { Button } from "@bs/ui";
-import { Checkbox } from "@bs/ui";
+import { Switch } from "@bs/ui";
 import { Input } from "@bs/ui";
-import { ConfirmDialog } from "../../../components/confirm-dialog.tsx";
 import { Field } from "../../../components/field.tsx";
-import { SettingsPageFrame, SettingsSection, useUnsavedGuard } from "../../../components/settings/settings-page.tsx";
+import { HeaderActions, SettingsPageFrame, SettingsSection, useUnsavedGuard } from "../../../components/settings/settings-page.tsx";
 import { orpc } from "../../../lib/orpc.ts";
 import { errorMessage } from "../../../lib/errors.ts";
 
@@ -19,15 +19,14 @@ export const Route = createFileRoute("/_store/settings/payments")({
 });
 
 const TITLE = "Payments";
-const DESCRIPTION = "Choose how customers can pay and connect your own payment gateway.";
+const DESCRIPTION = "Payment methods catalogue, manual payments (Cash on Delivery), and online gateway status.";
 
 export function PaymentsSettingsPage() {
-  const status = useQuery(orpc.admin.payments.get.queryOptions());
+  const query = useQuery(orpc.admin.paymentMethods.list.queryOptions());
   const { store } = useRouteContext({ from: "/_store" });
-  // ADR-020: gateway credentials are owner-only; others see status, not the form.
-  const canManageCredentials = (store?.permissions ?? []).includes("payments.manage");
+  const canManagePayments = (store?.permissions ?? []).includes("payments.manage");
 
-  if (status.isLoading) {
+  if (query.isLoading) {
     return (
       <SettingsPageFrame title={TITLE} description={DESCRIPTION}>
         <SettingsSection>
@@ -36,182 +35,374 @@ export function PaymentsSettingsPage() {
       </SettingsPageFrame>
     );
   }
-  if (status.isError || !status.data) {
+
+  if (query.isError || !query.data) {
     return (
       <SettingsPageFrame title={TITLE} description={DESCRIPTION}>
         <SettingsSection>
           <EmptyState
             icon={AlertTriangle}
-            title="Could not load payment settings"
-            description={errorMessage(status.error)}
-            action={<Button onClick={() => void status.refetch()}>Try again</Button>}
+            title="Could not load payment methods"
+            description={errorMessage(query.error)}
+            action={<Button onClick={() => void query.refetch()}>Try again</Button>}
           />
         </SettingsSection>
       </SettingsPageFrame>
     );
   }
 
+  const methods = query.data;
+  const codMethod = methods.find((m) => m.provider === "cod");
+  const razorpayMethod = methods.find((m) => m.provider === "razorpay");
+
   return (
     <SettingsPageFrame title={TITLE} description={DESCRIPTION}>
-      {!status.data.encryptionKeyConfigured ? (
+      {!canManagePayments ? (
         <SettingsSection>
           <Alert role="alert">
-            Saving payment keys is not available yet: the platform operator still has to configure the server encryption key (TENANT_SECRETS_KEY). Cash on delivery settings below work now.
+            <span className="font-medium text-foreground">Read-only view:</span> Only store owners and administrators with payment management permissions can edit payment configurations.
           </Alert>
         </SettingsSection>
       ) : null}
-      <CodForm initial={status.data.cod} />
-      {canManageCredentials ? (
-        <RazorpayForm razorpay={status.data.razorpay} keyMissing={!status.data.encryptionKeyConfigured} />
-      ) : (
-        <SettingsSection title="Razorpay" description="Payment gateway keys can only be changed by the Store Owner.">
-          <p className="text-xs">Status: {status.data.razorpay.configured ? `Connected (key ${status.data.razorpay.keyIdHint ?? ""})` : "Not connected"}</p>
-        </SettingsSection>
-      )}
+
+      <SettingsSection
+        title="Payment methods catalogue"
+        description="Available payment channels supported by the platform."
+      >
+        <div className="grid gap-3 sm:grid-cols-2">
+          {/* Cash on delivery card */}
+          <div className="flex flex-col justify-between rounded-lg border border-border p-4 bg-card">
+            <div>
+              <div className="flex items-center justify-between gap-2">
+                <h3 className="font-medium text-foreground">Cash on Delivery (COD)</h3>
+                {codMethod?.status === "active" ? (
+                  <Badge variant="outline" className="border-emerald-500/30 bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 gap-1">
+                    <CheckCircle2 className="h-3 w-3" /> Active
+                  </Badge>
+                ) : (
+                  <Badge variant="secondary">Disabled</Badge>
+                )}
+              </div>
+              <p className="mt-1 text-xs text-muted-foreground">
+                Manual payment method allowing customers to pay with cash or UPI upon delivery.
+              </p>
+            </div>
+            <div className="mt-4 pt-3 border-t border-border flex items-center justify-between text-xs text-muted-foreground">
+              <span>{codMethod?.status === "active" ? "Customers can checkout via COD" : "Disabled on storefront"}</span>
+              <span className="font-medium text-foreground">Manual</span>
+            </div>
+          </div>
+
+          {/* Razorpay card */}
+          <div className="flex flex-col justify-between rounded-lg border border-border p-4 bg-card">
+            <div>
+              <div className="flex items-center justify-between gap-2">
+                <h3 className="font-medium text-foreground">Razorpay</h3>
+                {razorpayMethod?.status === "active" ? (
+                  <Badge variant="outline" className="border-emerald-500/30 bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 gap-1">
+                    <CheckCircle2 className="h-3 w-3" /> Active
+                  </Badge>
+                ) : razorpayMethod?.status === "pending_setup" ? (
+                  <Badge variant="outline" className="border-amber-500/30 bg-amber-500/10 text-amber-600 dark:text-amber-400 gap-1">
+                    <Clock className="h-3 w-3" /> Pending setup
+                  </Badge>
+                ) : (
+                  <Badge variant="secondary" className="gap-1">
+                    <AlertCircle className="h-3 w-3" /> Unavailable
+                  </Badge>
+                )}
+              </div>
+              <p className="mt-1 text-xs text-muted-foreground">
+                Accept UPI, Cards, Netbanking, and Wallets in Indian Rupees directly into your account.
+              </p>
+            </div>
+            <div className="mt-4 pt-3 border-t border-border flex items-center justify-between text-xs text-muted-foreground">
+              <span>{razorpayMethod?.status === "active" ? "Gateway connected" : "Adapter unavailable / deferred"}</span>
+              <span className="font-medium text-foreground">Online</span>
+            </div>
+          </div>
+
+          {/* Coming Soon: PhonePe */}
+          <div className="flex flex-col justify-between rounded-lg border border-dashed border-border p-4 bg-muted/20 opacity-80">
+            <div>
+              <div className="flex items-center justify-between gap-2">
+                <h3 className="font-medium text-foreground">PhonePe Payment Gateway</h3>
+                <Badge variant="secondary" className="gap-1 text-xs">
+                  <Sparkles className="h-3 w-3 text-amber-500" /> Coming soon
+                </Badge>
+              </div>
+              <p className="mt-1 text-xs text-muted-foreground">
+                Direct UPI flows and merchant payments powered by PhonePe PG.
+              </p>
+            </div>
+            <div className="mt-4 pt-3 border-t border-border text-xs text-muted-foreground">
+              <span>Planned in future platform releases</span>
+            </div>
+          </div>
+
+          {/* Coming Soon: PayU */}
+          <div className="flex flex-col justify-between rounded-lg border border-dashed border-border p-4 bg-muted/20 opacity-80">
+            <div>
+              <div className="flex items-center justify-between gap-2">
+                <h3 className="font-medium text-foreground">PayU India</h3>
+                <Badge variant="secondary" className="gap-1 text-xs">
+                  <Sparkles className="h-3 w-3 text-amber-500" /> Coming soon
+                </Badge>
+              </div>
+              <p className="mt-1 text-xs text-muted-foreground">
+                Enterprise payment gateway for high-volume transactions and EMI.
+              </p>
+            </div>
+            <div className="mt-4 pt-3 border-t border-border text-xs text-muted-foreground">
+              <span>Planned in future platform releases</span>
+            </div>
+          </div>
+        </div>
+      </SettingsSection>
+
+      {/* Cash on Delivery configuration form */}
+      <CodConfigurationForm
+        codMethod={codMethod}
+        disabled={!canManagePayments}
+        onSaved={() => void query.refetch()}
+      />
+
+      {/* Online Gateway Info Banner */}
+      <SettingsSection
+        title="Online payment gateways"
+        description="Configuration for third-party payment service providers."
+      >
+        <div className="rounded-lg border border-border p-4 bg-muted/30">
+          <div className="flex items-start gap-3">
+            <ShieldAlert className="h-5 w-5 text-muted-foreground mt-0.5" />
+            <div className="text-xs space-y-1">
+              <p className="font-medium text-foreground">Online Payment Credentials Deferred</p>
+              <p className="text-muted-foreground">
+                In accordance with platform governance, live payment gateway integrations (Razorpay) remain in test/deferred posture until authorized by the platform owner. Orders placeable on store fronts default to Cash on Delivery.
+              </p>
+            </div>
+          </div>
+        </div>
+      </SettingsSection>
     </SettingsPageFrame>
   );
 }
 
-function CodForm({ initial }: { initial: { enabled: boolean; feePaise: number } }) {
+interface CodFormValues {
+  enabled: boolean;
+  displayName: string;
+  feeRupees: string;
+  minOrderRupees: string;
+  maxOrderRupees: string;
+  instructions: string;
+}
+
+function CodConfigurationForm({
+  codMethod,
+  disabled,
+  onSaved,
+}: {
+  codMethod:
+    | {
+        status: string;
+        displayName?: string | null;
+        instructions?: string | null;
+        config?: Record<string, unknown> | null;
+      }
+    | undefined;
+  disabled: boolean;
+  onSaved: () => void;
+}) {
   const queryClient = useQueryClient();
-  const update = useMutation(orpc.admin.settings.update.mutationOptions());
-  const [enabled, setEnabled] = useState(initial.enabled);
-  const [fee, setFee] = useState(String(initial.feePaise / 100));
+  const updateMutation = useMutation(orpc.admin.paymentMethods.updateCod.mutationOptions());
 
-  const dirty = enabled !== initial.enabled || fee !== String(initial.feePaise / 100);
-  const guard = useUnsavedGuard(dirty);
+  const initialEnabled = codMethod?.status === "active";
+  const initialDisplayName = codMethod?.displayName ?? "Cash on Delivery (COD)";
+  const initialInstructions = codMethod?.instructions ?? "Pay with cash or UPI QR code at delivery.";
 
-  function onSubmit(e: FormEvent) {
+  const feePaise = typeof codMethod?.config?.feePaise === "number" ? codMethod.config.feePaise : 0;
+  const minPaise = typeof codMethod?.config?.minOrderPaise === "number" ? codMethod.config.minOrderPaise : null;
+  const maxPaise = typeof codMethod?.config?.maxOrderPaise === "number" ? codMethod.config.maxOrderPaise : null;
+
+  const initialValues: CodFormValues = {
+    enabled: initialEnabled,
+    displayName: initialDisplayName,
+    feeRupees: String(feePaise / 100),
+    minOrderRupees: minPaise != null ? String(minPaise / 100) : "",
+    maxOrderRupees: maxPaise != null ? String(maxPaise / 100) : "",
+    instructions: initialInstructions,
+  };
+
+  const [form, setForm] = useState<CodFormValues>(initialValues);
+
+  const isDirty =
+    form.enabled !== initialValues.enabled ||
+    form.displayName !== initialValues.displayName ||
+    form.feeRupees !== initialValues.feeRupees ||
+    form.minOrderRupees !== initialValues.minOrderRupees ||
+    form.maxOrderRupees !== initialValues.maxOrderRupees ||
+    form.instructions !== initialValues.instructions;
+
+  const unsavedGuard = useUnsavedGuard(isDirty && !disabled);
+
+  function handleSubmit(e: FormEvent) {
     e.preventDefault();
-    const rupees = Number(fee);
-    if (!Number.isFinite(rupees) || rupees < 0) {
-      toast.error("Enter a valid COD fee");
+    if (disabled) return;
+
+    const feeNum = Number(form.feeRupees);
+    if (!Number.isFinite(feeNum) || feeNum < 0) {
+      toast.error("Please enter a valid handling fee (₹0 or greater).");
       return;
     }
-    update.mutate(
-      { cod: { enabled, feePaise: Math.round(rupees * 100) } },
+
+    let minOrderPaise: number | null = null;
+    if (form.minOrderRupees.trim()) {
+      const minNum = Number(form.minOrderRupees);
+      if (!Number.isFinite(minNum) || minNum < 0) {
+        toast.error("Please enter a valid minimum order value (₹0 or greater).");
+        return;
+      }
+      minOrderPaise = Math.round(minNum * 100);
+    }
+
+    let maxOrderPaise: number | null = null;
+    if (form.maxOrderRupees.trim()) {
+      const maxNum = Number(form.maxOrderRupees);
+      if (!Number.isFinite(maxNum) || maxNum <= 0) {
+        toast.error("Please enter a valid maximum order value.");
+        return;
+      }
+      maxOrderPaise = Math.round(maxNum * 100);
+    }
+
+    if (minOrderPaise != null && maxOrderPaise != null && minOrderPaise > maxOrderPaise) {
+      toast.error("Minimum order value cannot exceed maximum order value.");
+      return;
+    }
+
+    updateMutation.mutate(
+      {
+        enabled: form.enabled,
+        displayName: form.displayName.trim() || "Cash on Delivery (COD)",
+        feePaise: Math.round(feeNum * 100),
+        minOrderPaise,
+        maxOrderPaise,
+      },
       {
         onSuccess: () => {
-          toast.success("Cash on delivery settings saved");
-          void queryClient.invalidateQueries({ queryKey: orpc.admin.payments.key() });
+          toast.success("Cash on Delivery settings saved");
+          void queryClient.invalidateQueries({ queryKey: orpc.admin.paymentMethods.key() });
           void queryClient.invalidateQueries({ queryKey: orpc.admin.settings.key() });
+          onSaved();
         },
-        onError: (err) => toast.error(errorMessage(err)),
+        onError: (err) => {
+          toast.error(errorMessage(err));
+        },
       },
     );
   }
 
-  return (
-    <SettingsSection title="Cash on delivery" description="Let customers pay when the order arrives.">
-      {guard}
-      <form onSubmit={onSubmit} className="grid gap-3">
-        <label className="flex items-center gap-2 text-xs text-foreground">
-          <Checkbox checked={enabled} onCheckedChange={(c) => setEnabled(c)} />
-          Accept cash on delivery orders
-        </label>
-        <div className="max-w-xs">
-          <Field id="codFee" label="COD handling fee (₹)" hint="Added to the order total for COD orders. Use 0 for no fee.">
-            <Input id="codFee" type="number" min={0} step="0.01" value={fee} disabled={!enabled} onChange={(e) => setFee(e.target.value)} />
-          </Field>
-        </div>
-        <div>
-          <Button type="submit" disabled={update.isPending || !dirty}>
-            {update.isPending ? "Saving…" : "Save COD settings"}
-          </Button>
-        </div>
-      </form>
-    </SettingsSection>
-  );
-}
-
-function RazorpayForm({
-  razorpay,
-  keyMissing,
-}: {
-  razorpay: { configured: boolean; keyIdHint: string | null; hasWebhookSecret: boolean };
-  keyMissing: boolean;
-}) {
-  const queryClient = useQueryClient();
-  const save = useMutation(orpc.admin.payments.saveRazorpay.mutationOptions());
-  const clear = useMutation(orpc.admin.payments.clearRazorpay.mutationOptions());
-  const [keyId, setKeyId] = useState("");
-  const [keySecret, setKeySecret] = useState("");
-  const [webhookSecret, setWebhookSecret] = useState("");
-  const [confirmDisconnect, setConfirmDisconnect] = useState(false);
-
-  const refresh = () => void queryClient.invalidateQueries({ queryKey: orpc.admin.payments.key() });
-
-  function onSubmit(e: FormEvent) {
-    e.preventDefault();
-    save.mutate(
-      { keyId: keyId.trim(), keySecret: keySecret.trim(), ...(webhookSecret.trim() ? { webhookSecret: webhookSecret.trim() } : {}) },
-      {
-        onSuccess: () => {
-          toast.success("Razorpay keys saved");
-          setKeyId("");
-          setKeySecret("");
-          setWebhookSecret("");
-          refresh();
-        },
-        onError: (err) => toast.error(errorMessage(err)),
-      },
-    );
+  function handleReset() {
+    setForm(initialValues);
   }
 
   return (
     <SettingsSection
-      title="Razorpay"
-      description="Your own Razorpay account receives customer payments directly. Keys are stored encrypted and are never shown again."
+      title="Cash on Delivery configuration"
+      description="Configure handling charges, order thresholds, and storefront display text."
     >
-      <p className="text-xs">
-        Status:{" "}
-        <span className={razorpay.configured ? "font-medium text-foreground" : "text-muted-foreground"}>
-          {razorpay.configured ? `Connected (key ${razorpay.keyIdHint ?? "saved"})` : "Not connected"}
-        </span>
-        {razorpay.configured ? <span className="text-muted-foreground"> · webhook secret {razorpay.hasWebhookSecret ? "saved" : "not set"}</span> : null}
-      </p>
-      <form onSubmit={onSubmit} className="grid gap-3">
-        <Field id="keyId" label="Key ID" hint="Looks like rzp_test_… or rzp_live_…">
-          <Input id="keyId" autoComplete="off" required value={keyId} disabled={keyMissing} onChange={(e) => setKeyId(e.target.value)} />
-        </Field>
-        <Field id="keySecret" label="Key secret">
-          <Input id="keySecret" type="password" autoComplete="new-password" required value={keySecret} disabled={keyMissing} onChange={(e) => setKeySecret(e.target.value)} />
-        </Field>
-        <Field id="webhookSecret" label="Webhook secret (optional)" hint="From Razorpay dashboard > Webhooks.">
-          <Input id="webhookSecret" type="password" autoComplete="new-password" value={webhookSecret} disabled={keyMissing} onChange={(e) => setWebhookSecret(e.target.value)} />
-        </Field>
-        <div className="flex gap-2">
-          <Button type="submit" disabled={keyMissing || save.isPending || !keyId || !keySecret}>
-            {save.isPending ? "Saving…" : razorpay.configured ? "Replace keys" : "Save keys"}
+      {unsavedGuard}
+      {!disabled && isDirty ? (
+        <HeaderActions>
+          <Button variant="outline" size="sm" onClick={handleReset} disabled={updateMutation.isPending}>
+            Discard
           </Button>
-          {razorpay.configured ? (
-            <Button type="button" variant="outline" disabled={clear.isPending} onClick={() => setConfirmDisconnect(true)}>
-              Disconnect
-            </Button>
-          ) : null}
+          <Button size="sm" type="submit" form="cod-settings-form" disabled={updateMutation.isPending}>
+            {updateMutation.isPending ? "Saving…" : "Save COD"}
+          </Button>
+        </HeaderActions>
+      ) : null}
+      <form id="cod-settings-form" onSubmit={handleSubmit} className="grid gap-4 max-w-xl">
+        <div className="flex items-center justify-between rounded-lg border border-border p-3">
+          <div>
+            <p className="text-xs font-medium text-foreground">Enable Cash on Delivery</p>
+            <p className="text-xs text-muted-foreground">Offer COD option to buyers at checkout.</p>
+          </div>
+          <Switch
+            checked={form.enabled}
+            disabled={disabled || updateMutation.isPending}
+            onCheckedChange={(checked) => setForm((prev) => ({ ...prev, enabled: checked }))}
+          />
         </div>
-      </form>
 
-      <ConfirmDialog
-        open={confirmDisconnect}
-        onOpenChange={setConfirmDisconnect}
-        title="Disconnect Razorpay?"
-        description="Online payments will stop working until you add keys again."
-        confirmLabel="Disconnect"
-        cancelLabel="Keep connected"
-        destructive
-        pending={clear.isPending}
-        onConfirm={() => {
-          setConfirmDisconnect(false);
-          clear.mutate(undefined, {
-            onSuccess: () => {
-              toast.success("Razorpay disconnected");
-              refresh();
-            },
-            onError: (err) => toast.error(errorMessage(err)),
-          });
-        }}
-      />
+        <Field id="displayName" label="Storefront display name" hint="What customers see in checkout payment options.">
+          <Input
+            id="displayName"
+            value={form.displayName}
+            disabled={disabled || !form.enabled || updateMutation.isPending}
+            onChange={(e) => setForm((prev) => ({ ...prev, displayName: e.target.value }))}
+            placeholder="Cash on Delivery (COD)"
+          />
+        </Field>
+
+        <div className="grid gap-3 sm:grid-cols-3">
+          <Field id="feeRupees" label="COD fee (₹)" hint="Additional fee (0 for free).">
+            <Input
+              id="feeRupees"
+              type="number"
+              min={0}
+              step="0.01"
+              value={form.feeRupees}
+              disabled={disabled || !form.enabled || updateMutation.isPending}
+              onChange={(e) => setForm((prev) => ({ ...prev, feeRupees: e.target.value }))}
+            />
+          </Field>
+
+          <Field id="minOrder" label="Min order (₹)" hint="Optional minimum order limit.">
+            <Input
+              id="minOrder"
+              type="number"
+              min={0}
+              step="1"
+              value={form.minOrderRupees}
+              disabled={disabled || !form.enabled || updateMutation.isPending}
+              onChange={(e) => setForm((prev) => ({ ...prev, minOrderRupees: e.target.value }))}
+              placeholder="No minimum"
+            />
+          </Field>
+
+          <Field id="maxOrder" label="Max order (₹)" hint="Optional maximum order limit.">
+            <Input
+              id="maxOrder"
+              type="number"
+              min={1}
+              step="1"
+              value={form.maxOrderRupees}
+              disabled={disabled || !form.enabled || updateMutation.isPending}
+              onChange={(e) => setForm((prev) => ({ ...prev, maxOrderRupees: e.target.value }))}
+              placeholder="No maximum"
+            />
+          </Field>
+        </div>
+
+        <Field id="instructions" label="Payment instructions" hint="Shown to customers when placing an order with COD.">
+          <Input
+            id="instructions"
+            value={form.instructions}
+            disabled={disabled || !form.enabled || updateMutation.isPending}
+            onChange={(e) => setForm((prev) => ({ ...prev, instructions: e.target.value }))}
+            placeholder="Pay with cash or UPI QR code at delivery."
+          />
+        </Field>
+
+        {!disabled && isDirty ? (
+          <div>
+            <Button type="submit" disabled={updateMutation.isPending}>
+              {updateMutation.isPending ? "Saving…" : "Save COD settings"}
+            </Button>
+          </div>
+        ) : null}
+      </form>
     </SettingsSection>
   );
 }

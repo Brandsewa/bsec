@@ -52,6 +52,8 @@ beforeAll(async () => {
     DELETE FROM fulfillments WHERE tenant_id = '${tenantId}';
     DELETE FROM orders WHERE tenant_id = '${tenantId}';
     DELETE FROM carts WHERE tenant_id = '${tenantId}';
+    DELETE FROM customers WHERE tenant_id = '${tenantId}';
+    DELETE FROM tenant_feature_overrides WHERE tenant_id = '${tenantId}';
     DELETE FROM locations WHERE tenant_id = '${tenantId}';
   `);
   await pgClient.query("SET session_replication_role = 'origin'");
@@ -148,6 +150,28 @@ describe("Queue Consumers Integration", () => {
     expect(String(sent.html)).toContain("https://test-store-e1.bcom.si/cart");
     expect(String(sent.text)).toContain("Return to your cart: https://test-store-e1.bcom.si/cart");
     expect(String(sent.text)).not.toContain("Template:");
+  });
+
+  it("cart.abandoned consumer sends the reminder to any shopper, subscribed or not, even with settings.notifications on", async () => {
+    // Abandoned-cart recovery is a transactional (order-related) email: no marketing consent is needed.
+    const flagClient = new (await import("pg")).default.Client({ connectionString: superUrl });
+    await flagClient.connect();
+    await flagClient.query(
+      `INSERT INTO tenant_feature_overrides (tenant_id, key, enabled) VALUES ($1, 'settings.notifications', true)
+       ON CONFLICT (tenant_id, key) DO UPDATE SET enabled = true`,
+      [tenantId],
+    );
+    await flagClient.end();
+
+    await handleCartAbandonedJob(rwDb.db, logger, {
+      tenantId,
+      cartId,
+      token: "cart_tok_e1",
+      email: "never-subscribed@example.com",
+    });
+
+    expect(sentMails).toHaveLength(1);
+    expect(sentMails[0]!.to).toBe("never-subscribed@example.com");
   });
 
   it("cart.abandoned consumer skips email when no email address is on payload", async () => {

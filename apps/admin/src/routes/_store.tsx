@@ -28,6 +28,7 @@ import {
 import { EmptyState, PageContainer, PageSkeleton, ThemeToggle, type NavGroup } from "@bs/ui";
 import { AppShell } from "@/components/app-shell";
 import { Button } from "@bs/ui";
+import { SimpleSelect } from "../components/simple-select.tsx";
 import { fetchMe, signOut } from "../lib/auth.ts";
 import { getActiveStoreId, setActiveStoreId } from "../lib/session.ts";
 import { clearSupportSession } from "../lib/support.ts";
@@ -175,28 +176,23 @@ function StoreShell() {
         topRight={
           <>
             {me.stores.length > 1 ? (
-              <select
-                aria-label="Switch store"
-                className="h-8 rounded-md border border-border bg-background px-2 text-sm"
+              <SimpleSelect
+                ariaLabel="Switch store"
+                className="h-8 w-32 sm:w-44"
                 value={store.tenantId}
-                onChange={(e) => {
-                  setActiveStoreId(e.target.value);
+                onChange={(id) => {
+                  setActiveStoreId(id);
                   window.location.assign("/");
                 }}
-              >
-                {me.stores.map((s) => (
-                  <option key={s.tenantId} value={s.tenantId}>
-                    {s.name}
-                  </option>
-                ))}
-              </select>
+                options={me.stores.map((s) => ({ value: s.tenantId, label: s.name }))}
+              />
             ) : null}
             <span className="hidden text-sm text-foreground-lighter sm:inline">{me.support ? `Support: ${me.user.email}` : me.user.email}</span>
             {me.support ? null : (
               <>
                 <Button variant="ghost" size="sm" onClick={() => setChangePasswordOpen(true)} title="Change password">
-                  <KeyRound className="mr-1 h-3.5 w-3.5" />
-                  Password
+                  <KeyRound className="h-3.5 w-3.5 sm:mr-1" />
+                  <span className="hidden sm:inline">Password</span>
                 </Button>
                 <ThemeToggle />
                 <Button variant="ghost" size="sm" onClick={onSignOut}>

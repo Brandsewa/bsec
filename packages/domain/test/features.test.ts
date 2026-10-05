@@ -72,4 +72,39 @@ describe("isFeatureEnabled()", () => {
     expect(err.message).toBe("Checkout is disabled");
     expect(err.name).toBe("FeatureDisabledError");
   });
+
+  it("handles settings rebuild flags with default off, override, and kill switch", async () => {
+    const settingsFlags = [
+      "settings.gst_v2",
+      "settings.policies",
+      "settings.customer_accounts",
+      "settings.notifications",
+      "settings.storage",
+      "settings.maintenance",
+    ];
+
+    for (const flagKey of settingsFlags) {
+      // 1. Default off (no tenant override)
+      const defaultOffDb = createMockDb({
+        tenantOverride: undefined,
+        featureFlag: { defaultOn: false, killSwitch: false },
+      });
+      expect(await isFeatureEnabled(defaultOffDb, tenantId, flagKey)).toBe(false);
+
+      // 2. Tenant override to true
+      const enabledDb = createMockDb({
+        tenantOverride: { enabled: true },
+        featureFlag: { defaultOn: false, killSwitch: false },
+      });
+      expect(await isFeatureEnabled(enabledDb, tenantId, flagKey)).toBe(true);
+
+      // 3. Kill switch overrides tenant override
+      const killedDb = createMockDb({
+        tenantOverride: { enabled: true },
+        featureFlag: { defaultOn: false, killSwitch: true },
+      });
+      expect(await isFeatureEnabled(killedDb, tenantId, flagKey)).toBe(false);
+    }
+  });
 });
+

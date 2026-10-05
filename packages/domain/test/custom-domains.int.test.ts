@@ -3,10 +3,11 @@ import { PostgreSqlContainer, type StartedPostgreSqlContainer } from "@testconta
 import { createDb, type DbHandle, schema } from "@bs/db";
 import { bootstrapRoles } from "@bs/db/bootstrap";
 import { runMigrations } from "@bs/db/migrate";
-import { eq, sql } from "drizzle-orm";
+import { and, eq, sql } from "drizzle-orm";
 import {
   createRuntime,
   type Runtime,
+  type TenantContext,
   provisionTenant,
   addCustomDomain,
   verifyCustomDomain,
@@ -281,6 +282,95 @@ describe("M8 Custom Domains & Cloudflare for SaaS Integration (PLAN §8, ADR-007
     expect(domains).toHaveLength(1);
     expect(domains[0]!.type).toMatch(/subdomain/);
     expect(domains[0]!.isPrimary).toBe(true); // Restored as primary!
+  });
+
+  function ctxFor(tId: string, perms: string[] = ["domains.manage", "settings.read"]): TenantContext {
+    return {
+      tenantId: tId,
+      storeStatus: "live",
+      actor: { type: "staff", userId: "0199a000-0000-7000-8000-000000000001" },
+      roles: ["store_owner"],
+      permissions: perms,
+      requestId: "req-domain-test",
+    };
+  }
+
+  it("enforces permissions and writes audit logs for domain mutations", async () => {
+    const adminCtx = ctxFor(tenantId, ["domains.manage", "settings.read"]);
+    const deniedCtx = ctxFor(tenantId, ["analytics.read"]);
+
+    // Permission checks
+    await expect(listTenantDomains(rt, deniedCtx)).rejects.toThrow(/Forbidden/);
+    await expect(addCustomDomain(rt, deniedCtx, { hostname: "denied.example.com", provider: mockProvider })).rejects.toThrow(/Forbidden/);
+
+    // List with settings.read
+    const listRes = await listTenantDomains(rt, adminCtx);
+    expect(listRes).toBeDefined();
+
+    // Add with domains.manage
+    const added = await addCustomDomain(rt, adminCtx, {
+      hostname: "audit.example.com",
+      provider: mockProvider,
+    });
+    expect(added.hostname).toBe("audit.example.com");
+
+    // Check audit log for domain.add
+    const [addAudit] = await platformDb.db
+      .select()
+      .from(schema.auditLogs)
+      .where(and(eq(schema.auditLogs.tenantId, tenantId), eq(schema.auditLogs.action, "domain.add"), eq(schema.auditLogs.targetId, added.id)));
+    expect(addAudit).toBeDefined();
+    expect(addAudit?.targetType).toBe("custom_domain");
+    expect(JSON.stringify(addAudit?.diff)).not.toContain("cfCustomHostnameId");
+    expect(JSON.stringify(addAudit?.diff)).not.toContain("providerHostnameId");
+
+    // Verify denial and success
+    await expect(verifyCustomDomain(rt, deniedCtx, added.id, mockProvider)).rejects.toThrow(/Forbidden/);
+    mockProvider.setActive("audit.example.com");
+    const verified = await verifyCustomDomain(rt, adminCtx, added.id, mockProvider);
+    expect(verified.status).toBe("active");
+
+    const [verifyAudit] = await platformDb.db
+      .select()
+      .from(schema.auditLogs)
+      .where(and(eq(schema.auditLogs.tenantId, tenantId), eq(schema.auditLogs.action, "domain.verify"), eq(schema.auditLogs.targetId, added.id)));
+    expect(verifyAudit).toBeDefined();
+    expect(JSON.stringify(verifyAudit?.diff)).not.toContain("cfCustomHostnameId");
+
+    // Set primary denial and success
+    await expect(setPrimaryDomain(rt, deniedCtx, added.id)).rejects.toThrow(/Forbidden/);
+    const primRes = await setPrimaryDomain(rt, adminCtx, added.id);
+    expect(primRes.success).toBe(true);
+
+    const [primAudit] = await platformDb.db
+      .select()
+      .from(schema.auditLogs)
+      .where(and(eq(schema.auditLogs.tenantId, tenantId), eq(schema.auditLogs.action, "domain.set_primary"), eq(schema.auditLogs.targetId, added.id)));
+    expect(primAudit).toBeDefined();
+
+    // Remove denial and success
+    await expect(removeCustomDomain(rt, deniedCtx, added.id, mockProvider)).rejects.toThrow(/Forbidden/);
+    await removeCustomDomain(rt, adminCtx, added.id, mockProvider);
+
+    const [removeAudit] = await platformDb.db
+      .select()
+      .from(schema.auditLogs)
+      .where(and(eq(schema.auditLogs.tenantId, tenantId), eq(schema.auditLogs.action, "domain.remove"), eq(schema.auditLogs.targetId, added.id)));
+    expect(removeAudit).toBeDefined();
+  });
+
+  it("strictly refuses to remove or verify the platform subdomain", async () => {
+    const adminCtx = ctxFor(tenantId, ["domains.manage", "settings.read"]);
+    const domains = await listTenantDomains(rt, adminCtx);
+    const platformSub = domains.find((d) => d.type === "subdomain" || d.type === "platform_subdomain");
+    expect(platformSub).toBeDefined();
+
+    await expect(removeCustomDomain(rt, adminCtx, platformSub!.id, mockProvider)).rejects.toThrow(
+      "Cannot remove the default platform subdomain for the store."
+    );
+    await expect(verifyCustomDomain(rt, adminCtx, platformSub!.id, mockProvider)).rejects.toThrow(
+      "Cannot verify or modify the default platform subdomain."
+    );
   });
 
   it("VERIFIES Store 1 (store101.bcom.si) non-regression", async () => {

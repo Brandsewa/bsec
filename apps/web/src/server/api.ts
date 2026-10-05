@@ -11,6 +11,7 @@ import {
   buildTenantContext,
   getAdminMe,
   getStoreStatus,
+  getStoreStatusInternal,
   attachProductMedia,
   detachProductMedia,
   updateStoreStatus,
@@ -131,6 +132,10 @@ import {
   createAdminDraftOrder,
   getOrderSettings,
   updateOrderSettings,
+  getCheckoutSettings,
+  updateCheckoutSettings,
+  getCustomerAccountSettings,
+  updateCustomerAccountSettings,
   addAdminOrderNote,
   cancelAdminOrder,
   refundAdminOrder,
@@ -212,7 +217,6 @@ import {
   getOnboardingProgress,
   dismissOnboardingProgress,
   getTenantSubscription,
-  changeTenantPlan,
   listTenantDomains,
   addCustomDomain,
   verifyCustomDomain,
@@ -226,6 +230,42 @@ import {
   sendPlatformEmail,
   renderEmail,
   hashIpWithSalt,
+  listPaymentMethods,
+  updateCodMethod,
+  getPlanAndBilling,
+  listAvailablePlans,
+  requestPlanChange,
+  cancelPlanChangeRequest,
+  previewShippingRate,
+  getTaxSettings,
+  updateTaxSettings,
+  listTaxClasses,
+  createTaxClass,
+  updateTaxClass,
+  deleteTaxClass,
+  getNotificationSettings,
+  updateNotificationSettings,
+  listPolicies,
+  getPolicy,
+  savePolicyDraft,
+  publishPolicy,
+  getPolicyVersions,
+  restorePolicyDraft,
+  getPrivacySettings,
+  updatePrivacySettings,
+  listPrivacyRequests,
+  updatePrivacyRequestStatus,
+  executePrivacyExport,
+  executePrivacyErasure,
+  executePrivacyWithdrawConsent,
+  scheduleMaintenance,
+  cancelScheduledMaintenance,
+  endMaintenance,
+  listStoreStatusTransitions,
+  getStorageUsage,
+  getSettingsUpdate,
+  applySettingsUpdate,
+  getCookieInventory,
   resolvePeriod,
   getFinanceOverview,
   getDistinctCurrencies,
@@ -585,17 +625,229 @@ export const storeRouter = os.router({
     orderSettings: {
       get: os.admin.orderSettings.get
         .use(requireAdmin)
-        .use(requirePermission("settings.write"))
+        .use(requirePermission("settings.read"))
         .handler(({ context }) => {
           if (!context.tenantCtx) throw new Error("Missing tenant context");
           return getOrderSettings(context.rt, context.tenantCtx);
         }),
       update: os.admin.orderSettings.update
         .use(requireAdmin)
-        .use(requirePermission("settings.write"))
+        .use(requirePermission("orders.settings.manage"))
         .handler(({ context, input }) => {
           if (!context.tenantCtx) throw new Error("Missing tenant context");
           return updateOrderSettings(context.rt, context.tenantCtx, input);
+        }),
+    },
+    checkoutSettings: {
+      get: os.admin.checkoutSettings.get
+        .use(requireAdmin)
+        .use(requirePermission("settings.read"))
+        .handler(({ context }) => {
+          if (!context.tenantCtx) throw new Error("Missing tenant context");
+          return getCheckoutSettings(context.rt, context.tenantCtx);
+        }),
+      update: os.admin.checkoutSettings.update
+        .use(requireAdmin)
+        .use(requirePermission("checkout.manage"))
+        .handler(({ context, input }) => {
+          if (!context.tenantCtx) throw new Error("Missing tenant context");
+          return updateCheckoutSettings(context.rt, context.tenantCtx, input);
+        }),
+    },
+    customerAccountSettings: {
+      get: os.admin.customerAccountSettings.get
+        .use(requireAdmin)
+        .use(requirePermission("settings.read"))
+        .handler(({ context }) => {
+          if (!context.tenantCtx) throw new Error("Missing tenant context");
+          return getCustomerAccountSettings(context.rt, context.tenantCtx);
+        }),
+      update: os.admin.customerAccountSettings.update
+        .use(requireAdmin)
+        .use(requirePermission("checkout.manage"))
+        .handler(({ context, input }) => {
+          if (!context.tenantCtx) throw new Error("Missing tenant context");
+          return updateCustomerAccountSettings(context.rt, context.tenantCtx, input);
+        }),
+    },
+    paymentMethods: {
+      list: os.admin.paymentMethods.list
+        .use(requireAdmin)
+        .use(requirePermission("settings.read"))
+        .handler(({ context }) => {
+          if (!context.tenantCtx) throw new Error("Missing tenant context");
+          return listPaymentMethods(context.rt, context.tenantCtx);
+        }),
+      updateCod: os.admin.paymentMethods.updateCod
+        .use(requireAdmin)
+        .use(requirePermission("payments.manage"))
+        .handler(({ context, input }) => {
+          if (!context.tenantCtx) throw new Error("Missing tenant context");
+          return updateCodMethod(context.rt, context.tenantCtx, input);
+        }),
+    },
+    taxSettings: {
+      get: os.admin.taxSettings.get
+        .use(requireAdmin)
+        .use(requirePermission("settings.read"))
+        .handler(({ context }) => {
+          if (!context.tenantCtx) throw new Error("Missing tenant context");
+          return getTaxSettings(context.rt, context.tenantCtx);
+        }),
+      update: os.admin.taxSettings.update
+        .use(requireAdmin)
+        .use(requirePermission("taxes.manage"))
+        .handler(({ context, input }) => {
+          if (!context.tenantCtx) throw new Error("Missing tenant context");
+          return updateTaxSettings(context.rt, context.tenantCtx, input);
+        }),
+    },
+    taxClasses: {
+      list: os.admin.taxClasses.list
+        .use(requireAdmin)
+        .use(requirePermission("settings.read"))
+        .handler(({ context }) => {
+          if (!context.tenantCtx) throw new Error("Missing tenant context");
+          return listTaxClasses(context.rt, context.tenantCtx);
+        }),
+      create: os.admin.taxClasses.create
+        .use(requireAdmin)
+        .use(requirePermission("taxes.manage"))
+        .handler(({ context, input }) => {
+          if (!context.tenantCtx) throw new Error("Missing tenant context");
+          return createTaxClass(context.rt, context.tenantCtx, input);
+        }),
+      update: os.admin.taxClasses.update
+        .use(requireAdmin)
+        .use(requirePermission("taxes.manage"))
+        .handler(({ context, input }) => {
+          if (!context.tenantCtx) throw new Error("Missing tenant context");
+          return updateTaxClass(context.rt, context.tenantCtx, input);
+        }),
+      delete: os.admin.taxClasses.delete
+        .use(requireAdmin)
+        .use(requirePermission("taxes.manage"))
+        .handler(({ context, input }) => {
+          if (!context.tenantCtx) throw new Error("Missing tenant context");
+          return deleteTaxClass(context.rt, context.tenantCtx, input.id);
+        }),
+    },
+    notificationSettings: {
+      get: os.admin.notificationSettings.get
+        .use(requireAdmin)
+        .use(requirePermission("settings.read"))
+        .handler(({ context }) => {
+          if (!context.tenantCtx) throw new Error("Missing tenant context");
+          return getNotificationSettings(context.rt, context.tenantCtx);
+        }),
+      update: os.admin.notificationSettings.update
+        .use(requireAdmin)
+        .use(requirePermission("notifications.manage"))
+        .handler(({ context, input }) => {
+          if (!context.tenantCtx) throw new Error("Missing tenant context");
+          return updateNotificationSettings(context.rt, context.tenantCtx, input);
+        }),
+    },
+    policies: {
+      list: os.admin.policies.list
+        .use(requireAdmin)
+        .use(requirePermission("settings.read"))
+        .handler(({ context }) => {
+          if (!context.tenantCtx) throw new Error("Missing tenant context");
+          return listPolicies(context.rt, context.tenantCtx);
+        }),
+      get: os.admin.policies.get
+        .use(requireAdmin)
+        .use(requirePermission("settings.read"))
+        .handler(({ context, input }) => {
+          if (!context.tenantCtx) throw new Error("Missing tenant context");
+          return getPolicy(context.rt, context.tenantCtx, input.handle);
+        }),
+      saveDraft: os.admin.policies.saveDraft
+        .use(requireAdmin)
+        .use(requirePermission("policies.manage"))
+        .handler(({ context, input }) => {
+          if (!context.tenantCtx) throw new Error("Missing tenant context");
+          return savePolicyDraft(context.rt, context.tenantCtx, input);
+        }),
+      publish: os.admin.policies.publish
+        .use(requireAdmin)
+        .use(requirePermission("policies.manage"))
+        .handler(({ context, input }) => {
+          if (!context.tenantCtx) throw new Error("Missing tenant context");
+          return publishPolicy(context.rt, context.tenantCtx, input.handle);
+        }),
+      versions: os.admin.policies.versions
+        .use(requireAdmin)
+        .use(requirePermission("settings.read"))
+        .handler(({ context, input }) => {
+          if (!context.tenantCtx) throw new Error("Missing tenant context");
+          return getPolicyVersions(context.rt, context.tenantCtx, input.handle);
+        }),
+      restoreDraft: os.admin.policies.restoreDraft
+        .use(requireAdmin)
+        .use(requirePermission("policies.manage"))
+        .handler(({ context, input }) => {
+          if (!context.tenantCtx) throw new Error("Missing tenant context");
+          return restorePolicyDraft(context.rt, context.tenantCtx, input);
+        }),
+    },
+    customerPrivacy: {
+      getSettings: os.admin.customerPrivacy.getSettings
+        .use(requireAdmin)
+        .use(requirePermission("settings.read"))
+        .handler(({ context }) => {
+          if (!context.tenantCtx) throw new Error("Missing tenant context");
+          return getPrivacySettings(context.rt, context.tenantCtx);
+        }),
+      updateSettings: os.admin.customerPrivacy.updateSettings
+        .use(requireAdmin)
+        .use(requirePermission("privacy.manage"))
+        .handler(({ context, input }) => {
+          if (!context.tenantCtx) throw new Error("Missing tenant context");
+          return updatePrivacySettings(context.rt, context.tenantCtx, input);
+        }),
+      listRequests: os.admin.customerPrivacy.listRequests
+        .use(requireAdmin)
+        .use(requirePermission("privacy.manage"))
+        .handler(({ context, input }) => {
+          if (!context.tenantCtx) throw new Error("Missing tenant context");
+          return listPrivacyRequests(context.rt, context.tenantCtx, input);
+        }),
+      updateRequestStatus: os.admin.customerPrivacy.updateRequestStatus
+        .use(requireAdmin)
+        .use(requirePermission("privacy.manage"))
+        .handler(({ context, input }) => {
+          if (!context.tenantCtx) throw new Error("Missing tenant context");
+          return updatePrivacyRequestStatus(context.rt, context.tenantCtx, input);
+        }),
+      exportCustomerData: os.admin.customerPrivacy.exportCustomerData
+        .use(requireAdmin)
+        .use(requirePermission("privacy.manage"))
+        .handler(({ context, input }) => {
+          if (!context.tenantCtx) throw new Error("Missing tenant context");
+          return executePrivacyExport(context.rt, context.tenantCtx, input.id);
+        }),
+      eraseCustomerData: os.admin.customerPrivacy.eraseCustomerData
+        .use(requireAdmin)
+        .use(requirePermission("privacy.manage"))
+        .handler(({ context, input }) => {
+          if (!context.tenantCtx) throw new Error("Missing tenant context");
+          return executePrivacyErasure(context.rt, context.tenantCtx, input.id);
+        }),
+      withdrawConsent: os.admin.customerPrivacy.withdrawConsent
+        .use(requireAdmin)
+        .use(requirePermission("privacy.manage"))
+        .handler(({ context, input }) => {
+          if (!context.tenantCtx) throw new Error("Missing tenant context");
+          return executePrivacyWithdrawConsent(context.rt, context.tenantCtx, input.id);
+        }),
+      cookieInventory: os.admin.customerPrivacy.cookieInventory
+        .use(requireAdmin)
+        .use(requirePermission("settings.read"))
+        .handler(({ context }) => {
+          if (!context.tenantCtx) throw new Error("Missing tenant context");
+          return getCookieInventory(context.tenantCtx);
         }),
     },
     featureFlags: {
@@ -990,21 +1242,21 @@ export const storeRouter = os.router({
     branding: {
       get: os.admin.branding.get
         .use(requireAdmin)
-        .use(requirePermission("settings.write"))
+        .use(requirePermission("settings.read"))
         .handler(({ context }) => {
           if (!context.tenantCtx) throw new Error("Missing tenant context");
           return getBrandSettings(context.rt, context.tenantCtx);
         }),
       update: os.admin.branding.update
         .use(requireAdmin)
-        .use(requirePermission("settings.write"))
+        .use(requirePermission("branding.manage"))
         .handler(({ context, input }) => {
           if (!context.tenantCtx) throw new Error("Missing tenant context");
           return updateBrandSettings(context.rt, context.tenantCtx, input);
         }),
       publish: os.admin.branding.publish
         .use(requireAdmin)
-        .use(requirePermission("settings.write"))
+        .use(requirePermission("branding.manage"))
         .handler(({ context }) => {
           if (!context.tenantCtx) throw new Error("Missing tenant context");
           return publishBrandSettings(context.rt, context.tenantCtx);
@@ -1648,23 +1900,30 @@ export const storeRouter = os.router({
     shipping: {
       get: os.admin.shipping.get
         .use(requireAdmin)
-        .use(requirePermission("settings.write"))
+        .use(requirePermission("settings.read"))
         .handler(({ context }) => {
           if (!context.tenantCtx) throw new Error("Missing tenant context");
-          return getAdminShippingSettings(context.rt._db.db, context.tenantCtx.tenantId);
+          return getAdminShippingSettings(context.rt, context.tenantCtx);
         }),
       update: os.admin.shipping.update
         .use(requireAdmin)
-        .use(requirePermission("settings.write"))
+        .use(requirePermission("shipping.manage"))
         .handler(({ context, input }) => {
           if (!context.tenantCtx) throw new Error("Missing tenant context");
-          return updateAdminShippingSettings(context.rt._db.db, context.tenantCtx.tenantId, input);
+          return updateAdminShippingSettings(context.rt, context.tenantCtx, input);
+        }),
+      preview: os.admin.shipping.preview
+        .use(requireAdmin)
+        .use(requirePermission("shipping.manage"))
+        .handler(({ context, input }) => {
+          if (!context.tenantCtx) throw new Error("Missing tenant context");
+          return previewShippingRate(context.rt, context.tenantCtx, input);
         }),
     },
     storefront: {
       getStatus: os.admin.storefront.getStatus
         .use(requireAdmin)
-        .use(requirePermission("settings.write"))
+        .use(requirePermission("settings.read"))
         .handler(({ context }) => {
           if (!context.tenantCtx) throw new Error("Missing tenant context");
           return getStoreStatus(context.rt, context.tenantCtx).catch((e) => {
@@ -1673,7 +1932,7 @@ export const storeRouter = os.router({
         }),
       updateStatus: os.admin.storefront.updateStatus
         .use(requireAdmin)
-        .use(requirePermission("settings.write"))
+        .use(requirePermission("storefront.manage"))
         .handler(async ({ context, input }) => {
           if (!context.tenantCtx) throw new Error("Missing tenant context");
           const { launchAt, ...rest } = input;
@@ -1685,7 +1944,81 @@ export const storeRouter = os.router({
           } catch (e) {
             throw mapAuthError(e);
           }
-          return getStoreStatus(context.rt, context.tenantCtx);
+          return getStoreStatusInternal(context.rt, context.tenantCtx.tenantId);
+        }),
+      scheduleMaintenance: os.admin.storefront.scheduleMaintenance
+        .use(requireAdmin)
+        .use(requirePermission("storefront.manage"))
+        .handler(({ context, input }) => {
+          if (!context.tenantCtx) throw new Error("Missing tenant context");
+          if (!context.tenantCtx.roles.includes("store_owner")) {
+            throw new ORPCError("FORBIDDEN", { message: "Only store owners can schedule maintenance" });
+          }
+          return scheduleMaintenance(context.rt, context.tenantCtx, input).catch((e) => {
+            throw mapAuthError(e);
+          });
+        }),
+      cancelScheduledMaintenance: os.admin.storefront.cancelScheduledMaintenance
+        .use(requireAdmin)
+        .use(requirePermission("storefront.manage"))
+        .handler(({ context }) => {
+          if (!context.tenantCtx) throw new Error("Missing tenant context");
+          if (!context.tenantCtx.roles.includes("store_owner")) {
+            throw new ORPCError("FORBIDDEN", { message: "Only store owners can manage maintenance mode" });
+          }
+          return cancelScheduledMaintenance(context.rt, context.tenantCtx).catch((e) => {
+            throw mapAuthError(e);
+          });
+        }),
+      endMaintenance: os.admin.storefront.endMaintenance
+        .use(requireAdmin)
+        .use(requirePermission("storefront.manage"))
+        .handler(({ context }) => {
+          if (!context.tenantCtx) throw new Error("Missing tenant context");
+          if (!context.tenantCtx.roles.includes("store_owner")) {
+            throw new ORPCError("FORBIDDEN", { message: "Only store owners can manage maintenance mode" });
+          }
+          return endMaintenance(context.rt, context.tenantCtx).catch((e) => {
+            throw mapAuthError(e);
+          });
+        }),
+      listTransitions: os.admin.storefront.listTransitions
+        .use(requireAdmin)
+        .use(requirePermission("storefront.manage"))
+        .handler(({ context, input }) => {
+          if (!context.tenantCtx) throw new Error("Missing tenant context");
+          return listStoreStatusTransitions(context.rt, context.tenantCtx, input).catch((e) => {
+            throw mapAuthError(e);
+          });
+        }),
+    },
+    settingsUpdate: {
+      get: os.admin.settingsUpdate.get
+        .use(requireAdmin)
+        .use(requirePermission("settings.read"))
+        .handler(({ context }) => {
+          if (!context.tenantCtx) throw new Error("Missing tenant context");
+          return getSettingsUpdate(context.rt, context.tenantCtx);
+        }),
+      apply: os.admin.settingsUpdate.apply
+        .use(requireAdmin)
+        .use(requirePermission("settings.manage"))
+        .handler(({ context }) => {
+          if (!context.tenantCtx) throw new Error("Missing tenant context");
+          return applySettingsUpdate(context.rt, context.tenantCtx).catch((e) => {
+            throw mapAuthError(e);
+          });
+        }),
+    },
+    storageUsage: {
+      get: os.admin.storageUsage.get
+        .use(requireAdmin)
+        .use(requirePermission("settings.read"))
+        .handler(({ context }) => {
+          if (!context.tenantCtx) throw new Error("Missing tenant context");
+          return getStorageUsage(context.rt, context.tenantCtx).catch((e) => {
+            throw mapAuthError(e);
+          });
         }),
     },
     onboarding: {
@@ -1705,6 +2038,7 @@ export const storeRouter = os.router({
     billing: {
       getSubscription: os.admin.billing.getSubscription
         .use(requireAdmin)
+        .use(requirePermission("settings.read"))
         .handler(async ({ context }) => {
           if (!context.tenantCtx) throw new Error("Missing tenant context");
           const data = await getTenantSubscription(context.rt, context.tenantCtx.tenantId);
@@ -1716,7 +2050,6 @@ export const storeRouter = os.router({
                   interval: data.subscription.interval,
                   currentPeriodStart: data.subscription.currentPeriodStart?.toISOString() ?? null,
                   currentPeriodEnd: data.subscription.currentPeriodEnd?.toISOString() ?? null,
-                  provider: data.subscription.provider,
                 }
               : null,
             plan: data.plan
@@ -1742,32 +2075,44 @@ export const storeRouter = os.router({
             daysLeftInTrial: data.daysLeftInTrial,
           };
         }),
-      changePlan: os.admin.billing.changePlan
+    },
+    planAndBilling: {
+      get: os.admin.planAndBilling.get
         .use(requireAdmin)
-        .use(requirePermission("settings.write"))
+        .use(requirePermission("settings.read"))
+        .handler(async ({ context }) => {
+          if (!context.tenantCtx) throw new Error("Missing tenant context");
+          return getPlanAndBilling(context.rt, context.tenantCtx);
+        }),
+      availablePlans: os.admin.planAndBilling.availablePlans
+        .use(requireAdmin)
+        .use(requirePermission("settings.read"))
+        .handler(async ({ context }) => {
+          if (!context.tenantCtx) throw new Error("Missing tenant context");
+          return listAvailablePlans(context.rt, context.tenantCtx);
+        }),
+      requestChange: os.admin.planAndBilling.requestChange
+        .use(requireAdmin)
+        .use(requirePermission("settings.read"))
         .handler(async ({ context, input }) => {
           if (!context.tenantCtx) throw new Error("Missing tenant context");
-          const session = context.session;
-          const userEmail = session?.user?.email ?? "merchant@example.com";
-          const res = await changeTenantPlan(context.rt, {
-            tenantId: context.tenantCtx.tenantId,
-            planCode: input.planCode,
-            interval: input.interval,
-            customerEmail: userEmail,
-          });
-          return {
-            providerSubscriptionId: res.providerSubscriptionId,
-            shortUrl: res.shortUrl ?? undefined,
-            status: res.status,
-          };
+          return requestPlanChange(context.rt, context.tenantCtx, input);
+        }),
+      cancelRequest: os.admin.planAndBilling.cancelRequest
+        .use(requireAdmin)
+        .use(requirePermission("settings.read"))
+        .handler(async ({ context, input }) => {
+          if (!context.tenantCtx) throw new Error("Missing tenant context");
+          return cancelPlanChangeRequest(context.rt, context.tenantCtx, input);
         }),
     },
     domains: {
       list: os.admin.domains.list
         .use(requireAdmin)
+        .use(requirePermission("settings.read"))
         .handler(async ({ context }) => {
           if (!context.tenantCtx) throw new Error("Missing tenant context");
-          const rows = await listTenantDomains(context.rt, context.tenantCtx.tenantId);
+          const rows = await listTenantDomains(context.rt, context.tenantCtx);
           return rows.map((r) => ({
             id: r.id,
             hostname: r.hostname,
@@ -1782,10 +2127,10 @@ export const storeRouter = os.router({
         }),
       add: os.admin.domains.add
         .use(requireAdmin)
-        .use(requirePermission("settings.write"))
+        .use(requirePermission("domains.manage"))
         .handler(async ({ context, input }) => {
           if (!context.tenantCtx) throw new Error("Missing tenant context");
-          const created = await addCustomDomain(context.rt, context.tenantCtx.tenantId, {
+          const created = await addCustomDomain(context.rt, context.tenantCtx, {
             hostname: input.hostname,
             ...(input.prevalidateTxt !== undefined ? { prevalidateTxt: input.prevalidateTxt } : {}),
           });
@@ -1803,10 +2148,10 @@ export const storeRouter = os.router({
         }),
       verify: os.admin.domains.verify
         .use(requireAdmin)
-        .use(requirePermission("settings.write"))
+        .use(requirePermission("domains.manage"))
         .handler(async ({ context, input }) => {
           if (!context.tenantCtx) throw new Error("Missing tenant context");
-          const updated = await verifyCustomDomain(context.rt, context.tenantCtx.tenantId, input.id);
+          const updated = await verifyCustomDomain(context.rt, context.tenantCtx, input.id);
           return {
             id: updated.id,
             hostname: updated.hostname,
@@ -1816,17 +2161,17 @@ export const storeRouter = os.router({
         }),
       setPrimary: os.admin.domains.setPrimary
         .use(requireAdmin)
-        .use(requirePermission("settings.write"))
+        .use(requirePermission("domains.manage"))
         .handler(async ({ context, input }) => {
           if (!context.tenantCtx) throw new Error("Missing tenant context");
-          return setPrimaryDomain(context.rt, context.tenantCtx.tenantId, input.id);
+          return setPrimaryDomain(context.rt, context.tenantCtx, input.id);
         }),
       remove: os.admin.domains.remove
         .use(requireAdmin)
-        .use(requirePermission("settings.write"))
+        .use(requirePermission("domains.manage"))
         .handler(async ({ context, input }) => {
           if (!context.tenantCtx) throw new Error("Missing tenant context");
-          return removeCustomDomain(context.rt, context.tenantCtx.tenantId, input.id);
+          return removeCustomDomain(context.rt, context.tenantCtx, input.id);
         }),
     },
     quotes: {
