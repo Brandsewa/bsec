@@ -21,7 +21,6 @@ import Link from "next/link";
 import { SubdomainAvailabilityChecker } from "./SubdomainAvailabilityChecker.tsx";
 import { AppWindow } from "./beam/AppWindow.tsx";
 import { Dust } from "./beam/Dust.tsx";
-import { Founders } from "./beam/Founders.tsx";
 import { Smoke } from "./beam/Smoke.tsx";
 import { useRevealMotion } from "./landing/motion.ts";
 import { COMING_SOON, FAQS, FALLBACK_PLANS, INCLUDED_IN_ALL, STEPS, THEMES, planBullets, type LandingPlan } from "./landing/content.ts";
@@ -67,8 +66,6 @@ export function MarketingLandingPage({ plans }: { plans?: LandingPlan[] | undefi
           <div className="bm-flare-wide" />
         </div>
 
-        <Founders />
-
         {/* nav */}
         <header className="relative z-30">
           <div className="mx-auto flex h-[4.5rem] max-w-7xl items-center justify-between px-5 sm:px-8">
@@ -89,15 +86,15 @@ export function MarketingLandingPage({ plans }: { plans?: LandingPlan[] | undefi
         </header>
 
         {/* copy */}
-        <div className="relative z-20 mx-auto max-w-7xl px-5 pb-16 pt-14 sm:px-8 sm:pt-20 lg:pt-24">
-          <h1 className="bm-h1 bm-rise max-w-[11ch]" style={{ ["--d" as string]: "100ms" } as React.CSSProperties}>
+        <div className="relative z-20 mx-auto flex max-w-7xl flex-col items-center px-5 pb-16 pt-14 text-center sm:px-8 sm:pt-20 lg:pt-24">
+          <h1 className="bm-h1 bm-rise max-w-[14ch]" style={{ ["--d" as string]: "100ms" } as React.CSSProperties}>
             Open your Indian online store today.
           </h1>
           <p className="bm-dim bm-rise mt-7 max-w-[34rem] text-[1.1rem]" style={{ ["--d" as string]: "300ms" } as React.CSSProperties}>
             bcom.si gives Indian D2C brands a themed storefront, cash on delivery and GST invoices in one admin. Choose a
             name and start your 14-day free trial.
           </p>
-          <div className="bm-rise mt-9 max-w-[34rem]" style={{ ["--d" as string]: "500ms" } as React.CSSProperties}>
+          <div className="bm-rise mt-9 w-full max-w-[34rem]" style={{ ["--d" as string]: "500ms" } as React.CSSProperties}>
             <SubdomainAvailabilityChecker platformDomain="bcom.si" />
             <p className="bm-dim mt-3 text-[0.9rem]">14 days free · no card needed · plans from {inr(cheapest)} a month + GST</p>
           </div>

@@ -79,19 +79,6 @@
 .bm-pill:active { transform: translateY(0); }
 .bm-pill[disabled] { background: #262a38; color: #7d839c; box-shadow: none; cursor: not-allowed; animation: none; }
 
-/* ---------- Floating founder cards (two columns drifting up, faded top and bottom) ---------- */
-.bm-founders { position: absolute; z-index: 15; right: max(1.5rem, calc((100vw - 80rem) / 2 + 2rem)); top: 5rem; height: 30rem; width: 27rem; display: none; gap: 1rem; pointer-events: none;
-  -webkit-mask-image: linear-gradient(to bottom, transparent 0, #000 22%, #000 78%, transparent 100%); mask-image: linear-gradient(to bottom, transparent 0, #000 22%, #000 78%, transparent 100%); }
-@media (min-width: 1024px) { .bm-founders { display: flex; } }
-.bm-founders-col { flex: 1; overflow: hidden; }
-.bm-founders-b { margin-top: 2.5rem; }
-.bm-founders-track { display: flex; flex-direction: column; gap: 1rem; animation: bm-up 38s linear infinite; }
-.bm-founders-b .bm-founders-track { animation-duration: 50s; }
-@keyframes bm-up { to { transform: translateY(calc(-50% - 0.5rem)); } }
-.bm-founder { display: flex; align-items: center; gap: 0.75rem; padding: 0.85rem 0.95rem; border-radius: 16px; background: rgb(18 20 30 / 0.72); border: 1px solid rgb(255 255 255 / 0.1); backdrop-filter: blur(10px); box-shadow: 0 10px 30px -12px rgb(0 0 0 / 0.6); }
-.bm-founder-av { flex: none; width: 2.25rem; height: 2.25rem; border-radius: 999px; display: flex; align-items: center; justify-content: center; font-weight: 700; font-size: 0.95rem; color: #0a0a12; }
-.bm-founder-name { display: block; font-size: 0.9rem; font-weight: 600; color: var(--bm-text); }
-.bm-founder-meta { display: block; font-size: 0.76rem; color: var(--bm-dim); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .bm-pill-sm { min-height: 2.5rem; padding: 0.4rem 1.1rem; font-size: 0.74rem; }
 .bm-outline { display: inline-flex; align-items: center; min-height: 2.5rem; padding: 0.4rem 1.1rem; border-radius: 999px; border: 1px solid rgb(255 255 255 / 0.35); color: var(--bm-text); font-weight: 600; font-size: 0.74rem; letter-spacing: 0.1em; text-transform: uppercase; text-decoration: none; transition: background-color 200ms, border-color 200ms; }
 .bm-outline:hover { background: rgb(255 255 255 / 0.08); border-color: rgb(255 255 255 / 0.6); }
