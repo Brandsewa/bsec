@@ -698,7 +698,7 @@ export function CustomersPage() {
       <ScrollTabs value={s.view} onChange={(v) => setFilter({ view: v === "all" ? undefined : v })} tabs={VIEWS} />
 
       <PageSection>
-        <div className="grid gap-3">
+        <div className="grid grid-cols-1 gap-3">
           <TableToolbar
             searchLabel="Search customers"
             searchPlaceholder="Search name, email, phone"

@@ -265,7 +265,7 @@ export function SegmentsPage() {
       <ScrollTabs value={s.view} onChange={(v) => setFilter({ view: v === "all" ? undefined : v })} tabs={TABS} />
 
       <PageSection>
-        <div className="grid gap-3">
+        <div className="grid grid-cols-1 gap-3">
           <Input aria-label="Search segments" placeholder="Search segments" className="max-w-xs" value={s.q ?? ""} onChange={(e) => setSearchText(e.target.value)} />
 
           <BulkBar
