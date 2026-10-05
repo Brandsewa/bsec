@@ -9,22 +9,26 @@ import {
 describe("permissions", () => {
   it("lists all store permissions without duplicates", () => {
     expect(new Set(STORE_PERMISSIONS).size).toBe(STORE_PERMISSIONS.length);
-    expect(STORE_PERMISSIONS.length).toBe(29); // 14 legacy + 15 capability families
+    expect(STORE_PERMISSIONS.length).toBe(31); // 14 legacy + 15 capability families + 2 finance permissions
   });
 
   it("checks system store roles delegation matrix (owner-approved 2026-10-04)", () => {
-    // store_owner holds all permissions including payments.manage
+    // store_owner holds all permissions including payments.manage and finance.*
     expect(hasPermission(SYSTEM_STORE_ROLES.store_owner, "payments.manage")).toBe(true);
     expect(hasPermission(SYSTEM_STORE_ROLES.store_owner, "staff.manage")).toBe(true);
     expect(hasPermission(SYSTEM_STORE_ROLES.store_owner, "audit.read")).toBe(true);
     expect(hasPermission(SYSTEM_STORE_ROLES.store_owner, "settings.manage")).toBe(true);
+    expect(hasPermission(SYSTEM_STORE_ROLES.store_owner, "finance.read")).toBe(true);
+    expect(hasPermission(SYSTEM_STORE_ROLES.store_owner, "finance.write")).toBe(true);
 
-    // store_admin lacks exactly payments.manage, holds staff.manage and audit.read
+    // store_admin lacks exactly payments.manage, holds staff.manage, audit.read, finance.*
     expect(hasPermission(SYSTEM_STORE_ROLES.store_admin, "payments.manage")).toBe(false);
     expect(hasPermission(SYSTEM_STORE_ROLES.store_admin, "staff.manage")).toBe(true);
     expect(hasPermission(SYSTEM_STORE_ROLES.store_admin, "audit.read")).toBe(true);
     expect(hasPermission(SYSTEM_STORE_ROLES.store_admin, "domains.manage")).toBe(true);
     expect(hasPermission(SYSTEM_STORE_ROLES.store_admin, "orders.refund")).toBe(true);
+    expect(hasPermission(SYSTEM_STORE_ROLES.store_admin, "finance.read")).toBe(true);
+    expect(hasPermission(SYSTEM_STORE_ROLES.store_admin, "finance.write")).toBe(true);
   });
 
   it("satisfies migrated families when legacy settings.write is granted (aggregate mapping)", () => {

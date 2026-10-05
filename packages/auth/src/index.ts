@@ -22,6 +22,8 @@ export const STORE_PERMISSIONS = [
   "staff.manage",
   "analytics.read",
   "exports.run",
+  "finance.read",
+  "finance.write",
   // Settings capability families (Phase 2, ADR-020, docs/SETTINGS-SCHEMA.md §3.2)
   "settings.read",
   "settings.manage",

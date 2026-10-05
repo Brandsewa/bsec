@@ -257,8 +257,9 @@ Drizzle schema files in `packages/db/src/schema/` (one Postgres database, `publi
 | 0030 | `customers_segments` | customer_segments and customer_segment_members tables (Customers Phase 2) |
 | 0031 | `theme_template_archive` | `theme_templates.archived_at` (library draft / published / archived states) |
 | 0032 | `theme_previews` | `theme_previews`: short-lived shareable snapshots of a theme draft (`/preview/<code>`); the web role can only read it |
+| 0039 | `finance` | `ledger_entries`, `expenses`, `fiscal_periods` double-entry finance engine tables; expands `order_items.cost_price` (ADR-022) |
 
-How to write one (expand, migrate, contract; `forceRlsSql`): `docs/migrations.md`. **Never edit an applied migration.** Latest on disk: `0030` (the docs check keeps this list honest).
+How to write one (expand, migrate, contract; `forceRlsSql`): `docs/migrations.md`. **Never edit an applied migration.** Latest on disk: `0039` (the docs check keeps this list honest).
 
 ---
 
@@ -324,7 +325,7 @@ Schedules: `reservation.expiry` every minute, `idempotency.cleanup` every 15 min
 | Shopper | Phone OTP -> server-side `customer_sessions` row (hashed token, httpOnly cookie). OTP codes are never returned over HTTP | `packages/domain/src/customers/{otp,session}.ts`, ADR-012 |
 | Guests | Signed action tokens (`/o/`, `/cod/`, `/address/`, `/unsubscribe/`) | `orders/actions.ts`, `action_tokens` |
 
-Store permissions (`STORE_PERMISSIONS`): `products.read/write`, `orders.read/write/refund`, `customers.read/write`, `discounts.write`, `content.write`, `theme.publish`, `settings.write`, `staff.manage`, `analytics.read`, `exports.run`, plus settings capability families (Phase 2, ADR-020): `settings.read/manage`, `branding.manage`, `storefront.manage`, `checkout.manage`, `payments.manage`, `shipping.manage`, `taxes.manage`, `orders.settings.manage`, `returns.manage`, `notifications.manage`, `domains.manage`, `policies.manage`, `privacy.manage`, `audit.read`. System roles: `store_owner` (all), `store_admin` (all except `payments.manage`). Support sessions get read permissions plus a restricted write set (`context.ts`), strictly excluding all settings capability families. Enforce with `assertPermission(ctx, "...")` in the **domain service**, not only in the route. Check-time aggregate in `@bs/auth` maps legacy `settings.write` to migrated families.
+Store permissions (`STORE_PERMISSIONS`): `products.read/write`, `orders.read/write/refund`, `customers.read/write`, `discounts.write`, `content.write`, `theme.publish`, `settings.write`, `staff.manage`, `analytics.read`, `exports.run`, `finance.read/write`, plus settings capability families (Phase 2, ADR-020): `settings.read/manage`, `branding.manage`, `storefront.manage`, `checkout.manage`, `payments.manage`, `shipping.manage`, `taxes.manage`, `orders.settings.manage`, `returns.manage`, `notifications.manage`, `domains.manage`, `policies.manage`, `privacy.manage`, `audit.read`. System roles: `store_owner` (all), `store_admin` (all except `payments.manage`). Support sessions get read permissions plus a restricted write set (`context.ts`), strictly excluding all settings capability families and finance permissions. Enforce with `assertPermission(ctx, "...")` in the **domain service**, not only in the route. Check-time aggregate in `@bs/auth` maps legacy `settings.write` to migrated families.
 
 In flight: an auth overhaul (forgot/reset password, customer password sign-in, platform ZeptoMail email) is planned in `docs/AUTH-OVERHAUL-PLAN.md`, being built on branch `feat/auth-email-overhaul`.
 

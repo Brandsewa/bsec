@@ -39,13 +39,15 @@ const SETTINGS_CAPABILITY_FAMILIES: readonly StorePermission[] = [
 ];
 
 export const SUPPORT_READ_PERMISSIONS: readonly StorePermission[] = STORE_PERMISSIONS.filter(
-  (p) => p.endsWith(".read") && p !== "settings.read" && p !== "audit.read",
+  (p) => p.endsWith(".read") && p !== "settings.read" && p !== "audit.read" && p !== "finance.read",
 );
 const SUPPORT_WRITE_DENIED: readonly StorePermission[] = [
   "staff.manage",
   "settings.write",
   "exports.run",
   "orders.refund",
+  "finance.read",
+  "finance.write",
   ...SETTINGS_CAPABILITY_FAMILIES,
 ];
 export const SUPPORT_WRITE_PERMISSIONS: readonly StorePermission[] = STORE_PERMISSIONS.filter(

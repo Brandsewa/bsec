@@ -142,6 +142,8 @@ Plan: `docs/SETTINGS-REBUILD-PLAN.md`, `SETTINGS-REMAINING-PHASES`; records `202
 
 One line per piece of work that is started and not merged. Add yours before you start, remove it when merged or abandoned (`AGENTS.md` section 6). Format: `agent · branch · area · since · one-line goal`.
 
+- antigravity · feat/finance-phase-0 · finance · 2026-10-05 · Phase 0: ADR-022 and accounting engine
+
 
 ## Returns & Exchanges (Manual Review & Portal) — Complete (2026-10-02)
 
