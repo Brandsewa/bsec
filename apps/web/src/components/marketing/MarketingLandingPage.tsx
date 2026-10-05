@@ -50,7 +50,7 @@ export function MarketingLandingPage({ plans }: { plans?: LandingPlan[] | undefi
     <div ref={rootRef} className={`bm ${bmFont.variable}`} id="top">
       {/* ---------- Hero ---------- */}
       <section className="bm-hero" style={{ ["--bm-foot" as string]: "var(--bm-window-h)" } as React.CSSProperties}>
-        <style>{`.bm-hero{--bm-window-h:calc(min(94vw,64rem)*0.5 + 2.8rem)}@media(min-width:640px){.bm-hero{--bm-window-h:calc(min(94vw,64rem)*0.21875 + 2.8rem)}}`}</style>
+        <style>{`.bm-hero{--bm-window-h:calc(min(100vw,90rem)*0.5 + 2.8rem)}@media(min-width:640px){.bm-hero{--bm-window-h:calc(min(100vw,90rem)*0.2 + 2.8rem)}}`}</style>
 
         {/* light layers (they fall away as the page scrolls) */}
         <div className="bm-light absolute inset-0" aria-hidden="true">

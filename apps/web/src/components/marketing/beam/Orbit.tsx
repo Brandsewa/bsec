@@ -18,7 +18,6 @@ interface Mod {
   ring: 0 | 1 | 2;
   status: Status;
   tint: string;
-  icon: { d: string } | { glyph: string };
   tagline: string;
   today: string[];
   soon?: string[];
@@ -27,52 +26,44 @@ interface Mod {
 const MODULES: Mod[] = [
   {
     id: "orders", name: "Orders", ring: 0, status: "live", tint: "#8f8dff",
-    icon: { d: "M9 5H7a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V7a2 2 0 0 0-2-2h-2M9 3h6v4H9zM9 12h6M9 16h4" },
     tagline: "From the first cash-on-delivery order to the return.",
     today: ["Order board: placed, confirmed, shipped, delivered", "Returns and exchanges", "Quotes and pre-orders", "Abandoned-checkout tracking"],
   },
   {
     id: "inventory", name: "Inventory", ring: 0, status: "live", tint: "#7fd6c2",
-    icon: { d: "M21 8l-9-5-9 5v8l9 5 9-5V8zM3 8l9 5 9-5M12 13v8" },
     tagline: "Know what you have, and where it is.",
     today: ["Products with variants", "Categories, collections and brands", "Stock by location", "Stock held at order, released on cancel"],
   },
   {
     id: "customers", name: "Customers", ring: 1, status: "live", tint: "#b48dff",
-    icon: { d: "M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2M9 11a4 4 0 1 0 0-8 4 4 0 0 0 0 8zM22 21v-2a4 4 0 0 0-3-3.9M16 3.1a4 4 0 0 1 0 7.8" },
     tagline: "Your buyers, grouped and respected.",
     today: ["Customer profiles and order history", "Segments such as win-back", "Import and export", "Marketing consent recorded"],
   },
   {
     id: "sales", name: "Sales", ring: 1, status: "live", tint: "#6fb6ff",
-    icon: { d: "M3 17l6-6 4 4 8-8M15 7h6v6" },
     tagline: "The storefront that takes the order.",
     today: ["Themed storefront with a visual block editor", "Cash on delivery with a per-store fee", "Discounts", "Reviews with moderation"],
   },
   {
     id: "finance", name: "Finance", ring: 1, status: "partial", tint: "#ffc58d",
-    icon: { glyph: "₹" },
     tagline: "GST handled where the order is made.",
     today: ["GST tax invoices with place of supply", "COD fee recorded per order", "Plan pricing in rupees, plus GST"],
     soon: ["Invoice PDF download"],
   },
   {
     id: "shipping", name: "Shipping", ring: 2, status: "partial", tint: "#7fd6c2",
-    icon: { d: "M1 3h15v13H1zM16 8h4l3 3v5h-7zM5.5 21a2.5 2.5 0 1 0 0-5 2.5 2.5 0 0 0 0 5zM18.5 21a2.5 2.5 0 1 0 0-5 2.5 2.5 0 0 0 0 5z" },
     tagline: "Your zones and your rates, not ours.",
     today: ["Shipping zones per store", "Rates you set per zone", "Mark orders shipped and delivered"],
     soon: ["Shiprocket labels and tracking"],
   },
   {
     id: "payments", name: "Payments", ring: 2, status: "soon", tint: "#8f8dff",
-    icon: { d: "M2 5h20v14H2zM2 10h20" },
     tagline: "Online payments are on the way.",
     today: ["Today: cash on delivery, with a fee you control"],
     soon: ["Razorpay and UPI checkout"],
   },
   {
     id: "support", name: "Support", ring: 2, status: "partial", tint: "#ff9bb0",
-    icon: { d: "M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" },
     tagline: "Fix it after the sale.",
     today: ["Returns and exchanges", "Review moderation", "Staff roles and an activity log"],
     soon: ["WhatsApp and SMS updates"],
@@ -85,7 +76,11 @@ const STATUS_COLOR: Record<Status, string> = { live: "#5eead4", partial: "#fbbf2
 // Orbit size relative to the outermost one, and seconds for one lap (slow on purpose).
 const RING_SCALE = [0.4, 0.69, 0.98] as const;
 const RING_SECONDS = [80, 120, 170] as const;
+const TILT = (-6 * Math.PI) / 180; // the whole system leans: right side up
 const PAD = 30; // keeps the outer planets and their labels inside the stage
+
+/** Outer orbit half-height, leaving room for the tilt so the planets stay inside the stage. */
+const ryOuter = (w: number, h: number) => Math.max(20, h / 2 - PAD - (w / 2 - PAD) * Math.sin(Math.abs(TILT)));
 
 /** Even spacing within a ring, each ring rotated so the planets do not line up. */
 function phaseOf(mod: Mod): number {
@@ -114,11 +109,14 @@ export function Orbit() {
     MODULES.forEach((m, i) => {
       const el = els.current[i];
       if (!el) return;
-      const rx = (w / 2 - PAD) * (RING_SCALE[m.ring] ?? 1);
-      const ry = (h / 2 - PAD) * (RING_SCALE[m.ring] ?? 1);
+      const k = RING_SCALE[m.ring] ?? 1;
+      const rx = (w / 2 - PAD) * k;
+      const ry = ryOuter(w, h) * k;
       const a = phaseOf(m) + (Math.PI * 2 * t) / (RING_SECONDS[m.ring] ?? 100);
-      const x = cx + rx * Math.cos(a);
-      const y = cy + ry * Math.sin(a);
+      const ex = rx * Math.cos(a);
+      const ey = ry * Math.sin(a);
+      const x = cx + ex * Math.cos(TILT) - ey * Math.sin(TILT);
+      const y = cy + ex * Math.sin(TILT) + ey * Math.cos(TILT);
       const depth = (Math.sin(a) + 1) / 2; // 1 at the front (bottom of the ellipse)
       const half = el.offsetWidth / 2;
       const p = pos.current[i];
@@ -214,7 +212,8 @@ export function Orbit() {
             cx={dims.w / 2}
             cy={dims.h / 2}
             rx={Math.max(0, (dims.w / 2 - PAD) * k)}
-            ry={Math.max(0, (dims.h / 2 - PAD) * k)}
+            ry={Math.max(0, ryOuter(dims.w, dims.h) * k)}
+            transform={`rotate(${(TILT * 180) / Math.PI} ${dims.w / 2} ${dims.h / 2})`}
             fill="none"
             stroke="rgb(190 200 255)"
             strokeOpacity={0.16 - i * 0.03}
@@ -250,12 +249,6 @@ export function Orbit() {
           }}
         >
           <span className={`bm-planet-orb${m.status === "soon" ? " is-soon" : ""}`}>
-            {"d" in m.icon ? (
-              <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d={m.icon.d} /></svg>
-            ) : (
-              <span className="text-[1.25rem] font-semibold leading-none" aria-hidden="true">{m.icon.glyph}</span>
-            )}
-            <i className="bm-planet-dot" style={{ background: STATUS_COLOR[m.status] }} />
           </span>
           <span className="bm-planet-label">{m.name}</span>
         </button>
@@ -275,11 +268,6 @@ export function Orbit() {
         >
           <div className="flex items-center gap-3">
             <span className="bm-card-chip" style={{ ["--tint" as string]: active.tint } as React.CSSProperties}>
-              {"d" in active.icon ? (
-                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d={active.icon.d} /></svg>
-              ) : (
-                <span className="text-[1.1rem] font-semibold leading-none" aria-hidden="true">{active.icon.glyph}</span>
-              )}
             </span>
             <div className="min-w-0">
               <p className="text-[1.05rem] font-semibold leading-tight">{active.name}</p>
