@@ -75,10 +75,28 @@ const LEGACY_SETTINGS_WRITE_SET = new Set<string>(LEGACY_SETTINGS_WRITE_FAMILIES
  * store_owner: all permissions.
  * store_admin: all permissions EXCEPT payments.manage (owner-only per owner decision 2026-10-04).
  */
-export const SYSTEM_STORE_ROLES: Record<"store_owner" | "store_admin", readonly StorePermission[]> = {
+export const SYSTEM_STORE_ROLES: Record<"store_owner" | "store_admin" | "store_finance", readonly StorePermission[]> = {
   store_owner: STORE_PERMISSIONS,
   store_admin: STORE_PERMISSIONS.filter((p) => p !== "payments.manage"),
+  // Owner decision 2026-10-05 (finance D14): a role that sees and edits the books and nothing else.
+  store_finance: ["finance.read", "finance.write"],
 };
+
+/**
+ * Who may download Finance CSV exports (owner decision 2026-10-05, D10): the store owner and store admin
+ * system roles only, on top of holding `exports.run` and `finance.read`. The finance role cannot export.
+ */
+export const FINANCE_EXPORT_ROLES: readonly string[] = ["store_owner", "store_admin"];
+
+/**
+ * Finance permissions are defined by the system role, not by the permission array stored on each store's
+ * role row: stores created before the Finance section have stale arrays, and without this the books would
+ * be unreachable for their owners. Returns the finance permissions a system role is defined to hold.
+ */
+export function systemRoleFinancePermissions(roleName: string): readonly StorePermission[] {
+  const defined = (SYSTEM_STORE_ROLES as Record<string, readonly StorePermission[] | undefined>)[roleName];
+  return defined ? defined.filter((p) => p.startsWith("finance.")) : [];
+}
 
 export function hasPermission(granted: readonly string[], needed: StorePermission): boolean {
   if (granted.includes(needed)) return true;

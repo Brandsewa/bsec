@@ -1,7 +1,7 @@
 import { randomUUID } from "node:crypto";
 import { and, eq, sql } from "drizzle-orm";
 import { schema, withTenant, type Db } from "@bs/db";
-import { hashPassword, STORE_PERMISSIONS } from "@bs/auth";
+import { hashPassword, STORE_PERMISSIONS, SYSTEM_STORE_ROLES } from "@bs/auth";
 
 export interface CreateOwnerInput {
   email: string;
@@ -20,6 +20,7 @@ export interface CreateOwnerResult {
 const SYSTEM_ROLES: Array<{ name: string; permissions: readonly string[] }> = [
   { name: "store_owner", permissions: STORE_PERMISSIONS },
   { name: "store_admin", permissions: STORE_PERMISSIONS },
+  { name: "store_finance", permissions: SYSTEM_STORE_ROLES.store_finance },
 ];
 
 /** Makes sure the store has its system roles and gives the user an active owner membership. Idempotent. */

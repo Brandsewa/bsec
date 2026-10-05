@@ -1,5 +1,6 @@
 import { and, eq } from "drizzle-orm";
 import { schema, withTenant, withUser } from "@bs/db";
+import { systemRoleFinancePermissions } from "@bs/auth";
 import type { Runtime } from "../runtime.ts";
 import type { TenantContext } from "../context.ts";
 
@@ -71,7 +72,8 @@ export async function getAdminMe(rt: Runtime, userId: string): Promise<AdminMe> 
       slug: tenant.slug,
       status: tenant.status,
       role: role.name,
-      permissions: role.permissions ?? [],
+      // finance.* follow the system role definition, so stores that predate the Finance section see the nav too
+      permissions: [...new Set([...(role.permissions ?? []), ...systemRoleFinancePermissions(role.name)])],
     });
   }
 

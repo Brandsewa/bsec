@@ -242,6 +242,7 @@ import {
   createPresignedExpenseReceiptUpload,
   finalizeExpenseReceipt,
   getExpenseReceiptUrl,
+  assertCanExportFinance,
   listFiscalPeriods,
   closeFiscalPeriod,
   reopenFiscalPeriod,
@@ -2478,9 +2479,11 @@ api.get("/admin/finance/export", async (c) => {
   });
   if (!tenantCtx) return c.json({ error: "Store context required" }, 400);
 
-  // D10: exporting needs the export permission AND read access to the books; either alone must not leak finance data.
-  if (!hasPermission(tenantCtx.permissions, "exports.run") || !hasPermission(tenantCtx.permissions, "finance.read")) {
-    return c.json({ error: "Forbidden: exports.run and finance.read are both required" }, 403);
+  // D10: owner and admin roles only, with exports.run and finance.read (checked in the domain).
+  try {
+    assertCanExportFinance(tenantCtx);
+  } catch (err) {
+    return c.json({ error: err instanceof Error ? err.message : "Forbidden" }, 403);
   }
 
   const exportType = c.req.query("type") ?? "ledger";

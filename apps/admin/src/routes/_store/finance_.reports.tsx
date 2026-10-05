@@ -1,4 +1,4 @@
-import { createFileRoute, useNavigate } from "@tanstack/react-router";
+import { createFileRoute, useNavigate, useRouteContext } from "@tanstack/react-router";
 import {
   Download,
   FileSpreadsheet,
@@ -29,7 +29,7 @@ import { Label } from "@/components/ui/label";
 import { ConfirmDialog } from "../../components/confirm-dialog.tsx";
 import { DataTable, type Column } from "../../components/data-table/data-table.tsx";
 import { ScrollTabs } from "../../components/scroll-tabs.tsx";
-import { downloadFinanceCsv } from "../../lib/finance-export.ts";
+import { canExportFinance, downloadFinanceCsv } from "../../lib/finance-export.ts";
 import { SimpleSelect } from "../../components/simple-select.tsx";
 import { errorMessage } from "../../lib/errors.ts";
 import { orpc } from "../../lib/orpc.ts";
@@ -67,6 +67,8 @@ export function FinanceReportsPage() {
   const search = Route.useSearch();
   const navigate = useNavigate({ from: Route.fullPath });
   const queryClient = useQueryClient();
+  const { store } = useRouteContext({ from: "/_store" });
+  const canExport = canExportFinance(store?.role);
 
   const [closeOpen, setCloseOpen] = useState(false);
   const [reopenTarget, setReopenTarget] = useState<FiscalPeriodItem | null>(null);
@@ -253,6 +255,7 @@ export function FinanceReportsPage() {
         </div>
 
         {/* 2. CSV Export Hub */}
+        {canExport && (
         <div className="rounded-lg border bg-card p-6 space-y-4">
           <h2 className="text-lg font-semibold flex items-center gap-2">
             <FileSpreadsheet className="h-5 w-5 text-emerald-600" />
@@ -299,6 +302,7 @@ export function FinanceReportsPage() {
             </div>
           </div>
         </div>
+        )}
 
         {/* 3. Trial Balance Section */}
         <div className="rounded-lg border bg-card p-6 space-y-4">

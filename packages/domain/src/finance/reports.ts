@@ -14,6 +14,7 @@
 
 import { and, eq, gte, lte, ne, sql } from "drizzle-orm";
 import { schema, withTenant, type DbHandle } from "@bs/db";
+import { FINANCE_EXPORT_ROLES } from "@bs/auth";
 import { assertPermission, type TenantContext } from "../context.ts";
 import {
   getTrialBalance,
@@ -492,4 +493,16 @@ export async function getTrialBalanceForAdmin(
 ) {
   assertPermission(ctx, "finance.read");
   return withTenant(dbRw.db, ctx.tenantId, (tx) => getTrialBalance(tx, ctx.tenantId, filter));
+}
+
+/**
+ * CSV export of the books (owner decision 2026-10-05, D10): store owner and store admin only, and they
+ * must also hold exports.run and finance.read. The finance role and custom roles cannot export.
+ */
+export function assertCanExportFinance(ctx: TenantContext): void {
+  assertPermission(ctx, "exports.run");
+  assertPermission(ctx, "finance.read");
+  if (!ctx.roles.some((r) => FINANCE_EXPORT_ROLES.includes(r))) {
+    throw new Error("Forbidden: only the store owner and store admin can export finance data");
+  }
 }

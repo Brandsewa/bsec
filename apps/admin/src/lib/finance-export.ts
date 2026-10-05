@@ -7,6 +7,11 @@ import { getSupportStoreId, getSupportToken } from "./support.ts";
  * link or `location.href` cannot do this: the admin SPA lives on a different origin than the API and a
  * navigation cannot send `x-store-id`. The server names the file (and signals truncation in the name).
  */
+/** Owner decision 2026-10-05 (D10): only these roles may export; the server enforces the same list. */
+export function canExportFinance(role: string | undefined): boolean {
+  return role === "store_owner" || role === "store_admin";
+}
+
 export async function downloadFinanceCsv(type: "ledger" | "expenses", period: string): Promise<void> {
   const headers: Record<string, string> = {};
   const support = getSupportToken();

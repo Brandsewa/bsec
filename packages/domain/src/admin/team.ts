@@ -1,7 +1,7 @@
 import { createHash, randomBytes, randomUUID } from "node:crypto";
 import { and, eq, gt, isNull, sql } from "drizzle-orm";
 import { schema, withTenant } from "@bs/db";
-import { hashPassword } from "@bs/auth";
+import { hashPassword, SYSTEM_STORE_ROLES } from "@bs/auth";
 import type { Runtime } from "../runtime.ts";
 import { assertPermission, type TenantContext } from "../context.ts";
 import { assertStaffQuota } from "../system/quotas.ts";
@@ -69,9 +69,19 @@ export async function listMemberships(rt: Runtime, ctx: TenantContext): Promise<
 
 export async function listStoreRoles(rt: Runtime, ctx: TenantContext): Promise<Array<{ id: string; name: string }>> {
   assertPermission(ctx, "staff.manage");
-  return withTenant(rt._db.db, ctx.tenantId, (tx) =>
-    tx.select({ id: schema.roles.id, name: schema.roles.name }).from(schema.roles).orderBy(schema.roles.name),
-  );
+  return withTenant(rt._db.db, ctx.tenantId, async (tx) => {
+    // Stores created before the Finance section have no finance role yet: create the system role on first use.
+    await tx
+      .insert(schema.roles)
+      .values({ tenantId: ctx.tenantId, name: "store_finance", isSystem: true, permissions: [...SYSTEM_STORE_ROLES.store_finance] })
+      .onConflictDoNothing();
+    return tx.select({ id: schema.roles.id, name: schema.roles.name }).from(schema.roles).orderBy(schema.roles.name);
+  });
+}
+
+/** Owners and admins may hand out the finance role; it exposes the books, so not any staff.manage holder. */
+function canManageFinanceRole(ctx: TenantContext): boolean {
+  return ctx.roles.includes("store_owner") || ctx.roles.includes("store_admin");
 }
 
 async function activeOwnerCount(tx: Parameters<Parameters<typeof withTenant>[2]>[0]): Promise<number> {
@@ -106,6 +116,9 @@ export async function setMemberRole(
     if (!target) throw new Error("Not Found: member not found");
     const [newRole] = await tx.select({ name: schema.roles.name }).from(schema.roles).where(eq(schema.roles.id, input.roleId)).limit(1);
     if (!newRole) throw new Error("Bad Request: role not found");
+    if ((newRole.name === "store_finance" || target.roleName === "store_finance") && !canManageFinanceRole(ctx)) {
+      throw new Error("Forbidden: only store owners and admins can assign or modify the finance role");
+    }
     if (
       (newRole.name === "store_owner" || newRole.name === "store_admin" || target.roleName === "store_owner" || target.roleName === "store_admin") &&
       !isOwner
@@ -169,6 +182,9 @@ export async function inviteStaff(
     if (!role) throw new Error("Bad Request: role not found");
     if ((role.name === "store_owner" || role.name === "store_admin") && !isOwner) {
       throw new Error("Forbidden: only store owners can invite owner or admin members");
+    }
+    if (role.name === "store_finance" && !canManageFinanceRole(ctx)) {
+      throw new Error("Forbidden: only store owners and admins can invite finance members");
     }
 
     const [alreadyMember] = await tx

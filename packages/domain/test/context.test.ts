@@ -175,7 +175,8 @@ describe("buildTenantContext()", () => {
         storeStatus: "live",
         actor: { type: "staff", userId },
         roles: ["store_admin"],
-        permissions: ["staff.manage", "settings.write"],
+        // finance.* come from the store_admin system role definition (ADR-022), not from the stored array
+        permissions: ["staff.manage", "settings.write", "finance.read", "finance.write"],
         requestId: "admin-req-1",
       });
     });

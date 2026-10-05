@@ -45,11 +45,14 @@ We adopt an append-only double-entry ledger adapted from the Storify architectur
 9. **Non-destructive Period Close (D9):**
    Closing a fiscal period (`fiscal_periods`) snapshots P&L metrics and advances the closed boundary. Postings dated within a closed period are shifted to `closedThrough + 1s` with an explanatory audit note rather than rejected or backdated. A 60-second in-process cache for `closedThrough` is maintained and invalidated on close/reopen.
 
-10. **Export Authorization (D10):**
-    CSV ledger and expense exports require both `exports.run` and `finance.read`.
+10. **Export Authorization (D10, owner decision 2026-10-05):**
+    CSV ledger and expense exports are for the **store owner and store admin roles only**, and they must also hold `exports.run` and `finance.read` (`assertCanExportFinance`, `FINANCE_EXPORT_ROLES` in `@bs/auth`). The finance role and custom roles cannot export; the Export buttons are hidden for them.
 
-11. **Granular Permissions (D14):**
-    `finance.read` and `finance.write` permissions are added to `STORE_PERMISSIONS`. They are granted to store owners and store admins, but explicitly excluded from platform support sessions (`SUPPORT_READ_PERMISSIONS` and `SUPPORT_WRITE_PERMISSIONS`).
+11. **Granular Permissions and the finance role (D14, owner decision 2026-10-05):**
+    `finance.read` and `finance.write` are added to `STORE_PERMISSIONS`. Three system roles can use the books: `store_owner`, `store_admin`, and a new `store_finance` role that holds exactly `finance.read` and `finance.write` (no exports, no orders, no staff management). Platform support sessions never get finance access (`SUPPORT_READ_PERMISSIONS` and `SUPPORT_WRITE_PERMISSIONS`). Only owners and admins can invite or assign the finance role. Because every store keeps its own copy of each system role's permission array, stores created before this feature would have had no finance access at all; the finance permissions are therefore taken from the system role definition (`systemRoleFinancePermissions`) when the request context and the signed-in profile are built, and `store_finance` is created for a store the first time its roles are listed (new stores get it at provisioning).
+
+12. **Input tax credit (D13, owner decision 2026-10-05):**
+    Purchases are not tracked for GST. Expenses are booked at the gross amount and the tax summary covers output GST only. Revisit with the CA before the books are used for filing.
 
 ## Consequences
 
@@ -68,7 +71,7 @@ We adopt an append-only double-entry ledger adapted from the Storify architectur
 - **Expense categories and paid-from values.** The contract and UI use `rent, utilities, salaries, contractor, software_tools, marketing_ads, packaging, office_supplies, logistics_courier, inventory_purchase, professional_fees, travel, other` and `paid_from` of `cash_bank | cash_gateway | cash_on_hand | unpaid`, not the plan's `premises, people, marketing, ...` and `bank | cash | gateway | unpaid`. Contract, UI and ledger agree with each other; the plan lists are superseded. The ledger account for each paid-from value is stored on the expense row (`debit_account`), so changing these lists later does not break reversals.
 - **Tax-inclusive orders.** Real checkout computes `grandTotal = subtotal - discountTotal + shippingTotal + codFee` (tax is inside the price; `pricesIncludeTax` on admin orders). The plan's identity `merchandise + shipping + tax = grandTotal` therefore does not hold for the normal case. `decomposeOrder` handles it with its residual rule: the tax is removed from `product_revenue`, so revenue is booked ex-tax and the entries sum to `grandTotal`. This is the expected path, not an error path. Known simplification: tax charged on shipping is also taken out of merchandise revenue rather than shipping income.
 - **Recurring expenses.** Intervals are `monthly | quarterly | yearly` (no weekly). Schedule maths lives in `@bs/contracts` (`addRecurringInterval`, `firstRecurringDue`) so the server and the admin form's next-copy preview cannot disagree; months keep the anchor day and clamp short months without drifting (31 Jan: 28 Feb, 31 Mar). A past-dated template schedules only future copies unless the merchant ticks "also create copies already due", which the daily reconcile tick then books at most 12 per template per tick.
-- **CSV export permission (D10).** Requires `exports.run` and `finance.read` together (verification fix; the first build allowed either).
+- **CSV export permission (D10).** Owner and admin roles only (decision 2026-10-05), see decision 10.
 
 ## Known gaps (not built)
 

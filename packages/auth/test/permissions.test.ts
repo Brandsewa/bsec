@@ -1,9 +1,11 @@
 import { describe, expect, it } from "vitest";
 import {
+  FINANCE_EXPORT_ROLES,
   hasPermission,
   LEGACY_SETTINGS_WRITE_FAMILIES,
   STORE_PERMISSIONS,
   SYSTEM_STORE_ROLES,
+  systemRoleFinancePermissions,
 } from "../src/index.ts";
 
 describe("permissions", () => {
@@ -61,5 +63,24 @@ describe("permissions", () => {
     expect(hasPermission(domainsStaff, "settings.write")).toBe(false);
     expect(hasPermission(domainsStaff, "audit.read")).toBe(false);
   });
-});
 
+  it("defines the finance role (owner decision 2026-10-05): finance.read and finance.write only", () => {
+    expect([...SYSTEM_STORE_ROLES.store_finance]).toEqual(["finance.read", "finance.write"]);
+    expect(hasPermission(SYSTEM_STORE_ROLES.store_finance, "exports.run")).toBe(false);
+    expect(hasPermission(SYSTEM_STORE_ROLES.store_finance, "orders.read")).toBe(false);
+    expect(hasPermission(SYSTEM_STORE_ROLES.store_finance, "staff.manage")).toBe(false);
+  });
+
+  it("limits finance CSV export to the owner and admin roles", () => {
+    expect([...FINANCE_EXPORT_ROLES]).toEqual(["store_owner", "store_admin"]);
+    expect(FINANCE_EXPORT_ROLES).not.toContain("store_finance");
+  });
+
+  it("derives finance.* from the system role, and grants nothing to other roles", () => {
+    expect([...systemRoleFinancePermissions("store_owner")]).toEqual(["finance.read", "finance.write"]);
+    expect([...systemRoleFinancePermissions("store_admin")]).toEqual(["finance.read", "finance.write"]);
+    expect([...systemRoleFinancePermissions("store_finance")]).toEqual(["finance.read", "finance.write"]);
+    expect(systemRoleFinancePermissions("store_viewer")).toEqual([]);
+    expect(systemRoleFinancePermissions("anything")).toEqual([]);
+  });
+});

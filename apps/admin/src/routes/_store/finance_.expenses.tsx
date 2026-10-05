@@ -1,4 +1,4 @@
-import { createFileRoute, useNavigate } from "@tanstack/react-router";
+import { createFileRoute, useNavigate, useRouteContext } from "@tanstack/react-router";
 import {
   Download,
   Paperclip,
@@ -42,7 +42,7 @@ import {
   text,
 } from "../../components/data-table/use-table-state.ts";
 import { ScrollTabs } from "../../components/scroll-tabs.tsx";
-import { downloadFinanceCsv } from "../../lib/finance-export.ts";
+import { canExportFinance, downloadFinanceCsv } from "../../lib/finance-export.ts";
 import { SimpleSelect } from "../../components/simple-select.tsx";
 import { errorMessage } from "../../lib/errors.ts";
 import { client, orpc } from "../../lib/orpc.ts";
@@ -93,6 +93,8 @@ export function ExpensesPage() {
   const search = Route.useSearch();
   const navigate = useNavigate({ from: Route.fullPath });
   const queryClient = useQueryClient();
+  const { store } = useRouteContext({ from: "/_store" });
+  const canExport = canExportFinance(store?.role);
 
   const [createOpen, setCreateOpen] = useState(false);
   const [editTarget, setEditTarget] = useState<ExpenseItem | null>(null);
@@ -280,17 +282,19 @@ export function ExpensesPage() {
         description="Track operational overheads, vendor bills, recurring subscriptions, and payment settlements."
         aside={
           <div className="flex items-center gap-2">
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() => {
-                downloadFinanceCsv("expenses", search.period).catch((err) => toast.error(errorMessage(err, "Export failed")));
-              }}
-              className="gap-1.5"
-            >
-              <Download className="h-4 w-4" />
-              Export CSV
-            </Button>
+            {canExport && (
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => {
+                  downloadFinanceCsv("expenses", search.period).catch((err) => toast.error(errorMessage(err, "Export failed")));
+                }}
+                className="gap-1.5"
+              >
+                <Download className="h-4 w-4" />
+                Export CSV
+              </Button>
+            )}
             <Button
               size="sm"
               onClick={() => setCreateOpen(true)}
