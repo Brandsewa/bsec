@@ -87,22 +87,25 @@ export function MarketingLandingPage({ plans }: { plans?: LandingPlan[] | undefi
         </header>
 
         {/* copy */}
-        <div className="relative z-20 mx-auto flex max-w-7xl flex-col items-center px-5 pb-8 pt-12 text-center sm:px-8 sm:pt-16 lg:pt-16">
-          <h1 className="bm-h1 bm-rise max-w-[14ch]" style={{ ["--d" as string]: "100ms" } as React.CSSProperties}>
+        <div className="relative z-20 mx-auto flex max-w-7xl flex-col items-center px-5 pb-2 pt-8 text-center sm:px-8 sm:pt-10 lg:pt-10">
+          <h1 className="bm-h1 bm-rise max-w-[30ch]" style={{ ["--d" as string]: "100ms" } as React.CSSProperties}>
             Open your Indian online store today.
           </h1>
-          <p className="bm-dim bm-rise mt-7 max-w-[34rem] text-[1.1rem]" style={{ ["--d" as string]: "300ms" } as React.CSSProperties}>
+          <p className="bm-dim bm-rise mt-4 max-w-[46rem] text-[1.05rem]" style={{ ["--d" as string]: "300ms" } as React.CSSProperties}>
             bcom.si gives Indian D2C brands a themed storefront, cash on delivery and GST invoices in one admin. Choose a
             name and start your 14-day free trial.
           </p>
-          <div className="bm-rise mt-9 w-full max-w-[34rem]" style={{ ["--d" as string]: "500ms" } as React.CSSProperties}>
+          <div className="bm-rise mt-6 w-full max-w-[36rem]" style={{ ["--d" as string]: "500ms" } as React.CSSProperties}>
             <SubdomainAvailabilityChecker platformDomain="bcom.si" />
-            <p className="bm-dim mt-3 text-[0.9rem]">14 days free · no card needed · plans from {inr(cheapest)} a month + GST</p>
+            <p className="bm-dim mt-2.5 text-[0.9rem]">14 days free · no card needed · plans from {inr(cheapest)} a month + GST</p>
           </div>
         </div>
 
+        {/* the lit horizon under the orbit */}
+        <div className="bm-horizon" aria-hidden="true"><span /></div>
+
         {/* the module orbit */}
-        <div className="relative z-20 pb-6">
+        <div className="relative z-20 pb-8">
           <Orbit />
         </div>
       </section>
