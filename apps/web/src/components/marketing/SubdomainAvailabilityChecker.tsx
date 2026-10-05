@@ -73,54 +73,41 @@ export function SubdomainAvailabilityChecker({
   };
 
   return (
-    <div className="w-full max-w-xl mx-auto">
-      <form onSubmit={handleSubmit} className="flex flex-col sm:flex-row gap-3 shadow-lg rounded-2xl bg-white p-2.5 border border-slate-200">
-        <div className="flex-1 flex items-center px-4 py-2 bg-slate-50 rounded-xl border border-slate-200 focus-within:border-emerald-600 focus-within:bg-white transition-all">
+    <div className="w-full max-w-xl">
+      <form onSubmit={handleSubmit} className="bm-field flex flex-col gap-3 rounded-3xl p-2 sm:flex-row sm:items-center sm:rounded-full">
+        <label className="flex flex-1 items-center gap-2 px-4">
+          <span className="sr-only">Store name</span>
           <input
             type="text"
-            placeholder="Enter store name..."
+            placeholder="Your store name"
             value={storeName}
             onChange={(e) => handleStoreNameChange(e.target.value)}
-            className="w-full bg-transparent text-slate-900 placeholder:text-slate-400 font-medium text-base outline-none"
-            aria-label="Store name"
+            className="min-h-[3rem] w-full bg-transparent text-[1.05rem] font-medium outline-none placeholder:opacity-50"
+            style={{ color: "var(--bm-text)" }}
+            autoComplete="off"
             required
           />
-          <span className="text-slate-400 font-medium text-sm select-none shrink-0 pl-2">
-            .{platformDomain}
-          </span>
-        </div>
-
+          <span className="shrink-0 text-sm font-semibold" style={{ color: "var(--bm-dim)" }}>.{platformDomain}</span>
+        </label>
         <button
           type="submit"
-          disabled={!slug || slug.length < 3 || (checkResult !== null && !checkResult.available)}
-          className="px-6 py-3.5 bg-emerald-600 hover:bg-emerald-700 disabled:bg-slate-300 disabled:cursor-not-allowed text-white font-semibold text-base rounded-xl shadow-md hover:shadow-lg transition-all duration-200 shrink-0 text-center"
+          disabled={checkResult !== null && !checkResult.available}
+          className="bm-pill"
         >
-          Start Free Trial
+          See it in action
+          <svg width="16" height="16" viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><path d="M4 12h15M13 6l6 6-6 6" /></svg>
         </button>
       </form>
-
-      {/* Subdomain status pill */}
-      {slug.length >= 3 && (
-        <div className="mt-3 flex items-center justify-center gap-2 text-sm font-medium">
-          {isChecking ? (
-            <span className="text-slate-500 animate-pulse">Checking {slug}.{platformDomain}...</span>
+      <p className="mt-3 min-h-[1.75rem] text-[0.95rem] font-medium" role="status" aria-live="polite">
+        {slug.length >= 3 &&
+          (isChecking ? (
+            <span style={{ color: "var(--bm-dim)" }}>Checking {slug}.{platformDomain}…</span>
           ) : checkResult?.available ? (
-            <span className="text-emerald-700 bg-emerald-50 border border-emerald-200 px-3 py-1 rounded-full flex items-center gap-1.5">
-              <svg className="w-4 h-4 text-emerald-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M5 13l4 4L19 7" />
-              </svg>
-              <strong>{slug}.{platformDomain}</strong> is available!
-            </span>
+            <span style={{ color: "#7ee8c6" }}>✓ {slug}.{platformDomain} is available</span>
           ) : checkResult ? (
-            <span className="text-amber-800 bg-amber-50 border border-amber-200 px-3 py-1 rounded-full flex items-center gap-1.5">
-              <svg className="w-4 h-4 text-amber-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M6 18L18 6M6 6l12 12" />
-              </svg>
-              {checkResult.reason || "Subdomain is unavailable"}
-            </span>
-          ) : null}
-        </div>
-      )}
+            <span style={{ color: "#ff9db8" }}>{checkResult.reason || "That name is taken"}</span>
+          ) : null)}
+      </p>
     </div>
   );
 }

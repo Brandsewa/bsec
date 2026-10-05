@@ -1,568 +1,377 @@
 "use client";
 
-import React, { useState } from "react";
+/*
+ * bcom.si landing: "Beam".
+ * THESIS: one shaft of light falls from the top of the page onto the lit edge of the product window; the product is
+ *   the hero. Refuses the stock SaaS arrangement of a centred headline over a flat gradient with a floating mockup.
+ * OWN-WORLD: near-black ground, a vertical beam with a bloom where it lands, slow violet smoke, a dot grid that only
+ *   exists in the light, light motes rising from the foot, a warm-glow pill, Geist throughout.
+ * STORY: a D2C founder sees a real-looking order board under the light, learns exactly what is live (and what is
+ *   Coming soon), checks a store name and starts the 14-day trial.
+ * FIRST VIEWPORT: left, a left-aligned headline, one sentence, the store-name field with the warm pill; the beam falls
+ *   at 57% of the width onto the order-board window rising from the bottom edge.
+ * FORM: Beam, chosen by the owner on 2026-10-05 from six explored designs, in the style of modern dark developer-tool
+ *   heroes (original build, no third-party assets, copy or code). The other five live in git history on
+ *   design/marketing-landing (commits before the cleanup).
+ * FINISH: unreviewed and undocumented is unfinished; this build ends with the finish review, the verdict, DESIGN.md, and every shipping raster carrying its provenance
+ */
+
+import { useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import { SubdomainAvailabilityChecker } from "./SubdomainAvailabilityChecker.tsx";
+import { AppWindow } from "./beam/AppWindow.tsx";
+import { Orbit } from "./beam/Orbit.tsx";
+import { Dust } from "./beam/Dust.tsx";
+import { Smoke } from "./beam/Smoke.tsx";
+import { useRevealMotion } from "./landing/motion.ts";
+import { COMING_SOON, FAQS, FALLBACK_PLANS, INCLUDED_IN_ALL, STEPS, THEMES, planBullets, type LandingPlan } from "./landing/content.ts";
+import { bmFont } from "./beam/fonts.ts";
+import "./beam/beam.css";
 
-interface PlanItem {
-  code: string;
-  name: string;
-  monthlyPaise: number;
-  yearlyPaise: number;
-  description: string;
-  features: string[];
-  popular?: boolean;
+const inr = (paise: number) => `₹${Math.round(paise / 100).toLocaleString("en-IN")}`;
+const STRIP = ["Cash on delivery", "GST invoices", "Theme builder", "Orders", "Returns", "Customers"];
+
+function Arrow() {
+  return (
+    <svg width="16" height="16" viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M4 12h15M13 6l6 6-6 6" />
+    </svg>
+  );
 }
 
-const DEFAULT_PLANS: PlanItem[] = [
-  {
-    code: "starter",
-    name: "Starter",
-    monthlyPaise: 99900,
-    yearlyPaise: 999000,
-    description: "Perfect for new direct-to-consumer creators and boutique stores starting online.",
-    features: [
-      "Up to 500 products",
-      "2 staff accounts",
-      "5 GB fast media storage",
-      "₹99 Standard India flat rate shipping",
-      "Cash on Delivery & Razorpay integration",
-      "Automated GST Tax Invoices",
-      "1 Custom Domain connection",
-    ],
-  },
-  {
-    code: "growth",
-    name: "Growth",
-    monthlyPaise: 249900,
-    yearlyPaise: 2499000,
-    description: "For scaling Indian brands needing multi-staff workflows and high order throughput.",
-    features: [
-      "Up to 5,000 products",
-      "5 staff accounts",
-      "25 GB fast media storage",
-      "3 Custom Domains included",
-      "Shiprocket automated label printing & tracking",
-      "Remove 'Powered by bcom.si' branding",
-      "Advanced discount engine (BXGY, fixed, %)",
-      "Priority webhook dispatch",
-    ],
-    popular: true,
-  },
-  {
-    code: "pro",
-    name: "Pro",
-    monthlyPaise: 599900,
-    yearlyPaise: 5999000,
-    description: "Uncapped scale, enterprise concurrency, and dedicated infrastructure support.",
-    features: [
-      "Up to 25,000 products",
-      "15 staff accounts",
-      "100 GB fast media storage",
-      "10 Custom Domains included",
-      "High-concurrency flash sale protection",
-      "Multi-location inventory tracking",
-      "Full store CSV / JSON data export",
-      "Dedicated 24/7 priority SLA support",
-    ],
-  },
-];
-
-const TEMPLATES = [
-  {
-    code: "starter-minimal",
-    name: "Minimalist Essential",
-    industry: "Handicrafts & General Retail",
-    tagline: "Clean, distraction-free typography highlighting artisan craft details.",
-    color: "from-stone-800 to-amber-900",
-  },
-  {
-    code: "fashion-editorial",
-    name: "Fashion Editorial",
-    industry: "Apparel & Accessories",
-    tagline: "High-impact visual lookbook with rich full-width editorial hero blocks.",
-    color: "from-slate-900 to-indigo-950",
-  },
-  {
-    code: "gourmet-artisan",
-    name: "Gourmet Artisan",
-    industry: "Food, Tea & Organic Goods",
-    tagline: "Warm organic palette with custom freshness badges and dietary filters.",
-    color: "from-emerald-950 to-teal-900",
-  },
-];
-
-const FAQS = [
-  {
-    q: "Can I connect my own custom domain like mystore.in?",
-    a: "Yes! Every store gets a free permanent {slug}.bcom.si address instantly. You can connect your custom domain (.in, .com, .store, etc.) at any time with automatic free Cloudflare SSL certificates.",
-  },
-  {
-    q: "Do you take any transaction commission on my sales?",
-    a: "Zero transaction fees! Unlike other platforms that charge 1-2% on every sale, we only charge the fixed SaaS plan fee. 100% of your earnings go straight to your bank account via your own payment gateway.",
-  },
-  {
-    q: "What payment methods are supported for Indian customers?",
-    a: "Direct-to-consumer stores on bcom.si support Cash on Delivery (COD) out of the box with custom fee controls, alongside Instant UPI, RuPay, Credit/Debit cards, and Netbanking through Razorpay.",
-  },
-  {
-    q: "How does shipping and order tracking work?",
-    a: "You get native India flat-rate shipping zones pre-configured. You can also connect your own Shiprocket account with one click to generate shipping labels, manifest orders, and track pickups in real time.",
-  },
-  {
-    q: "Is there a free trial period?",
-    a: "Yes, every new store comes with a full 14-day free trial on your chosen plan. No credit card required to start building and testing your storefront.",
-  },
-];
-
-export function MarketingLandingPage() {
-  const [billingInterval, setBillingInterval] = useState<"monthly" | "yearly">("monthly");
-  const [activeFaq, setActiveFaq] = useState<number | null>(null);
-
-  const formatPrice = (paise: number) => {
-    return `₹${(paise / 100).toLocaleString("en-IN")}`;
-  };
+export function MarketingLandingPage({ plans }: { plans?: LandingPlan[] | undefined }) {
+  const rootRef = useRef<HTMLDivElement>(null);
+  useRevealMotion(rootRef, { item: ".bm-rv", armedClass: "bm-armed" });
+  const [interval, setInterval_] = useState<"monthly" | "yearly">("monthly");
+  const planList = useMemo(() => (plans && plans.length > 0 ? plans : FALLBACK_PLANS), [plans]);
 
   return (
-    <div className="min-h-screen bg-slate-50 text-slate-900 font-sans selection:bg-emerald-100 selection:text-emerald-900">
-      {/* Top Navbar */}
-      <header className="sticky top-0 z-50 bg-white/80 backdrop-blur-md border-b border-slate-200">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between">
-          <div className="flex items-center gap-3">
-            <span className="w-9 h-9 rounded-xl bg-emerald-600 flex items-center justify-center text-white font-extrabold text-xl shadow-sm">
-              g
-            </span>
-            <span className="text-xl font-bold tracking-tight text-slate-900">
-              bcom<span className="text-emerald-600">.si</span>
-            </span>
-          </div>
+    <div ref={rootRef} className={`bm ${bmFont.variable}`} id="top">
+      {/* ---------- Hero ---------- */}
+      <section className="bm-hero" style={{ ["--bm-foot" as string]: "var(--bm-window-h)" } as React.CSSProperties}>
+        <style>{`.bm-hero{--bm-window-h:calc(min(100vw,90rem)*0.5 + 3.3rem)}@media(min-width:640px){.bm-hero{--bm-window-h:calc(min(100vw,90rem)*0.2 + 3.3rem)}}`}</style>
 
-          <nav className="hidden md:flex items-center gap-8 text-sm font-semibold text-slate-600">
-            <a href="#features" className="hover:text-slate-900 transition-colors">Features</a>
-            <a href="#templates" className="hover:text-slate-900 transition-colors">Templates</a>
-            <a href="#how-it-works" className="hover:text-slate-900 transition-colors">How it works</a>
-            <a href="#pricing" className="hover:text-slate-900 transition-colors">Pricing</a>
-            <a href="#faq" className="hover:text-slate-900 transition-colors">FAQ</a>
-          </nav>
+        {/* light layers (they fall away as the page scrolls) */}
+        <div className="bm-light absolute inset-0" aria-hidden="true">
+          <div className="bm-smoke bm-smoke-a" />
+          <div className="bm-smoke bm-smoke-b" />
+          <div className="bm-smoke bm-smoke-c" />
+          <Smoke beamX={0.5} />
+          <div className="bm-grid" />
+          <div className="bm-bloom" />
+          <Dust beamX={0.5} foot={220} />
+        </div>
+        <div className="bm-grain" aria-hidden="true" />
+        <div className="bm-flare bm-light" aria-hidden="true">
+          <div className="bm-flare-wide" />
+        </div>
 
-          <div className="flex items-center gap-3">
-            <a
-              href="https://admin.bcom.si"
-              className="text-sm font-semibold text-slate-700 hover:text-slate-900 px-3.5 py-2 rounded-lg hover:bg-slate-100 transition-all"
-            >
-              Log in
+        {/* nav */}
+        <header className="relative z-30">
+          <div className="mx-auto flex h-[4.5rem] max-w-7xl items-center justify-between px-5 sm:px-8">
+            <a href="#top" className="flex items-center gap-2.5 no-underline" style={{ color: "var(--bm-text)" }} aria-label="Bs Commerce home">
+              <span className="flex h-8 w-8 items-center justify-center rounded-lg text-[1.05rem] font-bold" style={{ background: "linear-gradient(135deg,#8f8dff,#6f8bff)", color: "#0a0a12" }} aria-hidden="true">B</span>
+              <span className="text-[1.25rem] font-semibold tracking-tight">Bs Commerce</span>
             </a>
-            <Link
-              href="/signup"
-              className="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white font-semibold text-sm rounded-xl shadow-sm hover:shadow transition-all"
-            >
-              Start Free Trial
-            </Link>
+            <nav className="hidden items-center gap-1 lg:flex" aria-label="Sections">
+              {[["What works today", "#live"], ["Themes", "#themes"], ["How it works", "#steps"], ["Pricing", "#pricing"], ["FAQ", "#faq"]].map(([label, href]) => (
+                <a key={href} href={href} className="rounded-full px-3.5 py-2 text-[0.92rem] font-medium no-underline hover:bg-[rgb(255_255_255/0.08)]" style={{ color: "var(--bm-text)" }}>{label}</a>
+              ))}
+            </nav>
+            <div className="flex items-center gap-2.5">
+              <a href="https://admin.bcom.si" className="bm-outline hidden sm:inline-flex">Log in</a>
+              <Link href="/signup" className="bm-pill bm-pill-sm">Sign up</Link>
+            </div>
           </div>
-        </div>
-      </header>
+        </header>
 
-      {/* 1. Hero Section (PLAN §7) */}
-      <section className="relative pt-16 pb-20 sm:pt-24 sm:pb-28 overflow-hidden bg-gradient-to-b from-white to-slate-50 border-b border-slate-200">
-        <div className="max-w-5xl mx-auto px-4 sm:px-6 text-center">
-          <div className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full bg-emerald-50 border border-emerald-200 text-emerald-800 text-xs font-semibold mb-6">
-            <span className="w-2 h-2 rounded-full bg-emerald-500 animate-ping" />
-            Fastest Commerce Platform for Modern Indian Brands
-          </div>
-
-          <h1 className="text-4xl sm:text-6xl font-extrabold tracking-tight text-slate-900 leading-tight sm:leading-none mb-6">
-            Launch your online store <br className="hidden sm:inline" />
-            <span className="bg-gradient-to-r from-emerald-600 to-teal-600 bg-clip-text text-transparent">
-              in under 10 minutes.
-            </span>
+        {/* copy */}
+        <div className="relative z-20 mx-auto flex max-w-7xl flex-col items-center px-5 pb-2 pt-16 text-center sm:px-8 sm:pt-20 lg:pt-24">
+          <h1 className="bm-h1 bm-rise max-w-[30ch]" style={{ ["--d" as string]: "100ms" } as React.CSSProperties}>
+            Launch your Idea Today
           </h1>
-
-          <p className="max-w-2xl mx-auto text-lg sm:text-xl text-slate-600 font-normal mb-10 leading-relaxed">
-            Everything an Indian D2C merchant needs: instant UPI & COD, Shiprocket automation, GST-compliant tax invoices, and blazing fast storefronts.
+          <p className="bm-dim bm-rise mt-4 max-w-[46rem] text-[1.05rem]" style={{ ["--d" as string]: "300ms" } as React.CSSProperties}>
+            bcom.si gives Indian D2C brands a themed storefront, cash on delivery and GST invoices in one admin. Choose a
+            name and start your 14-day free trial.
           </p>
-
-          {/* Subdomain check input (Step 1 of signup) */}
-          <SubdomainAvailabilityChecker platformDomain="bcom.si" />
-
-          <p className="mt-4 text-xs text-slate-500 font-medium">
-            14-day free trial · No credit card required · Instant setup
-          </p>
-        </div>
-      </section>
-
-      {/* 2. Proof Strip (PLAN §7) */}
-      <section className="py-12 bg-white border-b border-slate-200">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <p className="text-center text-xs font-bold uppercase tracking-wider text-slate-400 mb-8">
-            Powering high-growth direct-to-consumer creators across India
-          </p>
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-8 items-center justify-center text-center opacity-70">
-            <div className="flex flex-col items-center">
-              <span className="text-xl font-bold text-slate-800 tracking-tight">Kolkata Handlooms</span>
-              <span className="text-xs text-slate-500">artisan fabrics · live</span>
-            </div>
-            <div className="flex flex-col items-center">
-              <span className="text-xl font-bold text-slate-800 tracking-tight">Organic Valley Co</span>
-              <span className="text-xs text-slate-500">spices & honey · live</span>
-            </div>
-            <div className="flex flex-col items-center">
-              <span className="text-xl font-bold text-slate-800 tracking-tight">Studio Nirvana</span>
-              <span className="text-xs text-slate-500">designer apparel · live</span>
-            </div>
-            <div className="flex flex-col items-center">
-              <span className="text-xl font-bold text-slate-800 tracking-tight">Pure Terra Crafts</span>
-              <span className="text-xs text-slate-500">sustainable living · live</span>
-            </div>
+          <div className="bm-rise mt-6 w-full max-w-[36rem]" style={{ ["--d" as string]: "500ms" } as React.CSSProperties}>
+            <SubdomainAvailabilityChecker platformDomain="bcom.si" />
           </div>
         </div>
+
+        {/* the module orbit */}
+        <div className="relative z-20 pb-8">
+          <Orbit />
+        </div>
       </section>
 
-      {/* 3. Features Grid (PLAN §7) */}
-      <section id="features" className="py-20 bg-slate-50 border-b border-slate-200">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="text-center max-w-3xl mx-auto mb-16">
-            <h2 className="text-xs font-bold uppercase tracking-widest text-emerald-600 mb-3">
-              Engineered for India
-            </h2>
-            <p className="text-3xl sm:text-4xl font-extrabold text-slate-900 tracking-tight">
-              Built natively for direct-to-consumer scale
+      {/* ---------- Strip ---------- */}
+      <section className="mx-auto max-w-7xl px-5 py-12 sm:px-8">
+        <p className="bm-dim text-[0.98rem]">Everything you need to sell in India:</p>
+        <p className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1 text-[1.05rem] font-semibold">
+          {STRIP.map((s, i) => (
+            <span key={s} className="flex items-center gap-3">
+              {s}
+              {i < STRIP.length - 1 && <span aria-hidden="true" style={{ color: "var(--bm-dim)" }}>·</span>}
+            </span>
+          ))}
+        </p>
+      </section>
+
+      {/* ---------- What works today ---------- */}
+      <section id="live" className="mx-auto max-w-7xl px-5 py-16 sm:px-8 lg:py-24">
+        <div className="bm-rv max-w-3xl">
+          <h2 className="bm-h2">Everything here works today.</h2>
+          <p className="bm-dim mt-5 max-w-[60ch]">
+            No roadmap in disguise. These are the parts a merchant can use the day they sign up. What is still being
+            built is marked Coming soon, below.
+          </p>
+        </div>
+
+        <div className="bm-rv bm-window-fade mx-auto mt-12 max-w-6xl">
+          <AppWindow />
+        </div>
+
+        <div className="mt-12 grid grid-cols-6 gap-5">
+          <article className="bm-panel bm-rv col-span-6 p-6 lg:col-span-4">
+            <h3 className="text-[1.45rem] font-semibold tracking-tight">Cash on delivery, done properly</h3>
+            <p className="bm-dim mt-2 max-w-[56ch]">
+              Set a COD fee per store. Stock is held when the order is placed and released if it is cancelled; you
+              confirm, ship and mark it delivered, and the cash collected is recorded.
             </p>
-          </div>
+            <ol className="mt-6 grid grid-cols-2 gap-3 text-sm sm:grid-cols-4" aria-label="Order lifecycle">
+              {["Placed", "Confirmed", "Shipped", "Delivered"].map((s, i) => (
+                <li key={s} className="rounded-xl px-3 py-2.5" style={{ background: "var(--bm-panel-2)", border: "1px solid var(--bm-line)" }}>
+                  <span className="bm-num block text-xs" style={{ color: "var(--bm-warm)" }}>Step {i + 1}</span>
+                  <span className="font-semibold">{s}</span>
+                </li>
+              ))}
+            </ol>
+          </article>
 
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
-            {/* Feature 1 */}
-            <div className="p-8 rounded-2xl bg-white border border-slate-200 shadow-sm hover:shadow-md transition-shadow">
-              <div className="w-12 h-12 rounded-xl bg-emerald-100 text-emerald-700 flex items-center justify-center font-bold text-xl mb-5">
-                ₹
-              </div>
-              <h3 className="text-xl font-bold text-slate-900 mb-2">UPI & Cash on Delivery</h3>
-              <p className="text-slate-600 text-sm leading-relaxed">
-                Native COD with customizable verification and automated fee adjustments alongside PhonePe, Google Pay, and Paytm checkout.
-              </p>
-            </div>
+          <article className="bm-panel bm-rv col-span-6 p-6 md:col-span-3 lg:col-span-2">
+            <h3 className="text-[1.35rem] font-semibold tracking-tight">GST invoices</h3>
+            <p className="bm-dim mt-2">CGST and SGST, or IGST, worked out from your state and your customer&apos;s, with the HSN on each line.</p>
+            <dl className="bm-num mt-4 space-y-1.5 rounded-xl p-3.5 text-sm" style={{ background: "var(--bm-panel-2)", border: "1px solid var(--bm-line)" }} aria-label="Example invoice lines">
+              <div className="flex justify-between"><dt>Cotton kurta · HSN 6104</dt><dd className="font-semibold">₹1,000.00</dd></div>
+              <div className="bm-dim flex justify-between"><dt>CGST + SGST 9% + 9%</dt><dd>₹180.00</dd></div>
+              <div className="bm-dim flex justify-between"><dt>or IGST 18%</dt><dd>₹180.00</dd></div>
+            </dl>
+            <p className="bm-dim mt-2 text-xs">Example only. Rates depend on your products.</p>
+          </article>
 
-            {/* Feature 2 */}
-            <div className="p-8 rounded-2xl bg-white border border-slate-200 shadow-sm hover:shadow-md transition-shadow">
-              <div className="w-12 h-12 rounded-xl bg-blue-100 text-blue-700 flex items-center justify-center font-bold text-xl mb-5">
-                🚚
-              </div>
-              <h3 className="text-xl font-bold text-slate-900 mb-2">Shiprocket Automation</h3>
-              <p className="text-slate-600 text-sm leading-relaxed">
-                Single-click shipping label generation, automated AWB assignment, and real-time tracking across 29,000+ Indian pincodes.
-              </p>
-            </div>
-
-            {/* Feature 3 */}
-            <div className="p-8 rounded-2xl bg-white border border-slate-200 shadow-sm hover:shadow-md transition-shadow">
-              <div className="w-12 h-12 rounded-xl bg-purple-100 text-purple-700 flex items-center justify-center font-bold text-xl mb-5">
-                📄
-              </div>
-              <h3 className="text-xl font-bold text-slate-900 mb-2">GST Tax Invoices</h3>
-              <p className="text-slate-600 text-sm leading-relaxed">
-                Automated legal GST tax invoices with state-wise IGST/CGST/SGST split, HSN code breakdowns, and instant PDF download.
-              </p>
-            </div>
-
-            {/* Feature 4 */}
-            <div className="p-8 rounded-2xl bg-white border border-slate-200 shadow-sm hover:shadow-md transition-shadow">
-              <div className="w-12 h-12 rounded-xl bg-amber-100 text-amber-700 flex items-center justify-center font-bold text-xl mb-5">
-                🌐
-              </div>
-              <h3 className="text-xl font-bold text-slate-900 mb-2">Custom Domains & SSL</h3>
-              <p className="text-slate-600 text-sm leading-relaxed">
-                Connect your brand's domain in seconds with enterprise Cloudflare for SaaS edge acceleration and automatic zero-downtime SSL.
-              </p>
-            </div>
-
-            {/* Feature 5 */}
-            <div className="p-8 rounded-2xl bg-white border border-slate-200 shadow-sm hover:shadow-md transition-shadow">
-              <div className="w-12 h-12 rounded-xl bg-rose-100 text-rose-700 flex items-center justify-center font-bold text-xl mb-5">
-                📱
-              </div>
-              <h3 className="text-xl font-bold text-slate-900 mb-2">Mobile-First Block Themes</h3>
-              <p className="text-slate-600 text-sm leading-relaxed">
-                Lightning-fast responsive layouts optimized for 95%+ mobile shopping traffic with zero merchant code overhead.
-              </p>
-            </div>
-
-            {/* Feature 6 */}
-            <div className="p-8 rounded-2xl bg-white border border-slate-200 shadow-sm hover:shadow-md transition-shadow relative">
-              <div className="w-12 h-12 rounded-xl bg-emerald-100 text-emerald-700 flex items-center justify-center font-bold text-xl mb-5">
-                💬
-              </div>
-              <span className="absolute top-6 right-6 px-2.5 py-1 rounded-full text-xs font-bold bg-slate-100 text-slate-600">
-                Coming Soon
-              </span>
-              <h3 className="text-xl font-bold text-slate-900 mb-2">WhatsApp Notifications</h3>
-              <p className="text-slate-600 text-sm leading-relaxed">
-                Automated WhatsApp order confirmations, dispatch alerts, and abandoned cart recovery directly to Indian customer numbers.
-              </p>
-            </div>
-          </div>
-        </div>
-      </section>
-
-      {/* 4. Templates Gallery (PLAN §7) */}
-      <section id="templates" className="py-20 bg-white border-b border-slate-200">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="text-center max-w-3xl mx-auto mb-16">
-            <h2 className="text-xs font-bold uppercase tracking-widest text-emerald-600 mb-3">
-              Starter Themes
-            </h2>
-            <p className="text-3xl sm:text-4xl font-extrabold text-slate-900 tracking-tight">
-              Professionally designed for your niche
+          <article className="bm-panel bm-rv col-span-6 p-6 md:col-span-3 lg:col-span-2">
+            <h3 className="text-[1.35rem] font-semibold tracking-tight">Change your theme without code</h3>
+            <p className="bm-dim mt-2">
+              Drag, drop and edit blocks: slider, product showcase, reviews, newsletter, cart. Colours, fonts and
+              heading sizes per device. No custom code to break.
             </p>
-          </div>
+            <ul className="mt-4 flex flex-wrap gap-2 text-sm font-medium" aria-label="Blocks you can place">
+              {["Hero slider", "Product showcase", "Reviews", "Newsletter"].map((b) => (
+                <li key={b} className="rounded-full px-3 py-1" style={{ background: "rgb(143 141 255 / 0.16)", color: "#d4d3ff" }}>{b}</li>
+              ))}
+            </ul>
+          </article>
 
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
-            {TEMPLATES.map((tmpl) => (
-              <div key={tmpl.code} className="flex flex-col rounded-2xl border border-slate-200 overflow-hidden shadow-sm hover:shadow-lg transition-all">
-                <div className={`h-48 bg-gradient-to-br ${tmpl.color} p-6 flex flex-col justify-end text-white`}>
-                  <span className="text-xs uppercase font-bold tracking-wider opacity-80">{tmpl.industry}</span>
-                  <h4 className="text-2xl font-extrabold tracking-tight mt-1">{tmpl.name}</h4>
-                </div>
-                <div className="p-6 flex-1 flex flex-col justify-between bg-white">
-                  <p className="text-sm text-slate-600 mb-6">{tmpl.tagline}</p>
-                  <Link
-                    href={`/signup?template=${tmpl.code}`}
-                    className="w-full py-2.5 px-4 text-center rounded-xl bg-slate-100 hover:bg-emerald-600 hover:text-white text-slate-800 font-semibold text-sm transition-all"
-                  >
-                    Start with this template
-                  </Link>
-                </div>
-              </div>
+          <article className="bm-panel bm-rv col-span-6 p-6 lg:col-span-4">
+            <h3 className="text-[1.45rem] font-semibold tracking-tight">The whole order, in one place</h3>
+            <p className="bm-dim mt-2 max-w-[60ch]">
+              Returns and exchanges with photos, a Request a quote button for price-on-request products, pre-orders
+              with a ship-on date, and a list of abandoned checkouts.
+            </p>
+            <ul className="mt-5 flex flex-wrap gap-2.5 text-sm font-medium">
+              {["Returns and exchanges", "Request a quote", "Pre-orders", "Abandoned checkouts", "Reviews", "Discounts"].map((t) => (
+                <li key={t} className="rounded-full px-3.5 py-1.5" style={{ border: "1px solid var(--bm-line)", background: "var(--bm-panel-2)" }}>{t}</li>
+              ))}
+            </ul>
+          </article>
+
+          <article className="bm-panel bm-rv col-span-6 p-6 md:col-span-3">
+            <h3 className="text-[1.35rem] font-semibold tracking-tight">Know who is buying</h3>
+            <p className="bm-dim mt-2">Customer profiles, notes, consent history and CSV import. Build segments from rules and see who falls in.</p>
+            <div className="mt-4 rounded-xl p-3.5 text-sm" style={{ background: "var(--bm-panel-2)", border: "1px solid var(--bm-line)" }} aria-label="Example segment rule">
+              <p className="font-semibold">Win-back <span className="bm-dim font-normal">· example segment</span></p>
+              <p className="bm-dim mt-1">Total spend over ₹5,000 and last order more than 60 days ago</p>
+            </div>
+          </article>
+
+          <article className="bm-panel bm-rv col-span-6 p-6 md:col-span-3">
+            <h3 className="text-[1.35rem] font-semibold tracking-tight">Shipping rates you control</h3>
+            <p className="bm-dim mt-2">Set zones, rates and a free-shipping threshold. The cart and the checkout charge the same total.</p>
+            <div className="mt-4 rounded-xl p-3.5" style={{ background: "var(--bm-panel-2)", border: "1px solid var(--bm-line)" }} aria-label="Example free shipping progress">
+              <div className="flex justify-between text-sm"><span>Standard ₹70</span><span className="bm-num" style={{ color: "var(--bm-warm)" }}>Free above ₹1,200</span></div>
+              <div className="mt-3 h-1.5 overflow-hidden rounded-full" style={{ background: "rgb(255 255 255 / 0.12)" }}><div className="h-full rounded-full" style={{ width: "78%", background: "var(--bm-violet)" }} /></div>
+              <p className="bm-dim mt-2 text-xs">Example cart: ₹260 away from free shipping</p>
+            </div>
+          </article>
+        </div>
+
+        <div className="bm-rv mt-14">
+          <h3 className="text-[1.45rem] font-semibold tracking-tight">Coming soon</h3>
+          <p className="bm-dim mt-1 max-w-[60ch]">Not live yet. We will announce each one when it works, not before.</p>
+          <ul className="mt-5 grid gap-4 sm:grid-cols-2 lg:grid-cols-5">
+            {COMING_SOON.map((c) => (
+              <li key={c.name} className="rounded-2xl p-4" style={{ border: "1px dashed rgb(255 255 255 / 0.25)" }}>
+                <p className="font-semibold tracking-tight">{c.name}</p>
+                <p className="bm-dim text-sm">{c.note}</p>
+                <p className="mt-2 text-xs font-semibold" style={{ color: "var(--bm-warm)" }}>Coming soon</p>
+              </li>
             ))}
-          </div>
+          </ul>
         </div>
       </section>
 
-      {/* 5. How It Works (PLAN §7) */}
-      <section id="how-it-works" className="py-20 bg-slate-50 border-b border-slate-200">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="text-center max-w-3xl mx-auto mb-16">
-            <h2 className="text-xs font-bold uppercase tracking-widest text-emerald-600 mb-3">
-              5 Simple Steps
-            </h2>
-            <p className="text-3xl sm:text-4xl font-extrabold text-slate-900 tracking-tight">
-              From zero to your first order
-            </p>
+      {/* ---------- Themes ---------- */}
+      <section id="themes" style={{ background: "var(--bm-panel)", borderTop: "1px solid var(--bm-line)", borderBottom: "1px solid var(--bm-line)" }}>
+        <div className="mx-auto max-w-7xl px-5 py-20 sm:px-8 lg:py-28">
+          <div className="bm-rv max-w-3xl">
+            <h2 className="bm-h2">Start from a theme made for your niche.</h2>
+            <p className="bm-dim mt-5 max-w-[60ch]">Then make it yours in the editor. These are illustrations of the starting layouts.</p>
           </div>
-
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-6 text-center">
-            <div className="p-6 bg-white rounded-2xl border border-slate-200">
-              <span className="inline-block w-8 h-8 rounded-full bg-emerald-100 text-emerald-800 font-bold text-sm leading-8 mb-4">1</span>
-              <h4 className="font-bold text-base mb-1">Pick Subdomain</h4>
-              <p className="text-xs text-slate-500">Claim your instant brand address on bcom.si</p>
-            </div>
-            <div className="p-6 bg-white rounded-2xl border border-slate-200">
-              <span className="inline-block w-8 h-8 rounded-full bg-emerald-100 text-emerald-800 font-bold text-sm leading-8 mb-4">2</span>
-              <h4 className="font-bold text-base mb-1">Choose Template</h4>
-              <p className="text-xs text-slate-500">Pick a mobile-first theme matching your industry</p>
-            </div>
-            <div className="p-6 bg-white rounded-2xl border border-slate-200">
-              <span className="inline-block w-8 h-8 rounded-full bg-emerald-100 text-emerald-800 font-bold text-sm leading-8 mb-4">3</span>
-              <h4 className="font-bold text-base mb-1">Add Products</h4>
-              <p className="text-xs text-slate-500">Upload photos, set prices, and configure variants</p>
-            </div>
-            <div className="p-6 bg-white rounded-2xl border border-slate-200">
-              <span className="inline-block w-8 h-8 rounded-full bg-emerald-100 text-emerald-800 font-bold text-sm leading-8 mb-4">4</span>
-              <h4 className="font-bold text-base mb-1">Connect Payments</h4>
-              <p className="text-xs text-slate-500">Enable Cash on Delivery and link Razorpay UPI</p>
-            </div>
-            <div className="p-6 bg-white rounded-2xl border border-slate-200">
-              <span className="inline-block w-8 h-8 rounded-full bg-emerald-100 text-emerald-800 font-bold text-sm leading-8 mb-4">5</span>
-              <h4 className="font-bold text-base mb-1">Start Selling</h4>
-              <p className="text-xs text-slate-500">Connect your custom domain and share your link</p>
-            </div>
-          </div>
-        </div>
-      </section>
-
-      {/* 6. Pricing Section (PLAN §7) */}
-      <section id="pricing" className="py-20 bg-white border-b border-slate-200">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="text-center max-w-3xl mx-auto mb-12">
-            <h2 className="text-xs font-bold uppercase tracking-widest text-emerald-600 mb-3">
-              Simple, Transparent Pricing
-            </h2>
-            <p className="text-3xl sm:text-4xl font-extrabold text-slate-900 tracking-tight mb-6">
-              Predictable plans with zero hidden fees
-            </p>
-
-            {/* Toggle Monthly vs Yearly */}
-            <div className="inline-flex items-center p-1 bg-slate-100 rounded-xl border border-slate-200">
-              <button
-                type="button"
-                onClick={() => setBillingInterval("monthly")}
-                className={`px-5 py-2 text-sm font-semibold rounded-lg transition-all ${
-                  billingInterval === "monthly" ? "bg-white text-slate-900 shadow-sm" : "text-slate-600 hover:text-slate-900"
-                }`}
-              >
-                Monthly
-              </button>
-              <button
-                type="button"
-                onClick={() => setBillingInterval("yearly")}
-                className={`px-5 py-2 text-sm font-semibold rounded-lg transition-all flex items-center gap-1.5 ${
-                  billingInterval === "yearly" ? "bg-white text-slate-900 shadow-sm" : "text-slate-600 hover:text-slate-900"
-                }`}
-              >
-                Yearly
-                <span className="bg-emerald-100 text-emerald-800 text-[10px] font-bold px-2 py-0.5 rounded-full">
-                  2 Months Free
-                </span>
-              </button>
-            </div>
-          </div>
-
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-8 items-stretch max-w-6xl mx-auto">
-            {DEFAULT_PLANS.map((plan) => {
-              const pricePaise = billingInterval === "monthly" ? plan.monthlyPaise : plan.yearlyPaise / 12;
-              return (
-                <div
-                  key={plan.code}
-                  className={`flex flex-col p-8 rounded-3xl border transition-all ${
-                    plan.popular
-                      ? "border-emerald-600 bg-white shadow-xl relative scale-105 z-10"
-                      : "border-slate-200 bg-white shadow-sm hover:shadow-md"
-                  }`}
-                >
-                  {plan.popular && (
-                    <span className="absolute -top-3.5 left-1/2 -translate-x-1/2 px-4 py-1 rounded-full bg-emerald-600 text-white font-bold text-xs uppercase tracking-wider shadow">
-                      Most Popular
-                    </span>
-                  )}
-                  <div className="mb-6">
-                    <h3 className="text-2xl font-bold text-slate-900 mb-2">{plan.name}</h3>
-                    <p className="text-sm text-slate-600 min-h-[40px]">{plan.description}</p>
-                  </div>
-
-                  <div className="mb-8">
-                    <div className="flex items-baseline gap-1">
-                      <span className="text-4xl font-extrabold text-slate-900">{formatPrice(pricePaise)}</span>
-                      <span className="text-sm text-slate-500 font-medium">/ month</span>
+          <ul className="mt-12 grid gap-8 md:grid-cols-3">
+            {THEMES.map((t, i) => (
+              <li key={t.code} className="bm-rv" style={{ transitionDelay: `${i * 100}ms` }}>
+                <div className="rounded-2xl p-3" style={{ background: "var(--bm-bg)", border: "1px solid var(--bm-line)" }}>
+                  <div className="rounded-xl p-3" style={{ background: t.ground, color: t.ink }}>
+                    <div className="flex items-center justify-between"><span className="text-xs font-semibold">Your store</span><span className="flex gap-1" aria-hidden="true">{[0, 1, 2].map((d) => <span key={d} className="h-1 w-4 rounded-full" style={{ background: t.accent, opacity: 0.4 + d * 0.25 }} />)}</span></div>
+                    <div className="mt-3 rounded-lg p-3.5" style={{ background: t.tile }}>
+                      <p className="text-[0.62rem] font-bold uppercase tracking-wider" style={{ color: t.accent }}>New in</p>
+                      <p className="mt-0.5 text-base font-semibold leading-tight">{t.name}</p>
+                      <span className="mt-2 inline-block rounded px-2.5 py-1 text-[0.65rem] font-bold" style={{ background: t.accent, color: t.ground }}>Shop now</span>
                     </div>
-                    {billingInterval === "yearly" && (
-                      <p className="text-xs text-emerald-700 font-semibold mt-1">
-                        Billed annually ({formatPrice(plan.yearlyPaise)}/yr)
-                      </p>
-                    )}
+                    <div className="mt-2.5 grid grid-cols-3 gap-1.5" aria-hidden="true">{[0, 1, 2].map((c) => <div key={c} className="aspect-[4/5] rounded" style={{ background: t.tile }} />)}</div>
                   </div>
+                </div>
+                <h3 className="mt-5 text-xl font-semibold tracking-tight">{t.name}</h3>
+                <p className="bm-dim text-sm">{t.industry}</p>
+                <p className="mt-1">{t.line}</p>
+                <Link href={`/signup?template=${t.code}`} className="bm-outline mt-4">Start with this theme</Link>
+              </li>
+            ))}
+          </ul>
+        </div>
+      </section>
 
-                  <ul className="space-y-3.5 mb-8 flex-1 text-sm text-slate-600">
-                    {plan.features.map((feat, i) => (
-                      <li key={i} className="flex items-start gap-2.5">
-                        <svg className="w-5 h-5 text-emerald-600 shrink-0 mt-0.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M5 13l4 4L19 7" />
-                        </svg>
-                        <span>{feat}</span>
+      {/* ---------- Steps ---------- */}
+      <section id="steps" className="mx-auto max-w-5xl px-5 py-20 sm:px-8 lg:py-28">
+        <div className="bm-rv"><h2 className="bm-h2">From a name to your first order.</h2></div>
+        <ol className="mt-12">
+          {STEPS.map((s, i) => (
+            <li key={s.title} className="bm-rv grid gap-3 py-7 md:grid-cols-[6rem_1fr_1.3fr] md:gap-8" style={{ borderTop: "1px solid var(--bm-line)" }}>
+              <span className="bm-num text-[2.6rem] font-semibold leading-none tracking-tight" style={{ color: "var(--bm-violet)" }} aria-hidden="true">{String(i + 1).padStart(2, "0")}</span>
+              <h3 className="text-xl font-semibold tracking-tight">{s.title}</h3>
+              <p className="bm-dim">{s.body}</p>
+            </li>
+          ))}
+          <li style={{ borderTop: "1px solid var(--bm-line)" }} aria-hidden="true" />
+        </ol>
+      </section>
+
+      {/* ---------- Pricing ---------- */}
+      <section id="pricing" style={{ background: "var(--bm-panel)", borderTop: "1px solid var(--bm-line)", borderBottom: "1px solid var(--bm-line)" }}>
+        <div className="mx-auto max-w-7xl px-5 py-20 sm:px-8 lg:py-28">
+          <div className="bm-rv flex flex-col justify-between gap-6 md:flex-row md:items-end">
+            <div className="max-w-2xl">
+              <h2 className="bm-h2">Plans you can read in one go.</h2>
+              <p className="bm-dim mt-5">Prices in rupees, plus GST. Every plan starts with a 14-day free trial.</p>
+            </div>
+            <div className="inline-flex rounded-full p-1" role="group" aria-label="Billing period" style={{ background: "var(--bm-bg)", border: "1px solid var(--bm-line)" }}>
+              {(["monthly", "yearly"] as const).map((v) => (
+                <button
+                  key={v}
+                  type="button"
+                  onClick={() => setInterval_(v)}
+                  aria-pressed={interval === v}
+                  className="min-h-[2.5rem] rounded-full px-5 font-semibold"
+                  style={interval === v ? { background: "var(--bm-text)", color: "#0a0a12" } : { color: "var(--bm-text)" }}
+                >
+                  {v === "monthly" ? "Monthly" : "Yearly"}
+                </button>
+              ))}
+            </div>
+          </div>
+          <ul className="mt-12 grid gap-6 lg:grid-cols-3">
+            {planList.map((p, i) => {
+              const perMonth = interval === "monthly" ? p.monthlyPaise : p.yearlyPaise / 12;
+              const saving = p.monthlyPaise * 12 - p.yearlyPaise;
+              return (
+                <li key={p.code} className="bm-panel bm-rv flex flex-col p-7" style={{ background: "var(--bm-bg)", transitionDelay: `${i * 90}ms` }}>
+                  <h3 className="text-2xl font-semibold tracking-tight">{p.name}</h3>
+                  <p className="bm-num mt-5 flex items-end gap-2">
+                    <span className="text-5xl font-semibold tracking-tight">{inr(perMonth)}</span>
+                    <span className="bm-dim pb-1.5">a month</span>
+                  </p>
+                  <p className="bm-dim bm-num mt-1 min-h-[1.5rem] text-sm">
+                    {interval === "yearly" ? `Billed ${inr(p.yearlyPaise)} a year${saving > 0 ? ` · you save ${inr(saving)}` : ""}` : "Billed monthly"}
+                  </p>
+                  <ul className="mt-6 flex-1 space-y-2.5">
+                    {planBullets(p.limits).map((b) => (
+                      <li key={b} className="flex items-start gap-2.5">
+                        <svg width="18" height="18" viewBox="0 0 24 24" className="mt-1 shrink-0" aria-hidden="true" fill="none" stroke="#8f8dff" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><path d="m5 12.5 4.5 4.5L19 7.5" /></svg>
+                        {b}
                       </li>
                     ))}
                   </ul>
-
-                  <Link
-                    href={`/signup?plan=${plan.code}&interval=${billingInterval}`}
-                    className={`w-full py-3 px-6 rounded-xl font-bold text-center text-sm shadow-sm transition-all ${
-                      plan.popular
-                        ? "bg-emerald-600 hover:bg-emerald-700 text-white shadow-emerald-600/20"
-                        : "bg-slate-100 hover:bg-slate-200 text-slate-900"
-                    }`}
-                  >
-                    Start 14-Day Free Trial
-                  </Link>
-                </div>
+                  <Link href={`/signup?plan=${p.code}&interval=${interval}`} className="bm-pill mt-8 w-full">Start free trial <Arrow /></Link>
+                </li>
               );
             })}
-          </div>
-
-          <p className="mt-8 text-center text-xs text-slate-500">
-            * All prices in INR. 18% GST applicable at checkout. Zero transaction commission on your store sales.
-          </p>
-        </div>
-      </section>
-
-      {/* 7. FAQ Section (PLAN §7) */}
-      <section id="faq" className="py-20 bg-slate-50 border-b border-slate-200">
-        <div className="max-w-4xl mx-auto px-4 sm:px-6">
-          <div className="text-center mb-14">
-            <h2 className="text-xs font-bold uppercase tracking-widest text-emerald-600 mb-3">FAQ</h2>
-            <p className="text-3xl font-extrabold text-slate-900 tracking-tight">Frequently asked questions</p>
-          </div>
-
-          <div className="space-y-4">
-            {FAQS.map((faq, index) => {
-              const isOpen = activeFaq === index;
-              return (
-                <div key={index} className="rounded-2xl border border-slate-200 bg-white overflow-hidden">
-                  <button
-                    type="button"
-                    onClick={() => setActiveFaq(isOpen ? null : index)}
-                    className="w-full px-6 py-5 text-left font-bold text-base text-slate-900 flex items-center justify-between gap-4"
-                  >
-                    <span>{faq.q}</span>
-                    <span className="text-slate-400 font-mono text-xl">{isOpen ? "−" : "+"}</span>
-                  </button>
-                  {isOpen && (
-                    <div className="px-6 pb-5 text-sm text-slate-600 leading-relaxed border-t border-slate-100 pt-4">
-                      {faq.a}
-                    </div>
-                  )}
-                </div>
-              );
-            })}
+          </ul>
+          <div className="bm-rv mt-12">
+            <p className="text-xl font-semibold tracking-tight">Every plan includes</p>
+            <ul className="mt-3 flex flex-wrap gap-2.5">
+              {INCLUDED_IN_ALL.map((x) => (
+                <li key={x} className="rounded-full px-4 py-2" style={{ border: "1px solid var(--bm-line)", background: "var(--bm-bg)" }}>{x}</li>
+              ))}
+            </ul>
           </div>
         </div>
       </section>
 
-      {/* Footer (PLAN §7) */}
-      <footer className="bg-slate-900 text-slate-400 py-16 text-sm">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="grid grid-cols-1 md:grid-cols-4 gap-10 mb-12">
-            <div>
-              <div className="flex items-center gap-2 mb-4">
-                <span className="w-8 h-8 rounded-lg bg-emerald-500 flex items-center justify-center text-slate-950 font-black text-lg">
-                  g
-                </span>
-                <span className="text-lg font-bold text-white tracking-tight">bcom.si</span>
-              </div>
-              <p className="text-xs leading-relaxed text-slate-400">
-                The high-performance ecommerce platform designed for modern Indian D2C creators.
-              </p>
-            </div>
+      {/* ---------- FAQ ---------- */}
+      <section id="faq" className="mx-auto max-w-4xl px-5 py-20 sm:px-8 lg:py-28">
+        <div className="bm-rv"><h2 className="bm-h2">Straight answers.</h2></div>
+        <div className="mt-10">
+          {FAQS.map((f) => (
+            <details key={f.q} className="bm-faq bm-rv py-1" style={{ borderTop: "1px solid var(--bm-line)" }}>
+              <summary className="flex min-h-[3.75rem] items-center justify-between gap-4 py-3 text-[1.1rem] font-semibold tracking-tight">
+                {f.q}
+                <svg width="22" height="22" viewBox="0 0 24 24" className="bm-plus shrink-0" aria-hidden="true" fill="none" stroke="#9ea4bd" strokeWidth="2" strokeLinecap="round"><path d="M12 5v14M5 12h14" /></svg>
+              </summary>
+              <p className="bm-dim max-w-[62ch] pb-5">{f.a}</p>
+            </details>
+          ))}
+          <div style={{ borderTop: "1px solid var(--bm-line)" }} />
+        </div>
+      </section>
 
-            <div>
-              <h5 className="font-bold text-white mb-4 text-xs uppercase tracking-wider">Product</h5>
-              <ul className="space-y-2.5 text-xs">
-                <li><a href="#features" className="hover:text-white transition-colors">Features</a></li>
-                <li><a href="#templates" className="hover:text-white transition-colors">Templates</a></li>
-                <li><a href="#pricing" className="hover:text-white transition-colors">Pricing</a></li>
-                <li><a href="#faq" className="hover:text-white transition-colors">FAQ</a></li>
-              </ul>
-            </div>
-
-            <div>
-              <h5 className="font-bold text-white mb-4 text-xs uppercase tracking-wider">Legal & Compliance</h5>
-              <ul className="space-y-2.5 text-xs">
-                <li><Link href="/terms" className="hover:text-white transition-colors">Terms of Service</Link></li>
-                <li><Link href="/privacy" className="hover:text-white transition-colors">Privacy Policy</Link></li>
-                <li><Link href="/privacy" className="hover:text-white transition-colors">DPA & Subprocessors</Link></li>
-              </ul>
-            </div>
-
-            <div>
-              <h5 className="font-bold text-white mb-4 text-xs uppercase tracking-wider">Account</h5>
-              <ul className="space-y-2.5 text-xs">
-                <li><a href="https://admin.bcom.si" className="hover:text-white transition-colors">Merchant Admin Login</a></li>
-                <li><Link href="/signup" className="hover:text-white transition-colors">Create Free Trial Store</Link></li>
-              </ul>
-            </div>
-          </div>
-
-          <div className="pt-8 border-t border-slate-800 text-xs flex flex-col sm:flex-row items-center justify-between gap-4">
-            <p>© {new Date().getFullYear()} bcom.si. All rights reserved.</p>
-            <p>Built with enterprise multi-tenant isolation on AWS Mumbai (ap-south-1).</p>
+      {/* ---------- Close ---------- */}
+      <section className="relative isolate overflow-hidden" style={{ borderTop: "1px solid var(--bm-line)" }}>
+        <div className="absolute inset-x-0 bottom-0 h-72" style={{ background: "radial-gradient(ellipse 45% 100% at 50% 100%, rgb(125 140 255 / 0.45), transparent 70%)" }} aria-hidden="true" />
+        <div className="bm-rv relative mx-auto max-w-4xl px-5 py-24 text-center sm:px-8">
+          <h2 className="bm-h2">Switch on your store today.</h2>
+          <p className="bm-dim mx-auto mt-4 max-w-[46ch]">Pick a name and start the 14-day trial. No card needed.</p>
+          <div className="mx-auto mt-8 flex max-w-xl justify-center text-left">
+            <SubdomainAvailabilityChecker platformDomain="bcom.si" />
           </div>
         </div>
+      </section>
+
+      <footer style={{ borderTop: "1px solid var(--bm-line)" }}>
+        <div className="mx-auto flex max-w-7xl flex-col gap-8 px-5 py-12 sm:px-8 md:flex-row md:items-center md:justify-between">
+          <div className="flex items-center gap-3">
+            <span className="flex h-8 w-8 items-center justify-center rounded-lg font-bold" style={{ background: "linear-gradient(135deg,#8f8dff,#6f8bff)", color: "#0a0a12" }} aria-hidden="true">b</span>
+            <p className="bm-dim max-w-xs text-sm">Online stores for Indian D2C brands, with cash on delivery and GST built in.</p>
+          </div>
+          <nav className="flex flex-wrap gap-x-6 gap-y-2" aria-label="Footer">
+            {[["What works today", "#live"], ["Themes", "#themes"], ["Pricing", "#pricing"], ["FAQ", "#faq"]].map(([label, href]) => (
+              <a key={href} href={href} style={{ color: "var(--bm-text)" }}>{label}</a>
+            ))}
+            <a href="https://admin.bcom.si" style={{ color: "var(--bm-text)" }}>Log in</a>
+            <Link href="/signup" style={{ color: "var(--bm-warm)" }}>Start free trial</Link>
+          </nav>
+        </div>
+        <p className="bm-dim mx-auto max-w-7xl px-5 pb-10 text-xs sm:px-8">© {new Date().getFullYear()} bcom.si. Example data on this page is made up for illustration.</p>
       </footer>
     </div>
   );
