@@ -179,3 +179,5 @@
 .bm-su-tick { display: flex; width: 4rem; height: 4rem; align-items: center; justify-content: center; border-radius: 18px; color: #7ee8c6; background: rgb(94 234 212 / 0.12); border: 1px solid rgb(94 234 212 / 0.35); box-shadow: 0 0 30px -4px rgb(94 234 212 / 0.4); }
 .bm-pill.bm-wrap { white-space: normal; text-align: center; letter-spacing: 0.06em; }
 .bm-input.bm-input-group { display: flex; align-items: center; gap: 0.5rem; }
+.bm-input option, .bm select option { background-color: #151823; color: #f3f4fa; }
+.bm-input option:checked { background-color: #2a2f4a; color: #fff; }
