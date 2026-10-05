@@ -62,7 +62,7 @@ Flag `settings.update_offer` (Super Admin -> Features). Owner only; Managers see
 Create `docs/changes/2026-10-0X-antigravity-settings-browser-test.md` (format: `docs/changes/README.md`, `Type: test`, Agent: antigravity) containing:
 1. Branch tip commit hash tested, stack setup (DB, ports), flags state.
 2. The checklist with `[x]` / `[!]` / `[-]` per line for sections 3, 4, 5, 7, 8, 9, 10 and the regression spot-check.
-3. For each defect: **severity** (High = blocks a main path or leaks/loses data; Medium; Low), page or API, **numbered steps**, expected, actual, evidence (response body, console error, SQL result, screenshot path under `docs/changes/assets/`, small files only).
+3. For each defect: **severity** (High = blocks a main path or leaks/loses data; Medium; Low), page or API, **numbered steps**, expected, actual, evidence (response body, console error, SQL result, screenshot path under `docs/test-evidence/2026-10-05-settings-browser/`, small files only).
 4. What you could **not** test and why.
 5. Open questions for the owner.
 
