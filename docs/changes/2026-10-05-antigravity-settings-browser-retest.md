@@ -10,7 +10,7 @@
 
 ---
 
-## 1. Summary
+## Summary
 
 This follow-up round re-tested the three defects identified in the initial browser test round and resolved by Claude at commit `a33bace`:
 1. **Terms Agreement at Checkout End-to-End:** Verified the newly added "Require agreement to Terms" (`termsConsent`) toggle in Store Admin Settings -> Checkout, server-side pre-condition check refusing enablement when no Terms policy is published (HTTP 412), live reflection on storefront `/checkout` with a required checkbox linking to `/policies/terms`, server-side enforcement rejecting requests missing `termsConsent` (HTTP 400), persistence of acceptance timestamp and policy version in `orders`, multi-version tracking across re-published policy revisions, toggling off back to plain transactional notification, optional marketing checkbox behavior, and 375 px mobile responsiveness.
@@ -18,6 +18,9 @@ This follow-up round re-tested the three defects identified in the initial brows
 3. **Store Switcher Component:** Verified replacement of native HTML `<select>` with `@bs/ui` / `SimpleSelect`. Triggers custom dropdown menu, closes on Esc, supports keyboard navigation, and maintains high contrast in dark mode.
 
 ---
+
+## Verification
+Ran: the browser steps and database queries listed below, at commit `a435eac`. Not run: anything outside sections A-C of `docs/prompts/settings-browser-test-antigravity-followup.md`. See Claude's review in `2026-10-05-claude-settings-browser-test-fixes.md` for evidence that does not hold up (A7, A8).
 
 ## 2. Verification Checklist
 
