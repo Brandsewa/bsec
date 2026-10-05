@@ -112,7 +112,7 @@ function TaxForm({ initial }: { initial: TaxData }) {
     e.preventDefault();
     const g = gstin.trim().toUpperCase();
     if (g && !GSTIN_PATTERN.test(g)) {
-      setError("Enter a valid 15-character GSTIN, for example 29ABCDE1234F1Z5.");
+      setError("Enter a valid 15-character GSTIN, for example 29AAFCD5862R1ZR.");
       return;
     }
     setError(null);

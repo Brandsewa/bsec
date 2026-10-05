@@ -127,7 +127,7 @@ export async function seedDemoStore(rt: Runtime, input: SeedDemoInput): Promise<
     supportEmail: `support@${DEMO_EMAIL_DOMAIN}`,
     supportPhone: "+919800000000",
     address: { line1: "12 MG Road", city: "Bengaluru", state: "Karnataka", pincode: "560001" },
-    tax: { gstin: "29ABCDE1234F1Z5", sellerState: "Karnataka", pricesIncludeTax: true },
+    tax: { gstin: "29AAFCD5862R1ZR", sellerState: "Karnataka", pricesIncludeTax: true },
   });
 
   const [location] = await db
