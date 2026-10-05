@@ -21,6 +21,7 @@ import Link from "next/link";
 import { SubdomainAvailabilityChecker } from "./SubdomainAvailabilityChecker.tsx";
 import { AppWindow } from "./beam/AppWindow.tsx";
 import { Dust } from "./beam/Dust.tsx";
+import { Founders } from "./beam/Founders.tsx";
 import { Smoke } from "./beam/Smoke.tsx";
 import { useRevealMotion } from "./landing/motion.ts";
 import { COMING_SOON, FAQS, FALLBACK_PLANS, INCLUDED_IN_ALL, STEPS, THEMES, planBullets, type LandingPlan } from "./landing/content.ts";
@@ -66,12 +67,14 @@ export function MarketingLandingPage({ plans }: { plans?: LandingPlan[] | undefi
           <div className="bm-flare-wide" />
         </div>
 
+        <Founders />
+
         {/* nav */}
         <header className="relative z-30">
           <div className="mx-auto flex h-[4.5rem] max-w-7xl items-center justify-between px-5 sm:px-8">
-            <a href="#top" className="flex items-center gap-2.5 no-underline" style={{ color: "var(--bm-text)" }} aria-label="bcom.si home">
-              <span className="flex h-8 w-8 items-center justify-center rounded-lg text-[1.05rem] font-bold" style={{ background: "linear-gradient(135deg,#8f8dff,#6f8bff)", color: "#0a0a12" }} aria-hidden="true">b</span>
-              <span className="text-[1.25rem] font-semibold tracking-tight">bcom.si</span>
+            <a href="#top" className="flex items-center gap-2.5 no-underline" style={{ color: "var(--bm-text)" }} aria-label="Bs Commerce home">
+              <span className="flex h-8 w-8 items-center justify-center rounded-lg text-[1.05rem] font-bold" style={{ background: "linear-gradient(135deg,#8f8dff,#6f8bff)", color: "#0a0a12" }} aria-hidden="true">B</span>
+              <span className="text-[1.25rem] font-semibold tracking-tight">Bs Commerce</span>
             </a>
             <nav className="hidden items-center gap-1 lg:flex" aria-label="Sections">
               {[["What works today", "#live"], ["Themes", "#themes"], ["How it works", "#steps"], ["Pricing", "#pricing"], ["FAQ", "#faq"]].map(([label, href]) => (

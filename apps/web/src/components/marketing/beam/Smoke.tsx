@@ -51,11 +51,11 @@ void main(){
   float core = smoothstep(0.6, 0.95, n);
 
   vec3 shadow = vec3(0.05, 0.05, 0.16);
-  vec3 body = mix(vec3(0.20, 0.17, 0.55), vec3(0.42, 0.40, 0.95), core);
-  vec3 lit = vec3(0.62, 0.68, 1.0) * exp(-abs(dx) * 5.5) * 0.9;   // beam light caught on the cloud edges
+  vec3 body = mix(vec3(0.16, 0.14, 0.44), vec3(0.28, 0.27, 0.66), core);
+  vec3 lit = vec3(0.50, 0.55, 0.90) * exp(-abs(dx) * 5.5) * 0.30;  // faint beam light on the cloud edges
   vec3 col = mix(shadow, body, smoothstep(0.2, 0.8, n)) + lit * dens;
 
-  float a = clamp(dens * 1.05, 0.0, 1.0);
+  float a = clamp(dens * 0.55, 0.0, 0.5);                          // capped so overlapping clouds never blow out to white
   gl_FragColor = vec4(col * a, a);                                  // premultiplied
 }
 `;
