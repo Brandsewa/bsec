@@ -215,3 +215,26 @@ export async function updateCheckoutSettings(
 
   return updatedConfig;
 }
+
+export interface StorefrontCheckoutConsent {
+  /** The shopper must tick the terms box (it also covers order emails); the server refuses the order otherwise. */
+  termsRequired: boolean;
+  /** Optional, unticked-by-default marketing box; absent when the store has not turned it on. */
+  marketing: { label: string } | null;
+}
+
+/** The consent options the checkout page shows, read by tenant id because shoppers have no staff context. */
+export async function getStorefrontCheckoutConsent(rt: Runtime, tenantId: string): Promise<StorefrontCheckoutConsent> {
+  return await withTenant(rt._db.db, tenantId, async (tx) => {
+    const [row] = await tx
+      .select({ checkout: schema.storeSettings.checkout })
+      .from(schema.storeSettings)
+      .where(eq(schema.storeSettings.tenantId, tenantId))
+      .limit(1);
+    const s = parseCheckoutSettings(row?.checkout);
+    return {
+      termsRequired: s.termsConsent?.enabled === true,
+      marketing: s.marketingEmail.enabled ? { label: s.marketingEmail.label } : null,
+    };
+  });
+}

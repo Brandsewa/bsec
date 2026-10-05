@@ -29,8 +29,11 @@ export const EMAIL_CLASS: Record<string, EmailClass> = {
   customer_account_setup: "security",
   privacy_request_verify: "security",
 
+  // A reminder about the shopper's own cart: order-related, so transactional (owner decision 2026-10-05). The
+  // checkout terms line tells the shopper to expect it; the store can still switch recovery off.
+  abandoned_cart_recovery: "transactional",
+
   // Marketing (requires subscribed consent, includes List-Unsubscribe headers)
-  abandoned_cart_recovery: "marketing",
   newsletter: "marketing",
   promotional: "marketing",
 };

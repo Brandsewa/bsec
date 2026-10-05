@@ -3,7 +3,7 @@
 import { priceOrder } from "@bs/domain/pricing";
 import React, { useState } from "react";
 import { useRouter } from "next/navigation";
-import type { StorefrontCart } from "@bs/domain";
+import type { StorefrontCart, StorefrontCheckoutConsent } from "@bs/domain";
 
 export const INDIAN_STATES_AND_UTS = [
   "Andaman and Nicobar Islands",
@@ -65,6 +65,7 @@ export interface CheckoutFormProps {
   cart: StorefrontCart;
   shippingRates: CheckoutShippingRate[];
   paymentOptions: CheckoutPaymentOptions;
+  consent: StorefrontCheckoutConsent;
   paymentMethod?: "cod" | "online";
   onPaymentMethodChange?: (method: "cod" | "online") => void;
   shippingMethod?: string;
@@ -75,6 +76,7 @@ export function CheckoutForm({
   cart,
   shippingRates,
   paymentOptions,
+  consent,
   paymentMethod: controlledPaymentMethod,
   onPaymentMethodChange,
   shippingMethod: controlledShippingMethod,
@@ -106,6 +108,8 @@ export function CheckoutForm({
   const noPaymentMethod = !paymentOptions.codEnabled && !paymentOptions.onlineAvailable;
   const codFeePaise = paymentMethod === "cod" && paymentOptions.codEnabled ? paymentOptions.codFeePaise : 0;
   const [notes, setNotes] = useState("");
+  const [termsAccepted, setTermsAccepted] = useState(false);
+  const [marketingAccepted, setMarketingAccepted] = useState(false);
 
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -145,6 +149,11 @@ export function CheckoutForm({
       return;
     }
 
+    if (consent.termsRequired && !termsAccepted) {
+      setError("Please tick the box to agree to the Terms and Conditions before placing your order");
+      return;
+    }
+
     setLoading(true);
 
     try {
@@ -163,6 +172,8 @@ export function CheckoutForm({
           shippingMethod,
           paymentMethod,
           notes: notes.trim() || undefined,
+          termsConsent: consent.termsRequired ? termsAccepted : undefined,
+          marketingConsent: consent.marketing ? marketingAccepted : undefined,
         }),
       });
 
@@ -423,6 +434,43 @@ export function CheckoutForm({
           placeholder="Special notes for delivery agent, gate code, landmarks, etc."
           className="w-full rounded-lg border border-border bg-background px-3 py-2 text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-primary"
         />
+      </section>
+
+      {/* 6. Consent: one terms box that also covers order emails, plus the optional marketing box */}
+      <section className="rounded-2xl border border-border bg-card p-6 shadow-sm space-y-3">
+        {consent.termsRequired ? (
+          <label className="flex items-start gap-3 text-sm text-foreground">
+            <input
+              type="checkbox"
+              checked={termsAccepted}
+              onChange={(e) => setTermsAccepted(e.target.checked)}
+              required
+              className="mt-0.5 h-4 w-4 rounded border-border"
+            />
+            <span>
+              I agree to the{" "}
+              <a href="/policies/terms" target="_blank" rel="noopener noreferrer" className="underline font-medium">
+                Terms and Conditions
+              </a>{" "}
+              and allow this store to email me about my order: confirmation, shipping and delivery updates, and a reminder if I leave items in my cart.
+            </span>
+          </label>
+        ) : (
+          <p className="text-xs text-muted-foreground">
+            We will email you about your order: confirmation, shipping and delivery updates, and a reminder if you leave items in your cart.
+          </p>
+        )}
+        {consent.marketing && (
+          <label className="flex items-start gap-3 text-sm text-foreground">
+            <input
+              type="checkbox"
+              checked={marketingAccepted}
+              onChange={(e) => setMarketingAccepted(e.target.checked)}
+              className="mt-0.5 h-4 w-4 rounded border-border"
+            />
+            <span>{consent.marketing.label}</span>
+          </label>
+        )}
       </section>
 
       {error && (

@@ -19,13 +19,13 @@ Audited Antigravity's phases 3-8 against the plan, the repo rules and a real-Pos
 | 4 | Medium | `customerPrivacy.cookieInventory` had a route-level permission only. | New `getCookieInventory(ctx)` asserts `settings.read`. |
 | 5 | Medium | Public privacy-request intake mailed a verification link with only a tenant-wide rate limit, so one visitor could aim every request at a victim's inbox. | Per-address (3/h) and per-IP (10/h) limits in `createPrivacyRequestPublic`; route passes the client IP; real-DB test. |
 | 6 | Medium | Four of six rollout flags were seeded but never read; Phase 4/7/8 behaviour was live for every store, so the staged rollout in the runbook could not work. | `settings.notifications` gates preference and marketing-consent evaluation, `settings.customer_accounts` the sign-in toggles, `settings.storage` the usage view, `settings.maintenance` scheduling. Flag off = behaviour before the feature. `settings-flags-off.int.test.ts` locks fail-closed; existing suites enable the flags they exercise (`test/helpers/feature-flags.ts`). |
-| 7 | Medium | Phase 7 silently stopped abandoned-cart recovery emails to shoppers without subscribed consent (`abandoned_cart_recovery` is class `marketing`); `queue-consumers.int.test.ts` failed 2 tests. | With fix 6 this only applies once `settings.notifications` is on. Tests now seed consent for the recovery fixtures and assert a non-subscriber gets nothing. **Open question for the owner** (below). |
+| 7 | Medium | Phase 7 silently stopped abandoned-cart recovery emails to shoppers without subscribed consent (`abandoned_cart_recovery` was class `marketing`); `queue-consumers.int.test.ts` failed 2 tests. | Owner decision: reclassified as transactional (see Follow-up). |
 
 ## Doc corrections
 The Phase 8 record, `progress.md` and the verification hand-off named a `store_maintenance_windows` table and a `bypassSecret` setting that do not exist. The code extends `store_status` (window columns) and adds the append-only `store_status_transitions` table (migration 0037); preview bypass reuses the existing hashed `bypass_token_hash`. `progress.md`, the hand-off and `docs/runbooks/settings-rollout.md` now describe what the flags really gate. The builder's record is left as written (another agent's file) apart from this correction note.
 
 ## Open questions (owner)
-1. **Abandoned-cart recovery and consent.** Keep consent-gating (DPDP-safer; recovery reaches only subscribed shoppers, and guests who never opted in get nothing) or reclassify `abandoned_cart_recovery` as transactional? Current code gates it, behind `settings.notifications`. Decide before enabling that flag for any store.
+1. ~~Abandoned-cart recovery and consent~~ **Decided by the owner (2026-10-05): transactional.** See "Follow-up" below.
 2. Customer-account settings updates write the audit action `checkout_settings.update`; it should probably be its own action. Left as is (not blocking).
 
 ## Verification (run in `C:\dev\bsec-settings-p8`)
@@ -43,3 +43,9 @@ Two more never-run tests surfaced after the merge, both fixed in the tests only:
 - [x] Code follows rules 2-6 and 10-13; no secrets; no unrelated edits.
 - [x] Real-DB tests added or fixed for every defect; docs corrected.
 - [x] Final gate on the merged-with-main tree (see Verification).
+
+## Follow-up: abandoned-cart emails are transactional, consent moves into the checkout terms line (owner decision 2026-10-05)
+- `abandoned_cart_recovery` is now class `transactional` (`email-classes.ts`): sent to any shopper, no marketing consent, no preference toggle; the store's recovery on/off setting still applies. Newsletter and promotional emails still need subscription.
+- **Defect found on the way:** the storefront checkout never rendered or sent the `termsConsent` or `marketingEmail` settings. With Terms agreement enabled in admin, every checkout would have been refused by the server. Fixed: the checkout page reads `getStorefrontCheckoutConsent` and `CheckoutForm` shows (a) when Terms agreement is on, one required box: agree to the Terms and allow order emails (confirmation, shipping and delivery updates, a cart reminder), linking `/policies/terms`; otherwise a plain notice saying the same; (b) the optional unticked marketing box with the store's label when that setting is on. `place-order` passes `termsConsent` and `marketingConsent` to `placeOrder`, which already enforced the first and recorded the second as a consent event. The order keeps the acceptance time and Terms version; no new table or column.
+- Tests: `queue-consumers` (non-subscriber now gets the reminder), `settings-phase-7` 7D (consent options follow settings), `cart-checkout` (terms box wording, plain notice, marketing box).
+- Not changed: the shopper's consent is recorded only for Terms-enabled stores; stores with it off rely on the notice. Say so if you want a record for every order.

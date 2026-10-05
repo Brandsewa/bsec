@@ -68,10 +68,6 @@ beforeAll(async () => {
     INSERT INTO fulfillments (id, tenant_id, order_id, location_id, status)
     VALUES ('${fulfillmentId}', '${tenantId}', '${orderId}', '${locationId}', 'shipped')
     ON CONFLICT DO NOTHING;
-    -- Abandoned-cart recovery is a marketing email (Settings Phase 7): only shoppers who subscribed receive it.
-    INSERT INTO customers (tenant_id, email, accepts_marketing, marketing_state)
-    VALUES ('${tenantId}', 'abandoned-cart@example.com', true, 'subscribed'),
-           ('${tenantId}', 'sweep@example.com', true, 'subscribed');
     INSERT INTO carts (id, tenant_id, token, email, status)
     VALUES ('${cartId}', '${tenantId}', 'cart_tok_e1', 'abandoned-cart@example.com', 'abandoned')
     ON CONFLICT DO NOTHING;
@@ -156,7 +152,8 @@ describe("Queue Consumers Integration", () => {
     expect(String(sent.text)).not.toContain("Template:");
   });
 
-  it("cart.abandoned consumer sends nothing to a shopper who has not subscribed (settings.notifications on)", async () => {
+  it("cart.abandoned consumer sends the reminder to any shopper, subscribed or not, even with settings.notifications on", async () => {
+    // Abandoned-cart recovery is a transactional (order-related) email: no marketing consent is needed.
     const flagClient = new (await import("pg")).default.Client({ connectionString: superUrl });
     await flagClient.connect();
     await flagClient.query(
@@ -165,6 +162,7 @@ describe("Queue Consumers Integration", () => {
       [tenantId],
     );
     await flagClient.end();
+
     await handleCartAbandonedJob(rwDb.db, logger, {
       tenantId,
       cartId,
@@ -172,7 +170,8 @@ describe("Queue Consumers Integration", () => {
       email: "never-subscribed@example.com",
     });
 
-    expect(sentMails).toHaveLength(0);
+    expect(sentMails).toHaveLength(1);
+    expect(sentMails[0]!.to).toBe("never-subscribed@example.com");
   });
 
   it("cart.abandoned consumer skips email when no email address is on payload", async () => {

@@ -19,6 +19,8 @@ import {
   updatePrivacySettings,
   createPrivacyRequestPublic,
   RateLimitExceededError,
+  getStorefrontCheckoutConsent,
+  updateCheckoutSettings,
   executePrivacyErasure,
   setMarketingConsent,
   pruneEmailLogs,
@@ -419,6 +421,28 @@ describe("Phase 7 Integration Tests (Real Postgres)", () => {
       expect(eventRes.rows[0]?.ip_hash).not.toBeNull();
       expect(eventRes.rows[0]?.ip_hash).not.toBe(rawIp);
       expect(eventRes.rows[0]?.text_version).toBe("newsletter_v1");
+    });
+  });
+
+  describe("7D: Checkout consent options", () => {
+    it("checkout consent options follow the store's settings", async () => {
+      await savePolicyDraft(rt, adminCtx, {
+        handle: "terms",
+        title: "Terms and Conditions",
+        content: { v: 1, blocks: [{ type: "paragraph", text: "These are the store terms of sale." }] },
+      });
+      await publishPolicy(rt, adminCtx, "terms");
+      const checkoutCtx = { ...adminCtx, permissions: [...adminCtx.permissions, "checkout.manage"] };
+      expect(await getStorefrontCheckoutConsent(rt, tenantId)).toEqual({ termsRequired: false, marketing: null });
+      await updateCheckoutSettings(rt, checkoutCtx, {
+        termsConsent: { enabled: true },
+        marketingEmail: { enabled: true, label: "Send me offers" },
+      });
+      expect(await getStorefrontCheckoutConsent(rt, tenantId)).toEqual({
+        termsRequired: true,
+        marketing: { label: "Send me offers" },
+      });
+      await updateCheckoutSettings(rt, checkoutCtx, { termsConsent: { enabled: false }, marketingEmail: { enabled: false, label: "Send me offers" } });
     });
   });
 });
