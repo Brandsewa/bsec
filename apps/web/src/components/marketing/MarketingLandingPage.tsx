@@ -49,7 +49,7 @@ export function MarketingLandingPage({ plans }: { plans?: LandingPlan[] | undefi
     <div ref={rootRef} className={`bm ${bmFont.variable}`} id="top">
       {/* ---------- Hero ---------- */}
       <section className="bm-hero" style={{ ["--bm-foot" as string]: "var(--bm-window-h)" } as React.CSSProperties}>
-        <style>{`.bm-hero{--bm-window-h:calc(min(100vw,90rem)*0.5 - 3.2rem)}@media(min-width:640px){.bm-hero{--bm-window-h:calc(min(100vw,90rem)*0.2 - 6.5rem)}}`}</style>
+        <style>{`.bm-hero{--bm-window-h:calc(min(100vw,90rem)*0.5 + 3.3rem)}@media(min-width:640px){.bm-hero{--bm-window-h:calc(min(100vw,90rem)*0.2 + 3.3rem)}}`}</style>
 
         {/* light layers (they fall away as the page scrolls) */}
         <div className="bm-light absolute inset-0" aria-hidden="true">
@@ -59,7 +59,7 @@ export function MarketingLandingPage({ plans }: { plans?: LandingPlan[] | undefi
           <Smoke beamX={0.5} />
           <div className="bm-grid" />
           <div className="bm-bloom" />
-          <Dust beamX={0.5} foot={120} />
+          <Dust beamX={0.5} foot={220} />
         </div>
         <div className="bm-grain" aria-hidden="true" />
         <div className="bm-flare bm-light" aria-hidden="true">
