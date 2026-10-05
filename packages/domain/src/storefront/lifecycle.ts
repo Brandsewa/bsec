@@ -1,6 +1,6 @@
 import { createHash, randomBytes, scrypt, timingSafeEqual } from "node:crypto";
 import { promisify } from "node:util";
-import { and, desc, eq, gt, isNotNull, isNull, lte, ne, or, sql } from "drizzle-orm";
+import { and, desc, eq, isNotNull, or, sql } from "drizzle-orm";
 import type { Db } from "@bs/db";
 import { schema, withTenant } from "@bs/db";
 import { resolveHostToTenant } from "../host-resolver.ts";
@@ -1027,17 +1027,37 @@ export async function executeMaintenanceWatchdogSweep(
   let restoredCount = 0;
   let startedCount = 0;
 
-  // 1. Restore stores whose maintenance window has passed
-  const expiredMaintenance = await db
-    .select()
-    .from(schema.storeStatus)
-    .where(
-      and(
-        eq(schema.storeStatus.mode, "maintenance"),
-        isNotNull(schema.storeStatus.maintenanceEndsAt),
-        lte(schema.storeStatus.maintenanceEndsAt, now),
-      ),
+  // store_status is a tenant table under forced RLS, so a read without a tenant context sees zero rows (the worker
+  // runs as app_rw). Visit each tenant under its own context, like the other sweeps; only rows that carry a
+  // maintenance window are fetched, then classified here.
+  const tenantIds = await db.select({ id: schema.tenants.id }).from(schema.tenants);
+  type StatusRow = typeof schema.storeStatus.$inferSelect;
+  const expiredMaintenance: StatusRow[] = [];
+  const dueScheduled: StatusRow[] = [];
+  for (const t of tenantIds) {
+    const [row] = await withTenant(db, t.id, (tx) =>
+      tx
+        .select()
+        .from(schema.storeStatus)
+        .where(
+          and(
+            eq(schema.storeStatus.tenantId, t.id),
+            or(isNotNull(schema.storeStatus.maintenanceEndsAt), isNotNull(schema.storeStatus.maintenanceStartsAt)),
+          ),
+        )
+        .limit(1),
     );
+    if (!row) continue;
+    const endsAt = row.maintenanceEndsAt;
+    const startsAt = row.maintenanceStartsAt;
+    if (row.mode === "maintenance") {
+      // 1. Restore stores whose maintenance window has passed
+      if (endsAt && endsAt <= now) expiredMaintenance.push(row);
+    } else if (startsAt && startsAt <= now && (!endsAt || endsAt > now)) {
+      // 2. Start scheduled maintenance that has arrived but not yet started
+      dueScheduled.push(row);
+    }
+  }
 
   for (const row of expiredMaintenance) {
     if (!row.tenantId) continue;
@@ -1080,19 +1100,6 @@ export async function executeMaintenanceWatchdogSweep(
     });
     restoredCount++;
   }
-
-  // 2. Start scheduled maintenance that has arrived but not yet started
-  const dueScheduled = await db
-    .select()
-    .from(schema.storeStatus)
-    .where(
-      and(
-        ne(schema.storeStatus.mode, "maintenance"),
-        isNotNull(schema.storeStatus.maintenanceStartsAt),
-        lte(schema.storeStatus.maintenanceStartsAt, now),
-        or(isNull(schema.storeStatus.maintenanceEndsAt), gt(schema.storeStatus.maintenanceEndsAt, now)),
-      ),
-    );
 
   for (const row of dueScheduled) {
     if (!row.tenantId) continue;

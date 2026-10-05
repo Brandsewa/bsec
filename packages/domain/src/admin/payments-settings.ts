@@ -126,16 +126,38 @@ export async function saveRazorpayCredentials(
           set: { ciphertext: e.ciphertext, iv: e.iv, keyVersion: e.keyVersion, updatedBy, updatedAt: new Date() },
         });
     }
+    // Audit says that credentials changed and in which mode, never a value (AGENTS.md rule 7).
+    await tx.insert(schema.auditLogs).values({
+      tenantId: ctx.tenantId,
+      actorType: "staff",
+      actorId: updatedBy,
+      action: "razorpay_credentials.saved",
+      targetType: "tenant_secrets",
+      targetId: ctx.tenantId,
+      diff: {
+        mode: { before: null, after: input.keyId.startsWith("rzp_live_") ? "live" : "test" },
+        webhookConfigured: { before: null, after: Boolean(input.webhookSecret) },
+      },
+    });
   });
   return getPaymentsStatus(rt, ctx);
 }
 
 export async function clearRazorpayCredentials(rt: Runtime, ctx: TenantContext): Promise<PaymentsStatusRecord> {
   assertPermission(ctx, "payments.manage");
-  await withTenant(rt._db.db, ctx.tenantId, (tx) =>
-    tx
+  await withTenant(rt._db.db, ctx.tenantId, async (tx) => {
+    await tx
       .delete(schema.tenantSecrets)
-      .where(and(eq(schema.tenantSecrets.tenantId, ctx.tenantId), eq(schema.tenantSecrets.provider, "razorpay"))),
-  );
+      .where(and(eq(schema.tenantSecrets.tenantId, ctx.tenantId), eq(schema.tenantSecrets.provider, "razorpay")));
+    await tx.insert(schema.auditLogs).values({
+      tenantId: ctx.tenantId,
+      actorType: "staff",
+      actorId: ctx.actor.type === "staff" ? ctx.actor.userId : null,
+      action: "razorpay_credentials.cleared",
+      targetType: "tenant_secrets",
+      targetId: ctx.tenantId,
+      diff: { credentials: { before: "set", after: "cleared" } },
+    });
+  });
   return getPaymentsStatus(rt, ctx);
 }

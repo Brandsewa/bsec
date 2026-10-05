@@ -149,7 +149,7 @@ export async function updatePrivacySettings(
 
     const nextSlaDays = input.requestSlaDays !== undefined ? input.requestSlaDays : current.requestSlaDays;
     if (nextSlaDays < 7 || nextSlaDays > 90) {
-      throw new Error("Request SLA days must be between 7 and 90");
+      throw new Error("Bad Request: Request SLA days must be between 7 and 90");
     }
 
     const privacyContactEmail =
@@ -439,7 +439,7 @@ export async function updatePrivacyRequestStatus(
       .limit(1);
 
     if (!existing) {
-      throw new Error(`Privacy request not found: ${input.id}`);
+      throw new Error(`Not Found: Privacy request not found: ${input.id}`);
     }
 
     const now = new Date();
@@ -520,7 +520,7 @@ export async function executePrivacyExport(
       )
       .limit(1);
 
-    if (!req) throw new Error(`Privacy request not found: ${requestId}`);
+    if (!req) throw new Error(`Not Found: Privacy request not found: ${requestId}`);
 
     let customerData: Record<string, unknown> | null = null;
     let addressesData: unknown[] = [];
@@ -630,7 +630,7 @@ export async function executePrivacyErasure(
       .limit(1);
   });
 
-  if (!req) throw new Error(`Privacy request not found: ${requestId}`);
+  if (!req) throw new Error(`Not Found: Privacy request not found: ${requestId}`);
 
   if (!req.customerId) {
     return { success: true, mode: "no_customer" };
@@ -699,7 +699,7 @@ export async function executePrivacyWithdrawConsent(
       .limit(1);
   });
 
-  if (!req) throw new Error(`Privacy request not found: ${requestId}`);
+  if (!req) throw new Error(`Not Found: Privacy request not found: ${requestId}`);
 
   if (req.customerId) {
     await setMarketingConsent(rt, ctx, {

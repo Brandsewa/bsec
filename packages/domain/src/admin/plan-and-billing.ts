@@ -343,7 +343,7 @@ export async function requestPlanChange(
       sql`SELECT COUNT(*)::text as count FROM plan_change_requests WHERE tenant_id = ${ctx.tenantId} AND created_at >= now() - interval '1 day';`,
     );
     if (parseInt(recent.rows[0]?.count ?? "0", 10) >= 3) {
-      throw new Error("Rate limit exceeded: You can only submit up to 3 plan change requests per day.");
+      throw new Error("Bad Request: Rate limit exceeded: You can only submit up to 3 plan change requests per day.");
     }
 
     const [inserted] = await tx
@@ -426,10 +426,10 @@ export async function cancelPlanChangeRequest(
       .limit(1);
 
     if (!row) {
-      throw new Error("Plan change request not found");
+      throw new Error("Not Found: Plan change request not found");
     }
     if (row.status !== "open") {
-      throw new Error(`Cannot cancel request with status '${row.status}'`);
+      throw new Error(`Conflict: Cannot cancel request with status '${row.status}'`);
     }
 
     await tx

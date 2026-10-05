@@ -1,6 +1,6 @@
 import { CreditCard, Globe, HardDrive, History, Landmark, LayoutDashboard, LifeBuoy, Receipt, RotateCcw, ShoppingBag, ShoppingCart, Sparkles, Store, Truck, UserCheck, UserCog } from "lucide-react";
 import type { ComponentType } from "react";
-import { hasPermission, type StorePermission } from "@bs/auth";
+import { hasPermission, type StorePermission } from "@bs/auth/permissions";
 
 export interface SettingsNavItem {
   id: string;
@@ -105,4 +105,14 @@ export function activeSettingsItem(items: readonly SettingsNavItem[], pathname: 
     if (matches && (!best || item.href.length > best.href.length)) best = item;
   }
   return best;
+}
+
+/**
+ * False when the path is a settings section the role may not see. A pasted URL then gets a clear no-access state
+ * instead of a page that fails to load with a generic error.
+ */
+export function canOpenSettingsPath(permissions: readonly string[], pathname: string): boolean {
+  const item = activeSettingsItem(SETTINGS_NAV, pathname);
+  if (!item?.perm) return true;
+  return hasPermission(permissions, item.perm as StorePermission);
 }

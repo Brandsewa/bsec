@@ -169,7 +169,7 @@ export async function getPolicy(
       .limit(1);
 
     if (!row) {
-      throw new Error(`Policy not found: ${handleOrId}`);
+      throw new Error(`Not Found: Policy not found: ${handleOrId}`);
     }
 
     let publishedVersion: PolicyDetailView["publishedVersion"] = null;
@@ -224,7 +224,7 @@ export async function savePolicyDraft(
 
   const validated = validatePolicyContent(input.content);
   if (!validated.valid) {
-    throw new Error(`Policy content validation failed: ${validated.error}`);
+    throw new Error(`Bad Request: Policy content validation failed: ${validated.error}`);
   }
 
   return await withTenant(db, ctx.tenantId, async (tx) => {
@@ -242,7 +242,7 @@ export async function savePolicyDraft(
       .limit(1);
 
     if (!existing) {
-      throw new Error(`Policy handle not found: ${input.handle}`);
+      throw new Error(`Not Found: Policy handle not found: ${input.handle}`);
     }
 
     const title = input.title?.trim() || existing.title;
@@ -342,18 +342,18 @@ export async function publishPolicy(
       .limit(1);
 
     if (!policy) {
-      throw new Error(`Policy handle not found: ${handle}`);
+      throw new Error(`Not Found: Policy handle not found: ${handle}`);
     }
 
     const content = policy.draftContent as PolicyContent;
     const validated = validatePolicyContent(content);
     if (!validated.valid) {
-      throw new Error(`Cannot publish: invalid content - ${validated.error}`);
+      throw new Error(`Bad Request: Cannot publish: invalid content - ${validated.error}`);
     }
 
     const placeholderCheck = hasStarterPlaceholders(validated.data);
     if (placeholderCheck.hasPlaceholders) {
-      throw new Error(`Cannot publish policy: ${placeholderCheck.reason}`);
+      throw new Error(`Bad Request: Cannot publish policy: ${placeholderCheck.reason}`);
     }
 
     // Determine next version number
@@ -516,7 +516,7 @@ export async function restorePolicyDraft(
       .limit(1);
 
     if (!policy) {
-      throw new Error(`Policy not found: ${input.handle}`);
+      throw new Error(`Not Found: Policy not found: ${input.handle}`);
     }
 
     const [vRow] = await tx
@@ -531,7 +531,7 @@ export async function restorePolicyDraft(
       .limit(1);
 
     if (!vRow) {
-      throw new Error(`Policy version not found: ${input.versionId}`);
+      throw new Error(`Not Found: Policy version not found: ${input.versionId}`);
     }
 
     const now = new Date();

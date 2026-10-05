@@ -144,7 +144,7 @@ export async function updateCheckoutSettings(
 
       if (!termsPolicy?.publishedVersionId) {
         throw new Error(
-          "Cannot require Terms of Service agreement at checkout: No Terms of Service policy has been published yet. Please publish your Terms policy in Settings > Policies first.",
+          "Precondition: Cannot require Terms of Service agreement at checkout: No Terms of Service policy has been published yet. Please publish your Terms policy in Settings > Policies first.",
         );
       }
     }

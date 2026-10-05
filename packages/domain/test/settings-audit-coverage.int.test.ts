@@ -7,6 +7,12 @@ import { bootstrapRoles } from "@bs/db/bootstrap";
 import { enableTenantFlags } from "./helpers/feature-flags.ts";
 import { runMigrations } from "@bs/db/migrate";
 import {
+  inviteStaff,
+  revokeInvitation,
+  listStoreRoles,
+  saveRazorpayCredentials,
+  clearRazorpayCredentials,
+  listSettingsActivity,
   createRuntime,
   provisionTenant,
   type Runtime,
@@ -319,6 +325,51 @@ describe("Slice 8D: Settings Audit Coverage & Sanitization Invariant", () => {
 
       expect(latest?.action).toBe("settings.privacy_updated");
       assertNoSecretsInDiff(latest?.diff);
+    });
+  });
+  describe("Access, credentials and the Activity page", () => {
+    it("audits invitations and Razorpay credential changes without leaking a secret", async () => {
+      const roles = await listStoreRoles(rt, ownerCtx);
+      const staffRole = roles.find((r) => r.name !== "store_owner" && r.name !== "store_admin") ?? roles[0]!;
+      const inv = await inviteStaff(rt, ownerCtx, { email: "audit-invitee@test.example", roleId: staffRole.id });
+      const [created] = await latestAuditRows();
+      expect(created?.action).toBe("staff_invitation.create");
+      expect(JSON.stringify(created?.diff)).not.toContain("audit-invitee");
+      expect(JSON.stringify(created?.diff)).not.toContain(inv.token ?? "no-token");
+
+      await revokeInvitation(rt, ownerCtx, { id: inv.id });
+      const [revoked] = await latestAuditRows();
+      expect(revoked?.action).toBe("staff_invitation.revoke");
+
+      await saveRazorpayCredentials(rt, ownerCtx, { keyId: "rzp_test_AuditKey123", keySecret: "super-secret-value-9", webhookSecret: "wh-secret-value-9" });
+      const [saved] = await latestAuditRows();
+      expect(saved?.action).toBe("razorpay_credentials.saved");
+      const savedText = JSON.stringify(saved?.diff);
+      expect(savedText).not.toContain("super-secret-value-9");
+      expect(savedText).not.toContain("wh-secret-value-9");
+      expect(savedText).not.toContain("AuditKey123");
+
+      await clearRazorpayCredentials(rt, ownerCtx);
+      const [cleared] = await latestAuditRows();
+      expect(cleared?.action).toBe("razorpay_credentials.cleared");
+    });
+
+    it("Settings Activity lists every settings change the services wrote, under a named area", async () => {
+      const written = await withTenant(rt._db.db, tenantId, (tx) =>
+        tx.select({ action: schema.auditLogs.action }).from(schema.auditLogs).where(eq(schema.auditLogs.tenantId, tenantId)),
+      );
+      const settingsActions = new Set(written.map((r) => r.action).filter((a) => !a.startsWith("tenant.")));
+      expect(settingsActions.size).toBeGreaterThan(10);
+
+      const activity = await listSettingsActivity(rt, ownerCtx, { limit: 100 });
+      const listed = new Set(activity.items.map((i) => i.action));
+      const missing = [...settingsActions].filter((a) => !listed.has(a));
+      expect(missing, `audit actions the Activity page does not show: ${missing.join(", ")}`).toEqual([]);
+      expect(activity.items.filter((i) => i.area === "General").map((i) => i.action)).toEqual([]);
+
+      const payments = await listSettingsActivity(rt, ownerCtx, { area: "Payments" });
+      expect(payments.items.length).toBeGreaterThan(0);
+      expect(payments.items.every((i) => i.area === "Payments")).toBe(true);
     });
   });
 });

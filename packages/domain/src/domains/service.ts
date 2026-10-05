@@ -40,7 +40,7 @@ export function normalizeCustomHostname(raw: string): string {
   h = h.replace(/:\d+$/, "");
 
   if (!FQDN_PATTERN.test(h)) {
-    throw new Error(`Invalid domain name format: '${raw}'. Please enter a valid fully-qualified domain name (e.g. store.mydomain.com).`);
+    throw new Error(`Bad Request: Invalid domain name format: '${raw}'. Please enter a valid fully-qualified domain name (e.g. store.mydomain.com).`);
   }
 
   // The platform's own domain, its subdomains and the admin/marketing hosts can never be claimed by a store.
@@ -49,7 +49,7 @@ export function normalizeCustomHostname(raw: string): string {
     .map((v) => v?.trim().toLowerCase().replace(/:\d+$/, ""))
     .filter((v): v is string => Boolean(v));
   if (h === platformDomain || h.endsWith(`.${platformDomain}`) || reservedExact.includes(h)) {
-    throw new Error(`Platform hosts (${platformDomain} and its subdomains) cannot be added as custom domains.`);
+    throw new Error(`Bad Request: Platform hosts (${platformDomain} and its subdomains) cannot be added as custom domains.`);
   }
 
   return h;
@@ -181,7 +181,7 @@ export async function addCustomDomainInternal(
     .limit(1);
 
   if (existing) {
-    throw new Error(`Domain '${hostname}' is already registered or connected to a store.`);
+    throw new Error(`Conflict: Domain '${hostname}' is already registered or connected to a store.`);
   }
 
   // 3. Register with Provider Adapter
@@ -284,11 +284,11 @@ export async function verifyCustomDomainInternal(
     .limit(1);
 
   if (!domain) {
-    throw new Error("Domain not found or access denied.");
+    throw new Error("Not Found: Domain not found or access denied.");
   }
 
   if (domain.type === "platform_subdomain" || domain.type === "subdomain") {
-    throw new Error("Cannot verify or modify the default platform subdomain.");
+    throw new Error("Bad Request: Cannot verify or modify the default platform subdomain.");
   }
 
   if (domain.type !== "custom" || !domain.cfCustomHostnameId) {
@@ -379,7 +379,7 @@ export async function setPrimaryDomainInternal(
     .limit(1);
 
   if (!domain) {
-    throw new Error("Domain not found or access denied.");
+    throw new Error("Not Found: Domain not found or access denied.");
   }
 
   // PLAN §8 Invariant: Only active domains can be primary
@@ -472,11 +472,11 @@ export async function removeCustomDomainInternal(
     .limit(1);
 
   if (!domain) {
-    throw new Error("Domain not found or access denied.");
+    throw new Error("Not Found: Domain not found or access denied.");
   }
 
   if (domain.type === "platform_subdomain" || domain.type === "subdomain") {
-    throw new Error("Cannot remove the default platform subdomain for the store.");
+    throw new Error("Bad Request: Cannot remove the default platform subdomain for the store.");
   }
 
   // If this was primary, revert primary status back to platform subdomain

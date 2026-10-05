@@ -105,7 +105,7 @@ pnpm workspace + Turborepo. Node `24.15`, pnpm `10.34.5`, TypeScript 6, ESLint 1
 | `packages/db` | `@bs/db` | Drizzle schema (`src/schema/*`), `tenantTable()` helper, migrations (`migrations/`), role bootstrap and migrate scripts (`src/scripts`), queue registry (`src/queues.ts`) |
 | `packages/domain` | `@bs/domain` | **All business logic.** Services per area (catalog, orders, returns, return-photos, return-settings, order-settings, preorders, quotes, customers, themes, saas, platform, system), `TenantContext`, `withTenant` runtime, cache tags and invalidation, job handlers (`jobs.ts`), logger |
 | `packages/contracts` | `@bs/contracts` | oRPC contracts + Zod schemas: `admin.ts`, `storefront.ts`, `platform.ts`, `index.ts` (`storeContract`, `platformContract`) |
-| `packages/auth` | `@bs/auth` | Better Auth configs (`staff.ts`, `platform.ts`, `customer.ts`), `STORE_PERMISSIONS`, `PLATFORM_ROLES`, system roles |
+| `packages/auth` | `@bs/auth` | Better Auth configs (`staff.ts`, `platform.ts`, `customer.ts`), plus the pure permission model in `permissions.ts` (`STORE_PERMISSIONS`, `PLATFORM_ROLES`, system roles). **Browser code imports `@bs/auth/permissions`, never the package root** (the root pulls pg and drizzle into the bundle and crashes Settings with "Buffer is not defined") |
 | `packages/blocks` | `@bs/blocks` | Versioned block registry (Zod schemas + views), document validation, sanitiser, tree renderer, theme page templates, `--bs-*` theme variables |
 | `packages/block-editor` | `@bs/block-editor` | Puck-based visual editor config, theme settings panel, media field, preview. Lazy-loaded by the admin; never shipped to shoppers |
 | `packages/payments` | `@bs/payments` | Provider adapter (ADR-008): `cod`, `razorpay`, `mock`; secret encryption helper |
@@ -263,6 +263,8 @@ Drizzle schema files in `packages/db/src/schema/` (one Postgres database, `publi
 | 0036 | `settings_phase7` | `store_policies` and `store_policy_versions` (append-only versions, no UPDATE/DELETE on versions for app_rw), `privacy_requests` table with anti-enumeration intake, action tokens, DPDP retention sweeps |
 | 0037 | `settings_phase8` | `store_status` maintenance columns (`maintenance_starts_at`, `maintenance_ends_at`, `mode_before_maintenance`, `maintenance_allow_staff_preview`), `store_status_transitions` table (append-only, no UPDATE/DELETE for app_rw) |
 | 0038 | `settings_flags_seed` | Seeds feature flags (`settings.gst_v2`, `settings.policies`, `settings.customer_accounts`, `settings.notifications`, `settings.storage`, `settings.maintenance`) with default_on = false |
+| 0039 | `store_admin_no_payments` | Data fix: removes `payments.manage` from every existing `store_admin` system role (the seed had granted the full list); runs per tenant because `roles` is under forced RLS |
+| 0040 | `platform_email_log_prune` | `app_rw` gets DELETE and column-level SELECT (`id`, `created_at`) on `platform_email_log` so the worker's 90-day retention prune can run, without reading recipient addresses |
 
 How to write one (expand, migrate, contract; `forceRlsSql`): `docs/migrations.md`. **Never edit an applied migration.** Latest on disk: `0038` (the docs check keeps this list honest).
 

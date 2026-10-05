@@ -58,7 +58,7 @@ describe("Settings shell: grouped navigation", () => {
     const peopleGroup = noStaff.find((g) => g.id === "people");
     expect(peopleGroup?.items.map((i) => i.id)).toEqual(["plan-and-billing"]);
     // Every visible item passes the permission filter.
-    const { hasPermission } = await import("@bs/auth");
+    const { hasPermission } = await import("@bs/auth/permissions");
     for (const g of noStaff) for (const i of g.items) expect(hasPermission(["settings.write"], i.perm as Parameters<typeof hasPermission>[1])).toBe(true);
 
     const domainsItem = SETTINGS_NAV.find((i) => i.id === "domains");
@@ -67,6 +67,23 @@ describe("Settings shell: grouped navigation", () => {
       href: "/settings/domains",
       perm: "domains.manage",
     });
+  });
+
+  it("Managers (store_admin) do not see Payments, and a pasted Payments URL is a no-access state", async () => {
+    const { SYSTEM_STORE_ROLES } = await import("@bs/auth/permissions");
+    const { visibleSettingsGroups, canOpenSettingsPath } = await import("../src/components/settings/settings-nav.ts");
+    const manager = [...SYSTEM_STORE_ROLES.store_admin];
+    const owner = [...SYSTEM_STORE_ROLES.store_owner];
+
+    const ids = (perms: string[]) => visibleSettingsGroups(perms).flatMap((g) => g.items.map((i) => i.id));
+    expect(ids(owner)).toContain("payments");
+    expect(ids(manager)).not.toContain("payments");
+    expect(ids(manager)).toContain("taxes");
+
+    expect(canOpenSettingsPath(owner, "/settings/payments")).toBe(true);
+    expect(canOpenSettingsPath(manager, "/settings/payments")).toBe(false);
+    expect(canOpenSettingsPath(manager, "/settings/taxes")).toBe(true);
+    expect(canOpenSettingsPath(["analytics.read"], "/settings/taxes")).toBe(false);
   });
 
   it("nav labels the users route Users with /settings/users path", async () => {
