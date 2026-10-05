@@ -4,7 +4,7 @@ import { createDb, type DbHandle } from "@bs/db";
 import { hasPermission, STORE_PERMISSIONS, SYSTEM_STORE_ROLES } from "@bs/auth";
 import { readFileSync } from "node:fs";
 import pg from "pg";
-import { eq } from "drizzle-orm";
+import { and, eq } from "drizzle-orm";
 import { schema, withTenant } from "@bs/db";
 import { bootstrapRoles } from "@bs/db/bootstrap";
 import { runMigrations } from "@bs/db/migrate";
@@ -98,7 +98,7 @@ describe("Slice 8C: Settings Authorization (role definitions and owner-only runt
   it("a provisioned store's store_admin role lacks payments.manage, and migration 0039 repairs older stores", async () => {
     const adminPerms = async () => {
       const [row] = await withTenant(rtPlatform._db.db, tenantIdA, (tx) =>
-        tx.select({ p: schema.roles.permissions }).from(schema.roles).where(eq(schema.roles.name, "store_admin")),
+        tx.select({ p: schema.roles.permissions }).from(schema.roles).where(and(eq(schema.roles.tenantId, tenantIdA), eq(schema.roles.name, "store_admin"))),
       );
       return row?.p ?? [];
     };
@@ -107,7 +107,7 @@ describe("Slice 8C: Settings Authorization (role definitions and owner-only runt
 
     // Recreate the old seed (full list), then run the migration exactly as the deploy does: as app_owner.
     await withTenant(rtPlatform._db.db, tenantIdA, (tx) =>
-      tx.update(schema.roles).set({ permissions: [...STORE_PERMISSIONS] }).where(eq(schema.roles.name, "store_admin")),
+      tx.update(schema.roles).set({ permissions: [...STORE_PERMISSIONS] }).where(and(eq(schema.roles.tenantId, tenantIdA), eq(schema.roles.name, "store_admin"))),
     );
     expect(await adminPerms()).toContain("payments.manage");
     const client = new pg.Client({ connectionString: as("app_owner", PW.owner) });
