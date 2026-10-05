@@ -143,3 +143,39 @@
 .bm-window-fade { -webkit-mask-image: linear-gradient(to bottom, #000 62%, transparent 100%); mask-image: linear-gradient(to bottom, #000 62%, transparent 100%); }
 
 .bm-spark { position: absolute; left: 0; top: 0; z-index: 20; width: 6px; height: 6px; border-radius: 50%; pointer-events: none; opacity: 0; background: #eef0ff; box-shadow: 0 0 10px 3px rgb(150 160 255 / 0.85), 0 0 22px 6px rgb(120 110 255 / 0.4); will-change: transform; }
+
+/* ---------- Form fields: no hard focus ring, the same warm glow as the buttons ---------- */
+.bm input:focus-visible, .bm select:focus-visible, .bm textarea:focus-visible { outline: none; }
+.bm-field, .bm-input { background: rgb(255 255 255 / 0.05); border: 1px solid rgb(255 255 255 / 0.18); transition: border-color 220ms var(--bm-ease), box-shadow 220ms var(--bm-ease), background-color 220ms; }
+.bm-field:focus-within, .bm-input:focus, .bm-input:focus-within {
+  border-color: rgb(255 255 255 / 0.4); background: rgb(255 255 255 / 0.07);
+  box-shadow: 0 0 0 1px rgb(255 255 255 / 0.18) inset, 0 0 20px 1px rgb(255 154 77 / 0.35), 0 8px 26px -10px rgb(255 120 40 / 0.4); }
+
+/* ---------- Signup in the Beam world ---------- */
+.bm-su { background: var(--bm-bg); }
+.bm-su::before { content: ""; position: absolute; inset: 0; pointer-events: none;
+  background: radial-gradient(ellipse 60% 40% at 50% 0%, rgb(110 100 235 / 0.22), transparent 70%), radial-gradient(ellipse 40% 30% at 90% 30%, rgb(80 110 230 / 0.12), transparent 70%); }
+.bm-su strong { color: var(--bm-text); font-weight: 600; }
+.bm-su-card { position: relative; border-radius: 24px; background: rgb(16 18 28 / 0.82); backdrop-filter: blur(12px); border: 1px solid rgb(255 255 255 / 0.12);
+  box-shadow: 0 -1px 0 rgb(220 228 255 / 0.5), 0 -10px 40px -10px rgb(130 140 255 / 0.5), 0 30px 70px -20px rgb(0 0 0 / 0.8); }
+.bm-label { display: block; margin-bottom: 0.5rem; font-size: 0.72rem; font-weight: 600; letter-spacing: 0.1em; text-transform: uppercase; color: var(--bm-dim); }
+.bm-input { display: block; width: 100%; padding: 0.8rem 1rem; border-radius: 14px; font-size: 0.95rem; color: var(--bm-text); color-scheme: dark; }
+.bm-input::placeholder { color: var(--bm-dim); opacity: 0.6; }
+.bm-logo-tile { background: linear-gradient(135deg, #8f8dff, #6f8bff); color: #0a0a12; }
+.bm-step-on, .bm-step-done, .bm-step-off { display: flex; width: 2rem; height: 2rem; align-items: center; justify-content: center; border-radius: 999px; font-size: 0.75rem; font-weight: 700; transition: all 250ms; }
+.bm-step-on { background: linear-gradient(180deg, #f3f1ee, #cfccc8); color: #15161c; box-shadow: 0 0 18px 1px rgb(255 154 77 / 0.4); }
+.bm-step-done { background: rgb(143 141 255 / 0.22); color: #c9c8ff; }
+.bm-step-off { background: rgb(255 255 255 / 0.07); color: var(--bm-dim); }
+.bm-line-on, .bm-line-off { height: 2px; }
+.bm-line-on { background: rgb(143 141 255 / 0.6); }
+.bm-line-off { background: rgb(255 255 255 / 0.1); }
+.bm-alert { border-radius: 14px; background: rgb(255 120 150 / 0.1); border: 1px solid rgb(255 120 150 / 0.35); color: #ffc2d1; }
+.bm-opt { border-radius: 16px; background: rgb(255 255 255 / 0.04); border: 1px solid rgb(255 255 255 / 0.12); transition: border-color 220ms var(--bm-ease), box-shadow 220ms var(--bm-ease), background-color 220ms; }
+.bm-opt:hover { border-color: rgb(255 255 255 / 0.28); }
+.bm-opt.is-on { border-color: rgb(255 255 255 / 0.45); background: rgb(143 141 255 / 0.1); box-shadow: 0 0 20px 1px rgb(255 154 77 / 0.28); }
+.bm-badge { border-radius: 999px; padding: 0.1rem 0.55rem; font-size: 0.65rem; font-weight: 700; background: rgb(143 141 255 / 0.2); color: #c9c8ff; }
+.bm-chip { border-radius: 8px; padding: 0.1rem 0.5rem; background: rgb(255 255 255 / 0.05); border: 1px solid rgb(255 255 255 / 0.1); }
+.bm-code { border-radius: 10px; padding: 0.5rem 0.75rem; font-family: ui-monospace, monospace; font-weight: 600; background: rgb(255 255 255 / 0.05); border: 1px solid rgb(255 255 255 / 0.12); word-break: break-all; }
+.bm-su-tick { display: flex; width: 4rem; height: 4rem; align-items: center; justify-content: center; border-radius: 18px; color: #7ee8c6; background: rgb(94 234 212 / 0.12); border: 1px solid rgb(94 234 212 / 0.35); box-shadow: 0 0 30px -4px rgb(94 234 212 / 0.4); }
+.bm-pill.bm-wrap { white-space: normal; text-align: center; letter-spacing: 0.06em; }
+.bm-input.bm-input-group { display: flex; align-items: center; gap: 0.5rem; }

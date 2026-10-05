@@ -74,7 +74,7 @@ export function SubdomainAvailabilityChecker({
 
   return (
     <div className="w-full max-w-xl">
-      <form onSubmit={handleSubmit} className="flex flex-col gap-3 rounded-3xl p-2 sm:flex-row sm:items-center sm:rounded-full" style={{ background: "rgb(255 255 255 / 0.05)", border: "1px solid rgb(255 255 255 / 0.18)" }}>
+      <form onSubmit={handleSubmit} className="bm-field flex flex-col gap-3 rounded-3xl p-2 sm:flex-row sm:items-center sm:rounded-full">
         <label className="flex flex-1 items-center gap-2 px-4">
           <span className="sr-only">Store name</span>
           <input
