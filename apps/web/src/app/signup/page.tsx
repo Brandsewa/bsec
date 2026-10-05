@@ -4,6 +4,8 @@ import React, { useState, useEffect, Suspense } from "react";
 import { TurnstileWidget } from "@/components/marketing/TurnstileWidget";
 import { useSearchParams } from "next/navigation";
 import Link from "next/link";
+import { bmFont } from "@/components/marketing/beam/fonts";
+import "@/components/marketing/beam/beam.css";
 
 interface TemplateOption {
   code: string;
@@ -302,29 +304,29 @@ function SignupContent() {
 
   if (provisionSuccess) {
     return (
-      <div className="max-w-xl mx-auto py-16 px-4 text-center">
-        <div className="w-16 h-16 bg-emerald-100 text-emerald-600 rounded-2xl flex items-center justify-center mx-auto mb-6 shadow-sm">
+      <div className="relative mx-auto max-w-xl px-4 py-16 text-center">
+        <div className="bm-su-tick mx-auto mb-6">
           <svg className="w-8 h-8" fill="none" viewBox="0 0 24 24" stroke="currentColor">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" />
           </svg>
         </div>
-        <h2 className="text-3xl font-extrabold text-slate-900 mb-3">Your store is live!</h2>
-        <p className="text-slate-600 mb-8 leading-relaxed">
+        <h2 className="bm-h2 mb-3">Your store is live!</h2>
+        <p className="bm-dim mb-8 leading-relaxed">
           Your new online store <strong>{storeName}</strong> has been provisioned and is ready to take orders.
         </p>
 
-        <div className="bg-slate-50 border border-slate-200 rounded-2xl p-6 mb-8 text-left space-y-4">
+        <div className="bm-panel mb-8 space-y-4 p-6 text-left">
           <div>
-            <span className="text-xs uppercase font-bold text-slate-500 tracking-wider">Live Storefront URL</span>
-            <div className="mt-1 font-mono text-emerald-800 font-bold bg-white px-3 py-2 rounded-lg border border-slate-200">
+            <span className="bm-label">Live Storefront URL</span>
+            <div className="bm-code mt-1" style={{ color: "#7ee8c6" }}>
               <a href={provisionSuccess.storeUrl} target="_blank" rel="noopener noreferrer" className="hover:underline">
                 {provisionSuccess.storeUrl}
               </a>
             </div>
           </div>
           <div>
-            <span className="text-xs uppercase font-bold text-slate-500 tracking-wider">Store Admin Dashboard</span>
-            <div className="mt-1 font-mono text-slate-800 font-bold bg-white px-3 py-2 rounded-lg border border-slate-200">
+            <span className="bm-label">Store Admin Dashboard</span>
+            <div className="bm-code mt-1">
               <a href={`${provisionSuccess.adminUrl}/?store=${provisionSuccess.slug}`} target="_blank" rel="noopener noreferrer" className="hover:underline">
                 {provisionSuccess.adminUrl}/?store={provisionSuccess.slug}
               </a>
@@ -335,7 +337,7 @@ function SignupContent() {
         <div className="flex flex-col sm:flex-row gap-4 justify-center">
           <a
             href={`${provisionSuccess.adminUrl}/?store=${provisionSuccess.slug}`}
-            className="px-6 py-3.5 bg-emerald-600 hover:bg-emerald-700 text-white font-bold rounded-xl shadow-md transition-all text-center"
+            className="bm-pill"
           >
             Open Store Admin
           </a>
@@ -343,7 +345,7 @@ function SignupContent() {
             href={provisionSuccess.storeUrl}
             target="_blank"
             rel="noopener noreferrer"
-            className="px-6 py-3.5 bg-white border border-slate-300 hover:bg-slate-50 text-slate-800 font-bold rounded-xl transition-all text-center"
+            className="bm-outline justify-center px-6"
           >
             Visit Live Storefront
           </a>
@@ -353,21 +355,21 @@ function SignupContent() {
   }
 
   return (
-    <div className="max-w-2xl mx-auto py-12 px-4 sm:px-6">
+    <div className="relative mx-auto max-w-2xl px-4 py-12 sm:px-6">
       {/* Header */}
       <div className="text-center mb-10">
-        <Link href="/" className="inline-flex items-center gap-2 mb-6">
-          <span className="w-8 h-8 rounded-lg bg-emerald-600 flex items-center justify-center text-white font-black text-lg">
-            g
+        <Link href="/" className="mb-6 inline-flex items-center gap-2.5 no-underline" style={{ color: "var(--bm-text)" }}>
+          <span className="bm-logo-tile flex h-8 w-8 items-center justify-center rounded-lg text-[1.05rem] font-bold">
+            B
           </span>
-          <span className="text-xl font-bold tracking-tight text-slate-900">
-            bcom<span className="text-emerald-600">.si</span>
+          <span className="text-[1.25rem] font-semibold tracking-tight">
+            Bs Commerce
           </span>
         </Link>
-        <h1 className="text-2xl sm:text-3xl font-extrabold text-slate-900 tracking-tight">
+        <h1 className="bm-h2">
           Create your online store
         </h1>
-        <p className="text-slate-600 text-sm mt-1">14-day free trial · Setup takes 2 minutes</p>
+        <p className="bm-dim mt-2 text-sm">14-day free trial · Setup takes 2 minutes</p>
       </div>
 
       {/* Step Indicator */}
@@ -377,10 +379,10 @@ function SignupContent() {
             <div
               className={`w-8 h-8 rounded-full flex items-center justify-center text-xs font-bold transition-all ${
                 step === s
-                  ? "bg-emerald-600 text-white shadow-md shadow-emerald-600/30"
+                  ? "bm-step-on"
                   : step > s
-                  ? "bg-emerald-100 text-emerald-800"
-                  : "bg-slate-200 text-slate-500"
+                  ? "bm-step-done"
+                  : "bm-step-off"
               }`}
             >
               {step > s ? "✓" : s}
@@ -388,7 +390,7 @@ function SignupContent() {
             {s < 5 && (
               <div
                 className={`w-6 sm:w-10 h-0.5 mx-1 transition-all ${
-                  step > s ? "bg-emerald-500" : "bg-slate-200"
+                  step > s ? "bm-line-on" : "bm-line-off"
                 }`}
               />
             )}
@@ -398,8 +400,8 @@ function SignupContent() {
 
       {/* Error alert */}
       {errorMessage && (
-        <div className="mb-6 p-4 rounded-xl bg-rose-50 border border-rose-200 text-rose-800 text-sm flex items-start gap-3">
-          <svg className="w-5 h-5 text-rose-600 shrink-0 mt-0.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+        <div className="bm-alert mb-6 flex items-start gap-3 p-4 text-sm">
+          <svg className="w-5 h-5 shrink-0 mt-0.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
           </svg>
           <div className="flex-1 font-medium">{errorMessage}</div>
@@ -407,17 +409,17 @@ function SignupContent() {
       )}
 
       {/* Wizard Card */}
-      <div className="bg-white rounded-3xl border border-slate-200 shadow-xl p-6 sm:p-10">
+      <div className="bm-su-card p-6 sm:p-10">
         {/* Step 1: Subdomain & Store Name */}
         {step === 1 && (
           <form onSubmit={handleStep1Submit} className="space-y-6">
             <div>
-              <h2 className="text-xl font-bold text-slate-900 mb-1">Step 1: Choose your store address</h2>
-              <p className="text-sm text-slate-500">Pick your store name and claim your permanent subdomain.</p>
+              <h2 className="mb-1 text-xl font-semibold">Step 1: Choose your store address</h2>
+              <p className="bm-dim text-sm">Pick your store name and claim your permanent subdomain.</p>
             </div>
 
             <div>
-              <label className="block text-xs font-bold uppercase tracking-wider text-slate-700 mb-2">
+              <label className="bm-label">
                 Store Name
               </label>
               <input
@@ -425,37 +427,37 @@ function SignupContent() {
                 placeholder="e.g. Kolkata Handlooms"
                 value={storeName}
                 onChange={(e) => handleStoreNameChange(e.target.value)}
-                className="w-full px-4 py-3 rounded-xl border border-slate-300 focus:border-emerald-600 focus:ring-1 focus:ring-emerald-600 outline-none text-base"
+                className="bm-input"
                 required
               />
             </div>
 
             <div>
-              <label className="block text-xs font-bold uppercase tracking-wider text-slate-700 mb-2">
+              <label className="bm-label">
                 Subdomain Address
               </label>
-              <div className="flex items-center px-4 py-3 rounded-xl border border-slate-300 bg-slate-50 focus-within:border-emerald-600 focus-within:bg-white transition-all">
+              <div className="bm-input bm-input-group">
                 <input
                   type="text"
                   placeholder="store-name"
                   value={slug}
                   onChange={(e) => setSlug(e.target.value.toLowerCase().trim())}
-                  className="w-full bg-transparent outline-none font-mono text-sm text-slate-900"
+                  className="w-full bg-transparent font-mono text-sm outline-none"
                   required
                 />
-                <span className="text-slate-400 font-medium text-sm select-none pl-2 shrink-0">
+                <span className="bm-dim shrink-0 select-none pl-2 text-sm font-medium">
                   .bcom.si
                 </span>
               </div>
               <div className="mt-2 text-xs font-medium">
                 {isCheckingSlug ? (
-                  <span className="text-slate-500">Checking availability...</span>
+                  <span className="bm-dim">Checking availability...</span>
                 ) : slugStatus?.available ? (
-                  <span className="text-emerald-700">✓ {slug}.bcom.si is available</span>
+                  <span style={{ color: "#7ee8c6" }}>✓ {slug}.bcom.si is available</span>
                 ) : slugStatus ? (
-                  <span className="text-rose-600">✕ {slugStatus.reason || "Subdomain is unavailable"}</span>
+                  <span style={{ color: "#ff9db8" }}>✕ {slugStatus.reason || "Subdomain is unavailable"}</span>
                 ) : (
-                  <span className="text-slate-400">At least 3 characters. Lowercase letters, numbers, and hyphens.</span>
+                  <span className="bm-dim">At least 3 characters. Lowercase letters, numbers, and hyphens.</span>
                 )}
               </div>
             </div>
@@ -463,7 +465,7 @@ function SignupContent() {
             <button
               type="submit"
               disabled={!slug || slug.length < 3 || !slugStatus?.available}
-              className="w-full py-3.5 bg-emerald-600 hover:bg-emerald-700 disabled:bg-slate-300 text-white font-bold rounded-xl shadow-md transition-all"
+              className="bm-pill w-full"
             >
               Continue to Account
             </button>
@@ -474,13 +476,13 @@ function SignupContent() {
         {step === 2 && (
           <form onSubmit={handleStep2Submit} className="space-y-6">
             <div>
-              <h2 className="text-xl font-bold text-slate-900 mb-1">Step 2: Store Owner Account</h2>
-              <p className="text-sm text-slate-500">These credentials will be used to log into your merchant admin.</p>
+              <h2 className="mb-1 text-xl font-semibold">Step 2: Store Owner Account</h2>
+              <p className="bm-dim text-sm">These credentials will be used to log into your merchant admin.</p>
             </div>
 
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <div>
-                <label className="block text-xs font-bold uppercase tracking-wider text-slate-700 mb-2">
+                <label className="bm-label">
                   Your Full Name
                 </label>
                 <input
@@ -488,13 +490,13 @@ function SignupContent() {
                   placeholder="Aarav Sharma"
                   value={ownerName}
                   onChange={(e) => setOwnerName(e.target.value)}
-                  className="w-full px-4 py-3 rounded-xl border border-slate-300 focus:border-emerald-600 outline-none text-sm"
+                  className="bm-input"
                   required
                 />
               </div>
 
               <div>
-                <label className="block text-xs font-bold uppercase tracking-wider text-slate-700 mb-2">
+                <label className="bm-label">
                   Mobile Number (Optional)
                 </label>
                 <input
@@ -502,13 +504,13 @@ function SignupContent() {
                   placeholder="+91 98765 43210"
                   value={phone}
                   onChange={(e) => setPhone(e.target.value)}
-                  className="w-full px-4 py-3 rounded-xl border border-slate-300 focus:border-emerald-600 outline-none text-sm"
+                  className="bm-input"
                 />
               </div>
             </div>
 
             <div>
-              <label className="block text-xs font-bold uppercase tracking-wider text-slate-700 mb-2">
+              <label className="bm-label">
                 Business Email Address
               </label>
               <input
@@ -516,14 +518,14 @@ function SignupContent() {
                 placeholder="founder@yourstore.in"
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
-                className="w-full px-4 py-3 rounded-xl border border-slate-300 focus:border-emerald-600 outline-none text-sm"
+                className="bm-input"
                 required
               />
-              <p className="mt-1 text-xs text-slate-400">Must be a valid business or personal email (no disposable addresses).</p>
+              <p className="bm-dim mt-1 text-xs">Must be a valid business or personal email (no disposable addresses).</p>
             </div>
 
             <div>
-              <label className="block text-xs font-bold uppercase tracking-wider text-slate-700 mb-2">
+              <label className="bm-label">
                 Password
               </label>
               <input
@@ -531,7 +533,7 @@ function SignupContent() {
                 placeholder="At least 10 characters"
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
-                className="w-full px-4 py-3 rounded-xl border border-slate-300 focus:border-emerald-600 outline-none text-sm"
+                className="bm-input"
                 required
                 minLength={10}
               />
@@ -541,13 +543,13 @@ function SignupContent() {
               <button
                 type="button"
                 onClick={() => setStep(1)}
-                className="py-3.5 px-6 border border-slate-300 text-slate-700 hover:bg-slate-50 font-semibold rounded-xl text-sm transition-all"
+                className="bm-outline px-6"
               >
                 Back
               </button>
               <button
                 type="submit"
-                className="flex-1 py-3.5 bg-emerald-600 hover:bg-emerald-700 text-white font-bold rounded-xl shadow-md transition-all text-sm"
+                className="bm-pill flex-1"
               >
                 Continue to Business Details
               </button>
@@ -559,18 +561,18 @@ function SignupContent() {
         {step === 3 && (
           <form onSubmit={handleStep3Submit} className="space-y-6">
             <div>
-              <h2 className="text-xl font-bold text-slate-900 mb-1">Step 3: Tell us about your business</h2>
-              <p className="text-sm text-slate-500">Helps us configure your default store settings and categories.</p>
+              <h2 className="mb-1 text-xl font-semibold">Step 3: Tell us about your business</h2>
+              <p className="bm-dim text-sm">Helps us configure your default store settings and categories.</p>
             </div>
 
             <div>
-              <label className="block text-xs font-bold uppercase tracking-wider text-slate-700 mb-2">
+              <label className="bm-label">
                 Industry Category
               </label>
               <select
                 value={industry}
                 onChange={(e) => setIndustry(e.target.value)}
-                className="w-full px-4 py-3 rounded-xl border border-slate-300 bg-white focus:border-emerald-600 outline-none text-sm font-medium"
+                className="bm-input"
               >
                 <option value="retail">General Retail & Lifestyle</option>
                 <option value="fashion">Fashion & Apparel</option>
@@ -582,7 +584,7 @@ function SignupContent() {
             </div>
 
             <div>
-              <label className="block text-xs font-bold uppercase tracking-wider text-slate-700 mb-2">
+              <label className="bm-label">
                 City / State
               </label>
               <input
@@ -590,7 +592,7 @@ function SignupContent() {
                 placeholder="e.g. Mumbai, Maharashtra"
                 value={businessCity}
                 onChange={(e) => setBusinessCity(e.target.value)}
-                className="w-full px-4 py-3 rounded-xl border border-slate-300 focus:border-emerald-600 outline-none text-sm"
+                className="bm-input"
               />
             </div>
 
@@ -598,13 +600,13 @@ function SignupContent() {
               <button
                 type="button"
                 onClick={() => setStep(2)}
-                className="py-3.5 px-6 border border-slate-300 text-slate-700 hover:bg-slate-50 font-semibold rounded-xl text-sm transition-all"
+                className="bm-outline px-6"
               >
                 Back
               </button>
               <button
                 type="submit"
-                className="flex-1 py-3.5 bg-emerald-600 hover:bg-emerald-700 text-white font-bold rounded-xl shadow-md transition-all text-sm"
+                className="bm-pill flex-1"
               >
                 Continue to Theme Selection
               </button>
@@ -616,8 +618,8 @@ function SignupContent() {
         {step === 4 && (
           <form onSubmit={handleStep4Submit} className="space-y-6">
             <div>
-              <h2 className="text-xl font-bold text-slate-900 mb-1">Step 4: Pick a starter theme</h2>
-              <p className="text-sm text-slate-500">You can customize colors, fonts, and blocks anytime in Store Admin.</p>
+              <h2 className="mb-1 text-xl font-semibold">Step 4: Pick a starter theme</h2>
+              <p className="bm-dim text-sm">You can customize colors, fonts, and blocks anytime in Store Admin.</p>
             </div>
 
             <div className="space-y-4">
@@ -625,17 +627,13 @@ function SignupContent() {
                 <div
                   key={tmpl.code}
                   onClick={() => setSelectedTemplate(tmpl.code)}
-                  className={`p-4 sm:p-5 rounded-2xl border cursor-pointer transition-all ${
-                    selectedTemplate === tmpl.code
-                      ? "border-emerald-600 bg-emerald-50/50 shadow-sm"
-                      : "border-slate-200 hover:border-slate-300"
-                  }`}
+                  className={`bm-opt cursor-pointer p-4 sm:p-5 ${selectedTemplate === tmpl.code ? "is-on" : ""}`}
                 >
                   <div className="flex items-center justify-between mb-1.5">
-                    <h4 className="font-bold text-slate-900 text-base">{tmpl.name}</h4>
-                    <span className="text-xs uppercase font-bold tracking-wider text-slate-500">{tmpl.industry}</span>
+                    <h4 className="font-semibold text-base">{tmpl.name}</h4>
+                    <span className="bm-dim text-xs font-semibold uppercase tracking-wider">{tmpl.industry}</span>
                   </div>
-                  <p className="text-xs text-slate-600 leading-relaxed">{tmpl.description}</p>
+                  <p className="bm-dim text-xs leading-relaxed">{tmpl.description}</p>
                 </div>
               ))}
             </div>
@@ -644,13 +642,13 @@ function SignupContent() {
               <button
                 type="button"
                 onClick={() => setStep(3)}
-                className="py-3.5 px-6 border border-slate-300 text-slate-700 hover:bg-slate-50 font-semibold rounded-xl text-sm transition-all"
+                className="bm-outline px-6"
               >
                 Back
               </button>
               <button
                 type="submit"
-                className="flex-1 py-3.5 bg-emerald-600 hover:bg-emerald-700 text-white font-bold rounded-xl shadow-md transition-all text-sm"
+                className="bm-pill flex-1"
               >
                 Continue to Plan
               </button>
@@ -662,8 +660,8 @@ function SignupContent() {
         {step === 5 && (
           <div className="space-y-6">
             <div>
-              <h2 className="text-xl font-bold text-slate-900 mb-1">Step 5: Review plan & launch</h2>
-              <p className="text-sm text-slate-500">Every plan includes a 14-day free trial. Upgrade or cancel anytime.</p>
+              <h2 className="mb-1 text-xl font-semibold">Step 5: Review plan & launch</h2>
+              <p className="bm-dim text-sm">Every plan includes a 14-day free trial. Upgrade or cancel anytime.</p>
             </div>
 
             <div className="space-y-3">
@@ -671,27 +669,23 @@ function SignupContent() {
                 <div
                   key={plan.code}
                   onClick={() => setSelectedPlan(plan.code)}
-                  className={`p-4 sm:p-5 rounded-2xl border cursor-pointer transition-all ${
-                    selectedPlan === plan.code
-                      ? "border-emerald-600 bg-emerald-50/40 shadow-sm"
-                      : "border-slate-200 hover:border-slate-300"
-                  }`}
+                  className={`bm-opt cursor-pointer p-4 sm:p-5 ${selectedPlan === plan.code ? "is-on" : ""}`}
                 >
                   <div className="flex items-center justify-between mb-1">
                     <div className="flex items-center gap-2">
-                      <h4 className="font-bold text-slate-900 text-base">{plan.name}</h4>
+                      <h4 className="font-semibold text-base">{plan.name}</h4>
                       {plan.popular && (
-                        <span className="bg-emerald-100 text-emerald-800 text-[10px] font-bold px-2 py-0.5 rounded-full">
+                        <span className="bm-badge">
                           Recommended
                         </span>
                       )}
                     </div>
-                    <span className="font-bold text-slate-900 text-base">{plan.priceText}</span>
+                    <span className="font-semibold text-base">{plan.priceText}</span>
                   </div>
-                  <p className="text-xs text-slate-500 mb-2">{plan.description}</p>
-                  <div className="flex flex-wrap gap-2 text-[11px] text-slate-600 font-medium">
+                  <p className="bm-dim mb-2 text-xs">{plan.description}</p>
+                  <div className="bm-dim flex flex-wrap gap-2 text-[11px] font-medium">
                     {plan.features.map((f, i) => (
-                      <span key={i} className="bg-white px-2 py-0.5 rounded border border-slate-200">
+                      <span key={i} className="bm-chip">
                         {f}
                       </span>
                     ))}
@@ -700,8 +694,8 @@ function SignupContent() {
               ))}
             </div>
 
-            <div className="p-4 rounded-xl bg-slate-50 border border-slate-200 text-xs text-slate-600 space-y-1">
-              <div className="font-semibold text-slate-800">Launch Summary:</div>
+            <div className="bm-panel bm-dim space-y-1 p-4 text-xs">
+              <div className="font-semibold">Launch Summary:</div>
               <div>• Store: <strong>{storeName}</strong> ({slug}.bcom.si)</div>
               <div>• Owner: <strong>{email}</strong></div>
               <div>• Trial: <strong>14 days free</strong> on {selectedPlan.toUpperCase()} tier</div>
@@ -718,7 +712,7 @@ function SignupContent() {
                 type="button"
                 disabled={isProvisioning}
                 onClick={() => setStep(4)}
-                className="py-3.5 px-6 border border-slate-300 text-slate-700 hover:bg-slate-50 font-semibold rounded-xl text-sm transition-all disabled:opacity-50"
+                className="bm-outline px-6 disabled:opacity-50"
               >
                 Back
               </button>
@@ -726,11 +720,11 @@ function SignupContent() {
                 type="button"
                 disabled={isProvisioning || !configLoaded || (turnstileSiteKey !== null && !turnstileToken)}
                 onClick={handleFinalSubmit}
-                className="flex-1 py-3.5 bg-emerald-600 hover:bg-emerald-700 text-white font-bold rounded-xl shadow-md transition-all text-sm disabled:bg-slate-400 flex items-center justify-center gap-2"
+                className="bm-pill bm-wrap flex-1"
               >
                 {isProvisioning ? (
                   <>
-                    <svg className="animate-spin w-4 h-4 text-white" fill="none" viewBox="0 0 24 24">
+                    <svg className="animate-spin w-4 h-4" fill="none" viewBox="0 0 24 24">
                       <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
                       <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
                     </svg>
@@ -750,8 +744,10 @@ function SignupContent() {
 
 export default function SignupPage() {
   return (
-    <Suspense fallback={<div className="p-12 text-center text-slate-500 font-medium">Loading signup wizard...</div>}>
-      <SignupContent />
-    </Suspense>
+    <div className={`bm bm-su ${bmFont.variable}`}>
+      <Suspense fallback={<div className="bm-dim p-12 text-center font-medium">Loading signup wizard...</div>}>
+        <SignupContent />
+      </Suspense>
+    </div>
   );
 }

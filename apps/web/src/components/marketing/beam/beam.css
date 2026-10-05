@@ -1,0 +1,183 @@
+/*
+ * bcom.si landing, design 6: "Beam". A near-black hero lit by one vertical beam that falls onto the top edge of the
+ * product window and blooms there, with slow violet smoke, a fine dot grid and a warm-glow pill. Original build in the
+ * style of modern dark developer-tool heroes. Scoped under .bm.
+ */
+.bm {
+  --bm-bg: #090a0c;
+  --bm-panel: #101218;
+  --bm-panel-2: #151823;
+  --bm-line: rgb(255 255 255 / 0.1);
+  --bm-text: #f3f4fa;
+  --bm-dim: #9ea4bd; /* secondary text on near-black (7.6:1) */
+  --bm-violet: #8f8dff;
+  --bm-blue: #6f8bff;
+  --bm-warm: #ff9a4d;
+  --bm-ease: cubic-bezier(0.16, 1, 0.3, 1);
+  --bm-beam-x: 50%; /* the beam's horizontal position, shared by every layer that lines up with it */
+  --bm-font: var(--font-bm), ui-sans-serif, system-ui, sans-serif;
+
+  position: relative; min-height: 100vh; overflow-x: clip;
+  background: var(--bm-bg); color: var(--bm-text);
+  font-family: var(--bm-font); font-size: 1.0625rem; line-height: 1.6; -webkit-font-smoothing: antialiased;
+}
+:root:has(.bm) { scrollbar-color: #2b2f45 var(--bm-bg); scroll-behavior: smooth; scroll-padding-top: 5rem; }
+.bm ::selection { background: var(--bm-violet); color: #0a0a12; }
+.bm :focus-visible { outline: 2px solid var(--bm-blue); outline-offset: 3px; border-radius: 8px; }
+.bm input { caret-color: var(--bm-warm); }
+.bm-num { font-variant-numeric: tabular-nums lining-nums; }
+.bm-dim { color: var(--bm-dim); }
+.bm-h1 { font-weight: 600; letter-spacing: -0.045em; line-height: 0.98; font-size: clamp(2.4rem, 5vw, 4.4rem); text-wrap: balance;
+  color: #f6f7ff; }
+.bm-h2 { font-weight: 600; letter-spacing: -0.04em; line-height: 1.04; font-size: clamp(1.9rem, 4vw, 3rem); text-wrap: balance; }
+
+/* ---------- Hero stage ---------- */
+.bm-hero { position: relative; isolation: isolate; overflow: hidden; min-height: min(100svh, 62rem); }
+
+/* smoke: three blurred masses drifting slowly; heavier on the beam's right, as the light spills */
+.bm-smoke { position: absolute; border-radius: 50%; filter: blur(70px); pointer-events: none; will-change: transform; }
+.bm-smoke-a { width: 46rem; height: 34rem; right: -8%; top: 4%; background: radial-gradient(closest-side, rgb(120 108 240 / 0.22), transparent 72%); animation: bm-drift-a 34s ease-in-out infinite alternate; }
+.bm-smoke-b { width: 40rem; height: 30rem; left: 38%; top: 22%; background: radial-gradient(closest-side, rgb(70 100 220 / 0.16), transparent 72%); animation: bm-drift-b 42s ease-in-out infinite alternate; }
+.bm-smoke-c { width: 30rem; height: 26rem; left: -6%; top: 40%; background: radial-gradient(closest-side, rgb(150 120 255 / 0.08), transparent 70%); animation: bm-drift-a 50s ease-in-out infinite alternate-reverse; }
+@keyframes bm-drift-a { from { transform: translate3d(0, 0, 0) scale(1); } to { transform: translate3d(-5rem, 3rem, 0) scale(1.18); } }
+@keyframes bm-drift-b { from { transform: translate3d(0, 0, 0) scale(1.1); } to { transform: translate3d(4rem, -2.5rem, 0) scale(0.92); } }
+
+/* fine dot grid, visible only in the light around the beam */
+.bm-grid { position: absolute; inset: 0; pointer-events: none; opacity: 0.55;
+  background-image: radial-gradient(circle, rgb(190 200 255 / 0.5) 0 0.8px, transparent 1.2px); background-size: 9px 9px;
+  -webkit-mask-image: radial-gradient(ellipse 34% 48% at var(--bm-beam-x) 62%, #000, transparent 72%); mask-image: radial-gradient(ellipse 34% 48% at var(--bm-beam-x) 62%, #000, transparent 72%); }
+
+/* grain over the stage */
+.bm-grain { position: absolute; inset: 0; pointer-events: none; opacity: 0.12; mix-blend-mode: overlay;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='200' height='200'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.9' numOctaves='2' stitchTiles='stitch'/%3E%3CfeColorMatrix values='0 0 0 0 1 0 0 0 0 1 0 0 0 0 1 0 0 0 .7 0'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E"); }
+
+/* the beam: a thin bright core, a soft halo, and a bloom where it lands on the window's top edge */
+.bm-bloom { position: absolute; left: var(--bm-beam-x); bottom: calc(var(--bm-foot, 8rem) - 7rem); width: min(110rem, 170%); height: 15rem; transform: translateX(-50%) rotate(-6deg); pointer-events: none; filter: blur(8px);
+  background: radial-gradient(ellipse 50% 48% at 50% 62%, rgb(90 118 245 / 0.55) 0%, rgb(72 98 235 / 0.5) 30%, rgb(58 56 200 / 0.35) 52%, transparent 74%); animation: bm-bloom 5.5s ease-in-out infinite; }
+@keyframes bm-pulse { 0%, 100% { opacity: 0.86; } 50% { opacity: 1; } }
+@keyframes bm-bloom { 0%, 100% { opacity: 0.88; transform: translateX(-50%) rotate(-6deg) scale(1); } 50% { opacity: 1; transform: translateX(-50%) rotate(-6deg) scale(1.04); } }
+/* as the page scrolls the light falls away (scroll-driven where supported) */
+@keyframes bm-fade { to { opacity: 0.08; } }
+@supports (animation-timeline: scroll()) {
+  .bm-light { animation: bm-fade linear both; animation-timeline: scroll(root); animation-range: 0 90vh; }
+}
+
+/* headline and copy settle in once */
+@keyframes bm-rise { from { opacity: 0; transform: translateY(22px); filter: blur(8px); } to { opacity: 1; transform: none; filter: blur(0); } }
+.bm-rise { animation: bm-rise 1000ms var(--bm-ease) both; animation-delay: var(--d, 0ms); }
+
+/* ---------- Pill button with a warm lit edge ---------- */
+.bm-pill {
+  position: relative; display: inline-flex; align-items: center; justify-content: center; gap: 0.55rem; white-space: nowrap; isolation: isolate;
+  min-height: 3rem; padding: 0.7rem 1.55rem; border-radius: 999px; border: 0; cursor: pointer; text-decoration: none;
+  font-weight: 600; font-size: 0.82rem; letter-spacing: 0.1em; text-transform: uppercase; color: #15161c;
+  background: linear-gradient(180deg, #f3f1ee 0%, #cfccc8 100%);
+  box-shadow: 0 0 0 1px rgb(255 255 255 / 0.35) inset;
+  transition: transform 220ms var(--bm-ease), box-shadow 220ms var(--bm-ease);
+}
+.bm-pill:hover { transform: translateY(-2px); box-shadow: 0 0 0 1px rgb(255 255 255 / 0.5) inset, 0 0 22px 2px rgb(255 154 77 / 0.5), 0 10px 28px -8px rgb(255 120 40 / 0.5); }
+.bm-pill:active { transform: translateY(0); }
+.bm-pill[disabled] { background: #262a38; color: #7d839c; box-shadow: none; cursor: not-allowed; animation: none; }
+
+.bm-pill-sm { min-height: 2.5rem; padding: 0.4rem 1.1rem; font-size: 0.74rem; }
+.bm-outline { display: inline-flex; align-items: center; min-height: 2.5rem; padding: 0.4rem 1.1rem; border-radius: 999px; border: 1px solid rgb(255 255 255 / 0.35); color: var(--bm-text); font-weight: 600; font-size: 0.74rem; letter-spacing: 0.1em; text-transform: uppercase; text-decoration: none; transition: background-color 200ms, border-color 200ms; }
+.bm-outline:hover { background: rgb(255 255 255 / 0.08); border-color: rgb(255 255 255 / 0.6); }
+
+/* ---------- Product window ---------- */
+.bm-window { position: relative; border-radius: 20px 20px 0 0; background: #0c0e13; border: 1px solid rgb(255 255 255 / 0.12); border-bottom: 0;
+  box-shadow: 0 -1px 0 rgb(220 228 255 / 0.95), 0 -2px 18px rgb(150 165 255 / 0.9), 0 -26px 80px -12px rgb(120 135 255 / 0.65), 0 40px 80px rgb(0 0 0 / 0.6); }
+.bm-window::before { content: ""; position: absolute; left: 6%; right: 6%; top: -1px; height: 2px; border-radius: 2px; background: linear-gradient(90deg, transparent, #fff 20%, #fff 80%, transparent); filter: blur(0.5px); }
+@keyframes bm-card-in { from { opacity: 0; transform: translateY(14px); } to { opacity: 1; transform: none; } }
+.bm-card-in { animation: bm-card-in 800ms var(--bm-ease) both; animation-delay: var(--d, 0ms); }
+@keyframes bm-new { from { opacity: 0; transform: translateY(-18px) scale(0.97); background: rgb(143 141 255 / 0.35); } to { opacity: 1; transform: none; background: transparent; } }
+.bm-card-new { animation: bm-new 700ms var(--bm-ease) both; }
+
+/* ---------- Page chrome below the hero ---------- */
+.bm-panel { background: var(--bm-panel); border: 1px solid var(--bm-line); border-radius: 18px; transition: border-color 300ms var(--bm-ease), transform 400ms var(--bm-ease); }
+.bm-panel:hover { border-color: rgb(255 255 255 / 0.22); transform: translateY(-3px); }
+.bm-rv { transition: opacity 700ms var(--bm-ease), transform 900ms var(--bm-ease); }
+.bm-armed .bm-rv:not(.is-in) { opacity: 0; transform: translateY(26px); }
+.bm-faq summary { cursor: pointer; list-style: none; }
+.bm-faq summary::-webkit-details-marker { display: none; }
+.bm-faq[open] .bm-plus { transform: rotate(45deg); }
+.bm-plus { transition: transform 260ms var(--bm-ease); }
+
+@media (prefers-reduced-motion: reduce) {
+  :root:has(.bm) { scroll-behavior: auto; }
+  .bm *, .bm *::before, .bm *::after { animation: none !important; transition: none !important; }
+  .bm-armed .bm-rv:not(.is-in) { opacity: 1; transform: none; }
+}
+
+/* the flare where the beam lands: sits above the window's top edge, blended with screen */
+.bm-flare { position: absolute; left: var(--bm-beam-x); bottom: calc(var(--bm-window-h) - 0.2rem); width: 0; z-index: 15; pointer-events: none; }
+.bm-flare > * { position: absolute; mix-blend-mode: screen; }
+.bm-flare-wide { left: -62rem; bottom: -7rem; width: 124rem; height: 17rem; filter: blur(26px); transform: rotate(-6deg);
+  background: radial-gradient(ellipse 50% 50% at 50% 58%, rgb(80 108 245 / 0.7) 0%, rgb(62 88 225 / 0.45) 34%, rgb(50 52 190 / 0.2) 58%, transparent 76%); animation: bm-flare 5.5s ease-in-out infinite; }
+@keyframes bm-flare { 0%, 100% { opacity: 0.88; } 50% { opacity: 1; } }
+
+/* ---------- Module orbit (planets are positioned from script; styles here are look only) ---------- */
+.bm-orbit { position: relative; width: min(100vw, 90rem); aspect-ratio: 1 / 1; margin: 0 auto; }
+@media (min-width: 640px) { .bm-orbit { aspect-ratio: 5 / 2; } }
+.bm-orbit-rings { position: absolute; inset: 0; width: 100%; height: 100%; overflow: visible; pointer-events: none; }
+.bm-sun { position: absolute; left: 50%; top: 50%; width: 4rem; height: 4rem; transform: translate(-50%, -50%); pointer-events: none; z-index: 1; }
+.bm-sun-core { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; border-radius: 50%;   background: radial-gradient(circle at 32% 28%, #d9d8ff, #8f8dff 50%, #5a63e0); box-shadow: 0 0 50px 6px rgb(120 120 255 / 0.5), 0 0 120px 20px rgb(100 90 240 / 0.25); }
+.bm-sun-ring { position: absolute; inset: -0.9rem; border-radius: 50%; border: 1px solid rgb(170 180 255 / 0.35); animation: bm-sun 4.5s ease-out infinite; }
+@keyframes bm-sun { from { transform: scale(0.8); opacity: 0.8; } to { transform: scale(1.5); opacity: 0; } }
+.bm-planet { position: absolute; left: 0; top: 0; width: 2.3rem; height: 2.3rem; padding: 0; border: 0; background: none; color: #0b0c14; cursor: pointer; opacity: 0; will-change: transform; }
+@media (max-width: 639px) { .bm-planet { width: 1.9rem; height: 1.9rem; } .bm-sun { width: 3rem; height: 3rem; } }
+.bm-planet-orb { position: relative; display: flex; align-items: center; justify-content: center; width: 100%; height: 100%; border-radius: 50%;
+  background: radial-gradient(circle at 32% 28%, color-mix(in srgb, var(--tint) 55%, #fff), var(--tint) 48%, color-mix(in srgb, var(--tint) 40%, #0a0a14));
+  box-shadow: 0 0 24px -2px color-mix(in srgb, var(--tint) 60%, transparent), inset -4px -6px 10px rgb(0 0 0 / 0.28); transition: transform 260ms var(--bm-ease), box-shadow 260ms; }
+.bm-planet:hover .bm-planet-orb, .bm-planet:focus-visible .bm-planet-orb, .bm-planet[aria-expanded="true"] .bm-planet-orb { transform: scale(1.14); box-shadow: 0 0 34px 2px color-mix(in srgb, var(--tint) 75%, transparent), inset -4px -6px 10px rgb(0 0 0 / 0.28); }
+.bm-planet-orb.is-soon { filter: saturate(0.4) brightness(0.8); outline: 1px dashed rgb(255 255 255 / 0.45); outline-offset: 3px; }
+.bm-planet-label { position: absolute; top: 100%; left: 50%; transform: translateX(-50%); margin-top: 0.3rem; white-space: nowrap; font-size: 0.74rem; font-weight: 600; letter-spacing: 0.02em; color: var(--bm-text); text-shadow: 0 1px 8px #000; pointer-events: none; }
+@media (max-width: 639px) { .bm-planet-label { font-size: 0.64rem; } }
+.bm-orbit-card { position: absolute; z-index: 40; padding: 1rem 1.05rem; border-radius: 16px; pointer-events: none; color: var(--bm-text);
+  background: rgb(16 18 28 / 0.94); border: 1px solid rgb(255 255 255 / 0.14); backdrop-filter: blur(14px);
+  box-shadow: 0 24px 60px -12px rgb(0 0 0 / 0.8), 0 0 40px -10px rgb(120 120 255 / 0.4); animation: bm-pop 180ms var(--bm-ease) both; }
+@keyframes bm-pop { from { opacity: 0; filter: blur(6px); } to { opacity: 1; filter: none; } }
+.bm-card-chip { display: flex; align-items: center; justify-content: center; flex: none; width: 2.25rem; height: 2.25rem; border-radius: 50%; color: #0b0c14;
+  background: radial-gradient(circle at 32% 28%, color-mix(in srgb, var(--tint) 55%, #fff), var(--tint)); }
+
+/* the sample window below the hero fades into the page instead of ending on a hard edge */
+.bm-window-fade { max-width: 80rem; margin-top: -1rem; padding: 4rem clamp(0.5rem, 4vw, 4rem) 0; -webkit-mask-image: linear-gradient(to bottom, #000 0, #000 60%, transparent 100%); mask-image: linear-gradient(to bottom, #000 0, #000 60%, transparent 100%); }
+
+.bm-spark { position: absolute; left: 0; top: 0; z-index: 20; width: 6px; height: 6px; border-radius: 50%; pointer-events: none; opacity: 0; background: #eef0ff; box-shadow: 0 0 10px 3px rgb(150 160 255 / 0.85), 0 0 22px 6px rgb(120 110 255 / 0.4); will-change: transform; }
+
+/* ---------- Form fields: no hard focus ring, the same warm glow as the buttons ---------- */
+.bm input:focus-visible, .bm select:focus-visible, .bm textarea:focus-visible { outline: none; }
+.bm-field, .bm-input { background: rgb(255 255 255 / 0.05); border: 1px solid rgb(255 255 255 / 0.18); transition: border-color 220ms var(--bm-ease), box-shadow 220ms var(--bm-ease), background-color 220ms; }
+.bm-field:focus-within, .bm-input:focus, .bm-input:focus-within {
+  border-color: rgb(255 255 255 / 0.4); background: rgb(255 255 255 / 0.07);
+  box-shadow: 0 0 0 1px rgb(255 255 255 / 0.18) inset, 0 0 20px 1px rgb(255 154 77 / 0.35), 0 8px 26px -10px rgb(255 120 40 / 0.4); }
+
+/* ---------- Signup in the Beam world ---------- */
+.bm-su { background: var(--bm-bg); }
+.bm-su::before { content: ""; position: absolute; inset: 0; pointer-events: none;
+  background: radial-gradient(ellipse 60% 40% at 50% 0%, rgb(110 100 235 / 0.22), transparent 70%), radial-gradient(ellipse 40% 30% at 90% 30%, rgb(80 110 230 / 0.12), transparent 70%); }
+.bm-su strong { color: var(--bm-text); font-weight: 600; }
+.bm-su-card { position: relative; border-radius: 24px; background: rgb(16 18 28 / 0.82); backdrop-filter: blur(12px); border: 1px solid rgb(255 255 255 / 0.12);
+  box-shadow: 0 -1px 0 rgb(220 228 255 / 0.5), 0 -10px 40px -10px rgb(130 140 255 / 0.5), 0 30px 70px -20px rgb(0 0 0 / 0.8); }
+.bm-label { display: block; margin-bottom: 0.5rem; font-size: 0.72rem; font-weight: 600; letter-spacing: 0.1em; text-transform: uppercase; color: var(--bm-dim); }
+.bm-input { display: block; width: 100%; padding: 0.8rem 1rem; border-radius: 14px; font-size: 0.95rem; color: var(--bm-text); color-scheme: dark; }
+.bm-input::placeholder { color: var(--bm-dim); opacity: 0.6; }
+.bm-logo-tile { background: linear-gradient(135deg, #8f8dff, #6f8bff); color: #0a0a12; }
+.bm-step-on, .bm-step-done, .bm-step-off { display: flex; width: 2rem; height: 2rem; align-items: center; justify-content: center; border-radius: 999px; font-size: 0.75rem; font-weight: 700; transition: all 250ms; }
+.bm-step-on { background: linear-gradient(180deg, #f3f1ee, #cfccc8); color: #15161c; box-shadow: 0 0 18px 1px rgb(255 154 77 / 0.4); }
+.bm-step-done { background: rgb(143 141 255 / 0.22); color: #c9c8ff; }
+.bm-step-off { background: rgb(255 255 255 / 0.07); color: var(--bm-dim); }
+.bm-line-on, .bm-line-off { height: 2px; }
+.bm-line-on { background: rgb(143 141 255 / 0.6); }
+.bm-line-off { background: rgb(255 255 255 / 0.1); }
+.bm-alert { border-radius: 14px; background: rgb(255 120 150 / 0.1); border: 1px solid rgb(255 120 150 / 0.35); color: #ffc2d1; }
+.bm-opt { border-radius: 16px; background: rgb(255 255 255 / 0.04); border: 1px solid rgb(255 255 255 / 0.12); transition: border-color 220ms var(--bm-ease), box-shadow 220ms var(--bm-ease), background-color 220ms; }
+.bm-opt:hover { border-color: rgb(255 255 255 / 0.28); }
+.bm-opt.is-on { border-color: rgb(255 255 255 / 0.45); background: rgb(143 141 255 / 0.1); box-shadow: 0 0 20px 1px rgb(255 154 77 / 0.28); }
+.bm-badge { border-radius: 999px; padding: 0.1rem 0.55rem; font-size: 0.65rem; font-weight: 700; background: rgb(143 141 255 / 0.2); color: #c9c8ff; }
+.bm-chip { border-radius: 8px; padding: 0.1rem 0.5rem; background: rgb(255 255 255 / 0.05); border: 1px solid rgb(255 255 255 / 0.1); }
+.bm-code { border-radius: 10px; padding: 0.5rem 0.75rem; font-family: ui-monospace, monospace; font-weight: 600; background: rgb(255 255 255 / 0.05); border: 1px solid rgb(255 255 255 / 0.12); word-break: break-all; }
+.bm-su-tick { display: flex; width: 4rem; height: 4rem; align-items: center; justify-content: center; border-radius: 18px; color: #7ee8c6; background: rgb(94 234 212 / 0.12); border: 1px solid rgb(94 234 212 / 0.35); box-shadow: 0 0 30px -4px rgb(94 234 212 / 0.4); }
+.bm-pill.bm-wrap { white-space: normal; text-align: center; letter-spacing: 0.06em; }
+.bm-input.bm-input-group { display: flex; align-items: center; gap: 0.5rem; }
+.bm-input option, .bm select option { background-color: #151823; color: #f3f4fa; }
+.bm-input option:checked { background-color: #2a2f4a; color: #fff; }
