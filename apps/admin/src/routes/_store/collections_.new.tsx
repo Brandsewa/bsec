@@ -25,7 +25,7 @@ import { Input } from "@bs/ui";
 import { RadioGroup, RadioGroupItem } from "@bs/ui";
 import { Switch } from "@bs/ui";
 import { SeoCard } from "../../components/seo-card.tsx";
-import { SimpleSelect } from "../../components/simple-select.tsx";
+import { SimpleSelect } from "@bs/ui";
 import { errorMessage } from "../../lib/errors.ts";
 import { orpc } from "../../lib/orpc.ts";
 

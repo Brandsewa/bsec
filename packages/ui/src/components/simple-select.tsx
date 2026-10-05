@@ -38,7 +38,7 @@ export function SimpleSelect({
 }: SimpleSelectProps) {
   const flat = groups ? groups.flatMap((g) => g.options) : options;
   return (
-    <Select items={flat} value={value === "" ? null : value} onValueChange={(v) => onChange(v ?? "")}>
+    <Select items={flat} value={value === "" ? null : value} onValueChange={(v: string | null) => onChange(v ?? "")}>
       <SelectTrigger id={id} aria-label={ariaLabel} className={className ?? "w-full"}>
         <SelectValue placeholder={placeholder} />
       </SelectTrigger>

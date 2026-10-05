@@ -120,15 +120,69 @@ export { Tooltip, TooltipTrigger, TooltipContent, TooltipProvider } from "./comp
 export { Toaster as SonnerToaster } from "./components/ui/sonner.tsx";
 export { Calendar } from "./components/ui/calendar.tsx";
 
+// New primitives & Base UI components
+export { Drawer, DrawerTrigger, DrawerPortal, DrawerClose, DrawerOverlay, DrawerContent, DrawerHeader, DrawerFooter, DrawerTitle, DrawerDescription } from "./components/ui/drawer.tsx";
+export { Command, CommandDialog, CommandInput, CommandList, CommandEmpty, CommandGroup, CommandItem, CommandShortcut, CommandSeparator } from "./components/ui/command.tsx";
+export { ChartContainer, ChartTooltip, ChartTooltipContent, ChartLegend, ChartLegendContent, ChartStyle } from "./components/ui/chart.tsx";
+export { InputOTP, InputOTPGroup, InputOTPSlot, InputOTPSeparator } from "./components/ui/input-otp.tsx";
+
 // Composed shared components
 export { ConfirmDialog, type ConfirmDialogProps } from "./components/confirm-dialog.tsx";
 export { SimpleSelect, type SimpleSelectProps, type SelectOption } from "./components/simple-select.tsx";
 export { DateRangePicker, type DateRangePickerProps } from "./components/date-range-picker.tsx";
 export { DatePicker, type DatePickerProps } from "./components/date-picker.tsx";
+export { DateTimePicker, type DateTimePickerProps } from "./components/date-time-picker.tsx";
 export { ScrollTabs, type ScrollTabsProps } from "./components/scroll-tabs.tsx";
 export { SectionCard, type SectionCardProps } from "./components/section-card.tsx";
 export { InfoTip, type InfoTipProps } from "./components/info-tip.tsx";
 export { ImageUploader, type ImageUploaderProps, type UploadAdapter } from "./components/image-uploader.tsx";
+export { Combobox, type ComboboxProps, type ComboboxOption } from "./components/combobox.tsx";
+export { MultiSelect, type MultiSelectProps, type MultiSelectOption } from "./components/multi-select.tsx";
+export { CommandPalette, type CommandPaletteProps, type CommandPaletteAction } from "./components/command-palette.tsx";
+export { ResponsiveDialog, ResponsiveDialogTrigger, ResponsiveDialogContent, ResponsiveDialogHeader, ResponsiveDialogTitle, ResponsiveDialogDescription, ResponsiveDialogFooter, ResponsiveDialogClose, type ResponsiveDialogProps } from "./components/responsive-dialog.tsx";
+export { Spinner, Empty, type SpinnerProps, type EmptyProps } from "./components/spinner.tsx";
+export { RouteProgress, type RouteProgressProps } from "./components/route-progress.tsx";
+export { StatusBadge, Money, RelativeTime, type StatusBadgeProps, type StatusTone, type MoneyProps, type RelativeTimeProps } from "./components/status-parts.tsx";
+export { AuthShell, type AuthShellProps } from "./layout/auth-shell.tsx";
+
+// Skeletons
+export {
+  PageHeaderSkeleton,
+  MetricCardsSkeleton,
+  DataTableSkeleton,
+  FormSectionSkeleton,
+  DetailPageSkeleton,
+  AuthCardSkeleton,
+  AccountPageSkeleton,
+} from "./patterns/skeletons.tsx";
+
+// Shared DataTable Kit
+export {
+  DataTable as SharedDataTable,
+  type Column as SharedColumn,
+  type DataTableProps as SharedDataTableProps,
+} from "./components/data-table/data-table.tsx";
+export { Pagination, PAGE_SIZES } from "./components/data-table/pagination.tsx";
+export { TableToolbar, type SortOption } from "./components/data-table/table-toolbar.tsx";
+export { BulkBar, ColumnsMenu, FilterChips, type FilterChip } from "./components/data-table/toolbar-parts.tsx";
+export { useBulkRunner, type BulkProgress } from "./components/data-table/use-bulk-runner.ts";
+export { useTableSelection } from "./components/data-table/use-table-selection.ts";
+export {
+  useUrlTableState,
+  useDebouncedValue,
+  useColumnVisibility,
+  parsePaging,
+  compactSearch,
+  oneOf,
+  text,
+  day,
+  flag,
+  dayStartIso,
+  dayAfterIso,
+  SearchStateProvider,
+  type SearchStateAdapter,
+} from "./components/data-table/use-table-state.ts";
+export { fetchAllPages } from "./components/data-table/fetch-all.ts";
 
 // Legacy components maintained for backwards compatibility
 export { Select as LegacySelect } from "./components/select.tsx";
@@ -155,3 +209,4 @@ export {
   type ThemeContextValue,
   type ThemeToggleProps,
 } from "./theme/index.ts";
+

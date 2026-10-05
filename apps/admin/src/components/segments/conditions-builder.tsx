@@ -4,7 +4,7 @@ import { Plus, Trash2 } from "lucide-react";
 import { Button } from "@bs/ui";
 import { Input } from "@bs/ui";
 import { Skeleton } from "@bs/ui";
-import { SimpleSelect } from "../simple-select.tsx";
+import { SimpleSelect } from "@bs/ui";
 import { errorMessage } from "../../lib/errors.ts";
 import { client, orpc } from "../../lib/orpc.ts";
 

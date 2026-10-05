@@ -10,7 +10,7 @@ import { Field, FieldDescription, FieldGroup, FieldLabel } from "@bs/ui";
 import { Input } from "@bs/ui";
 import { orpc } from "../../lib/orpc.ts";
 import { errorMessage } from "../../lib/errors.ts";
-import { SimpleSelect } from "../../components/simple-select.tsx";
+import { SimpleSelect } from "@bs/ui";
 
 export const Route = createFileRoute("/_store/discounts_/new")({
   pendingComponent: () => <PageSkeleton />,

@@ -42,8 +42,8 @@ import {
   useUrlTableState,
 } from "../../components/data-table/use-table-state.ts";
 import { money } from "../../components/order-parts.tsx";
-import { ScrollTabs } from "../../components/scroll-tabs.tsx";
-import { SimpleSelect } from "../../components/simple-select.tsx";
+import { ScrollTabs } from "@bs/ui";
+import { SimpleSelect } from "@bs/ui";
 import { downloadCsv, toCsv } from "../../lib/csv.ts";
 import { errorMessage } from "../../lib/errors.ts";
 import { client, orpc } from "../../lib/orpc.ts";

@@ -8,7 +8,7 @@ import { Popover, PopoverContent, PopoverTrigger } from "./ui/popover.tsx";
 import { cn } from "../lib/cn.ts";
 
 export interface DatePickerProps {
-  value?: Date;
+  value?: Date | undefined;
   onChange?: (date: Date | undefined) => void;
   placeholder?: string;
   disabled?: boolean;

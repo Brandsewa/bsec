@@ -10,7 +10,7 @@ import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, D
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@bs/ui";
 import { Field, FieldLabel } from "@bs/ui";
 import { Input } from "@bs/ui";
-import { ConfirmDialog } from "../../components/confirm-dialog.tsx";
+import { ConfirmDialog } from "@bs/ui";
 import { errorMessage } from "../../lib/errors.ts";
 import { orpc } from "../../lib/orpc.ts";
 

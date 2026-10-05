@@ -30,6 +30,7 @@ export function defineBsConfig(opts = {}) {
       rules: {
         "bs/tenant-cache-tag": "error",
         "bs/no-service-call-in-tx": "error",
+        "bs/design-system-guards": "error",
         "@typescript-eslint/consistent-type-imports": "error",
         "@typescript-eslint/no-unused-vars": ["error", { argsIgnorePattern: "^_", varsIgnorePattern: "^_" }],
         ...(allowDb ? {} : { "no-restricted-imports": ["error", DB_BAN] }),

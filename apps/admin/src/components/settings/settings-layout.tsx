@@ -1,7 +1,7 @@
 import { Link, Outlet, useNavigate, useRouterState } from "@tanstack/react-router";
 import { ShieldAlert } from "lucide-react";
 import { EmptyState } from "@bs/ui";
-import { SimpleSelect } from "../simple-select.tsx";
+import { SimpleSelect } from "@bs/ui";
 import { cn } from "@/lib/utils";
 import { SettingsUpdateBanner } from "./settings-update.tsx";
 import { activeSettingsItem, canOpenSettingsPath, visibleSettingsGroups } from "./settings-nav.ts";

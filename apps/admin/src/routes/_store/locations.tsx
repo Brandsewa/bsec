@@ -7,7 +7,7 @@ import type { Location } from "@bs/contracts";
 import { Badge } from "@bs/ui";
 import { Button } from "@bs/ui";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@bs/ui";
-import { ConfirmDialog } from "../../components/confirm-dialog.tsx";
+import { ConfirmDialog } from "@bs/ui";
 import { errorMessage } from "../../lib/errors.ts";
 import { orpc } from "../../lib/orpc.ts";
 

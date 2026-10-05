@@ -26,11 +26,11 @@ import {
 } from "@bs/ui";
 import { Input } from "@bs/ui";
 import { Label } from "@bs/ui";
-import { ConfirmDialog } from "../../components/confirm-dialog.tsx";
+import { ConfirmDialog } from "@bs/ui";
 import { DataTable, type Column } from "../../components/data-table/data-table.tsx";
-import { ScrollTabs } from "../../components/scroll-tabs.tsx";
+import { ScrollTabs } from "@bs/ui";
 import { canExportFinance, downloadFinanceCsv } from "../../lib/finance-export.ts";
-import { SimpleSelect } from "../../components/simple-select.tsx";
+import { SimpleSelect } from "@bs/ui";
 import { errorMessage } from "../../lib/errors.ts";
 import { orpc } from "../../lib/orpc.ts";
 

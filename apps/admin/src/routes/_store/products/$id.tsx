@@ -12,7 +12,7 @@ import { Switch } from "@bs/ui";
 import { Textarea } from "@bs/ui";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@bs/ui";
 import { SeoCard } from "../../../components/seo-card.tsx";
-import { SimpleSelect } from "../../../components/simple-select.tsx";
+import { SimpleSelect } from "@bs/ui";
 import { orpc } from "../../../lib/orpc.ts";
 
 export const Route = createFileRoute("/_store/products/$id")({

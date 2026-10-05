@@ -29,8 +29,8 @@ import {
 } from "@bs/ui";
 import { Input } from "@bs/ui";
 import { Label } from "@bs/ui";
-import { ScrollTabs } from "../../components/scroll-tabs.tsx";
-import { SimpleSelect } from "../../components/simple-select.tsx";
+import { ScrollTabs } from "@bs/ui";
+import { SimpleSelect } from "@bs/ui";
 import { errorMessage } from "../../lib/errors.ts";
 import { orpc } from "../../lib/orpc.ts";
 

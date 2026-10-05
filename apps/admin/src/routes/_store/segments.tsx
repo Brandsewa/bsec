@@ -7,12 +7,12 @@ import { Badge } from "@bs/ui";
 import { Input } from "@bs/ui";
 import { Button } from "@bs/ui";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from "@bs/ui";
-import { ConfirmDialog } from "../../components/confirm-dialog.tsx";
+import { ConfirmDialog } from "@bs/ui";
 import { DataTable, type Column } from "../../components/data-table/data-table.tsx";
 import { useTableSelection } from "../../components/data-table/use-table-selection.ts";
 import { BulkBar } from "../../components/data-table/toolbar-parts.tsx";
 import { useUrlTableState, compactSearch, oneOf, parsePaging, text } from "../../components/data-table/use-table-state.ts";
-import { ScrollTabs } from "../../components/scroll-tabs.tsx";
+import { ScrollTabs } from "@bs/ui";
 import { errorMessage } from "../../lib/errors.ts";
 import { client, orpc } from "../../lib/orpc.ts";
 

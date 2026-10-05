@@ -3,7 +3,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Sparkles } from "lucide-react";
 import { toast } from "@bs/ui";
 import { Button } from "@bs/ui";
-import { ConfirmDialog } from "../confirm-dialog.tsx";
+import { ConfirmDialog } from "@bs/ui";
 import { orpc } from "../../lib/orpc.ts";
 import { errorMessage } from "../../lib/errors.ts";
 

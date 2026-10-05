@@ -9,8 +9,39 @@ import {
   SelectValue,
   ThemeToggle,
   useTheme,
-  Skeleton,
+  Combobox,
+  MultiSelect,
+  CommandPalette,
+  ResponsiveDialog,
+  ResponsiveDialogTrigger,
+  ResponsiveDialogContent,
+  ResponsiveDialogHeader,
+  ResponsiveDialogTitle,
+  ResponsiveDialogDescription,
+  ResponsiveDialogFooter,
+  ResponsiveDialogClose,
+  Spinner,
+  Empty,
+  InputOTP,
+  InputOTPGroup,
+  InputOTPSlot,
+  StatusBadge,
+  Money,
+  RelativeTime,
+  DatePicker,
+  DateRangePicker,
+  DateTimePicker,
+  MetricCardsSkeleton,
+  DataTableSkeleton,
 } from "@bs/ui";
+import { Search, Sparkles, Inbox, User, Settings } from "lucide-react";
+
+const SAMPLE_NOW = 1775300000000;
+const INITIAL_RANGE = {
+  from: new Date(SAMPLE_NOW),
+  to: new Date(SAMPLE_NOW + 86400000 * 7),
+};
+const SAMPLE_RELATIVE_DATE = new Date(SAMPLE_NOW - 3600000 * 4);
 
 const TOKENS = [
   { name: "--background", desc: "Page and card surface" },
@@ -36,6 +67,13 @@ const TOKENS = [
 export function Kit() {
   const { preference, resolved } = useTheme();
   const [inputValue, setInputValue] = useState("");
+  const [comboboxVal, setComboboxVal] = useState("in");
+  const [multiVal, setMultiVal] = useState<string[]>(["electronics", "apparel"]);
+  const [cmdOpen, setCmdOpen] = useState(false);
+  const [otpVal, setOtpVal] = useState("123456");
+  const [date, setDate] = useState<Date | undefined>(new Date());
+  const [dateTime, setDateTime] = useState<Date | undefined>(new Date());
+  const [range, setRange] = useState<{ from?: Date; to?: Date } | undefined>(INITIAL_RANGE);
 
   return (
     <div className="min-h-screen bg-[var(--background)] p-8 text-[var(--foreground)] font-sans antialiased">
@@ -50,7 +88,13 @@ export function Kit() {
               <strong className="text-[var(--foreground)]">{resolved}</strong>)
             </p>
           </div>
-          <ThemeToggle />
+          <div className="flex items-center gap-3">
+            <Button variant="outline" size="sm" onClick={() => setCmdOpen(true)}>
+              <Search className="size-3.5 mr-1.5" />
+              Command Palette (Ctrl+K)
+            </Button>
+            <ThemeToggle />
+          </div>
         </div>
 
         {/* 1. Color Tokens */}
@@ -110,21 +154,25 @@ export function Kit() {
 
         {/* 3. Button Matrix */}
         <section className="space-y-4">
-          <h2 className="text-lg font-semibold tracking-tight">Buttons (6px radius, no pills)</h2>
+          <h2 className="text-lg font-semibold tracking-tight">Buttons (6px radius, no pills, loading state)</h2>
           <div className="flex flex-wrap items-center gap-3 rounded-lg border border-[var(--border)] bg-[var(--card)] p-6">
             <Button variant="primary">Primary Ink</Button>
+            <Button variant="brand">Brand Mint</Button>
             <Button variant="default">Default</Button>
+            <Button variant="outline">Outline</Button>
             <Button variant="ghost">Ghost</Button>
             <Button variant="destructive">Destructive</Button>
             <Button size="sm">Small (32px)</Button>
+            <Button size="icon"><Sparkles className="size-4" /></Button>
             <Button disabled>Disabled</Button>
+            <Button loading>Loading...</Button>
           </div>
         </section>
 
-        {/* 4. Controls & Inputs */}
+        {/* 4. Controls, Inputs & Select Family */}
         <section className="space-y-4">
-          <h2 className="text-lg font-semibold tracking-tight">Controls & Inputs</h2>
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 rounded-lg border border-[var(--border)] bg-[var(--card)] p-6">
+          <h2 className="text-lg font-semibold tracking-tight">Select Family & Input Primitives</h2>
+          <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4 rounded-lg border border-[var(--border)] bg-[var(--card)] p-6">
             <div className="space-y-1.5">
               <label className="text-xs font-medium">Text Input</label>
               <Input
@@ -146,18 +194,161 @@ export function Kit() {
                 </SelectContent>
               </Select>
             </div>
+            <div className="space-y-1.5">
+              <label className="text-xs font-medium">Combobox (Searchable)</label>
+              <Combobox
+                value={comboboxVal}
+                onChange={setComboboxVal}
+                placeholder="Select country..."
+                options={[
+                  { value: "in", label: "India (+91)" },
+                  { value: "us", label: "United States (+1)" },
+                  { value: "ae", label: "United Arab Emirates (+971)" },
+                  { value: "gb", label: "United Kingdom (+44)" },
+                ]}
+              />
+            </div>
+            <div className="space-y-1.5 sm:col-span-2">
+              <label className="text-xs font-medium">MultiSelect (Chips)</label>
+              <MultiSelect
+                value={multiVal}
+                onChange={setMultiVal}
+                placeholder="Select tags..."
+                options={[
+                  { value: "electronics", label: "Electronics" },
+                  { value: "apparel", label: "Apparel" },
+                  { value: "groceries", label: "Groceries" },
+                  { value: "footwear", label: "Footwear" },
+                ]}
+              />
+            </div>
+            <div className="space-y-1.5">
+              <label className="text-xs font-medium">Input OTP (6 Digits)</label>
+              <InputOTP maxLength={6} value={otpVal} onChange={setOtpVal}>
+                <InputOTPGroup>
+                  <InputOTPSlot index={0} />
+                  <InputOTPSlot index={1} />
+                  <InputOTPSlot index={2} />
+                  <InputOTPSlot index={3} />
+                  <InputOTPSlot index={4} />
+                  <InputOTPSlot index={5} />
+                </InputOTPGroup>
+              </InputOTP>
+            </div>
           </div>
         </section>
 
-        {/* 5. Skeletons */}
+        {/* 5. Date & Time Pickers */}
         <section className="space-y-4">
-          <h2 className="text-lg font-semibold tracking-tight">Skeletons (Pulse)</h2>
-          <div className="space-y-3 rounded-lg border border-[var(--border)] bg-[var(--card)] p-6">
-            <Skeleton className="h-6 w-1/3" />
-            <Skeleton className="h-4 w-2/3" />
-            <Skeleton className="h-24 w-full" />
+          <h2 className="text-lg font-semibold tracking-tight">Date & Time Family</h2>
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 rounded-lg border border-[var(--border)] bg-[var(--card)] p-6">
+            <div className="space-y-1.5">
+              <label className="text-xs font-medium">Date Picker</label>
+              <DatePicker value={date} onChange={setDate} />
+            </div>
+            <div className="space-y-1.5">
+              <label className="text-xs font-medium">Date Range Picker</label>
+              <DateRangePicker
+                from={range?.from ? range.from.toISOString().slice(0, 10) : undefined}
+                to={range?.to ? range.to.toISOString().slice(0, 10) : undefined}
+                onChange={(f, t) => {
+                  const next: { from?: Date; to?: Date } = {};
+                  if (f) next.from = new Date(f);
+                  if (t) next.to = new Date(t);
+                  setRange(next);
+                }}
+              />
+            </div>
+            <div className="space-y-1.5">
+              <label className="text-xs font-medium">Date Time Picker</label>
+              <DateTimePicker value={dateTime} onChange={setDateTime} />
+            </div>
           </div>
         </section>
+
+        {/* 6. Overlays & Responsive Dialog */}
+        <section className="space-y-4">
+          <h2 className="text-lg font-semibold tracking-tight">Responsive Dialog (Dialog on Desktop, Drawer on Mobile)</h2>
+          <div className="flex flex-wrap items-center gap-4 rounded-lg border border-[var(--border)] bg-[var(--card)] p-6">
+            <ResponsiveDialog>
+              <ResponsiveDialogTrigger render={<Button variant="outline">Open Responsive Dialog</Button>} />
+              <ResponsiveDialogContent>
+                <ResponsiveDialogHeader>
+                  <ResponsiveDialogTitle>Responsive Dialog Example</ResponsiveDialogTitle>
+                  <ResponsiveDialogDescription>
+                    On desktop (viewport &gt; 768px), this renders as an accessible modal Dialog. On mobile viewports, it opens as a smooth bottom Drawer.
+                  </ResponsiveDialogDescription>
+                </ResponsiveDialogHeader>
+                <div className="py-4 text-xs text-[var(--muted-foreground)]">
+                  Fully keyboard accessible with focus restoration and Esc to close.
+                </div>
+                <ResponsiveDialogFooter>
+                  <ResponsiveDialogClose render={<Button variant="outline">Cancel</Button>} />
+                  <Button variant="primary">Confirm</Button>
+                </ResponsiveDialogFooter>
+              </ResponsiveDialogContent>
+            </ResponsiveDialog>
+          </div>
+        </section>
+
+        {/* 7. Status & Money Parts */}
+        <section className="space-y-4">
+          <h2 className="text-lg font-semibold tracking-tight">Status Badges, Money & Relative Time</h2>
+          <div className="flex flex-wrap items-center gap-6 rounded-lg border border-[var(--border)] bg-[var(--card)] p-6">
+            <div className="flex items-center gap-2">
+              <StatusBadge tone="success" label="Active" withDot />
+              <StatusBadge tone="warning" label="Pending" withDot />
+              <StatusBadge tone="destructive" label="Failed" withDot />
+              <StatusBadge tone="neutral" label="Draft" withDot />
+              <StatusBadge tone="brand" label="Featured" withDot />
+            </div>
+            <div className="border-l border-[var(--border)] pl-6 flex items-center gap-4">
+              <Money amountInPaise={149900} />
+              <Money amountInPaise={25000000} className="text-base font-semibold" />
+            </div>
+            <div className="border-l border-[var(--border)] pl-6">
+              <RelativeTime date={SAMPLE_RELATIVE_DATE} />
+            </div>
+          </div>
+        </section>
+
+        {/* 8. Spinner & Empty States */}
+        <section className="space-y-4">
+          <h2 className="text-lg font-semibold tracking-tight">Spinners & Empty States</h2>
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 rounded-lg border border-[var(--border)] bg-[var(--card)] p-6">
+            <div className="flex items-center justify-center gap-4 p-8 border border-dashed border-[var(--border)] rounded-md">
+              <Spinner size="sm" />
+              <Spinner size="md" />
+              <Spinner size="lg" />
+            </div>
+            <Empty
+              icon={Inbox}
+              title="No items found"
+              description="Get started by creating your first product or adjusting your filters."
+              action={<Button size="sm">Create Product</Button>}
+            />
+          </div>
+        </section>
+
+        {/* 9. Composed Skeletons */}
+        <section className="space-y-4">
+          <h2 className="text-lg font-semibold tracking-tight">Composed Skeletons (CLS 0)</h2>
+          <div className="space-y-6">
+            <MetricCardsSkeleton count={4} />
+            <DataTableSkeleton rows={4} columns={4} />
+          </div>
+        </section>
+
+        {/* Command Palette Component */}
+        <CommandPalette
+          open={cmdOpen}
+          onOpenChange={setCmdOpen}
+          actions={[
+            { id: "1", label: "Go to Overview", group: "Navigation", icon: Sparkles, onSelect: () => setCmdOpen(false) },
+            { id: "2", label: "Tenants List", group: "Navigation", icon: User, onSelect: () => setCmdOpen(false) },
+            { id: "3", label: "Settings", group: "Navigation", icon: Settings, onSelect: () => setCmdOpen(false) },
+          ]}
+        />
       </div>
     </div>
   );

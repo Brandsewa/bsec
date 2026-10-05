@@ -3,7 +3,7 @@ import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useMutation, useQueries, useQuery, useQueryClient } from "@tanstack/react-query";
 import { ThemeSettingsEditor, type ThemeTokens } from "@bs/block-editor/preview";
 import { THEME_SYSTEM_PAGES, type BlockInstance } from "@bs/blocks";
-import { Button, EmptyState, PageContainer, PageSkeleton, toast } from "@bs/ui";
+import { Button, ConfirmDialog, EmptyState, PageContainer, PageSkeleton, toast } from "@bs/ui";
 import { orpc } from "../../../lib/orpc.ts";
 import { storeHost } from "../../../components/page-editor/host.ts";
 
@@ -97,21 +97,35 @@ function Screen({
     }),
   );
 
+  const [confirmLeaveOpen, setConfirmLeaveOpen] = useState(false);
+
   return (
-    <div style={{ height: "100vh", display: "flex", flexDirection: "column", background: "#fafafa" }}>
-      <div style={{ display: "flex", alignItems: "center", gap: 12, padding: "0 16px", height: 52, borderBottom: "1px solid #e4e4e7", background: "#fff", flex: "none" }}>
-        <Button size="sm" onClick={() => (dirty && !window.confirm("You have unsaved changes. Leave without saving?") ? undefined : onBack())}>
+    <div className="h-screen flex flex-col bg-[var(--background)]">
+      <div className="flex items-center gap-3 px-4 h-[52px] border-b border-[var(--border)] bg-[var(--card)] shrink-0">
+        <Button size="sm" onClick={() => (dirty ? setConfirmLeaveOpen(true) : onBack())}>
           ← Themes
         </Button>
-        <strong style={{ fontSize: 14 }}>Theme settings · {themeName}</strong>
-        <span style={{ marginLeft: "auto", fontSize: 12, color: dirty ? "#b26a00" : "#71717a" }}>
+        <strong className="text-sm font-semibold">Theme settings · {themeName}</strong>
+        <span className={dirty ? "ml-auto text-xs text-[var(--warning)]" : "ml-auto text-xs text-[var(--muted-foreground)]"}>
           {dirty ? "Unsaved changes" : canPublish ? "Saved settings are live on your store" : "You can view but not change theme settings"}
         </span>
         <Button size="sm" variant="primary" disabled={!dirty || !canPublish} loading={save.isPending} onClick={() => save.mutate({ tokens })}>
           Save and apply
         </Button>
       </div>
-      <div style={{ flex: 1, minHeight: 0 }}>
+      <ConfirmDialog
+        open={confirmLeaveOpen}
+        onOpenChange={setConfirmLeaveOpen}
+        title="Discard unsaved changes?"
+        description="You have unsaved changes in theme settings. Are you sure you want to leave without saving?"
+        confirmLabel="Leave without saving"
+        destructive
+        onConfirm={async () => {
+          setConfirmLeaveOpen(false);
+          onBack();
+        }}
+      />
+      <div className="flex-1 min-h-0">
         <ThemeSettingsEditor
           tokens={tokens}
           onChange={(t) => {

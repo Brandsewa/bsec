@@ -2,7 +2,7 @@ import { createContext, useContext, useState, type ReactNode } from "react";
 import { createPortal } from "react-dom";
 import { useBlocker } from "@tanstack/react-router";
 import { cn } from "@/lib/utils";
-import { ConfirmDialog } from "../confirm-dialog.tsx";
+import { ConfirmDialog } from "@bs/ui";
 
 /** The element in the page header where a section's primary action (Save changes) is shown. */
 const ActionsSlot = createContext<HTMLElement | null>(null);

@@ -5,10 +5,10 @@ import { AlertTriangle, ShieldCheck, Users } from "lucide-react";
 import { EmptyState, PageSkeleton, TableSkeleton, toast } from "@bs/ui";
 import { Button } from "@bs/ui";
 import { Input } from "@bs/ui";
-import { ConfirmDialog } from "../../../components/confirm-dialog.tsx";
-import { Field } from "../../../components/field.tsx";
+import { ConfirmDialog } from "@bs/ui";
+import { Field } from "@bs/ui";
 import { SettingsPageFrame, SettingsSection } from "../../../components/settings/settings-page.tsx";
-import { SimpleSelect } from "../../../components/simple-select.tsx";
+import { SimpleSelect } from "@bs/ui";
 import { orpc } from "../../../lib/orpc.ts";
 import { errorMessage } from "../../../lib/errors.ts";
 

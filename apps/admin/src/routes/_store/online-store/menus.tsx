@@ -20,6 +20,7 @@ import {
   PageHeader,
   PageSection,
   PageSkeleton,
+  SimpleSelect,
   TableSkeleton,
   toast,
 } from "@bs/ui";
@@ -467,18 +468,13 @@ function ItemList({
                 aria-invalid={!item.url.trim()}
                 onChange={(e) => setItems((prev) => patchItem(prev, here, { url: e.target.value }))}
               />
-              <select
-                aria-label="Link type"
+              <SimpleSelect
+                ariaLabel="Link type"
                 value={item.type}
-                onChange={(e) => setItems((prev) => patchItem(prev, here, { type: e.target.value as ItemType }))}
-                className="h-9 rounded-md border border-border-control bg-control px-2 text-sm"
-              >
-                {ITEM_TYPES.map((t) => (
-                  <option key={t.id} value={t.id}>
-                    {t.label}
-                  </option>
-                ))}
-              </select>
+                onChange={(v) => setItems((prev) => patchItem(prev, here, { type: v as ItemType }))}
+                className="h-9"
+                options={ITEM_TYPES.map((t) => ({ value: t.id, label: t.label }))}
+              />
               <div className="flex items-center gap-1">
                 <Button size="icon" variant="ghost" aria-label="Move up" disabled={index === 0} onClick={() => setItems((prev) => moveItem(prev, here, -1))}>
                   <ArrowUp />

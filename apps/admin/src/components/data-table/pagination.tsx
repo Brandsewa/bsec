@@ -1,6 +1,6 @@
 import { ChevronLeft, ChevronRight } from "lucide-react";
 import { Button } from "@bs/ui";
-import { SimpleSelect } from "../simple-select.tsx";
+import { SimpleSelect } from "@bs/ui";
 
 export const PAGE_SIZES = [25, 50, 100] as const;
 

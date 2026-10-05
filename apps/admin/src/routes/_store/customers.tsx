@@ -9,7 +9,7 @@ import { Checkbox } from "@bs/ui";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from "@bs/ui";
 import { Input } from "@bs/ui";
 import { Popover, PopoverContent, PopoverTrigger } from "@bs/ui";
-import { ConfirmDialog } from "../../components/confirm-dialog.tsx";
+import { ConfirmDialog } from "@bs/ui";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@bs/ui";
 import { parseCsv } from "../../lib/csv.ts";
 import { DataTable, type Column } from "../../components/data-table/data-table.tsx";
@@ -32,10 +32,10 @@ import {
   useDebouncedValue,
   useUrlTableState,
 } from "../../components/data-table/use-table-state.ts";
-import { DateRangePicker } from "../../components/date-range-picker.tsx";
+import { DateRangePicker } from "@bs/ui";
 import { money } from "../../components/order-parts.tsx";
-import { ScrollTabs } from "../../components/scroll-tabs.tsx";
-import { SimpleSelect } from "../../components/simple-select.tsx";
+import { ScrollTabs } from "@bs/ui";
+import { SimpleSelect } from "@bs/ui";
 import { downloadCsv, toCsv } from "../../lib/csv.ts";
 import { errorMessage } from "../../lib/errors.ts";
 import { client, orpc } from "../../lib/orpc.ts";

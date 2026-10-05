@@ -10,9 +10,9 @@ import { Field, FieldLabel } from "@bs/ui";
 import { Input } from "@bs/ui";
 import { Switch } from "@bs/ui";
 import { Textarea } from "@bs/ui";
-import { ConfirmDialog } from "../../components/confirm-dialog.tsx";
+import { ConfirmDialog } from "@bs/ui";
 import { SeoCard } from "../../components/seo-card.tsx";
-import { SimpleSelect } from "../../components/simple-select.tsx";
+import { SimpleSelect } from "@bs/ui";
 import { errorMessage } from "../../lib/errors.ts";
 import { orpc } from "../../lib/orpc.ts";
 

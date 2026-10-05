@@ -59,6 +59,8 @@ tester.run("tenant-cache-tag", tenantCacheTag, {
   ],
 });
 
+import designSystemGuards from "../eslint/rules/design-system-guards.js";
+
 const tmp = fs.mkdtempSync(path.join(os.tmpdir(), "bs-rules-"));
 const withLoading = path.join(tmp, "app", "a");
 const withoutLoading = path.join(tmp, "app", "b");
@@ -87,6 +89,70 @@ tester.run("route-pending", routePending, {
       code: "export default function P() {}",
       options: [{ mode: "next" }],
       errors: [{ messageId: "missingLoading" }],
+    },
+  ],
+});
+
+tester.run("design-system-guards", designSystemGuards, {
+  valid: [
+    {
+      filename: "C:/dev/bsec-design-system/apps/admin/src/routes/orders.tsx",
+      code: 'import { Button } from "@bs/ui"; const el = <Button className="rounded-md">Click</Button>;',
+    },
+    {
+      filename: "C:/dev/bsec-design-system/apps/admin/src/routes/orders.tsx",
+      code: '<Select><SelectItem value="1">One</SelectItem></Select>;',
+    },
+    {
+      filename: "C:/dev/bsec-design-system/packages/ui/src/button.tsx",
+      code: 'import { Dialog } from "@base-ui/react";',
+    },
+  ],
+  invalid: [
+    {
+      filename: "C:/dev/bsec-design-system/apps/admin/src/components/ui/button.tsx",
+      code: "export const x = 1;",
+      errors: [{ messageId: "noLocalUi" }],
+    },
+    {
+      filename: "C:/dev/bsec-design-system/apps/admin/src/routes/orders.tsx",
+      code: 'import { Dialog } from "@base-ui/react";',
+      errors: [{ messageId: "noRestrictedImports" }],
+    },
+    {
+      filename: "C:/dev/bsec-design-system/apps/admin/src/routes/orders.tsx",
+      code: 'import { toast } from "sonner";',
+      errors: [{ messageId: "noRestrictedImports" }],
+    },
+    {
+      filename: "C:/dev/bsec-design-system/apps/admin/src/routes/orders.tsx",
+      code: 'import { Command } from "cmdk";',
+      errors: [{ messageId: "noRestrictedImports" }],
+    },
+    {
+      filename: "C:/dev/bsec-design-system/apps/admin/src/routes/orders.tsx",
+      code: 'import { Drawer } from "vaul";',
+      errors: [{ messageId: "noRestrictedImports" }],
+    },
+    {
+      filename: "C:/dev/bsec-design-system/apps/admin/src/routes/orders.tsx",
+      code: "<select><option>One</option></select>;",
+      errors: [{ messageId: "noNativeSelect" }],
+    },
+    {
+      filename: "C:/dev/bsec-design-system/apps/admin/src/routes/orders.tsx",
+      code: 'window.confirm("Delete tenant?");',
+      errors: [{ messageId: "noWindowConfirm" }],
+    },
+    {
+      filename: "C:/dev/bsec-design-system/apps/admin/src/routes/orders.tsx",
+      code: '<Button className="rounded-full">Pill</Button>;',
+      errors: [{ messageId: "noRoundedFullButton" }],
+    },
+    {
+      filename: "C:/dev/bsec-design-system/apps/admin/src/routes/orders.tsx",
+      code: 'const hex = "#00d4a4";',
+      errors: [{ messageId: "noRawHex" }],
     },
   ],
 });

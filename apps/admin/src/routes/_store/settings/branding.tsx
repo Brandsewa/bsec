@@ -6,9 +6,9 @@ import { FormSkeleton, PageSkeleton, toast } from "@bs/ui";
 import { Button } from "@bs/ui";
 import { Input } from "@bs/ui";
 import { FieldLabel } from "@bs/ui";
-import { Field } from "../../../components/field.tsx";
+import { Field } from "@bs/ui";
 import { HeaderActions, SettingsPageFrame, SettingsSection, useUnsavedGuard } from "../../../components/settings/settings-page.tsx";
-import { SimpleSelect } from "../../../components/simple-select.tsx";
+import { SimpleSelect } from "@bs/ui";
 import type { BrandSettings } from "@bs/contracts";
 import { client, orpc } from "../../../lib/orpc.ts";
 

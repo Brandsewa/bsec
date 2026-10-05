@@ -32,7 +32,7 @@ import { orpc } from "../../lib/orpc.ts";
 import { errorMessage } from "../../lib/errors.ts";
 import { INDIAN_STATES } from "../../lib/india.ts";
 import { money } from "../../components/order-parts.tsx";
-import { SimpleSelect } from "../../components/simple-select.tsx";
+import { SimpleSelect } from "@bs/ui";
 
 export interface CreateOrderSearch {
   quoteId?: string | undefined;

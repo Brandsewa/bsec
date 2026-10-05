@@ -33,7 +33,7 @@ import {
 } from "@bs/ui";
 import { Input } from "@bs/ui";
 import { Label } from "@bs/ui";
-import { ConfirmDialog } from "../../components/confirm-dialog.tsx";
+import { ConfirmDialog } from "@bs/ui";
 import { DataTable, type Column } from "../../components/data-table/data-table.tsx";
 import { Pagination } from "../../components/data-table/pagination.tsx";
 import {
@@ -41,9 +41,9 @@ import {
   parsePaging,
   text,
 } from "../../components/data-table/use-table-state.ts";
-import { ScrollTabs } from "../../components/scroll-tabs.tsx";
+import { ScrollTabs } from "@bs/ui";
 import { canExportFinance, downloadFinanceCsv } from "../../lib/finance-export.ts";
-import { SimpleSelect } from "../../components/simple-select.tsx";
+import { SimpleSelect } from "@bs/ui";
 import { errorMessage } from "../../lib/errors.ts";
 import { client, orpc } from "../../lib/orpc.ts";
 

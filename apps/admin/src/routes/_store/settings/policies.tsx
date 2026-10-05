@@ -5,8 +5,8 @@ import { AlertTriangle, Eye, History, Plus, RotateCcw, Trash2 } from "lucide-rea
 import { EmptyState, FormSkeleton, PageSkeleton, toast } from "@bs/ui";
 import { Button } from "@bs/ui";
 import { Input } from "@bs/ui";
-import { SimpleSelect } from "../../../components/simple-select.tsx";
-import { ConfirmDialog } from "../../../components/confirm-dialog.tsx";
+import { SimpleSelect } from "@bs/ui";
+import { ConfirmDialog } from "@bs/ui";
 import { SettingsPageFrame, SettingsSection, useUnsavedGuard } from "../../../components/settings/settings-page.tsx";
 import { orpc } from "../../../lib/orpc.ts";
 import { errorMessage } from "../../../lib/errors.ts";

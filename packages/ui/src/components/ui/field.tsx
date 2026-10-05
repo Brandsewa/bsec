@@ -69,11 +69,40 @@ const fieldVariants = cva(
   }
 )
 
+interface FieldProps extends React.ComponentProps<"div">, VariantProps<typeof fieldVariants> {
+  id?: string;
+  label?: React.ReactNode;
+  hint?: React.ReactNode;
+  error?: React.ReactNode;
+}
+
 function Field({
   className,
   orientation = "vertical",
+  id,
+  label,
+  hint,
+  error,
+  children,
   ...props
-}: React.ComponentProps<"div"> & VariantProps<typeof fieldVariants>) {
+}: FieldProps) {
+  if (label || hint || error) {
+    return (
+      <div
+        role="group"
+        data-slot="field"
+        data-orientation={orientation}
+        className={cn(fieldVariants({ orientation }), className)}
+        {...props}
+      >
+        {label && <FieldLabel htmlFor={id}>{label}</FieldLabel>}
+        {children}
+        {hint && <FieldDescription>{hint}</FieldDescription>}
+        {error && <FieldError>{error}</FieldError>}
+      </div>
+    );
+  }
+
   return (
     <div
       role="group"
@@ -81,8 +110,10 @@ function Field({
       data-orientation={orientation}
       className={cn(fieldVariants({ orientation }), className)}
       {...props}
-    />
-  )
+    >
+      {children}
+    </div>
+  );
 }
 
 function FieldContent({ className, ...props }: React.ComponentProps<"div">) {

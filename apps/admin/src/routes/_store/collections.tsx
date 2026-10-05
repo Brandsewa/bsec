@@ -19,8 +19,8 @@ import { Badge } from "@bs/ui";
 import { Button } from "@bs/ui";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from "@bs/ui";
 import { Input } from "@bs/ui";
-import { ConfirmDialog } from "../../components/confirm-dialog.tsx";
-import { ScrollTabs } from "../../components/scroll-tabs.tsx";
+import { ConfirmDialog } from "@bs/ui";
+import { ScrollTabs } from "@bs/ui";
 import { errorMessage } from "../../lib/errors.ts";
 import { orpc } from "../../lib/orpc.ts";
 

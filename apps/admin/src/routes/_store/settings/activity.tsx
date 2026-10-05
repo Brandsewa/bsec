@@ -7,7 +7,7 @@ import { Button } from "@bs/ui";
 import { DataTable, type Column } from "../../../components/data-table/data-table.tsx";
 import { Pagination } from "../../../components/data-table/pagination.tsx";
 import { SettingsPageFrame, SettingsSection } from "../../../components/settings/settings-page.tsx";
-import { SimpleSelect } from "../../../components/simple-select.tsx";
+import { SimpleSelect } from "@bs/ui";
 import { orpc } from "../../../lib/orpc.ts";
 import { errorMessage } from "../../../lib/errors.ts";
 import type { SettingsActivityItem } from "@bs/contracts";

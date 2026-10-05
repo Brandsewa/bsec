@@ -7,8 +7,8 @@ import { Button } from "@bs/ui";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from "@bs/ui";
 import { Input } from "@bs/ui";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@bs/ui";
-import { Field } from "../../components/field.tsx";
-import { ConfirmDialog } from "../../components/confirm-dialog.tsx";
+import { Field } from "@bs/ui";
+import { ConfirmDialog } from "@bs/ui";
 import { DataTable, type Column } from "../../components/data-table/data-table.tsx";
 import { fetchAllPages } from "../../components/data-table/fetch-all.ts";
 import { Pagination } from "../../components/data-table/pagination.tsx";
@@ -26,7 +26,7 @@ import {
   useUrlTableState,
 } from "../../components/data-table/use-table-state.ts";
 import { StatusBadge, money } from "../../components/order-parts.tsx";
-import { ScrollTabs } from "../../components/scroll-tabs.tsx";
+import { ScrollTabs } from "@bs/ui";
 import { downloadCsv, toCsv } from "../../lib/csv.ts";
 import { errorMessage } from "../../lib/errors.ts";
 import { client, orpc } from "../../lib/orpc.ts";

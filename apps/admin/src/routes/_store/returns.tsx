@@ -61,8 +61,8 @@ import {
   useDebouncedValue,
   useUrlTableState,
 } from "../../components/data-table/use-table-state.ts";
-import { ScrollTabs } from "../../components/scroll-tabs.tsx";
-import { SimpleSelect } from "../../components/simple-select.tsx";
+import { ScrollTabs } from "@bs/ui";
+import { SimpleSelect } from "@bs/ui";
 import { downloadCsv, toCsv } from "../../lib/csv.ts";
 import { errorMessage } from "../../lib/errors.ts";
 import { client, orpc } from "../../lib/orpc.ts";

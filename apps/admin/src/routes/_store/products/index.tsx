@@ -6,7 +6,7 @@ import { keepPreviousData, useQuery, useQueryClient } from "@tanstack/react-quer
 import { Button } from "@bs/ui";
 import { Checkbox } from "@bs/ui";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from "@bs/ui";
-import { ConfirmDialog } from "../../../components/confirm-dialog.tsx";
+import { ConfirmDialog } from "@bs/ui";
 import { DataTable, type Column } from "../../../components/data-table/data-table.tsx";
 import { fetchAllPages } from "../../../components/data-table/fetch-all.ts";
 import { Pagination } from "../../../components/data-table/pagination.tsx";
@@ -26,10 +26,10 @@ import {
   useDebouncedValue,
   useUrlTableState,
 } from "../../../components/data-table/use-table-state.ts";
-import { DateRangePicker } from "../../../components/date-range-picker.tsx";
+import { DateRangePicker } from "@bs/ui";
 import { StatusBadge } from "../../../components/order-parts.tsx";
-import { ScrollTabs } from "../../../components/scroll-tabs.tsx";
-import { SimpleSelect } from "../../../components/simple-select.tsx";
+import { ScrollTabs } from "@bs/ui";
+import { SimpleSelect } from "@bs/ui";
 import { downloadCsv, toCsv } from "../../../lib/csv.ts";
 import { errorMessage } from "../../../lib/errors.ts";
 import { client, orpc } from "../../../lib/orpc.ts";

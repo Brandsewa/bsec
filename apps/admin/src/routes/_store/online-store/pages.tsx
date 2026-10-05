@@ -20,6 +20,7 @@ import {
   PageHeader,
   PageSection,
   PageSkeleton,
+  SimpleSelect,
   TableSkeleton,
   toast,
 } from "@bs/ui";
@@ -888,18 +889,13 @@ function ScalarInput({
     return (
       <div className="grid gap-1">
         {label}
-        <select
+        <SimpleSelect
           id={id}
           value={typeof value === "string" ? value : (spec.options?.[0] ?? "")}
-          onChange={(e) => onChange(e.target.value)}
-          className="h-9 rounded-md border border-border-control bg-control px-2 text-sm"
-        >
-          {(spec.options ?? []).map((o) => (
-            <option key={o} value={o}>
-              {o}
-            </option>
-          ))}
-        </select>
+          onChange={(v) => onChange(v)}
+          className="h-9"
+          options={(spec.options ?? []).map((o) => ({ value: o, label: o }))}
+        />
       </div>
     );
   }
