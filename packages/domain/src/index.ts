@@ -150,4 +150,5 @@ export * from "./privacy/service.ts";
 export * from "./system/email-classes.ts";
 export * from "./system/retention.ts";
 export * from "./admin/storage-usage.ts";
+export * from "./admin/settings-update.ts";
 export * from "./storefront/lookup-fallback.ts";

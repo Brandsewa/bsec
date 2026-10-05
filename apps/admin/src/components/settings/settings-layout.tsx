@@ -3,6 +3,7 @@ import { ShieldAlert } from "lucide-react";
 import { EmptyState } from "@bs/ui";
 import { SimpleSelect } from "../simple-select.tsx";
 import { cn } from "@/lib/utils";
+import { SettingsUpdateBanner } from "./settings-update.tsx";
 import { activeSettingsItem, canOpenSettingsPath, visibleSettingsGroups } from "./settings-nav.ts";
 
 /**
@@ -21,6 +22,8 @@ export function SettingsLayout({ permissions }: { permissions: readonly string[]
 
   return (
     <div className="mx-auto grid w-full max-w-6xl gap-3 px-4 py-6 md:px-8 lg:grid-cols-[13rem_minmax(0,1fr)] lg:gap-6">
+      <SettingsUpdateBanner />
+
       {/* Tablet / phone: one grouped section chooser above the content */}
       <div className="lg:hidden">
         <SimpleSelect

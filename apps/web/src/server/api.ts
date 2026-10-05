@@ -263,6 +263,8 @@ import {
   endMaintenance,
   listStoreStatusTransitions,
   getStorageUsage,
+  getSettingsUpdate,
+  applySettingsUpdate,
   getCookieInventory,
   type Logger,
   type Runtime,
@@ -1966,6 +1968,24 @@ export const storeRouter = os.router({
         .handler(({ context, input }) => {
           if (!context.tenantCtx) throw new Error("Missing tenant context");
           return listStoreStatusTransitions(context.rt, context.tenantCtx, input).catch((e) => {
+            throw mapAuthError(e);
+          });
+        }),
+    },
+    settingsUpdate: {
+      get: os.admin.settingsUpdate.get
+        .use(requireAdmin)
+        .use(requirePermission("settings.read"))
+        .handler(({ context }) => {
+          if (!context.tenantCtx) throw new Error("Missing tenant context");
+          return getSettingsUpdate(context.rt, context.tenantCtx);
+        }),
+      apply: os.admin.settingsUpdate.apply
+        .use(requireAdmin)
+        .use(requirePermission("settings.manage"))
+        .handler(({ context }) => {
+          if (!context.tenantCtx) throw new Error("Missing tenant context");
+          return applySettingsUpdate(context.rt, context.tenantCtx).catch((e) => {
             throw mapAuthError(e);
           });
         }),

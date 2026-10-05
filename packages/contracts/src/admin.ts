@@ -284,6 +284,15 @@ export const AbandonedCheckoutStep = z.object({
 });
 export type AbandonedCheckoutStep = z.infer<typeof AbandonedCheckoutStep>;
 
+export const SettingsUpdateView = z.object({
+  /** An update is on offer for this store: the platform has opened it and some new features are still off. */
+  available: z.boolean(),
+  /** Only the store owner can apply it; everyone else sees nothing. */
+  canApply: z.boolean(),
+  features: z.array(z.object({ key: z.string(), label: z.string() })),
+});
+export type SettingsUpdateView = z.infer<typeof SettingsUpdateView>;
+
 export const CheckoutSettings = z.object({
   v: z.literal(1).default(1),
   guestCheckout: z.boolean().default(true),
@@ -3693,6 +3702,16 @@ export const adminContract = {
           total: z.number(),
         }),
       ),
+  },
+
+  // --- Opt-in "Settings update available" prompt (owner decision 2026-10-05, ADR-011 rollout) ---
+  settingsUpdate: {
+    get: oc
+      .route({ method: "GET", path: "/admin/settings-update" })
+      .output(SettingsUpdateView),
+    apply: oc
+      .route({ method: "POST", path: "/admin/settings-update/apply" })
+      .output(SettingsUpdateView),
   },
 
   // --- Storage usage visibility (PLAN §10.2 / Settings Phase 8) ---
