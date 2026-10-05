@@ -2470,9 +2470,9 @@ api.get("/admin/finance/export", async (c) => {
   });
   if (!tenantCtx) return c.json({ error: "Store context required" }, 400);
 
-  // Check permission: exports.run or finance.read (D10)
-  if (!hasPermission(tenantCtx.permissions, "exports.run") && !hasPermission(tenantCtx.permissions, "finance.read")) {
-    return c.json({ error: "Forbidden: missing exports.run or finance.read permission" }, 403);
+  // D10: exporting needs the export permission AND read access to the books; either alone must not leak finance data.
+  if (!hasPermission(tenantCtx.permissions, "exports.run") || !hasPermission(tenantCtx.permissions, "finance.read")) {
+    return c.json({ error: "Forbidden: exports.run and finance.read are both required" }, 403);
   }
 
   const exportType = c.req.query("type") ?? "ledger";

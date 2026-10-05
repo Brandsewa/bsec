@@ -544,7 +544,7 @@ function CreateExpenseModal({
               <Label>Expense Category</Label>
               <SimpleSelect
                 value={category}
-                onChange={setCategory}
+                onChange={(v) => setCategory(v as ExpenseCategoryChoice)}
                 options={CATEGORY_OPTIONS}
               />
               {category === "inventory_purchase" && (
@@ -582,7 +582,7 @@ function CreateExpenseModal({
               <Label>Payment Source</Label>
               <SimpleSelect
                 value={paidFrom}
-                onChange={setPaidFrom}
+                onChange={(v) => setPaidFrom(v as PaidFromChoice)}
                 options={PAID_FROM_OPTIONS}
               />
             </div>
