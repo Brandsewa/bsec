@@ -20,6 +20,7 @@ import { useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import { SubdomainAvailabilityChecker } from "./SubdomainAvailabilityChecker.tsx";
 import { AppWindow } from "./beam/AppWindow.tsx";
+import { Orbit } from "./beam/Orbit.tsx";
 import { Dust } from "./beam/Dust.tsx";
 import { Smoke } from "./beam/Smoke.tsx";
 import { useRevealMotion } from "./landing/motion.ts";
@@ -49,17 +50,17 @@ export function MarketingLandingPage({ plans }: { plans?: LandingPlan[] | undefi
     <div ref={rootRef} className={`bm ${bmFont.variable}`} id="top">
       {/* ---------- Hero ---------- */}
       <section className="bm-hero" style={{ ["--bm-foot" as string]: "var(--bm-window-h)" } as React.CSSProperties}>
-        <style>{`.bm-hero{--bm-window-h:24rem}@media(min-width:640px){.bm-hero{--bm-window-h:34rem}}`}</style>
+        <style>{`.bm-hero{--bm-window-h:calc(min(94vw,64rem)*0.5 + 2.8rem)}@media(min-width:640px){.bm-hero{--bm-window-h:calc(min(94vw,64rem)*0.21875 + 2.8rem)}}`}</style>
 
         {/* light layers (they fall away as the page scrolls) */}
         <div className="bm-light absolute inset-0" aria-hidden="true">
           <div className="bm-smoke bm-smoke-a" />
           <div className="bm-smoke bm-smoke-b" />
           <div className="bm-smoke bm-smoke-c" />
-          <Smoke beamX={0.57} />
+          <Smoke beamX={0.5} />
           <div className="bm-grid" />
           <div className="bm-bloom" />
-          <Dust beamX={0.57} foot={544} />
+          <Dust beamX={0.5} foot={220} />
         </div>
         <div className="bm-grain" aria-hidden="true" />
         <div className="bm-flare bm-light" aria-hidden="true">
@@ -86,7 +87,7 @@ export function MarketingLandingPage({ plans }: { plans?: LandingPlan[] | undefi
         </header>
 
         {/* copy */}
-        <div className="relative z-20 mx-auto flex max-w-7xl flex-col items-center px-5 pb-16 pt-14 text-center sm:px-8 sm:pt-20 lg:pt-24">
+        <div className="relative z-20 mx-auto flex max-w-7xl flex-col items-center px-5 pb-8 pt-12 text-center sm:px-8 sm:pt-16 lg:pt-16">
           <h1 className="bm-h1 bm-rise max-w-[14ch]" style={{ ["--d" as string]: "100ms" } as React.CSSProperties}>
             Open your Indian online store today.
           </h1>
@@ -100,9 +101,9 @@ export function MarketingLandingPage({ plans }: { plans?: LandingPlan[] | undefi
           </div>
         </div>
 
-        {/* the lit window */}
-        <div className="relative z-20 mx-auto w-[min(92vw,76rem)]">
-          <AppWindow />
+        {/* the module orbit */}
+        <div className="relative z-20 pb-6">
+          <Orbit />
         </div>
       </section>
 
@@ -127,6 +128,10 @@ export function MarketingLandingPage({ plans }: { plans?: LandingPlan[] | undefi
             No roadmap in disguise. These are the parts a merchant can use the day they sign up. What is still being
             built is marked Coming soon, below.
           </p>
+        </div>
+
+        <div className="bm-rv bm-window-fade mx-auto mt-12 max-w-6xl">
+          <AppWindow />
         </div>
 
         <div className="mt-12 grid grid-cols-6 gap-5">

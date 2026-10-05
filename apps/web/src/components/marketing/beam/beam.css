@@ -14,7 +14,7 @@
   --bm-blue: #6f8bff;
   --bm-warm: #ff9a4d;
   --bm-ease: cubic-bezier(0.16, 1, 0.3, 1);
-  --bm-beam-x: 57%; /* the beam's horizontal position, shared by every layer that lines up with it */
+  --bm-beam-x: 50%; /* the beam's horizontal position, shared by every layer that lines up with it */
   --bm-font: var(--font-bm), ui-sans-serif, system-ui, sans-serif;
 
   position: relative; min-height: 100vh; overflow-x: clip;
@@ -114,3 +114,32 @@
 .bm-flare-wide { left: -42rem; bottom: -7rem; width: 84rem; height: 17rem; filter: blur(26px);
   background: radial-gradient(ellipse 50% 50% at 50% 58%, rgb(150 165 255 / 0.85) 0%, rgb(105 120 255 / 0.5) 34%, rgb(85 60 230 / 0.22) 58%, transparent 76%); animation: bm-flare 5.5s ease-in-out infinite; }
 @keyframes bm-flare { 0%, 100% { opacity: 0.88; } 50% { opacity: 1; } }
+
+/* ---------- Module orbit (planets are positioned from script; styles here are look only) ---------- */
+.bm-orbit { position: relative; width: min(94vw, 64rem); aspect-ratio: 1 / 1; margin: 0 auto; }
+@media (min-width: 640px) { .bm-orbit { aspect-ratio: 16 / 7; } }
+.bm-orbit-rings { position: absolute; inset: 0; width: 100%; height: 100%; overflow: visible; pointer-events: none; }
+.bm-sun { position: absolute; left: 50%; top: 50%; width: 4rem; height: 4rem; transform: translate(-50%, -50%); pointer-events: none; z-index: 1; }
+.bm-sun-core { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; border-radius: 50%; font-weight: 700; font-size: 1.5rem; color: #0a0a12;
+  background: radial-gradient(circle at 32% 28%, #d9d8ff, #8f8dff 50%, #5a63e0); box-shadow: 0 0 50px 6px rgb(120 120 255 / 0.5), 0 0 120px 20px rgb(100 90 240 / 0.25); }
+.bm-sun-ring { position: absolute; inset: -0.9rem; border-radius: 50%; border: 1px solid rgb(170 180 255 / 0.35); animation: bm-sun 4.5s ease-out infinite; }
+@keyframes bm-sun { from { transform: scale(0.8); opacity: 0.8; } to { transform: scale(1.5); opacity: 0; } }
+.bm-planet { position: absolute; left: 0; top: 0; width: 3rem; height: 3rem; padding: 0; border: 0; background: none; color: #0b0c14; cursor: pointer; opacity: 0; will-change: transform; }
+@media (max-width: 639px) { .bm-planet { width: 2.5rem; height: 2.5rem; } .bm-sun { width: 3rem; height: 3rem; } }
+.bm-planet-orb { position: relative; display: flex; align-items: center; justify-content: center; width: 100%; height: 100%; border-radius: 50%;
+  background: radial-gradient(circle at 32% 28%, color-mix(in srgb, var(--tint) 55%, #fff), var(--tint) 48%, color-mix(in srgb, var(--tint) 40%, #0a0a14));
+  box-shadow: 0 0 24px -2px color-mix(in srgb, var(--tint) 60%, transparent), inset -4px -6px 10px rgb(0 0 0 / 0.28); transition: transform 260ms var(--bm-ease), box-shadow 260ms; }
+.bm-planet:hover .bm-planet-orb, .bm-planet:focus-visible .bm-planet-orb, .bm-planet[aria-expanded="true"] .bm-planet-orb { transform: scale(1.14); box-shadow: 0 0 34px 2px color-mix(in srgb, var(--tint) 75%, transparent), inset -4px -6px 10px rgb(0 0 0 / 0.28); }
+.bm-planet-orb.is-soon { filter: saturate(0.4) brightness(0.8); outline: 1px dashed rgb(255 255 255 / 0.45); outline-offset: 3px; }
+.bm-planet-dot { position: absolute; top: -1px; right: -1px; width: 0.7rem; height: 0.7rem; border-radius: 50%; border: 2px solid var(--bm-bg); }
+.bm-planet-label { position: absolute; top: 100%; left: 50%; transform: translateX(-50%); margin-top: 0.3rem; white-space: nowrap; font-size: 0.74rem; font-weight: 600; letter-spacing: 0.02em; color: var(--bm-text); text-shadow: 0 1px 8px #000; pointer-events: none; }
+@media (max-width: 639px) { .bm-planet-label { font-size: 0.64rem; } }
+.bm-orbit-card { position: absolute; z-index: 40; padding: 1rem 1.05rem; border-radius: 16px; pointer-events: none; color: var(--bm-text);
+  background: rgb(16 18 28 / 0.94); border: 1px solid rgb(255 255 255 / 0.14); backdrop-filter: blur(14px);
+  box-shadow: 0 24px 60px -12px rgb(0 0 0 / 0.8), 0 0 40px -10px rgb(120 120 255 / 0.4); animation: bm-pop 180ms var(--bm-ease) both; }
+@keyframes bm-pop { from { opacity: 0; filter: blur(6px); } to { opacity: 1; filter: none; } }
+.bm-card-chip { display: flex; align-items: center; justify-content: center; flex: none; width: 2.25rem; height: 2.25rem; border-radius: 50%; color: #0b0c14;
+  background: radial-gradient(circle at 32% 28%, color-mix(in srgb, var(--tint) 55%, #fff), var(--tint)); }
+
+/* the sample window below the hero fades into the page instead of ending on a hard edge */
+.bm-window-fade { -webkit-mask-image: linear-gradient(to bottom, #000 62%, transparent 100%); mask-image: linear-gradient(to bottom, #000 62%, transparent 100%); }
