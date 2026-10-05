@@ -10,7 +10,11 @@ import {
   postOrderEvent,
   postRefundEvent,
   postRestockEvent,
+  listLedgerEntriesForAdmin,
+  getTrialBalanceForAdmin,
+  createAdjustment,
 } from "../src/finance/index.ts";
+import type { TenantContext } from "../src/context.ts";
 
 let env: TestDb;
 let dbRw: DbHandle;
@@ -336,5 +340,29 @@ describe("Finance Real Money Event Postings", () => {
     expect(entries[0]?.key).toBe(`order:${orderId}:cogs-back:return-${returnId}`);
     expect(entries[0]?.credit).toBe(LEDGER_ACCOUNT.COST_OF_GOODS);
     expect(entries[0]?.amount).toBe(100000);
+  });
+
+  it("admin ledger list and trial balance read the tenant's rows through RLS (not empty)", async () => {
+    const ctx = { tenantId, permissions: ["finance.read"] } as unknown as TenantContext;
+    const list = await listLedgerEntriesForAdmin(dbRw, ctx, {});
+    expect(list.total).toBeGreaterThan(0);
+    const tb = await getTrialBalanceForAdmin(dbRw, ctx, {});
+    expect(tb.accounts.length).toBeGreaterThan(0);
+    expect(tb.balanced).toBe(true);
+
+    const denied = { tenantId, permissions: [] } as unknown as TenantContext;
+    await expect(listLedgerEntriesForAdmin(dbRw, denied, {})).rejects.toThrow(/finance\.read/);
+  });
+
+  it("adjustments refuse accounts outside the fixed chart and write nothing", async () => {
+    const ctx = { tenantId, userId: null, permissions: ["finance.write", "finance.read"] } as unknown as TenantContext;
+    const base = { date: "2026-10-05", amount: 100, currency: "INR", reason: "bad account test" };
+    await expect(
+      createAdjustment(dbRw, ctx, { ...base, accountDebit: "nope", accountCredit: "cash_bank" }),
+    ).rejects.toThrow(/chart of accounts/);
+    const rows = await withTenant(dbRw.db, tenantId, (tx) =>
+      tx.select().from(schema.ledgerEntries).where(eq(schema.ledgerEntries.debit, "nope")),
+    );
+    expect(rows.length).toBe(0);
   });
 });

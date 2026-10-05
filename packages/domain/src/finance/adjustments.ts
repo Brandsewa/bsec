@@ -10,6 +10,7 @@ import { and, desc, eq, sql } from "drizzle-orm";
 import { schema, withTenant, type DbHandle } from "@bs/db";
 import { assertPermission, type TenantContext } from "../context.ts";
 import {
+  LEDGER_ACCOUNTS,
   LEDGER_BOOK,
   type LedgerAccount,
 } from "./accounts.ts";
@@ -91,6 +92,15 @@ export async function createAdjustment(
 
   if (!opts.amount || opts.amount <= 0 || !Number.isInteger(opts.amount)) {
     throw new Error("Bad Request: adjustment amount must be a positive integer in paise");
+  }
+
+  const known = LEDGER_ACCOUNTS as readonly string[];
+  if (!known.includes(opts.accountDebit) || !known.includes(opts.accountCredit)) {
+    throw new Error("Bad Request: adjustment accounts must be accounts from the store's chart of accounts");
+  }
+
+  if (Number.isNaN(new Date(opts.date.length === 10 ? `${opts.date}T00:00:00.000Z` : opts.date).getTime())) {
+    throw new Error("Bad Request: adjustment date is not a valid date");
   }
 
   if (opts.accountDebit === opts.accountCredit) {

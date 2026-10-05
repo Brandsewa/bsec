@@ -481,7 +481,8 @@ export async function listLedgerEntriesForAdmin(
   filter: ListLedgerEntriesFilter = {},
 ) {
   assertPermission(ctx, "finance.read");
-  return listLedgerEntries(dbRw.db, ctx.tenantId, filter);
+  // RLS: the raw handle has no tenant setting and would silently return zero rows.
+  return withTenant(dbRw.db, ctx.tenantId, (tx) => listLedgerEntries(tx, ctx.tenantId, filter));
 }
 
 export async function getTrialBalanceForAdmin(
@@ -490,5 +491,5 @@ export async function getTrialBalanceForAdmin(
   filter: TrialBalanceFilter = {},
 ) {
   assertPermission(ctx, "finance.read");
-  return getTrialBalance(dbRw.db, ctx.tenantId, filter);
+  return withTenant(dbRw.db, ctx.tenantId, (tx) => getTrialBalance(tx, ctx.tenantId, filter));
 }

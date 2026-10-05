@@ -162,14 +162,14 @@ export const ExpenseItem = z.object({
   settlement: z.object({
     settledAt: z.string(),
     paidFrom: z.string(),
-    note: z.string().optional(),
+    note: z.string().nullish(),
   }).nullable(),
   recurring: z.object({
     enabled: z.boolean(),
     interval: z.enum(["monthly", "quarterly", "yearly"]).optional(),
     intervalCount: z.number().int().optional(),
-    nextDueAt: z.string().optional(),
-    endsAt: z.string().optional(),
+    nextDueAt: z.string().nullish(),
+    endsAt: z.string().nullish(),
   }).nullable(),
   revision: z.number().int(),
   createdAt: z.string(),

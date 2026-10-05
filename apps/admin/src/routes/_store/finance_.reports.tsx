@@ -46,7 +46,7 @@ const PERIOD_TABS = [
   { id: "all", label: "All time" },
 ] as const;
 
-export const Route = createFileRoute("/_store/finance/reports")({
+export const Route = createFileRoute("/_store/finance_/reports")({
   validateSearch: (raw: Record<string, unknown>): ReportsSearch => ({
     period: typeof raw["period"] === "string" && ["7d", "30d", "90d", "ytd", "all"].includes(raw["period"]) ? (raw["period"] as ReportPeriod) : "30d",
   }),

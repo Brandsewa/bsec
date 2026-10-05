@@ -64,7 +64,7 @@ const PERIOD_TABS = [
   { id: "ytd", label: "Year to date" },
 ] as const;
 
-export const Route = createFileRoute("/_store/finance/expenses")({
+export const Route = createFileRoute("/_store/finance_/expenses")({
   validateSearch: (raw: Record<string, unknown>): ExpensesSearch => ({
     period: (oneOf(raw["period"], ["all", "7d", "30d", "90d", "ytd"]) as ExpensePeriod | undefined) ?? "30d",
     from: text(raw["from"]),

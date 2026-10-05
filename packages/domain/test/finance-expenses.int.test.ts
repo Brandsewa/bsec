@@ -14,6 +14,7 @@
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { and, eq, sql } from "drizzle-orm";
 import { createDb, schema, withTenant, type DbHandle } from "@bs/db";
+import { ExpenseItem } from "@bs/contracts";
 import { startTestDb, type TestDb } from "@bs/db/test-env";
 import { createRuntime, type Runtime } from "../src/runtime.ts";
 import { provisionTenant } from "../src/saas/provisioning.ts";
@@ -313,5 +314,32 @@ describe("Finance Expenses Domain Service", () => {
       expect(copies.length).toBeGreaterThanOrEqual(1);
       expect(copies[0]?.amount).toBe(120000);
     });
+  });
+
+  it("returns shapes the API contract accepts (settle, recurring create, unsettle)", async () => {
+    // The oRPC layer validates handler output against ExpenseItem; a null in an optional-only
+    // field turned settle and every recurring create into HTTP 500 after the DB write had committed.
+    const bill = await createExpense(dbRw, ctx, {
+      date: "2026-10-01",
+      category: "other",
+      paidFrom: "unpaid",
+      amount: 12000,
+      currency: "INR",
+    });
+    expect(() => ExpenseItem.parse(bill)).not.toThrow();
+    const settled = await settleExpense(dbRw, ctx, { id: bill.id, settledAt: "2026-10-02", paidFrom: "cash_bank" });
+    expect(() => ExpenseItem.parse(settled)).not.toThrow();
+    const reopened = await unsettleExpense(dbRw, ctx, bill.id);
+    expect(() => ExpenseItem.parse(reopened)).not.toThrow();
+
+    const recurring = await createExpense(dbRw, ctx, {
+      date: "2026-09-01",
+      category: "rent",
+      paidFrom: "cash_bank",
+      amount: 100000,
+      currency: "INR",
+      recurring: { enabled: true, interval: "monthly", intervalCount: 1, backfillDue: false },
+    });
+    expect(() => ExpenseItem.parse(recurring)).not.toThrow();
   });
 });

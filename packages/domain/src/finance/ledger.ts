@@ -12,6 +12,7 @@
 import { and, desc, eq, gte, lte, sql } from "drizzle-orm";
 import { schema, type Db } from "@bs/db";
 import {
+  LEDGER_ACCOUNTS,
   debitSign,
   type LedgerAccount,
   type LedgerBook,
@@ -66,6 +67,8 @@ export function isPostingUsable(posting: LedgerPosting): boolean {
   if (!Number.isFinite(posting.amount) || posting.amount <= 0) return false;
   if (!posting.currency || posting.currency.trim().length === 0) return false;
   if (posting.debit === posting.credit) return false;
+  // The chart of accounts is fixed in code; an unknown name must never reach the books.
+  if (!LEDGER_ACCOUNTS.includes(posting.debit) || !LEDGER_ACCOUNTS.includes(posting.credit)) return false;
   return true;
 }
 
