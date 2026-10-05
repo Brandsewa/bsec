@@ -621,6 +621,7 @@ export async function createAdminDraftOrder(
           allowBackorder: schema.variants.allowBackorder,
           preorderEnabled: schema.variants.preorderEnabled,
           preorderShipsOn: schema.variants.preorderShipsOn,
+          costPrice: schema.variants.costPrice,
           productId: schema.variants.productId,
         })
         .from(schema.variants)
@@ -864,6 +865,7 @@ export async function createAdminDraftOrder(
               ? it.variant.preorderShipsOn
               : (it.variant.preorderShipsOn as Date).toISOString().slice(0, 10)
             : null,
+        costPrice: it.variant.costPrice != null ? Number(it.variant.costPrice) : null,
       });
     }
 
@@ -878,6 +880,13 @@ export async function createAdminDraftOrder(
         providerOrderId: input.paymentReference ?? null,
       });
       await commitReservation(tx, ctx.tenantId, { orderId: order.id });
+      if (rt._jobs) {
+        await rt._jobs.send(QUEUE_NAMES.FINANCE_POST, {
+          tenantId: ctx.tenantId,
+          kind: "order",
+          id: order.id,
+        });
+      }
       if (input.customerId && rt._jobs) {
         await rt._jobs.send(QUEUE_NAMES.CUSTOMERS_REFRESH_METRICS, {
           tenantId: ctx.tenantId,

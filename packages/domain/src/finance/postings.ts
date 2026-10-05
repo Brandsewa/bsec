@@ -448,15 +448,18 @@ export interface PostingExpenseInput {
  * Maps paid_from string to the appropriate credit ledger account.
  */
 export function expensePaidFromToAccount(paidFrom?: string | null): LedgerAccount {
-  const normalized = (paidFrom || "bank").trim().toLowerCase();
+  const normalized = (paidFrom || "cash_bank").trim().toLowerCase();
   switch (normalized) {
     case "unpaid":
       return LEDGER_ACCOUNT.ACCOUNTS_PAYABLE;
     case "cash":
+    case "cash_on_hand":
       return LEDGER_ACCOUNT.CASH_ON_HAND;
     case "gateway":
+    case "cash_gateway":
       return LEDGER_ACCOUNT.CASH_GATEWAY;
     case "bank":
+    case "cash_bank":
     default:
       return LEDGER_ACCOUNT.CASH_BANK;
   }

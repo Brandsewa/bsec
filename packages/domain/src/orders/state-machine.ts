@@ -477,6 +477,14 @@ export async function transitionOrder(
           updatedAt: new Date(),
         })
         .where(and(eq(orders.tenantId, ctx.tenantId), eq(orders.id, orderId)));
+
+      if (rt._jobs && (orderPaymentStatus === "paid" || orderPaymentStatus === "cod_collected")) {
+        await rt._jobs.send(QUEUE_NAMES.FINANCE_POST, {
+          tenantId: ctx.tenantId,
+          kind: "order",
+          id: orderId,
+        });
+      }
     }
 
     // Write audit event

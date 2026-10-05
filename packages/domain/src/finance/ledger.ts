@@ -216,6 +216,81 @@ export async function postLedgerEntries(
   }
 }
 
+export interface ListLedgerEntriesFilter {
+  book?: string | undefined;
+  account?: string | undefined;
+  sourceKind?: string | undefined;
+  from?: Date | undefined;
+  to?: Date | undefined;
+  limit?: number | undefined;
+  offset?: number | undefined;
+}
+
+/**
+ * Lists ledger entries with pagination and optional filtering by account, source, and date range.
+ */
+export async function listLedgerEntries(
+  db: Db,
+  tenantId: string,
+  filter: ListLedgerEntriesFilter = {},
+) {
+  const limit = Math.min(200, Math.max(1, filter.limit ?? 50));
+  const offset = Math.max(0, filter.offset ?? 0);
+
+  const conditions = [eq(schema.ledgerEntries.tenantId, tenantId)];
+
+  if (filter.book) {
+    conditions.push(eq(schema.ledgerEntries.book, filter.book));
+  }
+  if (filter.sourceKind) {
+    conditions.push(eq(schema.ledgerEntries.sourceKind, filter.sourceKind));
+  }
+  if (filter.from) {
+    conditions.push(gte(schema.ledgerEntries.date, filter.from));
+  }
+  if (filter.to) {
+    conditions.push(lte(schema.ledgerEntries.date, filter.to));
+  }
+  if (filter.account) {
+    conditions.push(
+      sql`(${schema.ledgerEntries.debit} = ${filter.account} OR ${schema.ledgerEntries.credit} = ${filter.account})`,
+    );
+  }
+
+  const [countRow] = await db
+    .select({ count: sql<number>`count(*)::int` })
+    .from(schema.ledgerEntries)
+    .where(and(...conditions));
+
+  const rows = await db
+    .select()
+    .from(schema.ledgerEntries)
+    .where(and(...conditions))
+    .orderBy(desc(schema.ledgerEntries.date), desc(schema.ledgerEntries.createdAt))
+    .limit(limit)
+    .offset(offset);
+
+  const items = rows.map((r) => ({
+    id: r.id,
+    date: r.date.toISOString().slice(0, 10),
+    book: r.book,
+    accountDebit: r.debit,
+    accountCredit: r.credit,
+    amount: Number(r.amount),
+    currency: r.currency,
+    sourceKind: r.sourceKind,
+    sourceId: r.sourceId,
+    reason: r.sourceRef,
+    note: r.note,
+    createdAt: r.createdAt.toISOString(),
+  }));
+
+  return {
+    items,
+    total: countRow?.count ?? 0,
+  };
+}
+
 export interface TrialBalanceAccount {
   account: LedgerAccount;
   currency: string;
@@ -231,10 +306,10 @@ export interface TrialBalanceResult {
 }
 
 export interface TrialBalanceFilter {
-  book?: LedgerBook;
-  from?: Date;
-  to?: Date;
-  currency?: string;
+  book?: LedgerBook | undefined;
+  from?: Date | undefined;
+  to?: Date | undefined;
+  currency?: string | undefined;
 }
 
 /**
