@@ -34,4 +34,4 @@ See the final gate numbers appended in the PR description. Not run: browser walk
 ## Definition of done
 - [x] Code follows rules 2-6 and 10-13; no secrets; no unrelated edits.
 - [x] Real-DB tests added or fixed for every defect; docs corrected.
-- [ ] Final gate on the merged-with-main tree (see below).
+- [x] Final gate on the merged-with-main tree (see Verification).

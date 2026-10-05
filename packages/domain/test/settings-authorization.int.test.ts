@@ -28,10 +28,7 @@ function as(role: "app_owner" | "app_rw" | "app_platform", password: string): st
 }
 
 let tenantIdA: string;
-let tenantIdB: string;
-let ownerUserIdA: string;
 let managerUserIdA: string;
-let staffUserIdA: string;
 
 beforeAll(async () => {
   if (process.env.TEST_DATABASE_URL_SUPERUSER) {
@@ -54,19 +51,9 @@ beforeAll(async () => {
     planCode: "starter",
   });
   tenantIdA = pA.tenantId;
-  ownerUserIdA = pA.ownerId;
 
-  // Provision Tenant B for cross-tenant testing
-  const pB = await provisionTenant(rtPlatform, {
-    storeName: "Settings Auth Tenant B",
-    slug: "settings-auth-b",
-    owner: { email: "owner-b@test.example", name: "Owner B" },
-    planCode: "starter",
-  });
-  tenantIdB = pB.tenantId;
 
   managerUserIdA = crypto.randomUUID();
-  staffUserIdA = crypto.randomUUID();
 });
 
 afterAll(async () => {

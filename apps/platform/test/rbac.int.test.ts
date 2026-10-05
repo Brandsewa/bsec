@@ -104,6 +104,7 @@ const INPUT: Record<string, unknown> = {
   "templates.createPreview": { code: "essential-commerce" },
   "templates.delete": { code: "rbac-missing-theme" },
   "features.update": { featureKey: "k", defaultOn: true },
+  "plans.decideRequest": { id: U, decision: "declined" },
   "staff.invite": { email: "i@x.test", role: "platform_support" },
   "staff.updateRole": { userId: U, role: "platform_admin" },
   "staff.deactivate": { userId: U },

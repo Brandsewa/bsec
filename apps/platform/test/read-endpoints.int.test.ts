@@ -26,6 +26,7 @@ const INPUTS: Record<string, () => unknown> = {
   "domains.list": () => ({}),
   "plans.list": () => undefined,
   "plans.invoices": () => ({}),
+  "plans.listRequests": () => undefined,
   "signups.list": () => ({}),
   "templates.list": () => undefined,
   "templates.get": () => ({ code: "essential-commerce" }),
