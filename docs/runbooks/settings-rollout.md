@@ -23,11 +23,11 @@ All settings rebuild features across Phases 3 through 8 are deployed behind data
 | Flag Key | Default | What It Gates | Fallback Behavior When Off | Rollback Method | Data NOT Reverted on Rollback |
 |---|---|---|---|---|---|
 | `settings.gst_v2` | `false` | GST v2 tax rules, state-code resolution, CGST/SGST/IGST breakdown on orders, and B2B invoice generation with GSTIN validation. | Falls back to legacy unified tax calculation (`store_settings.checkout.tax` rate) without line-item breakdowns. | Set override to `false` or toggle kill-switch in Super Admin. | Invoices and order tax line items already generated under GST v2 remain immutable in Postgres. |
-| `settings.policies` | `false` | Serving merchant-published policy content on `/policies/[type]` (verified against `apps/web/src/app/policies/[type]/page.tsx`). | Storefront policy pages keep the platform boilerplate. | Set the override to `false` in Super Admin. | Drafts, versions and published rows stay in `store_policies` / `store_policy_versions`. |
-| `settings.customer_accounts` | `false` | Enforcement of the sign-in method toggles in `/settings/customer-accounts`: email/password registration and sign-in, and phone OTP (`isSignInMethodBlocked`). | Every sign-in method stays available, exactly as before the toggles existed. Nothing is hidden and no route is disabled. | Set the override to `false` in Super Admin. | Saved toggle values stay in `customer_account_settings`; accounts and sessions are untouched. |
-| `settings.notifications` | `false` | Execution-time evaluation in `sendTransactionalEmail`: customer notification preferences and marketing-consent gating. Abandoned-cart recovery is a transactional email (owner decision 2026-10-05): it goes to the shopper whether or not they subscribed, and the checkout terms line tells them to expect it. | Every email is sent as before, with no preference or consent evaluation. | Set the override to `false` in Super Admin. | Saved preferences stay in `store_settings.notifications`; `email_log` rows already written (including `skipped` ones) remain. |
-| `settings.storage` | `false` | The Storage page and `admin.storageUsage.get`: usage breakdown and quota warnings. | `admin.storageUsage.get` refuses with `FeatureDisabledError` (503); the page shows its error state. | Set the override to `false` in Super Admin. | Files and media rows are untouched. |
-| `settings.maintenance` | `false` | Owner scheduling of future maintenance windows (`storefront.scheduleMaintenance`). | Scheduling is refused with `FeatureDisabledError`. Manual maintenance mode, cancelling and ending a window, and the transition log keep working. | Set the override to `false` in Super Admin; an already-scheduled window still runs (cancel it first). | `store_status_transitions` rows and audit entries are append-only and remain. |
+| `settings.policies` | `false` | Serving merchant-published policy content on `/policies/[type]` (verified against `apps/web/src/app/policies/[type]/page.tsx`). | Storefront policy pages keep the platform boilerplate. | Turn the flag's kill switch on in Super Admin -> Features (see section 4). | Drafts, versions and published rows stay in `store_policies` / `store_policy_versions`. |
+| `settings.customer_accounts` | `false` | Enforcement of the sign-in method toggles in `/settings/customer-accounts`: email/password registration and sign-in, and phone OTP (`isSignInMethodBlocked`). | Every sign-in method stays available, exactly as before the toggles existed. Nothing is hidden and no route is disabled. | Turn the flag's kill switch on in Super Admin -> Features (see section 4). | Saved toggle values stay in `customer_account_settings`; accounts and sessions are untouched. |
+| `settings.notifications` | `false` | Execution-time evaluation in `sendTransactionalEmail`: customer notification preferences and marketing-consent gating. Abandoned-cart recovery is a transactional email (owner decision 2026-10-05): it goes to the shopper whether or not they subscribed, and the checkout terms line tells them to expect it. | Every email is sent as before, with no preference or consent evaluation. | Turn the flag's kill switch on in Super Admin -> Features (see section 4). | Saved preferences stay in `store_settings.notifications`; `email_log` rows already written (including `skipped` ones) remain. |
+| `settings.storage` | `false` | The Storage page and `admin.storageUsage.get`: usage breakdown and quota warnings. | `admin.storageUsage.get` refuses with `FeatureDisabledError` (503); the page shows its error state. | Turn the flag's kill switch on in Super Admin -> Features (see section 4). | Files and media rows are untouched. |
+| `settings.maintenance` | `false` | Owner scheduling of future maintenance windows (`storefront.scheduleMaintenance`). | Scheduling is refused with `FeatureDisabledError`. Manual maintenance mode, cancelling and ending a window, and the transition log keep working. | Turn the kill switch on in Super Admin -> Features; an already-scheduled window still runs (cancel it first). | `store_status_transitions` rows and audit entries are append-only and remain. |
 
 ---
 
@@ -75,27 +75,20 @@ To ensure zero merchant disruption, rollouts must follow this staged progression
 
 ---
 
-## 4. How to Enable / Disable via Super Admin
+## 4. How stores get the new features
 
-### Step-by-Step Operator Procedure
+There is no per-store override screen in Super Admin: **Features** only changes a flag's global default and its kill switch. Stores adopt the new features themselves, through the owner's "Update available" prompt.
 
-1. Log into Super Admin portal (`https://superadmin.bcom.si` or `http://localhost:5174`).
-2. Navigate to **Tenants** → Select the target store (e.g., `store_live_01`).
-3. Click on the **Features & Overrides** tab.
-4. Locate the desired feature flag key (e.g., `settings.policies`).
-5. Select **Enabled (True)** from the override dropdown.
-6. Enter an operational change reason: e.g., `Rollout Phase 8 pilot verification - ticket SEC-892`.
-7. Click **Save Override**. (This writes to `tenant_feature_overrides` and logs to `platform_audit_logs`).
-8. Cache invalidation runs immediately; the store begins honoring the new setting within 60 seconds.
+### The owner prompt (the staged rollout)
+1. Platform turns on **`settings.update_offer`** in Super Admin -> **Features** (global default on). While it is on, every store whose owner has not updated yet shows an **Update available** banner at the top of Settings (owner only; Managers and other roles see nothing).
+2. The owner opens the dialog, sees the list of features, and picks **Update now** or **Don't update**. Don't update closes it; the banner stays and nothing changes for the store.
+3. **Update now** writes a per-store override (`tenant_feature_overrides`) for all six `settings.*` flags together, audits `settings.update_applied`, and refetches the admin. The other stores are untouched.
+4. A store that has all six features on (by update, or because the global default is on) is no longer offered anything.
 
-### Emergency Kill-Switch Procedure
+To run a pilot first: leave `settings.update_offer` off globally, and for the pilot store only insert its offer override with SQL (`INSERT INTO tenant_feature_overrides (tenant_id, key, enabled, reason) VALUES ('<tenant>', 'settings.update_offer', true, 'pilot')`), then have that owner press Update now. Open the offer globally for everyone later.
 
-If an active feature exhibits unexpected latency, crash loops, or security anomalies:
-1. In Super Admin → **Feature Flags** (global catalog).
-2. Locate the flag key.
-3. Toggle the **Kill Switch** to `ACTIVE`.
-4. Click **Apply Global Kill Switch**.
-5. All tenant evaluations for this flag will immediately return `false` globally, bypassing all tenant overrides within sub-millisecond execution.
+### Emergency rollback
+In Super Admin -> **Features**, turn the **Kill Switch** on for the flag. Kill switches win over every store override and take effect on the next request. A store that has already pressed Update now keeps its override rows, so turning the kill switch off later restores the feature there; to remove it for good, delete that store's rows from `tenant_feature_overrides` (SQL, with the owner's yes).
 
 ---
 

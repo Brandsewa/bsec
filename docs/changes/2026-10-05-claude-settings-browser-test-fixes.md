@@ -32,7 +32,7 @@ Not reproduced and not fixed. Super Admin never imported `@bs/auth` and its bund
 
 ## Open questions (owner)
 1. ~~Custom roles~~ **Decided (owner, 2026-10-05): deferred.** There is no UI or API to create them; the Analytics-only role ZCode tested exists only by SQL. Future browser rounds should test with Owner and Manager only, plus that SQL role if wanted.
-2. The rollout runbook describes per-store flag overrides in Super Admin, but the Features screen only changes the global default.
+2. ~~Per-store flag overrides~~ **Decided (owner, 2026-10-05): instead of a Super Admin override screen, give the store owner an "Update available" prompt (Update now / Don't update).** See "Follow-up" below.
 
 ## Verification (merged tree, `C:\dev\bsec-settings-p8`)
 - `pnpm typecheck` 15/15, `pnpm lint` 15/15, `pnpm build` ok, `pnpm docs:check` ok.
@@ -44,3 +44,12 @@ Not reproduced and not fixed. Super Admin never imported `@bs/auth` and its bund
 - [x] Rules 2-7, 9-10 respected; migrations append-only (0039, 0040), journal entries increasing.
 - [x] A real-DB or unit test for each fix; docs (ARCHITECTURE migrations and auth notes) updated.
 - [ ] Browser re-test by ZCode (checklist sections above).
+
+## Follow-up: owner "Update available" prompt (owner decision 2026-10-05)
+- New flag `settings.update_offer` (migration 0041, default off). While it is on for a store, the **owner only** sees an **Update available** banner at the top of Settings. The dialog lists the six features and offers **Update now** or **Don't update**. Don't update only closes it (the banner stays). Update now writes per-store overrides for all six `settings.*` flags as one bundle, in one transaction with a `settings.update_applied` audit row; other stores are untouched. No undo in the UI; rollback is the Super Admin kill switch.
+- Domain `admin/settings-update.ts` (`getSettingsUpdate`, `applySettingsUpdate`), contract `admin.settingsUpdate.get/apply`, handlers in `api.ts`, UI `components/settings/settings-update.tsx` mounted in the Settings layout. `apply` needs `settings.manage` and the `store_owner` role in the domain service, and is refused (503) until the platform opens the offer.
+- Tests: `settings-update.int.test.ts` (offer off refuses; owner-only; bundle applied for this store only; audited; idempotent), isolation mappings for both procedures, admin banner rendering tests.
+- Runbook section 4 rewritten: it described a Super Admin "Features & Overrides" tab that does not exist. Pilot: insert the offer override for one store by SQL; later open `settings.update_offer` globally.
+- Known edge: if the platform's kill switch is on for one of the six flags, Update now cannot turn that feature on, and the banner keeps showing for it.
+- Added section 10 to the ZCode checklist for this prompt.
+- **Incident:** uncommitted edits in this worktree were wiped once by a `git reset --hard` (reflog `reset: moving to HEAD`) while ZCode was also using it; I redid them. AGENTS.md rule: each agent has its own worktree.

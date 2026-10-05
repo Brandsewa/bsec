@@ -11,7 +11,7 @@ Ground rules (AGENTS.md section 6):
 ## 0. Setup
 
 1. `pnpm install`, start Postgres (`pnpm test:heavy:local` starts the Docker one; or your usual local DB), run migrations, then `pnpm --filter @bs/web dev` (3000), `pnpm --filter @bs/platform dev` (4000), `pnpm --filter @bs/admin dev` (5173), `pnpm --filter @bs/superadmin dev` (5174). Seed the demo store per `DEPLOYMENT.md` ("Demo store").
-2. Four of the six rollout flags are off by default and change behaviour when on. **Super Admin (5174) -> Features**: turn on `settings.notifications`, `settings.customer_accounts`, `settings.storage`, `settings.maintenance`, `settings.policies`, `settings.gst_v2` (global default; there is no per-store override screen, so this applies to the whole local DB).
+2. The six settings flags are off by default. For the main walkthrough, **Super Admin (5174) -> Features**: turn on `settings.notifications`, `settings.customer_accounts`, `settings.storage`, `settings.maintenance`, `settings.policies`, `settings.gst_v2` (global default, so it applies to the whole local DB). Section 10 tests the owner "Update available" prompt instead: do that on a fresh store with all six left **off**.
 3. Prepare three store users: **Owner**, **Manager** (`store_admin`), and a **custom role with only Analytics read**. Invite them from Settings -> Users.
 4. Keep the browser console and network tab open. Any console error, 4xx/5xx you did not cause, or layout overflow is a finding.
 
@@ -91,6 +91,15 @@ Each section below: tick `[x]` pass, `[!]` defect (write it up), `[-]` not teste
 - [ ] No native `<select>` or `window.confirm` anywhere in Settings.
 - [ ] Reload every settings page: values persist; no console errors.
 
-## 10. Report
+## 10. Owner "Update available" prompt (fresh store, all six flags off)
+
+- [ ] With `settings.update_offer` off: Owner sees no banner in Settings.
+- [ ] Super Admin -> Features: turn `settings.update_offer` on. Reload Settings as **Owner**: a banner "New Settings features are ready for your store" with an **Update available** button appears above the Settings content (desktop and 375 px). As **Manager**: no banner.
+- [ ] Click **Update available**: a dialog titled "Update available" lists six features and has **Update now** and **Don't update**. **Don't update** closes it, the banner stays, and nothing changed (Settings -> Storage still unavailable, maintenance scheduling still refused).
+- [ ] Reopen, click **Update now**: success toast; the banner disappears; Storage page loads; maintenance scheduling is accepted; notification and consent rules and sign-in toggles now apply. Settings -> Activity shows `settings.update_applied`.
+- [ ] A second store that has not updated still has everything off and still shows the banner to its owner.
+- [ ] Reload and sign in again: still updated, no banner. Keyboard only: dialog traps focus, Esc acts as Don't update.
+
+## 11. Report
 
 Write the change record (see ground rules), list every unchecked box with the reason, and attach screenshots under `docs/changes/assets/` only if small (otherwise reference a path). Do not fix code in this round unless the owner asks; report and hand back to Claude.

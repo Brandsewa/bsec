@@ -25,6 +25,10 @@ import { bootstrapRoles } from "@bs/db/bootstrap";
 import { enableTenantFlags } from "./helpers/feature-flags.ts";
 import { runMigrations } from "@bs/db/migrate";
 import {
+  getSettingsUpdate,
+  applySettingsUpdate,
+  SETTINGS_UPDATE_FEATURES,
+  SETTINGS_UPDATE_OFFER_FLAG,
   getTaxSettings,
   updateTaxSettings,
   listTaxClasses,
@@ -1616,6 +1620,26 @@ describe("Generated Isolation Test Suite (M1 Real Postgres 18 Proof)", () => {
       }
       case "shipping.preview":
         return await previewShippingRate(rt, ctx, { subtotalPaise: 100000 });
+      case "settingsUpdate.get":
+        return await getSettingsUpdate(rt, ctx);
+      case "settingsUpdate.apply": {
+        // Owner-only. Opens the offer, applies, then removes the overrides so tenant A's flags are as they were.
+        const keys = [SETTINGS_UPDATE_OFFER_FLAG, ...SETTINGS_UPDATE_FEATURES.map((f) => f.key)];
+        const before = await dbPlatform.db.select().from(schema.tenantFeatureOverrides).where(eq(schema.tenantFeatureOverrides.tenantId, ctx.tenantId));
+        await enableTenantFlags(dbPlatform.db, ctx.tenantId, [SETTINGS_UPDATE_OFFER_FLAG]);
+        try {
+          return await applySettingsUpdate(rt, ctx);
+        } finally {
+          const kept = new Set(before.map((r) => r.key));
+          for (const key of keys) {
+            if (!kept.has(key)) {
+              await dbPlatform.db
+                .delete(schema.tenantFeatureOverrides)
+                .where(and(eq(schema.tenantFeatureOverrides.tenantId, ctx.tenantId), eq(schema.tenantFeatureOverrides.key, key)));
+            }
+          }
+        }
+      }
       case "storageUsage.get":
         return await getStorageUsage(rt, ctx);
       case "storefront.listTransitions":
@@ -1908,12 +1932,12 @@ describe("Generated Isolation Test Suite (M1 Real Postgres 18 Proof)", () => {
           // denial first, then run the procedure as an owner-level context.
           const ownerOnly = proc === "payments.saveRazorpay" || proc === "payments.clearRazorpay" || proc === "paymentMethods.updateCod";
           // Maintenance mutations additionally require the store_owner role (decision 10), not just the family.
-          const maintenanceOwnerOnly = proc === "storefront.scheduleMaintenance" || proc === "storefront.cancelScheduledMaintenance" || proc === "storefront.endMaintenance";
+          const maintenanceOwnerOnly = proc === "settingsUpdate.apply" || proc === "storefront.scheduleMaintenance" || proc === "storefront.cancelScheduledMaintenance" || proc === "storefront.endMaintenance";
           if (ownerOnly) {
             await expect(executeAdminProcedure(proc, rtApp, authCtx!)).rejects.toThrow(/payments\.manage/);
           }
           if (maintenanceOwnerOnly) {
-            await expect(executeAdminProcedure(proc, rtApp, authCtx!)).rejects.toThrow(/only store owners/i);
+            await expect(executeAdminProcedure(proc, rtApp, authCtx!)).rejects.toThrow(/only (the )?store owners?/i);
           }
           const runCtx = ownerOnly
             ? { ...authCtx!, permissions: [...authCtx!.permissions, "payments.manage"] }

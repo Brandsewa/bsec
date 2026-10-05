@@ -281,3 +281,24 @@ describe("Store details page (/settings/store-details)", () => {
     expect(html).not.toContain('id="timezone" disabled');
   }, 60_000);
 });
+
+describe("Settings update prompt", () => {
+  async function renderBanner(data: { available: boolean; canApply: boolean; features: { key: string; label: string }[] }) {
+    const { SettingsUpdateBanner } = await import("../src/components/settings/settings-update.tsx");
+    const { orpc } = await import("../src/lib/orpc.ts");
+    const qc = newClient();
+    qc.setQueryData(orpc.admin.settingsUpdate.get.queryOptions().queryKey, data);
+    return renderRouted(() => React.createElement(SettingsUpdateBanner), qc);
+  }
+
+  it("shows an Update available button when an update is on offer to the owner", async () => {
+    const html = await renderBanner({ available: true, canApply: true, features: [{ key: "settings.storage", label: "Storage usage page" }] });
+    expect(html).toContain("Update available");
+    expect(html).toContain("New Settings features are ready for your store");
+  });
+
+  it("shows nothing when there is no offer, or the viewer cannot apply it", async () => {
+    expect(await renderBanner({ available: false, canApply: false, features: [] })).not.toContain("Update available");
+    expect(await renderBanner({ available: true, canApply: false, features: [] })).not.toContain("Update available");
+  });
+});

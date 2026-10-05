@@ -265,6 +265,7 @@ Drizzle schema files in `packages/db/src/schema/` (one Postgres database, `publi
 | 0038 | `settings_flags_seed` | Seeds feature flags (`settings.gst_v2`, `settings.policies`, `settings.customer_accounts`, `settings.notifications`, `settings.storage`, `settings.maintenance`) with default_on = false |
 | 0039 | `store_admin_no_payments` | Data fix: removes `payments.manage` from every existing `store_admin` system role (the seed had granted the full list); runs per tenant because `roles` is under forced RLS |
 | 0040 | `platform_email_log_prune` | `app_rw` gets DELETE and column-level SELECT (`id`, `created_at`) on `platform_email_log` so the worker's 90-day retention prune can run, without reading recipient addresses |
+| 0041 | `settings_update_offer_flag` | Seeds the `settings.update_offer` flag (default off): while on for a store, its owner is offered the new Settings features with an Update now / Don't update prompt (`admin.settingsUpdate.get/apply`, `admin/settings-update.ts`; applying writes per-store overrides for the six `settings.*` flags and audits `settings.update_applied`) |
 
 How to write one (expand, migrate, contract; `forceRlsSql`): `docs/migrations.md`. **Never edit an applied migration.** Latest on disk: `0038` (the docs check keeps this list honest).
 
