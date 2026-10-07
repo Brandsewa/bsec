@@ -155,15 +155,13 @@ export function AppShell({
                   };
 
                   return (
-                    <SidebarMenuItem
-                      key={label}
-                      onMouseEnter={() => setOpenGroup(label)}
-                    >
+                    <SidebarMenuItem key={label}>
+                      {/* Click toggles the group. Opening on hover made links shift under the pointer while the
+                          previous group animated closed, so clicks landed on the wrong item. The collapsed icon rail
+                          still shows its flyout through the tooltip. */}
                       <SidebarMenuButton
-                        onMouseEnter={() => setOpenGroup(label)}
-                        // Hovering already opens the group, so a toggle here would close it again on the same click.
                         onClick={() => {
-                          setOpenGroup(label);
+                          setOpenGroup((prev) => (prev === label ? null : label));
                         }}
                         tooltip={flyoutTooltip}
                         className={cn(
