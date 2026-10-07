@@ -103,15 +103,15 @@ test("tax settings persist across a reload", async ({ page }) => {
   // GST rules (Settings phase 6) refuse a state that contradicts the GSTIN's state code, so a registered store
   // changes state by clearing the GSTIN here and restoring a valid Karnataka one below.
   await page.getByLabel("GSTIN").fill("");
-  await page.getByLabel("Your state (place of supply)").click();
+  await page.getByLabel("Place of supply state").click();
   await page.getByRole("option", { name: "Maharashtra" }).click();
   await page.getByRole("button", { name: "Save changes" }).click();
   await expect(page.getByText("Tax settings saved")).toBeVisible();
   await page.reload();
-  await expect(page.getByLabel("Your state (place of supply)")).toContainText("Maharashtra");
+  await expect(page.getByLabel("Place of supply state")).toContainText("Maharashtra");
   // put it back so re-runs start from the same state
   await page.getByLabel("GSTIN").fill("29AAFCD5862R1ZR");
-  await page.getByLabel("Your state (place of supply)").click();
+  await page.getByLabel("Place of supply state").click();
   await page.getByRole("option", { name: "Karnataka" }).click();
   await page.getByRole("button", { name: "Save changes" }).click();
   await expect(page.getByText("Tax settings saved")).toBeVisible();
