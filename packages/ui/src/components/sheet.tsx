@@ -28,7 +28,7 @@ export function SheetContent({
         {...props}
       >
         {children}
-        <D.Close className="absolute right-4 top-4 rounded-sm text-foreground-lighter hover:text-foreground" aria-label="Close">
+        <D.Close className="absolute right-4 top-4 rounded-sm text-muted-foreground hover:text-foreground" aria-label="Close">
           <X className="size-4" />
         </D.Close>
       </D.Content>
@@ -40,6 +40,6 @@ export function SheetTitle({ className, ...props }: ComponentProps<typeof D.Titl
   return <D.Title className={cn("text-base font-semibold", className)} {...props} />;
 }
 export function SheetDescription({ className, ...props }: ComponentProps<typeof D.Description>) {
-  return <D.Description className={cn("text-sm text-foreground-light", className)} {...props} />;
+  return <D.Description className={cn("text-sm text-foreground-2", className)} {...props} />;
 }
 

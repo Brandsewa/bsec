@@ -40,7 +40,7 @@ export function FilterBar({
         {onSearchChange !== undefined || search !== undefined ? (
           <div className="relative min-w-[200px] max-w-sm flex-1">
             <Search
-              className="absolute left-2.5 top-1/2 size-4 -translate-y-1/2 text-foreground-muted pointer-events-none"
+              className="absolute left-2.5 top-1/2 size-4 -translate-y-1/2 text-faint-foreground pointer-events-none"
               aria-hidden
             />
             <Input
@@ -54,7 +54,7 @@ export function FilterBar({
               <button
                 type="button"
                 onClick={() => onSearchChange("")}
-                className="absolute right-2 top-1/2 -translate-y-1/2 text-foreground-muted hover:text-foreground"
+                className="absolute right-2 top-1/2 -translate-y-1/2 text-faint-foreground hover:text-foreground"
                 aria-label="Clear search"
               >
                 <X className="size-3.5" aria-hidden />
@@ -71,7 +71,7 @@ export function FilterBar({
             variant="ghost"
             size="sm"
             onClick={onReset}
-            className="text-xs text-foreground-muted hover:text-foreground"
+            className="text-xs text-faint-foreground hover:text-foreground"
           >
             Reset
           </Button>

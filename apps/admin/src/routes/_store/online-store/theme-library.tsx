@@ -92,11 +92,11 @@ export function ThemeLibraryPage() {
       />
 
       {current ? (
-        <section aria-label="Customise your theme" className="mb-6 rounded-lg border border-border bg-surface-50 p-4">
+        <section aria-label="Customise your theme" className="mb-6 rounded-lg border border-border bg-muted/30 p-4">
           <div className="flex flex-wrap items-center justify-between gap-3">
             <div>
               <h2 className="text-sm font-semibold text-foreground">Customise {current.name}</h2>
-              <p className="text-sm text-foreground-light">
+              <p className="text-sm text-foreground-2">
                 Change colours, fonts and buttons in theme settings, then edit the layout of each page. Changes to pages stay in a draft until you publish; theme settings apply when you save.
               </p>
             </div>
@@ -114,9 +114,9 @@ export function ThemeLibraryPage() {
                   onClick={() => page && openPage(page.id)}
                   className="flex w-full flex-col items-start gap-1 rounded-md border border-border bg-background p-3 text-left text-sm transition-colors hover:border-primary disabled:cursor-not-allowed disabled:opacity-60"
                 >
-                  <LayoutTemplate className="size-4 text-foreground-lighter" aria-hidden />
+                  <LayoutTemplate className="size-4 text-muted-foreground" aria-hidden />
                   <span className="font-medium text-foreground">{label}</span>
-                  <span className="text-xs text-foreground-lighter">{page ? "Open in editor" : "Built-in layout"}</span>
+                  <span className="text-xs text-muted-foreground">{page ? "Open in editor" : "Built-in layout"}</span>
                 </button>
               </li>
             ))}
@@ -127,7 +127,7 @@ export function ThemeLibraryPage() {
       {libraryQuery.isError ? (
         <div role="alert" className="flex flex-col items-start gap-3 rounded-md border border-destructive/40 bg-destructive/5 p-4">
           <p className="text-sm font-medium text-foreground">Could not load themes</p>
-          <p className="text-sm text-foreground-light">{libraryQuery.error.message}</p>
+          <p className="text-sm text-foreground-2">{libraryQuery.error.message}</p>
           <Button size="sm" onClick={() => void libraryQuery.refetch()}>
             <RotateCcw className="mr-1.5 size-3.5" aria-hidden />
             Retry
@@ -140,8 +140,8 @@ export function ThemeLibraryPage() {
       ) : (
         <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
           {libraryQuery.data.map((t) => (
-            <article key={t.code} className={`flex flex-col rounded-lg border bg-surface-50 ${t.isCurrent ? "border-primary" : "border-border"}`}>
-              <div className="flex aspect-[16/9] items-center justify-center rounded-t-lg bg-surface-100 text-foreground-lighter">
+            <article key={t.code} className={`flex flex-col rounded-lg border bg-muted/30 ${t.isCurrent ? "border-primary" : "border-border"}`}>
+              <div className="flex aspect-[16/9] items-center justify-center rounded-t-lg bg-muted text-muted-foreground">
                 <Palette className="size-10" aria-hidden />
               </div>
               <div className="flex flex-1 flex-col gap-3 p-4">
@@ -157,19 +157,19 @@ export function ThemeLibraryPage() {
                       <span className="rounded-full bg-amber-500/10 px-2 py-0.5 text-[10px] font-medium text-amber-600">Newer version available</span>
                     ) : null}
                   </div>
-                  {t.description ? <p className="mt-1 text-sm text-foreground-light">{t.description}</p> : null}
+                  {t.description ? <p className="mt-1 text-sm text-foreground-2">{t.description}</p> : null}
                 </div>
                 {t.features.length > 0 ? (
                   <ul className="flex flex-wrap gap-1.5">
                     {t.features.map((f) => (
-                      <li key={f} className="rounded bg-surface-200 px-1.5 py-0.5 text-[11px] text-foreground-light">
+                      <li key={f} className="rounded bg-muted px-1.5 py-0.5 text-[11px] text-foreground-2">
                         {f}
                       </li>
                     ))}
                   </ul>
                 ) : null}
                 {t.updateAvailable ? (
-                  <p className="text-xs text-foreground-lighter">Nothing changes until you apply it. Applying replaces your theme settings and page layouts with the new version; each page's previous layout stays in its history so you can roll back.</p>
+                  <p className="text-xs text-muted-foreground">Nothing changes until you apply it. Applying replaces your theme settings and page layouts with the new version; each page's previous layout stays in its history so you can roll back.</p>
                 ) : null}
                 <div className="mt-auto flex flex-wrap gap-2 pt-1">
                   <Button size="sm" onClick={() => setPreviewing(t)}>
@@ -266,7 +266,7 @@ function ThemePreviewDialog({
         </div>
         <div className="max-h-[60vh] overflow-auto rounded-md border border-border bg-background">
           {previewQuery.isError ? (
-            <p role="alert" className="p-4 text-sm text-foreground-light">Could not load the preview: {previewQuery.error.message}</p>
+            <p role="alert" className="p-4 text-sm text-foreground-2">Could not load the preview: {previewQuery.error.message}</p>
           ) : !previewQuery.data ? (
             <PageSkeleton />
           ) : (

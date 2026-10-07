@@ -115,7 +115,7 @@ function QueryError({ message, onRetry }: { message: string; onRetry: () => void
   return (
     <div role="alert" className="flex flex-col items-start gap-3 rounded-md border border-destructive/40 bg-destructive/5 p-4">
       <p className="text-sm font-medium text-foreground">Could not load the theme</p>
-      <p className="text-sm text-foreground-light">{message}</p>
+      <p className="text-sm text-foreground-2">{message}</p>
       <Button size="sm" onClick={onRetry}>
         <RotateCcw className="size-3.5" aria-hidden />
         Retry
@@ -254,7 +254,7 @@ function ThemeEditor({
           <PageSection title="Colors & Palette">
             <div className="space-y-4">
               <div>
-                <span className="text-xs font-semibold uppercase tracking-wider text-foreground-muted">Quick Presets</span>
+                <span className="text-xs font-semibold uppercase tracking-wider text-faint-foreground">Quick Presets</span>
                 <div className="mt-2 flex flex-wrap gap-2">
                   {colorPresets.map((preset) => (
                     <button
@@ -268,7 +268,7 @@ function ThemeEditor({
                           accentColor: preset.accent,
                         }))
                       }
-                      className="flex items-center gap-1.5 rounded-md border border-border px-2.5 py-1 text-xs font-medium hover:bg-surface-100"
+                      className="flex items-center gap-1.5 rounded-md border border-border px-2.5 py-1 text-xs font-medium hover:bg-muted"
                     >
                       <span className="size-3 rounded-full" style={{ backgroundColor: preset.primary }} />
                       {preset.name}
@@ -300,7 +300,7 @@ function ThemeEditor({
                           aria-invalid={!valid}
                           value={value}
                           onChange={(e) => setColor(f.key, e.target.value)}
-                          className={`h-8 flex-1 rounded border bg-surface-50 px-2 font-mono text-xs ${
+                          className={`h-8 flex-1 rounded border bg-muted/30 px-2 font-mono text-xs ${
                             valid ? "border-border" : "border-destructive"
                           }`}
                         />
@@ -325,14 +325,14 @@ function ThemeEditor({
                     className={`flex items-center justify-between rounded-lg border p-3 text-left transition-colors ${
                       tokens.fontFamily === font.id
                         ? "border-primary bg-primary/5 text-foreground"
-                        : "border-border hover:bg-surface-50"
+                        : "border-border hover:bg-muted/30"
                     }`}
                   >
                     <div className="flex flex-col">
                       <span className="text-sm font-semibold" style={{ fontFamily: font.id }}>
                         {font.name}
                       </span>
-                      <span className="text-xs text-foreground-lighter">The quick brown fox jumps over the lazy dog</span>
+                      <span className="text-xs text-muted-foreground">The quick brown fox jumps over the lazy dog</span>
                     </div>
                     <div className="flex items-center gap-1.5">
                       {font.devanagari && (
@@ -403,16 +403,16 @@ function ThemeEditor({
         </div>
 
         <div className="space-y-4 lg:col-span-7">
-          <div className="flex items-center justify-between rounded-lg border border-border bg-surface-50 p-2">
+          <div className="flex items-center justify-between rounded-lg border border-border bg-muted/30 p-2">
             <div className="flex items-center gap-2">
-              <Eye className="size-4 text-foreground-lighter" />
+              <Eye className="size-4 text-muted-foreground" />
               <span className="text-xs font-semibold text-foreground">Storefront Live Preview</span>
             </div>
             <div className="flex items-center gap-1">
               <button
                 type="button"
                 onClick={() => setPreviewDevice("desktop")}
-                className={`rounded p-1 text-xs ${previewDevice === "desktop" ? "bg-surface-200 text-foreground" : "text-foreground-lighter"}`}
+                className={`rounded p-1 text-xs ${previewDevice === "desktop" ? "bg-muted text-foreground" : "text-muted-foreground"}`}
                 title="Desktop View"
                 aria-label="Desktop view"
               >
@@ -421,7 +421,7 @@ function ThemeEditor({
               <button
                 type="button"
                 onClick={() => setPreviewDevice("mobile")}
-                className={`rounded p-1 text-xs ${previewDevice === "mobile" ? "bg-surface-200 text-foreground" : "text-foreground-lighter"}`}
+                className={`rounded p-1 text-xs ${previewDevice === "mobile" ? "bg-muted text-foreground" : "text-muted-foreground"}`}
                 title="Mobile View"
                 aria-label="Mobile view"
               >
@@ -478,7 +478,7 @@ function ThemeEditor({
               </div>
             </div>
 
-            <div className="border-t border-border/40 bg-surface-50/40 p-6">
+            <div className="border-t border-border/40 bg-muted/20 p-6">
               <div className="mb-4 flex items-center justify-between">
                 <h3 className="text-sm font-bold">Featured products</h3>
                 <span className="text-xs font-medium" style={{ color: tokens.primaryColor }}>
@@ -488,7 +488,7 @@ function ThemeEditor({
               <div className="grid gap-4 sm:grid-cols-2">
                 {[1, 2].map((n) => (
                   <div key={n} className={`border border-border/60 bg-surface p-4 shadow-xs ${radiusClass}`}>
-                    <div className={`flex aspect-4/3 w-full items-center justify-center bg-surface-200/60 ${radiusClass}`}>
+                    <div className={`flex aspect-4/3 w-full items-center justify-center bg-muted/40 ${radiusClass}`}>
                       <Palette className="size-8 opacity-20" />
                     </div>
                     <div className="mt-3 flex items-start justify-between">

@@ -14,7 +14,7 @@ import { cn } from "../lib/cn.ts";
 export const Form = FormProvider;
 
 export function Label({ className, ...props }: ComponentProps<typeof L.Root>) {
-  return <L.Root className={cn("text-sm font-medium text-foreground-light", className)} {...props} />;
+  return <L.Root className={cn("text-sm font-medium text-foreground-2", className)} {...props} />;
 }
 
 interface FieldCtx {
@@ -66,7 +66,7 @@ export function FormItemLayout({
       <div className="grid gap-1.5">
         {children({ id, "aria-invalid": Boolean(error), "aria-describedby": error ? errId : descId })}
         {description ? (
-          <p id={descId} className="text-xs text-foreground-lighter">
+          <p id={descId} className="text-xs text-muted-foreground">
             {description}
           </p>
         ) : null}

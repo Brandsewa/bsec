@@ -357,7 +357,7 @@ function QueryError({ what, message, onRetry }: { what: string; message: string;
   return (
     <div role="alert" className="flex flex-col items-start gap-3 rounded-md border border-destructive/40 bg-destructive/5 p-4">
       <p className="text-sm font-medium text-foreground">Could not load {what}</p>
-      <p className="text-sm text-foreground-light">{message}</p>
+      <p className="text-sm text-foreground-2">{message}</p>
       <Button size="sm" onClick={onRetry}>
         <RotateCcw className="size-3.5" aria-hidden />
         Retry
@@ -409,7 +409,7 @@ export function PagesPage() {
                 onClick={() => setSelectedId(p.id)}
                 aria-current={p.id === activeId ? "true" : undefined}
                 className={`rounded-md border px-3 py-2 text-left text-sm ${
-                  p.id === activeId ? "border-primary bg-primary/5 font-medium" : "border-border hover:bg-surface-100"
+                  p.id === activeId ? "border-primary bg-primary/5 font-medium" : "border-border hover:bg-muted"
                 }`}
               >
                 <span className="flex items-center justify-between gap-2">
@@ -422,7 +422,7 @@ export function PagesPage() {
                     {p.publishedVersionId ? "Published" : "Draft"}
                   </span>
                 </span>
-                <span className="block font-mono text-xs text-foreground-lighter">/{p.slug}</span>
+                <span className="block font-mono text-xs text-muted-foreground">/{p.slug}</span>
               </button>
             ))}
           </nav>
@@ -767,7 +767,7 @@ function PageEditor({
               const open = openBlockId === b.id;
               const err = validateBlock(b);
               return (
-                <li key={b.id} className="rounded-md border border-border bg-surface-50">
+                <li key={b.id} className="rounded-md border border-border bg-muted/30">
                   <div className="flex items-center justify-between gap-2 p-3">
                     <button
                       type="button"
@@ -776,7 +776,7 @@ function PageEditor({
                       onClick={() => setOpenBlockId(open ? null : b.id)}
                     >
                       <span className="text-sm font-medium text-foreground">{meta?.label ?? b.type}</span>
-                      {b.hidden ? <span className="ml-2 text-xs text-foreground-lighter">(hidden)</span> : null}
+                      {b.hidden ? <span className="ml-2 text-xs text-muted-foreground">(hidden)</span> : null}
                       {err ? <span className="ml-2 text-xs text-destructive">{err}</span> : null}
                     </button>
                     <div className="flex items-center gap-1">
@@ -811,7 +811,7 @@ function PageEditor({
         )}
 
         <div className="mt-2">
-          <span className="text-xs font-semibold uppercase tracking-wider text-foreground-muted">Add a block</span>
+          <span className="text-xs font-semibold uppercase tracking-wider text-faint-foreground">Add a block</span>
           <div className="mt-2 flex flex-wrap gap-2">
             {BLOCK_TYPES.map((meta) => (
               <Button key={meta.type} size="sm" title={meta.description} onClick={() => addBlock(meta)}>
@@ -828,13 +828,13 @@ function PageEditor({
         description="Versions saved or published in this session. The service does not expose a full version history."
       >
         {history.length === 0 ? (
-          <p className="text-sm text-foreground-lighter">No versions yet. Save a draft to create one.</p>
+          <p className="text-sm text-muted-foreground">No versions yet. Save a draft to create one.</p>
         ) : (
           <ul className="grid gap-2">
             {history.map((h) => (
               <li key={h.versionId} className="flex items-center justify-between gap-2 rounded-md border border-border p-2 text-sm">
                 <span className="flex items-center gap-2">
-                  <History className="size-4 text-foreground-lighter" aria-hidden />
+                  <History className="size-4 text-muted-foreground" aria-hidden />
                   {h.label}
                   {h.versionId === published ? (
                     <span className="rounded-full bg-emerald-500/10 px-2 py-0.5 text-[10px] font-medium text-emerald-600">Live</span>
@@ -879,7 +879,7 @@ function ScalarInput({
   );
   if (spec.kind === "boolean") {
     return (
-      <label className="flex items-center gap-2 text-sm text-foreground-light">
+      <label className="flex items-center gap-2 text-sm text-foreground-2">
         <input type="checkbox" checked={value === true} onChange={(e) => onChange(e.target.checked)} />
         {spec.label}
       </label>
@@ -909,7 +909,7 @@ function ScalarInput({
           aria-invalid={invalid}
           value={typeof value === "string" ? value : ""}
           onChange={(e) => onChange(e.target.value)}
-          className="rounded-md border border-border-control bg-control px-3 py-2 text-sm"
+          className="rounded-md border border-input bg-muted px-3 py-2 text-sm"
         />
       </div>
     );
@@ -960,7 +960,7 @@ function BlockFields({ meta, props, onChange }: { meta: BlockMeta; props: Props;
         for (const sf of f.itemFields) blank[sf.key] = "";
         return (
           <fieldset key={f.key} className="grid gap-2">
-            <legend className="text-sm font-medium text-foreground-light">{f.label}</legend>
+            <legend className="text-sm font-medium text-foreground-2">{f.label}</legend>
             {list.map((item, i) => (
               <div key={i} className="grid gap-2 rounded-md border border-border p-3">
                 {f.itemFields.map((sf) => (

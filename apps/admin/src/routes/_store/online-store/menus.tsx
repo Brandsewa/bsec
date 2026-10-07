@@ -129,7 +129,7 @@ function QueryError({ what, message, onRetry }: { what: string; message: string;
   return (
     <div role="alert" className="flex flex-col items-start gap-3 rounded-md border border-destructive/40 bg-destructive/5 p-4">
       <p className="text-sm font-medium text-foreground">Could not load {what}</p>
-      <p className="text-sm text-foreground-light">{message}</p>
+      <p className="text-sm text-foreground-2">{message}</p>
       <Button size="sm" onClick={onRetry}>
         <RotateCcw className="size-3.5" aria-hidden />
         Retry
@@ -180,11 +180,11 @@ export function MenusPage() {
                 onClick={() => setSelectedHandle(m.handle)}
                 aria-current={m.handle === activeHandle ? "true" : undefined}
                 className={`rounded-md border px-3 py-2 text-left text-sm ${
-                  m.handle === activeHandle ? "border-primary bg-primary/5 font-medium" : "border-border hover:bg-surface-100"
+                  m.handle === activeHandle ? "border-primary bg-primary/5 font-medium" : "border-border hover:bg-muted"
                 }`}
               >
                 <span className="block text-foreground">{m.name}</span>
-                <span className="block font-mono text-xs text-foreground-lighter">{m.handle}</span>
+                <span className="block font-mono text-xs text-muted-foreground">{m.handle}</span>
               </button>
             ))}
           </nav>
@@ -453,7 +453,7 @@ function ItemList({
         const here = [...path, index];
         return (
           <li key={item.id} className="grid gap-2">
-            <div className="grid gap-2 rounded-md border border-border bg-surface-50 p-3 md:grid-cols-[1fr_1fr_9rem_auto] md:items-center">
+            <div className="grid gap-2 rounded-md border border-border bg-muted/30 p-3 md:grid-cols-[1fr_1fr_9rem_auto] md:items-center">
               <Input
                 aria-label="Link label"
                 placeholder="Label"

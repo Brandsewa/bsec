@@ -109,3 +109,12 @@ If the store color is invalid or absent, `deriveAccent` safely falls back to the
    - Unit test states, keyboard navigation, and accessibility semantics with Vitest.
 6. **Verify with the Monorepo Gate:**
    - Run `pnpm typecheck`, `pnpm lint`, and `pnpm --filter @bs/ui test`.
+
+---
+
+## 6. Token Aliases & Hardening (Part 8 Completed)
+
+All legacy backward-compatibility token aliases (`--surface-75..400`, `--overlay`, `--control`, `--dash-sidebar`, `--dash-canvas`, `--border-default`, `--border-muted`, `--border-strong`, `--border-stronger`, `--border-control`, `--primary-solid`, `--primary-bright`, `--foreground-light`, `--foreground-lighter`, `--foreground-muted`, `--bg-alternative`, and their Tailwind counterparts) have been completely removed from `@bs/ui` and all consumer applications (`apps/admin`, `apps/superadmin`, `apps/web`).
+
+Only the standard semantic tokens defined in Section 2 are supported. New code must strictly reference semantic tokens (`muted`, `muted-foreground`, `faint-foreground`, `foreground-2`, `card`, `popover`, `canvas`, `sidebar`, `border`, `border-soft`, `input`, `primary`, `brand`).
+

@@ -12,13 +12,13 @@ export function Skeleton({ className, ...props }: ComponentProps<"div">) {
 export function TableSkeleton({ rows = 10, columns = 4 }: { rows?: number; columns?: number }) {
   return (
     <div aria-hidden className="overflow-hidden rounded-md border border-border bg-card">
-      <div className="flex gap-4 border-b border-border bg-surface-75 px-3 py-2.5">
+      <div className="flex gap-4 border-b border-border bg-muted/50 px-3 py-2.5">
         {Array.from({ length: columns }, (_, c) => (
           <Skeleton key={c} className="h-3 flex-1" />
         ))}
       </div>
       {Array.from({ length: rows }, (_, r) => (
-        <div key={r} className="flex gap-4 border-b border-border-muted px-3 py-3 last:border-0">
+        <div key={r} className="flex gap-4 border-b border-border-soft px-3 py-3 last:border-0">
           {Array.from({ length: columns }, (_, c) => (
             <Skeleton key={c} className={cn("h-4 flex-1", c === 0 && "flex-[2]")} />
           ))}

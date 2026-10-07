@@ -4,7 +4,7 @@
 
 | | |
 |---|---|
-| Last verified against | `feat/ds-06-customer-auth` (Design system Part 6 & Part 7: customer account, auth shell, store accent, hardening and clean-up), 2026-10-07 |
+| Last verified against | `feat/ds-08-aliases-perf-a11y` (Design system Part 8: token alias removal, performance & accessibility pass, theme robustness, hardening), 2026-10-07 |
 | Verified how | files read from the working tree; `pnpm docs:check` for the mechanical parts. Facts marked *(from code)* were read, not run. |
 | Owner | whoever changes the area (see the update triggers in section 0) |
 

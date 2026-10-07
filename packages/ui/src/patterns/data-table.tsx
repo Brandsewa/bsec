@@ -79,7 +79,7 @@ export function DataTable<T>({
             <TableRow
               key={key}
               onClick={() => onRowClick?.(item)}
-              className={cn(onRowClick && "cursor-pointer hover:bg-surface-75")}
+              className={cn(onRowClick && "cursor-pointer hover:bg-muted/40")}
             >
               {columns.map((col, idx) => {
                 const cellContent = col.cell

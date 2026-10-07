@@ -38,10 +38,10 @@ export function MetricCard({
       )}
     >
       <div className="flex items-center justify-between gap-2">
-        <span className="text-xs font-medium uppercase tracking-wider text-foreground-lighter">
+        <span className="text-xs font-medium uppercase tracking-wider text-muted-foreground">
           {label}
         </span>
-        {Icon ? <Icon className="size-4 text-foreground-muted" aria-hidden /> : null}
+        {Icon ? <Icon className="size-4 text-faint-foreground" aria-hidden /> : null}
       </div>
 
       <div className="mt-3 flex items-baseline justify-between gap-3">
@@ -54,7 +54,7 @@ export function MetricCard({
               "inline-flex items-center gap-0.5 rounded-full px-2 py-0.5 text-xs font-medium",
               trend === "up" && "bg-emerald-500/10 text-emerald-600 dark:text-emerald-400",
               trend === "down" && "bg-rose-500/10 text-rose-600 dark:text-rose-400",
-              trend === "neutral" && "bg-surface-100 text-foreground-muted",
+              trend === "neutral" && "bg-muted text-faint-foreground",
             )}
           >
             {trend === "up" ? <ArrowUpRight className="size-3" aria-hidden /> : null}
@@ -66,7 +66,7 @@ export function MetricCard({
       </div>
 
       {(description || action) ? (
-        <div className="mt-2 flex items-center justify-between gap-2 text-xs text-foreground-muted">
+        <div className="mt-2 flex items-center justify-between gap-2 text-xs text-faint-foreground">
           {description ? <span>{description}</span> : <span />}
           {action}
         </div>

@@ -18,13 +18,13 @@ export function DialogContent({ className, children, ...props }: ComponentProps<
       <DialogOverlay />
       <D.Content
         className={cn(
-          "fixed left-1/2 top-1/2 z-50 grid w-[calc(100%-2rem)] max-w-lg -translate-x-1/2 -translate-y-1/2 gap-4 rounded-lg border border-border-strong bg-overlay p-6 shadow-lg",
+          "fixed left-1/2 top-1/2 z-50 grid w-[calc(100%-2rem)] max-w-lg -translate-x-1/2 -translate-y-1/2 gap-4 rounded-lg border border-border bg-popover p-6 shadow-lg",
           className,
         )}
         {...props}
       >
         {children}
-        <D.Close className="absolute right-4 top-4 rounded-sm text-foreground-lighter hover:text-foreground" aria-label="Close">
+        <D.Close className="absolute right-4 top-4 rounded-sm text-muted-foreground hover:text-foreground" aria-label="Close">
           <X className="size-4" />
         </D.Close>
       </D.Content>
@@ -42,6 +42,6 @@ export function DialogTitle({ className, ...props }: ComponentProps<typeof D.Tit
   return <D.Title className={cn("text-base font-semibold", className)} {...props} />;
 }
 export function DialogDescription({ className, ...props }: ComponentProps<typeof D.Description>) {
-  return <D.Description className={cn("text-sm text-foreground-light", className)} {...props} />;
+  return <D.Description className={cn("text-sm text-foreground-2", className)} {...props} />;
 }
 

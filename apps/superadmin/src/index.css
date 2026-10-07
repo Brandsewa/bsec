@@ -12,8 +12,6 @@
   --color-border: var(--border);
   --color-border-soft: var(--border-soft);
   --color-canvas: var(--canvas);
-  --color-dash-canvas: var(--dash-canvas);
-  --color-dash-sidebar: var(--dash-sidebar);
   --color-primary-foreground: var(--primary-foreground);
   --color-secondary: var(--secondary);
   --color-secondary-foreground: var(--secondary-foreground);
@@ -49,51 +47,46 @@
 
 :root {
   /* Admin chrome: white sidebar, grey canvas, so white cards stand out. */
-  --dash-sidebar: var(--background);
-  --dash-canvas: oklch(0.962 0.005 var(--primary-hue));
-  --canvas: var(--dash-canvas);
-  --secondary: var(--surface-200);
+  --sidebar: var(--background);
+  --canvas: oklch(0.962 0.005 var(--primary-hue));
+  --secondary: var(--muted);
   --secondary-foreground: var(--foreground);
-  --muted: var(--surface-100);
-  --muted-foreground: var(--foreground-lighter);
-  --accent: var(--surface-200);
+  --muted: #f4f4f5;
+  --muted-foreground: var(--muted-foreground);
+  --accent: var(--muted);
   --accent-foreground: var(--foreground);
   --card: var(--background);
   --card-foreground: var(--foreground);
-  --ring: var(--primary-bright);
-  --chart-1: var(--primary-bright);
-  --chart-2: var(--primary-solid);
-  --chart-3: var(--foreground-lighter);
-  --chart-4: var(--foreground-light);
+  --ring: var(--brand);
+  --chart-1: var(--brand);
+  --chart-2: var(--primary);
+  --chart-3: var(--muted-foreground);
+  --chart-4: var(--foreground-2);
   --chart-5: var(--foreground);
-  --sidebar: var(--dash-sidebar);
   --sidebar-foreground: var(--foreground);
-  --sidebar-primary: var(--primary-solid);
-  --sidebar-primary-foreground: var(--primary-solid-foreground);
-  --sidebar-accent: var(--surface-200);
+  --sidebar-primary: var(--primary);
+  --sidebar-primary-foreground: var(--primary-foreground);
+  --sidebar-accent: var(--muted);
   --sidebar-accent-foreground: var(--foreground);
   --sidebar-border: var(--border-soft);
-  --sidebar-ring: var(--primary-bright);
+  --sidebar-ring: var(--brand);
 }
 
 /* In dark mode, canvas is deep black and cards/surfaces are elevated dark grey for high contrast. */
 :root[data-theme="dark"] {
-  --dash-sidebar: var(--background);
-  --dash-canvas: #09090b;
-  --canvas: var(--dash-canvas);
+  --sidebar: var(--background);
+  --canvas: #09090b;
   --primary-foreground: oklch(0.2 0.03 var(--primary-hue));
   --card: #18181b;
   --card-foreground: var(--foreground);
   --popover: #18181b;
   --popover-foreground: var(--foreground);
   --muted: #222225;
-  --muted-foreground: var(--foreground-lighter);
+  --muted-foreground: #a1a1a1;
   --accent: #222225;
   --accent-foreground: var(--foreground);
   --border: #27272a;
-  --border-default: #27272a;
   --border-soft: #202024;
-  --border-control: #27272a;
   --input: #27272a;
 }
 

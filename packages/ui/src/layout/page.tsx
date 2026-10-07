@@ -33,7 +33,7 @@ export function PageBreadcrumbs({ items, actions }: { items: Crumb[]; actions?: 
   return (
     <div className="flex min-h-8 items-center justify-between gap-4">
       <nav aria-label="Breadcrumb">
-        <ol className="flex flex-wrap items-center gap-1 text-sm text-foreground-lighter">
+        <ol className="flex flex-wrap items-center gap-1 text-sm text-muted-foreground">
           {items.map((c, i) => {
             const last = i === items.length - 1;
             return (
@@ -74,8 +74,8 @@ export function PageHeader({
     <header className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
       <div className="grid gap-1">
         <h1 className="text-xl font-semibold tracking-tight text-foreground">{title}</h1>
-        {description ? <p className="text-sm text-foreground-light">{description}</p> : null}
-        {meta ? <div className="flex flex-wrap gap-3 text-xs text-foreground-lighter">{meta}</div> : null}
+        {description ? <p className="text-sm text-foreground-2">{description}</p> : null}
+        {meta ? <div className="flex flex-wrap gap-3 text-xs text-muted-foreground">{meta}</div> : null}
       </div>
       {aside ? <div className="flex shrink-0 items-center gap-2">{aside}</div> : null}
     </header>
@@ -108,7 +108,7 @@ export function PageSection({
         <div className="flex items-end justify-between gap-4">
           <div className="grid gap-0.5">
             {title ? <h2 className="text-base font-medium text-foreground">{title}</h2> : null}
-            {description ? <p className="text-sm text-foreground-lighter">{description}</p> : null}
+            {description ? <p className="text-sm text-muted-foreground">{description}</p> : null}
           </div>
           {actions ? <div className="flex items-center gap-2">{actions}</div> : null}
         </div>

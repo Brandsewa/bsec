@@ -113,7 +113,7 @@ export function DataTable<T>({
     );
   }
 
-  const stickyHead = "sticky top-0 z-10 bg-muted text-foreground-lighter shadow-[inset_0_-1px_0_var(--border-soft)]";
+  const stickyHead = "sticky top-0 z-10 bg-muted text-muted-foreground shadow-[inset_0_-1px_0_var(--border-soft)]";
 
   return (
     <div className={cn("rounded-lg border border-border-soft bg-card shadow-xs", isFetching && !isLoading && "transition-opacity")} aria-busy={isFetching || undefined}>

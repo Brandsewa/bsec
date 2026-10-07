@@ -123,7 +123,7 @@ export function AcceptInvitePage() {
             {busy ? "Working…" : !showPassword ? "Accept invitation" : "Create account and join"}
           </Button>
           {store ? (
-            <Button type="button" variant="link" size="sm" className="justify-start px-0 text-foreground-lighter" onClick={() => setExisting((v) => !v)}>
+            <Button type="button" variant="link" size="sm" className="justify-start px-0 text-muted-foreground" onClick={() => setExisting((v) => !v)}>
               {existing ? "I do not have an account yet" : "I already have an account with this email"}
             </Button>
           ) : null}
@@ -135,7 +135,7 @@ export function AcceptInvitePage() {
 
 function Shell({ title, children }: { title: string; children: React.ReactNode }) {
   return (
-    <div className="grid min-h-dvh place-items-center bg-dash-canvas p-4">
+    <div className="grid min-h-dvh place-items-center bg-canvas p-4">
       <div className="grid w-full max-w-sm gap-4 rounded-lg border border-border bg-background p-6 shadow-sm">
         <h1 className="text-lg font-semibold">{title}</h1>
         {children}

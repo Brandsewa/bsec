@@ -211,7 +211,7 @@ function StoreShell() {
                 options={me.stores.map((s) => ({ value: s.tenantId, label: s.name }))}
               />
             ) : null}
-            <span className="hidden text-sm text-foreground-lighter sm:inline">{me.support ? `Support: ${me.user.email}` : null}</span>
+            <span className="hidden text-sm text-muted-foreground sm:inline">{me.support ? `Support: ${me.user.email}` : null}</span>
             {me.support ? (
               <Button size="sm" variant="outline" onClick={onSignOut}>
                 Leave support
@@ -222,11 +222,11 @@ function StoreShell() {
                   render={
                     <button
                       type="button"
-                      className="group flex items-center gap-2 rounded-full p-1 transition-colors hover:bg-surface-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                      className="group flex items-center gap-2 rounded-full p-1 transition-colors hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
                       aria-label="User account menu"
                     >
-                      <Avatar size="sm" className="border border-border-soft bg-surface-200">
-                        <AvatarFallback className="bg-surface-200 text-foreground font-semibold text-xs">{(me.user.name ?? me.user.email ?? "U").slice(0, 2).toUpperCase()}</AvatarFallback>
+                      <Avatar size="sm" className="border border-border-soft bg-muted">
+                        <AvatarFallback className="bg-muted text-foreground font-semibold text-xs">{(me.user.name ?? me.user.email ?? "U").slice(0, 2).toUpperCase()}</AvatarFallback>
                       </Avatar>
                     </button>
                   }

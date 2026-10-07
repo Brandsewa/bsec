@@ -200,11 +200,11 @@ export function Layout({ user, onLogout }: LayoutProps) {
                 render={
                   <button
                     type="button"
-                    className="group flex items-center gap-2 rounded-full p-1 transition-colors hover:bg-surface-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                    className="group flex items-center gap-2 rounded-full p-1 transition-colors hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
                     aria-label="Staff account menu"
                   >
-                    <Avatar size="sm" className="border border-border-soft bg-surface-200">
-                      <AvatarFallback className="bg-surface-200 text-foreground font-semibold text-xs">{(user.name ?? user.email ?? "SA").slice(0, 2).toUpperCase()}</AvatarFallback>
+                    <Avatar size="sm" className="border border-border-soft bg-muted">
+                      <AvatarFallback className="bg-muted text-foreground font-semibold text-xs">{(user.name ?? user.email ?? "SA").slice(0, 2).toUpperCase()}</AvatarFallback>
                     </Avatar>
                   </button>
                 }
@@ -213,7 +213,7 @@ export function Layout({ user, onLogout }: LayoutProps) {
                 <DropdownMenuLabel className="px-2 py-1.5 text-xs">
                   <p className="font-semibold text-foreground truncate">{user.name || "Platform Staff"}</p>
                   <p className="text-[11px] text-muted-foreground truncate">{user.email}</p>
-                  <span className="mt-1 inline-block text-[10px] uppercase font-semibold text-primary-solid tracking-wider">
+                  <span className="mt-1 inline-block text-[10px] uppercase font-semibold text-primary tracking-wider">
                     {user.role.replace("platform_", "")}
                   </span>
                 </DropdownMenuLabel>

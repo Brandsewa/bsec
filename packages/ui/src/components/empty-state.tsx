@@ -14,10 +14,10 @@ export function EmptyState({
 }) {
   return (
     <div className="flex flex-col items-center justify-center gap-3 rounded-md border border-dashed border-border-soft bg-card/50 px-6 py-12 text-center">
-      {Icon ? <Icon className="size-8 text-foreground-muted" aria-hidden /> : null}
+      {Icon ? <Icon className="size-8 text-faint-foreground" aria-hidden /> : null}
       <div className="grid gap-1">
         <p className="text-sm font-medium text-foreground">{title}</p>
-        {description ? <p className="max-w-sm text-sm text-foreground-lighter">{description}</p> : null}
+        {description ? <p className="max-w-sm text-sm text-muted-foreground">{description}</p> : null}
       </div>
       {action}
     </div>
