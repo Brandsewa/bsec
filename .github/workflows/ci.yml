@@ -15,7 +15,7 @@ permissions:
 jobs:
   changes:
     name: detect changes
-    runs-on: ubuntu-24.04
+    runs-on: ${{ vars.CI_RUNNER || 'ubuntu-24.04' }}
     outputs:
       docs_only: ${{ steps.filter.outputs.docs_only }}
     steps:
@@ -65,7 +65,7 @@ jobs:
   check-fast:
     name: typecheck · lint · build · unit-test
     needs: changes
-    runs-on: ubuntu-24.04
+    runs-on: ${{ vars.CI_RUNNER || 'ubuntu-24.04' }}
     steps:
       - uses: actions/checkout@v5
       - uses: pnpm/action-setup@v4
@@ -95,7 +95,7 @@ jobs:
   check-heavy:
     name: heavy integration tests (real postgres)
     needs: changes
-    runs-on: ubuntu-24.04
+    runs-on: ${{ vars.CI_RUNNER || 'ubuntu-24.04' }}
     services:
       postgres:
         image: postgres:18
@@ -131,7 +131,7 @@ jobs:
 
   secret-scan:
     name: secret-scan
-    runs-on: ubuntu-24.04
+    runs-on: ${{ vars.CI_RUNNER || 'ubuntu-24.04' }}
     steps:
       - uses: actions/checkout@v5
         with:
@@ -146,7 +146,7 @@ jobs:
     name: build images → GHCR
     needs: [check-fast, check-heavy, secret-scan]
     if: github.event_name == 'push' && github.ref == 'refs/heads/main'
-    runs-on: ubuntu-24.04
+    runs-on: ${{ vars.CI_RUNNER || 'ubuntu-24.04' }}
     permissions:
       contents: read
       packages: write
@@ -190,7 +190,7 @@ jobs:
   staging-smoke-test:
     name: staging smoke test (ephemeral compose)
     needs: images
-    runs-on: ubuntu-24.04
+    runs-on: ${{ vars.CI_RUNNER || 'ubuntu-24.04' }}
     timeout-minutes: 15
     permissions:
       contents: read
@@ -286,7 +286,7 @@ jobs:
   deploy-production:
     name: deploy production (Coolify)
     needs: [images, staging-smoke-test]
-    runs-on: ubuntu-24.04
+    runs-on: ${{ vars.CI_RUNNER || 'ubuntu-24.04' }}
     # Required reviewers on the "production" environment gate this job (GitHub → Settings →
     # Environments → production). COOLIFY_TOKEN is a Coolify API token, permission "Deploy" only
     # (Keys & Tokens → API Tokens). Resource UUIDs below aren't secret, just identifiers.

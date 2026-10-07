@@ -1,0 +1,35 @@
+# Self-hosted CI runner (Docker Desktop on the owner's Windows PC). See README.md.
+# `dind` owns the Docker daemon; `runner` shares its network namespace, so a job's service container
+# (e.g. Postgres on :5432) is reachable at localhost exactly as on a GitHub-hosted runner, and both
+# containers mount the same work volume at the same path, so `docker run -v "$PWD:/repo"` works.
+name: bsec-ci-runner
+
+services:
+  dind:
+    image: docker:28-dind
+    privileged: true
+    restart: unless-stopped
+    environment:
+      DOCKER_TLS_CERTDIR: ""
+    volumes:
+      - work:/home/runner/_work
+      - docker-data:/var/lib/docker
+    command: ["--host=tcp://0.0.0.0:2375", "--host=unix:///var/run/docker.sock"]
+
+  runner:
+    build: .
+    restart: unless-stopped
+    network_mode: "service:dind"
+    depends_on: [dind]
+    environment:
+      DOCKER_HOST: tcp://localhost:2375
+      GITHUB_REPOSITORY: Brandsewa/bsec
+      RUNNER_NAME: bsec-local-1
+      RUNNER_LABELS: bsec-local
+      RUNNER_TOKEN: ${RUNNER_TOKEN:-}
+    volumes:
+      - work:/home/runner/_work
+
+volumes:
+  work:
+  docker-data:
