@@ -87,8 +87,10 @@ jobs:
         run: pnpm build
       - name: Unit Tests
         if: needs.changes.outputs.docs_only != 'true'
-        # Two vitest workers: jsdom route tests import the whole kit and time out when 16 workers fight for 8 GB.
-        run: pnpm exec turbo run test:fast -- --maxWorkers=2
+        # Files run one at a time: apps/platform's suites share one database (AGENTS.md section 4) and the jsdom
+        # route tests time out when many workers fight for the Docker VM's memory. A 2-core hosted runner was
+        # serial by accident; this PC is not.
+        run: pnpm exec turbo run test:fast -- --no-file-parallelism
       - name: Fast path notice
         if: needs.changes.outputs.docs_only == 'true'
         run: 'echo "Docs-only PR: docs:check succeeded; skipping lint, typecheck, build, and unit tests."'
