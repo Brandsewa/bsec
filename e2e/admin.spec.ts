@@ -17,6 +17,18 @@ async function signIn(page: Page, email = EMAIL, password = PASSWORD) {
   await page.getByRole("button", { name: "Sign in" }).click();
 }
 
+// The sidebar groups its links (Orders, Catalog, Sell...) and shows one group open at a time, so open the group first.
+async function gotoNav(page: Page, group: string, link: string) {
+  const target = page.getByRole("link", { name: link, exact: true });
+  if (!(await target.isVisible())) await page.getByRole("button", { name: group, exact: true }).click();
+  await target.click();
+}
+
+async function signOutViaMenu(page: Page) {
+  await page.getByRole("button", { name: "User account menu" }).click();
+  await page.getByRole("menuitem", { name: "Sign out" }).click();
+}
+
 async function openDemoStore(page: Page) {
   await expect(page.getByLabel("Switch store")).toBeVisible();
   await page.getByLabel("Switch store").click();
@@ -51,7 +63,8 @@ test("sign in: a wrong password is refused, the right one opens the store", asyn
 
   await page.getByLabel("Password").fill(PASSWORD);
   await page.getByRole("button", { name: "Sign in" }).click();
-  await expect(page.getByRole("link", { name: "Orders" }).first()).toBeVisible();
+  await expect(page.getByRole("button", { name: "Orders", exact: true })).toBeVisible();
+  await page.getByRole("button", { name: "User account menu" }).click();
   await expect(page.getByText(EMAIL)).toBeVisible();
 });
 
@@ -59,11 +72,11 @@ test("the demo store shows real products, orders, customers and discounts", asyn
   await signIn(page);
   await openDemoStore(page);
 
-  await page.getByRole("link", { name: "Products" }).click();
+  await gotoNav(page, "Catalog", "Products");
   await expect(page.getByRole("table").getByText("Cotton Kurta")).toBeVisible();
   await expect(page.getByText("Out of stock").first()).toBeVisible();
 
-  await page.getByRole("link", { name: "Orders" }).first().click();
+  await gotoNav(page, "Orders", "All orders");
   await expect(page.getByText("ORD-00019").first()).toBeVisible();
   // the redesigned lists render some values twice (table + card/summary), so match the first
   // the first four demo orders are COD orders the customer has not confirmed yet
@@ -71,13 +84,13 @@ test("the demo store shows real products, orders, customers and discounts", asyn
   await expect(page.getByText("ORD-00001").first()).toBeVisible();
   await expect(page.getByText("ORD-00019").first()).toBeHidden();
 
-  await page.getByRole("link", { name: "Customers" }).click();
+  await gotoNav(page, "Sell", "Customers");
   await expect(page.getByText("aarav.sharma@demo.example").first()).toBeVisible();
 
-  await page.getByRole("link", { name: "Discounts" }).click();
+  await gotoNav(page, "Sell", "Discounts");
   await expect(page.getByText("DEMOWELCOME10").first()).toBeVisible();
 
-  await page.getByRole("link", { name: "Inventory" }).click();
+  await gotoNav(page, "Catalog", "Inventory");
   await expect(page.getByText("DEMO-COTTON-1").first()).toBeVisible();
 });
 
@@ -141,8 +154,8 @@ test("team invite: create link, accept as a new person, they sign in and see the
 
 test("signing out ends the session", async ({ page, request }) => {
   await signIn(page);
-  await expect(page.getByRole("link", { name: "Orders" }).first()).toBeVisible();
-  await page.getByRole("button", { name: "Sign out" }).click();
+  await expect(page.getByRole("button", { name: "Orders", exact: true })).toBeVisible();
+  await signOutViaMenu(page);
   await expect(page).toHaveURL(/\/login/);
   await page.goto("/orders");
   await expect(page).toHaveURL(/\/login/);
@@ -177,7 +190,7 @@ test("store owner invite: follows emailed link, sets password, logs in, and land
       await page.getByLabel("Email").fill(ownerEmail);
       await page.getByLabel("Password").fill(ownerPassword);
       await page.getByRole("button", { name: "Sign in" }).click();
-      await expect(page.getByRole("link", { name: "Orders" }).first()).toBeVisible();
+      await expect(page.getByRole("button", { name: "Orders", exact: true })).toBeVisible();
     }
   }
 });
