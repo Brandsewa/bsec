@@ -16,11 +16,23 @@ services:
       - docker-data:/var/lib/docker
     command: ["--host=tcp://0.0.0.0:2375", "--host=unix:///var/run/docker.sock"]
 
+  # Named volumes are created root-owned; hand the work volume to the runner user (uid 1001) before it starts.
+  init:
+    image: busybox:1.37
+    user: root
+    command: ["chown", "-R", "1001:1001", "/home/runner/_work"]
+    volumes:
+      - work:/home/runner/_work
+
   runner:
     build: .
     restart: unless-stopped
     network_mode: "service:dind"
-    depends_on: [dind]
+    depends_on:
+      dind:
+        condition: service_started
+      init:
+        condition: service_completed_successfully
     environment:
       DOCKER_HOST: tcp://localhost:2375
       GITHUB_REPOSITORY: Brandsewa/bsec
