@@ -7,7 +7,7 @@ import { createContext, createElement, useContext, type ComponentType, type Reac
 export interface UiLinkProps {
   href: string;
   className?: string | undefined;
-  children: ReactNode;
+  children?: ReactNode | undefined;
   "aria-current"?: "page" | undefined;
 }
 

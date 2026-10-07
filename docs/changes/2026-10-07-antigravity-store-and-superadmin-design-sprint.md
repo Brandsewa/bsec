@@ -28,12 +28,15 @@ Completed full design system alignment and optimization sprint across both `apps
     - Streamlined Branding & Visual Identity into clean single-column cards, removing auxiliary accessibility/preview cards per instruction.
 
 ### 2. Super Admin Optimization (`apps/superadmin`)
+- **Collapsible Sidebar Modernization**: Upgraded universal `AppShell` in `@bs/ui` with collapsible icon rail (`Ctrl/Cmd+B`, edge trigger), hover tooltips, and flyouts, matching Store Admin sidebar behavior.
+- **Tenant Detail Polish**: Restructured `/tenants/$id` with clean breadcrumbs, refined action buttons to elegant `variant="outline"` styles, added proper badge border tokens, and standardized overview cards with explicit `border-border` and subtle horizontal row dividers (`border-border/60`). Standardized operator notes and textarea form controls.
 - **Layout Standardisation**: Converted all operational pages (`TenantsList`, `Signups`, `Staff`, `AuditLog`, `EmailSettings`, `System`, `Plans`, `Quotas`, `Features`, `Support`, `Templates`) to `PageContainer size="full"` with responsive paddings.
 - **Data Tables & Controls**: Replaced ad-hoc table markup with `@bs/ui` table tokens with sticky muted headers (`bg-muted/40`) and clean borders (`border-border`). Replaced native HTML checkboxes with accessible `@bs/ui` `Checkbox`.
 - **Quick Search Bar**: Replaced button styling collision in `Layout.tsx` with a sleek, input-like search trigger (`w-44 sm:w-64`, `Search` icon, `bg-muted/40 hover:bg-muted/70`, `border-border`, and `<kbd>Ctrl K</kbd>` badge).
 - **Email Settings Polish**: Fixed missing `border-border` styling on Test Email Delivery and DNS Verification Checklist cards.
 
 ### 3. Theme & Token System (`@bs/ui` + Admin + Superadmin)
+- **Toast Notifications Visibility & Styling**: Resolved white-on-white text in dark mode toast notifications: `Toaster` now dynamically observes HTML `data-theme` changes and enforces contrasting `!bg-card !border-border !text-foreground` across both light and dark themes.
 - **Dark Theme Contrast**:
   - Set canvas background to deep dark neutral (`hsl(220 18% 7%)`) and cards/surfaces to contrasting elevated dark gray (`hsl(220 16% 12%)` / `hsl(220 14% 15%)`).
   - Cards, table headers, modals, drawers, and popovers now maintain distinct contrast from background in both light and dark modes globally.

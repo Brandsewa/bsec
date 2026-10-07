@@ -426,6 +426,11 @@ Complete modernization, token unification, and card architecture polish across `
     - Streamlined Branding & Visual Identity into clean single-column cards, removing auxiliary accessibility/preview cards per instruction.
 
 ### 2. Super Admin Dashboard Optimization (`apps/superadmin`)
+- [x] **Collapsible Sidebar Modernization**:
+  - Upgraded universal `AppShell` in `@bs/ui` to support collapsible icon rail (`Ctrl/Cmd+B`, rail edge, or top trigger) with hover flyouts and tooltips, matching Store Admin sidebar capabilities.
+- [x] **Tenant Detail & Breadcrumbs Polish**:
+  - Restructured Tenant Detail (`/tenants/$id`): cleaned up breadcrumbs, refined action buttons to elegant `variant="outline"` styles with shadows, added proper badge borders, and standardized overview cards with explicit `border-border` and subtle horizontal row dividers (`border-border/60`).
+  - Standardized operator notes and textarea form controls to semantic input tokens.
 - [x] **Full Workspace Layout Parity**:
   - Standardized all operational pages (`TenantsList`, `Signups`, `Staff`, `AuditLog`, `EmailSettings`, `System`, `Plans`, `Quotas`, `Features`, `Support`, `Templates`) to `PageContainer size="full"`.
   - Converted ad-hoc tables to tokenized `@bs/ui` table structures with subtle muted headers (`bg-muted/40`) and clean borders (`border-border`).
@@ -436,6 +441,8 @@ Complete modernization, token unification, and card architecture polish across `
   - Fixed border consistency on transactional email cards (Test Email Delivery, DNS Verification Checklist).
 
 ### 3. Theme & Contrast System (`@bs/ui` + Admin + Super Admin)
+- [x] **Toast Notifications Visibility & Styling**:
+  - Resolved white-on-white text in dark mode toast notifications: `Toaster` now dynamically observes HTML `data-theme` changes and enforces contrasting `!bg-card !border-border !text-foreground` across both light and dark themes.
 - [x] **Dark Theme Contrast Overhaul**:
   - Set canvas background to deep dark neutral (`hsl(220 18% 7%)`) and cards/surfaces to contrasting elevated dark gray (`hsl(220 16% 12%)` / `hsl(220 14% 15%)`).
   - Cards, table headers, modals, drawers, and popovers maintain distinct contrast from background in both light and dark modes.

@@ -308,56 +308,56 @@ export function TenantDetail() {
         title={tenant.name}
         description={`Tenant ID: ${tenant.id} · Subdomain: ${tenant.slug}.bcom.si`}
         meta={
-          <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-semibold uppercase tracking-wider bg-primary/10 text-primary">
+          <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[11px] font-semibold uppercase tracking-wider bg-primary/10 text-primary border border-primary/20">
             {tenant.status}
           </span>
         }
         aside={
-          <div className="flex flex-wrap items-center gap-2">
+          <div className="flex flex-wrap items-center gap-1.5 sm:gap-2">
             {isAdmin && (tenant.status === "suspended" || tenant.status === "archived") && (
-              <Button size="sm" variant="default" onClick={handleRestore} disabled={actionLoading}>
+              <Button size="sm" variant="outline" onClick={handleRestore} disabled={actionLoading} className="shadow-2xs">
                 <RotateCcw className="mr-1.5 h-3.5 w-3.5" /> Restore Store
               </Button>
             )}
             {isAdmin && !["suspended", "archived", "deletion_requested", "deleted"].includes(tenant.status) && (
-              <Button size="sm" variant="destructive" onClick={() => setSuspendOpen(true)} disabled={actionLoading}>
+              <Button size="sm" variant="destructive" onClick={() => setSuspendOpen(true)} disabled={actionLoading} className="shadow-2xs">
                 <ShieldAlert className="mr-1.5 h-3.5 w-3.5" /> Suspend
               </Button>
             )}
             {isAdmin && !["archived", "deletion_requested", "deleted"].includes(tenant.status) && (
-              <Button size="sm" variant="default" onClick={() => setArchiveConfirmOpen(true)} disabled={actionLoading}>
+              <Button size="sm" variant="outline" onClick={() => setArchiveConfirmOpen(true)} disabled={actionLoading} className="shadow-2xs">
                 <Archive className="mr-1.5 h-3.5 w-3.5" /> Archive
               </Button>
             )}
 
             {isAdmin && tenant.status === "trial" && (
-              <Button size="sm" variant="default" onClick={() => setExtendTrialOpen(true)}>
+              <Button size="sm" variant="outline" onClick={() => setExtendTrialOpen(true)} className="shadow-2xs">
                 <Calendar className="mr-1.5 h-3.5 w-3.5" /> Extend Trial
               </Button>
             )}
             {isAdmin && (
-              <Button size="sm" variant="default" onClick={() => setPlanOpen(true)}>
+              <Button size="sm" variant="outline" onClick={() => setPlanOpen(true)} className="shadow-2xs">
                 <CreditCard className="mr-1.5 h-3.5 w-3.5" /> Change Plan
               </Button>
             )}
             {isAdmin && (
-              <Button size="sm" variant="default" onClick={() => setTransferOpen(true)}>
+              <Button size="sm" variant="outline" onClick={() => setTransferOpen(true)} className="shadow-2xs">
                 <ArrowRightLeft className="mr-1.5 h-3.5 w-3.5" /> Transfer Ownership
               </Button>
             )}
 
-            <Button size="sm" variant="default" onClick={() => setSupportSessionOpen(true)}>
+            <Button size="sm" variant="outline" onClick={() => setSupportSessionOpen(true)} className="shadow-2xs">
               <Headphones className="mr-1.5 h-3.5 w-3.5" /> Support Session
             </Button>
 
             {isAdmin && (
-              <Button size="sm" variant="default" onClick={handleRunExport} disabled={actionLoading}>
+              <Button size="sm" variant="outline" onClick={handleRunExport} disabled={actionLoading} className="shadow-2xs">
                 <Download className="mr-1.5 h-3.5 w-3.5" /> Export Data
               </Button>
             )}
 
             {isAdmin && tenant.status !== "deletion_requested" && tenant.status !== "deleted" && (
-              <Button size="sm" variant="destructive" onClick={() => setDeletionOpen(true)}>
+              <Button size="sm" variant="destructive" onClick={() => setDeletionOpen(true)} className="shadow-2xs">
                 <Trash2 className="mr-1.5 h-3.5 w-3.5" /> Delete
               </Button>
             )}
@@ -422,46 +422,46 @@ export function TenantDetail() {
       {/* Tab Contents */}
       {activeTab === "overview" && (
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-          <div className="rounded-xl border bg-card p-5 shadow-xs space-y-4">
+          <div className="rounded-xl border border-border bg-card p-5 shadow-xs space-y-4">
             <h3 className="font-semibold text-sm">Store Configuration</h3>
             <div className="space-y-2 text-xs">
-              <div className="flex justify-between py-1 border-b">
+              <div className="flex justify-between py-1.5 border-b border-border/60">
                 <span className="text-muted-foreground">Store Name:</span>
-                <span className="font-medium">{tenant.name}</span>
+                <span className="font-medium text-foreground">{tenant.name}</span>
               </div>
-              <div className="flex justify-between py-1 border-b">
+              <div className="flex justify-between py-1.5 border-b border-border/60">
                 <span className="text-muted-foreground">Subdomain:</span>
-                <span className="font-mono">{tenant.slug}.bcom.si</span>
+                <span className="font-mono text-foreground">{tenant.slug}.bcom.si</span>
               </div>
-              <div className="flex justify-between py-1 border-b">
+              <div className="flex justify-between py-1.5 border-b border-border/60">
                 <span className="text-muted-foreground">Lifecycle State:</span>
-                <span className="font-semibold capitalize">{tenant.status}</span>
+                <span className="font-semibold capitalize text-foreground">{tenant.status}</span>
               </div>
-              <div className="flex justify-between py-1 border-b">
+              <div className="flex justify-between py-1.5 border-b border-border/60">
                 <span className="text-muted-foreground">Created Date:</span>
-                <span>{tenant.createdAt ? new Date(tenant.createdAt).toLocaleString("en-IN") : "—"}</span>
+                <span className="text-foreground">{tenant.createdAt ? new Date(tenant.createdAt).toLocaleString("en-IN") : "—"}</span>
               </div>
-              <div className="flex justify-between py-1">
+              <div className="flex justify-between py-1.5">
                 <span className="text-muted-foreground">Trial Expiration:</span>
-                <span>{tenant.trialEndsAt ? new Date(tenant.trialEndsAt).toLocaleDateString("en-IN") : "No active trial"}</span>
+                <span className="text-foreground">{tenant.trialEndsAt ? new Date(tenant.trialEndsAt).toLocaleDateString("en-IN") : "No active trial"}</span>
               </div>
             </div>
           </div>
 
-          <div className="rounded-xl border bg-card p-5 shadow-xs space-y-4">
+          <div className="rounded-xl border border-border bg-card p-5 shadow-xs space-y-4">
             <h3 className="font-semibold text-sm">Store Usage & Volume</h3>
             <div className="space-y-2 text-xs">
-              <div className="flex justify-between py-1 border-b">
+              <div className="flex justify-between py-1.5 border-b border-border/60">
                 <span className="text-muted-foreground">Active Products:</span>
-                <span>{detail.usage.productsCount} items</span>
+                <span className="text-foreground">{detail.usage.productsCount} items</span>
               </div>
-              <div className="flex justify-between py-1 border-b">
+              <div className="flex justify-between py-1.5 border-b border-border/60">
                 <span className="text-muted-foreground">Total Orders Placed:</span>
-                <span>{detail.usage.ordersCount} orders</span>
+                <span className="text-foreground">{detail.usage.ordersCount} orders</span>
               </div>
-              <div className="flex justify-between py-1">
+              <div className="flex justify-between py-1.5">
                 <span className="text-muted-foreground">Gross Merchandise Volume:</span>
-                <span className="font-semibold">₹{(detail.usage.gmvPaise / 100).toLocaleString("en-IN")}</span>
+                <span className="font-semibold text-foreground">₹{(detail.usage.gmvPaise / 100).toLocaleString("en-IN")}</span>
               </div>
             </div>
           </div>
@@ -675,10 +675,10 @@ export function TenantDetail() {
 
       {activeTab === "notes" && (
         <div className="space-y-6">
-          <form onSubmit={handleAddNote} className="rounded-xl border bg-card p-4 space-y-3">
+          <form onSubmit={handleAddNote} className="rounded-xl border border-border bg-card p-5 space-y-3 shadow-xs">
             <h3 className="font-semibold text-sm">Add Internal Operator Note</h3>
             <textarea
-              className="w-full rounded-md border p-2 text-xs focus:outline-hidden focus:ring-1 focus:ring-primary"
+              className="w-full rounded-md border border-border bg-background p-2.5 text-xs text-foreground focus:outline-hidden focus:ring-1 focus:ring-primary placeholder:text-muted-foreground"
               rows={3}
               placeholder="e.g. Account manager notes, custom contract nuances, payment arrangement..."
               value={newNote}
@@ -695,7 +695,7 @@ export function TenantDetail() {
               <p className="text-xs text-muted-foreground italic">No operator notes recorded for this store.</p>
             ) : (
               detail.notes.map((n) => (
-                <div key={n.id} className="rounded-lg border bg-card p-3 text-xs space-y-1">
+                <div key={n.id} className="rounded-lg border border-border bg-card p-3.5 text-xs space-y-1 shadow-2xs">
                   <div className="flex items-center justify-between text-muted-foreground">
                     <span className="font-medium text-foreground">{n.authorName || n.authorEmail || "Staff"}</span>
                     <span>{new Date(n.createdAt).toLocaleString("en-IN")}</span>
