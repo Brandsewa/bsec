@@ -5,8 +5,15 @@
  */
 export const THEME_STORAGE_KEY = "bs-theme";
 
-export const themeBootScript = `(function() {
+/**
+ * Builds the boot script. `pathPattern` (a regex source) limits theming to matching paths, so the merchant
+ * storefront (which has its own per-store look) never gets a dark colour-scheme from the visitor's OS.
+ */
+export function makeThemeBootScript(pathPattern?: string): string {
+  const guard = pathPattern ? `if (!new RegExp(${JSON.stringify(pathPattern)}).test(location.pathname)) return;` : "";
+  return `(function() {
   try {
+    ${guard}
     var stored = localStorage.getItem("${THEME_STORAGE_KEY}") || "system";
     var resolved = stored;
     if (stored === "system") {
@@ -16,3 +23,6 @@ export const themeBootScript = `(function() {
     document.documentElement.style.colorScheme = resolved;
   } catch (e) {}
 })();`;
+}
+
+export const themeBootScript = makeThemeBootScript();

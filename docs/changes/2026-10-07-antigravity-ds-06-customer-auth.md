@@ -58,3 +58,11 @@ Implements Part 6 of the Design System Implementation Guide (`docs/DESIGN-SYSTEM
 - [x] Tests added or updated (`packages/ui/test/accent.test.ts`, `apps/web/test/account-auth.test.ts`).
 - [x] No secrets, no generated files, no unrelated edits in the diff.
 - [x] Change record created in `docs/changes/2026-10-07-antigravity-ds-06-customer-auth.md`.
+
+## Claude verification (2026-10-07)
+
+Gate re-run independently: typecheck 15/15, lint 15/15, docs:check ok, build 6/6; tests: ui 40, web 175, admin 72, config 39. Not run: e2e, browser walkthrough by Claude.
+
+Defect found and fixed: the Part 1 boot script (already on main) and the new `ThemeProvider` wrapper set `data-theme` and `color-scheme` on `<html>` for **every** web page, including the merchant storefront, so a visitor with a dark OS got dark native controls and scrollbars on a light store. Fix: `makeThemeBootScript(pathPattern)` and `ThemeProvider enabled` limit theming to account, auth and token pages (`apps/web/src/lib/themed-paths.ts`, `WebThemeProvider`); the provider clears the attributes when a visitor moves to a storefront page. Test: `apps/web/test/themed-paths.test.ts`.
+
+Still open (not Part 6 scope, storefront/checkout): native `<select>` in `catalog/ProductFilterSort`, `checkout/CheckoutForm`, and `orders/ReturnRequestForm` (also a `window.confirm`; `/o/[token]` is a customer token page, so migrate it in Part 7). Also: Part 6 removed the pill radius from the marketing landing buttons (`beam.css`), per decision D5; owner may want to confirm they like the landing that way. ARCHITECTURE.md update is deferred to Part 7.

@@ -20,9 +20,12 @@ import {
 import { computeThemeTokens } from "@/components/storefront/theme-tokens.ts";
 import { googleFontsHref } from "@bs/blocks/theme-vars";
 import { fontSans, fontMono } from "@/lib/fonts.ts";
-import { themeBootScript } from "@bs/ui/server";
-import { ThemeProvider } from "@bs/ui";
+import { makeThemeBootScript } from "@bs/ui/server";
+import { WebThemeProvider } from "@/components/theme/WebThemeProvider.tsx";
+import { THEMED_PATH_SOURCE } from "@/lib/themed-paths.ts";
 import "./globals.css";
+
+const themeBootScript = makeThemeBootScript(THEMED_PATH_SOURCE);
 
 export const instant = false;
 
@@ -76,7 +79,7 @@ export default async function RootLayout({ children }: { children: ReactNode }) 
           <script dangerouslySetInnerHTML={{ __html: themeBootScript }} />
         </head>
         <body className="min-h-dvh antialiased">
-          <ThemeProvider>{children}</ThemeProvider>
+          <WebThemeProvider>{children}</WebThemeProvider>
         </body>
       </html>
     );
@@ -171,7 +174,7 @@ export default async function RootLayout({ children }: { children: ReactNode }) 
           <script dangerouslySetInnerHTML={{ __html: themeBootScript }} />
         </head>
         <body className="min-h-dvh antialiased">
-          <ThemeProvider>{screenContent}</ThemeProvider>
+          <WebThemeProvider>{screenContent}</WebThemeProvider>
         </body>
       </html>
     );
@@ -186,7 +189,7 @@ export default async function RootLayout({ children }: { children: ReactNode }) 
         {fontsHref ? <link rel="stylesheet" href={fontsHref} precedence="default" /> : null}
       </head>
       <body className="flex min-h-dvh flex-col antialiased">
-        <ThemeProvider>
+        <WebThemeProvider>
           <StoreStatusBanner isBypass={access.isBypass} mode={access.mode} />
           {themeHeader ? (
             <ThemeChrome blocks={themeHeader.blocks} renderData={themeHeader.renderData} storeName={storeName} />
@@ -199,7 +202,7 @@ export default async function RootLayout({ children }: { children: ReactNode }) 
           ) : (
             <StoreFooter storeName={storeName} />
           )}
-        </ThemeProvider>
+        </WebThemeProvider>
       </body>
     </html>
   );

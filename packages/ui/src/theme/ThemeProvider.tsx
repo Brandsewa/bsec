@@ -35,9 +35,12 @@ function getStoredPreference(): ThemePreference {
 export function ThemeProvider({
   children,
   defaultPreference = "system",
+  enabled = true,
 }: {
   children: React.ReactNode;
   defaultPreference?: ThemePreference;
+  /** When false the provider leaves <html> alone (used on the merchant storefront, which has its own look). */
+  enabled?: boolean;
 }) {
   const [preference, setPreferenceState] = useState<ThemePreference>(() => {
     if (typeof window === "undefined") return defaultPreference;
@@ -78,6 +81,11 @@ export function ThemeProvider({
   useEffect(() => {
     if (typeof window === "undefined") return;
     const root = document.documentElement;
+    if (!enabled) {
+      delete root.dataset.theme;
+      root.style.removeProperty("color-scheme");
+      return;
+    }
     const current = root.dataset.theme;
 
     // If initial mount or theme unchanged, apply directly without animation
@@ -114,7 +122,7 @@ export function ThemeProvider({
     } else {
       applyTheme();
     }
-  }, [resolved]);
+  }, [resolved, enabled]);
 
   const setPreference = (pref: ThemePreference) => {
     setPreferenceState(pref);
