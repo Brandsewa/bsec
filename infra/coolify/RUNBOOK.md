@@ -151,4 +151,4 @@ The server IP is in old git history and cannot be removed without a history rewr
 4. Keep the OS and Coolify updated; rotate `COOLIFY_TOKEN` if it was ever shown in a log or screenshot.
 5. Re-run the probe after changes (from outside the network): only 80, 443 and the SSH port you chose should answer.
 
-Status: not yet applied (no SSH access from the agent environment); owner action.
+**Status: applied 2026-10-07.** The Hostinger VPS firewall (Security, Firewall) now accepts only TCP 22, 80 and 443 (everything else is dropped by Hostinger's default rule). A TCP probe afterwards showed only 22, 80 and 443 answering on both the IPv4 and the IPv6 address; 8000, 6001 and 6002 are closed. `https://server.brandsewa.com` (Coolify), the admin and the storefront domains still load, and deploys still work because the CI calls the Coolify API over 443. If a future change needs another port, add an accept rule in the same panel. Still open: SSH hardening on the server itself (key-only login, fail2ban), a Cloudflare-only allowlist for 80/443, and `fail2ban`.
