@@ -1,6 +1,6 @@
 # Coolify deployment runbook
 
-**Status:** production is live on the shared Brand Sewa VPS (`server.brandsewa.com`, host IP `88.222.241.159`), Coolify project **Bs Commerce Platform** -> environment `production`. There is **no staging VPS**; staging is an ephemeral CI stack, see section 0. Everything below reflects what is actually configured, not just the plan.
+**Status:** production is live on the shared Brand Sewa VPS (`server.brandsewa.com`, host IP `<VPS IP, kept out of the public repo>`), Coolify project **Bs Commerce Platform** -> environment `production`. There is **no staging VPS**; staging is an ephemeral CI stack, see section 0. Everything below reflects what is actually configured, not just the plan.
 
 Images are built by GitHub Actions and pulled from GHCR (`ghcr.io/brandsewa/bsec-*`, all **public** -- no registry credentials needed on the VPS). **Nothing is built on the VPS.** Source: PLAN section 3, section 13 (M0), section 14.
 

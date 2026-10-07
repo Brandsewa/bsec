@@ -1,6 +1,6 @@
 # Single-Tenant Point-in-Time Restore Runbook
 
-**Environment:** Production on `server.brandsewa.com` (host IP `88.222.241.159`).  
+**Environment:** Production on `server.brandsewa.com` (host IP `<VPS IP, kept out of the public repo>`).  
 **Plan Reference:** PLAN §14 ("Backups and disaster recovery: single-tenant restore without touching other tenants").
 
 ---

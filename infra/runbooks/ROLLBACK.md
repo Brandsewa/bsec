@@ -1,6 +1,6 @@
 # Production Rollback Runbook
 
-**Environment:** Production on `server.brandsewa.com` (host IP `88.222.241.159`).  
+**Environment:** Production on `server.brandsewa.com` (host IP `<VPS IP, kept out of the public repo>`).  
 **Coolify Project:** Bs Commerce Platform -> Environment `production`.  
 **Plan Reference:** PLAN §14 ("Database migration safety: expand -> migrate -> contract").
 

@@ -88,7 +88,7 @@ Bundled in the images and never run automatically. Open the app in Coolify, go t
 
 **Bootstrap the first Platform Staff owner** (platform container). Uses an interactive hidden password prompt (min 10 characters), never printed or logged:
 ```
-STAFF_EMAIL=brandsewaofficial@gmail.com STAFF_NAME="Platform Owner" node dist/create-staff.js
+STAFF_EMAIL=owner@example.com STAFF_NAME="Platform Owner" node dist/create-staff.js
 ```
 - The account can do nothing until it has set up an authenticator app: the first sign-in at `superadmin.bcom.si` shows a setup screen (secret + one-time backup codes), you confirm one code, and you are signed out. Every later sign-in is password + a code from the app (or a backup code, each usable once).
 - If the email already belongs to an account (for example a store owner), that account's password is **not** changed; it simply becomes platform staff.
