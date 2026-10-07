@@ -87,7 +87,8 @@ jobs:
         run: pnpm build
       - name: Unit Tests
         if: needs.changes.outputs.docs_only != 'true'
-        run: pnpm test:fast
+        # Two vitest workers: jsdom route tests import the whole kit and time out when 16 workers fight for 8 GB.
+        run: pnpm exec turbo run test:fast -- --maxWorkers=2
       - name: Fast path notice
         if: needs.changes.outputs.docs_only == 'true'
         run: 'echo "Docs-only PR: docs:check succeeded; skipping lint, typecheck, build, and unit tests."'
@@ -125,9 +126,8 @@ jobs:
         if: needs.changes.outputs.docs_only != 'true'
       # One package at a time and one vitest worker: every *.int.test.ts shares one Postgres and runs migrations
       # at start (AGENTS.md section 4). A 2-core hosted runner was serial by accident; bigger runners are not.
-      - run: pnpm exec turbo run test:heavy --concurrency=1
-        env:
-          VITEST_MAX_WORKERS: "1"
+      # Explicit flags: VITEST_MAX_WORKERS is not honoured by vitest 5, so the cap has to be on the command line.
+      - run: pnpm exec turbo run test:heavy --concurrency=1 -- --no-file-parallelism
         if: needs.changes.outputs.docs_only != 'true'
       - name: Fast path notice
         if: needs.changes.outputs.docs_only == 'true'
