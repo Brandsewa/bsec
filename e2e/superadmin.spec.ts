@@ -134,7 +134,8 @@ test.describe.serial("Super Admin (M9)", () => {
 
   test("signing out ends the session", async ({ page }) => {
     await signInWithCode(page, secret);
-    await page.getByRole("button", { name: "Sign Out" }).click();
+    await page.getByRole("button", { name: "Staff account menu" }).click();
+    await page.getByRole("menuitem", { name: "Sign out" }).click();
     await expect(page).toHaveURL(/\/login/);
     await page.goto(`${SUPERADMIN}/tenants`);
     await expect(page).toHaveURL(/\/login/);
