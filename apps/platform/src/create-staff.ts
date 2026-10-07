@@ -1,7 +1,7 @@
 /**
  * Operator tool: create the bootstrap platform staff login, or reset its authenticator (PLAN §6).
  * Run from the platform container's terminal:
- *   STAFF_EMAIL=brandsewaofficial@gmail.com STAFF_NAME="Platform Owner" node dist/create-staff.js
+ *   STAFF_EMAIL=owner@example.com STAFF_NAME="Platform Owner" node dist/create-staff.js
  *   STAFF_EMAIL=... STAFF_RESET_MFA=1 node dist/create-staff.js      (lost phone: they set up a new authenticator)
  *   STAFF_EMAIL=... STAFF_RESET_PASSWORD=1 node dist/create-staff.js (forgotten password: asks for the new one, ends their sessions)
  * A password is asked for (hidden prompt, or STAFF_PASSWORD when there is no TTY) only when the account is new. An existing
@@ -27,7 +27,8 @@ function promptHidden(question: string): Promise<string> {
 const url = process.env.DATABASE_URL_PLATFORM;
 if (!url) throw new Error("Missing env DATABASE_URL_PLATFORM");
 
-const email = process.env.STAFF_EMAIL ?? "brandsewaofficial@gmail.com";
+const email = process.env.STAFF_EMAIL;
+if (!email) throw new Error("Missing env STAFF_EMAIL");
 const name = process.env.STAFF_NAME ?? "Platform Owner";
 const role = (process.env.STAFF_ROLE as "platform_owner" | "platform_admin" | "platform_support") ?? "platform_owner";
 const resetMfa = process.env.STAFF_RESET_MFA === "1";

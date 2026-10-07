@@ -12,7 +12,7 @@
 
 > [!WARNING]
 > **Blocked from live execution on production storage:**
-> The current execution environment is a local build machine with no SSH access to the production host (`server.brandsewa.com` / `88.222.241.159`) and no production Cloudflare R2 access keys (`PGBACKREST_REPO1_S3_KEY`, `PGBACKREST_REPO1_S3_KEY_SECRET` for bucket `bsec-backups`).
+> The current execution environment is a local build machine with no SSH access to the production host (`server.brandsewa.com` / `<VPS IP, kept out of the public repo>`) and no production Cloudflare R2 access keys (`PGBACKREST_REPO1_S3_KEY`, `PGBACKREST_REPO1_S3_KEY_SECRET` for bucket `bsec-backups`).
 > Per engineering directives, live drill execution against production storage is **not simulated**. The step-by-step verified procedure below is documented for execution by the infrastructure operator who possesses production secrets.
 
 ---
