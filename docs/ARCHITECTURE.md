@@ -4,7 +4,7 @@
 
 | | |
 |---|---|
-| Last verified against | `feat/ds-08-aliases-perf-a11y` (Design system Part 8: token alias removal, performance & accessibility pass, theme robustness, hardening), 2026-10-07 |
+| Last verified against | `main` at `e029ec2` (design-system overhaul Parts 1-3 and 5-8 live; CI on hosted runners; repo public; VPS firewall applied), 2026-10-07 |
 | Verified how | files read from the working tree; `pnpm docs:check` for the mechanical parts. Facts marked *(from code)* were read, not run. |
 | Owner | whoever changes the area (see the update triggers in section 0) |
 
@@ -151,6 +151,8 @@ push to main -> images (web, platform, worker, admin, superadmin, migrate -> ghc
              -> staging-smoke-test (ephemeral compose, /health checks, Playwright e2e)
              -> deploy production (Coolify: run bsec-migrate, then deploy the app UUIDs)
 ```
+
+Runs on GitHub-hosted `ubuntu-24.04` runners (the repository is public, so minutes are free). Tests in CI are serial by design: `turbo run test:fast -- --no-file-parallelism` and `turbo run test:heavy --concurrency=1 -- --no-file-parallelism`, because the platform and db suites share one Postgres. The `ci-<ref>` concurrency group cancels an in-progress run when a newer one starts, so never merge a second PR while a `main` run is deploying. The e2e suite (`e2e/`) runs only in the smoke-test job on pushes to `main`; update its selectors whenever sidebar, menu or label text changes. A new `admin.*` procedure must also be mapped in `packages/domain/test/isolation.int.test.ts` or the heavy job fails. Repository settings: secret scanning and push protection on, private vulnerability reporting on, Dependabot security updates on, workflow runs from outside contributors need approval. Server firewall (Hostinger): only 22, 80, 443 open (`infra/coolify/RUNBOOK.md` section 9).
 
 Gotcha that already bit once: a new Coolify app must also be added to `APP_UUIDS` in `ci.yml`, or its image is built but never redeployed (Super Admin, 2026-10-01). Coolify UUIDs and the resource table live in `infra/coolify/RUNBOOK.md`.
 
@@ -401,6 +403,8 @@ Index and statuses: [`docs/adr/README.md`](adr/README.md). Summary of what each 
 
 Keep this list honest; remove an item when fixed.
 
+- The Super Admin "Appearance" manager (platform-managed colours, fonts and density for all dashboards, guide Part 4) is planned but **not built** (owner put it on hold 2026-10-07); no table, endpoint or ADR exists for it yet.
+- The repository is public for the development period and must be made private near launch; old commits still contain the former server IP, a personal email and a local path (see `progress.md`).
 - Two ADRs are numbered 014 (`014-admin-auth-and-api-access.md`, `014-platform-billing-separation.md`). Not renumbered because other docs link to them; the next ADR is **022**.
 - ADR for M9 decisions is still to be written (`progress.md`).
 - `progress.md` and `DEPLOYMENT.md` contain test counts and dates that go stale; prefer CI.

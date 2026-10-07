@@ -118,3 +118,8 @@ All legacy backward-compatibility token aliases (`--surface-75..400`, `--overlay
 
 Only the standard semantic tokens defined in Section 2 are supported. New code must strictly reference semantic tokens (`muted`, `muted-foreground`, `faint-foreground`, `foreground-2`, `card`, `popover`, `canvas`, `sidebar`, `border`, `border-soft`, `input`, `primary`, `brand`).
 
+---
+
+## Status (2026-10-07)
+
+Built and live: tokens, Geist, theme (light/dark/system), the component kit, Super Admin, Store Admin, and customer account/auth. **Planned but not built:** the Super Admin Appearance manager (platform-managed colours, fonts, density); the semantic token names above are its contract, so do not rename them. Open gaps and lessons: `progress.md`, section "Design-system overhaul, CI and public repo".
