@@ -15,7 +15,7 @@ permissions:
 jobs:
   changes:
     name: detect changes
-    runs-on: ubuntu-24.04
+    runs-on: ${{ vars.CI_RUNNER || 'ubuntu-24.04' }}
     outputs:
       docs_only: ${{ steps.filter.outputs.docs_only }}
     steps:
@@ -65,7 +65,7 @@ jobs:
   check-fast:
     name: typecheck · lint · build · unit-test
     needs: changes
-    runs-on: ubuntu-24.04
+    runs-on: ${{ vars.CI_RUNNER || 'ubuntu-24.04' }}
     steps:
       - uses: actions/checkout@v5
       - uses: pnpm/action-setup@v4
@@ -87,7 +87,10 @@ jobs:
         run: pnpm build
       - name: Unit Tests
         if: needs.changes.outputs.docs_only != 'true'
-        run: pnpm test:fast
+        # Files run one at a time: apps/platform's suites share one database (AGENTS.md section 4) and the jsdom
+        # route tests time out when many workers fight for the Docker VM's memory. A 2-core hosted runner was
+        # serial by accident; this PC is not.
+        run: pnpm exec turbo run test:fast -- --no-file-parallelism
       - name: Fast path notice
         if: needs.changes.outputs.docs_only == 'true'
         run: 'echo "Docs-only PR: docs:check succeeded; skipping lint, typecheck, build, and unit tests."'
@@ -95,7 +98,7 @@ jobs:
   check-heavy:
     name: heavy integration tests (real postgres)
     needs: changes
-    runs-on: ubuntu-24.04
+    runs-on: ${{ vars.CI_RUNNER || 'ubuntu-24.04' }}
     services:
       postgres:
         image: postgres:18
@@ -123,7 +126,10 @@ jobs:
         if: needs.changes.outputs.docs_only != 'true'
       - run: pnpm --filter "@bs/web..." build # perf-budget-bundle.int.test.ts reads .next
         if: needs.changes.outputs.docs_only != 'true'
-      - run: pnpm test:heavy
+      # One package at a time and one vitest worker: every *.int.test.ts shares one Postgres and runs migrations
+      # at start (AGENTS.md section 4). A 2-core hosted runner was serial by accident; bigger runners are not.
+      # Explicit flags: VITEST_MAX_WORKERS is not honoured by vitest 5, so the cap has to be on the command line.
+      - run: pnpm exec turbo run test:heavy --concurrency=1 -- --no-file-parallelism
         if: needs.changes.outputs.docs_only != 'true'
       - name: Fast path notice
         if: needs.changes.outputs.docs_only == 'true'
@@ -131,7 +137,7 @@ jobs:
 
   secret-scan:
     name: secret-scan
-    runs-on: ubuntu-24.04
+    runs-on: ${{ vars.CI_RUNNER || 'ubuntu-24.04' }}
     steps:
       - uses: actions/checkout@v5
         with:
@@ -146,7 +152,7 @@ jobs:
     name: build images → GHCR
     needs: [check-fast, check-heavy, secret-scan]
     if: github.event_name == 'push' && github.ref == 'refs/heads/main'
-    runs-on: ubuntu-24.04
+    runs-on: ${{ vars.CI_RUNNER || 'ubuntu-24.04' }}
     permissions:
       contents: read
       packages: write
@@ -190,7 +196,7 @@ jobs:
   staging-smoke-test:
     name: staging smoke test (ephemeral compose)
     needs: images
-    runs-on: ubuntu-24.04
+    runs-on: ${{ vars.CI_RUNNER || 'ubuntu-24.04' }}
     timeout-minutes: 15
     permissions:
       contents: read
@@ -286,7 +292,7 @@ jobs:
   deploy-production:
     name: deploy production (Coolify)
     needs: [images, staging-smoke-test]
-    runs-on: ubuntu-24.04
+    runs-on: ${{ vars.CI_RUNNER || 'ubuntu-24.04' }}
     # Required reviewers on the "production" environment gate this job (GitHub → Settings →
     # Environments → production). COOLIFY_TOKEN is a Coolify API token, permission "Deploy" only
     # (Keys & Tokens → API Tokens). Resource UUIDs below aren't secret, just identifiers.
