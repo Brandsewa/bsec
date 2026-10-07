@@ -66,3 +66,10 @@ Completed full design system alignment and optimization sprint across both `apps
 - [x] `docs/admin-ui-standards.md` and `progress.md` updated.
 - [x] No secrets, no generated files, no unrelated edits in the diff.
 - [x] Honest status reported.
+
+## Claude verification (2026-10-07)
+
+Reviewed the whole diff against origin/main (99 files). The sprint was labelled design-only but also added backend: return archive/restore/delete (contract, api.ts handlers, domain) and `dateFrom`/`dateTo` filters on quotes, abandoned checkouts and reviews. Fixes made by Claude before merge:
+- Return archive/restore/delete had no tests and no `audit_logs` rows (AGENTS.md rules 6 and tests). Added audit rows and real-database tests in `packages/domain/test/returns.int.test.ts` (3 new, file 12/12 passing), including cross-tenant isolation.
+- Archive now only accepts closed-out returns (refunded, replaced, rejected, cancelled, closed) and records the previous status; restore puts the previous status back instead of forcing `closed`.
+Gate re-run: typecheck 15/15, lint 15/15, docs:check ok, build 6/6; tests: admin 72, ui 30, config 39, web 165, domain test:fast 358 (44 files), real-DB quotes, abandoned-checkouts and reviews 22. Not run: end-to-end suite, browser walkthrough by Claude (owner reported browser testing done). Known: bulk "Archive" on an in-progress return now returns an error for that row instead of archiving it.

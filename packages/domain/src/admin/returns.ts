@@ -4,6 +4,8 @@ import type { Runtime } from "../runtime.ts";
 import { assertPermission, type TenantContext } from "../context.ts";
 import { getReturnPhotoUrls } from "../orders/return-photos.ts";
 
+const ARCHIVABLE_RETURN_STATUSES = ["refunded", "replaced", "rejected", "cancelled", "closed"];
+
 export interface AdminReturnStats {
   needsReview: number;
   awaitingItem: number;
@@ -479,8 +481,57 @@ export async function getAdminReturnDetail(
   });
 }
 
+type ReturnTx = Parameters<Parameters<typeof withTenant>[2]>[0];
+
+async function loadReturnForArchive(tx: ReturnTx, ctx: TenantContext, id: string) {
+  const [ret] = await tx
+    .select({
+      id: schema.returns.id,
+      orderId: schema.returns.orderId,
+      number: schema.returns.number,
+      status: schema.returns.status,
+    })
+    .from(schema.returns)
+    .where(and(eq(schema.returns.tenantId, ctx.tenantId), eq(schema.returns.id, id)));
+  if (!ret) throw new Error("Not Found: Return not found");
+  return ret;
+}
+
+async function recordReturnArchiveChange(
+  tx: ReturnTx,
+  ctx: TenantContext,
+  ret: { id: string; orderId: string; number: string },
+  type: "return.archived" | "return.restored" | "return.deleted",
+  message: string,
+  data: Record<string, unknown>,
+) {
+  const actorId = ctx.actor.type === "staff" ? ctx.actor.userId : null;
+  await tx.insert(schema.orderEvents).values({
+    tenantId: ctx.tenantId,
+    orderId: ret.orderId,
+    type,
+    message,
+    data: { returnId: ret.id, returnNumber: ret.number, ...data },
+    actorType: ctx.actor.type,
+    actorId,
+    visibleToCustomer: false,
+  });
+  // Returns carry refund records, so hiding or deleting one is an audited money-adjacent change (AGENTS.md rule 6).
+  await tx.insert(schema.auditLogs).values({
+    tenantId: ctx.tenantId,
+    actorType: ctx.actor.type,
+    actorId,
+    action: type,
+    targetType: "return",
+    targetId: ret.id,
+    diff: data,
+  });
+}
+
 /**
  * Archives a return case so it is hidden from active operational views.
+ * Only closed-out cases (refunded, replaced, rejected, cancelled, closed) can be archived, and the
+ * previous status is kept in the event so restore can put it back exactly.
  */
 export async function archiveAdminReturn(
   rt: Runtime,
@@ -490,35 +541,26 @@ export async function archiveAdminReturn(
   assertPermission(ctx, "orders.write");
 
   return await withTenant(rt._db.db, ctx.tenantId, async (tx) => {
-    const [ret] = await tx
-      .select({ id: schema.returns.id, orderId: schema.returns.orderId, number: schema.returns.number })
-      .from(schema.returns)
-      .where(and(eq(schema.returns.tenantId, ctx.tenantId), eq(schema.returns.id, input.id)));
-
-    if (!ret) throw new Error("Not Found: Return not found");
+    const ret = await loadReturnForArchive(tx, ctx, input.id);
+    if (ret.status === "archived") return { success: true };
+    if (!ARCHIVABLE_RETURN_STATUSES.includes(ret.status)) {
+      throw new Error("Only resolved, rejected, cancelled or closed returns can be archived.");
+    }
 
     await tx
       .update(schema.returns)
       .set({ status: "archived", updatedAt: new Date() })
       .where(and(eq(schema.returns.tenantId, ctx.tenantId), eq(schema.returns.id, input.id)));
 
-    await tx.insert(schema.orderEvents).values({
-      tenantId: ctx.tenantId,
-      orderId: ret.orderId,
-      type: "return.archived",
-      message: `Return ${ret.number} archived`,
-      data: { returnId: ret.id, returnNumber: ret.number },
-      actorType: ctx.actor?.type ?? "system",
-      actorId: ctx.actor && "userId" in ctx.actor ? ctx.actor.userId : null,
-      visibleToCustomer: false,
+    await recordReturnArchiveChange(tx, ctx, ret, "return.archived", `Return ${ret.number} archived`, {
+      previousStatus: ret.status,
     });
-
     return { success: true };
   });
 }
 
 /**
- * Restores an archived return case back to closed status.
+ * Restores an archived return to the status it had when it was archived (falls back to closed).
  */
 export async function restoreAdminReturn(
   rt: Runtime,
@@ -528,29 +570,34 @@ export async function restoreAdminReturn(
   assertPermission(ctx, "orders.write");
 
   return await withTenant(rt._db.db, ctx.tenantId, async (tx) => {
-    const [ret] = await tx
-      .select({ id: schema.returns.id, orderId: schema.returns.orderId, number: schema.returns.number })
-      .from(schema.returns)
-      .where(and(eq(schema.returns.tenantId, ctx.tenantId), eq(schema.returns.id, input.id)));
+    const ret = await loadReturnForArchive(tx, ctx, input.id);
+    if (ret.status !== "archived") return { success: true };
 
-    if (!ret) throw new Error("Not Found: Return not found");
+    const [last] = await tx
+      .select({ data: schema.orderEvents.data })
+      .from(schema.orderEvents)
+      .where(
+        and(
+          eq(schema.orderEvents.tenantId, ctx.tenantId),
+          eq(schema.orderEvents.orderId, ret.orderId),
+          eq(schema.orderEvents.type, "return.archived"),
+          sql`${schema.orderEvents.data}->>'returnId' = ${ret.id}`,
+        ),
+      )
+      .orderBy(desc(schema.orderEvents.createdAt))
+      .limit(1);
+    const previous = (last?.data as { previousStatus?: unknown } | undefined)?.previousStatus;
+    const restoredStatus =
+      typeof previous === "string" && ARCHIVABLE_RETURN_STATUSES.includes(previous) ? previous : "closed";
 
     await tx
       .update(schema.returns)
-      .set({ status: "closed", updatedAt: new Date() })
+      .set({ status: restoredStatus, updatedAt: new Date() })
       .where(and(eq(schema.returns.tenantId, ctx.tenantId), eq(schema.returns.id, input.id)));
 
-    await tx.insert(schema.orderEvents).values({
-      tenantId: ctx.tenantId,
-      orderId: ret.orderId,
-      type: "return.restored",
-      message: `Return ${ret.number} restored from archive`,
-      data: { returnId: ret.id, returnNumber: ret.number },
-      actorType: ctx.actor?.type ?? "system",
-      actorId: ctx.actor && "userId" in ctx.actor ? ctx.actor.userId : null,
-      visibleToCustomer: false,
+    await recordReturnArchiveChange(tx, ctx, ret, "return.restored", `Return ${ret.number} restored from archive`, {
+      restoredStatus,
     });
-
     return { success: true };
   });
 }
@@ -566,18 +613,7 @@ export async function deleteAdminReturn(
   assertPermission(ctx, "orders.write");
 
   return await withTenant(rt._db.db, ctx.tenantId, async (tx) => {
-    const [ret] = await tx
-      .select({
-        id: schema.returns.id,
-        status: schema.returns.status,
-        orderId: schema.returns.orderId,
-        number: schema.returns.number,
-      })
-      .from(schema.returns)
-      .where(and(eq(schema.returns.tenantId, ctx.tenantId), eq(schema.returns.id, input.id)));
-
-    if (!ret) throw new Error("Not Found: Return not found");
-
+    const ret = await loadReturnForArchive(tx, ctx, input.id);
     if (ret.status !== "archived") {
       throw new Error("Only archived returns can be deleted. Please archive the return first.");
     }
@@ -586,17 +622,7 @@ export async function deleteAdminReturn(
       .delete(schema.returns)
       .where(and(eq(schema.returns.tenantId, ctx.tenantId), eq(schema.returns.id, input.id)));
 
-    await tx.insert(schema.orderEvents).values({
-      tenantId: ctx.tenantId,
-      orderId: ret.orderId,
-      type: "return.deleted",
-      message: `Return ${ret.number} permanently deleted`,
-      data: { returnNumber: ret.number },
-      actorType: ctx.actor?.type ?? "system",
-      actorId: ctx.actor && "userId" in ctx.actor ? ctx.actor.userId : null,
-      visibleToCustomer: false,
-    });
-
+    await recordReturnArchiveChange(tx, ctx, ret, "return.deleted", `Return ${ret.number} permanently deleted`, {});
     return { success: true };
   });
 }

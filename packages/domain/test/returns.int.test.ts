@@ -8,6 +8,9 @@ import {
   requestReturn,
   cancelReturn,
   actOnReturn,
+  archiveAdminReturn,
+  restoreAdminReturn,
+  deleteAdminReturn,
   getAdminReturnStats,
   listAdminReturns,
   getAdminReturnDetail,
@@ -421,5 +424,67 @@ describe("Returns Test Suite: End-to-End & Boundary Verification", () => {
         getAdminReturnDetail(rtWeb, ctxB, { id: returnAId }),
       ).rejects.toThrow(/Return not found/i);
     }
+  });
+});
+
+describe("Return archive, restore and delete", () => {
+  async function cancelledReturn() {
+    const delivered = await createDeliveredOrder(ctxA, variantA1Id, 1);
+    const ret = await requestReturn(rtWeb, ctxA, {
+      orderId: delivered.orderId,
+      reason: "Changed my mind",
+      resolution: "refund",
+      items: [{ orderItemId: delivered.orderItemId, quantity: 1 }],
+    });
+    await cancelReturn(rtWeb, ctxA, { returnId: ret.returnId, reason: "Customer changed mind" });
+    return ret.returnId;
+  }
+
+  it("archives a closed-out return, hides it from active views, restores its prior status and audits each step", async () => {
+    const id = await cancelledReturn();
+    await archiveAdminReturn(rtWeb, ctxA, { id });
+
+    const active = await listAdminReturns(rtWeb, ctxA, { view: "all" });
+    expect(active.items.some((r) => r.id === id)).toBe(false);
+    const archived = await listAdminReturns(rtWeb, ctxA, { view: "archived" });
+    expect(archived.items.some((r) => r.id === id)).toBe(true);
+
+    await restoreAdminReturn(rtWeb, ctxA, { id });
+    const [row] = await withTenant(rtWeb._db.db, ctxA.tenantId, async (tx) =>
+      tx.select().from(schema.returns).where(eq(schema.returns.id, id)),
+    );
+    expect(row?.status).toBe("cancelled");
+
+    const audits = await withTenant(rtWeb._db.db, ctxA.tenantId, async (tx) =>
+      tx.select().from(schema.auditLogs).where(eq(schema.auditLogs.targetId, id)),
+    );
+    expect(audits.map((a) => a.action)).toEqual(expect.arrayContaining(["return.archived", "return.restored"]));
+  });
+
+  it("refuses to archive an in-progress return and to delete one that is not archived", async () => {
+    const delivered = await createDeliveredOrder(ctxA, variantA1Id, 1);
+    const ret = await requestReturn(rtWeb, ctxA, {
+      orderId: delivered.orderId,
+      reason: "Size or fit",
+      resolution: "refund",
+      items: [{ orderItemId: delivered.orderItemId, quantity: 1 }],
+    });
+    await expect(archiveAdminReturn(rtWeb, ctxA, { id: ret.returnId })).rejects.toThrow(/can be archived/i);
+    await expect(deleteAdminReturn(rtWeb, ctxA, { id: ret.returnId })).rejects.toThrow(/archive the return first/i);
+  });
+
+  it("deletes an archived return, writes an audit row, and never touches another tenant", async () => {
+    const id = await cancelledReturn();
+    await archiveAdminReturn(rtWeb, ctxA, { id });
+    await expect(deleteAdminReturn(rtWeb, ctxB, { id })).rejects.toThrow(/not found/i);
+    await deleteAdminReturn(rtWeb, ctxA, { id });
+    const rows = await withTenant(rtWeb._db.db, ctxA.tenantId, async (tx) =>
+      tx.select().from(schema.returns).where(eq(schema.returns.id, id)),
+    );
+    expect(rows).toHaveLength(0);
+    const audits = await withTenant(rtWeb._db.db, ctxA.tenantId, async (tx) =>
+      tx.select().from(schema.auditLogs).where(eq(schema.auditLogs.targetId, id)),
+    );
+    expect(audits.map((a) => a.action)).toContain("return.deleted");
   });
 });
