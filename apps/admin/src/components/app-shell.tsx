@@ -161,8 +161,9 @@ export function AppShell({
                     >
                       <SidebarMenuButton
                         onMouseEnter={() => setOpenGroup(label)}
+                        // Hovering already opens the group, so a toggle here would close it again on the same click.
                         onClick={() => {
-                          setOpenGroup((prev) => (prev === label ? null : label));
+                          setOpenGroup(label);
                         }}
                         tooltip={flyoutTooltip}
                         className={cn(
