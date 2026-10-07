@@ -68,7 +68,7 @@ jobs:
     runs-on: ${{ vars.CI_RUNNER || 'ubuntu-24.04' }}
     steps:
       - uses: actions/checkout@v5
-      - uses: pnpm/action-setup@v4
+      - uses: pnpm/action-setup@v6
       - uses: actions/setup-node@v5
         with:
           node-version-file: .nvmrc
@@ -115,7 +115,7 @@ jobs:
       TEST_DATABASE_URL_SUPERUSER: postgres://postgres:postgres@localhost:5432/bsec
     steps:
       - uses: actions/checkout@v5
-      - uses: pnpm/action-setup@v4
+      - uses: pnpm/action-setup@v6
         if: needs.changes.outputs.docs_only != 'true'
       - uses: actions/setup-node@v5
         if: needs.changes.outputs.docs_only != 'true'
@@ -253,7 +253,7 @@ jobs:
           $COMPOSE run --rm --no-deps -e OWNER_EMAIL=owner@ci.example platform node dist/demo.js seed
           # First platform staff login (the Super Admin e2e sets up its authenticator through the UI)
           $COMPOSE run --rm --no-deps -e STAFF_EMAIL=owner@ci.example -e STAFF_NAME="CI Owner" -e STAFF_PASSWORD="$E2E_PASSWORD" platform node dist/create-staff.js
-      - uses: pnpm/action-setup@v4
+      - uses: pnpm/action-setup@v6
       - uses: actions/setup-node@v5
         with:
           node-version-file: .nvmrc
