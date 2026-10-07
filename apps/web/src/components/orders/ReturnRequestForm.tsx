@@ -3,6 +3,7 @@
 import React, { useState, useRef } from "react";
 import Image from "next/image";
 import { useRouter } from "next/navigation";
+import { ConfirmDialog, SimpleSelect } from "@bs/ui";
 
 
 interface Item {
@@ -68,6 +69,7 @@ export function ReturnRequestForm({
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [cancellingId, setCancellingId] = useState<string | null>(null);
+  const [confirmCancelId, setConfirmCancelId] = useState<string | null>(null);
 
   const available = items.filter((i) => i.returnable > 0);
   const currentReasonObj = reasons.find((r) => r.id === selectedReasonId) ?? reasons[0];
@@ -148,7 +150,7 @@ export function ReturnRequestForm({
   }
 
   async function handleCancelReturn(returnId: string) {
-    if (!window.confirm("Are you sure you want to cancel this return request?")) return;
+    setConfirmCancelId(null);
     setCancellingId(returnId);
     setError(null);
     try {
@@ -224,6 +226,7 @@ export function ReturnRequestForm({
   }
 
   return (
+    <>
     <div className="space-y-4">
       {/* Existing Returns List */}
       {existingReturns.length > 0 && (
@@ -246,7 +249,7 @@ export function ReturnRequestForm({
                     <button
                       type="button"
                       disabled={cancellingId === r.id}
-                      onClick={() => handleCancelReturn(r.id)}
+                      onClick={() => setConfirmCancelId(r.id)}
                       className="text-xs text-destructive hover:underline disabled:opacity-50"
                     >
                       {cancellingId === r.id ? "Cancelling..." : "Cancel request"}
@@ -320,18 +323,16 @@ export function ReturnRequestForm({
                         <span className="font-medium text-foreground">{i.title}</span>
                         {i.variant ? <span className="text-xs text-muted-foreground"> ({i.variant})</span> : null}
                       </div>
-                      <select
-                        aria-label={`Quantity of ${i.title} to return`}
-                        value={qty[i.id] ?? 0}
-                        onChange={(e) => setQty({ ...qty, [i.id]: Number(e.target.value) })}
-                        className="rounded-md border border-border bg-background px-2.5 py-1 text-sm text-foreground"
-                      >
-                        {Array.from({ length: i.returnable + 1 }, (_, n) => (
-                          <option key={n} value={n}>
-                            {n} {n === 1 ? "unit" : "units"}
-                          </option>
-                        ))}
-                      </select>
+                      <SimpleSelect
+                        ariaLabel={`Quantity of ${i.title} to return`}
+                        value={String(qty[i.id] ?? 0)}
+                        onChange={(v) => setQty({ ...qty, [i.id]: Number(v) })}
+                        options={Array.from({ length: i.returnable + 1 }, (_, n) => ({
+                          value: String(n),
+                          label: `${n} ${n === 1 ? "unit" : "units"}`,
+                        }))}
+                        className="w-28"
+                      />
                     </label>
                   ))}
                 </div>
@@ -387,17 +388,13 @@ export function ReturnRequestForm({
               <div className="space-y-1.5">
                 <label className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Reason for Return *</label>
                 {reasons.length > 0 ? (
-                  <select
+                  <SimpleSelect
+                    ariaLabel="Reason for return"
                     value={selectedReasonId}
-                    onChange={(e) => setSelectedReasonId(e.target.value)}
-                    className="w-full rounded-md border border-border bg-background p-2 text-sm text-foreground"
-                  >
-                    {reasons.map((r) => (
-                      <option key={r.id} value={r.id}>
-                        {r.label}
-                      </option>
-                    ))}
-                  </select>
+                    onChange={setSelectedReasonId}
+                    options={reasons.map((r) => ({ value: r.id, label: r.label }))}
+                    className="w-full"
+                  />
                 ) : (
                   <input
                     required
@@ -506,5 +503,16 @@ export function ReturnRequestForm({
         </>
       )}
     </div>
+      <ConfirmDialog
+        open={confirmCancelId !== null}
+        onOpenChange={(open) => { if (!open) setConfirmCancelId(null); }}
+        title="Cancel this return request?"
+        description="The request will be withdrawn. You can submit a new one later if the item is still eligible."
+        confirmLabel="Cancel request"
+        cancelLabel="Keep request"
+        destructive
+        onConfirm={() => { if (confirmCancelId) void handleCancelReturn(confirmCancelId); }}
+      />
+    </>
   );
 }

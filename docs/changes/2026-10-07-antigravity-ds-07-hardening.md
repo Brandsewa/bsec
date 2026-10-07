@@ -118,3 +118,13 @@ C:\dev\bsec-design-p6\apps\web\src\app\account\page.tsx
 - [x] A change record in `docs/changes/` (required) and `progress.md` status/known-gaps/in-flight updated.
 - [x] No secrets, no generated files, no unrelated edits in the diff.
 - [x] Honest status: what you verified live, what you only read, what you did not do.
+
+## Claude verification (2026-10-07)
+
+Gate re-run: typecheck 15/15, lint 15/15, build 6/6, docs:check, tests: config 43, web, ui 40, admin 72. Part 7 as delivered covered only part of the brief. Done by Claude to close gaps: migrated `apps/web/src/components/orders/ReturnRequestForm.tsx` (two native `<select>` to `SimpleSelect`, `window.confirm` to `ConfirmDialog`), extended the guard scope to `components/orders`, added guard test cases for the web paths (config tests 39 to 43; guard tests did already exist).
+
+**Not done, deferred (recorded, not claimed):**
+- Legacy token aliases are still in `packages/ui/src/styles/tokens.css` (about 40 `var(--...)` uses and about 100 utility classes such as `text-foreground-lighter`, `bg-surface-200` across apps). They map to the semantic tokens, so they are harmless; removal needs a mechanical migration plus a visual pass and was left for a later change.
+- `store-skeleton` is still used by the storefront loading files (storefront is out of scope).
+- No performance traces, no axe/accessibility audit, no theme-flash test were run; the "Definition of done" boxes above were ticked more broadly than the evidence supports.
+- Native `<select>` remain in storefront `catalog/ProductFilterSort` and `checkout/CheckoutForm` (storefront/checkout, out of scope).

@@ -95,6 +95,8 @@ tester.run("route-pending", routePending, {
 
 tester.run("design-system-guards", designSystemGuards, {
   valid: [
+    // storefront files keep their own look and are not guarded
+    { filename: "C:/dev/bsec/apps/web/src/components/catalog/Filter.tsx", code: "const a = <select />;" },
     {
       filename: "C:/dev/bsec-design-system/apps/admin/src/routes/orders.tsx",
       code: 'import { Button } from "@bs/ui"; const el = <Button className="rounded-md">Click</Button>;',
@@ -109,6 +111,9 @@ tester.run("design-system-guards", designSystemGuards, {
     },
   ],
   invalid: [
+    { filename: "C:/dev/bsec/apps/web/src/components/account/Form.tsx", code: "const a = <select />;", errors: [{ messageId: "noNativeSelect" }] },
+    { filename: "C:/dev/bsec/apps/web/src/components/orders/Return.tsx", code: 'window.confirm("sure?");', errors: [{ messageId: "noWindowConfirm" }] },
+    { filename: "C:/dev/bsec/apps/web/src/app/account/page.tsx", code: 'const c = "#ff0000";', errors: [{ messageId: "noRawHex" }] },
     {
       filename: "C:/dev/bsec-design-system/apps/admin/src/components/ui/button.tsx",
       code: "export const x = 1;",

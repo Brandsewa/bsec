@@ -17,7 +17,7 @@ export default {
     const file = context.filename.replaceAll("\\", "/");
     // Enforce on apps/admin, apps/superadmin, and apps/web account/auth files (Part 7.2)
     const isAdminOrSuperAdmin = /\/apps\/(?:admin|superadmin)\/src\//.test(file);
-    const isWebAccountOrAuth = /\/apps\/web\/src\/(?:components\/account|app\/(?:account|privacy|orders|o|unsubscribe|address|cod))\//.test(file);
+    const isWebAccountOrAuth = /\/apps\/web\/src\/(?:components\/account|app\/(?:account|privacy|orders|o|unsubscribe|address|cod)|components\/orders)\//.test(file);
 
     if (!isAdminOrSuperAdmin && !isWebAccountOrAuth) {
       return {};
