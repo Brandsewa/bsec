@@ -169,7 +169,7 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
       - id: meta
-        uses: docker/metadata-action@v5
+        uses: docker/metadata-action@v6
         with:
           # ghcr.io/brandsewa/bsec-<app>; image names must be lowercase.
           images: ghcr.io/${{ github.repository_owner }}/bsec-${{ matrix.app }}
