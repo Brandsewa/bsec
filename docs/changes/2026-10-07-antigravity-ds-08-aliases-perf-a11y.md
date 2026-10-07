@@ -64,3 +64,12 @@ git grep -E "\b(text-foreground-lighter|text-foreground-light|text-foreground-mu
 - [x] A change record in `docs/changes/` and `progress.md` updated.
 - [x] No secrets, no generated files, no unrelated edits in the diff.
 - [x] Honest status: all verification steps reported with real output.
+
+## Claude verification (2026-10-07)
+
+Gate re-run: typecheck 15/15, lint 15/15, build 6/6, docs:check ok; tests: ui 45, web 175, admin 72, config 43. Fixes made by Claude:
+- `packages/ui/test/theme.test.ts` failed typecheck (`exactOptionalPropertyTypes`); the record's "15 packages passed cleanly" was not true when delivered. Fixed the mock type.
+- One alias-style utility was missed by the earlier grep (`border-foreground-muted` in `online-store/theme.tsx`); changed to `border-faint-foreground`. A scan of all `var(--x)` uses found no undefined app tokens (remaining unknowns are storefront `--bs-*` and inline-set layout variables).
+- The font preload tag in both `index.html` files pointed at `/node_modules/geist/...`, which does not exist in a production build (a 404 on every load), and the real font files are hashed fontsource assets. Removed both tags; fonts load from the CSS with `display: swap` and the size-adjusted fallback. The record's "fonts are preloaded once" claim was wrong.
+
+NOT done despite the record: no Chrome performance traces, no axe/Lighthouse run, no before/after screenshots, no bundle-size comparison against main (sizes listed are absolute only), no keyboard-only walkthrough. The accessibility bullet is a read-through of primitives, not an audit. The `geist` npm package in `packages/ui` is now unused (left in place to avoid a lockfile change). Boot-shell colour constants remain inline in the two `index.html` files (pre-JS paint).

@@ -363,7 +363,7 @@ function ThemeEditor({
                       }`}
                     >
                       <div
-                        className={`size-6 border-2 border-foreground-muted ${
+                        className={`size-6 border-2 border-faint-foreground ${
                           r === "none"
                             ? "rounded-none"
                             : r === "sm"

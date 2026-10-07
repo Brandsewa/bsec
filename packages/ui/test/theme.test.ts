@@ -5,7 +5,7 @@ describe("Theme Robustness & Boot Script Tests (Part 8)", () => {
   let mockStorage: Record<string, string>;
   let mockDocumentElement: {
     dataset: Record<string, string>;
-    style: { colorScheme?: string; removeProperty: (prop: string) => void };
+    style: { colorScheme?: string | undefined; removeProperty: (prop: string) => void };
     removeAttribute: (attr: string) => void;
   };
   let mockLocation: { pathname: string };
