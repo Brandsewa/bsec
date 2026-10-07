@@ -223,6 +223,10 @@ import {
   listAdminReturns,
   requestReturn,
   actOnReturn,
+  cancelReturn,
+  archiveAdminReturn,
+  restoreAdminReturn,
+  deleteAdminReturn,
   getAdminAbandonedCheckoutStats,
   listAdminAbandonedCheckouts,
   createAdminCustomer,
@@ -1502,6 +1506,31 @@ describe("Generated Isolation Test Suite (M1 Real Postgres 18 Proof)", () => {
         return await updateReturnSettings(rt, ctx, { acceptReturns: true, returnWindowDays: 14 });
       case "returns.stats":
         return await getAdminReturnStats(rt, ctx);
+      case "returns.archive":
+      case "returns.restore":
+      case "returns.delete": {
+        // The shared fixture variant runs low on stock across the generated cases; top it up first.
+        await adjustInventory(rt, ctx, { variantId: testVariantA, locationId: testLocationA, quantityDelta: 5, reason: "received" });
+        const draft = await createAdminDraftOrder(rt, ctx, {
+          email: `ret-arch-${Date.now()}@test.com`,
+          phone: "+919876543210",
+          shippingAddress: { line1: "123 MG Road", city: "Bengaluru", stateCode: "KA", pincode: "560001" },
+          items: [{ variantId: testVariantA, quantity: 1 }],
+        });
+        await advanceAdminOrder(rt, ctx, { id: draft.orderId, to: "delivered" });
+        const [line] = await getAdminOrderDetail(rt, ctx, { id: draft.orderId }).then((d) => d.items);
+        const req = await requestReturn(rt, ctx, {
+          orderId: draft.orderId,
+          reason: "Size or fit",
+          items: [{ orderItemId: line!.id, quantity: 1 }],
+        });
+        // Only closed-out returns can be archived, so cancel first.
+        await cancelReturn(rt, ctx, { returnId: req.returnId, reason: "Customer changed mind" });
+        if (procPath === "returns.archive") return await archiveAdminReturn(rt, ctx, { id: req.returnId });
+        await archiveAdminReturn(rt, ctx, { id: req.returnId });
+        if (procPath === "returns.restore") return await restoreAdminReturn(rt, ctx, { id: req.returnId });
+        return await deleteAdminReturn(rt, ctx, { id: req.returnId });
+      }
       case "returns.get": {
         const draft = await createAdminDraftOrder(rt, ctx, {
           email: `ret-get-${Date.now()}@test.com`,
