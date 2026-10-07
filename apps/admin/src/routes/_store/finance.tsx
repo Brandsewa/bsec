@@ -101,7 +101,7 @@ export function FinanceOverviewPage() {
   };
 
   return (
-    <PageContainer>
+    <PageContainer size="full">
       <PageHeader
         title="Finance Overview"
         description="Live double-entry books, profit & loss, cash position, and balance reconciliation."
@@ -122,7 +122,7 @@ export function FinanceOverviewPage() {
 
       <div className="space-y-6">
         {/* Period Selector Tabs */}
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b pb-3">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-border pb-3">
           <ScrollTabs
             tabs={PERIOD_TABS}
             value={search.period ?? "30d"}
@@ -210,7 +210,7 @@ export function FinanceOverviewPage() {
         {/* 3. P&L Breakdown: Where it came from / went */}
         {data && (
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-            <div className="rounded-lg border bg-card p-5 space-y-4">
+            <div className="rounded-lg border border-border bg-card p-5 space-y-4 shadow-xs">
               <h3 className="font-semibold text-base flex items-center gap-2">
                 <ArrowUpRight className="h-5 w-5 text-emerald-600" />
                 Where it came from (Income)
@@ -219,7 +219,7 @@ export function FinanceOverviewPage() {
                 {data.profitAndLoss.incomeLines.map((line) => (
                   <div
                     key={line.account}
-                    className="flex items-center justify-between border-b pb-2 text-sm"
+                    className="flex items-center justify-between border-b border-border pb-2 text-sm"
                   >
                     <div>
                       <span className="font-medium">{line.label}</span>
@@ -244,7 +244,7 @@ export function FinanceOverviewPage() {
               </div>
             </div>
 
-            <div className="rounded-lg border bg-card p-5 space-y-4">
+            <div className="rounded-lg border border-border bg-card p-5 space-y-4 shadow-xs">
               <h3 className="font-semibold text-base flex items-center gap-2">
                 <ArrowDownRight className="h-5 w-5 text-rose-600" />
                 Where it went (Costs & Expenses)
@@ -253,7 +253,7 @@ export function FinanceOverviewPage() {
                 {data.profitAndLoss.expenseLines.map((line) => (
                   <div
                     key={line.account}
-                    className="flex items-center justify-between border-b pb-2 text-sm"
+                    className="flex items-center justify-between border-b border-border pb-2 text-sm"
                   >
                     <span className="font-medium">{line.label}</span>
                     <span className="font-mono text-foreground">
@@ -272,7 +272,7 @@ export function FinanceOverviewPage() {
         {/* 4. Cash Position & Owed Section */}
         {data && (
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-            <div className="rounded-lg border bg-card p-5 space-y-4">
+            <div className="rounded-lg border border-border bg-card p-5 space-y-4 shadow-xs">
               <h3 className="font-semibold text-base flex items-center gap-2">
                 <Banknote className="h-5 w-5 text-primary" />
                 What the business is holding (Cash & Assets)
@@ -281,7 +281,7 @@ export function FinanceOverviewPage() {
                 {data.cashPosition.assets.map((asset) => (
                   <div
                     key={asset.account}
-                    className="flex items-center justify-between border-b pb-2 text-sm"
+                    className="flex items-center justify-between border-b border-border pb-2 text-sm"
                   >
                     <span className="font-medium">{asset.label}</span>
                     <span
@@ -300,20 +300,20 @@ export function FinanceOverviewPage() {
               </div>
             </div>
 
-            <div className="rounded-lg border bg-card p-5 space-y-4">
+            <div className="rounded-lg border border-border bg-card p-5 space-y-4 shadow-xs">
               <h3 className="font-semibold text-base flex items-center gap-2">
                 <DollarSign className="h-5 w-5 text-amber-600" />
                 Owed (Tax & Unpaid Bills)
               </h3>
               <div className="space-y-3">
-                <div className="flex items-center justify-between border-b pb-2 text-sm">
+                <div className="flex items-center justify-between border-b border-border pb-2 text-sm">
                   <div>
                     <span className="font-medium">Tax Payable (GST)</span>
                     <p className="text-xs text-muted-foreground">Collected from shoppers owed onward</p>
                   </div>
                   <span className="font-mono">{formatPaise(data.owed.youOweTaxPaise)}</span>
                 </div>
-                <div className="flex items-center justify-between border-b pb-2 text-sm">
+                <div className="flex items-center justify-between border-b border-border pb-2 text-sm">
                   <div>
                     <span className="font-medium">Unpaid Operational Bills</span>
                     <p className="text-xs text-muted-foreground">Recorded expenses not yet settled</p>
@@ -333,7 +333,7 @@ export function FinanceOverviewPage() {
 
         {/* 5. GMV Card */}
         {data && (
-          <div className="rounded-lg border bg-card p-5 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+          <div className="rounded-lg border border-border bg-card p-5 flex flex-col sm:flex-row sm:items-center justify-between gap-4 shadow-xs">
             <div>
               <h3 className="font-semibold text-sm">Gross Merchandise Value (GMV)</h3>
               <p className="text-xs text-muted-foreground">

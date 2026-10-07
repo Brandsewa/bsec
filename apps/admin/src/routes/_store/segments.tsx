@@ -4,11 +4,11 @@ import { useMemo, useState } from "react";
 import { MetricCard, MetricCardSkeleton, PageContainer, PageHeader, PageSection, PageSkeleton, TableSkeleton, toast } from "@bs/ui";
 import { keepPreviousData, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Badge } from "@bs/ui";
-import { Input } from "@bs/ui";
 import { Button } from "@bs/ui";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from "@bs/ui";
 import { ConfirmDialog } from "@bs/ui";
 import { DataTable, type Column } from "../../components/data-table/data-table.tsx";
+import { TableToolbar } from "../../components/data-table/table-toolbar.tsx";
 import { useTableSelection } from "../../components/data-table/use-table-selection.ts";
 import { BulkBar } from "../../components/data-table/toolbar-parts.tsx";
 import { useUrlTableState, compactSearch, oneOf, parsePaging, text } from "../../components/data-table/use-table-state.ts";
@@ -266,7 +266,18 @@ export function SegmentsPage() {
 
       <PageSection>
         <div className="grid grid-cols-1 gap-3">
-          <Input aria-label="Search segments" placeholder="Search segments" className="max-w-xs" value={s.q ?? ""} onChange={(e) => setSearchText(e.target.value)} />
+          <TableToolbar
+            searchLabel="Search segments"
+            searchPlaceholder="Search segments by name..."
+            searchText={s.q ?? ""}
+            onSearchText={setSearchText}
+            resultCount={total}
+            noun="segments"
+            sortOptions={[]}
+            sort=""
+            defaultSort=""
+            onSort={() => {}}
+          />
 
           <BulkBar
             count={sel.count}

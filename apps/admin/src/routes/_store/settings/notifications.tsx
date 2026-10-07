@@ -7,7 +7,7 @@ import { Button } from "@bs/ui";
 import { Input } from "@bs/ui";
 import { Switch } from "@bs/ui";
 import { Field } from "@bs/ui";
-import { HeaderActions, SettingsPageFrame, SettingsSection, useUnsavedGuard } from "../../../components/settings/settings-page.tsx";
+import { HeaderActions, SettingsCard, SettingsPageFrame, useUnsavedGuard } from "../../../components/settings/settings-page.tsx";
 import { orpc } from "../../../lib/orpc.ts";
 import { errorMessage } from "../../../lib/errors.ts";
 import type { NotificationSettings } from "@bs/contracts";
@@ -41,9 +41,9 @@ export function NotificationSettingsPage() {
   if (query.isLoading) {
     return (
       <SettingsPageFrame title={TITLE} description={DESCRIPTION}>
-        <SettingsSection>
+        <SettingsCard>
           <FormSkeleton />
-        </SettingsSection>
+        </SettingsCard>
       </SettingsPageFrame>
     );
   }
@@ -51,14 +51,14 @@ export function NotificationSettingsPage() {
   if (query.isError || !query.data) {
     return (
       <SettingsPageFrame title={TITLE} description={DESCRIPTION}>
-        <SettingsSection>
+        <SettingsCard>
           <EmptyState
             icon={AlertTriangle}
             title="Could not load notification settings"
             description={errorMessage(query.error)}
             action={<Button onClick={() => void query.refetch()}>Try again</Button>}
           />
-        </SettingsSection>
+        </SettingsCard>
       </SettingsPageFrame>
     );
   }
@@ -175,12 +175,12 @@ function NotificationForm({ data }: { data: NotificationSettings }) {
       )}
 
       <form id="settings-notifications" onSubmit={handleSubmit} className="space-y-6">
-        <SettingsSection
+        <SettingsCard
           title="Sender details"
-          description="Customize the sender display name and reply-to address shown to your customers. All emails are sent from the verified platform domain."
+          description="Display name and reply address shown on customer emails"
         >
           <div className="grid gap-4 sm:grid-cols-2">
-            <Field id="displayName" label="Sender display name" hint="The store name customers see in their inbox (1-60 characters).">
+            <Field id="displayName" label="Sender display name" hint="The store name customers see in their inbox.">
               <Input
                 id="displayName"
                 value={form.displayName}
@@ -200,11 +200,11 @@ function NotificationForm({ data }: { data: NotificationSettings }) {
               />
             </Field>
           </div>
-        </SettingsSection>
+        </SettingsCard>
 
-        <SettingsSection
+        <SettingsCard
           title="Customer notifications"
-          description="Choose which transactional emails are automatically sent to shoppers."
+          description="Transactional updates automatically dispatched to shoppers"
         >
           <div className="divide-y divide-border">
             <div className="flex items-center justify-between py-3">
@@ -299,11 +299,11 @@ function NotificationForm({ data }: { data: NotificationSettings }) {
               <Switch checked={true} disabled />
             </div>
           </div>
-        </SettingsSection>
+        </SettingsCard>
 
-        <SettingsSection
+        <SettingsCard
           title="Staff alerts"
-          description="Send an immediate order summary notification to your team when a new sale is made."
+          description="Instant order summaries sent to your team on new sales"
         >
           <div className="space-y-4">
             <div className="flex items-center justify-between">
@@ -332,11 +332,11 @@ function NotificationForm({ data }: { data: NotificationSettings }) {
               </Field>
             )}
           </div>
-        </SettingsSection>
+        </SettingsCard>
 
-        <SettingsSection
+        <SettingsCard
           title="Email footer note"
-          description="An optional note appended to all customer transactional emails (up to 300 characters plain text)."
+          description="Appended to all customer transactional emails (up to 300 chars)"
         >
           <Field id="footerNote" label="Footer note">
             <Input
@@ -347,12 +347,12 @@ function NotificationForm({ data }: { data: NotificationSettings }) {
               maxLength={300}
             />
           </Field>
-        </SettingsSection>
+        </SettingsCard>
       </form>
 
-      <SettingsSection
+      <SettingsCard
         title="Recent email delivery history"
-        description="The last 100 email delivery events for this store. Recipient addresses are masked to protect customer privacy."
+        description="The last 100 email delivery events (masked for privacy)"
       >
         {data.recentDeliveries.length === 0 ? (
           <p className="text-xs text-muted-foreground py-2">No email activity logged yet.</p>
@@ -393,7 +393,7 @@ function NotificationForm({ data }: { data: NotificationSettings }) {
             ))}
           </div>
         )}
-      </SettingsSection>
+      </SettingsCard>
     </SettingsPageFrame>
   );
 }

@@ -10,6 +10,7 @@ import {
 } from "lucide-react";
 import {
   Button,
+  Checkbox,
   Dialog,
   DialogContent,
   DialogDescription,
@@ -142,7 +143,7 @@ export function TenantsList() {
   if (isLoading) return <PageSkeleton />;
 
   return (
-    <PageContainer>
+    <PageContainer size="full">
       <PageHeader
         title="Tenants & Stores"
         description="All hosted storefronts on the platform, managed with explicit tenant isolation."
@@ -226,42 +227,44 @@ export function TenantsList() {
           }
         />
       ) : (
-        <div className="rounded-lg border bg-card overflow-hidden">
+        <div className="rounded-xl border border-border bg-card shadow-xs overflow-hidden">
           <Table>
             <TableHeader>
-              <TableRow>
-                <TableHead className="w-10">
-                  <input
-                    type="checkbox"
-                    checked={selectedIds.length === tenants.length && tenants.length > 0}
-                    onChange={selectAll}
-                    className="rounded border-gray-300"
-                  />
+              <TableRow className="bg-muted/40 hover:bg-muted/40">
+                <TableHead className="w-12 px-4">
+                  <div className="flex items-center justify-center">
+                    <Checkbox
+                      checked={selectedIds.length === tenants.length && tenants.length > 0}
+                      onCheckedChange={selectAll}
+                      aria-label="Select all stores"
+                    />
+                  </div>
                 </TableHead>
                 <TableHead>Store Name / Slug</TableHead>
                 <TableHead>Status</TableHead>
                 <TableHead>Owner Email</TableHead>
                 <TableHead>Plan</TableHead>
                 <TableHead>Created</TableHead>
-                <TableHead className="text-right">Actions</TableHead>
+                <TableHead className="text-right px-4">Actions</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
               {tenants.map((t) => (
-                <TableRow key={t.id}>
-                  <TableCell>
-                    <input
-                      type="checkbox"
-                      checked={selectedIds.includes(t.id)}
-                      onChange={() => toggleSelect(t.id)}
-                      className="rounded border-gray-300"
-                    />
+                <TableRow key={t.id} className="hover:bg-muted/30 transition-colors">
+                  <TableCell className="px-4">
+                    <div className="flex items-center justify-center">
+                      <Checkbox
+                        checked={selectedIds.includes(t.id)}
+                        onCheckedChange={() => toggleSelect(t.id)}
+                        aria-label={`Select ${t.name}`}
+                      />
+                    </div>
                   </TableCell>
                   <TableCell>
                     <div className="flex flex-col">
                       <Link
                         to={`/tenants/${t.id}`}
-                        className="font-medium hover:underline text-sm"
+                        className="font-medium hover:underline text-sm text-foreground"
                       >
                         {t.name}
                       </Link>
@@ -273,7 +276,7 @@ export function TenantsList() {
                   <TableCell>{statusBadge(t.status)}</TableCell>
                   <TableCell className="text-xs">
                     {t.ownerEmail ? (
-                      t.ownerEmail
+                      <span className="text-foreground">{t.ownerEmail}</span>
                     ) : (
                       <span className="text-muted-foreground italic">No owner assigned</span>
                     )}
@@ -284,9 +287,9 @@ export function TenantsList() {
                   <TableCell className="text-xs text-muted-foreground">
                     {t.createdAt ? new Date(t.createdAt).toLocaleDateString("en-IN") : "—"}
                   </TableCell>
-                  <TableCell className="text-right">
+                  <TableCell className="text-right px-4">
                     <Link to={`/tenants/${t.id}`}>
-                      <Button variant="ghost" size="sm" className="h-7 px-2 text-xs">
+                      <Button variant="ghost" size="sm" className="h-7 px-2.5 text-xs">
                         Manage
                       </Button>
                     </Link>

@@ -5,7 +5,7 @@ import { EmptyState, PageSkeleton, TableSkeleton, toast } from "@bs/ui";
 import { Button } from "@bs/ui";
 import { Checkbox } from "@bs/ui";
 import { Field, FieldLabel } from "@bs/ui";
-import { SettingsPageFrame, SettingsSection } from "../../../components/settings/settings-page.tsx";
+import { SettingsCard, SettingsPageFrame } from "../../../components/settings/settings-page.tsx";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@bs/ui";
 import { orpc } from "../../../lib/orpc.ts";
 import { errorMessage } from "../../../lib/errors.ts";
@@ -41,34 +41,37 @@ export function SupportAccessPage() {
       description="The platform team can look into your store only with your approval. Only the store owner can decide here, and every action they take is recorded."
     >
       {sessions.isLoading || standing.isLoading ? (
-        <SettingsSection>
+        <SettingsCard>
           <TableSkeleton rows={3} columns={3} />
-        </SettingsSection>
+        </SettingsCard>
       ) : sessions.isError ? (
-        <SettingsSection>
-        <EmptyState
-          icon={AlertTriangle}
-          title="Could not load support access"
-          description={errorMessage(sessions.error)}
-          action={<Button onClick={() => void sessions.refetch()}>Try again</Button>}
-        />
-        </SettingsSection>
+        <SettingsCard>
+          <EmptyState
+            icon={AlertTriangle}
+            title="Could not load support access"
+            description={errorMessage(sessions.error)}
+            action={<Button onClick={() => void sessions.refetch()}>Try again</Button>}
+          />
+        </SettingsCard>
       ) : (
         <>
-          <SettingsSection title="Requests waiting for you" description="Approving starts a 60-minute, read-only session. You can deny any request.">
+          <SettingsCard
+            title="Requests waiting for approval"
+            description="Approving grants a 60-minute read-only investigation window"
+          >
             {pending.length === 0 ? (
-              <p className="text-xs text-foreground-lighter">No requests are waiting.</p>
+              <p className="text-xs text-muted-foreground py-1">No pending support requests.</p>
             ) : (
               <ul className="grid gap-3">
                 {pending.map((s) => (
-                  <li key={s.id} className="grid gap-2 rounded-md border border-border p-3" data-testid="support-request">
-                    <div className="text-xs">
+                  <li key={s.id} className="grid gap-2 rounded-lg border border-border p-3.5 bg-muted/10" data-testid="support-request">
+                    <div className="text-xs font-medium text-foreground">
                       <strong>{s.staffName}</strong> ({s.staffEmail}) asks to look into your store
                     </div>
-                    <div className="text-xs text-foreground-lighter">
+                    <div className="text-xs text-muted-foreground">
                       Reason: {s.reason} · Ticket: {s.ticketRef} · Requested {new Date(s.requestedAt).toLocaleString("en-IN")}
                     </div>
-                    <div className="flex gap-2">
+                    <div className="flex gap-2 pt-1">
                       <Button
                         size="sm"
                         disabled={approve.isPending}
@@ -99,9 +102,12 @@ export function SupportAccessPage() {
                 ))}
               </ul>
             )}
-          </SettingsSection>
+          </SettingsCard>
 
-          <SettingsSection title="Standing consent" description="If you switch this on, the platform team can open read-only sessions without asking each time. Every session is still recorded and shown below.">
+          <SettingsCard
+            title="Standing consent"
+            description="Allow platform staff to open read-only sessions without prior request prompts"
+          >
             <Field orientation="horizontal">
               <Checkbox
                 id="standing-consent"
@@ -114,40 +120,45 @@ export function SupportAccessPage() {
                   )
                 }
               />
-              <FieldLabel htmlFor="standing-consent" className="font-normal">
-                Allow platform support to open read-only sessions without asking first
+              <FieldLabel htmlFor="standing-consent" className="text-xs font-normal cursor-pointer">
+                Allow platform support to open read-only sessions without asking first (all sessions remain audited)
               </FieldLabel>
             </Field>
-          </SettingsSection>
+          </SettingsCard>
 
-          <SettingsSection title="History" description="Every support session on your store, newest first.">
+          <SettingsCard
+            title="Support session history"
+            description="Audit log of all platform staff diagnostic access sessions"
+          >
             {list.length === 0 ? (
               <EmptyState icon={LifeBuoy} title="No support sessions yet" description="If the platform team ever needs to look into your store, it will appear here." />
             ) : (
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead>Who</TableHead>
-                    <TableHead>Reason / ticket</TableHead>
-                    <TableHead>Access</TableHead>
-                    <TableHead>Status</TableHead>
-                    <TableHead>Requests</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {list.map((s) => (
-                    <TableRow key={s.id} className="align-top">
-                      <TableCell>{s.staffName}</TableCell>
-                      <TableCell className="whitespace-normal">{s.reason} <span className="text-muted-foreground">({s.ticketRef})</span></TableCell>
-                      <TableCell className="whitespace-normal">{s.scope === "write" ? "read & write" : "read only"} · {s.consent.replace(/_/g, " ")}</TableCell>
-                      <TableCell>{STATUS_TEXT[s.status] ?? s.status}</TableCell>
-                      <TableCell>{s.actionsCount}</TableCell>
+              <div className="overflow-x-auto rounded-lg border border-border">
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>Who</TableHead>
+                      <TableHead>Reason / ticket</TableHead>
+                      <TableHead>Access</TableHead>
+                      <TableHead>Status</TableHead>
+                      <TableHead>Requests</TableHead>
                     </TableRow>
-                  ))}
-                </TableBody>
-              </Table>
+                  </TableHeader>
+                  <TableBody>
+                    {list.map((s) => (
+                      <TableRow key={s.id} className="align-top text-xs">
+                        <TableCell className="font-medium text-foreground">{s.staffName}</TableCell>
+                        <TableCell className="whitespace-normal">{s.reason} <span className="text-muted-foreground">({s.ticketRef})</span></TableCell>
+                        <TableCell className="whitespace-normal">{s.scope === "write" ? "read & write" : "read only"} · {s.consent.replace(/_/g, " ")}</TableCell>
+                        <TableCell>{STATUS_TEXT[s.status] ?? s.status}</TableCell>
+                        <TableCell>{s.actionsCount}</TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              </div>
             )}
-          </SettingsSection>
+          </SettingsCard>
         </>
       )}
     </SettingsPageFrame>

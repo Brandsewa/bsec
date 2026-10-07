@@ -29,7 +29,7 @@ export function Domains() {
   if (isLoading) return <PageSkeleton />;
 
   return (
-    <PageContainer>
+    <PageContainer size="full">
       <PageHeader
         title="Custom Domains & Hostnames"
         description="All platform subdomains and Cloudflare for SaaS custom hostnames mapped across stores."
@@ -56,24 +56,24 @@ export function Domains() {
           description="Custom domains will appear here once connected by stores or during provisioning."
         />
       ) : (
-        <div className="rounded-xl border bg-card overflow-hidden">
+        <div className="rounded-xl border border-border bg-card shadow-xs overflow-hidden">
           <Table>
             <TableHeader>
-              <TableRow>
-                <TableHead>Hostname</TableHead>
+              <TableRow className="bg-muted/40 hover:bg-muted/40">
+                <TableHead className="px-4">Hostname</TableHead>
                 <TableHead>Store / Tenant</TableHead>
                 <TableHead>Type</TableHead>
                 <TableHead>Primary</TableHead>
                 <TableHead>Status</TableHead>
                 <TableHead>SSL Status</TableHead>
                 <TableHead>Failure / DNS Reason</TableHead>
-                <TableHead>Connected At</TableHead>
+                <TableHead className="text-right px-4">Connected At</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
               {domains.map((d) => (
-                <TableRow key={d.id}>
-                  <TableCell className="font-mono text-xs font-semibold">{d.hostname}</TableCell>
+                <TableRow key={d.id} className="hover:bg-muted/30 transition-colors">
+                  <TableCell className="font-mono text-xs font-semibold px-4 text-foreground">{d.hostname}</TableCell>
                   <TableCell>
                     {d.tenantSlug ? (
                       <Link
@@ -97,7 +97,7 @@ export function Domains() {
                   <TableCell className="text-xs text-muted-foreground font-mono">
                     {d.failureReason || "DNS verified"}
                   </TableCell>
-                  <TableCell className="text-xs text-muted-foreground">
+                  <TableCell className="text-xs text-muted-foreground text-right px-4">
                     {new Date(d.createdAt).toLocaleDateString("en-IN")}
                   </TableCell>
                 </TableRow>

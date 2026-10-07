@@ -7,7 +7,7 @@ import { cn } from "../lib/cn.ts";
  */
 export function Table({ className, ...props }: ComponentProps<"table">) {
   return (
-    <div className="relative w-full overflow-x-auto rounded-md border border-border bg-background">
+    <div className="relative w-full overflow-x-auto rounded-md border border-border bg-card">
       <table className={cn("w-full caption-bottom text-sm", className)} {...props} />
     </div>
   );

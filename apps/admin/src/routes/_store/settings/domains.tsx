@@ -9,7 +9,7 @@ import { Checkbox } from "@bs/ui";
 import { Input } from "@bs/ui";
 import { ConfirmDialog } from "@bs/ui";
 import { Field } from "@bs/ui";
-import { HeaderActions, SettingsPageFrame, SettingsSection } from "../../../components/settings/settings-page.tsx";
+import { HeaderActions, SettingsCard, SettingsPageFrame } from "../../../components/settings/settings-page.tsx";
 import { orpc } from "../../../lib/orpc.ts";
 import { errorMessage } from "../../../lib/errors.ts";
 
@@ -127,9 +127,9 @@ export function DomainsSettingsPage() {
   if (domainsQuery.isLoading) {
     return (
       <SettingsPageFrame title={TITLE} description={DESCRIPTION}>
-        <SettingsSection>
+        <SettingsCard>
           <FormSkeleton />
-        </SettingsSection>
+        </SettingsCard>
       </SettingsPageFrame>
     );
   }
@@ -137,14 +137,14 @@ export function DomainsSettingsPage() {
   if (domainsQuery.isError || !domainsQuery.data) {
     return (
       <SettingsPageFrame title={TITLE} description={DESCRIPTION}>
-        <SettingsSection>
+        <SettingsCard>
           <EmptyState
             icon={AlertTriangle}
             title="Could not load domains"
             description={errorMessage(domainsQuery.error)}
             action={<Button onClick={() => void domainsQuery.refetch()}>Try again</Button>}
           />
-        </SettingsSection>
+        </SettingsCard>
       </SettingsPageFrame>
     );
   }
@@ -184,7 +184,7 @@ export function DomainsSettingsPage() {
       />
 
       {isAdding && (
-        <SettingsSection title="Add custom domain" description="Enter the domain or subdomain you want to connect to this store.">
+        <SettingsCard title="Add custom domain" description="Connect your domain or subdomain to this store.">
           <form onSubmit={handleAdd} className="space-y-4">
             <Field id="domain-hostname" label="Domain name" hint="For example, shop.mybrand.com or mybrand.com.">
               <Input
@@ -221,11 +221,11 @@ export function DomainsSettingsPage() {
               </Button>
             </div>
           </form>
-        </SettingsSection>
+        </SettingsCard>
       )}
 
       {domains.length === 0 && !isAdding ? (
-        <SettingsSection>
+        <SettingsCard>
           <EmptyState
             icon={Globe}
             title="No custom domains connected"
@@ -237,7 +237,7 @@ export function DomainsSettingsPage() {
               </Button>
             }
           />
-        </SettingsSection>
+        </SettingsCard>
       ) : (
         domains.map((d) => {
           const isProviderDisabled = d.status === "requested" && d.sslStatus === "not_configured";
@@ -247,7 +247,7 @@ export function DomainsSettingsPage() {
           const isVerifying = verifyingId === d.id || verifyDomain.isPending;
 
           return (
-            <SettingsSection key={d.id}>
+            <SettingsCard key={d.id}>
               <div className="flex flex-col gap-4">
                 <div className="flex flex-wrap items-center justify-between gap-3 border-b border-border pb-3">
                   <div className="flex items-center gap-2.5">
@@ -412,7 +412,7 @@ export function DomainsSettingsPage() {
                   </div>
                 )}
               </div>
-            </SettingsSection>
+            </SettingsCard>
           );
         })
       )}

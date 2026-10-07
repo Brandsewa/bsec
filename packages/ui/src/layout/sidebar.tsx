@@ -12,6 +12,7 @@ export interface NavItem {
 }
 export interface NavGroup {
   label?: string;
+  icon?: ComponentType<{ className?: string }>;
   items: NavItem[];
 }
 
@@ -81,14 +82,14 @@ export function AppShell({
 }) {
   const [open, setOpen] = useState(false);
   return (
-    <div className="min-h-dvh bg-dash-canvas md:grid md:grid-cols-[15rem_minmax(0,1fr)]">
-      <aside className="sticky top-0 hidden h-dvh flex-col gap-6 overflow-y-auto border-r border-border bg-dash-sidebar p-3 md:flex">
+    <div className="min-h-dvh bg-canvas md:grid md:grid-cols-[15rem_minmax(0,1fr)]">
+      <aside className="sticky top-0 hidden h-dvh flex-col gap-6 overflow-y-auto border-r border-border-soft bg-dash-sidebar p-3 md:flex">
         <div className="flex h-8 items-center px-2">{brand}</div>
         <NavList groups={groups} activeHref={activeHref} />
       </aside>
       <div className="flex min-w-0 flex-col">
         {banner}
-        <header className="flex h-12 items-center justify-between gap-2 border-b border-border bg-background px-3 md:px-6">
+        <header className="flex h-12 items-center justify-between gap-2 border-b border-border-soft bg-background px-3 md:px-6">
           <div className="flex items-center gap-2 md:hidden">
             <Button variant="ghost" size="icon" aria-label="Open menu" onClick={() => setOpen(true)}>
               <Menu />
@@ -97,7 +98,7 @@ export function AppShell({
           </div>
           <div className="ml-auto flex items-center gap-2">{topRight}</div>
         </header>
-        <main className="min-w-0 flex-1">{children}</main>
+        <main className="min-w-0 flex-1 bg-canvas">{children}</main>
       </div>
       <Sheet open={open} onOpenChange={setOpen}>
         <SheetContent side="left" className="bg-dash-sidebar p-3">

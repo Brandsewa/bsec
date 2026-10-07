@@ -6,7 +6,7 @@ import { EmptyState, FormSkeleton, PageSkeleton, toast } from "@bs/ui";
 import { Badge } from "@bs/ui";
 import { Button } from "@bs/ui";
 import { Switch } from "@bs/ui";
-import { HeaderActions, SettingsPageFrame, SettingsSection, useUnsavedGuard } from "../../../components/settings/settings-page.tsx";
+import { HeaderActions, SettingsCard, SettingsPageFrame, useUnsavedGuard } from "../../../components/settings/settings-page.tsx";
 import { orpc } from "../../../lib/orpc.ts";
 import { errorMessage } from "../../../lib/errors.ts";
 
@@ -32,9 +32,9 @@ export function CustomerAccountSettingsPage() {
   if (query.isLoading) {
     return (
       <SettingsPageFrame title={TITLE} description={DESCRIPTION}>
-        <SettingsSection>
+        <SettingsCard>
           <FormSkeleton />
-        </SettingsSection>
+        </SettingsCard>
       </SettingsPageFrame>
     );
   }
@@ -42,14 +42,14 @@ export function CustomerAccountSettingsPage() {
   if (query.isError || !query.data) {
     return (
       <SettingsPageFrame title={TITLE} description={DESCRIPTION}>
-        <SettingsSection>
+        <SettingsCard>
           <EmptyState
             icon={AlertTriangle}
             title="Could not load customer account settings"
             description={errorMessage(query.error)}
             action={<Button onClick={() => void query.refetch()}>Try again</Button>}
           />
-        </SettingsSection>
+        </SettingsCard>
       </SettingsPageFrame>
     );
   }
@@ -131,9 +131,9 @@ function CustomerAccountSettingsForm({
       </HeaderActions>
 
       <form id="settings-customer-accounts" onSubmit={onSubmit} className="space-y-6">
-        <SettingsSection
+        <SettingsCard
           title="Storefront links"
-          description="Control whether login and account links are visible to shoppers on your storefront."
+          description="Control login and account links visibility in header and navigation"
         >
           <div className="flex items-center justify-between gap-4 rounded-lg border border-border p-4">
             <div className="space-y-0.5">
@@ -151,11 +151,11 @@ function CustomerAccountSettingsForm({
               onCheckedChange={(checked) => setForm((prev) => ({ ...prev, showSignInLinks: Boolean(checked) }))}
             />
           </div>
-        </SettingsSection>
+        </SettingsCard>
 
-        <SettingsSection
+        <SettingsCard
           title="Sign-in methods"
-          description="Select which authentication methods customers can use to create an account and sign in."
+          description="Authentication options available for shoppers to create accounts and sign in"
         >
           <div className="space-y-4">
             {noLoginMethodSelected && (
@@ -215,11 +215,11 @@ function CustomerAccountSettingsForm({
               <Switch disabled checked={false} aria-label="Social sign-in not available" />
             </div>
           </div>
-        </SettingsSection>
+        </SettingsCard>
 
-        <SettingsSection
+        <SettingsCard
           title="Customer self-service"
-          description="Allow customers to manage their own orders from the order confirmation and tracking page."
+          description="Allow customers to manage orders and returns directly from their account portal"
         >
           <div className="space-y-4">
             <div className="flex items-center justify-between gap-4 rounded-lg border border-border p-4">
@@ -269,7 +269,7 @@ function CustomerAccountSettingsForm({
               </Link>
             </div>
           </div>
-        </SettingsSection>
+        </SettingsCard>
       </form>
     </SettingsPageFrame>
   );

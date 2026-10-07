@@ -232,7 +232,7 @@ function HomePage() {
             </div>
 
             {/* Steps list */}
-            <div className="divide-y divide-border/60 rounded-lg border border-border/60 bg-background/50">
+            <div className="divide-y divide-border-soft rounded-lg border border-border-soft bg-card shadow-xs">
               {checklistItems.map((step) => (
                 <div
                     key={step.id}

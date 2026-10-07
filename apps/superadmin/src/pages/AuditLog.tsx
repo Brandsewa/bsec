@@ -51,7 +51,7 @@ export function AuditLog() {
   if (isLoading) return <PageSkeleton />;
 
   return (
-    <PageContainer>
+    <PageContainer size="full">
       <PageHeader
         title="Platform Audit Log"
         description="Immutable record of every privileged mutation executed across stores. Filterable and exportable to CSV."
@@ -79,29 +79,29 @@ export function AuditLog() {
           description="Privileged mutations executed through the platform API will appear here."
         />
       ) : (
-        <div className="rounded-xl border bg-card overflow-hidden">
+        <div className="rounded-xl border border-border bg-card shadow-xs overflow-hidden">
           <Table>
             <TableHeader>
-              <TableRow>
-                <TableHead>Timestamp</TableHead>
+              <TableRow className="bg-muted/40 hover:bg-muted/40">
+                <TableHead className="px-4">Timestamp</TableHead>
                 <TableHead>Action</TableHead>
                 <TableHead>Actor</TableHead>
                 <TableHead>Target Entity</TableHead>
                 <TableHead>Store Tenant</TableHead>
-                <TableHead>IP Address</TableHead>
+                <TableHead className="text-right px-4">IP Address</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
               {auditLogs.map((log) => (
-                <TableRow key={log.id}>
-                  <TableCell className="text-xs text-muted-foreground whitespace-nowrap">
+                <TableRow key={log.id} className="hover:bg-muted/30 transition-colors">
+                  <TableCell className="text-xs text-muted-foreground whitespace-nowrap px-4">
                     {new Date(log.createdAt).toLocaleString("en-IN")}
                   </TableCell>
                   <TableCell className="font-mono text-xs font-semibold text-foreground">
                     {log.action}
                   </TableCell>
                   <TableCell className="text-xs">
-                    <span className="font-medium">{log.actorType}</span>
+                    <span className="font-medium text-foreground">{log.actorType}</span>
                     {log.actorUserId && (
                       <div className="text-muted-foreground text-[10px] font-mono">
                         {log.actorUserId.substring(0, 8)}...
@@ -114,7 +114,7 @@ export function AuditLog() {
                   <TableCell className="text-xs font-mono text-muted-foreground">
                     {log.tenantId ? `${log.tenantId.substring(0, 8)}...` : "—"}
                   </TableCell>
-                  <TableCell className="text-xs font-mono text-muted-foreground">
+                  <TableCell className="text-xs font-mono text-muted-foreground text-right px-4">
                     {log.ip || "—"}
                   </TableCell>
                 </TableRow>

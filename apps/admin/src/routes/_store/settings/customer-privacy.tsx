@@ -7,7 +7,7 @@ import { Button } from "@bs/ui";
 import { Input } from "@bs/ui";
 import { Field } from "@bs/ui";
 import { ConfirmDialog } from "@bs/ui";
-import { HeaderActions, SettingsPageFrame, SettingsSection, useUnsavedGuard } from "../../../components/settings/settings-page.tsx";
+import { HeaderActions, SettingsCard, SettingsPageFrame, useUnsavedGuard } from "../../../components/settings/settings-page.tsx";
 import { orpc } from "../../../lib/orpc.ts";
 import { errorMessage } from "../../../lib/errors.ts";
 import type { CookieInventoryItem, PrivacyRequestItem, PrivacySettings } from "@bs/contracts";
@@ -28,9 +28,9 @@ export function CustomerPrivacySettingsPage() {
   if (query.isLoading) {
     return (
       <SettingsPageFrame title={TITLE} description={DESCRIPTION}>
-        <SettingsSection>
+        <SettingsCard>
           <FormSkeleton />
-        </SettingsSection>
+        </SettingsCard>
       </SettingsPageFrame>
     );
   }
@@ -38,14 +38,14 @@ export function CustomerPrivacySettingsPage() {
   if (query.isError || !query.data) {
     return (
       <SettingsPageFrame title={TITLE} description={DESCRIPTION}>
-        <SettingsSection>
+        <SettingsCard>
           <EmptyState
             icon={AlertTriangle}
             title="Could not load privacy settings"
             description={errorMessage(query.error)}
             action={<Button onClick={() => void query.refetch()}>Try again</Button>}
           />
-        </SettingsSection>
+        </SettingsCard>
       </SettingsPageFrame>
     );
   }
@@ -168,8 +168,6 @@ function PrivacyForm({
     });
   };
 
-
-
   return (
     <SettingsPageFrame title={TITLE} description={DESCRIPTION}>
       <HeaderActions>
@@ -181,9 +179,10 @@ function PrivacyForm({
           {settingsMutation.isPending ? "Saving…" : "Save changes"}
         </Button>
       </HeaderActions>
+
       <div className="rounded-lg border border-border bg-card p-4">
         <div className="flex items-start gap-3">
-          <Shield className="size-5 text-primary mt-0.5" />
+          <Shield className="size-5 text-primary mt-0.5 shrink-0" />
           <div className="text-xs/relaxed text-muted-foreground space-y-1">
             <p className="font-semibold text-foreground text-sm">Customer Data Protection (DPDP Act, 2023)</p>
             <p>
@@ -197,12 +196,12 @@ function PrivacyForm({
       </div>
 
       <form id="settings-privacy" onSubmit={handleSubmit} className="space-y-6">
-        <SettingsSection
+        <SettingsCard
           title="Privacy contacts & SLA"
-          description="Designate official contact points for privacy communications and statutory turnaround limits."
+          description="Designate official contact points and turnaround timeframes"
         >
           <div className="grid gap-4 sm:grid-cols-3">
-            <Field id="privacyContactEmail" label="Privacy contact email" hint="Public contact point for privacy inquiries.">
+            <Field id="privacyContactEmail" label="Privacy contact email" hint="Public contact point for inquiries.">
               <Input
                 id="privacyContactEmail"
                 type="email"
@@ -212,7 +211,7 @@ function PrivacyForm({
               />
             </Field>
 
-            <Field id="grievanceOfficerName" label="Grievance officer name" hint="Statutory grievance redressal officer.">
+            <Field id="grievanceOfficerName" label="Grievance officer name" hint="Statutory redressal officer.">
               <Input
                 id="grievanceOfficerName"
                 value={form.grievanceOfficerName}
@@ -222,7 +221,7 @@ function PrivacyForm({
               />
             </Field>
 
-            <Field id="requestSlaDays" label="Response SLA (Days)" hint="Statutory limit to resolve requests (7 to 90 days).">
+            <Field id="requestSlaDays" label="Response SLA (Days)" hint="Statutory limit (7 to 90 days).">
               <Input
                 id="requestSlaDays"
                 type="number"
@@ -233,12 +232,12 @@ function PrivacyForm({
               />
             </Field>
           </div>
-        </SettingsSection>
+        </SettingsCard>
       </form>
 
-      <SettingsSection
+      <SettingsCard
         title="Privacy requests queue"
-        description="Data principal requests submitted by customers through the storefront privacy portal."
+        description="Data principal requests submitted by customers through the portal"
       >
         {requestsLoading ? (
           <FormSkeleton />
@@ -335,11 +334,11 @@ function PrivacyForm({
             ))}
           </div>
         )}
-      </SettingsSection>
+      </SettingsCard>
 
-      <SettingsSection
+      <SettingsCard
         title="Cookie inventory"
-        description="This storefront sets strictly necessary cookies only. No tracking, analytics, or third-party marketing cookies are loaded."
+        description="Strictly necessary cookies used by the platform storefront"
       >
         <div className="divide-y divide-border rounded-lg border border-border">
           {cookies.map((c) => (
@@ -357,7 +356,7 @@ function PrivacyForm({
             </div>
           ))}
         </div>
-      </SettingsSection>
+      </SettingsCard>
 
       <ConfirmDialog
         open={confirmAction === "export"}

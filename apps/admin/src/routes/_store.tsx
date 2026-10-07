@@ -25,10 +25,27 @@ import {
   Users,
   Warehouse,
 } from "lucide-react";
-import { EmptyState, PageContainer, PageSkeleton, ThemeToggle, type NavGroup } from "@bs/ui";
+import {
+  Avatar,
+  AvatarFallback,
+  Button,
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuSeparator,
+  DropdownMenuSub,
+  DropdownMenuSubContent,
+  DropdownMenuSubTrigger,
+  DropdownMenuTrigger,
+  EmptyState,
+  PageContainer,
+  PageSkeleton,
+  SimpleSelect,
+  ThemeToggle,
+  type NavGroup,
+} from "@bs/ui";
 import { AppShell } from "@/components/app-shell";
-import { Button } from "@bs/ui";
-import { SimpleSelect } from "@bs/ui";
 import { fetchMe, signOut } from "../lib/auth.ts";
 import { getActiveStoreId, setActiveStoreId } from "../lib/session.ts";
 import { clearSupportSession } from "../lib/support.ts";
@@ -43,6 +60,7 @@ interface GatedItem {
 }
 interface GatedGroup {
   label?: string;
+  icon?: NonNullable<NavGroup["items"][number]["icon"]>;
   items: GatedItem[];
 }
 
@@ -50,6 +68,7 @@ const nav: GatedGroup[] = [
   { items: [{ label: "Home", href: "/", icon: Home }] },
   {
     label: "Orders",
+    icon: ShoppingBag,
     items: [
       { label: "All orders", href: "/orders", icon: ShoppingBag, perm: "orders.read" },
       { label: "Pre-orders", href: "/preorders", icon: Clock, perm: "orders.read" },
@@ -59,15 +78,8 @@ const nav: GatedGroup[] = [
     ],
   },
   {
-    label: "Finance",
-    items: [
-      { label: "Overview", href: "/finance", icon: Banknote, perm: "finance.read" },
-      { label: "Expenses", href: "/finance/expenses", icon: Receipt, perm: "finance.read" },
-      { label: "Reports", href: "/finance/reports", icon: BarChart3, perm: "finance.read" },
-    ],
-  },
-  {
     label: "Catalog",
+    icon: Package,
     items: [
       { label: "Products", href: "/products", icon: Package, perm: "products.read" },
       { label: "Categories", href: "/categories", icon: FolderTree, perm: "products.read" },
@@ -80,6 +92,7 @@ const nav: GatedGroup[] = [
   },
   {
     label: "Sell",
+    icon: Users,
     items: [
       { label: "Customers", href: "/customers", icon: Users, perm: "customers.read" },
       { label: "Segments", href: "/segments", icon: Slice, perm: "customers.read" },
@@ -87,7 +100,17 @@ const nav: GatedGroup[] = [
     ],
   },
   {
+    label: "Finance",
+    icon: Banknote,
+    items: [
+      { label: "Overview", href: "/finance", icon: Banknote, perm: "finance.read" },
+      { label: "Expenses", href: "/finance/expenses", icon: Receipt, perm: "finance.read" },
+      { label: "Reports", href: "/finance/reports", icon: BarChart3, perm: "finance.read" },
+    ],
+  },
+  {
     label: "Online Store",
+    icon: Palette,
     items: [
       { label: "Themes", href: "/online-store/theme-library", icon: Palette, perm: "theme.publish" },
       { label: "Pages", href: "/online-store/pages", icon: FileText, perm: "content.write" },
@@ -105,6 +128,7 @@ function visibleNav(permissions: readonly string[]): NavGroup[] {
   return nav
     .map((g) => ({
       ...(g.label ? { label: g.label } : {}),
+      ...(g.icon ? { icon: g.icon } : {}),
       items: g.items.filter((i) => !i.perm || permissions.includes(i.perm)).map(({ label, href, icon }) => ({ label, href, icon })),
     }))
     .filter((g) => g.items.length > 0);
@@ -187,18 +211,51 @@ function StoreShell() {
                 options={me.stores.map((s) => ({ value: s.tenantId, label: s.name }))}
               />
             ) : null}
-            <span className="hidden text-sm text-foreground-lighter sm:inline">{me.support ? `Support: ${me.user.email}` : me.user.email}</span>
-            {me.support ? null : (
-              <>
-                <Button variant="ghost" size="sm" onClick={() => setChangePasswordOpen(true)} title="Change password">
-                  <KeyRound className="h-3.5 w-3.5 sm:mr-1" />
-                  <span className="hidden sm:inline">Password</span>
-                </Button>
-                <ThemeToggle />
-                <Button variant="ghost" size="sm" onClick={onSignOut}>
-                  Sign out
-                </Button>
-              </>
+            <span className="hidden text-sm text-foreground-lighter sm:inline">{me.support ? `Support: ${me.user.email}` : null}</span>
+            {me.support ? (
+              <Button size="sm" variant="outline" onClick={onSignOut}>
+                Leave support
+              </Button>
+            ) : (
+              <DropdownMenu>
+                <DropdownMenuTrigger
+                  render={
+                    <button
+                      type="button"
+                      className="group flex items-center gap-2 rounded-full p-1 transition-colors hover:bg-surface-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                      aria-label="User account menu"
+                    >
+                      <Avatar size="sm" className="border border-border-soft bg-surface-200">
+                        <AvatarFallback className="bg-surface-200 text-foreground font-semibold text-xs">{(me.user.name ?? me.user.email ?? "U").slice(0, 2).toUpperCase()}</AvatarFallback>
+                      </Avatar>
+                    </button>
+                  }
+                />
+                <DropdownMenuContent align="end" className="w-56 p-1.5 shadow-lg">
+                  <DropdownMenuLabel className="px-2 py-1.5 text-xs">
+                    <p className="font-semibold text-foreground truncate">{me.user.name || store.name}</p>
+                    <p className="text-[11px] text-muted-foreground truncate">{me.user.email}</p>
+                  </DropdownMenuLabel>
+                  <DropdownMenuSeparator />
+                  <DropdownMenuItem onClick={() => setChangePasswordOpen(true)}>
+                    <KeyRound className="size-3.5 mr-2" />
+                    <span>Password</span>
+                  </DropdownMenuItem>
+                  <DropdownMenuSub>
+                    <DropdownMenuSubTrigger>
+                      <Palette className="size-3.5 mr-2" />
+                      <span>Theme</span>
+                    </DropdownMenuSubTrigger>
+                    <DropdownMenuSubContent className="w-36 p-1">
+                      <ThemeToggle variant="menu" />
+                    </DropdownMenuSubContent>
+                  </DropdownMenuSub>
+                  <DropdownMenuSeparator />
+                  <DropdownMenuItem variant="destructive" onClick={onSignOut}>
+                    <span>Sign out</span>
+                  </DropdownMenuItem>
+                </DropdownMenuContent>
+              </DropdownMenu>
             )}
           </>
         }

@@ -131,7 +131,7 @@ export function TenantCreate() {
       />
 
       {result ? (
-        <div className="rounded-xl border bg-card p-6 shadow-sm space-y-6">
+        <div className="rounded-xl border border-border bg-card p-6 shadow-xs space-y-6">
           <div className="flex items-center gap-3 text-emerald-600 dark:text-emerald-400">
             <CheckCircle2 className="h-8 w-8" />
             <div>
@@ -172,7 +172,7 @@ export function TenantCreate() {
             </p>
           </div>
 
-          <div className="flex items-center justify-between pt-4 border-t">
+          <div className="flex items-center justify-between pt-4 border-t border-border/60">
             <Button
               variant="default"
               size="sm"
@@ -203,7 +203,7 @@ export function TenantCreate() {
           </div>
         </div>
       ) : (
-        <form onSubmit={handleSubmit} className="rounded-xl border bg-card p-6 shadow-sm space-y-5">
+        <form onSubmit={handleSubmit} className="rounded-xl border border-border bg-card p-6 shadow-xs space-y-5">
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div>
               <Label htmlFor="storeName">Store / Business Name *</Label>

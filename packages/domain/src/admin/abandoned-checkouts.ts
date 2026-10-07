@@ -45,6 +45,8 @@ export interface AbandonedCheckoutStatsRecord {
 export interface ListAdminAbandonedCheckoutsInput {
   view?: "all" | "open" | "recovered" | undefined;
   search?: string | undefined;
+  dateFrom?: string | undefined;
+  dateTo?: string | undefined;
   emailStatus?: "all" | "not_sent" | "sent" | "failed" | "not_applicable" | undefined;
   sort?: "abandoned_desc" | "abandoned_asc" | "total_desc" | "total_asc" | undefined;
   limit?: number | undefined;
@@ -143,6 +145,13 @@ export async function listAdminAbandonedCheckouts(
       // Checkout reached rule (D1)
       sql<boolean>`(${carts.email} IS NOT NULL OR ${carts.phone} IS NOT NULL OR ${carts.shippingAddress} IS NOT NULL)`,
     ];
+
+    if (input.dateFrom) {
+      conditions.push(sql`${carts.lastActivityAt} >= ${input.dateFrom}`);
+    }
+    if (input.dateTo) {
+      conditions.push(sql`${carts.lastActivityAt} <= ${input.dateTo}`);
+    }
 
     // Tab / View filtering
     if (view === "open") {

@@ -3,6 +3,7 @@ import { useQuery } from "@tanstack/react-query";
 import { Mail, Send, CheckCircle2, XCircle, AlertTriangle, ShieldCheck } from "lucide-react";
 import {
   Button,
+  Checkbox,
   Input,
   PageContainer,
   PageHeader,
@@ -143,7 +144,7 @@ export function EmailSettings() {
     : [];
 
   return (
-    <PageContainer>
+    <PageContainer size="full">
       <PageHeader
         title="Platform Transactional Email"
         description="Configure platform-wide SMTP transactional email via Zoho ZeptoMail. All tenant order & auth emails go through this sender."
@@ -158,23 +159,22 @@ export function EmailSettings() {
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         <div className="lg:col-span-2 space-y-6">
-          <div className="rounded-xl border bg-card p-5 shadow-xs">
-            <div className="flex items-center justify-between pb-3 border-b mb-4">
+          <div className="rounded-xl border border-border bg-card p-5 shadow-xs">
+            <div className="flex items-center justify-between pb-3 border-b border-border/60 mb-4">
               <div>
-                <h2 className="font-semibold text-base">SMTP Configuration</h2>
+                <h2 className="font-semibold text-base text-foreground">SMTP Configuration</h2>
                 <p className="text-xs text-muted-foreground mt-0.5">
                   Credentials are encrypted at rest with AES-256-GCM. The token/password is never exposed back to the client.
                 </p>
               </div>
               <div className="flex items-center gap-2">
                 <label className="text-xs font-medium cursor-pointer flex items-center gap-2">
-                  <span>Enable Mailer</span>
-                  <input
-                    type="checkbox"
+                  <span className="text-foreground">Enable Mailer</span>
+                  <Checkbox
                     checked={current.enabled}
-                    onChange={(e) => setForm({ ...current, enabled: e.target.checked })}
+                    onCheckedChange={(checked) => setForm({ ...current, enabled: Boolean(checked) })}
                     disabled={!canEdit}
-                    className="h-4 w-4 rounded border-gray-300 text-primary focus:ring-primary"
+                    aria-label="Enable mailer"
                   />
                 </label>
               </div>
@@ -308,7 +308,7 @@ export function EmailSettings() {
         </div>
 
         <div className="space-y-6">
-          <div className="rounded-xl border bg-card p-5 shadow-xs">
+          <div className="rounded-xl border border-border bg-card p-5 shadow-xs">
             <div className="flex items-center gap-2 mb-2">
               <Send className="h-4 w-4 text-primary" />
               <h2 className="font-semibold text-sm">Test Email Delivery</h2>
@@ -373,7 +373,7 @@ export function EmailSettings() {
             </div>
           </div>
 
-          <div className="rounded-xl border bg-card p-5 shadow-xs text-xs space-y-2">
+          <div className="rounded-xl border border-border bg-card p-5 shadow-xs text-xs space-y-2">
             <div className="flex items-center gap-2 font-semibold">
               <ShieldCheck className="h-4 w-4 text-primary" />
               <span>DNS Verification Checklist</span>
@@ -410,15 +410,15 @@ export function EmailSettings() {
           </div>
         </div>
 
-        <div className="rounded-xl border bg-card overflow-hidden">
+        <div className="rounded-xl border border-border bg-card shadow-xs overflow-hidden">
           <Table>
             <TableHeader>
-              <TableRow>
-                <TableHead>Time</TableHead>
+              <TableRow className="bg-muted/40 hover:bg-muted/40">
+                <TableHead className="px-4">Time</TableHead>
                 <TableHead>Recipient</TableHead>
                 <TableHead>Template</TableHead>
                 <TableHead>Status</TableHead>
-                <TableHead>Details / Message ID</TableHead>
+                <TableHead className="text-right px-4">Details / Message ID</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
@@ -430,13 +430,13 @@ export function EmailSettings() {
                 </TableRow>
               ) : (
                 filteredDeliveries.map((item) => (
-                  <TableRow key={item.id}>
-                    <TableCell className="text-xs text-muted-foreground whitespace-nowrap">
+                  <TableRow key={item.id} className="hover:bg-muted/30 transition-colors">
+                    <TableCell className="text-xs text-muted-foreground whitespace-nowrap px-4">
                       {new Date(item.createdAt).toLocaleString()}
                     </TableCell>
-                    <TableCell className="text-xs font-medium">{item.toEmail}</TableCell>
+                    <TableCell className="text-xs font-medium text-foreground">{item.toEmail}</TableCell>
                     <TableCell className="text-xs">
-                      <span className="px-2 py-0.5 rounded-full bg-muted font-mono">{item.template}</span>
+                      <span className="px-2 py-0.5 rounded-full bg-muted text-foreground font-mono text-[11px]">{item.template}</span>
                     </TableCell>
                     <TableCell>
                       {item.status === "sent" ? (
@@ -453,7 +453,7 @@ export function EmailSettings() {
                         </span>
                       )}
                     </TableCell>
-                    <TableCell className="text-xs text-muted-foreground font-mono max-w-xs truncate">
+                    <TableCell className="text-xs text-muted-foreground font-mono max-w-xs truncate text-right px-4">
                       {item.error ? (
                         <span className="text-destructive">{item.error}</span>
                       ) : (

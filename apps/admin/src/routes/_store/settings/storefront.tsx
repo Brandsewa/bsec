@@ -11,7 +11,7 @@ import { Input } from "@bs/ui";
 import { RadioGroup, RadioGroupItem } from "@bs/ui";
 import { ConfirmDialog } from "@bs/ui";
 import { Field } from "@bs/ui";
-import { HeaderActions, SettingsPageFrame, SettingsSection, useUnsavedGuard } from "../../../components/settings/settings-page.tsx";
+import { HeaderActions, SettingsCard, SettingsPageFrame, useUnsavedGuard } from "../../../components/settings/settings-page.tsx";
 import { orpc } from "../../../lib/orpc.ts";
 import { errorMessage } from "../../../lib/errors.ts";
 
@@ -38,23 +38,23 @@ export function StorefrontSettingsPage() {
   if (status.isLoading) {
     return (
       <SettingsPageFrame title={TITLE} description={DESCRIPTION}>
-        <SettingsSection>
+        <SettingsCard>
           <FormSkeleton />
-        </SettingsSection>
+        </SettingsCard>
       </SettingsPageFrame>
     );
   }
   if (status.isError || !status.data) {
     return (
       <SettingsPageFrame title={TITLE} description={DESCRIPTION}>
-        <SettingsSection>
+        <SettingsCard>
           <EmptyState
             icon={AlertTriangle}
             title="Could not load storefront settings"
             description={errorMessage(status.error)}
             action={<Button onClick={() => void status.refetch()}>Try again</Button>}
           />
-        </SettingsSection>
+        </SettingsCard>
       </SettingsPageFrame>
     );
   }
@@ -287,32 +287,32 @@ function StorefrontForm({ current }: { current: StorefrontStatus }) {
       )}
 
       {current.mode === "live" && (
-        <SettingsSection>
+        <SettingsCard>
           <div className="flex items-center gap-2 text-xs" role="status">
             <CheckCircle2 className="size-4 text-primary" aria-hidden />
             Your store is live.
           </div>
-        </SettingsSection>
+        </SettingsCard>
       )}
 
-      <SettingsSection title="Store visibility" description="You can change this at any time.">
+      <SettingsCard title="Store visibility" description="You can change this at any time.">
         <RadioGroup aria-label="Store visibility" className="gap-2" value={mode} onValueChange={(v) => setMode(v as Mode)}>
           {MODES.map((m) => (
             <label key={m.value} className="flex cursor-pointer items-start gap-3 rounded-md border border-border p-3 has-data-checked:border-primary/50 has-data-checked:bg-muted">
               <RadioGroupItem value={m.value} className="mt-0.5" />
-              <span>
+              <span className="space-y-0.5">
                 <span className="block text-xs font-medium text-foreground">{m.title}</span>
-                <span className="block text-muted-foreground">{m.description}</span>
+                <span className="block text-[11px] text-muted-foreground leading-normal">{m.description}</span>
               </span>
             </label>
           ))}
         </RadioGroup>
-      </SettingsSection>
+      </SettingsCard>
 
       {/* Scheduled Maintenance Section (Slice 8B) */}
-      <SettingsSection
+      <SettingsCard
         title="Scheduled maintenance"
-        description="Plan a future maintenance window (up to 72 hours). Automatic restoration ensures stores are never stranded."
+        description="Plan a future window (up to 72 hours). Automatically restores."
       >
         <div className="space-y-4">
           {current.maintenanceStartsAt && current.maintenanceEndsAt ? (
@@ -418,12 +418,12 @@ function StorefrontForm({ current }: { current: StorefrontStatus }) {
             </p>
           </div>
         </div>
-      </SettingsSection>
+      </SettingsCard>
 
       {/* Transition History Table */}
-      <SettingsSection
+      <SettingsCard
         title="Visibility transition log"
-        description="Immutable record of storefront mode changes, scheduled window starts, and auto-restorations."
+        description="Immutable record of storefront mode changes and scheduled window starts."
       >
         {transitionsQuery.isLoading ? (
           <FormSkeleton />
@@ -465,10 +465,10 @@ function StorefrontForm({ current }: { current: StorefrontStatus }) {
             </table>
           </div>
         )}
-      </SettingsSection>
+      </SettingsCard>
 
       {mode !== "live" && (
-        <SettingsSection title="Holding page" description="What visitors see while the store is not live.">
+        <SettingsCard title="Holding page" description="What visitors see while the store is not live.">
           <Field id="storefront-headline" label="Headline">
             <Input id="storefront-headline" value={headline} maxLength={120} placeholder="Opening soon" onChange={(e) => setHeadline(e.target.value)} />
           </Field>
@@ -476,18 +476,18 @@ function StorefrontForm({ current }: { current: StorefrontStatus }) {
             <Checkbox checked={collectEmails} onCheckedChange={(c) => setCollectEmails(Boolean(c))} />
             Let visitors leave their email to be notified
           </label>
-        </SettingsSection>
+        </SettingsCard>
       )}
 
       {mode === "password" && (
-        <SettingsSection
+        <SettingsCard
           title="Store password"
-          description={current.hasPassword ? "A password is set. Enter a new one only if you want to change it." : "Set the password visitors must enter."}
+          description={current.hasPassword ? "Password is set. Enter a new one to change it." : "Set the password visitors must enter."}
         >
           <Field id="storefront-password" label={current.hasPassword ? "New password" : "Password"} hint="At least 6 characters.">
             <Input id="storefront-password" type="password" autoComplete="new-password" value={password} minLength={6} onChange={(e) => setPassword(e.target.value)} />
           </Field>
-        </SettingsSection>
+        </SettingsCard>
       )}
     </SettingsPageFrame>
   );

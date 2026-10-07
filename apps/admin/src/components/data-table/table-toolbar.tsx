@@ -44,10 +44,10 @@ export function TableToolbar({
   resultCount: number;
   /** Plural noun for the "Show N …" button, e.g. "orders". */
   noun: string;
-  sortOptions: ReadonlyArray<SortOption>;
-  sort: string;
-  defaultSort: string;
-  onSort: (id: string | undefined) => void;
+  sortOptions?: ReadonlyArray<SortOption>;
+  sort?: string;
+  defaultSort?: string;
+  onSort?: (id: string | undefined) => void;
   trailing?: ReactNode;
 }) {
   const [filtersOpen, setFiltersOpen] = useState(false);
@@ -64,17 +64,19 @@ export function TableToolbar({
           onChange={(e) => onSearchText(e.target.value)}
           placeholder={searchPlaceholder}
         />
-        <div className={`grid gap-2 md:hidden ${filters ? "grid-cols-2" : "grid-cols-1"}`}>
+        <div className={`grid gap-2 md:hidden ${filters && sortOptions && sortOptions.length > 0 ? "grid-cols-2" : "grid-cols-1"}`}>
           {filters ? (
             <Button variant="outline" onClick={() => setFiltersOpen(true)}>
               <SlidersHorizontal className="mr-1.5" aria-hidden />
               Filters{activeFilterCount > 0 ? ` (${activeFilterCount})` : ""}
             </Button>
           ) : null}
-          <Button variant="outline" onClick={() => setSortOpen(true)}>
-            <ArrowUpDown className="mr-1.5" aria-hidden />
-            Sort
-          </Button>
+          {sortOptions && sortOptions.length > 0 ? (
+            <Button variant="outline" onClick={() => setSortOpen(true)}>
+              <ArrowUpDown className="mr-1.5" aria-hidden />
+              Sort
+            </Button>
+          ) : null}
         </div>
         <div className="hidden md:contents">
           {filters}
@@ -102,29 +104,31 @@ export function TableToolbar({
         </SheetContent>
       </Sheet>
 
-      <Sheet open={sortOpen} onOpenChange={setSortOpen}>
-        <SheetContent className="w-full sm:max-w-sm">
-          <SheetHeader className="border-b border-border">
-            <SheetTitle>Sort by</SheetTitle>
-            <SheetDescription>Choose how the list is ordered.</SheetDescription>
-          </SheetHeader>
-          <RadioGroup
-            className="gap-1 p-3"
-            value={sort}
-            onValueChange={(v) => {
-              onSort(v === defaultSort ? undefined : v);
-              setSortOpen(false);
-            }}
-          >
-            {sortOptions.map((o) => (
-              <label key={o.id} className="flex cursor-pointer items-center gap-3 rounded-md p-2.5 text-sm hover:bg-muted">
-                <RadioGroupItem value={o.id} />
-                {o.label}
-              </label>
-            ))}
-          </RadioGroup>
-        </SheetContent>
-      </Sheet>
+      {sortOptions && sortOptions.length > 0 && onSort ? (
+        <Sheet open={sortOpen} onOpenChange={setSortOpen}>
+          <SheetContent className="w-full sm:max-w-sm">
+            <SheetHeader className="border-b border-border">
+              <SheetTitle>Sort by</SheetTitle>
+              <SheetDescription>Choose how the list is ordered.</SheetDescription>
+            </SheetHeader>
+            <RadioGroup
+              className="gap-1 p-3"
+              value={sort}
+              onValueChange={(v) => {
+                onSort(v === defaultSort ? undefined : v);
+                setSortOpen(false);
+              }}
+            >
+              {sortOptions.map((o) => (
+                <label key={o.id} className="flex cursor-pointer items-center gap-3 rounded-md p-2.5 text-sm hover:bg-muted">
+                  <RadioGroupItem value={o.id} />
+                  {o.label}
+                </label>
+              ))}
+            </RadioGroup>
+          </SheetContent>
+        </Sheet>
+      ) : null}
     </>
   );
 }

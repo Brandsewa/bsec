@@ -2306,6 +2306,8 @@ export const adminContract = {
             status: z.enum(["all", "published", "on_hold", "replied", "awaiting_reply"]).optional(),
             rating: z.number().int().min(1).max(5).optional(),
             search: z.string().optional(),
+            dateFrom: z.string().optional(),
+            dateTo: z.string().optional(),
             limit: z.number().int().min(1).max(100).default(50),
             offset: z.number().int().min(0).default(0),
           })
@@ -2954,7 +2956,7 @@ export const adminContract = {
       .input(
         z
           .object({
-            view: z.enum(["all", "needs_review", "approved", "received", "resolved", "rejected_closed"]).default("all"),
+            view: z.enum(["all", "needs_review", "approved", "received", "resolved", "rejected_closed", "archived"]).default("all"),
             search: z.string().optional(),
             resolution: z.enum(["refund", "replacement"]).optional(),
             dateFrom: z.string().optional(),
@@ -2995,6 +2997,18 @@ export const adminContract = {
         }),
       )
       .output(z.object({ success: z.boolean(), status: z.string() })),
+    archive: oc
+      .route({ method: "POST", path: "/admin/returns/{id}/archive" })
+      .input(z.object({ id: z.string().uuid() }))
+      .output(z.object({ success: z.boolean() })),
+    restore: oc
+      .route({ method: "POST", path: "/admin/returns/{id}/restore" })
+      .input(z.object({ id: z.string().uuid() }))
+      .output(z.object({ success: z.boolean() })),
+    delete: oc
+      .route({ method: "DELETE", path: "/admin/returns/{id}" })
+      .input(z.object({ id: z.string().uuid() }))
+      .output(z.object({ success: z.boolean() })),
   },
 
   // --- Return Settings (ORDERS-SETTINGS-PLAN §5) ---
@@ -3850,6 +3864,8 @@ export const adminContract = {
             tab: z.enum(["all", "needs_reply", "quote_sent", "expired", "accepted", "closed"]).default("all"),
             search: z.string().optional(),
             dateRange: z.enum(["any", "7d", "30d", "90d"]).default("any"),
+            dateFrom: z.string().datetime().optional(),
+            dateTo: z.string().datetime().optional(),
             customerType: z.enum(["all", "account", "guest"]).default("all"),
             limit: z.number().int().min(1).max(100).default(50),
             offset: z.number().int().min(0).default(0),
@@ -3901,6 +3917,8 @@ export const adminContract = {
           .object({
             view: z.enum(["all", "open", "recovered"]).default("all"),
             search: z.string().optional(),
+            dateFrom: z.string().datetime().optional(),
+            dateTo: z.string().datetime().optional(),
             emailStatus: z.enum(["all", "not_sent", "sent", "failed", "not_applicable"]).default("all"),
             sort: z.enum(["abandoned_desc", "abandoned_asc", "total_desc", "total_asc"]).default("abandoned_desc"),
             limit: z.number().int().min(1).max(100).default(50),

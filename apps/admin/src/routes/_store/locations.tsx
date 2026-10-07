@@ -1,7 +1,7 @@
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { CheckCircle2, MapPin, MoreHorizontal, Pencil, Plus, Trash2 } from "lucide-react";
 import { useState } from "react";
-import { MetricCard, MetricCardSkeleton, PageContainer, PageHeader, PageSkeleton, toast } from "@bs/ui";
+import { MetricCard, MetricCardSkeleton, PageContainer, PageHeader, PageSection, PageSkeleton, toast } from "@bs/ui";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import type { Location } from "@bs/contracts";
 import { Badge } from "@bs/ui";
@@ -42,7 +42,7 @@ export function LocationsPage() {
   );
 
   return (
-    <PageContainer size="default" className="space-y-6">
+    <PageContainer size="full">
       <PageHeader
         title="Locations"
         description="Manage physical stock locations, warehouses, and fulfillment origins."
@@ -55,7 +55,7 @@ export function LocationsPage() {
       />
 
       {/* Stats Cards */}
-      <div className="grid grid-cols-3 gap-4">
+      <div className="grid grid-cols-2 gap-3 sm:gap-4 sm:grid-cols-3">
         {statsQuery.isLoading ? (
           <>
             <MetricCardSkeleton />
@@ -71,19 +71,20 @@ export function LocationsPage() {
         )}
       </div>
 
-      {/* Locations Table */}
-      <div className="overflow-hidden rounded-lg border bg-card">
-        <table className="w-full text-left text-sm">
-          <thead className="border-b bg-muted/40 text-xs font-medium text-muted-foreground uppercase">
-            <tr>
-              <th className="px-4 py-3">Location Name</th>
-              <th className="px-4 py-3">Address & PIN</th>
-              <th className="px-4 py-3">Status</th>
-              <th className="px-4 py-3">Default</th>
-              <th className="px-4 py-3 text-right">Actions</th>
-            </tr>
-          </thead>
-          <tbody className="divide-y">
+      <PageSection>
+        {/* Locations Table */}
+        <div className="overflow-hidden rounded-xl border border-border bg-card shadow-xs">
+          <table className="w-full text-left text-sm">
+            <thead className="border-b border-border bg-muted/60 text-xs font-medium text-muted-foreground">
+              <tr>
+                <th className="px-4 py-3">Location Name</th>
+                <th className="px-4 py-3">Address & PIN</th>
+                <th className="px-4 py-3">Status</th>
+                <th className="px-4 py-3">Default</th>
+                <th className="px-4 py-3 text-right">Actions</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-border/60">
             {locationsQuery.isLoading ? (
               <tr>
                 <td colSpan={5} className="px-4 py-8 text-center text-muted-foreground">
@@ -186,6 +187,7 @@ export function LocationsPage() {
           </tbody>
         </table>
       </div>
+      </PageSection>
 
       {/* Delete Location Confirm Dialog */}
       <ConfirmDialog

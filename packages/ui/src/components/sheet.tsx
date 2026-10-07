@@ -24,7 +24,7 @@ export function SheetContent({
     <D.Portal>
       <DialogOverlay />
       <D.Content
-        className={cn("fixed z-50 flex flex-col gap-4 overflow-y-auto border-border-strong bg-overlay p-6 shadow-lg", sides[side], className)}
+        className={cn("fixed z-50 flex flex-col gap-4 overflow-y-auto border-border bg-background text-foreground p-6 shadow-xl", sides[side], className)}
         {...props}
       >
         {children}

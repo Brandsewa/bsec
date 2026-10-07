@@ -9,7 +9,7 @@ import { Input } from "@bs/ui";
 import { Textarea } from "@bs/ui";
 import { SimpleSelect } from "@bs/ui";
 import { Field } from "@bs/ui";
-import { HeaderActions, SettingsPageFrame, SettingsSection, useUnsavedGuard } from "../../../components/settings/settings-page.tsx";
+import { HeaderActions, SettingsCard, SettingsPageFrame, useUnsavedGuard } from "../../../components/settings/settings-page.tsx";
 import { orpc } from "../../../lib/orpc.ts";
 import { errorMessage } from "../../../lib/errors.ts";
 
@@ -42,9 +42,9 @@ export function ReturnSettingsPage() {
   if (query.isLoading) {
     return (
       <SettingsPageFrame title={TITLE} description={DESCRIPTION}>
-        <SettingsSection>
+        <SettingsCard>
           <FormSkeleton />
-        </SettingsSection>
+        </SettingsCard>
       </SettingsPageFrame>
     );
   }
@@ -52,14 +52,14 @@ export function ReturnSettingsPage() {
   if (query.isError || !query.data) {
     return (
       <SettingsPageFrame title={TITLE} description={DESCRIPTION}>
-        <SettingsSection>
+        <SettingsCard>
           <EmptyState
             icon={AlertTriangle}
             title="Could not load return settings"
             description={errorMessage(query.error)}
             action={<Button onClick={() => void query.refetch()}>Try again</Button>}
           />
-        </SettingsSection>
+        </SettingsCard>
       </SettingsPageFrame>
     );
   }
@@ -167,9 +167,9 @@ function ReturnSettingsForm({
       </HeaderActions>
 
       <form id="settings-returns" onSubmit={onSubmit} className="space-y-6">
-        <SettingsSection
-          title="Policy & Rules"
-          description="Control whether customer self-service return and exchange requests are enabled and set the eligibility window."
+        <SettingsCard
+          title="Policy & rules"
+          description="Enable customer self-service requests and set eligibility timeframes"
         >
           <div className="space-y-4">
             <div className="flex items-center justify-between gap-4 rounded-lg border border-border p-4">
@@ -205,12 +205,12 @@ function ReturnSettingsForm({
               />
             </div>
 
-            <Field
-              id="returnWindowDays"
-              label="Return window (days)"
-              hint="How many days after order delivery a customer can request a return or exchange."
-            >
-              <div className="max-w-xs">
+            <div className="max-w-xs pt-1">
+              <Field
+                id="returnWindowDays"
+                label="Return window (days)"
+                hint="Days after delivery a customer can request return/exchange."
+              >
                 <Input
                   id="returnWindowDays"
                   type="number"
@@ -221,14 +221,21 @@ function ReturnSettingsForm({
                     setForm((prev) => ({ ...prev, returnWindowDays: Number(e.target.value) || 1 }))
                   }
                 />
-              </div>
-            </Field>
+              </Field>
+            </div>
           </div>
-        </SettingsSection>
+        </SettingsCard>
 
-        <SettingsSection
-          title="Return Reasons & Photo Rules"
-          description="Customise the reasons customers can pick from and whether photo proof is required."
+        <SettingsCard
+          title="Return reasons & photo rules"
+          description="Reasons shoppers can select and mandatory photo proof rules"
+          actions={
+            form.reasons.length < 12 ? (
+              <Button type="button" variant="outline" size="sm" onClick={addReason} className="gap-1.5">
+                <Plus className="h-4 w-4" /> Add reason
+              </Button>
+            ) : undefined
+          }
         >
           <div className="space-y-3">
             {form.reasons.map((reason, index) => (
@@ -269,24 +276,18 @@ function ReturnSettingsForm({
                 </Button>
               </div>
             ))}
-
-            {form.reasons.length < 12 && (
-              <Button type="button" variant="outline" size="sm" onClick={addReason} className="mt-2">
-                <Plus className="mr-1.5 h-4 w-4" /> Add reason
-              </Button>
-            )}
           </div>
-        </SettingsSection>
+        </SettingsCard>
 
-        <SettingsSection
-          title="Customer Instructions & Policy Copy"
-          description="Custom instructions and policy text displayed on the customer-facing return portal."
+        <SettingsCard
+          title="Customer instructions & policy copy"
+          description="Instructions and text shown on the customer-facing returns portal"
         >
           <div className="space-y-4">
             <Field
               id="instructions"
               label="Return instructions (sent upon approval)"
-              hint="Included in the approval message and visible to customers after you approve their return."
+              hint="Included in the approval message and visible after you approve their return."
             >
               <Textarea
                 id="instructions"
@@ -301,7 +302,7 @@ function ReturnSettingsForm({
             <Field
               id="policyText"
               label="Policy summary (shown on request form)"
-              hint="Brief policy highlights displayed to the customer before submitting a request."
+              hint="Brief policy highlights displayed before submitting a request."
             >
               <Textarea
                 id="policyText"
@@ -313,7 +314,7 @@ function ReturnSettingsForm({
               />
             </Field>
           </div>
-        </SettingsSection>
+        </SettingsCard>
       </form>
     </SettingsPageFrame>
   );

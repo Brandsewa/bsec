@@ -11,7 +11,7 @@ export function Skeleton({ className, ...props }: ComponentProps<"div">) {
 
 export function TableSkeleton({ rows = 10, columns = 4 }: { rows?: number; columns?: number }) {
   return (
-    <div aria-hidden className="overflow-hidden rounded-md border border-border bg-background">
+    <div aria-hidden className="overflow-hidden rounded-md border border-border bg-card">
       <div className="flex gap-4 border-b border-border bg-surface-75 px-3 py-2.5">
         {Array.from({ length: columns }, (_, c) => (
           <Skeleton key={c} className="h-3 flex-1" />
@@ -43,7 +43,7 @@ export function FormSkeleton({ fields = 4 }: { fields?: number }) {
 
 export function MetricCardSkeleton() {
   return (
-    <div aria-hidden className="grid gap-3 rounded-md border border-border bg-background p-4">
+    <div aria-hidden className="grid gap-3 rounded-md border border-border bg-card p-4">
       <Skeleton className="h-3.5 w-24" />
       <Skeleton className="h-7 w-32" />
       <Skeleton className="h-3 w-20" />

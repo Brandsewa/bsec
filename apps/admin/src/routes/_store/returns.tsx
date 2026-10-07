@@ -1,18 +1,20 @@
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import {
+  Archive,
   Camera,
   Copy,
   Download,
   ExternalLink,
   MoreHorizontal,
   RotateCcw,
+  Trash2,
 } from "lucide-react";
 import { useMemo, useState } from "react";
 import {
+  ConfirmDialog,
   EmptyState,
   MetricCard,
   MetricCardSkeleton,
-  PageBreadcrumbs,
   PageContainer,
   PageHeader,
   PageSection,
@@ -52,7 +54,9 @@ import { DataTable, type Column } from "../../components/data-table/data-table.t
 import { fetchAllPages } from "../../components/data-table/fetch-all.ts";
 import { Pagination } from "../../components/data-table/pagination.tsx";
 import { TableToolbar } from "../../components/data-table/table-toolbar.tsx";
-import { ColumnsMenu, FilterChips, type FilterChip } from "../../components/data-table/toolbar-parts.tsx";
+import { BulkBar, ColumnsMenu, FilterChips, type FilterChip } from "../../components/data-table/toolbar-parts.tsx";
+import { useBulkRunner } from "../../components/data-table/use-bulk-runner.ts";
+import { useTableSelection } from "../../components/data-table/use-table-selection.ts";
 import {
   oneOf,
   parsePaging,
@@ -60,9 +64,11 @@ import {
   useColumnVisibility,
   useDebouncedValue,
   useUrlTableState,
+  day,
+  dayAfterIso,
+  dayStartIso,
 } from "../../components/data-table/use-table-state.ts";
-import { ScrollTabs } from "@bs/ui";
-import { SimpleSelect } from "@bs/ui";
+import { DateRangePicker, ScrollTabs, SimpleSelect } from "@bs/ui";
 import { downloadCsv, toCsv } from "../../lib/csv.ts";
 import { errorMessage } from "../../lib/errors.ts";
 import { client, orpc } from "../../lib/orpc.ts";
@@ -76,9 +82,8 @@ export const Route = createFileRoute("/_store/returns")({
   component: ReturnsWorkbenchPage,
 });
 
-type ReturnView = "all" | "needs_review" | "approved" | "received" | "resolved" | "rejected_closed";
+type ReturnView = "all" | "needs_review" | "approved" | "received" | "resolved" | "rejected_closed" | "archived";
 type ReturnSort = "created_desc" | "created_asc" | "amount_desc" | "amount_asc";
-type DateRange = "any" | "7d" | "30d" | "90d";
 type ResolutionFilter = "all" | "refund" | "replacement";
 
 const VIEWS: ReadonlyArray<{ id: ReturnView; label: string }> = [
@@ -88,6 +93,7 @@ const VIEWS: ReadonlyArray<{ id: ReturnView; label: string }> = [
   { id: "received", label: "Received" },
   { id: "resolved", label: "Resolved" },
   { id: "rejected_closed", label: "Rejected / Closed" },
+  { id: "archived", label: "Archived" },
 ];
 
 const SORTS: ReadonlyArray<{ id: ReturnSort; label: string }> = [
@@ -95,13 +101,6 @@ const SORTS: ReadonlyArray<{ id: ReturnSort; label: string }> = [
   { id: "created_asc", label: "Oldest first" },
   { id: "amount_desc", label: "Refund value (high to low)" },
   { id: "amount_asc", label: "Refund value (low to high)" },
-];
-
-const DATE_RANGES: ReadonlyArray<{ value: DateRange; label: string }> = [
-  { value: "any", label: "All time" },
-  { value: "7d", label: "Last 7 days" },
-  { value: "30d", label: "Last 30 days" },
-  { value: "90d", label: "Last 90 days" },
 ];
 
 const RESOLUTIONS: ReadonlyArray<{ value: ResolutionFilter; label: string }> = [
@@ -114,7 +113,8 @@ export interface ReturnsSearch {
   view: ReturnView;
   q?: string | undefined;
   resolution: ResolutionFilter;
-  dateRange: DateRange;
+  from?: string | undefined;
+  to?: string | undefined;
   sort: ReturnSort;
   page: number;
   size: number;
@@ -125,20 +125,11 @@ export function parseReturnsSearch(raw: Record<string, unknown>): ReturnsSearch 
     view: (oneOf(raw["view"], VIEWS.map((v) => v.id)) as ReturnView) ?? "all",
     q: text(raw["q"]),
     resolution: (oneOf(raw["resolution"], RESOLUTIONS.map((r) => r.value)) as ResolutionFilter) ?? "all",
-    dateRange: (oneOf(raw["dateRange"], DATE_RANGES.map((d) => d.value)) as DateRange) ?? "any",
+    from: day(raw["from"]),
+    to: day(raw["to"]),
     sort: (oneOf(raw["sort"], SORTS.map((s) => s.id)) as ReturnSort) ?? "created_desc",
     ...parsePaging(raw),
   };
-}
-
-function dateFilterToIso(range: DateRange): string | undefined {
-  if (range === "any") return undefined;
-  const now = new Date();
-  const date = new Date(now);
-  if (range === "7d") date.setDate(now.getDate() - 7);
-  else if (range === "30d") date.setDate(now.getDate() - 30);
-  else if (range === "90d") date.setDate(now.getDate() - 90);
-  return date.toISOString();
 }
 
 function returnsListInput(s: ReturnsSearch, overrides?: { pageSize?: number; page?: number }) {
@@ -146,7 +137,8 @@ function returnsListInput(s: ReturnsSearch, overrides?: { pageSize?: number; pag
     view: s.view,
     search: s.q ? s.q.trim() : undefined,
     resolution: s.resolution !== "all" ? s.resolution : undefined,
-    dateFrom: dateFilterToIso(s.dateRange),
+    dateFrom: s.from ? dayStartIso(s.from) : undefined,
+    dateTo: s.to ? dayAfterIso(s.to) : undefined,
     sort: s.sort,
     page: overrides?.page ?? s.page,
     pageSize: overrides?.pageSize ?? s.size,
@@ -517,17 +509,82 @@ export function ReturnsWorkbenchPage() {
         onRemove: () => update({ resolution: "all", page: undefined }),
       });
     }
-    if (s.dateRange !== "any") {
+    if (s.from || s.to) {
+      const fmtDay = (d: string) => new Date(`${d}T00:00:00`).toLocaleDateString("en-IN", { day: "numeric", month: "short" });
       chips.push({
-        key: "dateRange",
-        label: `Date: ${DATE_RANGES.find((d) => d.value === s.dateRange)?.label ?? s.dateRange}`,
-        onRemove: () => update({ dateRange: "any", page: undefined }),
+        key: "requested",
+        label: `Requested: ${s.from ? fmtDay(s.from) : "…"} – ${s.to ? fmtDay(s.to) : "…"}`,
+        onRemove: () => update({ from: undefined, to: undefined, page: undefined }),
       });
     }
     return chips;
   }, [s, update, setSearchText]);
 
-  async function handleExportCsv() {
+  const bulk = useBulkRunner();
+  const rows = (returnsQuery.data?.items ?? []) as ReturnRow[];
+  const total = returnsQuery.data?.total ?? 0;
+
+  const sel = useTableSelection({
+    rows,
+    getId: (r: ReturnRow) => r.id,
+    total,
+    resetKey: JSON.stringify([s.view, s.resolution, s.from, s.to, s.q]),
+  });
+
+  const [toDelete, setToDelete] = useState<ReturnRow[] | null>(null);
+
+  const handleArchive = (items: ReturnRow[]) =>
+    bulk.run({
+      rows: items,
+      getId: (r) => r.id,
+      getLabel: (r) => r.number,
+      verb: "Archiving",
+      done: "archived",
+      noun: "return",
+      action: (r) => client.admin.returns.archive({ id: r.id }),
+      onFinished: (ok) => {
+        sel.release(ok);
+        void queryClient.invalidateQueries({ queryKey: orpc.admin.returns.key() });
+      },
+    });
+
+  const handleRestore = (items: ReturnRow[]) =>
+    bulk.run({
+      rows: items,
+      getId: (r) => r.id,
+      getLabel: (r) => r.number,
+      verb: "Restoring",
+      done: "restored",
+      noun: "return",
+      action: (r) => client.admin.returns.restore({ id: r.id }),
+      onFinished: (ok) => {
+        sel.release(ok);
+        void queryClient.invalidateQueries({ queryKey: orpc.admin.returns.key() });
+      },
+    });
+
+  const handleDelete = (items: ReturnRow[]) =>
+    bulk.run({
+      rows: items,
+      getId: (r) => r.id,
+      getLabel: (r) => r.number,
+      verb: "Deleting",
+      done: "deleted",
+      noun: "return",
+      action: (r) => client.admin.returns.delete({ id: r.id }),
+      onFinished: (ok) => {
+        sel.release(ok);
+        void queryClient.invalidateQueries({ queryKey: orpc.admin.returns.key() });
+      },
+    });
+
+  async function handleExportCsv(source: "selection" | "all" = "all") {
+    if (source === "selection" && !sel.allResults) {
+      const csv = toCsv(EXPORT_HEADER, sel.picked.map(exportRow));
+      downloadCsv(`returns-${new Date().toISOString().slice(0, 10)}.csv`, csv);
+      toast.success(`Exported ${sel.picked.length} return${sel.picked.length === 1 ? "" : "s"}`);
+      return;
+    }
     setExporting(true);
     try {
       const { rows: allRows } = await fetchAllPages<ReturnRow>(
@@ -552,61 +609,92 @@ export function ReturnsWorkbenchPage() {
     }
   }
 
-  const rows = (returnsQuery.data?.items ?? []) as ReturnRow[];
-  const total = returnsQuery.data?.total ?? 0;
-
   const rowMenu = (row: ReturnRow) => (
     <DropdownMenu>
-      <DropdownMenuTrigger render={<Button variant="ghost" size="icon" aria-label="Return actions" />}>
+      <DropdownMenuTrigger render={<Button variant="ghost" size="icon" aria-label={`Actions for return ${row.number}`} />}>
         <MoreHorizontal className="size-4" />
       </DropdownMenuTrigger>
-      <DropdownMenuContent align="end" className="w-48">
+      <DropdownMenuContent align="end" className="w-52">
         <DropdownMenuItem onClick={() => setActiveReturnId(row.id)}>
-          View details
+          <ExternalLink className="mr-2 size-3.5" /> View details
+        </DropdownMenuItem>
+        <DropdownMenuItem
+          onClick={() => {
+            void navigator.clipboard.writeText(row.number);
+            toast.success(`Copied ${row.number}`);
+          }}
+        >
+          <Copy className="mr-2 size-3.5" /> Copy return #
+        </DropdownMenuItem>
+        <DropdownMenuItem
+          onClick={() => {
+            void navigator.clipboard.writeText(row.orderNumber);
+            toast.success(`Copied ${row.orderNumber}`);
+          }}
+        >
+          <Copy className="mr-2 size-3.5" /> Copy order #
         </DropdownMenuItem>
         <DropdownMenuSeparator />
-        {row.status === "requested" && (
+        {s.view !== "archived" && row.status !== "archived" && (
           <>
-            <DropdownMenuItem onClick={() => openAction(row, "approve")}>
-              Approve return
-            </DropdownMenuItem>
-            <DropdownMenuItem className="text-destructive" onClick={() => openAction(row, "reject")}>
-              Reject return
+            {row.status === "requested" && (
+              <>
+                <DropdownMenuItem onClick={() => openAction(row, "approve")}>
+                  Approve return
+                </DropdownMenuItem>
+                <DropdownMenuItem className="text-destructive" onClick={() => openAction(row, "reject")}>
+                  Reject return
+                </DropdownMenuItem>
+              </>
+            )}
+            {row.status === "approved" && (
+              <DropdownMenuItem onClick={() => openAction(row, "pick_up")}>
+                Mark picked up
+              </DropdownMenuItem>
+            )}
+            {(row.status === "approved" || row.status === "picked_up") && (
+              <DropdownMenuItem onClick={() => openAction(row, "receive")}>
+                Mark received
+              </DropdownMenuItem>
+            )}
+            {row.status === "received" && (
+              <>
+                <DropdownMenuItem onClick={() => openAction(row, "refund")}>
+                  Record refund
+                </DropdownMenuItem>
+                <DropdownMenuItem onClick={() => openAction(row, "replace")}>
+                  Record exchange
+                </DropdownMenuItem>
+              </>
+            )}
+            {(row.status === "refunded" || row.status === "replaced" || row.status === "rejected" || row.status === "cancelled") && (
+              <DropdownMenuItem onClick={() => openAction(row, "close")}>
+                Close case
+              </DropdownMenuItem>
+            )}
+            <DropdownMenuSeparator />
+            <DropdownMenuItem disabled={bulk.busy} onClick={() => void handleArchive([row])}>
+              <Archive className="mr-2 size-3.5" /> Archive return
             </DropdownMenuItem>
           </>
         )}
-        {row.status === "approved" && (
-          <DropdownMenuItem onClick={() => openAction(row, "pick_up")}>
-            Mark picked up
-          </DropdownMenuItem>
-        )}
-        {(row.status === "approved" || row.status === "picked_up") && (
-          <DropdownMenuItem onClick={() => openAction(row, "receive")}>
-            Mark received
-          </DropdownMenuItem>
-        )}
-        {row.status === "received" && (
+        {(s.view === "archived" || row.status === "archived") && (
           <>
-            <DropdownMenuItem onClick={() => openAction(row, "refund")}>
-              Record refund
+            <DropdownMenuItem disabled={bulk.busy} onClick={() => void handleRestore([row])}>
+              <RotateCcw className="mr-2 size-3.5" /> Restore return
             </DropdownMenuItem>
-            <DropdownMenuItem onClick={() => openAction(row, "replace")}>
-              Record exchange
+            <DropdownMenuSeparator />
+            <DropdownMenuItem className="text-destructive" disabled={bulk.busy} onClick={() => setToDelete([row])}>
+              <Trash2 className="mr-2 size-3.5" /> Delete permanently
             </DropdownMenuItem>
           </>
-        )}
-        {(row.status === "refunded" || row.status === "replaced" || row.status === "rejected" || row.status === "cancelled") && (
-          <DropdownMenuItem onClick={() => openAction(row, "close")}>
-            Close case
-          </DropdownMenuItem>
         )}
       </DropdownMenuContent>
     </DropdownMenu>
   );
 
   return (
-    <PageContainer>
-      <PageBreadcrumbs items={[{ label: "Home", href: "/" }, { label: "Orders", href: "/orders" }, { label: "Returns & Exchanges" }]} />
+    <PageContainer size="full">
       <PageHeader
         title="Returns & Exchanges"
         description="Review customer return requests, inspect items, record refunds, and coordinate replacements."
@@ -655,22 +743,26 @@ export function ReturnsWorkbenchPage() {
           {/* Filters Toolbar */}
           <TableToolbar
             searchLabel="Search returns"
-            searchPlaceholder="Search by return #, order #, email, name..."
+            searchPlaceholder="Search return #, order #, email, name..."
             searchText={searchText}
             onSearchText={setSearchText}
             filters={
-              <>
+              <div className="flex items-center gap-2">
                 <SimpleSelect
+                  ariaLabel="Resolution filter"
+                  className="w-full md:w-44"
                   value={s.resolution}
                   onChange={(val) => update({ resolution: val as ResolutionFilter, page: undefined })}
                   options={RESOLUTIONS.map((r) => ({ value: r.value, label: r.label }))}
                 />
-                <SimpleSelect
-                  value={s.dateRange}
-                  onChange={(val) => update({ dateRange: val as DateRange, page: undefined })}
-                  options={DATE_RANGES.map((d) => ({ value: d.value, label: d.label }))}
+                <DateRangePicker
+                  className="w-full justify-start md:w-auto"
+                  emptyLabel="Requested: any date"
+                  from={s.from}
+                  to={s.to}
+                  onChange={(from, to) => update({ from, to, page: undefined })}
                 />
-              </>
+              </div>
             }
             resultCount={total}
             noun="returns"
@@ -689,7 +781,7 @@ export function ReturnsWorkbenchPage() {
                 <Button
                   variant="outline"
                   size="sm"
-                  onClick={handleExportCsv}
+                  onClick={() => void handleExportCsv("all")}
                   disabled={exporting || total === 0}
                   className="h-8 gap-1.5 text-xs font-medium"
                 >
@@ -703,9 +795,63 @@ export function ReturnsWorkbenchPage() {
           {filterChips.length > 0 && (
             <FilterChips
               chips={filterChips}
-              onClear={() => update({ q: undefined, dateRange: "any", resolution: "all", page: undefined })}
+              onClear={() => update({ q: undefined, from: undefined, to: undefined, resolution: "all", page: undefined })}
             />
           )}
+
+          <BulkBar
+            count={sel.count}
+            noun="return"
+            total={total}
+            allResults={sel.allResults}
+            pageFullySelected={sel.pageFullySelected}
+            onSelectAllResults={sel.selectAllResults}
+            onClear={sel.clear}
+            note={sel.allResults ? "Actions work on returns you tick yourself. Export covers every matching return." : undefined}
+          >
+            {s.view !== "archived" ? (
+              <Button
+                variant="outline"
+                size="sm"
+                disabled={bulk.busy || sel.allResults}
+                onClick={() => void handleArchive(sel.picked)}
+              >
+                <Archive className="mr-1.5 size-3.5" /> Archive
+              </Button>
+            ) : (
+              <>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  disabled={bulk.busy || sel.allResults}
+                  onClick={() => void handleRestore(sel.picked)}
+                >
+                  <RotateCcw className="mr-1.5 size-3.5" /> Restore
+                </Button>
+                <Button
+                  variant="destructive"
+                  size="sm"
+                  disabled={bulk.busy || sel.allResults}
+                  onClick={() => setToDelete(sel.picked)}
+                >
+                  <Trash2 className="mr-1.5 size-3.5" /> Delete
+                </Button>
+              </>
+            )}
+            <Button
+              variant="outline"
+              size="sm"
+              disabled={exporting}
+              onClick={() => void handleExportCsv("selection")}
+            >
+              <Download className="mr-1.5 size-3.5" /> Export
+            </Button>
+            {bulk.progress ? (
+              <span role="status" className="text-muted-foreground text-xs">
+                {bulk.progress.label}… {bulk.progress.done}/{bulk.progress.total}
+              </span>
+            ) : null}
+          </BulkBar>
 
           {/* Data Table */}
           <DataTable
@@ -719,11 +865,32 @@ export function ReturnsWorkbenchPage() {
               <EmptyState
                 icon={RotateCcw}
                 title="No returns found"
-                description="No return or exchange requests match your current filters."
+                description={s.view === "archived" ? "No archived returns found." : "No return or exchange requests match your current filters."}
               />
             }
+            selectedIds={sel.selectedIds}
+            onToggleRow={sel.toggleRow}
+            onTogglePage={sel.togglePage}
             rowActions={rowMenu}
             onRowClick={(row) => setActiveReturnId(row.id)}
+            renderCard={(r, ctx) => (
+              <div className="flex items-start gap-3 p-3" onClick={() => setActiveReturnId(r.id)}>
+                <div className="pt-0.5" onClick={(e) => e.stopPropagation()}>
+                  <Checkbox aria-label={`Select return ${r.number}`} checked={ctx.selected} onCheckedChange={() => ctx.toggle()} />
+                </div>
+                <div className="grid min-w-0 flex-1 gap-1">
+                  <div className="flex items-center justify-between gap-2">
+                    <span className="font-semibold text-foreground text-xs">{r.number}</span>
+                    <StatusBadge status={r.status} />
+                  </div>
+                  <div className="text-xs text-muted-foreground truncate">{r.customerName || r.customerEmail || r.orderNumber}</div>
+                  <div className="flex items-center justify-between text-xs pt-1">
+                    <span className="capitalize text-muted-foreground">{r.resolution}</span>
+                    <span className="font-medium text-foreground">{r.refundAmount ? `₹${(r.refundAmount / 100).toFixed(2)}` : "—"}</span>
+                  </div>
+                </div>
+              </div>
+            )}
           />
 
           {total > s.size && (
@@ -738,11 +905,29 @@ export function ReturnsWorkbenchPage() {
         </div>
       </PageSection>
 
+      <ConfirmDialog
+        open={toDelete !== null}
+        onOpenChange={(open) => !open && setToDelete(null)}
+        title={toDelete?.length === 1 ? `Delete return "${toDelete[0]?.number}"?` : `Delete ${toDelete?.length ?? 0} returns?`}
+        description="This will permanently delete the selected archived return record(s) and cannot be undone."
+        confirmLabel="Delete permanently"
+        cancelLabel="Keep in archive"
+        destructive
+        onConfirm={() => {
+          const items = toDelete ?? [];
+          setToDelete(null);
+          void handleDelete(items);
+        }}
+      />
+
       {/* Review & Detail Sheet */}
       <ReturnDetailSheet
         returnId={activeReturnId}
         onClose={() => setActiveReturnId(null)}
         onOpenAction={openAction}
+        onArchive={(row) => void handleArchive([row])}
+        onRestore={(row) => void handleRestore([row])}
+        onDelete={(row) => setToDelete([row])}
       />
 
       {/* Action Dialog */}
@@ -945,10 +1130,16 @@ function ReturnDetailSheet({
   returnId,
   onClose,
   onOpenAction,
+  onArchive,
+  onRestore,
+  onDelete,
 }: {
   returnId: string | null;
   onClose: () => void;
   onOpenAction: (returnItem: ReturnRow, action: "approve" | "reject" | "pick_up" | "receive" | "refund" | "replace" | "close") => void;
+  onArchive: (returnItem: ReturnRow) => void;
+  onRestore: (returnItem: ReturnRow) => void;
+  onDelete: (returnItem: ReturnRow) => void;
 }) {
   const navigate = useNavigate();
   const detailQuery = useQuery(
@@ -962,15 +1153,15 @@ function ReturnDetailSheet({
 
   return (
     <Sheet open={Boolean(returnId)} onOpenChange={(open) => !open && onClose()}>
-      <SheetContent className="w-full sm:max-w-xl overflow-y-auto">
-        <SheetHeader className="pb-4 border-b border-border">
+      <SheetContent className="w-full sm:max-w-none md:w-[35vw] md:min-w-[500px] max-w-2xl bg-background text-foreground border-l border-border-soft p-6 space-y-6 overflow-y-auto shadow-2xl">
+        <SheetHeader className="pb-4 border-b border-border-soft">
           <div className="flex items-center justify-between pr-6">
-            <SheetTitle className="text-base font-semibold">
+            <SheetTitle className="text-base font-semibold text-foreground">
               {d?.number ?? "Return Details"}
             </SheetTitle>
             {d && <StatusBadge status={d.status} />}
           </div>
-          <SheetDescription className="text-xs">
+          <SheetDescription className="text-xs text-muted-foreground">
             Requested on {d ? new Date(d.createdAt).toLocaleString("en-IN") : "..."}
           </SheetDescription>
         </SheetHeader>
@@ -984,9 +1175,9 @@ function ReturnDetailSheet({
         )}
 
         {d && (
-          <div className="py-4 space-y-6">
+          <div className="py-2 space-y-6">
             {/* Quick Action Bar */}
-            <div className="flex flex-wrap gap-2 pt-1 pb-3 border-b border-border">
+            <div className="flex flex-wrap items-center gap-2 pb-4 border-b border-border-soft">
               {d.status === "requested" && (
                 <>
                   <Button size="sm" onClick={() => onOpenAction(d as unknown as ReturnRow, "approve")}>
@@ -1026,6 +1217,20 @@ function ReturnDetailSheet({
                 <Button size="sm" variant="outline" onClick={() => onOpenAction(d as unknown as ReturnRow, "close")}>
                   Close Case
                 </Button>
+              )}
+              {d.status !== "archived" ? (
+                <Button size="sm" variant="outline" onClick={() => { onArchive(d as unknown as ReturnRow); onClose(); }}>
+                  <Archive className="mr-1.5 size-3.5" /> Archive
+                </Button>
+              ) : (
+                <>
+                  <Button size="sm" variant="outline" onClick={() => { onRestore(d as unknown as ReturnRow); onClose(); }}>
+                    <RotateCcw className="mr-1.5 size-3.5" /> Restore
+                  </Button>
+                  <Button size="sm" variant="destructive" onClick={() => { onDelete(d as unknown as ReturnRow); onClose(); }}>
+                    <Trash2 className="mr-1.5 size-3.5" /> Delete
+                  </Button>
+                </>
               )}
             </div>
 

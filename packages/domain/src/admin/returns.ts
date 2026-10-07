@@ -1,4 +1,4 @@
-import { and, desc, asc, eq, gte, lte, sql, inArray } from "drizzle-orm";
+import { and, desc, asc, eq, ne, gte, lte, sql, inArray } from "drizzle-orm";
 import { schema, withTenant } from "@bs/db";
 import type { Runtime } from "../runtime.ts";
 import { assertPermission, type TenantContext } from "../context.ts";
@@ -41,7 +41,7 @@ export interface AdminReturnListItem {
 }
 
 export interface ListAdminReturnsInput {
-  view?: "all" | "needs_review" | "approved" | "received" | "resolved" | "rejected_closed" | undefined;
+  view?: "all" | "needs_review" | "approved" | "received" | "resolved" | "rejected_closed" | "archived" | undefined;
   search?: string | undefined;
   resolution?: "refund" | "replacement" | undefined;
   dateFrom?: string | undefined;
@@ -115,6 +115,10 @@ export async function listAdminReturns(
       conditions.push(inArray(schema.returns.status, ["refunded", "replaced"]));
     } else if (input.view === "rejected_closed") {
       conditions.push(inArray(schema.returns.status, ["rejected", "cancelled", "closed"]));
+    } else if (input.view === "archived") {
+      conditions.push(eq(schema.returns.status, "archived"));
+    } else {
+      conditions.push(ne(schema.returns.status, "archived"));
     }
 
     // Resolution filter
@@ -472,5 +476,127 @@ export async function getAdminReturnDetail(
         data: t.data && typeof t.data === "object" ? (t.data as Record<string, unknown>) : null,
       })),
     };
+  });
+}
+
+/**
+ * Archives a return case so it is hidden from active operational views.
+ */
+export async function archiveAdminReturn(
+  rt: Runtime,
+  ctx: TenantContext,
+  input: { id: string },
+): Promise<{ success: boolean }> {
+  assertPermission(ctx, "orders.write");
+
+  return await withTenant(rt._db.db, ctx.tenantId, async (tx) => {
+    const [ret] = await tx
+      .select({ id: schema.returns.id, orderId: schema.returns.orderId, number: schema.returns.number })
+      .from(schema.returns)
+      .where(and(eq(schema.returns.tenantId, ctx.tenantId), eq(schema.returns.id, input.id)));
+
+    if (!ret) throw new Error("Not Found: Return not found");
+
+    await tx
+      .update(schema.returns)
+      .set({ status: "archived", updatedAt: new Date() })
+      .where(and(eq(schema.returns.tenantId, ctx.tenantId), eq(schema.returns.id, input.id)));
+
+    await tx.insert(schema.orderEvents).values({
+      tenantId: ctx.tenantId,
+      orderId: ret.orderId,
+      type: "return.archived",
+      message: `Return ${ret.number} archived`,
+      data: { returnId: ret.id, returnNumber: ret.number },
+      actorType: ctx.actor?.type ?? "system",
+      actorId: ctx.actor && "userId" in ctx.actor ? ctx.actor.userId : null,
+      visibleToCustomer: false,
+    });
+
+    return { success: true };
+  });
+}
+
+/**
+ * Restores an archived return case back to closed status.
+ */
+export async function restoreAdminReturn(
+  rt: Runtime,
+  ctx: TenantContext,
+  input: { id: string },
+): Promise<{ success: boolean }> {
+  assertPermission(ctx, "orders.write");
+
+  return await withTenant(rt._db.db, ctx.tenantId, async (tx) => {
+    const [ret] = await tx
+      .select({ id: schema.returns.id, orderId: schema.returns.orderId, number: schema.returns.number })
+      .from(schema.returns)
+      .where(and(eq(schema.returns.tenantId, ctx.tenantId), eq(schema.returns.id, input.id)));
+
+    if (!ret) throw new Error("Not Found: Return not found");
+
+    await tx
+      .update(schema.returns)
+      .set({ status: "closed", updatedAt: new Date() })
+      .where(and(eq(schema.returns.tenantId, ctx.tenantId), eq(schema.returns.id, input.id)));
+
+    await tx.insert(schema.orderEvents).values({
+      tenantId: ctx.tenantId,
+      orderId: ret.orderId,
+      type: "return.restored",
+      message: `Return ${ret.number} restored from archive`,
+      data: { returnId: ret.id, returnNumber: ret.number },
+      actorType: ctx.actor?.type ?? "system",
+      actorId: ctx.actor && "userId" in ctx.actor ? ctx.actor.userId : null,
+      visibleToCustomer: false,
+    });
+
+    return { success: true };
+  });
+}
+
+/**
+ * Permanently deletes a return case. Requires the return to be archived first.
+ */
+export async function deleteAdminReturn(
+  rt: Runtime,
+  ctx: TenantContext,
+  input: { id: string },
+): Promise<{ success: boolean }> {
+  assertPermission(ctx, "orders.write");
+
+  return await withTenant(rt._db.db, ctx.tenantId, async (tx) => {
+    const [ret] = await tx
+      .select({
+        id: schema.returns.id,
+        status: schema.returns.status,
+        orderId: schema.returns.orderId,
+        number: schema.returns.number,
+      })
+      .from(schema.returns)
+      .where(and(eq(schema.returns.tenantId, ctx.tenantId), eq(schema.returns.id, input.id)));
+
+    if (!ret) throw new Error("Not Found: Return not found");
+
+    if (ret.status !== "archived") {
+      throw new Error("Only archived returns can be deleted. Please archive the return first.");
+    }
+
+    await tx
+      .delete(schema.returns)
+      .where(and(eq(schema.returns.tenantId, ctx.tenantId), eq(schema.returns.id, input.id)));
+
+    await tx.insert(schema.orderEvents).values({
+      tenantId: ctx.tenantId,
+      orderId: ret.orderId,
+      type: "return.deleted",
+      message: `Return ${ret.number} permanently deleted`,
+      data: { returnNumber: ret.number },
+      actorType: ctx.actor?.type ?? "system",
+      actorId: ctx.actor && "userId" in ctx.actor ? ctx.actor.userId : null,
+      visibleToCustomer: false,
+    });
+
+    return { success: true };
   });
 }

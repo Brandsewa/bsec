@@ -296,7 +296,7 @@ export function TenantDetail() {
   };
 
   return (
-    <PageContainer>
+    <PageContainer size="full">
       <PageBreadcrumbs
         items={[
           { label: "Tenants", href: "/tenants" },
@@ -469,15 +469,15 @@ export function TenantDetail() {
       )}
 
       {activeTab === "domains" && (
-        <div className="rounded-xl border bg-card overflow-hidden">
+        <div className="rounded-xl border border-border bg-card shadow-xs overflow-hidden">
           <Table>
             <TableHeader>
-              <TableRow>
-                <TableHead>Hostname</TableHead>
+              <TableRow className="bg-muted/40 hover:bg-muted/40">
+                <TableHead className="px-4">Hostname</TableHead>
                 <TableHead>Type</TableHead>
                 <TableHead>Primary</TableHead>
                 <TableHead>Status</TableHead>
-                <TableHead>SSL Status</TableHead>
+                <TableHead className="text-right px-4">SSL Status</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
@@ -489,12 +489,12 @@ export function TenantDetail() {
                 </TableRow>
               ) : (
                 detail.domains.map((d) => (
-                  <TableRow key={d.id}>
-                    <TableCell className="font-mono text-xs font-medium">{d.hostname}</TableCell>
+                  <TableRow key={d.id} className="hover:bg-muted/30 transition-colors">
+                    <TableCell className="font-mono text-xs font-semibold px-4 text-foreground">{d.hostname}</TableCell>
                     <TableCell className="text-xs">{d.type}</TableCell>
                     <TableCell className="text-xs">{d.isPrimary ? "Yes" : "No"}</TableCell>
                     <TableCell className="text-xs capitalize">{d.status}</TableCell>
-                    <TableCell className="text-xs capitalize">{d.sslStatus || "pending"}</TableCell>
+                    <TableCell className="text-xs capitalize text-right px-4">{d.sslStatus || "pending"}</TableCell>
                   </TableRow>
                 ))
               )}
@@ -504,23 +504,23 @@ export function TenantDetail() {
       )}
 
       {activeTab === "members" && (
-        <div className="rounded-xl border bg-card overflow-hidden">
+        <div className="rounded-xl border border-border bg-card shadow-xs overflow-hidden">
           <Table>
             <TableHeader>
-              <TableRow>
-                <TableHead>Member Name</TableHead>
+              <TableRow className="bg-muted/40 hover:bg-muted/40">
+                <TableHead className="px-4">Member Name</TableHead>
                 <TableHead>Email</TableHead>
                 <TableHead>Role</TableHead>
-                <TableHead>Joined At</TableHead>
+                <TableHead className="text-right px-4">Joined At</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
               {detail.members.map((m) => (
-                <TableRow key={m.userId}>
-                  <TableCell className="font-medium text-xs">{m.name || "—"}</TableCell>
+                <TableRow key={m.userId} className="hover:bg-muted/30 transition-colors">
+                  <TableCell className="font-medium text-xs px-4 text-foreground">{m.name || "—"}</TableCell>
                   <TableCell className="text-xs">{m.email}</TableCell>
                   <TableCell className="text-xs capitalize font-semibold">{m.role}</TableCell>
-                  <TableCell className="text-xs text-muted-foreground">
+                  <TableCell className="text-xs text-muted-foreground text-right px-4">
                     {m.createdAt ? new Date(m.createdAt).toLocaleDateString("en-IN") : "—"}
                   </TableCell>
                 </TableRow>
@@ -532,30 +532,30 @@ export function TenantDetail() {
 
       {activeTab === "billing" && (
         <div className="space-y-6">
-          <div className="rounded-xl border bg-card p-5">
-            <h3 className="font-semibold text-sm mb-3">Subscription Details</h3>
+          <div className="rounded-xl border border-border bg-card p-5 shadow-xs">
+            <h3 className="font-semibold text-sm mb-3 text-foreground">Subscription Details</h3>
             {detail.billing.subscription ? (
               <div className="text-xs space-y-1">
-                <p>Status: <strong className="capitalize">{detail.billing.subscription.status}</strong></p>
-                <p>Billing Interval: <strong className="capitalize">{detail.billing.subscription.interval}</strong></p>
+                <p>Status: <strong className="capitalize text-foreground">{detail.billing.subscription.status}</strong></p>
+                <p>Billing Interval: <strong className="capitalize text-foreground">{detail.billing.subscription.interval}</strong></p>
               </div>
             ) : (
               <p className="text-xs text-muted-foreground">No active paid subscription attached.</p>
             )}
           </div>
 
-          <div className="rounded-xl border bg-card overflow-hidden">
-            <div className="p-4 border-b">
-              <h3 className="font-semibold text-sm">Issued Platform Invoices (GST)</h3>
+          <div className="rounded-xl border border-border bg-card shadow-xs overflow-hidden">
+            <div className="p-4 border-b border-border/60">
+              <h3 className="font-semibold text-sm text-foreground">Issued Platform Invoices (GST)</h3>
             </div>
             <Table>
               <TableHeader>
-                <TableRow>
-                  <TableHead>Invoice #</TableHead>
+                <TableRow className="bg-muted/40 hover:bg-muted/40">
+                  <TableHead className="px-4">Invoice #</TableHead>
                   <TableHead>Amount</TableHead>
                   <TableHead>Tax</TableHead>
                   <TableHead>Status</TableHead>
-                  <TableHead>Issued Date</TableHead>
+                  <TableHead className="text-right px-4">Issued Date</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
@@ -567,12 +567,12 @@ export function TenantDetail() {
                   </TableRow>
                 ) : (
                   detail.billing.invoices.map((inv) => (
-                    <TableRow key={inv.id}>
-                      <TableCell className="font-mono text-xs font-medium">{inv.number}</TableCell>
-                      <TableCell className="text-xs font-semibold">₹{(inv.amountPaise / 100).toFixed(2)}</TableCell>
+                    <TableRow key={inv.id} className="hover:bg-muted/30 transition-colors">
+                      <TableCell className="font-mono text-xs font-semibold px-4 text-foreground">{inv.number}</TableCell>
+                      <TableCell className="text-xs font-semibold text-foreground">₹{(inv.amountPaise / 100).toFixed(2)}</TableCell>
                       <TableCell className="text-xs text-muted-foreground">₹{(inv.taxPaise / 100).toFixed(2)}</TableCell>
                       <TableCell className="text-xs capitalize">{inv.status}</TableCell>
-                      <TableCell className="text-xs text-muted-foreground">{new Date(inv.issuedAt).toLocaleDateString("en-IN")}</TableCell>
+                      <TableCell className="text-xs text-muted-foreground text-right px-4">{new Date(inv.issuedAt).toLocaleDateString("en-IN")}</TableCell>
                     </TableRow>
                   ))
                 )}
@@ -584,39 +584,39 @@ export function TenantDetail() {
 
       {activeTab === "usage" && (
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-          <div className="rounded-xl border bg-card p-4">
+          <div className="rounded-xl border border-border bg-card p-4 shadow-xs">
             <span className="text-xs text-muted-foreground">Active Products</span>
-            <p className="text-2xl font-bold mt-1">{detail.usage.productsCount}</p>
+            <p className="text-2xl font-bold mt-1 text-foreground">{detail.usage.productsCount}</p>
           </div>
-          <div className="rounded-xl border bg-card p-4">
+          <div className="rounded-xl border border-border bg-card p-4 shadow-xs">
             <span className="text-xs text-muted-foreground">Total Orders Placed</span>
-            <p className="text-2xl font-bold mt-1">{detail.usage.ordersCount}</p>
+            <p className="text-2xl font-bold mt-1 text-foreground">{detail.usage.ordersCount}</p>
           </div>
-          <div className="rounded-xl border bg-card p-4">
+          <div className="rounded-xl border border-border bg-card p-4 shadow-xs">
             <span className="text-xs text-muted-foreground">Gross Merchandise Volume</span>
-            <p className="text-2xl font-bold mt-1">₹{(detail.usage.gmvPaise / 100).toLocaleString("en-IN")}</p>
+            <p className="text-2xl font-bold mt-1 text-foreground">₹{(detail.usage.gmvPaise / 100).toLocaleString("en-IN")}</p>
           </div>
         </div>
       )}
 
       {activeTab === "health" && (
         <div className="space-y-6">
-          <div className="rounded-xl border bg-card p-4">
+          <div className="rounded-xl border border-border bg-card p-4 shadow-xs">
             <span className="text-xs text-muted-foreground">Webhook Inbound Errors</span>
             <p className="text-2xl font-bold mt-1 text-destructive">{detail.health.failedWebhooksCount}</p>
           </div>
 
-          <div className="rounded-xl border bg-card overflow-hidden">
-            <div className="p-4 border-b">
-              <h3 className="font-semibold text-sm">Recent Webhook Failures</h3>
+          <div className="rounded-xl border border-border bg-card shadow-xs overflow-hidden">
+            <div className="p-4 border-b border-border/60">
+              <h3 className="font-semibold text-sm text-foreground">Recent Webhook Failures</h3>
             </div>
             <Table>
               <TableHeader>
-                <TableRow>
-                  <TableHead>Provider</TableHead>
+                <TableRow className="bg-muted/40 hover:bg-muted/40">
+                  <TableHead className="px-4">Provider</TableHead>
                   <TableHead>Event ID</TableHead>
                   <TableHead>Error Diagnostics</TableHead>
-                  <TableHead>Received At</TableHead>
+                  <TableHead className="text-right px-4">Received At</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
@@ -628,11 +628,11 @@ export function TenantDetail() {
                   </TableRow>
                 ) : (
                   detail.health.recentErrors.map((w) => (
-                    <TableRow key={w.id}>
-                      <TableCell className="font-medium text-xs uppercase">{w.provider}</TableCell>
+                    <TableRow key={w.id} className="hover:bg-muted/30 transition-colors">
+                      <TableCell className="font-medium text-xs uppercase px-4 text-foreground">{w.provider}</TableCell>
                       <TableCell className="font-mono text-xs">{w.eventId}</TableCell>
-                      <TableCell className="text-xs text-destructive font-mono">{w.error || "Unknown"}</TableCell>
-                      <TableCell className="text-xs text-muted-foreground">{new Date(w.receivedAt).toLocaleString("en-IN")}</TableCell>
+                      <TableCell className="text-xs text-destructive font-mono max-w-xs truncate">{w.error || "Unknown"}</TableCell>
+                      <TableCell className="text-xs text-muted-foreground text-right px-4">{new Date(w.receivedAt).toLocaleString("en-IN")}</TableCell>
                     </TableRow>
                   ))
                 )}
@@ -643,13 +643,13 @@ export function TenantDetail() {
       )}
 
       {activeTab === "audit" && (
-        <div className="rounded-xl border bg-card overflow-hidden">
+        <div className="rounded-xl border border-border bg-card shadow-xs overflow-hidden">
           <Table>
             <TableHeader>
-              <TableRow>
-                <TableHead>Action</TableHead>
+              <TableRow className="bg-muted/40 hover:bg-muted/40">
+                <TableHead className="px-4">Action</TableHead>
                 <TableHead>Actor Type</TableHead>
-                <TableHead>Timestamp</TableHead>
+                <TableHead className="text-right px-4">Timestamp</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
@@ -661,10 +661,10 @@ export function TenantDetail() {
                 </TableRow>
               ) : (
                 detail.audit.map((a) => (
-                  <TableRow key={a.id}>
-                    <TableCell className="font-mono text-xs font-semibold">{a.action}</TableCell>
+                  <TableRow key={a.id} className="hover:bg-muted/30 transition-colors">
+                    <TableCell className="font-mono text-xs font-semibold px-4 text-foreground">{a.action}</TableCell>
                     <TableCell className="text-xs">{a.actorType}</TableCell>
-                    <TableCell className="text-xs text-muted-foreground">{new Date(a.createdAt).toLocaleString("en-IN")}</TableCell>
+                    <TableCell className="text-xs text-muted-foreground text-right px-4">{new Date(a.createdAt).toLocaleString("en-IN")}</TableCell>
                   </TableRow>
                 ))
               )}

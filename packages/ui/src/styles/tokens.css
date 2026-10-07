@@ -12,15 +12,15 @@
 
   /* Surfaces & canvas */
   --background: #ffffff;
-  --canvas: #f7f7f7;
+  --canvas: #f8f9fa;
   --card: #ffffff;
   --popover: #ffffff;
-  --muted: #f7f7f7;
+  --muted: #f4f4f5;
 
   /* Borders & inputs */
-  --border: #e5e5e5;
-  --border-soft: #ededed;
-  --input: #e5e5e5;
+  --border: #e4e4e7;
+  --border-soft: #eeeeef;
+  --input: #e4e4e7;
 
   /* Foreground / text */
   --foreground: #0a0a0a;
@@ -122,16 +122,16 @@
 
 :root[data-theme="dark"] {
   /* Surfaces & canvas */
-  --background: #0a0a0a;
-  --canvas: #0a0a0a;
-  --card: #111111;
-  --popover: #111111;
-  --muted: #171717;
+  --background: #09090b;
+  --canvas: #09090b;
+  --card: #18181b;
+  --popover: #18181b;
+  --muted: #222225;
 
   /* Borders & inputs */
-  --border: #1f1f1f;
-  --border-soft: #171717;
-  --input: #262626;
+  --border: #27272a;
+  --border-soft: #202024;
+  --input: #27272a;
 
   /* Foreground / text */
   --foreground: #fafafa;
@@ -192,19 +192,19 @@
   --shadow-3: 0 12px 32px rgb(0 0 0 / 0.6);
 
   /* Backward-compatibility aliases for dark */
-  --surface-75: #141414;
+  --surface-75: #121214;
   --surface-100: var(--muted);
-  --surface-200: #222222;
-  --surface-300: #2c2c2c;
-  --surface-400: #383838;
+  --surface-200: #27272a;
+  --surface-300: #323236;
+  --surface-400: #3f3f46;
   --overlay: var(--popover);
   --control: var(--muted);
   --dash-sidebar: var(--sidebar);
   --dash-canvas: var(--canvas);
   --border-default: var(--border);
   --border-muted: var(--border-soft);
-  --border-strong: #2c2c2c;
-  --border-stronger: #3d3d3d;
+  --border-strong: #3f3f46;
+  --border-stronger: #52525b;
   --border-control: var(--input);
   --primary-solid: var(--primary);
   --primary-solid-foreground: var(--primary-foreground);
@@ -273,6 +273,10 @@
   --color-info: var(--info);
   --color-info-foreground: var(--info-foreground);
   --color-info-soft: var(--info-soft);
+  --color-secondary: var(--secondary);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-accent: var(--accent);
+  --color-accent-foreground: var(--accent-foreground);
   --color-sidebar: var(--sidebar);
   --color-sidebar-foreground: var(--sidebar-foreground);
   --color-sidebar-primary: var(--sidebar-primary);

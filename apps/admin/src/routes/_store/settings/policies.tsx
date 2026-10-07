@@ -7,7 +7,7 @@ import { Button } from "@bs/ui";
 import { Input } from "@bs/ui";
 import { SimpleSelect } from "@bs/ui";
 import { ConfirmDialog } from "@bs/ui";
-import { SettingsPageFrame, SettingsSection, useUnsavedGuard } from "../../../components/settings/settings-page.tsx";
+import { SettingsCard, SettingsPageFrame, useUnsavedGuard } from "../../../components/settings/settings-page.tsx";
 import { orpc } from "../../../lib/orpc.ts";
 import { errorMessage } from "../../../lib/errors.ts";
 import type { PolicyBlock, PolicyDetail, PolicyHandle } from "@bs/contracts";
@@ -35,9 +35,9 @@ export function PoliciesSettingsPage() {
   if (query.isLoading) {
     return (
       <SettingsPageFrame title={TITLE} description={DESCRIPTION}>
-        <SettingsSection>
+        <SettingsCard>
           <FormSkeleton />
-        </SettingsSection>
+        </SettingsCard>
       </SettingsPageFrame>
     );
   }
@@ -45,14 +45,14 @@ export function PoliciesSettingsPage() {
   if (query.isError || !query.data) {
     return (
       <SettingsPageFrame title={TITLE} description={DESCRIPTION}>
-        <SettingsSection>
+        <SettingsCard>
           <EmptyState
             icon={AlertTriangle}
             title="Could not load store policies"
             description={errorMessage(query.error)}
             action={<Button onClick={() => void query.refetch()}>Try again</Button>}
           />
-        </SettingsSection>
+        </SettingsCard>
       </SettingsPageFrame>
     );
   }
@@ -99,22 +99,22 @@ function PolicyEditor({ handle, onListRefetch }: { handle: PolicyHandle; onListR
 
   if (policyQuery.isLoading) {
     return (
-      <SettingsSection>
+      <SettingsCard>
         <FormSkeleton />
-      </SettingsSection>
+      </SettingsCard>
     );
   }
 
   if (policyQuery.isError || !policyQuery.data) {
     return (
-      <SettingsSection>
+      <SettingsCard>
         <EmptyState
           icon={AlertTriangle}
           title="Could not load policy details"
           description={errorMessage(policyQuery.error)}
           action={<Button onClick={() => void policyQuery.refetch()}>Try again</Button>}
         />
-      </SettingsSection>
+      </SettingsCard>
     );
   }
 
@@ -290,16 +290,16 @@ function PolicyForm({ policy, onSaved }: { policy: PolicyDetail; onSaved: () => 
       </div>
 
       {showVersions && (
-        <SettingsSection
+        <SettingsCard
           title="Version history"
-          description="Immutable snapshots created each time this policy was published. Restoring an earlier version copies its content into your current draft."
+          description="Immutable snapshots created each time this policy was published"
         >
           {versionsQuery.isLoading ? (
             <FormSkeleton />
           ) : !versionsQuery.data || versionsQuery.data.length === 0 ? (
             <p className="text-xs text-muted-foreground">No published versions yet.</p>
           ) : (
-            <div className="divide-y divide-border rounded-md border border-border">
+            <div className="divide-y divide-border rounded-lg border border-border">
               {versionsQuery.data.map((ver) => (
                 <div key={ver.id} className="flex items-center justify-between p-3">
                   <div>
@@ -329,15 +329,15 @@ function PolicyForm({ policy, onSaved }: { policy: PolicyDetail; onSaved: () => 
               ))}
             </div>
           )}
-        </SettingsSection>
+        </SettingsCard>
       )}
 
       {previewMode ? (
-        <SettingsSection
-          title="Storefront Shopper Preview"
-          description="How this policy looks when rendered on your storefront."
+        <SettingsCard
+          title="Storefront shopper preview"
+          description="Rendered appearance as viewed by store visitors"
         >
-          <div className="rounded-xl border border-border bg-card p-6 shadow-sm">
+          <div className="rounded-xl border border-border bg-card p-6 shadow-xs">
             <h1 className="text-2xl font-bold tracking-tight text-foreground">{title}</h1>
             <div className="mt-6 space-y-4 text-sm text-foreground">
               {blocks.map((block, i) => {
@@ -369,11 +369,11 @@ function PolicyForm({ policy, onSaved }: { policy: PolicyDetail; onSaved: () => 
               })}
             </div>
           </div>
-        </SettingsSection>
+        </SettingsCard>
       ) : (
-        <SettingsSection
-          title="Block Editor"
-          description="Add structured headings, paragraphs, lists, and dividers. Merchant text is strictly validated."
+        <SettingsCard
+          title="Block editor"
+          description="Structured headings, paragraphs, bullet lists, and horizontal dividers"
         >
           <div className="space-y-4">
             <div>
@@ -494,7 +494,7 @@ function PolicyForm({ policy, onSaved }: { policy: PolicyDetail; onSaved: () => 
               </Button>
             </div>
           </div>
-        </SettingsSection>
+        </SettingsCard>
       )}
 
       <ConfirmDialog

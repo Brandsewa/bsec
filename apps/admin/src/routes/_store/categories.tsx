@@ -13,15 +13,15 @@ import {
   Trash2,
 } from "lucide-react";
 import { useMemo, useState } from "react";
-import { MetricCard, MetricCardSkeleton, PageContainer, PageHeader, PageSkeleton, toast } from "@bs/ui";
+import { MetricCard, MetricCardSkeleton, PageContainer, PageHeader, PageSection, PageSkeleton, toast } from "@bs/ui";
 import { keepPreviousData, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import type { Category } from "@bs/contracts";
 import { Badge } from "@bs/ui";
 import { Button } from "@bs/ui";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from "@bs/ui";
-import { Input } from "@bs/ui";
 import { ConfirmDialog } from "@bs/ui";
 import { ScrollTabs } from "@bs/ui";
+import { TableToolbar } from "../../components/data-table/table-toolbar.tsx";
 import { errorMessage } from "../../lib/errors.ts";
 import { orpc } from "../../lib/orpc.ts";
 
@@ -113,15 +113,6 @@ export function CategoriesPage() {
     });
   };
 
-  const handleSearchSubmit = (e: React.FormEvent) => {
-    e.preventDefault();
-    void navigate({
-      to: ".",
-      replace: true,
-      search: ((prev: Record<string, unknown>) => ({ ...prev, q: queryText.trim() || undefined })) as never,
-    });
-  };
-
   // Build tree structure
   const { roots, childrenMap } = useMemo(() => {
     const childrenMap = new Map<string, Category[]>();
@@ -187,7 +178,7 @@ export function CategoriesPage() {
   };
 
   return (
-    <PageContainer size="default">
+    <PageContainer size="full">
       <PageHeader
         title="Categories"
         description="Organize your products into a clean, searchable hierarchy for storefront navigation."
@@ -200,7 +191,7 @@ export function CategoriesPage() {
       />
 
       {/* Metric Cards */}
-      <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-5">
+      <div className="grid grid-cols-2 gap-3 sm:gap-4 sm:grid-cols-3 lg:grid-cols-5">
         {statsQuery.isLoading ? (
           <>
             <MetricCardSkeleton />
@@ -220,79 +211,69 @@ export function CategoriesPage() {
         )}
       </div>
 
-      {/* Tabs & Search Toolbar */}
-      <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-        <ScrollTabs
-          tabs={STATUS_TABS}
-          value={status}
-          onChange={(val: string) => {
-            void navigate({
-              to: ".",
-              replace: true,
-              search: ((prev: Record<string, unknown>) => ({ ...prev, status: val as CategoryStatusFilter })) as never,
-            });
-          }}
-        />
-
-        <form onSubmit={handleSearchSubmit} className="flex max-w-sm flex-1 items-center gap-2">
-          <Input
-            placeholder="Search categories..."
-            value={queryText}
-            onChange={(e) => setQueryText(e.target.value)}
-            className="h-9"
+      <PageSection>
+        <div className="grid gap-3">
+          <ScrollTabs
+            tabs={STATUS_TABS}
+            value={status}
+            onChange={(val: string) => {
+              void navigate({
+                to: ".",
+                replace: true,
+                search: ((prev: Record<string, unknown>) => ({ ...prev, status: val as CategoryStatusFilter })) as never,
+              });
+            }}
           />
-          <Button type="submit" variant="secondary" size="sm">
-            Search
-          </Button>
-          {search.q && (
-            <Button
-              type="button"
-              variant="ghost"
-              size="sm"
-              onClick={() => {
-                setQueryText("");
-                void navigate({ to: ".", replace: true, search: ((prev: Record<string, unknown>) => ({ ...prev, q: undefined })) as never });
-              }}
-            >
-              Clear
-            </Button>
-          )}
-        </form>
-      </div>
 
-      {/* Tree-aware table */}
-      <div className="rounded-lg border border-border bg-card">
-        {categoriesQuery.isLoading ? (
-          <div className="p-8 text-center text-sm text-muted-foreground">Loading categories...</div>
-        ) : categories.length === 0 ? (
-          <div className="flex flex-col items-center justify-center p-12 text-center">
-            <FolderTree className="size-10 text-muted-foreground/60" aria-hidden />
-            <h3 className="mt-4 text-base font-medium">No categories found</h3>
-            <p className="mt-1 text-sm text-muted-foreground">
-              {search.q ? "No categories match your search term." : "Create your first category to organize your catalog."}
-            </p>
-            {!search.q && (
-              <Button render={<Link to="/categories/new" />} size="sm" className="mt-4">
-                <Plus className="mr-1.5 size-4" aria-hidden />
-                Add category
-              </Button>
-            )}
-          </div>
-        ) : (
-          <div className="overflow-x-auto">
-            <table className="w-full text-left text-sm">
-              <thead className="border-b border-border bg-muted/40 text-xs font-medium text-muted-foreground uppercase">
-                <tr>
-                  <th className="py-3 pr-4 pl-6">Category</th>
-                  <th className="py-3 px-4">Slug / Path</th>
-                  <th className="py-3 px-4 text-center">Products</th>
-                  <th className="py-3 px-4 text-center">Status</th>
-                  <th className="py-3 px-4 text-center">Featured</th>
-                  <th className="py-3 px-4 text-center">Order</th>
-                  <th className="py-3 pr-6 pl-4 text-right">Actions</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-border">
+          <TableToolbar
+            searchLabel="Search categories"
+            searchPlaceholder="Search categories..."
+            searchText={queryText}
+            onSearchText={(v) => {
+              setQueryText(v);
+              void navigate({
+                to: ".",
+                replace: true,
+                search: ((prev: Record<string, unknown>) => ({ ...prev, q: v.trim() || undefined })) as never,
+              });
+            }}
+            resultCount={categories.length}
+            noun="categories"
+          />
+
+          {/* Tree-aware table */}
+          <div className="overflow-hidden rounded-xl border border-border bg-card shadow-xs">
+            {categoriesQuery.isLoading ? (
+              <div className="p-8 text-center text-sm text-muted-foreground">Loading categories...</div>
+            ) : categories.length === 0 ? (
+              <div className="flex flex-col items-center justify-center p-12 text-center">
+                <FolderTree className="size-10 text-muted-foreground/60" aria-hidden />
+                <h3 className="mt-4 text-base font-medium">No categories found</h3>
+                <p className="mt-1 text-sm text-muted-foreground">
+                  {search.q ? "No categories match your search term." : "Create your first category to organize your catalog."}
+                </p>
+                {!search.q && (
+                  <Button render={<Link to="/categories/new" />} size="sm" className="mt-4">
+                    <Plus className="mr-1.5 size-4" aria-hidden />
+                    Add category
+                  </Button>
+                )}
+              </div>
+            ) : (
+              <div className="overflow-x-auto">
+                <table className="w-full text-left text-sm">
+                  <thead className="border-b border-border bg-muted/60 text-xs font-medium text-muted-foreground">
+                    <tr>
+                      <th className="py-3 pr-4 pl-6">Category</th>
+                      <th className="py-3 px-4">Slug / Path</th>
+                      <th className="py-3 px-4 text-center">Products</th>
+                      <th className="py-3 px-4 text-center">Status</th>
+                      <th className="py-3 px-4 text-center">Featured</th>
+                      <th className="py-3 px-4 text-center">Order</th>
+                      <th className="py-3 pr-6 pl-4 text-right">Actions</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-border/60">
                 {flattenedRows.map(({ item, level, hasChildren, isExpanded }) => {
                   const siblings = item.parentId ? childrenMap.get(item.parentId) ?? [] : roots;
                   const siblingIdx = siblings.findIndex((s) => s.id === item.id);
@@ -300,7 +281,7 @@ export function CategoriesPage() {
                   const isLast = siblingIdx === siblings.length - 1;
 
                   return (
-                    <tr key={item.id} className="transition-colors hover:bg-muted/30">
+                    <tr key={item.id} className="transition-colors hover:bg-muted/40">
                       <td className="py-3 pr-4 pl-6 font-medium">
                         <div className="flex items-center gap-2" style={{ paddingLeft: `${level * 24}px` }}>
                           {hasChildren ? (
@@ -448,6 +429,8 @@ export function CategoriesPage() {
           </div>
         )}
       </div>
+      </div>
+      </PageSection>
 
       {/* Delete Confirmation Dialog with reason guards */}
       <ConfirmDialog

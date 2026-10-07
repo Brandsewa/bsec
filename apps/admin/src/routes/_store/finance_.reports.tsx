@@ -150,7 +150,7 @@ export function FinanceReportsPage() {
   ];
 
   return (
-    <PageContainer>
+    <PageContainer size="full">
       <PageHeader
         title="Financial Reports & Close"
         description="Tax summaries, monthly GST breakdown, ledger trial balance, and fiscal month-end close."
@@ -158,7 +158,7 @@ export function FinanceReportsPage() {
 
       <div className="space-y-8">
         {/* Period Selector Tabs */}
-        <div className="border-b pb-3">
+        <div className="border-b border-border pb-3">
           <ScrollTabs
             tabs={PERIOD_TABS}
             value={search.period ?? "30d"}
@@ -171,8 +171,8 @@ export function FinanceReportsPage() {
         </div>
 
         {/* 1. Tax Summary & GST Breakdown */}
-        <div className="rounded-lg border bg-card p-6 space-y-6">
-          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b pb-4">
+        <div className="rounded-lg border border-border bg-card p-6 space-y-6 shadow-xs">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-border pb-4">
             <div>
               <h2 className="text-lg font-semibold">GST Tax Summary</h2>
               <p className="text-xs text-muted-foreground">
@@ -192,19 +192,19 @@ export function FinanceReportsPage() {
 
           {overview && (
             <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-              <div className="rounded-md border p-3">
+              <div className="rounded-md border border-border p-3">
                 <span className="text-xs text-muted-foreground">Tax Collected</span>
                 <p className="text-base font-semibold font-mono text-emerald-600">
                   {formatPaise(overview.taxSummary.taxCollectedPaise)}
                 </p>
               </div>
-              <div className="rounded-md border p-3">
+              <div className="rounded-md border border-border p-3">
                 <span className="text-xs text-muted-foreground">Tax Refunded (Returns)</span>
                 <p className="text-base font-semibold font-mono text-rose-600">
                   {formatPaise(overview.taxSummary.taxRefundedPaise)}
                 </p>
               </div>
-              <div className="rounded-md border p-3">
+              <div className="rounded-md border border-border p-3">
                 <span className="text-xs text-muted-foreground">Net Liability (Owed)</span>
                 <p className="text-base font-semibold font-mono text-primary">
                   {formatPaise(overview.taxSummary.taxOwedPaise)}
@@ -216,9 +216,9 @@ export function FinanceReportsPage() {
           {/* Monthly GST Split Table (from order_items) */}
           <div className="space-y-3">
             <h3 className="text-sm font-semibold">Monthly GST Breakdown (CGST / SGST / IGST)</h3>
-            <div className="overflow-x-auto rounded-md border">
+            <div className="overflow-x-auto rounded-md border border-border">
               <table className="w-full text-left text-sm">
-                <thead className="border-b bg-muted/50 text-xs font-medium text-muted-foreground">
+                <thead className="border-b border-border bg-muted/60 text-xs font-medium text-muted-foreground">
                   <tr>
                     <th className="p-3">Month</th>
                     <th className="p-3 text-right">Taxable Turnover</th>
@@ -228,7 +228,7 @@ export function FinanceReportsPage() {
                     <th className="p-3 text-right">Total GST</th>
                   </tr>
                 </thead>
-                <tbody className="divide-y font-mono text-xs">
+                <tbody className="divide-y divide-border/60 font-mono text-xs">
                   {overview?.taxSummary.gstMonthlyBreakdown.map((row) => (
                     <tr key={row.month}>
                       <td className="p-3 font-semibold">{row.month}</td>
@@ -256,7 +256,7 @@ export function FinanceReportsPage() {
 
         {/* 2. CSV Export Hub */}
         {canExport && (
-        <div className="rounded-lg border bg-card p-6 space-y-4">
+        <div className="rounded-lg border border-border bg-card p-6 space-y-4 shadow-xs">
           <h2 className="text-lg font-semibold flex items-center gap-2">
             <FileSpreadsheet className="h-5 w-5 text-emerald-600" />
             Financial Data Export
@@ -265,7 +265,7 @@ export function FinanceReportsPage() {
             Download RFC 4180 compliant CSV sheets with UTF-8 BOM encoding for your CA or audit.
           </p>
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 pt-2">
-            <div className="rounded-md border p-4 flex items-center justify-between">
+            <div className="rounded-md border border-border p-4 flex items-center justify-between">
               <div>
                 <span className="font-medium text-sm">General Ledger Entries</span>
                 <p className="text-xs text-muted-foreground">Double-entry spine with debit/credit pairs</p>
@@ -283,7 +283,7 @@ export function FinanceReportsPage() {
               </Button>
             </div>
 
-            <div className="rounded-md border p-4 flex items-center justify-between">
+            <div className="rounded-md border border-border p-4 flex items-center justify-between">
               <div>
                 <span className="font-medium text-sm">Expenses & Overhead</span>
                 <p className="text-xs text-muted-foreground">Operating costs, categories, and bills</p>
@@ -305,8 +305,8 @@ export function FinanceReportsPage() {
         )}
 
         {/* 3. Trial Balance Section */}
-        <div className="rounded-lg border bg-card p-6 space-y-4">
-          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b pb-4">
+        <div className="rounded-lg border border-border bg-card p-6 space-y-4 shadow-xs">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-border pb-4">
             <div>
               <h2 className="text-lg font-semibold flex items-center gap-2">
                 <Scale className="h-5 w-5 text-primary" />
@@ -326,9 +326,9 @@ export function FinanceReportsPage() {
             )}
           </div>
 
-          <div className="overflow-x-auto rounded-md border">
+          <div className="overflow-x-auto rounded-md border border-border">
             <table className="w-full text-left text-sm">
-              <thead className="border-b bg-muted/50 text-xs font-medium text-muted-foreground">
+              <thead className="border-b border-border bg-muted/60 text-xs font-medium text-muted-foreground">
                 <tr>
                   <th className="p-3">Account</th>
                   <th className="p-3 text-right">Total Debits</th>
@@ -336,7 +336,7 @@ export function FinanceReportsPage() {
                   <th className="p-3 text-right">Account Balance</th>
                 </tr>
               </thead>
-              <tbody className="divide-y font-mono text-xs">
+              <tbody className="divide-y divide-border/60 font-mono text-xs">
                 {trialBalance?.rows.map((r) => (
                   <tr key={r.account}>
                     <td className="p-3 font-sans font-medium">{r.label}</td>
@@ -351,8 +351,8 @@ export function FinanceReportsPage() {
         </div>
 
         {/* 4. Month-End Fiscal Close Panel */}
-        <div className="rounded-lg border bg-card p-6 space-y-6">
-          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b pb-4">
+        <div className="rounded-lg border border-border bg-card p-6 space-y-6 shadow-xs">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-border pb-4">
             <div>
               <h2 className="text-lg font-semibold flex items-center gap-2">
                 <Lock className="h-5 w-5 text-indigo-600" />

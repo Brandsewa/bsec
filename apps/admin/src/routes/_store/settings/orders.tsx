@@ -6,7 +6,7 @@ import { EmptyState, FormSkeleton, PageSkeleton, toast } from "@bs/ui";
 import { Button } from "@bs/ui";
 import { Input } from "@bs/ui";
 import { Field } from "@bs/ui";
-import { HeaderActions, SettingsPageFrame, SettingsSection, useUnsavedGuard } from "../../../components/settings/settings-page.tsx";
+import { HeaderActions, SettingsCard, SettingsPageFrame, useUnsavedGuard } from "../../../components/settings/settings-page.tsx";
 import { orpc } from "../../../lib/orpc.ts";
 import { errorMessage } from "../../../lib/errors.ts";
 
@@ -32,9 +32,9 @@ export function OrderSettingsPage() {
   if (query.isLoading) {
     return (
       <SettingsPageFrame title={TITLE} description={DESCRIPTION}>
-        <SettingsSection>
+        <SettingsCard>
           <FormSkeleton />
-        </SettingsSection>
+        </SettingsCard>
       </SettingsPageFrame>
     );
   }
@@ -42,14 +42,14 @@ export function OrderSettingsPage() {
   if (query.isError || !query.data) {
     return (
       <SettingsPageFrame title={TITLE} description={DESCRIPTION}>
-        <SettingsSection>
+        <SettingsCard>
           <EmptyState
             icon={AlertTriangle}
             title="Could not load order settings"
             description={errorMessage(query.error)}
             action={<Button onClick={() => void query.refetch()}>Try again</Button>}
           />
-        </SettingsSection>
+        </SettingsCard>
       </SettingsPageFrame>
     );
   }
@@ -132,9 +132,9 @@ function OrderSettingsForm({
       </HeaderActions>
 
       <form id="settings-orders" onSubmit={onSubmit} className="space-y-6">
-        <SettingsSection
+        <SettingsCard
           title="Order numbers"
-          description="Prefix and digits applied to new orders placed online or created in the store admin. Existing orders are never renumbered."
+          description="Prefix and zero-padding format applied to new orders"
         >
           <div className="grid gap-3 sm:grid-cols-3">
             <Field
@@ -194,29 +194,26 @@ function OrderSettingsForm({
             </Field>
           </div>
 
-          <div className="mt-4 rounded-md border bg-muted/40 p-4">
+          <div className="mt-4 rounded-lg border border-border bg-muted/20 p-3.5 flex items-center justify-between">
             <div className="flex items-center gap-2 text-xs font-medium text-muted-foreground">
               <Hash className="h-4 w-4" />
-              Live preview
+              <span>Next generated order preview:</span>
             </div>
-            <p className="mt-1 text-sm">
-              Your next order will be{" "}
-              <code className="rounded bg-background px-2 py-0.5 font-mono font-semibold text-foreground border">
-                {preview}
-              </code>
-            </p>
+            <code className="rounded bg-background px-2.5 py-1 font-mono font-semibold text-foreground text-sm border border-border">
+              {preview}
+            </code>
           </div>
-        </SettingsSection>
+        </SettingsCard>
 
-        <SettingsSection
-          title="Order processing"
-          description="Rules applied to customer carts and orders during checkout."
+        <SettingsCard
+          title="Order processing rules"
+          description="Cart holding duration and minimum checkout value limits"
         >
           <div className="grid gap-4 sm:grid-cols-2">
             <Field
               id="stockHoldMinutes"
               label="Inventory hold duration"
-              hint="How long reserved items are held during checkout (5 to 120 minutes, default 30)."
+              hint="How long reserved items are held during checkout (5 to 120 mins)."
             >
               <div className="flex items-center gap-2">
                 <Clock className="h-4 w-4 text-muted-foreground shrink-0" />
@@ -240,7 +237,7 @@ function OrderSettingsForm({
             <Field
               id="minimumOrderRupees"
               label="Minimum order value"
-              hint="Minimum goods total required to checkout online (0 means no minimum). Admin draft orders are exempt."
+              hint="Minimum subtotal required to place order (0 for no limit)."
             >
               <div className="flex items-center gap-2">
                 <Coins className="h-4 w-4 text-muted-foreground shrink-0" />
@@ -261,11 +258,11 @@ function OrderSettingsForm({
               </div>
             </Field>
           </div>
-        </SettingsSection>
+        </SettingsCard>
 
-        <SettingsSection
+        <SettingsCard
           title="Related settings"
-          description="Other store settings that affect order handling and fulfillment."
+          description="Other store settings that affect order handling and fulfillment"
         >
           <div className="grid gap-3 sm:grid-cols-2">
             <Link
@@ -312,7 +309,7 @@ function OrderSettingsForm({
               <ArrowRight className="h-4 w-4 text-muted-foreground" />
             </Link>
           </div>
-        </SettingsSection>
+        </SettingsCard>
       </form>
     </SettingsPageFrame>
   );

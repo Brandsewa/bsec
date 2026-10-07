@@ -14,12 +14,15 @@ import {
   Layers,
   LogOut,
   Mail,
+  Search,
   Sliders,
   UserCheck,
   Users,
 } from "lucide-react";
 import {
   AppShell,
+  Avatar,
+  AvatarFallback,
   Button,
   CommandPalette,
   Dialog,
@@ -28,6 +31,15 @@ import {
   DialogFooter,
   DialogHeader,
   DialogTitle,
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuSeparator,
+  DropdownMenuSub,
+  DropdownMenuSubContent,
+  DropdownMenuSubTrigger,
+  DropdownMenuTrigger,
   Input,
   Label,
   ThemeToggle,
@@ -169,47 +181,74 @@ export function Layout({ user, onLogout }: LayoutProps) {
         activeHref={location.pathname}
         topRight={
           <div className="flex items-center gap-2">
-            <Button
-              variant="default"
-              size="sm"
+            <button
+              type="button"
               onClick={() => setCommandPaletteOpen(true)}
-              className="h-8 gap-2 px-2.5 text-xs text-muted-foreground border border-border"
+              className="flex h-8 w-44 sm:w-64 items-center justify-between rounded-lg border border-border bg-muted/40 hover:bg-muted/70 px-2.5 text-xs text-muted-foreground hover:text-foreground transition-all shadow-2xs focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+              aria-label="Quick search (Ctrl+K)"
             >
-              <span>Quick search...</span>
-              <kbd className="pointer-events-none hidden h-4 select-none items-center gap-1 rounded bg-muted px-1.5 font-mono text-[10px] font-medium opacity-100 sm:inline-flex">
+              <span className="flex items-center gap-2">
+                <Search className="size-3.5 shrink-0 opacity-70" />
+                <span className="truncate">Quick search...</span>
+              </span>
+              <kbd className="pointer-events-none hidden h-4.5 select-none items-center gap-1 rounded border border-border/60 bg-background/80 px-1.5 font-mono text-[10px] font-medium text-muted-foreground sm:inline-flex">
                 Ctrl K
               </kbd>
-            </Button>
-            <ThemeToggle />
+            </button>
+            <DropdownMenu>
+              <DropdownMenuTrigger
+                render={
+                  <button
+                    type="button"
+                    className="group flex items-center gap-2 rounded-full p-1 transition-colors hover:bg-surface-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                    aria-label="Staff account menu"
+                  >
+                    <Avatar size="sm" className="border border-border-soft bg-surface-200">
+                      <AvatarFallback className="bg-surface-200 text-foreground font-semibold text-xs">{(user.name ?? user.email ?? "SA").slice(0, 2).toUpperCase()}</AvatarFallback>
+                    </Avatar>
+                  </button>
+                }
+              />
+              <DropdownMenuContent align="end" className="w-56 p-1.5 shadow-lg">
+                <DropdownMenuLabel className="px-2 py-1.5 text-xs">
+                  <p className="font-semibold text-foreground truncate">{user.name || "Platform Staff"}</p>
+                  <p className="text-[11px] text-muted-foreground truncate">{user.email}</p>
+                  <span className="mt-1 inline-block text-[10px] uppercase font-semibold text-primary-solid tracking-wider">
+                    {user.role.replace("platform_", "")}
+                  </span>
+                </DropdownMenuLabel>
+                <DropdownMenuSeparator />
+                <DropdownMenuItem
+                  onClick={() => {
+                    resetPasswordForm();
+                    setPasswordOpen(true);
+                  }}
+                >
+                  <KeyRound className="size-3.5 mr-2" />
+                  <span>Password</span>
+                </DropdownMenuItem>
+                <DropdownMenuSub>
+                  <DropdownMenuSubTrigger>
+                    <Sliders className="size-3.5 mr-2" />
+                    <span>Theme</span>
+                  </DropdownMenuSubTrigger>
+                  <DropdownMenuSubContent className="w-36 p-1">
+                    <ThemeToggle variant="menu" />
+                  </DropdownMenuSubContent>
+                </DropdownMenuSub>
+                <DropdownMenuSeparator />
+                <DropdownMenuItem variant="destructive" onClick={handleSignOut}>
+                  <LogOut className="size-3.5 mr-2" />
+                  <span>Sign out</span>
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
           </div>
         }
         banner={
           <div className="flex items-center justify-between bg-amber-500/10 px-4 py-1.5 text-xs font-medium text-amber-700 dark:text-amber-400 border-b border-amber-500/20">
             <span>Super Admin Mode · Every privileged action is audited under platform BYPASSRLS</span>
-            <div className="flex items-center gap-3">
-              <span>Staff: <strong className="font-semibold">{user.email}</strong> · {user.role.replace("platform_", "")}</span>
-              <Button
-                variant="ghost"
-                size="sm"
-                onClick={() => {
-                  resetPasswordForm();
-                  setPasswordOpen(true);
-                }}
-                className="h-6 px-2 text-xs text-muted-foreground hover:text-foreground"
-              >
-                <KeyRound className="mr-1 h-3 w-3" />
-                Change Password
-              </Button>
-              <Button
-                variant="ghost"
-                size="sm"
-                onClick={handleSignOut}
-                className="h-6 px-2 text-xs text-muted-foreground hover:text-foreground"
-              >
-                <LogOut className="mr-1 h-3 w-3" />
-                Sign Out
-              </Button>
-            </div>
+            <span className="text-muted-foreground">Staff: <strong className="font-semibold text-foreground">{user.email}</strong> · {user.role.replace("platform_", "")}</span>
           </div>
         }
       >

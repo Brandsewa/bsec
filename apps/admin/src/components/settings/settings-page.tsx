@@ -16,17 +16,19 @@ export function SettingsPageFrame({
   title,
   description,
   width = "narrow",
+  layout = "cards",
   children,
 }: {
   title: string;
   description?: ReactNode;
   width?: "narrow" | "wide";
+  layout?: "cards" | "single-card";
   children: ReactNode;
 }) {
   const [slot, setSlot] = useState<HTMLElement | null>(null);
   return (
     <ActionsSlot.Provider value={slot}>
-      <div className={cn("grid gap-3", width === "narrow" && "max-w-3xl")}>
+      <div className={cn("grid gap-5", width === "narrow" && "max-w-3xl")}>
         <header className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
           <div className="min-w-0">
             <h1 className="text-xl font-semibold text-foreground">{title}</h1>
@@ -34,7 +36,11 @@ export function SettingsPageFrame({
           </div>
           <div ref={setSlot} className="flex shrink-0 flex-wrap items-center gap-2 empty:hidden" />
         </header>
-        <div className="rounded-lg border border-border bg-background">{children}</div>
+        {layout === "single-card" ? (
+          <div className="rounded-lg border border-border bg-background">{children}</div>
+        ) : (
+          <div className="grid gap-4">{children}</div>
+        )}
       </div>
     </ActionsSlot.Provider>
   );
@@ -49,18 +55,58 @@ export function HeaderActions({ children }: { children: ReactNode }) {
   return slot ? createPortal(children, slot) : null;
 }
 
-/** One group of related settings inside the frame's card. */
+/** One card/section of related settings. Can be rendered as a standalone Card or inside a group. */
+export function SettingsCard({
+  title,
+  description,
+  actions,
+  children,
+  className,
+}: {
+  title?: string | undefined;
+  description?: ReactNode;
+  actions?: ReactNode;
+  children: ReactNode;
+  className?: string | undefined;
+}) {
+  return (
+    <div className={cn("rounded-lg border border-border bg-background p-4 sm:p-5 shadow-xs", className)}>
+      {title || description || actions ? (
+        <div className="mb-4 flex flex-col gap-1 sm:flex-row sm:items-center sm:justify-between">
+          {title ? <h2 className="text-sm font-semibold text-foreground">{title}</h2> : null}
+          <div className="flex items-center gap-3">
+            {description ? <span className="text-xs text-muted-foreground">{description}</span> : null}
+            {actions}
+          </div>
+        </div>
+      ) : null}
+      <div className="space-y-4">{children}</div>
+    </div>
+  );
+}
+
+/** One group of related settings inside a single-card frame or standalone section. */
 export function SettingsSection({
   title,
   description,
   actions,
   children,
+  asCard = false,
 }: {
-  title?: string;
+  title?: string | undefined;
   description?: ReactNode;
   actions?: ReactNode;
   children: ReactNode;
+  asCard?: boolean | undefined;
 }) {
+  if (asCard) {
+    return (
+      <SettingsCard title={title} description={description} actions={actions}>
+        {children}
+      </SettingsCard>
+    );
+  }
+
   return (
     <section className="grid gap-3 border-t border-border p-3.5 first:border-t-0 md:p-4">
       {title || actions ? (

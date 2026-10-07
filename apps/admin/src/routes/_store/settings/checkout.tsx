@@ -8,7 +8,7 @@ import { Input } from "@bs/ui";
 import { Switch } from "@bs/ui";
 import { SimpleSelect } from "@bs/ui";
 import { Field } from "@bs/ui";
-import { HeaderActions, SettingsPageFrame, SettingsSection, useUnsavedGuard } from "../../../components/settings/settings-page.tsx";
+import { HeaderActions, SettingsCard, SettingsPageFrame, useUnsavedGuard } from "../../../components/settings/settings-page.tsx";
 import { orpc } from "../../../lib/orpc.ts";
 import { errorMessage } from "../../../lib/errors.ts";
 import type { CheckoutSettings } from "@bs/contracts";
@@ -40,9 +40,9 @@ export function CheckoutSettingsPage() {
   if (query.isLoading) {
     return (
       <SettingsPageFrame title={TITLE} description={DESCRIPTION}>
-        <SettingsSection>
+        <SettingsCard>
           <FormSkeleton />
-        </SettingsSection>
+        </SettingsCard>
       </SettingsPageFrame>
     );
   }
@@ -50,14 +50,14 @@ export function CheckoutSettingsPage() {
   if (query.isError || !query.data) {
     return (
       <SettingsPageFrame title={TITLE} description={DESCRIPTION}>
-        <SettingsSection>
+        <SettingsCard>
           <EmptyState
             icon={AlertTriangle}
             title="Could not load checkout settings"
             description={errorMessage(query.error)}
             action={<Button onClick={() => void query.refetch()}>Try again</Button>}
           />
-        </SettingsSection>
+        </SettingsCard>
       </SettingsPageFrame>
     );
   }
@@ -145,9 +145,9 @@ function CheckoutSettingsForm({
       </HeaderActions>
 
       <form id="settings-checkout" onSubmit={onSubmit} className="space-y-6">
-        <SettingsSection
+        <SettingsCard
           title="Customer accounts & contact"
-          description="Control whether customer accounts are optional, required, or prompted after ordering."
+          description="Account requirements, phone verification, and form field display"
         >
           <div className="space-y-4">
             <div className="flex items-center justify-between gap-4 rounded-lg border border-border p-4">
@@ -231,11 +231,11 @@ function CheckoutSettingsForm({
               </Field>
             </div>
           </div>
-        </SettingsSection>
+        </SettingsCard>
 
-        <SettingsSection
+        <SettingsCard
           title="Consent at checkout"
-          description="Terms agreement and optional email marketing permission, shown above the Place Order button."
+          description="Terms agreement and promotional marketing opt-in options"
         >
           <div className="space-y-4">
             <div className="flex items-center justify-between gap-4 rounded-lg border border-border p-4">
@@ -289,11 +289,11 @@ function CheckoutSettingsForm({
               </div>
             )}
           </div>
-        </SettingsSection>
+        </SettingsCard>
 
-        <SettingsSection
+        <SettingsCard
           title="Abandoned checkouts"
-          description="Recover lost sales by identifying abandoned carts and sending recovery reminders."
+          description="Identify abandoned carts and send automated recovery reminders"
         >
           <div className="space-y-4">
             <div className="rounded-md border border-amber-500/20 bg-amber-50/50 p-4 text-amber-900 dark:border-amber-500/30 dark:bg-amber-950/20 dark:text-amber-200">
@@ -322,18 +322,23 @@ function CheckoutSettingsForm({
               />
             </div>
 
-            <Field
-              id="detectAfterMinutes"
-              label="Abandonment threshold"
-              hint="How long after customer inactivity a checkout is marked as abandoned (15 to 10,080 minutes)."
-            >
-              <div className="flex items-center gap-2 max-w-xs">
+            <div className="grid gap-2 sm:grid-cols-2 sm:items-center">
+              <div>
+                <label htmlFor="detectAfterMinutes" className="text-sm font-medium text-foreground">
+                  Abandonment threshold
+                </label>
+                <p className="text-xs text-muted-foreground">
+                  Inactivity delay before checkout is marked abandoned (15 to 10,080 minutes)
+                </p>
+              </div>
+              <div className="flex items-center justify-start sm:justify-end gap-2">
                 <Clock className="h-4 w-4 text-muted-foreground shrink-0" />
                 <Input
                   id="detectAfterMinutes"
                   type="number"
                   min={15}
                   max={10080}
+                  className="w-28 text-right"
                   value={form.detectAfterMinutes}
                   onChange={(e) => {
                     const val = parseInt(e.target.value, 10);
@@ -342,11 +347,11 @@ function CheckoutSettingsForm({
                     }
                   }}
                 />
-                <span className="text-xs text-muted-foreground">minutes</span>
+                <span className="text-xs text-muted-foreground w-12">mins</span>
               </div>
-            </Field>
+            </div>
           </div>
-        </SettingsSection>
+        </SettingsCard>
       </form>
     </SettingsPageFrame>
   );

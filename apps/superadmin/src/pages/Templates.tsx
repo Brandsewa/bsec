@@ -111,7 +111,7 @@ export function Templates() {
   const visible = (templates ?? []).filter((t) => t.status === tab);
 
   return (
-    <PageContainer>
+    <PageContainer size="full">
       <PageHeader
         title="Themes"
         description="Themes stores can pick from their dashboard. Each theme has its own colours, fonts, buttons, corners and layouts for the home, collection, product and cart pages, header and footer. Build it visually, then publish it to the store theme library."
@@ -134,81 +134,80 @@ export function Templates() {
               role="tab"
               aria-selected={on}
               onClick={() => setTab(t.key)}
-              className={`-mb-px border-b-2 px-3 py-2 text-sm font-medium ${on ? "border-primary text-foreground" : "border-transparent text-muted-foreground hover:text-foreground"}`}
+              className={`-mb-px border-b-2 px-3 py-2 text-sm font-medium transition-colors ${on ? "border-primary text-foreground font-semibold" : "border-transparent text-muted-foreground hover:text-foreground"}`}
             >
-              {t.label} <span className="ml-1 rounded-full bg-muted px-1.5 py-0.5 text-xs">{count}</span>
+              {t.label} <span className="ml-1 rounded-full bg-muted px-1.5 py-0.5 text-xs font-normal">{count}</span>
             </button>
           );
         })}
       </div>
 
       {isError ? (
-        <div role="alert" className="rounded-md border border-destructive/40 bg-destructive/5 p-4 text-sm">
+        <div role="alert" className="rounded-xl border border-destructive/40 bg-destructive/5 p-4 text-sm text-destructive">
           Could not load themes: {error.message}
         </div>
       ) : visible.length === 0 ? (
         <EmptyState icon={Layers} title={`No ${TABS.find((x) => x.key === tab)?.label.toLowerCase()} themes`} description={TABS.find((x) => x.key === tab)?.empty ?? ""} />
       ) : (
-        <div className="overflow-hidden rounded-xl border bg-card">
+        <div className="overflow-hidden rounded-xl border border-border bg-card shadow-xs">
           <Table>
             <TableHeader>
-              <TableRow>
-                <TableHead>Theme</TableHead>
-                <TableHead>Industry</TableHead>
-                <TableHead>Code</TableHead>
-                <TableHead>Version</TableHead>
-                <TableHead>Status</TableHead>
-                <TableHead className="text-right">Actions</TableHead>
+              <TableRow className="bg-muted/40 hover:bg-muted/40">
+                <TableHead className="px-4 w-[280px]">Theme</TableHead>
+                <TableHead className="w-[120px]">Industry</TableHead>
+                <TableHead className="w-[140px]">Code</TableHead>
+                <TableHead className="w-[90px]">Version</TableHead>
+                <TableHead className="w-[150px]">Status</TableHead>
+                <TableHead className="text-right px-4">Actions</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
               {visible.map((t) => (
-                <TableRow key={t.code}>
-                  <TableCell className="text-xs">
-                    <div className="font-semibold">{t.name}</div>
-                    {t.description ? <div className="max-w-md text-muted-foreground">{t.description}</div> : null}
+                <TableRow key={t.code} className="hover:bg-muted/30 transition-colors">
+                  <TableCell className="px-4">
+                    <div className="font-semibold text-sm text-foreground">{t.name}</div>
+                    {t.description ? <div className="text-xs text-muted-foreground line-clamp-2 mt-0.5 max-w-sm">{t.description}</div> : null}
                   </TableCell>
-                  <TableCell className="text-xs capitalize">{t.industry}</TableCell>
+                  <TableCell className="text-xs capitalize font-medium">{t.industry}</TableCell>
                   <TableCell className="font-mono text-xs text-muted-foreground">{t.code}</TableCell>
-                  <TableCell className="font-mono text-xs">v{t.version}</TableCell>
+                  <TableCell className="font-mono text-xs font-medium">v{t.version}</TableCell>
                   <TableCell className="text-xs">
-                    <span className={`inline-flex rounded-full px-2 py-0.5 font-medium ${t.status === "published" ? "bg-emerald-500/10 text-emerald-700" : t.status === "draft" ? "bg-amber-500/10 text-amber-700" : "bg-muted text-muted-foreground"}`}>
-                      {t.status === "published" ? "Published" : t.status === "draft" ? "Draft: hidden from stores" : "Archived: hidden from stores"}
+                    <span className={`inline-flex rounded-full px-2 py-0.5 font-medium ${t.status === "published" ? "bg-emerald-500/10 text-emerald-700 dark:text-emerald-400" : t.status === "draft" ? "bg-amber-500/10 text-amber-700 dark:text-amber-400" : "bg-muted text-muted-foreground"}`}>
+                      {t.status === "published" ? "Published" : t.status === "draft" ? "Draft" : "Archived"}
                     </span>
                     {t.status === "published" && t.hasUnpublishedChanges ? (
-                      <span className="ml-2 rounded-full bg-amber-500/10 px-2 py-0.5 font-medium text-amber-700">Unpublished changes</span>
+                      <span className="block mt-1 text-[11px] text-amber-700 dark:text-amber-400 font-medium">Unpublished edits</span>
                     ) : null}
                   </TableCell>
-                  <TableCell>
-                    <div className="flex justify-end gap-2">
-                      <Button size="sm" onClick={() => void navigate({ to: "/templates/$code/editor", params: { code: t.code } })}>
-                        <Pencil className="mr-1.5 size-3.5" aria-hidden />
+                  <TableCell className="px-4 text-right">
+                    <div className="flex items-center justify-end gap-1.5 flex-nowrap">
+                      <Button size="sm" variant="default" className="h-7 px-2.5 text-xs shrink-0" onClick={() => void navigate({ to: "/templates/$code/editor", params: { code: t.code } })}>
+                        <Pencil className="mr-1 size-3" aria-hidden />
                         Edit
                       </Button>
-                      <Button size="sm" onClick={() => setEditing({ code: t.code, name: t.name, description: t.description ?? "", industry: t.industry })}>
-                        <Settings2 className="mr-1.5 size-3.5" aria-hidden />
+                      <Button size="sm" variant="default" className="h-7 px-2.5 text-xs shrink-0" onClick={() => setEditing({ code: t.code, name: t.name, description: t.description ?? "", industry: t.industry })}>
+                        <Settings2 className="mr-1 size-3" aria-hidden />
                         Details
                       </Button>
                       {!t.isActive || t.hasUnpublishedChanges ? (
-                        <Button size="sm" variant="primary" loading={publish.isPending && publish.variables === t.code} onClick={() => publish.mutate(t.code)}>
+                        <Button size="sm" variant="primary" className="h-7 px-2.5 text-xs shrink-0" loading={publish.isPending && publish.variables === t.code} onClick={() => publish.mutate(t.code)}>
                           Publish
                         </Button>
                       ) : null}
                       {t.status === "published" ? (
-                        <Button size="sm" loading={setArchived.isPending && setArchived.variables?.code === t.code} onClick={() => setArchived.mutate({ code: t.code, archived: true })}>
-                          <Archive className="mr-1.5 size-3.5" aria-hidden />
+                        <Button size="sm" variant="default" className="h-7 px-2.5 text-xs shrink-0" loading={setArchived.isPending && setArchived.variables?.code === t.code} onClick={() => setArchived.mutate({ code: t.code, archived: true })}>
+                          <Archive className="mr-1 size-3" aria-hidden />
                           Archive
                         </Button>
                       ) : null}
                       {t.status === "archived" ? (
-                        <Button size="sm" onClick={() => setArchived.mutate({ code: t.code, archived: false })}>
-                          Move to drafts
+                        <Button size="sm" variant="default" className="h-7 px-2.5 text-xs shrink-0" onClick={() => setArchived.mutate({ code: t.code, archived: false })}>
+                          Restore
                         </Button>
                       ) : null}
                       {t.status !== "published" ? (
-                        <Button size="sm" onClick={() => setDeleting({ code: t.code, name: t.name })}>
-                          <Trash2 className="mr-1.5 size-3.5" aria-hidden />
-                          Delete
+                        <Button size="sm" variant="ghost" className="h-7 px-2 text-xs text-destructive hover:bg-destructive/10 shrink-0" onClick={() => setDeleting({ code: t.code, name: t.name })}>
+                          <Trash2 className="size-3" aria-hidden />
                         </Button>
                       ) : null}
                     </div>

@@ -59,7 +59,7 @@ export function Overview() {
   }
 
   return (
-    <PageContainer>
+    <PageContainer size="full">
       <PageHeader
         title="Platform Overview"
         description="Live operational telemetry and key business metrics across all hosted stores."
@@ -126,49 +126,61 @@ export function Overview() {
         <MetricCard
           label="Database Size"
           value={formatBytes(metrics.dbSizeBytes)}
-          description="PostgreSQL 18 total footprint"
+          description="PostgreSQL total footprint"
           icon={HardDrive}
         />
       </div>
 
       {/* Operations Quick Action Cards */}
       <div className="grid grid-cols-1 gap-6 md:grid-cols-3">
-        <div className="rounded-xl border bg-card p-5 shadow-xs">
-          <div className="flex items-center justify-between mb-3">
-            <h3 className="font-semibold text-sm">Store Provisioning</h3>
-            <Building2 className="h-4 w-4 text-muted-foreground" />
+        <div className="rounded-xl border border-border bg-card p-5 shadow-xs flex flex-col justify-between hover:border-primary/40 transition-colors">
+          <div>
+            <div className="flex items-center justify-between mb-2">
+              <h3 className="font-semibold text-sm text-foreground">Store Provisioning</h3>
+              <div className="p-1.5 rounded-md bg-muted text-foreground">
+                <Building2 className="h-4 w-4" />
+              </div>
+            </div>
+            <p className="text-xs text-muted-foreground mb-4">
+              Provision a new store with custom template, pricing tier, and single-use owner invite link.
+            </p>
           </div>
-          <p className="text-xs text-muted-foreground mb-4">
-            Provision a new store with custom template, pricing tier, and single-use owner invite link.
-          </p>
-          <Link to={"/tenants/create"} className="inline-flex items-center text-xs font-medium text-primary hover:underline">
-            Open creation form <ArrowUpRight className="ml-1 h-3 w-3" />
+          <Link to={"/tenants/create"} className="inline-flex items-center text-xs font-semibold text-primary hover:underline">
+            Open creation form <ArrowUpRight className="ml-1 h-3.5 w-3.5" />
           </Link>
         </div>
 
-        <div className="rounded-xl border bg-card p-5 shadow-xs">
-          <div className="flex items-center justify-between mb-3">
-            <h3 className="font-semibold text-sm">Support Impersonation</h3>
-            <Activity className="h-4 w-4 text-muted-foreground" />
+        <div className="rounded-xl border border-border bg-card p-5 shadow-xs flex flex-col justify-between hover:border-primary/40 transition-colors">
+          <div>
+            <div className="flex items-center justify-between mb-2">
+              <h3 className="font-semibold text-sm text-foreground">Support Impersonation</h3>
+              <div className="p-1.5 rounded-md bg-muted text-foreground">
+                <Activity className="h-4 w-4" />
+              </div>
+            </div>
+            <p className="text-xs text-muted-foreground mb-4">
+              Audited, time-boxed support sessions with required merchant consent or emergency overrides.
+            </p>
           </div>
-          <p className="text-xs text-muted-foreground mb-4">
-            Audited, time-boxed support sessions with required merchant consent or emergency overrides.
-          </p>
-          <Link to={"/support"} className="inline-flex items-center text-xs font-medium text-primary hover:underline">
-            View active sessions <ArrowUpRight className="ml-1 h-3 w-3" />
+          <Link to={"/support"} className="inline-flex items-center text-xs font-semibold text-primary hover:underline">
+            View active sessions <ArrowUpRight className="ml-1 h-3.5 w-3.5" />
           </Link>
         </div>
 
-        <div className="rounded-xl border bg-card p-5 shadow-xs">
-          <div className="flex items-center justify-between mb-3">
-            <h3 className="font-semibold text-sm">System & Queues</h3>
-            <Database className="h-4 w-4 text-muted-foreground" />
+        <div className="rounded-xl border border-border bg-card p-5 shadow-xs flex flex-col justify-between hover:border-primary/40 transition-colors">
+          <div>
+            <div className="flex items-center justify-between mb-2">
+              <h3 className="font-semibold text-sm text-foreground">System & Queues</h3>
+              <div className="p-1.5 rounded-md bg-muted text-foreground">
+                <Database className="h-4 w-4" />
+              </div>
+            </div>
+            <p className="text-xs text-muted-foreground mb-4">
+              Inspect pg-boss background queues, retry failed jobs, and monitor webhook inbox errors.
+            </p>
           </div>
-          <p className="text-xs text-muted-foreground mb-4">
-            Inspect pg-boss background queues, retry failed jobs, and monitor webhook inbox errors.
-          </p>
-          <Link to={"/system"} className="inline-flex items-center text-xs font-medium text-primary hover:underline">
-            Open system health <ArrowUpRight className="ml-1 h-3 w-3" />
+          <Link to={"/system"} className="inline-flex items-center text-xs font-semibold text-primary hover:underline">
+            Open system health <ArrowUpRight className="ml-1 h-3.5 w-3.5" />
           </Link>
         </div>
       </div>

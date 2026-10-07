@@ -11,7 +11,7 @@ import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, D
 import { ConfirmDialog } from "@bs/ui";
 import { Field } from "@bs/ui";
 import { SimpleSelect } from "@bs/ui";
-import { SettingsPageFrame, SettingsSection } from "../../../components/settings/settings-page.tsx";
+import { SettingsCard, SettingsPageFrame } from "../../../components/settings/settings-page.tsx";
 import { orpc } from "../../../lib/orpc.ts";
 import { errorMessage } from "../../../lib/errors.ts";
 
@@ -46,9 +46,9 @@ export function PlanAndBillingPage() {
   if (query.isLoading) {
     return (
       <SettingsPageFrame title={TITLE} description={DESCRIPTION}>
-        <SettingsSection>
+        <SettingsCard>
           <FormSkeleton />
-        </SettingsSection>
+        </SettingsCard>
       </SettingsPageFrame>
     );
   }
@@ -56,14 +56,14 @@ export function PlanAndBillingPage() {
   if (query.isError || !query.data) {
     return (
       <SettingsPageFrame title={TITLE} description={DESCRIPTION}>
-        <SettingsSection>
+        <SettingsCard>
           <EmptyState
             icon={AlertTriangle}
             title="Could not load plan and billing details"
             description={errorMessage(query.error)}
             action={<Button onClick={() => void query.refetch()}>Try again</Button>}
           />
-        </SettingsSection>
+        </SettingsCard>
       </SettingsPageFrame>
     );
   }
@@ -128,32 +128,30 @@ export function PlanAndBillingPage() {
     <SettingsPageFrame title={TITLE} description={DESCRIPTION}>
       {/* Open Plan Change Request Banner */}
       {openPlanChangeRequest ? (
-        <SettingsSection>
-          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 rounded-lg border border-primary/30 bg-primary/5 p-4">
-            <div className="flex items-start gap-3">
-              <Clock className="h-5 w-5 text-primary mt-0.5 shrink-0" />
-              <div>
-                <p className="text-xs font-semibold text-foreground">
-                  Plan change request pending review ({openPlanChangeRequest.toPlanName} · {openPlanChangeRequest.interval})
-                </p>
-                <p className="text-xs text-muted-foreground mt-0.5">
-                  Requested on {new Date(openPlanChangeRequest.createdAt).toLocaleDateString("en-IN", { day: "numeric", month: "short", year: "numeric" })}. Our team is processing your request.
-                  {openPlanChangeRequest.note ? ` Note: "${openPlanChangeRequest.note}"` : null}
-                </p>
-              </div>
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 rounded-lg border border-primary/30 bg-primary/5 p-4">
+          <div className="flex items-start gap-3">
+            <Clock className="h-5 w-5 text-primary mt-0.5 shrink-0" />
+            <div>
+              <p className="text-xs font-semibold text-foreground">
+                Plan change request pending review ({openPlanChangeRequest.toPlanName} · {openPlanChangeRequest.interval})
+              </p>
+              <p className="text-xs text-muted-foreground mt-0.5">
+                Requested on {new Date(openPlanChangeRequest.createdAt).toLocaleDateString("en-IN", { day: "numeric", month: "short", year: "numeric" })}. Our team is processing your request.
+                {openPlanChangeRequest.note ? ` Note: "${openPlanChangeRequest.note}"` : null}
+              </p>
             </div>
-            {isOwner ? (
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={() => setConfirmCancelOpen(true)}
-                disabled={cancelMutation.isPending}
-              >
-                Cancel request
-              </Button>
-            ) : null}
           </div>
-        </SettingsSection>
+          {isOwner ? (
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => setConfirmCancelOpen(true)}
+              disabled={cancelMutation.isPending}
+            >
+              Cancel request
+            </Button>
+          ) : null}
+        </div>
       ) : null}
 
       <Tabs defaultValue="plan" className="w-full">
@@ -164,9 +162,9 @@ export function PlanAndBillingPage() {
 
         {/* Tab 1: Plan & Usage */}
         <TabsContent value="plan" className="space-y-6 pt-4">
-          <SettingsSection
+          <SettingsCard
             title="Current plan"
-            description="Your active subscription tier and billing schedule."
+            description="Active subscription tier and billing schedule"
             actions={
               isOwner && !openPlanChangeRequest ? (
                 <Button onClick={handleOpenRequestDialog} size="sm">
@@ -198,8 +196,8 @@ export function PlanAndBillingPage() {
               </div>
 
               <div className="rounded-lg border border-border p-4 bg-muted/20">
-                <h4 className="text-xs font-medium text-foreground mb-2">Plan features & benefits</h4>
-                <ul className="text-xs text-muted-foreground space-y-1">
+                <h4 className="text-xs font-semibold text-foreground mb-2">Plan features & benefits</h4>
+                <ul className="text-xs text-muted-foreground space-y-1.5">
                   <li className="flex items-center gap-1.5">
                     <CheckCircle2 className="h-3.5 w-3.5 text-emerald-500 shrink-0" /> Multi-theme customizer & drag-and-drop builder
                   </li>
@@ -212,11 +210,11 @@ export function PlanAndBillingPage() {
                 </ul>
               </div>
             </div>
-          </SettingsSection>
+          </SettingsCard>
 
-          <SettingsSection
+          <SettingsCard
             title="Usage & quotas"
-            description="Active resource utilization for this store."
+            description="Active resource utilization for this store"
           >
             <div className="grid gap-4 sm:grid-cols-3">
               {usage.map((item) => (
@@ -239,14 +237,14 @@ export function PlanAndBillingPage() {
                 </div>
               ))}
             </div>
-          </SettingsSection>
+          </SettingsCard>
         </TabsContent>
 
         {/* Tab 2: Invoices */}
         <TabsContent value="invoices" className="pt-4">
-          <SettingsSection
+          <SettingsCard
             title="Platform billing invoices"
-            description="History of subscription charges and platform fees for your store."
+            description="History of subscription charges and platform fees for your store"
           >
             {invoices.length === 0 ? (
               <div className="rounded-lg border border-dashed border-border p-6 text-center text-xs text-muted-foreground">
@@ -284,7 +282,7 @@ export function PlanAndBillingPage() {
                 </table>
               </div>
             )}
-          </SettingsSection>
+          </SettingsCard>
         </TabsContent>
       </Tabs>
 

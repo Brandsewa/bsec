@@ -1,6 +1,7 @@
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import {
   AlertCircle,
+  Archive,
   CheckCircle2,
   Clock,
   Copy,
@@ -21,7 +22,6 @@ import {
   EmptyState,
   MetricCard,
   MetricCardSkeleton,
-  PageBreadcrumbs,
   PageContainer,
   PageHeader,
   PageSection,
@@ -32,6 +32,7 @@ import {
 import { keepPreviousData, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Badge } from "@bs/ui";
 import { Button } from "@bs/ui";
+import { Checkbox } from "@bs/ui";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -52,9 +53,14 @@ import { DataTable, type Column } from "../../components/data-table/data-table.t
 import { fetchAllPages } from "../../components/data-table/fetch-all.ts";
 import { Pagination } from "../../components/data-table/pagination.tsx";
 import { TableToolbar } from "../../components/data-table/table-toolbar.tsx";
-import { ColumnsMenu, FilterChips, type FilterChip } from "../../components/data-table/toolbar-parts.tsx";
+import { BulkBar, ColumnsMenu, FilterChips, type FilterChip } from "../../components/data-table/toolbar-parts.tsx";
+import { useBulkRunner } from "../../components/data-table/use-bulk-runner.ts";
+import { useTableSelection } from "../../components/data-table/use-table-selection.ts";
 import {
   compactSearch,
+  day,
+  dayAfterIso,
+  dayStartIso,
   oneOf,
   parsePaging,
   text,
@@ -63,15 +69,13 @@ import {
   useUrlTableState,
 } from "../../components/data-table/use-table-state.ts";
 import { money } from "../../components/order-parts.tsx";
-import { ScrollTabs } from "@bs/ui";
-import { SimpleSelect } from "@bs/ui";
+import { DateRangePicker, ScrollTabs, SimpleSelect } from "@bs/ui";
 import { downloadCsv, toCsv } from "../../lib/csv.ts";
 import { errorMessage } from "../../lib/errors.ts";
 import { client, orpc } from "../../lib/orpc.ts";
 
 type QuoteView = "all" | "needs_reply" | "quote_sent" | "expired" | "accepted" | "closed";
 type QuoteSort = "created_desc" | "created_asc" | "number_desc" | "number_asc";
-type DateRange = "any" | "7d" | "30d" | "90d";
 type CustomerType = "all" | "account" | "guest";
 
 const VIEWS: ReadonlyArray<{ id: QuoteView; label: string }> = [
@@ -80,7 +84,7 @@ const VIEWS: ReadonlyArray<{ id: QuoteView; label: string }> = [
   { id: "quote_sent", label: "Quote sent" },
   { id: "expired", label: "Expired" },
   { id: "accepted", label: "Accepted" },
-  { id: "closed", label: "Closed" },
+  { id: "closed", label: "Archived" },
 ];
 
 const SORTS: ReadonlyArray<{ id: QuoteSort; label: string }> = [
@@ -88,13 +92,6 @@ const SORTS: ReadonlyArray<{ id: QuoteSort; label: string }> = [
   { id: "created_asc", label: "Oldest first" },
   { id: "number_desc", label: "Lead number (high to low)" },
   { id: "number_asc", label: "Lead number (low to high)" },
-];
-
-const DATE_RANGES: ReadonlyArray<{ value: DateRange; label: string }> = [
-  { value: "any", label: "All time" },
-  { value: "7d", label: "Last 7 days" },
-  { value: "30d", label: "Last 30 days" },
-  { value: "90d", label: "Last 90 days" },
 ];
 
 const CUSTOMER_TYPES: ReadonlyArray<{ value: CustomerType; label: string }> = [
@@ -107,7 +104,8 @@ export interface QuotesSearch {
   view: QuoteView;
   q?: string | undefined;
   sort: QuoteSort;
-  dateRange: DateRange;
+  from?: string | undefined;
+  to?: string | undefined;
   customerType: CustomerType;
   page: number;
   size: number;
@@ -118,7 +116,8 @@ export function parseQuotesSearch(raw: Record<string, unknown>): QuotesSearch {
     view: oneOf(raw["view"], VIEWS.map((v) => v.id)) ?? "all",
     q: text(raw["q"]),
     sort: oneOf(raw["sort"], SORTS.map((s) => s.id)) ?? "created_desc",
-    dateRange: oneOf(raw["dateRange"], DATE_RANGES.map((d) => d.value)) ?? "any",
+    from: day(raw["from"]),
+    to: day(raw["to"]),
     customerType: oneOf(raw["customerType"], CUSTOMER_TYPES.map((c) => c.value)) ?? "all",
     ...parsePaging(raw),
   };
@@ -129,12 +128,14 @@ export function quotesListInput(
   paging: { pageSize: number; page: number } = { pageSize: s.size, page: s.page },
 ) {
   return {
-    view: s.view,
+    tab: s.view,
     sort: s.sort,
-    dateRange: s.dateRange,
+    dateFrom: s.from ? dayStartIso(s.from) : undefined,
+    dateTo: s.to ? dayAfterIso(s.to) : undefined,
     customerType: s.customerType,
-    ...(s.q ? { search: s.q } : {}),
-    ...paging,
+    ...(s.q ? { search: s.q.trim() } : {}),
+    limit: paging.pageSize,
+    offset: (paging.page - 1) * paging.pageSize,
   };
 }
 
@@ -177,7 +178,6 @@ export const Route = createFileRoute("/_store/quotes")({
     compactSearch(parseQuotesSearch(raw), {
       view: "all",
       sort: "created_desc",
-      dateRange: "any",
       customerType: "all",
       page: 1,
       size: 25,
@@ -288,7 +288,7 @@ export function QuotesPage({
   );
 
   const [activeQuoteId, setActiveQuoteId] = useState<string | null>(null);
-  const [deleteTarget, setDeleteTarget] = useState<QuoteRow | null>(null);
+  const [toDelete, setToDelete] = useState<QuoteRow[] | null>(null);
 
   const listQueryInput = useMemo(
     () => quotesListInput(s, { pageSize: s.size, page: s.page }),
@@ -305,37 +305,77 @@ export function QuotesPage({
     void queryClient.invalidateQueries({ queryKey: orpc.admin.quotes.stats.key() });
   };
 
-  const markLostMutation = useMutation(
-    orpc.admin.quotes.markLost.mutationOptions({
-      onSuccess: () => {
-        toast.success("Quote marked as lost");
-        invalidate();
-      },
-      onError: (err: Error) => toast.error(errorMessage(err)),
-    }),
-  );
-
-  const reopenMutation = useMutation(
-    orpc.admin.quotes.reopen.mutationOptions({
-      onSuccess: () => {
-        toast.success("Quote reopened");
-        invalidate();
-      },
-      onError: (err: Error) => toast.error(errorMessage(err)),
-    }),
-  );
-
   const deleteMutation = useMutation(
     orpc.admin.quotes.delete.mutationOptions({
       onSuccess: () => {
         toast.success("Quote lead deleted");
-        setDeleteTarget(null);
-        if (activeQuoteId === deleteTarget?.id) setActiveQuoteId(null);
+        setToDelete(null);
+        if (activeQuoteId && toDelete?.some((d) => d.id === activeQuoteId)) setActiveQuoteId(null);
         invalidate();
       },
       onError: (err: Error) => toast.error(errorMessage(err)),
     }),
   );
+
+  const rows = quotesQuery.data?.items ?? [];
+  const total = quotesQuery.data?.total ?? 0;
+
+  const sel = useTableSelection({
+    rows,
+    getId: (r) => r.id,
+    total,
+    resetKey: JSON.stringify([s.view, s.sort, s.customerType, s.from, s.to, s.q]),
+  });
+
+  const bulk = useBulkRunner();
+
+  const handleArchive = async (targets: QuoteRow[]) => {
+    await bulk.run({
+      rows: targets,
+      getId: (r) => r.id,
+      getLabel: (r) => r.number,
+      verb: "Archiving",
+      done: "archived",
+      noun: "quote",
+      action: (r) => client.admin.quotes.markLost({ id: r.id }),
+      onFinished: () => {
+        sel.clear();
+        invalidate();
+      },
+    });
+  };
+
+  const handleRestore = async (targets: QuoteRow[]) => {
+    await bulk.run({
+      rows: targets,
+      getId: (r) => r.id,
+      getLabel: (r) => r.number,
+      verb: "Restoring",
+      done: "restored",
+      noun: "quote",
+      action: (r) => client.admin.quotes.reopen({ id: r.id }),
+      onFinished: () => {
+        sel.clear();
+        invalidate();
+      },
+    });
+  };
+
+  const handleDelete = async (targets: QuoteRow[]) => {
+    await bulk.run({
+      rows: targets,
+      getId: (r) => r.id,
+      getLabel: (r) => r.number,
+      verb: "Deleting",
+      done: "deleted",
+      noun: "quote",
+      action: (r) => client.admin.quotes.delete({ id: r.id }),
+      onFinished: () => {
+        sel.clear();
+        invalidate();
+      },
+    });
+  };
 
   const columns: Column<QuoteRow>[] = useMemo(
     () => [
@@ -424,12 +464,11 @@ export function QuotesPage({
         onRemove: () => update({ q: undefined, page: undefined }),
       });
     }
-    if (s.dateRange !== "any") {
-      const label = DATE_RANGES.find((d) => d.value === s.dateRange)?.label ?? s.dateRange;
+    if (s.from || s.to) {
       list.push({
-        key: "dateRange",
-        label: `Date: ${label}`,
-        onRemove: () => update({ dateRange: "any", page: undefined }),
+        key: "date",
+        label: `Date: ${s.from ?? "…"} to ${s.to ?? "…"}`,
+        onRemove: () => update({ from: undefined, to: undefined, page: undefined }),
       });
     }
     if (s.customerType !== "all") {
@@ -441,12 +480,18 @@ export function QuotesPage({
       });
     }
     return list;
-  }, [s.customerType, s.dateRange, s.q, update]);
+  }, [s.customerType, s.from, s.to, s.q, update]);
 
   const [exporting, setExporting] = useState(false);
-  const handleExportCsv = async () => {
+  const handleExportCsv = async (scope: "all" | "selection" = "all") => {
     setExporting(true);
     try {
+      if (scope === "selection" && !sel.allResults) {
+        const csvContent = toCsv(EXPORT_HEADER, sel.picked.map(exportRow));
+        downloadCsv(`quotes-selection-${new Date().toISOString().slice(0, 10)}.csv`, csvContent);
+        toast.success(`Exported ${sel.picked.length} quote lead${sel.picked.length === 1 ? "" : "s"}`);
+        return;
+      }
       const { rows: allRows } = await fetchAllPages(
         (offset, limit) => {
           const page = Math.floor(offset / limit) + 1;
@@ -464,9 +509,6 @@ export function QuotesPage({
     }
   };
 
-  const rows = quotesQuery.data?.items ?? [];
-  const total = quotesQuery.data?.total ?? 0;
-
   const rowMenu = (row: QuoteRow) => (
     <DropdownMenu>
       <DropdownMenuTrigger render={<Button variant="ghost" size="icon-sm" aria-label="Quote actions" />}>
@@ -481,22 +523,19 @@ export function QuotesPage({
         >
           Create quote order
         </DropdownMenuItem>
-        {row.derivedStage !== "closed" && row.derivedStage !== "accepted" && (
-          <DropdownMenuItem onClick={() => markLostMutation.mutate({ id: row.id })}>
-            Mark as lost
+        {s.view !== "closed" ? (
+          <DropdownMenuItem onClick={() => void handleArchive([row])}>
+            <Archive className="mr-2 size-3.5" /> Archive
           </DropdownMenuItem>
-        )}
-        {(row.derivedStage === "closed" || row.derivedStage === "expired") && (
-          <DropdownMenuItem onClick={() => reopenMutation.mutate({ id: row.id })}>
-            <RotateCcw className="mr-2 size-3.5" /> Reopen quote
-          </DropdownMenuItem>
-        )}
-        {(row.status === "new" || row.status === "lost") && (
+        ) : (
           <>
+            <DropdownMenuItem onClick={() => void handleRestore([row])}>
+              <RotateCcw className="mr-2 size-3.5" /> Restore quote
+            </DropdownMenuItem>
             <DropdownMenuSeparator />
             <DropdownMenuItem
               className="text-destructive focus:text-destructive"
-              onClick={() => setDeleteTarget(row)}
+              onClick={() => setToDelete([row])}
             >
               <Trash2 className="mr-2 size-3.5" /> Delete lead
             </DropdownMenuItem>
@@ -507,13 +546,12 @@ export function QuotesPage({
   );
 
   return (
-    <PageContainer>
-      <PageBreadcrumbs items={[{ label: "Orders", href: "/orders" }, { label: "Quotes" }]} />
+    <PageContainer size="full">
       <PageHeader
         title="Quotes"
         description="Review custom quote requests and convert them into draft orders with tailored pricing."
         aside={
-          <Button variant="outline" size="sm" disabled={exporting || total === 0} onClick={handleExportCsv}>
+          <Button variant="outline" size="sm" disabled={exporting || total === 0} onClick={() => void handleExportCsv("all")}>
             <Download className="mr-1.5 size-3.5" />
             {exporting ? "Exporting..." : "Export CSV"}
           </Button>
@@ -537,6 +575,23 @@ export function QuotesPage({
             searchPlaceholder="Search quote #, customer, product..."
             searchText={searchText}
             onSearchText={setSearchText}
+            filters={
+              <div className="flex items-center gap-2">
+                <SimpleSelect
+                  ariaLabel="Customer type filter"
+                  value={s.customerType}
+                  onChange={(v) => update({ customerType: v as CustomerType, page: undefined })}
+                  options={CUSTOMER_TYPES}
+                />
+                <DateRangePicker
+                  className="w-full justify-start md:w-auto"
+                  emptyLabel="Requested: any date"
+                  from={s.from}
+                  to={s.to}
+                  onChange={(from, to) => update({ from, to, page: undefined })}
+                />
+              </div>
+            }
             resultCount={total}
             noun="quotes"
             sortOptions={SORTS}
@@ -545,27 +600,86 @@ export function QuotesPage({
             onSort={(v) => update({ sort: v as QuoteSort, page: undefined })}
             trailing={
               <div className="flex items-center gap-2">
-                <SimpleSelect
-                  value={s.dateRange}
-                  onChange={(v) => update({ dateRange: v as DateRange, page: undefined })}
-                  options={DATE_RANGES}
-                />
-                <SimpleSelect
-                  value={s.customerType}
-                  onChange={(v) => update({ customerType: v as CustomerType, page: undefined })}
-                  options={CUSTOMER_TYPES}
-                />
                 <ColumnsMenu
                   columns={columns as unknown as Column<unknown>[]}
                   isVisible={visibility.isVisible}
                   onToggle={visibility.toggle}
                   onReset={visibility.reset}
                 />
+                <Button
+                  variant="outline"
+                  size="sm"
+                  disabled={exporting || total === 0}
+                  onClick={() => void handleExportCsv("all")}
+                  className="h-8 gap-1.5 text-xs font-medium"
+                >
+                  <Download className="h-3.5 w-3.5" />
+                  {exporting ? "Exporting..." : "Export CSV"}
+                </Button>
               </div>
             }
           />
 
-          <FilterChips chips={filterChips} onClear={() => update({ q: undefined, dateRange: "any", customerType: "all", page: undefined })} />
+          {filterChips.length > 0 && (
+            <FilterChips
+              chips={filterChips}
+              onClear={() => update({ q: undefined, from: undefined, to: undefined, customerType: "all", page: undefined })}
+            />
+          )}
+
+          <BulkBar
+            count={sel.count}
+            noun="quote"
+            total={total}
+            allResults={sel.allResults}
+            pageFullySelected={sel.pageFullySelected}
+            onSelectAllResults={sel.selectAllResults}
+            onClear={sel.clear}
+            note={sel.allResults ? "Actions work on quotes you tick yourself. Export covers every matching quote." : undefined}
+          >
+            {s.view !== "closed" ? (
+              <Button
+                variant="outline"
+                size="sm"
+                disabled={bulk.busy || sel.allResults}
+                onClick={() => void handleArchive(sel.picked)}
+              >
+                <Archive className="mr-1.5 size-3.5" /> Archive
+              </Button>
+            ) : (
+              <>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  disabled={bulk.busy || sel.allResults}
+                  onClick={() => void handleRestore(sel.picked)}
+                >
+                  <RotateCcw className="mr-1.5 size-3.5" /> Restore
+                </Button>
+                <Button
+                  variant="destructive"
+                  size="sm"
+                  disabled={bulk.busy || sel.allResults}
+                  onClick={() => setToDelete(sel.picked)}
+                >
+                  <Trash2 className="mr-1.5 size-3.5" /> Delete
+                </Button>
+              </>
+            )}
+            <Button
+              variant="outline"
+              size="sm"
+              disabled={exporting}
+              onClick={() => void handleExportCsv("selection")}
+            >
+              <Download className="mr-1.5 size-3.5" /> Export
+            </Button>
+            {bulk.progress ? (
+              <span role="status" className="text-muted-foreground text-xs">
+                {bulk.progress.label}… {bulk.progress.done}/{bulk.progress.total}
+              </span>
+            ) : null}
+          </BulkBar>
 
           <DataTable
             columns={shownColumns}
@@ -578,11 +692,32 @@ export function QuotesPage({
               <EmptyState
                 icon={MessageSquareQuote}
                 title="No quote requests found"
-                description="Inquiries submitted via 'Price on request' products will appear here."
+                description={s.view === "closed" ? "No archived quote requests." : "Inquiries submitted via 'Price on request' products will appear here."}
               />
             }
+            selectedIds={sel.selectedIds}
+            onToggleRow={sel.toggleRow}
+            onTogglePage={sel.togglePage}
             onRowClick={(r) => setActiveQuoteId(r.id)}
             rowActions={(r) => rowMenu(r)}
+            renderCard={(r, ctx) => (
+              <div className="flex items-start gap-3 p-3" onClick={() => setActiveQuoteId(r.id)}>
+                <div className="pt-0.5" onClick={(e) => e.stopPropagation()}>
+                  <Checkbox aria-label={`Select quote ${r.number}`} checked={ctx.selected} onCheckedChange={() => ctx.toggle()} />
+                </div>
+                <div className="grid min-w-0 flex-1 gap-1">
+                  <div className="flex items-center justify-between gap-2">
+                    <span className="font-semibold text-foreground text-xs">{r.number}</span>
+                    <StageBadge stage={r.derivedStage} />
+                  </div>
+                  <div className="text-xs text-muted-foreground truncate">{r.name} · {r.productTitle}</div>
+                  <div className="flex items-center justify-between text-xs pt-1">
+                    <span className="text-muted-foreground">Qty: {r.quantity}</span>
+                    <span className="font-medium text-foreground">{r.quotedTotal != null ? money(r.quotedTotal) : "—"}</span>
+                  </div>
+                </div>
+              </div>
+            )}
           />
 
           {total > s.size && (
@@ -610,15 +745,18 @@ export function QuotesPage({
 
       {/* Delete Confirmation Dialog */}
       <ConfirmDialog
-        open={Boolean(deleteTarget)}
-        onOpenChange={(open) => !open && setDeleteTarget(null)}
-        title={`Delete quote lead ${deleteTarget?.number}?`}
-        description="This will permanently delete this quote request lead from the system. This action is audited and cannot be undone."
-        confirmLabel="Delete lead"
+        open={Boolean(toDelete && toDelete.length > 0)}
+        onOpenChange={(open) => !open && setToDelete(null)}
+        title={toDelete?.length === 1 ? `Delete quote lead "${toDelete[0]?.number}"?` : `Delete ${toDelete?.length ?? 0} quote leads?`}
+        description="This will permanently delete the selected quote request lead(s) from the system. This action is audited and cannot be undone."
+        confirmLabel="Delete permanently"
+        cancelLabel="Keep in archive"
         destructive
-        pending={deleteMutation.isPending}
+        pending={bulk.busy || deleteMutation.isPending}
         onConfirm={() => {
-          if (deleteTarget) deleteMutation.mutate({ id: deleteTarget.id });
+          const targets = toDelete ?? [];
+          setToDelete(null);
+          void handleDelete(targets);
         }}
       />
     </PageContainer>
@@ -686,7 +824,7 @@ function QuoteDetailSheet({
 
   return (
     <Sheet open={open} onOpenChange={(isOpen) => !isOpen && onClose()}>
-      <SheetContent className="w-full sm:max-w-md overflow-y-auto p-0 flex flex-col">
+      <SheetContent className="w-[35vw] md:min-w-[500px] max-w-full overflow-y-auto p-0 flex flex-col bg-background text-foreground">
         <SheetHeader className="p-6 border-b border-border">
           <div className="flex items-center justify-between gap-2">
             <SheetTitle className="text-base font-bold">Quote {quote?.number ?? "..."}</SheetTitle>

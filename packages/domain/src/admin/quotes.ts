@@ -36,6 +36,8 @@ export interface ListQuotesInput {
   tab?: "all" | "needs_reply" | "quote_sent" | "expired" | "accepted" | "closed" | undefined;
   search?: string | undefined;
   dateRange?: "any" | "7d" | "30d" | "90d" | undefined;
+  dateFrom?: string | undefined;
+  dateTo?: string | undefined;
   customerType?: "all" | "account" | "guest" | undefined;
   limit?: number | undefined;
   offset?: number | undefined;
@@ -335,6 +337,13 @@ export async function listAdminQuotes(
     if (query?.dateRange && query.dateRange !== "any") {
       const days = query.dateRange === "7d" ? 7 : query.dateRange === "30d" ? 30 : 90;
       conditions.push(sql`${quoteRequests.createdAt} >= now() - make_interval(days => ${days})`);
+    }
+
+    if (query?.dateFrom) {
+      conditions.push(sql`${quoteRequests.createdAt} >= ${query.dateFrom}`);
+    }
+    if (query?.dateTo) {
+      conditions.push(sql`${quoteRequests.createdAt} <= ${query.dateTo}`);
     }
 
     if (query?.customerType === "account") {

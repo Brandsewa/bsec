@@ -6,7 +6,7 @@ import { EmptyState, PageSkeleton } from "@bs/ui";
 import { Button } from "@bs/ui";
 import { DataTable, type Column } from "../../../components/data-table/data-table.tsx";
 import { Pagination } from "../../../components/data-table/pagination.tsx";
-import { SettingsPageFrame, SettingsSection } from "../../../components/settings/settings-page.tsx";
+import { SettingsCard, SettingsPageFrame } from "../../../components/settings/settings-page.tsx";
 import { SimpleSelect } from "@bs/ui";
 import { orpc } from "../../../lib/orpc.ts";
 import { errorMessage } from "../../../lib/errors.ts";
@@ -143,23 +143,23 @@ export function SettingsActivityPage() {
   if (activityQuery.isError) {
     return (
       <SettingsPageFrame title={TITLE} description={DESCRIPTION}>
-        <SettingsSection>
+        <SettingsCard>
           <EmptyState
             icon={AlertTriangle}
             title="Could not load settings activity"
             description={errorMessage(activityQuery.error)}
             action={<Button onClick={() => void activityQuery.refetch()}>Try again</Button>}
           />
-        </SettingsSection>
+        </SettingsCard>
       </SettingsPageFrame>
     );
   }
 
   return (
     <SettingsPageFrame title={TITLE} description={DESCRIPTION}>
-      <SettingsSection
-        title="Activity Log"
-        description="Recorded mutations with sanitized before/after changes and actor identity."
+      <SettingsCard
+        title="Activity audit trail"
+        description="Immutable record of administrative mutations with before/after changes"
       >
         <div className="grid gap-4">
           <div className="flex flex-wrap items-center justify-between gap-3">
@@ -176,8 +176,8 @@ export function SettingsActivityPage() {
                 }}
               />
             </div>
-            <div className="flex items-center gap-2 text-xs text-muted-foreground">
-              <Clock className="h-4 w-4" />
+            <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
+              <Clock className="h-3.5 w-3.5" />
               <span>Immutable audit trail</span>
             </div>
           </div>
@@ -213,7 +213,7 @@ export function SettingsActivityPage() {
             disabled={activityQuery.isLoading || activityQuery.isFetching}
           />
         </div>
-      </SettingsSection>
+      </SettingsCard>
     </SettingsPageFrame>
   );
 }

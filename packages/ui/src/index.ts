@@ -8,6 +8,7 @@ export { Textarea, type TextareaProps } from "./components/ui/textarea.tsx";
 export { Label } from "./components/ui/label.tsx";
 export { Card, CardHeader, CardFooter, CardTitle, CardDescription, CardContent } from "./components/ui/card.tsx";
 export { Badge, badgeVariants } from "./components/ui/badge.tsx";
+export { Avatar, AvatarImage, AvatarFallback } from "./components/ui/avatar.tsx";
 export { Alert, AlertTitle, AlertDescription } from "./components/ui/alert.tsx";
 export { Separator } from "./components/ui/separator.tsx";
 export { Switch } from "./components/ui/switch.tsx";

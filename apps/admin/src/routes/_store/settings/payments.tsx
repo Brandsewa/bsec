@@ -9,7 +9,7 @@ import { Button } from "@bs/ui";
 import { Switch } from "@bs/ui";
 import { Input } from "@bs/ui";
 import { Field } from "@bs/ui";
-import { HeaderActions, SettingsPageFrame, SettingsSection, useUnsavedGuard } from "../../../components/settings/settings-page.tsx";
+import { HeaderActions, SettingsCard, SettingsPageFrame, useUnsavedGuard } from "../../../components/settings/settings-page.tsx";
 import { orpc } from "../../../lib/orpc.ts";
 import { errorMessage } from "../../../lib/errors.ts";
 
@@ -29,9 +29,9 @@ export function PaymentsSettingsPage() {
   if (query.isLoading) {
     return (
       <SettingsPageFrame title={TITLE} description={DESCRIPTION}>
-        <SettingsSection>
+        <SettingsCard>
           <FormSkeleton />
-        </SettingsSection>
+        </SettingsCard>
       </SettingsPageFrame>
     );
   }
@@ -39,14 +39,14 @@ export function PaymentsSettingsPage() {
   if (query.isError || !query.data) {
     return (
       <SettingsPageFrame title={TITLE} description={DESCRIPTION}>
-        <SettingsSection>
+        <SettingsCard>
           <EmptyState
             icon={AlertTriangle}
             title="Could not load payment methods"
             description={errorMessage(query.error)}
             action={<Button onClick={() => void query.refetch()}>Try again</Button>}
           />
-        </SettingsSection>
+        </SettingsCard>
       </SettingsPageFrame>
     );
   }
@@ -58,56 +58,54 @@ export function PaymentsSettingsPage() {
   return (
     <SettingsPageFrame title={TITLE} description={DESCRIPTION}>
       {!canManagePayments ? (
-        <SettingsSection>
-          <Alert role="alert">
-            <span className="font-medium text-foreground">Read-only view:</span> Only store owners and administrators with payment management permissions can edit payment configurations.
-          </Alert>
-        </SettingsSection>
+        <Alert role="alert">
+          <span className="font-medium text-foreground">Read-only view:</span> Only store owners and administrators with payment management permissions can edit payment configurations.
+        </Alert>
       ) : null}
 
-      <SettingsSection
+      <SettingsCard
         title="Payment methods catalogue"
-        description="Available payment channels supported by the platform."
+        description="Supported channels for manual and online payments"
       >
         <div className="grid gap-3 sm:grid-cols-2">
           {/* Cash on delivery card */}
-          <div className="flex flex-col justify-between rounded-lg border border-border p-4 bg-card">
+          <div className="flex flex-col justify-between rounded-lg border border-border p-4 bg-muted/10">
             <div>
               <div className="flex items-center justify-between gap-2">
-                <h3 className="font-medium text-foreground">Cash on Delivery (COD)</h3>
+                <h3 className="text-sm font-medium text-foreground">Cash on Delivery (COD)</h3>
                 {codMethod?.status === "active" ? (
-                  <Badge variant="outline" className="border-emerald-500/30 bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 gap-1">
+                  <Badge variant="outline" className="border-emerald-500/30 bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 gap-1 text-[11px]">
                     <CheckCircle2 className="h-3 w-3" /> Active
                   </Badge>
                 ) : (
-                  <Badge variant="secondary">Disabled</Badge>
+                  <Badge variant="secondary" className="text-[11px]">Disabled</Badge>
                 )}
               </div>
               <p className="mt-1 text-xs text-muted-foreground">
                 Manual payment method allowing customers to pay with cash or UPI upon delivery.
               </p>
             </div>
-            <div className="mt-4 pt-3 border-t border-border flex items-center justify-between text-xs text-muted-foreground">
+            <div className="mt-4 pt-3 border-t border-border/60 flex items-center justify-between text-xs text-muted-foreground">
               <span>{codMethod?.status === "active" ? "Customers can checkout via COD" : "Disabled on storefront"}</span>
               <span className="font-medium text-foreground">Manual</span>
             </div>
           </div>
 
           {/* Razorpay card */}
-          <div className="flex flex-col justify-between rounded-lg border border-border p-4 bg-card">
+          <div className="flex flex-col justify-between rounded-lg border border-border p-4 bg-muted/10">
             <div>
               <div className="flex items-center justify-between gap-2">
-                <h3 className="font-medium text-foreground">Razorpay</h3>
+                <h3 className="text-sm font-medium text-foreground">Razorpay</h3>
                 {razorpayMethod?.status === "active" ? (
-                  <Badge variant="outline" className="border-emerald-500/30 bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 gap-1">
+                  <Badge variant="outline" className="border-emerald-500/30 bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 gap-1 text-[11px]">
                     <CheckCircle2 className="h-3 w-3" /> Active
                   </Badge>
                 ) : razorpayMethod?.status === "pending_setup" ? (
-                  <Badge variant="outline" className="border-amber-500/30 bg-amber-500/10 text-amber-600 dark:text-amber-400 gap-1">
+                  <Badge variant="outline" className="border-amber-500/30 bg-amber-500/10 text-amber-600 dark:text-amber-400 gap-1 text-[11px]">
                     <Clock className="h-3 w-3" /> Pending setup
                   </Badge>
                 ) : (
-                  <Badge variant="secondary" className="gap-1">
+                  <Badge variant="secondary" className="gap-1 text-[11px]">
                     <AlertCircle className="h-3 w-3" /> Unavailable
                   </Badge>
                 )}
@@ -116,7 +114,7 @@ export function PaymentsSettingsPage() {
                 Accept UPI, Cards, Netbanking, and Wallets in Indian Rupees directly into your account.
               </p>
             </div>
-            <div className="mt-4 pt-3 border-t border-border flex items-center justify-between text-xs text-muted-foreground">
+            <div className="mt-4 pt-3 border-t border-border/60 flex items-center justify-between text-xs text-muted-foreground">
               <span>{razorpayMethod?.status === "active" ? "Gateway connected" : "Adapter unavailable / deferred"}</span>
               <span className="font-medium text-foreground">Online</span>
             </div>
@@ -126,8 +124,8 @@ export function PaymentsSettingsPage() {
           <div className="flex flex-col justify-between rounded-lg border border-dashed border-border p-4 bg-muted/20 opacity-80">
             <div>
               <div className="flex items-center justify-between gap-2">
-                <h3 className="font-medium text-foreground">PhonePe Payment Gateway</h3>
-                <Badge variant="secondary" className="gap-1 text-xs">
+                <h3 className="text-sm font-medium text-foreground">PhonePe Payment Gateway</h3>
+                <Badge variant="secondary" className="gap-1 text-[11px]">
                   <Sparkles className="h-3 w-3 text-amber-500" /> Coming soon
                 </Badge>
               </div>
@@ -135,7 +133,7 @@ export function PaymentsSettingsPage() {
                 Direct UPI flows and merchant payments powered by PhonePe PG.
               </p>
             </div>
-            <div className="mt-4 pt-3 border-t border-border text-xs text-muted-foreground">
+            <div className="mt-4 pt-3 border-t border-border/60 text-xs text-muted-foreground">
               <span>Planned in future platform releases</span>
             </div>
           </div>
@@ -144,8 +142,8 @@ export function PaymentsSettingsPage() {
           <div className="flex flex-col justify-between rounded-lg border border-dashed border-border p-4 bg-muted/20 opacity-80">
             <div>
               <div className="flex items-center justify-between gap-2">
-                <h3 className="font-medium text-foreground">PayU India</h3>
-                <Badge variant="secondary" className="gap-1 text-xs">
+                <h3 className="text-sm font-medium text-foreground">PayU India</h3>
+                <Badge variant="secondary" className="gap-1 text-[11px]">
                   <Sparkles className="h-3 w-3 text-amber-500" /> Coming soon
                 </Badge>
               </div>
@@ -153,12 +151,12 @@ export function PaymentsSettingsPage() {
                 Enterprise payment gateway for high-volume transactions and EMI.
               </p>
             </div>
-            <div className="mt-4 pt-3 border-t border-border text-xs text-muted-foreground">
+            <div className="mt-4 pt-3 border-t border-border/60 text-xs text-muted-foreground">
               <span>Planned in future platform releases</span>
             </div>
           </div>
         </div>
-      </SettingsSection>
+      </SettingsCard>
 
       {/* Cash on Delivery configuration form */}
       <CodConfigurationForm
@@ -168,22 +166,22 @@ export function PaymentsSettingsPage() {
       />
 
       {/* Online Gateway Info Banner */}
-      <SettingsSection
+      <SettingsCard
         title="Online payment gateways"
-        description="Configuration for third-party payment service providers."
+        description="Configuration for third-party payment service providers"
       >
-        <div className="rounded-lg border border-border p-4 bg-muted/30">
+        <div className="rounded-lg border border-border p-4 bg-muted/20">
           <div className="flex items-start gap-3">
-            <ShieldAlert className="h-5 w-5 text-muted-foreground mt-0.5" />
+            <ShieldAlert className="h-5 w-5 text-muted-foreground mt-0.5 shrink-0" />
             <div className="text-xs space-y-1">
               <p className="font-medium text-foreground">Online Payment Credentials Deferred</p>
-              <p className="text-muted-foreground">
+              <p className="text-muted-foreground leading-relaxed">
                 In accordance with platform governance, live payment gateway integrations (Razorpay) remain in test/deferred posture until authorized by the platform owner. Orders placeable on store fronts default to Cash on Delivery.
               </p>
             </div>
           </div>
         </div>
-      </SettingsSection>
+      </SettingsCard>
     </SettingsPageFrame>
   );
 }
@@ -307,9 +305,21 @@ function CodConfigurationForm({
   }
 
   return (
-    <SettingsSection
+    <SettingsCard
       title="Cash on Delivery configuration"
-      description="Configure handling charges, order thresholds, and storefront display text."
+      description="Handling charges, order thresholds, and storefront display text"
+      actions={
+        !disabled && isDirty ? (
+          <div className="flex items-center gap-2">
+            <Button variant="outline" size="sm" onClick={handleReset} disabled={updateMutation.isPending}>
+              Discard
+            </Button>
+            <Button size="sm" type="submit" form="cod-settings-form" disabled={updateMutation.isPending}>
+              {updateMutation.isPending ? "Saving…" : "Save COD"}
+            </Button>
+          </div>
+        ) : undefined
+      }
     >
       {unsavedGuard}
       {!disabled && isDirty ? (
@@ -325,7 +335,7 @@ function CodConfigurationForm({
       <form id="cod-settings-form" onSubmit={handleSubmit} className="grid gap-4 max-w-xl">
         <div className="flex items-center justify-between rounded-lg border border-border p-3">
           <div>
-            <p className="text-xs font-medium text-foreground">Enable Cash on Delivery</p>
+            <p className="text-sm font-medium text-foreground">Enable Cash on Delivery</p>
             <p className="text-xs text-muted-foreground">Offer COD option to buyers at checkout.</p>
           </div>
           <Switch
@@ -403,6 +413,6 @@ function CodConfigurationForm({
           </div>
         ) : null}
       </form>
-    </SettingsSection>
+    </SettingsCard>
   );
 }

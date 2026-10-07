@@ -7,7 +7,7 @@ export interface SettingsNavItem {
   label: string;
   /** Route path of the section. */
   href: string;
-  description: string;
+  description?: string;
   icon: ComponentType<{ className?: string }>;
   /** Permission the store role must hold to see the section; omitted means everyone signed in. */
   perm?: string;

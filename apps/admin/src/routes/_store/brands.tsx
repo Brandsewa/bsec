@@ -1,7 +1,7 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { Image as ImageIcon, MoreHorizontal, Pencil, Plus, Tag, Trash2, Upload, X } from "lucide-react";
 import { useMemo, useRef, useState } from "react";
-import { MetricCard, MetricCardSkeleton, PageContainer, PageHeader, PageSkeleton, toast } from "@bs/ui";
+import { MetricCard, MetricCardSkeleton, PageContainer, PageHeader, PageSection, PageSkeleton, toast } from "@bs/ui";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import type { Brand } from "@bs/contracts";
 import { Badge } from "@bs/ui";
@@ -11,6 +11,7 @@ import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigge
 import { Field, FieldLabel } from "@bs/ui";
 import { Input } from "@bs/ui";
 import { ConfirmDialog } from "@bs/ui";
+import { TableToolbar } from "../../components/data-table/table-toolbar.tsx";
 import { errorMessage } from "../../lib/errors.ts";
 import { orpc } from "../../lib/orpc.ts";
 
@@ -185,7 +186,7 @@ export function BrandsPage() {
   const isSaving = createMutation.isPending || updateMutation.isPending;
 
   return (
-    <PageContainer size="default" className="space-y-6">
+    <PageContainer size="full">
       <PageHeader
         title="Brands"
         description="Organize products under manufacturer or brand labels for easy filtering."
@@ -198,7 +199,7 @@ export function BrandsPage() {
       />
 
       {/* Stats Cards */}
-      <div className="grid grid-cols-3 gap-4">
+      <div className="grid grid-cols-2 gap-3 sm:gap-4 sm:grid-cols-3">
         {statsQuery.isLoading ? (
           <>
             <MetricCardSkeleton />
@@ -214,33 +215,29 @@ export function BrandsPage() {
         )}
       </div>
 
-      {/* Filter toolbar */}
-      <div className="flex max-w-sm items-center gap-2">
-        <Input
-          placeholder="Search brands..."
-          value={queryText}
-          onChange={(e) => setQueryText(e.target.value)}
-          className="h-9"
-        />
-        {queryText && (
-          <Button type="button" variant="ghost" size="sm" onClick={() => setQueryText("")}>
-            Clear
-          </Button>
-        )}
-      </div>
+      <PageSection>
+        <div className="grid gap-3">
+          <TableToolbar
+            searchLabel="Search brands"
+            searchPlaceholder="Search brands..."
+            searchText={queryText}
+            onSearchText={setQueryText}
+            resultCount={filteredBrands.length}
+            noun="brands"
+          />
 
-      {/* Brands Table */}
-      <div className="overflow-hidden rounded-lg border bg-card">
-        <table className="w-full text-left text-sm">
-          <thead className="border-b bg-muted/40 text-xs font-medium text-muted-foreground uppercase">
-            <tr>
-              <th className="px-4 py-3">Brand</th>
-              <th className="px-4 py-3">Handle</th>
-              <th className="px-4 py-3">Products</th>
-              <th className="px-4 py-3 text-right">Actions</th>
-            </tr>
-          </thead>
-          <tbody className="divide-y">
+          {/* Brands Table */}
+          <div className="overflow-hidden rounded-xl border border-border bg-card shadow-xs">
+            <table className="w-full text-left text-sm">
+              <thead className="border-b border-border bg-muted/60 text-xs font-medium text-muted-foreground">
+                <tr>
+                  <th className="px-4 py-3">Brand</th>
+                  <th className="px-4 py-3">Handle</th>
+                  <th className="px-4 py-3">Products</th>
+                  <th className="px-4 py-3 text-right">Actions</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-border/60">
             {brandsQuery.isLoading ? (
               <tr>
                 <td colSpan={4} className="px-4 py-8 text-center text-muted-foreground">
@@ -320,6 +317,8 @@ export function BrandsPage() {
           </tbody>
         </table>
       </div>
+      </div>
+      </PageSection>
 
       {/* Brand Create/Edit Dialog */}
       <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>

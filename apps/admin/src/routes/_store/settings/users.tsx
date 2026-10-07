@@ -7,7 +7,7 @@ import { Button } from "@bs/ui";
 import { Input } from "@bs/ui";
 import { ConfirmDialog } from "@bs/ui";
 import { Field } from "@bs/ui";
-import { SettingsPageFrame, SettingsSection } from "../../../components/settings/settings-page.tsx";
+import { SettingsCard, SettingsPageFrame } from "../../../components/settings/settings-page.tsx";
 import { SimpleSelect } from "@bs/ui";
 import { orpc } from "../../../lib/orpc.ts";
 import { errorMessage } from "../../../lib/errors.ts";
@@ -77,16 +77,16 @@ export function UsersSettingsPage() {
   if (loading) {
     return (
       <SettingsPageFrame title={TITLE} description={DESCRIPTION}>
-        <SettingsSection>
+        <SettingsCard>
           <TableSkeleton rows={4} columns={3} />
-        </SettingsSection>
+        </SettingsCard>
       </SettingsPageFrame>
     );
   }
   if (failed) {
     return (
       <SettingsPageFrame title={TITLE} description={DESCRIPTION}>
-        <SettingsSection>
+        <SettingsCard>
           <EmptyState
             icon={AlertTriangle}
             title="Could not load users"
@@ -102,7 +102,7 @@ export function UsersSettingsPage() {
               </Button>
             }
           />
-        </SettingsSection>
+        </SettingsCard>
       </SettingsPageFrame>
     );
   }
@@ -114,11 +114,11 @@ export function UsersSettingsPage() {
   return (
     <SettingsPageFrame title={TITLE} description={DESCRIPTION}>
       {/* Read-only Store Owner identity summary */}
-      <SettingsSection
-        title="Store Owner"
-        description="The primary owner holds administrative and financial authority over this store. Store ownership transfer requires re-authenticated verification and is managed outside staff roles."
+      <SettingsCard
+        title="Store owner"
+        description="Holds primary administrative and billing authority"
       >
-        <div className="rounded-md border border-border bg-card p-4">
+        <div className="rounded-lg border border-border bg-card p-4">
           {ownerMembers.length === 0 ? (
             <p className="text-xs text-muted-foreground">Owner identity not determined.</p>
           ) : (
@@ -129,7 +129,7 @@ export function UsersSettingsPage() {
                     <ShieldCheck className="h-5 w-5" />
                   </div>
                   <div className="grid">
-                    <span className="text-xs font-medium text-foreground">{owner.name || owner.email}</span>
+                    <span className="text-xs font-semibold text-foreground">{owner.name || owner.email}</span>
                     <span className="text-xs text-muted-foreground">{owner.email}</span>
                   </div>
                   <span className="ml-auto inline-flex items-center rounded-full bg-muted px-2.5 py-0.5 text-[11px] font-medium text-foreground">
@@ -140,18 +140,21 @@ export function UsersSettingsPage() {
             </div>
           )}
         </div>
-      </SettingsSection>
+      </SettingsCard>
 
-      <SettingsSection title="Members" description="Staff with active access to this store.">
+      <SettingsCard
+        title="Members"
+        description="Staff with active access to this store admin"
+      >
         {memberList.length === 0 ? (
           <EmptyState icon={Users} title="No members yet" description="Invite someone below." />
         ) : (
-          <ul className="divide-y divide-border rounded-md border border-border">
+          <ul className="divide-y divide-border rounded-lg border border-border">
             {memberList.map((m) => (
               <li key={m.id} className="flex flex-wrap items-center justify-between gap-3 p-3">
                 <div className="grid">
                   <span className="text-xs font-medium text-foreground">{m.name || m.email}</span>
-                  <span className="text-muted-foreground">{m.email}</span>
+                  <span className="text-xs text-muted-foreground">{m.email}</span>
                 </div>
                 <div className="flex items-center gap-2">
                   <SimpleSelect
@@ -188,9 +191,12 @@ export function UsersSettingsPage() {
             ))}
           </ul>
         )}
-      </SettingsSection>
+      </SettingsCard>
 
-      <SettingsSection title="Invite someone" description="They get a link to set their own password. Passwords are never emailed or shown.">
+      <SettingsCard
+        title="Invite someone"
+        description="Invited staff will receive a single-use setup link"
+      >
         <form onSubmit={onInvite} className="grid gap-3 sm:grid-cols-[minmax(0,1fr)_9rem_auto] sm:items-end">
           <Field id="inviteEmail" label="Email">
             <Input id="inviteEmail" type="email" required value={email} onChange={(e) => setEmail(e.target.value)} />
@@ -203,8 +209,8 @@ export function UsersSettingsPage() {
           </Button>
         </form>
         {link ? (
-          <div className="grid gap-2 rounded-md border border-border bg-muted p-3">
-            <p className="text-xs text-foreground">Email is not set up yet, so copy this link and send it to them yourself. It works once and expires in 7 days.</p>
+          <div className="mt-3 grid gap-2 rounded-lg border border-border bg-muted/30 p-3">
+            <p className="text-xs text-foreground">Email delivery is deferred on this environment. Share this one-time link with the member (valid for 7 days):</p>
             <div className="flex gap-2">
               <Input readOnly value={link} onFocus={(e) => e.currentTarget.select()} aria-label="Invite link" />
               <Button
@@ -222,16 +228,19 @@ export function UsersSettingsPage() {
             </div>
           </div>
         ) : null}
-      </SettingsSection>
+      </SettingsCard>
 
       {pending.length > 0 ? (
-        <SettingsSection title="Pending invitations">
-          <ul className="divide-y divide-border rounded-md border border-border">
+        <SettingsCard
+          title="Pending invitations"
+          description="Awaiting acceptance by the recipient"
+        >
+          <ul className="divide-y divide-border rounded-lg border border-border">
             {pending.map((inv) => (
               <li key={inv.id} className="flex items-center justify-between gap-3 p-3 text-xs">
-                <span className="text-foreground">{inv.email}</span>
+                <span className="font-medium text-foreground">{inv.email}</span>
                 <span className="flex items-center gap-3">
-                  <span className="text-muted-foreground">expires {inv.expiresAt ? new Date(inv.expiresAt).toLocaleDateString("en-IN") : "soon"}</span>
+                  <span className="text-muted-foreground text-[11px]">expires {inv.expiresAt ? new Date(inv.expiresAt).toLocaleDateString("en-IN") : "soon"}</span>
                   <Button
                     variant="outline"
                     size="sm"
@@ -255,7 +264,7 @@ export function UsersSettingsPage() {
               </li>
             ))}
           </ul>
-        </SettingsSection>
+        </SettingsCard>
       ) : null}
 
       <ConfirmDialog

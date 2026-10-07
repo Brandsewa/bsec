@@ -67,20 +67,20 @@ export function Features() {
   if (isLoading) return <PageSkeleton />;
 
   return (
-    <PageContainer>
+    <PageContainer size="full">
       <PageHeader
         title="Feature Flags & Kill Switches"
         description="Global feature flags and circuit breakers for external integrations per PLAN §6.2. Every modification is audited."
       />
 
-      <div className="rounded-xl border bg-card overflow-hidden">
+      <div className="rounded-xl border border-border bg-card shadow-xs overflow-hidden">
         <Table>
           <TableHeader>
-            <TableRow>
-              <TableHead>Flag Key</TableHead>
+            <TableRow className="bg-muted/40 hover:bg-muted/40">
+              <TableHead className="px-4">Flag Key</TableHead>
               <TableHead>Default State</TableHead>
               <TableHead>Kill Switch (Emergency)</TableHead>
-              <TableHead className="text-right">Actions</TableHead>
+              <TableHead className="text-right px-4">Actions</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
@@ -92,8 +92,8 @@ export function Features() {
               </TableRow>
             ) : (
               flags.map((f) => (
-                <TableRow key={f.key}>
-                  <TableCell className="font-mono text-xs font-semibold">{f.key}</TableCell>
+                <TableRow key={f.key} className="hover:bg-muted/30 transition-colors">
+                  <TableCell className="font-mono text-xs font-semibold px-4 text-foreground">{f.key}</TableCell>
                   <TableCell>
                     <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium ${
                       f.defaultOn
@@ -112,12 +112,12 @@ export function Features() {
                       <span className="text-xs text-muted-foreground">Off (Normal operation)</span>
                     )}
                   </TableCell>
-                  <TableCell className="text-right">
+                  <TableCell className="text-right px-4">
                     <div className="flex items-center justify-end gap-2">
                       <Button
                         size="sm"
                         variant="default"
-                        className="h-7 text-xs px-2"
+                        className="h-7 text-xs px-2.5"
                         disabled={updatingKey === f.key}
                         onClick={() => handleToggle(f.key, f.defaultOn)}
                       >
@@ -126,7 +126,7 @@ export function Features() {
                       <Button
                         size="sm"
                         variant="default"
-                        className={`h-7 text-xs px-2 ${f.killSwitch ? "text-primary" : "text-destructive hover:bg-destructive/10"}`}
+                        className={`h-7 text-xs px-2.5 ${f.killSwitch ? "text-primary" : "text-destructive hover:bg-destructive/10"}`}
                         disabled={updatingKey === f.key}
                         onClick={() =>
                           setKillSwitchConfirm({

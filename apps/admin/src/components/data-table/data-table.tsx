@@ -104,7 +104,7 @@ export function DataTable<T>({
     return (
       <button
         type="button"
-        className="-mx-1 inline-flex items-center gap-1 rounded px-1 hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring/40 focus-visible:outline-none"
+        className="-mx-1 inline-flex cursor-pointer items-center gap-1 rounded px-1 hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring/40 focus-visible:outline-none"
         onClick={() => onSortChange(dir === "desc" ? keys.asc : keys.desc)}
       >
         {col.header}
@@ -113,10 +113,10 @@ export function DataTable<T>({
     );
   }
 
-  const stickyHead = "sticky top-0 z-10 bg-background shadow-[inset_0_-1px_0_var(--border-default)]";
+  const stickyHead = "sticky top-0 z-10 bg-muted text-foreground-lighter shadow-[inset_0_-1px_0_var(--border-soft)]";
 
   return (
-    <div className={cn("rounded-lg border border-border bg-background", isFetching && !isLoading && "transition-opacity")} aria-busy={isFetching || undefined}>
+    <div className={cn("rounded-lg border border-border-soft bg-card shadow-xs", isFetching && !isLoading && "transition-opacity")} aria-busy={isFetching || undefined}>
       {/* Table: tablet and up */}
       <div className={renderCard ? "hidden md:block" : undefined}>
         <Table containerClassName={cn("overflow-y-auto", maxHeightClass, isFetching && !isLoading && "opacity-70")}>

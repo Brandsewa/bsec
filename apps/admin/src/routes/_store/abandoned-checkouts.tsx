@@ -11,7 +11,6 @@ import {
   EmptyState,
   MetricCard,
   MetricCardSkeleton,
-  PageBreadcrumbs,
   PageContainer,
   PageHeader,
   PageSection,
@@ -22,6 +21,7 @@ import { keepPreviousData, useQuery } from "@tanstack/react-query";
 import type { AbandonedCheckoutItem } from "@bs/contracts";
 import { Badge } from "@bs/ui";
 import { Button } from "@bs/ui";
+import { Checkbox } from "@bs/ui";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -32,8 +32,14 @@ import { DataTable, type Column } from "../../components/data-table/data-table.t
 import { fetchAllPages } from "../../components/data-table/fetch-all.ts";
 import { Pagination } from "../../components/data-table/pagination.tsx";
 import { TableToolbar } from "../../components/data-table/table-toolbar.tsx";
-import { ColumnsMenu, FilterChips, type FilterChip } from "../../components/data-table/toolbar-parts.tsx";
+import { BulkBar, ColumnsMenu, FilterChips, type FilterChip } from "../../components/data-table/toolbar-parts.tsx";
+import { useBulkRunner } from "../../components/data-table/use-bulk-runner.ts";
+import { useTableSelection } from "../../components/data-table/use-table-selection.ts";
 import {
+  compactSearch,
+  day,
+  dayAfterIso,
+  dayStartIso,
   oneOf,
   parsePaging,
   text,
@@ -42,8 +48,7 @@ import {
   useUrlTableState,
 } from "../../components/data-table/use-table-state.ts";
 import { money } from "../../components/order-parts.tsx";
-import { ScrollTabs } from "@bs/ui";
-import { SimpleSelect } from "@bs/ui";
+import { DateRangePicker, ScrollTabs, SimpleSelect } from "@bs/ui";
 import { downloadCsv, toCsv } from "../../lib/csv.ts";
 import { errorMessage } from "../../lib/errors.ts";
 import { client, orpc } from "../../lib/orpc.ts";
@@ -76,6 +81,8 @@ export interface AbandonedCheckoutsSearch {
   view: AbandonedView;
   q?: string | undefined;
   emailStatus: EmailStatusFilter;
+  from?: string | undefined;
+  to?: string | undefined;
   sort: AbandonedSort;
   page: number;
   size: number;
@@ -86,14 +93,22 @@ export function parseAbandonedCheckoutsSearch(raw: Record<string, unknown>): Aba
     view: oneOf(raw["view"], VIEWS.map((v) => v.id)) ?? "all",
     q: text(raw["q"]),
     emailStatus: oneOf(raw["emailStatus"], EMAIL_FILTERS.map((f) => f.value)) ?? "all",
+    from: day(raw["from"]),
+    to: day(raw["to"]),
     sort: oneOf(raw["sort"], SORTS.map((s) => s.id)) ?? "abandoned_desc",
     ...parsePaging(raw),
   };
 }
 
 export const Route = createFileRoute("/_store/abandoned-checkouts")({
-  validateSearch: (raw: Record<string, unknown>): AbandonedCheckoutsSearch =>
-    parseAbandonedCheckoutsSearch(raw),
+  validateSearch: (raw: Record<string, unknown>): Partial<AbandonedCheckoutsSearch> =>
+    compactSearch(parseAbandonedCheckoutsSearch(raw), {
+      view: "all",
+      emailStatus: "all",
+      sort: "abandoned_desc",
+      page: 1,
+      size: 25,
+    }),
   pendingComponent: () => <PageSkeleton />,
   component: AbandonedCheckoutsPage,
 });
@@ -164,12 +179,14 @@ function AbandonedCheckoutsPage() {
     () => ({
       view: s.view,
       search: s.q || undefined,
+      dateFrom: s.from ? dayStartIso(s.from) : undefined,
+      dateTo: s.to ? dayAfterIso(s.to) : undefined,
       emailStatus: s.emailStatus,
       sort: s.sort,
       limit: s.size,
       offset: (s.page - 1) * s.size,
     }),
-    [s.view, s.q, s.emailStatus, s.sort, s.size, s.page],
+    [s.view, s.q, s.from, s.to, s.emailStatus, s.sort, s.size, s.page],
   );
 
   const listQuery = useQuery({
@@ -323,6 +340,18 @@ function AbandonedCheckoutsPage() {
     </DropdownMenu>
   );
 
+  const rows = listQuery.data?.items ?? [];
+  const total = listQuery.data?.total ?? 0;
+
+  const sel = useTableSelection({
+    rows,
+    getId: (r) => r.id,
+    total,
+    resetKey: JSON.stringify([s.view, s.sort, s.emailStatus, s.from, s.to, s.q]),
+  });
+
+  const bulk = useBulkRunner();
+
   const filterChips: FilterChip[] = useMemo(() => {
     const chips: FilterChip[] = [];
     if (s.q) {
@@ -330,6 +359,13 @@ function AbandonedCheckoutsPage() {
         key: "q",
         label: `Search: ${s.q}`,
         onRemove: () => update({ q: undefined, page: undefined }),
+      });
+    }
+    if (s.from || s.to) {
+      chips.push({
+        key: "date",
+        label: `Abandoned: ${s.from ?? "…"} to ${s.to ?? "…"}`,
+        onRemove: () => update({ from: undefined, to: undefined, page: undefined }),
       });
     }
     if (s.emailStatus !== "all") {
@@ -341,24 +377,11 @@ function AbandonedCheckoutsPage() {
       });
     }
     return chips;
-  }, [s.emailStatus, s.q, update]);
+  }, [s.emailStatus, s.from, s.to, s.q, update]);
 
-  async function handleExportCsv() {
+  async function handleExportCsv(scope: "all" | "selection" = "all") {
     setExporting(true);
     try {
-      const { rows: allRows } = await fetchAllPages<AbandonedCheckoutItem>(
-        (offset, limit) =>
-          client.admin.abandonedCheckouts.list({
-            view: s.view,
-            search: s.q || undefined,
-            emailStatus: s.emailStatus,
-            sort: s.sort,
-            limit,
-            offset,
-          }),
-        { cap: 5000 },
-      );
-
       const headers = [
         "Cart ID",
         "Customer Name",
@@ -373,7 +396,7 @@ function AbandonedCheckoutsPage() {
         "Recovered At",
       ];
 
-      const csvRows = allRows.map((it: AbandonedCheckoutItem) => [
+      const toRow = (it: AbandonedCheckoutItem) => [
         it.id,
         it.customer.name ?? "",
         it.customer.email ?? "",
@@ -385,8 +408,31 @@ function AbandonedCheckoutsPage() {
         it.emailStatus,
         it.recovered ? "Recovered" : "Not recovered",
         it.recoveredAt ?? "",
-      ]);
+      ];
 
+      if (scope === "selection" && !sel.allResults) {
+        const csvRows = sel.picked.map(toRow);
+        downloadCsv(`abandoned-checkouts-selection-${new Date().toISOString().slice(0, 10)}.csv`, toCsv(headers, csvRows));
+        toast.success(`Exported ${sel.picked.length} abandoned checkout${sel.picked.length === 1 ? "" : "s"}`);
+        return;
+      }
+
+      const { rows: allRows } = await fetchAllPages<AbandonedCheckoutItem>(
+        (offset, limit) =>
+          client.admin.abandonedCheckouts.list({
+            view: s.view,
+            search: s.q || undefined,
+            dateFrom: s.from ? dayStartIso(s.from) : undefined,
+            dateTo: s.to ? dayAfterIso(s.to) : undefined,
+            emailStatus: s.emailStatus,
+            sort: s.sort,
+            limit,
+            offset,
+          }),
+        { cap: 5000 },
+      );
+
+      const csvRows = allRows.map(toRow);
       downloadCsv(`abandoned-checkouts-${new Date().toISOString().slice(0, 10)}.csv`, toCsv(headers, csvRows));
       toast.success(`Exported ${allRows.length} abandoned checkout${allRows.length === 1 ? "" : "s"}`);
     } catch (err: unknown) {
@@ -396,19 +442,8 @@ function AbandonedCheckoutsPage() {
     }
   }
 
-  const rows = listQuery.data?.items ?? [];
-  const total = listQuery.data?.total ?? 0;
-
   return (
-    <PageContainer>
-      <PageBreadcrumbs
-        items={[
-          { label: "Home", href: "/" },
-          { label: "Orders", href: "/orders" },
-          { label: "Abandoned checkouts" },
-        ]}
-      />
-
+    <PageContainer size="full">
       <PageHeader
         title="Abandoned checkouts"
         description="Shoppers who started checkout and left before completing payment."
@@ -443,6 +478,23 @@ function AbandonedCheckoutsPage() {
             searchPlaceholder="Search customer, email, phone, product..."
             searchText={searchText}
             onSearchText={setSearchText}
+            filters={
+              <div className="flex items-center gap-2">
+                <SimpleSelect
+                  ariaLabel="Email status filter"
+                  value={s.emailStatus}
+                  onChange={(v) => update({ emailStatus: v as EmailStatusFilter, page: undefined })}
+                  options={EMAIL_FILTERS}
+                />
+                <DateRangePicker
+                  className="w-full justify-start md:w-auto"
+                  emptyLabel="Abandoned: any date"
+                  from={s.from}
+                  to={s.to}
+                  onChange={(from, to) => update({ from, to, page: undefined })}
+                />
+              </div>
+            }
             resultCount={total}
             noun="checkouts"
             sortOptions={SORTS}
@@ -451,11 +503,6 @@ function AbandonedCheckoutsPage() {
             onSort={(v) => update({ sort: v as AbandonedSort, page: undefined })}
             trailing={
               <div className="flex items-center gap-2">
-                <SimpleSelect
-                  value={s.emailStatus}
-                  onChange={(v) => update({ emailStatus: v as EmailStatusFilter, page: undefined })}
-                  options={EMAIL_FILTERS}
-                />
                 <ColumnsMenu
                   columns={columns as unknown as Column<unknown>[]}
                   isVisible={visibility.isVisible}
@@ -465,21 +512,48 @@ function AbandonedCheckoutsPage() {
                 <Button
                   variant="outline"
                   size="sm"
-                  onClick={handleExportCsv}
+                  onClick={() => void handleExportCsv("all")}
                   disabled={exporting || total === 0}
                   className="h-8 gap-1.5 text-xs font-medium"
                 >
                   <Download className="h-3.5 w-3.5" />
-                  {exporting ? "Exporting..." : "Export CSV"}
+                  {exporting ? "Export CSV" : "Export CSV"}
                 </Button>
               </div>
             }
           />
 
-          <FilterChips
-            chips={filterChips}
-            onClear={() => update({ q: undefined, emailStatus: "all", page: undefined })}
-          />
+          {filterChips.length > 0 && (
+            <FilterChips
+              chips={filterChips}
+              onClear={() => update({ q: undefined, from: undefined, to: undefined, emailStatus: "all", page: undefined })}
+            />
+          )}
+
+          <BulkBar
+            count={sel.count}
+            noun="checkout"
+            total={total}
+            allResults={sel.allResults}
+            pageFullySelected={sel.pageFullySelected}
+            onSelectAllResults={sel.selectAllResults}
+            onClear={sel.clear}
+            note={sel.allResults ? "Export covers every matching abandoned checkout." : undefined}
+          >
+            <Button
+              variant="outline"
+              size="sm"
+              disabled={exporting}
+              onClick={() => void handleExportCsv("selection")}
+            >
+              <Download className="mr-1.5 size-3.5" /> Export
+            </Button>
+            {bulk.progress ? (
+              <span role="status" className="text-muted-foreground text-xs">
+                {bulk.progress.label}… {bulk.progress.done}/{bulk.progress.total}
+              </span>
+            ) : null}
+          </BulkBar>
 
           <DataTable
             columns={shownColumns}
@@ -495,7 +569,28 @@ function AbandonedCheckoutsPage() {
                 description="Abandoned checkouts will show here after a customer starts checkout and leaves before payment."
               />
             }
+            selectedIds={sel.selectedIds}
+            onToggleRow={sel.toggleRow}
+            onTogglePage={sel.togglePage}
             rowActions={(r) => rowMenu(r)}
+            renderCard={(r, ctx) => (
+              <div className="flex items-start gap-3 p-3">
+                <div className="pt-0.5" onClick={(e) => e.stopPropagation()}>
+                  <Checkbox aria-label={`Select checkout ${r.id}`} checked={ctx.selected} onCheckedChange={() => ctx.toggle()} />
+                </div>
+                <div className="grid min-w-0 flex-1 gap-1">
+                  <div className="flex items-center justify-between gap-2">
+                    <span className="font-semibold text-foreground text-xs">{r.customer.name || "Guest"}</span>
+                    {r.recovered ? <Badge variant="outline">Recovered</Badge> : <Badge variant="outline">Open</Badge>}
+                  </div>
+                  <div className="text-xs text-muted-foreground truncate">{r.customer.email || r.customer.phone || "No contact info"}</div>
+                  <div className="flex items-center justify-between text-xs pt-1">
+                    <span className="text-muted-foreground">{r.itemsSummary.firstTitle || "Cart"}</span>
+                    <span className="font-medium text-foreground">{money(r.total)}</span>
+                  </div>
+                </div>
+              </div>
+            )}
           />
 
           {total > s.size && (

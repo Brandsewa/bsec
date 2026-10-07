@@ -33,7 +33,7 @@ export function MetricCard({
   return (
     <div
       className={cn(
-        "flex flex-col justify-between rounded-lg border border-border bg-background p-5 shadow-xs transition-colors",
+        "flex flex-col justify-between rounded-lg border border-border-soft bg-card p-5 shadow-xs transition-colors",
         className,
       )}
     >

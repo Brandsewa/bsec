@@ -12,6 +12,11 @@
  * --background, --foreground, --destructive, --radius or --border here (tokens.css owns them).
  */
 @theme inline {
+  --color-border: var(--border);
+  --color-border-soft: var(--border-soft);
+  --color-canvas: var(--canvas);
+  --color-dash-canvas: var(--dash-canvas);
+  --color-dash-sidebar: var(--dash-sidebar);
   --color-primary-foreground: var(--primary-foreground);
   --color-secondary: var(--secondary);
   --color-secondary-foreground: var(--secondary-foreground);
@@ -49,7 +54,7 @@
   /* Admin chrome: white sidebar, grey canvas, so white cards stand out. (Tones swapped vs the shared tokens.) */
   --dash-sidebar: var(--background);
   --dash-canvas: oklch(0.962 0.005 var(--primary-hue));
-  --primary-foreground: var(--primary-solid-foreground);
+  --canvas: var(--dash-canvas);
   --secondary: var(--surface-200);
   --secondary-foreground: var(--foreground);
   --muted: var(--surface-100);
@@ -58,9 +63,6 @@
   --accent-foreground: var(--foreground);
   --card: var(--background);
   --card-foreground: var(--foreground);
-  --popover: var(--overlay);
-  --popover-foreground: var(--foreground);
-  --input: var(--border-control);
   --ring: var(--primary-bright);
   --chart-1: var(--primary-bright);
   --chart-2: var(--primary-solid);
@@ -73,13 +75,64 @@
   --sidebar-primary-foreground: var(--primary-solid-foreground);
   --sidebar-accent: var(--surface-200);
   --sidebar-accent-foreground: var(--foreground);
-  --sidebar-border: var(--border-default);
+  --sidebar-border: var(--border-soft);
   --sidebar-ring: var(--primary-bright);
 }
 
-/* --primary is a light ink in dark mode, so its foreground must be dark. */
+/* In dark mode, canvas is deep black and cards/surfaces are elevated dark grey for high contrast. */
 :root[data-theme="dark"] {
   --dash-sidebar: var(--background);
-  --dash-canvas: oklch(0.15 0.006 var(--primary-hue));
+  --dash-canvas: #09090b;
+  --canvas: var(--dash-canvas);
   --primary-foreground: oklch(0.2 0.03 var(--primary-hue));
+  --card: #18181b;
+  --card-foreground: var(--foreground);
+  --popover: #18181b;
+  --popover-foreground: var(--foreground);
+  --muted: #222225;
+  --muted-foreground: var(--foreground-lighter);
+  --accent: #222225;
+  --accent-foreground: var(--foreground);
+  --border: #27272a;
+  --border-default: #27272a;
+  --border-soft: #202024;
+  --border-control: #27272a;
+  --input: #27272a;
+}
+
+/* Smooth theme transition */
+html.theme-transitioning,
+html.theme-transitioning *,
+html.theme-transitioning *::before,
+html.theme-transitioning *::after {
+  transition: background-color 200ms cubic-bezier(0.2, 0.8, 0.2, 1),
+              border-color 200ms cubic-bezier(0.2, 0.8, 0.2, 1),
+              color 200ms cubic-bezier(0.2, 0.8, 0.2, 1),
+              box-shadow 200ms cubic-bezier(0.2, 0.8, 0.2, 1) !important;
+  transition-delay: 0s !important;
+}
+
+::view-transition-old(root),
+::view-transition-new(root) {
+  animation-duration: 200ms;
+  animation-timing-function: cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+
+/* Smooth accordion animation for collapsible navigation submenus */
+.nav-accordion-content {
+  display: grid;
+  grid-template-rows: 0fr;
+  opacity: 0;
+  transition: grid-template-rows 220ms cubic-bezier(0.2, 0.8, 0.2, 1), opacity 180ms ease;
+  pointer-events: none;
+}
+
+.nav-accordion-content[data-state="open"] {
+  grid-template-rows: 1fr;
+  opacity: 1;
+  pointer-events: auto;
+}
+
+.nav-accordion-content > div {
+  overflow: hidden;
 }

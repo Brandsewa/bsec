@@ -4,7 +4,7 @@ import { AlertCircle, AlertTriangle, CheckCircle2, HardDrive, Info, ShieldCheck,
 import { EmptyState, FormSkeleton, PageSkeleton } from "@bs/ui";
 import { Badge } from "@bs/ui";
 import { Button } from "@bs/ui";
-import { SettingsPageFrame, SettingsSection } from "../../../components/settings/settings-page.tsx";
+import { SettingsCard, SettingsPageFrame } from "../../../components/settings/settings-page.tsx";
 import { orpc } from "../../../lib/orpc.ts";
 import { errorMessage } from "../../../lib/errors.ts";
 
@@ -39,9 +39,9 @@ export function StoragePage() {
   if (query.isLoading) {
     return (
       <SettingsPageFrame title={TITLE} description={DESCRIPTION}>
-        <SettingsSection>
+        <SettingsCard>
           <FormSkeleton />
-        </SettingsSection>
+        </SettingsCard>
       </SettingsPageFrame>
     );
   }
@@ -49,14 +49,14 @@ export function StoragePage() {
   if (query.isError || !query.data) {
     return (
       <SettingsPageFrame title={TITLE} description={DESCRIPTION}>
-        <SettingsSection>
+        <SettingsCard>
           <EmptyState
             icon={AlertTriangle}
             title="Could not load storage usage"
             description={errorMessage(query.error)}
             action={<Button onClick={() => void query.refetch()}>Try again</Button>}
           />
-        </SettingsSection>
+        </SettingsCard>
       </SettingsPageFrame>
     );
   }
@@ -92,9 +92,9 @@ export function StoragePage() {
   return (
     <SettingsPageFrame title={TITLE} description={DESCRIPTION}>
       {/* Storage Overview Meter */}
-      <SettingsSection
+      <SettingsCard
         title="Storage quota"
-        description="Total media files uploaded to your store compared against your plan limit."
+        description="Media uploads compared against current subscription limit"
       >
         <div className="space-y-4">
           <div className="flex flex-wrap items-center justify-between gap-2">
@@ -107,7 +107,7 @@ export function StoragePage() {
               </span>
             </div>
             <div className="flex items-center gap-2">
-              <Badge variant={stateBadgeVariant[state] ?? "secondary"} className="font-medium">
+              <Badge variant={stateBadgeVariant[state] ?? "secondary"} className="font-medium text-xs">
                 {stateLabels[state] ?? state}
               </Badge>
               {percentUsed !== null && (
@@ -120,7 +120,7 @@ export function StoragePage() {
 
           {/* Accessible Visual Progress Meter */}
           <div
-            className="h-3 w-full overflow-hidden rounded-full bg-muted"
+            className="h-2.5 w-full overflow-hidden rounded-full bg-muted"
             role="progressbar"
             aria-valuenow={percentUsed ?? 0}
             aria-valuemin={0}
@@ -169,7 +169,7 @@ export function StoragePage() {
           </div>
 
           {isOwner && (
-            <div className="pt-2">
+            <div className="pt-1">
               <Link to="/settings/plan-and-billing">
                 <Button variant="outline" size="sm" className="gap-1.5 text-xs">
                   <Sparkles className="size-3.5 text-primary" aria-hidden />
@@ -179,21 +179,21 @@ export function StoragePage() {
             </div>
           )}
         </div>
-      </SettingsSection>
+      </SettingsCard>
 
       {/* Category Breakdown */}
-      <SettingsSection
+      <SettingsCard
         title="Asset breakdown"
-        description="Usage grouped by asset type. Values reflect optimized original and variant files."
+        description="Usage grouped by asset type across originals and variants"
       >
-        <div className="divide-y divide-border rounded-md border border-border">
+        <div className="divide-y divide-border rounded-lg border border-border">
           {breakdown.map((item) => {
             const info = KIND_LABELS[item.kind] ?? { label: item.kind, description: "Other uploads" };
             const itemPercent = usedBytes > 0 ? Math.round((item.bytes / usedBytes) * 100) : 0;
             return (
               <div key={item.kind} className="flex flex-col sm:flex-row sm:items-center justify-between p-3.5 gap-2">
                 <div>
-                  <p className="text-xs font-medium text-foreground">{info.label}</p>
+                  <p className="text-xs font-semibold text-foreground">{info.label}</p>
                   <p className="text-[11px] text-muted-foreground">{info.description}</p>
                 </div>
                 <div className="text-right sm:text-right">
@@ -206,27 +206,27 @@ export function StoragePage() {
             );
           })}
         </div>
-      </SettingsSection>
+      </SettingsCard>
 
       {/* Infrastructure & Retention Details */}
-      <SettingsSection
+      <SettingsCard
         title="Storage & retention policy"
-        description="How files are stored, cached, delivered, and cleaned up."
+        description="File storage engine, CDN caching, and cleanup policy"
       >
         <div className="space-y-3 text-xs text-muted-foreground">
           <div className="flex items-start gap-2.5">
             <HardDrive className="size-4 text-foreground shrink-0 mt-0.5" aria-hidden />
             <div>
-              <p className="font-medium text-foreground">Storage provider</p>
-              <p>{providerLabel} with distributed global edge CDN delivery.</p>
+              <p className="font-semibold text-foreground">Storage provider</p>
+              <p className="mt-0.5">{providerLabel} with distributed global edge CDN delivery.</p>
             </div>
           </div>
 
           <div className="flex items-start gap-2.5">
             <CheckCircle2 className="size-4 text-primary shrink-0 mt-0.5" aria-hidden />
             <div>
-              <p className="font-medium text-foreground">CDN delivery</p>
-              <p>
+              <p className="font-semibold text-foreground">CDN delivery</p>
+              <p className="mt-0.5">
                 {publicMediaConfigured
                   ? "Public media CDN is active and serving optimized WebP/AVIF images to shoppers."
                   : "Standard edge media delivery is configured."}
@@ -237,8 +237,8 @@ export function StoragePage() {
           <div className="flex items-start gap-2.5">
             <ShieldCheck className="size-4 text-foreground shrink-0 mt-0.5" aria-hidden />
             <div>
-              <p className="font-medium text-foreground">Isolated private data</p>
-              <p>
+              <p className="font-semibold text-foreground">Isolated private data</p>
+              <p className="mt-0.5">
                 Private customer return photos and sensitive documents are stored in dedicated isolated storage.
                 They are neither exposed publicly nor counted towards this storefront media quota.
               </p>
@@ -248,14 +248,14 @@ export function StoragePage() {
           <div className="flex items-start gap-2.5">
             <Info className="size-4 text-foreground shrink-0 mt-0.5" aria-hidden />
             <div>
-              <p className="font-medium text-foreground">Automatic retention pruning</p>
-              <p>
+              <p className="font-semibold text-foreground">Automatic retention pruning</p>
+              <p className="mt-0.5">
                 When products or brand assets are permanently removed, orphaned files are purged by scheduled platform maintenance sweeps to keep your quota tidy.
               </p>
             </div>
           </div>
         </div>
-      </SettingsSection>
+      </SettingsCard>
     </SettingsPageFrame>
   );
 }

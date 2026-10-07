@@ -111,7 +111,7 @@ export function Staff() {
   if (isLoading) return <PageSkeleton />;
 
   return (
-    <PageContainer>
+    <PageContainer size="full">
       <PageHeader
         title="Platform Staff & Security"
         description="Authorized platform operators with verified multi-factor authentication (MFA). Deactivating staff kills all active sessions immediately."
@@ -122,15 +122,15 @@ export function Staff() {
         }
       />
 
-      <div className="rounded-xl border bg-card overflow-hidden">
+      <div className="rounded-xl border border-border bg-card shadow-xs overflow-hidden">
         <Table>
           <TableHeader>
-            <TableRow>
-              <TableHead>Staff Member</TableHead>
+            <TableRow className="bg-muted/40 hover:bg-muted/40">
+              <TableHead className="px-4">Staff Member</TableHead>
               <TableHead>Platform Role</TableHead>
               <TableHead>MFA Status</TableHead>
               <TableHead>Status</TableHead>
-              <TableHead className="text-right">Actions</TableHead>
+              <TableHead className="text-right px-4">Actions</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
@@ -142,8 +142,8 @@ export function Staff() {
               </TableRow>
             ) : (
               staffList.map((s) => (
-                <TableRow key={s.userId}>
-                  <TableCell>
+                <TableRow key={s.userId} className="hover:bg-muted/30 transition-colors">
+                  <TableCell className="px-4">
                     <div className="font-medium text-xs text-foreground">{s.name || s.email}</div>
                     <div className="text-muted-foreground text-[11px]">{s.email}</div>
                   </TableCell>
@@ -183,9 +183,9 @@ export function Staff() {
                       {s.isActive ? "Active" : "Deactivated"}
                     </span>
                   </TableCell>
-                  <TableCell className="text-right">
+                  <TableCell className="text-right px-4">
                     {s.userId === me.id ? (
-                      <span className="text-xs text-muted-foreground">You</span>
+                      <span className="text-xs text-muted-foreground font-medium">You</span>
                     ) : s.isActive ? (
                       <Button
                         size="sm"

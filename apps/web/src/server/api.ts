@@ -150,6 +150,9 @@ import {
   getAdminReturnStats,
   getAdminReturnDetail,
   actOnReturn,
+  archiveAdminReturn,
+  restoreAdminReturn,
+  deleteAdminReturn,
   getReturnSettings,
   updateReturnSettings,
   submitQuoteRequest,
@@ -1585,6 +1588,39 @@ export const storeRouter = os.router({
           if (!context.tenantCtx) throw new Error("Missing tenant context");
           try {
             return await actOnReturn(context.rt, context.tenantCtx, input);
+          } catch (err) {
+            throw mapAuthError(err);
+          }
+        }),
+      archive: os.admin.returns.archive
+        .use(requireAdmin)
+        .use(requirePermission("orders.write"))
+        .handler(async ({ context, input }) => {
+          if (!context.tenantCtx) throw new Error("Missing tenant context");
+          try {
+            return await archiveAdminReturn(context.rt, context.tenantCtx, input);
+          } catch (err) {
+            throw mapAuthError(err);
+          }
+        }),
+      restore: os.admin.returns.restore
+        .use(requireAdmin)
+        .use(requirePermission("orders.write"))
+        .handler(async ({ context, input }) => {
+          if (!context.tenantCtx) throw new Error("Missing tenant context");
+          try {
+            return await restoreAdminReturn(context.rt, context.tenantCtx, input);
+          } catch (err) {
+            throw mapAuthError(err);
+          }
+        }),
+      delete: os.admin.returns.delete
+        .use(requireAdmin)
+        .use(requirePermission("orders.write"))
+        .handler(async ({ context, input }) => {
+          if (!context.tenantCtx) throw new Error("Missing tenant context");
+          try {
+            return await deleteAdminReturn(context.rt, context.tenantCtx, input);
           } catch (err) {
             throw mapAuthError(err);
           }

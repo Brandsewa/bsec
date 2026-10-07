@@ -405,6 +405,45 @@ Store admin (`apps/admin`) moved to a new component system and layout. Standards
 - [ ] Old-style screens still to upgrade: Online Store (Themes, Pages, Navigation, editors), superadmin and platform UIs; edit flows for customers and discounts; order refund/return actions.
 - Gotchas: after changing `packages/contracts` or `packages/domain`, restart the Next dev server (new query params are silently dropped otherwise). Pages that use the table kit or `useUnsavedGuard` must render inside a router in tests.
 
+## Design Sprint: Store Admin & Super Admin UI / UX Alignment (2026-10-06 – 2026-10-07)
+
+Complete modernization, token unification, and card architecture polish across `apps/admin` (Store Admin) and `apps/superadmin` (Super Admin). Standards and mandatory adoption rules are codified in [`docs/admin-ui-standards.md`](docs/admin-ui-standards.md).
+
+### 1. Store Admin Polish & Card Hierarchy (`apps/admin`)
+- [x] **Archives & Full-Width Table Parity**:
+  - Aligned all archives tables across Orders (`quotes`, `abandoned-checkouts`, `returns`), Catalog (`categories`, `collections`, `brands`, `locations`, `reviews`), and Finance (`expenses`, `reports`) to match the refined full-width table layout from Orders.
+  - Replaced legacy heavy black borders with uniform `border-border` semantic tokens.
+- [x] **Returns & Exchanges Workflow Modernization**:
+  - Cleaned up top header hierarchy; consolidated search, filters, and store-timezone date selection into a unified bar (`DateRangePicker`).
+  - Added multi-select bulk operations with a safe two-step lifecycle (Archive first, Delete only available in Archive view).
+  - Modernized slide-over drawer with solid surface tokens (`bg-card`/`bg-background`) and responsive width (>=30% screen coverage).
+- [x] **Settings Workspace Architecture**:
+  - Modernized settings left navigation docked on the sidebar with unified typography hierarchy.
+  - Re-architected all 20 settings routes (`store-details`, `storefront`, `branding`, `checkout`, `customer-accounts`, `customer-privacy`, `payments`, `shipping`, `taxes`, `orders`, `returns`, `users`, `plan-and-billing`, `policies`, `activity`, `support`, `storage`, `notifications`, `domains`):
+    - Replaced undivided monolithic cards with modular, focused `SettingsCard` components.
+    - Maximized horizontal row efficiency: placed contextual help descriptions opposite form titles/labels (e.g., tax notes opposite Legal business name, dispatch address notes opposite Business address).
+    - Reduced excessive description font sizes to `text-[11px] text-muted-foreground`.
+    - Streamlined Branding & Visual Identity into clean single-column cards, removing auxiliary accessibility/preview cards per instruction.
+
+### 2. Super Admin Dashboard Optimization (`apps/superadmin`)
+- [x] **Full Workspace Layout Parity**:
+  - Standardized all operational pages (`TenantsList`, `Signups`, `Staff`, `AuditLog`, `EmailSettings`, `System`, `Plans`, `Quotas`, `Features`, `Support`, `Templates`) to `PageContainer size="full"`.
+  - Converted ad-hoc tables to tokenized `@bs/ui` table structures with subtle muted headers (`bg-muted/40`) and clean borders (`border-border`).
+  - Replaced native HTML checkboxes with accessible `@bs/ui` `Checkbox` components.
+- [x] **Header Quick Search Bar**:
+  - Modernized the top header quick search button in `Layout.tsx` into a sleek input-like trigger (`w-44 sm:w-64`, `Search` icon, `bg-muted/40 hover:bg-muted/70`, `border-border`, `<kbd>Ctrl K</kbd>` badge).
+- [x] **Email & Operational Cards Polish**:
+  - Fixed border consistency on transactional email cards (Test Email Delivery, DNS Verification Checklist).
+
+### 3. Theme & Contrast System (`@bs/ui` + Admin + Super Admin)
+- [x] **Dark Theme Contrast Overhaul**:
+  - Set canvas background to deep dark neutral (`hsl(220 18% 7%)`) and cards/surfaces to contrasting elevated dark gray (`hsl(220 16% 12%)` / `hsl(220 14% 15%)`).
+  - Cards, table headers, modals, drawers, and popovers maintain distinct contrast from background in both light and dark modes.
+  - Added smooth CSS transitions for theme toggles to eliminate jarring theme flashes.
+
+### 4. Mandatory Rule for New Components & Screens
+> **CRITICAL RULE**: Any developer or AI agent building or modifying screens, dialogs, drawers, or components in `apps/admin` or `apps/superadmin` **MUST** adhere to [`docs/admin-ui-standards.md`](docs/admin-ui-standards.md) and use the `@bs/ui` primitives. Never use hand-rolled tables, arbitrary hex colors, raw borders, or monolithic undivided settings cards.
+
 ## In flight
-- Antigravity | `feat/ds-01-foundation` | Design system Parts 2 (Kit), 3 (Super Admin), and 5 (Store Admin leftovers) | 2026-10-06
+- Antigravity | `design/sprint-ui` | Store Admin & Super Admin Design System Alignment Sprint (Completed locally, ready to verify) | 2026-10-07
 

@@ -167,7 +167,6 @@ describe("Online store admin pages use real oRPC data", { timeout: 30000 }, () =
     const html = await renderRouted(client, BrandingSettingsPage);
     expect(html).toContain("Saree Studio");
     expect(html).toContain("#7c3aed");
-    expect(html).toContain("21.00:1");
     expect(html).toContain("Rozha One");
     expectNoSample(html);
   });

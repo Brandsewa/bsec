@@ -3,7 +3,7 @@ import { useQuery } from "@tanstack/react-query";
 import { AlertTriangle, ArrowRight, CircleCheck, ExternalLink } from "lucide-react";
 import { EmptyState, FormSkeleton, PageSkeleton } from "@bs/ui";
 import { Button } from "@bs/ui";
-import { SettingsPageFrame, SettingsSection } from "../../../components/settings/settings-page.tsx";
+import { SettingsCard, SettingsPageFrame } from "../../../components/settings/settings-page.tsx";
 import { orpc } from "../../../lib/orpc.ts";
 import { errorMessage } from "../../../lib/errors.ts";
 
@@ -29,23 +29,23 @@ export function SettingsOverviewPage() {
   if (query.isLoading) {
     return (
       <SettingsPageFrame title="Overview" description="Your store at a glance.">
-        <SettingsSection>
+        <SettingsCard>
           <FormSkeleton />
-        </SettingsSection>
+        </SettingsCard>
       </SettingsPageFrame>
     );
   }
   if (query.isError || !query.data) {
     return (
       <SettingsPageFrame title="Overview" description="Your store at a glance.">
-        <SettingsSection>
+        <SettingsCard>
           <EmptyState
             icon={AlertTriangle}
             title="Could not load the overview"
             description={errorMessage(query.error)}
             action={<Button onClick={() => void query.refetch()}>Try again</Button>}
           />
-        </SettingsSection>
+        </SettingsCard>
       </SettingsPageFrame>
     );
   }
@@ -57,7 +57,7 @@ export function SettingsOverviewPage() {
   return (
     <SettingsPageFrame title="Overview" description="Your store at a glance: status, setup progress and what needs attention.">
       {required.length > 0 || informational.length > 0 ? (
-        <SettingsSection
+        <SettingsCard
           title="Action required"
           description={required.length > 0 ? undefined : "Nothing blocking sales right now."}
         >
@@ -69,7 +69,7 @@ export function SettingsOverviewPage() {
                   {a.description ? <p className="mt-0.5 text-xs/relaxed text-muted-foreground">{a.description}</p> : null}
                 </div>
                 {a.href ? (
-                  <Button variant="outline" className="shrink-0" nativeButton={false} render={<Link to={a.href} />}>
+                  <Button variant="outline" size="sm" className="shrink-0" nativeButton={false} render={<Link to={a.href} />}>
                     Fix
                     <ArrowRight className="size-3.5" />
                   </Button>
@@ -77,17 +77,17 @@ export function SettingsOverviewPage() {
               </li>
             ))}
           </ul>
-        </SettingsSection>
+        </SettingsCard>
       ) : (
-        <SettingsSection title="Action required">
+        <SettingsCard title="Action required">
           <div className="flex items-center gap-2 text-sm text-muted-foreground">
             <CircleCheck className="size-4 text-emerald-600" />
             Everything needed to sell is set up.
           </div>
-        </SettingsSection>
+        </SettingsCard>
       )}
 
-      <SettingsSection title="Store status">
+      <SettingsCard title="Store status">
         <div className="grid gap-3 sm:grid-cols-2">
           <div>
             <p className="text-xs text-muted-foreground">Availability</p>
@@ -137,18 +137,18 @@ export function SettingsOverviewPage() {
             </p>
           </div>
         </div>
-      </SettingsSection>
+      </SettingsCard>
 
       {d.quickLinks.length > 0 ? (
-        <SettingsSection title="Quick links">
+        <SettingsCard title="Quick links">
           <div className="flex flex-wrap gap-2">
             {d.quickLinks.map((q) => (
-              <Button key={q.href + q.label} variant="outline" nativeButton={false} render={<Link to={q.href} />}>
+              <Button key={q.href + q.label} variant="outline" size="sm" nativeButton={false} render={<Link to={q.href} />}>
                 {q.label}
               </Button>
             ))}
           </div>
-        </SettingsSection>
+        </SettingsCard>
       ) : null}
     </SettingsPageFrame>
   );

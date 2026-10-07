@@ -36,14 +36,14 @@ import { Label } from "@bs/ui";
 import { ConfirmDialog } from "@bs/ui";
 import { DataTable, type Column } from "../../components/data-table/data-table.tsx";
 import { Pagination } from "../../components/data-table/pagination.tsx";
+import { TableToolbar } from "../../components/data-table/table-toolbar.tsx";
 import {
   oneOf,
   parsePaging,
   text,
 } from "../../components/data-table/use-table-state.ts";
-import { ScrollTabs } from "@bs/ui";
+import { DateRangePicker, ScrollTabs, SimpleSelect } from "@bs/ui";
 import { canExportFinance, downloadFinanceCsv } from "../../lib/finance-export.ts";
-import { SimpleSelect } from "@bs/ui";
 import { errorMessage } from "../../lib/errors.ts";
 import { client, orpc } from "../../lib/orpc.ts";
 
@@ -276,7 +276,7 @@ export function ExpensesPage() {
   ];
 
   return (
-    <PageContainer>
+    <PageContainer size="full">
       <PageHeader
         title="Operational Expenses"
         description="Track operational overheads, vendor bills, recurring subscriptions, and payment settlements."
@@ -363,20 +363,78 @@ export function ExpensesPage() {
             }
           />
 
-          <div className="flex items-center gap-3">
-            <Input
-              type="search"
-              aria-label="Search expenses"
-              placeholder="Search payee, description or note..."
-              className="w-full md:max-w-64"
-              value={search.q ?? ""}
-              onChange={(e) =>
-                navigate({
-                  search: (prev) => ({ ...prev, q: e.target.value || undefined, page: 1 }),
-                })
-              }
-            />
-          </div>
+          <TableToolbar
+            searchLabel="Search expenses"
+            searchPlaceholder="Search payee, description or note..."
+            searchText={search.q ?? ""}
+            onSearchText={(v) =>
+              navigate({
+                search: (prev) => ({ ...prev, q: v.trim() || undefined, page: 1 }),
+              })
+            }
+            filters={
+              <div className="flex items-center gap-2">
+                <SimpleSelect
+                  ariaLabel="Category filter"
+                  value={search.category ?? "all"}
+                  onChange={(v) =>
+                    navigate({
+                      search: (prev) => ({ ...prev, category: v === "all" ? undefined : v, page: 1 }),
+                    })
+                  }
+                  options={[
+                    { value: "all", label: "All categories" },
+                    { value: "rent", label: "Rent" },
+                    { value: "utilities", label: "Utilities" },
+                    { value: "salaries", label: "Salaries" },
+                    { value: "contractor", label: "Contractor" },
+                    { value: "software_tools", label: "Software" },
+                    { value: "marketing_ads", label: "Marketing" },
+                    { value: "packaging", label: "Packaging" },
+                    { value: "office_supplies", label: "Office Supplies" },
+                    { value: "logistics_courier", label: "Logistics" },
+                    { value: "inventory_purchase", label: "Inventory Purchase" },
+                    { value: "professional_fees", label: "Professional Fees" },
+                    { value: "travel", label: "Travel" },
+                    { value: "other", label: "Other" },
+                  ]}
+                />
+                <SimpleSelect
+                  ariaLabel="Paid from filter"
+                  value={search.paidFrom ?? "all"}
+                  onChange={(v) =>
+                    navigate({
+                      search: (prev) => ({ ...prev, paidFrom: v === "all" ? undefined : v, page: 1 }),
+                    })
+                  }
+                  options={[
+                    { value: "all", label: "All payment sources" },
+                    { value: "cash_bank", label: "Bank Account" },
+                    { value: "cash_gateway", label: "Gateway Balance" },
+                    { value: "cash_on_hand", label: "Cash on Hand" },
+                    { value: "unpaid", label: "Unpaid Bills" },
+                  ]}
+                />
+                <DateRangePicker
+                  className="w-full justify-start md:w-auto"
+                  emptyLabel="Incurred: any date"
+                  from={search.from}
+                  to={search.to}
+                  onChange={(from, to) =>
+                    navigate({
+                      search: (prev) => ({ ...prev, from, to, page: 1 }),
+                    })
+                  }
+                />
+              </div>
+            }
+            resultCount={data?.total ?? 0}
+            noun="expenses"
+            sortOptions={[]}
+            sort=""
+            defaultSort=""
+            onSort={() => {}}
+          />
 
           {/* Table */}
           {expensesQuery.isLoading ? (

@@ -1,5 +1,5 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { AlertTriangle, CheckCircle2, Image as ImageIcon, RotateCcw, Save, ShieldCheck, Upload } from "lucide-react";
+import { Image as ImageIcon, RotateCcw, Save, Upload } from "lucide-react";
 import { useId, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { FormSkeleton, PageSkeleton, toast } from "@bs/ui";
@@ -7,45 +7,12 @@ import { Button } from "@bs/ui";
 import { Input } from "@bs/ui";
 import { FieldLabel } from "@bs/ui";
 import { Field } from "@bs/ui";
-import { HeaderActions, SettingsPageFrame, SettingsSection, useUnsavedGuard } from "../../../components/settings/settings-page.tsx";
+import { HeaderActions, SettingsCard, SettingsPageFrame, useUnsavedGuard } from "../../../components/settings/settings-page.tsx";
 import { SimpleSelect } from "@bs/ui";
 import type { BrandSettings } from "@bs/contracts";
 import { client, orpc } from "../../../lib/orpc.ts";
 
 const HEX = /^#(?:[0-9a-fA-F]{3}|[0-9a-fA-F]{6})$/;
-
-/**
- * Calculates WCAG 2.1 relative luminance and contrast ratio in client side.
- */
-function parseHex(hex: string): [number, number, number] {
-  const clean = hex.replace(/^#/, "").trim();
-  if (clean.length === 3) {
-    const c0 = clean.charAt(0);
-    const c1 = clean.charAt(1);
-    const c2 = clean.charAt(2);
-    return [parseInt(c0 + c0, 16), parseInt(c1 + c1, 16), parseInt(c2 + c2, 16)];
-  }
-  if (clean.length === 6) {
-    return [parseInt(clean.substring(0, 2), 16), parseInt(clean.substring(2, 4), 16), parseInt(clean.substring(4, 6), 16)];
-  }
-  return [0, 0, 0];
-}
-
-function getLuminance(hex: string): number {
-  const [r, g, b] = parseHex(hex);
-  const toLinear = (c: number) => {
-    const v = c / 255;
-    return v <= 0.04045 ? v / 12.92 : Math.pow((v + 0.055) / 1.055, 2.4);
-  };
-  return 0.2126 * toLinear(r) + 0.7152 * toLinear(g) + 0.0722 * toLinear(b);
-}
-
-export function computeContrast(color1: string, color2: string): number {
-  if (!HEX.test(color1) || !HEX.test(color2)) return 1;
-  const l1 = getLuminance(color1);
-  const l2 = getLuminance(color2);
-  return (Math.max(l1, l2) + 0.05) / (Math.min(l1, l2) + 0.05);
-}
 
 const curatedFonts = [
   { id: "Inter", name: "Inter", category: "Sans-serif", devanagari: false },
@@ -121,10 +88,10 @@ function fromServer(b: BrandSettings, storeName: string): FormState {
 
 function BrandingLoading() {
   return (
-    <SettingsPageFrame title="Branding" description="Logos, colours and typography." width="wide">
-      <SettingsSection>
+    <SettingsPageFrame title="Branding" description="Logos, colours and typography.">
+      <SettingsCard>
         <FormSkeleton fields={6} />
-      </SettingsSection>
+      </SettingsCard>
     </SettingsPageFrame>
   );
 }
@@ -142,8 +109,8 @@ export function BrandingSettingsPage() {
   const failed = brandQuery.isError ? brandQuery : settingsQuery.isError ? settingsQuery : null;
   if (failed) {
     return (
-      <SettingsPageFrame title="Branding" description="Logos, colours and typography." width="wide">
-        <SettingsSection>
+      <SettingsPageFrame title="Branding" description="Logos, colours and typography.">
+        <SettingsCard>
           <div role="alert" className="flex flex-col items-start gap-3 rounded-md border border-destructive/40 bg-destructive/5 p-4">
             <p className="text-xs font-medium text-foreground">Could not load branding settings</p>
             <p className="text-xs text-muted-foreground">{failed.error?.message}</p>
@@ -158,7 +125,7 @@ export function BrandingSettingsPage() {
               Retry
             </Button>
           </div>
-        </SettingsSection>
+        </SettingsCard>
       </SettingsPageFrame>
     );
   }
@@ -187,10 +154,6 @@ function BrandingEditor({ brand, storeName, media }: { brand: BrandSettings; sto
   const dirty = JSON.stringify(form) !== JSON.stringify(baseline);
   const guard = useUnsavedGuard(dirty);
   const invalidColors = colorFields.filter((f) => !HEX.test(form[f.key]));
-  const textBg = computeContrast(form.textColor, form.backgroundColor);
-  const primaryBg = computeContrast(form.primaryColor, form.backgroundColor);
-  const textPass = textBg >= 4.5;
-  const primaryPass = primaryBg >= 4.5;
 
   const set = <K extends keyof FormState>(key: K, value: FormState[K]) => setForm((p) => ({ ...p, [key]: value }));
 
@@ -285,19 +248,11 @@ function BrandingEditor({ brand, storeName, media }: { brand: BrandSettings; sto
     return localUrls[id] ?? media.find((m) => m.id === id)?.url;
   };
 
-  const fixTextColor = () => {
-    const fixed = getLuminance(form.backgroundColor) > 0.5 ? "#0f172a" : "#ffffff";
-    set("textColor", fixed);
-    toast.success(`Text colour set to ${fixed} for better contrast.`);
-  };
-
   const busy = updateBrand.isPending || updateSettings.isPending || publishBrand.isPending;
-  const previewFont = form.fontBody;
 
   return (
     <SettingsPageFrame
       title="Branding & visual identity"
-      width="wide"
       description={`Logos, colours and typography. Published version ${brand.version}${brand.publishedAt ? `, last published ${new Date(brand.publishedAt).toLocaleDateString()}` : ", not published yet"}.`}
     >
       {guard}
@@ -315,30 +270,30 @@ function BrandingEditor({ brand, storeName, media }: { brand: BrandSettings; sto
           {publishBrand.isPending ? "Publishing…" : "Publish"}
         </Button>
       </HeaderActions>
-
-      <div className="grid lg:grid-cols-12 lg:divide-x lg:divide-border">
-        <div className="lg:col-span-7">
-          <SettingsSection title="Store identity & images">
-            <div className="space-y-3">
+          <SettingsCard
+            title="Store identity & images"
+            description="Logos, favicon & store display name"
+          >
+            <div className="space-y-4">
               <div className="grid gap-1.5">
                 <FieldLabel htmlFor={nameId}>Store name</FieldLabel>
                 <Input id={nameId} value={form.storeName} aria-invalid={!form.storeName.trim()} onChange={(e) => set("storeName", e.target.value)} required />
-                {form.storeName.trim() ? null : <p className="text-destructive">Store name is required</p>}
+                {form.storeName.trim() ? null : <p className="text-xs text-destructive">Store name is required</p>}
               </div>
-              <p className="text-xs text-muted-foreground">A tagline is not stored by the backend yet, so it is not editable here.</p>
 
               <div className="grid gap-3 sm:grid-cols-2">
                 {IMAGE_SLOTS.map((slot) => {
                   const id = form[slot.key];
                   const url = urlFor(id);
+                  const isDarkSlot = slot.key === "logoDarkMediaId";
                   return (
                     <div key={slot.key} className="space-y-2">
                       <span className="text-xs font-medium text-foreground">{slot.label}</span>
-                      <div className="flex h-16 items-center justify-center rounded-lg border border-border bg-white p-2">
+                      <div className={`flex h-16 items-center justify-center rounded-lg border border-border p-2 ${isDarkSlot ? "bg-slate-950" : "bg-white dark:bg-muted/10"}`}>
                         {url ? (
                           <img src={url} alt={`${slot.label} preview`} className="max-h-12 max-w-full object-contain" />
                         ) : (
-                          <ImageIcon className="size-6 text-muted-foreground" aria-hidden />
+                          <ImageIcon className={`size-6 ${isDarkSlot ? "text-slate-600" : "text-muted-foreground"}`} aria-hidden />
                         )}
                       </div>
                       <div className="flex items-center gap-2">
@@ -380,9 +335,12 @@ function BrandingEditor({ brand, storeName, media }: { brand: BrandSettings; sto
                 />
               </div>
             </div>
-          </SettingsSection>
+          </SettingsCard>
 
-          <SettingsSection title="Brand colours">
+          <SettingsCard
+            title="Brand colours"
+            description="Hex palette & button geometry"
+          >
             <div className="grid gap-3 sm:grid-cols-2">
               {colorFields.map((f) => {
                 const value = form[f.key as ColorKey];
@@ -396,33 +354,33 @@ function BrandingEditor({ brand, storeName, media }: { brand: BrandSettings; sto
                         type="color"
                         value={valid && value.length === 7 ? value : "#000000"}
                         onChange={(e) => set(f.key, e.target.value)}
-                        className="size-7 cursor-pointer rounded border border-border"
+                        className="size-8 cursor-pointer rounded-md border border-border p-0.5 bg-background shrink-0"
                       />
-                      <Input aria-label={`${f.label} hex value`} value={value} aria-invalid={!valid} onChange={(e) => set(f.key, e.target.value)} className="font-mono" />
+                      <Input aria-label={`${f.label} hex value`} value={value} aria-invalid={!valid} onChange={(e) => set(f.key, e.target.value)} className="font-mono h-8 text-xs" />
                     </div>
                     {valid ? null : <p className="text-xs text-destructive">Use a hex colour like #1a2b3c</p>}
                   </div>
                 );
               })}
             </div>
-            <div className="mt-4 flex flex-wrap gap-3">
+            <div className="pt-2 border-t border-border grid gap-3 sm:grid-cols-3">
               <Field id="color-mode" label="Colour mode">
                 <SimpleSelect
                   id="color-mode"
-                  className="w-44"
+                  className="w-full"
                   value={form.colorMode}
                   onChange={(v) => set("colorMode", v as FormState["colorMode"])}
                   options={[
                     { value: "light", label: "Light" },
                     { value: "dark", label: "Dark" },
-                    { value: "auto", label: "Match visitor device" },
+                    { value: "auto", label: "Match device" },
                   ]}
                 />
               </Field>
               <Field id="corner-radius" label="Corner radius">
                 <SimpleSelect
                   id="corner-radius"
-                  className="w-32"
+                  className="w-full"
                   value={form.cornerRadius}
                   onChange={(v) => set("cornerRadius", v as FormState["cornerRadius"])}
                   options={(["none", "small", "medium", "large", "full"] as const).map((r) => ({ value: r, label: r }))}
@@ -431,16 +389,19 @@ function BrandingEditor({ brand, storeName, media }: { brand: BrandSettings; sto
               <Field id="button-style" label="Button style">
                 <SimpleSelect
                   id="button-style"
-                  className="w-32"
+                  className="w-full"
                   value={form.buttonStyle}
                   onChange={(v) => set("buttonStyle", v as FormState["buttonStyle"])}
                   options={(["solid", "outline", "pill"] as const).map((r) => ({ value: r, label: r }))}
                 />
               </Field>
             </div>
-          </SettingsSection>
+          </SettingsCard>
 
-          <SettingsSection title="Typography">
+          <SettingsCard
+            title="Typography"
+            description="Font families & text sizing scale"
+          >
             <div className="grid gap-3 sm:grid-cols-3">
               {(
                 [
@@ -474,67 +435,7 @@ function BrandingEditor({ brand, storeName, media }: { brand: BrandSettings; sto
                 />
               </Field>
             </div>
-          </SettingsSection>
-        </div>
-
-        <div className="border-t border-border lg:col-span-5 lg:border-t-0">
-          <SettingsSection title="Accessibility check" description="Computed from the colours above (WCAG AA needs 4.5:1).">
-            <div className="space-y-3">
-              {(
-                [
-                  { label: "Text on background", ratio: textBg, pass: textPass },
-                  { label: "Primary on background", ratio: primaryBg, pass: primaryPass },
-                ] as const
-              ).map((row) => (
-                <div key={row.label} className="flex items-center justify-between rounded-md border border-border p-3 text-xs">
-                  <span className="flex items-center gap-2">
-                    {row.pass ? <CheckCircle2 className="size-4 text-emerald-500" aria-hidden /> : <AlertTriangle className="size-4 text-amber-500" aria-hidden />}
-                    {row.label}
-                  </span>
-                  <span className="font-mono">{`${row.ratio.toFixed(2)}:1`}</span>
-                </div>
-              ))}
-              {textPass ? null : (
-                <Button size="sm" variant="outline" onClick={fixTextColor}>
-                  <ShieldCheck className="mr-1.5 size-3.5" aria-hidden />
-                  Fix text colour
-                </Button>
-              )}
-            </div>
-          </SettingsSection>
-
-          <SettingsSection title="Preview">
-            <div
-              className="overflow-hidden rounded-lg border border-border"
-              style={{ backgroundColor: form.backgroundColor, color: form.textColor, fontFamily: previewFont }}
-            >
-              <div className="p-5" style={{ backgroundColor: form.surfaceColor }}>
-                <p className="text-lg font-bold" style={{ fontFamily: form.fontHeading }}>
-                  {form.storeName || "Your store"}
-                </p>
-              </div>
-              <div className="space-y-3 p-5">
-                <p className="text-sm">Body text sample in your selected body font.</p>
-                <button
-                  type="button"
-                  className="px-4 py-2 text-sm font-semibold"
-                  style={{
-                    backgroundColor: form.buttonStyle === "outline" ? "transparent" : form.primaryColor,
-                    color: form.buttonStyle === "outline" ? form.primaryColor : "#ffffff",
-                    border: `2px solid ${form.primaryColor}`,
-                    borderRadius: form.buttonStyle === "pill" || form.cornerRadius === "full" ? 9999 : { none: 0, small: 4, medium: 8, large: 14, full: 9999 }[form.cornerRadius],
-                  }}
-                >
-                  Button
-                </button>
-                <span className="ml-3 text-sm font-medium" style={{ color: form.accentColor }}>
-                  Accent link
-                </span>
-              </div>
-            </div>
-          </SettingsSection>
-        </div>
-      </div>
+          </SettingsCard>
     </SettingsPageFrame>
   );
 }

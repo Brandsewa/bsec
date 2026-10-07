@@ -12,15 +12,15 @@ import {
   Zap,
 } from "lucide-react";
 import { useState } from "react";
-import { MetricCard, MetricCardSkeleton, PageContainer, PageHeader, PageSkeleton, toast } from "@bs/ui";
+import { MetricCard, MetricCardSkeleton, PageContainer, PageHeader, PageSection, PageSkeleton, toast } from "@bs/ui";
 import { keepPreviousData, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import type { Collection } from "@bs/contracts";
 import { Badge } from "@bs/ui";
 import { Button } from "@bs/ui";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from "@bs/ui";
-import { Input } from "@bs/ui";
 import { ConfirmDialog } from "@bs/ui";
 import { ScrollTabs } from "@bs/ui";
+import { TableToolbar } from "../../components/data-table/table-toolbar.tsx";
 import { errorMessage } from "../../lib/errors.ts";
 import { orpc } from "../../lib/orpc.ts";
 
@@ -102,17 +102,9 @@ export function CollectionsPage() {
     }),
   );
 
-  const handleSearchSubmit = (e: React.FormEvent) => {
-    e.preventDefault();
-    void navigate({
-      to: ".",
-      replace: true,
-      search: ((prev: Record<string, unknown>) => ({ ...prev, q: queryText.trim() || undefined })) as never,
-    });
-  };
 
   return (
-    <PageContainer size="default">
+    <PageContainer size="full">
       <PageHeader
         title="Collections"
         description="Group products manually or with automated condition rules to build merchandising pages."
@@ -125,7 +117,7 @@ export function CollectionsPage() {
       />
 
       {/* Stat Cards */}
-      <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-6">
+      <div className="grid grid-cols-2 gap-3 sm:gap-4 sm:grid-cols-3 lg:grid-cols-6">
         {statsQuery.isLoading ? (
           <>
             <MetricCardSkeleton />
@@ -147,84 +139,70 @@ export function CollectionsPage() {
         )}
       </div>
 
-      {/* Tabs & Search Toolbar */}
-      <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-        <ScrollTabs
-          tabs={STATUS_TABS}
-          value={status}
-          onChange={(val) => {
-            void navigate({
-              to: ".",
-              replace: true,
-              search: ((prev: Record<string, unknown>) => ({ ...prev, status: val as CollectionStatusFilter })) as never,
-            });
-          }}
-        />
-
-        <form onSubmit={handleSearchSubmit} className="flex max-w-sm flex-1 items-center gap-2">
-          <Input
-            placeholder="Search collections..."
-            value={queryText}
-            onChange={(e) => setQueryText(e.target.value)}
-            className="h-9"
+      <PageSection>
+        <div className="grid gap-3">
+          <ScrollTabs
+            tabs={STATUS_TABS}
+            value={status}
+            onChange={(val) => {
+              void navigate({
+                to: ".",
+                replace: true,
+                search: ((prev: Record<string, unknown>) => ({ ...prev, status: val as CollectionStatusFilter })) as never,
+              });
+            }}
           />
-          <Button type="submit" variant="secondary" size="sm">
-            Search
-          </Button>
-          {search.q && (
-            <Button
-              type="button"
-              variant="ghost"
-              size="sm"
-              onClick={() => {
-                setQueryText("");
-                void navigate({
-                  to: ".",
-                  replace: true,
-                  search: ((prev: Record<string, unknown>) => ({ ...prev, q: undefined })) as never,
-                });
-              }}
-            >
-              Clear
-            </Button>
-          )}
-        </form>
-      </div>
 
-      {/* Collections Table */}
-      <div className="rounded-lg border border-border bg-card">
-        {collectionsQuery.isLoading ? (
-          <div className="p-8 text-center text-sm text-muted-foreground">Loading collections...</div>
-        ) : collections.length === 0 ? (
-          <div className="flex flex-col items-center justify-center p-12 text-center">
-            <Layers className="size-10 text-muted-foreground/60" aria-hidden />
-            <h3 className="mt-4 text-base font-medium">No collections found</h3>
-            <p className="mt-1 text-sm text-muted-foreground">
-              {search.q ? "No collections match your search filter." : "Create manual or automated product collections."}
-            </p>
-            {!search.q && (
-              <Button render={<Link to="/collections/new" />} size="sm" className="mt-4">
-                <Plus className="mr-1.5 size-4" aria-hidden />
-                Create collection
-              </Button>
-            )}
-          </div>
-        ) : (
-          <div className="overflow-x-auto">
-            <table className="w-full text-left text-sm">
-              <thead className="border-b border-border bg-muted/40 text-xs font-medium text-muted-foreground uppercase">
-                <tr>
-                  <th className="py-3 pr-4 pl-6">Collection</th>
-                  <th className="py-3 px-4">Type</th>
-                  <th className="py-3 px-4 text-center">Products</th>
-                  <th className="py-3 px-4 text-center">Status</th>
-                  <th className="py-3 px-4 text-center">Search Engines</th>
-                  <th className="py-3 pr-6 pl-4 text-right">Actions</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-border">
+          <TableToolbar
+            searchLabel="Search collections"
+            searchPlaceholder="Search collections..."
+            searchText={queryText}
+            onSearchText={(v) => {
+              setQueryText(v);
+              void navigate({
+                to: ".",
+                replace: true,
+                search: ((prev: Record<string, unknown>) => ({ ...prev, q: v.trim() || undefined })) as never,
+              });
+            }}
+            resultCount={collections.length}
+            noun="collections"
+          />
+
+          {/* Collections Table */}
+          <div className="overflow-hidden rounded-xl border border-border bg-card shadow-xs">
+            {collectionsQuery.isLoading ? (
+              <div className="p-8 text-center text-sm text-muted-foreground">Loading collections...</div>
+            ) : collections.length === 0 ? (
+              <div className="flex flex-col items-center justify-center p-12 text-center">
+                <Layers className="size-10 text-muted-foreground/60" aria-hidden />
+                <h3 className="mt-4 text-base font-medium">No collections found</h3>
+                <p className="mt-1 text-sm text-muted-foreground">
+                  {search.q ? "No collections match your search filter." : "Create manual or automated product collections."}
+                </p>
+                {!search.q && (
+                  <Button render={<Link to="/collections/new" />} size="sm" className="mt-4">
+                    <Plus className="mr-1.5 size-4" aria-hidden />
+                    Create collection
+                  </Button>
+                )}
+              </div>
+            ) : (
+              <div className="overflow-x-auto">
+                <table className="w-full text-left text-sm">
+                  <thead className="border-b border-border bg-muted/60 text-xs font-medium text-muted-foreground">
+                    <tr>
+                      <th className="py-3 pr-4 pl-6">Collection</th>
+                      <th className="py-3 px-4">Type</th>
+                      <th className="py-3 px-4 text-center">Products</th>
+                      <th className="py-3 px-4 text-center">Status</th>
+                      <th className="py-3 px-4 text-center">Search Engines</th>
+                      <th className="py-3 pr-6 pl-4 text-right">Actions</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-border/60">
                 {collections.map((item) => (
-                  <tr key={item.id} className="transition-colors hover:bg-muted/30">
+                  <tr key={item.id} className="transition-colors hover:bg-muted/40">
                     <td className="py-3 pr-4 pl-6 font-medium">
                       <div className="flex items-center gap-3">
                         {item.imageUrl ? (
@@ -340,6 +318,8 @@ export function CollectionsPage() {
           </div>
         )}
       </div>
+      </div>
+      </PageSection>
 
       {/* Delete Confirmation Dialog */}
       <ConfirmDialog

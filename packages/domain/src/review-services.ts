@@ -1,4 +1,4 @@
-import { and, desc, eq, ilike, inArray, or, sql, type SQL } from "drizzle-orm";
+import { and, desc, eq, gte, ilike, inArray, lte, or, sql, type SQL } from "drizzle-orm";
 import { schema, withTenant, type Db } from "@bs/db";
 import type { Runtime } from "./runtime.ts";
 import { assertPermission, type TenantContext } from "./context.ts";
@@ -10,6 +10,8 @@ export interface ListReviewsQuery {
   status?: "all" | "published" | "on_hold" | "replied" | "awaiting_reply" | undefined;
   rating?: number | undefined;
   search?: string | undefined;
+  dateFrom?: string | undefined;
+  dateTo?: string | undefined;
   limit?: number | undefined;
   offset?: number | undefined;
 }
@@ -389,6 +391,13 @@ export async function listAdminReviews(
       } else if (query.status === "awaiting_reply") {
         conditions.push(sql`(${schema.reviews.replyText} IS NULL OR ${schema.reviews.replyText} = '')`);
       }
+    }
+
+    if (query.dateFrom) {
+      conditions.push(gte(schema.reviews.createdAt, new Date(query.dateFrom)));
+    }
+    if (query.dateTo) {
+      conditions.push(lte(schema.reviews.createdAt, new Date(query.dateTo)));
     }
 
     if (query.search?.trim()) {

@@ -74,11 +74,46 @@ export function ThemeProvider({
     return () => window.removeEventListener("storage", handleStorage);
   }, []);
 
-  // Update DOM when resolved theme changes
+  // Update DOM when resolved theme changes with smooth animation
   useEffect(() => {
     if (typeof window === "undefined") return;
-    document.documentElement.dataset.theme = resolved;
-    document.documentElement.style.colorScheme = resolved;
+    const root = document.documentElement;
+    const current = root.dataset.theme;
+
+    // If initial mount or theme unchanged, apply directly without animation
+    if (!current || current === resolved) {
+      root.dataset.theme = resolved;
+      root.style.colorScheme = resolved;
+      return;
+    }
+
+    const applyTheme = () => {
+      root.dataset.theme = resolved;
+      root.style.colorScheme = resolved;
+    };
+
+    const prefersReducedMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+
+    // View Transitions API: native hardware-accelerated smooth cross-fade
+    const docWithTransitions = document as Document & {
+      startViewTransition?: (updateCallback: () => void | Promise<void>) => unknown;
+    };
+
+    if (typeof docWithTransitions.startViewTransition === "function" && !prefersReducedMotion) {
+      docWithTransitions.startViewTransition(() => {
+        applyTheme();
+      });
+    } else if (!prefersReducedMotion) {
+      // CSS-based smooth transition fallback
+      root.classList.add("theme-transitioning");
+      applyTheme();
+      const timer = window.setTimeout(() => {
+        root.classList.remove("theme-transitioning");
+      }, 300);
+      return () => window.clearTimeout(timer);
+    } else {
+      applyTheme();
+    }
   }, [resolved]);
 
   const setPreference = (pref: ThemePreference) => {

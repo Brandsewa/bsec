@@ -4,16 +4,17 @@ import {
   Clock,
   MessageSquare,
   MoreHorizontal,
-  Search,
   Star,
   Trash2,
 } from "lucide-react";
 import { useState } from "react";
 import {
+  Checkbox,
   MetricCard,
   MetricCardSkeleton,
   PageContainer,
   PageHeader,
+  PageSection,
   PageSkeleton,
   toast,
 } from "@bs/ui";
@@ -36,10 +37,11 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@bs/ui";
-import { Input } from "@bs/ui";
 import { Textarea } from "@bs/ui";
 import { ConfirmDialog } from "@bs/ui";
-import { ScrollTabs } from "@bs/ui";
+import { DateRangePicker, ScrollTabs } from "@bs/ui";
+import { TableToolbar } from "../../components/data-table/table-toolbar.tsx";
+import { day, dayAfterIso, dayStartIso } from "../../components/data-table/use-table-state.ts";
 import { errorMessage } from "../../lib/errors.ts";
 import { orpc } from "../../lib/orpc.ts";
 
@@ -57,6 +59,8 @@ export interface ReviewsSearch {
   status?: ReviewStatusFilter | undefined;
   q?: string | undefined;
   rating?: number | undefined;
+  from?: string | undefined;
+  to?: string | undefined;
   page?: number | undefined;
 }
 
@@ -71,6 +75,8 @@ export const Route = createFileRoute("/_store/reviews")({
     rating: typeof raw["rating"] === "number" || (typeof raw["rating"] === "string" && !isNaN(Number(raw["rating"])))
       ? Number(raw["rating"])
       : undefined,
+    from: day(raw["from"]),
+    to: day(raw["to"]),
     page: typeof raw["page"] === "number" || (typeof raw["page"] === "string" && !isNaN(Number(raw["page"])))
       ? Number(raw["page"])
       : 1,
@@ -85,8 +91,6 @@ export function ReviewsPage() {
   const queryClient = useQueryClient();
 
   const status = search.status ?? "all";
-  const [queryText, setQueryText] = useState(search.q ?? "");
-  const [selectedRating, setSelectedRating] = useState<number | undefined>(search.rating);
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
   const [deleteTarget, setDeleteTarget] = useState<Review | null>(null);
   const [isBulkDeleteOpen, setIsBulkDeleteOpen] = useState(false);
@@ -104,6 +108,8 @@ export function ReviewsPage() {
         status,
         search: search.q,
         rating: search.rating,
+        dateFrom: search.from ? dayStartIso(search.from) : undefined,
+        dateTo: search.to ? dayAfterIso(search.to) : undefined,
         limit: pageSize,
         offset: (page - 1) * pageSize,
       },
@@ -204,6 +210,8 @@ export function ReviewsPage() {
         status: next.status !== undefined ? next.status : search.status,
         q: next.q !== undefined ? next.q : search.q,
         rating: next.rating !== undefined ? next.rating : search.rating,
+        from: next.from !== undefined ? next.from : search.from,
+        to: next.to !== undefined ? next.to : search.to,
         page: next.page !== undefined ? next.page : 1,
       })) as never,
     });
@@ -213,13 +221,7 @@ export function ReviewsPage() {
     updateSearch({ status: nextStatus as ReviewStatusFilter, page: 1 });
   };
 
-  const handleSearchSubmit = (e: React.FormEvent) => {
-    e.preventDefault();
-    updateSearch({ q: queryText.trim() || undefined, page: 1 });
-  };
-
   const handleRatingFilter = (r: number | undefined) => {
-    setSelectedRating(r);
     updateSearch({ rating: r, page: 1 });
   };
 
@@ -245,14 +247,14 @@ export function ReviewsPage() {
   };
 
   return (
-    <PageContainer size="default">
+    <PageContainer size="full">
       <PageHeader
         title="Customer Reviews"
         description="Moderate, manage, and reply to customer product feedback."
       />
 
       {/* Stats row */}
-      <div className="grid grid-cols-2 gap-4 sm:grid-cols-4">
+      <div className="grid grid-cols-2 gap-3 sm:gap-4 sm:grid-cols-4">
         {statsQuery.isLoading ? (
           <>
             <MetricCardSkeleton />
@@ -282,140 +284,145 @@ export function ReviewsPage() {
         ) : null}
       </div>
 
-      {/* Tabs & Search */}
-      <div className="flex flex-col gap-4">
-        <ScrollTabs
-          tabs={STATUS_TABS}
-          value={status}
-          onChange={handleTabChange}
-        />
+      <PageSection>
+        <div className="grid gap-3">
+          <ScrollTabs
+            tabs={STATUS_TABS}
+            value={status}
+            onChange={handleTabChange}
+          />
 
-        <div className="flex flex-wrap items-center justify-between gap-3">
-          <form onSubmit={handleSearchSubmit} className="relative flex-1 max-w-sm">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-            <Input
-              placeholder="Search by reviewer, title, content..."
-              value={queryText}
-              onChange={(e) => setQueryText(e.target.value)}
-              className="pl-9"
-            />
-          </form>
-
-          {/* Rating filter */}
-          <div className="flex items-center gap-1">
-            <Button
-              variant={selectedRating === undefined ? "secondary" : "outline"}
-              size="sm"
-              onClick={() => handleRatingFilter(undefined)}
-            >
-              All Stars
-            </Button>
-            {[5, 4, 3, 2, 1].map((star) => (
-              <Button
-                key={star}
-                variant={selectedRating === star ? "secondary" : "outline"}
-                size="sm"
-                onClick={() => handleRatingFilter(selectedRating === star ? undefined : star)}
-                className="gap-1"
-              >
-                {star} <Star className="h-3 w-3 fill-amber-400 text-amber-400" />
-              </Button>
-            ))}
-          </div>
-        </div>
-
-        {/* Bulk action banner */}
-        {selectedIds.length > 0 && (
-          <div className="flex items-center justify-between rounded-lg border bg-muted/60 px-4 py-2 text-sm">
-            <span>
-              <strong>{selectedIds.length}</strong> {selectedIds.length === 1 ? "review" : "reviews"} selected
-            </span>
-            <div className="flex items-center gap-2">
-              <Button
-                size="sm"
-                variant="outline"
-                onClick={() => bulkPublishMutation.mutate({ ids: selectedIds })}
-                disabled={bulkPublishMutation.isPending}
-              >
-                Publish Selected
-              </Button>
-              <Button
-                size="sm"
-                variant="outline"
-                onClick={() => bulkHoldMutation.mutate({ ids: selectedIds })}
-                disabled={bulkHoldMutation.isPending}
-              >
-                Put On Hold
-              </Button>
-              <Button
-                size="sm"
-                variant="destructive"
-                onClick={() => setIsBulkDeleteOpen(true)}
-              >
-                Delete Selected
-              </Button>
-            </div>
-          </div>
-        )}
-      </div>
-
-      {/* Reviews Table */}
-      <div className="rounded-lg border bg-card overflow-hidden">
-        <div className="overflow-x-auto">
-          <table className="w-full text-sm text-left">
-            <thead className="border-b bg-muted/40 text-xs uppercase tracking-wider text-muted-foreground">
-              <tr>
-                <th className="w-10 px-4 py-3">
-                  <input
-                    type="checkbox"
-                    checked={allSelected}
-                    ref={(input) => {
-                      if (input) input.indeterminate = someSelected;
-                    }}
-                    onChange={toggleSelectAll}
-                    className="rounded border-gray-300"
-                  />
-                </th>
-                <th className="px-4 py-3">Product</th>
-                <th className="px-4 py-3">Rating & Review</th>
-                <th className="px-4 py-3">Reviewer</th>
-                <th className="px-4 py-3">Date</th>
-                <th className="px-4 py-3">Status</th>
-                <th className="w-12 px-4 py-3 text-right">Actions</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y">
-              {listQuery.isLoading ? (
-                <tr>
-                  <td colSpan={7} className="px-4 py-12 text-center text-muted-foreground">
-                    Loading reviews...
-                  </td>
-                </tr>
-              ) : reviews.length === 0 ? (
-                <tr>
-                  <td colSpan={7} className="px-4 py-12 text-center text-muted-foreground">
-                    No reviews found matching this filter.
-                  </td>
-                </tr>
-              ) : (
-                reviews.map((review: Review) => {
-                  const isSelected = selectedIds.includes(review.id);
-                  return (
-                    <tr
-                      key={review.id}
-                      className={`hover:bg-muted/30 transition-colors ${
-                        isSelected ? "bg-muted/20" : ""
-                      }`}
+          <TableToolbar
+            searchLabel="Search reviews"
+            searchPlaceholder="Search reviewer, title, content..."
+            searchText={search.q ?? ""}
+            onSearchText={(v) => updateSearch({ q: v.trim() || undefined, page: 1 })}
+            filters={
+              <div className="flex items-center gap-2">
+                <div className="flex items-center gap-1">
+                  <Button
+                    variant={search.rating === undefined ? "secondary" : "outline"}
+                    size="sm"
+                    onClick={() => handleRatingFilter(undefined)}
+                  >
+                    All Stars
+                  </Button>
+                  {[5, 4, 3, 2, 1].map((star) => (
+                    <Button
+                      key={star}
+                      variant={search.rating === star ? "secondary" : "outline"}
+                      size="sm"
+                      onClick={() => handleRatingFilter(search.rating === star ? undefined : star)}
+                      className="gap-1"
                     >
-                      <td className="px-4 py-3">
-                        <input
-                          type="checkbox"
-                          checked={isSelected}
-                          onChange={() => toggleSelect(review.id)}
-                          className="rounded border-gray-300"
-                        />
+                      {star} <Star className="h-3 w-3 fill-amber-400 text-amber-400" />
+                    </Button>
+                  ))}
+                </div>
+                <DateRangePicker
+                  className="w-full justify-start md:w-auto"
+                  emptyLabel="Submitted: any date"
+                  from={search.from}
+                  to={search.to}
+                  onChange={(from, to) => updateSearch({ from, to, page: 1 })}
+                />
+              </div>
+            }
+            resultCount={total}
+            noun="reviews"
+            sortOptions={[]}
+            sort=""
+            defaultSort=""
+            onSort={() => {}}
+          />
+
+          {/* Bulk action banner */}
+          {selectedIds.length > 0 && (
+            <div className="flex items-center justify-between rounded-lg border border-border bg-muted/60 px-4 py-2 text-sm shadow-xs">
+              <span>
+                <strong>{selectedIds.length}</strong> {selectedIds.length === 1 ? "review" : "reviews"} selected
+              </span>
+              <div className="flex items-center gap-2">
+                <Button
+                  size="sm"
+                  variant="outline"
+                  onClick={() => bulkPublishMutation.mutate({ ids: selectedIds })}
+                  disabled={bulkPublishMutation.isPending}
+                >
+                  Publish Selected
+                </Button>
+                <Button
+                  size="sm"
+                  variant="outline"
+                  onClick={() => bulkHoldMutation.mutate({ ids: selectedIds })}
+                  disabled={bulkHoldMutation.isPending}
+                >
+                  Put On Hold
+                </Button>
+                <Button
+                  size="sm"
+                  variant="destructive"
+                  onClick={() => setIsBulkDeleteOpen(true)}
+                >
+                  Delete Selected
+                </Button>
+              </div>
+            </div>
+          )}
+
+          {/* Reviews Table */}
+          <div className="overflow-hidden rounded-xl border border-border bg-card shadow-xs">
+            <div className="overflow-x-auto">
+              <table className="w-full text-left text-sm">
+                <thead className="border-b border-border bg-muted/60 text-xs font-medium text-muted-foreground">
+                  <tr>
+                    <th className="w-10 px-4 py-3">
+                      <Checkbox
+                        aria-label="Select all reviews"
+                        checked={allSelected}
+                        indeterminate={someSelected}
+                        onCheckedChange={toggleSelectAll}
+                      />
+                    </th>
+                    <th className="px-4 py-3">Product</th>
+                    <th className="px-4 py-3">Rating & Review</th>
+                    <th className="px-4 py-3">Reviewer</th>
+                    <th className="px-4 py-3">Date</th>
+                    <th className="px-4 py-3">Status</th>
+                    <th className="w-12 px-4 py-3 text-right">Actions</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-border/60">
+                  {listQuery.isLoading ? (
+                    <tr>
+                      <td colSpan={7} className="px-4 py-12 text-center text-muted-foreground">
+                        Loading reviews...
                       </td>
-                      <td className="px-4 py-3 font-medium text-foreground">
+                    </tr>
+                  ) : reviews.length === 0 ? (
+                    <tr>
+                      <td colSpan={7} className="px-4 py-12 text-center text-muted-foreground">
+                        No reviews found matching this filter.
+                      </td>
+                    </tr>
+                  ) : (
+                    reviews.map((review: Review) => {
+                      const isSelected = selectedIds.includes(review.id);
+                      return (
+                        <tr
+                          key={review.id}
+                          className={`hover:bg-muted/30 transition-colors ${
+                            isSelected ? "bg-muted/20" : ""
+                          }`}
+                        >
+                          <td className="px-4 py-3">
+                            <Checkbox
+                              aria-label={`Select review by ${review.reviewerName}`}
+                              checked={isSelected}
+                              onCheckedChange={() => toggleSelect(review.id)}
+                            />
+                          </td>
+                          <td className="px-4 py-3 font-medium text-foreground">
                         {review.productTitle ? (
                           <div className="flex flex-col">
                             <span className="font-semibold line-clamp-1">{review.productTitle}</span>
@@ -534,7 +541,7 @@ export function ReviewsPage() {
 
         {/* Pagination */}
         {total > pageSize && (
-          <div className="flex items-center justify-between border-t px-4 py-3">
+          <div className="flex items-center justify-between border-t border-border px-4 py-3">
             <span className="text-xs text-muted-foreground">
               Showing {(page - 1) * pageSize + 1} to {Math.min(page * pageSize, total)} of {total} reviews
             </span>
@@ -559,6 +566,8 @@ export function ReviewsPage() {
           </div>
         )}
       </div>
+      </div>
+      </PageSection>
 
       {/* Reply Dialog */}
       <Dialog open={!!replyTarget} onOpenChange={(open) => !open && setReplyTarget(null)}>

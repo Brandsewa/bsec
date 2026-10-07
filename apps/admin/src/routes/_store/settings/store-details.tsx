@@ -2,11 +2,8 @@ import { createFileRoute, Link } from "@tanstack/react-router";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useState, type FormEvent } from "react";
 import { AlertTriangle } from "lucide-react";
-import { EmptyState, FormSkeleton, PageSkeleton, toast } from "@bs/ui";
-import { Button } from "@bs/ui";
-import { Input } from "@bs/ui";
-import { Switch } from "@bs/ui";
-import { HeaderActions, SettingsPageFrame, SettingsSection, useUnsavedGuard } from "../../../components/settings/settings-page.tsx";
+import { Button, EmptyState, FormSkeleton, Input, Label, PageSkeleton, Switch, toast } from "@bs/ui";
+import { HeaderActions, SettingsCard, SettingsPageFrame, useUnsavedGuard } from "../../../components/settings/settings-page.tsx";
 import { Field } from "@bs/ui";
 import { SimpleSelect } from "@bs/ui";
 import { orpc } from "../../../lib/orpc.ts";
@@ -79,23 +76,23 @@ export function StoreDetailsPage() {
   if (query.isLoading) {
     return (
       <SettingsPageFrame title={TITLE} description={DESCRIPTION}>
-        <SettingsSection>
+        <SettingsCard>
           <FormSkeleton />
-        </SettingsSection>
+        </SettingsCard>
       </SettingsPageFrame>
     );
   }
   if (query.isError || !query.data) {
     return (
       <SettingsPageFrame title={TITLE} description={DESCRIPTION}>
-        <SettingsSection>
+        <SettingsCard>
           <EmptyState
             icon={AlertTriangle}
             title="Could not load settings"
             description={errorMessage(query.error)}
             action={<Button onClick={() => void query.refetch()}>Try again</Button>}
           />
-        </SettingsSection>
+        </SettingsCard>
       </SettingsPageFrame>
     );
   }
@@ -151,14 +148,18 @@ function StoreDetailsForm({ data }: { data: SettingsData }) {
         </Button>
       </HeaderActions>
 
-      <form id="settings-store-details" onSubmit={onSubmit}>
-        <SettingsSection title="Store details">
+      <form id="settings-store-details" onSubmit={onSubmit} className="flex flex-col gap-4">
+        <SettingsCard title="Business details">
           <Field id="storeName" label="Store name">
             <Input id="storeName" required maxLength={120} value={form.storeName} onChange={set("storeName")} />
           </Field>
-          <Field id="legalName" label="Legal business name" hint="Printed on tax invoices.">
+          <div className="flex flex-col gap-1.5">
+            <div className="flex items-center justify-between">
+              <Label htmlFor="legalName" className="text-xs font-medium text-foreground">Legal business name</Label>
+              <span className="text-[11px] text-muted-foreground">Printed on tax invoices.</span>
+            </div>
             <Input id="legalName" maxLength={200} value={form.legalName} onChange={set("legalName")} />
-          </Field>
+          </div>
           <div className="grid gap-3 sm:grid-cols-2">
             <Field id="supportEmail" label="Support email">
               <Input id="supportEmail" type="email" value={form.supportEmail} onChange={set("supportEmail")} />
@@ -167,9 +168,9 @@ function StoreDetailsForm({ data }: { data: SettingsData }) {
               <Input id="supportPhone" type="tel" value={form.supportPhone} onChange={set("supportPhone")} />
             </Field>
           </div>
-        </SettingsSection>
+        </SettingsCard>
 
-        <SettingsSection title="Business address" description="Your registered or dispatch address.">
+        <SettingsCard title="Business address" description="Your registered or dispatch address.">
           <Field id="line1" label="Address line 1">
             <Input id="line1" value={form.line1} onChange={set("line1")} />
           </Field>
@@ -187,14 +188,17 @@ function StoreDetailsForm({ data }: { data: SettingsData }) {
               <Input id="pincode" inputMode="numeric" maxLength={6} value={form.pincode} onChange={set("pincode")} />
             </Field>
           </div>
-        </SettingsSection>
+        </SettingsCard>
 
-        <SettingsSection title="Regional defaults">
+        <SettingsCard title="Regional defaults">
           <div className="grid gap-3 sm:grid-cols-3">
-            <Field id="currency" label="Currency" hint="Currency cannot be changed after your store has orders.">
+            <div className="flex flex-col gap-1.5">
+              <Label htmlFor="currency" className="text-xs font-medium text-foreground">Currency</Label>
               <Input id="currency" disabled readOnly value={data.currency} />
-            </Field>
-            <Field id="timezone" label="Time zone">
+              <span className="text-[11px] text-muted-foreground">Cannot be changed after orders exist.</span>
+            </div>
+            <div className="flex flex-col gap-1.5">
+              <Label htmlFor="timezone" className="text-xs font-medium text-foreground">Time zone</Label>
               <SimpleSelect
                 id="timezone"
                 value={form.timezone}
@@ -202,28 +206,30 @@ function StoreDetailsForm({ data }: { data: SettingsData }) {
                 onChange={(v) => setForm((f) => ({ ...f, timezone: v }))}
                 options={STORE_TIMEZONES.map((tz) => ({ value: tz, label: tz.replace(/_/g, " ") }))}
               />
-            </Field>
-            <Field id="country" label="Country" hint="More countries are not supported yet.">
+            </div>
+            <div className="flex flex-col gap-1.5">
+              <Label htmlFor="country" className="text-xs font-medium text-foreground">Country</Label>
               <Input id="country" disabled readOnly value="India" />
-            </Field>
+              <span className="text-[11px] text-muted-foreground">More countries supported soon.</span>
+            </div>
           </div>
-        </SettingsSection>
+        </SettingsCard>
 
-        <SettingsSection title="Tax identity" description="GST registration is managed with the rest of your tax settings.">
-          <Field id="gstin" label="GSTIN" hint={<span>Managed in <Link to="/settings/taxes" className="underline underline-offset-2 hover:text-foreground">Settings &gt; Taxes</Link>. Invoices print it from there.</span>}>
+        <SettingsCard title="Tax identity" description={<span>Managed in <Link to="/settings/taxes" className="underline underline-offset-2 hover:text-foreground">Settings &gt; Taxes</Link></span>}>
+          <div className="flex flex-col gap-1.5">
+            <Label htmlFor="gstin" className="text-xs font-medium text-foreground">GSTIN</Label>
             <Input id="gstin" disabled readOnly value={data.tax?.gstin ?? "Not set"} />
-          </Field>
-        </SettingsSection>
+          </div>
+        </SettingsCard>
 
-        <SettingsSection
+        <SettingsCard
           title="Review moderation"
-          description="Control how product reviews submitted by customers are moderated."
         >
-          <div className="flex items-center justify-between">
+          <div className="flex items-center justify-between gap-4">
             <div className="space-y-0.5">
               <span className="text-sm font-medium text-foreground">Publish reviews automatically</span>
               <p className="text-xs text-muted-foreground">
-                When enabled, reviews from verified purchases (delivered orders) are published immediately without manual approval.
+                Reviews from verified purchases (delivered orders) are published immediately without manual approval.
               </p>
             </div>
             <Switch
@@ -232,7 +238,7 @@ function StoreDetailsForm({ data }: { data: SettingsData }) {
               onCheckedChange={(checked) => setForm((f) => ({ ...f, autoPublishReviews: checked }))}
             />
           </div>
-        </SettingsSection>
+        </SettingsCard>
       </form>
     </SettingsPageFrame>
   );

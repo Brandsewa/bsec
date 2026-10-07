@@ -3,20 +3,20 @@ import { Badge } from "@bs/ui";
 /** Paise → "₹1,234" (en-IN grouping). */
 export const money = (paise: number) => `₹${(paise / 100).toLocaleString("en-IN")}`;
 
-const BADGE_VARIANT: Record<string, "default" | "secondary" | "destructive" | "outline"> = {
-  paid: "default",
-  cod_collected: "default",
-  fulfilled: "default",
-  delivered: "default",
-  pending: "secondary",
-  cod_pending: "secondary",
+const BADGE_VARIANT: Record<string, "default" | "secondary" | "destructive" | "outline" | "success" | "warning"> = {
+  paid: "success",
+  cod_collected: "success",
+  fulfilled: "success",
+  delivered: "success",
+  pending: "warning",
+  cod_pending: "warning",
   unfulfilled: "secondary",
   partially_fulfilled: "secondary",
   failed: "destructive",
   rto: "destructive",
   cancelled: "destructive",
   refunded: "outline",
-  active: "default",
+  active: "success",
   scheduled: "secondary",
   expired: "outline",
   disabled: "destructive",

@@ -7,7 +7,7 @@ import { Button } from "@bs/ui";
 import { Checkbox } from "@bs/ui";
 import { Input } from "@bs/ui";
 import { Field } from "@bs/ui";
-import { HeaderActions, SettingsPageFrame, SettingsSection, useUnsavedGuard } from "../../../components/settings/settings-page.tsx";
+import { HeaderActions, SettingsCard, SettingsPageFrame, useUnsavedGuard } from "../../../components/settings/settings-page.tsx";
 import { orpc } from "../../../lib/orpc.ts";
 
 export const Route = createFileRoute("/_store/settings/shipping")({
@@ -24,9 +24,9 @@ export function ShippingSettingsPage() {
   if (!data) {
     return (
       <SettingsPageFrame title={TITLE} description={DESCRIPTION}>
-        <SettingsSection>
+        <SettingsCard>
           <FormSkeleton />
-        </SettingsSection>
+        </SettingsCard>
       </SettingsPageFrame>
     );
   }
@@ -105,16 +105,22 @@ function ShippingSettingsForm({ initialData }: { initialData: ShippingSettings }
         </Button>
       </HeaderActions>
 
-      <form id="shipping-form" onSubmit={handleSave}>
-        <SettingsSection title="Shipping zone" description="The primary region covered by these rates.">
-          <div className="max-w-sm">
+      <form id="shipping-form" onSubmit={handleSave} className="space-y-6">
+        <SettingsCard
+          title="Shipping zone"
+          description="Primary geographical region covered by these rates"
+        >
+          <div className="max-w-md">
             <Field id="zoneName" label="Zone name">
               <Input id="zoneName" value={zoneName} onChange={(e) => setZoneName(e.target.value)} placeholder="e.g. Domestic (India)" required />
             </Field>
           </div>
-        </SettingsSection>
+        </SettingsCard>
 
-        <SettingsSection title="Delivery rates" description="The shipping charges customers pay for Standard and Express delivery.">
+        <SettingsCard
+          title="Delivery rates"
+          description="Customer charges for Standard and Express fulfillment"
+        >
           <div className="grid gap-3 sm:grid-cols-2">
             <Field id="standardRate" label="Standard shipping (₹)" hint="Set to 0 for free standard shipping.">
               <RupeeInput id="standardRate" value={standardRupees} onChange={setStandardRupees} required />
@@ -123,21 +129,26 @@ function ShippingSettingsForm({ initialData }: { initialData: ShippingSettings }
               <RupeeInput id="expressRate" value={expressRupees} onChange={setExpressRupees} required />
             </Field>
           </div>
-        </SettingsSection>
+        </SettingsCard>
 
-        <SettingsSection title="Free delivery" description="Offer free standard shipping on carts over a minimum subtotal.">
-          <label className="flex items-center gap-2 text-xs font-medium text-foreground">
-            <Checkbox checked={enableFreeShipping} onCheckedChange={(c) => setEnableFreeShipping(c)} />
-            Free standard shipping above a minimum subtotal
-          </label>
-          {enableFreeShipping ? (
-            <div className="max-w-xs">
-              <Field id="threshold" label="Minimum order subtotal (₹)" hint="Orders at or above this subtotal ship free.">
-                <RupeeInput id="threshold" value={thresholdRupees} onChange={setThresholdRupees} min="1" required />
-              </Field>
-            </div>
-          ) : null}
-        </SettingsSection>
+        <SettingsCard
+          title="Free delivery threshold"
+          description="Offer automatic free standard shipping over cart subtotal"
+        >
+          <div className="space-y-4">
+            <label className="flex items-center gap-2 text-sm font-medium text-foreground cursor-pointer">
+              <Checkbox checked={enableFreeShipping} onCheckedChange={(c) => setEnableFreeShipping(c)} />
+              Enable free standard shipping above a minimum subtotal
+            </label>
+            {enableFreeShipping ? (
+              <div className="max-w-xs pl-6">
+                <Field id="threshold" label="Minimum order subtotal (₹)" hint="Orders at or above this amount ship free.">
+                  <RupeeInput id="threshold" value={thresholdRupees} onChange={setThresholdRupees} min="1" required />
+                </Field>
+              </div>
+            ) : null}
+          </div>
+        </SettingsCard>
       </form>
 
       <ShippingPreviewCalculator />
@@ -160,9 +171,9 @@ function ShippingPreviewCalculator() {
   };
 
   return (
-    <SettingsSection
-      title="Rate preview & calculation trace"
-      description="Simulate cart checkout to test how rates and free shipping rules are evaluated."
+    <SettingsCard
+      title="Rate preview & calculator"
+      description="Simulate cart checkout to test how rates and rules evaluate"
     >
       <form onSubmit={handlePreview} className="grid gap-3 sm:grid-cols-3 items-end">
         <Field id="testSubtotal" label="Test order subtotal (₹)">
@@ -183,22 +194,22 @@ function ShippingPreviewCalculator() {
       </form>
 
       {previewMutation.isError ? (
-        <p className="text-xs text-destructive mt-2">{previewMutation.error.message}</p>
+        <p className="text-xs text-destructive mt-3">{previewMutation.error.message}</p>
       ) : null}
 
       {previewMutation.data ? (
-        <div className="mt-3 rounded border border-border bg-muted/40 p-3 text-xs space-y-2">
+        <div className="mt-4 rounded-lg border border-border bg-muted/30 p-3 text-xs space-y-2">
           <div className="font-medium text-foreground">
-            Zone: <span className="font-semibold">{previewMutation.data.zoneName}</span>
+            Matched Zone: <span className="font-semibold text-primary">{previewMutation.data.zoneName}</span>
           </div>
           <div className="divide-y divide-border/60">
             {previewMutation.data.rates.map((r, i) => (
-              <div key={i} className="py-2 first:pt-0 last:pb-0 flex flex-col gap-1">
+              <div key={i} className="py-2.5 first:pt-1 last:pb-0 flex flex-col gap-1">
                 <div className="flex justify-between font-medium text-foreground">
                   <span>{r.title} ({r.estimatedDays})</span>
-                  <span>{r.isFree ? "Free" : `₹${(r.amountPaise / 100).toFixed(0)}`}</span>
+                  <span className="font-semibold">{r.isFree ? "Free" : `₹${(r.amountPaise / 100).toFixed(0)}`}</span>
                 </div>
-                <div className="text-muted-foreground text-[11px] font-mono bg-background/60 p-1.5 rounded border border-border/40">
+                <div className="text-muted-foreground text-[11px] font-mono bg-background/80 p-2 rounded border border-border/40">
                   {r.trace}
                 </div>
               </div>
@@ -206,6 +217,6 @@ function ShippingPreviewCalculator() {
           </div>
         </div>
       ) : null}
-    </SettingsSection>
+    </SettingsCard>
   );
 }

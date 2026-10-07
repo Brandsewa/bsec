@@ -11,7 +11,7 @@ import { FieldError } from "@bs/ui";
 import { Input } from "@bs/ui";
 import { ConfirmDialog } from "@bs/ui";
 import { Field } from "@bs/ui";
-import { HeaderActions, SettingsPageFrame, SettingsSection, useUnsavedGuard } from "../../../components/settings/settings-page.tsx";
+import { HeaderActions, SettingsCard, SettingsPageFrame, useUnsavedGuard } from "../../../components/settings/settings-page.tsx";
 import { SimpleSelect } from "@bs/ui";
 import { orpc } from "../../../lib/orpc.ts";
 import { errorMessage } from "../../../lib/errors.ts";
@@ -41,23 +41,23 @@ export function TaxSettingsPage() {
   if (query.isLoading) {
     return (
       <SettingsPageFrame title={TITLE} description={DESCRIPTION}>
-        <SettingsSection>
+        <SettingsCard>
           <FormSkeleton />
-        </SettingsSection>
+        </SettingsCard>
       </SettingsPageFrame>
     );
   }
   if (query.isError || !query.data) {
     return (
       <SettingsPageFrame title={TITLE} description={DESCRIPTION}>
-        <SettingsSection>
+        <SettingsCard>
           <EmptyState
             icon={AlertTriangle}
             title="Could not load tax settings"
             description={errorMessage(query.error)}
             action={<Button onClick={() => void query.refetch()}>Try again</Button>}
           />
-        </SettingsSection>
+        </SettingsCard>
       </SettingsPageFrame>
     );
   }
@@ -187,81 +187,96 @@ function TaxForm({ initial }: { initial: TaxData }) {
         </Button>
       </HeaderActions>
 
-      <form id="settings-taxes" onSubmit={onSubmit}>
+      <form id="settings-taxes" onSubmit={onSubmit} className="space-y-6">
         {!initial.sellerState && taxCollection ? (
-          <SettingsSection>
-            <Alert role="alert">
-              Your state is not set. Choose your state below so CGST/SGST and IGST are calculated accurately.
-            </Alert>
-          </SettingsSection>
+          <Alert role="alert">
+            Your state is not set. Choose your state below so CGST/SGST and IGST are calculated accurately.
+          </Alert>
         ) : null}
 
-        <SettingsSection
+        <SettingsCard
           title="Tax collection"
-          description="Enable GST tax lines on invoices and storefront orders. If disabled, sales are non-taxable (suitable for unregistered businesses below the turnover threshold)."
+          description="Enable or disable GST tax lines on invoices and checkout"
         >
-          <label className="flex items-center gap-2 text-xs font-medium text-foreground">
-            <Checkbox checked={taxCollection} onCheckedChange={(c) => setTaxCollection(c === true)} />
-            Collect GST on customer orders
-          </label>
-        </SettingsSection>
+          <div className="space-y-2">
+            <label className="flex items-center gap-2 text-sm font-medium text-foreground cursor-pointer">
+              <Checkbox checked={taxCollection} onCheckedChange={(c) => setTaxCollection(c === true)} />
+              Collect GST on customer orders
+            </label>
+            <p className="text-xs text-muted-foreground pl-6">
+              When disabled, orders are non-taxable (suitable for businesses below the turnover threshold).
+            </p>
+          </div>
+        </SettingsCard>
 
         {taxCollection ? (
           <>
-            <SettingsSection title="GST registration">
-              <Field id="gstin" label="GSTIN" hint="Leave blank if you are not GST registered.">
-                <Input
-                  id="gstin"
-                  maxLength={15}
-                  autoCapitalize="characters"
-                  value={gstin}
-                  onChange={(e) => setGstin(e.target.value.toUpperCase())}
-                  aria-invalid={Boolean(error)}
-                />
-                {error ? <FieldError>{error}</FieldError> : null}
-              </Field>
-              <Field id="sellerState" label="Your state (place of supply)" hint="The state your GST registration is in.">
-                <SimpleSelect
-                  id="sellerState"
-                  value={sellerState}
-                  placeholder="Select state"
-                  onChange={setSellerState}
-                  options={INDIAN_STATES.map((s) => ({ value: s, label: s }))}
-                />
-              </Field>
-            </SettingsSection>
-
-            <SettingsSection title="Pricing & Shipping">
-              <label className="flex items-center gap-2 text-xs text-foreground">
-                <Checkbox checked={pricesIncludeTax} onCheckedChange={(c) => setPricesIncludeTax(c === true)} />
-                Product prices already include GST
-              </label>
-              <p className="text-muted-foreground text-xs">
-                When on, the invoice splits the price you charge into taxable value and GST. When off, GST is added on top.
-              </p>
-
-              <div className="mt-2 max-w-sm">
-                <Field id="shippingTax" label="Shipping tax rule" hint="How tax is charged on shipping fees.">
+            <SettingsCard
+              title="GST registration"
+              description="Your business GSTIN and registered state of supply"
+            >
+              <div className="grid gap-4 sm:grid-cols-2">
+                <Field id="gstin" label="GSTIN" hint="Leave blank if not registered.">
+                  <Input
+                    id="gstin"
+                    maxLength={15}
+                    autoCapitalize="characters"
+                    value={gstin}
+                    onChange={(e) => setGstin(e.target.value.toUpperCase())}
+                    aria-invalid={Boolean(error)}
+                  />
+                  {error ? <FieldError>{error}</FieldError> : null}
+                </Field>
+                <Field id="sellerState" label="Place of supply state" hint="State your GST is registered in.">
                   <SimpleSelect
-                    id="shippingTax"
-                    value={shippingTax}
-                    onChange={(v) => setShippingTax(v as "highest_line_rate" | "none")}
-                    options={[
-                      { value: "highest_line_rate", label: "Tax at highest product rate in cart (standard mixed supply)" },
-                      { value: "none", label: "No tax on shipping" },
-                    ]}
+                    id="sellerState"
+                    value={sellerState}
+                    placeholder="Select state"
+                    onChange={setSellerState}
+                    options={INDIAN_STATES.map((s) => ({ value: s, label: s }))}
                   />
                 </Field>
               </div>
-            </SettingsSection>
+            </SettingsCard>
+
+            <SettingsCard
+              title="Pricing & shipping tax rules"
+              description="Tax treatment of catalogue product prices and shipping charges"
+            >
+              <div className="space-y-4">
+                <div className="space-y-1">
+                  <label className="flex items-center gap-2 text-sm font-medium text-foreground cursor-pointer">
+                    <Checkbox checked={pricesIncludeTax} onCheckedChange={(c) => setPricesIncludeTax(c === true)} />
+                    Product prices already include GST
+                  </label>
+                  <p className="text-xs text-muted-foreground pl-6">
+                    When on, the invoice splits the price you charge into taxable value and GST. When off, GST is added on top.
+                  </p>
+                </div>
+
+                <div className="max-w-md pt-2">
+                  <Field id="shippingTax" label="Shipping tax rule" hint="How tax is charged on shipping fees.">
+                    <SimpleSelect
+                      id="shippingTax"
+                      value={shippingTax}
+                      onChange={(v) => setShippingTax(v as "highest_line_rate" | "none")}
+                      options={[
+                        { value: "highest_line_rate", label: "Tax at highest product rate in cart (mixed supply)" },
+                        { value: "none", label: "No tax on shipping" },
+                      ]}
+                    />
+                  </Field>
+                </div>
+              </div>
+            </SettingsCard>
           </>
         ) : null}
       </form>
 
       {taxCollection ? (
-        <SettingsSection
+        <SettingsCard
           title="Tax classes"
-          description="Standard GST slabs assigned to products. Existing orders and invoices retain their original rates."
+          description="GST slabs assigned to catalog products"
           actions={
             <Button
               type="button"
@@ -275,7 +290,7 @@ function TaxForm({ initial }: { initial: TaxData }) {
             </Button>
           }
         >
-          <div className="rounded border border-border divide-y divide-border text-xs">
+          <div className="rounded-lg border border-border divide-y divide-border text-xs">
             {initial.classes.map((cls) => (
               <div key={cls.id} className="flex items-center justify-between p-3">
                 <div>
@@ -309,7 +324,7 @@ function TaxForm({ initial }: { initial: TaxData }) {
 
           {/* New Tax Class Dialog */}
           {isAddingClass ? (
-            <form onSubmit={handleCreateTaxClass} className="rounded border border-border bg-muted/30 p-3 mt-3 grid gap-3">
+            <form onSubmit={handleCreateTaxClass} className="rounded-lg border border-border bg-muted/20 p-4 mt-3 grid gap-3">
               <h3 className="text-xs font-semibold text-foreground">New GST Class</h3>
               <div className="grid gap-3 sm:grid-cols-3">
                 <Field id="newClassName" label="Class name">
@@ -339,7 +354,7 @@ function TaxForm({ initial }: { initial: TaxData }) {
                   />
                 </Field>
               </div>
-              <div className="flex justify-end gap-2">
+              <div className="flex justify-end gap-2 pt-1">
                 <Button type="button" variant="outline" size="sm" onClick={() => setIsAddingClass(false)}>
                   Cancel
                 </Button>
@@ -364,7 +379,7 @@ function TaxForm({ initial }: { initial: TaxData }) {
             pending={deleteClassMutation.isPending}
             onConfirm={handleDeleteTaxClass}
           />
-        </SettingsSection>
+        </SettingsCard>
       ) : null}
     </SettingsPageFrame>
   );
