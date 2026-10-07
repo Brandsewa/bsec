@@ -123,7 +123,11 @@ jobs:
         if: needs.changes.outputs.docs_only != 'true'
       - run: pnpm --filter "@bs/web..." build # perf-budget-bundle.int.test.ts reads .next
         if: needs.changes.outputs.docs_only != 'true'
-      - run: pnpm exec turbo run test:heavy --concurrency=1 # one package at a time: they share one Postgres (AGENTS.md section 4)
+      # One package at a time and one vitest worker: every *.int.test.ts shares one Postgres and runs migrations
+      # at start (AGENTS.md section 4). A 2-core hosted runner was serial by accident; bigger runners are not.
+      - run: pnpm exec turbo run test:heavy --concurrency=1
+        env:
+          VITEST_MAX_WORKERS: "1"
         if: needs.changes.outputs.docs_only != 'true'
       - name: Fast path notice
         if: needs.changes.outputs.docs_only == 'true'
