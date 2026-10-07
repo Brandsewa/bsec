@@ -1,5 +1,8 @@
 import React from "react";
 import type { Metadata } from "next";
+import { AuthShell } from "@bs/ui";
+import { resolveStore } from "@/server/customer-session.ts";
+import { getCachedStoreName } from "@/server/cached-storefront.ts";
 import { LoginForm } from "@/components/account/LoginForm.tsx";
 
 export const metadata: Metadata = {
@@ -7,10 +10,18 @@ export const metadata: Metadata = {
   robots: { index: false, follow: false },
 };
 
-export default function LoginPage() {
+export default async function LoginPage() {
+  const store = await resolveStore();
+  const storeName = store ? await getCachedStoreName(store.tenantId).catch(() => "Store") : "Store";
+
   return (
-    <div className="mx-auto max-w-3xl px-4 py-16 sm:px-6 lg:px-8">
+    <AuthShell
+      variant="store"
+      brand={{ name: storeName }}
+      title="Sign in"
+      description="Access your orders, addresses, and account details."
+    >
       <LoginForm initialTab="password" />
-    </div>
+    </AuthShell>
   );
 }

@@ -4,6 +4,7 @@ import { headers } from "next/headers";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { evaluateStorefrontAccess, getUnsubscribeView } from "@bs/domain";
+import { AuthShell } from "@bs/ui";
 import { UnsubscribeButton } from "@/components/account/UnsubscribeButton.tsx";
 import { server } from "@/server/runtime.ts";
 
@@ -25,39 +26,40 @@ export default async function UnsubscribePage({ params }: { params: Promise<{ to
   const view = await getUnsubscribeView(rt._db.db, access.tenantId, token);
 
   return (
-    <div className="mx-auto max-w-lg px-4 py-16 sm:px-6 lg:px-8">
-      <div className="rounded-2xl border border-border bg-card p-6 shadow-sm sm:p-8 space-y-5">
-        <h1 className="text-2xl font-extrabold text-foreground">Unsubscribe</h1>
+    <AuthShell
+      title="Unsubscribe"
+      subtitle={
+        view.state === "invalid"
+          ? "This unsubscribe link is not valid or has expired."
+          : view.state === "subscribed"
+            ? `Stop marketing emails to ${view.maskedEmail}?`
+            : `${view.maskedEmail} is not on our marketing list.`
+      }
+      variant="centered"
+    >
+      <div className="space-y-4">
         {view.state === "invalid" ? (
-          <>
+          <div className="space-y-3">
             <p className="text-sm text-muted-foreground" data-testid="unsubscribe-invalid">
-              This unsubscribe link is not valid or has expired. If you still get emails you do not want, use the link in
-              the latest email, or sign in to your account and turn off marketing there.
+              If you still get emails you do not want, use the link in the latest email, or sign in to your account and turn off marketing there.
             </p>
-            <Link href="/account/profile" className="inline-block text-sm font-medium text-primary hover:underline">
-              Go to my account
-            </Link>
-          </>
+            <div>
+              <Link href="/account/profile" className="text-sm font-medium text-primary hover:underline">
+                Go to my account
+              </Link>
+            </div>
+          </div>
         ) : (
-          <>
-            <p className="text-sm text-muted-foreground">
-              {view.state === "subscribed" ? (
-                <>Stop marketing emails to <span className="font-medium text-foreground">{view.maskedEmail}</span>?</>
-              ) : (
-                <>
-                  <span className="font-medium text-foreground">{view.maskedEmail}</span> is not on our marketing list.
-                </>
-              )}
-            </p>
-            <UnsubscribeButton token={token} alreadyDone={view.state === "unsubscribed"} />
-          </>
+          <UnsubscribeButton token={token} alreadyDone={view.state === "unsubscribed"} />
         )}
+
         <div className="border-t border-border pt-4">
           <Link href="/" className="text-sm font-medium text-primary hover:underline">
             ← Back to the store
           </Link>
         </div>
       </div>
-    </div>
+    </AuthShell>
   );
 }
+

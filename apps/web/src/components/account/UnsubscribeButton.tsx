@@ -1,6 +1,7 @@
 "use client";
 
 import React, { useState } from "react";
+import { Button, Alert, AlertDescription } from "@bs/ui";
 
 /** One-click confirmation for the unsubscribe page: nothing changes until the shopper presses the button. */
 export function UnsubscribeButton({ token, alreadyDone }: { token: string; alreadyDone: boolean }) {
@@ -23,27 +24,31 @@ export function UnsubscribeButton({ token, alreadyDone }: { token: string; alrea
 
   if (state === "done") {
     return (
-      <p role="status" className="rounded-lg bg-primary/10 px-4 py-3 text-sm font-medium text-primary" data-testid="unsubscribed">
-        You are unsubscribed. You will not get marketing emails from us any more. Order updates will still reach you.
-      </p>
+      <Alert variant="default" className="border-[var(--brand)] bg-[var(--brand-soft)]" role="status" data-testid="unsubscribed">
+        <AlertDescription className="text-xs text-[var(--foreground)]">
+          You are unsubscribed. You will not get marketing emails from us any more. Order updates will still reach you.
+        </AlertDescription>
+      </Alert>
     );
   }
 
   return (
     <div className="space-y-3">
-      <button
+      {error ? (
+        <Alert variant="destructive" role="alert">
+          <AlertDescription className="text-xs">{error}</AlertDescription>
+        </Alert>
+      ) : null}
+
+      <Button
         type="button"
+        size="md"
         onClick={confirm}
         disabled={state === "busy"}
-        className="rounded-lg bg-primary px-5 py-2.5 text-sm font-semibold text-primary-foreground disabled:opacity-60"
+        loading={state === "busy"}
       >
         {state === "busy" ? "Unsubscribing…" : "Unsubscribe"}
-      </button>
-      {error ? (
-        <p role="alert" className="text-sm text-red-600">
-          {error}
-        </p>
-      ) : null}
+      </Button>
     </div>
   );
 }

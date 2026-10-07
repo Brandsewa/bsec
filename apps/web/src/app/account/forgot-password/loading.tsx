@@ -1,6 +1,11 @@
 import React from "react";
-import { AccountSkeleton } from "@/components/account/AccountSkeleton.tsx";
+import { AuthCardSkeleton } from "@bs/ui";
 
 export default function Loading() {
-  return <AccountSkeleton variant="list" />;
+  return (
+    <div className="flex min-h-[60vh] items-center justify-center p-4">
+      <AuthCardSkeleton />
+    </div>
+  );
 }
+

@@ -2,8 +2,7 @@
 
 import React, { useState } from "react";
 import Link from "next/link";
-
-const inputClass = "w-full rounded-md border border-border bg-background px-3 py-2 text-sm";
+import { AuthShell, Button, Field, FieldLabel, Input, Checkbox, Alert, AlertDescription } from "@bs/ui";
 
 export default function RegisterPage() {
   const [name, setName] = useState("");
@@ -26,8 +25,8 @@ export default function RegisterPage() {
         headers: { "content-type": "application/json" },
         body: JSON.stringify({
           name: name.trim() || undefined,
-          email,
-          phone: phone || undefined,
+          email: email.trim(),
+          phone: phone.trim() || undefined,
           acceptsMarketing,
         }),
       });
@@ -40,101 +39,107 @@ export default function RegisterPage() {
       setRegistered(true);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Registration failed");
+    } finally {
       setBusy(false);
     }
   }
 
   return (
-    <div className="mx-auto max-w-sm rounded-2xl border border-border bg-card p-6 shadow-sm sm:p-8" data-testid="register-form">
-      <h1 className="text-2xl font-extrabold text-foreground">Create account</h1>
-      <p className="mt-1 text-sm text-muted-foreground">Sign up to track orders, save multiple addresses, and checkout faster.</p>
-
-      {registered ? (
-        <div className="mt-5 space-y-4">
-          <div className="rounded-lg bg-primary/10 p-4 text-center text-sm font-medium text-primary">
-            An account setup link has been sent to <strong className="text-foreground">{email}</strong>. Please check your inbox and click the link to set your password and complete your registration.
-          </div>
-          <Link
-            href="/account/login"
-            className="block text-center text-sm font-semibold text-primary hover:underline"
-          >
-            Return to sign in
-          </Link>
-        </div>
-      ) : (
-        <form onSubmit={handleRegister} className="mt-5 space-y-4">
-          <label className="block text-sm">
-            <span className="mb-1 block font-medium text-foreground">Full name (optional)</span>
-            <input
-              type="text"
-              value={name}
-              onChange={(e) => setName(e.target.value)}
-              className={inputClass}
-              autoComplete="name"
-              placeholder="Your name"
-            />
-          </label>
-
-          <label className="block text-sm">
-            <span className="mb-1 block font-medium text-foreground">Email address</span>
-            <input
-              required
-              type="email"
-              value={email}
-              onChange={(e) => setEmail(e.target.value)}
-              className={inputClass}
-              autoComplete="email"
-              placeholder="you@example.com"
-            />
-          </label>
-
-          <label className="block text-sm">
-            <span className="mb-1 block font-medium text-foreground">Phone number (optional)</span>
-            <input
-              inputMode="numeric"
-              pattern="[6-9][0-9]{9}"
-              maxLength={10}
-              value={phone}
-              onChange={(e) => setPhone(e.target.value.replace(/\D/g, ""))}
-              className={inputClass}
-              autoComplete="tel-national"
-              placeholder="10-digit number"
-            />
-            <span className="mt-1 block text-xs text-muted-foreground">Mandatory only at checkout for delivery.</span>
-          </label>
-
-          <label className="flex items-start gap-2 pt-1 text-sm text-muted-foreground">
-            <input
-              type="checkbox"
-              checked={acceptsMarketing}
-              onChange={(e) => setAcceptsMarketing(e.target.checked)}
-              className="mt-1 h-4 w-4 rounded border-border text-primary focus:ring-primary"
-            />
-            <span>Email me about news, new arrivals and exclusive offers</span>
-          </label>
-
-          {error ? (
-            <p role="alert" className="text-sm text-red-600">
-              {error}
-            </p>
-          ) : null}
-
-          <button
-            type="submit"
-            disabled={busy}
-            className="w-full rounded-lg bg-primary px-4 py-2.5 text-sm font-semibold text-primary-foreground disabled:opacity-60"
-          >
-            {busy ? "Creating account…" : "Create account"}
-          </button>
-
-          <p className="mt-4 text-center text-xs text-muted-foreground">
+    <div data-testid="register-form">
+      <AuthShell
+        variant="store"
+        brand={{ name: "Store" }}
+        title="Create account"
+        description="Sign up to track orders, save multiple addresses, and checkout faster."
+        footer={
+          <span>
             Already have an account?{" "}
-            <Link href="/account/login" className="font-semibold text-primary hover:underline">
+            <Link href="/account/login" className="font-semibold text-[var(--brand-ink)] hover:underline">
               Sign in
             </Link>
-          </p>
-        </form>
-      )}
+          </span>
+        }
+      >
+        {registered ? (
+          <div className="space-y-4">
+            <Alert variant="default" className="border-[var(--brand)] bg-[var(--brand-soft)]">
+              <AlertDescription className="text-xs text-[var(--foreground)]">
+                An account setup link has been sent to <strong className="text-[var(--foreground)]">{email}</strong>. Please check your inbox and click the link to set your password and complete your registration.
+              </AlertDescription>
+            </Alert>
+            <Button asChild size="md" className="w-full">
+              <Link href="/account/login">Return to sign in</Link>
+            </Button>
+          </div>
+        ) : (
+          <form onSubmit={handleRegister} className="space-y-4">
+            {error ? (
+              <Alert variant="destructive" role="alert">
+                <AlertDescription className="text-xs">{error}</AlertDescription>
+              </Alert>
+            ) : null}
+
+            <Field className="space-y-1.5">
+              <FieldLabel htmlFor="register-name">Full name (optional)</FieldLabel>
+              <Input
+                id="register-name"
+                type="text"
+                value={name}
+                onChange={(e) => setName(e.target.value)}
+                autoComplete="name"
+                placeholder="Your name"
+                className="h-10 sm:h-9"
+              />
+            </Field>
+
+            <Field className="space-y-1.5">
+              <FieldLabel htmlFor="register-email">Email address</FieldLabel>
+              <Input
+                id="register-email"
+                required
+                type="email"
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
+                autoComplete="email"
+                placeholder="you@example.com"
+                className="h-10 sm:h-9"
+              />
+            </Field>
+
+            <Field className="space-y-1.5">
+              <FieldLabel htmlFor="register-phone">Phone number (optional)</FieldLabel>
+              <Input
+                id="register-phone"
+                inputMode="numeric"
+                pattern="[6-9][0-9]{9}"
+                maxLength={10}
+                value={phone}
+                onChange={(e) => setPhone(e.target.value.replace(/\D/g, ""))}
+                autoComplete="tel-national"
+                placeholder="10-digit number"
+                className="h-10 sm:h-9"
+              />
+              <span className="block text-[11px] text-[var(--muted-foreground)]">Mandatory only at checkout for delivery.</span>
+            </Field>
+
+            <div className="flex items-start gap-2.5 pt-1">
+              <Checkbox
+                id="accepts-marketing"
+                checked={acceptsMarketing}
+                onCheckedChange={(checked) => setAcceptsMarketing(checked === true)}
+                className="mt-0.5"
+              />
+              <label htmlFor="accepts-marketing" className="text-xs text-[var(--muted-foreground)] leading-snug cursor-pointer select-none">
+                Email me about news, new arrivals and exclusive offers
+              </label>
+            </div>
+
+            <Button type="submit" size="md" disabled={busy} loading={busy} className="w-full">
+              {busy ? "Creating account…" : "Create account"}
+            </Button>
+          </form>
+        )}
+      </AuthShell>
     </div>
   );
 }

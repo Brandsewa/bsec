@@ -21,6 +21,7 @@ import { computeThemeTokens } from "@/components/storefront/theme-tokens.ts";
 import { googleFontsHref } from "@bs/blocks/theme-vars";
 import { fontSans, fontMono } from "@/lib/fonts.ts";
 import { themeBootScript } from "@bs/ui/server";
+import { ThemeProvider } from "@bs/ui";
 import "./globals.css";
 
 export const instant = false;
@@ -74,7 +75,9 @@ export default async function RootLayout({ children }: { children: ReactNode }) 
         <head>
           <script dangerouslySetInnerHTML={{ __html: themeBootScript }} />
         </head>
-        <body className="min-h-dvh antialiased">{children}</body>
+        <body className="min-h-dvh antialiased">
+          <ThemeProvider>{children}</ThemeProvider>
+        </body>
       </html>
     );
   }
@@ -167,7 +170,9 @@ export default async function RootLayout({ children }: { children: ReactNode }) 
         <head>
           <script dangerouslySetInnerHTML={{ __html: themeBootScript }} />
         </head>
-        <body className="min-h-dvh antialiased">{screenContent}</body>
+        <body className="min-h-dvh antialiased">
+          <ThemeProvider>{screenContent}</ThemeProvider>
+        </body>
       </html>
     );
   }
@@ -181,18 +186,20 @@ export default async function RootLayout({ children }: { children: ReactNode }) 
         {fontsHref ? <link rel="stylesheet" href={fontsHref} precedence="default" /> : null}
       </head>
       <body className="flex min-h-dvh flex-col antialiased">
-        <StoreStatusBanner isBypass={access.isBypass} mode={access.mode} />
-        {themeHeader ? (
-          <ThemeChrome blocks={themeHeader.blocks} renderData={themeHeader.renderData} storeName={storeName} />
-        ) : (
-          <StoreHeader storeName={storeName} logoWidth={logoWidth} />
-        )}
-        <main className="flex-1">{children}</main>
-        {themeFooter ? (
-          <ThemeChrome blocks={themeFooter.blocks} renderData={themeFooter.renderData} storeName={storeName} />
-        ) : (
-          <StoreFooter storeName={storeName} />
-        )}
+        <ThemeProvider>
+          <StoreStatusBanner isBypass={access.isBypass} mode={access.mode} />
+          {themeHeader ? (
+            <ThemeChrome blocks={themeHeader.blocks} renderData={themeHeader.renderData} storeName={storeName} />
+          ) : (
+            <StoreHeader storeName={storeName} logoWidth={logoWidth} />
+          )}
+          <main className="flex-1">{children}</main>
+          {themeFooter ? (
+            <ThemeChrome blocks={themeFooter.blocks} renderData={themeFooter.renderData} storeName={storeName} />
+          ) : (
+            <StoreFooter storeName={storeName} />
+          )}
+        </ThemeProvider>
       </body>
     </html>
   );

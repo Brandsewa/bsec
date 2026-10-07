@@ -2,8 +2,7 @@
 
 import React, { useState } from "react";
 import { useRouter } from "next/navigation";
-
-const inputClass = "w-full rounded-md border border-border bg-background px-3 py-2 text-sm";
+import { Button, Field, FieldLabel, Input, Checkbox, Alert, AlertDescription } from "@bs/ui";
 
 export interface ProfileFormProps {
   phone: string | null;
@@ -32,7 +31,7 @@ export function ProfileForm(props: ProfileFormProps) {
       const res = await fetch("/api/storefront/customer/profile", {
         method: "PUT",
         headers: { "content-type": "application/json" },
-        body: JSON.stringify({ name, email, acceptsMarketing }),
+        body: JSON.stringify({ name: name.trim(), email: email.trim(), acceptsMarketing }),
       });
       const data = (await res.json().catch(() => ({}))) as { error?: string };
       if (!res.ok) throw new Error(data.error ?? "Could not save your details");
@@ -47,35 +46,72 @@ export function ProfileForm(props: ProfileFormProps) {
 
   return (
     <form onSubmit={submit} className="space-y-4" data-testid="profile-form">
-      <label className="block text-sm">
-        <span className="mb-1 block font-medium text-foreground">Mobile number</span>
-        <input value={props.phone ?? ""} placeholder="No phone number linked" readOnly disabled className={`${inputClass} opacity-70`} />
-      </label>
-      <label className="block text-sm">
-        <span className="mb-1 block font-medium text-foreground">Name</span>
-        <input maxLength={120} value={name} onChange={(e) => setName(e.target.value)} className={inputClass} autoComplete="name" />
-      </label>
-      <label className="block text-sm">
-        <span className="mb-1 block font-medium text-foreground">Email</span>
-        <input required type="email" maxLength={254} value={email} onChange={(e) => setEmail(e.target.value)} className={inputClass} autoComplete="email" />
-      </label>
-      <label className="flex items-center gap-2 text-sm">
-        <input type="checkbox" checked={acceptsMarketing} onChange={(e) => setAcceptsMarketing(e.target.checked)} />
-        <span>Send me offers and news by email</span>
-      </label>
       {error ? (
-        <p role="alert" className="text-sm text-red-600">
-          {error}
-        </p>
+        <Alert variant="destructive" role="alert">
+          <AlertDescription className="text-xs">{error}</AlertDescription>
+        </Alert>
       ) : null}
+
       {saved ? (
-        <p role="status" className="text-sm font-medium text-primary">
-          Saved.
-        </p>
+        <Alert variant="default" className="border-[var(--brand)] bg-[var(--brand-soft)]" role="status">
+          <AlertDescription className="text-xs text-[var(--foreground)]">
+            Saved.
+          </AlertDescription>
+        </Alert>
       ) : null}
-      <button type="submit" disabled={busy} className="rounded-lg bg-primary px-5 py-2.5 text-sm font-semibold text-primary-foreground disabled:opacity-60">
+
+      <Field className="space-y-1.5">
+        <FieldLabel htmlFor="profile-phone">Mobile number</FieldLabel>
+        <Input
+          id="profile-phone"
+          value={props.phone ?? ""}
+          placeholder="No phone number linked"
+          readOnly
+          disabled
+          className="h-10 sm:h-9 opacity-70"
+        />
+      </Field>
+
+      <Field className="space-y-1.5">
+        <FieldLabel htmlFor="profile-name">Name</FieldLabel>
+        <Input
+          id="profile-name"
+          maxLength={120}
+          value={name}
+          onChange={(e) => setName(e.target.value)}
+          autoComplete="name"
+          className="h-10 sm:h-9"
+        />
+      </Field>
+
+      <Field className="space-y-1.5">
+        <FieldLabel htmlFor="profile-email">Email</FieldLabel>
+        <Input
+          id="profile-email"
+          required
+          type="email"
+          maxLength={254}
+          value={email}
+          onChange={(e) => setEmail(e.target.value)}
+          autoComplete="email"
+          className="h-10 sm:h-9"
+        />
+      </Field>
+
+      <div className="flex items-center gap-2.5 pt-1">
+        <Checkbox
+          id="profile-marketing"
+          checked={acceptsMarketing}
+          onCheckedChange={(checked) => setAcceptsMarketing(checked === true)}
+        />
+        <label htmlFor="profile-marketing" className="text-xs text-[var(--muted-foreground)] cursor-pointer select-none">
+          Send me offers and news by email
+        </label>
+      </div>
+
+      <Button type="submit" size="md" disabled={busy} loading={busy}>
         {busy ? "Saving…" : "Save changes"}
-      </button>
+      </Button>
     </form>
   );
 }

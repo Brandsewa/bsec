@@ -4,7 +4,9 @@ import { headers } from "next/headers";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { evaluateStorefrontAccess } from "@bs/domain";
+import { AuthShell } from "@bs/ui";
 import { PrivacyRequestForm } from "@/components/account/PrivacyRequestForm.tsx";
+import { getCachedStoreName } from "@/server/cached-storefront.ts";
 import { server } from "@/server/runtime.ts";
 
 export const metadata: Metadata = {
@@ -20,36 +22,32 @@ export default async function PrivacyRequestPage() {
   const access = await evaluateStorefrontAccess(rt, host, { headers: h });
   if (!access.tenantId) notFound();
 
+  const storeName = await getCachedStoreName(access.tenantId).catch(() => "Store");
+
   return (
-    <div className="mx-auto max-w-xl px-4 py-16 sm:px-6 lg:px-8">
-      <div className="space-y-6">
-        <div>
-          <h1 className="text-2xl font-extrabold text-foreground tracking-tight sm:text-3xl">
-            Customer Privacy & Data Rights
-          </h1>
-          <p className="mt-2 text-sm text-muted-foreground">
-            In accordance with applicable privacy laws including India's Digital Personal Data Protection Act, 2023, you have the right to request access, correction, or erasure of your personal data, or register a privacy inquiry.
-          </p>
-        </div>
-
+    <AuthShell
+      variant="store"
+      brand={{ name: storeName }}
+      title="Privacy & Data Rights"
+      description="Request access, correction, or erasure of your personal data."
+      footer={
+        <Link href="/" className="text-xs text-[var(--brand-ink)] hover:underline">
+          ← Back to the store
+        </Link>
+      }
+    >
+      <div className="space-y-4">
         <PrivacyRequestForm />
-
-        <div className="rounded-lg border border-border/60 bg-muted/30 p-4 text-xs text-muted-foreground space-y-2">
-          <p className="font-semibold text-foreground">How we handle requests</p>
+        <div className="rounded-lg border border-[var(--border)] bg-[var(--muted)] p-3 text-[11px] text-[var(--muted-foreground)] space-y-1.5 leading-relaxed">
+          <p className="font-semibold text-[var(--foreground)]">How we handle requests</p>
           <p>
-            • To prevent unauthorized data disclosure or alteration, a confirmation link will be emailed to you before any action is taken.
+            • To prevent unauthorized data disclosure, a confirmation link will be emailed to you before any action is taken.
           </p>
           <p>
-            • Transactional order and invoice records are retained in compliance with applicable tax and commercial accounting regulations.
+            • Transactional records are retained in compliance with applicable tax regulations.
           </p>
-        </div>
-
-        <div className="border-t border-border pt-4">
-          <Link href="/" className="text-sm font-medium text-primary hover:underline">
-            ← Back to the store
-          </Link>
         </div>
       </div>
-    </div>
+    </AuthShell>
   );
 }

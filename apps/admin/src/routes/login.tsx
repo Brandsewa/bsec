@@ -1,13 +1,10 @@
 import { createFileRoute, Link, redirect, useNavigate } from "@tanstack/react-router";
 import { useState, type FormEvent } from "react";
-import { PageSkeleton } from "@bs/ui";
-import { Button } from "@bs/ui";
-import { Field, FieldDescription, FieldError, FieldGroup, FieldLabel } from "@bs/ui";
-import { Input } from "@bs/ui";
+import { AuthCardSkeleton, AuthShell, Button, Field, FieldError, FieldGroup, FieldLabel, Input } from "@bs/ui";
 import { fetchMe, signIn } from "../lib/auth.ts";
 
 export const Route = createFileRoute("/login")({
-  pendingComponent: () => <PageSkeleton />,
+  pendingComponent: () => <AuthCardSkeleton />,
   beforeLoad: async ({ context }) => {
     const me = await context.queryClient.fetchQuery({ queryKey: ["me"], queryFn: fetchMe, staleTime: 0 }).catch(() => null);
     if (me) throw redirect({ to: "/" });
@@ -38,13 +35,14 @@ function LoginPage() {
   }
 
   return (
-    <div className="grid min-h-dvh place-items-center bg-dash-canvas p-4">
-      <form onSubmit={onSubmit} className="w-full max-w-sm rounded-lg border border-border bg-background p-6 shadow-sm">
+    <AuthShell
+      variant="platform"
+      brand={{ name: "Bs Commerce" }}
+      title="Sign in"
+      description="Use your store admin account."
+    >
+      <form onSubmit={onSubmit} className="space-y-4">
         <FieldGroup>
-          <div className="grid gap-1">
-            <h1 className="text-lg font-semibold">Sign in</h1>
-            <FieldDescription>Use your store admin account.</FieldDescription>
-          </div>
           <Field>
             <FieldLabel htmlFor="email">Email</FieldLabel>
             <Input id="email" type="email" autoComplete="username" required value={email} onChange={(e) => setEmail(e.target.value)} />
@@ -66,11 +64,11 @@ function LoginPage() {
             />
           </Field>
           {error ? <FieldError>{error}</FieldError> : null}
-          <Button type="submit" size="lg" disabled={busy || !email || !password}>
+          <Button type="submit" size="md" className="w-full" disabled={busy || !email || !password} loading={busy}>
             {busy ? "Signing in…" : "Sign in"}
           </Button>
         </FieldGroup>
       </form>
-    </div>
+    </AuthShell>
   );
 }

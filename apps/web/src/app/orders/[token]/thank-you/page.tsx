@@ -6,6 +6,7 @@ import { notFound } from "next/navigation";
 import { evaluateStorefrontAccess, getOrderByActionToken } from "@bs/domain";
 import { server } from "@/server/runtime.ts";
 import { describeOrderStatus, describePayment } from "@/components/orders/order-labels.ts";
+import { StatusBadge, Money, Button } from "@bs/ui";
 import { CreateAccountCard } from "@/components/orders/CreateAccountCard.tsx";
 
 interface ThankYouPageProps {
@@ -15,12 +16,6 @@ interface ThankYouPageProps {
 export const metadata: Metadata = {
   title: "Thank You for Your Order",
   description: "Order confirmation",
-};
-
-const TONE: Record<"good" | "bad" | "neutral", string> = {
-  good: "bg-emerald-50 text-emerald-700",
-  bad: "bg-rose-50 text-rose-700",
-  neutral: "bg-muted text-muted-foreground",
 };
 
 export default async function ThankYouPage({ params }: ThankYouPageProps) {
@@ -37,13 +32,17 @@ export default async function ThankYouPage({ params }: ThankYouPageProps) {
 
   const status = describeOrderStatus(order.status);
   const cancelled = order.status === "cancelled";
-  const inr = (paise: number) => `₹${(Number(paise) / 100).toLocaleString("en-IN")}`;
+  const statusToneMap: Record<"good" | "bad" | "neutral", "success" | "destructive" | "neutral"> = {
+    good: "success",
+    bad: "destructive",
+    neutral: "neutral",
+  };
 
   return (
     <div className="mx-auto max-w-3xl px-4 py-16 sm:px-6 lg:px-8 text-center">
       <div
         className={`mx-auto flex h-20 w-20 items-center justify-center rounded-full mb-6 ${
-          cancelled ? "bg-rose-100 text-rose-600" : "bg-emerald-100 text-emerald-600"
+          cancelled ? "bg-rose-100 text-rose-600 dark:bg-rose-950/40 dark:text-rose-400" : "bg-emerald-100 text-emerald-600 dark:bg-emerald-950/40 dark:text-emerald-400"
         }`}
       >
         <svg className="h-10 w-10" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2.5">
@@ -61,7 +60,7 @@ export default async function ThankYouPage({ params }: ThankYouPageProps) {
           : `We have received your order and will send updates to ${order.email}.`}
       </p>
 
-      <div className="mt-8 rounded-2xl border border-border bg-card p-6 text-left shadow-sm">
+      <div className="mt-8 rounded-xl border border-border bg-card p-6 text-left shadow-sm">
         <h2 className="text-sm font-semibold uppercase tracking-wider text-muted-foreground mb-4">Order Details</h2>
         <div className="space-y-3 text-sm">
           <div className="flex justify-between">
@@ -70,9 +69,9 @@ export default async function ThankYouPage({ params }: ThankYouPageProps) {
           </div>
           <div className="flex justify-between">
             <span className="text-muted-foreground">Status:</span>
-            <span className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-semibold ${TONE[status.tone]}`}>
+            <StatusBadge tone={statusToneMap[status.tone]}>
               {status.label}
-            </span>
+            </StatusBadge>
           </div>
           <div className="flex justify-between">
             <span className="text-muted-foreground">Payment:</span>
@@ -81,7 +80,9 @@ export default async function ThankYouPage({ params }: ThankYouPageProps) {
           {(order.discountTotal ?? 0) > 0 && (
             <div className="flex justify-between">
               <span className="text-muted-foreground">Discount:</span>
-              <span className="font-medium text-emerald-700">−{inr(order.discountTotal ?? 0)}</span>
+              <span className="font-medium text-emerald-700 dark:text-emerald-400">
+                −<Money paise={order.discountTotal ?? 0} />
+              </span>
             </div>
           )}
           {order.shipsOn && (
@@ -96,7 +97,7 @@ export default async function ThankYouPage({ params }: ThankYouPageProps) {
           )}
           <div className="flex justify-between">
             <span className="text-muted-foreground">Total:</span>
-            <span className="font-bold text-foreground">{inr(order.grandTotal)}</span>
+            <span className="font-bold text-foreground"><Money paise={order.grandTotal} /></span>
           </div>
         </div>
 
@@ -107,12 +108,12 @@ export default async function ThankYouPage({ params }: ThankYouPageProps) {
                 {item.productTitle}
                 {item.variantTitle && item.variantTitle !== "Default" ? ` (${item.variantTitle})` : ""} × {item.quantity}
                 {item.shipsOn ? (
-                  <span className="inline-flex items-center rounded bg-amber-500/10 px-1.5 py-0.25 text-[10px] font-medium text-amber-700 dark:text-amber-400">
+                  <span className="inline-flex items-center rounded bg-amber-500/10 px-1.5 py-0.5 text-[10px] font-medium text-amber-700 dark:text-amber-400">
                     Pre-order
                   </span>
                 ) : null}
               </span>
-              <span className="text-muted-foreground">{inr(item.total)}</span>
+              <span className="text-muted-foreground"><Money paise={item.total} /></span>
             </div>
           ))}
         </div>
@@ -121,19 +122,18 @@ export default async function ThankYouPage({ params }: ThankYouPageProps) {
       <CreateAccountCard email={order.email} phone={order.phone} />
 
       <div className="mt-10 flex flex-col items-center justify-center gap-3 sm:flex-row">
-        <Link
-          href={`/o/${token}`}
-          className="inline-flex items-center justify-center rounded-xl border border-border px-8 py-3.5 text-base font-semibold text-foreground hover:bg-muted/40 transition-colors"
-        >
-          View order status
+        <Link href={`/o/${token}`}>
+          <Button variant="outline">
+            View order status
+          </Button>
         </Link>
-        <Link
-          href="/"
-          className="inline-flex items-center justify-center rounded-xl bg-primary px-8 py-3.5 text-base font-semibold text-primary-foreground shadow hover:opacity-90 transition-opacity"
-        >
-          Continue Shopping
+        <Link href="/">
+          <Button variant="primary">
+            Continue Shopping
+          </Button>
         </Link>
       </div>
     </div>
   );
 }
+

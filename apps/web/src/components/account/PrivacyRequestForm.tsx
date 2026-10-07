@@ -1,6 +1,24 @@
 "use client";
 
 import React, { useState } from "react";
+import {
+  Button,
+  Field,
+  FieldLabel,
+  Input,
+  Textarea,
+  SimpleSelect,
+  Alert,
+  AlertDescription,
+} from "@bs/ui";
+
+const PRIVACY_REQUEST_TYPES = [
+  { value: "access", label: "Access data (Export personal information)" },
+  { value: "correction", label: "Correction of personal data" },
+  { value: "erasure", label: "Erasure / Deletion of personal data" },
+  { value: "withdraw_consent", label: "Withdraw marketing consent" },
+  { value: "grievance", label: "Privacy grievance / inquiry" },
+];
 
 export function PrivacyRequestForm() {
   const [email, setEmail] = useState("");
@@ -18,7 +36,7 @@ export function PrivacyRequestForm() {
       const res = await fetch("/api/storefront/privacy-requests", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ email, kind, details: details || undefined }),
+        body: JSON.stringify({ email: email.trim(), kind, details: details || undefined }),
       });
 
       const data = await res.json();
@@ -37,15 +55,15 @@ export function PrivacyRequestForm() {
 
   if (status === "success") {
     return (
-      <div className="rounded-xl border border-border bg-card p-6 shadow-sm space-y-4">
-        <div className="flex items-center space-x-3 text-green-600 dark:text-green-400">
+      <div className="rounded-xl border border-[var(--border)] bg-[var(--card)] p-6 shadow-xs space-y-4">
+        <div className="flex items-center space-x-3 text-[var(--success)]">
           <svg className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
           </svg>
-          <h2 className="text-lg font-semibold text-foreground">Verification Email Sent</h2>
+          <h2 className="text-base font-semibold text-[var(--foreground)]">Verification Email Sent</h2>
         </div>
-        <p className="text-sm text-muted-foreground">{message}</p>
-        <p className="text-xs text-muted-foreground">
+        <p className="text-xs text-[var(--muted-foreground)] leading-relaxed">{message}</p>
+        <p className="text-[11px] text-[var(--muted-foreground)]">
           For your security and privacy, data requests are processed only after you click the confirmation link sent to your email address.
         </p>
       </div>
@@ -53,72 +71,65 @@ export function PrivacyRequestForm() {
   }
 
   return (
-    <form onSubmit={handleSubmit} className="space-y-4 rounded-xl border border-border bg-card p-6 shadow-sm">
+    <form onSubmit={handleSubmit} className="space-y-4 rounded-xl border border-[var(--border)] bg-[var(--card)] p-6 shadow-xs">
       {status === "error" && (
-        <div className="rounded-md bg-destructive/15 p-3 text-sm text-destructive">
-          {message}
-        </div>
+        <Alert variant="destructive" role="alert">
+          <AlertDescription className="text-xs">{message}</AlertDescription>
+        </Alert>
       )}
 
-      <div>
-        <label htmlFor="email" className="block text-sm font-medium text-foreground">
-          Email address <span className="text-destructive">*</span>
-        </label>
-        <input
-          id="email"
+      <Field className="space-y-1.5">
+        <FieldLabel htmlFor="privacy-email">
+          Email address <span className="text-[var(--destructive)]">*</span>
+        </FieldLabel>
+        <Input
+          id="privacy-email"
           type="email"
           required
           value={email}
           onChange={(e) => setEmail(e.target.value)}
           placeholder="you@example.com"
-          className="mt-1 block w-full rounded-md border border-input bg-background px-3 py-2 text-sm text-foreground shadow-sm focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary"
+          className="h-10 sm:h-9"
         />
-        <p className="mt-1 text-xs text-muted-foreground">
+        <p className="text-[11px] text-[var(--muted-foreground)]">
           The email associated with your customer account or purchases.
         </p>
-      </div>
+      </Field>
 
-      <div>
-        <label htmlFor="kind" className="block text-sm font-medium text-foreground">
-          Request Type <span className="text-destructive">*</span>
-        </label>
-        <select
-          id="kind"
+      <Field className="space-y-1.5">
+        <FieldLabel htmlFor="privacy-kind">
+          Request Type <span className="text-[var(--destructive)]">*</span>
+        </FieldLabel>
+        <SimpleSelect
+          id="privacy-kind"
           value={kind}
-          onChange={(e) => setKind(e.target.value)}
-          className="mt-1 block w-full rounded-md border border-input bg-background px-3 py-2 text-sm text-foreground shadow-sm focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary"
-        >
-          <option value="access">Access data (Export personal information)</option>
-          <option value="correction">Correction of personal data</option>
-          <option value="erasure">Erasure / Deletion of personal data</option>
-          <option value="withdraw_consent">Withdraw marketing consent</option>
-          <option value="grievance">Privacy grievance / inquiry</option>
-        </select>
-      </div>
+          onChange={setKind}
+          options={PRIVACY_REQUEST_TYPES}
+        />
+      </Field>
 
-      <div>
-        <label htmlFor="details" className="block text-sm font-medium text-foreground">
-          Additional Details (Optional)
-        </label>
-        <textarea
-          id="details"
+      <Field className="space-y-1.5">
+        <FieldLabel htmlFor="privacy-details">Additional Details (Optional)</FieldLabel>
+        <Textarea
+          id="privacy-details"
           rows={3}
           maxLength={2000}
           value={details}
           onChange={(e) => setDetails(e.target.value)}
           placeholder="Provide any specific details regarding your request..."
-          className="mt-1 block w-full rounded-md border border-input bg-background px-3 py-2 text-sm text-foreground shadow-sm focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary"
+          className="resize-none text-xs"
         />
-      </div>
+      </Field>
 
       <div className="pt-2">
-        <button
+        <Button
           type="submit"
+          size="md"
           disabled={status === "submitting"}
-          className="inline-flex justify-center rounded-md border border-transparent bg-primary px-4 py-2 text-sm font-medium text-primary-foreground shadow-sm hover:opacity-90 focus:outline-none focus:ring-2 focus:ring-primary focus:ring-offset-2 disabled:opacity-50"
+          loading={status === "submitting"}
         >
           {status === "submitting" ? "Submitting..." : "Submit Privacy Request"}
-        </button>
+        </Button>
       </div>
     </form>
   );

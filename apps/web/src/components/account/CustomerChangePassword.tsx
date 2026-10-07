@@ -2,17 +2,18 @@
 
 import React, { useState } from "react";
 import { useRouter } from "next/navigation";
-
-const inputClass = "w-full rounded-md border border-border bg-background px-3 py-2 text-sm";
+import { Button, Field, FieldLabel, Input, Alert, AlertDescription, ConfirmDialog } from "@bs/ui";
 
 export function CustomerChangePassword() {
   const router = useRouter();
   const [currentPassword, setCurrentPassword] = useState("");
   const [nextPassword, setNextPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
+  const [showPassword, setShowPassword] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState(false);
+  const [showConfirmLogout, setShowConfirmLogout] = useState(false);
 
   async function submit(e: React.FormEvent) {
     e.preventDefault();
@@ -46,7 +47,6 @@ export function CustomerChangePassword() {
   }
 
   async function handleSignOutAll() {
-    if (!confirm("Are you sure you want to sign out of all devices?")) return;
     try {
       await fetch("/api/storefront/customer/logout", {
         method: "POST",
@@ -62,79 +62,111 @@ export function CustomerChangePassword() {
   return (
     <div className="space-y-6" data-testid="change-password-section">
       <form onSubmit={submit} className="space-y-4">
-        <label className="block text-sm">
-          <span className="mb-1 block font-medium text-foreground">Current password</span>
-          <input
-            required
-            type="password"
-            value={currentPassword}
-            onChange={(e) => setCurrentPassword(e.target.value)}
-            className={inputClass}
-            autoComplete="current-password"
-          />
-        </label>
+        {error ? (
+          <Alert variant="destructive" role="alert">
+            <AlertDescription className="text-xs">{error}</AlertDescription>
+          </Alert>
+        ) : null}
 
-        <label className="block text-sm">
-          <span className="mb-1 block font-medium text-foreground">New password</span>
-          <input
+        {success ? (
+          <Alert variant="default" className="border-[var(--brand)] bg-[var(--brand-soft)]">
+            <AlertDescription className="text-xs text-[var(--foreground)]">
+              Password changed successfully! Other devices have been signed out.
+            </AlertDescription>
+          </Alert>
+        ) : null}
+
+        <Field className="space-y-1.5">
+          <FieldLabel htmlFor="current-pw">Current password</FieldLabel>
+          <div className="relative">
+            <Input
+              id="current-pw"
+              required
+              type={showPassword ? "text" : "password"}
+              value={currentPassword}
+              onChange={(e) => setCurrentPassword(e.target.value)}
+              autoComplete="current-password"
+              className="h-10 sm:h-9 pr-10"
+            />
+            <button
+              type="button"
+              onClick={() => setShowPassword(!showPassword)}
+              aria-label={showPassword ? "Hide password" : "Show password"}
+              className="absolute right-2.5 top-1/2 -translate-y-1/2 text-[var(--muted-foreground)] hover:text-[var(--foreground)] p-1 text-xs"
+            >
+              {showPassword ? (
+                <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13.875 18.825A10.05 10.05 0 0112 19c-4.478 0-8.268-2.943-9.543-7a9.97 9.97 0 011.563-3.029m5.858.908a3 3 0 114.243 4.243M9.878 9.878l4.242 4.242M9.88 9.88l-3.29-3.29m7.532 7.532l3.29 3.29M3 3l18 18" />
+                </svg>
+              ) : (
+                <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
+                </svg>
+              )}
+            </button>
+          </div>
+        </Field>
+
+        <Field className="space-y-1.5">
+          <FieldLabel htmlFor="next-pw">New password</FieldLabel>
+          <Input
+            id="next-pw"
             required
-            type="password"
+            type={showPassword ? "text" : "password"}
             minLength={10}
             maxLength={128}
             value={nextPassword}
             onChange={(e) => setNextPassword(e.target.value)}
-            className={inputClass}
             autoComplete="new-password"
+            className="h-10 sm:h-9"
           />
-          <span className="mt-1 block text-xs text-muted-foreground">Minimum 10 characters.</span>
-        </label>
+          <span className="block text-[11px] text-[var(--muted-foreground)]">Minimum 10 characters.</span>
+        </Field>
 
-        <label className="block text-sm">
-          <span className="mb-1 block font-medium text-foreground">Confirm new password</span>
-          <input
+        <Field className="space-y-1.5">
+          <FieldLabel htmlFor="confirm-pw">Confirm new password</FieldLabel>
+          <Input
+            id="confirm-pw"
             required
-            type="password"
+            type={showPassword ? "text" : "password"}
             minLength={10}
             maxLength={128}
             value={confirmPassword}
             onChange={(e) => setConfirmPassword(e.target.value)}
-            className={inputClass}
             autoComplete="new-password"
+            className="h-10 sm:h-9"
           />
-        </label>
+        </Field>
 
-        {error ? (
-          <p role="alert" className="text-sm text-red-600">
-            {error}
-          </p>
-        ) : null}
-
-        {success ? (
-          <p className="text-sm font-medium text-primary">
-            Password changed successfully! Other devices have been signed out.
-          </p>
-        ) : null}
-
-        <button
-          type="submit"
-          disabled={busy}
-          className="rounded-lg bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground disabled:opacity-60"
-        >
+        <Button type="submit" size="md" disabled={busy} loading={busy}>
           {busy ? "Updating…" : "Update password"}
-        </button>
+        </Button>
       </form>
 
-      <div className="border-t border-border pt-6">
-        <h3 className="text-sm font-bold text-foreground">Active sessions</h3>
-        <p className="mt-1 text-xs text-muted-foreground">Sign out of all other browsers and devices.</p>
-        <button
+      <div className="border-t border-[var(--border)] pt-6">
+        <h3 className="text-sm font-semibold text-[var(--foreground)]">Active sessions</h3>
+        <p className="mt-1 text-xs text-[var(--muted-foreground)]">Sign out of all other browsers and devices.</p>
+        <Button
           type="button"
-          onClick={handleSignOutAll}
-          className="mt-3 rounded-lg border border-border px-3 py-1.5 text-xs font-semibold text-foreground hover:bg-muted"
+          variant="secondary"
+          size="sm"
+          onClick={() => setShowConfirmLogout(true)}
+          className="mt-3"
         >
           Sign out of all devices
-        </button>
+        </Button>
       </div>
+
+      <ConfirmDialog
+        open={showConfirmLogout}
+        onOpenChange={setShowConfirmLogout}
+        title="Sign out of all devices?"
+        description="Are you sure you want to sign out of all active sessions across all devices?"
+        confirmLabel="Sign out everywhere"
+        destructive
+        onConfirm={handleSignOutAll}
+      />
     </div>
   );
 }

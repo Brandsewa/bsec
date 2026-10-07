@@ -2,6 +2,17 @@
 
 import React, { useState } from "react";
 import { useRouter } from "next/navigation";
+import {
+  Button,
+  Field,
+  FieldLabel,
+  Input,
+  SimpleSelect,
+  Checkbox,
+  Badge,
+  Alert,
+  AlertDescription,
+} from "@bs/ui";
 
 export interface SavedAddress {
   id: string;
@@ -30,8 +41,24 @@ interface FormState {
   isDefault: boolean;
 }
 
-const blank = (phone: string | null): FormState => ({ name: "", phone: phone ?? "", line1: "", line2: "", landmark: "", city: "", stateCode: "", pincode: "", type: "home", isDefault: false });
-const inputClass = "w-full rounded-md border border-border bg-background px-3 py-2 text-sm";
+const ADDRESS_TYPES = [
+  { value: "home", label: "Home" },
+  { value: "work", label: "Work" },
+  { value: "other", label: "Other" },
+];
+
+const blank = (phone: string | null): FormState => ({
+  name: "",
+  phone: phone ?? "",
+  line1: "",
+  line2: "",
+  landmark: "",
+  city: "",
+  stateCode: "",
+  pincode: "",
+  type: "home",
+  isDefault: false,
+});
 
 /** The shopper's saved addresses: add, edit, make default, remove. */
 export function AddressBook({ addresses, phone }: { addresses: SavedAddress[]; phone: string | null }) {
@@ -46,13 +73,28 @@ export function AddressBook({ addresses, phone }: { addresses: SavedAddress[]; p
     setEditing(a ? a.id : "new");
     setForm(
       a
-        ? { name: a.name, phone: a.phone, line1: a.line1, line2: a.line2 ?? "", landmark: a.landmark ?? "", city: a.city, stateCode: a.stateCode, pincode: a.pincode, type: a.type, isDefault: a.isDefault }
+        ? {
+            name: a.name,
+            phone: a.phone,
+            line1: a.line1,
+            line2: a.line2 ?? "",
+            landmark: a.landmark ?? "",
+            city: a.city,
+            stateCode: a.stateCode,
+            pincode: a.pincode,
+            type: a.type,
+            isDefault: a.isDefault,
+          }
         : blank(phone),
     );
   }
 
   async function call(url: string, method: string, body?: unknown) {
-    const res = await fetch(url, { method, headers: { "content-type": "application/json" }, ...(body ? { body: JSON.stringify(body) } : {}) });
+    const res = await fetch(url, {
+      method,
+      headers: { "content-type": "application/json" },
+      ...(body ? { body: JSON.stringify(body) } : {}),
+    });
     const data = (await res.json().catch(() => ({}))) as { error?: string };
     if (!res.ok) throw new Error(data.error ?? "Something went wrong. Please try again.");
   }
@@ -87,25 +129,26 @@ export function AddressBook({ addresses, phone }: { addresses: SavedAddress[]; p
     }
   }
 
-  const text = (key: keyof FormState, label: string, extra: React.InputHTMLAttributes<HTMLInputElement> = {}) => (
-    <label className="block text-sm">
-      <span className="mb-1 block font-medium text-foreground">{label}</span>
-      <input value={form[key] as string} onChange={(e) => setForm({ ...form, [key]: e.target.value })} className={inputClass} {...extra} />
-    </label>
-  );
-
   return (
-    <div className="space-y-4" data-testid="address-book">
-      {addresses.length === 0 && editing === null ? <p className="text-sm text-muted-foreground">You have no saved addresses yet.</p> : null}
+    <div className="space-y-5" data-testid="address-book">
+      {addresses.length === 0 && editing === null ? (
+        <p className="text-sm text-[var(--muted-foreground)]">You have no saved addresses yet.</p>
+      ) : null}
+
       <ul className="space-y-3">
         {addresses.map((a) => (
-          <li key={a.id} className="rounded-xl border border-border p-4 text-sm">
+          <li key={a.id} className="rounded-xl border border-[var(--border)] bg-[var(--card)] p-4 text-sm shadow-xs">
             <div className="flex items-start justify-between gap-3">
               <div>
-                <div className="font-medium text-foreground">
-                  {a.name} {a.isDefault ? <span className="ml-1 rounded-full bg-primary/10 px-2 py-0.5 text-xs font-semibold text-primary">Default</span> : null}
+                <div className="font-semibold text-[var(--foreground)] flex items-center gap-2">
+                  <span>{a.name}</span>
+                  {a.isDefault ? (
+                    <Badge variant="secondary" className="text-[10px] px-1.5 py-0">
+                      Default
+                    </Badge>
+                  ) : null}
                 </div>
-                <div className="text-muted-foreground">
+                <div className="mt-1 text-xs text-[var(--muted-foreground)] leading-relaxed">
                   {[a.line1, a.line2, a.landmark].filter(Boolean).join(", ")}
                   <br />
                   {a.city}, {a.stateCode} {a.pincode}
@@ -113,13 +156,20 @@ export function AddressBook({ addresses, phone }: { addresses: SavedAddress[]; p
                   {a.phone}
                 </div>
               </div>
-              <div className="flex shrink-0 gap-3">
-                <button type="button" onClick={() => open(a)} className="font-medium text-primary hover:underline">
+              <div className="flex shrink-0 items-center gap-2">
+                <Button type="button" variant="ghost" size="sm" onClick={() => open(a)}>
                   Edit
-                </button>
-                <button type="button" onClick={() => remove(a.id)} disabled={busy} className="font-medium text-red-600 hover:underline disabled:opacity-60">
+                </Button>
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => remove(a.id)}
+                  disabled={busy}
+                  className="text-[var(--destructive)] hover:text-[var(--destructive)] hover:bg-[var(--destructive-soft)]"
+                >
                   Remove
-                </button>
+                </Button>
               </div>
             </div>
           </li>
@@ -127,49 +177,154 @@ export function AddressBook({ addresses, phone }: { addresses: SavedAddress[]; p
       </ul>
 
       {editing === null ? (
-        <button type="button" onClick={() => open()} className="rounded-lg border border-border px-4 py-2 text-sm font-semibold text-foreground hover:bg-muted">
+        <Button type="button" variant="secondary" size="md" onClick={() => open()}>
           Add an address
-        </button>
+        </Button>
       ) : (
-        <form onSubmit={save} className="space-y-3 rounded-xl border border-border p-4">
-          <h3 className="text-sm font-semibold uppercase tracking-wider text-muted-foreground">{editing === "new" ? "New address" : "Edit address"}</h3>
-          {text("name", "Recipient name", { required: true, maxLength: 120 })}
-          {text("phone", "Phone", { required: true, inputMode: "numeric", pattern: "[6-9][0-9]{9}", maxLength: 10 })}
-          {text("line1", "Address", { required: true, maxLength: 200 })}
-          {text("line2", "Apartment, suite (optional)", { maxLength: 200 })}
-          {text("landmark", "Landmark (optional)", { maxLength: 200 })}
-          <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
-            {text("city", "City", { required: true, maxLength: 80 })}
-            {text("stateCode", "State", { required: true, maxLength: 80 })}
-            {text("pincode", "Pincode", { required: true, inputMode: "numeric", pattern: "[1-9][0-9]{5}", maxLength: 6 })}
+        <form onSubmit={save} className="space-y-4 rounded-xl border border-[var(--border)] bg-[var(--card)] p-5 shadow-xs">
+          <h3 className="text-xs font-semibold uppercase tracking-wider text-[var(--muted-foreground)]">
+            {editing === "new" ? "New address" : "Edit address"}
+          </h3>
+
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <Field className="space-y-1.5">
+              <FieldLabel htmlFor="addr-name">Recipient name</FieldLabel>
+              <Input
+                id="addr-name"
+                required
+                maxLength={120}
+                value={form.name}
+                onChange={(e) => setForm({ ...form, name: e.target.value })}
+                className="h-10 sm:h-9"
+              />
+            </Field>
+
+            <Field className="space-y-1.5">
+              <FieldLabel htmlFor="addr-phone">Phone</FieldLabel>
+              <Input
+                id="addr-phone"
+                required
+                inputMode="numeric"
+                pattern="[6-9][0-9]{9}"
+                maxLength={10}
+                value={form.phone}
+                onChange={(e) => setForm({ ...form, phone: e.target.value })}
+                className="h-10 sm:h-9"
+              />
+            </Field>
           </div>
-          <label className="block text-sm">
-            <span className="mb-1 block font-medium text-foreground">Type</span>
-            <select value={form.type} onChange={(e) => setForm({ ...form, type: e.target.value })} className={inputClass}>
-              <option value="home">Home</option>
-              <option value="work">Work</option>
-              <option value="other">Other</option>
-            </select>
-          </label>
-          <label className="flex items-center gap-2 text-sm">
-            <input type="checkbox" checked={form.isDefault} onChange={(e) => setForm({ ...form, isDefault: e.target.checked })} />
-            <span>Make this my default address</span>
-          </label>
-          <div className="flex gap-2">
-            <button type="submit" disabled={busy} className="rounded-lg bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground disabled:opacity-60">
+
+          <Field className="space-y-1.5">
+            <FieldLabel htmlFor="addr-line1">Address line 1</FieldLabel>
+            <Input
+              id="addr-line1"
+              required
+              maxLength={200}
+              value={form.line1}
+              onChange={(e) => setForm({ ...form, line1: e.target.value })}
+              className="h-10 sm:h-9"
+            />
+          </Field>
+
+          <Field className="space-y-1.5">
+            <FieldLabel htmlFor="addr-line2">Apartment, suite (optional)</FieldLabel>
+            <Input
+              id="addr-line2"
+              maxLength={200}
+              value={form.line2}
+              onChange={(e) => setForm({ ...form, line2: e.target.value })}
+              className="h-10 sm:h-9"
+            />
+          </Field>
+
+          <Field className="space-y-1.5">
+            <FieldLabel htmlFor="addr-landmark">Landmark (optional)</FieldLabel>
+            <Input
+              id="addr-landmark"
+              maxLength={200}
+              value={form.landmark}
+              onChange={(e) => setForm({ ...form, landmark: e.target.value })}
+              className="h-10 sm:h-9"
+            />
+          </Field>
+
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
+            <Field className="space-y-1.5">
+              <FieldLabel htmlFor="addr-city">City</FieldLabel>
+              <Input
+                id="addr-city"
+                required
+                maxLength={80}
+                value={form.city}
+                onChange={(e) => setForm({ ...form, city: e.target.value })}
+                className="h-10 sm:h-9"
+              />
+            </Field>
+
+            <Field className="space-y-1.5">
+              <FieldLabel htmlFor="addr-state">State</FieldLabel>
+              <Input
+                id="addr-state"
+                required
+                maxLength={80}
+                value={form.stateCode}
+                onChange={(e) => setForm({ ...form, stateCode: e.target.value })}
+                className="h-10 sm:h-9"
+              />
+            </Field>
+
+            <Field className="space-y-1.5">
+              <FieldLabel htmlFor="addr-pincode">Pincode</FieldLabel>
+              <Input
+                id="addr-pincode"
+                required
+                inputMode="numeric"
+                pattern="[1-9][0-9]{5}"
+                maxLength={6}
+                value={form.pincode}
+                onChange={(e) => setForm({ ...form, pincode: e.target.value })}
+                className="h-10 sm:h-9"
+              />
+            </Field>
+          </div>
+
+          <Field className="space-y-1.5">
+            <FieldLabel htmlFor="addr-type">Address Type</FieldLabel>
+            <SimpleSelect
+              id="addr-type"
+              value={form.type}
+              onChange={(val: string) => setForm({ ...form, type: val as "home" | "work" | "other" })}
+              options={ADDRESS_TYPES}
+            />
+          </Field>
+
+          <div className="flex items-center gap-2.5 pt-1">
+            <Checkbox
+              id="addr-default"
+              checked={form.isDefault}
+              onCheckedChange={(checked) => setForm({ ...form, isDefault: checked === true })}
+            />
+            <label htmlFor="addr-default" className="text-xs text-[var(--muted-foreground)] cursor-pointer select-none">
+              Make this my default address
+            </label>
+          </div>
+
+          {error ? (
+            <Alert variant="destructive" role="alert">
+              <AlertDescription className="text-xs">{error}</AlertDescription>
+            </Alert>
+          ) : null}
+
+          <div className="flex items-center gap-2.5 pt-2">
+            <Button type="submit" size="md" disabled={busy} loading={busy}>
               {busy ? "Saving…" : "Save address"}
-            </button>
-            <button type="button" onClick={() => setEditing(null)} className="rounded-lg px-4 py-2 text-sm text-muted-foreground">
+            </Button>
+            <Button type="button" variant="ghost" size="md" onClick={() => setEditing(null)}>
               Cancel
-            </button>
+            </Button>
           </div>
         </form>
       )}
-      {error ? (
-        <p role="alert" className="text-sm text-red-600">
-          {error}
-        </p>
-      ) : null}
     </div>
   );
 }

@@ -2,6 +2,7 @@
 
 import React, { use, useEffect, useState } from "react";
 import Link from "next/link";
+import { AuthShell, Button, Alert, AlertDescription, Spinner } from "@bs/ui";
 
 export default function VerifyEmailPage({ params }: { params: Promise<{ token: string }> }) {
   const resolvedParams = use(params);
@@ -9,6 +10,7 @@ export default function VerifyEmailPage({ params }: { params: Promise<{ token: s
 
   const [status, setStatus] = useState<"verifying" | "success" | "error">("verifying");
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  const [resendCooldown, setResendCooldown] = useState(0);
 
   useEffect(() => {
     let active = true;
@@ -44,37 +46,56 @@ export default function VerifyEmailPage({ params }: { params: Promise<{ token: s
     };
   }, [token]);
 
-  return (
-    <div className="mx-auto max-w-sm rounded-2xl border border-border bg-card p-6 shadow-sm sm:p-8" data-testid="verify-email-page">
-      <h1 className="text-2xl font-extrabold text-foreground">Email verification</h1>
+  useEffect(() => {
+    if (resendCooldown <= 0) return;
+    const timer = setInterval(() => {
+      setResendCooldown((prev) => (prev > 0 ? prev - 1 : 0));
+    }, 1000);
+    return () => clearInterval(timer);
+  }, [resendCooldown]);
 
-      {status === "verifying" ? (
-        <p className="mt-3 text-sm text-muted-foreground">Verifying your email address, please wait…</p>
-      ) : status === "success" ? (
-        <div className="mt-4 space-y-4">
-          <div className="rounded-lg bg-primary/10 p-4 text-center text-sm font-medium text-primary">
-            Your email has been verified! You now have full access to your account and historical orders.
+  return (
+    <div data-testid="verify-email-page">
+      <AuthShell
+        variant="store"
+        brand={{ name: "Store" }}
+        title="Email verification"
+        description="Verifying your account email address"
+      >
+        {status === "verifying" ? (
+          <div className="flex flex-col items-center justify-center py-6 space-y-3 text-center">
+            <Spinner size="md" />
+            <p className="text-xs text-[var(--muted-foreground)]">Verifying your email address, please wait…</p>
           </div>
-          <Link
-            href="/account"
-            className="block w-full rounded-lg bg-primary px-4 py-2.5 text-center text-sm font-semibold text-primary-foreground"
-          >
-            Go to my account
-          </Link>
-        </div>
-      ) : (
-        <div className="mt-4 space-y-4">
-          <div className="rounded-lg bg-red-50 p-4 text-center text-sm font-medium text-red-600 dark:bg-red-950/50 dark:text-red-400">
-            {errorMessage ?? "Verification link is invalid or has expired."}
+        ) : status === "success" ? (
+          <div className="space-y-4">
+            <Alert variant="default" className="border-[var(--brand)] bg-[var(--brand-soft)]">
+              <AlertDescription className="text-xs text-[var(--foreground)]">
+                Your email has been verified! You now have full access to your account and historical orders.
+              </AlertDescription>
+            </Alert>
+            <Button asChild size="md" className="w-full">
+              <Link href="/account">Go to my account</Link>
+            </Button>
           </div>
-          <Link
-            href="/account"
-            className="block text-center text-sm font-semibold text-primary hover:underline"
-          >
-            Go to account
-          </Link>
-        </div>
-      )}
+        ) : (
+          <div className="space-y-4">
+            <Alert variant="destructive" role="alert">
+              <AlertDescription className="text-xs">
+                {errorMessage ?? "Verification link is invalid or has expired."}
+              </AlertDescription>
+            </Alert>
+            <Button asChild size="md" className="w-full">
+              <Link href="/account">Go to account</Link>
+            </Button>
+            {resendCooldown > 0 ? (
+              <p className="text-center text-xs text-[var(--muted-foreground)]">
+                Resend available in {resendCooldown}s
+              </p>
+            ) : null}
+          </div>
+        )}
+      </AuthShell>
     </div>
   );
 }

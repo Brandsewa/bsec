@@ -6,15 +6,16 @@ import { Card } from "../components/ui/card.tsx";
 import { cn } from "../lib/cn.ts";
 
 export interface AuthShellProps {
-  brand: {
+  brand?: {
     logo?: React.ReactNode;
-    name: string;
+    name?: string;
   };
   title: string;
   description?: string;
-  children: React.ReactNode;
+  subtitle?: string;
+  children?: React.ReactNode;
   footer?: React.ReactNode;
-  variant?: "platform" | "store";
+  variant?: "platform" | "store" | "centered";
   aside?: React.ReactNode;
   className?: string;
 }
@@ -23,12 +24,17 @@ export function AuthShell({
   brand,
   title,
   description,
+  subtitle,
   children,
   footer,
-  _variant = "platform",
+  variant: _variant = "platform",
   aside,
   className,
-}: AuthShellProps & { _variant?: "platform" | "store" }) {
+}: AuthShellProps) {
+  const desc = description ?? subtitle;
+  const brandName = brand?.name;
+  const brandLogo = brand?.logo;
+
   return (
     <div className={cn("min-h-screen w-full flex bg-[var(--background)] text-[var(--foreground)] relative", className)}>
       {/* Top right ThemeToggle */}
@@ -40,20 +46,22 @@ export function AuthShell({
         <div className="w-full max-w-[400px] space-y-6">
           {/* Brand header */}
           <div className="flex flex-col items-center text-center space-y-2">
-            {brand.logo ? (
+            {brandLogo ? (
               <div className="h-10 w-10 flex items-center justify-center">
-                {brand.logo}
+                {brandLogo}
               </div>
             ) : null}
-            <div className="text-xs font-semibold tracking-wider uppercase text-[var(--muted-foreground)]">
-              {brand.name}
-            </div>
+            {brandName ? (
+              <div className="text-xs font-semibold tracking-wider uppercase text-[var(--muted-foreground)]">
+                {brandName}
+              </div>
+            ) : null}
             <h1 className="text-xl font-bold tracking-tight text-[var(--foreground)]">
               {title}
             </h1>
-            {description && (
+            {desc && (
               <p className="text-xs text-[var(--muted-foreground)] text-balance">
-                {description}
+                {desc}
               </p>
             )}
           </div>

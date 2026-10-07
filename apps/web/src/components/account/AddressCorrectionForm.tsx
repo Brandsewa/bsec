@@ -1,6 +1,7 @@
 "use client";
 
 import React, { useState } from "react";
+import { Button, Field, FieldLabel, Input, Alert, AlertDescription } from "@bs/ui";
 
 export interface AddressFields {
   fullName: string;
@@ -10,8 +11,6 @@ export interface AddressFields {
   state: string;
   pincode: string;
 }
-
-const inputClass = "w-full rounded-md border border-border bg-background px-3 py-2 text-sm";
 
 /** Lets a shopper correct the delivery address of an order that has not shipped yet. */
 export function AddressCorrectionForm({ token, initial }: { token: string; initial: AddressFields }) {
@@ -48,45 +47,104 @@ export function AddressCorrectionForm({ token, initial }: { token: string; initi
 
   return (
     <form onSubmit={submit} className="space-y-4" data-testid="address-form">
-      <label className="block text-sm">
-        <span className="mb-1 block font-medium text-foreground">Full name</span>
-        <input required maxLength={120} value={form.fullName} onChange={set("fullName")} className={inputClass} autoComplete="name" />
-      </label>
-      <label className="block text-sm">
-        <span className="mb-1 block font-medium text-foreground">Address</span>
-        <input required maxLength={200} value={form.addressLine1} onChange={set("addressLine1")} className={inputClass} autoComplete="address-line1" />
-      </label>
-      <label className="block text-sm">
-        <span className="mb-1 block font-medium text-foreground">Apartment, landmark (optional)</span>
-        <input maxLength={200} value={form.addressLine2 ?? ""} onChange={set("addressLine2")} className={inputClass} autoComplete="address-line2" />
-      </label>
+      <Field className="space-y-1.5">
+        <FieldLabel htmlFor="corr-name">Full name</FieldLabel>
+        <Input
+          id="corr-name"
+          required
+          maxLength={120}
+          value={form.fullName}
+          onChange={set("fullName")}
+          autoComplete="name"
+          className="h-10 sm:h-9"
+        />
+      </Field>
+
+      <Field className="space-y-1.5">
+        <FieldLabel htmlFor="corr-line1">Address</FieldLabel>
+        <Input
+          id="corr-line1"
+          required
+          maxLength={200}
+          value={form.addressLine1}
+          onChange={set("addressLine1")}
+          autoComplete="address-line1"
+          className="h-10 sm:h-9"
+        />
+      </Field>
+
+      <Field className="space-y-1.5">
+        <FieldLabel htmlFor="corr-line2">Apartment, landmark (optional)</FieldLabel>
+        <Input
+          id="corr-line2"
+          maxLength={200}
+          value={form.addressLine2 ?? ""}
+          onChange={set("addressLine2")}
+          autoComplete="address-line2"
+          className="h-10 sm:h-9"
+        />
+      </Field>
+
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
-        <label className="block text-sm">
-          <span className="mb-1 block font-medium text-foreground">City</span>
-          <input required maxLength={80} value={form.city} onChange={set("city")} className={inputClass} autoComplete="address-level2" />
-        </label>
-        <label className="block text-sm">
-          <span className="mb-1 block font-medium text-foreground">State</span>
-          <input required maxLength={80} value={form.state} onChange={set("state")} className={inputClass} autoComplete="address-level1" />
-        </label>
-        <label className="block text-sm">
-          <span className="mb-1 block font-medium text-foreground">Pincode</span>
-          <input required inputMode="numeric" pattern="[1-9][0-9]{5}" maxLength={6} value={form.pincode} onChange={set("pincode")} className={inputClass} autoComplete="postal-code" />
-        </label>
+        <Field className="space-y-1.5">
+          <FieldLabel htmlFor="corr-city">City</FieldLabel>
+          <Input
+            id="corr-city"
+            required
+            maxLength={80}
+            value={form.city}
+            onChange={set("city")}
+            autoComplete="address-level2"
+            className="h-10 sm:h-9"
+          />
+        </Field>
+
+        <Field className="space-y-1.5">
+          <FieldLabel htmlFor="corr-state">State</FieldLabel>
+          <Input
+            id="corr-state"
+            required
+            maxLength={80}
+            value={form.state}
+            onChange={set("state")}
+            autoComplete="address-level1"
+            className="h-10 sm:h-9"
+          />
+        </Field>
+
+        <Field className="space-y-1.5">
+          <FieldLabel htmlFor="corr-pincode">Pincode</FieldLabel>
+          <Input
+            id="corr-pincode"
+            required
+            inputMode="numeric"
+            pattern="[1-9][0-9]{5}"
+            maxLength={6}
+            value={form.pincode}
+            onChange={set("pincode")}
+            autoComplete="postal-code"
+            className="h-10 sm:h-9"
+          />
+        </Field>
       </div>
+
       {error ? (
-        <p role="alert" className="text-sm text-red-600">
-          {error}
-        </p>
+        <Alert variant="destructive" role="alert">
+          <AlertDescription className="text-xs">{error}</AlertDescription>
+        </Alert>
       ) : null}
+
       {saved ? (
-        <p role="status" className="rounded-lg bg-primary/10 px-4 py-3 text-sm font-medium text-primary">
-          Thanks, your delivery address is updated.
-        </p>
+        <Alert variant="default" className="border-[var(--brand)] bg-[var(--brand-soft)]" role="status">
+          <AlertDescription className="text-xs text-[var(--foreground)]">
+            Thanks, your delivery address is updated.
+          </AlertDescription>
+        </Alert>
       ) : null}
-      <button type="submit" disabled={busy} className="rounded-lg bg-primary px-5 py-2.5 text-sm font-semibold text-primary-foreground disabled:opacity-60">
+
+      <Button type="submit" size="md" disabled={busy} loading={busy}>
         {busy ? "Saving…" : "Update address"}
-      </button>
+      </Button>
     </form>
   );
 }

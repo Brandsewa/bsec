@@ -2,8 +2,7 @@
 
 import React, { useState } from "react";
 import Link from "next/link";
-
-const inputClass = "w-full rounded-md border border-border bg-background px-3 py-2 text-sm";
+import { AuthShell, Button, Field, FieldLabel, Input, Alert, AlertDescription } from "@bs/ui";
 
 export default function ForgotPasswordPage() {
   const [email, setEmail] = useState("");
@@ -20,7 +19,7 @@ export default function ForgotPasswordPage() {
       const res = await fetch("/api/storefront/customer/forgot-password", {
         method: "POST",
         headers: { "content-type": "application/json" },
-        body: JSON.stringify({ email }),
+        body: JSON.stringify({ email: email.trim() }),
       });
 
       const data = (await res.json().catch(() => ({}))) as { error?: string };
@@ -37,59 +36,60 @@ export default function ForgotPasswordPage() {
   }
 
   return (
-    <div className="mx-auto max-w-sm rounded-2xl border border-border bg-card p-6 shadow-sm sm:p-8" data-testid="forgot-password-form">
-      <h1 className="text-2xl font-extrabold text-foreground">Forgot password</h1>
-      <p className="mt-1 text-sm text-muted-foreground">Enter your email and we will send you a link to reset your password.</p>
-
-      {submitted ? (
-        <div className="mt-5 space-y-4">
-          <div className="rounded-lg bg-primary/10 p-4 text-center text-sm font-medium text-primary">
-            If an account with this email exists, a password reset link has been sent. Please check your inbox.
-          </div>
-          <Link
-            href="/account/login"
-            className="block text-center text-sm font-semibold text-primary hover:underline"
-          >
-            Back to sign in
-          </Link>
-        </div>
-      ) : (
-        <form onSubmit={handleSubmit} className="mt-5 space-y-4">
-          <label className="block text-sm">
-            <span className="mb-1 block font-medium text-foreground">Email address</span>
-            <input
-              required
-              type="email"
-              value={email}
-              onChange={(e) => setEmail(e.target.value)}
-              className={inputClass}
-              autoComplete="email"
-              placeholder="you@example.com"
-            />
-          </label>
-
-          {error ? (
-            <p role="alert" className="text-sm text-red-600">
-              {error}
-            </p>
-          ) : null}
-
-          <button
-            type="submit"
-            disabled={busy}
-            className="w-full rounded-lg bg-primary px-4 py-2.5 text-sm font-semibold text-primary-foreground disabled:opacity-60"
-          >
-            {busy ? "Sending link…" : "Send reset link"}
-          </button>
-
-          <p className="mt-4 text-center text-xs text-muted-foreground">
+    <div data-testid="forgot-password-form">
+      <AuthShell
+        variant="store"
+        brand={{ name: "Store" }}
+        title="Forgot password"
+        description="Enter your email and we will send you a link to reset your password."
+        footer={
+          <span>
             Remember your password?{" "}
-            <Link href="/account/login" className="font-semibold text-primary hover:underline">
+            <Link href="/account/login" className="font-semibold text-[var(--brand-ink)] hover:underline">
               Sign in
             </Link>
-          </p>
-        </form>
-      )}
+          </span>
+        }
+      >
+        {submitted ? (
+          <div className="space-y-4">
+            <Alert variant="default" className="border-[var(--brand)] bg-[var(--brand-soft)]">
+              <AlertDescription className="text-xs text-[var(--foreground)]">
+                If an account with this email exists, a password reset link has been sent. Please check your inbox.
+              </AlertDescription>
+            </Alert>
+            <Button asChild size="md" className="w-full">
+              <Link href="/account/login">Back to sign in</Link>
+            </Button>
+          </div>
+        ) : (
+          <form onSubmit={handleSubmit} className="space-y-4">
+            {error ? (
+              <Alert variant="destructive" role="alert">
+                <AlertDescription className="text-xs">{error}</AlertDescription>
+              </Alert>
+            ) : null}
+
+            <Field className="space-y-1.5">
+              <FieldLabel htmlFor="forgot-email">Email address</FieldLabel>
+              <Input
+                id="forgot-email"
+                required
+                type="email"
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
+                autoComplete="email"
+                placeholder="you@example.com"
+                className="h-10 sm:h-9"
+              />
+            </Field>
+
+            <Button type="submit" size="md" disabled={busy} loading={busy} className="w-full">
+              {busy ? "Sending link…" : "Send reset link"}
+            </Button>
+          </form>
+        )}
+      </AuthShell>
     </div>
   );
 }

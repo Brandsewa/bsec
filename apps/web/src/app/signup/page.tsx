@@ -4,6 +4,7 @@ import React, { useState, useEffect, Suspense } from "react";
 import { TurnstileWidget } from "@/components/marketing/TurnstileWidget";
 import { useSearchParams } from "next/navigation";
 import Link from "next/link";
+import { SimpleSelect } from "@bs/ui";
 import { bmFont } from "@/components/marketing/beam/fonts";
 import "@/components/marketing/beam/beam.css";
 
@@ -569,18 +570,18 @@ function SignupContent() {
               <label className="bm-label">
                 Industry Category
               </label>
-              <select
+              <SimpleSelect
                 value={industry}
-                onChange={(e) => setIndustry(e.target.value)}
-                className="bm-input"
-              >
-                <option value="retail">General Retail & Lifestyle</option>
-                <option value="fashion">Fashion & Apparel</option>
-                <option value="food">Gourmet Food & Beverages</option>
-                <option value="handicrafts">Handicrafts & Artisans</option>
-                <option value="beauty">Beauty & Personal Care</option>
-                <option value="electronics">Electronics & Accessories</option>
-              </select>
+                onChange={setIndustry}
+                options={[
+                  { value: "retail", label: "General Retail & Lifestyle" },
+                  { value: "fashion", label: "Fashion & Apparel" },
+                  { value: "food", label: "Gourmet Food & Beverages" },
+                  { value: "handicrafts", label: "Handicrafts & Artisans" },
+                  { value: "beauty", label: "Beauty & Personal Care" },
+                  { value: "electronics", label: "Electronics & Accessories" },
+                ]}
+              />
             </div>
 
             <div>

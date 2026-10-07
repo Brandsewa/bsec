@@ -4,3 +4,4 @@
  */
 
 export { THEME_STORAGE_KEY, themeBootScript } from "./theme/bootScript.ts";
+export { deriveAccent, type DerivedAccent } from "./theme/accent.ts";

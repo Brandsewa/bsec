@@ -2,6 +2,7 @@
 
 import React, { useState } from "react";
 import { useRouter } from "next/navigation";
+import { Button } from "@bs/ui";
 
 export function LogoutButton() {
   const router = useRouter();
@@ -18,8 +19,15 @@ export function LogoutButton() {
   }
 
   return (
-    <button type="button" onClick={logout} disabled={busy} className="text-sm font-medium text-muted-foreground hover:text-foreground disabled:opacity-60">
-      {busy ? "Signing out…" : "Sign out"}
-    </button>
+    <Button
+      type="button"
+      variant="ghost"
+      size="sm"
+      onClick={logout}
+      disabled={busy}
+      loading={busy}
+    >
+      Sign out
+    </Button>
   );
 }

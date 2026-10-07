@@ -18,14 +18,15 @@ const TONE_CLASSES: Record<StatusTone, string> = {
 export interface StatusBadgeProps {
   status?: string;
   label?: string;
+  children?: React.ReactNode;
   tone?: StatusTone;
   dot?: boolean;
   withDot?: boolean;
   className?: string;
 }
 
-export function StatusBadge({ status, label, tone = "neutral", dot = false, withDot, className }: StatusBadgeProps) {
-  const text = label || status || "";
+export function StatusBadge({ status, label, children, tone = "neutral", dot = false, withDot, className }: StatusBadgeProps) {
+  const text = children ?? label ?? status ?? "";
   const showDot = withDot ?? dot;
   return (
     <span
@@ -48,7 +49,7 @@ export function StatusBadge({ status, label, tone = "neutral", dot = false, with
           )}
         />
       )}
-      {text.replace(/_/g, " ")}
+      {typeof text === "string" ? text.replace(/_/g, " ") : text}
     </span>
   );
 }
@@ -62,7 +63,10 @@ export interface MoneyProps {
 
 export function Money({ paise, amountInPaise, currency = "₹", className }: MoneyProps) {
   const value = paise ?? amountInPaise ?? 0;
-  const formatted = `${currency}${(value / 100).toLocaleString("en-IN")}`;
+  const formatted = `${currency}${(value / 100).toLocaleString("en-IN", {
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
+  })}`;
   return (
     <span className={cn("font-mono tabular-nums", className)}>
       {formatted}

@@ -69,7 +69,7 @@
 /* ---------- Pill button with a warm lit edge ---------- */
 .bm-pill {
   position: relative; display: inline-flex; align-items: center; justify-content: center; gap: 0.55rem; white-space: nowrap; isolation: isolate;
-  min-height: 3rem; padding: 0.7rem 1.55rem; border-radius: 999px; border: 0; cursor: pointer; text-decoration: none;
+  min-height: 3rem; padding: 0.7rem 1.55rem; border-radius: var(--radius-button, 6px); border: 0; cursor: pointer; text-decoration: none;
   font-weight: 600; font-size: 0.82rem; letter-spacing: 0.1em; text-transform: uppercase; color: #15161c;
   background: linear-gradient(180deg, #f3f1ee 0%, #cfccc8 100%);
   box-shadow: 0 0 0 1px rgb(255 255 255 / 0.35) inset;
@@ -80,7 +80,7 @@
 .bm-pill[disabled] { background: #262a38; color: #7d839c; box-shadow: none; cursor: not-allowed; animation: none; }
 
 .bm-pill-sm { min-height: 2.5rem; padding: 0.4rem 1.1rem; font-size: 0.74rem; }
-.bm-outline { display: inline-flex; align-items: center; min-height: 2.5rem; padding: 0.4rem 1.1rem; border-radius: 999px; border: 1px solid rgb(255 255 255 / 0.35); color: var(--bm-text); font-weight: 600; font-size: 0.74rem; letter-spacing: 0.1em; text-transform: uppercase; text-decoration: none; transition: background-color 200ms, border-color 200ms; }
+.bm-outline { display: inline-flex; align-items: center; min-height: 2.5rem; padding: 0.4rem 1.1rem; border-radius: var(--radius-button, 6px); border: 1px solid rgb(255 255 255 / 0.35); color: var(--bm-text); font-weight: 600; font-size: 0.74rem; letter-spacing: 0.1em; text-transform: uppercase; text-decoration: none; transition: background-color 200ms, border-color 200ms; }
 .bm-outline:hover { background: rgb(255 255 255 / 0.08); border-color: rgb(255 255 255 / 0.6); }
 
 /* ---------- Product window ---------- */

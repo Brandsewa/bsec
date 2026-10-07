@@ -4,6 +4,8 @@ import { headers } from "next/headers";
 import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
 import { evaluateStorefrontAccess, confirmCodOrder } from "@bs/domain";
+import { AuthShell, Button } from "@bs/ui";
+import { getCachedStoreName } from "@/server/cached-storefront.ts";
 import { server } from "@/server/runtime.ts";
 
 interface CodConfirmationPageProps {
@@ -31,6 +33,8 @@ export default async function CodConfirmationPage({ params, searchParams }: CodC
     notFound();
   }
 
+  const storeName = await getCachedStoreName(access.tenantId).catch(() => "Store");
+
   async function handleConfirm() {
     "use server";
     const h = await headers();
@@ -57,48 +61,39 @@ export default async function CodConfirmationPage({ params, searchParams }: CodC
   }
 
   return (
-    <div className="mx-auto max-w-lg px-4 py-16 sm:px-6 lg:px-8 text-center">
-      <div className="rounded-2xl border border-border bg-card p-8 shadow-sm">
-        {isConfirmed ? (
-          <div>
-            <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-full bg-emerald-100 text-emerald-600 mb-4">
-              <svg className="h-8 w-8" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2.5">
-                <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
-              </svg>
-            </div>
-            <h1 className="text-2xl font-bold text-foreground mb-2">Order Confirmed!</h1>
-            <p className="text-sm text-muted-foreground mb-6">
-              Thank you! Your Cash on Delivery order is now confirmed and our team is preparing it for dispatch.
-            </p>
-            <Link
-              href="/"
-              className="inline-flex items-center justify-center rounded-lg bg-primary px-5 py-2.5 text-sm font-semibold text-primary-foreground shadow-sm hover:bg-primary/90"
-            >
-              Continue Shopping
-            </Link>
+    <AuthShell
+      variant="store"
+      brand={{ name: storeName }}
+      title={isConfirmed ? "Order Confirmed!" : "Confirm Your COD Order"}
+      description={
+        isConfirmed
+          ? "Thank you! Your Cash on Delivery order is now confirmed and our team is preparing it for dispatch."
+          : "Please confirm that you requested this Cash on Delivery order."
+      }
+      footer={
+        <Link href="/" className="text-xs text-[var(--brand-ink)] hover:underline">
+          ← Return to store
+        </Link>
+      }
+    >
+      {isConfirmed ? (
+        <div className="space-y-4 text-center">
+          <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-xl bg-[var(--success-soft)] text-[var(--success)]">
+            <svg className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2.5">
+              <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
+            </svg>
           </div>
-        ) : (
-          <div>
-            <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-full bg-amber-100 text-amber-600 mb-4">
-              <svg className="h-8 w-8" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
-                <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
-              </svg>
-            </div>
-            <h1 className="text-2xl font-bold text-foreground mb-2">Confirm Your COD Order</h1>
-            <p className="text-sm text-muted-foreground mb-6">
-              Please click the button below to confirm that you requested this Cash on Delivery order.
-            </p>
-            <form action={handleConfirm}>
-              <button
-                type="submit"
-                className="w-full rounded-lg bg-primary px-5 py-2.5 text-sm font-semibold text-primary-foreground shadow-sm hover:bg-primary/90"
-              >
-                Yes, Confirm My Order
-              </button>
-            </form>
-          </div>
-        )}
-      </div>
-    </div>
+          <Button asChild size="md" className="w-full">
+            <Link href="/">Continue Shopping</Link>
+          </Button>
+        </div>
+      ) : (
+        <form action={handleConfirm} className="space-y-4">
+          <Button type="submit" size="md" className="w-full">
+            Yes, Confirm My Order
+          </Button>
+        </form>
+      )}
+    </AuthShell>
   );
 }

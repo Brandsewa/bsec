@@ -17,6 +17,7 @@ import {
   SharedDataTable,
   type SharedDataTableProps,
   Pagination,
+  AuthShell,
 } from "../src/index.ts";
 
 describe("@bs/ui Part 2 Component Kit Unit Tests", () => {
@@ -136,5 +137,25 @@ describe("@bs/ui Part 2 Component Kit Unit Tests", () => {
     );
     expect(html).toContain("26–50");
     expect(html).toContain("of 100");
+  });
+
+  it("AuthShell renders brand, title, description, children, and footer", () => {
+    const html = renderToStaticMarkup(
+      createElement(
+        AuthShell,
+        {
+          brand: { name: "Acme Store" },
+          title: "Sign in to your account",
+          description: "Enter your phone to continue",
+          footer: createElement("span", null, "Need help? Contact support"),
+        },
+        createElement("input", { placeholder: "Phone number" })
+      )
+    );
+    expect(html).toContain("Acme Store");
+    expect(html).toContain("Sign in to your account");
+    expect(html).toContain("Enter your phone to continue");
+    expect(html).toContain("Need help? Contact support");
+    expect(html).toContain('placeholder="Phone number"');
   });
 });

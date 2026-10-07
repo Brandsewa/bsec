@@ -208,5 +208,7 @@ export {
   type ResolvedTheme,
   type ThemeContextValue,
   type ThemeToggleProps,
+  deriveAccent,
+  type DerivedAccent,
 } from "./theme/index.ts";
 
