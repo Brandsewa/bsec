@@ -140,3 +140,15 @@ Each app's `/health` returns `{"status":"ok","service":"...","db":{"ok":true,"ro
 - A Docker Image resource whose process exits 0 (like `bsec-migrate`) gets restarted in a loop by Coolify's default policy - **Stop it manually** after a successful one-shot run.
 - Deploying via the API needs `POST`, not `GET` (a `GET` on `/api/v1/deploy` returns a 405 telling you so).
 - Keep the VPS free of build tools; if a build is needed, it belongs in GitHub Actions.
+
+## 9. Server hardening checklist (the repository is public)
+
+The server IP is in old git history and cannot be removed without a history rewrite, so assume it is known. A read-only TCP probe on 2026-10-07 found these ports reachable from the internet: **22** (SSH), **80/443** (expected), **8000** (Coolify dashboard), **6001** and **6002** (Coolify realtime and terminal websockets). Database and app ports (5432, 5433, 6379, 3000, 4000, 4100) were closed. Do the following in the VPS provider's firewall, because Docker-published ports bypass `ufw`:
+
+1. **Close 8000, 6001 and 6002 to the world.** Give Coolify its own domain in *Settings → Instance's Domain* (served through the proxy on 443 with a certificate), then allow 8000/6001/6002 only from your own IP, or not at all.
+2. **SSH:** key-only (`PasswordAuthentication no`, `PermitRootLogin prohibit-password`), restrict port 22 to your IP if it is static, and install `fail2ban`.
+3. **Web ports 80/443:** if the sites are behind Cloudflare, allow only Cloudflare's published IP ranges so the origin cannot be hit directly.
+4. Keep the OS and Coolify updated; rotate `COOLIFY_TOKEN` if it was ever shown in a log or screenshot.
+5. Re-run the probe after changes (from outside the network): only 80, 443 and the SSH port you chose should answer.
+
+Status: not yet applied (no SSH access from the agent environment); owner action.
