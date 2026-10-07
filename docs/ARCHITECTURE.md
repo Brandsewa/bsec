@@ -4,7 +4,7 @@
 
 | | |
 |---|---|
-| Last verified against | `feat/settings-rebuild-phase-8` (Settings rebuild Phase 8: storage visibility, owner-only scheduled maintenance, hardening and rollout), 2026-10-05 |
+| Last verified against | `feat/ds-06-customer-auth` (Design system Part 6 & Part 7: customer account, auth shell, store accent, hardening and clean-up), 2026-10-07 |
 | Verified how | files read from the working tree; `pnpm docs:check` for the mechanical parts. Facts marked *(from code)* were read, not run. |
 | Owner | whoever changes the area (see the update triggers in section 0) |
 
@@ -110,7 +110,7 @@ pnpm workspace + Turborepo. Node `24.15`, pnpm `10.34.5`, TypeScript 6, ESLint 1
 | `packages/block-editor` | `@bs/block-editor` | Puck-based visual editor config, theme settings panel, media field, preview. Lazy-loaded by the admin; never shipped to shoppers |
 | `packages/payments` | `@bs/payments` | Provider adapter (ADR-008): `cod`, `razorpay`, `mock`; secret encryption helper |
 | `packages/shipping` | `@bs/shipping` | Provider adapter: `manual`, `shiprocket` (Shiprocket is never called yet) |
-| `packages/ui` | `@bs/ui` | Unified design system across Vite and Next: tokens (`styles/tokens.css`), components (primitives, forms, feedback, media), patterns (data-table, metric cards, auth shell), composed skeletons |
+| `packages/ui` | `@bs/ui` | Unified design system across Vite and Next: tokens (`styles/tokens.css`), components (primitives, forms, feedback, media), patterns (data-table, metric cards, auth shell), composed skeletons, and server-safe `deriveAccent` (`@bs/ui/server`) |
 | `packages/config` | `@bs/config` | Shared tsconfig, ESLint factory `defineBsConfig` (with `bs/*` rules), esbuild bundler, Vitest config, Tailwind base |
 
 ### Everything else

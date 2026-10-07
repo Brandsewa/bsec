@@ -452,5 +452,5 @@ Complete modernization, token unification, and card architecture polish across `
 > **CRITICAL RULE**: Any developer or AI agent building or modifying screens, dialogs, drawers, or components in `apps/admin` or `apps/superadmin` **MUST** adhere to [`docs/admin-ui-standards.md`](docs/admin-ui-standards.md) and use the `@bs/ui` primitives. Never use hand-rolled tables, arbitrary hex colors, raw borders, or monolithic undivided settings cards.
 
 ## In flight
-- Antigravity | `feat/ds-06-customer-auth` | Design system Part 6: Customer account and auth (`apps/web`) | 2026-10-07
+- Antigravity | `feat/ds-06-customer-auth` | Design system Part 6 & 7: Customer account, auth shell, store accent, hardening and clean-up | 2026-10-07
 

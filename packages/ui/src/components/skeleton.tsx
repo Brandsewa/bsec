@@ -6,7 +6,7 @@ import { cn } from "../lib/cn.ts";
  * the region that is loading carries aria-busy. Shimmer is off under prefers-reduced-motion (tokens.css).
  */
 export function Skeleton({ className, ...props }: ComponentProps<"div">) {
-  return <div aria-hidden className={cn("bs-skeleton rounded-md", className)} {...props} />;
+  return <div aria-hidden className={cn("animate-pulse rounded-md bg-muted", className)} {...props} />;
 }
 
 export function TableSkeleton({ rows = 10, columns = 4 }: { rows?: number; columns?: number }) {

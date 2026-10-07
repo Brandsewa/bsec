@@ -186,7 +186,6 @@ export {
 export { fetchAllPages } from "./components/data-table/fetch-all.ts";
 
 // Legacy components maintained for backwards compatibility
-export { Select as LegacySelect } from "./components/select.tsx";
 export { Form, FormField, FormItemLayout } from "./components/form.tsx";
 export { EmptyState } from "./components/empty-state.tsx";
 export { DetailSkeleton, FormSkeleton, MetricCardSkeleton, TableSkeleton } from "./components/skeleton.tsx";

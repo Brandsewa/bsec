@@ -21,13 +21,13 @@
     </script>
     <style>
       /* Static shell skeleton: paints before any JavaScript downloads (PLAN §12). Replaced on mount. */
-      :root { --s-bg: #fbfcfb; --s-side: #f6f8f7; --s-line: #e3e8e5; --s-fill: #eceff0; }
-      [data-theme="dark"] { --s-bg: #131815; --s-side: #111512; --s-line: #262d29; --s-fill: #222a26; }
-      html, body { margin: 0; background: var(--s-bg); }
+      :root { --background: #fbfcfb; --sidebar: #f6f8f7; --border: #e3e8e5; --muted: #eceff0; }
+      [data-theme="dark"] { --background: #131815; --sidebar: #111512; --border: #262d29; --muted: #222a26; }
+      html, body { margin: 0; background: var(--background); }
       #boot { display: grid; grid-template-columns: 15rem 1fr; min-height: 100dvh; }
-      #boot aside { background: var(--s-side); border-right: 1px solid var(--s-line); padding: 12px; }
-      #boot header { height: 48px; border-bottom: 1px solid var(--s-line); background: var(--s-bg); }
-      #boot .b { background: var(--s-fill); border-radius: 6px; margin: 0 0 10px; }
+      #boot aside { background: var(--sidebar); border-right: 1px solid var(--border); padding: 12px; }
+      #boot header { height: 48px; border-bottom: 1px solid var(--border); background: var(--background); }
+      #boot .b { background: var(--muted); border-radius: 6px; margin: 0 0 10px; }
       #boot .page { max-width: 72rem; margin: 0 auto; padding: 24px 32px; }
       @media (max-width: 767px) { #boot { grid-template-columns: 1fr; } #boot aside { display: none; } #boot .page { padding: 24px 16px; } }
     </style>

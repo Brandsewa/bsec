@@ -15,14 +15,16 @@ export default {
   },
   create(context) {
     const file = context.filename.replaceAll("\\", "/");
-    // Per Guide Section 0 D1 & Part 5 scope: enforce on apps/admin and apps/superadmin.
-    // Part 6 will migrate customer account and auth in apps/web.
-    if (!/\/apps\/(?:admin|superadmin)\/src\//.test(file)) {
+    // Enforce on apps/admin, apps/superadmin, and apps/web account/auth files (Part 7.2)
+    const isAdminOrSuperAdmin = /\/apps\/(?:admin|superadmin)\/src\//.test(file);
+    const isWebAccountOrAuth = /\/apps\/web\/src\/(?:components\/account|app\/(?:account|privacy|orders|o|unsubscribe|address|cod))\//.test(file);
+
+    if (!isAdminOrSuperAdmin && !isWebAccountOrAuth) {
       return {};
     }
 
-    // Allowlist Appearance preview, theme tokens, theme editors, and color pickers where merchant sets brand hex
-    const isAppearancePreview = /appearance|theme-tokens|boot-shell|online-store\/theme|settings\/branding/i.test(file);
+    // Allowlist Appearance preview, theme tokens, theme editors, color pickers, and account accent derivation fallback
+    const isAppearancePreview = /appearance|theme-tokens|boot-shell|online-store\/theme|settings\/branding|account\/layout\.tsx/i.test(file);
 
     return {
       Program(node) {

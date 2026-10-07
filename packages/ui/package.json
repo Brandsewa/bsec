@@ -10,8 +10,7 @@
     ".": "./src/index.ts",
     "./server": "./src/server.ts",
     "./styles.css": "./src/styles/index.css",
-    "./tokens.css": "./src/styles/tokens.css",
-    "./skeleton-shell.html": "./src/skeleton-shell.html"
+    "./tokens.css": "./src/styles/tokens.css"
   },
   "scripts": {
     "typecheck": "tsc -p tsconfig.json",
