@@ -39,6 +39,8 @@ services:
       RUNNER_NAME: bsec-local-1
       RUNNER_LABELS: bsec-local
       RUNNER_TOKEN: ${RUNNER_TOKEN:-}
+      # The Docker VM has fewer GB than this PC has cores; unbounded vitest workers starve each other and time out.
+      VITEST_MAX_WORKERS: "4"
     volumes:
       - work:/home/runner/_work
 
