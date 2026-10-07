@@ -1,6 +1,6 @@
 # Design system implementation guide (single system: Super Admin, Store Admin, Customer account and auth)
 
-Status: **approved direction, ready to build** (owner decisions 2026-10-05).
+Status (2026-10-07): **Parts 1, 2, 3, 5, 6, 7 and 8 are built, verified and live in production. Part 4 (Appearance manager) is ON HOLD by the owner and not started.** The sections below are the original plan and acceptance criteria, kept for reference; what actually shipped, the gaps and the lessons are in `progress.md` ("Design-system overhaul, CI and public repo"). Original status: approved direction (owner decisions 2026-10-05).
 Builder: Google Antigravity. Verifier: Claude Code (verifies every part against its acceptance criteria and runs the gate before the next part starts; Antigravity never merges its own PR).
 Visual reference: `DESIGN-mintlify.md` (owner's Downloads folder; the tokens you need are copied into section 3, so you do not need the file).
 Read first, in this order: `AGENTS.md`, `docs/ARCHITECTURE.md`, `docs/admin-ui-standards.md`, `docs/changes/` (newest), `progress.md`, ADR-010, ADR-011, ADR-018, and `node_modules/next/dist/docs/` (Next 16 is newer than your training data).

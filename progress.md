@@ -142,6 +142,39 @@ Plan: `docs/SETTINGS-REBUILD-PLAN.md`, `SETTINGS-REMAINING-PHASES`; records `202
 - Finance (merged 2026-10-05, PR #39, ADR-022). **Pending checks, to do later** (owner: not yet scheduled): (1) receipt upload against real Cloudflare R2: it was tested only against a local S3 stand-in that does not verify SigV4 signatures, so signature acceptance and the bucket's CORS rules for a browser PUT are untested; (2) the `store_finance` role in a browser: tested through the API and `finance-roles.int.test.ts` only (sign in as a finance member, check the nav shows Finance only and the Export buttons are hidden). Two other Finance gaps are fixed in open PRs: cancelling a confirmed or paid order restores its stock (PR #41) and Finance/Returns/Pre-orders/Quotes no longer overflow horizontally at 375 px (PR #42). Details: `docs/changes/2026-10-05-claude-finance-verification.md`, ADR-022 "Known gaps".
 - COD fee/enable is still saved through the generic `settings.update` (`settings.write`); owner-only treatment is part of Settings Phase 5.
 
+## Design-system overhaul, CI and public repo: what happened and where it stands (2026-10-05 to 2026-10-07)
+
+Handoff summary for anyone (or any agent) picking this up. Plan and acceptance criteria: `docs/DESIGN-SYSTEM-IMPLEMENTATION-GUIDE.md`. Reference for the result: `docs/design-system.md`, `docs/admin-ui-standards.md`. Per-change evidence: `docs/changes/2026-10-05-*` to `2026-10-07-*`. Production was last deployed from `main` at `e029ec2` (all CI jobs green, deploy job succeeded).
+
+**Decisions on record (owner, 2026-10-05):** one design system in `@bs/ui` for Super Admin, Store Admin and customer account/auth (merchant storefront pages stay per-store); Geist + Geist Mono; Mintlify mint `#00d4a4` accent; no pill buttons (6px radius, Mintlify sizes); light/dark/system theme; customer account pages use the store's accent; images stay on local storage until Cloudflare R2 is connected (the existing `/admin/media/request-upload` flow is the seam).
+
+**Delivered and live**
+- [x] Part 1 foundation (tokens, Geist, theme provider/toggle, no-flash boot script), Part 2 component kit (shadcn on Base UI, date pickers, image uploader, combobox, command palette, drawer, chart, composed skeletons, `AuthShell`), Part 3 Super Admin (21 pages), Part 5 Store Admin, Part 6 customer account and auth (store accent via `deriveAccent`), Part 7 hardening (lint guards `bs/design-system-guards`), Part 8 (legacy token aliases removed). Plus the Store/Super Admin design sprint (archives, returns archive/restore/delete, settings cards, collapsible rail).
+- [x] Theme is scoped: on `apps/web` only account, auth and token pages follow light/dark/system (`apps/web/src/lib/themed-paths.ts`); storefront pages keep their own look. A leak of dark colour-scheme onto storefronts (introduced in Part 1) was found and fixed in Part 6.
+
+**Not done (owner decisions)**
+- [ ] **Part 4, the Super Admin "Appearance" manager (colours, fonts, density for all dashboards) is ON HOLD** by the owner ("we will add later"). Nothing of it is built: no table, endpoint, ADR or screen. Keep the semantic token names in `packages/ui/src/styles/tokens.css` because it will edit them. The design is in guide Part 4.
+
+**Known gaps (verified as not done, not claimed)**
+- Parts 7 and 8 as delivered by the builder did not include: Chrome performance traces, an axe/Lighthouse audit, before/after screenshots, a bundle-size comparison against the old build, a keyboard-only walkthrough. Run these when convenient.
+- Native `<select>` remains in the storefront catalog filter (`ProductFilterSort`) and checkout form (storefront and checkout were out of scope). `store-skeleton` is still used by storefront loading files. The `geist` npm dependency in `packages/ui` is unused. Boot-shell colour constants are inline in the two `index.html` files.
+- A Dependabot npm security update (`source-map-js`) reported "not possible" until a fixed version is resolvable; review any security PRs Dependabot opens (for example `esbuild`).
+
+**CI, repository and infrastructure (all 2026-10-07)**
+- GitHub-hosted jobs stopped starting (account billing block on a private repo). A self-hosted Docker runner was built and proven, then **removed** once the repo went public (hosted runners are free for public repos, and an outside PR must never reach a personal machine). `infra/ci-runner` no longer exists.
+- **The repository is public for the development period. Make it private again near launch** (Settings, Change visibility). The current files were scrubbed (server IP, personal email default, local path); old commits still contain them (no history rewrite, by rule). `LICENSE` (all rights reserved; have a lawyer confirm it) and `SECURITY.md` were added. Turned on: secret scanning, push protection, private vulnerability reporting, Dependabot security updates; workflow runs from outside contributors require approval.
+- CI test commands run serially on purpose: unit tests `turbo run test:fast -- --no-file-parallelism`, heavy `turbo run test:heavy --concurrency=1 -- --no-file-parallelism` (the platform and db suites share one database). `VITEST_MAX_WORKERS` is ignored by vitest 5; pass flags.
+- Dependabot bumps were merged as two reviewed batches (checkout 7, pnpm/action-setup 6, setup-node 7; then docker/setup-buildx-action 4 and docker/metadata-action 6); the nginx bump was dropped by Dependabot (1.29-alpine is current).
+- **VPS firewall (Hostinger) applied:** only TCP 22, 80, 443 answer, on IPv4 and IPv6; Coolify's 8000/6001/6002 are closed (details and re-check procedure: `infra/coolify/RUNBOOK.md` section 9). Coolify is served at `https://server.brandsewa.com`. **Owner actions still open:** SSH hardening on the server (key-only, `fail2ban`), an optional Cloudflare-only allowlist for 80/443, a lawyer's review of `LICENSE`, and turning the repo private before launch.
+
+**Lessons that cost time (do not repeat)**
+1. A new `admin.*` procedure must be mapped in `packages/domain/test/isolation.int.test.ts` (the generated isolation suite) or the heavy job fails; run that file when adding procedures.
+2. The e2e suite (`e2e/*.spec.ts`) runs only in the smoke-test job on pushes to `main`, so UI changes can pass every PR check and still fail there. After changing the sidebar, menus, labels or sign-out, update the specs (sidebar links are grouped, so open the group first; sign-out is inside the user menu; the Taxes field is "Place of supply state").
+3. Do not merge a second PR while a `main` run is in progress: the `ci-<ref>` concurrency group cancels the first run, possibly mid-deploy.
+4. Hover-opening sidebar groups moved links under the pointer and broke clicks; groups now toggle on click only.
+5. Builder change records overstated "gate green" more than once; always re-run typecheck, lint, build, docs:check and the tests yourself.
+6. After any deploy, check `https://admin.bcom.si`, `https://bcom.si` and a storefront; a single 503 right after a deploy cleared in under a minute (the web app restarting).
+
 ## Public repository follow-ups (2026-10-07)
 - Repo is public for the development period; make it private again near launch (Settings, Change visibility). **VPS firewall applied 2026-10-07** (only 22, 80, 443 reachable, IPv4 and IPv6; Coolify ports 8000/6001/6002 closed). **Owner action still open:** SSH hardening on the server (key-only, fail2ban) and optionally a Cloudflare-only allowlist for 80/443; checklist in `infra/coolify/RUNBOOK.md` section 9. Old commits still contain the server IP, a personal email and a local path (no history rewrite by rule). `LICENSE` (all rights reserved) and `SECURITY.md` added; secret scanning, push protection, private vulnerability reporting and Dependabot security updates are on.
 
@@ -460,8 +493,4 @@ Complete modernization, token unification, and card architecture polish across `
 
 ### 4. Mandatory Rule for New Components & Screens
 > **CRITICAL RULE**: Any developer or AI agent building or modifying screens, dialogs, drawers, or components in `apps/admin` or `apps/superadmin` **MUST** adhere to [`docs/admin-ui-standards.md`](docs/admin-ui-standards.md) and use the `@bs/ui` primitives. Never use hand-rolled tables, arbitrary hex colors, raw borders, or monolithic undivided settings cards.
-
-## In flight
-- Antigravity | `feat/ds-08-aliases-perf-a11y` | Design system Part 8: Token alias removal, perf & a11y pass, theme robustness, hardening | 2026-10-07
-
 

@@ -73,12 +73,16 @@ pnpm --filter @bs/domain test:fast
 pnpm test:heavy:local                   # fast shared local Postgres (or pnpm --filter @bs/domain test:heavy)
 ```
 
+- CI runs `test:fast` and `test:heavy` serially (`--no-file-parallelism`, heavy also `--concurrency=1`). If you add an `admin.*` procedure, map it in `packages/domain/test/isolation.int.test.ts` and run that file; otherwise the heavy job fails. The e2e suite (`e2e/`) only runs in CI on pushes to `main`: when you change sidebar, menu or label text, update its selectors in the same change.
 - Do **not** run the whole suite in parallel against one database: it causes collision and timeout flakes (`docs/FAST-LOCAL-TESTS.md`). Platform integration suites need `--no-file-parallelism`.
 - Behaviour you change needs a test; security behaviour needs a **real-database** test, not a mock (pattern: `packages/domain/test/*.int.test.ts`, `startTestDb`).
 - UI changes: run the app and use it (`pnpm --filter @bs/admin dev`, `@bs/web dev`). Type checks prove code compiles, not that the screen works. Say so plainly if you could not run it.
 - Report results honestly: failing or skipped tests are stated, with output. Never claim "verified" for something you did not run.
 
 ## 5. Git and release safety
+
+- **The repository is public** (development period; the owner will make it private near launch). Never commit server IPs, internal hostnames you were not told to publish, personal emails, local paths, tokens or customer data. Secret scanning and push protection are on.
+- **Never merge a second PR while a `main` run is in progress**: the workflow's concurrency group cancels the running one, possibly in the middle of a production deploy. Wait for the run to finish, then check the deploy job.
 
 - **`main` is production.** A push to `main` that passes CI **deploys to production** (Coolify). Never push to `main` with a red gate, never force-push, never rewrite shared history, never `--no-verify`.
 - Work on a **branch** (`feat/...`, `fix/...`, `docs/...`), named for the change. Parallel agents work in **separate git worktrees** (siblings under `bs-commerce-platform/`): do not edit another agent's worktree or branch.
