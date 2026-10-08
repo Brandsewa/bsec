@@ -11,8 +11,7 @@ export type TagKind =
   | "nav"
   | "store-shell"
   | "seo"
-  | "storage"
-  | "order";
+  | "storage";
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 

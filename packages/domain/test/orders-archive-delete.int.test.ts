@@ -418,4 +418,106 @@ describe("Order Deletion Success & Mixed Bulk Processing", () => {
     expect(r2?.reason).toBe("Order must be archived before it can be deleted");
     expect(r3?.ok).toBe(true);
   });
+
+  it("successfully deletes an archived cancelled order with discount redemptions and payment intents/attempts", async () => {
+    const draft = await createAdminDraftOrder(rtWeb, ctxOwner, {
+      email: "discount-payment-del@test.com",
+      phone: "+919876543210",
+      shippingAddress: { line1: "123 Main St", city: "Bengaluru", stateCode: "KA", pincode: "560001" },
+      items: [{ variantId: testVariantId, quantity: 1 }],
+    });
+    await cancelAdminOrder(rtWeb, ctxOwner, { id: draft.orderId, reason: "Cancelled before payment" });
+
+    let discountId = "";
+    let intentId = "";
+
+    await withTenant(rtWeb._db.db, ctxOwner.tenantId, async (tx) => {
+      const [disc] = await tx
+        .insert(schema.discounts)
+        .values({
+          tenantId: ctxOwner.tenantId,
+          code: "TESTSAVE10",
+          title: "Test 10 Off",
+          type: "fixed",
+          value: 1000,
+        })
+        .returning();
+      discountId = disc!.id;
+
+      await tx.insert(schema.discountRedemptions).values({
+        tenantId: ctxOwner.tenantId,
+        discountId,
+        orderId: draft.orderId,
+        amount: 1000,
+      });
+
+      const [intent] = await tx
+        .insert(schema.paymentIntents)
+        .values({
+          tenantId: ctxOwner.tenantId,
+          orderId: draft.orderId,
+          provider: "razorpay",
+          amount: 4000,
+          status: "failed",
+        })
+        .returning();
+      intentId = intent!.id;
+
+      await tx
+        .insert(schema.paymentAttempts)
+        .values({
+          tenantId: ctxOwner.tenantId,
+          intentId,
+          method: "card",
+          status: "failed",
+        });
+    });
+
+    await archiveOrders(rtWeb, ctxOwner, { ids: [draft.orderId] });
+
+    const delRes = await deleteOrders(rtWeb, ctxOwner, { ids: [draft.orderId] });
+    expect(delRes.successCount).toBe(1);
+    expect(delRes.skippedCount).toBe(0);
+    expect(delRes.results[0]!.ok).toBe(true);
+
+    await expect(getAdminOrderDetail(rtWeb, ctxOwner, { id: draft.orderId })).rejects.toThrow(
+      /Order not found/,
+    );
+
+    await withTenant(rtWeb._db.db, ctxOwner.tenantId, async (tx) => {
+      const redemptions = await tx
+        .select()
+        .from(schema.discountRedemptions)
+        .where(
+          and(
+            eq(schema.discountRedemptions.tenantId, ctxOwner.tenantId),
+            eq(schema.discountRedemptions.orderId, draft.orderId),
+          ),
+        );
+      expect(redemptions.length).toBe(0);
+
+      const intents = await tx
+        .select()
+        .from(schema.paymentIntents)
+        .where(
+          and(
+            eq(schema.paymentIntents.tenantId, ctxOwner.tenantId),
+            eq(schema.paymentIntents.orderId, draft.orderId),
+          ),
+        );
+      expect(intents.length).toBe(0);
+
+      const attempts = await tx
+        .select()
+        .from(schema.paymentAttempts)
+        .where(
+          and(
+            eq(schema.paymentAttempts.tenantId, ctxOwner.tenantId),
+            eq(schema.paymentAttempts.intentId, intentId),
+          ),
+        );
+      expect(attempts.length).toBe(0);
+    });
+  });
 });
+

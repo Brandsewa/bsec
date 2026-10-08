@@ -3,7 +3,7 @@
 Source of truth: `docs/PLAN.html` v2.0 (build order in `docs/BUILD-PLAN-M2-M9.md`). Items are ticked only after verification; the evidence is noted next to each. "From code" means it was read in the repo but not exercised live.
 
 ## In flight
-- **Antigravity**: `feat/admin-improvements-phase-2` — Phase 2: Orders archive/delete and Returns as a page (2026-10-08) — Complete, ready for Claude verification
+- **Antigravity**: `feat/admin-improvements-phase-3` — Phase 3: Quota tiers manager with pricing (2026-10-08)
 
 ## M11 · Auth & Transactional Email Overhaul (docs/AUTH-OVERHAUL-PLAN.md)
 
