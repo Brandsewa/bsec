@@ -11,6 +11,9 @@
  * 6. True PostgreSQL Row Level Security (RLS) enforcement: direct queries across tenants
  *    return 0 rows, and queries without tenant context return 0 rows under app_rw.
  */
+import fs from "node:fs";
+import os from "node:os";
+import path from "node:path";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { PostgreSqlContainer, type StartedPostgreSqlContainer } from "@testcontainers/postgresql";
 import { eq, sql, and } from "drizzle-orm";
@@ -347,11 +350,16 @@ describe("Generated Isolation Test Suite (M1 Real Postgres 18 Proof)", () => {
   let rtPlatform: Runtime;
   let dbRw: DbHandle;
   let dbPlatform: DbHandle;
+  let tempMediaDir: string;
 
   const adminProcedures = extractProcedurePaths(storeContract.admin as unknown as Record<string, unknown>);
   const platformProcedures = extractProcedurePaths(platformContract.tenants as unknown as Record<string, unknown>);
 
   beforeAll(async () => {
+    tempMediaDir = path.join(os.tmpdir(), `bsec-isolation-media-${Date.now()}`);
+    fs.mkdirSync(tempMediaDir, { recursive: true });
+    process.env.MEDIA_LOCAL_DIR = tempMediaDir;
+
     if (process.env.TEST_DATABASE_URL_SUPERUSER) {
       superUrl = process.env.TEST_DATABASE_URL_SUPERUSER;
     } else {
@@ -738,6 +746,14 @@ describe("Generated Isolation Test Suite (M1 Real Postgres 18 Proof)", () => {
   }, 180_000);
 
   afterAll(async () => {
+    delete process.env.MEDIA_LOCAL_DIR;
+    if (tempMediaDir) {
+      try {
+        fs.rmSync(tempMediaDir, { recursive: true, force: true });
+      } catch {
+        // ignore cleanup error
+      }
+    }
     await rtApp?.close();
     await rtPlatform?.close();
     await dbRw?.close();

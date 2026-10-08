@@ -16,6 +16,7 @@ import {
   attachProductMedia,
   detachProductMedia,
   uploadMediaDirect,
+  MAX_MEDIA_BYTES,
   updateStoreStatus,
   getSupportAdminMe,
   listStoreSupportSessions,
@@ -3018,6 +3019,23 @@ api.post("/admin/media/upload", async (c) => {
   }
 
   const contentType = c.req.header("content-type") || "";
+  const contentLengthHeader = c.req.header("content-length");
+  if (contentLengthHeader) {
+    const contentLength = Number.parseInt(contentLengthHeader, 10);
+    // Allow up to 512KB overhead for multipart form boundaries and headers
+    const maxMultipartLength = MAX_MEDIA_BYTES + 512 * 1024;
+    // Base64 adds ~33% overhead plus JSON framing
+    const maxJsonLength = Math.ceil((MAX_MEDIA_BYTES * 4) / 3) + 64 * 1024;
+    const isJson = contentType.includes("application/json");
+    const limit = isJson ? maxJsonLength : maxMultipartLength;
+    if (!Number.isNaN(contentLength) && contentLength > limit) {
+      return c.json(
+        { error: "File too large: request size exceeds maximum allowed upload size (10 MB)." },
+        413,
+      );
+    }
+  }
+
   let fileBytes: Buffer | Uint8Array;
   let filename: string;
   let mime: string;
@@ -3040,6 +3058,15 @@ api.post("/admin/media/upload", async (c) => {
     const json = (await c.req.json().catch(() => ({}))) as Record<string, unknown>;
     if (!json.data || !json.filename || !json.mime) {
       return c.json({ error: "Missing required fields: filename, mime, data" }, 400);
+    }
+    if (typeof json.data === "string") {
+      const maxBase64Chars = Math.ceil((MAX_MEDIA_BYTES * 4) / 3);
+      if (json.data.length > maxBase64Chars) {
+        return c.json(
+          { error: "File too large: base64 payload exceeds 10 MB limit." },
+          413,
+        );
+      }
     }
     fileBytes = Buffer.from(String(json.data), "base64");
     filename = String(json.filename);

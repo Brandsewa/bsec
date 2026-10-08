@@ -85,6 +85,12 @@ describe("Storage Connection & Drivers", () => {
     it("returns null for unknown or non-image types", () => {
       const textBytes = Buffer.from("Hello world, this is a plain text file.", "utf8");
       expect(sniffMimeType(textBytes)).toBeNull();
+
+      const htmlBytes = Buffer.from("<!DOCTYPE html><html><body><h1>Evil</h1></body></html>", "utf8");
+      expect(sniffMimeType(htmlBytes)).toBeNull();
+
+      const exeBytes = Buffer.from([0x4d, 0x5a, 0x90, 0x00, 0x03, 0x00, 0x00, 0x00]); // MZ DOS header
+      expect(sniffMimeType(exeBytes)).toBeNull();
     });
   });
 

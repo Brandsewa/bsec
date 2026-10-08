@@ -9,11 +9,18 @@ import {
 } from "./media/storage.ts";
 import {
   getActiveStorageDriver,
+  resolveDriverForMediaRow,
   resolvePublicMediaUrl,
   resolveStorageConnection,
 } from "./media/connection.ts";
 
-export { uploadMediaDirect } from "./media/connection.ts";
+export {
+  uploadMediaDirect,
+  resolveLocalMediaFilePath,
+  resolveDriverForMediaRow,
+  getEnvironmentStorageConfig,
+  resolveSafeLocalPath,
+} from "./media/connection.ts";
 
 export interface ListMediaQuery {
   folder?: string | undefined;
@@ -185,11 +192,25 @@ export async function deleteMediaRecord(
       .limit(1);
 
     if (existing[0]) {
+      const mediaRow = existing[0];
       try {
-        const { driver } = await getActiveStorageDriver(db, "public_media");
-        await driver.delete(existing[0].storageKey);
-      } catch {
-        // If driver delete fails (e.g. file already gone), proceed with row deletion
+        const driver = await resolveDriverForMediaRow(
+          db,
+          mediaRow.storageConnectionId,
+          "public_media",
+        );
+        if (driver) {
+          await driver.delete(mediaRow.storageKey);
+        } else {
+          console.warn(
+            `[storage] No storage driver resolved for media ${mediaRow.id} (connection: ${mediaRow.storageConnectionId})`,
+          );
+        }
+      } catch (err) {
+        console.error(
+          `[storage] Failed to delete storage object for media ${mediaRow.id} (key: ${mediaRow.storageKey}):`,
+          err,
+        );
       }
     }
 

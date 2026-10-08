@@ -1,6 +1,6 @@
 import fs from "node:fs";
 import path from "node:path";
-import { resolveSafeLocalPath, getActiveStorageDriver } from "@bs/domain";
+import { resolveLocalMediaFilePath } from "@bs/domain";
 import { server } from "@/server/runtime.ts";
 
 const MIME_MAP: Record<string, string> = {
@@ -17,7 +17,7 @@ const MIME_MAP: Record<string, string> = {
 /**
  * Serves locally stored media files.
  * Enforces strict path traversal protection, correct content types,
- * immutable caching, and defensive security headers.
+ * immutable caching, defensive security headers, and connection resolution.
  */
 export async function GET(
   _req: Request,
@@ -30,37 +30,14 @@ export async function GET(
       return new Response("Not Found", { status: 404 });
     }
 
-    // Determine base directory from active storage driver or env fallback
-    const { rt } = server();
-    let baseDir = process.env.MEDIA_LOCAL_DIR || "./.data/media";
-    try {
-      const { config } = await getActiveStorageDriver(rt._db.db, "public_media");
-      if (config.localDir) {
-        baseDir = config.localDir;
-      }
-    } catch {
-      // Use fallback base directory
-    }
-
-    const resolvedBase = path.resolve(/*turbopackIgnore: true*/ baseDir);
-    let filePath: string;
-    try {
-      filePath = resolveSafeLocalPath(resolvedBase, rawKey);
-    } catch {
+    if (rawKey.includes("\0") || rawKey.includes("..")) {
       return new Response("Invalid key or path traversal detected", { status: 400 });
     }
 
-    // Check file exists on filesystem
-    try {
-      const stat = await fs.promises.stat(filePath);
-      if (!stat.isFile()) {
-        return new Response("Not Found", { status: 404 });
-      }
-    } catch (err: unknown) {
-      if ((err as NodeJS.ErrnoException).code === "ENOENT") {
-        return new Response("Not Found", { status: 404 });
-      }
-      throw err;
+    const { rt } = server();
+    const filePath = await resolveLocalMediaFilePath(rt._db.db, rawKey);
+    if (!filePath) {
+      return new Response("Not Found", { status: 404 });
     }
 
     const ext = path.extname(filePath).toLowerCase();

@@ -561,7 +561,7 @@ export async function resolveStorageConnection(
   const cacheKey = `purpose:${purpose}`;
   const cached = storageConfigCache.get(cacheKey);
   const now = Date.now();
-  if (cached && cached.expiresAt > now) {
+  if (!process.env.VITEST && cached && cached.expiresAt > now) {
     return cached.config;
   }
 
@@ -620,10 +620,29 @@ export async function resolveStorageConnection(
   }
 
   // 2. Env fallback
+  const envConfig = getEnvironmentStorageConfig(purpose);
+  if (envConfig) {
+    storageConfigCache.set(cacheKey, { config: envConfig, expiresAt: now + 60_000 });
+    return envConfig;
+  }
+
+  // 3. Not configured
+  if (!process.env.VITEST) {
+    storageConfigCache.set(cacheKey, { config: null, expiresAt: now + 60_000 });
+  }
+  return null;
+}
+
+/**
+ * Returns the environment fallback storage configuration if defined.
+ */
+export function getEnvironmentStorageConfig(
+  purpose: StoragePurpose = "public_media",
+): ResolvedStorageConfig | null {
   const envCfg = getR2Config();
   if (purpose === "public_media") {
     if (envCfg.accessKeyId && envCfg.secretAccessKey) {
-      const config: ResolvedStorageConfig = {
+      return {
         id: null,
         name: "Environment (R2)",
         driver: "r2",
@@ -635,12 +654,24 @@ export async function resolveStorageConnection(
         publicBaseUrl: envCfg.publicUrl,
         accessKeyId: envCfg.accessKeyId,
         secretAccessKey: envCfg.secretAccessKey,
-        directBrowserUpload: false,
+        directBrowserUpload: true,
       };
-      storageConfigCache.set(cacheKey, { config, expiresAt: now + 60_000 });
-      return config;
-    } else if (process.env.MEDIA_LOCAL_DIR || process.env.NODE_ENV === "development" || process.env.VITEST) {
-      const config: ResolvedStorageConfig = {
+    } else if (envCfg.publicUrl) {
+      // Read-only public URL support when public domain is configured but write keys are omitted
+      return {
+        id: null,
+        name: "Environment (R2 Read-Only)",
+        driver: "r2",
+        purpose: "public_media",
+        isActive: true,
+        endpoint: envCfg.endpoint,
+        accountId: envCfg.accountId,
+        bucket: envCfg.bucketName,
+        publicBaseUrl: envCfg.publicUrl,
+        directBrowserUpload: true,
+      };
+    } else if (process.env.MEDIA_LOCAL_DIR || process.env.NODE_ENV === "development") {
+      return {
         id: null,
         name: "Local Filesystem",
         driver: "local",
@@ -649,13 +680,11 @@ export async function resolveStorageConnection(
         localDir: process.env.MEDIA_LOCAL_DIR || "./.data/media",
         directBrowserUpload: false,
       };
-      storageConfigCache.set(cacheKey, { config, expiresAt: now + 60_000 });
-      return config;
     }
   } else if (purpose === "private_files") {
     const privateBucket = process.env.R2_PRIVATE_BUCKET_NAME || envCfg.bucketName;
     if (envCfg.accessKeyId && envCfg.secretAccessKey && privateBucket) {
-      const config: ResolvedStorageConfig = {
+      return {
         id: null,
         name: "Environment (Private R2)",
         driver: "r2",
@@ -669,15 +698,136 @@ export async function resolveStorageConnection(
         secretAccessKey: envCfg.secretAccessKey,
         directBrowserUpload: false,
       };
-      storageConfigCache.set(cacheKey, { config, expiresAt: now + 60_000 });
-      return config;
+    }
+  }
+  return null;
+}
+
+/**
+ * Resolves the appropriate storage driver for an existing media row.
+ * If storageConnectionId is set, resolves that specific connection (even if no longer active).
+ * If storageConnectionId is NULL or undefined, resolves via environment fallback.
+ */
+export async function resolveDriverForMediaRow(
+  db: Db,
+  storageConnectionId: string | null | undefined,
+  purpose: StoragePurpose = "public_media",
+): Promise<MediaStorageDriver | null> {
+  if (storageConnectionId) {
+    const config = await resolveStorageConnectionById(db, storageConnectionId);
+    if (config) {
+      return createStorageDriver(config);
+    }
+  }
+  const envConfig = getEnvironmentStorageConfig(purpose);
+  if (envConfig) {
+    return createStorageDriver(envConfig);
+  }
+  return null;
+}
+
+/**
+ * Resolves the absolute local filesystem path for a media file key.
+ * 1. Checks if the key references a media record in the DB, resolving through the media row's connection.
+ * 2. If row connection is local, verifies file existence in that connection's localDir.
+ * 3. Falls back to active connection's localDir, then env fallback (MEDIA_LOCAL_DIR / ./.data/media),
+ *    and any other configured local connections.
+ * 4. Strictly validates path safety with resolveSafeLocalPath to prevent traversal.
+ */
+export async function resolveLocalMediaFilePath(
+  db: Db,
+  storageKey: string,
+): Promise<string | null> {
+  if (!storageKey || typeof storageKey !== "string") {
+    return null;
+  }
+
+  const candidateDirs: string[] = [];
+
+  // 1. Try to find the media record's specific connection
+  const parts = storageKey.split("/");
+  const tenantIdCandidate = parts[0];
+  const isUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(
+    tenantIdCandidate || "",
+  );
+
+  if (isUuid && tenantIdCandidate) {
+    try {
+      const rows = await withTenant(db, tenantIdCandidate, async (tx) => {
+        return tx
+          .select({ storageConnectionId: schema.media.storageConnectionId })
+          .from(schema.media)
+          .where(eq(schema.media.storageKey, storageKey))
+          .limit(1);
+      });
+
+      if (rows[0]) {
+        const connId = rows[0].storageConnectionId;
+        if (connId) {
+          const conn = await resolveStorageConnectionById(db, connId);
+          if (conn && conn.driver === "local" && conn.localDir) {
+            candidateDirs.push(conn.localDir);
+          }
+        } else {
+          // Explicit null storageConnectionId means environment fallback
+          const envCfg = getEnvironmentStorageConfig("public_media");
+          if (envCfg && envCfg.driver === "local" && envCfg.localDir) {
+            candidateDirs.push(envCfg.localDir);
+          }
+        }
+      }
+    } catch {
+      // Query or tenant context failure; continue to fallback directories
     }
   }
 
-  // 3. Not configured
-  if (!process.env.VITEST) {
-    storageConfigCache.set(cacheKey, { config: null, expiresAt: now + 60_000 });
+  // 2. Active connection directory
+  try {
+    const active = await resolveStorageConnection(db, "public_media");
+    if (active && active.driver === "local" && active.localDir) {
+      if (!candidateDirs.includes(active.localDir)) {
+        candidateDirs.push(active.localDir);
+      }
+    }
+  } catch {
+    // ignore
   }
+
+  // 3. Environment fallback directory
+  const envDir = process.env.MEDIA_LOCAL_DIR || "./.data/media";
+  if (!candidateDirs.includes(envDir)) {
+    candidateDirs.push(envDir);
+  }
+
+  // 4. Any other registered local connections
+  try {
+    const allLocal = await db
+      .select({ localDir: schema.platformStorageConnections.localDir })
+      .from(schema.platformStorageConnections)
+      .where(sql`${schema.platformStorageConnections.driver} = 'local'`);
+    for (const r of allLocal) {
+      if (r.localDir && !candidateDirs.includes(r.localDir)) {
+        candidateDirs.push(r.localDir);
+      }
+    }
+  } catch {
+    // ignore
+  }
+
+  // Check existence across candidate directories in priority order
+  for (const dir of candidateDirs) {
+    try {
+      const resolvedBase = path.resolve(/*turbopackIgnore: true*/ dir);
+      const safePath = resolveSafeLocalPath(resolvedBase, storageKey);
+      const stat = await fs.promises.stat(safePath);
+      if (stat.isFile()) {
+        return safePath;
+      }
+    } catch {
+      // Not found in this directory, or traversal attempt; continue
+    }
+  }
+
   return null;
 }
 
@@ -770,7 +920,7 @@ export async function getActiveStorageDriver(
   purpose: StoragePurpose = "public_media",
 ): Promise<{ driver: MediaStorageDriver; config: ResolvedStorageConfig }> {
   const config = await resolveStorageConnection(db, purpose);
-  if (!config) {
+  if (!config || (config.driver !== "local" && (!config.accessKeyId || !config.secretAccessKey))) {
     throw new Error(
       "Precondition: Image storage is not set up yet. Ask the platform team to connect it, then try again.",
     );
@@ -848,13 +998,15 @@ export async function uploadMediaDirect(
 
   // 2. Magic byte sniffing
   const sniffed = sniffMimeType(input.fileBytes);
-  if (sniffed && sniffed !== input.mime) {
-    // If declared MIME is octet-stream, adopt sniffed; if mismatched, reject!
-    if (input.mime !== "application/octet-stream") {
-      throw new Error(
-        `File verification failed: declared MIME "${input.mime}" does not match file contents ("${sniffed}").`,
-      );
-    }
+  if (!sniffed) {
+    throw new Error(
+      "File verification failed: file content is not a recognized image format.",
+    );
+  }
+  if (sniffed !== input.mime) {
+    throw new Error(
+      `File verification failed: declared MIME "${input.mime}" does not match file contents ("${sniffed}").`,
+    );
   }
 
   // 3. Quota check
