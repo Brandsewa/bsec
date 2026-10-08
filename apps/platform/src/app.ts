@@ -82,6 +82,12 @@ import {
   activatePlatformStorageConnection,
   testPlatformStorageConnection,
   deletePlatformStorageConnection,
+  getPlatformQuotaMatrix,
+  createPlatformQuotaTier,
+  updatePlatformQuotaTier,
+  deactivatePlatformQuotaTier,
+  updatePlatformQuotaLimits,
+  updatePlatformQuotaDefinition,
   createLogger,
   requestLogger,
   resolveRequestId,
@@ -424,6 +430,27 @@ export const platformRouter = os.router({
   },
   quotas: {
     list: os.quotas.list.use(requirePlatformStaff).handler(({ context }) => listPlatformQuotaDefinitions(context.rt)),
+    matrix: os.quotas.matrix.use(requirePlatformStaff).handler(({ context }) => getPlatformQuotaMatrix(context.rt)),
+    createTier: os.quotas.createTier.use(requireStaff("platform_admin")).handler(async ({ context, input }) => {
+      const staffUserId = actor(context);
+      return createPlatformQuotaTier(context.rt, staffUserId, input, context.meta);
+    }),
+    updateTier: os.quotas.updateTier.use(requireStaff("platform_admin")).handler(async ({ context, input }) => {
+      const staffUserId = actor(context);
+      return updatePlatformQuotaTier(context.rt, staffUserId, input, context.meta);
+    }),
+    deactivateTier: os.quotas.deactivateTier.use(requireStaff("platform_admin")).handler(async ({ context, input }) => {
+      const staffUserId = actor(context);
+      return deactivatePlatformQuotaTier(context.rt, staffUserId, input.code, context.meta);
+    }),
+    updateLimits: os.quotas.updateLimits.use(requireStaff("platform_admin")).handler(async ({ context, input }) => {
+      const staffUserId = actor(context);
+      return updatePlatformQuotaLimits(context.rt, staffUserId, input, context.meta);
+    }),
+    updateDefinition: os.quotas.updateDefinition.use(requireStaff("platform_admin")).handler(async ({ context, input }) => {
+      const staffUserId = actor(context);
+      return updatePlatformQuotaDefinition(context.rt, staffUserId, input, context.meta);
+    }),
   },
   features: {
     list: os.features.list.use(requirePlatformStaff).handler(({ context }) => listPlatformFeatureFlags(context.rt)),

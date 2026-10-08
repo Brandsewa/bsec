@@ -586,19 +586,141 @@ export const platformSystemContract = {
     .output(z.object({ ok: z.boolean() })),
 };
 
+export const QuotaTierView = z.object({
+  code: z.string(),
+  name: z.string(),
+  description: z.string().nullable(),
+  sort: z.number(),
+  isActive: z.boolean(),
+  priceMonthlyPaise: z.number(),
+  priceYearlyPaise: z.number(),
+  currency: z.string(),
+  isPublic: z.boolean(),
+  storeCount: z.number(),
+  createdAt: z.string(),
+  updatedAt: z.string(),
+});
+export type QuotaTierView = z.infer<typeof QuotaTierView>;
+
+export const QuotaDefinitionView = z.object({
+  key: z.string(),
+  description: z.string().nullable(),
+  unit: z.string(),
+  enforcement: z.enum(["hard", "soft", "notify"]),
+  tierXs: z.number(),
+  tierS: z.number(),
+  tierM: z.number(),
+  tierL: z.number(),
+  createdAt: z.string(),
+  updatedAt: z.string(),
+});
+export type QuotaDefinitionView = z.infer<typeof QuotaDefinitionView>;
+
+export const QuotaTierLimitView = z.object({
+  tierCode: z.string(),
+  quotaKey: z.string(),
+  value: z.number(),
+});
+export type QuotaTierLimitView = z.infer<typeof QuotaTierLimitView>;
+
+export const QuotaMatrixView = z.object({
+  tiers: z.array(QuotaTierView),
+  definitions: z.array(QuotaDefinitionView),
+  limits: z.array(QuotaTierLimitView),
+});
+export type QuotaMatrixView = z.infer<typeof QuotaMatrixView>;
+
+export const CreateQuotaTierInput = z.object({
+  code: z
+    .string()
+    .min(1)
+    .max(50)
+    .regex(/^[A-Za-z0-9_-]+$/, "Code must contain only letters, numbers, hyphens and underscores"),
+  name: z.string().min(1).max(100),
+  description: z.string().max(500).optional(),
+  sort: z.number().int().optional(),
+  priceMonthlyPaise: z.number().int().nonnegative().optional(),
+  priceYearlyPaise: z.number().int().nonnegative().optional(),
+  currency: z.string().default("INR").optional(),
+  isPublic: z.boolean().optional(),
+});
+export type CreateQuotaTierInput = z.infer<typeof CreateQuotaTierInput>;
+
+export const UpdateQuotaTierInput = z.object({
+  code: z.string(),
+  name: z.string().min(1).max(100).optional(),
+  description: z.string().max(500).nullable().optional(),
+  sort: z.number().int().optional(),
+  isActive: z.boolean().optional(),
+  priceMonthlyPaise: z.number().int().nonnegative().optional(),
+  priceYearlyPaise: z.number().int().nonnegative().optional(),
+  currency: z.string().optional(),
+  isPublic: z.boolean().optional(),
+});
+export type UpdateQuotaTierInput = z.infer<typeof UpdateQuotaTierInput>;
+
+export const UpdateQuotaLimitsInput = z.object({
+  updates: z
+    .array(
+      z.object({
+        tierCode: z.string(),
+        quotaKey: z.string(),
+        value: z.number().int().nonnegative(),
+      }),
+    )
+    .min(1)
+    .max(1000),
+});
+export type UpdateQuotaLimitsInput = z.infer<typeof UpdateQuotaLimitsInput>;
+
+export const UpdateQuotaDefinitionInput = z.object({
+  key: z.string(),
+  description: z.string().max(500).nullable().optional(),
+  unit: z.string().min(1).max(50).optional(),
+  enforcement: z.enum(["hard", "soft", "notify"]).optional(),
+});
+export type UpdateQuotaDefinitionInput = z.infer<typeof UpdateQuotaDefinitionInput>;
+
 export const platformQuotasContract = {
   list: oc
     .route({ method: "GET", path: "/platform/quotas" })
-    .output(z.array(z.object({
-      key: z.string(),
-      description: z.string().nullable().optional(),
-      unit: z.string(),
-      enforcement: z.string(),
-      tierXs: z.number(),
-      tierS: z.number(),
-      tierM: z.number(),
-      tierL: z.number(),
-    }))),
+    .output(
+      z.array(
+        z.object({
+          key: z.string(),
+          description: z.string().nullable().optional(),
+          unit: z.string(),
+          enforcement: z.string(),
+          tierXs: z.number(),
+          tierS: z.number(),
+          tierM: z.number(),
+          tierL: z.number(),
+        }),
+      ),
+    ),
+  matrix: oc
+    .route({ method: "GET", path: "/platform/quotas/matrix" })
+    .output(QuotaMatrixView),
+  createTier: oc
+    .route({ method: "POST", path: "/platform/quotas/tiers" })
+    .input(CreateQuotaTierInput)
+    .output(z.object({ ok: z.boolean(), code: z.string() })),
+  updateTier: oc
+    .route({ method: "PATCH", path: "/platform/quotas/tiers/{code}" })
+    .input(UpdateQuotaTierInput)
+    .output(z.object({ ok: z.boolean() })),
+  deactivateTier: oc
+    .route({ method: "POST", path: "/platform/quotas/tiers/{code}/deactivate" })
+    .input(z.object({ code: z.string() }))
+    .output(z.object({ ok: z.boolean() })),
+  updateLimits: oc
+    .route({ method: "POST", path: "/platform/quotas/limits/batch" })
+    .input(UpdateQuotaLimitsInput)
+    .output(z.object({ ok: z.boolean(), updatedCount: z.number() })),
+  updateDefinition: oc
+    .route({ method: "PATCH", path: "/platform/quotas/definitions/{key}" })
+    .input(UpdateQuotaDefinitionInput)
+    .output(z.object({ ok: z.boolean() })),
 };
 
 export const platformFeaturesContract = {

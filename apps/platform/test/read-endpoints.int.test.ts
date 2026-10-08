@@ -33,6 +33,7 @@ const INPUTS: Record<string, () => unknown> = {
   "templates.get": () => ({ code: "essential-commerce" }),
   "support.list": () => ({}),
   "quotas.list": () => undefined,
+  "quotas.matrix": () => undefined,
   "features.list": () => undefined,
   "staff.list": () => undefined,
   "audit.list": () => ({}),

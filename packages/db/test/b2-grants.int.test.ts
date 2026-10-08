@@ -106,6 +106,17 @@ describe("B2: app_rw privileges on platform vs tenant tables", () => {
     await expect(
       q(rw, "INSERT INTO platform_storage_connections (name, driver, purpose) VALUES ('test', 'local', 'public_media')")
     ).rejects.toThrow(/permission denied/i);
+
+    // 8. Writes on quota_tiers and quota_tier_limits must be rejected for app_rw
+    await expect(
+      q(rw, "INSERT INTO quota_tiers (code, name) VALUES ('TEST', 'Test Tier')")
+    ).rejects.toThrow(/permission denied/i);
+    await expect(
+      q(rw, "UPDATE quota_tiers SET name = 'Hacked' WHERE code = 'XS'")
+    ).rejects.toThrow(/permission denied/i);
+    await expect(
+      q(rw, "INSERT INTO quota_tier_limits (tier_code, quota_key, value) VALUES ('XS', 'products', 99999)")
+    ).rejects.toThrow(/permission denied/i);
   });
 
   it("permits legitimate reads on platform tables and append-only on platform_audit_logs", async () => {
@@ -122,6 +133,12 @@ describe("B2: app_rw privileges on platform vs tenant tables", () => {
     // Reading platform_storage_connections is allowed for app_rw
     const storageRes = await q(rw, "SELECT count(*) FROM platform_storage_connections");
     expect(Number(storageRes.rows[0]?.count)).toBeGreaterThanOrEqual(0);
+
+    // Reading quota_tiers and quota_tier_limits is allowed for app_rw
+    const tiersRes = await q(rw, "SELECT count(*) FROM quota_tiers");
+    expect(Number(tiersRes.rows[0]?.count)).toBeGreaterThanOrEqual(4);
+    const limitsRes = await q(rw, "SELECT count(*) FROM quota_tier_limits");
+    expect(Number(limitsRes.rows[0]?.count)).toBeGreaterThanOrEqual(4);
 
     // platform_audit_logs allows INSERT (append-only)
     await q(

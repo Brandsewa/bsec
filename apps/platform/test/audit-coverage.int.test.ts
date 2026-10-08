@@ -50,6 +50,7 @@ async function snapshot(): Promise<string> {
     "tenant_deletions", "tenant_size_tiers", "subscriptions", "domains", "webhook_inbox", "memberships", "exports",
     "export_files", "tenant_owner_invites", "users", "sessions", "organizations", "store_settings", "roles", "theme_templates",
     "platform_email_settings", "plan_change_requests", "platform_storage_connections",
+    "quota_tiers", "quota_tier_limits", "quota_definitions",
   ];
   const parts = tables.map((t) => `SELECT '${t}' || ':' || x::text AS r FROM ${t} x`);
   parts.push(`SELECT 'job:' || j.id::text || j.state::text FROM pgboss.job j`);
@@ -296,6 +297,57 @@ const CASES: Record<string, Case> = {
     action: "storage_connection.delete",
     input: async () => ({
       id: await mkStorage(),
+    }),
+  },
+  "quotas.createTier": {
+    role: "platform_admin",
+    action: "quota_tier.created",
+    input: async () => ({
+      code: `T_${++seq}_${Math.random().toString(36).slice(2, 6).toUpperCase()}`,
+      name: `Tier ${seq}`,
+      priceMonthlyPaise: 49900,
+      priceYearlyPaise: 499000,
+    }),
+  },
+  "quotas.updateTier": {
+    role: "platform_admin",
+    action: "quota_tier.updated",
+    input: async () => {
+      const code = `TU_${++seq}_${Math.random().toString(36).slice(2, 6).toUpperCase()}`;
+      await proc("quotas.createTier")(
+        { code, name: `Tier ${seq}` },
+        { context: ctxFor(owner.userId, owner.freshSessionAt) },
+      );
+      return { code, name: `Renamed Tier ${seq}`, priceMonthlyPaise: 99900 };
+    },
+  },
+  "quotas.deactivateTier": {
+    role: "platform_admin",
+    action: "quota_tier.updated",
+    input: async () => {
+      const code = `TD_${++seq}_${Math.random().toString(36).slice(2, 6).toUpperCase()}`;
+      await proc("quotas.createTier")(
+        { code, name: `Tier ${seq}` },
+        { context: ctxFor(owner.userId, owner.freshSessionAt) },
+      );
+      return { code };
+    },
+  },
+  "quotas.updateLimits": {
+    role: "platform_admin",
+    action: "quota_limits.updated",
+    input: async () => ({
+      updates: [{ tierCode: "XS", quotaKey: "products", value: 50 }],
+    }),
+  },
+  "quotas.updateDefinition": {
+    role: "platform_admin",
+    action: "quota_definition.updated",
+    input: async () => ({
+      key: "products",
+      description: "Catalog products updated",
+      unit: "count",
+      enforcement: "hard",
     }),
   },
 };

@@ -57,6 +57,12 @@ const MIN_ROLE: Record<string, Role | "public"> = {
   "support.elevateWrite": "platform_admin",
   "support.end": "platform_support",
   "quotas.list": "platform_support",
+  "quotas.matrix": "platform_support",
+  "quotas.createTier": "platform_admin",
+  "quotas.updateTier": "platform_admin",
+  "quotas.deactivateTier": "platform_admin",
+  "quotas.updateLimits": "platform_admin",
+  "quotas.updateDefinition": "platform_admin",
   "features.list": "platform_support",
   "features.update": "platform_admin",
   "staff.list": "platform_admin",
@@ -134,6 +140,12 @@ const INPUT: Record<string, unknown> = {
   "storage.activate": { id: U },
   "storage.test": { id: U },
   "storage.delete": { id: U },
+  "quotas.matrix": {},
+  "quotas.createTier": { code: "RBAC_TIER", name: "RBAC Tier" },
+  "quotas.updateTier": { code: "XS", name: "Renamed XS" },
+  "quotas.deactivateTier": { code: "NON_EXISTENT" },
+  "quotas.updateLimits": { updates: [{ tierCode: "XS", quotaKey: "products", value: 50 }] },
+  "quotas.updateDefinition": { key: "products", description: "Desc" },
 };
 
 const RANK: Record<Role, number> = { platform_support: 1, platform_admin: 2, platform_owner: 3 };

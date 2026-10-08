@@ -155,5 +155,6 @@ export * from "./storefront/lookup-fallback.ts";
 export * from "./finance/index.ts";
 export * from "./media/connection.ts";
 export * from "./platform/storage-connections.ts";
+export * from "./platform/quotas.ts";
 
 

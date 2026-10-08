@@ -216,7 +216,7 @@ Drizzle schema files in `packages/db/src/schema/` (one Postgres database, `publi
 | `tenant-secrets.ts` | `tenant_secrets` T |
 | `platform.ts` | `domains`, `feature_flags`, `tenant_feature_overrides`, `platform_staff`, `platform_staff_invitations`, `support_sessions`, `tenant_deletions`, `tenant_notes`, `export_files` |
 | `platform-storage.ts` | `platform_storage_connections` P |
-| `quotas.ts` | `rate_limit_counters`, `quota_definitions`, `tenant_size_tiers`, `tenant_quota_overrides`, `quota_events`, `tenant_active_jobs` |
+| `quotas.ts` | `rate_limit_counters`, `quota_definitions`, `quota_tiers` P, `quota_tier_limits` P, `tenant_size_tiers`, `tenant_quota_overrides`, `quota_events`, `tenant_active_jobs` |
 | `saas.ts` | `plans`, `subscriptions`, `platform_invoices`, `platform_audit_logs`, `theme_templates`, `signup_leads`, `slug_reservations`, `reserved_slugs`, `onboarding_progress`, `tenant_owner_invites`, `exports` |
 | `quotes.ts` | `quote_requests` T |
 | `finance.ts` | `ledger_entries`, `expenses`, `fiscal_periods` T |
@@ -273,8 +273,9 @@ Drizzle schema files in `packages/db/src/schema/` (one Postgres database, `publi
 | 0048 | `settings_update_offer_flag` | Seeds the `settings.update_offer` flag (default off): while on for a store, its owner is offered the new Settings features with an Update now / Don't update prompt (`admin.settingsUpdate.get/apply`, `admin/settings-update.ts`; applying writes per-store overrides for the six `settings.*` flags and audits `settings.update_applied`) |
 | 0049 | `platform_storage_connections` | `platform_storage_connections` table (platform BYPASSRLS) with AES-256-GCM encrypted credentials, `media.storage_connection_id` column (nullable) |
 | 0050 | `orders_archive` | `orders.archived_at` and `orders.archived_by` columns, `orders_tenant_archived_at_idx` index |
+| 0051 | `quota_tiers` | `quota_tiers` and `quota_tier_limits` tables, backfill from `quota_definitions`, grants |
 
-How to write one (expand, migrate, contract; `forceRlsSql`): `docs/migrations.md`. **Never edit an applied migration.** Latest on disk: `0050` (the docs check keeps this list honest).
+How to write one (expand, migrate, contract; `forceRlsSql`): `docs/migrations.md`. **Never edit an applied migration.** Latest on disk: `0051` (the docs check keeps this list honest).
 
 ---
 
@@ -398,7 +399,7 @@ Guard tests worth knowing: isolation suites (tenant leakage), `audit-coverage` (
 
 ## 16. Decisions (ADRs)
 
-Index and statuses: [`docs/adr/README.md`](adr/README.md). Summary of what each fixes in place: 001 modular monolith, 002 RLS isolation, 003 Postgres is the source of truth, 004 Cache Components, 005 oRPC, 006 pg-boss, 007 Cloudflare for SaaS, 008 payment adapter, 009 versioned block registry, 010 no merchant code, 011 feature flags and fallbacks, 012 customer sessions, 013 quotas and rate limits, 014 admin auth (and a separate 014 on platform billing separation, see gaps), 015 quota hierarchy, 016 provisioning atomicity, 017 custom domain adapter, 018 visual theme editor, 019 customer auth and platform mailer, 020 settings capability families and granular authorization, 021 settings rebuild deprecation and contract schedule, 022 store finance ledger, 023 storage connections and resilient media uploads. New architectural decisions need an ADR **before** the code.
+Index and statuses: [`docs/adr/README.md`](adr/README.md). Summary of what each fixes in place: 001 modular monolith, 002 RLS isolation, 003 Postgres is the source of truth, 004 Cache Components, 005 oRPC, 006 pg-boss, 007 Cloudflare for SaaS, 008 payment adapter, 009 versioned block registry, 010 no merchant code, 011 feature flags and fallbacks, 012 customer sessions, 013 quotas and rate limits, 014 admin auth (and a separate 014 on platform billing separation, see gaps), 015 quota hierarchy, 016 provisioning atomicity, 017 custom domain adapter, 018 visual theme editor, 019 customer auth and platform mailer, 020 settings capability families and granular authorization, 021 settings rebuild deprecation and contract schedule, 022 store finance ledger, 023 storage connections and resilient media uploads, 024 order archive vs permanent delete and Returns as a full page, 025 quota tiers normalisation, display pricing, and safe resolution. New architectural decisions need an ADR **before** the code.
 
 ---
 

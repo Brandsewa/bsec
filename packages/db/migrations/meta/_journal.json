@@ -316,6 +316,13 @@
       "when": 1792200000000,
       "tag": "0050_orders_archive",
       "breakpoints": true
+    },
+    {
+      "idx": 45,
+      "version": "7",
+      "when": 1792210000000,
+      "tag": "0051_quota_tiers",
+      "breakpoints": true
     }
   ]
 }
