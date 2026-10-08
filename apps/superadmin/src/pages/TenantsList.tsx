@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useState, useMemo } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
 import {
@@ -66,10 +66,28 @@ export function TenantsList() {
   const [bulkSuspendOpen, setBulkSuspendOpen] = useState(false);
   const [suspendReason, setSuspendReason] = useState("");
   const [bulkTierOpen, setBulkTierOpen] = useState(false);
-  const [selectedTier, setSelectedTier] = useState<"XS" | "S" | "M" | "L">("S");
+  const [selectedTier, setSelectedTier] = useState<string>("S");
   const [actionLoading, setActionLoading] = useState(false);
   const [suspendConfirm, setSuspendConfirm] = useState("");
   const [tierConfirm, setTierConfirm] = useState("");
+
+  const { data: quotaMatrix } = useQuery({
+    queryKey: ["platform", "quotas", "matrix"],
+    queryFn: () => client.quotas.matrix(),
+  });
+
+  const activeTiers = useMemo(() => {
+    return (quotaMatrix?.tiers ?? []).filter((t) => t.isActive);
+  }, [quotaMatrix]);
+
+  const effectiveTier = activeTiers.some((t) => t.code === selectedTier)
+    ? selectedTier
+    : (activeTiers[0]?.code ?? "S");
+
+  const getTierProductsLimit = (tierCode: string) => {
+    const lim = quotaMatrix?.limits?.find((l) => l.tierCode === tierCode && l.quotaKey === "products_max");
+    return lim?.value;
+  };
 
   const { data: tenants, isLoading, refetch } = useQuery({
     queryKey: ["platform", "tenants", { search, status: statusFilter }],
@@ -125,7 +143,7 @@ export function TenantsList() {
     try {
       const res = await client.tenants.bulkChangeTier({
         tenantIds: selectedIds,
-        tier: selectedTier,
+        tier: effectiveTier,
         confirmation: tierConfirm,
       });
       toast.success(`Updated ${res.updatedCount} store(s) to tier ${res.tier}`);
@@ -339,32 +357,46 @@ export function TenantsList() {
           <DialogHeader>
             <DialogTitle>Bulk Change Resource Tier</DialogTitle>
             <DialogDescription>
-              Update the size tier (XS, S, M, L) for {selectedIds.length} selected store(s).
+              Update the resource tier for {selectedIds.length} selected store(s).
             </DialogDescription>
           </DialogHeader>
           <div className="space-y-3 py-2">
             <label className="text-xs font-medium">Target Size Tier</label>
-            <Select value={selectedTier} onValueChange={(val) => setSelectedTier(val as typeof selectedTier)}>
+            <Select
+              value={effectiveTier}
+              onValueChange={(val) => {
+                setSelectedTier(val);
+                setTierConfirm("");
+              }}
+            >
               <SelectTrigger>
-                <SelectValue />
+                <SelectValue placeholder="Select a tier" />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="XS">XS (Starting tier, 50 products)</SelectItem>
-                <SelectItem value="S">S (Growth tier, 500 products)</SelectItem>
-                <SelectItem value="M">M (Scale tier, 5,000 products)</SelectItem>
-                <SelectItem value="L">L (Enterprise tier, 25,000 products)</SelectItem>
+                {activeTiers.map((t) => {
+                  const productsLimit = getTierProductsLimit(t.code);
+                  const priceText =
+                    t.priceMonthlyPaise > 0
+                      ? `₹${(t.priceMonthlyPaise / 100).toLocaleString("en-IN")}/mo`
+                      : "Free";
+                  return (
+                    <SelectItem key={t.code} value={t.code}>
+                      {t.code} — {t.name} ({priceText}{productsLimit !== undefined ? `, ${productsLimit.toLocaleString()} products` : ""})
+                    </SelectItem>
+                  );
+                })}
               </SelectContent>
             </Select>
             <label className="text-xs font-medium">
-              To confirm, type <span className="font-mono select-all">TIER {selectedTier} {selectedIds.length}</span>
+              To confirm, type <span className="font-mono select-all">TIER {effectiveTier} {selectedIds.length}</span>
             </label>
-            <Input value={tierConfirm} onChange={(e) => setTierConfirm(e.target.value)} placeholder={`TIER ${selectedTier} ${selectedIds.length}`} />
+            <Input value={tierConfirm} onChange={(e) => setTierConfirm(e.target.value)} placeholder={`TIER ${effectiveTier} ${selectedIds.length}`} />
           </div>
           <DialogFooter>
-            <Button variant="default" onClick={() => setBulkTierOpen(false)} disabled={actionLoading}>
+            <Button variant="outline" onClick={() => setBulkTierOpen(false)} disabled={actionLoading}>
               Cancel
             </Button>
-            <Button onClick={handleBulkChangeTier} disabled={actionLoading || tierConfirm !== `TIER ${selectedTier} ${selectedIds.length}`}>
+            <Button onClick={handleBulkChangeTier} disabled={actionLoading || tierConfirm !== `TIER ${effectiveTier} ${selectedIds.length}`}>
               {actionLoading ? "Updating..." : "Apply Tier"}
             </Button>
           </DialogFooter>

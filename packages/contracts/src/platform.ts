@@ -331,7 +331,11 @@ export const platformTenantsContract = {
     .output(z.object({ ok: z.boolean(), suspendedCount: z.number() })),
   bulkChangeTier: oc
     .route({ method: "POST", path: "/platform/tenants/bulk-tier" })
-    .input(z.object({ tenantIds: z.array(z.string().uuid()).min(1), tier: z.enum(["XS", "S", "M", "L"]), confirmation: z.string() }))
+    .input(z.object({
+      tenantIds: z.array(z.string().uuid()).min(1),
+      tier: z.string().trim().min(1).max(32).regex(/^[A-Za-z0-9_-]+$/, "Tier code must be alphanumeric").transform((v) => v.toUpperCase()),
+      confirmation: z.string(),
+    }))
     .output(z.object({ ok: z.boolean(), updatedCount: z.number(), tier: z.string() })),
   requestDeletion: oc
     .route({ method: "POST", path: "/platform/tenants/{id}/request-deletion" })

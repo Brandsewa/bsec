@@ -52,6 +52,17 @@ Also includes the two assigned Phase 2 follow-ups:
       - Inline numeric inputs with visual highlighted border for modified cells.
       - Unsaved changes sticky banner tracking dirty inputs with "Discard" and "Save Changes".
       - "N stores affected" batch confirmation dialog detailing modified limits (`products_max (XS): 50 → 100`) and total affected tenants.
+  - **Tenants List & Bulk Assignment (`apps/superadmin/src/pages/TenantsList.tsx`)**:
+    - Dynamically generates bulk tier assignment options directly from active tiers queried via `client.quotas.matrix()`.
+    - Each option renders tier code, name, INR monthly display price (e.g. `₹4,999/mo`), and key limits (e.g. `10,000 products`).
+    - Enforces typed confirmation `TIER <tier> <count>` before enabling the action button.
+- **Claude Verification Review Fixes**:
+  1. **Dynamic Active Tier Assignment**:
+     - `packages/contracts/src/platform.ts`: Replaced hardcoded `z.enum(["XS", "S", "M", "L"])` in `bulkChangeTier` with a validated tier code string schema (`trim().min(1).max(32).regex(...)`).
+     - `packages/domain/src/platform-services.ts`: In `bulkChangePlatformTenantTier`, validated inside the write transaction that the target tier exists and is `is_active = true`. Refuses unknown and inactive tiers with descriptive errors.
+     - `packages/domain/test/quotas-phase3.int.test.ts`: Rewrote the custom tier assignment test to execute end-to-end through `bulkChangePlatformTenantTier` (instead of raw SQL `UPDATE`). Added explicit refusal tests for unknown tiers and inactive tiers.
+  2. **Atomic Deactivation Guard**:
+     - `packages/domain/src/platform/quotas.ts`: In `updatePlatformQuotaTier`, moved the `inUseCount` ("stores on this tier") query inside the database transaction (`rt._db.db.transaction`) alongside the update, closing any race condition window between store assignment and tier deactivation.
 - **Phase 2 Follow-ups**:
   - Added test case in `packages/domain/test/admin-orders-phase2.int.test.ts` verifying order deletion cleanly cascades past `discount_redemptions`, `payment_intents`, and `payment_attempts`.
   - Removed unused `"order"` entry from `TagKind` in `packages/domain/src/cache-tags.ts`.
@@ -60,7 +71,7 @@ Also includes the two assigned Phase 2 follow-ups:
   - Updated `docs/ARCHITECTURE.md` sections 1.1, 1.2, 3.1, and ADR index.
 
 ## Decisions and trade-offs
-- **Decoupled Pricing from Billing**: Quota tier prices (`price_monthly_paise`, `price_yearly_paise`) are strictly informational for public comparison and catalog display. They are intentionally NOT connected to Razorpay, Stripe, or billing subscriptions (per ADR-025 and prompt rules).
+- **Decoupled Pricing from Billing**: Quota tier prices (`price_monthly_paise`, `price_yearly_paise`) are strictly display-only / informational for public comparison and catalog display. They are intentionally NOT connected to Razorpay, Stripe, or billing subscriptions (per ADR-025 and prompt rules).
 - **Expand-Only Migration**: Migration `0051_quota_tiers.sql` normalises limits into `quota_tier_limits` without dropping legacy columns on `quota_definitions`. All updates write through to legacy columns to ensure zero downtime.
 - **Storefront Non-Regression (ADR-015 Invariant)**: Set all hard resource limits to 0 in test suite and verified that storefront checkout, customer browsing, and webhook ingestion proceed unblocked without throwing 429 / 403 quota errors.
 
@@ -72,9 +83,9 @@ Also includes the two assigned Phase 2 follow-ups:
 - [x] Deactivating or deleting a tier that tenants use is refused by the domain service.
 - [x] All mutations use `assertRoleAtLeast("platform_admin")`, write `platform_audit_logs` with before/after diffs, and are added to `apps/platform` audit-coverage and RBAC suites.
 - [x] Super Admin `/quotas` gets two tabs (Tiers with price editing in a drawer; Limits matrix with inline edit, dirty tracking, atomic batch save, and an "N stores affected" confirmation) using shared kit only.
-- [x] Tier price stored as integer paise, formatted as INR, no float math. Tier price NOT wired into billing or invoices.
+- [x] Tier price stored as integer paise, formatted as INR, no float math. Tier price NOT wired into billing or invoices (strictly display-only).
 - [x] ADR-025 written.
-- [x] Real-DB tests passing for snapshot equality, refusal when tier in use, write-through sync, and zero-quota storefront safety.
+- [x] Real-DB tests passing for snapshot equality, refusal when tier in use, write-through sync, unknown/inactive tier refusal, and zero-quota storefront safety.
 - [x] Browser walkthrough performed on desktop (1280x800) and mobile (375x812) with zero defects.
 
 ## Verification
@@ -86,19 +97,21 @@ Also includes the two assigned Phase 2 follow-ups:
   - `pnpm --filter @bs/db test:fast`: Passed (3/3 files, 27/27 tests).
   - `pnpm --filter @bs/platform test`: Passed (7/7 files, 93/93 tests).
   - `pnpm --filter @bs/domain test:fast`: Passed (45/45 files, 374/374 tests).
-  - `pnpm --filter @bs/domain test:heavy` (serial, `--no-file-parallelism`): Passed (90/90 files, 1,920/1,920 tests).
+  - `pnpm --filter @bs/domain test:heavy` (serial via `pnpm test:heavy:local`): Passed (90/90 files, 1,930/1,930 tests).
 - **New Real-DB Test Suite (`quotas-phase3.int.test.ts`)**:
-  - 8/8 tests passed verifying:
+  - 10/10 tests passed verifying:
     1. Schema backfill snapshot equality before and after normalisation.
-    2. Atomic limits update with write-through sync to `quota_definitions`.
-    3. Custom tier creation and limit resolution.
-    4. Refusal when deactivating tier currently assigned to stores.
-    5. Successful deactivation of unassigned tier.
-    6. Platform audit logging for all tier and limit mutations with before/after diffs.
-    7. ADR-015 invariant: checkout proceeds unblocked when all hard quotas are 0.
-    8. Definition metadata update without mutating code-defined keys.
-- **Browser Walkthrough (`e2e/walkthrough-quotas.mjs`)**:
-  - Executed via Playwright on Chromium against live `apps/superadmin` (Vite preview on port 5174) and `apps/platform` (on port 4000) backed by PostgreSQL test container.
+    2. Editing a limit updates `resolveEffectiveQuota` immediately.
+    3. Write-through invariant: updating XS/S/M/L limits keeps legacy `quota_definitions` columns populated.
+    4. Adding tier XL with pricing and assigning a tenant end-to-end via real `bulkChangePlatformTenantTier`.
+    5. `bulkChangePlatformTenantTier` refuses unknown and inactive tiers.
+    6. Refuses to deactivate a tier that tenants are currently assigned to.
+    7. Unknown tier code falls back safely to XS tier threshold.
+    8. Prices stored as integer paise, formatted as INR with round-trip precision.
+    9. ADR-015 invariant: quotas never block checkout or storefront even with hard quotas at 0.
+    10. Updates quota definition metadata without altering code-defined keys.
+- **Browser Walkthrough Part 1: Quota Tiers & Limits Matrix (`e2e/walkthrough-quotas.mjs`)**:
+  - Executed via Playwright on Chromium against live `apps/superadmin` (Vite preview on port 5174) and `apps/platform`.
   - Desktop (1280x800):
     - Verified page title, header description, and Tenants link.
     - Verified initial 4 tiers (XS, S, M, L) with INR pricing and active store counts.
@@ -123,6 +136,32 @@ Also includes the two assigned Phase 2 follow-ups:
     - `07_mobile_tiers_view.png`
     - `08_mobile_add_tier_sheet.png`
     - `09_mobile_matrix_view.png`
+- **Browser Walkthrough Part 2: Dynamic Custom Tier Assignment (`e2e/walkthrough-assign-tier.mjs`)**:
+  - Executed via Playwright on Chromium against live `apps/superadmin` (port 5174).
+  - Desktop (1280x800):
+    - Navigated to `/tenants`.
+    - Selected store "Sikkim Supreme" (currently on tier XS).
+    - Verified bulk action bar appears with "1 store(s) selected".
+    - Clicked "Change Tier"; opened Bulk Change Resource Tier modal.
+    - Inspected select options populated dynamically from `quotas.matrix`: verified "XL — Extra Large (₹4,999/mo, 10,000 products)" is available and selectable.
+    - Selected tier XL; verified typed confirmation requirement dynamically updated to `TIER XL 1`.
+    - Typed confirmation `TIER XL 1` into input and clicked "Apply Tier".
+    - Verified RPC call intercepted with payload `{"tenantIds":["t-store-1"],"tier":"XL","confirmation":"TIER XL 1"}`.
+    - Verified success toast: "Updated 1 store(s) to tier XL".
+  - Mobile (375x812):
+    - Navigated to `/tenants` at 375 px viewport.
+    - Selected store "Ricwell Organic" (currently on tier S).
+    - Opened Change Tier modal, selected XL, typed `TIER XL 1`, and clicked "Apply Tier".
+    - Verified RPC call intercepted and success toast appeared.
+  - Screenshots recorded to `apps/superadmin/walkthrough-artifacts/`:
+    - `10_desktop_tenants_list.png`
+    - `11_desktop_store_selected_bulk_bar.png`
+    - `12_desktop_bulk_tier_dialog_filled.png`
+    - `13_desktop_store_assigned_xl_success.png`
+    - `14_mobile_tenants_view.png`
+    - `15_mobile_store_selected_bulk_bar.png`
+    - `16_mobile_bulk_tier_dialog_filled.png`
+    - `17_mobile_store_assigned_xl_success.png`
 
 ## Definition of Done
 - [x] Code follows section 2 and 3; the gate in section 4 passes.
@@ -133,3 +172,4 @@ Also includes the two assigned Phase 2 follow-ups:
 - [x] A change record in `docs/changes/` (required) and `progress.md` status/known-gaps/in-flight updated.
 - [x] No secrets, no generated files, no unrelated edits in the diff.
 - [x] Honest status: what you verified live, what you only read, what you did not do.
+

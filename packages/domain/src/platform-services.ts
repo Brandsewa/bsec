@@ -986,19 +986,34 @@ export async function bulkChangePlatformTenantTier(
   rt: Runtime,
   platformStaffUserId: string,
   tenantIds: string[],
-  tier: "XS" | "S" | "M" | "L",
+  tier: string,
   confirmation: string,
   meta?: AuditMeta,
 ) {
   await assertPlatformStaff(rt, platformStaffUserId);
   const ids = [...new Set(tenantIds)];
   if (ids.length === 0) throw new Error("Bad Request: select at least one store");
-  if (confirmation !== `TIER ${tier} ${ids.length}`) {
-    throw new Error(`Bad Request: type "TIER ${tier} ${ids.length}" to confirm`);
+  const cleanTier = tier.trim().toUpperCase();
+  if (confirmation !== `TIER ${cleanTier} ${ids.length}`) {
+    throw new Error(`Bad Request: type "TIER ${cleanTier} ${ids.length}" to confirm`);
   }
   const db = rt._db.db;
 
   return db.transaction(async (tx) => {
+    // Validate tier exists and is active inside the same transaction
+    const [targetTier] = await tx
+      .select({ code: schema.quotaTiers.code, isActive: schema.quotaTiers.isActive })
+      .from(schema.quotaTiers)
+      .where(eq(schema.quotaTiers.code, cleanTier))
+      .limit(1);
+
+    if (!targetTier) {
+      throw new Error(`Bad Request: Quota tier "${cleanTier}" does not exist`);
+    }
+    if (!targetTier.isActive) {
+      throw new Error(`Bad Request: Quota tier "${cleanTier}" is inactive and cannot be assigned to stores`);
+    }
+
     const existing = await tx.select({ id: schema.tenants.id }).from(schema.tenants).where(inArray(schema.tenants.id, ids));
     if (existing.length !== ids.length) throw new Error("Not Found: one or more selected stores do not exist");
     const previous = await tx
@@ -1010,19 +1025,19 @@ export async function bulkChangePlatformTenantTier(
     for (const tid of ids) {
       await tx
         .insert(schema.tenantSizeTiers)
-        .values({ tenantId: tid, tier })
+        .values({ tenantId: tid, tier: cleanTier })
         .onConflictDoUpdate({
           target: [schema.tenantSizeTiers.tenantId],
-          set: { tier, updatedAt: sql`now()` },
+          set: { tier: cleanTier, updatedAt: sql`now()` },
         });
 
       await writePlatformAudit(tx, platformStaffUserId, "tenant.bulk_tier_change", "tenant", tid, tid, {
         fromTier: before.get(tid) ?? null,
-        tier,
+        tier: cleanTier,
         bulkCount: ids.length,
       }, meta);
     }
-    return { ok: true, updatedCount: ids.length, tier };
+    return { ok: true, updatedCount: ids.length, tier: cleanTier };
   });
 }
 

@@ -2,6 +2,7 @@ import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { eq, sql } from "drizzle-orm";
 import { schema } from "@bs/db";
 import { startTestDb, type TestDb } from "@bs/db/test-env";
+import { seedPlatformStaff } from "@bs/db/test-fixtures";
 import {
   createRuntime,
   provisionTenant,
@@ -12,6 +13,7 @@ import {
   deactivatePlatformQuotaTier,
   updatePlatformQuotaLimits,
   updatePlatformQuotaDefinition,
+  bulkChangePlatformTenantTier,
   type Runtime,
   type TenantContext,
   getOrCreateCart,
@@ -27,11 +29,18 @@ let tenantId: string;
 let ownerId: string;
 let variantId: string;
 let _locationId: string;
+let staffUserId: string;
 
 beforeAll(async () => {
   env = await startTestDb();
   rt = createRuntime({ service: "web", databaseUrl: env.as("app_rw"), poolMax: 10 });
   rtPlatform = createRuntime({ service: "platform", databaseUrl: env.as("app_platform"), poolMax: 10 });
+
+  const staff = await seedPlatformStaff(rtPlatform._db.db, {
+    email: "admin-phase3@platform.test",
+    role: "platform_admin",
+  });
+  staffUserId = staff.userId;
 
   const tenant = await provisionTenant(rtPlatform, {
     storeName: "Quota Tiers Test Store",
@@ -146,8 +155,8 @@ describe("Phase 3: Quota Tiers & Pricing Normalisation (SA-2 / ADR-025)", () => 
     expect(defReset?.tierM).toBe(20000);
   });
 
-  it("adding tier XL with pricing and assigning a tenant works end-to-end", async () => {
-    const createRes = await createPlatformQuotaTier(rtPlatform, null, {
+  it("adding tier XL with pricing and assigning a tenant works end-to-end via real bulkChangePlatformTenantTier", async () => {
+    const createRes = await createPlatformQuotaTier(rtPlatform, staffUserId, {
       code: "XL",
       name: "Extra Large (Hyper-growth)",
       description: "Dedicated resources for top merchants",
@@ -161,15 +170,21 @@ describe("Phase 3: Quota Tiers & Pricing Normalisation (SA-2 / ADR-025)", () => 
     expect(createRes.code).toBe("XL");
 
     // Update custom limits for XL
-    await updatePlatformQuotaLimits(rtPlatform, null, {
+    await updatePlatformQuotaLimits(rtPlatform, staffUserId, {
       updates: [{ tierCode: "XL", quotaKey: "products", value: 50000 }],
     });
 
-    // Assign tenant to XL
-    await rtPlatform._db.db
-      .update(schema.tenantSizeTiers)
-      .set({ tier: "XL", updatedAt: new Date() })
-      .where(eq(schema.tenantSizeTiers.tenantId, tenantId));
+    // Assign tenant to XL via real domain service function
+    const assignRes = await bulkChangePlatformTenantTier(
+      rtPlatform,
+      staffUserId,
+      [tenantId],
+      "XL",
+      "TIER XL 1",
+    );
+    expect(assignRes.ok).toBe(true);
+    expect(assignRes.updatedCount).toBe(1);
+    expect(assignRes.tier).toBe("XL");
 
     const res = await resolveEffectiveQuota(rt._db.db, tenantId, "products");
     expect(res.limit).toBe(50000);
@@ -177,20 +192,46 @@ describe("Phase 3: Quota Tiers & Pricing Normalisation (SA-2 / ADR-025)", () => 
     expect(res.source).toBe("tier");
   });
 
+  it("bulkChangePlatformTenantTier refuses unknown and inactive tiers", async () => {
+    // 1. Unknown tier code refusal
+    await expect(
+      bulkChangePlatformTenantTier(rtPlatform, staffUserId, [tenantId], "NONEXISTENT", "TIER NONEXISTENT 1"),
+    ).rejects.toThrow(/Quota tier "NONEXISTENT" does not exist/);
+
+    // 2. Inactive tier code refusal: create an inactive tier first
+    await createPlatformQuotaTier(rtPlatform, staffUserId, {
+      code: "INACTIVE_TEST",
+      name: "Inactive Test Tier",
+      sort: 99,
+      priceMonthlyPaise: 0,
+      priceYearlyPaise: 0,
+      isPublic: false,
+    });
+    await deactivatePlatformQuotaTier(rtPlatform, staffUserId, "INACTIVE_TEST");
+
+    await expect(
+      bulkChangePlatformTenantTier(rtPlatform, staffUserId, [tenantId], "INACTIVE_TEST", "TIER INACTIVE_TEST 1"),
+    ).rejects.toThrow(/Quota tier "INACTIVE_TEST" is inactive and cannot be assigned to stores/);
+  });
+
   it("refuses to deactivate a tier that tenants are currently assigned to", async () => {
     // Tenant is currently on XL
     await expect(
-      deactivatePlatformQuotaTier(rtPlatform, null, "XL"),
+      deactivatePlatformQuotaTier(rtPlatform, staffUserId, "XL"),
     ).rejects.toThrow(/Cannot deactivate tier "XL": 1 store\(s\) are currently on this tier/);
 
-    // Reassign tenant back to XS
-    await rtPlatform._db.db
-      .update(schema.tenantSizeTiers)
-      .set({ tier: "XS", updatedAt: new Date() })
-      .where(eq(schema.tenantSizeTiers.tenantId, tenantId));
+    // Reassign tenant back to XS via real domain service function
+    const reassignRes = await bulkChangePlatformTenantTier(
+      rtPlatform,
+      staffUserId,
+      [tenantId],
+      "XS",
+      "TIER XS 1",
+    );
+    expect(reassignRes.ok).toBe(true);
 
     // Now deactivation succeeds!
-    const deactRes = await deactivatePlatformQuotaTier(rtPlatform, null, "XL");
+    const deactRes = await deactivatePlatformQuotaTier(rtPlatform, staffUserId, "XL");
     expect(deactRes.ok).toBe(true);
 
     const [xlRow] = await rtPlatform._db.db

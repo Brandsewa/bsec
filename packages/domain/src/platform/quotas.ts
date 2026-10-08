@@ -183,30 +183,30 @@ export async function updatePlatformQuotaTier(
 ): Promise<{ ok: boolean }> {
   const code = input.code.trim().toUpperCase();
 
-  const [before] = await rt._db.db
-    .select()
-    .from(schema.quotaTiers)
-    .where(eq(schema.quotaTiers.code, code))
-    .limit(1);
-
-  if (!before) {
-    throw new Error(`Quota tier "${code}" not found`);
-  }
-
-  // Refusal invariant: cannot deactivate tier in use
-  if (input.isActive === false && before.isActive === true) {
-    const countRes = await rt._db.db.execute<{ count: string }>(sql`
-      SELECT COUNT(*)::text as count FROM tenant_size_tiers WHERE UPPER(tier) = ${code};
-    `);
-    const inUseCount = parseInt(countRes.rows[0]?.count ?? "0", 10);
-    if (inUseCount > 0) {
-      throw new Error(
-        `Cannot deactivate tier "${code}": ${inUseCount} store(s) are currently on this tier. Reassign them before deactivating.`,
-      );
-    }
-  }
-
   return rt._db.db.transaction(async (tx) => {
+    const [before] = await tx
+      .select()
+      .from(schema.quotaTiers)
+      .where(eq(schema.quotaTiers.code, code))
+      .limit(1);
+
+    if (!before) {
+      throw new Error(`Quota tier "${code}" not found`);
+    }
+
+    // Refusal invariant: cannot deactivate tier in use (evaluated atomically inside transaction)
+    if (input.isActive === false && before.isActive === true) {
+      const countRes = await tx.execute<{ count: string }>(sql`
+        SELECT COUNT(*)::text as count FROM tenant_size_tiers WHERE UPPER(tier) = ${code};
+      `);
+      const inUseCount = parseInt(countRes.rows[0]?.count ?? "0", 10);
+      if (inUseCount > 0) {
+        throw new Error(
+          `Cannot deactivate tier "${code}": ${inUseCount} store(s) are currently on this tier. Reassign them before deactivating.`,
+        );
+      }
+    }
+
     const [updated] = await tx
       .update(schema.quotaTiers)
       .set({
