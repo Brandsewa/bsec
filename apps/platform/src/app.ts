@@ -82,6 +82,10 @@ import {
   activatePlatformStorageConnection,
   testPlatformStorageConnection,
   deletePlatformStorageConnection,
+  getPlatformStorageStats,
+  getPlatformIntegrationsOverview,
+  getPlatformChannelStats,
+  getPlatformChannelTransactions,
   getPlatformQuotaMatrix,
   createPlatformQuotaTier,
   updatePlatformQuotaTier,
@@ -534,9 +538,27 @@ export const platformRouter = os.router({
       const staffUserId = actor(context);
       return testPlatformStorageConnection(context.rt, staffUserId, input.id, context.meta);
     }),
+    stats: os.storage.stats.use(requirePlatformStaff).handler(async ({ context }) => {
+      const staffUserId = actor(context);
+      return getPlatformStorageStats(context.rt, staffUserId);
+    }),
     delete: os.storage.delete.use(requireStaff("platform_admin")).handler(async ({ context, input }) => {
       const staffUserId = actor(context);
       return deletePlatformStorageConnection(context.rt, staffUserId, input.id, context.meta);
+    }),
+  },
+  integrations: {
+    overview: os.integrations.overview.use(requirePlatformStaff).handler(async ({ context }) => {
+      const staffUserId = actor(context);
+      return getPlatformIntegrationsOverview(context.rt, staffUserId);
+    }),
+    channelStats: os.integrations.channelStats.use(requirePlatformStaff).handler(async ({ context, input }) => {
+      const staffUserId = actor(context);
+      return getPlatformChannelStats(context.rt, staffUserId, input);
+    }),
+    channelTransactions: os.integrations.channelTransactions.use(requirePlatformStaff).handler(async ({ context, input }) => {
+      const staffUserId = actor(context);
+      return getPlatformChannelTransactions(context.rt, staffUserId, input);
     }),
   },
 });

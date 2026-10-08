@@ -536,3 +536,66 @@ export async function deletePlatformStorageConnection(
 
   return { ok: true };
 }
+
+/**
+ * Gets aggregated storage statistics across all tenants and connections.
+ */
+export async function getPlatformStorageStats(
+  rt: Runtime,
+  platformStaffUserId: string,
+) {
+  await assertPlatformStaff(rt, platformStaffUserId);
+  const db = rt._db.db;
+
+  const [totalRes] = await db
+    .select({
+      totalBytes: sql<string>`coalesce(sum(${schema.media.bytes}), 0)`,
+      totalFiles: sql<string>`count(*)`,
+    })
+    .from(schema.media);
+
+  const connectionRows = await db
+    .select({
+      connectionId: schema.media.storageConnectionId,
+      connectionName: schema.platformStorageConnections.name,
+      bytes: sql<string>`coalesce(sum(${schema.media.bytes}), 0)`,
+      files: sql<string>`count(*)`,
+    })
+    .from(schema.media)
+    .leftJoin(
+      schema.platformStorageConnections,
+      eq(schema.media.storageConnectionId, schema.platformStorageConnections.id),
+    )
+    .groupBy(schema.media.storageConnectionId, schema.platformStorageConnections.name);
+
+  const tenantRows = await db
+    .select({
+      tenantId: schema.media.tenantId,
+      tenantName: schema.tenants.name,
+      bytes: sql<string>`coalesce(sum(${schema.media.bytes}), 0)`,
+      files: sql<string>`count(*)`,
+    })
+    .from(schema.media)
+    .leftJoin(schema.tenants, eq(schema.media.tenantId, schema.tenants.id))
+    .groupBy(schema.media.tenantId, schema.tenants.name)
+    .orderBy(desc(sql`sum(${schema.media.bytes})`))
+    .limit(5);
+
+  return {
+    totalBytes: Number(totalRes?.totalBytes ?? 0),
+    totalFiles: Number(totalRes?.totalFiles ?? 0),
+    byConnection: connectionRows.map((r) => ({
+      connectionId: r.connectionId,
+      connectionName: r.connectionName ?? (r.connectionId ? "Unknown" : "Unassigned"),
+      bytes: Number(r.bytes),
+      files: Number(r.files),
+    })),
+    topTenants: tenantRows.map((r) => ({
+      tenantId: r.tenantId,
+      tenantName: r.tenantName ?? "Unknown Store",
+      bytes: Number(r.bytes),
+      files: Number(r.files),
+    })),
+  };
+}
+

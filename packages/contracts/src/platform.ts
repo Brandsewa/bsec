@@ -945,10 +945,35 @@ export const UpdatePlatformStorageConnectionInput = z.object({
 });
 export type UpdatePlatformStorageConnectionInput = z.infer<typeof UpdatePlatformStorageConnectionInput>;
 
+export const PlatformStorageStatsView = z.object({
+  totalBytes: z.number(),
+  totalFiles: z.number(),
+  byConnection: z.array(
+    z.object({
+      connectionId: z.string().nullable(),
+      connectionName: z.string().nullable(),
+      bytes: z.number(),
+      files: z.number(),
+    }),
+  ),
+  topTenants: z.array(
+    z.object({
+      tenantId: z.string().nullable(),
+      tenantName: z.string(),
+      bytes: z.number(),
+      files: z.number(),
+    }),
+  ),
+});
+export type PlatformStorageStatsView = z.infer<typeof PlatformStorageStatsView>;
+
 export const platformStorageContract = {
   list: oc
     .route({ method: "GET", path: "/platform/storage/connections" })
     .output(z.array(PlatformStorageConnectionView)),
+  stats: oc
+    .route({ method: "GET", path: "/platform/storage/stats" })
+    .output(PlatformStorageStatsView),
   get: oc
     .route({ method: "GET", path: "/platform/storage/connections/{id}" })
     .input(z.object({ id: z.string().uuid() }))
@@ -981,4 +1006,107 @@ export const platformStorageContract = {
     .route({ method: "DELETE", path: "/platform/storage/connections/{id}" })
     .input(z.object({ id: z.string().uuid() }))
     .output(z.object({ ok: z.boolean() })),
+};
+
+export const PlatformIntegrationsOverview = z.object({
+  channels: z.object({
+    email: z.object({
+      status: z.enum(["active", "not_configured", "failing"]),
+      sent7d: z.number(),
+      failed7d: z.number(),
+      provider: z.string().nullable(),
+    }),
+    sms: z.object({
+      status: z.enum(["active", "not_configured", "not_enrolled", "failing"]),
+      sent7d: z.number(),
+      failed7d: z.number(),
+      provider: z.string().nullable(),
+    }),
+    whatsapp: z.object({
+      status: z.enum(["active", "not_configured", "not_enrolled", "failing"]),
+      sent7d: z.number(),
+      failed7d: z.number(),
+      provider: z.string().nullable(),
+    }),
+  }),
+  storage: z.object({
+    activeConnections: z.number(),
+    totalBytes: z.number(),
+    totalFiles: z.number(),
+  }),
+  payments: z.object({
+    enabledProviders: z.array(z.string()),
+    totalConnectedStores: z.number(),
+  }),
+});
+export type PlatformIntegrationsOverview = z.infer<typeof PlatformIntegrationsOverview>;
+
+export const ChannelStatsView = z.object({
+  channel: z.enum(["email", "sms", "whatsapp"]),
+  range: z.enum(["24h", "7d", "30d"]),
+  sent: z.number(),
+  failed: z.number(),
+  skipped: z.number(),
+  total: z.number(),
+  successRate: z.number(),
+  daily: z.array(
+    z.object({
+      date: z.string(),
+      sent: z.number(),
+      failed: z.number(),
+      skipped: z.number(),
+    }),
+  ),
+});
+export type ChannelStatsView = z.infer<typeof ChannelStatsView>;
+
+export const ChannelTransactionEntry = z.object({
+  id: z.string(),
+  channel: z.enum(["email", "sms", "whatsapp"]),
+  createdAt: z.string(),
+  recipient: z.string(),
+  template: z.string(),
+  tenantId: z.string().nullable().optional(),
+  tenantName: z.string().nullable().optional(),
+  status: z.enum(["sent", "failed", "skipped"]),
+  provider: z.string().nullable().optional(),
+  providerMessageId: z.string().nullable().optional(),
+  error: z.string().nullable().optional(),
+});
+export type ChannelTransactionEntry = z.infer<typeof ChannelTransactionEntry>;
+
+export const ChannelTransactionsView = z.object({
+  items: z.array(ChannelTransactionEntry),
+  total: z.number(),
+});
+export type ChannelTransactionsView = z.infer<typeof ChannelTransactionsView>;
+
+export const platformIntegrationsContract = {
+  overview: oc
+    .route({ method: "GET", path: "/platform/integrations/overview" })
+    .output(PlatformIntegrationsOverview),
+  channelStats: oc
+    .route({ method: "GET", path: "/platform/integrations/channels/{channel}/stats" })
+    .input(
+      z.object({
+        channel: z.enum(["email", "sms", "whatsapp"]),
+        range: z.enum(["24h", "7d", "30d"]).default("7d"),
+      }),
+    )
+    .output(ChannelStatsView),
+  channelTransactions: oc
+    .route({ method: "GET", path: "/platform/integrations/channels/{channel}/transactions" })
+    .input(
+      z.object({
+        channel: z.enum(["email", "sms", "whatsapp"]),
+        status: z.enum(["sent", "failed", "skipped"]).optional(),
+        template: z.string().optional(),
+        tenantId: z.string().uuid().optional(),
+        failedOnly: z.boolean().optional(),
+        search: z.string().optional(),
+        limit: z.number().int().min(1).max(100).default(50).optional(),
+        offset: z.number().int().min(0).default(0).optional(),
+      }),
+    )
+    .output(ChannelTransactionsView),
 };

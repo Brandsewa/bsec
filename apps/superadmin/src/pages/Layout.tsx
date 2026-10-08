@@ -2,6 +2,7 @@ import React, { useState, type FormEvent } from "react";
 import { Outlet, useLocation, useNavigate } from "@tanstack/react-router";
 import {
   Activity,
+  Boxes,
   Building2,
   CreditCard,
   Database,
@@ -15,6 +16,8 @@ import {
   Layers,
   LogOut,
   Mail,
+  MessageSquare,
+  Phone,
   Search,
   Sliders,
   UserCheck,
@@ -73,8 +76,7 @@ const navGroups: NavGroup[] = [
     items: [
       { label: "Support Sessions", href: "/support", icon: Headphones },
       { label: "System & Queues", href: "/system", icon: Activity },
-      { label: "Storage", href: "/storage", icon: HardDrive },
-      { label: "Email (ZeptoMail)", href: "/email", icon: Mail },
+      { label: "Integrations", href: "/integrations", icon: Boxes },
       { label: "Quotas & Tiers", href: "/quotas", icon: Sliders },
       { label: "Feature Flags", href: "/features", icon: Flag },
     ],
@@ -161,8 +163,13 @@ export function Layout({ user, onLogout }: LayoutProps) {
     { id: "templates", label: "Themes Library", icon: Layers, onSelect: () => navigate({ to: "/templates" }), group: "Commerce" },
     { id: "support", label: "Support Sessions", icon: Headphones, onSelect: () => navigate({ to: "/support" }), group: "Operations" },
     { id: "system", label: "System & Queues", icon: Activity, onSelect: () => navigate({ to: "/system" }), group: "Operations" },
-    { id: "storage", label: "Storage Connections", icon: HardDrive, onSelect: () => navigate({ to: "/storage" }), group: "Operations" },
-    { id: "email", label: "Email (ZeptoMail)", icon: Mail, onSelect: () => navigate({ to: "/email" }), group: "Operations" },
+    { id: "integrations", label: "Integrations Hub", icon: Boxes, onSelect: () => navigate({ to: "/integrations" }), group: "Operations" },
+    { id: "notifications", label: "Notification Channels", icon: Mail, onSelect: () => navigate({ to: "/integrations/notifications" }), group: "Operations" },
+    { id: "email", label: "Email (ZeptoMail / SMTP)", icon: Mail, onSelect: () => navigate({ to: "/integrations/notifications/email" }), group: "Operations" },
+    { id: "sms", label: "SMS (Zoho CPaaS)", icon: Phone, onSelect: () => navigate({ to: "/integrations/notifications/sms" }), group: "Operations" },
+    { id: "whatsapp", label: "WhatsApp (Zoho CPaaS)", icon: MessageSquare, onSelect: () => navigate({ to: "/integrations/notifications/whatsapp" }), group: "Operations" },
+    { id: "storage", label: "Storage Connections", icon: HardDrive, onSelect: () => navigate({ to: "/integrations/storage" }), group: "Operations" },
+    { id: "payments", label: "Payment Gateways", icon: CreditCard, onSelect: () => navigate({ to: "/integrations/payments" }), group: "Operations" },
     { id: "quotas", label: "Quotas & Tiers", icon: Sliders, onSelect: () => navigate({ to: "/quotas" }), group: "Operations" },
     { id: "features", label: "Feature Flags", icon: Flag, onSelect: () => navigate({ to: "/features" }), group: "Operations" },
     ...(user.role !== "platform_support"
@@ -181,7 +188,7 @@ export function Layout({ user, onLogout }: LayoutProps) {
           </div>
         }
         groups={groups}
-        activeHref={location.pathname}
+        activeHref={location.pathname.startsWith("/integrations") ? "/integrations" : location.pathname}
         topRight={
           <div className="flex items-center gap-2">
             <button

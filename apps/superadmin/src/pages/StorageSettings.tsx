@@ -1,7 +1,9 @@
 import React, { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
+import { useNavigate } from "@tanstack/react-router";
 import {
   AlertTriangle,
+  ArrowLeft,
   CheckCircle2,
   Database,
   ExternalLink,
@@ -48,6 +50,7 @@ import { useHasRole } from "../lib/user-context.tsx";
 import type { PlatformStorageConnectionView } from "@bs/contracts";
 
 export function StorageSettings() {
+  const navigate = useNavigate();
   const canEdit = useHasRole("platform_admin");
 
   const {
@@ -57,6 +60,11 @@ export function StorageSettings() {
   } = useQuery({
     queryKey: ["platform", "storage", "connections"],
     queryFn: () => client.storage.list(),
+  });
+
+  const { data: stats } = useQuery({
+    queryKey: ["platform", "storage", "stats"],
+    queryFn: () => client.storage.stats(),
   });
 
   // Modal State for Add / Edit
@@ -282,8 +290,28 @@ export function StorageSettings() {
 
   const activeMediaConn = connections.find((c) => c.purpose === "public_media" && c.isActive);
 
+  function formatBytes(bytes: number): string {
+    if (bytes === 0) return "0 B";
+    const k = 1024;
+    const sizes = ["B", "KB", "MB", "GB", "TB"];
+    const i = Math.floor(Math.log(bytes) / Math.log(k));
+    return `${parseFloat((bytes / Math.pow(k, i)).toFixed(1))} ${sizes[i]}`;
+  }
+
   return (
     <PageContainer>
+      <div className="mb-4">
+        <Button
+          variant="ghost"
+          size="sm"
+          className="gap-1.5 text-muted-foreground hover:text-foreground"
+          onClick={() => navigate({ to: "/integrations" })}
+        >
+          <ArrowLeft className="h-4 w-4" />
+          <span>Back to Integrations</span>
+        </Button>
+      </div>
+
       <PageHeader
         title="Storage Connections"
         description="Configure S3-compatible, Cloudflare R2, or local storage. Credentials are encrypted at rest with AES-256-GCM. Direct browser uploads and server-proxied streaming are supported."
@@ -298,6 +326,36 @@ export function StorageSettings() {
           ) : undefined
         }
       />
+
+      {/* Stats Row */}
+      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-6">
+        <Card className="p-4">
+          <div className="text-xs font-medium text-muted-foreground">Total Storage Used</div>
+          <div className="text-2xl font-bold mt-1 text-primary">
+            {formatBytes(stats?.totalBytes ?? 0)}
+          </div>
+        </Card>
+        <Card className="p-4">
+          <div className="text-xs font-medium text-muted-foreground">Total Files</div>
+          <div className="text-2xl font-bold mt-1">
+            {(stats?.totalFiles ?? 0).toLocaleString()}
+          </div>
+        </Card>
+        <Card className="p-4">
+          <div className="text-xs font-medium text-muted-foreground">Active Drivers</div>
+          <div className="text-2xl font-bold mt-1">
+            {connections.filter((c) => c.isActive).length}
+          </div>
+        </Card>
+        <Card className="p-4">
+          <div className="text-xs font-medium text-muted-foreground">Top Store by Usage</div>
+          <div className="text-sm font-semibold truncate mt-1">
+            {stats?.topTenants?.[0]
+              ? `${stats.topTenants[0].tenantName} (${formatBytes(stats.topTenants[0].bytes)})`
+              : "No media recorded"}
+          </div>
+        </Card>
+      </div>
 
       {/* Overview Status Banner */}
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
