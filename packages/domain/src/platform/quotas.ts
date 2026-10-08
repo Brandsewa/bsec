@@ -188,6 +188,7 @@ export async function updatePlatformQuotaTier(
       .select()
       .from(schema.quotaTiers)
       .where(eq(schema.quotaTiers.code, code))
+      .for("update")
       .limit(1);
 
     if (!before) {

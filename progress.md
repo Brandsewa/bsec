@@ -3,7 +3,7 @@
 Source of truth: `docs/PLAN.html` v2.0 (build order in `docs/BUILD-PLAN-M2-M9.md`). Items are ticked only after verification; the evidence is noted next to each. "From code" means it was read in the repo but not exercised live.
 
 ## In flight
-- **Antigravity**: `feat/admin-improvements-phase-3` — Phase 3: Quota tiers manager with pricing (2026-10-08)
+- **Antigravity**: `feat/admin-improvements-phase-4` — Phase 4: Integrations hub (Notifications, Storage, Payments) (2026-10-09)
 
 ## M11 · Auth & Transactional Email Overhaul (docs/AUTH-OVERHAUL-PLAN.md)
 

@@ -1005,6 +1005,7 @@ export async function bulkChangePlatformTenantTier(
       .select({ code: schema.quotaTiers.code, isActive: schema.quotaTiers.isActive })
       .from(schema.quotaTiers)
       .where(eq(schema.quotaTiers.code, cleanTier))
+      .for("share")
       .limit(1);
 
     if (!targetTier) {

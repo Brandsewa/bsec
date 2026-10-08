@@ -85,7 +85,7 @@ export function TenantsList() {
     : (activeTiers[0]?.code ?? "S");
 
   const getTierProductsLimit = (tierCode: string) => {
-    const lim = quotaMatrix?.limits?.find((l) => l.tierCode === tierCode && l.quotaKey === "products_max");
+    const lim = quotaMatrix?.limits?.find((l) => l.tierCode === tierCode && l.quotaKey === "products");
     return lim?.value;
   };
 
