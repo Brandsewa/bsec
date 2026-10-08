@@ -88,6 +88,9 @@ import {
   previewThemeTemplate,
   addAdminOrderNote,
   adjustInventory,
+  archiveOrders,
+  unarchiveOrders,
+  deleteOrders,
   assertPlatformStaff,
   buildTenantContext,
   cancelAdminOrder,
@@ -519,6 +522,7 @@ describe("Generated Isolation Test Suite (M1 Real Postgres 18 Proof)", () => {
             "orders.read",
             "orders.write",
             "orders.refund",
+            "orders.delete",
             "customers.read",
             "customers.write",
             "discounts.write",
@@ -685,6 +689,14 @@ describe("Generated Isolation Test Suite (M1 Real Postgres 18 Proof)", () => {
         quantity: 1,
         unitPrice: 2999,
         total: 2999,
+      });
+
+      await tx.insert(schema.inventoryLevels).values({
+        tenantId: tenantA,
+        variantId: testVariantA,
+        locationId: testLocationA,
+        onHand: 1000,
+        reserved: 0,
       });
 
       await tx.insert(schema.discounts).values({
@@ -1080,6 +1092,36 @@ describe("Generated Isolation Test Suite (M1 Real Postgres 18 Proof)", () => {
       }
       case "orders.createInvoice": {
         return await createAdminOrderInvoice(rt, ctx, { id: testOrderA });
+      }
+      case "orders.archive": {
+        const draft = await createAdminDraftOrder(rt, ctx, {
+          email: `archive-${Date.now()}@test.com`,
+          phone: "+919876543210",
+          shippingAddress: { line1: "123 MG Road", city: "Bengaluru", stateCode: "KA", pincode: "560001" },
+          items: [{ variantId: testVariantA, quantity: 1 }],
+        });
+        return await archiveOrders(rt, ctx, { ids: [draft.orderId] });
+      }
+      case "orders.unarchive": {
+        const draft = await createAdminDraftOrder(rt, ctx, {
+          email: `unarchive-${Date.now()}@test.com`,
+          phone: "+919876543210",
+          shippingAddress: { line1: "123 MG Road", city: "Bengaluru", stateCode: "KA", pincode: "560001" },
+          items: [{ variantId: testVariantA, quantity: 1 }],
+        });
+        await archiveOrders(rt, ctx, { ids: [draft.orderId] });
+        return await unarchiveOrders(rt, ctx, { ids: [draft.orderId] });
+      }
+      case "orders.delete": {
+        const draft = await createAdminDraftOrder(rt, ctx, {
+          email: `del-${Date.now()}@test.com`,
+          phone: "+919876543210",
+          shippingAddress: { line1: "123 MG Road", city: "Bengaluru", stateCode: "KA", pincode: "560001" },
+          items: [{ variantId: testVariantA, quantity: 1 }],
+        });
+        await cancelAdminOrder(rt, ctx, { id: draft.orderId, reason: "Cancel for delete" });
+        await archiveOrders(rt, ctx, { ids: [draft.orderId] });
+        return await deleteOrders(rt, ctx, { ids: [draft.orderId] });
       }
       case "orders.confirm":
       case "orders.advance":
@@ -2082,6 +2124,7 @@ describe("Generated Isolation Test Suite (M1 Real Postgres 18 Proof)", () => {
             "orders.read",
             "orders.write",
             "orders.refund",
+            "orders.delete",
             "customers.read",
             "customers.write",
             "discounts.write",

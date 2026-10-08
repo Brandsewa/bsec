@@ -46,6 +46,7 @@ const SUPPORT_WRITE_DENIED: readonly StorePermission[] = [
   "settings.write",
   "exports.run",
   "orders.refund",
+  "orders.delete",
   "finance.read",
   "finance.write",
   ...SETTINGS_CAPABILITY_FAMILIES,

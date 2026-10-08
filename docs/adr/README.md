@@ -28,5 +28,7 @@ New decisions get an ADR **before** code (PLAN §15). Copy `template.md`, take t
 | [021](021-settings-contract-schedule.md) | Settings rebuild deprecation and contract schedule | Accepted |
 | [022](022-store-finance-ledger.md) | Store finance double-entry ledger, expenses, and fiscal periods | Proposed |
 | [023](023-storage-connections-and-integrations-hub.md) | Storage connections in Super Admin and resilient media uploads | Accepted |
+| [024](024-order-archive-and-delete.md) | Order archive vs permanent delete and Returns as a full page | Accepted |
 
-**Next number: 024.**
+**Next number: 025.**
+

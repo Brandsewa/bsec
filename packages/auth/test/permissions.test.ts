@@ -11,7 +11,7 @@ import {
 describe("permissions", () => {
   it("lists all store permissions without duplicates", () => {
     expect(new Set(STORE_PERMISSIONS).size).toBe(STORE_PERMISSIONS.length);
-    expect(STORE_PERMISSIONS.length).toBe(31); // 14 legacy + 15 capability families + 2 finance permissions
+    expect(STORE_PERMISSIONS.length).toBe(32); // 14 legacy + 15 capability families + 2 finance permissions + 1 orders.delete
   });
 
   it("checks system store roles delegation matrix (owner-approved 2026-10-04)", () => {
@@ -22,13 +22,15 @@ describe("permissions", () => {
     expect(hasPermission(SYSTEM_STORE_ROLES.store_owner, "settings.manage")).toBe(true);
     expect(hasPermission(SYSTEM_STORE_ROLES.store_owner, "finance.read")).toBe(true);
     expect(hasPermission(SYSTEM_STORE_ROLES.store_owner, "finance.write")).toBe(true);
+    expect(hasPermission(SYSTEM_STORE_ROLES.store_owner, "orders.delete")).toBe(true);
 
-    // store_admin lacks exactly payments.manage, holds staff.manage, audit.read, finance.*
+    // store_admin lacks exactly payments.manage, holds staff.manage, audit.read, finance.*, orders.delete
     expect(hasPermission(SYSTEM_STORE_ROLES.store_admin, "payments.manage")).toBe(false);
     expect(hasPermission(SYSTEM_STORE_ROLES.store_admin, "staff.manage")).toBe(true);
     expect(hasPermission(SYSTEM_STORE_ROLES.store_admin, "audit.read")).toBe(true);
     expect(hasPermission(SYSTEM_STORE_ROLES.store_admin, "domains.manage")).toBe(true);
     expect(hasPermission(SYSTEM_STORE_ROLES.store_admin, "orders.refund")).toBe(true);
+    expect(hasPermission(SYSTEM_STORE_ROLES.store_admin, "orders.delete")).toBe(true);
     expect(hasPermission(SYSTEM_STORE_ROLES.store_admin, "finance.read")).toBe(true);
     expect(hasPermission(SYSTEM_STORE_ROLES.store_admin, "finance.write")).toBe(true);
   });

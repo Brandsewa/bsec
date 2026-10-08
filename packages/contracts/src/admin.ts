@@ -2603,7 +2603,7 @@ export const adminContract = {
       .input(
         z
           .object({
-            view: z.enum(["all", "unfulfilled", "unpaid", "cod_to_confirm", "rto", "open", "archived"]).default("all"),
+            view: z.enum(["all", "unfulfilled", "unpaid", "cod_to_confirm", "rto", "open", "closed", "archived"]).default("all"),
             search: z.string().optional(),
             status: z.string().optional(),
             paymentStatus: z.string().optional(),
@@ -2639,6 +2639,7 @@ export const adminContract = {
               shipsOn: z.string().nullable().optional(),
               itemsCount: z.number(),
               firstItemTitle: z.string().nullable().optional(),
+              archivedAt: z.string().nullable().optional(),
             }),
           ),
           total: z.number(),
@@ -2673,6 +2674,8 @@ export const adminContract = {
             preorderReleasedAt: z.string().nullable().optional(),
             cancelledAt: z.string().nullable().optional(),
             cancelReason: z.string().nullable().optional(),
+            archivedAt: z.string().nullable().optional(),
+            archivedBy: z.string().nullable().optional(),
             tags: z.array(z.string()).default([]),
           }),
           items: z.array(
@@ -2905,6 +2908,66 @@ export const adminContract = {
         }),
       )
       .output(z.object({ success: z.boolean(), status: z.string() })),
+    archive: oc
+      .route({ method: "POST", path: "/admin/orders/archive" })
+      .input(
+        z.object({
+          ids: z.array(z.string().uuid()).min(1).max(100),
+        }),
+      )
+      .output(
+        z.object({
+          results: z.array(
+            z.object({
+              id: z.string().uuid(),
+              ok: z.boolean(),
+              reason: z.string().optional(),
+            }),
+          ),
+          successCount: z.number().int(),
+          skippedCount: z.number().int(),
+        }),
+      ),
+    unarchive: oc
+      .route({ method: "POST", path: "/admin/orders/unarchive" })
+      .input(
+        z.object({
+          ids: z.array(z.string().uuid()).min(1).max(100),
+        }),
+      )
+      .output(
+        z.object({
+          results: z.array(
+            z.object({
+              id: z.string().uuid(),
+              ok: z.boolean(),
+              reason: z.string().optional(),
+            }),
+          ),
+          successCount: z.number().int(),
+          skippedCount: z.number().int(),
+        }),
+      ),
+    delete: oc
+      .route({ method: "POST", path: "/admin/orders/delete" })
+      .input(
+        z.object({
+          ids: z.array(z.string().uuid()).min(1).max(100),
+        }),
+      )
+      .output(
+        z.object({
+          results: z.array(
+            z.object({
+              id: z.string().uuid(),
+              ok: z.boolean(),
+              reason: z.string().optional(),
+            }),
+          ),
+          successCount: z.number().int(),
+          skippedCount: z.number().int(),
+        }),
+      ),
   },
 
   // --- Pre-orders (ORDERS-PREORDERS-PLAN §3.3) ---

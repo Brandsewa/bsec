@@ -50,6 +50,8 @@ export const orders = tenantTable(
     tags: text("tags").array().notNull().default(sql`ARRAY[]::text[]`),
     termsPolicyVersionId: uuid("terms_policy_version_id"),
     termsAcceptedAt: timestamp("terms_accepted_at", { withTimezone: true }),
+    archivedAt: timestamp("archived_at", { withTimezone: true }),
+    archivedBy: uuid("archived_by"),
     placedAt: timestamp("placed_at", { withTimezone: true }).notNull().default(sql`now()`),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().default(sql`now()`),
     updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().default(sql`now()`),
@@ -63,6 +65,7 @@ export const orders = tenantTable(
     index("orders_tenant_customer_id_idx").on(t.tenantId, t.customerId),
     index("orders_tenant_placed_at_idx").on(t.tenantId, t.placedAt),
     index("orders_tenant_ships_on_idx").on(t.tenantId, t.shipsOn).where(sql`ships_on is not null`),
+    index("orders_tenant_archived_at_idx").on(t.tenantId, t.archivedAt),
   ],
 );
 

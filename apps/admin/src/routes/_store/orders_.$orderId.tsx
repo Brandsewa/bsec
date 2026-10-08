@@ -1,8 +1,8 @@
-import { createFileRoute, Link } from "@tanstack/react-router";
-import { CheckCircle2, Clock, FileText, PackageCheck, RotateCcw, Truck, XCircle } from "lucide-react";
+import { createFileRoute, Link, useNavigate, useRouteContext } from "@tanstack/react-router";
+import { Archive, ArchiveRestore, CheckCircle2, Clock, FileText, MoreHorizontal, PackageCheck, RotateCcw, Trash2, Truck, XCircle } from "lucide-react";
 import { useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { EmptyState, PageBreadcrumbs, PageContainer, PageHeader, PageSkeleton, toast } from "@bs/ui";
+import { Badge, ConfirmDialog, DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger, EmptyState, PageBreadcrumbs, PageContainer, PageHeader, PageSkeleton, toast } from "@bs/ui";
 import { Alert } from "@bs/ui";
 import { Button } from "@bs/ui";
 import { Card, CardContent, CardHeader, CardTitle } from "@bs/ui";
@@ -45,10 +45,19 @@ function AddressLines({ address }: { address: unknown }) {
 
 function OrderDetailPage() {
   const { orderId } = Route.useParams();
+  const navigate = useNavigate();
+  const routeContext = useRouteContext({ strict: false }) as
+    | { store?: { permissions?: string[]; role?: string } }
+    | undefined;
+  const canDeleteOrders = (routeContext?.store?.permissions ?? []).includes("orders.delete");
+
   const queryClient = useQueryClient();
   const [cancelOpen, setCancelOpen] = useState(false);
   const [cancelReason, setCancelReason] = useState("");
   const [note, setNote] = useState("");
+
+  const [deleteOpen, setDeleteOpen] = useState(false);
+  const [deleteTypedText, setDeleteTypedText] = useState("");
 
   const detail = useQuery(orpc.admin.orders.get.queryOptions({ input: { id: orderId } }));
 
@@ -57,6 +66,52 @@ function OrderDetailPage() {
     void queryClient.invalidateQueries({ queryKey: orpc.admin.orders.get.key({ input: { id: orderId } }) });
   };
   const onError = (e: unknown) => toast.error(errorMessage(e));
+
+  const archive = useMutation(
+    orpc.admin.orders.archive.mutationOptions({
+      onSuccess: (r) => {
+        const res = r.results[0];
+        if (res?.ok) {
+          toast.success("Order archived.");
+          refresh();
+        } else {
+          toast.error(res?.reason ?? "Could not archive order.");
+        }
+      },
+      onError,
+    }),
+  );
+
+  const unarchive = useMutation(
+    orpc.admin.orders.unarchive.mutationOptions({
+      onSuccess: (r) => {
+        const res = r.results[0];
+        if (res?.ok) {
+          toast.success("Order unarchived.");
+          refresh();
+        } else {
+          toast.error(res?.reason ?? "Could not unarchive order.");
+        }
+      },
+      onError,
+    }),
+  );
+
+  const deleteOrder = useMutation(
+    orpc.admin.orders.delete.mutationOptions({
+      onSuccess: (r) => {
+        const res = r.results[0];
+        if (res?.ok) {
+          toast.success("Order permanently deleted.");
+          void queryClient.invalidateQueries({ queryKey: orpc.admin.orders.list.key() });
+          void navigate({ to: "/orders" });
+        } else {
+          toast.error(res?.reason ?? "Could not delete order.");
+        }
+      },
+      onError,
+    }),
+  );
 
   const confirmOrder = useMutation(
     orpc.admin.orders.confirm.mutationOptions({
@@ -126,6 +181,7 @@ function OrderDetailPage() {
 
   const { order, items, fulfillments, invoices, events, notes } = detail.data;
   const cancelled = order.status === "cancelled";
+  const isEligibleForDelete = Boolean(order.archivedAt) && (order.status === "cancelled" || order.status === "draft") && !["captured", "paid", "partially_refunded", "refunded"].includes(order.paymentStatus) && order.fulfillmentStatus === "unfulfilled";
   const today = new Date().toISOString().slice(0, 10);
   const isPreorderHold = Boolean(order.shipsOn && order.shipsOn > today && !order.preorderReleasedAt);
 
@@ -140,6 +196,41 @@ function OrderDetailPage() {
             <StatusBadge status={order.paymentStatus} />
             <StatusBadge status={order.fulfillmentStatus} />
             {cancelled ? <StatusBadge status="cancelled" /> : null}
+            {order.archivedAt ? <Badge variant="secondary">Archived</Badge> : null}
+            <DropdownMenu>
+              <DropdownMenuTrigger render={<Button variant="outline" size="icon" aria-label="Order actions" />}>
+                <MoreHorizontal className="size-4" />
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end" className="min-w-44">
+                {order.archivedAt ? (
+                  <DropdownMenuItem
+                    disabled={unarchive.isPending}
+                    onClick={() => unarchive.mutate({ ids: [orderId] })}
+                  >
+                    <ArchiveRestore className="mr-2 size-4" /> Unarchive order
+                  </DropdownMenuItem>
+                ) : (
+                  <DropdownMenuItem
+                    disabled={archive.isPending}
+                    onClick={() => archive.mutate({ ids: [orderId] })}
+                  >
+                    <Archive className="mr-2 size-4" /> Archive order
+                  </DropdownMenuItem>
+                )}
+                {Boolean(order.archivedAt) && canDeleteOrders ? (
+                  <DropdownMenuItem
+                    variant="destructive"
+                    disabled={!isEligibleForDelete || deleteOrder.isPending}
+                    onClick={() => {
+                      setDeleteTypedText("");
+                      setDeleteOpen(true);
+                    }}
+                  >
+                    <Trash2 className="mr-2 size-4" /> Delete order
+                  </DropdownMenuItem>
+                ) : null}
+              </DropdownMenuContent>
+            </DropdownMenu>
           </div>
         }
       />
@@ -409,6 +500,27 @@ function OrderDetailPage() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      <ConfirmDialog
+        open={deleteOpen}
+        onOpenChange={setDeleteOpen}
+        title={`Delete order ${order.number}?`}
+        description={`This permanently deletes ${order.number} and all associated records. This action cannot be undone. Type "${order.number}" to confirm.`}
+        confirmLabel="Delete order"
+        confirmDisabled={deleteTypedText.trim() !== order.number}
+        pending={deleteOrder.isPending}
+        destructive
+        onConfirm={() => deleteOrder.mutate({ ids: [orderId] })}
+      >
+        <div className="pt-2">
+          <Input
+            aria-label="Confirm deletion"
+            placeholder={order.number}
+            value={deleteTypedText}
+            onChange={(e) => setDeleteTypedText(e.target.value)}
+          />
+        </div>
+      </ConfirmDialog>
     </PageContainer>
   );
 }

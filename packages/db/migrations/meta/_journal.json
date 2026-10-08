@@ -309,6 +309,13 @@
       "when": 1792190000000,
       "tag": "0049_platform_storage_connections",
       "breakpoints": true
+    },
+    {
+      "idx": 44,
+      "version": "7",
+      "when": 1792200000000,
+      "tag": "0050_orders_archive",
+      "breakpoints": true
     }
   ]
 }

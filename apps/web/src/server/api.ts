@@ -145,6 +145,9 @@ import {
   createAdminFulfillment,
   confirmAdminOrder,
   advanceAdminOrder,
+  archiveOrders,
+  unarchiveOrders,
+  deleteOrders,
   listPreorders,
   getPreorderStats,
   changePreorderShipDate,
@@ -1534,6 +1537,27 @@ export const storeRouter = os.router({
           } catch (err) {
             throw mapAuthError(err);
           }
+        }),
+      archive: os.admin.orders.archive
+        .use(requireAdmin)
+        .use(requirePermission("orders.write"))
+        .handler(async ({ context, input }) => {
+          if (!context.tenantCtx) throw new Error("Missing tenant context");
+          return archiveOrders(context.rt, context.tenantCtx, input);
+        }),
+      unarchive: os.admin.orders.unarchive
+        .use(requireAdmin)
+        .use(requirePermission("orders.write"))
+        .handler(async ({ context, input }) => {
+          if (!context.tenantCtx) throw new Error("Missing tenant context");
+          return unarchiveOrders(context.rt, context.tenantCtx, input);
+        }),
+      delete: os.admin.orders.delete
+        .use(requireAdmin)
+        .use(requirePermission("orders.delete"))
+        .handler(async ({ context, input }) => {
+          if (!context.tenantCtx) throw new Error("Missing tenant context");
+          return deleteOrders(context.rt, context.tenantCtx, input);
         }),
     },
 

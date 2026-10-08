@@ -17,7 +17,7 @@ import { generateInvoice } from "../orders/invoices.ts";
 import { isFeatureEnabled, FeatureDisabledError } from "../features.ts";
 
 export interface ListOrdersInput {
-  view?: "all" | "unfulfilled" | "unpaid" | "cod_to_confirm" | "rto" | "open" | "archived" | undefined;
+  view?: "all" | "unfulfilled" | "unpaid" | "cod_to_confirm" | "rto" | "open" | "closed" | "archived" | undefined;
   search?: string | undefined;
   status?: string | undefined;
   paymentStatus?: string | undefined;
@@ -46,6 +46,7 @@ export interface OrderListItem {
   shipsOn?: string | null | undefined;
   itemsCount: number;
   firstItemTitle?: string | null | undefined;
+  archivedAt?: string | null | undefined;
 }
 
 export interface OrderStatsRecord {
@@ -81,19 +82,30 @@ export async function listAdminOrders(
       conditions.push(eq(schema.orders.fulfillmentStatus, "unfulfilled"));
       // a cancelled or returned order has nothing left to fulfil
       conditions.push(sql`${schema.orders.status} not in ('cancelled', 'returned')`);
+      conditions.push(sql`${schema.orders.archivedAt} is null`);
     } else if (input.view === "unpaid") {
       // Online payments awaiting capture, and COD orders whose cash has not been collected yet.
       conditions.push(inArray(schema.orders.paymentStatus, ["pending", "cod_pending"]));
+      conditions.push(sql`${schema.orders.archivedAt} is null`);
     } else if (input.view === "cod_to_confirm") {
       // COD orders the customer has not confirmed yet (confirmed via the emailed/SMS link).
       conditions.push(eq(schema.orders.status, "pending"));
       conditions.push(eq(schema.orders.paymentStatus, "cod_pending"));
+      conditions.push(sql`${schema.orders.archivedAt} is null`);
     } else if (input.view === "rto") {
       conditions.push(eq(schema.orders.fulfillmentStatus, "rto"));
+      conditions.push(sql`${schema.orders.archivedAt} is null`);
     } else if (input.view === "open") {
       conditions.push(notInArray(schema.orders.status, ["delivered", "cancelled", "returned"]));
-    } else if (input.view === "archived") {
+      conditions.push(sql`${schema.orders.archivedAt} is null`);
+    } else if (input.view === "closed") {
       conditions.push(inArray(schema.orders.status, ["delivered", "cancelled", "returned"]));
+      conditions.push(sql`${schema.orders.archivedAt} is null`);
+    } else if (input.view === "archived") {
+      conditions.push(sql`${schema.orders.archivedAt} is not null`);
+    } else {
+      // Default: hide archived orders from active lists
+      conditions.push(sql`${schema.orders.archivedAt} is null`);
     }
 
     if (input.source) conditions.push(eq(schema.orders.source, input.source));
@@ -142,6 +154,7 @@ export async function listAdminOrders(
         grandTotal: schema.orders.grandTotal,
         placedAt: schema.orders.placedAt,
         shipsOn: schema.orders.shipsOn,
+        archivedAt: schema.orders.archivedAt,
       })
       .from(schema.orders)
       .where(whereClause)
@@ -194,6 +207,7 @@ export async function listAdminOrders(
         shipsOn: r.shipsOn ? String(r.shipsOn) : null,
         itemsCount: itemCounts.get(r.id) ?? 0,
         firstItemTitle: firstItemTitles.get(r.id) ?? null,
+        archivedAt: r.archivedAt ? r.archivedAt.toISOString() : null,
       });
     }
 
@@ -223,8 +237,8 @@ export async function getAdminOrderStats(
       total_revenue: string | number;
     }>(sql`
       SELECT
-        COUNT(*)::int AS total_orders,
-        COUNT(*) FILTER (WHERE status NOT IN ('delivered', 'cancelled', 'returned'))::int AS open_orders,
+        COUNT(*) FILTER (WHERE archived_at IS NULL)::int AS total_orders,
+        COUNT(*) FILTER (WHERE status NOT IN ('delivered', 'cancelled', 'returned') AND archived_at IS NULL)::int AS open_orders,
         COUNT(*) FILTER (WHERE payment_status IN ('paid', 'cod_collected'))::int AS paid_orders,
         COALESCE(SUM(grand_total) FILTER (WHERE payment_status IN ('paid', 'cod_collected')), 0)::bigint AS total_revenue
       FROM orders
@@ -316,6 +330,8 @@ export async function getAdminOrderDetail(
         preorderReleasedAt: order.preorderReleasedAt ? order.preorderReleasedAt.toISOString() : null,
         cancelledAt: order.cancelledAt ? order.cancelledAt.toISOString() : null,
         cancelReason: order.cancelReason,
+        archivedAt: order.archivedAt ? order.archivedAt.toISOString() : null,
+        archivedBy: order.archivedBy ?? null,
         tags: order.tags ?? [],
       },
       items: items.map((it) => ({
@@ -1468,4 +1484,408 @@ export async function createAdminOrderInvoice(
     invoiceId: inv.invoiceId,
     invoiceNumber: inv.number,
   };
+}
+
+export interface BulkOrderOperationOutput {
+  results: Array<{ id: string; ok: boolean; reason?: string }>;
+  successCount: number;
+  skippedCount: number;
+}
+
+export async function archiveOrders(
+  rt: Runtime,
+  ctx: TenantContext,
+  input: { ids: string[] },
+): Promise<BulkOrderOperationOutput> {
+  assertPermission(ctx, "orders.write");
+  const db = rt._db.db;
+  const ids = Array.from(new Set(input.ids)).slice(0, 100);
+
+  return await withTenant(db, ctx.tenantId, async (tx) => {
+    const results: Array<{ id: string; ok: boolean; reason?: string }> = [];
+
+    for (const id of ids) {
+      const [order] = await tx
+        .select({
+          id: schema.orders.id,
+          number: schema.orders.number,
+          status: schema.orders.status,
+          archivedAt: schema.orders.archivedAt,
+        })
+        .from(schema.orders)
+        .where(and(eq(schema.orders.tenantId, ctx.tenantId), eq(schema.orders.id, id)))
+        .limit(1);
+
+      if (!order) {
+        results.push({ id, ok: false, reason: "Order not found" });
+        continue;
+      }
+
+      if (order.archivedAt) {
+        results.push({ id, ok: false, reason: "Order is already archived" });
+        continue;
+      }
+
+      const terminalStatuses = ["delivered", "cancelled", "returned"];
+      if (!terminalStatuses.includes(order.status)) {
+        results.push({
+          id,
+          ok: false,
+          reason: `Order is still open (status is '${order.status}'). Cancel or complete it first.`,
+        });
+        continue;
+      }
+
+      const now = new Date();
+      const actorUserId = ctx.actor.type === "staff" ? ctx.actor.userId : null;
+
+      await tx
+        .update(schema.orders)
+        .set({
+          archivedAt: now,
+          archivedBy: actorUserId,
+          updatedAt: now,
+        })
+        .where(and(eq(schema.orders.tenantId, ctx.tenantId), eq(schema.orders.id, id)));
+
+      await tx.insert(schema.auditLogs).values({
+        tenantId: ctx.tenantId,
+        actorType: ctx.actor.type,
+        actorId: actorUserId,
+        action: "order.archived",
+        targetType: "order",
+        targetId: id,
+        diff: {
+          orderNumber: order.number,
+          archivedAt: now.toISOString(),
+        },
+      });
+
+      await tx.insert(schema.orderEvents).values({
+        tenantId: ctx.tenantId,
+        orderId: id,
+        type: "order.archived",
+        message: "Order archived",
+        actorType: ctx.actor.type,
+        actorId: actorUserId,
+        data: { archivedAt: now.toISOString() },
+      });
+
+      results.push({ id, ok: true });
+    }
+
+    const successCount = results.filter((r) => r.ok).length;
+    const skippedCount = results.length - successCount;
+    return { results, successCount, skippedCount };
+  });
+}
+
+export async function unarchiveOrders(
+  rt: Runtime,
+  ctx: TenantContext,
+  input: { ids: string[] },
+): Promise<BulkOrderOperationOutput> {
+  assertPermission(ctx, "orders.write");
+  const db = rt._db.db;
+  const ids = Array.from(new Set(input.ids)).slice(0, 100);
+
+  return await withTenant(db, ctx.tenantId, async (tx) => {
+    const results: Array<{ id: string; ok: boolean; reason?: string }> = [];
+
+    for (const id of ids) {
+      const [order] = await tx
+        .select({
+          id: schema.orders.id,
+          number: schema.orders.number,
+          archivedAt: schema.orders.archivedAt,
+        })
+        .from(schema.orders)
+        .where(and(eq(schema.orders.tenantId, ctx.tenantId), eq(schema.orders.id, id)))
+        .limit(1);
+
+      if (!order) {
+        results.push({ id, ok: false, reason: "Order not found" });
+        continue;
+      }
+
+      if (!order.archivedAt) {
+        results.push({ id, ok: false, reason: "Order is not archived" });
+        continue;
+      }
+
+      const now = new Date();
+      const actorUserId = ctx.actor.type === "staff" ? ctx.actor.userId : null;
+
+      await tx
+        .update(schema.orders)
+        .set({
+          archivedAt: null,
+          archivedBy: null,
+          updatedAt: now,
+        })
+        .where(and(eq(schema.orders.tenantId, ctx.tenantId), eq(schema.orders.id, id)));
+
+      await tx.insert(schema.auditLogs).values({
+        tenantId: ctx.tenantId,
+        actorType: ctx.actor.type,
+        actorId: actorUserId,
+        action: "order.unarchived",
+        targetType: "order",
+        targetId: id,
+        diff: {
+          orderNumber: order.number,
+          unarchivedAt: now.toISOString(),
+        },
+      });
+
+      await tx.insert(schema.orderEvents).values({
+        tenantId: ctx.tenantId,
+        orderId: id,
+        type: "order.unarchived",
+        message: "Order unarchived",
+        actorType: ctx.actor.type,
+        actorId: actorUserId,
+        data: { unarchivedAt: now.toISOString() },
+      });
+
+      results.push({ id, ok: true });
+    }
+
+    const successCount = results.filter((r) => r.ok).length;
+    const skippedCount = results.length - successCount;
+    return { results, successCount, skippedCount };
+  });
+}
+
+export async function deleteOrders(
+  rt: Runtime,
+  ctx: TenantContext,
+  input: { ids: string[] },
+): Promise<BulkOrderOperationOutput> {
+  assertPermission(ctx, "orders.delete");
+  const db = rt._db.db;
+  const ids = Array.from(new Set(input.ids)).slice(0, 100);
+
+  return await withTenant(db, ctx.tenantId, async (tx) => {
+    const results: Array<{ id: string; ok: boolean; reason?: string }> = [];
+
+    for (const id of ids) {
+      const [order] = await tx
+        .select()
+        .from(schema.orders)
+        .where(and(eq(schema.orders.tenantId, ctx.tenantId), eq(schema.orders.id, id)))
+        .limit(1);
+
+      if (!order) {
+        results.push({ id, ok: false, reason: "Order not found" });
+        continue;
+      }
+
+      // Check 1: must be archived first (owner decision 2026-10-08)
+      if (!order.archivedAt) {
+        results.push({ id, ok: false, reason: "Order must be archived before it can be deleted" });
+        continue;
+      }
+
+      // Check 2: status must be cancelled or draft
+      if (order.status !== "cancelled" && order.status !== "draft") {
+        results.push({
+          id,
+          ok: false,
+          reason: `Only cancelled or draft orders can be deleted (status is '${order.status}')`,
+        });
+        continue;
+      }
+
+      // Check 3: no money moved
+      const monetaryStatuses = ["captured", "paid", "partially_refunded", "refunded"];
+      if (monetaryStatuses.includes(order.paymentStatus)) {
+        results.push({
+          id,
+          ok: false,
+          reason: `Order has monetary transactions (payment status is '${order.paymentStatus}')`,
+        });
+        continue;
+      }
+
+      // Check 4: no invoices issued
+      const [invoice] = await tx
+        .select({ id: schema.invoices.id })
+        .from(schema.invoices)
+        .where(and(eq(schema.invoices.tenantId, ctx.tenantId), eq(schema.invoices.orderId, id)))
+        .limit(1);
+      if (invoice) {
+        results.push({ id, ok: false, reason: "Order has an issued invoice or credit note" });
+        continue;
+      }
+
+      // Check 5: no shipments or fulfillments
+      if (order.fulfillmentStatus !== "unfulfilled") {
+        results.push({
+          id,
+          ok: false,
+          reason: `Order has fulfillment records (fulfillment status is '${order.fulfillmentStatus}')`,
+        });
+        continue;
+      }
+      const [fulfillment] = await tx
+        .select({ id: schema.fulfillments.id })
+        .from(schema.fulfillments)
+        .where(and(eq(schema.fulfillments.tenantId, ctx.tenantId), eq(schema.fulfillments.orderId, id)))
+        .limit(1);
+      if (fulfillment) {
+        results.push({ id, ok: false, reason: "Order has fulfillment or shipment records" });
+        continue;
+      }
+
+      // Check 6: no returns
+      const [orderReturn] = await tx
+        .select({ id: schema.returns.id })
+        .from(schema.returns)
+        .where(and(eq(schema.returns.tenantId, ctx.tenantId), eq(schema.returns.orderId, id)))
+        .limit(1);
+      if (orderReturn) {
+        results.push({ id, ok: false, reason: "Order has associated returns" });
+        continue;
+      }
+
+      // Check 7: not referenced by an exchange return
+      const [exchangeReturn] = await tx
+        .select({ id: schema.returns.id })
+        .from(schema.returns)
+        .where(and(eq(schema.returns.tenantId, ctx.tenantId), eq(schema.returns.exchangeOrderId, id)))
+        .limit(1);
+      if (exchangeReturn) {
+        results.push({ id, ok: false, reason: "Order is referenced by an exchange return" });
+        continue;
+      }
+
+      // Check 8: no refunds
+      const [refund] = await tx
+        .select({ id: schema.refunds.id })
+        .from(schema.refunds)
+        .where(and(eq(schema.refunds.tenantId, ctx.tenantId), eq(schema.refunds.orderId, id)))
+        .limit(1);
+      if (refund) {
+        results.push({ id, ok: false, reason: "Order has refund records" });
+        continue;
+      }
+
+      // Check 9: no posted finance ledger entries
+      const [ledgerEntry] = await tx
+        .select({ id: schema.ledgerEntries.id })
+        .from(schema.ledgerEntries)
+        .where(
+          and(
+            eq(schema.ledgerEntries.tenantId, ctx.tenantId),
+            eq(schema.ledgerEntries.sourceKind, "order"),
+            eq(schema.ledgerEntries.sourceId, id),
+          ),
+        )
+        .limit(1);
+      if (ledgerEntry) {
+        results.push({ id, ok: false, reason: "Order has posted finance ledger entries" });
+        continue;
+      }
+
+      // Check 10: no product reviews on order items
+      const items = await tx
+        .select({ id: schema.orderItems.id })
+        .from(schema.orderItems)
+        .where(and(eq(schema.orderItems.tenantId, ctx.tenantId), eq(schema.orderItems.orderId, id)));
+      const itemIds = items.map((it) => it.id);
+
+      if (itemIds.length > 0) {
+        const [review] = await tx
+          .select({ id: schema.reviews.id })
+          .from(schema.reviews)
+          .where(
+            and(
+              eq(schema.reviews.tenantId, ctx.tenantId),
+              inArray(schema.reviews.orderItemId, itemIds),
+            ),
+          )
+          .limit(1);
+        if (review) {
+          results.push({ id, ok: false, reason: "Order has associated product reviews" });
+          continue;
+        }
+      }
+
+      // All checks passed! Execute clean deletion of dependent rows inside the transaction:
+      const intents = await tx
+        .select({ id: schema.paymentIntents.id })
+        .from(schema.paymentIntents)
+        .where(and(eq(schema.paymentIntents.tenantId, ctx.tenantId), eq(schema.paymentIntents.orderId, id)));
+      const intentIds = intents.map((it) => it.id);
+
+      if (intentIds.length > 0) {
+        await tx
+          .delete(schema.paymentAttempts)
+          .where(
+            and(
+              eq(schema.paymentAttempts.tenantId, ctx.tenantId),
+              inArray(schema.paymentAttempts.intentId, intentIds),
+            ),
+          );
+        await tx
+          .delete(schema.paymentIntents)
+          .where(and(eq(schema.paymentIntents.tenantId, ctx.tenantId), eq(schema.paymentIntents.orderId, id)));
+      }
+
+      await tx
+        .delete(schema.discountRedemptions)
+        .where(and(eq(schema.discountRedemptions.tenantId, ctx.tenantId), eq(schema.discountRedemptions.orderId, id)));
+
+      await tx
+        .delete(schema.inventoryReservations)
+        .where(and(eq(schema.inventoryReservations.tenantId, ctx.tenantId), eq(schema.inventoryReservations.orderId, id)));
+
+      await tx
+        .delete(schema.orderNotes)
+        .where(and(eq(schema.orderNotes.tenantId, ctx.tenantId), eq(schema.orderNotes.orderId, id)));
+
+      await tx
+        .delete(schema.orderEvents)
+        .where(and(eq(schema.orderEvents.tenantId, ctx.tenantId), eq(schema.orderEvents.orderId, id)));
+
+      if (itemIds.length > 0) {
+        await tx
+          .delete(schema.orderItems)
+          .where(and(eq(schema.orderItems.tenantId, ctx.tenantId), eq(schema.orderItems.orderId, id)));
+      }
+
+      await tx
+        .update(schema.quoteRequests)
+        .set({ orderId: null })
+        .where(and(eq(schema.quoteRequests.tenantId, ctx.tenantId), eq(schema.quoteRequests.orderId, id)));
+
+      await tx
+        .delete(schema.orders)
+        .where(and(eq(schema.orders.tenantId, ctx.tenantId), eq(schema.orders.id, id)));
+
+      // Audit log: stores order number, total, status, and actor only (no customer PII)
+      const actorUserId = ctx.actor.type === "staff" ? ctx.actor.userId : null;
+      await tx.insert(schema.auditLogs).values({
+        tenantId: ctx.tenantId,
+        actorType: ctx.actor.type,
+        actorId: actorUserId,
+        action: "order.deleted",
+        targetType: "order",
+        targetId: id,
+        diff: {
+          orderNumber: order.number,
+          total: Number(order.grandTotal),
+          status: order.status,
+          actor: actorUserId ?? ctx.actor.type,
+        },
+      });
+
+      results.push({ id, ok: true });
+    }
+
+    const successCount = results.filter((r) => r.ok).length;
+    const skippedCount = results.length - successCount;
+    return { results, successCount, skippedCount };
+  });
 }

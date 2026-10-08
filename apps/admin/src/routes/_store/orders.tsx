@@ -1,5 +1,5 @@
-import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
-import { CheckCircle2, Clock, Copy, Download, ExternalLink, FileText, MoreHorizontal, PackageCheck, Plus, ShoppingBag, Truck, XCircle } from "lucide-react";
+import { createFileRoute, Link, useNavigate, useRouteContext } from "@tanstack/react-router";
+import { Archive, ArchiveRestore, CheckCircle2, Clock, Copy, Download, ExternalLink, FileText, MoreHorizontal, PackageCheck, Plus, ShoppingBag, Trash2, Truck, XCircle } from "lucide-react";
 import { useMemo, useState } from "react";
 import { MetricCard, MetricCardSkeleton, PageContainer, PageHeader, PageSection, PageSkeleton, TableSkeleton, toast } from "@bs/ui";
 import { keepPreviousData, useQuery, useQueryClient } from "@tanstack/react-query";
@@ -41,7 +41,7 @@ import { client, orpc } from "../../lib/orpc.ts";
 // URL state (the source of truth for filters, sort, search and paging)
 // ---------------------------------------------------------------------------------------------------------------
 
-type SavedView = "all" | "unfulfilled" | "unpaid" | "cod_to_confirm" | "rto" | "open" | "archived";
+type SavedView = "all" | "unfulfilled" | "unpaid" | "cod_to_confirm" | "rto" | "open" | "closed" | "archived";
 type Sort = "placed_desc" | "placed_asc" | "total_desc" | "total_asc" | "number_desc" | "number_asc";
 
 const VIEWS: ReadonlyArray<{ id: SavedView; label: string }> = [
@@ -51,8 +51,22 @@ const VIEWS: ReadonlyArray<{ id: SavedView; label: string }> = [
   { id: "unpaid", label: "Unpaid" },
   { id: "cod_to_confirm", label: "COD to confirm" },
   { id: "rto", label: "RTO / Returns" },
+  { id: "closed", label: "Closed" },
   { id: "archived", label: "Archived" },
 ];
+
+export function isOrderEligibleForDelete(o: {
+  archivedAt?: string | null | undefined;
+  status: string;
+  paymentStatus: string;
+  fulfillmentStatus: string;
+}): boolean {
+  if (!o.archivedAt) return false;
+  if (o.status !== "cancelled" && o.status !== "draft") return false;
+  if (["captured", "paid", "partially_refunded", "refunded"].includes(o.paymentStatus)) return false;
+  if (o.fulfillmentStatus !== "unfulfilled") return false;
+  return true;
+}
 const SORTS: ReadonlyArray<{ id: Sort; label: string }> = [
   { id: "placed_desc", label: "Newest first" },
   { id: "placed_asc", label: "Oldest first" },
@@ -292,11 +306,106 @@ export function OrdersPage() {
     resetKey: JSON.stringify([s.view, s.q, s.pay, s.ful, s.st, s.src, s.cod, s.from, s.to]),
   });
 
-  // ----- actions -----
+  const routeContext = useRouteContext({ strict: false }) as
+    | { store?: { permissions?: string[]; role?: string } }
+    | undefined;
+  const canDeleteOrders = (routeContext?.store?.permissions ?? []).includes("orders.delete");
+
   const [confirm, setConfirm] = useState<{ kind: AskKind; orders: OrderRow[] } | null>(null);
   const [cancelReason, setCancelReason] = useState("");
   const [shipCarrier, setShipCarrier] = useState("");
   const [shipAwb, setShipAwb] = useState("");
+
+  const [deleteConfirm, setDeleteConfirm] = useState<OrderRow[] | null>(null);
+  const [deleteTypedText, setDeleteTypedText] = useState("");
+  const [deletePending, setDeletePending] = useState(false);
+
+  async function handleArchive(orders: OrderRow[]) {
+    if (orders.length === 0) return;
+    try {
+      const res = await client.admin.orders.archive({ ids: orders.map((o) => o.id) });
+      const succeeded = res.results.filter((r) => r.ok);
+      const skipped = res.results.filter((r) => !r.ok);
+      const succeededIds = new Set(succeeded.map((r) => r.id));
+      sel.release(succeededIds);
+      void queryClient.invalidateQueries({ queryKey: orpc.admin.orders.key() });
+
+      if (succeeded.length > 0 && skipped.length === 0) {
+        toast.success(`${succeeded.length} order${succeeded.length === 1 ? "" : "s"} archived.`);
+      } else if (succeeded.length === 0 && skipped.length > 0) {
+        const first = skipped[0];
+        const num = first ? orders.find((o) => o.id === first.id)?.number ?? first.id : "";
+        toast.error(`Could not archive order${orders.length === 1 ? "" : "s"}. ${num}: ${first?.reason ?? "Ineligible"}`);
+      } else {
+        const first = skipped[0];
+        const num = first ? orders.find((o) => o.id === first.id)?.number ?? first.id : "";
+        toast.info(`${succeeded.length} archived, ${skipped.length} skipped. ${num}: ${first?.reason ?? "still open"}`);
+      }
+    } catch (e) {
+      toast.error(errorMessage(e));
+    }
+  }
+
+  async function handleUnarchive(orders: OrderRow[]) {
+    if (orders.length === 0) return;
+    try {
+      const res = await client.admin.orders.unarchive({ ids: orders.map((o) => o.id) });
+      const succeeded = res.results.filter((r) => r.ok);
+      const skipped = res.results.filter((r) => !r.ok);
+      const succeededIds = new Set(succeeded.map((r) => r.id));
+      sel.release(succeededIds);
+      void queryClient.invalidateQueries({ queryKey: orpc.admin.orders.key() });
+
+      if (succeeded.length > 0 && skipped.length === 0) {
+        toast.success(`${succeeded.length} order${succeeded.length === 1 ? "" : "s"} unarchived.`);
+      } else if (succeeded.length === 0 && skipped.length > 0) {
+        const first = skipped[0];
+        const num = first ? orders.find((o) => o.id === first.id)?.number ?? first.id : "";
+        toast.error(`Could not unarchive order${orders.length === 1 ? "" : "s"}. ${num}: ${first?.reason ?? "Ineligible"}`);
+      } else {
+        const first = skipped[0];
+        const num = first ? orders.find((o) => o.id === first.id)?.number ?? first.id : "";
+        toast.info(`${succeeded.length} unarchived, ${skipped.length} skipped. ${num}: ${first?.reason ?? "ineligible"}`);
+      }
+    } catch (e) {
+      toast.error(errorMessage(e));
+    }
+  }
+
+  function askDelete(orders: OrderRow[]) {
+    setDeleteTypedText("");
+    setDeleteConfirm(orders);
+  }
+
+  async function handleDelete(orders: OrderRow[]) {
+    if (orders.length === 0) return;
+    setDeletePending(true);
+    try {
+      const res = await client.admin.orders.delete({ ids: orders.map((o) => o.id) });
+      const succeeded = res.results.filter((r) => r.ok);
+      const skipped = res.results.filter((r) => !r.ok);
+      const succeededIds = new Set(succeeded.map((r) => r.id));
+      sel.release(succeededIds);
+      void queryClient.invalidateQueries({ queryKey: orpc.admin.orders.key() });
+      setDeleteConfirm(null);
+
+      if (succeeded.length > 0 && skipped.length === 0) {
+        toast.success(`${succeeded.length} order${succeeded.length === 1 ? "" : "s"} permanently deleted.`);
+      } else if (succeeded.length === 0 && skipped.length > 0) {
+        const first = skipped[0];
+        const num = first ? orders.find((o) => o.id === first.id)?.number ?? first.id : "";
+        toast.error(`Could not delete order${orders.length === 1 ? "" : "s"}. ${num}: ${first?.reason ?? "Ineligible"}`);
+      } else {
+        const first = skipped[0];
+        const num = first ? orders.find((o) => o.id === first.id)?.number ?? first.id : "";
+        toast.info(`${succeeded.length} deleted, ${skipped.length} skipped. ${num}: ${first?.reason ?? "ineligible"}`);
+      }
+    } catch (e) {
+      toast.error(errorMessage(e));
+    } finally {
+      setDeletePending(false);
+    }
+  }
 
   const runAction = (kind: ActionKind, orders: OrderRow[], extra?: unknown) =>
     bulk.run({
@@ -468,6 +577,25 @@ export function OrdersPage() {
         <DropdownMenuItem variant="destructive" disabled={!ACTIONS.cancel.eligible(o) || bulk.busy} onClick={() => ask("cancel", [o])}>
           <XCircle /> Cancel order
         </DropdownMenuItem>
+        <DropdownMenuSeparator />
+        {o.archivedAt ? (
+          <DropdownMenuItem disabled={bulk.busy} onClick={() => void handleUnarchive([o])}>
+            <ArchiveRestore /> Unarchive order
+          </DropdownMenuItem>
+        ) : (
+          <DropdownMenuItem disabled={bulk.busy} onClick={() => void handleArchive([o])}>
+            <Archive /> Archive order
+          </DropdownMenuItem>
+        )}
+        {Boolean(o.archivedAt) && canDeleteOrders ? (
+          <DropdownMenuItem
+            variant="destructive"
+            disabled={!isOrderEligibleForDelete(o) || bulk.busy}
+            onClick={() => askDelete([o])}
+          >
+            <Trash2 /> Delete order
+          </DropdownMenuItem>
+        ) : null}
       </DropdownMenuContent>
     </DropdownMenu>
   );
@@ -563,6 +691,35 @@ export function OrdersPage() {
             <Button variant="outline" size="sm" disabled={bulk.busy || sel.allResults} onClick={() => void runAction("invoice", sel.picked)}>
               <FileText className="mr-1.5" /> GST invoices
             </Button>
+            {s.view === "archived" ? (
+              <Button
+                variant="outline"
+                size="sm"
+                disabled={bulk.busy || sel.count === 0}
+                onClick={() => void handleUnarchive(sel.picked)}
+              >
+                <ArchiveRestore className="mr-1.5" /> Unarchive
+              </Button>
+            ) : (
+              <Button
+                variant="outline"
+                size="sm"
+                disabled={bulk.busy || sel.count === 0}
+                onClick={() => void handleArchive(sel.picked)}
+              >
+                <Archive className="mr-1.5" /> Archive
+              </Button>
+            )}
+            {s.view === "archived" && canDeleteOrders && (sel.allResults || sel.picked.some(isOrderEligibleForDelete)) ? (
+              <Button
+                variant="destructive"
+                size="sm"
+                disabled={bulk.busy || sel.count === 0}
+                onClick={() => askDelete(sel.picked)}
+              >
+                <Trash2 className="mr-1.5" /> Delete
+              </Button>
+            ) : null}
             <Button variant="outline" size="sm" disabled={bulk.busy} onClick={() => void exportOrders("selection")}>
               <Download className="mr-1.5" /> Export
             </Button>
@@ -679,6 +836,41 @@ export function OrdersPage() {
           </div>
         ) : null}
       </ConfirmDialog>
+
+      {deleteConfirm && (() => {
+        const singleOrder = deleteConfirm.length === 1 ? deleteConfirm[0] : null;
+        const targetText = singleOrder ? singleOrder.number : "DELETE";
+        return (
+          <ConfirmDialog
+            open={deleteConfirm !== null}
+            onOpenChange={(open) => !open && setDeleteConfirm(null)}
+            title={
+              singleOrder
+                ? `Delete order ${singleOrder.number}?`
+                : `Delete ${deleteConfirm.length} orders?`
+            }
+            description={
+              singleOrder
+                ? `This permanently deletes ${singleOrder.number} and all associated records. This action cannot be undone. Type "${singleOrder.number}" below to confirm.`
+                : `This permanently deletes eligible archived orders. Any ineligible orders will be skipped. This action cannot be undone. Type "DELETE" below to confirm.`
+            }
+            confirmLabel={singleOrder ? "Delete order" : `Delete ${deleteConfirm.length} orders`}
+            confirmDisabled={deleteTypedText.trim() !== targetText}
+            pending={deletePending}
+            destructive
+            onConfirm={() => void handleDelete(deleteConfirm)}
+          >
+            <div className="pt-2">
+              <Input
+                aria-label="Confirm deletion"
+                placeholder={targetText}
+                value={deleteTypedText}
+                onChange={(e) => setDeleteTypedText(e.target.value)}
+              />
+            </div>
+          </ConfirmDialog>
+        );
+      })()}
     </PageContainer>
   );
 }

@@ -36,13 +36,6 @@ import {
 import { Input } from "@bs/ui";
 import { Textarea } from "@bs/ui";
 import {
-  Sheet,
-  SheetContent,
-  SheetDescription,
-  SheetHeader,
-  SheetTitle,
-} from "@bs/ui";
-import {
   Dialog,
   DialogContent,
   DialogDescription,
@@ -202,7 +195,7 @@ function StatusBadge({ status }: { status: string }) {
 const EXPORT_HEADER = ["Return #", "Date", "Status", "Resolution", "Order #", "Customer Name", "Customer Email", "Reason", "Items Count", "Refund Amount (INR)"];
 
 function exportRow(r: ReturnRow) {
-  const itemsCount = r.items.reduce((s, i) => s + i.quantity, 0);
+  const itemsCount = (r.items ?? []).reduce((s, i) => s + i.quantity, 0);
   const amount = r.refundAmount ?? r.computedRefundAmount;
   return [
     r.number,
@@ -226,7 +219,6 @@ export function ReturnsWorkbenchPage() {
     update({ q: val.trim() || undefined, page: undefined }),
   );
 
-  const [activeReturnId, setActiveReturnId] = useState<string | null>(null);
   const [exporting, setExporting] = useState(false);
 
   // Dialog state for review actions
@@ -410,17 +402,18 @@ export function ReturnsWorkbenchPage() {
         id: "items",
         header: "Items",
         cell: (row) => {
-          const totalQty = row.items.reduce((acc, it) => acc + it.quantity, 0);
-          const first = row.items[0];
+          const items = row.items ?? [];
+          const totalQty = items.reduce((acc, it) => acc + it.quantity, 0);
+          const first = items[0];
           return (
             <div className="flex flex-col text-xs">
               <span className="font-medium text-foreground truncate max-w-44">
-                {first?.title ?? "Items"}
+                {first?.title ?? `${totalQty} item${totalQty === 1 ? "" : "s"}`}
                 {first?.variantTitle ? ` (${first.variantTitle})` : ""}
               </span>
-              {row.items.length > 1 && (
+              {items.length > 1 && (
                 <span className="text-muted-foreground">
-                  +{row.items.length - 1} more ({totalQty} units total)
+                  +{items.length - 1} more ({totalQty} units total)
                 </span>
               )}
             </div>
@@ -615,7 +608,7 @@ export function ReturnsWorkbenchPage() {
         <MoreHorizontal className="size-4" />
       </DropdownMenuTrigger>
       <DropdownMenuContent align="end" className="w-52">
-        <DropdownMenuItem onClick={() => setActiveReturnId(row.id)}>
+        <DropdownMenuItem onClick={() => void navigate({ to: "/returns/$returnId", params: { returnId: row.id } })}>
           <ExternalLink className="mr-2 size-3.5" /> View details
         </DropdownMenuItem>
         <DropdownMenuItem
@@ -872,9 +865,9 @@ export function ReturnsWorkbenchPage() {
             onToggleRow={sel.toggleRow}
             onTogglePage={sel.togglePage}
             rowActions={rowMenu}
-            onRowClick={(row) => setActiveReturnId(row.id)}
+            onRowClick={(row) => void navigate({ to: "/returns/$returnId", params: { returnId: row.id } })}
             renderCard={(r, ctx) => (
-              <div className="flex items-start gap-3 p-3" onClick={() => setActiveReturnId(r.id)}>
+              <div className="flex items-start gap-3 p-3" onClick={() => void navigate({ to: "/returns/$returnId", params: { returnId: r.id } })}>
                 <div className="pt-0.5" onClick={(e) => e.stopPropagation()}>
                   <Checkbox aria-label={`Select return ${r.number}`} checked={ctx.selected} onCheckedChange={() => ctx.toggle()} />
                 </div>
@@ -918,16 +911,6 @@ export function ReturnsWorkbenchPage() {
           setToDelete(null);
           void handleDelete(items);
         }}
-      />
-
-      {/* Review & Detail Sheet */}
-      <ReturnDetailSheet
-        returnId={activeReturnId}
-        onClose={() => setActiveReturnId(null)}
-        onOpenAction={openAction}
-        onArchive={(row) => void handleArchive([row])}
-        onRestore={(row) => void handleRestore([row])}
-        onDelete={(row) => setToDelete([row])}
       />
 
       {/* Action Dialog */}
@@ -1118,283 +1101,5 @@ export function ReturnsWorkbenchPage() {
   );
 }
 
-// ---------------------------------------------------------------------------------------------------------------------
-// Return Detail Sheet
-// ---------------------------------------------------------------------------------------------------------------------
+export default ReturnsWorkbenchPage;
 
-function inr(amount: number) {
-  return `₹${(amount / 100).toLocaleString("en-IN", { minimumFractionDigits: 2 })}`;
-}
-
-function ReturnDetailSheet({
-  returnId,
-  onClose,
-  onOpenAction,
-  onArchive,
-  onRestore,
-  onDelete,
-}: {
-  returnId: string | null;
-  onClose: () => void;
-  onOpenAction: (returnItem: ReturnRow, action: "approve" | "reject" | "pick_up" | "receive" | "refund" | "replace" | "close") => void;
-  onArchive: (returnItem: ReturnRow) => void;
-  onRestore: (returnItem: ReturnRow) => void;
-  onDelete: (returnItem: ReturnRow) => void;
-}) {
-  const navigate = useNavigate();
-  const detailQuery = useQuery(
-    orpc.admin.returns.get.queryOptions({
-      input: { id: returnId ?? "" },
-      enabled: Boolean(returnId),
-    }),
-  );
-
-  const d = detailQuery.data;
-
-  return (
-    <Sheet open={Boolean(returnId)} onOpenChange={(open) => !open && onClose()}>
-      <SheetContent className="w-full sm:max-w-none md:w-[35vw] md:min-w-[500px] max-w-2xl bg-background text-foreground border-l border-border-soft p-6 space-y-6 overflow-y-auto shadow-2xl">
-        <SheetHeader className="pb-4 border-b border-border-soft">
-          <div className="flex items-center justify-between pr-6">
-            <SheetTitle className="text-base font-semibold text-foreground">
-              {d?.number ?? "Return Details"}
-            </SheetTitle>
-            {d && <StatusBadge status={d.status} />}
-          </div>
-          <SheetDescription className="text-xs text-muted-foreground">
-            Requested on {d ? new Date(d.createdAt).toLocaleString("en-IN") : "..."}
-          </SheetDescription>
-        </SheetHeader>
-
-        {detailQuery.isLoading && (
-          <div className="py-8 space-y-4">
-            <div className="h-4 bg-muted rounded animate-pulse w-3/4" />
-            <div className="h-4 bg-muted rounded animate-pulse w-1/2" />
-            <div className="h-20 bg-muted rounded animate-pulse" />
-          </div>
-        )}
-
-        {d && (
-          <div className="py-2 space-y-6">
-            {/* Quick Action Bar */}
-            <div className="flex flex-wrap items-center gap-2 pb-4 border-b border-border-soft">
-              {d.status === "requested" && (
-                <>
-                  <Button size="sm" onClick={() => onOpenAction(d as unknown as ReturnRow, "approve")}>
-                    Approve Request
-                  </Button>
-                  <Button size="sm" variant="destructive" onClick={() => onOpenAction(d as unknown as ReturnRow, "reject")}>
-                    Reject Request
-                  </Button>
-                </>
-              )}
-              {d.status === "approved" && (
-                <>
-                  <Button size="sm" onClick={() => onOpenAction(d as unknown as ReturnRow, "pick_up")}>
-                    Mark Picked Up
-                  </Button>
-                  <Button size="sm" variant="outline" onClick={() => onOpenAction(d as unknown as ReturnRow, "receive")}>
-                    Mark Received
-                  </Button>
-                </>
-              )}
-              {d.status === "picked_up" && (
-                <Button size="sm" onClick={() => onOpenAction(d as unknown as ReturnRow, "receive")}>
-                  Mark Received & Inspect
-                </Button>
-              )}
-              {d.status === "received" && (
-                <>
-                  <Button size="sm" onClick={() => onOpenAction(d as unknown as ReturnRow, "refund")}>
-                    Record Refund
-                  </Button>
-                  <Button size="sm" variant="outline" onClick={() => onOpenAction(d as unknown as ReturnRow, "replace")}>
-                    Record Exchange
-                  </Button>
-                </>
-              )}
-              {(d.status === "refunded" || d.status === "replaced" || d.status === "rejected" || d.status === "cancelled") && (
-                <Button size="sm" variant="outline" onClick={() => onOpenAction(d as unknown as ReturnRow, "close")}>
-                  Close Case
-                </Button>
-              )}
-              {d.status !== "archived" ? (
-                <Button size="sm" variant="outline" onClick={() => { onArchive(d as unknown as ReturnRow); onClose(); }}>
-                  <Archive className="mr-1.5 size-3.5" /> Archive
-                </Button>
-              ) : (
-                <>
-                  <Button size="sm" variant="outline" onClick={() => { onRestore(d as unknown as ReturnRow); onClose(); }}>
-                    <RotateCcw className="mr-1.5 size-3.5" /> Restore
-                  </Button>
-                  <Button size="sm" variant="destructive" onClick={() => { onDelete(d as unknown as ReturnRow); onClose(); }}>
-                    <Trash2 className="mr-1.5 size-3.5" /> Delete
-                  </Button>
-                </>
-              )}
-            </div>
-
-            {/* Customer & Order Box */}
-            <div className="rounded-lg border border-border p-3 space-y-2">
-              <div className="flex items-center justify-between text-xs font-semibold uppercase tracking-wider text-muted-foreground">
-                <span>Order details</span>
-                <button
-                  type="button"
-                  onClick={() => void navigate({ to: "/orders/$orderId", params: { orderId: d.order.id } })}
-                  className="flex items-center gap-1 text-primary hover:underline"
-                >
-                  <span>{d.order.number}</span>
-                  <ExternalLink className="size-3" />
-                </button>
-              </div>
-              <div className="grid grid-cols-2 gap-2 text-xs">
-                <div>
-                  <span className="text-muted-foreground">Customer:</span>{" "}
-                  <span className="font-medium text-foreground">{d.order.customerName || "—"}</span>
-                </div>
-                <div>
-                  <span className="text-muted-foreground">Email:</span>{" "}
-                  <span className="font-medium text-foreground">{d.order.customerEmail || "—"}</span>
-                </div>
-                <div>
-                  <span className="text-muted-foreground">Order total:</span>{" "}
-                  <span className="font-medium text-foreground">{inr(d.order.grandTotal)}</span>
-                </div>
-                <div>
-                  <span className="text-muted-foreground">Payment:</span>{" "}
-                  <span className="font-medium text-foreground uppercase">{d.order.paymentMethod}</span>
-                </div>
-              </div>
-            </div>
-
-            {/* Reason & Resolution details */}
-            <div className="space-y-3">
-              <h4 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Reason & Request Details</h4>
-              <div className="rounded-lg border border-border divide-y divide-border text-xs">
-                <div className="p-3 flex justify-between">
-                  <span className="text-muted-foreground">Reason:</span>
-                  <span className="font-medium text-foreground">{d.reason}</span>
-                </div>
-                <div className="p-3 flex justify-between">
-                  <span className="text-muted-foreground">Resolution preference:</span>
-                  <span className="font-medium text-foreground capitalize">{d.resolution}</span>
-                </div>
-                {d.exchangeRequest && (
-                  <div className="p-3 space-y-1">
-                    <span className="text-muted-foreground">Customer exchange request:</span>
-                    <p className="font-medium text-foreground bg-muted/50 p-2 rounded">{d.exchangeRequest}</p>
-                  </div>
-                )}
-                {d.customerComment && (
-                  <div className="p-3 space-y-1">
-                    <span className="text-muted-foreground">Customer comments:</span>
-                    <p className="text-foreground">{d.customerComment}</p>
-                  </div>
-                )}
-                {d.decisionMessage && (
-                  <div className="p-3 space-y-1 bg-blue-50/50 dark:bg-blue-950/20">
-                    <span className="text-blue-700 dark:text-blue-300 font-semibold">Message to customer:</span>
-                    <p className="text-foreground">{d.decisionMessage}</p>
-                  </div>
-                )}
-                {d.adminNote && (
-                  <div className="p-3 space-y-1 bg-muted/40">
-                    <span className="text-muted-foreground font-semibold">Staff internal note:</span>
-                    <p className="text-foreground">{d.adminNote}</p>
-                  </div>
-                )}
-              </div>
-            </div>
-
-            {/* Photo Proof */}
-            {d.photos.length > 0 && (
-              <div className="space-y-2">
-                <h4 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground flex items-center gap-1.5">
-                  <Camera className="size-3.5" /> Photo Proof ({d.photos.length})
-                </h4>
-                <div className="grid grid-cols-3 gap-2">
-                  {d.photos.map((p, idx) => (
-                    <a
-                      key={p.id ?? idx}
-                      href={p.url}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="group relative aspect-square overflow-hidden rounded-lg border border-border bg-muted/30 hover:opacity-90"
-                    >
-                      <img src={p.url} alt={`Return photo ${idx + 1}`} className="h-full w-full object-cover" />
-                      <div className="absolute inset-0 bg-black/30 opacity-0 group-hover:opacity-100 flex items-center justify-center transition-opacity">
-                        <ExternalLink className="size-4 text-white" />
-                      </div>
-                    </a>
-                  ))}
-                </div>
-              </div>
-            )}
-
-            {/* Refund / Exchange Resolution Outcome */}
-            {(d.refundAmount || d.refundMethod || d.exchangeNote || d.exchangeOrderId) && (
-              <div className="space-y-2">
-                <h4 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Resolution Record</h4>
-                <div className="rounded-lg border border-border p-3 text-xs space-y-2 bg-emerald-50/20 dark:bg-emerald-950/10">
-                  {d.refundAmount && (
-                    <div className="flex justify-between">
-                      <span className="text-muted-foreground">Refunded amount:</span>
-                      <span className="font-bold text-foreground">{inr(d.refundAmount)}</span>
-                    </div>
-                  )}
-                  {d.refundMethod && (
-                    <div className="flex justify-between">
-                      <span className="text-muted-foreground">Refund method:</span>
-                      <span className="font-medium text-foreground uppercase">{d.refundMethod.replace(/_/g, " ")}</span>
-                    </div>
-                  )}
-                  {d.refundReference && (
-                    <div className="flex justify-between">
-                      <span className="text-muted-foreground">Reference / UTR:</span>
-                      <span className="font-mono text-foreground">{d.refundReference}</span>
-                    </div>
-                  )}
-                  {d.refundedAt && (
-                    <div className="flex justify-between">
-                      <span className="text-muted-foreground">Refunded date:</span>
-                      <span className="text-foreground">{new Date(d.refundedAt).toLocaleString("en-IN")}</span>
-                    </div>
-                  )}
-                  {d.exchangeNote && (
-                    <div className="space-y-1">
-                      <span className="text-muted-foreground">Exchange fulfillment note:</span>
-                      <p className="font-medium text-foreground">{d.exchangeNote}</p>
-                    </div>
-                  )}
-                  {d.exchangeOrderId && (
-                    <div className="flex justify-between">
-                      <span className="text-muted-foreground">Replacement Order:</span>
-                      <span className="font-mono text-foreground">{d.exchangeOrderId}</span>
-                    </div>
-                  )}
-                </div>
-              </div>
-            )}
-
-            {/* Returned Items Table */}
-            <div className="space-y-2">
-              <h4 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Items in this return</h4>
-              <div className="rounded-lg border border-border divide-y divide-border text-xs">
-                {d.items.map((item) => (
-                  <div key={item.id} className="p-3 flex items-center justify-between">
-                    <div>
-                      <p className="font-medium text-foreground">{item.title}</p>
-                      {item.variantTitle && <p className="text-muted-foreground">{item.variantTitle}</p>}
-                      <p className="text-muted-foreground">Qty: {item.quantity} × {inr(item.unitPrice)}</p>
-                    </div>
-                    <span className="font-semibold text-foreground">{inr(item.lineTotal)}</span>
-                  </div>
-                ))}
-              </div>
-            </div>
-          </div>
-        )}
-      </SheetContent>
-    </Sheet>
-  );
-}
