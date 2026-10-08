@@ -10,7 +10,8 @@ import { Field } from "@bs/ui";
 import { HeaderActions, SettingsCard, SettingsPageFrame, useUnsavedGuard } from "../../../components/settings/settings-page.tsx";
 import { SimpleSelect } from "@bs/ui";
 import type { BrandSettings } from "@bs/contracts";
-import { client, orpc } from "../../../lib/orpc.ts";
+import { orpc } from "../../../lib/orpc.ts";
+import { uploadMedia } from "../../../lib/upload-media.ts";
 
 const HEX = /^#(?:[0-9a-fA-F]{3}|[0-9a-fA-F]{6})$/;
 
@@ -217,21 +218,7 @@ function BrandingEditor({ brand, storeName, media }: { brand: BrandSettings; sto
     }
     setUploading(slot);
     try {
-      const presigned = await client.admin.media.requestUpload({
-        filename: file.name,
-        mime: file.type,
-        bytes: file.size,
-        folder: "branding",
-      });
-      const put = await fetch(presigned.uploadUrl, { method: "PUT", headers: presigned.headers, body: file });
-      if (!put.ok) throw new Error(`Upload failed (${put.status})`);
-      const created = await client.admin.media.create({
-        storageKey: presigned.storageKey,
-        mime: file.type,
-        bytes: file.size,
-        alt: file.name,
-        folder: "branding",
-      });
+      const created = await uploadMedia(file, { folder: "branding", alt: file.name });
       setLocalUrls((prev) => ({ ...prev, [created.id]: created.url ?? URL.createObjectURL(file) }));
       set(slot, created.id);
       await queryClient.invalidateQueries({ queryKey: orpc.admin.media.list.key() });

@@ -39,6 +39,7 @@ import { Features } from "./pages/Features.tsx";
 import { Staff } from "./pages/Staff.tsx";
 import { AuditLog } from "./pages/AuditLog.tsx";
 import { EmailSettings } from "./pages/EmailSettings.tsx";
+import { StorageSettings } from "./pages/StorageSettings.tsx";
 import { ForgotPassword } from "./pages/ForgotPassword.tsx";
 import { ResetPassword } from "./pages/ResetPassword.tsx";
 import { Kit } from "./pages/Kit.tsx";
@@ -321,6 +322,32 @@ const emailRoute = createRoute({
   ),
 });
 
+const storageRoute = createRoute({
+  getParentRoute: () => authLayoutRoute,
+  path: "/storage",
+  component: StorageSettings,
+  pendingComponent: () => (
+    <PageContainer>
+      <PageHeaderSkeleton />
+      <DataTableSkeleton columns={5} rows={4} />
+    </PageContainer>
+  ),
+});
+
+const integrationsStorageRoute = createRoute({
+  getParentRoute: () => authLayoutRoute,
+  path: "/integrations/storage",
+  beforeLoad: () => {
+    throw redirect({ to: "/storage" });
+  },
+  pendingComponent: () => (
+    <PageContainer>
+      <PageHeaderSkeleton />
+      <DataTableSkeleton columns={5} rows={4} />
+    </PageContainer>
+  ),
+});
+
 const kitRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: "/__kit",
@@ -355,6 +382,8 @@ export const routeTree = rootRoute.addChildren([
     staffRoute,
     auditRoute,
     emailRoute,
+    storageRoute,
+    integrationsStorageRoute,
   ]),
 ]);
 

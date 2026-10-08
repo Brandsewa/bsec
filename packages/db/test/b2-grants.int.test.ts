@@ -101,6 +101,11 @@ describe("B2: app_rw privileges on platform vs tenant tables", () => {
     await expect(
       q(rw, "INSERT INTO slug_reservations (slug, expires_at) VALUES ('badslug', now() + interval '1 hour')")
     ).rejects.toThrow(/permission denied/i);
+
+    // 7. Writes on platform_storage_connections must be rejected for app_rw
+    await expect(
+      q(rw, "INSERT INTO platform_storage_connections (name, driver, purpose) VALUES ('test', 'local', 'public_media')")
+    ).rejects.toThrow(/permission denied/i);
   });
 
   it("permits legitimate reads on platform tables and append-only on platform_audit_logs", async () => {
@@ -113,6 +118,10 @@ describe("B2: app_rw privileges on platform vs tenant tables", () => {
     // Reading reserved_slugs is allowed
     const slugRes = await q(rw, "SELECT count(*) FROM reserved_slugs");
     expect(Number(slugRes.rows[0]?.count)).toBeGreaterThan(0);
+
+    // Reading platform_storage_connections is allowed for app_rw
+    const storageRes = await q(rw, "SELECT count(*) FROM platform_storage_connections");
+    expect(Number(storageRes.rows[0]?.count)).toBeGreaterThanOrEqual(0);
 
     // platform_audit_logs allows INSERT (append-only)
     await q(

@@ -15,6 +15,7 @@ import { SeoCard } from "../../components/seo-card.tsx";
 import { SimpleSelect } from "@bs/ui";
 import { errorMessage } from "../../lib/errors.ts";
 import { orpc } from "../../lib/orpc.ts";
+import { uploadMedia } from "../../lib/upload-media.ts";
 
 export const Route = createFileRoute("/_store/categories_/$id")({
   pendingComponent: () => (
@@ -116,43 +117,19 @@ function CategoryEditor({
       })),
   ];
 
-  // Upload mutations
-  const requestUpload = useMutation(orpc.admin.media.requestUpload.mutationOptions());
-  const createMedia = useMutation(orpc.admin.media.create.mutationOptions());
-
   const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
 
     setUploading(true);
     try {
-      const { uploadUrl, storageKey } = await requestUpload.mutateAsync({
-        filename: file.name,
-        mime: file.type,
-        bytes: file.size,
+      const media = await uploadMedia(file, {
         folder: "categories",
-      });
-
-      const uploadRes = await fetch(uploadUrl, {
-        method: "PUT",
-        body: file,
-        headers: { "Content-Type": file.type },
-      });
-
-      if (!uploadRes.ok) {
-        throw new Error("Failed to upload image file to storage.");
-      }
-
-      const media = await createMedia.mutateAsync({
-        storageKey,
-        mime: file.type,
-        bytes: file.size,
         alt: name.trim() || "Category image",
-        folder: "categories",
       });
 
       setImageMediaId(media.id);
-      setImageUrl(URL.createObjectURL(file));
+      setImageUrl(media.url ?? URL.createObjectURL(file));
       toast.success("Image uploaded successfully");
     } catch (err) {
       toast.error(errorMessage(err, "Failed to upload image"));

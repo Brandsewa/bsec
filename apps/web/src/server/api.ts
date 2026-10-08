@@ -8,12 +8,14 @@ import { storeContract } from "@bs/contracts";
 import { hasPermission, type StorePermission } from "@bs/auth";
 import {
   adjustInventory,
+  assertPermission,
   buildTenantContext,
   getAdminMe,
   getStoreStatus,
   getStoreStatusInternal,
   attachProductMedia,
   detachProductMedia,
+  uploadMediaDirect,
   updateStoreStatus,
   getSupportAdminMe,
   listStoreSupportSessions,
@@ -1231,6 +1233,20 @@ export const storeRouter = os.router({
         .handler(({ context, input }) => {
           if (!context.tenantCtx) throw new Error("Missing tenant context");
           return createMediaRecord(context.rt, context.tenantCtx, input);
+        }),
+      upload: os.admin.media.upload
+        .use(requireAdmin)
+        .use(requirePermission("content.write"))
+        .handler(async ({ context, input }) => {
+          if (!context.tenantCtx) throw new Error("Missing tenant context");
+          const fileBytes = Buffer.from(input.data, "base64");
+          return uploadMediaDirect(context.rt, context.tenantCtx, {
+            fileBytes,
+            filename: input.filename,
+            mime: input.mime,
+            folder: input.folder,
+            alt: input.alt,
+          });
         }),
       delete: os.admin.media.delete
         .use(requireAdmin)
@@ -2977,6 +2993,80 @@ api.get("/admin/finance/export", async (c) => {
       "Content-Disposition": `attachment; filename="${filename}"`,
     },
   });
+});
+
+/**
+ * Server-proxied media upload endpoint (supports multipart/form-data and application/json).
+ * Used when direct browser-to-bucket upload is disabled or when bucket CORS fails.
+ */
+api.post("/admin/media/upload", async (c) => {
+  const session = await resolveStaffSession(c.req.raw.headers);
+  if (!session) return c.json({ error: "Unauthorized" }, 401);
+
+  const tenantCtx = await buildTenantContext(server().rt._db.db, {
+    entryPath: "admin",
+    headers: c.req.raw.headers,
+    session,
+    request: { method: c.req.method, path: c.req.path },
+  });
+  if (!tenantCtx) return c.json({ error: "Store context required" }, 400);
+
+  try {
+    assertPermission(tenantCtx, "content.write");
+  } catch (err) {
+    return c.json({ error: err instanceof Error ? err.message : "Forbidden" }, 403);
+  }
+
+  const contentType = c.req.header("content-type") || "";
+  let fileBytes: Buffer | Uint8Array;
+  let filename: string;
+  let mime: string;
+  let folder: string;
+  let alt: string | undefined;
+
+  if (contentType.includes("multipart/form-data")) {
+    const body = await c.req.parseBody();
+    const file = body["file"];
+    if (!file || typeof file === "string") {
+      return c.json({ error: "No file uploaded (field 'file' required)" }, 400);
+    }
+    const arrayBuffer = await (file as Blob).arrayBuffer();
+    fileBytes = Buffer.from(arrayBuffer);
+    filename = (file as File).name || "upload.jpg";
+    mime = (file as File).type || "application/octet-stream";
+    folder = typeof body["folder"] === "string" ? body["folder"] : "products";
+    alt = typeof body["alt"] === "string" ? body["alt"] : undefined;
+  } else if (contentType.includes("application/json")) {
+    const json = (await c.req.json().catch(() => ({}))) as Record<string, unknown>;
+    if (!json.data || !json.filename || !json.mime) {
+      return c.json({ error: "Missing required fields: filename, mime, data" }, 400);
+    }
+    fileBytes = Buffer.from(String(json.data), "base64");
+    filename = String(json.filename);
+    mime = String(json.mime);
+    folder = typeof json.folder === "string" ? json.folder : "products";
+    alt = typeof json.alt === "string" ? json.alt : undefined;
+  } else {
+    return c.json(
+      { error: "Unsupported Content-Type. Expected multipart/form-data or application/json" },
+      400,
+    );
+  }
+
+  try {
+    const result = await uploadMediaDirect(server().rt, tenantCtx, {
+      fileBytes,
+      filename,
+      mime,
+      folder,
+      alt,
+    });
+    return c.json(result);
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : "Upload failed";
+    const status = msg.includes("quota") ? 403 : msg.includes("MIME") || msg.includes("Invalid") ? 400 : 500;
+    return c.json({ error: msg }, status);
+  }
 });
 
 api.all("/rpc/*", async (c, next) => {

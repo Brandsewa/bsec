@@ -14,6 +14,7 @@ import { ConfirmDialog } from "@bs/ui";
 import { TableToolbar } from "../../components/data-table/table-toolbar.tsx";
 import { errorMessage } from "../../lib/errors.ts";
 import { orpc } from "../../lib/orpc.ts";
+import { uploadMedia } from "../../lib/upload-media.ts";
 
 export const Route = createFileRoute("/_store/brands")({
   pendingComponent: () => <PageSkeleton />,
@@ -69,38 +70,14 @@ export function BrandsPage() {
     setDialogOpen(true);
   };
 
-  const requestUpload = useMutation(orpc.admin.media.requestUpload.mutationOptions());
-  const createMedia = useMutation(orpc.admin.media.create.mutationOptions());
-
   const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
     setUploading(true);
     try {
-      const descriptor = await requestUpload.mutateAsync({
-        filename: file.name,
-        mime: file.type || "application/octet-stream",
-        bytes: file.size,
-        folder: "brands",
-      });
-
-      const res = await fetch(descriptor.uploadUrl, {
-        method: "PUT",
-        headers: descriptor.headers,
-        body: file,
-      });
-      if (!res.ok) throw new Error(`Upload failed (${res.status})`);
-
-      const created = await createMedia.mutateAsync({
-        storageKey: descriptor.storageKey,
-        mime: file.type || "application/octet-stream",
-        bytes: file.size,
-        alt: name || "Brand logo",
-        folder: "brands",
-      });
-
+      const created = await uploadMedia(file, { folder: "brands", alt: name || "Brand logo" });
       setLogoMediaId(created.id);
-      setLogoUrl(URL.createObjectURL(file));
+      setLogoUrl(created.url ?? URL.createObjectURL(file));
       toast.success("Logo uploaded");
     } catch (err) {
       toast.error(errorMessage(err, "Logo upload failed"));

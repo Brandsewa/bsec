@@ -2,6 +2,9 @@
 
 Source of truth: `docs/PLAN.html` v2.0 (build order in `docs/BUILD-PLAN-M2-M9.md`). Items are ticked only after verification; the evidence is noted next to each. "From code" means it was read in the repo but not exercised live.
 
+## In flight
+- **Antigravity**: `feat/admin-improvements-phase-1` — Phase 1: Storage connections in Super Admin and resilient media upload (2026-10-08)
+
 ## M11 · Auth & Transactional Email Overhaul (docs/AUTH-OVERHAUL-PLAN.md)
 
 ### Phase A: Platform-wide Transactional Email Service (Zoho ZeptoMail) — Complete (Awaiting Credentials Verification)
@@ -188,6 +191,8 @@ Handoff summary for anyone (or any agent) picking this up. Plan and acceptance c
 ## In flight
 
 One line per piece of work that is started and not merged. Add yours before you start, remove it when merged or abandoned (`AGENTS.md` section 6). Format: `agent · branch · area · since · one-line goal`.
+
+- Antigravity · feat/admin-improvements-phase-1 · platform storage & product image upload fix · 2026-10-08 · Super Admin storage connections (Local/R2/S3) + server-proxied upload and failed-to-fetch fix
 
 
 

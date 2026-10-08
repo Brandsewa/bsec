@@ -70,6 +70,13 @@ const MIN_ROLE: Record<string, Role | "public"> = {
   "email.update": "platform_admin",
   "email.sendTest": "platform_admin",
   "email.recentDeliveries": "platform_support",
+  "storage.list": "platform_support",
+  "storage.get": "platform_support",
+  "storage.create": "platform_admin",
+  "storage.update": "platform_admin",
+  "storage.activate": "platform_admin",
+  "storage.test": "platform_admin",
+  "storage.delete": "platform_admin",
 };
 
 /** Valid-shaped inputs, so the role check (which runs first) is what decides the outcome. */
@@ -120,6 +127,13 @@ const INPUT: Record<string, unknown> = {
     enabled: true,
   },
   "email.sendTest": { toEmail: "admin@platform.test" },
+  "storage.list": {},
+  "storage.get": { id: U },
+  "storage.create": { name: "Rbac Storage", driver: "local", purpose: "public_media" },
+  "storage.update": { id: U, name: "Renamed Storage" },
+  "storage.activate": { id: U },
+  "storage.test": { id: U },
+  "storage.delete": { id: U },
 };
 
 const RANK: Record<Role, number> = { platform_support: 1, platform_admin: 2, platform_owner: 3 };

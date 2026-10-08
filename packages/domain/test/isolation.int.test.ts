@@ -187,6 +187,7 @@ import {
   saveRazorpayCredentials,
   setMemberRole,
   requestMediaUpload,
+  uploadMediaDirect,
   rollbackPage,
   savePageDraft,
   updateAdminDiscount,
@@ -937,22 +938,11 @@ describe("Generated Isolation Test Suite (M1 Real Postgres 18 Proof)", () => {
       case "media.list":
         return await listMedia(rt, ctx);
       case "media.requestUpload": {
-        // uploads are refused unless storage credentials exist, so give this call some
-        const saved = { id: process.env.R2_ACCESS_KEY_ID, secret: process.env.R2_SECRET_ACCESS_KEY };
-        process.env.R2_ACCESS_KEY_ID = "isolation-test-key";
-        process.env.R2_SECRET_ACCESS_KEY = "isolation-test-secret";
-        try {
-          return await requestMediaUpload(rt, ctx, {
-            filename: "test.png",
-            mime: "image/png",
-            bytes: 1024,
-          });
-        } finally {
-          if (saved.id === undefined) delete process.env.R2_ACCESS_KEY_ID;
-          else process.env.R2_ACCESS_KEY_ID = saved.id;
-          if (saved.secret === undefined) delete process.env.R2_SECRET_ACCESS_KEY;
-          else process.env.R2_SECRET_ACCESS_KEY = saved.secret;
-        }
+        return await requestMediaUpload(rt, ctx, {
+          filename: "test.png",
+          mime: "image/png",
+          bytes: 1024,
+        });
       }
       case "media.create":
         return await createMediaRecord(rt, ctx, {
@@ -960,6 +950,15 @@ describe("Generated Isolation Test Suite (M1 Real Postgres 18 Proof)", () => {
           mime: "image/png",
           bytes: 1024,
         });
+      case "media.upload": {
+        const fakePng = Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 0, 0, 0, 0]);
+        return await uploadMediaDirect(rt, ctx, {
+          filename: "iso-upload.png",
+          mime: "image/png",
+          fileBytes: fakePng,
+          folder: "products",
+        });
+      }
       case "media.delete": {
         const m = await createMediaRecord(rt, ctx, {
           storageKey: `del-${Date.now()}-${Math.random().toString(36).slice(2, 6)}.png`,

@@ -49,7 +49,7 @@ async function snapshot(): Promise<string> {
     "tenants", "tenant_notes", "platform_staff", "platform_staff_invitations", "feature_flags", "support_sessions",
     "tenant_deletions", "tenant_size_tiers", "subscriptions", "domains", "webhook_inbox", "memberships", "exports",
     "export_files", "tenant_owner_invites", "users", "sessions", "organizations", "store_settings", "roles", "theme_templates",
-    "platform_email_settings", "plan_change_requests",
+    "platform_email_settings", "plan_change_requests", "platform_storage_connections",
   ];
   const parts = tables.map((t) => `SELECT '${t}' || ':' || x::text AS r FROM ${t} x`);
   parts.push(`SELECT 'job:' || j.id::text || j.state::text FROM pgboss.job j`);
@@ -259,7 +259,59 @@ const CASES: Record<string, Case> = {
       toEmail: `test-${++seq}@platform.test`,
     }),
   },
+  "storage.create": {
+    role: "platform_admin",
+    action: "storage_connection.create",
+    input: async () => ({
+      name: `Storage ${++seq}`,
+      driver: "local",
+      purpose: "public_media",
+      localDir: `./.data/test-storage-${seq}`,
+    }),
+  },
+  "storage.update": {
+    role: "platform_admin",
+    action: "storage_connection.update",
+    input: async () => ({
+      id: await mkStorage(),
+      name: `Renamed Storage ${++seq}`,
+    }),
+  },
+  "storage.activate": {
+    role: "platform_admin",
+    action: "storage_connection.activate",
+    input: async () => ({
+      id: await mkStorage(),
+    }),
+  },
+  "storage.test": {
+    role: "platform_admin",
+    action: "storage_connection.test",
+    input: async () => ({
+      id: await mkStorage(),
+    }),
+  },
+  "storage.delete": {
+    role: "platform_admin",
+    action: "storage_connection.delete",
+    input: async () => ({
+      id: await mkStorage(),
+    }),
+  },
 };
+
+async function mkStorage(): Promise<string> {
+  const res = (await proc("storage.create")(
+    {
+      name: `Storage ${++seq}`,
+      driver: "local",
+      purpose: "public_media",
+      localDir: `./.data/test-media-${seq}`,
+    },
+    { context: ctxFor(owner.userId, owner.freshSessionAt) },
+  )) as { id: string };
+  return res.id;
+}
 
 /** An active (emergency-consent) support session, so extend / elevate / end have something to act on. */
 async function activeSession(): Promise<string> {

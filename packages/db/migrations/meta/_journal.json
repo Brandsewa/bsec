@@ -302,6 +302,13 @@
       "when": 1792180000000,
       "tag": "0048_settings_update_offer_flag",
       "breakpoints": true
+    },
+    {
+      "idx": 43,
+      "version": "7",
+      "when": 1792190000000,
+      "tag": "0049_platform_storage_connections",
+      "breakpoints": true
     }
   ]
 }

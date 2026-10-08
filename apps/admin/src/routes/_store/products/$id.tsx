@@ -14,6 +14,7 @@ import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, D
 import { SeoCard } from "../../../components/seo-card.tsx";
 import { SimpleSelect } from "@bs/ui";
 import { orpc } from "../../../lib/orpc.ts";
+import { uploadMedia } from "../../../lib/upload-media.ts";
 
 export const Route = createFileRoute("/_store/products/$id")({
   pendingComponent: () => (
@@ -879,8 +880,6 @@ function MediaSection({ product }: { product: ProductDetailData }) {
   const queryClient = useQueryClient();
   const fileRef = useRef<HTMLInputElement>(null);
   const [uploading, setUploading] = useState(false);
-  const requestUpload = useMutation(orpc.admin.media.requestUpload.mutationOptions());
-  const createMedia = useMutation(orpc.admin.media.create.mutationOptions());
   const attachMedia = useMutation(orpc.admin.products.attachMedia.mutationOptions());
   const detachMedia = useMutation(orpc.admin.products.detachMedia.mutationOptions());
   const refresh = () => void queryClient.invalidateQueries({ queryKey: orpc.admin.products.key() });
@@ -888,25 +887,7 @@ function MediaSection({ product }: { product: ProductDetailData }) {
   const onFile = async (file: File) => {
     setUploading(true);
     try {
-      const descriptor = await requestUpload.mutateAsync({
-        filename: file.name,
-        mime: file.type || "application/octet-stream",
-        bytes: file.size,
-        folder: "products",
-      });
-      const res = await fetch(descriptor.uploadUrl, {
-        method: "PUT",
-        headers: descriptor.headers,
-        body: file,
-      });
-      if (!res.ok) throw new Error(`Upload failed (${res.status}). Check that image storage allows uploads from this site.`);
-      const created = await createMedia.mutateAsync({
-        storageKey: descriptor.storageKey,
-        mime: file.type || "application/octet-stream",
-        bytes: file.size,
-        alt: product.title,
-        folder: "products",
-      });
+      const created = await uploadMedia(file, { folder: "products", alt: product.title });
       await attachMedia.mutateAsync({ id: product.id, mediaId: created.id, alt: product.title });
       void queryClient.invalidateQueries({ queryKey: orpc.admin.media.list.key() });
       refresh();

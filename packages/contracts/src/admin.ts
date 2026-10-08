@@ -666,6 +666,7 @@ export type InventoryLevelItem = z.infer<typeof InventoryLevelItem>;
 export const MediaItem = z.object({
   id: z.string().uuid(),
   storageKey: z.string(),
+  storageConnectionId: z.string().uuid().nullable().optional(),
   cfImageId: z.string().nullable().optional(),
   mime: z.string(),
   bytes: z.number(),
@@ -682,6 +683,7 @@ export const PresignedUploadResponse = z.object({
   uploadUrl: z.string(),
   storageKey: z.string(),
   headers: z.record(z.string(), z.string()),
+  method: z.enum(["PUT", "POST"]).optional().default("PUT"),
 });
 export type PresignedUploadResponse = z.infer<typeof PresignedUploadResponse>;
 
@@ -2420,6 +2422,18 @@ export const adminContract = {
           alt: z.string().optional(),
           folder: z.string().default("products"),
           cfImageId: z.string().optional(),
+        }),
+      )
+      .output(MediaItem),
+    upload: oc
+      .route({ method: "POST", path: "/admin/media/upload" })
+      .input(
+        z.object({
+          filename: z.string().min(1),
+          mime: z.string().min(1),
+          data: z.string().min(1),
+          folder: z.string().default("products"),
+          alt: z.string().optional(),
         }),
       )
       .output(MediaItem),

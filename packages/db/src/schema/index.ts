@@ -35,3 +35,4 @@ export * from "./tax.ts";
 export * from "./policies.ts";
 export * from "./privacy.ts";
 export * from "./finance.ts";
+export * from "./platform-storage.ts";

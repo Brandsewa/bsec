@@ -66,6 +66,8 @@ Until step 3 the site works normally; only the self-service endpoints answer 503
 - `CUSTOM_DOMAIN_CNAME_TARGET` (default `stores.<PLATFORM_DOMAIN>`): the hostname customers point their domain at; it must exist in the Cloudflare zone.
 - `CLOUDFLARE_API_TOKEN` / `CLOUDFLARE_ZONE_ID`: custom domains stay in `requested` ("not configured") until both are set.
 - `RAZORPAY_PLATFORM_KEY_ID`, `RAZORPAY_PLATFORM_KEY_SECRET`, `RAZORPAY_PLATFORM_WEBHOOK_SECRET`: plan changes answer "billing not configured" until set.
+- `MEDIA_LOCAL_DIR` (optional, default `./.data/media`): filesystem storage directory when using the `local` storage driver.
+- Storage connections can also be configured dynamically in Super Admin under **Storage** (`/storage` or `/integrations/storage`). Active connections in `platform_storage_connections` supersede environment variables. When using S3 or Cloudflare R2 with direct browser uploads, ensure bucket CORS permits `PUT` from admin origins (e.g. `https://admin.bcom.si`). The Super Admin "Test connection" button performs live CORS diagnostics. If bucket CORS is unconfigured, uploads automatically fall back through server-proxied streaming (`/api/admin/media/upload`).
 
 ### Database roles
 | Role | Used by | Notes |

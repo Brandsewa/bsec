@@ -75,6 +75,13 @@ import {
   renderEmail,
   listPlatformPlanChangeRequests,
   decidePlatformPlanChangeRequest,
+  listPlatformStorageConnections,
+  getPlatformStorageConnection,
+  createPlatformStorageConnection,
+  updatePlatformStorageConnection,
+  activatePlatformStorageConnection,
+  testPlatformStorageConnection,
+  deletePlatformStorageConnection,
   createLogger,
   requestLogger,
   resolveRequestId,
@@ -473,6 +480,36 @@ export const platformRouter = os.router({
     recentDeliveries: os.email.recentDeliveries.use(requirePlatformStaff).handler(async ({ context, input }) => {
       const staffUserId = actor(context);
       return listRecentEmailDeliveries(context.rt, staffUserId, input);
+    }),
+  },
+  storage: {
+    list: os.storage.list.use(requirePlatformStaff).handler(async ({ context }) => {
+      const staffUserId = actor(context);
+      return listPlatformStorageConnections(context.rt, staffUserId);
+    }),
+    get: os.storage.get.use(requirePlatformStaff).handler(async ({ context, input }) => {
+      const staffUserId = actor(context);
+      return getPlatformStorageConnection(context.rt, staffUserId, input.id);
+    }),
+    create: os.storage.create.use(requireStaff("platform_admin")).handler(async ({ context, input }) => {
+      const staffUserId = actor(context);
+      return createPlatformStorageConnection(context.rt, staffUserId, input, context.meta);
+    }),
+    update: os.storage.update.use(requireStaff("platform_admin")).handler(async ({ context, input }) => {
+      const staffUserId = actor(context);
+      return updatePlatformStorageConnection(context.rt, staffUserId, input, context.meta);
+    }),
+    activate: os.storage.activate.use(requireStaff("platform_admin")).handler(async ({ context, input }) => {
+      const staffUserId = actor(context);
+      return activatePlatformStorageConnection(context.rt, staffUserId, input.id, context.meta);
+    }),
+    test: os.storage.test.use(requireStaff("platform_admin")).handler(async ({ context, input }) => {
+      const staffUserId = actor(context);
+      return testPlatformStorageConnection(context.rt, staffUserId, input.id, context.meta);
+    }),
+    delete: os.storage.delete.use(requireStaff("platform_admin")).handler(async ({ context, input }) => {
+      const staffUserId = actor(context);
+      return deletePlatformStorageConnection(context.rt, staffUserId, input.id, context.meta);
     }),
   },
 });

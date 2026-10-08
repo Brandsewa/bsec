@@ -758,3 +758,101 @@ export const platformEmailContract = {
     )
     .output(z.array(PlatformEmailLogEntry)),
 };
+
+export const PlatformStorageConnectionView = z.object({
+  id: z.string().uuid(),
+  name: z.string(),
+  driver: z.enum(["local", "r2", "s3"]),
+  purpose: z.enum(["public_media", "private_files"]),
+  isActive: z.boolean(),
+  status: z.enum(["untested", "ok", "failed"]),
+  lastTestAt: z.string().nullable().optional(),
+  lastTestError: z.string().nullable().optional(),
+  endpoint: z.string().nullable().optional(),
+  region: z.string().nullable().optional(),
+  bucket: z.string().nullable().optional(),
+  publicBaseUrl: z.string().nullable().optional(),
+  forcePathStyle: z.boolean().optional(),
+  localDir: z.string().nullable().optional(),
+  accountId: z.string().nullable().optional(),
+  directBrowserUpload: z.boolean().optional(),
+  hasAccessKey: z.boolean(),
+  accessKeyIdLast4: z.string().nullable().optional(),
+  hasSecretAccessKey: z.boolean(),
+  createdAt: z.string(),
+  updatedAt: z.string(),
+});
+export type PlatformStorageConnectionView = z.infer<typeof PlatformStorageConnectionView>;
+
+export const CreatePlatformStorageConnectionInput = z.object({
+  name: z.string().min(1).max(100),
+  driver: z.enum(["local", "r2", "s3"]),
+  purpose: z.enum(["public_media", "private_files"]),
+  endpoint: z.string().optional(),
+  region: z.string().optional(),
+  bucket: z.string().optional(),
+  publicBaseUrl: z.string().optional(),
+  forcePathStyle: z.boolean().optional(),
+  localDir: z.string().optional(),
+  accountId: z.string().optional(),
+  directBrowserUpload: z.boolean().optional(),
+  accessKeyId: z.string().optional(),
+  secretAccessKey: z.string().optional(),
+});
+export type CreatePlatformStorageConnectionInput = z.infer<typeof CreatePlatformStorageConnectionInput>;
+
+export const UpdatePlatformStorageConnectionInput = z.object({
+  id: z.string().uuid(),
+  name: z.string().min(1).max(100).optional(),
+  driver: z.enum(["local", "r2", "s3"]).optional(),
+  purpose: z.enum(["public_media", "private_files"]).optional(),
+  endpoint: z.string().nullable().optional(),
+  region: z.string().nullable().optional(),
+  bucket: z.string().nullable().optional(),
+  publicBaseUrl: z.string().nullable().optional(),
+  forcePathStyle: z.boolean().optional(),
+  localDir: z.string().nullable().optional(),
+  accountId: z.string().nullable().optional(),
+  directBrowserUpload: z.boolean().optional(),
+  accessKeyId: z.string().optional(),
+  secretAccessKey: z.string().optional(),
+});
+export type UpdatePlatformStorageConnectionInput = z.infer<typeof UpdatePlatformStorageConnectionInput>;
+
+export const platformStorageContract = {
+  list: oc
+    .route({ method: "GET", path: "/platform/storage/connections" })
+    .output(z.array(PlatformStorageConnectionView)),
+  get: oc
+    .route({ method: "GET", path: "/platform/storage/connections/{id}" })
+    .input(z.object({ id: z.string().uuid() }))
+    .output(PlatformStorageConnectionView),
+  create: oc
+    .route({ method: "POST", path: "/platform/storage/connections" })
+    .input(CreatePlatformStorageConnectionInput)
+    .output(z.object({ id: z.string().uuid(), ok: z.boolean() })),
+  update: oc
+    .route({ method: "PATCH", path: "/platform/storage/connections/{id}" })
+    .input(UpdatePlatformStorageConnectionInput)
+    .output(z.object({ ok: z.boolean() })),
+  activate: oc
+    .route({ method: "POST", path: "/platform/storage/connections/{id}/activate" })
+    .input(z.object({ id: z.string().uuid() }))
+    .output(z.object({ ok: z.boolean() })),
+  test: oc
+    .route({ method: "POST", path: "/platform/storage/connections/{id}/test" })
+    .input(z.object({ id: z.string().uuid() }))
+    .output(
+      z.object({
+        ok: z.boolean(),
+        status: z.string(),
+        error: z.string().optional(),
+        corsOk: z.boolean().optional(),
+        corsDetails: z.string().optional(),
+      }),
+    ),
+  delete: oc
+    .route({ method: "DELETE", path: "/platform/storage/connections/{id}" })
+    .input(z.object({ id: z.string().uuid() }))
+    .output(z.object({ ok: z.boolean() })),
+};

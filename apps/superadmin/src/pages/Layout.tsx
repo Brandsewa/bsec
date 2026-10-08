@@ -8,6 +8,7 @@ import {
   FileSpreadsheet,
   Flag,
   Globe,
+  HardDrive,
   Headphones,
   KeyRound,
   LayoutDashboard,
@@ -72,6 +73,7 @@ const navGroups: NavGroup[] = [
     items: [
       { label: "Support Sessions", href: "/support", icon: Headphones },
       { label: "System & Queues", href: "/system", icon: Activity },
+      { label: "Storage", href: "/storage", icon: HardDrive },
       { label: "Email (ZeptoMail)", href: "/email", icon: Mail },
       { label: "Quotas & Tiers", href: "/quotas", icon: Sliders },
       { label: "Feature Flags", href: "/features", icon: Flag },
@@ -159,6 +161,7 @@ export function Layout({ user, onLogout }: LayoutProps) {
     { id: "templates", label: "Themes Library", icon: Layers, onSelect: () => navigate({ to: "/templates" }), group: "Commerce" },
     { id: "support", label: "Support Sessions", icon: Headphones, onSelect: () => navigate({ to: "/support" }), group: "Operations" },
     { id: "system", label: "System & Queues", icon: Activity, onSelect: () => navigate({ to: "/system" }), group: "Operations" },
+    { id: "storage", label: "Storage Connections", icon: HardDrive, onSelect: () => navigate({ to: "/storage" }), group: "Operations" },
     { id: "email", label: "Email (ZeptoMail)", icon: Mail, onSelect: () => navigate({ to: "/email" }), group: "Operations" },
     { id: "quotas", label: "Quotas & Tiers", icon: Sliders, onSelect: () => navigate({ to: "/quotas" }), group: "Operations" },
     { id: "features", label: "Feature Flags", icon: Flag, onSelect: () => navigate({ to: "/features" }), group: "Operations" },

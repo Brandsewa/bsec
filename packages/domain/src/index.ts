@@ -153,5 +153,7 @@ export * from "./admin/storage-usage.ts";
 export * from "./admin/settings-update.ts";
 export * from "./storefront/lookup-fallback.ts";
 export * from "./finance/index.ts";
+export * from "./media/connection.ts";
+export * from "./platform/storage-connections.ts";
 
 
