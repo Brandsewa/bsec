@@ -87,6 +87,12 @@ const MIN_ROLE: Record<string, Role | "public"> = {
   "integrations.overview": "platform_support",
   "integrations.channelStats": "platform_support",
   "integrations.channelTransactions": "platform_support",
+  "integrations.listProviders": "platform_support",
+  "integrations.createProvider": "platform_admin",
+  "integrations.updateProvider": "platform_admin",
+  "integrations.deleteProvider": "platform_admin",
+  "integrations.setDefaultProvider": "platform_admin",
+  "integrations.testProvider": "platform_admin",
 };
 
 /** Valid-shaped inputs, so the role check (which runs first) is what decides the outcome. */
@@ -148,6 +154,12 @@ const INPUT: Record<string, unknown> = {
   "integrations.overview": {},
   "integrations.channelStats": { channel: "email", range: "7d" },
   "integrations.channelTransactions": { channel: "email" },
+  "integrations.listProviders": { channel: "sms" },
+  "integrations.createProvider": { channel: "sms", provider: "zoho_cpaas", displayName: "Zoho SMS", enabled: false, isDefault: false },
+  "integrations.updateProvider": { id: U, displayName: "Zoho SMS Renamed" },
+  "integrations.deleteProvider": { id: U },
+  "integrations.setDefaultProvider": { id: U },
+  "integrations.testProvider": { id: U, to: "+919876543210" },
   "quotas.matrix": {},
   "quotas.createTier": { code: "RBAC_TIER", name: "RBAC Tier" },
   "quotas.updateTier": { code: "XS", name: "Renamed XS" },

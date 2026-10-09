@@ -139,6 +139,15 @@ export function ChannelPage({ channel }: ChannelPageProps) {
     enabled: channel === "email",
   });
 
+  // 4. Channel providers for SMS and WhatsApp
+  const { data: channelProviders, refetch: refetchChannelProviders } = useQuery({
+    queryKey: ["platform", "integrations", "providers", channel],
+    queryFn: () => client.integrations.listProviders({ channel: channel as "sms" | "whatsapp" }),
+    enabled: channel === "sms" || channel === "whatsapp",
+  });
+
+  const activeChannelProvider = channelProviders?.[0] ?? null;
+
   // Form state for Email Settings Sheet
   const [formHost, setFormHost] = useState("");
   const [formPort, setFormPort] = useState(587);
@@ -154,6 +163,111 @@ export function ChannelPage({ channel }: ChannelPageProps) {
   // Test Email in Sheet
   const [testRecipient, setTestRecipient] = useState(staff.email ?? "");
   const [sendingTestEmail, setSendingTestEmail] = useState(false);
+
+  // Messaging Sheet state (for SMS and WhatsApp)
+  const [messagingSheetOpen, setMessagingSheetOpen] = useState(false);
+  const [cpaasDisplayName, setCpaasDisplayName] = useState("");
+  const [cpaasSenderKey, setCpaasSenderKey] = useState("");
+  const [cpaasEntityId, setCpaasEntityId] = useState("");
+  const [cpaasFromNumber, setCpaasFromNumber] = useState("");
+  const [cpaasSecret, setCpaasSecret] = useState("");
+  const [cpaasEnabled, setCpaasEnabled] = useState(false);
+  const [savingMessaging, setSavingMessaging] = useState(false);
+  const [testMessagingPhone, setTestMessagingPhone] = useState("");
+  const [sendingTestMessaging, setSendingTestMessaging] = useState(false);
+
+  const openMessagingSheet = () => {
+    if (activeChannelProvider) {
+      setCpaasDisplayName(activeChannelProvider.displayName);
+      setCpaasSenderKey((activeChannelProvider.config?.senderKey as string) || "");
+      setCpaasEntityId((activeChannelProvider.config?.entityId as string) || "");
+      setCpaasFromNumber((activeChannelProvider.config?.fromNumber as string) || "");
+      setCpaasEnabled(activeChannelProvider.enabled);
+      setCpaasSecret("");
+    } else {
+      setCpaasDisplayName(channel === "sms" ? "Zoho CPaaS (SMS)" : "Zoho CPaaS (WhatsApp)");
+      setCpaasSenderKey("");
+      setCpaasEntityId("");
+      setCpaasFromNumber("");
+      setCpaasEnabled(false);
+      setCpaasSecret("");
+    }
+    setTestMessagingPhone("");
+    setMessagingSheetOpen(true);
+  };
+
+  const handleSaveMessaging = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setSavingMessaging(true);
+    try {
+      const config: Record<string, unknown> = {};
+      if (channel === "sms") {
+        if (cpaasSenderKey.trim()) config.senderKey = cpaasSenderKey.trim();
+        if (cpaasEntityId.trim()) config.entityId = cpaasEntityId.trim();
+      } else {
+        if (cpaasFromNumber.trim()) config.fromNumber = cpaasFromNumber.trim();
+      }
+
+      if (activeChannelProvider) {
+        await client.integrations.updateProvider({
+          id: activeChannelProvider.id,
+          displayName: cpaasDisplayName.trim() || undefined,
+          config,
+          secret: cpaasSecret.trim() || undefined,
+          enabled: cpaasEnabled,
+        });
+        toast.success("Provider settings saved");
+      } else {
+        await client.integrations.createProvider({
+          channel: channel as "sms" | "whatsapp",
+          provider: "zoho_cpaas",
+          displayName: cpaasDisplayName.trim() || (channel === "sms" ? "Zoho CPaaS (SMS)" : "Zoho CPaaS (WhatsApp)"),
+          config,
+          secret: cpaasSecret.trim() || undefined,
+          enabled: cpaasEnabled,
+          isDefault: true,
+        });
+        toast.success("Provider registered");
+      }
+      setMessagingSheetOpen(false);
+      refetchChannelProviders();
+      refetchStats();
+    } catch (err) {
+      toast.error(messageOf(err, "Failed to save provider"));
+    } finally {
+      setSavingMessaging(false);
+    }
+  };
+
+  const handleSendTestMessaging = async () => {
+    if (!activeChannelProvider) {
+      toast.error("Please configure and save the provider first");
+      return;
+    }
+    if (!testMessagingPhone || testMessagingPhone.trim().length < 8) {
+      toast.error("Please enter a valid phone number with country code (e.g. +919876543210)");
+      return;
+    }
+    setSendingTestMessaging(true);
+    try {
+      const res = await client.integrations.testProvider({
+        id: activeChannelProvider.id,
+        to: testMessagingPhone.trim(),
+      });
+      if (res.ok) {
+        toast.success("Test message dispatched to gateway!");
+      } else {
+        toast.error(`Dispatch failed: ${res.error ?? "Provider error"}`);
+      }
+      refetchChannelProviders();
+      refetchStats();
+      refetchTx();
+    } catch (err) {
+      toast.error(messageOf(err, "Failed to send test message"));
+    } finally {
+      setSendingTestMessaging(false);
+    }
+  };
 
   const openEmailProviderSheet = (preset: "zoho_zeptomail" | "custom_smtp") => {
     setActiveProviderKey(preset);
@@ -250,8 +364,16 @@ export function ChannelPage({ channel }: ChannelPageProps) {
       }
     }
   } else {
-    channelBadgeVariant = "outline";
-    channelBadgeText = "Not enrolled";
+    if (activeChannelProvider?.enabled) {
+      channelBadgeVariant = "default";
+      channelBadgeText = "Active";
+    } else if (activeChannelProvider?.hasSecret) {
+      channelBadgeVariant = "secondary";
+      channelBadgeText = "Configured (Disabled)";
+    } else {
+      channelBadgeVariant = "outline";
+      channelBadgeText = "Not enrolled";
+    }
   }
 
   return (
@@ -736,8 +858,25 @@ export function ChannelPage({ channel }: ChannelPageProps) {
                     <div className="p-2 rounded-lg bg-amber-500/10 text-amber-500">
                       <Phone className="h-5 w-5" />
                     </div>
-                    <Badge variant="outline" className="text-amber-600 border-amber-500/30">
-                      Not enrolled
+                    <Badge
+                      variant={
+                        activeChannelProvider?.enabled
+                          ? "default"
+                          : activeChannelProvider?.hasSecret
+                            ? "secondary"
+                            : "outline"
+                      }
+                      className={
+                        !activeChannelProvider?.hasSecret
+                          ? "text-amber-600 border-amber-500/30"
+                          : ""
+                      }
+                    >
+                      {activeChannelProvider?.enabled
+                        ? "Active"
+                        : activeChannelProvider?.hasSecret
+                          ? "Enrolled"
+                          : "Not enrolled"}
                     </Badge>
                   </div>
                   <CardTitle className="text-lg">Zoho CPaaS (SMS)</CardTitle>
@@ -745,18 +884,49 @@ export function ChannelPage({ channel }: ChannelPageProps) {
                     Transactional SMS API through Zoho CPaaS console (India DC).
                   </CardDescription>
                 </CardHeader>
-                <CardContent className="space-y-2 text-xs">
-                  <div className="p-3 rounded-md bg-muted/40 border border-border/60 text-muted-foreground">
-                    <p className="font-medium text-foreground mb-1">Enrolment Status</p>
+                <CardContent className="space-y-3 text-xs">
+                  <div className="p-3 rounded-md bg-muted/40 border border-border/60 text-muted-foreground space-y-1">
+                    <p className="font-medium text-foreground mb-1">Enrolment & Compliance Status</p>
                     <p>
-                      Zoho CPaaS account is not yet enrolled. Credentials, DLT entity registration, and sender headers
-                      are required before enabling this gateway.
+                      {activeChannelProvider?.hasSecret
+                        ? "Zoho CPaaS credentials configured with AES-256-GCM encryption."
+                        : "Zoho CPaaS account is not yet enrolled. Credentials, TRAI DLT Principal Entity ID, and registered sender headers are required before enabling."}
                     </p>
                   </div>
+                  {activeChannelProvider && (
+                    <div className="space-y-1.5 pt-1">
+                      <div className="flex justify-between text-muted-foreground">
+                        <span>Sender Key:</span>
+                        <span className="font-mono text-foreground">
+                          {(activeChannelProvider.config?.senderKey as string) || "Not configured"}
+                        </span>
+                      </div>
+                      <div className="flex justify-between text-muted-foreground">
+                        <span>DLT Entity ID:</span>
+                        <span className="font-mono text-foreground">
+                          {(activeChannelProvider.config?.entityId as string) || "Not configured"}
+                        </span>
+                      </div>
+                      <div className="flex justify-between text-muted-foreground">
+                        <span>Last Test:</span>
+                        <span className="text-foreground">
+                          {activeChannelProvider.lastTestAt
+                            ? `${activeChannelProvider.lastTestStatus === "success" ? "Passed" : "Failed"} (${new Date(
+                                activeChannelProvider.lastTestAt,
+                              ).toLocaleDateString()})`
+                            : "Untested"}
+                        </span>
+                      </div>
+                    </div>
+                  )}
                 </CardContent>
                 <CardFooter>
-                  <Button variant="outline" disabled className="w-full">
-                    Enable & Test Send (Enrolment Required)
+                  <Button
+                    variant="outline"
+                    className="w-full"
+                    onClick={openMessagingSheet}
+                  >
+                    Configure Zoho CPaaS SMS
                   </Button>
                 </CardFooter>
               </Card>
@@ -767,8 +937,25 @@ export function ChannelPage({ channel }: ChannelPageProps) {
                     <div className="p-2 rounded-lg bg-green-500/10 text-green-500">
                       <MessageSquare className="h-5 w-5" />
                     </div>
-                    <Badge variant="outline" className="text-amber-600 border-amber-500/30">
-                      Not enrolled
+                    <Badge
+                      variant={
+                        activeChannelProvider?.enabled
+                          ? "default"
+                          : activeChannelProvider?.hasSecret
+                            ? "secondary"
+                            : "outline"
+                      }
+                      className={
+                        !activeChannelProvider?.hasSecret
+                          ? "text-amber-600 border-amber-500/30"
+                          : ""
+                      }
+                    >
+                      {activeChannelProvider?.enabled
+                        ? "Active"
+                        : activeChannelProvider?.hasSecret
+                          ? "Enrolled"
+                          : "Not enrolled"}
                     </Badge>
                   </div>
                   <CardTitle className="text-lg">Zoho CPaaS (WhatsApp)</CardTitle>
@@ -776,18 +963,43 @@ export function ChannelPage({ channel }: ChannelPageProps) {
                     WhatsApp Business API template messaging through Zoho CPaaS.
                   </CardDescription>
                 </CardHeader>
-                <CardContent className="space-y-2 text-xs">
-                  <div className="p-3 rounded-md bg-muted/40 border border-border/60 text-muted-foreground">
-                    <p className="font-medium text-foreground mb-1">Enrolment Status</p>
+                <CardContent className="space-y-3 text-xs">
+                  <div className="p-3 rounded-md bg-muted/40 border border-border/60 text-muted-foreground space-y-1">
+                    <p className="font-medium text-foreground mb-1">Enrolment & WABA Status</p>
                     <p>
-                      WhatsApp Business Account (WABA) not enrolled. Business-initiated messages require Meta-approved
-                      template mapping.
+                      {activeChannelProvider?.hasSecret
+                        ? "Zoho CPaaS WABA credentials configured with AES-256-GCM encryption."
+                        : "WhatsApp Business Account (WABA) not enrolled. Business-initiated messages require Meta-approved template mapping."}
                     </p>
                   </div>
+                  {activeChannelProvider && (
+                    <div className="space-y-1.5 pt-1">
+                      <div className="flex justify-between text-muted-foreground">
+                        <span>Sender Number:</span>
+                        <span className="font-mono text-foreground">
+                          {(activeChannelProvider.config?.fromNumber as string) || "Not configured"}
+                        </span>
+                      </div>
+                      <div className="flex justify-between text-muted-foreground">
+                        <span>Last Test:</span>
+                        <span className="text-foreground">
+                          {activeChannelProvider.lastTestAt
+                            ? `${activeChannelProvider.lastTestStatus === "success" ? "Passed" : "Failed"} (${new Date(
+                                activeChannelProvider.lastTestAt,
+                              ).toLocaleDateString()})`
+                            : "Untested"}
+                        </span>
+                      </div>
+                    </div>
+                  )}
                 </CardContent>
                 <CardFooter>
-                  <Button variant="outline" disabled className="w-full">
-                    Enable & Test Send (Enrolment Required)
+                  <Button
+                    variant="outline"
+                    className="w-full"
+                    onClick={openMessagingSheet}
+                  >
+                    Configure Zoho CPaaS WhatsApp
                   </Button>
                 </CardFooter>
               </Card>
@@ -1040,6 +1252,154 @@ export function ChannelPage({ channel }: ChannelPageProps) {
                 <span>{sendingTestEmail ? "Sending..." : "Test"}</span>
               </Button>
             </div>
+          </div>
+        </SheetContent>
+      </Sheet>
+
+      {/* PROVIDER SETTINGS SHEET FOR SMS & WHATSAPP */}
+      <Sheet open={messagingSheetOpen} onOpenChange={setMessagingSheetOpen}>
+        <SheetContent className="sm:max-w-lg overflow-y-auto">
+          <SheetHeader>
+            <SheetTitle>
+              {channel === "sms" ? "Configure Zoho CPaaS (SMS)" : "Configure Zoho CPaaS (WhatsApp)"}
+            </SheetTitle>
+            <SheetDescription className="text-xs">
+              {channel === "sms"
+                ? "India DC CPaaS transactional SMS gateway. Authentication token encrypted at rest via AES-256-GCM."
+                : "Meta WhatsApp Business API via Zoho CPaaS. Token encrypted at rest via AES-256-GCM."}
+            </SheetDescription>
+          </SheetHeader>
+
+          <form onSubmit={handleSaveMessaging} className="space-y-4 py-4 text-xs">
+            <div className="space-y-1.5">
+              <Label htmlFor="cpaas-name">Display Name</Label>
+              <Input
+                id="cpaas-name"
+                value={cpaasDisplayName}
+                onChange={(e) => setCpaasDisplayName(e.target.value)}
+                placeholder={channel === "sms" ? "Zoho CPaaS (SMS)" : "Zoho CPaaS (WhatsApp)"}
+                required
+                disabled={!canEdit}
+              />
+            </div>
+
+            {channel === "sms" ? (
+              <>
+                <div className="space-y-1.5">
+                  <Label htmlFor="cpaas-sender">Sender Key (DLT Header)</Label>
+                  <Input
+                    id="cpaas-sender"
+                    value={cpaasSenderKey}
+                    onChange={(e) => setCpaasSenderKey(e.target.value)}
+                    placeholder="e.g. BRANDSEWA_SMS"
+                    disabled={!canEdit}
+                  />
+                  <p className="text-[11px] text-muted-foreground">
+                    Sender key registered and approved in Zoho CPaaS Agent console.
+                  </p>
+                </div>
+                <div className="space-y-1.5">
+                  <Label htmlFor="cpaas-entity">TRAI DLT Principal Entity ID</Label>
+                  <Input
+                    id="cpaas-entity"
+                    value={cpaasEntityId}
+                    onChange={(e) => setCpaasEntityId(e.target.value)}
+                    placeholder="e.g. 1101550000000001"
+                    disabled={!canEdit}
+                  />
+                  <p className="text-[11px] text-muted-foreground">
+                    Mandatory 14 to 19 digit Entity ID from telecom operator portal (Vilpower/Airtel/Jio DLT).
+                  </p>
+                </div>
+              </>
+            ) : (
+              <div className="space-y-1.5">
+                <Label htmlFor="cpaas-from">From Phone Number</Label>
+                <Input
+                  id="cpaas-from"
+                  value={cpaasFromNumber}
+                  onChange={(e) => setCpaasFromNumber(e.target.value)}
+                  placeholder="e.g. +918000011111"
+                  disabled={!canEdit}
+                />
+                <p className="text-[11px] text-muted-foreground">
+                  Registered WhatsApp Business phone number on the Meta WhatsApp Business Account.
+                </p>
+              </div>
+            )}
+
+            <div className="space-y-1.5">
+              <Label htmlFor="cpaas-token">
+                Authentication Token {activeChannelProvider?.hasSecret && "(leave blank to keep existing)"}
+              </Label>
+              <Input
+                id="cpaas-token"
+                type="password"
+                value={cpaasSecret}
+                onChange={(e) => setCpaasSecret(e.target.value)}
+                placeholder={activeChannelProvider?.hasSecret ? "••••••••••••••••" : "Enter Zoho CPaaS Auth Token"}
+                disabled={!canEdit}
+              />
+              <p className="text-[11px] text-muted-foreground">
+                Passed in the Authorization header. Write-only; never displayed in plaintext.
+              </p>
+            </div>
+
+            <div className="flex items-center justify-between rounded-md border border-border p-3">
+              <div className="space-y-0.5">
+                <Label htmlFor="cpaas-enabled" className="text-xs font-semibold">Enable Provider</Label>
+                <p className="text-[11px] text-muted-foreground">
+                  {!activeChannelProvider?.hasSecret && !cpaasSecret.trim()
+                    ? "Credentials required before this provider can be enabled (enrolment required)."
+                    : "When enabled, transactional messages for this channel will be routed through Zoho CPaaS."}
+                </p>
+              </div>
+              <Switch
+                id="cpaas-enabled"
+                checked={cpaasEnabled}
+                onCheckedChange={setCpaasEnabled}
+                disabled={!canEdit || (!activeChannelProvider?.hasSecret && !cpaasSecret.trim())}
+              />
+            </div>
+
+            <SheetFooter className="pt-2">
+              <Button type="submit" disabled={!canEdit || savingMessaging} className="w-full">
+                {savingMessaging ? "Saving..." : "Save Settings"}
+              </Button>
+            </SheetFooter>
+          </form>
+
+          {/* Test send strip */}
+          <div className="border-t border-border pt-4 mt-2 space-y-2 text-xs">
+            <h4 className="font-semibold text-foreground">Test Message Delivery</h4>
+            <p className="text-[11px] text-muted-foreground">
+              Sends a diagnostic probe message to verify Zoho CPaaS API credentials and routing.
+            </p>
+            <div className="flex gap-2">
+              <Input
+                type="tel"
+                value={testMessagingPhone}
+                onChange={(e) => setTestMessagingPhone(e.target.value)}
+                placeholder="+91 98765 43210"
+                className="text-xs h-9"
+                disabled={!activeChannelProvider?.hasSecret}
+              />
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={handleSendTestMessaging}
+                disabled={sendingTestMessaging || !canEdit || !activeChannelProvider?.hasSecret}
+                className="h-9 gap-1 shrink-0"
+              >
+                <Send className="h-3.5 w-3.5" />
+                <span>{sendingTestMessaging ? "Sending..." : "Test Send"}</span>
+              </Button>
+            </div>
+            {!activeChannelProvider?.hasSecret && (
+              <p className="text-[11px] text-amber-600">
+                Enrolment required: save valid credentials above to enable test sends.
+              </p>
+            )}
           </div>
         </SheetContent>
       </Sheet>

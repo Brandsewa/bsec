@@ -157,5 +157,7 @@ export * from "./media/connection.ts";
 export * from "./platform/storage-connections.ts";
 export * from "./platform/quotas.ts";
 export * from "./platform/integrations-hub.ts";
+export * from "./platform/channel-providers.ts";
+export * from "./system/messaging/index.ts";
 
 

@@ -323,6 +323,13 @@
       "when": 1792210000000,
       "tag": "0051_quota_tiers",
       "breakpoints": true
+    },
+    {
+      "idx": 46,
+      "version": "7",
+      "when": 1792220000000,
+      "tag": "0052_channel_messaging",
+      "breakpoints": true
     }
   ]
 }

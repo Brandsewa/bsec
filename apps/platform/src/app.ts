@@ -86,6 +86,12 @@ import {
   getPlatformIntegrationsOverview,
   getPlatformChannelStats,
   getPlatformChannelTransactions,
+  listPlatformChannelProviders,
+  createPlatformChannelProvider,
+  updatePlatformChannelProvider,
+  deletePlatformChannelProvider,
+  setDefaultPlatformChannelProvider,
+  testPlatformChannelProvider,
   getPlatformQuotaMatrix,
   createPlatformQuotaTier,
   updatePlatformQuotaTier,
@@ -559,6 +565,30 @@ export const platformRouter = os.router({
     channelTransactions: os.integrations.channelTransactions.use(requirePlatformStaff).handler(async ({ context, input }) => {
       const staffUserId = actor(context);
       return getPlatformChannelTransactions(context.rt, staffUserId, input);
+    }),
+    listProviders: os.integrations.listProviders.use(requirePlatformStaff).handler(async ({ context, input }) => {
+      const staffUserId = actor(context);
+      return listPlatformChannelProviders(context.rt, staffUserId, input.channel);
+    }),
+    createProvider: os.integrations.createProvider.use(requirePlatformStaff).handler(async ({ context, input }) => {
+      const staffUserId = actor(context);
+      return createPlatformChannelProvider(context.rt, staffUserId, input, context.meta);
+    }),
+    updateProvider: os.integrations.updateProvider.use(requirePlatformStaff).handler(async ({ context, input }) => {
+      const staffUserId = actor(context);
+      return updatePlatformChannelProvider(context.rt, staffUserId, input, context.meta);
+    }),
+    deleteProvider: os.integrations.deleteProvider.use(requirePlatformStaff).handler(async ({ context, input }) => {
+      const staffUserId = actor(context);
+      return deletePlatformChannelProvider(context.rt, staffUserId, input.id, context.meta);
+    }),
+    setDefaultProvider: os.integrations.setDefaultProvider.use(requirePlatformStaff).handler(async ({ context, input }) => {
+      const staffUserId = actor(context);
+      return setDefaultPlatformChannelProvider(context.rt, staffUserId, input.id, context.meta);
+    }),
+    testProvider: os.integrations.testProvider.use(requirePlatformStaff).handler(async ({ context, input }) => {
+      const staffUserId = actor(context);
+      return testPlatformChannelProvider(context.rt, staffUserId, input, context.meta);
     }),
   },
 });

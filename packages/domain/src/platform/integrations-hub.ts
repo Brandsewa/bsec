@@ -50,6 +50,62 @@ export async function getPlatformIntegrationsOverview(
     .from(schema.platformEmailLog)
     .where(sql`${schema.platformEmailLog.createdAt} >= now() - interval '7 days'`);
 
+  // Query SMS provider & stats
+  const [smsDefault] = await db
+    .select()
+    .from(schema.platformChannelProviders)
+    .where(and(eq(schema.platformChannelProviders.channel, "sms"), eq(schema.platformChannelProviders.isDefault, true)))
+    .limit(1);
+
+  const [sms7d] = await db
+    .select({
+      sent: sql<string>`count(*) filter (where ${schema.platformMessageLog.status} = 'sent')`,
+      failed: sql<string>`count(*) filter (where ${schema.platformMessageLog.status} = 'failed')`,
+    })
+    .from(schema.platformMessageLog)
+    .where(and(eq(schema.platformMessageLog.channel, "sms"), sql`${schema.platformMessageLog.createdAt} >= now() - interval '7 days'`));
+
+  let smsStatus: "active" | "not_configured" | "not_enrolled" | "failing";
+  if (!smsDefault) {
+    smsStatus = "not_enrolled";
+  } else if (!smsDefault.secretCiphertext) {
+    smsStatus = "not_enrolled";
+  } else if (!smsDefault.enabled) {
+    smsStatus = "not_configured";
+  } else if (smsDefault.lastTestStatus === "failed") {
+    smsStatus = "failing";
+  } else {
+    smsStatus = "active";
+  }
+
+  // Query WhatsApp provider & stats
+  const [waDefault] = await db
+    .select()
+    .from(schema.platformChannelProviders)
+    .where(and(eq(schema.platformChannelProviders.channel, "whatsapp"), eq(schema.platformChannelProviders.isDefault, true)))
+    .limit(1);
+
+  const [wa7d] = await db
+    .select({
+      sent: sql<string>`count(*) filter (where ${schema.platformMessageLog.status} = 'sent')`,
+      failed: sql<string>`count(*) filter (where ${schema.platformMessageLog.status} = 'failed')`,
+    })
+    .from(schema.platformMessageLog)
+    .where(and(eq(schema.platformMessageLog.channel, "whatsapp"), sql`${schema.platformMessageLog.createdAt} >= now() - interval '7 days'`));
+
+  let waStatus: "active" | "not_configured" | "not_enrolled" | "failing";
+  if (!waDefault) {
+    waStatus = "not_enrolled";
+  } else if (!waDefault.secretCiphertext) {
+    waStatus = "not_enrolled";
+  } else if (!waDefault.enabled) {
+    waStatus = "not_configured";
+  } else if (waDefault.lastTestStatus === "failed") {
+    waStatus = "failing";
+  } else {
+    waStatus = "active";
+  }
+
   // 2. Storage summary
   const [activeStorageRes] = await db
     .select({
@@ -75,16 +131,16 @@ export async function getPlatformIntegrationsOverview(
         provider: emailCfg?.provider ?? "zoho_zeptomail",
       },
       sms: {
-        status: "not_enrolled" as const,
-        sent7d: 0,
-        failed7d: 0,
-        provider: "zoho_cpaas",
+        status: smsStatus,
+        sent7d: Number(sms7d?.sent ?? 0),
+        failed7d: Number(sms7d?.failed ?? 0),
+        provider: smsDefault?.provider ?? "zoho_cpaas",
       },
       whatsapp: {
-        status: "not_enrolled" as const,
-        sent7d: 0,
-        failed7d: 0,
-        provider: "zoho_cpaas",
+        status: waStatus,
+        sent7d: Number(wa7d?.sent ?? 0),
+        failed7d: Number(wa7d?.failed ?? 0),
+        provider: waDefault?.provider ?? "zoho_cpaas",
       },
     },
     storage: {
@@ -102,6 +158,7 @@ export async function getPlatformIntegrationsOverview(
 /**
  * Gets stats for a channel over the given range (24h, 7d, 30d).
  * Invariant: Email stats must equal a direct SQL count of platform_email_log for the same range.
+ * SMS / WhatsApp stats equal a direct SQL count of platform_message_log for the same channel and range.
  */
 export async function getPlatformChannelStats(
   rt: Runtime,
@@ -113,20 +170,6 @@ export async function getPlatformChannelStats(
 
   const { channel, range } = options;
 
-  if (channel !== "email") {
-    // SMS / WhatsApp in Slice A/B
-    return {
-      channel,
-      range,
-      sent: 0,
-      failed: 0,
-      skipped: 0,
-      total: 0,
-      successRate: 100,
-      daily: [],
-    };
-  }
-
   const intervalSql =
     range === "24h"
       ? sql`interval '24 hours'`
@@ -134,50 +177,99 @@ export async function getPlatformChannelStats(
         ? sql`interval '30 days'`
         : sql`interval '7 days'`;
 
-  // Status counts - exact SQL matching
-  const statusCounts = await db
-    .select({
-      status: schema.platformEmailLog.status,
-      count: sql<string>`count(*)`,
-    })
-    .from(schema.platformEmailLog)
-    .where(sql`${schema.platformEmailLog.createdAt} >= now() - ${intervalSql}`)
-    .groupBy(schema.platformEmailLog.status);
-
   let sent = 0;
   let failed = 0;
   let skipped = 0;
-  for (const row of statusCounts) {
-    const c = Number(row.count);
-    if (row.status === "sent") sent = c;
-    else if (row.status === "failed") failed = c;
-    else if (row.status === "skipped") skipped = c;
+  const dailyMap = new Map<string, { sent: number; failed: number; skipped: number }>();
+
+  if (channel === "email") {
+    const statusCounts = await db
+      .select({
+        status: schema.platformEmailLog.status,
+        count: sql<string>`count(*)`,
+      })
+      .from(schema.platformEmailLog)
+      .where(sql`${schema.platformEmailLog.createdAt} >= now() - ${intervalSql}`)
+      .groupBy(schema.platformEmailLog.status);
+
+    for (const row of statusCounts) {
+      const c = Number(row.count);
+      if (row.status === "sent") sent = c;
+      else if (row.status === "failed") failed = c;
+      else if (row.status === "skipped") skipped = c;
+    }
+
+    const dailyRows = await db
+      .select({
+        day: sql<string>`to_char(${schema.platformEmailLog.createdAt} AT TIME ZONE 'UTC', 'YYYY-MM-DD')`,
+        status: schema.platformEmailLog.status,
+        count: sql<string>`count(*)`,
+      })
+      .from(schema.platformEmailLog)
+      .where(sql`${schema.platformEmailLog.createdAt} >= now() - ${intervalSql}`)
+      .groupBy(sql`to_char(${schema.platformEmailLog.createdAt} AT TIME ZONE 'UTC', 'YYYY-MM-DD')`, schema.platformEmailLog.status)
+      .orderBy(sql`to_char(${schema.platformEmailLog.createdAt} AT TIME ZONE 'UTC', 'YYYY-MM-DD')`);
+
+    for (const r of dailyRows) {
+      const existing = dailyMap.get(r.day) ?? { sent: 0, failed: 0, skipped: 0 };
+      const c = Number(r.count);
+      if (r.status === "sent") existing.sent += c;
+      else if (r.status === "failed") existing.failed += c;
+      else if (r.status === "skipped") existing.skipped += c;
+      dailyMap.set(r.day, existing);
+    }
+  } else {
+    // SMS or WhatsApp
+    const statusCounts = await db
+      .select({
+        status: schema.platformMessageLog.status,
+        count: sql<string>`count(*)`,
+      })
+      .from(schema.platformMessageLog)
+      .where(
+        and(
+          eq(schema.platformMessageLog.channel, channel),
+          sql`${schema.platformMessageLog.createdAt} >= now() - ${intervalSql}`,
+        ),
+      )
+      .groupBy(schema.platformMessageLog.status);
+
+    for (const row of statusCounts) {
+      const c = Number(row.count);
+      if (row.status === "sent") sent = c;
+      else if (row.status === "failed") failed = c;
+      else if (row.status === "skipped") skipped = c;
+    }
+
+    const dailyRows = await db
+      .select({
+        day: sql<string>`to_char(${schema.platformMessageLog.createdAt} AT TIME ZONE 'UTC', 'YYYY-MM-DD')`,
+        status: schema.platformMessageLog.status,
+        count: sql<string>`count(*)`,
+      })
+      .from(schema.platformMessageLog)
+      .where(
+        and(
+          eq(schema.platformMessageLog.channel, channel),
+          sql`${schema.platformMessageLog.createdAt} >= now() - ${intervalSql}`,
+        ),
+      )
+      .groupBy(sql`to_char(${schema.platformMessageLog.createdAt} AT TIME ZONE 'UTC', 'YYYY-MM-DD')`, schema.platformMessageLog.status)
+      .orderBy(sql`to_char(${schema.platformMessageLog.createdAt} AT TIME ZONE 'UTC', 'YYYY-MM-DD')`);
+
+    for (const r of dailyRows) {
+      const existing = dailyMap.get(r.day) ?? { sent: 0, failed: 0, skipped: 0 };
+      const c = Number(r.count);
+      if (r.status === "sent") existing.sent += c;
+      else if (r.status === "failed") existing.failed += c;
+      else if (r.status === "skipped") existing.skipped += c;
+      dailyMap.set(r.day, existing);
+    }
   }
+
   const total = sent + failed + skipped;
   const attempted = sent + failed;
   const successRate = attempted > 0 ? Math.round((sent / attempted) * 100) : 100;
-
-  // Daily breakdown in UTC
-  const dailyRows = await db
-    .select({
-      day: sql<string>`to_char(${schema.platformEmailLog.createdAt} AT TIME ZONE 'UTC', 'YYYY-MM-DD')`,
-      status: schema.platformEmailLog.status,
-      count: sql<string>`count(*)`,
-    })
-    .from(schema.platformEmailLog)
-    .where(sql`${schema.platformEmailLog.createdAt} >= now() - ${intervalSql}`)
-    .groupBy(sql`to_char(${schema.platformEmailLog.createdAt} AT TIME ZONE 'UTC', 'YYYY-MM-DD')`, schema.platformEmailLog.status)
-    .orderBy(sql`to_char(${schema.platformEmailLog.createdAt} AT TIME ZONE 'UTC', 'YYYY-MM-DD')`);
-
-  const dailyMap = new Map<string, { sent: number; failed: number; skipped: number }>();
-  for (const r of dailyRows) {
-    const existing = dailyMap.get(r.day) ?? { sent: 0, failed: 0, skipped: 0 };
-    const c = Number(r.count);
-    if (r.status === "sent") existing.sent += c;
-    else if (r.status === "failed") existing.failed += c;
-    else if (r.status === "skipped") existing.skipped += c;
-    dailyMap.set(r.day, existing);
-  }
 
   // Generate date labels covering the range
   const daysCount = range === "24h" ? 2 : range === "30d" ? 30 : 7;
@@ -221,76 +313,140 @@ export async function getPlatformChannelTransactions(
 
   const { channel } = options;
 
-  if (channel !== "email") {
-    // In Slice A/B, SMS/WhatsApp have no records yet
+  if (channel === "email") {
+    const conditions: SQL[] = [];
+    if (options.failedOnly) {
+      conditions.push(eq(schema.platformEmailLog.status, "failed"));
+    } else if (options.status) {
+      conditions.push(eq(schema.platformEmailLog.status, options.status));
+    }
+    if (options.template) {
+      conditions.push(eq(schema.platformEmailLog.template, options.template));
+    }
+    if (options.tenantId) {
+      conditions.push(eq(schema.platformEmailLog.tenantId, options.tenantId));
+    }
+    if (options.search && options.search.trim()) {
+      const term = `%${options.search.trim()}%`;
+      const searchCond = or(
+        ilike(schema.platformEmailLog.toEmail, term),
+        ilike(schema.platformEmailLog.template, term),
+      );
+      if (searchCond) {
+        conditions.push(searchCond);
+      }
+    }
+
+    const whereClause = conditions.length > 0 ? and(...conditions) : undefined;
+
+    const [countRes] = await db
+      .select({ count: sql<string>`count(*)` })
+      .from(schema.platformEmailLog)
+      .where(whereClause);
+
+    const total = Number(countRes?.count ?? 0);
+
+    const rows = await db
+      .select({
+        id: schema.platformEmailLog.id,
+        createdAt: schema.platformEmailLog.createdAt,
+        recipient: schema.platformEmailLog.toEmail,
+        template: schema.platformEmailLog.template,
+        tenantId: schema.platformEmailLog.tenantId,
+        tenantName: schema.tenants.name,
+        status: schema.platformEmailLog.status,
+        providerMessageId: schema.platformEmailLog.providerMessageId,
+        error: schema.platformEmailLog.error,
+      })
+      .from(schema.platformEmailLog)
+      .leftJoin(schema.tenants, eq(schema.platformEmailLog.tenantId, schema.tenants.id))
+      .where(whereClause)
+      .orderBy(desc(schema.platformEmailLog.createdAt))
+      .limit(options.limit ?? 50)
+      .offset(options.offset ?? 0);
+
     return {
-      items: [],
-      total: 0,
+      items: rows.map((r) => ({
+        id: r.id,
+        channel: "email" as const,
+        createdAt: r.createdAt.toISOString(),
+        recipient: r.recipient,
+        template: r.template,
+        tenantId: r.tenantId ?? null,
+        tenantName: r.tenantName ?? null,
+        status: r.status as "sent" | "failed" | "skipped",
+        provider: "zoho_zeptomail",
+        providerMessageId: r.providerMessageId ?? null,
+        error: r.error ?? null,
+      })),
+      total,
     };
   }
 
-  const conditions: SQL[] = [];
+  // SMS or WhatsApp from platformMessageLog
+  const conditions: SQL[] = [eq(schema.platformMessageLog.channel, channel)];
   if (options.failedOnly) {
-    conditions.push(eq(schema.platformEmailLog.status, "failed"));
+    conditions.push(eq(schema.platformMessageLog.status, "failed"));
   } else if (options.status) {
-    conditions.push(eq(schema.platformEmailLog.status, options.status));
+    conditions.push(eq(schema.platformMessageLog.status, options.status));
   }
   if (options.template) {
-    conditions.push(eq(schema.platformEmailLog.template, options.template));
+    conditions.push(eq(schema.platformMessageLog.template, options.template));
   }
   if (options.tenantId) {
-    conditions.push(eq(schema.platformEmailLog.tenantId, options.tenantId));
+    conditions.push(eq(schema.platformMessageLog.tenantId, options.tenantId));
   }
   if (options.search && options.search.trim()) {
     const term = `%${options.search.trim()}%`;
     const searchCond = or(
-      ilike(schema.platformEmailLog.toEmail, term),
-      ilike(schema.platformEmailLog.template, term),
+      ilike(schema.platformMessageLog.toMasked, term),
+      ilike(schema.platformMessageLog.template, term),
     );
     if (searchCond) {
       conditions.push(searchCond);
     }
   }
 
-  const whereClause = conditions.length > 0 ? and(...conditions) : undefined;
+  const whereClause = and(...conditions);
 
   const [countRes] = await db
     .select({ count: sql<string>`count(*)` })
-    .from(schema.platformEmailLog)
+    .from(schema.platformMessageLog)
     .where(whereClause);
 
   const total = Number(countRes?.count ?? 0);
 
   const rows = await db
     .select({
-      id: schema.platformEmailLog.id,
-      createdAt: schema.platformEmailLog.createdAt,
-      recipient: schema.platformEmailLog.toEmail,
-      template: schema.platformEmailLog.template,
-      tenantId: schema.platformEmailLog.tenantId,
+      id: schema.platformMessageLog.id,
+      createdAt: schema.platformMessageLog.createdAt,
+      toMasked: schema.platformMessageLog.toMasked,
+      template: schema.platformMessageLog.template,
+      tenantId: schema.platformMessageLog.tenantId,
       tenantName: schema.tenants.name,
-      status: schema.platformEmailLog.status,
-      providerMessageId: schema.platformEmailLog.providerMessageId,
-      error: schema.platformEmailLog.error,
+      status: schema.platformMessageLog.status,
+      provider: schema.platformMessageLog.provider,
+      providerMessageId: schema.platformMessageLog.providerMessageId,
+      error: schema.platformMessageLog.error,
     })
-    .from(schema.platformEmailLog)
-    .leftJoin(schema.tenants, eq(schema.platformEmailLog.tenantId, schema.tenants.id))
+    .from(schema.platformMessageLog)
+    .leftJoin(schema.tenants, eq(schema.platformMessageLog.tenantId, schema.tenants.id))
     .where(whereClause)
-    .orderBy(desc(schema.platformEmailLog.createdAt))
+    .orderBy(desc(schema.platformMessageLog.createdAt))
     .limit(options.limit ?? 50)
     .offset(options.offset ?? 0);
 
   return {
     items: rows.map((r) => ({
       id: r.id,
-      channel: "email" as const,
+      channel: channel as "sms" | "whatsapp",
       createdAt: r.createdAt.toISOString(),
-      recipient: r.recipient,
+      recipient: r.toMasked,
       template: r.template,
       tenantId: r.tenantId ?? null,
       tenantName: r.tenantName ?? null,
       status: r.status as "sent" | "failed" | "skipped",
-      provider: "zoho_zeptomail",
+      provider: r.provider,
       providerMessageId: r.providerMessageId ?? null,
       error: r.error ?? null,
     })),

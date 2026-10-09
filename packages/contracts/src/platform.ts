@@ -1081,6 +1081,44 @@ export const ChannelTransactionsView = z.object({
 });
 export type ChannelTransactionsView = z.infer<typeof ChannelTransactionsView>;
 
+export const PlatformChannelProviderView = z.object({
+  id: z.string(),
+  channel: z.enum(["sms", "whatsapp"]),
+  provider: z.string(),
+  displayName: z.string(),
+  config: z.record(z.string(), z.unknown()),
+  hasSecret: z.boolean(),
+  enabled: z.boolean(),
+  isDefault: z.boolean(),
+  lastTestAt: z.string().nullable().optional(),
+  lastTestStatus: z.string().nullable().optional(),
+  lastTestError: z.string().nullable().optional(),
+  createdAt: z.string(),
+  updatedAt: z.string(),
+});
+export type PlatformChannelProviderView = z.infer<typeof PlatformChannelProviderView>;
+
+export const CreatePlatformChannelProviderInput = z.object({
+  channel: z.enum(["sms", "whatsapp"]),
+  provider: z.literal("zoho_cpaas"),
+  displayName: z.string().min(1).max(100),
+  config: z.record(z.string(), z.unknown()).default({}),
+  secret: z.string().optional(),
+  enabled: z.boolean().default(false),
+  isDefault: z.boolean().default(false),
+});
+export type CreatePlatformChannelProviderInput = z.infer<typeof CreatePlatformChannelProviderInput>;
+
+export const UpdatePlatformChannelProviderInput = z.object({
+  id: z.string().uuid(),
+  displayName: z.string().min(1).max(100).optional(),
+  config: z.record(z.string(), z.unknown()).optional(),
+  secret: z.string().optional(),
+  enabled: z.boolean().optional(),
+  isDefault: z.boolean().optional(),
+});
+export type UpdatePlatformChannelProviderInput = z.infer<typeof UpdatePlatformChannelProviderInput>;
+
 export const platformIntegrationsContract = {
   overview: oc
     .route({ method: "GET", path: "/platform/integrations/overview" })
@@ -1109,4 +1147,39 @@ export const platformIntegrationsContract = {
       }),
     )
     .output(ChannelTransactionsView),
+  listProviders: oc
+    .route({ method: "GET", path: "/platform/integrations/channels/{channel}/providers" })
+    .input(z.object({ channel: z.enum(["sms", "whatsapp"]) }))
+    .output(z.array(PlatformChannelProviderView)),
+  createProvider: oc
+    .route({ method: "POST", path: "/platform/integrations/channels/providers" })
+    .input(CreatePlatformChannelProviderInput)
+    .output(PlatformChannelProviderView),
+  updateProvider: oc
+    .route({ method: "PATCH", path: "/platform/integrations/channels/providers/{id}" })
+    .input(UpdatePlatformChannelProviderInput)
+    .output(PlatformChannelProviderView),
+  deleteProvider: oc
+    .route({ method: "DELETE", path: "/platform/integrations/channels/providers/{id}" })
+    .input(z.object({ id: z.string().uuid() }))
+    .output(z.object({ success: z.boolean(), id: z.string() })),
+  setDefaultProvider: oc
+    .route({ method: "POST", path: "/platform/integrations/channels/providers/{id}/default" })
+    .input(z.object({ id: z.string().uuid() }))
+    .output(z.object({ success: z.boolean() })),
+  testProvider: oc
+    .route({ method: "POST", path: "/platform/integrations/channels/providers/{id}/test" })
+    .input(
+      z.object({
+        id: z.string().uuid(),
+        to: z.string().min(5).max(20),
+      }),
+    )
+    .output(
+      z.object({
+        ok: z.boolean(),
+        error: z.string().nullable().optional(),
+        providerMessageId: z.string().nullable().optional(),
+      }),
+    ),
 };

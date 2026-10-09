@@ -158,6 +158,50 @@ async function run() {
     ],
   };
 
+  const mockSmsProviders = [
+    {
+      id: "cp-sms-1",
+      provider: "zoho_cpaas",
+      channel: "sms",
+      displayName: "Zoho CPaaS SMS (India DLT)",
+      isDefault: true,
+      isEnabled: false,
+      credentialsConfigured: false,
+      configMasked: {
+        senderKey: "BSECOM",
+        dltEntityId: "1101524390000012345",
+        fromNumber: null,
+      },
+      lastTestStatus: "not_tested",
+      lastTestedAt: null,
+      lastTestError: null,
+      createdAt: "2026-10-09T00:00:00Z",
+      updatedAt: "2026-10-09T00:00:00Z",
+    },
+  ];
+
+  const mockWhatsappProviders = [
+    {
+      id: "cp-wa-1",
+      provider: "zoho_cpaas",
+      channel: "whatsapp",
+      displayName: "Zoho CPaaS WhatsApp (WABA)",
+      isDefault: true,
+      isEnabled: false,
+      credentialsConfigured: false,
+      configMasked: {
+        senderKey: "WA_BIZ_MAIN",
+        dltEntityId: null,
+        fromNumber: "+919876543210",
+      },
+      lastTestStatus: "not_tested",
+      lastTestedAt: null,
+      lastTestError: null,
+      createdAt: "2026-10-09T00:00:00Z",
+      updatedAt: "2026-10-09T00:00:00Z",
+    },
+  ];
+
   const setupContext = async (viewport) => {
     const context = await browser.newContext({ viewport });
     const page = await context.newPage();
@@ -191,17 +235,65 @@ async function run() {
         });
       }
       if (url.includes("/rpc/integrations/channelStats") || url.includes("/rpc/integrations.channelStats")) {
+        const bodyText = route.request().postData() || "";
+        const ch = bodyText.includes('"sms"') ? "sms" : bodyText.includes('"whatsapp"') ? "whatsapp" : "email";
         return route.fulfill({
           status: 200,
           contentType: "application/json",
-          body: JSON.stringify({ json: mockStats }),
+          body: JSON.stringify({
+            json: {
+              channel: ch,
+              range: "7d",
+              sent: ch === "email" ? 1408 : 0,
+              failed: ch === "email" ? 12 : 0,
+              skipped: 0,
+              total: ch === "email" ? 1420 : 0,
+              successRate: ch === "email" ? 99.1 : 100,
+              daily: mockStats.daily.map((d) => ({
+                date: d.date,
+                sent: ch === "email" ? d.sent : 0,
+                failed: ch === "email" ? d.failed : 0,
+                skipped: 0,
+              })),
+            },
+          }),
         });
       }
       if (url.includes("/rpc/integrations/channelTransactions") || url.includes("/rpc/integrations.channelTransactions")) {
+        const bodyText = route.request().postData() || "";
+        if (bodyText.includes('"sms"') || bodyText.includes('"whatsapp"')) {
+          return route.fulfill({
+            status: 200,
+            contentType: "application/json",
+            body: JSON.stringify({ json: { items: [], total: 0 } }),
+          });
+        }
         return route.fulfill({
           status: 200,
           contentType: "application/json",
           body: JSON.stringify({ json: mockTransactions }),
+        });
+      }
+      if (url.includes("/rpc/integrations/listProviders") || url.includes("/rpc/integrations.listProviders")) {
+        const bodyText = route.request().postData() || "";
+        if (bodyText.includes('"sms"')) {
+          return route.fulfill({
+            status: 200,
+            contentType: "application/json",
+            body: JSON.stringify({ json: mockSmsProviders }),
+          });
+        }
+        if (bodyText.includes('"whatsapp"')) {
+          return route.fulfill({
+            status: 200,
+            contentType: "application/json",
+            body: JSON.stringify({ json: mockWhatsappProviders }),
+          });
+        }
+        return route.fulfill({
+          status: 200,
+          contentType: "application/json",
+          body: JSON.stringify({ json: [] }),
         });
       }
       if (url.includes("/rpc/storage/stats") || url.includes("/rpc/storage.stats")) {
@@ -326,19 +418,55 @@ async function run() {
     await page.keyboard.press("Escape");
     await page.waitForTimeout(300);
 
-    // E. Storage /integrations/storage
+    // E. SMS Channel /integrations/notifications/sms
+    console.log("-> Navigating to /integrations/notifications/sms...");
+    await page.goto("http://localhost:5174/integrations/notifications/sms", { waitUntil: "networkidle" });
+    await page.waitForTimeout(600);
+    await page.screenshot({ path: path.join(ARTIFACTS_DIR, "27a_desktop_sms_channel.png") });
+
+    console.log("-> Switching to SMS Providers tab...");
+    await page.getByRole("tab", { name: "Providers" }).click();
+    await page.waitForTimeout(500);
+    await page.screenshot({ path: path.join(ARTIFACTS_DIR, "27b_desktop_sms_providers_tab.png") });
+
+    console.log("-> Opening Zoho CPaaS SMS configure sheet...");
+    await page.getByRole("button", { name: "Configure" }).first().click();
+    await page.waitForTimeout(500);
+    await page.screenshot({ path: path.join(ARTIFACTS_DIR, "27c_desktop_sms_configure_sheet.png") });
+    await page.keyboard.press("Escape");
+    await page.waitForTimeout(300);
+
+    // F. WhatsApp Channel /integrations/notifications/whatsapp
+    console.log("-> Navigating to /integrations/notifications/whatsapp...");
+    await page.goto("http://localhost:5174/integrations/notifications/whatsapp", { waitUntil: "networkidle" });
+    await page.waitForTimeout(600);
+    await page.screenshot({ path: path.join(ARTIFACTS_DIR, "27d_desktop_whatsapp_channel.png") });
+
+    console.log("-> Switching to WhatsApp Providers tab...");
+    await page.getByRole("tab", { name: "Providers" }).click();
+    await page.waitForTimeout(500);
+    await page.screenshot({ path: path.join(ARTIFACTS_DIR, "27e_desktop_whatsapp_providers_tab.png") });
+
+    console.log("-> Opening Zoho CPaaS WhatsApp configure sheet...");
+    await page.getByRole("button", { name: "Configure" }).first().click();
+    await page.waitForTimeout(500);
+    await page.screenshot({ path: path.join(ARTIFACTS_DIR, "27f_desktop_whatsapp_configure_sheet.png") });
+    await page.keyboard.press("Escape");
+    await page.waitForTimeout(300);
+
+    // G. Storage /integrations/storage
     console.log("-> Navigating to /integrations/storage...");
     await page.goto("http://localhost:5174/integrations/storage", { waitUntil: "networkidle" });
     await page.waitForTimeout(600);
     await page.screenshot({ path: path.join(ARTIFACTS_DIR, "27_desktop_storage_stats.png") });
 
-    // F. Payments /integrations/payments
+    // H. Payments /integrations/payments
     console.log("-> Navigating to /integrations/payments...");
     await page.goto("http://localhost:5174/integrations/payments", { waitUntil: "networkidle" });
     await page.waitForTimeout(500);
     await page.screenshot({ path: path.join(ARTIFACTS_DIR, "28_desktop_payments_hub.png") });
 
-    // G. Verify Redirects
+    // I. Verify Redirects
     console.log("-> Verifying /email redirect...");
     await page.goto("http://localhost:5174/email", { waitUntil: "networkidle" });
     await page.waitForTimeout(500);
@@ -378,6 +506,16 @@ async function run() {
     await mPage.goto("http://localhost:5174/integrations/notifications/email", { waitUntil: "networkidle" });
     await mPage.waitForTimeout(500);
     await mPage.screenshot({ path: path.join(ARTIFACTS_DIR, "32_mobile_email_channel.png") });
+
+    console.log("-> Navigating to /integrations/notifications/sms (mobile)...");
+    await mPage.goto("http://localhost:5174/integrations/notifications/sms", { waitUntil: "networkidle" });
+    await mPage.waitForTimeout(500);
+    await mPage.screenshot({ path: path.join(ARTIFACTS_DIR, "32a_mobile_sms_channel.png") });
+
+    console.log("-> Navigating to /integrations/notifications/whatsapp (mobile)...");
+    await mPage.goto("http://localhost:5174/integrations/notifications/whatsapp", { waitUntil: "networkidle" });
+    await mPage.waitForTimeout(500);
+    await mPage.screenshot({ path: path.join(ARTIFACTS_DIR, "32b_mobile_whatsapp_channel.png") });
 
     console.log("-> Navigating to /integrations/storage (mobile)...");
     await mPage.goto("http://localhost:5174/integrations/storage", { waitUntil: "networkidle" });

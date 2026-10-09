@@ -51,6 +51,7 @@ async function snapshot(): Promise<string> {
     "export_files", "tenant_owner_invites", "users", "sessions", "organizations", "store_settings", "roles", "theme_templates",
     "platform_email_settings", "plan_change_requests", "platform_storage_connections",
     "quota_tiers", "quota_tier_limits", "quota_definitions",
+    "platform_channel_providers", "platform_message_log",
   ];
   const parts = tables.map((t) => `SELECT '${t}' || ':' || x::text AS r FROM ${t} x`);
   parts.push(`SELECT 'job:' || j.id::text || j.state::text FROM pgboss.job j`);
@@ -349,6 +350,61 @@ const CASES: Record<string, Case> = {
       unit: "count",
       enforcement: "hard",
     }),
+  },
+  "integrations.createProvider": {
+    role: "platform_admin",
+    action: "channel_provider.create",
+    input: async () => ({
+      channel: "sms",
+      provider: "zoho_cpaas",
+      displayName: `Zoho SMS ${++seq}`,
+      enabled: false,
+      isDefault: false,
+    }),
+  },
+  "integrations.updateProvider": {
+    role: "platform_admin",
+    action: "channel_provider.update",
+    input: async () => {
+      const p = (await proc("integrations.createProvider")(
+        { channel: "sms", provider: "zoho_cpaas", displayName: `Zoho SMS Upd ${++seq}` },
+        { context: ctxFor(owner.userId, owner.freshSessionAt) },
+      )) as { id: string };
+      return { id: p.id, displayName: `Renamed SMS ${seq}` };
+    },
+  },
+  "integrations.deleteProvider": {
+    role: "platform_admin",
+    action: "channel_provider.delete",
+    input: async () => {
+      const p = (await proc("integrations.createProvider")(
+        { channel: "sms", provider: "zoho_cpaas", displayName: `Zoho SMS Del ${++seq}` },
+        { context: ctxFor(owner.userId, owner.freshSessionAt) },
+      )) as { id: string };
+      return { id: p.id };
+    },
+  },
+  "integrations.setDefaultProvider": {
+    role: "platform_admin",
+    action: "channel_provider.setDefault",
+    input: async () => {
+      const p = (await proc("integrations.createProvider")(
+        { channel: "sms", provider: "zoho_cpaas", displayName: `Zoho SMS Def ${++seq}` },
+        { context: ctxFor(owner.userId, owner.freshSessionAt) },
+      )) as { id: string };
+      return { id: p.id };
+    },
+  },
+  "integrations.testProvider": {
+    role: "platform_admin",
+    action: "channel_provider.test",
+    input: async () => {
+      const p = (await proc("integrations.createProvider")(
+        { channel: "sms", provider: "zoho_cpaas", displayName: `Zoho SMS Tst ${++seq}` },
+        { context: ctxFor(owner.userId, owner.freshSessionAt) },
+      )) as { id: string };
+      return { id: p.id, to: "+919876543210" };
+    },
   },
 };
 
