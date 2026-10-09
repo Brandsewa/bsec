@@ -689,11 +689,13 @@ const CartIcon = (
 
 export function SiteHeaderView({ props, ctx }: A<R.SiteHeaderProps>): ReactNode {
   const name = props.logoText || ctx?.storeName || "Your store";
+  const customLogoUrl = mediaSrc(ctx, props.logoMediaId);
+  const logoUrl = customLogoUrl || (!props.logoText ? ctx?.logoUrl : null);
   return (
     <header className={cx("bsb bs-block-site-header bsb-site-header", `bsb-tone-${props.tone}`, props.sticky && "bsb-sticky", props.layout === "center" && "bsb-site-header-center")}>
       <div className="bsb-w bsb-w-wide bsb-site-header-row">
         <NavLink ctx={ctx} href="/" className="bsb-site-logo">
-          {ctx?.logoUrl && !props.logoText ? <img src={ctx.logoUrl} alt={name} style={{ maxHeight: 40, width: "auto" }} /> : <span>{name}</span>}
+          {logoUrl ? <img src={logoUrl} alt={name} style={{ maxHeight: 40, width: "auto" }} /> : <span>{name}</span>}
         </NavLink>
         <nav className="bsb-site-nav" aria-label="Main">
           {props.links.map((l, i) => (

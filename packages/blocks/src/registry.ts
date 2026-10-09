@@ -587,6 +587,7 @@ const navLinkSchema = z.object({ label: z.string().min(1).max(60), href: hrefSch
 export const SiteHeaderSchema = z.object({
   links: z.array(navLinkSchema).max(8).default([]),
   logoText: z.string().max(60).optional(),
+  logoMediaId: z.string().optional(),
   layout: z.enum(["left", "center"]).default("left"),
   showSearch: z.boolean().default(true),
   showCart: z.boolean().default(true),

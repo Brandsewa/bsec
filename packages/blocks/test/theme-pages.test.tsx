@@ -24,6 +24,34 @@ describe("header, footer, product and collection blocks", () => {
     expect(html).toContain('href="/collections/all"');
   });
 
+  it("renders custom logoMediaId, branding logoUrl, or store name", () => {
+    // 1. Branding logo fallback when no logoText or logoMediaId
+    const brandingHtml = renderToStaticMarkup(
+      <>{renderBlockTree([block("h", "SiteHeader", {})], { storeName: "Acme", logoUrl: "https://cdn.example/brand-logo.png" })}</>,
+    );
+    expect(brandingHtml).toContain('src="https://cdn.example/brand-logo.png"');
+
+    // 2. Custom logoMediaId overrides branding logo
+    const customHtml = renderToStaticMarkup(
+      <>{renderBlockTree([block("h", "SiteHeader", { logoMediaId: "med-123" })], {
+        storeName: "Acme",
+        logoUrl: "https://cdn.example/brand-logo.png",
+        mediaUrl: (id) => `https://cdn.example/media/${id}.png`,
+      })}</>,
+    );
+    expect(customHtml).toContain('src="https://cdn.example/media/med-123.png"');
+
+    // 3. logoText overrides branding logo
+    const textHtml = renderToStaticMarkup(
+      <>{renderBlockTree([block("h", "SiteHeader", { logoText: "Custom Brand" })], {
+        storeName: "Acme",
+        logoUrl: "https://cdn.example/brand-logo.png",
+      })}</>,
+    );
+    expect(textHtml).toContain("Custom Brand");
+    expect(textHtml).not.toContain("brand-logo.png");
+  });
+
   it("uses the storefront's link, cart and page-core renderers when the host provides them", () => {
     const html = renderToStaticMarkup(
       <>
