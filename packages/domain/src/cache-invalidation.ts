@@ -34,6 +34,7 @@ export type CacheChange =
   | {
       type: "page_published";
       slug: string;
+      extraSlugs?: string[] | undefined;
     }
   | {
       type: "nav_updated";
@@ -126,6 +127,9 @@ export function computeInvalidationTags(
     case "page_published": {
       // Custom/landing page publish or rollback -> page:<slug>
       tags.push(tenantTag(tenantId, "page", change.slug));
+      for (const s of change.extraSlugs ?? []) {
+        tags.push(tenantTag(tenantId, "page", s));
+      }
       break;
     }
     case "nav_updated": {

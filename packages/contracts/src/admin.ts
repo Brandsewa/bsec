@@ -814,10 +814,56 @@ export const Theme = z.object({
 });
 export type Theme = z.infer<typeof Theme>;
 
+export const PageSeo = z.object({
+  title: z.string().max(300).optional(),
+  description: z.string().max(1000).optional(),
+  imageMediaId: z.string().uuid().nullable().optional(),
+});
+export type PageSeo = z.infer<typeof PageSeo>;
+
+export const RESERVED_PAGE_SLUGS: ReadonlySet<string> = new Set([
+  "account",
+  "address",
+  "admin",
+  "api",
+  "blog",
+  "cart",
+  "categories",
+  "checkout",
+  "cod",
+  "collections",
+  "home",
+  "media",
+  "o",
+  "orders",
+  "pages",
+  "policies",
+  "preview",
+  "privacy-request",
+  "privacy-verify",
+  "products",
+  "robots.txt",
+  "search",
+  "signup",
+  "sitemap.xml",
+  "unsubscribe",
+]);
+
+export function isReservedPageSlug(slug: string): boolean {
+  const s = slug.toLowerCase().trim();
+  if (s.startsWith("template-")) return true;
+  return RESERVED_PAGE_SLUGS.has(s);
+}
+
 export const PageItem = z.object({
   id: z.string().uuid(),
   slug: z.string(),
   title: z.string(),
+  parentId: z.string().uuid().nullable().optional(),
+  path: z.string().optional(),
+  childCount: z.number().int().optional(),
+  seo: PageSeo.nullable().optional(),
+  status: z.enum(["draft", "published"]).optional(),
   /** home, landing, custom, or a theme system page (header, footer, product_template, collection_template, cart_template). */
   type: z.string().optional(),
   description: z.string().nullable().optional(),
@@ -2568,8 +2614,10 @@ export const adminContract = {
       .route({ method: "POST", path: "/admin/pages" })
       .input(
         z.object({
-          title: z.string().min(1),
+          title: z.string().min(1).max(200),
           slug: z.string().min(1),
+          parentId: z.string().uuid().nullable().optional(),
+          seo: PageSeo.optional(),
           description: z.string().optional(),
         }),
       )
@@ -2579,10 +2627,11 @@ export const adminContract = {
       .input(
         z.object({
           id: z.string().uuid(),
-          title: z.string().min(1).optional(),
+          title: z.string().min(1).max(200).optional(),
           slug: z.string().optional(),
+          parentId: z.string().uuid().nullable().optional(),
+          seo: PageSeo.optional(),
           description: z.string().optional(),
-          seo: z.unknown().optional(),
         }),
       )
       .output(PageItem),
@@ -2613,6 +2662,18 @@ export const adminContract = {
         }),
       )
       .output(z.object({ success: z.boolean(), publishedVersionId: z.string().uuid() })),
+    delete: oc
+      .route({ method: "DELETE", path: "/admin/pages/{id}" })
+      .input(z.object({ id: z.string().uuid() }))
+      .output(z.object({ success: z.boolean() })),
+    unpublish: oc
+      .route({ method: "POST", path: "/admin/pages/{id}/unpublish" })
+      .input(z.object({ id: z.string().uuid() }))
+      .output(z.object({ success: z.boolean() })),
+    duplicate: oc
+      .route({ method: "POST", path: "/admin/pages/{id}/duplicate" })
+      .input(z.object({ id: z.string().uuid() }))
+      .output(PageItem),
   },
 
   // Menus

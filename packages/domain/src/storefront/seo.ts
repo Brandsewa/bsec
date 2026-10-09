@@ -1,9 +1,10 @@
-import { and, desc, eq, isNull, inArray, or, sql } from "drizzle-orm";
+import { and, desc, eq, isNull, inArray, notInArray, or, sql } from "drizzle-orm";
 import { LISTED_PRODUCT_STATUSES } from "./product-status.ts";
 import { schema, withTenant } from "@bs/db";
 import type { Runtime } from "../runtime.ts";
 import type { TenantContext } from "../context.ts";
 import { invalidateCache } from "../cache-invalidation.ts";
+import { THEME_SYSTEM_PAGE_TYPES } from "../themes/system-pages.ts";
 import {
   parseCollectionRules,
   buildSingleRuleCondition,
@@ -982,9 +983,11 @@ export async function getStorefrontSitemapUrls(
       )
       .orderBy(desc(schema.categories.updatedAt));
 
-    // 4. Published Custom Pages (excluding "home" which is mapped to /)
+    // 4. Published Custom Pages (excluding "home" and theme system pages)
     const pageRows = await tx
       .select({
+        id: schema.pages.id,
+        parentId: schema.pages.parentId,
         slug: schema.pages.slug,
         type: schema.pages.type,
         updatedAt: schema.pages.updatedAt,
@@ -994,6 +997,7 @@ export async function getStorefrontSitemapUrls(
         and(
           eq(schema.pages.tenantId, ctx.tenantId),
           eq(schema.pages.status, "published"),
+          notInArray(schema.pages.type, [...THEME_SYSTEM_PAGE_TYPES]),
         ),
       )
       .orderBy(desc(schema.pages.updatedAt));
@@ -1039,11 +1043,27 @@ export async function getStorefrontSitemapUrls(
       });
     }
 
+    const pagesById = new Map(pageRows.map((p) => [p.id, p]));
+    function getCanonicalPath(page: { id: string; slug: string; parentId: string | null; type: string }): string {
+      const segments = [page.slug];
+      let cur = page.parentId;
+      const visited = new Set<string>();
+      while (cur) {
+        if (visited.has(cur)) break;
+        visited.add(cur);
+        const parent = pagesById.get(cur);
+        if (!parent) break;
+        segments.unshift(parent.slug);
+        cur = parent.parentId;
+      }
+      return `/pages/${segments.join("/")}`;
+    }
+
     // Custom pages (type !== 'home')
     for (const page of pageRows) {
       if (page.type !== "home") {
         sitemapItems.push({
-          loc: `${baseUrl}/pages/${page.slug}`,
+          loc: `${baseUrl}${getCanonicalPath(page)}`,
           lastmod: page.updatedAt.toISOString(),
           changefreq: "monthly",
           priority: 0.5,

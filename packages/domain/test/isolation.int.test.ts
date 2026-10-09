@@ -120,6 +120,7 @@ import {
   deleteCollection,
   deleteMediaRecord,
   deleteMenu,
+  deletePage,
   deleteProduct,
   getAdminCustomerDetail,
   getAdminMe,
@@ -201,6 +202,8 @@ import {
   requestMediaUpload,
   uploadMediaDirect,
   rollbackPage,
+  duplicatePage,
+  unpublishPage,
   savePageDraft,
   updateAdminDiscount,
   updateAdminShippingSettings,
@@ -1035,6 +1038,19 @@ describe("Generated Isolation Test Suite (M1 Real Postgres 18 Proof)", () => {
         return await publishPage(rt, ctx, { id: testPageA, versionId: testVersionA });
       case "pages.rollback":
         return await rollbackPage(rt, ctx, { id: testPageA, targetVersionId: testVersionA });
+      case "pages.delete": {
+        const p = await createPage(rt, ctx, { title: "To Delete", slug: `del-${Date.now()}-${Math.random().toString(36).slice(2, 6)}` });
+        return await deletePage(rt, ctx, { id: p.id });
+      }
+      case "pages.unpublish": {
+        const p = await createPage(rt, ctx, { title: "To Unpublish", slug: `unpub-${Date.now()}-${Math.random().toString(36).slice(2, 6)}` });
+        await publishPage(rt, ctx, { id: p.id });
+        return await unpublishPage(rt, ctx, { id: p.id });
+      }
+      case "pages.duplicate": {
+        const p = await createPage(rt, ctx, { title: "To Duplicate", slug: `dup-${Date.now()}-${Math.random().toString(36).slice(2, 6)}` });
+        return await duplicatePage(rt, ctx, { id: p.id });
+      }
       case "menus.list":
         return await listMenus(rt, ctx);
       case "menus.get":
