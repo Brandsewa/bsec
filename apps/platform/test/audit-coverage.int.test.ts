@@ -351,6 +351,11 @@ const CASES: Record<string, Case> = {
       enforcement: "hard",
     }),
   },
+  "integrations.updatePaymentProvider": {
+    role: "platform_admin",
+    action: "payment_provider.live_mode_allowed",
+    input: async () => ({ provider: "razorpay", liveModeAllowed: true }),
+  },
   "integrations.createProvider": {
     role: "platform_admin",
     action: "channel_provider.create",

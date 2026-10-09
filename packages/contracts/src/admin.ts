@@ -938,6 +938,25 @@ export const PaymentsStatus = z.object({
 });
 export type PaymentsStatus = z.infer<typeof PaymentsStatus>;
 
+/** A payment provider as one store sees it (ADMIN-IMPROVEMENTS-PLAN §6.4). Never carries a key or secret. */
+export const StorePaymentProvider = z.object({
+  provider: z.enum(["razorpay", "stripe"]),
+  displayName: z.string(),
+  platformEnabled: z.boolean(),
+  liveModeAllowed: z.boolean(),
+  state: z.enum(["not_connected", "connected_test", "active", "live_blocked"]),
+  mode: z.enum(["test", "live"]).nullable(),
+  keyHint: z.string().nullable(),
+  hasWebhookSecret: z.boolean(),
+  lastTestAt: z.string().nullable(),
+  lastTestOk: z.boolean().nullable(),
+  lastTestError: z.string().nullable(),
+  webhookPath: z.string(),
+  tenantId: z.string().uuid(),
+  checkoutLive: z.boolean(),
+});
+export type StorePaymentProvider = z.infer<typeof StorePaymentProvider>;
+
 export const AdminMeStore = z.object({
   tenantId: z.string().uuid(),
   name: z.string(),
@@ -1703,6 +1722,41 @@ export const adminContract = {
       )
       .output(PaymentsStatus),
     clearRazorpay: oc.route({ method: "DELETE", path: "/admin/payments/razorpay" }).output(PaymentsStatus),
+  },
+  paymentProviders: {
+    list: oc.route({ method: "GET", path: "/admin/payment-providers" }).output(z.array(StorePaymentProvider)),
+    saveCredentials: oc
+      .route({ method: "PUT", path: "/admin/payment-providers/{provider}/credentials" })
+      .input(
+        z.object({
+          provider: z.enum(["razorpay", "stripe"]),
+          /** Razorpay key id (rzp_test_...); not used for Stripe. */
+          keyId: z.string().min(6).max(100).optional(),
+          /** Razorpay key secret, or the Stripe secret key (sk_test_...). */
+          keySecret: z.string().min(6).max(300),
+          webhookSecret: z.string().min(6).max(200).optional(),
+        }),
+      )
+      .output(StorePaymentProvider),
+    clearCredentials: oc
+      .route({ method: "DELETE", path: "/admin/payment-providers/{provider}/credentials" })
+      .input(z.object({ provider: z.enum(["razorpay", "stripe"]) }))
+      .output(StorePaymentProvider.nullable()),
+    test: oc
+      .route({ method: "POST", path: "/admin/payment-providers/{provider}/test" })
+      .input(z.object({ provider: z.enum(["razorpay", "stripe"]) }))
+      .output(
+        z.object({
+          ok: z.boolean(),
+          mode: z.enum(["test", "live"]).optional(),
+          error: z.string().optional(),
+          provider: StorePaymentProvider,
+        }),
+      ),
+    setActive: oc
+      .route({ method: "POST", path: "/admin/payment-providers/{provider}/active" })
+      .input(z.object({ provider: z.enum(["razorpay", "stripe"]), active: z.boolean() }))
+      .output(StorePaymentProvider),
   },
   paymentMethods: {
     list: oc

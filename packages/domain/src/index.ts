@@ -137,6 +137,7 @@ export * from "./platform/catalog-reads.ts";
 export * from "./platform/email-settings.ts";
 export * from "./system/platform-mailer.ts";
 export * from "./admin/payment-methods.ts";
+export * from "./admin/payment-providers.ts";
 export * from "./admin/plan-and-billing.ts";
 export * from "./platform/plan-change-requests.ts";
 export * from "./admin/tax-settings.ts";
@@ -158,6 +159,7 @@ export * from "./platform/storage-connections.ts";
 export * from "./platform/quotas.ts";
 export * from "./platform/integrations-hub.ts";
 export * from "./platform/channel-providers.ts";
+export * from "./platform/payment-providers.ts";
 export * from "./system/messaging/index.ts";
 
 

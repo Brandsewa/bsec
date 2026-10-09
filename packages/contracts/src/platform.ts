@@ -1119,7 +1119,31 @@ export const UpdatePlatformChannelProviderInput = z.object({
 });
 export type UpdatePlatformChannelProviderInput = z.infer<typeof UpdatePlatformChannelProviderInput>;
 
+export const PlatformPaymentProviderView = z.object({
+  provider: z.enum(["razorpay", "stripe"]),
+  displayName: z.string(),
+  enabled: z.boolean(),
+  liveModeAllowed: z.boolean(),
+  connectedStores: z.number(),
+  activeStores: z.number(),
+  updatedAt: z.string(),
+});
+export type PlatformPaymentProviderView = z.infer<typeof PlatformPaymentProviderView>;
+
 export const platformIntegrationsContract = {
+  paymentProviders: oc
+    .route({ method: "GET", path: "/platform/integrations/payments/providers" })
+    .output(z.array(PlatformPaymentProviderView)),
+  updatePaymentProvider: oc
+    .route({ method: "PATCH", path: "/platform/integrations/payments/providers/{provider}" })
+    .input(
+      z.object({
+        provider: z.enum(["razorpay", "stripe"]),
+        enabled: z.boolean().optional(),
+        liveModeAllowed: z.boolean().optional(),
+      }),
+    )
+    .output(z.object({ ok: z.literal(true) })),
   overview: oc
     .route({ method: "GET", path: "/platform/integrations/overview" })
     .output(PlatformIntegrationsOverview),

@@ -9,7 +9,7 @@ import {
   RateLimitExceededError,
   getClientIp,
 } from "@bs/domain";
-import { RazorpayProvider, CODProvider } from "@bs/payments";
+import { RazorpayProvider, CODProvider, StripeProvider } from "@bs/payments";
 import { server } from "@/server/runtime.ts";
 
 export async function POST(
@@ -133,6 +133,12 @@ export async function POST(
       const creds = await getTenantPaymentSecrets(rt._db.db, tenantId, "razorpay");
       const razorpayProvider = new RazorpayProvider(creds);
       const verified = await razorpayProvider.verifyWebhook(headersRecord, rawBody);
+      signatureValid = verified.isValid;
+    } else if (provider === "stripe") {
+      // Stripe signs with the store's own whsec_ signing secret (Stripe-Signature header, 5 minute tolerance).
+      const creds = await getTenantPaymentSecrets(rt._db.db, tenantId, "stripe");
+      const stripeProvider = new StripeProvider({ webhookSecret: creds.webhookSecret });
+      const verified = await stripeProvider.verifyWebhook(headersRecord, rawBody);
       signatureValid = verified.isValid;
     } else if (provider === "cod") {
       const creds = await getTenantPaymentSecrets(rt._db.db, tenantId, "cod");

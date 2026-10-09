@@ -47,6 +47,7 @@ const INPUTS: Record<string, () => unknown> = {
   "integrations.channelStats": () => ({ channel: "email", range: "7d" }),
   "integrations.channelTransactions": () => ({ channel: "email" }),
   "integrations.listProviders": () => ({ channel: "sms" }),
+  "integrations.paymentProviders": () => undefined,
 };
 
 beforeAll(async () => {

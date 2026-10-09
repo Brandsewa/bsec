@@ -117,6 +117,11 @@ describe("B2: app_rw privileges on platform vs tenant tables", () => {
     await expect(
       q(rw, "INSERT INTO quota_tier_limits (tier_code, quota_key, value) VALUES ('XS', 'products', 99999)")
     ).rejects.toThrow(/permission denied/i);
+
+    // 9. Writes on platform_payment_providers must be rejected for app_rw
+    await expect(
+      q(rw, "UPDATE platform_payment_providers SET enabled = true WHERE provider = 'stripe'")
+    ).rejects.toThrow(/permission denied/i);
   });
 
   it("permits legitimate reads on platform tables and append-only on platform_audit_logs", async () => {
@@ -140,6 +145,11 @@ describe("B2: app_rw privileges on platform vs tenant tables", () => {
     const limitsRes = await q(rw, "SELECT count(*) FROM quota_tier_limits");
     expect(Number(limitsRes.rows[0]?.count)).toBeGreaterThanOrEqual(4);
 
+    // Reading platform_payment_providers is allowed for app_rw; Stripe ships disabled
+    const payRes = await q<{ provider: string; enabled: boolean }>(rw, "SELECT provider, enabled FROM platform_payment_providers ORDER BY sort");
+    expect(payRes.rows.map((r) => r.provider)).toEqual(["razorpay", "stripe"]);
+    expect(payRes.rows.find((r) => r.provider === "stripe")?.enabled).toBe(false);
+
     // platform_audit_logs allows INSERT (append-only)
     await q(
       rw,
@@ -157,6 +167,7 @@ const NON_RLS_TABLES_WRITABLE_BY_APP_RW: string[] = [
   "domains",
   "platform_audit_logs", // INSERT + SELECT only (append-only), asserted in the test above
   "platform_email_log", // INSERT (mail diagnostics) + DELETE and SELECT(id, created_at) for the 90-day prune
+  "platform_message_log", // INSERT (SMS/WhatsApp diagnostics, masked recipients) + DELETE and SELECT(id, created_at) for the 90-day prune
   "rate_limit_counters",
   "sessions",
   "tenant_active_jobs",

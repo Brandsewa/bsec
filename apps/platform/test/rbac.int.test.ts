@@ -93,6 +93,8 @@ const MIN_ROLE: Record<string, Role | "public"> = {
   "integrations.deleteProvider": "platform_admin",
   "integrations.setDefaultProvider": "platform_admin",
   "integrations.testProvider": "platform_admin",
+  "integrations.paymentProviders": "platform_support",
+  "integrations.updatePaymentProvider": "platform_admin",
 };
 
 /** Valid-shaped inputs, so the role check (which runs first) is what decides the outcome. */
@@ -159,6 +161,7 @@ const INPUT: Record<string, unknown> = {
   "integrations.updateProvider": { id: U, displayName: "Zoho SMS Renamed" },
   "integrations.deleteProvider": { id: U },
   "integrations.setDefaultProvider": { id: U },
+  "integrations.updatePaymentProvider": { provider: "stripe", enabled: true },
   "integrations.testProvider": { id: U, to: "+919876543210" },
   "quotas.matrix": {},
   "quotas.createTier": { code: "RBAC_TIER", name: "RBAC Tier" },

@@ -217,6 +217,7 @@ Drizzle schema files in `packages/db/src/schema/` (one Postgres database, `publi
 | `platform.ts` | `domains`, `feature_flags`, `tenant_feature_overrides`, `platform_staff`, `platform_staff_invitations`, `support_sessions`, `tenant_deletions`, `tenant_notes`, `export_files` |
 | `platform-storage.ts` | `platform_storage_connections` P |
 | `platform-channel.ts` | `platform_channel_providers` P, `platform_message_log` P |
+| `platform-payments.ts` | `platform_payment_providers` P (which payment gateways stores may connect; no secrets) |
 | `quotas.ts` | `rate_limit_counters`, `quota_definitions`, `quota_tiers` P, `quota_tier_limits` P, `tenant_size_tiers`, `tenant_quota_overrides`, `quota_events`, `tenant_active_jobs` |
 | `saas.ts` | `plans`, `subscriptions`, `platform_invoices`, `platform_audit_logs`, `theme_templates`, `signup_leads`, `slug_reservations`, `reserved_slugs`, `onboarding_progress`, `tenant_owner_invites`, `exports` |
 | `quotes.ts` | `quote_requests` T |
@@ -276,6 +277,7 @@ Drizzle schema files in `packages/db/src/schema/` (one Postgres database, `publi
 | 0050 | `orders_archive` | `orders.archived_at` and `orders.archived_by` columns, `orders_tenant_archived_at_idx` index |
 | 0051 | `quota_tiers` | `quota_tiers` and `quota_tier_limits` tables, backfill from `quota_definitions`, grants |
 | 0052 | `channel_messaging` | `platform_channel_providers` (SMS & WhatsApp provider configuration with AES-256-GCM encrypted tokens), `platform_message_log` (zero-retention masked phone audit log, 90-day retention prune) |
+| 0053 | `platform_payment_providers` | `platform_payment_providers` (Razorpay seeded enabled, Stripe disabled, per-provider live-mode switch; `app_rw` read-only), widens `payment_methods_provider_chk` to allow `stripe` |
 
 How to write one (expand, migrate, contract; `forceRlsSql`): `docs/migrations.md`. **Never edit an applied migration.** Latest on disk: `0052` (the docs check keeps this list honest).
 

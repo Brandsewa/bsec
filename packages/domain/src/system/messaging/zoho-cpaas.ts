@@ -114,7 +114,7 @@ export class ZohoCPaaSAdapter implements MessageChannelAdapter {
     const templateKey =
       input.template === "test_message"
         ? (this.config.templateMap?.["test_message"] ?? this.config.testTemplateKey)
-        : (this.config.templateMap?.[input.template] ?? (this.config.templateMap ? undefined : input.template));
+        : this.config.templateMap?.[input.template];
 
     if (!templateKey || !templateKey.trim()) {
       return {

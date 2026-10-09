@@ -186,7 +186,7 @@ describe("ZohoCPaaSAdapter (SMS and WhatsApp with faked HTTP)", () => {
       const adapter = new ZohoCPaaSAdapter({
         channel: "sms",
         token: "test-token",
-        config: { senderKey: "TEST" },
+        config: { senderKey: "TEST", templateMap: { test: "tmpl_test_1" } },
         fetchFn: fakeFetch,
       });
 
@@ -312,7 +312,7 @@ describe("ZohoCPaaSAdapter (SMS and WhatsApp with faked HTTP)", () => {
       const adapter = new ZohoCPaaSAdapter({
         channel: "sms",
         token: sensitiveToken,
-        config: { senderKey: "TEST" },
+        config: { senderKey: "TEST", templateMap: { test: "tmpl_test_1" } },
         fetchFn: fakeFetch,
       });
 

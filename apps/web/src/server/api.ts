@@ -14,6 +14,12 @@ import {
   getStoreStatus,
   getStoreStatusInternal,
   attachProductMedia,
+  listStorePaymentProviders,
+  saveStripeCredentials,
+  getStorePaymentProvider,
+  clearProviderCredentials,
+  testPaymentProviderConnection,
+  setPaymentProviderActive,
   detachProductMedia,
   uploadMediaDirect,
   MAX_MEDIA_BYTES,
@@ -506,6 +512,65 @@ export const storeRouter = os.router({
         .handler(({ context, input }) => {
           if (!context.tenantCtx) throw new Error("Missing tenant context");
           return setStandingSupportConsent(context.rt, context.tenantCtx, input.enabled).catch((e) => {
+            throw mapAuthError(e);
+          });
+        }),
+    },
+    paymentProviders: {
+      list: os.admin.paymentProviders.list
+        .use(requireAdmin)
+        .use(requirePermission("settings.read"))
+        .handler(({ context }) => {
+          if (!context.tenantCtx) throw new Error("Missing tenant context");
+          return listStorePaymentProviders(context.rt, context.tenantCtx);
+        }),
+      saveCredentials: os.admin.paymentProviders.saveCredentials
+        .use(requireAdmin)
+        .use(requirePermission("payments.manage"))
+        .handler(async ({ context, input }) => {
+          if (!context.tenantCtx) throw new Error("Missing tenant context");
+          try {
+            if (input.provider === "stripe") {
+              return await saveStripeCredentials(context.rt, context.tenantCtx, {
+                secretKey: input.keySecret,
+                webhookSecret: input.webhookSecret,
+              });
+            }
+            if (!input.keyId) throw new Error("Bad Request: Razorpay key id is required");
+            await saveRazorpayCredentials(context.rt, context.tenantCtx, {
+              keyId: input.keyId,
+              keySecret: input.keySecret,
+              webhookSecret: input.webhookSecret,
+            });
+            return await getStorePaymentProvider(context.rt, context.tenantCtx, "razorpay");
+          } catch (e) {
+            throw mapAuthError(e);
+          }
+        }),
+      clearCredentials: os.admin.paymentProviders.clearCredentials
+        .use(requireAdmin)
+        .use(requirePermission("payments.manage"))
+        .handler(({ context, input }) => {
+          if (!context.tenantCtx) throw new Error("Missing tenant context");
+          return clearProviderCredentials(context.rt, context.tenantCtx, input.provider).catch((e) => {
+            throw mapAuthError(e);
+          });
+        }),
+      test: os.admin.paymentProviders.test
+        .use(requireAdmin)
+        .use(requirePermission("payments.manage"))
+        .handler(({ context, input }) => {
+          if (!context.tenantCtx) throw new Error("Missing tenant context");
+          return testPaymentProviderConnection(context.rt, context.tenantCtx, input.provider).catch((e) => {
+            throw mapAuthError(e);
+          });
+        }),
+      setActive: os.admin.paymentProviders.setActive
+        .use(requireAdmin)
+        .use(requirePermission("payments.manage"))
+        .handler(({ context, input }) => {
+          if (!context.tenantCtx) throw new Error("Missing tenant context");
+          return setPaymentProviderActive(context.rt, context.tenantCtx, input.provider, input.active).catch((e) => {
             throw mapAuthError(e);
           });
         }),

@@ -4,6 +4,7 @@ import { decryptSecret, encryptSecret, isEncryptionKeyConfigured } from "@bs/pay
 import type { Runtime } from "../runtime.ts";
 import { assertPermission, type TenantContext } from "../context.ts";
 import { readStoreConfig } from "./store-config.ts";
+import { assertPaymentProviderEnabled, isPaymentProviderEnabled } from "./payment-providers.ts";
 import {
   getTenantPaymentMethods,
   parseCodPublicConfig,
@@ -44,7 +45,10 @@ export async function getStorefrontPaymentOptions(rt: Runtime, tenantId: string)
 
   // Online payment is available only if an active adapter exists in the registry AND the method is active
   const razorpayMethod = methods.find((m) => m.provider === "razorpay");
-  const onlineAvailable = Boolean(razorpayMethod && razorpayMethod.status === "active" && hasEnabledPaymentAdapter("razorpay"));
+  const platformOffersRazorpay = await isPaymentProviderEnabled(rt._db.db, "razorpay");
+  const onlineAvailable = Boolean(
+    razorpayMethod && razorpayMethod.status === "active" && platformOffersRazorpay && hasEnabledPaymentAdapter("razorpay"),
+  );
 
   return {
     cod: {
@@ -95,8 +99,14 @@ export async function saveRazorpayCredentials(
   input: { keyId: string; keySecret: string; webhookSecret?: string | undefined },
 ): Promise<PaymentsStatusRecord> {
   assertPermission(ctx, "payments.manage");
+  // Platform gate (ADMIN-IMPROVEMENTS-PLAN §6.4): keys can be saved only while the platform has Razorpay enabled,
+  // and live keys only once the platform allows live mode.
+  const { liveModeAllowed } = await assertPaymentProviderEnabled(rt._db.db, "razorpay");
   if (!RAZORPAY_KEY_ID.test(input.keyId)) {
     throw new Error("Bad Request: Razorpay key id should look like rzp_test_XXXX or rzp_live_XXXX");
+  }
+  if (input.keyId.startsWith("rzp_live_") && !liveModeAllowed) {
+    throw new Error("Precondition: live keys are not allowed yet. Use a test key (rzp_test_...) until the platform allows live mode.");
   }
   const entries: Array<[string, string]> = [
     ["key_id", input.keyId],

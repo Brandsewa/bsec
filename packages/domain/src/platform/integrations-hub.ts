@@ -2,6 +2,7 @@ import { and, desc, eq, ilike, or, sql, type SQL } from "drizzle-orm";
 import { schema } from "@bs/db";
 import type { Runtime } from "../runtime.ts";
 import { assertPlatformStaff } from "../platform-services.ts";
+import { listPlatformPaymentProviders } from "./payment-providers.ts";
 
 export interface ChannelStatsOptions {
   channel: "email" | "sms" | "whatsapp";
@@ -121,7 +122,8 @@ export async function getPlatformIntegrationsOverview(
     })
     .from(schema.media);
 
-  // 3. Payments summary (will expand in Slice D)
+  // 3. Payments summary (real platform_payment_providers rows and per-provider store counts)
+  const payProviders = await listPlatformPaymentProviders(rt, platformStaffUserId);
   return {
     channels: {
       email: {
@@ -149,8 +151,8 @@ export async function getPlatformIntegrationsOverview(
       totalFiles: Number(mediaStats?.totalFiles ?? 0),
     },
     payments: {
-      enabledProviders: ["razorpay"],
-      totalConnectedStores: 0,
+      enabledProviders: payProviders.filter((p) => p.enabled).map((p) => p.provider),
+      totalConnectedStores: payProviders.reduce((n, p) => n + p.connectedStores, 0),
     },
   };
 }

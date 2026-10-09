@@ -45,7 +45,7 @@ These are enforced by lint, tests or code review. Breaking one is a bug even if 
 | 11 | **Every admin route declares `pendingComponent`; every storefront `page.tsx` has a sibling `loading.tsx`.** | `bs/route-pending` |
 | 12 | **Money and shipping are per store.** Shipping rates are store configuration, never hardcoded. Prices and totals are recomputed on the server at checkout, never trusted from the client. | decision 2026-09-29, `orders/checkout.ts` |
 | 13 | **Side effects happen after commit, via pg-boss.** Enqueue jobs inside the business transaction; do not send email or call providers inline in a request. | ADR-006 |
-| 14 | **Do not touch Razorpay or Shiprocket integrations, or add provider keys,** unless the task is explicitly about them. Credentials are deferred by the owner. | `progress.md` "Decisions on record" |
+| 14 | **Do not touch Shiprocket or any shipping integration. Payment providers (Razorpay, Stripe) are in scope only through `docs/ADMIN-IMPROVEMENTS-PLAN.md` section 6.4 and in test mode; never add live provider keys.** Live credentials and online checkout are deferred by the owner. | `progress.md` "Decisions on record" |
 
 When a rule blocks you, do not work around it (no `eslint-disable`, no bypass role, no skipping `forceRlsSql`). Raise it in your change record under "Open questions" and ask the owner.
 

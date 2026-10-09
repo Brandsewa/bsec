@@ -84,6 +84,8 @@ import {
   deletePlatformStorageConnection,
   getPlatformStorageStats,
   getPlatformIntegrationsOverview,
+  listPlatformPaymentProviders,
+  updatePlatformPaymentProvider,
   getPlatformChannelStats,
   getPlatformChannelTransactions,
   listPlatformChannelProviders,
@@ -554,6 +556,14 @@ export const platformRouter = os.router({
     }),
   },
   integrations: {
+    paymentProviders: os.integrations.paymentProviders.use(requirePlatformStaff).handler(async ({ context }) => {
+      const staffUserId = actor(context);
+      return listPlatformPaymentProviders(context.rt, staffUserId);
+    }),
+    updatePaymentProvider: os.integrations.updatePaymentProvider.use(requireStaff("platform_admin")).handler(async ({ context, input }) => {
+      const staffUserId = actor(context);
+      return updatePlatformPaymentProvider(context.rt, staffUserId, input, context.meta);
+    }),
     overview: os.integrations.overview.use(requirePlatformStaff).handler(async ({ context }) => {
       const staffUserId = actor(context);
       return getPlatformIntegrationsOverview(context.rt, staffUserId);

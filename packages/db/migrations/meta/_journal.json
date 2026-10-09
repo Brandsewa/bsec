@@ -330,6 +330,13 @@
       "when": 1792220000000,
       "tag": "0052_channel_messaging",
       "breakpoints": true
+    },
+    {
+      "idx": 47,
+      "version": "7",
+      "when": 1792230000000,
+      "tag": "0053_platform_payment_providers",
+      "breakpoints": true
     }
   ]
 }

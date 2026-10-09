@@ -107,6 +107,12 @@ import {
   createProduct,
   acceptInvitation,
   clearRazorpayCredentials,
+  listStorePaymentProviders,
+  saveStripeCredentials,
+  getStorePaymentProvider,
+  clearProviderCredentials,
+  testPaymentProviderConnection,
+  setPaymentProviderActive,
   createRuntime,
   deleteAdminDiscount,
   deleteBrand,
@@ -1292,6 +1298,24 @@ describe("Generated Isolation Test Suite (M1 Real Postgres 18 Proof)", () => {
         assertPermission(ctx, "settings.read");
         return await getTenantSubscription(rt, ctx.tenantId);
 
+      // --- Phase 4 slice D: platform-gated payment providers ---
+      case "paymentProviders.list":
+        return await listStorePaymentProviders(rt, ctx);
+      case "paymentProviders.saveCredentials":
+      case "paymentProviders.clearCredentials":
+      case "paymentProviders.test":
+      case "paymentProviders.setActive": {
+        // Stripe ships disabled; switch it on for this suite (the platform role bypasses RLS and owns this table).
+        await rtPlatform._db.db.execute(sql`UPDATE platform_payment_providers SET enabled = true WHERE provider = 'stripe'`);
+        await saveStripeCredentials(rt, ctx, { secretKey: "sk_test_IsolationKey123456", webhookSecret: "whsec_isolationsecret1" });
+        if (procPath === "paymentProviders.saveCredentials") return await getStorePaymentProvider(rt, ctx, "stripe");
+        if (procPath === "paymentProviders.clearCredentials") return await clearProviderCredentials(rt, ctx, "stripe");
+        const okFetch = (async () => new Response(JSON.stringify({ livemode: false }), { status: 200 })) as unknown as typeof fetch;
+        const tested = await testPaymentProviderConnection(rt, ctx, "stripe", { fetchFn: okFetch });
+        if (procPath === "paymentProviders.test") return tested;
+        return await setPaymentProviderActive(rt, ctx, "stripe", true);
+      }
+
       // --- Settings Phase 5: Payment Methods Catalogue & COD ---
       case "paymentMethods.list":
         return await listPaymentMethods(rt, ctx);
@@ -2134,7 +2158,7 @@ describe("Generated Isolation Test Suite (M1 Real Postgres 18 Proof)", () => {
 
           // Credential writes are owner-only (ADR-020): store_admin's set lacks payments.manage, so prove the
           // denial first, then run the procedure as an owner-level context.
-          const ownerOnly = proc === "payments.saveRazorpay" || proc === "payments.clearRazorpay" || proc === "paymentMethods.updateCod";
+          const ownerOnly = proc === "payments.saveRazorpay" || proc === "payments.clearRazorpay" || proc === "paymentMethods.updateCod" || proc === "paymentProviders.saveCredentials" || proc === "paymentProviders.clearCredentials" || proc === "paymentProviders.test" || proc === "paymentProviders.setActive";
           // Maintenance mutations additionally require the store_owner role (decision 10), not just the family.
           const maintenanceOwnerOnly = proc === "settingsUpdate.apply" || proc === "storefront.scheduleMaintenance" || proc === "storefront.cancelScheduledMaintenance" || proc === "storefront.endMaintenance";
           if (ownerOnly) {
