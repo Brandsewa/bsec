@@ -156,7 +156,7 @@ export function MenusPage() {
 
   return (
     <PageContainer>
-      <PageBreadcrumbs items={[{ label: "Online Store", href: "/online-store/theme" }, { label: "Menus" }]} actions={menusQuery.data ? newButton : undefined} />
+      <PageBreadcrumbs items={[{ label: "Online Store", href: "/online-store/theme-library" }, { label: "Menus" }]} actions={menusQuery.data ? newButton : undefined} />
       <PageHeader title="Navigation Menus" description="Build the header, footer and other link menus shown on your storefront." />
 
       {menusQuery.isError ? (

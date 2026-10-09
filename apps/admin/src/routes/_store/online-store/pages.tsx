@@ -1,349 +1,99 @@
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
-import { ArrowDown, ArrowUp, Eye, EyeOff, FileText, History, LayoutDashboard, Plus, RotateCcw, Save, Trash2, Upload } from "lucide-react";
-import { useState } from "react";
+import { Copy, Edit, Image as ImageIcon, MoreHorizontal, Plus, Trash2, Undo2, Upload, X } from "lucide-react";
+import { useMemo, useRef, useState, useEffect } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useForm } from "react-hook-form";
 import {
+  Badge,
   Button,
-  Dialog,
-  DialogClose,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-  EmptyState,
-  FormSkeleton,
+  ConfirmDialog,
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+  Field,
+  FieldLabel,
   Input,
-  Label,
   PageBreadcrumbs,
   PageContainer,
   PageHeader,
-  PageSection,
   PageSkeleton,
+  Sheet,
+  SheetContent,
+  SheetDescription,
+  SheetFooter,
+  SheetHeader,
+  SheetTitle,
   SimpleSelect,
   TableSkeleton,
   toast,
 } from "@bs/ui";
 import { THEME_PAGE_TYPES } from "@bs/blocks";
+import type { PageItem } from "@bs/contracts";
+import { DataTable, type Column } from "../../../components/data-table/data-table.tsx";
+import { TableToolbar } from "../../../components/data-table/table-toolbar.tsx";
+import { SeoCard } from "../../../components/seo-card.tsx";
+import { errorMessage } from "../../../lib/errors.ts";
 import { orpc } from "../../../lib/orpc.ts";
+import { uploadMedia } from "../../../lib/upload-media.ts";
 
-// --- Block registry (mirrors the versioned schemas in @bs/blocks, document version 1) ---
-type Scalar = { key: string; label: string; kind: "text" | "textarea" | "number" | "boolean" | "select" | "csv"; options?: string[]; required?: boolean; min?: number; max?: number };
-type FieldSpec = Scalar | { key: string; label: string; kind: "list"; itemFields: Scalar[]; addLabel: string; min?: number };
-type Props = Record<string, unknown>;
+const RESERVED_SLUGS = new Set([
+  "api",
+  "cart",
+  "checkout",
+  "account",
+  "login",
+  "register",
+  "products",
+  "collections",
+  "categories",
+  "search",
+  "pages",
+  "sitemap",
+  "robots",
+  "favicon",
+  "manifest",
+  "admin",
+  "static",
+]);
 
-interface BlockMeta {
-  type: string;
-  label: string;
-  description: string;
-  fields: FieldSpec[];
-  defaults: Props;
-}
-
-const align = ["left", "center", "right"];
-const cols = ["2", "3", "4"];
-
-const BLOCK_TYPES: BlockMeta[] = [
-  {
-    type: "Hero",
-    label: "Hero",
-    description: "Large headline with optional buttons",
-    fields: [
-      { key: "title", label: "Title", kind: "text", required: true },
-      { key: "subtitle", label: "Subtitle", kind: "textarea" },
-      { key: "ctaText", label: "Button text", kind: "text" },
-      { key: "ctaLink", label: "Button link", kind: "text" },
-      { key: "secondaryCtaText", label: "Second button text", kind: "text" },
-      { key: "secondaryCtaLink", label: "Second button link", kind: "text" },
-      { key: "backgroundMediaId", label: "Background media ID", kind: "text" },
-      { key: "alignment", label: "Alignment", kind: "select", options: align },
-      { key: "overlayOpacity", label: "Overlay opacity (0-100)", kind: "number", min: 0, max: 100 },
-    ],
-    defaults: { title: "Headline", subtitle: "", ctaText: "Shop now", ctaLink: "/collections/all", alignment: "center", overlayOpacity: 30 },
-  },
-  {
-    type: "Banner",
-    label: "Announcement banner",
-    description: "Slim promotional strip",
-    fields: [
-      { key: "text", label: "Text", kind: "text", required: true },
-      { key: "link", label: "Link", kind: "text" },
-      { key: "dismissible", label: "Dismissible", kind: "boolean" },
-      { key: "variant", label: "Style", kind: "select", options: ["info", "promo", "warning"] },
-    ],
-    defaults: { text: "Announcement", dismissible: false, variant: "promo" },
-  },
-  {
-    type: "ProductGrid",
-    label: "Product grid",
-    description: "Grid of products, optionally from a collection",
-    fields: [
-      { key: "title", label: "Title", kind: "text", required: true },
-      { key: "subtitle", label: "Subtitle", kind: "text" },
-      { key: "collectionSlug", label: "Collection slug", kind: "text" },
-      { key: "limit", label: "Products to show (1-48)", kind: "number", min: 1, max: 48 },
-      { key: "columns", label: "Columns", kind: "select", options: cols },
-      { key: "showPrice", label: "Show price", kind: "boolean" },
-      { key: "showRating", label: "Show rating", kind: "boolean" },
-    ],
-    defaults: { title: "Featured products", limit: 8, columns: "4", showPrice: true, showRating: true },
-  },
-  {
-    type: "CollectionGrid",
-    label: "Collection grid",
-    description: "Tiles linking to collections",
-    fields: [
-      { key: "title", label: "Title", kind: "text", required: true },
-      { key: "subtitle", label: "Subtitle", kind: "text" },
-      { key: "collectionSlugs", label: "Collection slugs (comma separated)", kind: "csv" },
-      { key: "columns", label: "Columns", kind: "select", options: cols },
-    ],
-    defaults: { title: "Shop by category", collectionSlugs: [], columns: "3" },
-  },
-  {
-    type: "ProductCarousel",
-    label: "Product carousel",
-    description: "Sliding row of products",
-    fields: [
-      { key: "title", label: "Title", kind: "text", required: true },
-      { key: "subtitle", label: "Subtitle", kind: "text" },
-      { key: "collectionSlug", label: "Collection slug", kind: "text" },
-      { key: "limit", label: "Products to show (1-24)", kind: "number", min: 1, max: 24 },
-      { key: "autoPlay", label: "Auto-play", kind: "boolean" },
-    ],
-    defaults: { title: "Trending", limit: 8, autoPlay: false },
-  },
-  {
-    type: "Testimonials",
-    label: "Testimonials",
-    description: "Customer quotes",
-    fields: [
-      { key: "title", label: "Title", kind: "text" },
-      {
-        key: "items",
-        label: "Testimonials",
-        kind: "list",
-        addLabel: "Add testimonial",
-        min: 1,
-        itemFields: [
-          { key: "quote", label: "Quote", kind: "textarea", required: true },
-          { key: "author", label: "Author", kind: "text", required: true },
-          { key: "role", label: "Role or city", kind: "text" },
-        ],
-      },
-    ],
-    defaults: { title: "What customers say", items: [{ quote: "", author: "" }] },
-  },
-  {
-    type: "Reviews",
-    label: "Reviews",
-    description: "Live product reviews",
-    fields: [
-      { key: "title", label: "Title", kind: "text" },
-      { key: "showAggregate", label: "Show average rating", kind: "boolean" },
-      { key: "limit", label: "Reviews to show (1-20)", kind: "number", min: 1, max: 20 },
-    ],
-    defaults: { title: "Customer reviews", showAggregate: true, limit: 6 },
-  },
-  {
-    type: "RichText",
-    label: "Rich text",
-    description: "Formatted copy (HTML is sanitised on save)",
-    fields: [
-      { key: "content", label: "Content (HTML)", kind: "textarea", required: true },
-      { key: "alignment", label: "Alignment", kind: "select", options: align },
-    ],
-    defaults: { content: "<p>Write something here.</p>", alignment: "left" },
-  },
-  {
-    type: "FAQ",
-    label: "FAQ",
-    description: "Questions and answers",
-    fields: [
-      { key: "title", label: "Title", kind: "text" },
-      {
-        key: "items",
-        label: "Questions",
-        kind: "list",
-        addLabel: "Add question",
-        min: 1,
-        itemFields: [
-          { key: "question", label: "Question", kind: "text", required: true },
-          { key: "answer", label: "Answer", kind: "textarea", required: true },
-        ],
-      },
-    ],
-    defaults: { title: "Frequently asked questions", items: [{ question: "", answer: "" }] },
-  },
-  {
-    type: "Gallery",
-    label: "Gallery",
-    description: "Image gallery from your media library",
-    fields: [
-      { key: "title", label: "Title", kind: "text" },
-      { key: "layout", label: "Layout", kind: "select", options: ["grid", "masonry"] },
-      {
-        key: "images",
-        label: "Images",
-        kind: "list",
-        addLabel: "Add image",
-        itemFields: [
-          { key: "mediaId", label: "Media ID", kind: "text", required: true },
-          { key: "caption", label: "Caption", kind: "text" },
-          { key: "link", label: "Link", kind: "text" },
-        ],
-      },
-    ],
-    defaults: { layout: "grid", images: [] },
-  },
-  {
-    type: "Newsletter",
-    label: "Newsletter signup",
-    description: "Email capture form",
-    fields: [
-      { key: "title", label: "Title", kind: "text" },
-      { key: "subtitle", label: "Subtitle", kind: "text" },
-      { key: "buttonText", label: "Button text", kind: "text" },
-      { key: "placeholder", label: "Input placeholder", kind: "text" },
-    ],
-    defaults: {
-      title: "Subscribe to our newsletter",
-      subtitle: "Get updates on new releases and offers.",
-      buttonText: "Subscribe",
-      placeholder: "Enter your email address",
-    },
-  },
-  {
-    type: "UspStrip",
-    label: "USP strip",
-    description: "Row of short selling points",
-    fields: [
-      {
-        key: "items",
-        label: "Points",
-        kind: "list",
-        addLabel: "Add point",
-        min: 1,
-        itemFields: [
-          { key: "icon", label: "Icon name", kind: "text", required: true },
-          { key: "title", label: "Title", kind: "text", required: true },
-          { key: "description", label: "Description", kind: "text", required: true },
-        ],
-      },
-    ],
-    defaults: { items: [{ icon: "Truck", title: "", description: "" }] },
-  },
-];
-
-interface Block {
-  id: string;
-  type: string;
-  version: number;
-  props: Props;
-  hidden?: boolean;
-}
-
-function newId(): string {
-  return typeof crypto !== "undefined" && "randomUUID" in crypto
-    ? crypto.randomUUID()
-    : `blk-${Math.random().toString(36).slice(2, 10)}`;
-}
-
-function slugify(value: string): string {
-  return value
+function toSlug(input: string): string {
+  return input
     .toLowerCase()
-    .trim()
     .replace(/[^a-z0-9]+/g, "-")
     .replace(/^-+|-+$/g, "");
 }
 
-function metaFor(type: string): BlockMeta | undefined {
-  return BLOCK_TYPES.find((b) => b.type === type);
-}
-
-function toBlocks(raw: unknown[]): Block[] {
-  const out: Block[] = [];
-  for (const r of raw) {
-    if (!r || typeof r !== "object") continue;
-    const o = r as Record<string, unknown>;
-    if (typeof o.id !== "string" || typeof o.type !== "string") continue;
-    const block: Block = {
-      id: o.id,
-      type: o.type,
-      version: typeof o.version === "number" ? o.version : 1,
-      props: o.props && typeof o.props === "object" ? (o.props as Props) : {},
-    };
-    if (o.hidden === true) block.hidden = true;
-    out.push(block);
-  }
-  return out;
-}
-
-function validateScalar(f: Scalar, value: unknown): string | null {
-  if (f.kind === "number") {
-    if (value === undefined || value === "" || value === null) return null;
-    const n = Number(value);
-    if (!Number.isFinite(n)) return `${f.label} must be a number`;
-    if (f.min !== undefined && n < f.min) return `${f.label} must be at least ${f.min}`;
-    if (f.max !== undefined && n > f.max) return `${f.label} must be at most ${f.max}`;
-    return null;
-  }
-  if (f.required && (typeof value !== "string" || !value.trim())) return `${f.label} is required`;
-  return null;
-}
-
-function validateBlock(block: Block): string | null {
-  const meta = metaFor(block.type);
-  if (!meta) return `Unknown block type "${block.type}"`;
-  for (const f of meta.fields) {
-    const value = block.props[f.key];
-    if (f.kind === "list") {
-      const list = Array.isArray(value) ? (value as Props[]) : [];
-      if (f.min && list.length < f.min) return `${meta.label}: add at least ${f.min} item`;
-      for (const item of list) for (const sf of f.itemFields) {
-        const err = validateScalar(sf, item[sf.key]);
-        if (err) return `${meta.label}: ${err}`;
+function getDescendantIds(pageId: string, pages: PageItem[]): Set<string> {
+  const descendants = new Set<string>();
+  const queue = [pageId];
+  while (queue.length > 0) {
+    const curr = queue.shift();
+    if (!curr) break;
+    for (const p of pages) {
+      if (p.parentId === curr && !descendants.has(p.id)) {
+        descendants.add(p.id);
+        queue.push(p.id);
       }
-    } else {
-      const err = validateScalar(f, value);
-      if (err) return `${meta.label}: ${err}`;
     }
   }
-  return null;
+  return descendants;
 }
 
-/** Drop empty optional strings and coerce numbers so the payload matches the block schemas. */
-function cleanProps(meta: BlockMeta, props: Props): Props {
-  const out: Props = {};
-  const cleanScalar = (f: Scalar, v: unknown) => {
-    if (f.kind === "number") return v === "" || v === undefined ? undefined : Number(v);
-    if (f.kind === "csv") return Array.isArray(v) ? v : [];
-    if (typeof v === "string" && v === "" && !f.required) return undefined;
-    return v;
-  };
-  for (const f of meta.fields) {
-    const v = props[f.key];
-    if (f.kind === "list") {
-      out[f.key] = (Array.isArray(v) ? (v as Props[]) : []).map((item) => {
-        const row: Props = {};
-        for (const sf of f.itemFields) {
-          const c = cleanScalar(sf, item[sf.key]);
-          if (c !== undefined) row[sf.key] = c;
-        }
-        return row;
-      });
-    } else {
-      const c = cleanScalar(f, v);
-      if (c !== undefined) out[f.key] = c;
-    }
-  }
-  return out;
+interface PageFormData {
+  title: string;
+  slug: string;
+  parentId: string;
+  seoTitle: string;
+  seoDescription: string;
+  imageMediaId: string | null;
 }
 
 function PagesLoading() {
   return (
     <PageSkeleton>
-      <TableSkeleton rows={5} columns={3} />
+      <TableSkeleton rows={6} columns={5} />
     </PageSkeleton>
   );
 }
@@ -353,642 +103,748 @@ export const Route = createFileRoute("/_store/online-store/pages")({
   component: PagesPage,
 });
 
-function QueryError({ what, message, onRetry }: { what: string; message: string; onRetry: () => void }) {
-  return (
-    <div role="alert" className="flex flex-col items-start gap-3 rounded-md border border-destructive/40 bg-destructive/5 p-4">
-      <p className="text-sm font-medium text-foreground">Could not load {what}</p>
-      <p className="text-sm text-foreground-2">{message}</p>
-      <Button size="sm" onClick={onRetry}>
-        <RotateCcw className="size-3.5" aria-hidden />
-        Retry
-      </Button>
-    </div>
-  );
-}
-
 export function PagesPage() {
+  const navigate = useNavigate();
   const queryClient = useQueryClient();
-  const listQuery = useQuery(orpc.admin.pages.list.queryOptions());
-  const [selectedId, setSelectedId] = useState<string | null>(null);
-  const [createOpen, setCreateOpen] = useState(false);
+  const fileRef = useRef<HTMLInputElement>(null);
 
-  // Header, footer, product and collection layouts are edited from the Themes screen.
-  const pages = (listQuery.data ?? []).filter((p) => !THEME_PAGE_TYPES.has(p.type ?? ""));
-  const activeId = selectedId && pages.some((p) => p.id === selectedId) ? selectedId : (pages[0]?.id ?? null);
-
-  const newButton = (
-    <Button variant="primary" size="sm" onClick={() => setCreateOpen(true)}>
-      <Plus className="mr-1.5 size-3.5" aria-hidden />
-      New page
-    </Button>
+  // Queries
+  const pagesQuery = useQuery(orpc.admin.pages.list.queryOptions());
+  const mediaQuery = useQuery(
+    orpc.admin.media.list.queryOptions({
+      input: { folder: "pages", limit: 100 },
+    }),
   );
+
+  const rawPages = useMemo(() => pagesQuery.data ?? [], [pagesQuery.data]);
+
+  // Filter out theme system pages (header, footer, product_template, etc. and template-*)
+  // Keep home page!
+  const displayPages = useMemo(() => {
+    return rawPages.filter((p) => !THEME_PAGE_TYPES.has(p.type ?? "") && !p.slug.startsWith("template-"));
+  }, [rawPages]);
+
+  // Search & Status filters
+  const [searchText, setSearchText] = useState("");
+  const [statusFilter, setStatusFilter] = useState<"all" | "published" | "draft">("all");
+
+  const filteredPages = useMemo(() => {
+    return displayPages.filter((p) => {
+      if (statusFilter !== "all" && p.status !== statusFilter) return false;
+      if (!searchText.trim()) return true;
+      const q = searchText.toLowerCase().trim();
+      const matchTitle = p.title.toLowerCase().includes(q);
+      const matchSlug = p.slug.toLowerCase().includes(q);
+      const matchPath = (p.path ?? "").toLowerCase().includes(q);
+      return matchTitle || matchSlug || matchPath;
+    });
+  }, [displayPages, statusFilter, searchText]);
+
+  // Drawer / Sheet state
+  const [sheetOpen, setSheetOpen] = useState(false);
+  const [editingPage, setEditingPage] = useState<PageItem | null>(null);
+  const [slugManuallyEdited, setSlugManuallyEdited] = useState(false);
+  const [saveAndCustomize, setSaveAndCustomize] = useState(false);
+  const [uploadingImage, setUploadingImage] = useState(false);
+  const [previewImageUrl, setPreviewImageUrl] = useState<string | null>(null);
+
+  // Unsaved guard state
+  const [discardDialogOpen, setDiscardDialogOpen] = useState(false);
+
+  // Delete dialog state
+  const [deleteTarget, setDeleteTarget] = useState<PageItem | null>(null);
+
+  // Form setup
+  const {
+    register,
+    handleSubmit,
+    watch,
+    setValue,
+    reset,
+    formState: { errors, isDirty },
+  } = useForm<PageFormData>({
+    defaultValues: {
+      title: "",
+      slug: "",
+      parentId: "none",
+      seoTitle: "",
+      seoDescription: "",
+      imageMediaId: null,
+    },
+  });
+
+  const watchedTitle = watch("title");
+  const watchedSlug = watch("slug");
+  const watchedParentId = watch("parentId");
+  const watchedSeoTitle = watch("seoTitle");
+  const watchedSeoDescription = watch("seoDescription");
+  const watchedImageMediaId = watch("imageMediaId");
+
+  const isHome = editingPage?.slug === "home";
+
+  // When title changes and user hasn't manually edited slug, auto-slugify
+  useEffect(() => {
+    if (!editingPage && !slugManuallyEdited && !isHome) {
+      setValue("slug", toSlug(watchedTitle), { shouldValidate: true, shouldDirty: true });
+    }
+  }, [watchedTitle, editingPage, slugManuallyEdited, isHome, setValue]);
+
+  // Compute live full path
+  const liveFullPath = useMemo(() => {
+    if (isHome) return "/";
+    const cleanSlug = watchedSlug.trim() || "page-handle";
+    if (watchedParentId && watchedParentId !== "none") {
+      const parent = rawPages.find((p) => p.id === watchedParentId);
+      if (parent?.path) {
+        return `${parent.path}/${cleanSlug}`;
+      }
+    }
+    return `/pages/${cleanSlug}`;
+  }, [isHome, watchedSlug, watchedParentId, rawPages]);
+
+  // Parent path prefix for SEO preview
+  const seoPathPrefix = useMemo(() => {
+    if (isHome) return "";
+    if (watchedParentId && watchedParentId !== "none") {
+      const parent = rawPages.find((p) => p.id === watchedParentId);
+      if (parent?.path) {
+        return parent.path;
+      }
+    }
+    return "/pages";
+  }, [isHome, watchedParentId, rawPages]);
+
+  // Eligible parents: exclude self and self descendants, exclude home and system pages
+  const parentOptions = useMemo(() => {
+    const forbiddenIds = editingPage ? getDescendantIds(editingPage.id, rawPages) : new Set<string>();
+    if (editingPage) forbiddenIds.add(editingPage.id);
+
+    const eligible = displayPages.filter((p) => p.slug !== "home" && !forbiddenIds.has(p.id));
+
+    return [
+      { value: "none", label: "No parent (top level)" },
+      ...eligible.map((p) => ({
+        value: p.id,
+        label: `${p.title} (${p.path ?? `/pages/${p.slug}`})`,
+      })),
+    ];
+  }, [editingPage, rawPages, displayPages]);
+
+  // Mutations
+  const createMutation = useMutation(
+    orpc.admin.pages.create.mutationOptions({
+      onSuccess: (created) => {
+        toast.success(`Page created: ${created.title}`);
+        void queryClient.invalidateQueries({ queryKey: orpc.admin.pages.list.key() });
+        setSheetOpen(false);
+        reset();
+        if (saveAndCustomize) {
+          void navigate({ to: "/online-store/editor/$pageId", params: { pageId: created.id } });
+        }
+      },
+      onError: (err) => {
+        toast.error(errorMessage(err, "Failed to create page"));
+      },
+    }),
+  );
+
+  const updateMutation = useMutation(
+    orpc.admin.pages.update.mutationOptions({
+      onSuccess: (updated) => {
+        toast.success(`Page updated: ${updated.title}`);
+        void queryClient.invalidateQueries({ queryKey: orpc.admin.pages.list.key() });
+        setSheetOpen(false);
+        reset();
+        if (saveAndCustomize) {
+          void navigate({ to: "/online-store/editor/$pageId", params: { pageId: updated.id } });
+        }
+      },
+      onError: (err) => {
+        toast.error(errorMessage(err, "Failed to update page"));
+      },
+    }),
+  );
+
+  const duplicateMutation = useMutation(
+    orpc.admin.pages.duplicate.mutationOptions({
+      onSuccess: (duplicated) => {
+        toast.success(`Page duplicated: ${duplicated.title}`);
+        void queryClient.invalidateQueries({ queryKey: orpc.admin.pages.list.key() });
+      },
+      onError: (err) => {
+        toast.error(errorMessage(err, "Failed to duplicate page"));
+      },
+    }),
+  );
+
+  const unpublishMutation = useMutation(
+    orpc.admin.pages.unpublish.mutationOptions({
+      onSuccess: () => {
+        toast.success("Page moved to draft");
+        void queryClient.invalidateQueries({ queryKey: orpc.admin.pages.list.key() });
+      },
+      onError: (err) => {
+        toast.error(errorMessage(err, "Failed to unpublish page"));
+      },
+    }),
+  );
+
+  const deleteMutation = useMutation(
+    orpc.admin.pages.delete.mutationOptions({
+      onSuccess: () => {
+        toast.success("Page deleted");
+        setDeleteTarget(null);
+        void queryClient.invalidateQueries({ queryKey: orpc.admin.pages.list.key() });
+      },
+      onError: (err) => {
+        toast.error(errorMessage(err, "Failed to delete page"));
+      },
+    }),
+  );
+
+  const isSaving = createMutation.isPending || updateMutation.isPending;
+
+  // Handlers for opening Add/Edit
+  const handleOpenAdd = () => {
+    setEditingPage(null);
+    setSlugManuallyEdited(false);
+    setPreviewImageUrl(null);
+    reset({
+      title: "",
+      slug: "",
+      parentId: "none",
+      seoTitle: "",
+      seoDescription: "",
+      imageMediaId: null,
+    });
+    setSheetOpen(true);
+  };
+
+  const handleOpenEdit = (page: PageItem) => {
+    setEditingPage(page);
+    setSlugManuallyEdited(true);
+
+    // Resolve preview image URL if available in media cache
+    const existingMedia = mediaQuery.data?.items?.find((m) => m.id === page.seo?.imageMediaId);
+    setPreviewImageUrl(existingMedia?.url ?? null);
+
+    reset({
+      title: page.title,
+      slug: page.slug,
+      parentId: page.parentId ?? "none",
+      seoTitle: page.seo?.title ?? "",
+      seoDescription: page.seo?.description ?? "",
+      imageMediaId: page.seo?.imageMediaId ?? null,
+    });
+    setSheetOpen(true);
+  };
+
+  const handleCloseSheet = (nextOpen: boolean) => {
+    if (!nextOpen) {
+      if (isDirty) {
+        setDiscardDialogOpen(true);
+      } else {
+        setSheetOpen(false);
+      }
+    } else {
+      setSheetOpen(true);
+    }
+  };
+
+  const handleConfirmDiscard = () => {
+    setDiscardDialogOpen(false);
+    setSheetOpen(false);
+    reset();
+  };
+
+  // Image Upload handler
+  const handleImageUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setUploadingImage(true);
+    try {
+      const media = await uploadMedia(file, { folder: "pages", alt: watchedTitle || "Page feature image" });
+      setValue("imageMediaId", media.id, { shouldDirty: true });
+      setPreviewImageUrl(media.url ?? URL.createObjectURL(file));
+      toast.success("Feature image uploaded");
+    } catch (err) {
+      toast.error(errorMessage(err, "Failed to upload feature image"));
+    } finally {
+      setUploadingImage(false);
+      if (fileRef.current) fileRef.current.value = "";
+    }
+  };
+
+  const handleRemoveImage = () => {
+    setValue("imageMediaId", null, { shouldDirty: true });
+    setPreviewImageUrl(null);
+  };
+
+  // Form submission
+  const onSubmit = (data: PageFormData, customizeAfter: boolean) => {
+    setSaveAndCustomize(customizeAfter);
+
+    const cleanTitle = data.title.trim();
+    const cleanSlug = isHome ? "home" : data.slug.trim().toLowerCase();
+    const selectedParentId = data.parentId === "none" || !data.parentId ? null : data.parentId;
+
+    const seoPayload = {
+      title: data.seoTitle.trim() || undefined,
+      description: data.seoDescription.trim() || undefined,
+      imageMediaId: data.imageMediaId || null,
+    };
+
+    if (editingPage) {
+      updateMutation.mutate({
+        id: editingPage.id,
+        title: cleanTitle,
+        slug: isHome ? undefined : cleanSlug,
+        parentId: isHome ? null : selectedParentId,
+        seo: seoPayload,
+      });
+    } else {
+      createMutation.mutate({
+        title: cleanTitle,
+        slug: cleanSlug,
+        parentId: selectedParentId,
+        seo: seoPayload,
+      });
+    }
+  };
+
+  // Columns for DataTable
+  const columns: Column<PageItem>[] = [
+    {
+      id: "name",
+      header: "Name",
+      className: "font-medium",
+      cell: (page) => (
+        <div className="flex items-center gap-2">
+          <span>{page.title}</span>
+          {page.slug === "home" && (
+            <Badge variant="outline" className="text-[10px] font-normal">
+              Home
+            </Badge>
+          )}
+        </div>
+      ),
+    },
+    {
+      id: "url",
+      header: "URL",
+      className: "font-mono text-xs text-muted-foreground",
+      cell: (page) => (
+        <span>{page.path ?? (page.slug === "home" ? "/" : `/pages/${page.slug}`)}</span>
+      ),
+    },
+    {
+      id: "parent",
+      header: "Parent",
+      className: "text-muted-foreground",
+      cell: (page) => {
+        if (!page.parentId) return <span>—</span>;
+        const parent = rawPages.find((p) => p.id === page.parentId);
+        return <span>{parent ? parent.title : "—"}</span>;
+      },
+    },
+    {
+      id: "status",
+      header: "Status",
+      cell: (page) => (
+        <Badge variant={page.status === "published" ? "secondary" : "outline"}>
+          {page.status === "published" ? "Published" : "Draft"}
+        </Badge>
+      ),
+    },
+    {
+      id: "updated",
+      header: "Updated",
+      className: "text-muted-foreground text-xs",
+      cell: (page) => (
+        <span>
+          {new Date(page.updatedAt).toLocaleDateString("en-IN", {
+            day: "2-digit",
+            month: "short",
+            year: "numeric",
+          })}
+        </span>
+      ),
+    },
+  ];
 
   return (
     <PageContainer size="full">
-      <PageBreadcrumbs items={[{ label: "Online Store", href: "/online-store/theme" }, { label: "Pages" }]} actions={listQuery.data ? newButton : undefined} />
-      <PageHeader title="Pages" description="Compose storefront pages from content blocks, save drafts and publish when ready." />
-
-      {listQuery.isError ? (
-        <QueryError what="pages" message={listQuery.error.message} onRetry={() => void listQuery.refetch()} />
-      ) : !listQuery.data ? (
-        <PagesLoading />
-      ) : pages.length === 0 ? (
-        <EmptyState
-          icon={FileText}
-          title="No pages yet"
-          description="Create a page such as About or Contact, then build it from blocks."
-          action={newButton}
-        />
-      ) : (
-        <div className="grid gap-6 lg:grid-cols-[18rem_1fr]">
-          <nav aria-label="Pages" className="grid content-start gap-1">
-            {pages.map((p) => (
-              <button
-                key={p.id}
-                type="button"
-                onClick={() => setSelectedId(p.id)}
-                aria-current={p.id === activeId ? "true" : undefined}
-                className={`rounded-md border px-3 py-2 text-left text-sm ${
-                  p.id === activeId ? "border-primary bg-primary/5 font-medium" : "border-border hover:bg-muted"
-                }`}
-              >
-                <span className="flex items-center justify-between gap-2">
-                  <span className="text-foreground">{p.title}</span>
-                  <span
-                    className={`rounded-full px-2 py-0.5 text-[10px] font-medium ${
-                      p.publishedVersionId ? "bg-emerald-500/10 text-emerald-600" : "bg-amber-500/10 text-amber-600"
-                    }`}
-                  >
-                    {p.publishedVersionId ? "Published" : "Draft"}
-                  </span>
-                </span>
-                <span className="block font-mono text-xs text-muted-foreground">/{p.slug}</span>
-              </button>
-            ))}
-          </nav>
-          {activeId ? <PageEditorLoader key={activeId} id={activeId} /> : null}
-        </div>
-      )}
-
-      <CreatePageDialog
-        open={createOpen}
-        onOpenChange={setCreateOpen}
-        onCreated={(id) => {
-          setSelectedId(id);
-          void queryClient.invalidateQueries({ queryKey: orpc.admin.pages.list.key() });
-        }}
-      />
-    </PageContainer>
-  );
-}
-
-function CreatePageDialog({
-  open,
-  onOpenChange,
-  onCreated,
-}: {
-  open: boolean;
-  onOpenChange: (open: boolean) => void;
-  onCreated: (id: string) => void;
-}) {
-  const [title, setTitle] = useState("");
-  const [slug, setSlug] = useState("");
-  const [touched, setTouched] = useState(false);
-  const effectiveSlug = touched ? slug : slugify(title);
-  const invalid = !title.trim() || !effectiveSlug;
-
-  const create = useMutation(
-    orpc.admin.pages.create.mutationOptions({
-      onSuccess: (page) => {
-        toast.success(`Page "${page.title}" created.`);
-        setTitle("");
-        setSlug("");
-        setTouched(false);
-        onOpenChange(false);
-        onCreated(page.id);
-      },
-      onError: (err: Error) => toast.error(`Could not create page: ${err.message}`),
-    }),
-  );
-
-  return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent>
-        <form
-          className="grid gap-4"
-          onSubmit={(e) => {
-            e.preventDefault();
-            if (!invalid) create.mutate({ title: title.trim(), slug: effectiveSlug });
-          }}
-        >
-          <DialogHeader>
-            <DialogTitle>New page</DialogTitle>
-            <DialogDescription>The slug is the page address on your storefront.</DialogDescription>
-          </DialogHeader>
-          <div className="grid gap-1">
-            <Label htmlFor="page-title">Title</Label>
-            <Input id="page-title" value={title} onChange={(e) => setTitle(e.target.value)} placeholder="About us" required />
-          </div>
-          <div className="grid gap-1">
-            <Label htmlFor="page-slug">Slug</Label>
-            <Input
-              id="page-slug"
-              value={effectiveSlug}
-              onChange={(e) => {
-                setTouched(true);
-                setSlug(slugify(e.target.value));
-              }}
-              placeholder="about-us"
-              required
-            />
-          </div>
-          <DialogFooter>
-            <DialogClose asChild>
-              <Button type="button">Cancel</Button>
-            </DialogClose>
-            <Button type="submit" variant="primary" loading={create.isPending} disabled={invalid}>
-              Create page
-            </Button>
-          </DialogFooter>
-        </form>
-      </DialogContent>
-    </Dialog>
-  );
-}
-
-function PageEditorLoader({ id }: { id: string }) {
-  const query = useQuery(orpc.admin.pages.get.queryOptions({ input: { id } }));
-  if (query.isError) return <QueryError what="this page" message={query.error.message} onRetry={() => void query.refetch()} />;
-  if (!query.data) return <FormSkeleton fields={5} />;
-  const p = query.data;
-  return (
-    <PageEditor
-      key={`${p.id}:${p.updatedAt}`}
-      id={p.id}
-      initialTitle={p.title}
-      initialSlug={p.slug}
-      publishedVersionId={p.publishedVersionId ?? null}
-      initialBlocks={toBlocks(p.blocks)}
-    />
-  );
-}
-
-interface VersionEntry {
-  versionId: string;
-  label: string;
-}
-
-function PageEditor({
-  id,
-  initialTitle,
-  initialSlug,
-  publishedVersionId,
-  initialBlocks,
-}: {
-  id: string;
-  initialTitle: string;
-  initialSlug: string;
-  publishedVersionId: string | null;
-  initialBlocks: Block[];
-}) {
-  const queryClient = useQueryClient();
-  const [title, setTitle] = useState(initialTitle);
-  const [slug, setSlug] = useState(initialSlug);
-  const [blocks, setBlocks] = useState<Block[]>(initialBlocks);
-  const [openBlockId, setOpenBlockId] = useState<string | null>(null);
-  const [baseline, setBaseline] = useState(() => JSON.stringify(initialBlocks));
-  const [lastDraftId, setLastDraftId] = useState<string | null>(null);
-  const [published, setPublished] = useState<string | null>(publishedVersionId);
-  const [history, setHistory] = useState<VersionEntry[]>(
-    publishedVersionId ? [{ versionId: publishedVersionId, label: "Published version (loaded)" }] : [],
-  );
-
-  const navigate = useNavigate();
-  const blocksDirty = JSON.stringify(blocks) !== baseline;
-  const detailsDirty = title !== initialTitle || slug !== initialSlug;
-
-  const refresh = () =>
-    Promise.all([
-      queryClient.invalidateQueries({ queryKey: orpc.admin.pages.list.key() }),
-      queryClient.invalidateQueries({ queryKey: orpc.admin.pages.get.key({ input: { id } }) }),
-    ]);
-
-  const updateDetails = useMutation(
-    orpc.admin.pages.update.mutationOptions({
-      onSuccess: async () => {
-        await refresh();
-        toast.success("Page details saved.");
-      },
-      onError: (err: Error) => toast.error(`Could not save page details: ${err.message}`),
-    }),
-  );
-
-  const saveDraft = useMutation(
-    orpc.admin.pages.saveDraft.mutationOptions({
-      onError: (err: Error) => toast.error(`Could not save draft: ${err.message}`),
-    }),
-  );
-  const publish = useMutation(
-    orpc.admin.pages.publish.mutationOptions({
-      onError: (err: Error) => toast.error(`Could not publish page: ${err.message}`),
-    }),
-  );
-  const rollback = useMutation(
-    orpc.admin.pages.rollback.mutationOptions({
-      onSuccess: async (res) => {
-        setPublished(res.publishedVersionId);
-        await refresh();
-        toast.success("Rolled back to the selected version.");
-      },
-      onError: (err: Error) => toast.error(`Could not roll back: ${err.message}`),
-    }),
-  );
-
-  const problem = (() => {
-    for (const b of blocks) {
-      const err = validateBlock(b);
-      if (err) return err;
-    }
-    return null;
-  })();
-
-  const payload = () =>
-    blocks.map((b) => {
-      const meta = metaFor(b.type);
-      const base = { id: b.id, type: b.type, version: b.version, props: meta ? cleanProps(meta, b.props) : b.props };
-      return b.hidden ? { ...base, hidden: true } : base;
-    });
-
-  const persistDraft = async (): Promise<string | null> => {
-    if (problem) {
-      toast.error(problem);
-      return null;
-    }
-    const res = await saveDraft.mutateAsync({ id, blocks: payload() });
-    setLastDraftId(res.versionId);
-    setBaseline(JSON.stringify(blocks));
-    setHistory((h) => [{ versionId: res.versionId, label: `Draft saved ${new Date().toLocaleTimeString()}` }, ...h]);
-    return res.versionId;
-  };
-
-  const handleSaveDraft = async () => {
-    try {
-      const v = await persistDraft();
-      if (v) {
-        await refresh();
-        toast.success("Draft saved.");
-      }
-    } catch {
-      /* error toast shown by mutation */
-    }
-  };
-
-  const handlePublish = async () => {
-    try {
-      let versionId = lastDraftId ?? undefined;
-      if (blocksDirty || !versionId) {
-        if (blocksDirty) {
-          const v = await persistDraft();
-          if (!v) return;
-          versionId = v;
-        }
-      }
-      const res = await publish.mutateAsync(versionId ? { id, versionId } : { id });
-      setPublished(res.publishedVersionId);
-      setHistory((h) =>
-        h.some((e) => e.versionId === res.publishedVersionId)
-          ? h
-          : [{ versionId: res.publishedVersionId, label: "Published version" }, ...h],
-      );
-      await refresh();
-      toast.success("Page published.");
-    } catch {
-      /* error toast shown by mutation */
-    }
-  };
-
-  const busy = saveDraft.isPending || publish.isPending || rollback.isPending;
-
-  const addBlock = (meta: BlockMeta) => {
-    const block: Block = { id: newId(), type: meta.type, version: 1, props: structuredClone(meta.defaults) };
-    setBlocks((prev) => [...prev, block]);
-    setOpenBlockId(block.id);
-  };
-  const patchBlock = (blockId: string, patch: Partial<Block>) =>
-    setBlocks((prev) => prev.map((b) => (b.id === blockId ? { ...b, ...patch } : b)));
-  const toggleHidden = (blockId: string) =>
-    setBlocks((prev) =>
-      prev.map((x) => {
-        if (x.id !== blockId) return x;
-        if (x.hidden) {
-          const { hidden: _hidden, ...rest } = x;
-          return rest;
-        }
-        return { ...x, hidden: true };
-      }),
-    );
-  const moveBlock = (idx: number, dir: -1 | 1) =>
-    setBlocks((prev) => {
-      const t = idx + dir;
-      const a = prev[idx];
-      const b = prev[t];
-      if (!a || !b) return prev;
-      const next = [...prev];
-      next[idx] = b;
-      next[t] = a;
-      return next;
-    });
-
-  return (
-    <div className="grid content-start gap-4">
-      <PageSection
-        title="Page details"
+      <PageBreadcrumbs
+        items={[
+          { label: "Online Store", href: "/online-store/theme-library" },
+          { label: "Pages" },
+        ]}
         actions={
-          <Button
-            size="sm"
-            loading={updateDetails.isPending}
-            disabled={!detailsDirty || !title.trim() || !slug.trim()}
-            onClick={() => updateDetails.mutate({ id, title: title.trim(), slug: slug.trim() })}
-          >
-            <Save className="mr-1.5 size-3.5" aria-hidden />
-            Save details
+          <Button variant="primary" size="sm" onClick={handleOpenAdd}>
+            <Plus className="mr-1.5 size-3.5" aria-hidden />
+            Add page
           </Button>
         }
-      >
-        <div className="grid gap-3 sm:grid-cols-2">
-          <div className="grid gap-1">
-            <Label htmlFor="edit-title">Title</Label>
-            <Input id="edit-title" value={title} aria-invalid={!title.trim()} onChange={(e) => setTitle(e.target.value)} />
-          </div>
-          <div className="grid gap-1">
-            <Label htmlFor="edit-slug">Slug</Label>
-            <Input id="edit-slug" value={slug} aria-invalid={!slug.trim()} onChange={(e) => setSlug(slugify(e.target.value))} />
-          </div>
-        </div>
-      </PageSection>
+      />
 
-      <PageSection
-        title="Content blocks"
-        description={published ? "This page is live. Publish again to release your changes." : "This page is not published yet."}
-        actions={
-          <div className="flex items-center gap-2">
-            <Button
-              size="sm"
-              disabled={blocksDirty || busy}
-              title={blocksDirty ? "Save your draft first, then open the visual editor" : undefined}
-              onClick={() => void navigate({ to: "/online-store/editor/$pageId", params: { pageId: id } })}
-            >
-              <LayoutDashboard className="mr-1.5 size-3.5" aria-hidden />
-              Design visually
-            </Button>
-            <Button size="sm" loading={saveDraft.isPending} disabled={!blocksDirty || busy} onClick={() => void handleSaveDraft()}>
-              <Save className="mr-1.5 size-3.5" aria-hidden />
-              Save draft
-            </Button>
-            <Button
-              size="sm"
-              variant="primary"
-              loading={publish.isPending}
-              disabled={busy || (!blocksDirty && !lastDraftId && blocks.length === 0)}
-              onClick={() => void handlePublish()}
-            >
-              <Upload className="mr-1.5 size-3.5" aria-hidden />
-              Publish
-            </Button>
-          </div>
-        }
-      >
-        {blocks.length === 0 ? (
-          <EmptyState icon={FileText} title="This page has no blocks" description="Add a block below to start building the page." />
-        ) : (
-          <ol className="grid gap-2">
-            {blocks.map((b, idx) => {
-              const meta = metaFor(b.type);
-              const open = openBlockId === b.id;
-              const err = validateBlock(b);
-              return (
-                <li key={b.id} className="rounded-md border border-border bg-muted/30">
-                  <div className="flex items-center justify-between gap-2 p-3">
-                    <button
-                      type="button"
-                      className="flex-1 text-left"
-                      aria-expanded={open}
-                      onClick={() => setOpenBlockId(open ? null : b.id)}
-                    >
-                      <span className="text-sm font-medium text-foreground">{meta?.label ?? b.type}</span>
-                      {b.hidden ? <span className="ml-2 text-xs text-muted-foreground">(hidden)</span> : null}
-                      {err ? <span className="ml-2 text-xs text-destructive">{err}</span> : null}
-                    </button>
-                    <div className="flex items-center gap-1">
-                      <Button size="icon" variant="ghost" aria-label="Move block up" disabled={idx === 0} onClick={() => moveBlock(idx, -1)}>
-                        <ArrowUp />
-                      </Button>
-                      <Button size="icon" variant="ghost" aria-label="Move block down" disabled={idx === blocks.length - 1} onClick={() => moveBlock(idx, 1)}>
-                        <ArrowDown />
-                      </Button>
-                      <Button
-                        size="icon"
-                        variant="ghost"
-                        aria-label={b.hidden ? "Show block" : "Hide block"}
-                        onClick={() => toggleHidden(b.id)}
-                      >
-                        {b.hidden ? <EyeOff /> : <Eye />}
-                      </Button>
-                      <Button size="icon" variant="ghost" aria-label="Remove block" onClick={() => setBlocks((prev) => prev.filter((x) => x.id !== b.id))}>
-                        <Trash2 />
-                      </Button>
-                    </div>
-                  </div>
-                  {open && meta ? (
-                    <div className="grid gap-3 border-t border-border p-3">
-                      <BlockFields meta={meta} props={b.props} onChange={(props) => patchBlock(b.id, { props })} />
-                    </div>
-                  ) : null}
-                </li>
-              );
-            })}
-          </ol>
-        )}
+      <PageHeader
+        title="Pages"
+        description="Manage informational and marketing pages on your store. Customize their layout and content with the visual editor."
+      />
 
-        <div className="mt-2">
-          <span className="text-xs font-semibold uppercase tracking-wider text-faint-foreground">Add a block</span>
-          <div className="mt-2 flex flex-wrap gap-2">
-            {BLOCK_TYPES.map((meta) => (
-              <Button key={meta.type} size="sm" title={meta.description} onClick={() => addBlock(meta)}>
-                <Plus className="mr-1 size-3.5" aria-hidden />
-                {meta.label}
-              </Button>
-            ))}
-          </div>
-        </div>
-      </PageSection>
-
-      <PageSection
-        title="Versions"
-        description="Versions saved or published in this session. The service does not expose a full version history."
-      >
-        {history.length === 0 ? (
-          <p className="text-sm text-muted-foreground">No versions yet. Save a draft to create one.</p>
-        ) : (
-          <ul className="grid gap-2">
-            {history.map((h) => (
-              <li key={h.versionId} className="flex items-center justify-between gap-2 rounded-md border border-border p-2 text-sm">
-                <span className="flex items-center gap-2">
-                  <History className="size-4 text-muted-foreground" aria-hidden />
-                  {h.label}
-                  {h.versionId === published ? (
-                    <span className="rounded-full bg-emerald-500/10 px-2 py-0.5 text-[10px] font-medium text-emerald-600">Live</span>
-                  ) : null}
-                </span>
-                <Button
-                  size="sm"
-                  disabled={h.versionId === published || busy}
-                  loading={rollback.isPending && rollback.variables?.targetVersionId === h.versionId}
-                  onClick={() => rollback.mutate({ id, targetVersionId: h.versionId })}
-                >
-                  <RotateCcw className="mr-1.5 size-3.5" aria-hidden />
-                  Roll back to this
-                </Button>
-              </li>
-            ))}
-          </ul>
-        )}
-      </PageSection>
-    </div>
-  );
-}
-
-function ScalarInput({
-  spec,
-  value,
-  onChange,
-  idPrefix,
-}: {
-  spec: Scalar;
-  value: unknown;
-  onChange: (v: unknown) => void;
-  idPrefix: string;
-}) {
-  const id = `${idPrefix}-${spec.key}`;
-  const invalid = validateScalar(spec, value) !== null;
-  const label = (
-    <Label htmlFor={id}>
-      {spec.label}
-      {spec.required ? " *" : ""}
-    </Label>
-  );
-  if (spec.kind === "boolean") {
-    return (
-      <label className="flex items-center gap-2 text-sm text-foreground-2">
-        <input type="checkbox" checked={value === true} onChange={(e) => onChange(e.target.checked)} />
-        {spec.label}
-      </label>
-    );
-  }
-  if (spec.kind === "select") {
-    return (
-      <div className="grid gap-1">
-        {label}
-        <SimpleSelect
-          id={id}
-          value={typeof value === "string" ? value : (spec.options?.[0] ?? "")}
-          onChange={(v) => onChange(v)}
-          className="h-9"
-          options={(spec.options ?? []).map((o) => ({ value: o, label: o }))}
-        />
-      </div>
-    );
-  }
-  if (spec.kind === "textarea") {
-    return (
-      <div className="grid gap-1">
-        {label}
-        <textarea
-          id={id}
-          rows={4}
-          aria-invalid={invalid}
-          value={typeof value === "string" ? value : ""}
-          onChange={(e) => onChange(e.target.value)}
-          className="rounded-md border border-input bg-muted px-3 py-2 text-sm"
-        />
-      </div>
-    );
-  }
-  if (spec.kind === "csv") {
-    return (
-      <div className="grid gap-1">
-        {label}
-        <Input
-          id={id}
-          defaultValue={Array.isArray(value) ? value.join(", ") : ""}
-          onChange={(e) =>
-            onChange(
-              e.target.value
-                .split(",")
-                .map((s) => s.trim())
-                .filter(Boolean),
-            )
+      <div className="mt-6 flex flex-col gap-4">
+        <TableToolbar
+          searchLabel="Search pages"
+          searchPlaceholder="Search by title or URL..."
+          searchText={searchText}
+          onSearchText={setSearchText}
+          resultCount={filteredPages.length}
+          noun="pages"
+          filters={
+            <div className="flex items-center gap-2">
+              <SimpleSelect
+                ariaLabel="Filter by status"
+                className="w-36"
+                value={statusFilter}
+                options={[
+                  { value: "all", label: "All statuses" },
+                  { value: "published", label: "Published" },
+                  { value: "draft", label: "Draft" },
+                ]}
+                onChange={(v) => setStatusFilter(v as "all" | "published" | "draft")}
+              />
+            </div>
           }
         />
-      </div>
-    );
-  }
-  return (
-    <div className="grid gap-1">
-      {label}
-      <Input
-        id={id}
-        type={spec.kind === "number" ? "number" : "text"}
-        aria-invalid={invalid}
-        value={typeof value === "string" || typeof value === "number" ? String(value) : ""}
-        onChange={(e) => onChange(spec.kind === "number" ? e.target.value : e.target.value)}
-      />
-    </div>
-  );
-}
 
-function BlockFields({ meta, props, onChange }: { meta: BlockMeta; props: Props; onChange: (p: Props) => void }) {
-  const set = (key: string, value: unknown) => onChange({ ...props, [key]: value });
-  return (
-    <>
-      {meta.fields.map((f) => {
-        if (f.kind !== "list") {
-          return <ScalarInput key={f.key} spec={f} value={props[f.key]} onChange={(v) => set(f.key, v)} idPrefix={meta.type} />;
-        }
-        const list = Array.isArray(props[f.key]) ? (props[f.key] as Props[]) : [];
-        const blank: Props = {};
-        for (const sf of f.itemFields) blank[sf.key] = "";
-        return (
-          <fieldset key={f.key} className="grid gap-2">
-            <legend className="text-sm font-medium text-foreground-2">{f.label}</legend>
-            {list.map((item, i) => (
-              <div key={i} className="grid gap-2 rounded-md border border-border p-3">
-                {f.itemFields.map((sf) => (
-                  <ScalarInput
-                    key={sf.key}
-                    spec={sf}
-                    value={item[sf.key]}
-                    idPrefix={`${meta.type}-${f.key}-${i}`}
-                    onChange={(v) => set(f.key, list.map((x, xi) => (xi === i ? { ...x, [sf.key]: v } : x)))}
-                  />
-                ))}
-                <div>
-                  <Button size="sm" variant="ghost" onClick={() => set(f.key, list.filter((_, xi) => xi !== i))}>
-                    <Trash2 className="mr-1 size-3.5" aria-hidden />
-                    Remove
-                  </Button>
+        <DataTable
+          columns={columns}
+          rows={filteredPages}
+          getRowId={(p) => p.id}
+          isLoading={pagesQuery.isLoading}
+          empty={
+            <div className="flex flex-col items-center justify-center p-8 text-center">
+              <p className="text-base font-medium">No pages found</p>
+              <p className="mt-1 text-sm text-muted-foreground">
+                {searchText || statusFilter !== "all"
+                  ? "Try adjusting your search or filters."
+                  : "Create your first page to get started."}
+              </p>
+              {!searchText && statusFilter === "all" && (
+                <Button variant="outline" size="sm" className="mt-4" onClick={handleOpenAdd}>
+                  <Plus className="mr-1.5 size-3.5" />
+                  Add page
+                </Button>
+              )}
+            </div>
+          }
+          rowActions={(page) => (
+            <div className="flex items-center justify-end gap-1">
+              <Button variant="outline" size="sm" onClick={() => handleOpenEdit(page)}>
+                <Edit className="mr-1.5 size-3.5" />
+                Edit
+              </Button>
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() =>
+                  void navigate({
+                    to: "/online-store/editor/$pageId",
+                    params: { pageId: page.id },
+                  })
+                }
+              >
+                Customize
+              </Button>
+              <DropdownMenu>
+                <DropdownMenuTrigger
+                  render={
+                    <Button variant="ghost" size="icon" aria-label="Page actions">
+                      <MoreHorizontal className="size-4" />
+                    </Button>
+                  }
+                />
+                <DropdownMenuContent align="end">
+                  {page.slug !== "home" && (
+                    <DropdownMenuItem
+                      onClick={() => duplicateMutation.mutate({ id: page.id })}
+                      disabled={duplicateMutation.isPending}
+                    >
+                      <Copy className="mr-2 size-3.5" />
+                      Duplicate
+                    </DropdownMenuItem>
+                  )}
+                  {page.slug !== "home" && page.status === "published" && (
+                    <DropdownMenuItem
+                      onClick={() => unpublishMutation.mutate({ id: page.id })}
+                      disabled={unpublishMutation.isPending}
+                    >
+                      <Undo2 className="mr-2 size-3.5" />
+                      Unpublish
+                    </DropdownMenuItem>
+                  )}
+                  {page.slug !== "home" && (
+                    <>
+                      <DropdownMenuSeparator />
+                      <DropdownMenuItem
+                        className="text-destructive focus:text-destructive"
+                        onClick={() => setDeleteTarget(page)}
+                      >
+                        <Trash2 className="mr-2 size-3.5" />
+                        Delete
+                      </DropdownMenuItem>
+                    </>
+                  )}
+                </DropdownMenuContent>
+              </DropdownMenu>
+            </div>
+          )}
+        />
+      </div>
+
+      {/* Add / Edit Sheet */}
+      <Sheet open={sheetOpen} onOpenChange={handleCloseSheet}>
+        <SheetContent className="w-full sm:max-w-xl overflow-y-auto p-0 flex flex-col bg-background text-foreground">
+          <SheetHeader className="p-6 border-b border-border">
+            <SheetTitle>{editingPage ? `Edit: ${editingPage.title}` : "Add page"}</SheetTitle>
+            <SheetDescription>
+              {editingPage
+                ? "Update page settings, parent hierarchy, SEO, and feature image."
+                : "Create a new page. You can customize layout and sections in the visual editor."}
+            </SheetDescription>
+          </SheetHeader>
+
+          <form
+            id="page-form"
+            onSubmit={handleSubmit((data) => onSubmit(data, false))}
+            className="flex-1 p-6 space-y-6"
+            noValidate
+          >
+            {/* General Info */}
+            <div className="space-y-4">
+              <Field>
+                <FieldLabel htmlFor="page-title">
+                  Page name <span className="text-destructive">*</span>
+                </FieldLabel>
+                <Input
+                  id="page-title"
+                  {...register("title", {
+                    required: "Page name is required",
+                    maxLength: { value: 200, message: "Max 200 characters" },
+                  })}
+                  placeholder="e.g. About Us"
+                />
+                {errors.title && <p className="text-xs text-destructive">{errors.title.message}</p>}
+              </Field>
+
+              <Field>
+                <div className="flex items-center justify-between">
+                  <FieldLabel htmlFor="page-slug">
+                    URL handle {!isHome && <span className="text-destructive">*</span>}
+                  </FieldLabel>
+                  {isHome && <span className="text-xs text-muted-foreground">Home URL is locked to /</span>}
                 </div>
+                <Input
+                  id="page-slug"
+                  disabled={isHome}
+                  {...register("slug", {
+                    required: !isHome ? "URL handle is required" : false,
+                    validate: (val) => {
+                      if (isHome) return true;
+                      const clean = val.trim().toLowerCase();
+                      if (!/^[a-z0-9]+(?:-[a-z0-9]+)*$/.test(clean)) {
+                        return "Lowercase letters, numbers, and hyphens only (e.g. about-us)";
+                      }
+                      if (RESERVED_SLUGS.has(clean)) {
+                        return "This URL handle is reserved by the system";
+                      }
+                      if (clean.startsWith("template-")) {
+                        return "URL handle cannot start with 'template-'";
+                      }
+                      return true;
+                    },
+                    onChange: () => setSlugManuallyEdited(true),
+                  })}
+                  placeholder="e.g. about-us"
+                />
+                {errors.slug && <p className="text-xs text-destructive">{errors.slug.message}</p>}
+                <div className="mt-1 flex items-center gap-1.5 text-xs text-muted-foreground font-mono">
+                  <span>Canonical URL:</span>
+                  <span className="text-foreground font-medium">{liveFullPath}</span>
+                </div>
+              </Field>
+
+              {!isHome && (
+                <Field>
+                  <FieldLabel htmlFor="page-parent">Parent page</FieldLabel>
+                  <SimpleSelect
+                    id="page-parent"
+                    ariaLabel="Parent page"
+                    value={watchedParentId}
+                    options={parentOptions}
+                    onChange={(val) => setValue("parentId", val, { shouldDirty: true })}
+                  />
+                  <p className="text-xs text-muted-foreground">
+                    Organize pages hierarchically (e.g. Company &gt; About Us). Max depth 3 levels.
+                  </p>
+                </Field>
+              )}
+            </div>
+
+            {/* Feature Image */}
+            <div className="space-y-3 pt-2 border-t border-border">
+              <FieldLabel>Feature image</FieldLabel>
+              <div className="flex items-center gap-4">
+                {previewImageUrl ? (
+                  <div className="relative inline-block overflow-hidden rounded-lg border border-border">
+                    <img
+                      src={previewImageUrl}
+                      alt={watchedTitle || "Feature image"}
+                      className="h-24 w-36 object-cover"
+                      onError={() => setPreviewImageUrl(null)}
+                    />
+                    <Button
+                      type="button"
+                      variant="destructive"
+                      size="icon"
+                      className="absolute right-1 top-1 size-6"
+                      onClick={handleRemoveImage}
+                    >
+                      <X className="size-3.5" />
+                    </Button>
+                  </div>
+                ) : watchedImageMediaId ? (
+                  <div className="flex h-24 w-36 flex-col items-center justify-center rounded-lg border border-dashed border-border bg-muted/40 p-2 text-center">
+                    <ImageIcon className="size-6 text-muted-foreground mb-1" />
+                    <span className="text-[10px] text-muted-foreground truncate max-w-full">
+                      ID: {watchedImageMediaId.slice(0, 8)}...
+                    </span>
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="sm"
+                      className="mt-1 h-6 px-1.5 text-xs text-destructive"
+                      onClick={handleRemoveImage}
+                    >
+                      Remove
+                    </Button>
+                  </div>
+                ) : (
+                  <div className="flex h-24 w-36 flex-col items-center justify-center rounded-lg border border-dashed border-border p-2 text-center">
+                    <ImageIcon className="size-6 text-muted-foreground mb-1" />
+                    <span className="text-xs text-muted-foreground">No image</span>
+                  </div>
+                )}
+                <div className="flex flex-col gap-1.5">
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    disabled={uploadingImage}
+                    onClick={() => fileRef.current?.click()}
+                  >
+                    <Upload className="mr-1.5 size-3.5" />
+                    {uploadingImage ? "Uploading..." : "Upload image"}
+                  </Button>
+                  <span className="text-[11px] text-muted-foreground">
+                    Used for search and social sharing thumbnails.
+                  </span>
+                </div>
+                <input
+                  ref={fileRef}
+                  type="file"
+                  accept="image/*"
+                  className="hidden"
+                  onChange={handleImageUpload}
+                />
               </div>
-            ))}
-            <div>
-              <Button size="sm" onClick={() => set(f.key, [...list, { ...blank }])}>
-                <Plus className="mr-1 size-3.5" aria-hidden />
-                {f.addLabel}
+            </div>
+
+            {/* SEO Section (reusing SeoCard) */}
+            <div className="pt-2 border-t border-border">
+              <SeoCard
+                defaultTitle={watchedTitle.trim() || "Untitled Page"}
+                defaultDescription=""
+                pathPrefix={seoPathPrefix}
+                slug={isHome ? "" : watchedSlug.trim()}
+                title={watchedSeoTitle}
+                onTitleChange={(v) => setValue("seoTitle", v, { shouldDirty: true })}
+                description={watchedSeoDescription}
+                onDescriptionChange={(v) => setValue("seoDescription", v, { shouldDirty: true })}
+              />
+            </div>
+          </form>
+
+          <SheetFooter className="p-6 border-t border-border flex sm:justify-between items-center gap-2">
+            <Button variant="outline" type="button" onClick={() => handleCloseSheet(false)}>
+              Cancel
+            </Button>
+            <div className="flex items-center gap-2">
+              <Button
+                type="submit"
+                form="page-form"
+                variant="outline"
+                disabled={isSaving || uploadingImage}
+              >
+                {isSaving && !saveAndCustomize ? "Saving..." : "Save"}
+              </Button>
+              <Button
+                type="button"
+                variant="primary"
+                disabled={isSaving || uploadingImage}
+                onClick={handleSubmit((data) => onSubmit(data, true))}
+              >
+                {isSaving && saveAndCustomize ? "Saving..." : "Save and Customize"}
               </Button>
             </div>
-          </fieldset>
-        );
-      })}
-    </>
+          </SheetFooter>
+        </SheetContent>
+      </Sheet>
+
+      {/* Delete Confirmation Dialog */}
+      <ConfirmDialog
+        open={Boolean(deleteTarget)}
+        onOpenChange={(open) => !open && setDeleteTarget(null)}
+        title={
+          deleteTarget?.childCount && deleteTarget.childCount > 0
+            ? "Cannot delete page with subpages"
+            : "Delete page"
+        }
+        description={
+          deleteTarget?.childCount && deleteTarget.childCount > 0 ? (
+            <span>
+              This page has <strong>{deleteTarget.childCount} subpage(s)</strong>. Please reassign or
+              delete its child pages first before deleting this page.
+            </span>
+          ) : (
+            <span>
+              Are you sure you want to delete <strong>{deleteTarget?.title}</strong>? This action cannot
+              be undone.
+            </span>
+          )
+        }
+        confirmLabel="Delete page"
+        destructive
+        confirmDisabled={Boolean(deleteTarget?.childCount && deleteTarget.childCount > 0)}
+        pending={deleteMutation.isPending}
+        onConfirm={() => {
+          if (deleteTarget) {
+            deleteMutation.mutate({ id: deleteTarget.id });
+          }
+        }}
+      />
+
+      {/* Unsaved Changes Discard Dialog */}
+      <ConfirmDialog
+        open={discardDialogOpen}
+        onOpenChange={setDiscardDialogOpen}
+        title="Discard unsaved changes?"
+        description="You have unsaved changes that will be lost if you leave. Are you sure you want to discard them?"
+        confirmLabel="Discard changes"
+        cancelLabel="Keep editing"
+        destructive
+        onConfirm={handleConfirmDiscard}
+      />
+    </PageContainer>
   );
 }
