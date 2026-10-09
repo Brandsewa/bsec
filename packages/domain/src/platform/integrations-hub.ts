@@ -157,17 +157,17 @@ export async function getPlatformChannelStats(
   const attempted = sent + failed;
   const successRate = attempted > 0 ? Math.round((sent / attempted) * 100) : 100;
 
-  // Daily breakdown
+  // Daily breakdown in UTC
   const dailyRows = await db
     .select({
-      day: sql<string>`to_char(date_trunc('day', ${schema.platformEmailLog.createdAt}), 'YYYY-MM-DD')`,
+      day: sql<string>`to_char(${schema.platformEmailLog.createdAt} AT TIME ZONE 'UTC', 'YYYY-MM-DD')`,
       status: schema.platformEmailLog.status,
       count: sql<string>`count(*)`,
     })
     .from(schema.platformEmailLog)
     .where(sql`${schema.platformEmailLog.createdAt} >= now() - ${intervalSql}`)
-    .groupBy(sql`date_trunc('day', ${schema.platformEmailLog.createdAt})`, schema.platformEmailLog.status)
-    .orderBy(sql`date_trunc('day', ${schema.platformEmailLog.createdAt})`);
+    .groupBy(sql`to_char(${schema.platformEmailLog.createdAt} AT TIME ZONE 'UTC', 'YYYY-MM-DD')`, schema.platformEmailLog.status)
+    .orderBy(sql`to_char(${schema.platformEmailLog.createdAt} AT TIME ZONE 'UTC', 'YYYY-MM-DD')`);
 
   const dailyMap = new Map<string, { sent: number; failed: number; skipped: number }>();
   for (const r of dailyRows) {
