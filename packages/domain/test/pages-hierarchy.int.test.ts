@@ -10,6 +10,7 @@ import {
   listPages,
   provisionTenant,
   publishPage,
+  resolveMediaUrlById,
   updatePage,
   type Runtime,
   type TenantContext,
@@ -281,4 +282,19 @@ describe("Page hierarchy, canonical paths, and constraints (Phase 5)", () => {
     ]);
     expect(notFound).toBeNull();
   });
+
+  it("resolves media URL safely with graceful undefined on missing/deleted media", async () => {
+    // 1. null / undefined media ID returns undefined
+    const nullResult = await resolveMediaUrlById(rtWeb, ctxA.tenantId, null);
+    expect(nullResult).toBeUndefined();
+
+    const undefResult = await resolveMediaUrlById(rtWeb, ctxA.tenantId, undefined);
+    expect(undefResult).toBeUndefined();
+
+    // 2. Non-existent or deleted media ID returns undefined without error
+    const fakeId = "019266f8-4567-7000-8000-000000000999";
+    const missingResult = await resolveMediaUrlById(rtWeb, ctxA.tenantId, fakeId);
+    expect(missingResult).toBeUndefined();
+  });
 });
+

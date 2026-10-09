@@ -2,7 +2,7 @@ import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { Copy, Edit, Image as ImageIcon, MoreHorizontal, Plus, Trash2, Undo2, Upload, X } from "lucide-react";
 import { useMemo, useRef, useState, useEffect } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { useForm } from "react-hook-form";
+import { useForm, useWatch } from "react-hook-form";
 import {
   Badge,
   Button,
@@ -158,7 +158,7 @@ export function PagesPage() {
   const {
     register,
     handleSubmit,
-    watch,
+    control,
     setValue,
     reset,
     formState: { errors, isDirty },
@@ -173,12 +173,12 @@ export function PagesPage() {
     },
   });
 
-  const watchedTitle = watch("title");
-  const watchedSlug = watch("slug");
-  const watchedParentId = watch("parentId");
-  const watchedSeoTitle = watch("seoTitle");
-  const watchedSeoDescription = watch("seoDescription");
-  const watchedImageMediaId = watch("imageMediaId");
+  const watchedTitle = useWatch({ control, name: "title" });
+  const watchedSlug = useWatch({ control, name: "slug" });
+  const watchedParentId = useWatch({ control, name: "parentId" });
+  const watchedSeoTitle = useWatch({ control, name: "seoTitle" });
+  const watchedSeoDescription = useWatch({ control, name: "seoDescription" });
+  const watchedImageMediaId = useWatch({ control, name: "imageMediaId" });
 
   const isHome = editingPage?.slug === "home";
 

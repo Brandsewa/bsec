@@ -296,3 +296,31 @@ export async function detachProductMedia(
   await invalidateCache(rt, ctx, { type: "product_image_updated", productId: input.productId });
   return { success: true };
 }
+
+/**
+ * Resolves the public delivery URL for a media asset by ID within a tenant.
+ * Uses resolvePublicMediaUrl (the media connection resolver).
+ * Returns undefined if mediaId is null/undefined or if the media row is not found or deleted.
+ */
+export async function resolveMediaUrlById(
+  rt: Runtime,
+  tenantId: string,
+  mediaId: string | null | undefined,
+): Promise<string | undefined> {
+  if (!mediaId) return undefined;
+  const db = rt._db.db;
+  return withTenant(db, tenantId, async (tx) => {
+    const [row] = await tx
+      .select({
+        id: schema.media.id,
+        storageKey: schema.media.storageKey,
+        storageConnectionId: schema.media.storageConnectionId,
+      })
+      .from(schema.media)
+      .where(and(eq(schema.media.tenantId, tenantId), eq(schema.media.id, mediaId)))
+      .limit(1);
+
+    if (!row) return undefined;
+    return resolvePublicMediaUrl(db, row.storageKey, row.storageConnectionId);
+  });
+}

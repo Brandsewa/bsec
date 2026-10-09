@@ -8,6 +8,7 @@ import {
   generateBreadcrumbJsonLd,
   tenantTag,
   parsePageSeo,
+  resolveMediaUrlById,
 } from "@bs/domain";
 import { renderBlockDocument } from "@bs/blocks";
 import { server } from "@/server/runtime.ts";
@@ -44,12 +45,35 @@ export async function generateMetadata({ params }: CustomPageProps): Promise<Met
         const description = seo?.description || `Read more about ${result.page.title}.`;
         const canonicalUrl = `https://${host}${result.canonicalPath}`;
 
+        let imageUrl: string | undefined;
+        if (seo?.imageMediaId) {
+          try {
+            imageUrl = await resolveMediaUrlById(rt, access.tenantId, seo.imageMediaId);
+          } catch {
+            // Degrade gracefully if media cannot be resolved
+          }
+        }
+
         return {
           title,
           description,
           alternates: {
             canonical: canonicalUrl,
           },
+          openGraph: {
+            title,
+            description,
+            url: canonicalUrl,
+            images: imageUrl ? [{ url: imageUrl, alt: title }] : undefined,
+          },
+          twitter: imageUrl
+            ? {
+                card: "summary_large_image",
+                title,
+                description,
+                images: [imageUrl],
+              }
+            : undefined,
         };
       }
     }

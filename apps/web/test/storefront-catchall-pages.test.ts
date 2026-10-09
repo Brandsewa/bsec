@@ -64,6 +64,7 @@ const mockPageData = {
 };
 
 let pageDataToReturn: unknown = mockPageData;
+let mockMediaUrlToReturn: string | undefined = undefined;
 
 vi.mock("@/server/cached-storefront.ts", () => ({
   getCachedStorefrontPageByPath: vi.fn(async () => pageDataToReturn),
@@ -86,6 +87,10 @@ vi.mock("@bs/domain", async (importOriginal) => {
       allowed: true,
     })),
     getStorefrontPageByPath: vi.fn(async () => pageDataToReturn),
+    resolveMediaUrlById: vi.fn(async (_rt, _tenantId, mediaId) => {
+      if (mediaId === "deleted-media-id") return undefined;
+      return mockMediaUrlToReturn;
+    }),
   };
 });
 
@@ -148,4 +153,78 @@ describe("Catch-all Storefront Page ([...path]/page.tsx)", () => {
     expect(meta.description).toBe("SEO Description");
     expect(meta.alternates?.canonical).toBe("https://demo.bcom.si/pages/company/about");
   });
+
+  it("generates metadata with openGraph and twitter images when imageMediaId is present", async () => {
+    mockMediaUrlToReturn = "https://demo.bcom.si/media/about-share.jpg";
+    pageDataToReturn = {
+      ...mockPageData,
+      page: {
+        ...mockPageData.page,
+        seo: {
+          title: "SEO Title",
+          description: "SEO Description",
+          imageMediaId: "media-uuid-123",
+        },
+      },
+    };
+
+    const meta = await generateMetadata({
+      params: Promise.resolve({ path: ["company", "about"] }),
+    });
+
+    expect(meta.openGraph?.images).toEqual([
+      { url: "https://demo.bcom.si/media/about-share.jpg", alt: "SEO Title" },
+    ]);
+    expect(meta.twitter).toEqual({
+      card: "summary_large_image",
+      title: "SEO Title",
+      description: "SEO Description",
+      images: ["https://demo.bcom.si/media/about-share.jpg"],
+    });
+  });
+
+  it("generates metadata without images when page has no imageMediaId", async () => {
+    mockMediaUrlToReturn = undefined;
+    pageDataToReturn = {
+      ...mockPageData,
+      page: {
+        ...mockPageData.page,
+        seo: {
+          title: "SEO Title",
+          description: "SEO Description",
+        },
+      },
+    };
+
+    const meta = await generateMetadata({
+      params: Promise.resolve({ path: ["company", "about"] }),
+    });
+
+    expect(meta.openGraph?.images).toBeUndefined();
+    expect(meta.twitter).toBeUndefined();
+  });
+
+  it("generates metadata gracefully without images when imageMediaId is deleted or cannot be resolved", async () => {
+    mockMediaUrlToReturn = undefined;
+    pageDataToReturn = {
+      ...mockPageData,
+      page: {
+        ...mockPageData.page,
+        seo: {
+          title: "SEO Title",
+          description: "SEO Description",
+          imageMediaId: "deleted-media-id",
+        },
+      },
+    };
+
+    const meta = await generateMetadata({
+      params: Promise.resolve({ path: ["company", "about"] }),
+    });
+
+    expect(meta.title).toBe("SEO Title");
+    expect(meta.openGraph?.images).toBeUndefined();
+    expect(meta.twitter).toBeUndefined();
+  });
 });
+
