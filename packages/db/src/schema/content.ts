@@ -43,6 +43,7 @@ export const pages = tenantTable(
   "pages",
   {
     id: uuid("id").default(sql`uuidv7()`).primaryKey(),
+    parentId: uuid("parent_id"),
     type: text("type").notNull().default("custom"), // home, landing, custom, product_template, collection_template
     title: text("title").notNull(),
     slug: citext("slug").notNull(),
@@ -56,7 +57,15 @@ export const pages = tenantTable(
   (t) => [
     unique("pages_tenant_slug_uniq").on(t.tenantId, t.slug),
     unique("pages_tenant_id_uniq").on(t.tenantId, t.id),
+    tenantForeignKey({
+      tableTenantId: t.tenantId,
+      column: t.parentId,
+      target: { tenantId: t.tenantId, id: t.id },
+      name: "pages_parent_fk",
+      onDelete: "restrict",
+    }),
     index("pages_tenant_type_idx").on(t.tenantId, t.type),
+    index("pages_tenant_parent_idx").on(t.tenantId, t.parentId),
   ],
 );
 
