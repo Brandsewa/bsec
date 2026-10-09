@@ -615,6 +615,55 @@ export async function handleMaintenanceEndJob(
   });
 }
 
+export async function handleMaintenanceCleanupJob(
+  db: Db,
+  log: Logger,
+  data?: { tenantId?: string },
+): Promise<{
+  deletedCount: number;
+  prunedCounters: number;
+  reapedSlots: number;
+  prunedEmailLogs: number;
+  prunedMessageLogs: number;
+  prunedTenantEmailLogs: number;
+  prunedReqs: number;
+}> {
+  const res = await cleanupExpiredIdempotencyKeys(db, data?.tenantId);
+  // Same 15-minute maintenance pass: prune expired rate-limit counters, free job slots that a
+  // crashed worker never released, and prune platform_email_log and platform_message_log older than 90 days (PLAN §3.1, §6.2).
+  const prunedCounters = await cleanExpiredRateLimits(db);
+  const reapedSlots = await reapStaleTenantJobSlots(db);
+  const { prunePlatformEmailLogs } = await import("./system/platform-mailer.ts");
+  const prunedEmailLogs = await prunePlatformEmailLogs(db, 90).catch((err) => {
+    log.warn({ err }, "platform_email_log prune failed during maintenance pass");
+    return { deletedCount: 0 };
+  });
+  const { prunePlatformMessageLogs } = await import("./platform/channel-providers.ts");
+  const prunedMessageLogs = await prunePlatformMessageLogs(db, 90).catch((err) => {
+    log.warn({ err }, "platform_message_log prune failed during maintenance pass");
+    return { deletedCount: 0 };
+  });
+  const { pruneEmailLogs, prunePrivacyRequests } = await import("./system/retention.ts");
+  const prunedTenantEmailLogs = await pruneEmailLogs(db, 180).catch((err) => {
+    log.warn({ err }, "email_log prune failed during maintenance pass");
+    return { deletedCount: 0 };
+  });
+  const prunedReqs = await prunePrivacyRequests(db, 1095).catch((err) => {
+    log.warn({ err }, "privacy_requests prune failed during maintenance pass");
+    return { deletedCount: 0 };
+  });
+
+  return {
+    deletedCount: res.deletedCount,
+    prunedCounters,
+    reapedSlots,
+    prunedEmailLogs: prunedEmailLogs.deletedCount,
+    prunedMessageLogs: prunedMessageLogs.deletedCount,
+    prunedTenantEmailLogs: prunedTenantEmailLogs.deletedCount,
+    prunedReqs: prunedReqs.deletedCount,
+  };
+}
+
 export async function startJobs(opts: {
   databaseUrl: string;
   log: Logger;
@@ -690,34 +739,11 @@ export async function startJobs(opts: {
   await boss.work<{ tenantId?: string }>(QUEUE_NAMES.IDEMPOTENCY_CLEANUP, { localConcurrency: 1 }, async (batch) => {
     for (const job of batch) {
       try {
-        const res = await cleanupExpiredIdempotencyKeys(db, job.data?.tenantId);
-        // Same 15-minute maintenance pass: prune expired rate-limit counters, free job slots that a
-        // crashed worker never released, and prune platform_email_log older than 90 days (PLAN §3.1).
-        const prunedCounters = await cleanExpiredRateLimits(db);
-        const reapedSlots = await reapStaleTenantJobSlots(db);
-        const { prunePlatformEmailLogs } = await import("./system/platform-mailer.ts");
-        const prunedEmailLogs = await prunePlatformEmailLogs(db, 90).catch((err) => {
-          opts.log.warn({ err }, "platform_email_log prune failed during maintenance pass");
-          return { deletedCount: 0 };
-        });
-        const { pruneEmailLogs, prunePrivacyRequests } = await import("./system/retention.ts");
-        const prunedTenantEmailLogs = await pruneEmailLogs(db, 180).catch((err) => {
-          opts.log.warn({ err }, "email_log prune failed during maintenance pass");
-          return { deletedCount: 0 };
-        });
-        const prunedReqs = await prunePrivacyRequests(db, 1095).catch((err) => {
-          opts.log.warn({ err }, "privacy_requests prune failed during maintenance pass");
-          return { deletedCount: 0 };
-        });
+        const stats = await handleMaintenanceCleanupJob(db, opts.log, job.data);
         opts.log.info(
           {
             job_id: job.id,
-            deletedCount: res.deletedCount,
-            prunedCounters,
-            reapedSlots,
-            prunedEmailLogs: prunedEmailLogs.deletedCount,
-            prunedTenantEmailLogs: prunedTenantEmailLogs.deletedCount,
-            prunedReqs: prunedReqs.deletedCount,
+            ...stats,
           },
           "idempotency.cleanup processed",
         );

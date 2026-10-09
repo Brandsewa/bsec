@@ -36,6 +36,18 @@ Implements Slices A, B, and C of Phase 4 (Integrations Hub):
 ## Zoho CPaaS & TRAI DLT Architecture Notes
 - **Product & DC:** Zoho CPaaS (ZeptoMail parent console) located in the India Data Centre (`cpaas.zoho.com` / `cpaas.zoho.in`).
 - **Enrolment Posture:** Ready but NOT enrolled. Credentials default to empty, cards display **Not enrolled**, and the Enable switch + Test Send button are strictly disabled until valid credentials exist.
+- **Confirmed vs Unconfirmed Zoho CPaaS Request/Response Shapes:**
+  - **Confirmed against Zoho official documentation:**
+    - SMS Endpoint: `POST https://cpaas.zoho.com/v1.1/sms`
+    - WhatsApp Endpoint: `POST https://cpaas.zoho.com/v1.1/whatsapp`
+    - Raw `Authorization: <token>` header (no `Bearer` prefix).
+    - SMS JSON request body fields: `sender_key` (DLT Header), `to` (array of numbers), `template_key` (DLT Template ID), and `merge_info` (key-value replacement parameters).
+    - WhatsApp JSON request body fields: `from` (WABA phone number), `to` (array of numbers), `template_key` (Meta Template ID), and `merge_info` (key-value replacement parameters).
+  - **Marked UNCONFIRMED in code and records:**
+    - Success response JSON schema: Zoho documentation varies across product versions (`message_id` vs `data[0].id`). The adapter code treats any 2xx response as successful; if the response body does not match either known field, it records success with `providerMessageId: null` without failing.
+    - WhatsApp template language parameter: Zoho CPaaS documentation does not specify a separate `language` parameter in the root body.
+    - Error response JSON schema: Format of error payloads (`error.message` vs `message` vs root string).
+  - **Token Sanitization:** `sanitiseProviderError` directly replaces the configured token string (`this.config.authToken`) with `[REDACTED]` in addition to generic Authorization header regex patterns.
 - **India TRAI DLT Requirements:**
   - Mandatory Telecom Commercial Communications Customer Preference Regulations (TCCCPR 2018).
   - Principal Entity ID (14–19 digit alphanumeric ID registered on Vilpower/Jio/Airtel DLT portal).
@@ -46,13 +58,32 @@ Implements Slices A, B, and C of Phase 4 (Integrations Hub):
   - Requires registered WhatsApp Business Phone Number and Zoho CPaaS Auth Token.
 - **Customer OTP Invariant:** Checked `packages/domain/src/customers/otp.ts`—customer OTP delivery remains completely untouched in this phase.
 
+## Slice C Review Fixes (2026-10-09 Claude Verification Follow-up)
+1. **`pnpm docs:check` Alignment:**
+   - Updated `docs/ARCHITECTURE.md` section 7 to include `platform-channel.ts` in schema table and `0052_channel_messaging.sql` in migrations table.
+   - Updated latest migration on disk pointer to `0052`.
+   - Updated section 8 platform API tables to document `integrations.*` channel provider procedures.
+   - Updated section 11 to document 90-day message log pruning in the 15-minute maintenance pass.
+2. **Maintenance Pruning Job:**
+   - Wired `prunePlatformMessageLogs(db, 90)` into the 15-minute `IDEMPOTENCY_CLEANUP` maintenance job in `packages/domain/src/jobs.ts` next to `prunePlatformEmailLogs`.
+   - Verified with a real-Postgres test in `packages/domain/test/channel-messaging.int.test.ts` that `handleMaintenanceCleanupJob` prunes 90-day-old message logs while keeping recent logs.
+3. **Removed Invented Fallbacks:**
+   - Removed `"default_sender"`, `"default_from"`, and `"test_template"` in `packages/domain/src/system/messaging/zoho-cpaas.ts`.
+   - Throws clear errors if `senderKey` (SMS), `fromNumber` (WhatsApp), or `templateKey` is missing.
+   - For `testProvider` / `adapter.test()`, requires a configured test template key (`testTemplateKey` or `templateMap.test_message`).
+4. **Zoho CPaaS Response Handling & Error Redaction:**
+   - Tolerates arbitrary 2xx responses by succeeding with `providerMessageId: null` if message ID cannot be extracted.
+   - Redacts the exact configured token string in `sanitiseProviderError`.
+
 ## Verification
+- `pnpm docs:check`: Passed.
 - `pnpm typecheck`: Passed (15/15 packages clean).
 - `pnpm lint`: Passed (15/15 packages clean).
 - Unit Tests:
-  - `packages/domain/test/messaging-adapter.test.ts`: 8/8 passed (faked HTTP layer, request shapes, token redaction, rate limits).
+  - `packages/domain/test/messaging-adapter.test.ts`: 13/13 passed (faked HTTP layer, missing configuration guards, token redaction, unknown 2xx body parsing, rate limits).
 - Real Database Integration Tests (`postgres://postgres:postgres@localhost:55432/postgres`):
-  - `packages/domain/test/channel-messaging.int.test.ts`: 6/6 passed (encryption at rest, credential requirement, atomic default switch, masked diagnostic logging, 90-day pruning).
+  - `packages/domain/test/channel-messaging.int.test.ts`: 7/7 passed (encryption at rest, credential requirement, atomic default switch, masked diagnostic logging, test template requirement, 90-day job-level pruning via `handleMaintenanceCleanupJob`).
+  - `packages/domain/test/integrations-hub.int.test.ts`: 4/4 passed (stats calculation, direct SQL count equality).
   - `apps/platform/test/audit-coverage.int.test.ts`: 51/51 passed (all mutations verified for transaction and audit rollback).
   - `apps/platform/test/rbac.int.test.ts`: 4/4 passed.
   - `apps/platform/test/read-endpoints.int.test.ts`: 31/31 passed.
@@ -69,5 +100,6 @@ Implements Slices A, B, and C of Phase 4 (Integrations Hub):
     - `32b_mobile_whatsapp_channel.png`: WhatsApp channel mobile layout.
 
 ## Next Step
-- Stop and report for Claude's verification of Slice C.
-- Upon Claude's approval, proceed to Slice D (Payments platform enablement and store activation).
+- Stop and report for Claude's re-verification of Slice C.
+- Do NOT begin Slice D (Payments platform enablement and store activation) until Claude verifies and accepts Slice C.
+

@@ -216,6 +216,7 @@ Drizzle schema files in `packages/db/src/schema/` (one Postgres database, `publi
 | `tenant-secrets.ts` | `tenant_secrets` T |
 | `platform.ts` | `domains`, `feature_flags`, `tenant_feature_overrides`, `platform_staff`, `platform_staff_invitations`, `support_sessions`, `tenant_deletions`, `tenant_notes`, `export_files` |
 | `platform-storage.ts` | `platform_storage_connections` P |
+| `platform-channel.ts` | `platform_channel_providers` P, `platform_message_log` P |
 | `quotas.ts` | `rate_limit_counters`, `quota_definitions`, `quota_tiers` P, `quota_tier_limits` P, `tenant_size_tiers`, `tenant_quota_overrides`, `quota_events`, `tenant_active_jobs` |
 | `saas.ts` | `plans`, `subscriptions`, `platform_invoices`, `platform_audit_logs`, `theme_templates`, `signup_leads`, `slug_reservations`, `reserved_slugs`, `onboarding_progress`, `tenant_owner_invites`, `exports` |
 | `quotes.ts` | `quote_requests` T |
@@ -274,8 +275,9 @@ Drizzle schema files in `packages/db/src/schema/` (one Postgres database, `publi
 | 0049 | `platform_storage_connections` | `platform_storage_connections` table (platform BYPASSRLS) with AES-256-GCM encrypted credentials, `media.storage_connection_id` column (nullable) |
 | 0050 | `orders_archive` | `orders.archived_at` and `orders.archived_by` columns, `orders_tenant_archived_at_idx` index |
 | 0051 | `quota_tiers` | `quota_tiers` and `quota_tier_limits` tables, backfill from `quota_definitions`, grants |
+| 0052 | `channel_messaging` | `platform_channel_providers` (SMS & WhatsApp provider configuration with AES-256-GCM encrypted tokens), `platform_message_log` (zero-retention masked phone audit log, 90-day retention prune) |
 
-How to write one (expand, migrate, contract; `forceRlsSql`): `docs/migrations.md`. **Never edit an applied migration.** Latest on disk: `0051` (the docs check keeps this list honest).
+How to write one (expand, migrate, contract; `forceRlsSql`): `docs/migrations.md`. **Never edit an applied migration.** Latest on disk: `0052` (the docs check keeps this list honest).
 
 ---
 
@@ -290,7 +292,7 @@ Contracts are the single source of truth (`packages/contracts`); handlers are in
 
 **Non-oRPC routes in web** (`apps/web/src/app/api/`): `storefront/cart/*`, `storefront/checkout/place-order`, `storefront/customer/*` (OTP request/verify, profile, addresses, logout), `storefront/orders/[token]/return` (+ `/photo`, `/photo/finalize`, `/cancel`), `storefront/reviews` (GET list, POST create), `storefront/address/[token]`, `storefront/unsubscribe/[token]`, `storefront/search/suggestions`, `storefront/status/evaluate`, `admin/media/upload` (direct upload fallback proxy), `admin/finance/export` (RFC 4180 streaming CSV export), `webhooks/[provider]`, `webhooks/platform-billing`, `health`, `media/[...key]` (local storage driver media serving), and the catch-all `[[...route]]` that mounts the Hono app (Better Auth at `/api/auth/*`, oRPC).
 
-**`platformContract`** (`apps/platform`): `system` (health, data, retryJob, retryWebhook), `overview`, `tenants` (list/detail/create-for-client/suspend/restore/archive/plan/trial/ownership/notes/bulk ops/schedule deletion), `domains`, `plans`, `signups`, `storage` (list, get, create, update, activate, test, delete), `templates` (theme templates: create, edit in Puck, publish, hide), `support`, `quotas`, `features`, `staff`, `audit`. Plain HTTP: `/api/auth/*`, `/api/platform/me`, `/api/platform/mfa/complete`, `/api/platform/staff/accept-invitation`, `/api/platform/exports/:id/download`, `/health`.
+**`platformContract`** (`apps/platform`): `system` (health, data, retryJob, retryWebhook), `overview`, `tenants` (list/detail/create-for-client/suspend/restore/archive/plan/trial/ownership/notes/bulk ops/schedule deletion), `domains`, `plans`, `signups`, `storage` (list, get, create, update, activate, test, delete), `templates` (theme templates: create, edit in Puck, publish, hide), `support`, `quotas`, `features`, `staff`, `audit`, `integrations` (overview, channelStats, channelTransactions, listProviders, createProvider, updateProvider, deleteProvider, setDefaultProvider, testProvider). Plain HTTP: `/api/auth/*`, `/api/platform/me`, `/api/platform/mfa/complete`, `/api/platform/staff/accept-invitation`, `/api/platform/exports/:id/download`, `/health`.
 
 Procedure-level detail: open the contract file; do not duplicate it here.
 
@@ -302,7 +304,7 @@ Procedure-level detail: open the contract file; do not duplicate it here.
 
 **Store admin (`apps/admin/src/routes`, TanStack file routes; `routeTree.gen.ts` is generated, not committed)**: `login`, `accept-invite`, `_store/` (dashboard `index`, `orders` + `orders_.$orderId` + `orders_.new`, `products` (+ `new`, `$id`), `categories` (+ `categories_.new`, `categories_.$id`), `collections` (+ `collections_.new`, `collections_.$id`), `brands`, `locations` (+ `locations_.new`, `locations_.$id`), `reviews`, `inventory`, `customers` (+ detail), `segments` (+ `new`, `$segmentId`), `discounts` (+ `new`), `returns` + `returns_.$returnId`, `abandoned-checkouts`, `finance` (+ `expenses`, `reports`), `online-store/{theme, theme-library, pages, menus}`, `settings/{index (Overview), store-details, orders, returns, branding, payments, shipping, storefront, domains, storage, notifications, policies, customer-privacy, plan-and-billing, support, taxes, users (Users & accounts, legacy /settings/team redirects), activity}`), `_editor/online-store/{editor/$pageId, theme-settings}` (Puck), `platform` and `support` shells. UI conventions: `docs/admin-ui-standards.md`.
 
-**Super Admin (`apps/superadmin/src/pages`)**: Overview, TenantsList, TenantDetail, TenantCreate, Signups, Plans, Quotas, Features, Domains, Storage (StorageSettings), Support, System, Staff, AuditLog, Templates, TemplateEditor, Login, AcceptInvitation.
+**Super Admin (`apps/superadmin/src/pages`)**: Overview, TenantsList, TenantDetail, TenantCreate, Signups, Plans, Quotas, Features, Domains, Storage (StorageSettings), Support, System, Staff, AuditLog, Templates, TemplateEditor, Login, AcceptInvitation, Integrations (IntegrationsHub, NotificationsHub, ChannelPage, PaymentsIntegrations).
 
 ---
 
@@ -338,7 +340,7 @@ Theme flow: platform staff build `theme_templates` (draft + published snapshot, 
 
 Queues: `system.ping`, `segments.refresh_counts`, `order.created`, `order.paid`, `order.cod_confirmed`, `order.cancelled`, `reservation.expiry`, `webhook.process`, `idempotency.cleanup`, `fulfillment.created`, `fulfillment.delivered`, `fulfillment.rto`, `return.requested`, `refund.processed`, `cart.abandoned`, `cart.recovery_sweep`, `subscription.trial_expiry_sweep`, `order.preorder_date_changed`, `order.preorder_reminder_sweep`, `order.return_photo_cleanup`, `customers.refresh_metrics`, `customers.import` (CSV imports over 500 rows), `plan.change_requested`, `system.retention_sweep`, `maintenance.start`, `maintenance.end`, `maintenance.watchdog_sweep`, `finance.post`, `finance.reconcile`.
 
-Schedules: `reservation.expiry` every minute, `maintenance.watchdog_sweep` every minute, `idempotency.cleanup` every 15 min, `cart.recovery_sweep` and `subscription.trial_expiry_sweep` hourly, `segments.refresh_counts` every 6 hours, `order.preorder_reminder_sweep` daily (06:00), `order.return_photo_cleanup` daily (03:00), `finance.reconcile` daily (04:00), `system.retention_sweep` daily (02:00 for email_log and privacy_requests retention). Email handlers currently send placeholder text (no provider configured; see `progress.md`). Tenant deletion runs in the platform service on a timer (`DELETION_SWEEP_INTERVAL_MS`).
+Schedules: `reservation.expiry` every minute, `maintenance.watchdog_sweep` every minute, `idempotency.cleanup` every 15 min (maintenance pass: expired idempotency keys, rate limits, leaked job slots, 90-day `platform_email_log` and `platform_message_log` prunes, 180-day `email_log` and 3-year `privacy_requests`), `cart.recovery_sweep` and `subscription.trial_expiry_sweep` hourly, `segments.refresh_counts` every 6 hours, `order.preorder_reminder_sweep` daily (06:00), `order.return_photo_cleanup` daily (03:00), `finance.reconcile` daily (04:00), `system.retention_sweep` daily (02:00). Tenant deletion runs in the platform service on a timer (`DELETION_SWEEP_INTERVAL_MS`).
 
 **Return photos (customer evidence).** Presign and finalize run under the order link token (`resolveOrderIdFromToken`), keys are `tenants/<tenantId>/returns/<orderId>/<mediaId>.<jpg|png|webp>`, finalize looks the real object up in storage and checks its magic bytes (fails closed). Photos live in a **separate private R2 bucket** (`R2_PRIVATE_BUCKET_NAME`, never the public media bucket); the admin reads them through 15-minute signed URLs; with no private bucket configured the portal does not ask for photos. `order.return_photo_cleanup` (daily) deletes finalized-but-unattached photos older than 24 hours per tenant under RLS and keeps the record if the file cannot be deleted; store deletion (`platform/deletion-steps.ts`) removes photos from both buckets. Objects uploaded but never finalized need a bucket lifecycle rule (see `DEPLOYMENT.md`).
 

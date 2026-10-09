@@ -12,9 +12,10 @@ import {
   setDefaultPlatformChannelProvider,
   testPlatformChannelProvider,
   listPlatformChannelProviders,
-  prunePlatformMessageLogs,
   getPlatformChannelStats,
 } from "../src/index.ts";
+import { handleMaintenanceCleanupJob } from "../src/jobs.ts";
+import { pino } from "pino";
 
 let env: TestDb;
 let rt: Runtime;
@@ -145,13 +146,31 @@ describe("platform channel messaging (Zoho CPaaS SMS & WhatsApp, Real DB)", () =
     expect(afterDelete.some((p) => p.id === p2.id)).toBe(false);
   });
 
-  it("diagnostic test send writes strictly masked log to platform_message_log", async () => {
+  it("refuses diagnostic test send when test template key is not configured", async () => {
+    const provider = await createPlatformChannelProvider(rt, staffId, {
+      channel: "sms",
+      provider: "zoho_cpaas",
+      displayName: "Zoho SMS Without Test Template",
+      secret: "fake-test-token",
+      config: { senderKey: "TEST_SND" },
+    });
+
+    const testRes = await testPlatformChannelProvider(rt, staffId, {
+      id: provider.id,
+      to: "+91 98765 43210",
+    });
+
+    expect(testRes.ok).toBe(false);
+    expect(testRes.error).toMatch(/test template key is not configured/i);
+  });
+
+  it("diagnostic test send writes strictly masked log to platform_message_log when test template is configured", async () => {
     const provider = await createPlatformChannelProvider(rt, staffId, {
       channel: "sms",
       provider: "zoho_cpaas",
       displayName: "Zoho SMS Test Sender",
       secret: "fake-test-token",
-      config: { senderKey: "TEST_SND" },
+      config: { senderKey: "TEST_SND", testTemplateKey: "DLT_TEST_MSG_01" },
     });
 
     const testRes = await testPlatformChannelProvider(rt, staffId, {
@@ -190,45 +209,45 @@ describe("platform channel messaging (Zoho CPaaS SMS & WhatsApp, Real DB)", () =
     expect(updatedRow!.lastTestStatus).toBeDefined();
   });
 
-  it("prunes messages older than 90 days from platform_message_log", async () => {
+  it("the 15-minute maintenance pass job prunes platform_message_log older than 90 days", async () => {
     const oldDate = new Date(Date.now() - 95 * 24 * 60 * 60 * 1000);
     const recentDate = new Date();
 
     // Insert old record
-    await rt._db.db.insert(schema.platformMessageLog).values({
+    const [oldMsg] = await rt._db.db.insert(schema.platformMessageLog).values({
       channel: "sms",
-      toMasked: "+91••••••0001",
+      toMasked: "+91••••••9991",
       template: "old_notice",
       provider: "zoho_cpaas",
       status: "sent",
       createdAt: oldDate,
-    });
+    }).returning({ id: schema.platformMessageLog.id });
 
     // Insert recent record
-    await rt._db.db.insert(schema.platformMessageLog).values({
+    const [recentMsg] = await rt._db.db.insert(schema.platformMessageLog).values({
       channel: "sms",
-      toMasked: "+91••••••0002",
+      toMasked: "+91••••••9992",
       template: "recent_notice",
       provider: "zoho_cpaas",
       status: "sent",
       createdAt: recentDate,
-    });
+    }).returning({ id: schema.platformMessageLog.id });
 
-    const deletedCount = await prunePlatformMessageLogs(rt);
-    expect(deletedCount).toBeGreaterThanOrEqual(1);
+    const stats = await handleMaintenanceCleanupJob(rt._db.db, pino({ level: "silent" }));
+    expect(stats.prunedMessageLogs).toBeGreaterThanOrEqual(1);
 
     // Verify recent record still exists
     const remaining = await rt._db.db
       .select()
       .from(schema.platformMessageLog)
-      .where(eq(schema.platformMessageLog.toMasked, "+91••••••0002"));
+      .where(eq(schema.platformMessageLog.id, recentMsg!.id));
     expect(remaining.length).toBe(1);
 
     // Verify old record was purged
     const purged = await rt._db.db
       .select()
       .from(schema.platformMessageLog)
-      .where(eq(schema.platformMessageLog.toMasked, "+91••••••0001"));
+      .where(eq(schema.platformMessageLog.id, oldMsg!.id));
     expect(purged.length).toBe(0);
   });
 

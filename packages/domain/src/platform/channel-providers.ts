@@ -1,5 +1,5 @@
 import { and, desc, eq, sql } from "drizzle-orm";
-import { schema } from "@bs/db";
+import { schema, type Db } from "@bs/db";
 import { encryptSecret, decryptSecret } from "@bs/payments";
 import type { Runtime } from "../runtime.ts";
 import { assertPlatformStaff, assertRoleAtLeast, writePlatformAudit, type AuditMeta } from "../platform-services.ts";
@@ -455,16 +455,17 @@ export async function testPlatformChannelProvider(
 }
 
 /**
- * Prunes messages in platform_message_log older than 90 days (worker retention maintenance).
+ * Prunes messages in platform_message_log older than 90 days (worker retention maintenance, PLAN §6.2).
  */
-export async function prunePlatformMessageLogs(rt: Runtime): Promise<number> {
-  const db = rt._db.db;
-  const cutoff = new Date(Date.now() - 90 * 24 * 60 * 60 * 1000);
-
-  const deleted = await db
-    .delete(schema.platformMessageLog)
-    .where(sql`${schema.platformMessageLog.createdAt} < ${cutoff}`)
-    .returning({ id: schema.platformMessageLog.id });
-
-  return deleted.length;
+export async function prunePlatformMessageLogs(
+  dbOrRt: Db | Runtime,
+  retentionDays = 90,
+): Promise<{ deletedCount: number }> {
+  const db: Db = "_db" in dbOrRt ? (dbOrRt as Runtime)._db.db : dbOrRt;
+  const days = Math.max(1, Math.floor(retentionDays));
+  const result = await db.execute(
+    sql`DELETE FROM platform_message_log WHERE created_at < NOW() - (${days} || ' days')::INTERVAL RETURNING id`,
+  );
+  const rows = (result as unknown as { rows?: unknown[] })?.rows ?? (Array.isArray(result) ? result : []);
+  return { deletedCount: rows.length };
 }

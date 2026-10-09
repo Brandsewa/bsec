@@ -209,29 +209,116 @@ describe("ZohoCPaaSAdapter (SMS and WhatsApp with faked HTTP)", () => {
     });
   });
 
+  describe("Configuration requirements and fallback prevention", () => {
+    it("refuses SMS dispatch when senderKey is not configured", async () => {
+      const adapter = new ZohoCPaaSAdapter({
+        channel: "sms",
+        token: "valid-token",
+        config: {},
+      });
+
+      const res = await adapter.send({
+        to: "+919876543210",
+        template: "otp",
+      });
+
+      expect(res.ok).toBe(false);
+      expect(res.error).toMatch(/sender key is not configured/i);
+    });
+
+    it("refuses WhatsApp dispatch when fromNumber is not configured", async () => {
+      const adapter = new ZohoCPaaSAdapter({
+        channel: "whatsapp",
+        token: "valid-token",
+        config: {},
+      });
+
+      const res = await adapter.send({
+        to: "+919876543210",
+        template: "welcome",
+      });
+
+      expect(res.ok).toBe(false);
+      expect(res.error).toMatch(/from phone number is not configured/i);
+    });
+
+    it("refuses test dispatch when no test template is configured", async () => {
+      const adapter = new ZohoCPaaSAdapter({
+        channel: "sms",
+        token: "valid-token",
+        config: { senderKey: "TEST" },
+      });
+
+      const res = await adapter.test({ to: "+919876543210" });
+      expect(res.ok).toBe(false);
+      expect(res.error).toMatch(/test template key is not configured/i);
+    });
+
+    it("refuses dispatch when template is unmapped and templateMap is present", async () => {
+      const adapter = new ZohoCPaaSAdapter({
+        channel: "sms",
+        token: "valid-token",
+        config: {
+          senderKey: "TEST",
+          templateMap: { order_confirmation: "tmpl_1" },
+        },
+      });
+
+      const res = await adapter.send({
+        to: "+919876543210",
+        template: "order_cancelled",
+      });
+
+      expect(res.ok).toBe(false);
+      expect(res.error).toMatch(/template key for "order_cancelled" is not configured/i);
+    });
+  });
+
+  describe("Unknown success response body handling (UNCONFIRMED schema)", () => {
+    it("treats unknown 2xx body as success without provider message ID", async () => {
+      const fakeFetch: typeof fetch = async () =>
+        ({
+          ok: true,
+          status: 200,
+          json: async () => ({ status: "accepted", custom_unrecognized_prop: 123 }),
+        }) as unknown as Response;
+
+      const adapter = new ZohoCPaaSAdapter({
+        channel: "sms",
+        token: "test-token",
+        config: { senderKey: "TEST", testTemplateKey: "TEST_TMPL" },
+        fetchFn: fakeFetch,
+      });
+
+      const res = await adapter.test({ to: "+919876543210" });
+      expect(res.ok).toBe(true);
+      expect(res.providerMessageId).toBeNull();
+    });
+  });
+
   describe("Error sanitisation and secrets containment", () => {
     it("redacts auth tokens and credentials from error responses", async () => {
-      const sensitiveToken = "Zoho-enczapikey secret_raw_token_value_xyz";
+      const sensitiveToken = "secret_raw_token_value_xyz";
       const fakeFetch: typeof fetch = async () =>
         ({
           ok: false,
           status: 401,
           statusText: "Unauthorized",
           json: async () => ({
-            error: { message: `Invalid authentication header with ${sensitiveToken}` },
+            error: { message: `Invalid authentication header with ${sensitiveToken} and Zoho-enczapikey token123` },
           }),
         }) as unknown as Response;
 
       const adapter = new ZohoCPaaSAdapter({
         channel: "sms",
-        token: "secret_raw_token_value_xyz",
+        token: sensitiveToken,
         config: { senderKey: "TEST" },
         fetchFn: fakeFetch,
       });
 
       const res = await adapter.send({ to: "+919876543210", template: "test" });
       expect(res.ok).toBe(false);
-      expect(res.error).not.toContain("secret_raw_token_value_xyz");
+      expect(res.error).not.toContain(sensitiveToken);
       expect(res.error).toContain("[REDACTED]");
     });
   });
