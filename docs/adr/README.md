@@ -30,6 +30,7 @@ New decisions get an ADR **before** code (PLAN §15). Copy `template.md`, take t
 | [023](023-storage-connections-and-integrations-hub.md) | Storage connections in Super Admin and resilient media uploads | Accepted |
 | [024](024-order-archive-and-delete.md) | Order archive vs permanent delete and Returns as a full page | Accepted |
 | [025](025-quota-tiers-normalisation.md) | Quota tiers normalisation, display pricing, and safe resolution | Accepted |
+| [026](026-page-hierarchy-and-canonical-urls.md) | Page hierarchy and canonical hierarchical URLs | Accepted |
 
-**Next number: 026.**
+**Next number: 027.**
 

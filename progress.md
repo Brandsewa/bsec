@@ -3,7 +3,7 @@
 Source of truth: `docs/PLAN.html` v2.0 (build order in `docs/BUILD-PLAN-M2-M9.md`). Items are ticked only after verification; the evidence is noted next to each. "From code" means it was read in the repo but not exercised live.
 
 ## In flight
-- **Antigravity**: `feat/admin-improvements-phase-4` — Phase 4: Integrations hub (Notifications, Storage, Payments) (2026-10-09)
+- **Antigravity**: `feat/admin-improvements-phase-5` — Phase 5: Themes cleanup + Pages table (store admin) (2026-10-09) [Ready for Claude verification]
 
 ## M11 · Auth & Transactional Email Overhaul (docs/AUTH-OVERHAUL-PLAN.md)
 
@@ -191,9 +191,7 @@ Handoff summary for anyone (or any agent) picking this up. Plan and acceptance c
 ## In flight
 
 One line per piece of work that is started and not merged. Add yours before you start, remove it when merged or abandoned (`AGENTS.md` section 6). Format: `agent · branch · area · since · one-line goal`.
-
-- Antigravity · feat/admin-improvements-phase-1 · platform storage & product image upload fix · 2026-10-08 · Super Admin storage connections (Local/R2/S3) + server-proxied upload and failed-to-fetch fix
-
+- Antigravity · feat/admin-improvements-phase-5 · themes cleanup & pages hierarchy/table · 2026-10-09 · Phase 5: Themes cleanup (Puck customize, 3 cards/row) and Pages table (DataTable, sheet, hierarchy, canonical URLs)
 
 
 ## Returns & Exchanges (Manual Review & Portal) — Complete (2026-10-02)
