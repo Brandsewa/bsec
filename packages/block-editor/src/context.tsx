@@ -14,6 +14,8 @@ export interface BlockEditorHost {
   /** Media library. Omit for contexts without a store (platform theme templates). */
   listMedia?: (() => Promise<MediaAsset[]>) | undefined;
   uploadMedia?: ((file: File) => Promise<MediaAsset>) | undefined;
+  /** Available navigation menus for header/footer menu selection. */
+  listMenus?: (() => Promise<Array<{ handle: string; title: string }>>) | undefined;
 }
 
 export interface EditorRenderData {

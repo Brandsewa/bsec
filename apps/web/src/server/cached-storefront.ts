@@ -77,6 +77,8 @@ export async function getCachedStorefrontCollection(
   cacheTag(tenantTag(tenantId, "collection"));
   // A collection page lists products, so product changes must refresh it too.
   cacheTag(tenantTag(tenantId, "product"));
+  // Filter menu changes also invalidate collection listings.
+  cacheTag(tenantTag(tenantId, "nav"));
   const { rt } = server();
   const tenantCtx = createStorefrontTenantContext(tenantId);
   const res = await getStorefrontCollection(rt, tenantCtx, slug, options);
@@ -116,12 +118,17 @@ async function loadRenderData(tenantId: string, tenantCtx: TenantContext, docume
   const rendered = renderBlockDocument(document);
   if (!rendered.success) return { data: {}, media: {} };
   let needsCatalog = false;
+  let needsNav = false;
   walkBlocks(rendered.blocks as BlockInstance[], (b) => {
-    if (b.type === "ProductGrid" || b.type === "ProductCarousel" || b.type === "CollectionGrid") needsCatalog = true;
+    if (b.type === "ProductGrid" || b.type === "ProductCarousel" || b.type === "CollectionGrid" || b.type === "ProductShowcase") needsCatalog = true;
+    if (b.type === "SiteHeader" || b.type === "SiteFooter") needsNav = true;
   });
   if (needsCatalog) {
     cacheTag(tenantTag(tenantId, "product"));
     cacheTag(tenantTag(tenantId, "collection"));
+  }
+  if (needsNav) {
+    cacheTag(tenantTag(tenantId, "nav"));
   }
   const { rt } = server();
   return resolvePageRenderData(rt, tenantCtx, rendered.blocks);
@@ -200,6 +207,9 @@ export async function getCachedStoreName(tenantId: string): Promise<string> {
 export async function getCachedThemePage(tenantId: string, key: ThemeSystemPageKey) {
   "use cache";
   cacheTag(tenantTag(tenantId, "page", THEME_SYSTEM_PAGES[key].slug));
+  if (key === "header" || key === "footer") {
+    cacheTag(tenantTag(tenantId, "nav"));
+  }
   const { rt } = server();
   const tenantCtx = createStorefrontTenantContext(tenantId);
   const page = await getStorefrontThemePage(rt, tenantCtx, key);

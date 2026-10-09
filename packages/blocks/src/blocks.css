@@ -187,9 +187,80 @@
 .bsb-site-header { border-bottom: 1px solid var(--b); }
 .bsb-site-header-row { display: flex; align-items: center; gap: 1.5rem; padding-block: 0.75rem; }
 .bsb-site-logo { font-family: var(--fh); font-weight: 700; font-size: 1.25rem; color: inherit; text-decoration: none; display: inline-flex; align-items: center; }
-.bsb-site-nav { display: none; gap: 1.5rem; font-size: 0.9rem; font-weight: 500; flex: 1; }
+.bsb-site-nav { display: none; gap: 1.5rem; font-size: 0.9rem; font-weight: 500; flex: 1; align-items: center; }
 .bsb-site-nav a { color: inherit; text-decoration: none; }
 .bsb-site-nav a:hover { color: var(--p); }
+.bsb-nav-item { position: relative; display: flex; align-items: center; }
+.bsb-nav-link { display: inline-flex; align-items: center; gap: 0.25rem; }
+.bsb-chevron { transition: transform 0.15s ease; }
+.bsb-has-dropdown:hover > .bsb-nav-link .bsb-chevron,
+.bsb-has-dropdown:focus-within > .bsb-nav-link .bsb-chevron { transform: rotate(180deg); }
+.bsb-dropdown-menu {
+  position: absolute;
+  top: 100%;
+  left: 0;
+  min-width: 12rem;
+  background: var(--bs-bg, #fff);
+  border: 1px solid var(--b, #e5e7eb);
+  border-radius: var(--r, 6px);
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.08);
+  padding: 0.5rem 0;
+  display: none;
+  z-index: 50;
+}
+.bsb-has-dropdown:hover > .bsb-dropdown-menu,
+.bsb-has-dropdown:focus-within > .bsb-dropdown-menu {
+  display: block;
+}
+.bsb-dropdown-list { list-style: none; margin: 0; padding: 0; }
+.bsb-dropdown-item { position: relative; padding: 0; }
+.bsb-dropdown-link { display: block; padding: 0.5rem 1rem; color: inherit; text-decoration: none; font-size: 0.875rem; }
+.bsb-dropdown-link:hover { background: var(--s, #f4f4f5); color: var(--p); }
+.bsb-dropdown-sublist { list-style: none; margin: 0; padding: 0 0 0 1rem; border-left: 2px solid var(--b, #e5e7eb); }
+.bsb-dropdown-sublink { display: block; padding: 0.35rem 1rem; font-size: 0.8125rem; color: inherit; text-decoration: none; }
+.bsb-dropdown-sublink:hover { color: var(--p); }
+
+.bsb-mobile-menu { display: block; position: relative; }
+@media (min-width: 768px) { .bsb-mobile-menu { display: none; } }
+.bsb-mobile-toggle { cursor: pointer; list-style: none; }
+.bsb-mobile-toggle::-webkit-details-marker { display: none; }
+.bsb-mobile-menu[open] .bsb-mobile-open-icon { display: none; }
+.bsb-mobile-menu:not([open]) .bsb-mobile-close-icon { display: none; }
+.bsb-mobile-drawer {
+  position: absolute;
+  top: 100%;
+  left: 0;
+  right: 0;
+  width: 100vw;
+  margin-left: calc(-50vw + 50%);
+  background: var(--bs-bg, #fff);
+  border-bottom: 1px solid var(--b, #e5e7eb);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.12);
+  padding: 1rem 1.5rem;
+  z-index: 50;
+  max-height: 80vh;
+  overflow-y: auto;
+}
+.bsb-mobile-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 0.75rem; }
+.bsb-mobile-link { display: block; padding: 0.4rem 0; font-size: 1rem; font-weight: 500; color: inherit; text-decoration: none; }
+.bsb-mobile-link:hover { color: var(--p); }
+.bsb-mobile-accordion { border-bottom: 1px solid var(--b, #f4f4f5); padding-bottom: 0.5rem; }
+.bsb-mobile-accordion-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0.4rem 0;
+  font-size: 1rem;
+  font-weight: 500;
+  cursor: pointer;
+  list-style: none;
+}
+.bsb-mobile-accordion-header::-webkit-details-marker { display: none; }
+.bsb-mobile-accordion[open] > .bsb-mobile-accordion-header .bsb-chevron { transform: rotate(180deg); }
+.bsb-mobile-sublist { padding: 0.25rem 0 0.5rem 1rem; display: flex; flex-direction: column; gap: 0.5rem; }
+.bsb-mobile-parent-link { font-size: 0.875rem; color: var(--m); font-weight: 400; }
+.bsb-mobile-subsublist { padding: 0.25rem 0 0.5rem 1rem; display: flex; flex-direction: column; gap: 0.35rem; }
+
 .bsb-site-actions { display: flex; align-items: center; gap: 0.5rem; margin-left: auto; }
 .bsb-site-icon { display: inline-flex; width: 2.25rem; height: 2.25rem; align-items: center; justify-content: center; border-radius: 9999px; color: inherit; text-decoration: none; position: relative; }
 .bsb-site-icon:hover { background: var(--s); }

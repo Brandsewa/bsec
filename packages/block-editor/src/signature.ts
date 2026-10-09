@@ -12,6 +12,13 @@ export function dataSignature(blocks: BlockInstance[]): string {
   const parts: unknown[] = [];
   walkBlocks(blocks, (b) => {
     if (DATA_TYPES.has(b.type)) parts.push([b.id, b.type, ...DATA_PROPS.map((k) => b.props[k])]);
+    if (b.type === "SiteHeader") parts.push([b.id, b.type, b.props.menuHandle]);
+    if (b.type === "SiteFooter") {
+      const handles = Array.isArray(b.props.columns)
+        ? (b.props.columns as Array<Record<string, unknown>>).map((c) => c?.menuHandle)
+        : [];
+      parts.push([b.id, b.type, handles]);
+    }
     const media = MEDIA_PROPS.map((k) => b.props[k]).filter(Boolean);
     for (const list of [b.props.items, b.props.images, b.props.slides]) {
       if (Array.isArray(list)) {

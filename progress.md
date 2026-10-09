@@ -3,6 +3,7 @@
 Source of truth: `docs/PLAN.html` v2.0 (build order in `docs/BUILD-PLAN-M2-M9.md`). Items are ticked only after verification; the evidence is noted next to each. "From code" means it was read in the repo but not exercised live.
 
 ## In flight
+- **Antigravity**: `feat/admin-improvements-phase-6` — Phase 6: Navigation builder with filter menus (2026-10-09) [Ready for Claude verification]
 - **Antigravity**: `feat/admin-improvements-phase-5` — Phase 5: Themes cleanup + Pages table (store admin) (2026-10-09) [Ready for Claude verification]
 
 ## M11 · Auth & Transactional Email Overhaul (docs/AUTH-OVERHAUL-PLAN.md)

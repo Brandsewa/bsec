@@ -104,11 +104,13 @@ export const menus = tenantTable(
     id: uuid("id").default(sql`uuidv7()`).primaryKey(),
     handle: text("handle").notNull(), // header, footer, custom
     title: text("title").notNull(),
+    kind: text("kind").notNull().default("navigation"), // navigation, filter
     items: jsonb("items").notNull().default(sql`'[]'::jsonb`),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().default(sql`now()`),
     updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().default(sql`now()`),
   },
   (t) => [
     unique("menus_tenant_handle_uniq").on(t.tenantId, t.handle),
+    index("menus_tenant_kind_idx").on(t.tenantId, t.kind),
   ],
 );

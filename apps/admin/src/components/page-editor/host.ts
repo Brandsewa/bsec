@@ -23,6 +23,15 @@ export const storeHost: BlockEditorHost & {
     const created = await uploadMedia(file, { folder: "pages", alt: file.name });
     return { id: created.id, url: created.url ?? URL.createObjectURL(file), alt: created.alt ?? null };
   },
+
+  async listMenus() {
+    try {
+      const res = await client.admin.menus.list();
+      return res.map((m) => ({ handle: m.handle, title: m.name }));
+    } catch {
+      return [];
+    }
+  },
 };
 
 /** --bs-* CSS variables for the store's current branding, so previews match the storefront. */

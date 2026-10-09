@@ -905,20 +905,68 @@ export const PageVersionItem = z.object({
 });
 export type PageVersionItem = z.infer<typeof PageVersionItem>;
 
+export const MenuKind = z.enum(["navigation", "filter"]);
+export type MenuKind = z.infer<typeof MenuKind>;
+
+export const FilterKind = z.enum([
+  "availability",
+  "price",
+  "brand",
+  "category",
+  "collection",
+  "tag",
+  "option",
+]);
+export type FilterKind = z.infer<typeof FilterKind>;
+
+export const FilterDisplay = z.enum(["checkbox", "range", "swatch"]);
+export type FilterDisplay = z.infer<typeof FilterDisplay>;
+
+export const FilterItemConfig = z.object({
+  kind: FilterKind,
+  label: z.string().min(1),
+  display: FilterDisplay,
+  optionName: z.string().optional(),
+  collapsed: z.boolean().optional(),
+});
+export type FilterItemConfig = z.infer<typeof FilterItemConfig>;
+
+export const MenuItemType = z.enum([
+  "url",
+  "page",
+  "collection",
+  "product",
+  "category",
+  "brand",
+  "blog",
+  "policy",
+  "home",
+  "search",
+  "account",
+  "filter",
+]);
+export type MenuItemType = z.infer<typeof MenuItemType>;
+
 export type MenuItem = {
   id: string;
   title: string;
   url: string;
-  type: "url" | "page" | "collection" | "product" | "category";
+  type: MenuItemType;
+  targetId?: string | undefined;
+  openInNewTab?: boolean | undefined;
+  filter?: FilterItemConfig | undefined;
   children?: MenuItem[] | undefined;
 };
 
 export const MenuItem: z.ZodType<MenuItem> = z.lazy(() =>
   z.object({
     id: z.string(),
-    title: z.string(),
-    url: z.string(),
-    type: z.enum(["url", "page", "collection", "product", "category"]).default("url"),
+    title: z.string().default(""),
+    url: z.string().default(""),
+    type: MenuItemType.default("url"),
+    targetId: z.string().optional(),
+    openInNewTab: z.boolean().optional(),
+    filter: FilterItemConfig.optional(),
     children: z.array(MenuItem).optional(),
   }),
 );
@@ -927,6 +975,10 @@ export const Menu = z.object({
   id: z.string().uuid(),
   name: z.string(),
   handle: z.string(),
+  kind: MenuKind.default("navigation"),
+  itemCount: z.number().int().optional(),
+  usedIn: z.array(z.string()).optional(),
+  isProtected: z.boolean().optional(),
   createdAt: z.string(),
   updatedAt: z.string(),
 });
@@ -2691,7 +2743,8 @@ export const adminContract = {
         z.object({
           name: z.string().min(1),
           handle: z.string().min(1),
-          items: z.array(z.unknown()).default([]),
+          kind: MenuKind.optional().default("navigation"),
+          items: z.array(MenuItem).default([]),
         }),
       )
       .output(Menu),
@@ -2701,7 +2754,9 @@ export const adminContract = {
         z.object({
           id: z.string().uuid(),
           name: z.string().min(1).optional(),
-          items: z.array(z.unknown()).optional(),
+          handle: z.string().min(1).optional(),
+          kind: MenuKind.optional(),
+          items: z.array(MenuItem).optional(),
         }),
       )
       .output(Menu),

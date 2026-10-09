@@ -184,6 +184,35 @@ export interface StorefrontProductSummary {
   brand?: StorefrontBrand | null | undefined;
 }
 
+export interface StorefrontFacetValue {
+  value: string;
+  label: string;
+  count: number;
+  selected: boolean;
+}
+
+export interface StorefrontFacet {
+  id: string;
+  kind: "availability" | "price" | "brand" | "category" | "collection" | "tag" | "option";
+  label: string;
+  display: "checkbox" | "range" | "swatch";
+  optionName?: string | undefined;
+  collapsed?: boolean | undefined;
+  values?: StorefrontFacetValue[] | undefined;
+  range?: {
+    min: number;
+    max: number;
+    currentMin?: number | undefined;
+    currentMax?: number | undefined;
+  } | undefined;
+}
+
+export interface StorefrontFacetedResult {
+  menuHandle: string;
+  facets: StorefrontFacet[];
+  activeFilterCount: number;
+}
+
 export interface StorefrontCollectionDetail {
   collection: {
     id: string;
@@ -205,6 +234,7 @@ export interface StorefrontCollectionDetail {
     page: number;
     limit: number;
   };
+  filterData?: StorefrontFacetedResult | undefined;
 }
 
 export interface StorefrontCategoryDetail {
@@ -226,6 +256,7 @@ export interface StorefrontCategoryDetail {
     page: number;
     limit: number;
   };
+  filterData?: StorefrontFacetedResult | undefined;
 }
 
 export interface CatalogListingOptions {
@@ -233,6 +264,8 @@ export interface CatalogListingOptions {
   limit?: number | undefined;
   sort?: "price_asc" | "price_desc" | "newest" | "title" | undefined;
   inStockOnly?: boolean | undefined;
+  filterMenuHandle?: string | undefined;
+  filters?: Record<string, string | string[] | undefined> | undefined;
 }
 
 /**
@@ -447,9 +480,117 @@ export async function getStorefrontCollection(
     const limit = Math.max(1, Math.min(100, opts?.limit ?? 24));
     const offset = (page - 1) * limit;
 
-    const inStockCondition = opts?.inStockOnly
-      ? sql`exists (select 1 from variants v join inventory_levels il on il.tenant_id = v.tenant_id and il.variant_id = v.id where v.tenant_id = ${schema.products.tenantId} and v.product_id = ${schema.products.id} and (il.on_hand - il.reserved) > 0)`
-      : undefined;
+    // Look up filter menu if handle provided
+    let filterMenu: typeof schema.menus.$inferSelect | undefined;
+    if (opts?.filterMenuHandle) {
+      const [found] = await tx
+        .select()
+        .from(schema.menus)
+        .where(
+          and(
+            eq(schema.menus.tenantId, ctx.tenantId),
+            eq(schema.menus.handle, opts.filterMenuHandle),
+            eq(schema.menus.kind, "filter"),
+          ),
+        )
+        .limit(1);
+      filterMenu = found;
+    }
+
+    const rawItems = Array.isArray(filterMenu?.items) ? (filterMenu.items as Array<Record<string, unknown>>) : [];
+    const facetDefs = rawItems
+      .filter((it): it is typeof it & { type: "filter"; filter: { kind: string; label: string; display: string; optionName?: string; collapsed?: boolean } } =>
+        Boolean(it && typeof it === "object" && it.type === "filter" && it.filter && typeof it.filter === "object"),
+      )
+      .slice(0, 10);
+
+    const validOptionNames = facetDefs
+      .filter((f) => f.filter.kind === "option" && typeof f.filter.optionName === "string" && f.filter.optionName.trim().length > 0)
+      .map((f) => f.filter.optionName?.trim() ?? "")
+      .filter(Boolean);
+
+    // Parse filter inputs with bounded limits
+    const rawFilters = opts?.filters ?? {};
+    const parsedInStock = opts?.inStockOnly || rawFilters["in_stock"] === "1" || rawFilters["in_stock"] === "true" || rawFilters["inStockOnly"] === "true";
+
+    let priceMin: number | undefined;
+    let priceMax: number | undefined;
+    const rawPrice = rawFilters["price"];
+    if (typeof rawPrice === "string" && rawPrice.includes("-")) {
+      const [minStr, maxStr] = rawPrice.split("-");
+      const minNum = minStr && minStr.trim() !== "" ? Number(minStr) : undefined;
+      const maxNum = maxStr && maxStr.trim() !== "" ? Number(maxStr) : undefined;
+      if (minNum !== undefined && !Number.isNaN(minNum)) {
+        priceMin = Math.max(0, Math.min(1_000_000_000, Math.round(minNum)));
+      }
+      if (maxNum !== undefined && !Number.isNaN(maxNum)) {
+        priceMax = Math.max(0, Math.min(1_000_000_000, Math.round(maxNum)));
+      }
+    }
+
+    const parseListParam = (val: unknown): string[] => {
+      if (!val) return [];
+      const parts = Array.isArray(val) ? val.map(String) : String(val).split(",");
+      return parts.map((s) => s.trim()).filter((s) => s.length > 0).slice(0, 20);
+    };
+
+    const brandSlugs = parseListParam(rawFilters["brand"]);
+    const categorySlugs = parseListParam(rawFilters["category"]);
+    const collectionSlugs = parseListParam(rawFilters["collection"]);
+    const tags = parseListParam(rawFilters["tag"]);
+
+    const optionsFilters: Record<string, string[]> = {};
+    for (const optName of validOptionNames) {
+      const val = rawFilters[optName.toLowerCase()] ?? rawFilters[optName];
+      const parsedVals = parseListParam(val);
+      if (parsedVals.length > 0) {
+        optionsFilters[optName] = parsedVals;
+      }
+    }
+
+    // Build parameterized filter conditions
+    const filterConditions: SQL[] = [];
+    if (parsedInStock) {
+      filterConditions.push(
+        sql`exists (select 1 from variants v join inventory_levels il on il.tenant_id = v.tenant_id and il.variant_id = v.id where v.tenant_id = ${schema.products.tenantId} and v.product_id = ${schema.products.id} and (il.on_hand - il.reserved) > 0)`
+      );
+    }
+    if (priceMin !== undefined) {
+      filterConditions.push(
+        sql`exists (select 1 from variants v where v.tenant_id = ${schema.products.tenantId} and v.product_id = ${schema.products.id} and v.price >= ${priceMin})`
+      );
+    }
+    if (priceMax !== undefined) {
+      filterConditions.push(
+        sql`exists (select 1 from variants v where v.tenant_id = ${schema.products.tenantId} and v.product_id = ${schema.products.id} and v.price <= ${priceMax})`
+      );
+    }
+    if (brandSlugs.length > 0) {
+      filterConditions.push(
+        sql`exists (select 1 from ${schema.brands} where ${schema.brands.tenantId} = ${schema.products.tenantId} and ${schema.brands.id} = ${schema.products.brandId} and ${inArray(schema.brands.slug, brandSlugs)})`
+      );
+    }
+    if (categorySlugs.length > 0) {
+      filterConditions.push(
+        sql`exists (select 1 from ${schema.productCategories} join ${schema.categories} on ${schema.categories.tenantId} = ${schema.productCategories.tenantId} and ${schema.categories.id} = ${schema.productCategories.categoryId} where ${schema.productCategories.tenantId} = ${schema.products.tenantId} and ${schema.productCategories.productId} = ${schema.products.id} and ${inArray(schema.categories.slug, categorySlugs)})`
+      );
+    }
+    if (collectionSlugs.length > 0) {
+      filterConditions.push(
+        sql`exists (select 1 from ${schema.collectionProducts} join ${schema.collections} on ${schema.collections.tenantId} = ${schema.collectionProducts.tenantId} and ${schema.collections.id} = ${schema.collectionProducts.collectionId} where ${schema.collectionProducts.tenantId} = ${schema.products.tenantId} and ${schema.collectionProducts.productId} = ${schema.products.id} and ${inArray(schema.collections.slug, collectionSlugs)})`
+      );
+    }
+    if (tags.length > 0) {
+      const tagCond = or(...tags.map((t) => sql`${t} = ANY(${schema.products.tags})`));
+      if (tagCond) filterConditions.push(tagCond);
+    }
+    for (const [optName, optVals] of Object.entries(optionsFilters)) {
+      if (optVals.length > 0) {
+        filterConditions.push(
+          sql`exists (select 1 from variants v where v.tenant_id = ${schema.products.tenantId} and v.product_id = ${schema.products.id} and ${or(...optVals.map((val) => sql`v.option_values ->> ${optName} = ${val}`))})`
+        );
+      }
+    }
 
     const minPriceSql = sql`(select min(v.price) from variants v where v.tenant_id = ${schema.products.tenantId} and v.product_id = ${schema.products.id})`;
 
@@ -472,18 +613,28 @@ export async function getStorefrontCollection(
     let prodRows: Array<{ product: typeof schema.products.$inferSelect }>;
     let total: number;
 
-    if (col.type === "automated" && col.rules) {
-      const parsedRules = parseCollectionRules(col.rules);
-      const ruleConditions = parsedRules.map((rule) => buildSingleRuleCondition(rule, schema.products));
-      const combinedRules = col.match === "any" ? (ruleConditions.length > 0 ? or(...ruleConditions) : undefined) : (ruleConditions.length > 0 ? and(...ruleConditions) : undefined);
+    const isAutomated = col.type === "automated" && col.rules;
+    const parsedRules = isAutomated ? parseCollectionRules(col.rules) : [];
+    const ruleConditions = parsedRules.map((rule) => buildSingleRuleCondition(rule, schema.products));
+    const combinedRules = isAutomated
+      ? (col.match === "any" ? (ruleConditions.length > 0 ? or(...ruleConditions) : undefined) : (ruleConditions.length > 0 ? and(...ruleConditions) : undefined))
+      : undefined;
 
-      const autoWhere = and(
-        eq(schema.products.tenantId, ctx.tenantId),
-        inArray(schema.products.status, [...LISTED_PRODUCT_STATUSES]),
-        isNull(schema.products.deletedAt),
-        inStockCondition,
-        combinedRules,
-      );
+    const autoBaseWhere = and(
+      eq(schema.products.tenantId, ctx.tenantId),
+      inArray(schema.products.status, [...LISTED_PRODUCT_STATUSES]),
+      isNull(schema.products.deletedAt),
+      combinedRules,
+    );
+
+    const manualBaseWhere = and(
+      eq(schema.collectionProducts.collectionId, col.id),
+      inArray(schema.products.status, [...LISTED_PRODUCT_STATUSES]),
+      isNull(schema.products.deletedAt),
+    );
+
+    if (isAutomated) {
+      const autoWhere = and(autoBaseWhere, ...filterConditions);
 
       prodRows = await tx
         .select({ product: schema.products })
@@ -500,12 +651,7 @@ export async function getStorefrontCollection(
 
       total = Number(countRows[0]?.count ?? prodRows.length);
     } else {
-      const baseWhere = and(
-        eq(schema.collectionProducts.collectionId, col.id),
-        inArray(schema.products.status, [...LISTED_PRODUCT_STATUSES]),
-        isNull(schema.products.deletedAt),
-        inStockCondition,
-      );
+      const baseWhere = and(manualBaseWhere, ...filterConditions);
 
       const manualOrderClause = (effectiveSort === "manual")
         ? asc(schema.collectionProducts.position)
@@ -547,6 +693,422 @@ export async function getStorefrontCollection(
     const productIds = productList.map((p) => p.id);
     const summaryItems = await buildProductSummaries(tx, productIds, productList);
 
+    // Compute facet metadata and counts if filterMenu provided
+    let filterData: StorefrontFacetedResult | undefined = undefined;
+    if (filterMenu && facetDefs.length > 0) {
+      const facets: StorefrontFacet[] = [];
+
+      for (const f of facetDefs) {
+        const k = f.filter.kind as StorefrontFacet["kind"];
+        const display = f.filter.display as StorefrontFacet["display"];
+
+        if (k === "availability") {
+          const availCheckSql = sql`exists (select 1 from variants v join inventory_levels il on il.tenant_id = v.tenant_id and il.variant_id = v.id where v.tenant_id = ${schema.products.tenantId} and v.product_id = ${schema.products.id} and (il.on_hand - il.reserved) > 0)`;
+          let inStockCount: number;
+
+          if (isAutomated) {
+            const [availRow] = await tx
+              .select({
+                inStockCount: sql<number>`count(case when ${availCheckSql} then 1 end)::int`,
+              })
+              .from(schema.products)
+              .where(autoBaseWhere);
+            inStockCount = Number(availRow?.inStockCount ?? 0);
+          } else {
+            const [availRow] = await tx
+              .select({
+                inStockCount: sql<number>`count(case when ${availCheckSql} then 1 end)::int`,
+              })
+              .from(schema.collectionProducts)
+              .innerJoin(
+                schema.products,
+                and(
+                  eq(schema.products.tenantId, schema.collectionProducts.tenantId),
+                  eq(schema.products.id, schema.collectionProducts.productId),
+                ),
+              )
+              .where(manualBaseWhere);
+            inStockCount = Number(availRow?.inStockCount ?? 0);
+          }
+
+          facets.push({
+            id: "availability",
+            kind: "availability",
+            label: f.filter.label,
+            display,
+            collapsed: f.filter.collapsed,
+            values: [
+              {
+                value: "1",
+                label: "In stock",
+                count: inStockCount,
+                selected: Boolean(parsedInStock),
+              },
+            ],
+          });
+        } else if (k === "price") {
+          let minPrice: number;
+          let maxPrice: number;
+
+          if (isAutomated) {
+            const [priceRow] = await tx
+              .select({
+                minPrice: sql<number>`coalesce(min(${schema.variants.price}), 0)::int`,
+                maxPrice: sql<number>`coalesce(max(${schema.variants.price}), 0)::int`,
+              })
+              .from(schema.variants)
+              .innerJoin(
+                schema.products,
+                and(
+                  eq(schema.products.tenantId, schema.variants.tenantId),
+                  eq(schema.products.id, schema.variants.productId),
+                  autoBaseWhere,
+                ),
+              );
+            minPrice = Number(priceRow?.minPrice ?? 0);
+            maxPrice = Number(priceRow?.maxPrice ?? 0);
+          } else {
+            const [priceRow] = await tx
+              .select({
+                minPrice: sql<number>`coalesce(min(${schema.variants.price}), 0)::int`,
+                maxPrice: sql<number>`coalesce(max(${schema.variants.price}), 0)::int`,
+              })
+              .from(schema.variants)
+              .innerJoin(
+                schema.collectionProducts,
+                and(
+                  eq(schema.collectionProducts.tenantId, schema.variants.tenantId),
+                  eq(schema.collectionProducts.productId, schema.variants.productId),
+                  eq(schema.collectionProducts.collectionId, col.id),
+                ),
+              )
+              .innerJoin(
+                schema.products,
+                and(
+                  eq(schema.products.tenantId, schema.collectionProducts.tenantId),
+                  eq(schema.products.id, schema.collectionProducts.productId),
+                  inArray(schema.products.status, [...LISTED_PRODUCT_STATUSES]),
+                  isNull(schema.products.deletedAt),
+                ),
+              );
+            minPrice = Number(priceRow?.minPrice ?? 0);
+            maxPrice = Number(priceRow?.maxPrice ?? 0);
+          }
+
+          facets.push({
+            id: "price",
+            kind: "price",
+            label: f.filter.label,
+            display,
+            collapsed: f.filter.collapsed,
+            range: {
+              min: minPrice,
+              max: maxPrice,
+              currentMin: priceMin,
+              currentMax: priceMax,
+            },
+          });
+        } else if (k === "brand") {
+          let brandRows: Array<{ name: string; slug: string; count: number }>;
+          if (isAutomated) {
+            brandRows = await tx
+              .select({
+                name: schema.brands.name,
+                slug: schema.brands.slug,
+                count: sql<number>`count(distinct ${schema.products.id})::int`,
+              })
+              .from(schema.brands)
+              .innerJoin(
+                schema.products,
+                and(
+                  eq(schema.products.tenantId, schema.brands.tenantId),
+                  eq(schema.products.brandId, schema.brands.id),
+                  autoBaseWhere,
+                ),
+              )
+              .where(eq(schema.brands.tenantId, ctx.tenantId))
+              .groupBy(schema.brands.id, schema.brands.name, schema.brands.slug)
+              .orderBy(desc(sql`count(distinct ${schema.products.id})`))
+              .limit(20);
+          } else {
+            brandRows = await tx
+              .select({
+                name: schema.brands.name,
+                slug: schema.brands.slug,
+                count: sql<number>`count(distinct ${schema.products.id})::int`,
+              })
+              .from(schema.brands)
+              .innerJoin(
+                schema.products,
+                and(
+                  eq(schema.products.tenantId, schema.brands.tenantId),
+                  eq(schema.products.brandId, schema.brands.id),
+                  inArray(schema.products.status, [...LISTED_PRODUCT_STATUSES]),
+                  isNull(schema.products.deletedAt),
+                ),
+              )
+              .innerJoin(
+                schema.collectionProducts,
+                and(
+                  eq(schema.collectionProducts.tenantId, schema.products.tenantId),
+                  eq(schema.collectionProducts.productId, schema.products.id),
+                  eq(schema.collectionProducts.collectionId, col.id),
+                ),
+              )
+              .where(eq(schema.brands.tenantId, ctx.tenantId))
+              .groupBy(schema.brands.id, schema.brands.name, schema.brands.slug)
+              .orderBy(desc(sql`count(distinct ${schema.products.id})`))
+              .limit(20);
+          }
+
+          facets.push({
+            id: "brand",
+            kind: "brand",
+            label: f.filter.label,
+            display,
+            collapsed: f.filter.collapsed,
+            values: brandRows.map((b) => ({
+              value: b.slug,
+              label: b.name,
+              count: Number(b.count),
+              selected: brandSlugs.includes(b.slug),
+            })),
+          });
+        } else if (k === "category") {
+          let catRows: Array<{ name: string; slug: string; count: number }>;
+          if (isAutomated) {
+            catRows = await tx
+              .select({
+                name: schema.categories.name,
+                slug: schema.categories.slug,
+                count: sql<number>`count(distinct ${schema.products.id})::int`,
+              })
+              .from(schema.categories)
+              .innerJoin(
+                schema.productCategories,
+                and(
+                  eq(schema.productCategories.tenantId, schema.categories.tenantId),
+                  eq(schema.productCategories.categoryId, schema.categories.id),
+                ),
+              )
+              .innerJoin(
+                schema.products,
+                and(
+                  eq(schema.products.tenantId, schema.productCategories.tenantId),
+                  eq(schema.products.id, schema.productCategories.productId),
+                  autoBaseWhere,
+                ),
+              )
+              .where(eq(schema.categories.tenantId, ctx.tenantId))
+              .groupBy(schema.categories.id, schema.categories.name, schema.categories.slug)
+              .orderBy(desc(sql`count(distinct ${schema.products.id})`))
+              .limit(20);
+          } else {
+            catRows = await tx
+              .select({
+                name: schema.categories.name,
+                slug: schema.categories.slug,
+                count: sql<number>`count(distinct ${schema.products.id})::int`,
+              })
+              .from(schema.categories)
+              .innerJoin(
+                schema.productCategories,
+                and(
+                  eq(schema.productCategories.tenantId, schema.categories.tenantId),
+                  eq(schema.productCategories.categoryId, schema.categories.id),
+                ),
+              )
+              .innerJoin(
+                schema.products,
+                and(
+                  eq(schema.products.tenantId, schema.productCategories.tenantId),
+                  eq(schema.products.id, schema.productCategories.productId),
+                  inArray(schema.products.status, [...LISTED_PRODUCT_STATUSES]),
+                  isNull(schema.products.deletedAt),
+                ),
+              )
+              .innerJoin(
+                schema.collectionProducts,
+                and(
+                  eq(schema.collectionProducts.tenantId, schema.products.tenantId),
+                  eq(schema.collectionProducts.productId, schema.products.id),
+                  eq(schema.collectionProducts.collectionId, col.id),
+                ),
+              )
+              .where(eq(schema.categories.tenantId, ctx.tenantId))
+              .groupBy(schema.categories.id, schema.categories.name, schema.categories.slug)
+              .orderBy(desc(sql`count(distinct ${schema.products.id})`))
+              .limit(20);
+          }
+
+          facets.push({
+            id: "category",
+            kind: "category",
+            label: f.filter.label,
+            display,
+            collapsed: f.filter.collapsed,
+            values: catRows.map((c) => ({
+              value: c.slug,
+              label: c.name,
+              count: Number(c.count),
+              selected: categorySlugs.includes(c.slug),
+            })),
+          });
+        } else if (k === "tag") {
+          let tagRows: Array<{ tag: string; count: number }>;
+          if (isAutomated) {
+            tagRows = await tx
+              .select({
+                tag: sql<string>`unnest(${schema.products.tags})`,
+                count: sql<number>`count(distinct ${schema.products.id})::int`,
+              })
+              .from(schema.products)
+              .where(
+                and(
+                  autoBaseWhere,
+                  sql`array_length(${schema.products.tags}, 1) > 0`,
+                ),
+              )
+              .groupBy(sql`1`)
+              .orderBy(desc(sql`count(distinct ${schema.products.id})`))
+              .limit(20);
+          } else {
+            tagRows = await tx
+              .select({
+                tag: sql<string>`unnest(${schema.products.tags})`,
+                count: sql<number>`count(distinct ${schema.products.id})::int`,
+              })
+              .from(schema.products)
+              .innerJoin(
+                schema.collectionProducts,
+                and(
+                  eq(schema.collectionProducts.tenantId, schema.products.tenantId),
+                  eq(schema.collectionProducts.productId, schema.products.id),
+                  eq(schema.collectionProducts.collectionId, col.id),
+                ),
+              )
+              .where(
+                and(
+                  eq(schema.products.tenantId, ctx.tenantId),
+                  inArray(schema.products.status, [...LISTED_PRODUCT_STATUSES]),
+                  isNull(schema.products.deletedAt),
+                  sql`array_length(${schema.products.tags}, 1) > 0`,
+                ),
+              )
+              .groupBy(sql`1`)
+              .orderBy(desc(sql`count(distinct ${schema.products.id})`))
+              .limit(20);
+          }
+
+          facets.push({
+            id: "tag",
+            kind: "tag",
+            label: f.filter.label,
+            display,
+            collapsed: f.filter.collapsed,
+            values: tagRows.map((t) => ({
+              value: t.tag,
+              label: t.tag,
+              count: Number(t.count),
+              selected: tags.includes(t.tag),
+            })),
+          });
+        } else if (k === "option" && f.filter.optionName) {
+          const optName = f.filter.optionName.trim();
+          let optRows: Array<{ val: string; count: number }>;
+
+          if (isAutomated) {
+            optRows = await tx
+              .select({
+                val: sql<string>`${schema.variants.optionValues}->>${optName}`,
+                count: sql<number>`count(distinct ${schema.products.id})::int`,
+              })
+              .from(schema.variants)
+              .innerJoin(
+                schema.products,
+                and(
+                  eq(schema.products.tenantId, schema.variants.tenantId),
+                  eq(schema.products.id, schema.variants.productId),
+                  autoBaseWhere,
+                ),
+              )
+              .where(
+                and(
+                  eq(schema.variants.tenantId, ctx.tenantId),
+                  sql`${schema.variants.optionValues}->>${optName} IS NOT NULL`,
+                ),
+              )
+              .groupBy(sql`1`)
+              .orderBy(desc(sql`count(distinct ${schema.products.id})`))
+              .limit(20);
+          } else {
+            optRows = await tx
+              .select({
+                val: sql<string>`${schema.variants.optionValues}->>${optName}`,
+                count: sql<number>`count(distinct ${schema.products.id})::int`,
+              })
+              .from(schema.variants)
+              .innerJoin(
+                schema.products,
+                and(
+                  eq(schema.products.tenantId, schema.variants.tenantId),
+                  eq(schema.products.id, schema.variants.productId),
+                  inArray(schema.products.status, [...LISTED_PRODUCT_STATUSES]),
+                  isNull(schema.products.deletedAt),
+                ),
+              )
+              .innerJoin(
+                schema.collectionProducts,
+                and(
+                  eq(schema.collectionProducts.tenantId, schema.products.tenantId),
+                  eq(schema.collectionProducts.productId, schema.products.id),
+                  eq(schema.collectionProducts.collectionId, col.id),
+                ),
+              )
+              .where(
+                and(
+                  eq(schema.variants.tenantId, ctx.tenantId),
+                  sql`${schema.variants.optionValues}->>${optName} IS NOT NULL`,
+                ),
+              )
+              .groupBy(sql`1`)
+              .orderBy(desc(sql`count(distinct ${schema.products.id})`))
+              .limit(20);
+          }
+
+          facets.push({
+            id: optName.toLowerCase(),
+            kind: "option",
+            label: f.filter.label,
+            display,
+            optionName: optName,
+            collapsed: f.filter.collapsed,
+            values: optRows.map((o) => ({
+              value: o.val,
+              label: o.val,
+              count: Number(o.count),
+              selected: optionsFilters[optName]?.includes(o.val) ?? false,
+            })),
+          });
+        }
+      }
+
+      const activeFilterCount =
+        (parsedInStock ? 1 : 0) +
+        (priceMin !== undefined || priceMax !== undefined ? 1 : 0) +
+        brandSlugs.length +
+        categorySlugs.length +
+        collectionSlugs.length +
+        tags.length +
+        Object.values(optionsFilters).reduce((acc, v) => acc + v.length, 0);
+
+      filterData = {
+        menuHandle: filterMenu.handle,
+        facets,
+        activeFilterCount,
+      };
+    }
+
     return {
       collection: {
         id: col.id,
@@ -568,6 +1130,7 @@ export async function getStorefrontCollection(
         page,
         limit,
       },
+      filterData,
     };
   });
 }

@@ -4,7 +4,7 @@
 
 | | |
 |---|---|
-| Last verified against | `feat/admin-improvements-phase-5` (Themes cleanup + Pages table; hierarchical canonical URLs, migration 0054), 2026-10-09 |
+| Last verified against | `feat/admin-improvements-phase-6` (Navigation builder + filter menus; @dnd-kit drag-and-drop, faceted catalog filters, migration 0055), 2026-10-09 |
 | Verified how | files read from the working tree; `pnpm docs:check` for the mechanical parts. Facts marked *(from code)* were read, not run. |
 | Owner | whoever changes the area (see the update triggers in section 0) |
 
@@ -279,8 +279,9 @@ Drizzle schema files in `packages/db/src/schema/` (one Postgres database, `publi
 | 0052 | `channel_messaging` | `platform_channel_providers` (SMS & WhatsApp provider configuration with AES-256-GCM encrypted tokens), `platform_message_log` (zero-retention masked phone audit log, 90-day retention prune) |
 | 0053 | `platform_payment_providers` | `platform_payment_providers` (Razorpay seeded enabled, Stripe disabled, per-provider live-mode switch; `app_rw` read-only), widens `payment_methods_provider_chk` to allow `stripe` |
 | 0054 | `pages_hierarchy` | `pages.parent_id uuid NULL`, composite foreign key `(tenant_id, parent_id) -> pages(tenant_id, id)`, index on `(tenant_id, parent_id)` (max depth 3, hierarchical canonical URLs) |
+| 0055 | `menus_kind` | `menus.kind text NOT NULL DEFAULT 'navigation'`, index on `(tenant_id, kind)` (navigation vs filter menus) |
 
-How to write one (expand, migrate, contract; `forceRlsSql`): `docs/migrations.md`. **Never edit an applied migration.** Latest on disk: `0054` (the docs check keeps this list honest).
+How to write one (expand, migrate, contract; `forceRlsSql`): `docs/migrations.md`. **Never edit an applied migration.** Latest on disk: `0055` (the docs check keeps this list honest).
 
 ---
 

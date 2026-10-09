@@ -6,9 +6,6 @@ import { createMemoryHistory, createRootRoute, createRouter, RouterProvider } fr
 
 const SAMPLE_TEXT = ["Acme", "Nepal", "Kathmandu", "Pokhara", "Free shipping across"];
 
-function render(client: QueryClient, component: React.ComponentType): string {
-  return renderToString(React.createElement(QueryClientProvider, { client }, React.createElement(component)));
-}
 /** Settings sections guard unsaved changes through the router, so they render inside an in-memory one. */
 async function renderRouted(client: QueryClient, Page: () => React.ReactNode): Promise<string> {
   const router = createRouter({ routeTree: createRootRoute({ component: Page }), history: createMemoryHistory({ initialEntries: ["/"] }) });
@@ -67,34 +64,18 @@ describe("Online store admin pages use real oRPC data", { timeout: 30000 }, () =
     expectNoSample(html);
   });
 
-  it("menus page renders seeded menu with nested items", async () => {
+  it("menus list page renders seeded menu in the table", async () => {
     const { MenusPage } = await import("../src/routes/_store/online-store/menus.tsx");
     const { orpc } = await import("../src/lib/orpc.ts");
     const client = newClient();
     client.setQueryData(orpc.admin.menus.list.queryOptions().queryKey, [
-      { id: MENU_ID, name: "Main menu", handle: "main-menu", createdAt: now, updatedAt: now },
+      { id: MENU_ID, name: "Main menu", handle: "main-menu", kind: "navigation", itemCount: 2, createdAt: now, updatedAt: now },
     ]);
-    client.setQueryData(orpc.admin.menus.get.queryOptions({ input: { handle: "main-menu" } }).queryKey, {
-      id: MENU_ID,
-      name: "Main menu",
-      handle: "main-menu",
-      createdAt: now,
-      updatedAt: now,
-      items: [
-        {
-          id: "i1",
-          title: "Shop",
-          url: "/collections/all",
-          type: "url",
-          children: [{ id: "i2", title: "Sarees", url: "/collections/sarees", type: "collection" }],
-        },
-      ],
-    });
-    const html = render(client, MenusPage);
+    const html = await renderRouted(client, MenusPage);
     expect(html).toContain("Main menu");
     expect(html).toContain("main-menu");
-    expect(html).toContain("collections/sarees");
-    expect(html).toContain("Sarees");
+    expect(html).toContain("Navigation");
+    expect(html).toContain("Add menu");
     expectNoSample(html);
   });
 
@@ -103,9 +84,9 @@ describe("Online store admin pages use real oRPC data", { timeout: 30000 }, () =
     const { orpc } = await import("../src/lib/orpc.ts");
     const client = newClient();
     client.setQueryData(orpc.admin.menus.list.queryOptions().queryKey, []);
-    const html = render(client, MenusPage);
-    expect(html).toContain("No menus yet");
-    expect(html).toContain("New menu");
+    const html = await renderRouted(client, MenusPage);
+    expect(html).toContain("No menus found");
+    expect(html).toContain("Add menu");
     expectNoSample(html);
   });
 

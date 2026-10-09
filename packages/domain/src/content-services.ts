@@ -1,4 +1,5 @@
 import { and, desc, eq, notInArray } from "drizzle-orm";
+import { z } from "zod";
 import { schema, withTenant } from "@bs/db";
 import { validateBlockDocument } from "@bs/blocks";
 import type { Runtime } from "./runtime.ts";
@@ -219,7 +220,7 @@ interface PageRowSummary {
   title: string;
 }
 
-function computeCanonicalPath(
+export function computeCanonicalPath(
   page: { slug: string; type?: string | null; parentId?: string | null },
   pagesById: Map<string, { slug: string; parentId?: string | null; type?: string | null }>,
 ): string {
@@ -336,9 +337,10 @@ function collectDescendantSlugs(
   return result;
 }
 
-function isPageReferencedInMenus(
+export function isPageReferencedInMenus(
   menusList: Array<{ title: string; items: unknown }>,
   pageSlugsAndPaths: string[],
+  pageId?: string,
 ): string | null {
   const targets = new Set(
     pageSlugsAndPaths.map((p) => p.toLowerCase().trim().replace(/\/+$/, "")),
@@ -348,7 +350,10 @@ function isPageReferencedInMenus(
     if (!Array.isArray(items)) return false;
     for (const it of items) {
       if (typeof it === "object" && it !== null) {
-        const item = it as { url?: unknown; children?: unknown };
+        const item = it as { url?: unknown; children?: unknown; targetId?: unknown };
+        if (pageId && typeof item.targetId === "string" && item.targetId === pageId) {
+          return true;
+        }
         if (typeof item.url === "string") {
           const rawUrl = (item.url.trim().toLowerCase().split("?")[0] ?? "").replace(/\/+$/, "");
           if (targets.has(rawUrl)) {
@@ -763,11 +768,11 @@ export async function deletePage(rt: Runtime, ctx: TenantContext, input: { id: s
     const pagesById = new Map(allPages.map((p) => [p.id, p]));
     const canonicalPath = computeCanonicalPath(page, pagesById);
 
-    const referencedMenu = isPageReferencedInMenus(menus, [
-      canonicalPath,
-      `/pages/${page.slug}`,
-      page.slug,
-    ]);
+    const referencedMenu = isPageReferencedInMenus(
+      menus,
+      [canonicalPath, `/pages/${page.slug}`, page.slug],
+      page.id,
+    );
 
     if (referencedMenu) {
       throw new Error(`Cannot delete page: It is referenced by navigation menu "${referencedMenu}". Remove the menu link first.`);
@@ -1048,19 +1053,214 @@ export async function rollbackPage(rt: Runtime, ctx: TenantContext, input: Rollb
 }
 
 // --- Menu Services ---
+
+const SAFE_MENU_SCHEME = /^(\/|#|https:\/\/|mailto:|tel:)/i;
+
+export const FilterItemSchema = z.object({
+  id: z.string(),
+  type: z.literal("filter"),
+  filter: z.object({
+    kind: z.enum(["availability", "price", "brand", "category", "collection", "tag", "option"]),
+    label: z.string().min(1),
+    display: z.enum(["checkbox", "range", "swatch"]),
+    optionName: z.string().optional(),
+    collapsed: z.boolean().optional(),
+  }),
+});
+
+export function isProtectedMenu(handle: string): boolean {
+  return handle === "header" || handle === "footer";
+}
+
+function validateMenuItems(kind: string, items: unknown[], depth = 1): void {
+  if (kind === "filter") {
+    if (depth > 1) {
+      throw new Error("Filter menus cannot have nested items");
+    }
+    for (const item of items) {
+      const parsed = FilterItemSchema.safeParse(item);
+      if (!parsed.success) {
+        throw new Error(`Invalid filter menu item: ${parsed.error.message}`);
+      }
+      const children = (item as { children?: unknown[] }).children;
+      if (Array.isArray(children) && children.length > 0) {
+        throw new Error("Filter menus cannot have nested items");
+      }
+    }
+    return;
+  }
+
+  // Navigation menu validation
+  if (depth > 3) {
+    throw new Error("Navigation menus cannot exceed 3 levels of nesting");
+  }
+
+  for (const item of items) {
+    if (!item || typeof item !== "object") {
+      throw new Error("Invalid menu item");
+    }
+    const it = item as Record<string, unknown>;
+    const type = typeof it.type === "string" ? it.type : "url";
+    if (type === "url" && typeof it.url === "string") {
+      const u = it.url.trim();
+      if (u && !SAFE_MENU_SCHEME.test(u)) {
+        throw new Error(`Unsafe URL scheme in menu item: "${u}"`);
+      }
+      if (Boolean(it.openInNewTab || it.newTab) && !/^https:\/\//i.test(u)) {
+        throw new Error("Only https: links can be set to open in a new tab");
+      }
+    }
+    if (Array.isArray(it.children) && it.children.length > 0) {
+      validateMenuItems("navigation", it.children, depth + 1);
+    }
+  }
+}
+
+function countMenuItems(items: unknown[]): number {
+  let count = 0;
+  for (const it of items) {
+    if (it && typeof it === "object") {
+      count += 1;
+      const children = (it as { children?: unknown[] }).children;
+      if (Array.isArray(children)) {
+        count += countMenuItems(children);
+      }
+    }
+  }
+  return count;
+}
+
+function computeMenuUsage(
+  menus: Array<{ handle: string }>,
+  pages: Array<{ type: string; title: string; document?: unknown }>,
+): Map<string, Set<string>> {
+  const usage = new Map<string, Set<string>>();
+  for (const m of menus) {
+    const s = new Set<string>();
+    if (m.handle === "header") s.add("Header");
+    if (m.handle === "footer") s.add("Footer");
+    usage.set(m.handle, s);
+  }
+
+  for (const page of pages) {
+    const doc = page.document as { blocks?: Array<{ type?: string; props?: Record<string, unknown> }> } | null;
+    if (!doc || !Array.isArray(doc.blocks)) continue;
+    for (const b of doc.blocks) {
+      if (!b || !b.props) continue;
+      const menuH = b.props.menuHandle;
+      if (typeof menuH === "string") {
+        const set = usage.get(menuH);
+        if (set) {
+          const label = page.type === "header" ? "Header" : page.type === "footer" ? "Footer" : page.title;
+          set.add(label);
+        }
+      }
+      if (Array.isArray(b.props.columns)) {
+        for (const col of b.props.columns as Array<Record<string, unknown>>) {
+          if (col && typeof col.menuHandle === "string") {
+            const set = usage.get(col.menuHandle);
+            if (set) {
+              set.add("Footer");
+            }
+          }
+        }
+      }
+      const filterH = b.props.filterMenuHandle;
+      if (typeof filterH === "string") {
+        const set = usage.get(filterH);
+        if (set) {
+          const label = page.type === "collection_template" ? "Collection template" : page.title;
+          set.add(label);
+        }
+      }
+    }
+  }
+
+  return usage;
+}
+
+async function ensureDefaultMenus(
+  tx: Parameters<Parameters<typeof withTenant>[2]>[0],
+  tenantId: string,
+): Promise<void> {
+  const existing = await tx
+    .select({ handle: schema.menus.handle })
+    .from(schema.menus)
+    .where(eq(schema.menus.tenantId, tenantId));
+  const handles = new Set(existing.map((r: { handle: string }) => r.handle));
+
+  if (!handles.has("header")) {
+    await tx
+      .insert(schema.menus)
+      .values({
+        tenantId,
+        handle: "header",
+        title: "Main menu",
+        kind: "navigation",
+        items: [
+          { id: crypto.randomUUID(), title: "Home", url: "/", type: "home" },
+          { id: crypto.randomUUID(), title: "Catalog", url: "/collections/all", type: "collection" },
+          { id: crypto.randomUUID(), title: "About", url: "/pages/about", type: "page" },
+        ],
+      })
+      .onConflictDoNothing();
+  }
+
+  if (!handles.has("footer")) {
+    await tx
+      .insert(schema.menus)
+      .values({
+        tenantId,
+        handle: "footer",
+        title: "Footer menu",
+        kind: "navigation",
+        items: [
+          { id: crypto.randomUUID(), title: "About Us", url: "/pages/about", type: "page" },
+          { id: crypto.randomUUID(), title: "Privacy Policy", url: "/policies/privacy", type: "policy" },
+          { id: crypto.randomUUID(), title: "Terms of Service", url: "/policies/terms", type: "policy" },
+        ],
+      })
+      .onConflictDoNothing();
+  }
+}
+
 export async function listMenus(rt: Runtime, ctx: TenantContext) {
   assertPermission(ctx, "content.write");
   const db = rt._db.db;
 
   return withTenant(db, ctx.tenantId, async (tx) => {
+    await ensureDefaultMenus(tx, ctx.tenantId);
+
     const rows = await tx.select().from(schema.menus).orderBy(schema.menus.title);
-    return rows.map((r) => ({
-      id: r.id,
-      name: r.title,
-      handle: r.handle,
-      createdAt: r.createdAt.toISOString(),
-      updatedAt: r.updatedAt.toISOString(),
-    }));
+    const pageRows = await tx
+      .select({
+        title: schema.pages.title,
+        type: schema.pages.type,
+        document: schema.pageVersions.document,
+      })
+      .from(schema.pages)
+      .leftJoin(
+        schema.pageVersions,
+        eq(schema.pageVersions.id, schema.pages.publishedVersionId),
+      );
+
+    const usageMap = computeMenuUsage(rows, pageRows);
+
+    return rows.map((r) => {
+      const items = (r.items as unknown[]) ?? [];
+      const usedIn = Array.from(usageMap.get(r.handle) ?? []);
+      return {
+        id: r.id,
+        name: r.title,
+        handle: r.handle,
+        kind: (r.kind as "navigation" | "filter") || "navigation",
+        itemCount: countMenuItems(items),
+        usedIn,
+        isProtected: isProtectedMenu(r.handle),
+        createdAt: r.createdAt.toISOString(),
+        updatedAt: r.updatedAt.toISOString(),
+      };
+    });
   });
 }
 
@@ -1069,18 +1269,47 @@ export async function getMenu(rt: Runtime, ctx: TenantContext, input: { handle: 
   const db = rt._db.db;
 
   return withTenant(db, ctx.tenantId, async (tx) => {
-    const [row] = await tx
+    let [row] = await tx
       .select()
       .from(schema.menus)
       .where(eq(schema.menus.handle, input.handle));
 
+    if (!row && isProtectedMenu(input.handle)) {
+      await ensureDefaultMenus(tx, ctx.tenantId);
+      [row] = await tx
+        .select()
+        .from(schema.menus)
+        .where(eq(schema.menus.handle, input.handle));
+    }
+
     if (!row) throw new Error(`Menu not found: "${input.handle}"`);
+
+    const items = (row.items as unknown[]) ?? [];
+
+    const pageRows = await tx
+      .select({
+        title: schema.pages.title,
+        type: schema.pages.type,
+        document: schema.pageVersions.document,
+      })
+      .from(schema.pages)
+      .leftJoin(
+        schema.pageVersions,
+        eq(schema.pageVersions.id, schema.pages.publishedVersionId),
+      );
+
+    const usageMap = computeMenuUsage([row], pageRows);
+    const usedIn = Array.from(usageMap.get(row.handle) ?? []);
 
     return {
       id: row.id,
       name: row.title,
       handle: row.handle,
-      items: (row.items as unknown[]) ?? [],
+      kind: (row.kind as "navigation" | "filter") || "navigation",
+      itemCount: countMenuItems(items),
+      usedIn,
+      isProtected: isProtectedMenu(row.handle),
+      items,
       createdAt: row.createdAt.toISOString(),
       updatedAt: row.updatedAt.toISOString(),
     };
@@ -1090,10 +1319,18 @@ export async function getMenu(rt: Runtime, ctx: TenantContext, input: { handle: 
 export async function createMenu(
   rt: Runtime,
   ctx: TenantContext,
-  input: { name: string; handle: string; items?: unknown[] | undefined },
+  input: {
+    name: string;
+    handle: string;
+    kind?: "navigation" | "filter" | undefined;
+    items?: unknown[] | undefined;
+  },
 ) {
   assertPermission(ctx, "content.write");
   const db = rt._db.db;
+  const kind = input.kind ?? "navigation";
+  const items = input.items ?? [];
+  validateMenuItems(kind, items);
 
   return withTenant(db, ctx.tenantId, async (tx) => {
     const [row] = await tx
@@ -1102,7 +1339,8 @@ export async function createMenu(
         tenantId: ctx.tenantId,
         title: input.name,
         handle: input.handle,
-        items: input.items ?? [],
+        kind,
+        items,
       })
       .returning();
 
@@ -1112,6 +1350,9 @@ export async function createMenu(
       id: row.id,
       name: row.title,
       handle: row.handle,
+      kind: (row.kind as "navigation" | "filter") || "navigation",
+      itemCount: countMenuItems(items),
+      isProtected: isProtectedMenu(row.handle),
       createdAt: row.createdAt.toISOString(),
       updatedAt: row.updatedAt.toISOString(),
     };
@@ -1121,14 +1362,35 @@ export async function createMenu(
 export async function updateMenu(
   rt: Runtime,
   ctx: TenantContext,
-  input: { id: string; name?: string | undefined; items?: unknown[] | undefined },
+  input: {
+    id: string;
+    name?: string | undefined;
+    handle?: string | undefined;
+    kind?: "navigation" | "filter" | undefined;
+    items?: unknown[] | undefined;
+  },
 ) {
   assertPermission(ctx, "content.write");
   const db = rt._db.db;
 
   const row = await withTenant(db, ctx.tenantId, async (tx) => {
+    const [existing] = await tx.select().from(schema.menus).where(eq(schema.menus.id, input.id));
+    if (!existing) throw new Error(`Menu not found: "${input.id}"`);
+
+    if (input.handle !== undefined && input.handle !== existing.handle) {
+      if (isProtectedMenu(existing.handle)) {
+        throw new Error(`Cannot change handle of protected menu "${existing.handle}"`);
+      }
+    }
+
+    const effectiveKind = input.kind ?? (existing.kind as "navigation" | "filter") ?? "navigation";
+    const effectiveItems = input.items !== undefined ? input.items : ((existing.items as unknown[]) ?? []);
+    validateMenuItems(effectiveKind, effectiveItems);
+
     const updateData: Record<string, unknown> = { updatedAt: new Date() };
     if (input.name !== undefined) updateData.title = input.name;
+    if (input.handle !== undefined) updateData.handle = input.handle;
+    if (input.kind !== undefined) updateData.kind = input.kind;
     if (input.items !== undefined) updateData.items = input.items;
 
     const [updated] = await tx
@@ -1143,10 +1405,14 @@ export async function updateMenu(
 
   await invalidateCache(rt, ctx, { type: "nav_updated" });
 
+  const items = (row.items as unknown[]) ?? [];
   return {
     id: row.id,
     name: row.title,
     handle: row.handle,
+    kind: (row.kind as "navigation" | "filter") || "navigation",
+    itemCount: countMenuItems(items),
+    isProtected: isProtectedMenu(row.handle),
     createdAt: row.createdAt.toISOString(),
     updatedAt: row.updatedAt.toISOString(),
   };
@@ -1157,6 +1423,13 @@ export async function deleteMenu(rt: Runtime, ctx: TenantContext, input: { id: s
   const db = rt._db.db;
 
   return withTenant(db, ctx.tenantId, async (tx) => {
+    const [existing] = await tx.select().from(schema.menus).where(eq(schema.menus.id, input.id));
+    if (!existing) throw new Error(`Menu not found: "${input.id}"`);
+
+    if (isProtectedMenu(existing.handle)) {
+      throw new Error(`Protected default menu "${existing.handle}" cannot be deleted`);
+    }
+
     await tx.delete(schema.menus).where(eq(schema.menus.id, input.id));
     return { success: true };
   });

@@ -83,6 +83,100 @@ describe("header, footer, product and collection blocks", () => {
     expect(r.success).toBe(false);
   });
 
+  it("renders resolved menu with desktop dropdowns and mobile drawer accordion", () => {
+    const menuItems = [
+      { id: "1", label: "Home", url: "/", href: "/" },
+      {
+        id: "2",
+        label: "Shop",
+        url: "/collections/all",
+        href: "/collections/all",
+        children: [
+          {
+            id: "2a",
+            label: "Apparel",
+            url: "/collections/apparel",
+            href: "/collections/apparel",
+            children: [{ id: "2a1", label: "T-Shirts", url: "/collections/t-shirts", href: "/collections/t-shirts" }],
+          },
+          { id: "2b", label: "Accessories", url: "/collections/accessories", href: "/collections/accessories" },
+        ],
+      },
+    ];
+
+    const html = renderToStaticMarkup(
+      <>
+        {renderBlockTree([block("hdr", "SiteHeader", {})], {
+          storeName: "Acme Store",
+          data: { hdr: { kind: "menu", items: menuItems } },
+        })}
+      </>,
+    );
+
+    // Desktop dropdown
+    expect(html).toContain("bsb-has-dropdown");
+    expect(html).toContain("bsb-dropdown-menu");
+    expect(html).toContain('href="/collections/t-shirts"');
+    expect(html).toContain("T-Shirts");
+
+    // Mobile drawer accordion
+    expect(html).toContain("bsb-mobile-menu");
+    expect(html).toContain("bsb-mobile-drawer");
+    expect(html).toContain("bsb-mobile-accordion");
+    expect(html).toContain("All Shop");
+  });
+
+  it("falls back to block inline links when no menu exists (exact snapshot preservation)", () => {
+    const inlineLinks = [
+      { label: "Home", href: "/" },
+      { label: "Products", href: "/products" },
+    ];
+
+    const htmlWithoutMenu = renderToStaticMarkup(
+      <>{renderBlockTree([block("hdr", "SiteHeader", { links: inlineLinks })], { storeName: "Acme" })}</>,
+    );
+
+    // No mobile drawer should be rendered in fallback mode
+    expect(htmlWithoutMenu).not.toContain("bsb-mobile-menu");
+    expect(htmlWithoutMenu).not.toContain("bsb-has-dropdown");
+    expect(htmlWithoutMenu).toContain('href="/products"');
+    expect(htmlWithoutMenu).toContain("Products");
+  });
+
+  it("renders footer with resolved menu columns and fallback to inline links", () => {
+    const htmlWithMenu = renderToStaticMarkup(
+      <>
+        {renderBlockTree(
+          [
+            block("ftr", "SiteFooter", {
+              columns: [
+                { title: "Quick Links", links: [{ label: "Old", href: "/old" }] },
+                { title: "Help", links: [{ label: "FAQ", href: "/faq" }] },
+              ],
+            }),
+          ],
+          {
+            storeName: "Acme",
+            data: {
+              ftr: {
+                kind: "footer-menus",
+                columns: [
+                  [{ id: "m1", label: "New Shop", url: "/shop", href: "/shop" }],
+                  null, // Column 2 falls back to inline links
+                ],
+              },
+            },
+          },
+        )}
+      </>,
+    );
+
+    expect(htmlWithMenu).toContain("New Shop");
+    expect(htmlWithMenu).toContain('href="/shop"');
+    expect(htmlWithMenu).toContain("FAQ");
+    expect(htmlWithMenu).not.toContain("Old");
+  });
+
   it("round-trips through document rendering", () => {
     const r = renderBlockDocument({ version: 1, blocks: [block("f", "SiteFooter", {})] });
     expect(r.success).toBe(true);

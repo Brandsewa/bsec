@@ -687,22 +687,148 @@ const CartIcon = (
   </svg>
 );
 
+const HamburgerIcon = (
+  <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+    <line x1="3" y1="12" x2="21" y2="12" />
+    <line x1="3" y1="6" x2="21" y2="6" />
+    <line x1="3" y1="18" x2="21" y2="18" />
+  </svg>
+);
+
+const CloseIcon = (
+  <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+    <line x1="18" y1="6" x2="6" y2="18" />
+    <line x1="6" y1="6" x2="18" y2="18" />
+  </svg>
+);
+
 export function SiteHeaderView({ props, ctx }: A<R.SiteHeaderProps>): ReactNode {
   const name = props.logoText || ctx?.storeName || "Your store";
   const customLogoUrl = mediaSrc(ctx, props.logoMediaId);
   const logoUrl = customLogoUrl || (!props.logoText ? ctx?.logoUrl : null);
+
+  const d = ctx?.blockId ? ctx.data?.[ctx.blockId] : undefined;
+  const menuData = d && d.kind === "menu" ? d.items : undefined;
+  const hasResolvedMenu = Array.isArray(menuData) && menuData.length > 0;
+
   return (
     <header className={cx("bsb bs-block-site-header bsb-site-header", `bsb-tone-${props.tone}`, props.sticky && "bsb-sticky", props.layout === "center" && "bsb-site-header-center")}>
       <div className="bsb-w bsb-w-wide bsb-site-header-row">
+        {hasResolvedMenu ? (
+          <details className="bsb-mobile-menu">
+            <summary className="bsb-site-icon bsb-mobile-toggle" aria-label="Open menu">
+              <span className="bsb-mobile-open-icon">{HamburgerIcon}</span>
+              <span className="bsb-mobile-close-icon">{CloseIcon}</span>
+            </summary>
+            <div className="bsb-mobile-drawer">
+              <nav className="bsb-mobile-nav" aria-label="Mobile Navigation">
+                <ul className="bsb-mobile-list">
+                  {menuData.map((item) => (
+                    <li key={item.id} className="bsb-mobile-item">
+                      {item.children && item.children.length > 0 ? (
+                        <details className="bsb-mobile-accordion">
+                          <summary className="bsb-mobile-accordion-header">
+                            <span>{item.label}</span>
+                            <svg className="bsb-chevron" viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                              <path d="m6 9 6 6 6-6" />
+                            </svg>
+                          </summary>
+                          <div className="bsb-mobile-sublist">
+                            <NavLink ctx={ctx} href={item.url} className="bsb-mobile-link bsb-mobile-parent-link">
+                              All {item.label}
+                            </NavLink>
+                            {item.children.map((child) => (
+                              <div key={child.id} className="bsb-mobile-subitem">
+                                {child.children && child.children.length > 0 ? (
+                                  <details className="bsb-mobile-accordion bsb-mobile-subaccordion">
+                                    <summary className="bsb-mobile-accordion-header">
+                                      <span>{child.label}</span>
+                                      <svg className="bsb-chevron" viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                                        <path d="m6 9 6 6 6-6" />
+                                      </svg>
+                                    </summary>
+                                    <div className="bsb-mobile-subsublist">
+                                      <NavLink ctx={ctx} href={child.url} className="bsb-mobile-link bsb-mobile-parent-link">
+                                        All {child.label}
+                                      </NavLink>
+                                      {child.children.map((sub) => (
+                                        <NavLink key={sub.id} ctx={ctx} href={sub.url} className="bsb-mobile-link">
+                                          {sub.label}
+                                        </NavLink>
+                                      ))}
+                                    </div>
+                                  </details>
+                                ) : (
+                                  <NavLink ctx={ctx} href={child.url} className="bsb-mobile-link">
+                                    {child.label}
+                                  </NavLink>
+                                )}
+                              </div>
+                            ))}
+                          </div>
+                        </details>
+                      ) : (
+                        <NavLink ctx={ctx} href={item.url} className="bsb-mobile-link">
+                          {item.label}
+                        </NavLink>
+                      )}
+                    </li>
+                  ))}
+                </ul>
+              </nav>
+            </div>
+          </details>
+        ) : null}
         <NavLink ctx={ctx} href="/" className="bsb-site-logo">
           {logoUrl ? <img src={logoUrl} alt={name} style={{ maxHeight: 40, width: "auto" }} /> : <span>{name}</span>}
         </NavLink>
         <nav className="bsb-site-nav" aria-label="Main">
-          {props.links.map((l, i) => (
-            <NavLink key={`${l.href}-${i}`} ctx={ctx} href={l.href}>
-              {l.label}
-            </NavLink>
-          ))}
+          {hasResolvedMenu ? (
+            menuData.map((item) =>
+              item.children && item.children.length > 0 ? (
+                <div key={item.id} className="bsb-nav-item bsb-has-dropdown">
+                  <NavLink ctx={ctx} href={item.url} className="bsb-nav-link">
+                    <span>{item.label}</span>
+                    <svg className="bsb-chevron" viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                      <path d="m6 9 6 6 6-6" />
+                    </svg>
+                  </NavLink>
+                  <div className="bsb-dropdown-menu">
+                    <ul className="bsb-dropdown-list">
+                      {item.children.map((child) => (
+                        <li key={child.id} className="bsb-dropdown-item">
+                          <NavLink ctx={ctx} href={child.url} className="bsb-dropdown-link">
+                            {child.label}
+                          </NavLink>
+                          {child.children && child.children.length > 0 ? (
+                            <ul className="bsb-dropdown-sublist">
+                              {child.children.map((sub) => (
+                                <li key={sub.id} className="bsb-dropdown-subitem">
+                                  <NavLink ctx={ctx} href={sub.url} className="bsb-dropdown-sublink">
+                                    {sub.label}
+                                  </NavLink>
+                                </li>
+                              ))}
+                            </ul>
+                          ) : null}
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+                </div>
+              ) : (
+                <NavLink key={item.id} ctx={ctx} href={item.url} className="bsb-nav-link">
+                  {item.label}
+                </NavLink>
+              ),
+            )
+          ) : (
+            props.links.map((l, i) => (
+              <NavLink key={`${l.href}-${i}`} ctx={ctx} href={l.href}>
+                {l.label}
+              </NavLink>
+            ))
+          )}
         </nav>
         <div className="bsb-site-actions">
           {props.showSearch ? (
@@ -730,6 +856,10 @@ export function SiteHeaderView({ props, ctx }: A<R.SiteHeaderProps>): ReactNode 
 export function SiteFooterView({ props, ctx }: A<R.SiteFooterProps>): ReactNode {
   const name = ctx?.storeName || "Your store";
   const year = new Date().getFullYear();
+
+  const d = ctx?.blockId ? ctx.data?.[ctx.blockId] : undefined;
+  const footerMenus = d && d.kind === "footer-menus" ? d.columns : undefined;
+
   return (
     <footer className={cx("bsb bs-block-site-footer", `bsb-tone-${props.tone}`)}>
       <div className="bsb-w bsb-w-wide bsb-py-lg">
@@ -738,20 +868,26 @@ export function SiteFooterView({ props, ctx }: A<R.SiteFooterProps>): ReactNode 
             <p className="bsb-heading bsb-h-sm">{name}</p>
             {props.about ? <p className="bsb-muted" style={{ marginTop: "0.5rem", fontSize: "0.875rem" }}>{props.about}</p> : null}
           </div>
-          {props.columns.map((c, i) => (
-            <div key={`${c.title}-${i}`}>
-              <p className="bsb-site-footer-title">{c.title}</p>
-              <ul className="bsb-site-footer-links">
-                {c.links.map((l, j) => (
-                  <li key={`${l.href}-${j}`}>
-                    <NavLink ctx={ctx} href={l.href}>
-                      {l.label}
-                    </NavLink>
-                  </li>
-                ))}
-              </ul>
-            </div>
-          ))}
+          {props.columns.map((c, i) => {
+            const menuCol = footerMenus ? footerMenus[i] : null;
+            const links = menuCol && menuCol.length > 0
+              ? menuCol.map((item) => ({ label: item.label, href: item.url }))
+              : c.links;
+            return (
+              <div key={`${c.title}-${i}`}>
+                <p className="bsb-site-footer-title">{c.title}</p>
+                <ul className="bsb-site-footer-links">
+                  {links.map((l, j) => (
+                    <li key={`${l.href}-${j}`}>
+                      <NavLink ctx={ctx} href={l.href}>
+                        {l.label}
+                      </NavLink>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            );
+          })}
           {props.showNewsletter ? (
             <div>
               <p className="bsb-site-footer-title">{props.newsletterTitle}</p>
