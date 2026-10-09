@@ -31,7 +31,7 @@
   },
   "devDependencies": {
     "@bs/config": "workspace:*",
-    "@types/node": "24.19.0",
+    "@types/node": "26.6.4",
     "@types/pg": "8.23.1",
     "@testcontainers/postgresql": "12.1.0",
     "drizzle-kit": "0.31.11",
