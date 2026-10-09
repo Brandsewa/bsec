@@ -56,7 +56,10 @@ import {
   deleteCollection,
   deleteMediaRecord,
   deleteMenu,
+  deletePage,
   deleteProduct,
+  duplicatePage,
+  unpublishPage,
   getBrandSettings,
   getCollection,
   getMenu,
@@ -1454,6 +1457,27 @@ export const storeRouter = os.router({
         .handler(({ context, input }) => {
           if (!context.tenantCtx) throw new Error("Missing tenant context");
           return rollbackPage(context.rt, context.tenantCtx, input);
+        }),
+      delete: os.admin.pages.delete
+        .use(requireAdmin)
+        .use(requirePermission("content.write"))
+        .handler(({ context, input }) => {
+          if (!context.tenantCtx) throw new Error("Missing tenant context");
+          return deletePage(context.rt, context.tenantCtx, input);
+        }),
+      unpublish: os.admin.pages.unpublish
+        .use(requireAdmin)
+        .use(requirePermission("theme.publish"))
+        .handler(({ context, input }) => {
+          if (!context.tenantCtx) throw new Error("Missing tenant context");
+          return unpublishPage(context.rt, context.tenantCtx, input);
+        }),
+      duplicate: os.admin.pages.duplicate
+        .use(requireAdmin)
+        .use(requirePermission("content.write"))
+        .handler(({ context, input }) => {
+          if (!context.tenantCtx) throw new Error("Missing tenant context");
+          return duplicatePage(context.rt, context.tenantCtx, input);
         }),
     },
 

@@ -7,6 +7,7 @@ import {
   getStorefrontCategory,
   getStorefrontHomePage,
   getStorefrontPage,
+  getStorefrontPageByPath,
   getBrandSettings,
   getStorefrontThemePage,
   getStorefrontThemeTokens,
@@ -151,6 +152,22 @@ export async function getCachedStorefrontPage(tenantId: string, slug: string) {
 
   const renderData = await loadRenderData(tenantId, tenantCtx, page.document);
   return { ...page, renderData };
+}
+
+export async function getCachedStorefrontPageByPath(tenantId: string, pathSegments: string[]) {
+  "use cache";
+  const targetSlug = pathSegments[pathSegments.length - 1];
+  if (targetSlug) {
+    cacheTag(tenantTag(tenantId, "page", targetSlug));
+  }
+  cacheTag(tenantTag(tenantId, "store-shell"));
+  const { rt } = server();
+  const tenantCtx = createStorefrontTenantContext(tenantId);
+  const result = await getStorefrontPageByPath(rt, tenantCtx, pathSegments);
+  if (!result) return null;
+
+  const renderData = await loadRenderData(tenantId, tenantCtx, result.page.document);
+  return { ...result, renderData };
 }
 
 export async function getCachedBrandSettings(tenantId: string) {
