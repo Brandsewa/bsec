@@ -555,12 +555,15 @@ export async function getStorefrontCollection(
         sql`exists (select 1 from variants v join inventory_levels il on il.tenant_id = v.tenant_id and il.variant_id = v.id where v.tenant_id = ${schema.products.tenantId} and v.product_id = ${schema.products.id} and (il.on_hand - il.reserved) > 0)`
       );
     }
-    if (priceMin !== undefined) {
+    if (priceMin !== undefined && priceMax !== undefined) {
+      filterConditions.push(
+        sql`exists (select 1 from variants v where v.tenant_id = ${schema.products.tenantId} and v.product_id = ${schema.products.id} and v.price >= ${priceMin} and v.price <= ${priceMax})`
+      );
+    } else if (priceMin !== undefined) {
       filterConditions.push(
         sql`exists (select 1 from variants v where v.tenant_id = ${schema.products.tenantId} and v.product_id = ${schema.products.id} and v.price >= ${priceMin})`
       );
-    }
-    if (priceMax !== undefined) {
+    } else if (priceMax !== undefined) {
       filterConditions.push(
         sql`exists (select 1 from variants v where v.tenant_id = ${schema.products.tenantId} and v.product_id = ${schema.products.id} and v.price <= ${priceMax})`
       );

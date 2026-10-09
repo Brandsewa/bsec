@@ -88,11 +88,12 @@ describe("cached-storefront read-side tags match the write-side invalidation mat
     ]);
   });
 
-  it("collection loader tags with collection:{id} and collection", async () => {
+  it("collection loader tags with collection:{id}, collection, product and nav", async () => {
     await getCachedStorefrontCollection(TENANT_ID, "new");
     expect(cacheTagCalls).toEqual([
       tenantTag(TENANT_ID, "collection"),
       tenantTag(TENANT_ID, "product"),
+      tenantTag(TENANT_ID, "nav"),
       tenantTag(TENANT_ID, "collection", COLLECTION_ID),
     ]);
   });

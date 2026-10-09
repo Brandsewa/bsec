@@ -562,6 +562,7 @@ export async function createProduct(
 
     return product.id;
   });
+  await invalidateCache(rt, ctx, { type: "product_updated", productId: createdId });
   return loadProductDetailInternal(rt, ctx.tenantId, createdId);
 }
 
@@ -742,11 +743,18 @@ export async function deleteProduct(
   assertPermission(ctx, "products.write");
   const db = rt._db.db;
 
-  return withTenant(db, ctx.tenantId, async (tx) => {
+  const res = await withTenant(db, ctx.tenantId, async (tx) => {
     const [row] = await tx.delete(schema.products).where(eq(schema.products.id, input.id)).returning();
     if (!row) throw new Error(`Product not found: "${input.id}"`);
     return { success: true };
   });
+
+  await invalidateCache(rt, ctx, {
+    type: "product_updated",
+    productId: input.id,
+  });
+
+  return res;
 }
 
 /**
@@ -2085,6 +2093,12 @@ export async function createBrand(
 
     return row.id;
   });
+
+  await invalidateCache(rt, ctx, {
+    type: "brand_updated",
+    brandId: savedId,
+  });
+
   return loadBrandDetailInternal(rt, ctx.tenantId, savedId);
 }
 
@@ -2122,6 +2136,12 @@ export async function updateBrand(
 
     return row.id;
   });
+
+  await invalidateCache(rt, ctx, {
+    type: "brand_updated",
+    brandId: savedId,
+  });
+
   return loadBrandDetailInternal(rt, ctx.tenantId, savedId);
 }
 
@@ -2129,7 +2149,7 @@ export async function deleteBrand(rt: Runtime, ctx: TenantContext, input: { id: 
   assertPermission(ctx, "products.write");
   const db = rt._db.db;
 
-  return withTenant(db, ctx.tenantId, async (tx) => {
+  const res = await withTenant(db, ctx.tenantId, async (tx) => {
     const [prodCount] = await tx
       .select({ count: sql<number>`count(*)` })
       .from(schema.products)
@@ -2164,6 +2184,13 @@ export async function deleteBrand(rt: Runtime, ctx: TenantContext, input: { id: 
 
     return { success: true, affectedProducts: affected };
   });
+
+  await invalidateCache(rt, ctx, {
+    type: "brand_updated",
+    brandId: input.id,
+  });
+
+  return res;
 }
 
 // --- Locations ---

@@ -15,6 +15,7 @@ import {
   provisionTenant,
   publishPage,
   resolvePageRenderData,
+  tenantTag,
   updateMenu,
   updatePage,
   type Runtime,
@@ -156,11 +157,20 @@ describe("storefront menu resolution in resolvePageRenderData (Slice A)", () => 
     }
 
     // 6. Test slug rename: rename child page from "about-us" to "our-story"
+    const revalidated: string[][] = [];
+    (rt as unknown as { revalidateTags: (tags: string[]) => Promise<void> }).revalidateTags = async (tags: string[]) => {
+      revalidated.push(tags);
+    };
+
     await updatePage(rt, ctxA, {
       id: child.id,
       title: "Our Story",
       slug: "our-story",
     });
+
+    // Verify invalidation produced the tenant nav tag
+    const allTags = revalidated.flat();
+    expect(allTags).toContain(tenantTag(ctxA.tenantId, "nav"));
 
     const reloadedData = await resolvePageRenderData(rt, ctxA, [headerBlock]);
     if (reloadedData.data["hdr-1"]?.kind === "menu") {
@@ -382,10 +392,13 @@ describe("filter menus faceted filtering and counts (Slice C)", () => {
     const p1Id = crypto.randomUUID();
     const p2Id = crypto.randomUUID();
     const p3Id = crypto.randomUUID();
+    const pStraddleId = crypto.randomUUID();
 
     const v1Id = crypto.randomUUID();
     const v2Id = crypto.randomUUID();
     const v3Id = crypto.randomUUID();
+    const vStraddleLowId = crypto.randomUUID();
+    const vStraddleHighId = crypto.randomUUID();
 
     await withTenant(rt._db.db, ctxA.tenantId, async (tx) => {
       // Brands
@@ -433,6 +446,15 @@ describe("filter menus faceted filtering and counts (Slice C)", () => {
           brandId: brandAId,
           tags: ["winter", "sale"],
         },
+        {
+          id: pStraddleId,
+          tenantId: ctxA.tenantId,
+          title: "Straddle Shoes",
+          slug: "straddle-shoes",
+          status: "active",
+          brandId: brandBId,
+          tags: ["casual"],
+        },
       ]);
 
       // Variants
@@ -467,13 +489,35 @@ describe("filter menus faceted filtering and counts (Slice C)", () => {
           trackInventory: true,
           optionValues: { Size: "M" },
         },
+        {
+          id: vStraddleLowId,
+          tenantId: ctxA.tenantId,
+          productId: pStraddleId,
+          title: "Low Variant",
+          sku: "STR-LOW",
+          price: 500n,
+          trackInventory: true,
+          optionValues: { Size: "S" },
+        },
+        {
+          id: vStraddleHighId,
+          tenantId: ctxA.tenantId,
+          productId: pStraddleId,
+          title: "High Variant",
+          sku: "STR-HIGH",
+          price: 9000n,
+          trackInventory: true,
+          optionValues: { Size: "XL" },
+        },
       ]);
 
-      // Inventory (p1 in stock, p2 in stock, p3 out of stock)
+      // Inventory (p1 in stock, p2 in stock, p3 out of stock, straddle in stock)
       await tx.insert(schema.inventoryLevels).values([
         { tenantId: ctxA.tenantId, locationId, variantId: v1Id, onHand: 10, reserved: 0 },
         { tenantId: ctxA.tenantId, locationId, variantId: v2Id, onHand: 5, reserved: 0 },
         { tenantId: ctxA.tenantId, locationId, variantId: v3Id, onHand: 0, reserved: 0 },
+        { tenantId: ctxA.tenantId, locationId, variantId: vStraddleLowId, onHand: 5, reserved: 0 },
+        { tenantId: ctxA.tenantId, locationId, variantId: vStraddleHighId, onHand: 5, reserved: 0 },
       ]);
 
       // Map to Collection
@@ -481,6 +525,7 @@ describe("filter menus faceted filtering and counts (Slice C)", () => {
         { tenantId: ctxA.tenantId, collectionId: colId, productId: p1Id, position: 1 },
         { tenantId: ctxA.tenantId, collectionId: colId, productId: p2Id, position: 2 },
         { tenantId: ctxA.tenantId, collectionId: colId, productId: p3Id, position: 3 },
+        { tenantId: ctxA.tenantId, collectionId: colId, productId: pStraddleId, position: 4 },
       ]);
     });
 
@@ -524,27 +569,27 @@ describe("filter menus faceted filtering and counts (Slice C)", () => {
     });
 
     expect(fullRes).not.toBeNull();
-    expect(fullRes!.products.total).toBe(3);
+    expect(fullRes!.products.total).toBe(4);
     expect(fullRes!.filterData).toBeDefined();
 
     const facets = fullRes!.filterData!.facets;
     expect(facets.length).toBe(5);
 
-    // Availability facet: 2 in stock
+    // Availability facet: 3 in stock (p1, p2, straddle)
     const availFacet = facets.find((f) => f.kind === "availability");
-    expect(availFacet?.values?.[0]?.count).toBe(2);
+    expect(availFacet?.values?.[0]?.count).toBe(3);
 
-    // Price facet: min 1000, max 5000
+    // Price facet: min 500, max 9000 (straddle variants extend the range)
     const priceFacet = facets.find((f) => f.kind === "price");
-    expect(priceFacet?.range?.min).toBe(1000);
-    expect(priceFacet?.range?.max).toBe(5000);
+    expect(priceFacet?.range?.min).toBe(500);
+    expect(priceFacet?.range?.max).toBe(9000);
 
-    // Brand facet: Alpha has 2, Beta has 1
+    // Brand facet: Alpha has 2, Beta has 2
     const brandFacet = facets.find((f) => f.kind === "brand");
     const alphaBrand = brandFacet?.values?.find((v) => v.value === "brand-alpha");
     const betaBrand = brandFacet?.values?.find((v) => v.value === "brand-beta");
     expect(alphaBrand?.count).toBe(2);
-    expect(betaBrand?.count).toBe(1);
+    expect(betaBrand?.count).toBe(2);
 
     // Size option facet: M has 2, L has 1
     const sizeFacet = facets.find((f) => f.kind === "option" && f.optionName === "Size");
@@ -568,20 +613,24 @@ describe("filter menus faceted filtering and counts (Slice C)", () => {
     expect(brandFiltered!.filterData?.activeFilterCount).toBe(1);
 
     // 5. Test Filtering by Price Range (2000 - 4000)
+    // CRITICAL: pStraddle has variants at 500 and 9000 which straddle this range.
+    // With a single combined EXISTS clause requiring both bounds on the same variant,
+    // pStraddle MUST NOT match.
     const priceFiltered = await getStorefrontCollection(rt, ctxA, colSlug, {
       filterMenuHandle: "catalog-filters",
       filters: { price: "2000-4000" },
     });
     expect(priceFiltered!.products.total).toBe(1);
     expect(priceFiltered!.products.items[0]?.id).toBe(p2Id);
+    expect(priceFiltered!.products.items.map((p) => p.id)).not.toContain(pStraddleId);
 
     // 6. Test Filtering by Availability (In Stock only)
     const stockFiltered = await getStorefrontCollection(rt, ctxA, colSlug, {
       filterMenuHandle: "catalog-filters",
       filters: { in_stock: "1" },
     });
-    expect(stockFiltered!.products.total).toBe(2);
-    expect(stockFiltered!.products.items.map((p) => p.id)).toEqual(expect.arrayContaining([p1Id, p2Id]));
+    expect(stockFiltered!.products.total).toBe(3);
+    expect(stockFiltered!.products.items.map((p) => p.id)).toEqual(expect.arrayContaining([p1Id, p2Id, pStraddleId]));
 
     // 7. Test Filtering by Option (Size: L)
     const optionFiltered = await getStorefrontCollection(rt, ctxA, colSlug, {
@@ -604,7 +653,7 @@ describe("filter menus faceted filtering and counts (Slice C)", () => {
       filterMenuHandle: "catalog-filters",
       filters: { unknown_option: "XYZ" },
     });
-    expect(invalidOptFiltered!.products.total).toBe(3);
+    expect(invalidOptFiltered!.products.total).toBe(4);
 
     // 10. Capture EXPLAIN query plan evidence on real Postgres
     await withTenant(rt._db.db, ctxA.tenantId, async (tx) => {

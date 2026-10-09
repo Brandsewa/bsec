@@ -109,12 +109,28 @@ WHERE p.tenant_id = '...'
 - Execution Time: **0.148 ms**
 - Uses `Index Scan` on `products_tenant_id_uniq`, `variants_tenant_product_idx`, `inventory_levels_tenant_var_loc_uniq`, `collection_products_tenant_col_prod_uniq`, and `brands_tenant_slug_uniq`.
 
+## Verification Feedback Fixes (2026-10-09)
+Following Claude's verification review (`docs/changes/2026-10-09-claude-navigation-phase-6-verification.md`), all 4 items were resolved:
+1. **Cached Storefront Nav Tag & Test Counts:**
+   - Updated `apps/web/test/cached-storefront.test.ts` to expect `tenantTag(TENANT_ID, "nav")` in `getCachedStorefrontCollection`, aligning with the write-side invalidation matrix.
+   - Real test count: `apps/web` has **184 passing tests across 21 test files** (0 failures).
+2. **Comprehensive Nav Tag Cache Invalidation:**
+   - Extended `packages/domain/src/cache-invalidation.ts` with `brand_updated` event and added `tenantTag(tenantId, "nav")` to `product_updated`, `page_published`, `collection_updated`, and `brand_updated`.
+   - Wired cache invalidation into `packages/domain/src/catalog-services.ts` (`createProduct`, `deleteProduct`, `createBrand`, `updateBrand`, `deleteBrand`).
+   - Added unit tests in `packages/domain/test/cache-invalidation.test.ts` (12/12 passed) and real-DB integration test in `packages/domain/test/storefront-menus.int.test.ts` proving that page slug renaming triggers `nav` invalidation and resolves the menu item to the new canonical path.
+3. **Price Facet Filter Single EXISTS Bound:**
+   - In `packages/domain/src/storefront/catalog.ts`, merged `priceMin` and `priceMax` filters into a single `EXISTS (SELECT 1 FROM variants v WHERE v.tenant_id = p.tenant_id AND v.product_id = p.id AND v.price >= ${min} AND v.price <= ${max})`.
+   - Added test in `packages/domain/test/storefront-menus.int.test.ts` with product `pStraddle` possessing variants at ₹5.00 and ₹90.00; confirmed filtering for ₹20.00–₹40.00 correctly excludes it.
+4. **Browser Walkthrough Script & Heavy Test Run:**
+   - Committed `e2e/walkthrough-phase6.mjs`. **Note on Walkthrough Script:** The RPC and API layer is statefully mocked in this script to verify client-side rendering, TanStack router routes, `@dnd-kit` drag handles, keyboard indent/reorder buttons, responsive header dropdowns (desktop hover), mobile slide-over drawers with accordion disclosures, and collection filter sidebars / bottom sheets at 375 px and desktop. It is **not** a live backend run; backend and database queries are verified against real PostgreSQL via `storefront-menus.int.test.ts` and `test:heavy:local`.
+   - Executed `pnpm test:heavy:local`: Initial run encountered the known Windows worker crash (exit code 3221226505 / 0xC0000005) on 3 worker forks (`migration-0008-flags`, `cancel-restores-stock`, `finance-roles`), each of which passed individually; the subsequent full re-run passed completely (**95 test files, 2,001 tests passed**).
+
 ## Verification Evidence
 - **Docs Check:** `pnpm docs:check` passed (`docs:check ok`).
 - **Typecheck:** `pnpm typecheck` passed (clean across all 15 workspaces, 15/15 successful).
-- **Lint:** `pnpm lint` passed (0 errors, 0 warnings across all 15 workspaces).
+- **Lint:** `pnpm lint` passed (0 errors across all 15 workspaces).
 - **Monorepo Build:** `pnpm build` passed (6/6 successful: Next.js storefront, Vite admin SPA, Vite superadmin SPA, worker, packages).
-- **Domain Fast Tests:** `pnpm --filter @bs/domain test:fast` passed (46/46 files passed, 387/387 tests).
+- **Domain Fast Tests:** `pnpm --filter @bs/domain test:fast` passed (46/46 files passed, 390/390 tests).
 - **Real Database Integration Tests (`postgres://postgres:postgres@localhost:55432/postgres`):**
   - `packages/domain/test/storefront-menus.int.test.ts`: 8/8 passed (real Postgres):
     1. `resolvePageRenderData resolves SiteHeader menu dynamically and drops dead targets`
@@ -125,11 +141,11 @@ WHERE p.tenant_id = '...'
     6. `isPageReferencedInMenus detects page references by targetId`
     7. `filter menu CRUD and faceted catalog filtering with bounded inputs`
     8. `executes faceted collection query with sub-millisecond EXPLAIN ANALYZE plan`
-  - `packages/domain/test/isolation.int.test.ts`: 1,277/1,277 passed.
-  - `packages/db test`: 41/41 passed (including `b2-grants.int.test.ts` for migration 0055).
-- **Blocks & UI Tests:**
-  - `packages/blocks`: 114/114 passed (`packages/blocks/test/theme-pages.test.tsx` verifying navigation and logo rendering).
-  - `apps/web`: 165/165 passed.
+  - `packages/db test`: 41/41 passed across 5 test files (including `b2-grants.int.test.ts` for migration 0055).
+  - `pnpm test:heavy:local`: 95/95 test files passed, **2,001/2,001 tests passed** (duration: 245.17s).
+- **Storefront Web Tests:** `pnpm --filter @bs/web test` passed (21/21 files passed, **184/184 tests**).
+- **Blocks & UI Tests:** `packages/blocks`: 114/114 passed (`packages/blocks/test/theme-pages.test.tsx`).
+- **Browser Walkthrough:** `node e2e/walkthrough-phase6.mjs`: **45/45 checks passed** across desktop (1280x800) and mobile (375x812).
 
 ## Definition of Done Checklist
 - [x] Code follows section 2 and 3; the gate in section 4 passes.
@@ -140,3 +156,4 @@ WHERE p.tenant_id = '...'
 - [x] A change record in `docs/changes/` (required) and `progress.md` status/known-gaps/in-flight updated.
 - [x] No secrets, no generated files, no unrelated edits in the diff.
 - [x] Honest status: what you verified live, what you only read, what you did not do.
+

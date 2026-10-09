@@ -102,6 +102,7 @@ describe("PLAN §11.6 Cache Invalidation Matrix", () => {
       `t:${TENANT_ID}:category:${catId}`,
       `t:${TENANT_ID}:collection:${colId}`,
       `t:${TENANT_ID}:page:home`,
+      `t:${TENANT_ID}:nav`,
     ]);
   });
 
@@ -124,9 +125,48 @@ describe("PLAN §11.6 Cache Invalidation Matrix", () => {
     expect(tags).toEqual([`t:${TENANT_ID}:page:home`]);
   });
 
+  it("computes exact tags for custom page publish / slug change including nav tag", () => {
+    const tags = computeInvalidationTags(ctx, {
+      type: "page_published",
+      slug: "about",
+      extraSlugs: ["about-us"],
+    });
+
+    expect(tags).toEqual([
+      `t:${TENANT_ID}:page:about`,
+      `t:${TENANT_ID}:page:about-us`,
+      `t:${TENANT_ID}:nav`,
+    ]);
+  });
+
   it("computes exact tags for navigation menu update", () => {
     const tags = computeInvalidationTags(ctx, {
       type: "nav_updated",
+    });
+
+    expect(tags).toEqual([`t:${TENANT_ID}:nav`]);
+  });
+
+  it("computes exact tags for collection update including nav tag", () => {
+    const colId = "018f97b6-1234-7000-8000-000000000030";
+    const tags = computeInvalidationTags(ctx, {
+      type: "collection_updated",
+      collectionId: colId,
+    });
+
+    expect(tags).toEqual([
+      `t:${TENANT_ID}:collection:${colId}`,
+      `t:${TENANT_ID}:collection`,
+      `t:${TENANT_ID}:page:home`,
+      `t:${TENANT_ID}:nav`,
+    ]);
+  });
+
+  it("computes exact tags for brand update including nav tag", () => {
+    const brandId = "018f97b6-1234-7000-8000-000000000040";
+    const tags = computeInvalidationTags(ctx, {
+      type: "brand_updated",
+      brandId,
     });
 
     expect(tags).toEqual([`t:${TENANT_ID}:nav`]);
