@@ -21,7 +21,7 @@
   },
   "devDependencies": {
     "@bs/config": "workspace:*",
-    "@types/node": "24.19.0",
+    "@types/node": "26.6.4",
     "@types/react": "19.2.14",
     "@types/react-dom": "19.2.3",
     "@types/sanitize-html": "2.16.1",

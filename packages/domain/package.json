@@ -33,7 +33,7 @@
     "@bs/config": "workspace:*",
     "@bs/contracts": "workspace:*",
     "@testcontainers/postgresql": "12.1.0",
-    "@types/node": "24.19.0",
+    "@types/node": "26.6.4",
     "@types/nodemailer": "8.0.2",
     "@types/pg": "8.23.1",
     "eslint": "10.11.0",
