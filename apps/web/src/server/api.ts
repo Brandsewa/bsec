@@ -8,12 +8,21 @@ import { storeContract } from "@bs/contracts";
 import { hasPermission, type StorePermission } from "@bs/auth";
 import {
   adjustInventory,
+  assertPermission,
   buildTenantContext,
   getAdminMe,
   getStoreStatus,
   getStoreStatusInternal,
   attachProductMedia,
+  listStorePaymentProviders,
+  saveStripeCredentials,
+  getStorePaymentProvider,
+  clearProviderCredentials,
+  testPaymentProviderConnection,
+  setPaymentProviderActive,
   detachProductMedia,
+  uploadMediaDirect,
+  MAX_MEDIA_BYTES,
   updateStoreStatus,
   getSupportAdminMe,
   listStoreSupportSessions,
@@ -47,7 +56,10 @@ import {
   deleteCollection,
   deleteMediaRecord,
   deleteMenu,
+  deletePage,
   deleteProduct,
+  duplicatePage,
+  unpublishPage,
   getBrandSettings,
   getCollection,
   getMenu,
@@ -142,6 +154,9 @@ import {
   createAdminFulfillment,
   confirmAdminOrder,
   advanceAdminOrder,
+  archiveOrders,
+  unarchiveOrders,
+  deleteOrders,
   listPreorders,
   getPreorderStats,
   changePreorderShipDate,
@@ -500,6 +515,65 @@ export const storeRouter = os.router({
         .handler(({ context, input }) => {
           if (!context.tenantCtx) throw new Error("Missing tenant context");
           return setStandingSupportConsent(context.rt, context.tenantCtx, input.enabled).catch((e) => {
+            throw mapAuthError(e);
+          });
+        }),
+    },
+    paymentProviders: {
+      list: os.admin.paymentProviders.list
+        .use(requireAdmin)
+        .use(requirePermission("settings.read"))
+        .handler(({ context }) => {
+          if (!context.tenantCtx) throw new Error("Missing tenant context");
+          return listStorePaymentProviders(context.rt, context.tenantCtx);
+        }),
+      saveCredentials: os.admin.paymentProviders.saveCredentials
+        .use(requireAdmin)
+        .use(requirePermission("payments.manage"))
+        .handler(async ({ context, input }) => {
+          if (!context.tenantCtx) throw new Error("Missing tenant context");
+          try {
+            if (input.provider === "stripe") {
+              return await saveStripeCredentials(context.rt, context.tenantCtx, {
+                secretKey: input.keySecret,
+                webhookSecret: input.webhookSecret,
+              });
+            }
+            if (!input.keyId) throw new Error("Bad Request: Razorpay key id is required");
+            await saveRazorpayCredentials(context.rt, context.tenantCtx, {
+              keyId: input.keyId,
+              keySecret: input.keySecret,
+              webhookSecret: input.webhookSecret,
+            });
+            return await getStorePaymentProvider(context.rt, context.tenantCtx, "razorpay");
+          } catch (e) {
+            throw mapAuthError(e);
+          }
+        }),
+      clearCredentials: os.admin.paymentProviders.clearCredentials
+        .use(requireAdmin)
+        .use(requirePermission("payments.manage"))
+        .handler(({ context, input }) => {
+          if (!context.tenantCtx) throw new Error("Missing tenant context");
+          return clearProviderCredentials(context.rt, context.tenantCtx, input.provider).catch((e) => {
+            throw mapAuthError(e);
+          });
+        }),
+      test: os.admin.paymentProviders.test
+        .use(requireAdmin)
+        .use(requirePermission("payments.manage"))
+        .handler(({ context, input }) => {
+          if (!context.tenantCtx) throw new Error("Missing tenant context");
+          return testPaymentProviderConnection(context.rt, context.tenantCtx, input.provider).catch((e) => {
+            throw mapAuthError(e);
+          });
+        }),
+      setActive: os.admin.paymentProviders.setActive
+        .use(requireAdmin)
+        .use(requirePermission("payments.manage"))
+        .handler(({ context, input }) => {
+          if (!context.tenantCtx) throw new Error("Missing tenant context");
+          return setPaymentProviderActive(context.rt, context.tenantCtx, input.provider, input.active).catch((e) => {
             throw mapAuthError(e);
           });
         }),
@@ -1232,6 +1306,20 @@ export const storeRouter = os.router({
           if (!context.tenantCtx) throw new Error("Missing tenant context");
           return createMediaRecord(context.rt, context.tenantCtx, input);
         }),
+      upload: os.admin.media.upload
+        .use(requireAdmin)
+        .use(requirePermission("content.write"))
+        .handler(async ({ context, input }) => {
+          if (!context.tenantCtx) throw new Error("Missing tenant context");
+          const fileBytes = Buffer.from(input.data, "base64");
+          return uploadMediaDirect(context.rt, context.tenantCtx, {
+            fileBytes,
+            filename: input.filename,
+            mime: input.mime,
+            folder: input.folder,
+            alt: input.alt,
+          });
+        }),
       delete: os.admin.media.delete
         .use(requireAdmin)
         .use(requirePermission("content.write"))
@@ -1369,6 +1457,27 @@ export const storeRouter = os.router({
         .handler(({ context, input }) => {
           if (!context.tenantCtx) throw new Error("Missing tenant context");
           return rollbackPage(context.rt, context.tenantCtx, input);
+        }),
+      delete: os.admin.pages.delete
+        .use(requireAdmin)
+        .use(requirePermission("content.write"))
+        .handler(({ context, input }) => {
+          if (!context.tenantCtx) throw new Error("Missing tenant context");
+          return deletePage(context.rt, context.tenantCtx, input);
+        }),
+      unpublish: os.admin.pages.unpublish
+        .use(requireAdmin)
+        .use(requirePermission("theme.publish"))
+        .handler(({ context, input }) => {
+          if (!context.tenantCtx) throw new Error("Missing tenant context");
+          return unpublishPage(context.rt, context.tenantCtx, input);
+        }),
+      duplicate: os.admin.pages.duplicate
+        .use(requireAdmin)
+        .use(requirePermission("content.write"))
+        .handler(({ context, input }) => {
+          if (!context.tenantCtx) throw new Error("Missing tenant context");
+          return duplicatePage(context.rt, context.tenantCtx, input);
         }),
     },
 
@@ -1517,6 +1626,27 @@ export const storeRouter = os.router({
           } catch (err) {
             throw mapAuthError(err);
           }
+        }),
+      archive: os.admin.orders.archive
+        .use(requireAdmin)
+        .use(requirePermission("orders.write"))
+        .handler(async ({ context, input }) => {
+          if (!context.tenantCtx) throw new Error("Missing tenant context");
+          return archiveOrders(context.rt, context.tenantCtx, input);
+        }),
+      unarchive: os.admin.orders.unarchive
+        .use(requireAdmin)
+        .use(requirePermission("orders.write"))
+        .handler(async ({ context, input }) => {
+          if (!context.tenantCtx) throw new Error("Missing tenant context");
+          return unarchiveOrders(context.rt, context.tenantCtx, input);
+        }),
+      delete: os.admin.orders.delete
+        .use(requireAdmin)
+        .use(requirePermission("orders.delete"))
+        .handler(async ({ context, input }) => {
+          if (!context.tenantCtx) throw new Error("Missing tenant context");
+          return deleteOrders(context.rt, context.tenantCtx, input);
         }),
     },
 
@@ -2977,6 +3107,106 @@ api.get("/admin/finance/export", async (c) => {
       "Content-Disposition": `attachment; filename="${filename}"`,
     },
   });
+});
+
+/**
+ * Server-proxied media upload endpoint (supports multipart/form-data and application/json).
+ * Used when direct browser-to-bucket upload is disabled or when bucket CORS fails.
+ */
+api.post("/admin/media/upload", async (c) => {
+  const session = await resolveStaffSession(c.req.raw.headers);
+  if (!session) return c.json({ error: "Unauthorized" }, 401);
+
+  const tenantCtx = await buildTenantContext(server().rt._db.db, {
+    entryPath: "admin",
+    headers: c.req.raw.headers,
+    session,
+    request: { method: c.req.method, path: c.req.path },
+  });
+  if (!tenantCtx) return c.json({ error: "Store context required" }, 400);
+
+  try {
+    assertPermission(tenantCtx, "content.write");
+  } catch (err) {
+    return c.json({ error: err instanceof Error ? err.message : "Forbidden" }, 403);
+  }
+
+  const contentType = c.req.header("content-type") || "";
+  const contentLengthHeader = c.req.header("content-length");
+  if (contentLengthHeader) {
+    const contentLength = Number.parseInt(contentLengthHeader, 10);
+    // Allow up to 512KB overhead for multipart form boundaries and headers
+    const maxMultipartLength = MAX_MEDIA_BYTES + 512 * 1024;
+    // Base64 adds ~33% overhead plus JSON framing
+    const maxJsonLength = Math.ceil((MAX_MEDIA_BYTES * 4) / 3) + 64 * 1024;
+    const isJson = contentType.includes("application/json");
+    const limit = isJson ? maxJsonLength : maxMultipartLength;
+    if (!Number.isNaN(contentLength) && contentLength > limit) {
+      return c.json(
+        { error: "File too large: request size exceeds maximum allowed upload size (10 MB)." },
+        413,
+      );
+    }
+  }
+
+  let fileBytes: Buffer | Uint8Array;
+  let filename: string;
+  let mime: string;
+  let folder: string;
+  let alt: string | undefined;
+
+  if (contentType.includes("multipart/form-data")) {
+    const body = await c.req.parseBody();
+    const file = body["file"];
+    if (!file || typeof file === "string") {
+      return c.json({ error: "No file uploaded (field 'file' required)" }, 400);
+    }
+    const arrayBuffer = await (file as Blob).arrayBuffer();
+    fileBytes = Buffer.from(arrayBuffer);
+    filename = (file as File).name || "upload.jpg";
+    mime = (file as File).type || "application/octet-stream";
+    folder = typeof body["folder"] === "string" ? body["folder"] : "products";
+    alt = typeof body["alt"] === "string" ? body["alt"] : undefined;
+  } else if (contentType.includes("application/json")) {
+    const json = (await c.req.json().catch(() => ({}))) as Record<string, unknown>;
+    if (!json.data || !json.filename || !json.mime) {
+      return c.json({ error: "Missing required fields: filename, mime, data" }, 400);
+    }
+    if (typeof json.data === "string") {
+      const maxBase64Chars = Math.ceil((MAX_MEDIA_BYTES * 4) / 3);
+      if (json.data.length > maxBase64Chars) {
+        return c.json(
+          { error: "File too large: base64 payload exceeds 10 MB limit." },
+          413,
+        );
+      }
+    }
+    fileBytes = Buffer.from(String(json.data), "base64");
+    filename = String(json.filename);
+    mime = String(json.mime);
+    folder = typeof json.folder === "string" ? json.folder : "products";
+    alt = typeof json.alt === "string" ? json.alt : undefined;
+  } else {
+    return c.json(
+      { error: "Unsupported Content-Type. Expected multipart/form-data or application/json" },
+      400,
+    );
+  }
+
+  try {
+    const result = await uploadMediaDirect(server().rt, tenantCtx, {
+      fileBytes,
+      filename,
+      mime,
+      folder,
+      alt,
+    });
+    return c.json(result);
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : "Upload failed";
+    const status = msg.includes("quota") ? 403 : msg.includes("MIME") || msg.includes("Invalid") ? 400 : 500;
+    return c.json({ error: msg }, status);
+  }
 });
 
 api.all("/rpc/*", async (c, next) => {

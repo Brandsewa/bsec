@@ -26,6 +26,7 @@ interface CollectionPageProps {
     limit?: string;
     sort?: string;
     inStockOnly?: string;
+    [key: string]: string | undefined;
   }>;
 }
 
@@ -57,7 +58,17 @@ export async function generateMetadata({ params, searchParams }: CollectionPageP
 
       if (res?.collection) {
         const page = sp.page ? parseInt(sp.page, 10) : 1;
-        const hasFilterOrSortParams = Boolean(sp.sort || sp.inStockOnly);
+        const hasFilterOrSortParams = Boolean(
+          sp.sort ||
+          sp.inStockOnly ||
+          sp.in_stock ||
+          sp.price ||
+          sp.brand ||
+          sp.category ||
+          sp.collection ||
+          sp.tag ||
+          Object.keys(sp).some((k) => !["page", "limit"].includes(k))
+        );
 
         const seoMeta = buildCollectionSeoMetadata({
           collection: res.collection,
@@ -111,6 +122,7 @@ export default async function CollectionDetailPage({
   let collectionData: Awaited<ReturnType<typeof getStorefrontCollection>> = null;
   let host = "localhost";
   let tenantId = "";
+  let template: Awaited<ReturnType<typeof getCachedThemePage>> = null;
 
   try {
     const h = await headers();
@@ -123,11 +135,38 @@ export default async function CollectionDetailPage({
     }
 
     tenantId = access.tenantId;
+
+    // Check if the theme's collection template defines a filterMenuHandle
+    template = await getCachedThemePage(tenantId, "collection").catch(() => null);
+    let filterMenuHandle: string | undefined = undefined;
+    if (template?.blocks) {
+      const listingBlock = template.blocks.find((b) => b.type === "CollectionListing");
+      if (listingBlock && typeof listingBlock.props?.filterMenuHandle === "string" && listingBlock.props.filterMenuHandle) {
+        filterMenuHandle = listingBlock.props.filterMenuHandle;
+      }
+    }
+    if (!filterMenuHandle && typeof sp.filterMenu === "string") {
+      filterMenuHandle = sp.filterMenu;
+    }
+    if (!filterMenuHandle) {
+      filterMenuHandle = "filter";
+    }
+
+    // Extract filter search params
+    const filterParams: Record<string, string | string[] | undefined> = {};
+    for (const [k, v] of Object.entries(sp)) {
+      if (!["page", "limit", "sort"].includes(k)) {
+        filterParams[k] = v;
+      }
+    }
+
     collectionData = await getCachedStorefrontCollection(tenantId, slug, {
       page,
       limit,
       sort: sortOption,
       inStockOnly: inStockOnly || undefined,
+      filterMenuHandle,
+      filters: filterParams,
     });
   } catch {
     notFound();
@@ -167,8 +206,6 @@ export default async function CollectionDetailPage({
     { name: collection.title, url: `${storeUrl}/collections/${collection.slug}` },
   ]);
 
-  // The theme's own collection layout, when the store has one; the built-in layout otherwise.
-  const template = await getCachedThemePage(tenantId, "collection").catch(() => null);
   const listing = (options?: Parameters<typeof CollectionListingSection>[0]["options"]) => (
     <CollectionListingSection
       collection={collection}
@@ -177,6 +214,8 @@ export default async function CollectionDetailPage({
       limit={limit}
       rawSort={rawSort}
       inStockOnly={inStockOnly}
+      filterData={collectionData?.filterData}
+      filters={sp}
       options={options}
     />
   );

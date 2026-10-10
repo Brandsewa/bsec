@@ -124,7 +124,7 @@ describe("Media Storage & Cloudflare Images Helpers", () => {
 
       expect(descriptor.storageKey).toMatch(/^tenant-123\/products\/[a-zA-Z0-9-]+\.jpg$/);
       expect(descriptor.headers["Content-Type"]).toBe("image/jpeg");
-      expect(descriptor.headers["Content-Length"]).toBe("50000");
+      expect(descriptor.headers["Content-Length"]).toBeUndefined();
       expect(descriptor.expiresInSeconds).toBe(300);
     });
   });

@@ -331,7 +331,11 @@ export const platformTenantsContract = {
     .output(z.object({ ok: z.boolean(), suspendedCount: z.number() })),
   bulkChangeTier: oc
     .route({ method: "POST", path: "/platform/tenants/bulk-tier" })
-    .input(z.object({ tenantIds: z.array(z.string().uuid()).min(1), tier: z.enum(["XS", "S", "M", "L"]), confirmation: z.string() }))
+    .input(z.object({
+      tenantIds: z.array(z.string().uuid()).min(1),
+      tier: z.string().trim().min(1).max(32).regex(/^[A-Za-z0-9_-]+$/, "Tier code must be alphanumeric").transform((v) => v.toUpperCase()),
+      confirmation: z.string(),
+    }))
     .output(z.object({ ok: z.boolean(), updatedCount: z.number(), tier: z.string() })),
   requestDeletion: oc
     .route({ method: "POST", path: "/platform/tenants/{id}/request-deletion" })
@@ -586,19 +590,141 @@ export const platformSystemContract = {
     .output(z.object({ ok: z.boolean() })),
 };
 
+export const QuotaTierView = z.object({
+  code: z.string(),
+  name: z.string(),
+  description: z.string().nullable(),
+  sort: z.number(),
+  isActive: z.boolean(),
+  priceMonthlyPaise: z.number(),
+  priceYearlyPaise: z.number(),
+  currency: z.string(),
+  isPublic: z.boolean(),
+  storeCount: z.number(),
+  createdAt: z.string(),
+  updatedAt: z.string(),
+});
+export type QuotaTierView = z.infer<typeof QuotaTierView>;
+
+export const QuotaDefinitionView = z.object({
+  key: z.string(),
+  description: z.string().nullable(),
+  unit: z.string(),
+  enforcement: z.enum(["hard", "soft", "notify"]),
+  tierXs: z.number(),
+  tierS: z.number(),
+  tierM: z.number(),
+  tierL: z.number(),
+  createdAt: z.string(),
+  updatedAt: z.string(),
+});
+export type QuotaDefinitionView = z.infer<typeof QuotaDefinitionView>;
+
+export const QuotaTierLimitView = z.object({
+  tierCode: z.string(),
+  quotaKey: z.string(),
+  value: z.number(),
+});
+export type QuotaTierLimitView = z.infer<typeof QuotaTierLimitView>;
+
+export const QuotaMatrixView = z.object({
+  tiers: z.array(QuotaTierView),
+  definitions: z.array(QuotaDefinitionView),
+  limits: z.array(QuotaTierLimitView),
+});
+export type QuotaMatrixView = z.infer<typeof QuotaMatrixView>;
+
+export const CreateQuotaTierInput = z.object({
+  code: z
+    .string()
+    .min(1)
+    .max(50)
+    .regex(/^[A-Za-z0-9_-]+$/, "Code must contain only letters, numbers, hyphens and underscores"),
+  name: z.string().min(1).max(100),
+  description: z.string().max(500).optional(),
+  sort: z.number().int().optional(),
+  priceMonthlyPaise: z.number().int().nonnegative().optional(),
+  priceYearlyPaise: z.number().int().nonnegative().optional(),
+  currency: z.string().default("INR").optional(),
+  isPublic: z.boolean().optional(),
+});
+export type CreateQuotaTierInput = z.infer<typeof CreateQuotaTierInput>;
+
+export const UpdateQuotaTierInput = z.object({
+  code: z.string(),
+  name: z.string().min(1).max(100).optional(),
+  description: z.string().max(500).nullable().optional(),
+  sort: z.number().int().optional(),
+  isActive: z.boolean().optional(),
+  priceMonthlyPaise: z.number().int().nonnegative().optional(),
+  priceYearlyPaise: z.number().int().nonnegative().optional(),
+  currency: z.string().optional(),
+  isPublic: z.boolean().optional(),
+});
+export type UpdateQuotaTierInput = z.infer<typeof UpdateQuotaTierInput>;
+
+export const UpdateQuotaLimitsInput = z.object({
+  updates: z
+    .array(
+      z.object({
+        tierCode: z.string(),
+        quotaKey: z.string(),
+        value: z.number().int().nonnegative(),
+      }),
+    )
+    .min(1)
+    .max(1000),
+});
+export type UpdateQuotaLimitsInput = z.infer<typeof UpdateQuotaLimitsInput>;
+
+export const UpdateQuotaDefinitionInput = z.object({
+  key: z.string(),
+  description: z.string().max(500).nullable().optional(),
+  unit: z.string().min(1).max(50).optional(),
+  enforcement: z.enum(["hard", "soft", "notify"]).optional(),
+});
+export type UpdateQuotaDefinitionInput = z.infer<typeof UpdateQuotaDefinitionInput>;
+
 export const platformQuotasContract = {
   list: oc
     .route({ method: "GET", path: "/platform/quotas" })
-    .output(z.array(z.object({
-      key: z.string(),
-      description: z.string().nullable().optional(),
-      unit: z.string(),
-      enforcement: z.string(),
-      tierXs: z.number(),
-      tierS: z.number(),
-      tierM: z.number(),
-      tierL: z.number(),
-    }))),
+    .output(
+      z.array(
+        z.object({
+          key: z.string(),
+          description: z.string().nullable().optional(),
+          unit: z.string(),
+          enforcement: z.string(),
+          tierXs: z.number(),
+          tierS: z.number(),
+          tierM: z.number(),
+          tierL: z.number(),
+        }),
+      ),
+    ),
+  matrix: oc
+    .route({ method: "GET", path: "/platform/quotas/matrix" })
+    .output(QuotaMatrixView),
+  createTier: oc
+    .route({ method: "POST", path: "/platform/quotas/tiers" })
+    .input(CreateQuotaTierInput)
+    .output(z.object({ ok: z.boolean(), code: z.string() })),
+  updateTier: oc
+    .route({ method: "PATCH", path: "/platform/quotas/tiers/{code}" })
+    .input(UpdateQuotaTierInput)
+    .output(z.object({ ok: z.boolean() })),
+  deactivateTier: oc
+    .route({ method: "POST", path: "/platform/quotas/tiers/{code}/deactivate" })
+    .input(z.object({ code: z.string() }))
+    .output(z.object({ ok: z.boolean() })),
+  updateLimits: oc
+    .route({ method: "POST", path: "/platform/quotas/limits/batch" })
+    .input(UpdateQuotaLimitsInput)
+    .output(z.object({ ok: z.boolean(), updatedCount: z.number() })),
+  updateDefinition: oc
+    .route({ method: "PATCH", path: "/platform/quotas/definitions/{key}" })
+    .input(UpdateQuotaDefinitionInput)
+    .output(z.object({ ok: z.boolean() })),
 };
 
 export const platformFeaturesContract = {
@@ -757,4 +883,327 @@ export const platformEmailContract = {
       }).optional(),
     )
     .output(z.array(PlatformEmailLogEntry)),
+};
+
+export const PlatformStorageConnectionView = z.object({
+  id: z.string().uuid(),
+  name: z.string(),
+  driver: z.enum(["local", "r2", "s3"]),
+  purpose: z.enum(["public_media", "private_files"]),
+  isActive: z.boolean(),
+  status: z.enum(["untested", "ok", "failed"]),
+  lastTestAt: z.string().nullable().optional(),
+  lastTestError: z.string().nullable().optional(),
+  endpoint: z.string().nullable().optional(),
+  region: z.string().nullable().optional(),
+  bucket: z.string().nullable().optional(),
+  publicBaseUrl: z.string().nullable().optional(),
+  forcePathStyle: z.boolean().optional(),
+  localDir: z.string().nullable().optional(),
+  accountId: z.string().nullable().optional(),
+  directBrowserUpload: z.boolean().optional(),
+  hasAccessKey: z.boolean(),
+  accessKeyIdLast4: z.string().nullable().optional(),
+  hasSecretAccessKey: z.boolean(),
+  createdAt: z.string(),
+  updatedAt: z.string(),
+});
+export type PlatformStorageConnectionView = z.infer<typeof PlatformStorageConnectionView>;
+
+export const CreatePlatformStorageConnectionInput = z.object({
+  name: z.string().min(1).max(100),
+  driver: z.enum(["local", "r2", "s3"]),
+  purpose: z.enum(["public_media", "private_files"]),
+  endpoint: z.string().optional(),
+  region: z.string().optional(),
+  bucket: z.string().optional(),
+  publicBaseUrl: z.string().optional(),
+  forcePathStyle: z.boolean().optional(),
+  localDir: z.string().optional(),
+  accountId: z.string().optional(),
+  directBrowserUpload: z.boolean().optional(),
+  accessKeyId: z.string().optional(),
+  secretAccessKey: z.string().optional(),
+});
+export type CreatePlatformStorageConnectionInput = z.infer<typeof CreatePlatformStorageConnectionInput>;
+
+export const UpdatePlatformStorageConnectionInput = z.object({
+  id: z.string().uuid(),
+  name: z.string().min(1).max(100).optional(),
+  driver: z.enum(["local", "r2", "s3"]).optional(),
+  purpose: z.enum(["public_media", "private_files"]).optional(),
+  endpoint: z.string().nullable().optional(),
+  region: z.string().nullable().optional(),
+  bucket: z.string().nullable().optional(),
+  publicBaseUrl: z.string().nullable().optional(),
+  forcePathStyle: z.boolean().optional(),
+  localDir: z.string().nullable().optional(),
+  accountId: z.string().nullable().optional(),
+  directBrowserUpload: z.boolean().optional(),
+  accessKeyId: z.string().optional(),
+  secretAccessKey: z.string().optional(),
+});
+export type UpdatePlatformStorageConnectionInput = z.infer<typeof UpdatePlatformStorageConnectionInput>;
+
+export const PlatformStorageStatsView = z.object({
+  totalBytes: z.number(),
+  totalFiles: z.number(),
+  byConnection: z.array(
+    z.object({
+      connectionId: z.string().nullable(),
+      connectionName: z.string().nullable(),
+      bytes: z.number(),
+      files: z.number(),
+    }),
+  ),
+  topTenants: z.array(
+    z.object({
+      tenantId: z.string().nullable(),
+      tenantName: z.string(),
+      bytes: z.number(),
+      files: z.number(),
+    }),
+  ),
+});
+export type PlatformStorageStatsView = z.infer<typeof PlatformStorageStatsView>;
+
+export const platformStorageContract = {
+  list: oc
+    .route({ method: "GET", path: "/platform/storage/connections" })
+    .output(z.array(PlatformStorageConnectionView)),
+  stats: oc
+    .route({ method: "GET", path: "/platform/storage/stats" })
+    .output(PlatformStorageStatsView),
+  get: oc
+    .route({ method: "GET", path: "/platform/storage/connections/{id}" })
+    .input(z.object({ id: z.string().uuid() }))
+    .output(PlatformStorageConnectionView),
+  create: oc
+    .route({ method: "POST", path: "/platform/storage/connections" })
+    .input(CreatePlatformStorageConnectionInput)
+    .output(z.object({ id: z.string().uuid(), ok: z.boolean() })),
+  update: oc
+    .route({ method: "PATCH", path: "/platform/storage/connections/{id}" })
+    .input(UpdatePlatformStorageConnectionInput)
+    .output(z.object({ ok: z.boolean() })),
+  activate: oc
+    .route({ method: "POST", path: "/platform/storage/connections/{id}/activate" })
+    .input(z.object({ id: z.string().uuid() }))
+    .output(z.object({ ok: z.boolean() })),
+  test: oc
+    .route({ method: "POST", path: "/platform/storage/connections/{id}/test" })
+    .input(z.object({ id: z.string().uuid() }))
+    .output(
+      z.object({
+        ok: z.boolean(),
+        status: z.string(),
+        error: z.string().optional(),
+        corsOk: z.boolean().optional(),
+        corsDetails: z.string().optional(),
+      }),
+    ),
+  delete: oc
+    .route({ method: "DELETE", path: "/platform/storage/connections/{id}" })
+    .input(z.object({ id: z.string().uuid() }))
+    .output(z.object({ ok: z.boolean() })),
+};
+
+export const PlatformIntegrationsOverview = z.object({
+  channels: z.object({
+    email: z.object({
+      status: z.enum(["active", "not_configured", "failing"]),
+      sent7d: z.number(),
+      failed7d: z.number(),
+      provider: z.string().nullable(),
+    }),
+    sms: z.object({
+      status: z.enum(["active", "not_configured", "not_enrolled", "failing"]),
+      sent7d: z.number(),
+      failed7d: z.number(),
+      provider: z.string().nullable(),
+    }),
+    whatsapp: z.object({
+      status: z.enum(["active", "not_configured", "not_enrolled", "failing"]),
+      sent7d: z.number(),
+      failed7d: z.number(),
+      provider: z.string().nullable(),
+    }),
+  }),
+  storage: z.object({
+    activeConnections: z.number(),
+    totalBytes: z.number(),
+    totalFiles: z.number(),
+  }),
+  payments: z.object({
+    enabledProviders: z.array(z.string()),
+    totalConnectedStores: z.number(),
+  }),
+});
+export type PlatformIntegrationsOverview = z.infer<typeof PlatformIntegrationsOverview>;
+
+export const ChannelStatsView = z.object({
+  channel: z.enum(["email", "sms", "whatsapp"]),
+  range: z.enum(["24h", "7d", "30d"]),
+  sent: z.number(),
+  failed: z.number(),
+  skipped: z.number(),
+  total: z.number(),
+  successRate: z.number(),
+  daily: z.array(
+    z.object({
+      date: z.string(),
+      sent: z.number(),
+      failed: z.number(),
+      skipped: z.number(),
+    }),
+  ),
+});
+export type ChannelStatsView = z.infer<typeof ChannelStatsView>;
+
+export const ChannelTransactionEntry = z.object({
+  id: z.string(),
+  channel: z.enum(["email", "sms", "whatsapp"]),
+  createdAt: z.string(),
+  recipient: z.string(),
+  template: z.string(),
+  tenantId: z.string().nullable().optional(),
+  tenantName: z.string().nullable().optional(),
+  status: z.enum(["sent", "failed", "skipped"]),
+  provider: z.string().nullable().optional(),
+  providerMessageId: z.string().nullable().optional(),
+  error: z.string().nullable().optional(),
+});
+export type ChannelTransactionEntry = z.infer<typeof ChannelTransactionEntry>;
+
+export const ChannelTransactionsView = z.object({
+  items: z.array(ChannelTransactionEntry),
+  total: z.number(),
+});
+export type ChannelTransactionsView = z.infer<typeof ChannelTransactionsView>;
+
+export const PlatformChannelProviderView = z.object({
+  id: z.string(),
+  channel: z.enum(["sms", "whatsapp"]),
+  provider: z.string(),
+  displayName: z.string(),
+  config: z.record(z.string(), z.unknown()),
+  hasSecret: z.boolean(),
+  enabled: z.boolean(),
+  isDefault: z.boolean(),
+  lastTestAt: z.string().nullable().optional(),
+  lastTestStatus: z.string().nullable().optional(),
+  lastTestError: z.string().nullable().optional(),
+  createdAt: z.string(),
+  updatedAt: z.string(),
+});
+export type PlatformChannelProviderView = z.infer<typeof PlatformChannelProviderView>;
+
+export const CreatePlatformChannelProviderInput = z.object({
+  channel: z.enum(["sms", "whatsapp"]),
+  provider: z.literal("zoho_cpaas"),
+  displayName: z.string().min(1).max(100),
+  config: z.record(z.string(), z.unknown()).default({}),
+  secret: z.string().optional(),
+  enabled: z.boolean().default(false),
+  isDefault: z.boolean().default(false),
+});
+export type CreatePlatformChannelProviderInput = z.infer<typeof CreatePlatformChannelProviderInput>;
+
+export const UpdatePlatformChannelProviderInput = z.object({
+  id: z.string().uuid(),
+  displayName: z.string().min(1).max(100).optional(),
+  config: z.record(z.string(), z.unknown()).optional(),
+  secret: z.string().optional(),
+  enabled: z.boolean().optional(),
+  isDefault: z.boolean().optional(),
+});
+export type UpdatePlatformChannelProviderInput = z.infer<typeof UpdatePlatformChannelProviderInput>;
+
+export const PlatformPaymentProviderView = z.object({
+  provider: z.enum(["razorpay", "stripe"]),
+  displayName: z.string(),
+  enabled: z.boolean(),
+  liveModeAllowed: z.boolean(),
+  connectedStores: z.number(),
+  activeStores: z.number(),
+  updatedAt: z.string(),
+});
+export type PlatformPaymentProviderView = z.infer<typeof PlatformPaymentProviderView>;
+
+export const platformIntegrationsContract = {
+  paymentProviders: oc
+    .route({ method: "GET", path: "/platform/integrations/payments/providers" })
+    .output(z.array(PlatformPaymentProviderView)),
+  updatePaymentProvider: oc
+    .route({ method: "PATCH", path: "/platform/integrations/payments/providers/{provider}" })
+    .input(
+      z.object({
+        provider: z.enum(["razorpay", "stripe"]),
+        enabled: z.boolean().optional(),
+        liveModeAllowed: z.boolean().optional(),
+      }),
+    )
+    .output(z.object({ ok: z.literal(true) })),
+  overview: oc
+    .route({ method: "GET", path: "/platform/integrations/overview" })
+    .output(PlatformIntegrationsOverview),
+  channelStats: oc
+    .route({ method: "GET", path: "/platform/integrations/channels/{channel}/stats" })
+    .input(
+      z.object({
+        channel: z.enum(["email", "sms", "whatsapp"]),
+        range: z.enum(["24h", "7d", "30d"]).default("7d"),
+      }),
+    )
+    .output(ChannelStatsView),
+  channelTransactions: oc
+    .route({ method: "GET", path: "/platform/integrations/channels/{channel}/transactions" })
+    .input(
+      z.object({
+        channel: z.enum(["email", "sms", "whatsapp"]),
+        status: z.enum(["sent", "failed", "skipped"]).optional(),
+        template: z.string().optional(),
+        tenantId: z.string().uuid().optional(),
+        failedOnly: z.boolean().optional(),
+        search: z.string().optional(),
+        limit: z.number().int().min(1).max(100).default(50).optional(),
+        offset: z.number().int().min(0).default(0).optional(),
+      }),
+    )
+    .output(ChannelTransactionsView),
+  listProviders: oc
+    .route({ method: "GET", path: "/platform/integrations/channels/{channel}/providers" })
+    .input(z.object({ channel: z.enum(["sms", "whatsapp"]) }))
+    .output(z.array(PlatformChannelProviderView)),
+  createProvider: oc
+    .route({ method: "POST", path: "/platform/integrations/channels/providers" })
+    .input(CreatePlatformChannelProviderInput)
+    .output(PlatformChannelProviderView),
+  updateProvider: oc
+    .route({ method: "PATCH", path: "/platform/integrations/channels/providers/{id}" })
+    .input(UpdatePlatformChannelProviderInput)
+    .output(PlatformChannelProviderView),
+  deleteProvider: oc
+    .route({ method: "DELETE", path: "/platform/integrations/channels/providers/{id}" })
+    .input(z.object({ id: z.string().uuid() }))
+    .output(z.object({ success: z.boolean(), id: z.string() })),
+  setDefaultProvider: oc
+    .route({ method: "POST", path: "/platform/integrations/channels/providers/{id}/default" })
+    .input(z.object({ id: z.string().uuid() }))
+    .output(z.object({ success: z.boolean() })),
+  testProvider: oc
+    .route({ method: "POST", path: "/platform/integrations/channels/providers/{id}/test" })
+    .input(
+      z.object({
+        id: z.string().uuid(),
+        to: z.string().min(5).max(20),
+      }),
+    )
+    .output(
+      z.object({
+        ok: z.boolean(),
+        error: z.string().nullable().optional(),
+        providerMessageId: z.string().nullable().optional(),
+      }),
+    ),
 };

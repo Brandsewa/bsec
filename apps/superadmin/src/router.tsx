@@ -38,7 +38,11 @@ import { Quotas } from "./pages/Quotas.tsx";
 import { Features } from "./pages/Features.tsx";
 import { Staff } from "./pages/Staff.tsx";
 import { AuditLog } from "./pages/AuditLog.tsx";
-import { EmailSettings } from "./pages/EmailSettings.tsx";
+import { StorageSettings } from "./pages/StorageSettings.tsx";
+import { IntegrationsHub } from "./pages/integrations/IntegrationsHub.tsx";
+import { NotificationsHub } from "./pages/integrations/NotificationsHub.tsx";
+import { ChannelPage } from "./pages/integrations/ChannelPage.tsx";
+import { PaymentsIntegrations } from "./pages/integrations/PaymentsIntegrations.tsx";
 import { ForgotPassword } from "./pages/ForgotPassword.tsx";
 import { ResetPassword } from "./pages/ResetPassword.tsx";
 import { Kit } from "./pages/Kit.tsx";
@@ -312,11 +316,113 @@ const auditRoute = createRoute({
 const emailRoute = createRoute({
   getParentRoute: () => authLayoutRoute,
   path: "/email",
-  component: EmailSettings,
+  beforeLoad: () => {
+    throw redirect({ to: "/integrations/notifications/email" });
+  },
+  pendingComponent: () => <PageSkeleton />,
+  component: () => null,
+});
+
+const storageRoute = createRoute({
+  getParentRoute: () => authLayoutRoute,
+  path: "/storage",
+  beforeLoad: () => {
+    throw redirect({ to: "/integrations/storage" });
+  },
+  pendingComponent: () => <PageSkeleton />,
+  component: () => null,
+});
+
+const integrationsRoute = createRoute({
+  getParentRoute: () => authLayoutRoute,
+  path: "/integrations",
+  component: IntegrationsHub,
   pendingComponent: () => (
-    <PageContainer size="small">
+    <PageContainer>
       <PageHeaderSkeleton />
-      <FormSectionSkeleton fields={4} />
+      <MetricCardsSkeleton count={3} />
+    </PageContainer>
+  ),
+});
+
+const integrationsNotificationsRoute = createRoute({
+  getParentRoute: () => authLayoutRoute,
+  path: "/integrations/notifications",
+  component: NotificationsHub,
+  pendingComponent: () => (
+    <PageContainer>
+      <PageHeaderSkeleton />
+      <MetricCardsSkeleton count={3} />
+    </PageContainer>
+  ),
+});
+
+const integrationsEmailRoute = createRoute({
+  getParentRoute: () => authLayoutRoute,
+  path: "/integrations/notifications/email",
+  component: function EmailChannelRoute() {
+    return <ChannelPage channel="email" />;
+  },
+  pendingComponent: () => (
+    <PageContainer>
+      <PageHeaderSkeleton />
+      <MetricCardsSkeleton count={5} />
+      <DataTableSkeleton columns={7} rows={6} />
+    </PageContainer>
+  ),
+});
+
+const integrationsSmsRoute = createRoute({
+  getParentRoute: () => authLayoutRoute,
+  path: "/integrations/notifications/sms",
+  component: function SmsChannelRoute() {
+    return <ChannelPage channel="sms" />;
+  },
+  pendingComponent: () => (
+    <PageContainer>
+      <PageHeaderSkeleton />
+      <MetricCardsSkeleton count={5} />
+      <DataTableSkeleton columns={7} rows={4} />
+    </PageContainer>
+  ),
+});
+
+const integrationsWhatsAppRoute = createRoute({
+  getParentRoute: () => authLayoutRoute,
+  path: "/integrations/notifications/whatsapp",
+  component: function WhatsAppChannelRoute() {
+    return <ChannelPage channel="whatsapp" />;
+  },
+  pendingComponent: () => (
+    <PageContainer>
+      <PageHeaderSkeleton />
+      <MetricCardsSkeleton count={5} />
+      <DataTableSkeleton columns={7} rows={4} />
+    </PageContainer>
+  ),
+});
+
+const integrationsStorageRoute = createRoute({
+  getParentRoute: () => authLayoutRoute,
+  path: "/integrations/storage",
+  component: StorageSettings,
+  pendingComponent: () => (
+    <PageContainer>
+      <PageHeaderSkeleton />
+      <MetricCardsSkeleton count={4} />
+      <DataTableSkeleton columns={5} rows={4} />
+    </PageContainer>
+  ),
+});
+
+const integrationsPaymentsRoute = createRoute({
+  getParentRoute: () => authLayoutRoute,
+  path: "/integrations/payments",
+  component: PaymentsIntegrations,
+  pendingComponent: () => (
+    <PageContainer>
+      <PageHeaderSkeleton />
+      <MetricCardsSkeleton count={3} />
     </PageContainer>
   ),
 });
@@ -355,6 +461,14 @@ export const routeTree = rootRoute.addChildren([
     staffRoute,
     auditRoute,
     emailRoute,
+    storageRoute,
+    integrationsRoute,
+    integrationsNotificationsRoute,
+    integrationsEmailRoute,
+    integrationsSmsRoute,
+    integrationsWhatsAppRoute,
+    integrationsStorageRoute,
+    integrationsPaymentsRoute,
   ]),
 ]);
 

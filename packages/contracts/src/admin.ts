@@ -666,6 +666,7 @@ export type InventoryLevelItem = z.infer<typeof InventoryLevelItem>;
 export const MediaItem = z.object({
   id: z.string().uuid(),
   storageKey: z.string(),
+  storageConnectionId: z.string().uuid().nullable().optional(),
   cfImageId: z.string().nullable().optional(),
   mime: z.string(),
   bytes: z.number(),
@@ -682,6 +683,7 @@ export const PresignedUploadResponse = z.object({
   uploadUrl: z.string(),
   storageKey: z.string(),
   headers: z.record(z.string(), z.string()),
+  method: z.enum(["PUT", "POST"]).optional().default("PUT"),
 });
 export type PresignedUploadResponse = z.infer<typeof PresignedUploadResponse>;
 
@@ -812,10 +814,56 @@ export const Theme = z.object({
 });
 export type Theme = z.infer<typeof Theme>;
 
+export const PageSeo = z.object({
+  title: z.string().max(300).optional(),
+  description: z.string().max(1000).optional(),
+  imageMediaId: z.string().uuid().nullable().optional(),
+});
+export type PageSeo = z.infer<typeof PageSeo>;
+
+export const RESERVED_PAGE_SLUGS: ReadonlySet<string> = new Set([
+  "account",
+  "address",
+  "admin",
+  "api",
+  "blog",
+  "cart",
+  "categories",
+  "checkout",
+  "cod",
+  "collections",
+  "home",
+  "media",
+  "o",
+  "orders",
+  "pages",
+  "policies",
+  "preview",
+  "privacy-request",
+  "privacy-verify",
+  "products",
+  "robots.txt",
+  "search",
+  "signup",
+  "sitemap.xml",
+  "unsubscribe",
+]);
+
+export function isReservedPageSlug(slug: string): boolean {
+  const s = slug.toLowerCase().trim();
+  if (s.startsWith("template-")) return true;
+  return RESERVED_PAGE_SLUGS.has(s);
+}
+
 export const PageItem = z.object({
   id: z.string().uuid(),
   slug: z.string(),
   title: z.string(),
+  parentId: z.string().uuid().nullable().optional(),
+  path: z.string().optional(),
+  childCount: z.number().int().optional(),
+  seo: PageSeo.nullable().optional(),
+  status: z.enum(["draft", "published"]).optional(),
   /** home, landing, custom, or a theme system page (header, footer, product_template, collection_template, cart_template). */
   type: z.string().optional(),
   description: z.string().nullable().optional(),
@@ -857,20 +905,68 @@ export const PageVersionItem = z.object({
 });
 export type PageVersionItem = z.infer<typeof PageVersionItem>;
 
+export const MenuKind = z.enum(["navigation", "filter"]);
+export type MenuKind = z.infer<typeof MenuKind>;
+
+export const FilterKind = z.enum([
+  "availability",
+  "price",
+  "brand",
+  "category",
+  "collection",
+  "tag",
+  "option",
+]);
+export type FilterKind = z.infer<typeof FilterKind>;
+
+export const FilterDisplay = z.enum(["checkbox", "range", "swatch"]);
+export type FilterDisplay = z.infer<typeof FilterDisplay>;
+
+export const FilterItemConfig = z.object({
+  kind: FilterKind,
+  label: z.string().min(1),
+  display: FilterDisplay,
+  optionName: z.string().optional(),
+  collapsed: z.boolean().optional(),
+});
+export type FilterItemConfig = z.infer<typeof FilterItemConfig>;
+
+export const MenuItemType = z.enum([
+  "url",
+  "page",
+  "collection",
+  "product",
+  "category",
+  "brand",
+  "blog",
+  "policy",
+  "home",
+  "search",
+  "account",
+  "filter",
+]);
+export type MenuItemType = z.infer<typeof MenuItemType>;
+
 export type MenuItem = {
   id: string;
   title: string;
   url: string;
-  type: "url" | "page" | "collection" | "product" | "category";
+  type: MenuItemType;
+  targetId?: string | undefined;
+  openInNewTab?: boolean | undefined;
+  filter?: FilterItemConfig | undefined;
   children?: MenuItem[] | undefined;
 };
 
 export const MenuItem: z.ZodType<MenuItem> = z.lazy(() =>
   z.object({
     id: z.string(),
-    title: z.string(),
-    url: z.string(),
-    type: z.enum(["url", "page", "collection", "product", "category"]).default("url"),
+    title: z.string().default(""),
+    url: z.string().default(""),
+    type: MenuItemType.default("url"),
+    targetId: z.string().optional(),
+    openInNewTab: z.boolean().optional(),
+    filter: FilterItemConfig.optional(),
     children: z.array(MenuItem).optional(),
   }),
 );
@@ -879,6 +975,10 @@ export const Menu = z.object({
   id: z.string().uuid(),
   name: z.string(),
   handle: z.string(),
+  kind: MenuKind.default("navigation"),
+  itemCount: z.number().int().optional(),
+  usedIn: z.array(z.string()).optional(),
+  isProtected: z.boolean().optional(),
   createdAt: z.string(),
   updatedAt: z.string(),
 });
@@ -935,6 +1035,25 @@ export const PaymentsStatus = z.object({
   encryptionKeyConfigured: z.boolean(),
 });
 export type PaymentsStatus = z.infer<typeof PaymentsStatus>;
+
+/** A payment provider as one store sees it (ADMIN-IMPROVEMENTS-PLAN §6.4). Never carries a key or secret. */
+export const StorePaymentProvider = z.object({
+  provider: z.enum(["razorpay", "stripe"]),
+  displayName: z.string(),
+  platformEnabled: z.boolean(),
+  liveModeAllowed: z.boolean(),
+  state: z.enum(["not_connected", "connected_test", "active", "live_blocked"]),
+  mode: z.enum(["test", "live"]).nullable(),
+  keyHint: z.string().nullable(),
+  hasWebhookSecret: z.boolean(),
+  lastTestAt: z.string().nullable(),
+  lastTestOk: z.boolean().nullable(),
+  lastTestError: z.string().nullable(),
+  webhookPath: z.string(),
+  tenantId: z.string().uuid(),
+  checkoutLive: z.boolean(),
+});
+export type StorePaymentProvider = z.infer<typeof StorePaymentProvider>;
 
 export const AdminMeStore = z.object({
   tenantId: z.string().uuid(),
@@ -1702,6 +1821,41 @@ export const adminContract = {
       .output(PaymentsStatus),
     clearRazorpay: oc.route({ method: "DELETE", path: "/admin/payments/razorpay" }).output(PaymentsStatus),
   },
+  paymentProviders: {
+    list: oc.route({ method: "GET", path: "/admin/payment-providers" }).output(z.array(StorePaymentProvider)),
+    saveCredentials: oc
+      .route({ method: "PUT", path: "/admin/payment-providers/{provider}/credentials" })
+      .input(
+        z.object({
+          provider: z.enum(["razorpay", "stripe"]),
+          /** Razorpay key id (rzp_test_...); not used for Stripe. */
+          keyId: z.string().min(6).max(100).optional(),
+          /** Razorpay key secret, or the Stripe secret key (sk_test_...). */
+          keySecret: z.string().min(6).max(300),
+          webhookSecret: z.string().min(6).max(200).optional(),
+        }),
+      )
+      .output(StorePaymentProvider),
+    clearCredentials: oc
+      .route({ method: "DELETE", path: "/admin/payment-providers/{provider}/credentials" })
+      .input(z.object({ provider: z.enum(["razorpay", "stripe"]) }))
+      .output(StorePaymentProvider.nullable()),
+    test: oc
+      .route({ method: "POST", path: "/admin/payment-providers/{provider}/test" })
+      .input(z.object({ provider: z.enum(["razorpay", "stripe"]) }))
+      .output(
+        z.object({
+          ok: z.boolean(),
+          mode: z.enum(["test", "live"]).optional(),
+          error: z.string().optional(),
+          provider: StorePaymentProvider,
+        }),
+      ),
+    setActive: oc
+      .route({ method: "POST", path: "/admin/payment-providers/{provider}/active" })
+      .input(z.object({ provider: z.enum(["razorpay", "stripe"]), active: z.boolean() }))
+      .output(StorePaymentProvider),
+  },
   paymentMethods: {
     list: oc
       .route({ method: "GET", path: "/admin/payment-methods" })
@@ -2423,6 +2577,18 @@ export const adminContract = {
         }),
       )
       .output(MediaItem),
+    upload: oc
+      .route({ method: "POST", path: "/admin/media/upload" })
+      .input(
+        z.object({
+          filename: z.string().min(1),
+          mime: z.string().min(1),
+          data: z.string().min(1),
+          folder: z.string().default("products"),
+          alt: z.string().optional(),
+        }),
+      )
+      .output(MediaItem),
     delete: oc
       .route({ method: "DELETE", path: "/admin/media/{id}" })
       .input(z.object({ id: z.string().uuid() }))
@@ -2500,8 +2666,10 @@ export const adminContract = {
       .route({ method: "POST", path: "/admin/pages" })
       .input(
         z.object({
-          title: z.string().min(1),
+          title: z.string().min(1).max(200),
           slug: z.string().min(1),
+          parentId: z.string().uuid().nullable().optional(),
+          seo: PageSeo.optional(),
           description: z.string().optional(),
         }),
       )
@@ -2511,10 +2679,11 @@ export const adminContract = {
       .input(
         z.object({
           id: z.string().uuid(),
-          title: z.string().min(1).optional(),
+          title: z.string().min(1).max(200).optional(),
           slug: z.string().optional(),
+          parentId: z.string().uuid().nullable().optional(),
+          seo: PageSeo.optional(),
           description: z.string().optional(),
-          seo: z.unknown().optional(),
         }),
       )
       .output(PageItem),
@@ -2545,6 +2714,18 @@ export const adminContract = {
         }),
       )
       .output(z.object({ success: z.boolean(), publishedVersionId: z.string().uuid() })),
+    delete: oc
+      .route({ method: "DELETE", path: "/admin/pages/{id}" })
+      .input(z.object({ id: z.string().uuid() }))
+      .output(z.object({ success: z.boolean() })),
+    unpublish: oc
+      .route({ method: "POST", path: "/admin/pages/{id}/unpublish" })
+      .input(z.object({ id: z.string().uuid() }))
+      .output(z.object({ success: z.boolean() })),
+    duplicate: oc
+      .route({ method: "POST", path: "/admin/pages/{id}/duplicate" })
+      .input(z.object({ id: z.string().uuid() }))
+      .output(PageItem),
   },
 
   // Menus
@@ -2562,7 +2743,8 @@ export const adminContract = {
         z.object({
           name: z.string().min(1),
           handle: z.string().min(1),
-          items: z.array(z.unknown()).default([]),
+          kind: MenuKind.optional().default("navigation"),
+          items: z.array(MenuItem).default([]),
         }),
       )
       .output(Menu),
@@ -2572,7 +2754,9 @@ export const adminContract = {
         z.object({
           id: z.string().uuid(),
           name: z.string().min(1).optional(),
-          items: z.array(z.unknown()).optional(),
+          handle: z.string().min(1).optional(),
+          kind: MenuKind.optional(),
+          items: z.array(MenuItem).optional(),
         }),
       )
       .output(Menu),
@@ -2589,7 +2773,7 @@ export const adminContract = {
       .input(
         z
           .object({
-            view: z.enum(["all", "unfulfilled", "unpaid", "cod_to_confirm", "rto", "open", "archived"]).default("all"),
+            view: z.enum(["all", "unfulfilled", "unpaid", "cod_to_confirm", "rto", "open", "closed", "archived"]).default("all"),
             search: z.string().optional(),
             status: z.string().optional(),
             paymentStatus: z.string().optional(),
@@ -2625,6 +2809,7 @@ export const adminContract = {
               shipsOn: z.string().nullable().optional(),
               itemsCount: z.number(),
               firstItemTitle: z.string().nullable().optional(),
+              archivedAt: z.string().nullable().optional(),
             }),
           ),
           total: z.number(),
@@ -2659,6 +2844,8 @@ export const adminContract = {
             preorderReleasedAt: z.string().nullable().optional(),
             cancelledAt: z.string().nullable().optional(),
             cancelReason: z.string().nullable().optional(),
+            archivedAt: z.string().nullable().optional(),
+            archivedBy: z.string().nullable().optional(),
             tags: z.array(z.string()).default([]),
           }),
           items: z.array(
@@ -2891,6 +3078,66 @@ export const adminContract = {
         }),
       )
       .output(z.object({ success: z.boolean(), status: z.string() })),
+    archive: oc
+      .route({ method: "POST", path: "/admin/orders/archive" })
+      .input(
+        z.object({
+          ids: z.array(z.string().uuid()).min(1).max(100),
+        }),
+      )
+      .output(
+        z.object({
+          results: z.array(
+            z.object({
+              id: z.string().uuid(),
+              ok: z.boolean(),
+              reason: z.string().optional(),
+            }),
+          ),
+          successCount: z.number().int(),
+          skippedCount: z.number().int(),
+        }),
+      ),
+    unarchive: oc
+      .route({ method: "POST", path: "/admin/orders/unarchive" })
+      .input(
+        z.object({
+          ids: z.array(z.string().uuid()).min(1).max(100),
+        }),
+      )
+      .output(
+        z.object({
+          results: z.array(
+            z.object({
+              id: z.string().uuid(),
+              ok: z.boolean(),
+              reason: z.string().optional(),
+            }),
+          ),
+          successCount: z.number().int(),
+          skippedCount: z.number().int(),
+        }),
+      ),
+    delete: oc
+      .route({ method: "POST", path: "/admin/orders/delete" })
+      .input(
+        z.object({
+          ids: z.array(z.string().uuid()).min(1).max(100),
+        }),
+      )
+      .output(
+        z.object({
+          results: z.array(
+            z.object({
+              id: z.string().uuid(),
+              ok: z.boolean(),
+              reason: z.string().optional(),
+            }),
+          ),
+          successCount: z.number().int(),
+          skippedCount: z.number().int(),
+        }),
+      ),
   },
 
   // --- Pre-orders (ORDERS-PREORDERS-PLAN §3.3) ---

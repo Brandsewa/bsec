@@ -460,6 +460,10 @@ export async function processWebhookInboxItem(
       }
     }
 
+    // Stripe events are verified and stored in the inbox, but no state change is applied yet: online checkout does
+    // not create Stripe Checkout Sessions (ONLINE_PAYMENT_AVAILABLE is false), so there is no intent to settle.
+    // Applying checkout.session.completed / payment_intent.payment_failed / charge.refunded belongs with that wiring.
+
     // Mark processed
     await db
       .update(webhookInbox)

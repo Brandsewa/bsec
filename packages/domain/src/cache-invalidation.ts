@@ -34,6 +34,7 @@ export type CacheChange =
   | {
       type: "page_published";
       slug: string;
+      extraSlugs?: string[] | undefined;
     }
   | {
       type: "nav_updated";
@@ -56,6 +57,10 @@ export type CacheChange =
     }
   | {
       type: "media_updated";
+    }
+  | {
+      type: "brand_updated";
+      brandId: string;
     };
 
 /**
@@ -71,7 +76,7 @@ export function computeInvalidationTags(
 
   switch (change.type) {
     case "product_updated": {
-      // Product title, description, SEO -> product, its categories, its collections, home page if featured
+      // Product title, description, SEO -> product, its categories, its collections, home page if featured, nav
       tags.push(tenantTag(tenantId, "product", change.productId));
       tags.push(tenantTag(tenantId, "product"));
       for (const catId of change.categoryIds ?? []) {
@@ -83,6 +88,7 @@ export function computeInvalidationTags(
       if (change.isFeatured) {
         tags.push(tenantTag(tenantId, "page", "home"));
       }
+      tags.push(tenantTag(tenantId, "nav"));
       break;
     }
     case "product_price_changed": {
@@ -124,8 +130,12 @@ export function computeInvalidationTags(
       break;
     }
     case "page_published": {
-      // Custom/landing page publish or rollback -> page:<slug>
+      // Custom/landing page publish or rollback -> page:<slug>, nav
       tags.push(tenantTag(tenantId, "page", change.slug));
+      for (const s of change.extraSlugs ?? []) {
+        tags.push(tenantTag(tenantId, "page", s));
+      }
+      tags.push(tenantTag(tenantId, "nav"));
       break;
     }
     case "nav_updated": {
@@ -134,10 +144,15 @@ export function computeInvalidationTags(
       break;
     }
     case "collection_updated": {
-      // Collection rules or order -> collection, pages that embed it (home page)
+      // Collection rules or order -> collection, pages that embed it (home page), nav
       tags.push(tenantTag(tenantId, "collection", change.collectionId));
       tags.push(tenantTag(tenantId, "collection"));
       tags.push(tenantTag(tenantId, "page", "home"));
+      tags.push(tenantTag(tenantId, "nav"));
+      break;
+    }
+    case "brand_updated": {
+      tags.push(tenantTag(tenantId, "nav"));
       break;
     }
     case "category_updated": {

@@ -14,6 +14,7 @@ export const STORE_PERMISSIONS = [
   "orders.read",
   "orders.write",
   "orders.refund",
+  "orders.delete",
   "customers.read",
   "customers.write",
   "discounts.write",

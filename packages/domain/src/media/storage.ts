@@ -70,8 +70,7 @@ export function getR2Config(override?: Partial<R2ClientConfig>): R2ClientConfig 
   const accountId =
     override?.accountId ||
     process.env.R2_ACCOUNT_ID ||
-    process.env.CLOUDFLARE_ACCOUNT_ID ||
-    "7a0533854a8ded58696db809f403f26c"; // default from infra/coolify/RUNBOOK.md
+    process.env.CLOUDFLARE_ACCOUNT_ID;
 
   const endpoint =
     override?.endpoint ||
@@ -248,7 +247,6 @@ export async function buildPresignedUploadDescriptor(params: {
     Bucket: cfg.bucketName,
     Key: storageKey,
     ContentType: params.mime,
-    ContentLength: params.bytes,
   });
 
   const uploadUrl = await getSignedUrl(client, command, {
@@ -260,7 +258,6 @@ export async function buildPresignedUploadDescriptor(params: {
     storageKey,
     headers: {
       "Content-Type": params.mime,
-      "Content-Length": String(params.bytes),
     },
     expiresInSeconds: expiresIn,
   };
@@ -314,8 +311,7 @@ export async function uploadToCloudflareImages(params: {
   const accountId =
     params.accountId ||
     process.env.CLOUDFLARE_ACCOUNT_ID ||
-    process.env.R2_ACCOUNT_ID ||
-    "7a0533854a8ded58696db809f403f26c";
+    process.env.R2_ACCOUNT_ID;
   const apiToken =
     params.apiToken ||
     process.env.CLOUDFLARE_IMAGES_API_TOKEN ||

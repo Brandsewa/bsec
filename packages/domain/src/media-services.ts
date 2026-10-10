@@ -4,11 +4,23 @@ import type { Runtime } from "./runtime.ts";
 import { assertPermission, type TenantContext } from "./context.ts";
 import { invalidateCache } from "./cache-invalidation.ts";
 import {
-  buildPresignedUploadDescriptor,
-  isMediaStorageConfigured,
   publicMediaUrl,
   validateMediaUpload,
 } from "./media/storage.ts";
+import {
+  getActiveStorageDriver,
+  resolveDriverForMediaRow,
+  resolvePublicMediaUrl,
+  resolveStorageConnection,
+} from "./media/connection.ts";
+
+export {
+  uploadMediaDirect,
+  resolveLocalMediaFilePath,
+  resolveDriverForMediaRow,
+  getEnvironmentStorageConfig,
+  resolveSafeLocalPath,
+} from "./media/connection.ts";
 
 export interface ListMediaQuery {
   folder?: string | undefined;
@@ -57,10 +69,11 @@ export async function listMedia(
       .limit(limit)
       .offset(offset);
 
-    return {
-      items: rows.map((r) => ({
+    const items = await Promise.all(
+      rows.map(async (r) => ({
         id: r.id,
         storageKey: r.storageKey,
+        storageConnectionId: r.storageConnectionId ?? undefined,
         cfImageId: r.cfImageId,
         mime: r.mime,
         bytes: Number(r.bytes),
@@ -69,8 +82,12 @@ export async function listMedia(
         alt: r.alt,
         folder: r.folder,
         createdAt: r.createdAt.toISOString(),
-        url: publicMediaUrl(r.storageKey),
+        url: await resolvePublicMediaUrl(db, r.storageKey, r.storageConnectionId),
       })),
+    );
+
+    return {
+      items,
       total: rows.length,
     };
   });
@@ -80,7 +97,7 @@ export async function listMedia(
  * Generates an upload presigned descriptor after validating MIME and size.
  */
 export async function requestMediaUpload(
-  _rt: Runtime,
+  rt: Runtime,
   ctx: TenantContext,
   input: RequestUploadInput,
 ) {
@@ -91,13 +108,9 @@ export async function requestMediaUpload(
     throw new Error(validation.error || "Invalid media upload");
   }
 
-  // Without R2 credentials a signed URL would be built from placeholders and Cloudflare would reject the upload.
-  if (!isMediaStorageConfigured()) {
-    throw new Error("Precondition: Image storage is not set up yet. Ask the platform team to connect it, then try again.");
-  }
+  const { driver } = await getActiveStorageDriver(rt._db.db, "public_media");
 
-  // Generate real S3/R2 presigned upload descriptor
-  return await buildPresignedUploadDescriptor({
+  return await driver.presignUpload({
     tenantId: ctx.tenantId,
     folder: input.folder ?? "products",
     filename: input.filename,
@@ -117,12 +130,15 @@ export async function createMediaRecord(
   assertPermission(ctx, "content.write");
   const db = rt._db.db;
 
-  return withTenant(db, ctx.tenantId, async (tx) => {
-    const [row] = await tx
+  const activeConn = await resolveStorageConnection(db, "public_media");
+
+  const row = await withTenant(db, ctx.tenantId, async (tx) => {
+    const [inserted] = await tx
       .insert(schema.media)
       .values({
         tenantId: ctx.tenantId,
         storageKey: input.storageKey,
+        storageConnectionId: activeConn?.id ?? null,
         mime: input.mime,
         bytes: input.bytes,
         width: input.width,
@@ -133,21 +149,28 @@ export async function createMediaRecord(
       })
       .returning();
 
-    if (!row) throw new Error("Failed to save media record");
-
-    return {
-      id: row.id,
-      storageKey: row.storageKey,
-      cfImageId: row.cfImageId,
-      mime: row.mime,
-      bytes: Number(row.bytes),
-      width: row.width,
-      height: row.height,
-      alt: row.alt,
-      folder: row.folder,
-      createdAt: row.createdAt.toISOString(),
-    };
+    if (!inserted) throw new Error("Failed to save media record");
+    return inserted;
   });
+
+  await invalidateCache(rt, ctx, { type: "media_updated" });
+
+  const url = await resolvePublicMediaUrl(db, row.storageKey, row.storageConnectionId);
+
+  return {
+    id: row.id,
+    storageKey: row.storageKey,
+    storageConnectionId: row.storageConnectionId ?? undefined,
+    cfImageId: row.cfImageId,
+    mime: row.mime,
+    bytes: Number(row.bytes),
+    width: row.width,
+    height: row.height,
+    alt: row.alt,
+    folder: row.folder,
+    createdAt: row.createdAt.toISOString(),
+    url,
+  };
 }
 
 /**
@@ -161,10 +184,41 @@ export async function deleteMediaRecord(
   assertPermission(ctx, "content.write");
   const db = rt._db.db;
 
-  return withTenant(db, ctx.tenantId, async (tx) => {
+  await withTenant(db, ctx.tenantId, async (tx) => {
+    const existing = await tx
+      .select()
+      .from(schema.media)
+      .where(eq(schema.media.id, input.id))
+      .limit(1);
+
+    if (existing[0]) {
+      const mediaRow = existing[0];
+      try {
+        const driver = await resolveDriverForMediaRow(
+          db,
+          mediaRow.storageConnectionId,
+          "public_media",
+        );
+        if (driver) {
+          await driver.delete(mediaRow.storageKey);
+        } else {
+          console.warn(
+            `[storage] No storage driver resolved for media ${mediaRow.id} (connection: ${mediaRow.storageConnectionId})`,
+          );
+        }
+      } catch (err) {
+        console.error(
+          `[storage] Failed to delete storage object for media ${mediaRow.id} (key: ${mediaRow.storageKey}):`,
+          err,
+        );
+      }
+    }
+
     await tx.delete(schema.media).where(eq(schema.media.id, input.id));
-    return { success: true };
   });
+
+  await invalidateCache(rt, ctx, { type: "media_updated" });
+  return { success: true };
 }
 
 /**
@@ -241,4 +295,32 @@ export async function detachProductMedia(
 
   await invalidateCache(rt, ctx, { type: "product_image_updated", productId: input.productId });
   return { success: true };
+}
+
+/**
+ * Resolves the public delivery URL for a media asset by ID within a tenant.
+ * Uses resolvePublicMediaUrl (the media connection resolver).
+ * Returns undefined if mediaId is null/undefined or if the media row is not found or deleted.
+ */
+export async function resolveMediaUrlById(
+  rt: Runtime,
+  tenantId: string,
+  mediaId: string | null | undefined,
+): Promise<string | undefined> {
+  if (!mediaId) return undefined;
+  const db = rt._db.db;
+  return withTenant(db, tenantId, async (tx) => {
+    const [row] = await tx
+      .select({
+        id: schema.media.id,
+        storageKey: schema.media.storageKey,
+        storageConnectionId: schema.media.storageConnectionId,
+      })
+      .from(schema.media)
+      .where(and(eq(schema.media.tenantId, tenantId), eq(schema.media.id, mediaId)))
+      .limit(1);
+
+    if (!row) return undefined;
+    return resolvePublicMediaUrl(db, row.storageKey, row.storageConnectionId);
+  });
 }

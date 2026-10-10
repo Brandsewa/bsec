@@ -4,6 +4,7 @@ import { primaryCategory } from "./helpers/primary-category.ts";
 import { schema, withTenant } from "@bs/db";
 import { startTestDb, type TestDb } from "@bs/db/test-env";
 import {
+  archiveOrders,
   createAdminDraftOrder,
   createProduct,
   createRuntime,
@@ -279,24 +280,31 @@ describe("Orders Phase 1: All Orders Upgrades (Step 1)", () => {
     }
   });
 
-  it("partitions orders by view ('open' vs 'archived')", async () => {
+  it("partitions orders by view ('open' vs 'closed' vs 'archived')", async () => {
     const openOrders = await listAdminOrders(rtWeb, ctxA, { view: "open" });
     for (const item of openOrders.items) {
       expect(["pending", "confirmed", "processing", "partially_fulfilled"]).toContain(item.status);
     }
 
-    // Cancel one order to test archived view
+    // Cancel one order to test closed view
     const toCancel = openOrders.items[0]!;
     await withTenant(rtWeb._db.db, ctxA.tenantId, async (tx) => {
       await tx.update(schema.orders).set({ status: "cancelled" }).where(eq(schema.orders.id, toCancel.id));
     });
 
-    const archivedOrders = await listAdminOrders(rtWeb, ctxA, { view: "archived" });
-    const cancelledFound = archivedOrders.items.find((o) => o.id === toCancel.id);
+    const closedOrders = await listAdminOrders(rtWeb, ctxA, { view: "closed" });
+    const cancelledFound = closedOrders.items.find((o) => o.id === toCancel.id);
     expect(cancelledFound).toBeDefined();
-    for (const item of archivedOrders.items) {
+    for (const item of closedOrders.items) {
       expect(["delivered", "cancelled", "returned"]).toContain(item.status);
     }
+
+    // Archive the order to test archived view
+    await archiveOrders(rtWeb, ctxA, { ids: [toCancel.id] });
+    const archivedOrders = await listAdminOrders(rtWeb, ctxA, { view: "archived" });
+    const archivedFound = archivedOrders.items.find((o) => o.id === toCancel.id);
+    expect(archivedFound).toBeDefined();
+    expect(archivedFound?.archivedAt).not.toBeNull();
   });
 
   it("returns firstItemTitle for orders in the list", async () => {

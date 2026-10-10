@@ -78,11 +78,11 @@ afterAll(async () => {
 
 describe("platform login with MFA, end to end over HTTP (real Better Auth, real Postgres)", () => {
   it("bootstrap login -> authenticator enrolment -> forced re-login with a code -> a procedure works", async () => {
-    await createPlatformStaffMember(rt._db.db, { email: "owner@platform.test", name: "Platform Owner", password: "correct horse battery staple", role: "platform_owner" });
+    await createPlatformStaffMember(rt._db.db, { email: "mfa-owner@platform.test", name: "Platform Owner", password: "correct horse battery staple", role: "platform_owner" });
     const jar = new Jar();
 
     // 1. Password sign-in creates a session, but the API stays closed to it
-    const signIn = await send(jar, "/api/auth/sign-in/email", { body: { email: "owner@platform.test", password: "correct horse battery staple" } });
+    const signIn = await send(jar, "/api/auth/sign-in/email", { body: { email: "mfa-owner@platform.test", password: "correct horse battery staple" } });
     expect(signIn.status).toBe(200);
     expect(await (await send(jar, "/api/platform/me")).json()).toMatchObject({ authenticated: true, isPlatformStaff: true, mfaEnrolled: false, mfaComplete: false });
     expect((await send(jar, "/platform/tenants")).status).toBe(403);
@@ -114,7 +114,7 @@ describe("platform login with MFA, end to end over HTTP (real Better Auth, real 
 
     // 4. Signing in again is password + authenticator code, and only then is there a session
     const jar2 = new Jar();
-    const again = await send(jar2, "/api/auth/sign-in/email", { body: { email: "owner@platform.test", password: "correct horse battery staple" } });
+    const again = await send(jar2, "/api/auth/sign-in/email", { body: { email: "mfa-owner@platform.test", password: "correct horse battery staple" } });
     expect(again.status).toBe(200);
     expect(await again.json()).toMatchObject({ twoFactorRedirect: true });
     expect((await send(jar2, "/platform/tenants")).status).toBe(401); // password alone creates no session for an enrolled account
@@ -128,40 +128,45 @@ describe("platform login with MFA, end to end over HTTP (real Better Auth, real 
     expect(Array.isArray(await tenants.json())).toBe(true);
 
     // 5. The enrolment left an audit trail
-    const audit = await rt._db.db.select().from(schema.platformAuditLogs).where(eq(schema.platformAuditLogs.action, "platform_staff.mfa_enrolled"));
+    // Scoped to this test's own staff member: CI runs every heavy file against one database, so other files may
+    // already have written enrolment audit rows for their own staff.
+    const [me] = await rt._db.db.select({ id: schema.users.id }).from(schema.users).where(eq(schema.users.email, "mfa-owner@platform.test"));
+    const audit = (
+      await rt._db.db.select().from(schema.platformAuditLogs).where(eq(schema.platformAuditLogs.action, "platform_staff.mfa_enrolled"))
+    ).filter((a) => a.targetId === me?.id);
     expect(audit).toHaveLength(1);
   });
 
   it("a store owner's login, a deactivated account and a backup code behave correctly", async () => {
     // a store owner (a normal store account) can sign in to the platform auth endpoint, but is not staff and gets nothing
-    const [shop] = await rt._db.db.insert(schema.users).values({ email: "shopkeeper@shop.test", name: "Shop", emailVerified: true }).returning({ id: schema.users.id });
+    const [shop] = await rt._db.db.insert(schema.users).values({ email: "mfa-shopkeeper@shop.test", name: "Shop", emailVerified: true }).returning({ id: schema.users.id });
     await rt._db.db.insert(schema.accounts).values({ id: crypto.randomUUID(), userId: shop!.id, accountId: shop!.id, providerId: "credential", password: await hashPassword("a shopkeepers password 1") });
     const jar = new Jar();
-    expect((await send(jar, "/api/auth/sign-in/email", { body: { email: "shopkeeper@shop.test", password: "a shopkeepers password 1" } })).status).toBe(200);
+    expect((await send(jar, "/api/auth/sign-in/email", { body: { email: "mfa-shopkeeper@shop.test", password: "a shopkeepers password 1" } })).status).toBe(200);
     expect(await (await send(jar, "/api/platform/me")).json()).toMatchObject({ authenticated: true, isPlatformStaff: false, mfaComplete: false });
     expect((await send(jar, "/platform/tenants")).status).toBe(403);
     expect((await send(jar, "/platform/overview")).status).toBe(403);
     expect((await send(jar, "/api/platform/mfa/complete", { body: {} })).status).toBe(403);
 
     // a second staff member enrols, then signs in with a backup code instead of the authenticator
-    await createPlatformStaffMember(rt._db.db, { email: "backup@platform.test", name: "Backup", password: "backup staff password 1", role: "platform_admin" });
+    await createPlatformStaffMember(rt._db.db, { email: "mfa-backup@platform.test", name: "Backup", password: "backup staff password 1", role: "platform_admin" });
     const j = new Jar();
-    await send(j, "/api/auth/sign-in/email", { body: { email: "backup@platform.test", password: "backup staff password 1" }, ip: IP(20) });
+    await send(j, "/api/auth/sign-in/email", { body: { email: "mfa-backup@platform.test", password: "backup staff password 1" }, ip: IP(20) });
     const enable = await (await send(j, "/api/auth/two-factor/enable", { body: { password: "backup staff password 1" }, ip: IP(20) })).json() as { totpURI: string; backupCodes: string[] };
     await send(j, "/api/auth/two-factor/verify-totp", { body: { code: totp(new URL(enable.totpURI).searchParams.get("secret")!) }, ip: IP(20) });
     await send(j, "/api/platform/mfa/complete", { body: {}, ip: IP(20) });
     const j2 = new Jar();
-    await send(j2, "/api/auth/sign-in/email", { body: { email: "backup@platform.test", password: "backup staff password 1" }, ip: IP(21) });
+    await send(j2, "/api/auth/sign-in/email", { body: { email: "mfa-backup@platform.test", password: "backup staff password 1" }, ip: IP(21) });
     const bc = await send(j2, "/api/auth/two-factor/verify-backup-code", { body: { code: enable.backupCodes[0] }, ip: IP(21) });
     expect(bc.status).toBe(200);
     expect((await send(j2, "/platform/tenants", { ip: IP(21) })).status).toBe(200);
     // a backup code works once
     const j3 = new Jar();
-    await send(j3, "/api/auth/sign-in/email", { body: { email: "backup@platform.test", password: "backup staff password 1" }, ip: IP(22) });
+    await send(j3, "/api/auth/sign-in/email", { body: { email: "mfa-backup@platform.test", password: "backup staff password 1" }, ip: IP(22) });
     expect((await send(j3, "/api/auth/two-factor/verify-backup-code", { body: { code: enable.backupCodes[0] }, ip: IP(22) })).status).toBeGreaterThanOrEqual(400);
 
     // deactivation ends access immediately, even with a live session
-    const [staff] = await rt._db.db.select().from(schema.users).where(eq(schema.users.email, "backup@platform.test"));
+    const [staff] = await rt._db.db.select().from(schema.users).where(eq(schema.users.email, "mfa-backup@platform.test"));
     await rt._db.db.update(schema.platformStaff).set({ isActive: false }).where(eq(schema.platformStaff.userId, staff!.id));
     expect((await send(j2, "/platform/tenants", { ip: IP(21) })).status).toBe(403);
   });
@@ -185,7 +190,7 @@ describe("origin, CORS and test-auth hardening", () => {
   });
 
   it("the X-Test-Staff-Id backdoor does nothing without the explicit test flag", async () => {
-    const [staff] = await rt._db.db.select().from(schema.users).where(eq(schema.users.email, "owner@platform.test"));
+    const [staff] = await rt._db.db.select().from(schema.users).where(eq(schema.users.email, "mfa-owner@platform.test"));
     const res = await app.request("http://localhost:4000/platform/tenants", { headers: { "x-test-staff-id": staff!.id } });
     expect([401, 403]).toContain(res.status);
   });
@@ -194,7 +199,7 @@ describe("origin, CORS and test-auth hardening", () => {
     const jar = new Jar();
     const statuses: number[] = [];
     for (let i = 0; i < 8; i++) {
-      statuses.push((await send(jar, "/api/auth/sign-in/email", { body: { email: "owner@platform.test", password: `wrong-password-${i}` }, ip: IP(99) })).status);
+      statuses.push((await send(jar, "/api/auth/sign-in/email", { body: { email: "mfa-owner@platform.test", password: `wrong-password-${i}` }, ip: IP(99) })).status);
     }
     expect(statuses.slice(0, 5).every((s) => s === 401 || s === 400 || s === 403)).toBe(true);
     expect(statuses.slice(5).some((s) => s === 429)).toBe(true);

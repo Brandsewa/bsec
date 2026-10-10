@@ -18,6 +18,7 @@ export default function PageVisualEditor({ pageId, canPublish, storeName }: { pa
   const pageQuery = useQuery(orpc.admin.pages.get.queryOptions({ input: { id: pageId, draft: true } }));
   const brandQuery = useQuery(orpc.admin.branding.get.queryOptions());
   const themeQuery = useQuery(orpc.admin.themes.get.queryOptions());
+  const pagesListQuery = useQuery(orpc.admin.pages.list.queryOptions());
 
   // Theme settings edited from the sidebar's Theme tab. They go live when the page is published (like the
   // separate Theme settings screen, they have no draft), so they are held here until then.
@@ -33,6 +34,39 @@ export default function PageVisualEditor({ pageId, canPublish, storeName }: { pa
   // Theme pages (header, footer, product, collection) are reached from the theme screen, not the Pages list.
   const exit = () => void navigate({ to: kind === "header" || kind === "footer" || kind === "product" || kind === "collection" || kind === "cart" ? "/online-store/theme-library" : "/online-store/pages" });
   const fontsHref = googleFontsHref((tokens ?? null) as never);
+
+  const pageSwitcherOptions = useMemo(() => {
+    const list = pagesListQuery.data ?? [];
+    if (list.length === 0) return undefined;
+
+    const systemDefs: Array<{ type: string; defaultLabel: string }> = [
+      { type: "header", defaultLabel: "Header" },
+      { type: "home", defaultLabel: "Home page" },
+      { type: "collection_template", defaultLabel: "Collection template" },
+      { type: "product_template", defaultLabel: "Product template" },
+      { type: "cart_template", defaultLabel: "Cart template" },
+      { type: "footer", defaultLabel: "Footer" },
+    ];
+
+    const options: Array<{ value: string; label: string }> = [];
+    const usedIds = new Set<string>();
+
+    for (const sys of systemDefs) {
+      const match = list.find((p) => (sys.type === "home" ? p.type === "home" || p.slug === "home" : p.type === sys.type));
+      if (match) {
+        options.push({ value: match.id, label: match.title || sys.defaultLabel });
+        usedIds.add(match.id);
+      }
+    }
+
+    for (const p of list) {
+      if (!usedIds.has(p.id) && !p.slug.startsWith("template-")) {
+        options.push({ value: p.id, label: p.title || p.slug });
+      }
+    }
+
+    return options.length > 0 ? options : undefined;
+  }, [pagesListQuery.data]);
 
   if (pageQuery.isError) {
     return (
@@ -70,6 +104,15 @@ export default function PageVisualEditor({ pageId, canPublish, storeName }: { pa
       storeName={storeName}
       pageKind={kind}
       fontsHref={fontsHref}
+      pages={
+        pageSwitcherOptions
+          ? {
+              value: pageId,
+              options: pageSwitcherOptions,
+              onChange: (newPageId) => void navigate({ to: "/online-store/editor/$pageId", params: { pageId: newPageId } }),
+            }
+          : undefined
+      }
       onSaveDraft={saveDraft}
       onPublish={async (blocks) => {
         if (!canPublish) throw new Error("You do not have permission to publish. Save the draft and ask a store owner.");

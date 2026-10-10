@@ -11,6 +11,7 @@ export interface ConfirmDialogProps {
   cancelLabel?: string;
   destructive?: boolean;
   pending?: boolean;
+  confirmDisabled?: boolean;
   onConfirm: () => void;
   children?: ReactNode;
 }
@@ -25,6 +26,7 @@ export function ConfirmDialog({
   cancelLabel = "Not now",
   destructive,
   pending,
+  confirmDisabled,
   onConfirm,
   children,
 }: ConfirmDialogProps) {
@@ -40,7 +42,7 @@ export function ConfirmDialog({
           <Button variant="outline" onClick={() => onOpenChange(false)}>
             {cancelLabel}
           </Button>
-          <Button variant={destructive ? "destructive" : "default"} disabled={pending} onClick={onConfirm}>
+          <Button variant={destructive ? "destructive" : "default"} disabled={pending || confirmDisabled} onClick={onConfirm}>
             {confirmLabel}
           </Button>
         </DialogFooter>

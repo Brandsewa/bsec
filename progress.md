@@ -2,6 +2,10 @@
 
 Source of truth: `docs/PLAN.html` v2.0 (build order in `docs/BUILD-PLAN-M2-M9.md`). Items are ticked only after verification; the evidence is noted next to each. "From code" means it was read in the repo but not exercised live.
 
+## In flight
+- **Antigravity**: `feat/admin-improvements-phase-6` — Phase 6: Navigation builder with filter menus (2026-10-09) [Ready for Claude verification]
+- **Antigravity**: `feat/admin-improvements-phase-5` — Phase 5: Themes cleanup + Pages table (store admin) (2026-10-09) [Ready for Claude verification]
+
 ## M11 · Auth & Transactional Email Overhaul (docs/AUTH-OVERHAUL-PLAN.md)
 
 ### Phase A: Platform-wide Transactional Email Service (Zoho ZeptoMail) — Complete (Awaiting Credentials Verification)
@@ -188,7 +192,7 @@ Handoff summary for anyone (or any agent) picking this up. Plan and acceptance c
 ## In flight
 
 One line per piece of work that is started and not merged. Add yours before you start, remove it when merged or abandoned (`AGENTS.md` section 6). Format: `agent · branch · area · since · one-line goal`.
-
+- Antigravity · feat/admin-improvements-phase-5 · themes cleanup & pages hierarchy/table · 2026-10-09 · Phase 5: Themes cleanup (Puck customize, 3 cards/row) and Pages table (DataTable, sheet, hierarchy, canonical URLs)
 
 
 ## Returns & Exchanges (Manual Review & Portal) — Complete (2026-10-02)
@@ -337,6 +341,8 @@ Cached "not found" never cleared after a draft product was published; Add to Car
 
 ### Decisions on record
 - Razorpay, Shiprocket and Resend keys, Sentry and uptime accounts: set up at the very end (2026-09-29).
+- Payment gateways (owner, 2026-10-08): Razorpay and Stripe only, test mode only. Super Admin enables a gateway for the platform and separately allows live mode; each store then connects its own keys and activates it (`docs/ADMIN-IMPROVEMENTS-PLAN.md` 6.4). PayPal, shipping, live keys and online checkout wiring are still deferred.
+- SMS and WhatsApp (owner, 2026-10-08): Zoho CPaaS, configured but not enrolled.
 - Hardening and load testing: after all phases are built (2026-09-29).
 - Shipping rates are per store, never hardcoded.
 - No legacy dataset to migrate: store #1 is the platform's own first tenant (PLAN §16 does not apply).

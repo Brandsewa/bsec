@@ -11,6 +11,9 @@
  * 6. True PostgreSQL Row Level Security (RLS) enforcement: direct queries across tenants
  *    return 0 rows, and queries without tenant context return 0 rows under app_rw.
  */
+import fs from "node:fs";
+import os from "node:os";
+import path from "node:path";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { PostgreSqlContainer, type StartedPostgreSqlContainer } from "@testcontainers/postgresql";
 import { eq, sql, and } from "drizzle-orm";
@@ -85,6 +88,9 @@ import {
   previewThemeTemplate,
   addAdminOrderNote,
   adjustInventory,
+  archiveOrders,
+  unarchiveOrders,
+  deleteOrders,
   assertPlatformStaff,
   buildTenantContext,
   cancelAdminOrder,
@@ -101,6 +107,12 @@ import {
   createProduct,
   acceptInvitation,
   clearRazorpayCredentials,
+  listStorePaymentProviders,
+  saveStripeCredentials,
+  getStorePaymentProvider,
+  clearProviderCredentials,
+  testPaymentProviderConnection,
+  setPaymentProviderActive,
   createRuntime,
   deleteAdminDiscount,
   deleteBrand,
@@ -108,6 +120,7 @@ import {
   deleteCollection,
   deleteMediaRecord,
   deleteMenu,
+  deletePage,
   deleteProduct,
   getAdminCustomerDetail,
   getAdminMe,
@@ -187,7 +200,10 @@ import {
   saveRazorpayCredentials,
   setMemberRole,
   requestMediaUpload,
+  uploadMediaDirect,
   rollbackPage,
+  duplicatePage,
+  unpublishPage,
   savePageDraft,
   updateAdminDiscount,
   updateAdminShippingSettings,
@@ -346,11 +362,16 @@ describe("Generated Isolation Test Suite (M1 Real Postgres 18 Proof)", () => {
   let rtPlatform: Runtime;
   let dbRw: DbHandle;
   let dbPlatform: DbHandle;
+  let tempMediaDir: string;
 
   const adminProcedures = extractProcedurePaths(storeContract.admin as unknown as Record<string, unknown>);
   const platformProcedures = extractProcedurePaths(platformContract.tenants as unknown as Record<string, unknown>);
 
   beforeAll(async () => {
+    tempMediaDir = path.join(os.tmpdir(), `bsec-isolation-media-${Date.now()}`);
+    fs.mkdirSync(tempMediaDir, { recursive: true });
+    process.env.MEDIA_LOCAL_DIR = tempMediaDir;
+
     if (process.env.TEST_DATABASE_URL_SUPERUSER) {
       superUrl = process.env.TEST_DATABASE_URL_SUPERUSER;
     } else {
@@ -510,6 +531,7 @@ describe("Generated Isolation Test Suite (M1 Real Postgres 18 Proof)", () => {
             "orders.read",
             "orders.write",
             "orders.refund",
+            "orders.delete",
             "customers.read",
             "customers.write",
             "discounts.write",
@@ -678,6 +700,14 @@ describe("Generated Isolation Test Suite (M1 Real Postgres 18 Proof)", () => {
         total: 2999,
       });
 
+      await tx.insert(schema.inventoryLevels).values({
+        tenantId: tenantA,
+        variantId: testVariantA,
+        locationId: testLocationA,
+        onHand: 1000,
+        reserved: 0,
+      });
+
       await tx.insert(schema.discounts).values({
         id: testDiscountA,
         tenantId: tenantA,
@@ -737,6 +767,16 @@ describe("Generated Isolation Test Suite (M1 Real Postgres 18 Proof)", () => {
   }, 180_000);
 
   afterAll(async () => {
+    // The payment-provider cases switch Stripe on platform-wide; put the seed state back for files that share the database.
+    await rtPlatform?._db.db.execute(sql`UPDATE platform_payment_providers SET enabled = false, live_mode_allowed = false WHERE provider = 'stripe'`).catch(() => undefined);
+    delete process.env.MEDIA_LOCAL_DIR;
+    if (tempMediaDir) {
+      try {
+        fs.rmSync(tempMediaDir, { recursive: true, force: true });
+      } catch {
+        // ignore cleanup error
+      }
+    }
     await rtApp?.close();
     await rtPlatform?.close();
     await dbRw?.close();
@@ -937,22 +977,11 @@ describe("Generated Isolation Test Suite (M1 Real Postgres 18 Proof)", () => {
       case "media.list":
         return await listMedia(rt, ctx);
       case "media.requestUpload": {
-        // uploads are refused unless storage credentials exist, so give this call some
-        const saved = { id: process.env.R2_ACCESS_KEY_ID, secret: process.env.R2_SECRET_ACCESS_KEY };
-        process.env.R2_ACCESS_KEY_ID = "isolation-test-key";
-        process.env.R2_SECRET_ACCESS_KEY = "isolation-test-secret";
-        try {
-          return await requestMediaUpload(rt, ctx, {
-            filename: "test.png",
-            mime: "image/png",
-            bytes: 1024,
-          });
-        } finally {
-          if (saved.id === undefined) delete process.env.R2_ACCESS_KEY_ID;
-          else process.env.R2_ACCESS_KEY_ID = saved.id;
-          if (saved.secret === undefined) delete process.env.R2_SECRET_ACCESS_KEY;
-          else process.env.R2_SECRET_ACCESS_KEY = saved.secret;
-        }
+        return await requestMediaUpload(rt, ctx, {
+          filename: "test.png",
+          mime: "image/png",
+          bytes: 1024,
+        });
       }
       case "media.create":
         return await createMediaRecord(rt, ctx, {
@@ -960,6 +989,15 @@ describe("Generated Isolation Test Suite (M1 Real Postgres 18 Proof)", () => {
           mime: "image/png",
           bytes: 1024,
         });
+      case "media.upload": {
+        const fakePng = Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 0, 0, 0, 0]);
+        return await uploadMediaDirect(rt, ctx, {
+          filename: "iso-upload.png",
+          mime: "image/png",
+          fileBytes: fakePng,
+          folder: "products",
+        });
+      }
       case "media.delete": {
         const m = await createMediaRecord(rt, ctx, {
           storageKey: `del-${Date.now()}-${Math.random().toString(36).slice(2, 6)}.png`,
@@ -1002,6 +1040,19 @@ describe("Generated Isolation Test Suite (M1 Real Postgres 18 Proof)", () => {
         return await publishPage(rt, ctx, { id: testPageA, versionId: testVersionA });
       case "pages.rollback":
         return await rollbackPage(rt, ctx, { id: testPageA, targetVersionId: testVersionA });
+      case "pages.delete": {
+        const p = await createPage(rt, ctx, { title: "To Delete", slug: `del-${Date.now()}-${Math.random().toString(36).slice(2, 6)}` });
+        return await deletePage(rt, ctx, { id: p.id });
+      }
+      case "pages.unpublish": {
+        const p = await createPage(rt, ctx, { title: "To Unpublish", slug: `unpub-${Date.now()}-${Math.random().toString(36).slice(2, 6)}` });
+        await publishPage(rt, ctx, { id: p.id });
+        return await unpublishPage(rt, ctx, { id: p.id });
+      }
+      case "pages.duplicate": {
+        const p = await createPage(rt, ctx, { title: "To Duplicate", slug: `dup-${Date.now()}-${Math.random().toString(36).slice(2, 6)}` });
+        return await duplicatePage(rt, ctx, { id: p.id });
+      }
       case "menus.list":
         return await listMenus(rt, ctx);
       case "menus.get":
@@ -1065,6 +1116,36 @@ describe("Generated Isolation Test Suite (M1 Real Postgres 18 Proof)", () => {
       }
       case "orders.createInvoice": {
         return await createAdminOrderInvoice(rt, ctx, { id: testOrderA });
+      }
+      case "orders.archive": {
+        const draft = await createAdminDraftOrder(rt, ctx, {
+          email: `archive-${Date.now()}@test.com`,
+          phone: "+919876543210",
+          shippingAddress: { line1: "123 MG Road", city: "Bengaluru", stateCode: "KA", pincode: "560001" },
+          items: [{ variantId: testVariantA, quantity: 1 }],
+        });
+        return await archiveOrders(rt, ctx, { ids: [draft.orderId] });
+      }
+      case "orders.unarchive": {
+        const draft = await createAdminDraftOrder(rt, ctx, {
+          email: `unarchive-${Date.now()}@test.com`,
+          phone: "+919876543210",
+          shippingAddress: { line1: "123 MG Road", city: "Bengaluru", stateCode: "KA", pincode: "560001" },
+          items: [{ variantId: testVariantA, quantity: 1 }],
+        });
+        await archiveOrders(rt, ctx, { ids: [draft.orderId] });
+        return await unarchiveOrders(rt, ctx, { ids: [draft.orderId] });
+      }
+      case "orders.delete": {
+        const draft = await createAdminDraftOrder(rt, ctx, {
+          email: `del-${Date.now()}@test.com`,
+          phone: "+919876543210",
+          shippingAddress: { line1: "123 MG Road", city: "Bengaluru", stateCode: "KA", pincode: "560001" },
+          items: [{ variantId: testVariantA, quantity: 1 }],
+        });
+        await cancelAdminOrder(rt, ctx, { id: draft.orderId, reason: "Cancel for delete" });
+        await archiveOrders(rt, ctx, { ids: [draft.orderId] });
+        return await deleteOrders(rt, ctx, { ids: [draft.orderId] });
       }
       case "orders.confirm":
       case "orders.advance":
@@ -1234,6 +1315,24 @@ describe("Generated Isolation Test Suite (M1 Real Postgres 18 Proof)", () => {
       case "billing.getSubscription":
         assertPermission(ctx, "settings.read");
         return await getTenantSubscription(rt, ctx.tenantId);
+
+      // --- Phase 4 slice D: platform-gated payment providers ---
+      case "paymentProviders.list":
+        return await listStorePaymentProviders(rt, ctx);
+      case "paymentProviders.saveCredentials":
+      case "paymentProviders.clearCredentials":
+      case "paymentProviders.test":
+      case "paymentProviders.setActive": {
+        // Stripe ships disabled; switch it on for this suite (the platform role bypasses RLS and owns this table).
+        await rtPlatform._db.db.execute(sql`UPDATE platform_payment_providers SET enabled = true WHERE provider = 'stripe'`);
+        await saveStripeCredentials(rt, ctx, { secretKey: "sk_test_IsolationKey123456", webhookSecret: "whsec_isolationsecret1" });
+        if (procPath === "paymentProviders.saveCredentials") return await getStorePaymentProvider(rt, ctx, "stripe");
+        if (procPath === "paymentProviders.clearCredentials") return await clearProviderCredentials(rt, ctx, "stripe");
+        const okFetch = (async () => new Response(JSON.stringify({ livemode: false }), { status: 200 })) as unknown as typeof fetch;
+        const tested = await testPaymentProviderConnection(rt, ctx, "stripe", { fetchFn: okFetch });
+        if (procPath === "paymentProviders.test") return tested;
+        return await setPaymentProviderActive(rt, ctx, "stripe", true);
+      }
 
       // --- Settings Phase 5: Payment Methods Catalogue & COD ---
       case "paymentMethods.list":
@@ -2067,6 +2166,7 @@ describe("Generated Isolation Test Suite (M1 Real Postgres 18 Proof)", () => {
             "orders.read",
             "orders.write",
             "orders.refund",
+            "orders.delete",
             "customers.read",
             "customers.write",
             "discounts.write",
@@ -2076,7 +2176,7 @@ describe("Generated Isolation Test Suite (M1 Real Postgres 18 Proof)", () => {
 
           // Credential writes are owner-only (ADR-020): store_admin's set lacks payments.manage, so prove the
           // denial first, then run the procedure as an owner-level context.
-          const ownerOnly = proc === "payments.saveRazorpay" || proc === "payments.clearRazorpay" || proc === "paymentMethods.updateCod";
+          const ownerOnly = proc === "payments.saveRazorpay" || proc === "payments.clearRazorpay" || proc === "paymentMethods.updateCod" || proc === "paymentProviders.saveCredentials" || proc === "paymentProviders.clearCredentials" || proc === "paymentProviders.test" || proc === "paymentProviders.setActive";
           // Maintenance mutations additionally require the store_owner role (decision 10), not just the family.
           const maintenanceOwnerOnly = proc === "settingsUpdate.apply" || proc === "storefront.scheduleMaintenance" || proc === "storefront.cancelScheduledMaintenance" || proc === "storefront.endMaintenance";
           if (ownerOnly) {

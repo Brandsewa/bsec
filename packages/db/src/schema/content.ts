@@ -43,6 +43,7 @@ export const pages = tenantTable(
   "pages",
   {
     id: uuid("id").default(sql`uuidv7()`).primaryKey(),
+    parentId: uuid("parent_id"),
     type: text("type").notNull().default("custom"), // home, landing, custom, product_template, collection_template
     title: text("title").notNull(),
     slug: citext("slug").notNull(),
@@ -56,7 +57,15 @@ export const pages = tenantTable(
   (t) => [
     unique("pages_tenant_slug_uniq").on(t.tenantId, t.slug),
     unique("pages_tenant_id_uniq").on(t.tenantId, t.id),
+    tenantForeignKey({
+      tableTenantId: t.tenantId,
+      column: t.parentId,
+      target: { tenantId: t.tenantId, id: t.id },
+      name: "pages_parent_fk",
+      onDelete: "restrict",
+    }),
     index("pages_tenant_type_idx").on(t.tenantId, t.type),
+    index("pages_tenant_parent_idx").on(t.tenantId, t.parentId),
   ],
 );
 
@@ -95,11 +104,13 @@ export const menus = tenantTable(
     id: uuid("id").default(sql`uuidv7()`).primaryKey(),
     handle: text("handle").notNull(), // header, footer, custom
     title: text("title").notNull(),
+    kind: text("kind").notNull().default("navigation"), // navigation, filter
     items: jsonb("items").notNull().default(sql`'[]'::jsonb`),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().default(sql`now()`),
     updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().default(sql`now()`),
   },
   (t) => [
     unique("menus_tenant_handle_uniq").on(t.tenantId, t.handle),
+    index("menus_tenant_kind_idx").on(t.tenantId, t.kind),
   ],
 );

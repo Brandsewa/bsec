@@ -10,7 +10,8 @@
     "typecheck": "tsc -p tsconfig.json",
     "lint": "eslint . --cache --cache-location node_modules/.cache/eslint/",
     "test": "vitest run",
-    "test:fast": "vitest run",
+    "test:fast": "vitest run --exclude '**/*.int.test.ts'",
+    "test:heavy": "vitest run int.test.ts --no-file-parallelism",
     "seed:templates": "tsx src/seed-templates-cli.ts"
   },
   "dependencies": {

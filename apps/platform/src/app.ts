@@ -75,6 +75,31 @@ import {
   renderEmail,
   listPlatformPlanChangeRequests,
   decidePlatformPlanChangeRequest,
+  listPlatformStorageConnections,
+  getPlatformStorageConnection,
+  createPlatformStorageConnection,
+  updatePlatformStorageConnection,
+  activatePlatformStorageConnection,
+  testPlatformStorageConnection,
+  deletePlatformStorageConnection,
+  getPlatformStorageStats,
+  getPlatformIntegrationsOverview,
+  listPlatformPaymentProviders,
+  updatePlatformPaymentProvider,
+  getPlatformChannelStats,
+  getPlatformChannelTransactions,
+  listPlatformChannelProviders,
+  createPlatformChannelProvider,
+  updatePlatformChannelProvider,
+  deletePlatformChannelProvider,
+  setDefaultPlatformChannelProvider,
+  testPlatformChannelProvider,
+  getPlatformQuotaMatrix,
+  createPlatformQuotaTier,
+  updatePlatformQuotaTier,
+  deactivatePlatformQuotaTier,
+  updatePlatformQuotaLimits,
+  updatePlatformQuotaDefinition,
   createLogger,
   requestLogger,
   resolveRequestId,
@@ -417,6 +442,27 @@ export const platformRouter = os.router({
   },
   quotas: {
     list: os.quotas.list.use(requirePlatformStaff).handler(({ context }) => listPlatformQuotaDefinitions(context.rt)),
+    matrix: os.quotas.matrix.use(requirePlatformStaff).handler(({ context }) => getPlatformQuotaMatrix(context.rt)),
+    createTier: os.quotas.createTier.use(requireStaff("platform_admin")).handler(async ({ context, input }) => {
+      const staffUserId = actor(context);
+      return createPlatformQuotaTier(context.rt, staffUserId, input, context.meta);
+    }),
+    updateTier: os.quotas.updateTier.use(requireStaff("platform_admin")).handler(async ({ context, input }) => {
+      const staffUserId = actor(context);
+      return updatePlatformQuotaTier(context.rt, staffUserId, input, context.meta);
+    }),
+    deactivateTier: os.quotas.deactivateTier.use(requireStaff("platform_admin")).handler(async ({ context, input }) => {
+      const staffUserId = actor(context);
+      return deactivatePlatformQuotaTier(context.rt, staffUserId, input.code, context.meta);
+    }),
+    updateLimits: os.quotas.updateLimits.use(requireStaff("platform_admin")).handler(async ({ context, input }) => {
+      const staffUserId = actor(context);
+      return updatePlatformQuotaLimits(context.rt, staffUserId, input, context.meta);
+    }),
+    updateDefinition: os.quotas.updateDefinition.use(requireStaff("platform_admin")).handler(async ({ context, input }) => {
+      const staffUserId = actor(context);
+      return updatePlatformQuotaDefinition(context.rt, staffUserId, input, context.meta);
+    }),
   },
   features: {
     list: os.features.list.use(requirePlatformStaff).handler(({ context }) => listPlatformFeatureFlags(context.rt)),
@@ -473,6 +519,86 @@ export const platformRouter = os.router({
     recentDeliveries: os.email.recentDeliveries.use(requirePlatformStaff).handler(async ({ context, input }) => {
       const staffUserId = actor(context);
       return listRecentEmailDeliveries(context.rt, staffUserId, input);
+    }),
+  },
+  storage: {
+    list: os.storage.list.use(requirePlatformStaff).handler(async ({ context }) => {
+      const staffUserId = actor(context);
+      return listPlatformStorageConnections(context.rt, staffUserId);
+    }),
+    get: os.storage.get.use(requirePlatformStaff).handler(async ({ context, input }) => {
+      const staffUserId = actor(context);
+      return getPlatformStorageConnection(context.rt, staffUserId, input.id);
+    }),
+    create: os.storage.create.use(requireStaff("platform_admin")).handler(async ({ context, input }) => {
+      const staffUserId = actor(context);
+      return createPlatformStorageConnection(context.rt, staffUserId, input, context.meta);
+    }),
+    update: os.storage.update.use(requireStaff("platform_admin")).handler(async ({ context, input }) => {
+      const staffUserId = actor(context);
+      return updatePlatformStorageConnection(context.rt, staffUserId, input, context.meta);
+    }),
+    activate: os.storage.activate.use(requireStaff("platform_admin")).handler(async ({ context, input }) => {
+      const staffUserId = actor(context);
+      return activatePlatformStorageConnection(context.rt, staffUserId, input.id, context.meta);
+    }),
+    test: os.storage.test.use(requireStaff("platform_admin")).handler(async ({ context, input }) => {
+      const staffUserId = actor(context);
+      return testPlatformStorageConnection(context.rt, staffUserId, input.id, context.meta);
+    }),
+    stats: os.storage.stats.use(requirePlatformStaff).handler(async ({ context }) => {
+      const staffUserId = actor(context);
+      return getPlatformStorageStats(context.rt, staffUserId);
+    }),
+    delete: os.storage.delete.use(requireStaff("platform_admin")).handler(async ({ context, input }) => {
+      const staffUserId = actor(context);
+      return deletePlatformStorageConnection(context.rt, staffUserId, input.id, context.meta);
+    }),
+  },
+  integrations: {
+    paymentProviders: os.integrations.paymentProviders.use(requirePlatformStaff).handler(async ({ context }) => {
+      const staffUserId = actor(context);
+      return listPlatformPaymentProviders(context.rt, staffUserId);
+    }),
+    updatePaymentProvider: os.integrations.updatePaymentProvider.use(requireStaff("platform_admin")).handler(async ({ context, input }) => {
+      const staffUserId = actor(context);
+      return updatePlatformPaymentProvider(context.rt, staffUserId, input, context.meta);
+    }),
+    overview: os.integrations.overview.use(requirePlatformStaff).handler(async ({ context }) => {
+      const staffUserId = actor(context);
+      return getPlatformIntegrationsOverview(context.rt, staffUserId);
+    }),
+    channelStats: os.integrations.channelStats.use(requirePlatformStaff).handler(async ({ context, input }) => {
+      const staffUserId = actor(context);
+      return getPlatformChannelStats(context.rt, staffUserId, input);
+    }),
+    channelTransactions: os.integrations.channelTransactions.use(requirePlatformStaff).handler(async ({ context, input }) => {
+      const staffUserId = actor(context);
+      return getPlatformChannelTransactions(context.rt, staffUserId, input);
+    }),
+    listProviders: os.integrations.listProviders.use(requirePlatformStaff).handler(async ({ context, input }) => {
+      const staffUserId = actor(context);
+      return listPlatformChannelProviders(context.rt, staffUserId, input.channel);
+    }),
+    createProvider: os.integrations.createProvider.use(requirePlatformStaff).handler(async ({ context, input }) => {
+      const staffUserId = actor(context);
+      return createPlatformChannelProvider(context.rt, staffUserId, input, context.meta);
+    }),
+    updateProvider: os.integrations.updateProvider.use(requirePlatformStaff).handler(async ({ context, input }) => {
+      const staffUserId = actor(context);
+      return updatePlatformChannelProvider(context.rt, staffUserId, input, context.meta);
+    }),
+    deleteProvider: os.integrations.deleteProvider.use(requirePlatformStaff).handler(async ({ context, input }) => {
+      const staffUserId = actor(context);
+      return deletePlatformChannelProvider(context.rt, staffUserId, input.id, context.meta);
+    }),
+    setDefaultProvider: os.integrations.setDefaultProvider.use(requirePlatformStaff).handler(async ({ context, input }) => {
+      const staffUserId = actor(context);
+      return setDefaultPlatformChannelProvider(context.rt, staffUserId, input.id, context.meta);
+    }),
+    testProvider: os.integrations.testProvider.use(requirePlatformStaff).handler(async ({ context, input }) => {
+      const staffUserId = actor(context);
+      return testPlatformChannelProvider(context.rt, staffUserId, input, context.meta);
     }),
   },
 });

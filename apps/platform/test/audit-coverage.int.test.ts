@@ -49,7 +49,9 @@ async function snapshot(): Promise<string> {
     "tenants", "tenant_notes", "platform_staff", "platform_staff_invitations", "feature_flags", "support_sessions",
     "tenant_deletions", "tenant_size_tiers", "subscriptions", "domains", "webhook_inbox", "memberships", "exports",
     "export_files", "tenant_owner_invites", "users", "sessions", "organizations", "store_settings", "roles", "theme_templates",
-    "platform_email_settings", "plan_change_requests",
+    "platform_email_settings", "plan_change_requests", "platform_storage_connections",
+    "quota_tiers", "quota_tier_limits", "quota_definitions",
+    "platform_channel_providers", "platform_message_log",
   ];
   const parts = tables.map((t) => `SELECT '${t}' || ':' || x::text AS r FROM ${t} x`);
   parts.push(`SELECT 'job:' || j.id::text || j.state::text FROM pgboss.job j`);
@@ -259,7 +261,170 @@ const CASES: Record<string, Case> = {
       toEmail: `test-${++seq}@platform.test`,
     }),
   },
+  "storage.create": {
+    role: "platform_admin",
+    action: "storage_connection.create",
+    input: async () => ({
+      name: `Storage ${++seq}`,
+      driver: "local",
+      purpose: "public_media",
+      localDir: `./.data/test-storage-${seq}`,
+    }),
+  },
+  "storage.update": {
+    role: "platform_admin",
+    action: "storage_connection.update",
+    input: async () => ({
+      id: await mkStorage(),
+      name: `Renamed Storage ${++seq}`,
+    }),
+  },
+  "storage.activate": {
+    role: "platform_admin",
+    action: "storage_connection.activate",
+    input: async () => ({
+      id: await mkStorage(),
+    }),
+  },
+  "storage.test": {
+    role: "platform_admin",
+    action: "storage_connection.test",
+    input: async () => ({
+      id: await mkStorage(),
+    }),
+  },
+  "storage.delete": {
+    role: "platform_admin",
+    action: "storage_connection.delete",
+    input: async () => ({
+      id: await mkStorage(),
+    }),
+  },
+  "quotas.createTier": {
+    role: "platform_admin",
+    action: "quota_tier.created",
+    input: async () => ({
+      code: `T_${++seq}_${Math.random().toString(36).slice(2, 6).toUpperCase()}`,
+      name: `Tier ${seq}`,
+      priceMonthlyPaise: 49900,
+      priceYearlyPaise: 499000,
+    }),
+  },
+  "quotas.updateTier": {
+    role: "platform_admin",
+    action: "quota_tier.updated",
+    input: async () => {
+      const code = `TU_${++seq}_${Math.random().toString(36).slice(2, 6).toUpperCase()}`;
+      await proc("quotas.createTier")(
+        { code, name: `Tier ${seq}` },
+        { context: ctxFor(owner.userId, owner.freshSessionAt) },
+      );
+      return { code, name: `Renamed Tier ${seq}`, priceMonthlyPaise: 99900 };
+    },
+  },
+  "quotas.deactivateTier": {
+    role: "platform_admin",
+    action: "quota_tier.updated",
+    input: async () => {
+      const code = `TD_${++seq}_${Math.random().toString(36).slice(2, 6).toUpperCase()}`;
+      await proc("quotas.createTier")(
+        { code, name: `Tier ${seq}` },
+        { context: ctxFor(owner.userId, owner.freshSessionAt) },
+      );
+      return { code };
+    },
+  },
+  "quotas.updateLimits": {
+    role: "platform_admin",
+    action: "quota_limits.updated",
+    input: async () => ({
+      updates: [{ tierCode: "XS", quotaKey: "products", value: 50 }],
+    }),
+  },
+  "quotas.updateDefinition": {
+    role: "platform_admin",
+    action: "quota_definition.updated",
+    input: async () => ({
+      key: "products",
+      description: "Catalog products updated",
+      unit: "count",
+      enforcement: "hard",
+    }),
+  },
+  "integrations.updatePaymentProvider": {
+    role: "platform_admin",
+    action: "payment_provider.live_mode_allowed",
+    input: async () => ({ provider: "razorpay", liveModeAllowed: true }),
+  },
+  "integrations.createProvider": {
+    role: "platform_admin",
+    action: "channel_provider.create",
+    input: async () => ({
+      channel: "sms",
+      provider: "zoho_cpaas",
+      displayName: `Zoho SMS ${++seq}`,
+      enabled: false,
+      isDefault: false,
+    }),
+  },
+  "integrations.updateProvider": {
+    role: "platform_admin",
+    action: "channel_provider.update",
+    input: async () => {
+      const p = (await proc("integrations.createProvider")(
+        { channel: "sms", provider: "zoho_cpaas", displayName: `Zoho SMS Upd ${++seq}` },
+        { context: ctxFor(owner.userId, owner.freshSessionAt) },
+      )) as { id: string };
+      return { id: p.id, displayName: `Renamed SMS ${seq}` };
+    },
+  },
+  "integrations.deleteProvider": {
+    role: "platform_admin",
+    action: "channel_provider.delete",
+    input: async () => {
+      const p = (await proc("integrations.createProvider")(
+        { channel: "sms", provider: "zoho_cpaas", displayName: `Zoho SMS Del ${++seq}` },
+        { context: ctxFor(owner.userId, owner.freshSessionAt) },
+      )) as { id: string };
+      return { id: p.id };
+    },
+  },
+  "integrations.setDefaultProvider": {
+    role: "platform_admin",
+    action: "channel_provider.setDefault",
+    input: async () => {
+      const p = (await proc("integrations.createProvider")(
+        { channel: "sms", provider: "zoho_cpaas", displayName: `Zoho SMS Def ${++seq}` },
+        { context: ctxFor(owner.userId, owner.freshSessionAt) },
+      )) as { id: string };
+      return { id: p.id };
+    },
+  },
+  "integrations.testProvider": {
+    role: "platform_admin",
+    action: "channel_provider.test",
+    input: async () => {
+      const p = (await proc("integrations.createProvider")(
+        { channel: "sms", provider: "zoho_cpaas", displayName: `Zoho SMS Tst ${++seq}` },
+        { context: ctxFor(owner.userId, owner.freshSessionAt) },
+      )) as { id: string };
+      return { id: p.id, to: "+919876543210" };
+    },
+  },
 };
+
+async function mkStorage(): Promise<string> {
+  const res = (await proc("storage.create")(
+    {
+      name: `Storage ${++seq}`,
+      driver: "local",
+      purpose: "public_media",
+      localDir: `./.data/test-media-${seq}`,
+    },
+    { context: ctxFor(owner.userId, owner.freshSessionAt) },
+  )) as { id: string };
+  return res.id;
+}
 
 /** An active (emergency-consent) support session, so extend / elevate / end have something to act on. */
 async function activeSession(): Promise<string> {

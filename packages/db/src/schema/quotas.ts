@@ -1,5 +1,7 @@
 import { sql } from "drizzle-orm";
 import {
+  bigint,
+  boolean,
   index,
   integer,
   pgTable,
@@ -47,6 +49,47 @@ export const quotaDefinitions = pgTable("quota_definitions", {
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().default(sql`now()`),
   updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().default(sql`now()`),
 });
+
+/**
+ * Quota Tiers (ADMIN-IMPROVEMENTS-PLAN Phase 3 / SA-2 / ADR-025).
+ * Normalised platform table defining tenant size tiers and pricing.
+ */
+export const quotaTiers = pgTable("quota_tiers", {
+  code: text("code").primaryKey(),
+  name: text("name").notNull(),
+  description: text("description"),
+  sort: integer("sort").notNull().default(0),
+  isActive: boolean("is_active").notNull().default(true),
+  priceMonthlyPaise: bigint("price_monthly_paise", { mode: "number" }).notNull().default(0),
+  priceYearlyPaise: bigint("price_yearly_paise", { mode: "number" }).notNull().default(0),
+  currency: text("currency").notNull().default("INR"),
+  isPublic: boolean("is_public").notNull().default(true),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().default(sql`now()`),
+  updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().default(sql`now()`),
+});
+
+/**
+ * Quota Tier Limits (ADMIN-IMPROVEMENTS-PLAN Phase 3 / SA-2 / ADR-025).
+ * Normalised mapping table for limits per (tier_code, quota_key).
+ */
+export const quotaTierLimits = pgTable(
+  "quota_tier_limits",
+  {
+    tierCode: text("tier_code")
+      .notNull()
+      .references(() => quotaTiers.code, { onDelete: "cascade" }),
+    quotaKey: text("quota_key")
+      .notNull()
+      .references(() => quotaDefinitions.key, { onDelete: "cascade" }),
+    value: integer("value").notNull(),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().default(sql`now()`),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().default(sql`now()`),
+  },
+  (t) => [
+    primaryKey({ columns: [t.tierCode, t.quotaKey] }),
+  ],
+);
+
 
 /**
  * Tenant Size Tiers (PLAN §6.1, §14 / M7-M8).

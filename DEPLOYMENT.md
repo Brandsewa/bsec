@@ -66,6 +66,8 @@ Until step 3 the site works normally; only the self-service endpoints answer 503
 - `CUSTOM_DOMAIN_CNAME_TARGET` (default `stores.<PLATFORM_DOMAIN>`): the hostname customers point their domain at; it must exist in the Cloudflare zone.
 - `CLOUDFLARE_API_TOKEN` / `CLOUDFLARE_ZONE_ID`: custom domains stay in `requested` ("not configured") until both are set.
 - `RAZORPAY_PLATFORM_KEY_ID`, `RAZORPAY_PLATFORM_KEY_SECRET`, `RAZORPAY_PLATFORM_WEBHOOK_SECRET`: plan changes answer "billing not configured" until set.
+- `MEDIA_LOCAL_DIR` (optional, default `./.data/media`): filesystem storage directory when using the `local` storage driver.
+- Storage connections can also be configured dynamically in Super Admin under **Storage** (`/storage` or `/integrations/storage`). Active connections in `platform_storage_connections` supersede environment variables. When using S3 or Cloudflare R2 with direct browser uploads, ensure bucket CORS permits `PUT` from admin origins (e.g. `https://admin.bcom.si`). The Super Admin "Test connection" button performs live CORS diagnostics. If bucket CORS is unconfigured, uploads automatically fall back through server-proxied streaming (`/api/admin/media/upload`).
 
 ### Database roles
 | Role | Used by | Notes |
@@ -123,7 +125,10 @@ node dist/demo.js remove
    - Configure SMTP Host (`smtp.zeptomail.in` for India DC), Port `587`, Secure: `STARTTLS`, From Address: `no-reply@bcom.si`, Username: `emailapikey`, and paste the Send Mail Token into SMTP Password.
    - Click "Save email settings". The password will be symmetrically encrypted with `TENANT_SECRETS_KEY` at rest.
    - Click "Send test email" to verify delivery before going live.
-8. (Later) set `TENANT_SECRETS_KEY` on web, platform and worker before entering Razorpay/Shiprocket keys.
+8. **Super Admin -> Integrations** (`https://superadmin.bcom.si/integrations`) is the one place for notification channels, storage and payment gateways. `/email` and `/storage` redirect there.
+   - **SMS and WhatsApp (Zoho CPaaS): configured but not enrolled.** Nothing is sent until you create a Zoho CPaaS account, add credentials and enable the channel. Zoho's published API shape is `POST https://cpaas.zoho.com/v1.1/sms` and `/whatsapp` with the raw token in the `Authorization` header; response bodies and the WhatsApp language field are not documented there (marked unconfirmed in the code). India SMS also needs TRAI DLT registration (sender, templates); WhatsApp needs Meta-approved templates.
+   - **Payment gateways (Razorpay, Stripe), test mode only.** Under **Payments**, enable a gateway for stores and, only when you are ready for real money, switch on **Allow live mode**. Each store then connects its own keys in Store Admin -> Settings -> Payments, runs **Test connection** and activates. Stripe: in the store's Stripe dashboard add a webhook endpoint `https://<store-domain>/api/webhooks/stripe?tenantId=<store-id>` (the exact URL is shown in the store's gateway drawer), subscribe to `checkout.session.completed`, `payment_intent.payment_failed` and `charge.refunded`, and paste the endpoint's `whsec_` signing secret into the store. Stripe API version is pinned in `packages/payments/src/providers/stripe.ts` (`STRIPE_API_VERSION`); confirm it against Stripe's changelog before going live. **Online checkout is not switched on**: shoppers still pay by Cash on Delivery.
+9. (Later) set `TENANT_SECRETS_KEY` on web, platform and worker before entering Razorpay/Shiprocket keys.
 
 ## Operating the platform (Super Admin)
 - **Roles:** `platform_owner` (everything, including roles and emergency support), `platform_admin` (store lifecycle, plans, deletion, exports, staff invitations, support write-confirmation), `platform_support` (read everything, notes, support sessions they started). The last active owner can never be demoted or deactivated.

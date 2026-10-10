@@ -36,7 +36,7 @@ export interface QuotaResolution {
   unit: string;
   enforcement: "hard" | "soft" | "notify";
   source: "override" | "tier" | "plan" | "default";
-  tier: "XS" | "S" | "M" | "L";
+  tier: string;
 }
 
 export interface QuotaUsageItem {
@@ -48,12 +48,12 @@ export interface QuotaUsageItem {
   enforcement: "hard" | "soft" | "notify";
   percentUsed: number;
   source: "override" | "tier" | "plan" | "default";
-  tier: "XS" | "S" | "M" | "L";
+  tier: string;
 }
 
 export interface TenantUsageReport {
   tenantId: string;
-  tier: "XS" | "S" | "M" | "L";
+  tier: string;
   planCode: string | null;
   items: QuotaUsageItem[];
   warnings: string[];
@@ -79,12 +79,12 @@ export const DEFAULT_TIER_TABLE: Record<
 };
 
 /**
- * Resolves effective quota for a tenant following PLAN §6.1 / ADR-015:
+ * Resolves effective quota for a tenant following PLAN §6.1 / ADR-015 / ADR-025:
  * Hierarchy:
  * 1. Tenant Quota Override (if active and not expired)
- * 2. Tenant Size Tier (from tenant_size_tiers joined with quota_definitions)
+ * 2. Tenant Size Tier (from normalised quota_tier_limits table, fallback to XS)
  * 3. Plan Limits (from active subscription/plan)
- * 4. Default Fallback (XS tier default)
+ * 4. Default Fallback (XS tier threshold from fallback table)
  */
 export async function resolveEffectiveQuota(
   db: Db,
@@ -102,13 +102,14 @@ export async function resolveEffectiveQuota(
     LIMIT 1;
   `);
 
-  // Fetch tenant tier (un-tiered stores fallback to generous L tier as before M8)
+  // Fetch tenant tier (un-tiered stores default to generous L for backward compatibility; unknown assigned tiers fallback to XS)
   const tierRes = await db.execute<{ tier: string }>(sql`
     SELECT tier FROM tenant_size_tiers
     WHERE tenant_id = ${tenantId}
     LIMIT 1;
   `);
-  const tier = (tierRes.rows[0]?.tier?.toUpperCase() as "XS" | "S" | "M" | "L") || "L";
+  const rawTier = tierRes.rows[0]?.tier?.trim() || "L";
+  const tier = rawTier.toUpperCase();
 
   // Fetch quota definition metadata
   const defRes = await db.execute<{
@@ -138,10 +139,53 @@ export async function resolveEffectiveQuota(
     };
   }
 
-  // 2. Check tenant size tier
+  // 2. Check tenant size tier from normalised quota_tier_limits table
+  try {
+    const tierLimitRes = await db.execute<{ value: number }>(sql`
+      SELECT value FROM quota_tier_limits
+      WHERE UPPER(tier_code) = ${tier} AND quota_key = ${quotaKey}
+      LIMIT 1;
+    `);
+
+    if (tierLimitRes.rows[0]?.value !== undefined) {
+      const val = Number(tierLimitRes.rows[0].value);
+      if (!isNaN(val) && val >= 0) {
+        return {
+          limit: val,
+          unit,
+          enforcement,
+          source: "tier",
+          tier,
+        };
+      }
+    }
+
+    // If tier not found or limit missing for this tier, fall back safely to XS tier
+    const xsLimitRes = await db.execute<{ value: number }>(sql`
+      SELECT value FROM quota_tier_limits
+      WHERE UPPER(tier_code) = 'XS' AND quota_key = ${quotaKey}
+      LIMIT 1;
+    `);
+    if (xsLimitRes.rows[0]?.value !== undefined) {
+      const val = Number(xsLimitRes.rows[0].value);
+      if (!isNaN(val) && val >= 0) {
+        return {
+          limit: val,
+          unit,
+          enforcement,
+          source: "tier",
+          tier: "XS",
+        };
+      }
+    }
+  } catch {
+    // If quota_tier_limits table query fails, proceed to fallback
+  }
+
+  // Legacy fallback: check quota_definitions tier_xs/s/m/l
   if (defRes.rows[0]) {
     const colName = `tier_${tier.toLowerCase()}` as "tier_xs" | "tier_s" | "tier_m" | "tier_l";
-    const tierLimit = Number(defRes.rows[0][colName]);
+    const tierLimit = Number(defRes.rows[0][colName] ?? defRes.rows[0].tier_xs);
     if (!isNaN(tierLimit) && tierLimit >= 0) {
       return {
         limit: tierLimit,
@@ -181,9 +225,10 @@ export async function resolveEffectiveQuota(
     // If plans/subscriptions tables not yet queryable, proceed to default
   }
 
-  // 4. Default generous L fallback (non-regression for pre-M8 stores)
+  // 4. Default fallback: XS tier default threshold from fallback table
+  const defaultLimit = fallback[tier as "XS" | "S" | "M" | "L"] ?? fallback.XS ?? fallback.L;
   return {
-    limit: fallback[tier] ?? fallback.L,
+    limit: defaultLimit,
     unit,
     enforcement,
     source: "default",
@@ -409,7 +454,7 @@ export async function getTenantUsageReport(db: Db, tenantId: string): Promise<Te
   const tierRes = await db.execute<{ tier: string }>(sql`
     SELECT tier FROM tenant_size_tiers WHERE tenant_id = ${tenantId} LIMIT 1;
   `);
-  const tier = (tierRes.rows[0]?.tier?.toUpperCase() as "XS" | "S" | "M" | "L") || "L";
+  const tier = tierRes.rows[0]?.tier?.trim() || "XS";
 
   // Fetch plan
   const planRes = await db.execute<{ code: string }>(sql`

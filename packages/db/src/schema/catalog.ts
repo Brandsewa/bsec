@@ -18,6 +18,7 @@ import {
 import { tenantForeignKey, tenantTable } from "../tenant-table.ts";
 import { citext } from "./custom-types.ts";
 import { taxClasses } from "./tax.ts";
+import { platformStorageConnections } from "./platform-storage.ts";
 
 export const tsvector = customType<{ data: string }>({
   dataType() {
@@ -33,6 +34,10 @@ export const media = tenantTable(
   {
     id: uuid("id").default(sql`uuidv7()`).primaryKey(),
     storageKey: text("storage_key").notNull(),
+    storageConnectionId: uuid("storage_connection_id").references(
+      () => platformStorageConnections.id,
+      { onDelete: "set null" },
+    ),
     cfImageId: text("cf_image_id"),
     mime: text("mime").notNull(),
     bytes: bigint("bytes", { mode: "number" }).notNull(),

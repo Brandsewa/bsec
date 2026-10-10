@@ -72,12 +72,24 @@ export interface BlockCollectionSummary {
   imageMediaId?: string | undefined;
 }
 
+export interface ResolvedMenuItem {
+  id: string;
+  label: string;
+  url: string;
+  href: string;
+  type?: string | undefined;
+  newTab?: boolean | undefined;
+  openInNewTab?: boolean | undefined;
+  children?: ResolvedMenuItem[] | undefined;
+}
+
 /** Server-resolved data for blocks that need store data, keyed by block id. */
 export type BlockData =
   | { kind: "products"; products: BlockProduct[] }
   | { kind: "collections"; collections: BlockCollectionSummary[] }
-  /** One product list per tab of a product showcase, in tab order. */
-  | { kind: "product-tabs"; tabs: Array<{ products: BlockProduct[] }> };
+  | { kind: "product-tabs"; tabs: Array<{ products: BlockProduct[] }> }
+  | { kind: "menu"; items: ResolvedMenuItem[] }
+  | { kind: "footer-menus"; columns: Array<ResolvedMenuItem[] | null> };
 
 /**
  * Host-provided rendering context. Blocks stay UI-agnostic: the storefront and the
@@ -167,6 +179,7 @@ export interface CollectionListingOptions {
   showSaleBadge?: boolean | undefined;
   showRatings?: boolean | undefined;
   showBreadcrumb?: boolean | undefined;
+  filterMenuHandle?: string | undefined;
 }
 
 /**

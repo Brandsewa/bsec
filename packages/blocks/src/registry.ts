@@ -585,8 +585,10 @@ const DEFAULT_TRUST_POINTS = ["Secure checkout", "Easy returns", "Fast dispatch"
 const navLinkSchema = z.object({ label: z.string().min(1).max(60), href: hrefSchema });
 
 export const SiteHeaderSchema = z.object({
+  menuHandle: z.string().optional(),
   links: z.array(navLinkSchema).max(8).default([]),
   logoText: z.string().max(60).optional(),
+  logoMediaId: z.string().optional(),
   layout: z.enum(["left", "center"]).default("left"),
   showSearch: z.boolean().default(true),
   showCart: z.boolean().default(true),
@@ -599,6 +601,7 @@ export const SiteHeaderBlock: BlockDefinition<SiteHeaderProps> = {
   version: 1,
   schema: SiteHeaderSchema,
   defaultProps: {
+    menuHandle: "header",
     links: [
       { label: "Home", href: "/" },
       { label: "Shop", href: "/collections/all" },
@@ -616,7 +619,13 @@ export const SiteHeaderBlock: BlockDefinition<SiteHeaderProps> = {
 export const SiteFooterSchema = z.object({
   about: z.string().max(300).optional(),
   columns: z
-    .array(z.object({ title: z.string().min(1).max(60), links: z.array(navLinkSchema).max(8).default([]) }))
+    .array(
+      z.object({
+        title: z.string().min(1).max(60),
+        menuHandle: z.string().optional(),
+        links: z.array(navLinkSchema).max(8).default([]),
+      }),
+    )
     .max(4)
     .default([]),
   showNewsletter: z.boolean().default(true),
@@ -683,6 +692,7 @@ export const CollectionListingSchema = z.object({
   showSaleBadge: z.boolean().default(true),
   showRatings: z.boolean().default(true),
   showBreadcrumb: z.boolean().default(true),
+  filterMenuHandle: z.string().optional(),
 });
 export type CollectionListingProps = z.infer<typeof CollectionListingSchema>;
 export const CollectionListingBlock: BlockDefinition<CollectionListingProps> = {

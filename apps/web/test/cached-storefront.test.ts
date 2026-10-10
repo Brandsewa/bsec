@@ -48,6 +48,12 @@ vi.mock("@bs/domain", async (importOriginal) => {
     getStorefrontCategory: vi.fn(async () => ({ category: { id: CATEGORY_ID, slug: "gadgets" } })),
     getStorefrontHomePage: vi.fn(async () => ({ document: {} })),
     getStorefrontPage: vi.fn(async () => ({ id: "page-1", slug: "about" })),
+    getStorefrontPageByPath: vi.fn(async () => ({
+      page: { id: "page-2", slug: "team", title: "Team", type: "custom", document: { version: 1, blocks: [] } },
+      canonicalPath: "/pages/company/team",
+      isCanonical: true,
+      breadcrumbs: [{ name: "Home", url: "/" }],
+    })),
     getBrandSettings: vi.fn(async () => ({ logoUrl: null })),
   };
 });
@@ -58,6 +64,7 @@ import {
   getCachedStorefrontCategory,
   getCachedStorefrontHomePage,
   getCachedStorefrontPage,
+  getCachedStorefrontPageByPath,
   getCachedBrandSettings,
 } from "../src/server/cached-storefront.ts";
 import {
@@ -81,11 +88,12 @@ describe("cached-storefront read-side tags match the write-side invalidation mat
     ]);
   });
 
-  it("collection loader tags with collection:{id} and collection", async () => {
+  it("collection loader tags with collection:{id}, collection, product and nav", async () => {
     await getCachedStorefrontCollection(TENANT_ID, "new");
     expect(cacheTagCalls).toEqual([
       tenantTag(TENANT_ID, "collection"),
       tenantTag(TENANT_ID, "product"),
+      tenantTag(TENANT_ID, "nav"),
       tenantTag(TENANT_ID, "collection", COLLECTION_ID),
     ]);
   });
@@ -145,6 +153,14 @@ describe("cached-storefront read-side tags match the write-side invalidation mat
       tenantTag(TENANT_ID, "theme"),
       tenantTag(TENANT_ID, "store-shell"),
       tenantTag(TENANT_ID, "nav"),
+    ]);
+  });
+
+  it("custom page by path loader tags with page:{targetSlug} and store-shell", async () => {
+    await getCachedStorefrontPageByPath(TENANT_ID, ["company", "team"]);
+    expect(cacheTagCalls).toEqual([
+      tenantTag(TENANT_ID, "page", "team"),
+      tenantTag(TENANT_ID, "store-shell"),
     ]);
   });
 });

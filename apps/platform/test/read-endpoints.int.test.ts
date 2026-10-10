@@ -3,13 +3,14 @@ import { call } from "@orpc/server";
 import { platformContract } from "@bs/contracts";
 import { startTestDb, type TestDb } from "@bs/db/test-env";
 import { seedPlatformStaff } from "@bs/db/test-fixtures";
-import { createLogger, createRuntime, provisionTenant, startSupportSession, type Runtime } from "@bs/domain";
+import { createLogger, createPlatformStorageConnection, createRuntime, provisionTenant, startSupportSession, type Runtime } from "@bs/domain";
 import { platformRouter, type PlatformContext } from "../src/app.ts";
 
 let env: TestDb;
 let rt: Runtime;
 let context: PlatformContext;
 let tenantId: string;
+let storageId: string;
 
 /**
  * Every read (GET) procedure of the platform API, called through the real router against a database that has data.
@@ -32,12 +33,21 @@ const INPUTS: Record<string, () => unknown> = {
   "templates.get": () => ({ code: "essential-commerce" }),
   "support.list": () => ({}),
   "quotas.list": () => undefined,
+  "quotas.matrix": () => undefined,
   "features.list": () => undefined,
   "staff.list": () => undefined,
   "audit.list": () => ({}),
   "audit.exportCsv": () => ({}),
   "email.get": () => undefined,
   "email.recentDeliveries": () => ({}),
+  "storage.list": () => ({}),
+  "storage.stats": () => undefined,
+  "storage.get": () => ({ id: storageId }),
+  "integrations.overview": () => undefined,
+  "integrations.channelStats": () => ({ channel: "email", range: "7d" }),
+  "integrations.channelTransactions": () => ({ channel: "email" }),
+  "integrations.listProviders": () => ({ channel: "sms" }),
+  "integrations.paymentProviders": () => undefined,
 };
 
 beforeAll(async () => {
@@ -48,6 +58,13 @@ beforeAll(async () => {
   const r = await provisionTenant(rt, { storeName: "Read Test", slug: "read-test", owner: { email: "owner@read-test.test", name: "Owner" }, planCode: "growth", source: "platform_admin", actorUserId: staff.userId });
   tenantId = r.tenantId;
   await startSupportSession(rt, staff.userId, { tenantId, reason: "read endpoint check", ticketRef: "R-1", consent: "emergency" });
+  const storage = await createPlatformStorageConnection(rt, staff.userId, {
+    name: "Read Test S3",
+    driver: "s3",
+    purpose: "public_media",
+    bucket: "test-bucket",
+  });
+  storageId = storage.id;
 }, 180_000);
 
 afterAll(async () => {
