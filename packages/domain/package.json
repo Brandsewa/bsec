@@ -16,29 +16,29 @@
     "test:heavy": "vitest run int.test.ts"
   },
   "dependencies": {
-    "@aws-sdk/client-s3": "3.1141.0",
-    "@aws-sdk/s3-request-presigner": "3.1141.0",
+    "@aws-sdk/client-s3": "3.1147.0",
+    "@aws-sdk/s3-request-presigner": "3.1147.0",
     "@bs/auth": "workspace:*",
     "@bs/blocks": "workspace:*",
     "@bs/db": "workspace:*",
     "@bs/payments": "workspace:*",
     "@bs/shipping": "workspace:*",
     "drizzle-orm": "0.45.3",
-    "nodemailer": "10.0.13",
-    "pg-boss": "12.35.0",
+    "nodemailer": "10.0.15",
+    "pg-boss": "12.37.0",
     "zod": "4.6.5",
-    "pino": "10.3.1"
+    "pino": "10.4.0"
   },
   "devDependencies": {
     "@bs/config": "workspace:*",
     "@bs/contracts": "workspace:*",
-    "@testcontainers/postgresql": "12.1.0",
+    "@testcontainers/postgresql": "12.2.0",
     "@types/node": "24.19.0",
     "@types/nodemailer": "8.0.2",
     "@types/pg": "8.23.1",
-    "eslint": "10.11.0",
-    "pg": "8.23.0",
+    "eslint": "10.12.0",
+    "pg": "8.23.1",
     "typescript": "6.0.3",
-    "vitest": "5.0.2"
+    "vitest": "5.0.3"
   }
 }
