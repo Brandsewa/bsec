@@ -141,6 +141,8 @@ Each app's `/health` returns `{"status":"ok","service":"...","db":{"ok":true,"ro
 - Deploying via the API needs `POST`, not `GET` (a `GET` on `/api/v1/deploy` returns a 405 telling you so).
 - Keep the VPS free of build tools; if a build is needed, it belongs in GitHub Actions.
 
+- **Coolify's own nightly auto-update can break the dashboard and with it every CI deploy.** It runs at 18:30 UTC and pulls whatever is newest; on 2026-10-09 that was a broken build. Auto Update is now **off** and `LATEST_IMAGE` is pinned. A CI deploy that fails with `curl: (22) ... error: 502` means Coolify itself is down, not the app. See section 11.
+
 ## 9. Server hardening checklist (the repository is public)
 
 The server IP is in old git history and cannot be removed without a history rewrite, so assume it is known. A read-only TCP probe on 2026-10-07 found these ports reachable from the internet: **22** (SSH), **80/443** (expected), **8000** (Coolify dashboard), **6001** and **6002** (Coolify realtime and terminal websockets). Database and app ports (5432, 5433, 6379, 3000, 4000, 4100) were closed. Do the following in the VPS provider's firewall, because Docker-published ports bypass `ufw`:
@@ -148,7 +150,48 @@ The server IP is in old git history and cannot be removed without a history rewr
 1. **Close 8000, 6001 and 6002 to the world.** Give Coolify its own domain in *Settings → Instance's Domain* (served through the proxy on 443 with a certificate), then allow 8000/6001/6002 only from your own IP, or not at all.
 2. **SSH:** key-only (`PasswordAuthentication no`, `PermitRootLogin prohibit-password`), restrict port 22 to your IP if it is static, and install `fail2ban`.
 3. **Web ports 80/443:** if the sites are behind Cloudflare, allow only Cloudflare's published IP ranges so the origin cannot be hit directly.
-4. Keep the OS and Coolify updated; rotate `COOLIFY_TOKEN` if it was ever shown in a log or screenshot.
+4. Keep the OS updated; **Coolify is pinned and updated by hand, never automatically** (section 11); rotate `COOLIFY_TOKEN` if it was ever shown in a log or screenshot.
 5. Re-run the probe after changes (from outside the network): only 80, 443 and the SSH port you chose should answer.
 
 **Status: applied 2026-10-07.** The Hostinger VPS firewall (Security, Firewall) now accepts only TCP 22, 80 and 443 (everything else is dropped by Hostinger's default rule). A TCP probe afterwards showed only 22, 80 and 443 answering on both the IPv4 and the IPv6 address; 8000, 6001 and 6002 are closed. `https://server.brandsewa.com` (Coolify), the admin and the storefront domains still load, and deploys still work because the CI calls the Coolify API over 443. If a future change needs another port, add an accept rule in the same panel. Still open: SSH hardening on the server itself (key-only login, fail2ban), a Cloudflare-only allowlist for 80/443, and `fail2ban`.
+
+## 11. Coolify upgrades: pinned version and the 2026-10-09 incident
+
+**Policy.** Coolify is pinned to a known-good version in `/data/coolify/source/.env` (`LATEST_IMAGE=`) and **Auto Update is turned off** (Coolify dashboard -> Settings -> Advanced). Upgrade by hand, during a quiet hour, after checking the release notes, and keep the previous version number written down so you can go back.
+
+**Current pin:** `4.4.3` (the last version that ran correctly, set on 2026-10-10). Version history seen on this server: 4.3.23 (7 Oct), 4.4.2 (8 Oct), 4.4.3 (until the 9 Oct 18:30 UTC upgrade), 4.4.5 (broken).
+
+### What happened
+- At 18:30 UTC on 2026-10-09 Coolify's nightly auto-update replaced 4.4.3 with `coollabsio/coolify:4.4.5`, an image built only 24 minutes earlier. The upgrade log (`/data/coolify/source/upgrade-<date>.log`) says `application not healthy after 1m0s` and then `Coolify upgrade completed successfully`: it reports success even when the new container never becomes healthy.
+- The new container ran as the non-root user `www-data` but could not write to its own startup folder: `can't create /etc/s6-overlay/s6-rc.d/user/type: Permission denied`. Its init stopped, nothing listened on port 8080, the health check failed (`curl: (7) Failed to connect to 127.0.0.1:8080`) and the proxy returned **502** for the Coolify dashboard and API.
+- The apps (storefront, admin, Super Admin, platform API) kept running: only Coolify's own dashboard and API were down. The firewall (section 9) was **not** the cause: ports 22, 80 and 443 stayed open throughout.
+- The next CI deploy (the merge to `main` on 2026-10-10) failed at the migration step with `curl: (22) ... returned error: 502`, so no migration ran and the old code stayed live. After Coolify was restored, `gh run rerun <run-id> --failed` re-ran only the deploy job and it succeeded.
+
+### How to recognise it
+- `https://server.brandsewa.com` returns 502 while the sites answer 200.
+- On the server: `docker ps --format 'table {{.Names}}\t{{.Status}}' | grep coolify` shows `coolify` as `(unhealthy)` or stuck at `(health: starting)`; `docker inspect coolify --format '{{json .State.Health}}'` shows the failing check.
+- A CI deploy fails at "Run migration" with exit code 22 and a 502.
+
+### Rollback (what fixed it; takes about two minutes, database and volumes untouched)
+```bash
+cd /data/coolify/source
+cp .env .env.broken-<version>                      # keep a copy of the current file
+sed -i 's/^LATEST_IMAGE=.*/LATEST_IMAGE=<previous version>/' .env
+docker pull coollabsio/coolify:<previous version>
+docker compose --env-file .env -f docker-compose.yml -f docker-compose.prod.yml up -d --force-recreate coolify
+```
+Previous versions are in the dated backups `/data/coolify/source/.env-<date>-18-30-*` (`grep -H LATEST_IMAGE /data/coolify/source/.env*`). Then wait a minute and check `docker ps` shows `coolify` as `(healthy)` and `curl -s -o /dev/null -w "%{http_code}\n" http://127.0.0.1:8000/` returns 302. If that version also fails, try the one before it. Never run `docker system prune`, `docker volume rm` or `docker compose down -v` while recovering: the Coolify database and the other projects' data live in those volumes.
+
+### Doing a manual upgrade safely
+1. Write down the current `LATEST_IMAGE`.
+2. Check the release notes for the target version.
+3. Change `LATEST_IMAGE`, pull, recreate only the `coolify` container (command above), and confirm `(healthy)` plus a 302 from the dashboard before leaving.
+4. If it does not become healthy within two minutes, roll back immediately.
+5. Do not deploy from CI until the dashboard answers; a deploy against a down Coolify fails at the migration step and changes nothing.
+
+### Verifying `TENANT_SECRETS_KEY` without showing it
+Set on `bsec-web`, `bsec-platform` and `bsec-worker` only (the admin and Super Admin front-ends and the migrate job do not use it):
+```bash
+for c in $(docker ps --format '{{.Names}}' | grep -v -E 'coolify|buildx'); do n=$(docker exec $c printenv TENANT_SECRETS_KEY 2>/dev/null | wc -c); echo "$c: $([ "$n" -gt 1 ] && echo SET || echo missing)"; done
+```
+The value must be identical on all three and must never be rotated casually: stored credentials (email password, gateway keys) become unreadable if it changes.
