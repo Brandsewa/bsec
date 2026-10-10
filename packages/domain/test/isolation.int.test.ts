@@ -767,6 +767,8 @@ describe("Generated Isolation Test Suite (M1 Real Postgres 18 Proof)", () => {
   }, 180_000);
 
   afterAll(async () => {
+    // The payment-provider cases switch Stripe on platform-wide; put the seed state back for files that share the database.
+    await rtPlatform?._db.db.execute(sql`UPDATE platform_payment_providers SET enabled = false, live_mode_allowed = false WHERE provider = 'stripe'`).catch(() => undefined);
     delete process.env.MEDIA_LOCAL_DIR;
     if (tempMediaDir) {
       try {

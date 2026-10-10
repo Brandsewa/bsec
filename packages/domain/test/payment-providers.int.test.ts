@@ -28,6 +28,9 @@ let rtWeb: Runtime;
 let adminId: string;
 let ctxA: TenantContext;
 let ctxB: TenantContext;
+// Other heavy test files share this database in CI and may leave stripe enabled or hold their own keys, so reset the
+// platform rows to their seed state and compare store counts against a baseline instead of absolute numbers.
+let baseStripe = { connectedStores: 0, activeStores: 0 };
 
 const SK_TEST = "sk_test_51Abcdefghij1234567890";
 const SK_LIVE = "sk_live_51Abcdefghij1234567890";
@@ -57,6 +60,17 @@ beforeAll(async () => {
   rtPlatform = createRuntime({ service: "platform", databaseUrl: env.as("app_platform"), poolMax: 5 });
   rtWeb = createRuntime({ service: "web", databaseUrl: env.as("app_rw"), poolMax: 5 });
   adminId = (await seedPlatformStaff(rtPlatform._db.db, { email: "pay-admin@platform.test", role: "platform_admin" })).userId;
+  await rtPlatform._db.db
+    .update(schema.platformPaymentProviders)
+    .set({ enabled: false, liveModeAllowed: false })
+    .where(eq(schema.platformPaymentProviders.provider, "stripe"));
+  await rtPlatform._db.db
+    .update(schema.platformPaymentProviders)
+    .set({ enabled: true, liveModeAllowed: false })
+    .where(eq(schema.platformPaymentProviders.provider, "razorpay"));
+  const baseList = await listPlatformPaymentProviders(rtPlatform, adminId);
+  const bs = baseList.find((p) => p.provider === "stripe");
+  baseStripe = { connectedStores: bs?.connectedStores ?? 0, activeStores: bs?.activeStores ?? 0 };
   const a = await provisionTenant(rtPlatform, {
     storeName: "Pay Store A",
     slug: "pay-store-a",
@@ -82,7 +96,7 @@ afterAll(async () => {
 });
 
 describe("platform payment providers (real DB)", () => {
-  it("ships Razorpay enabled and Stripe disabled, with live mode closed", async () => {
+  it("lists Razorpay and Stripe with live mode closed (after the seed reset in beforeAll)", async () => {
     const list = await listPlatformPaymentProviders(rtPlatform, adminId);
     expect(list.map((p) => [p.provider, p.enabled, p.liveModeAllowed])).toEqual([
       ["razorpay", true, false],
@@ -155,8 +169,8 @@ describe("platform payment providers (real DB)", () => {
   it("platform stats count connected and active stores", async () => {
     const list = await listPlatformPaymentProviders(rtPlatform, adminId);
     const stripe = list.find((p) => p.provider === "stripe")!;
-    expect(stripe.connectedStores).toBe(1);
-    expect(stripe.activeStores).toBe(1);
+    expect(stripe.connectedStores).toBe(baseStripe.connectedStores + 1);
+    expect(stripe.activeStores).toBe(baseStripe.activeStores + 1);
   });
 
   it("disabling at platform level blocks new use but never strands the store", async () => {

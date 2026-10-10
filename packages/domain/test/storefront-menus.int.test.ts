@@ -387,7 +387,8 @@ describe("filter menus faceted filtering and counts (Slice C)", () => {
     const brandAId = crypto.randomUUID();
     const brandBId = crypto.randomUUID();
     const colId = crypto.randomUUID();
-    const colSlug = "summer-collection";
+    // Unique per run: this suite shares one database with every other heavy test file in CI, and the platform role bypasses RLS.
+    const colSlug = `summer-collection-${crypto.randomUUID().slice(0, 8)}`;
 
     const p1Id = crypto.randomUUID();
     const p2Id = crypto.randomUUID();

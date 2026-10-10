@@ -244,6 +244,8 @@ describe("Integrations Hub & Channel Stats (Phase 4 Plan 6.1-6.5)", () => {
   });
 
   it("returns overview metrics covering channels, storage, and payments", async () => {
+    // Heavy test files share one database in CI; other files leave SMS and WhatsApp providers behind.
+    await rt._db.db.delete(schema.platformChannelProviders);
     const overview = await getPlatformIntegrationsOverview(rt, staffUserId);
 
     expect(overview.channels.email).toBeDefined();

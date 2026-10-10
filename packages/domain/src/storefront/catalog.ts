@@ -469,7 +469,13 @@ export async function getStorefrontCollection(
     const [col] = await tx
       .select()
       .from(schema.collections)
-      .where(and(eq(schema.collections.slug, slug), eq(schema.collections.published, true)))
+      .where(
+        and(
+          eq(schema.collections.tenantId, ctx.tenantId),
+          eq(schema.collections.slug, slug),
+          eq(schema.collections.published, true),
+        ),
+      )
       .limit(1);
 
     if (!col) {
