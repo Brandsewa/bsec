@@ -63,6 +63,7 @@ export const media = tenantTable(
   },
   (t) => [
     unique("media_tenant_id_uniq").on(t.tenantId, t.id),
+    unique("media_tenant_storage_key_uniq").on(t.tenantId, t.storageKey),
     index("media_tenant_created_idx").on(t.tenantId, t.createdAt),
     index("media_tenant_status_created_idx").on(t.tenantId, t.status, t.createdAt, t.id),
     index("media_tenant_kind_idx").on(t.tenantId, t.kind, t.status),
