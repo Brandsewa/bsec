@@ -971,6 +971,11 @@ export async function requestMediaUpload(
     throw new Error(`Unsupported media format: "${input.mime}"`);
   }
 
+  const requestedFolder = input.folder ?? "products";
+  if ((PRIVATE_MEDIA_FOLDERS as readonly string[]).includes(requestedFolder)) {
+    throw new Error(`Bad Request: Presigning upload to private folder "${requestedFolder}" is restricted`);
+  }
+
   const kind = getMediaKind(normMime) || "image";
 
   // Enforce upload quotas (per-kind + storage limit)
@@ -983,7 +988,7 @@ export async function requestMediaUpload(
 
   return await driver.presignUpload({
     tenantId: ctx.tenantId,
-    folder: input.folder ?? "products",
+    folder: requestedFolder,
     filename: input.filename,
     mime: normMime,
     bytes: input.bytes,
@@ -1002,7 +1007,12 @@ export async function createMediaRecord(
   assertPermission(ctx, "content.write");
 
   // Validate client-provided storage key (fixes B2)
-  const { folder } = validateClientStorageKey(ctx.tenantId, input.storageKey);
+  const { folder: keyFolder } = validateClientStorageKey(ctx.tenantId, input.storageKey);
+
+  // Refuse if input.folder differs from the validated storage key folder (fixes R1)
+  if (input.folder && input.folder !== keyFolder) {
+    throw new Error(`Bad Request: Declared folder "${input.folder}" does not match storage key folder "${keyFolder}"`);
+  }
 
   // Ensure key doesn't already exist before making any storage calls
   await withTenant(rt._db.db, ctx.tenantId, async (tx) => {
@@ -1030,7 +1040,7 @@ export async function createMediaRecord(
     title: input.title,
     alt: input.alt,
     caption: input.caption,
-    folder: input.folder || folder,
+    folder: keyFolder,
     durationMs: input.durationMs,
     cfImageId: input.cfImageId,
   });
