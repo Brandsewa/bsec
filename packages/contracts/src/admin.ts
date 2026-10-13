@@ -662,22 +662,104 @@ export const InventoryLevelItem = z.object({
 });
 export type InventoryLevelItem = z.infer<typeof InventoryLevelItem>;
 
-// --- M2 Media Schemas ---
+// --- M2 Media Schemas & Quotas (MEDIA-LIBRARY-PLAN §4, §7) ---
+export const MediaKindSchema = z.enum(["image", "video", "document"]);
+export type MediaKind = z.infer<typeof MediaKindSchema>;
+
+export interface AllowedMediaType {
+  mime: string;
+  kind: MediaKind;
+  extensions: readonly string[];
+}
+
+export const ALLOWED_MEDIA_TYPES: readonly AllowedMediaType[] = [
+  // Images
+  { mime: "image/jpeg", kind: "image", extensions: ["jpg", "jpeg"] },
+  { mime: "image/png", kind: "image", extensions: ["png"] },
+  { mime: "image/webp", kind: "image", extensions: ["webp"] },
+  { mime: "image/avif", kind: "image", extensions: ["avif"] },
+  { mime: "image/gif", kind: "image", extensions: ["gif"] },
+  // Videos
+  { mime: "video/mp4", kind: "video", extensions: ["mp4"] },
+  { mime: "video/webm", kind: "video", extensions: ["webm"] },
+  { mime: "video/quicktime", kind: "video", extensions: ["mov"] },
+  // Documents
+  { mime: "application/pdf", kind: "document", extensions: ["pdf"] },
+  { mime: "text/csv", kind: "document", extensions: ["csv"] },
+  { mime: "text/plain", kind: "document", extensions: ["txt"] },
+  {
+    mime: "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+    kind: "document",
+    extensions: ["docx"],
+  },
+  {
+    mime: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+    kind: "document",
+    extensions: ["xlsx"],
+  },
+  {
+    mime: "application/vnd.openxmlformats-officedocument.presentationml.presentation",
+    kind: "document",
+    extensions: ["pptx"],
+  },
+] as const;
+
+export const MEDIA_ACCEPT_ATTRIBUTE = ALLOWED_MEDIA_TYPES.map((t) => t.mime).join(",");
+
+export const MediaUsageReference = z.object({
+  ownerType: z.string(),
+  ownerId: z.string().uuid(),
+  field: z.string(),
+  label: z.string(),
+  adminPath: z.string(),
+});
+export type MediaUsageReference = z.infer<typeof MediaUsageReference>;
+
 export const MediaItem = z.object({
   id: z.string().uuid(),
-  storageKey: z.string(),
-  storageConnectionId: z.string().uuid().nullable().optional(),
-  cfImageId: z.string().nullable().optional(),
+  kind: MediaKindSchema.default("image"),
   mime: z.string(),
+  filename: z.string().nullable().optional(),
+  title: z.string().nullable().optional(),
+  alt: z.string().nullable().optional(),
+  caption: z.string().nullable().optional(),
   bytes: z.number(),
   width: z.number().nullable().optional(),
   height: z.number().nullable().optional(),
-  alt: z.string().nullable().optional(),
-  folder: z.string(),
-  createdAt: z.string(),
+  durationMs: z.number().nullable().optional(),
   url: z.string().optional(),
+  thumbnailUrl: z.string().nullable().optional(),
+  status: z.enum(["ready", "trashed"]).default("ready"),
+  trashedAt: z.string().nullable().optional(),
+  usageCount: z.number().int().default(0),
+  uploadedBy: z.string().uuid().nullable().optional(),
+  createdAt: z.string(),
+  updatedAt: z.string().optional(),
+  // Compatibility fields
+  storageKey: z.string().optional(),
+  storageConnectionId: z.string().uuid().nullable().optional(),
+  cfImageId: z.string().nullable().optional(),
+  folder: z.string().optional(),
 });
 export type MediaItem = z.infer<typeof MediaItem>;
+
+export const MediaDetailItem = MediaItem.extend({
+  usages: z.array(MediaUsageReference),
+});
+export type MediaDetailItem = z.infer<typeof MediaDetailItem>;
+
+export const MediaUsageReport = z.object({
+  usedBytes: z.number(),
+  limitBytes: z.number(),
+  trashedBytes: z.number(),
+  fileCount: z.number(),
+  limits: z.object({
+    image: z.number(),
+    video: z.number(),
+    document: z.number(),
+  }),
+});
+export type MediaUsageReport = z.infer<typeof MediaUsageReport>;
 
 export const PresignedUploadResponse = z.object({
   uploadUrl: z.string(),
@@ -730,6 +812,13 @@ export const StorageUsageView = z.object({
   providerLabel: z.literal("Platform managed storage"),
   publicMediaConfigured: z.boolean(),
   maxUploadBytes: z.number(),
+  maxUploadBytesByKind: z
+    .object({
+      image: z.number(),
+      video: z.number(),
+      document: z.number(),
+    })
+    .optional(),
   breakdown: z.array(StorageUsageBreakdownItem),
 });
 export type StorageUsageView = z.infer<typeof StorageUsageView>;
@@ -2538,19 +2627,40 @@ export const adminContract = {
   },
 
   // Media
+  // Media (MEDIA-LIBRARY-PLAN §7)
   media: {
     list: oc
       .route({ method: "GET", path: "/admin/media" })
       .input(
         z
           .object({
+            cursor: z.string().optional(),
+            limit: z.number().int().min(1).max(100).default(40),
+            q: z.string().optional(),
+            kinds: z.array(MediaKindSchema).optional(),
+            usage: z.enum(["any", "used", "unused"]).optional(),
+            trash: z.boolean().default(false),
+            sort: z.enum(["newest", "oldest", "name", "largest"]).optional(),
+            // Backward-compatibility
             folder: z.string().optional(),
-            limit: z.number().int().min(1).max(100).default(50),
-            offset: z.number().int().min(0).default(0),
+            offset: z.number().int().min(0).optional(),
           })
           .optional(),
       )
-      .output(z.object({ items: z.array(MediaItem), total: z.number() })),
+      .output(
+        z.object({
+          items: z.array(MediaItem),
+          nextCursor: z.string().nullable().optional(),
+          total: z.number(),
+        }),
+      ),
+    get: oc
+      .route({ method: "GET", path: "/admin/media/{id}" })
+      .input(z.object({ id: z.string().uuid() }))
+      .output(MediaDetailItem),
+    usage: oc
+      .route({ method: "GET", path: "/admin/media/usage" })
+      .output(MediaUsageReport),
     requestUpload: oc
       .route({ method: "POST", path: "/admin/media/request-upload" })
       .input(
@@ -2569,9 +2679,13 @@ export const adminContract = {
           storageKey: z.string().min(1),
           mime: z.string().min(1),
           bytes: z.number().int().min(1),
+          filename: z.string().min(1).optional(),
+          title: z.string().optional(),
+          durationMs: z.number().int().optional(),
           width: z.number().int().optional(),
           height: z.number().int().optional(),
           alt: z.string().optional(),
+          caption: z.string().optional(),
           folder: z.string().default("products"),
           cfImageId: z.string().optional(),
         }),
@@ -2584,11 +2698,52 @@ export const adminContract = {
           filename: z.string().min(1),
           mime: z.string().min(1),
           data: z.string().min(1),
+          title: z.string().optional(),
+          durationMs: z.number().int().optional(),
           folder: z.string().default("products"),
           alt: z.string().optional(),
+          caption: z.string().optional(),
         }),
       )
       .output(MediaItem),
+    update: oc
+      .route({ method: "PATCH", path: "/admin/media/{id}" })
+      .input(
+        z.object({
+          id: z.string().uuid(),
+          title: z.string().max(255).optional(),
+          alt: z.string().max(512).optional(),
+          caption: z.string().max(1000).optional(),
+        }),
+      )
+      .output(MediaItem),
+    trash: oc
+      .route({ method: "POST", path: "/admin/media/trash" })
+      .input(z.object({ ids: z.array(z.string().uuid()).min(1).max(100) }))
+      .output(
+        z.object({
+          trashed: z.number(),
+          used: z.array(z.object({ id: z.string().uuid(), usageCount: z.number() })),
+        }),
+      ),
+    restore: oc
+      .route({ method: "POST", path: "/admin/media/restore" })
+      .input(z.object({ ids: z.array(z.string().uuid()).min(1).max(100) }))
+      .output(z.object({ restored: z.number() })),
+    deletePermanent: oc
+      .route({ method: "POST", path: "/admin/media/delete-permanent" })
+      .input(z.object({ ids: z.array(z.string().uuid()).min(1).max(100) }))
+      .output(
+        z.object({
+          deleted: z.number(),
+          blocked: z.array(
+            z.object({
+              id: z.string().uuid(),
+              usages: z.array(MediaUsageReference),
+            }),
+          ),
+        }),
+      ),
     delete: oc
       .route({ method: "DELETE", path: "/admin/media/{id}" })
       .input(z.object({ id: z.string().uuid() }))
