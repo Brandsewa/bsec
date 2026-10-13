@@ -11,7 +11,7 @@ import {
   Upload,
   Video as VideoIcon,
 } from "lucide-react";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useInfiniteQuery, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   Badge,
@@ -355,12 +355,12 @@ export function MediaLibraryPage() {
   };
 
   // Item click opens detail sheet
-  const handleItemClick = (item: MediaItem) => {
+  const handleItemClick = useCallback((item: MediaItem) => {
     navigate({
       search: (prev) => ({ ...prev, selectedId: item.id }),
       replace: true,
     });
-  };
+  }, [navigate]);
 
   const handleCloseDetail = () => {
     navigate({
@@ -589,7 +589,7 @@ export function MediaLibraryPage() {
         ),
       },
     ],
-    [],
+    [handleItemClick],
   );
 
   return (

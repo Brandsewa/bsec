@@ -10,7 +10,6 @@ import { invalidateCache } from "./cache-invalidation.ts";
 import {
   assertMediaUploadQuota,
   getTenantMediaUsageStats,
-  QuotaExceededError,
 } from "./system/quotas.ts";
 import {
   getMediaKind,
@@ -27,7 +26,6 @@ import {
   getActiveStorageDriver,
   resolveDriverForMediaRow,
   resolvePublicMediaUrl,
-  resolveSafeLocalPath,
   resolveStorageConnection,
   type ResolvedStorageConfig,
 } from "./media/connection.ts";
@@ -218,7 +216,9 @@ async function finalizeUpload(
         tenantId: ctx.tenantId,
         objects: [{ storageKey: params.storageKey, storageConnectionId: activeConfig.id }],
       }).catch(() => {});
-      throw new Error("Failed to process image metadata: corrupted or invalid image file");
+      throw new Error("Failed to process image metadata: corrupted or invalid image file", {
+        cause: err,
+      });
     }
   }
 
@@ -337,13 +337,14 @@ export async function listMedia(
 
     if (query?.q && query.q.trim()) {
       const q = query.q.trim();
-      conditions.push(
-        or(
-          sql`${schema.media.search} @@ websearch_to_tsquery('simple', ${q})`,
-          ilike(schema.media.filename, `${q}%`),
-          ilike(schema.media.filename, `%${q}%`),
-        )!,
+      const searchCond = or(
+        sql`${schema.media.search} @@ websearch_to_tsquery('simple', ${q})`,
+        ilike(schema.media.filename, `${q}%`),
+        ilike(schema.media.filename, `%${q}%`),
       );
+      if (searchCond) {
+        conditions.push(searchCond);
+      }
     }
 
     if (query?.usage === "used") {
@@ -445,16 +446,18 @@ export async function listMedia(
 
     let nextCursor: string | null = null;
     if (hasMore && pageRows.length > 0) {
-      const last = pageRows[pageRows.length - 1]!;
-      let sortVal: string | number;
-      if (sort === "oldest" || sort === "newest") {
-        sortVal = last.createdAt.toISOString();
-      } else if (sort === "name") {
-        sortVal = (last.filename || "").toLowerCase();
-      } else {
-        sortVal = Number(last.bytes);
+      const last = pageRows[pageRows.length - 1];
+      if (last) {
+        let sortVal: string | number;
+        if (sort === "oldest" || sort === "newest") {
+          sortVal = last.createdAt.toISOString();
+        } else if (sort === "name") {
+          sortVal = (last.filename || "").toLowerCase();
+        } else {
+          sortVal = Number(last.bytes);
+        }
+        nextCursor = encodeCursor(sortVal, last.id);
       }
-      nextCursor = encodeCursor(sortVal, last.id);
     }
 
     const activeConn = await resolveStorageConnection(db, "public_media");
@@ -635,7 +638,7 @@ export async function getMedia(
         });
       } else {
         usages.push({
-          ownerType: u.ownerType as any,
+          ownerType: u.ownerType,
           ownerId: u.ownerId,
           field: u.field,
           label: u.ownerType,
@@ -962,7 +965,7 @@ export async function trashMedia(
 
     const used = updated
       .filter((r) => (usageMap.get(r.id) || 0) > 0)
-      .map((r) => ({ id: r.id, usageCount: usageMap.get(r.id)! }));
+      .map((r) => ({ id: r.id, usageCount: usageMap.get(r.id) ?? 0 }));
 
     return { trashed: updated.length, used };
   });
@@ -1099,7 +1102,7 @@ export async function deleteMediaPermanent(
         blocked.push({
           id: mediaId,
           usages: uList.map((u) => ({
-            ownerType: u.ownerType as any,
+            ownerType: u.ownerType,
             ownerId: u.ownerId,
             field: u.field,
             label: productMap.get(u.ownerId) || u.ownerType,
@@ -1295,23 +1298,25 @@ export async function runMediaTrashSweep(
     WHERE ${sql.join(conditions, sql` AND `)}
   `;
 
+  interface SweepCandidateRow {
+    id: string;
+    tenant_id: string;
+    storage_key: string;
+    storage_connection_id: string | null;
+  }
+
   const candidatesRes = (await db.execute(query)) as unknown as {
-    rows?: {
-      id: string;
-      tenant_id: string;
-      storage_key: string;
-      storage_connection_id: string | null;
-    }[];
-    [key: string]: unknown;
+    rows?: SweepCandidateRow[];
   };
 
-  const candidates = Array.isArray(candidatesRes) ? (candidatesRes as any) : (candidatesRes?.rows ?? []);
+  const rawRows = Array.isArray(candidatesRes) ? candidatesRes : (candidatesRes?.rows ?? []);
+  const candidates = rawRows as SweepCandidateRow[];
   if (candidates.length === 0) {
     return { sweptTenants: 0, deletedCount: 0 };
   }
 
   // Group by tenant
-  const byTenant = new Map<string, typeof candidates>();
+  const byTenant = new Map<string, SweepCandidateRow[]>();
   for (const c of candidates) {
     const list = byTenant.get(c.tenant_id) || [];
     list.push(c);
@@ -1321,8 +1326,8 @@ export async function runMediaTrashSweep(
   let totalDeleted = 0;
 
   for (const [tId, rows] of byTenant.entries()) {
-    const rowIds = rows.map((r) => r.id);
-    const objects = rows.map((r) => ({
+    const rowIds = rows.map((r: SweepCandidateRow) => r.id);
+    const objects = rows.map((r: SweepCandidateRow) => ({
       storageKey: r.storage_key,
       storageConnectionId: r.storage_connection_id,
     }));

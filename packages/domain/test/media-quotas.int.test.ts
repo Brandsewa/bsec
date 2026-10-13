@@ -15,7 +15,7 @@ let env: TestDb;
 let rt: Runtime;
 let rtPlatform: Runtime;
 let tenantId: string;
-let ownerId: string;
+let _ownerId: string;
 
 beforeAll(async () => {
   env = await startTestDb();
@@ -30,7 +30,7 @@ beforeAll(async () => {
     source: "platform_admin",
   });
   tenantId = tenant.tenantId;
-  ownerId = tenant.ownerId;
+  _ownerId = tenant.ownerId;
 });
 
 afterAll(async () => {

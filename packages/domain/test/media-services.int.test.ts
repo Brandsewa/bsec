@@ -2,8 +2,8 @@ import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
-import { schema, withTenant, type Db } from "@bs/db";
-import { and, eq, sql } from "drizzle-orm";
+import { schema, withTenant } from "@bs/db";
+import { sql } from "drizzle-orm";
 import { startTestDb, type TestDb } from "@bs/db/test-env";
 import { seedPlatformStaff } from "@bs/db/test-fixtures";
 import { STORE_PERMISSIONS } from "@bs/auth";
@@ -21,15 +21,10 @@ import { invalidateStorageConnectionCache } from "../src/media/connection.ts";
 import {
   listMedia,
   getMedia,
-  getMediaUsage,
-  requestMediaUpload,
-  createMediaRecord,
   uploadMediaDirect,
-  updateMedia,
   trashMedia,
   restoreMedia,
   deleteMediaPermanent,
-  deleteMediaRecord,
   runMediaTrashSweep,
   attachProductMedia,
 } from "../src/media-services.ts";
@@ -108,7 +103,9 @@ describe("Media Services Integration Test Suite (Real Postgres & Storage)", () =
     try {
       await rtPlatform._db.db.delete(schema.platformStorageConnections);
       invalidateStorageConnectionCache();
-    } catch {}
+    } catch {
+      // ignore cleanup errors
+    }
     await env?.stop();
   });
 
@@ -135,9 +132,9 @@ describe("Media Services Integration Test Suite (Real Postgres & Storage)", () =
 
   it("supports listMedia with search, kind filter, usage filter, sort, and cursor pagination", async () => {
     // Upload 3 images
-    const m1 = await uploadMediaDirect(rt, ctx, { filename: "alpha.png", mime: "image/png", fileBytes: PNG_1X1, title: "Apple" });
+    const _m1 = await uploadMediaDirect(rt, ctx, { filename: "alpha.png", mime: "image/png", fileBytes: PNG_1X1, title: "Apple" });
     const m2 = await uploadMediaDirect(rt, ctx, { filename: "beta.png", mime: "image/png", fileBytes: PNG_1X1, title: "Banana" });
-    const m3 = await uploadMediaDirect(rt, ctx, { filename: "gamma.png", mime: "image/png", fileBytes: PNG_1X1, title: "Cherry" });
+    const _m3 = await uploadMediaDirect(rt, ctx, { filename: "gamma.png", mime: "image/png", fileBytes: PNG_1X1, title: "Cherry" });
 
     // 1. Search by title
     const searchRes = await listMedia(rt, ctx, { q: "Banana" });

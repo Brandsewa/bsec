@@ -1,4 +1,4 @@
-import { ALLOWED_MEDIA_TYPES, type AllowedMediaType, type MediaKind } from "@bs/contracts";
+import type { AllowedMediaType, MediaKind } from "@bs/contracts";
 
 export type { AllowedMediaType, MediaKind };
 
