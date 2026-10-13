@@ -22,6 +22,9 @@ export type PlanQuotaKey =
   | "staff_seats"
   | "storage_mb"
   | "media_file_mb"
+  | "media_image_mb"
+  | "media_video_mb"
+  | "media_document_mb"
   | "orders_month"
   | "emails_month"
   | "uncached_storefront_rpm"
@@ -68,6 +71,9 @@ export const DEFAULT_TIER_TABLE: Record<
   staff_seats: { unit: "count", enforcement: "hard", XS: 2, S: 5, M: 15, L: 50, desc: "Staff seats" },
   storage_mb: { unit: "MB", enforcement: "hard", XS: 1024, S: 5120, M: 25600, L: 102400, desc: "Media storage" },
   media_file_mb: { unit: "MB", enforcement: "hard", XS: 5, S: 10, M: 20, L: 50, desc: "Max upload file size" },
+  media_image_mb: { unit: "MB", enforcement: "hard", XS: 5, S: 5, M: 5, L: 5, desc: "Max image size" },
+  media_video_mb: { unit: "MB", enforcement: "hard", XS: 10, S: 10, M: 10, L: 10, desc: "Max video size" },
+  media_document_mb: { unit: "MB", enforcement: "hard", XS: 5, S: 5, M: 5, L: 5, desc: "Max document size" },
   orders_month: { unit: "orders", enforcement: "soft", XS: 300, S: 3000, M: 20000, L: 1000000, desc: "Monthly orders" },
   emails_month: { unit: "emails", enforcement: "soft", XS: 2000, S: 15000, M: 80000, L: 300000, desc: "Monthly emails" },
   uncached_storefront_rpm: { unit: "rpm", enforcement: "hard", XS: 3000, S: 4500, M: 9000, L: 18000, desc: "Storefront RPM" },
@@ -326,22 +332,34 @@ export async function assertQuota(
 
 
 /**
- * Hard enforcement check for media file storage (PLAN §6.1).
+ * Hard enforcement check for media file upload quotas (MEDIA-LIBRARY-PLAN §6.2).
+ * Enforces per-kind file size limit (media_image_mb / media_video_mb / media_document_mb)
+ * and total store storage limit (storage_mb, counting all files including Trash).
  */
-export async function assertStorageQuota(db: Db, tenantId: string, uploadSizeMb: number): Promise<void> {
-  // 1. Max individual file size check
-  const fileLimit = await resolveEffectiveQuota(db, tenantId, "media_file_mb");
-  if (uploadSizeMb > fileLimit.limit) {
+export async function assertMediaUploadQuota(
+  db: Db,
+  tenantId: string,
+  params: { kind: "image" | "video" | "document"; bytes: number },
+): Promise<void> {
+  // 1. Individual per-kind file size check
+  const quotaKey = `media_${params.kind}_mb` as PlanQuotaKey;
+  const kindLimit = await resolveEffectiveQuota(db, tenantId, quotaKey);
+  const maxBytes = kindLimit.limit * 1024 * 1024;
+  if (params.bytes > maxBytes) {
+    const fileMb = (params.bytes / (1024 * 1024)).toFixed(1);
+    const kindLabel =
+      params.kind === "image" ? "Images" : params.kind === "video" ? "Videos" : "Documents";
     throw new QuotaExceededError(
-      `File size exceeds maximum upload limit of ${fileLimit.limit} MB (file size: ${uploadSizeMb.toFixed(1)} MB).`,
-      "media_file_mb",
-      Math.round(uploadSizeMb),
-      fileLimit.limit,
+      `${kindLabel} can be up to ${kindLimit.limit} MB on your plan. This file is ${fileMb} MB.`,
+      quotaKey,
+      Math.round(params.bytes / (1024 * 1024)),
+      kindLimit.limit,
     );
   }
 
-  // 2. Total storage check
+  // 2. Total storage check (including Trash bytes)
   const totalLimit = await resolveEffectiveQuota(db, tenantId, "storage_mb");
+  const maxStorageBytes = totalLimit.limit * 1024 * 1024;
   const usageRes = await withTenant(db, tenantId, async (tx) => {
     return tx.execute<{ total_bytes: string }>(sql`
       SELECT COALESCE(SUM(bytes), 0)::text as total_bytes
@@ -349,15 +367,76 @@ export async function assertStorageQuota(db: Db, tenantId: string, uploadSizeMb:
       WHERE tenant_id = ${tenantId};
     `);
   });
-  const totalMb = Math.round(parseInt(usageRes.rows[0]?.total_bytes ?? "0", 10) / (1024 * 1024));
-  if (totalMb + uploadSizeMb > totalLimit.limit) {
+  const usedBytes = parseInt(usageRes.rows[0]?.total_bytes ?? "0", 10);
+  if (usedBytes + params.bytes > maxStorageBytes) {
+    const usedGb = (usedBytes / (1024 * 1024 * 1024)).toFixed(1);
+    const limitGb = (maxStorageBytes / (1024 * 1024 * 1024)).toFixed(1);
     throw new QuotaExceededError(
-      `Total media storage quota exceeded: limit is ${totalLimit.limit} MB (currently ${totalMb} MB).`,
+      `Your store has used ${usedGb} GB of ${limitGb} GB. Delete unused files or empty the Trash.`,
       "storage_mb",
-      totalMb,
+      Math.round(usedBytes / (1024 * 1024)),
       totalLimit.limit,
     );
   }
+}
+
+/**
+ * Retrieves aggregate storage and quota stats for Online Store > Media and Settings > Storage
+ * (MEDIA-LIBRARY-PLAN §6.3).
+ */
+export async function getTenantMediaUsageStats(db: Db, tenantId: string) {
+  const [usageRes, storageQuota, imageQuota, videoQuota, docQuota] = await Promise.all([
+    withTenant(db, tenantId, async (tx) => {
+      return tx.execute<{
+        total_bytes: string;
+        trashed_bytes: string;
+        file_count: string;
+      }>(sql`
+        SELECT
+          COALESCE(SUM(bytes), 0)::text as total_bytes,
+          COALESCE(SUM(bytes) FILTER (WHERE status = 'trashed'), 0)::text as trashed_bytes,
+          COUNT(*)::text as file_count
+        FROM media
+        WHERE tenant_id = ${tenantId};
+      `);
+    }),
+    resolveEffectiveQuota(db, tenantId, "storage_mb"),
+    resolveEffectiveQuota(db, tenantId, "media_image_mb"),
+    resolveEffectiveQuota(db, tenantId, "media_video_mb"),
+    resolveEffectiveQuota(db, tenantId, "media_document_mb"),
+  ]);
+
+  const row = usageRes.rows[0];
+  const usedBytes = parseInt(row?.total_bytes ?? "0", 10);
+  const trashedBytes = parseInt(row?.trashed_bytes ?? "0", 10);
+  const fileCount = parseInt(row?.file_count ?? "0", 10);
+  const limitBytes = storageQuota.limit * 1024 * 1024;
+
+  return {
+    usedBytes,
+    limitBytes,
+    trashedBytes,
+    fileCount,
+    limits: {
+      image: imageQuota.limit * 1024 * 1024,
+      video: videoQuota.limit * 1024 * 1024,
+      document: docQuota.limit * 1024 * 1024,
+    },
+  };
+}
+
+/**
+ * Legacy storage quota check, retained for compatibility as a wrapper over assertMediaUploadQuota.
+ */
+export async function assertStorageQuota(
+  db: Db,
+  tenantId: string,
+  uploadSizeMb: number,
+): Promise<void> {
+  await assertMediaUploadQuota(db, tenantId, {
+    kind: "image",
+    bytes: Math.round(uploadSizeMb * 1024 * 1024),
+  });
 }
 
 /**
@@ -486,6 +565,9 @@ export async function getTenantUsageReport(db: Db, tenantId: string): Promise<Te
     orders_month: parseInt(orderRes.rows[0]?.count ?? "0", 10),
     storage_mb: Math.round(parseInt(mediaRes.rows[0]?.total ?? "0", 10) / (1024 * 1024)),
     media_file_mb: 0,
+    media_image_mb: 0,
+    media_video_mb: 0,
+    media_document_mb: 0,
     emails_month: 0,
     uncached_storefront_rpm: 0,
     admin_api_rpm: 0,
@@ -499,6 +581,9 @@ export async function getTenantUsageReport(db: Db, tenantId: string): Promise<Te
     "variants",
     "staff_seats",
     "storage_mb",
+    "media_image_mb",
+    "media_video_mb",
+    "media_document_mb",
     "orders_month",
     "emails_month",
     "custom_domains",

@@ -69,10 +69,17 @@ export async function getStorageUsage(
   const mediaCount = breakdown.reduce((acc, curr) => acc + curr.count, 0);
 
   // 2. Resolve quota limits
-  const fileQuota = await resolveEffectiveQuota(rt._db.db, ctx.tenantId, "media_file_mb");
+  const imageQuota = await resolveEffectiveQuota(rt._db.db, ctx.tenantId, "media_image_mb");
+  const videoQuota = await resolveEffectiveQuota(rt._db.db, ctx.tenantId, "media_video_mb");
+  const docQuota = await resolveEffectiveQuota(rt._db.db, ctx.tenantId, "media_document_mb");
   const storageQuota = await resolveEffectiveQuota(rt._db.db, ctx.tenantId, "storage_mb");
 
-  const maxUploadBytes = fileQuota.limit * 1024 * 1024;
+  const maxUploadBytesByKind = {
+    image: imageQuota.limit * 1024 * 1024,
+    video: videoQuota.limit * 1024 * 1024,
+    document: docQuota.limit * 1024 * 1024,
+  };
+  const maxUploadBytes = maxUploadBytesByKind.image;
   const limitBytes = storageQuota.limit > 0 ? storageQuota.limit * 1024 * 1024 : null;
 
   let percentUsed: number | null = null;
@@ -105,6 +112,7 @@ export async function getStorageUsage(
     providerLabel: "Platform managed storage",
     publicMediaConfigured,
     maxUploadBytes,
+    maxUploadBytesByKind,
     breakdown,
   };
 }

@@ -11,6 +11,7 @@ export * from "./branding/contrast.ts";
 export * from "./branding/favicon.ts";
 export * from "./branding/fonts.ts";
 export * from "./catalog/csv.ts";
+export * from "./media/types.ts";
 export * from "./media/storage.ts";
 export * from "./catalog-services.ts";
 export * from "./review-services.ts";
