@@ -45,7 +45,7 @@ Neither change record has walkthrough evidence. Claude could not run the admin a
 If any step fails, fix it and say what you changed.
 
 ## 2. Should fix
-- **R3** The round-1 fixes record does not report on S1-S8 or the `signup-pipeline.int.test.ts` worker crash. Add a short section to your new record: each S item, fixed or not, and where. For the crash: run that file alone on `main` and on your branch, and paste both results.
+- **R3** The round-1 fixes record does not report on S1-S8. Add a short section to your new record: each S item, fixed or not, and where. (Claude's full heavy run of `4066341`: 97 files, 2045 tests, all passed, no worker crash; the earlier `signup-pipeline` crash did not recur.)
 - **R4** S8: confirm the production web and worker Docker images build with `sharp` in `@bs/domain`. Run the image builds locally, or say plainly that you could not and why.
 - **R5** Migration `0057` builds a unique index without `CONCURRENTLY`. `media` is small today, so this is acceptable. Add one line to the round-2 change record confirming generated keys are UUID-based, so production cannot hold duplicates. Do not change the migration.
 
