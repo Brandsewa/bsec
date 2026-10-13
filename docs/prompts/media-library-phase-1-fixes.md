@@ -8,6 +8,12 @@ Read again before starting: `AGENTS.md` sections 2, 4 and 6; `docs/MEDIA-LIBRARY
 - `pnpm lint` **fails**: `@bs/domain`, 4 × `@typescript-eslint/no-non-null-assertion` in `packages/domain/src/media-services.ts` (lines ~958, 1015, 1133, 1344: `updated[0]!.id`, `allowedIds[0]!`, `rowIds[0]!`). Fix without `!` and without `eslint-disable`.
 - Your change record says "All full test gates pass" but only selected heavy files were run. Run the **whole** heavy suite (`pnpm test:heavy:local`, serial) and paste the counts. Never tick a box you did not run (AGENTS.md section 6, rule 3).
 
+### Heavy suite regressions (Claude's run of your head `ea54a3e`, local Postgres, serial)
+Result: **97 files, 2 failed / 94 passed; 2040 tests, 9 failed / 2027 passed; 1 worker crash.**
+- `test/product-images.int.test.ts`: **6 failed**. `createMediaRecord` now calls storage `head`/`get`, so these tests fail with "Image storage is not set up yet" and then "Not Found: image not found in the media library". These tests cover a live feature (product images); do not weaken them. Give them a real local storage driver and real image bytes (a tiny valid PNG fixture), or a driver stub injected through the runtime, so they prove the new verification path.
+- `test/storage-connections.int.test.ts`: **3 failed**: "media row continues to resolve through original connection after another is activated" (sharp: "corrupted or invalid image file", the fixture bytes are not a real image), "refuses to delete a storage connection when referenced by existing media records" (cascades from the first), "uploadMediaDirect rejects non-images and MIME mismatches before saving" (error message changed from "not a recognized image format" to "File content does not match declared …"). Use valid fixtures; for the message, either keep the old wording or update the assertion **and** confirm no UI depends on the old text.
+- `test/signup-pipeline.int.test.ts`: the vitest worker exited with code `3221226505` (Windows `0xC0000409`, native crash). Check whether loading `sharp` in `@bs/domain` causes it (it did not happen on `main`); run that file alone on `main` and on your branch and report both results. If `sharp` is the cause, load it lazily (`await import("sharp")` only inside the image branch of `finalizeUpload`).
+
 ## 1. Blocking defects (must fix)
 
 ### B1. Private files are inside the library (data leak + data loss)
