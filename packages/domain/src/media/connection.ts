@@ -66,6 +66,8 @@ export interface MediaStorageDriver {
 
   head(key: string): Promise<{ exists: boolean; size?: number | undefined; contentType?: string | undefined }>;
 
+  get(key: string): Promise<Buffer | null>;
+
   delete(key: string): Promise<void>;
 
   publicUrl(key: string): string | undefined;
@@ -267,6 +269,18 @@ export class LocalStorageDriver implements MediaStorageDriver {
     }
   }
 
+  async get(key: string): Promise<Buffer | null> {
+    try {
+      const targetPath = resolveSafeLocalPath(this.baseDir, key);
+      return await fs.promises.readFile(targetPath);
+    } catch (err: unknown) {
+      if ((err as NodeJS.ErrnoException).code === "ENOENT") {
+        return null;
+      }
+      throw err;
+    }
+  }
+
   async delete(key: string): Promise<void> {
     try {
       const targetPath = resolveSafeLocalPath(this.baseDir, key);
@@ -416,6 +430,26 @@ export class S3StorageDriver implements MediaStorageDriver {
       const name = (err as { name?: string }).name;
       if (name === "NotFound" || name === "NoSuchKey") {
         return { exists: false };
+      }
+      throw err;
+    }
+  }
+
+  async get(key: string): Promise<Buffer | null> {
+    try {
+      const res = await this.client.send(
+        new GetObjectCommand({
+          Bucket: this.bucket,
+          Key: key,
+        }),
+      );
+      if (!res.Body) return null;
+      const bytes = await res.Body.transformToByteArray();
+      return Buffer.from(bytes);
+    } catch (err: unknown) {
+      const name = (err as { name?: string }).name;
+      if (name === "NotFound" || name === "NoSuchKey") {
+        return null;
       }
       throw err;
     }
@@ -971,101 +1005,4 @@ export function publicMediaUrlSync(
     return createStorageDriver(activeCached.config).publicUrl(storageKey);
   }
   return undefined;
-}
-
-/**
- * Direct server-proxied media upload (PLAN §3.1.4).
- * Replaces direct browser uploads as the default path, avoiding bucket CORS failures.
- */
-export async function uploadMediaDirect(
-  rt: Runtime,
-  ctx: TenantContext,
-  input: {
-    fileBytes: Buffer | Uint8Array;
-    filename: string;
-    mime: string;
-    folder?: string | undefined;
-    alt?: string | undefined;
-  },
-) {
-  assertPermission(ctx, "content.write");
-
-  // 1. Validation
-  const validation = validateMediaUpload(input.mime, input.fileBytes.length);
-  if (!validation.valid) {
-    throw new Error(validation.error || "Invalid media upload");
-  }
-
-  // 2. Magic byte sniffing
-  const sniffed = sniffMimeType(input.fileBytes);
-  if (!sniffed) {
-    throw new Error(
-      "File verification failed: file content is not a recognized image format.",
-    );
-  }
-  if (sniffed !== input.mime) {
-    throw new Error(
-      `File verification failed: declared MIME "${input.mime}" does not match file contents ("${sniffed}").`,
-    );
-  }
-
-  // 3. Quota check
-  const uploadSizeMb = input.fileBytes.length / (1024 * 1024);
-  await assertStorageQuota(rt._db.db, ctx.tenantId, uploadSizeMb);
-
-  // 4. Resolve active driver
-  const { driver, config } = await getActiveStorageDriver(rt._db.db, "public_media");
-
-  // 5. Generate isolated key
-  const { storageKey } = generateStorageKey(
-    ctx.tenantId,
-    input.folder || "products",
-    input.filename,
-  );
-
-  // 6. Write through driver
-  await driver.put({
-    key: storageKey,
-    body: input.fileBytes,
-    contentType: input.mime,
-  });
-
-  // 7. Persist media row
-  const created = await withTenant(rt._db.db, ctx.tenantId, async (tx) => {
-    const [row] = await tx
-      .insert(schema.media)
-      .values({
-        tenantId: ctx.tenantId,
-        storageKey,
-        storageConnectionId: config.id ?? null,
-        mime: input.mime,
-        bytes: input.fileBytes.length,
-        folder: input.folder || "products",
-        alt: input.alt ?? null,
-      })
-      .returning();
-    if (!row) {
-      throw new Error("Failed to insert media row");
-    }
-    return row;
-  });
-
-  await invalidateCache(rt, ctx, { type: "media_updated" });
-
-  const publicUrl = driver.publicUrl(storageKey);
-
-  return {
-    id: created.id,
-    storageKey: created.storageKey,
-    storageConnectionId: created.storageConnectionId ?? undefined,
-    cfImageId: created.cfImageId ?? undefined,
-    mime: created.mime,
-    bytes: Number(created.bytes),
-    width: created.width ?? undefined,
-    height: created.height ?? undefined,
-    alt: created.alt ?? undefined,
-    folder: created.folder,
-    createdAt: created.createdAt.toISOString(),
-    url: publicUrl,
-  };
 }

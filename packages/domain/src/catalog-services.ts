@@ -6,6 +6,7 @@ import { assertPermission, type TenantContext } from "./context.ts";
 import { invalidateCache } from "./cache-invalidation.ts";
 import { publicMediaUrl } from "./media/storage.ts";
 import { assertProductQuota } from "./system/quotas.ts";
+import { clearMediaUsagesForOwner, syncMediaUsages } from "./media-services.ts";
 
 export interface ListProductsQuery {
   search?: string | undefined;
@@ -557,7 +558,17 @@ export async function createProduct(
           imageMediaId: v.imageMediaId,
         })
         .returning();
-      if (variant) createdVariants.push(variant);
+      if (variant) {
+        createdVariants.push(variant);
+        if (v.imageMediaId) {
+          await syncMediaUsages(tx, ctx, {
+            ownerType: "variant",
+            ownerId: variant.id,
+            field: "image",
+            mediaIds: [v.imageMediaId],
+          });
+        }
+      }
     }
 
     return product.id;
@@ -744,6 +755,16 @@ export async function deleteProduct(
   const db = rt._db.db;
 
   const res = await withTenant(db, ctx.tenantId, async (tx) => {
+    // Clear polymorphic media usages for product and its variants
+    await tx.execute(sql`
+      DELETE FROM media_usages
+      WHERE tenant_id = ${ctx.tenantId}
+        AND (
+          (owner_type = 'product' AND owner_id = ${input.id})
+          OR (owner_type = 'variant' AND owner_id IN (SELECT id FROM variants WHERE product_id = ${input.id}))
+        )
+    `);
+
     const [row] = await tx.delete(schema.products).where(eq(schema.products.id, input.id)).returning();
     if (!row) throw new Error(`Product not found: "${input.id}"`);
     return { success: true };
@@ -794,6 +815,15 @@ export async function updateVariant(
 
     if (!row) {
       throw new Error(`Variant not found: "${input.id}"`);
+    }
+
+    if (input.imageMediaId !== undefined) {
+      await syncMediaUsages(tx, ctx, {
+        ownerType: "variant",
+        ownerId: input.id,
+        field: "image",
+        mediaIds: [input.imageMediaId],
+      });
     }
 
     const catRows = await tx
@@ -1361,6 +1391,15 @@ export async function createCategory(
 
     if (!row) throw new Error("Failed to create category");
 
+    if (input.imageMediaId) {
+      await syncMediaUsages(tx, ctx, {
+        ownerType: "category",
+        ownerId: row.id,
+        field: "image",
+        mediaIds: [input.imageMediaId],
+      });
+    }
+
     await tx.insert(schema.auditLogs).values({
       tenantId: ctx.tenantId,
       actorType: ctx.actor.type,
@@ -1445,6 +1484,15 @@ export async function updateCategory(
 
     if (!row) throw new Error(`Category not found: "${input.id}"`);
 
+    if (input.imageMediaId !== undefined) {
+      await syncMediaUsages(tx, ctx, {
+        ownerType: "category",
+        ownerId: input.id,
+        field: "image",
+        mediaIds: [input.imageMediaId],
+      });
+    }
+
     await tx.insert(schema.auditLogs).values({
       tenantId: ctx.tenantId,
       actorType: ctx.actor.type,
@@ -1497,6 +1545,11 @@ export async function deleteCategory(rt: Runtime, ctx: TenantContext, input: { i
       .returning();
 
     if (!row) throw new Error(`Category not found: "${input.id}"`);
+
+    await clearMediaUsagesForOwner(tx, ctx, {
+      ownerType: "category",
+      ownerId: input.id,
+    });
 
     await tx.insert(schema.auditLogs).values({
       tenantId: ctx.tenantId,
@@ -1777,6 +1830,15 @@ export async function createCollection(
 
     if (!row) throw new Error("Failed to create collection");
 
+    if (input.imageMediaId) {
+      await syncMediaUsages(tx, ctx, {
+        ownerType: "collection",
+        ownerId: row.id,
+        field: "image",
+        mediaIds: [input.imageMediaId],
+      });
+    }
+
     if (!isAutomated && input.productIds && input.productIds.length > 0) {
       for (let i = 0; i < input.productIds.length; i++) {
         const pId = input.productIds[i];
@@ -1861,6 +1923,15 @@ export async function updateCollection(
 
     if (!row) throw new Error(`Collection not found: "${input.id}"`);
 
+    if (input.imageMediaId !== undefined) {
+      await syncMediaUsages(tx, ctx, {
+        ownerType: "collection",
+        ownerId: input.id,
+        field: "image",
+        mediaIds: [input.imageMediaId],
+      });
+    }
+
     if (input.productIds !== undefined && row.type === "manual") {
       await tx.delete(schema.collectionProducts).where(eq(schema.collectionProducts.collectionId, input.id));
       for (let i = 0; i < input.productIds.length; i++) {
@@ -1907,6 +1978,11 @@ export async function deleteCollection(rt: Runtime, ctx: TenantContext, input: {
       .returning();
 
     if (!row) throw new Error(`Collection not found: "${input.id}"`);
+
+    await clearMediaUsagesForOwner(tx, ctx, {
+      ownerType: "collection",
+      ownerId: input.id,
+    });
 
     await tx.insert(schema.auditLogs).values({
       tenantId: ctx.tenantId,
@@ -2081,6 +2157,15 @@ export async function createBrand(
 
     if (!row) throw new Error("Failed to create brand");
 
+    if (input.logoMediaId) {
+      await syncMediaUsages(tx, ctx, {
+        ownerType: "brand",
+        ownerId: row.id,
+        field: "logo",
+        mediaIds: [input.logoMediaId],
+      });
+    }
+
     await tx.insert(schema.auditLogs).values({
       tenantId: ctx.tenantId,
       actorType: ctx.actor.type,
@@ -2123,6 +2208,15 @@ export async function updateBrand(
       .returning();
 
     if (!row) throw new Error(`Brand not found: "${input.id}"`);
+
+    if (input.logoMediaId !== undefined) {
+      await syncMediaUsages(tx, ctx, {
+        ownerType: "brand",
+        ownerId: input.id,
+        field: "logo",
+        mediaIds: [input.logoMediaId],
+      });
+    }
 
     await tx.insert(schema.auditLogs).values({
       tenantId: ctx.tenantId,
@@ -2171,6 +2265,11 @@ export async function deleteBrand(rt: Runtime, ctx: TenantContext, input: { id: 
 
     const [row] = await tx.delete(schema.brands).where(eq(schema.brands.id, input.id)).returning();
     if (!row) throw new Error(`Brand not found: "${input.id}"`);
+
+    await clearMediaUsagesForOwner(tx, ctx, {
+      ownerType: "brand",
+      ownerId: input.id,
+    });
 
     await tx.insert(schema.auditLogs).values({
       tenantId: ctx.tenantId,

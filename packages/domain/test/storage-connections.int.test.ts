@@ -23,10 +23,9 @@ import {
   resolveDriverForMediaRow,
   resolveLocalMediaFilePath,
   getActiveStorageDriver,
-  uploadMediaDirect,
   invalidateStorageConnectionCache,
 } from "../src/media/connection.ts";
-import { deleteMediaRecord } from "../src/media-services.ts";
+import { deleteMediaRecord, uploadMediaDirect } from "../src/media-services.ts";
 
 let env: TestDb;
 let rt: Runtime;

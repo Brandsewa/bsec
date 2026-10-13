@@ -1121,6 +1121,40 @@ export async function startJobs(opts: {
     },
   );
 
+  // Handle media.purge job (MEDIA-LIBRARY-PLAN §8)
+  await boss.work<{
+    tenantId: string;
+    objects: { storageKey: string; storageConnectionId?: string | null }[];
+  }>(QUEUE_NAMES.MEDIA_PURGE, { localConcurrency: 2 }, async (batch) => {
+    for (const job of batch) {
+      try {
+        const { purgeMediaObjects } = await import("./media-services.ts");
+        const res = await purgeMediaObjects(db, job.data);
+        opts.log.info({ job_id: job.id, purgedCount: res.purged }, "media.purge processed");
+      } catch (err) {
+        opts.log.error({ err, job_id: job.id }, "media.purge failed");
+        throw err;
+      }
+    }
+  });
+
+  // Handle media.trash_sweep recurring job (MEDIA-LIBRARY-PLAN §8)
+  await boss.work<{ tenantId?: string }>(QUEUE_NAMES.MEDIA_TRASH_SWEEP, { localConcurrency: 1 }, async (batch) => {
+    for (const job of batch) {
+      try {
+        const { runMediaTrashSweep } = await import("./media-services.ts");
+        const res = await runMediaTrashSweep(db, job.data?.tenantId);
+        opts.log.info(
+          { job_id: job.id, sweptTenants: res.sweptTenants, deletedCount: res.deletedCount },
+          "media.trash_sweep processed",
+        );
+      } catch (err) {
+        opts.log.error({ err, job_id: job.id }, "media.trash_sweep failed");
+        throw err;
+      }
+    }
+  });
+
   // Register recurring schedules and proof-of-life sweeps on boot (PLAN §5.10, §11.3)
   try {
     await boss.schedule(QUEUE_NAMES.RESERVATION_EXPIRY, "* * * * *", {});
@@ -1132,7 +1166,8 @@ export async function startJobs(opts: {
     await boss.schedule(QUEUE_NAMES.SEGMENTS_REFRESH_COUNTS, "0 */6 * * *", {});
     await boss.schedule(QUEUE_NAMES.MAINTENANCE_WATCHDOG_SWEEP, "* * * * *", {});
     await boss.schedule(QUEUE_NAMES.FINANCE_RECONCILE, "0 4 * * *", {});
-    opts.log.info("Registered recurring cron: reservation.expiry, idempotency.cleanup, cart.recovery_sweep, subscription.trial_expiry_sweep, preorder_reminder_sweep, return_photo_cleanup, maintenance.watchdog_sweep, finance.reconcile");
+    await boss.schedule(QUEUE_NAMES.MEDIA_TRASH_SWEEP, "0 22 * * *", {});
+    opts.log.info("Registered recurring cron: reservation.expiry, idempotency.cleanup, cart.recovery_sweep, subscription.trial_expiry_sweep, preorder_reminder_sweep, return_photo_cleanup, maintenance.watchdog_sweep, finance.reconcile, media.trash_sweep");
   } catch (err) {
     opts.log.warn({ err }, "Could not register recurring cron schedules with pg-boss");
   }
