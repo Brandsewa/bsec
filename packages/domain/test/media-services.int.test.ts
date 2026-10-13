@@ -31,6 +31,7 @@ import {
   runMediaTrashSweep,
   attachProductMedia,
   syncMediaUsages,
+  requestMediaUpload,
 } from "../src/media-services.ts";
 import { getActiveStorageDriver, LocalStorageDriver } from "../src/media/connection.ts";
 import { getTenantMediaUsageStats, QuotaExceededError } from "../src/system/quotas.ts";
@@ -729,4 +730,66 @@ describe("Media Services Integration Test Suite (Real Postgres & Storage)", () =
     // Clean up
     await deleteProduct(rt, ctx, { id: prod.id });
   });
+
+  it("prevents quota bypass through folder tampering on presigned upload and create (R1)", async () => {
+    // 1. requestUpload with private folder (returns or expense-receipts) is refused
+    await expect(
+      requestMediaUpload(rt, ctx, {
+        filename: "receipt.png",
+        mime: "image/png",
+        bytes: 1024,
+        folder: "returns",
+      }),
+    ).rejects.toThrow(/restricted/i);
+
+    await expect(
+      requestMediaUpload(rt, ctx, {
+        filename: "receipt.png",
+        mime: "image/png",
+        bytes: 1024,
+        folder: "expense-receipts",
+      }),
+    ).rejects.toThrow(/restricted/i);
+
+    // 2. create with a valid products key but client sends folder: "returns" is refused
+    const { driver } = await getActiveStorageDriver(rt._db.db, "public_media");
+    const testKey = `${tenantId}/products/${crypto.randomUUID()}.png`;
+    await driver.put({ key: testKey, body: PNG_1X1, contentType: "image/png" });
+
+    await expect(
+      createMediaRecord(rt, ctx, {
+        storageKey: testKey,
+        filename: "spoofed.png",
+        mime: "image/png",
+        bytes: PNG_1X1.length,
+        folder: "returns",
+      }),
+    ).rejects.toThrow(/does not match storage key folder/i);
+
+    // 3. create with the same valid key without folder or matching folder succeeds
+    const initialStats = await getTenantMediaUsageStats(rt._db.db, tenantId);
+    const created = await createMediaRecord(rt, ctx, {
+      storageKey: testKey,
+      filename: "valid.png",
+      mime: "image/png",
+      bytes: PNG_1X1.length,
+      folder: "products",
+    });
+
+    expect(created.folder).toBe("products");
+
+    // 4. Its bytes count toward storage_mb
+    const newStats = await getTenantMediaUsageStats(rt._db.db, tenantId);
+    expect(newStats.usedBytes).toBe(initialStats.usedBytes + PNG_1X1.length);
+
+    // 5. It appears in listMedia
+    const listRes = await listMedia(rt, ctx, { limit: 100 });
+    const found = listRes.items.some((item) => item.id === created.id);
+    expect(found).toBe(true);
+
+    // Clean up
+    await trashMedia(rt, ctx, { ids: [created.id] });
+    await deleteMediaPermanent(rt, ctx, { ids: [created.id] });
+  });
 });
+
