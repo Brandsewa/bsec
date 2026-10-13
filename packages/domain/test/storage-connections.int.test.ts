@@ -11,7 +11,9 @@ import {
   provisionTenant,
   type Runtime,
   type TenantContext,
+  type Jobs,
 } from "../src/index.ts";
+import { deleteMediaPermanent } from "../src/media-services.ts";
 import {
   listPlatformStorageConnections,
   getPlatformStorageConnection,
@@ -43,8 +45,9 @@ function makeTempDir(label: string): string {
 
 beforeAll(async () => {
   env = await startTestDb();
-  rt = createRuntime({ service: "platform", databaseUrl: env.as("app_platform"), poolMax: 4 });
-  rtWeb = createRuntime({ service: "web", databaseUrl: env.as("app_rw"), poolMax: 4 });
+  const jobsStub = { send: async () => "job-id" } as unknown as Jobs;
+  rt = createRuntime({ service: "platform", databaseUrl: env.as("app_platform"), poolMax: 4, jobs: jobsStub });
+  rtWeb = createRuntime({ service: "web", databaseUrl: env.as("app_rw"), poolMax: 4, jobs: jobsStub });
 
   const runId = Math.random().toString(36).slice(2, 7);
   const staff = await seedPlatformStaff(rt._db.db, {
@@ -208,7 +211,10 @@ describe("Platform Storage Connections (Real Database Integration)", () => {
     expect(active1.config.id).toBe(conn1.id);
 
     // 2. Upload media under Connection 1
-    const validPng = Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 0x00, 0x00]);
+    const validPng = Buffer.from(
+      "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==",
+      "base64",
+    );
     const uploaded = await uploadMediaDirect(rt, ctx, {
       fileBytes: validPng,
       filename: "product-1.png",
@@ -282,8 +288,9 @@ describe("Platform Storage Connections (Real Database Integration)", () => {
       deletePlatformStorageConnection(rt, adminUserId, conn.id),
     ).rejects.toThrow(/referenced by 1 existing media record/i);
 
-    // Delete the referencing media row
+    // Delete the referencing media row (trash then permanently delete)
     await deleteMediaRecord(rt, ctx, { id: insertedMedia!.id });
+    await deleteMediaPermanent(rt, ctx, { ids: [insertedMedia!.id] });
 
     // Now delete MUST succeed
     const delResult = await deletePlatformStorageConnection(rt, adminUserId, conn.id);

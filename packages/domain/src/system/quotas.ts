@@ -331,10 +331,12 @@ export async function assertQuota(
 }
 
 
+import { PRIVATE_MEDIA_FOLDERS } from "../media/types.ts";
+
 /**
  * Hard enforcement check for media file upload quotas (MEDIA-LIBRARY-PLAN §6.2).
  * Enforces per-kind file size limit (media_image_mb / media_video_mb / media_document_mb)
- * and total store storage limit (storage_mb, counting all files including Trash).
+ * and total store storage limit (storage_mb, counting all library files including Trash, excluding private folders).
  */
 export async function assertMediaUploadQuota(
   db: Db,
@@ -357,17 +359,11 @@ export async function assertMediaUploadQuota(
     );
   }
 
-  // 2. Total storage check (including Trash bytes)
+  // 2. Total storage check (including Trash bytes, excluding private folders)
   const totalLimit = await resolveEffectiveQuota(db, tenantId, "storage_mb");
   const maxStorageBytes = totalLimit.limit * 1024 * 1024;
-  const usageRes = await withTenant(db, tenantId, async (tx) => {
-    return tx.execute<{ total_bytes: string }>(sql`
-      SELECT COALESCE(SUM(bytes), 0)::text as total_bytes
-      FROM media
-      WHERE tenant_id = ${tenantId};
-    `);
-  });
-  const usedBytes = parseInt(usageRes.rows[0]?.total_bytes ?? "0", 10);
+  const stats = await getTenantMediaUsageStats(db, tenantId);
+  const usedBytes = stats.usedBytes;
   if (usedBytes + params.bytes > maxStorageBytes) {
     const usedGb = (usedBytes / (1024 * 1024 * 1024)).toFixed(1);
     const limitGb = (maxStorageBytes / (1024 * 1024 * 1024)).toFixed(1);
@@ -382,9 +378,14 @@ export async function assertMediaUploadQuota(
 
 /**
  * Retrieves aggregate storage and quota stats for Online Store > Media and Settings > Storage
- * (MEDIA-LIBRARY-PLAN §6.3).
+ * (MEDIA-LIBRARY-PLAN §6.3). Counts library files only (private folders 'returns', 'expense-receipts' excluded).
  */
 export async function getTenantMediaUsageStats(db: Db, tenantId: string) {
+  const privateFoldersSql = sql.join(
+    PRIVATE_MEDIA_FOLDERS.map((f) => sql`${f}`),
+    sql`, `,
+  );
+
   const [usageRes, storageQuota, imageQuota, videoQuota, docQuota] = await Promise.all([
     withTenant(db, tenantId, async (tx) => {
       return tx.execute<{
@@ -397,7 +398,8 @@ export async function getTenantMediaUsageStats(db: Db, tenantId: string) {
           COALESCE(SUM(bytes) FILTER (WHERE status = 'trashed'), 0)::text as trashed_bytes,
           COUNT(*)::text as file_count
         FROM media
-        WHERE tenant_id = ${tenantId};
+        WHERE tenant_id = ${tenantId}
+          AND (folder IS NULL OR folder NOT IN (${privateFoldersSql}));
       `);
     }),
     resolveEffectiveQuota(db, tenantId, "storage_mb"),
@@ -546,16 +548,18 @@ export async function getTenantUsageReport(db: Db, tenantId: string): Promise<Te
   const planCode = planRes.rows[0]?.code ?? null;
 
   // Real database counts
-  const [prodRes, varRes, staffRes, domRes, orderRes, mediaRes] = await withTenant(db, tenantId, async (tx) => {
-    return Promise.all([
-      tx.execute<{ count: string }>(sql`SELECT COUNT(*)::text as count FROM products WHERE tenant_id = ${tenantId};`),
-      tx.execute<{ count: string }>(sql`SELECT COUNT(*)::text as count FROM variants WHERE tenant_id = ${tenantId};`),
-      tx.execute<{ count: string }>(sql`SELECT COUNT(*)::text as count FROM memberships WHERE tenant_id = ${tenantId} AND status = 'active';`),
-      tx.execute<{ count: string }>(sql`SELECT COUNT(*)::text as count FROM domains WHERE tenant_id = ${tenantId} AND type = 'custom' AND status != 'removed';`),
-      tx.execute<{ count: string }>(sql`SELECT COUNT(*)::text as count FROM orders WHERE tenant_id = ${tenantId} AND created_at >= date_trunc('month', now());`),
-      tx.execute<{ total: string }>(sql`SELECT COALESCE(SUM(bytes), 0)::text as total FROM media WHERE tenant_id = ${tenantId};`),
-    ]);
-  });
+  const [[prodRes, varRes, staffRes, domRes, orderRes], mediaStats] = await Promise.all([
+    withTenant(db, tenantId, async (tx) => {
+      return Promise.all([
+        tx.execute<{ count: string }>(sql`SELECT COUNT(*)::text as count FROM products WHERE tenant_id = ${tenantId};`),
+        tx.execute<{ count: string }>(sql`SELECT COUNT(*)::text as count FROM variants WHERE tenant_id = ${tenantId};`),
+        tx.execute<{ count: string }>(sql`SELECT COUNT(*)::text as count FROM memberships WHERE tenant_id = ${tenantId} AND status = 'active';`),
+        tx.execute<{ count: string }>(sql`SELECT COUNT(*)::text as count FROM domains WHERE tenant_id = ${tenantId} AND type = 'custom' AND status != 'removed';`),
+        tx.execute<{ count: string }>(sql`SELECT COUNT(*)::text as count FROM orders WHERE tenant_id = ${tenantId} AND created_at >= date_trunc('month', now());`),
+      ]);
+    }),
+    getTenantMediaUsageStats(db, tenantId),
+  ]);
 
   const counts: Partial<Record<PlanQuotaKey, number>> = {
     products: parseInt(prodRes.rows[0]?.count ?? "0", 10),
@@ -563,7 +567,7 @@ export async function getTenantUsageReport(db: Db, tenantId: string): Promise<Te
     staff_seats: parseInt(staffRes.rows[0]?.count ?? "0", 10),
     custom_domains: parseInt(domRes.rows[0]?.count ?? "0", 10),
     orders_month: parseInt(orderRes.rows[0]?.count ?? "0", 10),
-    storage_mb: Math.round(parseInt(mediaRes.rows[0]?.total ?? "0", 10) / (1024 * 1024)),
+    storage_mb: Math.round(mediaStats.usedBytes / (1024 * 1024)),
     media_file_mb: 0,
     media_image_mb: 0,
     media_video_mb: 0,

@@ -20,7 +20,7 @@ export async function getStorageUsage(
     throw new FeatureDisabledError("settings.storage");
   }
 
-  // 1. Single indexed aggregate grouping by folder under withTenant isolation
+  // 1. Single indexed aggregate grouping by folder under withTenant isolation (excluding private folders)
   const rows = await withTenant(rt._db.db, ctx.tenantId, async (tx) => {
     return await tx.execute<{ folder: string; bytes: string; count: string }>(sql`
       SELECT
@@ -29,6 +29,7 @@ export async function getStorageUsage(
         COUNT(*)::text as count
       FROM media
       WHERE tenant_id = ${ctx.tenantId}
+        AND (folder IS NULL OR folder NOT IN ('returns', 'expense-receipts'))
       GROUP BY folder;
     `);
   });

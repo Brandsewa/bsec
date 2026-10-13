@@ -281,8 +281,9 @@ Drizzle schema files in `packages/db/src/schema/` (one Postgres database, `publi
 | 0054 | `pages_hierarchy` | `pages.parent_id uuid NULL`, composite foreign key `(tenant_id, parent_id) -> pages(tenant_id, id)`, index on `(tenant_id, parent_id)` (max depth 3, hierarchical canonical URLs) |
 | 0055 | `menus_kind` | `menus.kind text NOT NULL DEFAULT 'navigation'`, index on `(tenant_id, kind)` (navigation vs filter menus) |
 | 0056 | `media_library` | `media` columns (kind, filename, title, alt, caption, duration_ms, status, trashed_at, width, height), `media_usages` table (RLS), quota keys `media_image_mb`, `media_video_mb`, `media_document_mb` |
+| 0057 | `media_storage_key_uniq` | Unique index `media_tenant_storage_key_uniq` on `(tenant_id, storage_key)` (enforces storage key uniqueness per tenant) |
 
-How to write one (expand, migrate, contract; `forceRlsSql`): `docs/migrations.md`. **Never edit an applied migration.** Latest on disk: `0056` (the docs check keeps this list honest).
+How to write one (expand, migrate, contract; `forceRlsSql`): `docs/migrations.md`. **Never edit an applied migration.** Latest on disk: `0057` (the docs check keeps this list honest).
 
 ---
 

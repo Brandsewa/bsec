@@ -1,7 +1,6 @@
 import crypto from "node:crypto";
 import path from "node:path";
-import { and, asc, desc, eq, ilike, inArray, ne, or, sql } from "drizzle-orm";
-import sharp from "sharp";
+import { and, asc, desc, eq, ilike, inArray, lt, ne, or, sql } from "drizzle-orm";
 import { type Db, schema, withTenant } from "@bs/db";
 import type { MediaItem, MediaUsageReference, MediaUsageReport } from "@bs/contracts";
 import type { Runtime } from "./runtime.ts";
@@ -15,6 +14,7 @@ import {
   getMediaKind,
   isAllowedMime,
   type MediaKind,
+  PRIVATE_MEDIA_FOLDERS,
   verifyMediaMagicBytes,
 } from "./media/types.ts";
 import {
@@ -93,6 +93,43 @@ export interface FinalizeUploadParams {
   directBuffer?: Buffer | Uint8Array | undefined;
 }
 
+export const libraryScope = sql`(${schema.media.folder} IS NULL OR ${schema.media.folder} NOT IN ('returns', 'expense-receipts'))`;
+
+export function escapeLikePattern(pattern: string): string {
+  return pattern.replace(/[\\%_]/g, "\\$&");
+}
+
+export function validateClientStorageKey(
+  tenantId: string,
+  storageKey: string,
+): { folder: string; filename: string } {
+  if (typeof storageKey !== "string" || !storageKey) {
+    throw new Error("Bad Request: Invalid storage key");
+  }
+  if (storageKey.startsWith("/") || storageKey.includes("..") || storageKey.includes("\\")) {
+    throw new Error("Bad Request: Invalid storage key format");
+  }
+  const parts = storageKey.split("/");
+  if (parts.length !== 3) {
+    throw new Error("Bad Request: Storage key must have format {tenantId}/{folder}/{filename}");
+  }
+  const [keyTenantId, folder, filename] = parts;
+  if (keyTenantId !== tenantId) {
+    throw new Error("Bad Request: Storage key belongs to a different tenant");
+  }
+  if (!folder || !filename) {
+    throw new Error("Bad Request: Invalid storage key components");
+  }
+  if ((PRIVATE_MEDIA_FOLDERS as readonly string[]).includes(folder)) {
+    throw new Error(`Bad Request: Storage key folder "${folder}" is restricted`);
+  }
+  const validPattern = /^[a-zA-Z0-9_-]+\/[a-zA-Z0-9_-]+\/[a-zA-Z0-9_.-]+$/;
+  if (!validPattern.test(storageKey)) {
+    throw new Error("Bad Request: Invalid characters in storage key");
+  }
+  return { folder, filename };
+}
+
 function encodeCursor(sortKey: string | number, id: string): string {
   return Buffer.from(JSON.stringify({ s: sortKey, id })).toString("base64url");
 }
@@ -147,16 +184,17 @@ async function finalizeUpload(
 
   const { driver, config: activeConfig } = await getActiveStorageDriver(rt._db.db, "public_media");
 
-  let buffer: Buffer;
   let realBytes: number;
+  let magicBuffer: Uint8Array;
 
   if (params.directBuffer) {
-    buffer = Buffer.isBuffer(params.directBuffer)
+    const directBuf = Buffer.isBuffer(params.directBuffer)
       ? params.directBuffer
       : Buffer.from(params.directBuffer);
-    realBytes = buffer.length;
+    realBytes = directBuf.length;
+    magicBuffer = directBuf.subarray(0, 4096);
   } else {
-    // 1. HeadObject gives the real size (fixes Q2)
+    // 1. HeadObject gives the real size (fixes Q2, B3)
     const head = await driver.head(params.storageKey);
     if (!head.exists) {
       throw new Error(`Uploaded file not found in storage: "${params.storageKey}"`);
@@ -166,17 +204,34 @@ async function finalizeUpload(
       throw new Error("Uploaded file is empty");
     }
 
-    // 2. Read bytes for magic bytes inspection
-    const fetched = await driver.get(params.storageKey);
-    if (!fetched || fetched.length === 0) {
+    // 2. Quota check with real size BEFORE fetching object content (fixes B3, Q1, Q2, Q3)
+    const previewKind = getMediaKind(declaredMime) || "image";
+    try {
+      await assertMediaUploadQuota(rt._db.db, ctx.tenantId, {
+        kind: previewKind,
+        bytes: realBytes,
+      });
+    } catch (quotaErr) {
+      // Purge the oversize file from storage immediately without downloading it
+      await purgeMediaObjects(rt._db.db, {
+        tenantId: ctx.tenantId,
+        objects: [{ storageKey: params.storageKey, storageConnectionId: activeConfig.id }],
+      }).catch(() => {});
+      throw quotaErr;
+    }
+
+    // 3. Read only first 4 KB for magic bytes inspection (fixes B3)
+    const chunk = driver.getRange
+      ? await driver.getRange(params.storageKey, 0, 4095)
+      : await driver.get(params.storageKey);
+    if (!chunk || chunk.length === 0) {
       throw new Error(`Failed to read uploaded file from storage: "${params.storageKey}"`);
     }
-    buffer = fetched;
-    realBytes = buffer.length;
+    magicBuffer = chunk;
   }
 
-  // 3. Magic bytes verification (MEDIA-LIBRARY-PLAN §4)
-  const magicResult = verifyMediaMagicBytes(declaredMime, buffer, params.filename);
+  // 4. Magic bytes verification (MEDIA-LIBRARY-PLAN §4)
+  const magicResult = verifyMediaMagicBytes(declaredMime, magicBuffer, params.filename);
   if (!magicResult.valid) {
     // Purge the invalid file from storage immediately
     await purgeMediaObjects(rt._db.db, {
@@ -188,27 +243,45 @@ async function finalizeUpload(
 
   const kind = magicResult.kind || getMediaKind(declaredMime) || "image";
 
-  // 4. Quota check with real size (fixes Q1, Q2, Q3)
-  try {
-    await assertMediaUploadQuota(rt._db.db, ctx.tenantId, {
-      kind,
-      bytes: realBytes,
-    });
-  } catch (quotaErr) {
-    // Purge the oversize file from storage
-    await purgeMediaObjects(rt._db.db, {
-      tenantId: ctx.tenantId,
-      objects: [{ storageKey: params.storageKey, storageConnectionId: activeConfig.id }],
-    }).catch(() => {});
-    throw quotaErr;
+  // Re-verify quota if directBuffer (which skipped the pre-get quota check)
+  if (params.directBuffer) {
+    try {
+      await assertMediaUploadQuota(rt._db.db, ctx.tenantId, {
+        kind,
+        bytes: realBytes,
+      });
+    } catch (quotaErr) {
+      await purgeMediaObjects(rt._db.db, {
+        tenantId: ctx.tenantId,
+        objects: [{ storageKey: params.storageKey, storageConnectionId: activeConfig.id }],
+      }).catch(() => {});
+      throw quotaErr;
+    }
   }
 
-  // 5. Image dimensions with sharp
+  // 5. Download full object ONLY for images to inspect dimensions with sharp
   let width: number | null = null;
   let height: number | null = null;
+  let sha256: string;
+
   if (kind === "image") {
+    let fullImageBuffer: Buffer;
+    if (params.directBuffer) {
+      fullImageBuffer = Buffer.isBuffer(params.directBuffer)
+        ? params.directBuffer
+        : Buffer.from(params.directBuffer);
+    } else {
+      const fetched = await driver.get(params.storageKey);
+      if (!fetched || fetched.length === 0) {
+        throw new Error(`Failed to download image file from storage: "${params.storageKey}"`);
+      }
+      fullImageBuffer = fetched;
+    }
+
     try {
-      const meta = await sharp(buffer).metadata();
+      const sharpModule = await import("sharp");
+      const sharp = sharpModule.default;
+      const meta = await sharp(fullImageBuffer).metadata();
       width = meta.width ?? null;
       height = meta.height ?? null;
     } catch (err) {
@@ -220,10 +293,17 @@ async function finalizeUpload(
         cause: err,
       });
     }
+
+    sha256 = crypto.createHash("sha256").update(fullImageBuffer).digest("hex");
+  } else {
+    // For videos and documents, do not download the entire multi-megabyte file
+    if (params.directBuffer) {
+      sha256 = crypto.createHash("sha256").update(params.directBuffer).digest("hex");
+    } else {
+      sha256 = crypto.createHash("sha256").update(magicBuffer).digest("hex");
+    }
   }
 
-  // 6. SHA-256 hash
-  const sha256 = crypto.createHash("sha256").update(buffer).digest("hex");
   const filename = params.filename?.trim() || path.basename(params.storageKey);
 
   // 7. Insert row inside tenant transaction + audit log
@@ -325,6 +405,7 @@ export async function listMedia(
     const conditions = [
       eq(schema.media.tenantId, ctx.tenantId),
       isTrash ? eq(schema.media.status, "trashed") : ne(schema.media.status, "trashed"),
+      libraryScope,
     ];
 
     if (query?.folder) {
@@ -337,10 +418,10 @@ export async function listMedia(
 
     if (query?.q && query.q.trim()) {
       const q = query.q.trim();
+      const escaped = escapeLikePattern(q);
       const searchCond = or(
         sql`${schema.media.search} @@ websearch_to_tsquery('simple', ${q})`,
-        ilike(schema.media.filename, `${q}%`),
-        ilike(schema.media.filename, `%${q}%`),
+        ilike(schema.media.filename, `%${escaped}%`),
       );
       if (searchCond) {
         conditions.push(searchCond);
@@ -436,7 +517,7 @@ export async function listMedia(
       .orderBy(...orderClauses)
       .limit(limit + 1);
 
-    if (query?.offset && !query?.cursor) {
+    if (typeof query?.offset === "number" && !query?.cursor) {
       queryBuilder.offset(query.offset);
     }
 
@@ -503,6 +584,285 @@ export async function listMedia(
 }
 
 /**
+ * Checks branding, settings, and page/theme block documents for references to media IDs (MEDIA-LIBRARY-PLAN §5.2, B5).
+ */
+export async function findUntrackedReferences(
+  tx: Parameters<Parameters<typeof withTenant>[2]>[0],
+  tenantId: string,
+  mediaIds: string[],
+): Promise<Map<string, MediaUsageReference[]>> {
+  const refMap = new Map<string, MediaUsageReference[]>();
+  if (mediaIds.length === 0) return refMap;
+
+  const addRef = (mId: string, ref: MediaUsageReference) => {
+    const list = refMap.get(mId) || [];
+    list.push(ref);
+    refMap.set(mId, list);
+  };
+
+  // 1. Store branding settings
+  const [brand] = await tx
+    .select()
+    .from(schema.brandSettings)
+    .where(eq(schema.brandSettings.tenantId, tenantId))
+    .limit(1);
+
+  if (brand) {
+    if (brand.logoMediaId && mediaIds.includes(brand.logoMediaId)) {
+      addRef(brand.logoMediaId, {
+        ownerType: "branding",
+        ownerId: brand.id,
+        field: "logo",
+        label: "Store branding (Logo)",
+        adminPath: "/settings/branding",
+      });
+    }
+    if (brand.logoDarkMediaId && mediaIds.includes(brand.logoDarkMediaId)) {
+      addRef(brand.logoDarkMediaId, {
+        ownerType: "branding",
+        ownerId: brand.id,
+        field: "logo_dark",
+        label: "Store branding (Dark Logo)",
+        adminPath: "/settings/branding",
+      });
+    }
+    if (brand.faviconMediaId && mediaIds.includes(brand.faviconMediaId)) {
+      addRef(brand.faviconMediaId, {
+        ownerType: "branding",
+        ownerId: brand.id,
+        field: "favicon",
+        label: "Store branding (Favicon)",
+        adminPath: "/settings/branding",
+      });
+    }
+    if (brand.appleTouchIconMediaId && mediaIds.includes(brand.appleTouchIconMediaId)) {
+      addRef(brand.appleTouchIconMediaId, {
+        ownerType: "branding",
+        ownerId: brand.id,
+        field: "apple_touch_icon",
+        label: "Store branding (Apple Touch Icon)",
+        adminPath: "/settings/branding",
+      });
+    }
+    if (brand.socialImageMediaId && mediaIds.includes(brand.socialImageMediaId)) {
+      addRef(brand.socialImageMediaId, {
+        ownerType: "branding",
+        ownerId: brand.id,
+        field: "social_image",
+        label: "Store branding (Social Image)",
+        adminPath: "/settings/branding",
+      });
+    }
+  }
+
+  // 2. Store status settings (maintenance/coming-soon background image)
+  const [status] = await tx
+    .select()
+    .from(schema.storeStatus)
+    .where(eq(schema.storeStatus.tenantId, tenantId))
+    .limit(1);
+
+  if (status?.backgroundMediaId && mediaIds.includes(status.backgroundMediaId)) {
+    addRef(status.backgroundMediaId, {
+      ownerType: "store_status",
+      ownerId: status.id,
+      field: "background",
+      label: "Store status (Background image)",
+      adminPath: "/settings",
+    });
+  }
+
+  // 3. SEO settings
+  const [seo] = await tx
+    .select()
+    .from(schema.seoSettings)
+    .where(eq(schema.seoSettings.tenantId, tenantId))
+    .limit(1);
+
+  if (seo?.defaultOgImageMediaId && mediaIds.includes(seo.defaultOgImageMediaId)) {
+    addRef(seo.defaultOgImageMediaId, {
+      ownerType: "seo_settings",
+      ownerId: seo.id,
+      field: "default_og_image",
+      label: "Default social share image",
+      adminPath: "/settings",
+    });
+  }
+
+  // 4. Page blocks
+  for (const mId of mediaIds) {
+    const pageMatches = await tx.execute<{ page_id: string; title: string; slug: string }>(sql`
+      SELECT pv.page_id, p.title, p.slug
+      FROM page_versions pv
+      JOIN pages p ON p.id = pv.page_id AND p.tenant_id = pv.tenant_id
+      WHERE pv.tenant_id = ${tenantId}
+        AND pv.document::text LIKE ${`%${mId}%`}
+      LIMIT 5;
+    `);
+    for (const p of pageMatches.rows ?? []) {
+      addRef(mId, {
+        ownerType: "page",
+        ownerId: p.page_id,
+        field: "document",
+        label: `Page: ${p.title || p.slug || "Custom Page"}`,
+        adminPath: `/pages/${p.page_id}`,
+      });
+    }
+  }
+
+  // 5. Theme tokens
+  for (const mId of mediaIds) {
+    const themeMatches = await tx.execute<{ id: string; name: string }>(sql`
+      SELECT t.id, t.name
+      FROM themes t
+      WHERE t.tenant_id = ${tenantId}
+        AND t.tokens::text LIKE ${`%${mId}%`}
+      LIMIT 5;
+    `);
+    for (const t of themeMatches.rows ?? []) {
+      addRef(mId, {
+        ownerType: "theme",
+        ownerId: t.id,
+        field: "tokens",
+        label: `Theme: ${t.name || "Default Theme"}`,
+        adminPath: "/themes",
+      });
+    }
+  }
+
+  return refMap;
+}
+
+/**
+ * Shared helper to resolve full MediaUsageReference labels and admin paths across both tracked media_usages
+ * and untracked references (MEDIA-LIBRARY-PLAN §7, §9, S1, B5).
+ */
+export async function resolveMediaUsageLabels(
+  tx: Parameters<Parameters<typeof withTenant>[2]>[0],
+  tenantId: string,
+  mediaIds: string[],
+): Promise<Map<string, MediaUsageReference[]>> {
+  const result = new Map<string, MediaUsageReference[]>();
+  if (mediaIds.length === 0) return result;
+
+  // 1. Fetch tracked media_usages
+  const usageRows = await tx
+    .select()
+    .from(schema.mediaUsages)
+    .where(
+      and(
+        eq(schema.mediaUsages.tenantId, tenantId),
+        inArray(schema.mediaUsages.mediaId, mediaIds),
+      ),
+    );
+
+  const productIds = usageRows.filter((u) => u.ownerType === "product").map((u) => u.ownerId);
+  const variantIds = usageRows.filter((u) => u.ownerType === "variant").map((u) => u.ownerId);
+  const collectionIds = usageRows.filter((u) => u.ownerType === "collection").map((u) => u.ownerId);
+  const categoryIds = usageRows.filter((u) => u.ownerType === "category").map((u) => u.ownerId);
+  const brandIds = usageRows.filter((u) => u.ownerType === "brand").map((u) => u.ownerId);
+
+  const [productRows, variantRows, collectionRows, categoryRows, brandRows] = await Promise.all([
+    productIds.length > 0
+      ? tx.select({ id: schema.products.id, title: schema.products.title }).from(schema.products).where(inArray(schema.products.id, productIds))
+      : [],
+    variantIds.length > 0
+      ? tx
+          .select({
+            id: schema.variants.id,
+            productId: schema.variants.productId,
+            sku: schema.variants.sku,
+            title: schema.variants.title,
+            productTitle: schema.products.title,
+          })
+          .from(schema.variants)
+          .leftJoin(schema.products, eq(schema.products.id, schema.variants.productId))
+          .where(inArray(schema.variants.id, variantIds))
+      : [],
+    collectionIds.length > 0
+      ? tx.select({ id: schema.collections.id, title: schema.collections.title }).from(schema.collections).where(inArray(schema.collections.id, collectionIds))
+      : [],
+    categoryIds.length > 0
+      ? tx.select({ id: schema.categories.id, name: schema.categories.name }).from(schema.categories).where(inArray(schema.categories.id, categoryIds))
+      : [],
+    brandIds.length > 0
+      ? tx.select({ id: schema.brands.id, name: schema.brands.name }).from(schema.brands).where(inArray(schema.brands.id, brandIds))
+      : [],
+  ]);
+
+  const productMap = new Map(productRows.map((p) => [p.id, p.title]));
+  const variantMap = new Map(variantRows.map((v) => [v.id, v]));
+  const collectionMap = new Map(collectionRows.map((c) => [c.id, c.title]));
+  const categoryMap = new Map(categoryRows.map((c) => [c.id, c.name]));
+  const brandMap = new Map(brandRows.map((b) => [b.id, b.name]));
+
+  for (const u of usageRows) {
+    const list = result.get(u.mediaId) || [];
+    if (u.ownerType === "product") {
+      list.push({
+        ownerType: "product",
+        ownerId: u.ownerId,
+        field: u.field,
+        label: productMap.get(u.ownerId) || "Product",
+        adminPath: `/products/${u.ownerId}`,
+      });
+    } else if (u.ownerType === "variant") {
+      const v = variantMap.get(u.ownerId);
+      list.push({
+        ownerType: "variant",
+        ownerId: u.ownerId,
+        field: u.field,
+        label: v ? `${v.productTitle || "Product"} (${v.title || v.sku || "Variant"})` : "Variant",
+        adminPath: v ? `/products/${v.productId}` : `/products`,
+      });
+    } else if (u.ownerType === "collection") {
+      list.push({
+        ownerType: "collection",
+        ownerId: u.ownerId,
+        field: u.field,
+        label: collectionMap.get(u.ownerId) || "Collection",
+        adminPath: `/collections/${u.ownerId}`,
+      });
+    } else if (u.ownerType === "category") {
+      list.push({
+        ownerType: "category",
+        ownerId: u.ownerId,
+        field: u.field,
+        label: categoryMap.get(u.ownerId) || "Category",
+        adminPath: `/categories/${u.ownerId}`,
+      });
+    } else if (u.ownerType === "brand") {
+      list.push({
+        ownerType: "brand",
+        ownerId: u.ownerId,
+        field: u.field,
+        label: brandMap.get(u.ownerId) || "Brand",
+        adminPath: `/brands`,
+      });
+    } else {
+      list.push({
+        ownerType: u.ownerType,
+        ownerId: u.ownerId,
+        field: u.field,
+        label: u.ownerType,
+        adminPath: `/settings/branding`,
+      });
+    }
+    result.set(u.mediaId, list);
+  }
+
+  // 2. Fetch untracked references (branding, auth settings, seo settings, page blocks, themes)
+  const untracked = await findUntrackedReferences(tx, tenantId, mediaIds);
+  for (const [mId, refs] of untracked.entries()) {
+    const list = result.get(mId) || [];
+    list.push(...refs);
+    result.set(mId, list);
+  }
+
+  return result;
+}
+
+/**
  * Get media item with full "Used in" resolution (MEDIA-LIBRARY-PLAN §7, Acceptance criteria 7).
  */
 export async function getMedia(
@@ -538,114 +898,15 @@ export async function getMedia(
         updatedAt: schema.media.updatedAt,
       })
       .from(schema.media)
-      .where(and(eq(schema.media.tenantId, ctx.tenantId), eq(schema.media.id, input.id)))
+      .where(and(eq(schema.media.tenantId, ctx.tenantId), eq(schema.media.id, input.id), libraryScope))
       .limit(1);
 
     if (!row) {
-      throw new Error(`Media not found: "${input.id}"`);
+      throw new Error(`Not Found: Media not found: "${input.id}"`);
     }
 
-    // Resolve usage references
-    const usageRows = await tx
-      .select()
-      .from(schema.mediaUsages)
-      .where(and(eq(schema.mediaUsages.tenantId, ctx.tenantId), eq(schema.mediaUsages.mediaId, input.id)));
-
-    const usages: MediaUsageReference[] = [];
-
-    // Group owner IDs to resolve labels efficiently in single batch queries
-    const productIds = usageRows.filter((u) => u.ownerType === "product").map((u) => u.ownerId);
-    const variantIds = usageRows.filter((u) => u.ownerType === "variant").map((u) => u.ownerId);
-    const collectionIds = usageRows.filter((u) => u.ownerType === "collection").map((u) => u.ownerId);
-    const categoryIds = usageRows.filter((u) => u.ownerType === "category").map((u) => u.ownerId);
-    const brandIds = usageRows.filter((u) => u.ownerType === "brand").map((u) => u.ownerId);
-
-    const [productRows, variantRows, collectionRows, categoryRows, brandRows] = await Promise.all([
-      productIds.length > 0
-        ? tx.select({ id: schema.products.id, title: schema.products.title }).from(schema.products).where(inArray(schema.products.id, productIds))
-        : [],
-      variantIds.length > 0
-        ? tx
-            .select({
-              id: schema.variants.id,
-              productId: schema.variants.productId,
-              sku: schema.variants.sku,
-              title: schema.variants.title,
-              productTitle: schema.products.title,
-            })
-            .from(schema.variants)
-            .leftJoin(schema.products, eq(schema.products.id, schema.variants.productId))
-            .where(inArray(schema.variants.id, variantIds))
-        : [],
-      collectionIds.length > 0
-        ? tx.select({ id: schema.collections.id, title: schema.collections.title }).from(schema.collections).where(inArray(schema.collections.id, collectionIds))
-        : [],
-      categoryIds.length > 0
-        ? tx.select({ id: schema.categories.id, name: schema.categories.name }).from(schema.categories).where(inArray(schema.categories.id, categoryIds))
-        : [],
-      brandIds.length > 0
-        ? tx.select({ id: schema.brands.id, name: schema.brands.name }).from(schema.brands).where(inArray(schema.brands.id, brandIds))
-        : [],
-    ]);
-
-    const productMap = new Map(productRows.map((p) => [p.id, p.title]));
-    const variantMap = new Map(variantRows.map((v) => [v.id, v]));
-    const collectionMap = new Map(collectionRows.map((c) => [c.id, c.title]));
-    const categoryMap = new Map(categoryRows.map((c) => [c.id, c.name]));
-    const brandMap = new Map(brandRows.map((b) => [b.id, b.name]));
-
-    for (const u of usageRows) {
-      if (u.ownerType === "product") {
-        usages.push({
-          ownerType: "product",
-          ownerId: u.ownerId,
-          field: u.field,
-          label: productMap.get(u.ownerId) || "Product",
-          adminPath: `/products/${u.ownerId}`,
-        });
-      } else if (u.ownerType === "variant") {
-        const v = variantMap.get(u.ownerId);
-        usages.push({
-          ownerType: "variant",
-          ownerId: u.ownerId,
-          field: u.field,
-          label: v ? `${v.productTitle || "Product"} (${v.title || v.sku || "Variant"})` : "Variant",
-          adminPath: v ? `/products/${v.productId}` : `/products`,
-        });
-      } else if (u.ownerType === "collection") {
-        usages.push({
-          ownerType: "collection",
-          ownerId: u.ownerId,
-          field: u.field,
-          label: collectionMap.get(u.ownerId) || "Collection",
-          adminPath: `/collections/${u.ownerId}`,
-        });
-      } else if (u.ownerType === "category") {
-        usages.push({
-          ownerType: "category",
-          ownerId: u.ownerId,
-          field: u.field,
-          label: categoryMap.get(u.ownerId) || "Category",
-          adminPath: `/categories/${u.ownerId}`,
-        });
-      } else if (u.ownerType === "brand") {
-        usages.push({
-          ownerType: "brand",
-          ownerId: u.ownerId,
-          field: u.field,
-          label: brandMap.get(u.ownerId) || "Brand",
-          adminPath: `/brands`,
-        });
-      } else {
-        usages.push({
-          ownerType: u.ownerType,
-          ownerId: u.ownerId,
-          field: u.field,
-          label: u.ownerType,
-          adminPath: `/settings/branding`,
-        });
-      }
-    }
+    const usagesMap = await resolveMediaUsageLabels(tx, ctx.tenantId, [input.id]);
+    const usages = usagesMap.get(input.id) || [];
 
     const activeConn = await resolveStorageConnection(db, "public_media");
     const url = (await resolvePublicMediaUrl(db, row.storageKey, row.storageConnectionId)) || "";
@@ -739,6 +1000,28 @@ export async function createMediaRecord(
   input: CreateMediaInput,
 ) {
   assertPermission(ctx, "content.write");
+
+  // Validate client-provided storage key (fixes B2)
+  const { folder } = validateClientStorageKey(ctx.tenantId, input.storageKey);
+
+  // Ensure key doesn't already exist before making any storage calls
+  await withTenant(rt._db.db, ctx.tenantId, async (tx) => {
+    const [existing] = await tx
+      .select({ id: schema.media.id })
+      .from(schema.media)
+      .where(
+        and(
+          eq(schema.media.tenantId, ctx.tenantId),
+          eq(schema.media.storageKey, input.storageKey),
+        ),
+      )
+      .limit(1);
+
+    if (existing) {
+      throw new Error(`Bad Request: Storage key "${input.storageKey}" already registered in library`);
+    }
+  });
+
   return await finalizeUpload(rt, ctx, {
     storageKey: input.storageKey,
     declaredMime: input.mime,
@@ -747,7 +1030,7 @@ export async function createMediaRecord(
     title: input.title,
     alt: input.alt,
     caption: input.caption,
-    folder: input.folder,
+    folder: input.folder || folder,
     durationMs: input.durationMs,
     cfImageId: input.cfImageId,
   });
@@ -780,6 +1063,11 @@ export async function uploadMediaDirect(
     throw new Error(`Unsupported media format: "${input.mime}"`);
   }
 
+  const folder = input.folder || "products";
+  if ((PRIVATE_MEDIA_FOLDERS as readonly string[]).includes(folder)) {
+    throw new Error(`Bad Request: Uploading directly to private folder "${folder}" is restricted`);
+  }
+
   const kind = getMediaKind(normMime) || "image";
   await assertMediaUploadQuota(rt._db.db, ctx.tenantId, {
     kind,
@@ -789,7 +1077,7 @@ export async function uploadMediaDirect(
   const { driver } = await getActiveStorageDriver(rt._db.db, "public_media");
   const { storageKey } = generateStorageKey(
     ctx.tenantId,
-    input.folder || "products",
+    folder,
     input.filename,
   );
 
@@ -807,7 +1095,7 @@ export async function uploadMediaDirect(
     title: input.title,
     alt: input.alt,
     caption: input.caption,
-    folder: input.folder,
+    folder,
     durationMs: input.durationMs,
     directBuffer: input.fileBytes,
   });
@@ -824,15 +1112,15 @@ export async function updateMedia(
   assertPermission(ctx, "content.write");
   const db = rt._db.db;
 
-  const row = await withTenant(db, ctx.tenantId, async (tx) => {
+  const { row, usageCount } = await withTenant(db, ctx.tenantId, async (tx) => {
     const [existing] = await tx
       .select()
       .from(schema.media)
-      .where(and(eq(schema.media.tenantId, ctx.tenantId), eq(schema.media.id, input.id)))
+      .where(and(eq(schema.media.tenantId, ctx.tenantId), eq(schema.media.id, input.id), libraryScope))
       .limit(1);
 
     if (!existing) {
-      throw new Error(`Media not found: "${input.id}"`);
+      throw new Error(`Not Found: Media not found: "${input.id}"`);
     }
 
     const setVals: Record<string, unknown> = {
@@ -845,7 +1133,7 @@ export async function updateMedia(
     const [updated] = await tx
       .update(schema.media)
       .set(setVals)
-      .where(and(eq(schema.media.tenantId, ctx.tenantId), eq(schema.media.id, input.id)))
+      .where(and(eq(schema.media.tenantId, ctx.tenantId), eq(schema.media.id, input.id), libraryScope))
       .returning();
 
     if (!updated) throw new Error("Failed to update media");
@@ -863,7 +1151,12 @@ export async function updateMedia(
       },
     });
 
-    return updated;
+    const [usageRes] = await tx
+      .select({ count: sql<number>`count(*)::int` })
+      .from(schema.mediaUsages)
+      .where(and(eq(schema.mediaUsages.tenantId, ctx.tenantId), eq(schema.mediaUsages.mediaId, input.id)));
+
+    return { row: updated, usageCount: usageRes?.count ?? 0 };
   });
 
   await invalidateCache(rt, ctx, { type: "media_updated" });
@@ -888,7 +1181,7 @@ export async function updateMedia(
     thumbnailUrl,
     status: row.status as "ready" | "trashed",
     trashedAt: row.trashedAt ? row.trashedAt.toISOString() : null,
-    usageCount: 0,
+    usageCount,
     uploadedBy: row.uploadedBy,
     createdAt: row.createdAt.toISOString(),
     updatedAt: row.updatedAt.toISOString(),
@@ -944,18 +1237,20 @@ export async function trashMedia(
           eq(schema.media.tenantId, ctx.tenantId),
           inArray(schema.media.id, uniqueIds),
           ne(schema.media.status, "trashed"),
+          libraryScope,
         ),
       )
       .returning({ id: schema.media.id });
 
-    if (updated.length > 0) {
+    const firstUpdated = updated[0];
+    if (firstUpdated) {
       await tx.insert(schema.auditLogs).values({
         tenantId: ctx.tenantId,
         actorType: ctx.actor.type,
         actorId: ctx.actor.type === "staff" ? ctx.actor.userId : null,
         action: "media.trash",
         targetType: "media",
-        targetId: updated[0]!.id,
+        targetId: firstUpdated.id,
         diff: {
           trashedIds: updated.map((r) => r.id),
           trashedCount: updated.length,
@@ -1001,18 +1296,20 @@ export async function restoreMedia(
           eq(schema.media.tenantId, ctx.tenantId),
           inArray(schema.media.id, uniqueIds),
           eq(schema.media.status, "trashed"),
+          libraryScope,
         ),
       )
       .returning({ id: schema.media.id });
 
-    if (updated.length > 0) {
+    const firstRestored = updated[0];
+    if (firstRestored) {
       await tx.insert(schema.auditLogs).values({
         tenantId: ctx.tenantId,
         actorType: ctx.actor.type,
         actorId: ctx.actor.type === "staff" ? ctx.actor.userId : null,
         action: "media.restore",
         targetType: "media",
-        targetId: updated[0]!.id,
+        targetId: firstRestored.id,
         diff: {
           restoredIds: updated.map((r) => r.id),
           restoredCount: updated.length,
@@ -1028,8 +1325,8 @@ export async function restoreMedia(
 }
 
 /**
- * Permanently deletes trashed media files. Refuses items that still have usages (fixes L2).
- * Enqueues storage purge in the same business transaction (fixes L3, rule 13).
+ * Permanently deletes trashed media files. Refuses items that still have usages (fixes L2, B5).
+ * Enqueues storage purge in the same business transaction (fixes L3, rule 13, B4).
  */
 export async function deleteMediaPermanent(
   rt: Runtime,
@@ -1045,7 +1342,7 @@ export async function deleteMediaPermanent(
   if (uniqueIds.length === 0) return { deleted: 0, blocked: [] };
 
   const result = await withTenant(db, ctx.tenantId, async (tx) => {
-    // 1. Fetch target items (must be trashed)
+    // 1. Fetch target items (must be trashed and in libraryScope)
     const targetRows = await tx
       .select({
         id: schema.media.id,
@@ -1058,6 +1355,7 @@ export async function deleteMediaPermanent(
           eq(schema.media.tenantId, ctx.tenantId),
           inArray(schema.media.id, uniqueIds),
           eq(schema.media.status, "trashed"),
+          libraryScope,
         ),
       );
 
@@ -1067,48 +1365,18 @@ export async function deleteMediaPermanent(
 
     const targetRowIds = targetRows.map((r) => r.id);
 
-    // 2. Fetch usages for all target rows
-    const usageRows = await tx
-      .select()
-      .from(schema.mediaUsages)
-      .where(
-        and(
-          eq(schema.mediaUsages.tenantId, ctx.tenantId),
-          inArray(schema.mediaUsages.mediaId, targetRowIds),
-        ),
-      );
-
-    const blockedMap = new Map<string, typeof usageRows>();
-    for (const u of usageRows) {
-      const arr = blockedMap.get(u.mediaId) || [];
-      arr.push(u);
-      blockedMap.set(u.mediaId, arr);
-    }
+    // 2. Resolve usages across tracked media_usages and untracked references (B5, S1)
+    const usagesMap = await resolveMediaUsageLabels(tx, ctx.tenantId, targetRowIds);
 
     const blocked: { id: string; usages: MediaUsageReference[] }[] = [];
-    const allowedRows = targetRows.filter((r) => !blockedMap.has(r.id));
+    const allowedRows: typeof targetRows = [];
 
-    // Resolve labels for blocked items
-    if (usageRows.length > 0) {
-      const productIds = usageRows.filter((u) => u.ownerType === "product").map((u) => u.ownerId);
-      const [products] = await Promise.all([
-        productIds.length > 0
-          ? tx.select({ id: schema.products.id, title: schema.products.title }).from(schema.products).where(inArray(schema.products.id, productIds))
-          : [],
-      ]);
-      const productMap = new Map(products.map((p) => [p.id, p.title]));
-
-      for (const [mediaId, uList] of blockedMap.entries()) {
-        blocked.push({
-          id: mediaId,
-          usages: uList.map((u) => ({
-            ownerType: u.ownerType,
-            ownerId: u.ownerId,
-            field: u.field,
-            label: productMap.get(u.ownerId) || u.ownerType,
-            adminPath: u.ownerType === "product" ? `/products/${u.ownerId}` : "#",
-          })),
-        });
+    for (const r of targetRows) {
+      const uList = usagesMap.get(r.id);
+      if (uList && uList.length > 0) {
+        blocked.push({ id: r.id, usages: uList });
+      } else {
+        allowedRows.push(r);
       }
     }
 
@@ -1124,36 +1392,32 @@ export async function deleteMediaPermanent(
       .where(and(eq(schema.media.tenantId, ctx.tenantId), inArray(schema.media.id, allowedIds)));
 
     // 4. Write audit log
-    await tx.insert(schema.auditLogs).values({
-      tenantId: ctx.tenantId,
-      actorType: ctx.actor.type,
-      actorId: ctx.actor.type === "staff" ? ctx.actor.userId : null,
-      action: "media.delete",
-      targetType: "media",
-      targetId: allowedIds[0]!,
-      diff: {
-        deletedIds: allowedIds,
-        deletedCount: allowedIds.length,
-      },
-    });
+    const firstAllowed = allowedRows[0];
+    if (firstAllowed) {
+      await tx.insert(schema.auditLogs).values({
+        tenantId: ctx.tenantId,
+        actorType: ctx.actor.type,
+        actorId: ctx.actor.type === "staff" ? ctx.actor.userId : null,
+        action: "media.delete",
+        targetType: "media",
+        targetId: firstAllowed.id,
+        diff: {
+          deletedIds: allowedIds,
+          deletedCount: allowedIds.length,
+        },
+      });
+    }
 
     const objectsToPurge = allowedRows.map((r) => ({
       storageKey: r.storageKey,
       storageConnectionId: r.storageConnectionId,
     }));
 
-    // 5. Enqueue media.purge job inside business transaction or dispatch directly
+    // 5. Enqueue media.purge job inside business transaction (Rule 13, B4)
     if (rt._jobs) {
       await rt._jobs.send("media.purge", {
         tenantId: ctx.tenantId,
         objects: objectsToPurge,
-      });
-    } else {
-      await purgeMediaObjects(tx, {
-        tenantId: ctx.tenantId,
-        objects: objectsToPurge,
-      }).catch((err) => {
-        console.error("[storage] Direct purge error:", err);
       });
     }
 
@@ -1178,7 +1442,7 @@ export async function deleteMediaRecord(
 }
 
 /**
- * Domain helper to keep media_usages synchronized for an owner and field (MEDIA-LIBRARY-PLAN §5.2).
+ * Domain helper to keep media_usages synchronized for an owner and field (MEDIA-LIBRARY-PLAN §5.2, B6).
  * Replaces the usage records for one (ownerType, ownerId, field) set with given media IDs.
  */
 export async function syncMediaUsages(
@@ -1205,6 +1469,27 @@ export async function syncMediaUsages(
     );
 
   if (validIds.length === 0) return;
+
+  // Validate tenant ownership and reject private folders (B6, B1)
+  const existing = await tx
+    .select({ id: schema.media.id, folder: schema.media.folder })
+    .from(schema.media)
+    .where(
+      and(
+        eq(schema.media.tenantId, ctx.tenantId),
+        inArray(schema.media.id, validIds),
+      ),
+    );
+
+  if (existing.length !== validIds.length) {
+    throw new Error("Bad Request: One or more media items do not exist in tenant's media library");
+  }
+
+  for (const item of existing) {
+    if (item.folder && (PRIVATE_MEDIA_FOLDERS as readonly string[]).includes(item.folder)) {
+      throw new Error(`Bad Request: Media item "${item.id}" is in a private folder and cannot be used in public entities`);
+    }
+  }
 
   await tx.insert(schema.mediaUsages).values(
     validIds.map((mediaId) => ({
@@ -1272,89 +1557,123 @@ export async function purgeMediaObjects(
 }
 
 /**
- * Trash sweep job: permanently deletes items trashed > 30 days ago that have NO usages (MEDIA-LIBRARY-PLAN §8).
+ * Trash sweep job: permanently deletes items trashed > 30 days ago that have NO usages (MEDIA-LIBRARY-PLAN §8, B4).
  */
 export async function runMediaTrashSweep(
   db: Db,
   tenantId?: string,
+  jobs?: { send: (name: string, payload: unknown) => Promise<unknown> } | null,
 ): Promise<{ sweptTenants: number; deletedCount: number }> {
-  // Find candidates across tenants (or single tenant)
-  const conditions = [
-    sql`m.status = 'trashed'`,
-    sql`m.trashed_at < (now() - INTERVAL '30 days')`,
-    sql`NOT EXISTS (
-      SELECT 1 FROM media_usages mu
-      WHERE mu.tenant_id = m.tenant_id AND mu.media_id = m.id
-    )`,
-  ];
+  // 1. Determine target tenants (operates across tenants inside withTenant, B4)
+  const targetTenantIds: string[] = tenantId
+    ? [tenantId]
+    : (await db.select({ id: schema.tenants.id }).from(schema.tenants)).map((t) => t.id);
 
-  if (tenantId) {
-    conditions.push(sql`m.tenant_id = ${tenantId}`);
-  }
-
-  const query = sql`
-    SELECT id, tenant_id, storage_key, storage_connection_id
-    FROM media m
-    WHERE ${sql.join(conditions, sql` AND `)}
-  `;
-
-  interface SweepCandidateRow {
-    id: string;
-    tenant_id: string;
-    storage_key: string;
-    storage_connection_id: string | null;
-  }
-
-  const candidatesRes = (await db.execute(query)) as unknown as {
-    rows?: SweepCandidateRow[];
-  };
-
-  const rawRows = Array.isArray(candidatesRes) ? candidatesRes : (candidatesRes?.rows ?? []);
-  const candidates = rawRows as SweepCandidateRow[];
-  if (candidates.length === 0) {
-    return { sweptTenants: 0, deletedCount: 0 };
-  }
-
-  // Group by tenant
-  const byTenant = new Map<string, SweepCandidateRow[]>();
-  for (const c of candidates) {
-    const list = byTenant.get(c.tenant_id) || [];
-    list.push(c);
-    byTenant.set(c.tenant_id, list);
-  }
-
+  let sweptTenants = 0;
   let totalDeleted = 0;
 
-  for (const [tId, rows] of byTenant.entries()) {
-    const rowIds = rows.map((r: SweepCandidateRow) => r.id);
-    const objects = rows.map((r: SweepCandidateRow) => ({
-      storageKey: r.storage_key,
-      storageConnectionId: r.storage_connection_id,
-    }));
+  type SweepRow = {
+    id: string;
+    storage_key: string;
+    storage_connection_id: string | null;
+    [key: string]: unknown;
+  };
 
-    await withTenant(db, tId, async (tx) => {
-      await tx.delete(schema.media).where(inArray(schema.media.id, rowIds));
+  for (const tId of targetTenantIds) {
+    const deletedForTenant = await withTenant(db, tId, async (tx) => {
+      // 2. Select candidates older than 30 days, trashed, within libraryScope, and no tracked media_usages
+      const candidateRes = await tx.execute<SweepRow>(sql`
+        SELECT m.id, m.storage_key, m.storage_connection_id
+        FROM media m
+        WHERE m.tenant_id = ${tId}
+          AND m.status = 'trashed'
+          AND m.trashed_at < now() - interval '30 days'
+          AND (m.folder IS NULL OR m.folder NOT IN ('returns', 'expense-receipts'))
+          AND NOT EXISTS (
+            SELECT 1 FROM media_usages mu
+            WHERE mu.tenant_id = m.tenant_id
+              AND mu.media_id = m.id
+          )
+      `);
+      const candidates = (candidateRes.rows ?? []) as SweepRow[];
+      if (candidates.length === 0) return [];
 
-      await tx.insert(schema.auditLogs).values({
-        tenantId: tId,
-        actorType: "system",
-        actorId: "00000000-0000-0000-0000-000000000000",
-        action: "media.trash_sweep",
-        targetType: "media",
-        targetId: rowIds[0]!,
-        diff: {
-          deletedCount: rowIds.length,
-          deletedIds: rowIds,
-        },
-      });
+      const candidateIds = candidates.map((c) => c.id);
 
-      await purgeMediaObjects(tx, { tenantId: tId, objects });
+      // Check untracked references (B5)
+      const untracked = await findUntrackedReferences(tx, tId, candidateIds);
+      const safeToDeleteCandidates = candidates.filter((c) => !untracked.has(c.id));
+      if (safeToDeleteCandidates.length === 0) return [];
+
+      const safeIds = safeToDeleteCandidates.map((c) => c.id);
+
+      // 3. Atomically delete with RETURNING, re-checking conditions (B4)
+      const deletedRows = await tx
+        .delete(schema.media)
+        .where(
+          and(
+            eq(schema.media.tenantId, tId),
+            inArray(schema.media.id, safeIds),
+            eq(schema.media.status, "trashed"),
+            lt(schema.media.trashedAt, sql`now() - interval '30 days'`),
+            sql`(${schema.media.folder} IS NULL OR ${schema.media.folder} NOT IN ('returns', 'expense-receipts'))`,
+            sql`NOT EXISTS (
+              SELECT 1 FROM media_usages mu
+              WHERE mu.tenant_id = ${schema.media.tenantId}
+                AND mu.media_id = ${schema.media.id}
+            )`,
+          ),
+        )
+        .returning({
+          id: schema.media.id,
+          storage_key: schema.media.storageKey,
+          storage_connection_id: schema.media.storageConnectionId,
+        });
+
+      if (deletedRows.length === 0) return [];
+
+      const deletedIds = deletedRows.map((r) => r.id);
+
+      // 4. Audit log with actorType: "system", actorId: null (B4)
+      const firstDeleted = deletedRows[0];
+      if (firstDeleted) {
+        await tx.insert(schema.auditLogs).values({
+          tenantId: tId,
+          actorType: "system",
+          actorId: null,
+          action: "media.trash_sweep",
+          targetType: "media",
+          targetId: firstDeleted.id,
+          diff: {
+            deletedCount: deletedRows.length,
+            deletedIds,
+          },
+        });
+      }
+
+      return deletedRows;
     });
 
-    totalDeleted += rowIds.length;
+    if (deletedForTenant.length > 0) {
+      sweptTenants++;
+      totalDeleted += deletedForTenant.length;
+
+      // 5. Purge after commit by enqueueing media.purge (Rule 13, B4)
+      const objects = deletedForTenant.map((r) => ({
+        storageKey: r.storage_key,
+        storageConnectionId: r.storage_connection_id,
+      }));
+
+      if (jobs) {
+        await jobs.send("media.purge", {
+          tenantId: tId,
+          objects,
+        });
+      }
+    }
   }
 
-  return { sweptTenants: byTenant.size, deletedCount: totalDeleted };
+  return { sweptTenants, deletedCount: totalDeleted };
 }
 
 /**

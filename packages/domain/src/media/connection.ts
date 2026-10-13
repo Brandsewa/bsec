@@ -63,6 +63,8 @@ export interface MediaStorageDriver {
 
   get(key: string): Promise<Buffer | null>;
 
+  getRange?(key: string, start: number, end: number): Promise<Buffer | null>;
+
   delete(key: string): Promise<void>;
 
   publicUrl(key: string): string | undefined;
@@ -276,6 +278,26 @@ export class LocalStorageDriver implements MediaStorageDriver {
     }
   }
 
+  async getRange(key: string, start: number, end: number): Promise<Buffer | null> {
+    try {
+      const targetPath = resolveSafeLocalPath(this.baseDir, key);
+      const fd = await fs.promises.open(targetPath, "r");
+      try {
+        const length = end - start + 1;
+        const buffer = Buffer.alloc(length);
+        const { bytesRead } = await fd.read(buffer, 0, length, start);
+        return buffer.subarray(0, bytesRead);
+      } finally {
+        await fd.close();
+      }
+    } catch (err: unknown) {
+      if ((err as NodeJS.ErrnoException).code === "ENOENT") {
+        return null;
+      }
+      throw err;
+    }
+  }
+
   async delete(key: string): Promise<void> {
     try {
       const targetPath = resolveSafeLocalPath(this.baseDir, key);
@@ -292,7 +314,7 @@ export class LocalStorageDriver implements MediaStorageDriver {
     if (!key) return undefined;
     const clean = key.replace(/^[/\\]+/, "").replace(/\\/g, "/");
     const base = this.config.publicBaseUrl?.trim().replace(/\/+$/, "");
-    return base ? `${base}/media/${clean}` : `/media/${clean}`;
+    return base ? `${base}/${clean}` : `/media/${clean}`;
   }
 
   async presignDownload(key: string): Promise<string> {
@@ -382,6 +404,7 @@ export class S3StorageDriver implements MediaStorageDriver {
       Bucket: this.bucket,
       Key: storageKey,
       ContentType: params.mime,
+      ContentLength: params.bytes,
     });
 
     const uploadUrl = await getSignedUrl(this.client, command, { expiresIn });
@@ -436,6 +459,27 @@ export class S3StorageDriver implements MediaStorageDriver {
         new GetObjectCommand({
           Bucket: this.bucket,
           Key: key,
+        }),
+      );
+      if (!res.Body) return null;
+      const bytes = await res.Body.transformToByteArray();
+      return Buffer.from(bytes);
+    } catch (err: unknown) {
+      const name = (err as { name?: string }).name;
+      if (name === "NotFound" || name === "NoSuchKey") {
+        return null;
+      }
+      throw err;
+    }
+  }
+
+  async getRange(key: string, start: number, end: number): Promise<Buffer | null> {
+    try {
+      const res = await this.client.send(
+        new GetObjectCommand({
+          Bucket: this.bucket,
+          Key: key,
+          Range: `bytes=${start}-${end}`,
         }),
       );
       if (!res.Body) return null;

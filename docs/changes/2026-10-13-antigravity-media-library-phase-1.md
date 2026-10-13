@@ -6,6 +6,7 @@
 - **Area:** db, domain, contracts, admin, worker, docs
 - **Type:** feature
 - **Supersedes:** none
+- **Superseded by:** `2026-10-13-antigravity-media-library-phase-1-fixes.md`
 
 ## Summary
 Implements Phase 1 of the multi-tenant Media Library for Online Store > Media according to `docs/MEDIA-LIBRARY-PLAN.md` and `docs/prompts/media-library-phase-1.md`. Adds schema and migrations for media metadata, tracking usages via a tenant-isolated `media_usages` table, per-kind upload quota checks (images 5 MB, videos 10 MB, documents 5 MB) linked to plan quotas, trash and restore lifecycle with a 30-day scheduled purge worker job, HeadObject real byte verification at upload finalization, magic-byte format validation refusing SVGs and disguised files, and a rich, accessible Admin UI with Grid and Table views, search, kind and usage filters, upload queue with progress and error handling, detail sheet, and storage gauge.

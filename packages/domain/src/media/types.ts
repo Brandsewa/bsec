@@ -2,6 +2,9 @@ import type { AllowedMediaType, MediaKind } from "@bs/contracts";
 
 export type { AllowedMediaType, MediaKind };
 
+export const PRIVATE_MEDIA_FOLDERS = ["returns", "expense-receipts"] as const;
+export type PrivateMediaFolder = (typeof PRIVATE_MEDIA_FOLDERS)[number];
+
 export interface MediaTypeDefinition extends AllowedMediaType {
   verifyMagicBytes: (buffer: Uint8Array, filename?: string) => boolean;
 }
@@ -281,7 +284,7 @@ export function verifyMediaMagicBytes(
   if (!ok) {
     return {
       valid: false,
-      error: `File content does not match declared MIME type: "${mime}"`,
+      error: `File content does not match declared MIME type: "${mime}" (not a recognized image format or does not match file contents)`,
     };
   }
 

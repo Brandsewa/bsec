@@ -3,7 +3,7 @@
 Source of truth: `docs/PLAN.html` v2.0 (build order in `docs/BUILD-PLAN-M2-M9.md`). Items are ticked only after verification; the evidence is noted next to each. "From code" means it was read in the repo but not exercised live.
 
 ## In flight
-- Antigravity · feat/media-library-phase-1 · media library · 2026-10-13 · [Ready for Claude verification] Phase 1: Online Store > Media (grid + table, trash, usages, per-kind plan quotas).
+- Antigravity · feat/media-library-phase-1 · media library · 2026-10-13 · [Ready for Claude re-verification] Phase 1 fixes: private folder isolation (B1), client storage key validation & uniq index (B2), streaming head/quota check (B3), multi-tenant trash sweep under app_rw (B4), untracked system refs check (B5), usage sync tenant validation (B6).
 
 ## M11 · Auth & Transactional Email Overhaul (docs/AUTH-OVERHAUL-PLAN.md)
 
