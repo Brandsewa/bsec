@@ -84,3 +84,20 @@ pnpm scaffold:admin-procedure <area> <name>
 # Write files directly to disk:
 pnpm scaffold:admin-procedure orders archive-order --write
 ```
+
+---
+
+## 6. End-to-End Browser Testing (`@bs/e2e`)
+
+Playwright tests run against a running stack (staging docker compose or local dev servers).
+Media Library Phase 4 introduces un-mocked verification (`e2e/media-library.spec.ts`) using local filesystem storage.
+
+```bash
+# Run against running stack (ports 8080 and 3000):
+pnpm --filter @bs/e2e exec playwright test media-library.spec.ts
+
+# With local Google Chrome:
+E2E_CHROME=1 pnpm --filter @bs/e2e exec playwright test media-library.spec.ts
+```
+
+For setup and fixture generation details, see `e2e/README.md`.
