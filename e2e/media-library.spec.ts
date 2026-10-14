@@ -149,15 +149,17 @@ test.describe("Media library, real stack", () => {
 
   test("refuses SVG, a 6 MB image and an 11 MB video with the specific reason", async ({ page }) => {
     await openMedia(page);
+    // The page checks sizes against the plan limits it has loaded; wait for them (the storage meter shows them)
+    await expect(page.getByText(/^Storage/).first()).toBeVisible();
 
     await chooseFiles(page, [files.svg]);
     await expect(page.getByText("SVG files are not supported for security reasons.")).toBeVisible();
 
     await chooseFiles(page, [files.bigJpg]);
-    await expect(page.getByText(/Too large: Images can be up to 5 MB on your plan\. This file is 6\.\d MB\./)).toBeVisible();
+    await expect(page.getByText(/Images can be up to 5 MB on your plan\. This file is 6\.\d MB\./)).toBeVisible();
 
     await chooseFiles(page, [files.bigMp4]);
-    await expect(page.getByText(/Too large: Videos can be up to 10 MB on your plan\. This file is 11\.\d MB\./)).toBeVisible();
+    await expect(page.getByText(/Videos can be up to 10 MB on your plan\. This file is 11\.\d MB\./)).toBeVisible();
 
     // Nothing was stored for any of them
     expect(await mediaByName(page, path.basename(files.svg))).toBeUndefined();

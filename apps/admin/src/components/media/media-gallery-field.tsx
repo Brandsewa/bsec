@@ -108,7 +108,7 @@ function SortableGalleryTile({
       ref={setNodeRef}
       style={style}
       className={cn(
-        "group relative aspect-square rounded-lg border bg-card overflow-hidden flex flex-col justify-between transition-shadow",
+        "group relative aspect-square rounded-lg border border-border bg-card overflow-hidden flex flex-col justify-between transition-shadow",
         isDragging && "z-50 opacity-80 shadow-lg ring-2 ring-primary",
         isPrimary && "ring-2 ring-primary/80 border-primary",
       )}
@@ -201,7 +201,7 @@ function SortableGalleryTile({
 
       {/* Alt text indicator banner if set */}
       {Boolean(item.alt) && (
-        <div className="absolute bottom-0 inset-x-0 bg-background/90 backdrop-blur-xs px-2 py-0.5 border-t text-[10px] text-muted-foreground truncate font-mono">
+        <div className="absolute bottom-0 inset-x-0 bg-background/90 backdrop-blur-xs px-2 py-0.5 border-t border-border/60 text-[10px] text-muted-foreground truncate font-mono">
           Alt: {item.alt}
         </div>
       )}
@@ -410,7 +410,7 @@ export function MediaGalleryField({
                 <button
                   type="button"
                   onClick={() => setPickerOpen(true)}
-                  className="aspect-square rounded-lg border-2 border-dashed border-muted-foreground/25 hover:border-primary/50 hover:bg-muted/10 transition-colors flex flex-col items-center justify-center gap-2 text-muted-foreground hover:text-foreground cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
+                  className="aspect-square rounded-lg border-2 border-dashed border-muted-foreground/25 hover:border-foreground/30 hover:bg-muted/10 transition-colors flex flex-col items-center justify-center gap-2 text-muted-foreground hover:text-foreground cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
                 >
                   <div className="h-9 w-9 rounded-full bg-muted/50 flex items-center justify-center">
                     <Plus className="h-5 w-5" />

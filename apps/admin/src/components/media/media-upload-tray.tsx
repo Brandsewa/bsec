@@ -47,9 +47,9 @@ export function MediaUploadTray() {
   return (
     <aside
       aria-label="Upload progress"
-      className="fixed bottom-4 right-4 z-50 w-80 sm:w-96 rounded-lg border bg-card text-card-foreground shadow-2xl overflow-hidden"
+      className="fixed bottom-4 right-4 z-50 w-80 sm:w-96 rounded-lg border border-border bg-card text-card-foreground shadow-2xl overflow-hidden"
     >
-      <header className="flex items-center justify-between border-b bg-muted/60 px-3 py-2 text-sm font-medium">
+      <header className="flex items-center justify-between border-b border-border/60 bg-muted/60 px-4 py-3 text-sm font-medium">
         <div className="flex items-center gap-2 truncate">
           <span>
             {activeCount > 0
@@ -88,13 +88,13 @@ export function MediaUploadTray() {
       </header>
 
       {!minimized && (
-        <ul className="max-h-72 divide-y overflow-y-auto p-0 m-0 list-none">
+        <ul className="max-h-72 divide-y divide-border/60 overflow-y-auto p-0 m-0 list-none">
           {items.map((item) => {
             const isImage = item.file.type.startsWith("image/");
             const isVideo = item.file.type.startsWith("video/");
 
             return (
-              <li key={item.id} className="p-3 text-xs space-y-1.5 hover:bg-muted/30">
+              <li key={item.id} className="p-4 text-xs space-y-1.5 hover:bg-muted/30">
                 <div className="flex items-center justify-between gap-2">
                   <div className="flex items-center gap-2 min-w-0">
                     {isImage ? (

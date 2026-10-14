@@ -235,7 +235,7 @@ function MediaDetailContent({
   return (
     <div className="space-y-6 flex-1">
       {/* Preview Section */}
-      <div className="rounded-lg border bg-muted/20 p-2 overflow-hidden flex items-center justify-center min-h-[200px] max-h-[320px]">
+      <div className="rounded-lg border border-border bg-muted/20 p-2 overflow-hidden flex items-center justify-center min-h-[200px] max-h-[320px]">
         {item.kind === "image" && (
           <div
             className="relative inline-block cursor-crosshair select-none max-h-[300px]"
@@ -322,7 +322,7 @@ function MediaDetailContent({
                   ? "image/jpeg,image/png,image/webp,image/gif,image/avif"
                   : item.kind === "video"
                     ? "video/mp4,video/webm,video/quicktime"
-                    : ".pdf,.csv,.txt"
+                    : ".pdf,.csv,.txt,.docx,.xlsx,.pptx"
               }
             />
             <Button
@@ -374,9 +374,9 @@ function MediaDetailContent({
 
       {/* Focal Point & Crop Previews */}
       {item.kind === "image" && (
-        <div className="space-y-3 rounded-lg border p-4 bg-card">
-          <div className="flex items-center justify-between">
-            <div>
+        <div className="space-y-4 rounded-lg border border-border p-5 bg-card">
+          <div className="flex flex-wrap items-start justify-between gap-3">
+            <div className="min-w-0 flex-1 basis-56">
               <h4 className="text-sm font-semibold text-foreground">Focal point & crop previews</h4>
               <p className="text-xs text-muted-foreground">
                 Click image above to set focal point. Controls crop positioning across devices.
@@ -425,10 +425,10 @@ function MediaDetailContent({
             )}
           </div>
 
-          <div className="grid grid-cols-3 gap-3 pt-1">
+          <div className="grid grid-cols-3 items-start gap-4 pt-1">
             <div className="space-y-1">
               <span className="text-[11px] font-medium text-muted-foreground">1:1 Square</span>
-              <div className="aspect-square w-full overflow-hidden rounded border bg-muted/30">
+              <div className="aspect-square w-full overflow-hidden rounded border border-border bg-muted/30">
                 <img
                   src={item.url}
                   alt="1:1 crop preview"
@@ -441,7 +441,7 @@ function MediaDetailContent({
             </div>
             <div className="space-y-1">
               <span className="text-[11px] font-medium text-muted-foreground">4:5 Card</span>
-              <div className="aspect-[4/5] w-full overflow-hidden rounded border bg-muted/30">
+              <div className="aspect-[4/5] w-full overflow-hidden rounded border border-border bg-muted/30">
                 <img
                   src={item.url}
                   alt="4:5 crop preview"
@@ -454,7 +454,7 @@ function MediaDetailContent({
             </div>
             <div className="space-y-1">
               <span className="text-[11px] font-medium text-muted-foreground">16:9 Hero</span>
-              <div className="aspect-[16/9] w-full overflow-hidden rounded border bg-muted/30">
+              <div className="aspect-[16/9] w-full overflow-hidden rounded border border-border bg-muted/30">
                 <img
                   src={item.url}
                   alt="16:9 crop preview"
@@ -470,7 +470,7 @@ function MediaDetailContent({
       )}
 
       {/* Metadata Fields Form */}
-      <div className="space-y-4 rounded-lg border p-4 bg-card">
+      <div className="space-y-4 rounded-lg border border-border p-5 bg-card">
         <Field>
           <FieldLabel>Title</FieldLabel>
           <Input
@@ -531,7 +531,7 @@ function MediaDetailContent({
       </div>
 
       {/* Used In List */}
-      <div className="space-y-3 rounded-lg border p-4 bg-card">
+      <div className="space-y-3 rounded-lg border border-border p-4 bg-card">
         <div className="flex items-center justify-between">
           <h4 className="text-sm font-semibold text-foreground">Used in</h4>
           <Badge variant="secondary" className="text-xs">
@@ -542,7 +542,7 @@ function MediaDetailContent({
         {item.usages.length === 0 ? (
           <p className="text-xs text-muted-foreground">Not used anywhere</p>
         ) : (
-          <ul className="divide-y text-xs list-none p-0 m-0">
+          <ul className="divide-y divide-border/60 text-xs list-none p-0 m-0">
             {item.usages.map((usage, idx) => (
               <li key={idx} className="py-2 flex items-center justify-between gap-2">
                 <div className="flex items-center gap-2 truncate">
@@ -563,7 +563,7 @@ function MediaDetailContent({
       </div>
 
       {/* Read-only Facts */}
-      <div className="space-y-2 rounded-lg border p-4 bg-muted/20 text-xs">
+      <div className="space-y-2 rounded-lg border border-border p-4 bg-muted/20 text-xs">
         <h4 className="font-semibold text-foreground mb-2">File information</h4>
         <div className="grid grid-cols-2 gap-y-2 text-muted-foreground">
           <span>File name:</span>
@@ -669,9 +669,9 @@ export function MediaDetailSheet({
     <Sheet open={Boolean(mediaId)} onOpenChange={(open) => !open && onClose()}>
       <SheetContent
         side="right"
-        className="w-full sm:max-w-xl overflow-y-auto p-4 sm:p-6 flex flex-col gap-6"
+        className="data-[side=right]:w-full data-[side=right]:sm:w-[40vw] data-[side=right]:sm:min-w-[480px] data-[side=right]:sm:max-w-[760px] data-[side=right]:border-border/60 overflow-y-auto p-5 sm:p-8 flex flex-col gap-6"
       >
-        <SheetHeader className="text-left">
+        <SheetHeader className="p-0 text-left pr-10">
           <SheetTitle className="truncate">
             {isLoading ? <Skeleton className="h-6 w-48" /> : item?.filename || "Media details"}
           </SheetTitle>
@@ -698,7 +698,7 @@ export function MediaDetailSheet({
           />
         )}
 
-        <SheetFooter className="mt-auto pt-4 border-t">
+        <SheetFooter className="mt-auto border-t border-border/60 p-0 pt-5">
           <Button variant="outline" onClick={onClose} className="w-full">
             Close
           </Button>

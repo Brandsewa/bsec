@@ -487,7 +487,7 @@ export function MediaLibraryPage() {
         header: "Preview",
         className: "w-12 text-center",
         cell: (item: MediaItem) => (
-          <div className="h-10 w-10 rounded-md border bg-muted/40 overflow-hidden flex items-center justify-center shrink-0">
+          <div className="h-10 w-10 rounded-md border border-border bg-muted/40 overflow-hidden flex items-center justify-center shrink-0">
             {item.kind === "image" ? (
               <img
                 src={item.thumbnailUrl || item.url}
@@ -609,7 +609,7 @@ export function MediaLibraryPage() {
           <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3">
             {/* Storage Meter */}
             {Boolean(usageData) && (
-              <div className="flex items-center gap-2 rounded-lg border bg-card px-3 py-1.5 text-xs">
+              <div className="flex items-center gap-2 rounded-lg border border-border bg-card px-3 py-1.5 text-xs">
                 <div className="space-y-1 min-w-[130px] sm:min-w-[160px]">
                   <div className="flex items-center justify-between text-[11px] text-muted-foreground">
                     <span>Storage</span>
@@ -694,7 +694,7 @@ export function MediaLibraryPage() {
           </div>
 
           {/* Type Filter Buttons */}
-          <div className="flex items-center gap-1 border rounded-md p-0.5 bg-muted/40">
+          <div className="flex items-center gap-1 border border-border rounded-md p-0.5 bg-muted/40">
             <Button
               variant={!kindsFilter ? "secondary" : "ghost"}
               size="sm"
@@ -789,7 +789,7 @@ export function MediaLibraryPage() {
           </div>
 
           {/* View Toggle */}
-          <div className="flex items-center rounded-md border p-0.5 bg-muted/40">
+          <div className="flex items-center rounded-md border border-border p-0.5 bg-muted/40">
             <Button
               variant={view === "grid" ? "secondary" : "ghost"}
               size="icon"
@@ -817,7 +817,7 @@ export function MediaLibraryPage() {
         view === "grid" ? (
           <div className="grid grid-cols-2 md:grid-cols-4 xl:grid-cols-6 2xl:grid-cols-8 gap-3 sm:gap-4 mt-2">
             {Array.from({ length: 16 }).map((_, i) => (
-              <div key={i} className="aspect-square rounded-lg border bg-muted/40 animate-pulse" />
+              <div key={i} className="aspect-square rounded-lg border border-border bg-muted/40 animate-pulse" />
             ))}
           </div>
         ) : (
@@ -874,7 +874,7 @@ export function MediaLibraryPage() {
         </div>
       ) : (
         /* Table View */
-        <div className="rounded-lg border bg-card mt-2">
+        <div className="rounded-lg border border-border bg-card mt-2">
           <DataTable<MediaItem>
             rows={items}
             columns={tableColumns}
@@ -1024,7 +1024,7 @@ export function MediaLibraryPage() {
           aria-live="polite"
           className="fixed inset-0 z-50 flex flex-col items-center justify-center bg-background/85 backdrop-blur-sm border-4 border-dashed border-primary transition-all pointer-events-none"
         >
-          <div className="flex flex-col items-center justify-center gap-3 p-8 rounded-xl bg-card border shadow-2xl text-center max-w-md">
+          <div className="flex flex-col items-center justify-center gap-3 p-8 rounded-xl bg-card border border-border shadow-2xl text-center max-w-md">
             <Upload className="h-16 w-16 text-primary animate-bounce" />
             <h3 className="text-xl font-bold text-foreground">Drop files to upload</h3>
             <p className="text-sm text-muted-foreground">

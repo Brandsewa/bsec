@@ -70,7 +70,7 @@ export function MediaFiltersBar({
 
         <div className="flex flex-wrap items-center gap-2">
           {multiKind && (
-            <div className="flex items-center gap-1 bg-muted/50 p-1 rounded-md border text-xs">
+            <div className="flex items-center gap-1 bg-muted/50 p-1 rounded-md border border-border text-xs">
               <Button
                 variant={!kinds || kinds.length === 0 ? "secondary" : "ghost"}
                 size="sm"

@@ -97,7 +97,7 @@ export function MediaField({
       )}
 
       {isLoading && value ? (
-        <div className="flex items-center gap-3 p-3 rounded-lg border bg-muted/20">
+        <div className="flex items-center gap-3 p-3 rounded-lg border border-border bg-muted/20">
           <Skeleton className="h-16 w-16 rounded-md shrink-0" />
           <div className="space-y-1.5 flex-1">
             <Skeleton className="h-4 w-32" />
@@ -105,10 +105,10 @@ export function MediaField({
           </div>
         </div>
       ) : value && media ? (
-        <div className="flex items-center justify-between gap-3 p-3 rounded-lg border bg-card hover:bg-muted/10 transition-colors">
+        <div className="flex items-center justify-between gap-3 p-3 rounded-lg border border-border bg-card hover:bg-muted/10 transition-colors">
           <div className="flex items-center gap-3 min-w-0">
             {/* Thumbnail */}
-            <div className="h-16 w-16 rounded-md border bg-muted/40 overflow-hidden flex items-center justify-center shrink-0">
+            <div className="h-16 w-16 rounded-md border border-border bg-muted/40 overflow-hidden flex items-center justify-center shrink-0">
               {media.kind === "image" ? (
                 <img
                   src={media.thumbnailUrl || media.url}
