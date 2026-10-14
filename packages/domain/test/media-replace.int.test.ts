@@ -4,7 +4,6 @@ import os from "node:os";
 import path from "node:path";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { schema } from "@bs/db";
-import { eq } from "drizzle-orm";
 import { startTestDb, type TestDb } from "@bs/db/test-env";
 import { seedPlatformStaff } from "@bs/db/test-fixtures";
 import { STORE_PERMISSIONS } from "@bs/auth";
