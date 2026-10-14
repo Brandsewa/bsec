@@ -1,4 +1,5 @@
 import fs from "node:fs";
+import zlib from "node:zlib";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -127,4 +128,46 @@ export function ensureFixturesExist(): {
     oversizedJpgPath,
     oversizedMp4Path,
   };
+}
+
+/**
+ * A real, decodable RGB gradient PNG of any size (no image library needed). Large enough images (> 320 px wide)
+ * get worker derivatives, which a 1x1 pixel fixture never does.
+ */
+export function makePatternPng(width: number, height: number, seed = 0, salt = 0): Buffer {
+  const chunk = (type: string, data: Buffer): Buffer => {
+    const len = Buffer.alloc(4);
+    len.writeUInt32BE(data.length);
+    const body = Buffer.concat([Buffer.from(type, "ascii"), data]);
+    const crc = Buffer.alloc(4);
+    crc.writeUInt32BE(zlib.crc32(body) >>> 0);
+    return Buffer.concat([len, body, crc]);
+  };
+  const ihdr = Buffer.alloc(13);
+  ihdr.writeUInt32BE(width, 0);
+  ihdr.writeUInt32BE(height, 4);
+  ihdr[8] = 8; // bit depth
+  ihdr[9] = 2; // colour type: RGB
+  const rowLen = 1 + width * 3;
+  const raw = Buffer.alloc(rowLen * height);
+  for (let y = 0; y < height; y++) {
+    const o = y * rowLen;
+    raw[o] = 0; // filter: none
+    for (let x = 0; x < width; x++) {
+      const i = o + 1 + x * 3;
+      raw[i] = Math.floor((x / width) * 255);
+      raw[i + 1] = Math.floor((y / height) * 255);
+      raw[i + 2] = (128 + seed * 40) % 256;
+    }
+  }
+  // `salt` makes the bytes (and so the hash) unique per run without changing how the picture looks
+  raw[1] = salt & 0xff;
+  raw[2] = (salt >> 8) & 0xff;
+  raw[3] = (salt >> 16) & 0xff;
+  return Buffer.concat([
+    Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]),
+    chunk("IHDR", ihdr),
+    chunk("IDAT", zlib.deflateSync(raw)),
+    chunk("IEND", Buffer.alloc(0)),
+  ]);
 }
