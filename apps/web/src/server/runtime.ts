@@ -1,6 +1,6 @@
 import "server-only";
 import { revalidateTag } from "next/cache";
-import { warnIfEncryptionKeyMissing, createLogger, createRuntime, type Logger, type Runtime } from "@bs/domain";
+import { warnIfEncryptionKeyMissing, createLogger, createLazyJobSender, createRuntime, type Logger, type Runtime } from "@bs/domain";
 
 /**
  * One runtime per server process, role app_rw (RLS applies). Cached on globalThis so dev HMR
@@ -19,6 +19,8 @@ export function server(): { rt: Runtime; log: Logger } {
         databaseUrl: url,
         saasDatabaseUrl: process.env.DATABASE_URL_SAAS || undefined,
         poolMax: Number(process.env.DB_POOL_MAX ?? 10),
+        // Send-only: queues media jobs (derived images, hashes, file purge) for the worker to process
+        mediaJobs: createLazyJobSender(url),
         revalidateTags: (tags) => {
           for (const t of tags) {
             try {

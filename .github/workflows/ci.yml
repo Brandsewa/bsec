@@ -248,7 +248,7 @@ jobs:
           # http://127.0.0.1:3000 here (M5 exit criterion: proven "on staging").
       - name: Seed a store, an owner login and the demo store (operator tools from the images)
         run: |
-          $COMPOSE exec -T postgres psql -U postgres -d bsec -v ON_ERROR_STOP=1 -c "insert into organizations (id, name) values ('0199b000-0000-7000-8000-000000000000', 'CI Org'); insert into tenants (id, organization_id, slug, name) values ('0199b000-0000-7000-8000-000000000001', '0199b000-0000-7000-8000-000000000000', 'ci-store', 'CI Store');"
+          $COMPOSE exec -T postgres psql -U postgres -d bsec -v ON_ERROR_STOP=1 -c "insert into organizations (id, name) values ('0199b000-0000-7000-8000-000000000000', 'CI Org'); insert into tenants (id, organization_id, slug, name) values ('0199b000-0000-7000-8000-000000000001', '0199b000-0000-7000-8000-000000000000', 'ci-store', 'CI Store'); insert into domains (tenant_id, hostname, type, is_primary, status) values ('0199b000-0000-7000-8000-000000000001', 'ci-store.bcom.si', 'platform_subdomain', true, 'active'); insert into store_status (tenant_id, mode) values ('0199b000-0000-7000-8000-000000000001', 'live');"
           $COMPOSE run --rm --no-deps -e OWNER_EMAIL=owner@ci.example -e OWNER_NAME="CI Owner" -e OWNER_PASSWORD="$E2E_PASSWORD" -e STORE_SLUG=ci-store worker node dist/create-owner.js
           $COMPOSE run --rm --no-deps -e OWNER_EMAIL=owner@ci.example platform node dist/demo.js seed
           # First platform staff login (the Super Admin e2e sets up its authenticator through the UI)

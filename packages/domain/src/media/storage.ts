@@ -104,7 +104,9 @@ export function isMediaStorageConfigured(override?: Partial<R2ClientConfig>): bo
  */
 export function publicMediaUrl(storageKey: string | null | undefined, override?: Partial<R2ClientConfig>): string | undefined {
   if (!storageKey) return undefined;
-  const base = getR2Config(override).publicUrl?.trim().replace(/\/+$/, "");
+  // MEDIA_PUBLIC_URL is the public address for local-storage stacks (local dev, staging); production sets R2_PUBLIC_URL.
+  // It is only used to build URLs here: it must not change which storage driver is selected (getR2Config).
+  const base = (getR2Config(override).publicUrl || process.env.MEDIA_PUBLIC_URL)?.trim().replace(/\/+$/, "");
   return base ? `${base}/${storageKey.replace(/^\/+/, "")}` : undefined;
 }
 

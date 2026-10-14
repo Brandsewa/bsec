@@ -21,5 +21,7 @@ export default defineConfig({
     screenshot: "on",
     trace: "retain-on-failure",
     ...(process.env.E2E_CHROME ? { channel: "chrome" } : {}),
+    // Store hostnames (*.bcom.si) resolve to the local stack, so the browser can load a real storefront page.
+    launchOptions: { args: ["--host-resolver-rules=MAP *.bcom.si 127.0.0.1"] },
   },
 });

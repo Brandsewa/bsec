@@ -12,6 +12,7 @@ import type {
   SlotRender,
 } from "./types.ts";
 import { layoutHasAspectRatio, layoutStyle } from "./layout.ts";
+import { mediaImage } from "./media-image.ts";
 import type * as R from "./registry.ts";
 
 /**
@@ -76,14 +77,41 @@ function SectionHead({
 }
 
 export function HeroView({ props, ctx }: A<R.HeroProps>): ReactNode {
-  const bg = mediaSrc(ctx, props.backgroundMediaId);
+  const detail = props.backgroundMediaId ? ctx?.mediaDetails?.(props.backgroundMediaId) : null;
+  const bg = detail?.url ?? mediaSrc(ctx, props.backgroundMediaId);
+  const bgImg = bg
+    ? mediaImage(
+        detail
+          ? {
+              url: bg,
+              width: detail.width,
+              height: detail.height,
+              focalX: detail.focalX,
+              focalY: detail.focalY,
+              dominantColor: detail.dominantColor,
+              derivatives: detail.derivatives,
+            }
+          : { url: bg },
+        { sizes: "100vw" },
+      )
+    : null;
   const ctaText = props.ctaText ?? props.buttonText;
   const ctaLink = props.ctaLink ?? props.buttonUrl;
   return (
-    <section className={cx("bsb bs-block-hero bsb-hero", !bg && `bsb-tone-${props.tone}`)}>
-      {bg ? (
+    <section
+      className={cx("bsb bs-block-hero bsb-hero", !bg && `bsb-tone-${props.tone}`)}
+      style={{ backgroundColor: bgImg?.dominantColor ?? undefined }}
+    >
+      {bgImg ? (
         <>
-          <img className="bsb-hero-bg" src={bg} alt="" />
+          <img
+            className="bsb-hero-bg"
+            src={bgImg.src}
+            srcSet={bgImg.srcSet}
+            sizes={bgImg.sizes}
+            alt=""
+            style={{ objectPosition: bgImg.objectPosition }}
+          />
           <div className="bsb-hero-scrim" style={{ opacity: props.overlayOpacity / 100 }} />
         </>
       ) : null}
@@ -351,9 +379,37 @@ export function GalleryView({ props, ctx }: A<R.GalleryProps>): ReactNode {
         <SectionHead title={props.title} align="center" />
         <div className="bsb-grid bsb-gap-md" style={{ "--cols": 3, "--cols-m": 2 } as CSSProperties}>
           {props.images.map((im, i) => {
-            const src = mediaSrc(ctx, im.mediaId);
+            const detail = im.mediaId ? ctx?.mediaDetails?.(im.mediaId) : null;
+            const src = detail?.url ?? mediaSrc(ctx, im.mediaId);
             if (!src) return null;
-            const img = <img className="bsb-img bsb-ratio-square bsb-rounded" src={src} alt={im.caption ?? ""} loading="lazy" />;
+            const imgInfo = mediaImage(
+              detail
+                ? {
+                    url: src,
+                    width: detail.width,
+                    height: detail.height,
+                    focalX: detail.focalX,
+                    focalY: detail.focalY,
+                    dominantColor: detail.dominantColor,
+                    derivatives: detail.derivatives,
+                  }
+                : { url: src },
+              { sizes: "(max-width: 640px) 50vw, 33vw" },
+            );
+            const img = (
+              <img
+                className="bsb-img bsb-ratio-square bsb-rounded"
+                src={imgInfo.src}
+                srcSet={imgInfo.srcSet}
+                sizes={imgInfo.sizes}
+                alt={im.caption ?? detail?.alt ?? ""}
+                loading="lazy"
+                style={{
+                  objectPosition: imgInfo.objectPosition,
+                  backgroundColor: imgInfo.dominantColor ?? undefined,
+                }}
+              />
+            );
             return <figure key={i} style={{ margin: 0 }}>{im.link ? <a href={im.link}>{img}</a> : img}</figure>;
           })}
         </div>
@@ -562,9 +618,41 @@ export function TextView({ props }: A<R.TextProps>): ReactNode {
 const RATIO_CLASS = { auto: "", square: "bsb-ratio-square", "4-3": "bsb-ratio-4-3", "16-9": "bsb-ratio-16-9" } as const;
 
 export function ImageView({ props, ctx }: A<R.ImageProps>): ReactNode {
-  const src = mediaSrc(ctx, props.mediaId);
+  const detail = props.mediaId ? ctx?.mediaDetails?.(props.mediaId) : null;
+  const src = detail?.url ?? mediaSrc(ctx, props.mediaId);
   if (!src) return <div className="bsb bsb-placeholder">Add an image</div>;
-  const img = <img className={cx("bsb-img", RATIO_CLASS[props.ratio], props.rounded && "bsb-rounded")} src={src} alt={props.alt} loading="lazy" />;
+
+  const imgInfo = mediaImage(
+    detail
+      ? {
+          url: src,
+          width: detail.width,
+          height: detail.height,
+          focalX: detail.focalX,
+          focalY: detail.focalY,
+          dominantColor: detail.dominantColor,
+          derivatives: detail.derivatives,
+        }
+      : { url: src },
+    { sizes: "(max-width: 768px) 100vw, 800px" },
+  );
+
+  const altText = props.alt && props.alt.trim().length > 0 ? props.alt : (detail?.alt ?? "");
+
+  const img = (
+    <img
+      className={cx("bsb-img", RATIO_CLASS[props.ratio], props.rounded && "bsb-rounded")}
+      src={imgInfo.src}
+      srcSet={imgInfo.srcSet}
+      sizes={imgInfo.sizes}
+      alt={altText}
+      loading="lazy"
+      style={{
+        objectPosition: imgInfo.objectPosition,
+        backgroundColor: imgInfo.dominantColor ?? undefined,
+      }}
+    />
+  );
   return <div className="bsb">{props.href ? <a href={props.href}>{img}</a> : img}</div>;
 }
 
@@ -664,7 +752,7 @@ export function FileDownloadView({ props, ctx }: A<R.FileDownloadProps>): ReactN
     return <div className="bsb bsb-placeholder">Select a file to download</div>;
   }
 
-  const downloadUrl = fileUrl || fileData?.url || mediaDetails?.url;
+  const downloadUrl = props.mediaId ? `/media/${props.mediaId}/download` : (fileUrl || fileData?.url || mediaDetails?.url);
   const filename = fileData?.filename || mediaDetails?.filename || "download";
   const mime = fileData?.mime || mediaDetails?.mime || "application/octet-stream";
   const bytes = fileData?.bytes ?? mediaDetails?.bytes;

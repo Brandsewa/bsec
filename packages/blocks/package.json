@@ -6,6 +6,7 @@
   "exports": {
     ".": "./src/index.ts",
     "./blocks.css": "./src/blocks.css",
+    "./media-image": "./src/media-image.ts",
     "./theme-vars": "./src/theme-vars.ts"
   },
   "scripts": {

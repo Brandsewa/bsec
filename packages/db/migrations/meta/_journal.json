@@ -372,6 +372,13 @@
       "when": 1792280000000,
       "tag": "0058_media_usages_branding",
       "breakpoints": true
+    },
+    {
+      "idx": 53,
+      "version": "7",
+      "when": 1792290000000,
+      "tag": "0059_media_derivatives",
+      "breakpoints": true
     }
   ]
 }

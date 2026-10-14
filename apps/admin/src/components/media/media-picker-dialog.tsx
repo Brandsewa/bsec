@@ -459,6 +459,47 @@ function MediaPickerDialogInner({
                             </span>
                           </div>
                         )}
+                        {qItem.status === "checking" && (
+                          <p className="text-[11px] text-muted-foreground mt-1 animate-pulse">
+                            Checking for duplicates...
+                          </p>
+                        )}
+                        {qItem.status === "duplicate" && qItem.duplicateOf && (
+                          <div className="mt-2 p-2.5 rounded border border-amber-300 dark:border-amber-700 bg-amber-50 dark:bg-amber-950/40 text-amber-900 dark:text-amber-200 text-xs space-y-2">
+                            <div className="flex items-center gap-1.5 font-medium">
+                              <AlertCircle className="h-4 w-4 text-amber-600 dark:text-amber-400 shrink-0" />
+                              <span>This file is already in your library</span>
+                            </div>
+                            <div className="flex items-center gap-2">
+                              <Button
+                                type="button"
+                                size="sm"
+                                className="h-7 text-xs bg-amber-600 hover:bg-amber-700 text-white"
+                                onClick={() => qItem.useExisting()}
+                              >
+                                Use existing
+                              </Button>
+                              <Button
+                                type="button"
+                                variant="outline"
+                                size="sm"
+                                className="h-7 text-xs border-amber-300 dark:border-amber-700 hover:bg-amber-100 dark:hover:bg-amber-900/50"
+                                onClick={() => qItem.proceedUpload()}
+                              >
+                                Upload anyway
+                              </Button>
+                              <Button
+                                type="button"
+                                variant="ghost"
+                                size="sm"
+                                className="h-7 text-xs text-muted-foreground hover:text-foreground"
+                                onClick={() => qItem.cancel()}
+                              >
+                                Cancel
+                              </Button>
+                            </div>
+                          </div>
+                        )}
                         {qItem.error && (
                           <p className="text-[11px] text-destructive flex items-center gap-1 mt-1">
                             <AlertCircle className="h-3 w-3 shrink-0" />
@@ -467,6 +508,11 @@ function MediaPickerDialogInner({
                         )}
                       </div>
                       <div className="shrink-0 flex items-center gap-2">
+                        {qItem.status === "duplicate" && (
+                          <Badge variant="outline" className="border-amber-500 text-amber-600 dark:text-amber-400 bg-amber-50 dark:bg-amber-950/30 text-[10px]">
+                            Duplicate
+                          </Badge>
+                        )}
                         {qItem.status === "success" && (
                           <Badge variant="secondary" className="text-emerald-600 gap-1 text-[11px]">
                             <Check className="h-3 w-3" /> Ready

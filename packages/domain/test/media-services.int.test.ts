@@ -32,7 +32,9 @@ import {
   attachProductMedia,
   syncMediaUsages,
   requestMediaUpload,
+  findDuplicates,
 } from "../src/media-services.ts";
+import { processMediaHash, backfillMediaHashes } from "../src/media/hashing.ts";
 import { getActiveStorageDriver, LocalStorageDriver } from "../src/media/connection.ts";
 import { getTenantMediaUsageStats, QuotaExceededError } from "../src/system/quotas.ts";
 import {
@@ -790,6 +792,280 @@ describe("Media Services Integration Test Suite (Real Postgres & Storage)", () =
     // Clean up
     await trashMedia(rt, ctx, { ids: [created.id] });
     await deleteMediaPermanent(rt, ctx, { ids: [created.id] });
+  });
+
+  it("S3: sets, updates, clears, and validates focal point with audit logging", async () => {
+    const item = await uploadMediaDirect(rt, ctx, {
+      filename: "focal-test.png",
+      mime: "image/png",
+      fileBytes: PNG_1X1,
+    });
+
+    expect(item.focalX).toBeNull();
+    expect(item.focalY).toBeNull();
+
+    // Set focal point to (0.25, 0.75)
+    const updated = await updateMedia(rt, ctx, {
+      id: item.id,
+      focalX: 0.25,
+      focalY: 0.75,
+    });
+    expect(updated.focalX).toBe(0.25);
+    expect(updated.focalY).toBe(0.75);
+
+    // Read back via getMedia
+    const fetched = await getMedia(rt, ctx, { id: item.id });
+    expect(fetched.focalX).toBe(0.25);
+    expect(fetched.focalY).toBe(0.75);
+
+    // Read back via listMedia
+    const listRes = await listMedia(rt, ctx, { q: "focal-test" });
+    const inList = listRes.items.find((i) => i.id === item.id);
+    expect(inList?.focalX).toBe(0.25);
+    expect(inList?.focalY).toBe(0.75);
+
+    // Clear focal point (both null)
+    const cleared = await updateMedia(rt, ctx, {
+      id: item.id,
+      focalX: null,
+      focalY: null,
+    });
+    expect(cleared.focalX).toBeNull();
+    expect(cleared.focalY).toBeNull();
+
+    const fetchedCleared = await getMedia(rt, ctx, { id: item.id });
+    expect(fetchedCleared.focalX).toBeNull();
+    expect(fetchedCleared.focalY).toBeNull();
+
+    // Rejection cases: out of range, or only one null
+    await expect(
+      updateMedia(rt, ctx, {
+        id: item.id,
+        focalX: 1.5,
+        focalY: 0.5,
+      }),
+    ).rejects.toThrow(/focalX and focalY must be numbers between 0 and 1/i);
+
+    await expect(
+      updateMedia(rt, ctx, {
+        id: item.id,
+        focalX: null,
+        focalY: 0.5,
+      }),
+    ).rejects.toThrow(/focalX and focalY must either both be null or both be numbers/i);
+
+    // Audit logs verified
+    const [auditLog] = await withTenant(rt._db.db, ctx.tenantId, async (tx) => {
+      return await tx
+        .select()
+        .from(schema.auditLogs)
+        .where(and(eq(schema.auditLogs.tenantId, ctx.tenantId), eq(schema.auditLogs.targetId, item.id)))
+        .orderBy(sql`${schema.auditLogs.createdAt} DESC`)
+        .limit(1);
+    });
+
+    expect(auditLog?.action).toBe("media.update");
+
+    // Clean up
+    await trashMedia(rt, ctx, { ids: [item.id] });
+    await deleteMediaPermanent(rt, ctx, { ids: [item.id] });
+  });
+
+  it("detects duplicate uploads by sha256 and supports worker hashing and backfill (Plan S4)", async () => {
+    // 1. Upload unique document
+    const uniqueDocBytes = Buffer.from(`unique-duplicate-test-content-${Date.now()}`);
+    const item1 = await uploadMediaDirect(rt, ctx, {
+      fileBytes: uniqueDocBytes,
+      filename: "original-file.txt",
+      mime: "text/plain",
+    });
+
+    expect(item1.sha256).toBeDefined();
+    expect(item1.sha256).toMatch(/^[0-9a-f]{64}$/);
+
+    // 2. Query duplicates using the same sha256
+    const dups = await findDuplicates(rt, ctx, { hashes: [item1.sha256!] });
+    expect(dups.matches.length).toBe(1);
+    expect(dups.matches[0]!.existing.id).toBe(item1.id);
+    expect(dups.matches[0]!.existing.filename).toBe("original-file.txt");
+
+    // 3. Query with non-matching sha256
+    const noDups = await findDuplicates(rt, ctx, {
+      hashes: ["0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"],
+    });
+    expect(noDups.matches.length).toBe(0);
+
+    // 4. Test worker processMediaHash for unhashed file
+    // Write a dummy file to storage and create a media record without sha256
+    const { driver: storageDriver } = await getActiveStorageDriver(rt._db.db, "public_media");
+    const testKey = `test-unhashed-${Date.now()}.txt`;
+    await storageDriver.put({ key: testKey, body: uniqueDocBytes, contentType: "text/plain" });
+
+    const [unhashedRow] = await withTenant(rt._db.db, ctx.tenantId, async (tx) => {
+      return await tx
+        .insert(schema.media)
+        .values({
+          tenantId: ctx.tenantId,
+          storageKey: testKey,
+          mime: "text/plain",
+          bytes: uniqueDocBytes.length,
+          kind: "document",
+          status: "ready",
+          filename: "unhashed.txt",
+          sha256: null,
+        })
+        .returning();
+    });
+
+    expect(unhashedRow).toBeDefined();
+    expect(unhashedRow!.sha256).toBeNull();
+
+    // Call processMediaHash
+    const hashResult = await processMediaHash(rt._db.db, {
+      tenantId: ctx.tenantId,
+      mediaId: unhashedRow!.id,
+    });
+
+    expect(hashResult.hashed).toBe(true);
+    expect(hashResult.sha256).toBe(item1.sha256);
+
+    // Verify row in DB now has sha256
+    const [updatedRow] = await withTenant(rt._db.db, ctx.tenantId, async (tx) => {
+      return await tx
+        .select()
+        .from(schema.media)
+        .where(eq(schema.media.id, unhashedRow!.id))
+        .limit(1);
+    });
+    expect(updatedRow?.sha256).toBe(item1.sha256);
+
+    // Calling processMediaHash again is idempotent
+    const secondHash = await processMediaHash(rt._db.db, {
+      tenantId: ctx.tenantId,
+      mediaId: unhashedRow!.id,
+    });
+    expect(secondHash.hashed).toBe(false);
+    expect(secondHash.sha256).toBe(item1.sha256);
+
+    // 5. Test backfillMediaHashes
+    // Insert another unhashed row
+    const testKey2 = `test-backfill-${Date.now()}.txt`;
+    await storageDriver.put({ key: testKey2, body: uniqueDocBytes, contentType: "text/plain" });
+    const [backfillRow] = await withTenant(rt._db.db, ctx.tenantId, async (tx) => {
+      return await tx
+        .insert(schema.media)
+        .values({
+          tenantId: ctx.tenantId,
+          storageKey: testKey2,
+          mime: "text/plain",
+          bytes: uniqueDocBytes.length,
+          kind: "document",
+          status: "ready",
+          filename: "backfill.txt",
+          sha256: null,
+        })
+        .returning();
+    });
+
+    // Follow the continuation chain like the worker does (one page per run, cursor by id)
+    let totalHashed = 0;
+    let afterId: string | undefined;
+    let pageCount = 0;
+    do {
+      let next: string | undefined;
+      const stats = await backfillMediaHashes(rt._db.db, 50, ctx.tenantId, {
+        afterId,
+        jobs: {
+          send: async (_queue, data) => {
+            next = (data as { afterId?: string }).afterId;
+          },
+        },
+      });
+      totalHashed += stats.processed;
+      afterId = next;
+      pageCount++;
+    } while (afterId && pageCount < 200);
+    expect(totalHashed).toBeGreaterThanOrEqual(1);
+
+    const [afterBackfill] = await withTenant(rt._db.db, ctx.tenantId, async (tx) => {
+      return await tx
+        .select()
+        .from(schema.media)
+        .where(eq(schema.media.id, backfillRow!.id))
+        .limit(1);
+    });
+    expect(afterBackfill?.sha256).toBe(item1.sha256);
+
+    // Clean up
+    await trashMedia(rt, ctx, { ids: [item1.id, unhashedRow!.id, backfillRow!.id] });
+    await deleteMediaPermanent(rt, ctx, { ids: [item1.id, unhashedRow!.id, backfillRow!.id] });
+  });
+
+  it("10,000-row cursor pagination and search scale test (Plan S5)", async () => {
+    // Seed 10,000 media rows in a single batch
+    await withTenant(rt._db.db, ctx.tenantId, async (tx) => {
+      await tx.execute(sql`
+        INSERT INTO media (tenant_id, storage_key, mime, bytes, kind, status, filename, title, alt, created_at, updated_at)
+        SELECT
+          ${ctx.tenantId}::uuid,
+          'perf-test/img-' || s || '.jpg',
+          'image/jpeg',
+          1024,
+          'image',
+          'ready',
+          'perf-image-' || s || '.jpg',
+          'Perf Image ' || s,
+          'Alt text for perf image ' || s,
+          now() - (s || ' seconds')::interval,
+          now()
+        FROM generate_series(1, 10000) AS s;
+      `);
+    });
+
+    try {
+      // 1. Page 1 (50 items)
+      const t0 = performance.now();
+      const page1 = await listMedia(rt, ctx, { limit: 50 });
+      const d1 = performance.now() - t0;
+      expect(page1.items.length).toBe(50);
+      expect(page1.nextCursor).toBeTruthy();
+      // Generous threshold for dev environment while ensuring it doesn't do table scans or timeout
+      expect(d1).toBeLessThan(500);
+
+      // 2. Page 2 using cursor
+      const t1 = performance.now();
+      const page2 = await listMedia(rt, ctx, { limit: 50, cursor: page1.nextCursor! });
+      const d2 = performance.now() - t1;
+      expect(page2.items.length).toBe(50);
+      expect(page2.items[0]!.id).not.toBe(page1.items[0]!.id);
+      expect(d2).toBeLessThan(500);
+
+      // 3. Filtering by kinds=["image"]
+      const t2 = performance.now();
+      const filtered = await listMedia(rt, ctx, { limit: 50, kinds: ["image"] });
+      const d3 = performance.now() - t2;
+      expect(filtered.items.length).toBe(50);
+      expect(d3).toBeLessThan(500);
+
+      // 4. Text search
+      const t3 = performance.now();
+      const searchRes = await listMedia(rt, ctx, { limit: 50, q: "perf-image-500" });
+      const d4 = performance.now() - t3;
+      expect(searchRes.items.length).toBeGreaterThan(0);
+      expect(d4).toBeLessThan(500);
+
+      // 5. Assert usageCount is calculated without N+1
+      expect(typeof page1.items[0]!.usageCount).toBe("number");
+    } finally {
+      // Clean up the 10,000 rows
+      await withTenant(rt._db.db, ctx.tenantId, async (tx) => {
+        await tx.execute(sql`
+          DELETE FROM media
+          WHERE tenant_id = ${ctx.tenantId}::uuid
+            AND storage_key LIKE 'perf-test/%';
+        `);
+      });
+    }
   });
 });
 

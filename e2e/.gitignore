@@ -1,2 +1,5 @@
 test-results/
 playwright-report/
+fixtures/oversized-*
+fixtures/sample.*
+fixtures/rejected.svg

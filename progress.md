@@ -3,7 +3,6 @@
 Source of truth: `docs/PLAN.html` v2.0 (build order in `docs/BUILD-PLAN-M2-M9.md`). Items are ticked only after verification; the evidence is noted next to each. "From code" means it was read in the repo but not exercised live.
 
 ## In flight
-- Antigravity · feat/media-library-phase-3 · media library · 2026-10-14 · Phase 3: block editor picker, video/file props, page and theme usages [Ready for Claude verification]
 
 ## M11 · Auth & Transactional Email Overhaul (docs/AUTH-OVERHAUL-PLAN.md)
 
@@ -187,11 +186,6 @@ Handoff summary for anyone (or any agent) picking this up. Plan and acceptance c
 - **Branch:** `design/marketing-landing` (merged and live) deleted locally and on origin; the main checkout is back on `main`. A local, uncommitted copy of `DESIGN-SYSTEM-IMPLEMENTATION-GUIDE.md` that differed from the committed one was moved to `C:\dev\DESIGN-SYSTEM-IMPLEMENTATION-GUIDE.local.md`.
 - **Docker:** deleted every container, volume, custom network, image and build cache (bsec stacks, plus saywai, ChaiMarket2, ricwell, bsoms, commerce and storify, with no backups taken of those). Docker Desktop now runs in VMM mode; the old WSL2 `docker_data.vhdx` (67 GB) is deleted and the `docker-desktop` and both Podman WSL distros are unregistered. About 126 GB free on C:.
 - **Consequence:** the local dev database is gone. A fresh `docker compose` start creates an empty one; restore from `docker-backups` if the old data is needed.
-
-## In flight
-
-- Antigravity · feat/media-library-phase-1 · media library · 2026-10-13 · Phase 1: Online Store > Media (grid + table, trash, usages, per-kind plan quotas).
-
 
 ## Returns & Exchanges (Manual Review & Portal) — Complete (2026-10-02)
 

@@ -1,7 +1,8 @@
 import crypto from "node:crypto";
 import path from "node:path";
 import { and, asc, desc, eq, ilike, inArray, lt, ne, or, sql } from "drizzle-orm";
-import { type Db, schema, withTenant } from "@bs/db";
+import { type Db, QUEUE_NAMES, schema, withTenant } from "@bs/db";
+import { orientedSize } from "./media/derivatives.ts";
 import type { MediaItem, MediaUsageReference, MediaUsageReport } from "@bs/contracts";
 import type { Runtime } from "./runtime.ts";
 import { assertPermission, type TenantContext } from "./context.ts";
@@ -35,6 +36,10 @@ export {
   getEnvironmentStorageConfig,
   resolveSafeLocalPath,
 } from "./media/connection.ts";
+export * from "./media/download.ts";
+export * from "./media/image-helper.ts";
+export * from "./media/derivatives.ts";
+export * from "./media/hashing.ts";
 
 export interface ListMediaQuery {
   cursor?: string | undefined;
@@ -69,6 +74,7 @@ export interface CreateMediaInput {
   width?: number | undefined;
   height?: number | undefined;
   cfImageId?: string | undefined;
+  sha256?: string | undefined;
 }
 
 export interface UpdateMediaInput {
@@ -76,6 +82,8 @@ export interface UpdateMediaInput {
   title?: string | undefined;
   alt?: string | undefined;
   caption?: string | undefined;
+  focalX?: number | null | undefined;
+  focalY?: number | null | undefined;
 }
 
 export interface FinalizeUploadParams {
@@ -90,6 +98,7 @@ export interface FinalizeUploadParams {
   durationMs?: number | undefined;
   cfImageId?: string | undefined;
   directBuffer?: Buffer | Uint8Array | undefined;
+  sha256?: string | undefined;
 }
 
 export const libraryScope = sql`(${schema.media.folder} IS NULL OR ${schema.media.folder} NOT IN ('returns', 'expense-receipts'))`;
@@ -118,6 +127,9 @@ export function validateClientStorageKey(
   }
   if (!folder || !filename) {
     throw new Error("Bad Request: Invalid storage key components");
+  }
+  if (folder.startsWith("_")) {
+    throw new Error(`Bad Request: Storage key folder "${folder}" starting with "_" is reserved`);
   }
   if ((PRIVATE_MEDIA_FOLDERS as readonly string[]).includes(folder)) {
     throw new Error(`Bad Request: Storage key folder "${folder}" is restricted`);
@@ -164,6 +176,23 @@ export function buildThumbnailUrl(r: { kind: string; storageKey: string }, url: 
     });
   }
   return url;
+}
+
+/**
+ * Queue a media job after the database commit. Uses the worker's job client where there is one, otherwise the web
+ * service's send-only client. Best effort: a failure is logged and the worker's scheduled sweeps (derivatives, hashes)
+ * find the row anyway. Returns whether the job was queued.
+ */
+async function enqueueMediaJob(rt: Runtime, queue: string, data: object): Promise<boolean> {
+  const sender = rt._jobs ?? rt._mediaJobs;
+  if (!sender) return false;
+  try {
+    await sender.send(queue, data);
+    return true;
+  } catch (err) {
+    console.warn(`[media] could not enqueue ${queue}:`, err);
+    return false;
+  }
 }
 
 /**
@@ -284,8 +313,9 @@ async function finalizeUpload(
       const sharpModule = await import("sharp");
       const sharp = sharpModule.default;
       const meta = await sharp(fullImageBuffer).metadata();
-      width = meta.width ?? null;
-      height = meta.height ?? null;
+      const oriented = orientedSize(meta);
+      width = oriented.width || null;
+      height = oriented.height || null;
     } catch (err) {
       await purgeMediaObjects(rt._db.db, {
         tenantId: ctx.tenantId,
@@ -303,6 +333,8 @@ async function finalizeUpload(
       sha256 = crypto.createHash("sha256").update(params.directBuffer).digest("hex");
     }
   }
+
+  // A browser-supplied hash is advisory (duplicate hints only). It is never stored: media.hash computes the real one.
 
   const filename = params.filename?.trim() || path.basename(params.storageKey);
 
@@ -354,6 +386,14 @@ async function finalizeUpload(
     return inserted;
   });
 
+  // After commit (the worker must find the row): derive responsive images, and hash files whose hash is not known yet
+  if (row.kind === "image" && row.mime !== "image/gif") {
+    await enqueueMediaJob(rt, QUEUE_NAMES.MEDIA_DERIVE, { tenantId: ctx.tenantId, mediaId: row.id });
+  }
+  if (!row.sha256) {
+    await enqueueMediaJob(rt, QUEUE_NAMES.MEDIA_HASH, { tenantId: ctx.tenantId, mediaId: row.id });
+  }
+
   await invalidateCache(rt, ctx, { type: "media_updated" });
 
   const url = (await resolvePublicMediaUrl(rt._db.db, row.storageKey, row.storageConnectionId)) || "";
@@ -371,6 +411,11 @@ async function finalizeUpload(
     width: row.width,
     height: row.height,
     durationMs: row.durationMs,
+    focalX: row.focalX,
+    focalY: row.focalY,
+    dominantColor: row.dominantColor,
+    derivatives: (row.derivatives as Record<string, unknown> | null) ?? null,
+    sha256: row.sha256 ?? null,
     url,
     thumbnailUrl,
     status: row.status as "ready" | "trashed",
@@ -504,6 +549,11 @@ export async function listMedia(
         width: schema.media.width,
         height: schema.media.height,
         durationMs: schema.media.durationMs,
+        focalX: schema.media.focalX,
+        focalY: schema.media.focalY,
+        dominantColor: schema.media.dominantColor,
+        derivatives: schema.media.derivatives,
+        sha256: schema.media.sha256,
         status: schema.media.status,
         folder: schema.media.folder,
         uploadedBy: schema.media.uploadedBy,
@@ -558,6 +608,11 @@ export async function listMedia(
           width: r.width,
           height: r.height,
           durationMs: r.durationMs,
+          focalX: r.focalX,
+          focalY: r.focalY,
+          dominantColor: r.dominantColor,
+          derivatives: (r.derivatives as Record<string, unknown> | null) ?? null,
+          sha256: r.sha256 ?? null,
           url,
           thumbnailUrl,
           status: r.status as "ready" | "trashed",
@@ -820,6 +875,11 @@ export async function getMedia(
         width: schema.media.width,
         height: schema.media.height,
         durationMs: schema.media.durationMs,
+        focalX: schema.media.focalX,
+        focalY: schema.media.focalY,
+        dominantColor: schema.media.dominantColor,
+        derivatives: schema.media.derivatives,
+        sha256: schema.media.sha256,
         status: schema.media.status,
         folder: schema.media.folder,
         uploadedBy: schema.media.uploadedBy,
@@ -853,6 +913,11 @@ export async function getMedia(
       width: row.width,
       height: row.height,
       durationMs: row.durationMs,
+      focalX: row.focalX,
+      focalY: row.focalY,
+      dominantColor: row.dominantColor,
+      derivatives: (row.derivatives as Record<string, unknown> | null) ?? null,
+      sha256: row.sha256 ?? null,
       url,
       thumbnailUrl,
       status: row.status as "ready" | "trashed",
@@ -901,6 +966,9 @@ export async function requestMediaUpload(
   }
 
   const requestedFolder = input.folder ?? "products";
+  if (requestedFolder.startsWith("_")) {
+    throw new Error(`Bad Request: Presigning upload to folder "${requestedFolder}" starting with "_" is reserved`);
+  }
   if ((PRIVATE_MEDIA_FOLDERS as readonly string[]).includes(requestedFolder)) {
     throw new Error(`Bad Request: Presigning upload to private folder "${requestedFolder}" is restricted`);
   }
@@ -972,6 +1040,7 @@ export async function createMediaRecord(
     folder: keyFolder,
     durationMs: input.durationMs,
     cfImageId: input.cfImageId,
+    sha256: input.sha256,
   });
 }
 
@@ -1003,6 +1072,9 @@ export async function uploadMediaDirect(
   }
 
   const folder = input.folder || "products";
+  if (folder.startsWith("_")) {
+    throw new Error(`Bad Request: Uploading directly to folder "${folder}" starting with "_" is reserved`);
+  }
   if ((PRIVATE_MEDIA_FOLDERS as readonly string[]).includes(folder)) {
     throw new Error(`Bad Request: Uploading directly to private folder "${folder}" is restricted`);
   }
@@ -1068,6 +1140,30 @@ export async function updateMedia(
     if (input.title !== undefined) setVals.title = input.title ? input.title.trim() : null;
     if (input.alt !== undefined) setVals.alt = input.alt ? input.alt.trim().slice(0, 512) : null;
     if (input.caption !== undefined) setVals.caption = input.caption ? input.caption.trim().slice(0, 1000) : null;
+    if (input.focalX !== undefined || input.focalY !== undefined) {
+      if (input.focalX === null || input.focalY === null) {
+        if (input.focalX !== null || input.focalY !== null) {
+          throw new Error("Validation Error: focalX and focalY must either both be null or both be numbers between 0 and 1");
+        }
+        setVals.focalX = null;
+        setVals.focalY = null;
+      } else if (input.focalX !== undefined && input.focalY !== undefined) {
+        if (
+          typeof input.focalX !== "number" ||
+          typeof input.focalY !== "number" ||
+          input.focalX < 0 ||
+          input.focalX > 1 ||
+          input.focalY < 0 ||
+          input.focalY > 1
+        ) {
+          throw new Error("Validation Error: focalX and focalY must be numbers between 0 and 1");
+        }
+        setVals.focalX = input.focalX;
+        setVals.focalY = input.focalY;
+      } else {
+        throw new Error("Validation Error: focalX and focalY must either both be null or both be numbers between 0 and 1");
+      }
+    }
 
     const [updated] = await tx
       .update(schema.media)
@@ -1085,8 +1181,20 @@ export async function updateMedia(
       targetType: "media",
       targetId: input.id,
       diff: {
-        before: { title: existing.title, alt: existing.alt, caption: existing.caption },
-        after: { title: updated.title, alt: updated.alt, caption: updated.caption },
+        before: {
+          title: existing.title,
+          alt: existing.alt,
+          caption: existing.caption,
+          focalX: existing.focalX,
+          focalY: existing.focalY,
+        },
+        after: {
+          title: updated.title,
+          alt: updated.alt,
+          caption: updated.caption,
+          focalX: updated.focalX,
+          focalY: updated.focalY,
+        },
       },
     });
 
@@ -1115,6 +1223,11 @@ export async function updateMedia(
     width: row.width,
     height: row.height,
     durationMs: row.durationMs,
+    focalX: row.focalX,
+    focalY: row.focalY,
+    dominantColor: row.dominantColor,
+    derivatives: (row.derivatives as Record<string, unknown> | null) ?? null,
+    sha256: row.sha256 ?? null,
     url,
     thumbnailUrl,
     status: row.status as "ready" | "trashed",
@@ -1286,6 +1399,7 @@ export async function deleteMediaPermanent(
         id: schema.media.id,
         storageKey: schema.media.storageKey,
         storageConnectionId: schema.media.storageConnectionId,
+        derivatives: schema.media.derivatives,
       })
       .from(schema.media)
       .where(
@@ -1319,7 +1433,7 @@ export async function deleteMediaPermanent(
     }
 
     if (allowedRows.length === 0) {
-      return { deleted: 0, blocked, allowedIds: [] as string[] };
+      return { deleted: 0, blocked, allowedIds: [] as string[], objectsToPurge: [] as { storageKey: string; storageConnectionId: string | null; derivatives: unknown }[] };
     }
 
     const allowedIds = allowedRows.map((r) => r.id);
@@ -1349,18 +1463,24 @@ export async function deleteMediaPermanent(
     const objectsToPurge = allowedRows.map((r) => ({
       storageKey: r.storageKey,
       storageConnectionId: r.storageConnectionId,
+      derivatives: r.derivatives,
     }));
 
-    // 5. Enqueue media.purge job inside business transaction (Rule 13, B4)
-    if (rt._jobs) {
-      await rt._jobs.send("media.purge", {
-        tenantId: ctx.tenantId,
-        objects: objectsToPurge,
+    return { deleted: allowedIds.length, blocked, allowedIds, objectsToPurge };
+  });
+
+  // After commit: hand the stored files to the worker (media.purge). With no job client, or if queuing fails, remove them
+  // right here instead (best effort; a failure is logged and only leaves an unreferenced object behind).
+  const toPurge = result.objectsToPurge ?? [];
+  if (toPurge.length > 0) {
+    const queued = await enqueueMediaJob(rt, "media.purge", { tenantId: ctx.tenantId, objects: toPurge });
+    if (!queued) {
+      // The rows are already deleted: a storage problem must not turn this into a failed request
+      await purgeMediaObjects(db, { tenantId: ctx.tenantId, objects: toPurge }).catch((err: unknown) => {
+        console.error("[media] inline purge after permanent delete failed:", err);
       });
     }
-
-    return { deleted: allowedIds.length, blocked, allowedIds };
-  });
+  }
 
   await invalidateMediaCache(rt, ctx, result.allowedIds);
   return { deleted: result.deleted, blocked: result.blocked };
@@ -1465,11 +1585,31 @@ export async function clearMediaUsagesForOwner(
 /**
  * Purges physical storage objects for a tenant, strictly asserting tenant prefix (MEDIA-LIBRARY-PLAN §8).
  */
+/**
+ * Storage keys of a media row's derived files. `media.derivatives` is stored as a map
+ * (`{ w320: { key, width, height, bytes } }`); older callers and tests may pass a list, so accept both.
+ */
+export function collectDerivativeKeys(derivatives: unknown): string[] {
+  if (!derivatives || typeof derivatives !== "object") return [];
+  const items: unknown[] = Array.isArray(derivatives) ? derivatives : Object.values(derivatives as Record<string, unknown>);
+  const keys: string[] = [];
+  for (const item of items) {
+    if (item && typeof item === "object" && typeof (item as { key?: unknown }).key === "string") {
+      keys.push((item as { key: string }).key);
+    }
+  }
+  return keys;
+}
+
 export async function purgeMediaObjects(
   db: Db,
   params: {
     tenantId: string;
-    objects: { storageKey: string; storageConnectionId?: string | null }[];
+    objects: {
+      storageKey: string;
+      storageConnectionId?: string | null;
+      derivatives?: unknown;
+    }[];
   },
 ): Promise<{ purged: number }> {
   let purged = 0;
@@ -1486,6 +1626,16 @@ export async function purgeMediaObjects(
       if (driver) {
         await driver.delete(obj.storageKey);
         purged++;
+
+        for (const derivedKey of collectDerivativeKeys(obj.derivatives)) {
+          if (!derivedKey.startsWith(`${params.tenantId}/`)) continue;
+          try {
+            await driver.delete(derivedKey);
+            purged++;
+          } catch {
+            // Non-fatal if a derivative is already missing
+          }
+        }
       }
     } catch (err) {
       console.warn(`[storage] Could not delete physical object "${obj.storageKey}":`, err);
@@ -1514,6 +1664,7 @@ export async function runMediaTrashSweep(
     id: string;
     storage_key: string;
     storage_connection_id: string | null;
+    derivatives?: unknown;
     [key: string]: unknown;
   };
 
@@ -1566,6 +1717,7 @@ export async function runMediaTrashSweep(
           id: schema.media.id,
           storage_key: schema.media.storageKey,
           storage_connection_id: schema.media.storageConnectionId,
+          derivatives: schema.media.derivatives,
         });
 
       if (deletedRows.length === 0) return [];
@@ -1600,6 +1752,7 @@ export async function runMediaTrashSweep(
       const objects = deletedForTenant.map((r) => ({
         storageKey: r.storage_key,
         storageConnectionId: r.storage_connection_id,
+        derivatives: r.derivatives,
       }));
 
       if (jobs) {
@@ -2040,8 +2193,9 @@ export async function replaceMedia(
       const sharpModule = await import("sharp");
       const sharp = sharpModule.default;
       const meta = await sharp(fullBytes).metadata();
-      width = meta.width ?? null;
-      height = meta.height ?? null;
+      const oriented = orientedSize(meta);
+      width = oriented.width || null;
+      height = oriented.height || null;
       sha256 = crypto.createHash("sha256").update(fullBytes).digest("hex");
     } catch (err) {
       await purgeMediaObjects(db, {
@@ -2054,6 +2208,7 @@ export async function replaceMedia(
 
   const oldStorageKey = existing.storageKey;
   const oldConnectionId = existing.storageConnectionId;
+  const oldDerivatives: unknown = existing.derivatives ?? null;
 
   // 8. Atomic transaction: update media row and write audit log
   const updatedItem = await withTenant(db, ctx.tenantId, async (tx) => {
@@ -2067,6 +2222,8 @@ export async function replaceMedia(
       durationMs: input.durationMs ?? null,
       sha256,
       folder: keyFolder,
+      derivatives: null,
+      dominantColor: null,
       updatedAt: new Date(),
     };
     if (input.filename) {
@@ -2116,6 +2273,10 @@ export async function replaceMedia(
       width: updated.width,
       height: updated.height,
       durationMs: updated.durationMs,
+      focalX: updated.focalX,
+      focalY: updated.focalY,
+      dominantColor: updated.dominantColor,
+      derivatives: (updated.derivatives as Record<string, unknown> | null) ?? null,
       url,
       thumbnailUrl,
       status: updated.status as "ready" | "trashed",
@@ -2132,23 +2293,75 @@ export async function replaceMedia(
     };
   });
 
-  // 9. Post-commit: purge old storage object (via job if available, or direct fallback)
-  if (rt._jobs) {
-    await rt._jobs.send("media.purge", {
-      tenantId: ctx.tenantId,
-      objects: [{ storageKey: oldStorageKey, storageConnectionId: oldConnectionId }],
-    });
-  } else {
-    await purgeMediaObjects(db, {
-      tenantId: ctx.tenantId,
-      objects: [{ storageKey: oldStorageKey, storageConnectionId: oldConnectionId }],
+  // 9. Post-commit: purge old storage object and its derivatives
+  const purgePayload = {
+    tenantId: ctx.tenantId,
+    objects: [{ storageKey: oldStorageKey, storageConnectionId: oldConnectionId, derivatives: oldDerivatives }],
+  };
+  if (!(await enqueueMediaJob(rt, "media.purge", purgePayload))) {
+    await purgeMediaObjects(db, purgePayload).catch((err: unknown) => {
+      console.error("[media] inline purge after replace failed:", err);
     });
   }
 
-  // 10. Post-commit: cache fan-out to owners (S5)
+  // 10. Post-commit: enqueue media.derive for newly replaced image (Plan S2)
+  if (updatedItem.kind === "image" && updatedItem.mime !== "image/gif") {
+    await enqueueMediaJob(rt, QUEUE_NAMES.MEDIA_DERIVE, { tenantId: ctx.tenantId, mediaId: input.id });
+  }
+
+  // 11. Post-commit: cache fan-out to owners (S5)
   await invalidateMediaCache(rt, ctx, [input.id]);
 
   return updatedItem;
+}
+
+/**
+ * Replace a file by sending its bytes through the server (the counterpart of uploadMediaDirect). Used when the browser
+ * cannot PUT straight to storage (local storage, or a bucket without CORS). The new bytes are stored under a new key and
+ * then go through exactly the same checks and swap as replaceMedia (same kind, magic bytes, net quota, old files purged).
+ */
+export async function replaceMediaDirect(
+  rt: Runtime,
+  ctx: TenantContext,
+  input: {
+    id: string;
+    fileBytes: Buffer | Uint8Array;
+    filename: string;
+    mime: string;
+    durationMs?: number | undefined;
+  },
+): Promise<MediaItem> {
+  assertPermission(ctx, "content.write");
+  const db = rt._db.db;
+
+  const existing = await withTenant(db, ctx.tenantId, async (tx) => {
+    const [row] = await tx
+      .select({ id: schema.media.id, folder: schema.media.folder })
+      .from(schema.media)
+      .where(and(eq(schema.media.tenantId, ctx.tenantId), eq(schema.media.id, input.id), libraryScope))
+      .limit(1);
+    return row;
+  });
+  if (!existing) throw new Error("Not Found: media item not found");
+
+  const normMime = input.mime.toLowerCase().trim();
+  if (normMime === "image/svg+xml") throw new Error("SVG uploads are disabled for security reasons");
+  if (!isAllowedMime(normMime)) throw new Error(`Unsupported media format: "${input.mime}"`);
+
+  const { driver } = await getActiveStorageDriver(db, "public_media");
+  const folder = existing.folder && !existing.folder.startsWith("_") ? existing.folder : "products";
+  const { storageKey } = generateStorageKey(ctx.tenantId, folder, input.filename);
+  await driver.put({ key: storageKey, body: input.fileBytes, contentType: normMime });
+
+  // replaceMedia validates everything and removes the uploaded object itself when a check fails
+  return await replaceMedia(rt, ctx, {
+    id: input.id,
+    storageKey,
+    mime: normMime,
+    bytes: input.fileBytes.length,
+    filename: input.filename,
+    durationMs: input.durationMs,
+  });
 }
 
 /**
@@ -2175,4 +2388,84 @@ export async function resolveMediaUrlById(
     if (!row) return undefined;
     return resolvePublicMediaUrl(db, row.storageKey, row.storageConnectionId);
   });
+}
+
+/**
+ * Finds existing media items that match given SHA-256 hashes (Plan S4 duplicate detection).
+ * Scoped to current tenant's active ready media within libraryScope.
+ */
+export async function findDuplicates(
+  rt: Runtime,
+  ctx: TenantContext,
+  input: { hashes: string[] },
+): Promise<{ matches: { sha256: string; existing: MediaItem }[] }> {
+  assertPermission(ctx, "content.write");
+  const db = rt._db.db;
+  const cleanHashes = input.hashes
+    .map((h) => h.toLowerCase().trim())
+    .filter((h) => /^[0-9a-f]{64}$/.test(h));
+
+  if (cleanHashes.length === 0) {
+    return { matches: [] };
+  }
+
+  const rows = await withTenant(db, ctx.tenantId, async (tx) => {
+    return await tx
+      .select()
+      .from(schema.media)
+      .where(
+        and(
+          eq(schema.media.tenantId, ctx.tenantId),
+          inArray(schema.media.sha256, cleanHashes),
+          eq(schema.media.status, "ready"),
+          libraryScope,
+        ),
+      )
+      .orderBy(asc(schema.media.createdAt));
+  });
+
+  const matches: { sha256: string; existing: MediaItem }[] = [];
+  const seen = new Set<string>();
+
+  for (const row of rows) {
+    if (!row.sha256 || seen.has(row.sha256)) continue;
+    seen.add(row.sha256);
+    const url = (await resolvePublicMediaUrl(db, row.storageKey, row.storageConnectionId)) || "";
+    const thumbnailUrl = buildThumbnailUrl(row, url);
+    matches.push({
+      sha256: row.sha256,
+      existing: {
+        id: row.id,
+        kind: row.kind as MediaKind,
+        mime: row.mime,
+        filename: row.filename,
+        title: row.title,
+        alt: row.alt,
+        caption: row.caption,
+        bytes: Number(row.bytes),
+        width: row.width,
+        height: row.height,
+        durationMs: row.durationMs,
+        focalX: row.focalX,
+        focalY: row.focalY,
+        dominantColor: row.dominantColor,
+        derivatives: (row.derivatives as Record<string, unknown> | null) ?? null,
+        sha256: row.sha256 ?? null,
+        url,
+        thumbnailUrl,
+        status: row.status as "ready" | "trashed",
+        trashedAt: row.trashedAt ? row.trashedAt.toISOString() : null,
+        usageCount: 0,
+        uploadedBy: row.uploadedBy,
+        createdAt: row.createdAt.toISOString(),
+        updatedAt: row.updatedAt.toISOString(),
+        storageKey: row.storageKey,
+        storageConnectionId: row.storageConnectionId,
+        cfImageId: row.cfImageId,
+        folder: row.folder,
+      },
+    });
+  }
+
+  return { matches };
 }
