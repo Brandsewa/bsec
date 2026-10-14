@@ -1171,6 +1171,50 @@ export async function startJobs(opts: {
       }
     }
   });
+  await boss.work<{ tenantId: string; mediaId: string }>(
+    QUEUE_NAMES.MEDIA_DERIVE,
+    { localConcurrency: 2 },
+    async (batch) => {
+      for (const job of batch) {
+        try {
+          const { processMediaDerive } = await import("./media/derivatives.ts");
+          const res = await processMediaDerive(db, job.data);
+          opts.log.info(
+            { job_id: job.id, tenantId: job.data.tenantId, mediaId: job.data.mediaId, derived: res.derived },
+            "media.derive processed",
+          );
+        } catch (err) {
+          opts.log.error({ err, job_id: job.id }, "media.derive failed");
+          throw err;
+        }
+      }
+    },
+  );
+
+  // Handle media.backfill_derivatives job (Phase 4 Plan S2)
+  await boss.work<{ tenantId?: string; batchSize?: number }>(
+    QUEUE_NAMES.MEDIA_BACKFILL_DERIVATIVES,
+    { localConcurrency: 1 },
+    async (batch) => {
+      for (const job of batch) {
+        try {
+          const { backfillMediaDerivatives } = await import("./media/derivatives.ts");
+          const res = await backfillMediaDerivatives(db, {
+            tenantId: job.data?.tenantId,
+            batchSize: job.data?.batchSize ?? 50,
+            jobs: { send: (queue, data) => boss.send(queue, data) },
+          });
+          opts.log.info(
+            { job_id: job.id, processed: res.processed, hasMore: res.hasMore },
+            "media.backfill_derivatives processed",
+          );
+        } catch (err) {
+          opts.log.error({ err, job_id: job.id }, "media.backfill_derivatives failed");
+          throw err;
+        }
+      }
+    },
+  );
 
   // Register recurring schedules and proof-of-life sweeps on boot (PLAN §5.10, §11.3)
   try {
@@ -1206,6 +1250,7 @@ export async function startJobs(opts: {
   await boss.send(QUEUE_NAMES.SUBSCRIPTION_TRIAL_EXPIRY_SWEEP, {});
   await boss.send(QUEUE_NAMES.MAINTENANCE_WATCHDOG_SWEEP, {});
   await boss.send(QUEUE_NAMES.MEDIA_BACKFILL_USAGES, {}, { singletonKey: "media-backfill-v1" });
+  await boss.send(QUEUE_NAMES.MEDIA_BACKFILL_DERIVATIVES, {}, { singletonKey: "media-backfill-derivatives-v1" });
   opts.log.info({ concurrency: opts.concurrency }, "worker started");
 
   return {

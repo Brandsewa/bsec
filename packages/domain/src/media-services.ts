@@ -1,7 +1,7 @@
 import crypto from "node:crypto";
 import path from "node:path";
 import { and, asc, desc, eq, ilike, inArray, lt, ne, or, sql } from "drizzle-orm";
-import { type Db, schema, withTenant } from "@bs/db";
+import { type Db, QUEUE_NAMES, schema, withTenant } from "@bs/db";
 import type { MediaItem, MediaUsageReference, MediaUsageReport } from "@bs/contracts";
 import type { Runtime } from "./runtime.ts";
 import { assertPermission, type TenantContext } from "./context.ts";
@@ -36,6 +36,8 @@ export {
   resolveSafeLocalPath,
 } from "./media/connection.ts";
 export * from "./media/download.ts";
+export * from "./media/image-helper.ts";
+export * from "./media/derivatives.ts";
 
 export interface ListMediaQuery {
   cursor?: string | undefined;
@@ -119,6 +121,9 @@ export function validateClientStorageKey(
   }
   if (!folder || !filename) {
     throw new Error("Bad Request: Invalid storage key components");
+  }
+  if (folder.startsWith("_")) {
+    throw new Error(`Bad Request: Storage key folder "${folder}" starting with "_" is reserved`);
   }
   if ((PRIVATE_MEDIA_FOLDERS as readonly string[]).includes(folder)) {
     throw new Error(`Bad Request: Storage key folder "${folder}" is restricted`);
@@ -351,6 +356,14 @@ async function finalizeUpload(
         height,
       },
     });
+
+    // Enqueue media.derive for static images (Plan S2, rule 13)
+    if (inserted.kind === "image" && inserted.mime !== "image/gif" && rt._jobs) {
+      await rt._jobs.send(QUEUE_NAMES.MEDIA_DERIVE, {
+        tenantId: ctx.tenantId,
+        mediaId: inserted.id,
+      });
+    }
 
     return inserted;
   });
@@ -902,6 +915,9 @@ export async function requestMediaUpload(
   }
 
   const requestedFolder = input.folder ?? "products";
+  if (requestedFolder.startsWith("_")) {
+    throw new Error(`Bad Request: Presigning upload to folder "${requestedFolder}" starting with "_" is reserved`);
+  }
   if ((PRIVATE_MEDIA_FOLDERS as readonly string[]).includes(requestedFolder)) {
     throw new Error(`Bad Request: Presigning upload to private folder "${requestedFolder}" is restricted`);
   }
@@ -1004,6 +1020,9 @@ export async function uploadMediaDirect(
   }
 
   const folder = input.folder || "products";
+  if (folder.startsWith("_")) {
+    throw new Error(`Bad Request: Uploading directly to folder "${folder}" starting with "_" is reserved`);
+  }
   if ((PRIVATE_MEDIA_FOLDERS as readonly string[]).includes(folder)) {
     throw new Error(`Bad Request: Uploading directly to private folder "${folder}" is restricted`);
   }
@@ -1287,6 +1306,7 @@ export async function deleteMediaPermanent(
         id: schema.media.id,
         storageKey: schema.media.storageKey,
         storageConnectionId: schema.media.storageConnectionId,
+        derivatives: schema.media.derivatives,
       })
       .from(schema.media)
       .where(
@@ -1350,6 +1370,7 @@ export async function deleteMediaPermanent(
     const objectsToPurge = allowedRows.map((r) => ({
       storageKey: r.storageKey,
       storageConnectionId: r.storageConnectionId,
+      derivatives: (r.derivatives as { key: string }[] | null) ?? [],
     }));
 
     // 5. Enqueue media.purge job inside business transaction (Rule 13, B4)
@@ -1470,7 +1491,11 @@ export async function purgeMediaObjects(
   db: Db,
   params: {
     tenantId: string;
-    objects: { storageKey: string; storageConnectionId?: string | null }[];
+    objects: {
+      storageKey: string;
+      storageConnectionId?: string | null;
+      derivatives?: { key: string }[] | null;
+    }[];
   },
 ): Promise<{ purged: number }> {
   let purged = 0;
@@ -1487,6 +1512,19 @@ export async function purgeMediaObjects(
       if (driver) {
         await driver.delete(obj.storageKey);
         purged++;
+
+        if (obj.derivatives && Array.isArray(obj.derivatives)) {
+          for (const d of obj.derivatives) {
+            if (d.key && d.key.startsWith(`${params.tenantId}/`)) {
+              try {
+                await driver.delete(d.key);
+                purged++;
+              } catch {
+                // Non-fatal if derivative is already missing
+              }
+            }
+          }
+        }
       }
     } catch (err) {
       console.warn(`[storage] Could not delete physical object "${obj.storageKey}":`, err);
@@ -2055,6 +2093,7 @@ export async function replaceMedia(
 
   const oldStorageKey = existing.storageKey;
   const oldConnectionId = existing.storageConnectionId;
+  const oldDerivatives = (existing.derivatives as { key: string }[] | null) ?? [];
 
   // 8. Atomic transaction: update media row and write audit log
   const updatedItem = await withTenant(db, ctx.tenantId, async (tx) => {
@@ -2068,6 +2107,8 @@ export async function replaceMedia(
       durationMs: input.durationMs ?? null,
       sha256,
       folder: keyFolder,
+      derivatives: null,
+      dominantColor: null,
       updatedAt: new Date(),
     };
     if (input.filename) {
@@ -2133,20 +2174,26 @@ export async function replaceMedia(
     };
   });
 
-  // 9. Post-commit: purge old storage object (via job if available, or direct fallback)
+  // 9. Post-commit: purge old storage object and its derivatives
+  const purgePayload = {
+    tenantId: ctx.tenantId,
+    objects: [{ storageKey: oldStorageKey, storageConnectionId: oldConnectionId, derivatives: oldDerivatives }],
+  };
   if (rt._jobs) {
-    await rt._jobs.send("media.purge", {
-      tenantId: ctx.tenantId,
-      objects: [{ storageKey: oldStorageKey, storageConnectionId: oldConnectionId }],
-    });
+    await rt._jobs.send("media.purge", purgePayload);
   } else {
-    await purgeMediaObjects(db, {
+    await purgeMediaObjects(db, purgePayload);
+  }
+
+  // 10. Post-commit: enqueue media.derive for newly replaced image (Plan S2)
+  if (updatedItem.kind === "image" && updatedItem.mime !== "image/gif" && rt._jobs) {
+    await rt._jobs.send(QUEUE_NAMES.MEDIA_DERIVE, {
       tenantId: ctx.tenantId,
-      objects: [{ storageKey: oldStorageKey, storageConnectionId: oldConnectionId }],
+      mediaId: input.id,
     });
   }
 
-  // 10. Post-commit: cache fan-out to owners (S5)
+  // 11. Post-commit: cache fan-out to owners (S5)
   await invalidateMediaCache(rt, ctx, [input.id]);
 
   return updatedItem;

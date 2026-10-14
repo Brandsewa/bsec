@@ -2,40 +2,11 @@
 
 import React, { useState } from "react";
 import type { StorefrontMedia } from "@bs/domain";
+import { mediaImage } from "@bs/blocks";
 
 export interface ProductGalleryProps {
   media: StorefrontMedia[];
   title: string;
-}
-
-function generateImageSrcSet(url?: string): { src: string; srcSet?: string; sizes?: string } {
-  if (!url) return { src: "" };
-
-  // If the image is served via Cloudflare Images / CDN transform URL, produce responsive AVIF/WebP variants
-  if (url.includes("/cdn-cgi/image/")) {
-    const widths = [360, 640, 750, 1080];
-    const srcSet = widths
-      .map((w) => {
-        const transformed = url.replace(
-          /\/cdn-cgi\/image\/[^/]+/,
-          `/cdn-cgi/image/width=${w},fit=cover,format=auto,quality=85`,
-        );
-        return `${transformed} ${w}w`;
-      })
-      .join(", ");
-    return {
-      src: url,
-      srcSet,
-      sizes: "(max-width: 640px) 100vw, (max-width: 1024px) 50vw, 600px",
-    };
-  }
-
-  // If image URL is already WebP or AVIF, provide width descriptors or use as-is
-  return {
-    src: url,
-    srcSet: `${url} 1x, ${url} 2x`,
-    sizes: "(max-width: 640px) 100vw, (max-width: 1024px) 50vw, 600px",
-  };
 }
 
 export function ProductGallery({ media, title }: ProductGalleryProps) {
@@ -44,7 +15,21 @@ export function ProductGallery({ media, title }: ProductGalleryProps) {
   const items = media.filter((m) => Boolean(m.url));
   const activeItem = items[selectedIndex] ?? items[0];
   const firstImage = items.find((m) => m.kind !== "video") ?? items[0];
-  const { src, srcSet, sizes } = generateImageSrcSet(activeItem?.url);
+
+  const imgInfo = mediaImage(
+    activeItem
+      ? {
+          url: activeItem.url,
+          width: activeItem.width,
+          height: activeItem.height,
+          focalX: activeItem.focalX,
+          focalY: activeItem.focalY,
+          dominantColor: activeItem.dominantColor,
+          derivatives: activeItem.derivatives,
+        }
+      : null,
+    { sizes: "(max-width: 640px) 100vw, (max-width: 1024px) 50vw, 600px" },
+  );
 
   if (items.length === 0) {
     return (
@@ -75,7 +60,10 @@ export function ProductGallery({ media, title }: ProductGalleryProps) {
   return (
     <div className="flex flex-col gap-4">
       {/* Main item with fixed aspect ratio */}
-      <div className="relative aspect-square w-full overflow-hidden rounded-2xl border border-border/60 bg-surface shadow-xs">
+      <div
+        className="relative aspect-square w-full overflow-hidden rounded-2xl border border-border/60 bg-surface shadow-xs"
+        style={{ backgroundColor: imgInfo.dominantColor ?? undefined }}
+      >
         {isVideo ? (
           <video
             key={activeItem?.url}
@@ -91,13 +79,14 @@ export function ProductGallery({ media, title }: ProductGalleryProps) {
         ) : (
           /* eslint-disable-next-line @next/next/no-img-element */
           <img
-            src={src}
-            srcSet={srcSet}
-            sizes={sizes}
+            src={imgInfo.src}
+            srcSet={imgInfo.srcSet}
+            sizes={imgInfo.sizes}
             alt={activeItem?.alt ?? title}
             fetchPriority="high"
             loading="eager"
-            className="h-full w-full object-cover object-center transition-all duration-300"
+            style={{ objectPosition: imgInfo.objectPosition }}
+            className="h-full w-full object-cover transition-all duration-300"
           />
         )}
       </div>
@@ -108,7 +97,21 @@ export function ProductGallery({ media, title }: ProductGalleryProps) {
           {items.map((item, idx) => {
             const isSelected = idx === selectedIndex;
             const itemIsVideo = item.kind === "video";
-            const thumbUrl = itemIsVideo ? (firstImage?.url || item.url) : item.url;
+            const thumbItem = itemIsVideo ? (firstImage || item) : item;
+            const thumbInfo = mediaImage(
+              thumbItem
+                ? {
+                    url: thumbItem.url,
+                    width: thumbItem.width,
+                    height: thumbItem.height,
+                    focalX: thumbItem.focalX,
+                    focalY: thumbItem.focalY,
+                    dominantColor: thumbItem.dominantColor,
+                    derivatives: thumbItem.derivatives,
+                  }
+                : null,
+            );
+
             return (
               <button
                 key={item.id || item.mediaId || idx}
@@ -122,13 +125,16 @@ export function ProductGallery({ media, title }: ProductGalleryProps) {
                     ? "border-primary ring-2 ring-primary/20 scale-95"
                     : "border-border/60 hover:border-border hover:opacity-80"
                 }`}
+                style={{ backgroundColor: thumbInfo.dominantColor ?? undefined }}
               >
                 {/* eslint-disable-next-line @next/next/no-img-element */}
                 <img
-                  src={thumbUrl}
+                  src={thumbInfo.src}
+                  srcSet={thumbInfo.srcSet}
                   alt={item.alt ?? `${title} thumbnail ${idx + 1}`}
                   loading="lazy"
-                  className="h-full w-full object-cover object-center"
+                  style={{ objectPosition: thumbInfo.objectPosition }}
+                  className="h-full w-full object-cover"
                 />
                 {itemIsVideo && (
                   <div className="pointer-events-none absolute inset-0 flex items-center justify-center bg-black/30">

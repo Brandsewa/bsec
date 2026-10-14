@@ -105,6 +105,12 @@ export interface StorefrontMedia {
   alt: string | null;
   kind?: "image" | "video" | "document" | undefined;
   url?: string | undefined;
+  width?: number | null | undefined;
+  height?: number | null | undefined;
+  focalX?: number | null | undefined;
+  focalY?: number | null | undefined;
+  dominantColor?: string | null | undefined;
+  derivatives?: Record<string, { key: string; width: number; height: number; bytes: number }> | null | undefined;
 }
 
 export interface StorefrontOption {
@@ -182,6 +188,12 @@ export interface StorefrontProductSummary {
     alt: string | null;
     url?: string | undefined;
     kind?: "image" | "video" | "document" | undefined;
+    width?: number | null | undefined;
+    height?: number | null | undefined;
+    focalX?: number | null | undefined;
+    focalY?: number | null | undefined;
+    dominantColor?: string | null | undefined;
+    derivatives?: Record<string, { key: string; width: number; height: number; bytes: number }> | null | undefined;
   } | undefined;
   brand?: StorefrontBrand | null | undefined;
 }
@@ -419,6 +431,12 @@ export async function getStorefrontProduct(
         alt: m.alt || detail?.alt || p.title,
         kind: detail?.kind ?? "image",
         url: publicMediaUrl(detail?.storageKey),
+        width: detail?.width,
+        height: detail?.height,
+        focalX: detail?.focalX,
+        focalY: detail?.focalY,
+        dominantColor: detail?.dominantColor,
+        derivatives: detail?.derivatives,
       };
     });
 
@@ -1266,6 +1284,12 @@ interface MediaStorageDetail {
   storageKey: string;
   kind: "image" | "video" | "document";
   alt: string | null;
+  width?: number | null;
+  height?: number | null;
+  focalX?: number | null;
+  focalY?: number | null;
+  dominantColor?: string | null;
+  derivatives?: Record<string, { key: string; width: number; height: number; bytes: number }> | null;
 }
 
 /** Storage details of the given media files, by media id. */
@@ -1281,6 +1305,12 @@ async function mediaStorageKeys(
       storageKey: schema.media.storageKey,
       kind: schema.media.kind,
       alt: schema.media.alt,
+      width: schema.media.width,
+      height: schema.media.height,
+      focalX: schema.media.focalX,
+      focalY: schema.media.focalY,
+      dominantColor: schema.media.dominantColor,
+      derivatives: schema.media.derivatives,
     })
     .from(schema.media)
     .where(inArray(schema.media.id, ids));
@@ -1291,6 +1321,12 @@ async function mediaStorageKeys(
         storageKey: r.storageKey,
         kind: (r.kind as "image" | "video" | "document") ?? "image",
         alt: r.alt,
+        width: r.width,
+        height: r.height,
+        focalX: r.focalX,
+        focalY: r.focalY,
+        dominantColor: r.dominantColor,
+        derivatives: r.derivatives as Record<string, { key: string; width: number; height: number; bytes: number }> | null,
       },
     ]),
   );
@@ -1398,7 +1434,21 @@ export async function buildProductSummaries(
 
   const detailsByMedia = await mediaStorageKeys(tx, mediaRows.map((m) => m.mediaId));
   const productTitleMap = new Map(products.map((p) => [p.id, p.title]));
-  const mediaByProduct: Record<string, { mediaId: string; alt: string | null; url: string | undefined; kind: "image" | "video" | "document" }> = {};
+  const mediaByProduct: Record<
+    string,
+    {
+      mediaId: string;
+      alt: string | null;
+      url: string | undefined;
+      kind: "image" | "video" | "document";
+      width?: number | null | undefined;
+      height?: number | null | undefined;
+      focalX?: number | null | undefined;
+      focalY?: number | null | undefined;
+      dominantColor?: string | null | undefined;
+      derivatives?: Record<string, { key: string; width: number; height: number; bytes: number }> | null | undefined;
+    }
+  > = {};
   for (const m of mediaRows) {
     if (!mediaByProduct[m.productId]) {
       const detail = detailsByMedia.get(m.mediaId);
@@ -1411,6 +1461,12 @@ export async function buildProductSummaries(
         alt: m.alt || detail?.alt || productTitleMap.get(m.productId) || null,
         url: publicMediaUrl(detail?.storageKey),
         kind: detail?.kind ?? "image",
+        width: detail?.width,
+        height: detail?.height,
+        focalX: detail?.focalX,
+        focalY: detail?.focalY,
+        dominantColor: detail?.dominantColor,
+        derivatives: detail?.derivatives,
       };
     }
   }
@@ -1438,6 +1494,12 @@ export async function buildProductSummaries(
             alt: primaryImg.alt,
             url: primaryImg.url,
             kind: primaryImg.kind,
+            width: primaryImg.width,
+            height: primaryImg.height,
+            focalX: primaryImg.focalX,
+            focalY: primaryImg.focalY,
+            dominantColor: primaryImg.dominantColor,
+            derivatives: primaryImg.derivatives,
           }
         : undefined,
     };

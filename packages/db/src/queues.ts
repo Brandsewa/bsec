@@ -34,10 +34,14 @@ export const QUEUES = [
   // Finance queues (docs/FINANCE-PLAN.md §3.5)
   { name: "finance.post", options: { retryLimit: 5, retryBackoff: true, retryDelay: 5 } },
   { name: "finance.reconcile", options: { retryLimit: 3, retryBackoff: true, retryDelay: 10 } },
-  // Media library queues (MEDIA-LIBRARY-PLAN §8)
+  // Media library queues (MEDIA-LIBRARY-PLAN §8, Phase 4 S2/S4)
   { name: "media.purge", options: { retryLimit: 5, retryBackoff: true, retryDelay: 5 } },
   { name: "media.trash_sweep", options: { retryLimit: 3, retryBackoff: true, retryDelay: 10 } },
   { name: "media.backfill_usages", options: { retryLimit: 3, retryBackoff: true, retryDelay: 10 } },
+  { name: "media.derive", options: { retryLimit: 5, retryBackoff: true, retryDelay: 5 } },
+  { name: "media.backfill_derivatives", options: { retryLimit: 3, retryBackoff: true, retryDelay: 10 } },
+  { name: "media.hash", options: { retryLimit: 5, retryBackoff: true, retryDelay: 5 } },
+  { name: "media.backfill_hashes", options: { retryLimit: 3, retryBackoff: true, retryDelay: 10 } },
 ] as const;
 
 export type QueueName = (typeof QUEUES)[number]["name"];
@@ -75,4 +79,8 @@ export const QUEUE_NAMES = {
   MEDIA_PURGE: "media.purge",
   MEDIA_TRASH_SWEEP: "media.trash_sweep",
   MEDIA_BACKFILL_USAGES: "media.backfill_usages",
+  MEDIA_DERIVE: "media.derive",
+  MEDIA_BACKFILL_DERIVATIVES: "media.backfill_derivatives",
+  MEDIA_HASH: "media.hash",
+  MEDIA_BACKFILL_HASHES: "media.backfill_hashes",
 } as const;

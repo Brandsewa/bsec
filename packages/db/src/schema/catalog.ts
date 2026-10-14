@@ -9,6 +9,7 @@ import {
   integer,
   jsonb,
   numeric,
+  real,
   text,
   timestamp,
   unique,
@@ -53,6 +54,10 @@ export const media = tenantTable(
     caption: text("caption"),
     durationMs: integer("duration_ms"),
     sha256: text("sha256"),
+    derivatives: jsonb("derivatives"),
+    dominantColor: text("dominant_color"),
+    focalX: real("focal_x"),
+    focalY: real("focal_y"),
     trashedAt: timestamp("trashed_at", { withTimezone: true }),
     trashedBy: uuid("trashed_by"),
     search: tsvector("search").generatedAlwaysAs(
@@ -69,9 +74,14 @@ export const media = tenantTable(
     index("media_tenant_kind_idx").on(t.tenantId, t.kind, t.status),
     index("media_search_idx").using("gin", t.search),
     index("media_tenant_trashed_idx").on(t.tenantId, t.trashedAt).where(sql`"trashed_at" is not null`),
+    index("media_tenant_sha256_idx").on(t.tenantId, t.sha256).where(sql`"sha256" is not null`),
     check("media_kind_chk", sql`${t.kind} in ('image', 'video', 'document')`),
     check("media_status_chk", sql`${t.status} in ('ready', 'trashed')`),
     check("media_duration_ms_chk", sql`${t.durationMs} is null or ${t.durationMs} >= 0`),
+    check(
+      "media_focal_chk",
+      sql`(${t.focalX} is null and ${t.focalY} is null) or (${t.focalX} between 0 and 1 and ${t.focalY} between 0 and 1)`,
+    ),
     check(
       "media_trashed_status_chk",
       sql`(${t.status} = 'trashed' and ${t.trashedAt} is not null) or (${t.status} != 'trashed' and ${t.trashedAt} is null)`,

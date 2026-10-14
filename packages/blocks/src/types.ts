@@ -93,13 +93,27 @@ export type BlockData =
   | { kind: "footer-menus"; columns: Array<ResolvedMenuItem[] | null> }
   | { kind: "file"; filename: string; mime: string; bytes: number; url?: string | undefined };
 
+export interface RenderMediaDetail {
+  url: string;
+  alt?: string | null | undefined;
+  mime?: string | undefined;
+  bytes?: number | undefined;
+  filename?: string | undefined;
+  width?: number | null | undefined;
+  height?: number | null | undefined;
+  focalX?: number | null | undefined;
+  focalY?: number | null | undefined;
+  dominantColor?: string | null | undefined;
+  derivatives?: Record<string, { key: string; width: number; height: number; bytes: number }> | null | undefined;
+}
+
 /**
  * Host-provided rendering context. Blocks stay UI-agnostic: the storefront and the
  * visual editor each inject how media URLs and product cards are drawn.
  */
 export interface RenderContext {
   mediaUrl?: ((mediaId: string) => string | null) | undefined;
-  mediaDetails?: ((mediaId: string) => { url: string; alt?: string | null; mime?: string; bytes?: number; filename?: string } | null) | undefined;
+  mediaDetails?: ((mediaId: string) => RenderMediaDetail | null) | undefined;
   data?: Record<string, BlockData | undefined> | undefined;
   renderProductCard?: ((product: BlockProduct, opts: { showPrice: boolean; showRating: boolean }) => ReactNode) | undefined;
   /** Stable id of the block being rendered (for data lookup). */

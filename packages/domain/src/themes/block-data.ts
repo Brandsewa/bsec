@@ -634,33 +634,71 @@ function collectMediaIds(blocks: BlockInstance[], data: Record<string, BlockData
   return [...ids].slice(0, 500);
 }
 
-/**
- * Turns media ids into public delivery URLs. Cloudflare Images when configured
- * (CF_IMAGES_DELIVERY_URL=https://imagedelivery.net/<account-hash>), otherwise the R2 public
- * URL. Ids that cannot be resolved are omitted and the block renders its placeholder.
- */
-async function resolveMediaUrls(tx: Tx, ids: string[]): Promise<Record<string, string>> {
-  if (ids.length === 0) return {};
-  const cfBase = process.env.CF_IMAGES_DELIVERY_URL;
-  if (!cfBase && !publicMediaUrl("probe")) return {};
-  const rows = await tx
-    .select({ id: schema.media.id, cfImageId: schema.media.cfImageId, storageKey: schema.media.storageKey })
-    .from(schema.media)
-    .where(inArray(schema.media.id, ids));
-  const out: Record<string, string> = {};
-  for (const r of rows) {
-    if (cfBase && r.cfImageId) out[r.id] = buildCloudflareImageUrl(cfBase, r.cfImageId, "public");
-    else {
-      const url = publicMediaUrl(r.storageKey);
-      if (url) out[r.id] = url;
-    }
-  }
-  return out;
+export interface BlockMediaMeta {
+  url?: string | undefined;
+  width?: number | null | undefined;
+  height?: number | null | undefined;
+  focalX?: number | null | undefined;
+  focalY?: number | null | undefined;
+  dominantColor?: string | null | undefined;
+  derivatives?: Record<string, { key: string; width: number; height: number; bytes: number }> | null | undefined;
 }
 
 export interface PageRenderData {
   data: Record<string, BlockData>;
   media: Record<string, string>;
+  mediaMeta?: Record<string, BlockMediaMeta> | undefined;
+}
+
+/**
+ * Turns media ids into public delivery URLs and responsive metadata. Cloudflare Images when configured
+ * (CF_IMAGES_DELIVERY_URL=https://imagedelivery.net/<account-hash>), otherwise the R2 public
+ * URL. Ids that cannot be resolved are omitted and the block renders its placeholder.
+ */
+async function resolveMedia(
+  tx: Tx,
+  ids: string[],
+): Promise<{ media: Record<string, string>; mediaMeta: Record<string, BlockMediaMeta> }> {
+  if (ids.length === 0) return { media: {}, mediaMeta: {} };
+  const cfBase = process.env.CF_IMAGES_DELIVERY_URL;
+  if (!cfBase && !publicMediaUrl("probe")) return { media: {}, mediaMeta: {} };
+  const rows = await tx
+    .select({
+      id: schema.media.id,
+      cfImageId: schema.media.cfImageId,
+      storageKey: schema.media.storageKey,
+      width: schema.media.width,
+      height: schema.media.height,
+      focalX: schema.media.focalX,
+      focalY: schema.media.focalY,
+      dominantColor: schema.media.dominantColor,
+      derivatives: schema.media.derivatives,
+    })
+    .from(schema.media)
+    .where(inArray(schema.media.id, ids));
+  const media: Record<string, string> = {};
+  const mediaMeta: Record<string, BlockMediaMeta> = {};
+  for (const r of rows) {
+    let url: string | undefined = undefined;
+    if (cfBase && r.cfImageId) {
+      url = buildCloudflareImageUrl(cfBase, r.cfImageId, "public");
+    } else {
+      url = publicMediaUrl(r.storageKey) ?? undefined;
+    }
+    if (url) {
+      media[r.id] = url;
+    }
+    mediaMeta[r.id] = {
+      url,
+      width: r.width,
+      height: r.height,
+      focalX: r.focalX,
+      focalY: r.focalY,
+      dominantColor: r.dominantColor,
+      derivatives: r.derivatives as Record<string, { key: string; width: number; height: number; bytes: number }> | null,
+    };
+  }
+  return { media, mediaMeta };
 }
 
 /** Everything a page's blocks need to render: store data plus resolved media URLs. */
@@ -671,10 +709,10 @@ export async function resolvePageRenderData(
 ): Promise<PageRenderData> {
   const data = await resolveBlockData(rt, ctx, blocks);
   const ids = collectMediaIds(blocks, data);
-  const media = ids.length
-    ? await withTenant(rt._db.db, ctx.tenantId, (tx) => resolveMediaUrls(tx, ids))
-    : {};
-  return { data, media };
+  const { media, mediaMeta } = ids.length
+    ? await withTenant(rt._db.db, ctx.tenantId, (tx) => resolveMedia(tx, ids))
+    : { media: {}, mediaMeta: {} };
+  return { data, media, mediaMeta };
 }
 
 /**
@@ -690,7 +728,7 @@ export async function previewPageRenderData(
   const result = validateBlockDocument({ version: 1, blocks: input.blocks });
   if (!result.success) {
     // Unsaved edits can be mid-way invalid; the editor shows empty states rather than failing.
-    return { data: {}, media: {} };
+    return { data: {}, media: {}, mediaMeta: {} };
   }
   return resolvePageRenderData(rt, ctx, result.data.blocks);
 }
