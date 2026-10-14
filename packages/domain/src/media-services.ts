@@ -870,6 +870,7 @@ export async function getMedia(
         focalY: schema.media.focalY,
         dominantColor: schema.media.dominantColor,
         derivatives: schema.media.derivatives,
+        sha256: schema.media.sha256,
         status: schema.media.status,
         folder: schema.media.folder,
         uploadedBy: schema.media.uploadedBy,

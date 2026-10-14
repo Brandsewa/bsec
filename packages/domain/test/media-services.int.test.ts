@@ -1023,9 +1023,9 @@ describe("Media Services Integration Test Suite (Real Postgres & Storage)", () =
       expect(page2.items[0]!.id).not.toBe(page1.items[0]!.id);
       expect(d2).toBeLessThan(500);
 
-      // 3. Filtering by type="image"
+      // 3. Filtering by kinds=["image"]
       const t2 = performance.now();
-      const filtered = await listMedia(rt, ctx, { limit: 50, type: "image" });
+      const filtered = await listMedia(rt, ctx, { limit: 50, kinds: ["image"] });
       const d3 = performance.now() - t2;
       expect(filtered.items.length).toBe(50);
       expect(d3).toBeLessThan(500);
