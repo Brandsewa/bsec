@@ -1,6 +1,7 @@
 import { and, asc, desc, eq, inArray, isNull } from "drizzle-orm";
 import { schema, withTenant } from "@bs/db";
 import {
+  collectMediaIds as collectDocumentMediaIds,
   validateBlockDocument,
   walkBlocks,
   type BlockCollectionSummary,
@@ -493,6 +494,7 @@ export async function resolveBlockData(
   const showcaseBlocks: BlockInstance[] = [];
   const headerBlocks: BlockInstance[] = [];
   const footerBlocks: BlockInstance[] = [];
+  const fileBlocks: BlockInstance[] = [];
 
   walkBlocks(blocks, (b) => {
     if (b.hidden) return;
@@ -501,6 +503,7 @@ export async function resolveBlockData(
     else if (b.type === "CollectionGrid") collectionBlocks.push(b);
     else if (b.type === "SiteHeader") headerBlocks.push(b);
     else if (b.type === "SiteFooter") footerBlocks.push(b);
+    else if (b.type === "FileDownload") fileBlocks.push(b);
   });
 
   if (
@@ -508,7 +511,8 @@ export async function resolveBlockData(
     collectionBlocks.length === 0 &&
     showcaseBlocks.length === 0 &&
     headerBlocks.length === 0 &&
-    footerBlocks.length === 0
+    footerBlocks.length === 0 &&
+    fileBlocks.length === 0
   ) {
     return {};
   }
@@ -570,37 +574,62 @@ export async function resolveBlockData(
       }
     }
 
+    if (fileBlocks.length > 0) {
+      const fileMediaIds = fileBlocks
+        .map((b) => b.props.mediaId)
+        .filter((id): id is string => typeof id === "string" && Boolean(id));
+      if (fileMediaIds.length > 0) {
+        const rows = await tx
+          .select({
+            id: schema.media.id,
+            filename: schema.media.filename,
+            mime: schema.media.mime,
+            bytes: schema.media.bytes,
+            storageKey: schema.media.storageKey,
+          })
+          .from(schema.media)
+          .where(inArray(schema.media.id, fileMediaIds));
+        const byId = new Map(rows.map((r) => [r.id, r]));
+        for (const b of fileBlocks) {
+          const mediaId = typeof b.props.mediaId === "string" ? b.props.mediaId : "";
+          const row = byId.get(mediaId);
+          if (row) {
+            out[b.id] = {
+              kind: "file",
+              filename: row.filename ?? "download",
+              mime: row.mime,
+              bytes: row.bytes,
+              url: publicMediaUrl(row.storageKey) ?? undefined,
+            };
+          }
+        }
+      }
+    }
+
     return out;
   });
 }
 
 /** Media ids referenced by blocks (props) and by resolved data (product/collection images). */
 function collectMediaIds(blocks: BlockInstance[], data: Record<string, BlockData>): string[] {
-  const ids = new Set<string>();
-  const add = (v: unknown) => {
-    if (typeof v === "string" && v) ids.add(v);
-  };
-  walkBlocks(blocks, (b) => {
-    if (b.hidden) return;
-    add(b.props.backgroundMediaId);
-    add(b.props.mediaId);
-    for (const key of ["items", "images", "slides"] as const) {
-      const list = b.props[key];
-      if (Array.isArray(list)) {
-        for (const it of list) {
-          if (it && typeof it === "object") {
-            add((it as Record<string, unknown>).avatarMediaId);
-            add((it as Record<string, unknown>).mediaId);
-            add((it as Record<string, unknown>).backgroundMediaId);
-          }
+  const docCollected = collectDocumentMediaIds({ version: 1, blocks });
+  const ids = new Set<string>(docCollected.all);
+  for (const d of Object.values(data)) {
+    if (d.kind === "products") {
+      for (const p of d.products) {
+        if (p.imageMediaId) ids.add(p.imageMediaId);
+      }
+    } else if (d.kind === "product-tabs") {
+      for (const tab of d.tabs) {
+        for (const p of tab.products) {
+          if (p.imageMediaId) ids.add(p.imageMediaId);
         }
       }
+    } else if (d.kind === "collections") {
+      for (const c of d.collections) {
+        if (c.imageMediaId) ids.add(c.imageMediaId);
+      }
     }
-  });
-  for (const d of Object.values(data)) {
-    if (d.kind === "products") for (const p of d.products) add(p.imageMediaId);
-    else if (d.kind === "product-tabs") for (const tab of d.tabs) for (const p of tab.products) add(p.imageMediaId);
-    else if (d.kind === "collections") for (const c of d.collections) add(c.imageMediaId);
   }
   return [...ids].slice(0, 500);
 }

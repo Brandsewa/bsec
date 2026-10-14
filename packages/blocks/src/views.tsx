@@ -582,16 +582,122 @@ function embed(url: string): { kind: "iframe" | "video"; src: string } | null {
   return null;
 }
 
-export function VideoView({ props }: A<R.VideoProps>): ReactNode {
+export function VideoView({ props, ctx }: A<R.VideoProps>): ReactNode {
+  const mediaUrl = props.mediaId ? mediaSrc(ctx, props.mediaId) : null;
+  const posterUrl = props.posterMediaId ? mediaSrc(ctx, props.posterMediaId) : null;
+
+  if (props.mediaId) {
+    if (!mediaUrl) {
+      return <div className="bsb bsb-placeholder">Video not found</div>;
+    }
+    return (
+      <div className="bsb">
+        <video
+          className="bsb-video"
+          src={mediaUrl}
+          poster={posterUrl ?? undefined}
+          controls={!props.autoplayLoop}
+          autoPlay={props.autoplayLoop}
+          loop={props.autoplayLoop}
+          muted={props.autoplayLoop}
+          playsInline
+          preload="none"
+        />
+      </div>
+    );
+  }
+
   const e = props.url ? embed(props.url) : null;
-  if (!e) return <div className="bsb bsb-placeholder">Add a YouTube, Vimeo or .mp4 link</div>;
+  if (!e) return <div className="bsb bsb-placeholder">Add a video from media or a link</div>;
   return (
     <div className="bsb">
       {e.kind === "video" ? (
-        <video className="bsb-video" src={e.src} controls preload="none" playsInline />
+        <video
+          className="bsb-video"
+          src={e.src}
+          poster={posterUrl ?? undefined}
+          controls={!props.autoplayLoop}
+          autoPlay={props.autoplayLoop}
+          loop={props.autoplayLoop}
+          muted={props.autoplayLoop}
+          preload="none"
+          playsInline
+        />
       ) : (
-        <iframe className="bsb-video" src={e.src} loading="lazy" allowFullScreen title="Video" referrerPolicy="strict-origin-when-cross-origin" />
+        <iframe
+          className="bsb-video"
+          src={e.src}
+          loading="lazy"
+          allowFullScreen
+          title="Video"
+          referrerPolicy="strict-origin-when-cross-origin"
+        />
       )}
+    </div>
+  );
+}
+
+function formatFileSize(bytes: number): string {
+  if (bytes < 1024) return `${bytes} B`;
+  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
+  return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+}
+
+function formatMimeLabel(mime: string, filename?: string): string {
+  if (mime === "application/pdf" || filename?.endsWith(".pdf")) return "PDF";
+  if (mime.includes("word") || filename?.endsWith(".docx") || filename?.endsWith(".doc")) return "DOC";
+  if (mime.includes("sheet") || mime.includes("excel") || filename?.endsWith(".xlsx") || filename?.endsWith(".csv")) return "SHEET";
+  if (mime.includes("zip") || mime.includes("tar") || mime.includes("compressed")) return "ZIP";
+  if (mime.startsWith("audio/")) return "AUDIO";
+  if (mime.startsWith("image/")) return "IMAGE";
+  if (mime.startsWith("video/")) return "VIDEO";
+  return "FILE";
+}
+
+export function FileDownloadView({ props, ctx }: A<R.FileDownloadProps>): ReactNode {
+  const fileUrl = props.mediaId ? mediaSrc(ctx, props.mediaId) : null;
+  const blockData = ctx?.blockId && ctx.data ? ctx.data[ctx.blockId] : undefined;
+  const fileData = blockData && blockData.kind === "file" ? blockData : undefined;
+  const mediaDetails = props.mediaId && ctx?.mediaDetails ? ctx.mediaDetails(props.mediaId) : undefined;
+
+  if (!props.mediaId) {
+    return <div className="bsb bsb-placeholder">Select a file to download</div>;
+  }
+
+  const downloadUrl = fileUrl || fileData?.url || mediaDetails?.url;
+  const filename = fileData?.filename || mediaDetails?.filename || "download";
+  const mime = fileData?.mime || mediaDetails?.mime || "application/octet-stream";
+  const bytes = fileData?.bytes ?? mediaDetails?.bytes;
+  const typeLabel = formatMimeLabel(mime, filename);
+  const sizeLabel = typeof bytes === "number" ? formatFileSize(bytes) : undefined;
+  const metaText = [typeLabel, sizeLabel].filter(Boolean).join(", ");
+  const ariaLabel = `${props.label}${sizeLabel ? ` (${sizeLabel})` : ""}`;
+
+  return (
+    <div className="bsb">
+      <a
+        className="bsb-file-download"
+        href={downloadUrl ?? "#"}
+        download={filename}
+        aria-label={ariaLabel}
+      >
+        <div className="bsb-file-download-content">
+          <div className="bsb-file-download-icon" aria-hidden="true">
+            <span style={{ fontSize: "11px", fontWeight: 700, textTransform: "uppercase" }}>{typeLabel}</span>
+          </div>
+          <div className="bsb-file-download-info">
+            <span className="bsb-file-download-label">{props.label}</span>
+            {props.description ? <span className="bsb-file-download-desc">{props.description}</span> : null}
+            <span className="bsb-file-download-meta">
+              {filename} {metaText ? `• ${metaText}` : ""}
+            </span>
+          </div>
+        </div>
+        <div className="bsb-file-download-action" aria-hidden="true">
+          <span>Download</span>
+          <span style={{ fontSize: "14px" }}>↓</span>
+        </div>
+      </a>
     </div>
   );
 }

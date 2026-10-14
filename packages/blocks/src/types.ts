@@ -28,6 +28,7 @@ export type BlockType =
   | "Text"
   | "Image"
   | "Video"
+  | "FileDownload"
   | "Button"
   | "Icon"
   | "Link"
@@ -89,7 +90,8 @@ export type BlockData =
   | { kind: "collections"; collections: BlockCollectionSummary[] }
   | { kind: "product-tabs"; tabs: Array<{ products: BlockProduct[] }> }
   | { kind: "menu"; items: ResolvedMenuItem[] }
-  | { kind: "footer-menus"; columns: Array<ResolvedMenuItem[] | null> };
+  | { kind: "footer-menus"; columns: Array<ResolvedMenuItem[] | null> }
+  | { kind: "file"; filename: string; mime: string; bytes: number; url?: string | undefined };
 
 /**
  * Host-provided rendering context. Blocks stay UI-agnostic: the storefront and the
@@ -97,6 +99,7 @@ export type BlockData =
  */
 export interface RenderContext {
   mediaUrl?: ((mediaId: string) => string | null) | undefined;
+  mediaDetails?: ((mediaId: string) => { url: string; alt?: string | null; mime?: string; bytes?: number; filename?: string } | null) | undefined;
   data?: Record<string, BlockData | undefined> | undefined;
   renderProductCard?: ((product: BlockProduct, opts: { showPrice: boolean; showRating: boolean }) => ReactNode) | undefined;
   /** Stable id of the block being rendered (for data lookup). */

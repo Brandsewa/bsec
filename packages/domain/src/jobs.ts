@@ -1155,6 +1155,23 @@ export async function startJobs(opts: {
     }
   });
 
+  // Handle media.backfill_usages one-off idempotent backfill job (MEDIA-LIBRARY-PLAN §8, Phase 3 S4)
+  await boss.work<{ tenantId?: string }>(QUEUE_NAMES.MEDIA_BACKFILL_USAGES, { localConcurrency: 1 }, async (batch) => {
+    for (const job of batch) {
+      try {
+        const { backfillDocumentMediaUsages } = await import("./media/document-usages.ts");
+        const res = await backfillDocumentMediaUsages(db, job.data?.tenantId);
+        opts.log.info(
+          { job_id: job.id, syncedTenants: res.syncedTenants, syncedPages: res.syncedPages, syncedThemes: res.syncedThemes },
+          "media.backfill_usages processed",
+        );
+      } catch (err) {
+        opts.log.error({ err, job_id: job.id }, "media.backfill_usages failed");
+        throw err;
+      }
+    }
+  });
+
   // Register recurring schedules and proof-of-life sweeps on boot (PLAN §5.10, §11.3)
   try {
     await boss.schedule(QUEUE_NAMES.RESERVATION_EXPIRY, "* * * * *", {});
@@ -1188,6 +1205,7 @@ export async function startJobs(opts: {
   await boss.send(QUEUE_NAMES.CART_RECOVERY_SWEEP, {});
   await boss.send(QUEUE_NAMES.SUBSCRIPTION_TRIAL_EXPIRY_SWEEP, {});
   await boss.send(QUEUE_NAMES.MAINTENANCE_WATCHDOG_SWEEP, {});
+  await boss.send(QUEUE_NAMES.MEDIA_BACKFILL_USAGES, {}, { singletonKey: "media-backfill-v1" });
   opts.log.info({ concurrency: opts.concurrency }, "worker started");
 
   return {

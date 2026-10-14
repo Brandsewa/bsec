@@ -11,3 +11,4 @@ export * from "./sample-data.ts";
 export * from "./layout.ts";
 export * from "./render-tree.tsx";
 export * from "./theme-pages.ts";
+export * from "./media.ts";

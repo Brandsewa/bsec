@@ -34,6 +34,7 @@ New decisions get an ADR **before** code (PLAN §15). Copy `template.md`, take t
 | [027](027-navigation-and-filter-menus.md) | Navigation builder and faceted filter menus | Accepted |
 | [028](028-media-library.md) | Media library: flat storage, usages junction table, per-kind quotas, trash lifecycle, and SVG ban | Accepted |
 | [029](029-media-picker-and-usages.md) | Shared media picker, usage tracking, and cache fan-out | Accepted |
+| [030](030-media-in-blocks.md) | Media in block documents and themes | Accepted |
 
-**Next number: 030.**
+**Next number: 031.**
 

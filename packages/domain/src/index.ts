@@ -13,6 +13,7 @@ export * from "./branding/fonts.ts";
 export * from "./catalog/csv.ts";
 export * from "./media/types.ts";
 export * from "./media/storage.ts";
+export * from "./media/document-usages.ts";
 export * from "./catalog-services.ts";
 export * from "./review-services.ts";
 export * from "./media-services.ts";

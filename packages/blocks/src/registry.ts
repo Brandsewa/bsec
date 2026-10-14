@@ -485,14 +485,33 @@ export const ImageBlock: BlockDefinition<ImageProps> = {
   render: V.ImageView,
 };
 
-export const VideoSchema = z.object({ url: videoUrlSchema.default("") });
+export const VideoSchema = z.object({
+  url: videoUrlSchema.default(""),
+  mediaId: z.string().uuid().optional().or(z.literal("")),
+  posterMediaId: z.string().uuid().optional().or(z.literal("")),
+  autoplayLoop: z.boolean().default(false),
+});
 export type VideoProps = z.infer<typeof VideoSchema>;
 export const VideoBlock: BlockDefinition<VideoProps> = {
   type: "Video",
   version: 1,
   schema: VideoSchema,
-  defaultProps: { url: "" },
+  defaultProps: { url: "", autoplayLoop: false },
   render: V.VideoView,
+};
+
+export const FileDownloadSchema = z.object({
+  label: z.string().min(1).max(100).default("Download file"),
+  description: z.string().max(300).optional().default(""),
+  mediaId: z.string().uuid().optional().or(z.literal("")),
+});
+export type FileDownloadProps = z.infer<typeof FileDownloadSchema>;
+export const FileDownloadBlock: BlockDefinition<FileDownloadProps> = {
+  type: "FileDownload",
+  version: 1,
+  schema: FileDownloadSchema,
+  defaultProps: { label: "Download file", description: "", mediaId: "" },
+  render: V.FileDownloadView,
 };
 
 export const ButtonSchema = z.object({
@@ -932,6 +951,7 @@ export const BLOCK_DEFINITIONS: Record<BlockType, AnyBlockDefinition> = {
   Text: TextBlock,
   Image: ImageBlock,
   Video: VideoBlock,
+  FileDownload: FileDownloadBlock,
   Button: ButtonBlock,
   Icon: IconBlock,
   Link: LinkBlock,
@@ -954,6 +974,7 @@ export function getBlockDefinition(type: "CollectionGrid"): BlockDefinition<Coll
 export function getBlockDefinition(type: "ProductCarousel"): BlockDefinition<ProductCarouselProps>;
 export function getBlockDefinition(type: "Testimonials"): BlockDefinition<TestimonialsProps>;
 export function getBlockDefinition(type: "Reviews"): BlockDefinition<ReviewsProps>;
+export function getBlockDefinition(type: "FileDownload"): BlockDefinition<FileDownloadProps>;
 export function getBlockDefinition(type: "RichText"): BlockDefinition<RichTextProps>;
 export function getBlockDefinition(type: "FAQ"): BlockDefinition<FAQProps>;
 export function getBlockDefinition(type: "Gallery"): BlockDefinition<GalleryProps>;
