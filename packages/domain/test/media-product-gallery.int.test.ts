@@ -25,6 +25,7 @@ import {
   detachProductMedia,
   reorderProductMedia,
   updateProductMedia,
+  trashMedia,
 } from "../src/media-services.ts";
 import { createProduct } from "../src/catalog-services.ts";
 
@@ -245,5 +246,47 @@ describe("Product Media Gallery Integration Test Suite (S3)", () => {
     // attachedVid1 is now position 1
     expect(postDetachRows[1]?.id).toBe(attachedVid1.id);
     expect(postDetachRows[1]?.position).toBe(1);
+  });
+
+  it("refuses duplicate ids in reorder, trashed files, and removing the last image while a video remains", async () => {
+    const imgA = await uploadMediaDirect(rt, ctx, { filename: "rule-a.png", mime: "image/png", fileBytes: PNG_1X1 });
+    const imgB = await uploadMediaDirect(rt, ctx, { filename: "rule-b.png", mime: "image/png", fileBytes: PNG_1X1 });
+    const vid = await uploadMediaDirect(rt, ctx, { filename: "rule-v.mp4", mime: "video/mp4", fileBytes: MP4_BYTES });
+    const product = await createProduct(rt, ctx, {
+      title: "Gallery Rules Product",
+      slug: `gallery-rules-${Date.now()}`,
+      status: "draft",
+    });
+
+    // A file in the Trash cannot be attached
+    await trashMedia(rt, ctx, { ids: [imgB.id] });
+    await expect(attachProductMedia(rt, ctx, { productId: product.id, mediaId: imgB.id })).rejects.toThrow(/Trash/);
+
+    const a = await attachProductMedia(rt, ctx, { productId: product.id, mediaId: imgA.id });
+    const v = await attachProductMedia(rt, ctx, { productId: product.id, mediaId: vid.id });
+
+    // A repeated id must not pass the "same set" check and corrupt positions
+    await expect(
+      reorderProductMedia(rt, ctx, { id: product.id, order: [a.id, a.id] }),
+    ).rejects.toThrow(/exactly once/);
+
+    // The last image cannot be removed while a video remains (the primary must stay an image)
+    await expect(
+      detachProductMedia(rt, ctx, { productId: product.id, productMediaId: a.id }),
+    ).rejects.toThrow(/main media must be an image/);
+
+    const rows = await withTenant(rt._db.db, ctx.tenantId, (tx) =>
+      tx
+        .select({ id: schema.productMedia.id, position: schema.productMedia.position })
+        .from(schema.productMedia)
+        .where(eq(schema.productMedia.productId, product.id))
+        .orderBy(schema.productMedia.position),
+    );
+    expect(rows.map((r) => r.id)).toEqual([a.id, v.id]);
+    expect(rows.map((r) => r.position)).toEqual([0, 1]);
+
+    // Removing the video first, then the image, is allowed
+    await detachProductMedia(rt, ctx, { productId: product.id, productMediaId: v.id });
+    await detachProductMedia(rt, ctx, { productId: product.id, productMediaId: a.id });
   });
 });

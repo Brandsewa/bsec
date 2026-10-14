@@ -191,6 +191,35 @@ describe("Media Replace Integration Test Suite (Real Postgres & Storage)", () =>
     expect(current.storageKey).toBe(img.storageKey);
   });
 
+  it("refuses a replacement image that cannot be decoded, keeps the original and purges the upload", async () => {
+    const { driver } = await getActiveStorageDriver(rt._db.db, "public_media");
+
+    const img = await uploadMediaDirect(rt, ctx, {
+      filename: "intact.png",
+      mime: "image/png",
+      fileBytes: PNG_1X1,
+    });
+
+    // PNG signature followed by garbage: passes the magic-byte check, fails to decode
+    const brokenKey = `${ctx.tenantId}/products/${crypto.randomUUID()}.png`;
+    const broken = Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 0x00, 0x00, 0x00, 0x00]);
+    await driver.put({ key: brokenKey, body: broken, contentType: "image/png" });
+
+    await expect(
+      replaceMedia(rt, ctx, {
+        id: img.id,
+        storageKey: brokenKey,
+        mime: "image/png",
+        filename: "broken.png",
+        bytes: broken.length,
+      }),
+    ).rejects.toThrow(/corrupted or invalid image/i);
+
+    const current = await getMedia(rt, ctx, { id: img.id });
+    expect(current.storageKey).toBe(img.storageKey);
+    expect((await driver.head(brokenKey)).exists).toBe(false);
+  });
+
   it("calculates net quota delta and preserves used-in references", async () => {
     const { driver } = await getActiveStorageDriver(rt._db.db, "public_media");
 

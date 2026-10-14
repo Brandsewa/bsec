@@ -263,7 +263,8 @@ async function finalizeUpload(
   // 5. Download full object ONLY for images to inspect dimensions with sharp
   let width: number | null = null;
   let height: number | null = null;
-  let sha256: string;
+  // Hash only the complete content; a partial hash would make unrelated files look like duplicates.
+  let sha256: string | null = null;
 
   if (kind === "image") {
     let fullImageBuffer: Buffer;
@@ -297,11 +298,9 @@ async function finalizeUpload(
 
     sha256 = crypto.createHash("sha256").update(fullImageBuffer).digest("hex");
   } else {
-    // For videos and documents, do not download the entire multi-megabyte file
+    // For videos and documents, do not download the entire file; hash only when the full bytes are in hand.
     if (params.directBuffer) {
       sha256 = crypto.createHash("sha256").update(params.directBuffer).digest("hex");
-    } else {
-      sha256 = crypto.createHash("sha256").update(magicBuffer).digest("hex");
     }
   }
 
@@ -1604,11 +1603,15 @@ export async function attachProductMedia(
         id: schema.media.id,
         storageKey: schema.media.storageKey,
         kind: schema.media.kind,
+        status: schema.media.status,
       })
       .from(schema.media)
       .where(and(eq(schema.media.tenantId, ctx.tenantId), eq(schema.media.id, input.mediaId), libraryScope))
       .limit(1);
     if (!asset) throw new Error("Not Found: media item not found in library");
+    if (asset.status === "trashed") {
+      throw new Error("Bad Request: This file is in the Trash. Restore it before adding it to a product");
+    }
 
     if (asset.kind !== "image" && asset.kind !== "video") {
       throw new Error("Bad Request: Only images and videos can be added to the product gallery");
@@ -1704,6 +1707,11 @@ export async function detachProductMedia(
       .where(eq(schema.productMedia.productId, input.productId))
       .orderBy(schema.productMedia.position);
 
+    // The primary item must stay an image: removing the last image while videos remain is refused (rolls back the delete).
+    if (remaining.length > 0 && !remaining.some((r) => r.kind === "image")) {
+      throw new Error("Bad Request: Remove the videos first. A product's main media must be an image");
+    }
+
     // If remaining item at position 0 is not an image, promote the next image to position 0 (S3)
     if (remaining.length > 0) {
       const first = remaining[0];
@@ -1767,8 +1775,8 @@ export async function reorderProductMedia(
       .innerJoin(schema.media, eq(schema.media.id, schema.productMedia.mediaId))
       .where(eq(schema.productMedia.productId, input.id));
 
-    if (input.order.length !== current.length) {
-      throw new Error("Bad Request: order must contain exactly the product's current media items");
+    if (input.order.length !== current.length || new Set(input.order).size !== input.order.length) {
+      throw new Error("Bad Request: order must contain each of the product's current media items exactly once");
     }
 
     const currentMap = new Map(current.map((c) => [c.id, c]));
@@ -1983,25 +1991,31 @@ export async function replaceMedia(
     throw new Error(magicResult.error || "File verification failed: magic bytes mismatch");
   }
 
-  // 7. Extract dimensions
+  // 7. Extract dimensions. A replacement image that sharp cannot read is refused, as at upload.
   let width: number | null = null;
   let height: number | null = null;
+  let sha256: string | null = null;
   if (newKind === "image") {
     try {
       const fullBytes = await driver.get(input.storageKey);
-      if (fullBytes) {
-        const sharpModule = await import("sharp");
-        const sharp = sharpModule.default;
-        const meta = await sharp(fullBytes).metadata();
-        width = meta.width ?? null;
-        height = meta.height ?? null;
+      if (!fullBytes || fullBytes.length === 0) {
+        throw new Error("empty image body");
       }
-    } catch {
-      // Dimensions optional on failure
+      const sharpModule = await import("sharp");
+      const sharp = sharpModule.default;
+      const meta = await sharp(fullBytes).metadata();
+      width = meta.width ?? null;
+      height = meta.height ?? null;
+      sha256 = crypto.createHash("sha256").update(fullBytes).digest("hex");
+    } catch (err) {
+      await purgeMediaObjects(db, {
+        tenantId: ctx.tenantId,
+        objects: [{ storageKey: input.storageKey, storageConnectionId: activeConfig.id }],
+      }).catch(() => {});
+      throw new Error("Failed to process image metadata: corrupted or invalid image file", { cause: err });
     }
   }
 
-  const sha256 = crypto.createHash("sha256").update(chunk).digest("hex");
   const oldStorageKey = existing.storageKey;
   const oldConnectionId = existing.storageConnectionId;
 
