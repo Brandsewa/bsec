@@ -3,7 +3,6 @@
 Source of truth: `docs/PLAN.html` v2.0 (build order in `docs/BUILD-PLAN-M2-M9.md`). Items are ticked only after verification; the evidence is noted next to each. "From code" means it was read in the repo but not exercised live.
 
 ## In flight
-- Antigravity · feat/media-library-phase-4 · media library · 2026-10-14 · Phase 4: real e2e, document downloads, responsive images, focal point, duplicates. [Ready for Claude verification]
 
 ## M11 · Auth & Transactional Email Overhaul (docs/AUTH-OVERHAUL-PLAN.md)
 
