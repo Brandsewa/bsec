@@ -6,6 +6,7 @@ import { saasDb, type Runtime } from "../runtime.ts";
 import { tierForPlan } from "./plan-tiers.ts";
 import { buildOwnerInviteUrl, issueOwnerInviteInTx } from "./invite-token.ts";
 import { normalizeSubdomainSlug, validateSubdomainFormat } from "./subdomains.ts";
+import { syncDocumentMediaUsages } from "../media/document-usages.ts";
 
 export interface ProvisionOwnerInput {
   email: string;
@@ -413,6 +414,33 @@ export async function provisionTenant(
             draftVersionId: homeVersion.id,
           })
           .where(eq(schema.pages.id, homePage.id));
+
+        const provCtx = {
+          tenantId,
+          actor: { type: "system" as const, role: "platform_admin" as const },
+        };
+        await syncDocumentMediaUsages(
+          tx,
+          provCtx,
+          {
+            ownerType: "page",
+            ownerId: homePage.id,
+            field: "published",
+            document: { blocks: homeBlocks },
+          },
+          { tolerant: true },
+        );
+        await syncDocumentMediaUsages(
+          tx,
+          provCtx,
+          {
+            ownerType: "page",
+            ownerId: homePage.id,
+            field: "draft",
+            document: { blocks: homeBlocks },
+          },
+          { tolerant: true },
+        );
       }
     }
 
@@ -460,6 +488,57 @@ export async function provisionTenant(
             draftVersionId: aboutVersion.id,
           })
           .where(eq(schema.pages.id, aboutPage.id));
+
+        const provCtx = {
+          tenantId,
+          actor: { type: "system" as const, role: "platform_admin" as const },
+        };
+        await syncDocumentMediaUsages(
+          tx,
+          provCtx,
+          {
+            ownerType: "page",
+            ownerId: aboutPage.id,
+            field: "published",
+            document: {
+              blocks: [
+                {
+                  id: "b-about-01",
+                  type: "Content",
+                  version: 1,
+                  props: {
+                    heading: `About ${storeName}`,
+                    body: `Welcome to ${storeName}. We craft high-quality products with passion and attention to detail.`,
+                  },
+                },
+              ],
+            },
+          },
+          { tolerant: true },
+        );
+        await syncDocumentMediaUsages(
+          tx,
+          provCtx,
+          {
+            ownerType: "page",
+            ownerId: aboutPage.id,
+            field: "draft",
+            document: {
+              blocks: [
+                {
+                  id: "b-about-01",
+                  type: "Content",
+                  version: 1,
+                  props: {
+                    heading: `About ${storeName}`,
+                    body: `Welcome to ${storeName}. We craft high-quality products with passion and attention to detail.`,
+                  },
+                },
+              ],
+            },
+          },
+          { tolerant: true },
+        );
       }
     }
 
@@ -507,6 +586,57 @@ export async function provisionTenant(
             draftVersionId: privacyVersion.id,
           })
           .where(eq(schema.pages.id, privacyPage.id));
+
+        const provCtx = {
+          tenantId,
+          actor: { type: "system" as const, role: "platform_admin" as const },
+        };
+        await syncDocumentMediaUsages(
+          tx,
+          provCtx,
+          {
+            ownerType: "page",
+            ownerId: privacyPage.id,
+            field: "published",
+            document: {
+              blocks: [
+                {
+                  id: "b-privacy-01",
+                  type: "Content",
+                  version: 1,
+                  props: {
+                    heading: "Privacy Policy",
+                    body: `This Privacy Policy describes how ${storeName} collects, uses, and discloses your personal data when you visit our store or make a purchase.`,
+                  },
+                },
+              ],
+            },
+          },
+          { tolerant: true },
+        );
+        await syncDocumentMediaUsages(
+          tx,
+          provCtx,
+          {
+            ownerType: "page",
+            ownerId: privacyPage.id,
+            field: "draft",
+            document: {
+              blocks: [
+                {
+                  id: "b-privacy-01",
+                  type: "Content",
+                  version: 1,
+                  props: {
+                    heading: "Privacy Policy",
+                    body: `This Privacy Policy describes how ${storeName} collects, uses, and discloses your personal data when you visit our store or make a purchase.`,
+                  },
+                },
+              ],
+            },
+          },
+          { tolerant: true },
+        );
       }
     }
 
@@ -554,6 +684,57 @@ export async function provisionTenant(
             draftVersionId: termsVersion.id,
           })
           .where(eq(schema.pages.id, termsPage.id));
+
+        const provCtx = {
+          tenantId,
+          actor: { type: "system" as const, role: "platform_admin" as const },
+        };
+        await syncDocumentMediaUsages(
+          tx,
+          provCtx,
+          {
+            ownerType: "page",
+            ownerId: termsPage.id,
+            field: "published",
+            document: {
+              blocks: [
+                {
+                  id: "b-terms-01",
+                  type: "Content",
+                  version: 1,
+                  props: {
+                    heading: "Terms of Service",
+                    body: `By visiting our site or purchasing from ${storeName}, you agree to be bound by these Terms of Service.`,
+                  },
+                },
+              ],
+            },
+          },
+          { tolerant: true },
+        );
+        await syncDocumentMediaUsages(
+          tx,
+          provCtx,
+          {
+            ownerType: "page",
+            ownerId: termsPage.id,
+            field: "draft",
+            document: {
+              blocks: [
+                {
+                  id: "b-terms-01",
+                  type: "Content",
+                  version: 1,
+                  props: {
+                    heading: "Terms of Service",
+                    body: `By visiting our site or purchasing from ${storeName}, you agree to be bound by these Terms of Service.`,
+                  },
+                },
+              ],
+            },
+          },
+          { tolerant: true },
+        );
       }
     }
 

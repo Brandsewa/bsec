@@ -8,6 +8,7 @@ import {
   type BlockDocument,
 } from "./types.ts";
 import { sanitizeRichText } from "./sanitize.ts";
+import { isUuid } from "./media.ts";
 
 export type ValidationError = {
   path: string;
@@ -152,6 +153,19 @@ function validateBlockList(
 
     if (type === "RichText" && typeof props.content === "string") {
       props.content = sanitizeRichText(props.content);
+    }
+
+    if (type === "Video") {
+      if (typeof props.mediaId === "string" && !isUuid(props.mediaId)) {
+        delete props.mediaId;
+      }
+      if (typeof props.posterMediaId === "string" && !isUuid(props.posterMediaId)) {
+        delete props.posterMediaId;
+      }
+    } else if (type === "FileDownload") {
+      if (typeof props.mediaId === "string" && !isUuid(props.mediaId)) {
+        delete props.mediaId;
+      }
     }
 
     // Children are validated by this walker, not by the block's zod schema.

@@ -66,6 +66,8 @@ export type CacheChange =
             ownerType: string;
             ownerId: string;
             productId?: string | undefined;
+            slug?: string | undefined;
+            pageType?: string | undefined;
             field?: string | undefined;
           }>
         | undefined;
@@ -233,11 +235,37 @@ export function computeInvalidationTags(
             break;
           }
           case "page": {
+            if (o.slug) {
+              tags.push(tenantTag(tenantId, "page", o.slug));
+              if (o.slug === "home" || o.pageType === "home") {
+                tags.push(tenantTag(tenantId, "page", "home"));
+                tags.push(tenantTag(tenantId, "store-shell"));
+              }
+              if (
+                o.slug === "template-header" ||
+                o.pageType === "header" ||
+                o.slug === "template-footer" ||
+                o.pageType === "footer"
+              ) {
+                tags.push(tenantTag(tenantId, "nav"));
+                tags.push(tenantTag(tenantId, "store-shell"));
+              }
+              if (o.slug === "template-product" || o.pageType === "product_template") {
+                tags.push(tenantTag(tenantId, "product"));
+              }
+              if (o.slug === "template-collection" || o.pageType === "collection_template") {
+                tags.push(tenantTag(tenantId, "collection"));
+              }
+              if (o.slug === "template-cart" || o.pageType === "cart_template") {
+                tags.push(tenantTag(tenantId, "store-shell"));
+              }
+            }
             tags.push(tenantTag(tenantId, "page", o.ownerId));
             break;
           }
           case "theme": {
             tags.push(tenantTag(tenantId, "theme"));
+            tags.push(tenantTag(tenantId, "store-shell"));
             break;
           }
         }
@@ -309,24 +337,57 @@ export async function invalidateMediaCache(
       }
     }
 
+    const untrackedMap = await findUntrackedReferences(tx, ctx.tenantId, ids);
+
+    // Look up page metadata (slug, type) for cache tag derivation
+    const allPageIds = new Set<string>();
+    for (const u of usageRows) {
+      if (u.ownerType === "page") allPageIds.add(u.ownerId);
+    }
+    for (const refs of untrackedMap.values()) {
+      for (const r of refs) {
+        if (r.ownerType === "page") allPageIds.add(r.ownerId);
+      }
+    }
+
+    const pageMap = new Map<string, { slug: string; type: string }>();
+    if (allPageIds.size > 0) {
+      const pRows = await tx
+        .select({ id: schema.pages.id, slug: schema.pages.slug, type: schema.pages.type })
+        .from(schema.pages)
+        .where(inArray(schema.pages.id, Array.from(allPageIds)));
+      for (const p of pRows) {
+        pageMap.set(p.id, { slug: p.slug, type: p.type });
+      }
+    }
+
     const usageOwners: Array<{
       ownerType: string;
       ownerId: string;
       productId?: string | undefined;
+      slug?: string | undefined;
+      pageType?: string | undefined;
       field?: string | undefined;
-    }> = usageRows.map((u) => ({
-      ownerType: u.ownerType,
-      ownerId: u.ownerId,
-      productId: u.ownerType === "variant" ? variantProductMap.get(u.ownerId) : undefined,
-      field: u.field,
-    }));
+    }> = usageRows.map((u) => {
+      const p = u.ownerType === "page" ? pageMap.get(u.ownerId) : undefined;
+      return {
+        ownerType: u.ownerType,
+        ownerId: u.ownerId,
+        productId: u.ownerType === "variant" ? variantProductMap.get(u.ownerId) : undefined,
+        slug: p?.slug,
+        pageType: p?.type,
+        field: u.field,
+      };
+    });
 
-    const untrackedMap = await findUntrackedReferences(tx, ctx.tenantId, ids);
     for (const refs of untrackedMap.values()) {
       for (const r of refs) {
+        const p = r.ownerType === "page" ? pageMap.get(r.ownerId) : undefined;
         usageOwners.push({
           ownerType: r.ownerType,
           ownerId: r.ownerId,
+          slug: p?.slug,
+          pageType: p?.type,
           field: r.field,
         });
       }

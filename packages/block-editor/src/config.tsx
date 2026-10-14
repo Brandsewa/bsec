@@ -1,7 +1,7 @@
 import type { ComponentType, CSSProperties, ReactNode } from "react";
 import type { Config, CustomField, Field } from "@puckeditor/core";
 import { SLOT_BLOCK_TYPES, SLOT_PROP, getBlockDefinition, type BlockType, type RenderContext } from "@bs/blocks";
-import { mediaField } from "./MediaField.tsx";
+import { mediaField, videoMediaField, fileMediaField } from "./MediaField.tsx";
 import { menuField } from "./MenuField.tsx";
 import { accordionFields } from "./sections.tsx";
 import { layoutField } from "./LayoutField.tsx";
@@ -126,7 +126,25 @@ export const BLOCK_SPECS: Record<BlockType, Spec> = {
   Text: { label: "Text", category: "content", fields: { text: area("Text (blank line = new paragraph)"), align: select("Align", ALIGN), muted: radio("Softer colour") } },
   RichText: { label: "Rich text", category: "content", fields: { content: area("HTML (formatting tags only)"), alignment: select("Align", ALIGN) } },
   Image: { label: "Image", category: "content", fields: { mediaId: mediaField("Image") as Field, alt: text("Alt text"), ratio: select("Shape", { auto: "Original", square: "Square", "4-3": "4:3", "16-9": "16:9" }), rounded: radio("Rounded corners"), href: link("Link") } },
-  Video: { label: "Video", category: "content", fields: { url: text("YouTube, Vimeo or .mp4 link") } },
+  Video: {
+    label: "Video",
+    category: "content",
+    fields: {
+      mediaId: videoMediaField("Library video") as Field,
+      posterMediaId: mediaField("Poster image") as Field,
+      autoplayLoop: radio("Autoplay loop (muted)"),
+      url: text("Or video URL (YouTube, Vimeo, MP4)"),
+    },
+  },
+  FileDownload: {
+    label: "File download",
+    category: "content",
+    fields: {
+      label: text("Download button label"),
+      description: area("Description (optional)"),
+      mediaId: fileMediaField("Document file") as Field,
+    },
+  },
   Button: { label: "Button", category: "content", fields: { label: text("Label"), href: link("Link"), variant: select("Style", { primary: "Solid", secondary: "Soft", outline: "Outline" }), size: select("Size", { auto: "Match theme", sm: "Small", md: "Medium", lg: "Large" }), fullWidth: radio("Full width"), align: select("Align", ALIGN) } },
   Icon: { label: "Icon", category: "content", fields: { name: select("Icon", ICONS), size: select("Size", { sm: "Small", md: "Medium", lg: "Large" }), align: select("Align", ALIGN) } },
   Link: { label: "Link", category: "content", fields: { label: text("Label"), href: link("Link"), newTab: radio("Open in new tab") } },

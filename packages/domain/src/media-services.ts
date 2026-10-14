@@ -612,8 +612,10 @@ export async function resolveMediaUsageLabels(
   const collectionIds = usageRows.filter((u) => u.ownerType === "collection").map((u) => u.ownerId);
   const categoryIds = usageRows.filter((u) => u.ownerType === "category").map((u) => u.ownerId);
   const brandIds = usageRows.filter((u) => u.ownerType === "brand").map((u) => u.ownerId);
+  const pageIds = usageRows.filter((u) => u.ownerType === "page").map((u) => u.ownerId);
+  const themeIds = usageRows.filter((u) => u.ownerType === "theme").map((u) => u.ownerId);
 
-  const [productRows, variantRows, collectionRows, categoryRows, brandRows] = await Promise.all([
+  const [productRows, variantRows, collectionRows, categoryRows, brandRows, pageRows, themeRows] = await Promise.all([
     productIds.length > 0
       ? tx.select({ id: schema.products.id, title: schema.products.title }).from(schema.products).where(inArray(schema.products.id, productIds))
       : [],
@@ -639,6 +641,12 @@ export async function resolveMediaUsageLabels(
     brandIds.length > 0
       ? tx.select({ id: schema.brands.id, name: schema.brands.name }).from(schema.brands).where(inArray(schema.brands.id, brandIds))
       : [],
+    pageIds.length > 0
+      ? tx.select({ id: schema.pages.id, title: schema.pages.title, slug: schema.pages.slug, type: schema.pages.type }).from(schema.pages).where(inArray(schema.pages.id, pageIds))
+      : [],
+    themeIds.length > 0
+      ? tx.select({ id: schema.themes.id, name: schema.themes.name }).from(schema.themes).where(inArray(schema.themes.id, themeIds))
+      : [],
   ]);
 
   const productMap = new Map(productRows.map((p) => [p.id, p.title]));
@@ -646,6 +654,8 @@ export async function resolveMediaUsageLabels(
   const collectionMap = new Map(collectionRows.map((c) => [c.id, c.title]));
   const categoryMap = new Map(categoryRows.map((c) => [c.id, c.name]));
   const brandMap = new Map(brandRows.map((b) => [b.id, b.name]));
+  const pageMap = new Map(pageRows.map((p) => [p.id, p]));
+  const themeMap = new Map(themeRows.map((t) => [t.id, t.name]));
 
   for (const u of usageRows) {
     const list = result.get(u.mediaId) || [];
@@ -721,6 +731,32 @@ export async function resolveMediaUsageLabels(
         field: u.field,
         label,
         adminPath,
+      });
+    } else if (u.ownerType === "page") {
+      const p = pageMap.get(u.ownerId);
+      let label = p?.title || "Page";
+      if (p?.type === "header") label = "Header";
+      else if (p?.type === "footer") label = "Footer";
+      else if (p?.type === "product_template") label = "Product page";
+      else if (p?.type === "collection_template") label = "Collection page";
+      else if (p?.type === "cart_template") label = "Cart page";
+      else if (p?.type === "home") label = "Home page";
+
+      list.push({
+        ownerType: "page",
+        ownerId: u.ownerId,
+        field: u.field,
+        label,
+        adminPath: `/online-store/editor/${u.ownerId}`,
+      });
+    } else if (u.ownerType === "theme") {
+      const tName = themeMap.get(u.ownerId);
+      list.push({
+        ownerType: "theme",
+        ownerId: u.ownerId,
+        field: u.field,
+        label: tName ? `Theme: ${tName}` : "Theme settings",
+        adminPath: `/online-store/theme-library`,
       });
     } else {
       list.push({

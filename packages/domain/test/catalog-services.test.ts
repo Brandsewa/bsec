@@ -333,11 +333,18 @@ describe("M2 Domain Services", () => {
             execute: async () => {},
             select: () => ({
               from: () => ({
-                where: () => ({
-                  orderBy: () => ({
+                where: () => {
+                  const arr: unknown[] & {
+                    limit: () => unknown[];
+                    orderBy: () => { limit: () => unknown[] };
+                  } = Object.assign([] as unknown[], {
                     limit: () => [{ id: pageId, versionNumber: 1 }],
-                  }),
-                }),
+                    orderBy: () => ({
+                      limit: () => [{ id: pageId, versionNumber: 1 }],
+                    }),
+                  });
+                  return arr;
+                },
               }),
             }),
             insert: () => ({
@@ -405,11 +412,18 @@ describe("M2 Domain Services", () => {
             execute: async () => {},
             select: () => ({
               from: () => ({
-                where: () => ({
-                  orderBy: () => ({
-                    limit: () => [{ id: "ver-latest" }],
-                  }),
-                }),
+                where: () => {
+                  const arr: unknown[] & {
+                    limit: () => unknown[];
+                    orderBy: () => { limit: () => unknown[] };
+                  } = Object.assign([] as unknown[], {
+                    limit: () => [{ id: "ver-latest", document: { version: 1, blocks: [] } }],
+                    orderBy: () => ({
+                      limit: () => [{ id: "ver-latest", document: { version: 1, blocks: [] } }],
+                    }),
+                  });
+                  return arr;
+                },
               }),
             }),
             update: () => ({

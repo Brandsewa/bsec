@@ -88,3 +88,15 @@ export function sanitizeRichText(html: string): string {
     },
   });
 }
+
+const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+
+/**
+ * Drops invalid UUID strings for media reference properties.
+ */
+export function sanitizeMediaUuid(id: unknown): string | undefined {
+  if (typeof id !== "string") return undefined;
+  const trimmed = id.trim();
+  return UUID_REGEX.test(trimmed) ? trimmed : undefined;
+}
+

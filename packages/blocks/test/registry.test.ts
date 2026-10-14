@@ -23,7 +23,7 @@ describe("Block Registry v1", () => {
 
   it("registers the 12 original home-page block types plus layout, content, conversion, store-chrome and cart blocks", () => {
     expect(BLOCK_TYPES).toEqual(expect.arrayContaining(expectedBlockTypes));
-    expect(BLOCK_TYPES.length).toBe(34);
+    expect(BLOCK_TYPES.length).toBe(35);
   });
 
   for (const type of expectedBlockTypes) {
@@ -64,4 +64,50 @@ describe("Block Registry v1", () => {
       }
     });
   }
+
+  describe("Block: Video", () => {
+    it("accepts mediaId, posterMediaId, autoplayLoop and url", () => {
+      const def = getBlockDefinition("Video");
+      const valid = def.schema.safeParse({
+        mediaId: "11111111-1111-4111-8111-111111111111",
+        posterMediaId: "22222222-2222-4222-8222-222222222222",
+        autoplayLoop: true,
+        url: "https://www.youtube.com/watch?v=dQw4w9WgXcQ",
+      });
+      expect(valid.success).toBe(true);
+    });
+  });
+
+  describe("Block: FileDownload", () => {
+    it("has a valid version, schema, defaultProps, and renderer", () => {
+      const def = getBlockDefinition("FileDownload");
+      expect(def).toBeDefined();
+      expect(def.type).toBe("FileDownload");
+      expect(def.version).toBe(1);
+      expect(typeof def.render).toBe("function");
+
+      const parseResult = def.schema.safeParse(def.defaultProps);
+      expect(parseResult.success).toBe(true);
+    });
+
+    it("accepts valid label, description, and mediaId", () => {
+      const def = getBlockDefinition("FileDownload");
+      const res = def.schema.safeParse({
+        label: "Product Specs",
+        description: "Full PDF catalog",
+        mediaId: "11111111-1111-4111-8111-111111111111",
+      });
+      expect(res.success).toBe(true);
+    });
+
+    it("rejects invalid mediaId UUID", () => {
+      const def = getBlockDefinition("FileDownload");
+      const res = def.schema.safeParse({
+        label: "Product Specs",
+        mediaId: "not-a-uuid",
+      });
+      expect(res.success).toBe(false);
+    });
+  });
 });
+
