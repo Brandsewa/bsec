@@ -1,5 +1,5 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { Image as ImageIcon, RotateCcw, Save, Upload } from "lucide-react";
+import { RotateCcw, Save, Upload } from "lucide-react";
 import { useId, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { FormSkeleton, PageSkeleton, toast } from "@bs/ui";
@@ -11,7 +11,7 @@ import { HeaderActions, SettingsCard, SettingsPageFrame, useUnsavedGuard } from 
 import { SimpleSelect } from "@bs/ui";
 import type { BrandSettings } from "@bs/contracts";
 import { orpc } from "../../../lib/orpc.ts";
-import { uploadMedia } from "../../../lib/upload-media.ts";
+import { MediaField } from "../../../components/media/media-field.tsx";
 
 const HEX = /^#(?:[0-9a-fA-F]{3}|[0-9a-fA-F]{6})$/;
 
@@ -36,18 +36,19 @@ const colorFields = [
 type ColorKey = (typeof colorFields)[number]["key"];
 
 const IMAGE_SLOTS = [
-  { key: "logoLightMediaId", label: "Logo (light background)" },
-  { key: "logoDarkMediaId", label: "Logo (dark background)" },
-  { key: "faviconMediaId", label: "Favicon" },
-  { key: "socialImageMediaId", label: "Social sharing image" },
+  { key: "logoLightMediaId", label: "Logo (light background)", aspect: undefined },
+  { key: "logoDarkMediaId", label: "Logo (dark background)", aspect: undefined },
+  { key: "faviconMediaId", label: "Favicon", aspect: "1:1" as const },
+  { key: "appleTouchIconMediaId", label: "Apple Touch Icon", aspect: "1:1" as const },
+  { key: "socialImageMediaId", label: "Social sharing image", aspect: "1.91:1" as const },
 ] as const;
-type SlotKey = (typeof IMAGE_SLOTS)[number]["key"];
 
 interface FormState {
   storeName: string;
   logoLightMediaId: string | null;
   logoDarkMediaId: string | null;
   faviconMediaId: string | null;
+  appleTouchIconMediaId: string | null;
   socialImageMediaId: string | null;
   logoWidth: number;
   fontHeading: BrandSettings["fontHeading"];
@@ -70,6 +71,7 @@ function fromServer(b: BrandSettings, storeName: string): FormState {
     logoLightMediaId: b.logoLightMediaId ?? null,
     logoDarkMediaId: b.logoDarkMediaId ?? null,
     faviconMediaId: b.faviconMediaId ?? null,
+    appleTouchIconMediaId: b.appleTouchIconMediaId ?? null,
     socialImageMediaId: b.socialImageMediaId ?? null,
     logoWidth: b.logoWidth,
     fontHeading: b.fontHeading,
@@ -105,7 +107,6 @@ export const Route = createFileRoute("/_store/settings/branding")({
 export function BrandingSettingsPage() {
   const brandQuery = useQuery(orpc.admin.branding.get.queryOptions());
   const settingsQuery = useQuery(orpc.admin.settings.get.queryOptions());
-  const mediaQuery = useQuery(orpc.admin.media.list.queryOptions({ input: { limit: 100, offset: 0 } }));
 
   const failed = brandQuery.isError ? brandQuery : settingsQuery.isError ? settingsQuery : null;
   if (failed) {
@@ -137,19 +138,14 @@ export function BrandingSettingsPage() {
       key={`${brandQuery.data.id}:${brandQuery.data.version}`}
       brand={brandQuery.data}
       storeName={settingsQuery.data.storeName}
-      media={mediaQuery.data?.items ?? []}
     />
   );
 }
 
-type MediaEntry = { id: string; url?: string | undefined; alt?: string | null | undefined };
-
-function BrandingEditor({ brand, storeName, media }: { brand: BrandSettings; storeName: string; media: MediaEntry[] }) {
+function BrandingEditor({ brand, storeName }: { brand: BrandSettings; storeName: string }) {
   const queryClient = useQueryClient();
   const baseline = fromServer(brand, storeName);
   const [form, setForm] = useState<FormState>(baseline);
-  const [uploading, setUploading] = useState<SlotKey | null>(null);
-  const [localUrls, setLocalUrls] = useState<Record<string, string>>({});
   const nameId = useId();
 
   const dirty = JSON.stringify(form) !== JSON.stringify(baseline);
@@ -162,7 +158,6 @@ function BrandingEditor({ brand, storeName, media }: { brand: BrandSettings; sto
     Promise.all([
       queryClient.invalidateQueries({ queryKey: orpc.admin.branding.get.key() }),
       queryClient.invalidateQueries({ queryKey: orpc.admin.settings.get.key() }),
-      queryClient.invalidateQueries({ queryKey: orpc.admin.media.list.key() }),
     ]);
 
   const updateBrand = useMutation(orpc.admin.branding.update.mutationOptions());
@@ -211,30 +206,6 @@ function BrandingEditor({ brand, storeName, media }: { brand: BrandSettings; sto
     }
   };
 
-  const handleUpload = async (slot: SlotKey, file: File) => {
-    if (!file.type.startsWith("image/")) {
-      toast.error("Choose an image file.");
-      return;
-    }
-    setUploading(slot);
-    try {
-      const created = await uploadMedia(file, { folder: "branding", alt: file.name });
-      setLocalUrls((prev) => ({ ...prev, [created.id]: created.url ?? URL.createObjectURL(file) }));
-      set(slot, created.id);
-      await queryClient.invalidateQueries({ queryKey: orpc.admin.media.list.key() });
-      toast.success("Image uploaded. Save to apply it.");
-    } catch (err) {
-      toast.error(`Upload failed: ${err instanceof Error ? err.message : "unknown error"}`);
-    } finally {
-      setUploading(null);
-    }
-  };
-
-  const urlFor = (id: string | null): string | undefined => {
-    if (!id) return undefined;
-    return localUrls[id] ?? media.find((m) => m.id === id)?.url;
-  };
-
   const busy = updateBrand.isPending || updateSettings.isPending || publishBrand.isPending;
 
   return (
@@ -268,46 +239,17 @@ function BrandingEditor({ brand, storeName, media }: { brand: BrandSettings; sto
                 {form.storeName.trim() ? null : <p className="text-xs text-destructive">Store name is required</p>}
               </div>
 
-              <div className="grid gap-3 sm:grid-cols-2">
-                {IMAGE_SLOTS.map((slot) => {
-                  const id = form[slot.key];
-                  const url = urlFor(id);
-                  const isDarkSlot = slot.key === "logoDarkMediaId";
-                  return (
-                    <div key={slot.key} className="space-y-2">
-                      <span className="text-xs font-medium text-foreground">{slot.label}</span>
-                      <div className={`flex h-16 items-center justify-center rounded-lg border border-border p-2 ${isDarkSlot ? "bg-slate-950" : "bg-white dark:bg-muted/10"}`}>
-                        {url ? (
-                          <img src={url} alt={`${slot.label} preview`} className="max-h-12 max-w-full object-contain" />
-                        ) : (
-                          <ImageIcon className={`size-6 ${isDarkSlot ? "text-slate-600" : "text-muted-foreground"}`} aria-hidden />
-                        )}
-                      </div>
-                      <div className="flex items-center gap-2">
-                        <label className="inline-flex h-7 cursor-pointer items-center gap-1.5 rounded-md border border-border bg-background px-2.5 text-xs font-medium hover:bg-muted">
-                          <Upload className="size-3.5" aria-hidden />
-                          {uploading === slot.key ? "Uploading..." : id ? "Replace" : "Upload"}
-                          <input
-                            type="file"
-                            accept="image/*"
-                            className="sr-only"
-                            disabled={uploading !== null}
-                            onChange={(e) => {
-                              const file = e.target.files?.[0];
-                              e.target.value = "";
-                              if (file) void handleUpload(slot.key, file);
-                            }}
-                          />
-                        </label>
-                        {id ? (
-                          <Button size="sm" variant="ghost" onClick={() => set(slot.key, null)}>
-                            Remove
-                          </Button>
-                        ) : null}
-                      </div>
-                    </div>
-                  );
-                })}
+              <div className="grid gap-4 sm:grid-cols-2">
+                {IMAGE_SLOTS.map((slot) => (
+                  <MediaField
+                    key={slot.key}
+                    value={form[slot.key]}
+                    onChange={(id) => set(slot.key, id)}
+                    accept={["image"]}
+                    label={slot.label}
+                    aspect={slot.aspect}
+                  />
+                ))}
               </div>
 
               <div className="grid gap-1.5">

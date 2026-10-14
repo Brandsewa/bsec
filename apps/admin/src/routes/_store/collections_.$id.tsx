@@ -5,16 +5,14 @@ import {
   Eye,
   EyeOff,
   GripVertical,
-  Image as ImageIcon,
   Plus,
   Save,
   Search,
   Trash2,
-  Upload,
   X,
   Zap,
 } from "lucide-react";
-import { useRef, useState } from "react";
+import { useState } from "react";
 import { DetailSkeleton, EmptyState, PageBreadcrumbs, PageContainer, PageHeader, PageSkeleton, toast } from "@bs/ui";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import type { CollectionDetail, CollectionRule } from "@bs/contracts";
@@ -29,7 +27,7 @@ import { SeoCard } from "../../components/seo-card.tsx";
 import { SimpleSelect } from "@bs/ui";
 import { errorMessage } from "../../lib/errors.ts";
 import { orpc } from "../../lib/orpc.ts";
-import { uploadMedia } from "../../lib/upload-media.ts";
+import { MediaField } from "../../components/media/media-field.tsx";
 
 export const Route = createFileRoute("/_store/collections_/$id")({
   pendingComponent: () => (
@@ -111,7 +109,6 @@ export function EditCollectionPage({ id, navigate }: { id: string; navigate?: (t
 
 function CollectionEditor({ collection, go }: { collection: CollectionDetail; go: (to: string) => void }) {
   const queryClient = useQueryClient();
-  const fileRef = useRef<HTMLInputElement>(null);
 
   const [title, setTitle] = useState(collection.title);
   const [slug, setSlug] = useState(collection.slug);
@@ -127,8 +124,6 @@ function CollectionEditor({ collection, go }: { collection: CollectionDetail; go
 
   // Media
   const [imageMediaId, setImageMediaId] = useState<string | null>(collection.imageMediaId ?? null);
-  const [imageUrl, setImageUrl] = useState<string | null>(collection.imageUrl ?? null);
-  const [uploading, setUploading] = useState(false);
 
   // SEO state
   const [seoTitle, setSeoTitle] = useState(collection.seo?.title ?? "");
@@ -184,28 +179,6 @@ function CollectionEditor({ collection, go }: { collection: CollectionDetail; go
       },
     }),
   );
-
-  const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
-
-    setUploading(true);
-    try {
-      const media = await uploadMedia(file, {
-        folder: "collections",
-        alt: title.trim() || "Collection image",
-      });
-
-      setImageMediaId(media.id);
-      setImageUrl(media.url ?? URL.createObjectURL(file));
-      toast.success("Image uploaded successfully");
-    } catch (err) {
-      toast.error(errorMessage(err, "Failed to upload image"));
-    } finally {
-      setUploading(false);
-      if (fileRef.current) fileRef.current.value = "";
-    }
-  };
 
   const addRule = () => {
     setRules((prev) => [...prev, { field: "tag", operator: "equals", value: "" }]);
@@ -627,46 +600,11 @@ function CollectionEditor({ collection, go }: { collection: CollectionDetail; go
               <CardDescription>Hero banner or tile image for this collection.</CardDescription>
             </CardHeader>
             <CardContent>
-              {imageUrl ? (
-                <div className="relative inline-block overflow-hidden rounded-lg border border-border">
-                  <img src={imageUrl} alt={title} className="h-40 w-72 object-cover" />
-                  <Button
-                    type="button"
-                    variant="destructive"
-                    size="icon"
-                    className="absolute right-2 top-2 size-7"
-                    onClick={() => {
-                      setImageMediaId(null);
-                      setImageUrl(null);
-                    }}
-                  >
-                    <X className="size-4" />
-                  </Button>
-                </div>
-              ) : (
-                <div className="flex flex-col items-center justify-center rounded-lg border border-dashed border-border p-6 text-center">
-                  <ImageIcon className="size-8 text-muted-foreground mb-2" aria-hidden />
-                  <p className="text-sm font-medium text-foreground">No image uploaded</p>
-                  <p className="text-xs text-muted-foreground mt-0.5">PNG, JPG, WebP up to 5MB</p>
-                  <Button
-                    type="button"
-                    variant="outline"
-                    size="sm"
-                    className="mt-3"
-                    disabled={uploading}
-                    onClick={() => fileRef.current?.click()}
-                  >
-                    <Upload className="mr-1.5 size-3.5" aria-hidden />
-                    {uploading ? "Uploading..." : "Upload Image"}
-                  </Button>
-                </div>
-              )}
-              <input
-                ref={fileRef}
-                type="file"
-                accept="image/*"
-                className="hidden"
-                onChange={handleFileUpload}
+              <MediaField
+                value={imageMediaId}
+                onChange={(id) => setImageMediaId(id)}
+                accept={["image"]}
+                aspect="16:9"
               />
             </CardContent>
           </Card>

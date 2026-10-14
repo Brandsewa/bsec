@@ -1,6 +1,6 @@
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
-import { ArrowLeft, Image as ImageIcon, Save, Upload, X } from "lucide-react";
-import { useRef, useState } from "react";
+import { ArrowLeft, Save } from "lucide-react";
+import { useState } from "react";
 import { PageBreadcrumbs, PageContainer, PageHeader, PageSkeleton, toast } from "@bs/ui";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Button } from "@bs/ui";
@@ -13,7 +13,7 @@ import { SeoCard } from "../../components/seo-card.tsx";
 import { SimpleSelect } from "@bs/ui";
 import { errorMessage } from "../../lib/errors.ts";
 import { orpc } from "../../lib/orpc.ts";
-import { uploadMedia } from "../../lib/upload-media.ts";
+import { MediaField } from "../../components/media/media-field.tsx";
 
 export const Route = createFileRoute("/_store/categories_/new")({
   pendingComponent: () => <PageSkeleton />,
@@ -23,7 +23,6 @@ export const Route = createFileRoute("/_store/categories_/new")({
 export function CreateCategoryPage() {
   const navigate = useNavigate();
   const queryClient = useQueryClient();
-  const fileRef = useRef<HTMLInputElement>(null);
 
   const [name, setName] = useState("");
   const [slug, setSlug] = useState("");
@@ -33,8 +32,6 @@ export function CreateCategoryPage() {
   const [isFeatured, setIsFeatured] = useState(false);
   const [displayOrder, setDisplayOrder] = useState("0");
   const [imageMediaId, setImageMediaId] = useState<string | null>(null);
-  const [imageUrl, setImageUrl] = useState<string | null>(null);
-  const [uploading, setUploading] = useState(false);
 
   // SEO state
   const [seoTitle, setSeoTitle] = useState("");
@@ -60,24 +57,6 @@ export function CreateCategoryPage() {
         label: `${(c.path ?? "/").replace(/^\/|\/$/g, "") ? "— " : ""}${c.name}`,
       })),
   ];
-
-  const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
-
-    setUploading(true);
-    try {
-      const created = await uploadMedia(file, { folder: "categories", alt: name || "Category image" });
-      setImageMediaId(created.id);
-      setImageUrl(created.url ?? URL.createObjectURL(file));
-      toast.success("Image uploaded");
-    } catch (err) {
-      toast.error(errorMessage(err, "Image upload failed"));
-    } finally {
-      setUploading(false);
-      if (fileRef.current) fileRef.current.value = "";
-    }
-  };
 
   const createMutation = useMutation(
     orpc.admin.categories.create.mutationOptions({
@@ -148,7 +127,7 @@ export function CreateCategoryPage() {
               type="submit"
               form="category-form"
               size="sm"
-              disabled={createMutation.isPending || uploading}
+              disabled={createMutation.isPending}
             >
               <Save className="mr-1.5 size-3.5" aria-hidden />
               {createMutation.isPending ? "Saving..." : "Save Category"}
@@ -238,46 +217,12 @@ export function CreateCategoryPage() {
             <CardDescription>Shown in collection grids, category lists and menus.</CardDescription>
           </CardHeader>
           <CardContent>
-            {imageUrl ? (
-              <div className="relative inline-block overflow-hidden rounded-lg border border-border">
-                <img src={imageUrl} alt="Category preview" className="size-32 object-cover" />
-                <button
-                  type="button"
-                  onClick={() => {
-                    setImageMediaId(null);
-                    setImageUrl(null);
-                  }}
-                  className="absolute top-1.5 right-1.5 rounded-full bg-black/60 p-1 text-white hover:bg-black"
-                  aria-label="Remove image"
-                >
-                  <X className="size-3.5" />
-                </button>
-              </div>
-            ) : (
-              <div className="flex flex-col items-center justify-center rounded-lg border border-dashed border-border p-6 text-center">
-                <ImageIcon className="size-8 text-muted-foreground/60" aria-hidden />
-                <p className="mt-2 text-sm font-medium">Upload category banner or thumbnail</p>
-                <p className="text-xs text-muted-foreground">PNG, JPG, WebP up to 5MB</p>
-                <input
-                  ref={fileRef}
-                  type="file"
-                  accept="image/*"
-                  onChange={handleFileUpload}
-                  className="hidden"
-                />
-                <Button
-                  type="button"
-                  variant="outline"
-                  size="sm"
-                  disabled={uploading}
-                  onClick={() => fileRef.current?.click()}
-                  className="mt-4"
-                >
-                  <Upload className="mr-1.5 size-3.5" />
-                  {uploading ? "Uploading..." : "Select image"}
-                </Button>
-              </div>
-            )}
+            <MediaField
+              value={imageMediaId}
+              onChange={(id) => setImageMediaId(id)}
+              accept={["image"]}
+              aspect="16:9"
+            />
           </CardContent>
         </Card>
 

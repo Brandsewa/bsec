@@ -514,3 +514,71 @@ class MediaUploadQueueManager {
 }
 
 export const mediaUploadQueue = new MediaUploadQueueManager();
+
+/**
+ * Replaces an existing media file's content while keeping id, references, and metadata.
+ */
+export async function replaceMediaFile(
+  mediaId: string,
+  file: File,
+  options: {
+    expectedKind?: MediaKind | undefined;
+    usage?: UploadUsageLimits | null | undefined;
+    onProgress?: ((percent: number) => void) | undefined;
+  } = {},
+): Promise<MediaItem> {
+  const { error, kind, mime } = preCheckFile(file, options.usage);
+  if (error) {
+    throw new Error(error);
+  }
+  if (options.expectedKind && kind !== options.expectedKind) {
+    throw new Error(
+      `Cannot replace ${options.expectedKind} with ${kind}. Replacement must be the same file type.`,
+    );
+  }
+
+  const metadata = await extractMediaMetadata(file);
+
+  const descriptor = await client.admin.media.requestUpload({
+    filename: file.name,
+    mime,
+    bytes: file.size,
+    folder: "uploads",
+  });
+
+  await new Promise<void>((resolve, reject) => {
+    const xhr = new XMLHttpRequest();
+    xhr.upload.onprogress = (evt) => {
+      if (evt.lengthComputable && options.onProgress) {
+        options.onProgress(Math.round((evt.loaded / evt.total) * 100));
+      }
+    };
+    xhr.onload = () => {
+      if (xhr.status >= 200 && xhr.status < 300) {
+        resolve();
+      } else {
+        reject(new Error(`Direct storage upload returned status ${xhr.status}`));
+      }
+    };
+    xhr.onerror = () => reject(new Error("Direct upload failed"));
+    xhr.onabort = () => reject(new Error("Upload canceled"));
+
+    xhr.open(descriptor.method || "PUT", descriptor.uploadUrl);
+    const headers = { ...descriptor.headers };
+    delete headers["content-length"];
+    delete headers["Content-Length"];
+    for (const [k, v] of Object.entries(headers)) {
+      xhr.setRequestHeader(k, v);
+    }
+    xhr.send(file);
+  });
+
+  return await client.admin.media.replace({
+    id: mediaId,
+    storageKey: descriptor.storageKey,
+    mime,
+    bytes: file.size,
+    filename: file.name,
+    durationMs: metadata.durationMs,
+  });
+}
