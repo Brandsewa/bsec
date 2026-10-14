@@ -791,5 +791,82 @@ describe("Media Services Integration Test Suite (Real Postgres & Storage)", () =
     await trashMedia(rt, ctx, { ids: [created.id] });
     await deleteMediaPermanent(rt, ctx, { ids: [created.id] });
   });
+
+  it("S3: sets, updates, clears, and validates focal point with audit logging", async () => {
+    const item = await uploadMediaDirect(rt, ctx, {
+      filename: "focal-test.png",
+      mime: "image/png",
+      fileBytes: PNG_1X1,
+    });
+
+    expect(item.focalX).toBeNull();
+    expect(item.focalY).toBeNull();
+
+    // Set focal point to (0.25, 0.75)
+    const updated = await updateMedia(rt, ctx, {
+      id: item.id,
+      focalX: 0.25,
+      focalY: 0.75,
+    });
+    expect(updated.focalX).toBe(0.25);
+    expect(updated.focalY).toBe(0.75);
+
+    // Read back via getMedia
+    const fetched = await getMedia(rt, ctx, { id: item.id });
+    expect(fetched.focalX).toBe(0.25);
+    expect(fetched.focalY).toBe(0.75);
+
+    // Read back via listMedia
+    const listRes = await listMedia(rt, ctx, { q: "focal-test" });
+    const inList = listRes.items.find((i) => i.id === item.id);
+    expect(inList?.focalX).toBe(0.25);
+    expect(inList?.focalY).toBe(0.75);
+
+    // Clear focal point (both null)
+    const cleared = await updateMedia(rt, ctx, {
+      id: item.id,
+      focalX: null,
+      focalY: null,
+    });
+    expect(cleared.focalX).toBeNull();
+    expect(cleared.focalY).toBeNull();
+
+    const fetchedCleared = await getMedia(rt, ctx, { id: item.id });
+    expect(fetchedCleared.focalX).toBeNull();
+    expect(fetchedCleared.focalY).toBeNull();
+
+    // Rejection cases: out of range, or only one null
+    await expect(
+      updateMedia(rt, ctx, {
+        id: item.id,
+        focalX: 1.5,
+        focalY: 0.5,
+      }),
+    ).rejects.toThrow(/focalX and focalY must be numbers between 0 and 1/i);
+
+    await expect(
+      updateMedia(rt, ctx, {
+        id: item.id,
+        focalX: null,
+        focalY: 0.5,
+      }),
+    ).rejects.toThrow(/focalX and focalY must either both be null or both be numbers/i);
+
+    // Audit logs verified
+    const [auditLog] = await withTenant(rt._db.db, ctx.tenantId, async (tx) => {
+      return await tx
+        .select()
+        .from(schema.auditLogs)
+        .where(and(eq(schema.auditLogs.tenantId, ctx.tenantId), eq(schema.auditLogs.targetId, item.id)))
+        .orderBy(sql`${schema.auditLogs.createdAt} DESC`)
+        .limit(1);
+    });
+
+    expect(auditLog?.action).toBe("media.update");
+
+    // Clean up
+    await trashMedia(rt, ctx, { ids: [item.id] });
+    await deleteMediaPermanent(rt, ctx, { ids: [item.id] });
+  });
 });
 

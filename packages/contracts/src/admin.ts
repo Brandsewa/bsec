@@ -729,6 +729,10 @@ export const MediaItem = z.object({
   width: z.number().nullable().optional(),
   height: z.number().nullable().optional(),
   durationMs: z.number().nullable().optional(),
+  focalX: z.number().nullable().optional(),
+  focalY: z.number().nullable().optional(),
+  dominantColor: z.string().nullable().optional(),
+  derivatives: z.record(z.string(), z.any()).nullable().optional(),
   url: z.string().optional(),
   thumbnailUrl: z.string().nullable().optional(),
   status: z.enum(["ready", "trashed"]).default("ready"),
@@ -2722,12 +2726,36 @@ export const adminContract = {
     update: oc
       .route({ method: "PATCH", path: "/admin/media/{id}" })
       .input(
-        z.object({
-          id: z.string().uuid(),
-          title: z.string().max(255).optional(),
-          alt: z.string().max(512).optional(),
-          caption: z.string().max(1000).optional(),
-        }),
+        z
+          .object({
+            id: z.string().uuid(),
+            title: z.string().max(255).optional(),
+            alt: z.string().max(512).optional(),
+            caption: z.string().max(1000).optional(),
+            focalX: z.number().nullable().optional(),
+            focalY: z.number().nullable().optional(),
+          })
+          .refine(
+            (data) => {
+              if (data.focalX === null || data.focalY === null) {
+                return data.focalX === null && data.focalY === null;
+              }
+              if (data.focalX !== undefined && data.focalY !== undefined) {
+                return (
+                  typeof data.focalX === "number" &&
+                  typeof data.focalY === "number" &&
+                  data.focalX >= 0 &&
+                  data.focalX <= 1 &&
+                  data.focalY >= 0 &&
+                  data.focalY <= 1
+                );
+              }
+              return data.focalX === undefined && data.focalY === undefined;
+            },
+            {
+              message: "focalX and focalY must either both be null or both be numbers between 0 and 1",
+            },
+          ),
       )
       .output(MediaItem),
     replace: oc

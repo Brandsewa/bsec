@@ -70,10 +70,45 @@ function MediaDetailContent({
   const [title, setTitle] = useState(item.title || "");
   const [alt, setAlt] = useState(item.alt || "");
   const [caption, setCaption] = useState(item.caption || "");
+  const [focalX, setFocalX] = useState<number | null>(item.focalX ?? null);
+  const [focalY, setFocalY] = useState<number | null>(item.focalY ?? null);
   const [trashConfirmOpen, setTrashConfirmOpen] = useState(false);
   const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false);
   const [isReplacing, setIsReplacing] = useState(false);
   const replaceInputRef = useRef<HTMLInputElement>(null);
+
+  const handleImageClick = (e: React.MouseEvent<HTMLDivElement>) => {
+    const rect = e.currentTarget.getBoundingClientRect();
+    if (rect.width <= 0 || rect.height <= 0) return;
+    const x = Math.max(0, Math.min(1, (e.clientX - rect.left) / rect.width));
+    const y = Math.max(0, Math.min(1, (e.clientY - rect.top) / rect.height));
+    setFocalX(Math.round(x * 1000) / 1000);
+    setFocalY(Math.round(y * 1000) / 1000);
+  };
+
+  const handleMarkerKeyDown = (e: React.KeyboardEvent) => {
+    if (focalX === null || focalY === null) return;
+    const step = e.shiftKey ? 0.05 : 0.01;
+    let nextX = focalX;
+    let nextY = focalY;
+    if (e.key === "ArrowLeft") {
+      nextX = Math.max(0, Math.min(1, focalX - step));
+      e.preventDefault();
+    } else if (e.key === "ArrowRight") {
+      nextX = Math.max(0, Math.min(1, focalX + step));
+      e.preventDefault();
+    } else if (e.key === "ArrowUp") {
+      nextY = Math.max(0, Math.min(1, focalY - step));
+      e.preventDefault();
+    } else if (e.key === "ArrowDown") {
+      nextY = Math.max(0, Math.min(1, focalY + step));
+      e.preventDefault();
+    } else {
+      return;
+    }
+    setFocalX(Math.round(nextX * 1000) / 1000);
+    setFocalY(Math.round(nextY * 1000) / 1000);
+  };
 
   const handleReplaceFile = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -102,7 +137,9 @@ function MediaDetailContent({
   const isDirty =
     title !== (item.title || "") ||
     alt !== (item.alt || "") ||
-    caption !== (item.caption || "");
+    caption !== (item.caption || "") ||
+    focalX !== (item.focalX ?? null) ||
+    focalY !== (item.focalY ?? null);
 
   const updateMutation = useMutation({
     mutationFn: async () => {
@@ -111,6 +148,8 @@ function MediaDetailContent({
         title: title.trim() || undefined,
         alt: alt.trim() || undefined,
         caption: caption.trim() || undefined,
+        focalX,
+        focalY,
       });
     },
     onSuccess: (updated) => {
@@ -188,11 +227,29 @@ function MediaDetailContent({
       {/* Preview Section */}
       <div className="rounded-lg border bg-muted/20 p-2 overflow-hidden flex items-center justify-center min-h-[200px] max-h-[320px]">
         {item.kind === "image" && (
-          <img
-            src={item.url}
-            alt={item.alt || item.filename || ""}
-            className="max-h-[300px] w-auto max-w-full object-contain rounded-md"
-          />
+          <div
+            className="relative inline-block cursor-crosshair select-none max-h-[300px]"
+            onClick={handleImageClick}
+          >
+            <img
+              src={item.url}
+              alt={item.alt || item.filename || ""}
+              className="max-h-[300px] w-auto max-w-full object-contain rounded-md block pointer-events-none"
+            />
+            {focalX !== null && focalY !== null && (
+              <div
+                role="button"
+                tabIndex={0}
+                aria-label="Focal point marker. Use arrow keys to adjust."
+                onKeyDown={handleMarkerKeyDown}
+                onClick={(e) => e.stopPropagation()}
+                className="absolute -translate-x-1/2 -translate-y-1/2 w-4 h-4 rounded-full border-2 border-white bg-primary shadow-[0_0_0_1px_rgba(0,0,0,0.5),0_2px_4px_rgba(0,0,0,0.4)] flex items-center justify-center focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2 pointer-events-auto cursor-move"
+                style={{ left: `${focalX * 100}%`, top: `${focalY * 100}%` }}
+              >
+                <div className="w-1 h-1 rounded-full bg-white" />
+              </div>
+            )}
+          </div>
         )}
         {item.kind === "video" && (
           <video
@@ -304,6 +361,103 @@ function MediaDetailContent({
           </div>
         )}
       </div>
+
+      {/* Focal Point & Crop Previews */}
+      {item.kind === "image" && (
+        <div className="space-y-3 rounded-lg border p-4 bg-card">
+          <div className="flex items-center justify-between">
+            <div>
+              <h4 className="text-sm font-semibold text-foreground">Focal point & crop previews</h4>
+              <p className="text-xs text-muted-foreground">
+                Click image above to set focal point. Controls crop positioning across devices.
+              </p>
+            </div>
+            <div className="flex items-center gap-1.5 shrink-0">
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                className="h-7 text-xs"
+                onClick={() => {
+                  setFocalX(0.5);
+                  setFocalY(0.5);
+                }}
+              >
+                Reset (50% 50%)
+              </Button>
+              <Button
+                type="button"
+                variant="ghost"
+                size="sm"
+                className="h-7 text-xs text-muted-foreground hover:text-foreground"
+                disabled={focalX === null && focalY === null}
+                onClick={() => {
+                  setFocalX(null);
+                  setFocalY(null);
+                }}
+              >
+                Clear
+              </Button>
+            </div>
+          </div>
+
+          <div className="text-xs text-muted-foreground">
+            {focalX !== null && focalY !== null ? (
+              <span>
+                Position:{" "}
+                <span className="font-mono text-foreground font-medium">
+                  {Math.round(focalX * 100)}% {Math.round(focalY * 100)}%
+                </span>{" "}
+                (arrow keys nudge 1%, Shift+arrow 5%)
+              </span>
+            ) : (
+              <span className="italic">No custom focal point set (defaults to center 50% 50%).</span>
+            )}
+          </div>
+
+          <div className="grid grid-cols-3 gap-3 pt-1">
+            <div className="space-y-1">
+              <span className="text-[11px] font-medium text-muted-foreground">1:1 Square</span>
+              <div className="aspect-square w-full overflow-hidden rounded border bg-muted/30">
+                <img
+                  src={item.url}
+                  alt="1:1 crop preview"
+                  className="h-full w-full object-cover"
+                  style={{
+                    objectPosition: `${(focalX ?? 0.5) * 100}% ${(focalY ?? 0.5) * 100}%`,
+                  }}
+                />
+              </div>
+            </div>
+            <div className="space-y-1">
+              <span className="text-[11px] font-medium text-muted-foreground">4:5 Card</span>
+              <div className="aspect-[4/5] w-full overflow-hidden rounded border bg-muted/30">
+                <img
+                  src={item.url}
+                  alt="4:5 crop preview"
+                  className="h-full w-full object-cover"
+                  style={{
+                    objectPosition: `${(focalX ?? 0.5) * 100}% ${(focalY ?? 0.5) * 100}%`,
+                  }}
+                />
+              </div>
+            </div>
+            <div className="space-y-1">
+              <span className="text-[11px] font-medium text-muted-foreground">16:9 Hero</span>
+              <div className="aspect-[16/9] w-full overflow-hidden rounded border bg-muted/30">
+                <img
+                  src={item.url}
+                  alt="16:9 crop preview"
+                  className="h-full w-full object-cover"
+                  style={{
+                    objectPosition: `${(focalX ?? 0.5) * 100}% ${(focalY ?? 0.5) * 100}%`,
+                  }}
+                />
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Metadata Fields Form */}
       <div className="space-y-4 rounded-lg border p-4 bg-card">

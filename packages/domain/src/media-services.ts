@@ -79,6 +79,8 @@ export interface UpdateMediaInput {
   title?: string | undefined;
   alt?: string | undefined;
   caption?: string | undefined;
+  focalX?: number | null | undefined;
+  focalY?: number | null | undefined;
 }
 
 export interface FinalizeUploadParams {
@@ -385,6 +387,10 @@ async function finalizeUpload(
     width: row.width,
     height: row.height,
     durationMs: row.durationMs,
+    focalX: row.focalX,
+    focalY: row.focalY,
+    dominantColor: row.dominantColor,
+    derivatives: (row.derivatives as Record<string, unknown> | null) ?? null,
     url,
     thumbnailUrl,
     status: row.status as "ready" | "trashed",
@@ -518,6 +524,10 @@ export async function listMedia(
         width: schema.media.width,
         height: schema.media.height,
         durationMs: schema.media.durationMs,
+        focalX: schema.media.focalX,
+        focalY: schema.media.focalY,
+        dominantColor: schema.media.dominantColor,
+        derivatives: schema.media.derivatives,
         status: schema.media.status,
         folder: schema.media.folder,
         uploadedBy: schema.media.uploadedBy,
@@ -572,6 +582,10 @@ export async function listMedia(
           width: r.width,
           height: r.height,
           durationMs: r.durationMs,
+          focalX: r.focalX,
+          focalY: r.focalY,
+          dominantColor: r.dominantColor,
+          derivatives: (r.derivatives as Record<string, unknown> | null) ?? null,
           url,
           thumbnailUrl,
           status: r.status as "ready" | "trashed",
@@ -834,6 +848,10 @@ export async function getMedia(
         width: schema.media.width,
         height: schema.media.height,
         durationMs: schema.media.durationMs,
+        focalX: schema.media.focalX,
+        focalY: schema.media.focalY,
+        dominantColor: schema.media.dominantColor,
+        derivatives: schema.media.derivatives,
         status: schema.media.status,
         folder: schema.media.folder,
         uploadedBy: schema.media.uploadedBy,
@@ -867,6 +885,10 @@ export async function getMedia(
       width: row.width,
       height: row.height,
       durationMs: row.durationMs,
+      focalX: row.focalX,
+      focalY: row.focalY,
+      dominantColor: row.dominantColor,
+      derivatives: (row.derivatives as Record<string, unknown> | null) ?? null,
       url,
       thumbnailUrl,
       status: row.status as "ready" | "trashed",
@@ -1088,6 +1110,30 @@ export async function updateMedia(
     if (input.title !== undefined) setVals.title = input.title ? input.title.trim() : null;
     if (input.alt !== undefined) setVals.alt = input.alt ? input.alt.trim().slice(0, 512) : null;
     if (input.caption !== undefined) setVals.caption = input.caption ? input.caption.trim().slice(0, 1000) : null;
+    if (input.focalX !== undefined || input.focalY !== undefined) {
+      if (input.focalX === null || input.focalY === null) {
+        if (input.focalX !== null || input.focalY !== null) {
+          throw new Error("Validation Error: focalX and focalY must either both be null or both be numbers between 0 and 1");
+        }
+        setVals.focalX = null;
+        setVals.focalY = null;
+      } else if (input.focalX !== undefined && input.focalY !== undefined) {
+        if (
+          typeof input.focalX !== "number" ||
+          typeof input.focalY !== "number" ||
+          input.focalX < 0 ||
+          input.focalX > 1 ||
+          input.focalY < 0 ||
+          input.focalY > 1
+        ) {
+          throw new Error("Validation Error: focalX and focalY must be numbers between 0 and 1");
+        }
+        setVals.focalX = input.focalX;
+        setVals.focalY = input.focalY;
+      } else {
+        throw new Error("Validation Error: focalX and focalY must either both be null or both be numbers between 0 and 1");
+      }
+    }
 
     const [updated] = await tx
       .update(schema.media)
@@ -1105,8 +1151,20 @@ export async function updateMedia(
       targetType: "media",
       targetId: input.id,
       diff: {
-        before: { title: existing.title, alt: existing.alt, caption: existing.caption },
-        after: { title: updated.title, alt: updated.alt, caption: updated.caption },
+        before: {
+          title: existing.title,
+          alt: existing.alt,
+          caption: existing.caption,
+          focalX: existing.focalX,
+          focalY: existing.focalY,
+        },
+        after: {
+          title: updated.title,
+          alt: updated.alt,
+          caption: updated.caption,
+          focalX: updated.focalX,
+          focalY: updated.focalY,
+        },
       },
     });
 
@@ -1135,6 +1193,10 @@ export async function updateMedia(
     width: row.width,
     height: row.height,
     durationMs: row.durationMs,
+    focalX: row.focalX,
+    focalY: row.focalY,
+    dominantColor: row.dominantColor,
+    derivatives: (row.derivatives as Record<string, unknown> | null) ?? null,
     url,
     thumbnailUrl,
     status: row.status as "ready" | "trashed",
@@ -2158,6 +2220,10 @@ export async function replaceMedia(
       width: updated.width,
       height: updated.height,
       durationMs: updated.durationMs,
+      focalX: updated.focalX,
+      focalY: updated.focalY,
+      dominantColor: updated.dominantColor,
+      derivatives: (updated.derivatives as Record<string, unknown> | null) ?? null,
       url,
       thumbnailUrl,
       status: updated.status as "ready" | "trashed",
