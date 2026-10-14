@@ -1216,6 +1216,48 @@ export async function startJobs(opts: {
     },
   );
 
+  // Handle media.hash job (Phase 4 Plan S4)
+  await boss.work<{ tenantId: string; mediaId: string }>(
+    QUEUE_NAMES.MEDIA_HASH,
+    { localConcurrency: 2 },
+    async (batch) => {
+      for (const job of batch) {
+        try {
+          const { processMediaHash } = await import("./media/hashing.ts");
+          const res = await processMediaHash(db, job.data);
+          opts.log.info(
+            { job_id: job.id, tenantId: job.data.tenantId, mediaId: job.data.mediaId, hashed: res.hashed },
+            "media.hash processed",
+          );
+        } catch (err) {
+          opts.log.error({ err, job_id: job.id }, "media.hash failed");
+          throw err;
+        }
+      }
+    },
+  );
+
+  // Handle media.backfill_hashes job (Phase 4 Plan S4)
+  await boss.work<{ batchSize?: number }>(
+    QUEUE_NAMES.MEDIA_BACKFILL_HASHES,
+    { localConcurrency: 1 },
+    async (batch) => {
+      for (const job of batch) {
+        try {
+          const { backfillMediaHashes } = await import("./media/hashing.ts");
+          const res = await backfillMediaHashes(db, job.data?.batchSize ?? 100);
+          opts.log.info(
+            { job_id: job.id, processed: res.processed, errors: res.errors },
+            "media.backfill_hashes processed",
+          );
+        } catch (err) {
+          opts.log.error({ err, job_id: job.id }, "media.backfill_hashes failed");
+          throw err;
+        }
+      }
+    },
+  );
+
   // Register recurring schedules and proof-of-life sweeps on boot (PLAN §5.10, §11.3)
   try {
     await boss.schedule(QUEUE_NAMES.RESERVATION_EXPIRY, "* * * * *", {});
@@ -1251,6 +1293,7 @@ export async function startJobs(opts: {
   await boss.send(QUEUE_NAMES.MAINTENANCE_WATCHDOG_SWEEP, {});
   await boss.send(QUEUE_NAMES.MEDIA_BACKFILL_USAGES, {}, { singletonKey: "media-backfill-v1" });
   await boss.send(QUEUE_NAMES.MEDIA_BACKFILL_DERIVATIVES, {}, { singletonKey: "media-backfill-derivatives-v1" });
+  await boss.send(QUEUE_NAMES.MEDIA_BACKFILL_HASHES, {}, { singletonKey: "media-backfill-hashes-v1" });
   opts.log.info({ concurrency: opts.concurrency }, "worker started");
 
   return {

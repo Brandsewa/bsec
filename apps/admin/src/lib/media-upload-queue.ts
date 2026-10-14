@@ -5,17 +5,21 @@ import { apiBase } from "./config.ts";
 import { getActiveStoreId } from "./session.ts";
 import { getSupportStoreId, getSupportToken } from "./support.ts";
 
-export type UploadQueueStatus = "queued" | "uploading" | "success" | "error" | "canceled";
+export type UploadQueueStatus = "queued" | "checking" | "duplicate" | "uploading" | "success" | "error" | "canceled";
 
 export interface UploadQueueItem {
   id: string;
   file: File;
+  sha256?: string;
+  duplicateOf?: MediaItem;
   progress: number;
   status: UploadQueueStatus;
   result?: MediaItem;
   error?: string;
   cancel: () => void;
   retry: () => void;
+  proceedUpload: () => void;
+  useExisting: () => void;
 }
 
 export interface UploadUsageLimits {
@@ -29,11 +33,22 @@ export interface UploadUsageLimits {
 }
 
 export interface MediaUploadOptions {
-  folder?: string;
-  alt?: string;
-  title?: string;
-  onProgress?: (percent: number) => void;
-  onXhrCreated?: (xhr: XMLHttpRequest) => void;
+  folder?: string | undefined;
+  alt?: string | undefined;
+  title?: string | undefined;
+  sha256?: string | undefined;
+  onProgress?: ((percent: number) => void) | undefined;
+  onXhrCreated?: ((xhr: XMLHttpRequest) => void) | undefined;
+}
+
+/**
+ * Computes the SHA-256 hash of a file client-side using Web Crypto API (Plan S4).
+ */
+export async function computeFileSha256(file: File): Promise<string> {
+  const buffer = await file.arrayBuffer();
+  const hashBuffer = await crypto.subtle.digest("SHA-256", buffer);
+  const hashArray = Array.from(new Uint8Array(hashBuffer));
+  return hashArray.map((b) => b.toString(16).padStart(2, "0")).join("");
 }
 
 function getStoreHeaders(): Record<string, string> {
@@ -357,6 +372,7 @@ export async function uploadSingleFile(
     height: metadata.height,
     durationMs: metadata.durationMs,
     alt: options.alt,
+    sha256: options.sha256,
   });
 }
 
@@ -370,6 +386,7 @@ class MediaUploadQueueManager {
   private readonly maxConcurrent = 4;
   private listeners = new Set<(items: UploadQueueItem[]) => void>();
   private onItemCompletedListeners = new Set<(item: MediaItem) => void>();
+  private bypassedDuplicates = new Set<string>();
 
   public subscribe(listener: (items: UploadQueueItem[]) => void): () => void {
     this.listeners.add(listener);
@@ -405,6 +422,8 @@ class MediaUploadQueueManager {
         status: error ? "error" : "queued",
         cancel: () => this.cancelItem(id),
         retry: () => this.retryItem(id),
+        proceedUpload: () => this.proceedUploadItem(id),
+        useExisting: () => this.useExistingItem(id),
       };
       if (error) {
         item.error = error;
@@ -417,9 +436,10 @@ class MediaUploadQueueManager {
   }
 
   public cancelItem(id: string) {
+    this.bypassedDuplicates.delete(id);
     const item = this.queue.find((q) => q.id === id);
     if (!item) return;
-    if (item.status === "uploading" || item.status === "queued") {
+    if (item.status === "uploading" || item.status === "queued" || item.status === "duplicate" || item.status === "checking") {
       item.status = "canceled";
       this.notify();
       this.processQueue();
@@ -427,16 +447,42 @@ class MediaUploadQueueManager {
   }
 
   public retryItem(id: string) {
+    this.bypassedDuplicates.delete(id);
     const item = this.queue.find((q) => q.id === id);
     if (!item) return;
     item.status = "queued";
     delete item.error;
+    delete item.duplicateOf;
     item.progress = 0;
     this.notify();
     this.processQueue();
   }
 
+  public proceedUploadItem(id: string) {
+    const item = this.queue.find((q) => q.id === id);
+    if (!item || item.status !== "duplicate") return;
+    this.bypassedDuplicates.add(id);
+    item.status = "queued";
+    delete item.duplicateOf;
+    this.notify();
+    this.processQueue();
+  }
+
+  public useExistingItem(id: string) {
+    const item = this.queue.find((q) => q.id === id);
+    if (!item || !item.duplicateOf) return;
+    this.bypassedDuplicates.delete(id);
+    item.status = "success";
+    item.result = item.duplicateOf;
+    item.progress = 100;
+    this.notify();
+    for (const cb of this.onItemCompletedListeners) {
+      cb(item.duplicateOf);
+    }
+  }
+
   public removeItem(id: string) {
+    this.bypassedDuplicates.delete(id);
     const index = this.queue.findIndex((q) => q.id === id);
     if (index >= 0) {
       const item = this.queue[index];
@@ -450,7 +496,7 @@ class MediaUploadQueueManager {
   }
 
   public clearCompleted() {
-    this.queue = this.queue.filter((q) => q.status === "uploading" || q.status === "queued");
+    this.queue = this.queue.filter((q) => q.status === "uploading" || q.status === "queued" || q.status === "checking" || q.status === "duplicate");
     this.notify();
   }
 
@@ -459,8 +505,35 @@ class MediaUploadQueueManager {
       const next = this.queue.find((q) => q.status === "queued");
       if (!next) break;
 
-      this.startUpload(next);
+      this.startCheckAndUpload(next);
     }
+  }
+
+  private async startCheckAndUpload(item: UploadQueueItem) {
+    // 1. Check for duplicates if not bypassed
+    if (!this.bypassedDuplicates.has(item.id)) {
+      item.status = "checking";
+      this.notify();
+
+      try {
+        const sha256 = await computeFileSha256(item.file);
+        item.sha256 = sha256;
+
+        const res = await client.admin.media.findDuplicates({ hashes: [sha256] });
+        const match = res.matches.find((m) => m.sha256 === sha256);
+        if (match && match.existing) {
+          item.status = "duplicate";
+          item.duplicateOf = match.existing;
+          this.notify();
+          return;
+        }
+      } catch (err) {
+        console.warn("Duplicate check failed, proceeding with direct upload:", err);
+      }
+    }
+
+    // 2. Proceed with actual file upload
+    await this.startUpload(item);
   }
 
   private async startUpload(item: UploadQueueItem) {
@@ -483,6 +556,7 @@ class MediaUploadQueueManager {
 
     try {
       const result = await uploadSingleFile(item.file, {
+        sha256: item.sha256,
         onProgress: (pct) => {
           if (item.status === "uploading") {
             item.progress = pct;

@@ -125,7 +125,17 @@ export function MediaUploadTray() {
                       <span className="text-muted-foreground">Queued</span>
                     )}
 
-                    {(item.status === "uploading" || item.status === "queued") && (
+                    {item.status === "checking" && (
+                      <span className="text-muted-foreground animate-pulse">Checking...</span>
+                    )}
+
+                    {item.status === "duplicate" && (
+                      <Badge variant="outline" className="border-amber-500 text-amber-600 dark:text-amber-400 bg-amber-50 dark:bg-amber-950/30 text-[10px]">
+                        Already in library
+                      </Badge>
+                    )}
+
+                    {(item.status === "uploading" || item.status === "queued" || item.status === "checking") && (
                       <Button
                         variant="ghost"
                         size="icon"
@@ -168,6 +178,43 @@ export function MediaUploadTray() {
 
                 {item.status === "uploading" && (
                   <Progress value={item.progress} className="h-1.5" />
+                )}
+
+                {item.status === "duplicate" && item.duplicateOf && (
+                  <div className="mt-1.5 p-2 rounded border border-amber-300 dark:border-amber-700 bg-amber-50 dark:bg-amber-950/40 text-amber-900 dark:text-amber-200 text-xs space-y-1.5">
+                    <div className="flex items-center gap-1.5 font-medium">
+                      <AlertCircle className="h-3.5 w-3.5 text-amber-600 dark:text-amber-400 shrink-0" />
+                      <span>Already in library</span>
+                    </div>
+                    <div className="flex items-center gap-1.5">
+                      <Button
+                        type="button"
+                        size="sm"
+                        className="h-6 text-[11px] px-2 bg-amber-600 hover:bg-amber-700 text-white"
+                        onClick={item.useExisting}
+                      >
+                        Use existing
+                      </Button>
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        className="h-6 text-[11px] px-2 border-amber-300 dark:border-amber-700 hover:bg-amber-100 dark:hover:bg-amber-900/50"
+                        onClick={item.proceedUpload}
+                      >
+                        Upload anyway
+                      </Button>
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="sm"
+                        className="h-6 text-[11px] px-2 text-muted-foreground hover:text-foreground"
+                        onClick={item.cancel}
+                      >
+                        Cancel
+                      </Button>
+                    </div>
+                  </div>
                 )}
 
                 {item.status === "error" && (

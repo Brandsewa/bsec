@@ -62,6 +62,7 @@ import {
   deletePage,
   deleteProduct,
   duplicatePage,
+  findDuplicates,
   unpublishPage,
   getBrandSettings,
   getCollection,
@@ -1358,6 +1359,15 @@ export const storeRouter = os.router({
         .handler(({ context, input }) => {
           if (!context.tenantCtx) throw new Error("Missing tenant context");
           return Promise.resolve(createMediaRecord(context.rt, context.tenantCtx, input)).catch((e) => {
+            throw mapAuthError(e);
+          });
+        }),
+      findDuplicates: os.admin.media.findDuplicates
+        .use(requireAdmin)
+        .use(requirePermission("content.write"))
+        .handler(({ context, input }) => {
+          if (!context.tenantCtx) throw new Error("Missing tenant context");
+          return Promise.resolve(findDuplicates(context.rt, context.tenantCtx, input)).catch((e) => {
             throw mapAuthError(e);
           });
         }),

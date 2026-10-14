@@ -733,6 +733,7 @@ export const MediaItem = z.object({
   focalY: z.number().nullable().optional(),
   dominantColor: z.string().nullable().optional(),
   derivatives: z.record(z.string(), z.any()).nullable().optional(),
+  sha256: z.string().nullable().optional(),
   url: z.string().optional(),
   thumbnailUrl: z.string().nullable().optional(),
   status: z.enum(["ready", "trashed"]).default("ready"),
@@ -2705,9 +2706,27 @@ export const adminContract = {
           caption: z.string().optional(),
           folder: z.string().default("products"),
           cfImageId: z.string().optional(),
+          sha256: z.string().regex(/^[0-9a-f]{64}$/i).optional(),
         }),
       )
       .output(MediaItem),
+    findDuplicates: oc
+      .route({ method: "POST", path: "/admin/media/find-duplicates" })
+      .input(
+        z.object({
+          hashes: z.array(z.string().regex(/^[0-9a-f]{64}$/i)).min(1).max(100),
+        }),
+      )
+      .output(
+        z.object({
+          matches: z.array(
+            z.object({
+              sha256: z.string(),
+              existing: MediaItem,
+            }),
+          ),
+        }),
+      ),
     upload: oc
       .route({ method: "POST", path: "/admin/media/upload" })
       .input(

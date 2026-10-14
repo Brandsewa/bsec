@@ -38,6 +38,7 @@ export {
 export * from "./media/download.ts";
 export * from "./media/image-helper.ts";
 export * from "./media/derivatives.ts";
+export * from "./media/hashing.ts";
 
 export interface ListMediaQuery {
   cursor?: string | undefined;
@@ -72,6 +73,7 @@ export interface CreateMediaInput {
   width?: number | undefined;
   height?: number | undefined;
   cfImageId?: string | undefined;
+  sha256?: string | undefined;
 }
 
 export interface UpdateMediaInput {
@@ -95,6 +97,7 @@ export interface FinalizeUploadParams {
   durationMs?: number | undefined;
   cfImageId?: string | undefined;
   directBuffer?: Buffer | Uint8Array | undefined;
+  sha256?: string | undefined;
 }
 
 export const libraryScope = sql`(${schema.media.folder} IS NULL OR ${schema.media.folder} NOT IN ('returns', 'expense-receipts'))`;
@@ -312,6 +315,10 @@ async function finalizeUpload(
     }
   }
 
+  if (!sha256 && params.sha256 && /^[0-9a-f]{64}$/i.test(params.sha256)) {
+    sha256 = params.sha256.toLowerCase();
+  }
+
   const filename = params.filename?.trim() || path.basename(params.storageKey);
 
   // 7. Insert row inside tenant transaction + audit log
@@ -367,6 +374,14 @@ async function finalizeUpload(
       });
     }
 
+    // Enqueue media.hash if SHA-256 could not be determined at upload time (Plan S4, rule 13)
+    if (!inserted.sha256 && rt._jobs) {
+      await rt._jobs.send(QUEUE_NAMES.MEDIA_HASH, {
+        tenantId: ctx.tenantId,
+        mediaId: inserted.id,
+      });
+    }
+
     return inserted;
   });
 
@@ -391,6 +406,7 @@ async function finalizeUpload(
     focalY: row.focalY,
     dominantColor: row.dominantColor,
     derivatives: (row.derivatives as Record<string, unknown> | null) ?? null,
+    sha256: row.sha256 ?? null,
     url,
     thumbnailUrl,
     status: row.status as "ready" | "trashed",
@@ -528,6 +544,7 @@ export async function listMedia(
         focalY: schema.media.focalY,
         dominantColor: schema.media.dominantColor,
         derivatives: schema.media.derivatives,
+        sha256: schema.media.sha256,
         status: schema.media.status,
         folder: schema.media.folder,
         uploadedBy: schema.media.uploadedBy,
@@ -586,6 +603,7 @@ export async function listMedia(
           focalY: r.focalY,
           dominantColor: r.dominantColor,
           derivatives: (r.derivatives as Record<string, unknown> | null) ?? null,
+          sha256: r.sha256 ?? null,
           url,
           thumbnailUrl,
           status: r.status as "ready" | "trashed",
@@ -889,6 +907,7 @@ export async function getMedia(
       focalY: row.focalY,
       dominantColor: row.dominantColor,
       derivatives: (row.derivatives as Record<string, unknown> | null) ?? null,
+      sha256: row.sha256 ?? null,
       url,
       thumbnailUrl,
       status: row.status as "ready" | "trashed",
@@ -1011,6 +1030,7 @@ export async function createMediaRecord(
     folder: keyFolder,
     durationMs: input.durationMs,
     cfImageId: input.cfImageId,
+    sha256: input.sha256,
   });
 }
 
@@ -1197,6 +1217,7 @@ export async function updateMedia(
     focalY: row.focalY,
     dominantColor: row.dominantColor,
     derivatives: (row.derivatives as Record<string, unknown> | null) ?? null,
+    sha256: row.sha256 ?? null,
     url,
     thumbnailUrl,
     status: row.status as "ready" | "trashed",
@@ -2289,4 +2310,84 @@ export async function resolveMediaUrlById(
     if (!row) return undefined;
     return resolvePublicMediaUrl(db, row.storageKey, row.storageConnectionId);
   });
+}
+
+/**
+ * Finds existing media items that match given SHA-256 hashes (Plan S4 duplicate detection).
+ * Scoped to current tenant's active ready media within libraryScope.
+ */
+export async function findDuplicates(
+  rt: Runtime,
+  ctx: TenantContext,
+  input: { hashes: string[] },
+): Promise<{ matches: { sha256: string; existing: MediaItem }[] }> {
+  assertPermission(ctx, "content.write");
+  const db = rt._db.db;
+  const cleanHashes = input.hashes
+    .map((h) => h.toLowerCase().trim())
+    .filter((h) => /^[0-9a-f]{64}$/.test(h));
+
+  if (cleanHashes.length === 0) {
+    return { matches: [] };
+  }
+
+  const rows = await withTenant(db, ctx.tenantId, async (tx) => {
+    return await tx
+      .select()
+      .from(schema.media)
+      .where(
+        and(
+          eq(schema.media.tenantId, ctx.tenantId),
+          inArray(schema.media.sha256, cleanHashes),
+          eq(schema.media.status, "ready"),
+          libraryScope,
+        ),
+      )
+      .orderBy(asc(schema.media.createdAt));
+  });
+
+  const matches: { sha256: string; existing: MediaItem }[] = [];
+  const seen = new Set<string>();
+
+  for (const row of rows) {
+    if (!row.sha256 || seen.has(row.sha256)) continue;
+    seen.add(row.sha256);
+    const url = (await resolvePublicMediaUrl(db, row.storageKey, row.storageConnectionId)) || "";
+    const thumbnailUrl = buildThumbnailUrl(row, url);
+    matches.push({
+      sha256: row.sha256,
+      existing: {
+        id: row.id,
+        kind: row.kind as MediaKind,
+        mime: row.mime,
+        filename: row.filename,
+        title: row.title,
+        alt: row.alt,
+        caption: row.caption,
+        bytes: Number(row.bytes),
+        width: row.width,
+        height: row.height,
+        durationMs: row.durationMs,
+        focalX: row.focalX,
+        focalY: row.focalY,
+        dominantColor: row.dominantColor,
+        derivatives: (row.derivatives as Record<string, unknown> | null) ?? null,
+        sha256: row.sha256 ?? null,
+        url,
+        thumbnailUrl,
+        status: row.status as "ready" | "trashed",
+        trashedAt: row.trashedAt ? row.trashedAt.toISOString() : null,
+        usageCount: 0,
+        uploadedBy: row.uploadedBy,
+        createdAt: row.createdAt.toISOString(),
+        updatedAt: row.updatedAt.toISOString(),
+        storageKey: row.storageKey,
+        storageConnectionId: row.storageConnectionId,
+        cfImageId: row.cfImageId,
+        folder: row.folder,
+      },
+    });
+  }
+
+  return { matches };
 }
