@@ -9,7 +9,7 @@ import fs from "node:fs";
 import path from "node:path";
 import { spawn } from "node:child_process";
 
-const OUT = path.resolve(process.cwd(), "docs/changes/evidence/media-library");
+const OUT = path.resolve(process.cwd(), "docs/test-evidence/2026-10-14-media-library");
 fs.mkdirSync(OUT, { recursive: true });
 
 function waitFor(url, ms = 30000) {
