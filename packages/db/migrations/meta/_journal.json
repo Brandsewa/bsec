@@ -351,6 +351,20 @@
       "when": 1792250000000,
       "tag": "0055_menus_kind",
       "breakpoints": true
+    },
+    {
+      "idx": 50,
+      "version": "7",
+      "when": 1792260000000,
+      "tag": "0056_media_library",
+      "breakpoints": true
+    },
+    {
+      "idx": 51,
+      "version": "7",
+      "when": 1792270000000,
+      "tag": "0057_media_storage_key_uniq",
+      "breakpoints": true
     }
   ]
 }

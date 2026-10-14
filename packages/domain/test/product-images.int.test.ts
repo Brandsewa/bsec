@@ -1,5 +1,9 @@
+import fs from "node:fs";
+import os from "node:os";
+import path from "node:path";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { startTestDb, type TestDb } from "@bs/db/test-env";
+import { seedPlatformStaff } from "@bs/db/test-fixtures";
 import {
   attachProductMedia,
   createMediaRecord,
@@ -16,6 +20,11 @@ import {
   type Runtime,
   type TenantContext,
 } from "../src/index.ts";
+import {
+  createPlatformStorageConnection,
+  activatePlatformStorageConnection,
+} from "../src/platform/storage-connections.ts";
+import { invalidateStorageConnectionCache } from "../src/media/connection.ts";
 
 import { createActiveProduct } from "./helpers/factories.ts";
 
@@ -25,6 +34,12 @@ let rtWeb: Runtime;
 let ctx: TenantContext;
 let other: TenantContext;
 let productId: string;
+let tempStorageDir: string;
+
+const PNG_1X1 = Buffer.from(
+  "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==",
+  "base64",
+);
 
 const saved = { ...process.env };
 const mk = (s: { tenantId: string; ownerId: string }): TenantContext => ({
@@ -38,12 +53,19 @@ const mk = (s: { tenantId: string; ownerId: string }): TenantContext => ({
 const errorOf = async (p: Promise<unknown>) => (await p.then(() => null, (e: Error) => e))?.message ?? null;
 
 beforeAll(async () => {
+  process.env.TENANT_SECRETS_KEY = "test-secret-key-32-chars-long-abc!!";
   process.env.R2_PUBLIC_URL = "https://media.example.test/";
   delete process.env.R2_ACCESS_KEY_ID;
   delete process.env.R2_SECRET_ACCESS_KEY;
   env = await startTestDb();
   rt = createRuntime({ service: "platform", databaseUrl: env.as("app_platform"), poolMax: 5 });
   rtWeb = createRuntime({ service: "web", databaseUrl: env.as("app_rw"), poolMax: 5 });
+
+  tempStorageDir = path.join(os.tmpdir(), `bsec-prod-img-test-${Date.now()}`);
+  fs.mkdirSync(tempStorageDir, { recursive: true });
+  process.env.STORAGE_LOCAL_DIR = tempStorageDir;
+
+  // Don't activate storage connection yet so 'uploads need storage to be set up' tests can verify unconfigured state!
   const a = await provisionTenant(rt, { storeName: "img-a", slug: "img-a", owner: { email: "owner@img-a.test", name: "A" }, planCode: "starter", source: "platform_admin" });
   const b = await provisionTenant(rt, { storeName: "img-b", slug: "img-b", owner: { email: "owner@img-b.test", name: "B" }, planCode: "starter", source: "platform_admin" });
   ctx = mk(a);
@@ -53,6 +75,11 @@ beforeAll(async () => {
 }, 180_000);
 
 afterAll(async () => {
+  if (tempStorageDir && fs.existsSync(tempStorageDir)) {
+    fs.rmSync(tempStorageDir, { recursive: true, force: true });
+  }
+  delete process.env.STORAGE_LOCAL_DIR;
+  invalidateStorageConnectionCache();
   process.env = saved;
   await rt?.close();
   await rtWeb?.close();
@@ -105,9 +132,31 @@ describe("a product's images", () => {
   let mediaB: string;
   let linkA: string;
 
+  beforeAll(async () => {
+    const staff = await seedPlatformStaff(rt._db.db, {
+      email: `storage-admin-${Date.now()}@platform.test`,
+      role: "platform_admin",
+    });
+    const conn = await createPlatformStorageConnection(rt, staff.userId, {
+      name: "Test Storage",
+      driver: "local",
+      purpose: "public_media",
+      localDir: tempStorageDir,
+      publicBaseUrl: "https://media.example.test",
+    });
+    await activatePlatformStorageConnection(rt, staff.userId, conn.id);
+    invalidateStorageConnectionCache();
+  });
+
   it("an uploaded image can be attached: the first is the main image, and it has a public url", async () => {
-    mediaA = (await createMediaRecord(rtWeb, ctx, { storageKey: `${ctx.tenantId}/products/a.png`, mime: "image/png", bytes: 1000 })).id;
-    mediaB = (await createMediaRecord(rtWeb, ctx, { storageKey: `${ctx.tenantId}/products/b.png`, mime: "image/png", bytes: 1000 })).id;
+    const keyA = `${ctx.tenantId}/products/a.png`;
+    const keyB = `${ctx.tenantId}/products/b.png`;
+    fs.mkdirSync(path.join(tempStorageDir, ctx.tenantId, "products"), { recursive: true });
+    fs.writeFileSync(path.join(tempStorageDir, keyA), PNG_1X1);
+    fs.writeFileSync(path.join(tempStorageDir, keyB), PNG_1X1);
+
+    mediaA = (await createMediaRecord(rtWeb, ctx, { storageKey: keyA, mime: "image/png", bytes: PNG_1X1.length })).id;
+    mediaB = (await createMediaRecord(rtWeb, ctx, { storageKey: keyB, mime: "image/png", bytes: PNG_1X1.length })).id;
 
     const first = await attachProductMedia(rtWeb, ctx, { productId, mediaId: mediaA, alt: "Pickle jar" });
     linkA = first.id;

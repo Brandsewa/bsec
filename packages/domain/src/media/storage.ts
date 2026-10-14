@@ -247,6 +247,7 @@ export async function buildPresignedUploadDescriptor(params: {
     Bucket: cfg.bucketName,
     Key: storageKey,
     ContentType: params.mime,
+    ContentLength: params.bytes,
   });
 
   const uploadUrl = await getSignedUrl(client, command, {
