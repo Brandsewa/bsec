@@ -243,9 +243,9 @@ function MediaPickerDialogInner({
   };
 
   return (
-    <DialogContent className="w-full sm:max-w-4xl h-[92vh] sm:h-[82vh] flex flex-col p-0 gap-0 overflow-hidden max-w-full sm:rounded-lg">
+    <DialogContent className="w-full sm:max-w-5xl h-[92vh] sm:h-[82vh] flex flex-col p-0 gap-0 overflow-hidden max-w-full sm:rounded-lg">
         {/* Header */}
-        <DialogHeader className="p-4 sm:p-5 border-b bg-card">
+        <DialogHeader className="p-5 sm:p-6 border-b border-border/60 bg-card">
           <div className="flex items-center justify-between">
             <div>
               <DialogTitle className="text-lg font-semibold">{title}</DialogTitle>
@@ -264,7 +264,7 @@ function MediaPickerDialogInner({
           onValueChange={(v) => setActiveTab(v as "library" | "upload")}
           className="flex-1 flex flex-col min-h-0"
         >
-          <div className="px-4 sm:px-5 pt-3 border-b bg-muted/20">
+          <div className="px-5 sm:px-6 pt-3 border-b border-border/60 bg-muted/20">
             <TabsList className="grid w-48 grid-cols-2 h-9">
               <TabsTrigger value="library" className="text-xs">
                 Library
@@ -276,7 +276,7 @@ function MediaPickerDialogInner({
           </div>
 
           {/* Library Tab */}
-          <TabsContent value="library" className="flex-1 flex flex-col min-h-0 m-0 p-4 sm:p-5">
+          <TabsContent value="library" className="flex-1 flex flex-col min-h-0 m-0 p-5 sm:p-6">
             <MediaFiltersBar
               q={q}
               onQChange={setQ}
@@ -298,7 +298,7 @@ function MediaPickerDialogInner({
                   {Array.from({ length: 15 }).map((_, i) => (
                     <div
                       key={i}
-                      className="aspect-square rounded-lg border bg-muted/40 animate-pulse"
+                      className="aspect-square rounded-lg border border-border bg-muted/40 animate-pulse"
                     />
                   ))}
                 </div>
@@ -373,7 +373,7 @@ function MediaPickerDialogInner({
           </TabsContent>
 
           {/* Upload Tab */}
-          <TabsContent value="upload" className="flex-1 flex flex-col min-h-0 m-0 p-4 sm:p-5">
+          <TabsContent value="upload" className="flex-1 flex flex-col min-h-0 m-0 p-5 sm:p-6">
             <input
               type="file"
               ref={fileInputRef}
@@ -410,7 +410,7 @@ function MediaPickerDialogInner({
                 "border-2 border-dashed rounded-lg p-8 sm:p-12 text-center cursor-pointer transition-all flex flex-col items-center justify-center gap-3",
                 isDragOver
                   ? "border-primary bg-primary/5 scale-[0.99]"
-                  : "border-muted-foreground/25 hover:border-primary/50 hover:bg-muted/10",
+                  : "border-muted-foreground/25 hover:border-foreground/30 hover:bg-muted/10",
               )}
             >
               <div className="h-12 w-12 rounded-full bg-muted/50 flex items-center justify-center text-muted-foreground">
@@ -443,7 +443,7 @@ function MediaPickerDialogInner({
                     Clear completed
                   </Button>
                 </div>
-                <div className="overflow-y-auto flex-1 divide-y rounded-md border bg-card text-xs">
+                <div className="overflow-y-auto flex-1 divide-y divide-border/60 rounded-md border border-border bg-card text-xs">
                   {queueItems.map((qItem) => (
                     <div key={qItem.id} className="p-3 flex items-center justify-between gap-3">
                       <div className="min-w-0 flex-1">
@@ -538,7 +538,7 @@ function MediaPickerDialogInner({
         </Tabs>
 
         {/* Footer */}
-        <DialogFooter className="p-4 sm:p-5 border-t bg-card flex flex-row items-center justify-between gap-2">
+        <DialogFooter className="p-5 sm:p-6 border-t border-border/60 bg-card flex flex-row items-center justify-between gap-2">
           <div className="text-xs text-muted-foreground">
             {selectedIds.length > 0 ? (
               <span>

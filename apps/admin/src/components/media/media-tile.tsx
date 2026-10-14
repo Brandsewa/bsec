@@ -48,11 +48,11 @@ export function MediaTile({
         }
       }}
       className={cn(
-        "group relative aspect-square rounded-lg border bg-card text-card-foreground overflow-hidden cursor-pointer flex flex-col justify-between transition-all",
+        "group relative aspect-square rounded-lg border border-border bg-card text-card-foreground overflow-hidden cursor-pointer flex flex-col justify-between transition-all",
         "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary",
         isSelected
           ? "ring-2 ring-primary border-primary bg-primary/5"
-          : "hover:border-primary/50 hover:shadow-sm",
+          : "hover:border-foreground/25 hover:shadow-sm",
         className,
       )}
     >
@@ -121,7 +121,7 @@ export function MediaTile({
       </div>
 
       {/* Footer Subtitle */}
-      <div className="px-2 py-1 bg-card border-t text-[11px] flex items-center justify-between gap-1 min-w-0">
+      <div className="px-2 py-1 bg-card border-t border-border/60 text-[11px] flex items-center justify-between gap-1 min-w-0">
         <span className="truncate font-medium text-foreground" title={item.filename || ""}>
           {item.filename || "Untitled"}
         </span>
