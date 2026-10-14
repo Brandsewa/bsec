@@ -127,6 +127,7 @@ describe("Media Replace Integration Test Suite (Real Postgres & Storage)", () =>
       caption: "Initial caption",
     });
     const oldKey = initial.storageKey;
+    if (!oldKey) throw new Error("expected storageKey on initial upload");
     const oldHead = await driver.head(oldKey);
     expect(oldHead.exists).toBe(true);
 
@@ -140,6 +141,7 @@ describe("Media Replace Integration Test Suite (Real Postgres & Storage)", () =>
       storageKey: newKey,
       mime: "image/png",
       filename: "new-hero.png",
+      bytes: PNG_2X2.length,
     });
 
     // 4. Verification
@@ -180,6 +182,7 @@ describe("Media Replace Integration Test Suite (Real Postgres & Storage)", () =>
         storageKey: videoKey,
         mime: "video/mp4",
         filename: "video.mp4",
+        bytes: MP4_SAMPLE.length,
       }),
     ).rejects.toThrow(/Replacement file must be of the same type/i);
 
@@ -216,12 +219,15 @@ describe("Media Replace Integration Test Suite (Real Postgres & Storage)", () =>
       storageKey: newKey,
       mime: "image/png",
       filename: "product-image-v2.png",
+      bytes: PNG_2X2.length,
     });
 
     // Check usage count maintained
     expect(replaced.usageCount).toBe(1);
-    expect(replaced.usages.length).toBe(1);
-    expect(replaced.usages[0]?.ownerType).toBe("product");
+    const detail = await getMedia(rt, ctx, { id: initial.id });
+    expect(detail.usageCount).toBe(1);
+    expect(detail.usages.length).toBe(1);
+    expect(detail.usages[0]?.ownerType).toBe("product");
 
     // Check storage stats reflects difference
     const statsAfter = await getTenantMediaUsageStats(rt._db.db, ctx.tenantId);

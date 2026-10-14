@@ -1,6 +1,6 @@
 import { eq, sql } from "drizzle-orm";
 import { schema, type withTenant } from "@bs/db";
-import type { MediaUsageReference } from "./types.ts";
+import type { MediaUsageReference } from "@bs/contracts";
 
 /**
  * Checks branding, settings, and page/theme block documents for references to media IDs (MEDIA-LIBRARY-PLAN §5.2, B5).

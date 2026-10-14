@@ -63,6 +63,7 @@ export function MediaPickerDialog(props: MediaPickerDialogProps) {
 }
 
 function MediaPickerDialogInner({
+  open,
   onOpenChange,
   accept,
   multiple = false,

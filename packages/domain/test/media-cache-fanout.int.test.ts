@@ -195,6 +195,7 @@ describe("Media Cache Fan-Out Integration Test Suite (S4, Real Postgres)", () =>
       storageKey: kCol,
       filename: "col-replaced.png",
       mime: "image/png",
+      bytes: PNG_1X1.length,
     });
 
     expect(capturedTags).toContain(tenantTag(tenantId, "collection", collection.id));
@@ -210,6 +211,7 @@ describe("Media Cache Fan-Out Integration Test Suite (S4, Real Postgres)", () =>
       storageKey: kCat,
       filename: "cat-replaced.png",
       mime: "image/png",
+      bytes: PNG_1X1.length,
     });
 
     expect(capturedTags).toContain(tenantTag(tenantId, "category", category.id));
@@ -225,6 +227,7 @@ describe("Media Cache Fan-Out Integration Test Suite (S4, Real Postgres)", () =>
       storageKey: kBrand,
       filename: "brand-replaced.png",
       mime: "image/png",
+      bytes: PNG_1X1.length,
     });
 
     expect(capturedTags).toContain(tenantTag(tenantId, "nav"));
@@ -238,6 +241,7 @@ describe("Media Cache Fan-Out Integration Test Suite (S4, Real Postgres)", () =>
       storageKey: kLogo,
       filename: "logo-replaced.png",
       mime: "image/png",
+      bytes: PNG_1X1.length,
     });
 
     expect(capturedTags).toContain(tenantTag(tenantId, "store-shell"));
@@ -253,6 +257,7 @@ describe("Media Cache Fan-Out Integration Test Suite (S4, Real Postgres)", () =>
       storageKey: kStatus,
       filename: "status-replaced.png",
       mime: "image/png",
+      bytes: PNG_1X1.length,
     });
 
     expect(capturedTags).toContain(tenantTag(tenantId, "store-shell"));
