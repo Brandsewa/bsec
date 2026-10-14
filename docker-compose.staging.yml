@@ -52,6 +52,7 @@ services:
       ADMIN_ORIGINS: http://127.0.0.1:8080
       TENANT_SECRETS_KEY: ${TENANT_SECRETS_KEY:?required}
       MEDIA_LOCAL_DIR: /data/media
+      MEDIA_PUBLIC_URL: http://127.0.0.1:3000/media
       STORAGE_LOCAL_DIR: /data/media
     volumes:
       - media_data:/data/media
@@ -86,6 +87,7 @@ services:
       DATABASE_URL_SAAS: postgres://app_saas:${APP_SAAS_PASSWORD}@postgres:5432/bsec
       TENANT_SECRETS_KEY: ${TENANT_SECRETS_KEY:?required}
       MEDIA_LOCAL_DIR: /data/media
+      MEDIA_PUBLIC_URL: http://127.0.0.1:3000/media
       STORAGE_LOCAL_DIR: /data/media
     volumes:
       - media_data:/data/media

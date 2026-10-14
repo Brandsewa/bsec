@@ -69,6 +69,8 @@ Until step 3 the site works normally; only the self-service endpoints answer 503
 - `CLOUDFLARE_API_TOKEN` / `CLOUDFLARE_ZONE_ID`: custom domains stay in `requested` ("not configured") until both are set.
 - `RAZORPAY_PLATFORM_KEY_ID`, `RAZORPAY_PLATFORM_KEY_SECRET`, `RAZORPAY_PLATFORM_WEBHOOK_SECRET`: plan changes answer "billing not configured" until set.
 - `MEDIA_LOCAL_DIR` (optional, default `./.data/media`): filesystem storage directory when using the `local` storage driver.
+- `MEDIA_PUBLIC_URL` (optional, local and staging stacks only, web + worker): public address of the web app's `/media` route, for example `http://127.0.0.1:3000/media`. Needed when the admin runs on another origin than the web app and storage is the `local` driver; production uses `R2_PUBLIC_URL`. It never changes which storage driver is used.
+- Worker image: `sharp` (image resizing for `media.derive`) is installed beside the bundle by `infra/docker/worker.Dockerfile` (`npm install sharp@<version of packages/domain>`); keep both versions equal. A worker without it crashes only when it processes an image, because `sharp` is loaded lazily.
 - Storage connections can also be configured dynamically in Super Admin under **Storage** (`/storage` or `/integrations/storage`). Active connections in `platform_storage_connections` supersede environment variables. When using S3 or Cloudflare R2 with direct browser uploads, ensure bucket CORS permits `PUT` from admin origins (e.g. `https://admin.bcom.si`). The Super Admin "Test connection" button performs live CORS diagnostics. If bucket CORS is unconfigured, uploads automatically fall back through server-proxied streaming (`/api/admin/media/upload`).
 
 ### Database roles

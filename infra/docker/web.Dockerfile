@@ -27,6 +27,9 @@ WORKDIR /app
 COPY --from=build --chown=node:node /repo/apps/web/.next/standalone ./
 COPY --from=build --chown=node:node /repo/apps/web/.next/static ./apps/web/.next/static
 COPY --from=build --chown=node:node /repo/apps/web/public ./apps/web/public
+# Local media directory (STORAGE_LOCAL_DIR/MEDIA_LOCAL_DIR in compose and local stacks). Created here and owned by the
+# runtime user so a freshly created named volume mounted at /data/media is writable (a root-owned volume gives EACCES).
+RUN mkdir -p /data/media && chown node:node /data/media
 USER node
 EXPOSE 3000
 HEALTHCHECK --interval=15s --timeout=5s --start-period=20s --retries=3 \

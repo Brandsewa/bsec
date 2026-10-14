@@ -23,8 +23,13 @@ ARG APP_VERSION=dev
 ENV APP_VERSION=${APP_VERSION}
 ENV NODE_ENV=production PORT=4100
 WORKDIR /app
-# Single-file bundle (esbuild): no node_modules in the runtime image.
+# Single-file bundle (esbuild). The only node_modules is sharp (native image library used by media.derive);
+# its version must match packages/domain/package.json. npm picks the musl prebuilt binary for this Alpine image.
+RUN npm install --no-save --no-audit --no-fund --omit=dev --ignore-scripts=false sharp@0.35.5  && npm cache clean --force  && rm -f package.json package-lock.json
 COPY --from=build --chown=node:node /repo/apps/worker/dist ./dist
+# Local media directory (STORAGE_LOCAL_DIR/MEDIA_LOCAL_DIR in compose and local stacks). Created here and owned by the
+# runtime user so a freshly created named volume mounted at /data/media is writable (a root-owned volume gives EACCES).
+RUN mkdir -p /data/media && chown node:node /data/media
 USER node
 EXPOSE 4100
 HEALTHCHECK --interval=15s --timeout=5s --start-period=15s --retries=3   CMD wget -qO- http://127.0.0.1:4100/health >/dev/null || exit 1
