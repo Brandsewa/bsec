@@ -1,10 +1,12 @@
 import { useMemo, useState } from "react";
 import { useNavigate } from "@tanstack/react-router";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { BlockEditor, type EditorPageKind, type ThemeTokens } from "@bs/block-editor";
+import { BlockEditor, type BlockEditorHost, type EditorPageKind, type MediaAsset, type ThemeTokens } from "@bs/block-editor";
 import { googleFontsHref, type BlockInstance } from "@bs/blocks";
+import type { MediaKind } from "@bs/contracts";
 import { Button, EmptyState, PageContainer, PageSkeleton } from "@bs/ui";
 import { client, orpc } from "../../lib/orpc.ts";
+import { MediaPickerDialog } from "../media/media-picker-dialog.tsx";
 import { storeHost, themeVarsFor } from "./host.ts";
 
 /**
@@ -23,6 +25,32 @@ export default function PageVisualEditor({ pageId, canPublish, storeName }: { pa
   // Theme settings edited from the sidebar's Theme tab. They go live when the page is published (like the
   // separate Theme settings screen, they have no draft), so they are held here until then.
   const [editedTokens, setEditedTokens] = useState<ThemeTokens | null>(null);
+
+  const [pickerProps, setPickerProps] = useState<{
+    open: boolean;
+    accept?: MediaKind[] | undefined;
+    multiple?: boolean | undefined;
+    max?: number | undefined;
+    selected?: string[] | undefined;
+    resolve?: ((items: MediaAsset[]) => void) | undefined;
+  }>({ open: false });
+
+  const host = useMemo<BlockEditorHost>(() => ({
+    ...storeHost,
+    pickMedia: (opts) => {
+      return new Promise<MediaAsset[]>((resolve) => {
+        setPickerProps({
+          open: true,
+          accept: opts.accept as MediaKind[],
+          multiple: opts.multiple,
+          max: opts.max,
+          selected: opts.selected,
+          resolve,
+        });
+      });
+    },
+  }), []);
+
   const tokens = editedTokens ?? ((themeQuery.data?.tokens ?? null) as ThemeTokens | null);
   const themeVars = useMemo(
     () => themeVarsFor(brandQuery.data, themeQuery.data && tokens ? { ...themeQuery.data, tokens } : themeQuery.data),
@@ -90,52 +118,82 @@ export default function PageVisualEditor({ pageId, canPublish, storeName }: { pa
       queryClient.invalidateQueries({ queryKey: orpc.admin.pages.get.key({ input: { id: pageId } }) }),
     ]);
 
+
   const saveDraft = async (blocks: BlockInstance[]) => {
     await client.admin.pages.saveDraft({ id: pageId, blocks });
     await refresh();
   };
 
   return (
-    <BlockEditor
-      title={`Editing: ${page.title}`}
-      initialBlocks={page.blocks as BlockInstance[]}
-      host={storeHost}
-      themeVars={themeVars}
-      storeName={storeName}
-      pageKind={kind}
-      fontsHref={fontsHref}
-      pages={
-        pageSwitcherOptions
-          ? {
-              value: pageId,
-              options: pageSwitcherOptions,
-              onChange: (newPageId) => void navigate({ to: "/online-store/editor/$pageId", params: { pageId: newPageId } }),
-            }
-          : undefined
-      }
-      onSaveDraft={saveDraft}
-      onPublish={async (blocks) => {
-        if (!canPublish) throw new Error("You do not have permission to publish. Save the draft and ask a store owner.");
-        // Publish exactly what is on the canvas: save it as a new version, then point the page at it.
-        const { versionId } = await client.admin.pages.saveDraft({ id: pageId, blocks });
-        await client.admin.pages.publish({ id: pageId, versionId });
-        if (editedTokens) {
-          await client.admin.themes.update({ tokens: editedTokens });
-          await Promise.all([
-            queryClient.invalidateQueries({ queryKey: orpc.admin.themes.get.key() }),
-            queryClient.invalidateQueries({ queryKey: orpc.admin.themes.library.key() }),
-          ]);
-          setEditedTokens(null);
+    <>
+      <BlockEditor
+        title={`Editing: ${page.title}`}
+        initialBlocks={page.blocks as BlockInstance[]}
+        host={host}
+        themeVars={themeVars}
+        storeName={storeName}
+        pageKind={kind}
+        fontsHref={fontsHref}
+        pages={
+          pageSwitcherOptions
+            ? {
+                value: pageId,
+                options: pageSwitcherOptions,
+                onChange: (newPageId) => void navigate({ to: "/online-store/editor/$pageId", params: { pageId: newPageId } }),
+              }
+            : undefined
         }
-        await refresh();
-      }}
-      onExit={exit}
-      externalDirty={editedTokens !== null}
-      themeTokens={tokens ?? undefined}
-      onThemeTokensChange={setEditedTokens}
-      themeSettingsDisabled={!canPublish}
-      themeSettingsNote={canPublish ? "Applies to every page of your store. Saved and live when you publish." : "You can view but not change theme settings."}
-      publishLabel={page.hasUnpublishedChanges ? "Draft differs from live page" : undefined}
-    />
+        onSaveDraft={saveDraft}
+        onPublish={async (blocks) => {
+          if (!canPublish) throw new Error("You do not have permission to publish. Save the draft and ask a store owner.");
+          // Publish exactly what is on the canvas: save it as a new version, then point the page at it.
+          const { versionId } = await client.admin.pages.saveDraft({ id: pageId, blocks });
+          await client.admin.pages.publish({ id: pageId, versionId });
+          if (editedTokens) {
+            await client.admin.themes.update({ tokens: editedTokens });
+            await Promise.all([
+              queryClient.invalidateQueries({ queryKey: orpc.admin.themes.get.key() }),
+              queryClient.invalidateQueries({ queryKey: orpc.admin.themes.library.key() }),
+            ]);
+            setEditedTokens(null);
+          }
+          await refresh();
+        }}
+        onExit={exit}
+        externalDirty={editedTokens !== null}
+        themeTokens={tokens ?? undefined}
+        onThemeTokensChange={setEditedTokens}
+        themeSettingsDisabled={!canPublish}
+        themeSettingsNote={canPublish ? "Applies to every page of your store. Saved and live when you publish." : "You can view but not change theme settings."}
+        publishLabel={page.hasUnpublishedChanges ? "Draft differs from live page" : undefined}
+      />
+      <MediaPickerDialog
+        open={pickerProps.open}
+        onOpenChange={(open) => {
+          if (!open) {
+            pickerProps.resolve?.([]);
+            setPickerProps({ open: false });
+          }
+        }}
+        accept={pickerProps.accept}
+        multiple={pickerProps.multiple}
+        max={pickerProps.max}
+        selected={pickerProps.selected}
+        onSelect={(items) => {
+          pickerProps.resolve?.(
+            items.map((m) => ({
+              id: m.id,
+              url: m.url ?? "",
+              alt: m.alt,
+              kind: m.kind,
+              filename: m.filename,
+              mime: m.mime,
+              thumbnailUrl: m.thumbnailUrl ?? undefined,
+            })),
+          );
+          setPickerProps({ open: false });
+        }}
+      />
+    </>
   );
 }

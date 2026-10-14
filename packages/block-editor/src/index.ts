@@ -4,4 +4,5 @@ export { ThemeSettingsEditor, ThemeSettingsPanel, readThemeSettings, type ThemeS
 export { BlocksPreview, type BlocksPreviewProps } from "./BlocksPreview.tsx";
 export { useFontLink } from "./fonts.ts";
 export { dataSignature } from "./signature.ts";
-export type { BlockEditorHost, MediaAsset } from "./context.tsx";
+export { mediaField, videoMediaField, fileMediaField, galleryMediaField, type PickerProps } from "./MediaField.tsx";
+export type { BlockEditorHost, MediaAsset, MediaKind } from "./context.tsx";
