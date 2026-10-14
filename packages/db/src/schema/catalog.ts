@@ -27,7 +27,7 @@ export const tsvector = customType<{ data: string }>({
 });
 
 /**
- * Media library (PLAN §5.5).
+ * Media library (PLAN §5.5, MEDIA-LIBRARY-PLAN §5.1).
  */
 export const media = tenantTable(
   "media",
@@ -46,12 +46,75 @@ export const media = tenantTable(
     alt: text("alt"),
     folder: text("folder").notNull().default("products"),
     uploadedBy: uuid("uploaded_by"),
+    kind: text("kind").notNull().default("image"),
+    status: text("status").notNull().default("ready"),
+    filename: text("filename"),
+    title: text("title"),
+    caption: text("caption"),
+    durationMs: integer("duration_ms"),
+    sha256: text("sha256"),
+    trashedAt: timestamp("trashed_at", { withTimezone: true }),
+    trashedBy: uuid("trashed_by"),
+    search: tsvector("search").generatedAlwaysAs(
+      sql`to_tsvector('simple', coalesce("filename", '') || ' ' || coalesce("title", '') || ' ' || coalesce("alt", ''))`,
+    ),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().default(sql`now()`),
     updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().default(sql`now()`),
   },
   (t) => [
     unique("media_tenant_id_uniq").on(t.tenantId, t.id),
+    unique("media_tenant_storage_key_uniq").on(t.tenantId, t.storageKey),
     index("media_tenant_created_idx").on(t.tenantId, t.createdAt),
+    index("media_tenant_status_created_idx").on(t.tenantId, t.status, t.createdAt, t.id),
+    index("media_tenant_kind_idx").on(t.tenantId, t.kind, t.status),
+    index("media_search_idx").using("gin", t.search),
+    index("media_tenant_trashed_idx").on(t.tenantId, t.trashedAt).where(sql`"trashed_at" is not null`),
+    check("media_kind_chk", sql`${t.kind} in ('image', 'video', 'document')`),
+    check("media_status_chk", sql`${t.status} in ('ready', 'trashed')`),
+    check("media_duration_ms_chk", sql`${t.durationMs} is null or ${t.durationMs} >= 0`),
+    check(
+      "media_trashed_status_chk",
+      sql`(${t.status} = 'trashed' and ${t.trashedAt} is not null) or (${t.status} != 'trashed' and ${t.trashedAt} is null)`,
+    ),
+  ],
+);
+
+/**
+ * Media usages tracking references across products, variants, collections, categories, brands, etc.
+ * (MEDIA-LIBRARY-PLAN §5.2).
+ */
+export const mediaUsages = tenantTable(
+  "media_usages",
+  {
+    id: uuid("id").default(sql`uuidv7()`).primaryKey(),
+    mediaId: uuid("media_id").notNull(),
+    ownerType: text("owner_type").notNull(),
+    ownerId: uuid("owner_id").notNull(),
+    field: text("field").notNull(),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().default(sql`now()`),
+  },
+  (t) => [
+    unique("media_usages_tenant_id_uniq").on(t.tenantId, t.id),
+    unique("media_usages_owner_field_uniq").on(
+      t.tenantId,
+      t.mediaId,
+      t.ownerType,
+      t.ownerId,
+      t.field,
+    ),
+    tenantForeignKey({
+      tableTenantId: t.tenantId,
+      column: t.mediaId,
+      target: media,
+      name: "media_usages_media_fk",
+      onDelete: "cascade",
+    }),
+    check(
+      "media_usages_owner_type_chk",
+      sql`${t.ownerType} in ('product', 'variant', 'collection', 'category', 'brand', 'page', 'theme', 'store_branding')`,
+    ),
+    index("media_usages_tenant_owner_idx").on(t.tenantId, t.ownerType, t.ownerId),
+    index("media_usages_tenant_media_idx").on(t.tenantId, t.mediaId),
   ],
 );
 

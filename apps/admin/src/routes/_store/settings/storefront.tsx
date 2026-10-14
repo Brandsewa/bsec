@@ -14,6 +14,7 @@ import { Field } from "@bs/ui";
 import { HeaderActions, SettingsCard, SettingsPageFrame, useUnsavedGuard } from "../../../components/settings/settings-page.tsx";
 import { orpc } from "../../../lib/orpc.ts";
 import { errorMessage } from "../../../lib/errors.ts";
+import { MediaField } from "../../../components/media/media-field.tsx";
 
 export const Route = createFileRoute("/_store/settings/storefront")({
   pendingComponent: () => <PageSkeleton />,
@@ -78,6 +79,7 @@ function StorefrontForm({ current }: { current: StorefrontStatus }) {
   const [mode, setMode] = useState<Mode>(current.mode);
   const [headline, setHeadline] = useState(current.headline ?? "");
   const [collectEmails, setCollectEmails] = useState(current.collectEmails);
+  const [backgroundMediaId, setBackgroundMediaId] = useState<string | null>(current.backgroundMediaId ?? null);
   const [password, setPassword] = useState("");
   const [confirmOfflineOpen, setConfirmOfflineOpen] = useState(false);
   const [confirmEndMaintenanceOpen, setConfirmEndMaintenanceOpen] = useState(false);
@@ -90,7 +92,12 @@ function StorefrontForm({ current }: { current: StorefrontStatus }) {
   const [copiedAnnouncement, setCopiedAnnouncement] = useState(false);
 
   const needsPassword = mode === "password" && !current.hasPassword && password.length < 6;
-  const unchanged = current.mode === mode && (current.headline ?? "") === headline && current.collectEmails === collectEmails && password === "";
+  const unchanged =
+    current.mode === mode &&
+    (current.headline ?? "") === headline &&
+    current.collectEmails === collectEmails &&
+    (current.backgroundMediaId ?? null) === backgroundMediaId &&
+    password === "";
   const guard = useUnsavedGuard(!unchanged);
 
   function refresh() {
@@ -103,6 +110,7 @@ function StorefrontForm({ current }: { current: StorefrontStatus }) {
         mode,
         headline: headline.trim() === "" ? null : headline.trim(),
         collectEmails,
+        backgroundMediaId: backgroundMediaId ?? null,
         ...(password ? { password } : {}),
       },
       {
@@ -476,6 +484,15 @@ function StorefrontForm({ current }: { current: StorefrontStatus }) {
             <Checkbox checked={collectEmails} onCheckedChange={(c) => setCollectEmails(Boolean(c))} />
             Let visitors leave their email to be notified
           </label>
+          <div className="pt-2">
+            <MediaField
+              value={backgroundMediaId}
+              onChange={setBackgroundMediaId}
+              accept={["image"]}
+              label="Background image"
+              description="Custom background image displayed on holding and password screens."
+            />
+          </div>
         </SettingsCard>
       )}
 

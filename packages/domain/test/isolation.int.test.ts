@@ -243,6 +243,15 @@ import {
   archiveAdminReturn,
   restoreAdminReturn,
   deleteAdminReturn,
+  getMedia,
+  getMediaUsage,
+  updateMedia,
+  replaceMedia,
+  reorderProductMedia,
+  updateProductMedia,
+  trashMedia,
+  restoreMedia,
+  deleteMediaPermanent,
   getAdminAbandonedCheckoutStats,
   listAdminAbandonedCheckouts,
   createAdminCustomer,
@@ -615,12 +624,21 @@ describe("Generated Isolation Test Suite (M1 Real Postgres 18 Proof)", () => {
         published: true,
       });
 
+      const sampleKey = `${tenantA}/products/sample.png`;
+      const sampleFile = path.join(tempMediaDir, sampleKey);
+      fs.mkdirSync(path.dirname(sampleFile), { recursive: true });
+      const png1x1 = Buffer.from(
+        "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==",
+        "base64",
+      );
+      fs.writeFileSync(sampleFile, png1x1);
+
       await tx.insert(schema.media).values({
         id: testMediaA,
         tenantId: tenantA,
-        storageKey: "sample.png",
+        storageKey: sampleKey,
         mime: "image/png",
-        bytes: 1024,
+        bytes: png1x1.length,
         folder: "products",
       });
 
@@ -976,6 +994,10 @@ describe("Generated Isolation Test Suite (M1 Real Postgres 18 Proof)", () => {
         });
       case "media.list":
         return await listMedia(rt, ctx);
+      case "media.get":
+        return await getMedia(rt, ctx, { id: testMediaA });
+      case "media.usage":
+        return await getMediaUsage(rt, ctx);
       case "media.requestUpload": {
         return await requestMediaUpload(rt, ctx, {
           filename: "test.png",
@@ -983,28 +1005,77 @@ describe("Generated Isolation Test Suite (M1 Real Postgres 18 Proof)", () => {
           bytes: 1024,
         });
       }
-      case "media.create":
+      case "media.create": {
+        const key = `${ctx.tenantId}/products/iso-${Date.now()}-${Math.random().toString(36).slice(2, 6)}.png`;
+        const localTarget = path.join(tempMediaDir, key);
+        fs.mkdirSync(path.dirname(localTarget), { recursive: true });
+        const png1x1 = Buffer.from(
+          "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==",
+          "base64",
+        );
+        fs.writeFileSync(localTarget, png1x1);
         return await createMediaRecord(rt, ctx, {
-          storageKey: `iso-${Date.now()}-${Math.random().toString(36).slice(2, 6)}.png`,
+          storageKey: key,
           mime: "image/png",
-          bytes: 1024,
+          bytes: png1x1.length,
+          filename: "iso.png",
         });
+      }
       case "media.upload": {
-        const fakePng = Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 0, 0, 0, 0]);
+        const png1x1 = Buffer.from(
+          "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==",
+          "base64",
+        );
         return await uploadMediaDirect(rt, ctx, {
           filename: "iso-upload.png",
           mime: "image/png",
-          fileBytes: fakePng,
+          fileBytes: png1x1,
           folder: "products",
         });
       }
-      case "media.delete": {
-        const m = await createMediaRecord(rt, ctx, {
-          storageKey: `del-${Date.now()}-${Math.random().toString(36).slice(2, 6)}.png`,
+      case "media.update":
+        return await updateMedia(rt, ctx, { id: testMediaA, alt: "Updated alt" });
+      case "media.replace": {
+        const oldKey = `${ctx.tenantId}/products/rep-old-${Date.now()}-${Math.random().toString(36).slice(2, 6)}.png`;
+        const newKey = `${ctx.tenantId}/products/rep-new-${Date.now()}-${Math.random().toString(36).slice(2, 6)}.png`;
+        const localOld = path.join(tempMediaDir, oldKey);
+        const localNew = path.join(tempMediaDir, newKey);
+        fs.mkdirSync(path.dirname(localOld), { recursive: true });
+        const png1x1 = Buffer.from("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==", "base64");
+        fs.writeFileSync(localOld, png1x1);
+        fs.writeFileSync(localNew, png1x1);
+        const m = await createMediaRecord(rt, ctx, { storageKey: oldKey, mime: "image/png", bytes: png1x1.length, filename: "old.png" });
+        return await replaceMedia(rt, ctx, {
+          id: m.id,
+          storageKey: newKey,
           mime: "image/png",
-          bytes: 1024,
+          bytes: png1x1.length,
+          filename: "new.png",
         });
-        return await deleteMediaRecord(rt, ctx, { id: m.id });
+      }
+      case "media.trash":
+        return await trashMedia(rt, ctx, { ids: [testMediaA] });
+      case "media.restore":
+        return await restoreMedia(rt, ctx, { ids: [testMediaA] });
+      case "media.deletePermanent": {
+        const m = await withTenant(rt._db.db, ctx.tenantId, async (tx) => {
+          const [ins] = await tx
+            .insert(schema.media)
+            .values({
+              tenantId: ctx.tenantId,
+              storageKey: `${ctx.tenantId}/products/del-perm-${Date.now()}.png`,
+              mime: "image/png",
+              bytes: 1024,
+              status: "trashed",
+              trashedAt: new Date(),
+            })
+            .returning();
+          return ins!;
+        });
+        return await deleteMediaPermanent(rt, ctx, { ids: [m.id] });
+      }
+      case "media.delete": {
+        return await deleteMediaRecord(rt, ctx, { id: testMediaA });
       }
       case "branding.get":
         return await getBrandSettings(rt, ctx);
@@ -1450,15 +1521,65 @@ describe("Generated Isolation Test Suite (M1 Real Postgres 18 Proof)", () => {
 
       // --- Product images ---
       case "products.attachMedia": {
-        const m = await createMediaRecord(rt, ctx, { storageKey: `attach-${Date.now()}-${Math.random().toString(36).slice(2, 6)}.png`, mime: "image/png", bytes: 1024 });
+        const key = `${ctx.tenantId}/products/attach-${Date.now()}-${Math.random().toString(36).slice(2, 6)}.png`;
+        const localTarget = path.join(tempMediaDir, key);
+        fs.mkdirSync(path.dirname(localTarget), { recursive: true });
+        const png1x1 = Buffer.from(
+          "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==",
+          "base64",
+        );
+        fs.writeFileSync(localTarget, png1x1);
+        const m = await createMediaRecord(rt, ctx, { storageKey: key, mime: "image/png", bytes: png1x1.length, filename: "attach.png" });
         const prod = await createProduct(rt, ctx, { title: `Attach ${Date.now()}`, variants: [{ sku: `ATT-${Date.now()}`, title: "D", price: 100 }] });
         return await attachProductMedia(rt, ctx, { productId: prod.id, mediaId: m.id });
       }
       case "products.detachMedia": {
-        const m = await createMediaRecord(rt, ctx, { storageKey: `detach-${Date.now()}-${Math.random().toString(36).slice(2, 6)}.png`, mime: "image/png", bytes: 1024 });
+        const key = `${ctx.tenantId}/products/detach-${Date.now()}-${Math.random().toString(36).slice(2, 6)}.png`;
+        const localTarget = path.join(tempMediaDir, key);
+        fs.mkdirSync(path.dirname(localTarget), { recursive: true });
+        const png1x1 = Buffer.from(
+          "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==",
+          "base64",
+        );
+        fs.writeFileSync(localTarget, png1x1);
+        const m = await createMediaRecord(rt, ctx, { storageKey: key, mime: "image/png", bytes: png1x1.length, filename: "detach.png" });
         const prod = await createProduct(rt, ctx, { title: `Detach ${Date.now()}`, variants: [{ sku: `DET-${Date.now()}`, title: "D", price: 100 }] });
         const link = await attachProductMedia(rt, ctx, { productId: prod.id, mediaId: m.id });
         return await detachProductMedia(rt, ctx, { productId: prod.id, productMediaId: link.id });
+      }
+      case "products.reorderMedia": {
+        const key1 = `${ctx.tenantId}/products/reorder-1-${Date.now()}-${Math.random().toString(36).slice(2, 6)}.png`;
+        const key2 = `${ctx.tenantId}/products/reorder-2-${Date.now()}-${Math.random().toString(36).slice(2, 6)}.png`;
+        const local1 = path.join(tempMediaDir, key1);
+        const local2 = path.join(tempMediaDir, key2);
+        fs.mkdirSync(path.dirname(local1), { recursive: true });
+        const png1x1 = Buffer.from("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==", "base64");
+        fs.writeFileSync(local1, png1x1);
+        fs.writeFileSync(local2, png1x1);
+        const m1 = await createMediaRecord(rt, ctx, { storageKey: key1, mime: "image/png", bytes: png1x1.length, filename: "1.png" });
+        const m2 = await createMediaRecord(rt, ctx, { storageKey: key2, mime: "image/png", bytes: png1x1.length, filename: "2.png" });
+        const prod = await createProduct(rt, ctx, { title: `Reorder ${Date.now()}`, variants: [{ sku: `REO-${Date.now()}`, title: "D", price: 100 }] });
+        const link1 = await attachProductMedia(rt, ctx, { productId: prod.id, mediaId: m1.id });
+        const link2 = await attachProductMedia(rt, ctx, { productId: prod.id, mediaId: m2.id });
+        return await reorderProductMedia(rt, ctx, {
+          id: prod.id,
+          order: [link2.id, link1.id],
+        });
+      }
+      case "products.updateMedia": {
+        const key = `${ctx.tenantId}/products/updmed-${Date.now()}-${Math.random().toString(36).slice(2, 6)}.png`;
+        const local = path.join(tempMediaDir, key);
+        fs.mkdirSync(path.dirname(local), { recursive: true });
+        const png1x1 = Buffer.from("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==", "base64");
+        fs.writeFileSync(local, png1x1);
+        const m = await createMediaRecord(rt, ctx, { storageKey: key, mime: "image/png", bytes: png1x1.length, filename: "upd.png" });
+        const prod = await createProduct(rt, ctx, { title: `UpdMed ${Date.now()}`, variants: [{ sku: `UM-${Date.now()}`, title: "D", price: 100 }] });
+        const link = await attachProductMedia(rt, ctx, { productId: prod.id, mediaId: m.id });
+        return await updateProductMedia(rt, ctx, {
+          id: prod.id,
+          productMediaId: link.id,
+          alt: "Updated alt",
+        });
       }
 
       // --- Storefront mode ---

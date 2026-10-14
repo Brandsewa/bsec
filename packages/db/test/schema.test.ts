@@ -95,6 +95,7 @@ describe("M1 Schema Definitions", () => {
     expect(schema.inventoryLevels).toBeDefined();
     expect(schema.inventoryMovements).toBeDefined();
     expect(schema.media).toBeDefined();
+    expect(schema.mediaUsages).toBeDefined();
   });
 
   it("registers M2 catalog tables in tenantTableNames", () => {
@@ -112,6 +113,7 @@ describe("M1 Schema Definitions", () => {
       "inventory_levels",
       "inventory_movements",
       "media",
+      "media_usages",
     ];
     for (const name of expected) {
       expect(tenantTableNames.has(name), `Missing registration for ${name}`).toBe(true);

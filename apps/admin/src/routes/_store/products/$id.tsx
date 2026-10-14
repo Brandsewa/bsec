@@ -1,6 +1,6 @@
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
-import { AlertTriangle, Archive, ArrowLeft, ImageIcon, Save, Trash2, Upload } from "lucide-react";
-import { useRef, useState } from "react";
+import { AlertTriangle, Archive, ArrowLeft, ImageIcon, Save, Trash2 } from "lucide-react";
+import { useState } from "react";
 import { DetailSkeleton, EmptyState, PageBreadcrumbs, PageContainer, PageHeader, PageSkeleton, toast } from "@bs/ui";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import type { ProductDetail } from "@bs/contracts";
@@ -14,7 +14,10 @@ import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, D
 import { SeoCard } from "../../../components/seo-card.tsx";
 import { SimpleSelect } from "@bs/ui";
 import { orpc } from "../../../lib/orpc.ts";
-import { uploadMedia } from "../../../lib/upload-media.ts";
+import { MediaGalleryField } from "../../../components/media/media-gallery-field.tsx";
+import { MediaPickerDialog } from "../../../components/media/media-picker-dialog.tsx";
+import type { MediaItem } from "@bs/contracts";
+import { cn } from "@bs/ui";
 
 export const Route = createFileRoute("/_store/products/$id")({
   pendingComponent: () => (
@@ -362,7 +365,13 @@ function ProductEditor({ product, go }: { product: ProductDetailData; go: (to: s
               ) : (
                 <div className="grid gap-4">
                   {product.variants.map((v) => (
-                    <VariantRow key={v.id} variant={v} priceOnRequest={priceOnRequest} onSaved={invalidate} />
+                    <VariantRow
+                      key={v.id}
+                      variant={v}
+                      productMedia={product.media}
+                      priceOnRequest={priceOnRequest}
+                      onSaved={invalidate}
+                    />
                   ))}
                 </div>
               )}
@@ -728,10 +737,12 @@ function StockSummary({ product, onManage }: { product: ProductDetailData; onMan
 
 function VariantRow({
   variant,
+  productMedia,
   priceOnRequest,
   onSaved,
 }: {
   variant: ProductDetailData["variants"][number];
+  productMedia: ProductDetailData["media"];
   priceOnRequest: boolean;
   onSaved: () => void;
 }) {
@@ -742,7 +753,18 @@ function VariantRow({
   const [preorderEnabled, setPreorderEnabled] = useState(Boolean(variant.preorderEnabled));
   const [preorderShipsOn, setPreorderShipsOn] = useState(variant.preorderShipsOn ?? "");
   const [preorderMessage, setPreorderMessage] = useState(variant.preorderMessage ?? "");
+  const [imageMediaId, setImageMediaId] = useState<string | null>(variant.imageMediaId ?? null);
+  const [pickerOpen, setPickerOpen] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  const matchedProductMedia = productMedia.find((m) => m.mediaId === imageMediaId);
+  const mediaQuery = useQuery({
+    ...orpc.admin.media.get.queryOptions({ input: { id: imageMediaId as string } }),
+    enabled: Boolean(imageMediaId) && !matchedProductMedia,
+  });
+  const displayUrl = matchedProductMedia?.url ?? mediaQuery.data?.url;
+
+  const productImages = productMedia.filter((m) => m.kind === "image" && Boolean(m.url));
 
   const mutation = useMutation(
     orpc.admin.variants.update.mutationOptions({
@@ -756,7 +778,7 @@ function VariantRow({
 
   const today = new Date().toISOString().slice(0, 10);
 
-  const submit = () => {
+  const submit = (overrideImageMediaId?: string | null) => {
     if (!sku.trim() || !vTitle.trim()) return setError("SKU and title are required");
     if (!priceOnRequest && (price === "" || !Number.isFinite(Number(price)) || Number(price) < 0)) {
       return setError("Enter a valid price");
@@ -774,6 +796,7 @@ function VariantRow({
       }
     }
     setError(null);
+    const chosenImage = overrideImageMediaId !== undefined ? overrideImageMediaId : imageMediaId;
     mutation.mutate({
       id: variant.id,
       sku: sku.trim(),
@@ -783,7 +806,13 @@ function VariantRow({
       preorderEnabled,
       preorderShipsOn: preorderEnabled ? (preorderShipsOn || null) : null,
       preorderMessage: preorderEnabled ? (preorderMessage.trim() || null) : null,
+      imageMediaId: chosenImage ?? null,
     });
+  };
+
+  const handleSelectMedia = (id: string | null) => {
+    setImageMediaId(id);
+    submit(id);
   };
 
   return (
@@ -818,6 +847,88 @@ function VariantRow({
           disabled={priceOnRequest}
           value={priceOnRequest ? "" : compare}
           onChange={(e) => setCompare(e.target.value)}
+        />
+      </div>
+
+      {/* Variant Image Slot */}
+      <div className="sm:col-span-4 flex flex-wrap items-center gap-3 pt-1 border-t border-border/50 pb-1">
+        <span className="text-xs font-medium text-foreground">Variant Image:</span>
+        {displayUrl ? (
+          <div className="relative group size-10 rounded border border-border overflow-hidden bg-background">
+            <img src={displayUrl} alt={vTitle} className="size-full object-cover" />
+            <button
+              type="button"
+              className="absolute inset-0 bg-black/60 opacity-0 group-hover:opacity-100 flex items-center justify-center text-white transition-opacity"
+              onClick={() => handleSelectMedia(null)}
+              title="Remove image"
+            >
+              <Trash2 className="size-3.5" />
+            </button>
+          </div>
+        ) : (
+          <div className="size-10 rounded border border-dashed border-muted-foreground/30 flex items-center justify-center text-muted-foreground bg-muted/20">
+            <ImageIcon className="size-4" />
+          </div>
+        )}
+
+        {/* Quick row from product attached images */}
+        {productImages.length > 0 && (
+          <div className="flex items-center gap-1.5">
+            <span className="text-xs text-muted-foreground">From product:</span>
+            {productImages.slice(0, 5).map((m) => (
+              <button
+                key={m.id}
+                type="button"
+                onClick={() => handleSelectMedia(m.mediaId)}
+                className={cn(
+                  "size-8 rounded border overflow-hidden hover:opacity-80 transition-all",
+                  imageMediaId === m.mediaId ? "ring-2 ring-primary border-primary" : "border-border",
+                )}
+                title={m.alt ?? "Attach to variant"}
+              >
+                {m.url ? (
+                  <img src={m.url} alt="" className="size-full object-cover" />
+                ) : (
+                  <ImageIcon className="size-3 mx-auto" />
+                )}
+              </button>
+            ))}
+          </div>
+        )}
+
+        <Button
+          type="button"
+          variant="outline"
+          size="sm"
+          className="h-8 text-xs"
+          onClick={() => setPickerOpen(true)}
+        >
+          Browse library
+        </Button>
+
+        {imageMediaId && (
+          <Button
+            type="button"
+            variant="ghost"
+            size="sm"
+            className="h-8 text-xs text-destructive hover:text-destructive"
+            onClick={() => handleSelectMedia(null)}
+          >
+            Remove
+          </Button>
+        )}
+
+        <MediaPickerDialog
+          open={pickerOpen}
+          onOpenChange={setPickerOpen}
+          accept={["image"]}
+          multiple={false}
+          onSelect={(selected) => {
+            if (selected[0]) {
+              handleSelectMedia(selected[0].id);
+            }
+          }}
+          title="Select variant image"
         />
       </div>
 
@@ -868,7 +979,7 @@ function VariantRow({
           {priceOnRequest ? "Quote only" : `Current: ${inr.format(variant.price / 100)}`}
           {error ? <span role="alert" className="ml-3 text-destructive font-medium">{error}</span> : null}
         </span>
-        <Button type="button" variant="outline" size="sm" disabled={mutation.isPending} onClick={submit}>
+        <Button type="button" variant="outline" size="sm" disabled={mutation.isPending} onClick={() => submit()}>
           {mutation.isPending ? "Saving..." : "Save variant"}
         </Button>
       </div>
@@ -878,100 +989,68 @@ function VariantRow({
 
 function MediaSection({ product }: { product: ProductDetailData }) {
   const queryClient = useQueryClient();
-  const fileRef = useRef<HTMLInputElement>(null);
-  const [uploading, setUploading] = useState(false);
   const attachMedia = useMutation(orpc.admin.products.attachMedia.mutationOptions());
   const detachMedia = useMutation(orpc.admin.products.detachMedia.mutationOptions());
-  const refresh = () => void queryClient.invalidateQueries({ queryKey: orpc.admin.products.key() });
+  const reorderMedia = useMutation(orpc.admin.products.reorderMedia.mutationOptions());
+  const updateMedia = useMutation(orpc.admin.products.updateMedia.mutationOptions());
 
-  const onFile = async (file: File) => {
-    setUploading(true);
-    try {
-      const created = await uploadMedia(file, { folder: "products", alt: product.title });
-      await attachMedia.mutateAsync({ id: product.id, mediaId: created.id, alt: product.title });
-      void queryClient.invalidateQueries({ queryKey: orpc.admin.media.list.key() });
-      refresh();
-      toast.success("Image added to the product");
-    } catch (e) {
-      toast.error(e instanceof Error ? e.message : "Image upload failed");
-    } finally {
-      setUploading(false);
-      if (fileRef.current) fileRef.current.value = "";
-    }
+  const refresh = () => {
+    void queryClient.invalidateQueries({ queryKey: orpc.admin.products.get.key({ input: { id: product.id } }) });
+    void queryClient.invalidateQueries({ queryKey: orpc.admin.products.list.key() });
+  };
+
+  const handleAttach = async (mediaItem: MediaItem) => {
+    await attachMedia.mutateAsync({
+      id: product.id,
+      mediaId: mediaItem.id,
+      alt: mediaItem.alt ?? product.title,
+    });
+    refresh();
+  };
+
+  const handleDetach = async (productMediaId: string) => {
+    await detachMedia.mutateAsync({
+      id: product.id,
+      productMediaId,
+    });
+    refresh();
+  };
+
+  const handleReorder = async (order: string[]) => {
+    await reorderMedia.mutateAsync({
+      id: product.id,
+      order,
+    });
+    refresh();
+  };
+
+  const handleAltChange = async (productMediaId: string, alt: string | null) => {
+    await updateMedia.mutateAsync({
+      id: product.id,
+      productMediaId,
+      alt,
+    });
+    refresh();
   };
 
   return (
     <Card>
       <CardHeader>
         <CardTitle className="text-base font-semibold">Media</CardTitle>
-        <CardDescription>Images shown on your storefront. The first image is the main card image.</CardDescription>
+        <CardDescription>
+          Images and videos shown on your storefront. The first image is the main card image. Drag to reorder.
+        </CardDescription>
       </CardHeader>
-      <CardContent className="grid gap-4">
-        {product.media.length === 0 ? (
-          <EmptyState
-            icon={ImageIcon}
-            title="No images attached"
-            description="Upload images to display on your product page and collections."
-          />
-        ) : (
-          <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
-            {product.media.map((m) => (
-              <div key={m.id} className="overflow-hidden rounded-md border border-border bg-muted/20">
-                {m.url ? (
-                  <img src={m.url} alt={product.title} className="aspect-square w-full object-cover" />
-                ) : (
-                  <div className="flex aspect-square items-center justify-center text-muted-foreground">
-                    <ImageIcon className="size-6" aria-hidden />
-                  </div>
-                )}
-                <div className="flex items-center justify-between px-2 py-1 text-xs text-muted-foreground">
-                  <span>{m.isPrimary ? "Main image" : ""}</span>
-                  <button
-                    type="button"
-                    className="text-destructive hover:underline disabled:opacity-50"
-                    disabled={detachMedia.isPending}
-                    onClick={() =>
-                      detachMedia.mutate(
-                        { id: product.id, productMediaId: m.id },
-                        {
-                          onSuccess: () => {
-                            toast.success("Image removed");
-                            refresh();
-                          },
-                          onError: (e) => toast.error(e instanceof Error ? e.message : "Could not remove the image"),
-                        },
-                      )
-                    }
-                  >
-                    Remove
-                  </button>
-                </div>
-              </div>
-            ))}
-          </div>
-        )}
-        <div>
-          <input
-            ref={fileRef}
-            type="file"
-            accept="image/*"
-            className="hidden"
-            onChange={(e) => {
-              const f = e.target.files?.[0];
-              if (f) void onFile(f);
-            }}
-          />
-          <Button
-            type="button"
-            variant="outline"
-            size="sm"
-            disabled={uploading}
-            onClick={() => fileRef.current?.click()}
-          >
-            <Upload className="mr-1.5 size-3.5" aria-hidden />
-            {uploading ? "Uploading..." : "Upload image"}
-          </Button>
-        </div>
+      <CardContent>
+        <MediaGalleryField
+          value={product.media}
+          accept={["image", "video"]}
+          max={10}
+          onAttach={handleAttach}
+          onDetach={handleDetach}
+          onReorder={handleReorder}
+          onAltChange={handleAltChange}
+        />
       </CardContent>
     </Card>
   );

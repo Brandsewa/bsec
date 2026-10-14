@@ -32,6 +32,8 @@ New decisions get an ADR **before** code (PLAN §15). Copy `template.md`, take t
 | [025](025-quota-tiers-normalisation.md) | Quota tiers normalisation, display pricing, and safe resolution | Accepted |
 | [026](026-page-hierarchy-and-canonical-urls.md) | Page hierarchy and canonical hierarchical URLs | Accepted |
 | [027](027-navigation-and-filter-menus.md) | Navigation builder and faceted filter menus | Accepted |
+| [028](028-media-library.md) | Media library: flat storage, usages junction table, per-kind quotas, trash lifecycle, and SVG ban | Accepted |
+| [029](029-media-picker-and-usages.md) | Shared media picker, usage tracking, and cache fan-out | Accepted |
 
-**Next number: 028.**
+**Next number: 030.**
 

@@ -14,13 +14,15 @@ import {
   getStoreStatus,
   getStoreStatusInternal,
   attachProductMedia,
+  detachProductMedia,
+  reorderProductMedia,
+  updateProductMedia,
   listStorePaymentProviders,
   saveStripeCredentials,
   getStorePaymentProvider,
   clearProviderCredentials,
   testPaymentProviderConnection,
   setPaymentProviderActive,
-  detachProductMedia,
   uploadMediaDirect,
   MAX_MEDIA_BYTES,
   updateStoreStatus,
@@ -54,6 +56,7 @@ import {
   deleteBrand,
   deleteCategory,
   deleteCollection,
+  deleteMediaPermanent,
   deleteMediaRecord,
   deleteMenu,
   deletePage,
@@ -62,6 +65,8 @@ import {
   unpublishPage,
   getBrandSettings,
   getCollection,
+  getMedia,
+  getMediaUsage,
   getMenu,
   getPage,
   getProduct,
@@ -119,12 +124,17 @@ import {
   bulkDeleteAdminReviews,
   getStorefrontReviews,
   submitProductReview,
+  updateMedia,
+  replaceMedia,
   updateMenu,
   updatePage,
   updateProduct,
   updateStoreSettings,
   updateTheme,
   updateVariant,
+  trashMedia,
+  restoreMedia,
+  QuotaExceededError,
   getAdminShippingSettings,
   updateAdminShippingSettings,
   searchStorefrontProducts,
@@ -335,6 +345,17 @@ const os = implement(storeContract).$context<ApiContext>();
 
 /** Domain code signals auth problems with "Unauthorized:/Forbidden:/Bad Request:" prefixes; map them to real HTTP-level codes. */
 function mapAuthError(err: unknown): unknown {
+  if (err instanceof QuotaExceededError) {
+    return new ORPCError("FORBIDDEN", {
+      message: err.message,
+      data: {
+        code: "QUOTA_EXCEEDED",
+        quotaKey: err.quotaKey,
+        limit: err.limit,
+        current: err.current,
+      },
+    });
+  }
   if (err instanceof Error) {
     const m = err.message;
     if (m.startsWith("Unauthorized")) return new ORPCError("UNAUTHORIZED", { message: m.replace(/^Unauthorized:\s*/, "") });
@@ -957,6 +978,24 @@ export const storeRouter = os.router({
             throw mapAuthError(e);
           });
         }),
+      reorderMedia: os.admin.products.reorderMedia
+        .use(requireAdmin)
+        .use(requirePermission("products.write"))
+        .handler(({ context, input }) => {
+          if (!context.tenantCtx) throw new Error("Missing tenant context");
+          return reorderProductMedia(context.rt, context.tenantCtx, input).catch((e) => {
+            throw mapAuthError(e);
+          });
+        }),
+      updateMedia: os.admin.products.updateMedia
+        .use(requireAdmin)
+        .use(requirePermission("products.write"))
+        .handler(({ context, input }) => {
+          if (!context.tenantCtx) throw new Error("Missing tenant context");
+          return updateProductMedia(context.rt, context.tenantCtx, input).catch((e) => {
+            throw mapAuthError(e);
+          });
+        }),
       list: os.admin.products.list
         .use(requireAdmin)
         .use(requirePermission("products.read"))
@@ -1281,7 +1320,7 @@ export const storeRouter = os.router({
         }),
     },
 
-    // Media
+    // Media (MEDIA-LIBRARY-PLAN §7)
     media: {
       list: os.admin.media.list
         .use(requireAdmin)
@@ -1289,6 +1328,20 @@ export const storeRouter = os.router({
         .handler(({ context, input }) => {
           if (!context.tenantCtx) throw new Error("Missing tenant context");
           return listMedia(context.rt, context.tenantCtx, input);
+        }),
+      get: os.admin.media.get
+        .use(requireAdmin)
+        .use(requirePermission("content.write"))
+        .handler(({ context, input }) => {
+          if (!context.tenantCtx) throw new Error("Missing tenant context");
+          return getMedia(context.rt, context.tenantCtx, input);
+        }),
+      usage: os.admin.media.usage
+        .use(requireAdmin)
+        .use(requirePermission("content.write"))
+        .handler(({ context }) => {
+          if (!context.tenantCtx) throw new Error("Missing tenant context");
+          return getMediaUsage(context.rt, context.tenantCtx);
         }),
       requestUpload: os.admin.media.requestUpload
         .use(requireAdmin)
@@ -1304,7 +1357,9 @@ export const storeRouter = os.router({
         .use(requirePermission("content.write"))
         .handler(({ context, input }) => {
           if (!context.tenantCtx) throw new Error("Missing tenant context");
-          return createMediaRecord(context.rt, context.tenantCtx, input);
+          return Promise.resolve(createMediaRecord(context.rt, context.tenantCtx, input)).catch((e) => {
+            throw mapAuthError(e);
+          });
         }),
       upload: os.admin.media.upload
         .use(requireAdmin)
@@ -1312,13 +1367,59 @@ export const storeRouter = os.router({
         .handler(async ({ context, input }) => {
           if (!context.tenantCtx) throw new Error("Missing tenant context");
           const fileBytes = Buffer.from(input.data, "base64");
-          return uploadMediaDirect(context.rt, context.tenantCtx, {
-            fileBytes,
-            filename: input.filename,
-            mime: input.mime,
-            folder: input.folder,
-            alt: input.alt,
+          return Promise.resolve(
+            uploadMediaDirect(context.rt, context.tenantCtx, {
+              fileBytes,
+              filename: input.filename,
+              mime: input.mime,
+              folder: input.folder,
+              alt: input.alt,
+              title: input.title,
+              caption: input.caption,
+              durationMs: input.durationMs,
+            }),
+          ).catch((e) => {
+            throw mapAuthError(e);
           });
+        }),
+      update: os.admin.media.update
+        .use(requireAdmin)
+        .use(requirePermission("content.write"))
+        .handler(({ context, input }) => {
+          if (!context.tenantCtx) throw new Error("Missing tenant context");
+          return Promise.resolve(updateMedia(context.rt, context.tenantCtx, input)).catch((e) => {
+            throw mapAuthError(e);
+          });
+        }),
+      replace: os.admin.media.replace
+        .use(requireAdmin)
+        .use(requirePermission("content.write"))
+        .handler(({ context, input }) => {
+          if (!context.tenantCtx) throw new Error("Missing tenant context");
+          return replaceMedia(context.rt, context.tenantCtx, input).catch((e) => {
+            throw mapAuthError(e);
+          });
+        }),
+      trash: os.admin.media.trash
+        .use(requireAdmin)
+        .use(requirePermission("content.write"))
+        .handler(({ context, input }) => {
+          if (!context.tenantCtx) throw new Error("Missing tenant context");
+          return trashMedia(context.rt, context.tenantCtx, input);
+        }),
+      restore: os.admin.media.restore
+        .use(requireAdmin)
+        .use(requirePermission("content.write"))
+        .handler(({ context, input }) => {
+          if (!context.tenantCtx) throw new Error("Missing tenant context");
+          return restoreMedia(context.rt, context.tenantCtx, input);
+        }),
+      deletePermanent: os.admin.media.deletePermanent
+        .use(requireAdmin)
+        .use(requirePermission("content.write"))
+        .handler(({ context, input }) => {
+          if (!context.tenantCtx) throw new Error("Missing tenant context");
+          return deleteMediaPermanent(context.rt, context.tenantCtx, input);
         }),
       delete: os.admin.media.delete
         .use(requireAdmin)
@@ -3203,6 +3304,18 @@ api.post("/admin/media/upload", async (c) => {
     });
     return c.json(result);
   } catch (err) {
+    if (err instanceof QuotaExceededError) {
+      return c.json(
+        {
+          error: err.message,
+          code: "QUOTA_EXCEEDED",
+          quotaKey: err.quotaKey,
+          limit: err.limit,
+          current: err.current,
+        },
+        403,
+      );
+    }
     const msg = err instanceof Error ? err.message : "Upload failed";
     const status = msg.includes("quota") ? 403 : msg.includes("MIME") || msg.includes("Invalid") ? 400 : 500;
     return c.json({ error: msg }, status);

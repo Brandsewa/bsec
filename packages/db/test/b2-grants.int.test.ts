@@ -143,9 +143,24 @@ describe("B2: app_rw privileges on platform vs tenant tables", () => {
     const tiersRes = await q(rw, "SELECT count(*) FROM quota_tiers");
     expect(Number(tiersRes.rows[0]?.count)).toBeGreaterThanOrEqual(4);
     const limitsRes = await q(rw, "SELECT count(*) FROM quota_tier_limits");
-    expect(Number(limitsRes.rows[0]?.count)).toBeGreaterThanOrEqual(4);
+    expect(Number(limitsRes.rows[0]?.count)).toBeGreaterThanOrEqual(16);
 
-    // Reading platform_payment_providers is allowed for app_rw; Stripe ships disabled
+    // Reading media_usages tenant table is allowed for app_rw
+    const mediaUsagesRes = await q(rw, "SELECT count(*) FROM media_usages");
+    expect(Number(mediaUsagesRes.rows[0]?.count)).toBeGreaterThanOrEqual(0);
+
+    // Quota definitions include media per-kind keys
+    const quotaKeysRes = await q<{ key: string }>(
+      rw,
+      "SELECT key FROM quota_definitions WHERE key IN ('media_image_mb', 'media_video_mb', 'media_document_mb')",
+    );
+    expect(quotaKeysRes.rows.map((r) => r.key).sort()).toEqual([
+      "media_document_mb",
+      "media_image_mb",
+      "media_video_mb",
+    ]);
+
+    // platform_payment_providers is allowed for app_rw; Stripe ships disabled
     const payRes = await q<{ provider: string; enabled: boolean }>(rw, "SELECT provider, enabled FROM platform_payment_providers ORDER BY sort");
     expect(payRes.rows.map((r) => r.provider)).toEqual(["razorpay", "stripe"]);
     expect(payRes.rows.find((r) => r.provider === "stripe")?.enabled).toBe(false);

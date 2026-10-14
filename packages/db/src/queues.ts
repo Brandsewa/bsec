@@ -34,6 +34,9 @@ export const QUEUES = [
   // Finance queues (docs/FINANCE-PLAN.md §3.5)
   { name: "finance.post", options: { retryLimit: 5, retryBackoff: true, retryDelay: 5 } },
   { name: "finance.reconcile", options: { retryLimit: 3, retryBackoff: true, retryDelay: 10 } },
+  // Media library queues (MEDIA-LIBRARY-PLAN §8)
+  { name: "media.purge", options: { retryLimit: 5, retryBackoff: true, retryDelay: 5 } },
+  { name: "media.trash_sweep", options: { retryLimit: 3, retryBackoff: true, retryDelay: 10 } },
 ] as const;
 
 export type QueueName = (typeof QUEUES)[number]["name"];
@@ -68,4 +71,6 @@ export const QUEUE_NAMES = {
   MAINTENANCE_WATCHDOG_SWEEP: "maintenance.watchdog_sweep",
   FINANCE_POST: "finance.post",
   FINANCE_RECONCILE: "finance.reconcile",
+  MEDIA_PURGE: "media.purge",
+  MEDIA_TRASH_SWEEP: "media.trash_sweep",
 } as const;
