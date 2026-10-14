@@ -3,6 +3,7 @@ import { schema, withTenant } from "@bs/db";
 import type { TenantContext } from "./context.ts";
 import type { Runtime } from "./runtime.ts";
 import { tenantTag } from "./cache-tags.ts";
+import { findUntrackedReferences } from "./media/untracked-references.ts";
 
 export type CacheChange =
   | {
@@ -215,9 +216,27 @@ export function computeInvalidationTags(
             tags.push(tenantTag(tenantId, "nav"));
             break;
           }
-          case "store_branding": {
+          case "store_branding":
+          case "branding": {
             tags.push(tenantTag(tenantId, "store-shell"));
             tags.push(tenantTag(tenantId, "seo"));
+            tags.push(tenantTag(tenantId, "theme"));
+            break;
+          }
+          case "store_status": {
+            tags.push(tenantTag(tenantId, "store-shell"));
+            tags.push(tenantTag(tenantId, "seo"));
+            break;
+          }
+          case "seo_settings": {
+            tags.push(tenantTag(tenantId, "seo"));
+            break;
+          }
+          case "page": {
+            tags.push(tenantTag(tenantId, "page", o.ownerId));
+            break;
+          }
+          case "theme": {
             tags.push(tenantTag(tenantId, "theme"));
             break;
           }
@@ -290,12 +309,30 @@ export async function invalidateMediaCache(
       }
     }
 
-    return usageRows.map((u) => ({
+    const usageOwners: Array<{
+      ownerType: string;
+      ownerId: string;
+      productId?: string | undefined;
+      field?: string | undefined;
+    }> = usageRows.map((u) => ({
       ownerType: u.ownerType,
       ownerId: u.ownerId,
       productId: u.ownerType === "variant" ? variantProductMap.get(u.ownerId) : undefined,
       field: u.field,
     }));
+
+    const untrackedMap = await findUntrackedReferences(tx, ctx.tenantId, ids);
+    for (const refs of untrackedMap.values()) {
+      for (const r of refs) {
+        usageOwners.push({
+          ownerType: r.ownerType,
+          ownerId: r.ownerId,
+          field: r.field,
+        });
+      }
+    }
+
+    return usageOwners;
   });
 
   return await invalidateCache(rt, ctx, {
