@@ -27,6 +27,9 @@ Verified Antigravity's Phase 4 (head `1748816`). Its code passed review for most
 11. **Replace failed on local storage and on any bucket without CORS** (it only supported a direct PUT). It now falls back to the server, like a normal upload (`replaceMediaDirect`, `replaceId` on the proxy route).
 12. **Thumbnails and storefront images were broken on the local storage driver** (relative `/media/…` URLs, derived URLs losing the path prefix). `MEDIA_PUBLIC_URL` added for local and staging stacks; `buildDerivativeUrl` keeps any path prefix.
 13. **After a blocked permanent delete the confirmation stayed open**, and the message did not say where the file is used. It now closes and names the owners.
+14. **The product page broke its performance budget** (found by CI's web heavy job, not by my local runs of the domain suite): `ProductGallery` is a client component and imported one pure helper from the `@bs/blocks` barrel, which put every block, schema and view in the browser bundle (177 KB gzipped against the 100 KB budget in `perf-budget-bundle.int.test.ts`). It now imports `@bs/blocks/media-image` (new subpath export).
+
+**Found by CI on the first push (my own new tests):** CI runs every test file against one shared database, so an active storage connection left by an earlier file made directly inserted rows (no connection id) resolve to a different directory than the one the test wrote to. Reproduced locally by leaving an active connection in a shared database; the test fixture now records the connection id, as a real upload does.
 
 ## What changed (files that matter)
 - `packages/domain`: `media/derivatives.ts`, `media/hashing.ts`, `media-services.ts` (`collectDerivativeKeys`, `enqueueMediaJob`, `replaceMediaDirect`, inline purge fallback), `runtime.ts`, `system/job-sender.ts`, `jobs.ts` (schedules, send options), `media/connection.ts`, `media/storage.ts`.
@@ -60,6 +63,7 @@ Gate on the final tree:
 - Production-like storage: the e2e uses the local storage driver. Direct browser-to-R2 upload, R2 presigned downloads and the Cloudflare public domain were not exercised; the unchanged R2 code paths were only reviewed. The worker image `npm install sharp` runs in CI's image build, which I reproduced locally but not in GitHub Actions.
 - A real Next.js cache refresh after replace on the production deployment (the e2e proves it on the staging stack).
 - Video playback (the video fixture is a minimal MP4 container; only upload, storage and listing are covered).
+- The CI heavy job was only run in full by CI itself: locally I ran the domain suite per file (fresh database per file) and in CI-style shared-database mode, and the web performance-budget test separately. Lesson for later phases: run `pnpm exec turbo run test:heavy --concurrency=1 -- --no-file-parallelism` with `TEST_DATABASE_URL_SUPERUSER` before pushing.
 - Windows worker crashes (exit 3221226505) appear intermittently in local heavy runs, in different files each time; they do not reproduce when a file is run alone and look environmental.
 
 ## Docs updated
