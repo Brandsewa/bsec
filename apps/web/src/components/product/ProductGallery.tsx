@@ -2,7 +2,9 @@
 
 import React, { useState } from "react";
 import type { StorefrontMedia } from "@bs/domain";
-import { mediaImage } from "@bs/blocks";
+// Subpath import: this is a client component. The package barrel would put every block, zod schema and view into the
+// browser bundle (the /products/[slug] budget in perf-budget-bundle.int.test.ts is 100 KB gzipped).
+import { mediaImage } from "@bs/blocks/media-image";
 
 export interface ProductGalleryProps {
   media: StorefrontMedia[];
