@@ -5,6 +5,7 @@ import type { Runtime } from "./runtime.ts";
 import { assertPermission, type TenantContext } from "./context.ts";
 import { invalidateCache } from "./cache-invalidation.ts";
 import { createR2Client, getR2Config, isMediaStorageConfigured } from "./media/storage.ts";
+import { syncMediaUsages } from "./media-services.ts";
 
 export const APPROVED_BRAND_FONTS = [
   "Inter",
@@ -29,6 +30,7 @@ export interface UpdateBrandSettingsInput {
   logoDarkMediaId?: string | null | undefined;
   logoWidth?: number | undefined;
   faviconMediaId?: string | null | undefined;
+  appleTouchIconMediaId?: string | null | undefined;
   socialImageMediaId?: string | null | undefined;
   fontHeading?: BrandFont | undefined;
   fontBody?: BrandFont | undefined;
@@ -154,6 +156,7 @@ export async function getBrandSettingsInternal(rt: Runtime, tenantId: string) {
       logoDarkMediaId: existing.logoDarkMediaId,
       logoWidth: existing.logoWidthPx,
       faviconMediaId: existing.faviconMediaId,
+      appleTouchIconMediaId: existing.appleTouchIconMediaId,
       socialImageMediaId: existing.socialImageMediaId,
       fontHeading: (existing.fontHeading && (APPROVED_BRAND_FONTS as readonly string[]).includes(existing.fontHeading)
         ? existing.fontHeading
@@ -183,6 +186,7 @@ const AUDIT_BRAND_FIELDS = [
   "logoDarkMediaId",
   "logoWidth",
   "faviconMediaId",
+  "appleTouchIconMediaId",
   "socialImageMediaId",
   "fontHeading",
   "fontBody",
@@ -202,7 +206,7 @@ const AUDIT_BRAND_FIELDS = [
 async function validateMediaSlot(
   tx: Db,
   tenantId: string,
-  slot: "favicon" | "logoLight" | "logoDark" | "socialImage",
+  slot: "favicon" | "logoLight" | "logoDark" | "socialImage" | "appleTouchIcon",
   mediaId: string | null | undefined,
   s3Client?: S3Client,
 ) {
@@ -238,12 +242,12 @@ async function validateMediaSlot(
     if (bytes > MAX_BRAND_MEDIA_BYTES) {
       throw new Error(`Media file size for ${slot} (${bytes} bytes) exceeds maximum allowed limit of 5 MB.`);
     }
-  } else if (slot === "socialImage") {
+  } else if (slot === "socialImage" || slot === "appleTouchIcon") {
     if (!SOCIAL_IMAGE_ALLOWED_MIMES.includes(mime as (typeof SOCIAL_IMAGE_ALLOWED_MIMES)[number])) {
-      throw new Error(`Invalid media format '${row.mime}' for social image. Allowed formats: PNG, JPEG, WebP, SVG.`);
+      throw new Error(`Invalid media format '${row.mime}' for ${slot}. Allowed formats: PNG, JPEG, WebP, SVG.`);
     }
     if (bytes > MAX_BRAND_MEDIA_BYTES) {
-      throw new Error(`Media file size for social image (${bytes} bytes) exceeds maximum allowed limit of 5 MB.`);
+      throw new Error(`Media file size for ${slot} (${bytes} bytes) exceeds maximum allowed limit of 5 MB.`);
     }
   }
 
@@ -301,6 +305,9 @@ export async function updateBrandSettings(
     if (input.socialImageMediaId !== undefined) {
       await validateMediaSlot(tx, ctx.tenantId, "socialImage", input.socialImageMediaId, input.s3Client);
     }
+    if (input.appleTouchIconMediaId !== undefined) {
+      await validateMediaSlot(tx, ctx.tenantId, "appleTouchIcon", input.appleTouchIconMediaId, input.s3Client);
+    }
 
     const [existing] = await tx
       .select()
@@ -346,6 +353,7 @@ export async function updateBrandSettings(
           logoDarkMediaId: existing.logoDarkMediaId,
           logoWidth: existing.logoWidthPx,
           faviconMediaId: existing.faviconMediaId,
+          appleTouchIconMediaId: existing.appleTouchIconMediaId,
           socialImageMediaId: existing.socialImageMediaId,
           fontHeading: existing.fontHeading,
           fontBody: existing.fontBody,
@@ -368,6 +376,7 @@ export async function updateBrandSettings(
       logoDarkMediaId: input.logoDarkMediaId !== undefined ? input.logoDarkMediaId : (beforeState.logoDarkMediaId ?? null),
       logoWidth: input.logoWidth !== undefined ? input.logoWidth : (beforeState.logoWidth ?? DEFAULT_BRAND_SETTINGS.logoWidth),
       faviconMediaId: input.faviconMediaId !== undefined ? input.faviconMediaId : (beforeState.faviconMediaId ?? null),
+      appleTouchIconMediaId: input.appleTouchIconMediaId !== undefined ? input.appleTouchIconMediaId : (beforeState.appleTouchIconMediaId ?? null),
       socialImageMediaId: input.socialImageMediaId !== undefined ? input.socialImageMediaId : (beforeState.socialImageMediaId ?? null),
       fontHeading: input.fontHeading !== undefined ? input.fontHeading : (beforeState.fontHeading ?? DEFAULT_BRAND_SETTINGS.fontHeading),
       fontBody: input.fontBody !== undefined ? input.fontBody : (beforeState.fontBody ?? DEFAULT_BRAND_SETTINGS.fontBody),
@@ -395,6 +404,7 @@ export async function updateBrandSettings(
       if (input.logoDarkMediaId !== undefined) updateData.logoDarkMediaId = input.logoDarkMediaId;
       if (input.logoWidth !== undefined) updateData.logoWidthPx = input.logoWidth;
       if (input.faviconMediaId !== undefined) updateData.faviconMediaId = input.faviconMediaId;
+      if (input.appleTouchIconMediaId !== undefined) updateData.appleTouchIconMediaId = input.appleTouchIconMediaId;
       if (input.socialImageMediaId !== undefined) updateData.socialImageMediaId = input.socialImageMediaId;
       if (input.fontHeading !== undefined) updateData.fontHeading = input.fontHeading;
       if (input.fontBody !== undefined) updateData.fontBody = input.fontBody;
@@ -417,6 +427,7 @@ export async function updateBrandSettings(
           logoDarkMediaId: input.logoDarkMediaId,
           logoWidthPx: input.logoWidth ?? DEFAULT_BRAND_SETTINGS.logoWidth,
           faviconMediaId: input.faviconMediaId,
+          appleTouchIconMediaId: input.appleTouchIconMediaId,
           socialImageMediaId: input.socialImageMediaId,
           colors: updatedColors,
           colorScheme: input.colorMode ?? DEFAULT_BRAND_SETTINGS.colorMode,
@@ -430,6 +441,49 @@ export async function updateBrandSettings(
         })
         .returning();
       targetId = inserted?.id;
+    }
+
+    const brandingOwnerId = (targetId ?? existing?.id ?? ctx.tenantId) as string;
+
+    if (input.logoLightMediaId !== undefined) {
+      await syncMediaUsages(tx, ctx, {
+        ownerType: "store_branding",
+        ownerId: brandingOwnerId,
+        field: "logo",
+        mediaIds: [input.logoLightMediaId],
+      });
+    }
+    if (input.logoDarkMediaId !== undefined) {
+      await syncMediaUsages(tx, ctx, {
+        ownerType: "store_branding",
+        ownerId: brandingOwnerId,
+        field: "logo_dark",
+        mediaIds: [input.logoDarkMediaId],
+      });
+    }
+    if (input.faviconMediaId !== undefined) {
+      await syncMediaUsages(tx, ctx, {
+        ownerType: "store_branding",
+        ownerId: brandingOwnerId,
+        field: "favicon",
+        mediaIds: [input.faviconMediaId],
+      });
+    }
+    if (input.appleTouchIconMediaId !== undefined) {
+      await syncMediaUsages(tx, ctx, {
+        ownerType: "store_branding",
+        ownerId: brandingOwnerId,
+        field: "apple_touch_icon",
+        mediaIds: [input.appleTouchIconMediaId],
+      });
+    }
+    if (input.socialImageMediaId !== undefined) {
+      await syncMediaUsages(tx, ctx, {
+        ownerType: "store_branding",
+        ownerId: brandingOwnerId,
+        field: "social_image",
+        mediaIds: [input.socialImageMediaId],
+      });
     }
 
     // Write audit log

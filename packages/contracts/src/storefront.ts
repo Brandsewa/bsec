@@ -9,6 +9,7 @@ export const StorefrontPrimaryMedia = z.object({
   alt: z.string().nullable(),
   width: z.number().nullable(),
   height: z.number().nullable(),
+  kind: z.enum(["image", "video", "document"]).default("image"),
 });
 export type StorefrontPrimaryMedia = z.infer<typeof StorefrontPrimaryMedia>;
 

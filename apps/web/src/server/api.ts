@@ -14,13 +14,15 @@ import {
   getStoreStatus,
   getStoreStatusInternal,
   attachProductMedia,
+  detachProductMedia,
+  reorderProductMedia,
+  updateProductMedia,
   listStorePaymentProviders,
   saveStripeCredentials,
   getStorePaymentProvider,
   clearProviderCredentials,
   testPaymentProviderConnection,
   setPaymentProviderActive,
-  detachProductMedia,
   uploadMediaDirect,
   MAX_MEDIA_BYTES,
   updateStoreStatus,
@@ -123,6 +125,7 @@ import {
   getStorefrontReviews,
   submitProductReview,
   updateMedia,
+  replaceMedia,
   updateMenu,
   updatePage,
   updateProduct,
@@ -975,6 +978,24 @@ export const storeRouter = os.router({
             throw mapAuthError(e);
           });
         }),
+      reorderMedia: os.admin.products.reorderMedia
+        .use(requireAdmin)
+        .use(requirePermission("products.write"))
+        .handler(({ context, input }) => {
+          if (!context.tenantCtx) throw new Error("Missing tenant context");
+          return reorderProductMedia(context.rt, context.tenantCtx, input).catch((e) => {
+            throw mapAuthError(e);
+          });
+        }),
+      updateMedia: os.admin.products.updateMedia
+        .use(requireAdmin)
+        .use(requirePermission("products.write"))
+        .handler(({ context, input }) => {
+          if (!context.tenantCtx) throw new Error("Missing tenant context");
+          return updateProductMedia(context.rt, context.tenantCtx, input).catch((e) => {
+            throw mapAuthError(e);
+          });
+        }),
       list: os.admin.products.list
         .use(requireAdmin)
         .use(requirePermission("products.read"))
@@ -1367,6 +1388,15 @@ export const storeRouter = os.router({
         .handler(({ context, input }) => {
           if (!context.tenantCtx) throw new Error("Missing tenant context");
           return Promise.resolve(updateMedia(context.rt, context.tenantCtx, input)).catch((e) => {
+            throw mapAuthError(e);
+          });
+        }),
+      replace: os.admin.media.replace
+        .use(requireAdmin)
+        .use(requirePermission("content.write"))
+        .handler(({ context, input }) => {
+          if (!context.tenantCtx) throw new Error("Missing tenant context");
+          return replaceMedia(context.rt, context.tenantCtx, input).catch((e) => {
             throw mapAuthError(e);
           });
         }),

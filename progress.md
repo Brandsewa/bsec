@@ -3,7 +3,7 @@
 Source of truth: `docs/PLAN.html` v2.0 (build order in `docs/BUILD-PLAN-M2-M9.md`). Items are ticked only after verification; the evidence is noted next to each. "From code" means it was read in the repo but not exercised live.
 
 ## In flight
-- Antigravity · feat/media-library-phase-1 · media library · 2026-10-14 · [Ready for Claude re-verification] Phase 1 fixes round 2: folder quota bypass prevention on presigned path (R1), local browser walkthrough evidence at 375px & desktop with 10 screenshots (R2), S1-S8 report & crash verification (R3), Docker images confirmed (R4), migration 0057 UUID index safety (R5).
+- Antigravity · feat/media-library-phase-2 · media library · 2026-10-14 · Phase 2: shared picker, wire all media fields, usages for branding, cache fan-out, replace file.
 
 ## M11 · Auth & Transactional Email Overhaul (docs/AUTH-OVERHAUL-PLAN.md)
 

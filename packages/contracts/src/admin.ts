@@ -450,6 +450,8 @@ export const ProductMedia = z.object({
   position: z.number(),
   isPrimary: z.boolean(),
   url: z.string().optional(),
+  alt: z.string().nullable().optional(),
+  kind: z.enum(["image", "video", "document"]).default("image"),
 });
 export type ProductMedia = z.infer<typeof ProductMedia>;
 
@@ -777,6 +779,7 @@ export const StorefrontStatus = z.object({
   collectEmails: z.boolean(),
   launchAt: z.string().nullable(),
   hasPassword: z.boolean(),
+  backgroundMediaId: z.string().uuid().nullable().optional(),
   maintenanceStartsAt: z.string().nullable().optional(),
   maintenanceEndsAt: z.string().nullable().optional(),
   modeBeforeMaintenance: z.string().nullable().optional(),
@@ -848,6 +851,7 @@ export const BrandSettings = z.object({
   logoDarkMediaId: z.string().uuid().nullable().optional(),
   logoWidth: z.number(),
   faviconMediaId: z.string().uuid().nullable().optional(),
+  appleTouchIconMediaId: z.string().uuid().nullable().optional(),
   socialImageMediaId: z.string().uuid().nullable().optional(),
   fontHeading: z.enum(APPROVED_BRAND_FONTS),
   fontBody: z.enum(APPROVED_BRAND_FONTS),
@@ -874,6 +878,7 @@ export const UpdateBrandSettingsInput = z.object({
   logoDarkMediaId: z.string().uuid().nullable().optional(),
   logoWidth: z.number().int().min(20).max(1000).optional(),
   faviconMediaId: z.string().uuid().nullable().optional(),
+  appleTouchIconMediaId: z.string().uuid().nullable().optional(),
   socialImageMediaId: z.string().uuid().nullable().optional(),
   fontHeading: z.enum(APPROVED_BRAND_FONTS).optional(),
   fontBody: z.enum(APPROVED_BRAND_FONTS).optional(),
@@ -2179,6 +2184,14 @@ export const adminContract = {
       .route({ method: "DELETE", path: "/admin/products/{id}/media/{productMediaId}" })
       .input(z.object({ id: z.string().uuid(), productMediaId: z.string().uuid() }))
       .output(z.object({ success: z.boolean() })),
+    reorderMedia: oc
+      .route({ method: "POST", path: "/admin/products/{id}/media/reorder" })
+      .input(z.object({ id: z.string().uuid(), order: z.array(z.string().uuid()) }))
+      .output(z.object({ success: z.boolean() })),
+    updateMedia: oc
+      .route({ method: "PATCH", path: "/admin/products/{id}/media/{productMediaId}" })
+      .input(z.object({ id: z.string().uuid(), productMediaId: z.string().uuid(), alt: z.string().max(200).nullable().optional() }))
+      .output(z.object({ success: z.boolean() })),
     list: oc
       .route({ method: "GET", path: "/admin/products" })
       .input(
@@ -2714,6 +2727,19 @@ export const adminContract = {
           title: z.string().max(255).optional(),
           alt: z.string().max(512).optional(),
           caption: z.string().max(1000).optional(),
+        }),
+      )
+      .output(MediaItem),
+    replace: oc
+      .route({ method: "POST", path: "/admin/media/{id}/replace" })
+      .input(
+        z.object({
+          id: z.string().uuid(),
+          storageKey: z.string().min(1),
+          mime: z.string().min(1),
+          bytes: z.number().int().positive(),
+          filename: z.string().max(255).optional(),
+          durationMs: z.number().int().min(0).optional(),
         }),
       )
       .output(MediaItem),
@@ -4084,6 +4110,7 @@ export const adminContract = {
           showCountdown: z.boolean().optional(),
           launchAt: z.string().datetime().nullable().optional(),
           password: z.string().min(6).max(128).nullable().optional(),
+          backgroundMediaId: z.string().uuid().nullable().optional(),
         }),
       )
       .output(StorefrontStatus),

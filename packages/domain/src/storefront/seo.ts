@@ -4,6 +4,7 @@ import { schema, withTenant } from "@bs/db";
 import type { Runtime } from "../runtime.ts";
 import type { TenantContext } from "../context.ts";
 import { invalidateCache } from "../cache-invalidation.ts";
+import { syncMediaUsages } from "../media-services.ts";
 import { THEME_SYSTEM_PAGE_TYPES } from "../themes/system-pages.ts";
 import {
   parseCollectionRules,
@@ -585,25 +586,39 @@ export async function updateStorefrontSeoSettings(
     if (input.breadcrumbsEnabled !== undefined) updateValues.breadcrumbsEnabled = input.breadcrumbsEnabled;
     if (input.faqSchemaEnabled !== undefined) updateValues.faqSchemaEnabled = input.faqSchemaEnabled;
 
+    let targetId = existing?.id;
     if (existing) {
       await tx
         .update(schema.seoSettings)
         .set(updateValues)
         .where(eq(schema.seoSettings.id, existing.id));
     } else {
-      await tx.insert(schema.seoSettings).values({
-        tenantId: ctx.tenantId,
-        indexingEnabled: input.indexingEnabled ?? true,
-        titleTemplate: input.titleTemplate ?? "%s | {{store_name}}",
-        defaultMetaDescription: input.defaultMetaDescription ?? null,
-        defaultOgImageMediaId: input.defaultOgImageMediaId ?? null,
-        twitterHandle: input.twitterHandle ?? null,
-        organizationSchema: input.organizationSchema ?? null,
-        localBusiness: input.localBusiness ?? null,
-        robotsExtra: input.robotsExtra ?? null,
-        aiCrawlers: input.aiCrawlers ?? { ...DEFAULT_AI_CRAWLERS },
-        breadcrumbsEnabled: input.breadcrumbsEnabled ?? true,
-        faqSchemaEnabled: input.faqSchemaEnabled ?? true,
+      const [inserted] = await tx
+        .insert(schema.seoSettings)
+        .values({
+          tenantId: ctx.tenantId,
+          indexingEnabled: input.indexingEnabled ?? true,
+          titleTemplate: input.titleTemplate ?? "%s | {{store_name}}",
+          defaultMetaDescription: input.defaultMetaDescription ?? null,
+          defaultOgImageMediaId: input.defaultOgImageMediaId ?? null,
+          twitterHandle: input.twitterHandle ?? null,
+          organizationSchema: input.organizationSchema ?? null,
+          localBusiness: input.localBusiness ?? null,
+          robotsExtra: input.robotsExtra ?? null,
+          aiCrawlers: input.aiCrawlers ?? { ...DEFAULT_AI_CRAWLERS },
+          breadcrumbsEnabled: input.breadcrumbsEnabled ?? true,
+          faqSchemaEnabled: input.faqSchemaEnabled ?? true,
+        })
+        .returning({ id: schema.seoSettings.id });
+      targetId = inserted?.id;
+    }
+
+    if (input.defaultOgImageMediaId !== undefined) {
+      await syncMediaUsages(tx, ctx, {
+        ownerType: "store_branding",
+        ownerId: (targetId ?? ctx.tenantId) as string,
+        field: "seo_og_image",
+        mediaIds: [input.defaultOgImageMediaId],
       });
     }
   });
