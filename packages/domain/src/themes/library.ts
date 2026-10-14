@@ -6,6 +6,10 @@ import { assertPermission, type TenantContext } from "../context.ts";
 import { invalidateCache } from "../cache-invalidation.ts";
 import { THEME_SYSTEM_PAGES, THEME_SYSTEM_PAGE_KEYS, isThemeSystemPageKey } from "@bs/blocks";
 import { THEME_TOKENS_SOURCE } from "./system-pages.ts";
+import {
+  clearDocumentMediaUsages,
+  syncDocumentMediaUsages,
+} from "../media/document-usages.ts";
 
 /**
  * Store-side theme library (M10). The store sees only published platform templates and, when it
@@ -91,6 +95,7 @@ export async function activateTheme(
 
     // 1. Theme tokens
     const [existingTheme] = await tx.select().from(schema.themes).where(eq(schema.themes.tenantId, ctx.tenantId)).limit(1);
+    let themeId = existingTheme?.id;
     if (existingTheme) {
       await tx
         .update(schema.themes)
@@ -106,14 +111,27 @@ export async function activateTheme(
         })
         .where(eq(schema.themes.id, existingTheme.id));
     } else {
-      await tx.insert(schema.themes).values({
-        tenantId: ctx.tenantId,
-        templateCode: tpl.code,
-        templateVersion: tpl.version,
-        name: tpl.name,
-        tokens: { ...(tpl.defaultTokens as Record<string, unknown>), source: THEME_TOKENS_SOURCE },
-        status: "published",
-        publishedAt: new Date(),
+      const [newTheme] = await tx
+        .insert(schema.themes)
+        .values({
+          tenantId: ctx.tenantId,
+          templateCode: tpl.code,
+          templateVersion: tpl.version,
+          name: tpl.name,
+          tokens: { ...(tpl.defaultTokens as Record<string, unknown>), source: THEME_TOKENS_SOURCE },
+          status: "published",
+          publishedAt: new Date(),
+        })
+        .returning({ id: schema.themes.id });
+      themeId = newTheme?.id;
+    }
+
+    if (themeId && tpl.defaultTokens) {
+      await syncDocumentMediaUsages(tx, ctx, {
+        ownerType: "theme",
+        ownerId: themeId,
+        field: "tokens",
+        document: { ...(tpl.defaultTokens as Record<string, unknown>), source: THEME_TOKENS_SOURCE },
       });
     }
 
@@ -174,6 +192,20 @@ export async function activateTheme(
         .update(schema.pages)
         .set({ publishedVersionId: version.id, draftVersionId: version.id, status: "published", updatedAt: new Date() })
         .where(eq(schema.pages.id, pageId));
+
+      await syncDocumentMediaUsages(tx, ctx, {
+        ownerType: "page",
+        ownerId: pageId,
+        field: "published",
+        document: { version: 1, blocks },
+      });
+      await syncDocumentMediaUsages(tx, ctx, {
+        ownerType: "page",
+        ownerId: pageId,
+        field: "draft",
+        document: { version: 1, blocks },
+      });
+
       touched.push({ slug, isHome });
     }
 
@@ -187,7 +219,16 @@ export async function activateTheme(
         .set({ status: "draft", updatedAt: new Date() })
         .where(and(eq(schema.pages.type, def.type), eq(schema.pages.status, "published")))
         .returning({ id: schema.pages.id });
-      if (res.length > 0) touched.push({ slug: def.slug, isHome: false });
+      if (res.length > 0) {
+        for (const row of res) {
+          await clearDocumentMediaUsages(tx, ctx, {
+            ownerType: "page",
+            ownerId: row.id,
+            field: "published",
+          });
+        }
+        touched.push({ slug: def.slug, isHome: false });
+      }
     }
 
     return { code: tpl.code, name: tpl.name, version: tpl.version, touched };

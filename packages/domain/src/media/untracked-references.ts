@@ -124,7 +124,7 @@ export async function findUntrackedReferences(
         ownerId: p.page_id,
         field: "document",
         label: `Page: ${p.title || p.slug || "Custom Page"}`,
-        adminPath: `/pages/${p.page_id}`,
+        adminPath: `/online-store/editor/${p.page_id}`,
       });
     }
   }
@@ -144,7 +144,7 @@ export async function findUntrackedReferences(
         ownerId: t.id,
         field: "tokens",
         label: `Theme: ${t.name || "Default Theme"}`,
-        adminPath: "/themes",
+        adminPath: "/online-store/theme-library",
       });
     }
   }

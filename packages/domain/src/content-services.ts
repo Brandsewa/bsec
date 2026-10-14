@@ -6,6 +6,11 @@ import type { Runtime } from "./runtime.ts";
 import { assertPermission, type TenantContext } from "./context.ts";
 import { invalidateCache } from "./cache-invalidation.ts";
 import { THEME_SYSTEM_PAGE_TYPES } from "./themes/system-pages.ts";
+import { clearMediaUsagesForOwner } from "./media-services.ts";
+import {
+  clearDocumentMediaUsages,
+  syncDocumentMediaUsages,
+} from "./media/document-usages.ts";
 
 export interface PageSeoInput {
   title?: string | undefined;
@@ -176,6 +181,16 @@ export async function updateTheme(
         .returning();
 
       if (!row) throw new Error("Failed to update theme");
+
+      if (input.tokens !== undefined) {
+        await syncDocumentMediaUsages(tx, ctx, {
+          ownerType: "theme",
+          ownerId: row.id,
+          field: "tokens",
+          document: input.tokens,
+        });
+      }
+
       return {
         id: row.id,
         name: row.name,
@@ -198,6 +213,16 @@ export async function updateTheme(
       .returning();
 
     if (!row) throw new Error("Failed to create theme");
+
+    if (input.tokens !== undefined) {
+      await syncDocumentMediaUsages(tx, ctx, {
+        ownerType: "theme",
+        ownerId: row.id,
+        field: "tokens",
+        document: input.tokens,
+      });
+    }
+
     return {
       id: row.id,
       name: row.name,
@@ -565,6 +590,13 @@ export async function createPage(rt: Runtime, ctx: TenantContext, input: CreateP
         .update(schema.pages)
         .set({ draftVersionId: draftVer.id })
         .where(eq(schema.pages.id, row.id));
+
+      await syncDocumentMediaUsages(tx, ctx, {
+        ownerType: "page",
+        ownerId: row.id,
+        field: "draft",
+        document: { version: 1, blocks: [] },
+      });
     }
 
     const pagesById = new Map(allPages.map((p) => [p.id, p]));
@@ -778,6 +810,7 @@ export async function deletePage(rt: Runtime, ctx: TenantContext, input: { id: s
       throw new Error(`Cannot delete page: It is referenced by navigation menu "${referencedMenu}". Remove the menu link first.`);
     }
 
+    await clearMediaUsagesForOwner(tx, ctx, { ownerType: "page", ownerId: page.id });
     await tx.delete(schema.pageVersions).where(eq(schema.pageVersions.pageId, page.id));
     await tx.delete(schema.pages).where(eq(schema.pages.id, page.id));
 
@@ -817,6 +850,12 @@ export async function unpublishPage(rt: Runtime, ctx: TenantContext, input: { id
       .returning();
 
     if (!row) throw new Error("Failed to unpublish page");
+
+    await clearDocumentMediaUsages(tx, ctx, {
+      ownerType: "page",
+      ownerId: page.id,
+      field: "published",
+    });
 
     const allPages = await tx
       .select({
@@ -917,6 +956,13 @@ export async function duplicatePage(rt: Runtime, ctx: TenantContext, input: { id
         .update(schema.pages)
         .set({ draftVersionId: newVer.id })
         .where(eq(schema.pages.id, newPage.id));
+
+      await syncDocumentMediaUsages(tx, ctx, {
+        ownerType: "page",
+        ownerId: newPage.id,
+        field: "draft",
+        document: doc,
+      });
     }
 
     const allPages = await tx
@@ -974,6 +1020,13 @@ export async function savePageDraft(rt: Runtime, ctx: TenantContext, input: Save
 
     if (!created) throw new Error("Failed to create page version draft");
 
+    await syncDocumentMediaUsages(tx, ctx, {
+      ownerType: "page",
+      ownerId: input.id,
+      field: "draft",
+      document: validation.data,
+    });
+
     await tx
       .update(schema.pages)
       .set({
@@ -1005,6 +1058,21 @@ export async function publishPage(rt: Runtime, ctx: TenantContext, input: Publis
       targetVersionId = latest.id;
     }
 
+    const [targetVer] = await tx
+      .select({ id: schema.pageVersions.id, document: schema.pageVersions.document })
+      .from(schema.pageVersions)
+      .where(eq(schema.pageVersions.id, targetVersionId))
+      .limit(1);
+
+    if (targetVer?.document) {
+      await syncDocumentMediaUsages(tx, ctx, {
+        ownerType: "page",
+        ownerId: input.id,
+        field: "published",
+        document: targetVer.document,
+      });
+    }
+
     const updateQuery = tx
       .update(schema.pages)
       .set({
@@ -1032,10 +1100,32 @@ export async function rollbackPage(rt: Runtime, ctx: TenantContext, input: Rollb
   const db = rt._db.db;
 
   const updatedPage = await withTenant(db, ctx.tenantId, async (tx) => {
+    const [targetVer] = await tx
+      .select({ id: schema.pageVersions.id, document: schema.pageVersions.document })
+      .from(schema.pageVersions)
+      .where(eq(schema.pageVersions.id, input.targetVersionId))
+      .limit(1);
+
+    if (targetVer?.document) {
+      await syncDocumentMediaUsages(tx, ctx, {
+        ownerType: "page",
+        ownerId: input.id,
+        field: "published",
+        document: targetVer.document,
+      });
+      await syncDocumentMediaUsages(tx, ctx, {
+        ownerType: "page",
+        ownerId: input.id,
+        field: "draft",
+        document: targetVer.document,
+      });
+    }
+
     const updateQuery = tx
       .update(schema.pages)
       .set({
         publishedVersionId: input.targetVersionId,
+        draftVersionId: input.targetVersionId,
         status: "published",
         updatedAt: new Date(),
       })
