@@ -224,7 +224,9 @@ test.describe("Media library, real stack", () => {
     expect(await mediaByName(page, `e2e${run}-copy-of-pattern.png`)).toBeUndefined();
 
     await chooseFiles(page, [dupe]);
-    await page.getByRole("button", { name: "Upload anyway" }).first().click();
+    // A toast from the previous step can sit over this button, and the mouse resting on it keeps it open (it pauses
+    // while hovered), so a pointer click is intercepted forever on small runners. Dispatch the click on the button.
+    await page.getByRole("button", { name: "Upload anyway" }).first().dispatchEvent("click");
     const copy = await waitForMedia(page, `e2e${run}-copy-of-pattern.png`);
     expect(copy.id).not.toBe(ids.png);
     // The worker hashes it, and both files now share the same hash
