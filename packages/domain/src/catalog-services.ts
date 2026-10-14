@@ -293,6 +293,9 @@ export async function loadProductDetailInternal(
         mediaId: schema.productMedia.mediaId,
         position: schema.productMedia.position,
         storageKey: schema.media.storageKey,
+        kind: schema.media.kind,
+        alt: schema.productMedia.alt,
+        mediaAlt: schema.media.alt,
       })
       .from(schema.productMedia)
       .innerJoin(schema.media, eq(schema.media.id, schema.productMedia.mediaId))
@@ -390,6 +393,8 @@ export async function loadProductDetailInternal(
         position: m.position,
         isPrimary: m.position === 0,
         url: publicMediaUrl(m.storageKey),
+        kind: (m.kind as "image" | "video" | "document") ?? "image",
+        alt: m.alt ?? m.mediaAlt ?? null,
       })),
     };
   });

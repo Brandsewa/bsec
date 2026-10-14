@@ -246,6 +246,9 @@ import {
   getMedia,
   getMediaUsage,
   updateMedia,
+  replaceMedia,
+  reorderProductMedia,
+  updateProductMedia,
   trashMedia,
   restoreMedia,
   deleteMediaPermanent,
@@ -1032,6 +1035,24 @@ describe("Generated Isolation Test Suite (M1 Real Postgres 18 Proof)", () => {
       }
       case "media.update":
         return await updateMedia(rt, ctx, { id: testMediaA, alt: "Updated alt" });
+      case "media.replace": {
+        const oldKey = `${ctx.tenantId}/products/rep-old-${Date.now()}-${Math.random().toString(36).slice(2, 6)}.png`;
+        const newKey = `${ctx.tenantId}/products/rep-new-${Date.now()}-${Math.random().toString(36).slice(2, 6)}.png`;
+        const localOld = path.join(tempMediaDir, oldKey);
+        const localNew = path.join(tempMediaDir, newKey);
+        fs.mkdirSync(path.dirname(localOld), { recursive: true });
+        const png1x1 = Buffer.from("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==", "base64");
+        fs.writeFileSync(localOld, png1x1);
+        fs.writeFileSync(localNew, png1x1);
+        const m = await createMediaRecord(rt, ctx, { storageKey: oldKey, mime: "image/png", bytes: png1x1.length, filename: "old.png" });
+        return await replaceMedia(rt, ctx, {
+          id: m.id,
+          storageKey: newKey,
+          mime: "image/png",
+          bytes: png1x1.length,
+          filename: "new.png",
+        });
+      }
       case "media.trash":
         return await trashMedia(rt, ctx, { ids: [testMediaA] });
       case "media.restore":
@@ -1525,6 +1546,40 @@ describe("Generated Isolation Test Suite (M1 Real Postgres 18 Proof)", () => {
         const prod = await createProduct(rt, ctx, { title: `Detach ${Date.now()}`, variants: [{ sku: `DET-${Date.now()}`, title: "D", price: 100 }] });
         const link = await attachProductMedia(rt, ctx, { productId: prod.id, mediaId: m.id });
         return await detachProductMedia(rt, ctx, { productId: prod.id, productMediaId: link.id });
+      }
+      case "products.reorderMedia": {
+        const key1 = `${ctx.tenantId}/products/reorder-1-${Date.now()}-${Math.random().toString(36).slice(2, 6)}.png`;
+        const key2 = `${ctx.tenantId}/products/reorder-2-${Date.now()}-${Math.random().toString(36).slice(2, 6)}.png`;
+        const local1 = path.join(tempMediaDir, key1);
+        const local2 = path.join(tempMediaDir, key2);
+        fs.mkdirSync(path.dirname(local1), { recursive: true });
+        const png1x1 = Buffer.from("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==", "base64");
+        fs.writeFileSync(local1, png1x1);
+        fs.writeFileSync(local2, png1x1);
+        const m1 = await createMediaRecord(rt, ctx, { storageKey: key1, mime: "image/png", bytes: png1x1.length, filename: "1.png" });
+        const m2 = await createMediaRecord(rt, ctx, { storageKey: key2, mime: "image/png", bytes: png1x1.length, filename: "2.png" });
+        const prod = await createProduct(rt, ctx, { title: `Reorder ${Date.now()}`, variants: [{ sku: `REO-${Date.now()}`, title: "D", price: 100 }] });
+        const link1 = await attachProductMedia(rt, ctx, { productId: prod.id, mediaId: m1.id });
+        const link2 = await attachProductMedia(rt, ctx, { productId: prod.id, mediaId: m2.id });
+        return await reorderProductMedia(rt, ctx, {
+          id: prod.id,
+          order: [link2.id, link1.id],
+        });
+      }
+      case "products.updateMedia": {
+        const key = `${ctx.tenantId}/products/updmed-${Date.now()}-${Math.random().toString(36).slice(2, 6)}.png`;
+        const local = path.join(tempMediaDir, key);
+        fs.mkdirSync(path.dirname(local), { recursive: true });
+        const png1x1 = Buffer.from("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==", "base64");
+        fs.writeFileSync(local, png1x1);
+        const m = await createMediaRecord(rt, ctx, { storageKey: key, mime: "image/png", bytes: png1x1.length, filename: "upd.png" });
+        const prod = await createProduct(rt, ctx, { title: `UpdMed ${Date.now()}`, variants: [{ sku: `UM-${Date.now()}`, title: "D", price: 100 }] });
+        const link = await attachProductMedia(rt, ctx, { productId: prod.id, mediaId: m.id });
+        return await updateProductMedia(rt, ctx, {
+          id: prod.id,
+          productMediaId: link.id,
+          alt: "Updated alt",
+        });
       }
 
       // --- Storefront mode ---

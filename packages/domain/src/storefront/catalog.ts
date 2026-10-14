@@ -103,6 +103,7 @@ export interface StorefrontMedia {
   mediaId: string;
   position: number;
   alt: string | null;
+  kind?: "image" | "video" | "document" | undefined;
   url?: string | undefined;
 }
 
@@ -180,6 +181,7 @@ export interface StorefrontProductSummary {
     mediaId: string;
     alt: string | null;
     url?: string | undefined;
+    kind?: "image" | "video" | "document" | undefined;
   } | undefined;
   brand?: StorefrontBrand | null | undefined;
 }
@@ -406,15 +408,19 @@ export async function getStorefrontProduct(
       values: o.values,
     }));
 
-    const keysByMedia = await mediaStorageKeys(tx, mediaRows.map((m) => m.mediaId));
-    const media: StorefrontMedia[] = mediaRows.map((m) => ({
-      id: m.id,
-      productId: m.productId,
-      mediaId: m.mediaId,
-      position: m.position,
-      alt: m.alt,
-      url: publicMediaUrl(keysByMedia.get(m.mediaId)),
-    }));
+    const detailsByMedia = await mediaStorageKeys(tx, mediaRows.map((m) => m.mediaId));
+    const media: StorefrontMedia[] = mediaRows.map((m) => {
+      const detail = detailsByMedia.get(m.mediaId);
+      return {
+        id: m.id,
+        productId: m.productId,
+        mediaId: m.mediaId,
+        position: m.position,
+        alt: m.alt || detail?.alt || p.title,
+        kind: detail?.kind ?? "image",
+        url: publicMediaUrl(detail?.storageKey),
+      };
+    });
 
     return {
       id: p.id,
@@ -1256,18 +1262,38 @@ export async function getStorefrontCategory(
   });
 }
 
-/** Storage keys of the given media files, by media id (the public image address is built from the key). */
+interface MediaStorageDetail {
+  storageKey: string;
+  kind: "image" | "video" | "document";
+  alt: string | null;
+}
+
+/** Storage details of the given media files, by media id. */
 async function mediaStorageKeys(
   tx: Parameters<Parameters<typeof withTenant>[2]>[0],
   mediaIds: string[],
-): Promise<Map<string, string>> {
+): Promise<Map<string, MediaStorageDetail>> {
   const ids = [...new Set(mediaIds)];
   if (ids.length === 0) return new Map();
   const rows = await tx
-    .select({ id: schema.media.id, storageKey: schema.media.storageKey })
+    .select({
+      id: schema.media.id,
+      storageKey: schema.media.storageKey,
+      kind: schema.media.kind,
+      alt: schema.media.alt,
+    })
     .from(schema.media)
     .where(inArray(schema.media.id, ids));
-  return new Map([...rows].map((r) => [r.id, r.storageKey]));
+  return new Map(
+    rows.map((r) => [
+      r.id,
+      {
+        storageKey: r.storageKey,
+        kind: (r.kind as "image" | "video" | "document") ?? "image",
+        alt: r.alt,
+      },
+    ]),
+  );
 }
 
 /**
@@ -1370,14 +1396,21 @@ export async function buildProductSummaries(
     .where(inArray(schema.productMedia.productId, productIds))
     .orderBy(schema.productMedia.position);
 
-  const keysByMedia = await mediaStorageKeys(tx, mediaRows.map((m) => m.mediaId));
-  const mediaByProduct: Record<string, { mediaId: string; alt: string | null; url: string | undefined }> = {};
+  const detailsByMedia = await mediaStorageKeys(tx, mediaRows.map((m) => m.mediaId));
+  const productTitleMap = new Map(products.map((p) => [p.id, p.title]));
+  const mediaByProduct: Record<string, { mediaId: string; alt: string | null; url: string | undefined; kind: "image" | "video" | "document" }> = {};
   for (const m of mediaRows) {
     if (!mediaByProduct[m.productId]) {
+      const detail = detailsByMedia.get(m.mediaId);
+      // In listings, primaryImage must be an image (skip videos)
+      if (detail && detail.kind !== "image") {
+        continue;
+      }
       mediaByProduct[m.productId] = {
         mediaId: m.mediaId,
-        alt: m.alt,
-        url: publicMediaUrl(keysByMedia.get(m.mediaId)),
+        alt: m.alt || detail?.alt || productTitleMap.get(m.productId) || null,
+        url: publicMediaUrl(detail?.storageKey),
+        kind: detail?.kind ?? "image",
       };
     }
   }
@@ -1404,6 +1437,7 @@ export async function buildProductSummaries(
             mediaId: primaryImg.mediaId,
             alt: primaryImg.alt,
             url: primaryImg.url,
+            kind: primaryImg.kind,
           }
         : undefined,
     };

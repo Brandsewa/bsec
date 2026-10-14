@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { Link } from "@tanstack/react-router";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
@@ -7,6 +7,7 @@ import {
   Download,
   ExternalLink,
   FileText,
+  RefreshCw,
   Trash2,
   Undo2,
 } from "lucide-react";
@@ -26,10 +27,12 @@ import {
   SheetTitle,
   Skeleton,
   Textarea,
+  cn,
   toast,
 } from "@bs/ui";
 import type { MediaDetailItem, MediaItem } from "@bs/contracts";
 import { client, orpc } from "../../lib/orpc.ts";
+import { replaceMediaFile } from "../../lib/media-upload-queue.ts";
 
 function formatBytes(bytes: number): string {
   if (bytes === 0) return "0 B";
@@ -69,6 +72,32 @@ function MediaDetailContent({
   const [caption, setCaption] = useState(item.caption || "");
   const [trashConfirmOpen, setTrashConfirmOpen] = useState(false);
   const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false);
+  const [isReplacing, setIsReplacing] = useState(false);
+  const replaceInputRef = useRef<HTMLInputElement>(null);
+
+  const handleReplaceFile = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    e.target.value = "";
+    setIsReplacing(true);
+    try {
+      const updated = await replaceMediaFile(item.id, file, {
+        expectedKind: item.kind,
+      });
+      toast.success("File replaced successfully");
+      queryClient.invalidateQueries({ queryKey: ["admin", "media"] });
+      if (updated) {
+        queryClient.setQueryData(
+          orpc.admin.media.get.queryOptions({ input: { id: item.id } }).queryKey,
+          (prev: MediaItem | undefined) => (prev ? { ...prev, ...updated } : prev),
+        );
+      }
+    } catch (err: unknown) {
+      toast.error(err instanceof Error ? err.message : "Failed to replace file");
+    } finally {
+      setIsReplacing(false);
+    }
+  };
 
   const isDirty =
     title !== (item.title || "") ||
@@ -214,6 +243,33 @@ function MediaDetailContent({
             Download
           </a>
         </Button>
+        {item.status === "ready" && (
+          <>
+            <input
+              type="file"
+              ref={replaceInputRef}
+              onChange={handleReplaceFile}
+              className="hidden"
+              accept={
+                item.kind === "image"
+                  ? "image/jpeg,image/png,image/webp,image/gif,image/avif"
+                  : item.kind === "video"
+                    ? "video/mp4,video/webm,video/quicktime"
+                    : ".pdf,.csv,.txt"
+              }
+            />
+            <Button
+              variant="outline"
+              size="sm"
+              disabled={isReplacing}
+              onClick={() => replaceInputRef.current?.click()}
+              className="gap-1.5"
+            >
+              <RefreshCw className={cn("h-3.5 w-3.5", isReplacing && "animate-spin")} />
+              {isReplacing ? "Replacing..." : "Replace file"}
+            </Button>
+          </>
+        )}
         {item.status === "ready" ? (
           <Button
             variant="outline"

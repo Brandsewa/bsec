@@ -377,6 +377,50 @@ export async function assertMediaUploadQuota(
 }
 
 /**
+ * Asserts upload quota for replacing a media file, calculating net storage difference (MEDIA-LIBRARY-PLAN §6.2 / S6).
+ */
+export async function assertMediaReplaceQuota(
+  db: Db,
+  tenantId: string,
+  params: { kind: "image" | "video" | "document"; bytes: number; oldBytes: number },
+): Promise<void> {
+  // 1. Individual per-kind file size check on the replacement file
+  const quotaKey = `media_${params.kind}_mb` as PlanQuotaKey;
+  const kindLimit = await resolveEffectiveQuota(db, tenantId, quotaKey);
+  const maxBytes = kindLimit.limit * 1024 * 1024;
+  if (params.bytes > maxBytes) {
+    const fileMb = (params.bytes / (1024 * 1024)).toFixed(1);
+    const kindLabel =
+      params.kind === "image" ? "Images" : params.kind === "video" ? "Videos" : "Documents";
+    throw new QuotaExceededError(
+      `${kindLabel} can be up to ${kindLimit.limit} MB on your plan. This file is ${fileMb} MB.`,
+      quotaKey,
+      Math.round(params.bytes / (1024 * 1024)),
+      kindLimit.limit,
+    );
+  }
+
+  // 2. Net change in total storage
+  const netBytes = params.bytes - params.oldBytes;
+  if (netBytes > 0) {
+    const totalLimit = await resolveEffectiveQuota(db, tenantId, "storage_mb");
+    const maxStorageBytes = totalLimit.limit * 1024 * 1024;
+    const stats = await getTenantMediaUsageStats(db, tenantId);
+    const usedBytes = stats.usedBytes;
+    if (usedBytes + netBytes > maxStorageBytes) {
+      const usedGb = (usedBytes / (1024 * 1024 * 1024)).toFixed(1);
+      const limitGb = (maxStorageBytes / (1024 * 1024 * 1024)).toFixed(1);
+      throw new QuotaExceededError(
+        `Your store has used ${usedGb} GB of ${limitGb} GB. Delete unused files or empty the Trash.`,
+        "storage_mb",
+        Math.round((usedBytes + netBytes) / (1024 * 1024)),
+        totalLimit.limit,
+      );
+    }
+  }
+}
+
+/**
  * Retrieves aggregate storage and quota stats for Online Store > Media and Settings > Storage
  * (MEDIA-LIBRARY-PLAN §6.3). Counts library files only (private folders 'returns', 'expense-receipts' excluded).
  */

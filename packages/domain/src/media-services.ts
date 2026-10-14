@@ -5,8 +5,9 @@ import { type Db, schema, withTenant } from "@bs/db";
 import type { MediaItem, MediaUsageReference, MediaUsageReport } from "@bs/contracts";
 import type { Runtime } from "./runtime.ts";
 import { assertPermission, type TenantContext } from "./context.ts";
-import { invalidateCache } from "./cache-invalidation.ts";
+import { invalidateCache, invalidateMediaCache } from "./cache-invalidation.ts";
 import {
+  assertMediaReplaceQuota,
   assertMediaUploadQuota,
   getTenantMediaUsageStats,
 } from "./system/quotas.ts";
@@ -262,7 +263,8 @@ async function finalizeUpload(
   // 5. Download full object ONLY for images to inspect dimensions with sharp
   let width: number | null = null;
   let height: number | null = null;
-  let sha256: string;
+  // Hash only the complete content; a partial hash would make unrelated files look like duplicates.
+  let sha256: string | null = null;
 
   if (kind === "image") {
     let fullImageBuffer: Buffer;
@@ -296,11 +298,9 @@ async function finalizeUpload(
 
     sha256 = crypto.createHash("sha256").update(fullImageBuffer).digest("hex");
   } else {
-    // For videos and documents, do not download the entire multi-megabyte file
+    // For videos and documents, do not download the entire file; hash only when the full bytes are in hand.
     if (params.directBuffer) {
       sha256 = crypto.createHash("sha256").update(params.directBuffer).digest("hex");
-    } else {
-      sha256 = crypto.createHash("sha256").update(magicBuffer).digest("hex");
     }
   }
 
@@ -581,156 +581,8 @@ export async function listMedia(
     };
   });
 }
-
-/**
- * Checks branding, settings, and page/theme block documents for references to media IDs (MEDIA-LIBRARY-PLAN §5.2, B5).
- */
-export async function findUntrackedReferences(
-  tx: Parameters<Parameters<typeof withTenant>[2]>[0],
-  tenantId: string,
-  mediaIds: string[],
-): Promise<Map<string, MediaUsageReference[]>> {
-  const refMap = new Map<string, MediaUsageReference[]>();
-  if (mediaIds.length === 0) return refMap;
-
-  const addRef = (mId: string, ref: MediaUsageReference) => {
-    const list = refMap.get(mId) || [];
-    list.push(ref);
-    refMap.set(mId, list);
-  };
-
-  // 1. Store branding settings
-  const [brand] = await tx
-    .select()
-    .from(schema.brandSettings)
-    .where(eq(schema.brandSettings.tenantId, tenantId))
-    .limit(1);
-
-  if (brand) {
-    if (brand.logoMediaId && mediaIds.includes(brand.logoMediaId)) {
-      addRef(brand.logoMediaId, {
-        ownerType: "branding",
-        ownerId: brand.id,
-        field: "logo",
-        label: "Store branding (Logo)",
-        adminPath: "/settings/branding",
-      });
-    }
-    if (brand.logoDarkMediaId && mediaIds.includes(brand.logoDarkMediaId)) {
-      addRef(brand.logoDarkMediaId, {
-        ownerType: "branding",
-        ownerId: brand.id,
-        field: "logo_dark",
-        label: "Store branding (Dark Logo)",
-        adminPath: "/settings/branding",
-      });
-    }
-    if (brand.faviconMediaId && mediaIds.includes(brand.faviconMediaId)) {
-      addRef(brand.faviconMediaId, {
-        ownerType: "branding",
-        ownerId: brand.id,
-        field: "favicon",
-        label: "Store branding (Favicon)",
-        adminPath: "/settings/branding",
-      });
-    }
-    if (brand.appleTouchIconMediaId && mediaIds.includes(brand.appleTouchIconMediaId)) {
-      addRef(brand.appleTouchIconMediaId, {
-        ownerType: "branding",
-        ownerId: brand.id,
-        field: "apple_touch_icon",
-        label: "Store branding (Apple Touch Icon)",
-        adminPath: "/settings/branding",
-      });
-    }
-    if (brand.socialImageMediaId && mediaIds.includes(brand.socialImageMediaId)) {
-      addRef(brand.socialImageMediaId, {
-        ownerType: "branding",
-        ownerId: brand.id,
-        field: "social_image",
-        label: "Store branding (Social Image)",
-        adminPath: "/settings/branding",
-      });
-    }
-  }
-
-  // 2. Store status settings (maintenance/coming-soon background image)
-  const [status] = await tx
-    .select()
-    .from(schema.storeStatus)
-    .where(eq(schema.storeStatus.tenantId, tenantId))
-    .limit(1);
-
-  if (status?.backgroundMediaId && mediaIds.includes(status.backgroundMediaId)) {
-    addRef(status.backgroundMediaId, {
-      ownerType: "store_status",
-      ownerId: status.id,
-      field: "background",
-      label: "Store status (Background image)",
-      adminPath: "/settings",
-    });
-  }
-
-  // 3. SEO settings
-  const [seo] = await tx
-    .select()
-    .from(schema.seoSettings)
-    .where(eq(schema.seoSettings.tenantId, tenantId))
-    .limit(1);
-
-  if (seo?.defaultOgImageMediaId && mediaIds.includes(seo.defaultOgImageMediaId)) {
-    addRef(seo.defaultOgImageMediaId, {
-      ownerType: "seo_settings",
-      ownerId: seo.id,
-      field: "default_og_image",
-      label: "Default social share image",
-      adminPath: "/settings",
-    });
-  }
-
-  // 4. Page blocks
-  for (const mId of mediaIds) {
-    const pageMatches = await tx.execute<{ page_id: string; title: string; slug: string }>(sql`
-      SELECT pv.page_id, p.title, p.slug
-      FROM page_versions pv
-      JOIN pages p ON p.id = pv.page_id AND p.tenant_id = pv.tenant_id
-      WHERE pv.tenant_id = ${tenantId}
-        AND pv.document::text LIKE ${`%${mId}%`}
-      LIMIT 5;
-    `);
-    for (const p of pageMatches.rows ?? []) {
-      addRef(mId, {
-        ownerType: "page",
-        ownerId: p.page_id,
-        field: "document",
-        label: `Page: ${p.title || p.slug || "Custom Page"}`,
-        adminPath: `/pages/${p.page_id}`,
-      });
-    }
-  }
-
-  // 5. Theme tokens
-  for (const mId of mediaIds) {
-    const themeMatches = await tx.execute<{ id: string; name: string }>(sql`
-      SELECT t.id, t.name
-      FROM themes t
-      WHERE t.tenant_id = ${tenantId}
-        AND t.tokens::text LIKE ${`%${mId}%`}
-      LIMIT 5;
-    `);
-    for (const t of themeMatches.rows ?? []) {
-      addRef(mId, {
-        ownerType: "theme",
-        ownerId: t.id,
-        field: "tokens",
-        label: `Theme: ${t.name || "Default Theme"}`,
-        adminPath: "/themes",
-      });
-    }
-  }
-
-  return refMap;
-}
+import { findUntrackedReferences } from "./media/untracked-references.ts";
+export { findUntrackedReferences };
 
 /**
  * Shared helper to resolve full MediaUsageReference labels and admin paths across both tracked media_usages
@@ -838,6 +690,38 @@ export async function resolveMediaUsageLabels(
         label: brandMap.get(u.ownerId) || "Brand",
         adminPath: `/brands`,
       });
+    } else if (u.ownerType === "store_branding") {
+      let label = "Store branding";
+      let adminPath = "/settings/branding";
+      if (u.field === "status_background") {
+        label = "Store status (Background image)";
+        adminPath = "/settings/storefront";
+      } else if (u.field === "seo_og_image") {
+        label = "Default social share image";
+        adminPath = "/settings/storefront";
+      } else if (u.field === "logo") {
+        label = "Store branding (Logo)";
+        adminPath = "/settings/branding";
+      } else if (u.field === "logo_dark") {
+        label = "Store branding (Dark Logo)";
+        adminPath = "/settings/branding";
+      } else if (u.field === "favicon") {
+        label = "Store branding (Favicon)";
+        adminPath = "/settings/branding";
+      } else if (u.field === "apple_touch_icon") {
+        label = "Store branding (Apple Touch Icon)";
+        adminPath = "/settings/branding";
+      } else if (u.field === "social_image") {
+        label = "Store branding (Social Image)";
+        adminPath = "/settings/branding";
+      }
+      list.push({
+        ownerType: "store_branding",
+        ownerId: u.ownerId,
+        field: u.field,
+        label,
+        adminPath,
+      });
     } else {
       list.push({
         ownerType: u.ownerType,
@@ -850,11 +734,22 @@ export async function resolveMediaUsageLabels(
     result.set(u.mediaId, list);
   }
 
-  // 2. Fetch untracked references (branding, auth settings, seo settings, page blocks, themes)
+  // 2. Fetch untracked references (defensive check for branding, status, seo, page blocks, themes)
   const untracked = await findUntrackedReferences(tx, tenantId, mediaIds);
   for (const [mId, refs] of untracked.entries()) {
     const list = result.get(mId) || [];
-    list.push(...refs);
+    for (const ref of refs) {
+      if (
+        !list.some(
+          (existing) =>
+            existing.ownerType === ref.ownerType &&
+            existing.field === ref.field &&
+            existing.ownerId === ref.ownerId,
+        )
+      ) {
+        list.push(ref);
+      }
+    }
     result.set(mId, list);
   }
 
@@ -1167,7 +1062,7 @@ export async function updateMedia(
     return { row: updated, usageCount: usageRes?.count ?? 0 };
   });
 
-  await invalidateCache(rt, ctx, { type: "media_updated" });
+  await invalidateMediaCache(rt, ctx, [input.id]);
 
   const url = (await resolvePublicMediaUrl(db, row.storageKey, row.storageConnectionId)) || "";
   const thumbnailUrl = buildThumbnailUrl(row, url);
@@ -1272,7 +1167,7 @@ export async function trashMedia(
     return { trashed: updated.length, used };
   });
 
-  await invalidateCache(rt, ctx, { type: "media_updated" });
+  await invalidateMediaCache(rt, ctx, uniqueIds);
   return result;
 }
 
@@ -1327,7 +1222,7 @@ export async function restoreMedia(
     return { restored: updated.length };
   });
 
-  await invalidateCache(rt, ctx, { type: "media_updated" });
+  await invalidateMediaCache(rt, ctx, uniqueIds);
   return result;
 }
 
@@ -1367,7 +1262,7 @@ export async function deleteMediaPermanent(
       );
 
     if (targetRows.length === 0) {
-      return { deleted: 0, blocked: [] };
+      return { deleted: 0, blocked: [], allowedIds: [] as string[] };
     }
 
     const targetRowIds = targetRows.map((r) => r.id);
@@ -1388,7 +1283,7 @@ export async function deleteMediaPermanent(
     }
 
     if (allowedRows.length === 0) {
-      return { deleted: 0, blocked };
+      return { deleted: 0, blocked, allowedIds: [] as string[] };
     }
 
     const allowedIds = allowedRows.map((r) => r.id);
@@ -1428,11 +1323,11 @@ export async function deleteMediaPermanent(
       });
     }
 
-    return { deleted: allowedIds.length, blocked };
+    return { deleted: allowedIds.length, blocked, allowedIds };
   });
 
-  await invalidateCache(rt, ctx, { type: "media_updated" });
-  return result;
+  await invalidateMediaCache(rt, ctx, result.allowedIds);
+  return { deleted: result.deleted, blocked: result.blocked };
 }
 
 /**
@@ -1684,7 +1579,8 @@ export async function runMediaTrashSweep(
 }
 
 /**
- * Attaches an uploaded library image to a product and syncs media_usages (MEDIA-LIBRARY-PLAN §5.2).
+ * Attaches an uploaded library image or video to a product and syncs media_usages (MEDIA-LIBRARY-PLAN §3, §5.2 / S3).
+ * Primary (position 0) must always be an image.
  */
 export async function attachProductMedia(
   rt: Runtime,
@@ -1695,31 +1591,71 @@ export async function attachProductMedia(
   const db = rt._db.db;
 
   const link = await withTenant(db, ctx.tenantId, async (tx) => {
-    const [product] = await tx.select({ id: schema.products.id }).from(schema.products).where(eq(schema.products.id, input.productId)).limit(1);
-    if (!product) throw new Error("Not Found: product not found");
-    const [asset] = await tx.select({ id: schema.media.id, storageKey: schema.media.storageKey }).from(schema.media).where(eq(schema.media.id, input.mediaId)).limit(1);
-    if (!asset) throw new Error("Not Found: image not found in the media library");
-
-    const existing = await tx
-      .select()
-      .from(schema.productMedia)
-      .where(and(eq(schema.productMedia.productId, input.productId), eq(schema.productMedia.mediaId, input.mediaId)))
+    const [product] = await tx
+      .select({ id: schema.products.id })
+      .from(schema.products)
+      .where(eq(schema.products.id, input.productId))
       .limit(1);
-    if (existing[0]) {
-      return { id: existing[0].id, position: existing[0].position, storageKey: asset.storageKey };
+    if (!product) throw new Error("Not Found: product not found");
+
+    const [asset] = await tx
+      .select({
+        id: schema.media.id,
+        storageKey: schema.media.storageKey,
+        kind: schema.media.kind,
+        status: schema.media.status,
+      })
+      .from(schema.media)
+      .where(and(eq(schema.media.tenantId, ctx.tenantId), eq(schema.media.id, input.mediaId), libraryScope))
+      .limit(1);
+    if (!asset) throw new Error("Not Found: media item not found in library");
+    if (asset.status === "trashed") {
+      throw new Error("Bad Request: This file is in the Trash. Restore it before adding it to a product");
     }
 
-    const all = await tx
-      .select({ position: schema.productMedia.position })
+    if (asset.kind !== "image" && asset.kind !== "video") {
+      throw new Error("Bad Request: Only images and videos can be added to the product gallery");
+    }
+
+    const currentLinks = await tx
+      .select({
+        id: schema.productMedia.id,
+        position: schema.productMedia.position,
+        mediaId: schema.productMedia.mediaId,
+        kind: schema.media.kind,
+      })
       .from(schema.productMedia)
-      .where(eq(schema.productMedia.productId, input.productId));
-    const position = all.length === 0 ? 0 : Math.max(...all.map((r) => r.position)) + 1;
+      .innerJoin(schema.media, eq(schema.media.id, schema.productMedia.mediaId))
+      .where(eq(schema.productMedia.productId, input.productId))
+      .orderBy(schema.productMedia.position);
+
+    const existing = currentLinks.find((l) => l.mediaId === input.mediaId);
+    if (existing) {
+      return { id: existing.id, position: existing.position, storageKey: asset.storageKey };
+    }
+
+    const hasImage = currentLinks.some((l) => l.kind === "image");
+
+    if (asset.kind === "video") {
+      // Invariant: product must have at least one image before adding a video (S3)
+      if (!hasImage || currentLinks.length === 0) {
+        throw new Error("Bad Request: A product must have at least one image before adding a video");
+      }
+    }
+
+    const position = currentLinks.length === 0 ? 0 : Math.max(...currentLinks.map((r) => r.position)) + 1;
 
     const [row] = await tx
       .insert(schema.productMedia)
-      .values({ tenantId: ctx.tenantId, productId: input.productId, mediaId: input.mediaId, position, alt: input.alt ?? null })
+      .values({
+        tenantId: ctx.tenantId,
+        productId: input.productId,
+        mediaId: input.mediaId,
+        position,
+        alt: input.alt ?? null,
+      })
       .returning();
-    if (!row) throw new Error("Failed to attach image");
+    if (!row) throw new Error("Failed to attach media");
 
     // Sync media usages for this product gallery
     const allLinks = await tx
@@ -1742,7 +1678,8 @@ export async function attachProductMedia(
 }
 
 /**
- * Removes an image from a product and syncs media_usages (MEDIA-LIBRARY-PLAN §5.2).
+ * Removes an image or video from a product and syncs media_usages (MEDIA-LIBRARY-PLAN §3, §5.2 / S3).
+ * If the primary item was removed, promotes the next available image to position 0.
  */
 export async function detachProductMedia(
   rt: Runtime,
@@ -1757,17 +1694,43 @@ export async function detachProductMedia(
       .delete(schema.productMedia)
       .where(and(eq(schema.productMedia.id, input.productMediaId), eq(schema.productMedia.productId, input.productId)))
       .returning({ id: schema.productMedia.id });
-    if (deleted.length === 0) throw new Error("Not Found: image is not attached to this product");
+    if (deleted.length === 0) throw new Error("Not Found: media item is not attached to this product");
 
-    const rest = await tx
-      .select({ id: schema.productMedia.id, mediaId: schema.productMedia.mediaId })
+    const remaining = await tx
+      .select({
+        id: schema.productMedia.id,
+        mediaId: schema.productMedia.mediaId,
+        kind: schema.media.kind,
+      })
       .from(schema.productMedia)
+      .innerJoin(schema.media, eq(schema.media.id, schema.productMedia.mediaId))
       .where(eq(schema.productMedia.productId, input.productId))
       .orderBy(schema.productMedia.position);
 
-    for (let i = 0; i < rest.length; i++) {
-      const row = rest[i];
-      if (row) await tx.update(schema.productMedia).set({ position: i, updatedAt: new Date() }).where(eq(schema.productMedia.id, row.id));
+    // The primary item must stay an image: removing the last image while videos remain is refused (rolls back the delete).
+    if (remaining.length > 0 && !remaining.some((r) => r.kind === "image")) {
+      throw new Error("Bad Request: Remove the videos first. A product's main media must be an image");
+    }
+
+    // If remaining item at position 0 is not an image, promote the next image to position 0 (S3)
+    if (remaining.length > 0) {
+      const first = remaining[0];
+      if (first && first.kind !== "image") {
+        const nextImageIdx = remaining.findIndex((r) => r.kind === "image");
+        if (nextImageIdx > 0) {
+          const [promoted] = remaining.splice(nextImageIdx, 1);
+          if (promoted) {
+            remaining.unshift(promoted);
+          }
+        }
+      }
+    }
+
+    for (let i = 0; i < remaining.length; i++) {
+      const row = remaining[i];
+      if (row) {
+        await tx.update(schema.productMedia).set({ position: i, updatedAt: new Date() }).where(eq(schema.productMedia.id, row.id));
+      }
     }
 
     // Sync media usages for this product gallery
@@ -1775,12 +1738,381 @@ export async function detachProductMedia(
       ownerType: "product",
       ownerId: input.productId,
       field: "gallery",
-      mediaIds: rest.map((l) => l.mediaId),
+      mediaIds: remaining.map((l) => l.mediaId),
     });
   });
 
   await invalidateCache(rt, ctx, { type: "product_image_updated", productId: input.productId });
   return { success: true };
+}
+
+/**
+ * Reorders product media items gap-free, enforcing that position 0 is always an image (MEDIA-LIBRARY-PLAN §3 / S3).
+ */
+export async function reorderProductMedia(
+  rt: Runtime,
+  ctx: TenantContext,
+  input: { id: string; order: string[] },
+): Promise<{ success: boolean }> {
+  assertPermission(ctx, "products.write");
+  const db = rt._db.db;
+
+  await withTenant(db, ctx.tenantId, async (tx) => {
+    const [product] = await tx
+      .select({ id: schema.products.id })
+      .from(schema.products)
+      .where(eq(schema.products.id, input.id))
+      .limit(1);
+    if (!product) throw new Error("Not Found: product not found");
+
+    const current = await tx
+      .select({
+        id: schema.productMedia.id,
+        mediaId: schema.productMedia.mediaId,
+        kind: schema.media.kind,
+      })
+      .from(schema.productMedia)
+      .innerJoin(schema.media, eq(schema.media.id, schema.productMedia.mediaId))
+      .where(eq(schema.productMedia.productId, input.id));
+
+    if (input.order.length !== current.length || new Set(input.order).size !== input.order.length) {
+      throw new Error("Bad Request: order must contain each of the product's current media items exactly once");
+    }
+
+    const currentMap = new Map(current.map((c) => [c.id, c]));
+    for (const id of input.order) {
+      if (!currentMap.has(id)) {
+        throw new Error("Bad Request: order contains invalid or foreign product media IDs");
+      }
+    }
+
+    // Invariant: Position 0 must always be an image (MEDIA-LIBRARY-PLAN §3 / S3)
+    const firstId = input.order[0];
+    if (firstId) {
+      const firstItem = currentMap.get(firstId);
+      if (firstItem && firstItem.kind !== "image") {
+        throw new Error("Bad Request: The primary media (position 0) must be an image");
+      }
+    }
+
+    for (let i = 0; i < input.order.length; i++) {
+      const pmId = input.order[i];
+      if (pmId) {
+        await tx
+          .update(schema.productMedia)
+          .set({ position: i, updatedAt: new Date() })
+          .where(eq(schema.productMedia.id, pmId));
+      }
+    }
+
+    // Write audit log
+    await tx.insert(schema.auditLogs).values({
+      tenantId: ctx.tenantId,
+      actorType: ctx.actor.type,
+      actorId: ctx.actor.type === "staff" ? ctx.actor.userId : null,
+      action: "product.update",
+      targetType: "product",
+      targetId: input.id,
+      diff: {
+        reorderMedia: input.order,
+      },
+    });
+
+    // Sync media usages with the new order
+    const orderedMediaIds = input.order
+      .map((id) => currentMap.get(id)?.mediaId)
+      .filter((mId): mId is string => Boolean(mId));
+
+    await syncMediaUsages(tx, ctx, {
+      ownerType: "product",
+      ownerId: input.id,
+      field: "gallery",
+      mediaIds: orderedMediaIds,
+    });
+  });
+
+  await invalidateCache(rt, ctx, { type: "product_image_updated", productId: input.id });
+  return { success: true };
+}
+
+/**
+ * Updates product-level alt text on an attached product media item (MEDIA-LIBRARY-PLAN §3 / S3).
+ */
+export async function updateProductMedia(
+  rt: Runtime,
+  ctx: TenantContext,
+  input: { id: string; productMediaId: string; alt?: string | null | undefined },
+): Promise<{ success: boolean }> {
+  assertPermission(ctx, "products.write");
+  const db = rt._db.db;
+
+  await withTenant(db, ctx.tenantId, async (tx) => {
+    const [row] = await tx
+      .select({ id: schema.productMedia.id })
+      .from(schema.productMedia)
+      .where(
+        and(
+          eq(schema.productMedia.id, input.productMediaId),
+          eq(schema.productMedia.productId, input.id),
+        ),
+      )
+      .limit(1);
+
+    if (!row) throw new Error("Not Found: image is not attached to this product");
+
+    await tx
+      .update(schema.productMedia)
+      .set({
+        alt: input.alt !== undefined ? input.alt : undefined,
+        updatedAt: new Date(),
+      })
+      .where(eq(schema.productMedia.id, input.productMediaId));
+  });
+
+  await invalidateCache(rt, ctx, { type: "product_image_updated", productId: input.id });
+  return { success: true };
+}
+
+export interface ReplaceMediaInput {
+  id: string;
+  storageKey: string;
+  mime: string;
+  bytes: number;
+  filename?: string | undefined;
+  durationMs?: number | undefined;
+}
+
+/**
+ * Replaces a media file's physical object and metadata while preserving its ID, usages, and text fields
+ * (MEDIA-LIBRARY-PLAN §6.2, §7 / S6).
+ */
+export async function replaceMedia(
+  rt: Runtime,
+  ctx: TenantContext,
+  input: ReplaceMediaInput,
+): Promise<MediaItem> {
+  assertPermission(ctx, "content.write");
+  const db = rt._db.db;
+
+  // 1. Validate storage key shape and tenant prefix (B2, R1)
+  const { folder: keyFolder } = validateClientStorageKey(ctx.tenantId, input.storageKey);
+
+  // 2. Check that target item exists, belongs to tenant, is in libraryScope, and is NOT trashed
+  const existing = await withTenant(db, ctx.tenantId, async (tx) => {
+    const [row] = await tx
+      .select()
+      .from(schema.media)
+      .where(and(eq(schema.media.tenantId, ctx.tenantId), eq(schema.media.id, input.id), libraryScope))
+      .limit(1);
+
+    if (!row) {
+      throw new Error("Not Found: media item not found");
+    }
+    if (row.status === "trashed") {
+      throw new Error("Bad Request: Trashed files cannot be replaced. Restore the file first.");
+    }
+
+    // Ensure storage key is not already registered by another item
+    const [dup] = await tx
+      .select({ id: schema.media.id })
+      .from(schema.media)
+      .where(
+        and(
+          eq(schema.media.tenantId, ctx.tenantId),
+          eq(schema.media.storageKey, input.storageKey),
+          ne(schema.media.id, input.id),
+        ),
+      )
+      .limit(1);
+
+    if (dup) {
+      throw new Error(`Bad Request: Storage key "${input.storageKey}" already registered in library`);
+    }
+
+    return row;
+  });
+
+  const normMime = input.mime.toLowerCase().trim();
+  if (normMime === "image/svg+xml") {
+    throw new Error("SVG uploads are disabled for security reasons");
+  }
+  if (!isAllowedMime(normMime)) {
+    throw new Error(`Unsupported media format: "${input.mime}"`);
+  }
+
+  // 3. Derived kind must match existing item's kind (S6: Same kind required)
+  const newKind = getMediaKind(normMime);
+  if (!newKind || newKind !== existing.kind) {
+    throw new Error(`Bad Request: Replacement file must be of the same type (${existing.kind})`);
+  }
+
+  const { driver, config: activeConfig } = await getActiveStorageDriver(db, "public_media");
+
+  // 4. HeadObject gets real physical size
+  const head = await driver.head(input.storageKey);
+  if (!head.exists) {
+    throw new Error(`Uploaded file not found in storage: "${input.storageKey}"`);
+  }
+  const realBytes = head.size ?? 0;
+  if (realBytes <= 0) {
+    throw new Error("Uploaded file is empty");
+  }
+
+  // 5. Net quota check (counts realBytes - oldBytes)
+  try {
+    await assertMediaReplaceQuota(db, ctx.tenantId, {
+      kind: newKind,
+      bytes: realBytes,
+      oldBytes: Number(existing.bytes),
+    });
+  } catch (quotaErr) {
+    // Purge the oversize uploaded file immediately
+    await purgeMediaObjects(db, {
+      tenantId: ctx.tenantId,
+      objects: [{ storageKey: input.storageKey, storageConnectionId: activeConfig.id }],
+    }).catch(() => {});
+    throw quotaErr;
+  }
+
+  // 6. Magic bytes verification (read first 4 KB)
+  const chunk = driver.getRange
+    ? await driver.getRange(input.storageKey, 0, 4095)
+    : await driver.get(input.storageKey);
+  if (!chunk || chunk.length === 0) {
+    throw new Error(`Failed to read uploaded file from storage: "${input.storageKey}"`);
+  }
+
+  const magicResult = verifyMediaMagicBytes(normMime, chunk, input.filename || existing.filename || undefined);
+  if (!magicResult.valid) {
+    await purgeMediaObjects(db, {
+      tenantId: ctx.tenantId,
+      objects: [{ storageKey: input.storageKey, storageConnectionId: activeConfig.id }],
+    }).catch(() => {});
+    throw new Error(magicResult.error || "File verification failed: magic bytes mismatch");
+  }
+
+  // 7. Extract dimensions. A replacement image that sharp cannot read is refused, as at upload.
+  let width: number | null = null;
+  let height: number | null = null;
+  let sha256: string | null = null;
+  if (newKind === "image") {
+    try {
+      const fullBytes = await driver.get(input.storageKey);
+      if (!fullBytes || fullBytes.length === 0) {
+        throw new Error("empty image body");
+      }
+      const sharpModule = await import("sharp");
+      const sharp = sharpModule.default;
+      const meta = await sharp(fullBytes).metadata();
+      width = meta.width ?? null;
+      height = meta.height ?? null;
+      sha256 = crypto.createHash("sha256").update(fullBytes).digest("hex");
+    } catch (err) {
+      await purgeMediaObjects(db, {
+        tenantId: ctx.tenantId,
+        objects: [{ storageKey: input.storageKey, storageConnectionId: activeConfig.id }],
+      }).catch(() => {});
+      throw new Error("Failed to process image metadata: corrupted or invalid image file", { cause: err });
+    }
+  }
+
+  const oldStorageKey = existing.storageKey;
+  const oldConnectionId = existing.storageConnectionId;
+
+  // 8. Atomic transaction: update media row and write audit log
+  const updatedItem = await withTenant(db, ctx.tenantId, async (tx) => {
+    const updateValues: Record<string, unknown> = {
+      storageKey: input.storageKey,
+      storageConnectionId: activeConfig.id,
+      mime: normMime,
+      bytes: realBytes,
+      width,
+      height,
+      durationMs: input.durationMs ?? null,
+      sha256,
+      folder: keyFolder,
+      updatedAt: new Date(),
+    };
+    if (input.filename) {
+      updateValues.filename = input.filename;
+    }
+
+    const [updated] = await tx
+      .update(schema.media)
+      .set(updateValues)
+      .where(and(eq(schema.media.tenantId, ctx.tenantId), eq(schema.media.id, input.id)))
+      .returning();
+
+    if (!updated) {
+      throw new Error("Failed to update media record");
+    }
+
+    await tx.insert(schema.auditLogs).values({
+      tenantId: ctx.tenantId,
+      actorType: ctx.actor.type,
+      actorId: ctx.actor.type === "staff" ? ctx.actor.userId : null,
+      action: "media.replace",
+      targetType: "media",
+      targetId: input.id,
+      diff: {
+        oldKey: oldStorageKey,
+        newKey: input.storageKey,
+        oldBytes: Number(existing.bytes),
+        newBytes: realBytes,
+      },
+    });
+
+    const url = (await resolvePublicMediaUrl(db, updated.storageKey, updated.storageConnectionId)) || "";
+    const thumbnailUrl = buildThumbnailUrl(updated, url);
+
+    const usagesMap = await resolveMediaUsageLabels(tx, ctx.tenantId, [updated.id]);
+    const usages = usagesMap.get(updated.id) || [];
+
+    return {
+      id: updated.id,
+      kind: updated.kind as MediaKind,
+      mime: updated.mime,
+      filename: updated.filename,
+      title: updated.title,
+      alt: updated.alt,
+      caption: updated.caption,
+      bytes: Number(updated.bytes),
+      width: updated.width,
+      height: updated.height,
+      durationMs: updated.durationMs,
+      url,
+      thumbnailUrl,
+      status: updated.status as "ready" | "trashed",
+      trashedAt: updated.trashedAt ? updated.trashedAt.toISOString() : null,
+      usageCount: usages.length,
+      uploadedBy: updated.uploadedBy,
+      createdAt: updated.createdAt.toISOString(),
+      updatedAt: updated.updatedAt.toISOString(),
+      storageKey: updated.storageKey,
+      storageConnectionId: updated.storageConnectionId,
+      cfImageId: updated.cfImageId,
+      folder: updated.folder,
+      usages,
+    };
+  });
+
+  // 9. Post-commit: purge old storage object (via job if available, or direct fallback)
+  if (rt._jobs) {
+    await rt._jobs.send("media.purge", {
+      tenantId: ctx.tenantId,
+      objects: [{ storageKey: oldStorageKey, storageConnectionId: oldConnectionId }],
+    });
+  } else {
+    await purgeMediaObjects(db, {
+      tenantId: ctx.tenantId,
+      objects: [{ storageKey: oldStorageKey, storageConnectionId: oldConnectionId }],
+    });
+  }
+
+  // 10. Post-commit: cache fan-out to owners (S5)
+  await invalidateMediaCache(rt, ctx, [input.id]);
+
+  return updatedItem;
 }
 
 /**

@@ -41,11 +41,12 @@ function generateImageSrcSet(url?: string): { src: string; srcSet?: string; size
 export function ProductGallery({ media, title }: ProductGalleryProps) {
   const [selectedIndex, setSelectedIndex] = useState(0);
 
-  const images = media.filter((m) => Boolean(m.url));
-  const activeImage = images[selectedIndex] ?? images[0];
-  const { src, srcSet, sizes } = generateImageSrcSet(activeImage?.url);
+  const items = media.filter((m) => Boolean(m.url));
+  const activeItem = items[selectedIndex] ?? items[0];
+  const firstImage = items.find((m) => m.kind !== "video") ?? items[0];
+  const { src, srcSet, sizes } = generateImageSrcSet(activeItem?.url);
 
-  if (images.length === 0) {
+  if (items.length === 0) {
     return (
       <div className="flex aspect-square w-full items-center justify-center rounded-2xl border border-dashed border-border/80 bg-surface/50 text-text/60">
         <div className="text-center p-6">
@@ -69,33 +70,52 @@ export function ProductGallery({ media, title }: ProductGalleryProps) {
     );
   }
 
+  const isVideo = activeItem?.kind === "video";
+
   return (
     <div className="flex flex-col gap-4">
-      {/* Main Image with fixed aspect ratio */}
+      {/* Main item with fixed aspect ratio */}
       <div className="relative aspect-square w-full overflow-hidden rounded-2xl border border-border/60 bg-surface shadow-xs">
-        {/* eslint-disable-next-line @next/next/no-img-element */}
-        <img
-          src={src}
-          srcSet={srcSet}
-          sizes={sizes}
-          alt={activeImage?.alt ?? title}
-          fetchPriority="high"
-          loading="eager"
-          className="h-full w-full object-cover object-center transition-all duration-300"
-        />
+        {isVideo ? (
+          <video
+            key={activeItem?.url}
+            controls
+            playsInline
+            preload="none"
+            poster={firstImage?.url}
+            className="h-full w-full object-contain object-center bg-black"
+            src={activeItem?.url}
+          >
+            Your browser does not support the video tag.
+          </video>
+        ) : (
+          /* eslint-disable-next-line @next/next/no-img-element */
+          <img
+            src={src}
+            srcSet={srcSet}
+            sizes={sizes}
+            alt={activeItem?.alt ?? title}
+            fetchPriority="high"
+            loading="eager"
+            className="h-full w-full object-cover object-center transition-all duration-300"
+          />
+        )}
       </div>
 
       {/* Thumbnail strip */}
-      {images.length > 1 && (
+      {items.length > 1 && (
         <div className="flex gap-3 overflow-x-auto pb-2 pt-1 scrollbar-none" role="tablist" aria-label="Product thumbnails">
-          {images.map((item, idx) => {
+          {items.map((item, idx) => {
             const isSelected = idx === selectedIndex;
+            const itemIsVideo = item.kind === "video";
+            const thumbUrl = itemIsVideo ? (firstImage?.url || item.url) : item.url;
             return (
               <button
                 key={item.id || item.mediaId || idx}
                 type="button"
                 role="tab"
                 aria-selected={isSelected}
+                aria-label={itemIsVideo ? `Video thumbnail ${idx + 1}` : (item.alt ?? `${title} thumbnail ${idx + 1}`)}
                 onClick={() => setSelectedIndex(idx)}
                 className={`relative h-20 w-20 flex-shrink-0 overflow-hidden rounded-xl border-2 transition-all ${
                   isSelected
@@ -105,11 +125,20 @@ export function ProductGallery({ media, title }: ProductGalleryProps) {
               >
                 {/* eslint-disable-next-line @next/next/no-img-element */}
                 <img
-                  src={item.url}
+                  src={thumbUrl}
                   alt={item.alt ?? `${title} thumbnail ${idx + 1}`}
                   loading="lazy"
                   className="h-full w-full object-cover object-center"
                 />
+                {itemIsVideo && (
+                  <div className="pointer-events-none absolute inset-0 flex items-center justify-center bg-black/30">
+                    <div className="flex h-6 w-6 items-center justify-center rounded-full bg-black/70 text-white shadow-xs">
+                      <svg className="h-3 w-3 translate-x-0.5 fill-current" viewBox="0 0 24 24">
+                        <path d="M8 5v14l11-7z" />
+                      </svg>
+                    </div>
+                  </div>
+                )}
               </button>
             );
           })}

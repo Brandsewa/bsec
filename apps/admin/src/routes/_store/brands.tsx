@@ -1,6 +1,6 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { Image as ImageIcon, MoreHorizontal, Pencil, Plus, Tag, Trash2, Upload, X } from "lucide-react";
-import { useMemo, useRef, useState } from "react";
+import { Image as ImageIcon, MoreHorizontal, Pencil, Plus, Tag, Trash2 } from "lucide-react";
+import { useMemo, useState } from "react";
 import { MetricCard, MetricCardSkeleton, PageContainer, PageHeader, PageSection, PageSkeleton, toast } from "@bs/ui";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import type { Brand } from "@bs/contracts";
@@ -14,7 +14,7 @@ import { ConfirmDialog } from "@bs/ui";
 import { TableToolbar } from "../../components/data-table/table-toolbar.tsx";
 import { errorMessage } from "../../lib/errors.ts";
 import { orpc } from "../../lib/orpc.ts";
-import { uploadMedia } from "../../lib/upload-media.ts";
+import { MediaField } from "../../components/media/media-field.tsx";
 
 export const Route = createFileRoute("/_store/brands")({
   pendingComponent: () => <PageSkeleton />,
@@ -23,19 +23,15 @@ export const Route = createFileRoute("/_store/brands")({
 
 export function BrandsPage() {
   const queryClient = useQueryClient();
-  const fileRef = useRef<HTMLInputElement>(null);
 
   const [queryText, setQueryText] = useState("");
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editingBrand, setEditingBrand] = useState<Brand | null>(null);
   const [deleteTarget, setDeleteTarget] = useState<Brand | null>(null);
 
-  // Form states for dialog
   const [name, setName] = useState("");
   const [slug, setSlug] = useState("");
   const [logoMediaId, setLogoMediaId] = useState<string | null>(null);
-  const [logoUrl, setLogoUrl] = useState<string | null>(null);
-  const [uploading, setUploading] = useState(false);
   const [formErrors, setFormErrors] = useState<Record<string, string>>({});
 
   const statsQuery = useQuery(orpc.admin.brands.stats.queryOptions());
@@ -55,7 +51,6 @@ export function BrandsPage() {
     setName("");
     setSlug("");
     setLogoMediaId(null);
-    setLogoUrl(null);
     setFormErrors({});
     setDialogOpen(true);
   };
@@ -65,26 +60,8 @@ export function BrandsPage() {
     setName(brand.name);
     setSlug(brand.slug);
     setLogoMediaId(brand.logoMediaId ?? null);
-    setLogoUrl(brand.logoUrl ?? null);
     setFormErrors({});
     setDialogOpen(true);
-  };
-
-  const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
-    setUploading(true);
-    try {
-      const created = await uploadMedia(file, { folder: "brands", alt: name || "Brand logo" });
-      setLogoMediaId(created.id);
-      setLogoUrl(created.url ?? URL.createObjectURL(file));
-      toast.success("Logo uploaded");
-    } catch (err) {
-      toast.error(errorMessage(err, "Logo upload failed"));
-    } finally {
-      setUploading(false);
-      if (fileRef.current) fileRef.current.value = "";
-    }
   };
 
   const createMutation = useMutation(
@@ -343,61 +320,20 @@ export function BrandsPage() {
               {formErrors.slug && <p className="text-xs text-destructive">{formErrors.slug}</p>}
             </Field>
 
-            <Field>
-              <FieldLabel>Brand Logo</FieldLabel>
-              <div className="flex items-center gap-4">
-                <div className="flex h-16 w-16 shrink-0 items-center justify-center overflow-hidden rounded-md border bg-muted/20">
-                  {logoUrl ? (
-                    <img src={logoUrl} alt="Logo preview" className="h-full w-full object-contain" />
-                  ) : (
-                    <ImageIcon className="h-6 w-6 text-muted-foreground/40" />
-                  )}
-                </div>
-                <div className="space-y-1">
-                  <div className="flex items-center gap-2">
-                    <input
-                      ref={fileRef}
-                      type="file"
-                      accept="image/*"
-                      className="hidden"
-                      onChange={handleFileUpload}
-                    />
-                    <Button
-                      type="button"
-                      variant="outline"
-                      size="sm"
-                      disabled={uploading}
-                      onClick={() => fileRef.current?.click()}
-                      className="gap-1.5"
-                    >
-                      <Upload className="h-3.5 w-3.5" />
-                      {uploading ? "Uploading..." : logoUrl ? "Change logo" : "Upload logo"}
-                    </Button>
-                    {logoUrl && (
-                      <Button
-                        type="button"
-                        variant="ghost"
-                        size="sm"
-                        onClick={() => {
-                          setLogoMediaId(null);
-                          setLogoUrl(null);
-                        }}
-                      >
-                        <X className="h-3.5 w-3.5 text-muted-foreground" />
-                      </Button>
-                    )}
-                  </div>
-                  <p className="text-[11px] text-muted-foreground">PNG, JPG or SVG up to 5MB.</p>
-                </div>
-              </div>
-            </Field>
+            <MediaField
+              value={logoMediaId}
+              onChange={setLogoMediaId}
+              label="Brand Logo"
+              accept={["image"]}
+              aspect="1:1"
+            />
           </div>
 
           <DialogFooter>
             <Button variant="outline" onClick={() => setDialogOpen(false)}>
               Cancel
             </Button>
-            <Button onClick={handleSave} disabled={isSaving || uploading}>
+            <Button onClick={handleSave} disabled={isSaving}>
               {isSaving ? "Saving..." : editingBrand ? "Save changes" : "Create brand"}
             </Button>
           </DialogFooter>

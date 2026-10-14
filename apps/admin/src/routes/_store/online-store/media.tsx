@@ -16,7 +16,6 @@ import { useInfiniteQuery, useMutation, useQuery, useQueryClient } from "@tansta
 import {
   Badge,
   Button,
-  Checkbox,
   ConfirmDialog,
   EmptyState,
   InfoTip,
@@ -52,6 +51,7 @@ import { client, orpc } from "../../../lib/orpc.ts";
 import { mediaUploadQueue } from "../../../lib/media-upload-queue.ts";
 import { MediaUploadTray } from "../../../components/media/media-upload-tray.tsx";
 import { MediaDetailSheet } from "../../../components/media/media-detail-sheet.tsx";
+import { MediaTile } from "../../../components/media/media-tile.tsx";
 
 const VIEW_STORAGE_KEY = "bs.media.view";
 
@@ -851,14 +851,16 @@ export function MediaLibraryPage() {
         >
           {items.map((item, idx) => {
             const isSelected = selection.selectedIds.has(item.id);
-            const ext = (item.filename || "").split(".").pop() || "";
 
             return (
-              <div
+              <MediaTile
                 key={item.id}
-                role="gridcell"
-                tabIndex={0}
+                item={item}
+                isSelected={isSelected}
+                showCheckbox={true}
+                hasActiveSelection={selection.selectedIds.size > 0}
                 onClick={() => handleItemClick(item)}
+                onCheckboxClick={(e) => handleGridItemCheckboxClick(e, item, idx)}
                 onKeyDown={(e) => {
                   if (e.key === "Enter") handleItemClick(item);
                   if (e.key === " ") {
@@ -866,80 +868,7 @@ export function MediaLibraryPage() {
                     selection.toggleRow(item, !isSelected);
                   }
                 }}
-                className={cn(
-                  "group relative aspect-square rounded-lg border bg-card text-card-foreground overflow-hidden cursor-pointer flex flex-col justify-between transition-all",
-                  "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary",
-                  isSelected
-                    ? "ring-2 ring-primary border-primary bg-primary/5"
-                    : "hover:border-primary/50 hover:shadow-sm",
-                )}
-              >
-                {/* Checkbox Overlay */}
-                <div
-                  className={cn(
-                    "absolute top-2 left-2 z-10 transition-opacity",
-                    isSelected || selection.selectedIds.size > 0
-                      ? "opacity-100"
-                      : "opacity-0 group-hover:opacity-100 focus-within:opacity-100",
-                  )}
-                  onClick={(e) => handleGridItemCheckboxClick(e, item, idx)}
-                >
-                  <Checkbox
-                    checked={isSelected}
-                    aria-label={`Select ${item.filename || "file"}`}
-                    className="h-4 w-4 bg-background/90 shadow-sm"
-                  />
-                </div>
-
-                {/* Thumbnail Display */}
-                <div className="relative w-full h-[calc(100%-2.25rem)] overflow-hidden bg-muted/30 flex items-center justify-center">
-                  {item.kind === "image" ? (
-                    <img
-                      src={item.thumbnailUrl || item.url}
-                      alt={item.alt || item.filename || ""}
-                      className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-200"
-                      loading="lazy"
-                      decoding="async"
-                    />
-                  ) : item.kind === "video" ? (
-                    <div className="relative w-full h-full flex items-center justify-center bg-black/5 dark:bg-black/30">
-                      <VideoIcon className="h-10 w-10 text-purple-500 opacity-80" />
-                      {Boolean(item.durationMs) && (
-                        <span className="absolute bottom-1.5 right-1.5 font-mono text-[10px] bg-black/75 text-white px-1 py-0.5 rounded">
-                          {formatDuration(item.durationMs)}
-                        </span>
-                      )}
-                    </div>
-                  ) : (
-                    <div className="flex flex-col items-center justify-center p-2 text-center">
-                      <FileText className="h-10 w-10 text-emerald-500 mb-1" />
-                      <span className="font-mono text-[10px] font-bold uppercase text-muted-foreground">
-                        {ext}
-                      </span>
-                    </div>
-                  )}
-
-                  {/* Usage indicator badge */}
-                  {item.usageCount > 0 && (
-                    <Badge
-                      variant="secondary"
-                      className="absolute top-2 right-2 text-[10px] px-1 py-0 bg-background/90 shadow-xs"
-                    >
-                      Used ({item.usageCount})
-                    </Badge>
-                  )}
-                </div>
-
-                {/* Footer Subtitle */}
-                <div className="px-2 py-1 bg-card border-t text-[11px] flex items-center justify-between gap-1 min-w-0">
-                  <span className="truncate font-medium text-foreground" title={item.filename || ""}>
-                    {item.filename || "Untitled"}
-                  </span>
-                  <span className="text-[10px] text-muted-foreground shrink-0 font-mono">
-                    {formatBytes(item.bytes)}
-                  </span>
-                </div>
-              </div>
+              />
             );
           })}
         </div>

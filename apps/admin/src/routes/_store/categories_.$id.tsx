@@ -1,6 +1,6 @@
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
-import { ArrowLeft, Image as ImageIcon, Save, Trash2, Upload, X } from "lucide-react";
-import { useRef, useState } from "react";
+import { ArrowLeft, Save, Trash2 } from "lucide-react";
+import { useState } from "react";
 import { DetailSkeleton, EmptyState, PageBreadcrumbs, PageContainer, PageHeader, PageSkeleton, toast } from "@bs/ui";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import type { Category } from "@bs/contracts";
@@ -15,7 +15,7 @@ import { SeoCard } from "../../components/seo-card.tsx";
 import { SimpleSelect } from "@bs/ui";
 import { errorMessage } from "../../lib/errors.ts";
 import { orpc } from "../../lib/orpc.ts";
-import { uploadMedia } from "../../lib/upload-media.ts";
+import { MediaField } from "../../components/media/media-field.tsx";
 
 export const Route = createFileRoute("/_store/categories_/$id")({
   pendingComponent: () => (
@@ -81,7 +81,6 @@ function CategoryEditor({
   go: (to: string) => void;
 }) {
   const queryClient = useQueryClient();
-  const fileRef = useRef<HTMLInputElement>(null);
 
   const [name, setName] = useState(category.name);
   const [slug, setSlug] = useState(category.slug);
@@ -91,8 +90,6 @@ function CategoryEditor({
   const [isFeatured, setIsFeatured] = useState(category.isFeatured);
   const [displayOrder, setDisplayOrder] = useState(String(category.position ?? 0));
   const [imageMediaId, setImageMediaId] = useState<string | null>(category.imageMediaId ?? null);
-  const [imageUrl, setImageUrl] = useState<string | null>(category.imageUrl ?? null);
-  const [uploading, setUploading] = useState(false);
 
   // SEO state
   const [seoTitle, setSeoTitle] = useState(category.seo?.title ?? "");
@@ -116,28 +113,6 @@ function CategoryEditor({
         label: `${(c.path ?? "/").replace(/^\/|\/$/g, "") ? "— " : ""}${c.name}`,
       })),
   ];
-
-  const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
-
-    setUploading(true);
-    try {
-      const media = await uploadMedia(file, {
-        folder: "categories",
-        alt: name.trim() || "Category image",
-      });
-
-      setImageMediaId(media.id);
-      setImageUrl(media.url ?? URL.createObjectURL(file));
-      toast.success("Image uploaded successfully");
-    } catch (err) {
-      toast.error(errorMessage(err, "Failed to upload image"));
-    } finally {
-      setUploading(false);
-      if (fileRef.current) fileRef.current.value = "";
-    }
-  };
 
   // Update mutation
   const updateMutation = useMutation(
@@ -326,46 +301,11 @@ function CategoryEditor({
               <CardDescription>Visual banner or icon used in category lists and grids.</CardDescription>
             </CardHeader>
             <CardContent>
-              {imageUrl ? (
-                <div className="relative inline-block overflow-hidden rounded-lg border border-border">
-                  <img src={imageUrl} alt={name} className="h-40 w-72 object-cover" />
-                  <Button
-                    type="button"
-                    variant="destructive"
-                    size="icon"
-                    className="absolute right-2 top-2 size-7"
-                    onClick={() => {
-                      setImageMediaId(null);
-                      setImageUrl(null);
-                    }}
-                  >
-                    <X className="size-4" />
-                  </Button>
-                </div>
-              ) : (
-                <div className="flex flex-col items-center justify-center rounded-lg border border-dashed border-border p-6 text-center">
-                  <ImageIcon className="size-8 text-muted-foreground mb-2" aria-hidden />
-                  <p className="text-sm font-medium text-foreground">No image uploaded</p>
-                  <p className="text-xs text-muted-foreground mt-0.5">PNG, JPG, WebP up to 5MB</p>
-                  <Button
-                    type="button"
-                    variant="outline"
-                    size="sm"
-                    className="mt-3"
-                    disabled={uploading}
-                    onClick={() => fileRef.current?.click()}
-                  >
-                    <Upload className="mr-1.5 size-3.5" aria-hidden />
-                    {uploading ? "Uploading..." : "Upload Image"}
-                  </Button>
-                </div>
-              )}
-              <input
-                ref={fileRef}
-                type="file"
-                accept="image/*"
-                className="hidden"
-                onChange={handleFileUpload}
+              <MediaField
+                value={imageMediaId}
+                onChange={(id) => setImageMediaId(id)}
+                accept={["image"]}
+                aspect="16:9"
               />
             </CardContent>
           </Card>

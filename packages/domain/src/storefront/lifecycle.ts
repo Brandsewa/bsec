@@ -9,6 +9,7 @@ import { assertPermission } from "../context.ts";
 import { FeatureDisabledError, isFeatureEnabled } from "../features.ts";
 import type { Runtime } from "../runtime.ts";
 import { invalidateCache } from "../cache-invalidation.ts";
+import { syncMediaUsages } from "../media-services.ts";
 import { storefrontLifecycleDecision } from "../system/tenant-lifecycle.ts";
 import { recordHostMode } from "./lookup-fallback.ts";
 import type { StoreStatusTransitionItem } from "@bs/contracts";
@@ -536,6 +537,7 @@ export interface StoreStatusView {
   collectEmails: boolean;
   launchAt: string | null;
   hasPassword: boolean;
+  backgroundMediaId?: string | null;
   maintenanceStartsAt?: string | null;
   maintenanceEndsAt?: string | null;
   modeBeforeMaintenance?: string | null;
@@ -557,6 +559,7 @@ export async function getStoreStatusInternal(rt: Runtime, tenantId: string): Pro
       collectEmails: row?.collectEmails ?? true,
       launchAt: row?.launchAt ? row.launchAt.toISOString() : null,
       hasPassword: Boolean(row?.passwordHash),
+      backgroundMediaId: row?.backgroundMediaId ?? null,
       maintenanceStartsAt: row?.maintenanceStartsAt ? row.maintenanceStartsAt.toISOString() : null,
       maintenanceEndsAt: row?.maintenanceEndsAt ? row.maintenanceEndsAt.toISOString() : null,
       modeBeforeMaintenance: row?.modeBeforeMaintenance ?? null,
@@ -587,6 +590,7 @@ export async function updateStoreStatus(
     password?: string | null | undefined;
     retryAfterMinutes?: number | null | undefined;
     bypassToken?: string | null | undefined;
+    backgroundMediaId?: string | null | undefined;
   },
 ): Promise<{ success: boolean }> {
   assertPermission(ctx, "storefront.manage");
@@ -618,6 +622,7 @@ export async function updateStoreStatus(
     if (input.showCountdown !== undefined) updateValues.showCountdown = input.showCountdown;
     if (input.collectEmails !== undefined) updateValues.collectEmails = input.collectEmails;
     if (input.retryAfterMinutes !== undefined) updateValues.retryAfterMinutes = input.retryAfterMinutes;
+    if (input.backgroundMediaId !== undefined) updateValues.backgroundMediaId = input.backgroundMediaId;
     if (input.password !== undefined) {
       updateValues.passwordHash = input.password ? await hashStorePassword(input.password) : null;
     }
@@ -666,6 +671,7 @@ export async function updateStoreStatus(
           showCountdown: input.showCountdown ?? false,
           collectEmails: input.collectEmails ?? true,
           retryAfterMinutes: input.retryAfterMinutes ?? 60,
+          backgroundMediaId: input.backgroundMediaId ?? null,
           passwordHash: (updateValues.passwordHash as string | null) ?? null,
           bypassTokenHash: (updateValues.bypassTokenHash as string | null) ?? null,
           modeBeforeMaintenance: (updateValues.modeBeforeMaintenance as string | null) ?? null,
@@ -673,6 +679,15 @@ export async function updateStoreStatus(
         })
         .returning({ id: schema.storeStatus.id });
       statusId = inserted?.id ?? ctx.tenantId;
+    }
+
+    if (input.backgroundMediaId !== undefined) {
+      await syncMediaUsages(tx, ctx, {
+        ownerType: "store_branding",
+        ownerId: statusId,
+        field: "status_background",
+        mediaIds: [input.backgroundMediaId],
+      });
     }
 
     // Record transition if mode changed

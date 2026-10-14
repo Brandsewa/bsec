@@ -132,6 +132,8 @@ async function loadCartWithItems(
         alt: schema.productMedia.alt,
       },
       primaryStorageKey: schema.media.storageKey,
+      mediaAlt: schema.media.alt,
+      mediaKind: schema.media.kind,
     })
     .from(schema.cartItems)
     .innerJoin(
@@ -197,7 +199,8 @@ async function loadCartWithItems(
       primaryImage: r.primaryMedia?.mediaId
         ? {
             mediaId: r.primaryMedia.mediaId,
-            alt: r.primaryMedia.alt,
+            alt: r.primaryMedia.alt || r.mediaAlt || r.product.title,
+            kind: (r.mediaKind as "image" | "video" | "document") ?? "image",
             url: publicMediaUrl(r.primaryStorageKey),
           }
         : null,
