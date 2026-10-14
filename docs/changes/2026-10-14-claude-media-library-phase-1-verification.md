@@ -18,7 +18,7 @@ Verified Antigravity's Phase 1 after two send-back rounds (heads `ea54a3e`, `406
 ## Verification (Claude, local, final tree)
 - `pnpm typecheck`, `pnpm lint`, `pnpm build`, `pnpm docs:check`: pass.
 - `pnpm --filter @bs/domain test:fast`: 48 files, 410 tests pass.
-- Full heavy suite serial on local Postgres: see the PR (result recorded before merge).
+- Full heavy suite, serial, local Postgres (`node scripts/test-heavy-local.mjs --no-file-parallelism`): 97 files, 2046 tests, all passed.
 - Reviewed by reading: migrations 0056/0057, `media-services.ts` (private folders, key validation, quota before download, per-tenant sweep, untracked references, folder tampering fix), quotas, jobs, catalog usage wiring, upload queue and UI source.
 - Screenshots in `docs/test-evidence/2026-10-14-media-library/` viewed: grid, mobile, upload tray errors, detail sheet, trash confirm. Screenshots 07 and 08 are the same image, and 09 shows the confirm dialog, not the blocked result. Blocked deletes are proven by real-DB tests; the UI code handles `blocked` (media.tsx, media-detail-sheet.tsx).
 
