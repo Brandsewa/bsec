@@ -2,7 +2,7 @@ import { build } from "esbuild";
 
 /**
  * Bundles a Node service (platform, worker) into one ESM file: dist/main.js.
- * Everything is inlined, so the runtime image needs no node_modules.
+ * Everything is inlined, so the runtime image needs no node_modules (except native modules listed as external).
  */
 export async function bundleNode({ entry = "src/main.ts", outfile = "dist/main.js" } = {}) {
   await build({
@@ -14,8 +14,9 @@ export async function bundleNode({ entry = "src/main.ts", outfile = "dist/main.j
     format: "esm",
     sourcemap: true,
     legalComments: "none",
-    // pg's optional native binding is never installed.
-    external: ["pg-native"],
+    // pg's optional native binding is never installed. sharp is a native module: it cannot be inlined, so the
+    // worker image installs it next to the bundle (infra/docker/worker.Dockerfile) and loads it lazily.
+    external: ["pg-native", "sharp"],
     // CJS dependencies inside an ESM bundle still call require()/__dirname.
     banner: {
       js: [

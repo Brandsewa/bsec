@@ -967,8 +967,25 @@ describe("Media Services Integration Test Suite (Real Postgres & Storage)", () =
         .returning();
     });
 
-    const backfillStats = await backfillMediaHashes(rt._db.db, 50);
-    expect(backfillStats.processed).toBeGreaterThanOrEqual(1);
+    // Follow the continuation chain like the worker does (one page per run, cursor by id)
+    let totalHashed = 0;
+    let afterId: string | undefined;
+    let pageCount = 0;
+    do {
+      let next: string | undefined;
+      const stats = await backfillMediaHashes(rt._db.db, 50, ctx.tenantId, {
+        afterId,
+        jobs: {
+          send: async (_queue, data) => {
+            next = (data as { afterId?: string }).afterId;
+          },
+        },
+      });
+      totalHashed += stats.processed;
+      afterId = next;
+      pageCount++;
+    } while (afterId && pageCount < 200);
+    expect(totalHashed).toBeGreaterThanOrEqual(1);
 
     const [afterBackfill] = await withTenant(rt._db.db, ctx.tenantId, async (tx) => {
       return await tx

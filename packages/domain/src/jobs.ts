@@ -1202,7 +1202,7 @@ export async function startJobs(opts: {
           const res = await backfillMediaDerivatives(db, {
             tenantId: job.data?.tenantId,
             batchSize: job.data?.batchSize ?? 50,
-            jobs: { send: (queue, data) => boss.send(queue, data) },
+            jobs: { send: (queue, data, sendOptions) => boss.send(queue, data, sendOptions ?? {}) },
           });
           opts.log.info(
             { job_id: job.id, processed: res.processed, hasMore: res.hasMore },
@@ -1238,14 +1238,17 @@ export async function startJobs(opts: {
   );
 
   // Handle media.backfill_hashes job (Phase 4 Plan S4)
-  await boss.work<{ batchSize?: number }>(
+  await boss.work<{ batchSize?: number; tenantId?: string; afterId?: string }>(
     QUEUE_NAMES.MEDIA_BACKFILL_HASHES,
     { localConcurrency: 1 },
     async (batch) => {
       for (const job of batch) {
         try {
           const { backfillMediaHashes } = await import("./media/hashing.ts");
-          const res = await backfillMediaHashes(db, job.data?.batchSize ?? 100);
+          const res = await backfillMediaHashes(db, job.data?.batchSize ?? 100, job.data?.tenantId, {
+            afterId: job.data?.afterId,
+            jobs: { send: (queue, data, sendOptions) => boss.send(queue, data, sendOptions ?? {}) },
+          });
           opts.log.info(
             { job_id: job.id, processed: res.processed, errors: res.errors },
             "media.backfill_hashes processed",
@@ -1270,6 +1273,9 @@ export async function startJobs(opts: {
     await boss.schedule(QUEUE_NAMES.MAINTENANCE_WATCHDOG_SWEEP, "* * * * *", {});
     await boss.schedule(QUEUE_NAMES.FINANCE_RECONCILE, "0 4 * * *", {});
     await boss.schedule(QUEUE_NAMES.MEDIA_TRASH_SWEEP, "0 22 * * *", {});
+    // The web service has no job queue, so new uploads are found here: derived images within a minute, hashes in minutes.
+    await boss.schedule(QUEUE_NAMES.MEDIA_BACKFILL_DERIVATIVES, "* * * * *", {});
+    await boss.schedule(QUEUE_NAMES.MEDIA_BACKFILL_HASHES, "*/5 * * * *", {});
     opts.log.info("Registered recurring cron: reservation.expiry, idempotency.cleanup, cart.recovery_sweep, subscription.trial_expiry_sweep, preorder_reminder_sweep, return_photo_cleanup, maintenance.watchdog_sweep, finance.reconcile, media.trash_sweep");
   } catch (err) {
     opts.log.warn({ err }, "Could not register recurring cron schedules with pg-boss");

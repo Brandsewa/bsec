@@ -2,6 +2,7 @@ import crypto from "node:crypto";
 import path from "node:path";
 import { and, asc, desc, eq, ilike, inArray, lt, ne, or, sql } from "drizzle-orm";
 import { type Db, QUEUE_NAMES, schema, withTenant } from "@bs/db";
+import { orientedSize } from "./media/derivatives.ts";
 import type { MediaItem, MediaUsageReference, MediaUsageReport } from "@bs/contracts";
 import type { Runtime } from "./runtime.ts";
 import { assertPermission, type TenantContext } from "./context.ts";
@@ -178,6 +179,23 @@ export function buildThumbnailUrl(r: { kind: string; storageKey: string }, url: 
 }
 
 /**
+ * Queue a media job after the database commit. Uses the worker's job client where there is one, otherwise the web
+ * service's send-only client. Best effort: a failure is logged and the worker's scheduled sweeps (derivatives, hashes)
+ * find the row anyway. Returns whether the job was queued.
+ */
+async function enqueueMediaJob(rt: Runtime, queue: string, data: object): Promise<boolean> {
+  const sender = rt._jobs ?? rt._mediaJobs;
+  if (!sender) return false;
+  try {
+    await sender.send(queue, data);
+    return true;
+  } catch (err) {
+    console.warn(`[media] could not enqueue ${queue}:`, err);
+    return false;
+  }
+}
+
+/**
  * Shared internal upload finalization helper (MEDIA-LIBRARY-PLAN §7, §4, §6).
  * Used by createMediaRecord (after presigned upload) and uploadMediaDirect (proxy upload).
  */
@@ -295,8 +313,9 @@ async function finalizeUpload(
       const sharpModule = await import("sharp");
       const sharp = sharpModule.default;
       const meta = await sharp(fullImageBuffer).metadata();
-      width = meta.width ?? null;
-      height = meta.height ?? null;
+      const oriented = orientedSize(meta);
+      width = oriented.width || null;
+      height = oriented.height || null;
     } catch (err) {
       await purgeMediaObjects(rt._db.db, {
         tenantId: ctx.tenantId,
@@ -315,9 +334,7 @@ async function finalizeUpload(
     }
   }
 
-  if (!sha256 && params.sha256 && /^[0-9a-f]{64}$/i.test(params.sha256)) {
-    sha256 = params.sha256.toLowerCase();
-  }
+  // A browser-supplied hash is advisory (duplicate hints only). It is never stored: media.hash computes the real one.
 
   const filename = params.filename?.trim() || path.basename(params.storageKey);
 
@@ -366,24 +383,16 @@ async function finalizeUpload(
       },
     });
 
-    // Enqueue media.derive for static images (Plan S2, rule 13)
-    if (inserted.kind === "image" && inserted.mime !== "image/gif" && rt._jobs) {
-      await rt._jobs.send(QUEUE_NAMES.MEDIA_DERIVE, {
-        tenantId: ctx.tenantId,
-        mediaId: inserted.id,
-      });
-    }
-
-    // Enqueue media.hash if SHA-256 could not be determined at upload time (Plan S4, rule 13)
-    if (!inserted.sha256 && rt._jobs) {
-      await rt._jobs.send(QUEUE_NAMES.MEDIA_HASH, {
-        tenantId: ctx.tenantId,
-        mediaId: inserted.id,
-      });
-    }
-
     return inserted;
   });
+
+  // After commit (the worker must find the row): derive responsive images, and hash files whose hash is not known yet
+  if (row.kind === "image" && row.mime !== "image/gif") {
+    await enqueueMediaJob(rt, QUEUE_NAMES.MEDIA_DERIVE, { tenantId: ctx.tenantId, mediaId: row.id });
+  }
+  if (!row.sha256) {
+    await enqueueMediaJob(rt, QUEUE_NAMES.MEDIA_HASH, { tenantId: ctx.tenantId, mediaId: row.id });
+  }
 
   await invalidateCache(rt, ctx, { type: "media_updated" });
 
@@ -1424,7 +1433,7 @@ export async function deleteMediaPermanent(
     }
 
     if (allowedRows.length === 0) {
-      return { deleted: 0, blocked, allowedIds: [] as string[] };
+      return { deleted: 0, blocked, allowedIds: [] as string[], objectsToPurge: [] as { storageKey: string; storageConnectionId: string | null; derivatives: unknown }[] };
     }
 
     const allowedIds = allowedRows.map((r) => r.id);
@@ -1454,19 +1463,24 @@ export async function deleteMediaPermanent(
     const objectsToPurge = allowedRows.map((r) => ({
       storageKey: r.storageKey,
       storageConnectionId: r.storageConnectionId,
-      derivatives: (r.derivatives as { key: string }[] | null) ?? [],
+      derivatives: r.derivatives,
     }));
 
-    // 5. Enqueue media.purge job inside business transaction (Rule 13, B4)
-    if (rt._jobs) {
-      await rt._jobs.send("media.purge", {
-        tenantId: ctx.tenantId,
-        objects: objectsToPurge,
+    return { deleted: allowedIds.length, blocked, allowedIds, objectsToPurge };
+  });
+
+  // After commit: hand the stored files to the worker (media.purge). With no job client, or if queuing fails, remove them
+  // right here instead (best effort; a failure is logged and only leaves an unreferenced object behind).
+  const toPurge = result.objectsToPurge ?? [];
+  if (toPurge.length > 0) {
+    const queued = await enqueueMediaJob(rt, "media.purge", { tenantId: ctx.tenantId, objects: toPurge });
+    if (!queued) {
+      // The rows are already deleted: a storage problem must not turn this into a failed request
+      await purgeMediaObjects(db, { tenantId: ctx.tenantId, objects: toPurge }).catch((err: unknown) => {
+        console.error("[media] inline purge after permanent delete failed:", err);
       });
     }
-
-    return { deleted: allowedIds.length, blocked, allowedIds };
-  });
+  }
 
   await invalidateMediaCache(rt, ctx, result.allowedIds);
   return { deleted: result.deleted, blocked: result.blocked };
@@ -1571,6 +1585,22 @@ export async function clearMediaUsagesForOwner(
 /**
  * Purges physical storage objects for a tenant, strictly asserting tenant prefix (MEDIA-LIBRARY-PLAN §8).
  */
+/**
+ * Storage keys of a media row's derived files. `media.derivatives` is stored as a map
+ * (`{ w320: { key, width, height, bytes } }`); older callers and tests may pass a list, so accept both.
+ */
+export function collectDerivativeKeys(derivatives: unknown): string[] {
+  if (!derivatives || typeof derivatives !== "object") return [];
+  const items: unknown[] = Array.isArray(derivatives) ? derivatives : Object.values(derivatives as Record<string, unknown>);
+  const keys: string[] = [];
+  for (const item of items) {
+    if (item && typeof item === "object" && typeof (item as { key?: unknown }).key === "string") {
+      keys.push((item as { key: string }).key);
+    }
+  }
+  return keys;
+}
+
 export async function purgeMediaObjects(
   db: Db,
   params: {
@@ -1578,7 +1608,7 @@ export async function purgeMediaObjects(
     objects: {
       storageKey: string;
       storageConnectionId?: string | null;
-      derivatives?: { key: string }[] | null;
+      derivatives?: unknown;
     }[];
   },
 ): Promise<{ purged: number }> {
@@ -1597,16 +1627,13 @@ export async function purgeMediaObjects(
         await driver.delete(obj.storageKey);
         purged++;
 
-        if (obj.derivatives && Array.isArray(obj.derivatives)) {
-          for (const d of obj.derivatives) {
-            if (d.key && d.key.startsWith(`${params.tenantId}/`)) {
-              try {
-                await driver.delete(d.key);
-                purged++;
-              } catch {
-                // Non-fatal if derivative is already missing
-              }
-            }
+        for (const derivedKey of collectDerivativeKeys(obj.derivatives)) {
+          if (!derivedKey.startsWith(`${params.tenantId}/`)) continue;
+          try {
+            await driver.delete(derivedKey);
+            purged++;
+          } catch {
+            // Non-fatal if a derivative is already missing
           }
         }
       }
@@ -1637,6 +1664,7 @@ export async function runMediaTrashSweep(
     id: string;
     storage_key: string;
     storage_connection_id: string | null;
+    derivatives?: unknown;
     [key: string]: unknown;
   };
 
@@ -1689,6 +1717,7 @@ export async function runMediaTrashSweep(
           id: schema.media.id,
           storage_key: schema.media.storageKey,
           storage_connection_id: schema.media.storageConnectionId,
+          derivatives: schema.media.derivatives,
         });
 
       if (deletedRows.length === 0) return [];
@@ -1723,6 +1752,7 @@ export async function runMediaTrashSweep(
       const objects = deletedForTenant.map((r) => ({
         storageKey: r.storage_key,
         storageConnectionId: r.storage_connection_id,
+        derivatives: r.derivatives,
       }));
 
       if (jobs) {
@@ -2163,8 +2193,9 @@ export async function replaceMedia(
       const sharpModule = await import("sharp");
       const sharp = sharpModule.default;
       const meta = await sharp(fullBytes).metadata();
-      width = meta.width ?? null;
-      height = meta.height ?? null;
+      const oriented = orientedSize(meta);
+      width = oriented.width || null;
+      height = oriented.height || null;
       sha256 = crypto.createHash("sha256").update(fullBytes).digest("hex");
     } catch (err) {
       await purgeMediaObjects(db, {
@@ -2177,7 +2208,7 @@ export async function replaceMedia(
 
   const oldStorageKey = existing.storageKey;
   const oldConnectionId = existing.storageConnectionId;
-  const oldDerivatives = (existing.derivatives as { key: string }[] | null) ?? [];
+  const oldDerivatives: unknown = existing.derivatives ?? null;
 
   // 8. Atomic transaction: update media row and write audit log
   const updatedItem = await withTenant(db, ctx.tenantId, async (tx) => {
@@ -2267,24 +2298,70 @@ export async function replaceMedia(
     tenantId: ctx.tenantId,
     objects: [{ storageKey: oldStorageKey, storageConnectionId: oldConnectionId, derivatives: oldDerivatives }],
   };
-  if (rt._jobs) {
-    await rt._jobs.send("media.purge", purgePayload);
-  } else {
-    await purgeMediaObjects(db, purgePayload);
+  if (!(await enqueueMediaJob(rt, "media.purge", purgePayload))) {
+    await purgeMediaObjects(db, purgePayload).catch((err: unknown) => {
+      console.error("[media] inline purge after replace failed:", err);
+    });
   }
 
   // 10. Post-commit: enqueue media.derive for newly replaced image (Plan S2)
-  if (updatedItem.kind === "image" && updatedItem.mime !== "image/gif" && rt._jobs) {
-    await rt._jobs.send(QUEUE_NAMES.MEDIA_DERIVE, {
-      tenantId: ctx.tenantId,
-      mediaId: input.id,
-    });
+  if (updatedItem.kind === "image" && updatedItem.mime !== "image/gif") {
+    await enqueueMediaJob(rt, QUEUE_NAMES.MEDIA_DERIVE, { tenantId: ctx.tenantId, mediaId: input.id });
   }
 
   // 11. Post-commit: cache fan-out to owners (S5)
   await invalidateMediaCache(rt, ctx, [input.id]);
 
   return updatedItem;
+}
+
+/**
+ * Replace a file by sending its bytes through the server (the counterpart of uploadMediaDirect). Used when the browser
+ * cannot PUT straight to storage (local storage, or a bucket without CORS). The new bytes are stored under a new key and
+ * then go through exactly the same checks and swap as replaceMedia (same kind, magic bytes, net quota, old files purged).
+ */
+export async function replaceMediaDirect(
+  rt: Runtime,
+  ctx: TenantContext,
+  input: {
+    id: string;
+    fileBytes: Buffer | Uint8Array;
+    filename: string;
+    mime: string;
+    durationMs?: number | undefined;
+  },
+): Promise<MediaItem> {
+  assertPermission(ctx, "content.write");
+  const db = rt._db.db;
+
+  const existing = await withTenant(db, ctx.tenantId, async (tx) => {
+    const [row] = await tx
+      .select({ id: schema.media.id, folder: schema.media.folder })
+      .from(schema.media)
+      .where(and(eq(schema.media.tenantId, ctx.tenantId), eq(schema.media.id, input.id), libraryScope))
+      .limit(1);
+    return row;
+  });
+  if (!existing) throw new Error("Not Found: media item not found");
+
+  const normMime = input.mime.toLowerCase().trim();
+  if (normMime === "image/svg+xml") throw new Error("SVG uploads are disabled for security reasons");
+  if (!isAllowedMime(normMime)) throw new Error(`Unsupported media format: "${input.mime}"`);
+
+  const { driver } = await getActiveStorageDriver(db, "public_media");
+  const folder = existing.folder && !existing.folder.startsWith("_") ? existing.folder : "products";
+  const { storageKey } = generateStorageKey(ctx.tenantId, folder, input.filename);
+  await driver.put({ key: storageKey, body: input.fileBytes, contentType: normMime });
+
+  // replaceMedia validates everything and removes the uploaded object itself when a check fails
+  return await replaceMedia(rt, ctx, {
+    id: input.id,
+    storageKey,
+    mime: normMime,
+    bytes: input.fileBytes.length,
+    filename: input.filename,
+    durationMs: input.durationMs,
+  });
 }
 
 /**

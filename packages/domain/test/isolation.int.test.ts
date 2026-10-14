@@ -245,6 +245,7 @@ import {
   deleteAdminReturn,
   getMedia,
   getMediaUsage,
+  findDuplicates,
   updateMedia,
   replaceMedia,
   reorderProductMedia,
@@ -998,6 +999,8 @@ describe("Generated Isolation Test Suite (M1 Real Postgres 18 Proof)", () => {
         return await getMedia(rt, ctx, { id: testMediaA });
       case "media.usage":
         return await getMediaUsage(rt, ctx);
+      case "media.findDuplicates":
+        return await findDuplicates(rt, ctx, { hashes: ["0".repeat(64)] });
       case "media.requestUpload": {
         return await requestMediaUpload(rt, ctx, {
           filename: "test.png",

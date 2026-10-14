@@ -1,4 +1,3 @@
-import sharp from "sharp";
 import { and, eq, ne, sql } from "drizzle-orm";
 import { type Db, schema, withTenant } from "@bs/db";
 import type { MediaDerivativeItem } from "@bs/blocks";
@@ -13,10 +12,37 @@ export interface ProcessMediaDeriveResult {
 const DERIVATIVE_WIDTHS = [320, 640, 1024, 1600] as const;
 
 /**
+ * sharp is a native module. Load it only when an image is actually processed, so a service that merely imports
+ * the domain package (web build step, platform, tests) never needs the native binary at start-up.
+ */
+async function loadSharp() {
+  return (await import("sharp")).default;
+}
+
+/** EXIF orientations 5-8 turn the picture by 90 degrees, so the stored width and height swap. */
+export function orientedSize(meta: { width?: number | undefined; height?: number | undefined; orientation?: number | undefined }): {
+  width: number;
+  height: number;
+} {
+  const w = meta.width ?? 0;
+  const h = meta.height ?? 0;
+  return meta.orientation !== undefined && meta.orientation >= 5 ? { width: h, height: w } : { width: w, height: h };
+}
+
+/**
+ * File name segment that identifies one uploaded file. Derived keys include it, so replacing a file never reuses
+ * the old derived keys (no race with the old file's purge, no stale browser or CDN copies of the old image).
+ */
+function sourceFileId(storageKey: string): string {
+  const base = storageKey.split("/").pop() ?? "src";
+  return base.replace(/\.[^.]+$/, "").replace(/[^a-zA-Z0-9_-]/g, "") || "src";
+}
+
+/**
  * Worker job handler for media.derive (Phase 4 Plan S2).
  * Generates WebP derivatives at widths [320, 640, 1024, 1600] (never upscaling),
  * extracts dominant color via sharp.stats(), strips metadata, and stores at:
- * ${tenantId}/_derived/${mediaId}/w{width}.webp.
+ * ${tenantId}/_derived/${mediaId}/${sourceFileId}/w{width}.webp.
  *
  * Runs as app_rw under withTenant isolation with strict tenant-prefix assertions.
  * Derived files are excluded from tenant storage_mb quotas.
@@ -63,14 +89,26 @@ export async function processMediaDerive(
       return { derived: 0, dominantColor: null, derivatives: [] };
     }
 
-    const image = sharp(originalBytes);
-    const meta = await image.metadata();
-    const origW = meta.width ?? 0;
-    const origH = meta.height ?? 0;
+    const sharp = await loadSharp();
+    let meta: { width?: number | undefined; height?: number | undefined; orientation?: number | undefined } = {};
+    try {
+      meta = await sharp(originalBytes).metadata();
+    } catch {
+      // Undecodable: handled just below
+    }
+    const { width: origW, height: origH } = orientedSize(meta);
 
     if (origW <= 0 || origH <= 0) {
+      // Not decodable: record "no derivatives" so the backfill does not pick this row up forever
+      await tx
+        .update(schema.media)
+        .set({ derivatives: {}, updatedAt: new Date() })
+        .where(and(eq(schema.media.id, row.id), eq(schema.media.tenantId, params.tenantId)));
       return { derived: 0, dominantColor: null, derivatives: [] };
     }
+
+    // Auto-orient first: phone photos carry the turn in EXIF, which is dropped from the derived files
+    const image = sharp(originalBytes).rotate();
 
     // Extract dominant color from image statistics
     let dominantColor: string | null = null;
@@ -91,7 +129,7 @@ export async function processMediaDerive(
     const derivativesList: MediaDerivativeItem[] = [];
 
     for (const w of targetWidths) {
-      const derivedKey = `${params.tenantId}/_derived/${row.id}/w${w}.webp`;
+      const derivedKey = `${params.tenantId}/_derived/${row.id}/${sourceFileId(row.storageKey)}/w${w}.webp`;
 
       // Strict security assertion: derived keys must stay within tenant prefix
       if (!derivedKey.startsWith(`${params.tenantId}/`)) {
@@ -102,6 +140,7 @@ export async function processMediaDerive(
 
       // Generate stripped WebP variant
       const webpBuf = await sharp(originalBytes)
+        .rotate()
         .resize({ width: w, withoutEnlargement: true })
         .webp({ quality: 80 })
         .toBuffer();
@@ -161,7 +200,7 @@ export async function backfillMediaDerivatives(
   params?: {
     tenantId?: string | undefined;
     batchSize?: number | undefined;
-    jobs?: { send: (queue: string, data: object) => Promise<unknown> } | null | undefined;
+    jobs?: { send: (queue: string, data: object, options?: { startAfter?: number }) => Promise<unknown> } | null | undefined;
   },
 ): Promise<{ processed: number; hasMore: boolean }> {
   const batchSize = params?.batchSize ?? 50;
@@ -173,6 +212,7 @@ export async function backfillMediaDerivatives(
   let hasMore = false;
 
   for (const tId of targetTenants) {
+    let tenantHasMore = false;
     const candidates = await withTenant(db, tId, async (tx) => {
       return await tx
         .select({ id: schema.media.id })
@@ -191,6 +231,7 @@ export async function backfillMediaDerivatives(
 
     const itemsToProcess = candidates.slice(0, batchSize);
     if (candidates.length > batchSize) {
+      tenantHasMore = true;
       hasMore = true;
     }
 
@@ -199,12 +240,20 @@ export async function backfillMediaDerivatives(
         await processMediaDerive(db, { tenantId: tId, mediaId: item.id });
         totalProcessed++;
       } catch (err) {
+        // Unreadable file: record "no derivatives" so it is not selected again and cannot make this job loop forever
         console.warn(`[media.derive] Failed to process derivative for ${item.id}:`, err);
+        await withTenant(db, tId, async (tx) => {
+          await tx
+            .update(schema.media)
+            .set({ derivatives: {}, updatedAt: new Date() })
+            .where(and(eq(schema.media.id, item.id), eq(schema.media.tenantId, tId), sql`${schema.media.derivatives} is null`));
+        }).catch(() => undefined);
       }
     }
 
-    if (hasMore && params?.jobs) {
-      await params.jobs.send("media.backfill_derivatives", { tenantId: tId });
+    if (tenantHasMore && params?.jobs) {
+      // Pause between batches so a big library cannot starve the worker
+      await params.jobs.send("media.backfill_derivatives", { tenantId: tId }, { startAfter: 30 });
     }
   }
 

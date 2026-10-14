@@ -49,10 +49,17 @@ export function buildDerivativeUrl(derivedKey: string, originalUrl?: string | nu
     return `/media/${cleanKey}`;
   }
 
+  // The original URL is `<base>/<tenantId>/<folder>/<file>` and the derived key starts with the same tenant id, so
+  // everything before that segment is the public base (a bucket origin, a CDN, or a path such as `/media`).
+  const tenantSegment = cleanKey.split("/")[0];
+  if (tenantSegment) {
+    const at = originalUrl.indexOf(`/${tenantSegment}/`);
+    if (at >= 0) return `${originalUrl.slice(0, at)}/${cleanKey}`;
+  }
+
   if (originalUrl.startsWith("http://") || originalUrl.startsWith("https://")) {
     try {
-      const parsed = new URL(originalUrl);
-      return `${parsed.origin}/${cleanKey}`;
+      return `${new URL(originalUrl).origin}/${cleanKey}`;
     } catch {
       // Fall through to path-based
     }

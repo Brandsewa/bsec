@@ -36,6 +36,18 @@ describe("mediaImage helper in @bs/blocks", () => {
     expect(res.objectPosition).toBe("40% 60%");
   });
 
+  it("buildDerivativeUrl keeps a path prefix in front of the tenant segment (local storage at /media)", () => {
+    expect(
+      buildDerivativeUrl("t1/_derived/m1/f1/w320.webp", "http://127.0.0.1:3000/media/t1/products/f1.png"),
+    ).toBe("http://127.0.0.1:3000/media/t1/_derived/m1/f1/w320.webp");
+    expect(buildDerivativeUrl("t1/_derived/m1/f1/w320.webp", "/media/t1/products/f1.png")).toBe(
+      "/media/t1/_derived/m1/f1/w320.webp",
+    );
+    expect(buildDerivativeUrl("t1/_derived/m1/f1/w320.webp", "https://media.example.com/t1/products/f1.png")).toBe(
+      "https://media.example.com/t1/_derived/m1/f1/w320.webp",
+    );
+  });
+
   it("buildDerivativeUrl handles relative and absolute paths", () => {
     expect(buildDerivativeUrl("store/_derived/img/w320.webp")).toBe("/media/store/_derived/img/w320.webp");
     expect(buildDerivativeUrl("/store/_derived/img/w320.webp")).toBe("/media/store/_derived/img/w320.webp");

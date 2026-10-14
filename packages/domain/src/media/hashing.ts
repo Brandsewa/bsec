@@ -74,14 +74,19 @@ export async function processMediaHash(
 }
 
 /**
- * Backfills missing SHA-256 hashes on worker boot (Plan S4).
- * Batches of rows where sha256 IS NULL and status is 'ready'.
- * Complies with Postgres RLS by scoping within tenants via withTenant.
+ * Backfills missing SHA-256 hashes (Plan S4).
+ * Each run handles one page of rows per tenant (ordered by id, resuming after `afterId`) and re-enqueues a
+ * continuation when a tenant has more. Rows that cannot be hashed (missing file) are skipped by the cursor, so
+ * a few unreadable rows can never starve the rest or make the chain loop. Runs under withTenant as app_rw.
  */
 export async function backfillMediaHashes(
   db: Db,
   batchSize = 100,
   tenantId?: string,
+  options?: {
+    afterId?: string | undefined;
+    jobs?: { send: (queue: string, data: object, options?: { startAfter?: number }) => Promise<unknown> } | null | undefined;
+  },
 ): Promise<{ processed: number; errors: number }> {
   let processed = 0;
   let errors = 0;
@@ -91,34 +96,39 @@ export async function backfillMediaHashes(
     : (await db.select({ id: schema.tenants.id }).from(schema.tenants)).map((t) => t.id);
 
   for (const tId of targetTenantIds) {
-    if (processed >= batchSize) break;
-    const remaining = batchSize - processed;
-
     const rows = await withTenant(db, tId, async (tx) => {
       return await tx
-        .select({
-          id: schema.media.id,
-        })
+        .select({ id: schema.media.id })
         .from(schema.media)
         .where(
           and(
             eq(schema.media.tenantId, tId),
             sql`${schema.media.sha256} IS NULL`,
             eq(schema.media.status, "ready"),
+            ...(options?.afterId ? [sql`${schema.media.id} > ${options.afterId}`] : []),
           ),
         )
-        .limit(remaining);
+        .orderBy(schema.media.id)
+        .limit(batchSize + 1);
     });
 
-    for (const r of rows) {
+    const page = rows.slice(0, batchSize);
+    for (const r of page) {
       try {
         const res = await processMediaHash(db, { tenantId: tId, mediaId: r.id });
-        if (res.hashed) {
-          processed++;
-        }
+        if (res.hashed) processed++;
       } catch {
         errors++;
       }
+    }
+
+    const last = page[page.length - 1];
+    if (rows.length > batchSize && last && options?.jobs) {
+      await options.jobs.send(
+        "media.backfill_hashes",
+        { tenantId: tId, afterId: last.id, batchSize },
+        { startAfter: 30 },
+      );
     }
   }
 

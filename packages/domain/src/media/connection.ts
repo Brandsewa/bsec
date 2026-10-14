@@ -781,6 +781,9 @@ export function getEnvironmentStorageConfig(
         purpose: "public_media",
         isActive: true,
         localDir: process.env.MEDIA_LOCAL_DIR || "./.data/media",
+        // Where browsers reach /media (the web app). Needed when the admin runs on another origin, e.g. a local or
+        // staging stack. Unset: relative /media/<key> URLs, which only work from the web app's own origin.
+        publicBaseUrl: process.env.MEDIA_PUBLIC_URL?.trim() || undefined,
         directBrowserUpload: false,
       };
     }
