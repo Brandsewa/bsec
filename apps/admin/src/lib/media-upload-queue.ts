@@ -199,12 +199,15 @@ function uploadViaServerProxyXhr(
     width?: number;
     height?: number;
     durationMs?: number;
+    /** Replace the bytes of this existing library file instead of adding a new one */
+    replaceId?: string;
   },
 ): Promise<MediaItem> {
   return new Promise((resolve, reject) => {
     const formData = new FormData();
     formData.append("file", file);
     formData.append("folder", options.folder || "catalog");
+    if (options.replaceId) formData.append("replaceId", options.replaceId);
     if (options.alt) formData.append("alt", options.alt);
     if (options.title) formData.append("title", options.title);
     if (options.durationMs) formData.append("durationMs", String(options.durationMs));
@@ -620,32 +623,52 @@ export async function replaceMediaFile(
     folder: "uploads",
   });
 
-  await new Promise<void>((resolve, reject) => {
-    const xhr = new XMLHttpRequest();
-    xhr.upload.onprogress = (evt) => {
-      if (evt.lengthComputable && options.onProgress) {
-        options.onProgress(Math.round((evt.loaded / evt.total) * 100));
-      }
-    };
-    xhr.onload = () => {
-      if (xhr.status >= 200 && xhr.status < 300) {
-        resolve();
-      } else {
-        reject(new Error(`Direct storage upload returned status ${xhr.status}`));
-      }
-    };
-    xhr.onerror = () => reject(new Error("Direct upload failed"));
-    xhr.onabort = () => reject(new Error("Upload canceled"));
+  // Same rule as a normal upload: PUT straight to storage when the browser can, otherwise send the file through the
+  // server (local storage, or a bucket without CORS). The server swaps the bytes of this file in both cases.
+  const viaServer = () =>
+    uploadViaServerProxyXhr(file, {
+      folder: "uploads",
+      ...metadata,
+      replaceId: mediaId,
+      ...(options.onProgress ? { onProgress: options.onProgress } : {}),
+    });
 
-    xhr.open(descriptor.method || "PUT", descriptor.uploadUrl);
-    const headers = { ...descriptor.headers };
-    delete headers["content-length"];
-    delete headers["Content-Length"];
-    for (const [k, v] of Object.entries(headers)) {
-      xhr.setRequestHeader(k, v);
-    }
-    xhr.send(file);
-  });
+  const isDirectUrl =
+    (descriptor.uploadUrl.startsWith("http://") || descriptor.uploadUrl.startsWith("https://")) &&
+    !descriptor.uploadUrl.includes("/api/admin/media/upload");
+  if (!isDirectUrl) return await viaServer();
+
+  try {
+    await new Promise<void>((resolve, reject) => {
+      const xhr = new XMLHttpRequest();
+      xhr.upload.onprogress = (evt) => {
+        if (evt.lengthComputable && options.onProgress) {
+          options.onProgress(Math.round((evt.loaded / evt.total) * 100));
+        }
+      };
+      xhr.onload = () => {
+        if (xhr.status >= 200 && xhr.status < 300) {
+          resolve();
+        } else {
+          reject(new Error(`Direct storage upload returned status ${xhr.status}`));
+        }
+      };
+      xhr.onerror = () => reject(new Error("Direct upload failed (likely CORS)"));
+      xhr.onabort = () => reject(new Error("Upload canceled"));
+
+      xhr.open(descriptor.method || "PUT", descriptor.uploadUrl);
+      const headers = { ...descriptor.headers };
+      delete headers["content-length"];
+      delete headers["Content-Length"];
+      for (const [k, v] of Object.entries(headers)) {
+        xhr.setRequestHeader(k, v);
+      }
+      xhr.send(file);
+    });
+  } catch (err) {
+    console.warn("Direct storage upload failed, replacing through the server instead.", err);
+    return await viaServer();
+  }
 
   return await client.admin.media.replace({
     id: mediaId,

@@ -202,8 +202,17 @@ function MediaDetailContent({
       return await client.admin.media.deletePermanent({ ids: [item.id] });
     },
     onSuccess: (res) => {
+      // Whatever the outcome, the confirmation has been answered: close it so the result is readable
+      setDeleteConfirmOpen(false);
       if (res && res.blocked.length > 0) {
-        toast.error("Cannot permanently delete file while it is used in catalog");
+        // Name where it is used so the merchant knows what to change
+        const owners = (res.blocked[0]?.usages ?? [])
+          .slice(0, 3)
+          .map((u) => u.label)
+          .join(", ");
+        toast.error(
+          `Cannot permanently delete: this file is still used in ${owners || "your store"}. Remove it there first.`,
+        );
         return;
       }
       toast.success("File permanently deleted");
@@ -212,6 +221,7 @@ function MediaDetailContent({
       onClose();
     },
     onError: (err: unknown) => {
+      setDeleteConfirmOpen(false);
       toast.error(err instanceof Error ? err.message : "Failed to permanently delete");
     },
   });

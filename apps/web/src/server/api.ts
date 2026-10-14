@@ -24,6 +24,7 @@ import {
   testPaymentProviderConnection,
   setPaymentProviderActive,
   uploadMediaDirect,
+  replaceMediaDirect,
   MAX_MEDIA_BYTES,
   updateStoreStatus,
   getSupportAdminMe,
@@ -3265,6 +3266,7 @@ api.post("/admin/media/upload", async (c) => {
   let mime: string;
   let folder: string;
   let alt: string | undefined;
+  let replaceId: string | undefined;
 
   if (contentType.includes("multipart/form-data")) {
     const body = await c.req.parseBody();
@@ -3278,6 +3280,7 @@ api.post("/admin/media/upload", async (c) => {
     mime = (file as File).type || "application/octet-stream";
     folder = typeof body["folder"] === "string" ? body["folder"] : "products";
     alt = typeof body["alt"] === "string" ? body["alt"] : undefined;
+    replaceId = typeof body["replaceId"] === "string" && body["replaceId"] ? body["replaceId"] : undefined;
   } else if (contentType.includes("application/json")) {
     const json = (await c.req.json().catch(() => ({}))) as Record<string, unknown>;
     if (!json.data || !json.filename || !json.mime) {
@@ -3305,13 +3308,16 @@ api.post("/admin/media/upload", async (c) => {
   }
 
   try {
-    const result = await uploadMediaDirect(server().rt, tenantCtx, {
-      fileBytes,
-      filename,
-      mime,
-      folder,
-      alt,
-    });
+    // `replaceId` swaps the bytes of an existing library file (same id, same references) instead of adding a new one
+    const result = replaceId
+      ? await replaceMediaDirect(server().rt, tenantCtx, { id: replaceId, fileBytes, filename, mime })
+      : await uploadMediaDirect(server().rt, tenantCtx, {
+          fileBytes,
+          filename,
+          mime,
+          folder,
+          alt,
+        });
     return c.json(result);
   } catch (err) {
     if (err instanceof QuotaExceededError) {
