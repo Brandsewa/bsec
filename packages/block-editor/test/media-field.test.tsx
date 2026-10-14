@@ -21,7 +21,7 @@ describe("MediaField components and custom fields", () => {
       </HostContext.Provider>,
     );
     expect(html).toContain("Background image");
-    expect(html).toContain("Media picker not configured.");
+    expect(html).toContain("Stores add their own media after activating this theme.");
   });
 
   it("renders choose button when pickMedia is present on host", () => {

@@ -1065,12 +1065,13 @@ export async function publishPage(rt: Runtime, ctx: TenantContext, input: Publis
       .limit(1);
 
     if (targetVer?.document) {
+      // The version was validated when it was saved as a draft; publishing it must not fail on later Trash or deletes.
       await syncDocumentMediaUsages(tx, ctx, {
         ownerType: "page",
         ownerId: input.id,
         field: "published",
         document: targetVer.document,
-      });
+      }, { tolerant: true });
     }
 
     const updateQuery = tx
@@ -1107,18 +1108,19 @@ export async function rollbackPage(rt: Runtime, ctx: TenantContext, input: Rollb
       .limit(1);
 
     if (targetVer?.document) {
+      // Restoring history must not fail because a file was trashed or deleted since: that content was valid when saved.
       await syncDocumentMediaUsages(tx, ctx, {
         ownerType: "page",
         ownerId: input.id,
         field: "published",
         document: targetVer.document,
-      });
+      }, { tolerant: true });
       await syncDocumentMediaUsages(tx, ctx, {
         ownerType: "page",
         ownerId: input.id,
         field: "draft",
         document: targetVer.document,
-      });
+      }, { tolerant: true });
     }
 
     const updateQuery = tx

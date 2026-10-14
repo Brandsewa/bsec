@@ -29,7 +29,7 @@ export function Picker({
       <div>
         <div style={{ fontSize: 12, fontWeight: 600, marginBottom: 6 }}>{label}</div>
         <p style={{ ...box, color: "#666", margin: 0 }}>
-          Media picker not configured.
+          Stores add their own media after activating this theme.
         </p>
       </div>
     );
@@ -211,7 +211,7 @@ export function GalleryPicker({
       <div>
         <div style={{ fontSize: 12, fontWeight: 600, marginBottom: 6 }}>{label}</div>
         <p style={{ ...box, color: "#666", margin: 0 }}>
-          Media picker not configured.
+          Stores add their own media after activating this theme.
         </p>
       </div>
     );

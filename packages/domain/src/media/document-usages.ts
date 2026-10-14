@@ -46,7 +46,15 @@ function classifyExpectedKind(
 export function extractMediaReferences(
   document: unknown,
   ownerType: "page" | "theme" = "page",
+  options?: { lenient?: boolean },
 ): ExtractedMediaRef[] {
+  const lenient = options?.lenient === true;
+  // Strict (user saves): a malformed media value is a Bad Request. Lenient (backfill of existing data): skip it,
+  // so one odd legacy value cannot abort the whole tenant's backfill.
+  const invalid = (fieldName: string, raw: unknown): void => {
+    if (lenient) return;
+    throw new Error(`Bad Request: Invalid media ID in field "${fieldName}": "${String(raw)}"`);
+  };
   const refs: ExtractedMediaRef[] = [];
   if (!document || typeof document !== "object") return refs;
 
@@ -85,33 +93,27 @@ export function extractMediaReferences(
             if (typeof item === "string") {
               const trimmed = item.trim();
               if (!isUuid(trimmed)) {
-                throw new Error(
-                  `Bad Request: Invalid media ID in field "${fieldName}": "${item}"`,
-                );
+                invalid(fieldName, item);
+                continue;
               }
               refs.push({ field: fieldName, id: trimmed, expectedKind });
             } else if (typeof item === "object") {
               walk(item, blockType);
             } else {
-              throw new Error(
-                `Bad Request: Invalid media ID in field "${fieldName}": "${String(item)}"`,
-              );
+              invalid(fieldName, item);
             }
           }
         } else if (typeof val === "string") {
           const trimmed = val.trim();
           if (!isUuid(trimmed)) {
-            throw new Error(
-              `Bad Request: Invalid media ID in field "${fieldName}": "${val}"`,
-            );
+            invalid(fieldName, val);
+          } else {
+            refs.push({ field: fieldName, id: trimmed, expectedKind });
           }
-          refs.push({ field: fieldName, id: trimmed, expectedKind });
         } else if (typeof val === "object") {
           walk(val, blockType);
         } else {
-          throw new Error(
-            `Bad Request: Invalid media ID in field "${fieldName}": "${String(val)}"`,
-          );
+          invalid(fieldName, val);
         }
       } else if (val && typeof val === "object") {
         walk(val, blockType);
@@ -148,7 +150,7 @@ export async function syncDocumentMediaUsages(
   params: SyncDocumentMediaUsagesParams,
   options?: SyncDocumentMediaUsagesOptions,
 ): Promise<{ added: string[]; removed: string[] }> {
-  const extracted = extractMediaReferences(params.document, params.ownerType);
+  const extracted = extractMediaReferences(params.document, params.ownerType, { lenient: options?.tolerant === true });
   const targetIdSet = new Set(extracted.map((r) => r.id));
 
   // 1. Fetch current media_usages for this (owner, field)

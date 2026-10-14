@@ -593,6 +593,69 @@ describe("Media Document Usages Integration Test Suite (S4, S5, Real Postgres)",
     expect(backfillResult2.syncedThemes).toBe(backfillResult.syncedThemes);
   });
 
+  it("restores and publishes history that references files trashed or deleted since", async () => {
+    const img = await uploadMediaDirect(rt, ctx, { filename: "history.png", mime: "image/png", fileBytes: PNG_1X1 });
+    const page = await createPage(rt, ctx, { title: "History Page", slug: `history-${Date.now()}` });
+
+    const v1 = await savePageDraft(rt, ctx, {
+      id: page.id,
+      blocks: [{ id: "h-1", type: "Hero", props: { title: "One", backgroundMediaId: img.id } }],
+    });
+    await publishPage(rt, ctx, { id: page.id, versionId: v1.versionId });
+    await savePageDraft(rt, ctx, { id: page.id, blocks: [{ id: "h-1", type: "Hero", props: { title: "Two" } }] });
+
+    // The file is trashed, then permanently deleted once nothing tracks it any more
+    await trashMedia(rt, ctx, { ids: [img.id] });
+    const del = await deleteMediaPermanent(rt, ctx, { ids: [img.id] });
+    expect(del.deleted + del.blocked.length).toBe(1);
+
+    // Restoring or publishing the old version must still work (it was valid when saved)
+    await expect(rollbackPage(rt, ctx, { id: page.id, targetVersionId: v1.versionId })).resolves.not.toThrow();
+    await expect(publishPage(rt, ctx, { id: page.id, versionId: v1.versionId })).resolves.not.toThrow();
+  });
+
+  it("backfill survives a legacy non-UUID media value and still records the valid ones", async () => {
+    const img = await uploadMediaDirect(rt, ctx, { filename: "legacy-ok.png", mime: "image/png", fileBytes: PNG_1X1 });
+    const page = await createPage(rt, ctx, { title: "Legacy Page", slug: `legacy-${Date.now()}` });
+
+    // Simulate old data: a stored version with a junk media value next to a valid one
+    await withTenant(rt._db.db, tenantId, async (tx) => {
+      const [ver] = await tx
+        .insert(schema.pageVersions)
+        .values({
+          tenantId,
+          pageId: page.id,
+          document: {
+            version: 1,
+            blocks: [
+              { id: "l-1", type: "Hero", props: { title: "Old", backgroundMediaId: "legacy-sample-image" } },
+              { id: "l-2", type: "Image", props: { mediaId: img.id } },
+            ],
+          },
+        })
+        .returning({ id: schema.pageVersions.id });
+      if (!ver) throw new Error("version not created");
+      await tx.update(schema.pages).set({ draftVersionId: ver.id }).where(eq(schema.pages.id, page.id));
+    });
+
+    await expect(backfillDocumentMediaUsages(rt._db.db, tenantId)).resolves.toBeDefined();
+
+    const usages = await withTenant(rt._db.db, tenantId, async (tx) =>
+      tx
+        .select({ mediaId: schema.mediaUsages.mediaId })
+        .from(schema.mediaUsages)
+        .where(
+          and(
+            eq(schema.mediaUsages.tenantId, tenantId),
+            eq(schema.mediaUsages.ownerType, "page"),
+            eq(schema.mediaUsages.ownerId, page.id),
+            eq(schema.mediaUsages.field, "draft"),
+          ),
+        ),
+    );
+    expect(usages.map((u) => u.mediaId)).toEqual([img.id]);
+  });
+
   it("fans out cache tags when media used in pages and templates is updated", async () => {
     capturedTags = [];
 
