@@ -58,15 +58,20 @@ describe("Media delivery: Phase 4 review fixes (real Postgres)", () => {
     kind: "image" | "video" | "document";
     folder: string;
     filename: string;
-  }) =>
-    withTenant(rt._db.db, tenantId, async (tx) => {
+  }) => {
+    // Like a real upload, record the storage connection the file was written to. Without it a row falls back to the
+    // environment storage, which differs from the active connection when an earlier test file left one active
+    // (CI runs every file against one shared database).
+    const { config } = await getActiveStorageDriver(rt._db.db, "public_media");
+    return withTenant(rt._db.db, tenantId, async (tx) => {
       const [row] = await tx
         .insert(schema.media)
-        .values({ tenantId, status: "ready", ...values })
+        .values({ tenantId, status: "ready", storageConnectionId: config.id ?? null, ...values })
         .returning({ id: schema.media.id });
       if (!row) throw new Error("insert failed");
       return row.id;
     });
+  };
 
   beforeAll(async () => {
     env = await startTestDb();
