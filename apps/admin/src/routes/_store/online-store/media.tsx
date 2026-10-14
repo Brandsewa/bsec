@@ -634,15 +634,15 @@ export function MediaLibraryPage() {
                     <p className="font-semibold">Plan Upload Limits</p>
                     <p>
                       Images: up to{" "}
-                      {formatBytes(usageData?.limits.image ?? 5 * 1024 * 1024)}
+                      {formatBytes(usageData?.limits?.image ?? 5 * 1024 * 1024)}
                     </p>
                     <p>
                       Videos: up to{" "}
-                      {formatBytes(usageData?.limits.video ?? 10 * 1024 * 1024)}
+                      {formatBytes(usageData?.limits?.video ?? 10 * 1024 * 1024)}
                     </p>
                     <p>
                       Documents: up to{" "}
-                      {formatBytes(usageData?.limits.document ?? 5 * 1024 * 1024)}
+                      {formatBytes(usageData?.limits?.document ?? 5 * 1024 * 1024)}
                     </p>
                   </div>
                 </InfoTip>
