@@ -18,6 +18,7 @@ import {
 import { CSS } from "@dnd-kit/utilities";
 import {
   GripVertical,
+  Image as ImageIcon,
   MessageSquare,
   Play,
   Plus,
@@ -32,6 +33,7 @@ import {
   DialogFooter,
   DialogHeader,
   DialogTitle,
+  EmptyState,
   Field,
   FieldLabel,
   Input,
@@ -360,43 +362,66 @@ export function MediaGalleryField({
 
   return (
     <div className={cn("space-y-4", className)}>
-      <DndContext
-        sensors={sensors}
-        collisionDetection={closestCenter}
-        onDragEnd={handleDragEnd}
-      >
-        <SortableContext
-          items={value.map((i, idx) => i.id || i.mediaId || String(idx))}
-          strategy={rectSortingStrategy}
-        >
-          <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-3">
-            {value.map((item, index) => (
-              <SortableGalleryTile
-                key={item.id || item.mediaId || String(index)}
-                item={item}
-                index={index}
-                disabled={disabled}
-                onRemove={() => handleRemoveItem(item)}
-                onEditAlt={() => handleOpenAltModal(item)}
-              />
-            ))}
-
-            {/* Add media button tile */}
-            {!disabled && value.length < max && (
-              <button
+      {value.length === 0 ? (
+        <div className="space-y-3">
+          <EmptyState
+            icon={ImageIcon}
+            title="No images attached"
+            description="Choose images or videos from your library or upload new files."
+          />
+          {!disabled && (
+            <div className="flex justify-center">
+              <Button
                 type="button"
+                variant="outline"
+                size="sm"
                 onClick={() => setPickerOpen(true)}
-                className="aspect-square rounded-lg border-2 border-dashed border-muted-foreground/25 hover:border-primary/50 hover:bg-muted/10 transition-colors flex flex-col items-center justify-center gap-2 text-muted-foreground hover:text-foreground cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
               >
-                <div className="h-9 w-9 rounded-full bg-muted/50 flex items-center justify-center">
-                  <Plus className="h-5 w-5" />
-                </div>
-                <span className="text-xs font-medium">Add media</span>
-              </button>
-            )}
-          </div>
-        </SortableContext>
-      </DndContext>
+                <Plus className="mr-1.5 size-3.5" aria-hidden />
+                Add media
+              </Button>
+            </div>
+          )}
+        </div>
+      ) : (
+        <DndContext
+          sensors={sensors}
+          collisionDetection={closestCenter}
+          onDragEnd={handleDragEnd}
+        >
+          <SortableContext
+            items={value.map((i, idx) => i.id || i.mediaId || String(idx))}
+            strategy={rectSortingStrategy}
+          >
+            <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-3">
+              {value.map((item, index) => (
+                <SortableGalleryTile
+                  key={item.id || item.mediaId || String(index)}
+                  item={item}
+                  index={index}
+                  disabled={disabled}
+                  onRemove={() => handleRemoveItem(item)}
+                  onEditAlt={() => handleOpenAltModal(item)}
+                />
+              ))}
+
+              {/* Add media button tile */}
+              {!disabled && value.length < max && (
+                <button
+                  type="button"
+                  onClick={() => setPickerOpen(true)}
+                  className="aspect-square rounded-lg border-2 border-dashed border-muted-foreground/25 hover:border-primary/50 hover:bg-muted/10 transition-colors flex flex-col items-center justify-center gap-2 text-muted-foreground hover:text-foreground cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
+                >
+                  <div className="h-9 w-9 rounded-full bg-muted/50 flex items-center justify-center">
+                    <Plus className="h-5 w-5" />
+                  </div>
+                  <span className="text-xs font-medium">Add media</span>
+                </button>
+              )}
+            </div>
+          </SortableContext>
+        </DndContext>
+      )}
 
       {/* Alt Text Dialog */}
       <Dialog
