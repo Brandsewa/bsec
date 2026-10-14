@@ -43,4 +43,87 @@ describe("mediaImage helper in @bs/blocks", () => {
       "https://cdn.store.com/store/_derived/img/w320.webp",
     );
   });
+
+  describe("ImageView alt fallback behavior (Plan S5)", () => {
+    // Dynamically import views to keep tests modular
+    it("falls back to library item alt if block alt is empty", async () => {
+      const { ImageView } = await import("../src/views.tsx");
+      const { renderToStaticMarkup } = await import("react-dom/server");
+
+      const element = ImageView({
+        props: {
+          mediaId: "img-123",
+          alt: "",
+          ratio: "auto",
+          rounded: false,
+        },
+        ctx: {
+          mediaDetails: (id) =>
+            id === "img-123"
+              ? {
+                  url: "https://cdn.example.com/item.jpg",
+                  alt: "Library fallback alt text",
+                }
+              : null,
+        },
+      });
+
+      const html = renderToStaticMarkup(element as React.ReactElement);
+      expect(html).toContain('alt="Library fallback alt text"');
+      expect(html).toContain('src="https://cdn.example.com/item.jpg"');
+    });
+
+    it("prefers block alt when explicitly provided", async () => {
+      const { ImageView } = await import("../src/views.tsx");
+      const { renderToStaticMarkup } = await import("react-dom/server");
+
+      const element = ImageView({
+        props: {
+          mediaId: "img-123",
+          alt: "Explicit user alt",
+          ratio: "auto",
+          rounded: false,
+        },
+        ctx: {
+          mediaDetails: (id) =>
+            id === "img-123"
+              ? {
+                  url: "https://cdn.example.com/item.jpg",
+                  alt: "Library fallback alt text",
+                }
+              : null,
+        },
+      });
+
+      const html = renderToStaticMarkup(element as React.ReactElement);
+      expect(html).toContain('alt="Explicit user alt"');
+      expect(html).not.toContain('alt="Library fallback alt text"');
+    });
+
+    it("renders empty alt (decorative) when neither block nor library item has alt", async () => {
+      const { ImageView } = await import("../src/views.tsx");
+      const { renderToStaticMarkup } = await import("react-dom/server");
+
+      const element = ImageView({
+        props: {
+          mediaId: "img-123",
+          alt: "",
+          ratio: "auto",
+          rounded: false,
+        },
+        ctx: {
+          mediaDetails: (id) =>
+            id === "img-123"
+              ? {
+                  url: "https://cdn.example.com/item.jpg",
+                  alt: null,
+                }
+              : null,
+        },
+      });
+
+      const html = renderToStaticMarkup(element as React.ReactElement);
+      expect(html).toContain('alt=""');
+    });
+  });
 });
