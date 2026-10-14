@@ -19,8 +19,9 @@ export function server(): { rt: Runtime; log: Logger } {
         databaseUrl: url,
         saasDatabaseUrl: process.env.DATABASE_URL_SAAS || undefined,
         poolMax: Number(process.env.DB_POOL_MAX ?? 10),
-        // Send-only: queues media jobs (derived images, hashes, file purge) for the worker to process
-        mediaJobs: createLazyJobSender(url),
+        // Send-only job client: the web service enqueues (order confirmation, finance posting, customer metrics,
+        // webhooks, notifications, media jobs) and the worker processes. Without it every `if (rt._jobs)` is skipped.
+        jobs: createLazyJobSender(url),
         revalidateTags: (tags) => {
           for (const t of tags) {
             try {

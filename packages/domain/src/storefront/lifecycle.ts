@@ -848,21 +848,10 @@ export async function scheduleMaintenance(
     });
   });
 
-  if (rt._jobs) {
-    try {
-      await rt._jobs.send("maintenance.start", {
-        tenantId: ctx.tenantId,
-        startsAt: startsAt.toISOString(),
-        endsAt: endsAt.toISOString(),
-      });
-      await rt._jobs.send("maintenance.end", {
-        tenantId: ctx.tenantId,
-        endsAt: endsAt.toISOString(),
-      });
-    } catch {
-      // Watchdog sweep ensures recovery
-    }
-  }
+  // No jobs are queued here on purpose. `maintenance.start` and `maintenance.end` act immediately when they run
+  // (they do not check the schedule), so queuing them now would start maintenance at once instead of at startsAt, and
+  // a queued job would survive a later change or cancellation of the window. The per-minute
+  // `maintenance.watchdog_sweep` starts and ends windows on schedule and always reads the current schedule.
 
   await invalidateCache(rt, ctx, { type: "store_or_seo_updated" });
   return getStoreStatusInternal(rt, ctx.tenantId);

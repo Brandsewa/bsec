@@ -4,11 +4,6 @@ import type { Jobs } from "./jobs.ts";
 
 export type CacheInvalidator = (tags: string[]) => Promise<void> | void;
 
-export interface MediaJobSender {
-  send(queue: string, data: object): Promise<unknown>;
-  close?(): Promise<void>;
-}
-
 /**
  * Apps never import @bs/db (lint-enforced). They create an opaque runtime here and pass it
  * to domain services. One set of credentials per process (PLAN §14).
@@ -20,11 +15,6 @@ export interface Runtime {
   /** @internal second connection as app_saas for self-service paths (web/worker only); see saasDb(). */
   readonly _saasDb?: DbHandle | undefined;
   readonly _jobs?: Jobs | undefined;
-  /**
-   * @internal send-only job client for the media library (web has no `_jobs`; see system/job-sender.ts). Kept apart
-   * from `_jobs` so enabling media jobs does not change the many `if (rt._jobs)` paths elsewhere.
-   */
-  readonly _mediaJobs?: MediaJobSender | undefined;
   readonly revalidateTags?: CacheInvalidator | undefined;
   close(): Promise<void>;
 }
@@ -37,7 +27,6 @@ export function createRuntime(opts: {
   poolMax: number;
   revalidateTags?: CacheInvalidator | undefined;
   jobs?: Jobs | undefined;
-  mediaJobs?: MediaJobSender | undefined;
 }): Runtime {
   const handle = createDb(opts.databaseUrl, { max: opts.poolMax, applicationName: `bsec-${opts.service}` });
   const saasHandle = opts.saasDatabaseUrl
@@ -48,10 +37,9 @@ export function createRuntime(opts: {
     _db: handle,
     _saasDb: saasHandle,
     _jobs: opts.jobs,
-    _mediaJobs: opts.mediaJobs,
     revalidateTags: opts.revalidateTags,
     close: async () => {
-      await Promise.all([handle.close(), saasHandle?.close(), opts.mediaJobs?.close?.()]);
+      await Promise.all([handle.close(), saasHandle?.close()]);
     },
   };
 }

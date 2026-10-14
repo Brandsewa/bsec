@@ -627,7 +627,10 @@ function MediaDetailContent({
         }
         confirmLabel="Move to Trash"
         destructive
-        onConfirm={() => trashMutation.mutate()}
+        onConfirm={() => {
+          setTrashConfirmOpen(false);
+          trashMutation.mutate();
+        }}
       />
 
       <ConfirmDialog
@@ -637,7 +640,10 @@ function MediaDetailContent({
         description="Permanently delete this file and remove its storage object? This action cannot be undone."
         confirmLabel="Delete permanently"
         destructive
-        onConfirm={() => deletePermanentMutation.mutate()}
+        onConfirm={() => {
+          setDeleteConfirmOpen(false);
+          deletePermanentMutation.mutate();
+        }}
       />
     </div>
   );

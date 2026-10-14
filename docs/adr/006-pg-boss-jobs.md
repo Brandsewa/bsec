@@ -17,6 +17,9 @@ The pg-boss schema and queues are created by the migration step as `app_owner`; 
 - Queue load competes with OLTP on the same server; monitored via job lag (PLAN §14 thresholds).
 - Per-tenant fairness uses pg-boss group concurrency keys.
 
+## Amendment 2026-10-14: the web service enqueues
+The web runtime previously had no job client, so order confirmation, finance posting, customer metrics, webhook processing, notifications and media jobs sent from web requests were silently skipped (`if (rt._jobs)`). The web service now has a send-only pg-boss client (`createLazyJobSender`: `app_rw`, no migrate/schedule/supervise, 2 connections, created on first use). Sends are best effort (logged, never thrown) and start 2 s after sending. `maintenance.start` / `maintenance.end` are no longer queued: those handlers act immediately without checking the schedule, so a queued job would fire early or survive a cancellation; the minute watchdog is authoritative. `plan.change_requested` has no consumer and expires unprocessed. Customer CSV imports over 500 rows now run as a queued job.
+
 ## Alternatives considered
 - **Temporal / Inngest:** powerful but another system to run or pay for.
 - **BullMQ + Redis:** a second durable store and no transactional enqueue.

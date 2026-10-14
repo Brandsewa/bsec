@@ -364,6 +364,8 @@ test.describe("Media library, real stack", () => {
     await page.getByRole("button", { name: "Move to Trash" }).first().click();
     await page.getByRole("dialog").getByRole("button", { name: "Move to Trash" }).click();
     await expect(page.getByText("Moved to Trash")).toBeVisible();
+    // The confirmation closes by itself once the merchant confirms
+    await expect(page.getByRole("dialog").getByRole("button", { name: "Move to Trash" })).toBeHidden();
 
     await openMedia(page, `?trash=true&selectedId=${ids.png}`);
     await page.getByRole("button", { name: "Delete permanently" }).first().click();
@@ -423,6 +425,31 @@ test.describe("Media library, real stack", () => {
       )
       .toBe(true);
     await shop.screenshot({ path: test.info().outputPath("06-storefront-after-replace.png") });
+  });
+
+  test("bulk Move to Trash and Delete permanently close their confirmation and show the result", async ({ page }) => {
+    const name = `e2e${run}-bulk.docx`;
+    const bulkFile = path.join(path.dirname(files.docx), name);
+    fs.writeFileSync(bulkFile, Buffer.concat([fs.readFileSync(files.docx), Buffer.from(`
+% bulk ${run} ${Math.random()}
+`)]));
+    await openMedia(page);
+    await chooseFiles(page, [bulkFile]);
+    await waitForMedia(page, name);
+
+    await page.getByLabel(`Select ${name}`).first().check({ force: true });
+    await page.getByRole("button", { name: "Move to Trash" }).first().click();
+    await page.getByRole("dialog").getByRole("button", { name: "Move to Trash" }).click();
+    await expect(page.getByRole("dialog")).toBeHidden();
+    await expect(page.getByText("Moved 1 file to Trash")).toBeVisible();
+
+    await openMedia(page, "?trash=true");
+    await page.getByLabel(`Select ${name}`).first().check({ force: true });
+    await page.getByRole("button", { name: "Delete permanently" }).first().click();
+    await page.getByRole("dialog").getByRole("button", { name: "Delete permanently" }).click();
+    await expect(page.getByRole("dialog")).toBeHidden();
+    await expect(page.getByText("Permanently deleted 1 file")).toBeVisible();
+    await expect(page.getByLabel(`Select ${name}`)).toHaveCount(0);
   });
 
   test("at 375 px the library is usable and previews load", async ({ page }) => {

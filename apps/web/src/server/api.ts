@@ -137,6 +137,8 @@ import {
   trashMedia,
   restoreMedia,
   QuotaExceededError,
+  merchantMediaError,
+  MEDIA_GENERIC_ERROR,
   getAdminShippingSettings,
   updateAdminShippingSettings,
   searchStorefrontProducts,
@@ -415,6 +417,27 @@ const requireAdmin = os.middleware(async ({ context, next }) => {
     });
   } catch (err) {
     throw mapAuthError(err);
+  }
+});
+
+/**
+ * Media requests: show merchants the validation messages written for them, never server internals. Anything else
+ * (file system paths, bucket or database details) is logged here and replaced by one plain sentence.
+ */
+const mediaErrorGuard = os.middleware(async ({ context, next }) => {
+  try {
+    return await next();
+  } catch (err) {
+    if (err instanceof ORPCError) throw err;
+    if (err instanceof QuotaExceededError) throw mapAuthError(err);
+    const safe = merchantMediaError(err);
+    if (safe.expose) {
+      const mapped = mapAuthError(err);
+      if (mapped instanceof ORPCError) throw mapped;
+      throw new ORPCError("BAD_REQUEST", { message: safe.message });
+    }
+    context.log?.error({ err }, "media request failed");
+    throw new ORPCError("INTERNAL_SERVER_ERROR", { message: MEDIA_GENERIC_ERROR });
   }
 });
 
@@ -1327,6 +1350,7 @@ export const storeRouter = os.router({
       list: os.admin.media.list
         .use(requireAdmin)
         .use(requirePermission("content.write"))
+        .use(mediaErrorGuard)
         .handler(({ context, input }) => {
           if (!context.tenantCtx) throw new Error("Missing tenant context");
           return listMedia(context.rt, context.tenantCtx, input);
@@ -1334,6 +1358,7 @@ export const storeRouter = os.router({
       get: os.admin.media.get
         .use(requireAdmin)
         .use(requirePermission("content.write"))
+        .use(mediaErrorGuard)
         .handler(({ context, input }) => {
           if (!context.tenantCtx) throw new Error("Missing tenant context");
           return getMedia(context.rt, context.tenantCtx, input);
@@ -1341,6 +1366,7 @@ export const storeRouter = os.router({
       usage: os.admin.media.usage
         .use(requireAdmin)
         .use(requirePermission("content.write"))
+        .use(mediaErrorGuard)
         .handler(({ context }) => {
           if (!context.tenantCtx) throw new Error("Missing tenant context");
           return getMediaUsage(context.rt, context.tenantCtx);
@@ -1348,6 +1374,7 @@ export const storeRouter = os.router({
       requestUpload: os.admin.media.requestUpload
         .use(requireAdmin)
         .use(requirePermission("content.write"))
+        .use(mediaErrorGuard)
         .handler(({ context, input }) => {
           if (!context.tenantCtx) throw new Error("Missing tenant context");
           return Promise.resolve(requestMediaUpload(context.rt, context.tenantCtx, input)).catch((e) => {
@@ -1357,6 +1384,7 @@ export const storeRouter = os.router({
       create: os.admin.media.create
         .use(requireAdmin)
         .use(requirePermission("content.write"))
+        .use(mediaErrorGuard)
         .handler(({ context, input }) => {
           if (!context.tenantCtx) throw new Error("Missing tenant context");
           return Promise.resolve(createMediaRecord(context.rt, context.tenantCtx, input)).catch((e) => {
@@ -1366,6 +1394,7 @@ export const storeRouter = os.router({
       findDuplicates: os.admin.media.findDuplicates
         .use(requireAdmin)
         .use(requirePermission("content.write"))
+        .use(mediaErrorGuard)
         .handler(({ context, input }) => {
           if (!context.tenantCtx) throw new Error("Missing tenant context");
           return Promise.resolve(findDuplicates(context.rt, context.tenantCtx, input)).catch((e) => {
@@ -1375,6 +1404,7 @@ export const storeRouter = os.router({
       upload: os.admin.media.upload
         .use(requireAdmin)
         .use(requirePermission("content.write"))
+        .use(mediaErrorGuard)
         .handler(async ({ context, input }) => {
           if (!context.tenantCtx) throw new Error("Missing tenant context");
           const fileBytes = Buffer.from(input.data, "base64");
@@ -1396,6 +1426,7 @@ export const storeRouter = os.router({
       update: os.admin.media.update
         .use(requireAdmin)
         .use(requirePermission("content.write"))
+        .use(mediaErrorGuard)
         .handler(({ context, input }) => {
           if (!context.tenantCtx) throw new Error("Missing tenant context");
           return Promise.resolve(updateMedia(context.rt, context.tenantCtx, input)).catch((e) => {
@@ -1405,6 +1436,7 @@ export const storeRouter = os.router({
       replace: os.admin.media.replace
         .use(requireAdmin)
         .use(requirePermission("content.write"))
+        .use(mediaErrorGuard)
         .handler(({ context, input }) => {
           if (!context.tenantCtx) throw new Error("Missing tenant context");
           return replaceMedia(context.rt, context.tenantCtx, input).catch((e) => {
@@ -1414,6 +1446,7 @@ export const storeRouter = os.router({
       trash: os.admin.media.trash
         .use(requireAdmin)
         .use(requirePermission("content.write"))
+        .use(mediaErrorGuard)
         .handler(({ context, input }) => {
           if (!context.tenantCtx) throw new Error("Missing tenant context");
           return trashMedia(context.rt, context.tenantCtx, input);
@@ -1421,6 +1454,7 @@ export const storeRouter = os.router({
       restore: os.admin.media.restore
         .use(requireAdmin)
         .use(requirePermission("content.write"))
+        .use(mediaErrorGuard)
         .handler(({ context, input }) => {
           if (!context.tenantCtx) throw new Error("Missing tenant context");
           return restoreMedia(context.rt, context.tenantCtx, input);
@@ -1428,6 +1462,7 @@ export const storeRouter = os.router({
       deletePermanent: os.admin.media.deletePermanent
         .use(requireAdmin)
         .use(requirePermission("content.write"))
+        .use(mediaErrorGuard)
         .handler(({ context, input }) => {
           if (!context.tenantCtx) throw new Error("Missing tenant context");
           return deleteMediaPermanent(context.rt, context.tenantCtx, input);
@@ -1435,6 +1470,7 @@ export const storeRouter = os.router({
       delete: os.admin.media.delete
         .use(requireAdmin)
         .use(requirePermission("content.write"))
+        .use(mediaErrorGuard)
         .handler(({ context, input }) => {
           if (!context.tenantCtx) throw new Error("Missing tenant context");
           return deleteMediaRecord(context.rt, context.tenantCtx, input);
@@ -3332,9 +3368,15 @@ api.post("/admin/media/upload", async (c) => {
         403,
       );
     }
-    const msg = err instanceof Error ? err.message : "Upload failed";
-    const status = msg.includes("quota") ? 403 : msg.includes("MIME") || msg.includes("Invalid") ? 400 : 500;
-    return c.json({ error: msg }, status);
+    // Never send server internals to the browser: expected validation messages are shown, everything else is logged
+    const safe = merchantMediaError(err);
+    if (!safe.expose) {
+      c.get("log")?.error({ err }, "media upload failed");
+      return c.json({ error: MEDIA_GENERIC_ERROR }, 500);
+    }
+    const original = err instanceof Error ? err.message : "";
+    const status = /^Not Found/.test(original) ? 404 : /quota/i.test(original) ? 403 : 400;
+    return c.json({ error: safe.message }, status);
   }
 });
 

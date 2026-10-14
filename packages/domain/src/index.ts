@@ -169,3 +169,4 @@ export * from "./system/messaging/index.ts";
 
 
 export { createLazyJobSender, type JobSender } from "./system/job-sender.ts";
+export { merchantMediaError, MEDIA_GENERIC_ERROR, type MerchantMediaError } from "./media/errors.ts";
