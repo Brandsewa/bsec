@@ -3,7 +3,7 @@ import os from "node:os";
 import path from "node:path";
 import sharp from "sharp";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
-import { eq, and } from "drizzle-orm";
+import { eq } from "drizzle-orm";
 import { schema, withTenant } from "@bs/db";
 import { startTestDb, type TestDb } from "@bs/db/test-env";
 import { STORE_PERMISSIONS } from "@bs/auth";
@@ -15,7 +15,6 @@ import {
 } from "../src/index.ts";
 import {
   uploadMediaDirect,
-  replaceMedia,
 } from "../src/media-services.ts";
 import {
   processMediaDerive,

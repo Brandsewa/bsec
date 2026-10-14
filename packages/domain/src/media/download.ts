@@ -26,8 +26,13 @@ export function sanitizeDownloadFilename(
   fallback = "download",
 ): SanitizedFilename {
   let name = (rawFilename ?? "").trim();
-  // Strip control characters, CR, LF, NUL
-  name = name.replace(/[\r\n\0\x00-\x1f\x7f]/g, "");
+  // Strip control characters, CR, LF, NUL, DEL safely without regex control characters
+  name = Array.from(name)
+    .filter((ch) => {
+      const code = ch.charCodeAt(0);
+      return code >= 32 && code !== 127;
+    })
+    .join("");
   // Replace path separators / and \
   name = name.replace(/[/\\]+/g, "_");
   // Replace double quotes

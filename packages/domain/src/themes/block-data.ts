@@ -679,12 +679,10 @@ async function resolveMedia(
   const media: Record<string, string> = {};
   const mediaMeta: Record<string, BlockMediaMeta> = {};
   for (const r of rows) {
-    let url: string | undefined = undefined;
-    if (cfBase && r.cfImageId) {
-      url = buildCloudflareImageUrl(cfBase, r.cfImageId, "public");
-    } else {
-      url = publicMediaUrl(r.storageKey) ?? undefined;
-    }
+    const url: string | undefined =
+      cfBase && r.cfImageId
+        ? buildCloudflareImageUrl(cfBase, r.cfImageId, "public")
+        : (publicMediaUrl(r.storageKey) ?? undefined);
     if (url) {
       media[r.id] = url;
     }

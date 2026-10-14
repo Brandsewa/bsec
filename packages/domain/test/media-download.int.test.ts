@@ -22,7 +22,7 @@ describe("Media Storefront Download Integration Tests (Plan S1, Real Postgres)",
   let rt: Runtime;
   let rtPlatform: Runtime;
   let ctx: TenantContext;
-  let foreignCtx: TenantContext;
+  let _foreignCtx: TenantContext;
   let tenantId: string;
   let foreignTenantId: string;
   let tempStorageDir: string;
@@ -77,7 +77,7 @@ describe("Media Storefront Download Integration Tests (Plan S1, Real Postgres)",
     });
     foreignTenantId = t2.tenantId;
 
-    foreignCtx = {
+    _foreignCtx = {
       tenantId: foreignTenantId,
       storeStatus: "live",
       actor: { type: "staff", userId: t2.ownerId },

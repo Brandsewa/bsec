@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { mediaImage, buildDerivativeUrl } from "../src/media/image-helper.ts";
+import { mediaImage } from "../src/media/image-helper.ts";
 
 describe("mediaImage pure helper (Phase 4 Plan S2, S3)", () => {
   it("returns empty src when item is null or undefined", () => {
