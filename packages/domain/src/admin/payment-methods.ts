@@ -144,7 +144,7 @@ export async function getTenantPaymentMethods(
   } else {
     // Razorpay catalog entry (Slice 5A: shows catalogue card as unavailable / coming soon without active adapter)
     methods.push({
-      id: "00000000-0000-0000-0000-000000000001",
+      id: "00000000-0000-4000-8000-000000000001",
       provider: "razorpay",
       displayName: "Razorpay",
       status: "unavailable",

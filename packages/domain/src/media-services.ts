@@ -179,12 +179,11 @@ export function buildThumbnailUrl(r: { kind: string; storageKey: string }, url: 
 }
 
 /**
- * Queue a media job after the database commit. Uses the worker's job client where there is one, otherwise the web
- * service's send-only client. Best effort: a failure is logged and the worker's scheduled sweeps (derivatives, hashes)
+ * Queue a media job after the database commit. Uses the runtime's job client (the worker's, or the web service's send-only one). Best effort: a failure is logged and the worker's scheduled sweeps (derivatives, hashes)
  * find the row anyway. Returns whether the job was queued.
  */
 async function enqueueMediaJob(rt: Runtime, queue: string, data: object): Promise<boolean> {
-  const sender = rt._jobs ?? rt._mediaJobs;
+  const sender = rt._jobs;
   if (!sender) return false;
   try {
     await sender.send(queue, data);

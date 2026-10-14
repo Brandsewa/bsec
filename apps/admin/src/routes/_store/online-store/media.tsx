@@ -983,7 +983,11 @@ export function MediaLibraryPage() {
         }
         confirmLabel="Move to Trash"
         destructive
-        onConfirm={() => bulkTrashMutation.mutate()}
+        onConfirm={() => {
+          // Close first: the dialog has been answered; the toast reports the result
+          setBulkTrashConfirmOpen(false);
+          bulkTrashMutation.mutate();
+        }}
       />
 
       <ConfirmDialog
@@ -993,7 +997,10 @@ export function MediaLibraryPage() {
         description="Permanently deletes the selected files and removes their storage objects. This cannot be undone. Any files still used in your store will be protected and refused."
         confirmLabel="Delete permanently"
         destructive
-        onConfirm={() => bulkDeletePermanentMutation.mutate()}
+        onConfirm={() => {
+          setBulkDeleteConfirmOpen(false);
+          bulkDeletePermanentMutation.mutate();
+        }}
       />
 
       {/* Detail Sheet */}
