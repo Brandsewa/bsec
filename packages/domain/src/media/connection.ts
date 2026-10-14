@@ -69,7 +69,16 @@ export interface MediaStorageDriver {
 
   publicUrl(key: string): string | undefined;
 
-  presignDownload(key: string, expiresInSeconds?: number | undefined): Promise<string>;
+  presignDownload(
+    key: string,
+    options?:
+      | number
+      | {
+          expiresInSeconds?: number | undefined;
+          responseContentDisposition?: string | undefined;
+        }
+      | undefined,
+  ): Promise<string>;
 
   testConnection(adminOrigins?: string[]): Promise<{
     ok: boolean;
@@ -317,7 +326,16 @@ export class LocalStorageDriver implements MediaStorageDriver {
     return base ? `${base}/${clean}` : `/media/${clean}`;
   }
 
-  async presignDownload(key: string): Promise<string> {
+  async presignDownload(
+    key: string,
+    _options?:
+      | number
+      | {
+          expiresInSeconds?: number | undefined;
+          responseContentDisposition?: string | undefined;
+        }
+      | undefined,
+  ): Promise<string> {
     return this.publicUrl(key) ?? `/media/${key}`;
   }
 
@@ -510,12 +528,24 @@ export class S3StorageDriver implements MediaStorageDriver {
     return base ? `${base}/${cleanKey}` : undefined;
   }
 
-  async presignDownload(key: string, expiresInSeconds = 900): Promise<string> {
+  async presignDownload(
+    key: string,
+    options?:
+      | number
+      | {
+          expiresInSeconds?: number | undefined;
+          responseContentDisposition?: string | undefined;
+        }
+      | undefined,
+  ): Promise<string> {
+    const expiresIn = typeof options === "number" ? options : (options?.expiresInSeconds ?? 900);
+    const disposition = typeof options === "object" ? options?.responseContentDisposition : undefined;
     const command = new GetObjectCommand({
       Bucket: this.bucket,
       Key: key,
+      ...(disposition ? { ResponseContentDisposition: disposition } : {}),
     });
-    return await getSignedUrl(this.client, command, { expiresIn: expiresInSeconds });
+    return await getSignedUrl(this.client, command, { expiresIn });
   }
 
   async testConnection(adminOrigins?: string[]): Promise<{

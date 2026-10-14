@@ -35,6 +35,7 @@ export {
   getEnvironmentStorageConfig,
   resolveSafeLocalPath,
 } from "./media/connection.ts";
+export * from "./media/download.ts";
 
 export interface ListMediaQuery {
   cursor?: string | undefined;

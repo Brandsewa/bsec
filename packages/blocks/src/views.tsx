@@ -664,7 +664,7 @@ export function FileDownloadView({ props, ctx }: A<R.FileDownloadProps>): ReactN
     return <div className="bsb bsb-placeholder">Select a file to download</div>;
   }
 
-  const downloadUrl = fileUrl || fileData?.url || mediaDetails?.url;
+  const downloadUrl = props.mediaId ? `/media/${props.mediaId}/download` : (fileUrl || fileData?.url || mediaDetails?.url);
   const filename = fileData?.filename || mediaDetails?.filename || "download";
   const mime = fileData?.mime || mediaDetails?.mime || "application/octet-stream";
   const bytes = fileData?.bytes ?? mediaDetails?.bytes;
