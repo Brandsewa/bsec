@@ -26,8 +26,6 @@ import {
   getActiveStorageDriver,
   resolveDriverForMediaRow,
   resolvePublicMediaUrl,
-  resolveStorageConnection,
-  type ResolvedStorageConfig,
 } from "./media/connection.ts";
 
 export {
@@ -148,13 +146,15 @@ function decodeCursor(cursor?: string): { s: string | number; id: string } | nul
   }
 }
 
-function buildThumbnailUrl(
-  r: { kind: string; storageKey: string },
-  url: string,
-  config?: ResolvedStorageConfig | null,
-): string | null {
+/**
+ * Grid thumbnail for an image. Uses Cloudflare Image Transformations only when `CDN_BASE_URL` is set
+ * explicitly (that zone must have Image Transformations enabled); otherwise the original public URL is used.
+ * The storage connection's public base URL is NOT a resizer: `/cdn-cgi/image/` on it 404s on local storage and
+ * on any zone without transformations, which blanks every tile.
+ */
+export function buildThumbnailUrl(r: { kind: string; storageKey: string }, url: string): string | null {
   if (r.kind !== "image") return null;
-  const cdnBase = process.env.CDN_BASE_URL || config?.publicBaseUrl;
+  const cdnBase = process.env.CDN_BASE_URL?.trim();
   if (cdnBase) {
     return buildCloudflareImageTransformUrl(cdnBase, r.storageKey, {
       width: 320,
@@ -357,7 +357,7 @@ async function finalizeUpload(
   await invalidateCache(rt, ctx, { type: "media_updated" });
 
   const url = (await resolvePublicMediaUrl(rt._db.db, row.storageKey, row.storageConnectionId)) || "";
-  const thumbnailUrl = buildThumbnailUrl(row, url, activeConfig);
+  const thumbnailUrl = buildThumbnailUrl(row, url);
 
   return {
     id: row.id,
@@ -541,12 +541,11 @@ export async function listMedia(
       }
     }
 
-    const activeConn = await resolveStorageConnection(db, "public_media");
 
     const items: MediaItem[] = await Promise.all(
       pageRows.map(async (r) => {
         const url = (await resolvePublicMediaUrl(db, r.storageKey, r.storageConnectionId)) || "";
-        const thumbnailUrl = buildThumbnailUrl(r, url, activeConn as ResolvedStorageConfig);
+        const thumbnailUrl = buildThumbnailUrl(r, url);
         return {
           id: r.id,
           kind: r.kind as MediaKind,
@@ -908,9 +907,8 @@ export async function getMedia(
     const usagesMap = await resolveMediaUsageLabels(tx, ctx.tenantId, [input.id]);
     const usages = usagesMap.get(input.id) || [];
 
-    const activeConn = await resolveStorageConnection(db, "public_media");
     const url = (await resolvePublicMediaUrl(db, row.storageKey, row.storageConnectionId)) || "";
-    const thumbnailUrl = buildThumbnailUrl(row, url, activeConn as ResolvedStorageConfig);
+    const thumbnailUrl = buildThumbnailUrl(row, url);
 
     return {
       id: row.id,
@@ -1171,9 +1169,8 @@ export async function updateMedia(
 
   await invalidateCache(rt, ctx, { type: "media_updated" });
 
-  const activeConn = await resolveStorageConnection(db, "public_media");
   const url = (await resolvePublicMediaUrl(db, row.storageKey, row.storageConnectionId)) || "";
-  const thumbnailUrl = buildThumbnailUrl(row, url, activeConn as ResolvedStorageConfig);
+  const thumbnailUrl = buildThumbnailUrl(row, url);
 
   return {
     id: row.id,

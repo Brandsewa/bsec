@@ -380,7 +380,7 @@ In flight: an auth overhaul (forgot/reset password, customer password sign-in, p
 
 ## 14. Configuration
 
-Full per-service env var list, with what breaks when each is missing: **`DEPLOYMENT.md`**. Example local values: `.env.example`. Key groups: DB URLs per role, `PREVIEW_BASE_URL` (theme preview links), `BETTER_AUTH_URL`/`BETTER_AUTH_SECRET` (web and platform use *different* secrets), `TENANT_SECRETS_KEY`, R2 (`R2_*`, `R2_PUBLIC_URL`), Turnstile, Cloudflare custom-domain keys, Razorpay platform billing keys, `PLATFORM_DOMAIN`/`ADMIN_HOST`/`MARKETING_HOST`, `SUPERADMIN_ORIGINS`, Sentry DSN. Never commit `.env*` (only `.env.example`).
+Full per-service env var list, with what breaks when each is missing: **`DEPLOYMENT.md`**. Example local values: `.env.example`. Key groups: DB URLs per role, `PREVIEW_BASE_URL` (theme preview links), `BETTER_AUTH_URL`/`BETTER_AUTH_SECRET` (web and platform use *different* secrets), `TENANT_SECRETS_KEY`, R2 (`R2_*`, `R2_PUBLIC_URL`, optional `CDN_BASE_URL` for Media grid thumbnails), Turnstile, Cloudflare custom-domain keys, Razorpay platform billing keys, `PLATFORM_DOMAIN`/`ADMIN_HOST`/`MARKETING_HOST`, `SUPERADMIN_ORIGINS`, Sentry DSN. Never commit `.env*` (only `.env.example`).
 
 ---
 
