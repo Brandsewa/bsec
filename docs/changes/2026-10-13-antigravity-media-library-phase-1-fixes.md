@@ -6,6 +6,7 @@
 - **Area:** db, domain, docs
 - **Type:** fix
 - **Supersedes:** `2026-10-13-antigravity-media-library-phase-1.md`
+- **Superseded by:** `2026-10-14-antigravity-media-library-phase-1-fixes-round-2.md`
 
 ## Summary
 Addresses all blocking defects B1–B6 identified during Claude's verification review of Media Library Phase 1 (`head ea54a3e`), eliminates all `@typescript-eslint/no-non-null-assertion` linter failures in `media-services.ts`, and adds real-database integration test coverage:
