@@ -559,7 +559,6 @@ describe("Media Document Usages Integration Test Suite (S4, S5, Real Postgres)",
     if (!themeId) throw new Error("No theme found for tenant");
 
     await updateTheme(rt, ctx, {
-      themeId,
       tokens: {
         brand: {
           logoMediaId: themeLogo.id,

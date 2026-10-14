@@ -45,7 +45,7 @@ function classifyExpectedKind(
  */
 export function extractMediaReferences(
   document: unknown,
-  ownerType: "page" | "theme",
+  ownerType: "page" | "theme" = "page",
 ): ExtractedMediaRef[] {
   const refs: ExtractedMediaRef[] = [];
   if (!document || typeof document !== "object") return refs;

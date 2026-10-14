@@ -1,17 +1,11 @@
 import { describe, expect, it } from "vitest";
-import { z } from "zod";
-import {
-  collectMediaIds,
-  isMediaKey,
-  isUuid,
-} from "../src/media.ts";
+import { collectMediaIds } from "../src/media.ts";
 import { BLOCK_DEFINITIONS, BLOCK_TYPES } from "../src/registry.ts";
 
 const SAMPLE_UUID_1 = "0199a000-0000-7000-8000-000000000001";
 const SAMPLE_UUID_2 = "0199a000-0000-7000-8000-000000000002";
 const SAMPLE_UUID_3 = "0199a000-0000-7000-8000-000000000003";
 const SAMPLE_UUID_4 = "0199a000-0000-7000-8000-000000000004";
-const SAMPLE_UUID_5 = "0199a000-0000-7000-8000-000000000005";
 
 describe("Media Extractor (collectMediaIds)", () => {
   it("handles null, undefined, primitives, and junk input safely", () => {
