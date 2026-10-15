@@ -13,6 +13,7 @@ import {
   createCollection,
   updateCollection,
   seedDemoStore,
+  removeDemoStore,
   type Runtime,
   type TenantContext,
 } from "../src/index.ts";
@@ -70,6 +71,8 @@ beforeAll(async () => {
 }, 240_000);
 
 afterAll(async () => {
+  // CI shares one database across files, and the demo store has a fixed slug: leave none behind for demo-store.int.test.ts.
+  await removeDemoStore(rt);
   await pg?.end();
   await rwDb?.close();
   await rt?.close();
