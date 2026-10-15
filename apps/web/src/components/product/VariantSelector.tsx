@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState } from "react";
+import React, { useState, useSyncExternalStore } from "react";
 import type { StorefrontProductDetail, StorefrontVariant } from "@bs/domain";
 import { AddToCartButton } from "./AddToCartButton.tsx";
 import { StockEtaHole } from "./StockEtaHole.tsx";
@@ -23,33 +23,47 @@ export function formatInr(paise: number): string {
   }).format(rupees);
 }
 
+const subscribeNever = () => () => {};
+
 export function VariantSelector({ product, showSku = true, trustPoints }: VariantSelectorProps) {
   const [quoteOpen, setQuoteOpen] = useState(false);
   const variants = product.variants ?? [];
   const options = product.options ?? [];
 
-  // Default to first variant or one with available stock
-  const [selectedVariant, setSelectedVariant] = useState<StorefrontVariant | undefined>(() => {
-    return variants.find((v) => v.stockStatus === "in_stock") ?? variants[0];
-  });
+  // Deep link: /products/x?variant=<id> opens on that variant. useSyncExternalStore gives the server render (no link) and the
+  // first client render the same null, then reads the address, so markup matches on hydration.
+  const linkedId = useSyncExternalStore(
+    subscribeNever,
+    () => new URLSearchParams(window.location.search).get("variant"),
+    () => null,
+  );
+  const linkedVariant = linkedId ? variants.find((v) => v.id === linkedId) : undefined;
 
-  // Track selected option values (e.g. { "Switch Type": "Red Linear", "Color": "Midnight Black" })
-  const [selectedOptions, setSelectedOptions] = useState<Record<string, string>>(() => {
-    return (selectedVariant?.optionValues as Record<string, string>) ?? {};
-  });
+  // What the shopper picked by clicking; until then the linked variant, else the first one in stock.
+  const [pickedOptions, setPickedOptions] = useState<Record<string, string> | null>(null);
+  const defaultVariant = variants.find((v) => v.stockStatus === "in_stock") ?? variants[0];
+  const selectedOptions: Record<string, string> =
+    pickedOptions ?? ((linkedVariant ?? defaultVariant)?.optionValues as Record<string, string> | undefined) ?? {};
+  const selectedVariant: StorefrontVariant | undefined = pickedOptions
+    ? (variants.find((v) => {
+        const vOpts = (v.optionValues as Record<string, string>) ?? {};
+        return Object.entries(pickedOptions).every(([k, val]) => vOpts[k] === val);
+      }) ?? linkedVariant ?? defaultVariant)
+    : (linkedVariant ?? defaultVariant);
 
   const handleSelectOption = (optionName: string, value: string) => {
     const updated = { ...selectedOptions, [optionName]: value };
-    setSelectedOptions(updated);
+    setPickedOptions(updated);
 
-    // Find the variant that matches all selected option values
     const matchingVariant = variants.find((v) => {
       const vOpts = (v.optionValues as Record<string, string>) ?? {};
       return Object.entries(updated).every(([k, val]) => vOpts[k] === val);
     });
-
     if (matchingVariant) {
-      setSelectedVariant(matchingVariant);
+      // Keep the address shareable: the chosen variant is in the URL without adding a history entry.
+      const url = new URL(window.location.href);
+      url.searchParams.set("variant", matchingVariant.id);
+      window.history.replaceState(window.history.state, "", url);
     }
   };
 

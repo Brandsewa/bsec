@@ -10,7 +10,6 @@ import {
   getStorefrontCollection,
   seedThemeDemoCatalog,
   resolvePageRenderData,
-  searchStorefrontProducts,
   seedDemoStore,
   type Runtime,
   type TenantContext,

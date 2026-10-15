@@ -37,5 +37,7 @@ New decisions get an ADR **before** code (PLAN §15). Copy `template.md`, take t
 | [030](030-media-in-blocks.md) | Media in block documents and themes | Accepted |
 | [031](031-media-delivery.md) | Media delivery, performance derivatives, and proof | Accepted |
 
-**Next number: 032.**
+| [032](032-theme-page-set.md) | Theme page set: template pages and default pages | Accepted |
+
+**Next number: 033.**
 

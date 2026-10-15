@@ -3,6 +3,7 @@
 Source of truth: `docs/PLAN.html` v2.0 (build order in `docs/BUILD-PLAN-M2-M9.md`). Items are ticked only after verification; the evidence is noted next to each. "From code" means it was read in the repo but not exercised live.
 
 ## In flight
+- Claude · feat/theme-templates · theme page set · 2026-10-15 · collections archive, themed default pages, demo catalog (docs/THEME-TEMPLATES-PLAN.md)
 
 ## M11 · Auth & Transactional Email Overhaul (docs/AUTH-OVERHAUL-PLAN.md)
 

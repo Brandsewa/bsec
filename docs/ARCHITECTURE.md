@@ -4,7 +4,7 @@
 
 | | |
 |---|---|
-| Last verified against | `feat/media-library-phase-4` (Media Library Phase 4: real e2e, document downloads, responsive images, focal point, duplicates), 2026-10-14 |
+| Last verified against | `feat/theme-templates` (theme page set: collections archive, themed default pages, variant deep link), 2026-10-15 |
 | Verified how | files read from the working tree; `pnpm docs:check` for the mechanical parts. Facts marked *(from code)* were read, not run. |
 | Owner | whoever changes the area (see the update triggers in section 0) |
 
@@ -323,6 +323,8 @@ Procedure-level detail: open the contract file; do not duplicate it here.
 Block types in `packages/blocks/src/registry.ts`: content (Hero, HeroSlider, ProductShowcase, Banner, ProductGrid, CollectionGrid, ProductCarousel, Testimonials, Reviews, RichText, FAQ, Gallery, Newsletter, UspStrip), layout (Section, Container, Grid, FlexRow, FlexColumn, Spacer, Divider), atoms (Heading, Text, Image, Video, FileDownload, Button, Icon, Link, CallToAction), theme chrome and page cores (SiteHeader, SiteFooter, ProductDetail, CollectionListing, CartContents).
 
 Theme flow: platform staff build `theme_templates` (draft + published snapshot, home/collection/product/cart/header/footer pages + tokens) in Super Admin. A store *activates* a template: tokens and pages are **copied** into the store's own rows (templates are never edited by stores; re-applying replaces customisations and adds a page version, so it can be rolled back). The storefront applies a theme's tokens once the store opts in (`source: "theme"`); otherwise built-in layouts and Branding apply. Theme CSS variables are `--bs-*` (`theme-vars.ts`). Domain code: `packages/domain/src/themes/`. Cache tags `page:<slug>` and `theme` are invalidated on publish and rollback. **Theme previews:** Super Admin's theme editor Preview button saves the draft, then `templates.createPreview` stores an immutable snapshot (`theme_previews`, 24 h by default, unguessable 11-character code) and the tab opens `/preview/<code>?page=<page>` on the marketing host, where `apps/web/src/app/preview/[code]/page.tsx` draws the pages with sample products, collection, product and cart (`server/preview-samples.ts`); other hosts get a 404, pages are noindex, expired or unknown codes show a notice.
+
+**Theme page set (ADR-032).** Template pages (block documents): home, `collections` archive (`/collections`, type `collections_archive_template`, `CollectionGrid` with `showAll`), collection, product, cart, header, footer. Default pages, styled by theme tokens through `.bs-skin` and not block-editable: `/checkout`, `/checkout/failed` (fixed copy per reason code), `/orders/[token]/thank-you`, `/o/[token]`, `/search`, and the storefront `not-found.tsx`. Cart, checkout and result pages are `noindex`. The product page keeps the chosen variant in `?variant=<id>`. Local fixture: `seedThemeDemoCatalog` (`node dist/demo.js seed-catalog`) adds 6 collections and 14 products to the demo store.
 
 ### Branding vs Theme Settings Boundary
 
