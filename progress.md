@@ -3,7 +3,15 @@
 Source of truth: `docs/PLAN.html` v2.0 (build order in `docs/BUILD-PLAN-M2-M9.md`). Items are ticked only after verification; the evidence is noted next to each. "From code" means it was read in the repo but not exercised live.
 
 ## In flight
-- Claude · feat/theme-templates · theme page set · 2026-10-15 · collections archive, themed default pages, demo catalog (docs/THEME-TEMPLATES-PLAN.md)
+- (nothing claimed)
+
+## M12 · Theme page set and storefront redesign — shipped to production 2026-10-15
+
+Plan [`docs/THEME-TEMPLATES-PLAN.md`](docs/THEME-TEMPLATES-PLAN.md), decision [`ADR-032`](docs/adr/032-theme-page-set.md), full log [`docs/changes/2026-10-15-claude-theme-page-set.md`](docs/changes/2026-10-15-claude-theme-page-set.md). Merged in PR #77 (feature) and #78 (seed tool bundled).
+
+- [x] Collection archive, collection listing (filters, grid/list, load more, quick buy), product page (gallery, options, info tabs, delivery estimate), mini cart, checkout (business order, separate shipping address, saved addresses, optional account creation), customer account with sidebar, themed default pages, collection descriptions (migration 0060). Verified: typecheck, lint, build, unit suites and domain real-database suite (109 files / 2122 tests) green in CI.
+- [x] Production: the "Modern Commerce" theme draft was created with `node dist/seed-templates.js` and opens in the Super Admin editor. **Not published, not activated for any store.** Taste of Hills still runs its saved Essential Commerce pages.
+- [ ] **To refine later (owner, 2026-10-15):** review and polish the Modern Commerce pages in Super Admin, then publish and activate it for a store; mobile pass over the new storefront and account UI; announcement bar and predictive search (deferred); alternate templates per product/collection (only the option to create one wanted); a \"drawer only, no cart page\" setting; end-to-end check of sign-up at checkout once mail delivery exists; known small bugs (theme toggle hydration warning on account pages, COD fee line missing on account order detail, sign-in form staying on \"Signing in…\" until reload).
 
 ## M11 · Auth & Transactional Email Overhaul (docs/AUTH-OVERHAUL-PLAN.md)
 
