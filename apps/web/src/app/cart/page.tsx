@@ -3,7 +3,7 @@ import type { Metadata } from "next";
 import { headers, cookies } from "next/headers";
 import { evaluateStorefrontAccess, getFreeShippingThresholdPaise, getOrCreateCart } from "@bs/domain";
 import { server } from "@/server/runtime.ts";
-import { CartView } from "@/components/cart/CartView.tsx";
+import { CartView, DEFAULT_CART_CONTENTS_OPTIONS } from "@/components/cart/CartView.tsx";
 import { BlockRenderer } from "@/components/blocks/BlockRenderer.tsx";
 import { getCachedThemePage } from "@/server/cached-storefront.ts";
 import { CART_COOKIE_NAME } from "@/app/api/storefront/cart/route.ts";
@@ -11,6 +11,7 @@ import { CART_COOKIE_NAME } from "@/app/api/storefront/cart/route.ts";
 export const metadata: Metadata = {
   title: "Shopping Cart",
   description: "View and edit items in your shopping cart.",
+  robots: { index: false, follow: false },
 };
 
 export default async function CartPage() {
@@ -53,14 +54,19 @@ export default async function CartPage() {
 
   // The theme's own cart layout, when the store has one; the built-in layout otherwise.
   const template = await getCachedThemePage(access.tenantId, "cart").catch(() => null);
+  const freeShippingThresholdPaise = await getFreeShippingThresholdPaise(rt._db.db, access.tenantId).catch(() => null);
   if (!template) {
+    // The built-in layout shows the free-shipping progress bar whenever the store has a free-shipping threshold.
     return (
       <div className="bs-skin">
-        <CartView cart={cart} />
+        <CartView
+          cart={cart}
+          options={{ ...DEFAULT_CART_CONTENTS_OPTIONS, showFreeShippingBar: true }}
+          freeShippingThresholdPaise={freeShippingThresholdPaise}
+        />
       </div>
     );
   }
-  const freeShippingThresholdPaise = await getFreeShippingThresholdPaise(rt._db.db, access.tenantId).catch(() => null);
   return (
     <div className="bs-skin">
       <BlockRenderer

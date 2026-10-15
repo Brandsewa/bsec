@@ -37,6 +37,7 @@ import { setMarketingConsent } from "../customers/consent.ts";
 import { trackSoftQuotaUsage } from "../system/quotas.ts";
 import { isCheckoutAllowed } from "../system/tenant-lifecycle.ts";
 import { calculateTax } from "./tax-engine.ts";
+import { validateGstin } from "./gst-validation.ts";
 import { resolveTaxClass } from "../admin/tax-settings.ts";
 
 export interface PlaceOrderInput {
@@ -58,6 +59,45 @@ export interface PlaceOrderInput {
   customerId?: string | undefined;
   marketingConsent?: boolean | undefined;
   termsConsent?: boolean | undefined;
+  /** A business buyer: the company name and, optionally, its GSTIN, kept on the billing address (and on the invoice). */
+  businessOrder?: { companyName: string; taxId?: string | undefined } | undefined;
+  /** Where to deliver when that differs from the billing address above; it has its own contact. */
+  shipTo?: ShipToInput | undefined;
+}
+
+export interface ShipToInput {
+  fullName: string;
+  email?: string | undefined;
+  phone: string;
+  addressLine1: string;
+  city: string;
+  state: string;
+  pincode: string;
+  country?: string | undefined;
+}
+
+/** What goes wrong with a business or delivery-address block, as a Bad Request message; null when it is fine. Pure, so it is tested without a database. */
+export function checkoutContactProblem(input: Pick<PlaceOrderInput, "businessOrder" | "shipTo">): string | null {
+  const biz = input.businessOrder;
+  if (biz) {
+    const name = biz.companyName?.trim() ?? "";
+    if (!name) return "Bad Request: Company name is required for a business order";
+    if (name.length > 120) return "Bad Request: Company name is too long";
+    const taxId = biz.taxId?.trim();
+    if (taxId) {
+      const r = validateGstin(taxId.toUpperCase());
+      if (!r.valid) return `Bad Request: Tax ID (GSTIN) is not valid: ${r.error ?? "check the number"}`;
+    }
+  }
+  const ship = input.shipTo;
+  if (ship) {
+    if (!ship.fullName?.trim()) return "Bad Request: Shipping name is required";
+    if (!ship.addressLine1?.trim() || !ship.city?.trim() || !ship.state?.trim()) return "Bad Request: Shipping address is incomplete";
+    if (!/^[1-9][0-9]{5}$/.test(ship.pincode?.trim() ?? "")) return "Bad Request: Shipping pincode must be 6 digits";
+    if (!/^[6-9][0-9]{9}$/.test((ship.phone ?? "").replace(/\D/g, ""))) return "Bad Request: Shipping contact needs a valid 10-digit mobile number";
+    if (ship.email?.trim() && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(ship.email.trim())) return "Bad Request: Shipping contact email is not valid";
+  }
+  return null;
 }
 
 export interface PlaceOrderResult {
@@ -196,6 +236,9 @@ export async function placeOrder(
     if (!checkoutSettings.guestCheckout && !input.customerId) {
       throw new Error("Guest checkout is not permitted for this store. Please sign in to place an order.");
     }
+
+    const contactProblem = checkoutContactProblem(input);
+    if (contactProblem) throw new Error(contactProblem);
 
     // Phone required enforcement
     if (checkoutSettings.phoneRequired && (!input.phone || !input.phone.trim())) {
@@ -449,7 +492,8 @@ export async function placeOrder(
     const gstV2Enabled = await isFeatureEnabled(tx, tenantId, "settings.gst_v2");
     const rawTaxConfig = ((stRow?.checkout ?? {}) as Record<string, unknown>).tax as Record<string, unknown> | undefined;
     const sellerState = (rawTaxConfig?.sellerState as string | undefined) ?? ((stRow?.address as { state?: string } | null | undefined)?.state);
-    const destinationState = input.state?.trim();
+    // GST place of supply is where the goods are delivered, which is the shipping address when it differs from billing.
+    const destinationState = (input.shipTo?.state ?? input.state)?.trim();
 
     if (gstV2Enabled) {
       if (!sellerState || !sellerState.trim()) {
@@ -521,15 +565,27 @@ export async function placeOrder(
       codFee,
       grandTotal,
       shipsOn: orderShipsOn,
-      shippingAddress: {
-        fullName: input.fullName,
-        addressLine1: input.addressLine1,
-        addressLine2: input.addressLine2,
-        city: input.city,
-        state: input.state,
-        pincode: input.pincode,
-        country: input.country ?? "IN",
-      },
+      shippingAddress: input.shipTo
+        ? {
+            fullName: input.shipTo.fullName.trim(),
+            addressLine1: input.shipTo.addressLine1.trim(),
+            city: input.shipTo.city.trim(),
+            state: input.shipTo.state.trim(),
+            pincode: input.shipTo.pincode.trim(),
+            country: input.shipTo.country ?? "IN",
+            // The delivery contact, kept apart from the buyer's own email and phone.
+            phone: input.shipTo.phone.replace(/\D/g, ""),
+            ...(input.shipTo.email?.trim() ? { email: input.shipTo.email.trim().toLowerCase() } : {}),
+          }
+        : {
+            fullName: input.fullName,
+            addressLine1: input.addressLine1,
+            addressLine2: input.addressLine2,
+            city: input.city,
+            state: input.state,
+            pincode: input.pincode,
+            country: input.country ?? "IN",
+          },
       billingAddress: {
         fullName: input.fullName,
         addressLine1: input.addressLine1,
@@ -538,8 +594,14 @@ export async function placeOrder(
         state: input.state,
         pincode: input.pincode,
         country: input.country ?? "IN",
+        ...(input.businessOrder
+          ? {
+              companyName: input.businessOrder.companyName.trim(),
+              ...(input.businessOrder.taxId?.trim() ? { taxId: input.businessOrder.taxId.trim().toUpperCase() } : {}),
+            }
+          : {}),
       },
-      placeOfSupplyState: input.state,
+      placeOfSupplyState: destinationState ?? input.state,
       termsPolicyVersionId,
       termsAcceptedAt,
       source: "web",

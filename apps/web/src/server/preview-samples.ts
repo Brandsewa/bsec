@@ -19,9 +19,11 @@ export function sampleCollection(): StorefrontCollectionDetail {
     isFeatured: i === 1,
     ratingAvg: "4.5",
     ratingCount: 10 + i * 3,
+    categoryName: "Category",
+    quickAdd: { singleVariantId: `sample-variant-${i}`, inStock: true },
   }));
   return {
-    collection: { id: "sample-collection", title: "Bestsellers", slug: "bestsellers", type: "manual", rules: null, sortOrder: "manual", imageMediaId: null, seo: null, indexable: true, published: true, createdAt: NOW, updatedAt: NOW },
+    collection: { id: "sample-collection", title: "Bestsellers", slug: "bestsellers", type: "manual", rules: null, sortOrder: "manual", imageMediaId: null, description: "A short description of this collection appears here.", seo: null, indexable: true, published: true, createdAt: NOW, updatedAt: NOW },
     products: { items, total: items.length, page: 1, limit: 24 },
   };
 }

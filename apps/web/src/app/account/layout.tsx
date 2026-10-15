@@ -1,4 +1,4 @@
-import React, { Suspense } from "react";
+import React from "react";
 import type { Metadata } from "next";
 import { headers } from "next/headers";
 import { evaluateStorefrontAccess } from "@bs/domain";
@@ -6,8 +6,6 @@ import { server } from "@/server/runtime.ts";
 import { getCachedBrandSettings, getCachedThemeTokens } from "@/server/cached-storefront.ts";
 import { computeThemeTokens } from "@/components/storefront/theme-tokens.ts";
 import { deriveAccent } from "@bs/ui/server";
-import { AccountPageSkeleton } from "@bs/ui";
-import { AccountGate } from "@/components/account/AccountGate.tsx";
 
 export const metadata: Metadata = {
   title: "My Account",
@@ -60,9 +58,7 @@ export default async function AccountLayout({ children }: { children: React.Reac
 
   return (
     <div data-store-accent className="min-h-screen bg-background text-foreground" style={accountAccentVars}>
-      <Suspense fallback={<AccountPageSkeleton />}>
-        <AccountGate>{children}</AccountGate>
-      </Suspense>
+      {children}
     </div>
   );
 }

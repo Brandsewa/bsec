@@ -432,4 +432,37 @@ describe("theme builder: every page of a theme", () => {
     expect(Object.keys(res.pages)).toContain("home");
     expect(res.tokens).toBeTruthy();
   });
+
+  it("default page copy: bad copy is rejected on save, good copy reaches a store on activation and the other store keeps the built-in text", async () => {
+    const created = await createThemeTemplate(platform, OWNER_STAFF, { name: "Copy Shop", industry: "fashion" });
+    const withCopy = (defaultPages: unknown) => ({ ...created.draftTokens, defaultPages });
+
+    // HTML, unknown sections and over-long text never get stored.
+    for (const bad of [
+      { notFound: { heading: "<script>alert(1)</script>" } },
+      { notFound: { heading: "x".repeat(200) } },
+      { somethingElse: { heading: "Hi" } },
+      { checkout: { showTrustBadges: "yes" } },
+    ]) {
+      await expect(saveThemeTemplateDraft(platform, OWNER_STAFF, { code: created.code, pages: created.draftPages, tokens: withCopy(bad) })).rejects.toThrow(/Default pages/);
+    }
+
+    await saveThemeTemplateDraft(platform, OWNER_STAFF, {
+      code: created.code,
+      pages: created.draftPages,
+      tokens: withCopy({ notFound: { heading: "Lost? Let us help", message: "Try the search below." }, orderSuccess: { showCreateAccount: false } }),
+    });
+    await publishThemeTemplate(platform, OWNER_STAFF, created.code);
+    await activateTheme(web, ctxFor(TENANT_B), { code: created.code });
+
+    const { resolveDefaultPages, DEFAULT_PAGES } = await import("@bs/blocks");
+    const mine = resolveDefaultPages((await getStorefrontThemeTokens(web, ctxFor(TENANT_B)))?.["defaultPages"]);
+    expect(mine.notFound.heading).toBe("Lost? Let us help");
+    expect(mine.orderSuccess.showCreateAccount).toBe(false);
+    expect(mine.orderSuccess.heading).toBe(DEFAULT_PAGES.orderSuccess.heading); // untouched sections keep the built-in text
+
+    // The other store never activated this theme: it keeps the built-in defaults.
+    const other = resolveDefaultPages((await getStorefrontThemeTokens(web, ctxFor(TENANT_A)))?.["defaultPages"]);
+    expect(other.notFound.heading).toBe(DEFAULT_PAGES.notFound.heading);
+  });
 });

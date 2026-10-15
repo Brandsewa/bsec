@@ -138,3 +138,24 @@ describe("Storefront Contracts", () => {
     expect(validVerifyPassword.success).toBe(true);
   });
 });
+
+describe("Storefront reviews contract", () => {
+  const list = storeContract.storefront.reviews.list["~orpc"];
+
+  it("is served at the address the product page asks for", () => {
+    expect(list.route.path).toBe("/storefront/products/{productId}/reviews");
+    expect(list.route.method).toBe("GET");
+    expect(storeContract.storefront.reviews.submit["~orpc"].route.path).toBe("/storefront/products/{productId}/reviews");
+  });
+
+  it("reads page and limit from the query string, where they arrive as text, and still bounds them", () => {
+    const schema = list.inputSchema;
+    if (!schema) throw new Error("reviews.list has no input schema");
+    const id = "0199a0a3-0000-7000-8000-000000000001";
+    const ok = schema.safeParse({ productId: id, page: "2", limit: "5" });
+    expect(ok.success && ok.data).toMatchObject({ page: 2, limit: 5 });
+    expect(schema.safeParse({ productId: id }).data).toMatchObject({ page: 1, limit: 10 });
+    expect(schema.safeParse({ productId: id, limit: "500" }).success).toBe(false);
+    expect(schema.safeParse({ productId: id, page: "0" }).success).toBe(false);
+  });
+});

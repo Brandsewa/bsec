@@ -10,6 +10,7 @@ import { sampleCart, sampleCollection, sampleProductDetail } from "@/server/prev
 import { BlockRenderer } from "@/components/blocks/BlockRenderer.tsx";
 import { ThemeChrome } from "@/components/storefront/ThemeChrome.tsx";
 import { CollectionListingSection } from "@/components/catalog/CollectionListingSection.tsx";
+import { ProductInfoTabs } from "@/components/product/ProductInfoTabs.tsx";
 import { ProductDetailSection } from "@/components/product/ProductDetailSection.tsx";
 import { CartView } from "@/components/cart/CartView.tsx";
 
@@ -95,6 +96,9 @@ export default async function ThemePreviewPage({ params, searchParams }: { param
               <CollectionListingSection collection={sampleCollection().collection} products={sampleCollection().products} page={1} limit={24} rawSort="created_desc" inStockOnly={false} options={options} />
             ),
             renderProductDetail: (options) => <ProductDetailSection product={sampleProductDetail()} options={options} />,
+            renderProductInfoTabs: (o) => (
+              <ProductInfoTabs descriptionLabel={o.descriptionLabel} shippingLabel={o.shippingLabel} descriptionText="The product's own description appears here." shippingContent={o.shippingContent} imageAlt={o.imageAlt} imageSide={o.imageSide} />
+            ),
             renderCartContents: (options) => <CartView cart={sampleCart()} options={options} freeShippingThresholdPaise={299900} />,
           }}
         />

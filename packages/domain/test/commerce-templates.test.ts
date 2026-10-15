@@ -4,7 +4,9 @@ import { MODERN_TEMPLATE_PAGES, validateTemplatePages } from "../src/index.ts";
 describe("Modern Commerce theme", () => {
   it("passes block validation for every page, including the cart", () => {
     const pages = validateTemplatePages(MODERN_TEMPLATE_PAGES);
-    expect(Object.keys(pages).sort()).toEqual(["cart", "collection", "footer", "header", "home", "product"]);
+    expect(Object.keys(pages).sort()).toEqual(["cart", "collection", "collections", "footer", "header", "home", "product"]);
+    expect(pages["collections"]?.some((b) => b.type === "CollectionGrid" && b.props["showAll"] === true)).toBe(true);
+    expect(pages["product"]?.map((b) => b.type)).toEqual(expect.arrayContaining(["ProductDetail", "ProductInfoTabs"]));
     expect(pages["cart"]?.some((b) => b.type === "CartContents")).toBe(true);
   });
 });

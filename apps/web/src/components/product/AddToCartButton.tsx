@@ -48,7 +48,7 @@ export function AddToCartButton({
       setSuccess(true);
       // Dispatch cart update event for header badge sync
       if (typeof window !== "undefined") {
-        window.dispatchEvent(new Event("cart-updated"));
+        window.dispatchEvent(new CustomEvent("cart-updated", { detail: { open: true } }));
       }
 
       setTimeout(() => {

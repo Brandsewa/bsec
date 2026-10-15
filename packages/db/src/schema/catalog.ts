@@ -436,6 +436,8 @@ export const collections = tenantTable(
     match: text("match").notNull().default("all"),
     sortOrder: text("sort_order").notNull().default("manual"),
     imageMediaId: uuid("image_media_id"),
+    // Short plain-text blurb shown on collection cards and the archive (max 300 characters, enforced in the domain service).
+    description: text("description"),
     seo: jsonb("seo"),
     published: boolean("published").notNull().default(true),
     indexable: boolean("indexable").notNull().default(false),

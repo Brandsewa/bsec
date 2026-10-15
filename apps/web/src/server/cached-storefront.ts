@@ -21,7 +21,7 @@ import {
   type StorefrontCategoryDetail,
   type TenantContext,
 } from "@bs/domain";
-import { renderBlockDocument, walkBlocks, type BlockInstance } from "@bs/blocks";
+import { renderBlockDocument, resolveDefaultPages, walkBlocks, type BlockInstance } from "@bs/blocks";
 import { server } from "./runtime.ts";
 
 /**
@@ -216,6 +216,30 @@ export async function getCachedThemePage(tenantId: string, key: ThemeSystemPageK
   if (!page) return null;
   const renderData = await loadRenderData(tenantId, tenantCtx, { version: 1, blocks: page.blocks });
   return { blocks: page.blocks, renderData };
+}
+
+/**
+ * The Collection Archive (/collections): the theme's archive template when the store has one, else a default
+ * layout of a single "list every published collection" grid. Same cache tags as the collection pages.
+ */
+export async function getCachedCollectionsArchive(tenantId: string) {
+  "use cache";
+  cacheTag(tenantTag(tenantId, "page", THEME_SYSTEM_PAGES.collections.slug));
+  cacheTag(tenantTag(tenantId, "collection"));
+  const { rt } = server();
+  const tenantCtx = createStorefrontTenantContext(tenantId);
+  const page = await getStorefrontThemePage(rt, tenantCtx, "collections");
+  const blocks: BlockInstance[] = page?.blocks ?? [
+    { id: "default-archive", type: "CollectionGrid", version: 1, props: { title: "Collections", subtitle: "Browse everything we sell.", collectionSlugs: [], showAll: true, columns: "3" } },
+  ];
+  const renderData = await loadRenderData(tenantId, tenantCtx, { version: 1, blocks });
+  return { blocks, renderData, usesTheme: Boolean(page) };
+}
+
+/** Copy and switches for the default pages (checkout, order success, payment failed, search, 404); built-in text when the store's theme sets none. */
+export async function getCachedDefaultPages(tenantId: string) {
+  const tokens = await getCachedThemeTokens(tenantId).catch(() => null);
+  return resolveDefaultPages(tokens?.["defaultPages"]);
 }
 
 /** Theme tokens when the store uses the theme system (see THEME_TOKENS_SOURCE), else null. */

@@ -6,6 +6,7 @@
  */
 export const THEME_SYSTEM_PAGES = {
   collection: { type: "collection_template", slug: "template-collection", title: "Collection page" },
+  collections: { type: "collections_archive_template", slug: "template-collections", title: "Collection archive" },
   product: { type: "product_template", slug: "template-product", title: "Product page" },
   cart: { type: "cart_template", slug: "template-cart", title: "Cart page" },
   header: { type: "header", slug: "template-header", title: "Header" },
@@ -26,6 +27,7 @@ export function isThemeSystemPageKey(key: string): key is ThemeSystemPageKey {
 /** Display names for the theme's pages, in the order editors list them. */
 export const THEME_PAGE_LABELS: Record<"home" | ThemeSystemPageKey, string> = {
   home: "Home page",
+  collections: "Collection archive",
   collection: "Collection page",
   product: "Product page",
   cart: "Cart page",

@@ -259,8 +259,9 @@ export const storefrontContract = {
       .input(
         z.object({
           productId: z.string().uuid(),
-          page: z.number().int().min(1).default(1),
-          limit: z.number().int().min(1).max(50).default(10),
+          // Read from the query string, where every value arrives as text.
+          page: z.coerce.number().int().min(1).default(1),
+          limit: z.coerce.number().int().min(1).max(50).default(10),
         }),
       )
       .output(

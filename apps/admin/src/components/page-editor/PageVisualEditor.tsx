@@ -58,9 +58,9 @@ export default function PageVisualEditor({ pageId, canPublish, storeName }: { pa
   );
   const pageType = pageQuery.data?.type ?? "custom";
   const kind: EditorPageKind =
-    pageType === "home" ? "home" : pageType === "collection_template" ? "collection" : pageType === "product_template" ? "product" : pageType === "cart_template" ? "cart" : pageType === "header" ? "header" : pageType === "footer" ? "footer" : "custom";
+    pageType === "home" ? "home" : pageType === "collections_archive_template" ? "collections" : pageType === "collection_template" ? "collection" : pageType === "product_template" ? "product" : pageType === "cart_template" ? "cart" : pageType === "header" ? "header" : pageType === "footer" ? "footer" : "custom";
   // Theme pages (header, footer, product, collection) are reached from the theme screen, not the Pages list.
-  const exit = () => void navigate({ to: kind === "header" || kind === "footer" || kind === "product" || kind === "collection" || kind === "cart" ? "/online-store/theme-library" : "/online-store/pages" });
+  const exit = () => void navigate({ to: kind === "header" || kind === "footer" || kind === "product" || kind === "collection" || kind === "collections" || kind === "cart" ? "/online-store/theme-library" : "/online-store/pages" });
   const fontsHref = googleFontsHref((tokens ?? null) as never);
 
   const pageSwitcherOptions = useMemo(() => {
@@ -70,6 +70,7 @@ export default function PageVisualEditor({ pageId, canPublish, storeName }: { pa
     const systemDefs: Array<{ type: string; defaultLabel: string }> = [
       { type: "header", defaultLabel: "Header" },
       { type: "home", defaultLabel: "Home page" },
+      { type: "collections_archive_template", defaultLabel: "Collection archive template" },
       { type: "collection_template", defaultLabel: "Collection template" },
       { type: "product_template", defaultLabel: "Product template" },
       { type: "cart_template", defaultLabel: "Cart template" },

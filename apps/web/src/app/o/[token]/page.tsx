@@ -16,6 +16,7 @@ interface OrderTrackingPageProps {
 export const metadata: Metadata = {
   title: "Order Status",
   description: "View your order status and details",
+  robots: { index: false, follow: false },
 };
 
 export default async function OrderTrackingPage({ params }: OrderTrackingPageProps) {
@@ -44,7 +45,7 @@ export default async function OrderTrackingPage({ params }: OrderTrackingPagePro
   };
 
   return (
-    <div className="mx-auto max-w-3xl px-4 py-16 sm:px-6 lg:px-8">
+    <div className="bs-skin mx-auto max-w-3xl px-4 py-16 sm:px-6 lg:px-8">
       <div className="rounded-xl border border-border bg-card p-6 shadow-sm sm:p-8">
         <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center border-b border-border pb-6 gap-2">
           <div>

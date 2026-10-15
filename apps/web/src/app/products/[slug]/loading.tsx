@@ -1,5 +1,4 @@
 import React from "react";
-import { StockEtaSkeleton } from "@/components/product/StockEtaHole.tsx";
 
 export default function Loading() {
   return (
@@ -52,8 +51,7 @@ export default function Loading() {
             </div>
           </div>
 
-          {/* StockEta hole skeleton */}
-          <StockEtaSkeleton />
+          <div aria-hidden className="store-skeleton h-12 w-full rounded-lg" />
 
           {/* Add to cart skeleton */}
           <div aria-hidden className="store-skeleton h-14 w-full rounded-xl" />

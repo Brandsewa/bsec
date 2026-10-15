@@ -8,8 +8,8 @@ export default async function AccountAddressesPage() {
   if (!ctx) return null;
   const addresses = await getCustomerAddresses(ctx.store.rt._db.db, ctx.store.tenantId, ctx.customer.id);
   return (
-    <div className="rounded-2xl border border-border bg-card p-6 shadow-sm sm:p-8">
-      <h2 className="mb-4 text-lg font-bold text-foreground">Saved addresses</h2>
+    <div className="rounded-xl bg-[var(--muted)]/50 p-4 sm:p-5">
+      <h2 className="mb-3 text-base font-bold text-foreground">Saved addresses</h2>
       <AddressBook
         phone={ctx.customer.phone}
         addresses={addresses.map((a) => ({

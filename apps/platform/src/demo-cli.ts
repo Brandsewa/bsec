@@ -4,7 +4,7 @@
  *   node dist/demo.js remove
  * It only ever touches the store with slug "demo-store" and never contacts any external provider.
  */
-import { createRuntime, DEMO_SLUG, removeDemoStore, seedDemoStore } from "@bs/domain";
+import { createRuntime, DEMO_SLUG, removeDemoStore, seedDemoStore, seedThemeDemoCatalog } from "@bs/domain";
 
 const command = process.argv[2];
 const url = process.env.DATABASE_URL_PLATFORM;
@@ -22,11 +22,18 @@ try {
         : `Demo store '${res.slug}' created: ${res.products} products, ${res.customers} customers, ${res.orders} orders, ${res.discounts} discounts.`,
     );
     console.log("Sign in to the admin and switch store (top right) to 'Demo Store'.");
+  } else if (command === "seed-catalog") {
+    const res = await seedThemeDemoCatalog(rt);
+    console.log(
+      res.alreadySeeded
+        ? `Theme demo catalog already present (${res.products} products). Nothing changed.`
+        : `Theme demo catalog created: ${res.collections} collections, ${res.products} products.`,
+    );
   } else if (command === "remove") {
     const res = await removeDemoStore(rt, DEMO_SLUG);
     console.log(res.removed ? `Demo store removed. Rows deleted: ${JSON.stringify(res.deleted)}` : "No demo store found. Nothing to remove.");
   } else {
-    console.log("Usage: node dist/demo.js seed | remove");
+    console.log("Usage: node dist/demo.js seed | seed-catalog | remove");
     process.exitCode = 1;
   }
 } finally {

@@ -190,6 +190,7 @@ describe("Storefront Catalog & Search Services", () => {
                     },
                   ];
                   return Object.assign(items, {
+                    groupBy: () => [],
                     limit: () => [
                       {
                         id: collectionId,
@@ -210,7 +211,7 @@ describe("Storefront Catalog & Search Services", () => {
                 },
                 innerJoin: () => ({
                   where: () => ({
-                    orderBy: () => ({
+                    orderBy: () => Object.assign([], {
                       limit: () => ({
                         offset: () => [
                           {
@@ -267,6 +268,7 @@ describe("Storefront Catalog & Search Services", () => {
                     },
                   ];
                   return Object.assign(items, {
+                    groupBy: () => [],
                     limit: () => [
                       {
                         id: categoryId,
@@ -284,7 +286,7 @@ describe("Storefront Catalog & Search Services", () => {
                 },
                 innerJoin: () => ({
                   where: () => ({
-                    orderBy: () => ({
+                    orderBy: () => Object.assign([], {
                       limit: () => ({
                         offset: () => [
                           {
@@ -342,6 +344,7 @@ describe("Storefront Catalog & Search Services", () => {
             execute: async () => {},
             select: () => ({
               from: () => ({
+                innerJoin: () => ({ where: () => Object.assign([], { orderBy: () => [] }) }),
                 where: () => {
                   const items = [
                     {
@@ -355,6 +358,7 @@ describe("Storefront Catalog & Search Services", () => {
                     },
                   ];
                   return Object.assign(items, {
+                    groupBy: () => [],
                     orderBy: () => Object.assign(items, {
                       limit: () => ({
                         offset: () => items,
@@ -427,6 +431,7 @@ describe("Storefront Catalog & Search Services", () => {
                       { productId: "prod-low", price: "20.00" },
                     ];
                     return Object.assign(variants, {
+                      groupBy: () => [],
                       limit: () => [
                         {
                           id: collectionId,
@@ -447,7 +452,7 @@ describe("Storefront Catalog & Search Services", () => {
                   },
                   innerJoin: () => ({
                     where: () => ({
-                      orderBy: () => ({
+                      orderBy: () => Object.assign([], {
                         limit: () => ({
                           offset: () =>
                             order === "asc"

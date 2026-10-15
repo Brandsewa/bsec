@@ -1,3 +1,4 @@
+import { PLACEHOLDER_IMAGE_URL } from "@/lib/placeholder.ts";
 import React from "react";
 import type { StorefrontCart } from "@bs/domain";
 import { priceOrder } from "@bs/domain/pricing";
@@ -33,13 +34,13 @@ export function OrderSummary({ cart, shippingPaise = 0, codFeePaise = 0, onCartC
   }, null);
 
   return (
-    <div className="rounded-2xl border border-border bg-card p-6 shadow-sm">
-      <h2 className="text-lg font-bold text-foreground mb-4">Order Summary</h2>
+    <div className="rounded-xl bg-muted/60 p-4">
+      <h2 className="mb-2 hidden text-lg font-semibold tracking-tight text-foreground lg:block">Order Summary</h2>
 
-      <div className="divide-y divide-border/60 max-h-72 overflow-y-auto mb-4">
+      <div className="divide-y divide-border/40 max-h-64 overflow-y-auto mb-3">
         {cart.items.map((item) => (
-          <div key={item.id} className="flex items-center gap-3 py-3">
-            <div className="relative h-14 w-14 flex-shrink-0 overflow-hidden rounded-lg bg-muted border border-border/40">
+          <div key={item.id} className="flex items-center gap-2.5 py-2">
+            <div className="relative h-11 w-11 flex-shrink-0 overflow-hidden rounded-lg bg-background">
               {item.primaryImage?.url ? (
                 /* eslint-disable-next-line @next/next/no-img-element */
                 <img
@@ -49,9 +50,8 @@ export function OrderSummary({ cart, shippingPaise = 0, codFeePaise = 0, onCartC
                   className="h-full w-full object-cover"
                 />
               ) : (
-                <div className="flex h-full w-full items-center justify-center text-[10px] text-muted-foreground">
-                  No image
-                </div>
+                /* eslint-disable-next-line @next/next/no-img-element */
+                <img src={PLACEHOLDER_IMAGE_URL} alt="" className="h-full w-full object-cover" />
               )}
               <span className="absolute -top-1 -right-1 flex h-4 w-4 items-center justify-center rounded-full bg-foreground text-[10px] font-bold text-background">
                 {item.quantity}
@@ -75,7 +75,7 @@ export function OrderSummary({ cart, shippingPaise = 0, codFeePaise = 0, onCartC
         ))}
       </div>
 
-      <div className="space-y-2 border-t border-border/60 pt-4 text-sm">
+      <div className="space-y-1.5 border-t border-border/40 pt-3 text-sm">
         <div className="flex justify-between text-muted-foreground">
           <span>Subtotal</span>
           <span className="font-semibold text-foreground">{formattedSubtotal}</span>
@@ -96,15 +96,15 @@ export function OrderSummary({ cart, shippingPaise = 0, codFeePaise = 0, onCartC
             <span className="font-semibold text-foreground">{`₹${(codFeePaise / 100).toLocaleString("en-IN")}`}</span>
           </div>
         )}
-        <div className="flex justify-between text-base font-bold text-foreground border-t border-border/60 pt-3">
+        <div className="flex justify-between text-base font-bold text-foreground border-t border-border/40 pt-2.5">
           <span>Total</span>
-          <span className="text-xl">{formattedTotal}</span>
+          <span className="text-lg">{formattedTotal}</span>
         </div>
         <p className="text-xs text-muted-foreground mt-1">Inclusive of all taxes (GST)</p>
       </div>
 
       {latestShipDate && (
-        <div className="mt-4 rounded-xl border border-amber-500/30 bg-amber-500/10 p-3 text-xs text-amber-950 dark:text-amber-200">
+        <div className="mt-4 rounded-xl bg-amber-500/10 p-3 text-xs text-amber-950 dark:text-amber-200">
           <p className="font-semibold">Pre-order dispatch notice</p>
           <p className="mt-0.5 text-amber-900/90 dark:text-amber-300">
             {latestShipDate >= new Date().toISOString().slice(0, 10) ? (
@@ -123,7 +123,7 @@ export function OrderSummary({ cart, shippingPaise = 0, codFeePaise = 0, onCartC
       )}
 
       {onCartChange && (
-        <div className="mt-4">
+        <div className="mt-3">
           <DiscountCodeBox cart={cart} onChange={onCartChange} />
         </div>
       )}

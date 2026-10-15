@@ -7,6 +7,8 @@ import {
   FeatureDisabledError,
   checkStorefrontRateLimit,
   RateLimitExceededError,
+  registerCustomer,
+  getClientIp,
 } from "@bs/domain";
 import { server } from "@/server/runtime.ts";
 import { CART_COOKIE_NAME, getRequestHeaders, getCookieValue } from "../../cart/route.ts";
@@ -26,6 +28,27 @@ const PlaceOrderSchema = z.object({
   notes: z.string().optional(),
   termsConsent: z.boolean().optional(),
   marketingConsent: z.boolean().optional(),
+  // A business buyer: company name, and the GSTIN when they want it on the invoice.
+  // A guest ticked "Create an account": after the order is placed we send them the usual set-your-password email.
+  createAccount: z.boolean().optional(),
+  businessOrder: z
+    .object({
+      companyName: z.string().trim().min(1, "Company name is required").max(120),
+      taxId: z.string().trim().max(15).optional(),
+    })
+    .optional(),
+  // Deliver somewhere other than the billing address, to its own contact.
+  shipTo: z
+    .object({
+      fullName: z.string().trim().min(1, "Shipping name is required").max(120),
+      email: z.string().trim().email().max(255).optional().or(z.literal("")),
+      phone: z.string().regex(/^[6-9][0-9]{9}$/, "Valid 10-digit shipping contact number required"),
+      addressLine1: z.string().trim().min(1, "Shipping address is required").max(200),
+      city: z.string().trim().min(1).max(80),
+      state: z.string().trim().min(1).max(80),
+      pincode: z.string().regex(/^[1-9][0-9]{5}$/, "Valid 6-digit shipping pincode required"),
+    })
+    .optional(),
 });
 
 export async function POST(req: Request) {
@@ -100,7 +123,19 @@ export async function POST(req: Request) {
       notes: parsed.data.notes,
       termsConsent: parsed.data.termsConsent,
       marketingConsent: parsed.data.marketingConsent,
+      businessOrder: parsed.data.businessOrder,
+      shipTo: parsed.data.shipTo ? { ...parsed.data.shipTo, email: parsed.data.shipTo.email || undefined } : undefined,
     });
+
+    if (parsed.data.createAccount) {
+      // The order is already placed: a failure here (existing account, sign-up disabled) must not fail it.
+      await registerCustomer(
+        rt._db.db,
+        tenantCtx.tenantId,
+        { name: parsed.data.fullName, email: parsed.data.email, phone: parsed.data.phone, acceptsMarketing: parsed.data.marketingConsent },
+        { ip: getClientIp(req.headers), userAgent: req.headers.get("user-agent") ?? undefined },
+      ).catch(() => undefined);
+    }
 
     const response = NextResponse.json(orderResult, { status: 200 });
 

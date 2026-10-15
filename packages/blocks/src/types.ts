@@ -38,6 +38,7 @@ export type BlockType =
   | "SiteHeader"
   | "SiteFooter"
   | "ProductDetail"
+  | "ProductInfoTabs"
   | "CollectionListing"
   | "CartContents"
   | "HeroSlider"
@@ -71,6 +72,10 @@ export interface BlockCollectionSummary {
   slug: string;
   title: string;
   imageMediaId?: string | undefined;
+  /** Listed products in the collection; only set where it is cheap to know (archive page, manual collections). */
+  productCount?: number | undefined;
+  /** The collection blurb (plain text), shown under the title on cards. */
+  description?: string | undefined;
 }
 
 export interface ResolvedMenuItem {
@@ -127,6 +132,8 @@ export interface RenderContext {
   renderCart?: (() => ReactNode) | undefined;
   /** The real product page body / collection listing; the editor draws labelled placeholders instead. */
   renderProductDetail?: ((opts: ProductDetailOptions) => ReactNode) | undefined;
+  /** The product's long description and the theme's shipping and returns text in tabs; the editor draws a labelled placeholder instead. */
+  renderProductInfoTabs?: ((opts: ProductInfoTabsOptions) => ReactNode) | undefined;
   renderCollectionListing?: ((opts: CollectionListingOptions) => ReactNode) | undefined;
   /** The real cart (items, totals, discount code); the editor draws a labelled placeholder instead. */
   renderCartContents?: ((opts: CartContentsOptions) => ReactNode) | undefined;
@@ -154,6 +161,15 @@ export interface ProductShowcaseBehavior {
   pauseOnHover: boolean;
 }
 
+export interface ProductInfoTabsOptions {
+  descriptionLabel: string;
+  shippingLabel: string;
+  shippingContent: string;
+  imageMediaId?: string | undefined;
+  imageAlt: string;
+  imageSide: "right" | "left";
+}
+
 export interface ProductDetailOptions {
   galleryPosition: "left" | "right";
   showBreadcrumb: boolean;
@@ -168,6 +184,27 @@ export interface ProductDetailOptions {
   /** Phone: a bar with the price and an add-to-cart button appears once the main button scrolls out of view. */
   stickyMobileBar?: boolean | undefined;
   showSku?: boolean | undefined;
+  thumbPosition?: "bottom" | "left" | "right" | undefined;
+  showReadMore?: boolean | undefined;
+  variantStyle?: "buttons" | "pills" | "dropdown" | undefined;
+  priceNote?: string | undefined;
+  showBuyNow?: boolean | undefined;
+  addToCartLabel?: string | undefined;
+  buyNowLabel?: string | undefined;
+  addToCartBg?: string | undefined;
+  addToCartText?: string | undefined;
+  buyNowBg?: string | undefined;
+  buyNowText?: string | undefined;
+  showPaymentImage?: boolean | undefined;
+  paymentImageMediaId?: string | undefined;
+  paymentImageAlt?: string | undefined;
+  showDeliveryEstimate?: boolean | undefined;
+  cutoffHour?: number | undefined;
+  deliveryDays?: number | undefined;
+  shipsText?: string | undefined;
+  timeZone?: string | undefined;
+  showUsps?: boolean | undefined;
+  usps?: Array<{ icon: string; text: string; description?: string | undefined }> | undefined;
 }
 
 export interface CartContentsOptions {
@@ -192,11 +229,21 @@ export interface CollectionListingOptions {
   showDescription: boolean;
   columnsMobile?: "1" | "2" | undefined;
   imageRatio?: "square" | "portrait" | undefined;
-  cardStyle?: "bordered" | "minimal" | undefined;
+  cardStyle?: "borderless" | "bordered" | "minimal" | undefined;
   showSaleBadge?: boolean | undefined;
   showRatings?: boolean | undefined;
   showBreadcrumb?: boolean | undefined;
   filterMenuHandle?: string | undefined;
+  columnsTablet?: "1" | "2" | undefined;
+  defaultView?: "grid" | "list" | undefined;
+  showViewToggle?: boolean | undefined;
+  pageSize?: "12" | "24" | "36" | undefined;
+  filtersCollapsible?: boolean | undefined;
+  showAddToCart?: boolean | undefined;
+  showQuickAdd?: boolean | undefined;
+  showViewProduct?: boolean | undefined;
+  showCategoryBadge?: boolean | undefined;
+  hoverSecondImage?: boolean | undefined;
 }
 
 /**

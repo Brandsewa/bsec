@@ -191,7 +191,7 @@ export function ProductShowcaseClient({ options, children }: { options: ProductS
       try {
         const res = await fetch("/api/storefront/cart/items", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ variantId: variant, quantity: 1 }) });
         if (!res.ok) throw new Error("add failed");
-        window.dispatchEvent(new Event("cart-updated"));
+        window.dispatchEvent(new CustomEvent("cart-updated", { detail: { open: true } }));
         btn.dataset["state"] = "done";
         setTimeout(() => delete btn.dataset["state"], 1500);
       } catch {

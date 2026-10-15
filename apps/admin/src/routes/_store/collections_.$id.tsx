@@ -19,7 +19,7 @@ import type { CollectionDetail, CollectionRule } from "@bs/contracts";
 import { Button } from "@bs/ui";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@bs/ui";
 import { Field, FieldLabel } from "@bs/ui";
-import { Input } from "@bs/ui";
+import { Input, InfoTip, Textarea } from "@bs/ui";
 import { RadioGroup, RadioGroupItem } from "@bs/ui";
 import { Switch } from "@bs/ui";
 import { ConfirmDialog } from "@bs/ui";
@@ -111,6 +111,7 @@ function CollectionEditor({ collection, go }: { collection: CollectionDetail; go
   const queryClient = useQueryClient();
 
   const [title, setTitle] = useState(collection.title);
+  const [description, setDescription] = useState(collection.description ?? "");
   const [slug, setSlug] = useState(collection.slug);
   const [type, setType] = useState<"manual" | "automated">(collection.type);
   const [match, setMatch] = useState<"all" | "any">(collection.match ?? "all");
@@ -227,6 +228,7 @@ function CollectionEditor({ collection, go }: { collection: CollectionDetail; go
       id: collection.id,
       title: title.trim(),
       slug: slug.trim() || undefined,
+      description: description.trim() || null,
       imageMediaId: imageMediaId || null,
       type,
       match,
@@ -309,6 +311,22 @@ function CollectionEditor({ collection, go }: { collection: CollectionDetail; go
                     {errors["title"]}
                   </p>
                 )}
+              </div>
+
+              <div className="grid gap-1.5">
+                <FieldLabel htmlFor="edit-description" className="flex items-center gap-1.5">
+                  Description
+                  <InfoTip>Short plain-text blurb shown on collection cards and the collections page (two lines on cards). Up to 300 characters.</InfoTip>
+                </FieldLabel>
+                <Textarea
+                  id="edit-description"
+                  rows={3}
+                  maxLength={300}
+                  value={description}
+                  onChange={(e) => setDescription(e.target.value)}
+                  placeholder="e.g. Hand-made chilli pastes and oils from the Darjeeling hills"
+                />
+                <p className="text-xs text-muted-foreground">{description.length}/300</p>
               </div>
 
               <div className="grid gap-1.5">

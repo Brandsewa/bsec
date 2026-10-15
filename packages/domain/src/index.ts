@@ -92,6 +92,7 @@ export * from "./admin/payments-settings.ts";
 export * from "./admin/create-owner.ts";
 export * from "./admin/tenant-purge.ts";
 export * from "./admin/demo-store.ts";
+export * from "./admin/theme-demo-catalog.ts";
 export * from "./system/email.ts";
 export * from "./system/email-templates.ts";
 export * from "./system/abandoned-carts.ts";

@@ -2,9 +2,10 @@ import { useCallback, useMemo, useState } from "react";
 import { useNavigate } from "@tanstack/react-router";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { BlockEditor, type BlockEditorHost, type EditorPageKind, type ThemeTokens } from "@bs/block-editor";
-import { buildSampleRenderData, computeThemeTokens, googleFontsHref, type BlockInstance } from "@bs/blocks";
+import { buildSampleRenderData, computeThemeTokens, googleFontsHref, resolveDefaultPages, type BlockInstance, type DefaultPages } from "@bs/blocks";
 import { Button, EmptyState, PageContainer, PageSkeleton, toast } from "@bs/ui";
 import { client, orpc } from "../lib/orpc.ts";
+import { DefaultPagesForm } from "./DefaultPagesForm.tsx";
 
 /**
  * Platform theme builder. A theme is a set of settings (colours, fonts, corners, buttons; edited from the "Theme" tab in the page editor's sidebar, on every page) plus
@@ -19,13 +20,15 @@ const host: BlockEditorHost = {
 
 const TABS = [
   { key: "home", label: "Home page", kind: "home" },
+  { key: "collections", label: "Collection archive", kind: "collections" },
   { key: "collection", label: "Collection page", kind: "collection" },
   { key: "product", label: "Product page", kind: "product" },
   { key: "cart", label: "Cart page", kind: "cart" },
   { key: "header", label: "Header", kind: "header" },
   { key: "footer", label: "Footer", kind: "footer" },
 ] as const satisfies ReadonlyArray<{ key: string; label: string; kind?: EditorPageKind }>;
-type TabKey = (typeof TABS)[number]["key"];
+/** "defaults" is not a block page: it shows the form for the default pages (checkout, order success, payment failed, search, 404). */
+type TabKey = (typeof TABS)[number]["key"] | "defaults";
 
 type Pages = Record<string, BlockInstance[]>;
 
@@ -76,6 +79,8 @@ function Workspace({
   const [pages, setPages] = useState<Pages>(initialPages);
   const [dirty, setDirty] = useState(false);
   const [live, setLive] = useState(isActive);
+  const [defaultPages, setDefaultPages] = useState<DefaultPages>(() => resolveDefaultPages((initialTokens as Record<string, unknown>)["defaultPages"]));
+  const [saving, setSaving] = useState(false);
 
   const themeVars = useMemo(() => computeThemeTokens(null, tokens), [tokens]);
   const fontsHref = useMemo(() => googleFontsHref(tokens), [tokens]);
@@ -87,7 +92,7 @@ function Workspace({
   }, []);
 
   const saveAll = async (next: Pages) => {
-    await client.templates.saveDraft({ code, pages: next, tokens });
+    await client.templates.saveDraft({ code, pages: next, tokens: { ...tokens, defaultPages } });
     await queryClient.invalidateQueries({ queryKey: orpc.templates.list.key() });
     setDirty(false);
   };
@@ -102,6 +107,37 @@ function Workspace({
   };
 
   const active = TABS.find((t) => t.key === tab) ?? TABS[0];
+  const pageOptions = [...TABS.map((x) => ({ value: x.key as TabKey, label: x.label })), { value: "defaults" as TabKey, label: "Default pages" }];
+
+  const guarded = async (fn: () => Promise<void>) => {
+    setSaving(true);
+    try {
+      await fn();
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Could not save");
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  if (tab === "defaults") {
+    return (
+      <div className="h-screen bg-[var(--background)]">
+        <DefaultPagesForm
+          value={defaultPages}
+          onChange={(v) => {
+            setDefaultPages(v);
+            setDirty(true);
+          }}
+          saving={saving}
+          status={live ? "Published theme" : "Draft: hidden from stores"}
+          onExit={() => setTab("home")}
+          onSave={() => void guarded(async () => { await saveAll(pages); toast.success("Draft saved"); })}
+          onPublish={() => void guarded(() => publish(pages))}
+        />
+      </div>
+    );
+  }
 
   return (
     <div className="h-screen flex flex-col bg-[var(--background)]">
@@ -145,7 +181,7 @@ function Workspace({
               }
               return url;
             }}
-            pages={{ value: tab, options: TABS.map((x) => ({ value: x.key, label: x.label })), onChange: (v) => setTab(v as TabKey) }}
+            pages={{ value: tab, options: pageOptions, onChange: (v) => setTab(v as TabKey) }}
             publishLabel={live ? "Published" : "Draft: hidden from stores"}
             themeTokens={tokens}
             onThemeTokensChange={onThemeTokensChange}

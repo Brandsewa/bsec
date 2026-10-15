@@ -45,14 +45,24 @@ const TRUST_ITEMS = [
 export const MODERN_TEMPLATE_COLLECTION: BlockInstance[] = [
   b("mc-collection", "CollectionListing", {
     columns: "4",
+    columnsTablet: "2",
     columnsMobile: "2",
     imageRatio: "portrait",
-    cardStyle: "minimal",
+    cardStyle: "borderless",
     showSaleBadge: true,
     showRatings: true,
-    showBreadcrumb: true,
+    showBreadcrumb: false,
     showFilters: true,
     showDescription: true,
+    defaultView: "grid",
+    showViewToggle: true,
+    pageSize: "12",
+    filtersCollapsible: true,
+    showAddToCart: true,
+    showQuickAdd: true,
+    showViewProduct: true,
+    showCategoryBadge: true,
+    hoverSecondImage: true,
   }),
   b("mc-collection-usp", "UspStrip", { items: TRUST_ITEMS }),
   b("mc-collection-picks", "ProductCarousel", {
@@ -77,24 +87,48 @@ export const MODERN_TEMPLATE_COLLECTION: BlockInstance[] = [
 export const MODERN_TEMPLATE_PRODUCT: BlockInstance[] = [
   b("mc-product", "ProductDetail", {
     galleryPosition: "left",
+    thumbPosition: "left",
     showBreadcrumb: true,
     showRating: true,
+    showSku: true,
     showDescription: true,
+    showReadMore: true,
+    variantStyle: "pills",
+    priceNote: "Tax and shipping calculated at checkout.",
+    addToCartLabel: "Add to cart",
+    showBuyNow: true,
+    buyNowLabel: "Buy it now",
+    showPaymentImage: true,
+    paymentImageAlt: "Secure payment",
+    showDeliveryEstimate: true,
+    cutoffHour: 14,
+    deliveryDays: 3,
+    shipsText: "Ships within 24 hrs",
+    timeZone: "Asia/Kolkata",
+    showUsps: true,
+    usps: [
+      { icon: "truck", text: "Fast dispatch", description: "Packed and shipped within 24 hours" },
+      { icon: "shield", text: "Secure payment", description: "Encrypted checkout, details stay private" },
+      { icon: "returns", text: "Easy returns", description: "Simple returns if something is not right" },
+    ],
     showTags: false,
     stickyBuyBox: true,
-    showSku: false,
-    showTrustPoints: true,
-    trustPoints: ["Secure checkout", "Easy returns", "Fast dispatch"],
+    showTrustPoints: false,
     stickyMobileBar: true,
   }),
-  b("mc-product-usp", "UspStrip", { items: TRUST_ITEMS.slice(0, 3) }),
-  b("mc-product-faq", "FAQ", {
-    title: "Shipping, returns and care",
-    items: [
-      { question: "How long will delivery take?", answer: "Orders usually arrive in 3-5 business days across India. You get tracking details as soon as your order ships." },
-      { question: "What is the return policy?", answer: "Return unused items within 7 days of delivery for a refund or exchange." },
-      { question: "Can I pay on delivery?", answer: "Yes. Choose cash on delivery at checkout, or pay online with UPI or card." },
-    ],
+  b("mc-product-info", "ProductInfoTabs", {
+    descriptionLabel: "Description",
+    shippingLabel: "Shipping & returns",
+    shippingContent: [
+      "Orders are packed within 24 hours and shipped with a tracked courier.",
+      "",
+      "- Delivery usually takes 3-5 business days across India.",
+      "- You get tracking details as soon as your order ships.",
+      "- Unused items can be returned within 7 days of delivery for a refund or exchange.",
+      "- Cash on delivery is available at checkout.",
+    ].join(String.fromCharCode(10)),
+    imageAlt: "",
+    imageSide: "right",
   }),
   b("mc-product-reviews", "Reviews", { title: "Customer reviews", showAggregate: true, limit: 6 }),
   b("mc-product-more", "ProductCarousel", {
@@ -106,6 +140,12 @@ export const MODERN_TEMPLATE_PRODUCT: BlockInstance[] = [
     showRating: false,
     tone: "surface",
   }),
+];
+
+/** Collection archive: a heading and every published collection as a card grid. */
+export const MODERN_TEMPLATE_COLLECTIONS: BlockInstance[] = [
+  b("mc-archive", "CollectionGrid", { title: "Shop by collection", subtitle: "Browse everything we sell", collectionSlugs: [], showAll: true, columns: "3" }),
+  b("mc-archive-usp", "UspStrip", { items: TRUST_ITEMS }),
 ];
 
 /** Cart page: the cart first, reassurance under it, one row of discovery. */
@@ -155,6 +195,7 @@ export const MODERN_TEMPLATE_HEADER: BlockInstance[] = [
 /** Every page of the theme, keyed as theme_templates.draft_pages stores them. */
 export const MODERN_TEMPLATE_PAGES = {
   home: LAUNCH_TEMPLATE_HOME,
+  collections: MODERN_TEMPLATE_COLLECTIONS,
   collection: MODERN_TEMPLATE_COLLECTION,
   product: MODERN_TEMPLATE_PRODUCT,
   cart: MODERN_TEMPLATE_CART,

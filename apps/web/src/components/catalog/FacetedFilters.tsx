@@ -3,12 +3,17 @@
 import React, { useState, useTransition } from "react";
 import { useRouter, usePathname, useSearchParams } from "next/navigation";
 import type { StorefrontFacetedResult, StorefrontFacet } from "@bs/domain";
+import { ViewToggle, ProductsSkeleton } from "./ListingView.tsx";
+import { PriceSlider } from "./PriceSlider.tsx";
 
 export interface FacetedFiltersProps {
   filterData: StorefrontFacetedResult;
   currentSort?: string | undefined;
   totalCount?: number | undefined;
   children?: React.ReactNode;
+  /** Lets shoppers hide the filter sidebar on desktop. */
+  collapsible?: boolean | undefined;
+  showViewToggle?: boolean | undefined;
 }
 
 const SORT_OPTIONS = [
@@ -18,26 +23,31 @@ const SORT_OPTIONS = [
   { value: "title_asc", label: "Alphabetical A-Z" },
 ];
 
+const BAR_BUTTON = "items-center gap-1.5 whitespace-nowrap rounded-lg border border-border bg-background px-3 py-1.5 text-sm font-medium text-foreground hover:bg-muted transition-colors";
+const BADGE = "ml-1 inline-flex items-center justify-center rounded-full bg-primary px-1.5 py-0.5 text-xs font-semibold text-primary-foreground";
+const FILTER_ICON = (
+  <svg className="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+    <polygon points="22 3 2 3 10 12.46 10 19 14 21 14 12.46 22 3" />
+  </svg>
+);
+
 export function FacetedFilters({
   filterData,
   currentSort = "created_desc",
   totalCount,
   children,
+  collapsible = true,
+  showViewToggle = true,
 }: FacetedFiltersProps) {
   const router = useRouter();
   const pathname = usePathname();
   const searchParams = useSearchParams();
   const [isPending, startTransition] = useTransition();
   const [isMobileOpen, setIsMobileOpen] = useState(false);
+  const [sidebarOpen, setSidebarOpen] = useState(true);
+  const hasFacets = filterData.facets.length > 0;
 
-  // Price range local state for inputs
-  const priceFacet = filterData.facets.find((f) => f.kind === "price");
-  const [priceMinInput, setPriceMinInput] = useState<string>(
-    priceFacet?.range?.currentMin !== undefined ? String(priceFacet.range.currentMin) : ""
-  );
-  const [priceMaxInput, setPriceMaxInput] = useState<string>(
-    priceFacet?.range?.currentMax !== undefined ? String(priceFacet.range.currentMax) : ""
-  );
+  const [isSortOpen, setIsSortOpen] = useState(false);
 
   const handleSortChange = (newSort: string) => {
     const params = new URLSearchParams(searchParams?.toString() ?? "");
@@ -47,6 +57,7 @@ export function FacetedFilters({
       params.set("sort", newSort);
     }
     params.delete("page");
+    params.delete("limit");
     startTransition(() => {
       router.push(`${pathname}?${params.toString()}`);
     });
@@ -64,6 +75,7 @@ export function FacetedFilters({
       params.set(paramKey, next.join(","));
     }
     params.delete("page");
+    params.delete("limit");
     startTransition(() => {
       router.push(`${pathname}?${params.toString()}`);
     });
@@ -78,26 +90,30 @@ export function FacetedFilters({
       params.delete("inStockOnly");
     }
     params.delete("page");
+    params.delete("limit");
     startTransition(() => {
       router.push(`${pathname}?${params.toString()}`);
     });
   };
 
-  const applyPriceRange = () => {
+  // The slider works in whole rupees; the address and the query use paise. Dragging back to the full range removes the filter.
+  const commitPrice = (loRupees: number, hiRupees: number, fullMinPaise: number, fullMaxPaise: number) => {
     const params = new URLSearchParams(searchParams?.toString() ?? "");
-    const minVal = priceMinInput.trim() !== "" ? Math.max(0, Number(priceMinInput)) : undefined;
-    const maxVal = priceMaxInput.trim() !== "" ? Math.max(0, Number(priceMaxInput)) : undefined;
-
-    if (minVal !== undefined || maxVal !== undefined) {
-      const minStr = minVal !== undefined && !Number.isNaN(minVal) ? String(minVal) : "";
-      const maxStr = maxVal !== undefined && !Number.isNaN(maxVal) ? String(maxVal) : "";
-      params.set("price", `${minStr}-${maxStr}`);
-    } else {
+    const lo = loRupees * 100;
+    const hi = hiRupees * 100;
+    if (lo <= fullMinPaise && hi >= fullMaxPaise) {
+      if (!params.has("price")) return;
       params.delete("price");
+    } else {
+      const next = `${lo <= fullMinPaise ? "" : lo}-${hi >= fullMaxPaise ? "" : hi}`;
+      if (params.get("price") === next) return;
+      params.set("price", next);
     }
     params.delete("page");
+    params.delete("limit");
+    params.delete("limit");
     startTransition(() => {
-      router.push(`${pathname}?${params.toString()}`);
+      router.push(`${pathname}?${params.toString()}`, { scroll: false });
     });
   };
 
@@ -105,8 +121,6 @@ export function FacetedFilters({
     const params = new URLSearchParams();
     const sortVal = searchParams.get("sort");
     if (sortVal) params.set("sort", sortVal);
-    setPriceMinInput("");
-    setPriceMaxInput("");
     startTransition(() => {
       router.push(`${pathname}${params.toString() ? `?${params.toString()}` : ""}`);
     });
@@ -137,47 +151,24 @@ export function FacetedFilters({
     }
 
     if (facet.kind === "price") {
+      const rng = facet.range;
       return (
         <details key={facet.id} open={!facet.collapsed} className="group py-4 border-b border-border/60">
           <summary className="flex items-center justify-between text-sm font-medium text-foreground cursor-pointer select-none list-none">
             <span>{facet.label}</span>
             <span className="transition-transform group-open:rotate-180 text-muted-foreground text-xs">▼</span>
           </summary>
-          <div className="mt-3 space-y-3">
-            <div className="flex items-center gap-2">
-              <div className="flex-1">
-                <label className="text-xs text-muted-foreground block mb-1">Min (₹)</label>
-                <input
-                  type="number"
-                  min="0"
-                  placeholder={String(facet.range?.min ?? 0)}
-                  value={priceMinInput}
-                  onChange={(e) => setPriceMinInput(e.target.value)}
-                  className="w-full rounded-md border border-border bg-background px-2.5 py-1 text-sm text-foreground focus:border-primary focus:outline-hidden"
-                />
-              </div>
-              <span className="text-muted-foreground mt-5">-</span>
-              <div className="flex-1">
-                <label className="text-xs text-muted-foreground block mb-1">Max (₹)</label>
-                <input
-                  type="number"
-                  min="0"
-                  placeholder={String(facet.range?.max ?? 0)}
-                  value={priceMaxInput}
-                  onChange={(e) => setPriceMaxInput(e.target.value)}
-                  className="w-full rounded-md border border-border bg-background px-2.5 py-1 text-sm text-foreground focus:border-primary focus:outline-hidden"
-                />
-              </div>
-            </div>
-            <button
-              type="button"
-              onClick={applyPriceRange}
+          {rng ? (
+            <PriceSlider
+              key={`${rng.min}-${rng.max}-${rng.currentMin ?? ""}-${rng.currentMax ?? ""}`}
+              min={Math.floor(rng.min / 100)}
+              max={Math.ceil(rng.max / 100)}
+              valueMin={Math.floor((rng.currentMin ?? rng.min) / 100)}
+              valueMax={Math.ceil((rng.currentMax ?? rng.max) / 100)}
               disabled={isPending}
-              className="w-full rounded-md bg-secondary px-3 py-1.5 text-xs font-medium text-secondary-foreground hover:bg-secondary/80 transition-colors disabled:opacity-50"
-            >
-              Apply Price
-            </button>
-          </div>
+              onCommit={(lo, hi) => commitPrice(lo, hi, rng.min, rng.max)}
+            />
+          ) : null}
         </details>
       );
     }
@@ -251,47 +242,54 @@ export function FacetedFilters({
 
   return (
     <>
-      {/* Top Bar: Count, Mobile Filter Trigger, Desktop Sort */}
-      <div className="flex items-center justify-between py-4 border-b border-border/60">
-        {/* Count */}
-        <div className="text-sm text-muted-foreground">
+      {/* Top bar: Filters, product total, then sort and view on the right */}
+      <div className="flex flex-wrap items-center justify-between gap-3 py-4 border-b border-border/60">
+        <div className="flex items-center gap-3 sm:gap-4">
+          {/* Phone and tablet: opens the filter sheet */}
+          <button
+            type="button"
+            onClick={() => setIsMobileOpen(true)}
+            className={`${hasFacets ? "lg:hidden inline-flex" : "hidden"} ${BAR_BUTTON}`}
+          >
+            {FILTER_ICON}
+            <span>Filters</span>
+            {filterData.activeFilterCount > 0 ? <span className={BADGE}>{filterData.activeFilterCount}</span> : null}
+          </button>
+
+          {/* Desktop: hides or shows the sidebar */}
+          {hasFacets && collapsible ? (
+            <button
+              type="button"
+              onClick={() => setSidebarOpen((o) => !o)}
+              aria-expanded={sidebarOpen}
+              aria-controls="bs-filter-sidebar"
+              className={`hidden lg:inline-flex ${BAR_BUTTON}`}
+            >
+              {FILTER_ICON}
+              <span>{sidebarOpen ? "Hide filters" : "Show filters"}</span>
+              {!sidebarOpen && filterData.activeFilterCount > 0 ? <span className={BADGE}>{filterData.activeFilterCount}</span> : null}
+            </button>
+          ) : null}
+
           {totalCount !== undefined ? (
-            <span>
-              Showing <strong className="text-foreground">{totalCount}</strong> products
+            <span className="text-sm text-muted-foreground whitespace-nowrap">
+              <strong className="text-foreground">{totalCount}</strong> {totalCount === 1 ? "product" : "products"}
             </span>
           ) : null}
         </div>
 
-        <div className="flex items-center gap-3">
-          {/* Mobile Filter Button */}
-          <button
-            type="button"
-            onClick={() => setIsMobileOpen(true)}
-            className="lg:hidden inline-flex items-center gap-1.5 rounded-lg border border-border bg-background px-3 py-1.5 text-sm font-medium text-foreground hover:bg-muted transition-colors"
-          >
-            <svg
-              className="h-4 w-4"
-              viewBox="0 0 24 24"
-              fill="none"
-              stroke="currentColor"
-              strokeWidth="2"
-              strokeLinecap="round"
-              strokeLinejoin="round"
-              aria-hidden="true"
-            >
-              <polygon points="22 3 2 3 10 12.46 10 19 14 21 14 12.46 22 3" />
+        <div className="flex items-center gap-2 sm:gap-3">
+          {/* Phone: a button like Filters that opens the sort sheet */}
+          <button type="button" onClick={() => setIsSortOpen(true)} className={`inline-flex md:hidden ${BAR_BUTTON}`} aria-haspopup="dialog">
+            <svg className="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+              <path d="M3 6h18M6 12h12M10 18h4" />
             </svg>
-            <span>Filters</span>
-            {filterData.activeFilterCount > 0 ? (
-              <span className="ml-1 inline-flex items-center justify-center rounded-full bg-primary px-1.5 py-0.5 text-xs font-semibold text-primary-foreground">
-                {filterData.activeFilterCount}
-              </span>
-            ) : null}
+            <span>Sort</span>
           </button>
 
-          {/* Sort Select */}
-          <div className="flex items-center gap-2">
-            <label htmlFor="catalog-sort" className="text-sm text-muted-foreground whitespace-nowrap hidden sm:inline">
+          {/* Tablet and desktop: a select */}
+          <div className="hidden md:flex items-center gap-2">
+            <label htmlFor="catalog-sort" className="text-sm text-muted-foreground whitespace-nowrap">
               Sort by:
             </label>
             <select
@@ -308,14 +306,17 @@ export function FacetedFilters({
               ))}
             </select>
           </div>
+
+          {showViewToggle ? <ViewToggle /> : null}
         </div>
       </div>
 
       {/* Main Body */}
       {children ? (
-        <div className="mt-8 flex flex-col lg:flex-row gap-8 items-start">
+        <div className="mt-8 flex flex-col lg:flex-row gap-8 lg:gap-x-[52px] items-start">
           {/* Desktop Sidebar */}
-          <aside className="hidden lg:block w-64 shrink-0 sticky top-20">
+          {hasFacets ? (
+          <aside id="bs-filter-sidebar" className={`${sidebarOpen ? "hidden lg:block" : "hidden"} w-64 shrink-0 sticky top-20`}>
             <div className="flex items-center justify-between pb-3 border-b border-border/60">
               <h2 className="text-sm font-semibold uppercase tracking-wider text-muted-foreground">Filters</h2>
               {filterData.activeFilterCount > 0 ? (
@@ -331,9 +332,12 @@ export function FacetedFilters({
             </div>
             <div>{filterData.facets.map(renderFacet)}</div>
           </aside>
+          ) : null}
 
           {/* Children (Product grid and Pagination) */}
-          <div className="flex-1 min-w-0 w-full">{children}</div>
+          <div className="flex-1 min-w-0 w-full" aria-busy={isPending}>
+            {isPending ? <ProductsSkeleton /> : children}
+          </div>
         </div>
       ) : (
         <div className="hidden lg:block mt-8">
@@ -412,6 +416,44 @@ export function FacetedFilters({
                 Done
               </button>
             </div>
+          </div>
+        </div>
+      ) : null}
+
+      {/* Phone sort sheet */}
+      {isSortOpen ? (
+        <div className="fixed inset-0 z-50 flex flex-col justify-end md:hidden" role="dialog" aria-modal="true" aria-label="Sort products">
+          <div className="fixed inset-0 bg-black/60 backdrop-blur-xs" onClick={() => setIsSortOpen(false)} />
+          <div className="relative z-10 w-full rounded-t-2xl bg-background shadow-xl">
+            <div className="flex items-center justify-between px-6 py-4 border-b border-border">
+              <h2 className="text-lg font-semibold text-foreground">Sort by</h2>
+              <button type="button" onClick={() => setIsSortOpen(false)} className="rounded-full p-1.5 text-muted-foreground hover:bg-muted transition-colors" aria-label="Close sort">
+                ✕
+              </button>
+            </div>
+            <ul className="px-2 py-2" role="radiogroup" aria-label="Sort by">
+              {SORT_OPTIONS.map((opt) => (
+                <li key={opt.value}>
+                  <button
+                    type="button"
+                    role="radio"
+                    aria-checked={currentSort === opt.value}
+                    onClick={() => {
+                      setIsSortOpen(false);
+                      if (opt.value !== currentSort) handleSortChange(opt.value);
+                    }}
+                    className="flex w-full items-center justify-between rounded-lg px-4 py-3 text-left text-sm text-foreground hover:bg-muted"
+                  >
+                    <span className={currentSort === opt.value ? "font-semibold" : ""}>{opt.label}</span>
+                    {currentSort === opt.value ? (
+                      <svg className="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                        <path d="M5 13l4 4L19 7" />
+                      </svg>
+                    ) : null}
+                  </button>
+                </li>
+              ))}
+            </ul>
           </div>
         </div>
       ) : null}

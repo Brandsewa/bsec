@@ -256,6 +256,9 @@ export function computeInvalidationTags(
               if (o.slug === "template-collection" || o.pageType === "collection_template") {
                 tags.push(tenantTag(tenantId, "collection"));
               }
+              if (o.slug === "template-collections" || o.pageType === "collections_archive_template") {
+                tags.push(tenantTag(tenantId, "collection"));
+              }
               if (o.slug === "template-cart" || o.pageType === "cart_template") {
                 tags.push(tenantTag(tenantId, "store-shell"));
               }

@@ -137,7 +137,7 @@ export function AddressBook({ addresses, phone }: { addresses: SavedAddress[]; p
 
       <ul className="space-y-3">
         {addresses.map((a) => (
-          <li key={a.id} className="rounded-xl border border-[var(--border)] bg-[var(--card)] p-4 text-sm shadow-xs">
+          <li key={a.id} className="rounded-xl bg-[var(--muted)]/50 p-4 text-sm">
             <div className="flex items-start justify-between gap-3">
               <div>
                 <div className="font-semibold text-[var(--foreground)] flex items-center gap-2">
@@ -181,7 +181,7 @@ export function AddressBook({ addresses, phone }: { addresses: SavedAddress[]; p
           Add an address
         </Button>
       ) : (
-        <form onSubmit={save} className="space-y-4 rounded-xl border border-[var(--border)] bg-[var(--card)] p-5 shadow-xs">
+        <form onSubmit={save} className="space-y-3 rounded-xl bg-[var(--muted)]/50 p-5">
           <h3 className="text-xs font-semibold uppercase tracking-wider text-[var(--muted-foreground)]">
             {editing === "new" ? "New address" : "Edit address"}
           </h3>

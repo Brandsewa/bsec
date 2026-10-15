@@ -16,6 +16,7 @@ interface CodConfirmationPageProps {
 export const metadata: Metadata = {
   title: "Confirm Your Cash on Delivery Order",
   description: "Verify and confirm your Cash on Delivery order",
+  robots: { index: false, follow: false },
 };
 
 export default async function CodConfirmationPage({ params, searchParams }: CodConfirmationPageProps) {

@@ -97,8 +97,8 @@ describe("Catalog Listing & Search Components", () => {
       // No savings badge
       expect(html).not.toContain("Save");
 
-      // Fallback placeholder when no image
-      expect(html).toContain("No image available");
+      // Fallback placeholder picture when there is no image
+      expect(html).toContain("/placeholder.png");
     });
   });
 

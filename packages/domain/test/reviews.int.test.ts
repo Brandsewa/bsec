@@ -6,6 +6,7 @@ import { STORE_PERMISSIONS } from "@bs/auth";
 import {
   createAdminDraftOrder,
   createRuntime,
+  getCustomerReviews,
   getStorefrontReviews,
   provisionTenant,
   publishAdminReview,
@@ -118,5 +119,22 @@ describe("reviews", () => {
       }
     }
     expect(blocked).toBe(true);
+  });
+
+  it("a shopper sees only their own reviews (any status), and another store's shopper sees none", async () => {
+    const mkCustomer = async (ctx: TenantContext, email: string) =>
+      withTenant(rt._db.db, ctx.tenantId, async (tx) => {
+        const [c] = await tx.insert(schema.customers).values({ tenantId: ctx.tenantId, email, name: "Mine" }).returning({ id: schema.customers.id });
+        return c!.id;
+      });
+    const mine = await mkCustomer(ctxA, "mine@reviews.test");
+    const other = await mkCustomer(ctxA, "other@reviews.test");
+    await submitProductReview(rt, ctxA.tenantId, { ...base(), reviewerName: "Mine", body: "Held for approval, mine." }, mine);
+    await submitProductReview(rt, ctxA.tenantId, { ...base(), reviewerName: "Other", body: "Somebody else's review." }, other);
+    const rows = await getCustomerReviews(rt._db.db, ctxA.tenantId, mine);
+    expect(rows.length).toBe(1);
+    expect(rows[0]).toMatchObject({ productTitle: "Reviewed Thing", rating: 5 });
+    expect(rows[0]?.body).toContain("mine");
+    expect(await getCustomerReviews(rt._db.db, ctxB.tenantId, mine)).toEqual([]);
   });
 });

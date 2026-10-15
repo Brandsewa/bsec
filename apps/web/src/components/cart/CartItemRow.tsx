@@ -1,5 +1,6 @@
 "use client";
 
+import { PLACEHOLDER_IMAGE_URL } from "@/lib/placeholder.ts";
 import React, { useState } from "react";
 import Link from "next/link";
 import type { StorefrontCartItem } from "@bs/domain";
@@ -54,9 +55,8 @@ export function CartItemRow({ item, onUpdateQuantity, onRemove }: CartItemRowPro
               className="h-full w-full object-cover"
             />
           ) : (
-            <div className="flex h-full w-full items-center justify-center text-xs text-muted-foreground">
-              No image
-            </div>
+            /* eslint-disable-next-line @next/next/no-img-element */
+            <img src={PLACEHOLDER_IMAGE_URL} alt="" className="h-full w-full object-cover" />
           )}
         </div>
 

@@ -379,6 +379,13 @@
       "when": 1792290000000,
       "tag": "0059_media_derivatives",
       "breakpoints": true
+    },
+    {
+      "idx": 54,
+      "version": "7",
+      "when": 1792300000000,
+      "tag": "0060_collection_description",
+      "breakpoints": true
     }
   ]
 }

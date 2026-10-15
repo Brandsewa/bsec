@@ -1,3 +1,7 @@
+import { descriptionText } from "@/lib/description-text.ts";
+import { ProductInfoTabs } from "@/components/product/ProductInfoTabs.tsx";
+import { ProductReviewsSection } from "@/components/product/ProductReviewsSection.tsx";
+import { DEFAULT_SHIPPING_CONTENT, type ProductInfoTabsOptions } from "@bs/blocks";
 import React from "react";
 import type { Metadata } from "next";
 import { notFound } from "next/navigation";
@@ -122,8 +126,20 @@ export default async function ProductDetailPage({ params }: ProductPageProps) {
 
   // The theme's own product page layout, when the store has one; the built-in layout otherwise.
   const template = await getCachedThemePage(tenantId, "product").catch(() => null);
+  const media = template?.renderData?.media ?? {};
   const detail = (options?: Parameters<typeof ProductDetailSection>[0]["options"]) => (
-    <ProductDetailSection product={product} options={options} />
+    <ProductDetailSection product={product} options={options} paymentImageUrl={options?.paymentImageMediaId ? media[options.paymentImageMediaId] : undefined} />
+  );
+  const infoTabs = (o: ProductInfoTabsOptions) => (
+    <ProductInfoTabs
+      descriptionLabel={o.descriptionLabel}
+      shippingLabel={o.shippingLabel}
+      descriptionText={descriptionText(product.descriptionJson) || (product.shortDescription ?? "")}
+      shippingContent={o.shippingContent}
+      imageUrl={o.imageMediaId ? media[o.imageMediaId] : undefined}
+      imageAlt={o.imageAlt}
+      imageSide={o.imageSide}
+    />
   );
 
   return (
@@ -135,11 +151,23 @@ export default async function ProductDetailPage({ params }: ProductPageProps) {
         <BlockRenderer
           blocks={template.blocks}
           renderData={template.renderData}
-          context={{ renderProductDetail: (options) => detail(options) }}
+          context={{ renderProductDetail: (options) => detail(options), renderProductInfoTabs: infoTabs }}
         />
       ) : (
-        detail()
+        <>
+          {detail()}
+          <ProductInfoTabs
+            descriptionLabel="Description"
+            shippingLabel="Shipping & returns"
+            descriptionText={descriptionText(product.descriptionJson) || (product.shortDescription ?? "")}
+            shippingContent={DEFAULT_SHIPPING_CONTENT}
+            imageAlt=""
+          />
+        </>
       )}
+      <div className="mx-auto max-w-7xl px-4 pb-10 sm:px-6 lg:px-8">
+        <ProductReviewsSection productId={product.id} productTitle={product.title} />
+      </div>
     </div>
   );
 }

@@ -7,12 +7,15 @@ import type {
   CartContentsOptions,
   CollectionListingOptions,
   ProductDetailOptions,
+  ProductInfoTabsOptions,
   BlockRenderArgs,
   RenderContext,
   SlotRender,
 } from "./types.ts";
 import { layoutHasAspectRatio, layoutStyle } from "./layout.ts";
 import { mediaImage } from "./media-image.ts";
+import { PLACEHOLDER_IMAGE_URL } from "./media.ts";
+import { SvgIcon } from "./svg-icon.tsx";
 import type * as R from "./registry.ts";
 
 /**
@@ -162,7 +165,7 @@ function defaultCard(p: BlockProduct, o: { showPrice: boolean; showRating: boole
   return (
     <a className="bsb-card" href={`/products/${p.slug}`}>
       <div className="bsb-card-media">
-        {img ? <img src={img} alt={p.imageAlt ?? p.title} loading="lazy" /> : null}
+        <img src={img ?? PLACEHOLDER_IMAGE_URL} alt={img ? (p.imageAlt ?? p.title) : ""} loading="lazy" />
       </div>
       <div className="bsb-card-body">
         <h3 className="bsb-card-title">{p.title}</h3>
@@ -239,16 +242,17 @@ export function CollectionGridView({ props, ctx }: A<R.CollectionGridProps>): Re
         {collections.length === 0 ? (
           <p className="bsb-muted bsb-align-center">No collections selected yet.</p>
         ) : (
-          <div className="bsb-grid bsb-gap-md" style={{ "--cols": Number(props.columns), "--cols-m": 1 } as CSSProperties}>
+          <div className="bsb-grid bsb-ccards" style={{ "--cols": Number(props.columns), "--cols-t": Number(props.columnsTablet), "--cols-m": Number(props.columnsMobile) } as CSSProperties}>
             {collections.map((c) => {
               const img = mediaSrc(ctx, c.imageMediaId);
               return (
-                <a key={c.slug} className="bsb-card" href={`/collections/${c.slug}`}>
-                  <div className="bsb-card-media">
-                    {img ? <img src={img} alt="" loading="lazy" /> : null}
+                <a key={c.slug} className="bsb-ccard" href={`/collections/${c.slug}`}>
+                  <div className="bsb-ccard-media">
+                    <img src={img ?? PLACEHOLDER_IMAGE_URL} alt="" loading="lazy" />
                   </div>
-                  <div className="bsb-card-body">
-                    <h3 className="bsb-card-title">{c.title}</h3>
+                  <div className="bsb-ccard-body">
+                    <h3 className="bsb-ccard-title">{c.title}</h3>
+                    {c.description ? <p className="bsb-ccard-desc">{c.description}</p> : null}
                   </div>
                 </a>
               );
@@ -433,72 +437,6 @@ export function NewsletterView({ props }: A<R.NewsletterProps>): ReactNode {
   );
 }
 
-const ICON_PATHS: Record<string, ReactNode> = {
-  check: <path d="M20 6 9 17l-5-5" />,
-  star: <polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2" />,
-  heart: <path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z" />,
-  truck: (
-    <>
-      <path d="M14 18V6a2 2 0 0 0-2-2H4a2 2 0 0 0-2 2v11a1 1 0 0 0 1 1h2" />
-      <path d="M15 18H9" />
-      <path d="M19 18h2a1 1 0 0 0 1-1v-3.65a1 1 0 0 0-.22-.624l-3.48-4.35A1 1 0 0 0 17.52 8H14" />
-      <circle cx="17" cy="18" r="2" />
-      <circle cx="7" cy="18" r="2" />
-    </>
-  ),
-  shield: (
-    <>
-      <path d="M20 13c0 5-3.5 7.5-7.66 8.95a1 1 0 0 1-.67-.01C7.5 20.5 4 18 4 13V6a1 1 0 0 1 1-1c2 0 4.5-1.2 6.24-2.72a1.17 1.17 0 0 1 1.52 0C14.51 3.81 17 5 19 5a1 1 0 0 1 1 1z" />
-      <path d="m9 12 2 2 4-4" />
-    </>
-  ),
-  leaf: (
-    <>
-      <path d="M11 20A7 7 0 0 1 9.8 6.1C15.5 5 17 4.48 19 2c1 2 2 4.18 2 8 0 5.5-4.78 10-10 10Z" />
-      <path d="M2 21c0-3 1.85-5.36 5.08-6C9.5 14.52 12 13 13 12" />
-    </>
-  ),
-  gift: (
-    <>
-      <rect x="3" y="8" width="18" height="4" rx="1" />
-      <path d="M12 8v13" />
-      <path d="M19 12v7a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2v-7" />
-      <path d="M7.5 8a2.5 2.5 0 0 1 0-5A4.8 8 0 0 1 12 8a4.8 8 0 0 1 4.5-5 2.5 2.5 0 0 1 0 5" />
-    </>
-  ),
-  phone: <path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72 12.84 12.84 0 0 0 .7 2.81 2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45 12.84 12.84 0 0 0 2.81.7A2 2 0 0 1 22 16.92z" />,
-  mail: (
-    <>
-      <rect x="2" y="4" width="20" height="16" rx="2" />
-      <path d="m22 7-8.97 5.7a1.94 1.94 0 0 1-2.06 0L2 7" />
-    </>
-  ),
-  award: (
-    <>
-      <circle cx="12" cy="8" r="6" />
-      <path d="M15.477 12.89 17 22l-5-3-5 3 1.523-9.11" />
-    </>
-  ),
-  returns: (
-    <>
-      <path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8" />
-      <path d="M3 3v5h5" />
-    </>
-  ),
-  support: <path d="M3 14h3a2 2 0 0 1 2 2v3a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-7a9 9 0 0 1 18 0v7a2 2 0 0 1-2 2h-1a2 2 0 0 1-2-2v-3a2 2 0 0 1 2-2h3" />,
-};
-const ICON_ALIASES: Record<string, string> = { shieldcheck: "shield", rotateccw: "returns", headphones: "support" };
-
-function SvgIcon({ name, px }: { name: string; px: number }) {
-  const key = name.toLowerCase();
-  const path = ICON_PATHS[ICON_ALIASES[key] ?? key];
-  if (!path) return null;
-  return (
-    <svg width={px} height={px} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" aria-hidden>
-      {path}
-    </svg>
-  );
-}
 
 export function UspStripView({ props }: A<R.UspStripProps>): ReactNode {
   return (
@@ -1114,6 +1052,19 @@ function Placeholder({ label, hint, children }: { label: string; hint: string; c
   );
 }
 
+export function ProductInfoTabsView({ props, ctx }: A<R.ProductInfoTabsProps>): ReactNode {
+  if (ctx?.renderProductInfoTabs) return <>{ctx.renderProductInfoTabs(props as ProductInfoTabsOptions)}</>;
+  return (
+    <Placeholder label="Product details tabs" hint="The product's description and the shipping and returns text appear here, beside a picture.">
+      <div className="bsb-ph-box" style={{ height: 120 }}>
+        <span>
+          {props.descriptionLabel} · {props.shippingLabel}
+        </span>
+      </div>
+    </Placeholder>
+  );
+}
+
 export function ProductDetailView({ props, ctx }: A<R.ProductDetailProps>): ReactNode {
   if (ctx?.renderProductDetail) return <>{ctx.renderProductDetail(props as ProductDetailOptions)}</>;
   const gallery = (
@@ -1370,7 +1321,7 @@ function ShowcaseCard({ p, props, ctx, eager }: { p: BlockProduct; props: R.Prod
     <article className={cx("bsb-psc-card", `bsb-psc-card-${props.cardStyle}`)}>
       <div className={cx("bsb-psc-media", `bsb-psc-ratio-${props.imageRatio}`)}>
         {link(
-          img ? <img src={img} alt={p.imageAlt ?? p.title} decoding="async" loading={eager ? "eager" : "lazy"} /> : <span className="bsb-psc-noimg" aria-hidden="true" />,
+          <img src={img ?? PLACEHOLDER_IMAGE_URL} alt={img ? (p.imageAlt ?? p.title) : ""} decoding="async" loading={eager ? "eager" : "lazy"} />,
           "bsb-psc-imglink",
           p.title,
         )}
