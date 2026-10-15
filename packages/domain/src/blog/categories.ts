@@ -145,7 +145,7 @@ export async function createBlogCategory(
   return result;
 }
 
-export async function updateBlogCategory(rt: Runtime, ctx: TenantContext, id: string, input: Partial<BlogCategoryInput>): Promise<void> {
+export async function updateBlogCategory(rt: Runtime, ctx: TenantContext, id: string, input: { [K in keyof BlogCategoryInput]?: BlogCategoryInput[K] | undefined }): Promise<void> {
   assertPermission(ctx, "content.write");
   await withTenant(rt._db.db, ctx.tenantId, async (tx) => {
     const [cur] = await tx

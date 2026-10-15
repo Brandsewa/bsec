@@ -113,7 +113,8 @@ export async function prepareBlogBody(tx: Tx, ctx: TenantContext, raw: string): 
       if (src) map.set(r.id, { src, width: r.width, height: r.height });
     }
   }
-  const clean = sanitizeBlogHtml(raw, map);
+  // The editor leaves empty paragraphs behind; they only add blank space.
+  const clean = sanitizeBlogHtml(raw, map).replace(/<p>\s*(<br\s*\/?>)?\s*<\/p>/g, "");
   const withIds = addHeadingIds(clean);
   const text = htmlToText(withIds.html);
   const words = text ? text.split(" ").length : 0;

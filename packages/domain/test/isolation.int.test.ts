@@ -300,6 +300,23 @@ import {
   listFiscalPeriods,
   closeFiscalPeriod,
   reopenFiscalPeriod,
+  listBlogCategories,
+  createBlogCategory,
+  updateBlogCategory,
+  reorderBlogCategories,
+  deleteBlogCategory,
+  listBlogPosts,
+  getBlogPost,
+  createBlogPost,
+  updateBlogPost,
+  publishBlogPost,
+  scheduleBlogPost,
+  unpublishBlogPost,
+  duplicateBlogPost,
+  deleteBlogPost,
+  previewBlogHtml,
+  getBlogSettings,
+  updateBlogSettings,
 } from "../src/index.ts";
 import { createR2Client } from "../src/media/storage.ts";
 
@@ -2027,6 +2044,64 @@ describe("Generated Isolation Test Suite (M1 Real Postgres 18 Proof)", () => {
         return procPath === "finance.periods.close" ? closed : reopened;
       }
 
+      case "blog.categories.list":
+        return await listBlogCategories(rt, ctx);
+      case "blog.categories.create":
+        return await createBlogCategory(rt, ctx, { name: `BlogCat-${Date.now()}` });
+      case "blog.categories.update": {
+        const c = await createBlogCategory(rt, ctx, { name: `BlogCatU-${Date.now()}` });
+        await updateBlogCategory(rt, ctx, c.id, { name: "Renamed" });
+        return { ok: true };
+      }
+      case "blog.categories.reorder": {
+        const c = await createBlogCategory(rt, ctx, { name: `BlogCatR-${Date.now()}` });
+        await reorderBlogCategories(rt, ctx, [c.id]);
+        return { ok: true };
+      }
+      case "blog.categories.delete": {
+        const c = await createBlogCategory(rt, ctx, { name: `BlogCatD-${Date.now()}` });
+        await deleteBlogCategory(rt, ctx, c.id, null);
+        return { ok: true };
+      }
+      case "blog.posts.list":
+        return await listBlogPosts(rt, ctx);
+      case "blog.posts.get": {
+        const p = await createBlogPost(rt, ctx, { title: `BlogG-${Date.now()}` });
+        return await getBlogPost(rt, ctx, p.id);
+      }
+      case "blog.posts.create":
+        return await createBlogPost(rt, ctx, { title: `BlogC-${Date.now()}` });
+      case "blog.posts.update": {
+        const p = await createBlogPost(rt, ctx, { title: `BlogU-${Date.now()}` });
+        return await updateBlogPost(rt, ctx, p.id, { title: "Updated post" });
+      }
+      case "blog.posts.publish": {
+        const p = await createBlogPost(rt, ctx, { title: `BlogP-${Date.now()}` });
+        return await publishBlogPost(rt, ctx, p.id);
+      }
+      case "blog.posts.schedule": {
+        const p = await createBlogPost(rt, ctx, { title: `BlogS-${Date.now()}` });
+        return await scheduleBlogPost(rt, ctx, p.id, new Date(Date.now() + 86_400_000));
+      }
+      case "blog.posts.unpublish": {
+        const p = await createBlogPost(rt, ctx, { title: `BlogN-${Date.now()}`, status: "published" });
+        return await unpublishBlogPost(rt, ctx, p.id);
+      }
+      case "blog.posts.duplicate": {
+        const p = await createBlogPost(rt, ctx, { title: `BlogDup-${Date.now()}` });
+        return await duplicateBlogPost(rt, ctx, p.id);
+      }
+      case "blog.posts.delete": {
+        const p = await createBlogPost(rt, ctx, { title: `BlogX-${Date.now()}` });
+        await deleteBlogPost(rt, ctx, p.id);
+        return { ok: true };
+      }
+      case "blog.posts.previewHtml":
+        return await previewBlogHtml(rt, ctx, "<p>Hello</p>");
+      case "blog.settings.get":
+        return await getBlogSettings(rt, ctx);
+      case "blog.settings.update":
+        return await updateBlogSettings(rt, ctx, { postsPerPage: 9 });
       default:
         throw new Error(`Unmapped procedure in isolation test: ${procPath}`);
     }

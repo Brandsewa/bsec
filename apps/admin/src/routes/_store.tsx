@@ -6,6 +6,7 @@ import {
   BarChart3,
   Clock,
   FileText,
+  Newspaper,
   FolderTree,
   Home,
   Images,
@@ -115,6 +116,7 @@ const nav: GatedGroup[] = [
     items: [
       { label: "Themes", href: "/online-store/theme-library", icon: Palette, perm: "theme.publish" },
       { label: "Pages", href: "/online-store/pages", icon: FileText, perm: "content.write" },
+      { label: "Blog", href: "/online-store/blog", icon: Newspaper, perm: "content.write" },
       { label: "Media", href: "/online-store/media", icon: Images, perm: "content.write" },
       { label: "Navigation", href: "/online-store/menus", icon: Menu, perm: "content.write" },
     ],

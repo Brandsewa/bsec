@@ -180,14 +180,15 @@ Claude verifies every other agent's phase against these criteria and the gate be
 9. Menus can link to the blog, a category and a post; deleting the target does not break the menu (renders hidden or falls back to `/blog`).
 10. `pnpm --filter @bs/domain test:heavy` green including new blog suites and the updated isolation suite; `audit-coverage` unaffected.
 11. `/blog`, `/blog/page/2`, category and subcategory pages render with the theme's template and with the built-in default (no template rows); page 1 redirect and out-of-range page 404 correct.
-12. Single post renders breadcrumb, meta line, featured image, content, TOC (3+ headings), share links, related posts, previous/next; unknown or hidden slug gives the themed 404.
-13. Head output validated by test: title, description, canonical, robots, OG article tags, Twitter card; `noindex` posts and preview links carry `noindex`.
-14. JSON-LD: `BlogPosting`, `BreadcrumbList`, `Blog`/`ItemList` present and complete; unit tests for each.
-15. Sitemap lists only visible, indexable posts and categories with real `lastmod`; the old fake entries are gone; RSS validates (well-formed XML, absolute URLs, newest first).
-16. Activating a theme with blog pages copies them; a theme without them falls back to defaults; rollback restores the previous version; tags invalidate through `cache-invalidation.ts` only.
-17. 375 px and 1280 px: no horizontal scroll, axe finds no serious or critical issues, Lighthouse mobile SEO 100 / accessibility 95+, LCP and CLS within the budgets in `THEME-TEMPLATES-PLAN.md` section 4, `/blog/[slug]` within its bundle budget.
-18. Widget: count, source, category, layout, columns, show/hide toggles all change the output; works on home, a custom page and a product template; hides itself (no empty heading) when there are no posts; picks up a newly published post after revalidation; no N+1 queries (test counts queries).
-19. Widget slider scrolls by touch and keyboard with no JS carousel library.
+12. The blog's cached storefront loaders use a short `cacheLife` (about 60 s) because the worker cannot call `revalidateTag`; a scheduled post must be visible within a minute of its time.
+13. Single post renders breadcrumb, meta line, featured image, content, TOC (3+ headings), share links, related posts, previous/next; unknown or hidden slug gives the themed 404.
+14. Head output validated by test: title, description, canonical, robots, OG article tags, Twitter card; `noindex` posts and preview links carry `noindex`.
+15. JSON-LD: `BlogPosting`, `BreadcrumbList`, `Blog`/`ItemList` present and complete; unit tests for each.
+16. Sitemap lists only visible, indexable posts and categories with real `lastmod`; the old fake entries are gone; RSS validates (well-formed XML, absolute URLs, newest first).
+17. Activating a theme with blog pages copies them; a theme without them falls back to defaults; rollback restores the previous version; tags invalidate through `cache-invalidation.ts` only.
+18. 375 px and 1280 px: no horizontal scroll, axe finds no serious or critical issues, Lighthouse mobile SEO 100 / accessibility 95+, LCP and CLS within the budgets in `THEME-TEMPLATES-PLAN.md` section 4, `/blog/[slug]` within its bundle budget.
+19. Widget: count, source, category, layout, columns, show/hide toggles all change the output; works on home, a custom page and a product template; hides itself (no empty heading) when there are no posts; picks up a newly published post after revalidation; no N+1 queries (test counts queries).
+20. Widget slider scrolls by touch and keyboard with no JS carousel library.
 
 Gate before every merge: `pnpm typecheck`, `pnpm lint`, `pnpm build`, `pnpm docs:check`, affected tests, `@bs/domain test:heavy` (counts pasted in the change record). e2e selectors updated in the same change as the sidebar.
 

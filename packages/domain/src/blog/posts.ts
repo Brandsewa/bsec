@@ -141,7 +141,10 @@ export async function listBlogPosts(rt: Runtime, ctx: TenantContext, q: BlogPost
       .limit(Math.min(Math.max(q.limit ?? 25, 1), 100))
       .offset(Math.max(q.offset ?? 0, 0));
     const [tot] = await tx.select({ n: sql<number>`count(*)::int` }).from(schema.blogPosts).where(where);
-    return { items, total: tot?.n ?? 0 };
+    return {
+      items: items.map((i) => ({ ...i, status: i.status as BlogPostStatus, publishedAt: i.publishedAt?.toISOString() ?? null, updatedAt: i.updatedAt.toISOString() })),
+      total: tot?.n ?? 0,
+    };
   });
 }
 
@@ -150,7 +153,33 @@ export async function getBlogPost(rt: Runtime, ctx: TenantContext, id: string) {
   return withTenant(rt._db.db, ctx.tenantId, async (tx) => {
     const [row] = await tx.select().from(schema.blogPosts).where(and(eq(schema.blogPosts.tenantId, ctx.tenantId), eq(schema.blogPosts.id, id))).limit(1);
     if (!row) return null;
-    return { ...row, seo: (row.seo as BlogSeoInput | null) ?? null };
+    return {
+      id: row.id,
+      title: row.title,
+      slug: row.slug,
+      excerpt: row.excerpt,
+      contentHtml: row.contentHtml,
+      readingMinutes: row.readingMinutes,
+      featuredImageMediaId: row.featuredImageMediaId,
+      featuredImageAlt: row.featuredImageAlt,
+      categoryId: row.categoryId,
+      authorName: row.authorName,
+      status: row.status as BlogPostStatus,
+      publishedAt: row.publishedAt?.toISOString() ?? null,
+      isFeatured: row.isFeatured,
+      seo: (row.seo as BlogSeoInput | null) ?? null,
+      createdAt: row.createdAt.toISOString(),
+      updatedAt: row.updatedAt.toISOString(),
+    };
+  });
+}
+
+/** What the shopper would get for an unsaved body: same sanitiser, same heading ids, so the admin preview is honest. */
+export async function previewBlogHtml(rt: Runtime, ctx: TenantContext, contentHtml: string) {
+  assertPermission(ctx, "content.write");
+  return withTenant(rt._db.db, ctx.tenantId, async (tx) => {
+    const b = await prepareBlogBody(tx, ctx, contentHtml);
+    return { html: b.html, readingMinutes: b.readingMinutes, headings: b.headings };
   });
 }
 
