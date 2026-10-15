@@ -5,6 +5,7 @@ import {
   LEGACY_SETTINGS_WRITE_FAMILIES,
   STORE_PERMISSIONS,
   SYSTEM_STORE_ROLES,
+  systemRoleDefinedPermissions,
   systemRoleFinancePermissions,
 } from "../src/index.ts";
 
@@ -84,5 +85,12 @@ describe("permissions", () => {
     expect([...systemRoleFinancePermissions("store_finance")]).toEqual(["finance.read", "finance.write"]);
     expect(systemRoleFinancePermissions("store_viewer")).toEqual([]);
     expect(systemRoleFinancePermissions("anything")).toEqual([]);
+  });
+
+  it("tops the store owner up to every permission (a stale stored role row cannot hide Payments), and no other role", () => {
+    expect([...systemRoleDefinedPermissions("store_owner")]).toEqual([...STORE_PERMISSIONS]);
+    expect(systemRoleDefinedPermissions("store_owner")).toContain("payments.manage");
+    expect(systemRoleDefinedPermissions("store_admin")).toEqual([]);
+    expect(systemRoleDefinedPermissions("store_finance")).toEqual([]);
   });
 });
