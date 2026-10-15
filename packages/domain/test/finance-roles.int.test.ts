@@ -96,8 +96,8 @@ describe("Finance roles", () => {
     const owner = await ctxFor(ownerId);
     expect(owner.permissions).toContain("finance.read");
     expect(owner.permissions).toContain("finance.write");
-    // only finance.* is granted by definition: nothing else is invented
-    expect(owner.permissions).not.toContain("payments.manage");
+    // store_owner is defined as holding every permission (ADR-020), so a stale stored array is topped up to all of them
+    expect(owner.permissions).toContain("payments.manage");
     expect(owner.permissions).toContain("products.read");
   });
 

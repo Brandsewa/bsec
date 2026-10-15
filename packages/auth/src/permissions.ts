@@ -100,6 +100,16 @@ export function systemRoleFinancePermissions(roleName: string): readonly StorePe
   return defined ? defined.filter((p) => p.startsWith("finance.")) : [];
 }
 
+/**
+ * The store owner system role is defined as holding every permission. Stores created before a permission existed
+ * (for example `payments.manage`, which `settings.write` can never stand in for) keep a stored role row without it,
+ * so the owner would lose that menu item and its API. Returns the permissions the role is defined to hold, to be
+ * merged over the stored array. Other roles return nothing: their stored array is authoritative.
+ */
+export function systemRoleDefinedPermissions(roleName: string): readonly StorePermission[] {
+  return roleName === "store_owner" ? STORE_PERMISSIONS : [];
+}
+
 export function hasPermission(granted: readonly string[], needed: StorePermission): boolean {
   if (granted.includes(needed)) return true;
   // Check-time aggregate mapping: legacy settings.write satisfies migrated families except payments.manage and staff.manage

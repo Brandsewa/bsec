@@ -7,7 +7,7 @@ import type { Runtime } from "./runtime.ts";
  * Every domain service takes ctx first (PLAN §3). The tenant is never taken from the client:
  * it comes from the host (storefront) or session membership + X-Store-Id (admin). Built in M1.
  */
-import { hasPermission, STORE_PERMISSIONS, systemRoleFinancePermissions, type StorePermission } from "@bs/auth";
+import { hasPermission, STORE_PERMISSIONS, systemRoleDefinedPermissions, systemRoleFinancePermissions, type StorePermission } from "@bs/auth";
 
 import { validateSupportSessionToken } from "./platform/support-sessions.ts";
 import { isAdminAccessAllowed, isAdminReadOnly } from "./system/tenant-lifecycle.ts";
@@ -237,6 +237,9 @@ export async function buildTenantContext(
     // finance.* come from the system role definition, so stores that predate the Finance section keep working.
     const finance = systemRoleFinancePermissions(row.roleName);
     if (finance.length > 0) permissions = [...new Set([...permissions, ...finance])];
+    // The owner role is defined as holding everything: stores that predate a permission (payments.manage) keep owners whole.
+    const defined = systemRoleDefinedPermissions(row.roleName);
+    if (defined.length > 0) permissions = [...new Set([...permissions, ...defined])];
     if (isAdminReadOnly(row.tenantStatus)) {
       permissions = permissions.filter((p) => p.endsWith(".read"));
     }
