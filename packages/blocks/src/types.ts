@@ -42,7 +42,11 @@ export type BlockType =
   | "CollectionListing"
   | "CartContents"
   | "HeroSlider"
-  | "ProductShowcase";
+  | "ProductShowcase"
+  // Blog (ADR-033): the archive and single post cores, and the Recent Posts widget
+  | "BlogListing"
+  | "BlogPostContent"
+  | "BlogPosts";
 
 /** Minimal product shape the product blocks need; the host supplies the real data. Prices are in paise. */
 export interface BlockProduct {
@@ -78,6 +82,24 @@ export interface BlockCollectionSummary {
   description?: string | undefined;
 }
 
+/** A blog post as the blocks draw it. URLs are ready to use. */
+export interface BlockBlogPost {
+  slug: string;
+  title: string;
+  excerpt: string;
+  /** ISO date. */
+  publishedAt: string;
+  authorName: string;
+  readingMinutes: number;
+  imageUrl?: string | undefined;
+  imageAlt?: string | undefined;
+  imageWidth?: number | null | undefined;
+  imageHeight?: number | null | undefined;
+  categoryName?: string | undefined;
+  /** URL path under /blog/category/, for the category label's link. */
+  categoryPath?: string | undefined;
+}
+
 export interface ResolvedMenuItem {
   id: string;
   label: string;
@@ -94,6 +116,7 @@ export type BlockData =
   | { kind: "products"; products: BlockProduct[] }
   | { kind: "collections"; collections: BlockCollectionSummary[] }
   | { kind: "product-tabs"; tabs: Array<{ products: BlockProduct[] }> }
+  | { kind: "blog-posts"; posts: BlockBlogPost[]; viewAllHref: string }
   | { kind: "menu"; items: ResolvedMenuItem[] }
   | { kind: "footer-menus"; columns: Array<ResolvedMenuItem[] | null> }
   | { kind: "file"; filename: string; mime: string; bytes: number; url?: string | undefined };
@@ -135,6 +158,9 @@ export interface RenderContext {
   /** The product's long description and the theme's shipping and returns text in tabs; the editor draws a labelled placeholder instead. */
   renderProductInfoTabs?: ((opts: ProductInfoTabsOptions) => ReactNode) | undefined;
   renderCollectionListing?: ((opts: CollectionListingOptions) => ReactNode) | undefined;
+  /** The real blog archive / single post (drawn by the storefront from the request's data); the editor draws labelled samples instead. */
+  renderBlogListing?: ((opts: BlogListingOptions) => ReactNode) | undefined;
+  renderBlogPost?: ((opts: BlogPostOptions) => ReactNode) | undefined;
   /** The real cart (items, totals, discount code); the editor draws a labelled placeholder instead. */
   renderCartContents?: ((opts: CartContentsOptions) => ReactNode) | undefined;
   /** Wraps the hero slider's server-rendered markup with its autoplay / navigation behaviour (a client component). The editor draws it static. */
@@ -221,6 +247,41 @@ export interface CartContentsOptions {
   /** Phone: the total and checkout button stay at the bottom of the screen. */
   stickyMobileCheckout?: boolean | undefined;
   showContinueShopping?: boolean | undefined;
+}
+
+export interface BlogListingOptions {
+  title: string;
+  subtitle?: string | undefined;
+  showCategories: boolean;
+  layout: "grid" | "list";
+  columns: "2" | "3" | "4";
+  columnsTablet: "1" | "2";
+  columnsMobile: "1" | "2";
+  featuredFirst: boolean;
+  showImage: boolean;
+  showExcerpt: boolean;
+  showDate: boolean;
+  showAuthor: boolean;
+  showReadingTime: boolean;
+  showCategoryLabel: boolean;
+  imageRatio: "landscape" | "square" | "portrait";
+  postsPerPage: number;
+  emptyText: string;
+}
+
+export interface BlogPostOptions {
+  showBreadcrumb: boolean;
+  showCategory: boolean;
+  showDate: boolean;
+  showAuthor: boolean;
+  showReadingTime: boolean;
+  featuredImage: "above" | "wide" | "hidden";
+  contentWidth: "narrow" | "normal";
+  showToc: boolean;
+  showShare: boolean;
+  showRelated: boolean;
+  relatedCount: number;
+  showPrevNext: boolean;
 }
 
 export interface CollectionListingOptions {

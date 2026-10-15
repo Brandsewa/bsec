@@ -287,6 +287,9 @@ export function computeInvalidationTags(
               if (o.slug === "template-collections" || o.pageType === "collections_archive_template") {
                 tags.push(tenantTag(tenantId, "collection"));
               }
+              if (o.slug === "template-blog" || o.slug === "template-blog-post" || o.pageType === "blog_archive_template" || o.pageType === "blog_post_template") {
+                tags.push(tenantTag(tenantId, "blog"));
+              }
               if (o.slug === "template-cart" || o.pageType === "cart_template") {
                 tags.push(tenantTag(tenantId, "store-shell"));
               }

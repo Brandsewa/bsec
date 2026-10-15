@@ -192,13 +192,36 @@ export const MODERN_TEMPLATE_HEADER: BlockInstance[] = [
   }),
 ];
 
+/**
+ * Home page: the shared launch layout with a "From the blog" section before the testimonials. The section hides
+ * itself when the store has no posts, so a new store shows no empty heading (ADR-033).
+ */
+export const MODERN_TEMPLATE_HOME: BlockInstance[] = (() => {
+  const blog = b("mc-home-blog", "BlogPosts", { title: "From the blog", subtitle: "Guides, stories and news", count: 3, layout: "grid", columns: "3", viewAllLabel: "View all posts", hideWhenEmpty: true });
+  const at = LAUNCH_TEMPLATE_HOME.findIndex((x) => x.type === "Testimonials");
+  return at < 0 ? [...LAUNCH_TEMPLATE_HOME, blog] : [...LAUNCH_TEMPLATE_HOME.slice(0, at), blog, ...LAUNCH_TEMPLATE_HOME.slice(at)];
+})();
+
+/** Blog archive: every post as a card grid with category links and page numbers (the BlogListing core). */
+export const MODERN_TEMPLATE_BLOG_ARCHIVE: BlockInstance[] = [
+  b("mc-blog", "BlogListing", { title: "Blog", subtitle: "Guides, stories and news from our store", showCategories: true, layout: "grid", columns: "3", columnsTablet: "2", columnsMobile: "1", imageRatio: "landscape", showExcerpt: true, showDate: true, showReadingTime: true }),
+];
+
+/** Blog post: the post (the BlogPostContent core), then the shop again. */
+export const MODERN_TEMPLATE_BLOG_POST: BlockInstance[] = [
+  b("mc-blog-post", "BlogPostContent", { showBreadcrumb: true, showCategory: true, showDate: true, showAuthor: true, showReadingTime: true, featuredImage: "above", contentWidth: "narrow", showToc: true, showShare: true, showRelated: true, relatedCount: 3, showPrevNext: true }),
+  b("mc-blog-post-usp", "UspStrip", { items: TRUST_ITEMS }),
+];
+
 /** Every page of the theme, keyed as theme_templates.draft_pages stores them. */
 export const MODERN_TEMPLATE_PAGES = {
-  home: LAUNCH_TEMPLATE_HOME,
+  home: MODERN_TEMPLATE_HOME,
   collections: MODERN_TEMPLATE_COLLECTIONS,
   collection: MODERN_TEMPLATE_COLLECTION,
   product: MODERN_TEMPLATE_PRODUCT,
   cart: MODERN_TEMPLATE_CART,
+  blog: MODERN_TEMPLATE_BLOG_ARCHIVE,
+  "blog-post": MODERN_TEMPLATE_BLOG_POST,
   header: MODERN_TEMPLATE_HEADER,
   footer: LAUNCH_TEMPLATE_FOOTER,
 };

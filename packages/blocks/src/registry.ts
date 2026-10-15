@@ -17,6 +17,7 @@ import {
 } from "./common.ts";
 import { layoutSchema } from "./layout.ts";
 import * as V from "./views.tsx";
+import * as VB from "./views-blog.tsx";
 
 /* ------------------------------------------------------------------ */
 /* Sections and content blocks (M2). Schemas are additive-only: new    */
@@ -1058,6 +1059,98 @@ export const ProductShowcaseBlock: BlockDefinition<ProductShowcaseProps> = {
   render: V.ProductShowcaseView,
 };
 
+// Blog (ADR-033)
+const blogImageRatio = z.enum(["landscape", "square", "portrait"]);
+
+export const BlogListingSchema = z.object({
+  title: z.string().max(120).default("Blog"),
+  subtitle: z.string().max(240).optional(),
+  showCategories: z.boolean().default(true),
+  layout: z.enum(["grid", "list"]).default("grid"),
+  columns: z.enum(["2", "3", "4"]).default("3"),
+  columnsTablet: z.enum(["1", "2"]).default("2"),
+  columnsMobile: z.enum(["1", "2"]).default("1"),
+  featuredFirst: z.boolean().default(false),
+  showImage: z.boolean().default(true),
+  showExcerpt: z.boolean().default(true),
+  showDate: z.boolean().default(true),
+  showAuthor: z.boolean().default(false),
+  showReadingTime: z.boolean().default(true),
+  showCategoryLabel: z.boolean().default(true),
+  imageRatio: blogImageRatio.default("landscape"),
+  /** 0 = use the store's blog setting. */
+  postsPerPage: z.number().int().min(0).max(48).default(0),
+  emptyText: z.string().max(160).default("No posts yet. Please check back soon."),
+});
+export type BlogListingProps = z.infer<typeof BlogListingSchema>;
+
+export const BlogListingBlock: BlockDefinition<BlogListingProps> = {
+  type: "BlogListing",
+  version: 1,
+  schema: BlogListingSchema,
+  defaultProps: BlogListingSchema.parse({}),
+  render: VB.BlogListingView,
+};
+
+export const BlogPostContentSchema = z.object({
+  showBreadcrumb: z.boolean().default(true),
+  showCategory: z.boolean().default(true),
+  showDate: z.boolean().default(true),
+  showAuthor: z.boolean().default(true),
+  showReadingTime: z.boolean().default(true),
+  featuredImage: z.enum(["above", "wide", "hidden"]).default("above"),
+  contentWidth: z.enum(["narrow", "normal"]).default("narrow"),
+  showToc: z.boolean().default(true),
+  showShare: z.boolean().default(true),
+  showRelated: z.boolean().default(true),
+  relatedCount: z.number().int().min(0).max(6).default(3),
+  showPrevNext: z.boolean().default(true),
+});
+export type BlogPostContentProps = z.infer<typeof BlogPostContentSchema>;
+
+export const BlogPostContentBlock: BlockDefinition<BlogPostContentProps> = {
+  type: "BlogPostContent",
+  version: 1,
+  schema: BlogPostContentSchema,
+  defaultProps: BlogPostContentSchema.parse({}),
+  render: VB.BlogPostContentView,
+};
+
+/** The Recent Posts widget: drop it on the home page or any other page. */
+export const BlogPostsSchema = z.object({
+  title: z.string().max(120).default("From the blog"),
+  subtitle: z.string().max(240).optional(),
+  source: z.enum(["latest", "featured", "category"]).default("latest"),
+  /** Only used when source is "category" (a parent category includes its subcategories). */
+  categorySlug: z.string().max(120).optional(),
+  count: z.number().int().min(1).max(12).default(3),
+  layout: z.enum(["grid", "list", "slider"]).default("grid"),
+  columns: z.enum(["2", "3", "4"]).default("3"),
+  columnsTablet: z.enum(["1", "2"]).default("2"),
+  columnsMobile: z.enum(["1", "2"]).default("1"),
+  showImage: z.boolean().default(true),
+  showExcerpt: z.boolean().default(true),
+  excerptLines: z.enum(["2", "3", "4"]).default("2"),
+  showDate: z.boolean().default(true),
+  showAuthor: z.boolean().default(false),
+  showCategory: z.boolean().default(true),
+  imageRatio: blogImageRatio.default("landscape"),
+  showViewAll: z.boolean().default(true),
+  viewAllLabel: z.string().max(60).default("View all posts"),
+  /** Draw nothing (no empty heading) when the store has no posts to show. */
+  hideWhenEmpty: z.boolean().default(true),
+  tone: toneSchema.default("default"),
+});
+export type BlogPostsProps = z.infer<typeof BlogPostsSchema>;
+
+export const BlogPostsBlock: BlockDefinition<BlogPostsProps> = {
+  type: "BlogPosts",
+  version: 1,
+  schema: BlogPostsSchema,
+  defaultProps: BlogPostsSchema.parse({}),
+  render: VB.BlogPostsView,
+};
+
 export { type BlockType } from "./types.ts";
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -1101,6 +1194,9 @@ export const BLOCK_DEFINITIONS: Record<BlockType, AnyBlockDefinition> = {
   CartContents: CartContentsBlock,
   HeroSlider: HeroSliderBlock,
   ProductShowcase: ProductShowcaseBlock,
+  BlogListing: BlogListingBlock,
+  BlogPostContent: BlogPostContentBlock,
+  BlogPosts: BlogPostsBlock,
 };
 
 export const BLOCK_TYPES = Object.keys(BLOCK_DEFINITIONS) as BlockType[];

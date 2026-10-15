@@ -1,5 +1,5 @@
 import "server-only";
-import { cacheTag } from "next/cache";
+import { cacheLife, cacheTag } from "next/cache";
 import {
   tenantTag,
   getStorefrontProduct,
@@ -15,6 +15,11 @@ import {
   type ThemeSystemPageKey,
   resolvePageRenderData,
   getStoreSettings,
+  listPublicBlogPosts,
+  listPublicBlogCategories,
+  getPublicBlogPost,
+  listBlogForFeed,
+  type PublicBlogListQuery,
   type CatalogListingOptions,
   type StorefrontProductDetail,
   type StorefrontCollectionDetail,
@@ -119,7 +124,9 @@ async function loadRenderData(tenantId: string, tenantCtx: TenantContext, docume
   if (!rendered.success) return { data: {}, media: {} };
   let needsCatalog = false;
   let needsNav = false;
+  let needsBlog = false;
   walkBlocks(rendered.blocks as BlockInstance[], (b) => {
+    if (b.type === "BlogPosts") needsBlog = true;
     if (b.type === "ProductGrid" || b.type === "ProductCarousel" || b.type === "CollectionGrid" || b.type === "ProductShowcase") needsCatalog = true;
     if (b.type === "SiteHeader" || b.type === "SiteFooter") needsNav = true;
   });
@@ -129,6 +136,12 @@ async function loadRenderData(tenantId: string, tenantCtx: TenantContext, docume
   }
   if (needsNav) {
     cacheTag(tenantTag(tenantId, "nav"));
+  }
+  if (needsBlog) {
+    // A page with a Recent Posts widget refreshes when posts change. The worker cannot revalidate tags, so scheduled
+    // posts appear through a short lifetime instead (ADR-033).
+    cacheTag(tenantTag(tenantId, "blog"));
+    cacheLife({ stale: 30, revalidate: 60, expire: 3600 });
   }
   const { rt } = server();
   return resolvePageRenderData(rt, tenantCtx, rendered.blocks);
@@ -249,4 +262,36 @@ export async function getCachedThemeTokens(tenantId: string) {
   cacheTag(tenantTag(tenantId, "store-shell"));
   const { rt } = server();
   return getStorefrontThemeTokens(rt, createStorefrontTenantContext(tenantId));
+}
+
+/**
+ * Blog archive data (/blog, /blog/page/n, category pages). Tagged `blog`; the lifetime is short because the
+ * worker's scheduled-publish job cannot revalidate tags (ADR-033), so a scheduled post shows within about a minute.
+ */
+export async function getCachedBlogList(tenantId: string, query: PublicBlogListQuery) {
+  "use cache";
+  cacheTag(tenantTag(tenantId, "blog"));
+  cacheLife({ stale: 30, revalidate: 60, expire: 3600 });
+  const { rt } = server();
+  const ctx = createStorefrontTenantContext(tenantId);
+  const [list, categories] = await Promise.all([listPublicBlogPosts(rt, ctx, query), listPublicBlogCategories(rt, ctx)]);
+  return { list, categories };
+}
+
+export async function getCachedBlogPost(tenantId: string, slug: string) {
+  "use cache";
+  cacheTag(tenantTag(tenantId, "blog"));
+  cacheLife({ stale: 30, revalidate: 60, expire: 3600 });
+  const { rt } = server();
+  const res = await getPublicBlogPost(rt, createStorefrontTenantContext(tenantId), slug);
+  if (res.kind === "post") cacheTag(tenantTag(tenantId, "blog", res.post.id));
+  return res;
+}
+
+export async function getCachedBlogFeed(tenantId: string) {
+  "use cache";
+  cacheTag(tenantTag(tenantId, "blog"));
+  cacheLife({ stale: 30, revalidate: 60, expire: 3600 });
+  const { rt } = server();
+  return listBlogForFeed(rt, createStorefrontTenantContext(tenantId), 20);
 }

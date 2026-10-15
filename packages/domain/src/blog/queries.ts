@@ -253,26 +253,37 @@ export async function listPublicBlogPosts(rt: Runtime, ctx: TenantContext, q: Pu
   });
 }
 
-/** Newest posts for the Recent Posts widget: one query, bounded by `limit`. */
+/** Newest posts for the Recent Posts widget: one query, bounded by `limit`. Runs inside the caller's tenant transaction. */
+export async function recentBlogPostsTx(
+  tx: Tx,
+  tenantId: string,
+  opts: { limit?: number | undefined; categorySlug?: string | undefined; featuredOnly?: boolean | undefined } = {},
+): Promise<{ posts: BlogPostSummary[]; enabled: boolean; categoryPath: string | null }> {
+  const limit = Math.min(Math.max(opts.limit ?? 3, 1), 12);
+  const settings = await readBlogSettings(tx, tenantId);
+  if (!settings.enabled) return { posts: [], enabled: false, categoryPath: null };
+  const { rows, ref } = await loadCategoryIndex(tx, tenantId);
+  const conds: SQL[] = [eq(bp.tenantId, tenantId), visible];
+  let categoryPath: string | null = null;
+  if (opts.categorySlug) {
+    const c = rows.find((r) => r.isActive && r.slug === opts.categorySlug);
+    if (!c) return { posts: [], enabled: true, categoryPath: null };
+    categoryPath = ref(c.id)?.path ?? null;
+    conds.push(sql`${bp.categoryId} in (select id from blog_categories where tenant_id = ${tenantId} and (id = ${c.id} or parent_id = ${c.id}))`);
+  }
+  if (opts.featuredOnly) conds.push(eq(bp.isFeatured, true));
+  const list = await selectPosts(tx).where(and(...conds)).orderBy(desc(bp.publishedAt), desc(bp.id)).limit(limit);
+  return { posts: list.map((r) => toSummary(r, ref)), enabled: true, categoryPath };
+}
+
 export async function getRecentBlogPosts(
   rt: Runtime,
   ctx: TenantContext,
   opts: { limit?: number | undefined; categorySlug?: string | undefined; featuredOnly?: boolean | undefined } = {},
 ): Promise<{ posts: BlogPostSummary[]; enabled: boolean }> {
-  const limit = Math.min(Math.max(opts.limit ?? 3, 1), 12);
   return withTenant(rt._db.db, ctx.tenantId, async (tx) => {
-    const settings = await readBlogSettings(tx, ctx.tenantId);
-    if (!settings.enabled) return { posts: [], enabled: false };
-    const { rows, ref } = await loadCategoryIndex(tx, ctx.tenantId);
-    const conds: SQL[] = [eq(bp.tenantId, ctx.tenantId), visible];
-    if (opts.categorySlug) {
-      const c = rows.find((r) => r.isActive && r.slug === opts.categorySlug);
-      if (!c) return { posts: [], enabled: true };
-      conds.push(sql`${bp.categoryId} in (select id from blog_categories where tenant_id = ${ctx.tenantId} and (id = ${c.id} or parent_id = ${c.id}))`);
-    }
-    if (opts.featuredOnly) conds.push(eq(bp.isFeatured, true));
-    const list = await selectPosts(tx).where(and(...conds)).orderBy(desc(bp.publishedAt), desc(bp.id)).limit(limit);
-    return { posts: list.map((r) => toSummary(r, ref)), enabled: true };
+    const { posts, enabled } = await recentBlogPostsTx(tx, ctx.tenantId, opts);
+    return { posts, enabled };
   });
 }
 

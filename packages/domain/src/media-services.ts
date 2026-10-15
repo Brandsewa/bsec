@@ -803,6 +803,8 @@ export async function resolveMediaUsageLabels(
       else if (p?.type === "collection_template") label = "Collection page";
       else if (p?.type === "collections_archive_template") label = "Collection archive";
       else if (p?.type === "cart_template") label = "Cart page";
+      else if (p?.type === "blog_archive_template") label = "Blog archive";
+      else if (p?.type === "blog_post_template") label = "Blog post page";
       else if (p?.type === "home") label = "Home page";
 
       list.push({

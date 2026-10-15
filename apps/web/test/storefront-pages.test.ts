@@ -1,3 +1,5 @@
+import { existsSync, readFileSync } from "node:fs";
+import { join } from "node:path";
 import { describe, expect, it, vi } from "vitest";
 import React from "react";
 import { renderToString } from "react-dom/server";
@@ -298,15 +300,31 @@ describe("Storefront Pages & Block Rendering", () => {
   });
 
   describe("Blog Routes", () => {
-    // Stores have no blog authoring yet, so no store may show demo articles (a pickle shop was showing keyboard guides).
-    it("ships no demo articles on the blog index", async () => {
-      const { SAMPLE_ARTICLES } = await import("../src/app/blog/page.tsx");
-      expect(SAMPLE_ARTICLES).toEqual([]);
+    const root = join(process.cwd(), "src/app/blog");
+    const pages = ["page.tsx", "page/[n]/page.tsx", "category/[...path]/page.tsx", "[slug]/page.tsx"];
+
+    it("has the archive, page, category and post routes, each with a loading.tsx beside it", () => {
+      for (const page of pages) {
+        expect(existsSync(join(root, page)), page).toBe(true);
+        expect(existsSync(join(root, page.replace(/page\.tsx$/, "loading.tsx"))), `${page} loading`).toBe(true);
+      }
+      expect(existsSync(join(root, "feed.xml/route.ts"))).toBe(true);
     });
 
-    it("has no demo article pages, so every article URL is a 404", async () => {
-      const { ARTICLE_DETAILS } = await import("../src/app/blog/[slug]/page.tsx");
-      expect(Object.keys(ARTICLE_DETAILS)).toEqual([]);
+    it("no longer carries demo articles: posts come from the store", () => {
+      for (const page of pages) {
+        const src = readFileSync(join(root, page), "utf8");
+        expect(src).not.toContain("SAMPLE_ARTICLES");
+        expect(src).not.toContain("ARTICLE_DETAILS");
+      }
+    });
+
+    it("lists page numbers with the first, last and neighbours of the current page", async () => {
+      const { pageWindow } = await import("../src/components/blog/BlogListingSection.tsx");
+      expect(pageWindow(1, 1)).toEqual([1]);
+      expect(pageWindow(1, 3)).toEqual([1, 2, 3]);
+      expect(pageWindow(5, 10)).toEqual([1, "gap", 4, 5, 6, "gap", 10]);
+      expect(pageWindow(2, 10)).toEqual([1, 2, 3, "gap", 10]);
     });
   });
 });

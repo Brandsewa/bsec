@@ -15,3 +15,4 @@ export * from "./default-pages.ts";
 export { SvgIcon } from "./svg-icon.tsx";
 export * from "./media.ts";
 export * from "./media-image.ts";
+export { BlogCard, formatBlogDate, type BlogCardOptions } from "./views-blog.tsx";

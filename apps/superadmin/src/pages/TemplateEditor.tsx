@@ -24,6 +24,8 @@ const TABS = [
   { key: "collection", label: "Collection page", kind: "collection" },
   { key: "product", label: "Product page", kind: "product" },
   { key: "cart", label: "Cart page", kind: "cart" },
+  { key: "blog", label: "Blog archive", kind: "blogArchive" },
+  { key: "blog-post", label: "Blog post page", kind: "blogPost" },
   { key: "header", label: "Header", kind: "header" },
   { key: "footer", label: "Footer", kind: "footer" },
 ] as const satisfies ReadonlyArray<{ key: string; label: string; kind?: EditorPageKind }>;

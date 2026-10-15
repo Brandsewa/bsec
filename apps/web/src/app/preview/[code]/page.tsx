@@ -6,7 +6,9 @@ import { getThemePreview } from "@bs/domain";
 import { buildSampleRenderData, computeThemeTokens, googleFontsHref, THEME_PAGE_LABELS, type BlockInstance } from "@bs/blocks";
 import { server } from "@/server/runtime.ts";
 import { isPlatformMarketingHost } from "@/server/hosts.ts";
-import { sampleCart, sampleCollection, sampleProductDetail } from "@/server/preview-samples.ts";
+import { sampleBlogCategories, sampleBlogList, sampleBlogPost, sampleCart, sampleCollection, sampleProductDetail } from "@/server/preview-samples.ts";
+import { BlogListingSection } from "@/components/blog/BlogListingSection.tsx";
+import { BlogPostSection } from "@/components/blog/BlogPostSection.tsx";
 import { BlockRenderer } from "@/components/blocks/BlockRenderer.tsx";
 import { ThemeChrome } from "@/components/storefront/ThemeChrome.tsx";
 import { CollectionListingSection } from "@/components/catalog/CollectionListingSection.tsx";
@@ -21,7 +23,7 @@ import { CartView } from "@/components/cart/CartView.tsx";
  */
 export const metadata: Metadata = { title: "Theme preview", robots: { index: false, follow: false } };
 
-const ORDER = ["home", "collection", "product", "cart"];
+const ORDER = ["home", "collection", "product", "cart", "blog", "blog-post"];
 
 /** Whole hours until the link expires (at least 1). */
 function hoursUntil(iso: string): number {
@@ -99,6 +101,8 @@ export default async function ThemePreviewPage({ params, searchParams }: { param
             renderProductInfoTabs: (o) => (
               <ProductInfoTabs descriptionLabel={o.descriptionLabel} shippingLabel={o.shippingLabel} descriptionText="The product's own description appears here." shippingContent={o.shippingContent} imageAlt={o.imageAlt} imageSide={o.imageSide} />
             ),
+            renderBlogListing: (options) => <BlogListingSection list={sampleBlogList()} categories={sampleBlogCategories()} options={options} />,
+            renderBlogPost: (options) => <BlogPostSection post={sampleBlogPost()} options={options} postUrl="https://example.com/blog/sample-post-1" blogTitle="Blog" />,
             renderCartContents: (options) => <CartView cart={sampleCart()} options={options} freeShippingThresholdPaise={299900} />,
           }}
         />

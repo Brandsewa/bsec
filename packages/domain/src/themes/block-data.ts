@@ -5,6 +5,7 @@ import {
   validateBlockDocument,
   walkBlocks,
   type BlockCollectionSummary,
+  type BlockBlogPost,
   type BlockData,
   type BlockInstance,
   type BlockProduct,
@@ -17,6 +18,7 @@ import { computeCanonicalPath } from "../content-services.ts";
 import { buildCloudflareImageUrl, publicMediaUrl } from "../media/storage.ts";
 import { buildProductSummaries, type StorefrontProductSummary } from "../storefront/catalog.ts";
 import { LISTED_PRODUCT_STATUSES } from "../storefront/product-status.ts";
+import { recentBlogPostsTx, type BlogPostSummary } from "../blog/queries.ts";
 
 type Tx = Parameters<Parameters<typeof withTenant>[2]>[0];
 type ProductRow = typeof schema.products.$inferSelect;
@@ -505,6 +507,20 @@ async function loadMenusData(
  * visibility rules as the storefront catalog), so it is safe for both the storefront render
  * and the editor preview. Blocks that cannot resolve get no entry and render an empty state.
  */
+/** A blog summary in the shape the blocks draw (ready-to-use image URL, category link path). */
+export function toBlockBlogPost(p: BlogPostSummary): BlockBlogPost {
+  return {
+    slug: p.slug,
+    title: p.title,
+    excerpt: p.excerpt,
+    publishedAt: p.publishedAt,
+    authorName: p.authorName,
+    readingMinutes: p.readingMinutes,
+    ...(p.image ? { imageUrl: p.image.url, imageAlt: p.image.alt, imageWidth: p.image.width, imageHeight: p.image.height } : {}),
+    ...(p.category ? { categoryName: p.category.name, categoryPath: p.category.path } : {}),
+  };
+}
+
 export async function resolveBlockData(
   rt: Runtime,
   ctx: TenantContext,
@@ -516,6 +532,7 @@ export async function resolveBlockData(
   const headerBlocks: BlockInstance[] = [];
   const footerBlocks: BlockInstance[] = [];
   const fileBlocks: BlockInstance[] = [];
+  const blogBlocks: BlockInstance[] = [];
 
   walkBlocks(blocks, (b) => {
     if (b.hidden) return;
@@ -525,6 +542,7 @@ export async function resolveBlockData(
     else if (b.type === "SiteHeader") headerBlocks.push(b);
     else if (b.type === "SiteFooter") footerBlocks.push(b);
     else if (b.type === "FileDownload") fileBlocks.push(b);
+    else if (b.type === "BlogPosts") blogBlocks.push(b);
   });
 
   if (
@@ -533,7 +551,8 @@ export async function resolveBlockData(
     showcaseBlocks.length === 0 &&
     headerBlocks.length === 0 &&
     footerBlocks.length === 0 &&
-    fileBlocks.length === 0
+    fileBlocks.length === 0 &&
+    blogBlocks.length === 0
   ) {
     return {};
   }
@@ -570,6 +589,21 @@ export async function resolveBlockData(
       for (const b of collectionBlocks) {
         out[b.id] = { kind: "collections", collections: await loadCollections(tx, b.props) };
       }
+    }
+
+    // Recent Posts widgets (ADR-033): one bounded query per block, inside this transaction.
+    for (const b of blogBlocks) {
+      const source = b.props["source"];
+      const res = await recentBlogPostsTx(tx, ctx.tenantId, {
+        limit: Number(b.props["count"]) || 3,
+        categorySlug: source === "category" && typeof b.props["categorySlug"] === "string" ? b.props["categorySlug"] : undefined,
+        featuredOnly: source === "featured",
+      });
+      out[b.id] = {
+        kind: "blog-posts",
+        posts: res.enabled ? res.posts.map(toBlockBlogPost) : [],
+        viewAllHref: res.categoryPath ? `/blog/category/${res.categoryPath}` : "/blog",
+      };
     }
 
     if (headerBlocks.length > 0 || footerBlocks.length > 0) {

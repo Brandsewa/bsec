@@ -16,6 +16,8 @@ import {
   listPublicBlogCategories,
   listPublicBlogPosts,
   publishBlogPost,
+  resolveBlockData,
+  seedThemeDemoBlog,
   publishDueBlogPosts,
   resolveBlogStatus,
   scheduleBlogPost,
@@ -326,5 +328,69 @@ describe("blog widget query and audit", () => {
     const mine = await createBlogPost(rt, ownerA, { title: "Mine only" });
     await expect(updateBlogPost(rt, ownerB, mine.id, { title: "stolen" })).rejects.toThrow(/not found/i);
     await expect(deleteBlogPost(rt, ownerB, mine.id)).rejects.toThrow(/not found/i);
+  });
+});
+
+describe("Recent Posts widget data (block render data)", () => {
+  const widget = (id: string, props: Record<string, unknown>) => ({ id, type: "BlogPosts" as const, version: 1, props });
+
+  it("resolves newest first, bounded by count, by source and category, for one store only", async () => {
+    const cat = await createBlogCategory(rt, ownerA, { name: "Widget data cat" });
+    const featured = await createBlogPost(rt, ownerA, { title: "Widget featured", categoryId: cat.id, status: "published", publishedAt: new Date(), isFeatured: true });
+    for (let i = 0; i < 3; i++) await createBlogPost(rt, ownerA, { title: `Widget data ${i}`, status: "published", publishedAt: new Date(Date.now() - (i + 2) * 3_600_000) });
+    const blocks = [
+      widget("latest", { count: 2 }),
+      widget("featured", { count: 5, source: "featured" }),
+      widget("cat", { count: 5, source: "category", categorySlug: cat.slug }),
+      widget("nocat", { count: 5, source: "category", categorySlug: "does-not-exist" }),
+    ];
+    const data = await resolveBlockData(rtStore, anon(A), blocks as never);
+    const posts = (id: string) => (data[id]?.kind === "blog-posts" ? data[id].posts : null);
+    expect(posts("latest")).toHaveLength(2);
+    expect(posts("latest")?.[0]?.slug).toBe(featured.slug);
+    expect(posts("featured")?.[0]?.slug).toBe(featured.slug);
+    expect(posts("cat")?.map((p) => p.slug)).toEqual([featured.slug]);
+    expect(posts("cat")?.[0]).toMatchObject({ categoryName: "Widget data cat", categoryPath: cat.slug });
+    expect(posts("nocat")).toEqual([]);
+    const href = (id: string) => (data[id]?.kind === "blog-posts" ? data[id].viewAllHref : "");
+    expect(href("cat")).toBe(`/blog/category/${cat.slug}`);
+    expect(href("latest")).toBe("/blog");
+
+    const other = await resolveBlockData(rtStore, anon(B), blocks as never);
+    expect((other["latest"]?.kind === "blog-posts" ? other["latest"].posts : null)).toEqual([]);
+  });
+
+  it("is empty when the blog is switched off and a new post shows up as soon as it is published", async () => {
+    const blocks = [widget("w", { count: 12 })];
+    const count = async () => {
+      const d = await resolveBlockData(rtStore, anon(A), blocks as never);
+      return d["w"]?.kind === "blog-posts" ? d["w"].posts : [];
+    };
+    const before = (await count()).length;
+    const p = await createBlogPost(rt, ownerA, { title: "Fresh widget post", status: "published" });
+    expect((await count()).map((x) => x.slug)).toContain(p.slug);
+    expect((await count()).length).toBe(Math.min(before + 1, 12));
+    await updateBlogSettings(rt, ownerA, { enabled: false });
+    expect(await count()).toEqual([]);
+    await updateBlogSettings(rt, ownerA, { enabled: true });
+  });
+
+  it("the demo blog seed covers every state, runs once and stays hidden where it should", async () => {
+    await createBlogCategory(rt, ownerB, { name: "Placeholder so B has a row" });
+    const first = await seedThemeDemoBlog(rt, ownerB);
+    expect(first.seeded).toBe(true);
+    expect((await seedThemeDemoBlog(rt, ownerB)).seeded).toBe(false);
+    const states = await q<{ status: string; n: number }>(`select status, count(*)::int n from blog_posts where tenant_id = $1 group by status`, [B]);
+    const by = Object.fromEntries(states.map((r) => [r.status, r.n]));
+    expect(by["published"]).toBeGreaterThanOrEqual(5);
+    expect(by["scheduled"]).toBe(1);
+    expect(by["draft"]).toBe(1);
+    const visible = await listPublicBlogPosts(rtStore, anon(B), { perPage: 48 });
+    expect(visible.posts.map((p) => p.title)).not.toContain("Coming next week");
+    expect(visible.posts.map((p) => p.title)).not.toContain("Draft: ideas for the festive season");
+    const sizing = await listPublicBlogPosts(rtStore, anon(B), { categoryPath: "guides/sizing" });
+    expect(sizing.posts.map((p) => p.title)).toEqual(["How to choose the right size"]);
+    const guides = await listPublicBlogPosts(rtStore, anon(B), { categoryPath: "guides" });
+    expect(guides.posts.length).toBeGreaterThanOrEqual(3);
   });
 });
