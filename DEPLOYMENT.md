@@ -100,6 +100,11 @@ STAFF_EMAIL=owner@example.com STAFF_NAME="Platform Owner" node dist/create-staff
 - If the email already belongs to an account (for example a store owner), that account's password is **not** changed; it simply becomes platform staff.
 - **Lost phone / authenticator?** Run the same command again with `STAFF_RESET_MFA=1`: it removes the enrolment and all sessions so the person sets up a new authenticator. (This is why access to the platform container terminal must stay restricted.)
 
+**Create the Modern Commerce theme draft** (platform container). Creates or refreshes a hidden draft only: it publishes nothing and changes no store. Then open Super Admin, Themes, review and publish it:
+```
+STAFF_EMAIL=owner@example.com node dist/seed-templates.js
+```
+
 **Create or reset a store owner login** (worker container). Uses a hidden password prompt; the password is never printed or logged:
 ```
 OWNER_EMAIL=you@example.com OWNER_NAME="Your Name" STORE_SLUG=<store slug> node dist/create-owner.js
