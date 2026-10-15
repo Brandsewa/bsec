@@ -13,14 +13,14 @@
     "test:fast": "vitest run"
   },
   "dependencies": {
-    "@orpc/contract": "1.15.4",
-    "zod": "4.6.5"
+    "@orpc/contract": "1.15.6",
+    "zod": "4.6.7"
   },
   "devDependencies": {
     "@bs/config": "workspace:*",
     "@types/node": "24.19.0",
-    "eslint": "10.11.0",
+    "eslint": "10.12.0",
     "typescript": "6.0.3",
-    "vitest": "5.0.2"
+    "vitest": "5.0.4"
   }
 }
