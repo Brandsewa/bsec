@@ -452,7 +452,7 @@ describe("preview links for unpublished posts", () => {
     expect((await getPublicBlogPost(rtStore, anon(A), draft.slug)).kind).toBe("missing");
     const ok = await getPublicBlogPost(rtStore, anon(A), draft.slug, { previewToken: token });
     expect(ok.kind === "post" && ok.preview).toBe(true);
-    expect((await getPublicBlogPost(rtStore, anon(A), draft.slug, { previewToken: token.replace(/.$/, "0") })).kind).toBe("missing");
+    expect((await getPublicBlogPost(rtStore, anon(A), draft.slug, { previewToken: token.replace(/.$/, (c) => (c === "0" ? "1" : "0")) })).kind).toBe("missing");
     expect((await getPublicBlogPost(rtStore, anon(B), draft.slug, { previewToken: token })).kind).toBe("missing");
     // The link does not publish anything or change what is listed.
     expect((await listPublicBlogPosts(rtStore, anon(A), { perPage: 48 })).posts.map((p) => p.slug)).not.toContain(draft.slug);
