@@ -4,6 +4,7 @@ import type { Runtime } from "../runtime.ts";
 import { assertPermission, type TenantContext } from "../context.ts";
 import { invalidateCache } from "../cache-invalidation.ts";
 import { clearMediaUsagesForOwner, syncMediaUsages } from "../media-services.ts";
+import { publicMediaUrl } from "../media/storage.ts";
 import {
   cleanBlogExcerpt,
   cleanBlogSeo,
@@ -133,16 +134,24 @@ export async function listBlogPosts(rt: Runtime, ctx: TenantContext, q: BlogPost
         categoryId: schema.blogPosts.categoryId,
         categoryName: sql<string | null>`(select c.name from blog_categories c where c.tenant_id = ${schema.blogPosts.tenantId} and c.id = ${schema.blogPosts.categoryId})`,
         featuredImageMediaId: schema.blogPosts.featuredImageMediaId,
+        featuredKey: schema.media.storageKey,
         isFeatured: schema.blogPosts.isFeatured,
       })
       .from(schema.blogPosts)
+      .leftJoin(schema.media, and(eq(schema.media.tenantId, schema.blogPosts.tenantId), eq(schema.media.id, schema.blogPosts.featuredImageMediaId)))
       .where(where)
       .orderBy(order)
       .limit(Math.min(Math.max(q.limit ?? 25, 1), 100))
       .offset(Math.max(q.offset ?? 0, 0));
     const [tot] = await tx.select({ n: sql<number>`count(*)::int` }).from(schema.blogPosts).where(where);
     return {
-      items: items.map((i) => ({ ...i, status: i.status as BlogPostStatus, publishedAt: i.publishedAt?.toISOString() ?? null, updatedAt: i.updatedAt.toISOString() })),
+      items: items.map(({ featuredKey, ...i }) => ({
+        ...i,
+        status: i.status as BlogPostStatus,
+        publishedAt: i.publishedAt?.toISOString() ?? null,
+        updatedAt: i.updatedAt.toISOString(),
+        featuredImageUrl: publicMediaUrl(featuredKey) ?? null,
+      })),
       total: tot?.n ?? 0,
     };
   });

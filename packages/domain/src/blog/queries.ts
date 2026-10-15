@@ -5,6 +5,7 @@ import type { TenantContext } from "../context.ts";
 import { publicMediaUrl } from "../media/storage.ts";
 import { extractHeadings, type BlogHeading, type BlogSeoInput } from "./content.ts";
 import { readBlogSettings, type BlogSettings, type Tx } from "./shared.ts";
+import { verifyBlogPreviewToken } from "./preview.ts";
 
 /**
  * Storefront reads (ADR-033). ONE visibility rule for every list, the widget, the sitemap and the feed:
@@ -143,7 +144,8 @@ function toSummary(r: Row, ref: (id: string | null) => BlogCategoryRef | null): 
     slug: r.slug,
     title: r.title,
     excerpt: metaDescription(r),
-    publishedAt: (r.publishedAt ?? new Date(0)).toISOString(),
+    // A draft being previewed has no date yet: show today.
+    publishedAt: (r.publishedAt ?? new Date()).toISOString(),
     authorName: r.authorName,
     readingMinutes: r.readingMinutes,
     isFeatured: r.isFeatured,
@@ -288,17 +290,26 @@ export async function getRecentBlogPosts(
 }
 
 export type PublicBlogPostResult =
-  | { kind: "post"; post: BlogPostPage; settings: BlogSettings }
+  | { kind: "post"; post: BlogPostPage; settings: BlogSettings; preview: boolean }
   | { kind: "redirect"; slug: string }
   | { kind: "missing" };
 
-export async function getPublicBlogPost(rt: Runtime, ctx: TenantContext, slug: string): Promise<PublicBlogPostResult> {
+/**
+ * One post for the storefront. With a valid preview token (see preview.ts) the post shows whatever its state, so a
+ * draft can be reviewed; without one only visible posts resolve. Related posts and neighbours are always public ones.
+ */
+export async function getPublicBlogPost(rt: Runtime, ctx: TenantContext, slug: string, opts: { previewToken?: string | undefined } = {}): Promise<PublicBlogPostResult> {
   return withTenant(rt._db.db, ctx.tenantId, async (tx) => {
     const settings = await readBlogSettings(tx, ctx.tenantId);
-    if (!settings.enabled) return { kind: "missing" };
+    if (!settings.enabled && !opts.previewToken) return { kind: "missing" };
     const { ref } = await loadCategoryIndex(tx, ctx.tenantId);
+    let preview = false;
+    if (opts.previewToken) {
+      const [cand] = await tx.select({ id: bp.id }).from(bp).where(and(eq(bp.tenantId, ctx.tenantId), eq(bp.slug, slug))).limit(1);
+      preview = cand ? verifyBlogPreviewToken(ctx.tenantId, cand.id, opts.previewToken) : false;
+    }
     const [row] = await selectPosts(tx)
-      .where(and(eq(bp.tenantId, ctx.tenantId), eq(bp.slug, slug), visible))
+      .where(and(eq(bp.tenantId, ctx.tenantId), eq(bp.slug, slug), preview ? sql`true` : visible))
       .limit(1);
     if (!row) {
       const [red] = await tx
@@ -345,6 +356,7 @@ export async function getPublicBlogPost(rt: Runtime, ctx: TenantContext, slug: s
     const html = full?.contentHtml ?? "";
     return {
       kind: "post",
+      preview,
       settings,
       post: {
         ...toSummary(row, ref),
@@ -360,6 +372,37 @@ export async function getPublicBlogPost(rt: Runtime, ctx: TenantContext, slug: s
       },
     };
   });
+}
+
+/**
+ * Menu links to a blog category or a post (ADR-033): only live targets resolve, so a hidden category or a draft
+ * never shows in navigation. Runs inside the caller's tenant transaction.
+ */
+export async function blogMenuTargetsTx(
+  tx: Tx,
+  tenantId: string,
+  want: { categoryIds: ReadonlySet<string>; postIds: ReadonlySet<string> },
+): Promise<{ categories: Map<string, string>; posts: Map<string, string> }> {
+  const out = { categories: new Map<string, string>(), posts: new Map<string, string>() };
+  const settings = await readBlogSettings(tx, tenantId);
+  if (!settings.enabled) return out;
+  if (want.categoryIds.size > 0) {
+    const { rows, ref } = await loadCategoryIndex(tx, tenantId);
+    const byId = new Map(rows.map((r) => [r.id, r]));
+    for (const id of want.categoryIds) {
+      const c = byId.get(id);
+      const parent = c?.parentId ? byId.get(c.parentId) : undefined;
+      if (c?.isActive && (!c.parentId || parent?.isActive)) out.categories.set(id, ref(id)?.path ?? c.slug);
+    }
+  }
+  if (want.postIds.size > 0) {
+    const rows = await tx
+      .select({ id: bp.id, slug: bp.slug })
+      .from(bp)
+      .where(and(eq(bp.tenantId, tenantId), visible, sql`${bp.id} in (${sql.join([...want.postIds].map((id) => sql`${id}::uuid`), sql`, `)})`));
+    for (const r of rows) out.posts.set(r.id, r.slug);
+  }
+  return out;
 }
 
 /** Visible, indexable posts and active categories for the sitemap (runs inside the caller's tenant transaction). */

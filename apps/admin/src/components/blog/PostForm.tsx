@@ -1,7 +1,7 @@
-import { lazy, Suspense, useMemo, useState } from "react";
+import { lazy, Suspense, useEffect, useMemo, useState } from "react";
 import { useBlocker, useNavigate } from "@tanstack/react-router";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { AlertTriangle, ArrowLeft, Check, Globe, Save, Trash2 } from "lucide-react";
+import { AlertTriangle, ArrowLeft, Check, Eye, Globe, Save, Trash2 } from "lucide-react";
 import {
   Badge,
   Button,
@@ -185,7 +185,40 @@ function PostFormInner({ post }: { post: BlogPostDetail | null }) {
       onError: (err) => toast.error(errorMessage(err, "Could not delete the post")),
     }),
   );
+  const [autosavedAt, setAutosavedAt] = useState<Date | null>(null);
+  // Drafts keep themselves: 30 s after the last change, a saved draft is saved again. A published or scheduled post is
+  // never changed this way (the Save button is the only way to change what visitors see).
+  // Quiet on purpose: a failed background save must not interrupt typing; the Save button reports real errors.
+  const autosave = useMutation(orpc.admin.blog.posts.update.mutationOptions());
+  const previewLink = useMutation(
+    orpc.admin.blog.posts.previewLink.mutationOptions({
+      onSuccess: (res) => {
+        window.open(res.url, "_blank", "noopener");
+      },
+      onError: (err) => toast.error(errorMessage(err, "Could not create a preview link")),
+    }),
+  );
   const saving = createMutation.isPending || updateMutation.isPending;
+  const canAutosave = Boolean(post) && post?.status === "draft" && s.visibility === "draft" && dirty && s.title.trim().length > 0 && !saving && !autosave.isPending;
+  useEffect(() => {
+    if (!canAutosave || !post) return;
+    const timer = setTimeout(() => {
+      // `s` is the form as it was when this save started, so edits made while it runs stay unsaved.
+      autosave.mutate(
+        { id: post.id, ...buildInput() },
+        {
+          onSuccess: (res) => {
+            setAutosavedAt(new Date());
+            setSaved({ ...s, slug: res.slug });
+            invalidate();
+          },
+        },
+      );
+    }, 30_000);
+    return () => clearTimeout(timer);
+    // buildInput closes over the state in `s`; re-arming on every change is the debounce.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [canAutosave, s]);
 
   const save = () => {
     if (!s.title.trim()) {
@@ -221,7 +254,7 @@ function PostFormInner({ post }: { post: BlogPostDetail | null }) {
       <PageBreadcrumbs
         items={[{ label: "Blog", href: "/online-store/blog" }, { label: post ? post.title : "New post" }]}
         actions={
-          <div className="flex items-center gap-2">
+          <div className="flex flex-wrap items-center justify-end gap-2">
             <Button variant="ghost" size="sm" onClick={() => void navigate({ to: "/online-store/blog" })}>
               <ArrowLeft className="mr-1.5 size-3.5" aria-hidden />
               Posts
@@ -230,6 +263,22 @@ function PostFormInner({ post }: { post: BlogPostDetail | null }) {
               <Button type="button" variant="destructive" size="sm" onClick={() => setDeleteOpen(true)} disabled={deleteMutation.isPending}>
                 <Trash2 className="mr-1.5 size-3.5" aria-hidden />
                 Delete
+              </Button>
+            )}
+            {autosavedAt && !dirty ? <span className="hidden text-xs text-muted-foreground sm:inline">Draft saved {autosavedAt.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}</span> : null}
+            {post && (
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                disabled={previewLink.isPending}
+                onClick={() => {
+                  if (dirty) toast.info("The preview shows the last saved version. Save first to see your latest changes.");
+                  previewLink.mutate({ id: post.id });
+                }}
+              >
+                <Eye className="mr-1.5 size-3.5" aria-hidden />
+                Preview
               </Button>
             )}
             <Button type="button" size="sm" onClick={save} disabled={saving || (post !== null && !dirty)}>
@@ -242,7 +291,7 @@ function PostFormInner({ post }: { post: BlogPostDetail | null }) {
       <PageHeader title={post ? post.title : "New post"} description="Write the post, choose its category and image, and set how it appears in search results." />
 
       <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
-        <div className="flex flex-col gap-6 lg:col-span-2">
+        <div className="flex min-w-0 flex-col gap-6 lg:col-span-2">
           <Card>
             <CardContent className="grid gap-4 pt-5">
               <div className="grid gap-1.5">
@@ -292,7 +341,7 @@ function PostFormInner({ post }: { post: BlogPostDetail | null }) {
               <CardDescription>How this post appears in Google and when it is shared.</CardDescription>
             </CardHeader>
             <CardContent className="grid gap-5">
-              <div className="rounded-lg bg-muted/40 p-4">
+              <div className="min-w-0 overflow-hidden rounded-lg bg-muted/40 p-4">
                 <div className="truncate text-xs text-muted-foreground">your-store.com/blog/{s.slug || "address"}</div>
                 <div className="mt-1 line-clamp-1 text-base font-medium text-blue-600 dark:text-blue-400">{effectiveTitle || "Post title"}</div>
                 <div className="mt-1 line-clamp-2 text-sm text-muted-foreground">{effectiveDescription || "The description appears here."}</div>
@@ -342,7 +391,7 @@ function PostFormInner({ post }: { post: BlogPostDetail | null }) {
           </Card>
         </div>
 
-        <div className="flex flex-col gap-6">
+        <div className="flex min-w-0 flex-col gap-6">
           <Card>
             <CardHeader>
               <CardTitle className="flex items-center justify-between text-base font-semibold">

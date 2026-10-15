@@ -79,6 +79,8 @@ const LINK_TYPE_OPTIONS: { value: MenuItemType; label: string }[] = [
   { value: "product", label: "Product" },
   { value: "home", label: "Home" },
   { value: "blog", label: "Blog" },
+  { value: "blog_category", label: "Blog category" },
+  { value: "blog_post", label: "Blog post" },
   { value: "policy", label: "Policies" },
   { value: "search", label: "Search" },
   { value: "account", label: "Account / Login" },
@@ -550,6 +552,8 @@ function MenuEditorForm({ menu }: { menu: MenuDetail }) {
   const pagesQuery = useQuery(orpc.admin.pages.list.queryOptions());
   const collectionsQuery = useQuery(orpc.admin.collections.list.queryOptions({ input: {} }));
   const categoriesQuery = useQuery(orpc.admin.categories.list.queryOptions());
+  const blogCategoriesQuery = useQuery(orpc.admin.blog.categories.list.queryOptions());
+  const blogPostsQuery = useQuery(orpc.admin.blog.posts.list.queryOptions({ input: { status: "published", limit: 100 } }));
   const brandsQuery = useQuery(orpc.admin.brands.list.queryOptions());
   const productsQuery = useQuery(orpc.admin.products.list.queryOptions({ input: {} }));
 
@@ -1163,6 +1167,45 @@ function MenuEditorForm({ menu }: { menu: MenuDetail }) {
                       value: c.id,
                       label: `${c.name} (/categories/${c.slug})`,
                     })),
+                  ]}
+                />
+              </div>
+            ) : null}
+
+            {itemFormType === "blog_category" ? (
+              <div className="space-y-1.5">
+                <Label>Select Blog category</Label>
+                <SimpleSelect
+                  value={itemFormTargetId}
+                  onChange={(id: string) => {
+                    for (const c of blogCategoriesQuery.data ?? []) {
+                      const hit = c.id === id ? c : (c.children ?? []).find((k) => k.id === id);
+                      if (hit) handleResourceSelect(hit.id, hit.name, `/blog/category/${hit.parentId ? `${c.slug}/${hit.slug}` : hit.slug}`);
+                    }
+                  }}
+                  options={[
+                    { value: "", label: "-- Choose a blog category --" },
+                    ...(blogCategoriesQuery.data ?? []).flatMap((c) => [
+                      { value: c.id, label: c.name },
+                      ...(c.children ?? []).map((k) => ({ value: k.id, label: `${c.name} › ${k.name}` })),
+                    ]),
+                  ]}
+                />
+              </div>
+            ) : null}
+
+            {itemFormType === "blog_post" ? (
+              <div className="space-y-1.5">
+                <Label>Select Blog post</Label>
+                <SimpleSelect
+                  value={itemFormTargetId}
+                  onChange={(id: string) => {
+                    const post = (blogPostsQuery.data?.items ?? []).find((p) => p.id === id);
+                    if (post) handleResourceSelect(post.id, post.title, `/blog/${post.slug}`);
+                  }}
+                  options={[
+                    { value: "", label: "-- Choose a published post --" },
+                    ...(blogPostsQuery.data?.items ?? []).map((p) => ({ value: p.id, label: p.title })),
                   ]}
                 />
               </div>

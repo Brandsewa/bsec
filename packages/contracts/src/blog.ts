@@ -39,6 +39,8 @@ export const BlogPostListItem = z.object({
   categoryId: z.string().uuid().nullable(),
   categoryName: z.string().nullable(),
   featuredImageMediaId: z.string().uuid().nullable(),
+  /** Public address of the featured image, for list thumbnails. */
+  featuredImageUrl: z.string().nullable(),
   isFeatured: z.boolean(),
 });
 export type BlogPostListItem = z.infer<typeof BlogPostListItem>;
@@ -171,6 +173,11 @@ export const blogContract = {
       .input(Id)
       .output(z.object({ id: z.string().uuid(), slug: z.string() })),
     delete: oc.route({ method: "DELETE", path: "/admin/blog/posts/{id}" }).input(Id).output(Ok),
+    /** A signed link (valid 24 hours) that shows the post on the storefront whatever its state, hidden from search engines. */
+    previewLink: oc
+      .route({ method: "POST", path: "/admin/blog/posts/{id}/preview-link" })
+      .input(Id)
+      .output(z.object({ url: z.string(), expiresAt: z.string() })),
     /** The sanitised HTML the shopper would get for an unsaved body, so the admin preview equals the storefront. */
     previewHtml: oc
       .route({ method: "POST", path: "/admin/blog/preview-html" })

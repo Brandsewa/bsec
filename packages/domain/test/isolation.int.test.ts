@@ -315,6 +315,7 @@ import {
   duplicateBlogPost,
   deleteBlogPost,
   previewBlogHtml,
+  createBlogPreviewLink,
   getBlogSettings,
   updateBlogSettings,
 } from "../src/index.ts";
@@ -2095,6 +2096,11 @@ describe("Generated Isolation Test Suite (M1 Real Postgres 18 Proof)", () => {
         const p = await createBlogPost(rt, ctx, { title: `BlogX-${Date.now()}` });
         await deleteBlogPost(rt, ctx, p.id);
         return { ok: true };
+      }
+      case "blog.posts.previewLink": {
+        const p = await createBlogPost(rt, ctx, { title: `BlogL-${Date.now()}` });
+        await rt._db.db.insert(schema.domains).values({ tenantId: ctx.tenantId, hostname: `blog-${ctx.tenantId.slice(-6)}.isolation.test`, status: "active" }).onConflictDoNothing();
+        return await createBlogPreviewLink(rt, ctx, p.id);
       }
       case "blog.posts.previewHtml":
         return await previewBlogHtml(rt, ctx, "<p>Hello</p>");

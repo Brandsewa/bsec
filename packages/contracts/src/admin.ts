@@ -1040,6 +1040,8 @@ export const MenuItemType = z.enum([
   "category",
   "brand",
   "blog",
+  "blog_category",
+  "blog_post",
   "policy",
   "home",
   "search",

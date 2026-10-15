@@ -22,11 +22,10 @@ Shoppers can now read the blog. `/blog`, the category pages and every post are d
 ## Decisions and trade-offs
 - The cores are drawn by the storefront through render hooks (like `CollectionListing`), because they depend on the request (page, category, post). The widget uses render data, so it works wherever the block tree renders.
 - `postsPerPage` in the archive block (when above 0) wins over the store's blog setting; the loader reads the template first to know it.
-- Blog menu links to a category or a post (plan criterion 9) were **not built**: the existing "Blog" link kind still points at `/blog`. Staff can use a custom URL link meanwhile.
-- The post preview link for drafts (plan section 8) was **not built**.
+- Menu links to a blog category or a post and the draft preview link were left for the test round and are built there (see the Phase 5 record).
 
 ## Verification
-- Real Postgres: `blog.int.test.ts` 21/21; full `@bs/domain` heavy suite 110 files, 2226 tests (adds widget data by source and category, isolation, disabled blog, demo seed), `themes.int.test.ts` 27/27 (activating Modern Commerce copies both blog pages and the home widget; a theme without them removes them), `isolation.int.test.ts` green.
+- Real Postgres: `blog.int.test.ts` 18/18; full `@bs/domain` heavy suite 110 files, 2226 tests (adds widget data by source and category, isolation, disabled blog, demo seed), `themes.int.test.ts` 27/27 (activating Modern Commerce copies both blog pages and the home widget; a theme without them removes them), `isolation.int.test.ts` green.
 - Unit: `blog-seo.test.ts` 7/7 (metadata, JSON-LD, RSS), `blog-blocks.test.tsx` 8/8 (widget output and hiding, layouts, sample data, escaped text), web route and pagination tests. `pnpm typecheck` 15/15, `pnpm lint` 15/15 (0 errors), `pnpm build` 6/6 (routes listed), `docs:check` ok.
 - By hand on a local database (demo store, Next dev server): `/blog` lists the 6 visible posts (not the scheduled or draft), title, canonical, feed link, robots, JSON-LD present; category and subcategory pages, a post page (table of contents, share, related, previous and next, heading ids), RSS, hidden post sends `noindex`, a changed-slug post, the widget in a grid and as a category slider on a custom page. At 375 px: one column, no sideways scroll; at 1280 px: three columns.
 - NOT verified: the pages' look in a screenshot (the browser pane would not paint; I measured layout after revealing streamed content), unknown and hidden URLs answer HTTP 200 with a noindex not-found page in dev (the same as existing product and collection pages; not checked on a production build), axe, Lighthouse, keyboard use of the slider, the Super Admin and Store Admin editors for the new blocks in a browser (typechecked and linted only), feed validation in an external validator, tablet width.
@@ -38,4 +37,4 @@ Shoppers can now read the blog. `/blog`, the category pages and every post are d
 - [x] `progress.md` in-flight line still valid
 
 ## Follow-ups
-Menu link kinds for blog categories and posts; draft preview link; Phase 5 test round (axe, Lighthouse, 375 px walkthrough, e2e selectors).
+Built in Phase 5: menu link kinds, draft preview link. Phase 5 test round (axe, Lighthouse, 375 px walkthrough, e2e selectors).

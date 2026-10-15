@@ -33,11 +33,14 @@ export interface BlogCardOptions {
   layout?: "grid" | "list" | undefined;
   /** The first picture on a page is the likely LCP: load it eagerly. */
   priority?: boolean | undefined;
+  /** Heading level of the card title: h2 on the archive (under the page h1), h3 under a section heading (the default). */
+  headingLevel?: "h2" | "h3" | undefined;
 }
 
 /** One post card. Shared by the Recent Posts widget and the blog archive so both look the same. */
 export function BlogCard({ post, options }: { post: BlockBlogPost; options: BlogCardOptions }): ReactNode {
   const href = `/blog/${post.slug}`;
+  const Heading = options.headingLevel ?? "h3";
   const meta = [
     options.showDate ? formatBlogDate(post.publishedAt) : "",
     options.showAuthor && post.authorName ? post.authorName : "",
@@ -62,9 +65,9 @@ export function BlogCard({ post, options }: { post: BlockBlogPost; options: Blog
             {post.categoryName}
           </a>
         ) : null}
-        <h3 className="bsb-blog-title">
+        <Heading className="bsb-blog-title">
           <a href={href}>{post.title}</a>
-        </h3>
+        </Heading>
         {options.showExcerpt && post.excerpt ? (
           <p className="bsb-blog-excerpt" style={{ "--lines": options.excerptLines ?? "3" } as CSSProperties}>
             {post.excerpt}
@@ -123,6 +126,8 @@ export function BlogPostsView({ props, ctx }: A<R.BlogPostsProps>): ReactNode {
     imageRatio: props.imageRatio,
     excerptLines: props.excerptLines,
     layout: props.layout === "list" ? "list" : "grid",
+    // Without a section heading the cards sit directly under the page's h1.
+    headingLevel: props.title ? "h3" : "h2",
   };
   const vars = { "--cols": Number(props.columns), "--cols-t": Number(props.columnsTablet), "--cols-m": Number(props.columnsMobile) } as CSSProperties;
   return (

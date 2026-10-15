@@ -133,7 +133,7 @@ function BlogPostsPage() {
         title="Blog"
         description="Write posts, group them in categories and publish them on your store's blog."
         aside={
-          <div className="flex items-center gap-2">
+          <div className="flex flex-wrap items-center gap-2">
             <Button variant="outline" size="sm" onClick={() => setSettingsOpen(true)}>
               <Settings2 className="mr-1.5 size-4" aria-hidden />
               Blog settings
@@ -204,10 +204,21 @@ function BlogPostsPage() {
                     {items.map((item) => (
                       <tr key={item.id} className="transition-colors hover:bg-muted/40">
                         <td className="py-3 pr-4 pl-6">
-                          <Link to="/online-store/blog/$id" params={{ id: item.id }} className="font-medium text-foreground hover:underline">
-                            {item.title}
-                          </Link>
-                          <p className="font-mono text-xs text-muted-foreground">/blog/{item.slug}</p>
+                          <div className="flex items-center gap-3">
+                            {item.featuredImageUrl ? (
+                              <img src={item.featuredImageUrl} alt="" className="size-10 shrink-0 rounded object-cover" loading="lazy" />
+                            ) : (
+                              <div className="flex size-10 shrink-0 items-center justify-center rounded bg-muted/60 text-muted-foreground">
+                                <FileText className="size-4" aria-hidden />
+                              </div>
+                            )}
+                            <div className="min-w-0">
+                              <Link to="/online-store/blog/$id" params={{ id: item.id }} className="font-medium text-foreground hover:underline">
+                                {item.title}
+                              </Link>
+                              <p className="truncate font-mono text-xs text-muted-foreground">/blog/{item.slug}</p>
+                            </div>
+                          </div>
                         </td>
                         <td className="px-4 py-3 text-muted-foreground">{item.categoryName ?? "—"}</td>
                         <td className="px-4 py-3 text-muted-foreground">{item.authorName || "—"}</td>

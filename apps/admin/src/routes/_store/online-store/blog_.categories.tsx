@@ -104,7 +104,7 @@ function BlogCategoriesPage() {
     return opts;
   }, [roots, deleteTarget]);
 
-  const renderRow = (c: Row, siblings: Row[], index: number, depth: number) => (
+  const renderRow = (c: Row, siblings: Row[], index: number, depth: number, parentSlug?: string) => (
     <li key={c.id} className="flex items-center gap-3 py-3 pr-4 pl-6" style={{ paddingLeft: depth ? 48 : undefined }}>
       {depth > 0 && <CornerDownRight className="size-4 shrink-0 text-muted-foreground" aria-hidden />}
       <div className="min-w-0 flex-1">
@@ -112,7 +112,7 @@ function BlogCategoriesPage() {
           <span className="truncate font-medium">{c.name}</span>
           {!c.isActive && <Badge variant="outline" className="text-muted-foreground">Hidden</Badge>}
         </div>
-        <p className="font-mono text-xs text-muted-foreground">/blog/category/{c.slug}</p>
+        <p className="font-mono text-xs text-muted-foreground">/blog/category/{parentSlug ? `${parentSlug}/${c.slug}` : c.slug}</p>
       </div>
       <span className="text-xs tabular-nums text-muted-foreground">{c.postCount} {c.postCount === 1 ? "post" : "posts"}</span>
       <div className="flex items-center gap-0.5">
@@ -144,7 +144,7 @@ function BlogCategoriesPage() {
         title="Blog categories"
         description="Group posts into categories and subcategories. Visitors can browse each one from the blog."
         aside={
-          <div className="flex items-center gap-2">
+          <div className="flex flex-wrap items-center gap-2">
             <Button variant="outline" size="sm" render={<Link to="/online-store/blog" />} nativeButton={false}>
               <ArrowLeft className="mr-1.5 size-4" aria-hidden />
               Posts
@@ -177,7 +177,7 @@ function BlogCategoriesPage() {
                   <ul>{renderRow(c, roots, i, 0)}</ul>
                   {(c.children ?? []).length > 0 && (
                     <ul className="divide-y divide-border/40 bg-muted/20">
-                      {(c.children ?? []).map((k, j) => renderRow(k, c.children ?? [], j, 1))}
+                      {(c.children ?? []).map((k, j) => renderRow(k, c.children ?? [], j, 1, c.slug))}
                     </ul>
                   )}
                 </li>

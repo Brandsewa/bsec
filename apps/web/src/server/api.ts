@@ -336,6 +336,7 @@ import {
   duplicateBlogPost,
   deleteBlogPost,
   previewBlogHtml,
+  createBlogPreviewLink,
   getBlogSettings,
   updateBlogSettings,
 } from "@bs/domain";
@@ -1660,6 +1661,13 @@ export const storeRouter = os.router({
           .handler(({ context, input }) => {
             if (!context.tenantCtx) throw new Error("Missing tenant context");
             return deleteBlogPost(context.rt, context.tenantCtx, input.id).then(() => ({ ok: true as const }));
+          }),
+        previewLink: os.admin.blog.posts.previewLink
+          .use(requireAdmin)
+          .use(requirePermission("content.write"))
+          .handler(({ context, input }) => {
+            if (!context.tenantCtx) throw new Error("Missing tenant context");
+            return createBlogPreviewLink(context.rt, context.tenantCtx, input.id);
           }),
         previewHtml: os.admin.blog.posts.previewHtml
           .use(requireAdmin)

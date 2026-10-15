@@ -18,7 +18,7 @@ import { computeCanonicalPath } from "../content-services.ts";
 import { buildCloudflareImageUrl, publicMediaUrl } from "../media/storage.ts";
 import { buildProductSummaries, type StorefrontProductSummary } from "../storefront/catalog.ts";
 import { LISTED_PRODUCT_STATUSES } from "../storefront/product-status.ts";
-import { recentBlogPostsTx, type BlogPostSummary } from "../blog/queries.ts";
+import { blogMenuTargetsTx, recentBlogPostsTx, type BlogPostSummary } from "../blog/queries.ts";
 
 type Tx = Parameters<Parameters<typeof withTenant>[2]>[0];
 type ProductRow = typeof schema.products.$inferSelect;
@@ -223,6 +223,8 @@ async function loadMenusData(
   const categorySlugs = new Set<string>();
   const brandTargetIds = new Set<string>();
   const brandSlugs = new Set<string>();
+  const blogCategoryTargetIds = new Set<string>();
+  const blogPostTargetIds = new Set<string>();
 
   function collectFromItems(items: unknown) {
     if (!Array.isArray(items)) return;
@@ -249,6 +251,10 @@ async function loadMenusData(
         if (targetId) categoryTargetIds.add(targetId);
         const s = extractSlug(url, "categories");
         if (s) categorySlugs.add(s);
+      } else if (type === "blog_category") {
+        if (targetId) blogCategoryTargetIds.add(targetId);
+      } else if (type === "blog_post") {
+        if (targetId) blogPostTargetIds.add(targetId);
       } else if (type === "brand") {
         if (targetId) brandTargetIds.add(targetId);
         const s = extractBrandSlug(url);
@@ -333,6 +339,11 @@ async function loadMenusData(
       : [];
   const activeBrandsById = new Map(brands.map((b) => [b.id, b]));
   const activeBrandsBySlug = new Map(brands.map((b) => [b.slug.toLowerCase(), b]));
+
+  const blogTargets =
+    blogCategoryTargetIds.size > 0 || blogPostTargetIds.size > 0
+      ? await blogMenuTargetsTx(tx, tenantId, { categoryIds: blogCategoryTargetIds, postIds: blogPostTargetIds })
+      : { categories: new Map<string, string>(), posts: new Map<string, string>() };
 
   const SAFE_SCHEME = /^(\/(?!\/)|#|https:\/\/|mailto:|tel:)/i;
 
@@ -423,6 +434,18 @@ async function loadMenusData(
       }
       case "blog": {
         resolvedUrl = rawUrl || "/blog";
+        break;
+      }
+      case "blog_category": {
+        const path = targetId ? blogTargets.categories.get(targetId) : undefined;
+        if (!path) return null; // hidden or deleted category: skip
+        resolvedUrl = `/blog/category/${path}`;
+        break;
+      }
+      case "blog_post": {
+        const slug = targetId ? blogTargets.posts.get(targetId) : undefined;
+        if (!slug) return null; // draft, scheduled or deleted post: skip
+        resolvedUrl = `/blog/${slug}`;
         break;
       }
       case "policy": {

@@ -17,6 +17,10 @@ import {
   listPublicBlogPosts,
   publishBlogPost,
   resolveBlockData,
+  blogMenuTargetsTx,
+  createBlogPreviewLink,
+  signBlogPreviewToken,
+  verifyBlogPreviewToken,
   seedThemeDemoBlog,
   publishDueBlogPosts,
   resolveBlogStatus,
@@ -392,5 +396,71 @@ describe("Recent Posts widget data (block render data)", () => {
     expect(sizing.posts.map((p) => p.title)).toEqual(["How to choose the right size"]);
     const guides = await listPublicBlogPosts(rtStore, anon(B), { categoryPath: "guides" });
     expect(guides.posts.length).toBeGreaterThanOrEqual(3);
+  });
+});
+
+describe("menu links to blog categories and posts", () => {
+  it("resolve only live targets of this store: hidden categories, drafts, scheduled posts and other stores are skipped", async () => {
+    const parent = await createBlogCategory(rt, ownerA, { name: "Menu parent" });
+    const child = await createBlogCategory(rt, ownerA, { name: "Menu child", parentId: parent.id });
+    const live = await createBlogPost(rt, ownerA, { title: "Menu live post", status: "published", categoryId: child.id });
+    const draft = await createBlogPost(rt, ownerA, { title: "Menu draft post" });
+    const later = await createBlogPost(rt, ownerA, { title: "Menu later post", status: "scheduled", publishedAt: new Date(Date.now() + 86_400_000) });
+    const foreign = await createBlogCategory(rt, ownerB, { name: "Menu foreign" });
+    const resolve = () =>
+      withTenant(rtStore._db.db, A, (tx) =>
+        blogMenuTargetsTx(tx, A, { categoryIds: new Set([parent.id, child.id, foreign.id]), postIds: new Set([live.id, draft.id, later.id]) }),
+      );
+    let t = await resolve();
+    expect(t.categories.get(parent.id)).toBe("menu-parent");
+    expect(t.categories.get(child.id)).toBe("menu-parent/menu-child");
+    expect(t.categories.has(foreign.id)).toBe(false);
+    expect([...t.posts.entries()]).toEqual([[live.id, live.slug]]);
+    await updateBlogCategory(rt, ownerA, parent.id, { isActive: false });
+    t = await resolve();
+    expect(t.categories.size).toBe(0);
+    expect(t.posts.size).toBe(0); // the live post sits in a hidden category chain
+    await updateBlogCategory(rt, ownerA, parent.id, { isActive: true });
+    await updateBlogSettings(rt, ownerA, { enabled: false });
+    expect((await resolve()).categories.size).toBe(0);
+    await updateBlogSettings(rt, ownerA, { enabled: true });
+  });
+});
+
+describe("preview links for unpublished posts", () => {
+  it("tokens bind the store, the post and the expiry, and cannot be forged or reused", () => {
+    const now = Date.now();
+    const { token } = signBlogPreviewToken(A, "post-1", now);
+    expect(verifyBlogPreviewToken(A, "post-1", token, now + 1000)).toBe(true);
+    expect(verifyBlogPreviewToken(A, "post-2", token, now + 1000)).toBe(false);
+    expect(verifyBlogPreviewToken(B, "post-1", token, now + 1000)).toBe(false);
+    expect(verifyBlogPreviewToken(A, "post-1", token, now + 25 * 3_600_000)).toBe(false);
+    const [exp, sig] = token.split(".");
+    expect(verifyBlogPreviewToken(A, "post-1", `${exp}.${"0".repeat(64)}`, now + 1000)).toBe(false);
+    expect(verifyBlogPreviewToken(A, "post-1", `${(parseInt(exp!, 36) + 100_000).toString(36)}.${sig}`, now + 1000)).toBe(false);
+    for (const bad of ["", "x", "a.b", `${exp}.`, `.${sig}`, `${exp}.${sig}zz`]) expect(verifyBlogPreviewToken(A, "post-1", bad, now + 1000)).toBe(false);
+  });
+
+  it("shows a draft only with a valid link for that store, never makes it public and needs the store to have an address", async () => {
+    const draft = await createBlogPost(rt, ownerA, { title: "Secret draft for preview" });
+    await expect(createBlogPreviewLink(rt, ownerA, draft.id)).rejects.toThrow(/no active address/);
+    await q(`insert into domains (tenant_id, hostname, status, is_primary) values ($1, 'blog-a.example.test', 'active', true) on conflict do nothing`, [A]);
+    const link = await createBlogPreviewLink(rt, ownerA, draft.id);
+    expect(link.url).toMatch(/^https:\/\/blog-a\.example\.test\/blog\/secret-draft-for-preview\?preview=[0-9a-z]+\.[0-9a-f]{64}$/);
+    const token = new URL(link.url).searchParams.get("preview")!;
+
+    expect((await getPublicBlogPost(rtStore, anon(A), draft.slug)).kind).toBe("missing");
+    const ok = await getPublicBlogPost(rtStore, anon(A), draft.slug, { previewToken: token });
+    expect(ok.kind === "post" && ok.preview).toBe(true);
+    expect((await getPublicBlogPost(rtStore, anon(A), draft.slug, { previewToken: token.replace(/.$/, "0") })).kind).toBe("missing");
+    expect((await getPublicBlogPost(rtStore, anon(B), draft.slug, { previewToken: token })).kind).toBe("missing");
+    // The link does not publish anything or change what is listed.
+    expect((await listPublicBlogPosts(rtStore, anon(A), { perPage: 48 })).posts.map((p) => p.slug)).not.toContain(draft.slug);
+    // A normal visit of a public post is not flagged as a preview.
+    const pub = await createBlogPost(rt, ownerA, { title: "Public for preview check", status: "published" });
+    const view = await getPublicBlogPost(rtStore, anon(A), pub.slug);
+    expect(view.kind === "post" && view.preview).toBe(false);
+    await expect(createBlogPreviewLink(rt, ctxOf(A, []), draft.id)).rejects.toThrow();
+    await expect(createBlogPreviewLink(rt, ownerB, draft.id)).rejects.toThrow(/not found/i);
   });
 });

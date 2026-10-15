@@ -53,6 +53,7 @@ export function BlogListingSection({
     showCategory: options.showCategoryLabel,
     imageRatio: options.imageRatio,
     excerptLines: "3" as const,
+    headingLevel: "h2" as const,
   };
   const posts = list.posts.map(toBlockBlogPost);
   const first = options.featuredFirst && list.page === 1 && posts.length > 2 ? posts[0] : undefined;
