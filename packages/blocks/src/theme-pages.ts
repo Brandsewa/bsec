@@ -9,6 +9,8 @@ export const THEME_SYSTEM_PAGES = {
   collections: { type: "collections_archive_template", slug: "template-collections", title: "Collection archive" },
   product: { type: "product_template", slug: "template-product", title: "Product page" },
   cart: { type: "cart_template", slug: "template-cart", title: "Cart page" },
+  blog: { type: "blog_archive_template", slug: "template-blog", title: "Blog archive" },
+  "blog-post": { type: "blog_post_template", slug: "template-blog-post", title: "Blog post page" },
   header: { type: "header", slug: "template-header", title: "Header" },
   footer: { type: "footer", slug: "template-footer", title: "Footer" },
 } as const;
@@ -31,6 +33,8 @@ export const THEME_PAGE_LABELS: Record<"home" | ThemeSystemPageKey, string> = {
   collection: "Collection page",
   product: "Product page",
   cart: "Cart page",
+  blog: "Blog archive",
+  "blog-post": "Blog post page",
   header: "Header",
   footer: "Footer",
 };

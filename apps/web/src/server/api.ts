@@ -321,6 +321,24 @@ import {
   type Logger,
   type Runtime,
   type TenantContext,
+  listBlogCategories,
+  createBlogCategory,
+  updateBlogCategory,
+  reorderBlogCategories,
+  deleteBlogCategory,
+  listBlogPosts,
+  getBlogPost,
+  createBlogPost,
+  updateBlogPost,
+  publishBlogPost,
+  scheduleBlogPost,
+  unpublishBlogPost,
+  duplicateBlogPost,
+  deleteBlogPost,
+  previewBlogHtml,
+  createBlogPreviewLink,
+  getBlogSettings,
+  updateBlogSettings,
 } from "@bs/domain";
 import { server } from "./runtime.ts";
 import { allowedApiOrigins, getStaffAuth, resolveStaffSession } from "./auth.ts";
@@ -1539,6 +1557,142 @@ export const storeRouter = os.router({
           if (!context.tenantCtx) throw new Error("Missing tenant context");
           return activateTheme(context.rt, context.tenantCtx, input);
         }),
+    },
+
+    // Blog (ADR-033)
+    blog: {
+      categories: {
+        list: os.admin.blog.categories.list
+          .use(requireAdmin)
+          .use(requirePermission("content.write"))
+          .handler(({ context }) => {
+            if (!context.tenantCtx) throw new Error("Missing tenant context");
+            return listBlogCategories(context.rt, context.tenantCtx);
+          }),
+        create: os.admin.blog.categories.create
+          .use(requireAdmin)
+          .use(requirePermission("content.write"))
+          .handler(({ context, input }) => {
+            if (!context.tenantCtx) throw new Error("Missing tenant context");
+            return createBlogCategory(context.rt, context.tenantCtx, input);
+          }),
+        update: os.admin.blog.categories.update
+          .use(requireAdmin)
+          .use(requirePermission("content.write"))
+          .handler(({ context, input }) => {
+            if (!context.tenantCtx) throw new Error("Missing tenant context");
+            return (({ id, ...rest }) => updateBlogCategory(context.rt, context.tenantCtx, id, rest).then(() => ({ ok: true as const })))(input);
+          }),
+        reorder: os.admin.blog.categories.reorder
+          .use(requireAdmin)
+          .use(requirePermission("content.write"))
+          .handler(({ context, input }) => {
+            if (!context.tenantCtx) throw new Error("Missing tenant context");
+            return reorderBlogCategories(context.rt, context.tenantCtx, input.orderedIds).then(() => ({ ok: true as const }));
+          }),
+        delete: os.admin.blog.categories.delete
+          .use(requireAdmin)
+          .use(requirePermission("content.write"))
+          .handler(({ context, input }) => {
+            if (!context.tenantCtx) throw new Error("Missing tenant context");
+            return deleteBlogCategory(context.rt, context.tenantCtx, input.id, input.moveTo ?? null).then(() => ({ ok: true as const }));
+          }),
+      },
+      posts: {
+        list: os.admin.blog.posts.list
+          .use(requireAdmin)
+          .use(requirePermission("content.write"))
+          .handler(({ context, input }) => {
+            if (!context.tenantCtx) throw new Error("Missing tenant context");
+            return listBlogPosts(context.rt, context.tenantCtx, input ?? {});
+          }),
+        get: os.admin.blog.posts.get
+          .use(requireAdmin)
+          .use(requirePermission("content.write"))
+          .handler(({ context, input }) => {
+            if (!context.tenantCtx) throw new Error("Missing tenant context");
+            return getBlogPost(context.rt, context.tenantCtx, input.id).then((p) => { if (!p) throw new ORPCError("NOT_FOUND", { message: "Post not found" }); return p; });
+          }),
+        create: os.admin.blog.posts.create
+          .use(requireAdmin)
+          .use(requirePermission("content.write"))
+          .handler(({ context, input }) => {
+            if (!context.tenantCtx) throw new Error("Missing tenant context");
+            return createBlogPost(context.rt, context.tenantCtx, input as Parameters<typeof createBlogPost>[2]);
+          }),
+        update: os.admin.blog.posts.update
+          .use(requireAdmin)
+          .use(requirePermission("content.write"))
+          .handler(({ context, input }) => {
+            if (!context.tenantCtx) throw new Error("Missing tenant context");
+            return (({ id, ...rest }) => updateBlogPost(context.rt, context.tenantCtx, id, rest as Parameters<typeof updateBlogPost>[3]))(input);
+          }),
+        publish: os.admin.blog.posts.publish
+          .use(requireAdmin)
+          .use(requirePermission("content.write"))
+          .handler(({ context, input }) => {
+            if (!context.tenantCtx) throw new Error("Missing tenant context");
+            return publishBlogPost(context.rt, context.tenantCtx, input.id);
+          }),
+        schedule: os.admin.blog.posts.schedule
+          .use(requireAdmin)
+          .use(requirePermission("content.write"))
+          .handler(({ context, input }) => {
+            if (!context.tenantCtx) throw new Error("Missing tenant context");
+            return scheduleBlogPost(context.rt, context.tenantCtx, input.id, input.publishedAt);
+          }),
+        unpublish: os.admin.blog.posts.unpublish
+          .use(requireAdmin)
+          .use(requirePermission("content.write"))
+          .handler(({ context, input }) => {
+            if (!context.tenantCtx) throw new Error("Missing tenant context");
+            return unpublishBlogPost(context.rt, context.tenantCtx, input.id);
+          }),
+        duplicate: os.admin.blog.posts.duplicate
+          .use(requireAdmin)
+          .use(requirePermission("content.write"))
+          .handler(({ context, input }) => {
+            if (!context.tenantCtx) throw new Error("Missing tenant context");
+            return duplicateBlogPost(context.rt, context.tenantCtx, input.id);
+          }),
+        delete: os.admin.blog.posts.delete
+          .use(requireAdmin)
+          .use(requirePermission("content.write"))
+          .handler(({ context, input }) => {
+            if (!context.tenantCtx) throw new Error("Missing tenant context");
+            return deleteBlogPost(context.rt, context.tenantCtx, input.id).then(() => ({ ok: true as const }));
+          }),
+        previewLink: os.admin.blog.posts.previewLink
+          .use(requireAdmin)
+          .use(requirePermission("content.write"))
+          .handler(({ context, input }) => {
+            if (!context.tenantCtx) throw new Error("Missing tenant context");
+            return createBlogPreviewLink(context.rt, context.tenantCtx, input.id);
+          }),
+        previewHtml: os.admin.blog.posts.previewHtml
+          .use(requireAdmin)
+          .use(requirePermission("content.write"))
+          .handler(({ context, input }) => {
+            if (!context.tenantCtx) throw new Error("Missing tenant context");
+            return previewBlogHtml(context.rt, context.tenantCtx, input.contentHtml);
+          }),
+      },
+      settings: {
+        get: os.admin.blog.settings.get
+          .use(requireAdmin)
+          .use(requirePermission("content.write"))
+          .handler(({ context }) => {
+            if (!context.tenantCtx) throw new Error("Missing tenant context");
+            return getBlogSettings(context.rt, context.tenantCtx);
+          }),
+        update: os.admin.blog.settings.update
+          .use(requireAdmin)
+          .use(requirePermission("content.write"))
+          .handler(({ context, input }) => {
+            if (!context.tenantCtx) throw new Error("Missing tenant context");
+            return updateBlogSettings(context.rt, context.tenantCtx, input);
+          }),
+      },
     },
 
     // Pages

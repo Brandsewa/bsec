@@ -1,4 +1,4 @@
-import type { StorefrontCart, StorefrontCollectionDetail, StorefrontProductDetail } from "@bs/domain";
+import type { BlogPostPage, BlogPostSummary, PublicBlogCategory, PublicBlogList, StorefrontCart, StorefrontCollectionDetail, StorefrontProductDetail } from "@bs/domain";
 
 /**
  * Stand-in catalog data for theme previews, where there is no store. Prices are paise, ids are fake, and there
@@ -97,5 +97,70 @@ export function sampleCart(): StorefrontCart {
     subtotal: items.reduce((n, i) => n + i.lineTotal, 0),
     lastActivityAt: NOW,
     createdAt: NOW,
+  };
+}
+
+const SAMPLE_BLOG_TITLES = ["How to choose your first pair", "Five ways to care for handmade pieces", "Behind the scenes at our workshop", "Gift ideas for every budget", "A guide to sizing and fit", "What is new this season"];
+
+function sampleBlogSummary(i: number): BlogPostSummary {
+  return {
+    id: `sample-post-${i}`,
+    slug: `sample-post-${i + 1}`,
+    title: SAMPLE_BLOG_TITLES[i] ?? `Sample post ${i + 1}`,
+    excerpt: "A short summary of the post appears here. It is cut after a few lines on the blog list.",
+    publishedAt: NOW,
+    authorName: "Your team",
+    readingMinutes: 3 + (i % 4),
+    isFeatured: i === 0,
+    image: null,
+    category: { id: "sample-cat", name: i % 2 === 0 ? "Guides" : "News", slug: i % 2 === 0 ? "guides" : "news", path: i % 2 === 0 ? "guides" : "news" },
+  };
+}
+
+export function sampleBlogCategories(): PublicBlogCategory[] {
+  return [
+    { id: "c1", name: "Guides", slug: "guides", path: "guides", description: null, postCount: 3, children: [] },
+    { id: "c2", name: "News", slug: "news", path: "news", description: null, postCount: 3, children: [] },
+  ];
+}
+
+export function sampleBlogList(): PublicBlogList {
+  return {
+    enabled: true,
+    settings: { enabled: true, title: "Blog", description: "", postsPerPage: 9 },
+    posts: Array.from({ length: 6 }, (_, i) => sampleBlogSummary(i)),
+    total: 6,
+    page: 1,
+    pages: 1,
+    category: null,
+    categoryMissing: false,
+  };
+}
+
+export function sampleBlogPost(): BlogPostPage {
+  const html = [
+    "<p>This is where the post begins. A good opening tells the reader what they will learn.</p>",
+    '<h2 id="start-here">Start here</h2>',
+    "<p>Body text of the post appears here, with headings, lists and links written in the post editor.</p>",
+    '<h2 id="next-steps">Next steps</h2>',
+    "<ul><li>First point</li><li>Second point</li></ul>",
+    '<h2 id="wrap-up">Wrap up</h2>',
+    "<p>A closing paragraph.</p>",
+  ].join("");
+  return {
+    ...sampleBlogSummary(0),
+    contentHtml: html,
+    headings: [
+      { id: "start-here", text: "Start here", level: 2 },
+      { id: "next-steps", text: "Next steps", level: 2 },
+      { id: "wrap-up", text: "Wrap up", level: 2 },
+    ],
+    modifiedAt: NOW,
+    seo: null,
+    seoImage: null,
+    noindex: false,
+    related: [1, 2, 3].map(sampleBlogSummary),
+    previous: { slug: "sample-post-5", title: "An older sample post" },
+    next: { slug: "sample-post-6", title: "A newer sample post" },
   };
 }

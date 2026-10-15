@@ -18,6 +18,8 @@ import {
   getStorefrontHomePage,
   getStorefrontPage,
   getStorefrontThemePage,
+  seedModernTemplate,
+  MODERN_TEMPLATE_CODE,
   getStorefrontThemeTokens,
   listPageVersions,
   listThemeLibrary,
@@ -464,5 +466,27 @@ describe("theme builder: every page of a theme", () => {
     // The other store never activated this theme: it keeps the built-in defaults.
     const other = resolveDefaultPages((await getStorefrontThemeTokens(web, ctxFor(TENANT_A)))?.["defaultPages"]);
     expect(other.notFound.heading).toBe(DEFAULT_PAGES.notFound.heading);
+  });
+});
+
+describe("blog template pages (ADR-033)", () => {
+  it("activating Modern Commerce gives the store its blog archive and post templates, and a theme without them removes them", async () => {
+    await seedModernTemplate(platform, { staffEmail: "theme-owner@platform.test" });
+    await publishThemeTemplate(platform, OWNER_STAFF, MODERN_TEMPLATE_CODE);
+    await activateTheme(web, ctxFor(TENANT_A), { code: MODERN_TEMPLATE_CODE });
+
+    const archive = await getStorefrontThemePage(web, storefrontCtx(TENANT_A), "blog");
+    expect(archive?.blocks.map((b) => b.type)).toContain("BlogListing");
+    const single = await getStorefrontThemePage(web, storefrontCtx(TENANT_A), "blog-post");
+    expect(single?.blocks.map((b) => b.type)).toContain("BlogPostContent");
+    const home = await getStorefrontHomePage(web, storefrontCtx(TENANT_A));
+    expect((home.document.blocks as BlockInstance[]).map((b) => b.type)).toContain("BlogPosts");
+    // Another store never gets them.
+    expect(await getStorefrontThemePage(web, storefrontCtx(TENANT_B), "blog")).toBeNull();
+
+    // A theme that defines no blog pages unpublishes the previous theme's copies, so the built-in layout applies.
+    await activateTheme(web, ctxFor(TENANT_A), { code: LAUNCH_TEMPLATE_CODE });
+    expect(await getStorefrontThemePage(web, storefrontCtx(TENANT_A), "blog")).toBeNull();
+    expect(await getStorefrontThemePage(web, storefrontCtx(TENANT_A), "blog-post")).toBeNull();
   });
 });

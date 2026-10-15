@@ -746,6 +746,14 @@ export async function resolveMediaUsageLabels(
         label: categoryMap.get(u.ownerId) || "Category",
         adminPath: `/categories/${u.ownerId}`,
       });
+    } else if (u.ownerType === "blog_post" || u.ownerType === "blog_category") {
+      list.push({
+        ownerType: u.ownerType,
+        ownerId: u.ownerId,
+        field: u.field,
+        label: u.ownerType === "blog_post" ? "Blog post" : "Blog category",
+        adminPath: u.ownerType === "blog_post" ? `/online-store/blog/${u.ownerId}` : `/online-store/blog/categories`,
+      });
     } else if (u.ownerType === "brand") {
       list.push({
         ownerType: "brand",
@@ -795,6 +803,8 @@ export async function resolveMediaUsageLabels(
       else if (p?.type === "collection_template") label = "Collection page";
       else if (p?.type === "collections_archive_template") label = "Collection archive";
       else if (p?.type === "cart_template") label = "Cart page";
+      else if (p?.type === "blog_archive_template") label = "Blog archive";
+      else if (p?.type === "blog_post_template") label = "Blog post page";
       else if (p?.type === "home") label = "Home page";
 
       list.push({
@@ -1507,7 +1517,7 @@ export async function syncMediaUsages(
   tx: Parameters<Parameters<typeof withTenant>[2]>[0],
   ctx: TenantContext,
   params: {
-    ownerType: "product" | "variant" | "collection" | "category" | "brand" | "page" | "theme" | "store_branding";
+    ownerType: "product" | "variant" | "collection" | "category" | "brand" | "page" | "theme" | "store_branding" | "blog_post" | "blog_category";
     ownerId: string;
     field: string;
     mediaIds: (string | null | undefined)[];

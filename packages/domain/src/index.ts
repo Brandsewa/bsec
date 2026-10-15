@@ -22,6 +22,7 @@ export * from "./review-services.ts";
 export * from "./media-services.ts";
 export * from "./brand-services.ts";
 export * from "./content-services.ts";
+export * from "./blog/index.ts";
 export * from "./themes/block-data.ts";
 export * from "./themes/library.ts";
 export * from "./themes/system-pages.ts";

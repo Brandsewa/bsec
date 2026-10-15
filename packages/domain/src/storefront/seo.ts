@@ -1,4 +1,5 @@
 import { and, desc, eq, isNull, inArray, notInArray, or, sql } from "drizzle-orm";
+import { listBlogForSitemap } from "../blog/queries.ts";
 import { LISTED_PRODUCT_STATUSES } from "./product-status.ts";
 import { schema, withTenant } from "@bs/db";
 import type { Runtime } from "../runtime.ts";
@@ -668,11 +669,6 @@ export const STATIC_POLICY_PAGES = [
   { path: "/policies/shipping", changefreq: "yearly" as const, priority: 0.3 },
 ];
 
-export const STATIC_BLOG_POSTS = [
-  { slug: "mechanical-keyboards-guide-for-beginners", publishedAt: "2026-09-15T00:00:00.000Z" },
-  { slug: "lubing-switches-sound-and-feel", publishedAt: "2026-09-20T00:00:00.000Z" },
-  { slug: "workspace-ergonomics-desk-setup", publishedAt: "2026-09-25T00:00:00.000Z" },
-];
 
 /**
  * Queries all published entities for a tenant and builds a complete sitemap list:
@@ -1086,14 +1082,16 @@ export async function getStorefrontSitemapUrls(
       }
     }
 
-    // Blog posts
-    for (const blog of STATIC_BLOG_POSTS) {
-      sitemapItems.push({
-        loc: `${baseUrl}/blog/${blog.slug}`,
-        lastmod: blog.publishedAt,
-        changefreq: "monthly",
-        priority: 0.6,
-      });
+    // Blog: real, visible, indexable posts and the categories that have any (ADR-033)
+    const blog = await listBlogForSitemap(tx, ctx.tenantId);
+    if (blog.enabled) {
+      sitemapItems.push({ loc: `${baseUrl}/blog`, lastmod: (blog.posts[0]?.lastmod ?? new Date()).toISOString(), changefreq: "weekly", priority: 0.6 });
+      for (const c of blog.categories) {
+        sitemapItems.push({ loc: `${baseUrl}/blog/category/${c.path}`, lastmod: c.lastmod.toISOString(), changefreq: "weekly", priority: 0.5 });
+      }
+      for (const p of blog.posts) {
+        sitemapItems.push({ loc: `${baseUrl}/blog/${p.slug}`, lastmod: p.lastmod.toISOString(), changefreq: "monthly", priority: 0.6 });
+      }
     }
 
     // Static policy pages

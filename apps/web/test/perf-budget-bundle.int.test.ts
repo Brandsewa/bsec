@@ -58,4 +58,29 @@ describe("M3 Mobile Performance Baseline Audit: production bundle budget", () =>
     // Actual payload measured is ~12.21 KB
     expect(totalGzipKB).toBeLessThan(50);
   });
+
+  // Blog pages (ADR-033) are server-rendered with no client widgets, so they must stay far under the budget.
+  for (const route of ["/blog/[slug]", "/blog"] as const) {
+    it(`verifies production build client JS payload for ${route} is under 50KB gzipped`, () => {
+      const nextDir = path.join(__dirname, "../.next");
+      if (!fs.existsSync(nextDir)) throw new Error("Production build directory .next does not exist. Run 'pnpm --filter @bs/web build' first.");
+      const manifestPath = path.join(nextDir, `server/app${route}/page_client-reference-manifest.js`);
+      if (!fs.existsSync(manifestPath)) throw new Error(`Client reference manifest not found at ${manifestPath}.`);
+      const context = { globalThis: {} };
+      vm.createContext(context);
+      vm.runInContext(fs.readFileSync(manifestPath, "utf8"), context);
+      const manifestObj = (context.globalThis as { __RSC_MANIFEST?: Record<string, { entryJSFiles?: Record<string, string[]> }> }).__RSC_MANIFEST;
+      const entryJSFiles = manifestObj?.[`${route}/page`]?.entryJSFiles ?? {};
+      expect(Object.keys(entryJSFiles).length, "route manifest entry").toBeGreaterThan(0);
+      const chunks = new Set<string>();
+      for (const list of Object.values(entryJSFiles)) for (const f of list) chunks.add(f.replace(/^\//, ""));
+      let gzip = 0;
+      for (const chunk of chunks) {
+        const file = path.join(nextDir, chunk);
+        if (fs.existsSync(file)) gzip += zlib.gzipSync(fs.readFileSync(file)).length;
+      }
+      expect(gzip).toBeGreaterThan(0);
+      expect(gzip / 1024).toBeLessThan(50);
+    });
+  }
 });

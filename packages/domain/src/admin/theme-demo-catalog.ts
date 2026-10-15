@@ -7,6 +7,7 @@ import type { TenantContext } from "../context.ts";
 import { createProduct, createCategory, createCollection, adjustInventory, getProduct, type CreateProductInput } from "../catalog-services.ts";
 import { updateAdminShippingSettings } from "../orders/shipping-rates.ts";
 import { DEMO_SLUG } from "./demo-store.ts";
+import { createBlogCategory, createBlogPost } from "../blog/index.ts";
 
 /**
  * Catalog fixture for testing the theme page set (docs/THEME-TEMPLATES-PLAN.md section 6): collections and
@@ -163,6 +164,8 @@ export async function seedThemeDemoCatalog(rt: Runtime): Promise<ThemeDemoCatalo
   // The store's own shipping rates (never hardcoded in code, plan rule 12): Rs 50 standard, free from Rs 2,999. Safe to repeat.
   await updateAdminShippingSettings(rt, ctx, { zoneName: "Domestic (India)", standardRatePaise: 5000, expressRatePaise: 15000, freeShippingThresholdPaise: 299900 });
 
+  await seedThemeDemoBlog(rt, ctx);
+
   const existing = await db.execute<{ n: number }>(
     sql`select count(*)::int as n from products where tenant_id = ${tenantId} and ${THEME_DEMO_TAG} = any(tags)`,
   );
@@ -219,4 +222,39 @@ export async function seedThemeDemoCatalog(rt: Runtime): Promise<ThemeDemoCatalo
   }
 
   return { tenantId, alreadySeeded: false, collections: COLLECTIONS.length, products: PRODUCTS.length };
+}
+
+const BLOG_BODY = (topic: string, sections: number) =>
+  [
+    `<p>${topic} starts with knowing what matters to you. This short guide walks through the basics, with a few things we learned the hard way.</p>`,
+    ...Array.from({ length: sections }, (_, i) => `<h2>Step ${i + 1}: take it slowly</h2><p>${"Good results come from small, careful choices. ".repeat(12)}</p><ul><li>Check the details</li><li>Compare two options</li><li>Ask us if unsure</li></ul>`),
+    '<p>Questions? <a href="/collections/theme-demo-sale">See what is on sale</a> or write to us any time.</p>',
+  ].join("");
+
+/**
+ * Blog fixture for the demo store (ADR-033): a category with two subcategories and posts that cover each state
+ * (long, short, scheduled, draft, noindex). Idempotent: skipped when the "guides" category exists.
+ */
+export async function seedThemeDemoBlog(rt: Runtime, ctx: TenantContext): Promise<{ seeded: boolean }> {
+  const db = rt._db.db;
+  const [found] = await db.select({ id: schema.blogCategories.id }).from(schema.blogCategories).where(and(eq(schema.blogCategories.tenantId, ctx.tenantId), eq(schema.blogCategories.slug, "guides"))).limit(1);
+  if (found) return { seeded: false };
+  const guides = await createBlogCategory(rt, ctx, { name: "Guides", description: "How-tos and buying advice." });
+  const sizing = await createBlogCategory(rt, ctx, { name: "Sizing", parentId: guides.id });
+  const care = await createBlogCategory(rt, ctx, { name: "Care", parentId: guides.id });
+  const news = await createBlogCategory(rt, ctx, { name: "News", description: "What is new in the store." });
+  const day = 86_400_000;
+  const at = (daysAgo: number) => new Date(Date.now() - daysAgo * day);
+  const posts: Array<Parameters<typeof createBlogPost>[2]> = [
+    { title: "How to choose the right size", categoryId: sizing.id, status: "published", publishedAt: at(2), isFeatured: true, excerpt: "A quick way to find your fit without guessing.", contentHtml: BLOG_BODY("Choosing a size", 4) },
+    { title: "Caring for your favourites", categoryId: care.id, status: "published", publishedAt: at(5), excerpt: "Simple habits that make your pieces last for years.", contentHtml: BLOG_BODY("Care", 3) },
+    { title: "Our spring collection is here", categoryId: news.id, status: "published", publishedAt: at(9), excerpt: "Fresh colours and a few new materials.", contentHtml: BLOG_BODY("The new season", 2) },
+    { title: "A gift guide for every budget", categoryId: guides.id, status: "published", publishedAt: at(14), excerpt: "Ideas from under five hundred rupees to something special.", contentHtml: BLOG_BODY("Gifting", 5) },
+    { title: "A very short note", status: "published", publishedAt: at(20), contentHtml: "<p>Just a quick hello from the team.</p>" },
+    { title: "Behind the scenes (hidden from search)", categoryId: news.id, status: "published", publishedAt: at(25), seo: { noindex: true }, contentHtml: BLOG_BODY("Our workshop", 2) },
+    { title: "Coming next week", categoryId: news.id, status: "scheduled", publishedAt: new Date(Date.now() + 7 * day), contentHtml: BLOG_BODY("A sneak peek", 2) },
+    { title: "Draft: ideas for the festive season", categoryId: guides.id, contentHtml: BLOG_BODY("Festive ideas", 2) },
+  ];
+  for (const p of posts) await createBlogPost(rt, ctx, { ...p, authorName: "Demo team" });
+  return { seeded: true };
 }

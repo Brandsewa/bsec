@@ -36,7 +36,7 @@ describe("editor config", () => {
 
   it("builds a Puck config whose categories list each component exactly once, for every page kind", () => {
     const union = new Set<string>();
-    for (const pageKind of ["home", "collection", "product", "cart", "header", "footer", "custom"] as const) {
+    for (const pageKind of ["home", "collection", "product", "cart", "blogArchive", "blogPost", "header", "footer", "custom"] as const) {
       const config = buildPuckConfig({ themeVars: {}, pageKind }) as unknown as {
         components: Record<string, unknown>;
         categories: Record<string, { components: string[] }>;
@@ -87,9 +87,19 @@ describe("block picker by page kind", () => {
     }
   });
 
+  it("the blog cores are offered only on their own page, the widget everywhere but header and footer", () => {
+    expect(blockAllowed("BlogListing", "blogArchive")).toBe(true);
+    expect(blockAllowed("BlogListing", "blogPost")).toBe(false);
+    expect(blockAllowed("BlogPostContent", "blogPost")).toBe(true);
+    expect(blockAllowed("BlogPostContent", "home")).toBe(false);
+    expect(blockAllowed("BlogPosts", "home")).toBe(true);
+    expect(blockAllowed("BlogPosts", "product")).toBe(true);
+    expect(blockAllowed("BlogPosts", "header")).toBe(false);
+  });
+
   it("every block is offered somewhere", () => {
     for (const type of BLOCK_TYPES) {
-      const kinds = ["home", "collection", "product", "cart", "header", "footer"] as const;
+      const kinds = ["home", "collection", "product", "cart", "blogArchive", "blogPost", "header", "footer"] as const;
       expect(kinds.some((k) => blockAllowed(type, k)), type).toBe(true);
     }
   });
