@@ -11,8 +11,8 @@ export default async function AccountProfilePage() {
   if (!profile) return null;
   return (
     <div className="space-y-6">
-      <div className="rounded-2xl border border-border bg-card p-6 shadow-sm sm:p-8">
-        <h2 className="mb-4 text-lg font-bold text-foreground">Your details</h2>
+      <div className="rounded-xl bg-[var(--muted)]/50 p-4 sm:p-5">
+        <h2 className="mb-3 text-base font-bold text-foreground">Your details</h2>
         <ProfileForm
           phone={profile.phone}
           name={profile.name}
@@ -22,8 +22,8 @@ export default async function AccountProfilePage() {
         />
       </div>
 
-      <div className="rounded-2xl border border-border bg-card p-6 shadow-sm sm:p-8">
-        <h2 className="mb-4 text-lg font-bold text-foreground">Change password</h2>
+      <div className="rounded-xl bg-[var(--muted)]/50 p-4 sm:p-5">
+        <h2 className="mb-3 text-base font-bold text-foreground">Change password</h2>
         <CustomerChangePassword />
       </div>
     </div>

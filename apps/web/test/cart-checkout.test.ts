@@ -289,8 +289,8 @@ const noConsent = { termsRequired: false, marketing: null };
 
       // Shipping address
       expect(html).toContain("Shipping Address");
-      expect(html).toContain("Full Name");
-      expect(html).toContain("Address Line 1");
+      expect(html).toContain("Full name");
+      expect(html).toContain("Address (flat, building, street)");
       expect(html).toContain("City");
       expect(html).toContain("State");
       expect(html).toContain("Pincode");

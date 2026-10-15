@@ -32,7 +32,11 @@ const ADDRESS_ORDER = ["fullName", "name", "addressLine1", "addressLine2", "city
 
 function AddressLines({ address }: { address: unknown }) {
   const a = (address && typeof address === "object" ? address : {}) as Record<string, unknown>;
-  const lines = ADDRESS_ORDER.map((k) => a[k]).filter((v): v is string => typeof v === "string" && v.length > 0);
+  const text = (k: string) => (typeof a[k] === "string" && (a[k] as string).length > 0 ? (a[k] as string) : null);
+  // A business order adds the company and its GSTIN; a separate delivery address adds its own contact.
+  const lines = [text("companyName"), ...ADDRESS_ORDER.map((k) => text(k)), text("taxId") ? `GSTIN: ${text("taxId")}` : null, text("phone") ? `Phone: ${text("phone")}` : null, text("email") ? `Email: ${text("email")}` : null].filter(
+    (v): v is string => v !== null,
+  );
   if (lines.length === 0) return <p className="text-muted-foreground">No address on file.</p>;
   return (
     <address className="not-italic">
@@ -41,6 +45,15 @@ function AddressLines({ address }: { address: unknown }) {
       ))}
     </address>
   );
+}
+
+/** True when the billing address says something the shipping address does not (a company, a GSTIN, or another place). */
+function billingDiffers(billing: unknown, shipping: unknown): boolean {
+  if (!billing || typeof billing !== "object") return false;
+  const b = billing as Record<string, unknown>;
+  if (b["companyName"] || b["taxId"]) return true;
+  const s = (shipping && typeof shipping === "object" ? shipping : {}) as Record<string, unknown>;
+  return ["addressLine1", "city", "state", "pincode"].some((k) => (b[k] ?? "") !== (s[k] ?? ""));
 }
 
 function OrderDetailPage() {
@@ -466,6 +479,12 @@ function OrderDetailPage() {
                 <p className="mb-1 text-[0.625rem] font-semibold tracking-wider text-muted-foreground uppercase">Shipping address</p>
                 <AddressLines address={order.shippingAddress} />
               </div>
+              {billingDiffers(order.billingAddress, order.shippingAddress) ? (
+                <div>
+                  <p className="mb-1 text-[0.625rem] font-semibold tracking-wider text-muted-foreground uppercase">Billing address</p>
+                  <AddressLines address={order.billingAddress} />
+                </div>
+              ) : null}
             </CardContent>
           </Card>
 

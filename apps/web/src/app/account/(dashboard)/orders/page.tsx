@@ -25,14 +25,14 @@ function mapStatusToTone(status: string): StatusTone {
   }
 }
 
-export default async function AccountOrdersPage() {
+export default async function PurchaseHistoryPage() {
   const ctx = await accountContext();
   if (!ctx) return null;
   const orders = await getCustomerOrders(ctx.store.rt._db.db, ctx.store.tenantId, ctx.customer.id);
 
   if (orders.length === 0) {
     return (
-      <div className="rounded-xl border border-[var(--border)] bg-[var(--card)] p-8 text-center shadow-xs" data-testid="no-orders">
+      <div className="rounded-xl bg-[var(--muted)]/50 p-6 text-center" data-testid="no-orders">
         <p className="text-sm text-[var(--muted-foreground)]">You have not placed any orders yet.</p>
         <Link href="/collections" className="mt-3 inline-block text-sm font-semibold text-[var(--brand-ink)] hover:underline">
           Start shopping
@@ -49,7 +49,7 @@ export default async function AccountOrdersPage() {
           <li key={o.id}>
             <Link
               href={`/account/orders/${o.id}`}
-              className="flex flex-col gap-2 rounded-xl border border-[var(--border)] bg-[var(--card)] p-4 shadow-xs transition-colors hover:bg-[var(--muted)]"
+              className="flex flex-col gap-2 rounded-xl bg-[var(--muted)]/50 p-4 transition-colors hover:bg-[var(--muted)]"
             >
               <div className="flex items-center justify-between">
                 <span className="font-semibold text-sm text-[var(--foreground)]">{o.number}</span>
@@ -67,7 +67,7 @@ export default async function AccountOrdersPage() {
       </ul>
 
       {/* Desktop Simple Table */}
-      <div className="hidden md:block overflow-hidden rounded-xl border border-[var(--border)] bg-[var(--card)] shadow-xs">
+      <div className="hidden md:block overflow-hidden rounded-xl bg-[var(--muted)]/50">
         <table className="w-full text-left text-sm">
           <thead className="border-b border-[var(--border)] bg-[var(--muted)] text-[11px] font-semibold uppercase tracking-wider text-[var(--muted-foreground)]">
             <tr>

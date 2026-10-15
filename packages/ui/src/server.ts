@@ -5,3 +5,4 @@
 
 export { THEME_STORAGE_KEY, themeBootScript, makeThemeBootScript } from "./theme/bootScript.ts";
 export { deriveAccent, type DerivedAccent } from "./theme/accent.ts";
+export { buttonVariants } from "./components/ui/button-variants.ts";

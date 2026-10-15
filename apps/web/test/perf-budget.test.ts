@@ -133,7 +133,9 @@ describe("M3 Mobile Performance Baseline Audit (Lighthouse Mobile ≥ 90)", () =
       const componentFiles = [
         path.join(__dirname, "../src/components/product/ProductGallery.tsx"),
         path.join(__dirname, "../src/components/product/VariantSelector.tsx"),
-        path.join(__dirname, "../src/components/product/StockEtaHole.tsx"),
+        path.join(__dirname, "../src/components/product/ProductDescription.tsx"),
+        path.join(__dirname, "../src/components/product/DeliveryEstimate.tsx"),
+        path.join(__dirname, "../src/components/product/ProductInfoTabs.tsx"),
         path.join(__dirname, "../src/components/product/AddToCartButton.tsx"),
       ];
 

@@ -11,5 +11,7 @@ export * from "./sample-data.ts";
 export * from "./layout.ts";
 export * from "./render-tree.tsx";
 export * from "./theme-pages.ts";
+export * from "./default-pages.ts";
+export { SvgIcon } from "./svg-icon.tsx";
 export * from "./media.ts";
 export * from "./media-image.ts";

@@ -19,7 +19,7 @@ import type { CollectionRule } from "@bs/contracts";
 import { Button } from "@bs/ui";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@bs/ui";
 import { Field, FieldLabel } from "@bs/ui";
-import { Input } from "@bs/ui";
+import { Input, InfoTip, Textarea } from "@bs/ui";
 import { RadioGroup, RadioGroupItem } from "@bs/ui";
 import { Switch } from "@bs/ui";
 import { SeoCard } from "../../components/seo-card.tsx";
@@ -70,6 +70,7 @@ export function CreateCollectionPage() {
   const queryClient = useQueryClient();
 
   const [title, setTitle] = useState("");
+  const [description, setDescription] = useState("");
   const [slug, setSlug] = useState("");
   const [type, setType] = useState<"manual" | "automated">("manual");
   const [match, setMatch] = useState<"all" | "any">("all");
@@ -167,6 +168,7 @@ export function CreateCollectionPage() {
     createMutation.mutate({
       title: title.trim(),
       slug: slug.trim() || undefined,
+      description: description.trim() || undefined,
       imageMediaId: imageMediaId || null,
       type,
       match,
@@ -239,6 +241,22 @@ export function CreateCollectionPage() {
                     {errors["title"]}
                   </p>
                 )}
+              </div>
+
+              <div className="grid gap-1.5">
+                <FieldLabel htmlFor="col-description" className="flex items-center gap-1.5">
+                  Description
+                  <InfoTip>Short plain-text blurb shown on collection cards and the collections page (two lines on cards). Up to 300 characters.</InfoTip>
+                </FieldLabel>
+                <Textarea
+                  id="col-description"
+                  rows={3}
+                  maxLength={300}
+                  value={description}
+                  onChange={(e) => setDescription(e.target.value)}
+                  placeholder="e.g. Hand-made chilli pastes and oils from the Darjeeling hills"
+                />
+                <p className="text-xs text-muted-foreground">{description.length}/300</p>
               </div>
 
               <div className="grid gap-1.5">

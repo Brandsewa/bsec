@@ -196,6 +196,29 @@ export interface StorefrontProductSummary {
     derivatives?: Record<string, { key: string; width: number; height: number; bytes: number }> | null | undefined;
   } | undefined;
   brand?: StorefrontBrand | null | undefined;
+  /** The second picture, shown on hover in listings. Images only. */
+  secondaryImage?: { mediaId: string; alt: string | null; url?: string | undefined; width?: number | null | undefined; height?: number | null | undefined } | undefined;
+  /** Name of the product's first category, for the card badge. */
+  categoryName?: string | undefined;
+  /** What the listing card needs to add to cart without opening the product page. */
+  quickAdd?: StorefrontQuickAdd | undefined;
+}
+
+export interface StorefrontQuickAdd {
+  /** One purchasable variant and no choices to make: the card can add it directly. */
+  singleVariantId?: string | undefined;
+  /** At least one variant can be bought now. */
+  inStock: boolean;
+  /** Present when there is something to choose (more than one variant). */
+  options?: Array<{ name: string; values: string[] }> | undefined;
+  variants?: Array<{
+    id: string;
+    title: string;
+    optionValues: Record<string, string>;
+    price: number;
+    compareAtPrice?: number | undefined;
+    inStock: boolean;
+  }> | undefined;
 }
 
 export interface StorefrontFacetValue {
@@ -236,6 +259,7 @@ export interface StorefrontCollectionDetail {
     rules: unknown;
     sortOrder: string;
     imageMediaId: string | null;
+    description: string | null;
     seo: unknown;
     published: boolean;
     indexable: boolean;
@@ -1151,6 +1175,7 @@ export async function getStorefrontCollection(
         rules: col.rules,
         sortOrder: col.sortOrder,
         imageMediaId: col.imageMediaId,
+        description: col.description ?? null,
         seo: col.seo,
         published: col.published,
         indexable: col.indexable,
@@ -1374,6 +1399,11 @@ export async function buildProductSummaries(
   // Query variants to determine min/max prices
   const variantRows = await tx
     .select({
+      id: schema.variants.id,
+      title: schema.variants.title,
+      optionValues: schema.variants.optionValues,
+      trackInventory: schema.variants.trackInventory,
+      allowBackorder: schema.variants.allowBackorder,
       productId: schema.variants.productId,
       price: schema.variants.price,
       compareAtPrice: schema.variants.compareAtPrice,
@@ -1471,9 +1501,77 @@ export async function buildProductSummaries(
     }
   }
 
+  // Second picture per product (images only), shown on hover.
+  const secondByProduct = new Map<string, { mediaId: string; alt: string | null; url: string | undefined; width: number | null | undefined; height: number | null | undefined }>();
+  const seenFirst = new Set<string>();
+  for (const m of mediaRows) {
+    const detail = detailsByMedia.get(m.mediaId);
+    if (detail && detail.kind !== "image") continue;
+    if (!seenFirst.has(m.productId)) {
+      seenFirst.add(m.productId);
+      continue;
+    }
+    if (!secondByProduct.has(m.productId)) {
+      secondByProduct.set(m.productId, {
+        mediaId: m.mediaId,
+        alt: m.alt || detail?.alt || productTitleMap.get(m.productId) || null,
+        url: publicMediaUrl(detail?.storageKey),
+        width: detail?.width,
+        height: detail?.height,
+      });
+    }
+  }
+
+  // First category name per product, for the card badge.
+  const catRows = await tx
+    .select({ productId: schema.productCategories.productId, name: schema.categories.name })
+    .from(schema.productCategories)
+    .innerJoin(
+      schema.categories,
+      and(eq(schema.categories.tenantId, schema.productCategories.tenantId), eq(schema.categories.id, schema.productCategories.categoryId)),
+    )
+    .where(inArray(schema.productCategories.productId, productIds))
+    .orderBy(asc(schema.productCategories.position));
+  const categoryByProduct = new Map<string, string>();
+  for (const c of catRows) if (!categoryByProduct.has(c.productId)) categoryByProduct.set(c.productId, c.name);
+
+  // Add-to-cart data: options, variants and whether each can be bought now (stock is on hand minus reserved, unless untracked or backorder is allowed).
+  const optionRows = await tx
+    .select({ productId: schema.productOptions.productId, name: schema.productOptions.name, values: schema.productOptions.values, position: schema.productOptions.position })
+    .from(schema.productOptions)
+    .where(inArray(schema.productOptions.productId, productIds))
+    .orderBy(asc(schema.productOptions.position));
+  const stockRows = await tx
+    .select({ variantId: schema.inventoryLevels.variantId, available: sql<number>`coalesce(sum(${schema.inventoryLevels.onHand} - ${schema.inventoryLevels.reserved}), 0)::int` })
+    .from(schema.inventoryLevels)
+    .where(inArray(schema.inventoryLevels.variantId, variantRows.map((v) => v.id)))
+    .groupBy(schema.inventoryLevels.variantId);
+  const availableByVariant = new Map(stockRows.map((r) => [r.variantId, Number(r.available)]));
+  const optionsByProduct = new Map<string, Array<{ name: string; values: string[] }>>();
+  for (const o of optionRows) optionsByProduct.set(o.productId, [...(optionsByProduct.get(o.productId) ?? []), { name: o.name, values: o.values }]);
+  const variantsByProduct = new Map<string, NonNullable<StorefrontQuickAdd["variants"]>>();
+  for (const v of variantRows) {
+    const canBuy = !v.trackInventory || v.allowBackorder || (availableByVariant.get(v.id) ?? 0) > 0;
+    const ov = v.optionValues && typeof v.optionValues === "object" && !Array.isArray(v.optionValues) ? (v.optionValues as Record<string, string>) : {};
+    const compareAt = v.compareAtPrice ? Number(v.compareAtPrice) : undefined;
+    variantsByProduct.set(v.productId, [
+      ...(variantsByProduct.get(v.productId) ?? []),
+      { id: v.id, title: v.title, optionValues: ov, price: Number(v.price), ...(compareAt !== undefined ? { compareAtPrice: compareAt } : {}), inStock: canBuy },
+    ]);
+  }
+  const quickAddFor = (productId: string): StorefrontQuickAdd => {
+    const vs = variantsByProduct.get(productId) ?? [];
+    const inStock = vs.some((v) => v.inStock);
+    const only = vs.length === 1 ? vs[0] : undefined;
+    if (only) return { inStock, ...(only.inStock ? { singleVariantId: only.id } : {}) };
+    return { inStock, options: optionsByProduct.get(productId) ?? [], variants: vs };
+  };
+
   return products.map((p) => {
     const prices = pricesByProduct[p.id] ?? { priceMin: 0, priceMax: 0 };
     const primaryImg = mediaByProduct[p.id];
+    const second = secondByProduct.get(p.id);
+    const categoryName = categoryByProduct.get(p.id);
 
     return {
       id: p.id,
@@ -1488,6 +1586,9 @@ export async function buildProductSummaries(
       priceOnRequest: Boolean(p.priceOnRequest),
       ratingAvg: p.ratingAvg,
       ratingCount: p.ratingCount,
+      ...(second ? { secondaryImage: second } : {}),
+      ...(categoryName ? { categoryName } : {}),
+      quickAdd: quickAddFor(p.id),
       primaryImage: primaryImg
         ? {
             mediaId: primaryImg.mediaId,

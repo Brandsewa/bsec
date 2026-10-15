@@ -269,7 +269,7 @@ describe("signed-in account endpoints", () => {
   });
 
   it("order tracking redirect mints a link only for the customer's own order", async () => {
-    const { GET } = await import("../src/app/account/orders/[id]/track/route.ts");
+    const { GET } = await import("../src/app/account/(dashboard)/orders/[id]/track/route.ts");
     const get = () => new Request(`https://demo.bcom.si/account/orders/${ADDR_ID}/track`, { headers: { host: req.host } });
     // signed out: back to sign-in, nothing minted
     let res = await GET(get(), rawParams({ id: ADDR_ID }));
@@ -289,7 +289,7 @@ describe("signed-in account endpoints", () => {
 describe("account pages", () => {
   it("list the customer's orders with a link to each", async () => {
     req.cookie = "good";
-    const { default: Page } = await import("../src/app/account/page.tsx");
+    const { default: Page } = await import("../src/app/account/(dashboard)/page.tsx");
     const html = renderToString(await Page());
     expect(html).toContain("#1001");
     expect(html).toContain(`/account/orders/${ADDR_ID}`);
@@ -297,7 +297,7 @@ describe("account pages", () => {
   });
 
   it("render nothing without a session (the layout shows sign-in instead)", async () => {
-    const { default: Page } = await import("../src/app/account/page.tsx");
+    const { default: Page } = await import("../src/app/account/(dashboard)/page.tsx");
     expect(await Page()).toBeNull();
     expect(domain.getCustomerOrders).not.toHaveBeenCalled();
   });

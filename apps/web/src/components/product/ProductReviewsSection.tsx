@@ -39,7 +39,7 @@ export function ProductReviewsSection({ productId, productTitle }: ProductReview
   useEffect(() => {
     let cancelled = false;
 
-    fetch(`/api/storefront/reviews?productId=${encodeURIComponent(productId)}&page=${page}&limit=10`)
+    fetch(`/api/storefront/products/${encodeURIComponent(productId)}/reviews?page=${page}&limit=10`)
       .then(async (res) => {
         if (res.ok && !cancelled) {
           const data = (await res.json()) as ReviewsResponse;
@@ -74,11 +74,10 @@ export function ProductReviewsSection({ productId, productTitle }: ProductReview
 
     setSubmitting(true);
     try {
-      const res = await fetch("/api/storefront/reviews", {
+      const res = await fetch(`/api/storefront/products/${encodeURIComponent(productId)}/reviews`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          productId,
           reviewerName: reviewerName.trim(),
           email: email.trim() || undefined,
           orderNumber: orderNumber.trim() || undefined,
@@ -91,7 +90,7 @@ export function ProductReviewsSection({ productId, productTitle }: ProductReview
 
       const json = (await res.json()) as { message?: string; error?: string };
       if (!res.ok) {
-        setFormError(json.error ?? "Failed to submit review");
+        setFormError(json.message ?? json.error ?? "Failed to submit review");
       } else {
         setFormSuccess(json.message ?? "Thank you for your review!");
         setReviewerName("");
@@ -101,7 +100,7 @@ export function ProductReviewsSection({ productId, productTitle }: ProductReview
         setBody("");
         setRating(5);
         if (page === 1) {
-          fetch(`/api/storefront/reviews?productId=${encodeURIComponent(productId)}&page=1&limit=10`)
+          fetch(`/api/storefront/products/${encodeURIComponent(productId)}/reviews?page=1&limit=10`)
             .then(async (r) => {
               if (r.ok) {
                 const data = (await r.json()) as ReviewsResponse;

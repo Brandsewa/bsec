@@ -121,7 +121,12 @@ export const CollectionGridSchema = z.object({
   collectionSlugs: z.array(z.string()).default([]),
   /** List every published collection (the Collection Archive page), ignoring collectionSlugs. */
   showAll: z.boolean().default(false),
+  /** Cards per row on desktop (1024px and up). */
   columns: z.enum(["2", "3", "4"]).default("3"),
+  /** Cards per row on tablets (640 to 1023px). */
+  columnsTablet: z.enum(["1", "2"]).default("2"),
+  /** Cards per row on phones (under 640px). */
+  columnsMobile: z.enum(["1", "2"]).default("1"),
 });
 export type CollectionGridProps = z.infer<typeof CollectionGridSchema>;
 
@@ -135,6 +140,8 @@ export const CollectionGridBlock: BlockDefinition<CollectionGridProps> = {
     collectionSlugs: [],
     showAll: false,
     columns: "3",
+    columnsTablet: "2",
+    columnsMobile: "1",
   },
   render: V.CollectionGridView,
 };
@@ -683,6 +690,20 @@ export const SiteFooterBlock: BlockDefinition<SiteFooterProps> = {
   render: V.SiteFooterView,
 };
 
+export const DEFAULT_SHIPPING_CONTENT = [
+  "Orders are packed within 24 hours and shipped with a tracked courier.",
+  "",
+  "- Delivery time depends on your pincode; the estimate on this page is a guide.",
+  "- Shipping charges, if any, are shown at checkout.",
+  "- Unused items can be returned within the return window shown in our policy.",
+].join(String.fromCharCode(10));
+
+const DEFAULT_PRODUCT_USPS = [
+  { icon: "truck" as const, text: "Fast dispatch", description: "Packed and shipped within 24 hours" },
+  { icon: "shield" as const, text: "Secure payment", description: "Encrypted checkout, details stay private" },
+  { icon: "returns" as const, text: "Easy returns", description: "Simple returns if something is not right" },
+];
+
 export const ProductDetailSchema = z.object({
   galleryPosition: z.enum(["left", "right"]).default("left"),
   showBreadcrumb: z.boolean().default(true),
@@ -694,14 +715,92 @@ export const ProductDetailSchema = z.object({
   trustPoints: z.array(z.string().min(1).max(60)).max(4).default(DEFAULT_TRUST_POINTS),
   stickyMobileBar: z.boolean().default(false),
   showSku: z.boolean().default(true),
+  // Settings added later. Their schema defaults keep documents saved before them looking as they did (ADR-009); the new look is in defaultProps and the theme templates.
+  /** Where the thumbnails sit next to the main picture (phones always put them below). */
+  thumbPosition: z.enum(["bottom", "left", "right"]).default("bottom"),
+  /** The short description stops after two lines with a "Read more" link that opens the full description in a popup. */
+  showReadMore: z.boolean().default(false),
+  variantStyle: z.enum(["buttons", "pills", "dropdown"]).default("buttons"),
+  /** Small print under the price, e.g. "Tax and shipping calculated at checkout." Empty hides it. */
+  priceNote: z.string().max(80).default(""),
+  showBuyNow: z.boolean().default(false),
+  addToCartLabel: z.string().min(1).max(30).default("Add to cart"),
+  buyNowLabel: z.string().min(1).max(30).default("Buy it now"),
+  addToCartBg: hexColorSchema.optional(),
+  addToCartText: hexColorSchema.optional(),
+  buyNowBg: hexColorSchema.optional(),
+  buyNowText: hexColorSchema.optional(),
+  showPaymentImage: z.boolean().default(false),
+  /** A picture from the media library, e.g. a row of accepted payment methods. Empty uses the built-in "secure payment" badge. */
+  paymentImageMediaId: z.string().uuid().optional(),
+  paymentImageAlt: z.string().max(80).default("Secure payment"),
+  showDeliveryEstimate: z.boolean().default(false),
+  /** Orders placed before this hour (0-23, store time) ship the same day. */
+  cutoffHour: z.number().int().min(0).max(23).default(14),
+  /** Days from dispatch to delivery. */
+  deliveryDays: z.number().int().min(1).max(21).default(3),
+  shipsText: z.string().max(60).default("Ships within 24 hrs"),
+  timeZone: z.string().max(40).default("Asia/Kolkata"),
+  showUsps: z.boolean().default(false),
+  usps: z
+    .array(z.object({ icon: z.enum(ICON_NAMES).default("check"), text: z.string().min(1).max(40), description: z.string().max(80).optional() }))
+    .max(4)
+    .default(DEFAULT_PRODUCT_USPS),
 });
 export type ProductDetailProps = z.infer<typeof ProductDetailSchema>;
 export const ProductDetailBlock: BlockDefinition<ProductDetailProps> = {
   type: "ProductDetail",
   version: 1,
   schema: ProductDetailSchema,
-  defaultProps: { galleryPosition: "left", showBreadcrumb: true, showRating: true, showDescription: true, showTags: true, stickyBuyBox: false, showTrustPoints: false, trustPoints: DEFAULT_TRUST_POINTS, stickyMobileBar: false, showSku: true },
+  defaultProps: {
+    galleryPosition: "left",
+    showBreadcrumb: true,
+    showRating: true,
+    showDescription: true,
+    showTags: true,
+    stickyBuyBox: false,
+    showTrustPoints: false,
+    trustPoints: DEFAULT_TRUST_POINTS,
+    stickyMobileBar: false,
+    showSku: true,
+    thumbPosition: "left",
+    showReadMore: true,
+    variantStyle: "pills",
+    priceNote: "Tax and shipping calculated at checkout.",
+    showBuyNow: true,
+    addToCartLabel: "Add to cart",
+    buyNowLabel: "Buy it now",
+    showPaymentImage: true,
+    paymentImageAlt: "Secure payment",
+    showDeliveryEstimate: true,
+    cutoffHour: 14,
+    deliveryDays: 3,
+    shipsText: "Ships within 24 hrs",
+    timeZone: "Asia/Kolkata",
+    showUsps: true,
+    usps: DEFAULT_PRODUCT_USPS,
+  },
   render: V.ProductDetailView,
+};
+
+// Product page, second section: tabs (the product's own description, then shipping and returns text written in the theme) beside a picture.
+export const ProductInfoTabsSchema = z.object({
+  descriptionLabel: z.string().min(1).max(30).default("Description"),
+  shippingLabel: z.string().min(1).max(30).default("Shipping & returns"),
+  /** Plain text. A blank line starts a new paragraph; lines starting with "- " become a list. */
+  shippingContent: z.string().max(4000).default(DEFAULT_SHIPPING_CONTENT),
+  /** Picture beside the tabs (media library). Empty shows the placeholder picture. */
+  imageMediaId: z.string().uuid().optional(),
+  imageAlt: z.string().max(120).default(""),
+  imageSide: z.enum(["right", "left"]).default("right"),
+});
+export type ProductInfoTabsProps = z.infer<typeof ProductInfoTabsSchema>;
+export const ProductInfoTabsBlock: BlockDefinition<ProductInfoTabsProps> = {
+  type: "ProductInfoTabs",
+  version: 1,
+  schema: ProductInfoTabsSchema,
+  defaultProps: { descriptionLabel: "Description", shippingLabel: "Shipping & returns", shippingContent: DEFAULT_SHIPPING_CONTENT, imageAlt: "", imageSide: "right" },
+  render: V.ProductInfoTabsView,
 };
 
 export const CollectionListingSchema = z.object({
@@ -710,18 +809,53 @@ export const CollectionListingSchema = z.object({
   showDescription: z.boolean().default(true),
   columnsMobile: z.enum(["1", "2"]).default("1"),
   imageRatio: z.enum(["square", "portrait"]).default("square"),
-  cardStyle: z.enum(["bordered", "minimal"]).default("bordered"),
+  // Defaults here describe how documents saved before these settings existed keep looking (ADR-009); the new look is in defaultProps below and in the theme templates.
+  cardStyle: z.enum(["borderless", "bordered", "minimal"]).default("bordered"),
   showSaleBadge: z.boolean().default(true),
   showRatings: z.boolean().default(true),
   showBreadcrumb: z.boolean().default(true),
   filterMenuHandle: z.string().optional(),
+  /** Cards per row on tablets (640 to 1023px); `columns` is desktop, `columnsMobile` is phones. */
+  columnsTablet: z.enum(["1", "2"]).default("2"),
+  defaultView: z.enum(["grid", "list"]).default("grid"),
+  showViewToggle: z.boolean().default(false),
+  /** Products shown first and added by each "Load more". */
+  pageSize: z.enum(["12", "24", "36"]).default("24"),
+  /** Lets shoppers hide the filter sidebar on desktop. */
+  filtersCollapsible: z.boolean().default(false),
+  showAddToCart: z.boolean().default(false),
+  /** Opens a quick-buy popup for products with variants; off sends the shopper to the product page. */
+  showQuickAdd: z.boolean().default(true),
+  showViewProduct: z.boolean().default(true),
+  showCategoryBadge: z.boolean().default(false),
+  hoverSecondImage: z.boolean().default(false),
 });
 export type CollectionListingProps = z.infer<typeof CollectionListingSchema>;
 export const CollectionListingBlock: BlockDefinition<CollectionListingProps> = {
   type: "CollectionListing",
   version: 1,
   schema: CollectionListingSchema,
-  defaultProps: { columns: "4", showFilters: true, showDescription: true, columnsMobile: "1", imageRatio: "square", cardStyle: "bordered", showSaleBadge: true, showRatings: true, showBreadcrumb: true },
+  defaultProps: {
+    columns: "4",
+    showFilters: true,
+    showDescription: true,
+    columnsMobile: "1",
+    columnsTablet: "2",
+    imageRatio: "square",
+    cardStyle: "borderless",
+    showSaleBadge: true,
+    showRatings: true,
+    showBreadcrumb: false,
+    defaultView: "grid",
+    showViewToggle: true,
+    pageSize: "12",
+    filtersCollapsible: true,
+    showAddToCart: true,
+    showQuickAdd: true,
+    showViewProduct: true,
+    showCategoryBadge: true,
+    hoverSecondImage: true,
+  },
   render: V.CollectionListingView,
 };
 
@@ -962,6 +1096,7 @@ export const BLOCK_DEFINITIONS: Record<BlockType, AnyBlockDefinition> = {
   SiteHeader: SiteHeaderBlock,
   SiteFooter: SiteFooterBlock,
   ProductDetail: ProductDetailBlock,
+  ProductInfoTabs: ProductInfoTabsBlock,
   CollectionListing: CollectionListingBlock,
   CartContents: CartContentsBlock,
   HeroSlider: HeroSliderBlock,

@@ -1,6 +1,6 @@
 import { asc, eq, sql } from "drizzle-orm";
 import { schema } from "@bs/db";
-import { getBlockDefinition, validateBlockDocument, type BlockInstance, type BlockType } from "@bs/blocks";
+import { getBlockDefinition, validateBlockDocument, validateDefaultPages, type BlockInstance, type BlockType } from "@bs/blocks";
 import { LAUNCH_TEMPLATE_TOKENS } from "./launch-template.ts";
 import type { Runtime } from "../runtime.ts";
 import { assertPlatformStaff, writePlatformAudit, type AuditMeta } from "../platform-services.ts";
@@ -205,7 +205,11 @@ export async function saveThemeTemplateDraft(
   await assertThemeEditor(rt, staffUserId);
   const pages = validateTemplatePages(input.pages);
   const set: Partial<typeof schema.themeTemplates.$inferInsert> = { draftPages: pages, updatedAt: new Date() };
-  if (input.tokens) set.draftTokens = input.tokens;
+  if (input.tokens) {
+    // The default pages' copy lives in the tokens; reject bad copy here so it can never reach a store.
+    if (input.tokens["defaultPages"] !== undefined) validateDefaultPages(input.tokens["defaultPages"]);
+    set.draftTokens = input.tokens;
+  }
   await rt._db.db.transaction(async (tx) => {
     const res = await tx.update(schema.themeTemplates).set(set).where(eq(schema.themeTemplates.code, input.code)).returning({ id: schema.themeTemplates.id });
     if (res.length === 0) throw new Error(`Template not found: "${input.code}"`);

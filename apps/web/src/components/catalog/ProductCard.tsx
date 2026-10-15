@@ -1,14 +1,23 @@
+import { PLACEHOLDER_IMAGE_URL } from "@/lib/placeholder.ts";
 import React from "react";
 import Link from "next/link";
 import type { StorefrontProductSummary } from "@bs/domain";
+import { CardCartButton } from "./CardCartButton.tsx";
 
 export interface ProductCardProps {
   product: StorefrontProductSummary;
   /** Look chosen by the theme's collection template; the defaults are the built-in card. */
   imageRatio?: "square" | "portrait" | undefined;
-  cardStyle?: "bordered" | "minimal" | undefined;
+  cardStyle?: "borderless" | "bordered" | "minimal" | undefined;
   showSaleBadge?: boolean | undefined;
   showRatings?: boolean | undefined;
+  showCategoryBadge?: boolean | undefined;
+  showAddToCart?: boolean | undefined;
+  showQuickAdd?: boolean | undefined;
+  showViewProduct?: boolean | undefined;
+  hoverSecondImage?: boolean | undefined;
+  /** Above the fold: load the picture straight away instead of lazily. */
+  priority?: boolean | undefined;
 }
 
 /**
@@ -23,116 +32,95 @@ export function formatInrPrice(paise: number): string {
   }).format(rupees);
 }
 
-export function ProductCard({ product, imageRatio = "square", cardStyle = "bordered", showSaleBadge = true, showRatings = true }: ProductCardProps) {
+/**
+ * One product in a listing. The same markup serves grid and list: the listing container's `data-view` switches the layout in
+ * CSS (`.bs-pcard` rules in globals.css), so toggling never re-renders the cards.
+ */
+export function ProductCard({
+  product,
+  imageRatio = "square",
+  cardStyle = "borderless",
+  showSaleBadge = true,
+  showRatings = true,
+  showCategoryBadge = false,
+  showAddToCart = false,
+  showQuickAdd = true,
+  showViewProduct = true,
+  hoverSecondImage = false,
+  priority = false,
+}: ProductCardProps) {
   const isRange = product.priceMin !== product.priceMax;
-  const formattedPrice = isRange
-    ? `${formatInrPrice(product.priceMin)} - ${formatInrPrice(product.priceMax)}`
-    : formatInrPrice(product.priceMin);
+  const formattedPrice = isRange ? `${formatInrPrice(product.priceMin)} - ${formatInrPrice(product.priceMax)}` : formatInrPrice(product.priceMin);
 
-  // Compare-at price savings
   let savingsPercent: number | null = null;
   let formattedCompareAt: string | null = null;
   if (product.compareAtPriceMin && product.compareAtPriceMin > product.priceMin) {
-    savingsPercent = Math.round(
-      ((product.compareAtPriceMin - product.priceMin) / product.compareAtPriceMin) * 100,
-    );
+    savingsPercent = Math.round(((product.compareAtPriceMin - product.priceMin) / product.compareAtPriceMin) * 100);
     formattedCompareAt = formatInrPrice(product.compareAtPriceMin);
   }
 
   const imageUrl = product.primaryImage?.url;
   const imageAlt = product.primaryImage?.alt ?? product.title;
+  const secondUrl = hoverSecondImage ? product.secondaryImage?.url : undefined;
+  const hasRating = showRatings && product.ratingCount > 0;
+  const outOfStock = product.quickAdd ? !product.quickAdd.inStock : false;
 
   return (
-    <article
-      className={`group relative flex flex-col overflow-hidden rounded-xl transition-all duration-200 ${
-        cardStyle === "minimal" ? "bg-transparent" : "border border-border/70 bg-card hover:shadow-md hover:border-border"
-      }`}
-    >
-      {/* Product Image */}
-      <Link
-        href={`/products/${product.slug}`}
-        className={`relative w-full overflow-hidden bg-surface ${imageRatio === "portrait" ? "aspect-[4/5]" : "aspect-square"} ${cardStyle === "minimal" ? "rounded-xl" : ""}`}
-        aria-label={product.title}
-      >
-        {imageUrl ? (
-          /* eslint-disable-next-line @next/next/no-img-element */
-          <img
-            src={imageUrl}
-            alt={imageAlt}
-            loading="lazy"
-            className="h-full w-full object-cover object-center transition-transform duration-300 group-hover:scale-105"
+    <article className="bs-pcard group" data-style={cardStyle}>
+      <div className="bs-pcard-media bg-muted" style={{ aspectRatio: imageRatio === "portrait" ? "4 / 5" : "1 / 1" }}>
+        <Link href={`/products/${product.slug}`} className="block h-full w-full" aria-label={product.title}>
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img src={imageUrl ?? PLACEHOLDER_IMAGE_URL} alt={imageUrl ? imageAlt : ""} loading={priority ? "eager" : "lazy"} className="bs-pcard-img" />
+          {secondUrl ? (
+            // eslint-disable-next-line @next/next/no-img-element
+            <img src={secondUrl} alt="" loading="lazy" aria-hidden className="bs-pcard-img bs-pcard-img2" />
+          ) : null}
+        </Link>
+
+        <div className="pointer-events-none absolute left-2.5 right-2.5 top-2.5 flex items-start justify-between gap-2">
+          <span className="flex min-w-0 flex-col items-start gap-1">
+            {showCategoryBadge && product.categoryName ? <span className="max-w-full truncate rounded-md bg-background/95 px-2 py-0.5 text-xs font-medium text-foreground shadow-xs">{product.categoryName}</span> : null}
+            {!(showCategoryBadge && product.categoryName) && product.isFeatured ? <span className="rounded-md bg-primary px-2 py-0.5 text-xs font-medium text-primary-foreground shadow-xs">Featured</span> : null}
+          </span>
+          {showSaleBadge && savingsPercent !== null && savingsPercent > 0 ? <span className="rounded-md bg-emerald-600 px-2 py-0.5 text-xs font-semibold text-white shadow-xs">Save {savingsPercent}%</span> : null}
+        </div>
+
+        {outOfStock ? <span className="pointer-events-none absolute bottom-2.5 left-2.5 rounded-md bg-background/95 px-2 py-0.5 text-xs font-medium text-muted-foreground shadow-xs">Sold out</span> : null}
+
+        {showAddToCart && product.quickAdd ? (
+          <CardCartButton
+            product={{ title: product.title, slug: product.slug, imageUrl, shortDescription: product.shortDescription, quickAdd: product.quickAdd }}
+            showQuickAdd={showQuickAdd}
+            showViewProduct={showViewProduct}
           />
-        ) : (
-          <div className="flex h-full w-full items-center justify-center text-text/40 bg-muted/40">
-            <div className="text-center p-4">
-              <svg
-                className="mx-auto h-10 w-10 text-muted-foreground/50 mb-1"
-                fill="none"
-                viewBox="0 0 24 24"
-                stroke="currentColor"
-                aria-hidden="true"
-              >
-                <path
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  strokeWidth={1.5}
-                  d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z"
-                />
-              </svg>
-              <span className="text-xs font-medium text-muted-foreground">No image available</span>
-            </div>
-          </div>
-        )}
+        ) : null}
+      </div>
 
-        {/* Savings Badge */}
-        {showSaleBadge && savingsPercent !== null && savingsPercent > 0 && (
-          <span className="absolute top-2.5 right-2.5 rounded-md bg-emerald-600 px-2 py-0.5 text-xs font-semibold text-white shadow-xs">
-            Save {savingsPercent}%
-          </span>
-        )}
+      <div className="bs-pcard-body">
+        {product.brand ? <p className="mb-0.5 text-xs font-semibold uppercase tracking-wider text-muted-foreground">{product.brand.name}</p> : null}
 
-        {/* Featured Tag */}
-        {product.isFeatured && (
-          <span className="absolute top-2.5 left-2.5 rounded-md bg-primary px-2 py-0.5 text-xs font-medium text-primary-foreground shadow-xs">
-            Featured
-          </span>
-        )}
-      </Link>
-
-      {/* Product Info */}
-      <div className={`flex flex-1 flex-col ${cardStyle === "minimal" ? "px-0.5 pt-3 pb-1" : "p-4"}`}>
-        {product.brand && (
-          <p className="mb-1 text-xs font-semibold uppercase tracking-wider text-muted-foreground">
-            {product.brand.name}
-          </p>
-        )}
-
-        <h3 className="line-clamp-2 text-sm font-semibold text-foreground group-hover:text-primary transition-colors">
+        <h3 className="bs-pcard-title">
           <Link href={`/products/${product.slug}`}>{product.title}</Link>
         </h3>
 
-        {/* Rating if present */}
-        {showRatings && Number(product.ratingCount) > 0 && (
-          <div className="mt-1.5 flex items-center gap-1.5 text-xs text-muted-foreground">
+        {hasRating ? (
+          <div className="mt-1 flex items-center gap-1.5 text-xs text-muted-foreground" aria-label={`Rated ${product.ratingAvg} out of 5 from ${product.ratingCount} reviews`}>
             <span className="flex items-center text-amber-500">
               ★ <span className="ml-0.5 font-medium text-foreground">{product.ratingAvg}</span>
             </span>
             <span>({product.ratingCount})</span>
           </div>
-        )}
+        ) : null}
 
-        {/* Price & Savings */}
-        <div className="mt-auto pt-3 flex items-baseline gap-2">
+        {product.shortDescription ? <p className="bs-pcard-desc text-muted-foreground">{product.shortDescription}</p> : null}
+
+        <div className="bs-pcard-price">
           {product.priceOnRequest ? (
             <span className="text-sm font-semibold text-muted-foreground">Price on request</span>
           ) : (
             <>
               <span className="text-base font-bold text-foreground">{formattedPrice}</span>
-              {formattedCompareAt && (
-                <span className="text-xs text-muted-foreground line-through">
-                  {formattedCompareAt}
-                </span>
-              )}
+              {formattedCompareAt ? <span className="text-xs text-muted-foreground line-through">{formattedCompareAt}</span> : null}
             </>
           )}
         </div>

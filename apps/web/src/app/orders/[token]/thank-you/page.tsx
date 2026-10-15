@@ -5,6 +5,7 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { evaluateStorefrontAccess, getOrderByActionToken } from "@bs/domain";
 import { server } from "@/server/runtime.ts";
+import { getCachedDefaultPages } from "@/server/cached-storefront.ts";
 import { describeOrderStatus, describePayment } from "@/components/orders/order-labels.ts";
 import { StatusBadge, Money, Button } from "@bs/ui";
 import { CreateAccountCard } from "@/components/orders/CreateAccountCard.tsx";
@@ -31,6 +32,7 @@ export default async function ThankYouPage({ params }: ThankYouPageProps) {
   const order = await getOrderByActionToken(rt._db.db, access.tenantId, token);
   if (!order) notFound();
 
+  const copy = (await getCachedDefaultPages(access.tenantId)).orderSuccess;
   const status = describeOrderStatus(order.status);
   const cancelled = order.status === "cancelled";
   const statusToneMap: Record<"good" | "bad" | "neutral", "success" | "destructive" | "neutral"> = {
@@ -52,13 +54,13 @@ export default async function ThankYouPage({ params }: ThankYouPageProps) {
       </div>
 
       <h1 className="text-3xl font-extrabold tracking-tight text-foreground sm:text-4xl">
-        {cancelled ? "This order was cancelled" : "Thank you for your order!"}
+        {cancelled ? "This order was cancelled" : copy.heading}
       </h1>
 
       <p className="mt-3 text-base text-muted-foreground">
         {cancelled
           ? "No payment is due for this order."
-          : `We have received your order and will send updates to ${order.email}.`}
+          : copy.message.replaceAll("{email}", order.email)}
       </p>
 
       <div className="mt-8 rounded-xl border border-border bg-card p-6 text-left shadow-sm">
@@ -120,7 +122,7 @@ export default async function ThankYouPage({ params }: ThankYouPageProps) {
         </div>
       </div>
 
-      <CreateAccountCard email={order.email} phone={order.phone} />
+      {copy.showCreateAccount ? <CreateAccountCard email={order.email} phone={order.phone} /> : null}
 
       <div className="mt-10 flex flex-col items-center justify-center gap-3 sm:flex-row">
         <Link href={`/o/${token}`}>
@@ -130,7 +132,7 @@ export default async function ThankYouPage({ params }: ThankYouPageProps) {
         </Link>
         <Link href="/">
           <Button variant="primary">
-            Continue Shopping
+            {copy.continueLabel}
           </Button>
         </Link>
       </div>

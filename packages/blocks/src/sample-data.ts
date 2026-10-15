@@ -31,7 +31,7 @@ export function buildSampleRenderData(blocks: BlockInstance[]): { data: Record<s
     } else if (b.type === "CollectionGrid") {
       data[b.id] = {
         kind: "collections",
-        collections: ["Collection one", "Collection two", "Collection three"].map((title, i) => ({ slug: `collection-${i + 1}`, title })),
+        collections: ["Collection one", "Collection two", "Collection three"].map((title, i) => ({ slug: `collection-${i + 1}`, title, description: "A short description of this collection, shown on two lines at most." })),
       };
     }
   });

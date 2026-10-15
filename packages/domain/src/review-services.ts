@@ -919,3 +919,28 @@ export async function bulkDeleteAdminReviews(
 
   return { count: touchedProductIds.length };
 }
+
+/** The signed-in shopper's own reviews (any status), newest first, with the product they are about. */
+export async function getCustomerReviews(db: Db, tenantId: string, customerId: string) {
+  return withTenant(db, tenantId, async (tx) =>
+    tx
+      .select({
+        id: schema.reviews.id,
+        rating: schema.reviews.rating,
+        title: schema.reviews.title,
+        body: schema.reviews.body,
+        status: schema.reviews.status,
+        createdAt: schema.reviews.createdAt,
+        productTitle: schema.products.title,
+        productSlug: schema.products.slug,
+      })
+      .from(schema.reviews)
+      .innerJoin(
+        schema.products,
+        and(eq(schema.products.tenantId, schema.reviews.tenantId), eq(schema.products.id, schema.reviews.productId)),
+      )
+      .where(and(eq(schema.reviews.tenantId, tenantId), eq(schema.reviews.customerId, customerId)))
+      .orderBy(desc(schema.reviews.createdAt))
+      .limit(100),
+  );
+}

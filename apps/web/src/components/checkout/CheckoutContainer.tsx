@@ -1,9 +1,10 @@
 "use client";
 
-import React, { useState } from "react";
+import React, { useId, useState } from "react";
 import { useRouter } from "next/navigation";
 import type { StorefrontCart, StorefrontCheckoutConsent } from "@bs/domain";
-import { CheckoutForm, type CheckoutShippingRate, type CheckoutPaymentOptions } from "./CheckoutForm.tsx";
+import { priceOrder } from "@bs/domain/pricing";
+import { CheckoutForm, type CheckoutShippingRate, type CheckoutPaymentOptions, type SavedCheckoutAddress } from "./CheckoutForm.tsx";
 import { OrderSummary } from "./OrderSummary.tsx";
 
 export interface CheckoutContainerProps {
@@ -14,36 +15,74 @@ export interface CheckoutContainerProps {
   paymentOptions: CheckoutPaymentOptions;
   /** Which consent boxes the store shows above the Place Order button. */
   consent: StorefrontCheckoutConsent;
+  /** The signed-in shopper's address book and email; empty for a guest. */
+  savedAddresses?: SavedCheckoutAddress[];
+  customerEmail?: string;
+  signedIn?: boolean;
 }
 
-export function CheckoutContainer({ cart, shippingRates, paymentOptions, consent }: CheckoutContainerProps) {
+export function CheckoutContainer({ cart, shippingRates, paymentOptions, consent, savedAddresses, customerEmail, signedIn }: CheckoutContainerProps) {
   const router = useRouter();
+  const summaryId = useId();
   const [shippingMethod, setShippingMethod] = useState<string>(shippingRates[0]?.method ?? "");
+  const [summaryOpen, setSummaryOpen] = useState(false);
 
   const [paymentMethod, setPaymentMethod] = useState<"cod" | "online">(paymentOptions.codEnabled ? "cod" : "online");
   const codFeePaise = paymentMethod === "cod" && paymentOptions.codEnabled ? paymentOptions.codFeePaise : 0;
 
   const shippingPaise = shippingRates.find((r) => r.method === shippingMethod)?.amount ?? shippingRates[0]?.amount ?? 0;
+  const total = priceOrder({
+    subtotal: cart.subtotal,
+    shipping: shippingPaise,
+    codFee: codFeePaise,
+    discount: cart.discount ? { type: cart.discount.type, discountAmount: cart.discount.amount } : null,
+  }).grandTotal;
+  const totalLabel = `₹${(total / 100).toLocaleString("en-IN")}`;
 
   return (
-    <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 lg:gap-12 items-start">
+    <div className="grid grid-cols-1 items-start gap-6 lg:grid-cols-12 lg:gap-14">
+      {/* Order review: first and collapsed on phones, the grey panel beside the form on desktop. One instance, so its fields exist once. */}
+      <div className="lg:order-2 lg:col-span-5 lg:sticky lg:top-24">
+        <button
+          type="button"
+          onClick={() => setSummaryOpen((o) => !o)}
+          aria-expanded={summaryOpen}
+          aria-controls={summaryId}
+          className="flex w-full items-center justify-between rounded-xl bg-muted/60 px-4 py-3.5 text-left lg:hidden"
+        >
+          <span className="flex items-center gap-2 text-sm font-medium text-foreground">
+            <svg aria-hidden className="h-4 w-4 text-muted-foreground" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
+              <circle cx="8" cy="21" r="1" />
+              <circle cx="19" cy="21" r="1" />
+              <path strokeLinecap="round" strokeLinejoin="round" d="M2.05 2.05h2l2.66 12.42a2 2 0 0 0 2 1.58h9.78a2 2 0 0 0 1.95-1.57l1.65-7.43H5.12" />
+            </svg>
+            {summaryOpen ? "Hide order summary" : "Show order summary"}
+            <svg aria-hidden className={`h-4 w-4 transition-transform ${summaryOpen ? "rotate-180" : ""}`} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
+              <path strokeLinecap="round" strokeLinejoin="round" d="M6 9l6 6 6-6" />
+            </svg>
+          </span>
+          <span className="text-base font-bold text-foreground">{totalLabel}</span>
+        </button>
+        <div id={summaryId} className={`${summaryOpen ? "mt-3 block" : "hidden"} lg:mt-0 lg:block`}>
+          <OrderSummary cart={cart} shippingPaise={shippingPaise} codFeePaise={codFeePaise} onCartChange={() => router.refresh()} />
+        </div>
+      </div>
+
       {/* Checkout input forms (Customer info, address, shipping, payment) */}
-      <div className="lg:col-span-7">
+      <div className="lg:order-1 lg:col-span-7">
         <CheckoutForm
           cart={cart}
           shippingRates={shippingRates}
           paymentOptions={paymentOptions}
           consent={consent}
+          savedAddresses={savedAddresses ?? []}
+          customerEmail={customerEmail ?? ""}
+          signedIn={signedIn ?? false}
           paymentMethod={paymentMethod}
           onPaymentMethodChange={setPaymentMethod}
           shippingMethod={shippingMethod}
           onShippingMethodChange={setShippingMethod}
         />
-      </div>
-
-      {/* Order review & totals */}
-      <div className="lg:col-span-5">
-        <OrderSummary cart={cart} shippingPaise={shippingPaise} codFeePaise={codFeePaise} onCartChange={() => router.refresh()} />
       </div>
     </div>
   );

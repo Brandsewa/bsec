@@ -10,6 +10,8 @@ import {
   generateItemListJsonLd,
   formatTitle,
 } from "@bs/domain";
+import { DEFAULT_PAGES } from "@bs/blocks";
+import { getCachedDefaultPages } from "@/server/cached-storefront.ts";
 import { server } from "@/server/runtime.ts";
 import { ProductCard } from "@/components/catalog/ProductCard.tsx";
 import { SearchInput } from "@/components/catalog/SearchInput.tsx";
@@ -82,6 +84,7 @@ export default async function SearchPage({ searchParams }: SearchPageProps) {
 
   let results: Awaited<ReturnType<typeof searchStorefrontProducts>> = { items: [], total: 0 };
   let host = "localhost";
+  let emptyMessage = DEFAULT_PAGES.search.emptyMessage;
 
   if (q) {
     try {
@@ -101,6 +104,7 @@ export default async function SearchPage({ searchParams }: SearchPageProps) {
         };
 
         results = await searchStorefrontProducts(rt, tenantCtx, q, { page, limit });
+        emptyMessage = (await getCachedDefaultPages(access.tenantId)).search.emptyMessage;
       }
     } catch {
       // In case of error, show zero results
@@ -205,7 +209,7 @@ export default async function SearchPage({ searchParams }: SearchPageProps) {
             </svg>
             <h2 className="text-lg font-semibold text-foreground">No products found</h2>
             <p className="mt-1 text-sm text-muted-foreground max-w-md mx-auto">
-              No products found. Try different keywords, checking your spelling, or exploring our collections.
+              {emptyMessage}
             </p>
             <div className="mt-6">
               <Link

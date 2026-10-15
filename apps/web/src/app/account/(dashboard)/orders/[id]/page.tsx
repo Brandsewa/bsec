@@ -3,7 +3,8 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { getCustomerOrderDetail } from "@bs/domain";
 import { accountContext } from "@/server/customer-session.ts";
-import { StatusBadge, Badge, Money, type StatusTone, buttonVariants } from "@bs/ui";
+import { StatusBadge, Badge, Money, type StatusTone } from "@bs/ui";
+import { buttonVariants } from "@bs/ui/server";
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
@@ -43,7 +44,7 @@ export default async function AccountOrderPage({ params }: { params: Promise<{ i
   if (!order) notFound();
 
   return (
-    <div className="rounded-xl border border-[var(--border)] bg-[var(--card)] p-6 shadow-xs sm:p-8">
+    <div className="rounded-xl bg-[var(--muted)]/50 p-4 sm:p-5">
       <div className="flex flex-col gap-3 border-b border-[var(--border)] pb-6 sm:flex-row sm:items-center sm:justify-between">
         <div>
           <span className="text-xs font-semibold uppercase tracking-wider text-[var(--muted-foreground)]">Order</span>
@@ -106,7 +107,7 @@ export default async function AccountOrderPage({ params }: { params: Promise<{ i
       </div>
 
       <div className="mt-8 flex flex-wrap items-center justify-between gap-3 border-t border-[var(--border)] pt-6">
-        <Link href="/account" className="text-sm font-semibold text-[var(--brand-ink)] hover:underline">
+        <Link href="/account/orders" className="text-sm font-semibold text-[var(--brand-ink)] hover:underline">
           ← All orders
         </Link>
         {/* Opens the order's tracking and returns page; the link mints its secret on click, so it must not be prefetched. */}

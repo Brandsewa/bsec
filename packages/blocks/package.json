@@ -7,6 +7,7 @@
     ".": "./src/index.ts",
     "./blocks.css": "./src/blocks.css",
     "./media-image": "./src/media-image.ts",
+    "./svg-icon": "./src/svg-icon.tsx",
     "./theme-vars": "./src/theme-vars.ts"
   },
   "scripts": {

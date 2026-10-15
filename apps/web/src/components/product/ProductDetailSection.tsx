@@ -1,12 +1,14 @@
-import React, { Suspense } from "react";
+import React from "react";
 import Link from "next/link";
 import type { StorefrontProductDetail } from "@bs/domain";
-import type { ProductDetailOptions } from "@bs/blocks";
+import { SvgIcon, type ProductDetailOptions } from "@bs/blocks";
+import { descriptionText } from "@/lib/description-text.ts";
+import { RatingSummary } from "./RatingSummary.tsx";
 import { ProductGallery } from "./ProductGallery.tsx";
-import { VariantSelector } from "./VariantSelector.tsx";
+import { ProductBuyProvider, SkuLine, VariantOptions, PriceBlock, PurchaseActions } from "./VariantSelector.tsx";
+import { ProductDescription } from "./ProductDescription.tsx";
+import { DeliveryEstimate } from "./DeliveryEstimate.tsx";
 import { MobileBuyBar } from "./MobileBuyBar.tsx";
-import { StockEtaSkeleton } from "./StockEtaHole.tsx";
-import { ProductReviewsSection } from "./ProductReviewsSection.tsx";
 
 // Server-side copy of the price format (VariantSelector's is a client module and cannot be called from here).
 const formatInr = (paise: number) =>
@@ -22,26 +24,52 @@ export const DEFAULT_PRODUCT_DETAIL_OPTIONS: ProductDetailOptions = {
   showTrustPoints: false,
   stickyMobileBar: false,
   showSku: true,
+  thumbPosition: "left",
+  showReadMore: true,
+  variantStyle: "pills",
+  priceNote: "Tax and shipping calculated at checkout.",
+  showBuyNow: true,
+  addToCartLabel: "Add to cart",
+  buyNowLabel: "Buy it now",
+  showPaymentImage: true,
+  paymentImageAlt: "Secure payment",
+  showDeliveryEstimate: true,
+  cutoffHour: 14,
+  deliveryDays: 3,
+  shipsText: "Ships within 24 hrs",
+  timeZone: "Asia/Kolkata",
+  showUsps: true,
+  usps: [
+    { icon: "truck", text: "Fast dispatch", description: "Packed and shipped within 24 hours" },
+    { icon: "shield", text: "Secure payment", description: "Encrypted checkout, details stay private" },
+    { icon: "returns", text: "Easy returns", description: "Simple returns if something is not right" },
+  ],
 };
 
 /**
- * The product page body: breadcrumb, gallery, title, rating, description, variant picker and tags.
- * A theme's product page places it through the ProductDetail block (and sets the options); stores
- * without a product template get it with the defaults.
+ * The product page body: breadcrumb, gallery on one side and on the other the review summary, title, SKU, description, options,
+ * price, buttons, payment picture, delivery estimate and highlight cards. A theme's product page places it through the
+ * ProductDetail block (and sets the options); stores without a product template get it with the defaults.
  */
 export function ProductDetailSection({
   product,
   options = DEFAULT_PRODUCT_DETAIL_OPTIONS,
+  paymentImageUrl,
 }: {
   product: StorefrontProductDetail;
   options?: ProductDetailOptions | undefined;
+  /** Resolved URL of the theme's secure-payment picture (media library); the built-in badge is used when absent. */
+  paymentImageUrl?: string | undefined;
 }) {
   const prices = (product.variants ?? []).map((v) => v.price);
   const lowest = prices.length > 0 ? Math.min(...prices) : 0;
   const priceLabel = prices.length > 1 && Math.max(...prices) !== lowest ? `From ${formatInr(lowest)}` : formatInr(lowest);
+  const longDescription = descriptionText(product.descriptionJson);
+  const usps = options.showUsps ? (options.usps ?? []).slice(0, 4) : [];
+
   const gallery = (
     <div className={options.galleryPosition === "right" ? "lg:order-2" : undefined}>
-      <ProductGallery media={product.media} title={product.title} />
+      <ProductGallery media={product.media} title={product.title} thumbPosition={options.thumbPosition ?? "bottom"} />
     </div>
   );
 
@@ -61,61 +89,90 @@ export function ProductDetailSection({
         </nav>
       ) : null}
 
-      <div className="grid grid-cols-1 gap-12 lg:grid-cols-2 lg:gap-16 items-start">
+      <div className="grid grid-cols-1 gap-10 lg:grid-cols-2 lg:gap-16 items-start">
         {gallery}
 
-        <div className={`flex flex-col gap-6 ${options.stickyBuyBox ? "lg:sticky lg:top-24" : ""}`}>
-          <div>
-            {product.brand && (
-              <p className="text-xs font-semibold uppercase tracking-wider text-primary mb-1.5">{product.brand.name}</p>
-            )}
-            <h1 className="text-2xl sm:text-3xl font-extrabold tracking-tight text-foreground" style={{ fontFamily: "var(--bs-font-heading, inherit)" }}>
-              {product.title}
-            </h1>
-          </div>
-
-          {options.showRating && Number(product.ratingCount) > 0 && (
-            <div className="flex items-center gap-2 text-sm">
-              <div className="flex items-center text-amber-500">
-                <svg className="h-4 w-4 fill-current" viewBox="0 0 20 20">
-                  <path d="M9.049 2.927c.3-.921 1.603-.921 1.902 0l1.07 3.292a1 1 0 00.95.69h3.462c.969 0 1.371 1.24.588 1.81l-2.8 2.034a1 1 0 00-.364 1.118l1.07 3.292c.3.921-.755 1.688-1.54 1.118l-2.8-2.034a1 1 0 00-1.175 0l-2.8 2.034c-.784.57-1.838-.197-1.539-1.118l1.07-3.292a1 1 0 00-.364-1.118L2.98 8.72c-.783-.57-.38-1.81.588-1.81h3.461a1 1 0 00.951-.69l1.07-3.292z" />
-                </svg>
-                <span className="ml-1 font-semibold text-foreground">{product.ratingAvg}</span>
-              </div>
-              <span className="text-muted-foreground">({product.ratingCount} reviews)</span>
+        <ProductBuyProvider product={product}>
+          <div className={`flex flex-col gap-5 ${options.stickyBuyBox ? "lg:sticky lg:top-24" : ""}`}>
+            <div className="flex flex-col gap-2">
+              {options.showRating ? <RatingSummary average={product.ratingAvg} count={Number(product.ratingCount)} /> : null}
+              {product.brand ? <p className="text-xs font-semibold uppercase tracking-wider text-primary">{product.brand.name}</p> : null}
+              <h1 className="text-2xl sm:text-3xl font-extrabold tracking-tight text-foreground" style={{ fontFamily: "var(--bs-font-heading, inherit)" }}>
+                {product.title}
+              </h1>
+              {options.showSku !== false ? <SkuLine /> : null}
             </div>
-          )}
 
-          {options.showDescription && product.shortDescription && (
-            <p className="text-base text-muted-foreground leading-relaxed">{product.shortDescription}</p>
-          )}
+            {options.showDescription ? (
+              <ProductDescription title={product.title} short={product.shortDescription?.trim() ?? ""} full={longDescription} clamp={options.showReadMore === true} />
+            ) : null}
 
-          <Suspense fallback={<StockEtaSkeleton />}>
-            <VariantSelector
-              product={product}
-              showSku={options.showSku !== false}
+            <VariantOptions style={options.variantStyle ?? "buttons"} />
+
+            <PriceBlock note={options.priceNote} />
+
+            <PurchaseActions
+              addToCartLabel={options.addToCartLabel}
+              buyNowLabel={options.buyNowLabel}
+              showBuyNow={options.showBuyNow}
+              addToCartBg={options.addToCartBg}
+              addToCartText={options.addToCartText}
+              buyNowBg={options.buyNowBg}
+              buyNowText={options.buyNowText}
               trustPoints={options.showTrustPoints ? options.trustPoints : undefined}
             />
-          </Suspense>
 
-          {options.showTags && product.tags && product.tags.length > 0 && (
-            <div className="pt-4 border-t border-border/60">
-              <span className="text-xs font-semibold uppercase tracking-wider text-muted-foreground mr-2">Tags:</span>
-              <div className="inline-flex flex-wrap gap-1.5 mt-1">
-                {product.tags.map((tag) => (
-                  <span key={tag} className="inline-block rounded-md bg-muted px-2 py-0.5 text-xs text-muted-foreground font-medium">
-                    #{tag}
-                  </span>
+            {options.showPaymentImage ? (
+              // eslint-disable-next-line @next/next/no-img-element
+              <img src={paymentImageUrl ?? "/secure-payment.svg"} alt={options.paymentImageAlt || "Secure payment"} loading="lazy" className="h-auto w-full max-w-md self-start" />
+            ) : null}
+
+            {options.showDeliveryEstimate ? (
+              <DeliveryEstimate
+                cutoffHour={options.cutoffHour ?? 14}
+                deliveryDays={options.deliveryDays ?? 3}
+                shipsText={options.shipsText ?? ""}
+                timeZone={options.timeZone ?? "Asia/Kolkata"}
+              />
+            ) : null}
+
+            {usps.length > 0 ? (
+              <ul
+                className="bs-usp-grid -mx-4 flex snap-x snap-mandatory gap-3 overflow-x-auto px-4 pb-1 [scrollbar-width:none] sm:mx-0 sm:overflow-visible sm:px-0 [&::-webkit-scrollbar]:hidden"
+                style={{ "--usp-cols": usps.length } as React.CSSProperties}
+                aria-label="Highlights"
+                data-testid="product-usps"
+              >
+                {usps.map((u, i) => (
+                  <li key={i} className="flex min-w-[15rem] shrink-0 snap-start items-center gap-3 rounded-xl border border-border bg-surface/60 px-4 py-3 sm:min-w-0 sm:flex-col sm:items-start sm:gap-2.5">
+                    <span className="shrink-0 text-foreground">
+                      <SvgIcon name={u.icon} px={30} />
+                    </span>
+                    <span className="min-w-0">
+                      <span className="block text-sm font-semibold leading-snug text-foreground">{u.text}</span>
+                      {u.description ? <span className="block text-xs leading-snug text-muted-foreground">{u.description}</span> : null}
+                    </span>
+                  </li>
                 ))}
+              </ul>
+            ) : null}
+
+            {options.showTags && product.tags && product.tags.length > 0 && (
+              <div className="pt-4 border-t border-border/60">
+                <span className="text-xs font-semibold uppercase tracking-wider text-muted-foreground mr-2">Tags:</span>
+                <div className="inline-flex flex-wrap gap-1.5 mt-1">
+                  {product.tags.map((tag) => (
+                    <span key={tag} className="inline-block rounded-md bg-muted px-2 py-0.5 text-xs text-muted-foreground font-medium">
+                      #{tag}
+                    </span>
+                  ))}
+                </div>
               </div>
-            </div>
-          )}
-        </div>
+            )}
+          </div>
+        </ProductBuyProvider>
       </div>
       {options.stickyMobileBar ? <MobileBuyBar title={product.title} priceLabel={priceLabel} /> : null}
-
-      {/* Product Reviews & Rating Summary */}
-      <ProductReviewsSection productId={product.id} productTitle={product.title} />
     </div>
   );
 }

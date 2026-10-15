@@ -3,6 +3,7 @@ import { renderToStaticMarkup } from "react-dom/server";
 import {
   THEME_SYSTEM_PAGES,
   computeThemeTokens,
+  getBlockDefinition,
   googleFontsHref,
   renderBlockDocument,
   renderBlockTree,
@@ -282,5 +283,54 @@ describe("theme tokens: fonts, buttons and precedence", () => {
     expect(resolveThemeTokens(brand, { source: "theme", colors: { primary: "#00ff00" } })["--bs-primary"]).toBe("#00ff00");
     expect(resolveThemeTokens(brand, { colors: { primary: "#00ff00" } })["--bs-primary"]).toBe("#ff0000");
     expect(resolveThemeTokens(brand, null)["--bs-primary"]).toBe("#ff0000");
+  });
+});
+
+describe("collection grid cards", () => {
+  it("renders borderless cards with the description under the title, only when there is one", () => {
+    const grid = block("cg", "CollectionGrid", { title: "Shop", subtitle: "Browse everything", showAll: true });
+    const html = renderToStaticMarkup(
+      <>
+        {renderBlockTree([grid], {
+          data: { cg: { kind: "collections", collections: [{ slug: "a", title: "Alpha", description: "Small batch." }, { slug: "b", title: "Beta" }] } },
+        })}
+      </>,
+    );
+    expect(html).toContain("Browse everything"); // the heading's description comes from the block's own setting
+    expect(html).toContain('class="bsb-ccard-desc">Small batch.</p>');
+    expect(html.match(/bsb-ccard-desc/g)?.length).toBe(1); // no empty paragraph for a collection without one
+    expect(html).not.toContain("bsb-card "); // not the bordered generic card
+  });
+
+  it("accepts the showAll switch and defaults it off so existing pages are unchanged", () => {
+    const ok = validateBlockDocument({ version: 1, blocks: [block("cg", "CollectionGrid", { title: "x" })] });
+    expect(ok.success && ok.data.blocks[0]?.props["showAll"]).toBeFalsy();
+  });
+
+  it("sets cards per row for desktop, tablet and phone, with safe defaults and rejects other values", () => {
+    const render = (props: Record<string, unknown>) =>
+      renderToStaticMarkup(<>{renderBlockTree([block("cg", "CollectionGrid", props)], { data: { cg: { kind: "collections", collections: [{ slug: "a", title: "A" }] } } })}</>);
+    expect(render({ title: "x" })).toContain("--cols:3;--cols-t:2;--cols-m:1");
+    expect(render({ title: "x", columns: "4", columnsTablet: "1", columnsMobile: "2" })).toContain("--cols:4;--cols-t:1;--cols-m:2");
+    for (const bad of [{ columns: "5" }, { columnsTablet: "3" }, { columnsMobile: "4" }]) {
+      expect(validateBlockDocument({ version: 1, blocks: [block("cg", "CollectionGrid", { title: "x", ...bad })] }).success).toBe(false);
+    }
+  });
+});
+
+describe("collection listing settings", () => {
+  const parse = (props: Record<string, unknown>) => {
+    const r = validateBlockDocument({ version: 1, blocks: [block("c", "CollectionListing", props)] });
+    return r.success ? r.data.blocks[0]?.props : null;
+  };
+
+  it("leaves documents saved before the new settings looking the way they did", () => {
+    expect(parse({})).toMatchObject({ cardStyle: "bordered", showBreadcrumb: true, showAddToCart: false, showCategoryBadge: false, hoverSecondImage: false, showViewToggle: false, filtersCollapsible: false, pageSize: "24", columnsTablet: "2" });
+  });
+
+  it("gives a newly added block the new look, and accepts the new choices only", () => {
+    expect(getBlockDefinition("CollectionListing").defaultProps).toMatchObject({ cardStyle: "borderless", showBreadcrumb: false, showAddToCart: true, showQuickAdd: true, hoverSecondImage: true, pageSize: "12" });
+    expect(parse({ columns: "2", columnsTablet: "1", columnsMobile: "2", defaultView: "list", pageSize: "36" })).toMatchObject({ columns: "2", defaultView: "list", pageSize: "36" });
+    for (const bad of [{ columns: "5" }, { columnsTablet: "3" }, { defaultView: "table" }, { pageSize: "50" }, { cardStyle: "round" }]) expect(parse(bad)).toBeNull();
   });
 });

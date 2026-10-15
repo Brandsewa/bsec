@@ -421,7 +421,8 @@ export async function generateInvoice(
         fy,
         type: invoiceType,
         sellerGstin: sellerGstin ?? null,
-        buyerGstin: input.buyerGstin ?? null,
+        // A business order carries the buyer's GSTIN on its billing address (entered at checkout); an explicit value wins.
+        buyerGstin: input.buyerGstin ?? ((order.billingAddress as { taxId?: string } | null | undefined)?.taxId || null),
         placeOfSupplyState: destinationState,
         totals: totals as unknown as Record<string, unknown>,
         returnId: input.returnId ?? null,

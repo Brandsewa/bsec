@@ -10,6 +10,8 @@ import {
   getStorefrontCollection,
   seedThemeDemoCatalog,
   resolvePageRenderData,
+  createCollection,
+  updateCollection,
   seedDemoStore,
   type Runtime,
   type TenantContext,
@@ -120,6 +122,47 @@ describe("theme demo catalog", () => {
     const od = other.data["g"];
     expect(od?.kind === "collections" ? od.collections.length : -1).toBe(0);
     await one(`update collections set published = true where tenant_id = $1 and slug = 'theme-demo-men'`, [tenantId]);
+  });
+
+  it("collection descriptions: saved as plain text, limited to 300 characters, shown on archive cards, and empty clears it", async () => {
+    const ctx: TenantContext = { tenantId, storeStatus: "live", actor: { type: "system" }, roles: ["store_owner"], permissions: ["products.write", "products.read"], requestId: "req_desc" };
+    const made = await createCollection(rt, ctx, { title: "Described", slug: "theme-demo-described", description: "  Hand-made and small batch.  " });
+    expect(made.description).toBe("Hand-made and small batch.");
+
+    await expect(createCollection(rt, ctx, { title: "Bad", slug: "theme-demo-bad-html", description: "<b>hi</b>" })).rejects.toThrow(/plain text/);
+    await expect(updateCollection(rt, ctx, { id: made.id, description: "x".repeat(301) })).rejects.toThrow(/300/);
+
+    const grid = [{ id: "g", type: "CollectionGrid" as const, version: 1, props: { title: "All", collectionSlugs: [], showAll: true, columns: "3" } }];
+    const seen = async () => {
+      const d = (await resolvePageRenderData(rtStorefront, anon(tenantId), grid as never)).data["g"];
+      return d?.kind === "collections" ? d.collections.find((c) => c.slug === "theme-demo-described") : undefined;
+    };
+    expect((await seen())?.description).toBe("Hand-made and small batch.");
+    await updateCollection(rt, ctx, { id: made.id, description: "   " });
+    expect((await seen())?.description).toBeUndefined();
+  });
+
+  it("listing cards carry what quick add needs: a direct variant for simple products, options and variants for the rest, and stock", async () => {
+    const find = async (slug: string, title: string) => (await getStorefrontCollection(rtStorefront, anon(tenantId), slug))?.products.items.find((p) => p.title === title);
+
+    const saree = await find("theme-demo-sale", "Handloom Saree");
+    expect(saree?.quickAdd?.singleVariantId).toBeTruthy(); // one variant, nothing to choose
+    expect(saree?.quickAdd?.variants).toBeUndefined();
+    expect(saree?.categoryName).toBe("Women");
+
+    const jacket = await find("theme-demo-sale", "Weekender Jacket");
+    expect(jacket?.quickAdd?.singleVariantId).toBeUndefined();
+    expect(jacket?.quickAdd?.options?.map((o) => o.name)).toEqual(["Size", "Color"]);
+    expect(jacket?.quickAdd?.variants).toHaveLength(12);
+    expect(jacket?.quickAdd?.variants?.every((v) => v.inStock && v.compareAtPrice === 399900)).toBe(true);
+
+    const basket = await find("theme-demo-accessories", "Jute Storage Basket"); // no stock at all
+    expect(basket?.quickAdd?.inStock).toBe(false);
+    expect(basket?.quickAdd?.singleVariantId).toBeUndefined(); // an unavailable product must not be addable directly
+
+    const hoodie = (await getStorefrontCollection(rtStorefront, anon(tenantId), "theme-demo-new-arrivals"))?.products.items.find((p) => p.title === "Everyday Hoodie");
+    expect(hoodie?.quickAdd?.variants?.find((v) => v.title === "S/Black")?.inStock).toBe(false); // one sold-out variant among in-stock ones
+    expect(hoodie?.quickAdd?.inStock).toBe(true);
   });
 
   it("is idempotent", async () => {

@@ -5,6 +5,7 @@ import { STORE_PERMISSIONS } from "@bs/auth";
 import type { Runtime } from "../runtime.ts";
 import type { TenantContext } from "../context.ts";
 import { createProduct, createCategory, createCollection, adjustInventory, getProduct, type CreateProductInput } from "../catalog-services.ts";
+import { updateAdminShippingSettings } from "../orders/shipping-rates.ts";
 import { DEMO_SLUG } from "./demo-store.ts";
 
 /**
@@ -158,6 +159,9 @@ export async function seedThemeDemoCatalog(rt: Runtime): Promise<ThemeDemoCatalo
   if (!tenant) throw new Error("Demo store not found. Run the demo seed first (node dist/demo.js seed).");
   const tenantId = tenant.id;
   const ctx = ctxFor(tenantId);
+
+  // The store's own shipping rates (never hardcoded in code, plan rule 12): Rs 50 standard, free from Rs 2,999. Safe to repeat.
+  await updateAdminShippingSettings(rt, ctx, { zoneName: "Domestic (India)", standardRatePaise: 5000, expressRatePaise: 15000, freeShippingThresholdPaise: 299900 });
 
   const existing = await db.execute<{ n: number }>(
     sql`select count(*)::int as n from products where tenant_id = ${tenantId} and ${THEME_DEMO_TAG} = any(tags)`,

@@ -108,7 +108,8 @@ export default async function CollectionDetailPage({
   const sp = await searchParams;
 
   const page = Math.max(1, parseInt(sp.page ?? "1", 10) || 1);
-  const limit = Math.max(1, Math.min(100, parseInt(sp.limit ?? "24", 10) || 24));
+  // "Products per load" comes from the theme's collection template (12 by default); ?limit= is what "Load more" raises.
+  let limit = 12;
   const rawSort = sp.sort ?? "created_desc";
   const inStockOnly = sp.inStockOnly === "true";
 
@@ -138,6 +139,10 @@ export default async function CollectionDetailPage({
 
     // Check if the theme's collection template defines a filterMenuHandle
     template = await getCachedThemePage(tenantId, "collection").catch(() => null);
+    const listingForSize = template?.blocks.find((b) => b.type === "CollectionListing");
+    const templateSize = Number(listingForSize?.props?.["pageSize"]);
+    const defaultLimit = [12, 24, 36].includes(templateSize) ? templateSize : listingForSize ? 24 : 12;
+    limit = Math.max(1, Math.min(100, parseInt(sp.limit ?? "", 10) || defaultLimit));
     let filterMenuHandle: string | undefined = undefined;
     if (template?.blocks) {
       const listingBlock = template.blocks.find((b) => b.type === "CollectionListing");

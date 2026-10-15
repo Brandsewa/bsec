@@ -1,3 +1,6 @@
+/** Shown wherever a product or collection has no picture. The file ships with each app (apps/web, admin and superadmin public folders). */
+export const PLACEHOLDER_IMAGE_URL = "/placeholder.png";
+
 export interface CollectedMediaIds {
   images: string[];
   videos: string[];

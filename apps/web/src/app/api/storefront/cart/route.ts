@@ -3,6 +3,7 @@ import { headers, cookies } from "next/headers";
 import {
   evaluateStorefrontAccess,
   getOrCreateCart,
+  getFreeShippingThresholdPaise,
   checkStorefrontRateLimit,
   RateLimitExceededError,
 } from "@bs/domain";
@@ -73,10 +74,14 @@ export async function GET(req: Request) {
     const existingToken = await getCookieValue(CART_COOKIE_NAME, req);
     const cart = await getOrCreateCart(rt, tenantCtx, existingToken);
 
+    // The store's own free-shipping amount (from its shipping settings), for the mini cart's progress bar. Null when it has none.
+    const freeShippingThresholdPaise = await getFreeShippingThresholdPaise(rt._db.db, access.tenantId).catch(() => null);
+
     const response = NextResponse.json({
       cart,
       itemCount: cart.itemCount,
       subtotal: cart.subtotal,
+      freeShippingThresholdPaise,
     });
 
     // If new token created or cookie not set to current token, set cookie

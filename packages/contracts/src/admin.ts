@@ -558,6 +558,7 @@ export const Collection = z.object({
   id: z.string().uuid(),
   title: z.string(),
   slug: z.string(),
+  description: z.string().nullable().optional(),
   imageMediaId: z.string().uuid().nullable().optional(),
   imageUrl: z.string().nullable().optional(),
   type: z.enum(["manual", "automated"]),
@@ -2413,6 +2414,7 @@ export const adminContract = {
         z.object({
           title: z.string().min(1),
           slug: z.string().optional(),
+          description: z.string().max(300).optional(),
           imageMediaId: z.string().uuid().nullable().optional(),
           type: z.enum(["manual", "automated"]).default("manual"),
           match: z.enum(["all", "any"]).default("all"),
@@ -2443,6 +2445,7 @@ export const adminContract = {
           id: z.string().uuid(),
           title: z.string().min(1).optional(),
           slug: z.string().optional(),
+          description: z.string().max(300).nullable().optional(),
           imageMediaId: z.string().uuid().nullable().optional(),
           type: z.enum(["manual", "automated"]).optional(),
           match: z.enum(["all", "any"]).optional(),

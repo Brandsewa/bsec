@@ -142,6 +142,7 @@ async function loadCollections(tx: Tx, props: Record<string, unknown>): Promise<
       slug: r.slug,
       title: r.title,
       imageMediaId: r.imageMediaId ?? undefined,
+      ...(r.description ? { description: r.description } : {}),
       ...(r.type === "manual" ? { productCount: countById.get(r.id) ?? 0 } : {}),
     }));
   }
@@ -155,7 +156,7 @@ async function loadCollections(tx: Tx, props: Record<string, unknown>): Promise<
   return slugs
     .map((s) => bySlug.get(s))
     .filter((r): r is NonNullable<typeof r> => !!r)
-    .map((r) => ({ slug: r.slug, title: r.title, imageMediaId: r.imageMediaId ?? undefined }));
+    .map((r) => ({ slug: r.slug, title: r.title, imageMediaId: r.imageMediaId ?? undefined, ...(r.description ? { description: r.description } : {}) }));
 }
 
 function extractSlug(url: string, prefix: string): string {

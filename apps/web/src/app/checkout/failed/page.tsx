@@ -3,8 +3,10 @@ import type { Metadata } from "next";
 import { headers } from "next/headers";
 import Link from "next/link";
 import { evaluateStorefrontAccess, getStoreSettings } from "@bs/domain";
+import { DEFAULT_PAGES } from "@bs/blocks";
 import { Button } from "@bs/ui";
 import { server } from "@/server/runtime.ts";
+import { getCachedDefaultPages } from "@/server/cached-storefront.ts";
 
 export const metadata: Metadata = {
   title: "Payment unsuccessful",
@@ -12,12 +14,7 @@ export const metadata: Metadata = {
   robots: { index: false, follow: false },
 };
 
-// Fixed copy per reason code: the query string is never echoed, so a crafted link cannot show shoppers arbitrary text.
-const REASONS: Record<string, string> = {
-  declined: "Your bank declined the payment. No money was taken.",
-  cancelled: "The payment was cancelled before it finished. No money was taken.",
-  error: "Something went wrong while processing the payment. If any money was taken it is returned automatically.",
-};
+// Copy comes from the theme, chosen by reason code: the query string itself is never echoed, so a crafted link cannot show shoppers arbitrary text.
 
 interface FailedPageProps {
   searchParams: Promise<{ reason?: string }>;
@@ -26,14 +23,15 @@ interface FailedPageProps {
 /** Payment failed. The cart is left untouched so the shopper can retry, pick another method (such as cash on delivery) or get help. */
 export default async function CheckoutFailedPage({ searchParams }: FailedPageProps) {
   const { reason } = await searchParams;
-  const message = REASONS[reason ?? ""] ?? REASONS["error"];
 
   const h = await headers();
   const host = h.get("x-forwarded-host") ?? h.get("host") ?? "localhost";
   const { rt } = server();
   const access = await evaluateStorefrontAccess(rt, host, { headers: h });
   let supportEmail: string | null = null;
-  if (access.tenantId) {
+  const copy = (access.tenantId ? await getCachedDefaultPages(access.tenantId) : null)?.paymentFailed ?? DEFAULT_PAGES.paymentFailed;
+  const message = reason === "declined" ? copy.declinedMessage : reason === "cancelled" ? copy.cancelledMessage : copy.errorMessage;
+  if (access.tenantId && copy.showSupportEmail) {
     const settings = await getStoreSettings(rt, {
       tenantId: access.tenantId,
       storeStatus: access.mode ?? "live",
@@ -52,7 +50,7 @@ export default async function CheckoutFailedPage({ searchParams }: FailedPagePro
           <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
         </svg>
       </div>
-      <h1 className="text-3xl font-extrabold tracking-tight text-foreground sm:text-4xl">Payment unsuccessful</h1>
+      <h1 className="text-3xl font-extrabold tracking-tight text-foreground sm:text-4xl">{copy.heading}</h1>
       <p role="alert" className="mt-3 text-base text-muted-foreground">
         {message}
       </p>

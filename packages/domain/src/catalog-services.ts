@@ -1649,6 +1649,7 @@ export async function listCollections(
         title: schema.collections.title,
         slug: schema.collections.slug,
         imageMediaId: schema.collections.imageMediaId,
+        description: schema.collections.description,
         type: schema.collections.type,
         match: schema.collections.match,
         rules: schema.collections.rules,
@@ -1683,6 +1684,7 @@ export async function listCollections(
       title: r.title,
       slug: r.slug,
       imageMediaId: r.imageMediaId,
+      description: r.description,
       imageUrl: r.imageKey ? publicMediaUrl(r.imageKey) : null,
       type: r.type as "manual" | "automated",
       match: (r.match ?? "all") as "all" | "any",
@@ -1711,6 +1713,7 @@ export async function loadCollectionDetailInternal(
         title: schema.collections.title,
         slug: schema.collections.slug,
         imageMediaId: schema.collections.imageMediaId,
+        description: schema.collections.description,
         type: schema.collections.type,
         match: schema.collections.match,
         rules: schema.collections.rules,
@@ -1754,6 +1757,7 @@ export async function loadCollectionDetailInternal(
       title: row.title,
       slug: row.slug,
       imageMediaId: row.imageMediaId,
+      description: row.description,
       imageUrl: row.imageKey ? publicMediaUrl(row.imageKey) : null,
       type: row.type as "manual" | "automated",
       match: (row.match ?? "all") as "all" | "any",
@@ -1798,6 +1802,15 @@ export interface CreateCollectionInput {
   productIds?: string[] | undefined;
 }
 
+/** A collection blurb: plain text, at most 300 characters, empty means none. Shown on archive cards and the archive page. */
+export function cleanCollectionDescription(value: string | null | undefined): string | null {
+  const v = (value ?? "").trim();
+  if (!v) return null;
+  if (v.length > 300) throw new Error("Bad Request: collection description is limited to 300 characters");
+  if (/[<>]/.test(v)) throw new Error("Bad Request: collection description is plain text (no HTML)");
+  return v;
+}
+
 export async function createCollection(
   rt: Runtime,
   ctx: TenantContext,
@@ -1823,6 +1836,7 @@ export async function createCollection(
         title: input.title.trim(),
         slug,
         imageMediaId: input.imageMediaId || null,
+        description: cleanCollectionDescription(input.description),
         type: isAutomated ? "automated" : "manual",
         match: input.match ?? "all",
         rules: isAutomated && input.rules ? input.rules : null,
@@ -1889,6 +1903,7 @@ export interface UpdateCollectionInput {
   title?: string | undefined;
   slug?: string | undefined;
   imageMediaId?: string | null | undefined;
+  description?: string | null | undefined;
   type?: "manual" | "automated" | undefined;
   match?: "all" | "any" | undefined;
   rules?: unknown[] | null | undefined;
@@ -1912,6 +1927,7 @@ export async function updateCollection(
     if (input.title !== undefined) updateValues.title = input.title.trim();
     if (input.slug !== undefined) updateValues.slug = input.slug.trim();
     if (input.imageMediaId !== undefined) updateValues.imageMediaId = input.imageMediaId;
+    if (input.description !== undefined) updateValues.description = cleanCollectionDescription(input.description);
     if (input.type !== undefined) updateValues.type = input.type;
     if (input.match !== undefined) updateValues.match = input.match;
     if (input.rules !== undefined) updateValues.rules = input.rules;

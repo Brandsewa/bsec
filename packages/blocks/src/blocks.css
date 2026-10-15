@@ -161,6 +161,24 @@
   .bsb-carousel > * { flex-basis: calc((100% - (var(--cols, 4) - 1) * 1rem) / var(--cols, 4)); }
 }
 .bsb-card { display: block; text-decoration: none; color: inherit; border: 1px solid var(--b); border-radius: var(--r); overflow: hidden; background: var(--bg); }
+/* Collection cards (CollectionGrid): borderless, rounded image, title and a two-line description underneath. */
+/* The centred section head shrink-wraps its text box, so the title and description are centred inside a narrow left-hand box; let it span the row. */
+.bs-block-collection-grid .bsb-section-head.bsb-align-center > div:first-child { flex: 1 1 100%; }
+.bsb-ccards { row-gap: 2.5rem; column-gap: 1.5rem; padding-top: 1.5rem; }
+/* Cards per row: phone (--cols-m), tablet (--cols-t), desktop (--cols). Doubled class so it beats the generic grid breakpoint. */
+@media (min-width: 640px) { .bsb-grid.bsb-ccards { grid-template-columns: repeat(var(--cols-t, 2), minmax(0, 1fr)); } }
+@media (min-width: 1024px) { .bsb-grid.bsb-ccards { grid-template-columns: repeat(var(--cols, 3), minmax(0, 1fr)); } }
+@media (max-width: 639px) { .bsb-ccards { column-gap: 1rem; row-gap: 2rem; } .bsb-ccard-title { font-size: 1rem; } }
+.bsb-ccard { display: block; text-decoration: none; color: inherit; }
+.bsb-ccard-media { aspect-ratio: 4 / 5; border-radius: var(--r); overflow: hidden; background: var(--s); }
+.bsb-ccard-media img { width: 100%; height: 100%; object-fit: cover; display: block; transition: transform 0.4s ease; }
+.bsb-ccard:hover .bsb-ccard-media img, .bsb-ccard:focus-visible .bsb-ccard-media img { transform: scale(1.03); }
+.bsb-ccard:focus-visible { outline: 2px solid currentColor; outline-offset: 4px; border-radius: var(--r); }
+.bsb-ccard-body { padding-top: 0.875rem; }
+.bsb-ccard-title { font-weight: 600; font-size: 1.0625rem; margin: 0; }
+.bsb-ccard-desc { margin: 0.25rem 0 0; font-size: 0.875rem; line-height: 1.45; color: var(--m); display: -webkit-box; -webkit-line-clamp: 2; line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+@media (min-width: 768px) { .bsb-ccards { column-gap: 2rem; row-gap: 3rem; } }
+@media (prefers-reduced-motion: reduce) { .bsb-ccard-media img { transition: none; } }
 .bsb-card-media { aspect-ratio: 1 / 1; background: var(--s); }
 .bsb-card-media img { width: 100%; height: 100%; object-fit: cover; display: block; }
 .bsb-card-body { padding: 0.75rem; }

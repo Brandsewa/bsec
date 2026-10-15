@@ -23,7 +23,7 @@ describe("Block Registry v1", () => {
 
   it("registers the 12 original home-page block types plus layout, content, conversion, store-chrome and cart blocks", () => {
     expect(BLOCK_TYPES).toEqual(expect.arrayContaining(expectedBlockTypes));
-    expect(BLOCK_TYPES.length).toBe(35);
+    expect(BLOCK_TYPES.length).toBe(36);
   });
 
   for (const type of expectedBlockTypes) {

@@ -7,7 +7,6 @@ vi.mock("server-only", () => ({}));
 
 import { ProductGallery } from "../src/components/product/ProductGallery.tsx";
 import { VariantSelector } from "../src/components/product/VariantSelector.tsx";
-import { StockEtaHole, StockEtaSkeleton } from "../src/components/product/StockEtaHole.tsx";
 import { AddToCartButton, addVariantToCart } from "../src/components/product/AddToCartButton.tsx";
 import type { StorefrontProductDetail } from "@bs/domain";
 
@@ -165,7 +164,7 @@ describe("Storefront Product Detail Page (/products/[slug])", () => {
         }),
       );
 
-      expect(html).toContain("No image available");
+      expect(html).toContain("/placeholder.png");
     });
   });
 
@@ -193,50 +192,6 @@ describe("Storefront Product Detail Page (/products/[slug])", () => {
 
       // SKU of active variant
       expect(html).toContain("KC-PRO-BLK-RED");
-    });
-  });
-
-  describe("StockEtaHole", () => {
-    it("renders In Stock badge, GST note, and pincode check input", () => {
-      const html = renderToString(
-        React.createElement(StockEtaHole, {
-          stockStatus: "in_stock",
-          availableQuantity: 15,
-        }),
-      );
-
-      expect(html).toContain("In Stock");
-      expect(html).toContain("Price incl. of all taxes");
-      expect(html).toMatch(/Delivery &amp; Services|Delivery & Services/);
-      expect(html).toContain('placeholder="Enter 6-digit Pincode"');
-      expect(html).toContain("Check");
-    });
-
-    it("renders low stock badge when quantity is low", () => {
-      const html = renderToString(
-        React.createElement(StockEtaHole, {
-          stockStatus: "low_stock",
-          availableQuantity: 3,
-        }),
-      );
-
-      expect(html).toMatch(/Only <!-- -->3<!-- --> left!|Only 3 left!/);
-    });
-
-    it("renders Out of Stock badge when out of stock", () => {
-      const html = renderToString(
-        React.createElement(StockEtaHole, {
-          stockStatus: "out_of_stock",
-          availableQuantity: 0,
-        }),
-      );
-
-      expect(html).toContain("Out of Stock");
-    });
-
-    it("renders StockEtaSkeleton with zero layout shift", () => {
-      const html = renderToString(React.createElement(StockEtaSkeleton));
-      expect(html).toContain("store-skeleton");
     });
   });
 

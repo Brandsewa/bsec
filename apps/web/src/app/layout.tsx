@@ -5,7 +5,8 @@ import { cacheTag } from "next/cache";
 import { evaluateStorefrontAccess, tenantTag, type getBrandSettings } from "@bs/domain";
 import { server } from "@/server/runtime.ts";
 import { isPlatformMarketingHost } from "@/server/hosts.ts";
-import { getCachedBrandSettings, getCachedStoreName, getCachedThemePage, getCachedThemeTokens } from "@/server/cached-storefront.ts";
+import { getCachedBrandSettings, getCachedDefaultPages, getCachedStoreName, getCachedThemePage, getCachedThemeTokens } from "@/server/cached-storefront.ts";
+import { MiniCartConfigProvider, type MiniCartCopy } from "@/components/storefront/MiniCartConfig.tsx";
 import { StoreHeader } from "@/components/storefront/StoreHeader.tsx";
 import { StoreFooter } from "@/components/storefront/StoreFooter.tsx";
 import { ThemeChrome } from "@/components/storefront/ThemeChrome.tsx";
@@ -91,6 +92,7 @@ export default async function RootLayout({ children }: { children: ReactNode }) 
   // Set when the store uses the theme system (activated a library theme / saved theme settings);
   // otherwise its Branding settings keep deciding the look, exactly as before.
   let activeThemeTokens: Record<string, unknown> | null = null;
+  let miniCartCopy: MiniCartCopy | undefined;
   let themeHeader: Awaited<ReturnType<typeof getCachedThemePage>> = null;
   let themeFooter: Awaited<ReturnType<typeof getCachedThemePage>> = null;
 
@@ -119,6 +121,8 @@ export default async function RootLayout({ children }: { children: ReactNode }) 
       } catch {
         // Fallback to null brand settings
       }
+
+      miniCartCopy = await getCachedDefaultPages(access.tenantId).then((d) => d.miniCart).catch(() => undefined);
 
       try {
         [activeThemeTokens, themeHeader, themeFooter] = await Promise.all([
@@ -190,6 +194,7 @@ export default async function RootLayout({ children }: { children: ReactNode }) 
       </head>
       <body className="flex min-h-dvh flex-col antialiased">
         <WebThemeProvider>
+          <MiniCartConfigProvider copy={miniCartCopy}>
           <StoreStatusBanner isBypass={access.isBypass} mode={access.mode} />
           {themeHeader ? (
             <ThemeChrome blocks={themeHeader.blocks} renderData={themeHeader.renderData} storeName={storeName} />
@@ -202,6 +207,7 @@ export default async function RootLayout({ children }: { children: ReactNode }) 
           ) : (
             <StoreFooter storeName={storeName} />
           )}
+          </MiniCartConfigProvider>
         </WebThemeProvider>
       </body>
     </html>

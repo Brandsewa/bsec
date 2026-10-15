@@ -11,6 +11,7 @@ A theme defined home, collection, product, cart, header and footer. There was no
 - Two kinds of theme page. **Template pages** are block documents stored as `pages` rows (types in `THEME_SYSTEM_PAGES`): home, collections archive (`collections_archive_template`), collection, product, cart, header, footer. **Default pages** (checkout, order success, order status, payment failed, search, 404) are fixed storefront code styled only through the theme's `--bs-*` tokens via the `.bs-skin` wrapper; they are not block-editable and have no `pages` row.
 - The archive reuses the `CollectionGrid` block with an additive `showAll` prop (default false, so the block version is unchanged) that lists every published collection with a product count for manual collections. With no archive template the storefront renders the same block as a built-in default.
 - Cart, checkout and every result page are `noindex`. The failure page shows only fixed copy chosen by a reason code and never echoes the query string.
+- The default pages' copy and switches are stored in the theme tokens (`tokens.defaultPages`), validated as plain text when staff save a draft, and copied to stores with the other tokens on activation. No table or migration is added.
 - Alternate templates per product or collection are **not** part of this decision; the owner deferred them (2026-10-15).
 
 ## Consequences
