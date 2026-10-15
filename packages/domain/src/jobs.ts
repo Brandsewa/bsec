@@ -1086,6 +1086,20 @@ export async function startJobs(opts: {
     },
   );
 
+  // blog.publish_due: flips scheduled posts whose time has come (ADR-033)
+  await boss.work(QUEUE_NAMES.BLOG_PUBLISH_DUE, { localConcurrency: 1 }, async (batch) => {
+    for (const job of batch) {
+      try {
+        const { publishDueBlogPosts } = await import("./blog/due.ts");
+        const res = await publishDueBlogPosts(db);
+        opts.log.info({ job_id: job.id, ...res }, "blog.publish_due processed");
+      } catch (err) {
+        opts.log.error({ err, job_id: job.id }, "blog.publish_due failed");
+        throw err;
+      }
+    }
+  });
+
   // Handle maintenance.watchdog_sweep recurring job (Settings Phase 8 / Slice 8B)
   await boss.work(
     QUEUE_NAMES.MAINTENANCE_WATCHDOG_SWEEP,
@@ -1271,12 +1285,13 @@ export async function startJobs(opts: {
     await boss.schedule(QUEUE_NAMES.ORDER_RETURN_PHOTO_CLEANUP, "0 3 * * *", {});
     await boss.schedule(QUEUE_NAMES.SEGMENTS_REFRESH_COUNTS, "0 */6 * * *", {});
     await boss.schedule(QUEUE_NAMES.MAINTENANCE_WATCHDOG_SWEEP, "* * * * *", {});
+    await boss.schedule(QUEUE_NAMES.BLOG_PUBLISH_DUE, "* * * * *", {});
     await boss.schedule(QUEUE_NAMES.FINANCE_RECONCILE, "0 4 * * *", {});
     await boss.schedule(QUEUE_NAMES.MEDIA_TRASH_SWEEP, "0 22 * * *", {});
     // The web service has no job queue, so new uploads are found here: derived images within a minute, hashes in minutes.
     await boss.schedule(QUEUE_NAMES.MEDIA_BACKFILL_DERIVATIVES, "* * * * *", {});
     await boss.schedule(QUEUE_NAMES.MEDIA_BACKFILL_HASHES, "*/5 * * * *", {});
-    opts.log.info("Registered recurring cron: reservation.expiry, idempotency.cleanup, cart.recovery_sweep, subscription.trial_expiry_sweep, preorder_reminder_sweep, return_photo_cleanup, maintenance.watchdog_sweep, finance.reconcile, media.trash_sweep");
+    opts.log.info("Registered recurring cron: reservation.expiry, idempotency.cleanup, cart.recovery_sweep, subscription.trial_expiry_sweep, preorder_reminder_sweep, return_photo_cleanup, maintenance.watchdog_sweep, finance.reconcile, blog.publish_due, media.trash_sweep");
   } catch (err) {
     opts.log.warn({ err }, "Could not register recurring cron schedules with pg-boss");
   }

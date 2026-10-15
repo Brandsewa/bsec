@@ -31,6 +31,9 @@ export type CacheChange =
   | {
       type: "theme_or_brand_published";
     }
+  | { type: "blog_post_changed"; postId: string; slug?: string | undefined; previousSlug?: string | undefined; categoryId?: string | null | undefined }
+  | { type: "blog_category_changed"; categoryId?: string | undefined }
+  | { type: "blog_settings_changed" }
   | {
       type: "home_page_published";
     }
@@ -138,6 +141,25 @@ export function computeInvalidationTags(
       tags.push(tenantTag(tenantId, "store-shell"));
       break;
     }
+    case "blog_post_changed": {
+      // A post shows in lists, the Recent Posts widget (home or any page), its category pages, the feed and the sitemap.
+      tags.push(tenantTag(tenantId, "blog"));
+      tags.push(tenantTag(tenantId, "blog", change.postId));
+      if (change.categoryId) tags.push(tenantTag(tenantId, "blog", `cat:${change.categoryId}`));
+      tags.push(tenantTag(tenantId, "page", "home"));
+      tags.push(tenantTag(tenantId, "nav"));
+      tags.push(tenantTag(tenantId, "seo"));
+      break;
+    }
+    case "blog_category_changed":
+    case "blog_settings_changed": {
+      tags.push(tenantTag(tenantId, "blog"));
+      if (change.type === "blog_category_changed" && change.categoryId) tags.push(tenantTag(tenantId, "blog", `cat:${change.categoryId}`));
+      tags.push(tenantTag(tenantId, "page", "home"));
+      tags.push(tenantTag(tenantId, "nav"));
+      tags.push(tenantTag(tenantId, "seo"));
+      break;
+    }
     case "home_page_published": {
       // Home page publish -> page:home
       tags.push(tenantTag(tenantId, "page", "home"));
@@ -216,6 +238,12 @@ export function computeInvalidationTags(
           }
           case "brand": {
             tags.push(tenantTag(tenantId, "nav"));
+            break;
+          }
+          case "blog_post":
+          case "blog_category": {
+            tags.push(tenantTag(tenantId, "blog"));
+            tags.push(tenantTag(tenantId, "page", "home"));
             break;
           }
           case "store_branding":

@@ -121,7 +121,7 @@ export const mediaUsages = tenantTable(
     }),
     check(
       "media_usages_owner_type_chk",
-      sql`${t.ownerType} in ('product', 'variant', 'collection', 'category', 'brand', 'page', 'theme', 'store_branding')`,
+      sql`${t.ownerType} in ('product', 'variant', 'collection', 'category', 'brand', 'page', 'theme', 'store_branding', 'blog_post', 'blog_category')`,
     ),
     index("media_usages_tenant_owner_idx").on(t.tenantId, t.ownerType, t.ownerId),
     index("media_usages_tenant_media_idx").on(t.tenantId, t.mediaId),

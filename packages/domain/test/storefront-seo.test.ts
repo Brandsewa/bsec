@@ -536,6 +536,7 @@ describe("Storefront SEO & JSON-LD Structured Data", () => {
               innerJoin: () => chain,
               where: () => chain,
               orderBy: () => Promise.resolve(result),
+              groupBy: () => Promise.resolve(result),
               limit: () => Promise.resolve(result),
               then: (resolve: (val: unknown) => unknown) => Promise.resolve(result).then(resolve),
             };

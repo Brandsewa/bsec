@@ -74,6 +74,7 @@ export const QUEUE_NAMES = {
   MAINTENANCE_START: "maintenance.start",
   MAINTENANCE_END: "maintenance.end",
   MAINTENANCE_WATCHDOG_SWEEP: "maintenance.watchdog_sweep",
+  BLOG_PUBLISH_DUE: "blog.publish_due",
   FINANCE_POST: "finance.post",
   FINANCE_RECONCILE: "finance.reconcile",
   MEDIA_PURGE: "media.purge",

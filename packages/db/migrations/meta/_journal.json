@@ -386,6 +386,13 @@
       "when": 1792300000000,
       "tag": "0060_collection_description",
       "breakpoints": true
+    },
+    {
+      "idx": 55,
+      "version": "7",
+      "when": 1792310000000,
+      "tag": "0061_blog",
+      "breakpoints": true
     }
   ]
 }

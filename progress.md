@@ -3,7 +3,7 @@
 Source of truth: `docs/PLAN.html` v2.0 (build order in `docs/BUILD-PLAN-M2-M9.md`). Items are ticked only after verification; the evidence is noted next to each. "From code" means it was read in the repo but not exercised live.
 
 ## In flight
-- (nothing claimed)
+- claude · `feat/blog-system` · blog system Phase 1 (data, domain, jobs, sitemap), plan `docs/BLOG-PLAN.md`, ADR-033 · 2026-10-15
 
 ## M12 · Theme page set and storefront redesign — shipped to production 2026-10-15
 
