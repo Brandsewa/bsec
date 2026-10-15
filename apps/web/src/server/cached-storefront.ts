@@ -218,6 +218,24 @@ export async function getCachedThemePage(tenantId: string, key: ThemeSystemPageK
   return { blocks: page.blocks, renderData };
 }
 
+/**
+ * The Collection Archive (/collections): the theme's archive template when the store has one, else a default
+ * layout of a single "list every published collection" grid. Same cache tags as the collection pages.
+ */
+export async function getCachedCollectionsArchive(tenantId: string) {
+  "use cache";
+  cacheTag(tenantTag(tenantId, "page", THEME_SYSTEM_PAGES.collections.slug));
+  cacheTag(tenantTag(tenantId, "collection"));
+  const { rt } = server();
+  const tenantCtx = createStorefrontTenantContext(tenantId);
+  const page = await getStorefrontThemePage(rt, tenantCtx, "collections");
+  const blocks: BlockInstance[] = page?.blocks ?? [
+    { id: "default-archive", type: "CollectionGrid", version: 1, props: { title: "Collections", collectionSlugs: [], showAll: true, columns: "3" } },
+  ];
+  const renderData = await loadRenderData(tenantId, tenantCtx, { version: 1, blocks });
+  return { blocks, renderData, usesTheme: Boolean(page) };
+}
+
 /** Theme tokens when the store uses the theme system (see THEME_TOKENS_SOURCE), else null. */
 export async function getCachedThemeTokens(tenantId: string) {
   "use cache";

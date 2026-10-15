@@ -16,6 +16,7 @@ interface ThankYouPageProps {
 export const metadata: Metadata = {
   title: "Thank You for Your Order",
   description: "Order confirmation",
+  robots: { index: false, follow: false },
 };
 
 export default async function ThankYouPage({ params }: ThankYouPageProps) {
@@ -39,7 +40,7 @@ export default async function ThankYouPage({ params }: ThankYouPageProps) {
   };
 
   return (
-    <div className="mx-auto max-w-3xl px-4 py-16 sm:px-6 lg:px-8 text-center">
+    <div className="bs-skin mx-auto max-w-3xl px-4 py-16 sm:px-6 lg:px-8 text-center">
       <div
         className={`mx-auto flex h-20 w-20 items-center justify-center rounded-full mb-6 ${
           cancelled ? "bg-rose-100 text-rose-600 dark:bg-rose-950/40 dark:text-rose-400" : "bg-emerald-100 text-emerald-600 dark:bg-emerald-950/40 dark:text-emerald-400"

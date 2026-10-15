@@ -1,4 +1,4 @@
-import { and, asc, desc, eq, inArray, isNull } from "drizzle-orm";
+import { and, asc, desc, eq, inArray, isNull, sql } from "drizzle-orm";
 import { schema, withTenant } from "@bs/db";
 import {
   collectMediaIds as collectDocumentMediaIds,
@@ -125,6 +125,26 @@ async function enrichShowcaseProducts(tx: Tx, products: BlockProduct[]): Promise
 }
 
 async function loadCollections(tx: Tx, props: Record<string, unknown>): Promise<BlockCollectionSummary[]> {
+  if (props.showAll === true) {
+    // Collection Archive: every published collection, with how many listed products it holds (manual collections; automated ones show no count).
+    const all = await tx.select().from(schema.collections).where(eq(schema.collections.published, true)).orderBy(asc(schema.collections.title)).limit(48);
+    const counts = await tx
+      .select({ collectionId: schema.collectionProducts.collectionId, n: sql<number>`count(*)::int` })
+      .from(schema.collectionProducts)
+      .innerJoin(
+        schema.products,
+        and(eq(schema.products.tenantId, schema.collectionProducts.tenantId), eq(schema.products.id, schema.collectionProducts.productId)),
+      )
+      .where(inArray(schema.products.status, [...LISTED_PRODUCT_STATUSES]))
+      .groupBy(schema.collectionProducts.collectionId);
+    const countById = new Map(counts.map((c) => [c.collectionId, c.n]));
+    return all.map((r) => ({
+      slug: r.slug,
+      title: r.title,
+      imageMediaId: r.imageMediaId ?? undefined,
+      ...(r.type === "manual" ? { productCount: countById.get(r.id) ?? 0 } : {}),
+    }));
+  }
   const slugs = Array.isArray(props.collectionSlugs) ? (props.collectionSlugs as unknown[]).filter((s): s is string => typeof s === "string").slice(0, 12) : [];
   if (slugs.length === 0) return [];
   const rows = await tx

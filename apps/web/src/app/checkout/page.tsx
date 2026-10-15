@@ -10,6 +10,7 @@ import { CART_COOKIE_NAME } from "@/app/api/storefront/cart/route.ts";
 export const metadata: Metadata = {
   title: "Checkout",
   description: "Secure Checkout",
+  robots: { index: false, follow: false },
 };
 
 export default async function CheckoutPage() {
@@ -60,7 +61,7 @@ export default async function CheckoutPage() {
   const paymentOptions = { codEnabled: options.cod.enabled, codFeePaise: options.cod.feePaise, onlineAvailable: options.online.available };
 
   return (
-    <div className="mx-auto max-w-7xl px-4 py-8 sm:px-6 lg:px-8">
+    <div className="bs-skin mx-auto max-w-7xl px-4 py-8 sm:px-6 lg:px-8">
       <h1 className="text-2xl sm:text-3xl font-extrabold tracking-tight text-foreground mb-8">
         Checkout
       </h1>

@@ -119,6 +119,8 @@ export const CollectionGridSchema = z.object({
   title: z.string().min(1),
   subtitle: z.string().optional(),
   collectionSlugs: z.array(z.string()).default([]),
+  /** List every published collection (the Collection Archive page), ignoring collectionSlugs. */
+  showAll: z.boolean().default(false),
   columns: z.enum(["2", "3", "4"]).default("3"),
 });
 export type CollectionGridProps = z.infer<typeof CollectionGridSchema>;
@@ -131,6 +133,7 @@ export const CollectionGridBlock: BlockDefinition<CollectionGridProps> = {
     title: "Shop by Category",
     subtitle: "Find exactly what you are looking for",
     collectionSlugs: [],
+    showAll: false,
     columns: "3",
   },
   render: V.CollectionGridView,

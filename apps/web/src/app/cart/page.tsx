@@ -11,6 +11,7 @@ import { CART_COOKIE_NAME } from "@/app/api/storefront/cart/route.ts";
 export const metadata: Metadata = {
   title: "Shopping Cart",
   description: "View and edit items in your shopping cart.",
+  robots: { index: false, follow: false },
 };
 
 export default async function CartPage() {

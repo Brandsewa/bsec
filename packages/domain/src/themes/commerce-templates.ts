@@ -108,6 +108,12 @@ export const MODERN_TEMPLATE_PRODUCT: BlockInstance[] = [
   }),
 ];
 
+/** Collection archive: a heading and every published collection as a card grid. */
+export const MODERN_TEMPLATE_COLLECTIONS: BlockInstance[] = [
+  b("mc-archive", "CollectionGrid", { title: "Shop by collection", subtitle: "Browse everything we sell", collectionSlugs: [], showAll: true, columns: "3" }),
+  b("mc-archive-usp", "UspStrip", { items: TRUST_ITEMS }),
+];
+
 /** Cart page: the cart first, reassurance under it, one row of discovery. */
 export const MODERN_TEMPLATE_CART: BlockInstance[] = [
   b("mc-cart", "CartContents", {
@@ -155,6 +161,7 @@ export const MODERN_TEMPLATE_HEADER: BlockInstance[] = [
 /** Every page of the theme, keyed as theme_templates.draft_pages stores them. */
 export const MODERN_TEMPLATE_PAGES = {
   home: LAUNCH_TEMPLATE_HOME,
+  collections: MODERN_TEMPLATE_COLLECTIONS,
   collection: MODERN_TEMPLATE_COLLECTION,
   product: MODERN_TEMPLATE_PRODUCT,
   cart: MODERN_TEMPLATE_CART,

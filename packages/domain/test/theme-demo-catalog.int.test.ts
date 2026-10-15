@@ -9,6 +9,7 @@ import {
   createStoreOwner,
   getStorefrontCollection,
   seedThemeDemoCatalog,
+  resolvePageRenderData,
   searchStorefrontProducts,
   seedDemoStore,
   type Runtime,
@@ -101,6 +102,25 @@ describe("theme demo catalog", () => {
     expect(titles.join("|")).not.toMatch(/draft|archived/);
     const empty = await getStorefrontCollection(rtStorefront, anon(tenantId), "theme-demo-empty-collection");
     expect(empty?.products.total).toBe(0);
+  });
+
+  it("the archive grid lists every published collection with product counts, hides unpublished ones and never crosses stores", async () => {
+    const grid = [{ id: "g", type: "CollectionGrid" as const, version: 1, props: { title: "All", collectionSlugs: [], showAll: true, columns: "3" } }];
+    await one(`update collections set published = false where tenant_id = $1 and slug = 'theme-demo-men'`, [tenantId]);
+    const out = await resolvePageRenderData(rtStorefront, anon(tenantId), grid as never);
+    const d = out.data["g"];
+    expect(d?.kind).toBe("collections");
+    const cols = d?.kind === "collections" ? d.collections : [];
+    const slugs = cols.map((c) => c.slug);
+    expect(slugs).toContain("theme-demo-sale");
+    expect(slugs).not.toContain("theme-demo-men"); // unpublished
+    expect(cols.find((c) => c.slug === "theme-demo-sale")?.productCount).toBe(3);
+    expect(cols.find((c) => c.slug === "theme-demo-empty-collection")?.productCount).toBe(0);
+    // the control store has none of these collections: row level security keeps the lists apart
+    const other = await resolvePageRenderData(rtStorefront, anon(controlTenant), grid as never);
+    const od = other.data["g"];
+    expect(od?.kind === "collections" ? od.collections.length : -1).toBe(0);
+    await one(`update collections set published = true where tenant_id = $1 and slug = 'theme-demo-men'`, [tenantId]);
   });
 
   it("is idempotent", async () => {

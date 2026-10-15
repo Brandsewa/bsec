@@ -249,6 +249,11 @@ export function CollectionGridView({ props, ctx }: A<R.CollectionGridProps>): Re
                   </div>
                   <div className="bsb-card-body">
                     <h3 className="bsb-card-title">{c.title}</h3>
+                    {typeof c.productCount === "number" ? (
+                      <p className="bsb-muted">
+                        {c.productCount} {c.productCount === 1 ? "product" : "products"}
+                      </p>
+                    ) : null}
                   </div>
                 </a>
               );

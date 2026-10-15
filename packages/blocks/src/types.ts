@@ -71,6 +71,8 @@ export interface BlockCollectionSummary {
   slug: string;
   title: string;
   imageMediaId?: string | undefined;
+  /** Listed products in the collection; only set where it is cheap to know (archive page, manual collections). */
+  productCount?: number | undefined;
 }
 
 export interface ResolvedMenuItem {

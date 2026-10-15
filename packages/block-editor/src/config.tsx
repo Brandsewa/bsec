@@ -415,7 +415,7 @@ function EditorBlock({ type, props }: { type: BlockType; props: AnyProps }): Rea
 }
 
 /** Which kind of theme page is being edited; limits the block picker to blocks that make sense there. */
-export type EditorPageKind = "home" | "collection" | "product" | "cart" | "header" | "footer" | "custom";
+export type EditorPageKind = "home" | "collections" | "collection" | "product" | "cart" | "header" | "footer" | "custom";
 
 const ONLY: Record<"header" | "footer", BlockType[]> = {
   header: ["SiteHeader", "Banner"],
