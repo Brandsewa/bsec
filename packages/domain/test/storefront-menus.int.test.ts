@@ -24,6 +24,8 @@ import {
 
 let env: TestDb;
 let rt: Runtime;
+/** app_rw, so Row Level Security scopes menu reads to the store as in production (the platform runtime bypasses it). */
+let rtRls: Runtime;
 let ctxA: TenantContext;
 
 const ctxFor = (tenantId: string, ownerId: string): TenantContext => ({
@@ -38,6 +40,7 @@ const ctxFor = (tenantId: string, ownerId: string): TenantContext => ({
 beforeAll(async () => {
   env = await startTestDb();
   rt = createRuntime({ service: "platform", databaseUrl: env.as("app_platform"), poolMax: 5 });
+  rtRls = createRuntime({ service: "web", databaseUrl: env.as("app_rw"), poolMax: 3 });
 
   const a = await provisionTenant(rt, {
     storeName: "menus-tenant-a",
@@ -51,6 +54,7 @@ beforeAll(async () => {
 }, 180_000);
 
 afterAll(async () => {
+  await rtRls?.close();
   await rt?.close();
   await env?.stop();
 });
@@ -239,29 +243,29 @@ describe("menu management and protection (Slice B)", () => {
   });
 
   it("deletes a default menu and does not re-create it when listing or opening menus", async () => {
-    const menus = await listMenus(rt, ctxA);
+    const menus = await listMenus(rtRls, ctxA);
     const footer = menus.find((m) => m.handle === "footer")!;
 
-    await expect(deleteMenu(rt, ctxA, { id: footer.id })).resolves.toEqual({ success: true });
+    await expect(deleteMenu(rtRls, ctxA, { id: footer.id })).resolves.toEqual({ success: true });
 
-    const after = await listMenus(rt, ctxA);
+    const after = await listMenus(rtRls, ctxA);
     expect(after.find((m) => m.handle === "footer")).toBeUndefined();
-    await expect(getMenu(rt, ctxA, { handle: "footer" })).rejects.toThrow(/Menu not found/);
+    await expect(getMenu(rtRls, ctxA, { handle: "footer" })).rejects.toThrow(/Menu not found/);
 
     // The store can start again from scratch under the same handle.
-    const recreated = await createMenu(rt, ctxA, { name: "Footer menu", handle: "footer", items: [] });
+    const recreated = await createMenu(rtRls, ctxA, { name: "Footer menu", handle: "footer", items: [] });
     expect(recreated.handle).toBe("footer");
   });
 
   it("repairs legacy seeded items (no id, no type) when a menu is opened", async () => {
-    await withTenant(rt._db.db, ctxA.tenantId, async (tx) => {
+    await withTenant(rtRls._db.db, ctxA.tenantId, async (tx) => {
       await tx
         .update(schema.menus)
         .set({ items: [{ title: "Home", url: "/" }, { title: "Shop", url: "/collections/all", children: [{ title: "Tea", url: "/collections/tea" }] }] })
         .where(and(eq(schema.menus.tenantId, ctxA.tenantId), eq(schema.menus.handle, "header")));
     });
 
-    const menu = await getMenu(rt, ctxA, { handle: "header" });
+    const menu = await getMenu(rtRls, ctxA, { handle: "header" });
     const items = menu.items as Array<{ id: string; type: string; title: string; children?: Array<{ id: string; type: string }> }>;
     expect(items).toHaveLength(2);
     for (const it of items) {

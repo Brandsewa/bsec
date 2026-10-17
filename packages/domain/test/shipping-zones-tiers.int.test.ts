@@ -28,8 +28,8 @@ const ctxFor = (tenantId: string, ownerId: string, permissions = ["settings.read
 beforeAll(async () => {
   env = await startTestDb();
   rt = createRuntime({ service: "platform", databaseUrl: env.as("app_platform"), poolMax: 5 });
-  const a = await provisionTenant(rt, { storeName: "ship-a", slug: "ship-a", owner: { email: "owner-ship-a@test.com", name: "Owner A" }, planCode: "starter", source: "platform_admin" });
-  const b = await provisionTenant(rt, { storeName: "ship-b", slug: "ship-b", owner: { email: "owner-ship-b@test.com", name: "Owner B" }, planCode: "starter", source: "platform_admin" });
+  const a = await provisionTenant(rt, { storeName: "zt-ship-a", slug: "zt-ship-a", owner: { email: "owner-zt-ship-a@test.com", name: "Owner A" }, planCode: "starter", source: "platform_admin" });
+  const b = await provisionTenant(rt, { storeName: "zt-ship-b", slug: "zt-ship-b", owner: { email: "owner-zt-ship-b@test.com", name: "Owner B" }, planCode: "starter", source: "platform_admin" });
   ctx = ctxFor(a.tenantId, a.ownerId);
   otherCtx = ctxFor(b.tenantId, b.ownerId);
 }, 180_000);
