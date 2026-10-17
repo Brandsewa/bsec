@@ -2,7 +2,7 @@ import { walkBlocks, type BlockInstance } from "@bs/blocks";
 
 const DATA_TYPES = new Set(["ProductGrid", "ProductCarousel", "CollectionGrid", "ProductShowcase", "ReviewsMarquee", "CollectionShowcase"]);
 const DATA_PROPS = ["source", "collectionSlug", "productSlugs", "collectionSlugs", "limit", "tabs", "minRating", "showAll"] as const;
-const MEDIA_PROPS = ["backgroundMediaId", "mediaId"] as const;
+const MEDIA_PROPS = ["backgroundMediaId", "mediaId", "logoMediaId"] as const;
 
 /**
  * Changes only when something that affects server-resolved render data changes (which products a

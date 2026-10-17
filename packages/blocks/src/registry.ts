@@ -623,8 +623,14 @@ export const SiteHeaderSchema = z.object({
   links: z.array(navLinkSchema).max(8).default([]),
   logoText: z.string().max(60).optional(),
   logoMediaId: z.string().optional(),
-  layout: z.enum(["left", "center"]).default("left"),
+  /**
+   * left: logo then menu on the left, icons right. navCenter: logo left, menu in the middle, icons right.
+   * logoCenter: menu left, logo in the middle, icons right. logoRight: icons left, menu, logo right.
+   * center: logo in the middle with the menu on a row below (stacked).
+   */
+  layout: z.enum(["left", "navCenter", "logoCenter", "logoRight", "center"]).default("left"),
   showSearch: z.boolean().default(true),
+  showAccount: z.boolean().default(false),
   showCart: z.boolean().default(true),
   sticky: z.boolean().default(true),
   tone: toneSchema.default("default"),
@@ -643,6 +649,7 @@ export const SiteHeaderBlock: BlockDefinition<SiteHeaderProps> = {
     ],
     layout: "left",
     showSearch: true,
+    showAccount: false,
     showCart: true,
     sticky: true,
     tone: "default",
@@ -652,6 +659,16 @@ export const SiteHeaderBlock: BlockDefinition<SiteHeaderProps> = {
 
 export const SiteFooterSchema = z.object({
   about: z.string().max(300).optional(),
+  /**
+   * columns: brand and about text, then the link columns, then the newsletter. centered: everything centred, the
+   * link columns in one row. compact: one slim row (brand and links), copyright below.
+   */
+  layout: z.enum(["columns", "centered", "compact"]).default("columns"),
+  /** Shown in place of the store name when set; the logo image wins over the text. */
+  logoText: z.string().max(60).optional(),
+  logoMediaId: z.string().optional(),
+  /** On phones each link column folds into an accordion (open one at a time by tapping its title). */
+  mobileAccordion: z.boolean().default(true),
   columns: z
     .array(
       z.object({
@@ -675,6 +692,8 @@ export const SiteFooterBlock: BlockDefinition<SiteFooterProps> = {
   schema: SiteFooterSchema,
   defaultProps: {
     about: "Quality products, delivered with care.",
+    layout: "columns",
+    mobileAccordion: true,
     columns: [
       { title: "Shop", links: [{ label: "All products", href: "/collections/all" }, { label: "Search", href: "/search" }] },
       {

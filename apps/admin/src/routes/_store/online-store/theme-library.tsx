@@ -190,26 +190,30 @@ function ThemePreviewDialog({
 
   return (
     <Dialog open={!!theme} onOpenChange={(open) => !open && onClose()}>
-      <DialogContent className="max-w-5xl">
+      {/* About 80% of the screen so the theme is seen at a real desktop width; the preview area takes the spare height. */}
+      <DialogContent className="flex h-[80vh] w-[80vw] max-w-[80vw] flex-col gap-3 sm:max-w-[80vw]">
         <DialogHeader>
           <DialogTitle>{theme?.name} preview</DialogTitle>
           <DialogDescription>Shown with your store&apos;s own products. Nothing changes until you activate it.</DialogDescription>
         </DialogHeader>
-        <div className="flex flex-wrap gap-2">
-          {available.map((k) => (
-            <Button key={k} size="sm" variant={shown === k ? "primary" : "default"} onClick={() => setPageKey(k)}>
-              {THEME_PAGE_LABELS[k]}
+        <div className="flex flex-wrap items-center gap-2">
+          <div role="tablist" aria-label="Page" className="flex gap-1 rounded-md border border-border p-0.5">
+            {available.map((k) => (
+              <Button key={k} role="tab" aria-selected={shown === k} size="sm" variant="ghost" className="aria-selected:bg-foreground aria-selected:text-background aria-selected:hover:bg-foreground" onClick={() => setPageKey(k)}>
+                {THEME_PAGE_LABELS[k]}
+              </Button>
+            ))}
+          </div>
+          <div role="tablist" aria-label="Screen size" className="flex gap-1 rounded-md border border-border p-0.5">
+            <Button role="tab" aria-selected={!mobile} size="sm" variant="ghost" className="aria-selected:bg-foreground aria-selected:text-background aria-selected:hover:bg-foreground" onClick={() => setMobile(false)}>
+              <Laptop className="mr-1.5 size-3.5" aria-hidden /> Desktop
             </Button>
-          ))}
-          <span className="mx-1 w-px bg-border" aria-hidden />
-          <Button size="sm" variant={mobile ? "default" : "primary"} onClick={() => setMobile(false)}>
-            <Laptop className="mr-1.5 size-3.5" aria-hidden /> Desktop
-          </Button>
-          <Button size="sm" variant={mobile ? "primary" : "default"} onClick={() => setMobile(true)}>
-            <Smartphone className="mr-1.5 size-3.5" aria-hidden /> Mobile
-          </Button>
+            <Button role="tab" aria-selected={mobile} size="sm" variant="ghost" className="aria-selected:bg-foreground aria-selected:text-background aria-selected:hover:bg-foreground" onClick={() => setMobile(true)}>
+              <Smartphone className="mr-1.5 size-3.5" aria-hidden /> Mobile
+            </Button>
+          </div>
         </div>
-        <div className="max-h-[60vh] overflow-auto rounded-md border border-border bg-background">
+        <div className="min-h-0 flex-1 overflow-auto rounded-md border border-border bg-background">
           {previewQuery.isError ? (
             <p role="alert" className="p-4 text-sm text-foreground-2">Could not load the preview: {previewQuery.error.message}</p>
           ) : !previewQuery.data ? (

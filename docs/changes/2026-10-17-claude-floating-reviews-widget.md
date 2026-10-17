@@ -45,6 +45,12 @@ A new BCOM widget, "Floating reviews" (`ReviewsMarquee`), shows the store's publ
 - Local seed (not committed): header, footer and footer-help menus in the demo store, a `demo-store.localhost` domain and live status.
 - Not verified: a real mouse click on Preview in a normal browser (the embedded pane cannot open new windows; I checked the link creation, the preview page and the store editor's `window.open` target).
 
+## Header and Footer tabs, layouts and the theme preview dialog (follow-up 2)
+- The editor's left rail gets **Header** and **Footer** tabs (`HeaderFooterPanels.tsx`, `BlockEditor` `onFrameChange`): they edit the theme's `SiteHeader` / `SiteFooter` block props from any page. Header: five layouts (logo left with menu beside it, menu centred, logo centred, logo right, stacked), menu choice, logo image or text, search / account / cart icons, sticky, background. Footer: three layouts (columns, centred, compact), logo or brand name, about text, up to four link columns each tied to a menu from Online Store > Navigation, mobile accordion switch, newsletter, copyright, background. Super Admin keeps the edits in the theme draft; the store editor saves them as drafts of the header and footer pages with Save draft and publishes them with Publish.
+- Schema (additive, defaults keep old documents valid): `SiteHeader.layout` gains `navCenter`, `logoCenter`, `logoRight`; `showAccount`. `SiteFooter` gains `layout`, `logoText`, `logoMediaId`, `mobileAccordion`. On phones each footer column folds into an accordion (a second copy of the links in the markup, swapped by CSS), so long menus do not stretch the page.
+- Store admin > Themes > Preview: the dialog is 80% of the screen and the Home / Collection / Product and Desktop / Mobile tabs now show their selected state (they were indistinguishable).
+- The "Men collection is narrower than New Arrivals" report could not be reproduced: both pages render the same `max-w-7xl` container in the demo store. Left unchanged; if it comes back, note the URL and whether the store's collection template page exists.
+
 ## Docs updated
 - [x] `docs/ARCHITECTURE.md` (block list)
 - [x] ADR: not needed (new block on the existing pattern)

@@ -48,9 +48,19 @@ export interface EditorFrame {
 }
 
 export const FrameContext = createContext<EditorFrame | null>(null);
+
+/** What the Header and Footer tabs need: the frame and a way to change the SiteHeader / SiteFooter block's props. */
+export interface FrameEdit {
+  frame: EditorFrame;
+  patch: (part: "header" | "footer", patch: Record<string, unknown>) => void;
+  /** The page being edited is itself the header or the footer (its settings are edited on the canvas). */
+  editing: "header" | "footer" | null;
+}
+export const FrameEditContext = createContext<FrameEdit | null>(null);
 export const HostContext = createContext<BlockEditorHost | null>(null);
 export const RenderDataContext = createContext<EditorRenderData>({ data: {}, media: {} });
 
 export const useHost = () => useContext(HostContext);
 export const useFrame = () => useContext(FrameContext);
+export const useFrameEdit = () => useContext(FrameEditContext);
 export const useRenderData = () => useContext(RenderDataContext);

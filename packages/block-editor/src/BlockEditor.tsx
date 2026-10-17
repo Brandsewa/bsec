@@ -5,11 +5,12 @@ import "@bs/blocks/blocks.css";
 import { documentToPuck, puckToDocument, type BlockInstance, type PuckData } from "@bs/blocks";
 import { buildPuckConfig, type EditorPageKind } from "./config.tsx";
 import { useFontLink } from "./fonts.ts";
-import { FrameContext, HostContext, RenderDataContext, type BlockEditorHost, type EditorRenderData } from "./context.tsx";
+import { FrameContext, FrameEditContext, HostContext, RenderDataContext, type BlockEditorHost, type EditorRenderData } from "./context.tsx";
 import { dataSignature } from "./signature.ts";
 import { ThemeSettingsPanel, type ThemeTokens } from "./ThemeSettings.tsx";
 import { EDITOR_VIEWPORTS } from "./viewports.ts";
 import { EditorHeader, EditorHeaderContext, type EditorHeaderState } from "./EditorHeader.tsx";
+import { FooterPanel, HeaderPanel } from "./HeaderFooterPanels.tsx";
 
 export interface BlockEditorProps {
   title: string;
@@ -57,6 +58,11 @@ export interface BlockEditorProps {
    * header or the footer, is left out). Their menus resolve through the same render data as the page.
    */
   frame?: { header: BlockInstance[]; footer: BlockInstance[] } | undefined;
+  /**
+   * Called with the new header or footer blocks when the Header or Footer tab changes a setting. Giving it turns
+   * those tabs on; the host keeps the blocks (the editor stays controlled through `frame`) and saves them.
+   */
+  onFrameChange?: ((part: "header" | "footer", blocks: BlockInstance[]) => void) | undefined;
   /** A page switcher in the toolbar for hosts that edit several pages in one workspace. */
   pages?: { value: string; options: Array<{ value: string; label: string }>; onChange: (value: string) => void } | undefined;
 }
@@ -88,6 +94,28 @@ function ThemePanelFromContext() {
   return state ? <ThemeSettingsPanel tokens={state.tokens} onChange={state.onChange} disabled={state.disabled} note={state.note} /> : <></>;
 }
 
+const railIcon = { width: 20, height: 20, viewBox: "0 0 24 24", fill: "none", stroke: "currentColor", strokeWidth: 2, strokeLinecap: "round", strokeLinejoin: "round", "aria-hidden": true } as const;
+
+function HeaderIcon() {
+  return (
+    <svg {...railIcon}>
+      <rect x="3" y="4" width="18" height="16" rx="2" />
+      <path d="M3 9h18" />
+      <path d="M7 6.5h.01M10 6.5h.01" />
+    </svg>
+  );
+}
+
+function FooterIcon() {
+  return (
+    <svg {...railIcon}>
+      <rect x="3" y="4" width="18" height="16" rx="2" />
+      <path d="M3 15h18" />
+      <path d="M7 17.5h.01M10 17.5h.01" />
+    </svg>
+  );
+}
+
 function ThemeIcon() {
   return (
     <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
@@ -101,7 +129,7 @@ function ThemeIcon() {
 }
 
 
-export function BlockEditor({ title, initialBlocks: initialFromProps, host, themeVars, onSaveDraft, onPublish, onExit, previewHref, onPreview, publishLabel, pageKind, fontsHref, onBlocksChange, externalDirty, height, storeName, themeTokens, onThemeTokensChange, themeSettingsDisabled, themeSettingsNote, exitLabel, pages, frame: frameFromProps }: BlockEditorProps) {
+export function BlockEditor({ title, initialBlocks: initialFromProps, host, themeVars, onSaveDraft, onPublish, onExit, previewHref, onPreview, publishLabel, pageKind, fontsHref, onBlocksChange, externalDirty, height, storeName, themeTokens, onThemeTokensChange, themeSettingsDisabled, themeSettingsNote, exitLabel, pages, frame: frameFromProps, onFrameChange }: BlockEditorProps) {
   useFontLink(fontsHref);
   // The canvas owns the document once mounted: a refetch after saving must not reset it.
   const [initialBlocks] = useState(initialFromProps);
@@ -128,21 +156,40 @@ export function BlockEditor({ title, initialBlocks: initialFromProps, host, them
   const config = useMemo(() => buildPuckConfig({ themeVars: themeVars ?? {}, ...(pageKind ? { pageKind } : {}) }), [themeVars, pageKind]);
   // The theme tab is a Puck sidebar plugin in the same rail as Blocks and Outline, listed first (on top).
   const themeEnabled = Boolean(themeTokens && onThemeTokensChange);
+  const frameEditable = Boolean(onFrameChange);
   const plugins = useMemo(
     () =>
-      themeEnabled
+      themeEnabled || frameEditable
         ? [
-            {
-              name: "theme-settings",
-              label: "Theme",
-              icon: <ThemeIcon />,
-              render: ThemePanelFromContext,
-            },
+            ...(themeEnabled ? [{ name: "theme-settings", label: "Theme", icon: <ThemeIcon />, render: ThemePanelFromContext }] : []),
+            ...(frameEditable
+              ? [
+                  { name: "header-settings", label: "Header", icon: <HeaderIcon />, render: HeaderPanel },
+                  { name: "footer-settings", label: "Footer", icon: <FooterIcon />, render: FooterPanel },
+                ]
+              : []),
             blocksPlugin(),
             outlinePlugin(),
           ]
         : undefined,
-    [themeEnabled],
+    [themeEnabled, frameEditable],
+  );
+  // Header and Footer tabs: a change goes to the host as the whole new block list for that part.
+  const frameEdit = useMemo(
+    () =>
+      onFrameChange && frameFromProps
+        ? {
+            frame,
+            editing: pageKind === "header" || pageKind === "footer" ? pageKind : null,
+            patch: (part: "header" | "footer", patch: Record<string, unknown>) => {
+              const type = part === "header" ? "SiteHeader" : "SiteFooter";
+              const list = frameFromProps[part];
+              const next = list.map((b) => (b.type === type ? { ...b, props: { ...b.props, ...patch } } : b));
+              onFrameChange(part, next);
+            },
+          }
+        : null,
+    [onFrameChange, frameFromProps, frame, pageKind],
   );
   const themePanel = useMemo<ThemePanelState | null>(
     () => (themeTokens && onThemeTokensChange ? { tokens: themeTokens, onChange: onThemeTokensChange, disabled: themeSettingsDisabled, note: themeSettingsNote } : null),
@@ -250,6 +297,7 @@ export function BlockEditor({ title, initialBlocks: initialFromProps, host, them
       <ThemePanelContext.Provider value={themePanel}>
       <EditorHeaderContext.Provider value={headerState}>
       <FrameContext.Provider value={frame}>
+      <FrameEditContext.Provider value={frameEdit}>
       <RenderDataContext.Provider value={{ ...renderData, storeName }}>
         <div style={{ height: height ?? "100vh" }}>
           <Puck
@@ -277,6 +325,7 @@ export function BlockEditor({ title, initialBlocks: initialFromProps, host, them
           />
         </div>
       </RenderDataContext.Provider>
+      </FrameEditContext.Provider>
       </FrameContext.Provider>
       </EditorHeaderContext.Provider>
       </ThemePanelContext.Provider>

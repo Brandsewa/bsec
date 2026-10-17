@@ -845,7 +845,7 @@ export function SiteHeaderView({ props, ctx }: A<R.SiteHeaderProps>): ReactNode 
   const hasResolvedMenu = Array.isArray(menuData) && menuData.length > 0;
 
   return (
-    <header className={cx("bsb bs-block-site-header bsb-site-header", `bsb-tone-${props.tone}`, props.sticky && "bsb-sticky", props.layout === "center" && "bsb-site-header-center")}>
+    <header className={cx("bsb bs-block-site-header bsb-site-header", `bsb-tone-${props.tone}`, props.sticky && "bsb-sticky", props.layout === "center" && "bsb-site-header-center", `bsb-hl-${props.layout}`)}>
       <div className="bsb-w bsb-w-wide bsb-site-header-row">
         {hasResolvedMenu ? (
           <details className="bsb-mobile-menu">
@@ -970,6 +970,12 @@ export function SiteHeaderView({ props, ctx }: A<R.SiteHeaderProps>): ReactNode 
               {SearchIcon}
             </NavLink>
           ) : null}
+          {props.showAccount ? (
+            <NavLink ctx={ctx} href="/account" className="bsb-site-icon">
+              <span className="bsb-sr">Account</span>
+              {UserIcon}
+            </NavLink>
+          ) : null}
           {props.showCart ? (
             ctx?.renderCart ? (
               ctx.renderCart()
@@ -987,51 +993,83 @@ export function SiteHeaderView({ props, ctx }: A<R.SiteHeaderProps>): ReactNode 
 }
 
 export function SiteFooterView({ props, ctx }: A<R.SiteFooterProps>): ReactNode {
-  const name = ctx?.storeName || "Your store";
+  const name = props.logoText || ctx?.storeName || "Your store";
+  const logoUrl = mediaSrc(ctx, props.logoMediaId);
   const year = new Date().getFullYear();
 
   const d = ctx?.blockId ? ctx.data?.[ctx.blockId] : undefined;
   const footerMenus = d && d.kind === "footer-menus" ? d.columns : undefined;
 
+  const columns = props.columns.map((c, i) => {
+    const menuCol = footerMenus ? footerMenus[i] : null;
+    const links = menuCol && menuCol.length > 0 ? menuCol.map((item) => ({ label: item.label, href: item.url })) : c.links;
+    return { key: `${c.title}-${i}`, title: c.title, links };
+  });
+  const linkList = (links: Array<{ label: string; href: string }>) => (
+    <ul className="bsb-site-footer-links">
+      {links.map((l, j) => (
+        <li key={`${l.href}-${j}`}>
+          <NavLink ctx={ctx} href={l.href}>
+            {l.label}
+          </NavLink>
+        </li>
+      ))}
+    </ul>
+  );
+  const brand = (
+    <div className="bsb-site-footer-brand">
+      {logoUrl ? <img src={logoUrl} alt={name} style={{ maxHeight: 44, width: "auto" }} /> : <p className="bsb-heading bsb-h-sm">{name}</p>}
+      {props.about ? <p className="bsb-muted" style={{ marginTop: "0.5rem", fontSize: "0.875rem" }}>{props.about}</p> : null}
+    </div>
+  );
+  // Wide screens show every column open. With the accordion on, phones get the same links as one folded section per
+  // column (a second copy in the markup, swapped by CSS), so a long menu never pushes the page far down.
+  const columnBlocks = columns.map((c) => (
+    <div key={c.key} className="bsb-site-footer-col">
+      <div className="bsb-site-footer-open">
+        <p className="bsb-site-footer-title">{c.title}</p>
+        {linkList(c.links)}
+      </div>
+      {props.mobileAccordion ? (
+        <details className="bsb-site-footer-fold">
+          <summary className="bsb-site-footer-title">
+            <span>{c.title}</span>
+            <svg className="bsb-chevron" viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+              <path d="m6 9 6 6 6-6" />
+            </svg>
+          </summary>
+          {linkList(c.links)}
+        </details>
+      ) : null}
+    </div>
+  ));
+  const newsletter = props.showNewsletter ? (
+    <div className="bsb-site-footer-news">
+      <p className="bsb-site-footer-title">{props.newsletterTitle}</p>
+      <p className="bsb-muted" style={{ fontSize: "0.8125rem", margin: "0.5rem 0 0.75rem" }}>{props.newsletterText}</p>
+      <form className="bsb-form" action="/api/storefront/newsletter/subscribe" method="post" style={{ margin: 0 }}>
+        <input className="bsb-input" type="email" name="email" required placeholder="Your email" aria-label="Email address" />
+        <button className="bsb-btn bsb-btn-primary bsb-btn-sm" type="submit">Subscribe</button>
+      </form>
+    </div>
+  ) : null;
+
   return (
-    <footer className={cx("bsb bs-block-site-footer", `bsb-tone-${props.tone}`)}>
+    <footer className={cx("bsb bs-block-site-footer", `bsb-tone-${props.tone}`, `bsb-fl-${props.layout}`, props.mobileAccordion && "bsb-fl-accordion")}>
       <div className="bsb-w bsb-w-wide bsb-py-lg">
-        <div className="bsb-site-footer-grid">
-          <div>
-            <p className="bsb-heading bsb-h-sm">{name}</p>
-            {props.about ? <p className="bsb-muted" style={{ marginTop: "0.5rem", fontSize: "0.875rem" }}>{props.about}</p> : null}
+        {props.layout === "columns" ? (
+          <div className="bsb-site-footer-grid">
+            {brand}
+            {columnBlocks}
+            {newsletter}
           </div>
-          {props.columns.map((c, i) => {
-            const menuCol = footerMenus ? footerMenus[i] : null;
-            const links = menuCol && menuCol.length > 0
-              ? menuCol.map((item) => ({ label: item.label, href: item.url }))
-              : c.links;
-            return (
-              <div key={`${c.title}-${i}`}>
-                <p className="bsb-site-footer-title">{c.title}</p>
-                <ul className="bsb-site-footer-links">
-                  {links.map((l, j) => (
-                    <li key={`${l.href}-${j}`}>
-                      <NavLink ctx={ctx} href={l.href}>
-                        {l.label}
-                      </NavLink>
-                    </li>
-                  ))}
-                </ul>
-              </div>
-            );
-          })}
-          {props.showNewsletter ? (
-            <div>
-              <p className="bsb-site-footer-title">{props.newsletterTitle}</p>
-              <p className="bsb-muted" style={{ fontSize: "0.8125rem", margin: "0.5rem 0 0.75rem" }}>{props.newsletterText}</p>
-              <form className="bsb-form" action="/api/storefront/newsletter/subscribe" method="post" style={{ margin: 0 }}>
-                <input className="bsb-input" type="email" name="email" required placeholder="Your email" aria-label="Email address" />
-                <button className="bsb-btn bsb-btn-primary bsb-btn-sm" type="submit">Subscribe</button>
-              </form>
-            </div>
-          ) : null}
-        </div>
+        ) : (
+          <div className="bsb-site-footer-stack">
+            {brand}
+            <div className="bsb-site-footer-row">{columnBlocks}</div>
+            {newsletter}
+          </div>
+        )}
         <p className="bsb-muted bsb-align-center" style={{ marginTop: "2.5rem", fontSize: "0.75rem" }}>
           {props.copyright || `© ${year} ${name}. All rights reserved.`}
         </p>
@@ -1286,6 +1324,13 @@ export function HeroSliderView({ props, ctx }: A<R.HeroSliderProps>): ReactNode 
 }
 
 /* --------------------------- product showcase --------------------------- */
+
+const UserIcon = (
+  <svg viewBox="0 0 24 24" width="1.25em" height="1.25em" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+    <circle cx="12" cy="8" r="4" />
+    <path d="M4 21a8 8 0 0 1 16 0" />
+  </svg>
+);
 
 const BAG_ICON = (
   <svg viewBox="0 0 24 24" width="1em" height="1em" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">

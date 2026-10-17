@@ -4,16 +4,22 @@ import { useHost } from "./context.tsx";
 
 const box = { border: "1px solid #ddd", borderRadius: 6, padding: "6px 8px", fontSize: 13, width: "100%" } as const;
 
-function MenuSelect({
+export function MenuSelect({
   value,
   onChange,
   name,
   label,
+  bare,
+  noDefault,
 }: {
   value: string | undefined;
   onChange: (v: string | undefined) => void;
   name: string;
   label: string;
+  /** No label or help line (the caller draws its own). */
+  bare?: boolean | undefined;
+  /** The empty choice means "no menu" (the block's typed links) instead of the default menu. */
+  noDefault?: boolean | undefined;
 }) {
   const host = useHost();
   const [menus, setMenus] = useState<Array<{ handle: string; title: string }>>([
@@ -49,16 +55,18 @@ function MenuSelect({
 
   return (
     <div>
-      <label htmlFor={name} style={{ fontSize: 12, fontWeight: 600, display: "block", marginBottom: 6 }}>
-        {label}
-      </label>
+      {bare ? null : (
+        <label htmlFor={name} style={{ fontSize: 12, fontWeight: 600, display: "block", marginBottom: 6 }}>
+          {label}
+        </label>
+      )}
       <select
         id={name}
         value={currentValue}
         onChange={(e) => onChange(e.target.value || undefined)}
         style={box}
       >
-        <option value="">Default menu</option>
+        <option value="">{noDefault ? "No menu (use the typed links)" : "Default menu"}</option>
         {menus.map((m) => (
           <option key={m.handle} value={m.handle}>
             {m.title}
@@ -68,9 +76,11 @@ function MenuSelect({
           <option value={currentValue}>{currentValue} (custom)</option>
         ) : null}
       </select>
-      <span style={{ fontSize: 11, color: "#666", display: "block", marginTop: 4 }}>
-        Choose a menu created in Online Store &gt; Navigation
-      </span>
+      {bare ? null : (
+        <span style={{ fontSize: 11, color: "#666", display: "block", marginTop: 4 }}>
+          Choose a menu created in Online Store &gt; Navigation
+        </span>
+      )}
     </div>
   );
 }

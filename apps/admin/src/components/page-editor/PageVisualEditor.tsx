@@ -27,9 +27,14 @@ export default function PageVisualEditor({ pageId, canPublish, storeName }: { pa
   const footerId = pagesListQuery.data?.find((p) => p.type === "footer")?.id;
   const headerQuery = useQuery({ ...orpc.admin.pages.get.queryOptions({ input: { id: headerId ?? "", draft: true } }), enabled: Boolean(headerId) });
   const footerQuery = useQuery({ ...orpc.admin.pages.get.queryOptions({ input: { id: footerId ?? "", draft: true } }), enabled: Boolean(footerId) });
+  // Changes made in the Header and Footer tabs are held here and saved with the page (Save draft) and published with it.
+  const [frameEdits, setFrameEdits] = useState<{ header?: BlockInstance[]; footer?: BlockInstance[] }>({});
   const frame = useMemo(
-    () => ({ header: (headerQuery.data?.blocks ?? []) as BlockInstance[], footer: (footerQuery.data?.blocks ?? []) as BlockInstance[] }),
-    [headerQuery.data, footerQuery.data],
+    () => ({
+      header: frameEdits.header ?? ((headerQuery.data?.blocks ?? []) as BlockInstance[]),
+      footer: frameEdits.footer ?? ((footerQuery.data?.blocks ?? []) as BlockInstance[]),
+    }),
+    [headerQuery.data, footerQuery.data, frameEdits],
   );
 
   // Theme settings edited from the sidebar's Theme tab. They go live when the page is published (like the
@@ -140,8 +145,25 @@ export default function PageVisualEditor({ pageId, canPublish, storeName }: { pa
     ]);
 
 
+  const framePages: Array<["header" | "footer", string | undefined]> = [["header", headerId], ["footer", footerId]];
+  /** Saves the header/footer edits as drafts of their own pages; returns the version ids so Publish can publish them. */
+  const saveFrame = async () => {
+    const saved: Array<{ id: string; versionId: string }> = [];
+    for (const [part, id] of framePages) {
+      const blocks = frameEdits[part];
+      if (!blocks || !id || id === pageId) continue;
+      const r = await client.admin.pages.saveDraft({ id, blocks });
+      saved.push({ id, versionId: r.versionId });
+    }
+    if (saved.length > 0) {
+      setFrameEdits({});
+      await Promise.all([headerQuery.refetch(), footerQuery.refetch()]);
+    }
+    return saved;
+  };
   const saveDraft = async (blocks: BlockInstance[]) => {
     await client.admin.pages.saveDraft({ id: pageId, blocks });
+    await saveFrame();
     await refresh();
   };
 
@@ -155,6 +177,7 @@ export default function PageVisualEditor({ pageId, canPublish, storeName }: { pa
         storeName={storeName}
         pageKind={kind}
         frame={frame}
+        onFrameChange={canPublish ? (part, blocks) => setFrameEdits((e) => ({ ...e, [part]: blocks })) : undefined}
         previewHref={previewHref}
         fontsHref={fontsHref}
         pages={
@@ -172,6 +195,7 @@ export default function PageVisualEditor({ pageId, canPublish, storeName }: { pa
           // Publish exactly what is on the canvas: save it as a new version, then point the page at it.
           const { versionId } = await client.admin.pages.saveDraft({ id: pageId, blocks });
           await client.admin.pages.publish({ id: pageId, versionId });
+          for (const s of await saveFrame()) await client.admin.pages.publish({ id: s.id, versionId: s.versionId });
           if (editedTokens) {
             await client.admin.themes.update({ tokens: editedTokens });
             await Promise.all([
@@ -183,7 +207,7 @@ export default function PageVisualEditor({ pageId, canPublish, storeName }: { pa
           await refresh();
         }}
         onExit={exit}
-        externalDirty={editedTokens !== null}
+        externalDirty={editedTokens !== null || Object.keys(frameEdits).length > 0}
         themeTokens={tokens ?? undefined}
         onThemeTokensChange={setEditedTokens}
         themeSettingsDisabled={!canPublish}

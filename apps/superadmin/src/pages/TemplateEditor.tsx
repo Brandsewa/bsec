@@ -84,6 +84,7 @@ function Workspace({
   const [defaultPages, setDefaultPages] = useState<DefaultPages>(() => resolveDefaultPages((initialTokens as Record<string, unknown>)["defaultPages"]));
   const [saving, setSaving] = useState(false);
 
+  const frame = useMemo(() => ({ header: pages["header"] ?? [], footer: pages["footer"] ?? [] }), [pages]);
   const themeVars = useMemo(() => computeThemeTokens(null, tokens), [tokens]);
   const fontsHref = useMemo(() => googleFontsHref(tokens), [tokens]);
 
@@ -149,7 +150,11 @@ function Workspace({
             title={`${active.label} · ${name}`}
             height="100%"
             pageKind={"kind" in active ? active.kind : "custom"}
-            frame={{ header: pages["header"] ?? [], footer: pages["footer"] ?? [] }}
+            frame={frame}
+            onFrameChange={(part, blocks) => {
+              setPages((p) => ({ ...p, [part]: blocks }));
+              setDirty(true);
+            }}
             initialBlocks={pages[tab] ?? []}
             host={host}
             themeVars={themeVars}

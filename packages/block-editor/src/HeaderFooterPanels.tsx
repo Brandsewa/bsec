@@ -1,0 +1,224 @@
+import { useState, type CSSProperties, type ReactNode } from "react";
+import type { BlockInstance } from "@bs/blocks";
+import { Dropdown, type DropdownOption } from "./Dropdown.tsx";
+import { MenuSelect } from "./MenuField.tsx";
+import { Picker } from "./MediaField.tsx";
+import { useFrameEdit } from "./context.tsx";
+
+/**
+ * The Header and Footer tabs of the editor's left rail. They edit the theme's header and footer blocks from any page
+ * (the canvas shows them read-only around the page), so layout, icons, logo and menus are managed in one place. The
+ * values live in the SiteHeader / SiteFooter block's props, exactly what the Header and Footer pages edit.
+ */
+
+const label: CSSProperties = { display: "block", fontSize: 11, fontWeight: 600, marginBottom: 3 };
+const input: CSSProperties = { width: "100%", boxSizing: "border-box", border: "1px solid #d4d4d8", borderRadius: 7, padding: "4px 8px", fontSize: 12, background: "#fff", color: "#111", fontFamily: "inherit" };
+const box: CSSProperties = { display: "grid", gridTemplateColumns: "minmax(0, 1fr)", gap: 12, padding: "12px 12px 20px", boxSizing: "border-box", width: "100%", minWidth: 0, overflowX: "hidden" };
+
+const HEADER_LAYOUTS: DropdownOption[] = [
+  { value: "left", label: "Logo left, menu next to it" },
+  { value: "navCenter", label: "Logo left, menu in the middle" },
+  { value: "logoCenter", label: "Menu left, logo in the middle" },
+  { value: "logoRight", label: "Logo right, menu left" },
+  { value: "center", label: "Stacked: logo in the middle, menu below" },
+];
+const FOOTER_LAYOUTS: DropdownOption[] = [
+  { value: "columns", label: "Columns: brand, link columns, newsletter" },
+  { value: "centered", label: "Centred: brand on top, link columns in a row" },
+  { value: "compact", label: "Compact: brand and links side by side" },
+];
+const TONES: DropdownOption[] = [
+  { value: "default", label: "Plain" },
+  { value: "surface", label: "Soft background" },
+  { value: "primary", label: "Brand colour" },
+];
+
+/** A tiny diagram of each header layout, so the choice is visible and not only worded. */
+function LayoutPreview({ layout }: { layout: string }) {
+  const bar = (x: number, y: number, w: number, h = 4, o = 0.35) => <rect x={x} y={y} width={w} height={h} rx={2} fill="currentColor" opacity={o} />;
+  const common = { width: "100%", height: 34, viewBox: "0 0 120 34", "aria-hidden": true } as const;
+  const logo = (x: number, y = 14) => bar(x, y, 18, 6, 0.9);
+  const nav = (x: number, y = 16) => [bar(x, y, 12), bar(x + 16, y, 12), bar(x + 32, y, 12)];
+  const icons = (x: number, y = 15) => [<circle key="a" cx={x} cy={y + 2} r={3} fill="currentColor" opacity={0.6} />, <circle key="b" cx={x + 10} cy={y + 2} r={3} fill="currentColor" opacity={0.6} />];
+  return (
+    <svg {...common} style={{ background: "#f4f4f5", borderRadius: 6, color: "#3f3f46" }}>
+      {layout === "left" && (<>{logo(8)}{nav(34)}{icons(100)}</>)}
+      {layout === "navCenter" && (<>{logo(8)}{nav(40)}{icons(100)}</>)}
+      {layout === "logoCenter" && (<>{nav(8)}{logo(51)}{icons(100)}</>)}
+      {layout === "logoRight" && (<>{icons(8)}{nav(30)}{logo(94)}</>)}
+      {layout === "center" && (<>{logo(51, 7)}{nav(38, 22)}{icons(100, 6)}</>)}
+    </svg>
+  );
+}
+
+function Field({ title, hint, children }: { title: string; hint?: string | undefined; children: ReactNode }) {
+  return (
+    <div style={{ minWidth: 0 }}>
+      <span style={label}>{title}</span>
+      {children}
+      {hint ? <span style={{ display: "block", fontSize: 11, color: "#71717a", marginTop: 3 }}>{hint}</span> : null}
+    </div>
+  );
+}
+
+function Toggle({ id, text, checked, onChange }: { id: string; text: string; checked: boolean; onChange: (v: boolean) => void }) {
+  return (
+    <label htmlFor={id} style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 12, cursor: "pointer" }}>
+      <input id={id} type="checkbox" checked={checked} onChange={(e) => onChange(e.target.checked)} />
+      {text}
+    </label>
+  );
+}
+
+function Group({ title, children }: { title: string; children: ReactNode }) {
+  return (
+    <div style={{ display: "grid", gridTemplateColumns: "minmax(0, 1fr)", gap: 10, paddingTop: 10, borderTop: "1px solid #eee" }}>
+      <span style={{ fontSize: 12, fontWeight: 700 }}>{title}</span>
+      {children}
+    </div>
+  );
+}
+
+function Text({ value, onChange, name, max, area }: { value: string; onChange: (v: string) => void; name: string; max?: number; area?: boolean }) {
+  // Keyed by nothing: the field keeps its own text while typing, the block gets every change.
+  const [text, setText] = useState(value);
+  const common = {
+    id: name,
+    value: text,
+    maxLength: max,
+    onChange: (e: { target: { value: string } }) => {
+      setText(e.target.value);
+      onChange(e.target.value);
+    },
+    style: input,
+  };
+  return area ? <textarea rows={3} {...common} /> : <input type="text" {...common} />;
+}
+
+function Unavailable({ children }: { children: ReactNode }) {
+  return <p style={{ margin: 0, padding: 12, fontSize: 12, color: "#52525b", lineHeight: 1.5 }}>{children}</p>;
+}
+
+const asBool = (v: unknown, fallback: boolean) => (typeof v === "boolean" ? v : fallback);
+const asStr = (v: unknown, fallback = "") => (typeof v === "string" ? v : fallback);
+
+function useBlock(part: "header" | "footer"): { block: BlockInstance | undefined; props: Record<string, unknown>; set: (patch: Record<string, unknown>) => void; self: boolean } | null {
+  const edit = useFrameEdit();
+  if (!edit) return null;
+  const type = part === "header" ? "SiteHeader" : "SiteFooter";
+  const block = (part === "header" ? edit.frame.header : edit.frame.footer).find((b) => b.type === type);
+  return { block, props: (block?.props ?? {}) as Record<string, unknown>, set: (patch) => edit.patch(part, patch), self: edit.editing === part };
+}
+
+export function HeaderPanel() {
+  const h = useBlock("header");
+  if (!h) return <></>;
+  if (h.self) return <Unavailable>You are editing the header itself. Click it on the page to change its settings, or open any other page to manage the header from here.</Unavailable>;
+  if (!h.block) return <Unavailable>This theme has no header yet. Open the Header page and add one.</Unavailable>;
+  const p = h.props;
+  const layout = asStr(p["layout"], "left");
+  return (
+    <div style={box}>
+      <Field title="Layout" hint="Where the logo, the menu and the icons sit.">
+        <LayoutPreview layout={layout} />
+        <div style={{ marginTop: 6 }}>
+          <Dropdown ariaLabel="Header layout" value={layout} options={HEADER_LAYOUTS} onChange={(v) => h.set({ layout: v })} />
+        </div>
+      </Field>
+      <Group title="Menu and logo">
+        <Field title="Navigation menu" hint="Choose a menu made in Online Store > Navigation.">
+          <MenuSelect name="hf-header-menu" label="" value={asStr(p["menuHandle"]) || undefined} onChange={(v) => h.set({ menuHandle: v })} bare />
+        </Field>
+        <Picker label="Logo image" value={asStr(p["logoMediaId"]) || undefined} onChange={(v) => h.set({ logoMediaId: v })} accept={["image"]} />
+        <Field title="Logo text" hint="Used when there is no logo image. Empty uses the store name.">
+          <Text name="hf-header-logo" value={asStr(p["logoText"])} max={60} onChange={(v) => h.set({ logoText: v || undefined })} />
+        </Field>
+      </Group>
+      <Group title="Icons">
+        <Toggle id="hf-h-search" text="Search" checked={asBool(p["showSearch"], true)} onChange={(v) => h.set({ showSearch: v })} />
+        <Toggle id="hf-h-account" text="Account (sign in)" checked={asBool(p["showAccount"], false)} onChange={(v) => h.set({ showAccount: v })} />
+        <Toggle id="hf-h-cart" text="Cart" checked={asBool(p["showCart"], true)} onChange={(v) => h.set({ showCart: v })} />
+      </Group>
+      <Group title="Behaviour and colour">
+        <Toggle id="hf-h-sticky" text="Stay at the top while scrolling" checked={asBool(p["sticky"], true)} onChange={(v) => h.set({ sticky: v })} />
+        <Field title="Background">
+          <Dropdown ariaLabel="Header background" value={asStr(p["tone"], "default")} options={TONES} onChange={(v) => h.set({ tone: v })} />
+        </Field>
+      </Group>
+    </div>
+  );
+}
+
+type Col = { title: string; menuHandle?: string | undefined; links: Array<{ label: string; href: string }> };
+
+export function FooterPanel() {
+  const f = useBlock("footer");
+  if (!f) return <></>;
+  if (f.self) return <Unavailable>You are editing the footer itself. Click it on the page to change its settings, or open any other page to manage the footer from here.</Unavailable>;
+  if (!f.block) return <Unavailable>This theme has no footer yet. Open the Footer page and add one.</Unavailable>;
+  const p = f.props;
+  const columns = (Array.isArray(p["columns"]) ? (p["columns"] as Col[]) : []).slice(0, 4);
+  const setColumn = (i: number, patch: Partial<Col>) => f.set({ columns: columns.map((c, j) => (j === i ? { ...c, ...patch } : c)) });
+  return (
+    <div style={box}>
+      <Field title="Layout" hint="The footer's overall arrangement.">
+        <Dropdown ariaLabel="Footer layout" value={asStr(p["layout"], "columns")} options={FOOTER_LAYOUTS} onChange={(v) => f.set({ layout: v })} />
+      </Field>
+      <Group title="Brand">
+        <Picker label="Logo image" value={asStr(p["logoMediaId"]) || undefined} onChange={(v) => f.set({ logoMediaId: v })} accept={["image"]} />
+        <Field title="Brand name" hint="Used when there is no logo image. Empty uses the store name.">
+          <Text name="hf-footer-logo" value={asStr(p["logoText"])} max={60} onChange={(v) => f.set({ logoText: v || undefined })} />
+        </Field>
+        <Field title="About text">
+          <Text name="hf-footer-about" area value={asStr(p["about"])} max={300} onChange={(v) => f.set({ about: v || undefined })} />
+        </Field>
+      </Group>
+      <Group title="Link columns (up to 4)">
+        <span style={{ fontSize: 11, color: "#71717a" }}>Make the menus in Online Store &gt; Navigation (for example Footer 1 to Footer 4), then choose one for each column. Long menus fold into an accordion on phones.</span>
+        {columns.map((c, i) => (
+          <div key={i} style={{ display: "grid", gridTemplateColumns: "minmax(0, 1fr)", gap: 8, border: "1px solid #e4e4e7", borderRadius: 8, padding: 10, boxSizing: "border-box" }}>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+              <span style={{ fontSize: 11, fontWeight: 700 }}>Column {i + 1}</span>
+              <button type="button" onClick={() => f.set({ columns: columns.filter((_, j) => j !== i) })} style={{ border: 0, background: "none", color: "#b91c1c", fontSize: 11, cursor: "pointer", padding: 0 }}>
+                Remove
+              </button>
+            </div>
+            <Field title="Heading">
+              <Text name={`hf-footer-col-${i}`} value={c.title} max={60} onChange={(v) => setColumn(i, { title: v || "Links" })} />
+            </Field>
+            <Field title="Menu">
+              <MenuSelect name={`hf-footer-menu-${i}`} label="" value={c.menuHandle || undefined} onChange={(v) => setColumn(i, { menuHandle: v })} bare noDefault />
+            </Field>
+          </div>
+        ))}
+        {columns.length < 4 ? (
+          <button type="button" onClick={() => f.set({ columns: [...columns, { title: `Column ${columns.length + 1}`, links: [] }] })} style={{ border: "1px dashed #a1a1aa", background: "none", borderRadius: 8, padding: "6px 10px", fontSize: 12, cursor: "pointer" }}>
+            + Add a column
+          </button>
+        ) : null}
+        <Toggle id="hf-f-acc" text="Fold each column into an accordion on phones" checked={asBool(p["mobileAccordion"], true)} onChange={(v) => f.set({ mobileAccordion: v })} />
+      </Group>
+      <Group title="Newsletter">
+        <Toggle id="hf-f-news" text="Show the newsletter sign-up" checked={asBool(p["showNewsletter"], true)} onChange={(v) => f.set({ showNewsletter: v })} />
+        {asBool(p["showNewsletter"], true) ? (
+          <>
+            <Field title="Heading">
+              <Text name="hf-footer-news-title" value={asStr(p["newsletterTitle"], "Newsletter")} max={80} onChange={(v) => f.set({ newsletterTitle: v || "Newsletter" })} />
+            </Field>
+            <Field title="Text">
+              <Text name="hf-footer-news-text" value={asStr(p["newsletterText"])} max={200} onChange={(v) => f.set({ newsletterText: v })} />
+            </Field>
+          </>
+        ) : null}
+      </Group>
+      <Group title="Bottom line and colour">
+        <Field title="Copyright line" hint="Empty writes it automatically.">
+          <Text name="hf-footer-copy" value={asStr(p["copyright"])} max={200} onChange={(v) => f.set({ copyright: v || undefined })} />
+        </Field>
+        <Field title="Background">
+          <Dropdown ariaLabel="Footer background" value={asStr(p["tone"], "surface")} options={TONES} onChange={(v) => f.set({ tone: v })} />
+        </Field>
+      </Group>
+    </div>
+  );
+}
