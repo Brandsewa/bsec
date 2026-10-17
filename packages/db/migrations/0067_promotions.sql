@@ -59,14 +59,8 @@ CREATE INDEX "tenant_promotions_due_idx" ON "tenant_promotions" ("status","ends_
 --> statement-breakpoint
 CREATE UNIQUE INDEX "tenant_promotions_one_active_per_tenant" ON "tenant_promotions" ("tenant_id") WHERE "status" = 'active';
 --> statement-breakpoint
+-- Platform-only tables: the default privileges hand every new table to app_rw, so take it back. The platform service
+-- (app_platform) manages them; self-service signup (app_saas) may redeem codes (see saas-grants.ts).
+REVOKE ALL ON TABLE "promotions", "tenant_promotions" FROM "app_rw";
+--> statement-breakpoint
 GRANT SELECT, INSERT, UPDATE, DELETE ON TABLE "promotions", "tenant_promotions" TO "app_platform";
---> statement-breakpoint
-GRANT SELECT, INSERT, UPDATE ON TABLE "promotions", "tenant_promotions" TO "app_rw";
---> statement-breakpoint
-DO $$
-BEGIN
-  -- app_saas only exists where self-service signup is configured; it redeems promo codes while creating a store.
-  IF EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'app_saas') THEN
-    GRANT SELECT, INSERT, UPDATE ON TABLE "promotions", "tenant_promotions" TO "app_saas";
-  END IF;
-END $$;

@@ -18,6 +18,9 @@ export const APP_SAAS_WRITABLE_TABLES = [
   "platform_invoices",
   "quota_events",
   "tenant_owner_invites",
+  // Promo codes are redeemed while a store is created (ADR-035).
+  "promotions",
+  "tenant_promotions",
 ] as const;
 
 export const APP_SAAS_GRANTS_SQL = `
