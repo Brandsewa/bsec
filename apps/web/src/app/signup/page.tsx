@@ -69,6 +69,8 @@ function SignupContent() {
 
   // Wizard state (Steps 1 to 5)
   const [step, setStep] = useState<1 | 2 | 3 | 4 | 5>(1);
+  const [showPassword, setShowPassword] = useState(false);
+  const [promoCode, setPromoCode] = useState(searchParams.get("promo") || "");
 
   // Form fields
   const [storeName, setStoreName] = useState(searchParams.get("storeName") || "");
@@ -274,6 +276,7 @@ function SignupContent() {
             phone: phone.trim() || undefined,
           },
           planCode: selectedPlan,
+          ...(promoCode.trim() ? { promoCode: promoCode.trim() } : {}),
           themeTemplate: selectedTemplate,
           currency: "INR",
           timezone: "Asia/Kolkata",
@@ -529,14 +532,42 @@ function SignupContent() {
               <label className="bm-label">
                 Password
               </label>
+              <div style={{ position: "relative" }}>
+                <input
+                  type={showPassword ? "text" : "password"}
+                  placeholder="At least 10 characters"
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
+                  className="bm-input"
+                  style={{ paddingRight: "3rem" }}
+                  autoComplete="new-password"
+                  required
+                  minLength={10}
+                />
+                <button
+                  type="button"
+                  onClick={() => setShowPassword((v) => !v)}
+                  aria-label={showPassword ? "Hide password" : "Show password"}
+                  aria-pressed={showPassword}
+                  style={{ position: "absolute", top: 0, bottom: 0, right: 0, width: "3rem", background: "transparent", border: 0, color: "inherit", opacity: 0.7, cursor: "pointer", fontSize: "0.75rem" }}
+                >
+                  {showPassword ? "Hide" : "Show"}
+                </button>
+              </div>
+            </div>
+
+            <div>
+              <label className="bm-label">
+                Promo code (optional)
+              </label>
               <input
-                type="password"
-                placeholder="At least 10 characters"
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
+                type="text"
+                placeholder="e.g. LAUNCH2026"
+                value={promoCode}
+                onChange={(e) => setPromoCode(e.target.value)}
                 className="bm-input"
-                required
-                minLength={10}
+                autoComplete="off"
+                maxLength={32}
               />
             </div>
 

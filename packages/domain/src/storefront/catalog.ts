@@ -1305,6 +1305,69 @@ export async function getStorefrontCategory(
   });
 }
 
+export interface StorefrontCategoryCard {
+  id: string;
+  parentId: string | null;
+  name: string;
+  slug: string;
+  description: string | null;
+  imageUrl: string | undefined;
+  imageAlt: string | null;
+  /** Products visible in the storefront under this category. */
+  productCount: number;
+}
+
+/**
+ * Every active category that has at least one listed product, for the storefront's categories page (the category
+ * counterpart of the collections archive). Top-level categories first, then their children, each in the owner's order.
+ * Empty when the catalog feature is off.
+ */
+export async function listStorefrontCategories(rt: Runtime, ctx: TenantContext): Promise<StorefrontCategoryCard[]> {
+  const db = rt._db.db;
+  if (!(await isFeatureEnabled(db, ctx.tenantId, "catalog"))) return [];
+
+  return withTenant(db, ctx.tenantId, async (tx) => {
+    const counts = await tx
+      .select({ categoryId: schema.productCategories.categoryId, n: sql<number>`count(*)::int` })
+      .from(schema.productCategories)
+      .innerJoin(
+        schema.products,
+        and(eq(schema.products.tenantId, schema.productCategories.tenantId), eq(schema.products.id, schema.productCategories.productId)),
+      )
+      .where(and(inArray(schema.products.status, [...LISTED_PRODUCT_STATUSES]), isNull(schema.products.deletedAt)))
+      .groupBy(schema.productCategories.categoryId);
+    const countById = new Map(counts.map((c) => [c.categoryId, Number(c.n)]));
+
+    const rows = await tx
+      .select()
+      .from(schema.categories)
+      .where(eq(schema.categories.isActive, true))
+      .orderBy(asc(schema.categories.position), asc(schema.categories.name));
+
+    const visible = rows.filter((c) => (countById.get(c.id) ?? 0) > 0);
+    const media = await mediaStorageKeys(
+      tx,
+      visible.map((c) => c.imageMediaId).filter((id): id is string => Boolean(id)),
+    );
+
+    const cards = visible.map((c) => {
+      const detail = c.imageMediaId ? media.get(c.imageMediaId) : undefined;
+      return {
+        id: c.id,
+        parentId: c.parentId,
+        name: c.name,
+        slug: c.slug,
+        description: c.description,
+        imageUrl: publicMediaUrl(detail?.storageKey),
+        imageAlt: detail?.alt ?? null,
+        productCount: countById.get(c.id) ?? 0,
+      } satisfies StorefrontCategoryCard;
+    });
+    // Top-level first, children after: a stable, simple order for a flat grid.
+    return [...cards.filter((c) => !c.parentId), ...cards.filter((c) => c.parentId)];
+  });
+}
+
 interface MediaStorageDetail {
   storageKey: string;
   kind: "image" | "video" | "document";

@@ -33,9 +33,12 @@ import { THEME_PAGE_TYPES } from "@bs/blocks";
 import type { PageItem } from "@bs/contracts";
 import { DataTable, type Column } from "../../../components/data-table/data-table.tsx";
 import { TableToolbar } from "../../../components/data-table/table-toolbar.tsx";
+import { BulkBar } from "../../../components/data-table/toolbar-parts.tsx";
+import { useBulkRunner } from "../../../components/data-table/use-bulk-runner.ts";
+import { useTableSelection } from "../../../components/data-table/use-table-selection.ts";
 import { SeoCard } from "../../../components/seo-card.tsx";
 import { errorMessage } from "../../../lib/errors.ts";
-import { orpc } from "../../../lib/orpc.ts";
+import { client, orpc } from "../../../lib/orpc.ts";
 import { uploadMedia } from "../../../lib/upload-media.ts";
 
 const RESERVED_SLUGS = new Set([
@@ -139,6 +142,51 @@ export function PagesPage() {
       return matchTitle || matchSlug || matchPath;
     });
   }, [displayPages, statusFilter, searchText]);
+
+  // Row selection + bulk actions (Home is never deleted or unpublished in bulk)
+  const sel = useTableSelection({
+    rows: filteredPages,
+    getId: (p: PageItem) => p.id,
+    total: filteredPages.length,
+    resetKey: `${statusFilter}|${searchText}`,
+  });
+  const bulk = useBulkRunner();
+  const [bulkDeleteOpen, setBulkDeleteOpen] = useState(false);
+
+  async function bulkUnpublish() {
+    await bulk.run({
+      rows: sel.picked,
+      getId: (p) => p.id,
+      getLabel: (p) => p.title,
+      verb: "Unpublishing",
+      done: "moved to draft",
+      noun: "page",
+      eligible: (p) => p.slug !== "home" && p.status === "published",
+      action: (p) => client.admin.pages.unpublish({ id: p.id }),
+      onFinished: (ids) => {
+        sel.release(ids);
+        void queryClient.invalidateQueries({ queryKey: orpc.admin.pages.list.key() });
+      },
+    });
+  }
+
+  async function bulkDelete() {
+    setBulkDeleteOpen(false);
+    await bulk.run({
+      rows: sel.picked,
+      getId: (p) => p.id,
+      getLabel: (p) => p.title,
+      verb: "Deleting",
+      done: "deleted",
+      noun: "page",
+      eligible: (p) => p.slug !== "home" && !(p.childCount && p.childCount > 0),
+      action: (p) => client.admin.pages.delete({ id: p.id }),
+      onFinished: (ids) => {
+        sel.release(ids);
+        void queryClient.invalidateQueries({ queryKey: orpc.admin.pages.list.key() });
+      },
+    });
+  }
 
   // Drawer / Sheet state
   const [sheetOpen, setSheetOpen] = useState(false);
@@ -517,10 +565,36 @@ export function PagesPage() {
           }
         />
 
+        <BulkBar
+          count={sel.count}
+          noun="page"
+          total={filteredPages.length}
+          allResults={sel.allResults}
+          pageFullySelected={sel.pageFullySelected}
+          onSelectAllResults={sel.selectAllResults}
+          onClear={sel.clear}
+          note="The Home page and pages that still have subpages are skipped."
+        >
+          <Button variant="outline" size="sm" disabled={bulk.busy} onClick={() => void bulkUnpublish()}>
+            <Undo2 className="mr-1.5 size-3.5" /> Unpublish
+          </Button>
+          <Button variant="destructive" size="sm" disabled={bulk.busy} onClick={() => setBulkDeleteOpen(true)}>
+            <Trash2 className="mr-1.5 size-3.5" /> Delete
+          </Button>
+          {bulk.progress ? (
+            <span role="status" className="text-muted-foreground">
+              {bulk.progress.label}… {bulk.progress.done}/{bulk.progress.total}
+            </span>
+          ) : null}
+        </BulkBar>
+
         <DataTable
           columns={columns}
           rows={filteredPages}
           getRowId={(p) => p.id}
+          selectedIds={sel.selectedIds}
+          onToggleRow={sel.toggleRow}
+          onTogglePage={sel.togglePage}
           isLoading={pagesQuery.isLoading}
           empty={
             <div className="flex flex-col items-center justify-center p-8 text-center">
@@ -604,8 +678,8 @@ export function PagesPage() {
 
       {/* Add / Edit Sheet */}
       <Sheet open={sheetOpen} onOpenChange={handleCloseSheet}>
-        <SheetContent className="w-full sm:max-w-xl overflow-y-auto p-0 flex flex-col bg-background text-foreground">
-          <SheetHeader className="p-6 border-b border-border">
+        <SheetContent className="overflow-y-auto p-0 flex flex-col bg-background text-foreground">
+          <SheetHeader className="p-5 sm:p-8 border-b border-border">
             <SheetTitle>{editingPage ? `Edit: ${editingPage.title}` : "Add page"}</SheetTitle>
             <SheetDescription>
               {editingPage
@@ -617,7 +691,7 @@ export function PagesPage() {
           <form
             id="page-form"
             onSubmit={handleSubmit((data) => onSubmit(data, false))}
-            className="flex-1 p-6 space-y-6"
+            className="flex-1 p-5 sm:p-8 space-y-6"
             noValidate
           >
             {/* General Info */}
@@ -832,6 +906,17 @@ export function PagesPage() {
             deleteMutation.mutate({ id: deleteTarget.id });
           }
         }}
+      />
+
+      {/* Bulk delete confirmation */}
+      <ConfirmDialog
+        open={bulkDeleteOpen}
+        onOpenChange={setBulkDeleteOpen}
+        title={`Delete ${sel.count} selected page${sel.count === 1 ? "" : "s"}?`}
+        description="This cannot be undone. The Home page and pages that still have subpages are skipped."
+        confirmLabel="Delete pages"
+        destructive
+        onConfirm={() => void bulkDelete()}
       />
 
       {/* Unsaved Changes Discard Dialog */}

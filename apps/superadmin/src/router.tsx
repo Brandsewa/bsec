@@ -30,6 +30,7 @@ import { TenantCreate } from "./pages/TenantCreate.tsx";
 import { TenantDetail } from "./pages/TenantDetail.tsx";
 import { Domains } from "./pages/Domains.tsx";
 import { Plans } from "./pages/Plans.tsx";
+import { Promotions } from "./pages/Promotions.tsx";
 import { Signups } from "./pages/Signups.tsx";
 import { Templates } from "./pages/Templates.tsx";
 import { Support } from "./pages/Support.tsx";
@@ -213,6 +214,18 @@ const plansRoute = createRoute({
     <PageContainer>
       <PageHeaderSkeleton />
       <DataTableSkeleton columns={4} rows={4} />
+    </PageContainer>
+  ),
+});
+
+const promotionsRoute = createRoute({
+  getParentRoute: () => authLayoutRoute,
+  path: "/promotions",
+  component: Promotions,
+  pendingComponent: () => (
+    <PageContainer>
+      <PageHeaderSkeleton />
+      <DataTableSkeleton columns={6} rows={4} />
     </PageContainer>
   ),
 });
@@ -452,6 +465,7 @@ export const routeTree = rootRoute.addChildren([
     tenantDetailRoute,
     domainsRoute,
     plansRoute,
+    promotionsRoute,
     signupsRoute,
     templatesRoute,
     supportRoute,

@@ -1,6 +1,7 @@
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useState, type FormEvent } from "react";
 import { PageSkeleton } from "@bs/ui";
+import { PasswordInput } from "@bs/ui";
 import { Button } from "@bs/ui";
 import { Field, FieldDescription, FieldError, FieldGroup, FieldLabel } from "@bs/ui";
 import { Input } from "@bs/ui";
@@ -109,12 +110,12 @@ export function AcceptInvitePage() {
               </Field>
               <Field>
                 <FieldLabel htmlFor="password">Choose a password</FieldLabel>
-                <Input id="password" type="password" autoComplete="new-password" required minLength={10} value={password} onChange={(e) => setPassword(e.target.value)} />
+                <PasswordInput id="password" autoComplete="new-password" required minLength={10} value={password} onChange={(e) => setPassword(e.target.value)} />
                 <FieldDescription>At least 10 characters.</FieldDescription>
               </Field>
               <Field>
                 <FieldLabel htmlFor="confirm">Repeat password</FieldLabel>
-                <Input id="confirm" type="password" autoComplete="new-password" required value={confirm} onChange={(e) => setConfirm(e.target.value)} />
+                <PasswordInput id="confirm" autoComplete="new-password" required value={confirm} onChange={(e) => setConfirm(e.target.value)} />
               </Field>
             </>
           )}

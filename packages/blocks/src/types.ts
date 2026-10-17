@@ -39,6 +39,7 @@ export type BlockType =
   | "SiteFooter"
   | "ProductDetail"
   | "ProductInfoTabs"
+  | "ProductCustomField"
   | "CollectionListing"
   | "CartContents"
   | "HeroSlider"
@@ -157,6 +158,8 @@ export interface RenderContext {
   renderProductDetail?: ((opts: ProductDetailOptions) => ReactNode) | undefined;
   /** The product's long description and the theme's shipping and returns text in tabs; the editor draws a labelled placeholder instead. */
   renderProductInfoTabs?: ((opts: ProductInfoTabsOptions) => ReactNode) | undefined;
+  /** One custom field of the current product (ADR-034), drawn by the storefront from the product's data; the editor draws a labelled sample instead. */
+  renderProductCustomField?: ((opts: ProductCustomFieldOptions) => ReactNode) | undefined;
   renderCollectionListing?: ((opts: CollectionListingOptions) => ReactNode) | undefined;
   /** The real blog archive / single post (drawn by the storefront from the request's data); the editor draws labelled samples instead. */
   renderBlogListing?: ((opts: BlogListingOptions) => ReactNode) | undefined;
@@ -185,6 +188,14 @@ export interface ProductShowcaseBehavior {
   interval: number;
   loop: boolean;
   pauseOnHover: boolean;
+}
+
+export interface ProductCustomFieldOptions {
+  /** The custom field's key (Settings > Custom fields). */
+  fieldKey: string;
+  showLabel: boolean;
+  /** Replaces the field's own name when set. */
+  label: string;
 }
 
 export interface ProductInfoTabsOptions {

@@ -75,7 +75,7 @@ describe("Domains Settings Page (/settings/domains)", () => {
     expect(html).toContain("TXT");
     expect(html).toContain("_cf-custom-hostname.shop.mybrand.com");
     expect(html).toContain("cf-verification-token-12345");
-    expect(html).toContain("Check verification");
+    expect(html).toContain("Check status");
     // Make primary is disabled when awaiting DNS
     expect(html).toContain("Make primary");
     expect(html).toContain("disabled");
@@ -149,6 +149,6 @@ describe("Domains Settings Page (/settings/domains)", () => {
 
     expect(html).toContain("Verification failed");
     expect(html).toContain("DNS verification could not be completed");
-    expect(html).toContain("Re-verify domain");
+    expect(html).toContain("Check status");
   });
 });

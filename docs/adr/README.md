@@ -39,6 +39,8 @@ New decisions get an ADR **before** code (PLAN §15). Copy `template.md`, take t
 
 | [032](032-theme-page-set.md) | Theme page set: template pages and default pages | Accepted |
 | [033](033-blog-system.md) | Blog system: categories, posts, theme templates, widget | Accepted |
+| [034](034-custom-fields.md) | Custom fields on products and collections | Accepted |
+| [035](035-promotions-and-free-periods.md) | Promotions and free periods for store subscriptions | Accepted |
 
-**Next number: 034.**
+**Next number: 036.**
 

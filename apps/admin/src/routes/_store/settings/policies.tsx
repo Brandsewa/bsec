@@ -1,13 +1,13 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { useState } from "react";
-import { AlertTriangle, Eye, History, Plus, RotateCcw, Trash2 } from "lucide-react";
+import { AlertTriangle, Eye, History, RotateCcw } from "lucide-react";
 import { EmptyState, FormSkeleton, PageSkeleton, toast } from "@bs/ui";
 import { Button } from "@bs/ui";
 import { Input } from "@bs/ui";
-import { SimpleSelect } from "@bs/ui";
 import { ConfirmDialog } from "@bs/ui";
 import { SettingsCard, SettingsPageFrame, useUnsavedGuard } from "../../../components/settings/settings-page.tsx";
+import PolicyRichEditor from "../../../components/policy-rich-editor.tsx";
 import { orpc } from "../../../lib/orpc.ts";
 import { errorMessage } from "../../../lib/errors.ts";
 import type { PolicyBlock, PolicyDetail, PolicyHandle } from "@bs/contracts";
@@ -137,6 +137,8 @@ function PolicyForm({ policy, onSaved }: { policy: PolicyDetail; onSaved: () => 
   const [showVersions, setShowVersions] = useState(false);
   const [showPublishDialog, setShowPublishDialog] = useState(false);
   const [previewMode, setPreviewMode] = useState(false);
+  // Bumped when the draft is replaced from outside the editor (restore), so the editor reloads it.
+  const [editorKey, setEditorKey] = useState(0);
 
   const dirty = JSON.stringify({ title, blocks }) !== savedSnapshot;
   useUnsavedGuard(dirty);
@@ -178,6 +180,7 @@ function PolicyForm({ policy, onSaved }: { policy: PolicyDetail; onSaved: () => 
       onSuccess: (data) => {
         setTitle(data.title);
         setBlocks(data.draftContent.blocks);
+        setEditorKey((k) => k + 1);
         setSavedSnapshot(JSON.stringify({ title: data.title, blocks: data.draftContent.blocks }));
         toast.success("Restored version to draft");
         onSaved();
@@ -187,40 +190,6 @@ function PolicyForm({ policy, onSaved }: { policy: PolicyDetail; onSaved: () => 
       },
     }),
   );
-
-  const handleAddBlock = (type: "paragraph" | "heading" | "list" | "divider") => {
-    if (type === "divider") {
-      setBlocks([...blocks, { type: "divider" }]);
-    } else if (type === "heading") {
-      setBlocks([...blocks, { type: "heading", level: 2, text: "Heading" }]);
-    } else if (type === "paragraph") {
-      setBlocks([...blocks, { type: "paragraph", text: "Paragraph content here..." }]);
-    } else if (type === "list") {
-      setBlocks([...blocks, { type: "list", style: "unordered", items: ["Item 1", "Item 2"] }]);
-    }
-  };
-
-  const handleUpdateBlock = (index: number, updated: PolicyBlock) => {
-    const next = [...blocks];
-    next[index] = updated;
-    setBlocks(next);
-  };
-
-  const handleDeleteBlock = (index: number) => {
-    setBlocks(blocks.filter((_, i) => i !== index));
-  };
-
-  const handleMoveBlock = (index: number, direction: "up" | "down") => {
-    if ((direction === "up" && index === 0) || (direction === "down" && index === blocks.length - 1)) return;
-    const target = direction === "up" ? index - 1 : index + 1;
-    const currentBlock = blocks[index];
-    const targetBlock = blocks[target];
-    if (!currentBlock || !targetBlock) return;
-    const next = [...blocks];
-    next[index] = targetBlock;
-    next[target] = currentBlock;
-    setBlocks(next);
-  };
 
   return (
     <div className="space-y-6">
@@ -252,7 +221,7 @@ function PolicyForm({ policy, onSaved }: { policy: PolicyDetail; onSaved: () => 
             onClick={() => setPreviewMode(!previewMode)}
           >
             <Eye className="mr-1.5 size-3.5" />
-            {previewMode ? "Edit Blocks" : "Preview"}
+            {previewMode ? "Edit" : "Preview"}
           </Button>
 
           <Button
@@ -267,7 +236,7 @@ function PolicyForm({ policy, onSaved }: { policy: PolicyDetail; onSaved: () => 
           <Button
             variant="outline"
             size="sm"
-            disabled={!dirty || saveDraftMutation.isPending}
+            disabled={!dirty || blocks.length === 0 || saveDraftMutation.isPending}
             onClick={() =>
               saveDraftMutation.mutate({
                 handle: policy.handle,
@@ -372,127 +341,18 @@ function PolicyForm({ policy, onSaved }: { policy: PolicyDetail; onSaved: () => 
         </SettingsCard>
       ) : (
         <SettingsCard
-          title="Block editor"
-          description="Structured headings, paragraphs, bullet lists, and horizontal dividers"
+          title="Policy text"
+          description="Write your policy with headings, bold and italic text, links, lists and dividers"
         >
           <div className="space-y-4">
             <div>
-              <label className="block text-xs font-medium text-foreground mb-1">Policy Title</label>
-              <Input value={title} onChange={(e) => setTitle(e.target.value)} maxLength={120} />
+              <label htmlFor="policy-title" className="block text-xs font-medium text-foreground mb-1">Policy Title</label>
+              <Input id="policy-title" value={title} onChange={(e) => setTitle(e.target.value)} maxLength={120} />
             </div>
-
-            <div className="space-y-3">
-              {blocks.map((block, idx) => (
-                <div key={idx} className="rounded-lg border border-border bg-card p-3 shadow-xs space-y-2">
-                  <div className="flex items-center justify-between text-xs text-muted-foreground">
-                    <span className="font-semibold uppercase tracking-wider text-[10px] text-foreground">
-                      {block.type}
-                    </span>
-                    <div className="flex items-center gap-1">
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        disabled={idx === 0}
-                        onClick={() => handleMoveBlock(idx, "up")}
-                      >
-                        ↑
-                      </Button>
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        disabled={idx === blocks.length - 1}
-                        onClick={() => handleMoveBlock(idx, "down")}
-                      >
-                        ↓
-                      </Button>
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        onClick={() => handleDeleteBlock(idx)}
-                      >
-                        <Trash2 className="size-3 text-destructive" />
-                      </Button>
-                    </div>
-                  </div>
-
-                  {block.type === "heading" && (
-                    <div className="flex gap-2">
-                      <SimpleSelect
-                        ariaLabel="Heading Level"
-                        value={String(block.level)}
-                        onChange={(v) => handleUpdateBlock(idx, { ...block, level: Number(v) as 2 | 3 })}
-                        options={[
-                          { value: "2", label: "Heading 2" },
-                          { value: "3", label: "Heading 3" },
-                        ]}
-                      />
-                      <Input
-                        value={block.text}
-                        onChange={(e) => handleUpdateBlock(idx, { ...block, text: e.target.value })}
-                        placeholder="Heading text"
-                      />
-                    </div>
-                  )}
-
-                  {block.type === "paragraph" && (
-                    <textarea
-                      rows={3}
-                      className="w-full rounded-md border border-input bg-background p-2 text-xs text-foreground focus:outline-none focus:ring-1 focus:ring-primary"
-                      value={block.text}
-                      onChange={(e) => handleUpdateBlock(idx, { ...block, text: e.target.value })}
-                      placeholder="Paragraph text..."
-                    />
-                  )}
-
-                  {block.type === "list" && (
-                    <div className="space-y-2">
-                      <SimpleSelect
-                        ariaLabel="List style"
-                        value={block.style}
-                        onChange={(v) => handleUpdateBlock(idx, { ...block, style: v as "ordered" | "unordered" })}
-                        options={[
-                          { value: "unordered", label: "Bullet list" },
-                          { value: "ordered", label: "Numbered list" },
-                        ]}
-                      />
-                      <textarea
-                        rows={3}
-                        className="w-full rounded-md border border-input bg-background p-2 text-xs text-foreground focus:outline-none focus:ring-1 focus:ring-primary"
-                        value={block.items.join("\n")}
-                        onChange={(e) =>
-                          handleUpdateBlock(idx, {
-                            ...block,
-                            items: e.target.value.split("\n"),
-                          })
-                        }
-                        placeholder="One list item per line..."
-                      />
-                    </div>
-                  )}
-
-                  {block.type === "divider" && (
-                    <div className="border-t border-border py-1 text-center text-[10px] text-muted-foreground">
-                      Horizontal Rule
-                    </div>
-                  )}
-                </div>
-              ))}
-            </div>
-
-            <div className="flex flex-wrap gap-2 pt-2">
-              <Button variant="outline" size="sm" onClick={() => handleAddBlock("paragraph")}>
-                <Plus className="mr-1 size-3" /> Paragraph
-              </Button>
-              <Button variant="outline" size="sm" onClick={() => handleAddBlock("heading")}>
-                <Plus className="mr-1 size-3" /> Heading
-              </Button>
-              <Button variant="outline" size="sm" onClick={() => handleAddBlock("list")}>
-                <Plus className="mr-1 size-3" /> List
-              </Button>
-              <Button variant="outline" size="sm" onClick={() => handleAddBlock("divider")}>
-                <Plus className="mr-1 size-3" /> Divider
-              </Button>
-            </div>
+            <PolicyRichEditor initialBlocks={policy.draftContent.blocks} resetKey={`${policy.id}:${editorKey}`} onChange={setBlocks} />
+            {blocks.length === 0 ? (
+              <p className="text-xs text-muted-foreground">A policy needs at least some text before it can be saved.</p>
+            ) : null}
           </div>
         </SettingsCard>
       )}

@@ -7,6 +7,7 @@ import type {
   CartContentsOptions,
   CollectionListingOptions,
   ProductDetailOptions,
+  ProductCustomFieldOptions,
   ProductInfoTabsOptions,
   BlockRenderArgs,
   RenderContext,
@@ -1060,6 +1061,21 @@ export function ProductInfoTabsView({ props, ctx }: A<R.ProductInfoTabsProps>): 
         <span>
           {props.descriptionLabel} · {props.shippingLabel}
         </span>
+      </div>
+    </Placeholder>
+  );
+}
+
+export function ProductCustomFieldView({ props, ctx }: A<R.ProductCustomFieldProps>): ReactNode {
+  if (ctx?.renderProductCustomField) return <>{ctx.renderProductCustomField(props as ProductCustomFieldOptions)}</>;
+  // Editor and theme previews: a labelled sample, since the real value comes from each product.
+  return (
+    <Placeholder
+      label={props.fieldKey ? `Custom field: ${props.fieldKey}` : "Custom field"}
+      hint={props.fieldKey ? "Each product shows its own value here. Nothing is drawn when a product has no value." : "Enter the key of one of your custom fields (Settings > Custom fields)."}
+    >
+      <div className="bsb-ph-box" style={{ height: 64 }}>
+        <span>{props.showLabel ? `${props.label || props.fieldKey || "Field name"}: ` : ""}Value from the product</span>
       </div>
     </Placeholder>
   );

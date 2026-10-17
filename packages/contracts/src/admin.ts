@@ -458,6 +458,8 @@ export type ProductMedia = z.infer<typeof ProductMedia>;
 
 export const Product = z.object({
   id: z.string().uuid(),
+  /** Per-store running number; shown as BCPID-<n>. Null only for rows created before the backfill ran. */
+  productNumber: z.number().int().nullable().optional(),
   title: z.string(),
   slug: z.string(),
   status: z.enum(["draft", "active", "unlisted", "archived"]),
@@ -1100,6 +1102,10 @@ export const ShippingRateItem = z.object({
   rateType: z.string(),
   pricePaise: z.number().int(),
   thresholdPaise: z.number().int().nullable().optional(),
+  minSubtotalPaise: z.number().int().nullable().optional(),
+  maxSubtotalPaise: z.number().int().nullable().optional(),
+  minWeightGrams: z.number().int().nullable().optional(),
+  maxWeightGrams: z.number().int().nullable().optional(),
   minDays: z.number().int().nullable().optional(),
   maxDays: z.number().int().nullable().optional(),
 });
@@ -1109,6 +1115,8 @@ export const ShippingZoneItem = z.object({
   id: z.string().uuid(),
   name: z.string(),
   countries: z.array(z.string()),
+  /** Empty = the whole country; otherwise only these states. */
+  states: z.array(z.string()).default([]),
   isDefault: z.boolean(),
   rates: z.array(ShippingRateItem),
 });
@@ -1126,6 +1134,75 @@ export const UpdateShippingInput = z.object({
   freeShippingThresholdPaise: z.number().int().min(0).nullable().optional(),
 });
 export type UpdateShippingInput = z.infer<typeof UpdateShippingInput>;
+
+/** One rate as saved from the shipping settings page. `id` is present for an existing rate and absent for a new one. */
+export const SaveShippingRate = z.object({
+  id: z.string().uuid().optional(),
+  name: z.string().trim().min(1).max(80),
+  method: z.enum(["standard", "express"]),
+  rateType: z.enum(["flat", "free_above_threshold", "price_tier", "weight_tier"]),
+  pricePaise: z.number().int().min(0).max(100_000_000),
+  thresholdPaise: z.number().int().min(0).nullable().optional(),
+  minSubtotalPaise: z.number().int().min(0).nullable().optional(),
+  maxSubtotalPaise: z.number().int().min(0).nullable().optional(),
+  minWeightGrams: z.number().int().min(0).nullable().optional(),
+  maxWeightGrams: z.number().int().min(0).nullable().optional(),
+  minDays: z.number().int().min(0).max(90).nullable().optional(),
+  maxDays: z.number().int().min(0).max(90).nullable().optional(),
+});
+export type SaveShippingRate = z.infer<typeof SaveShippingRate>;
+
+export const SaveShippingZone = z.object({
+  id: z.string().uuid().optional(),
+  name: z.string().trim().min(1).max(80),
+  countries: z.array(z.string().length(2)).min(1).max(250),
+  states: z.array(z.string().trim().min(1).max(60)).max(60).default([]),
+  isDefault: z.boolean(),
+  rates: z.array(SaveShippingRate).max(30),
+});
+export type SaveShippingZone = z.infer<typeof SaveShippingZone>;
+
+/** Replaces the store's shipping zones and rates in one go (max 20 zones). Zones and rates left out are removed. */
+export const SaveShippingZonesInput = z.object({ zones: z.array(SaveShippingZone).min(1).max(20) });
+export type SaveShippingZonesInput = z.infer<typeof SaveShippingZonesInput>;
+
+// --- Custom fields (ADR-034) ---
+export const CustomFieldType = z.enum(["text", "rich_text", "image", "dropdown", "multi_select", "number", "boolean"]);
+export type CustomFieldType = z.infer<typeof CustomFieldType>;
+export const CustomFieldResource = z.enum(["product", "collection"]);
+export type CustomFieldResource = z.infer<typeof CustomFieldResource>;
+
+export const CustomFieldOption = z.object({ value: z.string(), label: z.string() });
+
+export const CustomFieldDefinition = z.object({
+  id: z.string().uuid(),
+  resourceType: CustomFieldResource,
+  key: z.string(),
+  name: z.string(),
+  type: CustomFieldType,
+  helpText: z.string().nullable(),
+  required: z.boolean(),
+  showOnStorefront: z.boolean(),
+  options: z.array(CustomFieldOption),
+  position: z.number().int(),
+  archived: z.boolean(),
+});
+export type CustomFieldDefinition = z.infer<typeof CustomFieldDefinition>;
+
+export const ResourceCustomField = z.object({
+  definition: CustomFieldDefinition,
+  /** Typed by the field: string, string[], number, boolean, or { mediaId } for images. */
+  value: z.unknown().nullable(),
+  imageUrl: z.string().optional(),
+});
+export type ResourceCustomField = z.infer<typeof ResourceCustomField>;
+
+export const ResourceCustomFields = z.object({
+  /** False when the store's plan does not include custom fields (Growth and above). */
+  enabled: z.boolean(),
+  fields: z.array(ResourceCustomField),
+});
+export type ResourceCustomFields = z.infer<typeof ResourceCustomFields>;
 
 // --- Admin oRPC Contract ---
 export const PaymentsStatus = z.object({
@@ -1647,6 +1724,9 @@ export type UpdateTaxSettingsInput = z.infer<typeof UpdateTaxSettingsInput>;
 
 export const ShippingPreviewInput = z.object({
   subtotalPaise: z.number().int().min(0),
+  /** Total cart weight in grams, for weight-based rates. */
+  weightGrams: z.number().int().min(0).max(100_000_000).optional(),
+  destinationCountry: z.string().length(2).optional(),
   destinationState: z.string().optional(),
   destinationPincode: z.string().optional(),
 });
@@ -2305,6 +2385,69 @@ export const adminContract = {
       .route({ method: "DELETE", path: "/admin/products/{id}" })
       .input(z.object({ id: z.string().uuid() }))
       .output(z.object({ success: z.boolean() })),
+    /**
+     * Variant builder: replaces the product's options (max 3, 30 values each, 250 variants) and creates the missing
+     * variants. Existing matching variants are kept; variants outside the grid are never deleted here.
+     */
+    setOptions: oc
+      .route({ method: "PUT", path: "/admin/products/{id}/options" })
+      .input(
+        z.object({
+          id: z.string().uuid(),
+          options: z.array(z.object({ name: z.string().min(1).max(40), values: z.array(z.string().max(40)).min(1).max(30) })).max(3),
+          defaultPriceMinor: z.number().int().min(0).optional(),
+        }),
+      )
+      .output(ProductDetail),
+  },
+
+  // Catalog: Custom fields (ADR-034). Growth plan and above.
+  customFields: {
+    listDefinitions: oc
+      .route({ method: "GET", path: "/admin/custom-fields" })
+      .input(z.object({ resourceType: CustomFieldResource, includeArchived: z.boolean().optional() }))
+      .output(z.object({ enabled: z.boolean(), definitions: z.array(CustomFieldDefinition) })),
+    createDefinition: oc
+      .route({ method: "POST", path: "/admin/custom-fields" })
+      .input(
+        z.object({
+          resourceType: CustomFieldResource,
+          name: z.string().trim().min(1).max(80),
+          key: z.string().trim().max(40).optional(),
+          type: CustomFieldType,
+          helpText: z.string().max(200).nullable().optional(),
+          required: z.boolean().optional(),
+          showOnStorefront: z.boolean().optional(),
+          options: z.array(z.object({ value: z.string().max(60).optional(), label: z.string().max(60) })).max(50).optional(),
+        }),
+      )
+      .output(CustomFieldDefinition),
+    updateDefinition: oc
+      .route({ method: "PATCH", path: "/admin/custom-fields/{id}" })
+      .input(
+        z.object({
+          id: z.string().uuid(),
+          name: z.string().trim().min(1).max(80).optional(),
+          helpText: z.string().max(200).nullable().optional(),
+          required: z.boolean().optional(),
+          showOnStorefront: z.boolean().optional(),
+          options: z.array(z.object({ value: z.string().max(60).optional(), label: z.string().max(60) })).max(50).optional(),
+          position: z.number().int().min(0).max(10_000).optional(),
+        }),
+      )
+      .output(CustomFieldDefinition),
+    setArchived: oc
+      .route({ method: "POST", path: "/admin/custom-fields/{id}/archive" })
+      .input(z.object({ id: z.string().uuid(), archived: z.boolean() }))
+      .output(CustomFieldDefinition),
+    getValues: oc
+      .route({ method: "GET", path: "/admin/custom-fields/values" })
+      .input(z.object({ resourceType: CustomFieldResource, resourceId: z.string().uuid() }))
+      .output(ResourceCustomFields),
+    setValues: oc
+      .route({ method: "PUT", path: "/admin/custom-fields/values" })
+      .input(z.object({ resourceType: CustomFieldResource, resourceId: z.string().uuid(), values: z.record(z.string().uuid(), z.unknown()) }))
+      .output(ResourceCustomFields),
   },
 
   // Catalog: Variants
@@ -2325,9 +2468,54 @@ export const adminContract = {
           preorderShipsOn: z.string().nullable().optional(),
           preorderMessage: z.string().max(200).nullable().optional(),
           imageMediaId: z.string().uuid().nullable().optional(),
+          barcode: z.string().max(64).nullable().optional(),
+          /** Weight in grams (whole grams, up to 1,000 kg). Used for weight-based shipping rates. */
+          weightGrams: z.number().int().min(0).max(1_000_000).nullable().optional(),
+          /** Package size in centimetres. */
+          dimensions: z
+            .object({
+              lengthCm: z.number().min(0).max(1000).optional(),
+              widthCm: z.number().min(0).max(1000).optional(),
+              heightCm: z.number().min(0).max(1000).optional(),
+            })
+            .nullable()
+            .optional(),
+          optionValues: z.record(z.string().max(40), z.string().max(40)).nullable().optional(),
         }),
       )
       .output(ProductVariant),
+    create: oc
+      .route({ method: "POST", path: "/admin/products/{productId}/variants" })
+      .input(
+        z.object({
+          productId: z.string().uuid(),
+          sku: z.string().min(1).max(64),
+          title: z.string().min(1).max(200),
+          price: z.number().int().min(0),
+          compareAtPrice: z.number().int().min(0).optional(),
+          costPrice: z.number().int().min(0).optional(),
+          barcode: z.string().max(64).nullable().optional(),
+          weightGrams: z.number().int().min(0).max(1_000_000).nullable().optional(),
+          dimensions: z
+            .object({
+              lengthCm: z.number().min(0).max(1000).optional(),
+              widthCm: z.number().min(0).max(1000).optional(),
+              heightCm: z.number().min(0).max(1000).optional(),
+            })
+            .nullable()
+            .optional(),
+          optionValues: z.record(z.string().max(40), z.string().max(40)).optional(),
+          trackInventory: z.boolean().optional(),
+          allowBackorder: z.boolean().optional(),
+          imageMediaId: z.string().uuid().optional(),
+        }),
+      )
+      .output(ProductVariant),
+    /** Deletes a variant that was never sold; refused when it is on an order or is the product's last variant. */
+    delete: oc
+      .route({ method: "DELETE", path: "/admin/variants/{id}" })
+      .input(z.object({ id: z.string().uuid() }))
+      .output(z.object({ success: z.boolean() })),
   },
 
   // Catalog: Categories
@@ -4142,6 +4330,10 @@ export const adminContract = {
           message: z.string(),
         }),
       ),
+    saveZones: oc
+      .route({ method: "PUT", path: "/admin/settings/shipping/zones" })
+      .input(SaveShippingZonesInput)
+      .output(z.object({ success: z.boolean(), message: z.string() })),
     preview: oc
       .route({ method: "POST", path: "/admin/settings/shipping/preview" })
       .input(ShippingPreviewInput)

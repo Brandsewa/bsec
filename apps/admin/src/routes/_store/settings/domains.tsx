@@ -23,9 +23,46 @@ const DESCRIPTION = "Connect and manage your custom domain so shoppers find your
 
 const FQDN_PATTERN = /^(?!:\/\/)([a-zA-Z0-9-]+\.)+[a-zA-Z]{2,}$/;
 
+/** Plain-language steps shown before and while a domain is added, so owners know what to create at their DNS provider. */
+function DomainSetupGuide() {
+  return (
+    <div className="rounded-md border border-border bg-muted/30 p-3.5 text-xs" aria-label="How to connect a domain">
+      <p className="font-medium text-foreground">How connecting a domain works</p>
+      <ol className="mt-2 list-decimal space-y-1.5 pl-4 text-muted-foreground">
+        <li>
+          <span className="font-medium text-foreground">Add your domain here.</span> Enter the address you own, such as{" "}
+          <span className="font-mono">shop.mybrand.com</span>.
+        </li>
+        <li>
+          <span className="font-medium text-foreground">Create the DNS records we show you</span> at your domain provider (GoDaddy, Namecheap, Cloudflare and
+          so on): a <span className="font-mono">CNAME</span> record that points your domain to our server, and a <span className="font-mono">TXT</span> record
+          if you tick the ownership check.
+        </li>
+        <li>
+          <span className="font-medium text-foreground">Wait for DNS to update.</span> This is usually a few minutes but can take up to 24 to 48 hours.
+        </li>
+        <li>
+          <span className="font-medium text-foreground">Press "Check status".</span> When the domain is found, it shows as Active with SSL (the padlock)
+          switched on, and you can make it your primary address.
+        </li>
+      </ol>
+      <p className="mt-2 text-muted-foreground">
+        For a bare domain such as <span className="font-mono">mybrand.com</span>, some providers call the CNAME record an ALIAS or ANAME record, or need
+        "CNAME flattening". A subdomain such as <span className="font-mono">shop.mybrand.com</span> is the easiest.
+      </p>
+    </div>
+  );
+}
+
 export function DomainsSettingsPage() {
   const queryClient = useQueryClient();
-  const domainsQuery = useQuery(orpc.admin.domains.list.queryOptions());
+  const domainsQuery = useQuery({
+    ...orpc.admin.domains.list.queryOptions(),
+    // While a domain waits for DNS, quietly re-read the list so a status change made elsewhere (for example by the
+    // platform's background check) shows up without a page reload. This never triggers a DNS lookup by itself.
+    refetchInterval: (query) =>
+      (query.state.data ?? []).some((d) => d.status !== "active" && d.status !== "failed") ? 30_000 : false,
+  });
 
   const addDomain = useMutation(orpc.admin.domains.add.mutationOptions());
   const verifyDomain = useMutation(orpc.admin.domains.verify.mutationOptions());
@@ -186,6 +223,7 @@ export function DomainsSettingsPage() {
       {isAdding && (
         <SettingsCard title="Add custom domain" description="Connect your domain or subdomain to this store.">
           <form onSubmit={handleAdd} className="space-y-4">
+            <DomainSetupGuide />
             <Field id="domain-hostname" label="Domain name" hint="For example, shop.mybrand.com or mybrand.com.">
               <Input
                 id="domain-hostname"
@@ -226,6 +264,7 @@ export function DomainsSettingsPage() {
 
       {domains.length === 0 && !isAdding ? (
         <SettingsCard>
+          <DomainSetupGuide />
           <EmptyState
             icon={Globe}
             title="No custom domains connected"
@@ -285,6 +324,12 @@ export function DomainsSettingsPage() {
                   </div>
 
                   <div className="flex items-center gap-2">
+                    {isPending && (
+                      <Button size="sm" variant="outline" disabled={isVerifying} onClick={() => handleVerify(d.id)}>
+                        <RefreshCw className={`mr-1.5 size-3.5 ${isVerifying ? "animate-spin" : ""}`} aria-hidden />
+                        {isVerifying ? "Checking…" : "Check status"}
+                      </Button>
+                    )}
                     {!d.isPrimary && (
                       <Button
                         size="sm"
@@ -331,7 +376,7 @@ export function DomainsSettingsPage() {
                         onClick={() => handleVerify(d.id)}
                       >
                         <RefreshCw className={`mr-1.5 size-3.5 ${isVerifying ? "animate-spin" : ""}`} aria-hidden />
-                        {isVerifying ? "Checking…" : "Re-verify domain"}
+                        {isVerifying ? "Checking…" : "Check status"}
                       </Button>
                       <p className="mt-1.5 text-[11px] text-muted-foreground">
                         DNS updates can take up to 24-48 hours to propagate worldwide. Avoid rapid retries to respect provider rate limits.
@@ -402,7 +447,7 @@ export function DomainsSettingsPage() {
                           onClick={() => handleVerify(d.id)}
                         >
                           <RefreshCw className={`mr-1.5 size-3.5 ${isVerifying ? "animate-spin" : ""}`} aria-hidden />
-                          {isVerifying ? "Verifying…" : "Check verification"}
+                          {isVerifying ? "Verifying…" : "Check status"}
                         </Button>
                         <span className="text-[11px] text-muted-foreground">
                           DNS updates can take up to 24-48 hours to propagate worldwide.

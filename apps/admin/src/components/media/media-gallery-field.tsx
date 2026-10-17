@@ -17,6 +17,8 @@ import {
 } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
 import {
+  ChevronLeft,
+  ChevronRight,
   GripVertical,
   Image as ImageIcon,
   MessageSquare,
@@ -74,6 +76,7 @@ interface SortableGalleryTileProps {
   disabled?: boolean | undefined;
   onRemove: () => void;
   onEditAlt: () => void;
+  onView: () => void;
 }
 
 function SortableGalleryTile({
@@ -82,6 +85,7 @@ function SortableGalleryTile({
   disabled,
   onRemove,
   onEditAlt,
+  onView,
 }: SortableGalleryTileProps) {
   const sortableId = item.id || item.mediaId || String(index);
   const {
@@ -139,7 +143,19 @@ function SortableGalleryTile({
       </div>
 
       {/* Media Preview */}
-      <div className="relative w-full h-full bg-muted/30 flex items-center justify-center overflow-hidden">
+      <div
+        role="button"
+        tabIndex={0}
+        aria-label={`View ${item.alt || item.filename || "media"} larger`}
+        onClick={onView}
+        onKeyDown={(e) => {
+          if (e.key === "Enter" || e.key === " ") {
+            e.preventDefault();
+            onView();
+          }
+        }}
+        className="relative w-full h-full bg-muted/30 flex items-center justify-center overflow-hidden cursor-zoom-in focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
+      >
         {item.kind === "video" ? (
           <div className="relative w-full h-full flex items-center justify-center bg-black/10">
             <VideoIcon className="h-10 w-10 text-purple-500 opacity-80" />
@@ -209,6 +225,90 @@ function SortableGalleryTile({
   );
 }
 
+/** Large preview of one product media item with previous/next (buttons and arrow keys) over the whole gallery. */
+function MediaLightbox({
+  items,
+  index,
+  onIndexChange,
+  onClose,
+}: {
+  items: MediaRef[];
+  index: number | null;
+  onIndexChange: (next: number) => void;
+  onClose: () => void;
+}) {
+  const open = index !== null && items[index] !== undefined;
+  const current = open && index !== null ? items[index] : undefined;
+  const count = items.length;
+
+  const go = (delta: number) => {
+    if (index === null || count === 0) return;
+    onIndexChange((index + delta + count) % count);
+  };
+
+  return (
+    <Dialog open={open} onOpenChange={(o) => !o && onClose()}>
+      <DialogContent
+        className="sm:max-w-3xl"
+        onKeyDown={(e) => {
+          if (e.key === "ArrowLeft") {
+            e.preventDefault();
+            go(-1);
+          } else if (e.key === "ArrowRight") {
+            e.preventDefault();
+            go(1);
+          }
+        }}
+      >
+        <DialogHeader>
+          <DialogTitle className="flex items-center justify-between gap-3 pr-8">
+            <span className="truncate">{current?.alt || current?.filename || "Media preview"}</span>
+            <span className="shrink-0 font-mono text-xs font-normal text-muted-foreground">
+              {index !== null ? index + 1 : 0} / {count}
+            </span>
+          </DialogTitle>
+        </DialogHeader>
+        <div className="relative flex min-h-64 items-center justify-center rounded-md bg-muted/30">
+          {current?.kind === "video" ? (
+            <video key={current.mediaId} src={current.url} controls className="max-h-[70vh] w-full rounded-md" />
+          ) : (
+            <img
+              key={current?.mediaId}
+              src={current?.url || current?.thumbnailUrl || undefined}
+              alt={current?.alt || current?.filename || "Product media"}
+              className="max-h-[70vh] w-auto max-w-full rounded-md object-contain"
+            />
+          )}
+          {count > 1 && (
+            <>
+              <Button
+                type="button"
+                variant="secondary"
+                size="icon"
+                className="absolute left-2 top-1/2 h-9 w-9 -translate-y-1/2 shadow-sm"
+                onClick={() => go(-1)}
+                aria-label="Previous media"
+              >
+                <ChevronLeft className="h-5 w-5" />
+              </Button>
+              <Button
+                type="button"
+                variant="secondary"
+                size="icon"
+                className="absolute right-2 top-1/2 h-9 w-9 -translate-y-1/2 shadow-sm"
+                onClick={() => go(1)}
+                aria-label="Next media"
+              >
+                <ChevronRight className="h-5 w-5" />
+              </Button>
+            </>
+          )}
+        </div>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
 export function MediaGalleryField({
   value,
   onChange,
@@ -224,6 +324,7 @@ export function MediaGalleryField({
   const [pickerOpen, setPickerOpen] = useState(false);
   const [altModalItem, setAltModalItem] = useState<MediaRef | null>(null);
   const [altInputValue, setAltInputValue] = useState("");
+  const [viewIndex, setViewIndex] = useState<number | null>(null);
 
   const sensors = useSensors(
     useSensor(PointerSensor, {
@@ -402,6 +503,7 @@ export function MediaGalleryField({
                   disabled={disabled}
                   onRemove={() => handleRemoveItem(item)}
                   onEditAlt={() => handleOpenAltModal(item)}
+                  onView={() => setViewIndex(index)}
                 />
               ))}
 
@@ -422,6 +524,8 @@ export function MediaGalleryField({
           </SortableContext>
         </DndContext>
       )}
+
+      <MediaLightbox items={value} index={viewIndex} onIndexChange={setViewIndex} onClose={() => setViewIndex(null)} />
 
       {/* Alt Text Dialog */}
       <Dialog

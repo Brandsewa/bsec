@@ -82,6 +82,57 @@ export const platformInvoices = pgTable("platform_invoices", {
 });
 
 /**
+ * Promotions (ADR-035): discounts and free periods the platform owner can create. A promotion lasts at most 12 months.
+ * Platform-wide; no RLS (migration 0067).
+ */
+export const promotions = pgTable("promotions", {
+  id: uuid("id").default(sql`uuidv7()`).primaryKey(),
+  code: text("code").notNull().unique(),
+  name: text("name").notNull(),
+  description: text("description"),
+  /** percent_off | free_months */
+  kind: text("kind").notNull(),
+  percentOff: integer("percent_off"),
+  durationMonths: integer("duration_months").notNull(),
+  /** Empty = every plan. */
+  appliesToPlanCodes: text("applies_to_plan_codes").array().notNull().default(sql`ARRAY[]::text[]`),
+  maxRedemptions: integer("max_redemptions"),
+  redeemedCount: integer("redeemed_count").notNull().default(0),
+  validFrom: timestamp("valid_from", { withTimezone: true }),
+  validUntil: timestamp("valid_until", { withTimezone: true }),
+  isActive: boolean("is_active").notNull().default(true),
+  createdBy: uuid("created_by"),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().default(sql`now()`),
+  updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().default(sql`now()`),
+});
+
+/**
+ * A promotion given to one store (by promo code at signup, or granted by the platform owner). One active grant per store.
+ * Platform-wide; no RLS (migration 0067).
+ */
+export const tenantPromotions = pgTable("tenant_promotions", {
+  id: uuid("id").default(sql`uuidv7()`).primaryKey(),
+  tenantId: uuid("tenant_id").notNull().references(() => tenants.id, { onDelete: "restrict" }),
+  promotionId: uuid("promotion_id").references(() => promotions.id, { onDelete: "set null" }),
+  kind: text("kind").notNull(),
+  percentOff: integer("percent_off"),
+  durationMonths: integer("duration_months").notNull(),
+  planCode: text("plan_code"),
+  /** Prepaid term: 6, 12 or 36 months. */
+  termMonths: integer("term_months").notNull().default(12),
+  /** code | staff */
+  source: text("source").notNull(),
+  note: text("note"),
+  /** active | ended | cancelled */
+  status: text("status").notNull().default("active"),
+  startsAt: timestamp("starts_at", { withTimezone: true }).notNull().default(sql`now()`),
+  endsAt: timestamp("ends_at", { withTimezone: true }).notNull(),
+  endedAt: timestamp("ended_at", { withTimezone: true }),
+  grantedBy: uuid("granted_by"),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().default(sql`now()`),
+});
+
+/**
  * Platform Audit Logs: Append-only log of all Super Admin mutations (PLAN §4, §5.1, §6).
  * Platform-wide; no RLS.
  */
@@ -98,6 +149,16 @@ export const platformAuditLogs = pgTable("platform_audit_logs", {
   diff: jsonb("diff"),
   requestId: text("request_id"),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().default(sql`now()`),
+});
+
+/**
+ * Audit log archives: marks audit rows hidden from the default view. Insert/delete only; platform_audit_logs itself is
+ * never updated or deleted (migration 0064).
+ */
+export const platformAuditLogArchives = pgTable("platform_audit_log_archives", {
+  auditLogId: uuid("audit_log_id").primaryKey(),
+  archivedBy: uuid("archived_by"),
+  archivedAt: timestamp("archived_at", { withTimezone: true }).notNull().default(sql`now()`),
 });
 
 /**

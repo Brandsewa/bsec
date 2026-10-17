@@ -3,7 +3,16 @@
 Source of truth: `docs/PLAN.html` v2.0 (build order in `docs/BUILD-PLAN-M2-M9.md`). Items are ticked only after verification; the evidence is noted next to each. "From code" means it was read in the repo but not exercised live.
 
 ## In flight
+- claude · `fix/admin-polish-phase-1` · admin and Super Admin polish round, all three phases built (menus bug, auth forms, drawers, friendly IDs, variant builder, shipping zones and tiers, custom fields, promotions, flags, audit log, tenant purge, payments and domains pages, policy rich text); awaiting owner check and commit; plan `docs/ADMIN-SUPERADMIN-POLISH-PLAN.md`, ADR-034, ADR-035, change records `docs/changes/2026-10-17-claude-admin-polish-phase-1.md` and `...-phases-2-3.md` · 2026-10-17
 - claude · `feat/blog-system` · blog system built end to end (phases 1-5), awaiting owner review and merge; plan `docs/BLOG-PLAN.md`, ADR-033, change records `docs/changes/2026-10-15-claude-blog-*` · 2026-10-15
+
+## M13 · Admin and Super Admin polish round (2026-10-17): built, not yet checked in a browser
+
+Plan [`docs/ADMIN-SUPERADMIN-POLISH-PLAN.md`](docs/ADMIN-SUPERADMIN-POLISH-PLAN.md) (owner decisions in section 3a), decisions [`ADR-034`](docs/adr/034-custom-fields.md) and [`ADR-035`](docs/adr/035-promotions-and-free-periods.md), change records `docs/changes/2026-10-17-claude-admin-polish-phase-1.md` and `...-phases-2-3.md`. Migrations 0062 to 0067.
+
+- [x] Built and verified by typecheck, lint, build, docs check and automated tests (unit and real-database): the 31 items of the owner's issue log, grouped as quick fixes, features and four larger modules (variant builder, shipping zones and tiers, custom fields, promotions).
+- [ ] **Not verified live:** no screen of this round was driven in a browser; owner to walk the admin and Super Admin pages, then merge. Nothing was run against production data.
+- [ ] **Follow-ups (owner, 2026-10-17):** custom fields on collections and storefront filtering by a field; reminder emails before a free period ends; a "category" source for product and collection blocks and category links in theme defaults; shipping by PIN range; real billing from promotion grants.
 
 ## M12 · Theme page set and storefront redesign — shipped to production 2026-10-15
 

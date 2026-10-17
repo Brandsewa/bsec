@@ -6,6 +6,8 @@ import { saasDb, type Runtime } from "../runtime.ts";
 import { tierForPlan } from "./plan-tiers.ts";
 import { buildOwnerInviteUrl, issueOwnerInviteInTx } from "./invite-token.ts";
 import { normalizeSubdomainSlug, validateSubdomainFormat } from "./subdomains.ts";
+import { defaultFooterMenuItems, defaultHeaderMenuItems } from "../menu-defaults.ts";
+import { redeemPromoCodeInTx } from "../platform/promotions.ts";
 import { syncDocumentMediaUsages } from "../media/document-usages.ts";
 
 export interface ProvisionOwnerInput {
@@ -34,6 +36,8 @@ export interface ProvisionTenantInput {
    * expiry) or 'comped' (free, no expiry). Self-service signups are always trials.
    */
   subscriptionState?: "trial" | "active" | "comped" | undefined;
+  /** A promo code to redeem with this store (ADR-035). A bad code stops the whole provisioning before anything is created. */
+  promoCode?: string | undefined;
   /** Test hook to verify mid-transaction rollback of created org/tenant/user/domain */
   _failMidway?: boolean | undefined;
 }
@@ -323,6 +327,10 @@ export async function provisionTenant(
       throw new Error("Failed to create subscription record");
     }
 
+    if (input.promoCode?.trim()) {
+      await redeemPromoCodeInTx(tx, { tenantId, code: input.promoCode, planCode });
+    }
+
     // 14. Onboarding Progress Checklist (PLAN §5.2, §8)
     await tx.insert(schema.onboardingProgress).values({
       tenantId,
@@ -369,7 +377,7 @@ export async function provisionTenant(
           title: `Welcome to ${storeName}`,
           subtitle: "Explore our premium handcrafted collections.",
           buttonText: "Shop Catalog",
-          buttonUrl: "/collections/all",
+          buttonUrl: "/categories",
         },
       },
       {
@@ -738,28 +746,10 @@ export async function provisionTenant(
       }
     }
 
-    // Navigation Menus (Header & Footer)
+    // Navigation Menus (Header & Footer): full items with ids and types so the admin editor can open them.
     await tx.insert(schema.menus).values([
-      {
-        tenantId,
-        handle: "header",
-        title: "Main menu",
-        items: [
-          { title: "Home", url: "/" },
-          { title: "Catalog", url: "/collections/all" },
-          { title: "About", url: "/pages/about" },
-        ],
-      },
-      {
-        tenantId,
-        handle: "footer",
-        title: "Footer menu",
-        items: [
-          { title: "About Us", url: "/pages/about" },
-          { title: "Privacy Policy", url: "/policies/privacy" },
-          { title: "Terms of Service", url: "/policies/terms" },
-        ],
-      },
+      { tenantId, handle: "header", title: "Main menu", items: defaultHeaderMenuItems() },
+      { tenantId, handle: "footer", title: "Footer menu", items: defaultFooterMenuItems() },
     ]);
 
     // 16. Cleanup any slug reservation

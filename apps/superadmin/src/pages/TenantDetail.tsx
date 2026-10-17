@@ -15,6 +15,7 @@ import {
   FileSpreadsheet,
   Globe,
   Headphones,
+  MoreHorizontal,
   RotateCcw,
   ShieldAlert,
   Trash2,
@@ -28,6 +29,11 @@ import {
   DialogFooter,
   DialogHeader,
   DialogTitle,
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
   Input,
   PageBreadcrumbs,
   PageContainer,
@@ -45,8 +51,11 @@ import {
   TableHeader,
   TableRow,
   ConfirmDialog,
+  CopyableId,
   toast,
 } from "@bs/ui";
+import { formatStoreId } from "@bs/contracts";
+import { TenantPromotions } from "./TenantPromotions.tsx";
 import { client } from "../lib/orpc.ts";
 import { apiBase, storeAdminBase } from "../lib/config.ts";
 import { useHasRole } from "../lib/user-context.tsx";
@@ -77,12 +86,15 @@ export function TenantDetail() {
   const [deletionOpen, setDeletionOpen] = useState(false);
   const [deletionConfirmText, setDeletionConfirmText] = useState("");
   const [deletionReason, setDeletionReason] = useState("");
-  const [deletionGraceDays, setDeletionGraceDays] = useState(7);
+  const [deletionGraceDays, setDeletionGraceDays] = useState(30);
+  const [purgeOpen, setPurgeOpen] = useState(false);
+  const [purgeConfirmText, setPurgeConfirmText] = useState("");
 
   const [newNote, setNewNote] = useState("");
   const [actionLoading, setActionLoading] = useState(false);
 
   const isAdmin = useHasRole("platform_admin");
+  const isOwner = useHasRole("platform_owner");
 
   const [planOpen, setPlanOpen] = useState(false);
   const [planCode, setPlanCode] = useState("starter");
@@ -221,6 +233,25 @@ export function TenantDetail() {
     }
   };
 
+  const handlePurge = async () => {
+    if (purgeConfirmText !== `PURGE ${tenant.slug}`) {
+      toast.error(`Please type exact confirmation: PURGE ${tenant.slug}`);
+      return;
+    }
+    setActionLoading(true);
+    try {
+      await client.tenants.purge({ id: tenant.id, confirmSlug: tenant.slug });
+      toast.success("Permanent purge approved. It runs in the background and is recorded in the audit log.");
+      setPurgeOpen(false);
+      setPurgeConfirmText("");
+      refetch();
+    } catch (err) {
+      toast.error(messageOf(err, "Failed to approve the purge"));
+    } finally {
+      setActionLoading(false);
+    }
+  };
+
   const executeArchive = async () => {
     setActionLoading(true);
     try {
@@ -295,6 +326,10 @@ export function TenantDetail() {
     }
   };
 
+  const canSuspend = !["suspended", "archived", "deletion_requested", "deleted"].includes(tenant.status);
+  const canArchive = !["archived", "deletion_requested", "deleted"].includes(tenant.status);
+  const canDelete = tenant.status !== "deletion_requested" && tenant.status !== "deleted";
+
   return (
     <PageContainer size="full">
       <PageBreadcrumbs
@@ -306,11 +341,14 @@ export function TenantDetail() {
 
       <PageHeader
         title={tenant.name}
-        description={`Tenant ID: ${tenant.id} · Subdomain: ${tenant.slug}.bcom.si`}
+        description={`Subdomain: ${tenant.slug}.bcom.si`}
         meta={
-          <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[11px] font-semibold uppercase tracking-wider bg-primary/10 text-primary border border-primary/20">
-            {tenant.status}
-          </span>
+          <>
+            <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[11px] font-semibold uppercase tracking-wider bg-primary/10 text-primary border border-primary/20">
+              {tenant.status}
+            </span>
+            {formatStoreId(tenant.storeNumber) ? <CopyableId value={formatStoreId(tenant.storeNumber) as string} /> : null}
+          </>
         }
         aside={
           <div className="flex flex-wrap items-center gap-1.5 sm:gap-2">
@@ -319,17 +357,6 @@ export function TenantDetail() {
                 <RotateCcw className="mr-1.5 h-3.5 w-3.5" /> Restore Store
               </Button>
             )}
-            {isAdmin && !["suspended", "archived", "deletion_requested", "deleted"].includes(tenant.status) && (
-              <Button size="sm" variant="destructive" onClick={() => setSuspendOpen(true)} disabled={actionLoading} className="shadow-2xs">
-                <ShieldAlert className="mr-1.5 h-3.5 w-3.5" /> Suspend
-              </Button>
-            )}
-            {isAdmin && !["archived", "deletion_requested", "deleted"].includes(tenant.status) && (
-              <Button size="sm" variant="outline" onClick={() => setArchiveConfirmOpen(true)} disabled={actionLoading} className="shadow-2xs">
-                <Archive className="mr-1.5 h-3.5 w-3.5" /> Archive
-              </Button>
-            )}
-
             {isAdmin && tenant.status === "trial" && (
               <Button size="sm" variant="outline" onClick={() => setExtendTrialOpen(true)} className="shadow-2xs">
                 <Calendar className="mr-1.5 h-3.5 w-3.5" /> Extend Trial
@@ -356,10 +383,40 @@ export function TenantDetail() {
               </Button>
             )}
 
-            {isAdmin && tenant.status !== "deletion_requested" && tenant.status !== "deleted" && (
-              <Button size="sm" variant="destructive" onClick={() => setDeletionOpen(true)} className="shadow-2xs">
-                <Trash2 className="mr-1.5 h-3.5 w-3.5" /> Delete
-              </Button>
+            {isAdmin && (canSuspend || canArchive || canDelete) && (
+              <DropdownMenu>
+                <DropdownMenuTrigger
+                  render={
+                    <Button size="sm" variant="outline" aria-label="More actions" className="shadow-2xs">
+                      <MoreHorizontal className="mr-1.5 h-3.5 w-3.5" /> More
+                    </Button>
+                  }
+                />
+                <DropdownMenuContent align="end">
+                  {canSuspend && (
+                    <DropdownMenuItem
+                      className="text-destructive focus:text-destructive"
+                      disabled={actionLoading}
+                      onClick={() => setSuspendOpen(true)}
+                    >
+                      <ShieldAlert className="mr-2 h-3.5 w-3.5" /> Suspend
+                    </DropdownMenuItem>
+                  )}
+                  {canArchive && (
+                    <DropdownMenuItem disabled={actionLoading} onClick={() => setArchiveConfirmOpen(true)}>
+                      <Archive className="mr-2 h-3.5 w-3.5" /> Archive
+                    </DropdownMenuItem>
+                  )}
+                  {canDelete && (
+                    <>
+                      <DropdownMenuSeparator />
+                      <DropdownMenuItem className="text-destructive focus:text-destructive" onClick={() => setDeletionOpen(true)}>
+                        <Trash2 className="mr-2 h-3.5 w-3.5" /> Delete store
+                      </DropdownMenuItem>
+                    </>
+                  )}
+                </DropdownMenuContent>
+              </DropdownMenu>
             )}
           </div>
         }
@@ -374,20 +431,38 @@ export function TenantDetail() {
             Step: <span className="font-mono">{detail.deletion.step}</span> · Reason: {detail.deletion.reason}
           </p>
           {detail.deletion.error && <p className="mt-1 text-xs text-destructive">Last error (it will retry): {detail.deletion.error}</p>}
-          {detail.deletion.canCancel ? (
-            isAdmin && (
-              <Button size="sm" className="mt-3" onClick={handleCancelDeletion} disabled={actionLoading}>
+          {detail.deletion.manualPurge ? (
+            <p className="mt-2 text-xs text-muted-foreground">
+              {detail.deletion.purgeApprovedAt
+                ? "The permanent purge was approved and runs in the background."
+                : !detail.deletion.purgeAvailable
+                  ? `The store's data is kept until ${new Date(detail.deletion.purgeAvailableFrom).toLocaleDateString("en-IN")}. After that the platform owner can delete it permanently.`
+                  : isOwner
+                    ? "The retention period is over. You can now delete the store's data permanently."
+                    : "The retention period is over. Only the platform owner can delete the store's data permanently."}
+            </p>
+          ) : null}
+          <div className="mt-3 flex flex-wrap items-center gap-2">
+            {detail.deletion.canCancel && isAdmin ? (
+              <Button size="sm" onClick={handleCancelDeletion} disabled={actionLoading}>
                 Cancel deletion
               </Button>
-            )
-          ) : (
-            <p className="mt-2 text-xs">The deletion has started and can no longer be cancelled.</p>
-          )}
+            ) : null}
+            {detail.deletion.manualPurge &&
+            !detail.deletion.purgeApprovedAt &&
+            isOwner &&
+            detail.deletion.purgeAvailable ? (
+              <Button size="sm" variant="destructive" onClick={() => setPurgeOpen(true)} disabled={actionLoading}>
+                <Trash2 className="mr-1.5 h-3.5 w-3.5" /> Delete permanently
+              </Button>
+            ) : null}
+          </div>
+          {!detail.deletion.canCancel ? <p className="mt-2 text-xs">The deletion has started and can no longer be cancelled.</p> : null}
         </div>
       )}
 
       {/* Tabs Bar */}
-      <div className="flex items-center gap-1 border-b mb-6 overflow-x-auto">
+      <div className="flex items-center gap-1 border-b border-border mb-6 overflow-x-auto">
         {(
           [
             { id: "overview", label: "Overview", icon: Building2 },
@@ -543,6 +618,8 @@ export function TenantDetail() {
               <p className="text-xs text-muted-foreground">No active paid subscription attached.</p>
             )}
           </div>
+
+          <TenantPromotions tenantId={tenant.id} planCode={(tenant.planId ?? "starter").toLowerCase()} />
 
           <div className="rounded-xl border border-border bg-card shadow-xs overflow-hidden">
             <div className="p-4 border-b border-border/60">
@@ -901,6 +978,37 @@ export function TenantDetail() {
       />
 
       {/* Deletion Dialog */}
+      <Dialog open={purgeOpen} onOpenChange={setPurgeOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle className="text-destructive flex items-center gap-2">
+              <AlertOctagon className="h-5 w-5" /> Delete store data permanently
+            </DialogTitle>
+            <DialogDescription>
+              This cannot be undone. A final export is taken first, billing stops, domains are released, files are removed and every row of this store is deleted.
+              The store record, invoices (kept for tax rules) and the audit trail stay.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-3 py-2 text-xs">
+            <div className="rounded-lg bg-destructive/10 p-3 text-destructive border border-destructive/20">
+              <p className="font-semibold">To confirm, type exactly: <span className="font-mono select-all">PURGE {tenant.slug}</span></p>
+              <Input
+                value={purgeConfirmText}
+                onChange={(e) => setPurgeConfirmText(e.target.value)}
+                placeholder={`PURGE ${tenant.slug}`}
+                className="mt-2 bg-background text-foreground"
+              />
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="default" onClick={() => setPurgeOpen(false)}>Cancel</Button>
+            <Button variant="destructive" onClick={handlePurge} disabled={actionLoading || purgeConfirmText !== `PURGE ${tenant.slug}`}>
+              Delete permanently
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
       <Dialog open={deletionOpen} onOpenChange={setDeletionOpen}>
         <DialogContent>
           <DialogHeader>
@@ -908,16 +1016,16 @@ export function TenantDetail() {
               <AlertOctagon className="h-5 w-5" /> Schedule Tenant Deletion
             </DialogTitle>
             <DialogDescription>
-              This enqueues the 8-step tenant deletion workflow (pg-boss). A grace period allows cancellation before permanent purge.
+              The store goes offline right away. Its data is kept for at least 30 days and you can cancel until the purge starts. After that, only the platform owner can delete the data permanently.
             </DialogDescription>
           </DialogHeader>
           <div className="space-y-3 py-2 text-xs">
             <div>
-              <label className="font-semibold">Grace Period (Days)</label>
+              <label className="font-semibold">Retention (days, 30 to 90)</label>
               <Input
                 type="number"
-                min={0}
-                max={30}
+                min={30}
+                max={90}
                 value={deletionGraceDays}
                 onChange={(e) => setDeletionGraceDays(Number(e.target.value))}
               />

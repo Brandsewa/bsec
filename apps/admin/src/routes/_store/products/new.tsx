@@ -11,6 +11,7 @@ import { Switch } from "@bs/ui";
 import { Textarea } from "@bs/ui";
 import { SeoCard } from "../../../components/seo-card.tsx";
 import { SimpleSelect } from "@bs/ui";
+import { categoryLabel } from "../../../lib/category-label.ts";
 import { orpc } from "../../../lib/orpc.ts";
 
 export const Route = createFileRoute("/_store/products/new")({
@@ -640,7 +641,7 @@ export function NewProductPage({ navigate }: { navigate?: (to: string) => void }
                     { value: "", label: "Select primary category..." },
                     ...categories.map((c) => ({
                       value: c.id,
-                      label: c.path ? `${c.path} (${c.name})` : c.name,
+                      label: categoryLabel(c, categories),
                     })),
                   ]}
                 />
@@ -675,7 +676,7 @@ export function NewProductPage({ navigate }: { navigate?: (to: string) => void }
                             }}
                             className="rounded border-border text-primary focus:ring-primary"
                           />
-                          <span className="truncate">{c.path ? `${c.path} (${c.name})` : c.name}</span>
+                          <span className="truncate">{categoryLabel(c, categories)}</span>
                         </label>
                       );
                     })}

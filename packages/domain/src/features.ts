@@ -16,6 +16,7 @@ export class FeatureDisabledError extends Error {
 /**
  * Resolves whether a feature flag is enabled for a specific tenant (PLAN §5.1, M1).
  * Resolution hierarchy:
+ *  0. Retired (permanent) flag -> true
  *  1. Kill switch on global feature_flags -> false
  *  2. Tenant-level override in tenant_feature_overrides -> override.enabled
  *  3. Global default_on in feature_flags -> flag.defaultOn
@@ -26,7 +27,7 @@ export async function isFeatureEnabled(
   tenantId: string,
   key: string,
 ): Promise<boolean> {
-  let flag: { defaultOn: boolean; killSwitch: boolean } | undefined;
+  let flag: { defaultOn: boolean; killSwitch: boolean; retiredAt?: Date | null } | undefined;
 
   if (db.query?.featureFlags) {
     flag = await db.query.featureFlags.findFirst({
@@ -37,11 +38,17 @@ export async function isFeatureEnabled(
       .select({
         defaultOn: schema.featureFlags.defaultOn,
         killSwitch: schema.featureFlags.killSwitch,
+        retiredAt: schema.featureFlags.retiredAt,
       })
       .from(schema.featureFlags)
       .where(eq(schema.featureFlags.key, key))
       .limit(1);
     flag = rows[0];
+  }
+
+  // A retired (permanent) feature is always on: no kill switch, override or default applies any more.
+  if (flag?.retiredAt) {
+    return true;
   }
 
   if (!flag || flag.killSwitch) {

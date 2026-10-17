@@ -5,6 +5,9 @@ import {
   getStorefrontProduct,
   getStorefrontCollection,
   getStorefrontCategory,
+  listStorefrontCategories,
+  getStorefrontCustomFields,
+  type StorefrontCustomField,
   getStorefrontHomePage,
   getStorefrontPage,
   getStorefrontPageByPath,
@@ -24,6 +27,7 @@ import {
   type StorefrontProductDetail,
   type StorefrontCollectionDetail,
   type StorefrontCategoryDetail,
+  type StorefrontCategoryCard,
   type TenantContext,
 } from "@bs/domain";
 import { renderBlockDocument, resolveDefaultPages, walkBlocks, type BlockInstance } from "@bs/blocks";
@@ -93,6 +97,24 @@ export async function getCachedStorefrontCollection(
   }
 
   return res;
+}
+
+/** The custom fields to show for one product (ADR-034), refreshed with the product and with field changes. */
+export async function getCachedProductCustomFields(tenantId: string, productId: string): Promise<StorefrontCustomField[]> {
+  "use cache";
+  cacheTag(tenantTag(tenantId, "product", productId));
+  cacheTag(tenantTag(tenantId, "product"));
+  const { rt } = server();
+  return getStorefrontCustomFields(rt, createStorefrontTenantContext(tenantId), { resourceType: "product", resourceId: productId });
+}
+
+/** All visible categories for the /categories page, cached under the category and product tags (PLAN §11.6). */
+export async function getCachedStorefrontCategories(tenantId: string): Promise<StorefrontCategoryCard[]> {
+  "use cache";
+  cacheTag(tenantTag(tenantId, "category"));
+  cacheTag(tenantTag(tenantId, "product"));
+  const { rt } = server();
+  return listStorefrontCategories(rt, createStorefrontTenantContext(tenantId));
 }
 
 export async function getCachedStorefrontCategory(

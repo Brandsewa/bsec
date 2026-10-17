@@ -1,6 +1,7 @@
 import { createFileRoute, Link, redirect, useNavigate } from "@tanstack/react-router";
 import { useState, type FormEvent } from "react";
 import { AuthCardSkeleton, AuthShell, Button, Field, FieldError, FieldGroup, FieldLabel, Input } from "@bs/ui";
+import { PasswordInput } from "@bs/ui";
 import { fetchMe, signIn } from "../lib/auth.ts";
 
 export const Route = createFileRoute("/login")({
@@ -54,9 +55,9 @@ function LoginPage() {
                 Forgot password?
               </Link>
             </div>
-            <Input
+            <PasswordInput
               id="password"
-              type="password"
+              
               autoComplete="current-password"
               required
               value={password}

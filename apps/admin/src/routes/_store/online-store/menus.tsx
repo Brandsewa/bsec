@@ -257,26 +257,15 @@ export function MenusPage() {
             <Edit2 className="h-4 w-4 mr-1" />
             Edit
           </Button>
-          {!m.isProtected ? (
-            <Button
-              size="sm"
-              variant="ghost"
-              className="text-destructive hover:text-destructive"
-              onClick={() => setDeleteTarget(m)}
-            >
-              <Trash2 className="h-4 w-4" />
-            </Button>
-          ) : (
-            <Button
-              size="sm"
-              variant="ghost"
-              disabled
-              title="Default menu is protected and cannot be deleted"
-              className="text-muted-foreground opacity-40 cursor-not-allowed"
-            >
-              <Trash2 className="h-4 w-4" />
-            </Button>
-          )}
+          <Button
+            size="sm"
+            variant="ghost"
+            className="text-destructive hover:text-destructive"
+            aria-label={`Delete menu ${m.name}`}
+            onClick={() => setDeleteTarget(m)}
+          >
+            <Trash2 className="h-4 w-4" />
+          </Button>
         </div>
       ),
     },
@@ -427,7 +416,11 @@ export function MenusPage() {
         open={Boolean(deleteTarget)}
         onOpenChange={(open) => !open && setDeleteTarget(null)}
         title={`Delete menu "${deleteTarget?.name}"?`}
-        description="Are you sure you want to delete this menu? Blocks referencing this handle will fall back to default links."
+        description={
+          deleteTarget?.isProtected
+            ? "This is a default menu used by your storefront. If you delete it, that part of your storefront shows no links until you create a menu with the same handle again. This cannot be undone."
+            : "Are you sure you want to delete this menu? Blocks referencing this handle will show no links."
+        }
         confirmLabel="Delete menu"
         destructive
         onConfirm={() => {

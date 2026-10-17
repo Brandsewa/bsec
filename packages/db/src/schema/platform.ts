@@ -46,6 +46,11 @@ export const featureFlags = pgTable("feature_flags", {
   defaultOn: boolean("default_on").notNull().default(false),
   rules: jsonb("rules"),
   killSwitch: boolean("kill_switch").notNull().default(false),
+  /** "release": temporary rollout flag that can be retired. "kill_switch": long-lived emergency switch, never retired (migration 0063). */
+  kind: text("kind").notNull().default("release"),
+  description: text("description"),
+  /** Set when the feature was made permanent: the flag is then always on and hidden from the main list. */
+  retiredAt: timestamp("retired_at", { withTimezone: true }),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().default(sql`now()`),
   updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().default(sql`now()`),
 });

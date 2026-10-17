@@ -804,6 +804,24 @@ export const ProductInfoTabsBlock: BlockDefinition<ProductInfoTabsProps> = {
   render: V.ProductInfoTabsView,
 };
 
+/**
+ * One custom field of the product (ADR-034): the owner picks a field key and the storefront shows that product's value.
+ * Product pages only. Draws nothing when the product has no value for the field.
+ */
+export const ProductCustomFieldSchema = z.object({
+  fieldKey: z.string().max(40).default(""),
+  showLabel: z.boolean().default(true),
+  label: z.string().max(80).default(""),
+});
+export type ProductCustomFieldProps = z.infer<typeof ProductCustomFieldSchema>;
+export const ProductCustomFieldBlock: BlockDefinition<ProductCustomFieldProps> = {
+  type: "ProductCustomField",
+  version: 1,
+  schema: ProductCustomFieldSchema,
+  defaultProps: { fieldKey: "", showLabel: true, label: "" },
+  render: V.ProductCustomFieldView,
+};
+
 export const CollectionListingSchema = z.object({
   columns: z.enum(["2", "3", "4"]).default("4"),
   showFilters: z.boolean().default(true),
@@ -1190,6 +1208,7 @@ export const BLOCK_DEFINITIONS: Record<BlockType, AnyBlockDefinition> = {
   SiteFooter: SiteFooterBlock,
   ProductDetail: ProductDetailBlock,
   ProductInfoTabs: ProductInfoTabsBlock,
+  ProductCustomField: ProductCustomFieldBlock,
   CollectionListing: CollectionListingBlock,
   CartContents: CartContentsBlock,
   HeroSlider: HeroSliderBlock,

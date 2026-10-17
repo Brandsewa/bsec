@@ -1,5 +1,6 @@
 import { descriptionText } from "@/lib/description-text.ts";
 import { ProductInfoTabs } from "@/components/product/ProductInfoTabs.tsx";
+import { ProductCustomField } from "@/components/product/ProductCustomField.tsx";
 import { ProductReviewsSection } from "@/components/product/ProductReviewsSection.tsx";
 import { DEFAULT_SHIPPING_CONTENT, type ProductInfoTabsOptions } from "@bs/blocks";
 import React from "react";
@@ -18,7 +19,7 @@ import {
   tenantTag,
 } from "@bs/domain";
 import { server } from "@/server/runtime.ts";
-import { getCachedStorefrontProduct, getCachedThemePage } from "@/server/cached-storefront.ts";
+import { getCachedProductCustomFields, getCachedStorefrontProduct, getCachedThemePage } from "@/server/cached-storefront.ts";
 import { BlockRenderer } from "@/components/blocks/BlockRenderer.tsx";
 import { ProductDetailSection } from "@/components/product/ProductDetailSection.tsx";
 
@@ -130,6 +131,11 @@ export default async function ProductDetailPage({ params }: ProductPageProps) {
   const detail = (options?: Parameters<typeof ProductDetailSection>[0]["options"]) => (
     <ProductDetailSection product={product} options={options} paymentImageUrl={options?.paymentImageMediaId ? media[options.paymentImageMediaId] : undefined} />
   );
+  // Custom fields (ADR-034): loaded once for the product and handed to the theme's "Custom field" blocks.
+  const customFields = await getCachedProductCustomFields(tenantId, product.id).catch(() => []);
+  const customField = (o: { fieldKey: string; showLabel: boolean; label: string }) => (
+    <ProductCustomField field={customFields.find((f) => f.key === o.fieldKey)} showLabel={o.showLabel} label={o.label} />
+  );
   const infoTabs = (o: ProductInfoTabsOptions) => (
     <ProductInfoTabs
       descriptionLabel={o.descriptionLabel}
@@ -151,7 +157,7 @@ export default async function ProductDetailPage({ params }: ProductPageProps) {
         <BlockRenderer
           blocks={template.blocks}
           renderData={template.renderData}
-          context={{ renderProductDetail: (options) => detail(options), renderProductInfoTabs: infoTabs }}
+          context={{ renderProductDetail: (options) => detail(options), renderProductInfoTabs: infoTabs, renderProductCustomField: customField }}
         />
       ) : (
         <>

@@ -1,6 +1,7 @@
 import React, { useState } from "react";
 import { Database } from "lucide-react";
 import { AuthShell, Button, Input, Label } from "@bs/ui";
+import { PasswordInput } from "@bs/ui";
 import { acceptStaffInvitation } from "../lib/auth.ts";
 
 /** Public page: a platform staff invitation is accepted here (choose a password, then sign in and set up MFA). */
@@ -47,13 +48,13 @@ export function AcceptInvitation() {
             {error && (
               <div role="alert" className="rounded-md bg-destructive/10 p-3 text-sm text-destructive border border-destructive/20">{error}</div>
             )}
-            <div>
+            <div className="space-y-1.5">
               <Label htmlFor="name">Your name</Label>
               <Input id="name" value={name} onChange={(e) => setName(e.target.value)} autoFocus />
             </div>
-            <div>
+            <div className="space-y-1.5">
               <Label htmlFor="password">Choose a password (10+ characters)</Label>
-              <Input id="password" type="password" minLength={10} value={password} onChange={(e) => setPassword(e.target.value)} required />
+              <PasswordInput id="password" minLength={10} value={password} onChange={(e) => setPassword(e.target.value)} required />
               <p className="mt-1 text-xs text-muted-foreground">If you already have an account with this email, enter its current password instead: it is not changed.</p>
             </div>
             <Button type="submit" className="w-full" disabled={busy || password.length < 10}>

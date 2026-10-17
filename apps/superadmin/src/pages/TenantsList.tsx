@@ -92,10 +92,13 @@ export function TenantsList() {
   const { data: tenants, isLoading, refetch } = useQuery({
     queryKey: ["platform", "tenants", { search, status: statusFilter }],
     queryFn: () =>
-      client.tenants.list({
-        search: search.trim() || undefined,
-        status: statusFilter !== "all" ? statusFilter : undefined,
-      }),
+      client.tenants
+        .list({
+          search: search.trim() || undefined,
+          status: statusFilter !== "all" ? statusFilter : undefined,
+        })
+        // Deleted stores (their data is already gone) are hidden unless the Deleted filter is chosen.
+        .then((rows) => (statusFilter === "all" ? rows.filter((r) => r.status !== "deleted") : rows)),
   });
 
   const toggleSelect = (id: string) => {
@@ -199,6 +202,7 @@ export function TenantsList() {
               <SelectItem value="past_due">Past Due</SelectItem>
               <SelectItem value="suspended">Suspended</SelectItem>
               <SelectItem value="archived">Archived</SelectItem>
+              <SelectItem value="deleted">Deleted</SelectItem>
             </SelectContent>
           </Select>
         </div>

@@ -306,11 +306,11 @@ function StorefrontForm({ current }: { current: StorefrontStatus }) {
       <SettingsCard title="Store visibility" description="You can change this at any time.">
         <RadioGroup aria-label="Store visibility" className="gap-2" value={mode} onValueChange={(v) => setMode(v as Mode)}>
           {MODES.map((m) => (
-            <label key={m.value} className="flex cursor-pointer items-start gap-3 rounded-md border border-border p-3 has-data-checked:border-primary/50 has-data-checked:bg-muted">
-              <RadioGroupItem value={m.value} className="mt-0.5" />
-              <span className="space-y-0.5">
-                <span className="block text-xs font-medium text-foreground">{m.title}</span>
-                <span className="block text-[11px] text-muted-foreground leading-normal">{m.description}</span>
+            <label key={m.value} className="flex cursor-pointer items-center gap-3 rounded-md border border-border px-3 py-2.5 has-data-checked:border-primary/50 has-data-checked:bg-muted">
+              <RadioGroupItem value={m.value} className="shrink-0" />
+              <span className="flex min-w-0 flex-1 flex-col gap-0.5 sm:flex-row sm:items-center sm:justify-between sm:gap-4">
+                <span className="shrink-0 text-xs font-medium text-foreground">{m.title}</span>
+                <span className="text-[11px] leading-normal text-muted-foreground sm:text-right">{m.description}</span>
               </span>
             </label>
           ))}

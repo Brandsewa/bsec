@@ -144,7 +144,16 @@ export async function listPlatformQuotaDefinitions(rt: Runtime) {
 
 export async function listPlatformFeatureFlags(rt: Runtime) {
   const rows = await rt._db.db.select().from(schema.featureFlags);
-  return rows.map((r) => ({ key: r.key, defaultOn: r.defaultOn, killSwitch: r.killSwitch }));
+  return rows
+    .map((r) => ({
+      key: r.key,
+      defaultOn: r.defaultOn,
+      killSwitch: r.killSwitch,
+      kind: (r.kind === "kill_switch" ? "kill_switch" : "release") as "release" | "kill_switch",
+      description: r.description ?? null,
+      retiredAt: r.retiredAt ? r.retiredAt.toISOString() : null,
+    }))
+    .sort((a, b) => a.key.localeCompare(b.key));
 }
 
 /** Changes a global feature flag / kill switch. The change and its audit row are one transaction; unknown keys are refused. */
@@ -157,6 +166,7 @@ export async function updatePlatformFeatureFlag(
   return rt._db.db.transaction(async (tx) => {
     const [before] = await tx.select().from(schema.featureFlags).where(eq(schema.featureFlags.key, input.featureKey)).for("update").limit(1);
     if (!before) throw new Error(`Not Found: feature flag not found: ${input.featureKey}`);
+    if (before.retiredAt) throw new Error(`Conflict: '${input.featureKey}' is permanent. Restore it before changing it`);
 
     await tx
       .update(schema.featureFlags)
@@ -171,6 +181,48 @@ export async function updatePlatformFeatureFlag(
       from: { defaultOn: before.defaultOn, killSwitch: before.killSwitch },
       to: { defaultOn: input.defaultOn, killSwitch: input.killSwitch ?? before.killSwitch },
     }, meta);
+    return { ok: true as const };
+  });
+}
+
+/**
+ * Makes a release flag permanent (retired): it becomes always on and leaves the main list. Kill switches are protected
+ * so the emergency switch is never lost, and a flag must be on with its kill switch off first, so retiring can never
+ * silently turn a feature on that was off.
+ */
+export async function retirePlatformFeatureFlag(
+  rt: Runtime,
+  staffUserId: string,
+  input: { featureKey: string },
+  meta?: AuditMeta,
+): Promise<{ ok: true }> {
+  return rt._db.db.transaction(async (tx) => {
+    const [flag] = await tx.select().from(schema.featureFlags).where(eq(schema.featureFlags.key, input.featureKey)).for("update").limit(1);
+    if (!flag) throw new Error(`Not Found: feature flag not found: ${input.featureKey}`);
+    if (flag.retiredAt) return { ok: true as const };
+    if (flag.kind === "kill_switch") throw new Error(`Conflict: '${input.featureKey}' is a kill switch and cannot be made permanent`);
+    if (!flag.defaultOn || flag.killSwitch) throw new Error(`Conflict: turn '${input.featureKey}' on (and clear its kill switch) before making it permanent`);
+
+    await tx.update(schema.featureFlags).set({ retiredAt: sql`now()`, updatedAt: sql`now()` }).where(eq(schema.featureFlags.key, input.featureKey));
+    await writePlatformAudit(tx, staffUserId, "feature_flag.retire", "feature_flag", input.featureKey, null, { from: { retired: false }, to: { retired: true } }, meta);
+    return { ok: true as const };
+  });
+}
+
+/** Brings a retired flag back as a normal release flag. */
+export async function restorePlatformFeatureFlag(
+  rt: Runtime,
+  staffUserId: string,
+  input: { featureKey: string },
+  meta?: AuditMeta,
+): Promise<{ ok: true }> {
+  return rt._db.db.transaction(async (tx) => {
+    const [flag] = await tx.select().from(schema.featureFlags).where(eq(schema.featureFlags.key, input.featureKey)).for("update").limit(1);
+    if (!flag) throw new Error(`Not Found: feature flag not found: ${input.featureKey}`);
+    if (!flag.retiredAt) return { ok: true as const };
+
+    await tx.update(schema.featureFlags).set({ retiredAt: null, updatedAt: sql`now()` }).where(eq(schema.featureFlags.key, input.featureKey));
+    await writePlatformAudit(tx, staffUserId, "feature_flag.restore", "feature_flag", input.featureKey, null, { from: { retired: true }, to: { retired: false } }, meta);
     return { ok: true as const };
   });
 }

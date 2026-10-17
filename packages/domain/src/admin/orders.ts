@@ -5,7 +5,8 @@ import type { Runtime } from "../runtime.ts";
 import { assertPermission, type TenantContext } from "../context.ts";
 import { allocateOrderNumber } from "./order-settings.ts";
 import { readStoreConfig } from "./store-config.ts";
-import { getTenantShippingRates } from "../orders/shipping-rates.ts";
+import { cartWeightGrams, getTenantShippingRates } from "../orders/shipping-rates.ts";
+import { toCountryCode } from "../orders/shipping-rules.ts";
 import { allocateDiscount } from "../orders/pricing.ts";
 import { calculateGstLineItem, normalizeState } from "../orders/invoices.ts";
 import { calculateTax } from "../orders/tax-engine.ts";
@@ -464,7 +465,10 @@ export async function estimateAdminDraftOrder(
     }
 
     const netGoods = Math.max(0, subtotal - discountTotal);
-    const resolvedRates = await getTenantShippingRates(tx, ctx.tenantId, netGoods);
+    const resolvedRates = await getTenantShippingRates(tx, ctx.tenantId, netGoods, {
+      weightGrams: await cartWeightGrams(tx, itemCalculations.map((i) => ({ variantId: i.variantId, quantity: i.quantity }))),
+      destination: { country: toCountryCode((input.shippingAddress as { country?: string } | undefined)?.country) ?? "IN", state: input.shippingAddress?.state },
+    });
     const availableShippingRates = resolvedRates
       .filter((r) => r.applicable)
       .map((r) => ({
@@ -749,7 +753,13 @@ export async function createAdminDraftOrder(
     }
 
     const netGoods = Math.max(0, subtotal - discountTotal);
-    const resolvedRates = await getTenantShippingRates(tx, ctx.tenantId, netGoods);
+    const resolvedRates = await getTenantShippingRates(tx, ctx.tenantId, netGoods, {
+      weightGrams: await cartWeightGrams(tx, itemCalculations.map((i) => ({ variantId: i.variant.id, quantity: i.quantity }))),
+      destination: {
+        country: toCountryCode((input.shippingAddress as { country?: string } | undefined)?.country) ?? "IN",
+        state: (input.shippingAddress as Record<string, unknown> | undefined)?.state as string | undefined,
+      },
+    });
     const availableShippingRates = resolvedRates
       .filter((r) => r.applicable)
       .map((r) => ({

@@ -176,6 +176,18 @@ const CASES: Record<string, Case> = {
       return { id: s.tenantId };
     },
   },
+  "tenants.purge": {
+    role: "platform_owner",
+    action: "tenant.purge_approved",
+    input: async () => {
+      const s = await mkStore();
+      await scheduleTenantDeletion(rt, owner.userId, { tenantId: s.tenantId, confirmSlug: s.slug, graceDays: 0 });
+      // The 30-day retention must be over: backdate the request.
+      const old = new Date(Date.now() - 40 * 24 * 3600_000);
+      await rt._db.db.update(schema.tenantDeletions).set({ createdAt: old, scheduledFor: old }).where(eq(schema.tenantDeletions.tenantId, s.tenantId));
+      return { id: s.tenantId, confirmSlug: s.slug };
+    },
+  },
   "tenants.export": { role: "platform_admin", action: "tenant.export_generated", input: async () => ({ id: (await mkStore()).tenantId }) },
   "support.start": {
     role: "platform_support",
@@ -204,6 +216,77 @@ const CASES: Record<string, Case> = {
       const key = `flag_${++seq}`;
       await rt._db.db.insert(schema.featureFlags).values({ key, defaultOn: false });
       return { featureKey: key, defaultOn: true };
+    },
+  },
+  "audit.archive": {
+    role: "platform_admin",
+    action: "audit_log.archive",
+    input: async () => {
+      const [row] = await rt._db.db
+        .insert(schema.platformAuditLogs)
+        .values({ action: "test.seed", targetType: "test", targetId: `seed_${++seq}` })
+        .returning({ id: schema.platformAuditLogs.id });
+      return { ids: [row!.id] };
+    },
+  },
+  "audit.unarchive": {
+    role: "platform_admin",
+    action: "audit_log.unarchive",
+    input: async () => {
+      const [row] = await rt._db.db
+        .insert(schema.platformAuditLogs)
+        .values({ action: "test.seed", targetType: "test", targetId: `seed_${++seq}` })
+        .returning({ id: schema.platformAuditLogs.id });
+      await rt._db.db.insert(schema.platformAuditLogArchives).values({ auditLogId: row!.id });
+      return { ids: [row!.id] };
+    },
+  },
+  "promotions.create": {
+    role: "platform_owner",
+    action: "promotion.created",
+    input: async () => ({ code: `COV-${++seq}-${Date.now() % 100000}`, name: "Coverage promo", kind: "free_months" as const, durationMonths: 3 }),
+  },
+  "promotions.update": {
+    role: "platform_owner",
+    action: "promotion.updated",
+    input: async () => {
+      const [p] = await rt._db.db.insert(schema.promotions).values({ code: `UPD-${++seq}-${Date.now() % 100000}`, name: "Upd", kind: "free_months", durationMonths: 2 }).returning({ id: schema.promotions.id });
+      return { id: p!.id, name: "Renamed" };
+    },
+  },
+  "promotions.grant": {
+    role: "platform_owner",
+    action: "promotion.granted",
+    input: async () => ({ tenantId: (await mkStore()).tenantId, termMonths: 12 as const, custom: { kind: "free_months" as const, durationMonths: 12 } }),
+  },
+  "promotions.cancelGrant": {
+    role: "platform_owner",
+    action: "promotion.cancelled",
+    input: async () => {
+      const s = await mkStore();
+      const [g] = await rt._db.db
+        .insert(schema.tenantPromotions)
+        .values({ tenantId: s.tenantId, kind: "free_months", durationMonths: 3, termMonths: 12, source: "staff", endsAt: new Date(Date.now() + 90 * 24 * 3600_000) })
+        .returning({ id: schema.tenantPromotions.id });
+      return { id: g!.id };
+    },
+  },
+  "features.retire": {
+    role: "platform_admin",
+    action: "feature_flag.retire",
+    input: async () => {
+      const key = `flag_${++seq}`;
+      await rt._db.db.insert(schema.featureFlags).values({ key, defaultOn: true });
+      return { featureKey: key };
+    },
+  },
+  "features.restore": {
+    role: "platform_owner",
+    action: "feature_flag.restore",
+    input: async () => {
+      const key = `flag_${++seq}`;
+      await rt._db.db.insert(schema.featureFlags).values({ key, defaultOn: true, retiredAt: new Date() });
+      return { featureKey: key };
     },
   },
   "plans.decideRequest": {

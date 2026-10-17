@@ -134,6 +134,15 @@ import {
   updateStoreSettings,
   updateTheme,
   updateVariant,
+  listCustomFieldDefinitions,
+  createCustomFieldDefinition,
+  updateCustomFieldDefinition,
+  setCustomFieldArchived,
+  getResourceCustomFields,
+  setResourceCustomFields,
+  createVariant,
+  deleteVariant,
+  setProductOptions,
   trashMedia,
   restoreMedia,
   QuotaExceededError,
@@ -141,6 +150,7 @@ import {
   MEDIA_GENERIC_ERROR,
   getAdminShippingSettings,
   updateAdminShippingSettings,
+  saveAdminShippingZones,
   searchStorefrontProducts,
   getSearchSuggestions,
   getOrCreateCart,
@@ -1074,6 +1084,59 @@ export const storeRouter = os.router({
           if (!context.tenantCtx) throw new Error("Missing tenant context");
           return deleteProduct(context.rt, context.tenantCtx, input);
         }),
+      setOptions: os.admin.products.setOptions
+        .use(requireAdmin)
+        .use(requirePermission("products.write"))
+        .handler(({ context, input }) => {
+          if (!context.tenantCtx) throw new Error("Missing tenant context");
+          return setProductOptions(context.rt, context.tenantCtx, { productId: input.id, options: input.options, defaultPriceMinor: input.defaultPriceMinor });
+        }),
+    },
+
+    // Catalog: Custom fields (ADR-034)
+    customFields: {
+      listDefinitions: os.admin.customFields.listDefinitions
+        .use(requireAdmin)
+        .use(requirePermission("products.read"))
+        .handler(({ context, input }) => {
+          if (!context.tenantCtx) throw new Error("Missing tenant context");
+          return listCustomFieldDefinitions(context.rt, context.tenantCtx, input);
+        }),
+      createDefinition: os.admin.customFields.createDefinition
+        .use(requireAdmin)
+        .use(requirePermission("products.write"))
+        .handler(({ context, input }) => {
+          if (!context.tenantCtx) throw new Error("Missing tenant context");
+          return createCustomFieldDefinition(context.rt, context.tenantCtx, input);
+        }),
+      updateDefinition: os.admin.customFields.updateDefinition
+        .use(requireAdmin)
+        .use(requirePermission("products.write"))
+        .handler(({ context, input }) => {
+          if (!context.tenantCtx) throw new Error("Missing tenant context");
+          return updateCustomFieldDefinition(context.rt, context.tenantCtx, input);
+        }),
+      setArchived: os.admin.customFields.setArchived
+        .use(requireAdmin)
+        .use(requirePermission("products.write"))
+        .handler(({ context, input }) => {
+          if (!context.tenantCtx) throw new Error("Missing tenant context");
+          return setCustomFieldArchived(context.rt, context.tenantCtx, input);
+        }),
+      getValues: os.admin.customFields.getValues
+        .use(requireAdmin)
+        .use(requirePermission("products.read"))
+        .handler(({ context, input }) => {
+          if (!context.tenantCtx) throw new Error("Missing tenant context");
+          return getResourceCustomFields(context.rt, context.tenantCtx, input);
+        }),
+      setValues: os.admin.customFields.setValues
+        .use(requireAdmin)
+        .use(requirePermission("products.write"))
+        .handler(({ context, input }) => {
+          if (!context.tenantCtx) throw new Error("Missing tenant context");
+          return setResourceCustomFields(context.rt, context.tenantCtx, input);
+        }),
     },
 
     // Catalog: Variants
@@ -1084,6 +1147,20 @@ export const storeRouter = os.router({
         .handler(({ context, input }) => {
           if (!context.tenantCtx) throw new Error("Missing tenant context");
           return updateVariant(context.rt, context.tenantCtx, input);
+        }),
+      create: os.admin.variants.create
+        .use(requireAdmin)
+        .use(requirePermission("products.write"))
+        .handler(({ context, input }) => {
+          if (!context.tenantCtx) throw new Error("Missing tenant context");
+          return createVariant(context.rt, context.tenantCtx, input);
+        }),
+      delete: os.admin.variants.delete
+        .use(requireAdmin)
+        .use(requirePermission("products.write"))
+        .handler(({ context, input }) => {
+          if (!context.tenantCtx) throw new Error("Missing tenant context");
+          return deleteVariant(context.rt, context.tenantCtx, input);
         }),
     },
 
@@ -2379,6 +2456,13 @@ export const storeRouter = os.router({
         .handler(({ context, input }) => {
           if (!context.tenantCtx) throw new Error("Missing tenant context");
           return updateAdminShippingSettings(context.rt, context.tenantCtx, input);
+        }),
+      saveZones: os.admin.shipping.saveZones
+        .use(requireAdmin)
+        .use(requirePermission("shipping.manage"))
+        .handler(({ context, input }) => {
+          if (!context.tenantCtx) throw new Error("Missing tenant context");
+          return saveAdminShippingZones(context.rt, context.tenantCtx, input);
         }),
       preview: os.admin.shipping.preview
         .use(requireAdmin)

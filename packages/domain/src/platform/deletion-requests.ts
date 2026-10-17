@@ -1,8 +1,11 @@
 import { and, eq, isNull, sql } from "drizzle-orm";
 import { schema } from "@bs/db";
 import type { Runtime } from "../runtime.ts";
-import { assertPlatformStaff, writePlatformAudit, type AuditMeta } from "../platform-services.ts";
+import { assertPlatformStaff, assertRoleAtLeast, writePlatformAudit, type AuditMeta, type PlatformRole } from "../platform-services.ts";
+import { PURGE_RETENTION_DAYS, purgeAvailableFrom } from "./purge-retention.ts";
 import { assertCanTransitionTenant, type TenantLifecycleState } from "../system/tenant-lifecycle.ts";
+
+export { PURGE_RETENTION_DAYS, purgeAvailableFrom };
 
 export type DeletionStep =
   | "requested"
@@ -13,6 +16,14 @@ export type DeletionStep =
   | "db_purged"
   | "verified"
   | "deleted";
+
+interface DeletionMetadata {
+  previousStatus?: string;
+  /** New deletions never purge on their own: the platform owner approves the purge once retention is over. */
+  manualPurge?: boolean;
+  purgeApprovedAt?: string;
+  purgeApprovedBy?: string;
+}
 
 /** Once the workflow has moved past these steps it has side effects that cannot be undone, so cancel is refused. */
 const CANCELLABLE_STEPS: readonly DeletionStep[] = ["requested", "exported"];
@@ -30,6 +41,11 @@ export interface DeletionRecord {
   cancelledBy?: string | null;
   error?: string | null;
   createdAt: string;
+  /** True for deletions that wait for the platform owner's "purge" instead of running on a timer. */
+  manualPurge: boolean;
+  purgeApprovedAt: string | null;
+  /** When the platform owner may approve the purge. */
+  purgeAvailableFrom: string;
 }
 
 export type DeletionRow = typeof schema.tenantDeletions.$inferSelect;
@@ -48,6 +64,9 @@ export function toDeletionRecord(d: DeletionRow): DeletionRecord {
     cancelledBy: d.cancelledBy,
     error: d.error,
     createdAt: d.createdAt.toISOString(),
+    manualPurge: Boolean((d.metadata as DeletionMetadata | null)?.manualPurge),
+    purgeApprovedAt: (d.metadata as DeletionMetadata | null)?.purgeApprovedAt ?? null,
+    purgeAvailableFrom: purgeAvailableFrom(d).toISOString(),
   };
 }
 
@@ -63,7 +82,7 @@ export async function scheduleTenantDeletion(
   meta?: AuditMeta,
 ): Promise<DeletionRecord> {
   await assertPlatformStaff(rt, platformStaffUserId);
-  const graceDays = input.graceDays ?? 7;
+  const graceDays = input.graceDays ?? PURGE_RETENTION_DAYS;
   if (!Number.isFinite(graceDays) || graceDays < 0 || graceDays > 90) {
     throw new Error("Bad Request: grace period must be between 0 and 90 days");
   }
@@ -92,7 +111,7 @@ export async function scheduleTenantDeletion(
         step: "requested",
         scheduledFor,
         // Remembered so a cancel puts the store back exactly where it was (e.g. suspended stays suspended).
-        metadata: { previousStatus: tenant.status },
+        metadata: { previousStatus: tenant.status, manualPurge: true } satisfies DeletionMetadata,
       })
       .returning();
     if (!deletion) throw new Error("Failed to schedule tenant deletion");
@@ -150,5 +169,59 @@ export async function cancelTenantDeletion(
       atStep: deletion.step,
     }, meta);
     return { ok: true as const };
+  });
+}
+
+/**
+ * The platform owner approves the permanent purge of a deleted store (owner decision 2026-10-17). Only possible once the
+ * retention period (30 days after the deletion was requested) is over, only for the platform owner, and only with the
+ * store's slug typed as confirmation. Approval does not purge inline: it releases the deletion to the background sweep,
+ * which exports, stops billing, releases domains, removes media and every row, then marks the store deleted. The
+ * tenant row, invoices and audit trail stay (PLAN §6.4).
+ */
+export async function approveTenantPurge(
+  rt: Runtime,
+  platformStaffUserId: string,
+  input: { tenantId: string; confirmSlug: string },
+  meta?: AuditMeta,
+  now: Date = new Date(),
+): Promise<{ ok: true; alreadyApproved: boolean }> {
+  const staff = await assertPlatformStaff(rt, platformStaffUserId);
+  assertRoleAtLeast(staff.role as PlatformRole, "platform_owner", "purging a store permanently");
+
+  return rt._db.db.transaction(async (tx) => {
+    const [tenant] = await tx.select().from(schema.tenants).where(eq(schema.tenants.id, input.tenantId)).for("update").limit(1);
+    if (!tenant) throw new Error(`Not Found: tenant not found: ${input.tenantId}`);
+    if (input.confirmSlug.trim() !== tenant.slug) {
+      throw new Error(`Bad Request: type the store's slug "${tenant.slug}" to confirm the purge`);
+    }
+    if (tenant.status !== "deletion_requested") throw new Error("Conflict: only a store that is scheduled for deletion can be purged");
+
+    const [deletion] = await tx
+      .select()
+      .from(schema.tenantDeletions)
+      .where(and(eq(schema.tenantDeletions.tenantId, input.tenantId), isNull(schema.tenantDeletions.cancelledAt), isNull(schema.tenantDeletions.completedAt)))
+      .for("update")
+      .limit(1);
+    if (!deletion) throw new Error("Not Found: this store has no open deletion request");
+
+    const meta0 = (deletion.metadata as DeletionMetadata | null) ?? {};
+    if (meta0.purgeApprovedAt) return { ok: true as const, alreadyApproved: true };
+
+    const from = purgeAvailableFrom(deletion);
+    if (from.getTime() > now.getTime()) {
+      throw new Error(`Conflict: the data is kept until ${from.toISOString().slice(0, 10)}. The permanent purge becomes available then`);
+    }
+
+    await tx
+      .update(schema.tenantDeletions)
+      .set({ metadata: { ...meta0, manualPurge: true, purgeApprovedAt: now.toISOString(), purgeApprovedBy: platformStaffUserId }, updatedAt: sql`now()` })
+      .where(eq(schema.tenantDeletions.id, deletion.id));
+
+    await writePlatformAudit(tx, platformStaffUserId, "tenant.purge_approved", "tenant", input.tenantId, input.tenantId, {
+      deletionId: deletion.id,
+      retentionEnded: from.toISOString(),
+    }, meta);
+    return { ok: true as const, alreadyApproved: false };
   });
 }

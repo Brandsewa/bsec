@@ -13,6 +13,7 @@ import {
   platformSystemContract,
   platformQuotasContract,
   platformFeaturesContract,
+  platformPromotionsContract,
   platformStaffContract,
   platformAuditContract,
   platformEmailContract,
@@ -24,6 +25,7 @@ import { storefrontContract } from "./storefront.ts";
 export * from "./admin.ts";
 export * from "./finance.ts";
 export * from "./blog.ts";
+export * from "./friendly-ids.ts";
 export * from "./platform.ts";
 export * from "./storefront.ts";
 
@@ -67,6 +69,7 @@ export const platformContract = {
   support: platformSupportContract,
   quotas: platformQuotasContract,
   features: platformFeaturesContract,
+  promotions: platformPromotionsContract,
   staff: platformStaffContract,
   audit: platformAuditContract,
   email: platformEmailContract,

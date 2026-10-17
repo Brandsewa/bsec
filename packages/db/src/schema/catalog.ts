@@ -244,12 +244,15 @@ export const products = tenantTable(
     ),
     ratingAvg: numeric("rating_avg", { precision: 3, scale: 2 }).notNull().default("0.00"),
     ratingCount: integer("rating_count").notNull().default(0),
+    /** Per-store running number shown as BCPID-<n>; assigned by the domain layer. */
+    productNumber: integer("product_number"),
     deletedAt: timestamp("deleted_at", { withTimezone: true }),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().default(sql`now()`),
     updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().default(sql`now()`),
   },
   (t) => [
     unique("products_tenant_slug_uniq").on(t.tenantId, t.slug),
+    uniqueIndex("products_tenant_number_uniq").on(t.tenantId, t.productNumber),
     unique("products_tenant_id_uniq").on(t.tenantId, t.id),
     tenantForeignKey({
       tableTenantId: t.tenantId,

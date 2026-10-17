@@ -1,5 +1,6 @@
 import { and, desc, eq, notInArray } from "drizzle-orm";
 import { z } from "zod";
+import { normalizeMenuItems } from "./menu-defaults.ts";
 import { schema, withTenant } from "@bs/db";
 import { validateBlockDocument } from "@bs/blocks";
 import type { Runtime } from "./runtime.ts";
@@ -1271,58 +1272,11 @@ function computeMenuUsage(
   return usage;
 }
 
-async function ensureDefaultMenus(
-  tx: Parameters<Parameters<typeof withTenant>[2]>[0],
-  tenantId: string,
-): Promise<void> {
-  const existing = await tx
-    .select({ handle: schema.menus.handle })
-    .from(schema.menus)
-    .where(eq(schema.menus.tenantId, tenantId));
-  const handles = new Set(existing.map((r: { handle: string }) => r.handle));
-
-  if (!handles.has("header")) {
-    await tx
-      .insert(schema.menus)
-      .values({
-        tenantId,
-        handle: "header",
-        title: "Main menu",
-        kind: "navigation",
-        items: [
-          { id: crypto.randomUUID(), title: "Home", url: "/", type: "home" },
-          { id: crypto.randomUUID(), title: "Catalog", url: "/collections/all", type: "collection" },
-          { id: crypto.randomUUID(), title: "About", url: "/pages/about", type: "page" },
-        ],
-      })
-      .onConflictDoNothing();
-  }
-
-  if (!handles.has("footer")) {
-    await tx
-      .insert(schema.menus)
-      .values({
-        tenantId,
-        handle: "footer",
-        title: "Footer menu",
-        kind: "navigation",
-        items: [
-          { id: crypto.randomUUID(), title: "About Us", url: "/pages/about", type: "page" },
-          { id: crypto.randomUUID(), title: "Privacy Policy", url: "/policies/privacy", type: "policy" },
-          { id: crypto.randomUUID(), title: "Terms of Service", url: "/policies/terms", type: "policy" },
-        ],
-      })
-      .onConflictDoNothing();
-  }
-}
-
 export async function listMenus(rt: Runtime, ctx: TenantContext) {
   assertPermission(ctx, "content.write");
   const db = rt._db.db;
 
   return withTenant(db, ctx.tenantId, async (tx) => {
-    await ensureDefaultMenus(tx, ctx.tenantId);
-
     const rows = await tx.select().from(schema.menus).orderBy(schema.menus.title);
     const pageRows = await tx
       .select({
@@ -1361,22 +1315,16 @@ export async function getMenu(rt: Runtime, ctx: TenantContext, input: { handle: 
   const db = rt._db.db;
 
   return withTenant(db, ctx.tenantId, async (tx) => {
-    let [row] = await tx
+    // A deleted default menu stays deleted: nothing re-creates it when it is listed or opened.
+    const [row] = await tx
       .select()
       .from(schema.menus)
       .where(eq(schema.menus.handle, input.handle));
 
-    if (!row && isProtectedMenu(input.handle)) {
-      await ensureDefaultMenus(tx, ctx.tenantId);
-      [row] = await tx
-        .select()
-        .from(schema.menus)
-        .where(eq(schema.menus.handle, input.handle));
-    }
-
     if (!row) throw new Error(`Menu not found: "${input.handle}"`);
 
-    const items = (row.items as unknown[]) ?? [];
+    // Legacy seeded menus lack item ids and types, which broke the editor (blank screen).
+    const items = row.kind === "filter" ? ((row.items as unknown[]) ?? []) : normalizeMenuItems(row.items);
 
     const pageRows = await tx
       .select({
@@ -1514,17 +1462,17 @@ export async function deleteMenu(rt: Runtime, ctx: TenantContext, input: { id: s
   assertPermission(ctx, "content.write");
   const db = rt._db.db;
 
-  return withTenant(db, ctx.tenantId, async (tx) => {
+  await withTenant(db, ctx.tenantId, async (tx) => {
     const [existing] = await tx.select().from(schema.menus).where(eq(schema.menus.id, input.id));
     if (!existing) throw new Error(`Menu not found: "${input.id}"`);
 
-    if (isProtectedMenu(existing.handle)) {
-      throw new Error(`Protected default menu "${existing.handle}" cannot be deleted`);
-    }
-
+    // Default menus (header, footer) can be deleted like any other menu; a store may start from scratch.
     await tx.delete(schema.menus).where(eq(schema.menus.id, input.id));
-    return { success: true };
   });
+
+  // After commit (AGENTS.md rule 13): storefront navigation caches must drop the deleted menu.
+  await invalidateCache(rt, ctx, { type: "nav_updated" });
+  return { success: true };
 }
 
 // --- Storefront Public Content Services ---

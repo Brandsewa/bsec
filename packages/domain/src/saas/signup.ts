@@ -44,6 +44,8 @@ export interface CompleteSignupInput {
   timezone?: string | undefined;
   turnstileToken?: string | undefined;
   clientIp?: string | undefined;
+  /** Optional promo code (ADR-035). */
+  promoCode?: string | undefined;
 }
 
 /**
@@ -164,6 +166,7 @@ export async function completeSignup(
     timezone: input.timezone || "Asia/Kolkata",
     leadId: input.leadId,
     source: "self_service",
+    promoCode: input.promoCode,
   });
 
   // 7. Update signup lead to store_created if leadId provided

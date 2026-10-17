@@ -5,6 +5,8 @@ export { UiLink, UiLinkProvider, type UiLinkProps } from "./lib/link.tsx";
 export { Button, type ButtonProps } from "./components/ui/button.tsx";
 export { buttonVariants } from "./components/ui/button-variants.ts";
 export { Input, type InputProps } from "./components/ui/input.tsx";
+export { CopyableId } from "./components/copyable-id.tsx";
+export { PasswordInput, type PasswordInputProps } from "./components/ui/password-input.tsx";
 export { Textarea, type TextareaProps } from "./components/ui/textarea.tsx";
 export { Label } from "./components/ui/label.tsx";
 export { Card, CardHeader, CardFooter, CardTitle, CardDescription, CardContent } from "./components/ui/card.tsx";

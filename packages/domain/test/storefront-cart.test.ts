@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { type Db, shippingZones, shippingRates } from "@bs/db";
+import { type Db, shippingZones, shippingRates, variants } from "@bs/db";
 import type { Runtime, TenantContext } from "../src/index.ts";
 import {
   getOrCreateCart,
@@ -569,6 +569,10 @@ describe("Storefront Cart & Newsletter Services", () => {
                         orderBy: () => configuredRates,
                       }),
                     };
+                  }
+                  if (table === variants) {
+                    // The cart's total weight is read from the variants: none of these test variants has a weight.
+                    return { where: () => [] };
                   }
                   return {
                     where: () => ({

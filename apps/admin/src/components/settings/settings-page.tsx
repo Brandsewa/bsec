@@ -57,12 +57,14 @@ export function HeaderActions({ children }: { children: ReactNode }) {
 
 /** One card/section of related settings. Can be rendered as a standalone Card or inside a group. */
 export function SettingsCard({
+  id,
   title,
   description,
   actions,
   children,
   className,
 }: {
+  id?: string | undefined;
   title?: string | undefined;
   description?: ReactNode;
   actions?: ReactNode;
@@ -70,7 +72,7 @@ export function SettingsCard({
   className?: string | undefined;
 }) {
   return (
-    <div className={cn("rounded-lg border border-border bg-background p-4 sm:p-5 shadow-xs", className)}>
+    <div id={id} className={cn("scroll-mt-20 rounded-lg border border-border bg-background p-4 sm:p-5 shadow-xs", className)}>
       {title || description || actions ? (
         <div className="mb-4 flex flex-col gap-1 sm:flex-row sm:items-center sm:justify-between">
           {title ? <h2 className="text-sm font-semibold text-foreground">{title}</h2> : null}

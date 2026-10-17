@@ -15,6 +15,7 @@ export * from "./identity.ts";
 export * from "./settings.ts";
 export * from "./catalog.ts";
 export * from "./blog.ts";
+export * from "./custom-fields.ts";
 export * from "./branding.ts";
 export * from "./content.ts";
 export * from "./search.ts";

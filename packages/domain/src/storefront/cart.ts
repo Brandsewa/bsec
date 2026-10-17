@@ -3,7 +3,8 @@ import { DIRECT_PRODUCT_STATUSES } from "./product-status.ts";
 import { schema, withTenant, type Db } from "@bs/db";
 import type { Runtime } from "../runtime.ts";
 import type { TenantContext } from "../context.ts";
-import { getTenantShippingRates } from "../orders/shipping-rates.ts";
+import { cartWeightGrams, getTenantShippingRates } from "../orders/shipping-rates.ts";
+import { toCountryCode } from "../orders/shipping-rules.ts";
 import { publicMediaUrl } from "../media/storage.ts";
 import { evaluateDiscount } from "../orders/discounts.ts";
 
@@ -100,6 +101,8 @@ export interface RemoveCartItemInput {
 export interface EstimateCartShippingInput {
   token: string;
   pincode: string;
+  /** Shipping state, when known, to pick the matching shipping zone. */
+  state?: string | undefined;
 }
 
 /**
@@ -568,6 +571,32 @@ export async function clearCart(
 }
 
 /**
+ * The shipping options for a cart going to a given state (and country), priced by the same function the order is
+ * charged with. Used by checkout to refresh the options when the shopper picks a state. No pincode is needed.
+ */
+export async function quoteCartShipping(
+  rt: Runtime,
+  ctx: TenantContext,
+  input: { token: string; state: string; country?: string | undefined },
+): Promise<ShippingEstimate["rates"]> {
+  const cart = await getOrCreateCart(rt, ctx, input.token);
+  const weightGrams = await withTenant(rt._db.db, ctx.tenantId, (tx) =>
+    cartWeightGrams(tx, cart.items.map((i) => ({ variantId: i.variantId, quantity: i.quantity }))),
+  );
+  const rates = await getTenantShippingRates(rt._db.db, ctx.tenantId, cart.subtotal, {
+    weightGrams,
+    destination: { country: toCountryCode(input.country) ?? "IN", state: input.state },
+  });
+  return rates.map((r) => ({
+    id: r.method,
+    title: r.title,
+    description: r.description,
+    amount: r.amount,
+    estimatedDays: r.estimatedDays,
+  }));
+}
+
+/**
  * Validates Indian pincode format and computes shipping rates based on cart subtotal.
  */
 export async function estimateCartShipping(
@@ -582,7 +611,13 @@ export async function estimateCartShipping(
 
   const cart = await getOrCreateCart(rt, ctx, input.token);
 
-  const rates = await getTenantShippingRates(rt._db.db, ctx.tenantId, cart.subtotal);
+  const weightGrams = await withTenant(rt._db.db, ctx.tenantId, (tx) =>
+    cartWeightGrams(tx, cart.items.map((i) => ({ variantId: i.variantId, quantity: i.quantity }))),
+  );
+  const rates = await getTenantShippingRates(rt._db.db, ctx.tenantId, cart.subtotal, {
+    weightGrams,
+    ...(input.state ? { destination: { country: "IN", state: input.state } } : {}),
+  });
 
   return {
     serviceable: true,

@@ -1,5 +1,6 @@
 import { sql } from "drizzle-orm";
 import {
+  integer,
   jsonb,
   pgTable,
   text,
@@ -45,6 +46,8 @@ export const tenants = pgTable("tenants", {
   suspendedReason: text("suspended_reason"),
   archivedAt: timestamp("archived_at", { withTimezone: true }),
   dataRegion: text("data_region").notNull().default("ap-south-1"),
+  /** Platform-wide running number shown as BCSID-<nnnn>; default comes from sequence tenants_store_number_seq (migration 0062). */
+  storeNumber: integer("store_number").notNull().unique("tenants_store_number_uniq").default(sql`nextval('tenants_store_number_seq')`),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().default(sql`now()`),
   updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().default(sql`now()`),
 });

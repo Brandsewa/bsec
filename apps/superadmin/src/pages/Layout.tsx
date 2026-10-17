@@ -5,6 +5,7 @@ import {
   Boxes,
   Building2,
   CreditCard,
+  Gift,
   Database,
   FileSpreadsheet,
   Flag,
@@ -44,11 +45,11 @@ import {
   DropdownMenuSubContent,
   DropdownMenuSubTrigger,
   DropdownMenuTrigger,
-  Input,
   Label,
   ThemeToggle,
   type NavGroup,
 } from "@bs/ui";
+import { PasswordInput } from "@bs/ui";
 import { changePassword, signOut, type PlatformUser } from "../lib/auth.ts";
 import { UserContext } from "../lib/user-context.tsx";
 
@@ -67,6 +68,7 @@ const navGroups: NavGroup[] = [
       { label: "Tenants", href: "/tenants", icon: Building2 },
       { label: "Domains", href: "/domains", icon: Globe },
       { label: "Plans & Billing", href: "/plans", icon: CreditCard },
+      { label: "Promotions", href: "/promotions", icon: Gift },
       { label: "Signups Funnel", href: "/signups", icon: Users },
       { label: "Themes", href: "/templates", icon: Layers },
     ],
@@ -159,6 +161,7 @@ export function Layout({ user, onLogout }: LayoutProps) {
     { id: "tenant-create", label: "Create Store", icon: Building2, onSelect: () => navigate({ to: "/tenants/create" }), group: "Commerce" },
     { id: "domains", label: "Domains", icon: Globe, onSelect: () => navigate({ to: "/domains" }), group: "Commerce" },
     { id: "plans", label: "Plans & Billing", icon: CreditCard, onSelect: () => navigate({ to: "/plans" }), group: "Commerce" },
+    { id: "promotions", label: "Promotions", icon: Gift, onSelect: () => navigate({ to: "/promotions" }), group: "Commerce" },
     { id: "signups", label: "Signups Funnel", icon: Users, onSelect: () => navigate({ to: "/signups" }), group: "Commerce" },
     { id: "templates", label: "Themes Library", icon: Layers, onSelect: () => navigate({ to: "/templates" }), group: "Commerce" },
     { id: "support", label: "Support Sessions", icon: Headphones, onSelect: () => navigate({ to: "/support" }), group: "Operations" },
@@ -296,22 +299,22 @@ export function Layout({ user, onLogout }: LayoutProps) {
             </div>
           ) : (
             <form onSubmit={handlePasswordSubmit} className="space-y-4">
-              <div>
+              <div className="space-y-1.5">
                 <Label htmlFor="current-pw">Current Password</Label>
-                <Input
+                <PasswordInput
                   id="current-pw"
-                  type="password"
+                  
                   required
                   autoFocus
                   value={currentPassword}
                   onChange={(e) => setCurrentPassword(e.target.value)}
                 />
               </div>
-              <div>
+              <div className="space-y-1.5">
                 <Label htmlFor="new-pw">New Password (min 10 characters)</Label>
-                <Input
+                <PasswordInput
                   id="new-pw"
-                  type="password"
+                  
                   required
                   minLength={10}
                   maxLength={128}
@@ -319,11 +322,11 @@ export function Layout({ user, onLogout }: LayoutProps) {
                   onChange={(e) => setNewPassword(e.target.value)}
                 />
               </div>
-              <div>
+              <div className="space-y-1.5">
                 <Label htmlFor="confirm-pw">Confirm New Password</Label>
-                <Input
+                <PasswordInput
                   id="confirm-pw"
-                  type="password"
+                  
                   required
                   minLength={10}
                   maxLength={128}

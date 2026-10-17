@@ -278,6 +278,8 @@ export const shippingZones = tenantTable(
     id: uuid("id").default(sql`uuidv7()`).primaryKey(),
     name: text("name").notNull(),
     countries: text("countries").array().notNull().default(sql`ARRAY['IN']::text[]`),
+    /** Empty = the whole country. Otherwise only these states (migration 0065). */
+    states: text("states").array().notNull().default(sql`ARRAY[]::text[]`),
     isDefault: boolean("is_default").notNull().default(false),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().default(sql`now()`),
     updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().default(sql`now()`),
@@ -299,9 +301,15 @@ export const shippingRates = tenantTable(
     zoneId: uuid("zone_id").notNull(),
     name: text("name").notNull(),
     method: text("method").notNull().default("standard"), // 'standard' | 'express'
-    rateType: text("rate_type").notNull().default("flat"), // 'flat' | 'free_above_threshold'
+    rateType: text("rate_type").notNull().default("flat"), // 'flat' | 'free_above_threshold' | 'price_tier' | 'weight_tier'
     pricePaise: integer("price_paise").notNull().default(0),
     thresholdPaise: integer("threshold_paise"),
+    /** Price tier: applies from this order value (inclusive) up to the maximum (exclusive, empty = no limit). */
+    minSubtotalPaise: integer("min_subtotal_paise"),
+    maxSubtotalPaise: integer("max_subtotal_paise"),
+    /** Weight tier: applies from this cart weight in grams (inclusive) up to the maximum (exclusive, empty = no limit). */
+    minWeightGrams: integer("min_weight_grams"),
+    maxWeightGrams: integer("max_weight_grams"),
     minDays: integer("min_days").default(2),
     maxDays: integer("max_days").default(5),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().default(sql`now()`),

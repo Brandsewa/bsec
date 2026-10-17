@@ -91,6 +91,10 @@ export interface UpdateVariantInput {
   preorderShipsOn?: string | null | undefined;
   preorderMessage?: string | null | undefined;
   imageMediaId?: string | null | undefined;
+  barcode?: string | null | undefined;
+  weightGrams?: number | null | undefined;
+  dimensions?: Record<string, unknown> | null | undefined;
+  optionValues?: Record<string, string> | null | undefined;
 }
 
 export interface AdjustInventoryInput {
@@ -222,6 +226,7 @@ export async function listProducts(
           id: r.id,
           title: r.title,
           slug: r.slug,
+          productNumber: r.productNumber,
           status: r.status as "draft" | "active" | "unlisted" | "archived",
           descriptionJson: r.descriptionJson,
           shortDescription: r.shortDescription,
@@ -333,6 +338,7 @@ export async function loadProductDetailInternal(
 
     return {
       id: p.id,
+      productNumber: p.productNumber,
       title: p.title,
       slug: p.slug,
       status: p.status as "draft" | "active" | "unlisted" | "archived",
@@ -440,10 +446,20 @@ export async function createProduct(
         .replace(/[^a-z0-9]+/g, "-")
         .replace(/(^-|-$)/g, "");
 
+    // BCPID-<n>: next running number for this store. The advisory lock serialises concurrent creates in one
+    // store; the unique index (tenant_id, product_number) is the backstop.
+    await tx.execute(sql`SELECT pg_advisory_xact_lock(hashtext(${`product-number:${ctx.tenantId}`}))`);
+    const [numberRow] = await tx
+      .select({ next: sql<number>`coalesce(max(${schema.products.productNumber}), 0) + 1` })
+      .from(schema.products)
+      .where(eq(schema.products.tenantId, ctx.tenantId));
+    const productNumber = Number(numberRow?.next ?? 1);
+
     const [product] = await tx
       .insert(schema.products)
       .values({
         tenantId: ctx.tenantId,
+        productNumber,
         title: input.title,
         slug,
         status: input.status ?? "draft",
@@ -811,6 +827,10 @@ export async function updateVariant(
     if (input.preorderShipsOn !== undefined) updateValues.preorderShipsOn = input.preorderShipsOn;
     if (input.preorderMessage !== undefined) updateValues.preorderMessage = input.preorderMessage;
     if (input.imageMediaId !== undefined) updateValues.imageMediaId = input.imageMediaId;
+    if (input.barcode !== undefined) updateValues.barcode = input.barcode?.trim() || null;
+    if (input.weightGrams !== undefined) updateValues.weightGrams = input.weightGrams;
+    if (input.dimensions !== undefined) updateValues.dimensions = input.dimensions;
+    if (input.optionValues !== undefined) updateValues.optionValues = input.optionValues;
 
     const [row] = await tx
       .update(schema.variants)

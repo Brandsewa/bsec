@@ -109,6 +109,8 @@ export async function runDueTenantDeletions(
             isNull(schema.tenantDeletions.cancelledAt),
             isNull(schema.tenantDeletions.completedAt),
             lte(schema.tenantDeletions.scheduledFor, opts.deps?.now ?? new Date()),
+            // Manual-purge deletions wait for the platform owner's approval (approveTenantPurge); older ones run on schedule.
+            sql`(${schema.tenantDeletions.metadata}->>'manualPurge' IS DISTINCT FROM 'true' OR ${schema.tenantDeletions.metadata}->>'purgeApprovedAt' IS NOT NULL)`,
           ),
         )
         .orderBy(asc(schema.tenantDeletions.scheduledFor))

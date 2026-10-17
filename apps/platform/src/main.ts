@@ -1,6 +1,6 @@
 import * as Sentry from "@sentry/node";
 import { serve } from "@hono/node-server";
-import { warnIfEncryptionKeyMissing, createLogger, createRuntime, runDueTenantDeletions } from "@bs/domain";
+import { warnIfEncryptionKeyMissing, createLogger, createRuntime, endDuePromotions, runDueTenantDeletions } from "@bs/domain";
 import { createApp } from "./app.ts";
 
 warnIfEncryptionKeyMissing();
@@ -39,6 +39,19 @@ const sweep = async () => {
     sweeping = false;
   }
 };
+// Promotions (ADR-035): a free period that ends without the store paying suspends it until it chooses a plan.
+const promoSweep = async () => {
+  try {
+    const res = await endDuePromotions(rt);
+    if (res.ended > 0) log.info(res, "promotion sweep");
+  } catch (err) {
+    log.error({ err }, "promotion sweep failed");
+  }
+};
+const promoTimer = setInterval(() => void promoSweep(), Number(process.env.PROMOTION_SWEEP_INTERVAL_MS ?? 3_600_000));
+promoTimer.unref();
+setTimeout(() => void promoSweep(), 20_000).unref();
+
 const sweepTimer = setInterval(() => void sweep(), sweepEveryMs);
 sweepTimer.unref();
 setTimeout(() => void sweep(), 15_000).unref();

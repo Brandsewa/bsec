@@ -1,7 +1,8 @@
 import React, { useState } from "react";
 import { Link, useNavigate } from "@tanstack/react-router";
 import { Database } from "lucide-react";
-import { AuthShell, Button, Input, Label } from "@bs/ui";
+import { AuthShell, Button, Label } from "@bs/ui";
+import { PasswordInput } from "@bs/ui";
 import { resetPassword } from "../lib/auth.ts";
 
 export function ResetPassword({ token }: { token?: string }) {
@@ -94,11 +95,11 @@ export function ResetPassword({ token }: { token?: string }) {
           </div>
         ) : (
           <form onSubmit={handleSubmit} className="space-y-4">
-            <div>
+            <div className="space-y-1.5">
               <Label htmlFor="new-password">New Password (min 10 characters)</Label>
-              <Input
+              <PasswordInput
                 id="new-password"
-                type="password"
+                
                 placeholder="••••••••••••"
                 minLength={10}
                 maxLength={128}
@@ -108,11 +109,11 @@ export function ResetPassword({ token }: { token?: string }) {
                 autoFocus
               />
             </div>
-            <div>
+            <div className="space-y-1.5">
               <Label htmlFor="confirm-password">Confirm New Password</Label>
-              <Input
+              <PasswordInput
                 id="confirm-password"
-                type="password"
+                
                 placeholder="••••••••••••"
                 minLength={10}
                 maxLength={128}

@@ -2,6 +2,7 @@ import React, { useState } from "react";
 import { Link } from "@tanstack/react-router";
 import { Database, ShieldCheck } from "lucide-react";
 import { AuthShell, Button, Input, Label, toast } from "@bs/ui";
+import { PasswordInput } from "@bs/ui";
 import {
   fetchLoginStatus,
   finishMfaSetup,
@@ -158,18 +159,18 @@ export function Login({ onSuccess }: LoginProps) {
 
         {step === "credentials" && (
           <form onSubmit={handleCredentialsSubmit} className="space-y-4">
-            <div>
+            <div className="space-y-1.5">
               <Label htmlFor="email">Platform Staff Email</Label>
               <Input id="email" type="email" placeholder="staff@example.com" value={email} onChange={(e) => setEmail(e.target.value)} required autoFocus />
             </div>
-            <div>
+            <div className="space-y-1.5">
               <div className="flex items-center justify-between">
                 <Label htmlFor="password">Password</Label>
                 <Link to="/forgot-password" className="text-xs text-muted-foreground hover:text-foreground hover:underline">
                   Forgot password?
                 </Link>
               </div>
-              <Input id="password" type="password" placeholder="••••••••••••" value={password} onChange={(e) => setPassword(e.target.value)} required />
+              <PasswordInput id="password" placeholder="••••••••••••" value={password} onChange={(e) => setPassword(e.target.value)} required />
             </div>
             <Button type="submit" disabled={loading} className="w-full">
               {loading ? "Authenticating..." : "Sign In with Credentials"}
@@ -185,12 +186,12 @@ export function Login({ onSuccess }: LoginProps) {
               <span>Two-factor authentication is required. Enter the 6-digit code from your authenticator app, or a backup code.</span>
             </div>
             {!useBackupCode ? (
-              <div>
+              <div className="space-y-1.5">
                 <Label htmlFor="totp">Authenticator Code (6 digits)</Label>
                 <Input id="totp" type="text" inputMode="numeric" autoComplete="one-time-code" placeholder="123456" maxLength={6} value={totpCode} onChange={(e) => setTotpCode(e.target.value.trim())} required autoFocus />
               </div>
             ) : (
-              <div>
+              <div className="space-y-1.5">
                 <Label htmlFor="backup">Backup Code</Label>
                 <Input id="backup" type="text" placeholder="e.g. abcd-1234" value={backupCode} onChange={(e) => setBackupCode(e.target.value.trim())} required autoFocus />
               </div>
@@ -220,7 +221,7 @@ export function Login({ onSuccess }: LoginProps) {
             </div>
             <div className="space-y-2">
               <Label htmlFor="confirm-password">Confirm your password to generate your secret</Label>
-              <Input id="confirm-password" type="password" value={password} onChange={(e) => setPassword(e.target.value)} />
+              <PasswordInput id="confirm-password" value={password} onChange={(e) => setPassword(e.target.value)} />
             </div>
             <Button className="w-full" disabled={loading || !password} onClick={handleStartSetup}>
               {loading ? "Working..." : "Generate my authenticator secret"}

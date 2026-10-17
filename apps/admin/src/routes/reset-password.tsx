@@ -1,6 +1,7 @@
 import { createFileRoute, Link, redirect, useNavigate } from "@tanstack/react-router";
 import { useState, type FormEvent } from "react";
-import { AuthCardSkeleton, AuthShell, Button, buttonVariants, Field, FieldError, FieldGroup, FieldLabel, Input } from "@bs/ui";
+import { AuthCardSkeleton, AuthShell, Button, buttonVariants, Field, FieldError, FieldGroup, FieldLabel } from "@bs/ui";
+import { PasswordInput } from "@bs/ui";
 import { fetchMe, resetPassword } from "../lib/auth.ts";
 
 export const Route = createFileRoute("/reset-password")({
@@ -102,9 +103,9 @@ function ResetPasswordPage() {
           <FieldGroup>
             <Field>
               <FieldLabel htmlFor="new-password">New password</FieldLabel>
-              <Input
+              <PasswordInput
                 id="new-password"
-                type="password"
+                
                 autoComplete="new-password"
                 required
                 autoFocus
@@ -116,9 +117,9 @@ function ResetPasswordPage() {
             </Field>
             <Field>
               <FieldLabel htmlFor="confirm-password">Confirm new password</FieldLabel>
-              <Input
+              <PasswordInput
                 id="confirm-password"
-                type="password"
+                
                 autoComplete="new-password"
                 required
                 minLength={10}

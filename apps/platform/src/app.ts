@@ -16,6 +16,15 @@ import {
   recordExportDownload,
   requestCustomDomainForClient,
   updatePlatformFeatureFlag,
+  retirePlatformFeatureFlag,
+  listPromotions,
+  createPromotion,
+  updatePromotion,
+  listTenantPromotions,
+  grantPromotion,
+  cancelTenantPromotion,
+  quotePromotionTerm,
+  restorePlatformFeatureFlag,
   assertPlatformStaff,
   assertRoleAtLeast,
   checkHealth,
@@ -46,9 +55,12 @@ import {
   deactivatePlatformStaffMember,
   reactivatePlatformStaffMember,
   listPlatformAuditLogs,
+  archivePlatformAuditLogs,
+  unarchivePlatformAuditLogs,
   exportPlatformAuditLogsCsv,
   scheduleTenantDeletion,
   cancelTenantDeletion,
+  approveTenantPurge,
   startSupportSession,
   extendSupportSession,
   confirmSupportSessionWriteAccess,
@@ -362,6 +374,11 @@ export const platformRouter = os.router({
       await cancelTenantDeletion(context.rt, staffUserId, input.id, context.meta);
       return { ok: true };
     }),
+    purge: os.tenants.purge.use(requireStaff("platform_owner")).handler(async ({ context, input }) => {
+      const staffUserId = actor(context);
+      const res = await approveTenantPurge(context.rt, staffUserId, { tenantId: input.id, confirmSlug: input.confirmSlug }, context.meta);
+      return { ok: true, alreadyApproved: res.alreadyApproved };
+    }),
     export: os.tenants.export.use(requireStaff("platform_admin")).handler(async ({ context, input }) => {
       const staffUserId = actor(context);
       return runStoreExport(context.rt, input.id, staffUserId, { meta: context.meta });
@@ -469,6 +486,21 @@ export const platformRouter = os.router({
     update: os.features.update.use(requireStaff("platform_admin")).handler(({ context, input }) =>
       updatePlatformFeatureFlag(context.rt, actor(context), input, context.meta),
     ),
+    retire: os.features.retire.use(requireStaff("platform_admin")).handler(({ context, input }) =>
+      retirePlatformFeatureFlag(context.rt, actor(context), input, context.meta),
+    ),
+    restore: os.features.restore.use(requireStaff("platform_owner")).handler(({ context, input }) =>
+      restorePlatformFeatureFlag(context.rt, actor(context), input, context.meta),
+    ),
+  },
+  promotions: {
+    list: os.promotions.list.use(requirePlatformStaff).handler(({ context }) => listPromotions(context.rt, actor(context))),
+    create: os.promotions.create.use(requireStaff("platform_owner")).handler(({ context, input }) => createPromotion(context.rt, actor(context), input, context.meta)),
+    update: os.promotions.update.use(requireStaff("platform_owner")).handler(({ context, input }) => updatePromotion(context.rt, actor(context), input, context.meta)),
+    listForTenant: os.promotions.listForTenant.use(requirePlatformStaff).handler(({ context, input }) => listTenantPromotions(context.rt, actor(context), input.tenantId)),
+    grant: os.promotions.grant.use(requireStaff("platform_owner")).handler(({ context, input }) => grantPromotion(context.rt, actor(context), input, context.meta)),
+    cancelGrant: os.promotions.cancelGrant.use(requireStaff("platform_owner")).handler(({ context, input }) => cancelTenantPromotion(context.rt, actor(context), input, context.meta)),
+    quote: os.promotions.quote.use(requirePlatformStaff).handler(({ context, input }) => quotePromotionTerm(context.rt, actor(context), input)),
   },
   staff: {
     list: os.staff.list.use(requireStaff("platform_admin")).handler(async ({ context }) => {
@@ -496,6 +528,14 @@ export const platformRouter = os.router({
     list: os.audit.list.use(requirePlatformStaff).handler(async ({ context, input }) => {
       const staffUserId = actor(context);
       return listPlatformAuditLogs(context.rt, staffUserId, input);
+    }),
+    archive: os.audit.archive.use(requireStaff("platform_admin")).handler(async ({ context, input }) => {
+      const staffUserId = actor(context);
+      return archivePlatformAuditLogs(context.rt, staffUserId, input.ids, context.meta);
+    }),
+    unarchive: os.audit.unarchive.use(requireStaff("platform_admin")).handler(async ({ context, input }) => {
+      const staffUserId = actor(context);
+      return unarchivePlatformAuditLogs(context.rt, staffUserId, input.ids, context.meta);
     }),
     exportCsv: os.audit.exportCsv.use(requireStaff("platform_admin")).handler(async ({ context, input }) => {
       const staffUserId = actor(context);

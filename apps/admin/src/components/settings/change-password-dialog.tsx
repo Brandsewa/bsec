@@ -7,8 +7,8 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@bs/ui";
+import { PasswordInput } from "@bs/ui";
 import { Button } from "@bs/ui";
-import { Input } from "@bs/ui";
 import { Field, FieldDescription, FieldError, FieldGroup, FieldLabel } from "@bs/ui";
 import { changePassword } from "../../lib/auth.ts";
 
@@ -94,9 +94,9 @@ export function ChangePasswordDialog({ open, onOpenChange }: ChangePasswordDialo
             <FieldGroup>
               <Field>
                 <FieldLabel htmlFor="current-password">Current password</FieldLabel>
-                <Input
+                <PasswordInput
                   id="current-password"
-                  type="password"
+                  
                   autoComplete="current-password"
                   required
                   autoFocus
@@ -106,9 +106,9 @@ export function ChangePasswordDialog({ open, onOpenChange }: ChangePasswordDialo
               </Field>
               <Field>
                 <FieldLabel htmlFor="dialog-new-password">New password</FieldLabel>
-                <Input
+                <PasswordInput
                   id="dialog-new-password"
-                  type="password"
+                  
                   autoComplete="new-password"
                   required
                   minLength={10}
@@ -120,9 +120,9 @@ export function ChangePasswordDialog({ open, onOpenChange }: ChangePasswordDialo
               </Field>
               <Field>
                 <FieldLabel htmlFor="dialog-confirm-password">Confirm new password</FieldLabel>
-                <Input
+                <PasswordInput
                   id="dialog-confirm-password"
-                  type="password"
+                  
                   autoComplete="new-password"
                   required
                   minLength={10}

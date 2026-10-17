@@ -1,7 +1,7 @@
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
-import { AlertTriangle, Archive, ArrowLeft, ImageIcon, Save, Trash2 } from "lucide-react";
+import { AlertTriangle, Archive, ArrowLeft, Save, Trash2 } from "lucide-react";
 import { useState } from "react";
-import { DetailSkeleton, EmptyState, PageBreadcrumbs, PageContainer, PageHeader, PageSkeleton, toast } from "@bs/ui";
+import { DetailSkeleton, EmptyState, PageContainer, PageHeader, PageSkeleton, toast } from "@bs/ui";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import type { ProductDetail } from "@bs/contracts";
 import { Button } from "@bs/ui";
@@ -12,12 +12,14 @@ import { Switch } from "@bs/ui";
 import { Textarea } from "@bs/ui";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@bs/ui";
 import { SeoCard } from "../../../components/seo-card.tsx";
-import { SimpleSelect } from "@bs/ui";
+import { VariantBuilderCard } from "../../../components/product/variant-builder.tsx";
+import { CustomFieldsCard } from "../../../components/product/custom-fields-card.tsx";
+import { CopyableId, SimpleSelect } from "@bs/ui";
+import { formatProductId } from "@bs/contracts";
+import { categoryLabel } from "../../../lib/category-label.ts";
 import { orpc } from "../../../lib/orpc.ts";
 import { MediaGalleryField } from "../../../components/media/media-gallery-field.tsx";
-import { MediaPickerDialog } from "../../../components/media/media-picker-dialog.tsx";
 import type { MediaItem } from "@bs/contracts";
-import { cn } from "@bs/ui";
 
 export const Route = createFileRoute("/_store/products/$id")({
   pendingComponent: () => (
@@ -34,9 +36,6 @@ function ProductDetailRoute() {
   return <ProductDetailPage id={id} navigate={(to) => void navigate({ to })} />;
 }
 
-const inr = new Intl.NumberFormat("en-IN", { style: "currency", currency: "INR" });
-const toPaise = (rupees: string) => Math.round(Number(rupees) * 100);
-const toRupees = (paise: number | null | undefined) => (paise == null ? "" : String(paise / 100));
 
 function descriptionText(json: unknown): string {
   if (typeof json === "string") return json;
@@ -217,9 +216,17 @@ function ProductEditor({ product, go }: { product: ProductDetailData; go: (to: s
 
   return (
     <PageContainer size="full">
-      <PageBreadcrumbs
-        items={[{ label: "Products", href: "/products" }, { label: product.title }]}
-        actions={
+      <PageHeader
+        meta={formatProductId(product.productNumber) ? <CopyableId value={formatProductId(product.productNumber) as string} /> : undefined}
+        title={
+          <span className="flex flex-wrap items-center gap-3">
+            {product.title}
+            <span className={`inline-flex items-center rounded-full border px-2.5 py-0.5 text-xs font-semibold uppercase tracking-wider ${statusBadgeColor}`}>
+              {product.status}
+            </span>
+          </span>
+        }
+        aside={
           <div className="flex items-center gap-2">
             <Button variant="ghost" size="sm" onClick={() => go("/products")}>
               <ArrowLeft className="mr-1.5 size-3.5" aria-hidden />
@@ -245,13 +252,6 @@ function ProductEditor({ product, go }: { product: ProductDetailData; go: (to: s
           </div>
         }
       />
-
-      <div className="flex items-center gap-3">
-        <PageHeader title={product.title} description={`ID: ${product.id}`} />
-        <span className={`inline-flex items-center rounded-full border px-2.5 py-0.5 text-xs font-semibold uppercase tracking-wider ${statusBadgeColor}`}>
-          {product.status}
-        </span>
-      </div>
 
       <form
         onSubmit={(ev) => {
@@ -354,29 +354,15 @@ function ProductEditor({ product, go }: { product: ProductDetailData; go: (to: s
           </Card>
 
           {/* Variants Section */}
-          <Card>
-            <CardHeader>
-              <CardTitle className="text-base font-semibold">Variants & Pricing</CardTitle>
-              <CardDescription>SKUs, pricing (in ₹), and pre-order settings per variant.</CardDescription>
-            </CardHeader>
-            <CardContent className="grid gap-4">
-              {product.variants.length === 0 ? (
-                <EmptyState title="No variants" description="This product has no variants yet." />
-              ) : (
-                <div className="grid gap-4">
-                  {product.variants.map((v) => (
-                    <VariantRow
-                      key={v.id}
-                      variant={v}
-                      productMedia={product.media}
-                      priceOnRequest={priceOnRequest}
-                      onSaved={invalidate}
-                    />
-                  ))}
-                </div>
-              )}
-            </CardContent>
-          </Card>
+          <VariantBuilderCard
+            key={JSON.stringify(product.options.map((o) => [o.name, o.values]))}
+            product={product}
+            priceOnRequest={priceOnRequest}
+            onChanged={invalidate}
+          />
+
+          {/* Custom fields (ADR-034) */}
+          <CustomFieldsCard resourceType="product" resourceId={product.id} />
 
           {/* Stock / Inventory Summary */}
           <StockSummary product={product} onManage={() => go("/inventory")} />
@@ -430,20 +416,17 @@ function ProductEditor({ product, go }: { product: ProductDetailData; go: (to: s
             <CardContent className="grid gap-4">
               <div className="grid gap-1.5">
                 <FieldLabel htmlFor="product-status">Product Status</FieldLabel>
-                <div id="product-status" className="grid grid-cols-2 gap-2">
-                  {(["draft", "active", "unlisted", "archived"] as const).map((s) => (
-                    <Button
-                      key={s}
-                      type="button"
-                      variant={status === s ? "default" : "outline"}
-                      size="sm"
-                      className="capitalize text-xs"
-                      onClick={() => setStatus(s)}
-                    >
-                      {s}
-                    </Button>
-                  ))}
-                </div>
+                <SimpleSelect
+                  id="product-status"
+                  value={status}
+                  onChange={(val) => setStatus(val as typeof status)}
+                  options={[
+                    { value: "draft", label: "Draft" },
+                    { value: "active", label: "Active" },
+                    { value: "unlisted", label: "Unlisted" },
+                    { value: "archived", label: "Archived" },
+                  ]}
+                />
                 {status === "unlisted" && (
                   <p className="text-xs text-amber-600 dark:text-amber-400 mt-1">
                     Unlisted products are reachable only by direct URL link; hidden from catalog lists, search, and sitemap.
@@ -497,7 +480,7 @@ function ProductEditor({ product, go }: { product: ProductDetailData; go: (to: s
                     { value: "", label: "Select primary category..." },
                     ...categories.map((c) => ({
                       value: c.id,
-                      label: c.path ? `${c.path} (${c.name})` : c.name,
+                      label: categoryLabel(c, categories),
                     })),
                   ]}
                 />
@@ -532,7 +515,7 @@ function ProductEditor({ product, go }: { product: ProductDetailData; go: (to: s
                             }}
                             className="rounded border-border text-primary focus:ring-primary"
                           />
-                          <span className="truncate">{c.path ? `${c.path} (${c.name})` : c.name}</span>
+                          <span className="truncate">{categoryLabel(c, categories)}</span>
                         </label>
                       );
                     })}
@@ -732,258 +715,6 @@ function StockSummary({ product, onManage }: { product: ProductDetailData; onMan
         )}
       </CardContent>
     </Card>
-  );
-}
-
-function VariantRow({
-  variant,
-  productMedia,
-  priceOnRequest,
-  onSaved,
-}: {
-  variant: ProductDetailData["variants"][number];
-  productMedia: ProductDetailData["media"];
-  priceOnRequest: boolean;
-  onSaved: () => void;
-}) {
-  const [sku, setSku] = useState(variant.sku);
-  const [vTitle, setVTitle] = useState(variant.title);
-  const [price, setPrice] = useState(toRupees(variant.price));
-  const [compare, setCompare] = useState(toRupees(variant.compareAtPrice));
-  const [preorderEnabled, setPreorderEnabled] = useState(Boolean(variant.preorderEnabled));
-  const [preorderShipsOn, setPreorderShipsOn] = useState(variant.preorderShipsOn ?? "");
-  const [preorderMessage, setPreorderMessage] = useState(variant.preorderMessage ?? "");
-  const [imageMediaId, setImageMediaId] = useState<string | null>(variant.imageMediaId ?? null);
-  const [pickerOpen, setPickerOpen] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-
-  const matchedProductMedia = productMedia.find((m) => m.mediaId === imageMediaId);
-  const mediaQuery = useQuery({
-    ...orpc.admin.media.get.queryOptions({ input: { id: imageMediaId as string } }),
-    enabled: Boolean(imageMediaId) && !matchedProductMedia,
-  });
-  const displayUrl = matchedProductMedia?.url ?? mediaQuery.data?.url;
-
-  const productImages = productMedia.filter((m) => m.kind === "image" && Boolean(m.url));
-
-  const mutation = useMutation(
-    orpc.admin.variants.update.mutationOptions({
-      onSuccess: () => {
-        toast.success(`Variant ${sku} saved`);
-        onSaved();
-      },
-      onError: (err: Error) => toast.error(err.message || "Failed to save variant"),
-    }),
-  );
-
-  const today = new Date().toISOString().slice(0, 10);
-
-  const submit = (overrideImageMediaId?: string | null) => {
-    if (!sku.trim() || !vTitle.trim()) return setError("SKU and title are required");
-    if (!priceOnRequest && (price === "" || !Number.isFinite(Number(price)) || Number(price) < 0)) {
-      return setError("Enter a valid price");
-    }
-    if (!priceOnRequest && compare !== "" && (!Number.isFinite(Number(compare)) || Number(compare) < 0)) {
-      return setError("Enter a valid compare-at price");
-    }
-    if (preorderEnabled) {
-      if (!preorderShipsOn) return setError("Ship date is required for pre-orders");
-      if (!variant.preorderEnabled && preorderShipsOn <= today) {
-        return setError("Pre-order ship date must be in the future when enabling");
-      }
-      if (preorderMessage.length > 200) {
-        return setError("Pre-order message cannot exceed 200 characters");
-      }
-    }
-    setError(null);
-    const chosenImage = overrideImageMediaId !== undefined ? overrideImageMediaId : imageMediaId;
-    mutation.mutate({
-      id: variant.id,
-      sku: sku.trim(),
-      title: vTitle.trim(),
-      price: priceOnRequest ? 0 : toPaise(price),
-      compareAtPrice: priceOnRequest || compare === "" ? null : toPaise(compare),
-      preorderEnabled,
-      preorderShipsOn: preorderEnabled ? (preorderShipsOn || null) : null,
-      preorderMessage: preorderEnabled ? (preorderMessage.trim() || null) : null,
-      imageMediaId: chosenImage ?? null,
-    });
-  };
-
-  const handleSelectMedia = (id: string | null) => {
-    setImageMediaId(id);
-    submit(id);
-  };
-
-  return (
-    <div className="grid gap-3 rounded-md border border-border p-3.5 bg-muted/20 sm:grid-cols-4">
-      <div className="grid gap-1.5">
-        <FieldLabel htmlFor={`v-title-${variant.id}`}>Title</FieldLabel>
-        <Input id={`v-title-${variant.id}`} value={vTitle} onChange={(e) => setVTitle(e.target.value)} />
-      </div>
-      <div className="grid gap-1.5">
-        <FieldLabel htmlFor={`v-sku-${variant.id}`}>SKU</FieldLabel>
-        <Input id={`v-sku-${variant.id}`} value={sku} onChange={(e) => setSku(e.target.value)} />
-      </div>
-      <div className="grid gap-1.5">
-        <FieldLabel htmlFor={`v-price-${variant.id}`}>Price (₹)</FieldLabel>
-        <Input
-          id={`v-price-${variant.id}`}
-          type="number"
-          step="0.01"
-          min="0"
-          disabled={priceOnRequest}
-          value={priceOnRequest ? "0.00" : price}
-          onChange={(e) => setPrice(e.target.value)}
-        />
-      </div>
-      <div className="grid gap-1.5">
-        <FieldLabel htmlFor={`v-compare-${variant.id}`}>Compare-at (₹)</FieldLabel>
-        <Input
-          id={`v-compare-${variant.id}`}
-          type="number"
-          step="0.01"
-          min="0"
-          disabled={priceOnRequest}
-          value={priceOnRequest ? "" : compare}
-          onChange={(e) => setCompare(e.target.value)}
-        />
-      </div>
-
-      {/* Variant Image Slot */}
-      <div className="sm:col-span-4 flex flex-wrap items-center gap-3 pt-1 border-t border-border/50 pb-1">
-        <span className="text-xs font-medium text-foreground">Variant Image:</span>
-        {displayUrl ? (
-          <div className="relative group size-10 rounded border border-border overflow-hidden bg-background">
-            <img src={displayUrl} alt={vTitle} className="size-full object-cover" />
-            <button
-              type="button"
-              className="absolute inset-0 bg-black/60 opacity-0 group-hover:opacity-100 flex items-center justify-center text-white transition-opacity"
-              onClick={() => handleSelectMedia(null)}
-              title="Remove image"
-            >
-              <Trash2 className="size-3.5" />
-            </button>
-          </div>
-        ) : (
-          <div className="size-10 rounded border border-dashed border-muted-foreground/30 flex items-center justify-center text-muted-foreground bg-muted/20">
-            <ImageIcon className="size-4" />
-          </div>
-        )}
-
-        {/* Quick row from product attached images */}
-        {productImages.length > 0 && (
-          <div className="flex items-center gap-1.5">
-            <span className="text-xs text-muted-foreground">From product:</span>
-            {productImages.slice(0, 5).map((m) => (
-              <button
-                key={m.id}
-                type="button"
-                onClick={() => handleSelectMedia(m.mediaId)}
-                className={cn(
-                  "size-8 rounded border overflow-hidden hover:opacity-80 transition-all",
-                  imageMediaId === m.mediaId ? "ring-2 ring-primary border-primary" : "border-border",
-                )}
-                title={m.alt ?? "Attach to variant"}
-              >
-                {m.url ? (
-                  <img src={m.url} alt="" className="size-full object-cover" />
-                ) : (
-                  <ImageIcon className="size-3 mx-auto" />
-                )}
-              </button>
-            ))}
-          </div>
-        )}
-
-        <Button
-          type="button"
-          variant="outline"
-          size="sm"
-          className="h-8 text-xs"
-          onClick={() => setPickerOpen(true)}
-        >
-          Browse library
-        </Button>
-
-        {imageMediaId && (
-          <Button
-            type="button"
-            variant="ghost"
-            size="sm"
-            className="h-8 text-xs text-destructive hover:text-destructive"
-            onClick={() => handleSelectMedia(null)}
-          >
-            Remove
-          </Button>
-        )}
-
-        <MediaPickerDialog
-          open={pickerOpen}
-          onOpenChange={setPickerOpen}
-          accept={["image"]}
-          multiple={false}
-          onSelect={(selected) => {
-            if (selected[0]) {
-              handleSelectMedia(selected[0].id);
-            }
-          }}
-          title="Select variant image"
-        />
-      </div>
-
-      <div className="border-t border-border pt-3 sm:col-span-4 flex flex-col gap-3">
-        <Field orientation="horizontal" className="justify-between">
-          <div>
-            <FieldLabel htmlFor={`v-preorder-${variant.id}`} className="cursor-pointer font-normal text-sm">
-              Enable pre-order
-            </FieldLabel>
-            <p className="text-xs text-muted-foreground">Sell at zero stock with an expected dispatch date.</p>
-          </div>
-          <Switch
-            id={`v-preorder-${variant.id}`}
-            checked={preorderEnabled}
-            onCheckedChange={(c) => setPreorderEnabled(Boolean(c))}
-          />
-        </Field>
-
-        {preorderEnabled && (
-          <div className="grid gap-3 sm:grid-cols-2 rounded-md bg-muted/40 p-3 border border-border">
-            <div className="grid gap-1.5">
-              <FieldLabel htmlFor={`v-ships-on-${variant.id}`}>Expected ship date *</FieldLabel>
-              <Input
-                id={`v-ships-on-${variant.id}`}
-                type="date"
-                value={preorderShipsOn}
-                onChange={(e) => setPreorderShipsOn(e.target.value)}
-              />
-            </div>
-            <div className="grid gap-1.5">
-              <FieldLabel htmlFor={`v-preorder-msg-${variant.id}`}>
-                Customer message (optional, max 200 chars)
-              </FieldLabel>
-              <Input
-                id={`v-preorder-msg-${variant.id}`}
-                placeholder="e.g. Dispatches in 2 weeks"
-                maxLength={200}
-                value={preorderMessage}
-                onChange={(e) => setPreorderMessage(e.target.value)}
-              />
-            </div>
-          </div>
-        )}
-      </div>
-
-      <div className="flex items-center justify-between sm:col-span-4 border-t border-border pt-2">
-        <span className="text-xs text-muted-foreground">
-          {priceOnRequest ? "Quote only" : `Current: ${inr.format(variant.price / 100)}`}
-          {error ? <span role="alert" className="ml-3 text-destructive font-medium">{error}</span> : null}
-        </span>
-        <Button type="button" variant="outline" size="sm" disabled={mutation.isPending} onClick={() => submit()}>
-          {mutation.isPending ? "Saving..." : "Save variant"}
-        </Button>
-      </div>
-    </div>
   );
 }
 

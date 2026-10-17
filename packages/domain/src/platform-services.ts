@@ -1,10 +1,11 @@
 import { createHash, randomBytes } from "node:crypto";
-import { and, desc, eq, gte, inArray, isNull, sql } from "drizzle-orm";
+import { and, desc, eq, gte, ilike, inArray, isNotNull, isNull, lt, sql } from "drizzle-orm";
 import { schema, withTenant, type Db } from "@bs/db";
 import { hashPassword, verifyPassword } from "@bs/auth";
 import type { Runtime } from "./runtime.ts";
 import { assertCanTransitionTenant } from "./system/tenant-lifecycle.ts";
 import { tierForPlan } from "./saas/plan-tiers.ts";
+import { purgeAvailableFrom } from "./platform/purge-retention.ts";
 
 export interface AuditMeta {
   ip?: string | undefined;
@@ -447,6 +448,7 @@ export async function getPlatformTenantDetail(
   return {
     overview: {
       id: tenant.id,
+      storeNumber: tenant.storeNumber,
       name: tenant.name,
       slug: tenant.slug,
       status: tenant.status,
@@ -533,6 +535,10 @@ export async function getPlatformTenantDetail(
           reason: openDeletion.reason,
           error: openDeletion.error,
           canCancel: openDeletion.step === "requested" || openDeletion.step === "exported",
+          manualPurge: Boolean((openDeletion.metadata as { manualPurge?: boolean } | null)?.manualPurge),
+          purgeApprovedAt: (openDeletion.metadata as { purgeApprovedAt?: string } | null)?.purgeApprovedAt ?? null,
+          purgeAvailableFrom: purgeAvailableFrom(openDeletion).toISOString(),
+          purgeAvailable: purgeAvailableFrom(openDeletion).getTime() <= Date.now(),
         }
       : null,
   };
@@ -1361,6 +1367,10 @@ export async function listPlatformAuditLogs(
     tenantId?: string | undefined;
     actorUserId?: string | undefined;
     action?: string | undefined;
+    actionContains?: string | undefined;
+    from?: string | undefined;
+    to?: string | undefined;
+    archived?: "hide" | "only" | "all" | undefined;
     limit?: number | undefined;
     offset?: number | undefined;
   } | undefined,
@@ -1368,10 +1378,26 @@ export async function listPlatformAuditLogs(
   await assertPlatformStaff(rt, platformStaffUserId);
   const db = rt._db.db;
 
+  const fromDate = params?.from ? new Date(params.from) : null;
+  const toDate = params?.to ? new Date(params.to) : null;
+  if ((fromDate && Number.isNaN(fromDate.getTime())) || (toDate && Number.isNaN(toDate.getTime()))) {
+    throw new Error("Bad Request: invalid date filter");
+  }
+  const archivedMode = params?.archived ?? "hide";
+  // Escape LIKE wildcards so the search box matches literally.
+  const containsPattern = params?.actionContains?.trim()
+    ? `%${params.actionContains.trim().replace(/[\\%_]/g, (c) => `\\${c}`)}%`
+    : null;
+
   const conditions = [
     params?.tenantId ? eq(schema.platformAuditLogs.tenantId, params.tenantId) : undefined,
     params?.action ? eq(schema.platformAuditLogs.action, params.action) : undefined,
     params?.actorUserId ? eq(schema.platformAuditLogs.actorUserId, params.actorUserId) : undefined,
+    containsPattern ? ilike(schema.platformAuditLogs.action, containsPattern) : undefined,
+    fromDate ? gte(schema.platformAuditLogs.createdAt, fromDate) : undefined,
+    toDate ? lt(schema.platformAuditLogs.createdAt, toDate) : undefined,
+    archivedMode === "hide" ? isNull(schema.platformAuditLogArchives.auditLogId) : undefined,
+    archivedMode === "only" ? isNotNull(schema.platformAuditLogArchives.auditLogId) : undefined,
   ].filter((c): c is NonNullable<typeof c> => c !== undefined);
 
   const filtered = await db
@@ -1384,12 +1410,16 @@ export async function listPlatformAuditLogs(
       targetId: schema.platformAuditLogs.targetId,
       tenantId: schema.platformAuditLogs.tenantId,
       ip: schema.platformAuditLogs.ip,
+      userAgent: schema.platformAuditLogs.userAgent,
+      requestId: schema.platformAuditLogs.requestId,
+      archivedId: schema.platformAuditLogArchives.auditLogId,
       diff: schema.platformAuditLogs.diff,
       createdAt: schema.platformAuditLogs.createdAt,
       actorEmail: schema.users.email,
     })
     .from(schema.platformAuditLogs)
     .leftJoin(schema.users, eq(schema.users.id, schema.platformAuditLogs.actorUserId))
+    .leftJoin(schema.platformAuditLogArchives, eq(schema.platformAuditLogArchives.auditLogId, schema.platformAuditLogs.id))
     .where(conditions.length > 0 ? and(...conditions) : undefined)
     .orderBy(desc(schema.platformAuditLogs.createdAt))
     .limit(Math.min(params?.limit ?? 100, 10000))
@@ -1405,9 +1435,56 @@ export async function listPlatformAuditLogs(
     targetId: r.targetId,
     tenantId: r.tenantId,
     ip: r.ip,
+    userAgent: r.userAgent,
+    requestId: r.requestId,
+    archived: r.archivedId !== null,
     diff: r.diff,
     createdAt: r.createdAt.toISOString(),
   }));
+}
+
+/** Hides audit rows from the default view. The rows themselves are never deleted or changed; the act is audited. */
+export async function archivePlatformAuditLogs(
+  rt: Runtime,
+  staffUserId: string,
+  ids: string[],
+  meta?: AuditMeta,
+): Promise<{ archived: number }> {
+  const unique = [...new Set(ids)];
+  return rt._db.db.transaction(async (tx) => {
+    const existing = await tx
+      .select({ id: schema.platformAuditLogs.id })
+      .from(schema.platformAuditLogs)
+      .where(inArray(schema.platformAuditLogs.id, unique));
+    const found = existing.map((r) => r.id);
+    if (found.length === 0) return { archived: 0 };
+    const inserted = await tx
+      .insert(schema.platformAuditLogArchives)
+      .values(found.map((id) => ({ auditLogId: id, archivedBy: staffUserId })))
+      .onConflictDoNothing()
+      .returning({ id: schema.platformAuditLogArchives.auditLogId });
+    await writePlatformAudit(tx, staffUserId, "audit_log.archive", "audit_log", found[0] as string, null, { count: inserted.length, ids: found.slice(0, 50) }, meta);
+    return { archived: inserted.length };
+  });
+}
+
+/** Brings archived audit rows back into the default view. */
+export async function unarchivePlatformAuditLogs(
+  rt: Runtime,
+  staffUserId: string,
+  ids: string[],
+  meta?: AuditMeta,
+): Promise<{ unarchived: number }> {
+  const unique = [...new Set(ids)];
+  return rt._db.db.transaction(async (tx) => {
+    const removed = await tx
+      .delete(schema.platformAuditLogArchives)
+      .where(inArray(schema.platformAuditLogArchives.auditLogId, unique))
+      .returning({ id: schema.platformAuditLogArchives.auditLogId });
+    if (removed.length === 0) return { unarchived: 0 };
+    await writePlatformAudit(tx, staffUserId, "audit_log.unarchive", "audit_log", removed[0]?.id as string, null, { count: removed.length, ids: removed.slice(0, 50).map((r) => r.id) }, meta);
+    return { unarchived: removed.length };
+  });
 }
 
 /**
@@ -1418,7 +1495,7 @@ export async function exportPlatformAuditLogsCsv(
   platformStaffUserId: string,
   params?: { tenantId?: string | undefined; action?: string | undefined } | undefined,
 ): Promise<string> {
-  const logs = await listPlatformAuditLogs(rt, platformStaffUserId, { ...params, limit: 10000 });
+  const logs = await listPlatformAuditLogs(rt, platformStaffUserId, { ...params, archived: "all", limit: 10000 });
   const headers = ["ID", "Timestamp", "Actor Email", "Actor Type", "Action", "Target Type", "Target ID", "Tenant ID", "IP", "Diff"];
   const lines = [headers.join(",")];
 

@@ -1,7 +1,7 @@
 "use client";
 
 import { priceOrder } from "@bs/domain/pricing";
-import React, { useState } from "react";
+import React, { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import type { StorefrontCart, StorefrontCheckoutConsent } from "@bs/domain";
 
@@ -105,6 +105,8 @@ export interface CheckoutFormProps {
   onPaymentMethodChange?: (method: "cod" | "online") => void;
   shippingMethod?: string;
   onShippingMethodChange?: (method: string) => void;
+  /** Called with the state the order ships to, on first render and whenever it changes, so shipping options can follow it. */
+  onShippingStateChange?: (state: string) => void;
 }
 
 export function CheckoutForm({
@@ -119,6 +121,7 @@ export function CheckoutForm({
   onPaymentMethodChange,
   shippingMethod: controlledShippingMethod,
   onShippingMethodChange,
+  onShippingStateChange,
 }: CheckoutFormProps) {
   const router = useRouter();
 
@@ -198,6 +201,12 @@ export function CheckoutForm({
 
   // The price comes from the store's own shipping rates (the same ones the order is charged with).
   const currentShippingPaise = (shippingRates.find((r) => r.method === shippingMethod) ?? shippingRates[0])?.amount ?? 0;
+
+  // Shipping options follow the state the order ships to (the separate shipping address when one is used).
+  const shippingState = shipDifferent ? shipState : state;
+  useEffect(() => {
+    if (shippingState) onShippingStateChange?.(shippingState);
+  }, [shippingState, onShippingStateChange]);
 
   const handleShippingChange = (method: string) => {
     if (controlledShippingMethod === undefined) {

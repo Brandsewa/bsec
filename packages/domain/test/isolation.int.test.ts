@@ -207,6 +207,7 @@ import {
   savePageDraft,
   updateAdminDiscount,
   updateAdminShippingSettings,
+  saveAdminShippingZones,
   updateBrand,
   updateBrandSettings,
   updateCategory,
@@ -217,6 +218,15 @@ import {
   updateStoreSettings,
   updateTheme,
   updateVariant,
+  listCustomFieldDefinitions,
+  createCustomFieldDefinition,
+  updateCustomFieldDefinition,
+  setCustomFieldArchived,
+  getResourceCustomFields,
+  setResourceCustomFields,
+  createVariant,
+  deleteVariant,
+  setProductOptions,
   getTenantSubscription,
   approveStoreSupportSession,
   denyStoreSupportSession,
@@ -840,6 +850,15 @@ describe("Generated Isolation Test Suite (M1 Real Postgres 18 Proof)", () => {
     expect(adminProcedures).toContain("products.update");
     expect(adminProcedures).toContain("products.delete");
     expect(adminProcedures).toContain("variants.update");
+    expect(adminProcedures).toContain("customFields.listDefinitions");
+    expect(adminProcedures).toContain("customFields.createDefinition");
+    expect(adminProcedures).toContain("customFields.updateDefinition");
+    expect(adminProcedures).toContain("customFields.setArchived");
+    expect(adminProcedures).toContain("customFields.getValues");
+    expect(adminProcedures).toContain("customFields.setValues");
+    expect(adminProcedures).toContain("variants.create");
+    expect(adminProcedures).toContain("variants.delete");
+    expect(adminProcedures).toContain("products.setOptions");
     expect(adminProcedures).toContain("categories.list");
     expect(adminProcedures).toContain("collections.list");
     expect(adminProcedures).toContain("brands.list");
@@ -871,6 +890,15 @@ describe("Generated Isolation Test Suite (M1 Real Postgres 18 Proof)", () => {
     expect(platformProcedures).toContain("list");
     expect(platformProcedures).toContain("get");
   });
+
+  /** Custom fields need the Growth plan (owner decision 2026-10-17): give store A one before exercising them. */
+  async function ensureGrowthPlan(tenantId: string) {
+    await dbPlatform.db.execute(sql`
+      INSERT INTO subscriptions (tenant_id, plan_id, status, interval)
+      SELECT ${tenantId}, p.id, 'active', 'monthly' FROM plans p
+       WHERE p.code = 'growth' AND NOT EXISTS (SELECT 1 FROM subscriptions s WHERE s.tenant_id = ${tenantId});
+    `);
+  }
 
   /**
    * Helper to dispatch procedure calls to actual domain services against real DB.
@@ -970,6 +998,34 @@ describe("Generated Isolation Test Suite (M1 Real Postgres 18 Proof)", () => {
       }
       case "variants.update":
         return await updateVariant(rt, ctx, { id: testVariantA, price: 2500 });
+      case "customFields.listDefinitions":
+        return await listCustomFieldDefinitions(rt, ctx, { resourceType: "product" });
+      case "customFields.createDefinition":
+        await ensureGrowthPlan(ctx.tenantId);
+        return await createCustomFieldDefinition(rt, ctx, { resourceType: "product", name: `Iso Field ${Date.now()}`, type: "text" });
+      case "customFields.updateDefinition": {
+        await ensureGrowthPlan(ctx.tenantId);
+        const d = await createCustomFieldDefinition(rt, ctx, { resourceType: "product", name: `Iso Upd ${Date.now()}`, type: "text" });
+        return await updateCustomFieldDefinition(rt, ctx, { id: d.id, name: "Renamed" });
+      }
+      case "customFields.setArchived": {
+        await ensureGrowthPlan(ctx.tenantId);
+        const d = await createCustomFieldDefinition(rt, ctx, { resourceType: "product", name: `Iso Arc ${Date.now()}`, type: "text" });
+        return await setCustomFieldArchived(rt, ctx, { id: d.id, archived: true });
+      }
+      case "customFields.getValues":
+        return await getResourceCustomFields(rt, ctx, { resourceType: "product", resourceId: testProductA });
+      case "customFields.setValues":
+        await ensureGrowthPlan(ctx.tenantId);
+        return await setResourceCustomFields(rt, ctx, { resourceType: "product", resourceId: testProductA, values: {} });
+      case "variants.create":
+        return await createVariant(rt, ctx, { productId: testProductA, sku: `ISO-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`, title: "Extra", price: 100 });
+      case "variants.delete": {
+        const v = await createVariant(rt, ctx, { productId: testProductA, sku: `ISO-DEL-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`, title: "Extra", price: 100 });
+        return await deleteVariant(rt, ctx, { id: v.id });
+      }
+      case "products.setOptions":
+        return await setProductOptions(rt, ctx, { productId: testProductA, options: [{ name: "Size", values: ["S"] }] });
       case "categories.list":
         return await listCategories(rt, ctx);
       case "categories.create":
@@ -1395,6 +1451,28 @@ describe("Generated Isolation Test Suite (M1 Real Postgres 18 Proof)", () => {
       // --- M7 Shipping Settings Admin ---
       case "shipping.get":
         return await getAdminShippingSettings(rt, ctx);
+      case "shipping.saveZones": {
+        const current = await getAdminShippingSettings(rt, ctx);
+        return await saveAdminShippingZones(rt, ctx, {
+          zones: current.zones.map((z) => ({
+            id: z.id,
+            name: z.name,
+            countries: z.countries,
+            states: z.states ?? [],
+            isDefault: z.isDefault,
+            rates: z.rates.map((r) => ({
+              id: r.id,
+              name: r.name,
+              method: r.method as "standard" | "express",
+              rateType: r.rateType as "flat" | "free_above_threshold" | "price_tier" | "weight_tier",
+              pricePaise: r.pricePaise,
+              thresholdPaise: r.thresholdPaise ?? null,
+              minDays: r.minDays ?? null,
+              maxDays: r.maxDays ?? null,
+            })),
+          })),
+        });
+      }
       case "shipping.update":
         return await updateAdminShippingSettings(rt, ctx, {
           zoneName: "Domestic (India)",

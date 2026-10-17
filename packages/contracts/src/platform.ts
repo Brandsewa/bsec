@@ -18,6 +18,8 @@ export type PlatformTenant = z.infer<typeof PlatformTenant>;
 export const PlatformTenantDetail = z.object({
   overview: z.object({
     id: z.string(),
+    /** Platform-wide running number; shown as BCSID-<nnnn>. */
+    storeNumber: z.number().int().nullable().optional(),
     name: z.string(),
     slug: z.string(),
     status: z.string(),
@@ -107,6 +109,13 @@ export const PlatformTenantDetail = z.object({
       reason: z.string(),
       error: z.string().nullable(),
       canCancel: z.boolean(),
+      /** True when the data is kept until the platform owner approves the purge after the retention period. */
+      manualPurge: z.boolean(),
+      purgeApprovedAt: z.string().nullable(),
+      /** First moment the platform owner can approve the permanent purge. */
+      purgeAvailableFrom: z.string(),
+      /** True once that moment has passed (computed on the server). */
+      purgeAvailable: z.boolean(),
     })
     .nullable(),
 });
@@ -172,6 +181,9 @@ export const PlatformAuditLog = z.object({
   targetId: z.string(),
   tenantId: z.string().nullable().optional(),
   ip: z.string().nullable().optional(),
+  userAgent: z.string().nullable().optional(),
+  requestId: z.string().nullable().optional(),
+  archived: z.boolean().optional(),
   diff: z.any().nullable().optional(),
   createdAt: z.string(),
 });
@@ -345,6 +357,11 @@ export const platformTenantsContract = {
     .route({ method: "POST", path: "/platform/tenants/{id}/cancel-deletion" })
     .input(z.object({ id: z.string().uuid() }))
     .output(z.object({ ok: z.boolean() })),
+  /** Platform owner only, and only after the 30-day retention: releases the deletion to the background purge. */
+  purge: oc
+    .route({ method: "POST", path: "/platform/tenants/{id}/purge" })
+    .input(z.object({ id: z.string().uuid(), confirmSlug: z.string().min(1) }))
+    .output(z.object({ ok: z.boolean(), alreadyApproved: z.boolean() })),
   export: oc
     .route({ method: "POST", path: "/platform/tenants/{id}/export" })
     .input(z.object({ id: z.string().uuid() }))
@@ -727,18 +744,160 @@ export const platformQuotasContract = {
     .output(z.object({ ok: z.boolean() })),
 };
 
+export const PlatformFeatureFlag = z.object({
+  key: z.string(),
+  defaultOn: z.boolean(),
+  killSwitch: z.boolean(),
+  kind: z.enum(["release", "kill_switch"]),
+  description: z.string().nullable(),
+  retiredAt: z.string().nullable(),
+});
+export type PlatformFeatureFlag = z.infer<typeof PlatformFeatureFlag>;
+
 export const platformFeaturesContract = {
   list: oc
     .route({ method: "GET", path: "/platform/features" })
-    .output(z.array(z.object({
-      key: z.string(),
-      defaultOn: z.boolean(),
-      killSwitch: z.boolean(),
-    }))),
+    .output(z.array(PlatformFeatureFlag)),
   update: oc
     .route({ method: "POST", path: "/platform/features/{featureKey}" })
     .input(z.object({ featureKey: z.string(), defaultOn: z.boolean(), killSwitch: z.boolean().optional() }))
     .output(z.object({ ok: z.boolean() })),
+  /** Makes a release flag permanent: always on, toggles gone, hidden from the main list. Kill switches are refused. */
+  retire: oc
+    .route({ method: "POST", path: "/platform/features/{featureKey}/retire" })
+    .input(z.object({ featureKey: z.string() }))
+    .output(z.object({ ok: z.boolean() })),
+  /** Brings a retired flag back as a normal release flag (platform owner only). */
+  restore: oc
+    .route({ method: "POST", path: "/platform/features/{featureKey}/restore" })
+    .input(z.object({ featureKey: z.string() }))
+    .output(z.object({ ok: z.boolean() })),
+};
+
+// --- Promotions and free periods (ADR-035) ---
+export const PromotionKind = z.enum(["percent_off", "free_months"]);
+
+export const PromotionView = z.object({
+  id: z.string().uuid(),
+  code: z.string(),
+  name: z.string(),
+  description: z.string().nullable(),
+  kind: PromotionKind,
+  percentOff: z.number().int().nullable(),
+  durationMonths: z.number().int(),
+  appliesToPlanCodes: z.array(z.string()),
+  maxRedemptions: z.number().int().nullable(),
+  redeemedCount: z.number().int(),
+  validFrom: z.string().nullable(),
+  validUntil: z.string().nullable(),
+  isActive: z.boolean(),
+  createdAt: z.string(),
+});
+export type PromotionView = z.infer<typeof PromotionView>;
+
+export const TenantPromotionView = z.object({
+  id: z.string().uuid(),
+  promotionId: z.string().uuid().nullable(),
+  promotionCode: z.string().nullable(),
+  kind: PromotionKind,
+  percentOff: z.number().int().nullable(),
+  durationMonths: z.number().int(),
+  planCode: z.string().nullable(),
+  termMonths: z.number().int(),
+  source: z.enum(["code", "staff"]),
+  note: z.string().nullable(),
+  status: z.enum(["active", "ended", "cancelled"]),
+  startsAt: z.string(),
+  endsAt: z.string(),
+});
+export type TenantPromotionView = z.infer<typeof TenantPromotionView>;
+
+const PromotionTermsInput = z.object({
+  kind: PromotionKind,
+  percentOff: z.number().int().min(1).max(100).nullable().optional(),
+  durationMonths: z.number().int().min(1).max(12),
+});
+
+export const TermQuoteView = z.object({
+  planName: z.string(),
+  monthlyPricePaise: z.number().int(),
+  termMonths: z.number().int(),
+  listTotalPaise: z.number().int(),
+  discountPaise: z.number().int(),
+  totalPaise: z.number().int(),
+  taxPaise: z.number().int(),
+  lines: z.array(z.object({ fromMonth: z.number().int(), toMonth: z.number().int(), months: z.number().int(), monthlyPaise: z.number().int(), label: z.string() })),
+});
+export type TermQuoteView = z.infer<typeof TermQuoteView>;
+
+export const platformPromotionsContract = {
+  list: oc.route({ method: "GET", path: "/platform/promotions" }).output(z.array(PromotionView)),
+  /** Platform owner only. A promotion lasts 1 to 12 months. */
+  create: oc
+    .route({ method: "POST", path: "/platform/promotions" })
+    .input(
+      z.object({
+        code: z.string().min(3).max(32),
+        name: z.string().min(1).max(80),
+        description: z.string().max(300).nullable().optional(),
+        kind: PromotionKind,
+        percentOff: z.number().int().min(1).max(100).nullable().optional(),
+        durationMonths: z.number().int().min(1).max(12),
+        appliesToPlanCodes: z.array(z.string().max(30)).max(10).optional(),
+        maxRedemptions: z.number().int().min(1).nullable().optional(),
+        validFrom: z.string().nullable().optional(),
+        validUntil: z.string().nullable().optional(),
+      }),
+    )
+    .output(PromotionView),
+  update: oc
+    .route({ method: "PATCH", path: "/platform/promotions/{id}" })
+    .input(
+      z.object({
+        id: z.string().uuid(),
+        name: z.string().min(1).max(80).optional(),
+        description: z.string().max(300).nullable().optional(),
+        appliesToPlanCodes: z.array(z.string().max(30)).max(10).optional(),
+        maxRedemptions: z.number().int().min(1).nullable().optional(),
+        validFrom: z.string().nullable().optional(),
+        validUntil: z.string().nullable().optional(),
+        isActive: z.boolean().optional(),
+      }),
+    )
+    .output(PromotionView),
+  listForTenant: oc
+    .route({ method: "GET", path: "/platform/tenants/{tenantId}/promotions" })
+    .input(z.object({ tenantId: z.string().uuid() }))
+    .output(z.array(TenantPromotionView)),
+  /** Platform owner only: give a store a promotion or custom terms (for example a free year). */
+  grant: oc
+    .route({ method: "POST", path: "/platform/tenants/{tenantId}/promotions" })
+    .input(
+      z.object({
+        tenantId: z.string().uuid(),
+        promotionId: z.string().uuid().optional(),
+        custom: PromotionTermsInput.optional(),
+        termMonths: z.union([z.literal(6), z.literal(12), z.literal(36)]),
+        note: z.string().max(300).optional(),
+      }),
+    )
+    .output(TenantPromotionView),
+  cancelGrant: oc
+    .route({ method: "POST", path: "/platform/promotions/grants/{id}/cancel" })
+    .input(z.object({ id: z.string().uuid(), reason: z.string().max(300).optional() }))
+    .output(z.object({ ok: z.boolean() })),
+  /** A read-only preview, so it is a GET (nothing is written). */
+  quote: oc
+    .route({ method: "GET", path: "/platform/promotions/quote" })
+    .input(
+      z.object({
+        planCode: z.string().min(1).max(30),
+        termMonths: z.union([z.literal(6), z.literal(12), z.literal(36)]),
+        promotionId: z.string().uuid().optional(),
+        custom: PromotionTermsInput.optional(),
+      }),
+    )
+    .output(TermQuoteView),
 };
 
 export const platformStaffContract = {
@@ -791,11 +950,27 @@ export const platformAuditContract = {
         tenantId: z.string().optional(),
         actorUserId: z.string().optional(),
         action: z.string().optional(),
+        /** Case-insensitive "contains" match on the action name (for the search box). */
+        actionContains: z.string().max(100).optional(),
+        /** ISO timestamps, inclusive start and exclusive end. */
+        from: z.string().optional(),
+        to: z.string().optional(),
+        /** "hide" (default) leaves archived rows out, "only" shows just them, "all" shows everything. */
+        archived: z.enum(["hide", "only", "all"]).optional(),
         limit: z.number().int().optional(),
         offset: z.number().int().optional(),
       }).optional(),
     )
     .output(z.array(PlatformAuditLog)),
+  /** Hides rows from the default view. Rows are never deleted or edited. */
+  archive: oc
+    .route({ method: "POST", path: "/platform/audit/archive" })
+    .input(z.object({ ids: z.array(z.string().uuid()).min(1).max(200) }))
+    .output(z.object({ archived: z.number() })),
+  unarchive: oc
+    .route({ method: "POST", path: "/platform/audit/unarchive" })
+    .input(z.object({ ids: z.array(z.string().uuid()).min(1).max(200) }))
+    .output(z.object({ unarchived: z.number() })),
   exportCsv: oc
     .route({ method: "GET", path: "/platform/audit/export" })
     .input(

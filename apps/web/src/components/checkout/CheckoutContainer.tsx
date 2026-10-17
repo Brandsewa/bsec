@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useId, useState } from "react";
+import React, { useCallback, useId, useState } from "react";
 import { useRouter } from "next/navigation";
 import type { StorefrontCart, StorefrontCheckoutConsent } from "@bs/domain";
 import { priceOrder } from "@bs/domain/pricing";
@@ -21,10 +21,30 @@ export interface CheckoutContainerProps {
   signedIn?: boolean;
 }
 
-export function CheckoutContainer({ cart, shippingRates, paymentOptions, consent, savedAddresses, customerEmail, signedIn }: CheckoutContainerProps) {
+export function CheckoutContainer({ cart, shippingRates: initialRates, paymentOptions, consent, savedAddresses, customerEmail, signedIn }: CheckoutContainerProps) {
   const router = useRouter();
   const summaryId = useId();
-  const [shippingMethod, setShippingMethod] = useState<string>(shippingRates[0]?.method ?? "");
+  // The store's shipping options can depend on where the order ships (zones by state), so they refresh when the shopper
+  // picks a state. The server prices the order again when it is placed, so this only keeps what is shown accurate.
+  const [shippingRates, setShippingRates] = useState<CheckoutShippingRate[]>(initialRates);
+  const [shippingMethod, setShippingMethod] = useState<string>(initialRates[0]?.method ?? "");
+  const refreshRates = useCallback(async (state: string) => {
+    try {
+      const res = await fetch("/api/storefront/checkout/shipping-rates", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ state }),
+      });
+      if (!res.ok) return;
+      const data = (await res.json()) as { rates?: Array<{ id: string; title: string; description: string; amount: number; estimatedDays: string }> };
+      if (!data.rates || data.rates.length === 0) return;
+      const next: CheckoutShippingRate[] = data.rates.map((r) => ({ method: r.id, title: r.title, description: r.description, estimatedDays: r.estimatedDays, amount: r.amount }));
+      setShippingRates(next);
+      setShippingMethod((current) => (next.some((r) => r.method === current) ? current : (next[0]?.method ?? "")));
+    } catch {
+      // Keep the options already shown; placing the order re-checks them on the server.
+    }
+  }, []);
   const [summaryOpen, setSummaryOpen] = useState(false);
 
   const [paymentMethod, setPaymentMethod] = useState<"cod" | "online">(paymentOptions.codEnabled ? "cod" : "online");
@@ -82,6 +102,7 @@ export function CheckoutContainer({ cart, shippingRates, paymentOptions, consent
           onPaymentMethodChange={setPaymentMethod}
           shippingMethod={shippingMethod}
           onShippingMethodChange={setShippingMethod}
+          onShippingStateChange={refreshRates}
         />
       </div>
     </div>

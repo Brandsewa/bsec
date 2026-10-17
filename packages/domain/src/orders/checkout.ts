@@ -23,7 +23,8 @@ import { reserveInventory } from "../catalog/inventory-reservations.ts";
 import { allocateOrderNumber } from "../admin/order-settings.ts";
 import { redeemDiscount } from "./discounts.ts";
 import { allocateDiscount, priceOrder } from "./pricing.ts";
-import { getTenantShippingRates } from "./shipping-rates.ts";
+import { cartWeightGrams, getTenantShippingRates } from "./shipping-rates.ts";
+import { toCountryCode } from "./shipping-rules.ts";
 import { withIdempotencyKey } from "../system/idempotency.ts";
 import { isFeatureEnabled, FeatureDisabledError } from "../features.ts";
 import { parseCheckoutSettings } from "../admin/checkout-config.ts";
@@ -194,7 +195,11 @@ export async function placeOrder(
 
     // 2. Calculate amounts (in paise) using canonical shipping calculation (PLAN §5.4, §7 / M7)
     const subtotal = cart.subtotal;
-    const resolvedRates = await getTenantShippingRates(tx, tenantId, subtotal);
+    // Zone, weight tiers and price tiers are all decided here on the server from the cart and the shipping address.
+    const resolvedRates = await getTenantShippingRates(tx, tenantId, subtotal, {
+      weightGrams: await cartWeightGrams(tx, cart.items.map((i) => ({ variantId: i.variantId, quantity: i.quantity }))),
+      destination: { country: toCountryCode(input.shipTo?.country ?? input.country) ?? "IN", state: input.shipTo?.state ?? input.state },
+    });
     if (input.shippingMethod && !resolvedRates.some((r) => r.method === input.shippingMethod)) {
       throw new Error("Bad Request: the chosen shipping method is not available for this store");
     }

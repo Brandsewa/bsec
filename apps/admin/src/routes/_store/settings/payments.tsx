@@ -1,8 +1,8 @@
 import { createFileRoute, useRouteContext } from "@tanstack/react-router";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useState, type FormEvent } from "react";
-import { AlertTriangle, CheckCircle2, Clock, ShieldAlert, Sparkles, AlertCircle, CreditCard } from "lucide-react";
-import { EmptyState, FormSkeleton, PageSkeleton, Sheet, SheetContent, SheetDescription, SheetFooter, SheetHeader, SheetTitle, toast } from "@bs/ui";
+import { AlertTriangle, CheckCircle2, Clock, ShieldAlert, AlertCircle, CreditCard, Copy, Plus, Banknote, Globe } from "lucide-react";
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, EmptyState, FormSkeleton, PageSkeleton, Sheet, SheetContent, SheetDescription, SheetFooter, SheetHeader, SheetTitle, toast } from "@bs/ui";
 import type { StorePaymentProvider } from "@bs/contracts";
 import { Badge } from "@bs/ui";
 import { Alert } from "@bs/ui";
@@ -64,66 +64,62 @@ export function PaymentsSettingsPage() {
       ) : null}
 
       <SettingsCard
-        title="Payment methods catalogue"
-        description="Supported channels for manual and online payments"
+        title="Payment methods"
+        description="Choose how your shoppers can pay"
       >
         <div className="grid gap-3 sm:grid-cols-2">
-          {/* Cash on delivery card */}
+          {/* Manual payments */}
           <div className="flex flex-col justify-between rounded-lg border border-border p-4 bg-muted/10">
             <div>
               <div className="flex items-center justify-between gap-2">
-                <h3 className="text-sm font-medium text-foreground">Cash on Delivery (COD)</h3>
+                <h3 className="flex items-center gap-1.5 text-sm font-medium text-foreground">
+                  <Banknote className="h-4 w-4 text-muted-foreground" aria-hidden /> Manual payments
+                </h3>
                 {codMethod?.status === "active" ? (
                   <Badge variant="outline" className="border-emerald-500/30 bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 gap-1 text-[11px]">
                     <CheckCircle2 className="h-3 w-3" /> Active
                   </Badge>
                 ) : (
-                  <Badge variant="secondary" className="text-[11px]">Disabled</Badge>
+                  <Badge variant="secondary" className="text-[11px]">Off</Badge>
                 )}
               </div>
               <p className="mt-1 text-xs text-muted-foreground">
-                Manual payment method allowing customers to pay with cash or UPI upon delivery.
+                Cash on Delivery: customers pay with cash or UPI when the order arrives.
               </p>
             </div>
-            <div className="mt-4 pt-3 border-t border-border/60 flex items-center justify-between text-xs text-muted-foreground">
-              <span>{codMethod?.status === "active" ? "Customers can checkout via COD" : "Disabled on storefront"}</span>
-              <span className="font-medium text-foreground">Manual</span>
+            <div className="mt-4 flex items-center justify-between border-t border-border/60 pt-3 text-xs text-muted-foreground">
+              <span>{codMethod?.status === "active" ? "Customers can checkout via COD" : "Not offered at checkout"}</span>
+              <Button
+                size="sm"
+                variant="outline"
+                onClick={() => document.getElementById("cod-configuration")?.scrollIntoView({ behavior: "smooth", block: "start" })}
+              >
+                Configure
+              </Button>
             </div>
           </div>
 
-          {/* Coming Soon: PhonePe */}
-          <div className="flex flex-col justify-between rounded-lg border border-dashed border-border p-4 bg-muted/20 opacity-80">
+          {/* Online payment gateways */}
+          <div className="flex flex-col justify-between rounded-lg border border-border p-4 bg-muted/10">
             <div>
               <div className="flex items-center justify-between gap-2">
-                <h3 className="text-sm font-medium text-foreground">PhonePe Payment Gateway</h3>
-                <Badge variant="secondary" className="gap-1 text-[11px]">
-                  <Sparkles className="h-3 w-3 text-amber-500" /> Coming soon
-                </Badge>
+                <h3 className="flex items-center gap-1.5 text-sm font-medium text-foreground">
+                  <Globe className="h-4 w-4 text-muted-foreground" aria-hidden /> Online payment gateways
+                </h3>
               </div>
               <p className="mt-1 text-xs text-muted-foreground">
-                Direct UPI flows and merchant payments powered by PhonePe PG.
+                Accept UPI, cards, netbanking and wallets through a payment gateway such as Razorpay.
               </p>
             </div>
-            <div className="mt-4 pt-3 border-t border-border/60 text-xs text-muted-foreground">
-              <span>Planned in future platform releases</span>
-            </div>
-          </div>
-
-          {/* Coming Soon: PayU */}
-          <div className="flex flex-col justify-between rounded-lg border border-dashed border-border p-4 bg-muted/20 opacity-80">
-            <div>
-              <div className="flex items-center justify-between gap-2">
-                <h3 className="text-sm font-medium text-foreground">PayU India</h3>
-                <Badge variant="secondary" className="gap-1 text-[11px]">
-                  <Sparkles className="h-3 w-3 text-amber-500" /> Coming soon
-                </Badge>
-              </div>
-              <p className="mt-1 text-xs text-muted-foreground">
-                Enterprise payment gateway for high-volume transactions and EMI.
-              </p>
-            </div>
-            <div className="mt-4 pt-3 border-t border-border/60 text-xs text-muted-foreground">
-              <span>Planned in future platform releases</span>
+            <div className="mt-4 flex items-center justify-between border-t border-border/60 pt-3 text-xs text-muted-foreground">
+              <span>Add and set up a gateway below</span>
+              <Button
+                size="sm"
+                variant="outline"
+                onClick={() => document.getElementById("online-gateways")?.scrollIntoView({ behavior: "smooth", block: "start" })}
+              >
+                View
+              </Button>
             </div>
           </div>
         </div>
@@ -261,6 +257,7 @@ function CodConfigurationForm({
 
   return (
     <SettingsCard
+      id="cod-configuration"
       title="Cash on Delivery configuration"
       description="Handling charges, order thresholds, and storefront display text"
       actions={
@@ -417,17 +414,44 @@ function GatewayStateBadge({ provider }: { provider: StorePaymentProvider }) {
   );
 }
 
-/** Online gateways the platform has enabled for this store (Razorpay, Stripe): connect keys, test, activate. */
+const GATEWAY_BLURB: Record<StorePaymentProvider["provider"], string> = {
+  razorpay: "Accept UPI, cards, netbanking and wallets in rupees.",
+  stripe: "Accept cards through Stripe-hosted Checkout (the shopper pays on stripe.com).",
+};
+
+/**
+ * Online gateways the platform has enabled for this store (Razorpay, Stripe). "Add gateway" opens a picker; the chosen
+ * gateway appears as a card here and its Configure button opens the drawer to save keys, test and activate.
+ */
 function OnlineGateways({ canManage }: { canManage: boolean }) {
   const query = useQuery(orpc.admin.paymentProviders.list.queryOptions());
   const [openProvider, setOpenProvider] = useState<StorePaymentProvider["provider"] | null>(null);
+  const [pickerOpen, setPickerOpen] = useState(false);
+  // A gateway the owner just picked stays listed (as "Not connected") until keys are saved, so Configure is one click away.
+  const [picked, setPicked] = useState<Array<StorePaymentProvider["provider"]>>([]);
   const providers = query.data ?? [];
   const open = providers.find((p) => p.provider === openProvider) ?? null;
+  const added = providers.filter((p) => p.state !== "not_connected" || picked.includes(p.provider));
+  const available = providers.filter((p) => !added.some((a) => a.provider === p.provider));
+
+  function choose(provider: StorePaymentProvider["provider"]) {
+    setPicked((prev) => (prev.includes(provider) ? prev : [...prev, provider]));
+    setPickerOpen(false);
+    setOpenProvider(provider);
+  }
 
   return (
     <SettingsCard
+      id="online-gateways"
       title="Online payment gateways"
-      description="Gateways your platform has enabled. Connect your own account with test keys, check the connection, then activate."
+      description="Add a gateway, connect your own account with test keys, check the connection, then activate."
+      actions={
+        canManage ? (
+          <Button size="sm" variant="outline" disabled={available.length === 0} onClick={() => setPickerOpen(true)}>
+            <Plus className="mr-1.5 size-3.5" aria-hidden /> Add gateway
+          </Button>
+        ) : undefined
+      }
     >
       <div className="mb-4 flex items-start gap-3 rounded-lg border border-border bg-muted/20 p-3 text-xs">
         <ShieldAlert className="mt-0.5 h-4 w-4 shrink-0 text-muted-foreground" aria-hidden />
@@ -449,9 +473,12 @@ function OnlineGateways({ canManage }: { canManage: boolean }) {
       {query.data && providers.length === 0 ? (
         <p className="text-xs text-muted-foreground">No online gateways are enabled for stores yet. Ask the platform team to enable one.</p>
       ) : null}
+      {query.data && providers.length > 0 && added.length === 0 ? (
+        <p className="text-xs text-muted-foreground">No gateway added yet. Use "Add gateway" to choose one.</p>
+      ) : null}
 
       <div className="grid gap-3 sm:grid-cols-2">
-        {providers.map((p) => (
+        {added.map((p) => (
           <div key={p.provider} className="flex flex-col justify-between rounded-lg border border-border bg-muted/10 p-4">
             <div>
               <div className="flex items-center justify-between gap-2">
@@ -460,11 +487,7 @@ function OnlineGateways({ canManage }: { canManage: boolean }) {
                 </h3>
                 <GatewayStateBadge provider={p} />
               </div>
-              <p className="mt-1 text-xs text-muted-foreground">
-                {p.provider === "razorpay"
-                  ? "Accept UPI, cards, netbanking and wallets in rupees."
-                  : "Accept cards through Stripe-hosted Checkout (the shopper pays on stripe.com)."}
-              </p>
+              <p className="mt-1 text-xs text-muted-foreground">{GATEWAY_BLURB[p.provider]}</p>
             </div>
             <div className="mt-4 flex items-center justify-between border-t border-border/60 pt-3 text-xs text-muted-foreground">
               <span>
@@ -472,12 +495,44 @@ function OnlineGateways({ canManage }: { canManage: boolean }) {
                 {p.mode ? ` · ${p.mode} mode` : ""}
               </span>
               <Button size="sm" variant="outline" onClick={() => setOpenProvider(p.provider)}>
-                {p.state === "not_connected" ? "Connect" : "Manage"}
+                Configure
               </Button>
             </div>
           </div>
         ))}
       </div>
+
+      <Dialog open={pickerOpen} onOpenChange={setPickerOpen}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>Add a payment gateway</DialogTitle>
+            <DialogDescription>Choose a gateway to connect to your store. You will set it up in the next step.</DialogDescription>
+          </DialogHeader>
+          <div className="grid gap-2">
+            {available.length === 0 ? (
+              <p className="text-xs text-muted-foreground">All available gateways are already added.</p>
+            ) : (
+              available.map((p) => (
+                <button
+                  key={p.provider}
+                  type="button"
+                  disabled={!p.platformEnabled}
+                  onClick={() => choose(p.provider)}
+                  className="flex items-start gap-3 rounded-lg border border-border p-3 text-left transition-colors hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/50 disabled:cursor-not-allowed disabled:opacity-60"
+                >
+                  <CreditCard className="mt-0.5 h-4 w-4 shrink-0 text-muted-foreground" aria-hidden />
+                  <span className="grid gap-0.5">
+                    <span className="text-sm font-medium text-foreground">{p.displayName}</span>
+                    <span className="text-xs text-muted-foreground">
+                      {p.platformEnabled ? GATEWAY_BLURB[p.provider] : "Turned off by the platform"}
+                    </span>
+                  </span>
+                </button>
+              ))
+            )}
+          </div>
+        </DialogContent>
+      </Dialog>
 
       <GatewaySheet provider={open} canManage={canManage} onClose={() => setOpenProvider(null)} />
     </SettingsCard>
@@ -490,6 +545,8 @@ function GatewaySheet({ provider, canManage, onClose }: { provider: StorePayment
   const [keySecret, setKeySecret] = useState("");
   const [webhookSecret, setWebhookSecret] = useState("");
   const [busy, setBusy] = useState<GatewayAction | "save" | null>(null);
+  const domainsQuery = useQuery(orpc.admin.domains.list.queryOptions());
+  const { store } = useRouteContext({ from: "/_store" });
 
   const saveMutation = useMutation(orpc.admin.paymentProviders.saveCredentials.mutationOptions());
   const clearMutation = useMutation(orpc.admin.paymentProviders.clearCredentials.mutationOptions());
@@ -504,7 +561,13 @@ function GatewaySheet({ provider, canManage, onClose }: { provider: StorePayment
   if (!provider) return <Sheet open={false} onOpenChange={onClose} />;
   const isRazorpay = provider.provider === "razorpay";
   const locked = !canManage || !provider.platformEnabled;
-  const webhookUrl = `https://<your-store-domain>${provider.webhookPath}`;
+  // Use the store's real primary host so the URL can be pasted into the gateway dashboard as is.
+  const domains = domainsQuery.data ?? [];
+  const primaryHost =
+    domains.find((d) => d.isPrimary && d.status === "active")?.hostname ??
+    domains.find((d) => d.isPrimary)?.hostname ??
+    (store?.slug ? `${store.slug}.bcom.si` : null);
+  const webhookUrl = `https://${primaryHost ?? "<your-store-domain>"}${provider.webhookPath}`;
 
   async function run<T>(action: GatewayAction | "save", fn: () => Promise<T>, okMessage: (r: T) => string | null): Promise<boolean> {
     setBusy(action);
@@ -524,8 +587,8 @@ function GatewaySheet({ provider, canManage, onClose }: { provider: StorePayment
 
   return (
     <Sheet open onOpenChange={(o) => !o && onClose()}>
-      <SheetContent className="w-full overflow-y-auto sm:max-w-md">
-        <SheetHeader>
+      <SheetContent className="overflow-y-auto">
+        <SheetHeader className="p-5 pb-3 sm:p-8 sm:pb-4">
           <SheetTitle>{provider.displayName}</SheetTitle>
           <SheetDescription>
             {provider.platformEnabled
@@ -536,7 +599,7 @@ function GatewaySheet({ provider, canManage, onClose }: { provider: StorePayment
           </SheetDescription>
         </SheetHeader>
 
-        <div className="space-y-5 px-4 pb-4 text-xs">
+        <div className="space-y-6 px-5 pb-6 text-xs sm:px-8">
           <dl className="grid grid-cols-2 gap-2">
             <div className="rounded-md border border-border p-2">
               <dt className="text-muted-foreground">Status</dt>
@@ -631,13 +694,26 @@ function GatewaySheet({ provider, canManage, onClose }: { provider: StorePayment
           <div className="space-y-1 rounded-md border border-border p-3">
             <p className="font-medium text-foreground">Webhook URL</p>
             <p className="text-muted-foreground">
-              Add this endpoint in your {provider.displayName} dashboard, then paste its signing secret above. Replace the host with your store&apos;s domain.
+              Add this endpoint in your {provider.displayName} dashboard, then paste its signing secret above.
             </p>
             <p className="break-all rounded bg-muted p-1.5 font-mono text-[10px]">{webhookUrl}</p>
+            <Button
+              type="button"
+              size="sm"
+              variant="outline"
+              onClick={() => {
+                void navigator.clipboard
+                  .writeText(webhookUrl)
+                  .then(() => toast.success("Webhook URL copied"))
+                  .catch(() => toast.error("Could not copy. Select the URL and copy it by hand."));
+              }}
+            >
+              <Copy className="mr-1.5 size-3.5" aria-hidden /> Copy URL
+            </Button>
           </div>
         </div>
 
-        <SheetFooter className="flex-col gap-2 border-t border-border sm:flex-col">
+        <SheetFooter className="flex-col gap-2 border-t border-border px-5 py-4 sm:flex-col sm:px-8">
           <div className="flex flex-wrap gap-2">
             <Button
               size="sm"

@@ -4,7 +4,7 @@
 
 | | |
 |---|---|
-| Last verified against | `feat/blog-system` (blog: data, admin, themed archive and post templates, Recent Posts widget), 2026-10-15 |
+| Last verified against | `fix/admin-polish-phase-1` (admin and Super Admin polish round: friendly IDs, variant builder, shipping zones and tiers, custom fields, promotions, flag retirement, audit archive, tenant purge), 2026-10-17 |
 | Verified how | files read from the working tree; `pnpm docs:check` for the mechanical parts. Facts marked *(from code)* were read, not run. |
 | Owner | whoever changes the area (see the update triggers in section 0) |
 
@@ -287,8 +287,14 @@ Drizzle schema files in `packages/db/src/schema/` (one Postgres database, `publi
 | 0059 | `media_derivatives` | `media` columns: `derivatives` (jsonb), `dominant_color` (text), `focal_x` (real), `focal_y` (real) |
 | 0060 | `collection_description` | `collections.description` (text, nullable, plain text up to 300 characters; shown on archive cards) |
 | 0061 | `blog` | `blog_categories` (parent and child only), `blog_posts` (sanitised HTML body, draft / scheduled / published), `blog_slug_redirects`, `store_settings.blog_settings`, widens the `media_usages` owner types with `blog_post` and `blog_category` (ADR-033) |
+| 0062 | `friendly_ids` | `products.product_number` (per-store running number shown as BCPID-n, unique with `tenant_id`), `tenants.store_number` (platform-wide, BCSID-nnnn, sequence `tenants_store_number_seq`); both backfilled in creation order |
+| 0063 | `feature_flag_lifecycle` | `feature_flags.kind` (`release` or `kill_switch`), `description`, `retired_at` (a retired flag is always on); `catalog`, `checkout`, `fulfillment` become kill switches |
+| 0064 | `audit_log_archives` | `platform_audit_log_archives` (insert/delete only; hides rows from the default audit view while `platform_audit_logs` stays append-only) |
+| 0065 | `shipping_regions_tiers` | `shipping_zones.states` (empty = whole country), `shipping_rates` price tiers (`min/max_subtotal_paise`) and weight tiers (`min/max_weight_grams`), rate types `price_tier` and `weight_tier` |
+| 0066 | `custom_fields` | `custom_field_definitions`, `custom_field_values` (tenant tables, forced RLS, ADR-034); `plans.features.custom_fields` (Growth and Pro) |
+| 0067 | `promotions` | `promotions`, `tenant_promotions` (platform tables, ADR-035; promotions last at most 12 months, one active per store) |
 
-How to write one (expand, migrate, contract; `forceRlsSql`): `docs/migrations.md`. **Never edit an applied migration.** Latest on disk: `0061` (the docs check keeps this list honest).
+How to write one (expand, migrate, contract; `forceRlsSql`): `docs/migrations.md`. **Never edit an applied migration.** Latest on disk: `0067` (the docs check keeps this list honest).
 
 ---
 
@@ -325,7 +331,7 @@ Checkout: a signed-in shopper's saved addresses (default first) are offered as c
 
 `@bs/blocks` is a **versioned block registry** (ADR-009): page documents are JSON; each block has a Zod schema and a view; validation is recursive (depth 6, 300 blocks), props are enumerated, links and video hosts are allow-listed (ADR-010). The storefront renders trees with `renderBlockTree`, products/collections/media resolved server-side in the same `"use cache"` scope as the page. The editor (Puck, ADR-018) lives in `packages/block-editor`, lazy-loaded by the admin; shoppers never download it.
 
-Block types in `packages/blocks/src/registry.ts`: content (Hero, HeroSlider, ProductShowcase, Banner, ProductGrid, CollectionGrid, ProductCarousel, Testimonials, Reviews, RichText, FAQ, Gallery, Newsletter, UspStrip), layout (Section, Container, Grid, FlexRow, FlexColumn, Spacer, Divider), atoms (Heading, Text, Image, Video, FileDownload, Button, Icon, Link, CallToAction), theme chrome and page cores (SiteHeader, SiteFooter, ProductDetail, ProductInfoTabs, CollectionListing, CartContents, BlogListing, BlogPostContent), plus the Recent Posts widget `BlogPosts` (39 block types).
+Block types in `packages/blocks/src/registry.ts`: content (Hero, HeroSlider, ProductShowcase, Banner, ProductGrid, CollectionGrid, ProductCarousel, Testimonials, Reviews, RichText, FAQ, Gallery, Newsletter, UspStrip), layout (Section, Container, Grid, FlexRow, FlexColumn, Spacer, Divider), atoms (Heading, Text, Image, Video, FileDownload, Button, Icon, Link, CallToAction), theme chrome and page cores (SiteHeader, SiteFooter, ProductDetail, ProductInfoTabs, CollectionListing, CartContents, BlogListing, BlogPostContent), plus the Recent Posts widget `BlogPosts` and the product page block `ProductCustomField` (draws one custom field of the product, ADR-034; product pages only) (40 block types).
 
 Theme flow: platform staff build `theme_templates` (draft + published snapshot, home/collection/product/cart/header/footer pages + tokens) in Super Admin. A store *activates* a template: tokens and pages are **copied** into the store's own rows (templates are never edited by stores; re-applying replaces customisations and adds a page version, so it can be rolled back). The storefront applies a theme's tokens once the store opts in (`source: "theme"`); otherwise built-in layouts and Branding apply. Theme CSS variables are `--bs-*` (`theme-vars.ts`). Domain code: `packages/domain/src/themes/`. Cache tags `page:<slug>` and `theme` are invalidated on publish and rollback. **Theme previews:** Super Admin's theme editor Preview button saves the draft, then `templates.createPreview` stores an immutable snapshot (`theme_previews`, 24 h by default, unguessable 11-character code) and the tab opens `/preview/<code>?page=<page>` on the marketing host, where `apps/web/src/app/preview/[code]/page.tsx` draws the pages with sample products, collection, product and cart (`server/preview-samples.ts`); other hosts get a 404, pages are noindex, expired or unknown codes show a notice.
 
@@ -350,6 +356,19 @@ Theme flow: platform staff build `theme_templates` (draft + published snapshot, 
 **Adding a block:** schema + view in `packages/blocks`, register it, add editor config in `packages/block-editor/src/config.tsx`, add tests (`packages/blocks/test`), bump the block version if the schema changes shape, update this section.
 
 ---
+
+### Admin and Super Admin polish round (2026-10-17; plan `docs/ADMIN-SUPERADMIN-POLISH-PLAN.md`)
+- **Friendly ids:** products show `BCPID-<n>` (`products.product_number`, assigned in `createProduct` under an advisory lock per store), stores `BCSID-<nnnn>` (`tenants.store_number`); helpers `formatProductId` / `formatStoreId` in `@bs/contracts`; the UI uses `CopyableId` from `@bs/ui`.
+- **Variant builder:** `packages/domain/src/catalog/variant-options.ts` (pure rules: 3 options, 30 values each, 250 variants) and `variant-builder.ts` (`setProductOptions`, `createVariant`, `deleteVariant`); API `admin.products.setOptions`, `admin.variants.create|delete`, and `variants.update` now also takes barcode, weight (g), dimensions and option values. Admin: `apps/admin/src/components/product/variant-builder.tsx` and `variant-drawer.tsx`.
+- **Shipping:** zones can list states (`shipping_zones.states`) and rates can be flat, free-above, price tier or weight tier. `getTenantShippingRates(db, tenantId, subtotal, { weightGrams, destination })` is the one function that prices the cart, checkout and admin orders; rules (`shipping-rules.ts`) are pure. Admin: Settings > Shipping edits all zones through `admin.shipping.saveZones`. Checkout refreshes the options when the shipping state changes (`POST /api/storefront/checkout/shipping-rates`, read-only, re-priced on the server at placement). No courier integration.
+- **Custom fields (ADR-034):** `packages/domain/src/catalog/custom-fields.ts` and `custom-field-rules.ts`; API `admin.customFields.*`; Settings > Custom fields, a card on the product page, block `ProductCustomField`, storefront `ProductCustomField.tsx`. Growth plan and above.
+- **Promotions (ADR-035):** `packages/domain/src/platform/promotions.ts`, `saas/promotion-math.ts`; Platform API `promotions.*`; Super Admin Promotions page and the Billing tab; promo code field on signup; hourly sweep `endDuePromotions` in `apps/platform/src/main.ts` (`PROMOTION_SWEEP_INTERVAL_MS`).
+- **Feature flags:** `retire` / `restore` (`platform_admin` / `platform_owner`); retired flags are always on in `isFeatureEnabled`; kill switches cannot be retired.
+- **Platform audit log:** server pagination and filters on `audit.list`, `audit.archive|unarchive` (insert/delete in `platform_audit_log_archives`; rows are never deleted).
+- **Tenant purge:** new deletions keep the data for at least 30 days; only the platform owner can approve the permanent purge (`tenants.purge`, `approveTenantPurge`), which releases the deletion to the existing background workflow. The tenant row, invoices and audit trail stay.
+- **Storefront categories:** `/categories` lists every category with products (`listStorefrontCategories`); default navigation and the starter home page link to it.
+- **Menus:** default menus can be deleted and are no longer re-created; legacy items without ids are repaired when a menu is opened (`menu-defaults.ts`).
+- **UI kit:** `PasswordInput`, `CopyableId`, wider shared `Sheet` drawers; `categoryLabel`, policy rich text (`policy-rich-text.ts`) in `apps/admin/src/lib`.
 
 ## 11. Jobs and queues
 

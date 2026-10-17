@@ -238,13 +238,39 @@ describe("menu management and protection (Slice B)", () => {
     expect(footer?.usedIn).toContain("Footer");
   });
 
-  it("prevents deleting protected default menus", async () => {
+  it("deletes a default menu and does not re-create it when listing or opening menus", async () => {
     const menus = await listMenus(rt, ctxA);
-    const header = menus.find((m) => m.handle === "header")!;
+    const footer = menus.find((m) => m.handle === "footer")!;
 
-    await expect(deleteMenu(rt, ctxA, { id: header.id })).rejects.toThrow(
-      /Protected default menu "header" cannot be deleted/,
-    );
+    await expect(deleteMenu(rt, ctxA, { id: footer.id })).resolves.toEqual({ success: true });
+
+    const after = await listMenus(rt, ctxA);
+    expect(after.find((m) => m.handle === "footer")).toBeUndefined();
+    await expect(getMenu(rt, ctxA, { handle: "footer" })).rejects.toThrow(/Menu not found/);
+
+    // The store can start again from scratch under the same handle.
+    const recreated = await createMenu(rt, ctxA, { name: "Footer menu", handle: "footer", items: [] });
+    expect(recreated.handle).toBe("footer");
+  });
+
+  it("repairs legacy seeded items (no id, no type) when a menu is opened", async () => {
+    await withTenant(rt._db.db, ctxA.tenantId, async (tx) => {
+      await tx
+        .update(schema.menus)
+        .set({ items: [{ title: "Home", url: "/" }, { title: "Shop", url: "/collections/all", children: [{ title: "Tea", url: "/collections/tea" }] }] })
+        .where(and(eq(schema.menus.tenantId, ctxA.tenantId), eq(schema.menus.handle, "header")));
+    });
+
+    const menu = await getMenu(rt, ctxA, { handle: "header" });
+    const items = menu.items as Array<{ id: string; type: string; title: string; children?: Array<{ id: string; type: string }> }>;
+    expect(items).toHaveLength(2);
+    for (const it of items) {
+      expect(typeof it.id).toBe("string");
+      expect(it.id.length).toBeGreaterThan(0);
+      expect(it.type).toBe("url");
+    }
+    expect(items[1]?.children?.[0]?.id).toBeTruthy();
+    expect(items[1]?.children?.[0]?.type).toBe("url");
   });
 
   it("prevents renaming handle of protected default menus", async () => {

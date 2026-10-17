@@ -6,6 +6,7 @@ import { schema } from "@bs/db";
 import { startTestDb, type TestDb } from "@bs/db/test-env";
 import { seedPlatformStaff } from "@bs/db/test-fixtures";
 import {
+  approveTenantPurge,
   cancelTenantDeletion,
   createRuntime,
   executeTenantDeletionWorkflow,
@@ -25,6 +26,7 @@ let env: TestDb;
 let rt: Runtime;
 let rtWeb: Runtime;
 let staffId: string;
+let supportStaffId: string;
 
 /** Drivers wrap database errors ("Failed query"); the permission message is on `cause`. */
 const denied = async (p: Promise<unknown>) => {
@@ -69,7 +71,8 @@ beforeAll(async () => {
   env = await startTestDb();
   rt = createRuntime({ service: "platform", databaseUrl: env.as("app_platform"), poolMax: 8 });
   rtWeb = createRuntime({ service: "web", databaseUrl: env.as("app_rw"), poolMax: 3 });
-  staffId = (await seedPlatformStaff(rt._db.db, { email: "deletion-owner@platform.test" })).userId;
+  staffId = (await seedPlatformStaff(rt._db.db, { email: "deletion-owner@platform.test", role: "platform_owner" })).userId;
+  supportStaffId = (await seedPlatformStaff(rt._db.db, { email: "deletion-admin@platform.test", role: "platform_admin" })).userId;
 }, 180_000);
 
 afterAll(async () => {
@@ -150,7 +153,17 @@ describe("tenant deletion workflow", () => {
     expect((await runDueTenantDeletions(rt)).completed).toBe(0);
     expect(await count("products", a.tenantId)).toBeGreaterThan(0);
 
-    // after the grace period the sweep runs the whole workflow; two sweeps at once take turns (advisory lock)
+    // manual purge (owner decision 2026-10-17): even after the grace period the sweep waits for the platform owner
+    expect((await runDueTenantDeletions(rt, { deps: { now: later() } })).completed).toBe(0);
+    expect(await count("products", a.tenantId)).toBeGreaterThan(0);
+    // approving needs the platform owner role, the typed slug and the 30-day retention
+    expect(await errorOf(approveTenantPurge(rt, supportStaffId, { tenantId: a.tenantId, confirmSlug: "del-a" }, undefined, later()))).toMatch(/platform_owner|Forbidden/i);
+    expect(await errorOf(approveTenantPurge(rt, staffId, { tenantId: a.tenantId, confirmSlug: "wrong" }, undefined, later()))).toMatch(/type the store's slug/);
+    expect(await errorOf(approveTenantPurge(rt, staffId, { tenantId: a.tenantId, confirmSlug: "del-a" }))).toMatch(/data is kept until/);
+    expect(await approveTenantPurge(rt, staffId, { tenantId: a.tenantId, confirmSlug: "del-a" }, undefined, later())).toEqual({ ok: true, alreadyApproved: false });
+    expect(await approveTenantPurge(rt, staffId, { tenantId: a.tenantId, confirmSlug: "del-a" }, undefined, later())).toEqual({ ok: true, alreadyApproved: true });
+
+    // once approved the sweep runs the whole workflow; two sweeps at once take turns (advisory lock)
     const results = await Promise.all([runDueTenantDeletions(rt, { deps: { now: later() } }), runDueTenantDeletions(rt, { deps: { now: later() } })]);
     expect(results.reduce((n, r) => n + r.completed, 0)).toBe(1);
 

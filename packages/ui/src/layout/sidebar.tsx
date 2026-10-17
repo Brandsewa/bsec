@@ -163,11 +163,7 @@ export function AppShell({
                   };
 
                   return (
-                    <SidebarMenuItem
-                      key={label}
-                      onMouseEnter={() => setOpenGroup(label)}
-                      onFocus={() => setOpenGroup(label)}
-                    >
+                    <SidebarMenuItem key={label}>
                       <SidebarMenuButton
                         isActive={hasActiveChild}
                         tooltip={flyoutTooltip}
