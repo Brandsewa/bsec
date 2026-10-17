@@ -13,7 +13,7 @@ async function signIn(page: Page, email = EMAIL, password = PASSWORD) {
   await page.goto("/");
   await expect(page).toHaveURL(/\/login/);
   await page.getByLabel("Email").fill(email);
-  await page.getByLabel("Password").fill(password);
+  await page.getByLabel("Password", { exact: true }).fill(password);
   await page.getByRole("button", { name: "Sign in" }).click();
 }
 
@@ -61,7 +61,7 @@ test("sign in: a wrong password is refused, the right one opens the store", asyn
   await expect(page.getByText("Incorrect email or password.")).toBeVisible();
   await expect(page).toHaveURL(/\/login/);
 
-  await page.getByLabel("Password").fill(PASSWORD);
+  await page.getByLabel("Password", { exact: true }).fill(PASSWORD);
   await page.getByRole("button", { name: "Sign in" }).click();
   await expect(page.getByRole("button", { name: "Orders", exact: true })).toBeVisible();
   await page.getByRole("button", { name: "User account menu" }).click();
@@ -137,7 +137,7 @@ test("team invite: create link, accept as a new person, they sign in and see the
   await guestPage.getByRole("button", { name: "Create account and join" }).click();
   await expect(guestPage).toHaveURL(/\/login/);
   await guestPage.getByLabel("Email").fill(inviteeEmail);
-  await guestPage.getByLabel("Password").fill("e2e-staff-password-1");
+  await guestPage.getByLabel("Password", { exact: true }).fill("e2e-staff-password-1");
   await guestPage.getByRole("button", { name: "Sign in" }).click();
   await expect(guestPage.getByText("Demo Store").first()).toBeVisible();
 
@@ -188,7 +188,7 @@ test("store owner invite: follows emailed link, sets password, logs in, and land
     if (data.inviteUrl || data.adminUrl) {
       await page.goto(`/login?store=${data.slug}`);
       await page.getByLabel("Email").fill(ownerEmail);
-      await page.getByLabel("Password").fill(ownerPassword);
+      await page.getByLabel("Password", { exact: true }).fill(ownerPassword);
       await page.getByRole("button", { name: "Sign in" }).click();
       await expect(page.getByRole("button", { name: "Orders", exact: true })).toBeVisible();
     }
