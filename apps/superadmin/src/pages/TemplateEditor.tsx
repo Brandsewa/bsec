@@ -149,6 +149,7 @@ function Workspace({
             title={`${active.label} · ${name}`}
             height="100%"
             pageKind={"kind" in active ? active.kind : "custom"}
+            frame={{ header: pages["header"] ?? [], footer: pages["footer"] ?? [] }}
             initialBlocks={pages[tab] ?? []}
             host={host}
             themeVars={themeVars}

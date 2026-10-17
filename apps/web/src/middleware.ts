@@ -22,6 +22,7 @@ export async function middleware(request: NextRequest) {
     (hostname === "localhost" && (
       pathname === "/" ||
       pathname.startsWith("/signup") ||
+      pathname.startsWith("/preview/") ||
       pathname.startsWith("/api/saas/") ||
       request.nextUrl.searchParams.get("marketing") === "true"
     ));

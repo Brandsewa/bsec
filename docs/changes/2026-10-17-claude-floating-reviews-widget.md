@@ -38,6 +38,13 @@ A new BCOM widget, "Floating reviews" (`ReviewsMarquee`), shows the store's publ
 - Exercised by hand: dragged the widget onto the home page in the Super Admin theme editor (local); it rendered with sample reviews, heading right, panel sections present.
 - NOT verified: the Collection showcase's picker against a real store's collections and the real-database path (only type-checked and render-tested; the data function is shared with Collection grid); the movement and hover-pause visually, a live storefront with real reviews, the Product showcase image change in a browser, full `pnpm build`; `pnpm lint` (blocks, block-editor, domain) and `pnpm docs:check` pass.
 
+## Header and footer menus, builder frame and preview (follow-up)
+- The theme builder and the store's page editor now draw the theme's header and footer around the page being edited (`BlockEditor` `frame` prop, `FrameContext`, `FrameBlocks` in `config.tsx`), read-only; the header and footer pages themselves are edited as before. In the store editor the frame is resolved through `admin.pages.blockData`, so the store's own menus show.
+- The Modern Commerce template's footer columns now point at the store menus `footer` and `footer-help`, and its header at `header` (fallback links stay for stores without those menus). The Modern home swaps the static Testimonials for Floating reviews. The shared launch template (`launch-template.ts`) is unchanged because migration 0015 must match it (`themes.int.test.ts`); my earlier commit had changed it and broke that test, now restored.
+- Preview: the toolbar button already existed in Super Admin; locally it pointed at `https://localhost` and `/preview/<code>` was not served on `localhost`. `apps/web/src/middleware.ts` now serves `/preview/` on `localhost`, and the dev setup needs `PREVIEW_BASE_URL=http://localhost:3000`. The store admin editor gets a Preview button that saves the draft and opens the storefront (`<slug>.localhost:3000` in dev). If the browser blocks the pre-opened tab, the editor now says where the preview is.
+- Local seed (not committed): header, footer and footer-help menus in the demo store, a `demo-store.localhost` domain and live status.
+- Not verified: a real mouse click on Preview in a normal browser (the embedded pane cannot open new windows; I checked the link creation, the preview page and the store editor's `window.open` target).
+
 ## Docs updated
 - [x] `docs/ARCHITECTURE.md` (block list)
 - [x] ADR: not needed (new block on the existing pattern)

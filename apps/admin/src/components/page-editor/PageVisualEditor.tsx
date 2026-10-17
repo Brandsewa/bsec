@@ -21,6 +21,16 @@ export default function PageVisualEditor({ pageId, canPublish, storeName }: { pa
   const brandQuery = useQuery(orpc.admin.branding.get.queryOptions());
   const themeQuery = useQuery(orpc.admin.themes.get.queryOptions());
   const pagesListQuery = useQuery(orpc.admin.pages.list.queryOptions());
+  // The store's header and footer pages frame the page on the canvas (read-only); they are edited from their own pages.
+  const overviewQuery = useQuery(orpc.admin.settingsOverview.get.queryOptions());
+  const headerId = pagesListQuery.data?.find((p) => p.type === "header")?.id;
+  const footerId = pagesListQuery.data?.find((p) => p.type === "footer")?.id;
+  const headerQuery = useQuery({ ...orpc.admin.pages.get.queryOptions({ input: { id: headerId ?? "", draft: true } }), enabled: Boolean(headerId) });
+  const footerQuery = useQuery({ ...orpc.admin.pages.get.queryOptions({ input: { id: footerId ?? "", draft: true } }), enabled: Boolean(footerId) });
+  const frame = useMemo(
+    () => ({ header: (headerQuery.data?.blocks ?? []) as BlockInstance[], footer: (footerQuery.data?.blocks ?? []) as BlockInstance[] }),
+    [headerQuery.data, footerQuery.data],
+  );
 
   // Theme settings edited from the sidebar's Theme tab. They go live when the page is published (like the
   // separate Theme settings screen, they have no draft), so they are held here until then.
@@ -115,6 +125,14 @@ export default function PageVisualEditor({ pageId, canPublish, storeName }: { pa
   if (!pageQuery.data || !stylingSettled) return <PageSkeleton />;
 
   const page = pageQuery.data;
+  // "Preview" opens the store's own storefront on this page (after saving the draft). Draft changes appear there once
+  // they are published; theme template pages (header, footer, product...) open the home page.
+  const rawStorefront = overviewQuery.data?.storeStatus.storefrontUrl?.replace(/\/+$/, "");
+  // On a developer machine the store lives at <slug>.localhost on the web app's port, over plain http.
+  const storefront = rawStorefront && /^https:\/\/[^/]+\.localhost$/i.test(rawStorefront) ? `${rawStorefront.replace("https://", "http://")}:3000` : rawStorefront;
+  const previewHref = storefront
+    ? `${storefront}${page.type === "landing" || page.type === "custom" ? `/pages/${(page.path ?? page.slug).replace(/^\/+/, "")}` : "/"}`
+    : undefined;
   const refresh = () =>
     Promise.all([
       queryClient.invalidateQueries({ queryKey: orpc.admin.pages.list.key() }),
@@ -136,6 +154,8 @@ export default function PageVisualEditor({ pageId, canPublish, storeName }: { pa
         themeVars={themeVars}
         storeName={storeName}
         pageKind={kind}
+        frame={frame}
+        previewHref={previewHref}
         fontsHref={fontsHref}
         pages={
           pageSwitcherOptions

@@ -179,6 +179,7 @@ export const MODERN_TEMPLATE_CART: BlockInstance[] = [
 export const MODERN_TEMPLATE_HEADER: BlockInstance[] = [
   b("mc-banner", "Banner", { text: "Free shipping on orders over ₹999", link: "/collections/all", variant: "promo", dismissible: false }),
   b("mc-header", "SiteHeader", {
+    menuHandle: "header",
     links: [
       { label: "Home", href: "/" },
       { label: "Shop all", href: "/collections/all" },
@@ -198,8 +199,12 @@ export const MODERN_TEMPLATE_HEADER: BlockInstance[] = [
  */
 export const MODERN_TEMPLATE_HOME: BlockInstance[] = (() => {
   const blog = b("mc-home-blog", "BlogPosts", { title: "From the blog", subtitle: "Guides, stories and news", count: 3, layout: "grid", columns: "3", viewAllLabel: "View all posts", hideWhenEmpty: true });
-  const at = LAUNCH_TEMPLATE_HOME.findIndex((x) => x.type === "ReviewsMarquee");
-  return at < 0 ? [...LAUNCH_TEMPLATE_HOME, blog] : [...LAUNCH_TEMPLATE_HOME.slice(0, at), blog, ...LAUNCH_TEMPLATE_HOME.slice(at)];
+  // The launch layout's static testimonials are replaced by Floating reviews (the store's own published reviews; it
+  // hides itself until the store has some). The launch template itself stays as migration 0015 stored it.
+  const reviews = b("mc-home-reviews", "ReviewsMarquee", { eyebrow: "Testimonials", title: "Loved by customers", description: "Real words from people who bought and tried our products.", tone: "surface" });
+  const base = LAUNCH_TEMPLATE_HOME.map((x) => (x.type === "Testimonials" ? reviews : x));
+  const at = base.findIndex((x) => x.type === "ReviewsMarquee");
+  return at < 0 ? [...base, blog] : [...base.slice(0, at), blog, ...base.slice(at)];
 })();
 
 /** Blog archive: every post as a card grid with category links and page numbers (the BlogListing core). */
@@ -213,6 +218,17 @@ export const MODERN_TEMPLATE_BLOG_POST: BlockInstance[] = [
   b("mc-blog-post-usp", "UspStrip", { items: TRUST_ITEMS }),
 ];
 
+/**
+ * Footer: the launch footer with its link columns tied to the store's own menus ("footer" and "footer-help", Online
+ * Store > Navigation). The typed-in links stay as the fallback for a store that has not made those menus.
+ */
+export const MODERN_TEMPLATE_FOOTER: BlockInstance[] = LAUNCH_TEMPLATE_FOOTER.map((blk) => {
+  if (blk.type !== "SiteFooter" || !Array.isArray(blk.props["columns"])) return blk;
+  const handles = ["footer", "footer-help"];
+  const columns = (blk.props["columns"] as Array<Record<string, unknown>>).map((c, i) => (handles[i] ? { ...c, menuHandle: handles[i] } : c));
+  return { ...blk, props: { ...blk.props, columns } };
+});
+
 /** Every page of the theme, keyed as theme_templates.draft_pages stores them. */
 export const MODERN_TEMPLATE_PAGES = {
   home: MODERN_TEMPLATE_HOME,
@@ -223,5 +239,5 @@ export const MODERN_TEMPLATE_PAGES = {
   blog: MODERN_TEMPLATE_BLOG_ARCHIVE,
   "blog-post": MODERN_TEMPLATE_BLOG_POST,
   header: MODERN_TEMPLATE_HEADER,
-  footer: LAUNCH_TEMPLATE_FOOTER,
+  footer: MODERN_TEMPLATE_FOOTER,
 };

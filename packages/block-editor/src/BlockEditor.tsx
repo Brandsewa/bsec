@@ -5,7 +5,7 @@ import "@bs/blocks/blocks.css";
 import { documentToPuck, puckToDocument, type BlockInstance, type PuckData } from "@bs/blocks";
 import { buildPuckConfig, type EditorPageKind } from "./config.tsx";
 import { useFontLink } from "./fonts.ts";
-import { HostContext, RenderDataContext, type BlockEditorHost, type EditorRenderData } from "./context.tsx";
+import { FrameContext, HostContext, RenderDataContext, type BlockEditorHost, type EditorRenderData } from "./context.tsx";
 import { dataSignature } from "./signature.ts";
 import { ThemeSettingsPanel, type ThemeTokens } from "./ThemeSettings.tsx";
 import { EDITOR_VIEWPORTS } from "./viewports.ts";
@@ -52,6 +52,11 @@ export interface BlockEditorProps {
   themeSettingsNote?: string | undefined;
   /** Label of the back/exit button in the toolbar (default "Exit"). */
   exitLabel?: string | undefined;
+  /**
+   * The theme's header and footer, drawn read-only around the page being edited (the one being edited, when it is the
+   * header or the footer, is left out). Their menus resolve through the same render data as the page.
+   */
+  frame?: { header: BlockInstance[]; footer: BlockInstance[] } | undefined;
   /** A page switcher in the toolbar for hosts that edit several pages in one workspace. */
   pages?: { value: string; options: Array<{ value: string; label: string }>; onChange: (value: string) => void } | undefined;
 }
@@ -96,7 +101,7 @@ function ThemeIcon() {
 }
 
 
-export function BlockEditor({ title, initialBlocks: initialFromProps, host, themeVars, onSaveDraft, onPublish, onExit, previewHref, onPreview, publishLabel, pageKind, fontsHref, onBlocksChange, externalDirty, height, storeName, themeTokens, onThemeTokensChange, themeSettingsDisabled, themeSettingsNote, exitLabel, pages }: BlockEditorProps) {
+export function BlockEditor({ title, initialBlocks: initialFromProps, host, themeVars, onSaveDraft, onPublish, onExit, previewHref, onPreview, publishLabel, pageKind, fontsHref, onBlocksChange, externalDirty, height, storeName, themeTokens, onThemeTokensChange, themeSettingsDisabled, themeSettingsNote, exitLabel, pages, frame: frameFromProps }: BlockEditorProps) {
   useFontLink(fontsHref);
   // The canvas owns the document once mounted: a refetch after saving must not reset it.
   const [initialBlocks] = useState(initialFromProps);
@@ -105,6 +110,19 @@ export function BlockEditor({ title, initialBlocks: initialFromProps, host, them
   const [busy, setBusy] = useState(false);
   const [status, setStatus] = useState<{ kind: "ok" | "error"; text: string } | null>(null);
   const [renderData, setRenderData] = useState<EditorRenderData>({ data: {}, media: {} });
+  const frame = useMemo(
+    () => ({
+      header: pageKind === "header" ? [] : (frameFromProps?.header ?? []),
+      footer: pageKind === "footer" ? [] : (frameFromProps?.footer ?? []),
+    }),
+    [frameFromProps, pageKind],
+  );
+  const frameBlocks = useMemo(() => [...frame.header, ...frame.footer], [frame]);
+  const frameBlocksRef = useRef(frameBlocks);
+  useEffect(() => {
+    frameBlocksRef.current = frameBlocks;
+  }, [frameBlocks]);
+  const frameSig = useMemo(() => dataSignature(frameBlocks), [frameBlocks]);
   const [sig, setSig] = useState(() => dataSignature(initialBlocks));
 
   const config = useMemo(() => buildPuckConfig({ themeVars: themeVars ?? {}, ...(pageKind ? { pageKind } : {}) }), [themeVars, pageKind]);
@@ -137,7 +155,7 @@ export function BlockEditor({ title, initialBlocks: initialFromProps, host, them
     let cancelled = false;
     const timer = setTimeout(() => {
       host
-        .loadRenderData(blocksRef.current)
+        .loadRenderData([...blocksRef.current, ...frameBlocksRef.current])
         .then((r) => {
           if (!cancelled) setRenderData(r as EditorRenderData);
         })
@@ -149,7 +167,7 @@ export function BlockEditor({ title, initialBlocks: initialFromProps, host, them
       cancelled = true;
       clearTimeout(timer);
     };
-  }, [sig, host]);
+  }, [sig, frameSig, host]);
 
   useEffect(() => {
     const warn = (e: BeforeUnloadEvent) => {
@@ -197,6 +215,10 @@ export function BlockEditor({ title, initialBlocks: initialFromProps, host, them
         if (url && win) {
           win.location.href = url;
           setStatus({ kind: "ok", text: "Preview opened in a new tab" });
+        } else if (url) {
+          // The browser blocked the pre-opened tab: try once more now, and say where the preview is either way.
+          window.open(url, "_blank", "noopener");
+          setStatus({ kind: "ok", text: `Preview ready: ${url}` });
         } else {
           win?.close();
         }
@@ -227,6 +249,7 @@ export function BlockEditor({ title, initialBlocks: initialFromProps, host, them
     <HostContext.Provider value={host}>
       <ThemePanelContext.Provider value={themePanel}>
       <EditorHeaderContext.Provider value={headerState}>
+      <FrameContext.Provider value={frame}>
       <RenderDataContext.Provider value={{ ...renderData, storeName }}>
         <div style={{ height: height ?? "100vh" }}>
           <Puck
@@ -254,6 +277,7 @@ export function BlockEditor({ title, initialBlocks: initialFromProps, host, them
           />
         </div>
       </RenderDataContext.Provider>
+      </FrameContext.Provider>
       </EditorHeaderContext.Provider>
       </ThemePanelContext.Provider>
     </HostContext.Provider>

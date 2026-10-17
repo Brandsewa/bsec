@@ -1,5 +1,5 @@
 import { createContext, useContext } from "react";
-import type { BlockData } from "@bs/blocks";
+import type { BlockData, BlockInstance } from "@bs/blocks";
 
 export type MediaKind = "image" | "video" | "document";
 
@@ -41,8 +41,16 @@ export interface EditorRenderData {
   storeName?: string | undefined;
 }
 
+/** The theme's header and footer, drawn (read-only) above and below the page being edited. */
+export interface EditorFrame {
+  header: BlockInstance[];
+  footer: BlockInstance[];
+}
+
+export const FrameContext = createContext<EditorFrame | null>(null);
 export const HostContext = createContext<BlockEditorHost | null>(null);
 export const RenderDataContext = createContext<EditorRenderData>({ data: {}, media: {} });
 
 export const useHost = () => useContext(HostContext);
+export const useFrame = () => useContext(FrameContext);
 export const useRenderData = () => useContext(RenderDataContext);

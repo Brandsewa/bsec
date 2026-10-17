@@ -1,12 +1,12 @@
 import type { ComponentType, CSSProperties, ReactNode } from "react";
 import type { Config, CustomField, Field } from "@puckeditor/core";
-import { SLOT_BLOCK_TYPES, SLOT_PROP, getBlockDefinition, type BlockType, type RenderContext } from "@bs/blocks";
+import { SLOT_BLOCK_TYPES, SLOT_PROP, getBlockDefinition, renderBlockTree, type BlockType, type RenderContext } from "@bs/blocks";
 import { mediaField, videoMediaField, fileMediaField } from "./MediaField.tsx";
 import { menuField } from "./MenuField.tsx";
 import { collectionsField } from "./CollectionsField.tsx";
 import { accordionFields } from "./sections.tsx";
 import { layoutField } from "./LayoutField.tsx";
-import { useRenderData } from "./context.tsx";
+import { useFrame, useRenderData } from "./context.tsx";
 
 /**
  * Builds the Puck config from the versioned block registry (ADR-009). Field panels only expose
@@ -582,6 +582,24 @@ const CATEGORY_TITLES = { layout: "Layout", content: "Content", store: "Store wi
 
 type AnyProps = Record<string, unknown> & { id: string; puck?: unknown };
 
+/**
+ * The theme's header or footer around the page being edited, so the page is seen in its real surroundings. It is
+ * drawn from the same block data as the storefront (menus included) and cannot be clicked: it is edited from the
+ * Header and Footer pages.
+ */
+function FrameBlocks({ part }: { part: "header" | "footer" }): ReactNode {
+  const frame = useFrame();
+  const { data, media, storeName } = useRenderData();
+  const blocks = frame?.[part] ?? [];
+  if (blocks.length === 0) return null;
+  const ctx: RenderContext = { data, mediaUrl: (mid) => media[mid] ?? null, ...(storeName ? { storeName } : {}) };
+  return (
+    <div data-bs-frame={part} style={{ pointerEvents: "none", userSelect: "none" }} aria-hidden="true">
+      {renderBlockTree(blocks, ctx)}
+    </div>
+  );
+}
+
 function EditorBlock({ type, props }: { type: BlockType; props: AnyProps }): ReactNode {
   const def = getBlockDefinition(type);
   const { data, media, storeName } = useRenderData();
@@ -669,7 +687,9 @@ export function buildPuckConfig(options: { themeVars: Record<string, string>; pa
       // The canvas shows the store's own theme: same --bs-* variables the storefront sets.
       render: ({ children }: { children: ReactNode }) => (
         <div className="bsb" style={{ ...(options.themeVars as CSSProperties), background: "var(--bs-bg, #fff)", minHeight: "100vh" }}>
+          <FrameBlocks part="header" />
           {children}
+          <FrameBlocks part="footer" />
         </div>
       ),
     },
