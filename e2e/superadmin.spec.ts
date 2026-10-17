@@ -120,12 +120,15 @@ test.describe.serial("Super Admin (M9)", () => {
     await page.keyboard.press("Escape");
 
     // suspend and restore, both audited
-    await page.getByRole("button", { name: "Suspend" }).click();
+    // Suspend now lives in the "More" menu so it does not stand out beside the everyday actions.
+    await page.getByRole("button", { name: "More actions" }).click();
+    await page.getByRole("menuitem", { name: "Suspend" }).click();
     await page.getByPlaceholder(/Non-payment/).fill("E2E suspension check");
     await page.getByRole("button", { name: "Confirm Suspension" }).click();
     await expect(page.getByRole("button", { name: "Restore Store" })).toBeVisible();
     await page.getByRole("button", { name: "Restore Store" }).click();
-    await expect(page.getByRole("button", { name: "Suspend" })).toBeVisible();
+    await expect(page.getByRole("button", { name: "More actions" })).toBeVisible();
+    await expect(page.getByRole("button", { name: "Restore Store" })).toHaveCount(0);
 
     await page.goto(`${SUPERADMIN}/audit`);
     await expect(page.getByText("tenant.suspend").first()).toBeVisible();
