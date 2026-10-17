@@ -198,7 +198,7 @@ export const MODERN_TEMPLATE_HEADER: BlockInstance[] = [
  */
 export const MODERN_TEMPLATE_HOME: BlockInstance[] = (() => {
   const blog = b("mc-home-blog", "BlogPosts", { title: "From the blog", subtitle: "Guides, stories and news", count: 3, layout: "grid", columns: "3", viewAllLabel: "View all posts", hideWhenEmpty: true });
-  const at = LAUNCH_TEMPLATE_HOME.findIndex((x) => x.type === "Testimonials");
+  const at = LAUNCH_TEMPLATE_HOME.findIndex((x) => x.type === "ReviewsMarquee");
   return at < 0 ? [...LAUNCH_TEMPLATE_HOME, blog] : [...LAUNCH_TEMPLATE_HOME.slice(0, at), blog, ...LAUNCH_TEMPLATE_HOME.slice(at)];
 })();
 

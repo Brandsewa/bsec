@@ -3,6 +3,7 @@ import type { Config, CustomField, Field } from "@puckeditor/core";
 import { SLOT_BLOCK_TYPES, SLOT_PROP, getBlockDefinition, type BlockType, type RenderContext } from "@bs/blocks";
 import { mediaField, videoMediaField, fileMediaField } from "./MediaField.tsx";
 import { menuField } from "./MenuField.tsx";
+import { collectionsField } from "./CollectionsField.tsx";
 import { accordionFields } from "./sections.tsx";
 import { layoutField } from "./LayoutField.tsx";
 import { useRenderData } from "./context.tsx";
@@ -270,6 +271,198 @@ export const BLOCK_SPECS: Record<BlockType, Spec> = {
       },
     ]),
   },
+  ImageBanner: {
+    label: "Image banner",
+    category: "bcom",
+    fields: accordionFields("ImageBanner", [
+      {
+        id: "picture",
+        title: "Picture",
+        fields: {
+          backgroundMediaId: mediaField("Image") as Field,
+          imageFit: select("Fit", { cover: "Cover (fill and crop)", contain: "Contain (show it all)" }),
+          imagePosition: select("Keep in view", { center: "Centre", top: "Top", bottom: "Bottom", left: "Left", right: "Right" }),
+          tone: select("Colour behind the image", TONE),
+          overlayOpacity: num("Image darkening %", 0, 100),
+          height: select("Height", { sm: "Short", md: "Medium", lg: "Tall", xl: "Extra tall" }),
+          width: select("Banner width", WIDTH),
+          radius: select("Rounded corners", { none: "None", md: "Small", lg: "Large", xl: "Extra large" }),
+        },
+      },
+      {
+        id: "text",
+        title: "Text",
+        fields: {
+          eyebrow: text("Small line above the heading"),
+          title: text("Heading"),
+          description: area("Description"),
+          italic: radio("Italic small line and description"),
+          eyebrowColor: colorField("Small line colour") as Field,
+          titleColor: colorField("Heading colour") as Field,
+          textColor: colorField("Description colour") as Field,
+        },
+      },
+      {
+        id: "buttons",
+        title: "Buttons (shown only with a link)",
+        fields: {
+          button1Label: text("Button 1 text"),
+          button1Href: link("Button 1 link"),
+          button2Label: text("Button 2 text"),
+          button2Href: link("Button 2 link"),
+        },
+      },
+      {
+        id: "place",
+        title: "Text position",
+        fields: {
+          contentAlign: select("Across", { left: "Left", center: "Middle", right: "Right" }),
+          contentVertical: select("Up and down", { top: "Top", middle: "Middle", bottom: "Bottom" }),
+          textAlign: select("Text alignment", ALIGN),
+          contentWidth: select("Text width", { sm: "Narrow", md: "Medium", lg: "Wide", full: "Full" }),
+        },
+      },
+    ]),
+  },
+  FaqSection: {
+    label: "FAQ accordion",
+    category: "bcom",
+    fields: accordionFields("FaqSection", [
+      {
+        id: "heading",
+        title: "Heading and description",
+        fields: {
+          eyebrow: text("Small line above the heading (empty hides it)"),
+          title: text("Heading"),
+          description: area("Description under the heading"),
+          tone: select("Background", TONE),
+          width: select("Width", WIDTH),
+        },
+      },
+      {
+        id: "layout",
+        title: "Layout",
+        fields: {
+          layout: select("Layout", { split: "Split (heading beside the questions)", stacked: "Stacked (heading above the questions)" }),
+          textSide: select("Split: heading side", { right: "Right (questions on the left)", left: "Left (questions on the right)" }),
+          textPosition: select("Split: heading position", { top: "Top", middle: "Middle", bottom: "Bottom" }),
+          headingAlign: select("Stacked: heading alignment", ALIGN),
+        },
+      },
+      {
+        id: "look",
+        title: "Questions look",
+        fields: {
+          style: select("Style", { cards: "Cards", plain: "Plain (soft lines)" }),
+          iconPosition: select("Icon", { right: "After the question", left: "In front of the question" }),
+          iconStyle: select("Icon shape", { plus: "Plus / minus", chevron: "Arrow" }),
+          singleOpen: radio("Opening one closes the others"),
+          openFirst: radio("First question open"),
+        },
+      },
+      {
+        id: "items",
+        title: "Questions",
+        fields: {
+          items: { type: "array", label: "Questions", getItemSummary: (i: { question?: string }) => i.question ?? "Question", arrayFields: { question: text("Question"), answer: area("Answer") }, defaultItemProps: { question: "Question", answer: "Answer" } } as Field,
+        },
+      },
+    ]),
+  },
+  CollectionShowcase: {
+    label: "Collection showcase",
+    category: "bcom",
+    fields: accordionFields("CollectionShowcase", [
+      {
+        id: "heading",
+        title: "Heading and button",
+        fields: {
+          title: text("Heading"),
+          subtitle: text("Description under the heading"),
+          headerAlign: select("Heading position", { left: "Left (button on the right)", center: "Middle (button below)", right: "Right (button on the left)" }),
+          buttonLabel: text("Button text"),
+          buttonHref: link("Button link (empty hides the button)"),
+          tone: select("Background", TONE),
+        },
+      },
+      {
+        id: "collections",
+        title: "Collections",
+        fields: {
+          showAll: radio("Show every published collection"),
+          collectionSlugs: collectionsField("Pick collections (ignored when showing every collection)") as Field,
+        },
+      },
+      {
+        id: "layout",
+        title: "Layout",
+        fields: {
+          columns: select("Cards per row: desktop (more wrap to extra rows)", { "2": "2", "3": "3", "4": "4", "5": "5", "6": "6" }),
+          tabletLayout: select("Tablet", { grid: "Grid", carousel: "Carousel (swipe sideways)" }),
+          columnsTablet: select("Tablet: cards per row or visible at once", { "2": "2", "3": "3" }),
+          mobileLayout: select("Phone", { grid: "Grid", carousel: "Carousel (swipe sideways)" }),
+          columnsMobile: select("Phone: cards per row or visible at once", { "1": "1", "2": "2" }),
+        },
+      },
+    ]),
+  },
+  ReviewsMarquee: {
+    label: "Floating reviews",
+    category: "bcom",
+    fields: accordionFields("ReviewsMarquee", [
+      {
+        id: "heading",
+        title: "Heading and layout",
+        fields: {
+          eyebrow: text("Small line above the heading (empty hides it)"),
+          title: text("Heading"),
+          description: area("Description under the heading"),
+          textSide: select("Heading side", { right: "Right (reviews on the left)", left: "Left (reviews on the right)" }),
+          textPosition: select("Text position", { top: "Top", middle: "Middle", bottom: "Bottom", split: "Split (heading top, description and buttons bottom)" }),
+          tone: select("Background", TONE),
+        },
+      },
+      {
+        id: "buttons",
+        title: "Buttons (shown only with a link)",
+        fields: {
+          button1Label: text("Button 1 text"),
+          button1Href: link("Button 1 link"),
+          button2Label: text("Button 2 text"),
+          button2Href: link("Button 2 link"),
+        },
+      },
+      {
+        id: "reviews",
+        title: "Which reviews",
+        fields: {
+          source: select("Pick", { top: "Highest rated first", latest: "Newest first" }),
+          minRating: num("Lowest star rating to show (1-5)", 1, 5),
+          limit: num("How many reviews", 3, 24),
+          hideWhenEmpty: radio("Hide the section until there are reviews"),
+        },
+      },
+      {
+        id: "motion",
+        title: "Movement and size",
+        fields: {
+          columns: select("Columns of reviews", { "2": "Two", "1": "One" }),
+          speed: select("Speed", { slow: "Slow", medium: "Medium", fast: "Fast" }),
+          height: select("Height", { sm: "Short", md: "Medium", lg: "Tall" }),
+        },
+      },
+      {
+        id: "card",
+        title: "Review card",
+        fields: {
+          showTitle: radio("Review title"),
+          showProduct: radio("Product name"),
+          showVerified: radio("Verified buyer tag"),
+          showDate: radio("Date"),
+        },
+      },
+    ]),
+  },
   ProductShowcase: {
     label: "Product showcase",
     category: "bcom",
@@ -427,6 +620,8 @@ const ONLY: Record<"header" | "footer", BlockType[]> = {
   footer: ["SiteFooter", "Newsletter", "UspStrip", "Banner", "Heading", "Text", "Divider", "Spacer"],
 };
 const CHROME: BlockType[] = ["SiteHeader", "SiteFooter"];
+/** Still drawn when a page already uses them (templates, saved pages), but no longer offered in the block picker. */
+export const RETIRED_FROM_PICKER: BlockType[] = ["Testimonials"];
 
 export function blockAllowed(type: BlockType, kind: EditorPageKind): boolean {
   if (kind === "header" || kind === "footer") return ONLY[kind].includes(type);
@@ -447,7 +642,7 @@ export function buildPuckConfig(options: { themeVars: Record<string, string>; pa
   for (const [type, spec] of Object.entries(BLOCK_SPECS) as Array<[BlockType, Spec]>) {
     if (!blockAllowed(type, kind)) continue;
     const def = getBlockDefinition(type);
-    byCategory[spec.category]?.push(type);
+    if (!RETIRED_FROM_PICKER.includes(type)) byCategory[spec.category]?.push(type);
     components[type] = {
       label: spec.label,
       fields: spec.fields,
@@ -457,12 +652,16 @@ export function buildPuckConfig(options: { themeVars: Record<string, string>; pa
   }
 
   return {
-    categories: Object.fromEntries(
-      (Object.keys(CATEGORY_TITLES) as Array<keyof typeof CATEGORY_TITLES>).map((k) => [
-        k,
-        { title: CATEGORY_TITLES[k], components: byCategory[k] ?? [], defaultExpanded: k !== "layout" },
-      ]),
-    ),
+    categories: {
+      ...Object.fromEntries(
+        (Object.keys(CATEGORY_TITLES) as Array<keyof typeof CATEGORY_TITLES>).map((k) => [
+          k,
+          { title: CATEGORY_TITLES[k], components: byCategory[k] ?? [], defaultExpanded: k !== "layout" },
+        ]),
+      ),
+      // Puck lists every component outside the categories under "Other"; retired blocks stay out of the picker.
+      other: { visible: false },
+    },
     components,
     root: {
       // Page-level settings (SEO etc.) live on the page record, not in the block document.

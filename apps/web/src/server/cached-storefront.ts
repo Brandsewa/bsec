@@ -149,7 +149,9 @@ async function loadRenderData(tenantId: string, tenantCtx: TenantContext, docume
   let needsBlog = false;
   walkBlocks(rendered.blocks as BlockInstance[], (b) => {
     if (b.type === "BlogPosts") needsBlog = true;
-    if (b.type === "ProductGrid" || b.type === "ProductCarousel" || b.type === "CollectionGrid" || b.type === "ProductShowcase") needsCatalog = true;
+    // Review changes invalidate the product tags (cache-invalidation.ts review_updated), so the widget follows them.
+    if (b.type === "ReviewsMarquee") needsCatalog = true;
+    if (b.type === "ProductGrid" || b.type === "ProductCarousel" || b.type === "CollectionGrid" || b.type === "CollectionShowcase" || b.type === "ProductShowcase") needsCatalog = true;
     if (b.type === "SiteHeader" || b.type === "SiteFooter") needsNav = true;
   });
   if (needsCatalog) {

@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { BLOCK_TYPES, SLOT_BLOCK_TYPES, SLOT_PROP, getBlockDefinition, validateBlockDocument, type BlockInstance } from "@bs/blocks";
-import { BLOCK_SPECS, blockAllowed, buildPuckConfig, dataSignature, type EditorPageKind } from "../src/index.ts";
+import { BLOCK_SPECS, RETIRED_FROM_PICKER, blockAllowed, buildPuckConfig, dataSignature, type EditorPageKind } from "../src/index.ts";
 
 describe("editor config", () => {
   it("has an editor panel for every registered block (none can be added without one)", () => {
@@ -39,10 +39,10 @@ describe("editor config", () => {
     for (const pageKind of ["home", "collection", "product", "cart", "blogArchive", "blogPost", "header", "footer", "custom"] as const) {
       const config = buildPuckConfig({ themeVars: {}, pageKind }) as unknown as {
         components: Record<string, unknown>;
-        categories: Record<string, { components: string[] }>;
+        categories: Record<string, { components?: string[] }>;
       };
-      const listed = Object.values(config.categories).flatMap((c) => c.components);
-      expect([...listed].sort(), pageKind).toEqual(Object.keys(config.components).sort());
+      const listed = Object.values(config.categories).flatMap((c) => c.components ?? []);
+      expect([...listed].sort(), pageKind).toEqual(Object.keys(config.components).filter((t) => !RETIRED_FROM_PICKER.includes(t as never)).sort());
       Object.keys(config.components).forEach((t) => union.add(t));
     }
     expect([...union].sort()).toEqual([...BLOCK_TYPES].sort());

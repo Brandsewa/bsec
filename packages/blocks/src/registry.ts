@@ -18,6 +18,10 @@ import {
 import { layoutSchema } from "./layout.ts";
 import * as V from "./views.tsx";
 import * as VB from "./views-blog.tsx";
+import * as VR from "./views-reviews.tsx";
+import * as VI from "./views-image-banner.tsx";
+import * as VF from "./views-faq.tsx";
+import * as VC from "./views-collection-showcase.tsx";
 
 /* ------------------------------------------------------------------ */
 /* Sections and content blocks (M2). Schemas are additive-only: new    */
@@ -1169,6 +1173,168 @@ export const BlogPostsBlock: BlockDefinition<BlogPostsProps> = {
   render: VB.BlogPostsView,
 };
 
+/**
+ * The Floating reviews widget: the store's published product reviews drift upwards in a column beside a heading.
+ * Reviews come from the same data as the product pages (`reviews` table), resolved on the server per block.
+ */
+export const ReviewsMarqueeSchema = z.object({
+  /** Small line above the heading; empty hides it. */
+  eyebrow: z.string().max(60).default(""),
+  title: z.string().max(120).default("Loved by our customers"),
+  description: z.string().max(400).default("Real words from people who bought and tried our products."),
+  /** Up to two buttons under the description; a button shows only when its link is filled in. */
+  button1Label: z.string().max(40).default("See more reviews"),
+  button1Href: hrefSchema.or(z.literal("")).default(""),
+  button2Label: z.string().max(40).default("Learn more"),
+  button2Href: hrefSchema.or(z.literal("")).default(""),
+  /** Where the heading block sits next to the reviews. "split" puts the heading on top and the description and buttons at the bottom. */
+  textPosition: z.enum(["top", "middle", "bottom", "split"]).default("middle"),
+  /** Which side the heading sits on; the moving reviews take the other side. */
+  textSide: z.enum(["right", "left"]).default("right"),
+  source: z.enum(["latest", "top"]).default("top"),
+  minRating: z.number().int().min(1).max(5).default(4),
+  limit: z.number().int().min(3).max(24).default(12),
+  columns: z.enum(["1", "2"]).default("2"),
+  speed: z.enum(["slow", "medium", "fast"]).default("slow"),
+  height: z.enum(["sm", "md", "lg"]).default("md"),
+  showTitle: z.boolean().default(true),
+  showProduct: z.boolean().default(true),
+  showVerified: z.boolean().default(true),
+  showDate: z.boolean().default(false),
+  /** Draw nothing when the store has no reviews to show yet. */
+  hideWhenEmpty: z.boolean().default(true),
+  tone: toneSchema.default("default"),
+});
+export type ReviewsMarqueeProps = z.infer<typeof ReviewsMarqueeSchema>;
+
+export const ReviewsMarqueeBlock: BlockDefinition<ReviewsMarqueeProps> = {
+  type: "ReviewsMarquee",
+  version: 1,
+  schema: ReviewsMarqueeSchema,
+  defaultProps: ReviewsMarqueeSchema.parse({}),
+  render: VR.ReviewsMarqueeView,
+};
+
+/**
+ * Image banner: an uploaded picture (cover or contained) with an eyebrow, heading, description and up to two buttons
+ * laid over it. The text group can sit anywhere on the picture (left/middle/right x top/middle/bottom).
+ */
+export const ImageBannerSchema = z.object({
+  backgroundMediaId: z.string().optional(),
+  imageFit: z.enum(["cover", "contain"]).default("cover"),
+  /** Which part of the picture stays in view when it is cropped (cover) or where it rests (contain). */
+  imagePosition: z.enum(["center", "top", "bottom", "left", "right"]).default("center"),
+  /** Colour behind the picture (visible with "contain" or while it loads). */
+  tone: toneSchema.default("surface"),
+  height: z.enum(["sm", "md", "lg", "xl"]).default("lg"),
+  width: widthSchema.default("wide"),
+  radius: z.enum(["none", "md", "lg", "xl"]).default("lg"),
+  overlayOpacity: z.number().min(0).max(100).default(0),
+  eyebrow: z.string().max(80).default("Our story"),
+  title: z.string().max(160).default("A headline that tells your story"),
+  description: z.string().max(500).default("A short description that sits over your picture. Upload an image, then place this text anywhere on it."),
+  button1Label: z.string().max(40).default("Shop now"),
+  button1Href: hrefSchema.or(z.literal("")).default(""),
+  button2Label: z.string().max(40).default("Learn more"),
+  button2Href: hrefSchema.or(z.literal("")).default(""),
+  /** Where the text group sits on the picture. */
+  contentAlign: z.enum(["left", "center", "right"]).default("left"),
+  contentVertical: z.enum(["top", "middle", "bottom"]).default("top"),
+  /** Text alignment inside the group. */
+  textAlign: z.enum(["left", "center", "right"]).default("left"),
+  contentWidth: z.enum(["sm", "md", "lg", "full"]).default("md"),
+  italic: z.boolean().default(true),
+  eyebrowColor: hexColorSchema.optional(),
+  titleColor: hexColorSchema.optional(),
+  textColor: hexColorSchema.optional(),
+});
+export type ImageBannerProps = z.infer<typeof ImageBannerSchema>;
+
+export const ImageBannerBlock: BlockDefinition<ImageBannerProps> = {
+  type: "ImageBanner",
+  version: 1,
+  schema: ImageBannerSchema,
+  defaultProps: ImageBannerSchema.parse({}),
+  render: VI.ImageBannerView,
+};
+
+/**
+ * FAQ accordion: the FAQ block plus a heading and description, a split layout (heading beside the questions) or a
+ * stacked one, a card or plain look, and the open/close icon in front of or after each question.
+ */
+export const FaqSectionSchema = z.object({
+  eyebrow: z.string().max(80).default(""),
+  title: z.string().max(160).default("Frequently asked questions"),
+  description: z.string().max(500).default("Everything you need to know before you order."),
+  layout: z.enum(["split", "stacked"]).default("split"),
+  /** Split layout: which side the heading sits on; the questions take the other side. */
+  textSide: z.enum(["right", "left"]).default("right"),
+  /** Split layout: where the heading block sits next to the questions. */
+  textPosition: z.enum(["top", "middle", "bottom"]).default("top"),
+  /** Stacked layout: heading and description alignment. */
+  headingAlign: z.enum(["left", "center", "right"]).default("left"),
+  style: z.enum(["cards", "plain"]).default("cards"),
+  iconPosition: z.enum(["left", "right"]).default("right"),
+  iconStyle: z.enum(["chevron", "plus"]).default("plus"),
+  /** Opening one question closes the others. */
+  singleOpen: z.boolean().default(false),
+  openFirst: z.boolean().default(false),
+  width: widthSchema.default("wide"),
+  tone: toneSchema.default("default"),
+  items: z
+    .array(z.object({ question: z.string().min(1), answer: z.string().min(1) }))
+    .min(1)
+    .default([
+      { question: "How long does shipping take?", answer: "Standard shipping takes 3-5 business days across India." },
+      { question: "What is your return policy?", answer: "We offer hassle-free returns within 7 days of delivery for unused items." },
+      { question: "Can I pay on delivery?", answer: "Yes, cash on delivery is available on most orders." },
+    ]),
+});
+export type FaqSectionProps = z.infer<typeof FaqSectionSchema>;
+
+export const FaqSectionBlock: BlockDefinition<FaqSectionProps> = {
+  type: "FaqSection",
+  version: 1,
+  schema: FaqSectionSchema,
+  defaultProps: FaqSectionSchema.parse({}),
+  render: VF.FaqSectionView,
+};
+
+/**
+ * Collection showcase: the Collection grid with the heading placed left, middle or right, an optional button link,
+ * up to six cards per desktop row (more collections wrap into more rows), and a grid or carousel choice for
+ * tablets and phones. Collections are picked from the store's own list; the data is resolved like the Collection grid.
+ */
+export const CollectionShowcaseSchema = z.object({
+  title: z.string().max(120).default("Shop by collection"),
+  subtitle: z.string().max(300).default("Find exactly what you are looking for"),
+  headerAlign: z.enum(["left", "center", "right"]).default("left"),
+  /** The button shows only when its link is filled in. */
+  buttonLabel: z.string().max(40).default("View all"),
+  buttonHref: hrefSchema.or(z.literal("")).default("/collections"),
+  collectionSlugs: z.array(z.string().max(200)).max(24).default([]),
+  /** List every published collection, ignoring the chosen ones. */
+  showAll: z.boolean().default(false),
+  /** Cards per row on desktop (1024px and up); more collections wrap onto further rows. */
+  columns: z.enum(["2", "3", "4", "5", "6"]).default("4"),
+  /** Tablets (640 to 1023px): cards per row, or visible at once in the carousel. */
+  columnsTablet: z.enum(["2", "3"]).default("2"),
+  tabletLayout: z.enum(["grid", "carousel"]).default("grid"),
+  /** Phones (under 640px). */
+  columnsMobile: z.enum(["1", "2"]).default("1"),
+  mobileLayout: z.enum(["grid", "carousel"]).default("carousel"),
+  tone: toneSchema.default("default"),
+});
+export type CollectionShowcaseProps = z.infer<typeof CollectionShowcaseSchema>;
+
+export const CollectionShowcaseBlock: BlockDefinition<CollectionShowcaseProps> = {
+  type: "CollectionShowcase",
+  version: 1,
+  schema: CollectionShowcaseSchema,
+  defaultProps: CollectionShowcaseSchema.parse({}),
+  render: VC.CollectionShowcaseView,
+};
+
 export { type BlockType } from "./types.ts";
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -1216,6 +1382,10 @@ export const BLOCK_DEFINITIONS: Record<BlockType, AnyBlockDefinition> = {
   BlogListing: BlogListingBlock,
   BlogPostContent: BlogPostContentBlock,
   BlogPosts: BlogPostsBlock,
+  ReviewsMarquee: ReviewsMarqueeBlock,
+  ImageBanner: ImageBannerBlock,
+  FaqSection: FaqSectionBlock,
+  CollectionShowcase: CollectionShowcaseBlock,
 };
 
 export const BLOCK_TYPES = Object.keys(BLOCK_DEFINITIONS) as BlockType[];

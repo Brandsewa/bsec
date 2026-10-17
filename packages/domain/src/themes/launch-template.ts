@@ -110,15 +110,12 @@ export const LAUNCH_TEMPLATE_HOME: BlockInstance[] = [
     tone: "primary",
     align: "center",
   }),
-  b("ec-testimonials", "Testimonials", {
+  // Floating reviews: the store's own published reviews; it hides itself until the store has some.
+  b("ec-testimonials", "ReviewsMarquee", {
+    eyebrow: "Testimonials",
     title: "Loved by customers",
-    layout: "grid",
+    description: "Real words from people who bought and tried our products.",
     tone: "surface",
-    items: [
-      { quote: "Beautiful quality and it arrived in two days. Already ordered again.", author: "Aarav S.", role: "Verified buyer", rating: 5 },
-      { quote: "Exactly as described and the packaging was lovely. Great support too.", author: "Meera K.", role: "Verified buyer", rating: 5 },
-      { quote: "Fair prices for the quality. Easy returns made me confident to try.", author: "Rohan P.", role: "Verified buyer", rating: 4 },
-    ],
   }),
   b("ec-new", "ProductGrid", {
     title: "New arrivals",

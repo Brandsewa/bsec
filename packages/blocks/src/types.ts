@@ -47,7 +47,15 @@ export type BlockType =
   // Blog (ADR-033): the archive and single post cores, and the Recent Posts widget
   | "BlogListing"
   | "BlogPostContent"
-  | "BlogPosts";
+  | "BlogPosts"
+  // Floating customer reviews, fed by the store's product reviews
+  | "ReviewsMarquee"
+  // A picture banner with its own eyebrow, heading, description and buttons placed anywhere on the picture
+  | "ImageBanner"
+  // FAQ accordion with heading and description, split or stacked layout, card or plain look, icon on either side
+  | "FaqSection"
+  // Collection grid with a movable heading, a button link, wrapping rows and a carousel option for tablets and phones
+  | "CollectionShowcase";
 
 /** Minimal product shape the product blocks need; the host supplies the real data. Prices are in paise. */
 export interface BlockProduct {
@@ -101,6 +109,21 @@ export interface BlockBlogPost {
   categoryPath?: string | undefined;
 }
 
+/** A published product review as the Floating reviews widget draws it. */
+export interface BlockReview {
+  id: string;
+  rating: number;
+  title?: string | undefined;
+  body: string;
+  reviewerName: string;
+  /** Bought the product (the review is linked to a delivered order item). */
+  verified: boolean;
+  productTitle?: string | undefined;
+  productSlug?: string | undefined;
+  /** ISO date. */
+  createdAt: string;
+}
+
 export interface ResolvedMenuItem {
   id: string;
   label: string;
@@ -118,6 +141,7 @@ export type BlockData =
   | { kind: "collections"; collections: BlockCollectionSummary[] }
   | { kind: "product-tabs"; tabs: Array<{ products: BlockProduct[] }> }
   | { kind: "blog-posts"; posts: BlockBlogPost[]; viewAllHref: string }
+  | { kind: "reviews"; reviews: BlockReview[] }
   | { kind: "menu"; items: ResolvedMenuItem[] }
   | { kind: "footer-menus"; columns: Array<ResolvedMenuItem[] | null> }
   | { kind: "file"; filename: string; mime: string; bytes: number; url?: string | undefined };

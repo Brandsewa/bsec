@@ -15,6 +15,15 @@ export const storeHost: BlockEditorHost = {
       return [];
     }
   },
+
+  async listCollections() {
+    try {
+      const res = await client.admin.collections.list();
+      return res.filter((c) => c.published).map((c) => ({ slug: c.slug, title: c.title }));
+    } catch {
+      return [];
+    }
+  },
 };
 
 /** --bs-* CSS variables for the store's current branding, so previews match the storefront. */

@@ -9,6 +9,7 @@ import {
   getCustomerReviews,
   getStorefrontReviews,
   provisionTenant,
+  resolveBlockData,
   publishAdminReview,
   submitProductReview,
   type Runtime,
@@ -136,5 +137,25 @@ describe("reviews", () => {
     expect(rows[0]).toMatchObject({ productTitle: "Reviewed Thing", rating: 5 });
     expect(rows[0]?.body).toContain("mine");
     expect(await getCustomerReviews(rt._db.db, ctxB.tenantId, mine)).toEqual([]);
+  });
+
+  it("the Floating reviews widget shows only this store's published reviews, with the verified flag", async () => {
+    const widget = (props: Record<string, unknown>) => [{ id: "w", type: "ReviewsMarquee" as const, version: 1, props }];
+    const reviewsOf = async (ctx: TenantContext, props: Record<string, unknown>) => {
+      const data = await resolveBlockData(rt, ctx, widget(props));
+      const d = data["w"];
+      return d?.kind === "reviews" ? d.reviews : [];
+    };
+    const all = await reviewsOf(ctxA, { minRating: 1, limit: 12, source: "latest" });
+    const names = all.map((r) => r.reviewerName);
+    expect(names).toContain("Buyer");
+    expect(names).toContain("Asha");
+    expect(names).not.toContain("Mine"); // still on hold
+    expect(all.find((r) => r.reviewerName === "Buyer")).toMatchObject({ verified: true, rating: 4, productTitle: "Reviewed Thing" });
+    expect(all.find((r) => r.reviewerName === "Asha")?.verified).toBe(false);
+    const fiveOnly = await reviewsOf(ctxA, { minRating: 5, limit: 12, source: "top" });
+    expect(fiveOnly.every((r) => r.rating === 5)).toBe(true);
+    expect(fiveOnly.map((r) => r.reviewerName)).not.toContain("Buyer");
+    expect(await reviewsOf(ctxB, { minRating: 1, limit: 12, source: "latest" })).toEqual([]);
   });
 });

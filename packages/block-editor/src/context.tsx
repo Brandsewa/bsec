@@ -30,6 +30,8 @@ export interface BlockEditorHost {
   uploadMedia?: ((file: File) => Promise<MediaAsset>) | undefined;
   /** Available navigation menus for header/footer menu selection. */
   listMenus?: (() => Promise<Array<{ handle: string; title: string }>>) | undefined;
+  /** The store's published collections, for the collection pickers. Hosts without a store leave it out. */
+  listCollections?: (() => Promise<Array<{ slug: string; title: string }>>) | undefined;
 }
 
 export interface EditorRenderData {

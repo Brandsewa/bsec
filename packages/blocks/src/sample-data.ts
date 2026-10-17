@@ -28,10 +28,10 @@ export function buildSampleRenderData(blocks: BlockInstance[]): { data: Record<s
     } else if (b.type === "ProductShowcase") {
       const tabs = Array.isArray(b.props["tabs"]) ? (b.props["tabs"] as unknown[]) : [{}];
       data[b.id] = { kind: "product-tabs", tabs: tabs.slice(0, 6).map(() => ({ products: sampleProducts(Number(b.props["limit"]) || 8) })) };
-    } else if (b.type === "CollectionGrid") {
+    } else if (b.type === "CollectionGrid" || b.type === "CollectionShowcase") {
       data[b.id] = {
         kind: "collections",
-        collections: ["Collection one", "Collection two", "Collection three"].map((title, i) => ({ slug: `collection-${i + 1}`, title, description: "A short description of this collection, shown on two lines at most." })),
+        collections: (b.type === "CollectionShowcase" ? ["Collection one", "Collection two", "Collection three", "Collection four", "Collection five", "Collection six", "Collection seven", "Collection eight"] : ["Collection one", "Collection two", "Collection three"]).map((title, i) => ({ slug: `collection-${i + 1}`, title, description: "A short description of this collection, shown on two lines at most." })),
       };
     }
   });

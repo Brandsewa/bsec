@@ -52,6 +52,11 @@ export const COMPACT_CSS = `
 [class*="PuckLayout"] [data-sec-header] { background: #f0f0f3; border-radius: 7px; }
 [class*="PuckLayout"] [data-sec-header] button { padding-inline: 8px; }
 
-/* Left rail labels (Theme, Blocks, Outline) */
-[class*="PuckLayout"] [class*="SidebarRail"] { font-size: 11px; }
+/* The editor is always a light surface. Inside a dark app (Super Admin) the text colour would be inherited
+   from the page and come out white on white (outline names, theme colour chips), so it is pinned here. */
+[class*="PuckLayout"] { color: #18181b; color-scheme: light; }
+
+/* Left rail (Theme, Blocks, Outline): smaller icons and labels */
+[class*="PuckLayout"] [class*="NavItem-link"] { font-size: 10.5px; gap: 2px; padding-block: 8px; }
+[class*="PuckLayout"] [class*="NavItem-link"] svg { width: 18px; height: 18px; }
 `;

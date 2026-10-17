@@ -6,6 +6,7 @@ import {
   walkBlocks,
   type BlockCollectionSummary,
   type BlockBlogPost,
+  type BlockReview,
   type BlockData,
   type BlockInstance,
   type BlockProduct,
@@ -148,7 +149,7 @@ async function loadCollections(tx: Tx, props: Record<string, unknown>): Promise<
       ...(r.type === "manual" ? { productCount: countById.get(r.id) ?? 0 } : {}),
     }));
   }
-  const slugs = Array.isArray(props.collectionSlugs) ? (props.collectionSlugs as unknown[]).filter((s): s is string => typeof s === "string").slice(0, 12) : [];
+  const slugs = Array.isArray(props.collectionSlugs) ? (props.collectionSlugs as unknown[]).filter((s): s is string => typeof s === "string").slice(0, 24) : [];
   if (slugs.length === 0) return [];
   const rows = await tx
     .select()
@@ -544,6 +545,54 @@ export function toBlockBlogPost(p: BlogPostSummary): BlockBlogPost {
   };
 }
 
+/**
+ * Published product reviews for the Floating reviews widget (the same `reviews` rows the product pages show), with
+ * the product's name and link. Only reviews of products customers can see; on-hold reviews never appear.
+ */
+export async function recentReviewsTx(
+  tx: Tx,
+  tenantId: string,
+  opts: { limit: number; minRating: number; source: "latest" | "top" },
+): Promise<BlockReview[]> {
+  const limit = Math.min(Math.max(Math.trunc(opts.limit) || 12, 1), 24);
+  const minRating = Math.min(Math.max(Math.trunc(opts.minRating) || 1, 1), 5);
+  const rows = await tx
+    .select({
+      id: schema.reviews.id,
+      rating: schema.reviews.rating,
+      title: schema.reviews.title,
+      body: schema.reviews.body,
+      reviewerName: schema.reviews.reviewerName,
+      orderItemId: schema.reviews.orderItemId,
+      createdAt: schema.reviews.createdAt,
+      productTitle: schema.products.title,
+      productSlug: schema.products.slug,
+    })
+    .from(schema.reviews)
+    .innerJoin(schema.products, and(eq(schema.products.tenantId, schema.reviews.tenantId), eq(schema.products.id, schema.reviews.productId)))
+    .where(
+      and(
+        eq(schema.reviews.tenantId, tenantId),
+        eq(schema.reviews.status, "published"),
+        sql`${schema.reviews.rating} >= ${minRating}`,
+        liveProducts(),
+      ),
+    )
+    .orderBy(...(opts.source === "top" ? [desc(schema.reviews.rating), desc(schema.reviews.createdAt)] : [desc(schema.reviews.createdAt)]))
+    .limit(limit);
+  return rows.map((r) => ({
+    id: r.id,
+    rating: r.rating,
+    ...(r.title ? { title: r.title } : null),
+    body: r.body,
+    reviewerName: r.reviewerName,
+    verified: Boolean(r.orderItemId),
+    productTitle: r.productTitle,
+    productSlug: r.productSlug,
+    createdAt: r.createdAt.toISOString(),
+  }));
+}
+
 export async function resolveBlockData(
   rt: Runtime,
   ctx: TenantContext,
@@ -556,16 +605,18 @@ export async function resolveBlockData(
   const footerBlocks: BlockInstance[] = [];
   const fileBlocks: BlockInstance[] = [];
   const blogBlocks: BlockInstance[] = [];
+  const reviewBlocks: BlockInstance[] = [];
 
   walkBlocks(blocks, (b) => {
     if (b.hidden) return;
     if (b.type === "ProductShowcase") showcaseBlocks.push(b);
     else if (b.type === "ProductGrid" || b.type === "ProductCarousel") productBlocks.push(b);
-    else if (b.type === "CollectionGrid") collectionBlocks.push(b);
+    else if (b.type === "CollectionGrid" || b.type === "CollectionShowcase") collectionBlocks.push(b);
     else if (b.type === "SiteHeader") headerBlocks.push(b);
     else if (b.type === "SiteFooter") footerBlocks.push(b);
     else if (b.type === "FileDownload") fileBlocks.push(b);
     else if (b.type === "BlogPosts") blogBlocks.push(b);
+    else if (b.type === "ReviewsMarquee") reviewBlocks.push(b);
   });
 
   if (
@@ -575,7 +626,8 @@ export async function resolveBlockData(
     headerBlocks.length === 0 &&
     footerBlocks.length === 0 &&
     fileBlocks.length === 0 &&
-    blogBlocks.length === 0
+    blogBlocks.length === 0 &&
+    reviewBlocks.length === 0
   ) {
     return {};
   }
@@ -607,6 +659,18 @@ export async function resolveBlockData(
           resolved.push({ products: await enrichShowcaseProducts(tx, summaries.map(toBlockProduct)) });
         }
         out[b.id] = { kind: "product-tabs", tabs: resolved };
+      }
+
+      // Floating reviews widgets: reviews belong to catalog products, so they follow the catalog feature.
+      for (const b of reviewBlocks) {
+        out[b.id] = {
+          kind: "reviews",
+          reviews: await recentReviewsTx(tx, ctx.tenantId, {
+            limit: Number(b.props["limit"]) || 12,
+            minRating: Number(b.props["minRating"]) || 4,
+            source: b.props["source"] === "latest" ? "latest" : "top",
+          }),
+        };
       }
 
       for (const b of collectionBlocks) {

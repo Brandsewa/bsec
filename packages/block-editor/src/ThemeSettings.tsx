@@ -391,7 +391,7 @@ export function ThemeSettingsPanel({ tokens, onChange, disabled, note }: ThemeSe
               type="button"
               disabled={disabled}
               onClick={() => commit({ colors: p.colors })}
-              style={{ border: "1px solid #d4d4d8", background: "#fff", borderRadius: 999, padding: "2px 9px 2px 5px", fontSize: 11, cursor: "pointer", display: "inline-flex", alignItems: "center", gap: 6 }}
+              style={{ border: "1px solid #d4d4d8", background: "#fff", color: "#18181b", borderRadius: 999, padding: "2px 9px 2px 5px", fontSize: 11, cursor: "pointer", display: "inline-flex", alignItems: "center", gap: 6 }}
             >
               <span style={{ width: 14, height: 14, borderRadius: 999, background: p.colors["primary"], display: "inline-block" }} />
               {p.name}
