@@ -442,6 +442,13 @@
       "when": 1792456400000,
       "tag": "0068_signup_default_template",
       "breakpoints": true
+    },
+    {
+      "idx": 63,
+      "version": "7",
+      "when": 1792542800000,
+      "tag": "0069_platform_billing_settings",
+      "breakpoints": true
     }
   ]
 }

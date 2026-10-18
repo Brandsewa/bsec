@@ -1305,7 +1305,55 @@ export const PlatformPaymentProviderView = z.object({
 });
 export type PlatformPaymentProviderView = z.infer<typeof PlatformPaymentProviderView>;
 
+const BillingKeySetView = z.object({
+  keyId: z.string().nullable(),
+  secretConfigured: z.boolean(),
+  secretLastFour: z.string().nullable(),
+  webhookSecretConfigured: z.boolean(),
+});
+
+export const PlatformBillingSettingsView = z.object({
+  provider: z.literal("razorpay"),
+  mode: z.enum(["test", "live"]),
+  enabled: z.boolean(),
+  graceDays: z.number().int(),
+  test: BillingKeySetView,
+  live: BillingKeySetView,
+  webhookUrl: z.string(),
+  usingEnvFallback: z.boolean(),
+  lastTestAt: z.string().nullable(),
+  lastTestStatus: z.enum(["success", "failed"]).nullable(),
+  lastTestError: z.string().nullable(),
+  updatedAt: z.string().nullable(),
+});
+export type PlatformBillingSettingsView = z.infer<typeof PlatformBillingSettingsView>;
+
+const BillingKeysInput = z.object({
+  keyId: z.string().max(80).optional(),
+  keySecret: z.string().max(200).optional(), // write-only
+  webhookSecret: z.string().max(200).optional(), // write-only
+});
+
 export const platformIntegrationsContract = {
+  billingSettings: oc
+    .route({ method: "GET", path: "/platform/integrations/billing/settings" })
+    .output(PlatformBillingSettingsView),
+  updateBillingSettings: oc
+    .route({ method: "PATCH", path: "/platform/integrations/billing/settings" })
+    .input(
+      z.object({
+        mode: z.enum(["test", "live"]).optional(),
+        enabled: z.boolean().optional(),
+        graceDays: z.number().int().min(0).max(30).optional(),
+        test: BillingKeysInput.optional(),
+        live: BillingKeysInput.optional(),
+      }),
+    )
+    .output(z.object({ ok: z.literal(true) })),
+  testBillingConnection: oc
+    .route({ method: "POST", path: "/platform/integrations/billing/test" })
+    .input(z.object({ mode: z.enum(["test", "live"]).optional() }))
+    .output(z.object({ ok: z.boolean(), mode: z.enum(["test", "live"]), error: z.string().optional() })),
   paymentProviders: oc
     .route({ method: "GET", path: "/platform/integrations/payments/providers" })
     .output(z.array(PlatformPaymentProviderView)),

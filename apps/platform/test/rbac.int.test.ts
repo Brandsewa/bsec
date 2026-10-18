@@ -107,6 +107,9 @@ const MIN_ROLE: Record<string, Role | "public"> = {
   "integrations.testProvider": "platform_admin",
   "integrations.paymentProviders": "platform_support",
   "integrations.updatePaymentProvider": "platform_admin",
+  "integrations.billingSettings": "platform_support",
+  "integrations.updateBillingSettings": "platform_owner",
+  "integrations.testBillingConnection": "platform_owner",
 };
 
 /** Valid-shaped inputs, so the role check (which runs first) is what decides the outcome. */
@@ -185,6 +188,9 @@ const INPUT: Record<string, unknown> = {
   "integrations.deleteProvider": { id: U },
   "integrations.setDefaultProvider": { id: U },
   "integrations.updatePaymentProvider": { provider: "stripe", enabled: true },
+  "integrations.billingSettings": {},
+  "integrations.updateBillingSettings": { graceDays: 7 },
+  "integrations.testBillingConnection": { mode: "test" },
   "integrations.testProvider": { id: U, to: "+919876543210" },
   "quotas.matrix": {},
   "quotas.createTier": { code: "RBAC_TIER", name: "RBAC Tier" },

@@ -173,6 +173,7 @@ export function Layout({ user, onLogout }: LayoutProps) {
     { id: "whatsapp", label: "WhatsApp (Zoho CPaaS)", icon: MessageSquare, onSelect: () => navigate({ to: "/integrations/notifications/whatsapp" }), group: "Operations" },
     { id: "storage", label: "Storage Connections", icon: HardDrive, onSelect: () => navigate({ to: "/integrations/storage" }), group: "Operations" },
     { id: "payments", label: "Payment Gateways", icon: CreditCard, onSelect: () => navigate({ to: "/integrations/payments" }), group: "Operations" },
+    { id: "billing", label: "Platform billing", icon: CreditCard, onSelect: () => navigate({ to: "/integrations/billing" }), group: "Operations" },
     { id: "quotas", label: "Quotas & Tiers", icon: Sliders, onSelect: () => navigate({ to: "/quotas" }), group: "Operations" },
     { id: "features", label: "Feature Flags", icon: Flag, onSelect: () => navigate({ to: "/features" }), group: "Operations" },
     ...(user.role !== "platform_support"
