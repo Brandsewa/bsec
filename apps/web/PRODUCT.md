@@ -31,7 +31,7 @@ Name on the page: **bcom.si** (domain `bcom.si`). Existing logo is a placeholder
 Real product surfaces to show as proof: the store admin (orders, customers, segments, returns), the theme editor with blocks, the storefront themes (Essential Commerce, Fashion Editorial, Gourmet Artisan, Starter Minimal, Modern Commerce draft), the COD order flow, the GST invoice data. One real store exists (Taste of Hills, `tasteofhills.bcom.si`); no permission or quote has been given to feature it. Absent, and must not be fabricated: customer testimonials, logos, statistics, press.
 
 ## Product Principles
-1. Say only what a merchant can do today; label the rest "Coming soon".
+1. Say only what a merchant can do today; label the rest "Coming soon". **Exception (owner decision 2026-10-18):** the agent-first page (`docs/MARKETING-AGENT-FIRST-PLAN.md`) describes the finished AI-commerce product and is not merged or launched until those features are built. Demo chats, brands and figures on it are illustrations and are labelled as such.
 2. Show the real product (admin, editor, storefront) instead of describing it.
 3. India specifics are the proof (COD, GST, rupee pricing), not decoration.
 4. One clear action: check a store name, start the 14-day trial.

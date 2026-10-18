@@ -5,10 +5,13 @@ import { useRouter } from "next/navigation";
 
 interface SubdomainAvailabilityCheckerProps {
   platformDomain?: string;
+  /** "lp" is the agent-first landing page look (landing/landing.css); the default is the signup page look. */
+  variant?: "default" | "lp";
 }
 
 export function SubdomainAvailabilityChecker({
   platformDomain = "bcom.si",
+  variant = "default",
 }: SubdomainAvailabilityCheckerProps) {
   const router = useRouter();
   const [storeName, setStoreName] = useState("");
@@ -71,6 +74,40 @@ export function SubdomainAvailabilityChecker({
       router.push(`/signup?slug=${encodeURIComponent(slug)}&storeName=${encodeURIComponent(storeName || slug)}`);
     });
   };
+
+  if (variant === "lp") {
+    return (
+      <div className="claimcol">
+        <div className="claimw">
+          <form className="claim" onSubmit={handleSubmit}>
+            <input
+              type="text"
+              placeholder="your-store-name"
+              aria-label="Store name"
+              value={storeName}
+              onChange={(e) => handleStoreNameChange(e.target.value)}
+              autoComplete="off"
+              required
+            />
+            <span aria-hidden="true">.{platformDomain}</span>
+            <button type="submit" className="btn pri" disabled={checkResult !== null && !checkResult.available}>
+              Claim it →
+            </button>
+          </form>
+        </div>
+        <p className="claimstatus" role="status" aria-live="polite">
+          {slug.length >= 3 &&
+            (isChecking ? (
+              <span className="chk">Checking {slug}.{platformDomain}…</span>
+            ) : checkResult?.available ? (
+              <span className="ok">✓ {slug}.{platformDomain} is available</span>
+            ) : checkResult ? (
+              <span className="bad">{checkResult.reason || "That name is taken"}</span>
+            ) : null)}
+        </p>
+      </div>
+    );
+  }
 
   return (
     <div className="w-full max-w-xl">

@@ -1,6 +1,7 @@
 /**
- * Landing page content. Every claim here is something a merchant can do today (verified against the repository on
- * 2026-10-04, see apps/web/PRODUCT.md). Anything not live is shown as "Coming soon" and never described as available.
+ * Landing page content for the agent-first page (docs/MARKETING-AGENT-FIRST-PLAN.md). Owner decision 2026-10-18: this
+ * page is not merged until the AI-commerce features it describes are built, so the copy describes the finished product.
+ * The chat conversations, brands and dashboard on the page are illustrations and are labelled as such.
  */
 
 export interface LandingPlan {
@@ -33,25 +34,18 @@ export function planBullets(limits: Record<string, unknown>): string[] {
   if (orders !== null) out.push(`${fmt(orders)} orders a month`);
   if (staff !== null) out.push(`${fmt(staff)} staff ${staff === 1 ? "account" : "accounts"}`);
   if (storageMb !== null) out.push(`${fmt(Math.round(storageMb / 1024))} GB media storage`);
-  if (domains !== null) out.push(`${fmt(domains)} custom ${domains === 1 ? "domain" : "domains"} (coming soon)`);
+  if (domains !== null) out.push(`${fmt(domains)} custom ${domains === 1 ? "domain" : "domains"}`);
   return out;
 }
 
 export const INCLUDED_IN_ALL = [
+  "AI-ready store layer",
   "Cash on delivery checkout",
   "GST tax invoices",
   "Visual theme builder",
   "Returns and exchanges",
   "Customers and segments",
   "14-day free trial",
-];
-
-export const COMING_SOON = [
-  { name: "Online payments", note: "UPI and cards through Razorpay" },
-  { name: "Shiprocket", note: "Labels and live tracking" },
-  { name: "WhatsApp and SMS", note: "Order and dispatch alerts" },
-  { name: "Custom domains", note: "Your own .in or .com" },
-  { name: "Invoice PDFs", note: "Download and share" },
 ];
 
 export const THEMES = [
@@ -88,36 +82,36 @@ export const THEMES = [
 ];
 
 export const STEPS = [
-  { title: "Pick a name", body: "Type your store name. We check name.bcom.si live and it is yours for the trial." },
-  { title: "Choose a theme", body: "Start from a theme made for your niche. Change anything later in the block editor." },
-  { title: "Add products and set your rates", body: "Create products and variants, set your shipping zones and rates, and choose your COD fee." },
-  { title: "Share the link, take orders", body: "Customers order with cash on delivery. You confirm, ship and mark delivered from the admin." },
+  { title: "Pick a name", body: "We check it is free. It is yours for the trial." },
+  { title: "Choose a theme", body: "Start from a look made for your niche." },
+  { title: "Add your products", body: "Upload them. We make them readable by AI." },
+  { title: "Get found", body: "Share the link and let assistants find you." },
 ];
 
 export const FAQS = [
   {
+    q: "What is an AI-ready store?",
+    a: "A store whose products, prices, stock and delivery details are readable by AI assistants, so they can find, compare and recommend your products to shoppers who ask.",
+  },
+  {
+    q: "Do I need to do anything technical?",
+    a: "No. Add your products as usual. We handle making them readable and keep them up to date.",
+  },
+  {
+    q: "Which assistants will this work with?",
+    a: "We are built for ChatGPT, Gemini, Claude and Perplexity, and for the open standards behind them, so new assistants can be added as they arrive.",
+  },
+  {
+    q: "When will in-chat checkout be available in India?",
+    a: "We are built for it and will switch it on for Indian stores as soon as each assistant launches it here. Stores on Bs Commerce will be first in line.",
+  },
+  {
+    q: "Is it safe? Can an AI invent a discount?",
+    a: "No. Prices, GST and shipping are locked by your store for each cart. An assistant cannot change them, and any negotiation stays inside the limits you set.",
+  },
+  {
     q: "Can I use my own domain?",
-    a: "Every store gets name.bcom.si straight away. Connecting your own domain is built but not switched on yet, so it is marked Coming soon until it works end to end.",
-  },
-  {
-    q: "How do my customers pay?",
-    a: "With cash on delivery today, with a fee you set. Online payments through Razorpay (UPI and cards) are Coming soon.",
-  },
-  {
-    q: "What do you charge besides the plan?",
-    a: "Today the plan fee is the only thing you pay us, plus GST. bcom.si does not process payments yet, so there are no payment fees. When online payments launch, the payment provider's own fees will apply and we will show them before you switch it on.",
-  },
-  {
-    q: "How does shipping work?",
-    a: "You set your own shipping zones, rates and a free-shipping threshold. Shiprocket labels and tracking are Coming soon; until then you ship with any courier and mark orders shipped in the admin.",
-  },
-  {
-    q: "Are the invoices GST-ready?",
-    a: "Tax invoices work out CGST and SGST or IGST from your state and your customer's state, with HSN on each line. Downloadable PDFs are Coming soon.",
-  },
-  {
-    q: "Can I bring my store from another platform?",
-    a: "There is no import tool yet. You add products in the admin, and we will say so here when importing is ready.",
+    a: "Yes. Every store starts on name.bcom.si, and your plan includes custom domains.",
   },
   {
     q: "Is there a free trial?",
