@@ -32,6 +32,16 @@ export const bgVideoUrlSchema = z
   .refine((v) => v === "" || SAFE_BG_VIDEO.test(v), { message: "Use a direct .mp4 or .webm https link" });
 
 /** A colour as #rrggbb. Used where a block lets a merchant override a theme colour; never free-form CSS. */
+/** Logo width and height in pixels for each device (empty = the theme default: up to 40px tall, natural width). */
+const logoBoxSchema = z.object({
+  width: z.number().int().min(16).max(600).optional(),
+  height: z.number().int().min(12).max(300).optional(),
+});
+export const logoSizeSchema = z
+  .object({ desktop: logoBoxSchema.default({}), tablet: logoBoxSchema.default({}), mobile: logoBoxSchema.default({}) })
+  .default({ desktop: {}, tablet: {}, mobile: {} });
+export type LogoSize = z.infer<typeof logoSizeSchema>;
+
 export const hexColorSchema = z.string().regex(/^#[0-9a-fA-F]{6}$/, "Use a colour like #1f3a5f");
 
 export const alignSchema = z.enum(["left", "center", "right"]);

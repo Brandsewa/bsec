@@ -1,5 +1,6 @@
 import { Link } from "@tanstack/react-router";
-import { lazy, Suspense, useMemo, useState } from "react";
+import { lazy, Suspense, useMemo, useState, type ReactNode } from "react";
+import { ChevronDown } from "lucide-react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Button, Card, CardContent, CardDescription, CardHeader, CardTitle, FieldLabel, Input, MultiSelect, Switch, SimpleSelect, toast } from "@bs/ui";
 import type { ResourceCustomField } from "@bs/contracts";
@@ -80,6 +81,31 @@ export function CustomFieldsCard({ resourceType, resourceId }: { resourceType: "
   );
 }
 
+/** One custom field as a collapsible row: the field's name and whether it has a value show while it is closed. */
+function FieldAccordionItem({ title, required, filled, defaultOpen, children }: { title: string; required: boolean; filled: boolean; defaultOpen: boolean; children: ReactNode }) {
+  const [open, setOpen] = useState(defaultOpen);
+  return (
+    <div className="rounded-lg border border-border">
+      <button
+        type="button"
+        aria-expanded={open}
+        onClick={() => setOpen((o) => !o)}
+        className="flex w-full items-center justify-between gap-3 px-3 py-2.5 text-left"
+      >
+        <span className="text-sm font-medium text-foreground">
+          {title}
+          {required ? <span className="text-destructive"> *</span> : null}
+        </span>
+        <span className="flex items-center gap-2">
+          <span className={filled ? "text-xs text-muted-foreground" : "text-xs text-muted-foreground/70"}>{filled ? "Filled in" : "Empty"}</span>
+          <ChevronDown className={`size-4 text-muted-foreground transition-transform ${open ? "rotate-180" : ""}`} aria-hidden />
+        </span>
+      </button>
+      {open ? <div className="grid gap-1.5 border-t border-border px-3 py-3">{children}</div> : null}
+    </div>
+  );
+}
+
 function FieldsForm({ fields, saving, onSave }: { fields: ResourceCustomField[]; saving: boolean; onSave: (values: Values) => Promise<void> }) {
   const initial = useMemo(() => Object.fromEntries(fields.map((f) => [f.definition.id, initialValue(f)])), [fields]);
   const [values, setValues] = useState<Values>(initial);
@@ -100,6 +126,7 @@ function FieldsForm({ fields, saving, onSave }: { fields: ResourceCustomField[];
   }
 
   const set = (id: string, v: unknown) => setValues((prev) => ({ ...prev, [id]: v }));
+  const isSet = (f: ResourceCustomField) => toSubmit(f.definition.type, values[f.definition.id]) !== null;
 
   return (
     <Card>
@@ -110,16 +137,22 @@ function FieldsForm({ fields, saving, onSave }: { fields: ResourceCustomField[];
           <Link to="/settings/custom-fields" className="text-primary underline">Manage fields</Link>
         </CardDescription>
       </CardHeader>
-      <CardContent className="grid gap-5">
-        {fields.map((f) => {
+      <CardContent className="grid gap-3">
+        {fields.map((f, index) => {
           const d = f.definition;
           const id = `cf-${d.id}`;
           const v = values[d.id];
           return (
-            <div key={d.id} className="grid gap-1.5">
-              <FieldLabel htmlFor={id}>
+            <FieldAccordionItem
+              key={d.id}
+              title={d.name}
+              required={d.required}
+              filled={isSet(f)}
+              // Open what needs attention (a required field with no value) and, otherwise, the first field.
+              defaultOpen={d.required ? !isSet(f) : index === 0}
+            >
+              <FieldLabel htmlFor={id} className="sr-only">
                 {d.name}
-                {d.required ? <span className="text-destructive"> *</span> : null}
               </FieldLabel>
 
               {d.type === "text" ? <Input id={id} value={(v as string) ?? ""} maxLength={500} onChange={(e) => set(d.id, e.target.value)} /> : null}
@@ -144,7 +177,7 @@ function FieldsForm({ fields, saving, onSave }: { fields: ResourceCustomField[];
               ) : null}
 
               {d.helpText ? <p className="text-xs text-muted-foreground">{d.helpText}</p> : null}
-            </div>
+            </FieldAccordionItem>
           );
         })}
 

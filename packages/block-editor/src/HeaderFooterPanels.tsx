@@ -1,4 +1,5 @@
-import { useState, type CSSProperties, type ReactNode } from "react";
+import { Fragment, useState, type CSSProperties, type ReactNode } from "react";
+import type { CustomField } from "@puckeditor/core";
 import type { BlockInstance } from "@bs/blocks";
 import { Dropdown, type DropdownOption } from "./Dropdown.tsx";
 import { MenuSelect } from "./MenuField.tsx";
@@ -95,6 +96,79 @@ function Text({ value, onChange, name, max, area }: { value: string; onChange: (
   return area ? <textarea rows={3} {...common} /> : <input type="text" {...common} />;
 }
 
+type LogoBox = { width?: number | undefined; height?: number | undefined };
+type LogoSizeValue = { desktop?: LogoBox; tablet?: LogoBox; mobile?: LogoBox };
+const DEVICES: Array<{ key: "desktop" | "tablet" | "mobile"; label: string; hint: string }> = [
+  { key: "desktop", label: "Desktop", hint: "1024px and wider" },
+  { key: "tablet", label: "Tablet", hint: "768 to 1023px" },
+  { key: "mobile", label: "Mobile", hint: "below 768px" },
+];
+
+/** A number box in pixels: empty means "not set" (the theme default), and a smaller screen then inherits the larger one. */
+function PxInput({ value, label, min, max, onCommit }: { value: number | undefined; label: string; min: number; max: number; onCommit: (v: number | undefined) => void }) {
+  const [text, setText] = useState(value === undefined ? "" : String(value));
+  const apply = () => {
+    if (text.trim() === "") return onCommit(undefined);
+    const n = Number(text);
+    if (!Number.isFinite(n)) return setText(value === undefined ? "" : String(value));
+    const px = Math.min(max, Math.max(min, Math.round(n)));
+    setText(String(px));
+    onCommit(px);
+  };
+  return (
+    <div style={{ position: "relative" }}>
+      <input
+        type="text"
+        inputMode="numeric"
+        aria-label={label}
+        placeholder="auto"
+        value={text}
+        onChange={(e) => setText(e.target.value.replace(/[^0-9]/g, "").slice(0, 3))}
+        onBlur={apply}
+        onKeyDown={(e) => e.key === "Enter" && apply()}
+        style={{ ...input, paddingRight: 22 }}
+      />
+      <span aria-hidden="true" style={{ position: "absolute", right: 7, top: "50%", transform: "translateY(-50%)", fontSize: 10, color: "#a1a1aa", pointerEvents: "none" }}>
+        px
+      </span>
+    </div>
+  );
+}
+
+/** The logo's width and height for desktop, tablet and mobile. */
+export function LogoSizeEditor({ value, onChange }: { value: LogoSizeValue | undefined; onChange: (v: LogoSizeValue) => void }) {
+  const size = value ?? {};
+  const set = (device: "desktop" | "tablet" | "mobile", key: "width" | "height", v: number | undefined) => {
+    onChange({ ...size, [device]: { ...(size[device] ?? {}), [key]: v } });
+  };
+  const isDefault = DEVICES.every((d) => !size[d.key]?.width && !size[d.key]?.height);
+  return (
+    <div style={{ display: "grid", gap: 6, minWidth: 0 }}>
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline" }}>
+        <span style={label}>Logo size</span>
+        <button type="button" disabled={isDefault} onClick={() => onChange({ desktop: {}, tablet: {}, mobile: {} })} style={{ border: 0, background: "none", fontSize: 11, color: isDefault ? "#a1a1aa" : "#2563eb", cursor: isDefault ? "default" : "pointer", padding: 0 }}>
+          Reset
+        </button>
+      </div>
+      <div style={{ display: "grid", gridTemplateColumns: "minmax(0, 0.9fr) repeat(2, minmax(0, 1fr))", gap: 6, alignItems: "center" }}>
+        <span />
+        <span style={{ fontSize: 11, color: "#52525b", fontWeight: 600 }}>Width</span>
+        <span style={{ fontSize: 11, color: "#52525b", fontWeight: 600 }}>Height</span>
+        {DEVICES.map((d) => (
+          <Fragment key={d.key}>
+            <span title={d.hint} style={{ fontSize: 11, color: "#52525b", fontWeight: 600 }}>
+              {d.label}
+            </span>
+            <PxInput value={size[d.key]?.width} label={`${d.label} logo width`} min={16} max={600} onCommit={(v) => set(d.key, "width", v)} />
+            <PxInput value={size[d.key]?.height} label={`${d.label} logo height`} min={12} max={300} onCommit={(v) => set(d.key, "height", v)} />
+          </Fragment>
+        ))}
+      </div>
+      <span style={{ fontSize: 11, color: "#71717a" }}>Leave a box empty for automatic. Set only one of width or height to keep the logo's shape. Tablet and mobile follow the larger screen until set.</span>
+    </div>
+  );
+}
+
 function Unavailable({ children }: { children: ReactNode }) {
   return <p style={{ margin: 0, padding: 12, fontSize: 12, color: "#52525b", lineHeight: 1.5 }}>{children}</p>;
 }
@@ -130,6 +204,7 @@ export function HeaderPanel() {
           <MenuSelect name="hf-header-menu" label="" value={asStr(p["menuHandle"]) || undefined} onChange={(v) => h.set({ menuHandle: v })} bare />
         </Field>
         <Picker label="Logo image" value={asStr(p["logoMediaId"]) || undefined} onChange={(v) => h.set({ logoMediaId: v })} accept={["image"]} />
+        <LogoSizeEditor value={p["logoSize"] as LogoSizeValue | undefined} onChange={(v) => h.set({ logoSize: v })} />
         <Field title="Logo text" hint="Used when there is no logo image. Empty uses the store name.">
           <Text name="hf-header-logo" value={asStr(p["logoText"])} max={60} onChange={(v) => h.set({ logoText: v || undefined })} />
         </Field>
@@ -166,6 +241,7 @@ export function FooterPanel() {
       </Field>
       <Group title="Brand">
         <Picker label="Logo image" value={asStr(p["logoMediaId"]) || undefined} onChange={(v) => f.set({ logoMediaId: v })} accept={["image"]} />
+        <LogoSizeEditor value={p["logoSize"] as LogoSizeValue | undefined} onChange={(v) => f.set({ logoSize: v })} />
         <Field title="Brand name" hint="Used when there is no logo image. Empty uses the store name.">
           <Text name="hf-footer-logo" value={asStr(p["logoText"])} max={60} onChange={(v) => f.set({ logoText: v || undefined })} />
         </Field>
@@ -222,3 +298,10 @@ export function FooterPanel() {
     </div>
   );
 }
+
+/** The same size editor as a Puck field, for the Header and Footer pages' own settings. */
+export const logoSizeField = (label: string): CustomField<LogoSizeValue | undefined> => ({
+  type: "custom",
+  label,
+  render: ({ value, onChange }) => <LogoSizeEditor value={value} onChange={onChange} />,
+});

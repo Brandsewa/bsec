@@ -286,6 +286,31 @@
 .bsb-site-header-center .bsb-site-nav { flex: 0 1 auto; order: 3; width: 100%; justify-content: center; }
 .bsb-site-header-center .bsb-site-actions { margin-left: 0; position: absolute; right: 1rem; top: 0.75rem; }
 @media (min-width: 768px) { .bsb-site-nav { display: flex; } }
+
+/* Logo size per device (SiteHeader.logoSize, SiteFooter.logoSize): desktop first, a smaller screen inherits what it does not set */
+.bsb-logo-img { display: block; object-fit: contain; max-width: 100%; --lg-w: var(--lg-d-w); --lg-h: var(--lg-d-h); width: var(--lg-w, auto); height: var(--lg-h, auto); max-height: var(--lg-h, 40px); }
+@media (max-width: 1023px) { .bsb-logo-img { --lg-w: var(--lg-t-w, var(--lg-d-w)); --lg-h: var(--lg-t-h, var(--lg-d-h)); } }
+@media (max-width: 767px) { .bsb-logo-img { --lg-w: var(--lg-m-w, var(--lg-t-w, var(--lg-d-w))); --lg-h: var(--lg-m-h, var(--lg-t-h, var(--lg-d-h))); } }
+
+
+/* Announcement bar (Banner): one message, or several rotating one after another (CSS only) */
+.bsb-ann { display: block; }
+.bsb-ann-msg { margin: 0; }
+.bsb-ann-rotate { display: grid; }
+.bsb-ann-rotate .bsb-ann-msg { grid-area: 1 / 1; opacity: 0; animation-duration: calc(var(--ann-n) * var(--ann-iv)); animation-delay: calc(var(--ann-i) * var(--ann-iv)); animation-iteration-count: infinite; animation-timing-function: linear; }
+.bsb-ann-rotate:hover .bsb-ann-msg { animation-play-state: paused; }
+.bsb-ann-n2 .bsb-ann-msg { animation-name: bsb-ann-2; }
+@keyframes bsb-ann-2 { 0% { opacity: 0; } 2% { opacity: 1; } 48.00% { opacity: 1; } 50.00% { opacity: 0; } 100% { opacity: 0; } }
+.bsb-ann-n3 .bsb-ann-msg { animation-name: bsb-ann-3; }
+@keyframes bsb-ann-3 { 0% { opacity: 0; } 2% { opacity: 1; } 31.33% { opacity: 1; } 33.33% { opacity: 0; } 100% { opacity: 0; } }
+.bsb-ann-n4 .bsb-ann-msg { animation-name: bsb-ann-4; }
+@keyframes bsb-ann-4 { 0% { opacity: 0; } 2% { opacity: 1; } 23.00% { opacity: 1; } 25.00% { opacity: 0; } 100% { opacity: 0; } }
+.bsb-ann-n5 .bsb-ann-msg { animation-name: bsb-ann-5; }
+@keyframes bsb-ann-5 { 0% { opacity: 0; } 2% { opacity: 1; } 18.00% { opacity: 1; } 20.00% { opacity: 0; } 100% { opacity: 0; } }
+.bsb-ann-n6 .bsb-ann-msg { animation-name: bsb-ann-6; }
+@keyframes bsb-ann-6 { 0% { opacity: 0; } 2% { opacity: 1; } 14.67% { opacity: 1; } 16.67% { opacity: 0; } 100% { opacity: 0; } }
+@media (prefers-reduced-motion: reduce) { .bsb-ann-rotate .bsb-ann-msg { animation: none; opacity: 0; } .bsb-ann-rotate .bsb-ann-msg:first-child { opacity: 1; } }
+
 /* Header layouts (SiteHeader.layout) and the account icon */
 .bsb-hl-navCenter .bsb-site-nav { justify-content: center; }
 .bsb-hl-logoRight .bsb-site-header-row { flex-direction: row-reverse; }
@@ -521,7 +546,9 @@
   margin-top: var(--mt); margin-bottom: var(--mb);
   margin-left: var(--ml, auto); margin-right: var(--mr, auto);
   padding-top: var(--pt); padding-right: var(--pr); padding-bottom: var(--pb); padding-left: var(--pl);
-  width: var(--w); min-width: var(--mnw); max-width: var(--mxw);
+  /* Full width unless the widget sets one: with the auto side margins above, a flex-column parent (the storefront's block
+     list) would otherwise shrink the box to its content, and a slider whose slides are all absolutely placed collapses to 0. */
+  width: var(--w, 100%); min-width: var(--mnw); max-width: var(--mxw);
   box-sizing: border-box;
 }
 @media (max-width: 1023px) {

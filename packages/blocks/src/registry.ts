@@ -6,6 +6,7 @@ import {
   hexColorSchema,
   gapSchema,
   hrefSchema,
+  logoSizeSchema,
   ICON_NAMES,
   itemsSchema,
   justifySchema,
@@ -69,6 +70,21 @@ export const BannerSchema = z.object({
   link: hrefSchema.optional(),
   dismissible: z.boolean().default(false),
   variant: z.enum(["info", "promo", "warning"]).default("promo"),
+  /** More messages after `text`; with two or more the bar rotates through them (CSS only, pauses on hover). */
+  messages: z
+    .array(z.object({ text: z.string().min(1).max(200), link: hrefSchema.optional() }))
+    .max(5)
+    .default([]),
+  rotate: z.boolean().default(true),
+  /** Seconds each message stays. */
+  interval: z.number().int().min(2).max(20).default(5),
+  align: alignSchema.default("center"),
+  /** Colours: empty uses the theme's brand colours. */
+  bgColor: hexColorSchema.optional(),
+  textColor: hexColorSchema.optional(),
+  fontSize: z.number().int().min(11).max(22).default(14),
+  fontWeight: z.enum(["400", "500", "600", "700"]).default("500"),
+  font: z.enum(["body", "heading"]).default("body"),
 });
 export type BannerProps = z.infer<typeof BannerSchema>;
 
@@ -80,6 +96,13 @@ export const BannerBlock: BlockDefinition<BannerProps> = {
     text: "Special introductory offer: free shipping on orders over ₹999!",
     dismissible: false,
     variant: "promo",
+    messages: [],
+    rotate: true,
+    interval: 5,
+    align: "center",
+    fontSize: 14,
+    fontWeight: "500",
+    font: "body",
   },
   render: V.BannerView,
 };
@@ -623,6 +646,7 @@ export const SiteHeaderSchema = z.object({
   links: z.array(navLinkSchema).max(8).default([]),
   logoText: z.string().max(60).optional(),
   logoMediaId: z.string().optional(),
+  logoSize: logoSizeSchema,
   /**
    * left: logo then menu on the left, icons right. navCenter: logo left, menu in the middle, icons right.
    * logoCenter: menu left, logo in the middle, icons right. logoRight: icons left, menu, logo right.
@@ -648,6 +672,7 @@ export const SiteHeaderBlock: BlockDefinition<SiteHeaderProps> = {
       { label: "About", href: "/pages/about" },
     ],
     layout: "left",
+    logoSize: { desktop: {}, tablet: {}, mobile: {} },
     showSearch: true,
     showAccount: false,
     showCart: true,
@@ -667,6 +692,7 @@ export const SiteFooterSchema = z.object({
   /** Shown in place of the store name when set; the logo image wins over the text. */
   logoText: z.string().max(60).optional(),
   logoMediaId: z.string().optional(),
+  logoSize: logoSizeSchema,
   /** On phones each link column folds into an accordion (open one at a time by tapping its title). */
   mobileAccordion: z.boolean().default(true),
   columns: z
@@ -693,6 +719,7 @@ export const SiteFooterBlock: BlockDefinition<SiteFooterProps> = {
   defaultProps: {
     about: "Quality products, delivered with care.",
     layout: "columns",
+    logoSize: { desktop: {}, tablet: {}, mobile: {} },
     mobileAccordion: true,
     columns: [
       { title: "Shop", links: [{ label: "All products", href: "/collections/all" }, { label: "Search", href: "/search" }] },

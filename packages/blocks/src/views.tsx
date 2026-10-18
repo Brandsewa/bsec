@@ -18,6 +18,7 @@ import { mediaImage } from "./media-image.ts";
 import { PLACEHOLDER_IMAGE_URL } from "./media.ts";
 import { SvgIcon } from "./svg-icon.tsx";
 import type * as R from "./registry.ts";
+import type { LogoSize } from "./common.ts";
 
 /**
  * Presentational renderers for every block. Pure: no hooks, no data fetching, no browser
@@ -148,15 +149,36 @@ export function HeroView({ props, ctx }: A<R.HeroProps>): ReactNode {
 }
 
 export function BannerView({ props }: A<R.BannerProps>): ReactNode {
+  const all = [{ text: props.text, link: props.link }, ...props.messages];
+  const rotating = props.rotate && all.length > 1;
+  const style = {
+    padding: "0.6rem 1rem",
+    fontSize: `${props.fontSize / 16}rem`,
+    fontWeight: Number(props.fontWeight),
+    ...(props.font === "heading" ? { fontFamily: "var(--fh, inherit)" } : null),
+    ...(props.bgColor ? { background: props.bgColor } : null),
+    ...(props.textColor ? { color: props.textColor } : null),
+    "--ann-n": all.length,
+    "--ann-iv": `${props.interval}s`,
+  } as CSSProperties;
   return (
-    <div className="bsb bs-block-banner bsb-tone-primary bsb-align-center" style={{ padding: "0.6rem 1rem", fontSize: "0.875rem", fontWeight: 500 }}>
-      {props.link ? (
-        <a href={props.link} style={{ color: "inherit", textDecoration: "underline" }}>
-          {props.text}
-        </a>
-      ) : (
-        props.text
-      )}
+    <div
+      className={cx("bsb bs-block-banner bsb-ann", !props.bgColor && "bsb-tone-primary", `bsb-align-${props.align}`, rotating && `bsb-ann-rotate bsb-ann-n${all.length}`)}
+      style={style}
+      role="region"
+      aria-label="Announcements"
+    >
+      {all.map((m, i) => (
+        <p key={i} className="bsb-ann-msg" style={{ "--ann-i": i } as CSSProperties} {...(rotating && i > 0 ? { "aria-hidden": true } : null)}>
+          {m.link ? (
+            <a href={m.link} style={{ color: "inherit", textDecoration: "underline" }}>
+              {m.text}
+            </a>
+          ) : (
+            m.text
+          )}
+        </p>
+      ))}
     </div>
   );
 }
@@ -913,7 +935,7 @@ export function SiteHeaderView({ props, ctx }: A<R.SiteHeaderProps>): ReactNode 
           </details>
         ) : null}
         <NavLink ctx={ctx} href="/" className="bsb-site-logo">
-          {logoUrl ? <img src={logoUrl} alt={name} style={{ maxHeight: 40, width: "auto" }} /> : <span>{name}</span>}
+          {logoUrl ? <img className="bsb-logo-img" src={logoUrl} alt={name} style={logoSizeStyle(props.logoSize)} /> : <span>{name}</span>}
         </NavLink>
         <nav className="bsb-site-nav" aria-label="Main">
           {hasResolvedMenu ? (
@@ -1018,7 +1040,7 @@ export function SiteFooterView({ props, ctx }: A<R.SiteFooterProps>): ReactNode 
   );
   const brand = (
     <div className="bsb-site-footer-brand">
-      {logoUrl ? <img src={logoUrl} alt={name} style={{ maxHeight: 44, width: "auto" }} /> : <p className="bsb-heading bsb-h-sm">{name}</p>}
+      {logoUrl ? <img className="bsb-logo-img" src={logoUrl} alt={name} style={logoSizeStyle(props.logoSize)} /> : <p className="bsb-heading bsb-h-sm">{name}</p>}
       {props.about ? <p className="bsb-muted" style={{ marginTop: "0.5rem", fontSize: "0.875rem" }}>{props.about}</p> : null}
     </div>
   );
@@ -1324,6 +1346,18 @@ export function HeroSliderView({ props, ctx }: A<R.HeroSliderProps>): ReactNode 
 }
 
 /* --------------------------- product showcase --------------------------- */
+
+/** The logo's size per device as CSS variables (blocks.css picks the set for the screen, a smaller screen inheriting the larger one). */
+function logoSizeStyle(size: LogoSize | undefined): CSSProperties {
+  const out: Record<string, string> = {};
+  const letter = { desktop: "d", tablet: "t", mobile: "m" } as const;
+  for (const device of ["desktop", "tablet", "mobile"] as const) {
+    const box = size?.[device];
+    if (box?.width) out[`--lg-${letter[device]}-w`] = `${box.width}px`;
+    if (box?.height) out[`--lg-${letter[device]}-h`] = `${box.height}px`;
+  }
+  return out as CSSProperties;
+}
 
 const UserIcon = (
   <svg viewBox="0 0 24 24" width="1.25em" height="1.25em" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">

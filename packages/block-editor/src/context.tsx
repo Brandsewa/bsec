@@ -53,6 +53,8 @@ export const FrameContext = createContext<EditorFrame | null>(null);
 export interface FrameEdit {
   frame: EditorFrame;
   patch: (part: "header" | "footer", patch: Record<string, unknown>) => void;
+  /** Replaces the whole block list of the header or footer (adding or hiding a block such as the announcement bar). */
+  setBlocks: (part: "header" | "footer", blocks: BlockInstance[]) => void;
   /** The page being edited is itself the header or the footer (its settings are edited on the canvas). */
   editing: "header" | "footer" | null;
 }

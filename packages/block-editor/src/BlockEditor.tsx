@@ -11,6 +11,7 @@ import { ThemeSettingsPanel, type ThemeTokens } from "./ThemeSettings.tsx";
 import { EDITOR_VIEWPORTS } from "./viewports.ts";
 import { EditorHeader, EditorHeaderContext, type EditorHeaderState } from "./EditorHeader.tsx";
 import { FooterPanel, HeaderPanel } from "./HeaderFooterPanels.tsx";
+import { GeneralPanel } from "./GeneralPanel.tsx";
 
 export interface BlockEditorProps {
   title: string;
@@ -96,6 +97,15 @@ function ThemePanelFromContext() {
 
 const railIcon = { width: 20, height: 20, viewBox: "0 0 24 24", fill: "none", stroke: "currentColor", strokeWidth: 2, strokeLinecap: "round", strokeLinejoin: "round", "aria-hidden": true } as const;
 
+function GeneralIcon() {
+  return (
+    <svg {...railIcon}>
+      <circle cx="12" cy="12" r="3" />
+      <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 1 1-4 0v-.09a1.65 1.65 0 0 0-1-1.51 1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 1 1 0-4h.09a1.65 1.65 0 0 0 1.51-1 1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33h0a1.65 1.65 0 0 0 1-1.51V3a2 2 0 1 1 4 0v.09a1.65 1.65 0 0 0 1 1.51h0a1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82v0a1.65 1.65 0 0 0 1.51 1H21a2 2 0 1 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z" />
+    </svg>
+  );
+}
+
 function HeaderIcon() {
   return (
     <svg {...railIcon}>
@@ -164,6 +174,7 @@ export function BlockEditor({ title, initialBlocks: initialFromProps, host, them
             ...(themeEnabled ? [{ name: "theme-settings", label: "Theme", icon: <ThemeIcon />, render: ThemePanelFromContext }] : []),
             ...(frameEditable
               ? [
+                  { name: "general-settings", label: "General", icon: <GeneralIcon />, render: GeneralPanel },
                   { name: "header-settings", label: "Header", icon: <HeaderIcon />, render: HeaderPanel },
                   { name: "footer-settings", label: "Footer", icon: <FooterIcon />, render: FooterPanel },
                 ]
@@ -187,6 +198,7 @@ export function BlockEditor({ title, initialBlocks: initialFromProps, host, them
               const next = list.map((b) => (b.type === type ? { ...b, props: { ...b.props, ...patch } } : b));
               onFrameChange(part, next);
             },
+            setBlocks: (part: "header" | "footer", blocks: BlockInstance[]) => onFrameChange(part, blocks),
           }
         : null,
     [onFrameChange, frameFromProps, frame, pageKind],

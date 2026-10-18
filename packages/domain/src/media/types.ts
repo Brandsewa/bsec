@@ -101,13 +101,19 @@ export const MEDIA_TYPES: readonly MediaTypeDefinition[] = [
     verifyMagicBytes: (buf) =>
       buf.length >= 6 && hasAscii(buf, 0, "GIF8") && (buf[4] === 0x37 || buf[4] === 0x39) && buf[5] === 0x61,
   },
-  // 6. MP4: ....ftyp (brands isom, mp4*, avc1, M4V, etc.)
+  // 6. MP4: usually ....ftyp (brands isom, mp4*, avc1, M4V, etc.), but several encoders and screen recorders start the
+  // file with a free / skip / wide / moov / mdat box instead, which is still a valid MP4.
   {
     mime: "video/mp4",
     kind: "video",
     extensions: ["mp4"],
-    verifyMagicBytes: (buf) =>
-      buf.length >= 12 && hasAscii(buf, 4, "ftyp"),
+    verifyMagicBytes: (buf) => {
+      if (buf.length < 12) return false;
+      if (hasAscii(buf, 4, "ftyp")) return true;
+      const firstBoxSize = ((buf[0] ?? 0) * 0x1000000) + (((buf[1] ?? 0) << 16) | ((buf[2] ?? 0) << 8) | (buf[3] ?? 0));
+      if (firstBoxSize < 8 && firstBoxSize !== 1) return false;
+      return ["free", "skip", "wide", "moov", "mdat"].some((box) => hasAscii(buf, 4, box));
+    },
   },
   // 7. WebM: 1A 45 DF A3 (EBML)
   {

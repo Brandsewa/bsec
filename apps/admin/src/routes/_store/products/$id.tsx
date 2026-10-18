@@ -261,7 +261,7 @@ function ProductEditor({ product, go }: { product: ProductDetailData; go: (to: s
         className="grid grid-cols-1 lg:grid-cols-3 gap-6"
         noValidate
       >
-        {/* Left Column (2 spans): Primary details, media, pricing, variants, inventory, shipping, SEO */}
+        {/* Left Column (2 spans): Primary details, media, pricing, variants, custom fields, SEO */}
         <div className="lg:col-span-2 flex flex-col gap-6">
           {/* General Information Card */}
           <Card>
@@ -364,34 +364,6 @@ function ProductEditor({ product, go }: { product: ProductDetailData; go: (to: s
           {/* Custom fields (ADR-034) */}
           <CustomFieldsCard resourceType="product" resourceId={product.id} />
 
-          {/* Stock / Inventory Summary */}
-          <StockSummary product={product} onManage={() => go("/inventory")} />
-
-          {/* Shipping Card */}
-          <Card>
-            <CardHeader>
-              <CardTitle className="text-base font-semibold">Shipping</CardTitle>
-              <CardDescription>Physical delivery requirements.</CardDescription>
-            </CardHeader>
-            <CardContent>
-              <Field orientation="horizontal" className="justify-between">
-                <div>
-                  <FieldLabel htmlFor="requires-shipping" className="cursor-pointer font-medium">
-                    Requires shipping
-                  </FieldLabel>
-                  <p className="text-xs text-muted-foreground">
-                    This is a physical item that requires shipping or courier dispatch.
-                  </p>
-                </div>
-                <Switch
-                  id="requires-shipping"
-                  checked={requiresShipping}
-                  onCheckedChange={(c) => setRequiresShipping(Boolean(c))}
-                />
-              </Field>
-            </CardContent>
-          </Card>
-
           {/* Search Engine Listing (SEO Card) */}
           <SeoCard
             defaultTitle={title || product.title}
@@ -405,7 +377,7 @@ function ProductEditor({ product, go }: { product: ProductDetailData; go: (to: s
           />
         </div>
 
-        {/* Right Column (1 span): Status, Organization, Returns */}
+        {/* Right Column (1 span): Status, Organization, Returns, Stock, Shipping, Taxes */}
         <div className="flex flex-col gap-6">
           {/* Status & Visibility Card */}
           <Card>
@@ -598,6 +570,34 @@ function ProductEditor({ product, go }: { product: ProductDetailData; go: (to: s
                   id="returnable-switch"
                   checked={returnable}
                   onCheckedChange={(c) => setReturnable(Boolean(c))}
+                />
+              </Field>
+            </CardContent>
+          </Card>
+
+          {/* Stock / Inventory Summary */}
+          <StockSummary product={product} onManage={() => go("/inventory")} />
+
+          {/* Shipping Card */}
+          <Card>
+            <CardHeader>
+              <CardTitle className="text-base font-semibold">Shipping</CardTitle>
+              <CardDescription>Physical delivery requirements.</CardDescription>
+            </CardHeader>
+            <CardContent>
+              <Field orientation="horizontal" className="justify-between">
+                <div>
+                  <FieldLabel htmlFor="requires-shipping" className="cursor-pointer font-medium">
+                    Requires shipping
+                  </FieldLabel>
+                  <p className="text-xs text-muted-foreground">
+                    This is a physical item that requires shipping or courier dispatch.
+                  </p>
+                </div>
+                <Switch
+                  id="requires-shipping"
+                  checked={requiresShipping}
+                  onCheckedChange={(c) => setRequiresShipping(Boolean(c))}
                 />
               </Field>
             </CardContent>

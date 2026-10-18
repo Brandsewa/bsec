@@ -525,31 +525,6 @@ export function NewProductPage({ navigate }: { navigate?: (to: string) => void }
             </CardContent>
           </Card>
 
-          {/* Shipping Card */}
-          <Card>
-            <CardHeader>
-              <CardTitle className="text-base font-semibold">Shipping</CardTitle>
-              <CardDescription>Physical delivery requirements.</CardDescription>
-            </CardHeader>
-            <CardContent>
-              <Field orientation="horizontal" className="justify-between">
-                <div>
-                  <FieldLabel htmlFor="requires-shipping" className="cursor-pointer font-medium">
-                    Requires shipping
-                  </FieldLabel>
-                  <p className="text-xs text-muted-foreground">
-                    This is a physical item that requires shipping or courier dispatch.
-                  </p>
-                </div>
-                <Switch
-                  id="requires-shipping"
-                  checked={requiresShipping}
-                  onCheckedChange={(c) => setRequiresShipping(Boolean(c))}
-                />
-              </Field>
-            </CardContent>
-          </Card>
-
           {/* Search Engine Listing (SEO Card) */}
           <SeoCard
             defaultTitle={title}
@@ -563,7 +538,7 @@ export function NewProductPage({ navigate }: { navigate?: (to: string) => void }
           />
         </div>
 
-        {/* Right Column (1 span): Status, Organization, Returns */}
+        {/* Right Column (1 span): Status, Organization, Returns, Shipping */}
         <div className="flex flex-col gap-6">
           {/* Status & Visibility Card */}
           <Card>
@@ -759,6 +734,31 @@ export function NewProductPage({ navigate }: { navigate?: (to: string) => void }
                   id="returnable-switch"
                   checked={returnable}
                   onCheckedChange={(c) => setReturnable(Boolean(c))}
+                />
+              </Field>
+            </CardContent>
+          </Card>
+
+          {/* Shipping Card */}
+          <Card>
+            <CardHeader>
+              <CardTitle className="text-base font-semibold">Shipping</CardTitle>
+              <CardDescription>Physical delivery requirements.</CardDescription>
+            </CardHeader>
+            <CardContent>
+              <Field orientation="horizontal" className="justify-between">
+                <div>
+                  <FieldLabel htmlFor="requires-shipping" className="cursor-pointer font-medium">
+                    Requires shipping
+                  </FieldLabel>
+                  <p className="text-xs text-muted-foreground">
+                    This is a physical item that requires shipping or courier dispatch.
+                  </p>
+                </div>
+                <Switch
+                  id="requires-shipping"
+                  checked={requiresShipping}
+                  onCheckedChange={(c) => setRequiresShipping(Boolean(c))}
                 />
               </Field>
             </CardContent>

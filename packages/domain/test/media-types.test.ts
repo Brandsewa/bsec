@@ -121,6 +121,16 @@ describe("MEDIA_TYPES definition and magic-byte checks (MEDIA-LIBRARY-PLAN §4)"
     });
   });
 
+  it("accepts MP4 files that start with a free, wide, moov or mdat box, and still rejects other content", () => {
+    const box = (name: string) => Buffer.from([0, 0, 0, 8, ...[...name].map((c) => c.charCodeAt(0)), 0, 0, 0, 0, 0, 0, 0, 0]);
+    for (const name of ["free", "skip", "wide", "moov", "mdat"]) {
+      expect(verifyMediaMagicBytes("video/mp4", box(name)).valid, name).toBe(true);
+    }
+    expect(verifyMediaMagicBytes("video/mp4", box("abcd")).valid).toBe(false);
+    expect(verifyMediaMagicBytes("video/mp4", Buffer.from("<html><body>not a video</body></html>")).valid).toBe(false);
+    expect(verifyMediaMagicBytes("video/mp4", Buffer.from([0, 0, 0, 2, 0x66, 0x72, 0x65, 0x65, 0, 0, 0, 0])).valid).toBe(false);
+  });
+
   it("verifies WebM magic bytes (1A 45 DF A3)", () => {
     const validWebm = Buffer.from([0x1a, 0x45, 0xdf, 0xa3, 0x9f, 0x42, 0x86, 0x81]);
     expect(verifyMediaMagicBytes("video/webm", validWebm)).toEqual({

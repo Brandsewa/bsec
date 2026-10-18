@@ -1,6 +1,6 @@
 import { describe, it, expect } from "vitest";
 import { renderToStaticMarkup } from "react-dom/server";
-import { SiteFooterSchema, SiteHeaderSchema, renderBlockTree, validateBlockDocument, type BlockInstance } from "../src/index.ts";
+import { BannerSchema, SiteFooterSchema, SiteHeaderSchema, renderBlockTree, validateBlockDocument, type BlockInstance } from "../src/index.ts";
 
 const header = (props: Record<string, unknown> = {}): BlockInstance => ({ id: "h", type: "SiteHeader", version: 1, props });
 const footer = (props: Record<string, unknown> = {}): BlockInstance => ({ id: "f", type: "SiteFooter", version: 1, props });
@@ -66,5 +66,55 @@ describe("site footer options", () => {
     expect(render([footer({ logoText: "Acme" })])).toContain("Acme");
     const withLogo = render([footer({ logoMediaId: "m1", logoText: "Acme" })], { mediaUrl: (id: string) => (id === "m1" ? "https://media.example/logo.png" : null) });
     expect(withLogo).toContain("https://media.example/logo.png");
+  });
+});
+
+describe("logo size per device", () => {
+  const withLogo = (size: Record<string, unknown>) => ({ logoMediaId: "m1", logoSize: size });
+  const media = { mediaUrl: (id: string) => (id === "m1" ? "https://media.example/logo.png" : null) };
+
+  it("sets CSS variables only for the sizes that are set", () => {
+    const html = render([header(withLogo({ desktop: { width: 160 }, tablet: {}, mobile: { height: 28 } }))], media);
+    expect(html).toContain("--lg-d-w:160px");
+    expect(html).toContain("--lg-m-h:28px");
+    expect(html).not.toContain("--lg-t-");
+    expect(html).toContain("bsb-logo-img");
+    expect(render([footer(withLogo({ desktop: { height: 50 } }))], media)).toContain("--lg-d-h:50px");
+  });
+
+  it("keeps the sizes inside their limits and defaults to none", () => {
+    expect(SiteHeaderSchema.parse({}).logoSize).toEqual({ desktop: {}, tablet: {}, mobile: {} });
+    expect(SiteHeaderSchema.safeParse({ logoSize: { desktop: { width: 5000 } } }).success).toBe(false);
+    expect(SiteFooterSchema.safeParse({ logoSize: { mobile: { height: 5 } } }).success).toBe(false);
+  });
+});
+
+describe("announcement bar", () => {
+  const bar = (props: Record<string, unknown> = {}): BlockInstance => ({ id: "b", type: "Banner", version: 1, props: { text: "First", ...props } });
+
+  it("stays a plain single message by default", () => {
+    const html = render([bar()]);
+    expect(html).toContain("First");
+    expect(html).not.toContain("bsb-ann-rotate");
+  });
+
+  it("rotates through several messages with the chosen interval, and not when switched off", () => {
+    const html = render([bar({ messages: [{ text: "Second", link: "/sale" }], interval: 8 })]);
+    expect(html).toContain("bsb-ann-rotate");
+    expect(html).toContain("bsb-ann-n2");
+    expect(html).toContain("--ann-iv:8s");
+    expect(html).toContain('href="/sale"');
+    expect(render([bar({ messages: [{ text: "Second" }], rotate: false })])).not.toContain("bsb-ann-rotate");
+  });
+
+  it("applies colours, font and alignment, and rejects bad values", () => {
+    const html = render([bar({ bgColor: "#112233", textColor: "#ffffff", fontSize: 16, fontWeight: "700", font: "heading", align: "left" })]);
+    expect(html).toContain("background:#112233");
+    expect(html).toContain("color:#ffffff");
+    expect(html).toContain("font-size:1rem");
+    expect(html).toContain("bsb-align-left");
+    expect(BannerSchema.safeParse({ text: "x", bgColor: "red" }).success).toBe(false);
+    expect(BannerSchema.safeParse({ text: "x", interval: 1 }).success).toBe(false);
+    expect(BannerSchema.safeParse({ text: "x", messages: Array.from({ length: 6 }, () => ({ text: "m" })) }).success).toBe(false);
   });
 });

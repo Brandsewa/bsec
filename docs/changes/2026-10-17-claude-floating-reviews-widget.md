@@ -51,6 +51,15 @@ A new BCOM widget, "Floating reviews" (`ReviewsMarquee`), shows the store's publ
 - Store admin > Themes > Preview: the dialog is 80% of the screen and the Home / Collection / Product and Desktop / Mobile tabs now show their selected state (they were indistinguishable).
 - The "Men collection is narrower than New Arrivals" report could not be reproduced: both pages render the same `max-w-7xl` container in the demo store. Left unchanged; if it comes back, note the URL and whether the store's collection template page exists.
 
+## Fixes and features after live testing (follow-up 3)
+- **MP4 upload rejected:** the magic-byte check only accepted files whose first box is `ftyp`; many encoders and screen recorders start with `free`, `skip`, `wide`, `moov` or `mdat`. `packages/domain/src/media/types.ts` now accepts those (test in `media-types.test.ts`). The 10 MB per-video plan limit (`media_video_mb`) is unchanged: a bigger video still fails with "Videos can be up to 10 MB on your plan" (owner decision to raise it).
+- **Hero slider banner images missing on the live site:** `.bsb-lay` had `width: var(--w)` with auto side margins; in the storefront's flex-column block list that shrank the slider to 0px wide (all slides are absolutely placed), so the image existed but was invisible. Now `width: var(--w, 100%)` (`layout-css.test.ts`). Local dev also needs `MEDIA_PUBLIC_URL` for any image to resolve.
+- **Product page (storefront):** "Write a review" opens a pop-up (Escape, click outside, focus return); reviews are cards, two rows of three, then "Show more reviews" opens a right-hand drawer with every review and "Load more" (`ProductReviewsSection.tsx`).
+- **Product admin:** custom fields are collapsible rows (required and empty ones open); Stock & Inventory and Shipping moved to the right column with Taxes & GST on the edit page, Shipping on the new-product page.
+- **Logo size per device** (`logoSize` on `SiteHeader` and `SiteFooter`, width and height in px for desktop, tablet and mobile; smaller screens inherit) in the Header/Footer tabs and the block fields.
+- **General tab** in the editor's left rail with an **Announcement bar** accordion: on/off (hides the Banner block), up to six messages that rotate in CSS (interval, pause on hover, reduced motion shows the first), alignment, background and text colour, font, weight and size. The `Banner` block gained `messages`, `rotate`, `interval`, `align`, `bgColor`, `textColor`, `fontSize`, `fontWeight`, `font` (all with defaults).
+- Dev note: after changing a block schema, restart the web dev server; it kept the old schema and silently dropped the new `messages` prop on save.
+
 ## Docs updated
 - [x] `docs/ARCHITECTURE.md` (block list)
 - [x] ADR: not needed (new block on the existing pattern)
