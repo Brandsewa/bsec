@@ -1,6 +1,6 @@
 import { createHmac } from "node:crypto";
 import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from "vitest";
-import { eq } from "drizzle-orm";
+import { eq, sql } from "drizzle-orm";
 import { schema } from "@bs/db";
 import { startTestDb, type TestDb } from "@bs/db/test-env";
 import { seedPlatformStaff } from "@bs/db/test-fixtures";
@@ -26,6 +26,12 @@ let env: TestDb;
 let rt: Runtime;
 let owner: string;
 let seq = 0;
+
+/** CI runs every test file against one shared database: leave no billing state behind and start from none. */
+async function resetBilling() {
+  await rt._db.db.execute(sql`DELETE FROM platform_razorpay_plans`);
+  await rt._db.db.execute(sql`DELETE FROM platform_billing_settings`);
+}
 
 const errorOf = async (p: Promise<unknown>) => (await p.then(() => null, (e: Error) => e))?.message ?? null;
 const WEBHOOK_SECRET = "whsec_b4_test_secret_12345";
@@ -80,10 +86,12 @@ beforeAll(async () => {
   owner = (await seedPlatformStaff(rt._db.db, { email: "b3-owner@platform.test", role: "platform_owner" })).userId;
   delete process.env.RAZORPAY_PLATFORM_KEY_ID;
   delete process.env.RAZORPAY_PLATFORM_KEY_SECRET;
+  await resetBilling();
 }, 180_000);
 
 afterEach(() => vi.restoreAllMocks());
 afterAll(async () => {
+  await resetBilling();
   await rt?.close();
   await env?.stop();
 });
@@ -215,12 +223,13 @@ describe("B4 webhook lifecycle and gapless invoices", () => {
     const b = await activeStore();
     await send(charged(a.subId, a.tenantId, "pay_a1"), "evt_a1");
     await send(charged(b.subId, b.tenantId, "pay_b1"), "evt_b1");
-    const invoices = await rt._db.db.select().from(schema.platformInvoices);
-    const numbers = invoices.map((i) => i.number).sort();
+    // Only this test's own invoices (other files share the table in CI).
+    const mine = (await rt._db.db.select().from(schema.platformInvoices)).filter((i) => i.tenantId === a.tenantId || i.tenantId === b.tenantId);
+    expect(mine).toHaveLength(2);
     const fy = financialYearSeries(new Date());
-    expect(numbers.every((n) => new RegExp(`^BS/${fy}/\\d{5}$`).test(n))).toBe(true);
-    const seqs = numbers.map((n) => Number(n.slice(-5)));
-    expect(seqs).toEqual(Array.from({ length: seqs.length }, (_, i) => seqs[0]! + i)); // consecutive
+    expect(mine.every((i) => new RegExp(`^BS/${fy}/\\d{5}$`).test(i.number))).toBe(true);
+    const [first, second] = mine.map((i) => Number(i.number.slice(-5))).sort((x, y) => x - y);
+    expect(second).toBe(first! + 1); // consecutive: no gap between two payments
   });
 
   it("invoices one provider payment only once, even if it arrives in two events", async () => {
