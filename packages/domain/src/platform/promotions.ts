@@ -468,3 +468,36 @@ export async function endDuePromotions(rt: Runtime, now: Date = new Date(), limi
   }
   return { ended, suspended };
 }
+
+export interface PromoCodePreview {
+  valid: boolean;
+  /** Plain sentence for the signup form: what the code gives, or why it cannot be used. */
+  message: string;
+}
+
+/**
+ * Public, read-only check of a promo code for the signup form (does not redeem or reveal anything beyond what the shopper
+ * would be told on redeeming). The caller rate-limits it. Redemption itself still re-checks everything in the transaction.
+ */
+export async function previewPromoCode(db: Db, input: { code: string; planCode?: string | null | undefined; now?: Date | undefined }): Promise<PromoCodePreview> {
+  if (!input.code.trim()) return { valid: false, message: "Enter a promo code." };
+  let code: string;
+  try {
+    code = normalizePromoCode(input.code);
+  } catch {
+    return { valid: false, message: "This promo code is not valid." }; // wrong shape: same answer as an unknown code
+  }
+  const [p] = await db.select().from(schema.promotions).where(eq(schema.promotions.code, code)).limit(1);
+  if (!p) return { valid: false, message: "This promo code is not valid." };
+  try {
+    assertPromotionRedeemable(p, input.planCode ?? null, input.now ?? new Date());
+  } catch (err) {
+    return { valid: false, message: (err instanceof Error ? err.message : "This promo code cannot be used").replace(/^Bad Request: /, "").replace(/^./, (c) => c.toUpperCase()) + "." };
+  }
+  const months = `${p.durationMonths} month${p.durationMonths === 1 ? "" : "s"}`;
+  const plans = p.appliesToPlanCodes.length > 0 ? ` on the ${p.appliesToPlanCodes.join(" or ")} plan` : "";
+  return {
+    valid: true,
+    message: p.kind === "free_months" ? `Valid: ${months} free${plans}.` : `Valid: ${p.percentOff}% off for ${months}${plans}.`,
+  };
+}

@@ -293,8 +293,9 @@ Drizzle schema files in `packages/db/src/schema/` (one Postgres database, `publi
 | 0065 | `shipping_regions_tiers` | `shipping_zones.states` (empty = whole country), `shipping_rates` price tiers (`min/max_subtotal_paise`) and weight tiers (`min/max_weight_grams`), rate types `price_tier` and `weight_tier` |
 | 0066 | `custom_fields` | `custom_field_definitions`, `custom_field_values` (tenant tables, forced RLS, ADR-034); `plans.features.custom_fields` (Growth and Pro) |
 | 0067 | `promotions` | `promotions`, `tenant_promotions` (platform tables, ADR-035; promotions last at most 12 months, one active per store) |
+| 0068 | `signup_default_template` | `theme_templates.is_signup_default` (at most one flagged; new self-service stores start with it, else the launch theme) |
 
-How to write one (expand, migrate, contract; `forceRlsSql`): `docs/migrations.md`. **Never edit an applied migration.** Latest on disk: `0067` (the docs check keeps this list honest).
+How to write one (expand, migrate, contract; `forceRlsSql`): `docs/migrations.md`. **Never edit an applied migration.** Latest on disk: `0068` (the docs check keeps this list honest).
 
 ---
 

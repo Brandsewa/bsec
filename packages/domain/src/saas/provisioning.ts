@@ -1,6 +1,6 @@
 import { randomUUID } from "node:crypto";
 import { eq, sql } from "drizzle-orm";
-import { schema } from "@bs/db";
+import { schema, type Db } from "@bs/db";
 import { hashPassword, STORE_PERMISSIONS, SYSTEM_STORE_ROLES } from "@bs/auth";
 import { saasDb, type Runtime } from "../runtime.ts";
 import { tierForPlan } from "./plan-tiers.ts";
@@ -17,12 +17,35 @@ export interface ProvisionOwnerInput {
   phone?: string | undefined;
 }
 
+export interface ProvisionBusinessInput {
+  legalName?: string | undefined;
+  industry?: string | undefined;
+  line1?: string | undefined;
+  city?: string | undefined;
+  state?: string | undefined;
+  pincode?: string | undefined;
+}
+
+/** The template new stores start with: the one flagged `is_signup_default`, else the launch theme, else the oldest published one. */
+export async function resolveSignupTemplateCode(tx: Db): Promise<string> {
+  const res = await tx.execute<{ code: string }>(sql`
+    SELECT code FROM theme_templates
+     WHERE is_active = true AND archived_at IS NULL AND published_at IS NOT NULL
+     ORDER BY is_signup_default DESC, (code = 'essential-commerce') DESC, published_at ASC
+     LIMIT 1;
+  `);
+  return res.rows[0]?.code ?? "essential-commerce";
+}
+
 export interface ProvisionTenantInput {
   storeName: string;
   slug: string;
   owner: ProvisionOwnerInput;
   planCode?: "starter" | "growth" | "pro" | string | undefined;
-  themeTemplate?: "starter-minimal" | "fashion-editorial" | "gourmet-artisan" | string | undefined;
+  /** Theme template code. Omitted for self-service signups: the platform's default template is used (`resolveSignupTemplateCode`). */
+  themeTemplate?: string | undefined;
+  /** Business details collected at signup; they pre-fill Settings, Store details and the tax state. */
+  business?: ProvisionBusinessInput | undefined;
   currency?: string | undefined;
   timezone?: string | undefined;
   leadId?: string | undefined;
@@ -82,7 +105,6 @@ export async function provisionTenant(
   const currency = (input.currency || "INR").toUpperCase();
   const timezone = input.timezone || "Asia/Kolkata";
   const planCode = (input.planCode || "starter").toLowerCase();
-  const templateCode = input.themeTemplate || "starter-minimal";
   const source = input.source || "self_service";
 
   const platformDomain = process.env.PLATFORM_DOMAIN?.trim() || "bcom.si";
@@ -94,6 +116,8 @@ export async function provisionTenant(
   const adminUrl = `${protocol}://${adminHost}`;
 
   return await db.transaction(async (tx) => {
+    const templateCode = input.themeTemplate || (await resolveSignupTemplateCode(tx));
+
     // 1. Verify slug is not already owned by another store
     const existingTenant = await tx.execute<{ id: string }>(sql`
       SELECT id FROM tenants WHERE LOWER(slug) = ${slug} LIMIT 1;
@@ -232,11 +256,23 @@ export async function provisionTenant(
     });
 
     // 9. Store Settings with default COD configuration
+    const biz = input.business;
+    const businessAddress =
+      biz && (biz.line1?.trim() || biz.city?.trim() || biz.state?.trim() || biz.pincode?.trim())
+        ? {
+            countryCode: "IN",
+            ...(biz.line1?.trim() ? { line1: biz.line1.trim() } : {}),
+            ...(biz.city?.trim() ? { city: biz.city.trim() } : {}),
+            ...(biz.state?.trim() ? { state: biz.state.trim() } : {}),
+            ...(biz.pincode?.trim() ? { pincode: biz.pincode.trim() } : {}),
+          }
+        : null;
     const orderPrefix = `#${slug.slice(0, 3).toUpperCase()}-`;
     await tx.insert(schema.storeSettings).values({
       tenantId,
       storeName,
-      legalName: storeName,
+      legalName: input.business?.legalName?.trim() || storeName,
+      address: businessAddress,
       currency,
       timezone,
       supportEmail: ownerEmail,
@@ -244,7 +280,7 @@ export async function provisionTenant(
       orderPrefix,
       checkout: {
         cod: { enabled: true, feePaise: 0 },
-        tax: { gstin: null, sellerState: null, pricesIncludeTax: true },
+        tax: { gstin: null, sellerState: input.business?.state?.trim() || null, pricesIncludeTax: true },
       },
     });
 
