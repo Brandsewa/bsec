@@ -119,13 +119,20 @@ const cornerValue = z
   .optional();
 const cornersSchema = z.object({ topLeft: cornerValue, topRight: cornerValue, bottomRight: cornerValue, bottomLeft: cornerValue });
 export const slideRadiusSchema = z
-  .object({ desktop: cornersSchema.default({}), tablet: cornersSchema.default({}), mobile: cornersSchema.default({}) })
-  .default({ desktop: {}, tablet: {}, mobile: {} });
+  .object({
+    /** Rounded corners on or off. When on and no size is set, the corners use 16px. */
+    enabled: z.boolean().default(false),
+    desktop: cornersSchema.default({}),
+    tablet: cornersSchema.default({}),
+    mobile: cornersSchema.default({}),
+  })
+  .default({ enabled: false, desktop: {}, tablet: {}, mobile: {} });
 export type SlideRadius = z.infer<typeof slideRadiusSchema>;
 
 /** The CSS variables for the slide corners; only the values that are set. */
 export function slideRadiusStyle(radius: SlideRadius | undefined): CSSProperties {
   const out: Record<string, string> = {};
+  if (!radius?.enabled) return out as CSSProperties;
   for (const device of LAYOUT_DEVICES) {
     for (const corner of CORNERS) {
       const v = radius?.[device]?.[corner];

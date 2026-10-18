@@ -111,11 +111,19 @@ describe("hero slider on phones and layout radius", () => {
     expect(render([block("HeroSlider")])).toContain("bsb-hs-wm-full");
     expect(render([block("HeroSlider", { widthMode: "contained" })])).toContain("bsb-hs-wm-contained");
     expect(HeroSliderSchema.safeParse({ widthMode: "wide" }).success).toBe(false);
-    const html = render([block("HeroSlider", { slideRadius: { desktop: { topLeft: "24px", topRight: "24px" }, mobile: { bottomLeft: "8px" } } })]);
+    const html = render([block("HeroSlider", { slideRadius: { enabled: true, desktop: { topLeft: "24px", topRight: "24px" }, mobile: { bottomLeft: "8px" } } })]);
     expect(html).toContain("--sr-d-tl:24px");
     expect(html).toContain("--sr-d-tr:24px");
     expect(html).toContain("--sr-m-bl:8px");
-    expect(HeroSliderSchema.safeParse({ slideRadius: { desktop: { topLeft: "red" } } }).success).toBe(false);
-    expect(HeroSliderSchema.parse({}).slideRadius).toEqual({ desktop: {}, tablet: {}, mobile: {} });
+    expect(html).toContain("bsb-hs-rounded");
+    // Off by default, and sizes are ignored while the switch is off.
+    const off = render([block("HeroSlider", { slideRadius: { enabled: false, desktop: { topLeft: "24px" } } })]);
+    expect(off).not.toContain("--sr-d-tl");
+    expect(off).not.toContain("bsb-hs-rounded");
+    expect(render([block("HeroSlider")])).not.toContain("bsb-hs-rounded");
+    // On with no size set: the stylesheet's 16px default applies (no variables needed).
+    expect(render([block("HeroSlider", { slideRadius: { enabled: true } })])).toContain("bsb-hs-rounded");
+    expect(HeroSliderSchema.safeParse({ slideRadius: { enabled: true, desktop: { topLeft: "red" } } }).success).toBe(false);
+    expect(HeroSliderSchema.parse({}).slideRadius).toEqual({ enabled: false, desktop: {}, tablet: {}, mobile: {} });
   });
 });

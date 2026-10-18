@@ -185,12 +185,30 @@ export const layoutField = (label: string, options: { radius?: boolean } = {}): 
   render: ({ value, onChange }) => <LayoutPanel value={value} onChange={onChange} radius={options.radius !== false} />,
 });
 
-type SlideRadiusValue = { [D in LayoutDevice]?: { [C in Corner]?: string | undefined } | undefined };
+type SlideRadiusValue = { enabled?: boolean | undefined } & { [D in LayoutDevice]?: { [C in Corner]?: string | undefined } | undefined };
 const CORNER_CAPTIONS: Array<[Corner, string]> = [["topLeft", "Top left"], ["topRight", "Top right"], ["bottomRight", "Bottom right"], ["bottomLeft", "Bottom left"]];
 
-/** Rounded corners of the slides: device tabs like the layout panel, one box per corner and an "All" box that sets the four together. */
+/** Rounded corners of the carousel and its slides: a Yes / No switch, and when Yes the sizes per screen (an "All" box and one per corner). */
 function SlideRadiusPanel({ value, onChange }: { value: SlideRadiusValue | undefined; onChange: (v: SlideRadiusValue) => void }) {
   const radius: SlideRadiusValue = value ?? {};
+  if (!radius.enabled) {
+    return (
+      <div style={{ display: "flex", alignItems: "center", gap: 14, fontSize: 12 }}>
+        <label style={{ display: "flex", alignItems: "center", gap: 6, cursor: "pointer" }}>
+          <input type="radio" name="slide-round" checked onChange={() => undefined} />
+          No
+        </label>
+        <label style={{ display: "flex", alignItems: "center", gap: 6, cursor: "pointer" }}>
+          <input type="radio" name="slide-round" checked={false} onChange={() => onChange({ ...radius, enabled: true })} />
+          Yes, round the corners
+        </label>
+      </div>
+    );
+  }
+  return <SlideRadiusSizes radius={radius} onChange={onChange} />;
+}
+
+function SlideRadiusSizes({ radius, onChange }: { radius: SlideRadiusValue; onChange: (v: SlideRadiusValue) => void }) {
   const [device, setDevice] = useState<LayoutDevice>("desktop");
   const corners = radius[device] ?? {};
   const inherited = (c: Corner) => {
@@ -209,6 +227,16 @@ function SlideRadiusPanel({ value, onChange }: { value: SlideRadiusValue | undef
   const hasValues = Object.keys(corners).length > 0;
   return (
     <div style={{ minWidth: 0 }}>
+      <div style={{ display: "flex", alignItems: "center", gap: 14, fontSize: 12, marginBottom: 8 }}>
+        <label style={{ display: "flex", alignItems: "center", gap: 6, cursor: "pointer" }}>
+          <input type="radio" name="slide-round" checked={false} onChange={() => onChange({ ...radius, enabled: false })} />
+          No
+        </label>
+        <label style={{ display: "flex", alignItems: "center", gap: 6, cursor: "pointer" }}>
+          <input type="radio" name="slide-round" checked onChange={() => undefined} />
+          Yes, round the corners
+        </label>
+      </div>
       <div role="tablist" aria-label="Screen" style={{ display: "flex", gap: 4, background: "#f0f0f3", borderRadius: 8, padding: 3 }}>
         {DEVICES.map((d) => {
           const on = d.id === device;
@@ -224,7 +252,7 @@ function SlideRadiusPanel({ value, onChange }: { value: SlideRadiusValue | undef
         <button type="button" disabled={!hasValues} onClick={() => onChange({ ...radius, [device]: undefined })} style={{ border: 0, background: "none", fontSize: 11, color: hasValues ? "#2563eb" : "#a1a1aa", cursor: hasValues ? "pointer" : "default", padding: 0 }}>
           Reset {device}
         </button>
-        <InfoTip>Type a size with its unit (12px, 1rem, 50%); a plain number means px. An empty box follows the larger screen. The corners round the whole slide: the picture and, on phones, the text block under it.</InfoTip>
+        <InfoTip>Type a size with its unit (12px, 1rem, 50%); a plain number means px. An empty box follows the larger screen, and with nothing set the corners are 16px. The corners round the whole carousel and every slide, including the text block under the picture on phones.</InfoTip>
       </div>
       <div style={{ display: "grid", gap: 8 }}>
         <div style={{ display: "grid", gap: 4 }}>

@@ -1012,3 +1012,8 @@
 .bsb-lay.bsb-hs-wm-full, .bsb-lay.bsb-hs-wm-contained { margin-left: auto; margin-right: auto; width: 100%; }
 .bsb-lay.bsb-hs-wm-full { max-width: none; }
 .bsb-lay.bsb-hs-wm-contained { max-width: min(var(--mxw, 80rem), calc(100% - 2rem)); }
+
+/* Hero slider rounded corners (HeroSlider.slideRadius.enabled): the carousel container and every slide get the same shape, 16px when no size is set */
+.bsb-lay.bsb-hs-rounded { border-radius: var(--sr-tl, 16px) var(--sr-tr, 16px) var(--sr-br, 16px) var(--sr-bl, 16px); overflow: hidden; }
+.bsb-hs-rounded .bsb-hs, .bsb-hs-rounded .bsb-hs .bsb-hs-slide { border-radius: var(--sr-tl, 16px) var(--sr-tr, 16px) var(--sr-br, 16px) var(--sr-bl, 16px); }
+.bsb-hs-rounded .bsb-hs-media { border-radius: inherit; }
