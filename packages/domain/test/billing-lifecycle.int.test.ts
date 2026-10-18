@@ -160,7 +160,7 @@ describe("M8 Platform Merchant Subscriptions & Billing Lifecycle (ADR-014, PLAN 
     // Verify platform GST tax invoice
     expect(billingInfo.invoices).toHaveLength(1);
     const inv = billingInfo.invoices[0]!;
-    expect(inv.number).toMatch(/^INV-\d{6}-[A-F0-9]{6}$/);
+    expect(inv.number).toMatch(/^BS\/\d{2}-\d{2}\/\d{5}$/);
     expect(inv.amountPaise).toBe(99900);
     expect(inv.taxPaise).toBe(Math.round((99900 * 18) / 118));
     expect(inv.status).toBe("paid");

@@ -1,5 +1,5 @@
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
-import { eq } from "drizzle-orm";
+import { eq, sql } from "drizzle-orm";
 import { schema, createDb } from "@bs/db";
 import { startTestDb, type TestDb } from "@bs/db/test-env";
 import { seedPlatformStaff } from "@bs/db/test-fixtures";
@@ -18,6 +18,12 @@ let rt: Runtime;
 let owner: string;
 let admin: string;
 
+/** CI runs every test file against one shared database: leave no billing state behind and start from none. */
+async function resetBilling() {
+  await rt._db.db.execute(sql`DELETE FROM platform_razorpay_plans`);
+  await rt._db.db.execute(sql`DELETE FROM platform_billing_settings`);
+}
+
 const errorOf = async (p: Promise<unknown>) => (await p.then(() => null, (e: Error) => e))?.message ?? null;
 // drizzle wraps driver errors ("Failed query"); the Postgres message is on the cause.
 const dbErrorOf = async (p: Promise<unknown>) => {
@@ -31,9 +37,11 @@ beforeAll(async () => {
   rt = createRuntime({ service: "platform", databaseUrl: env.as("app_platform"), poolMax: 5 });
   owner = (await seedPlatformStaff(rt._db.db, { email: "billing-owner@platform.test", role: "platform_owner" })).userId;
   admin = (await seedPlatformStaff(rt._db.db, { email: "billing-admin@platform.test", role: "platform_admin" })).userId;
+  await resetBilling();
 }, 180_000);
 
 afterAll(async () => {
+  await resetBilling();
   await rt?.close();
   await env?.stop();
 });

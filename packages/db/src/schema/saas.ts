@@ -77,6 +77,8 @@ export const platformInvoices = pgTable("platform_invoices", {
   issuedAt: timestamp("issued_at", { withTimezone: true }).notNull().default(sql`now()`),
   paidAt: timestamp("paid_at", { withTimezone: true }),
   pdfKey: text("pdf_key"),
+  // The provider payment this invoice is for (unique when set), so one payment is never invoiced twice.
+  providerPaymentId: text("provider_payment_id"),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().default(sql`now()`),
   updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().default(sql`now()`),
 });

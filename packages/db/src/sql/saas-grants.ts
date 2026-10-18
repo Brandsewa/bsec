@@ -21,6 +21,8 @@ export const APP_SAAS_WRITABLE_TABLES = [
   // Promo codes are redeemed while a store is created (ADR-035).
   "promotions",
   "tenant_promotions",
+  // The billing webhook issues gapless invoice numbers and reads the Razorpay plan ids (billing B2, B4).
+  "platform_invoice_counters",
 ] as const;
 
 export const APP_SAAS_GRANTS_SQL = `
@@ -29,6 +31,6 @@ BEGIN
   IF EXISTS (SELECT FROM pg_roles WHERE rolname = 'app_saas') THEN
     GRANT SELECT, INSERT, UPDATE, DELETE ON TABLE ${APP_SAAS_WRITABLE_TABLES.map((t) => `"${t}"`).join(", ")} TO app_saas;
     -- The platform's billing credentials (ADR-036): read-only, for the billing webhook and subscribe paths.
-    GRANT SELECT ON TABLE "platform_billing_settings" TO app_saas;
+    GRANT SELECT ON TABLE "platform_billing_settings", "platform_razorpay_plans" TO app_saas;
   END IF;
 END $$;`;

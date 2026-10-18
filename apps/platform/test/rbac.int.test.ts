@@ -108,6 +108,8 @@ const MIN_ROLE: Record<string, Role | "public"> = {
   "integrations.paymentProviders": "platform_support",
   "integrations.updatePaymentProvider": "platform_admin",
   "integrations.billingSettings": "platform_support",
+  "integrations.billingPlans": "platform_support",
+  "integrations.syncBillingPlans": "platform_owner",
   "integrations.updateBillingSettings": "platform_owner",
   "integrations.testBillingConnection": "platform_owner",
 };
@@ -189,6 +191,8 @@ const INPUT: Record<string, unknown> = {
   "integrations.setDefaultProvider": { id: U },
   "integrations.updatePaymentProvider": { provider: "stripe", enabled: true },
   "integrations.billingSettings": {},
+  "integrations.billingPlans": {},
+  "integrations.syncBillingPlans": {},
   "integrations.updateBillingSettings": { graceDays: 7 },
   "integrations.testBillingConnection": { mode: "test" },
   "integrations.testProvider": { id: U, to: "+919876543210" },

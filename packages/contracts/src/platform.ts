@@ -1334,7 +1334,36 @@ const BillingKeysInput = z.object({
   webhookSecret: z.string().max(200).optional(), // write-only
 });
 
+const BillingPlanIntervalView = z.object({ pricePaise: z.number(), razorpayPlanId: z.string().nullable(), inSync: z.boolean() });
+export const BillingPlansView = z.object({
+  mode: z.enum(["test", "live"]),
+  canSync: z.boolean(),
+  plans: z.array(
+    z.object({
+      planId: z.string(),
+      code: z.string(),
+      name: z.string(),
+      monthly: BillingPlanIntervalView,
+      yearly: BillingPlanIntervalView,
+    }),
+  ),
+});
+export type BillingPlansView = z.infer<typeof BillingPlansView>;
+
 export const platformIntegrationsContract = {
+  billingPlans: oc
+    .route({ method: "GET", path: "/platform/integrations/billing/plans" })
+    .output(BillingPlansView),
+  syncBillingPlans: oc
+    .route({ method: "POST", path: "/platform/integrations/billing/plans/sync" })
+    .output(
+      z.object({
+        mode: z.enum(["test", "live"]),
+        created: z.number(),
+        unchanged: z.number(),
+        failed: z.array(z.object({ plan: z.string(), interval: z.enum(["monthly", "yearly"]), error: z.string() })),
+      }),
+    ),
   billingSettings: oc
     .route({ method: "GET", path: "/platform/integrations/billing/settings" })
     .output(PlatformBillingSettingsView),
