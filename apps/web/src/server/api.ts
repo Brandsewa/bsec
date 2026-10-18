@@ -276,6 +276,8 @@ import {
   listPaymentMethods,
   updateCodMethod,
   getPlanAndBilling,
+  subscribeToPlan,
+  cancelPlanSubscription,
   listAvailablePlans,
   requestPlanChange,
   cancelPlanChangeRequest,
@@ -2643,6 +2645,20 @@ export const storeRouter = os.router({
         .handler(async ({ context }) => {
           if (!context.tenantCtx) throw new Error("Missing tenant context");
           return listAvailablePlans(context.rt, context.tenantCtx);
+        }),
+      subscribe: os.admin.planAndBilling.subscribe
+        .use(requireAdmin)
+        .use(requirePermission("settings.read"))
+        .handler(async ({ context, input }) => {
+          if (!context.tenantCtx) throw new Error("Missing tenant context");
+          return subscribeToPlan(context.rt, context.tenantCtx, input);
+        }),
+      cancelSubscription: os.admin.planAndBilling.cancelSubscription
+        .use(requireAdmin)
+        .use(requirePermission("settings.read"))
+        .handler(async ({ context }) => {
+          if (!context.tenantCtx) throw new Error("Missing tenant context");
+          return cancelPlanSubscription(context.rt, context.tenantCtx);
         }),
       requestChange: os.admin.planAndBilling.requestChange
         .use(requireAdmin)

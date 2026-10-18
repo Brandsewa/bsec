@@ -3,7 +3,7 @@
 Source of truth: `docs/PLAN.html` v2.0 (build order in `docs/BUILD-PLAN-M2-M9.md`). Items are ticked only after verification; the evidence is noted next to each. "From code" means it was read in the repo but not exercised live.
 
 ## In flight
-- claude · `feat/platform-billing` · platform billing (charge merchants with Razorpay subscriptions): slice B1 built (keys in Super Admin), B2 to B9 next; plan `docs/PLATFORM-BILLING-PLAN.md`, ADR-036 · 2026-10-18
+- claude · `feat/platform-billing-b2-b4` · platform billing (charge merchants with Razorpay subscriptions): B1 merged; B2 to B4 built (plan sync, subscribe and cancel, webhook lifecycle with gapless invoices) on `feat/platform-billing-b2-b4`, B5 to B9 next; plan `docs/PLATFORM-BILLING-PLAN.md`, ADR-036 · 2026-10-18
 - claude · `fix/admin-polish-phase-1` · admin and Super Admin polish round, all three phases built (menus bug, auth forms, drawers, friendly IDs, variant builder, shipping zones and tiers, custom fields, promotions, flags, audit log, tenant purge, payments and domains pages, policy rich text); awaiting owner check and commit; plan `docs/ADMIN-SUPERADMIN-POLISH-PLAN.md`, ADR-034, ADR-035, change records `docs/changes/2026-10-17-claude-admin-polish-phase-1.md` and `...-phases-2-3.md` · 2026-10-17
 - claude · `feat/blog-system` · blog system built end to end (phases 1-5), awaiting owner review and merge; plan `docs/BLOG-PLAN.md`, ADR-033, change records `docs/changes/2026-10-15-claude-blog-*` · 2026-10-15
 

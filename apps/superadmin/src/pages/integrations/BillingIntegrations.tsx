@@ -22,6 +22,12 @@ import {
   PageHeader,
   PasswordInput,
   Switch,
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
   toast,
 } from "@bs/ui";
 import type { PlatformBillingSettingsView } from "@bs/contracts";
@@ -154,6 +160,83 @@ function KeysCard({
           </Button>
         </CardFooter>
       </form>
+    </Card>
+  );
+}
+
+function rupees(paise: number): string {
+  return `₹${(paise / 100).toLocaleString("en-IN", { maximumFractionDigits: 0 })}`;
+}
+
+function PlansCard({ canEdit }: { canEdit: boolean }) {
+  const queryClient = useQueryClient();
+  const [syncing, setSyncing] = useState(false);
+  const { data, isLoading } = useQuery({
+    queryKey: ["platform", "integrations", "billing-plans"],
+    queryFn: () => client.integrations.billingPlans(),
+  });
+
+  const sync = async () => {
+    setSyncing(true);
+    try {
+      const res = await client.integrations.syncBillingPlans();
+      if (res.failed.length > 0) toast.error(`${res.failed.length} plan(s) failed: ${res.failed[0]?.error ?? ""}`);
+      else toast.success(res.created > 0 ? `Created ${res.created} Razorpay plan(s)` : "Everything is already in sync");
+      await queryClient.invalidateQueries({ queryKey: ["platform", "integrations", "billing-plans"] });
+    } catch (err) {
+      toast.error(messageOf(err));
+    } finally {
+      setSyncing(false);
+    }
+  };
+
+  const cell = (v: { pricePaise: number; razorpayPlanId: string | null; inSync: boolean }) =>
+    v.pricePaise <= 0 ? (
+      <span className="text-muted-foreground">Free</span>
+    ) : (
+      <div className="space-y-0.5">
+        <div>{rupees(v.pricePaise)}</div>
+        {v.inSync ? <Badge variant="secondary">Synced</Badge> : <Badge variant="destructive">{v.razorpayPlanId ? "Price changed" : "Not synced"}</Badge>}
+      </div>
+    );
+
+  return (
+    <Card>
+      <CardHeader>
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          <CardTitle>Razorpay plans</CardTitle>
+          <Button size="sm" disabled={!canEdit || syncing || !data?.canSync} onClick={() => void sync()}>
+            {syncing ? "Syncing..." : "Sync plans to Razorpay"}
+          </Button>
+        </div>
+        <CardDescription>
+          Razorpay needs a plan for every price a merchant can subscribe to. Sync creates the missing ones for the {data?.mode ?? "test"} account; existing plans are never edited, so current subscribers are not affected when a price changes.
+          {data && !data.canSync ? " Save and enable the keys above first." : ""}
+        </CardDescription>
+      </CardHeader>
+      <CardContent>
+        {isLoading ? <MetricCardsSkeleton count={1} /> : null}
+        {data ? (
+          <Table>
+            <TableHeader>
+              <TableRow>
+                <TableHead>Plan</TableHead>
+                <TableHead>Monthly</TableHead>
+                <TableHead>Yearly</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {data.plans.map((p) => (
+                <TableRow key={p.planId}>
+                  <TableCell className="font-medium">{p.name}</TableCell>
+                  <TableCell>{cell(p.monthly)}</TableCell>
+                  <TableCell>{cell(p.yearly)}</TableCell>
+                </TableRow>
+              ))}
+            </TableBody>
+          </Table>
+        ) : null}
+      </CardContent>
     </Card>
   );
 }
@@ -296,6 +379,8 @@ export function BillingIntegrations() {
             <KeysCard mode="test" view={data.test} active={data.mode === "test"} canEdit={canEdit} onSaved={refresh} />
             <KeysCard mode="live" view={data.live} active={data.mode === "live"} canEdit={canEdit} onSaved={refresh} />
           </div>
+
+          <PlansCard canEdit={canEdit} />
 
           <Card>
             <CardHeader>

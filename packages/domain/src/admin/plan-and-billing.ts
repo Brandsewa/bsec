@@ -1,7 +1,9 @@
 import { and, desc, eq, sql } from "drizzle-orm";
 import { schema, withTenant, QUEUE_NAMES } from "@bs/db";
-import type { Runtime } from "../runtime.ts";
+import { SaasNotConfiguredError, saasDb, type Runtime } from "../runtime.ts";
 import { assertPermission, type TenantContext } from "../context.ts";
+import { cancelTenantSubscription, changeTenantPlan } from "../saas/billing.ts";
+import { loadPlatformBillingCredentials } from "../platform/billing-settings.ts";
 import { resolveEffectiveQuota, DEFAULT_TIER_TABLE, type PlanQuotaKey } from "../system/quotas.ts";
 
 export interface PlanAndBillingUsageItem {
@@ -38,6 +40,17 @@ export interface PlanAndBillingView {
   } | null;
   usage: PlanAndBillingUsageItem[];
   invoices: PlanAndBillingInvoiceItem[];
+  /** Paying by card or UPI through the platform's Razorpay account (billing B3). */
+  billing: {
+    /** True once the platform owner has enabled billing with keys. */
+    available: boolean;
+    /** Billing runs in Razorpay test mode: no real money moves. */
+    testMode: boolean;
+    /** A Razorpay subscription exists (authorised or charging). */
+    hasSubscription: boolean;
+    /** When an active subscription will end because it was cancelled. */
+    cancelAt: string | null;
+  };
   openPlanChangeRequest: {
     id: string;
     requestedBy: string;
@@ -236,10 +249,23 @@ export async function getPlanAndBilling(
       }
     : null;
 
+  // Online payment is simply "not available" where the self-service database role is not configured (local dev, tests).
+  let creds: Awaited<ReturnType<typeof loadPlatformBillingCredentials>> = null;
+  try {
+    creds = await loadPlatformBillingCredentials(saasDb(rt));
+  } catch (e) {
+    if (!(e instanceof SaasNotConfiguredError)) throw e;
+  }
   return {
     plan: planView,
     usage,
     invoices,
+    billing: {
+      available: Boolean(creds),
+      testMode: creds?.mode !== "live",
+      hasSubscription: Boolean(sub?.providerSubscriptionId),
+      cancelAt: sub?.cancelAt?.toISOString() ?? null,
+    },
     openPlanChangeRequest,
   };
 }
@@ -454,4 +480,93 @@ export async function cancelPlanChangeRequest(
   });
 
   return { ok: true };
+}
+
+function storeOwnerId(ctx: TenantContext, what: string): string {
+  if (!ctx.roles.includes("store_owner") || ctx.actor.type !== "staff") {
+    throw new Error(`Forbidden: Only the store owner can ${what}.`);
+  }
+  return ctx.actor.userId;
+}
+
+/** The first charge must be later than this many seconds from now (Razorpay rejects a start_at that is too close). */
+const MIN_START_AHEAD_MS = 15 * 60 * 1000;
+
+/**
+ * Starts a paid subscription for the store owner (billing B3). Returns Razorpay's hosted page where the owner authorises
+ * a card or UPI AutoPay. The first charge waits until the trial or a free-months promotion ends, so nobody pays early.
+ * The plan only changes after the payment webhook confirms the first charge.
+ */
+export async function subscribeToPlan(
+  rt: Runtime,
+  ctx: TenantContext,
+  input: { planCode: string; interval: "monthly" | "yearly" },
+): Promise<{ checkoutUrl: string | null; firstChargeAt: string | null; testMode: boolean }> {
+  assertPermission(ctx, "settings.read");
+  const userId = storeOwnerId(ctx, "subscribe to a plan");
+  const db = rt._db.db;
+  const creds = await loadPlatformBillingCredentials(saasDb(rt));
+  if (!creds) throw new Error("Bad Request: online plan payment is not available yet. Request a plan change instead.");
+
+  const [owner] = await db.select({ email: schema.users.email, name: schema.users.name }).from(schema.users).where(eq(schema.users.id, userId)).limit(1);
+  if (!owner) throw new Error("Not Found: owner account");
+
+  const [sub] = await db.select().from(schema.subscriptions).where(eq(schema.subscriptions.tenantId, ctx.tenantId)).orderBy(desc(schema.subscriptions.createdAt)).limit(1);
+  if (sub?.status === "active" && sub.providerSubscriptionId) {
+    throw new Error("Bad Request: this store already has an active subscription. Cancel it before choosing another plan.");
+  }
+
+  // Never charge before the trial or a free-months promotion ends.
+  const candidates: number[] = [];
+  if (sub?.status === "trialing" && sub.currentPeriodEnd) candidates.push(sub.currentPeriodEnd.getTime());
+  const [promo] = await saasDb(rt)
+    .select({ endsAt: schema.tenantPromotions.endsAt })
+    .from(schema.tenantPromotions)
+    .where(and(eq(schema.tenantPromotions.tenantId, ctx.tenantId), eq(schema.tenantPromotions.status, "active"), eq(schema.tenantPromotions.kind, "free_months")))
+    .limit(1);
+  if (promo) candidates.push(promo.endsAt.getTime());
+  const target = candidates.length > 0 ? Math.max(...candidates) : 0;
+  const startAtMs = target > Date.now() + MIN_START_AHEAD_MS ? target : 0;
+
+  const res = await changeTenantPlan(rt, {
+    tenantId: ctx.tenantId,
+    planCode: input.planCode,
+    interval: input.interval,
+    customerEmail: owner.email,
+    ...(owner.name ? { customerName: owner.name } : {}),
+    ...(startAtMs ? { startAt: Math.floor(startAtMs / 1000) } : {}),
+  });
+
+  await withTenant(db, ctx.tenantId, async (tx) => {
+    await tx.insert(schema.auditLogs).values({
+      tenantId: ctx.tenantId,
+      actorType: "staff",
+      actorId: userId,
+      action: "subscription.started",
+      targetType: "subscription",
+      targetId: res.providerSubscriptionId,
+      diff: { planCode: { before: null, after: input.planCode }, interval: { before: null, after: input.interval }, firstChargeAt: { before: null, after: startAtMs ? new Date(startAtMs).toISOString() : null } },
+    });
+  });
+
+  return { checkoutUrl: res.shortUrl ?? null, firstChargeAt: startAtMs ? new Date(startAtMs).toISOString() : null, testMode: creds.mode !== "live" };
+}
+
+/** Cancels the store's paid subscription at the end of the paid period (billing B3). Owner only. */
+export async function cancelPlanSubscription(rt: Runtime, ctx: TenantContext): Promise<{ cancelAt: string | null }> {
+  assertPermission(ctx, "settings.read");
+  const userId = storeOwnerId(ctx, "cancel the subscription");
+  const res = await cancelTenantSubscription(rt, ctx.tenantId);
+  await withTenant(rt._db.db, ctx.tenantId, async (tx) => {
+    await tx.insert(schema.auditLogs).values({
+      tenantId: ctx.tenantId,
+      actorType: "staff",
+      actorId: userId,
+      action: "subscription.cancel_requested",
+      targetType: "subscription",
+      targetId: ctx.tenantId,
+      diff: { cancelAt: { before: null, after: res.cancelAt?.toISOString() ?? null } },
+    });
+  });
+  return { cancelAt: res.cancelAt?.toISOString() ?? null };
 }

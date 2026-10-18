@@ -1614,6 +1614,12 @@ export const PlanAndBillingView = z.object({
     .nullable(),
   usage: z.array(PlanAndBillingUsageItem),
   invoices: z.array(PlanAndBillingInvoiceItem),
+  billing: z.object({
+    available: z.boolean(),
+    testMode: z.boolean(),
+    hasSubscription: z.boolean(),
+    cancelAt: z.string().nullable(),
+  }),
   openPlanChangeRequest: z
     .object({
       id: z.string().uuid(),
@@ -4487,6 +4493,13 @@ export const adminContract = {
           message: z.string(),
         }),
       ),
+    subscribe: oc
+      .route({ method: "POST", path: "/admin/plan-and-billing/subscribe" })
+      .input(z.object({ planCode: z.string().min(1).max(40), interval: z.enum(["monthly", "yearly"]) }))
+      .output(z.object({ checkoutUrl: z.string().nullable(), firstChargeAt: z.string().nullable(), testMode: z.boolean() })),
+    cancelSubscription: oc
+      .route({ method: "POST", path: "/admin/plan-and-billing/cancel-subscription" })
+      .output(z.object({ cancelAt: z.string().nullable() })),
     cancelRequest: oc
       .route({ method: "POST", path: "/admin/plan-and-billing/cancel-request" })
       .input(z.object({ id: z.string().uuid() }))

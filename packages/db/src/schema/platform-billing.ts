@@ -1,5 +1,5 @@
 import { sql } from "drizzle-orm";
-import { boolean, integer, pgTable, text, timestamp, uuid } from "drizzle-orm/pg-core";
+import { bigint, boolean, integer, pgTable, text, timestamp, unique, uuid } from "drizzle-orm/pg-core";
 
 /**
  * Platform billing credentials (ADR-036). The platform's own Razorpay account for charging merchants; separate from
@@ -29,4 +29,28 @@ export const platformBillingSettings = pgTable("platform_billing_settings", {
   lastTestError: text("last_test_error"),
   updatedBy: uuid("updated_by"),
   updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().default(sql`now()`),
+});
+
+/**
+ * Razorpay plans the platform created for its own plans (billing B2). Razorpay plans cannot be edited and differ between
+ * test and live mode, so each (plan, interval, mode, amount) is its own row; the newest row for the active mode is used.
+ */
+export const platformRazorpayPlans = pgTable(
+  "platform_razorpay_plans",
+  {
+    id: uuid("id").default(sql`uuidv7()`).primaryKey(),
+    planId: uuid("plan_id").notNull(),
+    interval: text("interval").notNull(), // monthly | yearly
+    mode: text("mode").notNull(), // test | live
+    razorpayPlanId: text("razorpay_plan_id").notNull(),
+    amountPaise: bigint("amount_paise", { mode: "number" }).notNull(),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().default(sql`now()`),
+  },
+  (t) => [unique("platform_razorpay_plans_uniq").on(t.planId, t.interval, t.mode, t.amountPaise)],
+);
+
+/** Gapless platform invoice numbering per financial-year series (billing B4). Locked by the issuing transaction. */
+export const platformInvoiceCounters = pgTable("platform_invoice_counters", {
+  series: text("series").primaryKey(),
+  lastNumber: integer("last_number").notNull().default(0),
 });
