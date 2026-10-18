@@ -544,6 +544,7 @@
   --mxh: var(--l-d-mxh);
   --ar: var(--l-d-ar);
   --rd: var(--l-d-rd);
+  --sr-tl: var(--sr-d-tl); --sr-tr: var(--sr-d-tr); --sr-br: var(--sr-d-br); --sr-bl: var(--sr-d-bl);
   border-radius: var(--rd, 0);
   margin-top: var(--mt); margin-bottom: var(--mb);
   margin-left: var(--ml, auto); margin-right: var(--mr, auto);
@@ -571,6 +572,7 @@
     --mxh: var(--l-t-mxh, var(--l-d-mxh));
     --ar: var(--l-t-ar, var(--l-d-ar));
     --rd: var(--l-t-rd, var(--l-d-rd));
+    --sr-tl: var(--sr-t-tl, var(--sr-d-tl)); --sr-tr: var(--sr-t-tr, var(--sr-d-tr)); --sr-br: var(--sr-t-br, var(--sr-d-br)); --sr-bl: var(--sr-t-bl, var(--sr-d-bl));
   }
 }
 @media (max-width: 767px) {
@@ -591,10 +593,11 @@
     --mxh: var(--l-m-mxh, var(--l-t-mxh, var(--l-d-mxh)));
     --ar: var(--l-m-ar, var(--l-t-ar, var(--l-d-ar)));
     --rd: var(--l-m-rd, var(--l-t-rd, var(--l-d-rd)));
+    --sr-tl: var(--sr-m-tl, var(--sr-t-tl, var(--sr-d-tl))); --sr-tr: var(--sr-m-tr, var(--sr-t-tr, var(--sr-d-tr))); --sr-br: var(--sr-m-br, var(--sr-t-br, var(--sr-d-br))); --sr-bl: var(--sr-m-bl, var(--sr-t-bl, var(--sr-d-bl)));
   }
 }
 /* Height, min/max height and aspect ratio apply to the slider's slides (its own preset height gives way). */
-.bsb-hs .bsb-hs-slide { height: var(--h, var(--hs-h)); min-height: var(--mnh, 0px); max-height: var(--mxh, none); border-radius: var(--rd, 0); overflow: hidden; }
+.bsb-hs .bsb-hs-slide { height: var(--h, var(--hs-h)); min-height: var(--mnh, 0px); max-height: var(--mxh, none); border-radius: var(--sr-tl, var(--rd, 0)) var(--sr-tr, var(--rd, 0)) var(--sr-br, var(--rd, 0)) var(--sr-bl, var(--rd, 0)); overflow: hidden; }
 .bsb-hs-ar .bsb-hs-slide { height: auto; aspect-ratio: var(--ar); }
 /* ...and to the showcase box itself. */
 .bsb-psc.bsb-lay { height: var(--h); min-height: var(--mnh); max-height: var(--mxh); aspect-ratio: var(--ar); }
@@ -983,3 +986,29 @@
   .bsb-hs-m-below .bsb-hs-arrow { top: calc(var(--h, var(--hs-h)) / 2); }
   .bsb-hs-m-below .bsb-hs-pos-center .bsb-hs-content, .bsb-hs-m-below.bsb-hs-pos-center .bsb-hs-content { padding-bottom: 3rem; }
 }
+
+/* Announcement bar: linked text without underline plus an arrow, side arrows for several messages */
+.bsb-ann { position: relative; }
+.bsb-ann-link { color: inherit; text-decoration: none; display: inline-flex; align-items: center; gap: 0.35em; }
+.bsb-ann-link:hover .bsb-ann-go { transform: translateX(3px); }
+.bsb-ann-link:focus-visible { outline: 2px solid currentColor; outline-offset: 3px; border-radius: 3px; }
+.bsb-ann-go { display: inline-block; transition: transform 0.15s; line-height: 1; }
+.bsb-ann-nav { position: absolute; top: 50%; transform: translateY(-50%); z-index: 1; border: 0; background: transparent; color: inherit; font: inherit; font-size: 1.35em; line-height: 1; padding: 0.15em 0.55em; cursor: pointer; opacity: 0.75; }
+.bsb-ann-nav:hover { opacity: 1; }
+.bsb-ann-nav:focus-visible { outline: 2px solid currentColor; outline-offset: 1px; border-radius: 4px; }
+.bsb-ann-prev { left: 0.25rem; } .bsb-ann-next { right: 0.25rem; }
+.bsb-ann-rotate { padding-left: 2.25rem !important; padding-right: 2.25rem !important; }
+/* After an arrow is used the chosen message stays (data-ann-i) and the automatic rotation stops. */
+.bsb-ann[data-ann-i] .bsb-ann-msg { animation: none; opacity: 0; }
+.bsb-ann[data-ann-i="0"] .bsb-ann-msg:nth-of-type(1) { opacity: 1; }
+.bsb-ann[data-ann-i="1"] .bsb-ann-msg:nth-of-type(2) { opacity: 1; }
+.bsb-ann[data-ann-i="2"] .bsb-ann-msg:nth-of-type(3) { opacity: 1; }
+.bsb-ann[data-ann-i="3"] .bsb-ann-msg:nth-of-type(4) { opacity: 1; }
+.bsb-ann[data-ann-i="4"] .bsb-ann-msg:nth-of-type(5) { opacity: 1; }
+.bsb-ann[data-ann-i="5"] .bsb-ann-msg:nth-of-type(6) { opacity: 1; }
+@media (prefers-reduced-motion: reduce) { .bsb-ann-go { transition: none; } }
+
+/* Hero slider width (HeroSlider.widthMode): always centred, whatever side margins or width the Section panel holds */
+.bsb-lay.bsb-hs-wm-full, .bsb-lay.bsb-hs-wm-contained { margin-left: auto; margin-right: auto; width: 100%; }
+.bsb-lay.bsb-hs-wm-full { max-width: none; }
+.bsb-lay.bsb-hs-wm-contained { max-width: min(var(--mxw, 80rem), calc(100% - 2rem)); }

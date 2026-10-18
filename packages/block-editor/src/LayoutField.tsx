@@ -1,6 +1,6 @@
 import { useState, type CSSProperties, type ReactNode } from "react";
 import type { CustomField } from "@puckeditor/core";
-import { LAYOUT_RULES, inheritedLayoutValue, isValidLayoutValue, type Layout, type LayoutDevice, type LayoutKey } from "@bs/blocks";
+import { LAYOUT_RULES, inheritedLayoutValue, isValidLayoutValue, type Corner, type Layout, type LayoutDevice, type LayoutKey } from "@bs/blocks";
 
 /**
  * A page-builder style layout panel for one widget: margin, padding and sizing, per device. Desktop holds the
@@ -88,147 +88,164 @@ function InfoTip({ children }: { children: ReactNode }) {
   );
 }
 
-const ALL_SIDES: Record<"margin" | "padding", [LayoutKey, LayoutKey, LayoutKey, LayoutKey]> = {
-  margin: ["marginTop", "marginRight", "marginBottom", "marginLeft"],
-  padding: ["paddingTop", "paddingRight", "paddingBottom", "paddingLeft"],
-};
-const COLS = "minmax(0, 0.9fr) repeat(3, minmax(0, 1fr))";
-
 /**
- * The panel is one compact grid: a row per setting and a column per device (desktop, tablet, mobile), like the logo size
- * editor. Margin and padding take one value for all sides; "Sides" opens the four sides when they should differ. A box a
- * device leaves empty follows the larger device (shown as its placeholder). Min and max sizes and the aspect ratio sit
- * under "More".
+ * The layout panel: tabs for the screen (Desktop, Tablet, Mobile) and, in each tab, one row per setting with its values side
+ * by side: Margin and Padding (Top, Right, Left, Bottom), Width and Height (Normal, Min, Max), then Aspect ratio and, for
+ * widgets that have it, Border radius. A box a device leaves empty follows the larger device (shown as its placeholder).
  */
-function LayoutPanel({ value, onChange }: { value: Layout | undefined; onChange: (v: Layout) => void }) {
+function LayoutPanel({ value, onChange, radius }: { value: Layout | undefined; onChange: (v: Layout) => void; radius: boolean }) {
   const layout: Layout = value ?? {};
-  const [sides, setSides] = useState<{ margin: boolean; padding: boolean }>({ margin: false, padding: false });
-  const [more, setMore] = useState(false);
+  const [device, setDevice] = useState<LayoutDevice>("desktop");
 
-  const get = (d: LayoutDevice, k: LayoutKey) => layout[d]?.[k];
-  const inheritedFor = (d: LayoutDevice, k: LayoutKey) => inheritedLayoutValue(layout, d, k);
-  const setMany = (d: LayoutDevice, patch: Partial<Record<LayoutKey, string | undefined>>) => {
-    const next: Record<string, string> = {};
-    for (const [key, val] of Object.entries(layout[d] ?? {})) if (val && !(key in patch)) next[key] = val;
-    for (const [key, val] of Object.entries(patch)) if (val) next[key] = val;
-    onChange({ ...layout, [d]: Object.keys(next).length > 0 ? next : undefined });
+  const get = (k: LayoutKey) => layout[device]?.[k];
+  const inheritedFor = (k: LayoutKey) => inheritedLayoutValue(layout, device, k);
+  const set = (k: LayoutKey, v: string | undefined) => {
+    const kept = Object.entries(layout[device] ?? {}).filter(([key, val]) => key !== k && val);
+    const values = Object.fromEntries(v === undefined || v === "" ? kept : [...kept, [k, v]]);
+    onChange({ ...layout, [device]: Object.keys(values).length > 0 ? values : undefined });
   };
-  const hasAny = DEVICES.some((d) => Object.keys(layout[d.id] ?? {}).length > 0);
+  const hasValues = Object.keys(layout[device] ?? {}).length > 0;
 
-  const rowStyle: CSSProperties = { display: "grid", gridTemplateColumns: COLS, gap: 6, alignItems: "center" };
-  const rowTitle: CSSProperties = { ...small, fontWeight: 600, color: "#18181b" };
-
-  const row = (title: string, k: LayoutKey) => (
-    <div key={k} style={rowStyle}>
-      <span style={rowTitle}>{title}</span>
-      {DEVICES.map((d) => (
-        <LengthInput key={d.id} k={k} label={`${title} (${d.label})`} compactLabel value={get(d.id, k)} inherited={inheritedFor(d.id, k)} onChange={(v) => setMany(d.id, { [k]: v })} />
-      ))}
+  const row = (title: string, cells: Array<[LayoutKey, string]>) => (
+    <div key={title} style={{ display: "grid", gap: 4 }}>
+      <span style={{ ...small, fontWeight: 700, color: "#18181b" }}>{title}</span>
+      <div style={{ display: "grid", gridTemplateColumns: `repeat(${cells.length}, minmax(0, 1fr))`, gap: 6 }}>
+        {cells.map(([k, caption]) => (
+          <div key={k} style={{ display: "grid", gap: 2, minWidth: 0 }}>
+            <LengthInput k={k} label={`${title} ${caption} (${device})`} compactLabel value={get(k)} inherited={inheritedFor(k)} onChange={(v) => set(k, v)} />
+            <span style={{ fontSize: 10, color: "#71717a", textAlign: "center" }}>{caption}</span>
+          </div>
+        ))}
+      </div>
     </div>
   );
 
-  /** Margin or padding: one value for every side, or the four sides. */
-  const spacing = (title: string, group: "margin" | "padding") => {
-    const keys = ALL_SIDES[group];
-    const open = sides[group];
-    const sideNames = ["Top", "Right", "Bottom", "Left"];
-    return (
-      <div key={group} style={{ display: "grid", gap: 6 }}>
-        <div style={rowStyle}>
-          <span style={rowTitle}>
-            {title}
-            <button type="button" aria-expanded={open} onClick={() => setSides((s) => ({ ...s, [group]: !s[group] }))} style={{ display: "block", border: 0, background: "none", padding: 0, fontSize: 10, color: "#2563eb", cursor: "pointer" }}>
-              {open ? "All sides" : "Sides"}
-            </button>
-          </span>
-          {DEVICES.map((d) => {
-            const values = keys.map((k) => get(d.id, k));
-            const same = values.every((v) => v === values[0]);
-            return (
-              <LengthInput
-                key={d.id}
-                k={keys[0]}
-                label={`${title} all sides (${d.label})`}
-                compactLabel
-                value={same ? values[0] : undefined}
-                inherited={same ? inheritedFor(d.id, keys[0]) : "mixed"}
-                onChange={(v) => setMany(d.id, Object.fromEntries(keys.map((k) => [k, v])))}
-              />
-            );
-          })}
-        </div>
-        {open
-          ? keys.map((k, i) => (
-              <div key={k} style={rowStyle}>
-                <span style={{ ...small, paddingLeft: 8 }}>{sideNames[i]}</span>
-                {DEVICES.map((d) => (
-                  <LengthInput key={d.id} k={k} label={`${title} ${(sideNames[i] ?? "").toLowerCase()} (${d.label})`} compactLabel value={get(d.id, k)} inherited={inheritedFor(d.id, k)} onChange={(v) => setMany(d.id, { [k]: v })} />
-                ))}
-              </div>
-            ))
-          : null}
-      </div>
-    );
-  };
-
   return (
     <div style={{ minWidth: 0 }}>
-      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 8 }}>
-        <button type="button" disabled={!hasAny} onClick={() => onChange({})} style={{ border: 0, background: "none", fontSize: 11, color: hasAny ? "#2563eb" : "#a1a1aa", cursor: hasAny ? "pointer" : "default", padding: 0 }}>
-          Reset all
+      <div role="tablist" aria-label="Screen" style={{ display: "flex", gap: 4, background: "#f0f0f3", borderRadius: 8, padding: 3 }}>
+        {DEVICES.map((d) => {
+          const on = d.id === device;
+          const touched = Object.keys(layout[d.id] ?? {}).length > 0;
+          return (
+            <button
+              key={d.id}
+              type="button"
+              role="tab"
+              aria-selected={on}
+              onClick={() => setDevice(d.id)}
+              style={{ flex: 1, border: 0, borderRadius: 6, padding: "5px 0", fontSize: 11, fontWeight: 600, cursor: "pointer", background: on ? "#fff" : "transparent", color: on ? "#18181b" : "#52525b", boxShadow: on ? "0 1px 2px rgba(0,0,0,.12)" : "none" }}
+            >
+              {d.label}
+              {touched ? (
+                <span aria-hidden="true" style={{ marginLeft: 4, color: "#2563eb" }}>
+                  ●
+                </span>
+              ) : null}
+            </button>
+          );
+        })}
+      </div>
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", margin: "6px 0 10px" }}>
+        <button type="button" disabled={!hasValues} onClick={() => onChange({ ...layout, [device]: undefined })} style={{ border: 0, background: "none", fontSize: 11, color: hasValues ? "#2563eb" : "#a1a1aa", cursor: hasValues ? "pointer" : "default", padding: 0 }}>
+          Reset {device}
         </button>
         <InfoTip>
-          Type a size with its unit: <strong>24px</strong>, <strong>1.5rem</strong>, <strong>2em</strong> or <strong>50%</strong> (widths). A plain number means px. Margins also accept <strong>auto</strong>. An empty box follows the larger screen.
+          {device === "desktop" ? "Base values for every screen. " : `Overrides for ${device} and smaller; an empty box follows the larger screen. `}
+          Type a size with its unit: <strong>24px</strong>, <strong>1.5rem</strong>, <strong>2em</strong> or <strong>50%</strong> (widths). A plain number means px. Margins also accept <strong>auto</strong>.
         </InfoTip>
       </div>
-      <div style={{ ...rowStyle, marginBottom: 6 }}>
-        <span />
-        {DEVICES.map((d) => (
-          <span key={d.id} style={{ ...small, fontWeight: 700, color: "#18181b", textAlign: "center" }}>
-            {d.label}
-          </span>
-        ))}
-      </div>
-      <div style={{ display: "grid", gap: 8 }}>
-        {spacing("Margin", "margin")}
-        {spacing("Padding", "padding")}
-        {row("Width", "width")}
-        {row("Height", "height")}
-        {row("Border radius", "radius")}
-      </div>
-      <button type="button" aria-expanded={more} onClick={() => setMore((m) => !m)} style={{ marginTop: 10, border: 0, background: "none", padding: 0, fontSize: 11, fontWeight: 600, color: "#2563eb", cursor: "pointer" }}>
-        {more ? "Fewer options" : "More: min and max sizes, aspect ratio"}
-      </button>
-      {more ? (
-        <div style={{ display: "grid", gap: 8, marginTop: 8 }}>
-          {row("Min. width", "minWidth")}
-          {row("Min. height", "minHeight")}
-          {row("Max. width", "maxWidth")}
-          {row("Max. height", "maxHeight")}
-          <div style={rowStyle}>
-            <span style={rowTitle}>Aspect ratio</span>
-            {DEVICES.map((d) => (
-              <input
-                key={d.id}
-                aria-label={`Aspect ratio (${d.label})`}
-                value={get(d.id, "aspectRatio") ?? ""}
-                placeholder={inheritedFor(d.id, "aspectRatio") ?? "16 / 9"}
-                onChange={(e) => {
-                  const raw = e.target.value.replace(/[^0-9./ ]/g, "").slice(0, 16);
-                  setMany(d.id, { aspectRatio: raw === "" ? undefined : raw });
-                }}
-                style={{ minWidth: 0, width: "100%", boxSizing: "border-box", border: "1px solid #e4e4e7", borderRadius: 7, background: "#fafafa", padding: "4px 6px", fontSize: 12, color: "#18181b", textAlign: "center" }}
-              />
-            ))}
-          </div>
+      <div style={{ display: "grid", gap: 12 }}>
+        {row("Margin", [["marginTop", "T"], ["marginRight", "R"], ["marginLeft", "L"], ["marginBottom", "B"]])}
+        {row("Padding", [["paddingTop", "T"], ["paddingRight", "R"], ["paddingLeft", "L"], ["paddingBottom", "B"]])}
+        {row("Width", [["width", "N"], ["minWidth", "Min"], ["maxWidth", "Max"]])}
+        {row("Height", [["height", "N"], ["minHeight", "Min"], ["maxHeight", "Max"]])}
+        <div style={{ display: "grid", gap: 4 }}>
+          <span style={{ ...small, fontWeight: 700, color: "#18181b" }}>Aspect ratio</span>
+          <input
+            aria-label={`Aspect ratio (${device})`}
+            value={get("aspectRatio") ?? ""}
+            placeholder={inheritedFor("aspectRatio") ?? "16 / 9"}
+            onChange={(e) => {
+              const raw = e.target.value.replace(/[^0-9./ ]/g, "").slice(0, 16);
+              set("aspectRatio", raw === "" ? undefined : raw);
+            }}
+            style={{ minWidth: 0, width: "100%", boxSizing: "border-box", border: "1px solid #e4e4e7", borderRadius: 7, background: "#fafafa", padding: "4px 8px", fontSize: 12, color: "#18181b", textAlign: "center" }}
+          />
         </div>
-      ) : null}
+        {radius ? row("Border radius", [["radius", "All corners"]]) : null}
+      </div>
     </div>
   );
 }
 
-export const layoutField = (label: string): CustomField<Layout | undefined> => ({
+/** `radius: false` leaves out the border radius row (the Hero slider has its own slide corner controls). */
+export const layoutField = (label: string, options: { radius?: boolean } = {}): CustomField<Layout | undefined> => ({
   type: "custom",
   label,
-  render: ({ value, onChange }) => <LayoutPanel value={value} onChange={onChange} />,
+  render: ({ value, onChange }) => <LayoutPanel value={value} onChange={onChange} radius={options.radius !== false} />,
+});
+
+type SlideRadiusValue = { [D in LayoutDevice]?: { [C in Corner]?: string | undefined } | undefined };
+const CORNER_CAPTIONS: Array<[Corner, string]> = [["topLeft", "Top left"], ["topRight", "Top right"], ["bottomRight", "Bottom right"], ["bottomLeft", "Bottom left"]];
+
+/** Rounded corners of the slides: device tabs like the layout panel, one box per corner and an "All" box that sets the four together. */
+function SlideRadiusPanel({ value, onChange }: { value: SlideRadiusValue | undefined; onChange: (v: SlideRadiusValue) => void }) {
+  const radius: SlideRadiusValue = value ?? {};
+  const [device, setDevice] = useState<LayoutDevice>("desktop");
+  const corners = radius[device] ?? {};
+  const inherited = (c: Corner) => {
+    const order: LayoutDevice[] = device === "mobile" ? ["tablet", "desktop"] : device === "tablet" ? ["desktop"] : [];
+    for (const d of order) if (radius[d]?.[c]) return radius[d]?.[c];
+    return undefined;
+  };
+  const setCorners = (patch: Partial<Record<Corner, string | undefined>>) => {
+    const next: Record<string, string> = {};
+    for (const [k, v] of Object.entries(corners)) if (v && !(k in patch)) next[k] = v;
+    for (const [k, v] of Object.entries(patch)) if (v) next[k] = v;
+    onChange({ ...radius, [device]: Object.keys(next).length > 0 ? next : undefined });
+  };
+  const values = CORNER_CAPTIONS.map(([c]) => corners[c]);
+  const same = values.every((v) => v === values[0]);
+  const hasValues = Object.keys(corners).length > 0;
+  return (
+    <div style={{ minWidth: 0 }}>
+      <div role="tablist" aria-label="Screen" style={{ display: "flex", gap: 4, background: "#f0f0f3", borderRadius: 8, padding: 3 }}>
+        {DEVICES.map((d) => {
+          const on = d.id === device;
+          return (
+            <button key={d.id} type="button" role="tab" aria-selected={on} onClick={() => setDevice(d.id)} style={{ flex: 1, border: 0, borderRadius: 6, padding: "5px 0", fontSize: 11, fontWeight: 600, cursor: "pointer", background: on ? "#fff" : "transparent", color: on ? "#18181b" : "#52525b", boxShadow: on ? "0 1px 2px rgba(0,0,0,.12)" : "none" }}>
+              {d.label}
+              {Object.keys(radius[d.id] ?? {}).length > 0 ? <span aria-hidden="true" style={{ marginLeft: 4, color: "#2563eb" }}>●</span> : null}
+            </button>
+          );
+        })}
+      </div>
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", margin: "6px 0 8px" }}>
+        <button type="button" disabled={!hasValues} onClick={() => onChange({ ...radius, [device]: undefined })} style={{ border: 0, background: "none", fontSize: 11, color: hasValues ? "#2563eb" : "#a1a1aa", cursor: hasValues ? "pointer" : "default", padding: 0 }}>
+          Reset {device}
+        </button>
+        <InfoTip>Type a size with its unit (12px, 1rem, 50%); a plain number means px. An empty box follows the larger screen. The corners round the whole slide: the picture and, on phones, the text block under it.</InfoTip>
+      </div>
+      <div style={{ display: "grid", gap: 8 }}>
+        <div style={{ display: "grid", gap: 4 }}>
+          <span style={{ ...small, fontWeight: 700, color: "#18181b" }}>All corners</span>
+          <LengthInput k="radius" label={`All corners (${device})`} compactLabel value={same ? values[0] : undefined} inherited={same ? inherited("topLeft") : "mixed"} onChange={(v) => setCorners(Object.fromEntries(CORNER_CAPTIONS.map(([c]) => [c, v])))} />
+        </div>
+        <div style={{ display: "grid", gridTemplateColumns: "repeat(4, minmax(0, 1fr))", gap: 6 }}>
+          {CORNER_CAPTIONS.map(([c, caption]) => (
+            <div key={c} style={{ display: "grid", gap: 2, minWidth: 0 }}>
+              <LengthInput k="radius" label={`${caption} (${device})`} compactLabel value={corners[c]} inherited={inherited(c)} onChange={(v) => setCorners({ [c]: v })} />
+              <span style={{ fontSize: 10, color: "#71717a", textAlign: "center" }}>{caption.replace("Top ", "T ").replace("Bottom ", "B ").replace("left", "L").replace("right", "R")}</span>
+            </div>
+          ))}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+export const slideRadiusField = (label: string): CustomField<SlideRadiusValue | undefined> => ({
+  type: "custom",
+  label,
+  render: ({ value, onChange }) => <SlideRadiusPanel value={value} onChange={onChange} />,
 });

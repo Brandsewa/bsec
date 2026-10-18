@@ -105,4 +105,17 @@ describe("hero slider on phones and layout radius", () => {
     expect(isValidLayoutValue("radius", "red")).toBe(false);
     expect(layoutStyle({ desktop: { radius: "16px" }, mobile: { radius: "8px" } })).toMatchObject({ "--l-d-rd": "16px", "--l-m-rd": "8px" });
   });
+
+  it("is full width by default, can be contained, and keeps its own slide corners per device", () => {
+    expect(HeroSliderSchema.parse({}).widthMode).toBe("full");
+    expect(render([block("HeroSlider")])).toContain("bsb-hs-wm-full");
+    expect(render([block("HeroSlider", { widthMode: "contained" })])).toContain("bsb-hs-wm-contained");
+    expect(HeroSliderSchema.safeParse({ widthMode: "wide" }).success).toBe(false);
+    const html = render([block("HeroSlider", { slideRadius: { desktop: { topLeft: "24px", topRight: "24px" }, mobile: { bottomLeft: "8px" } } })]);
+    expect(html).toContain("--sr-d-tl:24px");
+    expect(html).toContain("--sr-d-tr:24px");
+    expect(html).toContain("--sr-m-bl:8px");
+    expect(HeroSliderSchema.safeParse({ slideRadius: { desktop: { topLeft: "red" } } }).success).toBe(false);
+    expect(HeroSliderSchema.parse({}).slideRadius).toEqual({ desktop: {}, tablet: {}, mobile: {} });
+  });
 });

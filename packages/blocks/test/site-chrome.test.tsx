@@ -117,4 +117,22 @@ describe("announcement bar", () => {
     expect(BannerSchema.safeParse({ text: "x", interval: 1 }).success).toBe(false);
     expect(BannerSchema.safeParse({ text: "x", messages: Array.from({ length: 6 }, () => ({ text: "m" })) }).success).toBe(false);
   });
+
+  it("shows linked text without an underline and with a small arrow", () => {
+    const html = render([bar({ link: "/sale" })]);
+    expect(html).toContain('class="bsb-ann-link"');
+    expect(html).toContain("bsb-ann-go");
+    expect(html).not.toContain("underline");
+    expect(render([bar()])).not.toContain("bsb-ann-go");
+  });
+
+  it("draws previous and next arrows only when there are several messages, through the host's wrapper", () => {
+    const several = render([bar({ messages: [{ text: "Second" }] })]);
+    expect(several).toContain('data-ann-dir="-1"');
+    expect(several).toContain('data-ann-dir="1"');
+    expect(render([bar()])).not.toContain("data-ann-dir");
+    expect(render([bar({ messages: [{ text: "Second" }], rotate: false })])).not.toContain("data-ann-dir");
+    const wrapped = render([bar({ messages: [{ text: "Second" }] })], { renderBanner: ({ children }: { children: unknown }) => <section data-host="banner">{children as never}</section> });
+    expect(wrapped).toContain('data-host="banner"');
+  });
 });

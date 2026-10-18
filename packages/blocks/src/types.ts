@@ -180,6 +180,8 @@ export interface RenderContext {
   renderCart?: (() => ReactNode) | undefined;
   /** The real product page body / collection listing; the editor draws labelled placeholders instead. */
   renderProductDetail?: ((opts: ProductDetailOptions) => ReactNode) | undefined;
+  /** The announcement bar's previous / next arrows (a small client wrapper on the storefront); the editors draw them without behaviour. */
+  renderBanner?: ((p: { children: ReactNode }) => ReactNode) | undefined;
   /** The product's long description and the theme's shipping and returns text in tabs; the editor draws a labelled placeholder instead. */
   renderProductInfoTabs?: ((opts: ProductInfoTabsOptions) => ReactNode) | undefined;
   /** One custom field of the current product (ADR-034), drawn by the storefront from the product's data; the editor draws a labelled sample instead. */

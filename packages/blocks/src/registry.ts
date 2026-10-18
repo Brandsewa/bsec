@@ -16,7 +16,7 @@ import {
   videoUrlSchema,
   widthSchema,
 } from "./common.ts";
-import { layoutSchema } from "./layout.ts";
+import { layoutSchema, slideRadiusSchema } from "./layout.ts";
 import * as V from "./views.tsx";
 import * as VB from "./views-blog.tsx";
 import * as VR from "./views-reviews.tsx";
@@ -1029,6 +1029,13 @@ export const HeroSliderSchema = z.object({
   contentPosition: z.enum(["bottom", "center"]).default("bottom"),
   height: z.enum(["sm", "md", "lg", "screen"]).default("md"),
   contentWidth: z.enum(["default", "wide", "full"]).default("wide"),
+  /** Rounded corners of the slides (the picture and, on phones, the text block under it), per device and corner. */
+  slideRadius: slideRadiusSchema,
+  /**
+   * How wide the slider is on the page: "full" runs edge to edge, "contained" is limited to the content width (the Section's
+   * max width when set, else 80rem). Both are always centred; side margins from the Section panel do not apply to them.
+   */
+  widthMode: z.enum(["full", "contained"]).default("full"),
   /** Phones: the text and buttons sit on a block below the picture or video ("below"), or over it as on larger screens ("overlay"). */
   mobileLayout: z.enum(["below", "overlay"]).default("below"),
   /** Colours of that block on phones; empty uses the theme's soft background and text colour. */

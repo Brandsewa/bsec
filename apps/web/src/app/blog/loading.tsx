@@ -7,7 +7,7 @@ export default function Loading() {
       </div>
       <div className="grid gap-8 md:grid-cols-2 lg:grid-cols-3">
         {[1, 2, 3].map((i) => (
-          <div key={i} className="flex flex-col rounded-xl border border-border p-6 space-y-4">
+          <div key={i} className="flex flex-col rounded-xl bg-card p-6 space-y-4">
             <div aria-hidden className="store-skeleton h-4 w-28" />
             <div aria-hidden className="store-skeleton h-6 w-full" />
             <div aria-hidden className="store-skeleton h-16 w-full" />

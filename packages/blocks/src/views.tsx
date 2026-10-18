@@ -13,7 +13,7 @@ import type {
   RenderContext,
   SlotRender,
 } from "./types.ts";
-import { layoutHasAspectRatio, layoutStyle } from "./layout.ts";
+import { layoutHasAspectRatio, layoutStyle, slideRadiusStyle } from "./layout.ts";
 import { mediaImage } from "./media-image.ts";
 import { PLACEHOLDER_IMAGE_URL } from "./media.ts";
 import { SvgIcon } from "./svg-icon.tsx";
@@ -149,7 +149,7 @@ export function HeroView({ props, ctx }: A<R.HeroProps>): ReactNode {
   );
 }
 
-export function BannerView({ props }: A<R.BannerProps>): ReactNode {
+export function BannerView({ props, ctx }: A<R.BannerProps>): ReactNode {
   const all = [{ text: props.text, link: props.link }, ...props.messages];
   const rotating = props.rotate && all.length > 1;
   const style = {
@@ -162,26 +162,41 @@ export function BannerView({ props }: A<R.BannerProps>): ReactNode {
     "--ann-n": all.length,
     "--ann-iv": `${props.interval}s`,
   } as CSSProperties;
-  return (
+  const bar = (
     <div
       className={cx("bsb bs-block-banner bsb-ann", !props.bgColor && "bsb-tone-primary", `bsb-align-${props.align}`, rotating && `bsb-ann-rotate bsb-ann-n${all.length}`)}
       style={style}
       role="region"
       aria-label="Announcements"
     >
+      {rotating ? (
+        <button type="button" className="bsb-ann-nav bsb-ann-prev" data-ann-dir="-1" aria-label="Previous announcement">
+          ‹
+        </button>
+      ) : null}
       {all.map((m, i) => (
         <p key={i} className="bsb-ann-msg" style={{ "--ann-i": i } as CSSProperties} {...(rotating && i > 0 ? { "aria-hidden": true } : null)}>
           {m.link ? (
-            <a href={m.link} style={{ color: "inherit", textDecoration: "underline" }}>
+            // A linked message is not underlined: a small arrow after the text shows that it can be clicked.
+            <a href={m.link} className="bsb-ann-link">
               {m.text}
+              <span className="bsb-ann-go" aria-hidden="true">
+                →
+              </span>
             </a>
           ) : (
             m.text
           )}
         </p>
       ))}
+      {rotating ? (
+        <button type="button" className="bsb-ann-nav bsb-ann-next" data-ann-dir="1" aria-label="Next announcement">
+          ›
+        </button>
+      ) : null}
     </div>
   );
+  return rotating && ctx?.renderBanner ? <>{ctx.renderBanner({ children: bar })}</> : bar;
 }
 
 function defaultCard(p: BlockProduct, o: { showPrice: boolean; showRating: boolean }, ctx?: RenderContext): ReactNode {
@@ -1235,7 +1250,7 @@ export function HeroSliderView({ props, ctx }: A<R.HeroSliderProps>): ReactNode 
   const customS = Boolean(props.secondaryBg || props.secondaryText);
 
   const markup = (
-    <div className={cx("bsb-lay", layoutHasAspectRatio(props.box) && "bsb-hs-ar")} style={layoutStyle(props.box)}>
+    <div className={cx("bsb-lay", `bsb-hs-wm-${props.widthMode}`, layoutHasAspectRatio(props.box) && "bsb-hs-ar")} style={{ ...layoutStyle(props.box), ...slideRadiusStyle(props.slideRadius) }}>
     <section
       className={cx(
         "bsb bsb-hs",

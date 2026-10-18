@@ -20,7 +20,7 @@ export default function Loading() {
       </div>
 
       {/* Query status count skeleton */}
-      <div className="mb-6 border-b border-border/60 pb-4">
+      <div className="mb-6 pb-4">
         <div aria-hidden className="store-skeleton h-5 w-48 rounded" />
       </div>
 
@@ -29,7 +29,7 @@ export default function Loading() {
         {Array.from({ length: 8 }).map((_, i) => (
           <div
             key={i}
-            className="flex flex-col overflow-hidden rounded-xl border border-border/60 bg-card"
+            className="flex flex-col overflow-hidden rounded-xl bg-card"
           >
             <div aria-hidden className="store-skeleton aspect-square w-full" />
             <div className="flex flex-1 flex-col p-4 gap-3">

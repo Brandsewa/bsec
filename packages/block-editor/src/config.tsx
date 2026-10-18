@@ -7,7 +7,7 @@ import { collectionsField } from "./CollectionsField.tsx";
 import { logoSizeField } from "./HeaderFooterPanels.tsx";
 import { elementOrderField } from "./ElementOrderField.tsx";
 import { accordionFields } from "./sections.tsx";
-import { layoutField } from "./LayoutField.tsx";
+import { layoutField, slideRadiusField } from "./LayoutField.tsx";
 import { useFrame, useRenderData } from "./context.tsx";
 
 /**
@@ -198,6 +198,7 @@ export const BLOCK_SPECS: Record<BlockType, Spec> = {
           } as Field,
           titleSize: select("Heading size (theme H2 / H1)", { lg: "Large (H2 size)", xl: "Extra large (H1 size)" }),
           titleTag: select("First slide heading tag (SEO)", { h2: "H2", h1: "H1 (use once per page)" }),
+          slideRadius: slideRadiusField("Slide corners (border radius)") as Field,
         },
       },
       {
@@ -217,7 +218,7 @@ export const BLOCK_SPECS: Record<BlockType, Spec> = {
       {
         id: "section",
         title: "Section",
-        fields: { box: layoutField("Section") as Field },
+        fields: { widthMode: select("Width on the page", { full: "Full width (edge to edge)", contained: "Contained (content width, centred)" }), box: layoutField("Section", { radius: false }) as Field },
       },
       {
         id: "shade",

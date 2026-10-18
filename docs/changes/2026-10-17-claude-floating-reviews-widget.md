@@ -68,6 +68,13 @@ A new BCOM widget, "Floating reviews" (`ReviewsMarquee`), shows the store's publ
 - **Collection archive (B2-08):** `CollectionGrid.headerAlign` (left, centre, right; default centre).
 - **Hero slider (B2-09, B2-10):** the Section panel is now one grid with a column per device (desktop, tablet, mobile) and a row each for Margin and Padding (one value for all sides, or "Sides"), Width, Height and a new Border radius (`radius` layout key, also rounds the slides); min/max sizes and aspect ratio sit under "More". On phones the text and buttons sit on a block below the picture by default (`HeroSlider.mobileLayout` below/overlay, `mobileTextBg`, `mobileTextColor`).
 
+## Batch 3: layout tabs, slide corners, slider width, announcement arrows, skeletons (follow-up 5)
+- **Section panel (B3-01):** tabs Desktop / Tablet / Mobile; each tab has Margin and Padding (Top, Right, Left, Bottom on one row), Width and Height (Normal, Min, Max), Aspect ratio and, for widgets that have it, Border radius (`layoutField(label, { radius })`).
+- **Slide corners (B3-02):** `HeroSlider.slideRadius` (per device, per corner, validated sizes) edited in the Slides accordion; it rounds the whole slide, including the phone text block. The Hero slider's Section panel no longer has the single radius row (the Product showcase keeps it).
+- **Slider width (B3-03):** `HeroSlider.widthMode` full (default, edge to edge) or contained (content width or the Section max width), both always centred: the Section's side margins no longer push the slider to the left.
+- **Announcement bar (B3-04):** linked text has no underline and a small arrow; with several messages, previous/next arrows on each side (`BannerClient`, a delegated click handler wired through `renderBanner` in both `BlockRenderer` and `ThemeChrome`); the first click holds that message and stops the automatic rotation.
+- **Skeletons (B3-05):** the loading placeholders for search, collections, categories, blog and policies no longer draw border lines.
+
 ## Docs updated
 - [x] `docs/ARCHITECTURE.md` (block list)
 - [x] ADR: not needed (new block on the existing pattern)

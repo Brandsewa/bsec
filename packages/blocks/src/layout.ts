@@ -105,6 +105,36 @@ export const layoutSchema = z.object({
   mobile: layoutValuesSchema.optional(),
 });
 
+/**
+ * Rounded corners of a slider's slides, per device and per corner: each value is a size (px, rem, em or %), never free CSS.
+ * blocks.css reads them as --sr-d-* / --sr-t-* / --sr-m-* (top-left tl, top-right tr, bottom-right br, bottom-left bl).
+ */
+export const CORNERS = ["topLeft", "topRight", "bottomRight", "bottomLeft"] as const;
+export type Corner = (typeof CORNERS)[number];
+const CORNER_VAR: Record<Corner, string> = { topLeft: "tl", topRight: "tr", bottomRight: "br", bottomLeft: "bl" };
+const cornerValue = z
+  .string()
+  .max(24)
+  .refine((v) => isValidLayoutValue("radius", v), { message: "Not a valid corner size (use a number with px, rem, em or %)" })
+  .optional();
+const cornersSchema = z.object({ topLeft: cornerValue, topRight: cornerValue, bottomRight: cornerValue, bottomLeft: cornerValue });
+export const slideRadiusSchema = z
+  .object({ desktop: cornersSchema.default({}), tablet: cornersSchema.default({}), mobile: cornersSchema.default({}) })
+  .default({ desktop: {}, tablet: {}, mobile: {} });
+export type SlideRadius = z.infer<typeof slideRadiusSchema>;
+
+/** The CSS variables for the slide corners; only the values that are set. */
+export function slideRadiusStyle(radius: SlideRadius | undefined): CSSProperties {
+  const out: Record<string, string> = {};
+  for (const device of LAYOUT_DEVICES) {
+    for (const corner of CORNERS) {
+      const v = radius?.[device]?.[corner];
+      if (v) out[`--sr-${DEVICE_LETTER[device]}-${CORNER_VAR[corner]}`] = v;
+    }
+  }
+  return out as CSSProperties;
+}
+
 /** The CSS variables for a layout; only the values that are set. */
 export function layoutStyle(layout: Layout | undefined): CSSProperties {
   const out: Record<string, string> = {};

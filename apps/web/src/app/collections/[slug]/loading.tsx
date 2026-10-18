@@ -18,7 +18,7 @@ export default function Loading() {
       </div>
 
       {/* Filter and Sort skeleton */}
-      <div className="flex flex-col gap-4 py-4 sm:flex-row sm:items-center sm:justify-between border-b border-border/60">
+      <div className="flex flex-col gap-4 py-4 sm:flex-row sm:items-center sm:justify-between">
         <div aria-hidden className="store-skeleton h-4 w-36 rounded" />
         <div className="flex items-center gap-4">
           <div aria-hidden className="store-skeleton h-5 w-24 rounded" />
@@ -31,7 +31,7 @@ export default function Loading() {
         {Array.from({ length: 8 }).map((_, i) => (
           <div
             key={i}
-            className="flex flex-col overflow-hidden rounded-xl border border-border/60 bg-card"
+            className="flex flex-col overflow-hidden rounded-xl bg-card"
           >
             <div aria-hidden className="store-skeleton aspect-square w-full" />
             <div className="flex flex-1 flex-col p-4 gap-3">
