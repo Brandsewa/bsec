@@ -40,13 +40,15 @@ function loadScript(): Promise<TurnstileApi> {
 }
 
 /** Cloudflare Turnstile challenge. Calls onToken(token) when solved and onToken(null) when it expires or fails. */
-export function TurnstileWidget({ siteKey, onToken }: { siteKey: string; onToken: (token: string | null) => void }) {
+export function TurnstileWidget({ siteKey, onToken, onFailure }: { siteKey: string; onToken: (token: string | null) => void; onFailure?: () => void }) {
   const container = useRef<HTMLDivElement>(null);
   const onTokenRef = useRef(onToken);
+  const onFailureRef = useRef(onFailure);
 
   useEffect(() => {
     onTokenRef.current = onToken;
-  }, [onToken]);
+    onFailureRef.current = onFailure;
+  }, [onToken, onFailure]);
 
   useEffect(() => {
     let widgetId: string | undefined;
@@ -58,10 +60,16 @@ export function TurnstileWidget({ siteKey, onToken }: { siteKey: string; onToken
           sitekey: siteKey,
           callback: (token) => onTokenRef.current(token),
           "expired-callback": () => onTokenRef.current(null),
-          "error-callback": () => onTokenRef.current(null),
+          "error-callback": () => {
+            onTokenRef.current(null);
+            onFailureRef.current?.();
+          },
         });
       })
-      .catch(() => onTokenRef.current(null));
+      .catch(() => {
+        onTokenRef.current(null);
+        onFailureRef.current?.();
+      });
     return () => {
       cancelled = true;
       if (widgetId && window.turnstile) window.turnstile.remove(widgetId);

@@ -11,7 +11,7 @@ import {
   normalizeSubdomainSlug,
   verifySubdomainReservation,
 } from "./subdomains.ts";
-import { provisionTenant, type ProvisionTenantResult } from "./provisioning.ts";
+import { provisionTenant, type ProvisionBusinessInput, type ProvisionTenantResult } from "./provisioning.ts";
 
 export interface SaveSignupLeadInput {
   leadId?: string | undefined;
@@ -39,7 +39,7 @@ export interface CompleteSignupInput {
     phone?: string | undefined;
   };
   planCode?: "starter" | "growth" | "pro" | string | undefined;
-  themeTemplate?: "starter-minimal" | "fashion-editorial" | "gourmet-artisan" | string | undefined;
+  business?: ProvisionBusinessInput | undefined;
   currency?: string | undefined;
   timezone?: string | undefined;
   turnstileToken?: string | undefined;
@@ -161,7 +161,7 @@ export async function completeSignup(
       phone: input.owner.phone,
     },
     planCode: input.planCode || "starter",
-    themeTemplate: input.themeTemplate || "starter-minimal",
+    business: input.business,
     currency: input.currency || "INR",
     timezone: input.timezone || "Asia/Kolkata",
     leadId: input.leadId,

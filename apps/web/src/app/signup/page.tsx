@@ -5,70 +5,43 @@ import { TurnstileWidget } from "@/components/marketing/TurnstileWidget";
 import { useSearchParams } from "next/navigation";
 import Link from "next/link";
 import { SimpleSelect } from "@bs/ui";
+import { INDIAN_STATES } from "@/lib/india";
 import { bmFont } from "@/components/marketing/beam/fonts";
 import "@/components/marketing/beam/beam.css";
 
-interface TemplateOption {
+interface PlanOption {
   code: string;
   name: string;
-  industry: string;
-  description: string;
+  priceMonthlyPaise: number;
+  limits: Record<string, number>;
+  features: Record<string, boolean>;
 }
 
-const TEMPLATES: TemplateOption[] = [
-  {
-    code: "starter-minimal",
-    name: "Minimalist Essential",
-    industry: "Handicrafts & General Retail",
-    description: "Clean typography, fast product grids, and distraction-free mobile checkout.",
-  },
-  {
-    code: "fashion-editorial",
-    name: "Fashion Editorial",
-    industry: "Apparel & Accessories",
-    description: "Lookbook hero banners, lifestyle collections, and size/variant switchers.",
-  },
-  {
-    code: "gourmet-artisan",
-    name: "Gourmet Artisan",
-    industry: "Food, Tea & Organic Goods",
-    description: "Warm organic palette with custom freshness badges and ingredient highlights.",
-  },
-];
+const TRIAL_DAYS = 14;
 
-const PLANS = [
-  {
-    code: "starter",
-    name: "Starter",
-    priceText: "₹999 / mo",
-    trialDays: 14,
-    description: "Ideal for boutique businesses and emerging creators.",
-    features: ["Up to 500 products", "2 staff accounts", "₹99 Flat Rate India shipping", "1 Custom Domain"],
-  },
-  {
-    code: "growth",
-    name: "Growth",
-    priceText: "₹2,499 / mo",
-    trialDays: 14,
-    popular: true,
-    description: "For scaling Indian brands with fast-moving inventory.",
-    features: ["Up to 5,000 products", "5 staff accounts", "3 Custom Domains", "Shiprocket automation", "Remove platform branding"],
-  },
-  {
-    code: "pro",
-    name: "Pro",
-    priceText: "₹5,999 / mo",
-    trialDays: 14,
-    description: "High-volume brands needing multi-location scale.",
-    features: ["Up to 25,000 products", "15 staff accounts", "10 Custom Domains", "High-concurrency protection"],
-  },
-];
+function rupees(paise: number): string {
+  return `₹${(paise / 100).toLocaleString("en-IN", { maximumFractionDigits: 0 })} / mo`;
+}
+
+/** Feature chips built from the plan's real limits and flags (no copy is hard-coded per plan). */
+function planChips(plan: PlanOption): string[] {
+  const chips: string[] = [];
+  const { limits, features } = plan;
+  const fmt = (v: number) => v.toLocaleString("en-IN");
+  if (limits.products) chips.push(`Up to ${fmt(limits.products)} products`);
+  if (limits.orders_month) chips.push(`${fmt(limits.orders_month)} orders / month`);
+  if (limits.staff_seats) chips.push(`${fmt(limits.staff_seats)} staff accounts`);
+  if (features.custom_domain && limits.custom_domains) chips.push(`${fmt(limits.custom_domains)} custom domain${limits.custom_domains === 1 ? "" : "s"}`);
+  if (limits.storage_mb) chips.push(`${Math.round(limits.storage_mb / 1024)} GB storage`);
+  if (features.remove_branding) chips.push("Remove platform branding");
+  return chips;
+}
 
 function SignupContent() {
   const searchParams = useSearchParams();
 
   // Wizard state (Steps 1 to 5)
-  const [step, setStep] = useState<1 | 2 | 3 | 4 | 5>(1);
+  const [step, setStep] = useState<1 | 2 | 3 | 4>(1);
   const [showPassword, setShowPassword] = useState(false);
   const [promoCode, setPromoCode] = useState(searchParams.get("promo") || "");
 
@@ -89,11 +62,19 @@ function SignupContent() {
 
   // Business
   const [industry, setIndustry] = useState("retail");
+  const [businessName, setBusinessName] = useState("");
+  const [addressLine, setAddressLine] = useState("");
   const [businessCity, setBusinessCity] = useState("");
+  const [businessState, setBusinessState] = useState("");
+  const [pincode, setPincode] = useState("");
 
-  // Template & Plan
-  const [selectedTemplate, setSelectedTemplate] = useState(searchParams.get("template") || "starter-minimal");
-  const [selectedPlan, setSelectedPlan] = useState(searchParams.get("plan") || "growth");
+  // Plan (loaded from the platform's real plans) and promo code check
+  const [plans, setPlans] = useState<PlanOption[] | null>(null);
+  const [plansError, setPlansError] = useState(false);
+  const [selectedPlan, setSelectedPlan] = useState<string | null>(searchParams.get("plan"));
+  const [promoStatus, setPromoStatus] = useState<{ checking?: boolean; valid?: boolean; message?: string } | null>(null);
+  // Set when the bot check cannot run (for example the domain is not allowed on the Turnstile widget).
+  const [turnstileFailed, setTurnstileFailed] = useState(false);
 
   // Submission & Provisioning status
   const [isProvisioning, setIsProvisioning] = useState(false);
@@ -225,30 +206,67 @@ function SignupContent() {
   // Step 3 -> Step 4
   const handleStep3Submit = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (!businessState) {
+      setErrorMessage("Please choose the state your business is in.");
+      return;
+    }
     setErrorMessage(null);
-    await updateLead("basics_entered");
+    await updateLead("basics_entered", { businessName: businessName.trim() || storeName || undefined });
     setStep(4);
+    // A code carried in the link (?promo=) is checked as soon as the plan step opens.
+    if (promoCode.trim()) void checkPromo(promoCode, selectedPlan);
   };
 
-  // Step 4 -> Step 5
-  const handleStep4Submit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setErrorMessage(null);
-    await updateLead("template_chosen");
-    setStep(5);
+  // Load the platform's real plans once. Without a choice in the link, the second plan is preselected as "recommended".
+  useEffect(() => {
+    fetch("/api/saas/plans")
+      .then((r) => (r.ok ? r.json() : Promise.reject(new Error("plans"))))
+      .then((rows: PlanOption[]) => {
+        setPlans(rows);
+        setSelectedPlan((cur) => (cur && rows.some((p) => p.code === cur) ? cur : (rows[Math.min(1, rows.length - 1)]?.code ?? null)));
+      })
+      .catch(() => setPlansError(true));
+  }, []);
+
+  const checkPromo = async (code: string, planCode: string | null) => {
+    const trimmed = code.trim();
+    if (!trimmed) {
+      setPromoStatus(null);
+      return;
+    }
+    setPromoStatus({ checking: true });
+    try {
+      const res = await fetch("/api/saas/promo/check", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ code: trimmed, planCode }),
+      });
+      const data = (await res.json()) as { valid?: boolean; message?: string };
+      setPromoStatus({ valid: Boolean(data.valid), message: data.message ?? "Could not check this code." });
+    } catch {
+      setPromoStatus({ valid: false, message: "Could not check this code. Try again." });
+    }
   };
 
   // Step 5 Submit: Final Provisioning
   const handleFinalSubmit = async () => {
+    if (!selectedPlan) {
+      setErrorMessage("Please choose a plan.");
+      return;
+    }
+    if (promoCode.trim() && !promoStatus?.valid) {
+      setErrorMessage("Fix or clear the promo code before launching.");
+      return;
+    }
     setIsProvisioning(true);
     setErrorMessage(null);
     setProvisionProgress("Creating tenant database isolation...");
 
     const steps = [
-      "Configuring India shipping zones (₹99 standard flat rate)...",
+      "Configuring India shipping zones...",
       "Setting up Cash on Delivery & payment configurations...",
       "Publishing starter theme template & home page blocks...",
-      "Allocating size tier & starting 14-day free trial...",
+      `Allocating size tier & starting ${TRIAL_DAYS}-day free trial...`,
     ];
 
     let stepIndex = 0;
@@ -277,7 +295,14 @@ function SignupContent() {
           },
           planCode: selectedPlan,
           ...(promoCode.trim() ? { promoCode: promoCode.trim() } : {}),
-          themeTemplate: selectedTemplate,
+          business: {
+            legalName: businessName.trim() || undefined,
+            industry,
+            line1: addressLine.trim() || undefined,
+            city: businessCity.trim() || undefined,
+            state: businessState || undefined,
+            pincode: pincode.trim() || undefined,
+          },
           currency: "INR",
           timezone: "Asia/Kolkata",
         }),
@@ -556,21 +581,6 @@ function SignupContent() {
               </div>
             </div>
 
-            <div>
-              <label className="bm-label">
-                Promo code (optional)
-              </label>
-              <input
-                type="text"
-                placeholder="e.g. LAUNCH2026"
-                value={promoCode}
-                onChange={(e) => setPromoCode(e.target.value)}
-                className="bm-input"
-                autoComplete="off"
-                maxLength={32}
-              />
-            </div>
-
             <div className="flex gap-3">
               <button
                 type="button"
@@ -583,7 +593,7 @@ function SignupContent() {
                 type="submit"
                 className="bm-pill flex-1"
               >
-                Continue to Business Details
+                Continue
               </button>
             </div>
           </form>
@@ -594,13 +604,23 @@ function SignupContent() {
           <form onSubmit={handleStep3Submit} className="space-y-6">
             <div>
               <h2 className="mb-1 text-xl font-semibold">Step 3: Tell us about your business</h2>
-              <p className="bm-dim text-sm">Helps us configure your default store settings and categories.</p>
+              <p className="bm-dim text-sm">This pre-fills your store details, invoices and GST state. You can change it later in Settings.</p>
             </div>
 
             <div>
-              <label className="bm-label">
-                Industry Category
-              </label>
+              <label className="bm-label">Business name</label>
+              <input
+                type="text"
+                placeholder={storeName || "Your registered business name"}
+                value={businessName}
+                onChange={(e) => setBusinessName(e.target.value)}
+                className="bm-input"
+              />
+              <p className="bm-dim mt-1 text-xs">Leave empty to use your store name.</p>
+            </div>
+
+            <div>
+              <label className="bm-label">Industry category</label>
               <SimpleSelect
                 value={industry}
                 onChange={setIndustry}
@@ -616,108 +636,95 @@ function SignupContent() {
             </div>
 
             <div>
-              <label className="bm-label">
-                City / State
-              </label>
+              <label className="bm-label">Business address</label>
               <input
                 type="text"
-                placeholder="e.g. Mumbai, Maharashtra"
-                value={businessCity}
-                onChange={(e) => setBusinessCity(e.target.value)}
+                placeholder="Building, street, area"
+                value={addressLine}
+                onChange={(e) => setAddressLine(e.target.value)}
+                className="bm-input"
+                required
+              />
+            </div>
+
+            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+              <div>
+                <label className="bm-label">City</label>
+                <input
+                  type="text"
+                  placeholder="e.g. Mumbai"
+                  value={businessCity}
+                  onChange={(e) => setBusinessCity(e.target.value)}
+                  className="bm-input"
+                  required
+                />
+              </div>
+              <div>
+                <label className="bm-label">State</label>
+                <SimpleSelect
+                  value={businessState}
+                  onChange={setBusinessState}
+                  placeholder="Select state"
+                  options={INDIAN_STATES.map((st) => ({ value: st, label: st }))}
+                />
+              </div>
+            </div>
+
+            <div>
+              <label className="bm-label">PIN code (optional)</label>
+              <input
+                type="text"
+                inputMode="numeric"
+                placeholder="400001"
+                value={pincode}
+                onChange={(e) => setPincode(e.target.value.replace(/\D/g, "").slice(0, 6))}
                 className="bm-input"
               />
             </div>
 
             <div className="flex gap-3">
-              <button
-                type="button"
-                onClick={() => setStep(2)}
-                className="bm-outline px-6"
-              >
+              <button type="button" onClick={() => setStep(2)} className="bm-outline px-6">
                 Back
               </button>
-              <button
-                type="submit"
-                className="bm-pill flex-1"
-              >
-                Continue to Theme Selection
-              </button>
-            </div>
-          </form>
-        )}
-
-        {/* Step 4: Pick Template */}
-        {step === 4 && (
-          <form onSubmit={handleStep4Submit} className="space-y-6">
-            <div>
-              <h2 className="mb-1 text-xl font-semibold">Step 4: Pick a starter theme</h2>
-              <p className="bm-dim text-sm">You can customize colors, fonts, and blocks anytime in Store Admin.</p>
-            </div>
-
-            <div className="space-y-4">
-              {TEMPLATES.map((tmpl) => (
-                <div
-                  key={tmpl.code}
-                  onClick={() => setSelectedTemplate(tmpl.code)}
-                  className={`bm-opt cursor-pointer p-4 sm:p-5 ${selectedTemplate === tmpl.code ? "is-on" : ""}`}
-                >
-                  <div className="flex items-center justify-between mb-1.5">
-                    <h4 className="font-semibold text-base">{tmpl.name}</h4>
-                    <span className="bm-dim text-xs font-semibold uppercase tracking-wider">{tmpl.industry}</span>
-                  </div>
-                  <p className="bm-dim text-xs leading-relaxed">{tmpl.description}</p>
-                </div>
-              ))}
-            </div>
-
-            <div className="flex gap-3">
-              <button
-                type="button"
-                onClick={() => setStep(3)}
-                className="bm-outline px-6"
-              >
-                Back
-              </button>
-              <button
-                type="submit"
-                className="bm-pill flex-1"
-              >
+              <button type="submit" className="bm-pill flex-1">
                 Continue to Plan
               </button>
             </div>
           </form>
         )}
 
-        {/* Step 5: Plan Selection & Provisioning */}
-        {step === 5 && (
+        {/* Step 4: Plan Selection & Provisioning */}
+        {step === 4 && (
           <div className="space-y-6">
             <div>
-              <h2 className="mb-1 text-xl font-semibold">Step 5: Review plan & launch</h2>
-              <p className="bm-dim text-sm">Every plan includes a 14-day free trial. Upgrade or cancel anytime.</p>
+              <h2 className="mb-1 text-xl font-semibold">Step 4: Choose your plan & launch</h2>
+              <p className="bm-dim text-sm">Every plan includes a {TRIAL_DAYS}-day free trial. Upgrade or cancel anytime.</p>
             </div>
 
+            {plansError && <p className="text-sm" style={{ color: "#ff8a8a" }}>Plans could not be loaded. Refresh the page to try again.</p>}
+            {!plans && !plansError && <p className="bm-dim text-sm">Loading plans...</p>}
+
             <div className="space-y-3">
-              {PLANS.map((plan) => (
+              {(plans ?? []).map((plan, i) => (
                 <div
                   key={plan.code}
-                  onClick={() => setSelectedPlan(plan.code)}
+                  onClick={() => {
+                    setSelectedPlan(plan.code);
+                    // A code can be limited to certain plans, so re-check it for the new choice.
+                    if (promoCode.trim()) void checkPromo(promoCode, plan.code);
+                  }}
                   className={`bm-opt cursor-pointer p-4 sm:p-5 ${selectedPlan === plan.code ? "is-on" : ""}`}
                 >
                   <div className="flex items-center justify-between mb-1">
                     <div className="flex items-center gap-2">
                       <h4 className="font-semibold text-base">{plan.name}</h4>
-                      {plan.popular && (
-                        <span className="bm-badge">
-                          Recommended
-                        </span>
-                      )}
+                      {i === Math.min(1, (plans?.length ?? 1) - 1) && <span className="bm-badge">Recommended</span>}
                     </div>
-                    <span className="font-semibold text-base">{plan.priceText}</span>
+                    <span className="font-semibold text-base">{rupees(plan.priceMonthlyPaise)}</span>
                   </div>
-                  <p className="bm-dim mb-2 text-xs">{plan.description}</p>
                   <div className="bm-dim flex flex-wrap gap-2 text-[11px] font-medium">
-                    {plan.features.map((f, i) => (
-                      <span key={i} className="bm-chip">
+                    {planChips(plan).map((f) => (
+                      <span key={f} className="bm-chip">
                         {f}
                       </span>
                     ))}
@@ -726,31 +733,67 @@ function SignupContent() {
               ))}
             </div>
 
+            <div>
+              <label className="bm-label">Promo code (optional)</label>
+              <input
+                type="text"
+                placeholder="e.g. LAUNCH2026"
+                value={promoCode}
+                onChange={(e) => {
+                  setPromoCode(e.target.value);
+                  setPromoStatus(null);
+                }}
+                onBlur={() => void checkPromo(promoCode, selectedPlan)}
+                className="bm-input"
+                autoComplete="off"
+                maxLength={32}
+              />
+              {promoStatus && (
+                <p
+                  className="mt-1 text-xs"
+                  role="status"
+                  style={{ color: promoStatus.checking ? undefined : promoStatus.valid ? "#7ee8c6" : "#ff8a8a" }}
+                >
+                  {promoStatus.checking ? "Checking code..." : promoStatus.message}
+                </p>
+              )}
+            </div>
+
             <div className="bm-panel bm-dim space-y-1 p-4 text-xs">
               <div className="font-semibold">Launch Summary:</div>
               <div>• Store: <strong>{storeName}</strong> ({slug}.bcom.si)</div>
               <div>• Owner: <strong>{email}</strong></div>
-              <div>• Trial: <strong>14 days free</strong> on {selectedPlan.toUpperCase()} tier</div>
+              <div>• Trial: <strong>{TRIAL_DAYS} days free</strong> on <strong>{plans?.find((p) => p.code === selectedPlan)?.name ?? "your chosen"}</strong> plan</div>
+              <div>• Location: {[businessCity, businessState].filter(Boolean).join(", ")}</div>
             </div>
 
             {turnstileSiteKey && (
               <div className="flex justify-center">
-                <TurnstileWidget key={turnstileNonce} siteKey={turnstileSiteKey} onToken={setTurnstileToken} />
+                <TurnstileWidget
+                  key={turnstileNonce}
+                  siteKey={turnstileSiteKey}
+                  onToken={setTurnstileToken}
+                  onFailure={() => setTurnstileFailed(true)}
+                />
               </div>
             )}
-
+            {turnstileFailed && (
+              <p className="text-sm" style={{ color: "#ff8a8a" }}>
+                The security check could not load, so the store cannot be created yet. Refresh the page; if it keeps happening, contact support.
+              </p>
+            )}
             <div className="flex gap-3">
               <button
                 type="button"
                 disabled={isProvisioning}
-                onClick={() => setStep(4)}
+                onClick={() => setStep(3)}
                 className="bm-outline px-6 disabled:opacity-50"
               >
                 Back
               </button>
               <button
                 type="button"
-                disabled={isProvisioning || !configLoaded || (turnstileSiteKey !== null && !turnstileToken)}
+                disabled={isProvisioning || !configLoaded || !selectedPlan || (turnstileSiteKey !== null && !turnstileToken)}
                 onClick={handleFinalSubmit}
                 className="bm-pill bm-wrap flex-1"
               >

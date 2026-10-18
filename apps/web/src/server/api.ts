@@ -253,6 +253,7 @@ import {
   SaasNotConfiguredError,
   saveSignupLead,
   completeSignup,
+  previewPromoCode,
   acceptTenantOwnerInvite,
   listPublicPlans,
   listPublicThemeTemplates,
@@ -3301,6 +3302,16 @@ api.post("/saas/lead", async (c) => {
 api.get("/saas/config", (c) => {
   // Public, non-secret runtime config for the signup page.
   return c.json({ turnstileSiteKey: process.env.TURNSTILE_SITE_KEY?.trim() || null });
+});
+
+api.post("/saas/promo/check", async (c) => {
+  const db = saasDb(server().rt);
+  const rateCheck = await checkLeadCaptureRateLimit(db, clientIp(c.req.raw.headers));
+  if (!rateCheck.allowed) return c.json({ valid: false, message: "Too many checks. Please try again later." }, 429);
+  const body = (await c.req.json().catch(() => ({}))) as { code?: unknown; planCode?: unknown };
+  const code = typeof body.code === "string" ? body.code.slice(0, 40) : "";
+  const planCode = typeof body.planCode === "string" ? body.planCode.slice(0, 40) : null;
+  return c.json(await previewPromoCode(db, { code, planCode }));
 });
 
 api.get("/saas/plans", async (c) => {

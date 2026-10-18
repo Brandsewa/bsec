@@ -15,6 +15,7 @@ import {
   saveSignupLead,
   completeSignup,
   provisionTenant,
+  previewPromoCode,
 } from "../src/index.ts";
 
 const PW = { owner: "o_test", rw: "rw_test", platform: "p_test" };
@@ -187,7 +188,7 @@ describe("M8 Signup Pipeline & Abuse Protection (PLAN §5.2, §7 / ADR-016)", ()
         phone: "+919811223344",
       },
       planCode: "starter",
-      themeTemplate: "starter-minimal",
+      business: { legalName: "Complete Flow Pvt Ltd", industry: "retail", line1: "12 MG Road", city: "Pune", state: "Maharashtra", pincode: "411001" },
       clientIp: "203.0.113.195",
     });
 
@@ -208,5 +209,35 @@ describe("M8 Signup Pipeline & Abuse Protection (PLAN §5.2, §7 / ADR-016)", ()
       .from(schema.subscriptions)
       .where(eq(schema.subscriptions.tenantId, result.tenantId));
     expect(sub!.status).toBe("trialing");
+
+    // Business details land in Settings, Store details and the GST seller state
+    const [settings] = await rt._db.db.select().from(schema.storeSettings).where(eq(schema.storeSettings.tenantId, result.tenantId));
+    expect(settings!.legalName).toBe("Complete Flow Pvt Ltd");
+    expect(settings!.address).toMatchObject({ line1: "12 MG Road", city: "Pune", state: "Maharashtra", pincode: "411001" });
+    expect((settings!.checkout as { tax: { sellerState: string | null } }).tax.sellerState).toBe("Maharashtra");
+
+    // The client does not pick the theme: the platform default is applied (launch theme unless one is flagged)
+    const [theme] = await rt._db.db.select().from(schema.themes).where(eq(schema.themes.tenantId, result.tenantId));
+    expect(theme!.templateCode).toBe("essential-commerce");
+  });
+
+  it("previews promo codes for the signup form without redeeming them", async () => {
+    const db = rt._db.db;
+    const base = { name: "Preview test", kind: "free_months" as const, durationMonths: 3 };
+    await db.insert(schema.promotions).values([
+      { ...base, code: "PREVIEWOK" },
+      { ...base, code: "PREVIEWGROWTH", appliesToPlanCodes: ["growth"] },
+      { ...base, code: "PREVIEWOFF", isActive: false },
+      { ...base, code: "PREVIEWFULL", maxRedemptions: 1, redeemedCount: 1 },
+    ]);
+    expect(await previewPromoCode(db, { code: " previewok ", planCode: "starter" })).toEqual({ valid: true, message: "Valid: 3 months free." });
+    expect((await previewPromoCode(db, { code: "PREVIEWGROWTH", planCode: "growth" })).valid).toBe(true);
+    expect(await previewPromoCode(db, { code: "PREVIEWGROWTH", planCode: "starter" })).toMatchObject({ valid: false, message: expect.stringMatching(/does not apply to the chosen plan/) });
+    expect((await previewPromoCode(db, { code: "PREVIEWOFF" })).message).toMatch(/not active/);
+    expect((await previewPromoCode(db, { code: "PREVIEWFULL" })).message).toMatch(/fully redeemed/);
+    expect(await previewPromoCode(db, { code: "NOSUCHCODE" })).toEqual({ valid: false, message: "This promo code is not valid." });
+    expect((await previewPromoCode(db, { code: "  " })).valid).toBe(false);
+    const [row] = await db.select().from(schema.promotions).where(eq(schema.promotions.code, "PREVIEWOK"));
+    expect(row!.redeemedCount).toBe(0);
   });
 });

@@ -185,6 +185,8 @@ export const themeTemplates = pgTable("theme_templates", {
   archivedAt: timestamp("archived_at", { withTimezone: true }),
   version: integer("version").notNull().default(1),
   isActive: boolean("is_active").notNull().default(true),
+  // The template new self-service stores start with (at most one; see migration 0068 and resolveSignupTemplateCode).
+  isSignupDefault: boolean("is_signup_default").notNull().default(false),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().default(sql`now()`),
   updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().default(sql`now()`),
 });
