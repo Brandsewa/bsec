@@ -35,12 +35,33 @@ function useBuy(): BuyState {
 }
 
 /**
+ * The option list for the picker. A product normally carries its option definitions; one that has variants with option
+ * values but no definitions (imported or edited by hand) would show no picker at all, so the options are worked out from
+ * the variants themselves. With a single variant, or when every option has one value, there is nothing to choose.
+ */
+function optionsFor(product: StorefrontProductDetail): NonNullable<StorefrontProductDetail["options"]> {
+  if (product.options && product.options.length > 0) return product.options;
+  const variants = product.variants ?? [];
+  if (variants.length < 2) return [];
+  const byName = new Map<string, string[]>();
+  for (const v of variants) {
+    for (const [name, value] of Object.entries((v.optionValues as Record<string, string> | null) ?? {})) {
+      const values = byName.get(name) ?? [];
+      if (!values.includes(value)) values.push(value);
+      byName.set(name, values);
+    }
+  }
+  const derived = [...byName.entries()].map(([name, values], position) => ({ id: `derived-${name}`, productId: product.id, name, position, values }));
+  return derived.some((o) => o.values.length > 1) ? derived : [];
+}
+
+/**
  * Holds which variant the shopper has chosen and how many, so the pieces of the buy box (SKU, options, price, buttons) can sit
  * in any order between server-rendered parts of the page (rating, title, description) and still agree with each other.
  */
 export function ProductBuyProvider({ product, children }: { product: StorefrontProductDetail; children: React.ReactNode }) {
   const variants = product.variants ?? [];
-  const options = product.options ?? [];
+  const options = optionsFor(product);
 
   // Deep link: /products/x?variant=<id> opens on that variant. useSyncExternalStore gives the server render and the first client
   // render the same null, then reads the address, so markup matches on hydration.
@@ -145,10 +166,13 @@ export function VariantOptions({ style = "pills" }: { style?: "pills" | "buttons
 
 /** Price (with the compare-at price and saving), a small note under it and a low or no stock message. */
 export function PriceBlock({ note }: { note?: string | undefined }) {
-  const { product, selectedVariant } = useBuy();
+  const { product, selectedVariant, qty } = useBuy();
   const variants = product.variants ?? [];
-  const currentPrice = selectedVariant?.price ?? variants[0]?.price ?? 0;
-  const currentCompareAt = selectedVariant?.compareAtPrice ?? variants[0]?.compareAtPrice;
+  // The price follows the quantity as it is changed: unit price x quantity (checkout still works the real total out on the server).
+  const unitPrice = selectedVariant?.price ?? variants[0]?.price ?? 0;
+  const unitCompareAt = selectedVariant?.compareAtPrice ?? variants[0]?.compareAtPrice;
+  const currentPrice = unitPrice * qty;
+  const currentCompareAt = unitCompareAt !== undefined ? unitCompareAt * qty : undefined;
   const hasSavings = currentCompareAt !== undefined && currentCompareAt > currentPrice;
   const discountPercent = hasSavings ? Math.round(((currentCompareAt - currentPrice) / currentCompareAt) * 100) : 0;
   const stockStatus = selectedVariant?.stockStatus ?? "out_of_stock";
@@ -165,6 +189,11 @@ export function PriceBlock({ note }: { note?: string | undefined }) {
           {hasSavings ? <span className="rounded-md bg-emerald-500/10 px-2 py-0.5 text-xs font-semibold text-emerald-600 dark:text-emerald-400">Save {discountPercent}%</span> : null}
         </div>
       )}
+      {qty > 1 && !product.priceOnRequest ? (
+        <p className="text-sm text-muted-foreground" aria-live="polite">
+          {formatInr(unitPrice)} each × {qty}
+        </p>
+      ) : null}
       {note && !product.priceOnRequest ? <p className="text-xs text-muted-foreground">{note}</p> : null}
       {!product.priceOnRequest && !preorder && stockStatus === "low_stock" ? (
         <p className="text-sm font-medium text-amber-600" role="status">

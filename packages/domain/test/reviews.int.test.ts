@@ -10,6 +10,7 @@ import {
   getStorefrontReviews,
   provisionTenant,
   resolveBlockData,
+  resolveRelatedBlockData,
   publishAdminReview,
   submitProductReview,
   type Runtime,
@@ -22,6 +23,7 @@ import { RateLimitExceededError } from "../src/system/rate-limit.ts";
 
 let env: TestDb;
 let rt: Runtime;
+let rtWeb: Runtime;
 let ctxA: TenantContext;
 let ctxB: TenantContext;
 let productA: string;
@@ -53,6 +55,8 @@ async function tenant(label: string) {
 beforeAll(async () => {
   env = await startTestDb();
   rt = createRuntime({ service: "platform", databaseUrl: env.as("app_platform"), poolMax: 10 });
+  // Storefront reads run as app_rw, so row level security is really in force.
+  rtWeb = createRuntime({ service: "web", databaseUrl: env.as("app_rw"), poolMax: 5 });
   ctxA = await tenant("a");
   ctxB = await tenant("b");
   const p = await createActiveProduct(rt, ctxA, { title: "Reviewed Thing", sku: "REV-1", price: 10000, stock: 20 });
@@ -157,5 +161,22 @@ describe("reviews", () => {
     expect(fiveOnly.every((r) => r.rating === 5)).toBe(true);
     expect(fiveOnly.map((r) => r.reviewerName)).not.toContain("Buyer");
     expect(await reviewsOf(ctxB, { minRating: 1, limit: 12, source: "latest" })).toEqual([]);
+  });
+
+  it("the related products carousel lists the store's other visible products, never the product itself or another store's", async () => {
+    await createActiveProduct(rt, ctxA, { title: "Second Thing", sku: "REV-2", price: 5000, stock: 5 });
+    const showcase = { id: "s", type: "ProductShowcase" as const, version: 1, props: { tabs: [{ label: "Related", source: "related", collectionSlug: "" }], limit: 8 } };
+    const titlesFor = async (ctx: TenantContext, productId: string) => {
+      const data = await resolveRelatedBlockData(rtWeb, ctx, { productId, blocks: [showcase] });
+      const d = data["s"];
+      return d?.kind === "product-tabs" ? (d.tabs[0]?.products.map((p) => p.title) ?? []) : [];
+    };
+    const forA = await titlesFor(ctxA, productA);
+    expect(forA).toContain("Second Thing");
+    expect(forA).not.toContain("Reviewed Thing");
+    // Store B has no products: nothing of store A leaks into its carousel.
+    expect(await titlesFor(ctxB, productA)).toEqual([]);
+    // A page without such a block resolves nothing.
+    expect(await resolveRelatedBlockData(rtWeb, ctxA, { productId: productA, blocks: [] })).toEqual({});
   });
 });

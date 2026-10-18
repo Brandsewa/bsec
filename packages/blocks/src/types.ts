@@ -266,6 +266,13 @@ export interface ProductDetailOptions {
   timeZone?: string | undefined;
   showUsps?: boolean | undefined;
   usps?: Array<{ icon: string; text: string; description?: string | undefined }> | undefined;
+  /** Order of the buy-box elements (names from PRODUCT_ELEMENTS); empty or missing = the default order. */
+  elementOrder?: string[] | undefined;
+  showAccordion?: boolean | undefined;
+  accordionFirstOpen?: boolean | undefined;
+  accordionItems?:
+    | Array<{ icon: string; title: string; source: "static" | "custom_field"; fieldKey?: string | undefined; text?: string | undefined }>
+    | undefined;
 }
 
 export interface CartContentsOptions {

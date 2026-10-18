@@ -18,6 +18,7 @@ import { mediaImage } from "./media-image.ts";
 import { PLACEHOLDER_IMAGE_URL } from "./media.ts";
 import { SvgIcon } from "./svg-icon.tsx";
 import type * as R from "./registry.ts";
+import { ProductDetailSample } from "./views-product.tsx";
 import type { LogoSize } from "./common.ts";
 
 /**
@@ -261,9 +262,9 @@ export function CollectionGridView({ props, ctx }: A<R.CollectionGridProps>): Re
   return (
     <section className="bsb bs-block-collection-grid bsb-py-lg">
       <div className="bsb-w bsb-w-wide">
-        <SectionHead title={props.title} subtitle={props.subtitle} align="center" />
+        <SectionHead title={props.title} subtitle={props.subtitle} align={props.headerAlign} />
         {collections.length === 0 ? (
-          <p className="bsb-muted bsb-align-center">No collections selected yet.</p>
+          <p className={cx("bsb-muted", `bsb-align-${props.headerAlign}`)}>No collections selected yet.</p>
         ) : (
           <div className="bsb-grid bsb-ccards" style={{ "--cols": Number(props.columns), "--cols-t": Number(props.columnsTablet), "--cols-m": Number(props.columnsMobile) } as CSSProperties}>
             {collections.map((c) => {
@@ -1143,29 +1144,7 @@ export function ProductCustomFieldView({ props, ctx }: A<R.ProductCustomFieldPro
 
 export function ProductDetailView({ props, ctx }: A<R.ProductDetailProps>): ReactNode {
   if (ctx?.renderProductDetail) return <>{ctx.renderProductDetail(props as ProductDetailOptions)}</>;
-  const gallery = (
-    <div className="bsb-ph-box" style={{ aspectRatio: "1 / 1" }} aria-hidden="true">
-      <span>Product images</span>
-    </div>
-  );
-  const info = (
-    <div style={{ display: "flex", flexDirection: "column", gap: "1rem" }}>
-      <h1 className="bsb-heading bsb-h-lg">Product name</h1>
-      {props.showRating ? <Stars value={4} /> : null}
-      <p style={{ fontSize: "1.5rem", fontWeight: 700, margin: 0 }}>{money(129900)}</p>
-      {props.showDescription ? <p className="bsb-muted">A short product description appears here, written by the store for each product.</p> : null}
-      <div className="bsb-ph-box" style={{ height: 44 }}><span>Variant options</span></div>
-      <span className="bsb-btn bsb-btn-primary bsb-btn-lg" style={{ justifyContent: "center" }}>Add to cart</span>
-      {props.showTrustPoints ? <p className="bsb-muted" style={{ fontSize: "0.75rem", margin: 0 }}>{props.trustPoints.join(" · ")}</p> : null}
-      {props.showTags ? <p className="bsb-muted" style={{ fontSize: "0.75rem" }}>#tag #another</p> : null}
-    </div>
-  );
-  return (
-    <Placeholder label="Product page" hint="Each product's own images, price and options fill this area.">
-      {props.showBreadcrumb ? <p className="bsb-muted" style={{ fontSize: "0.8125rem", marginBottom: "1rem" }}>Home / Products / Product name</p> : null}
-      <div className="bsb-ph-two">{props.galleryPosition === "left" ? <>{gallery}{info}</> : <>{info}{gallery}</>}</div>
-    </Placeholder>
-  );
+  return <ProductDetailSample props={props} ctx={ctx} />;
 }
 
 export function CollectionListingView({ props, ctx }: A<R.CollectionListingProps>): ReactNode {
@@ -1249,6 +1228,8 @@ export function HeroSliderView({ props, ctx }: A<R.HeroSliderProps>): ReactNode 
     ...(props.primaryText ? { "--hs-p-fg": props.primaryText } : null),
     ...(props.secondaryBg ? { "--hs-s-bg": props.secondaryBg } : null),
     ...(props.secondaryText ? { "--hs-s-fg": props.secondaryText } : null),
+    ...(props.mobileTextBg ? { "--hs-m-bg": props.mobileTextBg } : null),
+    ...(props.mobileTextColor ? { "--hs-m-fg": props.mobileTextColor } : null),
   } as CSSProperties;
   const customP = Boolean(props.primaryBg || props.primaryText);
   const customS = Boolean(props.secondaryBg || props.secondaryText);
@@ -1263,6 +1244,7 @@ export function HeroSliderView({ props, ctx }: A<R.HeroSliderProps>): ReactNode 
         `bsb-hs-align-${props.align}`,
         `bsb-hs-pos-${props.contentPosition}`,
         `bsb-hs-w-${props.contentWidth}`,
+        `bsb-hs-m-${props.mobileLayout}`,
       )}
       style={style}
       data-hs=""

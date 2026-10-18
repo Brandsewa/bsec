@@ -31,6 +31,7 @@ export const LAYOUT_KEYS = [
   "minHeight",
   "maxHeight",
   "aspectRatio",
+  "radius",
 ] as const;
 export type LayoutKey = (typeof LAYOUT_KEYS)[number];
 export type LayoutValues = { [K in LayoutKey]?: string | undefined };
@@ -53,6 +54,7 @@ export const LAYOUT_VAR: Record<LayoutKey, string> = {
   minHeight: "mnh",
   maxHeight: "mxh",
   aspectRatio: "ar",
+  radius: "rd",
 };
 const DEVICE_LETTER: Record<LayoutDevice, string> = { desktop: "d", tablet: "t", mobile: "m" };
 
@@ -73,6 +75,7 @@ export const LAYOUT_RULES: Record<LayoutKey, { units: readonly string[]; negativ
   minHeight: { units: ["px", "rem", "em"], keywords: [] },
   maxHeight: { units: ["px", "rem", "em"], keywords: ["none"] },
   aspectRatio: { units: [], keywords: [] },
+  radius: { units: ["px", "rem", "em", "%"], keywords: [] },
 };
 
 const ASPECT = /^\d{1,3}(\.\d{1,3})?(\s*\/\s*\d{1,3}(\.\d{1,3})?)?$/;

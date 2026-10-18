@@ -17,6 +17,7 @@ import {
   THEME_SYSTEM_PAGES,
   type ThemeSystemPageKey,
   resolvePageRenderData,
+  resolveRelatedBlockData,
   getStoreSettings,
   listPublicBlogPosts,
   listPublicBlogCategories,
@@ -241,6 +242,18 @@ export async function getCachedStoreName(tenantId: string): Promise<string> {
  * widgets need), or null when the store has none and the built-in layout applies. Tagged with
  * the page's own tag so publishing it in the editor refreshes every page that uses it.
  */
+/**
+ * Product page: the data of the theme's Product showcase blocks that list related products, for one product. Refreshes when
+ * products or collections change, like the rest of the product page.
+ */
+export async function getCachedRelatedShowcaseData(tenantId: string, productId: string, blocks: BlockInstance[]) {
+  "use cache";
+  cacheTag(tenantTag(tenantId, "product"));
+  cacheTag(tenantTag(tenantId, "collection"));
+  const { rt } = server();
+  return resolveRelatedBlockData(rt, createStorefrontTenantContext(tenantId), { productId, blocks });
+}
+
 export async function getCachedThemePage(tenantId: string, key: ThemeSystemPageKey) {
   "use cache";
   cacheTag(tenantTag(tenantId, "page", THEME_SYSTEM_PAGES[key].slug));

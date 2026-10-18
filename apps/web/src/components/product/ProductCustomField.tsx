@@ -1,14 +1,8 @@
 import React from "react";
 import type { StorefrontCustomField } from "@bs/domain";
 
-/**
- * One custom field of the product (ADR-034), drawn by the product page for the theme's "Custom field" block. Values were
- * validated when saved; rich text is cleaned again on the server before it gets here. Draws nothing without a value.
- */
-export function ProductCustomField({ field, showLabel, label }: { field: StorefrontCustomField | undefined; showLabel: boolean; label: string }) {
-  if (!field) return null;
-  const title = label.trim() || field.name;
-
+/** The value of one custom field as the storefront draws it (rich text, image, list, yes/no, number or plain text); null when there is nothing to draw. */
+export function customFieldBody(field: StorefrontCustomField): React.ReactNode {
   let body: React.ReactNode;
   switch (field.type) {
     case "rich_text":
@@ -40,6 +34,18 @@ export function ProductCustomField({ field, showLabel, label }: { field: Storefr
     default:
       body = <p className="whitespace-pre-line">{String(field.value)}</p>;
   }
+  return body;
+}
+
+/**
+ * One custom field of the product (ADR-034), drawn by the product page for the theme's "Custom field" block. Values were
+ * validated when saved; rich text is cleaned again on the server before it gets here. Draws nothing without a value.
+ */
+export function ProductCustomField({ field, showLabel, label }: { field: StorefrontCustomField | undefined; showLabel: boolean; label: string }) {
+  if (!field) return null;
+  const title = label.trim() || field.name;
+
+  const body = customFieldBody(field);
   if (body === null) return null;
 
   return (

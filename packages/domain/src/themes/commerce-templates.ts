@@ -131,13 +131,12 @@ export const MODERN_TEMPLATE_PRODUCT: BlockInstance[] = [
     imageSide: "right",
   }),
   b("mc-product-reviews", "Reviews", { title: "Customer reviews", showAggregate: true, limit: 6 }),
-  b("mc-product-more", "ProductCarousel", {
+  // The same carousel as the home page's Product showcase, fed with products related to the one being viewed.
+  b("mc-product-more", "ProductShowcase", {
     title: "You may also like",
-    source: "newest",
-    limit: 8,
-    columns: "4",
-    showPrice: true,
-    showRating: false,
+    subtitle: "",
+    tabs: [{ label: "Related", source: "related", collectionSlug: "" }],
+    limit: 10,
     tone: "surface",
   }),
 ];

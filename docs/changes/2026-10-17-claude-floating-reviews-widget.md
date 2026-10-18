@@ -60,6 +60,14 @@ A new BCOM widget, "Floating reviews" (`ReviewsMarquee`), shows the store's publ
 - **General tab** in the editor's left rail with an **Announcement bar** accordion: on/off (hides the Banner block), up to six messages that rotate in CSS (interval, pause on hover, reduced motion shows the first), alignment, background and text colour, font, weight and size. The `Banner` block gained `messages`, `rotate`, `interval`, `align`, `bgColor`, `textColor`, `fontSize`, `fontWeight`, `font` (all with defaults).
 - Dev note: after changing a block schema, restart the web dev server; it kept the old schema and silently dropped the new `messages` prop on save.
 
+## Batch 2: product page, archive, hero slider (follow-up 4)
+- **Variants (B2-01):** a product with several variants but no stored option definitions showed no option picker; the buy box now works the options out from the variants (`optionsFor` in `VariantSelector.tsx`).
+- **Live price (B2-03):** the price, the struck compare-at price and the "each x quantity" line follow the quantity stepper (display only; checkout still recomputes on the server).
+- **Product template (B2-02, B2-04, B2-05, B2-06):** `ProductDetail` gained `elementOrder` (drag-to-reorder list, empty = the old order), `showAccordion`, `accordionFirstOpen` and `accordionItems` (icon, title, static text or a product custom field; rows with no value are hidden). The storefront (`ProductDetailSection`) draws the buy-box elements in that order with the accordion in the same column; the editors now draw the same elements, order and settings with a sample product (`views-product.tsx`) instead of the old placeholder. New icons: clipboard, cup, help, info, package, droplet. Shared helpers in `product-elements.ts`.
+- **Related products (B2-07):** the Product showcase has a new tab source "related" (same collections, then categories, then newest, never the product itself). `resolveRelatedBlockData` (domain, real-database test in `reviews.int.test.ts`) resolves it per product and the product route lays it over the cached theme data (`getCachedRelatedShowcaseData`). The Modern Commerce template's "You may also like" is now this carousel; a store that already has the old carousel block swaps it in its product template.
+- **Collection archive (B2-08):** `CollectionGrid.headerAlign` (left, centre, right; default centre).
+- **Hero slider (B2-09, B2-10):** the Section panel is now one grid with a column per device (desktop, tablet, mobile) and a row each for Margin and Padding (one value for all sides, or "Sides"), Width, Height and a new Border radius (`radius` layout key, also rounds the slides); min/max sizes and aspect ratio sit under "More". On phones the text and buttons sit on a block below the picture by default (`HeroSlider.mobileLayout` below/overlay, `mobileTextBg`, `mobileTextColor`).
+
 ## Docs updated
 - [x] `docs/ARCHITECTURE.md` (block list)
 - [x] ADR: not needed (new block on the existing pattern)

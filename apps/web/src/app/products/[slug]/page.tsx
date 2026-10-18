@@ -19,7 +19,7 @@ import {
   tenantTag,
 } from "@bs/domain";
 import { server } from "@/server/runtime.ts";
-import { getCachedProductCustomFields, getCachedStorefrontProduct, getCachedThemePage } from "@/server/cached-storefront.ts";
+import { getCachedProductCustomFields, getCachedRelatedShowcaseData, getCachedStorefrontProduct, getCachedThemePage } from "@/server/cached-storefront.ts";
 import { BlockRenderer } from "@/components/blocks/BlockRenderer.tsx";
 import { ProductDetailSection } from "@/components/product/ProductDetailSection.tsx";
 
@@ -128,8 +128,11 @@ export default async function ProductDetailPage({ params }: ProductPageProps) {
   // The theme's own product page layout, when the store has one; the built-in layout otherwise.
   const template = await getCachedThemePage(tenantId, "product").catch(() => null);
   const media = template?.renderData?.media ?? {};
+  // "Related" product carousels are resolved for this product and laid over the theme page's data.
+  const relatedData = template ? await getCachedRelatedShowcaseData(tenantId, product.id, template.blocks).catch(() => ({})) : {};
+  const renderData = template ? { ...template.renderData, data: { ...template.renderData.data, ...relatedData } } : undefined;
   const detail = (options?: Parameters<typeof ProductDetailSection>[0]["options"]) => (
-    <ProductDetailSection product={product} options={options} paymentImageUrl={options?.paymentImageMediaId ? media[options.paymentImageMediaId] : undefined} />
+    <ProductDetailSection product={product} options={options} customFields={customFields} paymentImageUrl={options?.paymentImageMediaId ? media[options.paymentImageMediaId] : undefined} />
   );
   // Custom fields (ADR-034): loaded once for the product and handed to the theme's "Custom field" blocks.
   const customFields = await getCachedProductCustomFields(tenantId, product.id).catch(() => []);
@@ -156,7 +159,7 @@ export default async function ProductDetailPage({ params }: ProductPageProps) {
       {template ? (
         <BlockRenderer
           blocks={template.blocks}
-          renderData={template.renderData}
+          renderData={renderData}
           context={{ renderProductDetail: (options) => detail(options), renderProductInfoTabs: infoTabs, renderProductCustomField: customField }}
         />
       ) : (

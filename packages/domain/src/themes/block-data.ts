@@ -106,6 +106,77 @@ async function loadProducts(tx: Tx, props: Record<string, unknown>): Promise<Pro
  * Adds what the showcase card needs beyond the product summary: the first category's name (for the badge)
  * and, for single-variant products, the variant id so the card's cart button can add it directly.
  */
+/**
+ * Products related to one product: others from the same collections, then the same categories, then the newest, never the
+ * product itself. Only products customers can see.
+ */
+async function loadRelatedProducts(tx: Tx, productId: string, limit: number): Promise<ProductRow[]> {
+  const collections = await tx.select({ id: schema.collectionProducts.collectionId }).from(schema.collectionProducts).where(eq(schema.collectionProducts.productId, productId));
+  const categories = await tx.select({ id: schema.productCategories.categoryId }).from(schema.productCategories).where(eq(schema.productCategories.productId, productId));
+  const ids: string[] = [];
+  const add = (rows: Array<{ productId: string }>) => {
+    for (const r of rows) if (r.productId !== productId && !ids.includes(r.productId)) ids.push(r.productId);
+  };
+  if (collections.length > 0) {
+    add(await tx.select({ productId: schema.collectionProducts.productId }).from(schema.collectionProducts).where(inArray(schema.collectionProducts.collectionId, collections.map((c) => c.id))).limit(100));
+  }
+  if (categories.length > 0) {
+    add(await tx.select({ productId: schema.productCategories.productId }).from(schema.productCategories).where(inArray(schema.productCategories.categoryId, categories.map((c) => c.id))).limit(100));
+  }
+  const related = ids.length > 0 ? await tx.select().from(schema.products).where(and(liveProducts(), inArray(schema.products.id, ids.slice(0, 100)))) : [];
+  const rank = new Map(ids.map((id, i) => [id, i]));
+  const rows = related.sort((a, b) => (rank.get(a.id) ?? 0) - (rank.get(b.id) ?? 0)).slice(0, limit);
+  if (rows.length >= limit) return rows;
+  const fill = await newest(tx, limit + rows.length + 1);
+  const have = new Set(rows.map((r) => r.id));
+  for (const r of fill) {
+    if (rows.length >= limit) break;
+    if (r.id !== productId && !have.has(r.id)) rows.push(r);
+  }
+  return rows;
+}
+
+/** One Product showcase's tabs. A "related" tab lists products related to `relatedTo` (the product page's product), else the newest. */
+async function resolveShowcase(tx: Tx, b: BlockInstance, relatedTo?: string): Promise<BlockData> {
+  const tabs = Array.isArray(b.props["tabs"]) ? (b.props["tabs"] as Array<Record<string, unknown>>).slice(0, 6) : [];
+  const limit = Number(b.props["limit"]) || 10;
+  const resolved: Array<{ products: BlockProduct[] }> = [];
+  for (const tab of tabs.length > 0 ? tabs : [{ source: "newest" }]) {
+    const rows =
+      tab["source"] === "related" && relatedTo
+        ? await loadRelatedProducts(tx, relatedTo, limit)
+        : await loadProducts(tx, { source: tab["source"] === "related" ? "newest" : tab["source"], collectionSlug: tab["collectionSlug"], limit });
+    const summaries = await buildProductSummaries(tx, rows.map((r) => r.id), rows);
+    resolved.push({ products: await enrichShowcaseProducts(tx, summaries.map(toBlockProduct)) });
+  }
+  return { kind: "product-tabs", tabs: resolved };
+}
+
+/**
+ * Product page: the render data of the Product showcase blocks that have a "related" tab, for this product. The theme's page
+ * data is resolved once per store, so these blocks are resolved again per product and laid over it.
+ */
+export async function resolveRelatedBlockData(
+  rt: Runtime,
+  ctx: TenantContext,
+  input: { productId: string; blocks: BlockInstance[] },
+): Promise<Record<string, BlockData>> {
+  const targets: BlockInstance[] = [];
+  walkBlocks(input.blocks, (b) => {
+    if (b.hidden || b.type !== "ProductShowcase") return;
+    const tabs = Array.isArray(b.props["tabs"]) ? (b.props["tabs"] as Array<Record<string, unknown>>) : [];
+    if (tabs.some((t) => t["source"] === "related")) targets.push(b);
+  });
+  if (targets.length === 0) return {};
+  const db = rt._db.db;
+  if (!(await isFeatureEnabled(db, ctx.tenantId, "catalog"))) return {};
+  return withTenant(db, ctx.tenantId, async (tx) => {
+    const out: Record<string, BlockData> = {};
+    for (const b of targets) out[b.id] = await resolveShowcase(tx, b, input.productId);
+    return out;
+  });
+}
+
 async function enrichShowcaseProducts(tx: Tx, products: BlockProduct[]): Promise<BlockProduct[]> {
   if (products.length === 0) return products;
   const ids = products.map((p) => p.id);
@@ -650,15 +721,7 @@ export async function resolveBlockData(
       }
 
       for (const b of showcaseBlocks) {
-        const tabs = Array.isArray(b.props["tabs"]) ? (b.props["tabs"] as Array<Record<string, unknown>>).slice(0, 6) : [];
-        const limit = Number(b.props["limit"]) || 10;
-        const resolved: Array<{ products: BlockProduct[] }> = [];
-        for (const tab of tabs.length > 0 ? tabs : [{ source: "newest" }]) {
-          const rows = await loadProducts(tx, { source: tab["source"], collectionSlug: tab["collectionSlug"], limit });
-          const summaries = await buildProductSummaries(tx, rows.map((r) => r.id), rows);
-          resolved.push({ products: await enrichShowcaseProducts(tx, summaries.map(toBlockProduct)) });
-        }
-        out[b.id] = { kind: "product-tabs", tabs: resolved };
+        out[b.id] = await resolveShowcase(tx, b);
       }
 
       // Floating reviews widgets: reviews belong to catalog products, so they follow the catalog feature.

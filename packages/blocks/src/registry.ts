@@ -22,6 +22,7 @@ import * as VB from "./views-blog.tsx";
 import * as VR from "./views-reviews.tsx";
 import * as VI from "./views-image-banner.tsx";
 import * as VF from "./views-faq.tsx";
+import { PRODUCT_ELEMENTS } from "./product-elements.ts";
 import * as VC from "./views-collection-showcase.tsx";
 
 /* ------------------------------------------------------------------ */
@@ -146,6 +147,8 @@ export const ProductGridBlock: BlockDefinition<ProductGridProps> = {
 export const CollectionGridSchema = z.object({
   title: z.string().min(1),
   subtitle: z.string().optional(),
+  /** Where the heading and the description sit: left, centre (the original look) or right. */
+  headerAlign: alignSchema.default("center"),
   collectionSlugs: z.array(z.string()).default([]),
   /** List every published collection (the Collection Archive page), ignoring collectionSlugs. */
   showAll: z.boolean().default(false),
@@ -165,6 +168,7 @@ export const CollectionGridBlock: BlockDefinition<CollectionGridProps> = {
   defaultProps: {
     title: "Shop by Category",
     subtitle: "Find exactly what you are looking for",
+    headerAlign: "center",
     collectionSlugs: [],
     showAll: false,
     columns: "3",
@@ -755,6 +759,8 @@ const DEFAULT_PRODUCT_USPS = [
   { icon: "returns" as const, text: "Easy returns", description: "Simple returns if something is not right" },
 ];
 
+export { PRODUCT_ELEMENTS, PRODUCT_ELEMENT_LABELS, normalizeElementOrder, type ProductElement } from "./product-elements.ts";
+
 export const ProductDetailSchema = z.object({
   galleryPosition: z.enum(["left", "right"]).default("left"),
   showBreadcrumb: z.boolean().default(true),
@@ -797,6 +803,24 @@ export const ProductDetailSchema = z.object({
     .array(z.object({ icon: z.enum(ICON_NAMES).default("check"), text: z.string().min(1).max(40), description: z.string().max(80).optional() }))
     .max(4)
     .default(DEFAULT_PRODUCT_USPS),
+  /** Order of the buy-box elements (see PRODUCT_ELEMENTS). Empty = the default order, as before. */
+  elementOrder: z.array(z.enum(PRODUCT_ELEMENTS)).max(12).default([]),
+  /** A list of collapsible rows (details, ingredients, brewing guide...) in the buy-box column. */
+  showAccordion: z.boolean().default(false),
+  accordionFirstOpen: z.boolean().default(true),
+  accordionItems: z
+    .array(
+      z.object({
+        icon: z.enum(ICON_NAMES).default("info"),
+        title: z.string().min(1).max(60),
+        /** "custom_field" shows the product's own value of the custom field `fieldKey` (hidden when the product has none); "static" shows `text`. */
+        source: z.enum(["static", "custom_field"]).default("static"),
+        fieldKey: z.string().max(80).optional(),
+        text: z.string().max(2000).optional(),
+      }),
+    )
+    .max(8)
+    .default([]),
 });
 export type ProductDetailProps = z.infer<typeof ProductDetailSchema>;
 export const ProductDetailBlock: BlockDefinition<ProductDetailProps> = {
@@ -830,6 +854,10 @@ export const ProductDetailBlock: BlockDefinition<ProductDetailProps> = {
     timeZone: "Asia/Kolkata",
     showUsps: true,
     usps: DEFAULT_PRODUCT_USPS,
+    elementOrder: [],
+    showAccordion: false,
+    accordionFirstOpen: true,
+    accordionItems: [],
   },
   render: V.ProductDetailView,
 };
@@ -1001,6 +1029,11 @@ export const HeroSliderSchema = z.object({
   contentPosition: z.enum(["bottom", "center"]).default("bottom"),
   height: z.enum(["sm", "md", "lg", "screen"]).default("md"),
   contentWidth: z.enum(["default", "wide", "full"]).default("wide"),
+  /** Phones: the text and buttons sit on a block below the picture or video ("below"), or over it as on larger screens ("overlay"). */
+  mobileLayout: z.enum(["below", "overlay"]).default("below"),
+  /** Colours of that block on phones; empty uses the theme's soft background and text colour. */
+  mobileTextBg: hexColorSchema.optional(),
+  mobileTextColor: hexColorSchema.optional(),
   titleSize: z.enum(["lg", "xl"]).default("lg"),
   titleTag: z.enum(["h1", "h2"]).default("h2"), // first slide only; the others are always h2
   // Image and shade
@@ -1054,7 +1087,8 @@ export const HeroSliderBlock: BlockDefinition<HeroSliderProps> = {
 
 export const ShowcaseTabSchema = z.object({
   label: z.string().max(40).default(""),
-  source: z.enum(["newest", "featured", "collection"]).default("collection"),
+  /** "related" is for the product page: products from the same collections or categories as the product being viewed (newest elsewhere). */
+  source: z.enum(["newest", "featured", "collection", "related"]).default("collection"),
   collectionSlug: z.string().max(120).default(""),
 });
 export type ShowcaseTab = z.infer<typeof ShowcaseTabSchema>;
