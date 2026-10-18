@@ -434,6 +434,17 @@ const CASES: Record<string, Case> = {
       enforcement: "hard",
     }),
   },
+  "integrations.updateBillingSettings": {
+    role: "platform_owner",
+    action: "platform_billing.updated",
+    input: async () => ({ graceDays: 5 }),
+  },
+  // No keys are saved in this suite, so the test returns "save the keys first" without calling Razorpay.
+  "integrations.testBillingConnection": {
+    role: "platform_owner",
+    action: "platform_billing.tested",
+    input: async () => ({ mode: "test" }),
+  },
   "integrations.updatePaymentProvider": {
     role: "platform_admin",
     action: "payment_provider.live_mode_allowed",

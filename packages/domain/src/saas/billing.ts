@@ -1,8 +1,9 @@
 import { createHmac, randomBytes, createHash, timingSafeEqual } from "node:crypto";
 import { and, desc, eq, sql } from "drizzle-orm";
-import { schema } from "@bs/db";
+import { schema, type Db } from "@bs/db";
 import { saasDb, type Runtime } from "../runtime.ts";
 import { tierForPlan } from "./plan-tiers.ts";
+import { loadPlatformBillingCredentials } from "../platform/billing-settings.ts";
 
 export interface SubscriptionBillingProvider {
   isConfigured?(): boolean;
@@ -132,6 +133,20 @@ export class RazorpaySubscriptionProvider implements SubscriptionBillingProvider
   }
 }
 
+/**
+ * The billing provider for the platform's saved Razorpay keys (Super Admin, ADR-036), falling back to the legacy env vars.
+ * With neither, the provider reports itself unconfigured instead of faking success (ADR-014 point 4).
+ */
+export async function resolveBillingProvider(db: Db): Promise<RazorpaySubscriptionProvider> {
+  const creds = await loadPlatformBillingCredentials(db);
+  if (!creds) return new RazorpaySubscriptionProvider();
+  return new RazorpaySubscriptionProvider({
+    keyId: creds.keyId,
+    keySecret: creds.keySecret,
+    ...(creds.webhookSecret ? { webhookSecret: creds.webhookSecret } : {}),
+  });
+}
+
 export interface PlatformBillingWebhookResult {
   received: boolean;
   eventId: string;
@@ -154,7 +169,7 @@ export async function handlePlatformBillingWebhook(
   },
 ): Promise<PlatformBillingWebhookResult> {
   const db = saasDb(rt);
-  const billingProvider = params.provider ?? new RazorpaySubscriptionProvider();
+  const billingProvider = params.provider ?? (await resolveBillingProvider(db));
 
   // 1. Signature Verification (Fails closed per ADR-014)
   const isValid = billingProvider.verifyWebhookSignature(params.rawBody, params.signature);
@@ -471,7 +486,7 @@ export async function changeTenantPlan(
   },
 ) {
   const db = saasDb(rt);
-  const billingProvider = params.provider ?? new RazorpaySubscriptionProvider();
+  const billingProvider = params.provider ?? (await resolveBillingProvider(db));
 
   if (typeof billingProvider.isConfigured === "function" && !billingProvider.isConfigured()) {
     throw new Error("Billing is not configured: missing Razorpay credentials");
@@ -557,7 +572,7 @@ export async function cancelTenantSubscription(
   provider?: SubscriptionBillingProvider,
 ) {
   const db = saasDb(rt);
-  const billingProvider = provider ?? new RazorpaySubscriptionProvider();
+  const billingProvider = provider ?? (await resolveBillingProvider(db));
 
   if (typeof billingProvider.isConfigured === "function" && !billingProvider.isConfigured()) {
     throw new Error("Billing is not configured: missing Razorpay credentials");

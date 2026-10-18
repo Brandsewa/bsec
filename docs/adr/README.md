@@ -41,6 +41,7 @@ New decisions get an ADR **before** code (PLAN §15). Copy `template.md`, take t
 | [033](033-blog-system.md) | Blog system: categories, posts, theme templates, widget | Accepted |
 | [034](034-custom-fields.md) | Custom fields on products and collections | Accepted |
 | [035](035-promotions-and-free-periods.md) | Promotions and free periods for store subscriptions | Accepted |
+| [036](036-platform-billing-credentials.md) | Platform billing credentials in Super Admin (supersedes ADR-014 point 1) | Accepted |
 
-**Next number: 036.**
+**Next number: 037.**
 

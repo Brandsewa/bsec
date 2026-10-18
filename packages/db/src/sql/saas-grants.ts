@@ -28,5 +28,7 @@ DO $$
 BEGIN
   IF EXISTS (SELECT FROM pg_roles WHERE rolname = 'app_saas') THEN
     GRANT SELECT, INSERT, UPDATE, DELETE ON TABLE ${APP_SAAS_WRITABLE_TABLES.map((t) => `"${t}"`).join(", ")} TO app_saas;
+    -- The platform's billing credentials (ADR-036): read-only, for the billing webhook and subscribe paths.
+    GRANT SELECT ON TABLE "platform_billing_settings" TO app_saas;
   END IF;
 END $$;`;

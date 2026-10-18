@@ -294,8 +294,9 @@ Drizzle schema files in `packages/db/src/schema/` (one Postgres database, `publi
 | 0066 | `custom_fields` | `custom_field_definitions`, `custom_field_values` (tenant tables, forced RLS, ADR-034); `plans.features.custom_fields` (Growth and Pro) |
 | 0067 | `promotions` | `promotions`, `tenant_promotions` (platform tables, ADR-035; promotions last at most 12 months, one active per store) |
 | 0068 | `signup_default_template` | `theme_templates.is_signup_default` (at most one flagged; new self-service stores start with it, else the launch theme) |
+| 0069 | `platform_billing_settings` | `platform_billing_settings` (one row: encrypted Razorpay test and live keys for charging merchants, mode, enabled, grace days; `app_platform` writes, `app_saas` reads; ADR-036) |
 
-How to write one (expand, migrate, contract; `forceRlsSql`): `docs/migrations.md`. **Never edit an applied migration.** Latest on disk: `0068` (the docs check keeps this list honest).
+How to write one (expand, migrate, contract; `forceRlsSql`): `docs/migrations.md`. **Never edit an applied migration.** Latest on disk: `0069` (the docs check keeps this list honest).
 
 ---
 
@@ -363,6 +364,7 @@ Theme flow: platform staff build `theme_templates` (draft + published snapshot, 
 - **Variant builder:** `packages/domain/src/catalog/variant-options.ts` (pure rules: 3 options, 30 values each, 250 variants) and `variant-builder.ts` (`setProductOptions`, `createVariant`, `deleteVariant`); API `admin.products.setOptions`, `admin.variants.create|delete`, and `variants.update` now also takes barcode, weight (g), dimensions and option values. Admin: `apps/admin/src/components/product/variant-builder.tsx` and `variant-drawer.tsx`.
 - **Shipping:** zones can list states (`shipping_zones.states`) and rates can be flat, free-above, price tier or weight tier. `getTenantShippingRates(db, tenantId, subtotal, { weightGrams, destination })` is the one function that prices the cart, checkout and admin orders; rules (`shipping-rules.ts`) are pure. Admin: Settings > Shipping edits all zones through `admin.shipping.saveZones`. Checkout refreshes the options when the shipping state changes (`POST /api/storefront/checkout/shipping-rates`, read-only, re-priced on the server at placement). No courier integration.
 - **Custom fields (ADR-034):** `packages/domain/src/catalog/custom-fields.ts` and `custom-field-rules.ts`; API `admin.customFields.*`; Settings > Custom fields, a card on the product page, block `ProductCustomField`, storefront `ProductCustomField.tsx`. Growth plan and above.
+- **Platform billing credentials (ADR-036):** `packages/db/src/schema/platform-billing.ts`, `packages/domain/src/platform/billing-settings.ts` (`loadPlatformBillingCredentials`: saved keys, then env fallback), `saas/billing.ts` `resolveBillingProvider`; Platform API `integrations.billingSettings`, `updateBillingSettings`, `testBillingConnection` (owner only, audited); Super Admin Integrations, Platform billing (`/integrations/billing`).
 - **Promotions (ADR-035):** `packages/domain/src/platform/promotions.ts`, `saas/promotion-math.ts`; Platform API `promotions.*`; Super Admin Promotions page and the Billing tab; promo code field on signup; hourly sweep `endDuePromotions` in `apps/platform/src/main.ts` (`PROMOTION_SWEEP_INTERVAL_MS`).
 - **Feature flags:** `retire` / `restore` (`platform_admin` / `platform_owner`); retired flags are always on in `isFeatureEnabled`; kill switches cannot be retired.
 - **Platform audit log:** server pagination and filters on `audit.list`, `audit.archive|unarchive` (insert/delete in `platform_audit_log_archives`; rows are never deleted).
