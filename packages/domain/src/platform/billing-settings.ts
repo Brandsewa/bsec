@@ -20,6 +20,18 @@ export interface BillingKeySetView {
   webhookSecretConfigured: boolean;
 }
 
+export interface InvoiceProfile {
+  legalName: string | null;
+  address: string | null;
+  /** The state the platform is registered in (decides CGST and SGST versus IGST). */
+  state: string | null;
+  gstin: string | null;
+  /** Service accounting code, shown on the invoice when set. */
+  sac: string | null;
+  /** Tax rate in basis points (1800 = 18%). The plan price is quoted inclusive of it. */
+  gstRateBps: number;
+}
+
 export interface PlatformBillingSettingsView {
   provider: "razorpay";
   mode: BillingMode;
@@ -27,6 +39,7 @@ export interface PlatformBillingSettingsView {
   graceDays: number;
   test: BillingKeySetView;
   live: BillingKeySetView;
+  invoice: InvoiceProfile;
   /** Where Razorpay must send subscription events (set it in the Razorpay dashboard for the matching mode). */
   webhookUrl: string;
   /** True while the keys come from the server environment because none are saved here (ADR-014 fallback). */
@@ -43,7 +56,19 @@ export interface BillingKeysInput {
   webhookSecret?: string | undefined;
 }
 
+export interface UpdateInvoiceProfileInput {
+  legalName?: string | undefined;
+  address?: string | undefined;
+  state?: string | undefined;
+  gstin?: string | undefined;
+  sac?: string | undefined;
+  gstRateBps?: number | undefined;
+}
+
+export const GSTIN_PATTERN = /^[0-9]{2}[A-Z]{5}[0-9]{4}[A-Z][1-9A-Z]Z[0-9A-Z]$/;
+
 export interface UpdateBillingSettingsInput {
+  invoice?: UpdateInvoiceProfileInput | undefined;
   mode?: BillingMode | undefined;
   enabled?: boolean | undefined;
   graceDays?: number | undefined;
@@ -120,6 +145,22 @@ export async function loadPlatformBillingCredentials(db: Db): Promise<BillingCre
   return null;
 }
 
+function invoiceProfileOf(row: BillingRow | undefined): InvoiceProfile {
+  return {
+    legalName: row?.invoiceLegalName ?? null,
+    address: row?.invoiceAddress ?? null,
+    state: row?.invoiceState ?? null,
+    gstin: row?.invoiceGstin ?? null,
+    sac: row?.invoiceSac ?? null,
+    gstRateBps: row?.gstRateBps ?? 1800,
+  };
+}
+
+/** The platform's invoice issuer details and tax rate (read by the billing webhook and the invoice PDF). */
+export async function loadInvoiceProfile(db: Db): Promise<InvoiceProfile> {
+  return invoiceProfileOf(await loadRow(db));
+}
+
 export async function getPlatformBillingSettings(rt: Runtime, staffUserId: string): Promise<PlatformBillingSettingsView> {
   await assertPlatformStaff(rt, staffUserId);
   const row = await loadRow(rt._db.db);
@@ -131,6 +172,7 @@ export async function getPlatformBillingSettings(rt: Runtime, staffUserId: strin
     graceDays: row?.graceDays ?? 7,
     test: keySet(row, "test"),
     live: keySet(row, "live"),
+    invoice: invoiceProfileOf(row),
     webhookUrl: webhookUrl(),
     usingEnvFallback: creds?.source === "env",
     lastTestAt: row?.lastTestAt ? row.lastTestAt.toISOString() : null,
@@ -201,6 +243,26 @@ export async function updatePlatformBillingSettings(
     if (input.graceDays !== undefined) {
       values.graceDays = input.graceDays;
       changed.push("graceDays");
+    }
+    if (input.invoice) {
+      const inv = input.invoice;
+      const text = (v: string | undefined, max: number) => (v === undefined ? undefined : v.trim().slice(0, max) || null);
+      const legalName = text(inv.legalName, 200);
+      const address = text(inv.address, 500);
+      const state = text(inv.state, 80);
+      const gstin = inv.gstin === undefined ? undefined : inv.gstin.trim().toUpperCase() || null;
+      const sac = text(inv.sac, 12);
+      if (gstin && !GSTIN_PATTERN.test(gstin)) throw new Error("Bad Request: that is not a valid GSTIN (15 characters, for example 27AAAAA0000A1Z5)");
+      if (sac && !/^[0-9]{4,8}$/.test(sac)) throw new Error("Bad Request: the SAC is 4 to 8 digits");
+      if (inv.gstRateBps !== undefined && (!Number.isInteger(inv.gstRateBps) || inv.gstRateBps < 0 || inv.gstRateBps > 2800)) {
+        throw new Error("Bad Request: the tax rate is 0% to 28%");
+      }
+      if (legalName !== undefined) { values.invoiceLegalName = legalName; changed.push("invoice.legalName"); }
+      if (address !== undefined) { values.invoiceAddress = address; changed.push("invoice.address"); }
+      if (state !== undefined) { values.invoiceState = state; changed.push("invoice.state"); }
+      if (gstin !== undefined) { values.invoiceGstin = gstin; changed.push("invoice.gstin"); }
+      if (sac !== undefined) { values.invoiceSac = sac; changed.push("invoice.sac"); }
+      if (inv.gstRateBps !== undefined) { values.gstRateBps = inv.gstRateBps; changed.push("invoice.gstRateBps"); }
     }
 
     const merged = { ...(existing ?? {}), ...values } as BillingRow;

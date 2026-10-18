@@ -24,6 +24,13 @@ export const platformBillingSettings = pgTable("platform_billing_settings", {
   liveSecretIv: text("live_secret_iv"),
   liveWebhookCiphertext: text("live_webhook_ciphertext"),
   liveWebhookIv: text("live_webhook_iv"),
+  // Who issues the GST invoices (billing B6). The plan price is quoted inclusive of this tax.
+  invoiceLegalName: text("invoice_legal_name"),
+  invoiceAddress: text("invoice_address"),
+  invoiceState: text("invoice_state"),
+  invoiceGstin: text("invoice_gstin"),
+  invoiceSac: text("invoice_sac"),
+  gstRateBps: integer("gst_rate_bps").notNull().default(1800),
   lastTestAt: timestamp("last_test_at", { withTimezone: true }),
   lastTestStatus: text("last_test_status"),
   lastTestError: text("last_test_error"),

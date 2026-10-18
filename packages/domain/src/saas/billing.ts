@@ -3,7 +3,7 @@ import { and, desc, eq, sql } from "drizzle-orm";
 import { schema, type Db } from "@bs/db";
 import { saasDb, type Runtime } from "../runtime.ts";
 import { LAPSED_TRIAL_TIER, tierForPlan } from "./plan-tiers.ts";
-import { loadPlatformBillingCredentials } from "../platform/billing-settings.ts";
+import { loadInvoiceProfile, loadPlatformBillingCredentials } from "../platform/billing-settings.ts";
 import { findRazorpayPlanId } from "../platform/billing-plans.ts";
 
 export interface SubscriptionBillingProvider {
@@ -323,7 +323,9 @@ export async function handlePlatformBillingWebhook(
             ? new Date(subEntity.current_end * 1000)
             : new Date(Date.now() + 30 * 24 * 60 * 60 * 1000);
 
-          const taxPaise = Math.round((amountPaise * 18) / 118); // 18% inclusive GST (rate to be confirmed with the owner's GST details)
+          // The plan price is quoted inclusive of GST; the rate is Super Admin, Platform billing, Invoice details (default 18%).
+          const gstRateBps = (await loadInvoiceProfile(db)).gstRateBps;
+          const taxPaise = Math.round((amountPaise * gstRateBps) / (10000 + gstRateBps));
           const paymentId = paymentEntity.id ?? null;
 
           // Do the invoice, subscription and tier writes in ONE transaction
@@ -350,6 +352,8 @@ export async function handlePlatformBillingWebhook(
                 providerSubscriptionId: subId ?? undefined,
                 currentPeriodStart: currentStart,
                 currentPeriodEnd: currentEnd,
+                pastDueSince: null,
+                dunningStage: 0,
                 updatedAt: new Date(),
               })
               .where(eq(schema.subscriptions.id, activeSub.id));
@@ -417,7 +421,7 @@ export async function handlePlatformBillingWebhook(
       if (subId) {
         await db
           .update(schema.subscriptions)
-          .set({ status: "past_due", updatedAt: new Date() })
+          .set({ status: "past_due", pastDueSince: sql`COALESCE(${schema.subscriptions.pastDueSince}, now())`, updatedAt: new Date() })
           .where(eq(schema.subscriptions.providerSubscriptionId, subId));
         actionTaken = "subscription_past_due";
       }
@@ -450,7 +454,7 @@ export async function handlePlatformBillingWebhook(
       if (subId) {
         await db
           .update(schema.subscriptions)
-          .set({ status: "active", updatedAt: new Date() })
+          .set({ status: "active", pastDueSince: null, dunningStage: 0, updatedAt: new Date() })
           .where(eq(schema.subscriptions.providerSubscriptionId, subId));
         actionTaken = "subscription_resumed";
       }

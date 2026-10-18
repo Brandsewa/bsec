@@ -14,6 +14,7 @@ import { SimpleSelect } from "@bs/ui";
 import { SettingsCard, SettingsPageFrame } from "../../../components/settings/settings-page.tsx";
 import { orpc } from "../../../lib/orpc.ts";
 import { errorMessage } from "../../../lib/errors.ts";
+import { downloadInvoicePdf } from "../../../lib/invoice-download.ts";
 
 export const Route = createFileRoute("/_store/settings/plan-and-billing")({
   pendingComponent: () => <PageSkeleton />,
@@ -335,6 +336,7 @@ export function PlanAndBillingPage() {
                       <th className="p-3">Issued date</th>
                       <th className="p-3">Amount</th>
                       <th className="p-3">Status</th>
+                      <th className="p-3 text-right">Invoice</th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-border">
@@ -351,6 +353,16 @@ export function PlanAndBillingPage() {
                           <Badge variant={inv.status === "paid" ? "outline" : "secondary"}>
                             {inv.status}
                           </Badge>
+                        </td>
+                        <td className="p-3 text-right">
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            disabled={!inv.downloadable}
+                            onClick={() => downloadInvoicePdf(inv.id, inv.number).catch((e) => toast.error(errorMessage(e)))}
+                          >
+                            Download PDF
+                          </Button>
                         </td>
                       </tr>
                     ))}

@@ -164,6 +164,73 @@ function KeysCard({
   );
 }
 
+function InvoiceDetailsCard({ view, canEdit, onSaved }: { view: PlatformBillingSettingsView["invoice"]; canEdit: boolean; onSaved: () => Promise<void> }) {
+  const [form, setForm] = useState({
+    legalName: view.legalName ?? "",
+    address: view.address ?? "",
+    state: view.state ?? "",
+    gstin: view.gstin ?? "",
+    sac: view.sac ?? "",
+    gstRatePercent: String(view.gstRateBps / 100),
+  });
+  const [saving, setSaving] = useState(false);
+
+  const save = async (e: React.FormEvent) => {
+    e.preventDefault();
+    const percent = Number(form.gstRatePercent);
+    if (!Number.isFinite(percent) || percent < 0 || percent > 28) {
+      toast.error("The tax rate is 0% to 28%");
+      return;
+    }
+    setSaving(true);
+    try {
+      await client.integrations.updateBillingSettings({
+        invoice: { legalName: form.legalName, address: form.address, state: form.state, gstin: form.gstin, sac: form.sac, gstRateBps: Math.round(percent * 100) },
+      });
+      toast.success("Invoice details saved");
+      await onSaved();
+    } catch (err) {
+      toast.error(messageOf(err));
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const field = (id: keyof typeof form, label: string, hint?: string, placeholder?: string) => (
+    <div className="space-y-1.5">
+      <Label htmlFor={`inv-${id}`}>{label}</Label>
+      <Input id={`inv-${id}`} value={form[id]} onChange={(e) => setForm({ ...form, [id]: e.target.value })} placeholder={placeholder} disabled={!canEdit} autoComplete="off" />
+      {hint ? <p className="text-[11px] text-muted-foreground">{hint}</p> : null}
+    </div>
+  );
+
+  return (
+    <Card>
+      <form onSubmit={save}>
+        <CardHeader>
+          <CardTitle>Invoice details</CardTitle>
+          <CardDescription>
+            Printed on the GST tax invoice every merchant receives for a plan payment. The plan price is treated as inclusive of this tax. Have your accountant confirm the GSTIN, SAC and rate.
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="grid gap-4 sm:grid-cols-2">
+          {field("legalName", "Legal name", undefined, "Brand Sewa Pvt Ltd")}
+          {field("gstin", "GSTIN", "15 characters, for example 27AAAAA0000A1Z5")}
+          <div className="sm:col-span-2">{field("address", "Registered address")}</div>
+          {field("state", "State", "Decides CGST and SGST (same state as the merchant) or IGST", "Maharashtra")}
+          {field("sac", "SAC", "Service accounting code, 4 to 8 digits")}
+          {field("gstRatePercent", "GST rate (%)", "Usually 18")}
+        </CardContent>
+        <CardFooter>
+          <Button type="submit" size="sm" disabled={!canEdit || saving}>
+            {saving ? "Saving..." : "Save invoice details"}
+          </Button>
+        </CardFooter>
+      </form>
+    </Card>
+  );
+}
+
 function rupees(paise: number): string {
   return `₹${(paise / 100).toLocaleString("en-IN", { maximumFractionDigits: 0 })}`;
 }
@@ -381,6 +448,8 @@ export function BillingIntegrations() {
           </div>
 
           <PlansCard canEdit={canEdit} />
+
+          <InvoiceDetailsCard key={data.updatedAt ?? "new"} view={data.invoice} canEdit={canEdit} onSaved={refresh} />
 
           <Card>
             <CardHeader>
