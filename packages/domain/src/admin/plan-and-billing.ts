@@ -196,7 +196,7 @@ export async function getPlanAndBilling(
       amountPaise: inv.amountPaise,
       taxPaise: inv.taxPaise,
       status: inv.status as "issued" | "paid" | "void",
-      downloadable: Boolean(inv.pdfKey),
+      downloadable: true, // rendered on demand (billing B6)
     }));
   }
 

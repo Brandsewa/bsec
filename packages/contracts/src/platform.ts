@@ -1312,7 +1312,17 @@ const BillingKeySetView = z.object({
   webhookSecretConfigured: z.boolean(),
 });
 
+const InvoiceProfile = z.object({
+  legalName: z.string().nullable(),
+  address: z.string().nullable(),
+  state: z.string().nullable(),
+  gstin: z.string().nullable(),
+  sac: z.string().nullable(),
+  gstRateBps: z.number().int(),
+});
+
 export const PlatformBillingSettingsView = z.object({
+  invoice: InvoiceProfile,
   provider: z.literal("razorpay"),
   mode: z.enum(["test", "live"]),
   enabled: z.boolean(),
@@ -1374,6 +1384,16 @@ export const platformIntegrationsContract = {
         mode: z.enum(["test", "live"]).optional(),
         enabled: z.boolean().optional(),
         graceDays: z.number().int().min(0).max(30).optional(),
+        invoice: z
+          .object({
+            legalName: z.string().max(200).optional(),
+            address: z.string().max(500).optional(),
+            state: z.string().max(80).optional(),
+            gstin: z.string().max(20).optional(),
+            sac: z.string().max(12).optional(),
+            gstRateBps: z.number().int().min(0).max(2800).optional(),
+          })
+          .optional(),
         test: BillingKeysInput.optional(),
         live: BillingKeysInput.optional(),
       }),

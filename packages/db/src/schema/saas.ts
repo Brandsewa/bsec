@@ -56,6 +56,9 @@ export const subscriptions = pgTable("subscriptions", {
   provider: text("provider").notNull().default("razorpay"),
   providerSubscriptionId: text("provider_subscription_id"),
   cancelAt: timestamp("cancel_at", { withTimezone: true }),
+  // Dunning (billing B5): when a paid subscription first failed to charge, and which reminder was sent last.
+  pastDueSince: timestamp("past_due_since", { withTimezone: true }),
+  dunningStage: integer("dunning_stage").notNull().default(0),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().default(sql`now()`),
   updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().default(sql`now()`),
 });

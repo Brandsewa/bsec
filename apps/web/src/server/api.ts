@@ -277,6 +277,8 @@ import {
   updateCodMethod,
   getPlanAndBilling,
   subscribeToPlan,
+  loadInvoicePdfData,
+  renderPlatformInvoicePdf,
   cancelPlanSubscription,
   listAvailablePlans,
   requestPlanChange,
@@ -3391,6 +3393,39 @@ api.get("/health", async (c) => {
  * CSV export route for Finance (docs/FINANCE-PLAN.md §3.10).
  * Downloads ledger entries or expenses with BOM + RFC 4180 quoting and 20,000-row ceiling.
  */
+/**
+ * GST tax invoice PDF for one of the store's own platform plan payments (billing B6). Rendered on demand; the invoice must
+ * belong to the signed-in store, so another store's id answers 404.
+ */
+api.get("/admin/billing/invoices/:id/pdf", async (c) => {
+  const session = await resolveStaffSession(c.req.raw.headers);
+  if (!session) return c.json({ error: "Unauthorized" }, 401);
+  const tenantCtx = await buildTenantContext(server().rt._db.db, {
+    entryPath: "admin",
+    headers: c.req.raw.headers,
+    session,
+    request: { method: c.req.method, path: c.req.path },
+  });
+  if (!tenantCtx) return c.json({ error: "Store context required" }, 400);
+  try {
+    assertPermission(tenantCtx, "settings.read");
+  } catch {
+    return c.json({ error: "Forbidden" }, 403);
+  }
+  const id = c.req.param("id");
+  if (!/^[0-9a-f-]{36}$/i.test(id)) return c.json({ error: "Not found" }, 404);
+  const data = await loadInvoicePdfData(server().rt, tenantCtx.tenantId, id);
+  if (!data) return c.json({ error: "Not found" }, 404);
+  const pdf = await renderPlatformInvoicePdf(data);
+  return new Response(new Uint8Array(pdf), {
+    headers: {
+      "Content-Type": "application/pdf",
+      "Content-Disposition": `attachment; filename="invoice-${data.number.replace(/[^A-Za-z0-9-]/g, "-")}.pdf"`,
+      "Cache-Control": "private, no-store",
+    },
+  });
+});
+
 api.get("/admin/finance/export", async (c) => {
   const session = await resolveStaffSession(c.req.raw.headers);
   if (!session) return c.json({ error: "Unauthorized" }, 401);

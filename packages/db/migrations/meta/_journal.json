@@ -456,6 +456,13 @@
       "when": 1792629200000,
       "tag": "0070_billing_plans_and_invoice_series",
       "breakpoints": true
+    },
+    {
+      "idx": 65,
+      "version": "7",
+      "when": 1792715600000,
+      "tag": "0071_billing_dunning_and_invoice_profile",
+      "breakpoints": true
     }
   ]
 }

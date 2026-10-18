@@ -148,6 +148,8 @@ export * from "./platform/catalog-reads.ts";
 export * from "./platform/promotions.ts";
 export * from "./platform/billing-settings.ts";
 export * from "./platform/billing-plans.ts";
+export * from "./saas/dunning.ts";
+export * from "./saas/invoice-pdf.ts";
 export * from "./saas/promotion-math.ts";
 export * from "./platform/email-settings.ts";
 export * from "./system/platform-mailer.ts";
