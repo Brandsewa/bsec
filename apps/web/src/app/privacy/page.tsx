@@ -4,8 +4,8 @@ import { GrievanceBox, LegalMeta, RelatedLinks, Summary } from "@/components/mar
 import { ADDRESS_LINE, SITE } from "@/components/marketing/landing/site-info.ts";
 
 export const metadata: Metadata = {
-  title: "Privacy policy | Bs Commerce",
-  description: "How Bs Commerce (bcom.si), operated by Brand Sewa Digital Private Limited, collects, uses and protects personal data under India's DPDP Act.",
+  title: "Privacy policy | BCom",
+  description: "How BCom (bcom.si), operated by Brand Sewa Digital Private Limited, collects, uses and protects personal data under India's DPDP Act.",
   alternates: { canonical: "/privacy" },
 };
 

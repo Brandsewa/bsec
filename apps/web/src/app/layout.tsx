@@ -36,7 +36,7 @@ export async function generateMetadata(): Promise<Metadata> {
     const host = h.get("x-forwarded-host") ?? h.get("host") ?? "localhost";
     // The platform's own public site is meant to be found: the page sets its title and description.
     if (isPlatformMarketingHost(host)) {
-      return { title: "Bs Commerce", description: "Launch your online store in 10 minutes.", robots: { index: true, follow: true } };
+      return { title: "BCom", description: "Launch your online store in 10 minutes.", robots: { index: true, follow: true } };
     }
     const { rt } = server();
     const access = await evaluateStorefrontAccess(rt, host, { headers: h });
@@ -50,13 +50,13 @@ export async function generateMetadata(): Promise<Metadata> {
       };
     }
     return {
-      title: "Bs Commerce",
+      title: "BCom",
       description: "Launch your online store in 10 minutes.",
       robots: isNoIndex ? { index: false, follow: false } : { index: true, follow: true },
     };
   } catch {
     return {
-      title: "Bs Commerce",
+      title: "BCom",
       description: "Launch your online store in 10 minutes.",
       robots: { index: false, follow: false },
     };

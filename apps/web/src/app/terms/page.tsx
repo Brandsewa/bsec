@@ -5,8 +5,8 @@ import { GrievanceBox, LegalMeta, RelatedLinks, Summary } from "@/components/mar
 import { SITE } from "@/components/marketing/landing/site-info.ts";
 
 export const metadata: Metadata = {
-  title: "Terms of service | Bs Commerce",
-  description: "The terms for using Bs Commerce (bcom.si), the e-commerce platform operated by Brand Sewa Digital Private Limited.",
+  title: "Terms of service | BCom",
+  description: "The terms for using BCom (bcom.si), the e-commerce platform operated by Brand Sewa Digital Private Limited.",
   alternates: { canonical: "/terms" },
 };
 
@@ -89,8 +89,8 @@ export default function TermsPage() {
 
         <h2>9. Payments from your customers</h2>
         <p>
-          Today your customers can pay with cash on delivery. When you connect an online payment provider, the provider&rsquo;s terms apply to those payments. We are not a bank or a payment aggregator and we do
-          not hold your customers&rsquo; money.
+          Your customers can pay with cash on delivery or, through the payment provider you connect, online with UPI, cards and net banking. The provider&rsquo;s terms apply to those payments. We are not a bank or a
+          payment aggregator and we do not hold your customers&rsquo; money.
         </p>
 
         <h2>10. Customer data</h2>

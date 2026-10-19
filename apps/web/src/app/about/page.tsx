@@ -5,8 +5,8 @@ import { CompanyBox } from "@/components/marketing/landing/LegalBits.tsx";
 import { SITE } from "@/components/marketing/landing/site-info.ts";
 
 export const metadata: Metadata = {
-  title: "About us | Bs Commerce",
-  description: "Bs Commerce (bcom.si) is an agent-first e-commerce platform for Indian brands, a product of Brand Sewa Digital Private Limited.",
+  title: "About us | BCom",
+  description: "BCom (bcom.si) is an agent-first e-commerce platform for Indian brands, a product of Brand Sewa Digital Private Limited.",
   alternates: { canonical: "/about" },
 };
 
@@ -31,7 +31,7 @@ export default function AboutPage() {
         <ul>
           <li>a storefront with ready-made themes and a visual, no-code theme builder;</li>
           <li>products with variants, categories, collections and stock;</li>
-          <li>cash on delivery checkout and GST tax invoices;</li>
+          <li>online payments (UPI, cards and net banking) and cash on delivery, with GST tax invoices;</li>
           <li>orders, returns and exchanges;</li>
           <li>customers and segments, discounts, staff accounts and roles.</li>
         </ul>

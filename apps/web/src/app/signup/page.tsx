@@ -392,7 +392,7 @@ function SignupContent() {
             B
           </span>
           <span className="text-[1.25rem] font-semibold tracking-tight">
-            Bs Commerce
+            BCom
           </span>
         </Link>
         <h1 className="bm-h2">

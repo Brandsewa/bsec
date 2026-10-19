@@ -49,7 +49,7 @@ export const INCLUDED_IN_ALL = [
 
 export const FAQS = [
   {
-    q: "What can I do on Bs Commerce today?",
+    q: "What can I do on BCom today?",
     a: "Open a complete online store: add products and variants, pick a theme, set your shipping rates and COD fee, take cash on delivery orders and issue GST invoices, handle returns and exchanges, and manage customers and staff. Your store lives on yourname.bcom.si, so you can share it on Google, Instagram, WhatsApp or anywhere else.",
   },
   {

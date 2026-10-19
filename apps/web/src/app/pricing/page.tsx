@@ -6,8 +6,8 @@ import { Pricing } from "@/components/marketing/landing/sections/Pricing.tsx";
 import { loadLandingPlans } from "@/server/landing-plans.ts";
 
 export const metadata: Metadata = {
-  title: "Pricing | Bs Commerce",
-  description: "Bs Commerce plans in Indian rupees plus GST. Every plan starts with a 14-day free trial.",
+  title: "Pricing | BCom",
+  description: "BCom plans in Indian rupees plus GST. Every plan starts with a 14-day free trial.",
   alternates: { canonical: "/pricing" },
 };
 
@@ -28,7 +28,7 @@ export default async function PricingPage() {
             Refunds are covered in the <Link href="/refund-policy">refund and cancellation policy</Link>.
           </li>
           <li>
-            Online payments, custom domains and the AI shopping features are coming soon and are not part of any plan until released.
+            Custom domains and the AI shopping features are coming soon and are not part of any plan until released.
           </li>
         </ul>
       </article>

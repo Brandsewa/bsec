@@ -4,8 +4,8 @@ import { LegalMeta, RelatedLinks, Summary } from "@/components/marketing/landing
 import { SITE } from "@/components/marketing/landing/site-info.ts";
 
 export const metadata: Metadata = {
-  title: "Refund and cancellation policy | Bs Commerce",
-  description: "How cancelling a Bs Commerce plan works and when refunds are given.",
+  title: "Refund and cancellation policy | BCom",
+  description: "How cancelling a BCom plan works and when refunds are given.",
   alternates: { canonical: "/refund-policy" },
 };
 
