@@ -421,7 +421,6 @@ export function BillingIntegrations() {
     queryFn: () => client.integrations.billingSettings(),
   });
   const refresh = () => queryClient.invalidateQueries({ queryKey: ["platform", "integrations", "billing"] });
-  const webhookUrl = data ? (data.provider === "cashfree" ? data.cashfreeWebhookUrl : data.webhookUrl) : "";
 
   const apply = async () => {
     if (!confirm) return;
@@ -575,59 +574,66 @@ export function BillingIntegrations() {
             </CardContent>
           </Card>
 
-          {data.provider === "cashfree" ? (
-            <>
-              <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
-                <CashfreeKeysCard mode="test" view={data.cashfree.test} active={data.mode === "test"} canEdit={canEdit} onSaved={refresh} />
-                <CashfreeKeysCard mode="live" view={data.cashfree.live} active={data.mode === "live"} canEdit={canEdit} onSaved={refresh} />
-              </div>
-              <Card>
-                <CardHeader>
-                  <CardTitle>Plans</CardTitle>
-                  <CardDescription>
-                    Cashfree needs no plan sync: each subscription carries its own price from your plans, charged by Cashfree every month or year. Change a price under Plans and new subscriptions use it; current subscribers keep what they signed up for.
-                  </CardDescription>
-                </CardHeader>
-              </Card>
-            </>
-          ) : (
-            <>
-              <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
-                <KeysCard mode="test" view={data.test} active={data.mode === "test"} canEdit={canEdit} onSaved={refresh} />
-                <KeysCard mode="live" view={data.live} active={data.mode === "live"} canEdit={canEdit} onSaved={refresh} />
-              </div>
+          <div className="space-y-3">
+            <h2 className="text-sm font-semibold text-foreground">Razorpay keys{data.provider === "razorpay" ? " (active gateway)" : ""}</h2>
+            <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
+              <KeysCard mode="test" view={data.test} active={data.provider === "razorpay" && data.mode === "test"} canEdit={canEdit} onSaved={refresh} />
+              <KeysCard mode="live" view={data.live} active={data.provider === "razorpay" && data.mode === "live"} canEdit={canEdit} onSaved={refresh} />
+            </div>
+          </div>
 
-              <PlansCard canEdit={canEdit} />
-            </>
+          <div className="space-y-3">
+            <h2 className="text-sm font-semibold text-foreground">Cashfree keys{data.provider === "cashfree" ? " (active gateway)" : ""}</h2>
+            <p className="text-xs text-muted-foreground">Save and test the Cashfree keys here first, then choose Cashfree under Payment gateway above.</p>
+            <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
+              <CashfreeKeysCard mode="test" view={data.cashfree.test} active={data.provider === "cashfree" && data.mode === "test"} canEdit={canEdit} onSaved={refresh} />
+              <CashfreeKeysCard mode="live" view={data.cashfree.live} active={data.provider === "cashfree" && data.mode === "live"} canEdit={canEdit} onSaved={refresh} />
+            </div>
+          </div>
+
+          {data.provider === "cashfree" ? (
+            <Card>
+              <CardHeader>
+                <CardTitle>Plans</CardTitle>
+                <CardDescription>
+                  Cashfree needs no plan sync: each subscription carries its own price from your plans, charged by Cashfree every month or year. Change a price under Plans and new subscriptions use it; current subscribers keep what they signed up for.
+                </CardDescription>
+              </CardHeader>
+            </Card>
+          ) : (
+            <PlansCard canEdit={canEdit} />
           )}
 
           <InvoiceDetailsCard key={data.updatedAt ?? "new"} view={data.invoice} canEdit={canEdit} onSaved={refresh} />
 
           <Card>
             <CardHeader>
-              <CardTitle>Webhook URL</CardTitle>
+              <CardTitle>Webhook URLs</CardTitle>
               <CardDescription>
-                {data.provider === "cashfree"
-                  ? "In Cashfree (Developers, Webhooks) add this URL for the same mode as the keys and tick the Subscription events (status changed, payment success, payment failed). Cashfree signs them with your secret key."
-                  : "In Razorpay (Account and settings, Webhooks) add this URL for the same mode as the keys, with the active events for subscriptions and payments, and the secret you saved above."}
+                Register the matching URL in each gateway's dashboard, for the same mode as the keys. Razorpay: Account and settings, Webhooks, with the subscription and payment events and the secret you saved above. Cashfree: Developers, Webhooks, with the Subscription events; Cashfree signs them with your secret key.
               </CardDescription>
             </CardHeader>
-            <CardContent>
-              <div className="flex items-center gap-2">
-                <code className="flex-1 truncate rounded-md border border-border bg-muted/40 px-3 py-2 text-xs">{webhookUrl}</code>
-                <Button
-                  type="button"
-                  size="sm"
-                  variant="outline"
-                  className="gap-1.5"
-                  onClick={() => {
-                    void navigator.clipboard.writeText(webhookUrl).then(() => toast.success("Webhook URL copied"));
-                  }}
-                >
-                  <Copy className="h-3.5 w-3.5" />
-                  Copy
-                </Button>
-              </div>
+            <CardContent className="space-y-3">
+              {([["Razorpay", data.webhookUrl], ["Cashfree", data.cashfreeWebhookUrl]] as const).map(([label, url]) => (
+                <div key={label} className="space-y-1">
+                  <p className="text-xs font-medium text-foreground">{label}</p>
+                  <div className="flex items-center gap-2">
+                    <code className="flex-1 truncate rounded-md border border-border bg-muted/40 px-3 py-2 text-xs">{url}</code>
+                    <Button
+                      type="button"
+                      size="sm"
+                      variant="outline"
+                      className="gap-1.5"
+                      onClick={() => {
+                        void navigator.clipboard.writeText(url).then(() => toast.success("Webhook URL copied"));
+                      }}
+                    >
+                      <Copy className="h-3.5 w-3.5" />
+                      Copy
+                    </Button>
+                  </div>
+                </div>
+              ))}
             </CardContent>
           </Card>
         </div>

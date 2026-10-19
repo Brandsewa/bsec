@@ -349,7 +349,7 @@ export async function updatePlatformBillingSettings(
     const gateway = provider === "cashfree" ? "Cashfree" : "Razorpay";
     if ((enabled || input.mode === "live" || input.provider === "cashfree") && !hasKeys) {
       throw new Error(
-        `Bad Request: save the ${provider === "cashfree" ? "Cashfree " : ""}${mode} ${provider === "cashfree" ? "App ID and secret" : "key id and secret"} before ${input.mode === "live" ? "switching to live mode" : input.provider !== undefined && !enabled ? `switching to ${gateway}` : "enabling billing"}`,
+        `Bad Request: save the ${provider === "cashfree" ? "Cashfree " : ""}${mode} ${provider === "cashfree" ? "App ID and secret" : "key id and secret"} before ${input.mode === "live" ? "switching to live mode" : input.provider !== undefined && input.provider !== activeProviderOf(existing) ? `switching to ${gateway}` : "enabling billing"}`,
       );
     }
     if (input.provider !== undefined && input.provider !== activeProviderOf(existing)) changed.push("provider");
