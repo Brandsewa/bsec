@@ -97,6 +97,9 @@ beforeAll(async () => {
 
 afterEach(() => vi.restoreAllMocks());
 afterAll(async () => {
+  // CI shares one database across test files: the dunning sweep must not see this file's past-due subscription.
+  await rt._db.db.execute(sql`DELETE FROM platform_invoices WHERE subscription_id IN (SELECT id FROM subscriptions WHERE provider = 'cashfree')`);
+  await rt._db.db.execute(sql`DELETE FROM subscriptions WHERE provider = 'cashfree'`);
   await resetBilling();
   await rt?.close();
   await env?.stop();
