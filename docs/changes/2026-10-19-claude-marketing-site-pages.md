@@ -39,6 +39,9 @@ The owner is applying for Razorpay, which verifies the live website. The marketi
 - Removed the old Beam stylesheet and fonts file (`components/marketing/beam/`), the unused default look of `SubdomainAvailabilityChecker` and the `bmFont` export.
 - `fix/signup-flow` turned out to be already merged into main (PR #83); a merge of the stale branch was made and undone, nothing else was stacked.
 
+## Revision 5: hero phone (owner review, 2026-10-19)
+- Tabs are now "Search", "Social" and "AI agents" (were Google Search and Instagram). The Search tab shows a horizontal Google-style shopping feed (swipe-style cards with price, name, store, rating and delivery) plus an organic store listing, then the store page with Add to cart, then Place order (cash on delivery) and Order placed. Social is unchanged. The phone is wider (410 px) and the hero columns are equal.
+
 ## Decisions and trade-offs
 - Billing is described as Razorpay subscriptions (owner), with the owner able to set up a plan from the back end for some stores. Refunds: within 7 days of a payment, none after. Courts: West Bengal. No phone number published yet. These are the owner's inputs, not invented.
 - Legal text is drafted from common best practice and the product's real behaviour; it is not legal advice and should be read by the owner or counsel before the Razorpay submission.

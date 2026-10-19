@@ -34,13 +34,13 @@ interface View {
 }
 
 const EMPTY: View = { text: "", typing: false, press: false, stage: 0, user: false, waiting: false, results: false, pay: false, done: false, pick: "none", payState: "idle", notif: false };
-const FINAL: View = { ...EMPTY, stage: 6, user: true, results: true, pay: true, done: true, pick: "out", payState: "paid" };
+const FINAL: View = { ...EMPTY, stage: 8, user: true, results: true, pay: true, done: true, pick: "out", payState: "paid" };
 
 interface TabInfo { mode: Mode; label: string; ready: boolean; Icon: () => React.ReactElement }
-const GOOGLE_TAB: TabInfo = { mode: "google", label: "Google Search", ready: true, Icon: GoogleIcon };
+const GOOGLE_TAB: TabInfo = { mode: "google", label: "Search", ready: true, Icon: GoogleIcon };
 const TABS: TabInfo[] = [
   GOOGLE_TAB,
-  { mode: "instagram", label: "Instagram", ready: true, Icon: InstagramIcon },
+  { mode: "instagram", label: "Social", ready: true, Icon: InstagramIcon },
   { mode: "agents", label: "AI agents", ready: false, Icon: SparkIcon },
 ];
 
@@ -71,9 +71,17 @@ function ProductCard({ p, k, className }: { p: DemoProduct; k: number; className
   );
 }
 
-/** The merchant's store page, shared by the Google and Instagram flows. Cash on delivery is what is live today. */
-function StorePage({ p, stage }: { p: DemoProduct; stage: number }) {
-  const placed = stage >= 6;
+/**
+ * The merchant's store page, shared by the Search and Social flows. Cash on delivery is what is live today.
+ * "cart" variant (Search): Add to cart, then Place order. "direct" variant (Social): one Order now button.
+ * Stage numbers: direct 3 open, 4 press, 5 placing, 6+ placed. cart 3 open, 4 add pressed, 5 added, 6 place pressed, 7 placing, 8+ placed.
+ */
+function StorePage({ p, stage, variant }: { p: DemoProduct; stage: number; variant: "direct" | "cart" }) {
+  const cart = variant === "cart";
+  const placed = cart ? stage >= 8 : stage >= 6;
+  const added = cart && stage >= 5;
+  const placing = cart ? stage === 7 : stage === 5;
+  const placePress = cart ? stage === 6 : stage === 4;
   return (
     <div className="spage">
       <div className="surl"><span aria-hidden="true">🔒</span> {p.brand.toLowerCase().replace(/[^a-z0-9]+/g, "")}.bcom.si</div>
@@ -89,11 +97,32 @@ function StorePage({ p, stage }: { p: DemoProduct; stage: number }) {
             <div><b>Order placed</b><span className="t">{DEMO_ORDER_NUMBER} · pay {p.price} on delivery</span></div>
           </div>
         ) : (
-          <div className={`obtn ${stage === 4 ? "press" : ""}`}>
-            {stage === 5 ? (<><i className="sp" />Placing your order</>) : "Order now · Cash on delivery"}
-          </div>
+          <>
+            {cart && (
+              <div className={`obtn alt ${stage === 4 ? "press" : ""} ${added ? "added" : ""}`}>{added ? "✓ Added to cart" : "Add to cart"}</div>
+            )}
+            {(!cart || added) && (
+              <div className={`obtn ${placePress ? "press" : ""}`}>
+                {placing ? (<><i className="sp" />Placing your order</>) : cart ? "Place order · Cash on delivery" : "Order now · Cash on delivery"}
+              </div>
+            )}
+          </>
         )}
       </div>
+    </div>
+  );
+}
+
+/** Google-style shopping card for the horizontal feed. */
+function FeedCard({ p, k, className }: { p: DemoProduct; k: number; className: string }) {
+  return (
+    <div className={`gcard ${className}`} style={{ ["--g1" as string]: p.gradient, ["--k" as string]: k } as React.CSSProperties}>
+      <div className="gim" />
+      <div className="gprice">{p.price}</div>
+      <div className="gname">{p.name}</div>
+      <div className="gstore">{p.brand}</div>
+      <div className="grate"><span className="sr-star"><StarIcon /></span>{p.rating} <span>({p.reviews})</span></div>
+      <div className="gdel">{p.delivery}</div>
     </div>
   );
 }
@@ -154,10 +183,12 @@ export function PhoneDemo() {
       at(te + 800, { press: false, stage: 1 });
       at(te + 3000, { stage: 2, pick: "sel" });
       at(te + 4200, { stage: 3 });
-      at(te + 6000, { stage: 4 });
-      at(te + 6400, { stage: 5 });
-      at(te + 8000, { stage: 6 });
-      next(te + 11500);
+      at(te + 5800, { stage: 4 });
+      at(te + 6300, { stage: 5 });
+      at(te + 7800, { stage: 6 });
+      at(te + 8200, { stage: 7 });
+      at(te + 9700, { stage: 8 });
+      next(te + 13200);
     } else if (mode === "instagram") {
       at(500, { stage: 1 });
       at(2600, { stage: 2 });
@@ -224,13 +255,20 @@ export function PhoneDemo() {
             {v.stage === 0 && <div className="ghint">Shoppers search Google for what they want.</div>}
             {(v.stage === 1 || v.stage === 2) && (
               <div className="gres">
-                <div className="cap">Shopping results</div>
-                {x.products.map((p, k) => (
-                  <ProductCard key={p.brand} p={p} k={k} className={v.pick === "none" ? "" : k === 0 ? "sel" : "dim"} />
-                ))}
+                <div className="cap">Shopping</div>
+                <div className="gcar">
+                  {x.products.map((p, k) => (
+                    <FeedCard key={p.brand} p={p} k={k} className={v.pick === "none" ? "" : k === 0 ? "sel" : "dim"} />
+                  ))}
+                </div>
+                <div className="gorg">
+                  <div className="gurl">heritage.bcom.si</div>
+                  <div className="gtitle">Heritage Wool Hoodie: warm, relaxed fit | Free delivery</div>
+                  <div className="gsnip">Gift-ready wool-blend hoodie. In stock, cash on delivery, ships across India.</div>
+                </div>
               </div>
             )}
-            {v.stage >= 3 && <StorePage p={x.products[0]} stage={v.stage} />}
+            {v.stage >= 3 && <StorePage p={x.products[0]} stage={v.stage} variant="cart" />}
           </div>
         )}
 
@@ -246,7 +284,7 @@ export function PhoneDemo() {
                 <div className="igcap"><b>heritage.store</b> New winter hoodies are here. Warm, soft and gift-ready. Tap the tag or use the link in our bio.</div>
               </div>
             ) : (
-              <StorePage p={shopProduct} stage={v.stage} />
+              <StorePage p={shopProduct} stage={v.stage} variant="direct" />
             )}
           </div>
         )}
