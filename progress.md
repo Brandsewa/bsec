@@ -3,6 +3,7 @@
 Source of truth: `docs/PLAN.html` v2.0 (build order in `docs/BUILD-PLAN-M2-M9.md`). Items are ticked only after verification; the evidence is noted next to each. "From code" means it was read in the repo but not exercised live.
 
 ## In flight
+- claude · `feat/hide-from-search-engines` · search-engine switch on Storefront settings · 2026-10-19
 - claude · `feat/custom-domain-setup` · custom domains made usable: sweep job, register-on-retry, DNS records always shown, apex guidance, Cloudflare and Traefik runbook · 2026-10-19
 - claude · `feat/platform-billing-b5-b6` · platform billing (charge merchants with Razorpay subscriptions): B1 merged; B1 to B4 merged; B5 (dunning) and B6 (invoice PDF) built on `feat/platform-billing-b5-b6`, B7 to B9 next; plan `docs/PLATFORM-BILLING-PLAN.md`, ADR-036 · 2026-10-18
 - claude · `fix/admin-polish-phase-1` · admin and Super Admin polish round, all three phases built (menus bug, auth forms, drawers, friendly IDs, variant builder, shipping zones and tiers, custom fields, promotions, flags, audit log, tenant purge, payments and domains pages, policy rich text); awaiting owner check and commit; plan `docs/ADMIN-SUPERADMIN-POLISH-PLAN.md`, ADR-034, ADR-035, change records `docs/changes/2026-10-17-claude-admin-polish-phase-1.md` and `...-phases-2-3.md` · 2026-10-17

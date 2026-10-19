@@ -793,6 +793,8 @@ export const StorefrontStatus = z.object({
   maintenanceEndsAt: z.string().nullable().optional(),
   modeBeforeMaintenance: z.string().nullable().optional(),
   maintenanceAllowStaffPreview: z.boolean().optional(),
+  /** Mirrors seo_settings.indexing_enabled (inverted): the "discourage search engines" switch for a live store. */
+  hideFromSearchEngines: z.boolean().optional(),
 });
 
 export type StorefrontStatus = z.infer<typeof StorefrontStatus>;
@@ -4362,6 +4364,7 @@ export const adminContract = {
           launchAt: z.string().datetime().nullable().optional(),
           password: z.string().min(6).max(128).nullable().optional(),
           backgroundMediaId: z.string().uuid().nullable().optional(),
+          hideFromSearchEngines: z.boolean().optional(),
         }),
       )
       .output(StorefrontStatus),

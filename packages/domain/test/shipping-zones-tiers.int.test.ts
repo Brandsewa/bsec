@@ -144,8 +144,9 @@ describe("shipping zones and tiers", () => {
     await expect(
       saveAdminShippingZones(rt, ctx, {
         zones: [
-          first,
-          base[1]!,
+          // zone order from the database is not guaranteed, so pick the zones by name
+          base.find((z) => z.name === "India")!,
+          base.find((z) => z.name === "South")!,
           { name: "Clash", countries: ["IN"], states: ["Kerala"], isDefault: false, rates: [rate({})] },
         ],
       }),
