@@ -1,5 +1,5 @@
 import { randomUUID } from "node:crypto";
-import { and, eq, ne, sql } from "drizzle-orm";
+import { and, eq, inArray, ne, sql } from "drizzle-orm";
 import { schema, withTenant } from "@bs/db";
 import type { Runtime } from "../runtime.ts";
 import { assertCustomDomainQuota } from "../system/quotas.ts";
@@ -263,13 +263,28 @@ export async function verifyCustomDomainInternal(
   tenantId: string,
   domainId: string,
   providerOverride?: CustomDomainProvider,
+) {
+  return verifyDomainWithDb(rt._db.db, tenantId, domainId, providerOverride);
+}
+
+type Db = Runtime["_db"]["db"];
+
+/**
+ * Core of "Check status", also used by the background sweep (which has a db handle but no Runtime).
+ * A domain that was saved while the provider was unconfigured has no provider id yet: once the provider is
+ * configured, the check registers it, so merchants do not have to delete and re-add it.
+ */
+export async function verifyDomainWithDb(
+  db: Db,
+  tenantId: string,
+  domainId: string,
+  providerOverride?: CustomDomainProvider,
 ): Promise<{
   domain: typeof schema.domains.$inferSelect;
   updated: CustomDomainRecord;
   nextStatus: string;
   statusRes: { status: string; sslStatus?: string | null };
 }> {
-  const db = rt._db.db;
   const provider = providerOverride ?? new CloudflareCustomDomainProvider();
 
   const [domain] = await db
@@ -289,6 +304,30 @@ export async function verifyCustomDomainInternal(
 
   if (domain.type === "platform_subdomain" || domain.type === "subdomain") {
     throw new Error("Bad Request: Cannot verify or modify the default platform subdomain.");
+  }
+
+  if (domain.type === "custom" && !domain.cfCustomHostnameId && provider.isConfigured?.()) {
+    const created = await provider.createCustomHostname(domain.hostname, { prevalidate: Boolean(domain.prevalidateTxt) });
+    const [registered] = await db
+      .update(schema.domains)
+      .set({
+        status: created.status,
+        sslStatus: created.sslStatus,
+        cfCustomHostnameId: created.providerHostnameId,
+        verification: created.cnameTarget
+          ? { cname: created.cnameTarget, ...(created.txtVerification ? { txt: created.txtVerification } : {}) }
+          : null,
+        lastCheckedAt: new Date(),
+        updatedAt: new Date(),
+      })
+      .where(eq(schema.domains.id, domain.id))
+      .returning();
+    return {
+      domain,
+      updated: registered as CustomDomainRecord,
+      nextStatus: created.status,
+      statusRes: { status: created.status, sslStatus: created.sslStatus },
+    };
   }
 
   if (domain.type !== "custom" || !domain.cfCustomHostnameId) {
@@ -321,12 +360,14 @@ export async function verifyCustomDomainInternal(
 
   // If verified and active, mark onboarding checklist step complete
   if (nextStatus === "active") {
-    await db.execute(sql`
-      UPDATE onboarding_progress
-      SET steps = jsonb_set(steps, '{domain_connected}', 'true'::jsonb),
-          updated_at = now()
-      WHERE tenant_id = ${tenantId};
-    `);
+    await withTenant(db, tenantId, (tx) =>
+      tx.execute(sql`
+        UPDATE onboarding_progress
+        SET steps = jsonb_set(steps, '{domain_connected}', 'true'::jsonb),
+            updated_at = now()
+        WHERE tenant_id = ${tenantId};
+      `),
+    );
   }
 
   return {
@@ -335,6 +376,32 @@ export async function verifyCustomDomainInternal(
     nextStatus,
     statusRes,
   };
+}
+
+/** Background pass: refresh every custom domain that is still waiting on DNS or SSL. Returns how many changed state. */
+export async function sweepPendingCustomDomains(
+  db: Db,
+  opts: { provider?: CustomDomainProvider; log?: { warn: (o: object, m: string) => void } } = {},
+): Promise<{ checked: number; changed: number }> {
+  const provider = opts.provider ?? new CloudflareCustomDomainProvider();
+  if (provider.isConfigured && !provider.isConfigured()) return { checked: 0, changed: 0 };
+
+  const pending = await db
+    .select({ id: schema.domains.id, tenantId: schema.domains.tenantId, status: schema.domains.status })
+    .from(schema.domains)
+    .where(and(eq(schema.domains.type, "custom"), inArray(schema.domains.status, ["requested", "awaiting_dns", "verifying", "ssl_pending"])));
+
+  let changed = 0;
+  for (const row of pending) {
+    try {
+      const res = await verifyDomainWithDb(db, row.tenantId, row.id, provider);
+      if (res.nextStatus !== row.status) changed += 1;
+    } catch (err) {
+      // One bad domain must not stop the rest; the merchant can still press "Check status".
+      opts.log?.warn({ err, domainId: row.id }, "custom domain sweep: check failed");
+    }
+  }
+  return { checked: pending.length, changed };
 }
 
 /**

@@ -125,8 +125,10 @@ describe("Domains Settings Page (/settings/domains)", () => {
     const Page = Route.options.component as () => React.ReactNode;
     const html = await renderRouted(Page, qc);
 
-    expect(html).toContain("Domain provider not configured");
-    expect(html).toContain("Custom domain provisioning is not currently available on this platform.");
+    expect(html).toContain("Waiting for platform setup");
+    // The records are still shown so the merchant can prepare DNS now.
+    expect(html).toContain("DNS Configuration Required");
+    expect(html).toContain("stores.bcom.si");
   });
 
   it("renders verification failed state with diagnostic message and retry", async () => {

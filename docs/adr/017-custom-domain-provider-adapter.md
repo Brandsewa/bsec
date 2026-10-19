@@ -37,3 +37,6 @@ Live credentials for third-party providers (Cloudflare API token, Zone ID) will 
 ## Consequences
 - Clean separation between internal domain state management and Cloudflare edge infrastructure.
 - Zero downtime migrations for existing live stores.
+
+## Update 2026-10-19
+The polling worker now exists as the `domains.sweep` pg-boss job (every 5 minutes, `sweepPendingCustomDomains`). A domain saved while the provider was unconfigured has no provider id; the next check (manual or sweep) registers it once credentials exist. Traefik needs a catch-all router for custom hostnames: see DEPLOYMENT.md.

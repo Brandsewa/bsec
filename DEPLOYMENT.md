@@ -66,7 +66,7 @@ Until step 3 the site works normally; only the self-service endpoints answer 503
 - `PREVIEW_BASE_URL` (platform, optional): where theme preview links point, with no trailing slash. Default `https://<MARKETING_HOST or PLATFORM_DOMAIN>`; set it for local development (for example `http://localhost:3000`). The preview page itself is served by the web app on the marketing host at `/preview/<code>`.
 - `ADMIN_HOST` (default `admin.<PLATFORM_DOMAIN>`) and `MARKETING_HOST` (default `PLATFORM_DOMAIN`): also reserved; `MARKETING_HOST` is the only host that serves `/signup` and `/api/saas/*`.
 - `CUSTOM_DOMAIN_CNAME_TARGET` (default `stores.<PLATFORM_DOMAIN>`): the hostname customers point their domain at; it must exist in the Cloudflare zone.
-- `CLOUDFLARE_API_TOKEN` / `CLOUDFLARE_ZONE_ID`: custom domains stay in `requested` ("not configured") until both are set.
+- `CLOUDFLARE_API_TOKEN` / `CLOUDFLARE_ZONE_ID`: custom domains stay in `requested` ("not configured") until both are set. Set them on **web, platform and worker** (the worker runs the 5-minute `domains.sweep`). Setup is in "Custom domains (Cloudflare for SaaS)" below.
 - `RAZORPAY_PLATFORM_KEY_ID`, `RAZORPAY_PLATFORM_KEY_SECRET`, `RAZORPAY_PLATFORM_WEBHOOK_SECRET`: legacy fallback only (ADR-036). Preferred: the platform owner saves the keys in Super Admin, Integrations, Platform billing (needs `TENANT_SECRETS_KEY`). Plan changes answer "billing not configured" until keys are saved there or set here.
 - `MEDIA_LOCAL_DIR` (optional, default `./.data/media`): filesystem storage directory when using the `local` storage driver.
 - `MEDIA_PUBLIC_URL` (optional, local and staging stacks only, web + worker): public address of the web app's `/media` route, for example `http://127.0.0.1:3000/media`. Needed when the admin runs on another origin than the web app and storage is the `local` driver; production uses `R2_PUBLIC_URL`. It never changes which storage driver is used.
@@ -173,3 +173,33 @@ Notes:
 - While the admin, platform or superadmin container restarts, the wildcard also catches its host and the web app answers with its "Opening Soon" page instead of a 503. That is expected for the duration of a deploy.
 - `media.bcom.si` is the public address of the R2 images bucket, so `media` can never be a store slug.
 - The platform's own site (`bcom.si`, `www.bcom.si`, or `MARKETING_HOST`) is served by the same application but is recognised by the layout and middleware (`apps/web/src/server/hosts.ts`) and never gets the store gate, header or footer.
+
+## Custom domains (Cloudflare for SaaS)
+
+Merchants connect `shop.theirbrand.com` (or a bare domain) in Admin -> Settings -> Domains. The free Cloudflare plan is enough: 100 custom hostnames are included, then USD 0.10 each per month. Enterprise-only features (wildcard hostnames, apex proxying/BYOIP, custom certificates) are not used.
+
+One-time setup (owner, in the Cloudflare dashboard for the `bcom.si` zone):
+1. DNS: a **proxied** CNAME `stores` pointing at the same origin as the `*` wildcard record.
+2. SSL/TLS -> Custom Hostnames: set **Fallback Origin** to `stores.bcom.si` and wait for Active. Do not add hostnames by hand there; the app creates them through the API (a hand-made one blocks the same name in the app).
+3. My Profile -> API Tokens -> custom token, permission **Zone -> SSL and Certificates -> Edit**, resource **Specific zone: bcom.si**. Copy the Zone ID from the zone overview.
+4. In Coolify set `CLOUDFLARE_API_TOKEN` and `CLOUDFLARE_ZONE_ID` on web, platform and worker, then redeploy. Never paste them in chat or commit them.
+
+What the merchant does: create `CNAME shop -> stores.bcom.si` at their DNS host (a bare domain needs ALIAS/ANAME/CNAME flattening, so `www` is recommended), then wait. The worker's `domains.sweep` checks every 5 minutes; "Check status" does the same on demand. A domain saved before the credentials existed is registered with Cloudflare on its next check, so nobody has to re-add it.
+
+**Traefik must also route custom hostnames.** Cloudflare for SaaS forwards the request with the merchant's own `Host` header, and the wildcard above only matches `*.bcom.si`, so Traefik would answer `503 no available server`. Add a catch-all below the wildcard to `bsec-web`'s manual labels, and change the two wildcard routers' `priority` from `1` to `2`:
+
+```
+traefik.http.routers.http-custom-<id>.entryPoints=http
+traefik.http.routers.http-custom-<id>.middlewares=redirect-to-https
+traefik.http.routers.http-custom-<id>.priority=1
+traefik.http.routers.http-custom-<id>.rule=HostRegexp(`^.+$`)
+traefik.http.routers.http-custom-<id>.service=http-1-<id>
+traefik.http.routers.https-custom-<id>.entryPoints=https
+traefik.http.routers.https-custom-<id>.middlewares=gzip
+traefik.http.routers.https-custom-<id>.priority=1
+traefik.http.routers.https-custom-<id>.rule=HostRegexp(`^.+$`)
+traefik.http.routers.https-custom-<id>.service=https-1-<id>
+traefik.http.routers.https-custom-<id>.tls=true
+```
+
+Unknown hosts then reach the web app, which already answers a host it cannot resolve with its own not-found page (it never serves another store). Cloudflare SSL mode must stay "Full". Test with one real subdomain before telling merchants.

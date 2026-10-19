@@ -84,4 +84,5 @@ export const QUEUE_NAMES = {
   MEDIA_BACKFILL_DERIVATIVES: "media.backfill_derivatives",
   MEDIA_HASH: "media.hash",
   MEDIA_BACKFILL_HASHES: "media.backfill_hashes",
+  DOMAINS_SWEEP: "domains.sweep",
 } as const;
