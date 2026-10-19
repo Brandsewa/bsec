@@ -131,7 +131,6 @@ export function PhoneDemo() {
   const rootRef = useRef<HTMLDivElement>(null);
   const [tab, setTab] = useState(0);
   const [agentRound, setAgentRound] = useState(0);
-  const [auto, setAuto] = useState(true);
   const [inView, setInView] = useState(true);
   const [view, setView] = useState<View>(EMPTY);
 
@@ -163,7 +162,6 @@ export function PhoneDemo() {
       timers.push(window.setTimeout(() => setView((v) => ({ ...v, ...patch })), ms));
     };
     const next = (ms: number) => {
-      if (!auto) return;
       timers.push(
         window.setTimeout(() => {
           if (mode === "agents") setAgentRound((r) => r + 1);
@@ -214,7 +212,7 @@ export function PhoneDemo() {
       next(te + 16400);
     }
     return () => timers.forEach((t) => window.clearTimeout(t));
-  }, [active, tab, agentRound, auto, mode, query]);
+  }, [active, tab, agentRound, mode, query]);
 
   const v = reduced ? FINAL : view;
 
@@ -235,7 +233,6 @@ export function PhoneDemo() {
               aria-selected={tab === i}
               className={`tab ${tab === i ? "on" : ""}`}
               onClick={() => {
-                setAuto(false);
                 setTab(i);
               }}
             >
