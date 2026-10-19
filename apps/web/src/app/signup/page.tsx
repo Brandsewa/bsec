@@ -6,8 +6,10 @@ import { useSearchParams } from "next/navigation";
 import Link from "next/link";
 import { SimpleSelect } from "@bs/ui";
 import { INDIAN_STATES } from "@/lib/india";
-import { bmFont } from "@/components/marketing/beam/fonts";
-import "@/components/marketing/beam/beam.css";
+import { fontSerifDisplay } from "@/lib/fonts.ts";
+import { Nav } from "@/components/marketing/landing/sections/Nav.tsx";
+import { SiteFooter } from "@/components/marketing/landing/sections/Footer.tsx";
+import "@/components/marketing/landing/landing.css";
 
 interface PlanOption {
   code: string;
@@ -333,7 +335,7 @@ function SignupContent() {
 
   if (provisionSuccess) {
     return (
-      <div className="relative mx-auto max-w-xl px-4 py-16 text-center">
+      <div className="relative mx-auto max-w-xl px-4 pb-16 text-center">
         <div className="bm-su-tick mx-auto mb-6">
           <svg className="w-8 h-8" fill="none" viewBox="0 0 24 24" stroke="currentColor">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" />
@@ -384,21 +386,13 @@ function SignupContent() {
   }
 
   return (
-    <div className="relative mx-auto max-w-2xl px-4 py-12 sm:px-6">
+    <div className="relative mx-auto max-w-2xl px-4 pb-14 sm:px-6">
       {/* Header */}
       <div className="text-center mb-10">
-        <Link href="/" className="mb-6 inline-flex items-center gap-2.5 no-underline" style={{ color: "var(--bm-text)" }}>
-          <span className="bm-logo-tile flex h-8 w-8 items-center justify-center rounded-lg text-[1.05rem] font-bold">
-            B
-          </span>
-          <span className="text-[1.25rem] font-semibold tracking-tight">
-            Bs Commerce
-          </span>
-        </Link>
-        <h1 className="bm-h2">
-          Create your online store
+        <h1 className="su-title">
+          Create your <i>online store</i>
         </h1>
-        <p className="bm-dim mt-2 text-sm">14-day free trial · Setup takes 2 minutes</p>
+        <p className="bm-dim mt-3 text-sm">14-day free trial · Setup takes 2 minutes</p>
       </div>
 
       {/* Step Indicator */}
@@ -782,6 +776,10 @@ function SignupContent() {
                 The security check could not load, so the store cannot be created yet. Refresh the page; if it keeps happening, contact support.
               </p>
             )}
+            <p className="su-consent">
+              By launching your store you agree to our <Link href="/terms">Terms of service</Link> and <Link href="/privacy">Privacy policy</Link>. See the{" "}
+              <Link href="/refund-policy">refund and cancellation policy</Link>.
+            </p>
             <div className="flex gap-3">
               <button
                 type="button"
@@ -819,10 +817,15 @@ function SignupContent() {
 
 export default function SignupPage() {
   return (
-    <div className={`bm bm-su ${bmFont.variable}`}>
-      <Suspense fallback={<div className="bm-dim p-12 text-center font-medium">Loading signup wizard...</div>}>
-        <SignupContent />
-      </Suspense>
+    <div className={`lp lp-su ${fontSerifDisplay.variable}`}>
+      <div className="aurora" aria-hidden="true"><i /><i /><i /></div>
+      <Nav />
+      <div className="su-main">
+        <Suspense fallback={<div className="bm-dim p-12 text-center font-medium">Loading signup wizard...</div>}>
+          <SignupContent />
+        </Suspense>
+      </div>
+      <SiteFooter />
     </div>
   );
 }

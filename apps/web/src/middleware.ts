@@ -1,4 +1,5 @@
 import { NextResponse, type NextRequest } from "next/server";
+import { MARKETING_PAGES } from "./components/marketing/landing/site-info.ts";
 import { isPlatformMarketingHost } from "./server/hosts.ts";
 
 export async function middleware(request: NextRequest) {
@@ -55,6 +56,11 @@ export async function middleware(request: NextRequest) {
   }
 
   if (isMarketingHost && pathname === "/") {
+    return NextResponse.next();
+  }
+
+  // The marketing site's plain pages (about, contact, pricing, legal). Each page itself 404s on any non-marketing host.
+  if (isMarketingHost && MARKETING_PAGES.some((p) => p.path === pathname)) {
     return NextResponse.next();
   }
 

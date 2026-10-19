@@ -7,8 +7,6 @@ import {
   generateWebSiteJsonLd,
   generateOrganizationJsonLd,
   getStoreSettings,
-  listPublicPlans,
-  saasDb,
   tenantTag,
 } from "@bs/domain";
 import { renderBlockDocument, type BlockData } from "@bs/blocks";
@@ -16,7 +14,7 @@ import { server } from "@/server/runtime.ts";
 import { getCachedStorefrontHomePage } from "@/server/cached-storefront.ts";
 import { BlockRenderer } from "@/components/blocks/BlockRenderer.tsx";
 import { MarketingLandingPage } from "@/components/marketing/MarketingLandingPage.tsx";
-import type { LandingPlan } from "@/components/marketing/landing/content.ts";
+import { loadLandingPlans } from "@/server/landing-plans.ts";
 
 export async function generateMetadata(): Promise<Metadata> {
   let title = "Home";
@@ -30,8 +28,8 @@ export async function generateMetadata(): Promise<Metadata> {
 
     if (!access.tenantId) {
       return {
-        title: "bcom.si: online stores for Indian D2C brands",
-        description: "Open an online store with cash on delivery, GST invoices and a no-code theme builder. 14-day free trial, plans from ₹999 a month plus GST.",
+        title: "BCOM: the agent-first e-commerce platform for Indian brands",
+        description: "Open a complete online store today with cash on delivery, GST invoices and a no-code theme builder, built for the AI shopping era. 14-day free trial, plans from ₹999 a month plus GST.",
       };
     }
 
@@ -55,23 +53,6 @@ export async function generateMetadata(): Promise<Metadata> {
     title,
     description,
   };
-}
-
-/** Live plans for the marketing page; an empty list makes the page fall back to the seeded plan values. */
-async function loadLandingPlans(): Promise<LandingPlan[]> {
-  try {
-    const { rt } = server();
-    const rows = await listPublicPlans(saasDb(rt));
-    return rows.map((p) => ({
-      code: p.code,
-      name: p.name,
-      monthlyPaise: p.priceMonthlyPaise,
-      yearlyPaise: p.priceYearlyPaise,
-      limits: p.limits,
-    }));
-  } catch {
-    return [];
-  }
 }
 
 export default async function HomePage() {

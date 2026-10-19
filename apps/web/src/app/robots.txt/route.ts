@@ -1,4 +1,5 @@
 import { evaluateStorefrontAccess, generateRobotsTxt, getStorefrontSeoSettings } from "@bs/domain";
+import { isPlatformMarketingHost } from "@/server/hosts.ts";
 import { server } from "@/server/runtime.ts";
 
 export async function GET(req: Request) {
@@ -7,6 +8,25 @@ export async function GET(req: Request) {
       req.headers.get("x-forwarded-host") ??
       req.headers.get("host") ??
       "localhost";
+
+    // The platform's own site is meant to be found (and reviewed by payment providers): allow the public pages.
+    if (isPlatformMarketingHost(host)) {
+      const proto = req.headers.get("x-forwarded-proto") ?? "https";
+      const origin = `${proto}://${host.split(",")[0]?.trim()}`;
+      return new Response(`User-agent: *
+Allow: /
+Disallow: /api/
+Disallow: /preview/
+
+Sitemap: ${origin}/sitemap.xml
+`, {
+        status: 200,
+        headers: {
+          "Content-Type": "text/plain; charset=utf-8",
+          "Cache-Control": "public, max-age=3600, s-maxage=86400, stale-while-revalidate=86400",
+        },
+      });
+    }
 
     const { rt } = server();
     const access = await evaluateStorefrontAccess(rt, host, { headers: req.headers });

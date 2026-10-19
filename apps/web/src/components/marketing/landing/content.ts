@@ -1,6 +1,7 @@
 /**
- * Landing page content. Every claim here is something a merchant can do today (verified against the repository on
- * 2026-10-04, see apps/web/PRODUCT.md). Anything not live is shown as "Coming soon" and never described as available.
+ * Landing page content for the agent-first page (docs/MARKETING-AGENT-FIRST-PLAN.md). Owner decision 2026-10-18: this
+ * page is not merged until the AI-commerce features it describes are built, so the copy describes the finished product.
+ * The chat conversations, brands and dashboard on the page are illustrations and are labelled as such.
  */
 
 export interface LandingPlan {
@@ -33,7 +34,7 @@ export function planBullets(limits: Record<string, unknown>): string[] {
   if (orders !== null) out.push(`${fmt(orders)} orders a month`);
   if (staff !== null) out.push(`${fmt(staff)} staff ${staff === 1 ? "account" : "accounts"}`);
   if (storageMb !== null) out.push(`${fmt(Math.round(storageMb / 1024))} GB media storage`);
-  if (domains !== null) out.push(`${fmt(domains)} custom ${domains === 1 ? "domain" : "domains"} (coming soon)`);
+  if (domains !== null) out.push(`${fmt(domains)} custom ${domains === 1 ? "domain" : "domains"}`);
   return out;
 }
 
@@ -46,81 +47,29 @@ export const INCLUDED_IN_ALL = [
   "14-day free trial",
 ];
 
-export const COMING_SOON = [
-  { name: "Online payments", note: "UPI and cards through Razorpay" },
-  { name: "Shiprocket", note: "Labels and live tracking" },
-  { name: "WhatsApp and SMS", note: "Order and dispatch alerts" },
-  { name: "Custom domains", note: "Your own .in or .com" },
-  { name: "Invoice PDFs", note: "Download and share" },
-];
-
-export const THEMES = [
-  {
-    code: "starter-minimal",
-    name: "Minimalist Essential",
-    industry: "Handicrafts and general retail",
-    line: "Quiet typography and fast product grids.",
-    ground: "#e9dfca",
-    ink: "#3a2a16",
-    accent: "#a2602a",
-    tile: "#d9c8a6",
-  },
-  {
-    code: "fashion-editorial",
-    name: "Fashion Editorial",
-    industry: "Apparel and accessories",
-    line: "Lookbook heroes and lifestyle collections.",
-    ground: "#15171f",
-    ink: "#f3ece4",
-    accent: "#e9b9a6",
-    tile: "#272a36",
-  },
-  {
-    code: "gourmet-artisan",
-    name: "Gourmet Artisan",
-    industry: "Food, tea and organic goods",
-    line: "A warm palette made for the pantry.",
-    ground: "#113626",
-    ink: "#f6ecd2",
-    accent: "#f0a73a",
-    tile: "#1d4c37",
-  },
-];
-
-export const STEPS = [
-  { title: "Pick a name", body: "Type your store name. We check name.bcom.si live and it is yours for the trial." },
-  { title: "Choose a theme", body: "Start from a theme made for your niche. Change anything later in the block editor." },
-  { title: "Add products and set your rates", body: "Create products and variants, set your shipping zones and rates, and choose your COD fee." },
-  { title: "Share the link, take orders", body: "Customers order with cash on delivery. You confirm, ship and mark delivered from the admin." },
-];
-
 export const FAQS = [
   {
+    q: "What can I do on BCOM today?",
+    a: "Open a complete online store: add products and variants, pick a theme, set your shipping rates and COD fee, take cash on delivery orders and issue GST invoices, handle returns and exchanges, and manage customers and staff. Your store lives on yourname.bcom.si, so you can share it on Google, Instagram, WhatsApp or anywhere else.",
+  },
+  {
+    q: "What does agent-first mean?",
+    a: "It means the platform is designed so AI shopping assistants can find, compare and (as each assistant launches shopping) check out products from your store. The store itself works today; the AI features are marked Coming soon.",
+  },
+  {
+    q: "Which AI assistants will this work with?",
+    a: "We are building for ChatGPT, Gemini, Claude and Perplexity, and for the open standards behind them, so new assistants can be added as they arrive. We will switch each one on for Indian stores as it launches shopping here.",
+  },
+  {
+    q: "Is it safe? Can an AI invent a discount?",
+    a: "No. When AI selling launches, your store locks the price, GST and shipping for each cart and an assistant cannot change them. Any negotiation stays inside the limits you set.",
+  },
+  {
+    q: "How does billing and the free trial work?",
+    a: "Every plan starts with a 14-day free trial and no card is needed to start. Paid plans are billed through Razorpay subscriptions. See the refund and cancellation policy for how cancelling and refunds work.",
+  },
+  {
     q: "Can I use my own domain?",
-    a: "Every store gets name.bcom.si straight away. Connecting your own domain is built but not switched on yet, so it is marked Coming soon until it works end to end.",
-  },
-  {
-    q: "How do my customers pay?",
-    a: "With cash on delivery today, with a fee you set. Online payments through Razorpay (UPI and cards) are Coming soon.",
-  },
-  {
-    q: "What do you charge besides the plan?",
-    a: "Today the plan fee is the only thing you pay us, plus GST. bcom.si does not process payments yet, so there are no payment fees. When online payments launch, the payment provider's own fees will apply and we will show them before you switch it on.",
-  },
-  {
-    q: "How does shipping work?",
-    a: "You set your own shipping zones, rates and a free-shipping threshold. Shiprocket labels and tracking are Coming soon; until then you ship with any courier and mark orders shipped in the admin.",
-  },
-  {
-    q: "Are the invoices GST-ready?",
-    a: "Tax invoices work out CGST and SGST or IGST from your state and your customer's state, with HSN on each line. Downloadable PDFs are Coming soon.",
-  },
-  {
-    q: "Can I bring my store from another platform?",
-    a: "There is no import tool yet. You add products in the admin, and we will say so here when importing is ready.",
-  },
-  {
-    q: "Is there a free trial?",
-    a: "Yes, 14 days on the plan you choose. You do not need a card to start.",
+    a: "Every store starts on yourname.bcom.si. Connecting your own domain is coming soon.",
   },
 ];
