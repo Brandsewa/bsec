@@ -12,7 +12,7 @@ Razorpay (the payment gateway the owner is applying for) checks the live website
 - bcom.si is a product of **Brand Sewa Digital Private Limited** (brandsewa.com); the footer, contact page, About page and legal pages say so, with CIN and GSTIN.
 - The phone demo stays, with three tabs: **Google Search** and **Instagram** (ready today, ending in a cash-on-delivery order) and **AI agents** (coming soon).
 - Billing: merchants pay plans through Razorpay subscriptions; for some stores the owner may set a plan up from the back end. Refunds: within 7 days of a payment, none after. Courts: West Bengal. No phone number published for now. Contact: info@bcom.si, support@bcom.si. Grievance officer: Veeplov Rai, legalteam@brandsewa.com.
-- Product name on the site is **BCom** (not "Bs Commerce"). Online payments (UPI, cards, net banking) and intelligent analytics are described as available but are not built yet: **launch gate, merge only when both exist** (owner, 2026-10-19).
+- Product name on the site is **BCOM** (all caps; not "Bs Commerce"; the domain bcom.si stays lowercase). Online payments (UPI, cards, net banking) and intelligent analytics are described as available but are not built yet: **launch gate, merge only when both exist** (owner, 2026-10-19).
 - The repo is public for now; the owner will make it private before launch.
 
 ## 3. Pages (marketing host only; any other host gets 404)

@@ -292,7 +292,7 @@ export function PhoneDemo() {
             <div className={`notif ${v.notif ? "show" : ""}`} aria-hidden="true">
               <span className="ni">B</span>
               <div>
-                <small>BCom · now</small>
+                <small>BCOM · now</small>
                 <b>Order placed successfully</b>
                 <span>{chosen.name} from {chosen.brand} arrives {x.arrives}.</span>
               </div>

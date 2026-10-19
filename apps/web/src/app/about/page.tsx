@@ -5,8 +5,8 @@ import { CompanyBox } from "@/components/marketing/landing/LegalBits.tsx";
 import { SITE } from "@/components/marketing/landing/site-info.ts";
 
 export const metadata: Metadata = {
-  title: "About us | BCom",
-  description: "BCom (bcom.si) is an agent-first e-commerce platform for Indian brands, a product of Brand Sewa Digital Private Limited.",
+  title: "About us | BCOM",
+  description: "BCOM (bcom.si) is an agent-first e-commerce platform for Indian brands, a product of Brand Sewa Digital Private Limited.",
   alternates: { canonical: "/about" },
 };
 

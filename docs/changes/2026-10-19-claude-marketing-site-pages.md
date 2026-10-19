@@ -30,6 +30,9 @@ The owner is applying for Razorpay, which verifies the live website. The marketi
 - **Launch gate (owner decision):** online payments and intelligent analytics are not built yet. The owner has confirmed both will be built before launch, so this copy describes them as available. **Do not merge or deploy this branch until both exist.** The pricing page no longer lists online payments as coming soon; terms section 9 and the About page now mention online payments.
 - Product name on every marketing page, metadata, footer, nav, phone demo and the signup page changed from "Bs Commerce" to "BCom" (`site-info.ts` `product`, plus hard-coded strings). The domain stays bcom.si.
 
+## Revision 3 (owner review, 2026-10-19)
+- Brand name written in all caps, **BCOM**, everywhere on the site (titles, nav, footer, legal pages, phone notification, FAQ, signup page). The domain `bcom.si` and the email addresses stay lowercase.
+
 ## Decisions and trade-offs
 - Billing is described as Razorpay subscriptions (owner), with the owner able to set up a plan from the back end for some stores. Refunds: within 7 days of a payment, none after. Courts: West Bengal. No phone number published yet. These are the owner's inputs, not invented.
 - Legal text is drafted from common best practice and the product's real behaviour; it is not legal advice and should be read by the owner or counsel before the Razorpay submission.

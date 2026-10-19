@@ -5,8 +5,8 @@ import { GrievanceBox, LegalMeta, RelatedLinks, Summary } from "@/components/mar
 import { SITE } from "@/components/marketing/landing/site-info.ts";
 
 export const metadata: Metadata = {
-  title: "Terms of service | BCom",
-  description: "The terms for using BCom (bcom.si), the e-commerce platform operated by Brand Sewa Digital Private Limited.",
+  title: "Terms of service | BCOM",
+  description: "The terms for using BCOM (bcom.si), the e-commerce platform operated by Brand Sewa Digital Private Limited.",
   alternates: { canonical: "/terms" },
 };
 

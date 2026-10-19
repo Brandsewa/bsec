@@ -28,7 +28,7 @@ export async function generateMetadata(): Promise<Metadata> {
 
     if (!access.tenantId) {
       return {
-        title: "BCom: the agent-first e-commerce platform for Indian brands",
+        title: "BCOM: the agent-first e-commerce platform for Indian brands",
         description: "Open a complete online store today with cash on delivery, GST invoices and a no-code theme builder, built for the AI shopping era. 14-day free trial, plans from ₹999 a month plus GST.",
       };
     }

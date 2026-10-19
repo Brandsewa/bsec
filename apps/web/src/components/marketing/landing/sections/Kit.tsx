@@ -23,7 +23,7 @@ export function AiEra() {
           <span className="eyebrow">Built for the AI shopping era</span>
           <h2>People now shop by asking. <i className="s gt">Your store will be ready.</i></h2>
           <p className="lead">
-            Shoppers are starting to ask ChatGPT, Gemini and Claude what to buy. These features are designed in and arrive as each assistant launches shopping in India. Stores on BCom get them first.
+            Shoppers are starting to ask ChatGPT, Gemini and Claude what to buy. These features are designed in and arrive as each assistant launches shopping in India. Stores on BCOM get them first.
           </p>
         </div>
         <div className="bento">

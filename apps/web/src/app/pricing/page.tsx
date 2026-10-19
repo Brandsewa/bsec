@@ -6,8 +6,8 @@ import { Pricing } from "@/components/marketing/landing/sections/Pricing.tsx";
 import { loadLandingPlans } from "@/server/landing-plans.ts";
 
 export const metadata: Metadata = {
-  title: "Pricing | BCom",
-  description: "BCom plans in Indian rupees plus GST. Every plan starts with a 14-day free trial.",
+  title: "Pricing | BCOM",
+  description: "BCOM plans in Indian rupees plus GST. Every plan starts with a 14-day free trial.",
   alternates: { canonical: "/pricing" },
 };
 

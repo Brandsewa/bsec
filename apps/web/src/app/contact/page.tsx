@@ -5,8 +5,8 @@ import { organizationJsonLd } from "@/components/marketing/landing/seo.ts";
 import { SITE } from "@/components/marketing/landing/site-info.ts";
 
 export const metadata: Metadata = {
-  title: "Contact us | BCom",
-  description: "Contact BCom (bcom.si): email, registered address and grievance officer details for Brand Sewa Digital Private Limited.",
+  title: "Contact us | BCOM",
+  description: "Contact BCOM (bcom.si): email, registered address and grievance officer details for Brand Sewa Digital Private Limited.",
   alternates: { canonical: "/contact" },
 };
 

@@ -5,7 +5,7 @@
  */
 export const SITE = {
   /** Name on the page. */
-  product: "BCom",
+  product: "BCOM",
   domain: "bcom.si",
   url: "https://bcom.si",
   legalName: "Brand Sewa Digital Private Limited",

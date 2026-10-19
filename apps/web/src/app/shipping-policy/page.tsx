@@ -4,8 +4,8 @@ import { LegalMeta, RelatedLinks, Summary } from "@/components/marketing/landing
 import { SITE } from "@/components/marketing/landing/site-info.ts";
 
 export const metadata: Metadata = {
-  title: "Delivery policy | BCom",
-  description: "BCom is a software service delivered online. No physical goods are shipped.",
+  title: "Delivery policy | BCOM",
+  description: "BCOM is a software service delivered online. No physical goods are shipped.",
   alternates: { canonical: "/shipping-policy" },
 };
 
