@@ -77,7 +77,7 @@ export async function findRazorpayPlanId(
 export async function listBillingPlans(rt: Runtime, staffUserId: string): Promise<BillingPlansView> {
   await assertPlatformStaff(rt, staffUserId);
   const db = rt._db.db;
-  const creds = await loadPlatformBillingCredentials(db);
+  const creds = await loadPlatformBillingCredentials(db, "razorpay");
   const mode: BillingMode = creds?.mode ?? "test";
   const plans = await db.select().from(schema.plans).orderBy(asc(schema.plans.sort));
   const out: BillingPlanView[] = [];
@@ -105,7 +105,7 @@ export async function syncBillingPlans(
   const staff = await assertPlatformStaff(rt, staffUserId);
   assertRoleAtLeast(staff.role, "platform_owner", "sync billing plans");
   const db = rt._db.db;
-  const creds = await loadPlatformBillingCredentials(db);
+  const creds = await loadPlatformBillingCredentials(db, "razorpay");
   if (!creds) throw new Error("Bad Request: billing is not configured. Save and enable the Razorpay keys first");
 
   const auth = `Basic ${Buffer.from(`${creds.keyId}:${creds.keySecret}`).toString("base64")}`;

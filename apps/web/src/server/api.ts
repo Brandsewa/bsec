@@ -19,6 +19,7 @@ import {
   updateProductMedia,
   listStorePaymentProviders,
   saveStripeCredentials,
+  saveCashfreeCredentials,
   getStorePaymentProvider,
   clearProviderCredentials,
   testPaymentProviderConnection,
@@ -617,6 +618,10 @@ export const storeRouter = os.router({
                 secretKey: input.keySecret,
                 webhookSecret: input.webhookSecret,
               });
+            }
+            if (input.provider === "cashfree") {
+              if (!input.keyId) throw new Error("Bad Request: the Cashfree App ID is required");
+              return await saveCashfreeCredentials(context.rt, context.tenantCtx, { appId: input.keyId, secretKey: input.keySecret });
             }
             if (!input.keyId) throw new Error("Bad Request: Razorpay key id is required");
             await saveRazorpayCredentials(context.rt, context.tenantCtx, {

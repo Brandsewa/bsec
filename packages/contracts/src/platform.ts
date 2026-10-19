@@ -1295,7 +1295,7 @@ export const UpdatePlatformChannelProviderInput = z.object({
 export type UpdatePlatformChannelProviderInput = z.infer<typeof UpdatePlatformChannelProviderInput>;
 
 export const PlatformPaymentProviderView = z.object({
-  provider: z.enum(["razorpay", "stripe"]),
+  provider: z.enum(["razorpay", "stripe", "cashfree"]),
   displayName: z.string(),
   enabled: z.boolean(),
   liveModeAllowed: z.boolean(),
@@ -1323,13 +1323,15 @@ const InvoiceProfile = z.object({
 
 export const PlatformBillingSettingsView = z.object({
   invoice: InvoiceProfile,
-  provider: z.literal("razorpay"),
+  provider: z.enum(["razorpay", "cashfree"]),
   mode: z.enum(["test", "live"]),
   enabled: z.boolean(),
   graceDays: z.number().int(),
   test: BillingKeySetView,
   live: BillingKeySetView,
+  cashfree: z.object({ test: BillingKeySetView, live: BillingKeySetView }),
   webhookUrl: z.string(),
+  cashfreeWebhookUrl: z.string(),
   usingEnvFallback: z.boolean(),
   lastTestAt: z.string().nullable(),
   lastTestStatus: z.enum(["success", "failed"]).nullable(),
@@ -1337,6 +1339,11 @@ export const PlatformBillingSettingsView = z.object({
   updatedAt: z.string().nullable(),
 });
 export type PlatformBillingSettingsView = z.infer<typeof PlatformBillingSettingsView>;
+
+const CashfreeKeysInput = z.object({
+  clientId: z.string().max(80).optional(),
+  clientSecret: z.string().max(200).optional(), // write-only
+});
 
 const BillingKeysInput = z.object({
   keyId: z.string().max(80).optional(),
@@ -1381,6 +1388,8 @@ export const platformIntegrationsContract = {
     .route({ method: "PATCH", path: "/platform/integrations/billing/settings" })
     .input(
       z.object({
+        provider: z.enum(["razorpay", "cashfree"]).optional(),
+        cashfree: z.object({ test: CashfreeKeysInput.optional(), live: CashfreeKeysInput.optional() }).optional(),
         mode: z.enum(["test", "live"]).optional(),
         enabled: z.boolean().optional(),
         graceDays: z.number().int().min(0).max(30).optional(),
@@ -1401,8 +1410,8 @@ export const platformIntegrationsContract = {
     .output(z.object({ ok: z.literal(true) })),
   testBillingConnection: oc
     .route({ method: "POST", path: "/platform/integrations/billing/test" })
-    .input(z.object({ mode: z.enum(["test", "live"]).optional() }))
-    .output(z.object({ ok: z.boolean(), mode: z.enum(["test", "live"]), error: z.string().optional() })),
+    .input(z.object({ mode: z.enum(["test", "live"]).optional(), provider: z.enum(["razorpay", "cashfree"]).optional() }))
+    .output(z.object({ ok: z.boolean(), mode: z.enum(["test", "live"]), provider: z.enum(["razorpay", "cashfree"]), error: z.string().optional() })),
   paymentProviders: oc
     .route({ method: "GET", path: "/platform/integrations/payments/providers" })
     .output(z.array(PlatformPaymentProviderView)),
@@ -1410,7 +1419,7 @@ export const platformIntegrationsContract = {
     .route({ method: "PATCH", path: "/platform/integrations/payments/providers/{provider}" })
     .input(
       z.object({
-        provider: z.enum(["razorpay", "stripe"]),
+        provider: z.enum(["razorpay", "stripe", "cashfree"]),
         enabled: z.boolean().optional(),
         liveModeAllowed: z.boolean().optional(),
       }),

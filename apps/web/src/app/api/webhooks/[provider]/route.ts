@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { randomUUID } from "node:crypto";
+import { createHash, randomUUID } from "node:crypto";
 import {
   receiveWebhook,
   resolveWebhookTenant,
@@ -9,7 +9,7 @@ import {
   RateLimitExceededError,
   getClientIp,
 } from "@bs/domain";
-import { RazorpayProvider, CODProvider, StripeProvider } from "@bs/payments";
+import { CashfreeProvider, RazorpayProvider, CODProvider, StripeProvider } from "@bs/payments";
 import { server } from "@/server/runtime.ts";
 
 export async function POST(
@@ -41,9 +41,14 @@ export async function POST(
     const orderObj = payloadObj?.order as Record<string, unknown> | undefined;
     const orderEntity = orderObj?.entity as Record<string, unknown> | undefined;
     const orderNotes = orderEntity?.notes as Record<string, unknown> | undefined;
+    // Cashfree nests its payload under data.order / data.payment (ADR-037).
+    const cfData = provider === "cashfree" ? (parsed.data as Record<string, unknown> | undefined) : undefined;
+    const cfOrder = cfData?.order as Record<string, unknown> | undefined;
+    const cfPayment = cfData?.payment as Record<string, unknown> | undefined;
 
-    // Extract eventId from provider payload / headers
+    // Extract eventId from provider payload / headers. Cashfree sends none; a retry has the identical body, so its hash is stable.
     const eventId =
+      (provider === "cashfree" && `cf_${createHash("sha256").update(rawBody).digest("hex")}`) ||
       (typeof parsed.event_id === "string" && parsed.event_id) ||
       (typeof parsed.id === "string" && parsed.id) ||
       req.headers.get("x-razorpay-event-id") ||
@@ -61,12 +66,14 @@ export async function POST(
       undefined;
 
     const providerOrderId =
+      (typeof cfOrder?.order_id === "string" && cfOrder.order_id) ||
       (typeof paymentEntity?.order_id === "string" && paymentEntity.order_id) ||
       (typeof orderEntity?.id === "string" && orderEntity.id) ||
       (typeof parsed.order_id === "string" && parsed.order_id) ||
       undefined;
 
     const providerPaymentId =
+      (cfPayment?.cf_payment_id !== undefined && String(cfPayment.cf_payment_id)) ||
       (typeof paymentEntity?.id === "string" && paymentEntity.id) ||
       (typeof parsed.payment_id === "string" && parsed.payment_id) ||
       undefined;
@@ -133,6 +140,11 @@ export async function POST(
       const creds = await getTenantPaymentSecrets(rt._db.db, tenantId, "razorpay");
       const razorpayProvider = new RazorpayProvider(creds);
       const verified = await razorpayProvider.verifyWebhook(headersRecord, rawBody);
+      signatureValid = verified.isValid;
+    } else if (provider === "cashfree") {
+      // Cashfree signs timestamp + raw body with the store's own secret (x-webhook-signature, x-webhook-timestamp).
+      const creds = await getTenantPaymentSecrets(rt._db.db, tenantId, "cashfree");
+      const verified = await new CashfreeProvider({ clientId: creds.keyId, clientSecret: creds.keySecret }).verifyWebhook(headersRecord, rawBody);
       signatureValid = verified.isValid;
     } else if (provider === "stripe") {
       // Stripe signs with the store's own whsec_ signing secret (Stripe-Signature header, 5 minute tolerance).

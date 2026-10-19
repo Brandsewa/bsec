@@ -1,6 +1,6 @@
 import * as Sentry from "@sentry/node";
 import { serve } from "@hono/node-server";
-import { warnIfEncryptionKeyMissing, createLogger, createRuntime, endDuePromotions, runBillingDunningSweep, runDueTenantDeletions } from "@bs/domain";
+import { warnIfEncryptionKeyMissing, createLogger, createRuntime, endDuePromotions, runBillingDunningSweep, endDueCashfreeCancellations, runDueTenantDeletions } from "@bs/domain";
 import { createApp } from "./app.ts";
 
 warnIfEncryptionKeyMissing();
@@ -57,6 +57,9 @@ const dunningSweep = async () => {
   try {
     const res = await runBillingDunningSweep(rt);
     if (res.notified > 0 || res.reminded > 0 || res.limited > 0) log.info(res, "billing dunning sweep");
+    // Cashfree cancels at once, so a cancelled store keeps its plan until the paid period ends; end those here (ADR-037).
+    const ended = await endDueCashfreeCancellations(rt);
+    if (ended.ended > 0) log.info(ended, "billing cancellations ended");
   } catch (err) {
     log.error({ err }, "billing dunning sweep failed");
   }
