@@ -88,7 +88,7 @@ function KeysCard({
   const test = async () => {
     setTesting(true);
     try {
-      const res = await client.integrations.testBillingConnection({ mode });
+      const res = await client.integrations.testBillingConnection({ mode, provider: "razorpay" });
       if (res.ok) toast.success("Razorpay accepted these keys");
       else toast.error(res.error ?? "Razorpay rejected these keys");
       await onSaved();
@@ -149,6 +149,106 @@ function KeysCard({
               disabled={!canEdit}
             />
             <p className="text-[11px] text-muted-foreground">The secret you type when adding the webhook in Razorpay (see the URL below).</p>
+          </div>
+        </CardContent>
+        <CardFooter className="gap-2">
+          <Button type="submit" size="sm" disabled={!canEdit || !dirty || saving}>
+            {saving ? "Saving..." : "Save keys"}
+          </Button>
+          <Button type="button" size="sm" variant="outline" disabled={!canEdit || testing || !view.secretConfigured} onClick={() => void test()}>
+            {testing ? "Testing..." : "Test connection"}
+          </Button>
+        </CardFooter>
+      </form>
+    </Card>
+  );
+}
+
+function CashfreeKeysCard({
+  mode,
+  view,
+  active,
+  canEdit,
+  onSaved,
+}: {
+  mode: Mode;
+  view: KeySet;
+  active: boolean;
+  canEdit: boolean;
+  onSaved: () => Promise<void>;
+}) {
+  const [form, setForm] = useState({ clientId: "", clientSecret: "" });
+  const [saving, setSaving] = useState(false);
+  const [testing, setTesting] = useState(false);
+  const dirty = Boolean(form.clientId.trim() || form.clientSecret.trim());
+
+  const save = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setSaving(true);
+    try {
+      await client.integrations.updateBillingSettings({
+        cashfree: {
+          [mode]: {
+            ...(form.clientId.trim() ? { clientId: form.clientId.trim() } : {}),
+            ...(form.clientSecret.trim() ? { clientSecret: form.clientSecret.trim() } : {}),
+          },
+        },
+      });
+      setForm({ clientId: "", clientSecret: "" });
+      toast.success(`Cashfree ${mode} keys saved`);
+      await onSaved();
+    } catch (err) {
+      toast.error(messageOf(err));
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const test = async () => {
+    setTesting(true);
+    try {
+      const res = await client.integrations.testBillingConnection({ mode, provider: "cashfree" });
+      if (res.ok) toast.success("Cashfree accepted these keys");
+      else toast.error(res.error ?? "Cashfree rejected these keys");
+      await onSaved();
+    } catch (err) {
+      toast.error(messageOf(err));
+    } finally {
+      setTesting(false);
+    }
+  };
+
+  return (
+    <Card>
+      <form onSubmit={save}>
+        <CardHeader>
+          <div className="flex items-center justify-between gap-2">
+            <CardTitle>Cashfree {mode === "test" ? "sandbox keys" : "live keys"}</CardTitle>
+            {active ? <Badge>In use</Badge> : <Badge variant="secondary">Not in use</Badge>}
+          </div>
+          <CardDescription>
+            {mode === "test"
+              ? "From Cashfree, Developers, API keys, Sandbox. Safe for practice payments."
+              : "From Cashfree, Developers, API keys, Production. Real money moves with these keys. Save them only when you are ready."}
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <div className="space-y-1.5">
+            <Label htmlFor={`cf-${mode}-id`}>App ID</Label>
+            <Input id={`cf-${mode}-id`} value={form.clientId} onChange={(e) => setForm({ ...form, clientId: e.target.value })} placeholder={view.keyId ?? ""} autoComplete="off" disabled={!canEdit} />
+            <p className="text-[11px] text-muted-foreground">{view.keyId ? "Saved; type to replace." : "Not saved yet."}</p>
+          </div>
+          <div className="space-y-1.5">
+            <Label htmlFor={`cf-${mode}-secret`}>Secret key</Label>
+            <PasswordInput
+              id={`cf-${mode}-secret`}
+              value={form.clientSecret}
+              onChange={(e) => setForm({ ...form, clientSecret: e.target.value })}
+              placeholder={view.secretConfigured ? `Saved, ends in ${view.secretLastFour ?? "••••"}` : ""}
+              autoComplete="new-password"
+              disabled={!canEdit}
+            />
+            <p className="text-[11px] text-muted-foreground">Write-only. It is encrypted and never shown again. Cashfree also signs its webhooks with it, so there is no separate webhook secret.</p>
           </div>
         </CardContent>
         <CardFooter className="gap-2">
@@ -312,7 +412,7 @@ export function BillingIntegrations() {
   const navigate = useNavigate();
   const queryClient = useQueryClient();
   const canEdit = useHasRole("platform_owner");
-  const [confirm, setConfirm] = useState<null | "enable" | "disable" | "live" | "test">(null);
+  const [confirm, setConfirm] = useState<null | "enable" | "disable" | "live" | "test" | "cashfree" | "razorpay">(null);
   const [saving, setSaving] = useState(false);
   const [grace, setGrace] = useState<string>("");
 
@@ -321,13 +421,22 @@ export function BillingIntegrations() {
     queryFn: () => client.integrations.billingSettings(),
   });
   const refresh = () => queryClient.invalidateQueries({ queryKey: ["platform", "integrations", "billing"] });
+  const webhookUrl = data ? (data.provider === "cashfree" ? data.cashfreeWebhookUrl : data.webhookUrl) : "";
 
   const apply = async () => {
     if (!confirm) return;
     setSaving(true);
     try {
       await client.integrations.updateBillingSettings(
-        confirm === "enable" ? { enabled: true } : confirm === "disable" ? { enabled: false } : confirm === "live" ? { mode: "live" } : { mode: "test" },
+        confirm === "enable"
+          ? { enabled: true }
+          : confirm === "disable"
+            ? { enabled: false }
+            : confirm === "live"
+              ? { mode: "live" }
+              : confirm === "cashfree" || confirm === "razorpay"
+                ? { provider: confirm }
+                : { mode: "test" },
       );
       toast.success("Billing settings updated");
       setConfirm(null);
@@ -366,7 +475,7 @@ export function BillingIntegrations() {
 
       <PageHeader
         title="Platform billing"
-        description="The Razorpay account Brand Sewa uses to charge merchants for their plan. This is separate from each store's own payment gateway. Start in test mode."
+        description="The payment gateway account Brand Sewa uses to charge merchants for their plan (Razorpay or Cashfree). This is separate from each store's own payment gateway. Start in test mode."
       />
 
       {isLoading ? <MetricCardsSkeleton count={3} /> : null}
@@ -388,7 +497,31 @@ export function BillingIntegrations() {
               <AlertDescription>Only a platform owner can change billing settings.</AlertDescription>
             </Alert>
           ) : null}
-          {data.usingEnvFallback ? (
+          <Card>
+            <CardHeader>
+              <CardTitle>Payment gateway</CardTitle>
+              <CardDescription>
+                The gateway used when a merchant subscribes from now on. Subscriptions already running stay on the gateway that created them, so switching never interrupts a paying store. Keys for both gateways can stay saved.
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="flex flex-wrap gap-2">
+              {(["razorpay", "cashfree"] as const).map((p) => (
+                <Button
+                  key={p}
+                  type="button"
+                  size="sm"
+                  variant={data.provider === p ? "default" : "outline"}
+                  disabled={!canEdit || data.provider === p}
+                  aria-pressed={data.provider === p}
+                  onClick={() => setConfirm(p)}
+                >
+                  {p === "razorpay" ? "Razorpay" : "Cashfree"}
+                  {data.provider === p ? " (active)" : ""}
+                </Button>
+              ))}
+            </CardContent>
+          </Card>
+          {data.usingEnvFallback && data.provider === "razorpay" ? (
             <Alert>
               <AlertTitle>Using server environment keys</AlertTitle>
               <AlertDescription>No keys are saved here, so billing falls back to the RAZORPAY_PLATFORM_* values on the server. Save keys below and enable billing to manage them here.</AlertDescription>
@@ -442,12 +575,31 @@ export function BillingIntegrations() {
             </CardContent>
           </Card>
 
-          <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
-            <KeysCard mode="test" view={data.test} active={data.mode === "test"} canEdit={canEdit} onSaved={refresh} />
-            <KeysCard mode="live" view={data.live} active={data.mode === "live"} canEdit={canEdit} onSaved={refresh} />
-          </div>
+          {data.provider === "cashfree" ? (
+            <>
+              <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
+                <CashfreeKeysCard mode="test" view={data.cashfree.test} active={data.mode === "test"} canEdit={canEdit} onSaved={refresh} />
+                <CashfreeKeysCard mode="live" view={data.cashfree.live} active={data.mode === "live"} canEdit={canEdit} onSaved={refresh} />
+              </div>
+              <Card>
+                <CardHeader>
+                  <CardTitle>Plans</CardTitle>
+                  <CardDescription>
+                    Cashfree needs no plan sync: each subscription carries its own price from your plans, charged by Cashfree every month or year. Change a price under Plans and new subscriptions use it; current subscribers keep what they signed up for.
+                  </CardDescription>
+                </CardHeader>
+              </Card>
+            </>
+          ) : (
+            <>
+              <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
+                <KeysCard mode="test" view={data.test} active={data.mode === "test"} canEdit={canEdit} onSaved={refresh} />
+                <KeysCard mode="live" view={data.live} active={data.mode === "live"} canEdit={canEdit} onSaved={refresh} />
+              </div>
 
-          <PlansCard canEdit={canEdit} />
+              <PlansCard canEdit={canEdit} />
+            </>
+          )}
 
           <InvoiceDetailsCard key={data.updatedAt ?? "new"} view={data.invoice} canEdit={canEdit} onSaved={refresh} />
 
@@ -455,19 +607,21 @@ export function BillingIntegrations() {
             <CardHeader>
               <CardTitle>Webhook URL</CardTitle>
               <CardDescription>
-                In Razorpay (Account and settings, Webhooks) add this URL for the same mode as the keys, with the active events for subscriptions and payments, and the secret you saved above.
+                {data.provider === "cashfree"
+                  ? "In Cashfree (Developers, Webhooks) add this URL for the same mode as the keys and tick the Subscription events (status changed, payment success, payment failed). Cashfree signs them with your secret key."
+                  : "In Razorpay (Account and settings, Webhooks) add this URL for the same mode as the keys, with the active events for subscriptions and payments, and the secret you saved above."}
               </CardDescription>
             </CardHeader>
             <CardContent>
               <div className="flex items-center gap-2">
-                <code className="flex-1 truncate rounded-md border border-border bg-muted/40 px-3 py-2 text-xs">{data.webhookUrl}</code>
+                <code className="flex-1 truncate rounded-md border border-border bg-muted/40 px-3 py-2 text-xs">{webhookUrl}</code>
                 <Button
                   type="button"
                   size="sm"
                   variant="outline"
                   className="gap-1.5"
                   onClick={() => {
-                    void navigator.clipboard.writeText(data.webhookUrl).then(() => toast.success("Webhook URL copied"));
+                    void navigator.clipboard.writeText(webhookUrl).then(() => toast.success("Webhook URL copied"));
                   }}
                 >
                   <Copy className="h-3.5 w-3.5" />
@@ -485,16 +639,26 @@ export function BillingIntegrations() {
           if (!open && !saving) setConfirm(null);
         }}
         title={
-          confirm === "enable" ? "Enable platform billing?" : confirm === "disable" ? "Disable platform billing?" : confirm === "live" ? "Switch to live mode?" : "Switch back to test mode?"
+          confirm === "enable"
+            ? "Enable platform billing?"
+            : confirm === "disable"
+              ? "Disable platform billing?"
+              : confirm === "live"
+                ? "Switch to live mode?"
+                : confirm === "cashfree" || confirm === "razorpay"
+                  ? `Use ${confirm === "cashfree" ? "Cashfree" : "Razorpay"} for new subscriptions?`
+                  : "Switch back to test mode?"
         }
         description={
           confirm === "enable"
             ? "Merchants will be able to subscribe and be charged with the active mode's keys."
             : confirm === "disable"
-              ? "No new subscriptions or charges can be started. Existing Razorpay subscriptions keep running on Razorpay's side."
+              ? "No new subscriptions or charges can be started. Existing subscriptions keep running on their gateway's side."
               : confirm === "live"
                 ? "Merchants will be charged real money with the live keys. Make sure a full test-mode run has passed."
-                : "New subscriptions will use the test keys again."
+                : confirm === "cashfree" || confirm === "razorpay"
+                  ? "New subscriptions will be created on this gateway. Subscriptions already running stay where they are. The gateway's keys for the active mode must be saved first."
+                  : "New subscriptions will use the test keys again."
         }
         confirmLabel={saving ? "Saving..." : "Confirm"}
         destructive={confirm === "live" || confirm === "disable"}

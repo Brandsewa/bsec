@@ -15,6 +15,7 @@ import { SettingsCard, SettingsPageFrame } from "../../../components/settings/se
 import { orpc } from "../../../lib/orpc.ts";
 import { errorMessage } from "../../../lib/errors.ts";
 import { downloadInvoicePdf } from "../../../lib/invoice-download.ts";
+import { openCashfreeCheckout } from "../../../lib/cashfree-checkout.ts";
 
 export const Route = createFileRoute("/_store/settings/plan-and-billing")({
   pendingComponent: () => <PageSkeleton />,
@@ -37,6 +38,7 @@ export function PlanAndBillingPage() {
   const cancelSubscriptionMutation = useMutation(orpc.admin.planAndBilling.cancelSubscription.mutationOptions());
   const [payPlanCode, setPayPlanCode] = useState<string>("");
   const [payInterval, setPayInterval] = useState<"monthly" | "yearly">("monthly");
+  const [payPhone, setPayPhone] = useState("");
   const [confirmCancelSubOpen, setConfirmCancelSubOpen] = useState(false);
 
   const [requestDialogOpen, setRequestDialogOpen] = useState(false);
@@ -75,6 +77,8 @@ export function PlanAndBillingPage() {
   }
 
   const { plan, usage, invoices, openPlanChangeRequest, billing } = query.data;
+  const isCashfree = billing.provider === "cashfree";
+  const gatewayName = isCashfree ? "Cashfree" : "Razorpay";
   const availablePlans = availablePlansQuery.data ?? [];
 
   function handleOpenRequestDialog() {
@@ -225,7 +229,7 @@ export function PlanAndBillingPage() {
             >
               {billing.testMode ? (
                 <p className="mb-3 rounded-md border border-border bg-muted/40 p-3 text-xs text-muted-foreground">
-                  Payments are in test mode right now: use Razorpay test cards, no real money moves.
+                  Payments are in test mode right now: use {gatewayName} test payment details, no real money moves.
                 </p>
               ) : null}
               {billing.hasSubscription && plan?.status === "active" ? (
@@ -266,16 +270,35 @@ export function PlanAndBillingPage() {
                       ]}
                     />
                   </div>
+                  {isCashfree ? (
+                    <div className="min-w-48 space-y-1.5">
+                      <p className="text-xs font-medium text-muted-foreground">Mobile number</p>
+                      <Input
+                        value={payPhone}
+                        onChange={(e) => setPayPhone(e.target.value)}
+                        inputMode="tel"
+                        autoComplete="tel"
+                        placeholder="10-digit mobile"
+                        aria-label="Mobile number for the payment mandate"
+                      />
+                    </div>
+                  ) : null}
                   <Button
                     size="sm"
-                    disabled={!payPlanCode || subscribeMutation.isPending}
+                    disabled={!payPlanCode || subscribeMutation.isPending || (isCashfree && payPhone.replace(/\D/g, "").length < 10)}
                     onClick={() =>
                       subscribeMutation.mutate(
-                        { planCode: payPlanCode, interval: payInterval },
+                        {
+                          planCode: payPlanCode,
+                          interval: payInterval,
+                          ...(isCashfree ? { phone: payPhone.trim(), returnUrl: `${window.location.origin}${window.location.pathname}` } : {}),
+                        },
                         {
                           onSuccess: (res) => {
-                            if (res.checkoutUrl) window.location.assign(res.checkoutUrl);
-                            else toast.error("Razorpay did not return a payment page. Try again.");
+                            if (res.checkoutSession) {
+                              void openCashfreeCheckout(res.checkoutSession).catch((e: unknown) => toast.error(errorMessage(e)));
+                            } else if (res.checkoutUrl) window.location.assign(res.checkoutUrl);
+                            else toast.error(`${gatewayName} did not return a payment page. Try again.`);
                           },
                           onError: (e) => toast.error(errorMessage(e)),
                         },

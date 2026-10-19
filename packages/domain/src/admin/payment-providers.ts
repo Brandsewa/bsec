@@ -1,6 +1,6 @@
 import { and, eq } from "drizzle-orm";
 import { schema, withTenant, type Db } from "@bs/db";
-import { StripeProvider, decryptSecret, encryptSecret } from "@bs/payments";
+import { CashfreeProvider, StripeProvider, cashfreeModeOfSecret, decryptSecret, encryptSecret } from "@bs/payments";
 import type { Runtime } from "../runtime.ts";
 import { assertPermission, type TenantContext } from "../context.ts";
 import { invalidateCache } from "../cache-invalidation.ts";
@@ -16,8 +16,10 @@ import { getTenantPaymentSecrets } from "../payments/credentials.ts";
  * Disabling a provider at platform level never strands money: saved keys, in-flight payments, webhooks for existing
  * intents and refunds are untouched. It only blocks new key saves, activations and new payment intents.
  */
-export type OnlineProvider = "razorpay" | "stripe";
-export const ONLINE_PROVIDERS: readonly OnlineProvider[] = ["razorpay", "stripe"];
+export type OnlineProvider = "razorpay" | "stripe" | "cashfree";
+export const ONLINE_PROVIDERS: readonly OnlineProvider[] = ["razorpay", "stripe", "cashfree"];
+
+const PROVIDER_NAMES: Record<OnlineProvider, string> = { razorpay: "Razorpay", stripe: "Stripe", cashfree: "Cashfree" };
 
 export type ProviderState = "not_connected" | "connected_test" | "active" | "live_blocked";
 
@@ -47,9 +49,14 @@ export interface StorePaymentProviderView {
 const KEY_PATTERNS: Record<OnlineProvider, RegExp> = {
   razorpay: /^rzp_(test|live)_[A-Za-z0-9]{6,}$/,
   stripe: /^sk_(test|live)_[A-Za-z0-9]{10,}$/,
+  // Cashfree: the App ID is a short alphanumeric id (sandbox ones start with TEST); the secret looks like cfsk_ma_test_... or
+  // cfsk_ma_prod_... . Kept loose on purpose: the connection test is the real check.
+  cashfree: /^[A-Za-z0-9_-]{16,200}$/,
 };
+const CASHFREE_APP_ID = /^[A-Za-z0-9]{6,60}$/;
 
 function modeOfKey(provider: OnlineProvider, key: string): "test" | "live" {
+  if (provider === "cashfree") return cashfreeModeOfSecret(key);
   return provider === "razorpay" ? (key.startsWith("rzp_live_") ? "live" : "test") : key.startsWith("sk_live_") ? "live" : "test";
 }
 
@@ -92,7 +99,7 @@ async function loadStoreView(
       .from(schema.tenantSecrets)
       .where(eq(schema.tenantSecrets.provider, provider));
     const byName = new Map(secrets.map((s) => [s.keyName, s]));
-    const hasKeys = provider === "razorpay" ? byName.has("key_id") && byName.has("key_secret") : byName.has("key_secret");
+    const hasKeys = provider === "razorpay" || provider === "cashfree" ? byName.has("key_id") && byName.has("key_secret") : byName.has("key_secret");
 
     // A disabled provider is shown only to stores that already hold keys for it.
     if (!platformRow.enabled && !hasKeys) return null;
@@ -105,14 +112,23 @@ async function loadStoreView(
 
     let keyHint: string | null = null;
     let mode: "test" | "live" | null = null;
-    const keyRow = provider === "razorpay" ? byName.get("key_id") : byName.get("key_secret");
+    const keyRow = provider === "razorpay" || provider === "cashfree" ? byName.get("key_id") : byName.get("key_secret");
     if (keyRow) {
       try {
         const plain = decryptSecret({ ciphertext: keyRow.ciphertext, iv: keyRow.iv });
         keyHint = `…${plain.slice(-4)}`;
-        mode = modeOfKey(provider, plain);
+        mode = provider === "cashfree" ? null : modeOfKey(provider, plain);
       } catch {
         keyHint = null;
+      }
+    }
+    // Cashfree's mode is told by its secret (the App ID does not say), and the secret also signs its webhooks.
+    const cfSecretRow = provider === "cashfree" ? byName.get("key_secret") : undefined;
+    if (cfSecretRow) {
+      try {
+        mode = modeOfKey("cashfree", decryptSecret({ ciphertext: cfSecretRow.ciphertext, iv: cfSecretRow.iv }));
+      } catch {
+        mode = null;
       }
     }
 
@@ -132,7 +148,7 @@ async function loadStoreView(
       state,
       mode,
       keyHint,
-      hasWebhookSecret: byName.has("webhook_secret"),
+      hasWebhookSecret: provider === "cashfree" ? byName.has("key_secret") : byName.has("webhook_secret"),
       lastTestAt: typeof setup.lastTestAt === "string" ? setup.lastTestAt : null,
       lastTestOk: typeof setup.lastTestOk === "boolean" ? setup.lastTestOk : null,
       lastTestError: typeof setup.lastTestError === "string" ? setup.lastTestError : null,
@@ -234,6 +250,56 @@ export async function saveStripeCredentials(
   return getStorePaymentProvider(rt, ctx, "stripe");
 }
 
+/**
+ * Saves the store's own Cashfree App ID and secret, encrypted in tenant_secrets (ADR-037). Cashfree signs webhooks with the
+ * same secret, so no separate webhook secret is stored. Live keys are refused until the platform allows live mode.
+ */
+export async function saveCashfreeCredentials(
+  rt: Runtime,
+  ctx: TenantContext,
+  input: { appId: string; secretKey: string },
+): Promise<StorePaymentProviderView> {
+  assertPermission(ctx, "payments.manage");
+  const { liveModeAllowed } = await assertPaymentProviderEnabled(rt._db.db, "cashfree");
+  const appId = input.appId.trim();
+  const secretKey = input.secretKey.trim();
+  if (!CASHFREE_APP_ID.test(appId)) throw new Error("Bad Request: the Cashfree App ID is letters and digits only (from Cashfree, Developers, API keys)");
+  if (!KEY_PATTERNS.cashfree.test(secretKey)) throw new Error("Bad Request: the Cashfree secret key should look like cfsk_ma_test_XXXX or cfsk_ma_prod_XXXX");
+  const mode = modeOfKey("cashfree", secretKey);
+  if (mode === "live" && !liveModeAllowed) {
+    throw new Error("Precondition: live keys are not allowed yet. Use your Cashfree test (sandbox) keys until the platform allows live mode.");
+  }
+  const encrypted = [
+    { keyName: "key_id", ...encryptOrExplain(appId) },
+    { keyName: "key_secret", ...encryptOrExplain(secretKey) },
+  ];
+  const updatedBy = ctx.actor.type === "staff" ? ctx.actor.userId : null;
+
+  await withTenant(rt._db.db, ctx.tenantId, async (tx) => {
+    for (const e of encrypted) {
+      await tx
+        .insert(schema.tenantSecrets)
+        .values({ tenantId: ctx.tenantId, provider: "cashfree", keyName: e.keyName, ciphertext: e.ciphertext, iv: e.iv, keyVersion: e.keyVersion, updatedBy })
+        .onConflictDoUpdate({
+          target: [schema.tenantSecrets.tenantId, schema.tenantSecrets.provider, schema.tenantSecrets.keyName],
+          set: { ciphertext: e.ciphertext, iv: e.iv, keyVersion: e.keyVersion, updatedBy, updatedAt: new Date() },
+        });
+    }
+    // New keys invalidate the previous test and deactivate the method until it is tested and activated again.
+    await upsertMethodRow(tx, ctx.tenantId, "cashfree", "Cashfree", { status: "pending_setup", mode, setup: { lastTestOk: null, lastTestAt: null, lastTestError: null } });
+    await tx.insert(schema.auditLogs).values({
+      tenantId: ctx.tenantId,
+      actorType: "staff",
+      actorId: updatedBy,
+      action: "cashfree_credentials.saved",
+      targetType: "tenant_secrets",
+      targetId: ctx.tenantId,
+      diff: { mode: { before: null, after: mode } },
+    });
+  });
+  return getStorePaymentProvider(rt, ctx, "cashfree");
+}
+
 export async function clearProviderCredentials(rt: Runtime, ctx: TenantContext, provider: OnlineProvider): Promise<StorePaymentProviderView | null> {
   assertPermission(ctx, "payments.manage");
   await withTenant(rt._db.db, ctx.tenantId, async (tx) => {
@@ -293,7 +359,7 @@ async function upsertMethodRow(
       displayName,
       status: next.status,
       mode: next.mode,
-      sortOrder: provider === "razorpay" ? 1 : 2,
+      sortOrder: provider === "razorpay" ? 1 : provider === "stripe" ? 2 : 3,
       publicConfig: { v: 1 },
       setupState,
       version: 1,
@@ -336,6 +402,12 @@ export async function testPaymentProviderConnection(
           ? { ok: false, error: "The key's mode does not match what Stripe reports." }
           : { ok: r.ok, mode: r.ok ? declared : undefined, error: r.error };
     }
+  } else if (provider === "cashfree") {
+    if (!creds.keyId || !creds.keySecret) {
+      result = { ok: false, error: "Save your Cashfree App ID and secret first." };
+    } else {
+      result = await new CashfreeProvider({ clientId: creds.keyId, clientSecret: creds.keySecret, fetchFn }).testConnection();
+    }
   } else if (!creds.keyId || !creds.keySecret) {
     result = { ok: false, error: "Save your Razorpay key id and secret first." };
   } else {
@@ -357,7 +429,7 @@ export async function testPaymentProviderConnection(
       .from(schema.paymentMethods)
       .where(and(eq(schema.paymentMethods.tenantId, ctx.tenantId), eq(schema.paymentMethods.provider, provider)))
       .limit(1);
-    await upsertMethodRow(tx, ctx.tenantId, provider, provider === "stripe" ? "Stripe" : "Razorpay", {
+    await upsertMethodRow(tx, ctx.tenantId, provider, PROVIDER_NAMES[provider], {
       // A failing test also drops an active method back to pending so a broken key is not left "active".
       status: result.ok ? ((existing?.status === "active" ? "active" : "pending_setup") as "active" | "pending_setup") : "pending_setup",
       mode: result.mode ?? (existing?.mode as "test" | "live" | null) ?? null,
@@ -406,7 +478,7 @@ export async function setPaymentProviderActive(
       .from(schema.paymentMethods)
       .where(and(eq(schema.paymentMethods.tenantId, ctx.tenantId), eq(schema.paymentMethods.provider, provider)))
       .limit(1);
-    await upsertMethodRow(tx, ctx.tenantId, provider, provider === "stripe" ? "Stripe" : "Razorpay", {
+    await upsertMethodRow(tx, ctx.tenantId, provider, PROVIDER_NAMES[provider], {
       status: active ? "active" : "disabled",
       mode: (existing?.mode as "test" | "live" | null) ?? null,
     });

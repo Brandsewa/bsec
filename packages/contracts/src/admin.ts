@@ -1220,7 +1220,7 @@ export type PaymentsStatus = z.infer<typeof PaymentsStatus>;
 
 /** A payment provider as one store sees it (ADMIN-IMPROVEMENTS-PLAN §6.4). Never carries a key or secret. */
 export const StorePaymentProvider = z.object({
-  provider: z.enum(["razorpay", "stripe"]),
+  provider: z.enum(["razorpay", "stripe", "cashfree"]),
   displayName: z.string(),
   platformEnabled: z.boolean(),
   liveModeAllowed: z.boolean(),
@@ -1619,6 +1619,7 @@ export const PlanAndBillingView = z.object({
   billing: z.object({
     available: z.boolean(),
     testMode: z.boolean(),
+    provider: z.enum(["razorpay", "cashfree"]),
     hasSubscription: z.boolean(),
     cancelAt: z.string().nullable(),
   }),
@@ -2018,10 +2019,10 @@ export const adminContract = {
       .route({ method: "PUT", path: "/admin/payment-providers/{provider}/credentials" })
       .input(
         z.object({
-          provider: z.enum(["razorpay", "stripe"]),
-          /** Razorpay key id (rzp_test_...); not used for Stripe. */
+          provider: z.enum(["razorpay", "stripe", "cashfree"]),
+          /** Razorpay key id (rzp_test_...) or Cashfree App ID; not used for Stripe. */
           keyId: z.string().min(6).max(100).optional(),
-          /** Razorpay key secret, or the Stripe secret key (sk_test_...). */
+          /** Razorpay key secret, the Stripe secret key (sk_test_...), or the Cashfree secret key (cfsk_ma_test_...). */
           keySecret: z.string().min(6).max(300),
           webhookSecret: z.string().min(6).max(200).optional(),
         }),
@@ -2029,11 +2030,11 @@ export const adminContract = {
       .output(StorePaymentProvider),
     clearCredentials: oc
       .route({ method: "DELETE", path: "/admin/payment-providers/{provider}/credentials" })
-      .input(z.object({ provider: z.enum(["razorpay", "stripe"]) }))
+      .input(z.object({ provider: z.enum(["razorpay", "stripe", "cashfree"]) }))
       .output(StorePaymentProvider.nullable()),
     test: oc
       .route({ method: "POST", path: "/admin/payment-providers/{provider}/test" })
-      .input(z.object({ provider: z.enum(["razorpay", "stripe"]) }))
+      .input(z.object({ provider: z.enum(["razorpay", "stripe", "cashfree"]) }))
       .output(
         z.object({
           ok: z.boolean(),
@@ -2044,7 +2045,7 @@ export const adminContract = {
       ),
     setActive: oc
       .route({ method: "POST", path: "/admin/payment-providers/{provider}/active" })
-      .input(z.object({ provider: z.enum(["razorpay", "stripe"]), active: z.boolean() }))
+      .input(z.object({ provider: z.enum(["razorpay", "stripe", "cashfree"]), active: z.boolean() }))
       .output(StorePaymentProvider),
   },
   paymentMethods: {
@@ -4498,8 +4499,26 @@ export const adminContract = {
       ),
     subscribe: oc
       .route({ method: "POST", path: "/admin/plan-and-billing/subscribe" })
-      .input(z.object({ planCode: z.string().min(1).max(40), interval: z.enum(["monthly", "yearly"]) }))
-      .output(z.object({ checkoutUrl: z.string().nullable(), firstChargeAt: z.string().nullable(), testMode: z.boolean() })),
+      .input(
+        z.object({
+          planCode: z.string().min(1).max(40),
+          interval: z.enum(["monthly", "yearly"]),
+          /** Cashfree needs a phone number for the payment mandate; used for this payment only. */
+          phone: z.string().max(20).optional(),
+          /** Where Cashfree returns the owner after authorising (platform domains and localhost only; others are ignored). */
+          returnUrl: z.string().max(300).optional(),
+        }),
+      )
+      .output(
+        z.object({
+          /** Razorpay: a hosted page to open. */
+          checkoutUrl: z.string().nullable(),
+          /** Cashfree: a session the admin app opens with Cashfree's checkout script. */
+          checkoutSession: z.object({ gateway: z.literal("cashfree"), sessionId: z.string(), mode: z.enum(["test", "live"]) }).nullable(),
+          firstChargeAt: z.string().nullable(),
+          testMode: z.boolean(),
+        }),
+      ),
     cancelSubscription: oc
       .route({ method: "POST", path: "/admin/plan-and-billing/cancel-subscription" })
       .output(z.object({ cancelAt: z.string().nullable() })),

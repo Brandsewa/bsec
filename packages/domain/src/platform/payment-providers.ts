@@ -8,7 +8,7 @@ import {
   type AuditMeta,
 } from "../platform-services.ts";
 
-export const PAYMENT_PROVIDER_IDS = ["razorpay", "stripe"] as const;
+export const PAYMENT_PROVIDER_IDS = ["razorpay", "stripe", "cashfree"] as const;
 export type PaymentProviderId = (typeof PAYMENT_PROVIDER_IDS)[number];
 
 export interface PlatformPaymentProviderView {
@@ -40,11 +40,11 @@ export async function listPlatformPaymentProviders(
 
   const connected = await db.execute<{ provider: string; n: string }>(sql`
     SELECT provider, COUNT(DISTINCT tenant_id)::text AS n FROM tenant_secrets
-    WHERE provider IN ('razorpay', 'stripe') GROUP BY provider;
+    WHERE provider IN ('razorpay', 'stripe', 'cashfree') GROUP BY provider;
   `);
   const active = await db.execute<{ provider: string; n: string }>(sql`
     SELECT provider, COUNT(DISTINCT tenant_id)::text AS n FROM payment_methods
-    WHERE status = 'active' AND provider IN ('razorpay', 'stripe') GROUP BY provider;
+    WHERE status = 'active' AND provider IN ('razorpay', 'stripe', 'cashfree') GROUP BY provider;
   `);
   const connectedMap = new Map(connected.rows.map((r) => [r.provider, Number(r.n)]));
   const activeMap = new Map(active.rows.map((r) => [r.provider, Number(r.n)]));

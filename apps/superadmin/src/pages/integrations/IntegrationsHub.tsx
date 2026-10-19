@@ -183,7 +183,7 @@ export function IntegrationsHub() {
             </div>
             <CardTitle className="text-xl">Payment Gateways</CardTitle>
             <CardDescription>
-              Platform-level payment provider switches (Razorpay & Stripe) for tenant store checkouts.
+              Platform-level payment provider switches (Razorpay, Stripe & Cashfree) for tenant store checkouts.
             </CardDescription>
           </CardHeader>
 

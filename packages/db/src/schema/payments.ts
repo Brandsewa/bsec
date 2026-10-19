@@ -122,7 +122,7 @@ export const paymentMethods = tenantTable(
   "payment_methods",
   {
     id: uuid("id").default(sql`uuidv7()`).primaryKey(),
-    provider: text("provider").notNull(), // 'cod' | 'razorpay'
+    provider: text("provider").notNull(), // cod | razorpay | stripe | cashfree
     displayName: text("display_name").notNull(),
     status: text("status").notNull().default("disabled"), // 'disabled' | 'pending_setup' | 'active' | 'unavailable' | 'error'
     mode: text("mode"), // 'live' | 'test' | null

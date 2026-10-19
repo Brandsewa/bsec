@@ -40,11 +40,13 @@ export interface PlanAndBillingView {
   } | null;
   usage: PlanAndBillingUsageItem[];
   invoices: PlanAndBillingInvoiceItem[];
-  /** Paying by card or UPI through the platform's Razorpay account (billing B3). */
+  /** Paying by card or UPI through the platform's payment gateway, Razorpay or Cashfree (billing B3, ADR-037). */
   billing: {
+    /** Which gateway a new subscription will use. */
+    provider: "razorpay" | "cashfree";
     /** True once the platform owner has enabled billing with keys. */
     available: boolean;
-    /** Billing runs in Razorpay test mode: no real money moves. */
+    /** Billing runs in the gateway's test mode: no real money moves. */
     testMode: boolean;
     /** A Razorpay subscription exists (authorised or charging). */
     hasSubscription: boolean;
@@ -261,6 +263,7 @@ export async function getPlanAndBilling(
     usage,
     invoices,
     billing: {
+      provider: creds?.provider ?? "razorpay",
       available: Boolean(creds),
       testMode: creds?.mode !== "live",
       hasSubscription: Boolean(sub?.providerSubscriptionId),
@@ -489,27 +492,52 @@ function storeOwnerId(ctx: TenantContext, what: string): string {
   return ctx.actor.userId;
 }
 
+/** Where Cashfree sends the merchant back after authorising. Only the platform's own domains and localhost are accepted. */
+function safeReturnUrl(raw: string | undefined): string | undefined {
+  if (!raw) return undefined;
+  try {
+    const u = new URL(raw);
+    const root = (process.env.PLATFORM_DOMAIN?.trim() || "bcom.si").split(":")[0] ?? "bcom.si";
+    const local = u.hostname === "localhost" || u.hostname === "127.0.0.1";
+    const own = u.hostname === root || u.hostname.endsWith(`.${root}`);
+    if (!(own && u.protocol === "https:") && !(local && u.protocol === "http:")) return undefined;
+    return `${u.origin}${u.pathname}`;
+  } catch {
+    return undefined;
+  }
+}
+
 /** The first charge must be later than this many seconds from now (Razorpay rejects a start_at that is too close). */
 const MIN_START_AHEAD_MS = 15 * 60 * 1000;
 
 /**
- * Starts a paid subscription for the store owner (billing B3). Returns Razorpay's hosted page where the owner authorises
- * a card or UPI AutoPay. The first charge waits until the trial or a free-months promotion ends, so nobody pays early.
+ * Starts a paid subscription for the store owner (billing B3). Razorpay returns a hosted page where the owner authorises
+ * a card or UPI AutoPay; Cashfree returns a checkout session the admin app opens with Cashfree's script (ADR-037). The first charge waits until the trial or a free-months promotion ends, so nobody pays early.
  * The plan only changes after the payment webhook confirms the first charge.
  */
 export async function subscribeToPlan(
   rt: Runtime,
   ctx: TenantContext,
-  input: { planCode: string; interval: "monthly" | "yearly" },
-): Promise<{ checkoutUrl: string | null; firstChargeAt: string | null; testMode: boolean }> {
+  input: { planCode: string; interval: "monthly" | "yearly"; phone?: string | undefined; returnUrl?: string | undefined },
+): Promise<{
+  checkoutUrl: string | null;
+  checkoutSession: { gateway: "cashfree"; sessionId: string; mode: "test" | "live" } | null;
+  firstChargeAt: string | null;
+  testMode: boolean;
+}> {
   assertPermission(ctx, "settings.read");
   const userId = storeOwnerId(ctx, "subscribe to a plan");
   const db = rt._db.db;
   const creds = await loadPlatformBillingCredentials(saasDb(rt));
   if (!creds) throw new Error("Bad Request: online plan payment is not available yet. Request a plan change instead.");
 
-  const [owner] = await db.select({ email: schema.users.email, name: schema.users.name }).from(schema.users).where(eq(schema.users.id, userId)).limit(1);
+  const [owner] = await db.select({ email: schema.users.email, name: schema.users.name, phone: schema.users.phone }).from(schema.users).where(eq(schema.users.id, userId)).limit(1);
   if (!owner) throw new Error("Not Found: owner account");
+  // Cashfree needs a phone number for the mandate. A number given here is used for this payment only, not saved to the account.
+  const phone = (input.phone ?? owner.phone ?? "").replace(/[\s()-]/g, "");
+  if (creds.provider === "cashfree" && !/^\+?[0-9]{10,13}$/.test(phone)) {
+    throw new Error("Bad Request: a phone number is required to set up automatic payment (10 digits).");
+  }
 
   const [sub] = await db.select().from(schema.subscriptions).where(eq(schema.subscriptions.tenantId, ctx.tenantId)).orderBy(desc(schema.subscriptions.createdAt)).limit(1);
   if (sub?.status === "active" && sub.providerSubscriptionId) {
@@ -534,6 +562,8 @@ export async function subscribeToPlan(
     interval: input.interval,
     customerEmail: owner.email,
     ...(owner.name ? { customerName: owner.name } : {}),
+    ...(creds.provider === "cashfree" ? { customerPhone: phone.replace(/^\+?91(?=[0-9]{10}$)/, "").replace(/^\+/, "") } : {}),
+    ...(safeReturnUrl(input.returnUrl) ? { returnUrl: safeReturnUrl(input.returnUrl) as string } : {}),
     ...(startAtMs ? { startAt: Math.floor(startAtMs / 1000) } : {}),
   });
 
@@ -549,7 +579,11 @@ export async function subscribeToPlan(
     });
   });
 
-  return { checkoutUrl: res.shortUrl ?? null, firstChargeAt: startAtMs ? new Date(startAtMs).toISOString() : null, testMode: creds.mode !== "live" };
+  return {
+    checkoutUrl: res.shortUrl ?? null,
+    checkoutSession: res.checkoutSession ? { gateway: "cashfree", ...res.checkoutSession } : null,
+    firstChargeAt: startAtMs ? new Date(startAtMs).toISOString() : null, testMode: creds.mode !== "live",
+  };
 }
 
 /** Cancels the store's paid subscription at the end of the paid period (billing B3). Owner only. */

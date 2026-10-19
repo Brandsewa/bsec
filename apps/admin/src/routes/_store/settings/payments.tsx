@@ -417,10 +417,11 @@ function GatewayStateBadge({ provider }: { provider: StorePaymentProvider }) {
 const GATEWAY_BLURB: Record<StorePaymentProvider["provider"], string> = {
   razorpay: "Accept UPI, cards, netbanking and wallets in rupees.",
   stripe: "Accept cards through Stripe-hosted Checkout (the shopper pays on stripe.com).",
+  cashfree: "Accept UPI, cards, netbanking and wallets in rupees through your own Cashfree account.",
 };
 
 /**
- * Online gateways the platform has enabled for this store (Razorpay, Stripe). "Add gateway" opens a picker; the chosen
+ * Online gateways the platform has enabled for this store (Razorpay, Stripe, Cashfree). "Add gateway" opens a picker; the chosen
  * gateway appears as a card here and its Configure button opens the drawer to save keys, test and activate.
  */
 function OnlineGateways({ canManage }: { canManage: boolean }) {
@@ -560,6 +561,9 @@ function GatewaySheet({ provider, canManage, onClose }: { provider: StorePayment
 
   if (!provider) return <Sheet open={false} onOpenChange={onClose} />;
   const isRazorpay = provider.provider === "razorpay";
+  const isCashfree = provider.provider === "cashfree";
+  // Razorpay and Cashfree both pair an id with a secret; Stripe has a single secret key.
+  const hasKeyId = isRazorpay || isCashfree;
   const locked = !canManage || !provider.platformEnabled;
   // Use the store's real primary host so the URL can be pasted into the gateway dashboard as is.
   const domains = domainsQuery.data ?? [];
@@ -629,7 +633,7 @@ function GatewaySheet({ provider, canManage, onClose }: { provider: StorePayment
                 () =>
                   saveMutation.mutateAsync({
                     provider: provider.provider,
-                    ...(isRazorpay ? { keyId: keyId.trim() } : {}),
+                    ...(hasKeyId ? { keyId: keyId.trim() } : {}),
                     keySecret: keySecret.trim(),
                     ...(webhookSecret.trim() ? { webhookSecret: webhookSecret.trim() } : {}),
                   }),
@@ -647,15 +651,29 @@ function GatewaySheet({ provider, canManage, onClose }: { provider: StorePayment
               {provider.keyHint ? "Replace keys" : "Add keys"}
               <span className="ml-2 font-normal text-muted-foreground">Stored encrypted and never shown again.</span>
             </p>
-            {isRazorpay ? (
-              <Field id="gw-key-id" label="Key ID" hint="Starts with rzp_test_ (rzp_live_ only if live mode is allowed).">
-                <Input id="gw-key-id" autoComplete="off" value={keyId} disabled={locked} onChange={(e) => setKeyId(e.target.value)} placeholder="rzp_test_..." />
+            {hasKeyId ? (
+              <Field
+                id="gw-key-id"
+                label={isCashfree ? "App ID" : "Key ID"}
+                hint={
+                  isCashfree
+                    ? "From Cashfree, Developers, API keys. Use the sandbox (test) App ID first."
+                    : "Starts with rzp_test_ (rzp_live_ only if live mode is allowed)."
+                }
+              >
+                <Input id="gw-key-id" autoComplete="off" value={keyId} disabled={locked} onChange={(e) => setKeyId(e.target.value)} placeholder={isCashfree ? "TEST10..." : "rzp_test_..."} />
               </Field>
             ) : null}
             <Field
               id="gw-key-secret"
               label={isRazorpay ? "Key secret" : "Secret key"}
-              hint={isRazorpay ? undefined : "Starts with sk_test_ (sk_live_ only if live mode is allowed)."}
+              hint={
+                isRazorpay
+                  ? undefined
+                  : isCashfree
+                    ? "Starts with cfsk_ma_test_ (cfsk_ma_prod_ only if live mode is allowed). Cashfree also uses it to sign webhooks."
+                    : "Starts with sk_test_ (sk_live_ only if live mode is allowed)."
+              }
             >
               <Input
                 id="gw-key-secret"
@@ -664,9 +682,10 @@ function GatewaySheet({ provider, canManage, onClose }: { provider: StorePayment
                 value={keySecret}
                 disabled={locked}
                 onChange={(e) => setKeySecret(e.target.value)}
-                placeholder={isRazorpay ? "" : "sk_test_..."}
+                placeholder={isRazorpay ? "" : isCashfree ? "cfsk_ma_test_..." : "sk_test_..."}
               />
             </Field>
+            {isCashfree ? null : (
             <Field
               id="gw-webhook"
               label="Webhook signing secret"
@@ -686,7 +705,8 @@ function GatewaySheet({ provider, canManage, onClose }: { provider: StorePayment
                 placeholder={isRazorpay ? "" : "whsec_..."}
               />
             </Field>
-            <Button type="submit" size="sm" disabled={locked || busy !== null || !keySecret.trim() || (isRazorpay && !keyId.trim())}>
+            )}
+            <Button type="submit" size="sm" disabled={locked || busy !== null || !keySecret.trim() || (hasKeyId && !keyId.trim())}>
               {busy === "save" ? "Saving…" : "Save keys"}
             </Button>
           </form>
@@ -694,7 +714,9 @@ function GatewaySheet({ provider, canManage, onClose }: { provider: StorePayment
           <div className="space-y-1 rounded-md border border-border p-3">
             <p className="font-medium text-foreground">Webhook URL</p>
             <p className="text-muted-foreground">
-              Add this endpoint in your {provider.displayName} dashboard, then paste its signing secret above.
+              {isCashfree
+                ? "Add this endpoint in Cashfree (Developers, Webhooks) and subscribe to the payment events. Cashfree signs it with your secret key, so there is nothing more to paste."
+                : `Add this endpoint in your ${provider.displayName} dashboard, then paste its signing secret above.`}
             </p>
             <p className="break-all rounded bg-muted p-1.5 font-mono text-[10px]">{webhookUrl}</p>
             <Button

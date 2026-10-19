@@ -24,6 +24,13 @@ export const platformBillingSettings = pgTable("platform_billing_settings", {
   liveSecretIv: text("live_secret_iv"),
   liveWebhookCiphertext: text("live_webhook_ciphertext"),
   liveWebhookIv: text("live_webhook_iv"),
+  // The platform's Cashfree credentials (ADR-037). Cashfree signs webhooks with the client secret, so no webhook secret.
+  cashfreeTestClientId: text("cashfree_test_client_id"),
+  cashfreeTestSecretCiphertext: text("cashfree_test_secret_ciphertext"),
+  cashfreeTestSecretIv: text("cashfree_test_secret_iv"),
+  cashfreeLiveClientId: text("cashfree_live_client_id"),
+  cashfreeLiveSecretCiphertext: text("cashfree_live_secret_ciphertext"),
+  cashfreeLiveSecretIv: text("cashfree_live_secret_iv"),
   // Who issues the GST invoices (billing B6). The plan price is quoted inclusive of this tax.
   invoiceLegalName: text("invoice_legal_name"),
   invoiceAddress: text("invoice_address"),

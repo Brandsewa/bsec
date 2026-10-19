@@ -109,7 +109,7 @@ describe("platform billing settings (ADR-036)", () => {
       seen.push(String((init?.headers as Record<string, string>).Authorization));
       return new Response("{}", { status: 200 });
     }) as typeof fetch);
-    expect(ok).toEqual({ ok: true, mode: "test" });
+    expect(ok).toEqual({ ok: true, mode: "test", provider: "razorpay" });
     expect(seen[0]).toBe(`Basic ${Buffer.from(`rzp_test_abc123:${SECRET}`).toString("base64")}`);
     expect((await getPlatformBillingSettings(rt, admin)).lastTestStatus).toBe("success");
 

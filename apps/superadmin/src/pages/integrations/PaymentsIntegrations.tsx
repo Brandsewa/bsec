@@ -32,6 +32,10 @@ const COPY: Record<PlatformPaymentProviderView["provider"], { blurb: string; acc
     blurb: "Global payment gateway via Stripe-hosted Checkout (redirect to Stripe, no card form on the storefront).",
     accent: "bg-indigo-500/10 text-indigo-500",
   },
+  cashfree: {
+    blurb: "India payment gateway (UPI, cards, netbanking, wallets). Stores connect their own Cashfree account with sandbox keys first.",
+    accent: "bg-emerald-500/10 text-emerald-500",
+  },
 };
 
 type Pending =
