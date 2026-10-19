@@ -294,7 +294,7 @@ describe("M8 Custom Domains & Cloudflare for SaaS Integration (PLAN §8, ADR-007
     expect(first.checked).toBeGreaterThanOrEqual(1);
     const [registered] = await rwDb.db.select().from(schema.domains).where(eq(schema.domains.id, saved.id));
     expect(registered?.cfCustomHostnameId).toBe("cf_mock_late_setup_example_com");
-    expect(registered?.verification?.cname).toBe("stores.bcom.si");
+    expect((registered?.verification as { cname?: string } | null)?.cname).toBe("stores.bcom.si");
 
     // Once DNS and SSL are done at the provider, the next pass activates it without the merchant doing anything.
     configured.setActive("late.setup-example.com");
