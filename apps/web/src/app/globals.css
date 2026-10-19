@@ -43,6 +43,15 @@ body {
   font-family: var(--bs-font-body, ui-sans-serif, system-ui, sans-serif);
 }
 
+/*
+ * data-theme is only set on the account/auth paths (THEMED_PATH_SOURCE), where the shared light/dark tokens apply.
+ * Without this the body stayed on the store's fixed white while cards and text went dark in OS dark mode.
+ */
+:root[data-theme] body {
+  background: var(--background);
+  color: var(--foreground);
+}
+
 @keyframes store-shimmer {
   from { opacity: 1; }
   50% { opacity: 0.55; }
