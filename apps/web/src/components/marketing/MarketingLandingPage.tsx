@@ -13,7 +13,7 @@ import { Hero } from "./landing/sections/Hero.tsx";
 import { AiEra } from "./landing/sections/Kit.tsx";
 import { Nav } from "./landing/sections/Nav.tsx";
 import { Pricing } from "./landing/sections/Pricing.tsx";
-import { India, Themes } from "./landing/sections/Proof.tsx";
+import { India } from "./landing/sections/Proof.tsx";
 import { organizationJsonLd } from "./landing/seo.ts";
 
 export function MarketingLandingPage({ plans }: { plans?: LandingPlan[] | undefined }) {
@@ -25,7 +25,6 @@ export function MarketingLandingPage({ plans }: { plans?: LandingPlan[] | undefi
       <Hero />
       <India />
       <AiEra />
-      <Themes />
       <Pricing plans={planList} />
       <Faq />
       <FinalCta />

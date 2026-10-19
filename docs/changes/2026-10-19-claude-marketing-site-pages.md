@@ -20,6 +20,11 @@ The owner is applying for Razorpay, which verifies the live website. The marketi
 - `apps/web/PRODUCT.md` principle 1 updated; `docs/ARCHITECTURE.md` routes line updated.
 - Tests: `apps/web/test/marketing-landing.test.ts` (8 tests: demo data, content, required pages exist with a loading file, company details complete).
 
+## Revision 1 (owner review, 2026-10-19)
+- Removed the Themes section from the home page (and its unused code and data).
+- Ready today grid is now: 01 complete catalogue management (SEO built in, built for GEO), 02 customers and segments, 03 visual theme builder, 04 shipping, orders, returns and exchanges, 05 cash on delivery and GST invoices (owner left 05 open; this is Claude's pick), 06 finance (sales, income, expenses, GST-ready reports).
+- Checked against the code before wording: SEO is real (sitemaps, robots, product, category, collection, FAQ and organisation JSON-LD); there is no GEO-specific feature (no llms.txt), so the card says "built for GEO", not "ready"; Finance is merged (ledger, expenses, reports, ADR-022) with known pending checks listed in `progress.md`.
+
 ## Decisions and trade-offs
 - Billing is described as Razorpay subscriptions (owner), with the owner able to set up a plan from the back end for some stores. Refunds: within 7 days of a payment, none after. Courts: West Bengal. No phone number published yet. These are the owner's inputs, not invented.
 - Legal text is drafted from common best practice and the product's real behaviour; it is not legal advice and should be read by the owner or counsel before the Razorpay submission.

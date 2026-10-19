@@ -47,39 +47,6 @@ export const INCLUDED_IN_ALL = [
   "14-day free trial",
 ];
 
-export const THEMES = [
-  {
-    code: "starter-minimal",
-    name: "Minimalist Essential",
-    industry: "Handicrafts and general retail",
-    line: "Quiet typography and fast product grids.",
-    ground: "#e9dfca",
-    ink: "#3a2a16",
-    accent: "#a2602a",
-    tile: "#d9c8a6",
-  },
-  {
-    code: "fashion-editorial",
-    name: "Fashion Editorial",
-    industry: "Apparel and accessories",
-    line: "Lookbook heroes and lifestyle collections.",
-    ground: "#15171f",
-    ink: "#f3ece4",
-    accent: "#e9b9a6",
-    tile: "#272a36",
-  },
-  {
-    code: "gourmet-artisan",
-    name: "Gourmet Artisan",
-    industry: "Food, tea and organic goods",
-    line: "A warm palette made for the pantry.",
-    ground: "#113626",
-    ink: "#f6ecd2",
-    accent: "#f0a73a",
-    tile: "#1d4c37",
-  },
-];
-
 export const FAQS = [
   {
     q: "What can I do on Bs Commerce today?",
