@@ -1,24 +1,25 @@
-import { STEPS, THEMES } from "../content.ts";
+import { THEMES } from "../content.ts";
 
-const INDIA: Array<[string, string, string, string]> = [
-  ["₹", "Cash on delivery", "Order confirmation and risk checks to cut returns to origin.", "d0"],
-  ["GST", "Invoices that add up", "CGST, SGST and IGST worked out on every order.", "d1"],
-  ["PIN", "Pincode checks", "Shoppers know you deliver before they commit.", "d2"],
-  ["Aa", "Visual theme builder", "Drag, drop and edit blocks. No code.", "d0"],
-  ["↩", "Returns and exchanges", "Handled in one place, start to finish.", "d1"],
-  ["&", "Customers and segments", "Know who is buying and who is drifting away.", "d2"],
+const READY: Array<[string, string, string, string]> = [
+  ["₹", "Cash on delivery", "Order confirmation and a COD fee you set, to keep returns to origin down.", "d0"],
+  ["GST", "GST tax invoices", "CGST, SGST and IGST worked out from your state and your customer's, with HSN on each line.", "d1"],
+  ["Aa", "Visual theme builder", "Start from a theme made for your niche. Drag, drop and edit blocks. No code.", "d2"],
+  ["↩", "Orders, returns and exchanges", "Confirm, ship and mark delivered. Handle returns and exchanges in one place.", "d0"],
+  ["&", "Customers and segments", "Know who is buying, tag them, build segments and import or export your list.", "d1"],
+  ["@", "Your storefront, your link", "A store on yourname.bcom.si you can share on Google, Instagram, WhatsApp and anywhere else.", "d2"],
 ];
 
 export function India() {
   return (
-    <section className="sec light" id="india">
+    <section className="sec light" id="ready">
       <div className="wrap">
         <div className="rv" style={{ maxWidth: 820 }}>
-          <span className="eyebrow">Built for India</span>
-          <h2>The AI layer sits on a store made for <i className="s gt">how India sells.</i></h2>
+          <span className="eyebrow">Ready today</span>
+          <h2>A complete store, <i className="s gt">built for how India sells.</i></h2>
+          <p className="lead">Open a store today and start taking orders. No waiting for new features.</p>
         </div>
         <div className="ig">
-          {INDIA.map(([glyph, title, body, d], i) => (
+          {READY.map(([glyph, title, body, d], i) => (
             <div key={title} className={`ii rv ${d === "d0" ? "" : d}`}>
               <div className="n">0{i + 1}</div>
               <div className="gl" aria-hidden="true">{glyph}</div>
@@ -63,28 +64,6 @@ export function Themes() {
               </div>
             );
           })}
-        </div>
-      </div>
-    </section>
-  );
-}
-
-export function Launch() {
-  return (
-    <section className="sec" style={{ background: "var(--bg2)", borderBlock: "1px solid var(--line)" }}>
-      <div className="wrap">
-        <div className="rv" style={{ maxWidth: 760 }}>
-          <span className="eyebrow">Launch</span>
-          <h2>From a name to your <i className="s gt">first order.</i></h2>
-        </div>
-        <div className="ls">
-          {STEPS.map((s, i) => (
-            <div key={s.title} className={`spot rv ${i === 1 ? "d1" : i === 2 ? "d2" : i === 3 ? "d3" : ""}`}>
-              <div className="n">{i + 1}</div>
-              <h3>{s.title}</h3>
-              <p>{s.body}</p>
-            </div>
-          ))}
         </div>
       </div>
     </section>

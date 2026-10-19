@@ -39,7 +39,6 @@ export function planBullets(limits: Record<string, unknown>): string[] {
 }
 
 export const INCLUDED_IN_ALL = [
-  "AI-ready store layer",
   "Cash on delivery checkout",
   "GST tax invoices",
   "Visual theme builder",
@@ -81,40 +80,29 @@ export const THEMES = [
   },
 ];
 
-export const STEPS = [
-  { title: "Pick a name", body: "We check it is free. It is yours for the trial." },
-  { title: "Choose a theme", body: "Start from a look made for your niche." },
-  { title: "Add your products", body: "Upload them. We make them readable by AI." },
-  { title: "Get found", body: "Share the link and let assistants find you." },
-];
-
 export const FAQS = [
   {
-    q: "What is an AI-ready store?",
-    a: "A store whose products, prices, stock and delivery details are readable by AI assistants, so they can find, compare and recommend your products to shoppers who ask.",
+    q: "What can I do on Bs Commerce today?",
+    a: "Open a complete online store: add products and variants, pick a theme, set your shipping rates and COD fee, take cash on delivery orders and issue GST invoices, handle returns and exchanges, and manage customers and staff. Your store lives on yourname.bcom.si, so you can share it on Google, Instagram, WhatsApp or anywhere else.",
   },
   {
-    q: "Do I need to do anything technical?",
-    a: "No. Add your products as usual. We handle making them readable and keep them up to date.",
+    q: "What does agent-first mean?",
+    a: "It means the platform is designed so AI shopping assistants can find, compare and (as each assistant launches shopping) check out products from your store. The store itself works today; the AI features are marked Coming soon.",
   },
   {
-    q: "Which assistants will this work with?",
-    a: "We are built for ChatGPT, Gemini, Claude and Perplexity, and for the open standards behind them, so new assistants can be added as they arrive.",
-  },
-  {
-    q: "When will in-chat checkout be available in India?",
-    a: "We are built for it and will switch it on for Indian stores as soon as each assistant launches it here. Stores on Bs Commerce will be first in line.",
+    q: "Which AI assistants will this work with?",
+    a: "We are building for ChatGPT, Gemini, Claude and Perplexity, and for the open standards behind them, so new assistants can be added as they arrive. We will switch each one on for Indian stores as it launches shopping here.",
   },
   {
     q: "Is it safe? Can an AI invent a discount?",
-    a: "No. Prices, GST and shipping are locked by your store for each cart. An assistant cannot change them, and any negotiation stays inside the limits you set.",
+    a: "No. When AI selling launches, your store locks the price, GST and shipping for each cart and an assistant cannot change them. Any negotiation stays inside the limits you set.",
+  },
+  {
+    q: "How does billing and the free trial work?",
+    a: "Every plan starts with a 14-day free trial and no card is needed to start. Paid plans are billed through Razorpay subscriptions. See the refund and cancellation policy for how cancelling and refunds work.",
   },
   {
     q: "Can I use my own domain?",
-    a: "Yes. Every store starts on name.bcom.si, and your plan includes custom domains.",
-  },
-  {
-    q: "Is there a free trial?",
-    a: "Yes, 14 days on the plan you choose. You do not need a card to start.",
+    a: "Every store starts on yourname.bcom.si. Connecting your own domain is coming soon.",
   },
 ];

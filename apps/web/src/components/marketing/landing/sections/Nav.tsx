@@ -4,11 +4,11 @@ import Link from "next/link";
 import { useState } from "react";
 
 const LINKS: Array<[string, string]> = [
-  ["How it works", "#how"],
-  ["What you get", "#kit"],
-  ["India", "#india"],
-  ["Pricing", "#pricing"],
-  ["FAQ", "#faq"],
+  ["Ready today", "/#ready"],
+  ["AI shopping", "/#ai"],
+  ["Pricing", "/pricing"],
+  ["About", "/about"],
+  ["Contact", "/contact"],
 ];
 
 export function Nav() {
@@ -16,12 +16,12 @@ export function Nav() {
   return (
     <>
       <nav aria-label="Main">
-        <a className="logo" href="#top" aria-label="Bs Commerce home">
+        <Link className="logo" href="/" aria-label="Bs Commerce home">
           <i>B</i>Bs Commerce
-        </a>
+        </Link>
         <div className="links">
           {LINKS.map(([label, href]) => (
-            <a key={href} href={href}>{label}</a>
+            <Link key={href} href={href}>{label}</Link>
           ))}
         </div>
         <a className="btn login" href="https://admin.bcom.si">Log in</a>
@@ -34,7 +34,7 @@ export function Nav() {
       </nav>
       <div id="lp-menu" className={`mpanel ${open ? "open" : ""}`}>
         {LINKS.map(([label, href]) => (
-          <a key={href} href={href} onClick={() => setOpen(false)}>{label}</a>
+          <Link key={href} href={href} onClick={() => setOpen(false)}>{label}</Link>
         ))}
         <a href="https://admin.bcom.si">Log in</a>
       </div>

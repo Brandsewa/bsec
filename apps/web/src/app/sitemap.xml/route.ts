@@ -3,6 +3,8 @@ import {
   generateSitemapXml,
   getStorefrontSitemapUrls,
 } from "@bs/domain";
+import { MARKETING_PAGES } from "@/components/marketing/landing/site-info.ts";
+import { isPlatformMarketingHost } from "@/server/hosts.ts";
 import { server } from "@/server/runtime.ts";
 
 export async function GET(req: Request) {
@@ -16,6 +18,17 @@ export async function GET(req: Request) {
       req.headers.get("x-forwarded-host") ??
       req.headers.get("host") ??
       "localhost";
+
+    // The platform's own site lists its public pages (home, about, contact, pricing and the legal pages).
+    if (isPlatformMarketingHost(host)) {
+      const proto = req.headers.get("x-forwarded-proto") ?? "https";
+      const origin = `${proto}://${host.split(",")[0]?.trim()}`;
+      const items = [
+        { loc: `${origin}/`, changefreq: "weekly" as const, priority: 1 },
+        ...MARKETING_PAGES.map((p) => ({ loc: `${origin}${p.path}`, changefreq: "monthly" as const, priority: 0.6 })),
+      ];
+      return new Response(generateSitemapXml(items), { status: 200, headers });
+    }
 
     const { rt } = server();
     const access = await evaluateStorefrontAccess(rt, host, { headers: req.headers });

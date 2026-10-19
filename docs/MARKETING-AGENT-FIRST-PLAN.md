@@ -1,6 +1,6 @@
 # Marketing page: agent-first redesign plan
 
-Status: built on branch, awaiting owner review (2026-10-18). Not to be merged until the AI-commerce features it describes are built. Owner: Claude Code plans, builds and verifies. Branch `feat/marketing-agent-first`, worktree `bsec-marketing`.
+Status: superseded in part by `docs/MARKETING-SITE-PLAN.md` (2026-10-19). The design and components below are built; the "do not merge until the AI features are built" rule is replaced: the page now ships soon, with honest Ready today and Coming soon labels, because a payment gateway needs to verify the site.
 
 ## 1. Goal
 

@@ -1,6 +1,9 @@
+import { existsSync } from "node:fs";
+import { join } from "node:path";
 import { describe, expect, it } from "vitest";
-import { DEMO_SEARCHES, NEGOTIATION, bundleDiscount, searchAt } from "../src/components/marketing/landing/demo-data.ts";
-import { FAQS, FALLBACK_PLANS, INCLUDED_IN_ALL, STEPS, planBullets } from "../src/components/marketing/landing/content.ts";
+import { DEMO_SEARCHES, searchAt } from "../src/components/marketing/landing/demo-data.ts";
+import { FAQS, FALLBACK_PLANS, planBullets } from "../src/components/marketing/landing/content.ts";
+import { ADDRESS_LINE, MARKETING_PAGES, SITE } from "../src/components/marketing/landing/site-info.ts";
 
 describe("marketing landing demo data", () => {
   it("every search offers three products from different brands and a valid pick", () => {
@@ -23,21 +26,6 @@ describe("marketing landing demo data", () => {
   });
 });
 
-describe("negotiation demo rules", () => {
-  it("gives no discount under 5 pieces, 5% from 5 and 10% from 12", () => {
-    expect(bundleDiscount(1)).toBe(0);
-    expect(bundleDiscount(4)).toBe(0);
-    expect(bundleDiscount(5)).toBe(5);
-    expect(bundleDiscount(11)).toBe(5);
-    expect(bundleDiscount(12)).toBe(10);
-    expect(bundleDiscount(40)).toBe(10);
-  });
-
-  it("offers maximum-discount choices that include the buyer's ask", () => {
-    expect(NEGOTIATION.maxChoices).toContain(NEGOTIATION.buyerAsks);
-  });
-});
-
 describe("marketing landing content", () => {
   it("keeps plan bullets driven by the plan limits", () => {
     const starter = FALLBACK_PLANS[0];
@@ -47,16 +35,41 @@ describe("marketing landing content", () => {
     expect(bullets.some((b) => b.includes("custom domain"))).toBe(true);
   });
 
-  it("has a four-step launch and an AI-ready line in every plan", () => {
-    expect(STEPS).toHaveLength(4);
-    expect(INCLUDED_IN_ALL[0]).toBe("AI-ready store layer");
-  });
-
   it("has unique, non-empty FAQ entries", () => {
     expect(new Set(FAQS.map((f) => f.q)).size).toBe(FAQS.length);
     for (const f of FAQS) {
       expect(f.q.length).toBeGreaterThan(5);
       expect(f.a.length).toBeGreaterThan(20);
     }
+  });
+});
+
+describe("marketing site pages (payment gateway review)", () => {
+  const required = ["/about", "/contact", "/pricing", "/terms", "/privacy", "/refund-policy", "/shipping-policy"];
+
+  it("lists every page a payment gateway reviewer expects, once each", () => {
+    const paths = MARKETING_PAGES.map((p) => p.path);
+    for (const r of required) expect(paths).toContain(r);
+    expect(new Set(paths).size).toBe(paths.length);
+  });
+
+  it("has a page and a sibling loading file for every listed page", () => {
+    for (const { path } of MARKETING_PAGES) {
+      const dir = join(__dirname, "..", "src", "app", path);
+      expect(existsSync(join(dir, "page.tsx")), `${path} page.tsx`).toBe(true);
+      expect(existsSync(join(dir, "loading.tsx")), `${path} loading.tsx`).toBe(true);
+    }
+  });
+
+  it("states the company details completely, with no placeholders", () => {
+    expect(SITE.legalName).toBe("Brand Sewa Digital Private Limited");
+    expect(SITE.cin).toMatch(/^[LU]\d{5}[A-Z]{2}\d{4}[A-Z]{3}\d{6}$/);
+    expect(SITE.gstin).toMatch(/^\d{2}[A-Z]{5}\d{4}[A-Z]\dZ[A-Z\d]$/);
+    expect(SITE.emails.support).toMatch(/^[^@\s]+@bcom\.si$/);
+    expect(SITE.grievance.email).toContain("@");
+    expect(SITE.grievance.name.length).toBeGreaterThan(2);
+    expect(ADDRESS_LINE).toContain("734101");
+    const text = JSON.stringify(SITE) + ADDRESS_LINE;
+    expect(text).not.toMatch(/TODO|TBD|lorem|xxx|\[.*\]/i);
   });
 });

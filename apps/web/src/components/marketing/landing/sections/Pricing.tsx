@@ -6,16 +6,21 @@ import { INCLUDED_IN_ALL, planBullets, type LandingPlan } from "../content.ts";
 
 const inr = (paise: number) => `₹${Math.round(paise / 100).toLocaleString("en-IN")}`;
 
-export function Pricing({ plans }: { plans: LandingPlan[] }) {
+/** `bare` drops the section heading (the pricing page has its own header). */
+export function Pricing({ plans, bare = false }: { plans: LandingPlan[]; bare?: boolean }) {
   const [interval, setInterval_] = useState<"monthly" | "yearly">("monthly");
   return (
-    <section className="sec" id="pricing">
+    <section className={bare ? "sec doc-pricing" : "sec"} id="pricing">
       <div className="wrap">
         <div className="rv" style={{ textAlign: "center" }}>
-          <span className="eyebrow">Pricing</span>
-          <h2>Plans you can read <i className="s gt">in one go.</i></h2>
-          <p className="lead" style={{ marginInline: "auto" }}>Prices in rupees, plus GST. Every plan starts with a 14-day free trial.</p>
-          <div className="seg" role="group" aria-label="Billing period" style={{ marginTop: 26 }}>
+          {!bare && (
+            <>
+              <span className="eyebrow">Pricing</span>
+              <h2>Plans you can read <i className="s gt">in one go.</i></h2>
+              <p className="lead" style={{ marginInline: "auto" }}>Prices in rupees, plus GST. Every plan starts with a 14-day free trial.</p>
+            </>
+          )}
+          <div className="seg" role="group" aria-label="Billing period" style={{ marginTop: bare ? 0 : 26 }}>
             {(["monthly", "yearly"] as const).map((v) => (
               <button key={v} type="button" aria-pressed={interval === v} onClick={() => setInterval_(v)}>
                 {v === "monthly" ? "Monthly" : "Yearly"}

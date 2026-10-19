@@ -8,12 +8,12 @@ export function Hero() {
       <div className="grid-bg" aria-hidden="true" />
       <div className="wrap herog">
         <div className="htxt">
-          <span className="pill am"><b />Indian stores first in line</span>
+          <span className="pill"><b />Ready today · AI agents coming soon</span>
           <h1>
-            Be found where people now <i className="s gt">shop.</i> Inside <i className="s">AI chats.</i>
+            The <i className="s gt">agent-first</i> e-commerce platform for Indian brands.
           </h1>
           <p className="lead">
-            Bs Commerce stores are built for ChatGPT, Gemini and Claude. Get discovered, recommended and checked out by AI assistants, starting with India.
+            A complete online store you can open today: cash on delivery, GST invoices, themes, orders and returns. Built from day one for the AI shopping era, so selling through ChatGPT, Gemini and Claude arrives as each one launches in India.
           </p>
           <SubdomainAvailabilityChecker platformDomain="bcom.si" variant="lp" />
           <p className="fine">14-day free trial · Cash on delivery and GST invoices included</p>

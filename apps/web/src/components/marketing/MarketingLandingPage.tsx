@@ -1,49 +1,35 @@
 /*
- * bcom.si landing: agent-first redesign (docs/MARKETING-AGENT-FIRST-PLAN.md).
- * THESIS: people now search inside AI chats, so the page shows a store being found, chosen, paid for and confirmed
- * inside one. Server component composition; only the demos, tabs, pricing toggle and nav menu are client components.
- * Styling is scoped under `.lp` (landing/landing.css); the old Beam page is replaced.
+ * bcom.si home page: agent-first e-commerce platform (docs/MARKETING-AGENT-FIRST-PLAN.md, docs/MARKETING-SITE-PLAN.md).
+ * Honest by design: what a merchant can use today is shown as ready; the AI-agent features are marked Coming soon.
+ * Server component composition; only the phone demo, pricing toggle, nav menu and the store-name checker are client components.
+ * Styling is scoped under `.lp` (landing/landing.css).
  */
 
-import { Journey } from "./landing/sections/Journey.tsx";
 import { LandingShell } from "./landing/LandingShell.tsx";
 import { FALLBACK_PLANS, type LandingPlan } from "./landing/content.ts";
-import { Faq, FinalCta, Footer, SalesRep } from "./landing/sections/Close.tsx";
+import { Faq, FinalCta } from "./landing/sections/Close.tsx";
+import { SiteFooter } from "./landing/sections/Footer.tsx";
 import { Hero } from "./landing/sections/Hero.tsx";
-import { Kit, Visibility } from "./landing/sections/Kit.tsx";
+import { AiEra } from "./landing/sections/Kit.tsx";
 import { Nav } from "./landing/sections/Nav.tsx";
 import { Pricing } from "./landing/sections/Pricing.tsx";
-import { India, Launch, Themes } from "./landing/sections/Proof.tsx";
-import { Shift, StandardsStrip } from "./landing/sections/Story.tsx";
+import { India, Themes } from "./landing/sections/Proof.tsx";
+import { organizationJsonLd } from "./landing/seo.ts";
 
 export function MarketingLandingPage({ plans }: { plans?: LandingPlan[] | undefined }) {
   const planList = plans && plans.length > 0 ? plans : FALLBACK_PLANS;
   return (
     <LandingShell>
+      <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(organizationJsonLd()) }} />
       <Nav />
       <Hero />
-      <StandardsStrip />
-      <Shift />
-      <section className="sec" id="how" style={{ background: "var(--bg2)", borderBlock: "1px solid var(--line)" }}>
-        <div className="wrap">
-          <div className="rv" style={{ maxWidth: 760 }}>
-            <span className="eyebrow">How an assistant shops your store</span>
-            <h2>From a question to a <i className="s gt">delivered order.</i></h2>
-            <p className="lead">Every step happens in the chat. You add products as usual. The rest is built in.</p>
-          </div>
-          <Journey />
-        </div>
-      </section>
-      <Kit />
-      <SalesRep />
-      <Visibility />
       <India />
+      <AiEra />
       <Themes />
-      <Launch />
       <Pricing plans={planList} />
       <Faq />
       <FinalCta />
-      <Footer />
+      <SiteFooter />
     </LandingShell>
   );
 }

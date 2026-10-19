@@ -69,23 +69,6 @@ export const DEMO_SEARCHES: DemoSearch[] = [
   },
 ];
 
-/** The sales-rep demo: the store's unit price and the discount rules the visitor can try. */
-export const NEGOTIATION = {
-  unitPrice: 2199,
-  /** Bundle discount by quantity: 5 pieces and up get 5%, 12 and up get 10%. */
-  tiers: [
-    { from: 12, percent: 10 },
-    { from: 5, percent: 5 },
-  ],
-  maxChoices: [5, 10, 15],
-  buyerAsks: 15,
-} as const;
-
-export function bundleDiscount(quantity: number): number {
-  for (const t of NEGOTIATION.tiers) if (quantity >= t.from) return t.percent;
-  return 0;
-}
-
 /** Search by tab index; wraps so a stale index can never read past the end. */
 export function searchAt(i: number): DemoSearch {
   return DEMO_SEARCHES[i % DEMO_SEARCHES.length] as DemoSearch;
