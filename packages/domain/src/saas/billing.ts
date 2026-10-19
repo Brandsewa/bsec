@@ -1,8 +1,10 @@
-import { createHmac, randomBytes, createHash, timingSafeEqual } from "node:crypto";
+import { createHmac, createHash, timingSafeEqual } from "node:crypto";
 import { and, desc, eq, sql } from "drizzle-orm";
-import { schema } from "@bs/db";
+import { schema, type Db } from "@bs/db";
 import { saasDb, type Runtime } from "../runtime.ts";
-import { tierForPlan } from "./plan-tiers.ts";
+import { LAPSED_TRIAL_TIER, tierForPlan } from "./plan-tiers.ts";
+import { loadInvoiceProfile, loadPlatformBillingCredentials } from "../platform/billing-settings.ts";
+import { findRazorpayPlanId } from "../platform/billing-plans.ts";
 
 export interface SubscriptionBillingProvider {
   isConfigured?(): boolean;
@@ -13,13 +15,16 @@ export interface SubscriptionBillingProvider {
     customerName?: string;
     tenantId: string;
     planId?: string;
+    /** Unix seconds of the first charge (after a trial or a free period). Omit to charge on authorisation. */
+    startAt?: number;
     notes?: Record<string, string>;
   }): Promise<{
     providerSubscriptionId: string;
     shortUrl?: string;
     status: string;
   }>;
-  cancelSubscription(providerSubscriptionId: string): Promise<{ status: string }>;
+  /** `atCycleEnd` keeps an active subscription running until the paid period ends (Razorpay only allows it when active). */
+  cancelSubscription(providerSubscriptionId: string, opts?: { atCycleEnd?: boolean }): Promise<{ status: string }>;
   verifyWebhookSignature(rawBody: string, signature: string): boolean;
 }
 
@@ -49,6 +54,7 @@ export class RazorpaySubscriptionProvider implements SubscriptionBillingProvider
     customerName?: string;
     tenantId: string;
     planId?: string;
+    startAt?: number;
     notes?: Record<string, string>;
   }): Promise<{
     providerSubscriptionId: string;
@@ -74,6 +80,7 @@ export class RazorpaySubscriptionProvider implements SubscriptionBillingProvider
         plan_id: params.planId,
         total_count: params.interval === "yearly" ? 5 : 60,
         customer_notify: 1,
+        ...(params.startAt ? { start_at: params.startAt } : {}),
         notes: {
           tenant_id: params.tenantId,
           plan_code: params.planCode,
@@ -95,7 +102,7 @@ export class RazorpaySubscriptionProvider implements SubscriptionBillingProvider
     };
   }
 
-  async cancelSubscription(providerSubscriptionId: string): Promise<{ status: string }> {
+  async cancelSubscription(providerSubscriptionId: string, opts?: { atCycleEnd?: boolean }): Promise<{ status: string }> {
     if (!this.isConfigured()) {
       throw new Error("Billing is not configured: RAZORPAY_KEY_ID or RAZORPAY_KEY_SECRET is missing");
     }
@@ -107,7 +114,7 @@ export class RazorpaySubscriptionProvider implements SubscriptionBillingProvider
         "Content-Type": "application/json",
         Authorization: `Basic ${auth}`,
       },
-      body: JSON.stringify({ cancel_at_cycle_end: 0 }),
+      body: JSON.stringify({ cancel_at_cycle_end: opts?.atCycleEnd ? 1 : 0 }),
     });
 
     if (!res.ok) {
@@ -132,6 +139,47 @@ export class RazorpaySubscriptionProvider implements SubscriptionBillingProvider
   }
 }
 
+/**
+ * The billing provider for the platform's saved Razorpay keys (Super Admin, ADR-036), falling back to the legacy env vars.
+ * With neither, the provider reports itself unconfigured instead of faking success (ADR-014 point 4).
+ */
+export async function resolveBillingProvider(db: Db): Promise<RazorpaySubscriptionProvider> {
+  const creds = await loadPlatformBillingCredentials(db);
+  if (!creds) return new RazorpaySubscriptionProvider();
+  return new RazorpaySubscriptionProvider({
+    keyId: creds.keyId,
+    keySecret: creds.keySecret,
+    ...(creds.webhookSecret ? { webhookSecret: creds.webhookSecret } : {}),
+  });
+}
+
+/** Prefix of the platform's GST invoice series. Revisit with the owner's GST registration details. */
+export const PLATFORM_INVOICE_PREFIX = "BS";
+
+/** Indian financial year (April to March) of a date, as "26-27". Uses the IST calendar date. */
+export function financialYearSeries(at: Date): string {
+  const ist = new Date(at.getTime() + 5.5 * 60 * 60 * 1000);
+  const year = ist.getUTCFullYear();
+  const startYear = ist.getUTCMonth() >= 3 ? year : year - 1;
+  return `${String(startYear).slice(-2)}-${String(startYear + 1).slice(-2)}`;
+}
+
+/**
+ * Issues the next number in the financial-year invoice series, for example BS/26-27/00001. The counter row is locked by
+ * the calling transaction, so a rolled-back invoice never leaves a gap (GST needs a consecutive series).
+ */
+export async function nextPlatformInvoiceNumber(tx: Db, at: Date = new Date()): Promise<string> {
+  const series = financialYearSeries(at);
+  const res = await tx.execute<{ last_number: number }>(sql`
+    INSERT INTO platform_invoice_counters (series, last_number) VALUES (${series}, 1)
+    ON CONFLICT (series) DO UPDATE SET last_number = platform_invoice_counters.last_number + 1
+    RETURNING last_number;
+  `);
+  const n = res.rows[0]?.last_number;
+  if (!n) throw new Error("Failed to issue an invoice number");
+  return `${PLATFORM_INVOICE_PREFIX}/${series}/${String(n).padStart(5, "0")}`;
+}
+
 export interface PlatformBillingWebhookResult {
   received: boolean;
   eventId: string;
@@ -154,7 +202,7 @@ export async function handlePlatformBillingWebhook(
   },
 ): Promise<PlatformBillingWebhookResult> {
   const db = saasDb(rt);
-  const billingProvider = params.provider ?? new RazorpaySubscriptionProvider();
+  const billingProvider = params.provider ?? (await resolveBillingProvider(db));
 
   // 1. Signature Verification (Fails closed per ADR-014)
   const isValid = billingProvider.verifyWebhookSignature(params.rawBody, params.signature);
@@ -275,9 +323,10 @@ export async function handlePlatformBillingWebhook(
             ? new Date(subEntity.current_end * 1000)
             : new Date(Date.now() + 30 * 24 * 60 * 60 * 1000);
 
-          const taxPaise = Math.round((amountPaise * 18) / 118); // 18% inclusive GST
-          const dateStr = new Date().toISOString().slice(0, 7).replace("-", "");
-          const invoiceNumber = `INV-${dateStr}-${randomBytes(3).toString("hex").toUpperCase()}`;
+          // The plan price is quoted inclusive of GST; the rate is Super Admin, Platform billing, Invoice details (default 18%).
+          const gstRateBps = (await loadInvoiceProfile(db)).gstRateBps;
+          const taxPaise = Math.round((amountPaise * gstRateBps) / (10000 + gstRateBps));
+          const paymentId = paymentEntity.id ?? null;
 
           // Do the invoice, subscription and tier writes in ONE transaction
           await db.transaction(async (tx) => {
@@ -303,21 +352,30 @@ export async function handlePlatformBillingWebhook(
                 providerSubscriptionId: subId ?? undefined,
                 currentPeriodStart: currentStart,
                 currentPeriodEnd: currentEnd,
+                pastDueSince: null,
+                dunningStage: 0,
                 updatedAt: new Date(),
               })
               .where(eq(schema.subscriptions.id, activeSub.id));
 
-            // Generate GST Invoice
-            await tx.insert(schema.platformInvoices).values({
-              tenantId: activeSub.tenantId,
-              subscriptionId: activeSub.id,
-              number: invoiceNumber,
-              amountPaise,
-              taxPaise,
-              status: "paid",
-              issuedAt: new Date(),
-              paidAt: new Date(),
-            });
+            // One invoice per provider payment: the same payment can arrive in more than one event.
+            const [already] = paymentId
+              ? await tx.select({ id: schema.platformInvoices.id }).from(schema.platformInvoices).where(eq(schema.platformInvoices.providerPaymentId, paymentId)).limit(1)
+              : [];
+            if (!already) {
+              const issuedAt = new Date();
+              await tx.insert(schema.platformInvoices).values({
+                tenantId: activeSub.tenantId,
+                subscriptionId: activeSub.id,
+                number: await nextPlatformInvoiceNumber(tx, issuedAt),
+                amountPaise,
+                taxPaise,
+                status: "paid",
+                issuedAt,
+                paidAt: issuedAt,
+                providerPaymentId: paymentId,
+              });
+            }
 
             // Ensure tenant quota size tier reflects plan tier
             const effectivePlanId = newPlanId ?? activeSub.planId;
@@ -342,33 +400,61 @@ export async function handlePlatformBillingWebhook(
         }
       }
 
-    } else if (eventType === "subscription.halted") {
+    } else if (eventType === "subscription.authenticated") {
+      // The merchant authorised the card or UPI mandate. Nothing is charged yet when the first charge is deferred past a
+      // trial or free period, so the status stays as it is; we only make sure the provider id is linked to the store.
+      const subEntity = payload.payload?.subscription?.entity;
+      const subId = subEntity?.id;
+      const tenantIdNote = subEntity?.notes?.tenant_id;
+      if (subId && tenantIdNote) {
+        await db
+          .update(schema.subscriptions)
+          .set({ providerSubscriptionId: subId, updatedAt: new Date() })
+          .where(and(eq(schema.subscriptions.tenantId, tenantIdNote), sql`${schema.subscriptions.providerSubscriptionId} IS DISTINCT FROM ${subId}`));
+        actionTaken = "subscription_authenticated";
+      }
+    } else if (eventType === "subscription.pending" || eventType === "subscription.halted") {
+      // A charge failed: Razorpay is retrying (pending) or gave up (halted). The store is marked past due; limiting it
+      // after the grace period is the dunning job's work (billing B5), not a webhook's.
       const subEntity = payload.payload?.subscription?.entity;
       const subId = subEntity?.id;
       if (subId) {
         await db
           .update(schema.subscriptions)
-          .set({ status: "past_due", updatedAt: new Date() })
+          .set({ status: "past_due", pastDueSince: sql`COALESCE(${schema.subscriptions.pastDueSince}, now())`, updatedAt: new Date() })
           .where(eq(schema.subscriptions.providerSubscriptionId, subId));
         actionTaken = "subscription_past_due";
       }
-    } else if (eventType === "subscription.cancelled") {
+    } else if (eventType === "subscription.cancelled" || eventType === "subscription.completed") {
       const subEntity = payload.payload?.subscription?.entity;
       const subId = subEntity?.id;
       if (subId) {
-        await db
-          .update(schema.subscriptions)
-          .set({ status: "cancelled", updatedAt: new Date() })
-          .where(eq(schema.subscriptions.providerSubscriptionId, subId));
+        await db.transaction(async (tx) => {
+          const ended = await tx
+            .update(schema.subscriptions)
+            .set({ status: "cancelled", updatedAt: new Date() })
+            .where(eq(schema.subscriptions.providerSubscriptionId, subId))
+            .returning({ tenantId: schema.subscriptions.tenantId });
+          // The paid period is over: the store moves to the restricted tier until it subscribes again.
+          for (const row of ended) {
+            await tx
+              .insert(schema.tenantSizeTiers)
+              .values({ tenantId: row.tenantId, tier: LAPSED_TRIAL_TIER })
+              .onConflictDoUpdate({ target: schema.tenantSizeTiers.tenantId, set: { tier: LAPSED_TRIAL_TIER, updatedAt: new Date() } });
+          }
+        });
         actionTaken = "subscription_cancelled";
       }
+    } else if (eventType === "payment.failed") {
+      // Recorded in the inbox for support; the subscription events above drive the status.
+      actionTaken = "payment_failed_noted";
     } else if (eventType === "subscription.resumed" || eventType === "subscription.activated") {
       const subEntity = payload.payload?.subscription?.entity;
       const subId = subEntity?.id;
       if (subId) {
         await db
           .update(schema.subscriptions)
-          .set({ status: "active", updatedAt: new Date() })
+          .set({ status: "active", pastDueSince: null, dunningStage: 0, updatedAt: new Date() })
           .where(eq(schema.subscriptions.providerSubscriptionId, subId));
         actionTaken = "subscription_resumed";
       }
@@ -467,11 +553,13 @@ export async function changeTenantPlan(
     interval: "monthly" | "yearly";
     customerEmail: string;
     customerName?: string;
+    /** Unix seconds of the first charge; set after a trial or free period so the merchant is not charged early. */
+    startAt?: number;
     provider?: SubscriptionBillingProvider;
   },
 ) {
   const db = saasDb(rt);
-  const billingProvider = params.provider ?? new RazorpaySubscriptionProvider();
+  const billingProvider = params.provider ?? (await resolveBillingProvider(db));
 
   if (typeof billingProvider.isConfigured === "function" && !billingProvider.isConfigured()) {
     throw new Error("Billing is not configured: missing Razorpay credentials");
@@ -487,12 +575,16 @@ export async function changeTenantPlan(
     throw new Error(`Plan '${params.planCode}' not found`);
   }
 
+  // The plan synced for the active mode (Super Admin, Platform billing) wins; the old per-plan columns stay as a fallback.
+  const activeMode = (await loadPlatformBillingCredentials(db))?.mode ?? "test";
+  const synced = await findRazorpayPlanId(db, plan.id, params.interval, activeMode, params.interval === "yearly" ? plan.priceYearlyPaise : plan.priceMonthlyPaise);
   const features = plan.features as Record<string, unknown> | null;
   const planIds = features?.razorpay_plan_ids as Record<string, string> | undefined;
   const razorpayPlanId =
-    params.interval === "yearly"
+    synced?.razorpayPlanId ??
+    (params.interval === "yearly"
       ? plan.razorpayPlanIdYearly ?? planIds?.yearly
-      : plan.razorpayPlanIdMonthly ?? planIds?.monthly;
+      : plan.razorpayPlanIdMonthly ?? planIds?.monthly);
 
   if (!razorpayPlanId) {
     throw new Error(
@@ -508,6 +600,7 @@ export async function changeTenantPlan(
     ...(params.customerName ? { customerName: params.customerName } : {}),
     tenantId: params.tenantId,
     planId: razorpayPlanId,
+    ...(params.startAt ? { startAt: params.startAt } : {}),
   });
 
   // Update or insert subscription record
@@ -555,9 +648,9 @@ export async function cancelTenantSubscription(
   rt: Runtime,
   tenantId: string,
   provider?: SubscriptionBillingProvider,
-) {
+): Promise<{ status: string; cancelAt: Date | null }> {
   const db = saasDb(rt);
-  const billingProvider = provider ?? new RazorpaySubscriptionProvider();
+  const billingProvider = provider ?? (await resolveBillingProvider(db));
 
   if (typeof billingProvider.isConfigured === "function" && !billingProvider.isConfigured()) {
     throw new Error("Billing is not configured: missing Razorpay credentials");
@@ -574,7 +667,12 @@ export async function cancelTenantSubscription(
     throw new Error("No active subscription found to cancel");
   }
 
-  const res = await billingProvider.cancelSubscription(sub.providerSubscriptionId);
-  return res;
+  // An active subscription is cancelled at the end of the paid period (the merchant keeps what they paid for); one that
+  // never started charging is cancelled at once. The provider's cancelled event ends it for good.
+  const atCycleEnd = sub.status === "active";
+  const res = await billingProvider.cancelSubscription(sub.providerSubscriptionId, { atCycleEnd });
+  const cancelAt = atCycleEnd ? (sub.currentPeriodEnd ?? null) : new Date();
+  await db.update(schema.subscriptions).set({ cancelAt, updatedAt: new Date() }).where(eq(schema.subscriptions.id, sub.id));
+  return { ...res, cancelAt };
 }
 

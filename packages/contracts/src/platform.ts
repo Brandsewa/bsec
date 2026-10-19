@@ -1305,7 +1305,104 @@ export const PlatformPaymentProviderView = z.object({
 });
 export type PlatformPaymentProviderView = z.infer<typeof PlatformPaymentProviderView>;
 
+const BillingKeySetView = z.object({
+  keyId: z.string().nullable(),
+  secretConfigured: z.boolean(),
+  secretLastFour: z.string().nullable(),
+  webhookSecretConfigured: z.boolean(),
+});
+
+const InvoiceProfile = z.object({
+  legalName: z.string().nullable(),
+  address: z.string().nullable(),
+  state: z.string().nullable(),
+  gstin: z.string().nullable(),
+  sac: z.string().nullable(),
+  gstRateBps: z.number().int(),
+});
+
+export const PlatformBillingSettingsView = z.object({
+  invoice: InvoiceProfile,
+  provider: z.literal("razorpay"),
+  mode: z.enum(["test", "live"]),
+  enabled: z.boolean(),
+  graceDays: z.number().int(),
+  test: BillingKeySetView,
+  live: BillingKeySetView,
+  webhookUrl: z.string(),
+  usingEnvFallback: z.boolean(),
+  lastTestAt: z.string().nullable(),
+  lastTestStatus: z.enum(["success", "failed"]).nullable(),
+  lastTestError: z.string().nullable(),
+  updatedAt: z.string().nullable(),
+});
+export type PlatformBillingSettingsView = z.infer<typeof PlatformBillingSettingsView>;
+
+const BillingKeysInput = z.object({
+  keyId: z.string().max(80).optional(),
+  keySecret: z.string().max(200).optional(), // write-only
+  webhookSecret: z.string().max(200).optional(), // write-only
+});
+
+const BillingPlanIntervalView = z.object({ pricePaise: z.number(), razorpayPlanId: z.string().nullable(), inSync: z.boolean() });
+export const BillingPlansView = z.object({
+  mode: z.enum(["test", "live"]),
+  canSync: z.boolean(),
+  plans: z.array(
+    z.object({
+      planId: z.string(),
+      code: z.string(),
+      name: z.string(),
+      monthly: BillingPlanIntervalView,
+      yearly: BillingPlanIntervalView,
+    }),
+  ),
+});
+export type BillingPlansView = z.infer<typeof BillingPlansView>;
+
 export const platformIntegrationsContract = {
+  billingPlans: oc
+    .route({ method: "GET", path: "/platform/integrations/billing/plans" })
+    .output(BillingPlansView),
+  syncBillingPlans: oc
+    .route({ method: "POST", path: "/platform/integrations/billing/plans/sync" })
+    .output(
+      z.object({
+        mode: z.enum(["test", "live"]),
+        created: z.number(),
+        unchanged: z.number(),
+        failed: z.array(z.object({ plan: z.string(), interval: z.enum(["monthly", "yearly"]), error: z.string() })),
+      }),
+    ),
+  billingSettings: oc
+    .route({ method: "GET", path: "/platform/integrations/billing/settings" })
+    .output(PlatformBillingSettingsView),
+  updateBillingSettings: oc
+    .route({ method: "PATCH", path: "/platform/integrations/billing/settings" })
+    .input(
+      z.object({
+        mode: z.enum(["test", "live"]).optional(),
+        enabled: z.boolean().optional(),
+        graceDays: z.number().int().min(0).max(30).optional(),
+        invoice: z
+          .object({
+            legalName: z.string().max(200).optional(),
+            address: z.string().max(500).optional(),
+            state: z.string().max(80).optional(),
+            gstin: z.string().max(20).optional(),
+            sac: z.string().max(12).optional(),
+            gstRateBps: z.number().int().min(0).max(2800).optional(),
+          })
+          .optional(),
+        test: BillingKeysInput.optional(),
+        live: BillingKeysInput.optional(),
+      }),
+    )
+    .output(z.object({ ok: z.literal(true) })),
+  testBillingConnection: oc
+    .route({ method: "POST", path: "/platform/integrations/billing/test" })
+    .input(z.object({ mode: z.enum(["test", "live"]).optional() }))
+    .output(z.object({ ok: z.boolean(), mode: z.enum(["test", "live"]), error: z.string().optional() })),
   paymentProviders: oc
     .route({ method: "GET", path: "/platform/integrations/payments/providers" })
     .output(z.array(PlatformPaymentProviderView)),

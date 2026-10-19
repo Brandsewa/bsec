@@ -80,6 +80,11 @@ import {
   deleteThemeTemplate,
   createThemePreview,
   getPlatformEmailSettings,
+  getPlatformBillingSettings,
+  listBillingPlans,
+  syncBillingPlans,
+  updatePlatformBillingSettings,
+  testPlatformBillingConnection,
   updatePlatformEmailSettings,
   sendPlatformTestEmail,
   listRecentEmailDeliveries,
@@ -596,6 +601,26 @@ export const platformRouter = os.router({
     }),
   },
   integrations: {
+    billingSettings: os.integrations.billingSettings.use(requirePlatformStaff).handler(async ({ context }) => {
+      const staffUserId = actor(context);
+      return getPlatformBillingSettings(context.rt, staffUserId);
+    }),
+    billingPlans: os.integrations.billingPlans.use(requirePlatformStaff).handler(async ({ context }) => {
+      const staffUserId = actor(context);
+      return listBillingPlans(context.rt, staffUserId);
+    }),
+    syncBillingPlans: os.integrations.syncBillingPlans.use(requireStaff("platform_owner")).handler(async ({ context }) => {
+      const staffUserId = actor(context);
+      return syncBillingPlans(context.rt, staffUserId, context.meta);
+    }),
+    updateBillingSettings: os.integrations.updateBillingSettings.use(requireStaff("platform_owner")).handler(async ({ context, input }) => {
+      const staffUserId = actor(context);
+      return updatePlatformBillingSettings(context.rt, staffUserId, input, context.meta);
+    }),
+    testBillingConnection: os.integrations.testBillingConnection.use(requireStaff("platform_owner")).handler(async ({ context, input }) => {
+      const staffUserId = actor(context);
+      return testPlatformBillingConnection(context.rt, staffUserId, input, context.meta);
+    }),
     paymentProviders: os.integrations.paymentProviders.use(requirePlatformStaff).handler(async ({ context }) => {
       const staffUserId = actor(context);
       return listPlatformPaymentProviders(context.rt, staffUserId);

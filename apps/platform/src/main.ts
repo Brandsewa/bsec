@@ -1,6 +1,6 @@
 import * as Sentry from "@sentry/node";
 import { serve } from "@hono/node-server";
-import { warnIfEncryptionKeyMissing, createLogger, createRuntime, endDuePromotions, runDueTenantDeletions } from "@bs/domain";
+import { warnIfEncryptionKeyMissing, createLogger, createRuntime, endDuePromotions, runBillingDunningSweep, runDueTenantDeletions } from "@bs/domain";
 import { createApp } from "./app.ts";
 
 warnIfEncryptionKeyMissing();
@@ -51,6 +51,19 @@ const promoSweep = async () => {
 const promoTimer = setInterval(() => void promoSweep(), Number(process.env.PROMOTION_SWEEP_INTERVAL_MS ?? 3_600_000));
 promoTimer.unref();
 setTimeout(() => void promoSweep(), 20_000).unref();
+
+// Paid subscriptions that fail to charge: failure notice, reminder, then limit after the grace period (billing B5).
+const dunningSweep = async () => {
+  try {
+    const res = await runBillingDunningSweep(rt);
+    if (res.notified > 0 || res.reminded > 0 || res.limited > 0) log.info(res, "billing dunning sweep");
+  } catch (err) {
+    log.error({ err }, "billing dunning sweep failed");
+  }
+};
+const dunningTimer = setInterval(() => void dunningSweep(), Number(process.env.DUNNING_SWEEP_INTERVAL_MS ?? 3_600_000));
+dunningTimer.unref();
+setTimeout(() => void dunningSweep(), 25_000).unref();
 
 const sweepTimer = setInterval(() => void sweep(), sweepEveryMs);
 sweepTimer.unref();

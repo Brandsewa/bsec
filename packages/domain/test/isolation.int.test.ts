@@ -291,6 +291,8 @@ import {
   getPlanAndBilling,
   listAvailablePlans,
   requestPlanChange,
+  subscribeToPlan,
+  cancelPlanSubscription,
   cancelPlanChangeRequest,
   getFinanceOverview,
   getDistinctCurrencies,
@@ -915,6 +917,10 @@ describe("Generated Isolation Test Suite (M1 Real Postgres 18 Proof)", () => {
 
   /** Support access is the store OWNER's decision; the harness's store_admin user gets the owner role for these calls. */
   const asOwner = (ctx: TenantContext): TenantContext => ({ ...ctx, roles: ["store_owner"] });
+  const notAvailable = (e: Error) => {
+    if (/^Forbidden/.test(e.message)) throw e;
+    return { error: e.message };
+  };
 
   async function executeAdminProcedure(procPath: string, rt: Runtime, ctx: TenantContext) {
     switch (procPath) {
@@ -1531,6 +1537,12 @@ describe("Generated Isolation Test Suite (M1 Real Postgres 18 Proof)", () => {
           note: "Isolation test request",
         });
       }
+      // (A permission failure must still reject; only "billing is not available" is turned into a value.)
+      // Online billing is not enabled in this suite, so both answer with their "not available" message (no tenant data involved).
+      case "planAndBilling.subscribe":
+        return await subscribeToPlan(rt, asOwner(ctx), { planCode: "starter", interval: "monthly" }).catch(notAvailable);
+      case "planAndBilling.cancelSubscription":
+        return await cancelPlanSubscription(rt, asOwner(ctx)).catch(notAvailable);
       case "planAndBilling.cancelRequest": {
         // Need an open request to cancel
         const plans = await listAvailablePlans(rt, ctx);

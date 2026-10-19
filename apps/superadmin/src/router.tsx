@@ -44,6 +44,7 @@ import { IntegrationsHub } from "./pages/integrations/IntegrationsHub.tsx";
 import { NotificationsHub } from "./pages/integrations/NotificationsHub.tsx";
 import { ChannelPage } from "./pages/integrations/ChannelPage.tsx";
 import { PaymentsIntegrations } from "./pages/integrations/PaymentsIntegrations.tsx";
+import { BillingIntegrations } from "./pages/integrations/BillingIntegrations.tsx";
 import { ForgotPassword } from "./pages/ForgotPassword.tsx";
 import { ResetPassword } from "./pages/ResetPassword.tsx";
 import { Kit } from "./pages/Kit.tsx";
@@ -428,6 +429,18 @@ const integrationsStorageRoute = createRoute({
   ),
 });
 
+const integrationsBillingRoute = createRoute({
+  getParentRoute: () => authLayoutRoute,
+  path: "/integrations/billing",
+  component: BillingIntegrations,
+  pendingComponent: () => (
+    <PageContainer>
+      <PageHeaderSkeleton />
+      <MetricCardsSkeleton count={3} />
+    </PageContainer>
+  ),
+});
+
 const integrationsPaymentsRoute = createRoute({
   getParentRoute: () => authLayoutRoute,
   path: "/integrations/payments",
@@ -483,6 +496,7 @@ export const routeTree = rootRoute.addChildren([
     integrationsWhatsAppRoute,
     integrationsStorageRoute,
     integrationsPaymentsRoute,
+    integrationsBillingRoute,
   ]),
 ]);
 

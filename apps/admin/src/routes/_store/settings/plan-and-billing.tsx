@@ -14,6 +14,7 @@ import { SimpleSelect } from "@bs/ui";
 import { SettingsCard, SettingsPageFrame } from "../../../components/settings/settings-page.tsx";
 import { orpc } from "../../../lib/orpc.ts";
 import { errorMessage } from "../../../lib/errors.ts";
+import { downloadInvoicePdf } from "../../../lib/invoice-download.ts";
 
 export const Route = createFileRoute("/_store/settings/plan-and-billing")({
   pendingComponent: () => <PageSkeleton />,
@@ -32,6 +33,11 @@ export function PlanAndBillingPage() {
 
   const requestMutation = useMutation(orpc.admin.planAndBilling.requestChange.mutationOptions());
   const cancelMutation = useMutation(orpc.admin.planAndBilling.cancelRequest.mutationOptions());
+  const subscribeMutation = useMutation(orpc.admin.planAndBilling.subscribe.mutationOptions());
+  const cancelSubscriptionMutation = useMutation(orpc.admin.planAndBilling.cancelSubscription.mutationOptions());
+  const [payPlanCode, setPayPlanCode] = useState<string>("");
+  const [payInterval, setPayInterval] = useState<"monthly" | "yearly">("monthly");
+  const [confirmCancelSubOpen, setConfirmCancelSubOpen] = useState(false);
 
   const [requestDialogOpen, setRequestDialogOpen] = useState(false);
   const [selectedPlanId, setSelectedPlanId] = useState<string>("");
@@ -68,7 +74,7 @@ export function PlanAndBillingPage() {
     );
   }
 
-  const { plan, usage, invoices, openPlanChangeRequest } = query.data;
+  const { plan, usage, invoices, openPlanChangeRequest, billing } = query.data;
   const availablePlans = availablePlansQuery.data ?? [];
 
   function handleOpenRequestDialog() {
@@ -212,6 +218,77 @@ export function PlanAndBillingPage() {
             </div>
           </SettingsCard>
 
+          {billing.available && isOwner ? (
+            <SettingsCard
+              title="Pay for your plan"
+              description="Pay by card or UPI AutoPay. Your free trial or free period is never cut short: the first charge happens when it ends."
+            >
+              {billing.testMode ? (
+                <p className="mb-3 rounded-md border border-border bg-muted/40 p-3 text-xs text-muted-foreground">
+                  Payments are in test mode right now: use Razorpay test cards, no real money moves.
+                </p>
+              ) : null}
+              {billing.hasSubscription && plan?.status === "active" ? (
+                <div className="space-y-3">
+                  <p className="text-sm text-foreground">
+                    {billing.cancelAt
+                      ? `Your subscription ends on ${new Date(billing.cancelAt).toLocaleDateString("en-IN", { day: "numeric", month: "short", year: "numeric" })}. You keep your plan until then.`
+                      : "Your subscription renews automatically."}
+                  </p>
+                  {!billing.cancelAt ? (
+                    <Button variant="outline" size="sm" onClick={() => setConfirmCancelSubOpen(true)}>
+                      Cancel subscription
+                    </Button>
+                  ) : null}
+                </div>
+              ) : (
+                <div className="flex flex-wrap items-end gap-3">
+                  <div className="min-w-48 space-y-1.5">
+                    <p className="text-xs font-medium text-muted-foreground">Plan</p>
+                    <SimpleSelect
+                      value={payPlanCode}
+                      onChange={setPayPlanCode}
+                      placeholder="Choose a plan"
+                      options={availablePlans.map((p) => ({
+                        value: p.code,
+                        label: `${p.name} (₹${((payInterval === "yearly" ? p.priceYearlyPaise : p.priceMonthlyPaise) / 100).toLocaleString("en-IN")}/${payInterval === "yearly" ? "yr" : "mo"})`,
+                      }))}
+                    />
+                  </div>
+                  <div className="min-w-40 space-y-1.5">
+                    <p className="text-xs font-medium text-muted-foreground">Billed</p>
+                    <SimpleSelect
+                      value={payInterval}
+                      onChange={(v) => setPayInterval(v === "yearly" ? "yearly" : "monthly")}
+                      options={[
+                        { value: "monthly", label: "Monthly" },
+                        { value: "yearly", label: "Yearly" },
+                      ]}
+                    />
+                  </div>
+                  <Button
+                    size="sm"
+                    disabled={!payPlanCode || subscribeMutation.isPending}
+                    onClick={() =>
+                      subscribeMutation.mutate(
+                        { planCode: payPlanCode, interval: payInterval },
+                        {
+                          onSuccess: (res) => {
+                            if (res.checkoutUrl) window.location.assign(res.checkoutUrl);
+                            else toast.error("Razorpay did not return a payment page. Try again.");
+                          },
+                          onError: (e) => toast.error(errorMessage(e)),
+                        },
+                      )
+                    }
+                  >
+                    {subscribeMutation.isPending ? "Opening payment page..." : "Continue to payment"}
+                  </Button>
+                </div>
+              )}
+            </SettingsCard>
+          ) : null}
+
           <SettingsCard
             title="Usage & quotas"
             description="Active resource utilization for this store"
@@ -259,6 +336,7 @@ export function PlanAndBillingPage() {
                       <th className="p-3">Issued date</th>
                       <th className="p-3">Amount</th>
                       <th className="p-3">Status</th>
+                      <th className="p-3 text-right">Invoice</th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-border">
@@ -275,6 +353,16 @@ export function PlanAndBillingPage() {
                           <Badge variant={inv.status === "paid" ? "outline" : "secondary"}>
                             {inv.status}
                           </Badge>
+                        </td>
+                        <td className="p-3 text-right">
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            disabled={!inv.downloadable}
+                            onClick={() => downloadInvoicePdf(inv.id, inv.number).catch((e) => toast.error(errorMessage(e)))}
+                          >
+                            Download PDF
+                          </Button>
                         </td>
                       </tr>
                     ))}
@@ -345,6 +433,26 @@ export function PlanAndBillingPage() {
       </Dialog>
 
       {/* Confirm Cancel Dialog */}
+      <ConfirmDialog
+        open={confirmCancelSubOpen}
+        onOpenChange={setConfirmCancelSubOpen}
+        title="Cancel your subscription?"
+        description="You keep your plan until the end of the period you have paid for. After that the store moves to the restricted free tier."
+        confirmLabel="Cancel subscription"
+        destructive
+        pending={cancelSubscriptionMutation.isPending}
+        onConfirm={() =>
+          cancelSubscriptionMutation.mutate(undefined, {
+            onSuccess: () => {
+              toast.success("Subscription cancelled");
+              setConfirmCancelSubOpen(false);
+              refresh();
+            },
+            onError: (e) => toast.error(errorMessage(e)),
+          })
+        }
+      />
+
       <ConfirmDialog
         open={confirmCancelOpen}
         onOpenChange={setConfirmCancelOpen}

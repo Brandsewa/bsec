@@ -5,7 +5,7 @@ import type { Runtime } from "../runtime.ts";
 import { writePlatformAudit } from "../platform-services.ts";
 import { PURGE_KEEP_TABLES, purgeTenantData } from "../admin/tenant-purge.ts";
 import { CloudflareCustomDomainProvider, type CustomDomainProvider } from "../domains/provider.ts";
-import { RazorpaySubscriptionProvider, type SubscriptionBillingProvider } from "../saas/billing.ts";
+import { resolveBillingProvider, type SubscriptionBillingProvider } from "../saas/billing.ts";
 import { createR2Client, getR2Config } from "../media/storage.ts";
 import { getReturnPhotoStorageConfig } from "../orders/return-photos.ts";
 import { runStoreExport } from "./exports.ts";
@@ -80,7 +80,7 @@ export async function stepExport(rt: Runtime, d: DeletionRow, deps: DeletionDeps
 export async function stepStopBilling(rt: Runtime, d: DeletionRow, deps: DeletionDeps): Promise<void> {
   const db = rt._db.db;
   const subs = await db.select().from(schema.subscriptions).where(eq(schema.subscriptions.tenantId, d.tenantId));
-  const provider = deps.billing ?? new RazorpaySubscriptionProvider();
+  const provider = deps.billing ?? (await resolveBillingProvider(db));
   let providerCancelled = 0;
   if (provider.isConfigured?.() ?? true) {
     for (const s of subs) {

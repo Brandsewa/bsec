@@ -48,6 +48,8 @@ const INPUTS: Record<string, () => unknown> = {
   "integrations.channelTransactions": () => ({ channel: "email" }),
   "integrations.listProviders": () => ({ channel: "sms" }),
   "integrations.paymentProviders": () => undefined,
+  "integrations.billingSettings": () => undefined,
+  "integrations.billingPlans": () => undefined,
   "promotions.list": () => undefined,
   "promotions.listForTenant": () => ({ tenantId }),
   "promotions.quote": () => ({ planCode: "growth", termMonths: 12 }),

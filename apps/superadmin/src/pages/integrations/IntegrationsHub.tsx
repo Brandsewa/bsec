@@ -208,12 +208,20 @@ export function IntegrationsHub() {
             </div>
           </CardContent>
 
-          <CardFooter className="pt-2">
+          <CardFooter className="flex-col gap-2 pt-2">
             <Button
               className="w-full justify-between"
               onClick={() => navigate({ to: "/integrations/payments" })}
             >
               <span>Manage Payments</span>
+              <ArrowRight className="h-4 w-4 ml-1" />
+            </Button>
+            <Button
+              variant="outline"
+              className="w-full justify-between"
+              onClick={() => navigate({ to: "/integrations/billing" })}
+            >
+              <span>Platform billing (charge merchants)</span>
               <ArrowRight className="h-4 w-4 ml-1" />
             </Button>
           </CardFooter>

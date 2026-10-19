@@ -434,6 +434,35 @@ const CASES: Record<string, Case> = {
       enforcement: "hard",
     }),
   },
+  "integrations.updateBillingSettings": {
+    role: "platform_owner",
+    action: "platform_billing.updated",
+    input: async () => ({ graceDays: 5 }),
+  },
+  // No keys are saved in this suite, so the test returns "save the keys first" without calling Razorpay.
+  "integrations.testBillingConnection": {
+    role: "platform_owner",
+    action: "platform_billing.tested",
+    input: async () => ({ mode: "test" }),
+  },
+  // Keys are saved and every plan already has a Razorpay plan at its current price, so the sync makes no network call.
+  "integrations.syncBillingPlans": {
+    role: "platform_owner",
+    action: "platform_billing.plans_synced",
+    input: async () => {
+      await proc("integrations.updateBillingSettings")(
+        { enabled: true, test: { keyId: "rzp_test_audit", keySecret: "audit_secret" } },
+        { context: ctxFor(owner.userId, owner.freshSessionAt) },
+      );
+      await superDb.db.execute(sql`
+        INSERT INTO platform_razorpay_plans (plan_id, interval, mode, razorpay_plan_id, amount_paise)
+        SELECT id, 'monthly', 'test', 'plan_audit_m_' || code, price_monthly_paise FROM plans WHERE price_monthly_paise > 0
+        UNION ALL
+        SELECT id, 'yearly', 'test', 'plan_audit_y_' || code, price_yearly_paise FROM plans WHERE price_yearly_paise > 0
+        ON CONFLICT DO NOTHING`);
+      return undefined;
+    },
+  },
   "integrations.updatePaymentProvider": {
     role: "platform_admin",
     action: "payment_provider.live_mode_allowed",
