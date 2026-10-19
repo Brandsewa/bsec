@@ -11,6 +11,7 @@ import { schema } from "@bs/db";
 import { eq, and, notInArray } from "drizzle-orm";
 import { acquireTenantJobSlot, cleanExpiredRateLimits, reapStaleTenantJobSlots, releaseTenantJobSlot } from "./system/rate-limit.ts";
 import { runTrialExpirySweep } from "./saas/trial-expiry.ts";
+import { sweepPendingCustomDomains } from "./domains/service.ts";
 import { isMarketingAllowed } from "./system/tenant-lifecycle.ts";
 import { handleFinancePost, runFinanceReconcileSweep } from "./finance/index.ts";
 
@@ -915,6 +916,19 @@ export async function startJobs(opts: {
     }
   });
 
+  // Custom domains: pick up DNS/SSL progress without the merchant pressing "Check status" (ADR-017)
+  await boss.work(QUEUE_NAMES.DOMAINS_SWEEP, { localConcurrency: 1 }, async (batch) => {
+    for (const job of batch) {
+      try {
+        const res = await sweepPendingCustomDomains(db, { log: opts.log });
+        if (res.checked > 0) opts.log.info({ job_id: job.id, ...res }, "domains.sweep processed");
+      } catch (err) {
+        opts.log.error({ err, job_id: job.id }, "domains.sweep failed");
+        throw err;
+      }
+    }
+  });
+
   // Handle subscription trial expiry sweep (PLAN §6.4, §14)
   await boss.work(QUEUE_NAMES.SUBSCRIPTION_TRIAL_EXPIRY_SWEEP, { localConcurrency: 1 }, async (batch) => {
     for (const job of batch) {
@@ -1281,6 +1295,7 @@ export async function startJobs(opts: {
     await boss.schedule(QUEUE_NAMES.IDEMPOTENCY_CLEANUP, "*/15 * * * *", {});
     await boss.schedule(QUEUE_NAMES.CART_RECOVERY_SWEEP, "0 * * * *", {});
     await boss.schedule(QUEUE_NAMES.SUBSCRIPTION_TRIAL_EXPIRY_SWEEP, "0 * * * *", {});
+    await boss.schedule(QUEUE_NAMES.DOMAINS_SWEEP, "*/5 * * * *", {});
     await boss.schedule(QUEUE_NAMES.ORDER_PREORDER_REMINDER_SWEEP, "0 6 * * *", {});
     await boss.schedule(QUEUE_NAMES.ORDER_RETURN_PHOTO_CLEANUP, "0 3 * * *", {});
     await boss.schedule(QUEUE_NAMES.SEGMENTS_REFRESH_COUNTS, "0 */6 * * *", {});

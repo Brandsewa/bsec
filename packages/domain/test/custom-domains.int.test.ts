@@ -11,6 +11,7 @@ import {
   provisionTenant,
   addCustomDomain,
   verifyCustomDomain,
+  sweepPendingCustomDomains,
   setPrimaryDomain,
   removeCustomDomain,
   listTenantDomains,
@@ -272,6 +273,46 @@ describe("M8 Custom Domains & Cloudflare for SaaS Integration (PLAN §8, ADR-007
 
     // Clean up
     await removeCustomDomain(rt, tenantId, prevalDomain.id, mockProvider);
+  });
+
+  it("registers a domain saved while the provider was unconfigured, then the sweep activates it", async () => {
+    const unconfigured: CustomDomainProvider = {
+      isConfigured: () => false,
+      createCustomHostname: async (hostname) => ({ providerHostnameId: null, hostname, status: "requested", sslStatus: "not_configured" }),
+      getCustomHostnameStatus: async (id) => ({ providerHostnameId: id, hostname: "", status: "requested", sslStatus: "not_configured" }),
+      deleteCustomHostname: async () => ({ deleted: true }),
+    };
+    const saved = await addCustomDomain(rt, tenantId, { hostname: "late.setup-example.com", provider: unconfigured });
+    expect(saved.status).toBe("requested");
+    expect(saved.cfCustomHostnameId).toBeNull();
+
+    const configured = new MockCustomDomainProvider();
+    (configured as CustomDomainProvider).isConfigured = () => true;
+
+    // First pass registers it with the provider and records the DNS target.
+    const first = await sweepPendingCustomDomains(rwDb.db, { provider: configured });
+    expect(first.checked).toBeGreaterThanOrEqual(1);
+    const [registered] = await rwDb.db.select().from(schema.domains).where(eq(schema.domains.id, saved.id));
+    expect(registered?.cfCustomHostnameId).toBe("cf_mock_late_setup_example_com");
+    expect(registered?.verification?.cname).toBe("stores.bcom.si");
+
+    // Once DNS and SSL are done at the provider, the next pass activates it without the merchant doing anything.
+    configured.setActive("late.setup-example.com");
+    await sweepPendingCustomDomains(rwDb.db, { provider: configured });
+    const [active] = await rwDb.db.select().from(schema.domains).where(eq(schema.domains.id, saved.id));
+    expect(active?.status).toBe("active");
+
+    await removeCustomDomain(rt, tenantId, saved.id, configured);
+  });
+
+  it("sweep does nothing while the provider is unconfigured", async () => {
+    const off: CustomDomainProvider = {
+      isConfigured: () => false,
+      createCustomHostname: async () => { throw new Error("must not be called"); },
+      getCustomHostnameStatus: async () => { throw new Error("must not be called"); },
+      deleteCustomHostname: async () => ({ deleted: true }),
+    };
+    expect(await sweepPendingCustomDomains(rwDb.db, { provider: off })).toEqual({ checked: 0, changed: 0 });
   });
 
   it("removes custom domain and automatically reassigns primary back to platform subdomain", async () => {

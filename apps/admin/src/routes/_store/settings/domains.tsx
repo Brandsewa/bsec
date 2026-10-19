@@ -47,8 +47,11 @@ function DomainSetupGuide() {
         </li>
       </ol>
       <p className="mt-2 text-muted-foreground">
-        For a bare domain such as <span className="font-mono">mybrand.com</span>, some providers call the CNAME record an ALIAS or ANAME record, or need
-        "CNAME flattening". A subdomain such as <span className="font-mono">shop.mybrand.com</span> is the easiest.
+        <span className="font-medium text-foreground">Subdomain or main domain?</span> A subdomain such as <span className="font-mono">shop.mybrand.com</span>{" "}
+        or <span className="font-mono">www.mybrand.com</span> is the easiest and works everywhere. For a bare domain such as{" "}
+        <span className="font-mono">mybrand.com</span>, a normal CNAME is not allowed at the root: your provider must offer an ALIAS or ANAME record, or
+        "CNAME flattening" (Cloudflare does). If it does not, connect <span className="font-mono">www.mybrand.com</span> and forward the bare domain to it.
+        Remove any old A, AAAA or CNAME record on the same name first, and do not point it anywhere else while connecting.
       </p>
     </div>
   );
@@ -281,7 +284,8 @@ export function DomainsSettingsPage() {
         domains.map((d) => {
           const isProviderDisabled = d.status === "requested" && d.sslStatus === "not_configured";
           const isActive = d.status === "active";
-          const isPending = !isActive && !isProviderDisabled && d.status !== "failed";
+          // A domain saved before the platform finished its domain setup is still shown with its records; "Check status" registers it.
+          const isPending = !isActive && d.status !== "failed";
           const isFailed = d.status === "failed";
           const isVerifying = verifyingId === d.id || verifyDomain.isPending;
 
@@ -355,9 +359,11 @@ export function DomainsSettingsPage() {
 
                 {isProviderDisabled && (
                   <div role="status" className="rounded-md border border-amber-500/30 bg-amber-500/5 p-3.5 text-xs text-foreground">
-                    <p className="font-medium text-amber-800 dark:text-amber-200">Domain provider not configured</p>
+                    <p className="font-medium text-amber-800 dark:text-amber-200">Waiting for platform setup</p>
                     <p className="mt-1 text-muted-foreground">
-                      Custom domain provisioning is not currently available on this platform. Store is accessible via your platform subdomain.
+                      We have not registered this domain yet because custom domain provisioning is not switched on for this platform. You can create the DNS
+                      record below now. Once it is switched on, press Check status and we will finish connecting it. Your store stays available on its platform
+                      address in the meantime.
                     </p>
                   </div>
                 )}
