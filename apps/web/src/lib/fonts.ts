@@ -16,8 +16,6 @@ export const fontMono = Geist_Mono({
   display: "swap",
 });
 
-/** Compatibility export for beam marketing font */
-export const bmFont = fontSans;
 
 /** Italic display serif for the marketing page's accent words (landing.css reads --font-serif-display). */
 export const fontSerifDisplay = Instrument_Serif({

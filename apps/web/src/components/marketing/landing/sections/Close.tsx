@@ -30,7 +30,7 @@ export function FinalCta() {
         <span className="pill am"><b />14-day free trial</span>
         <h2>Open your store today. <i className="s gt">Be ready for what comes next.</i></h2>
         <div style={{ maxWidth: 540, margin: "36px auto 0", textAlign: "left" }}>
-          <SubdomainAvailabilityChecker platformDomain="bcom.si" variant="lp" />
+          <SubdomainAvailabilityChecker platformDomain="bcom.si" />
         </div>
         
       </div>

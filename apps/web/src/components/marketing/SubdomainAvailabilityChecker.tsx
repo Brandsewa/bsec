@@ -5,13 +5,10 @@ import { useRouter } from "next/navigation";
 
 interface SubdomainAvailabilityCheckerProps {
   platformDomain?: string;
-  /** "lp" is the agent-first landing page look (landing/landing.css); the default is the signup page look. */
-  variant?: "default" | "lp";
 }
 
 export function SubdomainAvailabilityChecker({
   platformDomain = "bcom.si",
-  variant = "default",
 }: SubdomainAvailabilityCheckerProps) {
   const router = useRouter();
   const [storeName, setStoreName] = useState("");
@@ -75,74 +72,33 @@ export function SubdomainAvailabilityChecker({
     });
   };
 
-  if (variant === "lp") {
-    return (
-      <div className="claimcol">
-        <div className="claimw">
-          <form className="claim" onSubmit={handleSubmit}>
-            <input
-              type="text"
-              placeholder="your-store-name"
-              aria-label="Store name"
-              value={storeName}
-              onChange={(e) => handleStoreNameChange(e.target.value)}
-              autoComplete="off"
-              required
-            />
-            <span aria-hidden="true">.{platformDomain}</span>
-            <button type="submit" className="btn pri" disabled={checkResult !== null && !checkResult.available}>
-              Claim it →
-            </button>
-          </form>
-        </div>
-        <p className="claimstatus" role="status" aria-live="polite">
-          {slug.length >= 3 &&
-            (isChecking ? (
-              <span className="chk">Checking {slug}.{platformDomain}…</span>
-            ) : checkResult?.available ? (
-              <span className="ok">✓ {slug}.{platformDomain} is available</span>
-            ) : checkResult ? (
-              <span className="bad">{checkResult.reason || "That name is taken"}</span>
-            ) : null)}
-        </p>
-      </div>
-    );
-  }
-
   return (
-    <div className="w-full max-w-xl">
-      <form onSubmit={handleSubmit} className="bm-field flex flex-col gap-3 rounded-3xl p-2 sm:flex-row sm:items-center sm:rounded-full">
-        <label className="flex flex-1 items-center gap-2 px-4">
-          <span className="sr-only">Store name</span>
+    <div className="claimcol">
+      <div className="claimw">
+        <form className="claim" onSubmit={handleSubmit}>
           <input
             type="text"
-            placeholder="Your store name"
+            placeholder="your-store-name"
+            aria-label="Store name"
             value={storeName}
             onChange={(e) => handleStoreNameChange(e.target.value)}
-            className="min-h-[3rem] w-full bg-transparent text-[1.05rem] font-medium outline-none placeholder:opacity-50"
-            style={{ color: "var(--bm-text)" }}
             autoComplete="off"
             required
           />
-          <span className="shrink-0 text-sm font-semibold" style={{ color: "var(--bm-dim)" }}>.{platformDomain}</span>
-        </label>
-        <button
-          type="submit"
-          disabled={checkResult !== null && !checkResult.available}
-          className="bm-pill"
-        >
-          See it in action
-          <svg width="16" height="16" viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><path d="M4 12h15M13 6l6 6-6 6" /></svg>
-        </button>
-      </form>
-      <p className="mt-3 min-h-[1.75rem] text-[0.95rem] font-medium" role="status" aria-live="polite">
+          <span aria-hidden="true">.{platformDomain}</span>
+          <button type="submit" className="btn pri" disabled={checkResult !== null && !checkResult.available}>
+            Claim it →
+          </button>
+        </form>
+      </div>
+      <p className="claimstatus" role="status" aria-live="polite">
         {slug.length >= 3 &&
           (isChecking ? (
-            <span style={{ color: "var(--bm-dim)" }}>Checking {slug}.{platformDomain}…</span>
+            <span className="chk">Checking {slug}.{platformDomain}…</span>
           ) : checkResult?.available ? (
-            <span style={{ color: "#7ee8c6" }}>✓ {slug}.{platformDomain} is available</span>
+            <span className="ok">✓ {slug}.{platformDomain} is available</span>
           ) : checkResult ? (
-            <span style={{ color: "#ff9db8" }}>{checkResult.reason || "That name is taken"}</span>
+            <span className="bad">{checkResult.reason || "That name is taken"}</span>
           ) : null)}
       </p>
     </div>

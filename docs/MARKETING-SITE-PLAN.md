@@ -41,3 +41,7 @@ Razorpay (the payment gateway the owner is applying for) checks the live website
 2. Merge, deploy, and open each URL logged out on a phone.
 3. Check the footer and contact details match Brand Sewa's registration.
 4. Submit the home page URL and the policy page URLs in the Razorpay dashboard.
+
+## 6. Signup flow (added 2026-10-19)
+
+`/signup` is restyled to the home page look (same glow, nav, card, inputs, buttons, step dots, plan cards) with the logic untouched: it now uses `landing/landing.css` (scoped `.lp-su`) and the shared nav and footer, and drops the old Beam stylesheet. A consent line (terms, privacy, refund policy) sits above the Launch button. `fix/signup-flow` was already merged to main (PR #83), so there was nothing to stack on; a merge of that stale branch was undone.

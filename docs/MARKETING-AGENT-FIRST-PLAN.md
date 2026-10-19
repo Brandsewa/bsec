@@ -34,7 +34,7 @@ components/marketing/
     sections/                     Nav, Hero, Story (StandardsStrip, Shift), Journey, Kit (Kit, Visibility), Proof (India, Themes, Launch), Pricing, Close (SalesRep, Faq, FinalCta, Footer)
     LandingShell.tsx              client root: scopes `.lp`, loads the serif, arms reveals and the card spotlight
 ```
-`beam/beam.css` and `beam/fonts.ts` stay because `/signup` still uses them; only the Beam hero components (Orbit, Smoke, Dust, AppWindow) were deleted.
+The whole `beam/` folder is now deleted: `/signup` moved to the landing styles (see `docs/MARKETING-SITE-PLAN.md`).
 
 Server components by default; client components only for the two demos, the journey tabs, the nav menu and the reveal helper.
 

@@ -33,6 +33,12 @@ The owner is applying for Razorpay, which verifies the live website. The marketi
 ## Revision 3 (owner review, 2026-10-19)
 - Brand name written in all caps, **BCOM**, everywhere on the site (titles, nav, footer, legal pages, phone notification, FAQ, signup page). The domain `bcom.si` and the email addresses stay lowercase.
 
+## Revision 4: signup flow restyle (owner review, 2026-10-19)
+- `/signup` (all five steps and the success screen) now looks like the home page: aurora glow, shared nav and footer, gradient headline, same card, input, button, step-dot and plan-card styling (`.lp-su` rules in `landing/landing.css`). Signup logic, validation and API calls are unchanged. Added a consent line (Terms, Privacy, refund policy) above "Launch My Store Now".
+- The `@layer base` wrapper on the `.lp *` reset lets Tailwind utilities (used by the signup markup) keep their margins and padding.
+- Removed the old Beam stylesheet and fonts file (`components/marketing/beam/`), the unused default look of `SubdomainAvailabilityChecker` and the `bmFont` export.
+- `fix/signup-flow` turned out to be already merged into main (PR #83); a merge of the stale branch was made and undone, nothing else was stacked.
+
 ## Decisions and trade-offs
 - Billing is described as Razorpay subscriptions (owner), with the owner able to set up a plan from the back end for some stores. Refunds: within 7 days of a payment, none after. Courts: West Bengal. No phone number published yet. These are the owner's inputs, not invented.
 - Legal text is drafted from common best practice and the product's real behaviour; it is not legal advice and should be read by the owner or counsel before the Razorpay submission.

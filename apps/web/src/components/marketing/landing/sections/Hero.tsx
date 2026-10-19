@@ -15,7 +15,7 @@ export function Hero() {
           <p className="lead">
             A complete online store you can open today: cash on delivery, GST invoices, themes, orders and returns. Built from day one for the AI shopping era, so selling through ChatGPT, Gemini and Claude arrives as each one launches in India.
           </p>
-          <SubdomainAvailabilityChecker platformDomain="bcom.si" variant="lp" />
+          <SubdomainAvailabilityChecker platformDomain="bcom.si" />
           <p className="fine">14-day free trial · Cash on delivery and GST invoices included</p>
         </div>
         <PhoneDemo />
