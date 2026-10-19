@@ -542,6 +542,7 @@ export interface StoreStatusView {
   maintenanceEndsAt?: string | null;
   modeBeforeMaintenance?: string | null;
   maintenanceAllowStaffPreview?: boolean;
+  hideFromSearchEngines?: boolean;
 }
 
 /** The store's current storefront mode and public message without permission assertion. */
@@ -552,7 +553,13 @@ export async function getStoreStatusInternal(rt: Runtime, tenantId: string): Pro
       .from(schema.storeStatus)
       .where(eq(schema.storeStatus.tenantId, tenantId))
       .limit(1);
+    const [seoRow] = await tx
+      .select({ indexingEnabled: schema.seoSettings.indexingEnabled })
+      .from(schema.seoSettings)
+      .where(eq(schema.seoSettings.tenantId, tenantId))
+      .limit(1);
     return {
+      hideFromSearchEngines: seoRow ? !seoRow.indexingEnabled : false,
       mode: (row?.mode as StorefrontMode | undefined) ?? "coming_soon",
       headline: row?.headline ?? null,
       showCountdown: row?.showCountdown ?? false,
@@ -591,6 +598,7 @@ export async function updateStoreStatus(
     retryAfterMinutes?: number | null | undefined;
     bypassToken?: string | null | undefined;
     backgroundMediaId?: string | null | undefined;
+    hideFromSearchEngines?: boolean | undefined;
   },
 ): Promise<{ success: boolean }> {
   assertPermission(ctx, "storefront.manage");
@@ -690,6 +698,25 @@ export async function updateStoreStatus(
       });
     }
 
+    // "Discourage search engines" switch: the same flag the SEO settings use, so robots.txt, the robots meta tag and
+    // X-Robots-Tag all follow it (a store in coming-soon or password mode is hidden regardless).
+    const [existingSeo] = await tx
+      .select({ id: schema.seoSettings.id, indexingEnabled: schema.seoSettings.indexingEnabled })
+      .from(schema.seoSettings)
+      .where(eq(schema.seoSettings.tenantId, ctx.tenantId))
+      .limit(1);
+    const hiddenBefore = existingSeo ? !existingSeo.indexingEnabled : false;
+    if (input.hideFromSearchEngines !== undefined) {
+      if (existingSeo) {
+        await tx
+          .update(schema.seoSettings)
+          .set({ indexingEnabled: !input.hideFromSearchEngines, updatedAt: new Date() })
+          .where(eq(schema.seoSettings.id, existingSeo.id));
+      } else {
+        await tx.insert(schema.seoSettings).values({ tenantId: ctx.tenantId, indexingEnabled: !input.hideFromSearchEngines });
+      }
+    }
+
     // Record transition if mode changed
     if (input.mode !== undefined && input.mode !== existing?.mode) {
       await tx.insert(schema.storeStatusTransitions).values({
@@ -713,6 +740,7 @@ export async function updateStoreStatus(
       collectEmails: existing?.collectEmails ?? true,
       password: existing?.passwordHash ? "set" : "not_set",
       bypassToken: existing?.bypassTokenHash ? "set" : "not_set",
+      hideFromSearchEngines: hiddenBefore,
     };
 
     const after: Record<string, unknown> = {
@@ -735,6 +763,7 @@ export async function updateStoreStatus(
         input.bypassToken !== undefined
           ? (input.bypassToken ? "set" : "cleared")
           : (existing?.bypassTokenHash ? "set" : "not_set"),
+      hideFromSearchEngines: input.hideFromSearchEngines !== undefined ? input.hideFromSearchEngines : hiddenBefore,
     };
 
     const diff: Record<string, { before: unknown; after: unknown }> = {};

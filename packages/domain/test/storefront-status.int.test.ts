@@ -95,6 +95,33 @@ describe("storefront mode (going live)", () => {
     expect(row?.changedBy).toBe(storeA.ownerId);
   });
 
+  it("the search-engine switch hides a live store from crawlers, is audited, and is per store", async () => {
+    await updateStoreStatus(rtWeb, ctxFor(storeA), { mode: "live" });
+    invalidateHostCache();
+    expect(await evaluateStorefrontAccess(rt._db.db, storeA.host)).toMatchObject({ allowed: true, noindex: false });
+    expect((await getStoreStatus(rtWeb, ctxFor(storeA))).hideFromSearchEngines).toBe(false);
+
+    await updateStoreStatus(rtWeb, ctxFor(storeA), { hideFromSearchEngines: true });
+    invalidateHostCache();
+    expect((await getStoreStatus(rtWeb, ctxFor(storeA))).hideFromSearchEngines).toBe(true);
+    // Still reachable for shoppers (it is a request to crawlers, not a lock), but marked noindex.
+    expect(await evaluateStorefrontAccess(rt._db.db, storeA.host)).toMatchObject({ allowed: true, noindex: true });
+    expect((await getStoreStatus(rtWeb, ctxFor(storeB))).hideFromSearchEngines).toBe(false);
+
+    const [audit] = await rt._db.db
+      .select()
+      .from(schema.auditLogs)
+      .where(eq(schema.auditLogs.tenantId, storeA.tenantId))
+      .orderBy(desc(schema.auditLogs.createdAt))
+      .limit(1);
+    expect(JSON.stringify(audit?.diff)).toContain("hideFromSearchEngines");
+
+    await updateStoreStatus(rtWeb, ctxFor(storeA), { hideFromSearchEngines: false });
+    invalidateHostCache();
+    expect(await evaluateStorefrontAccess(rt._db.db, storeA.host)).toMatchObject({ allowed: true, noindex: false });
+    await updateStoreStatus(rtWeb, ctxFor(storeA), { mode: "coming_soon" });
+  });
+
   it("password mode needs a password first", async () => {
     expect(await errorOf(updateStoreStatus(rtWeb, ctxFor(storeB), { mode: "password" }))).toMatch(/set a password/);
     await updateStoreStatus(rtWeb, ctxFor(storeB), { mode: "password", password: "open-sesame-1" });

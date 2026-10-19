@@ -7,6 +7,7 @@ import type { StorefrontStatus } from "@bs/contracts";
 import { Badge } from "@bs/ui";
 import { Button } from "@bs/ui";
 import { Checkbox } from "@bs/ui";
+import { Switch } from "@bs/ui";
 import { Input } from "@bs/ui";
 import { RadioGroup, RadioGroupItem } from "@bs/ui";
 import { ConfirmDialog } from "@bs/ui";
@@ -81,6 +82,7 @@ function StorefrontForm({ current }: { current: StorefrontStatus }) {
   const [collectEmails, setCollectEmails] = useState(current.collectEmails);
   const [backgroundMediaId, setBackgroundMediaId] = useState<string | null>(current.backgroundMediaId ?? null);
   const [password, setPassword] = useState("");
+  const [hideFromSearch, setHideFromSearch] = useState(current.hideFromSearchEngines ?? false);
   const [confirmOfflineOpen, setConfirmOfflineOpen] = useState(false);
   const [confirmEndMaintenanceOpen, setConfirmEndMaintenanceOpen] = useState(false);
   const [confirmCancelScheduleOpen, setConfirmCancelScheduleOpen] = useState(false);
@@ -97,6 +99,7 @@ function StorefrontForm({ current }: { current: StorefrontStatus }) {
     (current.headline ?? "") === headline &&
     current.collectEmails === collectEmails &&
     (current.backgroundMediaId ?? null) === backgroundMediaId &&
+    (current.hideFromSearchEngines ?? false) === hideFromSearch &&
     password === "";
   const guard = useUnsavedGuard(!unchanged);
 
@@ -111,6 +114,7 @@ function StorefrontForm({ current }: { current: StorefrontStatus }) {
         headline: headline.trim() === "" ? null : headline.trim(),
         collectEmails,
         backgroundMediaId: backgroundMediaId ?? null,
+        hideFromSearchEngines: hideFromSearch,
         ...(password ? { password } : {}),
       },
       {
@@ -315,6 +319,22 @@ function StorefrontForm({ current }: { current: StorefrontStatus }) {
             </label>
           ))}
         </RadioGroup>
+      </SettingsCard>
+
+      <SettingsCard title="Search engines" description="Control whether Google and other search engines may list your store.">
+        <div className="flex items-start justify-between gap-4">
+          <div className="min-w-0 space-y-1">
+            <label htmlFor="hide-from-search" className="text-xs font-medium text-foreground">Discourage search engines from indexing this store</label>
+            <p className="text-[11px] leading-normal text-muted-foreground">
+              Asks search engines not to list any page (robots.txt and a noindex tag). It is a request, not a lock: anyone with the link can still open the
+              store. Use a password if you need to keep visitors out.
+              {mode === "live"
+                ? ""
+                : " While the store is in Coming soon or Password mode it is always hidden from search engines, whatever this is set to."}
+            </p>
+          </div>
+          <Switch id="hide-from-search" checked={hideFromSearch} onCheckedChange={(v) => setHideFromSearch(Boolean(v))} />
+        </div>
       </SettingsCard>
 
       {/* Scheduled Maintenance Section (Slice 8B) */}
