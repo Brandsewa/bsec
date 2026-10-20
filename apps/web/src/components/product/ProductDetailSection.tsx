@@ -203,9 +203,9 @@ export function ProductDetailSection({
   flushHead();
 
   return (
-    <div className={`mx-auto max-w-7xl px-4 py-8 sm:px-6 lg:px-8 ${options.stickyMobileBar ? "pb-24 lg:pb-8" : ""}`}>
+    <div className={`mx-auto max-w-7xl px-3 py-4 sm:px-6 sm:py-8 lg:px-8 ${options.stickyMobileBar ? "pb-24 lg:pb-8" : ""}`}>
       {options.showBreadcrumb ? (
-        <nav aria-label="Breadcrumb" className="mb-6 flex items-center gap-2 text-sm text-muted-foreground">
+        <nav aria-label="Breadcrumb" className="mb-6 hidden items-center gap-2 text-sm text-muted-foreground sm:flex">
           <Link href="/" className="hover:text-foreground transition-colors">
             Home
           </Link>
@@ -218,7 +218,7 @@ export function ProductDetailSection({
         </nav>
       ) : null}
 
-      <div className="grid grid-cols-1 gap-10 lg:grid-cols-2 lg:gap-16 items-start">
+      <div className="grid grid-cols-1 gap-6 sm:gap-10 lg:grid-cols-2 lg:gap-16 items-start">
         {gallery}
 
         <ProductBuyProvider product={product}>

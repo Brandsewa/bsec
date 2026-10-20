@@ -24,7 +24,7 @@ export function MobileBuyBar({ title, priceLabel, targetId = "buy-box" }: { titl
   return (
     <div
       aria-hidden={!visible}
-      className={`fixed inset-x-0 bottom-0 z-40 border-t border-border bg-background/95 px-4 py-3 shadow-[0_-4px_16px_rgba(0,0,0,0.08)] backdrop-blur transition-transform duration-200 lg:hidden ${
+      className={`fixed inset-x-0 bottom-[var(--bottom-nav-h,0px)] z-40 border-t border-border bg-background/95 px-4 py-3 shadow-[0_-4px_16px_rgba(0,0,0,0.08)] backdrop-blur transition-transform duration-200 lg:hidden ${
         visible ? "translate-y-0" : "translate-y-full"
       }`}
     >

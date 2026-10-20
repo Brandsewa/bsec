@@ -5,6 +5,7 @@ import type { BlockRenderArgs, RenderContext } from "./types.ts";
 import { normalizeElementOrder, type PRODUCT_ELEMENTS } from "./product-elements.ts";
 import type { ProductDetailProps } from "./registry.ts";
 import { SvgIcon } from "./svg-icon.tsx";
+import { SampleBuyProvider, SampleOptions, SamplePrice } from "./views-product-sample-client.tsx";
 
 /**
  * The product page as the editors draw it: the same elements, in the same order and with the same settings as the
@@ -14,9 +15,6 @@ import { SvgIcon } from "./svg-icon.tsx";
  */
 
 const cx = (...parts: Array<string | false | null | undefined>) => parts.filter(Boolean).join(" ");
-const money = (paise: number) => `₹${(paise / 100).toLocaleString("en-IN")}`;
-
-const SAMPLE_VARIANTS = ["50 g", "100 g", "250 g"];
 
 function Chevron() {
   return (
@@ -70,32 +68,8 @@ export function ProductDetailSample({ props, ctx }: BlockRenderArgs<ProductDetai
         {props.showReadMore ? <span className="bsb-pd-more">Read more</span> : null}
       </div>
     ) : null,
-    options: (
-      <div className="bsb-pd-opt">
-        <span className="bsb-pd-opt-label">
-          Size: <span className="bsb-muted">{SAMPLE_VARIANTS[0]}</span>
-        </span>
-        {props.variantStyle === "dropdown" ? (
-          <span className="bsb-pd-select">{SAMPLE_VARIANTS[0]}</span>
-        ) : (
-          <div className="bsb-pd-opt-row">
-            {SAMPLE_VARIANTS.map((v, i) => (
-              <span key={v} className={cx("bsb-pd-opt-pill", props.variantStyle === "buttons" && "bsb-pd-opt-btn", i === 0 && "bsb-pd-opt-on")}>
-                {v}
-              </span>
-            ))}
-          </div>
-        )}
-      </div>
-    ),
-    price: (
-      <div className="bsb-pd-price">
-        <div>
-          <strong>{money(67900)}</strong> <s className="bsb-muted">{money(79900)}</s> <span className="bsb-pd-save">Save 15%</span>
-        </div>
-        {props.priceNote ? <p className="bsb-muted bsb-pd-note">{props.priceNote}</p> : null}
-      </div>
-    ),
+    options: <SampleOptions style={props.variantStyle} />,
+    price: <SamplePrice note={props.priceNote} />,
     actions: (
       <div className="bsb-pd-actions">
         <div className="bsb-pd-buyrow">
@@ -186,7 +160,9 @@ export function ProductDetailSample({ props, ctx }: BlockRenderArgs<ProductDetai
         {props.showBreadcrumb ? <p className="bsb-muted bsb-pd-crumb">Home / Products / Sample product name</p> : null}
         <div className="bsb-pd-grid">
           {gallery}
-          <div className={cx("bsb-pd-info", props.stickyBuyBox && "bsb-pd-sticky")}>{nodes}</div>
+          <SampleBuyProvider>
+            <div className={cx("bsb-pd-info", props.stickyBuyBox && "bsb-pd-sticky")}>{nodes}</div>
+          </SampleBuyProvider>
         </div>
         <p className="bsb-muted bsb-align-center" style={{ fontSize: "0.75rem", marginTop: "1rem" }}>
           <strong>Product page</strong> · Each product&apos;s own images, price and options fill this area.

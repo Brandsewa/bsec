@@ -658,7 +658,7 @@ export const SiteHeaderSchema = z.object({
    */
   layout: z.enum(["left", "navCenter", "logoCenter", "logoRight", "center"]).default("left"),
   showSearch: z.boolean().default(true),
-  showAccount: z.boolean().default(false),
+  showAccount: z.boolean().default(true),
   showCart: z.boolean().default(true),
   sticky: z.boolean().default(true),
   tone: toneSchema.default("default"),
@@ -678,7 +678,7 @@ export const SiteHeaderBlock: BlockDefinition<SiteHeaderProps> = {
     layout: "left",
     logoSize: { desktop: {}, tablet: {}, mobile: {} },
     showSearch: true,
-    showAccount: false,
+    showAccount: true,
     showCart: true,
     sticky: true,
     tone: "default",
