@@ -11,3 +11,6 @@ next-env.d.ts
 routeTree.gen.ts
 
 .tanstack
+
+# Local dev media store (MEDIA_LOCAL_DIR default)
+.data
