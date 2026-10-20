@@ -97,7 +97,7 @@ export function SearchModalPanel({ onClose }: { onClose: () => void }) {
   return (
     <div className="fixed inset-0 z-[65] flex items-start justify-center px-3 pt-[8vh] sm:pt-[12vh]" data-search-modal="">
       <div className="absolute inset-0 bg-black/45 backdrop-blur-[2px]" onClick={close} aria-hidden />
-      <div role="dialog" aria-modal="true" aria-label="Search products" className="bs-skin relative flex max-h-[78vh] w-full max-w-2xl flex-col overflow-hidden rounded-3xl bg-background text-foreground shadow-2xl">
+      <div role="dialog" aria-modal="true" aria-label="Search products" className="bs-skin relative flex max-h-[78vh] w-full max-w-2xl flex-col overflow-hidden rounded-xl bg-background text-foreground shadow-2xl">
         <form
           className="flex items-center gap-3 border-b border-border p-3 sm:p-4"
           role="search"

@@ -124,7 +124,7 @@ body {
 
 /* The grey panel behind each checkout step and the order summary: the text colour mixed into the page colour, so it stays
    clearly visible on any theme (a plain "surface" grey is nearly white on many). No border or shadow. */
-.bs-panel { border-radius: 1rem; background: color-mix(in srgb, var(--color-foreground, #0f172a) 7%, var(--color-background, #ffffff)); }
+.bs-panel { border-radius: 0.5rem; background: color-mix(in srgb, var(--color-foreground, #0f172a) 7%, var(--color-background, #ffffff)); }
 
 /* Rich text from a custom field (and the RichText block): Tailwind's reset removes list markers and heading sizes, so they are put back.
    Sizes are in em, so the text follows whatever font size the surrounding section uses. */

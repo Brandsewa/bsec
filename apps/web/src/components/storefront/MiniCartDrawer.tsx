@@ -1,6 +1,7 @@
 "use client";
 
 import React, { useCallback, useEffect, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import Link from "next/link";
 import { PLACEHOLDER_IMAGE_URL } from "@/lib/placeholder.ts";
 import type { StorefrontCart } from "@bs/domain";
@@ -99,8 +100,9 @@ export function MiniCartDrawer({
   const percent = threshold ? Math.min(100, Math.round((subtotal / threshold) * 100)) : 0;
   const trust = copy.showTrustRow ? copy.trustItems : [];
 
-  return (
-    <div className="fixed inset-0 z-[80]" data-testid="mini-cart">
+  // Drawn on <body>: inside the header it would share the header's stacking layer and could never rise above the bottom bar.
+  const tree = (
+    <div className="fixed inset-0 z-[100]" data-testid="mini-cart">
       <div className="absolute inset-0 bg-black/40" onClick={onClose} aria-hidden />
       <div ref={panelRef} role="dialog" aria-modal="true" aria-label="Shopping cart" className="bs-skin absolute right-0 top-0 flex h-full w-[90%] max-w-md flex-col bg-background text-foreground shadow-xl">
         <div className="flex items-center justify-between border-b border-border px-5 py-3">
@@ -225,4 +227,6 @@ export function MiniCartDrawer({
       </div>
     </div>
   );
+  // No document while rendering to static markup (tests, server): the panel is then drawn in place.
+  return typeof document === "undefined" ? tree : createPortal(tree, document.body);
 }

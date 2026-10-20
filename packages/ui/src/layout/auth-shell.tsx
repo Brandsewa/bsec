@@ -36,7 +36,14 @@ export function AuthShell({
   const brandLogo = brand?.logo;
 
   return (
-    <div className={cn("min-h-screen w-full flex bg-[var(--background)] text-[var(--foreground)] relative", className)}>
+    <div
+      className={cn(
+        "w-full flex bg-[var(--background)] text-[var(--foreground)] relative",
+        // A store's sign-in sits inside the store's header and bottom bar: it fills what is left, centred, and does not scroll.
+        variant === "store" ? "min-h-[calc(100dvh-10.5rem)] md:min-h-[calc(100dvh-8rem)]" : "min-h-screen",
+        className,
+      )}
+    >
       {/* Staff screens can switch theme; a store's customer sign-in is always light (no dark store theme yet). */}
       {variant === "store" ? null : (
         <div className="absolute top-4 right-4 z-50">
@@ -44,7 +51,7 @@ export function AuthShell({
         </div>
       )}
 
-      <div className="flex-1 flex flex-col justify-center items-center px-4 py-12 sm:px-6 lg:px-8">
+      <div className={cn("flex-1 flex flex-col justify-center items-center px-4 sm:px-6 lg:px-8", variant === "store" ? "py-4" : "py-12")}>
         <div className="w-full max-w-[400px] space-y-6">
           {/* Brand header */}
           <div className="flex flex-col items-center text-center space-y-2">
