@@ -209,6 +209,10 @@ describe("origin, CORS and test-auth hardening", () => {
     await createPlatformStaffMember(rt._db.db, { email: "relaxed@platform.test", name: "Relaxed", password: "relaxed staff password 1", role: "platform_admin" });
     const [ownerUser] = await rt._db.db.select({ id: schema.users.id }).from(schema.users).where(eq(schema.users.email, "mfa-owner@platform.test"));
 
+    const auditCount = async () =>
+      (await rt._db.db.select().from(schema.platformAuditLogs).where(eq(schema.platformAuditLogs.action, "platform_settings.update"))).length;
+    const auditBefore = await auditCount();
+
     // Toggle MFA off through the real owner-only service (also flips two_factor_enabled for all staff).
     await updatePlatformSettings(rt, ownerUser!.id, { requireStaffMfa: false });
     expect(await (await send(new Jar(), "/api/platform/me")).json()).toMatchObject({ authenticated: false });
@@ -242,7 +246,6 @@ describe("origin, CORS and test-auth hardening", () => {
     expect(ownerFlag!.enabled).toBe(true);
 
     // The toggles left an audit trail.
-    const audit = await rt._db.db.select().from(schema.platformAuditLogs).where(eq(schema.platformAuditLogs.action, "platform_settings.update"));
-    expect(audit).toHaveLength(2);
+    expect((await auditCount()) - auditBefore).toBe(2);
   });
 });
