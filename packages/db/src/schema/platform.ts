@@ -183,7 +183,7 @@ export const exportFiles = pgTable("export_files", {
 
 /**
  * Platform Settings (single row, id = 'default'): platform-wide operational toggles.
- * Created empty by migration 0031 on purpose — absence means the environment default
+ * Created empty by migration 0073 on purpose — absence means the environment default
  * (required in production, optional when APP_ENV=local). The Super Admin toggle writes the row.
  * Platform-level: no tenant column, writable only by app_platform, no RLS.
  */
