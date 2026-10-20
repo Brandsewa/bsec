@@ -3,6 +3,7 @@ import { headers } from "next/headers";
 import { evaluateStorefrontAccess } from "@bs/domain";
 import { server } from "@/server/runtime.ts";
 import { getCachedStorefrontProduct } from "@/server/cached-storefront.ts";
+import { buyModel } from "@/lib/buy-model.ts";
 
 /**
  * What the product carousel's quick-buy popup needs for one product: picture, short description and every variant with
@@ -20,7 +21,9 @@ export async function GET(_req: Request, ctx: { params: Promise<{ slug: string }
     const product = await getCachedStorefrontProduct(access.tenantId, slug);
     if (!product) return NextResponse.json({ error: "Product not found" }, { status: 404 });
 
-    const variants = (product.variants ?? []).map((v) => ({
+    // The same options the product page offers, including the "Variant" fallback for variants the options cannot reach.
+    const model = buyModel(product);
+    const variants = model.variants.map((v) => ({
       id: v.id,
       title: v.title,
       optionValues: (v.optionValues as Record<string, string> | null) ?? {},
@@ -28,20 +31,7 @@ export async function GET(_req: Request, ctx: { params: Promise<{ slug: string }
       ...(v.compareAtPrice !== undefined ? { compareAtPrice: v.compareAtPrice } : {}),
       inStock: v.stockStatus !== "out_of_stock" || Boolean(v.preorderEnabled),
     }));
-
-    // Option definitions, or worked out from the variants when a product has none stored.
-    let options = (product.options ?? []).map((o) => ({ name: o.name, values: o.values }));
-    if (options.length === 0 && variants.length > 1) {
-      const byName = new Map<string, string[]>();
-      for (const v of variants) {
-        for (const [name, value] of Object.entries(v.optionValues)) {
-          const values = byName.get(name) ?? [];
-          if (!values.includes(value)) values.push(value);
-          byName.set(name, values);
-        }
-      }
-      options = [...byName.entries()].map(([name, values]) => ({ name, values }));
-    }
+    const options = model.options.map((o) => ({ name: o.name, values: o.values }));
 
     const image = product.media.find((m) => m.kind !== "video" && m.kind !== "document" && m.url);
     return NextResponse.json({

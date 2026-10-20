@@ -72,8 +72,10 @@ export default async function CheckoutPage() {
   const copy = (await getCachedDefaultPages(access.tenantId)).checkout;
 
   return (
-    <div className="bs-skin mx-auto max-w-7xl px-4 py-8 sm:px-6 lg:px-8">
-      <h1 className="text-2xl sm:text-3xl font-extrabold tracking-tight text-foreground mb-8">
+    // The heading is centred and the spacing kept tight; each step sits in a grey panel (.bs-panel).
+    <div className="bs-skin">
+      <div className="mx-auto max-w-7xl px-3 py-4 sm:px-6 sm:py-8 lg:px-8">
+      <h1 className="mb-4 text-center text-xl font-extrabold tracking-tight text-foreground sm:mb-6 sm:text-3xl">
         {copy.heading}
       </h1>
 
@@ -86,6 +88,7 @@ export default async function CheckoutPage() {
         </ul>
       ) : null}
       {copy.note ? <p className="mt-4 text-sm text-muted-foreground">{copy.note}</p> : null}
+      </div>
     </div>
   );
 }

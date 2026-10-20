@@ -332,8 +332,8 @@
 
 /* Footer layouts and the phone accordion (SiteFooter.layout, mobileAccordion) */
 .bsb-site-footer-fold { display: none; }
-.bsb-site-footer-stack { display: grid; gap: 2rem; }
-.bsb-site-footer-row { display: grid; gap: 2rem; grid-template-columns: 1fr; }
+.bsb-site-footer-stack { display: grid; gap: 2rem; grid-template-columns: minmax(0, 1fr); }
+.bsb-site-footer-row { display: grid; gap: 2rem; grid-template-columns: minmax(0, 1fr); }
 .bsb-fl-centered .bsb-site-footer-stack { text-align: center; justify-items: center; }
 .bsb-fl-centered .bsb-site-footer-brand { max-width: 36rem; }
 .bsb-fl-centered .bsb-site-footer-links { justify-items: center; }
@@ -358,7 +358,12 @@
   .bsb-site-footer-fold .bsb-site-footer-links { margin: 0 0 1rem; }
 }
 
-.bsb-site-footer-grid { display: grid; gap: 2rem; grid-template-columns: 1fr; }
+/* minmax(0, 1fr): a plain 1fr column grows to its widest content (the newsletter row), pushing the footer past the right edge on phones. */
+.bsb-site-footer-grid { display: grid; gap: 2rem; grid-template-columns: minmax(0, 1fr); }
+.bsb-site-footer-grid > *, .bsb-site-footer-stack > *, .bsb-site-footer-row > * { min-width: 0; }
+.bsb-site-footer-news form { display: flex; gap: 0.5rem; }
+.bsb-site-footer-news form .bsb-input { min-width: 0; flex: 1 1 auto; }
+.bsb-site-footer-news form .bsb-btn { flex: none; }
 @media (min-width: 768px) { .bsb-site-footer-grid { grid-template-columns: repeat(auto-fit, minmax(10rem, 1fr)); } }
 .bsb-site-footer-title { font-size: 0.75rem; font-weight: 700; letter-spacing: 0.06em; text-transform: uppercase; color: var(--m); margin: 0; }
 .bsb-site-footer-links { list-style: none; padding: 0; margin: 0.75rem 0 0; display: grid; gap: 0.5rem; font-size: 0.875rem; }

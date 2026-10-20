@@ -49,9 +49,10 @@ describe("checkout layout", () => {
     expect(html).toContain("lg:order-2");
   });
 
-  it("has no card borders around the form sections and a soft grey summary panel without a border", () => {
+  it("groups the form into grey panels, the same as the summary, without card borders or shadows", () => {
     expect(html).not.toMatch(/<section class="[^"]*border/);
-    expect(html).toContain("bg-muted/60");
+    expect(html).toContain("bs-panel");
+    expect(html).toMatch(/<section class="bs-panel/); // each step is a panel
     expect(html).not.toContain("rounded-2xl border border-border");
     expect(html).not.toContain("shadow-sm");
   });

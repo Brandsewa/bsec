@@ -326,11 +326,11 @@ export function CheckoutForm({
   };
 
   return (
-    <form onSubmit={handleSubmit} className="space-y-6">
+    <form onSubmit={handleSubmit} className="space-y-4 sm:space-y-5">
       {/* 1. Contact, with an optional business block */}
-      <section>
-        <div className="mb-2.5 flex items-center justify-between gap-3">
-          <h2 className="text-lg font-semibold tracking-tight text-foreground">Contact Information</h2>
+      <section className={CARD}>
+        <div className="mb-3 flex items-center justify-between gap-3">
+          <h2 className="text-base font-semibold tracking-tight text-foreground sm:text-lg">Contact Information</h2>
           {!signedIn ? (
             <a href="/account/login" className="text-sm font-semibold text-foreground hover:underline">
               Login
@@ -363,9 +363,9 @@ export function CheckoutForm({
       </section>
 
       {/* 2. Billing and shipping address; one form, or two when the order ships elsewhere */}
-      <section>
-        <div className="mb-2.5 flex flex-wrap items-center justify-between gap-x-4 gap-y-1">
-          <h2 className="text-lg font-semibold tracking-tight text-foreground">{shipDifferent ? "Billing Address" : "Billing & Shipping Address"}</h2>
+      <section className={CARD}>
+        <div className="mb-3 flex flex-wrap items-center justify-between gap-x-4 gap-y-1">
+          <h2 className="text-base font-semibold tracking-tight text-foreground sm:text-lg">{shipDifferent ? "Billing Address" : "Billing & Shipping Address"}</h2>
           <label className="flex cursor-pointer items-center gap-2 text-sm text-foreground">
             <input type="checkbox" checked={shipDifferent} onChange={(e) => setShipDifferent(e.target.checked)} className="h-3.5 w-3.5 rounded border-border/70" />
             Ship to a different address?
@@ -439,8 +439,8 @@ export function CheckoutForm({
       </section>
 
       {shipDifferent ? (
-        <section data-testid="shipping-address-fields">
-          <h2 className="mb-2.5 text-lg font-semibold tracking-tight text-foreground">Shipping Address</h2>
+        <section data-testid="shipping-address-fields" className={CARD}>
+          <h2 className="mb-2.5 text-base font-semibold tracking-tight text-foreground sm:text-lg">Shipping Address</h2>
           <div className="space-y-3">
             <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
               <TextField id="checkout-ship-email" label="Contact email (optional)" type="email" value={shipEmail} onChange={setShipEmail} />
@@ -462,13 +462,13 @@ export function CheckoutForm({
       ) : null}
 
       {/* 3. Shipping Method: the store's own options and prices */}
-      <section>
-        <h2 className="mb-2.5 text-lg font-semibold tracking-tight text-foreground">Shipping Method</h2>
+      <section className={CARD}>
+        <h2 className="mb-3 text-base font-semibold tracking-tight text-foreground sm:text-lg">Shipping Method</h2>
         <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
           {shippingRates.map((rate) => (
             <label
               key={rate.method}
-              className="flex cursor-pointer items-center justify-between gap-2 rounded-lg border border-border/50 px-3.5 py-2.5 transition-colors hover:bg-muted/40 has-[:checked]:border-primary/50 has-[:checked]:bg-primary/5"
+              className="flex cursor-pointer items-center justify-between gap-2 rounded-lg border border-border px-3.5 py-2.5 transition-colors hover:bg-muted/40 has-[:checked]:border-primary/50 has-[:checked]:bg-primary/5"
             >
               <div className="flex items-center gap-3">
                 <input
@@ -493,11 +493,11 @@ export function CheckoutForm({
       </section>
 
       {/* 4. Payment Method: only what this store can really take */}
-      <section>
-        <h2 className="mb-2.5 text-lg font-semibold tracking-tight text-foreground">Payment Method</h2>
+      <section className={CARD}>
+        <h2 className="mb-3 text-base font-semibold tracking-tight text-foreground sm:text-lg">Payment Method</h2>
         <div className="space-y-2">
           {paymentOptions.codEnabled && (
-            <label className="flex cursor-pointer items-center justify-between rounded-lg border border-border/50 px-3.5 py-2.5 transition-colors hover:bg-muted/40 has-[:checked]:border-primary/50 has-[:checked]:bg-primary/5">
+            <label className="flex cursor-pointer items-center justify-between rounded-lg border border-border px-3.5 py-2.5 transition-colors hover:bg-muted/40 has-[:checked]:border-primary/50 has-[:checked]:bg-primary/5">
               <div className="flex items-center gap-3">
                 <input
                   type="radio"
@@ -519,7 +519,7 @@ export function CheckoutForm({
           )}
 
           {paymentOptions.onlineAvailable && (
-            <label className="flex cursor-pointer items-center justify-between rounded-lg border border-border/50 px-3.5 py-2.5 transition-colors hover:bg-muted/40 has-[:checked]:border-primary/50 has-[:checked]:bg-primary/5">
+            <label className="flex cursor-pointer items-center justify-between rounded-lg border border-border px-3.5 py-2.5 transition-colors hover:bg-muted/40 has-[:checked]:border-primary/50 has-[:checked]:bg-primary/5">
               <div className="flex items-center gap-3">
                 <input
                   type="radio"
@@ -635,12 +635,15 @@ export function CheckoutForm({
   );
 }
 
+// Each step of the checkout is a grey panel (the same one as the order summary), with white fields that stand out on it.
+const CARD = "bs-panel p-4 sm:p-6";
+
 const INPUT_CLASS =
-  "w-full rounded-lg border border-border/60 bg-background px-3 py-2 text-sm text-foreground transition-colors placeholder:text-muted-foreground/70 hover:border-border focus:border-primary/60 focus:outline-none focus:ring-2 focus:ring-primary/15";
+  "w-full rounded-lg border border-border bg-background px-3 py-2 text-sm text-foreground transition-colors placeholder:text-muted-foreground/70 hover:border-border focus:border-primary/60 focus:outline-none focus:ring-2 focus:ring-primary/15";
 
 // A field whose name sits inside it: the name reads as the placeholder, then shrinks to the top edge once there is text or focus.
 const FIELD_CLASS =
-  "peer h-12 w-full rounded-lg border border-border/60 bg-background px-3 pb-1 pt-5 text-sm text-foreground placeholder-transparent transition-colors hover:border-border focus:border-primary/60 focus:outline-none focus:ring-2 focus:ring-primary/15";
+  "peer h-12 w-full rounded-lg border border-border bg-background px-3 pb-1 pt-5 text-sm text-foreground placeholder-transparent transition-colors hover:border-border focus:border-primary/60 focus:outline-none focus:ring-2 focus:ring-primary/15";
 const FLOAT_LABEL =
   "pointer-events-none absolute left-3 top-3 origin-left text-sm text-muted-foreground transition-all peer-focus:top-1.5 peer-focus:text-[11px] peer-[:not(:placeholder-shown)]:top-1.5 peer-[:not(:placeholder-shown)]:text-[11px]";
 // Same, for fields that always show a value (the state list, the phone number with its +91): the name stays small at the top.

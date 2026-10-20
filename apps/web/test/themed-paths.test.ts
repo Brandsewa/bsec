@@ -3,9 +3,13 @@ import { makeThemeBootScript } from "@bs/ui/server";
 import { THEMED_PATH_SOURCE, isThemedPath } from "../src/lib/themed-paths.ts";
 
 describe("themed paths (storefront keeps its own look)", () => {
-  it("themes account, auth and token pages", () => {
-    for (const p of ["/account", "/account/login", "/signup", "/o/abc", "/orders/t/thank-you", "/cod/x", "/unsubscribe/t", "/privacy-request"]) {
-      expect(isThemedPath(p), p).toBe(true);
+  it("themes only the platform sign-up page", () => {
+    expect(isThemedPath("/signup")).toBe(true);
+  });
+
+  it("keeps customer account, sign-in and order pages light", () => {
+    for (const p of ["/account", "/account/login", "/o/abc", "/orders/t/thank-you", "/cod/x", "/unsubscribe/t", "/privacy-request"]) {
+      expect(isThemedPath(p), p).toBe(false);
     }
   });
 
@@ -29,6 +33,7 @@ describe("themed paths (storefront keeps its own look)", () => {
       return root;
     };
     expect(run("/products/shirt", true).dataset.theme).toBeUndefined();
-    expect(run("/account/login", true).dataset.theme).toBe("dark");
+    expect(run("/account/login", true).dataset.theme).toBeUndefined();
+    expect(run("/signup", true).dataset.theme).toBe("dark");
   });
 });

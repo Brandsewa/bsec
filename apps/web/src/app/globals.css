@@ -122,6 +122,10 @@ body {
 .bs-skel { border-radius: 0.5rem; background: linear-gradient(90deg, var(--color-muted, #f1f5f9) 25%, color-mix(in srgb, var(--color-muted, #f1f5f9) 55%, white) 50%, var(--color-muted, #f1f5f9) 75%); background-size: 200% 100%; animation: bs-shimmer 1.4s linear infinite; }
 @media (prefers-reduced-motion: reduce) { .bs-skel { animation: none; } }
 
+/* The grey panel behind each checkout step and the order summary: the text colour mixed into the page colour, so it stays
+   clearly visible on any theme (a plain "surface" grey is nearly white on many). No border or shadow. */
+.bs-panel { border-radius: 1rem; background: color-mix(in srgb, var(--color-foreground, #0f172a) 7%, var(--color-background, #ffffff)); }
+
 /* Rich text from a custom field (and the RichText block): Tailwind's reset removes list markers and heading sizes, so they are put back.
    Sizes are in em, so the text follows whatever font size the surrounding section uses. */
 .bs-custom-field-rich { line-height: 1.65; overflow-wrap: anywhere; }
