@@ -3,6 +3,7 @@ import { useBlocker, useNavigate } from "@tanstack/react-router";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { AlertTriangle, ArrowLeft, Check, Eye, Globe, Save, Trash2 } from "lucide-react";
 import {
+  PageActions,
   Badge,
   Button,
   Card,
@@ -15,7 +16,6 @@ import {
   FieldLabel,
   InfoTip,
   Input,
-  PageBreadcrumbs,
   PageContainer,
   PageHeader,
   RadioGroup,
@@ -251,10 +251,8 @@ function PostFormInner({ post }: { post: BlogPostDetail | null }) {
 
   return (
     <PageContainer size="full">
-      <PageBreadcrumbs
-        items={[{ label: "Blog", href: "/online-store/blog" }, { label: post ? post.title : "New post" }]}
-        actions={
-          <div className="flex flex-wrap items-center justify-end gap-2">
+      <PageActions>
+        <div className="flex flex-wrap items-center justify-end gap-2">
             <Button variant="ghost" size="sm" onClick={() => void navigate({ to: "/online-store/blog" })}>
               <ArrowLeft className="mr-1.5 size-3.5" aria-hidden />
               Posts
@@ -286,8 +284,7 @@ function PostFormInner({ post }: { post: BlogPostDetail | null }) {
               {saving ? "Saving..." : s.visibility === "published" && post?.status !== "published" ? "Save and publish" : "Save"}
             </Button>
           </div>
-        }
-      />
+      </PageActions>
       <PageHeader title={post ? post.title : "New post"} description="Write the post, choose its category and image, and set how it appears in search results." />
 
       <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">

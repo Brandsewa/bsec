@@ -9,6 +9,8 @@ import { buildProductSummaries, type StorefrontProductSummary } from "./catalog.
 export interface SearchProductsOptions {
   page?: number | undefined;
   limit?: number | undefined;
+  /** False for as-you-type lookups, which are not searches the shopper submitted and must not be counted as such. Defaults to true. */
+  log?: boolean | undefined;
 }
 
 export interface SearchProductsResult {
@@ -91,6 +93,7 @@ export async function searchStorefrontProducts(
 
   // Log query into search_queries table with daily aggregation in an isolated tenant transaction
   // so any logging failure or db issue never fails the search response or aborts the search tx
+  if (opts?.log === false) return searchResult;
   try {
     await withTenant(db, ctx.tenantId, async (tx) => {
       await tx

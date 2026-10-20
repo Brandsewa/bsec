@@ -1,7 +1,7 @@
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { ArrowLeft, Save } from "lucide-react";
 import { useState } from "react";
-import { PageBreadcrumbs, PageContainer, PageHeader, PageSkeleton, toast } from "@bs/ui";
+import { PageContainer, PageHeader, PageSkeleton, toast } from "@bs/ui";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { Button } from "@bs/ui";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@bs/ui";
@@ -75,12 +75,6 @@ export function CreateLocationPage() {
 
   return (
     <PageContainer size="default" className="space-y-6 pb-16">
-      <PageBreadcrumbs
-        items={[
-          { label: "Locations", href: "/locations" },
-          { label: "New location" },
-        ]}
-      />
 
       <PageHeader
         title="Add location"

@@ -1,19 +1,10 @@
-import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
+import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { ArrowLeft, Save } from "lucide-react";
-import { useState } from "react";
-import { PageBreadcrumbs, PageContainer, PageHeader, PageSkeleton, toast } from "@bs/ui";
+import { PageContainer, PageHeader, PageSkeleton, toast, Button } from "@bs/ui";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Button } from "@bs/ui";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@bs/ui";
-import { FieldLabel } from "@bs/ui";
-import { Input } from "@bs/ui";
-import { Switch } from "@bs/ui";
-import { Textarea } from "@bs/ui";
-import { SeoCard } from "../../components/seo-card.tsx";
-import { SimpleSelect } from "@bs/ui";
+import { CategoryForm } from "../../components/category/category-form.tsx";
 import { errorMessage } from "../../lib/errors.ts";
 import { orpc } from "../../lib/orpc.ts";
-import { MediaField } from "../../components/media/media-field.tsx";
 
 export const Route = createFileRoute("/_store/categories_/new")({
   pendingComponent: () => <PageSkeleton />,
@@ -23,40 +14,7 @@ export const Route = createFileRoute("/_store/categories_/new")({
 export function CreateCategoryPage() {
   const navigate = useNavigate();
   const queryClient = useQueryClient();
-
-  const [name, setName] = useState("");
-  const [slug, setSlug] = useState("");
-  const [description, setDescription] = useState("");
-  const [parentId, setParentId] = useState<string>("none");
-  const [isActive, setIsActive] = useState(true);
-  const [isFeatured, setIsFeatured] = useState(false);
-  const [displayOrder, setDisplayOrder] = useState("0");
-  const [imageMediaId, setImageMediaId] = useState<string | null>(null);
-
-  // SEO state
-  const [seoTitle, setSeoTitle] = useState("");
-  const [seoDescription, setSeoDescription] = useState("");
-
-  const [errors, setErrors] = useState<Record<string, string>>({});
-
-  // Query existing categories to populate parent options
   const categoriesQuery = useQuery(orpc.admin.categories.list.queryOptions());
-  const categories = categoriesQuery.data ?? [];
-
-  // Filter eligible parents (depth < 3)
-  const parentOptions = [
-    { value: "none", label: "None (Top-level parent category)" },
-    ...categories
-      .filter((c) => {
-        // Path has max 3 levels: "/" is depth 1, "/id/" is depth 2, "/id1/id2/" is depth 3
-        const depth = ((c.path ?? "/").match(/\//g) || []).length;
-        return depth < 3; // depth 1 or 2 can be parent
-      })
-      .map((c) => ({
-        value: c.id,
-        label: `${(c.path ?? "/").replace(/^\/|\/$/g, "") ? "— " : ""}${c.name}`,
-      })),
-  ];
 
   const createMutation = useMutation(
     orpc.admin.categories.create.mutationOptions({
@@ -72,63 +30,18 @@ export function CreateCategoryPage() {
     }),
   );
 
-  const handleSubmit = (e: React.FormEvent) => {
-    e.preventDefault();
-    const newErrors: Record<string, string> = {};
-
-    if (!name.trim()) {
-      newErrors["name"] = "Category name is required";
-    }
-    if (description.length > 500) {
-      newErrors["description"] = "Description must be 500 characters or less";
-    }
-
-    setErrors(newErrors);
-    if (Object.keys(newErrors).length > 0) return;
-
-    createMutation.mutate({
-      name: name.trim(),
-      slug: slug.trim() || undefined,
-      description: description.trim() || undefined,
-      parentId: parentId === "none" ? null : parentId,
-      imageMediaId: imageMediaId || null,
-      position: Number(displayOrder) || 0,
-      isActive,
-      isFeatured,
-      seo:
-        seoTitle.trim() || seoDescription.trim()
-          ? {
-              title: seoTitle.trim() || null,
-              description: seoDescription.trim() || null,
-            }
-          : undefined,
-    });
-  };
-
   return (
-    <PageContainer size="default">
-      <PageBreadcrumbs
-        items={[
-          { label: "Categories", href: "/categories" },
-          { label: "New category" },
-        ]}
-      />
-
+    <PageContainer size="full">
       <PageHeader
         title="Add category"
         description="Create a category to group related products."
         aside={
           <div className="flex items-center gap-2">
-            <Button render={<Link to="/categories" />} variant="outline" size="sm">
+            <Button variant="ghost" size="sm" onClick={() => void navigate({ to: "/categories" })}>
               <ArrowLeft className="mr-1.5 size-3.5" aria-hidden />
-              Cancel
+              Categories
             </Button>
-            <Button
-              type="submit"
-              form="category-form"
-              size="sm"
-              disabled={createMutation.isPending}
-            >
+            <Button type="submit" form="category-form" size="sm" disabled={createMutation.isPending}>
               <Save className="mr-1.5 size-3.5" aria-hidden />
               {createMutation.isPending ? "Saving..." : "Save Category"}
             </Button>
@@ -136,145 +49,28 @@ export function CreateCategoryPage() {
         }
       />
 
-      <form id="category-form" onSubmit={handleSubmit} className="grid gap-6">
-        {/* Category Details */}
-        <Card>
-          <CardHeader>
-            <CardTitle className="text-base font-semibold">General Information</CardTitle>
-            <CardDescription>Basic name, handle and description for the category.</CardDescription>
-          </CardHeader>
-          <CardContent className="grid gap-4">
-            <div className="grid gap-1.5">
-              <FieldLabel htmlFor="cat-name">Name *</FieldLabel>
-              <Input
-                id="cat-name"
-                value={name}
-                onChange={(e) => {
-                  setName(e.target.value);
-                  if (!slug || slug === name.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/(^-|-$)/g, "")) {
-                    setSlug(e.target.value.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/(^-|-$)/g, ""));
-                  }
-                }}
-                placeholder="e.g. Mechanical Keyboards"
-                required
-              />
-              {errors["name"] && <p className="text-xs text-destructive">{errors["name"]}</p>}
-            </div>
-
-            <div className="grid gap-1.5">
-              <div className="flex items-center justify-between">
-                <FieldLabel htmlFor="cat-desc">Description</FieldLabel>
-                <span
-                  className={`text-xs ${
-                    description.length > 500 ? "font-semibold text-destructive" : "text-muted-foreground"
-                  }`}
-                >
-                  {description.length} / 500
-                </span>
-              </div>
-              <Textarea
-                id="cat-desc"
-                rows={4}
-                value={description}
-                onChange={(e) => setDescription(e.target.value)}
-                placeholder="Brief category overview for the storefront..."
-                maxLength={500}
-              />
-              {errors["description"] && (
-                <p className="text-xs text-destructive">{errors["description"]}</p>
-              )}
-            </div>
-
-            <div className="grid gap-1.5">
-              <FieldLabel htmlFor="cat-parent">Parent category</FieldLabel>
-              <SimpleSelect
-                value={parentId}
-                options={parentOptions}
-                onChange={(val) => setParentId(val)}
-              />
-              <p className="text-xs text-muted-foreground">
-                Category hierarchy allows up to 3 levels deep.
-              </p>
-            </div>
-
-            <div className="grid gap-1.5">
-              <FieldLabel htmlFor="cat-order">Display order position</FieldLabel>
-              <Input
-                id="cat-order"
-                type="number"
-                value={displayOrder}
-                onChange={(e) => setDisplayOrder(e.target.value)}
-                className="max-w-[120px]"
-              />
-            </div>
-          </CardContent>
-        </Card>
-
-        {/* Category Image */}
-        <Card>
-          <CardHeader>
-            <CardTitle className="text-base font-semibold">Category Image</CardTitle>
-            <CardDescription>Shown in collection grids, category lists and menus.</CardDescription>
-          </CardHeader>
-          <CardContent>
-            <MediaField
-              value={imageMediaId}
-              onChange={(id) => setImageMediaId(id)}
-              accept={["image"]}
-              aspect="16:9"
-            />
-          </CardContent>
-        </Card>
-
-        {/* Visibility & Organization */}
-        <Card>
-          <CardHeader>
-            <CardTitle className="text-base font-semibold">Visibility & Merchandising</CardTitle>
-          </CardHeader>
-          <CardContent className="grid gap-5">
-            <div className="flex items-center justify-between">
-              <div>
-                <FieldLabel htmlFor="cat-active">Active</FieldLabel>
-                <p className="text-xs text-muted-foreground">
-                  Inactive categories are hidden from storefront menus and category lists.
-                </p>
-              </div>
-              <Switch
-                id="cat-active"
-                checked={isActive}
-                onCheckedChange={(c) => setIsActive(c)}
-              />
-            </div>
-
-            <div className="flex items-center justify-between border-t border-border pt-4">
-              <div>
-                <FieldLabel htmlFor="cat-featured">Featured category</FieldLabel>
-                <p className="text-xs text-muted-foreground">
-                  Highlight this category in featured category blocks on your homepage.
-                </p>
-              </div>
-              <Switch
-                id="cat-featured"
-                checked={isFeatured}
-                onCheckedChange={(c) => setIsFeatured(c)}
-              />
-            </div>
-          </CardContent>
-        </Card>
-
-        {/* SEO Card (No indexing switch for categories as categories are always indexable) */}
-        <SeoCard
-          defaultTitle={name}
-          defaultDescription={description}
-          pathPrefix="/categories"
-          slug={slug}
-          onSlugChange={setSlug}
-          title={seoTitle}
-          onTitleChange={setSeoTitle}
-          description={seoDescription}
-          onDescriptionChange={setSeoDescription}
-        />
-      </form>
+      <CategoryForm
+        formId="category-form"
+        categories={categoriesQuery.data ?? []}
+        onSubmit={(v) =>
+          createMutation.mutate({
+            name: v.name,
+            slug: v.slug || undefined,
+            description: v.description || undefined,
+            parentId: v.parentId,
+            imageMediaId: v.imageMediaId,
+            position: v.position,
+            isActive: v.isActive,
+            isFeatured: v.isFeatured,
+            type: v.type,
+            match: v.match,
+            rules: v.type === "automated" ? v.rules : undefined,
+            sortOrder: v.sortOrder,
+            ...(v.type === "manual" ? { productIds: v.productIds } : {}),
+            seo: v.seoTitle || v.seoDescription ? { title: v.seoTitle || null, description: v.seoDescription || null } : undefined,
+          })
+        }
+      />
     </PageContainer>
   );
 }

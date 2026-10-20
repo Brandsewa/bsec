@@ -28,7 +28,6 @@ import {
   DialogTitle,
   EmptyState,
   Input,
-  PageBreadcrumbs,
   PageContainer,
   PageHeader,
   PageSkeleton,
@@ -216,7 +215,6 @@ export function ReturnDetailPage() {
   if (detailQuery.isError || !detailQuery.data) {
     return (
       <PageContainer size="small">
-        <PageBreadcrumbs items={[{ label: "Returns", href: "/returns" }, { label: "Return" }]} />
         <EmptyState
           icon={RotateCcw}
           title="Could not load return"
@@ -231,8 +229,8 @@ export function ReturnDetailPage() {
 
   return (
     <PageContainer>
-      <PageBreadcrumbs items={[{ label: "Returns", href: "/returns" }, { label: d.number }]} />
       <PageHeader
+        back={{ href: "/returns", label: "Returns" }}
         title={d.number}
         description={`Requested on ${new Date(d.createdAt).toLocaleString("en-IN")}`}
         aside={

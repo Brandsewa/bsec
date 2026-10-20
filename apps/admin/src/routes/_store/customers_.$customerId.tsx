@@ -1,7 +1,7 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { ArrowLeft, Ban, MapPin, MoreHorizontal, Pencil, Plus, ShieldCheck, Tag, Trash2, X } from "lucide-react";
 import { useMemo, useState } from "react";
-import { EmptyState, PageBreadcrumbs, PageContainer, PageSkeleton, toast } from "@bs/ui";
+import { EmptyState, PageContainer, PageSkeleton, toast } from "@bs/ui";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { UsersRound } from "lucide-react";
 import { Badge } from "@bs/ui";
@@ -728,7 +728,6 @@ export function CustomerDetailPage(props: { customerId?: string } = {}) {
   if (detail.isError || !detail.data) {
     return (
       <PageContainer size="small">
-        <PageBreadcrumbs items={[{ label: "Customers", href: "/customers" }, { label: "Customer" }]} />
         <EmptyState
           title="Could not load this customer"
           description={detail.error ? errorMessage(detail.error) : "They may have been removed."}
@@ -743,7 +742,6 @@ export function CustomerDetailPage(props: { customerId?: string } = {}) {
 
   return (
     <PageContainer size="full">
-      <PageBreadcrumbs items={[{ label: "Customers", href: "/customers" }, { label: name }]} />
       <div className="sticky top-0 z-10 -mx-4 mb-4 flex flex-wrap items-center gap-3 border-b border-border bg-background px-4 py-3">
         <Button variant="ghost" size="icon" aria-label="Back to customers" render={<Link to="/customers" />}>
           <ArrowLeft />

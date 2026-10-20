@@ -19,6 +19,7 @@ import { PLACEHOLDER_IMAGE_URL } from "./media.ts";
 import { SvgIcon } from "./svg-icon.tsx";
 import type * as R from "./registry.ts";
 import { ProductDetailSample } from "./views-product.tsx";
+import { MobileMenu } from "./views-mobile-menu-client.tsx";
 import type { LogoSize } from "./common.ts";
 
 /**
@@ -858,21 +859,6 @@ const CartIcon = (
   </svg>
 );
 
-const HamburgerIcon = (
-  <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-    <line x1="3" y1="12" x2="21" y2="12" />
-    <line x1="3" y1="6" x2="21" y2="6" />
-    <line x1="3" y1="18" x2="21" y2="18" />
-  </svg>
-);
-
-const CloseIcon = (
-  <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-    <line x1="18" y1="6" x2="6" y2="18" />
-    <line x1="6" y1="6" x2="18" y2="18" />
-  </svg>
-);
-
 export function SiteHeaderView({ props, ctx }: A<R.SiteHeaderProps>): ReactNode {
   const name = props.logoText || ctx?.storeName || "Your store";
   const customLogoUrl = mediaSrc(ctx, props.logoMediaId);
@@ -886,12 +872,8 @@ export function SiteHeaderView({ props, ctx }: A<R.SiteHeaderProps>): ReactNode 
     <header className={cx("bsb bs-block-site-header bsb-site-header", `bsb-tone-${props.tone}`, props.sticky && "bsb-sticky", props.layout === "center" && "bsb-site-header-center", `bsb-hl-${props.layout}`)}>
       <div className="bsb-w bsb-w-wide bsb-site-header-row">
         {hasResolvedMenu ? (
-          <details className="bsb-mobile-menu">
-            <summary className="bsb-site-icon bsb-mobile-toggle" aria-label="Open menu">
-              <span className="bsb-mobile-open-icon">{HamburgerIcon}</span>
-              <span className="bsb-mobile-close-icon">{CloseIcon}</span>
-            </summary>
-            <div className="bsb-mobile-drawer">
+          <MobileMenu>
+            <div>
               <nav className="bsb-mobile-nav" aria-label="Mobile Navigation">
                 <ul className="bsb-mobile-list">
                   {menuData.map((item) => (
@@ -948,7 +930,7 @@ export function SiteHeaderView({ props, ctx }: A<R.SiteHeaderProps>): ReactNode 
                 </ul>
               </nav>
             </div>
-          </details>
+          </MobileMenu>
         ) : null}
         <NavLink ctx={ctx} href="/" className="bsb-site-logo">
           {logoUrl ? <img className="bsb-logo-img" src={logoUrl} alt={name} style={logoSizeStyle(props.logoSize)} /> : <span>{name}</span>}

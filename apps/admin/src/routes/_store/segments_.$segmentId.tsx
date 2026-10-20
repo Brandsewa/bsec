@@ -1,7 +1,7 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { ArrowLeft, Download, Mail, Pencil, RefreshCw, Trash2, X } from "lucide-react";
 import { useMemo, useState } from "react";
-import { EmptyState, PageBreadcrumbs, PageContainer, PageSkeleton, toast } from "@bs/ui";
+import { EmptyState, PageContainer, PageSkeleton, toast } from "@bs/ui";
 import { keepPreviousData, useQuery as useQuery2 } from "@tanstack/react-query";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Badge } from "@bs/ui";
@@ -65,7 +65,6 @@ function SegmentDetailPage() {
   if (detail.isError || !detail.data) {
     return (
       <PageContainer size="small">
-        <PageBreadcrumbs items={[{ label: "Segments", href: "/segments" }, { label: "Segment" }]} />
         <EmptyState
           title="Could not load this segment"
           description={detail.error ? errorMessage(detail.error) : "It may have been deleted."}
@@ -81,7 +80,6 @@ function SegmentDetailPage() {
 
   return (
     <PageContainer size="full">
-      <PageBreadcrumbs items={[{ label: "Segments", href: "/segments" }, { label: seg.name }]} />
       <div className="sticky top-0 z-10 -mx-4 mb-4 flex flex-wrap items-center gap-3 border-b border-border bg-background px-4 py-3">
         <Button variant="ghost" size="icon" aria-label="Back to segments" render={<Link to="/segments" />}>
           <ArrowLeft />

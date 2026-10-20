@@ -10,6 +10,8 @@ import { MiniCartConfigProvider, type MiniCartCopy } from "@/components/storefro
 import { StoreHeader } from "@/components/storefront/StoreHeader.tsx";
 import { StoreFooter } from "@/components/storefront/StoreFooter.tsx";
 import { ThemeChrome } from "@/components/storefront/ThemeChrome.tsx";
+import { SearchModal } from "@/components/storefront/SearchModal.tsx";
+import { MobileBottomNav } from "@/components/storefront/MobileBottomNav.tsx";
 import { StoreStatusBanner } from "@/components/storefront/StoreStatusBanner.tsx";
 import {
   ComingSoonScreen,
@@ -207,6 +209,8 @@ export default async function RootLayout({ children }: { children: ReactNode }) 
           ) : (
             <StoreFooter storeName={storeName} />
           )}
+          <SearchModal />
+          {themeHeader ? <MobileBottomNav /> : null}
           </MiniCartConfigProvider>
         </WebThemeProvider>
       </body>

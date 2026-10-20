@@ -3,6 +3,7 @@ import { Edit2, Filter, Menu as MenuIcon, Plus, Trash2 } from "lucide-react";
 import React, { useMemo, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
+  PageActions,
   Badge,
   Button,
   ConfirmDialog,
@@ -14,7 +15,6 @@ import {
   DialogTitle,
   Input,
   Label,
-  PageBreadcrumbs,
   PageContainer,
   PageHeader,
   PageSkeleton,
@@ -273,18 +273,12 @@ export function MenusPage() {
 
   return (
     <PageContainer>
-      <PageBreadcrumbs
-        items={[
-          { label: "Online Store" },
-          { label: "Navigation" },
-        ]}
-        actions={
-          <Button size="sm" onClick={() => setIsAddOpen(true)}>
+      <PageActions>
+        <Button size="sm" onClick={() => setIsAddOpen(true)}>
             <Plus className="mr-1.5 size-3.5" />
             Add menu
           </Button>
-        }
-      />
+      </PageActions>
 
       <PageHeader
         title="Navigation"

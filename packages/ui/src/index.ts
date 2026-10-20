@@ -193,7 +193,7 @@ export { Form, FormField, FormItemLayout } from "./components/form.tsx";
 export { EmptyState } from "./components/empty-state.tsx";
 export { DetailSkeleton, FormSkeleton, MetricCardSkeleton, TableSkeleton } from "./components/skeleton.tsx";
 export { Toaster, toast } from "./components/toast.tsx";
-export { PageBreadcrumbs, PageContainer, PageHeader, PageSection, type Crumb } from "./layout/page.tsx";
+export { PageActions, PageBreadcrumbs, PageContainer, PageHeader, PageSection, type Crumb } from "./layout/page.tsx";
 export { AppShell, type NavGroup, type NavItem } from "./layout/sidebar.tsx";
 export { PageSkeleton, ROUTE_PENDING_MIN_MS, ROUTE_PENDING_MS } from "./patterns/route-template.tsx";
 export { MetricCard, type MetricCardProps } from "./patterns/metric-card.tsx";

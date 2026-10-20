@@ -100,7 +100,7 @@ export function CardCartButton({ product, showQuickAdd, showViewProduct }: { pro
   );
 }
 
-function QuickBuyDialog({ product, showViewProduct, onClose }: { product: CardCartProduct; showViewProduct: boolean; onClose: () => void }) {
+export function QuickBuyDialog({ product, showViewProduct, onClose }: { product: CardCartProduct; showViewProduct: boolean; onClose: () => void }) {
   const options = product.quickAdd.options ?? [];
   const variants = product.quickAdd.variants ?? [];
   const firstBuyable = variants.find((v) => v.inStock) ?? variants[0];

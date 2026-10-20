@@ -1,21 +1,15 @@
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
-import { ArrowLeft, Save, Trash2 } from "lucide-react";
+import { ArrowLeft, Eye, Save, Trash2 } from "lucide-react";
 import { useState } from "react";
-import { DetailSkeleton, EmptyState, PageBreadcrumbs, PageContainer, PageHeader, PageSkeleton, toast } from "@bs/ui";
+import { DetailSkeleton, EmptyState, PageContainer, PageHeader, PageSkeleton, toast } from "@bs/ui";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import type { Category } from "@bs/contracts";
+import type { Category, CategoryDetail } from "@bs/contracts";
 import { Button } from "@bs/ui";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@bs/ui";
-import { Field, FieldLabel } from "@bs/ui";
-import { Input } from "@bs/ui";
-import { Switch } from "@bs/ui";
-import { Textarea } from "@bs/ui";
 import { ConfirmDialog } from "@bs/ui";
-import { SeoCard } from "../../components/seo-card.tsx";
-import { SimpleSelect } from "@bs/ui";
 import { errorMessage } from "../../lib/errors.ts";
 import { orpc } from "../../lib/orpc.ts";
-import { MediaField } from "../../components/media/media-field.tsx";
+import { CategoryForm } from "../../components/category/category-form.tsx";
+import { storefrontLink, useStorefrontUrl } from "../../lib/storefront-url.ts";
 
 export const Route = createFileRoute("/_store/categories_/$id")({
   pendingComponent: () => (
@@ -76,45 +70,14 @@ function CategoryEditor({
   categories,
   go,
 }: {
-  category: Category;
+  category: CategoryDetail;
   categories: Category[];
   go: (to: string) => void;
 }) {
   const queryClient = useQueryClient();
-
-  const [name, setName] = useState(category.name);
-  const [slug, setSlug] = useState(category.slug);
-  const [description, setDescription] = useState(category.description ?? "");
-  const [parentId, setParentId] = useState<string>(category.parentId ?? "none");
-  const [isActive, setIsActive] = useState(category.isActive);
-  const [isFeatured, setIsFeatured] = useState(category.isFeatured);
-  const [displayOrder, setDisplayOrder] = useState(String(category.position ?? 0));
-  const [imageMediaId, setImageMediaId] = useState<string | null>(category.imageMediaId ?? null);
-
-  // SEO state
-  const [seoTitle, setSeoTitle] = useState(category.seo?.title ?? "");
-  const [seoDescription, setSeoDescription] = useState(category.seo?.description ?? "");
-
-  const [errors, setErrors] = useState<Record<string, string>>({});
   const [deleteOpen, setDeleteOpen] = useState(false);
+  const previewHref = storefrontLink(useStorefrontUrl(), `/categories/${category.slug}`);
 
-  // Filter eligible parents (not self, and depth < 3)
-  const parentOptions = [
-    { value: "none", label: "None (Top-level parent category)" },
-    ...categories
-      .filter((c) => {
-        if (c.id === category.id) return false;
-        if (c.path?.includes(`/${category.id}/`)) return false;
-        const depth = ((c.path ?? "/").match(/\//g) || []).length;
-        return depth < 3;
-      })
-      .map((c) => ({
-        value: c.id,
-        label: `${(c.path ?? "/").replace(/^\/|\/$/g, "") ? "— " : ""}${c.name}`,
-      })),
-  ];
-
-  // Update mutation
   const updateMutation = useMutation(
     orpc.admin.categories.update.mutationOptions({
       onSuccess: () => {
@@ -128,7 +91,6 @@ function CategoryEditor({
     }),
   );
 
-  // Delete mutation
   const deleteMutation = useMutation(
     orpc.admin.categories.delete.mutationOptions({
       onSuccess: () => {
@@ -142,77 +104,37 @@ function CategoryEditor({
     }),
   );
 
-  const validate = () => {
-    const nextErrors: Record<string, string> = {};
-    if (!name.trim()) nextErrors["name"] = "Category name is required";
-    if (slug.trim() && !/^[a-z0-9]+(?:-[a-z0-9]+)*$/.test(slug.trim())) {
-      nextErrors["slug"] = "Use lowercase letters, numbers, and hyphens only";
-    }
-    if (description.length > 500) {
-      nextErrors["description"] = "Description cannot exceed 500 characters";
-    }
-    const orderNum = parseInt(displayOrder, 10);
-    if (isNaN(orderNum) || orderNum < 0) {
-      nextErrors["displayOrder"] = "Must be a non-negative integer";
-    }
-
-    setErrors(nextErrors);
-    return Object.keys(nextErrors).length === 0;
-  };
-
-  const handleSubmit = (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!validate()) {
-      toast.error("Please fix the errors before saving");
-      return;
-    }
-
-    updateMutation.mutate({
-      id: category.id,
-      name: name.trim(),
-      slug: slug.trim() || undefined,
-      description: description.trim() || null,
-      parentId: parentId === "none" ? null : parentId,
-      imageMediaId: imageMediaId || null,
-      position: parseInt(displayOrder, 10) || 0,
-      isActive,
-      isFeatured,
-      seo: {
-        title: seoTitle.trim() || undefined,
-        description: seoDescription.trim() || undefined,
-      },
-    });
-  };
-
   return (
     <PageContainer size="full">
-      <PageBreadcrumbs
-        items={[
-          { label: "Categories", href: "/categories" },
-          { label: category.name },
-        ]}
-        actions={
+      <PageHeader
+        title={category.name}
+        description="Manage category details, hierarchical structure, and search engine listing."
+        aside={
           <div className="flex items-center gap-2">
             <Button variant="ghost" size="sm" onClick={() => go("/categories")}>
               <ArrowLeft className="mr-1.5 size-3.5" aria-hidden />
               Categories
             </Button>
-            <Button
-              type="button"
-              variant="destructive"
-              size="sm"
-              onClick={() => setDeleteOpen(true)}
-              disabled={deleteMutation.isPending}
-            >
+            {previewHref ? (
+              category.isActive ? (
+                <Button variant="outline" size="sm" asChild>
+                  <a href={previewHref} target="_blank" rel="noopener noreferrer">
+                    <Eye className="mr-1.5 size-3.5" aria-hidden />
+                    Preview
+                  </a>
+                </Button>
+              ) : (
+                <Button variant="outline" size="sm" disabled title="Inactive categories are hidden from the storefront">
+                  <Eye className="mr-1.5 size-3.5" aria-hidden />
+                  Preview
+                </Button>
+              )
+            ) : null}
+            <Button type="button" variant="destructive" size="sm" onClick={() => setDeleteOpen(true)} disabled={deleteMutation.isPending}>
               <Trash2 className="mr-1.5 size-3.5" aria-hidden />
               Delete
             </Button>
-            <Button
-              type="submit"
-              form="category-form"
-              size="sm"
-              disabled={updateMutation.isPending}
-            >
+            <Button type="submit" form="category-form" size="sm" disabled={updateMutation.isPending}>
               <Save className="mr-1.5 size-3.5" aria-hidden />
               {updateMutation.isPending ? "Saving..." : "Save Changes"}
             </Button>
@@ -220,198 +142,31 @@ function CategoryEditor({
         }
       />
 
-      <PageHeader
-        title={category.name}
-        description={`Manage category details, hierarchical structure, and search engine listing.`}
+      <CategoryForm
+        formId="category-form"
+        category={category}
+        categories={categories}
+        onSubmit={(v) =>
+          updateMutation.mutate({
+            id: category.id,
+            name: v.name,
+            slug: v.slug || undefined,
+            description: v.description || null,
+            parentId: v.parentId,
+            imageMediaId: v.imageMediaId,
+            position: v.position,
+            isActive: v.isActive,
+            isFeatured: v.isFeatured,
+            type: v.type,
+            match: v.match,
+            rules: v.type === "automated" ? v.rules : null,
+            sortOrder: v.sortOrder,
+            ...(v.type === "manual" ? { productIds: v.productIds } : {}),
+            seo: { title: v.seoTitle || undefined, description: v.seoDescription || undefined },
+          })
+        }
       />
 
-      <form id="category-form" onSubmit={handleSubmit} className="grid grid-cols-1 lg:grid-cols-3 gap-6" noValidate>
-        {/* Left 2 Columns: Main Details, Image, SEO */}
-        <div className="lg:col-span-2 flex flex-col gap-6">
-          <Card>
-            <CardHeader>
-              <CardTitle className="text-base font-semibold">General Information</CardTitle>
-              <CardDescription>Name, description, and hierarchy settings.</CardDescription>
-            </CardHeader>
-            <CardContent className="grid gap-4">
-              <div className="grid gap-1.5">
-                <FieldLabel htmlFor="cat-name">Category Name *</FieldLabel>
-                <Input
-                  id="cat-name"
-                  value={name}
-                  onChange={(e) => setName(e.target.value)}
-                  placeholder="e.g. Mechanical Keyboards"
-                  aria-invalid={Boolean(errors["name"])}
-                />
-                {errors["name"] && (
-                  <p role="alert" className="text-xs text-destructive">
-                    {errors["name"]}
-                  </p>
-                )}
-              </div>
-
-              <div className="grid gap-1.5">
-                <FieldLabel htmlFor="cat-slug">URL Handle (Slug)</FieldLabel>
-                <Input
-                  id="cat-slug"
-                  value={slug}
-                  onChange={(e) => setSlug(e.target.value)}
-                  placeholder="e.g. mechanical-keyboards"
-                  aria-invalid={Boolean(errors["slug"])}
-                />
-                {errors["slug"] && (
-                  <p role="alert" className="text-xs text-destructive">
-                    {errors["slug"]}
-                  </p>
-                )}
-              </div>
-
-              <div className="grid gap-1.5">
-                <div className="flex items-center justify-between">
-                  <FieldLabel htmlFor="cat-desc">Description</FieldLabel>
-                  <span
-                    className={`text-xs ${
-                      description.length > 500 ? "font-semibold text-destructive" : "text-muted-foreground"
-                    }`}
-                  >
-                    {description.length} / 500
-                  </span>
-                </div>
-                <Textarea
-                  id="cat-desc"
-                  rows={4}
-                  value={description}
-                  onChange={(e) => setDescription(e.target.value)}
-                  placeholder="Brief description displayed on category pages..."
-                  maxLength={500}
-                />
-                {errors["description"] && (
-                  <p role="alert" className="text-xs text-destructive">
-                    {errors["description"]}
-                  </p>
-                )}
-              </div>
-            </CardContent>
-          </Card>
-
-          {/* Category Image */}
-          <Card>
-            <CardHeader>
-              <CardTitle className="text-base font-semibold">Category Banner / Image</CardTitle>
-              <CardDescription>Visual banner or icon used in category lists and grids.</CardDescription>
-            </CardHeader>
-            <CardContent>
-              <MediaField
-                value={imageMediaId}
-                onChange={(id) => setImageMediaId(id)}
-                accept={["image"]}
-                aspect="16:9"
-              />
-            </CardContent>
-          </Card>
-
-          {/* Search Engine Optimization Card (Always Indexable, No Switch) */}
-          <SeoCard
-            defaultTitle={name}
-            defaultDescription={description}
-            pathPrefix="/categories"
-            slug={slug}
-            onSlugChange={setSlug}
-            title={seoTitle}
-            onTitleChange={setSeoTitle}
-            description={seoDescription}
-            onDescriptionChange={setSeoDescription}
-          />
-        </div>
-
-        {/* Right 1 Column: Hierarchy, Status, Position */}
-        <div className="flex flex-col gap-6">
-          {/* Hierarchy & Parent Category */}
-          <Card>
-            <CardHeader>
-              <CardTitle className="text-base font-semibold">Hierarchy</CardTitle>
-              <CardDescription>Position within the 3-level category tree.</CardDescription>
-            </CardHeader>
-            <CardContent className="grid gap-4">
-              <div className="grid gap-1.5">
-                <FieldLabel htmlFor="parent-category">Parent Category</FieldLabel>
-                <SimpleSelect
-                  id="parent-category"
-                  value={parentId}
-                  onChange={(v) => setParentId(v)}
-                  options={parentOptions}
-                />
-                <p className="text-xs text-muted-foreground">
-                  Categories can be nested up to 3 levels deep.
-                </p>
-              </div>
-
-              <div className="grid gap-1.5">
-                <FieldLabel htmlFor="cat-position">Display Position</FieldLabel>
-                <Input
-                  id="cat-position"
-                  type="number"
-                  min="0"
-                  value={displayOrder}
-                  onChange={(e) => setDisplayOrder(e.target.value)}
-                  placeholder="0"
-                />
-                <p className="text-xs text-muted-foreground">
-                  Lower numbers appear first within the same parent level.
-                </p>
-                {errors["displayOrder"] && (
-                  <p role="alert" className="text-xs text-destructive">
-                    {errors["displayOrder"]}
-                  </p>
-                )}
-              </div>
-            </CardContent>
-          </Card>
-
-          {/* Status & Visibility */}
-          <Card>
-            <CardHeader>
-              <CardTitle className="text-base font-semibold">Status & Visibility</CardTitle>
-              <CardDescription>Control category visibility across your storefront.</CardDescription>
-            </CardHeader>
-            <CardContent className="grid gap-4">
-              <Field orientation="horizontal" className="justify-between">
-                <div>
-                  <FieldLabel htmlFor="is-active" className="cursor-pointer font-medium text-sm">
-                    Active category
-                  </FieldLabel>
-                  <p className="text-xs text-muted-foreground">
-                    Show this category in navigation menus and category lists.
-                  </p>
-                </div>
-                <Switch
-                  id="is-active"
-                  checked={isActive}
-                  onCheckedChange={(c) => setIsActive(Boolean(c))}
-                />
-              </Field>
-
-              <Field orientation="horizontal" className="justify-between border-t border-border pt-3">
-                <div>
-                  <FieldLabel htmlFor="is-featured" className="cursor-pointer font-medium text-sm">
-                    Featured category
-                  </FieldLabel>
-                  <p className="text-xs text-muted-foreground">
-                    Highlight in featured collection grids and home heroes.
-                  </p>
-                </div>
-                <Switch
-                  id="is-featured"
-                  checked={isFeatured}
-                  onCheckedChange={(c) => setIsFeatured(Boolean(c))}
-                />
-              </Field>
-            </CardContent>
-          </Card>
-        </div>
-      </form>
-
-      {/* Delete Confirmation */}
       <ConfirmDialog
         open={deleteOpen}
         onOpenChange={setDeleteOpen}

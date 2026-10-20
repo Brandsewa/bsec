@@ -120,11 +120,11 @@ describe("header, footer, product and collection blocks", () => {
     expect(html).toContain('href="/collections/t-shirts"');
     expect(html).toContain("T-Shirts");
 
-    // Mobile drawer accordion
+    // Phone menu: a toggle button; the drawer itself is drawn only while it is open (client component), so its links
+    // are not part of the static markup.
     expect(html).toContain("bsb-mobile-menu");
-    expect(html).toContain("bsb-mobile-drawer");
-    expect(html).toContain("bsb-mobile-accordion");
-    expect(html).toContain("All Shop");
+    expect(html).toContain('aria-label="Open menu"');
+    expect(html).not.toContain("bsb-mobile-drawer");
   });
 
   it("falls back to block inline links when no menu exists (exact snapshot preservation)", () => {

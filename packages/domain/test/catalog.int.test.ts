@@ -1,4 +1,5 @@
 import { beforeAll, describe, expect, it } from "vitest";
+import { eq } from "drizzle-orm";
 import { schema, withTenant } from "@bs/db";
 import { startTestDb, type TestDb } from "@bs/db/test-env";
 import { STORE_PERMISSIONS } from "@bs/auth";
@@ -20,6 +21,8 @@ import {
   getCollection,
   getLocation,
   getProduct,
+  getStorefrontCategory,
+  listStorefrontCategories,
   listBrands,
   listCategories,
   listCollections,
@@ -228,6 +231,81 @@ describe("Catalog Services (Real Postgres)", () => {
       });
 
       expect(updated.productIds).toEqual([p3.id, p1.id, p2.id]);
+    });
+  });
+
+  describe("Categories use the collection model", () => {
+    it("assigns products to a manual category in order, and refuses to strip a product of its primary category", async () => {
+      const home = await createCategory(rt, ctxA, { name: "Model Home" });
+      const shelf = await createCategory(rt, ctxA, { name: "Model Shelf", sortOrder: "price_asc" });
+      expect(shelf.type).toBe("manual");
+      expect(shelf.sortOrder).toBe("price_asc");
+
+      const p1 = await createProduct(rt, ctxA, { title: "Model P1", status: "active", primaryCategoryId: home.id });
+      const p2 = await createProduct(rt, ctxA, { title: "Model P2", status: "draft" });
+
+      // p1 keeps its primary category elsewhere; p2 has none, so the shelf becomes its primary.
+      const assigned = await updateCategory(rt, ctxA, { id: shelf.id, productIds: [p2.id, p1.id] });
+      expect(assigned.productIds).toEqual([p2.id, p1.id]);
+      const p2Rows = await withTenant(rt._db.db, ctxA.tenantId, (tx) => tx.select().from(schema.productCategories).where(eq(schema.productCategories.productId, p2.id)));
+      expect(p2Rows).toHaveLength(1);
+      expect(p2Rows[0]?.isPrimary).toBe(true);
+
+      // Reorder keeps both; removing the non-primary one is fine.
+      const reordered = await updateCategory(rt, ctxA, { id: shelf.id, productIds: [p1.id, p2.id] });
+      expect(reordered.productIds).toEqual([p1.id, p2.id]);
+      const trimmed = await updateCategory(rt, ctxA, { id: shelf.id, productIds: [p2.id] });
+      expect(trimmed.productIds).toEqual([p2.id]);
+
+      // p2's primary category is the shelf: it cannot be removed here.
+      await expect(updateCategory(rt, ctxA, { id: shelf.id, productIds: [] })).rejects.toThrow(/primary category/);
+    });
+
+    it("stores the rules of an automated category and drops them when it turns manual", async () => {
+      const auto = await createCategory(rt, ctxA, {
+        name: "Model Auto",
+        type: "automated",
+        match: "any",
+        rules: [{ field: "tag", operator: "equals", value: "sale" }],
+      });
+      expect(auto.type).toBe("automated");
+      expect(auto.match).toBe("any");
+      expect(auto.rules).toEqual([{ field: "tag", operator: "equals", value: "sale" }]);
+
+      const listed = await listCategories(rt, ctxA);
+      expect(listed.find((c) => c.id === auto.id)?.type).toBe("automated");
+
+      const back = await updateCategory(rt, ctxA, { id: auto.id, type: "manual", rules: null });
+      expect(back.type).toBe("manual");
+      expect(back.rules).toBeNull();
+    });
+  });
+
+  describe("Storefront category pages follow the category's type and sort", () => {
+    it("lists an automated category by its rules and applies the default sort", async () => {
+      const home = await createCategory(rt, ctxA, { name: "Front Home" });
+      const tag = `front-${Math.random().toString(36).slice(2, 7)}`;
+      const cheap = await createProduct(rt, ctxA, { title: "Front Zeta", status: "active", primaryCategoryId: home.id, tags: [tag] });
+      const dear = await createProduct(rt, ctxA, { title: "Front Alpha", status: "active", primaryCategoryId: home.id, tags: [tag] });
+      await createProduct(rt, ctxA, { title: "Front Other", status: "active", primaryCategoryId: home.id });
+
+      const auto = await createCategory(rt, ctxA, {
+        name: "Front Auto",
+        type: "automated",
+        rules: [{ field: "tag", operator: "equals", value: tag }],
+        sortOrder: "title_desc",
+      });
+      const page = await getStorefrontCategory(rt, ctxA, auto.slug);
+      expect(page?.products.total).toBe(2);
+      // Default sort is the category's own: title Z to A.
+      expect(page?.products.items.map((p) => p.id)).toEqual([cheap.id, dear.id]);
+      // A shopper's choice still wins.
+      const asc = await getStorefrontCategory(rt, ctxA, auto.slug, { sort: "title" });
+      expect(asc?.products.items.map((p) => p.id)).toEqual([dear.id, cheap.id]);
+
+      // The categories archive counts an automated category by its rules.
+      const cards = await listStorefrontCategories(rt, ctxA);
+      expect(cards.find((c) => c.id === auto.id)?.productCount).toBe(2);
     });
   });
 

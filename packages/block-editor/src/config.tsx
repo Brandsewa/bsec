@@ -28,6 +28,27 @@ const select = (label: string, o: Record<string, string>): Field => ({ type: "se
 const radio = (label: string): Field => ({ type: "radio", label, options: yesNo });
 const link = (label: string): Field => text(`${label} (/path, https://…)`);
 
+// A compact on/off switch row (label left, switch right) for settings that are plain Yes/No. Stores the same boolean as radio().
+const toggle = (label: string): CustomField<boolean | undefined> => ({
+  type: "custom",
+  label,
+  render: ({ value, onChange }) => (
+    <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10 }}>
+      <span style={{ fontSize: 12, fontWeight: 600 }}>{label}</span>
+      <button
+        type="button"
+        role="switch"
+        aria-checked={value === true}
+        aria-label={label}
+        onClick={() => onChange(!(value === true))}
+        style={{ flex: "none", position: "relative", width: 30, height: 18, borderRadius: 999, border: 0, padding: 0, cursor: "pointer", background: value === true ? "#18181b" : "#d4d4d8", transition: "background .15s" }}
+      >
+        <span style={{ position: "absolute", top: 2, left: value === true ? 14 : 2, width: 14, height: 14, borderRadius: "50%", background: "#fff", transition: "left .15s" }} />
+      </button>
+    </div>
+  ),
+});
+
 // string[] edited as one slug per line (the schema stores plain strings).
 const listField = (label: string): CustomField<string[]> => ({
   type: "custom",
@@ -168,7 +189,89 @@ export const BLOCK_SPECS: Record<BlockType, Spec> = {
   Newsletter: { label: "Newsletter", category: "store", fields: { title: text("Heading"), subtitle: text("Subheading"), buttonText: text("Button"), placeholder: text("Email placeholder") } },
   SiteHeader: { label: "Header", category: "store", fields: { menuHandle: menuField("Navigation menu") as Field, logoText: text("Logo text (empty = store logo / name)"), logoMediaId: mediaField("Custom logo image (overrides brand logo)") as Field, logoSize: logoSizeField("Logo size") as Field, layout: select("Layout", { left: "Logo left, menu next to it", navCenter: "Logo left, menu in the middle", logoCenter: "Menu left, logo in the middle", logoRight: "Logo right, menu left", center: "Stacked: logo in the middle, menu below" }), links: { type: "array", label: "Fallback menu links", getItemSummary: (i: { label?: string }) => i.label ?? "Link", arrayFields: { label: text("Label"), href: link("Link") }, defaultItemProps: { label: "Link", href: "/" } } as Field, showSearch: radio("Search icon"), showAccount: radio("Account icon"), showCart: radio("Cart icon"), sticky: radio("Stay at top while scrolling"), tone: select("Background", TONE) } },
   SiteFooter: { label: "Footer", category: "store", fields: { layout: select("Layout", { columns: "Columns: brand, link columns, newsletter", centered: "Centred: brand on top, link columns in a row", compact: "Compact: brand and links side by side" }), logoMediaId: mediaField("Logo image (empty = brand name)") as Field, logoSize: logoSizeField("Logo size") as Field, logoText: text("Brand name (empty = store name)"), about: area("About text"), mobileAccordion: radio("Fold link columns into an accordion on phones"), columns: { type: "array", label: "Link columns", getItemSummary: (i: { title?: string }) => i.title ?? "Column", arrayFields: { title: text("Column title"), menuHandle: menuField("Navigation menu") as Field, links: { type: "array", label: "Fallback links", getItemSummary: (i: { label?: string }) => i.label ?? "Link", arrayFields: { label: text("Label"), href: link("Link") }, defaultItemProps: { label: "Link", href: "/" } } as Field }, defaultItemProps: { title: "Column", links: [] } } as Field, showNewsletter: radio("Newsletter signup"), newsletterTitle: text("Newsletter heading"), newsletterText: text("Newsletter text"), copyright: text("Copyright line (empty = automatic)"), tone: select("Background", TONE) } },
-  ProductDetail: { label: "Product details", category: "store", fields: { elementOrder: elementOrderField("Order of the elements (drag to move)") as Field, galleryPosition: select("Images side", { left: "Left", right: "Right" }), thumbPosition: select("Thumbnails", { bottom: "Below the picture", left: "Left of the picture", right: "Right of the picture" }), showBreadcrumb: radio("Breadcrumb"), showRating: radio("Review summary (hidden when there are no reviews)"), showSku: radio("SKU"), showDescription: radio("Short description"), showReadMore: radio("Two lines with a Read more popup"), variantStyle: select("Options as", { pills: "Small pills", buttons: "Buttons", dropdown: "Dropdowns" }), priceNote: text("Note under the price (empty hides it)"), addToCartLabel: text("Add to cart label"), addToCartBg: colorField("Add to cart colour") as Field, addToCartText: colorField("Add to cart text colour") as Field, showBuyNow: radio("Buy it now button"), buyNowLabel: text("Buy it now label"), buyNowBg: colorField("Buy it now colour") as Field, buyNowText: colorField("Buy it now text colour") as Field, showPaymentImage: radio("Secure payment picture"), paymentImageMediaId: mediaField("Secure payment picture (empty = built-in badge)") as Field, paymentImageAlt: text("Secure payment picture description"), showDeliveryEstimate: radio("Delivery estimate"), cutoffHour: num("Same-day dispatch before (hour, 0-23)", 0, 23), deliveryDays: num("Delivery takes (days)", 1, 21), shipsText: text("Dispatch note"), timeZone: text("Time zone (e.g. Asia/Kolkata)"), showUsps: radio("Small highlight cards"), usps: { type: "array", label: "Highlight cards (max 4)", getItemSummary: (i: { text?: string }) => i.text ?? "Card", arrayFields: { icon: select("Icon", ICONS), text: text("Title"), description: text("Short description (optional)") }, defaultItemProps: { icon: "check", text: "Highlight", description: "" } } as Field, showTags: radio("Tags"), stickyBuyBox: radio("Keep buy box in view while scrolling"), showTrustPoints: radio("Reassurance lines under the button"), trustPoints: linesField("Reassurance lines (one per line, max 4)", 4) as Field, stickyMobileBar: radio("Phone: price and add-to-cart bar while scrolling"), showAccordion: radio("Accordion (details rows) in this column"), accordionFirstOpen: radio("Accordion: first row open"), accordionItems: { type: "array", label: "Accordion rows (max 8)", max: 8, getItemSummary: (i: { title?: string }) => i.title ?? "Row", arrayFields: { icon: select("Icon", ICONS), title: text("Title"), source: select("Content", { static: "Text written here", custom_field: "A custom field of the product" }), fieldKey: text("Custom field key (Settings > Custom fields)"), text: area("Text (for \"Text written here\")") }, defaultItemProps: { icon: "info", title: "Details", source: "static", text: "" } } as Field } },
+  ProductDetail: {
+    label: "Product details",
+    category: "store",
+    fields: accordionFields("ProductDetail", [
+      { id: "order", title: "Order of the elements", fields: { elementOrder: elementOrderField("Drag to move, or use the arrows") as Field } },
+      {
+        id: "layout",
+        title: "Layout",
+        fields: {
+          galleryPosition: select("Images side", { left: "Left", right: "Right" }),
+          thumbPosition: select("Thumbnails", { bottom: "Below the picture", left: "Left of the picture", right: "Right of the picture" }),
+          variantStyle: select("Options as", { pills: "Small pills", buttons: "Buttons", dropdown: "Dropdowns" }),
+          stickyBuyBox: toggle("Keep buy box in view while scrolling") as Field,
+        },
+      },
+      {
+        id: "info",
+        title: "Product info",
+        fields: {
+          showBreadcrumb: toggle("Breadcrumb") as Field,
+          showRating: toggle("Review summary (hidden when there are no reviews)") as Field,
+          showSku: toggle("SKU") as Field,
+          showDescription: toggle("Short description") as Field,
+          showReadMore: toggle("Two lines with a Read more popup") as Field,
+          showTags: toggle("Tags") as Field,
+          priceNote: text("Note under the price (empty hides it)"),
+        },
+      },
+      {
+        id: "buttons",
+        title: "Add to cart and Buy now",
+        fields: {
+          addToCartLabel: text("Add to cart label"),
+          addToCartBg: colorField("Add to cart colour") as Field,
+          addToCartText: colorField("Add to cart text colour") as Field,
+          showBuyNow: toggle("Buy it now button") as Field,
+          buyNowLabel: text("Buy it now label"),
+          buyNowBg: colorField("Buy it now colour") as Field,
+          buyNowText: colorField("Buy it now text colour") as Field,
+          stickyMobileBar: toggle("Phone: price and add-to-cart bar while scrolling") as Field,
+        },
+      },
+      {
+        id: "trust",
+        title: "Payment and reassurance",
+        fields: {
+          showPaymentImage: toggle("Secure payment picture") as Field,
+          paymentImageMediaId: mediaField("Secure payment picture (empty = built-in badge)") as Field,
+          paymentImageAlt: text("Secure payment picture description"),
+          showTrustPoints: toggle("Reassurance lines under the button") as Field,
+          trustPoints: linesField("Reassurance lines (one per line, max 4)", 4) as Field,
+        },
+      },
+      {
+        id: "delivery",
+        title: "Delivery estimate",
+        fields: {
+          showDeliveryEstimate: toggle("Delivery estimate") as Field,
+          cutoffHour: num("Same-day dispatch before (hour, 0-23)", 0, 23),
+          deliveryDays: num("Delivery takes (days)", 1, 21),
+          shipsText: text("Dispatch note"),
+          timeZone: text("Time zone (e.g. Asia/Kolkata)"),
+        },
+      },
+      {
+        id: "highlights",
+        title: "Highlight cards",
+        fields: {
+          showUsps: toggle("Small highlight cards") as Field,
+          usps: { type: "array", label: "Highlight cards (max 4)", getItemSummary: (i: { text?: string }) => i.text ?? "Card", arrayFields: { icon: select("Icon", ICONS), text: text("Title"), description: text("Short description (optional)") }, defaultItemProps: { icon: "check", text: "Highlight", description: "" } } as Field,
+        },
+      },
+      {
+        id: "accordion",
+        title: "Accordion (details rows)",
+        fields: {
+          showAccordion: toggle("Accordion (details rows) in this column") as Field,
+          accordionFirstOpen: toggle("Accordion: first row open") as Field,
+          accordionItems: { type: "array", label: "Accordion rows (max 8)", max: 8, getItemSummary: (i: { title?: string }) => i.title ?? "Row", arrayFields: { icon: select("Icon", ICONS), title: text("Title"), source: select("Content", { static: "Text written here", custom_field: "A custom field of the product" }), fieldKey: text("Custom field key (Settings > Custom fields)"), text: area("Text (for \"Text written here\")") }, defaultItemProps: { icon: "info", title: "Details", source: "static", text: "" } } as Field,
+        },
+      },
+    ]),
+  },
   ProductCustomField: { label: "Custom field", category: "store", fields: { fieldKey: text("Field key (from Settings > Custom fields)"), showLabel: radio("Show the field name"), label: text("Name override (optional)") } },
   ProductInfoTabs: { label: "Product tabs and picture", category: "store", fields: { descriptionLabel: text("First tab name"), shippingLabel: text("Second tab name"), shippingContent: area("Second tab text (blank line = new paragraph, \"- \" = list item)"), imageMediaId: mediaField("Picture (empty = placeholder)") as Field, imageAlt: text("Picture description"), imageSide: select("Picture side", { right: "Right", left: "Left" }) } },
   HeroSlider: {

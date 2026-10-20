@@ -192,6 +192,13 @@ export const categories = tenantTable(
     path: text("path").notNull().default("/"),
     isActive: boolean("is_active").notNull().default(true),
     isFeatured: boolean("is_featured").notNull().default(false),
+    // Same model as collections: "manual" lists the products assigned through product_categories, in `position` order;
+    // "automated" lists every listed product matching `rules` (all or any of them, per `match`).
+    type: text("type").notNull().default("manual"),
+    match: text("match").notNull().default("all"),
+    rules: jsonb("rules"),
+    // Default product order on the category page ("manual" = the assigned order); shoppers can still pick another.
+    sortOrder: text("sort_order").notNull().default("manual"),
     seo: jsonb("seo"),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().default(sql`now()`),
     updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().default(sql`now()`),

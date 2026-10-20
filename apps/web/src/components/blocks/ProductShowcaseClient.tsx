@@ -1,7 +1,12 @@
 "use client";
 
-import React, { useEffect, useRef, type ReactNode } from "react";
+import React, { useEffect, useRef, useState, type ReactNode } from "react";
 import type { ProductShowcaseBehavior } from "@bs/blocks";
+import dynamic from "next/dynamic";
+import type { CardCartProduct } from "@/components/catalog/CardCartButton.tsx";
+
+// Loaded the first time a quick-buy popup is opened.
+const QuickBuyDialog = dynamic(() => import("@/components/catalog/CardCartButton.tsx").then((m) => m.QuickBuyDialog), { ssr: false });
 
 /**
  * Behaviour for the product showcase's server-rendered markup (progressive enhancement, like the hero
@@ -16,6 +21,8 @@ import type { ProductShowcaseBehavior } from "@bs/blocks";
  */
 export function ProductShowcaseClient({ options, children }: { options: ProductShowcaseBehavior; children: ReactNode }) {
   const wrap = useRef<HTMLDivElement>(null);
+  // A product with several variants opens a quick-buy popup (picture, short details, options) instead of leaving the page.
+  const [quick, setQuick] = useState<CardCartProduct | null>(null);
 
   useEffect(() => {
     const root = wrap.current?.querySelector<HTMLElement>("[data-psc]");
@@ -183,7 +190,23 @@ export function ProductShowcaseClient({ options, children }: { options: ProductS
       if (!btn) return;
       const variant = btn.dataset["variant"];
       if (!variant) {
-        window.location.assign(btn.dataset["href"] ?? "/");
+        const href = btn.dataset["href"] ?? "/";
+        const slug = href.split("/").filter(Boolean).pop();
+        if (!slug || btn.dataset["state"] === "busy") {
+          window.location.assign(href);
+          return;
+        }
+        btn.dataset["state"] = "busy";
+        try {
+          const res = await fetch(`/api/storefront/products/${encodeURIComponent(slug)}/quick-buy`);
+          if (!res.ok) throw new Error("load failed");
+          setQuick((await res.json()) as CardCartProduct);
+        } catch {
+          // The popup could not be filled: the product page has everything.
+          window.location.assign(href);
+        } finally {
+          delete btn.dataset["state"];
+        }
         return;
       }
       if (btn.dataset["state"] === "busy") return;
@@ -240,6 +263,7 @@ export function ProductShowcaseClient({ options, children }: { options: ProductS
   return (
     <div ref={wrap} style={{ display: "contents" }}>
       {children}
+      {quick ? <QuickBuyDialog product={quick} showViewProduct onClose={() => setQuick(null)} /> : null}
     </div>
   );
 }

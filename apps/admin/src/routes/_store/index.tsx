@@ -15,7 +15,6 @@ import { useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import {
   MetricCardSkeleton,
-  PageBreadcrumbs,
   PageContainer,
   PageHeader,
   PageSection,
@@ -134,7 +133,6 @@ function HomePage() {
 
   return (
     <PageContainer>
-      <PageBreadcrumbs items={[{ label: "Home" }]} />
       <PageHeader
         title="Home"
         description="Welcome to your store control center. Manage products, orders, and storefront setup."

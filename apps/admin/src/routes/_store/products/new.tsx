@@ -1,17 +1,17 @@
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
-import { ArrowLeft, Plus, Save, Trash2 } from "lucide-react";
+import { ArrowLeft, Save } from "lucide-react";
 import { useState } from "react";
-import { FormSkeleton, PageBreadcrumbs, PageContainer, PageHeader, PageSkeleton, toast } from "@bs/ui";
+import { PageActions, FormSkeleton, PageContainer, PageHeader, PageSkeleton, toast } from "@bs/ui";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Button } from "@bs/ui";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@bs/ui";
-import { Field, FieldLabel } from "@bs/ui";
+import { Field, FieldLabel, Switch } from "@bs/ui";
 import { Input } from "@bs/ui";
-import { Switch } from "@bs/ui";
 import { Textarea } from "@bs/ui";
 import { SeoCard } from "../../../components/seo-card.tsx";
-import { SimpleSelect } from "@bs/ui";
-import { categoryLabel } from "../../../lib/category-label.ts";
+import { DraftVariantBuilderCard, defaultDraftVariant, usableOptions, type DraftVariant } from "../../../components/product/draft-variant-builder.tsx";
+import { OrganizationCard, PricingQuotesCard, StatusVisibilityCard, type PreorderValue } from "../../../components/product/product-cards.tsx";
+import { previewGrid, type DraftOption } from "../../../lib/variant-grid.ts";
 import { orpc } from "../../../lib/orpc.ts";
 
 export const Route = createFileRoute("/_store/products/new")({
@@ -35,20 +35,6 @@ const slugify = (v: string) =>
     .replace(/(^-|-$)/g, "");
 
 const toPaise = (rupees: string) => Math.round(Number(rupees) * 100);
-
-interface OptionDraft {
-  name: string;
-  values: string;
-}
-interface VariantDraft {
-  sku: string;
-  title: string;
-  price: string;
-  compareAtPrice: string;
-  preorderEnabled?: boolean;
-  preorderShipsOn?: string;
-  preorderMessage?: string;
-}
 
 export function NewProductPage({ navigate }: { navigate?: (to: string) => void }) {
   const go = navigate ?? (() => undefined);
@@ -86,10 +72,9 @@ export function NewProductPage({ navigate }: { navigate?: (to: string) => void }
   const [seoTitle, setSeoTitle] = useState("");
   const [seoDescription, setSeoDescription] = useState("");
 
-  const [options, setOptions] = useState<OptionDraft[]>([]);
-  const [variants, setVariants] = useState<VariantDraft[]>([
-    { sku: "", title: "Default", price: "", compareAtPrice: "" },
-  ]);
+  const [options, setOptions] = useState<DraftOption[]>([]);
+  const [variants, setVariants] = useState<DraftVariant[]>([defaultDraftVariant()]);
+  const [preorder, setPreorder] = useState<PreorderValue>({ enabled: false, shipsOn: "", message: "" });
   const [errors, setErrors] = useState<Record<string, string>>({});
 
   const createMutation = useMutation(
@@ -110,11 +95,6 @@ export function NewProductPage({ navigate }: { navigate?: (to: string) => void }
     if (!slugTouched) setSlug(slugify(val));
   };
 
-  const updateVariant = (i: number, patch: Partial<VariantDraft>) =>
-    setVariants((prev) => prev.map((v, idx) => (idx === i ? { ...v, ...patch } : v)));
-  const updateOption = (i: number, patch: Partial<OptionDraft>) =>
-    setOptions((prev) => prev.map((o, idx) => (idx === i ? { ...o, ...patch } : o)));
-
   const validate = () => {
     const e: Record<string, string> = {};
     if (!title.trim()) e["title"] = "Title is required";
@@ -126,32 +106,23 @@ export function NewProductPage({ navigate }: { navigate?: (to: string) => void }
       e["primaryCategory"] = "A primary category is required to publish or list a product";
     }
 
-    options.forEach((o, i) => {
-      if (!o.name.trim()) e[`option-name-${i}`] = "Option name is required";
-      if (!o.values.split(",").some((s) => s.trim())) e[`option-values-${i}`] = "Add at least one value";
-    });
+    const grid = previewGrid(options, []);
+    if (grid.error) e["options"] = grid.error;
 
     const today = new Date().toISOString().slice(0, 10);
     variants.forEach((v, i) => {
       if (!v.sku.trim()) e[`variant-sku-${i}`] = "SKU is required";
-      if (!v.title.trim()) e[`variant-title-${i}`] = "Variant title is required";
       if (!priceOnRequest && (v.price === "" || !Number.isFinite(Number(v.price)) || Number(v.price) < 0)) {
         e[`variant-price-${i}`] = "Enter a valid price";
       }
       if (!priceOnRequest && v.compareAtPrice !== "" && (!Number.isFinite(Number(v.compareAtPrice)) || Number(v.compareAtPrice) < 0)) {
         e[`variant-compare-${i}`] = "Enter a valid compare-at price";
       }
-      if (v.preorderEnabled) {
-        if (!v.preorderShipsOn) {
-          e[`variant-ships-on-${i}`] = "Pre-order ship date is required";
-        } else if (v.preorderShipsOn <= today) {
-          e[`variant-ships-on-${i}`] = "Pre-order ship date must be in the future";
-        }
-        if (v.preorderMessage && v.preorderMessage.length > 200) {
-          e[`variant-msg-${i}`] = "Pre-order message cannot exceed 200 characters";
-        }
-      }
     });
+    if (preorder.enabled) {
+      if (!preorder.shipsOn) e["preorderShipsOn"] = "Pre-order ship date is required";
+      else if (preorder.shipsOn <= today) e["preorderShipsOn"] = "Pre-order ship date must be in the future";
+    }
     setErrors(e);
     return Object.keys(e).length === 0;
   };
@@ -162,13 +133,7 @@ export function NewProductPage({ navigate }: { navigate?: (to: string) => void }
       toast.error("Please fix the highlighted fields");
       return;
     }
-    const cleanOptions = options.map((o) => ({
-      name: o.name.trim(),
-      values: o.values
-        .split(",")
-        .map((s) => s.trim())
-        .filter(Boolean),
-    }));
+    const cleanOpts = usableOptions(options);
     createMutation.mutate({
       title: title.trim(),
       ...(slug ? { slug } : {}),
@@ -191,17 +156,18 @@ export function NewProductPage({ navigate }: { navigate?: (to: string) => void }
         title: seoTitle.trim() || undefined,
         description: seoDescription.trim() || undefined,
       },
-      ...(cleanOptions.length > 0 ? { options: cleanOptions } : {}),
+      ...(cleanOpts.length > 0 ? { options: cleanOpts } : {}),
       variants: variants.map((v) => ({
         sku: v.sku.trim(),
-        title: v.title.trim(),
+        title: v.title,
         price: priceOnRequest ? 0 : toPaise(v.price),
         ...(!priceOnRequest && v.compareAtPrice !== "" ? { compareAtPrice: toPaise(v.compareAtPrice) } : {}),
+        ...(Object.keys(v.optionValues).length > 0 ? { optionValues: v.optionValues } : {}),
         trackInventory: true,
         allowBackorder: false,
-        preorderEnabled: Boolean(v.preorderEnabled),
-        preorderShipsOn: v.preorderEnabled && v.preorderShipsOn ? v.preorderShipsOn : null,
-        preorderMessage: v.preorderEnabled && v.preorderMessage ? v.preorderMessage.trim() : null,
+        preorderEnabled: preorder.enabled,
+        preorderShipsOn: preorder.enabled ? preorder.shipsOn : null,
+        preorderMessage: preorder.enabled && preorder.message.trim() ? preorder.message.trim() : null,
       })),
     });
   };
@@ -215,10 +181,8 @@ export function NewProductPage({ navigate }: { navigate?: (to: string) => void }
 
   return (
     <PageContainer size="full">
-      <PageBreadcrumbs
-        items={[{ label: "Products", href: "/products" }, { label: "New Product" }]}
-        actions={
-          <div className="flex items-center gap-2">
+      <PageActions>
+        <div className="flex items-center gap-2">
             <Button variant="ghost" size="sm" onClick={() => go("/products")}>
               <ArrowLeft className="mr-1.5 size-3.5" aria-hidden />
               Back
@@ -234,8 +198,7 @@ export function NewProductPage({ navigate }: { navigate?: (to: string) => void }
               {createMutation.isPending ? "Saving..." : "Save Product"}
             </Button>
           </div>
-        }
-      />
+      </PageActions>
 
       <PageHeader
         title="Add Product"
@@ -312,218 +275,22 @@ export function NewProductPage({ navigate }: { navigate?: (to: string) => void }
             </CardContent>
           </Card>
 
-          {/* Pricing & Quotes Card */}
-          <Card>
-            <CardHeader>
-              <CardTitle className="text-base font-semibold">Pricing & Quotes</CardTitle>
-              <CardDescription>Price on request hides checkout prices and routes buyers to quote requests.</CardDescription>
-            </CardHeader>
-            <CardContent className="grid gap-4">
-              <Field orientation="horizontal" className="justify-between">
-                <div>
-                  <FieldLabel htmlFor="price-on-request" className="cursor-pointer font-medium">
-                    Price on request
-                  </FieldLabel>
-                  <p className="text-xs text-muted-foreground">
-                    Hide prices and require customers to submit quote requests.
-                  </p>
-                </div>
-                <Switch
-                  id="price-on-request"
-                  checked={priceOnRequest}
-                  onCheckedChange={(c) => setPriceOnRequest(Boolean(c))}
-                />
-              </Field>
-            </CardContent>
-          </Card>
+          <PricingQuotesCard
+            priceOnRequest={priceOnRequest}
+            onPriceOnRequestChange={setPriceOnRequest}
+            preorder={preorder}
+            onPreorderChange={setPreorder}
+            errors={errors}
+          />
 
-          {/* Options Card */}
-          <Card>
-            <CardHeader>
-              <CardTitle className="text-base font-semibold">Options</CardTitle>
-              <CardDescription>Optional buyer-selectable attributes such as Size or Colour.</CardDescription>
-            </CardHeader>
-            <CardContent className="grid gap-3">
-              {options.map((o, i) => (
-                <div key={i} className="grid gap-2 rounded-md border border-border p-3 sm:grid-cols-[1fr_2fr_auto] bg-muted/20">
-                  <div className="grid gap-1.5">
-                    <FieldLabel htmlFor={`option-name-${i}`}>Option Name</FieldLabel>
-                    <Input
-                      id={`option-name-${i}`}
-                      value={o.name}
-                      onChange={(e) => updateOption(i, { name: e.target.value })}
-                      placeholder="Size"
-                    />
-                    {err(`option-name-${i}`)}
-                  </div>
-                  <div className="grid gap-1.5">
-                    <FieldLabel htmlFor={`option-values-${i}`}>Values (comma separated)</FieldLabel>
-                    <Input
-                      id={`option-values-${i}`}
-                      value={o.values}
-                      onChange={(e) => updateOption(i, { values: e.target.value })}
-                      placeholder="S, M, L, XL"
-                    />
-                    {err(`option-values-${i}`)}
-                  </div>
-                  <div className="flex items-end">
-                    <Button
-                      type="button"
-                      variant="ghost"
-                      size="sm"
-                      aria-label="Remove option"
-                      onClick={() => setOptions((prev) => prev.filter((_, idx) => idx !== i))}
-                    >
-                      <Trash2 className="size-3.5 text-destructive" aria-hidden />
-                    </Button>
-                  </div>
-                </div>
-              ))}
-              <div>
-                <Button
-                  type="button"
-                  variant="outline"
-                  size="sm"
-                  onClick={() => setOptions((prev) => [...prev, { name: "", values: "" }])}
-                >
-                  <Plus className="mr-1.5 size-3.5" aria-hidden />
-                  Add option
-                </Button>
-              </div>
-            </CardContent>
-          </Card>
-
-          {/* Variants Card */}
-          <Card>
-            <CardHeader>
-              <CardTitle className="text-base font-semibold">Variants & Pricing</CardTitle>
-              <CardDescription>Each variant has its own SKU, price (in ₹), and pre-order settings.</CardDescription>
-            </CardHeader>
-            <CardContent className="grid gap-3">
-              {variants.map((v, i) => (
-                <div key={i} className="grid gap-3 rounded-md border border-border p-3.5 sm:grid-cols-2 bg-muted/20">
-                  <div className="grid gap-1.5">
-                    <FieldLabel htmlFor={`variant-title-${i}`}>Variant title *</FieldLabel>
-                    <Input
-                      id={`variant-title-${i}`}
-                      value={v.title}
-                      onChange={(e) => updateVariant(i, { title: e.target.value })}
-                    />
-                    {err(`variant-title-${i}`)}
-                  </div>
-                  <div className="grid gap-1.5">
-                    <FieldLabel htmlFor={`variant-sku-${i}`}>SKU *</FieldLabel>
-                    <Input
-                      id={`variant-sku-${i}`}
-                      value={v.sku}
-                      onChange={(e) => updateVariant(i, { sku: e.target.value })}
-                      placeholder="e.g. DENIM-JKT-01"
-                    />
-                    {err(`variant-sku-${i}`)}
-                  </div>
-                  <div className="grid gap-1.5">
-                    <FieldLabel htmlFor={`variant-price-${i}`}>Price (₹) *</FieldLabel>
-                    <Input
-                      id={`variant-price-${i}`}
-                      type="number"
-                      step="0.01"
-                      min="0"
-                      disabled={priceOnRequest}
-                      value={priceOnRequest ? "0.00" : v.price}
-                      onChange={(e) => updateVariant(i, { price: e.target.value })}
-                      placeholder="0.00"
-                    />
-                    {err(`variant-price-${i}`)}
-                  </div>
-                  <div className="grid gap-1.5">
-                    <FieldLabel htmlFor={`variant-compare-${i}`}>Compare-at price (₹)</FieldLabel>
-                    <Input
-                      id={`variant-compare-${i}`}
-                      type="number"
-                      step="0.01"
-                      min="0"
-                      disabled={priceOnRequest}
-                      value={priceOnRequest ? "" : v.compareAtPrice}
-                      onChange={(e) => updateVariant(i, { compareAtPrice: e.target.value })}
-                      placeholder="0.00"
-                    />
-                    {err(`variant-compare-${i}`)}
-                  </div>
-
-                  <div className="border-t border-border pt-3 sm:col-span-2 flex flex-col gap-3">
-                    <Field orientation="horizontal" className="justify-between">
-                      <div>
-                        <FieldLabel htmlFor={`v-preorder-${i}`} className="cursor-pointer font-normal text-sm">
-                          Enable pre-order
-                        </FieldLabel>
-                        <p className="text-xs text-muted-foreground">Sell at zero stock with expected dispatch date.</p>
-                      </div>
-                      <Switch
-                        id={`v-preorder-${i}`}
-                        checked={Boolean(v.preorderEnabled)}
-                        onCheckedChange={(c) => updateVariant(i, { preorderEnabled: Boolean(c) })}
-                      />
-                    </Field>
-
-                    {v.preorderEnabled && (
-                      <div className="grid gap-3 sm:grid-cols-2 rounded-md bg-muted/40 p-3 border border-border">
-                        <div className="grid gap-1.5">
-                          <FieldLabel htmlFor={`variant-ships-on-${i}`}>Expected ship date *</FieldLabel>
-                          <Input
-                            id={`variant-ships-on-${i}`}
-                            type="date"
-                            value={v.preorderShipsOn ?? ""}
-                            onChange={(e) => updateVariant(i, { preorderShipsOn: e.target.value })}
-                          />
-                          {err(`variant-ships-on-${i}`)}
-                        </div>
-                        <div className="grid gap-1.5">
-                          <FieldLabel htmlFor={`variant-msg-${i}`}>
-                            Customer message (optional, max 200 chars)
-                          </FieldLabel>
-                          <Input
-                            id={`variant-msg-${i}`}
-                            placeholder="e.g. Handmade in small batches"
-                            maxLength={200}
-                            value={v.preorderMessage ?? ""}
-                            onChange={(e) => updateVariant(i, { preorderMessage: e.target.value })}
-                          />
-                          {err(`variant-msg-${i}`)}
-                        </div>
-                      </div>
-                    )}
-                  </div>
-
-                  {variants.length > 1 ? (
-                    <div className="sm:col-span-2 flex justify-end">
-                      <Button
-                        type="button"
-                        variant="ghost"
-                        size="sm"
-                        onClick={() => setVariants((prev) => prev.filter((_, idx) => idx !== i))}
-                      >
-                        <Trash2 className="mr-1.5 size-3.5 text-destructive" aria-hidden />
-                        Remove variant
-                      </Button>
-                    </div>
-                  ) : null}
-                </div>
-              ))}
-              <div>
-                <Button
-                  type="button"
-                  variant="outline"
-                  size="sm"
-                  onClick={() =>
-                    setVariants((prev) => [...prev, { sku: "", title: "", price: "", compareAtPrice: "" }])
-                  }
-                >
-                  <Plus className="mr-1.5 size-3.5" aria-hidden />
-                  Add variant
-                </Button>
-              </div>
-            </CardContent>
-          </Card>
+          <DraftVariantBuilderCard
+            options={options}
+            onOptionsChange={setOptions}
+            variants={variants}
+            onVariantsChange={setVariants}
+            priceOnRequest={priceOnRequest}
+            errors={errors}
+          />
 
           {/* Search Engine Listing (SEO Card) */}
           <SeoCard
@@ -540,177 +307,28 @@ export function NewProductPage({ navigate }: { navigate?: (to: string) => void }
 
         {/* Right Column (1 span): Status, Organization, Returns, Shipping */}
         <div className="flex flex-col gap-6">
-          {/* Status & Visibility Card */}
-          <Card>
-            <CardHeader>
-              <CardTitle className="text-base font-semibold">Status & Visibility</CardTitle>
-              <CardDescription>Control how and where this product is listed.</CardDescription>
-            </CardHeader>
-            <CardContent className="grid gap-4">
-              <div className="grid gap-1.5">
-                <FieldLabel htmlFor="product-status">Product Status</FieldLabel>
-                <div id="product-status" className="grid grid-cols-2 gap-2">
-                  {(["draft", "active", "unlisted", "archived"] as const).map((s) => (
-                    <Button
-                      key={s}
-                      type="button"
-                      variant={status === s ? "default" : "outline"}
-                      size="sm"
-                      className="capitalize text-xs"
-                      onClick={() => setStatus(s)}
-                    >
-                      {s}
-                    </Button>
-                  ))}
-                </div>
-                {status === "unlisted" && (
-                  <p className="text-xs text-amber-600 dark:text-amber-400 mt-1">
-                    Unlisted products are reachable only by direct URL link; hidden from catalog lists, search, and sitemap.
-                  </p>
-                )}
-                {(status === "active" || status === "unlisted") && !primaryCategoryId && (
-                  <p className="text-xs text-destructive mt-1">
-                    A primary category is required to publish or list this product.
-                  </p>
-                )}
-              </div>
+          <StatusVisibilityCard
+            status={status}
+            onStatusChange={setStatus}
+            isFeatured={isFeatured}
+            onFeaturedChange={setIsFeatured}
+            hasPrimaryCategory={Boolean(primaryCategoryId)}
+          />
 
-              <Field orientation="horizontal" className="justify-between border-t border-border pt-3">
-                <div>
-                  <FieldLabel htmlFor="is-featured" className="cursor-pointer font-medium text-sm">
-                    Featured product
-                  </FieldLabel>
-                  <p className="text-xs text-muted-foreground">
-                    Highlight this product on the home page and featured grids.
-                  </p>
-                </div>
-                <Switch
-                  id="is-featured"
-                  checked={isFeatured}
-                  onCheckedChange={(c) => setIsFeatured(Boolean(c))}
-                />
-              </Field>
-            </CardContent>
-          </Card>
-
-          {/* Organization Card */}
-          <Card>
-            <CardHeader>
-              <CardTitle className="text-base font-semibold">Organization</CardTitle>
-              <CardDescription>Primary category, extra categories, brand, and collections.</CardDescription>
-            </CardHeader>
-            <CardContent className="grid gap-4">
-              {/* Primary Category */}
-              <div className="grid gap-1.5">
-                <FieldLabel htmlFor="primary-category">
-                  Primary Category <span className="text-destructive">*</span>
-                </FieldLabel>
-                <SimpleSelect
-                  id="primary-category"
-                  value={primaryCategoryId}
-                  onChange={(val) => {
-                    setPrimaryCategoryId(val);
-                    setExtraCategoryIds((prev) => prev.filter((id) => id !== val));
-                  }}
-                  options={[
-                    { value: "", label: "Select primary category..." },
-                    ...categories.map((c) => ({
-                      value: c.id,
-                      label: categoryLabel(c, categories),
-                    })),
-                  ]}
-                />
-                <p className="text-xs text-muted-foreground">
-                  Used as the main navigation breadcrumb and primary canonical taxonomy.
-                </p>
-                {err("primaryCategory")}
-              </div>
-
-              {/* Extra Categories */}
-              <div className="grid gap-1.5 border-t border-border pt-3">
-                <FieldLabel>Additional Categories</FieldLabel>
-                <p className="text-xs text-muted-foreground mb-1.5">
-                  Optional extra categories this product also belongs to.
-                </p>
-                <div className="max-h-40 overflow-y-auto rounded-md border border-border p-2 grid gap-2">
-                  {categories
-                    .filter((c) => c.id !== primaryCategoryId)
-                    .map((c) => {
-                      const checked = extraCategoryIds.includes(c.id);
-                      return (
-                        <label key={c.id} className="flex items-center gap-2 text-xs cursor-pointer select-none">
-                          <input
-                            type="checkbox"
-                            checked={checked}
-                            onChange={(e) => {
-                              if (e.target.checked) {
-                                setExtraCategoryIds((prev) => [...prev, c.id]);
-                              } else {
-                                setExtraCategoryIds((prev) => prev.filter((id) => id !== c.id));
-                              }
-                            }}
-                            className="rounded border-border text-primary focus:ring-primary"
-                          />
-                          <span className="truncate">{categoryLabel(c, categories)}</span>
-                        </label>
-                      );
-                    })}
-                  {categories.filter((c) => c.id !== primaryCategoryId).length === 0 && (
-                    <span className="text-xs text-muted-foreground">No additional categories</span>
-                  )}
-                </div>
-              </div>
-
-              {/* Brand */}
-              <div className="grid gap-1.5 border-t border-border pt-3">
-                <FieldLabel htmlFor="product-brand">Brand</FieldLabel>
-                <SimpleSelect
-                  id="product-brand"
-                  value={brandId}
-                  onChange={(val) => setBrandId(val)}
-                  options={[
-                    { value: "", label: "No brand" },
-                    ...brands.map((b) => ({ value: b.id, label: b.name })),
-                  ]}
-                />
-              </div>
-
-              {/* Collections */}
-              <div className="grid gap-1.5 border-t border-border pt-3">
-                <FieldLabel>Manual Collections</FieldLabel>
-                <p className="text-xs text-muted-foreground mb-1.5">
-                  Assign this product to specific curated collections.
-                </p>
-                <div className="max-h-40 overflow-y-auto rounded-md border border-border p-2 grid gap-2">
-                  {collections
-                    .filter((c) => c.type === "manual")
-                    .map((c) => {
-                      const checked = collectionIds.includes(c.id);
-                      return (
-                        <label key={c.id} className="flex items-center gap-2 text-xs cursor-pointer select-none">
-                          <input
-                            type="checkbox"
-                            checked={checked}
-                            onChange={(e) => {
-                              if (e.target.checked) {
-                                setCollectionIds((prev) => [...prev, c.id]);
-                              } else {
-                                setCollectionIds((prev) => prev.filter((id) => id !== c.id));
-                              }
-                            }}
-                            className="rounded border-border text-primary focus:ring-primary"
-                          />
-                          <span className="truncate">{c.title}</span>
-                        </label>
-                      );
-                    })}
-                  {collections.filter((c) => c.type === "manual").length === 0 && (
-                    <span className="text-xs text-muted-foreground">No manual collections</span>
-                  )}
-                </div>
-              </div>
-            </CardContent>
-          </Card>
+          <OrganizationCard
+            categories={categories}
+            brands={brands}
+            collections={collections}
+            primaryCategoryId={primaryCategoryId}
+            onPrimaryCategoryChange={setPrimaryCategoryId}
+            extraCategoryIds={extraCategoryIds}
+            onExtraCategoryIdsChange={setExtraCategoryIds}
+            brandId={brandId}
+            onBrandChange={setBrandId}
+            collectionIds={collectionIds}
+            onCollectionIdsChange={setCollectionIds}
+            primaryCategoryError={errors["primaryCategory"]}
+          />
 
           {/* Returns & Policy Card */}
           <Card>

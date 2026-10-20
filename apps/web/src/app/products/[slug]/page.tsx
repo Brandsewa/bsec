@@ -151,17 +151,32 @@ export default async function ProductDetailPage({ params }: ProductPageProps) {
     />
   );
 
+  const templateContext = { renderProductDetail: (options: Parameters<typeof detail>[0]) => detail(options), renderProductInfoTabs: infoTabs, renderProductCustomField: customField };
+  // The theme's "Reviews" block is only a heading placeholder (the real reviews are drawn below the product's own blocks),
+  // so it is left out here; the reviews section has its own heading.
+  const templateBlocks = (template?.blocks ?? []).filter((b) => b.type !== "Reviews");
+  const coreTypes = new Set(["ProductDetail", "ProductInfoTabs", "ProductCustomField"]);
+  let lastCore = -1;
+  templateBlocks.forEach((b, i) => {
+    if (coreTypes.has(b.type)) lastCore = i;
+  });
+  const beforeReviews = templateBlocks.slice(0, lastCore + 1);
+  const afterReviews = templateBlocks.slice(lastCore + 1);
+
   return (
     <div data-cache-tag={productCacheTag} className="bs-skin">
       {/* Schema.org Structured Data */}
       <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(productJsonLd) }} />
       <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(breadcrumbsJsonLd) }} />
       {template ? (
-        <BlockRenderer
-          blocks={template.blocks}
-          renderData={renderData}
-          context={{ renderProductDetail: (options) => detail(options), renderProductInfoTabs: infoTabs, renderProductCustomField: customField }}
-        />
+        <>
+          <BlockRenderer blocks={beforeReviews} renderData={renderData} context={templateContext} />
+          {/* Reviews follow the product's own blocks; recommendations and anything else the theme adds come after them. */}
+          <div className="mx-auto max-w-7xl px-4 pb-10 sm:px-6 lg:px-8">
+            <ProductReviewsSection productId={product.id} productTitle={product.title} />
+          </div>
+          <BlockRenderer blocks={afterReviews} renderData={renderData} context={templateContext} />
+        </>
       ) : (
         <>
           {detail()}
@@ -174,9 +189,11 @@ export default async function ProductDetailPage({ params }: ProductPageProps) {
           />
         </>
       )}
-      <div className="mx-auto max-w-7xl px-4 pb-10 sm:px-6 lg:px-8">
-        <ProductReviewsSection productId={product.id} productTitle={product.title} />
-      </div>
+      {template ? null : (
+        <div className="mx-auto max-w-7xl px-4 pb-10 sm:px-6 lg:px-8">
+          <ProductReviewsSection productId={product.id} productTitle={product.title} />
+        </div>
+      )}
     </div>
   );
 }

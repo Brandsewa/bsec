@@ -1,32 +1,27 @@
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import {
   ArrowLeft,
-  Boxes,
   Eye,
   EyeOff,
-  GripVertical,
-  Plus,
   Save,
-  Search,
   Trash2,
-  X,
-  Zap,
 } from "lucide-react";
 import { useState } from "react";
-import { DetailSkeleton, EmptyState, PageBreadcrumbs, PageContainer, PageHeader, PageSkeleton, toast } from "@bs/ui";
+import { PageActions, DetailSkeleton, EmptyState, PageContainer, PageHeader, PageSkeleton, toast } from "@bs/ui";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import type { CollectionDetail, CollectionRule } from "@bs/contracts";
 import { Button } from "@bs/ui";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@bs/ui";
 import { Field, FieldLabel } from "@bs/ui";
 import { Input, InfoTip, Textarea } from "@bs/ui";
-import { RadioGroup, RadioGroupItem } from "@bs/ui";
 import { Switch } from "@bs/ui";
 import { ConfirmDialog } from "@bs/ui";
 import { SeoCard } from "../../components/seo-card.tsx";
-import { SimpleSelect } from "@bs/ui";
 import { errorMessage } from "../../lib/errors.ts";
 import { orpc } from "../../lib/orpc.ts";
+import { CollectionTypeCard, ProductAssignmentsCard, ProductSortingCard, RulesBuilderCard } from "../../components/collection/collection-parts.tsx";
+import type { PickedProduct } from "../../components/product/product-picker-dialog.tsx";
+import { storefrontLink, useStorefrontUrl } from "../../lib/storefront-url.ts";
 import { MediaField } from "../../components/media/media-field.tsx";
 
 export const Route = createFileRoute("/_store/collections_/$id")({
@@ -43,38 +38,6 @@ function EditCollectionRoute() {
   const navigate = useNavigate();
   return <EditCollectionPage id={id} navigate={(to) => void navigate({ to })} />;
 }
-
-const SORT_OPTIONS = [
-  { value: "manual", label: "Manually" },
-  { value: "best_selling", label: "Best selling" },
-  { value: "title_asc", label: "Alphabetically (A-Z)" },
-  { value: "title_desc", label: "Alphabetically (Z-A)" },
-  { value: "price_asc", label: "Price (low to high)" },
-  { value: "price_desc", label: "Price (high to low)" },
-  { value: "created_desc", label: "Date: Newest first" },
-  { value: "created_asc", label: "Date: Oldest first" },
-];
-
-const RULE_FIELDS = [
-  { value: "title", label: "Product title" },
-  { value: "product_type", label: "Product type" },
-  { value: "tag", label: "Product tag" },
-  { value: "brand", label: "Brand" },
-  { value: "category", label: "Category" },
-  { value: "price", label: "Price (paise/inr)" },
-  { value: "in_stock", label: "In stock" },
-];
-
-const RULE_OPERATORS = [
-  { value: "equals", label: "is equal to" },
-  { value: "not_equals", label: "is not equal to" },
-  { value: "contains", label: "contains" },
-  { value: "not_contains", label: "does not contain" },
-  { value: "greater_than", label: "is greater than" },
-  { value: "less_than", label: "is less than" },
-  { value: "is_set", label: "is set" },
-  { value: "is_not_set", label: "is not set" },
-];
 
 export function EditCollectionPage({ id, navigate }: { id: string; navigate?: (to: string) => void }) {
   const go = navigate ?? (() => undefined);
@@ -109,6 +72,7 @@ export function EditCollectionPage({ id, navigate }: { id: string; navigate?: (t
 
 function CollectionEditor({ collection, go }: { collection: CollectionDetail; go: (to: string) => void }) {
   const queryClient = useQueryClient();
+  const previewHref = storefrontLink(useStorefrontUrl(), `/collections/${collection.slug}`);
 
   const [title, setTitle] = useState(collection.title);
   const [description, setDescription] = useState(collection.description ?? "");
@@ -138,19 +102,11 @@ function CollectionEditor({ collection, go }: { collection: CollectionDetail; go
   );
 
   // Manual product picker state
-  const [productIds, setProductIds] = useState<string[]>(collection.productIds ?? []);
-  const [productSearch, setProductSearch] = useState("");
-  const [deleteOpen, setDeleteOpen] = useState(false);
-
-  const productsQuery = useQuery({
-    ...orpc.admin.products.list.queryOptions({
-      input: {
-        search: productSearch.trim() || undefined,
-        limit: 20,
-      },
-    }),
+  const [products, setProducts] = useState<PickedProduct[]>(() => {
+    const byId = new Map((collection.products ?? []).map((p) => [p.id, p]));
+    return (collection.productIds ?? []).map((id) => byId.get(id) ?? { id, title: "Unknown product" });
   });
-  const availableProducts = productsQuery.data?.items ?? [];
+  const [deleteOpen, setDeleteOpen] = useState(false);
 
   const [errors, setErrors] = useState<Record<string, string>>({});
 
@@ -180,38 +136,6 @@ function CollectionEditor({ collection, go }: { collection: CollectionDetail; go
       },
     }),
   );
-
-  const addRule = () => {
-    setRules((prev) => [...prev, { field: "tag", operator: "equals", value: "" }]);
-  };
-
-  const updateRule = (index: number, patch: Partial<CollectionRule>) => {
-    setRules((prev) => prev.map((r, i) => (i === index ? { ...r, ...patch } : r)));
-  };
-
-  const removeRule = (index: number) => {
-    setRules((prev) => prev.filter((_, i) => i !== index));
-  };
-
-  const addProduct = (productId: string) => {
-    if (!productIds.includes(productId)) {
-      setProductIds((prev) => [...prev, productId]);
-    }
-  };
-
-  const removeProduct = (productId: string) => {
-    setProductIds((prev) => prev.filter((id) => id !== productId));
-  };
-
-  const moveProduct = (fromIndex: number, toIndex: number) => {
-    if (toIndex < 0 || toIndex >= productIds.length) return;
-    setProductIds((prev) => {
-      const next = [...prev];
-      const [item] = next.splice(fromIndex, 1);
-      if (item) next.splice(toIndex, 0, item);
-      return next;
-    });
-  };
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -243,23 +167,33 @@ function CollectionEditor({ collection, go }: { collection: CollectionDetail; go
               description: seoDescription.trim() || null,
             }
           : null,
-      productIds: type === "manual" ? productIds : undefined,
+      productIds: type === "manual" ? products.map((p) => p.id) : undefined,
     });
   };
 
   return (
     <PageContainer size="full">
-      <PageBreadcrumbs
-        items={[
-          { label: "Collections", href: "/collections" },
-          { label: collection.title },
-        ]}
-        actions={
-          <div className="flex items-center gap-2">
+      <PageActions>
+        <div className="flex items-center gap-2">
             <Button variant="ghost" size="sm" onClick={() => go("/collections")}>
               <ArrowLeft className="mr-1.5 size-3.5" aria-hidden />
               Collections
             </Button>
+            {previewHref ? (
+              collection.published ? (
+                <Button variant="outline" size="sm" asChild>
+                  <a href={previewHref} target="_blank" rel="noopener noreferrer">
+                    <Eye className="mr-1.5 size-3.5" aria-hidden />
+                    Preview
+                  </a>
+                </Button>
+              ) : (
+                <Button variant="outline" size="sm" disabled title="Unpublished collections are hidden from the storefront">
+                  <Eye className="mr-1.5 size-3.5" aria-hidden />
+                  Preview
+                </Button>
+              )
+            ) : null}
             <Button
               type="button"
               variant="destructive"
@@ -280,8 +214,7 @@ function CollectionEditor({ collection, go }: { collection: CollectionDetail; go
               {updateMutation.isPending ? "Saving..." : "Save Changes"}
             </Button>
           </div>
-        }
-      />
+      </PageActions>
 
       <PageHeader
         title={collection.title}
@@ -341,232 +274,13 @@ function CollectionEditor({ collection, go }: { collection: CollectionDetail; go
             </CardContent>
           </Card>
 
-          {/* Collection Type Selector */}
-          <Card>
-            <CardHeader>
-              <CardTitle className="text-base font-semibold">Collection Type</CardTitle>
-              <CardDescription>Choose how products are added to this collection.</CardDescription>
-            </CardHeader>
-            <CardContent>
-              <RadioGroup
-                value={type}
-                onValueChange={(val: string) => setType(val as "manual" | "automated")}
-                className="grid gap-4"
-              >
-                <label
-                  htmlFor="edit-type-manual"
-                  className={`flex cursor-pointer items-start gap-3 rounded-lg border p-4 transition-colors ${
-                    type === "manual" ? "border-primary bg-primary/5" : "border-border hover:bg-muted/50"
-                  }`}
-                >
-                  <RadioGroupItem value="manual" id="edit-type-manual" className="mt-1" />
-                  <div className="space-y-1">
-                    <div className="flex items-center gap-1.5 font-medium">
-                      <Boxes className="size-4 text-muted-foreground" aria-hidden />
-                      Manual Collection
-                    </div>
-                    <p className="text-xs text-muted-foreground">
-                      Add products to this collection one by one and custom order them.
-                    </p>
-                  </div>
-                </label>
+          <CollectionTypeCard value={type} onChange={setType} noun="collection" idPrefix="edit" />
 
-                <label
-                  htmlFor="edit-type-auto"
-                  className={`flex cursor-pointer items-start gap-3 rounded-lg border p-4 transition-colors ${
-                    type === "automated" ? "border-primary bg-primary/5" : "border-border hover:bg-muted/50"
-                  }`}
-                >
-                  <RadioGroupItem value="automated" id="edit-type-auto" className="mt-1" />
-                  <div className="space-y-1">
-                    <div className="flex items-center gap-1.5 font-medium">
-                      <Zap className="size-4 text-muted-foreground" aria-hidden />
-                      Automated Collection
-                    </div>
-                    <p className="text-xs text-muted-foreground">
-                      Existing and future products matching conditions will be automatically added.
-                    </p>
-                  </div>
-                </label>
-              </RadioGroup>
-            </CardContent>
-          </Card>
-
-          {/* Type-Specific Builder: Manual Picker or Automated Condition Builder */}
+          {/* Type-specific: manual product picker or automated conditions */}
           {type === "manual" ? (
-            <Card>
-              <CardHeader>
-                <CardTitle className="text-base font-semibold">Product Assignments</CardTitle>
-                <CardDescription>Search and select products included in this collection.</CardDescription>
-              </CardHeader>
-              <CardContent className="space-y-4">
-                <div className="relative">
-                  <Search className="absolute left-3 top-2.5 size-4 text-muted-foreground" />
-                  <Input
-                    placeholder="Search products to add..."
-                    value={productSearch}
-                    onChange={(e) => setProductSearch(e.target.value)}
-                    className="pl-9"
-                  />
-                </div>
-
-                {productSearch.trim() && (
-                  <div className="max-h-48 overflow-y-auto rounded-md border border-border bg-muted/20 p-2 space-y-1">
-                    {availableProducts.length === 0 ? (
-                      <div className="p-3 text-center text-xs text-muted-foreground">No matching products found</div>
-                    ) : (
-                      availableProducts.map((p) => {
-                        const isSelected = productIds.includes(p.id);
-                        return (
-                          <div
-                            key={p.id}
-                            className="flex items-center justify-between rounded p-2 text-sm hover:bg-muted/50"
-                          >
-                            <span className="truncate">{p.title}</span>
-                            <Button
-                              type="button"
-                              variant={isSelected ? "secondary" : "outline"}
-                              size="sm"
-                              disabled={isSelected}
-                              onClick={() => addProduct(p.id)}
-                            >
-                              {isSelected ? "Added" : "Add"}
-                            </Button>
-                          </div>
-                        );
-                      })
-                    )}
-                  </div>
-                )}
-
-                <div className="space-y-2">
-                  <div className="text-xs font-semibold uppercase text-muted-foreground tracking-wider">
-                    Selected Products ({productIds.length})
-                  </div>
-                  {productIds.length === 0 ? (
-                    <div className="rounded-lg border border-dashed border-border p-6 text-center text-sm text-muted-foreground">
-                      No products added yet. Use the search above to pick products.
-                    </div>
-                  ) : (
-                    <div className="space-y-1">
-                      {productIds.map((pid, idx) => {
-                        const prod = availableProducts.find((p) => p.id === pid) || collection.products?.find((p) => p.id === pid);
-                        return (
-                          <div
-                            key={pid}
-                            className="flex items-center justify-between rounded-md border border-border bg-card p-2 text-sm"
-                          >
-                            <div className="flex items-center gap-2 truncate">
-                              <GripVertical className="size-4 text-muted-foreground cursor-grab" />
-                              <span className="text-xs font-mono text-muted-foreground">{idx + 1}.</span>
-                              <span className="truncate font-medium">{prod?.title ?? pid}</span>
-                            </div>
-                            <div className="flex items-center gap-1">
-                              <Button
-                                type="button"
-                                variant="ghost"
-                                size="sm"
-                                disabled={idx === 0}
-                                onClick={() => moveProduct(idx, idx - 1)}
-                              >
-                                ↑
-                              </Button>
-                              <Button
-                                type="button"
-                                variant="ghost"
-                                size="sm"
-                                disabled={idx === productIds.length - 1}
-                                onClick={() => moveProduct(idx, idx + 1)}
-                              >
-                                ↓
-                              </Button>
-                              <Button
-                                type="button"
-                                variant="ghost"
-                                size="sm"
-                                onClick={() => removeProduct(pid)}
-                              >
-                                <X className="size-4 text-destructive" />
-                              </Button>
-                            </div>
-                          </div>
-                        );
-                      })}
-                    </div>
-                  )}
-                </div>
-              </CardContent>
-            </Card>
+            <ProductAssignmentsCard products={products} onChange={setProducts} />
           ) : (
-            <Card>
-              <CardHeader>
-                <CardTitle className="text-base font-semibold">Conditions</CardTitle>
-                <CardDescription>Products must match these criteria to be included.</CardDescription>
-              </CardHeader>
-              <CardContent className="space-y-4">
-                <div className="flex items-center gap-4 text-sm">
-                  <span className="text-muted-foreground">Products must match:</span>
-                  <RadioGroup
-                    value={match}
-                    onValueChange={(val: string) => setMatch(val as "all" | "any")}
-                    className="flex items-center gap-4"
-                  >
-                    <div className="flex items-center gap-1.5">
-                      <RadioGroupItem value="all" id="edit-match-all" />
-                      <label htmlFor="edit-match-all" className="cursor-pointer">All conditions</label>
-                    </div>
-                    <div className="flex items-center gap-1.5">
-                      <RadioGroupItem value="any" id="edit-match-any" />
-                      <label htmlFor="edit-match-any" className="cursor-pointer">Any condition</label>
-                    </div>
-                  </RadioGroup>
-                </div>
-
-                <div className="space-y-3">
-                  {rules.map((rule, idx) => (
-                    <div key={idx} className="flex flex-wrap items-center gap-2">
-                      <div className="w-36">
-                        <SimpleSelect
-                          value={rule.field}
-                          options={RULE_FIELDS}
-                          onChange={(val: string) => updateRule(idx, { field: val as CollectionRule["field"] })}
-                        />
-                      </div>
-                      <div className="w-36">
-                        <SimpleSelect
-                          value={rule.operator}
-                          options={RULE_OPERATORS}
-                          onChange={(val: string) => updateRule(idx, { operator: val as CollectionRule["operator"] })}
-                        />
-                      </div>
-                      {!["is_set", "is_not_set"].includes(rule.operator) && (
-                        <Input
-                          placeholder="Condition value"
-                          value={String(rule.value ?? "")}
-                          onChange={(e) => updateRule(idx, { value: e.target.value })}
-                          className="flex-1 min-w-[140px]"
-                        />
-                      )}
-                      {rules.length > 1 && (
-                        <Button
-                          type="button"
-                          variant="ghost"
-                          size="sm"
-                          onClick={() => removeRule(idx)}
-                        >
-                          <Trash2 className="size-4 text-destructive" />
-                        </Button>
-                      )}
-                    </div>
-                  ))}
-
-                  <Button type="button" variant="outline" size="sm" onClick={addRule}>
-                    <Plus className="mr-1.5 size-3.5" />
-                    Add another condition
-                  </Button>
-                </div>
-              </CardContent>
-            </Card>
+            <RulesBuilderCard rules={rules} onRulesChange={setRules} match={match} onMatchChange={setMatch} idPrefix="edit" />
           )}
 
           {/* Search Engine Optimization Card (Configurable Indexing) */}
@@ -627,32 +341,7 @@ function CollectionEditor({ collection, go }: { collection: CollectionDetail; go
             </CardContent>
           </Card>
 
-          {/* Sort Order */}
-          <Card>
-            <CardHeader>
-              <CardTitle className="text-base font-semibold">Product Sorting</CardTitle>
-              <CardDescription>Default display order of products in this collection.</CardDescription>
-            </CardHeader>
-            <CardContent>
-              <SimpleSelect
-                value={sortOrder}
-                options={SORT_OPTIONS}
-                onChange={(val: string) =>
-                  setSortOrder(
-                    val as
-                      | "manual"
-                      | "best_selling"
-                      | "title_asc"
-                      | "title_desc"
-                      | "price_asc"
-                      | "price_desc"
-                      | "created_desc"
-                      | "created_asc",
-                  )
-                }
-              />
-            </CardContent>
-          </Card>
+          <ProductSortingCard value={sortOrder} onChange={(val) => setSortOrder(val as typeof sortOrder)} noun="collection" />
 
           {/* Status & Visibility */}
           <Card>

@@ -102,7 +102,7 @@ export function MiniCartDrawer({
   return (
     <div className="fixed inset-0 z-[60]" data-testid="mini-cart">
       <div className="absolute inset-0 bg-black/40" onClick={onClose} aria-hidden />
-      <div ref={panelRef} role="dialog" aria-modal="true" aria-label="Shopping cart" className="bs-skin absolute right-0 top-0 flex h-full w-full max-w-md flex-col bg-background text-foreground shadow-xl">
+      <div ref={panelRef} role="dialog" aria-modal="true" aria-label="Shopping cart" className="bs-skin absolute right-0 top-0 flex h-full w-[90%] max-w-md flex-col bg-background text-foreground shadow-xl">
         <div className="flex items-center justify-between border-b border-border px-5 py-3">
           <h2 className="flex items-center gap-2 text-lg font-semibold tracking-tight" style={HEADING_FONT}>
             {copy.heading}

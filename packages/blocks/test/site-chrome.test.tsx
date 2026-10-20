@@ -12,15 +12,15 @@ describe("site header options", () => {
       expect(SiteHeaderSchema.safeParse({ layout }).success, layout).toBe(true);
     }
     expect(SiteHeaderSchema.safeParse({ layout: "diagonal" }).success).toBe(false);
-    expect(SiteHeaderSchema.parse({})).toMatchObject({ layout: "left", showAccount: false, showSearch: true, showCart: true });
+    expect(SiteHeaderSchema.parse({})).toMatchObject({ layout: "left", showAccount: true, showSearch: true, showCart: true });
     expect(validateBlockDocument({ version: 1, blocks: [header({ layout: "left", links: [] })] }).success).toBe(true);
   });
 
-  it("puts the layout class on the header and the account icon only when asked", () => {
+  it("puts the layout class on the header and shows the account icon unless it is switched off", () => {
     for (const layout of ["left", "navCenter", "logoCenter", "logoRight", "center"]) expect(render([header({ layout })])).toContain(`bsb-hl-${layout}`);
     expect(render([header({ layout: "center" })])).toContain("bsb-site-header-center");
-    expect(render([header()])).not.toContain('href="/account"');
-    expect(render([header({ showAccount: true })])).toContain('href="/account"');
+    expect(render([header()])).toContain('href="/account"');
+    expect(render([header({ showAccount: false })])).not.toContain('href="/account"');
     expect(render([header({ showSearch: false, showCart: false })])).not.toContain('href="/search"');
   });
 });

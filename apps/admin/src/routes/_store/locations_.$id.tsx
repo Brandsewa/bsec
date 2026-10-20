@@ -1,7 +1,7 @@
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { ArrowLeft, CheckCircle2, Save, Trash2 } from "lucide-react";
 import { useState } from "react";
-import { PageBreadcrumbs, PageContainer, PageHeader, PageSkeleton, toast } from "@bs/ui";
+import { PageContainer, PageHeader, PageSkeleton, toast } from "@bs/ui";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import type { Location } from "@bs/contracts";
 import { Badge } from "@bs/ui";
@@ -36,7 +36,6 @@ export function EditLocationPage({ id, navigate }: { id: string; navigate?: (to:
   if (locationQuery.isError || !locationQuery.data) {
     return (
       <PageContainer size="default" className="space-y-6">
-        <PageBreadcrumbs items={[{ label: "Locations", href: "/locations" }, { label: "Not found" }]} />
         <Card>
           <CardContent className="py-12 text-center">
             <p className="text-muted-foreground">Location not found or deleted.</p>
@@ -126,12 +125,6 @@ function LocationEditor({ location, go }: { location: Location; go: (to: string)
 
   return (
     <PageContainer size="default" className="space-y-6 pb-16">
-      <PageBreadcrumbs
-        items={[
-          { label: "Locations", href: "/locations" },
-          { label: location.name },
-        ]}
-      />
 
       <PageHeader
         title={

@@ -4,6 +4,7 @@ import React, { createContext, useContext, useState, useSyncExternalStore } from
 import type { StorefrontProductDetail, StorefrontVariant } from "@bs/domain";
 import { addVariantToCart } from "./AddToCartButton.tsx";
 import { RequestQuoteDialog } from "./RequestQuoteDialog.tsx";
+import { ShareButton } from "./ShareButton.tsx";
 
 /** Formats minor unit paise into standard ₹ Indian Rupee format */
 export function formatInr(paise: number): string {
@@ -170,7 +171,8 @@ export function PriceBlock({ note }: { note?: string | undefined }) {
   const variants = product.variants ?? [];
   // The price follows the quantity as it is changed: unit price x quantity (checkout still works the real total out on the server).
   const unitPrice = selectedVariant?.price ?? variants[0]?.price ?? 0;
-  const unitCompareAt = selectedVariant?.compareAtPrice ?? variants[0]?.compareAtPrice;
+  // A chosen variant without a compare-at price shows none; it must not borrow the first variant's.
+  const unitCompareAt = selectedVariant ? selectedVariant.compareAtPrice : variants[0]?.compareAtPrice;
   const currentPrice = unitPrice * qty;
   const currentCompareAt = unitCompareAt !== undefined ? unitCompareAt * qty : undefined;
   const hasSavings = currentCompareAt !== undefined && currentCompareAt > currentPrice;
@@ -180,15 +182,18 @@ export function PriceBlock({ note }: { note?: string | undefined }) {
 
   return (
     <div className="flex flex-col gap-1.5">
-      {product.priceOnRequest ? (
-        <span className="w-fit rounded-lg bg-primary/10 px-3 py-1.5 text-sm font-semibold text-primary">Price on request</span>
-      ) : (
-        <div className="flex flex-wrap items-baseline gap-x-3 gap-y-1">
-          <span className="text-3xl font-extrabold tracking-tight text-foreground">{formatInr(currentPrice)}</span>
-          {hasSavings ? <span className="text-xl font-medium text-muted-foreground line-through">{formatInr(currentCompareAt)}</span> : null}
-          {hasSavings ? <span className="rounded-md bg-emerald-500/10 px-2 py-0.5 text-xs font-semibold text-emerald-600 dark:text-emerald-400">Save {discountPercent}%</span> : null}
-        </div>
-      )}
+      <div className="flex items-start justify-between gap-3">
+        {product.priceOnRequest ? (
+          <span className="w-fit rounded-lg bg-primary/10 px-3 py-1.5 text-sm font-semibold text-primary">Price on request</span>
+        ) : (
+          <div className="flex flex-wrap items-baseline gap-x-3 gap-y-1">
+            <span className="text-3xl font-extrabold tracking-tight text-foreground">{formatInr(currentPrice)}</span>
+            {hasSavings ? <span className="text-xl font-medium text-muted-foreground line-through">{formatInr(currentCompareAt)}</span> : null}
+            {hasSavings ? <span className="rounded-md bg-emerald-500/10 px-2 py-0.5 text-xs font-semibold text-emerald-600 dark:text-emerald-400">Save {discountPercent}%</span> : null}
+          </div>
+        )}
+        <ShareButton title={product.title} className="shrink-0" />
+      </div>
       {qty > 1 && !product.priceOnRequest ? (
         <p className="text-sm text-muted-foreground" aria-live="polite">
           {formatInr(unitPrice)} each × {qty}

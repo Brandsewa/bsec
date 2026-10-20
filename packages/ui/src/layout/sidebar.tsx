@@ -29,6 +29,8 @@ export interface NavGroup {
   label?: string;
   icon?: ComponentType<{ className?: string }>;
   items: NavItem[];
+  /** Shows a small "open in a new tab" icon on the group row (for example, a link to the live storefront). */
+  external?: { href: string; label: string };
 }
 
 /** The one item that matches the current path best (longest matching href), so /settings does not stay lit on /settings/taxes. */

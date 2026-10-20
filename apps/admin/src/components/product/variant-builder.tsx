@@ -37,12 +37,12 @@ const inr = new Intl.NumberFormat("en-IN", { style: "currency", currency: "INR" 
 const toPaise = (rupees: string) => Math.round(Number(rupees) * 100);
 
 /** Values of one option as removable chips; Enter or a comma adds, Backspace on an empty field removes the last. */
-function ValueChips({ values, onChange, label }: { values: string[]; onChange: (next: string[]) => void; label: string }) {
+export function ValueChips({ values, onChange, label, onEnter }: { values: string[]; onChange: (next: string[]) => void; label: string; onEnter?: (next: string[]) => void }) {
   const [text, setText] = useState("");
 
-  function commit(raw: string) {
+  function commit(raw: string): string[] | null {
     const parts = raw.split(",").map((p) => p.trim()).filter(Boolean);
-    if (parts.length === 0) return;
+    if (parts.length === 0) return null;
     const seen = new Set(values.map((v) => v.toLowerCase()));
     const next = [...values];
     for (const p of parts) {
@@ -52,12 +52,14 @@ function ValueChips({ values, onChange, label }: { values: string[]; onChange: (
     }
     onChange(next);
     setText("");
+    return next;
   }
 
   function onKeyDown(e: KeyboardEvent<HTMLInputElement>) {
     if (e.key === "Enter" || e.key === ",") {
       e.preventDefault();
-      commit(text);
+      const next = commit(text);
+      if (next) onEnter?.(next);
     } else if (e.key === "Backspace" && text === "" && values.length > 0) {
       onChange(values.slice(0, -1));
     }
@@ -113,7 +115,6 @@ export function VariantBuilderCard({ product, priceOnRequest, onChanged }: Varia
   const bulk = useBulkRunner();
 
   const setOptions = useMutation(orpc.admin.products.setOptions.mutationOptions());
-
   const cleaned = useMemo(() => cleanOptions(draft), [draft]);
   const dirty = JSON.stringify(cleaned) !== JSON.stringify(cleanOptions(initial));
   const preview = useMemo(() => previewGrid(draft, product.variants), [draft, product.variants]);
@@ -126,12 +127,16 @@ export function VariantBuilderCard({ product, priceOnRequest, onChanged }: Varia
 
   const mediaUrl = (mediaId: string | null | undefined) => product.media.find((m) => m.mediaId === mediaId)?.url;
 
-  async function apply() {
-    if (preview.error) return;
+  // `source` lets Enter apply the values it just added, before React has re-rendered with them.
+  async function apply(source: DraftOption[] = draft) {
+    // Pressing Enter after typing values applies the options straight away, so the variants appear below without a second click.
+    const grid = previewGrid(source, product.variants);
+    if (grid.error || setOptions.isPending) return;
     try {
-      const options = cleaned.filter((o) => o.name && o.values.length > 0);
+      const options = cleanOptions(source).filter((o) => o.name && o.values.length > 0);
+      if (JSON.stringify(options) === JSON.stringify(cleanOptions(initial).filter((o) => o.name && o.values.length > 0))) return;
       await setOptions.mutateAsync({ id: product.id, options });
-      toast.success(preview.toCreate > 0 ? `Options saved. ${preview.toCreate} variant${preview.toCreate === 1 ? "" : "s"} added.` : "Options saved.");
+      toast.success(grid.toCreate > 0 ? `Options saved. ${grid.toCreate} variant${grid.toCreate === 1 ? "" : "s"} added.` : "Options saved.");
       onChanged();
     } catch (err) {
       toast.error(errorMessage(err, "Could not save the options"));
@@ -233,6 +238,7 @@ export function VariantBuilderCard({ product, priceOnRequest, onChanged }: Varia
                       label={`Values for ${opt.name || "option"}`}
                       values={opt.values}
                       onChange={(next) => setDraft((d) => d.map((o, j) => (j === i ? { ...o, values: next } : o)))}
+                      onEnter={(next) => void apply(draft.map((o, j) => (j === i ? { ...o, values: next } : o)))}
                     />
                   </div>
                   <Button
@@ -368,6 +374,7 @@ export function VariantBuilderCard({ product, priceOnRequest, onChanged }: Varia
         productMedia={product.media}
         priceOnRequest={priceOnRequest}
         variant={drawerVariant}
+        variants={product.variants}
         optionNames={optionNames}
         canDelete={product.variants.length > 1}
         onChanged={onChanged}

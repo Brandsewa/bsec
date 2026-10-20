@@ -20,7 +20,6 @@ import {
   EmptyState,
   InfoTip,
   Input,
-  PageBreadcrumbs,
   PageContainer,
   PageHeader,
   PageSkeleton,
@@ -594,13 +593,6 @@ export function MediaLibraryPage() {
 
   return (
     <PageContainer>
-      <PageBreadcrumbs
-        items={[
-          { label: "Home", href: "/" },
-          { label: "Online Store", href: "/online-store/pages" },
-          { label: "Media" },
-        ]}
-      />
 
       <PageHeader
         title="Media"
