@@ -1228,55 +1228,68 @@ export async function getStorefrontCategory(
       ? sql`exists (select 1 from variants v join inventory_levels il on il.tenant_id = v.tenant_id and il.variant_id = v.id where v.tenant_id = ${schema.products.tenantId} and v.product_id = ${schema.products.id} and (il.on_hand - il.reserved) > 0)`
       : undefined;
 
-    const baseWhere = and(
-      eq(schema.productCategories.categoryId, cat.id),
-      inArray(schema.products.status, [...LISTED_PRODUCT_STATUSES]),
-      isNull(schema.products.deletedAt),
-      inStockCondition,
-    );
-
     const minPriceSql = sql`(select min(v.price) from variants v where v.tenant_id = ${schema.products.tenantId} and v.product_id = ${schema.products.id})`;
-    let orderClause = asc(schema.productCategories.position);
-    if (opts?.sort === "price_asc") {
+    // The shopper's choice wins; otherwise the category's own default order (like a collection's).
+    const effectiveSort = opts?.sort ?? cat.sortOrder;
+    let orderClause: SQL = asc(schema.productCategories.position);
+    if (effectiveSort === "price_asc") {
       orderClause = asc(minPriceSql);
-    } else if (opts?.sort === "price_desc") {
+    } else if (effectiveSort === "price_desc") {
       orderClause = desc(minPriceSql);
-    } else if (opts?.sort === "newest") {
+    } else if (effectiveSort === "newest" || effectiveSort === "created_desc") {
       orderClause = desc(schema.products.createdAt);
-    } else if (opts?.sort === "title") {
+    } else if (effectiveSort === "oldest" || effectiveSort === "created_asc") {
+      orderClause = asc(schema.products.createdAt);
+    } else if (effectiveSort === "title" || effectiveSort === "title_asc") {
       orderClause = asc(schema.products.title);
+    } else if (effectiveSort === "title_desc") {
+      orderClause = desc(schema.products.title);
     }
 
-    const prodRows = await tx
-      .select({
-        product: schema.products,
-      })
-      .from(schema.productCategories)
-      .innerJoin(
-        schema.products,
-        and(
-          eq(schema.products.tenantId, schema.productCategories.tenantId),
-          eq(schema.products.id, schema.productCategories.productId),
-        ),
-      )
-      .where(baseWhere)
-      .orderBy(orderClause)
-      .limit(limit)
-      .offset(offset);
+    let prodRows: Array<{ product: typeof schema.products.$inferSelect }>;
+    let total: number;
 
-    const countRows = await tx
-      .select({ count: sql<number>`count(*)::int` })
-      .from(schema.productCategories)
-      .innerJoin(
-        schema.products,
-        and(
-          eq(schema.products.tenantId, schema.productCategories.tenantId),
-          eq(schema.products.id, schema.productCategories.productId),
-        ),
-      )
-      .where(baseWhere);
-
-    const total = Number(countRows[0]?.count ?? prodRows.length);
+    if (cat.type === "automated") {
+      // Every listed product that matches the category's rules; "manual" order has no meaning here, so newest first.
+      const ruleConditions = parseCollectionRules(cat.rules).map((rule) => buildSingleRuleCondition(rule, schema.products));
+      const combined = ruleConditions.length > 0 ? (cat.match === "any" ? or(...ruleConditions) : and(...ruleConditions)) : sql`false`;
+      const autoWhere = and(
+        eq(schema.products.tenantId, ctx.tenantId),
+        inArray(schema.products.status, [...LISTED_PRODUCT_STATUSES]),
+        isNull(schema.products.deletedAt),
+        combined,
+        inStockCondition,
+      );
+      const autoOrder = effectiveSort === "manual" ? desc(schema.products.createdAt) : orderClause;
+      prodRows = await tx.select({ product: schema.products }).from(schema.products).where(autoWhere).orderBy(autoOrder).limit(limit).offset(offset);
+      const countRows = await tx.select({ count: sql<number>`count(*)::int` }).from(schema.products).where(autoWhere);
+      total = Number(countRows[0]?.count ?? prodRows.length);
+    } else {
+      const baseWhere = and(
+        eq(schema.productCategories.categoryId, cat.id),
+        inArray(schema.products.status, [...LISTED_PRODUCT_STATUSES]),
+        isNull(schema.products.deletedAt),
+        inStockCondition,
+      );
+      const join = and(
+        eq(schema.products.tenantId, schema.productCategories.tenantId),
+        eq(schema.products.id, schema.productCategories.productId),
+      );
+      prodRows = await tx
+        .select({ product: schema.products })
+        .from(schema.productCategories)
+        .innerJoin(schema.products, join)
+        .where(baseWhere)
+        .orderBy(orderClause)
+        .limit(limit)
+        .offset(offset);
+      const countRows = await tx
+        .select({ count: sql<number>`count(*)::int` })
+        .from(schema.productCategories)
+        .innerJoin(schema.products, join)
+        .where(baseWhere);
+      total = Number(countRows[0]?.count ?? prodRows.length);
+    }
 
     const productList = prodRows.map((r) => r.product);
     const productIds = productList.map((p) => p.id);
@@ -1343,6 +1356,18 @@ export async function listStorefrontCategories(rt: Runtime, ctx: TenantContext):
       .from(schema.categories)
       .where(eq(schema.categories.isActive, true))
       .orderBy(asc(schema.categories.position), asc(schema.categories.name));
+
+    // An automated category has no assigned products: its count is however many listed products match its rules.
+    for (const c of rows) {
+      if (c.type !== "automated") continue;
+      const conditions = parseCollectionRules(c.rules).map((rule) => buildSingleRuleCondition(rule, schema.products));
+      const combined = conditions.length > 0 ? (c.match === "any" ? or(...conditions) : and(...conditions)) : sql`false`;
+      const [row] = await tx
+        .select({ n: sql<number>`count(*)::int` })
+        .from(schema.products)
+        .where(and(eq(schema.products.tenantId, ctx.tenantId), inArray(schema.products.status, [...LISTED_PRODUCT_STATUSES]), isNull(schema.products.deletedAt), combined));
+      countById.set(c.id, Number(row?.n ?? 0));
+    }
 
     const visible = rows.filter((c) => (countById.get(c.id) ?? 0) > 0);
     const media = await mediaStorageKeys(

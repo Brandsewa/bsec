@@ -477,6 +477,13 @@
       "when": 1792888400000,
       "tag": "0073_platform_settings",
       "breakpoints": true
+    },
+    {
+      "idx": 68,
+      "version": "7",
+      "when": 1792974800000,
+      "tag": "0074_category_types",
+      "breakpoints": true
     }
   ]
 }

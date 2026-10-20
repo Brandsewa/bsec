@@ -518,6 +518,12 @@ export const Category = z.object({
   path: z.string().optional(),
   isActive: z.boolean(),
   isFeatured: z.boolean(),
+  /** Same model as collections: manual (assigned products) or automated (rules). */
+  type: z.enum(["manual", "automated"]).default("manual"),
+  match: z.enum(["all", "any"]).default("all"),
+  rules: z.array(z.lazy(() => CollectionRule)).nullable().optional(),
+  /** Default product order on the category page. */
+  sortOrder: z.string().default("manual"),
   seo: CategorySeo.nullable().optional(),
   productCount: z.number().int().optional(),
   childrenCount: z.number().int().optional(),
@@ -525,6 +531,24 @@ export const Category = z.object({
   updatedAt: z.string(),
 });
 export type Category = z.infer<typeof Category>;
+
+/** One category with its assigned products, in order (manual categories). */
+export const CategoryDetail = Category.extend({
+  productIds: z.array(z.string().uuid()).default([]),
+  products: z
+    .array(
+      z.object({
+        id: z.string().uuid(),
+        title: z.string(),
+        slug: z.string(),
+        status: z.string(),
+        imageUrl: z.string().nullable().optional(),
+        priceMin: z.number().nullable().optional(),
+      }),
+    )
+    .optional(),
+});
+export type CategoryDetail = z.infer<typeof CategoryDetail>;
 
 export const CategoryStats = z.object({
   total: z.number().int(),
@@ -2547,7 +2571,7 @@ export const adminContract = {
     get: oc
       .route({ method: "GET", path: "/admin/categories/{id}" })
       .input(z.object({ id: z.string().uuid() }))
-      .output(Category),
+      .output(CategoryDetail),
     create: oc
       .route({ method: "POST", path: "/admin/categories" })
       .input(
@@ -2560,10 +2584,16 @@ export const adminContract = {
           position: z.number().int().default(0),
           isActive: z.boolean().default(true),
           isFeatured: z.boolean().default(false),
+          type: z.enum(["manual", "automated"]).default("manual"),
+          match: z.enum(["all", "any"]).default("all"),
+          rules: z.array(z.lazy(() => CollectionRule)).optional(),
+          sortOrder: z.string().default("manual"),
+          /** Manual categories: the assigned products, in order. */
+          productIds: z.array(z.string().uuid()).optional(),
           seo: CategorySeo.optional(),
         }),
       )
-      .output(Category),
+      .output(CategoryDetail),
     update: oc
       .route({ method: "PATCH", path: "/admin/categories/{id}" })
       .input(
@@ -2577,10 +2607,15 @@ export const adminContract = {
           position: z.number().int().optional(),
           isActive: z.boolean().optional(),
           isFeatured: z.boolean().optional(),
+          type: z.enum(["manual", "automated"]).optional(),
+          match: z.enum(["all", "any"]).optional(),
+          rules: z.array(z.lazy(() => CollectionRule)).nullable().optional(),
+          sortOrder: z.string().optional(),
+          productIds: z.array(z.string().uuid()).optional(),
           seo: CategorySeo.nullable().optional(),
         }),
       )
-      .output(Category),
+      .output(CategoryDetail),
     delete: oc
       .route({ method: "DELETE", path: "/admin/categories/{id}" })
       .input(z.object({ id: z.string().uuid() }))

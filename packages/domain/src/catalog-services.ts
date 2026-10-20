@@ -1209,6 +1209,10 @@ export async function listCategories(rt: Runtime, ctx: TenantContext, query?: Li
         path: schema.categories.path,
         isActive: schema.categories.isActive,
         isFeatured: schema.categories.isFeatured,
+        type: schema.categories.type,
+        match: schema.categories.match,
+        rules: schema.categories.rules,
+        sortOrder: schema.categories.sortOrder,
         seo: schema.categories.seo,
         createdAt: schema.categories.createdAt,
         updatedAt: schema.categories.updatedAt,
@@ -1259,6 +1263,10 @@ export async function listCategories(rt: Runtime, ctx: TenantContext, query?: Li
       path: r.path,
       isActive: r.isActive,
       isFeatured: r.isFeatured,
+      type: r.type as "manual" | "automated",
+      match: (r.match ?? "all") as "all" | "any",
+      rules: (r.rules as CollectionRule[] | null) ?? null,
+      sortOrder: r.sortOrder,
       seo: r.seo as { title?: string | null; description?: string | null } | null,
       productCount: prodCountMap.get(r.id) ?? 0,
       childrenCount: childCountMap.get(r.id) ?? 0,
@@ -1288,6 +1296,10 @@ export async function loadCategoryDetailInternal(
         path: schema.categories.path,
         isActive: schema.categories.isActive,
         isFeatured: schema.categories.isFeatured,
+        type: schema.categories.type,
+        match: schema.categories.match,
+        rules: schema.categories.rules,
+        sortOrder: schema.categories.sortOrder,
         seo: schema.categories.seo,
         createdAt: schema.categories.createdAt,
         updatedAt: schema.categories.updatedAt,
@@ -1299,6 +1311,22 @@ export async function loadCategoryDetailInternal(
       .limit(1);
 
     if (!row) throw new Error(`Category not found: "${categoryId}"`);
+
+    // The products assigned to the category, in their order (what a manual category lists).
+    const assigned = await tx
+      .select({
+        id: schema.products.id,
+        title: schema.products.title,
+        slug: schema.products.slug,
+        status: schema.products.status,
+      })
+      .from(schema.productCategories)
+      .innerJoin(
+        schema.products,
+        and(eq(schema.products.tenantId, schema.productCategories.tenantId), eq(schema.products.id, schema.productCategories.productId)),
+      )
+      .where(and(eq(schema.productCategories.categoryId, row.id), isNull(schema.products.deletedAt)))
+      .orderBy(asc(schema.productCategories.position), asc(schema.products.title));
 
     const [prodCount, childCount] = await Promise.all([
       tx
@@ -1323,9 +1351,15 @@ export async function loadCategoryDetailInternal(
       path: row.path,
       isActive: row.isActive,
       isFeatured: row.isFeatured,
+      type: row.type as "manual" | "automated",
+      match: (row.match ?? "all") as "all" | "any",
+      rules: (row.rules as CollectionRule[] | null) ?? null,
+      sortOrder: row.sortOrder,
       seo: row.seo as { title?: string | null; description?: string | null } | null,
       productCount: Number(prodCount[0]?.count ?? 0),
       childrenCount: Number(childCount[0]?.count ?? 0),
+      productIds: assigned.map((p) => p.id),
+      products: assigned.map((p) => ({ id: p.id, title: p.title, slug: p.slug, status: p.status, imageUrl: null, priceMin: null })),
       createdAt: row.createdAt.toISOString(),
       updatedAt: row.updatedAt.toISOString(),
     };
@@ -1376,7 +1410,57 @@ export interface CreateCategoryInput {
   position?: number | undefined;
   isActive?: boolean | undefined;
   isFeatured?: boolean | undefined;
+  type?: "manual" | "automated" | undefined;
+  match?: "all" | "any" | undefined;
+  rules?: CollectionRule[] | undefined;
+  sortOrder?: string | undefined;
+  productIds?: string[] | undefined;
   seo?: { title?: string | null | undefined; description?: string | null | undefined } | undefined;
+}
+
+/**
+ * Makes `productIds` (in that order) the products assigned to a manual category. A product that already has the
+ * category is kept (and moved to its new place); a new one is added, and becomes primary when it has no primary yet.
+ * A product whose primary category is this one cannot be removed here: it would be left without a primary category.
+ */
+async function syncCategoryProducts(tx: Db, tenantId: string, categoryId: string, productIds: string[]): Promise<void> {
+  const wanted = [...new Set(productIds)];
+  const existing = await tx
+    .select({
+      id: schema.productCategories.id,
+      productId: schema.productCategories.productId,
+      isPrimary: schema.productCategories.isPrimary,
+      title: schema.products.title,
+    })
+    .from(schema.productCategories)
+    .innerJoin(schema.products, and(eq(schema.products.tenantId, schema.productCategories.tenantId), eq(schema.products.id, schema.productCategories.productId)))
+    .where(eq(schema.productCategories.categoryId, categoryId));
+
+  const wantedSet = new Set(wanted);
+  const removed = existing.filter((e) => !wantedSet.has(e.productId));
+  const blocked = removed.find((e) => e.isPrimary);
+  if (blocked) {
+    throw new Error(`"${blocked.title}" uses this category as its primary category. Change its primary category on the product first, then remove it here.`);
+  }
+  if (removed.length > 0) {
+    await tx.delete(schema.productCategories).where(inArray(schema.productCategories.id, removed.map((e) => e.id)));
+  }
+
+  const have = new Map(existing.map((e) => [e.productId, e]));
+  for (let i = 0; i < wanted.length; i++) {
+    const productId = wanted[i] as string;
+    const row = have.get(productId);
+    if (row) {
+      await tx.update(schema.productCategories).set({ position: i, updatedAt: new Date() }).where(eq(schema.productCategories.id, row.id));
+      continue;
+    }
+    const [hasPrimary] = await tx
+      .select({ id: schema.productCategories.id })
+      .from(schema.productCategories)
+      .where(and(eq(schema.productCategories.productId, productId), eq(schema.productCategories.isPrimary, true)))
+      .limit(1);
+    await tx.insert(schema.productCategories).values({ tenantId, productId, categoryId, position: i, isPrimary: !hasPrimary });
+  }
 }
 
 export async function createCategory(
@@ -1410,11 +1494,19 @@ export async function createCategory(
         path,
         isActive: input.isActive ?? true,
         isFeatured: input.isFeatured ?? false,
+        type: input.type ?? "manual",
+        match: input.match ?? "all",
+        rules: (input.type ?? "manual") === "automated" ? (input.rules ?? []) : null,
+        sortOrder: input.sortOrder ?? "manual",
         seo: input.seo || null,
       })
       .returning();
 
     if (!row) throw new Error("Failed to create category");
+
+    if (row.type === "manual" && input.productIds && input.productIds.length > 0) {
+      await syncCategoryProducts(tx, ctx.tenantId, row.id, input.productIds);
+    }
 
     if (input.imageMediaId) {
       await syncMediaUsages(tx, ctx, {
@@ -1461,6 +1553,11 @@ export interface UpdateCategoryInput {
   position?: number | undefined;
   isActive?: boolean | undefined;
   isFeatured?: boolean | undefined;
+  type?: "manual" | "automated" | undefined;
+  match?: "all" | "any" | undefined;
+  rules?: CollectionRule[] | null | undefined;
+  sortOrder?: string | undefined;
+  productIds?: string[] | undefined;
   seo?: { title?: string | null | undefined; description?: string | null | undefined } | null | undefined;
 }
 
@@ -1490,6 +1587,10 @@ export async function updateCategory(
     if (input.position !== undefined) updateValues.position = input.position;
     if (input.isActive !== undefined) updateValues.isActive = input.isActive;
     if (input.isFeatured !== undefined) updateValues.isFeatured = input.isFeatured;
+    if (input.type !== undefined) updateValues.type = input.type;
+    if (input.match !== undefined) updateValues.match = input.match;
+    if (input.rules !== undefined) updateValues.rules = input.rules;
+    if (input.sortOrder !== undefined) updateValues.sortOrder = input.sortOrder;
     if (input.seo !== undefined) updateValues.seo = input.seo;
 
     if (input.parentId !== undefined && input.parentId !== existing.parentId) {
@@ -1508,6 +1609,10 @@ export async function updateCategory(
       .returning();
 
     if (!row) throw new Error(`Category not found: "${input.id}"`);
+
+    if (input.productIds !== undefined && row.type === "manual") {
+      await syncCategoryProducts(tx, ctx.tenantId, row.id, input.productIds);
+    }
 
     if (input.imageMediaId !== undefined) {
       await syncMediaUsages(tx, ctx, {

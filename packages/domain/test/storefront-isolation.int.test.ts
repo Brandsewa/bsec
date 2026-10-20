@@ -644,6 +644,17 @@ describe("Storefront Integration & Tenant Isolation Suite (Real PostgreSQL 18)",
       });
       expect(queriesInB.length).toBe(0);
     });
+
+    it("as-you-type lookups (log: false) still return results but are not recorded as searches", async () => {
+      const typed = "Mechanical Switch";
+      const before = await withTenant(dbRw.db, tenantA, async (tx) => tx.select().from(schema.searchQueries).where(eq(schema.searchQueries.query, typed)));
+
+      const result = await searchStorefrontProducts(rtApp, ctxA, typed, { limit: 8, log: false });
+      expect(result.items.some((i) => i.id === productA1)).toBe(true);
+
+      const after = await withTenant(dbRw.db, tenantA, async (tx) => tx.select().from(schema.searchQueries).where(eq(schema.searchQueries.query, typed)));
+      expect(after.length).toBe(before.length);
+    });
   });
 
   describe("3. Cart & Line Items Isolation", () => {
