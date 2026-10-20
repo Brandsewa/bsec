@@ -139,7 +139,7 @@ export function ProductDetailSection({
           data-testid="product-usps"
         >
           {usps.map((u, i) => (
-            <li key={i} className="flex min-w-[13rem] shrink-0 snap-start flex-col items-start gap-2 rounded-xl border border-border bg-surface/60 px-4 py-3 sm:min-w-0 sm:gap-2.5">
+            <li key={i} className="flex basis-[calc(50%-0.375rem)] shrink-0 snap-start flex-col items-start gap-2 rounded-xl border border-border bg-surface/60 px-3 py-3 sm:min-w-0 sm:basis-auto sm:gap-2.5 sm:px-4">
               <span className="shrink-0 text-foreground">
                 <SvgIcon name={u.icon} px={30} />
               </span>
@@ -203,7 +203,7 @@ export function ProductDetailSection({
   flushHead();
 
   return (
-    <div className={`mx-auto max-w-7xl px-3 py-4 sm:px-6 sm:py-8 lg:px-8 pb-6 sm:pb-8`}>
+    <div className={`mx-auto max-w-7xl px-3 py-4 sm:px-6 sm:py-8 lg:px-8 pb-2 sm:pb-8`}>
       {options.showBreadcrumb ? (
         <nav aria-label="Breadcrumb" className="mb-6 hidden items-center gap-2 text-sm text-muted-foreground sm:flex">
           <Link href="/" className="hover:text-foreground transition-colors">

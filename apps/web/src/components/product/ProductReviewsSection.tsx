@@ -233,7 +233,7 @@ export function ProductReviewsSection({ productId, productTitle }: ProductReview
   const input = "w-full rounded-md border border-input bg-background px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary";
 
   return (
-    <section className="mt-16 border-t border-border pt-12" id="reviews-section">
+    <section className="mt-6 border-t border-border pt-8 sm:mt-16 sm:pt-12" id="reviews-section">
       <div className="flex flex-col gap-6 border-b border-border/60 pb-8 md:flex-row md:items-center md:justify-between">
         <div>
           <h2 className="text-2xl font-bold tracking-tight text-foreground">Customer Reviews</h2>

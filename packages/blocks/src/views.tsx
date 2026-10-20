@@ -985,7 +985,7 @@ export function SiteHeaderView({ props, ctx }: A<R.SiteHeaderProps>): ReactNode 
         </nav>
         <div className="bsb-site-actions">
           {props.showSearch ? (
-            <NavLink ctx={ctx} href="/search" className="bsb-site-icon">
+            <NavLink ctx={ctx} href="/search" className="bsb-site-icon bsb-site-search">
               <span className="bsb-sr">Search</span>
               {SearchIcon}
             </NavLink>

@@ -57,7 +57,7 @@ export default async function AccountLayout({ children }: { children: React.Reac
   } as React.CSSProperties;
 
   return (
-    <div data-store-accent className="min-h-screen bg-background text-foreground" style={accountAccentVars}>
+    <div data-store-accent className="bg-background text-foreground" style={accountAccentVars}>
       {children}
     </div>
   );
