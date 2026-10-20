@@ -12,5 +12,10 @@ CREATE TABLE IF NOT EXISTS "platform_settings" (
   "updated_at" timestamp with time zone DEFAULT now() NOT NULL
 );
 --> statement-breakpoint
+REVOKE ALL ON TABLE "platform_settings" FROM PUBLIC;
+--> statement-breakpoint
+REVOKE ALL ON TABLE "platform_settings" FROM "app_rw";
+--> statement-breakpoint
 GRANT SELECT ON TABLE "platform_settings" TO "app_rw";
+--> statement-breakpoint
 GRANT ALL ON TABLE "platform_settings" TO "app_platform";
