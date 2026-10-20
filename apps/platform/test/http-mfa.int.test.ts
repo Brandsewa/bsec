@@ -207,7 +207,7 @@ describe("origin, CORS and test-auth hardening", () => {
 
   it("with staff MFA toggled off, password-only sign-in is enough and nothing demands enrolment", async () => {
     await createPlatformStaffMember(rt._db.db, { email: "relaxed@platform.test", name: "Relaxed", password: "relaxed staff password 1", role: "platform_admin" });
-    const [ownerUser] = await rt._db.db.select({ id: schema.users.id }).from(schema.users).where(eq(schema.users.email, "owner@platform.test"));
+    const [ownerUser] = await rt._db.db.select({ id: schema.users.id }).from(schema.users).where(eq(schema.users.email, "mfa-owner@platform.test"));
 
     // Toggle MFA off through the real owner-only service (also flips two_factor_enabled for all staff).
     await updatePlatformSettings(rt, ownerUser!.id, { requireStaffMfa: false });
@@ -225,7 +225,7 @@ describe("origin, CORS and test-auth hardening", () => {
 
     // Even a user whose authenticator WAS enrolled signs in password-only while the toggle is off.
     const ownerJar = new Jar();
-    const ownerSignIn = await send(ownerJar, "/api/auth/sign-in/email", { body: { email: "owner@platform.test", password: "correct horse battery staple" }, ip: IP(151) });
+    const ownerSignIn = await send(ownerJar, "/api/auth/sign-in/email", { body: { email: "mfa-owner@platform.test", password: "correct horse battery staple" }, ip: IP(151) });
     expect(ownerSignIn.status).toBe(200);
     const ownerBody = (await ownerSignIn.json()) as { twoFactorRedirect?: boolean };
     expect(ownerBody.twoFactorRedirect ?? false).toBe(false); // enrolled, but the toggle is off
@@ -238,7 +238,7 @@ describe("origin, CORS and test-auth hardening", () => {
     expect((await send(jar, "/platform/tenants")).status).toBe(403);
     const [relaxedUser] = await rt._db.db.select({ enabled: schema.users.twoFactorEnabled }).from(schema.users).where(eq(schema.users.email, "relaxed@platform.test"));
     expect(relaxedUser!.enabled).toBe(false);
-    const [ownerFlag] = await rt._db.db.select({ enabled: schema.users.twoFactorEnabled }).from(schema.users).where(eq(schema.users.email, "owner@platform.test"));
+    const [ownerFlag] = await rt._db.db.select({ enabled: schema.users.twoFactorEnabled }).from(schema.users).where(eq(schema.users.email, "mfa-owner@platform.test"));
     expect(ownerFlag!.enabled).toBe(true);
 
     // The toggles left an audit trail.
