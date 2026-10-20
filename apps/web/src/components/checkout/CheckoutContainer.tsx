@@ -60,7 +60,7 @@ export function CheckoutContainer({ cart, shippingRates: initialRates, paymentOp
   const totalLabel = `₹${(total / 100).toLocaleString("en-IN")}`;
 
   return (
-    <div className="grid grid-cols-1 items-start gap-6 lg:grid-cols-12 lg:gap-14">
+    <div className="grid grid-cols-1 items-start gap-4 sm:gap-6 lg:grid-cols-12 lg:gap-10">
       {/* Order review: first and collapsed on phones, the grey panel beside the form on desktop. One instance, so its fields exist once. */}
       <div className="lg:order-2 lg:col-span-5 lg:sticky lg:top-24">
         <button
@@ -68,7 +68,7 @@ export function CheckoutContainer({ cart, shippingRates: initialRates, paymentOp
           onClick={() => setSummaryOpen((o) => !o)}
           aria-expanded={summaryOpen}
           aria-controls={summaryId}
-          className="flex w-full items-center justify-between rounded-xl bg-muted/60 px-4 py-3.5 text-left lg:hidden"
+          className="flex w-full items-center justify-between bs-panel px-4 py-3.5 text-left lg:hidden"
         >
           <span className="flex items-center gap-2 text-sm font-medium text-foreground">
             <svg aria-hidden className="h-4 w-4 text-muted-foreground" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">

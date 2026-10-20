@@ -5,6 +5,7 @@ import type { StorefrontProductDetail, StorefrontVariant } from "@bs/domain";
 import { addVariantToCart } from "./AddToCartButton.tsx";
 import { RequestQuoteDialog } from "./RequestQuoteDialog.tsx";
 import { ShareButton } from "./ShareButton.tsx";
+import { buyModel } from "@/lib/buy-model.ts";
 
 /** Formats minor unit paise into standard ₹ Indian Rupee format */
 export function formatInr(paise: number): string {
@@ -21,6 +22,8 @@ const subscribeNever = () => () => {};
 interface BuyState {
   product: StorefrontProductDetail;
   options: NonNullable<StorefrontProductDetail["options"]>;
+  /** The variants the picker chooses between (see buyModel). */
+  variants: StorefrontVariant[];
   selectedVariant: StorefrontVariant | undefined;
   selectedOptions: Record<string, string>;
   pick: (name: string, value: string) => void;
@@ -36,33 +39,11 @@ function useBuy(): BuyState {
 }
 
 /**
- * The option list for the picker. A product normally carries its option definitions; one that has variants with option
- * values but no definitions (imported or edited by hand) would show no picker at all, so the options are worked out from
- * the variants themselves. With a single variant, or when every option has one value, there is nothing to choose.
- */
-function optionsFor(product: StorefrontProductDetail): NonNullable<StorefrontProductDetail["options"]> {
-  if (product.options && product.options.length > 0) return product.options;
-  const variants = product.variants ?? [];
-  if (variants.length < 2) return [];
-  const byName = new Map<string, string[]>();
-  for (const v of variants) {
-    for (const [name, value] of Object.entries((v.optionValues as Record<string, string> | null) ?? {})) {
-      const values = byName.get(name) ?? [];
-      if (!values.includes(value)) values.push(value);
-      byName.set(name, values);
-    }
-  }
-  const derived = [...byName.entries()].map(([name, values], position) => ({ id: `derived-${name}`, productId: product.id, name, position, values }));
-  return derived.some((o) => o.values.length > 1) ? derived : [];
-}
-
-/**
  * Holds which variant the shopper has chosen and how many, so the pieces of the buy box (SKU, options, price, buttons) can sit
  * in any order between server-rendered parts of the page (rating, title, description) and still agree with each other.
  */
 export function ProductBuyProvider({ product, children }: { product: StorefrontProductDetail; children: React.ReactNode }) {
-  const variants = product.variants ?? [];
-  const options = optionsFor(product);
+  const { options, variants } = buyModel(product);
 
   // Deep link: /products/x?variant=<id> opens on that variant. useSyncExternalStore gives the server render and the first client
   // render the same null, then reads the address, so markup matches on hydration.
@@ -94,7 +75,7 @@ export function ProductBuyProvider({ product, children }: { product: StorefrontP
   };
 
   return (
-    <BuyContext.Provider value={{ product, options, selectedVariant, selectedOptions, pick, qty, setQty: (n) => setQtyState(Math.min(10, Math.max(1, n))) }}>
+    <BuyContext.Provider value={{ product, options, variants, selectedVariant, selectedOptions, pick, qty, setQty: (n) => setQtyState(Math.min(10, Math.max(1, n))) }}>
       {children}
     </BuyContext.Provider>
   );
@@ -108,8 +89,7 @@ export function SkuLine({ className = "" }: { className?: string }) {
 
 /** The product's options (size, colour...) as small pills, plain buttons or dropdowns. Combinations with nothing in stock look struck through. */
 export function VariantOptions({ style = "pills" }: { style?: "pills" | "buttons" | "dropdown" | undefined }) {
-  const { product, options, selectedOptions, pick } = useBuy();
-  const variants = product.variants ?? [];
+  const { options, variants, selectedOptions, pick } = useBuy();
   if (options.length === 0) return null;
 
   const inStockWith = (name: string, value: string) =>

@@ -27,7 +27,7 @@ export function AuthShell({
   subtitle,
   children,
   footer,
-  variant: _variant = "platform",
+  variant = "platform",
   aside,
   className,
 }: AuthShellProps) {
@@ -37,10 +37,12 @@ export function AuthShell({
 
   return (
     <div className={cn("min-h-screen w-full flex bg-[var(--background)] text-[var(--foreground)] relative", className)}>
-      {/* Top right ThemeToggle */}
-      <div className="absolute top-4 right-4 z-50">
-        <ThemeToggle />
-      </div>
+      {/* Staff screens can switch theme; a store's customer sign-in is always light (no dark store theme yet). */}
+      {variant === "store" ? null : (
+        <div className="absolute top-4 right-4 z-50">
+          <ThemeToggle />
+        </div>
+      )}
 
       <div className="flex-1 flex flex-col justify-center items-center px-4 py-12 sm:px-6 lg:px-8">
         <div className="w-full max-w-[400px] space-y-6">

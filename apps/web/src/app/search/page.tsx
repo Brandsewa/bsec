@@ -148,8 +148,8 @@ export default async function SearchPage({ searchParams }: SearchPageProps) {
       </nav>
 
       {/* Search Header & SearchInput Bar */}
-      <div className="flex flex-col items-center justify-center text-center mb-10">
-        <h1 className="text-3xl font-extrabold tracking-tight text-foreground sm:text-4xl mb-4">
+      <div className="mb-6 flex flex-col items-center justify-center text-center sm:mb-10">
+        <h1 className="text-2xl font-extrabold tracking-tight text-foreground sm:text-4xl mb-3 sm:mb-4">
           Search Products
         </h1>
         <p className="max-w-xl text-sm text-muted-foreground mb-6">
@@ -174,7 +174,7 @@ export default async function SearchPage({ searchParams }: SearchPageProps) {
       {q ? (
         results.items.length > 0 ? (
           <div>
-            <div className="grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+            <div className="grid grid-cols-2 gap-3 sm:gap-5 md:grid-cols-3 lg:grid-cols-4 lg:gap-6">
               {results.items.map((product) => (
                 <ProductCard key={product.id} product={product} />
               ))}

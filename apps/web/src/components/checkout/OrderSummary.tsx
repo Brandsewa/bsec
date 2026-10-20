@@ -34,7 +34,7 @@ export function OrderSummary({ cart, shippingPaise = 0, codFeePaise = 0, onCartC
   }, null);
 
   return (
-    <div className="rounded-xl bg-muted/60 p-4">
+    <div className="bs-panel p-4 sm:p-6">
       <h2 className="mb-2 hidden text-lg font-semibold tracking-tight text-foreground lg:block">Order Summary</h2>
 
       <div className="divide-y divide-border/40 max-h-64 overflow-y-auto mb-3">
