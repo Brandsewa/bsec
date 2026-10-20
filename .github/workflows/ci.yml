@@ -188,7 +188,8 @@ jobs:
             APP_VERSION=${{ github.sha }}
             VITE_SENTRY_DSN=${{ secrets.VITE_SENTRY_DSN }}
           cache-from: type=gha,scope=${{ matrix.app }}
-          cache-to: type=gha,mode=max,scope=${{ matrix.app }}
+          # mode=min: mode=max stored every layer (~345 MB x 6 images per run) and pushed the repo past the 10 GB Actions cache limit.
+          cache-to: type=gha,mode=min,scope=${{ matrix.app }}
 
   # Ephemeral staging: run the exact images just pushed, on the runner, smoke-test, tear down.
   # Replaces a persistent staging VPS (cost/simplicity call, 2026-09-29). Fresh random secrets
