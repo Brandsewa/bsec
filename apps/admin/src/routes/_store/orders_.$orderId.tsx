@@ -2,7 +2,7 @@ import { createFileRoute, Link, useNavigate, useRouteContext } from "@tanstack/r
 import { Archive, ArchiveRestore, CheckCircle2, Clock, FileText, MoreHorizontal, PackageCheck, RotateCcw, Trash2, Truck, XCircle } from "lucide-react";
 import { useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Badge, ConfirmDialog, DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger, EmptyState, PageBreadcrumbs, PageContainer, PageHeader, PageSkeleton, toast } from "@bs/ui";
+import { Badge, ConfirmDialog, DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger, EmptyState, PageContainer, PageHeader, PageSkeleton, toast } from "@bs/ui";
 import { Alert } from "@bs/ui";
 import { Button } from "@bs/ui";
 import { Card, CardContent, CardHeader, CardTitle } from "@bs/ui";
@@ -182,7 +182,6 @@ function OrderDetailPage() {
   if (detail.isError || !detail.data) {
     return (
       <PageContainer size="small">
-        <PageBreadcrumbs items={[{ label: "Orders", href: "/orders" }, { label: "Order" }]} />
         <EmptyState
           title="Could not load this order"
           description={detail.error ? errorMessage(detail.error) : "It may have been removed."}
@@ -200,8 +199,8 @@ function OrderDetailPage() {
 
   return (
     <PageContainer>
-      <PageBreadcrumbs items={[{ label: "Orders", href: "/orders" }, { label: order.number }]} />
       <PageHeader
+        back={{ href: "/orders", label: "Orders" }}
         title={order.number}
         description={`Placed on ${new Date(order.placedAt).toLocaleString()}`}
         aside={

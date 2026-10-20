@@ -1,5 +1,5 @@
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
-import { AlertTriangle, Archive, ArrowLeft, Save, Trash2 } from "lucide-react";
+import { AlertTriangle, Archive, ArrowLeft, Eye, Save, Trash2 } from "lucide-react";
 import { useState } from "react";
 import { DetailSkeleton, EmptyState, PageContainer, PageHeader, PageSkeleton, toast } from "@bs/ui";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
@@ -16,8 +16,9 @@ import { VariantBuilderCard } from "../../../components/product/variant-builder.
 import { CustomFieldsCard } from "../../../components/product/custom-fields-card.tsx";
 import { CopyableId, SimpleSelect } from "@bs/ui";
 import { formatProductId } from "@bs/contracts";
-import { categoryLabel } from "../../../lib/category-label.ts";
-import { orpc } from "../../../lib/orpc.ts";
+import { OrganizationCard, PricingQuotesCard, StatusVisibilityCard, type PreorderValue } from "../../../components/product/product-cards.tsx";
+import { storefrontLink, useStorefrontUrl } from "../../../lib/storefront-url.ts";
+import { client, orpc } from "../../../lib/orpc.ts";
 import { MediaGalleryField } from "../../../components/media/media-gallery-field.tsx";
 import type { MediaItem } from "@bs/contracts";
 
@@ -121,8 +122,20 @@ function ProductEditor({ product, go }: { product: ProductDetailData; go: (to: s
   const [seoTitle, setSeoTitle] = useState(initialSeo.title ?? "");
   const [seoDescription, setSeoDescription] = useState(initialSeo.description ?? "");
 
+  // Pre-order is stored per variant; this switch sets it on all of them (see PricingQuotesCard).
+  const preorderVariants = product.variants.filter((v) => v.preorderEnabled);
+  const initialPreorder: PreorderValue = {
+    enabled: product.variants.length > 0 && preorderVariants.length === product.variants.length,
+    shipsOn: preorderVariants[0]?.preorderShipsOn ?? "",
+    message: preorderVariants[0]?.preorderMessage ?? "",
+  };
+  const mixedPreorder = preorderVariants.length > 0 && preorderVariants.length < product.variants.length;
+  const [preorder, setPreorder] = useState<PreorderValue>(initialPreorder);
+
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [confirmDelete, setConfirmDelete] = useState(false);
+  const storefront = useStorefrontUrl();
+  const previewHref = storefrontLink(storefront, `/products/${product.slug}`);
 
   const invalidate = () => {
     void queryClient.invalidateQueries({ queryKey: orpc.admin.products.get.key({ input: { id: product.id } }) });
@@ -162,6 +175,15 @@ function ProductEditor({ product, go }: { product: ProductDetailData; go: (to: s
       e["primaryCategory"] = "A primary category is required to publish or list a product";
     }
 
+    const preorderChanged =
+      preorder.enabled !== initialPreorder.enabled ||
+      (preorder.enabled && (preorder.shipsOn !== initialPreorder.shipsOn || preorder.message !== initialPreorder.message));
+    if (preorder.enabled && preorderChanged) {
+      const today = new Date().toISOString().slice(0, 10);
+      if (!preorder.shipsOn) e["preorderShipsOn"] = "Pre-order ship date is required";
+      else if (preorder.shipsOn !== initialPreorder.shipsOn && preorder.shipsOn <= today) e["preorderShipsOn"] = "Pre-order ship date must be in the future";
+    }
+
     setErrors(e);
     if (Object.keys(e).length > 0) {
       toast.error("Please fix the highlighted fields");
@@ -169,6 +191,20 @@ function ProductEditor({ product, go }: { product: ProductDetailData; go: (to: s
     }
 
     if (nextStatus) setStatus(nextStatus);
+
+    const applyPreorder = async () => {
+      if (!preorderChanged) return;
+      await Promise.all(
+        product.variants.map((v) =>
+          client.admin.variants.update({
+            id: v.id,
+            preorderEnabled: preorder.enabled,
+            preorderShipsOn: preorder.enabled ? preorder.shipsOn || null : null,
+            preorderMessage: preorder.enabled ? preorder.message.trim() || null : null,
+          }),
+        ),
+      );
+    };
 
     updateMutation.mutate({
       id: product.id,
@@ -194,6 +230,12 @@ function ProductEditor({ product, go }: { product: ProductDetailData; go: (to: s
       seo: {
         title: seoTitle.trim() || undefined,
         description: seoDescription.trim() || undefined,
+      },
+    }, {
+      onSuccess: () => {
+        void applyPreorder()
+          .then(invalidate)
+          .catch((err: Error) => toast.error(err.message || "Saved, but the pre-order settings could not be applied"));
       },
     });
   };
@@ -232,6 +274,21 @@ function ProductEditor({ product, go }: { product: ProductDetailData; go: (to: s
               <ArrowLeft className="mr-1.5 size-3.5" aria-hidden />
               Products
             </Button>
+            {previewHref ? (
+              product.status === "active" || product.status === "unlisted" ? (
+                <Button variant="outline" size="sm" asChild>
+                  <a href={previewHref} target="_blank" rel="noopener noreferrer">
+                    <Eye className="mr-1.5 size-3.5" aria-hidden />
+                    Preview
+                  </a>
+                </Button>
+              ) : (
+                <Button variant="outline" size="sm" disabled title="Only active or unlisted products can be viewed on the storefront">
+                  <Eye className="mr-1.5 size-3.5" aria-hidden />
+                  Preview
+                </Button>
+              )
+            ) : null}
             <Button
               variant="outline"
               size="sm"
@@ -328,34 +385,17 @@ function ProductEditor({ product, go }: { product: ProductDetailData; go: (to: s
           {/* Media Section */}
           <MediaSection product={product} />
 
-          {/* Pricing & Quotes Card */}
-          <Card>
-            <CardHeader>
-              <CardTitle className="text-base font-semibold">Pricing & Quotes</CardTitle>
-              <CardDescription>Price on request hides checkout prices and routes buyers to quotes.</CardDescription>
-            </CardHeader>
-            <CardContent className="grid gap-4">
-              <Field orientation="horizontal" className="justify-between">
-                <div>
-                  <FieldLabel htmlFor="price-on-request" className="cursor-pointer font-medium">
-                    Price on request
-                  </FieldLabel>
-                  <p className="text-xs text-muted-foreground">
-                    Hide pricing and require buyers to submit a quote request instead of checkout.
-                  </p>
-                </div>
-                <Switch
-                  id="price-on-request"
-                  checked={priceOnRequest}
-                  onCheckedChange={(c) => setPriceOnRequest(Boolean(c))}
-                />
-              </Field>
-            </CardContent>
-          </Card>
+          <PricingQuotesCard
+            priceOnRequest={priceOnRequest}
+            onPriceOnRequestChange={setPriceOnRequest}
+            preorder={preorder}
+            onPreorderChange={setPreorder}
+            mixedPreorder={mixedPreorder}
+            errors={errors}
+          />
 
           {/* Variants Section */}
           <VariantBuilderCard
-            key={JSON.stringify(product.options.map((o) => [o.name, o.values]))}
             product={product}
             priceOnRequest={priceOnRequest}
             onChanged={invalidate}
@@ -379,174 +419,28 @@ function ProductEditor({ product, go }: { product: ProductDetailData; go: (to: s
 
         {/* Right Column (1 span): Status, Organization, Returns, Stock, Shipping, Taxes */}
         <div className="flex flex-col gap-6">
-          {/* Status & Visibility Card */}
-          <Card>
-            <CardHeader>
-              <CardTitle className="text-base font-semibold">Status & Visibility</CardTitle>
-              <CardDescription>Control how and where this product is listed.</CardDescription>
-            </CardHeader>
-            <CardContent className="grid gap-4">
-              <div className="grid gap-1.5">
-                <FieldLabel htmlFor="product-status">Product Status</FieldLabel>
-                <SimpleSelect
-                  id="product-status"
-                  value={status}
-                  onChange={(val) => setStatus(val as typeof status)}
-                  options={[
-                    { value: "draft", label: "Draft" },
-                    { value: "active", label: "Active" },
-                    { value: "unlisted", label: "Unlisted" },
-                    { value: "archived", label: "Archived" },
-                  ]}
-                />
-                {status === "unlisted" && (
-                  <p className="text-xs text-amber-600 dark:text-amber-400 mt-1">
-                    Unlisted products are reachable only by direct URL link; hidden from catalog lists, search, and sitemap.
-                  </p>
-                )}
-                {(status === "active" || status === "unlisted") && !primaryCategoryId && (
-                  <p className="text-xs text-destructive mt-1">
-                    A primary category is required to publish or list this product.
-                  </p>
-                )}
-              </div>
+          <StatusVisibilityCard
+            status={status}
+            onStatusChange={setStatus}
+            isFeatured={isFeatured}
+            onFeaturedChange={setIsFeatured}
+            hasPrimaryCategory={Boolean(primaryCategoryId)}
+          />
 
-              <Field orientation="horizontal" className="justify-between border-t border-border pt-3">
-                <div>
-                  <FieldLabel htmlFor="is-featured" className="cursor-pointer font-medium text-sm">
-                    Featured product
-                  </FieldLabel>
-                  <p className="text-xs text-muted-foreground">
-                    Highlight this product on the home page and featured grids.
-                  </p>
-                </div>
-                <Switch
-                  id="is-featured"
-                  checked={isFeatured}
-                  onCheckedChange={(c) => setIsFeatured(Boolean(c))}
-                />
-              </Field>
-            </CardContent>
-          </Card>
-
-          {/* Organization Card */}
-          <Card>
-            <CardHeader>
-              <CardTitle className="text-base font-semibold">Organization</CardTitle>
-              <CardDescription>Primary category, extra categories, brand, and collections.</CardDescription>
-            </CardHeader>
-            <CardContent className="grid gap-4">
-              {/* Primary Category */}
-              <div className="grid gap-1.5">
-                <FieldLabel htmlFor="primary-category">
-                  Primary Category <span className="text-destructive">*</span>
-                </FieldLabel>
-                <SimpleSelect
-                  id="primary-category"
-                  value={primaryCategoryId}
-                  onChange={(val) => {
-                    setPrimaryCategoryId(val);
-                    setExtraCategoryIds((prev) => prev.filter((id) => id !== val));
-                  }}
-                  options={[
-                    { value: "", label: "Select primary category..." },
-                    ...categories.map((c) => ({
-                      value: c.id,
-                      label: categoryLabel(c, categories),
-                    })),
-                  ]}
-                />
-                <p className="text-xs text-muted-foreground">
-                  Used as the main navigation breadcrumb and primary canonical taxonomy.
-                </p>
-                {err("primaryCategory")}
-              </div>
-
-              {/* Extra Categories */}
-              <div className="grid gap-1.5 border-t border-border pt-3">
-                <FieldLabel>Additional Categories</FieldLabel>
-                <p className="text-xs text-muted-foreground mb-1.5">
-                  Optional extra categories this product also belongs to.
-                </p>
-                <div className="max-h-40 overflow-y-auto rounded-md border border-border p-2 grid gap-2">
-                  {categories
-                    .filter((c) => c.id !== primaryCategoryId)
-                    .map((c) => {
-                      const checked = extraCategoryIds.includes(c.id);
-                      return (
-                        <label key={c.id} className="flex items-center gap-2 text-xs cursor-pointer select-none">
-                          <input
-                            type="checkbox"
-                            checked={checked}
-                            onChange={(e) => {
-                              if (e.target.checked) {
-                                setExtraCategoryIds((prev) => [...prev, c.id]);
-                              } else {
-                                setExtraCategoryIds((prev) => prev.filter((id) => id !== c.id));
-                              }
-                            }}
-                            className="rounded border-border text-primary focus:ring-primary"
-                          />
-                          <span className="truncate">{categoryLabel(c, categories)}</span>
-                        </label>
-                      );
-                    })}
-                  {categories.filter((c) => c.id !== primaryCategoryId).length === 0 && (
-                    <span className="text-xs text-muted-foreground">No additional categories</span>
-                  )}
-                </div>
-              </div>
-
-              {/* Brand */}
-              <div className="grid gap-1.5 border-t border-border pt-3">
-                <FieldLabel htmlFor="product-brand">Brand</FieldLabel>
-                <SimpleSelect
-                  id="product-brand"
-                  value={brandId}
-                  onChange={(val) => setBrandId(val)}
-                  options={[
-                    { value: "", label: "No brand" },
-                    ...brands.map((b) => ({ value: b.id, label: b.name })),
-                  ]}
-                />
-              </div>
-
-              {/* Collections */}
-              <div className="grid gap-1.5 border-t border-border pt-3">
-                <FieldLabel>Manual Collections</FieldLabel>
-                <p className="text-xs text-muted-foreground mb-1.5">
-                  Assign this product to specific curated collections.
-                </p>
-                <div className="max-h-40 overflow-y-auto rounded-md border border-border p-2 grid gap-2">
-                  {collections
-                    .filter((c) => c.type === "manual")
-                    .map((c) => {
-                      const checked = collectionIds.includes(c.id);
-                      return (
-                        <label key={c.id} className="flex items-center gap-2 text-xs cursor-pointer select-none">
-                          <input
-                            type="checkbox"
-                            checked={checked}
-                            onChange={(e) => {
-                              if (e.target.checked) {
-                                setCollectionIds((prev) => [...prev, c.id]);
-                              } else {
-                                setCollectionIds((prev) => prev.filter((id) => id !== c.id));
-                              }
-                            }}
-                            className="rounded border-border text-primary focus:ring-primary"
-                          />
-                          <span className="truncate">{c.title}</span>
-                        </label>
-                      );
-                    })}
-                  {collections.filter((c) => c.type === "manual").length === 0 && (
-                    <span className="text-xs text-muted-foreground">No manual collections</span>
-                  )}
-                </div>
-              </div>
-            </CardContent>
-          </Card>
+          <OrganizationCard
+            categories={categories}
+            brands={brands}
+            collections={collections}
+            primaryCategoryId={primaryCategoryId}
+            onPrimaryCategoryChange={setPrimaryCategoryId}
+            extraCategoryIds={extraCategoryIds}
+            onExtraCategoryIdsChange={setExtraCategoryIds}
+            brandId={brandId}
+            onBrandChange={setBrandId}
+            collectionIds={collectionIds}
+            onCollectionIdsChange={setCollectionIds}
+            primaryCategoryError={errors["primaryCategory"]}
+          />
 
           {/* Returns & Policy Card */}
           <Card>

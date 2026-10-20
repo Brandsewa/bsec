@@ -1,7 +1,7 @@
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { useState } from "react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
-import { PageBreadcrumbs, PageContainer, PageHeader, PageSkeleton, toast } from "@bs/ui";
+import { PageContainer, PageHeader, PageSkeleton, toast } from "@bs/ui";
 import { Alert } from "@bs/ui";
 import { Button } from "@bs/ui";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@bs/ui";
@@ -93,8 +93,7 @@ function CreateDiscountPage() {
 
   return (
     <PageContainer>
-      <PageBreadcrumbs items={[{ label: "Discounts", href: "/discounts" }, { label: "Create discount" }]} />
-      <PageHeader title="Create discount" description="Set up a coupon code or an automatic discount for your storefront." />
+      <PageHeader back={{ href: "/discounts", label: "Discounts" }} title="Create discount" description="Set up a coupon code or an automatic discount for your storefront." />
 
       <form
         className="grid items-start gap-4 lg:grid-cols-[minmax(0,1fr)_20rem]"

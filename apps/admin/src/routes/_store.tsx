@@ -1,3 +1,4 @@
+import { useStorefrontUrl } from "../lib/storefront-url.ts";
 import { useState } from "react";
 import { Outlet, createFileRoute, redirect, useRouterState } from "@tanstack/react-router";
 import {
@@ -156,6 +157,7 @@ function StoreShell() {
   const pathname = useRouterState({ select: (s) => s.location.pathname });
   const { me, store } = Route.useRouteContext();
   const [changePasswordOpen, setChangePasswordOpen] = useState(false);
+  const storefrontUrl = useStorefrontUrl();
 
   async function onSignOut() {
     if (me.support) {
@@ -182,7 +184,9 @@ function StoreShell() {
     <>
       <AppShell
         brand={<span className="text-sm font-semibold">{store.name}</span>}
-        groups={visibleNav(store.permissions)}
+        groups={visibleNav(store.permissions).map((g) =>
+          g.label === "Online Store" && storefrontUrl ? { ...g, external: { href: storefrontUrl, label: "View your store" } } : g,
+        )}
         activeHref={pathname}
         banner={
           me.support ? (

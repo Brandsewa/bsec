@@ -1,6 +1,6 @@
 import { Link } from "@tanstack/react-router";
 import { useState, type ReactNode } from "react";
-import { ChevronRight } from "lucide-react";
+import { ChevronRight, ExternalLink } from "lucide-react";
 import {
   cn,
   Sidebar,
@@ -180,6 +180,19 @@ export function AppShell({
                           )}
                         />
                       </SidebarMenuButton>
+                      {g.external ? (
+                        // A sibling of the button, not inside it (a link cannot sit inside a button).
+                        <a
+                          href={g.external.href}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          aria-label={g.external.label}
+                          title={g.external.label}
+                          className="absolute right-8 top-1.5 flex size-5 items-center justify-center rounded text-muted-foreground hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring group-data-[collapsible=icon]:hidden"
+                        >
+                          <ExternalLink className="size-3.5" aria-hidden />
+                        </a>
+                      ) : null}
                       <div
                         data-state={isOpen ? "open" : "closed"}
                         className="nav-accordion-content group-data-[collapsible=icon]:hidden"

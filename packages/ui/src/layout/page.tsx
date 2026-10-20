@@ -1,4 +1,4 @@
-import { ChevronRight } from "lucide-react";
+import { ArrowLeft, ChevronRight } from "lucide-react";
 import { Suspense, type ComponentProps, type ReactNode } from "react";
 import { cn } from "../lib/cn.ts";
 import { UiLink } from "../lib/link.tsx";
@@ -58,13 +58,20 @@ export function PageBreadcrumbs({ items, actions }: { items: Crumb[]; actions?: 
   );
 }
 
+/** Right-aligned action row for pages that have no breadcrumb (parent pages with a primary action). */
+export function PageActions({ children }: { children: ReactNode }) {
+  return <div className="flex min-h-8 items-center justify-end gap-2">{children}</div>;
+}
+
 /** Title + optional meta; `aside` holds actions on detail pages. */
 export function PageHeader({
   title,
   description,
   meta,
   aside,
+  back,
 }: {
+  back?: { href: string; label: string };
   title: ReactNode;
   description?: ReactNode;
   meta?: ReactNode;
@@ -73,6 +80,12 @@ export function PageHeader({
   return (
     <header className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
       <div className="grid gap-1">
+        {back ? (
+          <UiLink href={back.href} className="inline-flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground">
+            <ArrowLeft className="size-3.5" aria-hidden />
+            {back.label}
+          </UiLink>
+        ) : null}
         <h1 className="text-xl font-semibold tracking-tight text-foreground">{title}</h1>
         {description ? <p className="text-sm text-foreground-2">{description}</p> : null}
         {meta ? <div className="flex flex-wrap gap-3 text-xs text-muted-foreground">{meta}</div> : null}

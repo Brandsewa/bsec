@@ -3,6 +3,7 @@
 Source of truth: `docs/PLAN.html` v2.0 (build order in `docs/BUILD-PLAN-M2-M9.md`). Items are ticked only after verification; the evidence is noted next to each. "From code" means it was read in the repo but not exercised live.
 
 ## In flight
+- claude · `feat/admin-storefront-polish-batch1` · owner's 41-item polish batch: product/category/collection forms, variants, navigation editor, theme builder product block, Modern Commerce mobile (bottom nav, menu drawer, search popup, share), breadcrumbs removed · 2026-10-20
 - claude · `feat/hide-from-search-engines` · search-engine switch on Storefront settings · 2026-10-19
 - claude · `feat/custom-domain-setup` · custom domains made usable: sweep job, register-on-retry, DNS records always shown, apex guidance, Cloudflare and Traefik runbook · 2026-10-19
 - claude · `feat/cashfree-gateway` · Cashfree as a second gateway: platform plan billing (alongside Razorpay) and store-side connection; built on top of `feat/platform-billing-b5-b6`, awaiting owner sandbox run; ADR-037, change record `docs/changes/2026-10-19-claude-cashfree-gateway.md` · 2026-10-19

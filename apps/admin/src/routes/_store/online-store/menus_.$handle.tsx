@@ -46,7 +46,6 @@ import {
   EmptyState,
   Input,
   Label,
-  PageBreadcrumbs,
   PageContainer,
   PageSkeleton,
   Sheet,
@@ -197,6 +196,62 @@ function outdentItem(items: MenuItem[], path: number[]): MenuItem[] {
   });
 }
 
+const MAX_MENU_DEPTH = 3;
+/** Horizontal drag distance that counts as one level of nesting. */
+const NEST_STEP_PX = 36;
+
+/** After a drop, drag distance to the right nests the item under the one above it; to the left lifts it a level. */
+function applySidewaysNesting(items: MenuItem[], id: string, dx: number): MenuItem[] {
+  if (Math.abs(dx) < NEST_STEP_PX) return items;
+  const flat = flattenItems(items);
+  const at = flat.find((f) => f.id === id);
+  if (!at) return items;
+  return dx > 0 ? indentItem(items, at.path) : outdentItem(items, at.path);
+}
+
+/** How many levels this item and its children take (an item with no children is 1). */
+function subtreeDepth(item: MenuItem): number {
+  return 1 + Math.max(0, ...(item.children ?? []).map(subtreeDepth));
+}
+
+function treeDepth(items: MenuItem[]): number {
+  return Math.max(0, ...items.map(subtreeDepth));
+}
+
+/** Take an item (with its children) out of the tree. */
+function extractById(items: MenuItem[], id: string): { items: MenuItem[]; node: MenuItem | null } {
+  let node: MenuItem | null = null;
+  const walk = (list: MenuItem[]): MenuItem[] =>
+    list.flatMap((it) => {
+      if (it.id === id) {
+        node = it;
+        return [];
+      }
+      return [it.children && it.children.length > 0 ? { ...it, children: walk(it.children) } : it];
+    });
+  const next = walk(items);
+  return { items: next, node };
+}
+
+/** Put `node` next to the item `targetId`, as its sibling before or after it. */
+function insertBeside(items: MenuItem[], targetId: string, node: MenuItem, where: "before" | "after"): MenuItem[] {
+  const out: MenuItem[] = [];
+  for (const it of items) {
+    if (it.id === targetId) {
+      if (where === "before") out.push(node);
+      out.push(it);
+      if (where === "after") out.push(node);
+    } else {
+      out.push(it.children && it.children.length > 0 ? { ...it, children: insertBeside(it.children, targetId, node, where) } : it);
+    }
+  }
+  return out;
+}
+
+function containsId(item: MenuItem, id: string): boolean {
+  return item.id === id || (item.children ?? []).some((c) => containsId(c, id));
+}
+
 function addChild(items: MenuItem[], path: number[]): MenuItem[] {
   const child: MenuItem = { id: newId(), title: "", url: "/", type: "url" };
   if (path.length === 0) return [...items, child];
@@ -288,7 +343,6 @@ function SortableNavigationRow({
               </Badge>
             ) : null}
           </div>
-          <p className="text-xs text-muted-foreground truncate font-mono">{flat.item.url || "—"}</p>
         </div>
       </div>
 
@@ -481,7 +535,7 @@ function SortableFilterRow({
 
 function HeaderPreviewStrip({ items }: { items: MenuItem[] }) {
   return (
-    <Card className="border-dashed bg-muted/20">
+    <Card className="relative z-20 overflow-visible">
       <CardHeader className="py-3 px-4 border-b border-border/50">
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-2">
@@ -493,7 +547,7 @@ function HeaderPreviewStrip({ items }: { items: MenuItem[] }) {
           <span className="text-xs text-muted-foreground">Simulated storefront header navigation</span>
         </div>
       </CardHeader>
-      <CardContent className="p-4 overflow-x-auto">
+      <CardContent className="p-4">
         <nav className="flex items-center gap-6 text-sm font-medium">
           <span className="font-bold tracking-tight text-foreground/80 shrink-0 select-none">STORE</span>
           <div className="flex items-center gap-5 flex-wrap">
@@ -655,8 +709,17 @@ function MenuEditorForm({ menu }: { menu: MenuDetail }) {
 
   // Drag and drop handler for flat list
   const handleDragEnd = (event: DragEndEvent) => {
-    const { active, over } = event;
-    if (!over || active.id === over.id) return;
+    const { active, over, delta } = event;
+    if (!over) return;
+    // Dropped back on itself: a sideways drag still nests it under the item above, or lifts it out one level.
+    if (active.id === over.id) {
+      if (menu.kind !== "filter" && Math.abs(delta.x) >= NEST_STEP_PX) {
+        const nested = applySidewaysNesting(items, String(active.id), delta.x);
+        if (treeDepth(nested) <= MAX_MENU_DEPTH) setItems(nested);
+        else toast.error("Menus can be nested up to 3 levels deep");
+      }
+      return;
+    }
 
     if (menu.kind === "filter") {
       const oldIndex = items.findIndex((it) => it.id === active.id);
@@ -667,25 +730,24 @@ function MenuEditorForm({ menu }: { menu: MenuDetail }) {
       return;
     }
 
-    // For navigation items
-    const activeFlat = flatItems.find((f) => f.id === active.id);
-    const overFlat = flatItems.find((f) => f.id === over.id);
+    // Navigation items: dropping on another row moves the item there, and dragging sideways nests or un-nests it.
+    const activeId = String(active.id);
+    const overId = String(over.id);
+    const from = flatItems.findIndex((f) => f.id === activeId);
+    const to = flatItems.findIndex((f) => f.id === overId);
+    const activeFlat = flatItems[from];
+    const overFlat = flatItems[to];
     if (!activeFlat || !overFlat) return;
-
-    // Same parent siblings move
-    const activeParentPath = activeFlat.path.slice(0, -1).join(",");
-    const overParentPath = overFlat.path.slice(0, -1).join(",");
-    if (activeParentPath === overParentPath) {
-      const activeIdx = activeFlat.path[activeFlat.path.length - 1];
-      const overIdx = overFlat.path[overFlat.path.length - 1];
-      if (activeIdx !== undefined && overIdx !== undefined) {
-        setItems(
-          updateAt(items, activeFlat.path.slice(0, -1), (sibs) =>
-            arrayMove(sibs, activeIdx, overIdx),
-          ),
-        );
-      }
+    // An item cannot be dropped inside itself.
+    if (containsId(activeFlat.item, overId)) return;
+    const taken = extractById(items, activeId);
+    if (!taken.node) return;
+    const next = insertBeside(taken.items, overId, taken.node, from < to ? "after" : "before");
+    if (treeDepth(next) > MAX_MENU_DEPTH) {
+      toast.error("Menus can be nested up to 3 levels deep");
+      return;
     }
+    setItems(applySidewaysNesting(next, activeId, delta.x));
   };
 
   // Item Drawer Actions
@@ -895,13 +957,6 @@ function MenuEditorForm({ menu }: { menu: MenuDetail }) {
 
   return (
     <PageContainer>
-      <PageBreadcrumbs
-        items={[
-          { label: "Online Store" },
-          { label: "Navigation", href: "/online-store/menus" },
-          { label: menu.name },
-        ]}
-      />
 
       <div className="flex items-center justify-between mb-6">
         <div className="flex items-center gap-3">
@@ -944,13 +999,15 @@ function MenuEditorForm({ menu }: { menu: MenuDetail }) {
       <div className="space-y-6">
         {/* Menu Title Setting */}
         <Card>
-          <CardHeader>
-            <CardTitle className="text-base">Menu Settings</CardTitle>
-            <CardDescription>Title and identifier for this menu.</CardDescription>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            <div className="max-w-md space-y-1.5">
-              <Label htmlFor="edit-menu-title">Title</Label>
+          <CardContent className="flex flex-col gap-3 py-4 sm:flex-row sm:items-center sm:justify-between sm:gap-8">
+            <div>
+              <CardTitle className="text-base">Menu Settings</CardTitle>
+              <CardDescription>Title and identifier for this menu.</CardDescription>
+            </div>
+            <div className="flex w-full items-center gap-3 sm:max-w-md">
+              <Label htmlFor="edit-menu-title" className="shrink-0">
+                Title
+              </Label>
               <Input
                 id="edit-menu-title"
                 value={name}
@@ -1074,15 +1131,15 @@ function MenuEditorForm({ menu }: { menu: MenuDetail }) {
 
       {/* Add / Edit Navigation Item Sheet */}
       <Sheet open={itemDrawerOpen} onOpenChange={setItemDrawerOpen}>
-        <SheetContent className="sm:max-w-md overflow-y-auto">
-          <SheetHeader>
+        <SheetContent className="overflow-y-auto p-0">
+          <SheetHeader className="border-b border-border p-5 sm:p-8">
             <SheetTitle>{editingItemPath !== null ? "Edit menu item" : "Add menu item"}</SheetTitle>
             <SheetDescription>
               Choose a resource target or custom URL and provide a label.
             </SheetDescription>
           </SheetHeader>
 
-          <div className="space-y-4 py-4">
+          <div className="space-y-4 p-5 sm:p-8">
             <div className="space-y-1.5">
               <Label htmlFor="item-title">Item label</Label>
               <Input
@@ -1121,7 +1178,7 @@ function MenuEditorForm({ menu }: { menu: MenuDetail }) {
                     { value: "", label: "-- Choose a page --" },
                     ...(pagesQuery.data ?? []).map((p) => ({
                       value: p.id,
-                      label: `${p.title} (/pages/${p.slug})`,
+                      label: p.title,
                     })),
                   ]}
                 />
@@ -1143,7 +1200,7 @@ function MenuEditorForm({ menu }: { menu: MenuDetail }) {
                     { value: "", label: "-- Choose a collection --" },
                     ...(collectionsQuery.data ?? []).map((c) => ({
                       value: c.id,
-                      label: `${c.title} (/collections/${c.slug})`,
+                      label: c.title,
                     })),
                   ]}
                 />
@@ -1165,7 +1222,7 @@ function MenuEditorForm({ menu }: { menu: MenuDetail }) {
                     { value: "", label: "-- Choose a category --" },
                     ...(categoriesQuery.data ?? []).map((c) => ({
                       value: c.id,
-                      label: `${c.name} (/categories/${c.slug})`,
+                      label: c.name,
                     })),
                   ]}
                 />
@@ -1248,7 +1305,7 @@ function MenuEditorForm({ menu }: { menu: MenuDetail }) {
                     { value: "", label: "-- Choose a product --" },
                     ...(productsQuery.data?.items ?? []).map((p) => ({
                       value: p.id,
-                      label: `${p.title} (/products/${p.slug})`,
+                      label: p.title,
                     })),
                   ]}
                 />
@@ -1269,10 +1326,11 @@ function MenuEditorForm({ menu }: { menu: MenuDetail }) {
                 </p>
               </div>
             ) : (
-              <div className="space-y-1.5">
-                <Label>Resolved URL path</Label>
-                <Input value={itemFormUrl} readOnly className="bg-muted font-mono text-xs" />
-              </div>
+              itemFormUrl ? (
+                <p className="text-xs text-muted-foreground">
+                  Links to <span className="font-mono">{itemFormUrl}</span> automatically.
+                </p>
+              ) : null
             )}
 
             <div className="pt-2 border-t border-border flex items-center justify-between">
@@ -1293,7 +1351,7 @@ function MenuEditorForm({ menu }: { menu: MenuDetail }) {
             </div>
           </div>
 
-          <SheetFooter>
+          <SheetFooter className="border-t border-border p-5 sm:p-8">
             <Button variant="outline" onClick={() => setItemDrawerOpen(false)}>
               Cancel
             </Button>
@@ -1304,15 +1362,15 @@ function MenuEditorForm({ menu }: { menu: MenuDetail }) {
 
       {/* Add / Edit Filter Facet Sheet */}
       <Sheet open={filterDrawerOpen} onOpenChange={setFilterDrawerOpen}>
-        <SheetContent className="sm:max-w-md overflow-y-auto">
-          <SheetHeader>
+        <SheetContent className="overflow-y-auto p-0">
+          <SheetHeader className="border-b border-border p-5 sm:p-8">
             <SheetTitle>{editingFilterIdx !== null ? "Edit filter facet" : "Add filter facet"}</SheetTitle>
             <SheetDescription>
               Configure a faceted search filter for the catalog.
             </SheetDescription>
           </SheetHeader>
 
-          <div className="space-y-4 py-4">
+          <div className="space-y-4 p-5 sm:p-8">
             <div className="space-y-1.5">
               <Label htmlFor="filter-kind">Filter Kind</Label>
               <SimpleSelect
@@ -1373,7 +1431,7 @@ function MenuEditorForm({ menu }: { menu: MenuDetail }) {
             </div>
           </div>
 
-          <SheetFooter>
+          <SheetFooter className="border-t border-border p-5 sm:p-8">
             <Button variant="outline" onClick={() => setFilterDrawerOpen(false)}>
               Cancel
             </Button>

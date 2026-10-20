@@ -1,7 +1,7 @@
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { ArrowLeft } from "lucide-react";
 import { useState } from "react";
-import { PageBreadcrumbs, PageContainer, PageSkeleton, toast } from "@bs/ui";
+import { PageContainer, PageSkeleton, toast } from "@bs/ui";
 import { useQueryClient } from "@tanstack/react-query";
 import { Button } from "@bs/ui";
 import { Input } from "@bs/ui";
@@ -55,7 +55,6 @@ function SegmentNewPage() {
 
   return (
     <PageContainer size="full">
-      <PageBreadcrumbs items={[{ label: "Segments", href: "/segments" }, { label: "New" }]} />
       <div className="sticky top-0 z-10 -mx-4 mb-4 flex flex-wrap items-center gap-3 border-b border-border bg-background px-4 py-3">
         <Button variant="ghost" size="icon" aria-label="Back to segments" render={<Link to="/segments" />}>
           <ArrowLeft />

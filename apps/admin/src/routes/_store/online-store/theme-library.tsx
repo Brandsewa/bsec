@@ -15,7 +15,6 @@ import {
   DialogHeader,
   DialogTitle,
   EmptyState,
-  PageBreadcrumbs,
   PageContainer,
   PageHeader,
   PageSkeleton,
@@ -61,9 +60,6 @@ export function ThemeLibraryPage() {
 
   return (
     <PageContainer size="full">
-      <PageBreadcrumbs
-        items={[{ label: "Online Store", href: "/online-store/theme-library" }, { label: "Themes" }]}
-      />
       <PageHeader
         title="Themes"
         description="Pick a theme, then customise every section of your storefront with the visual editor. Your changes stay in a draft until you publish."

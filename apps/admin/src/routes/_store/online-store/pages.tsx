@@ -4,6 +4,7 @@ import { useMemo, useRef, useState, useEffect } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useForm, useWatch } from "react-hook-form";
 import {
+  PageActions,
   Badge,
   Button,
   ConfirmDialog,
@@ -15,7 +16,6 @@ import {
   Field,
   FieldLabel,
   Input,
-  PageBreadcrumbs,
   PageContainer,
   PageHeader,
   PageSkeleton,
@@ -522,18 +522,12 @@ export function PagesPage() {
 
   return (
     <PageContainer size="full">
-      <PageBreadcrumbs
-        items={[
-          { label: "Online Store", href: "/online-store/theme-library" },
-          { label: "Pages" },
-        ]}
-        actions={
-          <Button variant="primary" size="sm" onClick={handleOpenAdd}>
+      <PageActions>
+        <Button variant="primary" size="sm" onClick={handleOpenAdd}>
             <Plus className="mr-1.5 size-3.5" aria-hidden />
             Add page
           </Button>
-        }
-      />
+      </PageActions>
 
       <PageHeader
         title="Pages"
@@ -849,7 +843,7 @@ export function PagesPage() {
             </div>
           </form>
 
-          <SheetFooter className="p-6 border-t border-border flex sm:justify-between items-center gap-2">
+          <SheetFooter className="flex flex-row items-center justify-between gap-2 border-t border-border p-6">
             <Button variant="outline" type="button" onClick={() => handleCloseSheet(false)}>
               Cancel
             </Button>

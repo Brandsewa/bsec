@@ -10,7 +10,7 @@ import {
 } from "lucide-react";
 import { useEffect, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { PageBreadcrumbs, PageContainer, PageHeader, PageSkeleton, toast } from "@bs/ui";
+import { PageContainer, PageHeader, PageSkeleton, toast } from "@bs/ui";
 import { Alert } from "@bs/ui";
 import { Badge } from "@bs/ui";
 import { Button } from "@bs/ui";
@@ -601,8 +601,8 @@ function CreateOrderPage() {
 
   return (
     <PageContainer>
-      <PageBreadcrumbs items={[{ label: "Orders", href: "/orders" }, { label: "Create order" }]} />
       <PageHeader
+        back={{ href: "/orders", label: "Orders" }}
         title="Create order"
         description="Build an order for a customer without storefront checkout. Full parity with discounts, tax rules, inventory reservation, and payment options."
       />
