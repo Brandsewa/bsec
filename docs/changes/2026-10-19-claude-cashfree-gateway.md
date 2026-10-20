@@ -2,7 +2,7 @@
 
 - **Date:** 2026-10-19
 - **Agent:** claude
-- **Branch:** `feat/cashfree-gateway` (cut from `feat/platform-billing-b5-b6`, which holds B5 and B6; not merged yet)
+- **Branch:** merged to `main` as PR 94 (`de1c731`) and follow-up PR 95 (Super Admin fix); deployed to production 2026-10-19
 - **Area:** db, payments, domain, contracts, web, platform, admin, superadmin, docs
 - **Type:** feature
 - **Supersedes:** none
@@ -22,8 +22,8 @@ The owner is having trouble with Razorpay and asked for Cashfree as an alternati
 See ADR-037. Cashfree cannot cancel at the end of a cycle, so cancel is immediate at Cashfree with the plan kept until `cancelAt` by our sweep. No plan sync is needed (the plan is defined inline per subscription). Cashfree webhook signing is documented both with and without a dot between timestamp and body; both are accepted (still HMAC-protected).
 
 ## Verification
-- Ran: `pnpm typecheck` for payments, db, contracts, domain, web, platform, admin, superadmin: pass. Cashfree unit tests 11 pass. Real-database: `platform-billing-cashfree` 8 pass, `cashfree-store-provider` 5 pass, `payment-providers` 12 pass, `b4-billing-webhook` 2 pass. (Billing regression files: see the section below once the run finished.)
-- NOT verified: **no call has been made to the real Cashfree sandbox**; request and response shapes come from Cashfree's published docs and fakes. The checkout script call (`subscriptionsCheckout`) and the cancel body were not exercised in a browser. `pnpm lint`, `pnpm build`, `pnpm docs:check`, the full heavy suite and the e2e suite were not run for this record.
+- Ran: `pnpm typecheck` for payments, db, contracts, domain, web, platform, admin, superadmin: pass. Cashfree unit tests 11 pass. Real-database: `platform-billing-cashfree` 8 pass, `cashfree-store-provider` 5 pass, `payment-providers` 12 pass, `b4-billing-webhook` 2 pass. The full heavy suite (118 files, 2353 tests in @bs/domain, plus platform, db, web, payments) passed before merge; CI on PR 94 first failed twice on my own test data (a db grants test that did not expect the cashfree provider row, and a past-due subscription from the Cashfree test leaking into the dunning test) and was fixed in the PR. The staging smoke test (the e2e job) and the production deploy passed on `main` for both PRs.
+- NOT verified: **no call has been made to the real Cashfree sandbox**; request and response shapes come from Cashfree's published docs and fakes. The checkout script call (`subscriptionsCheckout`) and the cancel body were not exercised in a browser. The Super Admin Connection test with real Cashfree sandbox keys was accepted by the owner on 2026-10-20; subscribe, the checkout script, webhooks and cancel have not yet been run with a real sandbox payment.
 
 ## Docs updated
 - [x] `docs/ARCHITECTURE.md` (migration 0072, routes, Cashfree bullet, last verified)
@@ -39,3 +39,6 @@ See ADR-037. Cashfree cannot cancel at the end of a cycle, so cancel is immediat
 
 ## Definition of done
 Not complete until the gate (`lint`, `build`, `docs:check`, heavy suite) is run and the owner's sandbox pass succeeds.
+
+## Follow-up (2026-10-19, PR 95)
+The first Super Admin page only showed the Cashfree key cards after Cashfree was already the active gateway, so the owner could not enter keys before switching (and the switch error said "enabling billing"). Fixed: both gateways' key cards and both webhook URLs always show; the switch error names the gateway. Deployed.
