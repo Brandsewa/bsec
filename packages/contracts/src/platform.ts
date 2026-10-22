@@ -357,6 +357,11 @@ export const platformTenantsContract = {
     .route({ method: "POST", path: "/platform/tenants/{id}/cancel-deletion" })
     .input(z.object({ id: z.string().uuid() }))
     .output(z.object({ ok: z.boolean() })),
+  /** Brings a deleted store back as an empty, suspended shell (its data was purged); the pre-deletion export is kept. */
+  restoreDeleted: oc
+    .route({ method: "POST", path: "/platform/tenants/{id}/restore-deleted" })
+    .input(z.object({ id: z.string().uuid(), confirmSlug: z.string().min(1), reason: z.string().optional() }))
+    .output(z.object({ ok: z.boolean(), status: z.string(), exportId: z.string().nullable() })),
   /** Platform owner only, and only after the 30-day retention: releases the deletion to the background purge. */
   purge: oc
     .route({ method: "POST", path: "/platform/tenants/{id}/purge" })

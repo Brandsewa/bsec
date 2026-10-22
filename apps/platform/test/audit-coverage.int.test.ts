@@ -177,6 +177,15 @@ const CASES: Record<string, Case> = {
       return { id: s.tenantId };
     },
   },
+  "tenants.restoreDeleted": {
+    role: "platform_admin",
+    action: "tenant.restored_from_deleted",
+    input: async () => {
+      const s = await mkStore();
+      await rt._db.db.update(schema.tenants).set({ status: "deleted" }).where(eq(schema.tenants.id, s.tenantId));
+      return { id: s.tenantId, confirmSlug: s.slug };
+    },
+  },
   "tenants.purge": {
     role: "platform_owner",
     action: "tenant.purge_approved",

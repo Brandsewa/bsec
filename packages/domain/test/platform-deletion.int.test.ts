@@ -12,6 +12,7 @@ import {
   executeTenantDeletionWorkflow,
   provisionTenant,
   readExportArchive,
+  restoreDeletedTenant,
   runDueTenantDeletions,
   runStoreExport,
   scheduleTenantDeletion,
@@ -255,5 +256,32 @@ describe("tenant deletion workflow", () => {
     await rt._db.db.insert(schema.domains).values({ tenantId: r.tenantId, hostname: "shop.started.example", type: "custom", status: "active", cfCustomHostnameId: "cf_1" });
     expect(await errorOf(executeTenantDeletionWorkflow(rt, dr2.id, { domains, now: later() }))).toMatch(/cloudflare down/);
     expect(await errorOf(cancelTenantDeletion(rt, staffId, r.tenantId))).toMatch(/already started \(billing_stopped\)/);
+  });
+
+  it("restores a deleted store as an empty suspended shell, with its subdomain, audit row and export reference", async () => {
+    const s = await makeStore("del-restore", { withData: true });
+    const dr = await scheduleTenantDeletion(rt, staffId, { tenantId: s.tenantId, confirmSlug: "del-restore", graceDays: 0 });
+    await executeTenantDeletionWorkflow(rt, dr.id, { now: later(), deleteMediaObjects: async () => 0, billing: { isConfigured: () => false } as never, domains: { isConfigured: () => false } as never });
+    const [gone] = await rt._db.db.select().from(schema.tenants).where(eq(schema.tenants.id, s.tenantId));
+    expect(gone!.status).toBe("deleted");
+    expect(await count("products", s.tenantId)).toBe(0);
+
+    // not a deleted store, wrong slug: refused
+    const live = await makeStore("del-restore-live");
+    expect(await errorOf(restoreDeletedTenant(rt, staffId, { tenantId: live.tenantId, confirmSlug: "del-restore-live" }))).toMatch(/only a deleted store/);
+    expect(await errorOf(restoreDeletedTenant(rt, staffId, { tenantId: s.tenantId, confirmSlug: "nope" }))).toMatch(/type the store's slug/);
+
+    const res = await restoreDeletedTenant(rt, staffId, { tenantId: s.tenantId, confirmSlug: "del-restore", reason: "customer asked" });
+    expect(res.status).toBe("suspended");
+    expect(res.exportId).toBeTruthy();
+    const [t] = await rt._db.db.select().from(schema.tenants).where(eq(schema.tenants.id, s.tenantId));
+    expect(t!.status).toBe("suspended"); // never straight back to live
+    expect(await count("products", s.tenantId)).toBe(0); // purged data does not come back
+    const doms = await rt._db.db.select().from(schema.domains).where(eq(schema.domains.tenantId, s.tenantId));
+    expect(doms.filter((d) => d.type === "subdomain" && d.isPrimary && d.status === "active")).toHaveLength(1);
+    const audit = await rt._db.db.select().from(schema.platformAuditLogs).where(eq(schema.platformAuditLogs.tenantId, s.tenantId));
+    expect(audit.map((a) => a.action)).toContain("tenant.restored_from_deleted");
+    // already restored: a second restore is refused
+    expect(await errorOf(restoreDeletedTenant(rt, staffId, { tenantId: s.tenantId, confirmSlug: "del-restore" }))).toMatch(/only a deleted store/);
   });
 });

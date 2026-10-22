@@ -173,6 +173,65 @@ export async function cancelTenantDeletion(
 }
 
 /**
+ * Brings a deleted store back (staff action, platform_admin or higher). The tenant row, slug, owner, invoices, audit
+ * trail and the export taken before the purge survive deletion; the store's own rows (products, orders, media,
+ * customers...) do not, so the store comes back as an empty shell. It returns `suspended`, never live: the storefront
+ * stays offline and the admin read-only until staff check it and reactivate it. Billing was cancelled by the workflow
+ * and is not recreated; the platform subdomain is re-attached so the host resolves again. The slug is still held by the
+ * tenant row, so nobody can have taken it in the meantime.
+ */
+export async function restoreDeletedTenant(
+  rt: Runtime,
+  platformStaffUserId: string,
+  input: { tenantId: string; confirmSlug: string; reason?: string | undefined },
+  meta?: AuditMeta,
+): Promise<{ ok: true; status: "suspended"; exportId: string | null }> {
+  const staff = await assertPlatformStaff(rt, platformStaffUserId);
+  assertRoleAtLeast(staff.role as PlatformRole, "platform_admin", "restoring a deleted store");
+
+  return rt._db.db.transaction(async (tx) => {
+    const [tenant] = await tx.select().from(schema.tenants).where(eq(schema.tenants.id, input.tenantId)).for("update").limit(1);
+    if (!tenant) throw new Error(`Not Found: tenant not found: ${input.tenantId}`);
+    if (tenant.status !== "deleted") throw new Error("Conflict: only a deleted store can be restored");
+    if (input.confirmSlug.trim() !== tenant.slug) {
+      throw new Error(`Bad Request: type the store's slug "${tenant.slug}" to confirm the restore`);
+    }
+    assertCanTransitionTenant(tenant.status, "suspended");
+
+    const [deletion] = await tx
+      .select()
+      .from(schema.tenantDeletions)
+      .where(and(eq(schema.tenantDeletions.tenantId, input.tenantId), sql`${schema.tenantDeletions.completedAt} IS NOT NULL`))
+      .orderBy(sql`${schema.tenantDeletions.completedAt} DESC`)
+      .limit(1);
+
+    const reason = input.reason?.trim() || "Restored after deletion";
+    await tx
+      .update(schema.tenants)
+      .set({ status: "suspended", suspendedReason: `${reason}: review the store, then reactivate it`, archivedAt: null, updatedAt: sql`now()` })
+      .where(eq(schema.tenants.id, input.tenantId));
+
+    // Domains were marked removed (or purged) by the workflow; re-attach the platform subdomain.
+    const platformDomain = process.env.PLATFORM_DOMAIN?.trim() || "bcom.si";
+    const hostname = `${tenant.slug}.${platformDomain}`;
+    await tx.delete(schema.domains).where(and(eq(schema.domains.tenantId, input.tenantId), eq(schema.domains.hostname, hostname)));
+    await tx.insert(schema.domains).values({ tenantId: input.tenantId, hostname, type: "subdomain", status: "active", isPrimary: true, sslStatus: "active" });
+
+    await writePlatformAudit(tx, platformStaffUserId, "tenant.restored_from_deleted", "tenant", input.tenantId, input.tenantId, {
+      fromStatus: "deleted",
+      toStatus: "suspended",
+      reason,
+      deletionId: deletion?.id ?? null,
+      exportId: deletion?.exportId ?? null,
+      // The workflow removes the store's rows, so none of them come back with the restore.
+      dataRestored: false,
+    }, meta);
+
+    return { ok: true as const, status: "suspended" as const, exportId: deletion?.exportId ?? null };
+  });
+}
+
+/**
  * The platform owner approves the permanent purge of a deleted store (owner decision 2026-10-17). Only possible once the
  * retention period (30 days after the deletion was requested) is over, only for the platform owner, and only with the
  * store's slug typed as confirmation. Approval does not purge inline: it releases the deletion to the background sweep,
