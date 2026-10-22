@@ -98,7 +98,7 @@ export async function resetPlatformData(
         if (!s.providerSubscriptionId || s.status === "cancelled") continue;
         // A subscription the provider no longer knows (404) is already gone, which is what a reset wants.
         await billing.cancelSubscription(s.providerSubscriptionId).catch((err: unknown) => {
-          if (!/404|not found/i.test(err instanceof Error ? err.message : String(err))) throw err;
+          if (!/404|not found/i.test(err instanceof Error ? err.message : String(err))) throw err;
         });
       }
     }
