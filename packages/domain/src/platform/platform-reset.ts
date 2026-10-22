@@ -94,7 +94,13 @@ export async function resetPlatformData(
   for (const t of tenants) {
     if (billing.isConfigured?.() ?? true) {
       const subs = await db.select().from(schema.subscriptions).where(eq(schema.subscriptions.tenantId, t.id));
-      for (const s of subs) if (s.providerSubscriptionId && s.status !== "cancelled") await billing.cancelSubscription(s.providerSubscriptionId);
+      for (const s of subs) {
+        if (!s.providerSubscriptionId || s.status === "cancelled") continue;
+        // A subscription the provider no longer knows (404) is already gone, which is what a reset wants.
+        await billing.cancelSubscription(s.providerSubscriptionId).catch((err: unknown) => {
+          if (!/404|not found/i.test(err instanceof Error ? err.message : String(err))) throw err;
+        });
+      }
     }
     if (domainsProvider.isConfigured?.() ?? true) {
       const doms = await db.select().from(schema.domains).where(eq(schema.domains.tenantId, t.id));

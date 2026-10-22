@@ -24,6 +24,7 @@ const INPUTS: Record<string, () => unknown> = {
   "tenants.list": () => ({}),
   "tenants.get": () => ({ id: tenantId }),
   "tenants.getDetail": () => ({ id: tenantId }),
+  "tenants.resetPreview": () => undefined,
   "domains.list": () => ({}),
   "plans.list": () => undefined,
   "plans.invoices": () => ({}),
