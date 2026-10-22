@@ -27,10 +27,10 @@ The owner built test stores and accounts on production and wants a clean start. 
 - NOT verified: the dialog in a browser, R2/Cloudflare/billing cleanup against real providers (mocked in tests), `pnpm build`.
 
 ## Docs updated
-- [ ] `docs/ARCHITECTURE.md`: not updated (add the two routes and the env var)
+- [x] `docs/ARCHITECTURE.md`: updated in the docs PR (2026-10-22)
 - [x] ADR: not needed
 - [x] `DEPLOYMENT.md`: `PLATFORM_RESET_ENABLED` documented
-- [ ] `progress.md`
+- [x] `progress.md`: M14 added
 
 ## Follow-ups and open questions
 - Owner must set `PLATFORM_RESET_ENABLED=true` in Coolify on the platform service to use it, and remove it afterwards.

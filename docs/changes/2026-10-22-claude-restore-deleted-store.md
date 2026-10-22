@@ -28,10 +28,10 @@ A store whose deletion workflow finished (status `deleted`) was a dead end: the 
 - NOT verified: the Super Admin dialog in a browser, restoring `tasteofhills` locally, `pnpm build`, full test gate.
 
 ## Docs updated
-- [ ] `docs/ARCHITECTURE.md`: not updated yet (add the new route to the platform tenants list)
+- [x] `docs/ARCHITECTURE.md`: updated in the docs PR (2026-10-22)
 - [x] ADR: not needed
 - [x] `DEPLOYMENT.md` / RUNBOOK: not needed
-- [ ] `progress.md`
+- [x] `progress.md`: M14 added
 
 ## Follow-ups and open questions
 - Owner: should a restored store be offered an "import from export" step? Not built.

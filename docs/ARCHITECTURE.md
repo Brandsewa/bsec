@@ -4,7 +4,7 @@
 
 | | |
 |---|---|
-| Last verified against | `feat/admin-storefront-polish-batch1` (owner polish batch: admin product/category/collection/navigation forms, theme-builder product block, Modern Commerce mobile), 2026-10-20 |
+| Last verified against | `docs/restore-and-reset-progress` (restore deleted store, platform reset), 2026-10-22 |
 | Verified how | files read from the working tree; `pnpm docs:check` for the mechanical parts. Facts marked *(from code)* were read, not run. |
 | Owner | whoever changes the area (see the update triggers in section 0) |
 
@@ -377,6 +377,7 @@ Theme flow: platform staff build `theme_templates` (draft + published snapshot, 
 - **Feature flags:** `retire` / `restore` (`platform_admin` / `platform_owner`); retired flags are always on in `isFeatureEnabled`; kill switches cannot be retired.
 - **Platform audit log:** server pagination and filters on `audit.list`, `audit.archive|unarchive` (insert/delete in `platform_audit_log_archives`; rows are never deleted).
 - **Tenant purge:** new deletions keep the data for at least 30 days; only the platform owner can approve the permanent purge (`tenants.purge`, `approveTenantPurge`), which releases the deletion to the existing background workflow. The tenant row, invoices and audit trail stay.
+- **Restore a deleted store and platform reset (2026-10-22):** `restoreDeletedTenant` (`platform/deletion-requests.ts`, Platform API `tenants.restoreDeleted`, `platform_admin`): a `deleted` store returns as an empty `suspended` shell with its subdomain row re-created (the purge removed its data); lifecycle matrix allows only `deleted -> suspended`. Known gap: the owner's membership is purged and not recreated, so the owner cannot sign in to a restored store yet. `resetPlatformData` / `previewPlatformReset` (`platform/platform-reset.ts`, Platform API `tenants.resetPreview`, `tenants.resetAll`, `platform_owner`, Super Admin System page): deletes every store and non-staff account, keeps staff, plans, theme templates, flags, settings and the audit trail; behind env `PLATFORM_RESET_ENABLED=true` (platform service, default off), typed phrase and store count; outside systems first and fail closed, DB deletes plus audit row in one transaction; a provider 404 or Cashfree `subscription_status_invalid_for_action` counts as already cancelled.
 - **Storefront categories:** `/categories` lists every category with products (`listStorefrontCategories`); default navigation and the starter home page link to it.
 - **Menus:** default menus can be deleted and are no longer re-created; legacy items without ids are repaired when a menu is opened (`menu-defaults.ts`).
 - **UI kit:** `PasswordInput`, `CopyableId`, wider shared `Sheet` drawers; `categoryLabel`, policy rich text (`policy-rich-text.ts`) in `apps/admin/src/lib`.

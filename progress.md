@@ -11,6 +11,17 @@ Source of truth: `docs/PLAN.html` v2.0 (build order in `docs/BUILD-PLAN-M2-M9.md
 - claude · `fix/admin-polish-phase-1` · admin and Super Admin polish round, all three phases built (menus bug, auth forms, drawers, friendly IDs, variant builder, shipping zones and tiers, custom fields, promotions, flags, audit log, tenant purge, payments and domains pages, policy rich text); awaiting owner check and commit; plan `docs/ADMIN-SUPERADMIN-POLISH-PLAN.md`, ADR-034, ADR-035, change records `docs/changes/2026-10-17-claude-admin-polish-phase-1.md` and `...-phases-2-3.md` · 2026-10-17
 - claude · `feat/blog-system` · blog system built end to end (phases 1-5), awaiting owner review and merge; plan `docs/BLOG-PLAN.md`, ADR-033, change records `docs/changes/2026-10-15-claude-blog-*` · 2026-10-15
 
+## M14 · Restore deleted store and platform reset (2026-10-22): shipped to production
+
+Change records `docs/changes/2026-10-22-claude-restore-deleted-store.md`, `...-platform-reset.md`; PRs 103, 104, 105.
+
+- [x] **Restore a deleted store** (Super Admin tenant page, `platform_admin`): the store returns suspended and empty; verified on production by the owner (tasteofhills restored).
+- [x] **Platform reset** (Super Admin System page, `platform_owner`, env `PLATFORM_RESET_ENABLED`): wiped the owner's test stores and accounts on production; verified by the owner after two fixes (provider refusal handling, step-named errors). Staff, plans, theme templates, flags and settings were kept.
+- [ ] **Owner action:** remove `PLATFORM_RESET_ENABLED` from the platform app in Coolify and redeploy so the reset is switched off again.
+- [ ] **Known gap:** a restored store has no owner membership (the purge deletes it), so the owner cannot sign in. Fix first in the next slice.
+- [ ] **Flaky test:** `packages/domain/test/store-settings.int.test.ts` ("writes an audit_logs row...") reads `rows.at(-1)` from an unordered query and failed a `main` run once (re-run passed). Add an `ORDER BY`.
+- [ ] **Planned, not built (owner discussion 2026-10-22):** 30-day soft delete, then archive: write a checksummed backup to a private R2 bucket, purge live rows, restore-from-backup import, R2 lifecycle expiry at 6 months, optional customer download at delete time. Build order: owner-membership fix, download offer, R2 backup and import, expiry rule and Archived stage in the UI. DPDP wording for the terms is the owner's to confirm.
+
 ## M13 · Admin and Super Admin polish round (2026-10-17): built, not yet checked in a browser
 
 Plan [`docs/ADMIN-SUPERADMIN-POLISH-PLAN.md`](docs/ADMIN-SUPERADMIN-POLISH-PLAN.md) (owner decisions in section 3a), decisions [`ADR-034`](docs/adr/034-custom-fields.md) and [`ADR-035`](docs/adr/035-promotions-and-free-periods.md), change records `docs/changes/2026-10-17-claude-admin-polish-phase-1.md` and `...-phases-2-3.md`. Migrations 0062 to 0067.
