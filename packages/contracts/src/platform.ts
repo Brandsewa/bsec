@@ -367,6 +367,22 @@ export const platformTenantsContract = {
     .route({ method: "POST", path: "/platform/tenants/{id}/purge" })
     .input(z.object({ id: z.string().uuid(), confirmSlug: z.string().min(1) }))
     .output(z.object({ ok: z.boolean(), alreadyApproved: z.boolean() })),
+  /** Platform owner only: what a full platform reset would delete, and whether it is switched on. */
+  resetPreview: oc
+    .route({ method: "GET", path: "/platform/reset-preview" })
+    .output(z.object({
+      enabled: z.boolean(),
+      phrase: z.string(),
+      stores: z.array(z.object({ id: z.string(), name: z.string(), slug: z.string(), status: z.string() })),
+      usersToDelete: z.number(),
+      staffKept: z.number(),
+      signupLeads: z.number(),
+    })),
+  /** Platform owner only, behind PLATFORM_RESET_ENABLED: deletes every store and non-staff account. */
+  resetAll: oc
+    .route({ method: "POST", path: "/platform/reset" })
+    .input(z.object({ confirmation: z.string().min(1), expectedStores: z.number().int().min(0) }))
+    .output(z.object({ ok: z.boolean(), storesDeleted: z.number(), usersDeleted: z.number() })),
   export: oc
     .route({ method: "POST", path: "/platform/tenants/{id}/export" })
     .input(z.object({ id: z.string().uuid() }))

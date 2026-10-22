@@ -43,6 +43,8 @@ import {
   suspendPlatformTenant,
   restorePlatformTenant,
   restoreDeletedTenant,
+  previewPlatformReset,
+  resetPlatformData,
   archivePlatformTenant,
   changePlatformTenantPlan,
   extendPlatformTenantTrial,
@@ -391,6 +393,12 @@ export const platformRouter = os.router({
         context.meta,
       );
     }),
+    resetPreview: os.tenants.resetPreview.use(requireStaff("platform_owner")).handler(({ context }) =>
+      previewPlatformReset(context.rt, actor(context)),
+    ),
+    resetAll: os.tenants.resetAll.use(requireStaff("platform_owner")).handler(({ context, input }) =>
+      resetPlatformData(context.rt, actor(context), input, context.meta),
+    ),
     purge: os.tenants.purge.use(requireStaff("platform_owner")).handler(async ({ context, input }) => {
       const staffUserId = actor(context);
       const res = await approveTenantPurge(context.rt, staffUserId, { tenantId: input.id, confirmSlug: input.confirmSlug }, context.meta);

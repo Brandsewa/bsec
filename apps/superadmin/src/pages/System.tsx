@@ -4,9 +4,17 @@ import {
   HardDrive,
   RefreshCw,
   RotateCcw,
+  AlertOctagon,
 } from "lucide-react";
 import {
   Button,
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+  Input,
   PageContainer,
   PageHeader,
   PageSkeleton,
@@ -20,8 +28,35 @@ import {
 } from "@bs/ui";
 import { client } from "../lib/orpc.ts";
 import { messageOf } from "../lib/errors.ts";
+import { useHasRole } from "../lib/user-context.tsx";
 
 export function System() {
+  const isOwner = useHasRole("platform_owner");
+  const [resetOpen, setResetOpen] = useState(false);
+  const [resetText, setResetText] = useState("");
+  const [resetting, setResetting] = useState(false);
+  const { data: resetPreview, refetch: refetchPreview } = useQuery({
+    queryKey: ["platform", "reset-preview"],
+    queryFn: () => client.tenants.resetPreview(),
+    enabled: isOwner && resetOpen,
+  });
+
+  const handleReset = async () => {
+    if (!resetPreview) return;
+    setResetting(true);
+    try {
+      const res = await client.tenants.resetAll({ confirmation: resetText, expectedStores: resetPreview.stores.length });
+      toast.success(`Platform reset: ${res.storesDeleted} stores and ${res.usersDeleted} accounts deleted.`);
+      setResetOpen(false);
+      setResetText("");
+    } catch (err) {
+      toast.error(messageOf(err, "Failed to reset the platform"));
+      void refetchPreview();
+    } finally {
+      setResetting(false);
+    }
+  };
+
   const [retryingJobId, setRetryingJobId] = useState<string | null>(null);
   const [retryingWebhookId, setRetryingWebhookId] = useState<string | null>(null);
 
@@ -257,6 +292,65 @@ export function System() {
           )}
         </div>
       </div>
+
+      {isOwner && (
+        <div className="mt-6 rounded-lg border border-destructive/30 bg-destructive/5 p-4">
+          <h2 className="flex items-center gap-2 text-sm font-semibold text-destructive">
+            <AlertOctagon className="h-4 w-4" /> Reset platform data
+          </h2>
+          <p className="mt-1 text-xs text-muted-foreground">
+            Deletes every store and every store owner or customer account so you can start fresh. Staff logins, plans, theme templates, feature flags and
+            settings stay. Cannot be undone, and only works while PLATFORM_RESET_ENABLED=true is set on the platform service.
+          </p>
+          <Button size="sm" variant="destructive" className="mt-3" onClick={() => setResetOpen(true)}>
+            Review and reset
+          </Button>
+        </div>
+      )}
+
+      <Dialog open={resetOpen} onOpenChange={setResetOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2 text-destructive">
+              <AlertOctagon className="h-5 w-5" /> Reset platform data
+            </DialogTitle>
+            <DialogDescription>
+              Everything below is deleted permanently: store data, files, custom domains, provider subscriptions, invoices and accounts.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-3 py-2 text-xs">
+            {!resetPreview ? (
+              <p>Loading what would be deleted...</p>
+            ) : (
+              <>
+                {!resetPreview.enabled && (
+                  <p className="rounded-lg border border-destructive/20 bg-destructive/10 p-3 text-destructive">
+                    Reset is switched off. Set PLATFORM_RESET_ENABLED=true on the platform service, redeploy, then come back. Turn it off again afterwards.
+                  </p>
+                )}
+                <p className="font-semibold">
+                  {resetPreview.stores.length} stores, {resetPreview.usersToDelete === 1 ? "1 account" : `${resetPreview.usersToDelete} accounts`} and {resetPreview.signupLeads} signup leads will be deleted. {resetPreview.staffKept} staff logins stay.
+                </p>
+                <ul className="max-h-40 overflow-auto rounded-lg bg-muted/40 p-2 font-mono">
+                  {resetPreview.stores.map((st) => (
+                    <li key={st.id}>{st.slug} <span className="text-muted-foreground">({st.status})</span></li>
+                  ))}
+                </ul>
+                <div className="space-y-1">
+                  <label className="font-semibold">To confirm, type: <span className="select-all font-mono">{resetPreview.phrase}</span></label>
+                  <Input value={resetText} onChange={(e) => setResetText(e.target.value)} placeholder={resetPreview.phrase} />
+                </div>
+              </>
+            )}
+          </div>
+          <DialogFooter>
+            <Button variant="default" onClick={() => setResetOpen(false)}>Cancel</Button>
+            <Button variant="destructive" onClick={handleReset} disabled={resetting || !resetPreview?.enabled || resetText !== resetPreview?.phrase}>
+              Delete everything
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </PageContainer>
   );
 }

@@ -533,6 +533,16 @@ const CASES: Record<string, Case> = {
       return { id: p.id, to: "+919876543210" };
     },
   },
+  // Keep this LAST: it deletes every store, so cases after it would find nothing to work on.
+  "tenants.resetAll": {
+    role: "platform_owner",
+    action: "platform.reset",
+    input: async () => {
+      process.env.PLATFORM_RESET_ENABLED = "true";
+      const r = await rt._db.db.execute<{ n: string }>(sql`SELECT count(*)::text AS n FROM tenants`);
+      return { confirmation: "RESET ALL STORES", expectedStores: Number(r.rows[0]!.n) };
+    },
+  },
 };
 
 async function mkStorage(): Promise<string> {

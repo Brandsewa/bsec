@@ -45,7 +45,7 @@ async function deleteKeysFromBucket(client: ReturnType<typeof createR2Client>, b
   return deleted;
 }
 
-async function deleteFromR2(keys: string[]): Promise<number> {
+export async function deleteFromR2(keys: string[]): Promise<number> {
   const cfg = getR2Config();
   const privateCfg = getReturnPhotoStorageConfig();
   const client = createR2Client();
