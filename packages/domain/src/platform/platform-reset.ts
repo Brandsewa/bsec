@@ -112,7 +112,10 @@ export async function resetPlatformData(
         // A subscription the provider no longer knows (404) is already gone, which is what a reset wants.
         await stage(`cancelling the billing subscription of ${t.slug}`, () =>
           billing.cancelSubscription(providerId).catch((err: unknown) => {
-            if (!/404|not found/i.test(err instanceof Error ? err.message : String(err))) throw err;
+            // Already gone (404) or in a state the provider will not cancel (Cashfree: subscription_status_invalid_for_action,
+            // e.g. never activated or already ended): nothing is left to stop, which is what a reset wants.
+            const e = err as { message?: string; code?: string };
+            if (!/404|not found|invalid[_ ]for[_ ]action/i.test(`${e.code ?? ""} ${e.message ?? String(err)}`)) throw err;
           }),
         );
       }
