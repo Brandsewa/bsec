@@ -42,6 +42,7 @@ import {
   getPlatformOverviewMetrics,
   suspendPlatformTenant,
   restorePlatformTenant,
+  restoreDeletedTenant,
   archivePlatformTenant,
   changePlatformTenantPlan,
   extendPlatformTenantTrial,
@@ -380,6 +381,15 @@ export const platformRouter = os.router({
       const staffUserId = actor(context);
       await cancelTenantDeletion(context.rt, staffUserId, input.id, context.meta);
       return { ok: true };
+    }),
+    restoreDeleted: os.tenants.restoreDeleted.use(requireStaff("platform_admin")).handler(async ({ context, input }) => {
+      const staffUserId = actor(context);
+      return restoreDeletedTenant(
+        context.rt,
+        staffUserId,
+        { tenantId: input.id, confirmSlug: input.confirmSlug, ...(input.reason !== undefined ? { reason: input.reason } : {}) },
+        context.meta,
+      );
     }),
     purge: os.tenants.purge.use(requireStaff("platform_owner")).handler(async ({ context, input }) => {
       const staffUserId = actor(context);

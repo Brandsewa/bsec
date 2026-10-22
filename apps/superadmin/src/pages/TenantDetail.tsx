@@ -87,6 +87,9 @@ export function TenantDetail() {
   const [deletionConfirmText, setDeletionConfirmText] = useState("");
   const [deletionReason, setDeletionReason] = useState("");
   const [deletionGraceDays, setDeletionGraceDays] = useState(30);
+  const [restoreOpen, setRestoreOpen] = useState(false);
+  const [restoreConfirmText, setRestoreConfirmText] = useState("");
+  const [restoreReason, setRestoreReason] = useState("");
   const [purgeOpen, setPurgeOpen] = useState(false);
   const [purgeConfirmText, setPurgeConfirmText] = useState("");
 
@@ -297,6 +300,26 @@ export function TenantDetail() {
     }
   };
 
+  const handleRestoreDeleted = async () => {
+    if (restoreConfirmText !== tenant.slug) {
+      toast.error(`Type ${tenant.slug} to confirm`);
+      return;
+    }
+    setActionLoading(true);
+    try {
+      await client.tenants.restoreDeleted({ id: tenant.id, confirmSlug: tenant.slug, reason: restoreReason || undefined });
+      toast.success("Store restored as an empty, suspended shell. Review it, then reactivate it.");
+      setRestoreOpen(false);
+      setRestoreConfirmText("");
+      setRestoreReason("");
+      refetch();
+    } catch (err) {
+      toast.error(messageOf(err, "Failed to restore the store"));
+    } finally {
+      setActionLoading(false);
+    }
+  };
+
   const handleCancelDeletion = async () => {
     setActionLoading(true);
     try {
@@ -355,6 +378,11 @@ export function TenantDetail() {
             {isAdmin && (tenant.status === "suspended" || tenant.status === "archived") && (
               <Button size="sm" variant="outline" onClick={handleRestore} disabled={actionLoading} className="shadow-2xs">
                 <RotateCcw className="mr-1.5 h-3.5 w-3.5" /> Restore Store
+              </Button>
+            )}
+            {isAdmin && tenant.status === "deleted" && (
+              <Button size="sm" variant="outline" onClick={() => setRestoreOpen(true)} disabled={actionLoading} className="shadow-2xs">
+                <RotateCcw className="mr-1.5 h-3.5 w-3.5" /> Restore deleted store
               </Button>
             )}
             {isAdmin && tenant.status === "trial" && (
@@ -976,6 +1004,37 @@ export function TenantDetail() {
         confirmLabel="Transfer Ownership"
         onConfirm={executeTransfer}
       />
+
+      <Dialog open={restoreOpen} onOpenChange={setRestoreOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <RotateCcw className="h-5 w-5" /> Restore deleted store
+            </DialogTitle>
+            <DialogDescription>
+              The store record, owner, invoices and audit trail were kept, so the store comes back under the same address ({tenant.slug}.bcom.si).
+              Its products, orders, customers and files were removed when it was deleted and are not brought back; the export taken before the deletion
+              is kept. The store returns <strong>suspended</strong>: it stays offline until you review it and reactivate it. Billing is not restarted.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-3 py-2 text-xs">
+            <div className="space-y-1">
+              <label className="font-semibold">Reason (recorded in the audit log)</label>
+              <Input value={restoreReason} onChange={(e) => setRestoreReason(e.target.value)} placeholder="e.g. Owner asked to reopen the store" />
+            </div>
+            <div className="space-y-1">
+              <label className="font-semibold">To confirm, type: <span className="font-mono select-all">{tenant.slug}</span></label>
+              <Input value={restoreConfirmText} onChange={(e) => setRestoreConfirmText(e.target.value)} placeholder={tenant.slug} />
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="default" onClick={() => setRestoreOpen(false)}>Cancel</Button>
+            <Button onClick={handleRestoreDeleted} disabled={actionLoading || restoreConfirmText !== tenant.slug}>
+              Restore store
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       {/* Deletion Dialog */}
       <Dialog open={purgeOpen} onOpenChange={setPurgeOpen}>

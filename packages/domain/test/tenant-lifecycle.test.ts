@@ -177,7 +177,8 @@ describe("Tenant Lifecycle State Machine (PLAN §6.4)", () => {
     });
 
     it("rejects illegal transitions", () => {
-      // Terminal state cannot transition to anything
+      // A deleted store can only come back through "suspended" (staff restore), never straight to live
+      expect(canTransitionTenant("deleted", "suspended")).toBe(true);
       expect(canTransitionTenant("deleted", "active")).toBe(false);
       expect(() => assertCanTransitionTenant("deleted", "active")).toThrow(
         /Invalid tenant lifecycle transition/,

@@ -97,7 +97,9 @@ export const ALLOWED_TRANSITIONS: Record<TenantLifecycleState, readonly TenantLi
   archived: ["active", "deletion_requested"],
   // Cancelling a deletion puts the store back into whatever state it was in before the request.
   deletion_requested: ["trial", "active", "past_due", "suspended", "archived", "deleted"],
-  deleted: [], // terminal state
+  // The workflow never leaves "deleted" on its own. Only the staff "restore deleted store" action (restoreDeletedTenant)
+  // moves it, and always into "suspended" so the store stays offline until staff review and reactivate it.
+  deleted: ["suspended"],
 };
 
 export function canTransitionTenant(from: TenantLifecycleState, to: TenantLifecycleState): boolean {
