@@ -11,7 +11,9 @@ import {
   createRuntime,
   executeTenantDeletionWorkflow,
   provisionTenant,
+  previewPlatformReset,
   readExportArchive,
+  resetPlatformData,
   restoreDeletedTenant,
   runDueTenantDeletions,
   runStoreExport,
@@ -283,5 +285,42 @@ describe("tenant deletion workflow", () => {
     expect(audit.map((a) => a.action)).toContain("tenant.restored_from_deleted");
     // already restored: a second restore is refused
     expect(await errorOf(restoreDeletedTenant(rt, staffId, { tenantId: s.tenantId, confirmSlug: "del-restore" }))).toMatch(/only a deleted store/);
+  });
+});
+
+describe("platform reset", () => {
+  it("wipes every store and non-staff account, keeps staff, plans and the audit trail, and is gated", async () => {
+    const a = await makeStore("reset-a", { withData: true });
+    await makeStore("reset-b");
+    const stores = (await rt._db.db.select().from(schema.tenants)).length;
+    const plansBefore = (await rt._db.db.select().from(schema.plans)).length;
+    const staffBefore = (await rt._db.db.select().from(schema.platformStaff)).length;
+    const templatesBefore = (await rt._db.db.select().from(schema.themeTemplates)).length;
+    const deps = { billing: { isConfigured: () => false } as never, domains: { isConfigured: () => false } as never, deleteMediaObjects: async () => 0 };
+
+    // gate: off by default, owner only, typed phrase, matching count
+    delete process.env.PLATFORM_RESET_ENABLED;
+    expect(await errorOf(resetPlatformData(rt, staffId, { confirmation: "RESET ALL STORES", expectedStores: stores }, undefined, deps))).toMatch(/switched off/);
+    process.env.PLATFORM_RESET_ENABLED = "true";
+    expect(await errorOf(resetPlatformData(rt, supportStaffId, { confirmation: "RESET ALL STORES", expectedStores: stores }, undefined, deps))).toMatch(/platform_owner/);
+    expect(await errorOf(resetPlatformData(rt, staffId, { confirmation: "reset", expectedStores: stores }, undefined, deps))).toMatch(/type "RESET ALL STORES"/);
+    expect(await errorOf(resetPlatformData(rt, staffId, { confirmation: "RESET ALL STORES", expectedStores: stores + 1 }, undefined, deps))).toMatch(/Review the list/);
+    expect((await rt._db.db.select().from(schema.tenants)).length).toBe(stores); // nothing was touched
+
+    const preview = await previewPlatformReset(rt, staffId);
+    expect(preview.stores.length).toBe(stores);
+    expect(preview.staffKept).toBe(staffBefore);
+
+    const res = await resetPlatformData(rt, staffId, { confirmation: "RESET ALL STORES", expectedStores: stores }, undefined, deps);
+    expect(res.storesDeleted).toBe(stores);
+    expect((await rt._db.db.select().from(schema.tenants)).length).toBe(0);
+    expect(await count("products", a.tenantId)).toBe(0);
+    expect((await rt._db.db.select().from(schema.organizations)).length).toBe(0);
+    expect((await rt._db.db.select().from(schema.platformStaff)).length).toBe(staffBefore);
+    expect((await rt._db.db.select().from(schema.plans)).length).toBe(plansBefore);
+    expect((await rt._db.db.select().from(schema.themeTemplates)).length).toBe(templatesBefore); // theme builder templates stay
+    const actions = (await rt._db.db.select().from(schema.platformAuditLogs)).map((r) => r.action);
+    expect(actions).toContain("platform.reset");
+    delete process.env.PLATFORM_RESET_ENABLED;
   });
 });

@@ -141,6 +141,7 @@ export { warnIfEncryptionKeyMissing, isEncryptionKeyConfigured } from "@bs/payme
 export * from "./system/tenant-lifecycle.ts";
 export * from "./platform/support-sessions.ts";
 export * from "./platform/tenant-deletions.ts";
+export * from "./platform/platform-reset.ts";
 export * from "./platform/exports.ts";
 export * from "./platform/create-staff.ts";
 export * from "./platform/system.ts";
