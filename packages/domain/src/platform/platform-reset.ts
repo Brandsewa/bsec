@@ -27,6 +27,18 @@ export interface PlatformResetPreview {
   signupLeads: number;
 }
 
+/** Runs one reset step; a failure is rethrown as a "Conflict:" so Super Admin shows what failed instead of "Internal server error". */
+async function stage<T>(label: string, fn: () => Promise<T>): Promise<T> {
+  try {
+    return await fn();
+  } catch (err) {
+    const e = err as Error & { cause?: Error };
+    const detail = [e.message, e.cause?.message].filter(Boolean).join(" | ").slice(0, 400);
+    console.error(`[platform-reset] ${label} failed`, err);
+    throw new Error(`Conflict: ${label} failed. Nothing in the database was changed. ${detail}`, { cause: err });
+  }
+}
+
 export function isPlatformResetEnabled(): boolean {
   return process.env.PLATFORM_RESET_ENABLED?.trim() === "true";
 }
@@ -87,7 +99,7 @@ export async function resetPlatformData(
   }
 
   // 1. Outside systems, before anything is deleted.
-  const billing = deps.billing ?? (await resolveBillingProvider(db));
+  const billing = deps.billing ?? (await stage("loading the billing provider", () => resolveBillingProvider(db)));
   const domainsProvider = deps.domains ?? new CloudflareCustomDomainProvider();
   const r2 = getR2Config();
   const mediaConfigured = Boolean(deps.deleteMediaObjects) || Boolean(r2.accessKeyId && r2.secretAccessKey);
@@ -95,25 +107,34 @@ export async function resetPlatformData(
     if (billing.isConfigured?.() ?? true) {
       const subs = await db.select().from(schema.subscriptions).where(eq(schema.subscriptions.tenantId, t.id));
       for (const s of subs) {
-        if (!s.providerSubscriptionId || s.status === "cancelled") continue;
+        const providerId = s.providerSubscriptionId;
+        if (!providerId || s.status === "cancelled") continue;
         // A subscription the provider no longer knows (404) is already gone, which is what a reset wants.
-        await billing.cancelSubscription(s.providerSubscriptionId).catch((err: unknown) => {
-          if (!/404|not found/i.test(err instanceof Error ? err.message : String(err))) throw err;
-        });
+        await stage(`cancelling the billing subscription of ${t.slug}`, () =>
+          billing.cancelSubscription(providerId).catch((err: unknown) => {
+            // Already gone (404) or in a state the provider will not cancel (Cashfree: subscription_status_invalid_for_action,
+            // e.g. never activated or already ended): nothing is left to stop, which is what a reset wants.
+            const e = err as { message?: string; code?: string };
+            if (!/404|not found|invalid[_ ]for[_ ]action/i.test(`${e.code ?? ""} ${e.message ?? String(err)}`)) throw err;
+          }),
+        );
       }
     }
     if (domainsProvider.isConfigured?.() ?? true) {
       const doms = await db.select().from(schema.domains).where(eq(schema.domains.tenantId, t.id));
-      for (const d of doms) if (d.type === "custom" && d.cfCustomHostnameId) await domainsProvider.deleteCustomHostname(d.cfCustomHostnameId);
+      for (const d of doms) if (d.type === "custom" && d.cfCustomHostnameId) {
+        const hostId = d.cfCustomHostnameId;
+        await stage(`releasing the custom domain ${d.hostname} of ${t.slug}`, () => domainsProvider.deleteCustomHostname(hostId));
+      }
     }
     if (mediaConfigured) {
       const keys = (await db.select({ key: schema.media.storageKey }).from(schema.media).where(eq(schema.media.tenantId, t.id))).map((m) => m.key);
-      if (keys.length > 0) await (deps.deleteMediaObjects ?? deleteFromR2)(keys);
+      if (keys.length > 0) await stage(`deleting the files of ${t.slug}`, () => (deps.deleteMediaObjects ?? deleteFromR2)(keys));
     }
   }
 
   // 2. Everything in the database in ONE transaction: a failure (or a failed audit write) leaves the data untouched.
-  return db.transaction(async (tx) => {
+  return stage("deleting the database rows", () => db.transaction(async (tx) => {
     for (const t of tenants) await purgeTenantData(tx, t.id);
     const staffIds = (await tx.select({ id: schema.platformStaff.userId }).from(schema.platformStaff)).map((r) => r.id);
     await tx.delete(schema.tenantPromotions); // references tenants with ON DELETE RESTRICT
@@ -131,5 +152,5 @@ export async function resetPlatformData(
       usersDeleted: gone.length,
     }, meta);
     return { ok: true as const, storesDeleted: tenants.length, usersDeleted: gone.length };
-  });
+  }));
 }

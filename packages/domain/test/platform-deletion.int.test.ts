@@ -296,7 +296,10 @@ describe("platform reset", () => {
     const plansBefore = (await rt._db.db.select().from(schema.plans)).length;
     const staffBefore = (await rt._db.db.select().from(schema.platformStaff)).length;
     const templatesBefore = (await rt._db.db.select().from(schema.themeTemplates)).length;
-    const deps = { billing: { isConfigured: () => false } as never, domains: { isConfigured: () => false } as never, deleteMediaObjects: async () => 0 };
+    // a provider that refuses to cancel (Cashfree: status invalid for action) must not block the reset
+    await rt._db.db.update(schema.subscriptions).set({ providerSubscriptionId: "sub_not_cancellable", status: "active" }).where(eq(schema.subscriptions.tenantId, a.tenantId));
+    const refuse = Object.assign(new Error("subscription_status : is invalid for action."), { code: "subscription_status_invalid_for_action" });
+    const deps = { billing: { isConfigured: () => true, cancelSubscription: async () => { throw refuse; } } as never, domains: { isConfigured: () => false } as never, deleteMediaObjects: async () => 0 };
 
     // gate: off by default, owner only, typed phrase, matching count
     delete process.env.PLATFORM_RESET_ENABLED;
