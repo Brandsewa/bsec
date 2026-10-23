@@ -187,6 +187,8 @@ export const categories = tenantTable(
     name: text("name").notNull(),
     slug: citext("slug").notNull(),
     description: text("description"),
+    // Long, formatted description shown below the product list (validated blocks, never HTML).
+    descriptionJson: jsonb("description_json"),
     imageMediaId: uuid("image_media_id"),
     position: integer("position").notNull().default(0),
     path: text("path").notNull().default("/"),
@@ -448,6 +450,8 @@ export const collections = tenantTable(
     imageMediaId: uuid("image_media_id"),
     // Short plain-text blurb shown on collection cards and the archive (max 300 characters, enforced in the domain service).
     description: text("description"),
+    // Long, formatted description shown below the product list (validated blocks, never HTML).
+    descriptionJson: jsonb("description_json"),
     seo: jsonb("seo"),
     published: boolean("published").notNull().default(true),
     indexable: boolean("indexable").notNull().default(false),

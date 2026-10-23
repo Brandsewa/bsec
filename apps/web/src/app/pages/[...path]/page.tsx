@@ -150,11 +150,8 @@ export default async function CustomContentPage({ params }: CustomPageProps) {
         type="application/ld+json"
         dangerouslySetInnerHTML={{ __html: JSON.stringify(breadcrumbsJsonLd) }}
       />
-      <header className="mx-auto max-w-4xl px-4 pt-10 pb-4">
-        <h1 className="text-3xl md:text-5xl font-bold tracking-tight text-foreground">
-          {pageData.page.title}
-        </h1>
-      </header>
+      {/* The page's own blocks carry the visible heading; keep the title for screen readers and search engines. */}
+      <h1 className="sr-only">{pageData.page.title}</h1>
       <BlockRenderer blocks={renderResult.blocks} renderData={pageData.renderData} />
     </article>
   );

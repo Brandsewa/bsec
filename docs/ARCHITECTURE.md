@@ -4,7 +4,7 @@
 
 | | |
 |---|---|
-| Last verified against | `feat/admin-storefront-polish-batch1` (owner polish batch: admin product/category/collection/navigation forms, theme-builder product block, Modern Commerce mobile), 2026-10-20 |
+| Last verified against | `feat/sprint-storefront-theme-fixes` (owner sprint: body sizes and dark colours in theme settings, footer social icons, search popup on desktop, category and collection short and rich long description, login-only reviews, policy publish saves the editor first), 2026-10-23 |
 | Verified how | files read from the working tree; `pnpm docs:check` for the mechanical parts. Facts marked *(from code)* were read, not run. |
 | Owner | whoever changes the area (see the update triggers in section 0) |
 
@@ -300,6 +300,7 @@ Drizzle schema files in `packages/db/src/schema/` (one Postgres database, `publi
 | 0071 | `billing_dunning_and_invoice_profile` | `subscriptions.past_due_since` and `dunning_stage` (billing B5); `platform_billing_settings` invoice issuer columns (`invoice_legal_name`, `invoice_address`, `invoice_state`, `invoice_gstin`, `invoice_sac`, `gst_rate_bps`) (billing B6) |
 | 0073 | `platform_settings` | single-row `platform_settings` (id `default`): `require_staff_mfa` toggle for platform staff TOTP (Super Admin, platform_owner only); table created empty so absence means the environment default |
 | 0074 | `category_types` | `categories.type` (manual or automated), `match`, `rules` and `sort_order`: categories use the collection model (expand-only; existing categories stay manual in assigned order) |
+| 0075 | `collection_category_long_description` | `categories.description_json` and `collections.description_json` (JSONB, nullable): the long, formatted description shown below the product list, in the policy block format (headings, paragraphs with bold, italic and https links, lists, dividers; never HTML). The existing plain `description` is now the short description under the title (expand-only, no new table) |
 
 How to write one (expand, migrate, contract; `forceRlsSql`): `docs/migrations.md`. **Never edit an applied migration.** Latest on disk: `0074` (the docs check keeps this list honest).
 
@@ -481,3 +482,12 @@ Keep this list honest; remove an item when fixed.
 | COD | Cash on delivery (the only working payment method today) |
 | Coolify | Self-hosted PaaS that runs the containers on the VPS |
 | Antigravity | Google's agentic IDE, used as one of the coding agents (see `AGENTS.md`) |
+
+## Sprint 2026-10-23 notes (storefront and theme fixes)
+
+- **Theme tokens.** `fontSizes.body` (desktop, tablet, mobile; 12 to 24 px) sits beside the heading levels and is emitted as `--bs-body-d/-t/-m`; `.bsb` applies it mobile first. `colors.dark` and `colors.textOnDark` give `--bs-dark` and `--bs-on-dark`; every block's Background option now includes **Dark background** (`toneSchema` has `dark`, `.bsb-tone-dark` in `blocks.css`).
+- **Footer socials.** `SiteFooter` has `socials` (up to 8, network + safe link), `socialStyle`, `socialColor`, `socialSize`; the Footer panel groups are accordions and have a "Social links" group.
+- **Search popup.** `SearchModal` listens for clicks in the capture phase, so the header search icon (a next/link on desktop) opens the popup instead of navigating to `/search`.
+- **Category and collection descriptions.** `description` is the short text under the title; `description_json` is the rich long description (`RichDescription` in `packages/contracts`, `cleanRichDescription` in `packages/domain/src/rich-description.ts`), edited with the policy rich editor and drawn by `components/storefront/RichBlocks.tsx` below the product list (also used by `/policies/[type]`, which now shows bold, italic and links).
+- **Reviews.** `submitProductReview` needs a signed-in customer (no email or order number any more); verified purchase = a delivered order of that customer containing the product. `GET /api/storefront/customer/profile` returns `{ signedIn, name }` for the review form; `/account/login?next=/path` returns the shopper to the page.
+- **Policy publish.** The admin saves the editor's draft before publishing, since publish snapshots the saved draft.

@@ -1,6 +1,6 @@
 /** @jsxRuntime automatic */
 /** @jsxImportSource react */
-import type { ReactNode } from "react";
+import type { CSSProperties as _Css, ReactNode } from "react";
 import type { BlockRenderArgs } from "./types.ts";
 import type * as R from "./registry.ts";
 
@@ -23,7 +23,10 @@ export function FaqSectionView({ props, ctx }: A<R.FaqSectionProps>): ReactNode 
     </div>
   ) : null;
   const list = (
-    <div className={cx("bsb-fq-list", `bsb-fq-${props.style}`, `bsb-fq-icon-${props.iconPosition}`)}>
+    <div
+      className={cx("bsb-fq-list", `bsb-fq-${props.style}`, `bsb-fq-icon-${props.iconPosition}`)}
+      style={{ "--fq-icon": `${props.iconSize}px`, "--fq-py": `${props.rowPadding}px` } as _Css}
+    >
       {props.items.map((it, i) => (
         <details key={i} className="bsb-fq-item" {...(group ? { name: group } : null)} {...(props.openFirst && i === 0 ? { open: true } : null)}>
           <summary className="bsb-fq-q">
@@ -41,8 +44,8 @@ export function FaqSectionView({ props, ctx }: A<R.FaqSectionProps>): ReactNode 
       <div className={cx("bsb-w", `bsb-w-${props.width}`)}>
         {props.layout === "split" ? (
           <div className={cx("bsb-fq", "bsb-fq-split", `bsb-fq-side-${props.textSide}`, `bsb-fq-pos-${props.textPosition}`)}>
-            {list}
             {head}
+            {list}
           </div>
         ) : (
           <div className={cx("bsb-fq", "bsb-fq-stacked", props.headingAlign !== "left" && `bsb-align-${props.headingAlign}`)}>

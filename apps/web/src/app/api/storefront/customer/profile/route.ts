@@ -1,13 +1,27 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
 import { updateCustomerProfile } from "@bs/domain";
-import { customerApi, errorResponse } from "@/server/customer-session.ts";
+import { currentCustomer, customerApi, errorResponse, resolveStore } from "@/server/customer-session.ts";
 
 const Body = z.object({
   name: z.string().trim().max(120),
   email: z.string().trim().email("Enter a valid email address").max(254),
   acceptsMarketing: z.boolean(),
 });
+
+/** Whether a shopper is signed in on this store, and their name (never an error for a visitor). The review form uses it. */
+export async function GET() {
+  const none = NextResponse.json({ signedIn: false }, { headers: { "Cache-Control": "private, no-store" } });
+  try {
+    const store = await resolveStore();
+    if (!store) return none;
+    const customer = await currentCustomer(store);
+    if (!customer) return none;
+    return NextResponse.json({ signedIn: true, name: customer.name }, { headers: { "Cache-Control": "private, no-store" } });
+  } catch {
+    return none;
+  }
+}
 
 /** The signed-in shopper edits their name, email and marketing choice. */
 export async function PUT(req: Request) {

@@ -6,10 +6,10 @@ import {
   generateBreadcrumbJsonLd,
   getPublishedPolicy,
   isFeatureEnabled,
-  type PolicyBlock,
   type PolicyContent,
 } from "@bs/domain";
 import { server } from "@/server/runtime.ts";
+import { RichBlocks } from "@/components/storefront/RichBlocks.tsx";
 
 export const ALLOWED_POLICY_TYPES = ["privacy", "terms", "refund", "shipping", "legal_notice"] as const;
 export type PolicyType = (typeof ALLOWED_POLICY_TYPES)[number];
@@ -111,56 +111,6 @@ export async function generateMetadata({ params }: PolicyPageProps): Promise<Met
   };
 }
 
-function renderBlock(block: PolicyBlock, index: number) {
-  if (block.type === "heading") {
-    if (block.level === 3) {
-      return (
-        <h3 key={index} className="text-xl font-semibold mt-6 mb-3 text-foreground">
-          {block.text}
-        </h3>
-      );
-    }
-    return (
-      <h2 key={index} className="text-2xl font-bold mt-8 mb-4 text-foreground">
-        {block.text}
-      </h2>
-    );
-  }
-
-  if (block.type === "paragraph") {
-    return (
-      <p key={index} className="my-4 text-foreground/90 leading-relaxed">
-        {block.text}
-      </p>
-    );
-  }
-
-  if (block.type === "list") {
-    if (block.style === "ordered") {
-      return (
-        <ol key={index} className="list-decimal pl-6 my-4 space-y-2 text-foreground/90">
-          {block.items.map((item, i) => (
-            <li key={i}>{item}</li>
-          ))}
-        </ol>
-      );
-    }
-    return (
-      <ul key={index} className="list-disc pl-6 my-4 space-y-2 text-foreground/90">
-        {block.items.map((item, i) => (
-          <li key={i}>{item}</li>
-        ))}
-      </ul>
-    );
-  }
-
-  if (block.type === "divider") {
-    return <hr key={index} className="my-8 border-border" />;
-  }
-
-  return null;
-}
-
 export default async function PolicyPage({ params }: PolicyPageProps) {
   const { type } = await params;
 
@@ -241,7 +191,7 @@ export default async function PolicyPage({ params }: PolicyPageProps) {
       </header>
       {publishedPolicy ? (
         <div className="prose dark:prose-invert max-w-none text-foreground/90">
-          {publishedPolicy.content.blocks.map((block, idx) => renderBlock(block, idx))}
+          <RichBlocks blocks={publishedPolicy.content.blocks} />
         </div>
       ) : (
         <div className="prose dark:prose-invert max-w-none whitespace-pre-line text-foreground/90 leading-relaxed">

@@ -10,7 +10,14 @@ export const metadata: Metadata = {
   robots: { index: false, follow: false },
 };
 
-export default async function LoginPage() {
+/** Only same-site paths: an absolute or protocol-relative address would turn the sign-in into an open redirect. */
+function safeNext(value: string | string[] | undefined): string | undefined {
+  const v = Array.isArray(value) ? value[0] : value;
+  return v && v.startsWith("/") && !v.startsWith("//") && !v.includes("\\") ? v : undefined;
+}
+
+export default async function LoginPage({ searchParams }: { searchParams: Promise<Record<string, string | string[] | undefined>> }) {
+  const next = safeNext((await searchParams)["next"]);
   const store = await resolveStore();
   const storeName = store ? await getCachedStoreName(store.tenantId).catch(() => "Store") : "Store";
 
@@ -21,7 +28,7 @@ export default async function LoginPage() {
       title="Sign in"
       description="Access your orders, addresses, and account details."
     >
-      <LoginForm initialTab="password" />
+      <LoginForm initialTab="password" {...(next ? { redirectTo: next } : {})} />
     </AuthShell>
   );
 }

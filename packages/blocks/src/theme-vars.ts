@@ -78,6 +78,24 @@ export const DEFAULT_HEADING_SIZES: HeadingSizes = {
   h6: { desktop: 14, tablet: 14, mobile: 14 },
 };
 
+/** Body text size per device, stored beside the heading levels as fontSizes.body. */
+export const MIN_BODY_PX = 12;
+export const MAX_BODY_PX = 24;
+export const DEFAULT_BODY_SIZES: Record<SizeDevice, number> = { desktop: 16, tablet: 16, mobile: 16 };
+
+export function resolveBodySizes(tokens: ThemeTokensLike | null | undefined): Record<SizeDevice, number> {
+  const own = tokens?.fontSizes?.["body"] ?? {};
+  const one = (val: unknown, fallback: number) => {
+    const n = typeof val === "number" ? val : typeof val === "string" && val.trim() !== "" ? Number(val) : NaN;
+    return Number.isFinite(n) ? Math.min(MAX_BODY_PX, Math.max(MIN_BODY_PX, Math.round(n))) : fallback;
+  };
+  return {
+    desktop: one(own["desktop"], DEFAULT_BODY_SIZES.desktop),
+    tablet: one(own["tablet"], DEFAULT_BODY_SIZES.tablet),
+    mobile: one(own["mobile"], DEFAULT_BODY_SIZES.mobile),
+  };
+}
+
 /** A size in pixels clamped to the allowed range, or the fallback when it is not a usable number. */
 function sanitizeHeadingPx(val: unknown, fallback: number): number {
   const n = typeof val === "number" ? val : typeof val === "string" && val.trim() !== "" ? Number(val) : NaN;
@@ -242,6 +260,9 @@ export function computeThemeTokens(
   const background = sanitizeColor(rawBackground, "#ffffff");
   const surface = sanitizeColor(rawSurface, "#f8fafc");
   const text = sanitizeColor(rawText, "#0f172a");
+  // Dark sections: their own background and text colour, so widgets can offer a "Dark background" tone.
+  const dark = sanitizeColor(brandSettings?.["darkColor"] || colors["dark"], "#0f172a");
+  const onDark = sanitizeColor(colors["textOnDark"], readableOn(dark));
 
   const fontHeading = sanitizeFont(rawFontHeading, "Inter");
   const fontBody = sanitizeFont(rawFontBody, "Inter");
@@ -275,6 +296,11 @@ export function computeThemeTokens(
     sizeVars[`--bs-${level}-m`] = `${sizes[level].mobile / 16}rem`;
   }
 
+  const body = resolveBodySizes(themeTokens);
+  sizeVars["--bs-body-d"] = `${body.desktop / 16}rem`;
+  sizeVars["--bs-body-t"] = `${body.tablet / 16}rem`;
+  sizeVars["--bs-body-m"] = `${body.mobile / 16}rem`;
+
   return {
     ...sizeVars,
     // Block stylesheet variables (blocks.css). Same sanitized values, separate namespace so
@@ -284,6 +310,8 @@ export function computeThemeTokens(
     "--bs-surface": surface,
     "--bs-bg": background,
     "--bs-text": text,
+    "--bs-dark": dark,
+    "--bs-on-dark": onDark,
     "--bs-muted": `color-mix(in srgb, ${text} 60%, ${background})`,
     "--bs-border": `color-mix(in srgb, ${text} 15%, ${background})`,
     "--bs-radius": radius,
@@ -309,6 +337,8 @@ export function computeThemeTokens(
     "--color-background": background,
     "--color-surface": surface,
     "--color-text": text,
+    "--color-dark": dark,
+    "--color-text-on-dark": onDark,
     // Bare names: the long-standing contract of these variables. Blocks use the --bs-font-* ones, which add fallbacks.
     "--font-heading": fontHeading,
     "--font-body": fontBody,

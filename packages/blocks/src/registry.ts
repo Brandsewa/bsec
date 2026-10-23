@@ -686,6 +686,9 @@ export const SiteHeaderBlock: BlockDefinition<SiteHeaderProps> = {
   render: V.SiteHeaderView,
 };
 
+export const SOCIAL_NETWORKS = ["instagram", "facebook", "x", "youtube", "linkedin", "whatsapp", "email", "website"] as const;
+export type SocialNetwork = (typeof SOCIAL_NETWORKS)[number];
+
 export const SiteFooterSchema = z.object({
   about: z.string().max(300).optional(),
   /**
@@ -709,6 +712,15 @@ export const SiteFooterSchema = z.object({
     )
     .max(4)
     .default([]),
+  /** Social icons under the brand: one per network, each linking out. Empty shows none. */
+  socials: z
+    .array(z.object({ network: z.enum(SOCIAL_NETWORKS), url: hrefSchema.min(1) }))
+    .max(8)
+    .default([]),
+  socialStyle: z.enum(["plain", "filled", "outline"]).default("plain"),
+  socialColor: z.enum(["text", "brand"]).default("text"),
+  /** Icon size in pixels. */
+  socialSize: z.number().int().min(14).max(40).default(20),
   showNewsletter: z.boolean().default(true),
   newsletterTitle: z.string().max(80).default("Newsletter"),
   newsletterText: z.string().max(200).default("Subscribe for updates and exclusive offers."),
@@ -737,6 +749,10 @@ export const SiteFooterBlock: BlockDefinition<SiteFooterProps> = {
         ],
       },
     ],
+    socials: [],
+    socialStyle: "plain",
+    socialColor: "text",
+    socialSize: 20,
     showNewsletter: true,
     newsletterTitle: "Newsletter",
     newsletterText: "Subscribe for updates and exclusive offers.",
@@ -1363,6 +1379,10 @@ export const FaqSectionSchema = z.object({
   style: z.enum(["cards", "plain"]).default("cards"),
   iconPosition: z.enum(["left", "right"]).default("right"),
   iconStyle: z.enum(["chevron", "plus"]).default("plus"),
+  /** Open/close icon size in pixels. */
+  iconSize: z.number().int().min(10).max(48).default(20),
+  /** Space above and below each question in pixels (the row height). */
+  rowPadding: z.number().int().min(4).max(48).default(16),
   /** Opening one question closes the others. */
   singleOpen: z.boolean().default(false),
   openFirst: z.boolean().default(false),

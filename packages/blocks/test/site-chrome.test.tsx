@@ -37,6 +37,24 @@ describe("site footer options", () => {
     expect(SiteFooterSchema.safeParse({ columns: Array.from({ length: 5 }, (_, i) => ({ title: `c${i}` })) }).success).toBe(false);
   });
 
+  it("draws social icons under the brand, only for filled-in links, and none by default", () => {
+    expect(SiteFooterSchema.parse({}).socials).toEqual([]);
+    expect(render([footer({ columns: cols })])).not.toContain("bsb-socials");
+    const html = render([footer({ socials: [{ network: "instagram", url: "https://instagram.com/shop" }, { network: "email", url: "mailto:hi@shop.in" }, { network: "facebook", url: "https://" }], socialStyle: "filled", socialSize: 28 })]);
+    expect(html).toContain("bsb-socials-filled");
+    expect(html).toContain("--soc:28px");
+    expect(html).toContain('aria-label="Instagram"');
+    expect(html).toContain('href="mailto:hi@shop.in"');
+    expect(html).not.toContain('aria-label="Facebook"'); // an empty address draws nothing
+    expect(html).toContain('rel="noopener noreferrer"');
+  });
+
+  it("rejects unsafe social links and unknown networks", () => {
+    expect(SiteFooterSchema.safeParse({ socials: [{ network: "instagram", url: "javascript:alert(1)" }] }).success).toBe(false);
+    expect(SiteFooterSchema.safeParse({ socials: [{ network: "myspace", url: "https://x.com" }] }).success).toBe(false);
+    expect(SiteFooterSchema.safeParse({ socials: Array.from({ length: 9 }, () => ({ network: "x", url: "https://x.com" })) }).success).toBe(false);
+  });
+
   it("draws columns, centred and compact layouts", () => {
     const columnsHtml = render([footer({ columns: cols })]);
     expect(columnsHtml).toContain("bsb-fl-columns");

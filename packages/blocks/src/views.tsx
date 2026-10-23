@@ -1012,6 +1012,65 @@ export function SiteHeaderView({ props, ctx }: A<R.SiteHeaderProps>): ReactNode 
   );
 }
 
+const SOCIAL_PATHS: Record<R.SocialNetwork, ReactNode> = {
+  instagram: (
+    <>
+      <rect width="20" height="20" x="2" y="2" rx="5" ry="5" />
+      <path d="M16 11.37A4 4 0 1 1 12.63 8 4 4 0 0 1 16 11.37z" />
+      <line x1="17.5" x2="17.51" y1="6.5" y2="6.5" />
+    </>
+  ),
+  facebook: <path d="M18 2h-3a5 5 0 0 0-5 5v3H7v4h3v8h4v-8h3l1-4h-4V7a1 1 0 0 1 1-1h3z" />,
+  x: <path d="M4 4l16 16M20 4L4 20" />,
+  youtube: (
+    <>
+      <path d="M2.5 17a24.12 24.12 0 0 1 0-10 2 2 0 0 1 1.4-1.4 49.56 49.56 0 0 1 16.2 0A2 2 0 0 1 21.5 7a24.12 24.12 0 0 1 0 10 2 2 0 0 1-1.4 1.4 49.55 49.55 0 0 1-16.2 0A2 2 0 0 1 2.5 17" />
+      <path d="m10 15 5-3-5-3z" />
+    </>
+  ),
+  linkedin: (
+    <>
+      <path d="M16 8a6 6 0 0 1 6 6v7h-4v-7a2 2 0 0 0-2-2 2 2 0 0 0-2 2v7h-4v-7a6 6 0 0 1 6-6z" />
+      <rect width="4" height="12" x="2" y="9" />
+      <circle cx="4" cy="4" r="2" />
+    </>
+  ),
+  whatsapp: <path d="M7.9 20A9 9 0 1 0 4 16.1L2 22Z" />,
+  email: (
+    <>
+      <rect width="20" height="16" x="2" y="4" rx="2" />
+      <path d="m22 7-8.97 5.7a1.94 1.94 0 0 1-2.06 0L2 7" />
+    </>
+  ),
+  website: (
+    <>
+      <circle cx="12" cy="12" r="10" />
+      <path d="M2 12h20" />
+      <path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z" />
+    </>
+  ),
+};
+const SOCIAL_LABELS: Record<R.SocialNetwork, string> = { instagram: "Instagram", facebook: "Facebook", x: "X", youtube: "YouTube", linkedin: "LinkedIn", whatsapp: "WhatsApp", email: "Email", website: "Website" };
+
+function FooterSocials({ props }: { props: R.SiteFooterProps }): ReactNode {
+  const socials = props.socials.filter((s) => s.url.replace(/^https?:\/\//i, "").trim() !== "");
+  if (socials.length === 0) return null;
+  const size = props.socialSize;
+  return (
+    <ul className={cx("bsb-socials", `bsb-socials-${props.socialStyle}`, `bsb-socials-c-${props.socialColor}`)} style={{ "--soc": `${size}px` } as CSSProperties}>
+      {socials.map((s, i) => (
+        <li key={`${s.network}-${i}`}>
+          <a href={s.url} className="bsb-social" aria-label={SOCIAL_LABELS[s.network]} {...(isExternal(s.url) ? { target: "_blank", rel: "noopener noreferrer" } : {})}>
+            <svg viewBox="0 0 24 24" width={size} height={size} fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+              {SOCIAL_PATHS[s.network]}
+            </svg>
+          </a>
+        </li>
+      ))}
+    </ul>
+  );
+}
+
 export function SiteFooterView({ props, ctx }: A<R.SiteFooterProps>): ReactNode {
   const name = props.logoText || ctx?.storeName || "Your store";
   const logoUrl = mediaSrc(ctx, props.logoMediaId);
@@ -1040,6 +1099,7 @@ export function SiteFooterView({ props, ctx }: A<R.SiteFooterProps>): ReactNode 
     <div className="bsb-site-footer-brand">
       {logoUrl ? <img className="bsb-logo-img" src={logoUrl} alt={name} style={logoSizeStyle(props.logoSize)} /> : <p className="bsb-heading bsb-h-sm">{name}</p>}
       {props.about ? <p className="bsb-muted" style={{ marginTop: "0.5rem", fontSize: "0.875rem" }}>{props.about}</p> : null}
+      <FooterSocials props={props} />
     </div>
   );
   // Wide screens show every column open. With the accordion on, phones get the same links as one folded section per
@@ -1399,7 +1459,6 @@ function ShowcaseCard({ p, props, ctx, eager }: { p: BlockProduct; props: R.Prod
           "bsb-psc-imglink",
           p.title,
         )}
-        {badge ? <span className="bsb-psc-badge bsb-psc-badge-l">{badge}</span> : null}
         {props.showSaleBadge && saving > 0 ? <span className="bsb-psc-badge bsb-psc-badge-r">Save {saving}%</span> : null}
         {props.showAddToCart ? (
           <button
@@ -1414,7 +1473,12 @@ function ShowcaseCard({ p, props, ctx, eager }: { p: BlockProduct; props: R.Prod
           </button>
         ) : null}
       </div>
-      {rows.length > 0 ? <div className="bsb-psc-info">{rows}</div> : null}
+      {rows.length > 0 || badge ? (
+        <div className="bsb-psc-info">
+          {badge ? <p className="bsb-psc-cat">{badge}</p> : null}
+          {rows}
+        </div>
+      ) : null}
     </article>
   );
 }

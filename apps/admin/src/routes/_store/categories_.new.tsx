@@ -57,6 +57,7 @@ export function CreateCategoryPage() {
             name: v.name,
             slug: v.slug || undefined,
             description: v.description || undefined,
+            descriptionJson: v.descriptionJson,
             parentId: v.parentId,
             imageMediaId: v.imageMediaId,
             position: v.position,

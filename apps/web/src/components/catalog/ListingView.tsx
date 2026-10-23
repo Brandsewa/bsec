@@ -82,6 +82,7 @@ export function ProductsSkeleton({ count = 8 }: { count?: number }) {
         <div key={i} className="bs-pcard" aria-hidden>
           <div className="bs-pcard-media bs-skel" style={{ aspectRatio: "1 / 1" }} />
           <div className="bs-pcard-body">
+            <div className="bs-skel mb-2 h-3 w-1/4" />
             <div className="bs-skel h-4 w-4/5" />
             <div className="bs-skel mt-2 h-3 w-2/5" />
             <div className="bs-skel mt-3 h-4 w-1/4" />

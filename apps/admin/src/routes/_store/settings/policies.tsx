@@ -372,8 +372,16 @@ function PolicyForm({ policy, onSaved }: { policy: PolicyDetail; onSaved: () => 
           </div>
         }
         confirmLabel="Publish Now"
-        pending={publishMutation.isPending}
-        onConfirm={() => publishMutation.mutate({ handle: policy.handle })}
+        pending={publishMutation.isPending || saveDraftMutation.isPending}
+        onConfirm={async () => {
+          // Publish snapshots the saved draft, so save what is in the editor first (unsaved edits were being ignored).
+          try {
+            if (dirty) await saveDraftMutation.mutateAsync({ handle: policy.handle, title, content: { v: 1, blocks } });
+          } catch {
+            return;
+          }
+          publishMutation.mutate({ handle: policy.handle });
+        }}
       />
     </div>
   );
