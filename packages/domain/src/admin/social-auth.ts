@@ -164,7 +164,8 @@ export async function startStoreGoogleVerification(rt: Runtime, ctx: TenantConte
   const hosts = await assertAvailable(rt, ctx.tenantId);
   const row = await readStoreSocialAuth(rt._db.db, ctx.tenantId);
   if (!row?.clientId) throw new Error("Bad Request: add your Google Client ID first");
-  const host = hosts[0]!;
+  const host = hosts[0];
+  if (!host) throw new Error("Bad Request: connect and verify your own domain first");
   const ticket = issueGoogleSetupTicket(secret, ctx.tenantId, row.clientId);
   return { url: `https://${host}/account/google-verify?t=${encodeURIComponent(ticket)}` };
 }

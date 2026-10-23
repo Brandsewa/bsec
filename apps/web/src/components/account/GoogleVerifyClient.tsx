@@ -11,15 +11,11 @@ export function GoogleVerifyClient() {
   const params = useSearchParams();
   const ticket = params.get("t");
   const buttonRef = useRef<HTMLDivElement | null>(null);
-  const [state, setState] = useState<State>("loading");
-  const [message, setMessage] = useState<string | null>(null);
+  const [state, setState] = useState<State>(ticket ? "loading" : "error");
+  const [message, setMessage] = useState<string | null>(ticket ? null : "This test link is missing. Start the test again from Store Admin.");
 
   useEffect(() => {
-    if (!ticket) {
-      setState("error");
-      setMessage("This test link is missing. Start the test again from Store Admin.");
-      return;
-    }
+    if (!ticket) return;
     let cancelled = false;
     (async () => {
       try {

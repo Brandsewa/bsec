@@ -15,7 +15,7 @@ export async function GET(req: Request) {
   const parsed = readGoogleSetupTicket(secret, ticket);
   if (!parsed) return NextResponse.json({ error: "This test link expired. Start the test again from Store Admin." }, { status: 400, headers: NO_STORE });
   const h = await getRequestHeaders(req);
-  const host = (h.get("x-forwarded-host") ?? h.get("host") ?? "localhost").split(":")[0]!.toLowerCase();
+  const host = (h.get("x-forwarded-host") ?? h.get("host") ?? "localhost").split(":")[0]?.toLowerCase() ?? "";
   return NextResponse.json(
     { clientId: parsed.clientId, nonce: issueSetupNonce(secret, parsed.tenantId, host) },
     { headers: NO_STORE },
