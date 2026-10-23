@@ -2,7 +2,7 @@
 
 - **Date:** 2026-10-23
 - **Agent:** claude
-- **Branch:** `feat/widgets-multicard-collgrid-blog`  (stacked on `feat/sprint-storefront-theme-fixes`, PR 107; not merged yet)
+- **Branch:** `feat/widgets-multicard-collgrid-blog`  (PR to main; PR 107 is already merged)
 - **Area:** blocks, block-editor, domain (block data), web
 - **Type:** feature
 - **Supersedes:** none
