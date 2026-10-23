@@ -41,6 +41,12 @@ export function IntegrationsHub() {
     queryFn: () => client.integrations.overview(),
   });
 
+  const { data: authOverview } = useQuery({
+    queryKey: ["platform", "integrations", "auth"],
+    queryFn: () => client.integrations.authOverview(),
+  });
+  const googleOn = authOverview?.google.enabled ?? false;
+
   if (isLoading) {
     return (
       <PageContainer>
@@ -56,12 +62,6 @@ export function IntegrationsHub() {
   const emailStatus = overview?.channels.email.status ?? "not_configured";
   const emailSent7d = overview?.channels.email.sent7d ?? 0;
   const emailFailed7d = overview?.channels.email.failed7d ?? 0;
-
-  const { data: authOverview } = useQuery({
-    queryKey: ["platform", "integrations", "auth"],
-    queryFn: () => client.integrations.authOverview(),
-  });
-  const googleOn = authOverview?.google.enabled ?? false;
 
   const storageActive = overview?.storage.activeConnections ?? 0;
   const storageBytes = overview?.storage.totalBytes ?? 0;

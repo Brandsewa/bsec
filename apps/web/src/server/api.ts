@@ -356,6 +356,11 @@ import {
   getBlogSettings,
   updateBlogSettings,
   getPublicGoogleSignin,
+  getStoreGoogleSignin,
+  setStoreGoogleClientId,
+  updateStoreGoogleSignin,
+  startStoreGoogleVerification,
+  disconnectStoreGoogle,
   issueGoogleSignupNonce,
   verifyGoogleForSignup,
 } from "@bs/domain";
@@ -600,6 +605,45 @@ export const storeRouter = os.router({
           return setStandingSupportConsent(context.rt, context.tenantCtx, input.enabled).catch((e) => {
             throw mapAuthError(e);
           });
+        }),
+    },
+    socialAuth: {
+      get: os.admin.socialAuth.get
+        .use(requireAdmin)
+        .use(requirePermission("settings.read"))
+        .handler(({ context }) => {
+          if (!context.tenantCtx) throw new Error("Missing tenant context");
+          return getStoreGoogleSignin(context.rt, context.tenantCtx);
+        }),
+      setClientId: os.admin.socialAuth.setClientId
+        .use(requireAdmin)
+        .use(requirePermission("settings.write"))
+        .handler(({ context, input }) => {
+          if (!context.tenantCtx) throw new Error("Missing tenant context");
+          return setStoreGoogleClientId(context.rt, context.tenantCtx, input);
+        }),
+      update: os.admin.socialAuth.update
+        .use(requireAdmin)
+        .use(requirePermission("settings.write"))
+        .handler(({ context, input }) => {
+          if (!context.tenantCtx) throw new Error("Missing tenant context");
+          return updateStoreGoogleSignin(context.rt, context.tenantCtx, input);
+        }),
+      startVerification: os.admin.socialAuth.startVerification
+        .use(requireAdmin)
+        .use(requirePermission("settings.write"))
+        .handler(({ context }) => {
+          if (!context.tenantCtx) throw new Error("Missing tenant context");
+          const secret = readAuthSettings()?.secret;
+          if (!secret) throw new Error("Bad Request: sign-in is not configured on this server");
+          return startStoreGoogleVerification(context.rt, context.tenantCtx, secret);
+        }),
+      disconnect: os.admin.socialAuth.disconnect
+        .use(requireAdmin)
+        .use(requirePermission("settings.write"))
+        .handler(({ context }) => {
+          if (!context.tenantCtx) throw new Error("Missing tenant context");
+          return disconnectStoreGoogle(context.rt, context.tenantCtx);
         }),
     },
     paymentProviders: {

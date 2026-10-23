@@ -3,6 +3,7 @@
 import React, { useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
+import { GoogleSignIn } from "./GoogleSignIn.tsx";
 import { Button, Field, FieldLabel, Input, Alert, AlertDescription, Tabs, TabsList, TabsTrigger } from "@bs/ui";
 
 export function LoginForm({ initialTab = "otp", redirectTo = "/account" }: { initialTab?: "password" | "otp"; /** Where to go after signing in (a same-site path). */ redirectTo?: string }) {
@@ -236,6 +237,7 @@ export function LoginForm({ initialTab = "otp", redirectTo = "/account" }: { ini
           </Button>
         </form>
       )}
+      <GoogleSignIn redirectTo={redirectTo} />
     </div>
   );
 }

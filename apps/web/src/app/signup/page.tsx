@@ -6,6 +6,7 @@ import { useSearchParams } from "next/navigation";
 import Link from "next/link";
 import { SimpleSelect } from "@bs/ui";
 import { INDIAN_STATES } from "@/lib/india";
+import { loadGoogleScript } from "@/lib/google-identity.ts";
 import { fontSerifDisplay } from "@/lib/fonts.ts";
 import { Nav } from "@/components/marketing/landing/sections/Nav.tsx";
 import { SiteFooter } from "@/components/marketing/landing/sections/Footer.tsx";
@@ -21,34 +22,6 @@ interface PlanOption {
 
 const TRIAL_DAYS = 14;
 
-declare global {
-  interface Window {
-    google?: {
-      accounts: {
-        id: {
-          initialize: (cfg: Record<string, unknown>) => void;
-          renderButton: (el: HTMLElement, opts: Record<string, unknown>) => void;
-        };
-      };
-    };
-  }
-}
-
-/** Loads Google Identity Services once; only called on the signup step when Google sign-up is enabled. */
-function loadGoogleScript(): Promise<void> {
-  return new Promise((resolve, reject) => {
-    if (window.google?.accounts) return resolve();
-    const existing = document.querySelector<HTMLScriptElement>('script[src="https://accounts.google.com/gsi/client"]');
-    const el = existing ?? document.createElement("script");
-    el.addEventListener("load", () => resolve(), { once: true });
-    el.addEventListener("error", () => reject(new Error("google script")), { once: true });
-    if (!existing) {
-      el.src = "https://accounts.google.com/gsi/client";
-      el.async = true;
-      document.head.appendChild(el);
-    }
-  });
-}
 
 function rupees(paise: number): string {
   return `₹${(paise / 100).toLocaleString("en-IN", { maximumFractionDigits: 0 })} / mo`;

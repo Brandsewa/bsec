@@ -119,16 +119,10 @@ export async function getPlatformAuthOverview(rt: Runtime, platformStaffUserId: 
   const linked = await db.execute<{ n: string }>(
     sql`SELECT COUNT(DISTINCT user_id)::text AS n FROM accounts WHERE provider_id = 'google';`,
   );
-  // Tier B table arrives with the customer phase; tolerate its absence so this page never breaks.
-  let customerStores = 0;
-  try {
-    const r = await db.execute<{ n: string }>(
-      sql`SELECT COUNT(*)::text AS n FROM store_social_auth WHERE provider = 'google' AND enabled = true;`,
-    );
-    customerStores = Number(r.rows[0]?.n ?? 0);
-  } catch {
-    /* table not present yet */
-  }
+  const stores = await db.execute<{ n: string }>(
+    sql`SELECT COUNT(*)::text AS n FROM store_social_auth WHERE provider = 'google' AND enabled = true;`,
+  );
+  const customerStores = Number(stores.rows[0]?.n ?? 0);
 
   return {
     email: {

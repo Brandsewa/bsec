@@ -498,6 +498,13 @@
       "when": 1793062200000,
       "tag": "0076_platform_google_auth",
       "breakpoints": true
+    },
+    {
+      "idx": 71,
+      "version": "7",
+      "when": 1793063200000,
+      "tag": "0077_customer_google_signin",
+      "breakpoints": true
     }
   ]
 }

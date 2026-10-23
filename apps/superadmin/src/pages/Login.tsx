@@ -1,4 +1,5 @@
 import React, { useEffect, useState } from "react";
+import { useQuery } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
 import { Database, ShieldCheck } from "lucide-react";
 import { AuthShell, Button, Input, Label, toast } from "@bs/ui";
@@ -27,15 +28,19 @@ export function Login({ onSuccess }: LoginProps) {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [loading, setLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(() =>
+    typeof window !== "undefined" && new URLSearchParams(window.location.search).has("google_error")
+      ? "Google sign-in did not work for this account. Use your email, password and authenticator code."
+      : null,
+  );
   const [notice, setNotice] = useState<string | null>(null);
 
-  const [googleEnabled, setGoogleEnabled] = useState(false);
+  const { data: google } = useQuery({ queryKey: ["google-signin"], queryFn: fetchGoogleSignin, staleTime: 60_000 });
+  const googleEnabled = Boolean(google?.enabled);
 
   useEffect(() => {
-    void fetchGoogleSignin().then((g) => setGoogleEnabled(g.enabled));
+    // Clean the marker Better Auth's error redirect left in the address bar.
     if (new URLSearchParams(window.location.search).has("google_error")) {
-      setError("Google sign-in did not work for this account. Use your email, password and authenticator code.");
       window.history.replaceState(null, "", window.location.pathname);
     }
   }, []);

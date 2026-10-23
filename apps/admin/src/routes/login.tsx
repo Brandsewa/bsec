@@ -1,5 +1,6 @@
 import { createFileRoute, Link, redirect, useNavigate } from "@tanstack/react-router";
 import { useEffect, useState, type FormEvent } from "react";
+import { useQuery } from "@tanstack/react-query";
 import { AuthCardSkeleton, AuthShell, Button, Field, FieldError, FieldGroup, FieldLabel, Input } from "@bs/ui";
 import { PasswordInput } from "@bs/ui";
 import { fetchMe, signIn } from "../lib/auth.ts";
@@ -19,32 +20,32 @@ function LoginPage() {
   const { queryClient } = Route.useRouteContext();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
-  const [error, setError] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(() =>
+    typeof window !== "undefined" && new URLSearchParams(window.location.search).has("google_error")
+      ? "Google sign-in did not work for this account. Sign in with your email and password."
+      : null,
+  );
   const [busy, setBusy] = useState(false);
 
-  const [googleOn, setGoogleOn] = useState(false);
+  const { data: google } = useQuery({ queryKey: ["google-signin"], queryFn: fetchGoogleSignin, staleTime: 60_000 });
+  const googleOn = Boolean(google?.enabled);
 
   useEffect(() => {
+    if (!google?.enabled || !google.oneTap || !google.clientId) return;
     let cleanup: (() => void) | undefined;
     let cancelled = false;
-    if (new URLSearchParams(window.location.search).has("google_error")) {
-      setError("Google sign-in did not work for this account. Sign in with your email and password.");
-    }
-    void fetchGoogleSignin().then(async (g) => {
-      if (cancelled || !g.enabled) return;
-      setGoogleOn(true);
-      if (g.oneTap && g.clientId) {
-        cleanup = await startOneTap(g.clientId, () => {
-          queryClient.clear();
-          void navigate({ to: "/" });
-        });
-      }
+    void startOneTap(google.clientId, () => {
+      queryClient.clear();
+      void navigate({ to: "/" });
+    }).then((stop) => {
+      if (cancelled) stop();
+      else cleanup = stop;
     });
     return () => {
       cancelled = true;
       cleanup?.();
     };
-  }, [navigate, queryClient]);
+  }, [google, navigate, queryClient]);
 
   async function onGoogle() {
     setError(null);

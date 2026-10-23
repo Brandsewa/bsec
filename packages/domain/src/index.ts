@@ -158,6 +158,8 @@ export * from "./platform/settings.ts";
 export * from "./system/platform-mailer.ts";
 export * from "./admin/payment-methods.ts";
 export * from "./admin/payment-providers.ts";
+export * from "./admin/social-auth.ts";
+export * from "./customers/social/google.ts";
 export * from "./admin/plan-and-billing.ts";
 export * from "./platform/plan-change-requests.ts";
 export * from "./admin/tax-settings.ts";

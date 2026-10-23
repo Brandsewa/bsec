@@ -330,6 +330,11 @@ import {
   createBlogPreviewLink,
   getBlogSettings,
   updateBlogSettings,
+  getStoreGoogleSignin,
+  setStoreGoogleClientId,
+  updateStoreGoogleSignin,
+  startStoreGoogleVerification,
+  disconnectStoreGoogle,
 } from "../src/index.ts";
 import { createR2Client } from "../src/media/storage.ts";
 
@@ -1730,6 +1735,24 @@ describe("Generated Isolation Test Suite (M1 Real Postgres 18 Proof)", () => {
         return await getCheckoutSettings(rt, ctx);
       case "checkoutSettings.update":
         return await updateCheckoutSettings(rt, ctx, { guestCheckout: true });
+      // --- Tier B: a store's own Google sign-in for its customers ---
+      case "socialAuth.get":
+        return await getStoreGoogleSignin(rt, ctx);
+      case "socialAuth.setClientId":
+      case "socialAuth.update":
+      case "socialAuth.startVerification":
+      case "socialAuth.disconnect": {
+        // The store needs Super Admin's customer switch and a live custom domain (platform role owns both tables).
+        await rtPlatform._db.db.execute(sql`UPDATE platform_auth_providers SET customer_signin_allowed = true WHERE provider = 'google'`);
+        await rtPlatform._db.db.execute(
+          sql`INSERT INTO domains (tenant_id, hostname, type, status, is_primary) VALUES (${ctx.tenantId}, ${`iso-${ctx.tenantId.slice(0, 8)}.example.test`}, 'custom', 'active', false) ON CONFLICT (hostname) DO NOTHING`,
+        );
+        const saved = await setStoreGoogleClientId(rt, ctx, { clientId: "123456789012-isolationclient.apps.googleusercontent.com" });
+        if (procPath === "socialAuth.setClientId") return saved;
+        if (procPath === "socialAuth.update") return await updateStoreGoogleSignin(rt, ctx, { oneTapEnabled: false });
+        if (procPath === "socialAuth.startVerification") return await startStoreGoogleVerification(rt, ctx, "isolation-secret-0123456789abcdef0123");
+        return await disconnectStoreGoogle(rt, ctx);
+      }
       case "customerAccountSettings.get":
         return await getCustomerAccountSettings(rt, ctx);
       case "customerAccountSettings.update":

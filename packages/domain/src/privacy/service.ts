@@ -527,6 +527,7 @@ export async function executePrivacyExport(
     let ordersSummary: unknown[] = [];
     let consentHistory: unknown[] = [];
     const reviewsData: unknown[] = [];
+    let linkedSignIns: unknown[] = [];
 
     if (req.customerId) {
       const [c] = await tx
@@ -576,6 +577,16 @@ export async function executePrivacyExport(
         })
         .from(schema.customerConsentEvents)
         .where(and(eq(schema.customerConsentEvents.tenantId, ctx.tenantId), eq(schema.customerConsentEvents.customerId, req.customerId)));
+
+      linkedSignIns = await tx
+        .select({
+          provider: schema.customerIdentities.provider,
+          email: schema.customerIdentities.email,
+          linkedAt: schema.customerIdentities.createdAt,
+          lastLoginAt: schema.customerIdentities.lastLoginAt,
+        })
+        .from(schema.customerIdentities)
+        .where(and(eq(schema.customerIdentities.tenantId, ctx.tenantId), eq(schema.customerIdentities.customerId, req.customerId)));
     }
 
     const exportBundle = {
@@ -586,6 +597,7 @@ export async function executePrivacyExport(
       orders: ordersSummary,
       consentEvents: consentHistory,
       reviews: reviewsData,
+      linkedSignIns,
     };
 
     // Audit log
