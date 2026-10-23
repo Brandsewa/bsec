@@ -30,6 +30,9 @@ interface CollectionPageProps {
   }>;
 }
 
+/** The collection page's product list is either the full "Collection page" block or the bare "Collection products" widget. */
+const isListingBlock = (type: string) => type === "CollectionListing" || type === "CollectionProducts";
+
 export async function generateMetadata({ params, searchParams }: CollectionPageProps): Promise<Metadata> {
   const { slug } = await params;
   const sp = await searchParams;
@@ -139,13 +142,13 @@ export default async function CollectionDetailPage({
 
     // Check if the theme's collection template defines a filterMenuHandle
     template = await getCachedThemePage(tenantId, "collection").catch(() => null);
-    const listingForSize = template?.blocks.find((b) => b.type === "CollectionListing");
+    const listingForSize = template?.blocks.find((b) => isListingBlock(b.type));
     const templateSize = Number(listingForSize?.props?.["pageSize"]);
     const defaultLimit = [12, 24, 36].includes(templateSize) ? templateSize : listingForSize ? 24 : 12;
     limit = Math.max(1, Math.min(100, parseInt(sp.limit ?? "", 10) || defaultLimit));
     let filterMenuHandle: string | undefined = undefined;
     if (template?.blocks) {
-      const listingBlock = template.blocks.find((b) => b.type === "CollectionListing");
+      const listingBlock = template.blocks.find((b) => isListingBlock(b.type));
       if (listingBlock && typeof listingBlock.props?.filterMenuHandle === "string" && listingBlock.props.filterMenuHandle) {
         filterMenuHandle = listingBlock.props.filterMenuHandle;
       }

@@ -1,5 +1,6 @@
 import type { CSSProperties, ReactNode } from "react";
 import type { z } from "zod";
+import type { Layout } from "./layout.ts";
 
 export type BlockType =
   // Sections and content (M2)
@@ -55,7 +56,13 @@ export type BlockType =
   // FAQ accordion with heading and description, split or stacked layout, card or plain look, icon on either side
   | "FaqSection"
   // Collection grid with a movable heading, a button link, wrapping rows and a carousel option for tablets and phones
-  | "CollectionShowcase";
+  | "CollectionShowcase"
+  // Cards with icon or picture, heading, text and link: a grid, or a slider on tablets and phones
+  | "MultiCard"
+  // The collection page's product grid (sort, filters, cards) without its title block, so a page can put its own content around it
+  | "CollectionProducts"
+  // Recent posts as a slider (arrows, flat page lines) with cards per row per device and an optional list on phones
+  | "BlogShowcase";
 
 /** Minimal product shape the product blocks need; the host supplies the real data. Prices are in paise. */
 export interface BlockProduct {
@@ -349,6 +356,13 @@ export interface CollectionListingOptions {
   showViewProduct?: boolean | undefined;
   showCategoryBadge?: boolean | undefined;
   hoverSecondImage?: boolean | undefined;
+  /** The Collection products widget: no built-in page heading or long description unless switched on, and its own section box. */
+  bare?: boolean | undefined;
+  showTitle?: boolean | undefined;
+  showLongDescription?: boolean | undefined;
+  tone?: "default" | "surface" | "primary" | "dark" | undefined;
+  width?: "narrow" | "default" | "wide" | "full" | undefined;
+  box?: Layout | undefined;
 }
 
 /**

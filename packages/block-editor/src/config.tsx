@@ -361,7 +361,7 @@ export const BLOCK_SPECS: Record<BlockType, Spec> = {
         title: "Pagination dots",
         fields: {
           dots: radio("Show dots"),
-          dotsStyle: select("Style", { dot: "Dots", pill: "Active pill", line: "Lines" }),
+          dotsDesktop: radio("Show dots on desktop and tablet too (arrows replace them there by default)"),
           dotsSize: select("Size", { sm: "Small", md: "Medium", lg: "Large" }),
           dotsColor: select("Colour", { light: "Light", dark: "Dark", brand: "Theme button colour" }),
           dotsPosition: select("Position", { left: "Left", center: "Centre", right: "Right" }),
@@ -476,6 +476,106 @@ export const BLOCK_SPECS: Record<BlockType, Spec> = {
         title: "Questions",
         fields: {
           items: { type: "array", label: "Questions", getItemSummary: (i: { question?: string }) => i.question ?? "Question", arrayFields: { question: text("Question"), answer: area("Answer") }, defaultItemProps: { question: "Question", answer: "Answer" } } as Field,
+        },
+      },
+    ]),
+  },
+  MultiCard: {
+    label: "Multi card",
+    category: "bcom",
+    fields: accordionFields("MultiCard", [
+      {
+        id: "section",
+        title: "Section",
+        fields: {
+          box: layoutField("Section") as Field,
+          width: select("Content width", WIDTH),
+          tone: select("Background", TONE),
+          sectionBg: colorField("Background colour (overrides the choice above)") as Field,
+        },
+      },
+      {
+        id: "heading",
+        title: "Heading",
+        fields: {
+          title: text("Heading (empty hides it)"),
+          subtitle: text("Description under the heading"),
+          headerAlign: select("Alignment", ALIGN),
+        },
+      },
+      {
+        id: "layout",
+        title: "Cards per row and slider",
+        fields: {
+          perRowDesktop: select("Cards per row: desktop (recommended 3)", { "1": "1", "2": "2", "3": "3", "4": "4" }),
+          perRowTablet: select("Cards per row: tablet (recommended 2)", { "1": "1", "2": "2", "3": "3" }),
+          perRowMobile: select("Cards per row: phone (recommended 1)", { "1": "1", "2": "2" }),
+          tabletLayout: select("Tablet", { grid: "Grid", slider: "Slider (swipe sideways)" }),
+          mobileLayout: select("Phone (recommended: slider)", { grid: "Grid", slider: "Slider (swipe sideways)" }),
+          gap: num("Space between cards (px)", 0, 64),
+        },
+      },
+      {
+        id: "card",
+        title: "Card look",
+        fields: {
+          cardPadding: num("Padding inside each card (px)", 0, 64),
+          cardRadius: num("Corner radius (px)", 0, 48),
+          borderWidth: num("Border line (px, 0 for none)", 0, 8),
+          borderColor: colorField("Border colour (empty uses the theme)") as Field,
+          cardBg: colorField("Card background colour (empty is see-through)") as Field,
+          cardText: colorField("Card text colour (empty follows the section)") as Field,
+          cardBgMediaId: mediaField("Background picture for every card (a card can set its own)") as Field,
+          cardOverlay: num("Darkening over a background picture (%)", 0, 80),
+          cardMinHeight: num("Minimum card height (px, 0 = automatic)", 0, 600),
+        },
+      },
+      {
+        id: "content",
+        title: "Card content",
+        fields: {
+          contentAlign: select("Vertical position (needs a minimum height)", { start: "Top", center: "Middle", end: "Bottom" }),
+          textAlign: select("Text alignment", ALIGN),
+          elementGap: num("Space between icon, heading, text and link (px)", 0, 48),
+          showIcon: radio("Icon or picture"),
+          showHeading: radio("Heading"),
+          showText: radio("Text"),
+          showLink: radio("Link"),
+          iconSize: num("Icon size (px)", 16, 120),
+          linkStyle: select("Link look", { link: "Text link", button: "Button" }),
+        },
+      },
+      {
+        id: "items",
+        title: "Cards",
+        fields: {
+          items: {
+            type: "array",
+            label: "Cards",
+            getItemSummary: (i: { heading?: string }) => i.heading || "Card",
+            arrayFields: {
+              icon: select("Icon (ignored when a picture is chosen)", ICONS),
+              iconMediaId: mediaField("Picture instead of an icon") as Field,
+              heading: text("Heading"),
+              text: area("Text"),
+              linkLabel: text("Link text"),
+              linkHref: link("Link"),
+              bgMediaId: mediaField("Background picture for this card") as Field,
+            },
+            defaultItemProps: { icon: "star", heading: "Heading", text: "Write something helpful for your customers." },
+          } as Field,
+        },
+      },
+      {
+        id: "slider",
+        title: "Slider controls (tablet and phone)",
+        fields: {
+          arrows: radio("Arrows (tablet)"),
+          dots: radio("Page lines (phone)"),
+          dotsColor: select("Page line colour", { light: "Light", dark: "Dark", brand: "Theme button colour" }),
+          autoplay: radio("Autoplay"),
+          interval: num("Seconds per page", 2, 20),
+          loop: radio("Loop back to the start"),
         },
       },
     ]),
@@ -666,7 +766,7 @@ export const BLOCK_SPECS: Record<BlockType, Spec> = {
         title: "Pagination dots",
         fields: {
           dots: radio("Show dots"),
-          dotsStyle: select("Style", { dot: "Dots", pill: "Active pill", line: "Lines" }),
+          dotsDesktop: radio("Show dots on desktop and tablet too (arrows replace them there by default)"),
           dotsSize: select("Size", { sm: "Small", md: "Medium", lg: "Large" }),
           dotsColor: select("Colour", { light: "Light", dark: "Dark", brand: "Theme button colour" }),
           dotsPosition: select("Position", { left: "Left", center: "Centre", right: "Right" }),
@@ -680,6 +780,131 @@ export const BLOCK_SPECS: Record<BlockType, Spec> = {
           interval: num("Seconds per page", 2, 20),
           loop: radio("Loop back to the start"),
           pauseOnHover: radio("Pause while hovering"),
+        },
+      },
+    ]),
+  },
+  BlogShowcase: {
+    label: "Blog slider",
+    category: "bcom",
+    fields: accordionFields("BlogShowcase", [
+      {
+        id: "heading",
+        title: "Heading and posts",
+        fields: {
+          title: text("Heading"),
+          subtitle: text("Description under the heading"),
+          headerAlign: select("Heading position", { left: "Left", center: "Middle", right: "Right" }),
+          source: select("Which posts", { latest: "Newest posts", featured: "Featured posts", category: "From one category" }),
+          categorySlug: text("Category address (only for 'From one category')"),
+          count: num("How many posts", 1, 12),
+          showViewAll: radio("'View all' link"),
+          viewAllLabel: text("'View all' link text"),
+          hideWhenEmpty: radio("Hide the section when there are no posts"),
+        },
+      },
+      {
+        id: "section",
+        title: "Section",
+        fields: { box: layoutField("Section") as Field, width: select("Content width", WIDTH), tone: select("Background", TONE) },
+      },
+      {
+        id: "layout",
+        title: "Cards per row",
+        fields: {
+          layout: select("Desktop and tablet", { slider: "Slider", grid: "Grid (no sliding)" }),
+          perViewDesktop: num("Cards per row: desktop (recommended 3)", 1, 4),
+          perViewTablet: num("Cards per row: tablet (recommended 2)", 1, 3),
+          perViewMobile: num("Cards per row: phone (recommended 1)", 1, 2),
+          mobileLayout: select("Phone", { slider: "Slider (swipe sideways)", grid: "Grid", list: "List (one post per row)" }),
+          listThumbnail: radio("Phone list: small picture beside each post"),
+          gap: num("Space between cards (px)", 0, 48),
+        },
+      },
+      {
+        id: "card",
+        title: "Card",
+        fields: {
+          showImage: radio("Picture"),
+          imageRatio: select("Picture shape", { landscape: "Landscape", square: "Square", portrait: "Portrait (4:5)" }),
+          showCategory: radio("Category label"),
+          showExcerpt: radio("Summary"),
+          excerptLines: select("Summary lines", { "2": "2", "3": "3", "4": "4" }),
+          showDate: radio("Date"),
+          showAuthor: radio("Author"),
+        },
+      },
+      {
+        id: "slider",
+        title: "Slider controls",
+        fields: {
+          arrows: radio("Arrows (tablet and desktop)"),
+          dots: radio("Page lines (phone)"),
+          dotsDesktop: radio("Also show page lines on desktop and tablet"),
+          dotsColor: select("Page line colour", { light: "Light", dark: "Dark", brand: "Theme button colour" }),
+          autoplay: radio("Autoplay"),
+          interval: num("Seconds per page", 2, 20),
+          loop: radio("Loop back to the start"),
+        },
+      },
+    ]),
+  },
+  CollectionProducts: {
+    label: "Collection products (grid only)",
+    category: "store",
+    fields: accordionFields("CollectionProducts", [
+      {
+        id: "section",
+        title: "Section",
+        fields: {
+          box: layoutField("Section") as Field,
+          width: select("Content width", WIDTH),
+          tone: select("Background", TONE),
+        },
+      },
+      {
+        id: "text",
+        title: "Collection text (off to place your own around the grid)",
+        fields: {
+          showTitle: radio("Collection name as the page heading (keep one heading on the page)"),
+          showDescription: radio("Short description under the name"),
+          showLongDescription: radio("Long description below the products"),
+        },
+      },
+      {
+        id: "grid",
+        title: "Grid",
+        fields: {
+          columns: select("Cards per row: desktop (recommended 4)", { "4": "4", "3": "3", "2": "2" }),
+          columnsTablet: select("Cards per row: tablet (recommended 2)", { "2": "2", "1": "1" }),
+          columnsMobile: select("Cards per row: phone (recommended 2)", { "1": "1", "2": "2" }),
+          pageSize: select("Products per load (recommended 12)", { "12": "12", "24": "24", "36": "36" }),
+          defaultView: select("Default view", { grid: "Grid", list: "List" }),
+          showViewToggle: radio("Grid / list switch"),
+        },
+      },
+      {
+        id: "filters",
+        title: "Sort and filters",
+        fields: {
+          showFilters: radio("Sort and filters"),
+          filterMenuHandle: menuField("Filter menu") as Field,
+          filtersCollapsible: radio("Filter sidebar can be hidden"),
+        },
+      },
+      {
+        id: "cards",
+        title: "Product cards",
+        fields: {
+          imageRatio: select("Image shape", { square: "Square", portrait: "Portrait (4:5)" }),
+          cardStyle: select("Card style", { borderless: "Borderless", bordered: "Bordered", minimal: "Minimal" }),
+          hoverSecondImage: radio("Second image on hover"),
+          showSaleBadge: radio("Discount badge"),
+          showCategoryBadge: radio("Category label above the product name"),
+          showRatings: radio("Ratings"),
+          showAddToCart: radio("Add to cart icon on image"),
+          showQuickAdd: radio("Quick-buy popup for products with variants"),
+          showViewProduct: radio("View product link in popup"),
         },
       },
     ]),
@@ -756,7 +981,7 @@ export function blockAllowed(type: BlockType, kind: EditorPageKind): boolean {
   if (kind === "header" || kind === "footer") return ONLY[kind].includes(type);
   if (CHROME.includes(type)) return false;
   if (type === "ProductDetail" || type === "ProductInfoTabs" || type === "ProductCustomField") return kind === "product";
-  if (type === "CollectionListing") return kind === "collection";
+  if (type === "CollectionListing" || type === "CollectionProducts") return kind === "collection";
   if (type === "CartContents") return kind === "cart";
   if (type === "BlogListing") return kind === "blogArchive";
   if (type === "BlogPostContent") return kind === "blogPost";

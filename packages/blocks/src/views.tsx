@@ -1223,6 +1223,31 @@ export function CollectionListingView({ props, ctx }: A<R.CollectionListingProps
   );
 }
 
+export function CollectionProductsView({ props, ctx }: A<R.CollectionProductsProps>): ReactNode {
+  if (ctx?.renderCollectionListing) return <>{ctx.renderCollectionListing({ ...props, bare: true } as CollectionListingOptions)}</>;
+  const cards = Array.from({ length: Number(props.columns) * 2 }, (_, i) => (
+    <div key={i}>
+      <div className="bsb-ph-box" style={{ aspectRatio: "4 / 5" }} aria-hidden="true" />
+      <p style={{ margin: "0.5rem 0 0.15rem", fontWeight: 600 }}>Sample product {i + 1}</p>
+      <p className="bsb-muted" style={{ margin: 0 }}>{money(49900 + i * 10000)}</p>
+    </div>
+  ));
+  return (
+    <section className={cx("bsb bs-block-collection-products bsb-lay", `bsb-tone-${props.tone}`)} style={layoutStyle(props.box)}>
+      <div className={cx("bsb-w", `bsb-w-${props.width}`)}>
+        {props.showTitle ? <h1 className="bsb-heading bsb-h-lg">Collection name</h1> : null}
+        {props.showDescription ? <p className="bsb-muted" style={{ margin: "0.5rem 0 1rem" }}>The collection's short description appears here.</p> : null}
+        {props.showFilters ? <p className="bsb-muted" style={{ fontSize: "0.8125rem", margin: "0 0 1rem" }}>Sort · In stock only</p> : null}
+        <div className="bsb-grid bsb-gap-md" style={{ ["--cols" as string]: props.columns, ["--cols-m" as string]: props.columnsMobile }}>{cards}</div>
+        {props.showLongDescription ? <p className="bsb-muted" style={{ marginTop: "1.5rem" }}>The collection's long description appears here, below the products.</p> : null}
+        <p className="bsb-muted bsb-align-center" style={{ fontSize: "0.75rem", marginTop: "1rem" }}>
+          <strong>Collection products</strong> · This collection's own products are listed here on the storefront.
+        </p>
+      </div>
+    </section>
+  );
+}
+
 export function CartContentsView({ props, ctx }: A<R.CartContentsProps>): ReactNode {
   if (ctx?.renderCartContents) return <>{ctx.renderCartContents(props as CartContentsOptions)}</>;
   const items = (
@@ -1370,7 +1395,7 @@ export function HeroSliderView({ props, ctx }: A<R.HeroSliderProps>): ReactNode 
         </div>
       ) : null}
       {n > 1 && props.dots ? (
-        <div className={cx("bsb-hs-dots", `bsb-hs-dots-${props.dotsPosition}`, `bsb-hs-dot-${props.dotsStyle}`, `bsb-hs-dots-${props.dotsSize}`, `bsb-hs-dots-c-${props.dotsColor}`)} role="group" aria-label="Choose slide">
+        <div className={cx("bsb-hs-dots", props.arrows && !props.dotsDesktop && "bsb-hs-dots-mobile", `bsb-hs-dots-${props.dotsPosition}`, `bsb-hs-dot-${props.dotsStyle}`, `bsb-hs-dots-${props.dotsSize}`, `bsb-hs-dots-c-${props.dotsColor}`)} role="group" aria-label="Choose slide">
           {props.slides.map((_, i) => (
             <button key={i} type="button" className="bsb-hs-dotbtn" data-hs-dot="" aria-label={`Go to slide ${i + 1}`} {...(i === 0 ? { "aria-current": "true" as const } : null)} />
           ))}
@@ -1538,7 +1563,7 @@ export function ProductShowcaseView({ props, ctx, }: A<R.ProductShowcaseProps>):
                 </div>
               )}
               {/* The host fills the dots: how many pages there are depends on the screen. */}
-              {props.dots ? <div className={cx("bsb-hs-dots", "bsb-psc-dots", `bsb-hs-dots-${props.dotsPosition}`, `bsb-hs-dot-${props.dotsStyle}`, `bsb-hs-dots-${props.dotsSize}`, `bsb-hs-dots-c-${props.dotsColor}`)} data-psc-dots="" role="group" aria-label="Choose page" /> : null}
+              {props.dots ? <div className={cx("bsb-hs-dots", "bsb-psc-dots", props.arrows && !props.dotsDesktop && "bsb-hs-dots-mobile", `bsb-hs-dots-${props.dotsPosition}`, `bsb-hs-dot-${props.dotsStyle}`, `bsb-hs-dots-${props.dotsSize}`, `bsb-hs-dots-c-${props.dotsColor}`)} data-psc-dots="" role="group" aria-label="Choose page" /> : null}
             </div>
           );
         })}
