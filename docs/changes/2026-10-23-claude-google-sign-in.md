@@ -26,6 +26,8 @@ Super Admin can now configure one platform Google client (Authentication hub) so
 ## Verification
 - `pnpm typecheck` pass (15 packages). `pnpm lint` pass for the touched packages.
 - Real database: `platform-auth-providers.int.test.ts` 16 pass, `customer-google-signin.int.test.ts` 19 pass, `isolation.int.test.ts` 1510 pass (new `admin.socialAuth.*` mapped), `b2-grants.int.test.ts` 6 pass, `apps/platform` `audit-coverage.int.test.ts` 70 pass, `packages/auth` 15 pass.
+- Full domain heavy suite (`pnpm test:heavy:local`): 121 of 123 files pass; 2 files (`media-derivatives`, `order-cancel-stock`) crashed their Windows worker (exit 3221226505) and pass when run alone (8 of 8). `test:fast` pass for domain (460), web (230), admin, superadmin, auth, db, contracts. `pnpm build` and `pnpm docs:check` pass.
+- Exercised by hand: Super Admin sign-in, Integrations hub, `/integrations/auth` on the local dev stack (desktop width); saved a fake Google client and ran the connection test, which Google answered with `invalid_client` and the page showed the plain-English failure and kept Enable switched off. The dev rows were removed afterwards.
 - NOT verified: any live Google round trip (no Google client exists yet), the UI in a browser, the Better Auth redirect callback end to end, FedCM behaviour. These need the owner's Google Cloud client and a manual walkthrough on a custom domain. The connection test calls Google's token endpoint with a deliberately invalid code; the audit-coverage test makes that call too (offline it records a failed test).
 
 ## Docs updated

@@ -40,6 +40,20 @@ describe("Customer Accounts Settings Page (/settings/customer-accounts)", () => 
       createdAt: "2026-10-04T12:00:00.000Z",
     });
 
+    // Super Admin has not allowed Google sign-in for customers yet.
+    qc.setQueryData(orpc.admin.socialAuth.get.queryOptions().queryKey, {
+      platformAllowed: false,
+      hasVerifiedDomain: false,
+      origins: [],
+      clientId: null,
+      enabled: false,
+      oneTapEnabled: true,
+      verified: false,
+      verifiedAt: null,
+      verifiedHost: null,
+      needsVerification: false,
+    });
+
     const Page = Route.options.component as () => React.ReactNode;
     const html = await renderRouted(Page, qc);
 
@@ -49,7 +63,7 @@ describe("Customer Accounts Settings Page (/settings/customer-accounts)", () => 
     expect(html).toContain("Sign-in methods");
     expect(html).toContain("Email and password");
     expect(html).toContain("Phone number (SMS OTP)");
-    expect(html).toContain("Social sign-in (Google, Facebook)");
+    expect(html).toContain("Sign in with Google");
     expect(html).toContain("Not available yet");
     expect(html).toContain("Customer self-service");
     expect(html).toContain("Allow self-service return requests");
