@@ -164,6 +164,7 @@ export * from "./orders/tax-engine.ts";
 export * from "./orders/gst-validation.ts";
 export * from "./admin/notification-settings.ts";
 export * from "./policies/validator.ts";
+export * from "./rich-description.ts";
 export * from "./policies/starters.ts";
 export * from "./policies/service.ts";
 export * from "./privacy/service.ts";

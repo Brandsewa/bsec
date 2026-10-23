@@ -20,11 +20,9 @@ export interface SubmitReviewInput {
   productId: string;
   variantId?: string | undefined;
   reviewerName: string;
-  email?: string | undefined;
   rating: number;
   title?: string | undefined;
   body: string;
-  orderNumber?: string | undefined;
   honeypot?: string | undefined;
   /** Client IP, for rate limiting. */
   ip?: string | undefined;
@@ -178,7 +176,8 @@ export async function getStorefrontReviews(
 
 /**
  * Storefront: Submit a product review.
- * Enforces verified purchase check (delivered order item), honeypot, plain text sanitization, and auto-publish setting.
+ * Only a signed-in customer can review. Enforces the verified purchase check (a delivered order of theirs containing the
+ * product), honeypot, plain text sanitization, and auto-publish setting.
  */
 export async function submitProductReview(
   rt: Runtime,
@@ -186,6 +185,11 @@ export async function submitProductReview(
   input: SubmitReviewInput,
   customerId?: string | undefined,
 ) {
+  // 0. Reviews need a signed-in customer (owner decision 2026-10-23): no anonymous or email-only reviews.
+  if (!customerId) {
+    throw new Error("Unauthorized: Please sign in to review this product.");
+  }
+
   // 1. Honeypot check: bot prevention
   if (input.honeypot && input.honeypot.trim().length > 0) {
     // Silently drop bot submission
@@ -203,11 +207,9 @@ export async function submitProductReview(
     const ipRes = await checkRateLimit(db, { key: ipKey, limit: 10, windowSeconds: 3600 });
     if (!ipRes.allowed) throw new RateLimitExceededError("Too many reviews from this connection. Please try again later.", ipRes.retryAfter, 10, ipKey);
   }
-  if (input.email) {
-    const emailKey = `review_submit:email:${tenantId}:${input.email.trim().toLowerCase()}`;
-    const emailRes = await checkRateLimit(db, { key: emailKey, limit: 5, windowSeconds: 3600 });
-    if (!emailRes.allowed) throw new RateLimitExceededError("Too many reviews from this email. Please try again later.", emailRes.retryAfter, 5, emailKey);
-  }
+  const customerKey = `review_submit:customer:${tenantId}:${customerId}`;
+  const customerRes = await checkRateLimit(db, { key: customerKey, limit: 5, windowSeconds: 3600 });
+  if (!customerRes.allowed) throw new RateLimitExceededError("Too many reviews from this account. Please try again later.", customerRes.retryAfter, 5, customerKey);
 
   // 2. Sanitize plain text
   const cleanReviewerName = sanitizePlainText(input.reviewerName);
@@ -237,58 +239,31 @@ export async function submitProductReview(
     }
 
     // 4. Determine verified purchase & customer linkage
-    let matchedCustomerId: string | null = customerId ?? null;
+    const matchedCustomerId: string = customerId;
     let matchedOrderItemId: string | null = null;
 
-    if (!matchedCustomerId && input.email) {
-      const [customerRow] = await tx
-        .select({ id: schema.customers.id })
-        .from(schema.customers)
-        .where(and(eq(schema.customers.tenantId, tenantId), eq(schema.customers.email, input.email.trim().toLowerCase())))
-        .limit(1);
-      if (customerRow) {
-        matchedCustomerId = customerRow.id;
-      }
-    }
+    // A delivered order of this customer that contains the product makes it a verified purchase.
+    const deliveredOrders = await tx
+      .select({
+        orderItemId: schema.orderItems.id,
+        variantId: schema.orderItems.variantId,
+      })
+      .from(schema.orders)
+      .innerJoin(schema.orderItems, and(eq(schema.orderItems.tenantId, tenantId), eq(schema.orderItems.orderId, schema.orders.id)))
+      .innerJoin(schema.variants, and(eq(schema.variants.tenantId, tenantId), eq(schema.variants.id, schema.orderItems.variantId)))
+      .where(
+        and(
+          eq(schema.orders.tenantId, tenantId),
+          eq(schema.orders.customerId, matchedCustomerId),
+          eq(schema.orders.fulfillmentStatus, "delivered"),
+          eq(schema.variants.productId, input.productId),
+        ),
+      )
+      .limit(1);
+    if (deliveredOrders[0]) matchedOrderItemId = deliveredOrders[0].orderItemId;
 
-    // Find delivered order item matching this customer or order number
-    const canProveOrder = Boolean(customerId) || Boolean(input.email && input.orderNumber);
-    if (canProveOrder) {
-      const orderConditions: SQL[] = [eq(schema.orders.tenantId, tenantId)];
-      if (matchedCustomerId) {
-        orderConditions.push(eq(schema.orders.customerId, matchedCustomerId));
-      } else if (input.email) {
-        orderConditions.push(eq(schema.orders.email, input.email.trim().toLowerCase()));
-      }
-      if (input.orderNumber) {
-        orderConditions.push(eq(schema.orders.number, input.orderNumber.trim()));
-      }
-
-      // Check delivered orders containing this product
-      const deliveredOrders = await tx
-        .select({
-          orderItemId: schema.orderItems.id,
-          variantId: schema.orderItems.variantId,
-        })
-        .from(schema.orders)
-        .innerJoin(schema.orderItems, and(eq(schema.orderItems.tenantId, tenantId), eq(schema.orderItems.orderId, schema.orders.id)))
-        .innerJoin(schema.variants, and(eq(schema.variants.tenantId, tenantId), eq(schema.variants.id, schema.orderItems.variantId)))
-        .where(
-          and(
-            ...orderConditions,
-            eq(schema.orders.fulfillmentStatus, "delivered"),
-            eq(schema.variants.productId, input.productId),
-          ),
-        )
-        .limit(1);
-
-      if (deliveredOrders.length > 0 && deliveredOrders[0]) {
-        matchedOrderItemId = deliveredOrders[0].orderItemId;
-      }
-    }
-
-    // 5. Check if review already exists for this customer/email & product
-    if (matchedCustomerId) {
+    // 5. Check if review already exists for this customer & product
+    {
       const [existingReview] = await tx
         .select({ id: schema.reviews.id })
         .from(schema.reviews)

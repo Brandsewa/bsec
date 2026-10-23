@@ -9,7 +9,8 @@ import {
 import { useState } from "react";
 import { PageActions, DetailSkeleton, EmptyState, PageContainer, PageHeader, PageSkeleton, toast } from "@bs/ui";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import type { CollectionDetail, CollectionRule } from "@bs/contracts";
+import type { CollectionDetail, CollectionRule, RichDescription } from "@bs/contracts";
+import { RichDescriptionField } from "../../components/rich-description-field.tsx";
 import { Button } from "@bs/ui";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@bs/ui";
 import { Field, FieldLabel } from "@bs/ui";
@@ -76,6 +77,7 @@ function CollectionEditor({ collection, go }: { collection: CollectionDetail; go
 
   const [title, setTitle] = useState(collection.title);
   const [description, setDescription] = useState(collection.description ?? "");
+  const [descriptionJson, setDescriptionJson] = useState<RichDescription | null>(collection.descriptionJson ?? null);
   const [slug, setSlug] = useState(collection.slug);
   const [type, setType] = useState<"manual" | "automated">(collection.type);
   const [match, setMatch] = useState<"all" | "any">(collection.match ?? "all");
@@ -153,6 +155,7 @@ function CollectionEditor({ collection, go }: { collection: CollectionDetail; go
       title: title.trim(),
       slug: slug.trim() || undefined,
       description: description.trim() || null,
+      descriptionJson,
       imageMediaId: imageMediaId || null,
       type,
       match,
@@ -248,8 +251,8 @@ function CollectionEditor({ collection, go }: { collection: CollectionDetail; go
 
               <div className="grid gap-1.5">
                 <FieldLabel htmlFor="edit-description" className="flex items-center gap-1.5">
-                  Description
-                  <InfoTip>Short plain-text blurb shown on collection cards and the collections page (two lines on cards). Up to 300 characters.</InfoTip>
+                  Short description
+                  <InfoTip>Plain-text blurb shown under the collection title, on collection cards and on the collections page (two lines on cards). Up to 300 characters.</InfoTip>
                 </FieldLabel>
                 <Textarea
                   id="edit-description"
@@ -261,6 +264,8 @@ function CollectionEditor({ collection, go }: { collection: CollectionDetail; go
                 />
                 <p className="text-xs text-muted-foreground">{description.length}/300</p>
               </div>
+
+              <RichDescriptionField id="edit-long-description" value={descriptionJson} onChange={setDescriptionJson} tip="Shown below the products on the collection page, for detail content such as buying guides or care notes. Supports headings, bold, italic, links, lists and dividers." />
 
               <div className="grid gap-1.5">
                 <FieldLabel htmlFor="edit-slug">URL Handle (Slug)</FieldLabel>

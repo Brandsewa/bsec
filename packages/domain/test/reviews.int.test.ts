@@ -28,7 +28,8 @@ let ctxA: TenantContext;
 let ctxB: TenantContext;
 let productA: string;
 let variantA: string;
-let orderNumber: string;
+let buyerId: string;
+let askerId: string;
 
 const address = { fullName: "Rev Test", line1: "1 Road", city: "Pune", state: "Maharashtra", pincode: "411001" };
 
@@ -71,25 +72,44 @@ beforeAll(async () => {
   });
   await withTenant(rt._db.db, ctxA.tenantId, (tx) => tx.update(schema.orders).set({ fulfillmentStatus: "delivered" }).where(eq(schema.orders.id, o.orderId)));
   const [row] = await withTenant(rt._db.db, ctxA.tenantId, (tx) => tx.select().from(schema.orders).where(eq(schema.orders.id, o.orderId)));
-  orderNumber = row!.number;
+  const mkCustomer = (email: string, name: string) =>
+    withTenant(rt._db.db, ctxA.tenantId, async (tx) => {
+      const [c] = await tx.insert(schema.customers).values({ tenantId: ctxA.tenantId, email, name }).returning({ id: schema.customers.id });
+      return c!.id;
+    });
+  // The buyer owns the delivered order; the asker is signed in but has bought nothing.
+  buyerId = await mkCustomer("buyer@reviews.test", "Buyer");
+  askerId = await mkCustomer("asker@reviews.test", "Asha");
+  await withTenant(rt._db.db, ctxA.tenantId, (tx) => tx.update(schema.orders).set({ customerId: buyerId }).where(eq(schema.orders.id, row!.id)));
   await withTenant(rt._db.db, ctxA.tenantId, (tx) => tx.update(schema.storeSettings).set({ autoPublishReviews: true }).where(eq(schema.storeSettings.tenantId, ctxA.tenantId)));
 }, 180_000);
 
 const base = () => ({ productId: productA, reviewerName: "Asha", rating: 5, body: "Lovely product, would buy again." });
 
 describe("reviews", () => {
-  it("an email alone does not earn the verified badge or auto-publish", async () => {
-    const r = await submitProductReview(rt, ctxA.tenantId, { ...base(), email: "buyer@reviews.test" });
+  it("rejects a review from someone who is not signed in", async () => {
+    await expect(submitProductReview(rt, ctxA.tenantId, { ...base() })).rejects.toThrow(/sign in/i);
+    const rows = await withTenant(rt._db.db, ctxA.tenantId, (tx) => tx.select().from(schema.reviews));
+    expect(rows.length).toBe(0);
+  });
+
+  it("a signed-in shopper who has not bought the product is not verified and waits for moderation", async () => {
+    const r = await submitProductReview(rt, ctxA.tenantId, { ...base() }, askerId);
     expect(r.status).toBe("on_hold");
     const [row] = await withTenant(rt._db.db, ctxA.tenantId, (tx) => tx.select().from(schema.reviews).where(eq(schema.reviews.reviewerName, "Asha")));
     expect(row?.orderItemId).toBeNull();
+    expect(row?.customerId).toBe(askerId);
   });
 
-  it("email plus the order number of a delivered order is verified and auto-publishes", async () => {
-    const r = await submitProductReview(rt, ctxA.tenantId, { ...base(), reviewerName: "Buyer", email: "buyer@reviews.test", orderNumber, rating: 4 });
+  it("a signed-in shopper with a delivered order of the product is verified and auto-publishes", async () => {
+    const r = await submitProductReview(rt, ctxA.tenantId, { ...base(), reviewerName: "Buyer", rating: 4 }, buyerId);
     expect(r.status).toBe("published");
     const list = await getStorefrontReviews(rt, ctxA.tenantId, { productId: productA });
     expect(JSON.stringify(list)).toContain("Buyer");
+  });
+
+  it("one shopper cannot review the same product twice", async () => {
+    await expect(submitProductReview(rt, ctxA.tenantId, { ...base(), reviewerName: "Buyer" }, buyerId)).rejects.toThrow(/already reviewed/i);
   });
 
   it("moderation publishes a held review and keeps the product rating in step", async () => {
@@ -109,7 +129,7 @@ describe("reviews", () => {
 
   it("a bot filling the honeypot stores nothing", async () => {
     const before = await withTenant(rt._db.db, ctxA.tenantId, (tx) => tx.select().from(schema.reviews));
-    await submitProductReview(rt, ctxA.tenantId, { ...base(), reviewerName: "Bot", honeypot: "x" });
+    await submitProductReview(rt, ctxA.tenantId, { ...base(), reviewerName: "Bot", honeypot: "x" }, askerId);
     const after = await withTenant(rt._db.db, ctxA.tenantId, (tx) => tx.select().from(schema.reviews));
     expect(after.length).toBe(before.length);
   });
@@ -118,7 +138,7 @@ describe("reviews", () => {
     let blocked = false;
     for (let i = 0; i < 12; i++) {
       try {
-        await submitProductReview(rt, ctxA.tenantId, { ...base(), reviewerName: `Flood${i}`, ip: "203.0.113.9" });
+        await submitProductReview(rt, ctxA.tenantId, { ...base(), reviewerName: `Flood${i}`, ip: "203.0.113.9" }, askerId);
       } catch (e) {
         if (e instanceof RateLimitExceededError) blocked = true;
       }

@@ -161,6 +161,34 @@ describe("Catalog Services (Real Postgres)", () => {
     });
   });
 
+  describe("Long description (rich text) of categories and collections", () => {
+    const rich = { v: 1 as const, blocks: [{ type: "heading" as const, level: 2 as const, text: "Buying guide" }, { type: "paragraph" as const, text: "Choose by heat level." }] };
+
+    it("saves, reads back, replaces and clears a category's long description, separate from the short one", async () => {
+      const cat = await createCategory(rt, ctxA, { name: "Rich Cat", description: "Short blurb", descriptionJson: rich });
+      expect(cat.description).toBe("Short blurb");
+      expect(cat.descriptionJson).toMatchObject({ v: 1, blocks: [{ type: "heading" }, { type: "paragraph" }] });
+      const edited = await updateCategory(rt, ctxA, { id: cat.id, descriptionJson: { v: 1, blocks: [{ type: "paragraph", text: "Replaced." }] } });
+      expect(edited.descriptionJson?.blocks).toHaveLength(1);
+      expect(edited.description).toBe("Short blurb");
+      const cleared = await updateCategory(rt, ctxA, { id: cat.id, descriptionJson: { v: 1, blocks: [] } });
+      expect(cleared.descriptionJson).toBeNull();
+    });
+
+    it("does the same for a collection and refuses content that is not valid blocks", async () => {
+      const col = await createCollection(rt, ctxA, { title: "Rich Collection", description: "Short", descriptionJson: rich });
+      expect(col.descriptionJson).toMatchObject({ v: 1, blocks: [{ type: "heading" }, { type: "paragraph" }] });
+      await expect(updateCollection(rt, ctxA, { id: col.id, descriptionJson: { v: 1, blocks: [{ type: "html", html: "<b>x</b>" }] } })).rejects.toThrow(/Bad Request/);
+      const unchanged = await getCollection(rt, ctxA, { id: col.id });
+      expect(unchanged.descriptionJson?.blocks).toHaveLength(2);
+    });
+
+    it("keeps one store's long description out of another store's reads", async () => {
+      const cat = await createCategory(rt, ctxA, { name: "Tenant Rich Cat", descriptionJson: rich });
+      await expect(getCategory(rt, ctxB, { id: cat.id })).rejects.toThrow(/not found/i);
+    });
+  });
+
   describe("Category depth and delete guards", () => {
     it("enforces max 3 levels depth and rejects level 4", async () => {
       const l1 = await createCategory(rt, ctxA, { name: "Level 1" });

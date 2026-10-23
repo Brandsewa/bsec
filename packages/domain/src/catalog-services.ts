@@ -4,6 +4,7 @@ import type { CollectionRule } from "@bs/contracts";
 import type { Runtime } from "./runtime.ts";
 import { assertPermission, type TenantContext } from "./context.ts";
 import { invalidateCache } from "./cache-invalidation.ts";
+import { cleanRichDescription, type RichDescriptionValue } from "./rich-description.ts";
 import { publicMediaUrl } from "./media/storage.ts";
 import { assertProductQuota } from "./system/quotas.ts";
 import { clearMediaUsagesForOwner, syncMediaUsages } from "./media-services.ts";
@@ -1204,6 +1205,7 @@ export async function listCategories(rt: Runtime, ctx: TenantContext, query?: Li
         name: schema.categories.name,
         slug: schema.categories.slug,
         description: schema.categories.description,
+        descriptionJson: schema.categories.descriptionJson,
         imageMediaId: schema.categories.imageMediaId,
         position: schema.categories.position,
         path: schema.categories.path,
@@ -1257,6 +1259,7 @@ export async function listCategories(rt: Runtime, ctx: TenantContext, query?: Li
       name: r.name,
       slug: r.slug,
       description: r.description,
+      descriptionJson: (r.descriptionJson ?? null) as RichDescriptionValue | null,
       imageMediaId: r.imageMediaId,
       imageUrl: r.imageKey ? publicMediaUrl(r.imageKey) : null,
       position: r.position,
@@ -1291,6 +1294,7 @@ export async function loadCategoryDetailInternal(
         name: schema.categories.name,
         slug: schema.categories.slug,
         description: schema.categories.description,
+        descriptionJson: schema.categories.descriptionJson,
         imageMediaId: schema.categories.imageMediaId,
         position: schema.categories.position,
         path: schema.categories.path,
@@ -1345,6 +1349,7 @@ export async function loadCategoryDetailInternal(
       name: row.name,
       slug: row.slug,
       description: row.description,
+      descriptionJson: (row.descriptionJson ?? null) as RichDescriptionValue | null,
       imageMediaId: row.imageMediaId,
       imageUrl: row.imageKey ? publicMediaUrl(row.imageKey) : null,
       position: row.position,
@@ -1405,6 +1410,7 @@ export interface CreateCategoryInput {
   name: string;
   slug?: string | undefined;
   description?: string | undefined;
+  descriptionJson?: unknown;
   parentId?: string | null | undefined;
   imageMediaId?: string | null | undefined;
   position?: number | undefined;
@@ -1488,6 +1494,7 @@ export async function createCategory(
         name: input.name.trim(),
         slug,
         description: input.description?.trim() || null,
+        descriptionJson: cleanRichDescription(input.descriptionJson),
         parentId: input.parentId || null,
         imageMediaId: input.imageMediaId || null,
         position: input.position ?? 0,
@@ -1548,6 +1555,7 @@ export interface UpdateCategoryInput {
   name?: string | undefined;
   slug?: string | undefined;
   description?: string | null | undefined;
+  descriptionJson?: unknown;
   parentId?: string | null | undefined;
   imageMediaId?: string | null | undefined;
   position?: number | undefined;
@@ -1583,6 +1591,7 @@ export async function updateCategory(
     if (input.name !== undefined) updateValues.name = input.name.trim();
     if (input.slug !== undefined) updateValues.slug = input.slug.trim();
     if (input.description !== undefined) updateValues.description = input.description ? input.description.trim() : null;
+    if (input.descriptionJson !== undefined) updateValues.descriptionJson = cleanRichDescription(input.descriptionJson);
     if (input.imageMediaId !== undefined) updateValues.imageMediaId = input.imageMediaId;
     if (input.position !== undefined) updateValues.position = input.position;
     if (input.isActive !== undefined) updateValues.isActive = input.isActive;
@@ -1775,6 +1784,7 @@ export async function listCollections(
         slug: schema.collections.slug,
         imageMediaId: schema.collections.imageMediaId,
         description: schema.collections.description,
+        descriptionJson: schema.collections.descriptionJson,
         type: schema.collections.type,
         match: schema.collections.match,
         rules: schema.collections.rules,
@@ -1810,6 +1820,7 @@ export async function listCollections(
       slug: r.slug,
       imageMediaId: r.imageMediaId,
       description: r.description,
+      descriptionJson: (r.descriptionJson ?? null) as RichDescriptionValue | null,
       imageUrl: r.imageKey ? publicMediaUrl(r.imageKey) : null,
       type: r.type as "manual" | "automated",
       match: (r.match ?? "all") as "all" | "any",
@@ -1839,6 +1850,7 @@ export async function loadCollectionDetailInternal(
         slug: schema.collections.slug,
         imageMediaId: schema.collections.imageMediaId,
         description: schema.collections.description,
+        descriptionJson: schema.collections.descriptionJson,
         type: schema.collections.type,
         match: schema.collections.match,
         rules: schema.collections.rules,
@@ -1883,6 +1895,7 @@ export async function loadCollectionDetailInternal(
       slug: row.slug,
       imageMediaId: row.imageMediaId,
       description: row.description,
+      descriptionJson: (row.descriptionJson ?? null) as RichDescriptionValue | null,
       imageUrl: row.imageKey ? publicMediaUrl(row.imageKey) : null,
       type: row.type as "manual" | "automated",
       match: (row.match ?? "all") as "all" | "any",
@@ -1916,6 +1929,7 @@ export interface CreateCollectionInput {
   title: string;
   slug?: string | undefined;
   description?: string | undefined;
+  descriptionJson?: unknown;
   imageMediaId?: string | null | undefined;
   type?: "manual" | "automated" | undefined;
   match?: "all" | "any" | undefined;
@@ -1962,6 +1976,7 @@ export async function createCollection(
         slug,
         imageMediaId: input.imageMediaId || null,
         description: cleanCollectionDescription(input.description),
+        descriptionJson: cleanRichDescription(input.descriptionJson),
         type: isAutomated ? "automated" : "manual",
         match: input.match ?? "all",
         rules: isAutomated && input.rules ? input.rules : null,
@@ -2029,6 +2044,7 @@ export interface UpdateCollectionInput {
   slug?: string | undefined;
   imageMediaId?: string | null | undefined;
   description?: string | null | undefined;
+  descriptionJson?: unknown;
   type?: "manual" | "automated" | undefined;
   match?: "all" | "any" | undefined;
   rules?: unknown[] | null | undefined;
@@ -2053,6 +2069,7 @@ export async function updateCollection(
     if (input.slug !== undefined) updateValues.slug = input.slug.trim();
     if (input.imageMediaId !== undefined) updateValues.imageMediaId = input.imageMediaId;
     if (input.description !== undefined) updateValues.description = cleanCollectionDescription(input.description);
+    if (input.descriptionJson !== undefined) updateValues.descriptionJson = cleanRichDescription(input.descriptionJson);
     if (input.type !== undefined) updateValues.type = input.type;
     if (input.match !== undefined) updateValues.match = input.match;
     if (input.rules !== undefined) updateValues.rules = input.rules;

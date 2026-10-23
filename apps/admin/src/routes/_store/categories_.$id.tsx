@@ -152,6 +152,7 @@ function CategoryEditor({
             name: v.name,
             slug: v.slug || undefined,
             description: v.description || null,
+            descriptionJson: v.descriptionJson,
             parentId: v.parentId,
             imageMediaId: v.imageMediaId,
             position: v.position,

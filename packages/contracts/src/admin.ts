@@ -512,6 +512,8 @@ export const Category = z.object({
   name: z.string(),
   slug: z.string(),
   description: z.string().nullable().optional(),
+  /** Long, formatted description shown below the product list. */
+  descriptionJson: z.lazy(() => RichDescription).nullable().optional(),
   imageMediaId: z.string().uuid().nullable().optional(),
   imageUrl: z.string().nullable().optional(),
   position: z.number(),
@@ -586,6 +588,8 @@ export const Collection = z.object({
   title: z.string(),
   slug: z.string(),
   description: z.string().nullable().optional(),
+  /** Long, formatted description shown below the product list. */
+  descriptionJson: z.lazy(() => RichDescription).nullable().optional(),
   imageMediaId: z.string().uuid().nullable().optional(),
   imageUrl: z.string().nullable().optional(),
   type: z.enum(["manual", "automated"]),
@@ -1894,6 +1898,13 @@ export const PolicyBlock = z.discriminatedUnion("type", [
   }),
 ]);
 
+/** Long description of a category or collection: policy-style blocks, and empty is allowed. */
+export const RichDescription = z.object({
+  v: z.literal(1),
+  blocks: z.array(PolicyBlock).max(80),
+});
+export type RichDescription = z.infer<typeof RichDescription>;
+
 export const PolicyContent = z.object({
   v: z.literal(1),
   blocks: z.array(PolicyBlock).min(1).max(80),
@@ -2579,6 +2590,7 @@ export const adminContract = {
           name: z.string().min(1),
           slug: z.string().optional(),
           description: z.string().max(500).optional(),
+          descriptionJson: RichDescription.nullable().optional(),
           parentId: z.string().uuid().nullable().optional(),
           imageMediaId: z.string().uuid().nullable().optional(),
           position: z.number().int().default(0),
@@ -2602,6 +2614,7 @@ export const adminContract = {
           name: z.string().min(1).optional(),
           slug: z.string().optional(),
           description: z.string().max(500).nullable().optional(),
+          descriptionJson: RichDescription.nullable().optional(),
           parentId: z.string().uuid().nullable().optional(),
           imageMediaId: z.string().uuid().nullable().optional(),
           position: z.number().int().optional(),
@@ -2650,6 +2663,7 @@ export const adminContract = {
           title: z.string().min(1),
           slug: z.string().optional(),
           description: z.string().max(300).optional(),
+          descriptionJson: RichDescription.nullable().optional(),
           imageMediaId: z.string().uuid().nullable().optional(),
           type: z.enum(["manual", "automated"]).default("manual"),
           match: z.enum(["all", "any"]).default("all"),
@@ -2681,6 +2695,7 @@ export const adminContract = {
           title: z.string().min(1).optional(),
           slug: z.string().optional(),
           description: z.string().max(300).nullable().optional(),
+          descriptionJson: RichDescription.nullable().optional(),
           imageMediaId: z.string().uuid().nullable().optional(),
           type: z.enum(["manual", "automated"]).optional(),
           match: z.enum(["all", "any"]).optional(),

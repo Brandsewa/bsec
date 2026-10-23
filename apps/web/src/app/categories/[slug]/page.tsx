@@ -1,4 +1,5 @@
 import React from "react";
+import { RichBlocks } from "@/components/storefront/RichBlocks.tsx";
 import type { Metadata } from "next";
 import { notFound } from "next/navigation";
 import { headers } from "next/headers";
@@ -171,7 +172,7 @@ export default async function CategoryDetailPage({
   ]);
 
   return (
-    <div className="mx-auto max-w-7xl px-4 py-8 sm:px-6 lg:px-8" data-cache-tag={categoryCacheTag}>
+    <div className="mx-auto w-full max-w-[80rem] px-4 py-8" data-cache-tag={categoryCacheTag}>
       {/* Schema.org Structured Data */}
       <script
         type="application/ld+json"
@@ -265,6 +266,13 @@ export default async function CategoryDetailPage({
           limit: limit !== 24 ? limit : undefined,
         }}
       />
+
+      {/* Long description: detail content below the products */}
+      {category.descriptionJson && category.descriptionJson.blocks.length > 0 ? (
+        <section className="mt-12 max-w-3xl border-t border-border pt-8" aria-label={`About ${category.name}`}>
+          <RichBlocks blocks={category.descriptionJson.blocks} />
+        </section>
+      ) : null}
     </div>
   );
 }

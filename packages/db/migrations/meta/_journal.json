@@ -484,6 +484,13 @@
       "when": 1792974800000,
       "tag": "0074_category_types",
       "breakpoints": true
+    },
+    {
+      "idx": 69,
+      "version": "7",
+      "when": 1793061200000,
+      "tag": "0075_collection_category_long_description",
+      "breakpoints": true
     }
   ]
 }

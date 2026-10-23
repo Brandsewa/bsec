@@ -81,3 +81,44 @@ describe("font weights and button colours", () => {
     expect(outline["--bs-btn-fg"]).toBe("#7c3aed");
   });
 });
+
+describe("body text sizes", () => {
+  it("default to 16px on every device and emit rem variables", () => {
+    const v = computeThemeTokens(null, {});
+    expect(v["--bs-body-d"]).toBe("1rem");
+    expect(v["--bs-body-t"]).toBe("1rem");
+    expect(v["--bs-body-m"]).toBe("1rem");
+  });
+
+  it("follow the theme per device and stay inside 12 to 24px", () => {
+    const v = computeThemeTokens(null, { fontSizes: { body: { desktop: 18, tablet: 17, mobile: 100 } } });
+    expect(v["--bs-body-d"]).toBe("1.125rem");
+    expect(v["--bs-body-t"]).toBe("1.0625rem");
+    expect(v["--bs-body-m"]).toBe("1.5rem");
+    expect(computeThemeTokens(null, { fontSizes: { body: { mobile: "abc" } } })["--bs-body-m"]).toBe("1rem");
+  });
+
+  it("do not disturb the heading sizes", () => {
+    const v = computeThemeTokens(null, { fontSizes: { body: { desktop: 20 }, h1: { desktop: 70 } } });
+    expect(v["--bs-h1-d"]).toBe("4.375rem");
+  });
+});
+
+describe("dark background colours", () => {
+  it("default to a dark slate with white text", () => {
+    const v = computeThemeTokens(null, {});
+    expect(v["--bs-dark"]).toBe("#0f172a");
+    expect(v["--bs-on-dark"]).toBe("#ffffff");
+  });
+
+  it("use the theme's own colours, and pick readable text when only the background is set", () => {
+    const own = computeThemeTokens(null, { colors: { dark: "#10231a", textOnDark: "#f4f7f5" } });
+    expect(own["--bs-dark"]).toBe("#10231a");
+    expect(own["--bs-on-dark"]).toBe("#f4f7f5");
+    expect(computeThemeTokens(null, { colors: { dark: "#fde68a" } })["--bs-on-dark"]).toBe("#0f172a");
+  });
+
+  it("ignore values that are not colours", () => {
+    expect(computeThemeTokens(null, { colors: { dark: "red; background: url(x)" } })["--bs-dark"]).toBe("#0f172a");
+  });
+});

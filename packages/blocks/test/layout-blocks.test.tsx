@@ -297,7 +297,10 @@ describe("product showcase", () => {
     expect(html).toContain("₹119");
     expect(html).toContain("Starts from"); // first product has a price range
     expect(html).toContain("Save 8%");
-    expect(html).toContain("Jams"); // category badge
+    expect(html).toContain("Jams"); // category label
+    const media = html.slice(html.indexOf("bsb-psc-media"), html.indexOf("bsb-psc-info"));
+    expect(media).not.toContain("Jams"); // not drawn over the image
+    expect(html.slice(html.indexOf("bsb-psc-info"))).toContain("bsb-psc-cat");
     expect(html).toContain('data-variant="v1"'); // single variant: quick add
     expect(html).toContain("Choose options for Rhododendron Juice"); // no quick-add variant: opens the page
     const bare = render({ showAddToCart: false, showSaleBadge: false, showCompareAt: false, startsFrom: "never", badge: "none" });

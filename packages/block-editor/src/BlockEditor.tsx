@@ -259,6 +259,16 @@ export function BlockEditor({ title, initialBlocks: initialFromProps, host, them
 
   const save = useCallback(() => void run(() => onSaveDraft(blocksRef.current), "Draft saved"), [run, onSaveDraft]);
   const publish = useCallback(() => void run(() => onPublish(blocksRef.current), "Published"), [run, onPublish]);
+  /** A fresh query value per click, so the browser and any edge cache fetch the page again (a hard refresh). */
+  const fresh = (url: string) => {
+    try {
+      const u = new URL(url, window.location.href);
+      u.searchParams.set("_pv", String(Date.now()));
+      return u.toString();
+    } catch {
+      return url;
+    }
+  };
   const preview = useCallback(async () => {
     if (onPreview) {
       const win = window.open("", "_blank");
@@ -272,11 +282,11 @@ export function BlockEditor({ title, initialBlocks: initialFromProps, host, them
       try {
         const url = await onPreview();
         if (url && win) {
-          win.location.href = url;
+          win.location.replace(fresh(url));
           setStatus({ kind: "ok", text: "Preview opened in a new tab" });
         } else if (url) {
           // The browser blocked the pre-opened tab: try once more now, and say where the preview is either way.
-          window.open(url, "_blank", "noopener");
+          window.open(fresh(url), "_blank", "noopener");
           setStatus({ kind: "ok", text: `Preview ready: ${url}` });
         } else {
           win?.close();
@@ -288,7 +298,7 @@ export function BlockEditor({ title, initialBlocks: initialFromProps, host, them
       return;
     }
     const ok = !dirty || (await run(() => onSaveDraft(blocksRef.current), "Draft saved"));
-    if (ok && previewHref) window.open(previewHref, "_blank", "noopener");
+    if (ok && previewHref) window.open(fresh(previewHref), "_blank", "noopener");
   }, [dirty, externalDirty, run, onSaveDraft, onPreview, previewHref]);
   const headerState: EditorHeaderState = {
     backLabel: exitLabel ?? "Exit",

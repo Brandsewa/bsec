@@ -21,14 +21,17 @@ export function SearchModal() {
       if (e.defaultPrevented || e.button !== 0 || e.metaKey || e.ctrlKey || e.shiftKey || e.altKey) return;
       const link = (e.target as Element | null)?.closest?.("a");
       if (!link || link.getAttribute("href") !== "/search" || link.closest("[data-search-modal]")) return;
+      // Capture phase: next/link's own handler (React, on the root) calls preventDefault first, which would
+      // make this listener bail out on desktop, where the header icon is a next/link.
       e.preventDefault();
+      e.stopPropagation();
       setOpen(true);
     };
     window.addEventListener(SEARCH_OPEN_EVENT, onEvent);
-    document.addEventListener("click", onClick);
+    document.addEventListener("click", onClick, true);
     return () => {
       window.removeEventListener(SEARCH_OPEN_EVENT, onEvent);
-      document.removeEventListener("click", onClick);
+      document.removeEventListener("click", onClick, true);
     };
   }, []);
 

@@ -23,11 +23,21 @@ describe("FAQ accordion", () => {
     expect(html).toContain("Q &lt;b&gt;1&lt;/b&gt;");
   });
 
-  it("puts the questions first with the heading on the right by default, and swaps sides", () => {
+  it("keeps the heading first in the markup (so it is on top on phones), and the side is chosen by CSS order", () => {
     const right = render();
     expect(right).toContain("bsb-fq-side-right");
-    expect(right.indexOf("bsb-fq-list")).toBeLessThan(right.indexOf("bsb-fq-head"));
+    expect(right.indexOf("bsb-fq-head")).toBeLessThan(right.indexOf("bsb-fq-list"));
     expect(render({ textSide: "left" })).toContain("bsb-fq-side-left");
+  });
+
+  it("passes the icon size and row height to the list as CSS variables, within limits", () => {
+    expect(render()).toContain("--fq-icon:20px");
+    expect(render()).toContain("--fq-py:16px");
+    const custom = render({ iconSize: 28, rowPadding: 24 });
+    expect(custom).toContain("--fq-icon:28px");
+    expect(custom).toContain("--fq-py:24px");
+    expect(FaqSectionSchema.safeParse({ iconSize: 5 }).success).toBe(false);
+    expect(FaqSectionSchema.safeParse({ rowPadding: 60 }).success).toBe(false);
   });
 
   it("stacks the heading above the questions", () => {
