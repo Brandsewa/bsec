@@ -50,6 +50,7 @@ const INPUTS: Record<string, () => unknown> = {
   "integrations.channelTransactions": () => ({ channel: "email" }),
   "integrations.listProviders": () => ({ channel: "sms" }),
   "integrations.paymentProviders": () => undefined,
+  "integrations.authOverview": () => undefined,
   "integrations.billingSettings": () => undefined,
   "integrations.billingPlans": () => undefined,
   "promotions.list": () => undefined,
