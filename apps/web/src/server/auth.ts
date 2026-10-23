@@ -1,5 +1,5 @@
-import { createStaffAuth, STAFF_COOKIE_PREFIX, type StaffAuth } from "@bs/auth";
-import { renderEmail, sendPlatformEmail } from "@bs/domain";
+import { createStaffAuth, googleConfigFingerprint, STAFF_COOKIE_PREFIX, type GoogleAuthConfig, type StaffAuth } from "@bs/auth";
+import { loadPlatformGoogleRuntimeConfig, renderEmail, sendPlatformEmail } from "@bs/domain";
 import { server } from "./runtime.ts";
 import type { ApiContext } from "./api.ts";
 
@@ -19,7 +19,30 @@ export interface AuthSettings {
   cookieDomain: string | undefined;
 }
 
-const g = globalThis as unknown as { __bsStaffAuth?: { auth: StaffAuth; settings: AuthSettings } };
+const g = globalThis as unknown as {
+  __bsStaffAuth?: { auth: StaffAuth; settings: AuthSettings; googleFingerprint: string } | undefined;
+  __bsStaffGoogle?: { at: number; cfg: GoogleAuthConfig | null };
+};
+
+const GOOGLE_CONFIG_TTL_MS = 15_000;
+
+/**
+ * Better Auth reads the Google client when its context is first built, so the instance is rebuilt whenever the
+ * platform Google settings change in Super Admin. The settings are re-read at most every 15 seconds.
+ */
+export async function ensureStaffAuthFresh(): Promise<void> {
+  const now = Date.now();
+  if (!g.__bsStaffGoogle || now - g.__bsStaffGoogle.at > GOOGLE_CONFIG_TTL_MS) {
+    try {
+      const runtime = await loadPlatformGoogleRuntimeConfig(server().rt._db.db);
+      g.__bsStaffGoogle = { at: now, cfg: runtime ? { clientId: runtime.clientId, clientSecret: runtime.clientSecret } : null };
+    } catch {
+      g.__bsStaffGoogle = { at: now, cfg: g.__bsStaffGoogle?.cfg ?? null };
+    }
+  }
+  const fp = googleConfigFingerprint(g.__bsStaffGoogle.cfg);
+  if (g.__bsStaffAuth && g.__bsStaffAuth.googleFingerprint !== fp) g.__bsStaffAuth = undefined;
+}
 
 export function readAuthSettings(env: NodeJS.ProcessEnv = process.env): AuthSettings | null {
   const baseURL = env.BETTER_AUTH_URL?.trim();
@@ -45,7 +68,9 @@ export function getStaffAuth(): { auth: StaffAuth; settings: AuthSettings } | nu
   if (g.__bsStaffAuth) return g.__bsStaffAuth;
   const settings = readAuthSettings();
   if (!settings) return null;
+  const googleCfg = g.__bsStaffGoogle?.cfg ?? null;
   const auth = createStaffAuth(server().rt._db.db, {
+    loadGoogle: async () => googleCfg,
     baseURL: settings.baseURL,
     secret: settings.secret,
     ...(settings.adminOrigins[0] ? { adminUrl: settings.adminOrigins[0] } : {}),
@@ -91,7 +116,7 @@ export function getStaffAuth(): { auth: StaffAuth; settings: AuthSettings } | nu
       });
     },
   });
-  g.__bsStaffAuth = { auth, settings };
+  g.__bsStaffAuth = { auth, settings, googleFingerprint: googleConfigFingerprint(googleCfg) };
   return g.__bsStaffAuth;
 }
 

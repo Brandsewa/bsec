@@ -43,6 +43,7 @@ New decisions get an ADR **before** code (PLAN §15). Copy `template.md`, take t
 | [035](035-promotions-and-free-periods.md) | Promotions and free periods for store subscriptions | Accepted |
 | [036](036-platform-billing-credentials.md) | Platform billing credentials in Super Admin (supersedes ADR-014 point 1) | Accepted |
 | [037](037-cashfree-second-gateway.md) | Cashfree as a second payment gateway (platform billing and store connections) | Accepted |
+| [038](038-google-sign-in.md) | Google sign-in: platform client for our team and store owners, store-owned client for customers | Accepted |
 
-**Next number: 037.**
+**Next number: 039.**
 

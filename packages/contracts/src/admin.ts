@@ -2014,6 +2014,20 @@ export type UpdatePrivacySettingsInput = z.infer<typeof UpdatePrivacySettingsInp
 export type PrivacyRequestItem = z.infer<typeof PrivacyRequestItem>;
 export type CookieInventoryItem = z.infer<typeof CookieInventoryItem>;
 
+export const StoreGoogleSigninView = z.object({
+  platformAllowed: z.boolean(),
+  hasVerifiedDomain: z.boolean(),
+  origins: z.array(z.string()),
+  clientId: z.string().nullable(),
+  enabled: z.boolean(),
+  oneTapEnabled: z.boolean(),
+  verified: z.boolean(),
+  verifiedAt: z.string().nullable(),
+  verifiedHost: z.string().nullable(),
+  needsVerification: z.boolean(),
+});
+export type StoreGoogleSigninView = z.infer<typeof StoreGoogleSigninView>;
+
 export const adminContract = {
   support: {
     list: oc.route({ method: "GET", path: "/admin/support/sessions" }).output(z.array(StoreSupportSession)),
@@ -2047,6 +2061,21 @@ export const adminContract = {
       )
       .output(PaymentsStatus),
     clearRazorpay: oc.route({ method: "DELETE", path: "/admin/payments/razorpay" }).output(PaymentsStatus),
+  },
+  socialAuth: {
+    get: oc.route({ method: "GET", path: "/admin/social-auth/google" }).output(StoreGoogleSigninView),
+    setClientId: oc
+      .route({ method: "PUT", path: "/admin/social-auth/google/client-id" })
+      .input(z.object({ clientId: z.string().min(10).max(200) }))
+      .output(z.object({ ok: z.literal(true) })),
+    update: oc
+      .route({ method: "PATCH", path: "/admin/social-auth/google" })
+      .input(z.object({ enabled: z.boolean().optional(), oneTapEnabled: z.boolean().optional() }))
+      .output(z.object({ ok: z.literal(true) })),
+    startVerification: oc
+      .route({ method: "POST", path: "/admin/social-auth/google/verify" })
+      .output(z.object({ url: z.string() })),
+    disconnect: oc.route({ method: "DELETE", path: "/admin/social-auth/google" }).output(z.object({ ok: z.literal(true) })),
   },
   paymentProviders: {
     list: oc.route({ method: "GET", path: "/admin/payment-providers" }).output(z.array(StorePaymentProvider)),

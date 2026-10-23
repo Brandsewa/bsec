@@ -7,6 +7,7 @@ import {
   Mail,
   MessageSquare,
   Phone,
+  ShieldCheck,
   ArrowRight,
 } from "lucide-react";
 import {
@@ -40,6 +41,12 @@ export function IntegrationsHub() {
     queryFn: () => client.integrations.overview(),
   });
 
+  const { data: authOverview } = useQuery({
+    queryKey: ["platform", "integrations", "auth"],
+    queryFn: () => client.integrations.authOverview(),
+  });
+  const googleOn = authOverview?.google.enabled ?? false;
+
   if (isLoading) {
     return (
       <PageContainer>
@@ -67,7 +74,7 @@ export function IntegrationsHub() {
         description="Centralised configuration for messaging channels, object storage drivers, and payment provider enablement."
       />
 
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mt-4">
+      <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-6 mt-4">
         {/* Card 1: Notifications */}
         <Card className="flex flex-col justify-between hover:border-primary/40 transition-colors">
           <CardHeader>
@@ -222,6 +229,47 @@ export function IntegrationsHub() {
               onClick={() => navigate({ to: "/integrations/billing" })}
             >
               <span>Platform billing (charge merchants)</span>
+              <ArrowRight className="h-4 w-4 ml-1" />
+            </Button>
+          </CardFooter>
+        </Card>
+        {/* Card 4: Authentication */}
+        <Card className="flex flex-col justify-between hover:border-primary/40 transition-colors">
+          <CardHeader>
+            <div className="flex items-center justify-between mb-2">
+              <div className="p-2.5 rounded-lg bg-violet-500/10 text-violet-500">
+                <ShieldCheck className="h-6 w-6" />
+              </div>
+              <Badge variant={googleOn ? "default" : "secondary"}>{googleOn ? "Google on" : "Email & phone"}</Badge>
+            </div>
+            <CardTitle className="text-xl">Authentication</CardTitle>
+            <CardDescription>
+              Email and password, phone OTP and social sign-in (Google) for the team, store owners and customers.
+            </CardDescription>
+          </CardHeader>
+
+          <CardContent className="space-y-3">
+            <div className="rounded-md border border-border/60 p-3 space-y-2 bg-muted/30">
+              <div className="flex items-center justify-between text-xs">
+                <span className="font-medium">Email & password</span>
+                <Badge variant="default" className="text-[10px] py-0 px-1.5">Always on</Badge>
+              </div>
+              <div className="flex items-center justify-between text-xs">
+                <span className="font-medium">Phone OTP</span>
+                <Badge variant="outline" className="text-[10px] py-0 px-1.5 text-amber-600 dark:text-amber-400">SMS not enrolled</Badge>
+              </div>
+              <div className="flex items-center justify-between text-xs">
+                <span className="font-medium">Google</span>
+                <Badge variant={googleOn ? "default" : "secondary"} className="text-[10px] py-0 px-1.5">
+                  {googleOn ? "Enabled" : "Disabled"}
+                </Badge>
+              </div>
+            </div>
+          </CardContent>
+
+          <CardFooter className="pt-2">
+            <Button className="w-full justify-between" onClick={() => navigate({ to: "/integrations/auth" })}>
+              <span>Manage Authentication</span>
               <ArrowRight className="h-4 w-4 ml-1" />
             </Button>
           </CardFooter>

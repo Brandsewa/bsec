@@ -1,11 +1,12 @@
 "use client";
 
-import React, { useState, useEffect, Suspense } from "react";
+import React, { useState, useEffect, useRef, Suspense } from "react";
 import { TurnstileWidget } from "@/components/marketing/TurnstileWidget";
 import { useSearchParams } from "next/navigation";
 import Link from "next/link";
 import { SimpleSelect } from "@bs/ui";
 import { INDIAN_STATES } from "@/lib/india";
+import { loadGoogleScript } from "@/lib/google-identity.ts";
 import { fontSerifDisplay } from "@/lib/fonts.ts";
 import { Nav } from "@/components/marketing/landing/sections/Nav.tsx";
 import { SiteFooter } from "@/components/marketing/landing/sections/Footer.tsx";
@@ -20,6 +21,7 @@ interface PlanOption {
 }
 
 const TRIAL_DAYS = 14;
+
 
 function rupees(paise: number): string {
   return `₹${(paise / 100).toLocaleString("en-IN", { maximumFractionDigits: 0 })} / mo`;
@@ -61,6 +63,11 @@ function SignupContent() {
   const [email, setEmail] = useState("");
   const [phone, setPhone] = useState("");
   const [password, setPassword] = useState("");
+
+  // Signup with Google: the verified ticket replaces the password, and the email becomes read-only.
+  const [googleTicket, setGoogleTicket] = useState<string | null>(null);
+  const [googleCfg, setGoogleCfg] = useState<{ clientId: string } | null>(null);
+  const googleButtonRef = useRef<HTMLDivElement | null>(null);
 
   // Business
   const [industry, setIndustry] = useState("retail");
@@ -188,7 +195,7 @@ function SignupContent() {
   // Step 2 -> Step 3
   const handleStep2Submit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (password.length < 10) {
+    if (!googleTicket && password.length < 10) {
       setErrorMessage("Password must be at least 10 characters long.");
       return;
     }
@@ -196,6 +203,55 @@ function SignupContent() {
     await updateLead("credentials_entered");
     setStep(3);
   };
+
+  // Google sign-up button on step 2 (only when Super Admin enabled it for new store owners).
+  useEffect(() => {
+    if (step !== 2 || googleTicket) return;
+    let cancelled = false;
+    (async () => {
+      try {
+        const cfg = (await fetch("/api/public/google-signin").then((r) => (r.ok ? r.json() : null))) as {
+          enabled?: boolean;
+          clientId?: string | null;
+          signupAllowed?: boolean;
+        } | null;
+        if (cancelled || !cfg?.enabled || !cfg.signupAllowed || !cfg.clientId) return;
+        const clientId = cfg.clientId;
+        setGoogleCfg({ clientId });
+        const { nonce } = (await fetch("/api/saas/google/nonce").then((r) => r.json())) as { nonce: string };
+        await loadGoogleScript();
+        if (cancelled || !googleButtonRef.current) return;
+        window.google?.accounts.id.initialize({
+          client_id: clientId,
+          nonce,
+          use_fedcm_for_prompt: true,
+          callback: async (resp: { credential?: string }) => {
+            if (!resp.credential) return;
+            const res = await fetch("/api/saas/google/verify", {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({ idToken: resp.credential, nonce }),
+            });
+            const data = (await res.json().catch(() => ({}))) as { ticket?: string; email?: string; name?: string; error?: string };
+            if (!res.ok || !data.ticket) {
+              setErrorMessage(data.error || "Google could not be verified. Please try again.");
+              return;
+            }
+            setErrorMessage(null);
+            setGoogleTicket(data.ticket);
+            if (data.email) setEmail(data.email);
+            if (data.name && !ownerName.trim()) setOwnerName(data.name);
+          },
+        });
+        window.google?.accounts.id.renderButton(googleButtonRef.current, { theme: "outline", size: "large", text: "signup_with", width: 320 });
+      } catch {
+        /* the email and password form always works */
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [step, googleTicket]); // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
     fetch("/api/saas/config")
@@ -292,7 +348,7 @@ function SignupContent() {
           owner: {
             email: email.trim(),
             name: ownerName.trim(),
-            password,
+            ...(googleTicket ? { googleTicket } : { password }),
             phone: phone.trim() || undefined,
           },
           planCode: selectedPlan,
@@ -503,6 +559,18 @@ function SignupContent() {
               <p className="bm-dim text-sm">These credentials will be used to log into your merchant admin.</p>
             </div>
 
+            {googleCfg && !googleTicket ? (
+              <div className="space-y-3">
+                <div ref={googleButtonRef} />
+                <p className="bm-dim text-xs">or fill in the form below</p>
+              </div>
+            ) : null}
+            {googleTicket ? (
+              <p className="rounded-md border border-emerald-500/30 bg-emerald-500/10 p-3 text-sm">
+                Google verified {email}. No password is needed: you will sign in with Google.
+              </p>
+            ) : null}
+
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <div>
                 <label className="bm-label">
@@ -543,10 +611,12 @@ function SignupContent() {
                 onChange={(e) => setEmail(e.target.value)}
                 className="bm-input"
                 required
+                readOnly={Boolean(googleTicket)}
               />
               <p className="bm-dim mt-1 text-xs">Must be a valid business or personal email (no disposable addresses).</p>
             </div>
 
+            {!googleTicket ? (
             <div>
               <label className="bm-label">
                 Password
@@ -574,6 +644,7 @@ function SignupContent() {
                 </button>
               </div>
             </div>
+            ) : null}
 
             <div className="flex gap-3">
               <button

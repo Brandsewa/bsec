@@ -466,6 +466,18 @@ export async function checkCustomerLoginRateLimit(
 }
 
 /**
+ * Customer social (Google) sign-in: per (tenant, IP) only, 20 attempts / 5 min. There is no per-email bucket because the
+ * email is not known until Google's token is verified, and a shared bucket would let one visitor lock every shopper out.
+ */
+export async function checkCustomerSocialLoginRateLimit(db: Db, params: { tenantId: string; ip: string }): Promise<void> {
+  const key = `cust:social:ip:${params.tenantId}:${params.ip}`;
+  const res = await checkRateLimit(db, { key, limit: 20, windowSeconds: 300 });
+  if (!res.allowed) {
+    throw new RateLimitExceededError(`Too many sign in attempts. Please retry after ${res.retryAfter} seconds.`, res.retryAfter, res.limit, key);
+  }
+}
+
+/**
  * Admin and Staff Login Rate Limits:
  * - Per IP: 10 attempts / 15 min (900s)
  * - Per email: 5 attempts / 15 min (900s)

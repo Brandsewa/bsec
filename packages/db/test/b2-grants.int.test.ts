@@ -122,6 +122,11 @@ describe("B2: app_rw privileges on platform vs tenant tables", () => {
     await expect(
       q(rw, "UPDATE platform_payment_providers SET enabled = true WHERE provider = 'stripe'")
     ).rejects.toThrow(/permission denied/i);
+
+    // 10. The platform Google client and auth switches are read-only for the tenant runtime
+    await expect(q(rw, "UPDATE platform_auth_providers SET enabled = true WHERE provider = 'google'")).rejects.toThrow(/permission denied/i);
+    await expect(q(rw, "UPDATE platform_google_client SET client_id = 'x'")).rejects.toThrow(/permission denied/i);
+    await expect(q(rw, "INSERT INTO platform_google_client (id) VALUES ('default')")).rejects.toThrow(/permission denied/i);
   });
 
   it("permits legitimate reads on platform tables and append-only on platform_audit_logs", async () => {

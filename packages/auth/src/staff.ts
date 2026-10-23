@@ -1,7 +1,9 @@
 import { betterAuth, type BetterAuthOptions } from "better-auth";
 import { drizzleAdapter } from "better-auth/adapters/drizzle";
 import { schema, type Db } from "@bs/db";
+import { oneTap } from "better-auth/plugins";
 import { STAFF_COOKIE_PREFIX } from "./index.ts";
+import { googleSessionGuard, googleSocialProvider, type GoogleConfigLoader } from "./google.ts";
 
 export interface StaffAuthOptions {
   baseURL?: string;
@@ -19,6 +21,8 @@ export interface StaffAuthOptions {
   /** Callback invoked after password reset completes */
   onPasswordReset?: (data: { user: { id: string; email: string; name?: string } }) => Promise<void> | void;
   advanced?: BetterAuthOptions["advanced"];
+  /** Platform Google client (Tier A). Omit to keep Google sign-in off. */
+  loadGoogle?: GoogleConfigLoader;
 }
 
 /**
@@ -82,6 +86,14 @@ export function createStaffAuth(db: Db, opts: StaffAuthOptions = {}) {
     session: {
       expiresIn: 60 * 60 * 24 * 7,
       updateAge: 60 * 60 * 24,
+    },
+    // Google sign-in for existing accounts only (implicit sign-up is off). Linking requires a verified local email,
+    // so a pre-registered unverified account can never be taken over by a Google login.
+    ...(opts.loadGoogle ? { socialProviders: { google: googleSocialProvider(opts.loadGoogle) } } : {}),
+    account: { accountLinking: { enabled: true, requireLocalEmailVerified: true } },
+    plugins: opts.loadGoogle ? [oneTap({ disableSignup: true })] : [],
+    databaseHooks: {
+      session: { create: { before: async (session, ctx) => { await googleSessionGuard(db, { requirePlatformStaff: false })(session, ctx); } } },
     },
     // Our own Postgres-backed limiter (checkAdminLoginLimit) guards sign-in; Better Auth's in-memory
     // limiter would not be shared across containers.

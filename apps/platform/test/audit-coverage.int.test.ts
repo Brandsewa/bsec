@@ -473,6 +473,28 @@ const CASES: Record<string, Case> = {
       return undefined;
     },
   },
+  "integrations.setGoogleClient": {
+    role: "platform_admin",
+    action: "auth_provider.google.client_updated",
+    input: async () => ({ clientId: "123456789012-auditclientaaaaaa.apps.googleusercontent.com", clientSecret: "GOCSPX-audit-secret" }),
+  },
+  "integrations.updateGoogleAuth": {
+    role: "platform_admin",
+    action: "auth_provider.google.updated",
+    input: async () => ({ oneTapAllowed: false }),
+  },
+  // The probe asks Google to exchange a deliberately invalid code; offline it is recorded as a failed test, which still audits.
+  "integrations.testGoogleClient": {
+    role: "platform_admin",
+    action: "auth_provider.google.tested",
+    input: async () => {
+      await proc("integrations.setGoogleClient")(
+        { clientId: "123456789012-auditclientaaaaaa.apps.googleusercontent.com", clientSecret: "GOCSPX-audit-secret" },
+        { context: ctxFor((await F.staffOf("platform_admin")).userId, (await F.staffOf("platform_admin")).freshSessionAt) },
+      );
+      return undefined;
+    },
+  },
   "integrations.updatePaymentProvider": {
     role: "platform_admin",
     action: "payment_provider.live_mode_allowed",

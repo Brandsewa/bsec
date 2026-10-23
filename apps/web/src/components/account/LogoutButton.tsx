@@ -3,6 +3,7 @@
 import React, { useState } from "react";
 import { useRouter } from "next/navigation";
 import { Button } from "@bs/ui";
+import "@/lib/google-identity.ts";
 
 export function LogoutButton() {
   const router = useRouter();
@@ -12,6 +13,8 @@ export function LogoutButton() {
     setBusy(true);
     try {
       await fetch("/api/storefront/customer/logout", { method: "POST" });
+      // Stops One Tap from silently signing the shopper straight back in.
+      window.google?.accounts.id.disableAutoSelect();
     } finally {
       router.push("/account");
       router.refresh();

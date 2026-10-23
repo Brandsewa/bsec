@@ -15,6 +15,8 @@ export interface ProvisionOwnerInput {
   name: string;
   password?: string | undefined;
   phone?: string | undefined;
+  /** Verified Google identity (signup with Google). The user is created email-verified with no password. */
+  google?: { sub: string } | undefined;
 }
 
 export interface ProvisionBusinessInput {
@@ -167,7 +169,7 @@ export async function provisionTenant(
           email: ownerEmail,
           name: ownerName,
           phone: input.owner.phone ?? null,
-          emailVerified: false,
+          emailVerified: Boolean(input.owner.google),
         })
         .returning({ id: schema.users.id });
       if (!newUser) throw new Error("Failed to create store owner user");
@@ -213,6 +215,15 @@ export async function provisionTenant(
         accountId: ownerId,
         providerId: "credential",
         password: passwordHash,
+      });
+    }
+
+    if (!isExistingUser && input.owner.google) {
+      await tx.insert(schema.accounts).values({
+        id: randomUUID(),
+        userId: ownerId,
+        accountId: input.owner.google.sub,
+        providerId: "google",
       });
     }
 

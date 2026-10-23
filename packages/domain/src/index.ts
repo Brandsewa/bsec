@@ -131,6 +131,7 @@ export * from "./saas/subdomains.ts";
 export * from "./saas/abuse-protection.ts";
 export * from "./saas/provisioning.ts";
 export * from "./saas/signup.ts";
+export * from "./saas/google-signup.ts";
 export * from "./saas/trial-expiry.ts";
 export * from "./saas/owner-invites.ts";
 export * from "./saas/onboarding.ts";
@@ -157,6 +158,8 @@ export * from "./platform/settings.ts";
 export * from "./system/platform-mailer.ts";
 export * from "./admin/payment-methods.ts";
 export * from "./admin/payment-providers.ts";
+export * from "./admin/social-auth.ts";
+export * from "./customers/social/google.ts";
 export * from "./admin/plan-and-billing.ts";
 export * from "./platform/plan-change-requests.ts";
 export * from "./admin/tax-settings.ts";
@@ -180,6 +183,7 @@ export * from "./platform/quotas.ts";
 export * from "./platform/integrations-hub.ts";
 export * from "./platform/channel-providers.ts";
 export * from "./platform/payment-providers.ts";
+export * from "./platform/auth-providers.ts";
 export * from "./system/messaging/index.ts";
 
 

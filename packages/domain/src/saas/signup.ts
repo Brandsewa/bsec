@@ -11,6 +11,7 @@ import {
   normalizeSubdomainSlug,
   verifySubdomainReservation,
 } from "./subdomains.ts";
+import { readGoogleSignupTicket } from "./google-signup.ts";
 import { provisionTenant, type ProvisionBusinessInput, type ProvisionTenantResult } from "./provisioning.ts";
 
 export interface SaveSignupLeadInput {
@@ -37,6 +38,8 @@ export interface CompleteSignupInput {
     name: string;
     password?: string | undefined;
     phone?: string | undefined;
+    /** Ticket from verifyGoogleForSignup. Replaces the password and fixes the owner email to the verified one. */
+    googleTicket?: string | undefined;
   };
   planCode?: "starter" | "growth" | "pro" | string | undefined;
   business?: ProvisionBusinessInput | undefined;
@@ -119,7 +122,18 @@ export async function completeSignup(
 ): Promise<ProvisionTenantResult> {
   const db = saasDb(rt);
   const clientIp = input.clientIp || "127.0.0.1";
-  const email = input.owner.email.trim().toLowerCase();
+  let email = input.owner.email.trim().toLowerCase();
+  let googleSub: string | undefined;
+  let ownerName = input.owner.name;
+  if (input.owner.googleTicket) {
+    const secret = process.env.BETTER_AUTH_SECRET?.trim();
+    const ticket = secret ? readGoogleSignupTicket(secret, input.owner.googleTicket) : null;
+    if (!ticket) throw new Error("Your Google sign-in expired. Please continue with Google again.");
+    // The email is the one Google verified, whatever the client sent.
+    email = ticket.email;
+    googleSub = ticket.sub;
+    ownerName = input.owner.name?.trim() || ticket.name;
+  }
 
   // 1. Abuse: Rate limiting (5/hr IP, 3/hr email)
   const rateLimit = await checkSignupRateLimit(db, clientIp, email);
@@ -156,8 +170,8 @@ export async function completeSignup(
     slug: normSlug,
     owner: {
       email,
-      name: input.owner.name,
-      password: input.owner.password,
+      name: ownerName,
+      ...(googleSub ? { google: { sub: googleSub } } : { password: input.owner.password }),
       phone: input.owner.phone,
     },
     planCode: input.planCode || "starter",

@@ -1,13 +1,16 @@
-import React, { useState } from "react";
+import React, { useEffect, useState } from "react";
+import { useQuery } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
 import { Database, ShieldCheck } from "lucide-react";
 import { AuthShell, Button, Input, Label, toast } from "@bs/ui";
 import { PasswordInput } from "@bs/ui";
 import {
+  fetchGoogleSignin,
   fetchLoginStatus,
   finishMfaSetup,
   signIn,
   signOut,
+  startGoogleSignIn,
   startMfaSetup,
   verifyBackupCode,
   verifyTotp,
@@ -25,8 +28,28 @@ export function Login({ onSuccess }: LoginProps) {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [loading, setLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(() =>
+    typeof window !== "undefined" && new URLSearchParams(window.location.search).has("google_error")
+      ? "Google sign-in did not work for this account. Use your email, password and authenticator code."
+      : null,
+  );
   const [notice, setNotice] = useState<string | null>(null);
+
+  const { data: google } = useQuery({ queryKey: ["google-signin"], queryFn: fetchGoogleSignin, staleTime: 60_000 });
+  const googleEnabled = Boolean(google?.enabled);
+
+  useEffect(() => {
+    // Clean the marker Better Auth's error redirect left in the address bar.
+    if (new URLSearchParams(window.location.search).has("google_error")) {
+      window.history.replaceState(null, "", window.location.pathname);
+    }
+  }, []);
+
+  const handleGoogle = async () => {
+    setError(null);
+    const res = await startGoogleSignIn();
+    if (!res.ok && res.message !== "Redirecting to Google…") setError(res.message);
+  };
 
   const [step, setStep] = useState<Step>("credentials");
   const [totpCode, setTotpCode] = useState("");
@@ -176,6 +199,18 @@ export function Login({ onSuccess }: LoginProps) {
             <Button type="submit" disabled={loading} className="w-full">
               {loading ? "Authenticating..." : "Sign In with Credentials"}
             </Button>
+            {googleEnabled ? (
+              <>
+                <div className="flex items-center gap-3 text-xs text-muted-foreground">
+                  <span className="h-px flex-1 bg-border" />
+                  or
+                  <span className="h-px flex-1 bg-border" />
+                </div>
+                <Button type="button" variant="outline" className="w-full" onClick={() => void handleGoogle()}>
+                  Continue with Google
+                </Button>
+              </>
+            ) : null}
             <p className="text-center text-xs text-muted-foreground mt-4">Access restricted to authorized platform staff with verified MFA.</p>
           </form>
         )}

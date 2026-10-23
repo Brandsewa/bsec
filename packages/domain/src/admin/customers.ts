@@ -969,6 +969,8 @@ export async function deleteAdminCustomer(rt: Runtime, ctx: TenantContext, input
     await tx.delete(schema.customerNotes).where(and(eq(schema.customerNotes.tenantId, ctx.tenantId), eq(schema.customerNotes.customerId, input.id)));
     await tx.delete(schema.wishlistItems).where(and(eq(schema.wishlistItems.tenantId, ctx.tenantId), eq(schema.wishlistItems.customerId, input.id)));
     await tx.delete(schema.customerSessions).where(and(eq(schema.customerSessions.tenantId, ctx.tenantId), eq(schema.customerSessions.userId, input.id)));
+    // Linked Google sign-ins go too (the hard-delete path cascades through the composite foreign key).
+    await tx.delete(schema.customerIdentities).where(and(eq(schema.customerIdentities.tenantId, ctx.tenantId), eq(schema.customerIdentities.customerId, input.id)));
     await tx
       .update(schema.customers)
       .set({

@@ -1326,6 +1326,29 @@ export const PlatformPaymentProviderView = z.object({
 });
 export type PlatformPaymentProviderView = z.infer<typeof PlatformPaymentProviderView>;
 
+export const PlatformGoogleView = z.object({
+  enabled: z.boolean(),
+  staffSignupAllowed: z.boolean(),
+  customerSigninAllowed: z.boolean(),
+  oneTapAllowed: z.boolean(),
+  clientId: z.string().nullable(),
+  secretConfigured: z.boolean(),
+  lastTestAt: z.string().nullable(),
+  lastTestStatus: z.enum(["success", "failed"]).nullable(),
+  lastTestError: z.string().nullable(),
+  linkedUsers: z.number(),
+  customerStoresConnected: z.number(),
+  updatedAt: z.string().nullable(),
+});
+export type PlatformGoogleView = z.infer<typeof PlatformGoogleView>;
+
+export const PlatformAuthOverview = z.object({
+  email: z.object({ totalStores: z.number(), storesDisabled: z.number(), mailerConfigured: z.boolean() }),
+  phone: z.object({ totalStores: z.number(), storesDisabled: z.number() }),
+  google: PlatformGoogleView,
+});
+export type PlatformAuthOverview = z.infer<typeof PlatformAuthOverview>;
+
 const BillingKeySetView = z.object({
   keyId: z.string().nullable(),
   secretConfigured: z.boolean(),
@@ -1446,6 +1469,27 @@ export const platformIntegrationsContract = {
       }),
     )
     .output(z.object({ ok: z.literal(true) })),
+  authOverview: oc
+    .route({ method: "GET", path: "/platform/integrations/auth" })
+    .output(PlatformAuthOverview),
+  updateGoogleAuth: oc
+    .route({ method: "PATCH", path: "/platform/integrations/auth/google" })
+    .input(
+      z.object({
+        enabled: z.boolean().optional(),
+        staffSignupAllowed: z.boolean().optional(),
+        customerSigninAllowed: z.boolean().optional(),
+        oneTapAllowed: z.boolean().optional(),
+      }),
+    )
+    .output(z.object({ ok: z.literal(true) })),
+  setGoogleClient: oc
+    .route({ method: "PUT", path: "/platform/integrations/auth/google/client" })
+    .input(z.object({ clientId: z.string().min(10).max(200), clientSecret: z.string().max(500).optional() }))
+    .output(z.object({ ok: z.literal(true) })),
+  testGoogleClient: oc
+    .route({ method: "POST", path: "/platform/integrations/auth/google/test" })
+    .output(z.object({ ok: z.boolean(), error: z.string().optional() })),
   overview: oc
     .route({ method: "GET", path: "/platform/integrations/overview" })
     .output(PlatformIntegrationsOverview),

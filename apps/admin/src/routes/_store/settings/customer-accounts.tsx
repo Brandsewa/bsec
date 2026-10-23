@@ -1,12 +1,12 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useState, type FormEvent } from "react";
-import { AlertTriangle, ArrowRight, KeyRound, Lock, Phone, RotateCcw, ShieldAlert, UserCheck, XCircle } from "lucide-react";
+import { AlertTriangle, ArrowRight, KeyRound, Phone, RotateCcw, ShieldAlert, UserCheck, XCircle } from "lucide-react";
 import { EmptyState, FormSkeleton, PageSkeleton, toast } from "@bs/ui";
-import { Badge } from "@bs/ui";
 import { Button } from "@bs/ui";
 import { Switch } from "@bs/ui";
 import { HeaderActions, SettingsCard, SettingsPageFrame, useUnsavedGuard } from "../../../components/settings/settings-page.tsx";
+import { GoogleSigninCard } from "../../../components/settings/google-signin-card.tsx";
 import { orpc } from "../../../lib/orpc.ts";
 import { errorMessage } from "../../../lib/errors.ts";
 
@@ -198,22 +198,6 @@ function CustomerAccountSettingsForm({
                 onCheckedChange={(checked) => setForm((prev) => ({ ...prev, phoneOtpEnabled: Boolean(checked) }))}
               />
             </div>
-
-            <div className="flex items-center justify-between gap-4 rounded-lg border border-border/50 bg-muted/30 p-4 opacity-75">
-              <div className="space-y-0.5">
-                <div className="flex items-center gap-2">
-                  <Lock className="h-4 w-4 text-muted-foreground" />
-                  <span className="text-sm font-medium text-foreground">Social sign-in (Google, Facebook)</span>
-                  <Badge variant="outline" className="text-[10px] font-medium py-0 px-1.5 text-muted-foreground">
-                    Not available yet
-                  </Badge>
-                </div>
-                <p className="text-xs text-muted-foreground">
-                  One-tap social login with Google and Facebook will be available in an upcoming platform release.
-                </p>
-              </div>
-              <Switch disabled checked={false} aria-label="Social sign-in not available" />
-            </div>
           </div>
         </SettingsCard>
 
@@ -271,6 +255,8 @@ function CustomerAccountSettingsForm({
           </div>
         </SettingsCard>
       </form>
+
+      <GoogleSigninCard />
     </SettingsPageFrame>
   );
 }

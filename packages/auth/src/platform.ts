@@ -1,8 +1,9 @@
 import { betterAuth, type BetterAuthOptions } from "better-auth";
 import { drizzleAdapter } from "better-auth/adapters/drizzle";
-import { twoFactor } from "better-auth/plugins";
+import { oneTap, twoFactor } from "better-auth/plugins";
 import { schema, type Db } from "@bs/db";
 import { PLATFORM_COOKIE_PREFIX } from "./index.ts";
+import { googleSessionGuard, googleSocialProvider, type GoogleConfigLoader } from "./google.ts";
 
 export interface PlatformAuthOptions {
   baseURL?: string | undefined;
@@ -14,6 +15,8 @@ export interface PlatformAuthOptions {
   onSendResetPassword?: ((data: { user: { id: string; email: string; name?: string }; url: string; token: string }) => Promise<void> | void) | undefined;
   onPasswordReset?: ((data: { user: { id: string; email: string; name?: string } }) => Promise<void> | void) | undefined;
   advanced?: BetterAuthOptions["advanced"] | undefined;
+  /** Platform Google client (Tier A). Omit to keep Google sign-in off. */
+  loadGoogle?: GoogleConfigLoader | undefined;
 }
 
 /**
@@ -95,10 +98,17 @@ export function createPlatformAuth(db: Db, opts: PlatformAuthOptions = {}) {
         "/two-factor/verify-backup-code": { window: 300, max: 5 },
       },
     },
+    // Google sign-in for existing active platform_staff WITHOUT two-factor only (see googleSessionGuard).
+    ...(opts.loadGoogle ? { socialProviders: { google: googleSocialProvider(opts.loadGoogle) } } : {}),
+    account: { accountLinking: { enabled: true, requireLocalEmailVerified: true } },
+    databaseHooks: {
+      session: { create: { before: async (session, ctx) => { await googleSessionGuard(db, { requirePlatformStaff: true })(session, ctx); } } },
+    },
     plugins: [
       twoFactor({
         issuer: "BsCommerce Platform",
       }),
+      ...(opts.loadGoogle ? [oneTap({ disableSignup: true })] : []),
     ],
     advanced: {
       cookiePrefix: PLATFORM_COOKIE_PREFIX,

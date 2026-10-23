@@ -7,6 +7,14 @@ export * from "./permissions.ts";
 export { createStaffAuth, type StaffAuth, type StaffAuthOptions } from "./staff.ts";
 export { createPlatformAuth, type PlatformAuth, type PlatformAuthOptions } from "./platform.ts";
 export { hashPassword, verifyPassword } from "better-auth/crypto";
+export {
+  googleConfigFingerprint,
+  googleSessionGuard,
+  verifyGoogleIdentity,
+  type GoogleAuthConfig,
+  type GoogleConfigLoader,
+  type GoogleIdentityClaims,
+} from "./google.ts";
 export { createCustomerAuth, type CustomerAuth, type CustomerAuthOptions } from "./customer.ts";
 
 

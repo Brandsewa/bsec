@@ -1232,7 +1232,7 @@ export async function acceptPlatformStaffInvitation(
     } else {
       const [created] = await tx
         .insert(schema.users)
-        .values({ email, name: input.name?.trim() || email.split("@")[0] || "Platform staff", emailVerified: false, twoFactorEnabled: false })
+        .values({ email, name: input.name?.trim() || email.split("@")[0] || "Platform staff", emailVerified: true, twoFactorEnabled: false })
         .returning({ id: schema.users.id });
       if (!created) throw new Error("Failed to create user");
       userId = created.id;
