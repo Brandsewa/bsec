@@ -32,6 +32,27 @@ const TONES: DropdownOption[] = [
   { value: "default", label: "Plain" },
   { value: "surface", label: "Soft background" },
   { value: "primary", label: "Brand colour" },
+  { value: "dark", label: "Dark background" },
+];
+
+const SOCIAL_NETWORKS: DropdownOption[] = [
+  { value: "instagram", label: "Instagram" },
+  { value: "facebook", label: "Facebook" },
+  { value: "x", label: "X (Twitter)" },
+  { value: "youtube", label: "YouTube" },
+  { value: "linkedin", label: "LinkedIn" },
+  { value: "whatsapp", label: "WhatsApp" },
+  { value: "email", label: "Email" },
+  { value: "website", label: "Website" },
+];
+const SOCIAL_STYLES: DropdownOption[] = [
+  { value: "plain", label: "Plain icon" },
+  { value: "filled", label: "Filled circle" },
+  { value: "outline", label: "Outlined circle" },
+];
+const SOCIAL_COLORS: DropdownOption[] = [
+  { value: "text", label: "Text colour" },
+  { value: "brand", label: "Brand colour" },
 ];
 
 /** A tiny diagram of each header layout, so the choice is visible and not only worded. */
@@ -71,11 +92,23 @@ function Toggle({ id, text, checked, onChange }: { id: string; text: string; che
   );
 }
 
-function Group({ title, children }: { title: string; children: ReactNode }) {
+/** A settings group as an accordion: closed until opened, so a long panel stays short. */
+function Group({ title, children, open: startOpen = false }: { title: string; children: ReactNode; open?: boolean }) {
+  const [open, setOpen] = useState(startOpen);
   return (
     <div style={{ display: "grid", gridTemplateColumns: "minmax(0, 1fr)", gap: 10, paddingTop: 10, borderTop: "1px solid #eee" }}>
-      <span style={{ fontSize: 12, fontWeight: 700 }}>{title}</span>
-      {children}
+      <button
+        type="button"
+        aria-expanded={open}
+        onClick={() => setOpen((o) => !o)}
+        style={{ display: "flex", width: "100%", alignItems: "center", justifyContent: "space-between", background: "none", border: 0, padding: 0, cursor: "pointer", fontSize: 12, fontWeight: 700, color: "#111", textAlign: "left" }}
+      >
+        {title}
+        <span aria-hidden="true" style={{ fontSize: 11, transform: open ? "rotate(180deg)" : "none", transition: "transform .15s" }}>
+          ▾
+        </span>
+      </button>
+      {open ? children : null}
     </div>
   );
 }
@@ -224,6 +257,7 @@ export function HeaderPanel() {
   );
 }
 
+type Social = { network: string; url: string };
 type Col = { title: string; menuHandle?: string | undefined; links: Array<{ label: string; href: string }> };
 
 export function FooterPanel() {
@@ -234,12 +268,14 @@ export function FooterPanel() {
   const p = f.props;
   const columns = (Array.isArray(p["columns"]) ? (p["columns"] as Col[]) : []).slice(0, 4);
   const setColumn = (i: number, patch: Partial<Col>) => f.set({ columns: columns.map((c, j) => (j === i ? { ...c, ...patch } : c)) });
+  const socials = (Array.isArray(p["socials"]) ? (p["socials"] as Social[]) : []).slice(0, 8);
+  const setSocial = (i: number, patch: Partial<Social>) => f.set({ socials: socials.map((s, j) => (j === i ? { ...s, ...patch } : s)) });
   return (
     <div style={box}>
       <Field title="Layout" hint="The footer's overall arrangement.">
         <Dropdown ariaLabel="Footer layout" value={asStr(p["layout"], "columns")} options={FOOTER_LAYOUTS} onChange={(v) => f.set({ layout: v })} />
       </Field>
-      <Group title="Brand">
+      <Group title="Brand" open>
         <Picker label="Logo image" value={asStr(p["logoMediaId"]) || undefined} onChange={(v) => f.set({ logoMediaId: v })} accept={["image"]} />
         <LogoSizeEditor value={p["logoSize"] as LogoSizeValue | undefined} onChange={(v) => f.set({ logoSize: v })} />
         <Field title="Brand name" hint="Used when there is no logo image. Empty uses the store name.">
@@ -273,6 +309,51 @@ export function FooterPanel() {
           </button>
         ) : null}
         <Toggle id="hf-f-acc" text="Fold each column into an accordion on phones" checked={asBool(p["mobileAccordion"], true)} onChange={(v) => f.set({ mobileAccordion: v })} />
+      </Group>
+      <Group title="Social links">
+        <span style={{ fontSize: 11, color: "#71717a" }}>Icons shown under the brand. Add the networks you use and paste each full address (https://…). Remove one to hide it.</span>
+        {socials.map((s, i) => (
+          <div key={i} style={{ display: "grid", gridTemplateColumns: "minmax(0, 1fr)", gap: 8, border: "1px solid #e4e4e7", borderRadius: 8, padding: 10, boxSizing: "border-box" }}>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+              <span style={{ fontSize: 11, fontWeight: 700 }}>{SOCIAL_NETWORKS.find((n) => n.value === s.network)?.label ?? "Link"}</span>
+              <button type="button" onClick={() => f.set({ socials: socials.filter((_, j) => j !== i) })} style={{ border: 0, background: "none", color: "#b91c1c", fontSize: 11, cursor: "pointer", padding: 0 }}>
+                Remove
+              </button>
+            </div>
+            <Field title="Network">
+              <Dropdown ariaLabel={`Social network ${i + 1}`} value={s.network} options={SOCIAL_NETWORKS} onChange={(v) => setSocial(i, { network: v })} />
+            </Field>
+            <Field title="Link">
+              <Text name={`hf-footer-social-${i}`} value={s.url} max={500} onChange={(v) => setSocial(i, { url: v })} />
+            </Field>
+          </div>
+        ))}
+        {socials.length < 8 ? (
+          <button type="button" onClick={() => f.set({ socials: [...socials, { network: "instagram", url: "https://" }] })} style={{ border: "1px dashed #a1a1aa", background: "none", borderRadius: 8, padding: "6px 10px", fontSize: 12, cursor: "pointer" }}>
+            + Add a social link
+          </button>
+        ) : null}
+        {socials.length > 0 ? (
+          <>
+            <Field title="Icon style">
+              <Dropdown ariaLabel="Social icon style" value={asStr(p["socialStyle"], "plain")} options={SOCIAL_STYLES} onChange={(v) => f.set({ socialStyle: v })} />
+            </Field>
+            <Field title="Icon colour">
+              <Dropdown ariaLabel="Social icon colour" value={asStr(p["socialColor"], "text")} options={SOCIAL_COLORS} onChange={(v) => f.set({ socialColor: v })} />
+            </Field>
+            <Field title="Icon size (px)" hint="14 to 40.">
+              <input
+                type="number"
+                aria-label="Social icon size in pixels"
+                min={14}
+                max={40}
+                value={Number(p["socialSize"] ?? 20)}
+                onChange={(e) => f.set({ socialSize: Math.min(40, Math.max(14, Math.round(Number(e.target.value) || 20))) })}
+                style={input}
+              />
+            </Field>
+          </>
+        ) : null}
       </Group>
       <Group title="Newsletter">
         <Toggle id="hf-f-news" text="Show the newsletter sign-up" checked={asBool(p["showNewsletter"], true)} onChange={(v) => f.set({ showNewsletter: v })} />

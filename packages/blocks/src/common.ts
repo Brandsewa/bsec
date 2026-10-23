@@ -45,7 +45,7 @@ export type LogoSize = z.infer<typeof logoSizeSchema>;
 export const hexColorSchema = z.string().regex(/^#[0-9a-fA-F]{6}$/, "Use a colour like #1f3a5f");
 
 export const alignSchema = z.enum(["left", "center", "right"]);
-export const toneSchema = z.enum(["default", "surface", "primary"]);
+export const toneSchema = z.enum(["default", "surface", "primary", "dark"]);
 export const spacingSchema = z.enum(["none", "sm", "md", "lg", "xl"]);
 export const gapSchema = z.enum(["none", "sm", "md", "lg"]);
 export const widthSchema = z.enum(["narrow", "default", "wide", "full"]);

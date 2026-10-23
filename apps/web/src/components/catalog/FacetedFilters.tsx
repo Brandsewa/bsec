@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useTransition } from "react";
+import React, { useEffect, useRef, useState, useTransition } from "react";
 import { useRouter, usePathname, useSearchParams } from "next/navigation";
 import type { StorefrontFacetedResult, StorefrontFacet } from "@bs/domain";
 import { ViewToggle, ProductsSkeleton } from "./ListingView.tsx";
@@ -14,6 +14,8 @@ export interface FacetedFiltersProps {
   /** Lets shoppers hide the filter sidebar on desktop. */
   collapsible?: boolean | undefined;
   showViewToggle?: boolean | undefined;
+  /** Cards in the loading skeleton: the number currently shown, so the grid keeps its size while filtering. */
+  skeletonCount?: number | undefined;
 }
 
 const SORT_OPTIONS = [
@@ -38,11 +40,18 @@ export function FacetedFilters({
   children,
   collapsible = true,
   showViewToggle = true,
+  skeletonCount,
 }: FacetedFiltersProps) {
   const router = useRouter();
   const pathname = usePathname();
   const searchParams = useSearchParams();
   const [isPending, startTransition] = useTransition();
+  // While a filter is applied the skeleton is as tall as the grid it replaces, so the page does not collapse and re-grow.
+  const gridRef = useRef<HTMLDivElement>(null);
+  const [lockedHeight, setLockedHeight] = useState<number | undefined>(undefined);
+  useEffect(() => {
+    if (!isPending && gridRef.current) setLockedHeight(gridRef.current.offsetHeight);
+  }, [isPending, children]);
   const [isMobileOpen, setIsMobileOpen] = useState(false);
   const [sidebarOpen, setSidebarOpen] = useState(true);
   const hasFacets = filterData.facets.length > 0;
@@ -335,8 +344,8 @@ export function FacetedFilters({
           ) : null}
 
           {/* Children (Product grid and Pagination) */}
-          <div className="flex-1 min-w-0 w-full" aria-busy={isPending}>
-            {isPending ? <ProductsSkeleton /> : children}
+          <div ref={gridRef} className="flex-1 min-w-0 w-full" aria-busy={isPending} style={isPending && lockedHeight ? { minHeight: lockedHeight } : undefined}>
+            {isPending ? <ProductsSkeleton count={skeletonCount ?? 8} /> : children}
           </div>
         </div>
       ) : (

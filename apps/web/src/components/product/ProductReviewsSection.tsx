@@ -131,8 +131,8 @@ export function ProductReviewsSection({ productId, productTitle }: ProductReview
   // Form state
   const [rating, setRating] = useState(5);
   const [reviewerName, setReviewerName] = useState("");
-  const [email, setEmail] = useState("");
-  const [orderNumber, setOrderNumber] = useState("");
+  // Reviews are for signed-in shoppers: null while checking, then the shopper or false.
+  const [shopper, setShopper] = useState<{ name: string } | false | null>(null);
   const [title, setTitle] = useState("");
   const [body, setBody] = useState("");
   const [honeypot, setHoneypot] = useState("");
@@ -182,6 +182,23 @@ export function ProductReviewsSection({ productId, productTitle }: ProductReview
     }
   };
 
+  useEffect(() => {
+    let cancelled = false;
+    fetch("/api/storefront/customer/profile", { cache: "no-store" })
+      .then((res) => (res.ok ? res.json() : { signedIn: false }))
+      .then((data: { signedIn?: boolean; name?: string }) => {
+        if (cancelled) return;
+        setShopper(data.signedIn ? { name: data.name ?? "" } : false);
+        if (data.signedIn && data.name) setReviewerName((n) => n || (data.name ?? ""));
+      })
+      .catch(() => {
+        if (!cancelled) setShopper(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
   const closeForm = useCallback(() => setFormOpen(false), []);
   const closeDrawer = useCallback(() => setDrawerOpen(false), []);
 
@@ -199,8 +216,6 @@ export function ProductReviewsSection({ productId, productTitle }: ProductReview
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           reviewerName: reviewerName.trim(),
-          email: email.trim() || undefined,
-          orderNumber: orderNumber.trim() || undefined,
           rating,
           title: title.trim() || undefined,
           body: body.trim(),
@@ -212,9 +227,6 @@ export function ProductReviewsSection({ productId, productTitle }: ProductReview
         setFormError(json.message ?? json.error ?? "Failed to submit review");
       } else {
         setFormSuccess(json.message ?? "Thank you for your review!");
-        setReviewerName("");
-        setEmail("");
-        setOrderNumber("");
         setTitle("");
         setBody("");
         setRating(5);
@@ -245,17 +257,27 @@ export function ProductReviewsSection({ productId, productTitle }: ProductReview
             </span>
           </div>
         </div>
-        <button
-          type="button"
-          onClick={() => {
-            setFormSuccess(null);
-            setFormError(null);
-            setFormOpen(true);
-          }}
-          className="inline-flex items-center justify-center rounded-lg bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground shadow transition-colors hover:bg-primary/90"
-        >
-          Write a Review
-        </button>
+        {shopper === false ? (
+          <a
+            href={`/account/login?next=${encodeURIComponent(typeof window === "undefined" ? "/" : `${window.location.pathname}#reviews-section`)}`}
+            className="inline-flex items-center justify-center rounded-lg bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground shadow transition-colors hover:bg-primary/90"
+          >
+            Log in to review
+          </a>
+        ) : (
+          <button
+            type="button"
+            disabled={shopper === null}
+            onClick={() => {
+              setFormSuccess(null);
+              setFormError(null);
+              setFormOpen(true);
+            }}
+            className="inline-flex items-center justify-center rounded-lg bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground shadow transition-colors hover:bg-primary/90 disabled:opacity-60"
+          >
+            Write a Review
+          </button>
+        )}
       </div>
 
       {/* Review cards: two rows, then "Show more" */}
@@ -283,7 +305,7 @@ export function ProductReviewsSection({ productId, productTitle }: ProductReview
       )}
 
       {/* Write a review: a pop-up */}
-      {formOpen ? (
+      {formOpen && shopper ? (
         <Overlay label={`Write a review for ${productTitle}`} onClose={closeForm}>
           <form onSubmit={handleSubmit} className="space-y-4 p-6" noValidate>
             <div className="flex items-start justify-between gap-3">
@@ -313,20 +335,9 @@ export function ProductReviewsSection({ productId, productTitle }: ProductReview
               </div>
             </div>
 
-            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-              <div>
-                <label htmlFor="rv-name" className="mb-1 block text-xs font-semibold text-foreground">Your Name *</label>
-                <input id="rv-name" type="text" required value={reviewerName} onChange={(e) => setReviewerName(e.target.value)} placeholder="e.g. John Doe" className={input} />
-              </div>
-              <div>
-                <label htmlFor="rv-email" className="mb-1 block text-xs font-semibold text-foreground">Email (for verification)</label>
-                <input id="rv-email" type="email" value={email} onChange={(e) => setEmail(e.target.value)} placeholder="e.g. john@example.com" className={input} />
-              </div>
-            </div>
-
             <div>
-              <label htmlFor="rv-order" className="mb-1 block text-xs font-semibold text-foreground">Order Number (optional)</label>
-              <input id="rv-order" type="text" value={orderNumber} onChange={(e) => setOrderNumber(e.target.value)} placeholder="e.g. #ORD-1001" className={input} />
+              <label htmlFor="rv-name" className="mb-1 block text-xs font-semibold text-foreground">Your Name *</label>
+              <input id="rv-name" type="text" required value={reviewerName} onChange={(e) => setReviewerName(e.target.value)} placeholder="e.g. John Doe" className={input} />
             </div>
 
             <div>

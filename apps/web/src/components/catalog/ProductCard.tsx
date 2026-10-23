@@ -79,7 +79,6 @@ export function ProductCard({
 
         <div className="pointer-events-none absolute left-2.5 right-2.5 top-2.5 flex items-start justify-between gap-2">
           <span className="flex min-w-0 flex-col items-start gap-1">
-            {showCategoryBadge && product.categoryName ? <span className="max-w-full truncate rounded-md bg-background/95 px-2 py-0.5 text-xs font-medium text-foreground shadow-xs">{product.categoryName}</span> : null}
             {!(showCategoryBadge && product.categoryName) && product.isFeatured ? <span className="rounded-md bg-primary px-2 py-0.5 text-xs font-medium text-primary-foreground shadow-xs">Featured</span> : null}
           </span>
           {showSaleBadge && savingsPercent !== null && savingsPercent > 0 ? <span className="rounded-md bg-emerald-600 px-2 py-0.5 text-xs font-semibold text-white shadow-xs">Save {savingsPercent}%</span> : null}
@@ -97,6 +96,7 @@ export function ProductCard({
       </div>
 
       <div className="bs-pcard-body">
+        {showCategoryBadge && product.categoryName ? <p className="mb-0.5 truncate text-xs font-medium text-muted-foreground">{product.categoryName}</p> : null}
         {product.brand ? <p className="mb-0.5 text-xs font-semibold uppercase tracking-wider text-muted-foreground">{product.brand.name}</p> : null}
 
         <h3 className="bs-pcard-title">

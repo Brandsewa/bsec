@@ -7,6 +7,7 @@ import { FacetedFilters } from "./FacetedFilters.tsx";
 import { Pagination } from "./Pagination.tsx";
 import { LoadMore } from "./LoadMore.tsx";
 import { ListingViewProvider, ProductsContainer } from "./ListingView.tsx";
+import { RichBlocks } from "@/components/storefront/RichBlocks.tsx";
 
 export const DEFAULT_COLLECTION_LISTING_OPTIONS: CollectionListingOptions = {
   columns: "4",
@@ -122,7 +123,7 @@ export function CollectionListingSection({
 
   return (
     <ListingViewProvider defaultView={o.defaultView} cols={Number(o.columns)} colsTablet={Number(o.columnsTablet ?? "2")} colsMobile={Number(o.columnsMobile ?? "1")}>
-      <div className="mx-auto max-w-7xl px-4 py-8 sm:px-6 lg:px-8">
+      <div className="mx-auto w-full max-w-[80rem] px-4 py-8">
         {o.showBreadcrumb ? (
           <nav aria-label="Breadcrumb" className="mb-6 flex items-center gap-2 text-sm text-muted-foreground">
             <Link href="/" className="hover:text-foreground transition-colors">
@@ -151,6 +152,7 @@ export function CollectionListingSection({
             totalCount={products.total}
             collapsible={o.filtersCollapsible}
             showViewToggle={o.showViewToggle}
+            skeletonCount={Math.max(1, products.items.length)}
           >
             {productGrid}
             {more}
@@ -161,6 +163,13 @@ export function CollectionListingSection({
             {more}
           </>
         )}
+
+        {/* Long description: detail content below the products */}
+        {o.showDescription && collection.descriptionJson && collection.descriptionJson.blocks.length > 0 ? (
+          <section className="mt-12 max-w-3xl border-t border-border pt-8" aria-label={`About ${collection.title}`}>
+            <RichBlocks blocks={collection.descriptionJson.blocks} />
+          </section>
+        ) : null}
       </div>
     </ListingViewProvider>
   );

@@ -8,7 +8,8 @@ import {
 import { useState } from "react";
 import { PageActions, PageContainer, PageHeader, PageSkeleton, toast } from "@bs/ui";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
-import type { CollectionRule } from "@bs/contracts";
+import type { CollectionRule, RichDescription } from "@bs/contracts";
+import { RichDescriptionField } from "../../components/rich-description-field.tsx";
 import { Button } from "@bs/ui";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@bs/ui";
 import { Field, FieldLabel } from "@bs/ui";
@@ -32,6 +33,7 @@ export function CreateCollectionPage() {
 
   const [title, setTitle] = useState("");
   const [description, setDescription] = useState("");
+  const [descriptionJson, setDescriptionJson] = useState<RichDescription | null>(null);
   const [slug, setSlug] = useState("");
   const [type, setType] = useState<"manual" | "automated">("manual");
   const [match, setMatch] = useState<"all" | "any">("all");
@@ -87,6 +89,7 @@ export function CreateCollectionPage() {
       title: title.trim(),
       slug: slug.trim() || undefined,
       description: description.trim() || undefined,
+      descriptionJson,
       imageMediaId: imageMediaId || null,
       type,
       match,
@@ -157,8 +160,8 @@ export function CreateCollectionPage() {
 
               <div className="grid gap-1.5">
                 <FieldLabel htmlFor="col-description" className="flex items-center gap-1.5">
-                  Description
-                  <InfoTip>Short plain-text blurb shown on collection cards and the collections page (two lines on cards). Up to 300 characters.</InfoTip>
+                  Short description
+                  <InfoTip>Plain-text blurb shown under the collection title, on collection cards and on the collections page (two lines on cards). Up to 300 characters.</InfoTip>
                 </FieldLabel>
                 <Textarea
                   id="col-description"
@@ -170,6 +173,8 @@ export function CreateCollectionPage() {
                 />
                 <p className="text-xs text-muted-foreground">{description.length}/300</p>
               </div>
+
+              <RichDescriptionField id="col-long-description" value={descriptionJson} onChange={setDescriptionJson} tip="Shown below the products on the collection page, for detail content such as buying guides or care notes. Supports headings, bold, italic, links, lists and dividers." />
 
               <div className="grid gap-1.5">
                 <FieldLabel htmlFor="col-slug">URL Handle (Slug)</FieldLabel>

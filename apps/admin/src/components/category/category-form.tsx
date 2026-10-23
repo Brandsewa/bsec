@@ -12,7 +12,8 @@ import {
   Switch,
   Textarea,
 } from "@bs/ui";
-import type { Category, CategoryDetail, CollectionRule } from "@bs/contracts";
+import type { Category, CategoryDetail, CollectionRule, RichDescription } from "@bs/contracts";
+import { RichDescriptionField } from "../rich-description-field.tsx";
 import { SeoCard } from "../seo-card.tsx";
 import { MediaField } from "../media/media-field.tsx";
 import { CollectionTypeCard, NEW_RULE, ProductAssignmentsCard, ProductSortingCard, RulesBuilderCard } from "../collection/collection-parts.tsx";
@@ -22,6 +23,7 @@ export interface CategoryFormValues {
   name: string;
   slug: string;
   description: string;
+  descriptionJson: RichDescription | null;
   parentId: string | null;
   isActive: boolean;
   isFeatured: boolean;
@@ -59,6 +61,7 @@ export function CategoryForm({
   const [name, setName] = useState(category?.name ?? "");
   const [slug, setSlug] = useState(category?.slug ?? "");
   const [description, setDescription] = useState(category?.description ?? "");
+  const [descriptionJson, setDescriptionJson] = useState<RichDescription | null>(category?.descriptionJson ?? null);
   const [parentId, setParentId] = useState<string>(category?.parentId ?? "none");
   const [isActive, setIsActive] = useState(category?.isActive ?? true);
   const [isFeatured, setIsFeatured] = useState(category?.isFeatured ?? false);
@@ -101,6 +104,7 @@ export function CategoryForm({
       name: name.trim(),
       slug: slug.trim(),
       description: description.trim(),
+      descriptionJson,
       parentId: parentId === "none" ? null : parentId,
       isActive,
       isFeatured,
@@ -162,7 +166,7 @@ export function CategoryForm({
 
             <div className="grid gap-1.5">
               <div className="flex items-center justify-between">
-                <FieldLabel htmlFor="cat-desc">Description</FieldLabel>
+                <FieldLabel htmlFor="cat-desc">Short description</FieldLabel>
                 <span className={`text-xs ${description.length > 500 ? "font-semibold text-destructive" : "text-muted-foreground"}`}>{description.length} / 500</span>
               </div>
               <Textarea
@@ -175,6 +179,8 @@ export function CategoryForm({
               />
               {err("description")}
             </div>
+
+            <RichDescriptionField id="cat-long-description" value={descriptionJson} onChange={setDescriptionJson} tip="Shown below the products on the category page, for detail content such as buying guides or care notes. Supports headings, bold, italic, links, lists and dividers." />
           </CardContent>
         </Card>
 

@@ -5,6 +5,7 @@ import type { Runtime } from "../runtime.ts";
 import type { TenantContext } from "../context.ts";
 import { isFeatureEnabled } from "../features.ts";
 import { publicMediaUrl } from "../media/storage.ts";
+import type { RichDescriptionValue } from "../rich-description.ts";
 
 export interface CollectionRule {
   field: "tag" | "product_type" | "brand" | "category" | "price" | "in_stock" | "title" | string;
@@ -260,6 +261,8 @@ export interface StorefrontCollectionDetail {
     sortOrder: string;
     imageMediaId: string | null;
     description: string | null;
+    /** Long, formatted description shown below the product list. */
+    descriptionJson: RichDescriptionValue | null;
     seo: unknown;
     published: boolean;
     indexable: boolean;
@@ -282,6 +285,7 @@ export interface StorefrontCategoryDetail {
     name: string;
     slug: string;
     description: string | null;
+    descriptionJson: RichDescriptionValue | null;
     position: number;
     imageMediaId: string | null;
     seo: unknown;
@@ -1176,6 +1180,7 @@ export async function getStorefrontCollection(
         sortOrder: col.sortOrder,
         imageMediaId: col.imageMediaId,
         description: col.description ?? null,
+        descriptionJson: (col.descriptionJson ?? null) as RichDescriptionValue | null,
         seo: col.seo,
         published: col.published,
         indexable: col.indexable,
@@ -1302,6 +1307,7 @@ export async function getStorefrontCategory(
         name: cat.name,
         slug: cat.slug,
         description: cat.description,
+        descriptionJson: (cat.descriptionJson ?? null) as RichDescriptionValue | null,
         position: cat.position,
         imageMediaId: cat.imageMediaId,
         seo: cat.seo,

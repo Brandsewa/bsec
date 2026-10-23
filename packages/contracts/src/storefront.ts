@@ -299,11 +299,9 @@ export const storefrontContract = {
           productId: z.string().uuid(),
           variantId: z.string().uuid().optional(),
           reviewerName: z.string().trim().min(1).max(80),
-          email: z.string().trim().email().max(255).optional(),
           rating: z.number().int().min(1).max(5),
           title: z.string().trim().max(100).optional(),
           body: z.string().trim().min(1).max(1000),
-          orderNumber: z.string().trim().max(50).optional(),
           honeypot: z.string().max(0).optional(), // Must be empty
         }),
       )

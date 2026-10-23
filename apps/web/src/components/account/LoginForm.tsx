@@ -5,7 +5,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { Button, Field, FieldLabel, Input, Alert, AlertDescription, Tabs, TabsList, TabsTrigger } from "@bs/ui";
 
-export function LoginForm({ initialTab = "otp" }: { initialTab?: "password" | "otp" }) {
+export function LoginForm({ initialTab = "otp", redirectTo = "/account" }: { initialTab?: "password" | "otp"; /** Where to go after signing in (a same-site path). */ redirectTo?: string }) {
   const router = useRouter();
   const [tab, setTab] = useState<"password" | "otp">(initialTab);
 
@@ -40,7 +40,7 @@ export function LoginForm({ initialTab = "otp" }: { initialTab?: "password" | "o
     try {
       await post("/api/storefront/customer/login", { email: email.trim(), password });
       // /account/login is outside the account gate, so a bare refresh would leave the shopper on the form.
-      router.replace("/account");
+      router.replace(redirectTo);
       router.refresh();
     } catch (err) {
       setError(err instanceof Error ? err.message : "Invalid email or password");
@@ -68,7 +68,7 @@ export function LoginForm({ initialTab = "otp" }: { initialTab?: "password" | "o
     setBusy(true);
     try {
       await post("/api/storefront/customer/otp/verify", { phone: phone.trim(), otp: otp.trim() });
-      router.replace("/account");
+      router.replace(redirectTo);
       router.refresh();
     } catch (err) {
       setError(err instanceof Error ? err.message : "Could not verify the code");

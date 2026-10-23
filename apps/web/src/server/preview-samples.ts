@@ -23,7 +23,7 @@ export function sampleCollection(): StorefrontCollectionDetail {
     quickAdd: { singleVariantId: `sample-variant-${i}`, inStock: true },
   }));
   return {
-    collection: { id: "sample-collection", title: "Bestsellers", slug: "bestsellers", type: "manual", rules: null, sortOrder: "manual", imageMediaId: null, description: "A short description of this collection appears here.", seo: null, indexable: true, published: true, createdAt: NOW, updatedAt: NOW },
+    collection: { id: "sample-collection", title: "Bestsellers", slug: "bestsellers", type: "manual", rules: null, sortOrder: "manual", imageMediaId: null, description: "A short description of this collection appears here.", descriptionJson: { v: 1, blocks: [{ type: "paragraph", text: "The long description of this collection appears below the products." }] }, seo: null, indexable: true, published: true, createdAt: NOW, updatedAt: NOW },
     products: { items, total: items.length, page: 1, limit: 24 },
   };
 }

@@ -16,7 +16,11 @@ import {
   googleFontsHref,
   resolveButtonSize,
   resolveFontWeight,
+  resolveBodySizes,
   resolveHeadingSizes,
+  DEFAULT_BODY_SIZES,
+  MAX_BODY_PX,
+  MIN_BODY_PX,
   type HeadingSizes,
   type SizeDevice,
   type BlockInstance,
@@ -41,15 +45,17 @@ const COLOR_FIELDS = [
   { key: "accent", label: "Accent" },
   { key: "background", label: "Page background" },
   { key: "surface", label: "Soft background", hint: "Cards and alternate sections" },
-  { key: "text", label: "Text" },
+  { key: "dark", label: "Dark background", hint: "Sections set to the dark background" },
+  { key: "text", label: "Text on light backgrounds" },
+  { key: "textOnDark", label: "Text on dark backgrounds" },
 ] as const;
 
 const PRESETS: Array<{ name: string; colors: Record<string, string> }> = [
-  { name: "Forest", colors: { primary: "#0b6b42", secondary: "#334155", accent: "#f59e0b", background: "#ffffff", surface: "#f4f7f5", text: "#16201b" } },
-  { name: "Ocean", colors: { primary: "#1d4ed8", secondary: "#334155", accent: "#06b6d4", background: "#ffffff", surface: "#f1f5fb", text: "#0f172a" } },
-  { name: "Sunset", colors: { primary: "#c2410c", secondary: "#44403c", accent: "#eab308", background: "#fffbf7", surface: "#fdf1e7", text: "#2a1a10" } },
-  { name: "Mono", colors: { primary: "#111827", secondary: "#4b5563", accent: "#6b7280", background: "#ffffff", surface: "#f3f4f6", text: "#111827" } },
-  { name: "Midnight", colors: { primary: "#a78bfa", secondary: "#94a3b8", accent: "#f472b6", background: "#0f172a", surface: "#1e293b", text: "#f1f5f9" } },
+  { name: "Forest", colors: { primary: "#0b6b42", secondary: "#334155", accent: "#f59e0b", background: "#ffffff", surface: "#f4f7f5", text: "#16201b", dark: "#10231a", textOnDark: "#f4f7f5" } },
+  { name: "Ocean", colors: { primary: "#1d4ed8", secondary: "#334155", accent: "#06b6d4", background: "#ffffff", surface: "#f1f5fb", text: "#0f172a", dark: "#0f1f3d", textOnDark: "#f1f5fb" } },
+  { name: "Sunset", colors: { primary: "#c2410c", secondary: "#44403c", accent: "#eab308", background: "#fffbf7", surface: "#fdf1e7", text: "#2a1a10", dark: "#2a1a10", textOnDark: "#fdf1e7" } },
+  { name: "Mono", colors: { primary: "#111827", secondary: "#4b5563", accent: "#6b7280", background: "#ffffff", surface: "#f3f4f6", text: "#111827", dark: "#111827", textOnDark: "#ffffff" } },
+  { name: "Midnight", colors: { primary: "#a78bfa", secondary: "#94a3b8", accent: "#f472b6", background: "#0f172a", surface: "#1e293b", text: "#f1f5f9", dark: "#020617", textOnDark: "#f1f5f9" } },
 ];
 
 const RADIUS_LABELS: Record<(typeof THEME_RADII)[number], string> = { none: "Square", sm: "Slight", md: "Rounded", lg: "Very rounded", full: "Pill" };
@@ -79,8 +85,11 @@ export function readThemeSettings(tokens: ThemeTokens) {
       background: sanitized["--color-background"] ?? "#ffffff",
       surface: sanitized["--color-surface"] ?? "#f8fafc",
       text: sanitized["--color-text"] ?? "#0f172a",
+      dark: sanitized["--color-dark"] ?? "#0f172a",
+      textOnDark: sanitized["--color-text-on-dark"] ?? "#ffffff",
     } as Record<string, string>,
     sizes: resolveHeadingSizes(tokens),
+    bodySizes: resolveBodySizes(tokens),
     heading: String(tokens.fonts?.heading ?? tokens.typography?.headingFont ?? "Inter"),
     body: String(tokens.fonts?.body ?? tokens.typography?.bodyFont ?? "Inter"),
     radius: radiusKey(tokens.radius ?? tokens.shape?.radius),
@@ -223,12 +232,12 @@ function DeviceIcon({ device }: { device: SizeDevice }) {
 }
 
 /** One size box. Edits are applied when the field loses focus or Enter is pressed; an invalid entry reverts. */
-function SizeInput({ value, label, disabled, onCommit }: { value: number; label: string; disabled?: boolean | undefined; onCommit: (px: number) => void }) {
+function SizeInput({ value, label, disabled, min = MIN_HEADING_PX, max = MAX_HEADING_PX, onCommit }: { value: number; label: string; disabled?: boolean | undefined; min?: number; max?: number; onCommit: (px: number) => void }) {
   const [text, setText] = useState(String(value));
   const apply = () => {
     const n = Number(text);
     if (text.trim() === "" || !Number.isFinite(n)) return setText(String(value));
-    const px = Math.min(MAX_HEADING_PX, Math.max(MIN_HEADING_PX, Math.round(n)));
+    const px = Math.min(max, Math.max(min, Math.round(n)));
     setText(String(px));
     if (px !== value) onCommit(px);
   };
@@ -246,7 +255,7 @@ function SizeInput({ value, label, disabled, onCommit }: { value: number; label:
           if (e.key === "Enter") apply();
           if (e.key === "ArrowUp" || e.key === "ArrowDown") {
             e.preventDefault();
-            const n = Math.min(MAX_HEADING_PX, Math.max(MIN_HEADING_PX, (Number(text) || value) + (e.key === "ArrowUp" ? 1 : -1)));
+            const n = Math.min(max, Math.max(min, (Number(text) || value) + (e.key === "ArrowUp" ? 1 : -1)));
             setText(String(n));
             onCommit(n);
           }
@@ -265,16 +274,18 @@ function SizeInput({ value, label, disabled, onCommit }: { value: number; label:
  * desktop sizes applied from 768px and 1024px (mobile first). The page editor's Mobile, Tablet and Desktop
  * previews show each set.
  */
-function HeadingSizesEditor({ sizes, onChange, disabled }: { sizes: HeadingSizes; onChange: (sizes: HeadingSizes) => void; disabled?: boolean | undefined }) {
-  const isDefault = HEADING_LEVELS.every((l) => SIZE_DEVICES.every((d) => sizes[l][d] === DEFAULT_HEADING_SIZES[l][d]));
+function HeadingSizesEditor({ sizes, bodySizes, onChange, disabled }: { sizes: HeadingSizes; bodySizes: Record<SizeDevice, number>; onChange: (sizes: HeadingSizes, bodySizes: Record<SizeDevice, number>) => void; disabled?: boolean | undefined }) {
+  const isDefault =
+    HEADING_LEVELS.every((l) => SIZE_DEVICES.every((d) => sizes[l][d] === DEFAULT_HEADING_SIZES[l][d])) &&
+    SIZE_DEVICES.every((d) => bodySizes[d] === DEFAULT_BODY_SIZES[d]);
   return (
     <div style={{ marginTop: 6, paddingTop: 12, borderTop: "1px dashed #e4e4e7" }}>
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline" }}>
-        <span style={label}>Heading sizes</span>
+        <span style={label}>Text sizes</span>
         <button
           type="button"
           disabled={disabled || isDefault}
-          onClick={() => onChange(structuredClone(DEFAULT_HEADING_SIZES))}
+          onClick={() => onChange(structuredClone(DEFAULT_HEADING_SIZES), { ...DEFAULT_BODY_SIZES })}
           style={{ border: 0, background: "none", fontSize: 11, color: disabled || isDefault ? "#a1a1aa" : "#2563eb", cursor: disabled || isDefault ? "default" : "pointer", padding: 0 }}
         >
           Reset
@@ -289,10 +300,22 @@ function HeadingSizesEditor({ sizes, onChange, disabled }: { sizes: HeadingSizes
           </span>
         ))}
         {HEADING_LEVELS.map((level) => (
-          <FragmentRow key={level} level={level} sizes={sizes} disabled={disabled} onChange={onChange} />
+          <FragmentRow key={level} level={level} sizes={sizes} disabled={disabled} onChange={(next) => onChange(next, bodySizes)} />
+        ))}
+        <span style={{ fontSize: 12, fontWeight: 700, color: "#18181b" }}>Body</span>
+        {SIZE_DEVICES.map((d) => (
+          <SizeInput
+            key={`body-${d}-${bodySizes[d]}`}
+            value={bodySizes[d]}
+            min={MIN_BODY_PX}
+            max={MAX_BODY_PX}
+            label={`Body text size on ${DEVICE_LABELS[d].label.toLowerCase()} in pixels`}
+            disabled={disabled}
+            onCommit={(px) => onChange(sizes, { ...bodySizes, [d]: px })}
+          />
         ))}
       </div>
-      <span style={{ display: "block", fontSize: 11, color: "#71717a", marginTop: 8 }}>Pixels, {MIN_HEADING_PX} to {MAX_HEADING_PX}. Desktop applies from 1024px, tablet from 768px.</span>
+      <span style={{ display: "block", fontSize: 11, color: "#71717a", marginTop: 8 }}>Pixels: headings {MIN_HEADING_PX} to {MAX_HEADING_PX}, body {MIN_BODY_PX} to {MAX_BODY_PX}. Desktop applies from 1024px, tablet from 768px.</span>
     </div>
   );
 }
@@ -347,6 +370,7 @@ export function ThemeSettingsPanel({ tokens, onChange, disabled, note }: ThemeSe
     heading?: string;
     body?: string;
     sizes?: HeadingSizes;
+    bodySizes?: Record<SizeDevice, number>;
     radius?: string;
     buttonStyle?: string;
     buttonRadius?: string;
@@ -366,7 +390,7 @@ export function ThemeSettingsPanel({ tokens, onChange, disabled, note }: ThemeSe
       source: "theme",
       colors: next.colors,
       fonts: { heading: next.heading, body: next.body, headingWeight: Number(next.headingWeight), bodyWeight: Number(next.bodyWeight) },
-      fontSizes: next.sizes,
+      fontSizes: { ...next.sizes, body: next.bodySizes },
       radius: next.radius,
       buttons: {
         style: next.buttonStyle,
@@ -418,7 +442,7 @@ export function ThemeSettingsPanel({ tokens, onChange, disabled, note }: ThemeSe
         <Field title="Body weight">
           <Dropdown compact ariaLabel="Body font weight" value={v.bodyWeight} options={WEIGHT_OPTIONS} disabled={disabled} onChange={(value) => commit({ bodyWeight: value })} />
         </Field>
-        <HeadingSizesEditor sizes={v.sizes} disabled={disabled} onChange={(sizes) => commit({ sizes })} />
+        <HeadingSizesEditor sizes={v.sizes} bodySizes={v.bodySizes} disabled={disabled} onChange={(sizes, bodySizes) => commit({ sizes, bodySizes })} />
       </Section>
 
       <Section id="corners" title="Corners" open={openId === "corners"} onToggle={() => toggle("corners")}>

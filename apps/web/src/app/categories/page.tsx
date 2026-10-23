@@ -23,7 +23,7 @@ export default async function CategoriesArchivePage() {
 
   return (
     <div className="bs-skin">
-      <div className="mx-auto max-w-7xl px-4 py-8 sm:px-6 lg:px-8">
+      <div className="mx-auto w-full max-w-[80rem] px-4 py-8">
         <h1 className="mb-2 text-3xl font-semibold tracking-tight">Shop by category</h1>
         <p className="mb-8 text-sm opacity-70">Find exactly what you are looking for.</p>
 
