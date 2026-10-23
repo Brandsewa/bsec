@@ -35,7 +35,7 @@
     "@bs/config": "workspace:*",
     "@bs/contracts": "workspace:*",
     "@testcontainers/postgresql": "12.2.1",
-    "@types/node": "24.19.0",
+    "@types/node": "26.6.5",
     "@types/nodemailer": "8.0.2",
     "@types/pdfkit": "0.17.6",
     "@types/pg": "8.23.1",
