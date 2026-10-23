@@ -8,6 +8,7 @@ import { Pagination } from "./Pagination.tsx";
 import { LoadMore } from "./LoadMore.tsx";
 import { ListingViewProvider, ProductsContainer } from "./ListingView.tsx";
 import { RichBlocks } from "@/components/storefront/RichBlocks.tsx";
+import { layoutStyle } from "@bs/blocks";
 
 export const DEFAULT_COLLECTION_LISTING_OPTIONS: CollectionListingOptions = {
   columns: "4",
@@ -65,6 +66,7 @@ export function CollectionListingSection({
   const step = Number(o.pageSize ?? "12");
   const shown = Math.min(products.total, (page - 1) * limit + products.items.length);
 
+  const bare = Boolean(o.bare);
   const hasFacets = Boolean(o.showFilters && filterData && filterData.facets && filterData.facets.length > 0);
 
   const productGrid =
@@ -123,7 +125,11 @@ export function CollectionListingSection({
 
   return (
     <ListingViewProvider defaultView={o.defaultView} cols={Number(o.columns)} colsTablet={Number(o.columnsTablet ?? "2")} colsMobile={Number(o.columnsMobile ?? "1")}>
-      <div className="mx-auto w-full max-w-[80rem] px-4 py-8">
+      <div
+        className={bare ? `bsb bsb-lay bsb-tone-${o.tone ?? "default"}` : "mx-auto w-full max-w-[80rem] px-4 py-8"}
+        {...(bare ? { style: layoutStyle(o.box) } : null)}
+      >
+       <div className={bare ? `bsb-w bsb-w-${o.width ?? "wide"}` : undefined}>
         {o.showBreadcrumb ? (
           <nav aria-label="Breadcrumb" className="mb-6 flex items-center gap-2 text-sm text-muted-foreground">
             <Link href="/" className="hover:text-foreground transition-colors">
@@ -138,12 +144,15 @@ export function CollectionListingSection({
           </nav>
         ) : null}
 
+        {o.showTitle === false ? null : (
         <div className="mb-6">
           <h1 className="text-3xl font-extrabold tracking-tight text-foreground sm:text-4xl" style={{ fontFamily: "var(--bs-font-heading, inherit)" }}>
             {collection.title}
           </h1>
           {o.showDescription && description ? <p className="mt-2 max-w-2xl text-muted-foreground">{description}</p> : null}
         </div>
+        )}
+        {o.showTitle === false && o.showDescription && description ? <p className="mb-6 max-w-2xl text-muted-foreground">{description}</p> : null}
 
         {o.showFilters ? (
           <FacetedFilters
@@ -165,11 +174,12 @@ export function CollectionListingSection({
         )}
 
         {/* Long description: detail content below the products */}
-        {o.showDescription && collection.descriptionJson && collection.descriptionJson.blocks.length > 0 ? (
+        {(bare ? o.showLongDescription : o.showDescription) && collection.descriptionJson && collection.descriptionJson.blocks.length > 0 ? (
           <section className="mt-12 max-w-3xl border-t border-border pt-8" aria-label={`About ${collection.title}`}>
             <RichBlocks blocks={collection.descriptionJson.blocks} />
           </section>
         ) : null}
+       </div>
       </div>
     </ListingViewProvider>
   );

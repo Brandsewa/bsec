@@ -3,6 +3,7 @@
 Source of truth: `docs/PLAN.html` v2.0 (build order in `docs/BUILD-PLAN-M2-M9.md`). Items are ticked only after verification; the evidence is noted next to each. "From code" means it was read in the repo but not exercised live.
 
 ## In flight
+- claude · `feat/widgets-multicard-collgrid-blog` · Multi card, Collection products and Blog slider widgets, flat slider dots; built on `feat/sprint-storefront-theme-fixes` (PR 107); change record `docs/changes/2026-10-23-claude-new-widgets-multicard-collection-blog.md` · 2026-10-23
 - claude · `feat/sprint-storefront-theme-fixes` · owner sprint 2026-10-23: theme body sizes and dark colours, footer social icons, desktop search popup, hidden page title, FAQ accordion size controls, category label under the image, category and collection short and rich long description, collection page width and filter skeleton, login-only reviews, policy publish fix; change record `docs/changes/2026-10-23-claude-sprint-storefront-theme-fixes.md` · 2026-10-23
 - claude · `feat/admin-storefront-polish-batch1` · owner's 41-item polish batch: product/category/collection forms, variants, navigation editor, theme builder product block, Modern Commerce mobile (bottom nav, menu drawer, search popup, share), breadcrumbs removed · 2026-10-20
 - claude · `feat/hide-from-search-engines` · search-engine switch on Storefront settings · 2026-10-19

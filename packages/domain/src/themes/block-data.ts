@@ -686,7 +686,7 @@ export async function resolveBlockData(
     else if (b.type === "SiteHeader") headerBlocks.push(b);
     else if (b.type === "SiteFooter") footerBlocks.push(b);
     else if (b.type === "FileDownload") fileBlocks.push(b);
-    else if (b.type === "BlogPosts") blogBlocks.push(b);
+    else if (b.type === "BlogPosts" || b.type === "BlogShowcase") blogBlocks.push(b);
     else if (b.type === "ReviewsMarquee") reviewBlocks.push(b);
   });
 

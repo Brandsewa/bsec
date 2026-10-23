@@ -24,6 +24,7 @@ import * as VI from "./views-image-banner.tsx";
 import * as VF from "./views-faq.tsx";
 import { PRODUCT_ELEMENTS } from "./product-elements.ts";
 import * as VC from "./views-collection-showcase.tsx";
+import * as VM from "./views-multi-card.tsx";
 
 /* ------------------------------------------------------------------ */
 /* Sections and content blocks (M2). Schemas are additive-only: new    */
@@ -972,6 +973,99 @@ export const CollectionListingBlock: BlockDefinition<CollectionListingProps> = {
   render: V.CollectionListingView,
 };
 
+/**
+ * Blog slider: the Recent posts widget with the store's slider navigation (arrows on larger screens, flat page lines
+ * on phones), cards per row for each device, and on phones a slider, a grid or a plain list (with or without thumbnails).
+ */
+export const BlogShowcaseSchema = z.object({
+  title: z.string().max(120).default("From the blog"),
+  subtitle: z.string().max(240).optional(),
+  headerAlign: alignSchema.default("left"),
+  source: z.enum(["latest", "featured", "category"]).default("latest"),
+  categorySlug: z.string().max(120).optional(),
+  count: z.number().int().min(1).max(12).default(6),
+  tone: toneSchema.default("default"),
+  width: widthSchema.default("wide"),
+  box: layoutSchema.default({ desktop: { paddingTop: "48px", paddingBottom: "48px" }, mobile: { paddingTop: "32px", paddingBottom: "32px" } }),
+  // Layout
+  layout: z.enum(["slider", "grid"]).default("slider"),
+  perViewDesktop: z.number().int().min(1).max(4).default(3),
+  perViewTablet: z.number().int().min(1).max(3).default(2),
+  perViewMobile: z.number().int().min(1).max(2).default(1),
+  mobileLayout: z.enum(["slider", "grid", "list"]).default("slider"),
+  /** Phone list only: a small picture beside each post. */
+  listThumbnail: z.boolean().default(true),
+  gap: z.number().int().min(0).max(48).default(20),
+  // Card
+  showImage: z.boolean().default(true),
+  showExcerpt: z.boolean().default(true),
+  excerptLines: z.enum(["2", "3", "4"]).default("2"),
+  showDate: z.boolean().default(true),
+  showAuthor: z.boolean().default(false),
+  showCategory: z.boolean().default(true),
+  imageRatio: z.enum(["landscape", "square", "portrait"]).default("landscape"),
+  showViewAll: z.boolean().default(true),
+  viewAllLabel: z.string().max(60).default("View all posts"),
+  hideWhenEmpty: z.boolean().default(true),
+  // Slider controls (same look as the product showcase)
+  arrows: z.boolean().default(true),
+  dots: z.boolean().default(true),
+  dotsDesktop: z.boolean().default(false),
+  dotsColor: z.enum(["light", "dark", "brand"]).default("dark"),
+  autoplay: z.boolean().default(false),
+  interval: z.number().int().min(2).max(20).default(6),
+  loop: z.boolean().default(true),
+});
+export type BlogShowcaseProps = z.infer<typeof BlogShowcaseSchema>;
+
+export const BlogShowcaseBlock: BlockDefinition<BlogShowcaseProps> = {
+  type: "BlogShowcase",
+  version: 1,
+  schema: BlogShowcaseSchema,
+  defaultProps: BlogShowcaseSchema.parse({}),
+  render: VB.BlogShowcaseView,
+};
+
+/**
+ * Collection products: the collection page's product grid (sort and filters, cards, load more) as a widget of its own.
+ * Unlike "Collection page" it has no built-in heading or description unless switched on, so a Heading, Image or Text
+ * widget can sit above or around it. Same cards and options; plus a section box and recommended defaults.
+ */
+export const CollectionProductsSchema = CollectionListingSchema.omit({ showBreadcrumb: true }).extend({
+  showTitle: z.boolean().default(true),
+  showDescription: z.boolean().default(false),
+  showLongDescription: z.boolean().default(false),
+  tone: toneSchema.default("default"),
+  width: widthSchema.default("wide"),
+  box: layoutSchema.default({ desktop: { paddingTop: "24px", paddingBottom: "40px" }, mobile: { paddingTop: "16px", paddingBottom: "32px" } }),
+});
+export type CollectionProductsProps = z.infer<typeof CollectionProductsSchema>;
+export const CollectionProductsBlock: BlockDefinition<CollectionProductsProps> = {
+  type: "CollectionProducts",
+  version: 1,
+  schema: CollectionProductsSchema,
+  defaultProps: CollectionProductsSchema.parse({
+    columns: "4",
+    columnsTablet: "2",
+    columnsMobile: "2",
+    showFilters: true,
+    imageRatio: "square",
+    cardStyle: "borderless",
+    showSaleBadge: true,
+    showRatings: true,
+    defaultView: "grid",
+    showViewToggle: true,
+    pageSize: "12",
+    filtersCollapsible: true,
+    showAddToCart: true,
+    showQuickAdd: true,
+    showViewProduct: true,
+    showCategoryBadge: true,
+    hoverSecondImage: true,
+  }),
+  render: V.CollectionProductsView,
+};
+
 // The cart page's core: items, totals, discount code and checkout button stay in storefront code
 // (prices are recomputed on the server, rule 12); the template only places it and picks its layout.
 export const CartContentsSchema = z.object({
@@ -1081,6 +1175,8 @@ export const HeroSliderSchema = z.object({
   pauseOnHover: z.boolean().default(true),
   // Pagination dots
   dots: z.boolean().default(true),
+  /** Dots show on phones; on larger screens the arrows do the job. Turn this on to show them there too. */
+  dotsDesktop: z.boolean().default(false),
   dotsStyle: z.enum(["dot", "pill", "line"]).default("dot"),
   dotsSize: z.enum(["sm", "md", "lg"]).default("md"),
   dotsColor: z.enum(["light", "dark", "brand"]).default("light"),
@@ -1169,6 +1265,8 @@ export const ProductShowcaseSchema = z.object({
   arrowsOnMobile: z.boolean().default(false),
   // Pagination dots
   dots: z.boolean().default(true),
+  /** Dots show on phones; on larger screens the arrows do the job. Turn this on to show them there too. */
+  dotsDesktop: z.boolean().default(false),
   dotsStyle: z.enum(["dot", "pill", "line"]).default("dot"),
   dotsSize: z.enum(["sm", "md", "lg"]).default("md"),
   dotsColor: z.enum(["light", "dark", "brand"]).default("dark"),
@@ -1412,6 +1510,88 @@ export const FaqSectionBlock: BlockDefinition<FaqSectionProps> = {
  * up to six cards per desktop row (more collections wrap into more rows), and a grid or carousel choice for
  * tablets and phones. Collections are picked from the store's own list; the data is resolved like the Collection grid.
  */
+/**
+ * Multi card: a section of cards, each with an icon or picture, heading, text and link. Desktop is a grid of 1 to 4
+ * cards; tablets and phones are a grid or a swipeable slider. Colours, borders, radius and spacing are set once for
+ * every card; a card can have its own background picture.
+ */
+export const MultiCardItemSchema = z.object({
+  /** A picture from the media library; wins over `icon`. */
+  iconMediaId: z.string().optional(),
+  icon: z.enum(ICON_NAMES).optional(),
+  heading: z.string().max(120).default(""),
+  text: z.string().max(400).default(""),
+  linkLabel: z.string().max(60).default(""),
+  linkHref: hrefSchema.default(""),
+  /** A background picture for this card only (overrides the section-wide one). */
+  bgMediaId: z.string().optional(),
+});
+export const MultiCardSchema = z.object({
+  // Section
+  tone: toneSchema.default("default"),
+  sectionBg: hexColorSchema.optional(),
+  width: widthSchema.default("wide"),
+  box: layoutSchema.default({ desktop: { paddingTop: "48px", paddingBottom: "48px" }, mobile: { paddingTop: "32px", paddingBottom: "32px" } }),
+  title: z.string().max(120).default(""),
+  subtitle: z.string().max(300).default(""),
+  headerAlign: alignSchema.default("left"),
+  // Layout
+  perRowDesktop: z.enum(["1", "2", "3", "4"]).default("3"),
+  perRowTablet: z.enum(["1", "2", "3"]).default("2"),
+  perRowMobile: z.enum(["1", "2"]).default("1"),
+  tabletLayout: z.enum(["grid", "slider"]).default("grid"),
+  mobileLayout: z.enum(["grid", "slider"]).default("slider"),
+  /** Space between cards, px. */
+  gap: z.number().int().min(0).max(64).default(16),
+  // Slider
+  arrows: z.boolean().default(true),
+  dots: z.boolean().default(true),
+  dotsColor: z.enum(["light", "dark", "brand"]).default("dark"),
+  autoplay: z.boolean().default(false),
+  interval: z.number().int().min(2).max(20).default(5),
+  loop: z.boolean().default(true),
+  // Card
+  cardPadding: z.number().int().min(0).max(64).default(24),
+  cardRadius: z.number().int().min(0).max(48).default(12),
+  borderWidth: z.number().int().min(0).max(8).default(1),
+  borderColor: hexColorSchema.optional(),
+  cardBg: hexColorSchema.optional(),
+  cardText: hexColorSchema.optional(),
+  cardBgMediaId: z.string().optional(),
+  /** Darkening over a background picture, %. */
+  cardOverlay: z.number().int().min(0).max(80).default(40),
+  cardMinHeight: z.number().int().min(0).max(600).default(0),
+  contentAlign: z.enum(["start", "center", "end"]).default("start"),
+  textAlign: alignSchema.default("left"),
+  /** Space between the icon, heading, text and link, px. */
+  elementGap: z.number().int().min(0).max(48).default(12),
+  // Elements
+  showIcon: z.boolean().default(true),
+  showHeading: z.boolean().default(true),
+  showText: z.boolean().default(true),
+  showLink: z.boolean().default(true),
+  iconSize: z.number().int().min(16).max(120).default(48),
+  linkStyle: z.enum(["link", "button"]).default("link"),
+  items: z
+    .array(MultiCardItemSchema)
+    .min(1)
+    .max(12)
+    .default([
+      { icon: "truck", heading: "Fast delivery", text: "Packed with care and shipped within a day.", linkLabel: "", linkHref: "" },
+      { icon: "shield", heading: "Secure checkout", text: "Pay by UPI, card or cash on delivery.", linkLabel: "", linkHref: "" },
+      { icon: "returns", heading: "Easy returns", text: "A simple return if something is not right.", linkLabel: "", linkHref: "" },
+    ]),
+});
+export type MultiCardProps = z.infer<typeof MultiCardSchema>;
+
+export const MultiCardBlock: BlockDefinition<MultiCardProps> = {
+  type: "MultiCard",
+  version: 1,
+  schema: MultiCardSchema,
+  defaultProps: MultiCardSchema.parse({}),
+  render: VM.MultiCardView,
+};
+
 export const CollectionShowcaseSchema = z.object({
   title: z.string().max(120).default("Shop by collection"),
   subtitle: z.string().max(300).default("Find exactly what you are looking for"),
@@ -1493,6 +1673,9 @@ export const BLOCK_DEFINITIONS: Record<BlockType, AnyBlockDefinition> = {
   ImageBanner: ImageBannerBlock,
   FaqSection: FaqSectionBlock,
   CollectionShowcase: CollectionShowcaseBlock,
+  MultiCard: MultiCardBlock,
+  CollectionProducts: CollectionProductsBlock,
+  BlogShowcase: BlogShowcaseBlock,
 };
 
 export const BLOCK_TYPES = Object.keys(BLOCK_DEFINITIONS) as BlockType[];
