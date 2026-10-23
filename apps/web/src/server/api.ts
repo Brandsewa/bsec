@@ -355,9 +355,12 @@ import {
   createBlogPreviewLink,
   getBlogSettings,
   updateBlogSettings,
+  getPublicGoogleSignin,
+  issueGoogleSignupNonce,
+  verifyGoogleForSignup,
 } from "@bs/domain";
 import { server } from "./runtime.ts";
-import { allowedApiOrigins, getStaffAuth, resolveStaffSession } from "./auth.ts";
+import { allowedApiOrigins, ensureStaffAuthFresh, getStaffAuth, readAuthSettings, resolveStaffSession } from "./auth.ts";
 import { isForbiddenStaffOrigin } from "./csrf.ts";
 import { clientIp } from "./client-ip.ts";
 
@@ -3178,7 +3181,14 @@ api.use("*", async (c, next) => {
 });
 
 /** Staff authentication (Better Auth): sign-in, sign-out, get-session. Public sign-up is disabled. */
+/** Public, secret-free Google sign-in config for the admin login and signup pages. */
+api.get("/public/google-signin", async (c) => {
+  const cfg = await getPublicGoogleSignin(server().rt._db.db);
+  return c.json(cfg, 200, { "cache-control": "no-store" });
+});
+
 api.all("/auth/*", async (c) => {
+  await ensureStaffAuthFresh();
   const cfg = getStaffAuth();
   if (!cfg) {
     return c.json({ error: "Admin sign-in is not configured on this server (BETTER_AUTH_URL / BETTER_AUTH_SECRET)." }, 503);
@@ -3347,6 +3357,25 @@ api.get("/saas/templates", async (c) => {
   const db = saasDb(server().rt);
   const templates = await listPublicThemeTemplates(db);
   return c.json(templates);
+});
+
+/** Signup with Google (Tier A): a nonce to bind the ID token, then verification that returns a signup ticket. */
+api.get("/saas/google/nonce", (c) => {
+  const secret = readAuthSettings()?.secret;
+  if (!secret) return c.json({ error: "Sign-up with Google is not configured." }, 503);
+  return c.json({ nonce: issueGoogleSignupNonce(secret) }, 200, { "cache-control": "no-store" });
+});
+
+api.post("/saas/google/verify", async (c) => {
+  const secret = readAuthSettings()?.secret;
+  if (!secret) return c.json({ error: "Sign-up with Google is not configured." }, 503);
+  const body = (await c.req.json().catch(() => ({}))) as { idToken?: unknown; nonce?: unknown };
+  if (typeof body.idToken !== "string" || typeof body.nonce !== "string") return c.json({ error: "Invalid request" }, 400);
+  try {
+    return c.json(await verifyGoogleForSignup(server().rt._db.db, secret, { idToken: body.idToken, nonce: body.nonce }));
+  } catch (err: unknown) {
+    return c.json({ error: err instanceof Error ? err.message : "Google could not be verified." }, 400);
+  }
 });
 
 api.post("/saas/signup", async (c) => {

@@ -1,13 +1,15 @@
-import React, { useState } from "react";
+import React, { useEffect, useState } from "react";
 import { Link } from "@tanstack/react-router";
 import { Database, ShieldCheck } from "lucide-react";
 import { AuthShell, Button, Input, Label, toast } from "@bs/ui";
 import { PasswordInput } from "@bs/ui";
 import {
+  fetchGoogleSignin,
   fetchLoginStatus,
   finishMfaSetup,
   signIn,
   signOut,
+  startGoogleSignIn,
   startMfaSetup,
   verifyBackupCode,
   verifyTotp,
@@ -27,6 +29,22 @@ export function Login({ onSuccess }: LoginProps) {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
+
+  const [googleEnabled, setGoogleEnabled] = useState(false);
+
+  useEffect(() => {
+    void fetchGoogleSignin().then((g) => setGoogleEnabled(g.enabled));
+    if (new URLSearchParams(window.location.search).has("google_error")) {
+      setError("Google sign-in did not work for this account. Use your email, password and authenticator code.");
+      window.history.replaceState(null, "", window.location.pathname);
+    }
+  }, []);
+
+  const handleGoogle = async () => {
+    setError(null);
+    const res = await startGoogleSignIn();
+    if (!res.ok && res.message !== "Redirecting to Google…") setError(res.message);
+  };
 
   const [step, setStep] = useState<Step>("credentials");
   const [totpCode, setTotpCode] = useState("");
@@ -176,6 +194,18 @@ export function Login({ onSuccess }: LoginProps) {
             <Button type="submit" disabled={loading} className="w-full">
               {loading ? "Authenticating..." : "Sign In with Credentials"}
             </Button>
+            {googleEnabled ? (
+              <>
+                <div className="flex items-center gap-3 text-xs text-muted-foreground">
+                  <span className="h-px flex-1 bg-border" />
+                  or
+                  <span className="h-px flex-1 bg-border" />
+                </div>
+                <Button type="button" variant="outline" className="w-full" onClick={() => void handleGoogle()}>
+                  Continue with Google
+                </Button>
+              </>
+            ) : null}
             <p className="text-center text-xs text-muted-foreground mt-4">Access restricted to authorized platform staff with verified MFA.</p>
           </form>
         )}

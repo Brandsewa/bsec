@@ -131,6 +131,7 @@ export * from "./saas/subdomains.ts";
 export * from "./saas/abuse-protection.ts";
 export * from "./saas/provisioning.ts";
 export * from "./saas/signup.ts";
+export * from "./saas/google-signup.ts";
 export * from "./saas/trial-expiry.ts";
 export * from "./saas/owner-invites.ts";
 export * from "./saas/onboarding.ts";
@@ -180,6 +181,7 @@ export * from "./platform/quotas.ts";
 export * from "./platform/integrations-hub.ts";
 export * from "./platform/channel-providers.ts";
 export * from "./platform/payment-providers.ts";
+export * from "./platform/auth-providers.ts";
 export * from "./system/messaging/index.ts";
 
 

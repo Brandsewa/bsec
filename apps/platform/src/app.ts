@@ -4,7 +4,7 @@ import { implement, onError, ORPCError } from "@orpc/server";
 import { RPCHandler } from "@orpc/server/fetch";
 import { OpenAPIHandler } from "@orpc/openapi/fetch";
 import { platformContract } from "@bs/contracts";
-import { createPlatformAuth, PLATFORM_COOKIE_PREFIX, type PlatformAuth } from "@bs/auth";
+import { createPlatformAuth, googleConfigFingerprint, PLATFORM_COOKIE_PREFIX, type GoogleAuthConfig, type PlatformAuth } from "@bs/auth";
 import {
   acceptPlatformStaffInvitation,
   listPlatformDomains,
@@ -107,6 +107,12 @@ import {
   getPlatformStorageStats,
   getPlatformIntegrationsOverview,
   listPlatformPaymentProviders,
+  getPlatformAuthOverview,
+  getPublicGoogleSignin,
+  loadPlatformGoogleRuntimeConfig,
+  updatePlatformGoogleSettings,
+  setPlatformGoogleClient,
+  testPlatformGoogleClient,
   updatePlatformPaymentProvider,
   getPlatformChannelStats,
   getPlatformChannelTransactions,
@@ -160,10 +166,34 @@ export function platformAllowedOrigins(): string[] {
 
 const platformAuthLogger = createLogger("platform-auth");
 let _platformAuth: PlatformAuth | undefined;
+let _platformGoogle: { at: number; cfg: GoogleAuthConfig | null } | undefined;
+let _platformGoogleFp = "off";
+
+/**
+ * Better Auth reads the Google client when its context is built, so the instance is rebuilt whenever the platform
+ * Google settings change. The settings are re-read at most every 15 seconds.
+ */
+async function ensurePlatformAuthFresh(rt: Runtime): Promise<void> {
+  const now = Date.now();
+  if (!_platformGoogle || now - _platformGoogle.at > 15_000) {
+    try {
+      const runtime = await loadPlatformGoogleRuntimeConfig(rt._db.db);
+      _platformGoogle = { at: now, cfg: runtime ? { clientId: runtime.clientId, clientSecret: runtime.clientSecret } : null };
+    } catch {
+      _platformGoogle = { at: now, cfg: _platformGoogle?.cfg ?? null };
+    }
+  }
+  const fp = googleConfigFingerprint(_platformGoogle.cfg);
+  if (_platformAuth && fp !== _platformGoogleFp) _platformAuth = undefined;
+}
+
 export function getPlatformAuth(rt: Runtime): PlatformAuth {
   if (!_platformAuth) {
+    const googleCfg = _platformGoogle?.cfg ?? null;
+    _platformGoogleFp = googleConfigFingerprint(googleCfg);
     const superadminUrl = platformAllowedOrigins()[0] ?? "https://superadmin.bcom.si";
     _platformAuth = createPlatformAuth(rt._db.db, {
+      loadGoogle: async () => googleCfg,
       baseURL: process.env.PLATFORM_AUTH_URL ?? process.env.BETTER_AUTH_URL,
       secret: process.env.BETTER_AUTH_SECRET,
       superadminUrl,
@@ -649,6 +679,18 @@ export const platformRouter = os.router({
       const staffUserId = actor(context);
       return updatePlatformPaymentProvider(context.rt, staffUserId, input, context.meta);
     }),
+    authOverview: os.integrations.authOverview.use(requirePlatformStaff).handler(async ({ context }) => {
+      return getPlatformAuthOverview(context.rt, actor(context));
+    }),
+    updateGoogleAuth: os.integrations.updateGoogleAuth.use(requireStaff("platform_admin")).handler(async ({ context, input }) => {
+      return updatePlatformGoogleSettings(context.rt, actor(context), input, context.meta);
+    }),
+    setGoogleClient: os.integrations.setGoogleClient.use(requireStaff("platform_admin")).handler(async ({ context, input }) => {
+      return setPlatformGoogleClient(context.rt, actor(context), input, context.meta);
+    }),
+    testGoogleClient: os.integrations.testGoogleClient.use(requireStaff("platform_admin")).handler(async ({ context }) => {
+      return testPlatformGoogleClient(context.rt, actor(context), context.meta);
+    }),
     overview: os.integrations.overview.use(requirePlatformStaff).handler(async ({ context }) => {
       const staffUserId = actor(context);
       return getPlatformIntegrationsOverview(context.rt, staffUserId);
@@ -758,7 +800,13 @@ export function createApp(rt: Runtime, rootLog: Logger) {
   });
 
   // Better Auth endpoints for platform_staff (sign-in, two-factor enrolment and verification, sign-out)
+  /** Public, secret-free Google sign-in config for the Super Admin login page. */
+  app.get("/api/platform/google-signin", async (c) => {
+    return c.json(await getPublicGoogleSignin(rt._db.db), 200, { "cache-control": "no-store" });
+  });
+
   app.all("/api/auth/*", async (c) => {
+    await ensurePlatformAuthFresh(rt);
     const req = c.req.raw;
     const path = new URL(req.url).pathname;
     if (req.method === "POST" && path.endsWith("/change-password")) {

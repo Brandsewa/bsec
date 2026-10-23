@@ -196,3 +196,40 @@ export async function changePassword(currentPassword: string, newPassword: strin
     return { ok: false, message: "Could not reach the platform server. Check your connection." };
   }
 }
+
+export interface GoogleSignin {
+  enabled: boolean;
+  clientId: string | null;
+  oneTap: boolean;
+  signupAllowed: boolean;
+}
+
+/** Whether Google sign-in is switched on (secret-free). Falls back to "off" on any error. */
+export async function fetchGoogleSignin(): Promise<GoogleSignin> {
+  try {
+    const res = await fetch(`${apiBase()}/api/platform/google-signin`, { credentials: "include" });
+    if (!res.ok) return { enabled: false, clientId: null, oneTap: false, signupAllowed: false };
+    return (await res.json()) as GoogleSignin;
+  } catch {
+    return { enabled: false, clientId: null, oneTap: false, signupAllowed: false };
+  }
+}
+
+/** Starts Google sign-in; the browser leaves for Google and returns to this app. Resolves only on failure. */
+export async function startGoogleSignIn(): Promise<{ ok: false; message: string }> {
+  try {
+    const res = await post("/api/auth/sign-in/social", {
+      provider: "google",
+      callbackURL: `${window.location.origin}/`,
+      errorCallbackURL: `${window.location.origin}/?google_error=1`,
+    });
+    const data = (await res.json().catch(() => ({}))) as { url?: string; message?: string };
+    if (res.ok && data.url) {
+      window.location.assign(data.url);
+      return { ok: false, message: "Redirecting to Google…" };
+    }
+    return { ok: false, message: data.message || "Google sign-in is not available right now." };
+  } catch {
+    return { ok: false, message: "Could not reach the server. Check your connection and try again." };
+  }
+}

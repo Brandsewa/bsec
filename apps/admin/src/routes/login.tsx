@@ -1,8 +1,9 @@
 import { createFileRoute, Link, redirect, useNavigate } from "@tanstack/react-router";
-import { useState, type FormEvent } from "react";
+import { useEffect, useState, type FormEvent } from "react";
 import { AuthCardSkeleton, AuthShell, Button, Field, FieldError, FieldGroup, FieldLabel, Input } from "@bs/ui";
 import { PasswordInput } from "@bs/ui";
 import { fetchMe, signIn } from "../lib/auth.ts";
+import { fetchGoogleSignin, startGoogleSignIn, startOneTap } from "../lib/google.ts";
 
 export const Route = createFileRoute("/login")({
   pendingComponent: () => <AuthCardSkeleton />,
@@ -20,6 +21,36 @@ function LoginPage() {
   const [password, setPassword] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+
+  const [googleOn, setGoogleOn] = useState(false);
+
+  useEffect(() => {
+    let cleanup: (() => void) | undefined;
+    let cancelled = false;
+    if (new URLSearchParams(window.location.search).has("google_error")) {
+      setError("Google sign-in did not work for this account. Sign in with your email and password.");
+    }
+    void fetchGoogleSignin().then(async (g) => {
+      if (cancelled || !g.enabled) return;
+      setGoogleOn(true);
+      if (g.oneTap && g.clientId) {
+        cleanup = await startOneTap(g.clientId, () => {
+          queryClient.clear();
+          void navigate({ to: "/" });
+        });
+      }
+    });
+    return () => {
+      cancelled = true;
+      cleanup?.();
+    };
+  }, [navigate, queryClient]);
+
+  async function onGoogle() {
+    setError(null);
+    const res = await startGoogleSignIn();
+    if (res.message) setError(res.message);
+  }
 
   async function onSubmit(e: FormEvent) {
     e.preventDefault();
@@ -68,6 +99,18 @@ function LoginPage() {
           <Button type="submit" size="md" className="w-full" disabled={busy || !email || !password} loading={busy}>
             {busy ? "Signing in…" : "Sign in"}
           </Button>
+          {googleOn ? (
+            <>
+              <div className="flex items-center gap-3 text-xs text-muted-foreground">
+                <span className="h-px flex-1 bg-border" />
+                or
+                <span className="h-px flex-1 bg-border" />
+              </div>
+              <Button type="button" variant="outline" size="md" className="w-full" onClick={() => void onGoogle()}>
+                Continue with Google
+              </Button>
+            </>
+          ) : null}
         </FieldGroup>
       </form>
     </AuthShell>
