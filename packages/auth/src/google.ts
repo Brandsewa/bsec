@@ -1,4 +1,4 @@
-import { eq } from "drizzle-orm";
+import { and, eq } from "drizzle-orm";
 import { APIError } from "better-auth/api";
 import { verifyGoogleIdToken } from "better-auth/social-providers";
 import { schema, type Db } from "@bs/db";
@@ -75,6 +75,32 @@ export function googleSessionGuard(db: Db, opts: { requirePlatformStaff: boolean
         throw new APIError("FORBIDDEN", { message: "Sign-in with Google is not available for this account." });
       }
     }
+  };
+}
+
+/**
+ * Runs just before a Google account is linked to an existing user during a Google sign-in.
+ *
+ * Google confirmed the mailbox, so a user whose own email was never verified (every owner who signed up with email and
+ * password) can be linked automatically. The classic takeover is someone pre-registering a victim's address with a
+ * password they chose and waiting for the victim to sign in with Google. So at link time, if the local email was NOT
+ * verified, the password login and every existing session for that user are removed and the email is marked verified.
+ * The real owner can set a new password with "Forgot password". A user whose email was already verified is untouched.
+ */
+export function googleAccountLinkGuard(db: Db) {
+  return async (account: { userId: string; providerId: string }, ctx: { path?: string } | null): Promise<void> => {
+    if (account.providerId !== "google" || !isGoogleSignInPath(ctx?.path)) return;
+    await db.transaction(async (tx) => {
+      const [user] = await tx
+        .select({ emailVerified: schema.users.emailVerified })
+        .from(schema.users)
+        .where(eq(schema.users.id, account.userId))
+        .limit(1);
+      if (!user || user.emailVerified) return;
+      await tx.delete(schema.accounts).where(and(eq(schema.accounts.userId, account.userId), eq(schema.accounts.providerId, "credential")));
+      await tx.delete(schema.sessions).where(eq(schema.sessions.userId, account.userId));
+      await tx.update(schema.users).set({ emailVerified: true }).where(eq(schema.users.id, account.userId));
+    });
   };
 }
 

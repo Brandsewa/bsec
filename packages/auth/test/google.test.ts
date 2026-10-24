@@ -31,8 +31,8 @@ describe("Google sign-in wiring", () => {
       const auth = make(mockDb, { baseURL: "http://localhost:3000", secret: SECRET, loadGoogle: async () => cfg });
       const ctx = await auth.$context;
       expect(ctx.socialProviders.map((p: { id: string }) => p.id)).toEqual(["google"]);
-      // Account linking needs a verified local email, so an unverified pre-registered account cannot be taken over.
-      expect(auth.options.account?.accountLinking?.requireLocalEmailVerified).toBe(true);
+      // Linking an unverified local account is allowed only through googleAccountLinkGuard (password and sessions removed).
+      expect(auth.options.account?.accountLinking?.requireLocalEmailVerified).toBe(false);
     }
   });
 

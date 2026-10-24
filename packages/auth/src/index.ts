@@ -9,6 +9,7 @@ export { createPlatformAuth, type PlatformAuth, type PlatformAuthOptions } from 
 export { hashPassword, verifyPassword } from "better-auth/crypto";
 export {
   googleConfigFingerprint,
+  googleAccountLinkGuard,
   googleSessionGuard,
   verifyGoogleIdentity,
   type GoogleAuthConfig,

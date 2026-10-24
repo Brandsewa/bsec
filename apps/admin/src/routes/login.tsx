@@ -6,6 +6,19 @@ import { PasswordInput } from "@bs/ui";
 import { fetchMe, signIn } from "../lib/auth.ts";
 import { fetchGoogleSignin, startGoogleSignIn, startOneTap } from "../lib/google.ts";
 
+function googleErrorMessage(search: string): string | null {
+  const params = new URLSearchParams(search);
+  if (!params.has("google_error") && !params.has("error")) return null;
+  const code = params.get("error") ?? "";
+  if (code === "signup_disabled" || code === "user_not_found") {
+    return "No account was found for that Google email. Sign in with the email you registered with, or sign up first.";
+  }
+  if (code === "account_not_linked" || code === "unable_to_link_account") {
+    return "This Google account could not be linked to your account. Sign in with your email and password.";
+  }
+  return `Google sign-in did not work${code ? ` (${code})` : ""}. Sign in with your email and password.`;
+}
+
 export const Route = createFileRoute("/login")({
   pendingComponent: () => <AuthCardSkeleton />,
   beforeLoad: async ({ context }) => {
@@ -20,11 +33,7 @@ function LoginPage() {
   const { queryClient } = Route.useRouteContext();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
-  const [error, setError] = useState<string | null>(() =>
-    typeof window !== "undefined" && new URLSearchParams(window.location.search).has("google_error")
-      ? "Google sign-in did not work for this account. Sign in with your email and password."
-      : null,
-  );
+  const [error, setError] = useState<string | null>(() => (typeof window !== "undefined" ? googleErrorMessage(window.location.search) : null));
   const [busy, setBusy] = useState(false);
 
   const { data: google } = useQuery({ queryKey: ["google-signin"], queryFn: fetchGoogleSignin, staleTime: 60_000 });
