@@ -296,7 +296,11 @@ export function PlanAndBillingPage() {
                         {
                           onSuccess: (res) => {
                             if (res.checkoutSession) {
-                              void openCashfreeCheckout(res.checkoutSession).catch((e: unknown) => toast.error(errorMessage(e)));
+                              void openCashfreeCheckout(res.checkoutSession).catch((e: unknown) => {
+                                // errorMessage hides plain Errors; this one is about Cashfree's own script, so show it.
+                                console.error("Cashfree checkout failed", e);
+                                toast.error(e instanceof Error && e.message ? e.message : errorMessage(e));
+                              });
                             } else if (res.checkoutUrl) window.location.assign(res.checkoutUrl);
                             else toast.error(`${gatewayName} did not return a payment page. Try again.`);
                           },
