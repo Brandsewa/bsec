@@ -145,3 +145,13 @@ describe("mediaImage helper in @bs/blocks", () => {
     });
   });
 });
+
+describe("external image links", () => {
+  it("accepts https only; rejects javascript:, data: and http", async () => {
+    const { ImageSchema } = await import("../src/registry.ts");
+    expect(ImageSchema.safeParse({ imageUrl: "https://cdn.example.com/a.png" }).success).toBe(true);
+    for (const bad of ["javascript:alert(1)", "data:text/html,x", "http://example.com/a.png"]) {
+      expect(ImageSchema.safeParse({ imageUrl: bad }).success).toBe(false);
+    }
+  });
+});

@@ -6,6 +6,7 @@ import {
   hexColorSchema,
   gapSchema,
   hrefSchema,
+  httpsImageUrlSchema,
   logoSizeSchema,
   ICON_NAMES,
   itemsSchema,
@@ -533,7 +534,7 @@ export const TextBlock: BlockDefinition<TextProps> = {
 
 export const ImageSchema = z.object({
   mediaId: z.string().optional(),
-  imageUrl: z.string().url().optional().or(z.literal("")),
+  imageUrl: httpsImageUrlSchema.optional().or(z.literal("")),
   alt: z.string().max(300).default(""),
   ratio: z.enum(["auto", "square", "4-3", "16-9"]).default("auto"),
   objectFit: z.enum(BRICKS_OBJECT_FIT_OPTIONS).optional().default("cover"),

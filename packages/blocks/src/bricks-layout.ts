@@ -1,7 +1,7 @@
 import { z } from "zod";
 import type { CSSProperties } from "react";
 import { isValidLayoutValue, type LayoutDevice, LAYOUT_DEVICES, type Corner, CORNERS } from "./layout.ts";
-import { hexColorSchema, bgVideoUrlSchema } from "./common.ts";
+import { hexColorSchema, bgVideoUrlSchema, httpsImageUrlSchema } from "./common.ts";
 
 /**
  * Bricks-inspired Layout & Style specifications for Section, Container, and Block.
@@ -136,7 +136,7 @@ const backgroundSchema = z.object({
   color: hexColorSchema.optional().or(z.literal("")),
   textColor: hexColorSchema.optional().or(z.literal("")),
   mediaId: z.string().optional(),
-  imageUrl: z.string().url().optional().or(z.literal("")),
+  imageUrl: httpsImageUrlSchema.optional().or(z.literal("")),
   imageSize: z.string().optional(), // 'cover' | 'contain' | 'auto' | custom
   imagePosition: z.string().optional(), // 'center center' | 'top center' | ...
   videoUrl: bgVideoUrlSchema.optional().or(z.literal("")),
