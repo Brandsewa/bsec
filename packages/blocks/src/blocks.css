@@ -871,6 +871,95 @@
   }
 }
 
+/* Global Layout theme defaults for Section and Container */
+.brxe-section.brx-resp {
+  --brx-d-pt: var(--bs-sec-d-pt, initial);
+  --brx-d-pr: var(--bs-sec-d-pr, initial);
+  --brx-d-pb: var(--bs-sec-d-pb, initial);
+  --brx-d-pl: var(--bs-sec-d-pl, initial);
+  --brx-d-mt: var(--bs-sec-d-mt, initial);
+  --brx-d-mr: var(--bs-sec-d-mr, initial);
+  --brx-d-mb: var(--bs-sec-d-mb, initial);
+  --brx-d-ml: var(--bs-sec-d-ml, initial);
+  --brx-d-w: var(--bs-sec-d-w, 100%);
+  --brx-d-mnw: var(--bs-sec-d-mnw, initial);
+  --brx-d-mxw: var(--bs-sec-d-mxw, 100%);
+}
+
+.brxe-container.brx-resp {
+  --brx-d-pt: var(--bs-cnt-d-pt, initial);
+  --brx-d-pr: var(--bs-cnt-d-pr, initial);
+  --brx-d-pb: var(--bs-cnt-d-pb, initial);
+  --brx-d-pl: var(--bs-cnt-d-pl, initial);
+  --brx-d-mt: var(--bs-cnt-d-mt, initial);
+  --brx-d-mr: var(--bs-cnt-d-mr, auto);
+  --brx-d-mb: var(--bs-cnt-d-mb, initial);
+  --brx-d-ml: var(--bs-cnt-d-ml, auto);
+  --brx-d-w: var(--bs-cnt-d-w, 100%);
+  --brx-d-mnw: var(--bs-cnt-d-mnw, initial);
+  --brx-d-mxw: var(--bs-cnt-d-mxw, var(--bs-site-w-d, 1200px));
+}
+
+@media (max-width: 1023px) {
+  .brxe-section.brx-resp {
+    --brx-t-pt: var(--bs-sec-t-pt, var(--bs-sec-d-pt, initial));
+    --brx-t-pr: var(--bs-sec-t-pr, var(--bs-sec-d-pr, initial));
+    --brx-t-pb: var(--bs-sec-t-pb, var(--bs-sec-d-pb, initial));
+    --brx-t-pl: var(--bs-sec-t-pl, var(--bs-sec-d-pl, initial));
+    --brx-t-mt: var(--bs-sec-t-mt, var(--bs-sec-d-mt, initial));
+    --brx-t-mr: var(--bs-sec-t-mr, var(--bs-sec-d-mr, initial));
+    --brx-t-mb: var(--bs-sec-t-mb, var(--bs-sec-d-mb, initial));
+    --brx-t-ml: var(--bs-sec-t-ml, var(--bs-sec-d-ml, initial));
+    --brx-t-w: var(--bs-sec-t-w, var(--bs-sec-d-w, 100%));
+    --brx-t-mnw: var(--bs-sec-t-mnw, var(--bs-sec-d-mnw, initial));
+    --brx-t-mxw: var(--bs-sec-t-mxw, var(--bs-sec-d-mxw, 100%));
+  }
+
+  .brxe-container.brx-resp {
+    --brx-t-pt: var(--bs-cnt-t-pt, var(--bs-cnt-d-pt, initial));
+    --brx-t-pr: var(--bs-cnt-t-pr, var(--bs-cnt-d-pr, initial));
+    --brx-t-pb: var(--bs-cnt-t-pb, var(--bs-cnt-d-pb, initial));
+    --brx-t-pl: var(--bs-cnt-t-pl, var(--bs-cnt-d-pl, initial));
+    --brx-t-mt: var(--bs-cnt-t-mt, var(--bs-cnt-d-mt, initial));
+    --brx-t-mr: var(--bs-cnt-t-mr, var(--bs-cnt-d-mr, auto));
+    --brx-t-mb: var(--bs-cnt-t-mb, var(--bs-cnt-d-mb, initial));
+    --brx-t-ml: var(--bs-cnt-t-ml, var(--bs-cnt-d-ml, auto));
+    --brx-t-w: var(--bs-cnt-t-w, var(--bs-cnt-d-w, 100%));
+    --brx-t-mnw: var(--bs-cnt-t-mnw, var(--bs-cnt-d-mnw, initial));
+    --brx-t-mxw: var(--bs-cnt-t-mxw, var(--bs-site-w-t, var(--bs-cnt-d-mxw, var(--bs-site-w-d, 100%))));
+  }
+}
+
+@media (max-width: 767px) {
+  .brxe-section.brx-resp {
+    --brx-m-pt: var(--bs-sec-m-pt, var(--bs-sec-t-pt, var(--bs-sec-d-pt, initial)));
+    --brx-m-pr: var(--bs-sec-m-pr, var(--bs-sec-t-pr, var(--bs-sec-d-pr, initial)));
+    --brx-m-pb: var(--bs-sec-m-pb, var(--bs-sec-t-pb, var(--bs-sec-d-pb, initial)));
+    --brx-m-pl: var(--bs-sec-m-pl, var(--bs-sec-t-pl, var(--bs-sec-d-pl, initial)));
+    --brx-m-mt: var(--bs-sec-m-mt, var(--bs-sec-t-mt, var(--bs-sec-d-mt, initial)));
+    --brx-m-mr: var(--bs-sec-m-mr, var(--bs-sec-t-mr, var(--bs-sec-d-mr, initial)));
+    --brx-m-mb: var(--bs-sec-m-mb, var(--bs-sec-t-mb, var(--bs-sec-d-mb, initial)));
+    --brx-m-ml: var(--bs-sec-m-ml, var(--bs-sec-t-ml, var(--bs-sec-d-ml, initial)));
+    --brx-m-w: var(--bs-sec-m-w, var(--bs-sec-t-w, var(--bs-sec-d-w, 100%)));
+    --brx-m-mnw: var(--bs-sec-m-mnw, var(--bs-sec-t-mnw, var(--bs-sec-d-mnw, initial)));
+    --brx-m-mxw: var(--bs-sec-m-mxw, var(--bs-sec-t-mxw, var(--bs-sec-d-mxw, 100%)));
+  }
+
+  .brxe-container.brx-resp {
+    --brx-m-pt: var(--bs-cnt-m-pt, var(--bs-cnt-t-pt, var(--bs-cnt-d-pt, initial)));
+    --brx-m-pr: var(--bs-cnt-m-pr, var(--bs-cnt-t-pr, var(--bs-cnt-d-pr, initial)));
+    --brx-m-pb: var(--bs-cnt-m-pb, var(--bs-cnt-t-pb, var(--bs-cnt-d-pb, initial)));
+    --brx-m-pl: var(--bs-cnt-m-pl, var(--bs-cnt-t-pl, var(--bs-cnt-d-pl, initial)));
+    --brx-m-mt: var(--bs-cnt-m-mt, var(--bs-cnt-t-mt, var(--bs-cnt-d-mt, initial)));
+    --brx-m-mr: var(--bs-cnt-m-mr, var(--bs-cnt-t-mr, var(--bs-cnt-d-mr, auto)));
+    --brx-m-mb: var(--bs-cnt-m-mb, var(--bs-cnt-t-mb, var(--bs-cnt-d-mb, initial)));
+    --brx-m-ml: var(--bs-cnt-m-ml, var(--bs-cnt-t-ml, var(--bs-cnt-d-ml, auto)));
+    --brx-m-w: var(--bs-cnt-m-w, var(--bs-cnt-t-w, var(--bs-cnt-d-w, 100%)));
+    --brx-m-mnw: var(--bs-cnt-m-mnw, var(--bs-cnt-t-mnw, var(--bs-cnt-d-mnw, initial)));
+    --brx-m-mxw: var(--bs-cnt-m-mxw, var(--bs-site-w-m, var(--bs-site-w-t, var(--bs-cnt-d-mxw, var(--bs-site-w-d, 100%)))));
+  }
+}
+
 /* Bricks elements sizing and layout */
 .brxe-image {
   display: block;

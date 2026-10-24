@@ -236,105 +236,179 @@ export function bricksElementStyle(props: BricksLayoutProps, options?: { default
   const t = props.responsive?.tablet;
   const m = props.responsive?.mobile;
 
-  // Responsive CSS Variables for flex / layout properties
-  if (d.direction) style["--brx-d-dir"] = d.direction;
-  if (t?.direction) style["--brx-t-dir"] = t.direction;
-  if (m?.direction) style["--brx-m-dir"] = m.direction;
+  // Responsive CSS Variables for flex / layout properties with desktop -> tablet -> mobile inheritance
+  const dir_d = d.direction;
+  const dir_t = t?.direction ?? dir_d;
+  const dir_m = m?.direction ?? dir_t;
+  if (dir_d) style["--brx-d-dir"] = dir_d;
+  if (dir_t) style["--brx-t-dir"] = dir_t;
+  if (dir_m) style["--brx-m-dir"] = dir_m;
 
-  if (d.alignMainAxis) style["--brx-d-jc"] = d.alignMainAxis;
-  if (t?.alignMainAxis) style["--brx-t-jc"] = t.alignMainAxis;
-  if (m?.alignMainAxis) style["--brx-m-jc"] = m.alignMainAxis;
+  const jc_d = d.alignMainAxis;
+  const jc_t = t?.alignMainAxis ?? jc_d;
+  const jc_m = m?.alignMainAxis ?? jc_t;
+  if (jc_d) style["--brx-d-jc"] = jc_d;
+  if (jc_t) style["--brx-t-jc"] = jc_t;
+  if (jc_m) style["--brx-m-jc"] = jc_m;
 
-  if (d.alignCrossAxis) style["--brx-d-ai"] = d.alignCrossAxis;
-  if (t?.alignCrossAxis) style["--brx-t-ai"] = t.alignCrossAxis;
-  if (m?.alignCrossAxis) style["--brx-m-ai"] = m.alignCrossAxis;
+  const ai_d = d.alignCrossAxis;
+  const ai_t = t?.alignCrossAxis ?? ai_d;
+  const ai_m = m?.alignCrossAxis ?? ai_t;
+  if (ai_d) style["--brx-d-ai"] = ai_d;
+  if (ai_t) style["--brx-t-ai"] = ai_t;
+  if (ai_m) style["--brx-m-ai"] = ai_m;
 
-  if (d.flexWrap) style["--brx-d-wrap"] = d.flexWrap;
-  if (t?.flexWrap) style["--brx-t-wrap"] = t.flexWrap;
-  if (m?.flexWrap) style["--brx-m-wrap"] = m.flexWrap;
+  const wrap_d = d.flexWrap;
+  const wrap_t = t?.flexWrap ?? wrap_d;
+  const wrap_m = m?.flexWrap ?? wrap_t;
+  if (wrap_d) style["--brx-d-wrap"] = wrap_d;
+  if (wrap_t) style["--brx-t-wrap"] = wrap_t;
+  if (wrap_m) style["--brx-m-wrap"] = wrap_m;
 
-  if (d.gap) style["--brx-d-gap"] = normalizeLengthValue(d.gap);
-  if (t?.gap) style["--brx-t-gap"] = normalizeLengthValue(t.gap);
-  if (m?.gap) style["--brx-m-gap"] = normalizeLengthValue(m.gap);
+  const gap_d = normalizeLengthValue(d.gap);
+  const gap_t = normalizeLengthValue(t?.gap) ?? gap_d;
+  const gap_m = normalizeLengthValue(m?.gap) ?? gap_t;
+  if (gap_d) style["--brx-d-gap"] = gap_d;
+  if (gap_t) style["--brx-t-gap"] = gap_t;
+  if (gap_m) style["--brx-m-gap"] = gap_m;
 
-  if (d.colGap) style["--brx-d-cg"] = normalizeLengthValue(d.colGap);
-  if (t?.colGap) style["--brx-t-cg"] = normalizeLengthValue(t.colGap);
-  if (m?.colGap) style["--brx-m-cg"] = normalizeLengthValue(m.colGap);
+  const cg_d = normalizeLengthValue(d.colGap);
+  const cg_t = normalizeLengthValue(t?.colGap) ?? cg_d;
+  const cg_m = normalizeLengthValue(m?.colGap) ?? cg_t;
+  if (cg_d) style["--brx-d-cg"] = cg_d;
+  if (cg_t) style["--brx-t-cg"] = cg_t;
+  if (cg_m) style["--brx-m-cg"] = cg_m;
 
-  if (d.rowGap) style["--brx-d-rg"] = normalizeLengthValue(d.rowGap);
-  if (t?.rowGap) style["--brx-t-rg"] = normalizeLengthValue(t.rowGap);
-  if (m?.rowGap) style["--brx-m-rg"] = normalizeLengthValue(m.rowGap);
+  const rg_d = normalizeLengthValue(d.rowGap);
+  const rg_t = normalizeLengthValue(t?.rowGap) ?? rg_d;
+  const rg_m = normalizeLengthValue(m?.rowGap) ?? rg_t;
+  if (rg_d) style["--brx-d-rg"] = rg_d;
+  if (rg_t) style["--brx-t-rg"] = rg_t;
+  if (rg_m) style["--brx-m-rg"] = rg_m;
 
   // Padding
-  if (d.padding?.top) style["--brx-d-pt"] = normalizeLengthValue(d.padding.top);
-  if (d.padding?.right) style["--brx-d-pr"] = normalizeLengthValue(d.padding.right);
-  if (d.padding?.bottom) style["--brx-d-pb"] = normalizeLengthValue(d.padding.bottom);
-  if (d.padding?.left) style["--brx-d-pl"] = normalizeLengthValue(d.padding.left);
+  const pt_d = normalizeLengthValue(d.padding?.top);
+  const pt_t = normalizeLengthValue(t?.padding?.top) ?? pt_d;
+  const pt_m = normalizeLengthValue(m?.padding?.top) ?? pt_t;
+  if (pt_d) style["--brx-d-pt"] = pt_d;
+  if (pt_t) style["--brx-t-pt"] = pt_t;
+  if (pt_m) style["--brx-m-pt"] = pt_m;
 
-  if (t?.padding?.top) style["--brx-t-pt"] = normalizeLengthValue(t.padding.top);
-  if (t?.padding?.right) style["--brx-t-pr"] = normalizeLengthValue(t.padding.right);
-  if (t?.padding?.bottom) style["--brx-t-pb"] = normalizeLengthValue(t.padding.bottom);
-  if (t?.padding?.left) style["--brx-t-pl"] = normalizeLengthValue(t.padding.left);
+  const pr_d = normalizeLengthValue(d.padding?.right);
+  const pr_t = normalizeLengthValue(t?.padding?.right) ?? pr_d;
+  const pr_m = normalizeLengthValue(m?.padding?.right) ?? pr_t;
+  if (pr_d) style["--brx-d-pr"] = pr_d;
+  if (pr_t) style["--brx-t-pr"] = pr_t;
+  if (pr_m) style["--brx-m-pr"] = pr_m;
 
-  if (m?.padding?.top) style["--brx-m-pt"] = normalizeLengthValue(m.padding.top);
-  if (m?.padding?.right) style["--brx-m-pr"] = normalizeLengthValue(m.padding.right);
-  if (m?.padding?.bottom) style["--brx-m-pb"] = normalizeLengthValue(m.padding.bottom);
-  if (m?.padding?.left) style["--brx-m-pl"] = normalizeLengthValue(m.padding.left);
+  const pb_d = normalizeLengthValue(d.padding?.bottom);
+  const pb_t = normalizeLengthValue(t?.padding?.bottom) ?? pb_d;
+  const pb_m = normalizeLengthValue(m?.padding?.bottom) ?? pb_t;
+  if (pb_d) style["--brx-d-pb"] = pb_d;
+  if (pb_t) style["--brx-t-pb"] = pb_t;
+  if (pb_m) style["--brx-m-pb"] = pb_m;
+
+  const pl_d = normalizeLengthValue(d.padding?.left);
+  const pl_t = normalizeLengthValue(t?.padding?.left) ?? pl_d;
+  const pl_m = normalizeLengthValue(m?.padding?.left) ?? pl_t;
+  if (pl_d) style["--brx-d-pl"] = pl_d;
+  if (pl_t) style["--brx-t-pl"] = pl_t;
+  if (pl_m) style["--brx-m-pl"] = pl_m;
 
   // Margin
-  if (d.margin?.top) style["--brx-d-mt"] = normalizeLengthValue(d.margin.top);
-  if (d.margin?.right) style["--brx-d-mr"] = normalizeLengthValue(d.margin.right);
-  if (d.margin?.bottom) style["--brx-d-mb"] = normalizeLengthValue(d.margin.bottom);
-  if (d.margin?.left) style["--brx-d-ml"] = normalizeLengthValue(d.margin.left);
+  const mt_d = normalizeLengthValue(d.margin?.top);
+  const mt_t = normalizeLengthValue(t?.margin?.top) ?? mt_d;
+  const mt_m = normalizeLengthValue(m?.margin?.top) ?? mt_t;
+  if (mt_d) style["--brx-d-mt"] = mt_d;
+  if (mt_t) style["--brx-t-mt"] = mt_t;
+  if (mt_m) style["--brx-m-mt"] = mt_m;
 
-  if (t?.margin?.top) style["--brx-t-mt"] = normalizeLengthValue(t.margin.top);
-  if (t?.margin?.right) style["--brx-t-mr"] = normalizeLengthValue(t.margin.right);
-  if (t?.margin?.bottom) style["--brx-t-mb"] = normalizeLengthValue(t.margin.bottom);
-  if (t?.margin?.left) style["--brx-t-ml"] = normalizeLengthValue(t.margin.left);
+  const mr_d = normalizeLengthValue(d.margin?.right);
+  const mr_t = normalizeLengthValue(t?.margin?.right) ?? mr_d;
+  const mr_m = normalizeLengthValue(m?.margin?.right) ?? mr_t;
+  if (mr_d) style["--brx-d-mr"] = mr_d;
+  if (mr_t) style["--brx-t-mr"] = mr_t;
+  if (mr_m) style["--brx-m-mr"] = mr_m;
 
-  if (m?.margin?.top) style["--brx-m-mt"] = normalizeLengthValue(m.margin.top);
-  if (m?.margin?.right) style["--brx-m-mr"] = normalizeLengthValue(m.margin.right);
-  if (m?.margin?.bottom) style["--brx-m-mb"] = normalizeLengthValue(m.margin.bottom);
-  if (m?.margin?.left) style["--brx-m-ml"] = normalizeLengthValue(m.margin.left);
+  const mb_d = normalizeLengthValue(d.margin?.bottom);
+  const mb_t = normalizeLengthValue(t?.margin?.bottom) ?? mb_d;
+  const mb_m = normalizeLengthValue(m?.margin?.bottom) ?? mb_t;
+  if (mb_d) style["--brx-d-mb"] = mb_d;
+  if (mb_t) style["--brx-t-mb"] = mb_t;
+  if (mb_m) style["--brx-m-mb"] = mb_m;
+
+  const ml_d = normalizeLengthValue(d.margin?.left);
+  const ml_t = normalizeLengthValue(t?.margin?.left) ?? ml_d;
+  const ml_m = normalizeLengthValue(m?.margin?.left) ?? ml_t;
+  if (ml_d) style["--brx-d-ml"] = ml_d;
+  if (ml_t) style["--brx-t-ml"] = ml_t;
+  if (ml_m) style["--brx-m-ml"] = ml_m;
 
   // Sizing
-  if (d.sizing?.width) style["--brx-d-w"] = normalizeLengthValue(d.sizing.width);
-  if (t?.sizing?.width) style["--brx-t-w"] = normalizeLengthValue(t.sizing.width);
-  if (m?.sizing?.width) style["--brx-m-w"] = normalizeLengthValue(m.sizing.width);
+  const w_d = normalizeLengthValue(d.sizing?.width);
+  const w_t = normalizeLengthValue(t?.sizing?.width) ?? w_d;
+  const w_m = normalizeLengthValue(m?.sizing?.width) ?? w_t;
+  if (w_d) style["--brx-d-w"] = w_d;
+  if (w_t) style["--brx-t-w"] = w_t;
+  if (w_m) style["--brx-m-w"] = w_m;
 
-  if (d.sizing?.minWidth) style["--brx-d-mnw"] = normalizeLengthValue(d.sizing.minWidth);
-  if (t?.sizing?.minWidth) style["--brx-t-mnw"] = normalizeLengthValue(t.sizing.minWidth);
-  if (m?.sizing?.minWidth) style["--brx-m-mnw"] = normalizeLengthValue(m.sizing.minWidth);
+  const mnw_d = normalizeLengthValue(d.sizing?.minWidth);
+  const mnw_t = normalizeLengthValue(t?.sizing?.minWidth) ?? mnw_d;
+  const mnw_m = normalizeLengthValue(m?.sizing?.minWidth) ?? mnw_t;
+  if (mnw_d) style["--brx-d-mnw"] = mnw_d;
+  if (mnw_t) style["--brx-t-mnw"] = mnw_t;
+  if (mnw_m) style["--brx-m-mnw"] = mnw_m;
 
-  if (d.sizing?.maxWidth) style["--brx-d-mxw"] = normalizeLengthValue(d.sizing.maxWidth);
-  if (t?.sizing?.maxWidth) style["--brx-t-mxw"] = normalizeLengthValue(t.sizing.maxWidth);
-  if (m?.sizing?.maxWidth) style["--brx-m-mxw"] = normalizeLengthValue(m.sizing.maxWidth);
+  const mxw_d = normalizeLengthValue(d.sizing?.maxWidth);
+  const mxw_t = normalizeLengthValue(t?.sizing?.maxWidth) ?? mxw_d;
+  const mxw_m = normalizeLengthValue(m?.sizing?.maxWidth) ?? mxw_t;
+  if (mxw_d) style["--brx-d-mxw"] = mxw_d;
+  if (mxw_t) style["--brx-t-mxw"] = mxw_t;
+  if (mxw_m) style["--brx-m-mxw"] = mxw_m;
 
-  if (d.sizing?.height) style["--brx-d-h"] = normalizeLengthValue(d.sizing.height);
-  if (t?.sizing?.height) style["--brx-t-h"] = normalizeLengthValue(t.sizing.height);
-  if (m?.sizing?.height) style["--brx-m-h"] = normalizeLengthValue(m.sizing.height);
+  const h_d = normalizeLengthValue(d.sizing?.height);
+  const h_t = normalizeLengthValue(t?.sizing?.height) ?? h_d;
+  const h_m = normalizeLengthValue(m?.sizing?.height) ?? h_t;
+  if (h_d) style["--brx-d-h"] = h_d;
+  if (h_t) style["--brx-t-h"] = h_t;
+  if (h_m) style["--brx-m-h"] = h_m;
 
-  if (d.sizing?.minHeight) style["--brx-d-mnh"] = normalizeLengthValue(d.sizing.minHeight);
-  if (t?.sizing?.minHeight) style["--brx-t-mnh"] = normalizeLengthValue(t.sizing.minHeight);
-  if (m?.sizing?.minHeight) style["--brx-m-mnh"] = normalizeLengthValue(m.sizing.minHeight);
+  const mnh_d = normalizeLengthValue(d.sizing?.minHeight);
+  const mnh_t = normalizeLengthValue(t?.sizing?.minHeight) ?? mnh_d;
+  const mnh_m = normalizeLengthValue(m?.sizing?.minHeight) ?? mnh_t;
+  if (mnh_d) style["--brx-d-mnh"] = mnh_d;
+  if (mnh_t) style["--brx-t-mnh"] = mnh_t;
+  if (mnh_m) style["--brx-m-mnh"] = mnh_m;
 
-  if (d.sizing?.maxHeight) style["--brx-d-mxh"] = normalizeLengthValue(d.sizing.maxHeight);
-  if (t?.sizing?.maxHeight) style["--brx-t-mxh"] = normalizeLengthValue(t.sizing.maxHeight);
-  if (m?.sizing?.maxHeight) style["--brx-m-mxh"] = normalizeLengthValue(m.sizing.maxHeight);
+  const mxh_d = normalizeLengthValue(d.sizing?.maxHeight);
+  const mxh_t = normalizeLengthValue(t?.sizing?.maxHeight) ?? mxh_d;
+  const mxh_m = normalizeLengthValue(m?.sizing?.maxHeight) ?? mxh_t;
+  if (mxh_d) style["--brx-d-mxh"] = mxh_d;
+  if (mxh_t) style["--brx-t-mxh"] = mxh_t;
+  if (mxh_m) style["--brx-m-mxh"] = mxh_m;
 
-  if (d.sizing?.aspectRatio) style["--brx-d-ar"] = d.sizing.aspectRatio.replace(/\s+/g, " ");
-  if (t?.sizing?.aspectRatio) style["--brx-t-ar"] = t.sizing.aspectRatio.replace(/\s+/g, " ");
-  if (m?.sizing?.aspectRatio) style["--brx-m-ar"] = m.sizing.aspectRatio.replace(/\s+/g, " ");
+  const ar_d = d.sizing?.aspectRatio?.replace(/\s+/g, " ");
+  const ar_t = t?.sizing?.aspectRatio?.replace(/\s+/g, " ") ?? ar_d;
+  const ar_m = m?.sizing?.aspectRatio?.replace(/\s+/g, " ") ?? ar_t;
+  if (ar_d) style["--brx-d-ar"] = ar_d;
+  if (ar_t) style["--brx-t-ar"] = ar_t;
+  if (ar_m) style["--brx-m-ar"] = ar_m;
 
   // Text / Content Alignment
-  if (d.align) style["--brx-d-ta"] = d.align;
-  if (t?.align) style["--brx-t-ta"] = t.align;
-  if (m?.align) style["--brx-m-ta"] = m.align;
+  const ta_d = d.align;
+  const ta_t = t?.align ?? ta_d;
+  const ta_m = m?.align ?? ta_t;
+  if (ta_d) style["--brx-d-ta"] = ta_d;
+  if (ta_t) style["--brx-t-ta"] = ta_t;
+  if (ta_m) style["--brx-m-ta"] = ta_m;
 
   // Background color
-  if (d.background?.color) style["--brx-d-bg-c"] = d.background.color;
-  if (t?.background?.color) style["--brx-t-bg-c"] = t.background.color;
-  if (m?.background?.color) style["--brx-m-bg-c"] = m.background.color;
+  const bgc_d = d.background?.color;
+  const bgc_t = t?.background?.color ?? bgc_d;
+  const bgc_m = m?.background?.color ?? bgc_t;
+  if (bgc_d) style["--brx-d-bg-c"] = bgc_d;
+  if (bgc_t) style["--brx-t-bg-c"] = bgc_t;
+  if (bgc_m) style["--brx-m-bg-c"] = bgc_m;
 
   // Display
   const display = props.display || options?.defaultDisplay;

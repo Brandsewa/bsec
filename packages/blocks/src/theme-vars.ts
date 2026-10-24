@@ -35,6 +35,8 @@ export interface ThemeTokensLike {
     | undefined;
   /** Heading sizes in pixels per level and device (see HEADING_LEVELS, DEFAULT_HEADING_SIZES). */
   fontSizes?: Record<string, Partial<Record<string, unknown>> | undefined> | undefined;
+  /** Global layout defaults: site width, section and container sizing/margin/padding per device. */
+  layout?: ThemeLayoutSettings | undefined;
   /** Legacy shapes written by the first launch template; still read, never written. */
   typography?: { headingFont?: string | undefined; bodyFont?: string | undefined } | undefined;
   shape?: { radius?: string | undefined; buttonStyle?: string | undefined } | undefined;
@@ -116,6 +118,122 @@ export function resolveHeadingSizes(tokens: ThemeTokensLike | null | undefined):
     };
   }
   return out;
+}
+
+export interface SpacingQuadValues {
+  top?: string | undefined;
+  right?: string | undefined;
+  bottom?: string | undefined;
+  left?: string | undefined;
+}
+
+export interface SizingValues {
+  width?: string | undefined;
+  minWidth?: string | undefined;
+  maxWidth?: string | undefined;
+}
+
+export interface ThemeLayoutElementSettings {
+  margin?: SpacingQuadValues | undefined;
+  padding?: SpacingQuadValues | undefined;
+  width?: string | undefined;
+  minWidth?: string | undefined;
+  maxWidth?: string | undefined;
+  sizing?: SizingValues | undefined;
+}
+
+export interface ThemeLayoutDeviceSettings {
+  siteWidth?: string | undefined;
+  section?: ThemeLayoutElementSettings | undefined;
+  container?: ThemeLayoutElementSettings | undefined;
+}
+
+export interface ThemeLayoutSettings {
+  desktop?: ThemeLayoutDeviceSettings | undefined;
+  tablet?: ThemeLayoutDeviceSettings | undefined;
+  mobile?: ThemeLayoutDeviceSettings | undefined;
+}
+
+export const DEFAULT_SITE_WIDTHS: Record<SizeDevice, string> = {
+  desktop: "1200px",
+  tablet: "100%",
+  mobile: "100%",
+};
+
+export function sanitizeLayoutLength(val: unknown, fallback?: string): string | undefined {
+  if (typeof val === "number" && Number.isFinite(val)) {
+    return `${val}px`;
+  }
+  if (typeof val !== "string") return fallback;
+  const trimmed = val.trim();
+  if (!trimmed) return fallback;
+  if (/^-?\d+(\.\d+)?$/.test(trimmed)) {
+    return `${trimmed}px`;
+  }
+  if (/^-?\d+(\.\d+)?(px|%|rem|em|vw|vh)$/.test(trimmed)) {
+    return trimmed;
+  }
+  if (trimmed === "auto" || trimmed === "none" || trimmed === "initial") {
+    return trimmed;
+  }
+  return fallback;
+}
+
+export interface ResolvedDeviceLayout {
+  siteWidth: string;
+  section: {
+    margin: SpacingQuadValues;
+    padding: SpacingQuadValues;
+    sizing: SizingValues;
+  };
+  container: {
+    margin: SpacingQuadValues;
+    padding: SpacingQuadValues;
+    sizing: SizingValues;
+  };
+}
+
+export type ResolvedThemeLayout = Record<SizeDevice, ResolvedDeviceLayout>;
+
+export function resolveThemeLayout(tokens: ThemeTokensLike | null | undefined): ResolvedThemeLayout {
+  const layout = tokens?.layout;
+  const resolveDevice = (dev: SizeDevice): ResolvedDeviceLayout => {
+    const rawDev = layout?.[dev] ?? {};
+    const siteWidth = sanitizeLayoutLength(rawDev.siteWidth, DEFAULT_SITE_WIDTHS[dev]) ?? DEFAULT_SITE_WIDTHS[dev];
+
+    const getElementProps = (rawElem: ThemeLayoutElementSettings | undefined) => {
+      const margin: SpacingQuadValues = {
+        top: sanitizeLayoutLength(rawElem?.margin?.top),
+        right: sanitizeLayoutLength(rawElem?.margin?.right),
+        bottom: sanitizeLayoutLength(rawElem?.margin?.bottom),
+        left: sanitizeLayoutLength(rawElem?.margin?.left),
+      };
+      const padding: SpacingQuadValues = {
+        top: sanitizeLayoutLength(rawElem?.padding?.top),
+        right: sanitizeLayoutLength(rawElem?.padding?.right),
+        bottom: sanitizeLayoutLength(rawElem?.padding?.bottom),
+        left: sanitizeLayoutLength(rawElem?.padding?.left),
+      };
+      const sizing: SizingValues = {
+        width: sanitizeLayoutLength(rawElem?.sizing?.width ?? rawElem?.width),
+        minWidth: sanitizeLayoutLength(rawElem?.sizing?.minWidth ?? rawElem?.minWidth),
+        maxWidth: sanitizeLayoutLength(rawElem?.sizing?.maxWidth ?? rawElem?.maxWidth),
+      };
+      return { margin, padding, sizing };
+    };
+
+    return {
+      siteWidth,
+      section: getElementProps(rawDev.section),
+      container: getElementProps(rawDev.container),
+    };
+  };
+
+  return {
+    desktop: resolveDevice("desktop"),
+    tablet: resolveDevice("tablet"),
+    mobile: resolveDevice("mobile"),
+  };
 }
 
 /** Weights the theme fonts are loaded in (googleFontsHref requests 400 to 700). */
@@ -301,8 +419,44 @@ export function computeThemeTokens(
   sizeVars["--bs-body-t"] = `${body.tablet / 16}rem`;
   sizeVars["--bs-body-m"] = `${body.mobile / 16}rem`;
 
+  const layout = resolveThemeLayout(themeTokens);
+  const layoutVars: Record<string, string> = {};
+  const devLetters: Record<SizeDevice, string> = { desktop: "d", tablet: "t", mobile: "m" };
+  for (const dev of SIZE_DEVICES) {
+    const ltr = devLetters[dev];
+    const devLayout = layout[dev];
+    layoutVars[`--bs-site-w-${ltr}`] = devLayout.siteWidth;
+
+    const sec = devLayout.section;
+    if (sec.padding.top) layoutVars[`--bs-sec-${ltr}-pt`] = sec.padding.top;
+    if (sec.padding.right) layoutVars[`--bs-sec-${ltr}-pr`] = sec.padding.right;
+    if (sec.padding.bottom) layoutVars[`--bs-sec-${ltr}-pb`] = sec.padding.bottom;
+    if (sec.padding.left) layoutVars[`--bs-sec-${ltr}-pl`] = sec.padding.left;
+    if (sec.margin.top) layoutVars[`--bs-sec-${ltr}-mt`] = sec.margin.top;
+    if (sec.margin.right) layoutVars[`--bs-sec-${ltr}-mr`] = sec.margin.right;
+    if (sec.margin.bottom) layoutVars[`--bs-sec-${ltr}-mb`] = sec.margin.bottom;
+    if (sec.margin.left) layoutVars[`--bs-sec-${ltr}-ml`] = sec.margin.left;
+    if (sec.sizing.width) layoutVars[`--bs-sec-${ltr}-w`] = sec.sizing.width;
+    if (sec.sizing.minWidth) layoutVars[`--bs-sec-${ltr}-mnw`] = sec.sizing.minWidth;
+    if (sec.sizing.maxWidth) layoutVars[`--bs-sec-${ltr}-mxw`] = sec.sizing.maxWidth;
+
+    const cnt = devLayout.container;
+    if (cnt.padding.top) layoutVars[`--bs-cnt-${ltr}-pt`] = cnt.padding.top;
+    if (cnt.padding.right) layoutVars[`--bs-cnt-${ltr}-pr`] = cnt.padding.right;
+    if (cnt.padding.bottom) layoutVars[`--bs-cnt-${ltr}-pb`] = cnt.padding.bottom;
+    if (cnt.padding.left) layoutVars[`--bs-cnt-${ltr}-pl`] = cnt.padding.left;
+    if (cnt.margin.top) layoutVars[`--bs-cnt-${ltr}-mt`] = cnt.margin.top;
+    if (cnt.margin.right) layoutVars[`--bs-cnt-${ltr}-mr`] = cnt.margin.right;
+    if (cnt.margin.bottom) layoutVars[`--bs-cnt-${ltr}-mb`] = cnt.margin.bottom;
+    if (cnt.margin.left) layoutVars[`--bs-cnt-${ltr}-ml`] = cnt.margin.left;
+    if (cnt.sizing.width) layoutVars[`--bs-cnt-${ltr}-w`] = cnt.sizing.width;
+    if (cnt.sizing.minWidth) layoutVars[`--bs-cnt-${ltr}-mnw`] = cnt.sizing.minWidth;
+    if (cnt.sizing.maxWidth) layoutVars[`--bs-cnt-${ltr}-mxw`] = cnt.sizing.maxWidth;
+  }
+
   return {
     ...sizeVars,
+    ...layoutVars,
     // Block stylesheet variables (blocks.css). Same sanitized values, separate namespace so
     // they cannot collide with host Tailwind/theme variables.
     "--bs-primary": primary,

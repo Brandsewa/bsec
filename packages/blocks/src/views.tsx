@@ -628,9 +628,6 @@ export function ContainerView({ props, children, ctx }: A<R.ContainerProps>): Re
         position: "relative",
         zIndex: 1,
         boxSizing: "border-box",
-        marginLeft: "auto",
-        marginRight: "auto",
-        maxWidth: "100%",
         ...customStyle,
       }}
     >

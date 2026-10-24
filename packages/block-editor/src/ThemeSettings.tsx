@@ -21,10 +21,19 @@ import {
   DEFAULT_BODY_SIZES,
   MAX_BODY_PX,
   MIN_BODY_PX,
+  DEFAULT_SITE_WIDTHS,
+  resolveThemeLayout,
+  sanitizeLayoutLength,
   type HeadingSizes,
   type SizeDevice,
   type BlockInstance,
   type ThemeTokensLike,
+  type ResolvedThemeLayout,
+  type ResolvedDeviceLayout,
+  type SpacingQuadValues,
+  type SizingValues,
+  type ThemeLayoutSettings,
+  type ThemeLayoutDeviceSettings,
 } from "@bs/blocks";
 import { BlocksPreview } from "./BlocksPreview.tsx";
 import { Dropdown, type DropdownOption } from "./Dropdown.tsx";
@@ -112,6 +121,7 @@ export function readThemeSettings(tokens: ThemeTokens) {
       lightBg: tokens.buttons?.lightBg,
       lightText: tokens.buttons?.lightText,
     } as Partial<Record<ButtonColorKey, string>>,
+    layout: resolveThemeLayout(tokens),
   };
 }
 
@@ -347,6 +357,334 @@ function cleanButtonColors(set: Partial<Record<ButtonColorKey, string | undefine
   return out;
 }
 
+function cleanThemeLayout(layout: ResolvedThemeLayout | undefined): ThemeLayoutSettings | undefined {
+  if (!layout) return undefined;
+  const cleanQuad = (q?: SpacingQuadValues) => {
+    if (!q) return undefined;
+    const res: SpacingQuadValues = {};
+    if (q.top?.trim()) res.top = q.top.trim();
+    if (q.right?.trim()) res.right = q.right.trim();
+    if (q.bottom?.trim()) res.bottom = q.bottom.trim();
+    if (q.left?.trim()) res.left = q.left.trim();
+    return Object.keys(res).length > 0 ? res : undefined;
+  };
+  const cleanSizing = (s?: SizingValues) => {
+    if (!s) return undefined;
+    const res: SizingValues = {};
+    if (s.width?.trim()) res.width = s.width.trim();
+    if (s.minWidth?.trim()) res.minWidth = s.minWidth.trim();
+    if (s.maxWidth?.trim()) res.maxWidth = s.maxWidth.trim();
+    return Object.keys(res).length > 0 ? res : undefined;
+  };
+
+  const out: ThemeLayoutSettings = {};
+  for (const dev of SIZE_DEVICES) {
+    const devLayout = layout[dev];
+    if (!devLayout) continue;
+    const devOut: ThemeLayoutDeviceSettings = {};
+    if (devLayout.siteWidth && devLayout.siteWidth !== DEFAULT_SITE_WIDTHS[dev]) {
+      devOut.siteWidth = devLayout.siteWidth.trim();
+    }
+    const secMargin = cleanQuad(devLayout.section?.margin);
+    const secPad = cleanQuad(devLayout.section?.padding);
+    const secSizing = cleanSizing(devLayout.section?.sizing);
+    if (secMargin || secPad || secSizing) {
+      devOut.section = {
+        ...(secMargin ? { margin: secMargin } : {}),
+        ...(secPad ? { padding: secPad } : {}),
+        ...(secSizing ? { sizing: secSizing } : {}),
+      };
+    }
+    const cntMargin = cleanQuad(devLayout.container?.margin);
+    const cntPad = cleanQuad(devLayout.container?.padding);
+    const cntSizing = cleanSizing(devLayout.container?.sizing);
+    if (cntMargin || cntPad || cntSizing) {
+      devOut.container = {
+        ...(cntMargin ? { margin: cntMargin } : {}),
+        ...(cntPad ? { padding: cntPad } : {}),
+        ...(cntSizing ? { sizing: cntSizing } : {}),
+      };
+    }
+    if (Object.keys(devOut).length > 0) {
+      out[dev] = devOut;
+    }
+  }
+  return Object.keys(out).length > 0 ? out : undefined;
+}
+
+function QuadInputGroup({
+  values,
+  disabled,
+  placeholderTop = "0px",
+  placeholderRight = "0px",
+  placeholderBottom = "0px",
+  placeholderLeft = "0px",
+  onChange,
+}: {
+  values: SpacingQuadValues | undefined;
+  disabled?: boolean | undefined;
+  placeholderTop?: string | undefined;
+  placeholderRight?: string | undefined;
+  placeholderBottom?: string | undefined;
+  placeholderLeft?: string | undefined;
+  onChange: (next: SpacingQuadValues) => void;
+}) {
+  const sides = [
+    { key: "top", label: "Top", placeholder: placeholderTop },
+    { key: "right", label: "Right", placeholder: placeholderRight },
+    { key: "bottom", label: "Bottom", placeholder: placeholderBottom },
+    { key: "left", label: "Left", placeholder: placeholderLeft },
+  ] as const;
+
+  return (
+    <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 5 }}>
+      {sides.map(({ key, label: sideLabel, placeholder }) => (
+        <div key={key}>
+          <span style={{ display: "block", fontSize: 9, color: "#71717a", marginBottom: 2 }}>{sideLabel}</span>
+          <input
+            type="text"
+            value={values?.[key] ?? ""}
+            placeholder={placeholder}
+            disabled={disabled}
+            onChange={(e) => onChange({ ...values, [key]: e.target.value })}
+            onBlur={(e) => {
+              const sanitized = sanitizeLayoutLength(e.target.value) ?? (e.target.value.trim() === "" ? "" : e.target.value);
+              onChange({ ...values, [key]: sanitized });
+            }}
+            style={{ ...input, padding: "4px 6px", fontSize: 11 }}
+          />
+        </div>
+      ))}
+    </div>
+  );
+}
+
+function SizingInputGroup({
+  values,
+  disabled,
+  placeholderWidth = "100%",
+  placeholderMinWidth = "none",
+  placeholderMaxWidth = "100%",
+  onChange,
+}: {
+  values: SizingValues | undefined;
+  disabled?: boolean | undefined;
+  placeholderWidth?: string | undefined;
+  placeholderMinWidth?: string | undefined;
+  placeholderMaxWidth?: string | undefined;
+  onChange: (next: SizingValues) => void;
+}) {
+  const fields = [
+    { key: "width", label: "Width", placeholder: placeholderWidth },
+    { key: "minWidth", label: "Min W", placeholder: placeholderMinWidth },
+    { key: "maxWidth", label: "Max W", placeholder: placeholderMaxWidth },
+  ] as const;
+
+  return (
+    <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 5 }}>
+      {fields.map(({ key, label: fieldLabel, placeholder }) => (
+        <div key={key}>
+          <span style={{ display: "block", fontSize: 9, color: "#71717a", marginBottom: 2 }}>{fieldLabel}</span>
+          <input
+            type="text"
+            value={values?.[key] ?? ""}
+            placeholder={placeholder}
+            disabled={disabled}
+            onChange={(e) => onChange({ ...values, [key]: e.target.value })}
+            onBlur={(e) => {
+              const sanitized = sanitizeLayoutLength(e.target.value) ?? (e.target.value.trim() === "" ? "" : e.target.value);
+              onChange({ ...values, [key]: sanitized });
+            }}
+            style={{ ...input, padding: "4px 6px", fontSize: 11 }}
+          />
+        </div>
+      ))}
+    </div>
+  );
+}
+
+function LayoutSettingsEditor({
+  layout,
+  disabled,
+  onChange,
+}: {
+  layout: ResolvedThemeLayout;
+  disabled?: boolean | undefined;
+  onChange: (layout: ResolvedThemeLayout) => void;
+}) {
+  const [activeDevice, setActiveDevice] = useState<SizeDevice>("desktop");
+  const currentDev = layout[activeDevice];
+
+  const updateDev = (patch: Partial<ResolvedDeviceLayout>) => {
+    onChange({
+      ...layout,
+      [activeDevice]: {
+        ...currentDev,
+        ...patch,
+      },
+    });
+  };
+
+  const isDefault =
+    SIZE_DEVICES.every((d) => layout[d].siteWidth === DEFAULT_SITE_WIDTHS[d]) &&
+    SIZE_DEVICES.every(
+      (d) =>
+        !layout[d].section.margin.top &&
+        !layout[d].section.margin.right &&
+        !layout[d].section.margin.bottom &&
+        !layout[d].section.margin.left &&
+        !layout[d].section.padding.top &&
+        !layout[d].section.padding.right &&
+        !layout[d].section.padding.bottom &&
+        !layout[d].section.padding.left &&
+        !layout[d].section.sizing.width &&
+        !layout[d].section.sizing.minWidth &&
+        !layout[d].section.sizing.maxWidth &&
+        !layout[d].container.margin.top &&
+        !layout[d].container.margin.right &&
+        !layout[d].container.margin.bottom &&
+        !layout[d].container.margin.left &&
+        !layout[d].container.padding.top &&
+        !layout[d].container.padding.right &&
+        !layout[d].container.padding.bottom &&
+        !layout[d].container.padding.left &&
+        !layout[d].container.sizing.width &&
+        !layout[d].container.sizing.minWidth &&
+        !layout[d].container.sizing.maxWidth
+    );
+
+  const resetAll = () => {
+    onChange(resolveThemeLayout({}));
+  };
+
+  return (
+    <div style={{ display: "grid", gap: 12 }}>
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+        <div style={{ display: "flex", gap: 4, background: "#f4f4f5", padding: 3, borderRadius: 8, flex: 1, maxWidth: 230 }}>
+          {SIZE_DEVICES.map((d) => (
+            <button
+              key={d}
+              type="button"
+              disabled={disabled}
+              onClick={() => setActiveDevice(d)}
+              style={{
+                flex: 1,
+                display: "inline-flex",
+                alignItems: "center",
+                justifyContent: "center",
+                gap: 5,
+                padding: "4px 6px",
+                fontSize: 11,
+                fontWeight: 600,
+                borderRadius: 6,
+                border: 0,
+                cursor: "pointer",
+                background: activeDevice === d ? "#fff" : "transparent",
+                color: activeDevice === d ? "#18181b" : "#71717a",
+                boxShadow: activeDevice === d ? "0 1px 2px rgba(0,0,0,0.08)" : "none",
+              }}
+            >
+              <DeviceIcon device={d} />
+              {DEVICE_LABELS[d].label}
+            </button>
+          ))}
+        </div>
+        <button
+          type="button"
+          disabled={disabled || isDefault}
+          onClick={resetAll}
+          style={{ border: 0, background: "none", fontSize: 11, color: disabled || isDefault ? "#a1a1aa" : "#2563eb", cursor: disabled || isDefault ? "default" : "pointer", padding: "0 4px" }}
+        >
+          Reset
+        </button>
+      </div>
+
+      <Field title="Site width" hint={`Maximum container width on ${DEVICE_LABELS[activeDevice].label.toLowerCase()} (e.g. 1200px, 100%)`}>
+        <input
+          type="text"
+          value={currentDev.siteWidth}
+          placeholder={DEFAULT_SITE_WIDTHS[activeDevice]}
+          disabled={disabled}
+          onChange={(e) => updateDev({ siteWidth: e.target.value })}
+          onBlur={(e) => {
+            const sanitized = sanitizeLayoutLength(e.target.value, DEFAULT_SITE_WIDTHS[activeDevice]) ?? DEFAULT_SITE_WIDTHS[activeDevice];
+            updateDev({ siteWidth: sanitized });
+          }}
+          style={input}
+        />
+      </Field>
+
+      {/* Section Defaults */}
+      <div style={{ borderTop: "1px dashed #e4e4e7", paddingTop: 10, display: "grid", gap: 8 }}>
+        <span style={{ fontSize: 11, fontWeight: 700, color: "#18181b", textTransform: "uppercase", letterSpacing: "0.04em" }}>
+          Section Defaults ({DEVICE_LABELS[activeDevice].label})
+        </span>
+
+        <Field title="Section width (Min, Max, Width)">
+          <SizingInputGroup
+            values={currentDev.section.sizing}
+            disabled={disabled}
+            placeholderWidth="100%"
+            placeholderMaxWidth="100%"
+            onChange={(sizing) => updateDev({ section: { ...currentDev.section, sizing } })}
+          />
+        </Field>
+
+        <Field title="Section margin">
+          <QuadInputGroup
+            values={currentDev.section.margin}
+            disabled={disabled}
+            onChange={(margin) => updateDev({ section: { ...currentDev.section, margin } })}
+          />
+        </Field>
+
+        <Field title="Section padding">
+          <QuadInputGroup
+            values={currentDev.section.padding}
+            disabled={disabled}
+            onChange={(padding) => updateDev({ section: { ...currentDev.section, padding } })}
+          />
+        </Field>
+      </div>
+
+      {/* Container Defaults */}
+      <div style={{ borderTop: "1px dashed #e4e4e7", paddingTop: 10, display: "grid", gap: 8 }}>
+        <span style={{ fontSize: 11, fontWeight: 700, color: "#18181b", textTransform: "uppercase", letterSpacing: "0.04em" }}>
+          Container Defaults ({DEVICE_LABELS[activeDevice].label})
+        </span>
+
+        <Field title="Container width (Min, Max, Width)">
+          <SizingInputGroup
+            values={currentDev.container.sizing}
+            disabled={disabled}
+            placeholderWidth="100%"
+            placeholderMaxWidth={currentDev.siteWidth || DEFAULT_SITE_WIDTHS[activeDevice]}
+            onChange={(sizing) => updateDev({ container: { ...currentDev.container, sizing } })}
+          />
+        </Field>
+
+        <Field title="Container margin">
+          <QuadInputGroup
+            values={currentDev.container.margin}
+            disabled={disabled}
+            placeholderLeft="auto"
+            placeholderRight="auto"
+            onChange={(margin) => updateDev({ container: { ...currentDev.container, margin } })}
+          />
+        </Field>
+
+        <Field title="Container padding">
+          <QuadInputGroup
+            values={currentDev.container.padding}
+            disabled={disabled}
+            onChange={(padding) => updateDev({ container: { ...currentDev.container, padding } })}
+          />
+        </Field>
+      </div>
+    </div>
+  );
+}
+
 export interface ThemeSettingsPanelProps {
   tokens: ThemeTokens;
   onChange: (tokens: ThemeTokens) => void;
@@ -379,8 +717,15 @@ export function ThemeSettingsPanel({ tokens, onChange, disabled, note }: ThemeSe
     headingWeight?: string;
     bodyWeight?: string;
     buttonColors?: Partial<Record<ButtonColorKey, string | undefined>>;
+    layout?: ResolvedThemeLayout;
   }) => {
-    const next = { ...v, ...patch, colors: { ...v.colors, ...(patch.colors ?? {}) }, buttonColorsSet: { ...v.buttonColorsSet, ...(patch.buttonColors ?? {}) } };
+    const next = {
+      ...v,
+      ...patch,
+      colors: { ...v.colors, ...(patch.colors ?? {}) },
+      buttonColorsSet: { ...v.buttonColorsSet, ...(patch.buttonColors ?? {}) },
+      layout: patch.layout ?? v.layout,
+    };
     const { typography: _t, shape: _s, ...rest } = tokens;
     void _t;
     void _s;
@@ -399,6 +744,7 @@ export function ThemeSettingsPanel({ tokens, onChange, disabled, note }: ThemeSe
         size: next.buttonSize,
         ...cleanButtonColors(next.buttonColorsSet),
       },
+      layout: cleanThemeLayout(next.layout),
     });
   };
 
@@ -443,6 +789,10 @@ export function ThemeSettingsPanel({ tokens, onChange, disabled, note }: ThemeSe
           <Dropdown compact ariaLabel="Body font weight" value={v.bodyWeight} options={WEIGHT_OPTIONS} disabled={disabled} onChange={(value) => commit({ bodyWeight: value })} />
         </Field>
         <HeadingSizesEditor sizes={v.sizes} bodySizes={v.bodySizes} disabled={disabled} onChange={(sizes, bodySizes) => commit({ sizes, bodySizes })} />
+      </Section>
+
+      <Section id="layout" title="Layout" open={openId === "layout"} onToggle={() => toggle("layout")}>
+        <LayoutSettingsEditor layout={v.layout} disabled={disabled} onChange={(layout) => commit({ layout })} />
       </Section>
 
       <Section id="corners" title="Corners" open={openId === "corners"} onToggle={() => toggle("corners")}>
