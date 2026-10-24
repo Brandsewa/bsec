@@ -3,7 +3,7 @@ import { eq } from "drizzle-orm";
 import { schema } from "@bs/db";
 import { startTestDb, type TestDb } from "@bs/db/test-env";
 import { seedPlatformStaff } from "@bs/db/test-fixtures";
-import { googleSessionGuard, type GoogleIdentityClaims } from "@bs/auth";
+import { googleAccountLinkGuard, googleSessionGuard, type GoogleIdentityClaims } from "@bs/auth";
 import {
   createRuntime,
   getPlatformAuthOverview,
@@ -213,5 +213,47 @@ describe("google session guard (no way around two-factor)", () => {
     await rt._db.db.update(schema.users).set({ twoFactorEnabled: false }).where(eq(schema.users.id, supportId));
     const guard = googleSessionGuard(rt._db.db, { requirePlatformStaff: true });
     await expect(guard({ userId: supportId }, { path: "/callback/:id" })).resolves.toBeUndefined();
+  });
+});
+
+describe("linking Google to an owner who signed up with email and password", () => {
+  async function mkOwner(email: string, emailVerified: boolean) {
+    const [u] = await rt._db.db.insert(schema.users).values({ email, name: "Owner", emailVerified }).returning({ id: schema.users.id });
+    const userId = u!.id;
+    await rt._db.db.insert(schema.accounts).values({ id: crypto.randomUUID(), userId, accountId: userId, providerId: "credential", password: "hash" });
+    await rt._db.db.insert(schema.sessions).values({ id: crypto.randomUUID(), userId, token: `tok-${userId}`, expiresAt: new Date(Date.now() + 3_600_000) });
+    return userId;
+  }
+  const rows = async (userId: string) => ({
+    credential: await rt._db.db.select().from(schema.accounts).where(eq(schema.accounts.userId, userId)),
+    sessions: await rt._db.db.select().from(schema.sessions).where(eq(schema.sessions.userId, userId)),
+    user: (await rt._db.db.select().from(schema.users).where(eq(schema.users.id, userId)))[0],
+  });
+
+  it("verifies the email and removes the password login and sessions of an unverified account (pre-registration takeover)", async () => {
+    const id = await mkOwner("unverified-owner@example.test", false);
+    await googleAccountLinkGuard(rt._db.db)({ userId: id, providerId: "google" }, { path: "/callback/:id" });
+    const r = await rows(id);
+    expect(r.user?.emailVerified).toBe(true);
+    expect(r.credential).toHaveLength(0);
+    expect(r.sessions).toHaveLength(0);
+  });
+
+  it("leaves an account whose email was already verified untouched", async () => {
+    const id = await mkOwner("verified-owner@example.test", true);
+    await googleAccountLinkGuard(rt._db.db)({ userId: id, providerId: "google" }, { path: "/callback/:id" });
+    const r = await rows(id);
+    expect(r.credential).toHaveLength(1);
+    expect(r.sessions).toHaveLength(1);
+  });
+
+  it("does nothing for other providers or sign-ins that did not come through Google", async () => {
+    const id = await mkOwner("other-owner@example.test", false);
+    const guard = googleAccountLinkGuard(rt._db.db);
+    await guard({ userId: id, providerId: "credential" }, { path: "/callback/:id" });
+    await guard({ userId: id, providerId: "google" }, { path: "/sign-in/email" });
+    const r = await rows(id);
+    expect(r.user?.emailVerified).toBe(false);
+    expect(r.credential).toHaveLength(1);
   });
 });
