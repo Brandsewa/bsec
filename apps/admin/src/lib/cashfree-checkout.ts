@@ -3,10 +3,11 @@
  * the script is loaded on demand, only when a merchant on Cashfree billing presses "Continue to payment". The server never
  * trusts anything this script reports: the plan only changes after Cashfree's signed webhook arrives.
  */
+// The script's option is named `subsSessionId` (not the API's `subscription_session_id`): it answers "subsSessionId is missing in options" otherwise.
 const SDK_URL = "https://sdk.cashfree.com/js/v3/cashfree.js";
 
 interface CashfreeInstance {
-  subscriptionsCheckout(opts: { subscriptionSessionId: string; redirectTarget?: "_self" | "_blank" | "_top" }): Promise<{ error?: { message?: string } } | undefined>;
+  subscriptionsCheckout(opts: { subsSessionId: string; redirectTarget?: "_self" | "_blank" | "_top" }): Promise<{ error?: { message?: string } } | undefined>;
 }
 type CashfreeFactory = (opts: { mode: "sandbox" | "production" }) => CashfreeInstance;
 
@@ -30,6 +31,6 @@ function loadSdk(): Promise<CashfreeFactory> {
 export async function openCashfreeCheckout(session: { sessionId: string; mode: "test" | "live" }): Promise<void> {
   const Cashfree = await loadSdk();
   const cashfree = Cashfree({ mode: session.mode === "live" ? "production" : "sandbox" });
-  const result = await cashfree.subscriptionsCheckout({ subscriptionSessionId: session.sessionId, redirectTarget: "_self" });
+  const result = await cashfree.subscriptionsCheckout({ subsSessionId: session.sessionId, redirectTarget: "_self" });
   if (result?.error) throw new Error(result.error.message ?? "Cashfree could not open the payment page.");
 }
