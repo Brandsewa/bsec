@@ -663,6 +663,7 @@
   --brx-d-ar: initial;  --brx-t-ar: initial;  --brx-m-ar: initial;
   --brx-d-ta: initial;  --brx-t-ta: initial;  --brx-m-ta: initial;
   --brx-d-bg-c: initial;--brx-t-bg-c: initial;--brx-m-bg-c: initial;
+  --brx-d-c: initial;   --brx-t-c: initial;   --brx-m-c: initial;
 
   --b-dir: var(--brx-d-dir);
   --b-jc: var(--brx-d-jc);
@@ -688,6 +689,7 @@
   --b-ar: var(--brx-d-ar);
   --b-ta: var(--brx-d-ta);
   --b-bg-c: var(--brx-d-bg-c);
+  --b-c: var(--brx-d-c);
 
   flex-direction: var(--b-dir);
   justify-content: var(--b-jc);
@@ -715,6 +717,8 @@
   max-height: var(--b-mxh);
   aspect-ratio: var(--b-ar);
   text-align: var(--b-ta);
+  background-color: var(--b-bg-c);
+  color: var(--b-c);
 }
 
 /* Also forward flex/grid layout variables to inner Slot wrappers */
@@ -757,6 +761,7 @@
     --b-ar: var(--brx-t-ar, var(--brx-d-ar));
     --b-ta: var(--brx-t-ta, var(--brx-d-ta));
     --b-bg-c: var(--brx-t-bg-c, var(--brx-d-bg-c));
+    --b-c: var(--brx-t-c, var(--brx-d-c));
 
     flex-direction: var(--b-dir) !important;
     justify-content: var(--b-jc) !important;
@@ -827,6 +832,7 @@
     --b-ar: var(--brx-m-ar, var(--brx-t-ar, var(--brx-d-ar)));
     --b-ta: var(--brx-m-ta, var(--brx-t-ta, var(--brx-d-ta)));
     --b-bg-c: var(--brx-m-bg-c, var(--brx-t-bg-c, var(--brx-d-bg-c)));
+    --b-c: var(--brx-m-c, var(--brx-t-c, var(--brx-d-c)));
 
     flex-direction: var(--b-dir) !important;
     justify-content: var(--b-jc) !important;

@@ -134,6 +134,7 @@ const sizingSchema = z.object({
 
 const backgroundSchema = z.object({
   color: hexColorSchema.optional().or(z.literal("")),
+  textColor: hexColorSchema.optional().or(z.literal("")),
   mediaId: z.string().optional(),
   imageUrl: z.string().url().optional().or(z.literal("")),
   imageSize: z.string().optional(), // 'cover' | 'contain' | 'auto' | custom
@@ -410,6 +411,14 @@ export function bricksElementStyle(props: BricksLayoutProps, options?: { default
   if (bgc_t) style["--brx-t-bg-c"] = bgc_t;
   if (bgc_m) style["--brx-m-bg-c"] = bgc_m;
 
+  // Text color
+  const tc_d = d.background?.textColor;
+  const tc_t = t?.background?.textColor ?? tc_d;
+  const tc_m = m?.background?.textColor ?? tc_t;
+  if (tc_d) style["--brx-d-c"] = tc_d;
+  if (tc_t) style["--brx-t-c"] = tc_t;
+  if (tc_m) style["--brx-m-c"] = tc_m;
+
   // Display
   const display = props.display || options?.defaultDisplay;
   if (display && display !== "none") {
@@ -471,6 +480,9 @@ export function bricksElementStyle(props: BricksLayoutProps, options?: { default
   // Background
   if (props.background?.color) {
     style.backgroundColor = props.background.color;
+  }
+  if (props.background?.textColor) {
+    style.color = props.background.textColor;
   }
 
   // Border

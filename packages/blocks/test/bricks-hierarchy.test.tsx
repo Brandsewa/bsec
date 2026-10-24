@@ -97,4 +97,30 @@ describe("Section > Container > 2x Blocks Hierarchy and Styling", () => {
     // Has responsive class
     expect(html).toContain("brx-resp");
   });
+
+  it("renders background color and text color pairing across desktop and responsive devices", () => {
+    const styledBlock = block("Block", {
+      background: {
+        color: "#0f172a",
+        textColor: "#ffffff",
+      },
+      responsive: {
+        mobile: {
+          background: {
+            color: "#1e293b",
+            textColor: "#cbd5e1",
+          },
+        },
+      },
+      content: [],
+    });
+
+    const html = render(styledBlock);
+    expect(html).toContain("background-color:#0f172a");
+    expect(html).toContain("color:#ffffff");
+    expect(html).toContain("--brx-d-bg-c:#0f172a");
+    expect(html).toContain("--brx-d-c:#ffffff");
+    expect(html).toContain("--brx-m-bg-c:#1e293b");
+    expect(html).toContain("--brx-m-c:#cbd5e1");
+  });
 });

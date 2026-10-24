@@ -42,7 +42,6 @@ import { BlocksPreview } from "./BlocksPreview.tsx";
 import { Dropdown, type DropdownOption } from "./Dropdown.tsx";
 import type { BlockEditorHost } from "./context.tsx";
 import { useFontLink } from "./fonts.ts";
-import { ColorPickerSwatch } from "./ColorPickerSwatch.tsx";
 
 /**
  * Theme settings: colours, fonts, corners and buttons. Used by the platform theme builder and
@@ -313,6 +312,91 @@ const accordion = {
   body: { display: "grid", gap: 10, paddingBottom: 14 } as CSSProperties,
 };
 
+
+/** A custom color row for Theme Settings: circular swatch (triggers native picker) + hex input + description below. */
+function ThemeColorRow({
+  title,
+  hint,
+  value,
+  disabled,
+  onChange,
+}: {
+  title: string;
+  hint?: string | undefined;
+  value: string | undefined;
+  disabled?: boolean | undefined;
+  onChange: (hex: string) => void;
+}) {
+  const hex = /^#[0-9a-f]{6}$/i.test(value ?? "") ? (value as string) : "#000000";
+  return (
+    <div style={{ display: "grid", gap: 3 }}>
+      <span style={label}>{title}</span>
+      <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+        <label
+          title={`Click to pick ${title}`}
+          style={{
+            position: "relative",
+            width: 26,
+            height: 26,
+            flex: "none",
+            borderRadius: "50%",
+            background: value || "#ffffff",
+            border: "1px solid rgba(0,0,0,0.18)",
+            boxShadow: "inset 0 0 0 2px #fff",
+            cursor: disabled ? "not-allowed" : "pointer",
+            overflow: "hidden",
+            display: "inline-block",
+          }}
+        >
+          <input
+            type="color"
+            aria-label={`${title} color picker`}
+            value={hex}
+            disabled={disabled}
+            onChange={(e) => onChange(e.target.value)}
+            style={{
+              position: "absolute",
+              inset: 0,
+              width: "100%",
+              height: "100%",
+              opacity: 0,
+              cursor: "pointer",
+              border: 0,
+              padding: 0,
+            }}
+          />
+        </label>
+        <input
+          type="text"
+          aria-label={`${title} hex`}
+          value={value ?? ""}
+          placeholder="#000000"
+          disabled={disabled}
+          onChange={(e) => onChange(e.target.value)}
+          onBlur={(e) => {
+            const trimmed = e.target.value.trim();
+            if (/^#[0-9a-f]{3,8}$/i.test(trimmed)) onChange(trimmed);
+          }}
+          style={{
+            flex: 1,
+            border: "1px solid #d4d4d8",
+            borderRadius: 7,
+            padding: "5px 8px",
+            fontSize: 12,
+            background: "#fff",
+            color: "#111",
+            fontFamily: "ui-monospace, monospace",
+          }}
+        />
+      </div>
+      {hint ? (
+        <span style={{ display: "block", fontSize: 11, color: "#71717a", lineHeight: 1.35, marginTop: 1 }}>
+          {hint}
+        </span>
+      ) : null}
+    </div>
+  );
+}
 
 function Field({ title, hint, children }: { title: string; hint?: string | undefined; children: ReactNode }) {
   return (
@@ -933,22 +1017,21 @@ export function ThemeSettingsPanel({ tokens, onChange, disabled, note }: ThemeSe
           ))}
         </div>
         {COLOR_SECTIONS.map((sec, secIdx) => (
-          <div key={secIdx} style={{ display: "grid", gap: 8, borderTop: secIdx > 0 ? "1px dashed #e4e4e7" : undefined, paddingTop: secIdx > 0 ? 10 : 0 }}>
+          <div key={secIdx} style={{ display: "grid", gap: 10, borderTop: secIdx > 0 ? "1px dashed #e4e4e7" : undefined, paddingTop: secIdx > 0 ? 12 : 0 }}>
             {sec.title ? (
               <span style={{ fontSize: 11, fontWeight: 700, color: "#18181b", textTransform: "uppercase", letterSpacing: "0.04em" }}>
                 {sec.title}
               </span>
             ) : null}
             {sec.fields.map((f) => (
-              <Field key={f.key} title={f.label} hint={f.hint}>
-                <ColorPickerSwatch
-                  label={f.label}
-                  value={v.colors[f.key] ?? DEFAULT_THEME_COLORS[f.key]}
-                  disabled={disabled}
-                  showHexInput
-                  onChange={(hex) => hex && commit({ colors: { [f.key]: hex } })}
-                />
-              </Field>
+              <ThemeColorRow
+                key={f.key}
+                title={f.label}
+                hint={f.hint}
+                value={v.colors[f.key] ?? DEFAULT_THEME_COLORS[f.key]}
+                disabled={disabled}
+                onChange={(hex) => hex && commit({ colors: { [f.key]: hex } })}
+              />
             ))}
           </div>
         ))}
@@ -1035,42 +1118,32 @@ export function ThemeSettingsPanel({ tokens, onChange, disabled, note }: ThemeSe
               Reset
             </button>
           </div>
-          <Field title="Dark button: background" hint="The main button. Also the colour of outline and soft buttons.">
-            <ColorPickerSwatch
-              label="Dark button background"
-              value={v.buttonColors.darkBg}
-              disabled={disabled}
-              showHexInput
-              onChange={(hex) => hex && commit({ buttonColors: { darkBg: hex } })}
-            />
-          </Field>
-          <Field title="Dark button: text">
-            <ColorPickerSwatch
-              label="Dark button text"
-              value={v.buttonColors.darkText}
-              disabled={disabled}
-              showHexInput
-              onChange={(hex) => hex && commit({ buttonColors: { darkText: hex } })}
-            />
-          </Field>
-          <Field title="Light button: background" hint="The secondary button.">
-            <ColorPickerSwatch
-              label="Light button background"
-              value={v.buttonColors.lightBg}
-              disabled={disabled}
-              showHexInput
-              onChange={(hex) => hex && commit({ buttonColors: { lightBg: hex } })}
-            />
-          </Field>
-          <Field title="Light button: text">
-            <ColorPickerSwatch
-              label="Light button text"
-              value={v.buttonColors.lightText}
-              disabled={disabled}
-              showHexInput
-              onChange={(hex) => hex && commit({ buttonColors: { lightText: hex } })}
-            />
-          </Field>
+          <ThemeColorRow
+            title="Dark button: background"
+            hint="The main button. Also the colour of outline and soft buttons."
+            value={v.buttonColors.darkBg}
+            disabled={disabled}
+            onChange={(hex) => commit({ buttonColors: { darkBg: hex } })}
+          />
+          <ThemeColorRow
+            title="Dark button: text"
+            value={v.buttonColors.darkText}
+            disabled={disabled}
+            onChange={(hex) => commit({ buttonColors: { darkText: hex } })}
+          />
+          <ThemeColorRow
+            title="Light button: background"
+            hint="The secondary button."
+            value={v.buttonColors.lightBg}
+            disabled={disabled}
+            onChange={(hex) => commit({ buttonColors: { lightBg: hex } })}
+          />
+          <ThemeColorRow
+            title="Light button: text"
+            value={v.buttonColors.lightText}
+            disabled={disabled}
+            onChange={(hex) => commit({ buttonColors: { lightText: hex } })}
+          />
         </div>
       </Section>
     </div>

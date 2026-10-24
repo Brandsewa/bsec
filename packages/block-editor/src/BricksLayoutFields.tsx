@@ -374,6 +374,18 @@ export const backgroundField = (): CustomField<Record<string, unknown> | undefin
             label="Background Color"
             value={v.color as string | undefined}
             onChange={(hex) => set("color", hex)}
+            textColor={v.textColor as string | undefined}
+            onTextColorChange={(hex) => set("textColor", hex)}
+          />
+        </div>
+
+        {/* Text Color */}
+        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+          <span style={{ fontSize: 12, color: "#27272a", fontWeight: 500 }}>Text Color</span>
+          <ColorPickerSwatch
+            label="Text Color"
+            value={v.textColor as string | undefined}
+            onChange={(hex) => set("textColor", hex)}
           />
         </div>
 
