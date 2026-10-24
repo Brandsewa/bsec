@@ -24,6 +24,9 @@ import {
   DEFAULT_SITE_WIDTHS,
   resolveThemeLayout,
   sanitizeLayoutLength,
+  DEFAULT_THEME_COLORS,
+  resolveThemeColors,
+  type ThemeColorKey,
   type HeadingSizes,
   type SizeDevice,
   type BlockInstance,
@@ -39,6 +42,7 @@ import { BlocksPreview } from "./BlocksPreview.tsx";
 import { Dropdown, type DropdownOption } from "./Dropdown.tsx";
 import type { BlockEditorHost } from "./context.tsx";
 import { useFontLink } from "./fonts.ts";
+import { ColorPickerSwatch } from "./ColorPickerSwatch.tsx";
 
 /**
  * Theme settings: colours, fonts, corners and buttons. Used by the platform theme builder and
@@ -48,23 +52,188 @@ import { useFontLink } from "./fonts.ts";
 
 export type ThemeTokens = ThemeTokensLike & Record<string, unknown>;
 
-const COLOR_FIELDS = [
-  { key: "primary", label: "Brand colour", hint: "Buttons, links and accents" },
-  { key: "secondary", label: "Secondary" },
-  { key: "accent", label: "Accent" },
-  { key: "background", label: "Page background" },
-  { key: "surface", label: "Soft background", hint: "Cards and alternate sections" },
-  { key: "dark", label: "Dark background", hint: "Sections set to the dark background" },
-  { key: "text", label: "Text on light backgrounds" },
-  { key: "textOnDark", label: "Text on dark backgrounds" },
-] as const;
+interface ThemeColorFieldDef {
+  key: ThemeColorKey;
+  label: string;
+  hint?: string;
+}
 
-const PRESETS: Array<{ name: string; colors: Record<string, string> }> = [
-  { name: "Forest", colors: { primary: "#0b6b42", secondary: "#334155", accent: "#f59e0b", background: "#ffffff", surface: "#f4f7f5", text: "#16201b", dark: "#10231a", textOnDark: "#f4f7f5" } },
-  { name: "Ocean", colors: { primary: "#1d4ed8", secondary: "#334155", accent: "#06b6d4", background: "#ffffff", surface: "#f1f5fb", text: "#0f172a", dark: "#0f1f3d", textOnDark: "#f1f5fb" } },
-  { name: "Sunset", colors: { primary: "#c2410c", secondary: "#44403c", accent: "#eab308", background: "#fffbf7", surface: "#fdf1e7", text: "#2a1a10", dark: "#2a1a10", textOnDark: "#fdf1e7" } },
-  { name: "Mono", colors: { primary: "#111827", secondary: "#4b5563", accent: "#6b7280", background: "#ffffff", surface: "#f3f4f6", text: "#111827", dark: "#111827", textOnDark: "#ffffff" } },
-  { name: "Midnight", colors: { primary: "#a78bfa", secondary: "#94a3b8", accent: "#f472b6", background: "#0f172a", surface: "#1e293b", text: "#f1f5f9", dark: "#020617", textOnDark: "#f1f5f9" } },
+const COLOR_SECTIONS: Array<{
+  title?: string;
+  fields: ThemeColorFieldDef[];
+}> = [
+  {
+    fields: [
+      { key: "siteBackground", label: "Site Background", hint: "Overall page / canvas background" },
+    ],
+  },
+  {
+    title: "Brand Palette",
+    fields: [
+      { key: "primary", label: "Primary", hint: "Main brand color, primary buttons and accents" },
+      { key: "secondary", label: "Secondary", hint: "Secondary actions, borders, and subtext" },
+      { key: "accent1", label: "Accent 1", hint: "First accent color for callouts and highlights" },
+      { key: "accent2", label: "Accent 2", hint: "Second accent color for badges and emphasis" },
+    ],
+  },
+  {
+    title: "Light Scheme",
+    fields: [
+      { key: "lightHeading", label: "Heading", hint: "Headings on light background" },
+      { key: "lightText", label: "Text", hint: "Body text on light background" },
+      { key: "lightButton", label: "Button", hint: "Button background on light scheme" },
+      { key: "lightButtonText", label: "Button Text", hint: "Button text on light scheme" },
+      { key: "lightBackground", label: "Backgrounds", hint: "Default section & card background on light scheme" },
+    ],
+  },
+  {
+    title: "Dark Scheme",
+    fields: [
+      { key: "darkHeading", label: "Heading", hint: "Headings on dark background" },
+      { key: "darkText", label: "Text", hint: "Body text on dark background" },
+      { key: "darkButton", label: "Button Background", hint: "Button background on dark scheme" },
+      { key: "darkButtonText", label: "Button Text", hint: "Button text on dark scheme" },
+      { key: "darkBackground", label: "Backgrounds", hint: "Default section & card background on dark scheme" },
+    ],
+  },
+];
+
+const PRESETS: Array<{ name: string; primary: string; colors: Record<string, string> }> = [
+  {
+    name: "Forest",
+    primary: "#0b6b42",
+    colors: {
+      siteBackground: "#ffffff",
+      primary: "#0b6b42",
+      secondary: "#334155",
+      accent1: "#15803d",
+      accent2: "#f59e0b",
+      lightHeading: "#16201b",
+      lightText: "#334155",
+      lightButton: "#0b6b42",
+      lightButtonText: "#ffffff",
+      lightBackground: "#f4f7f5",
+      darkHeading: "#f4f7f5",
+      darkText: "#cbd5e1",
+      darkButton: "#15803d",
+      darkButtonText: "#ffffff",
+      darkBackground: "#10231a",
+      accent: "#15803d",
+      background: "#ffffff",
+      surface: "#f4f7f5",
+      text: "#16201b",
+      dark: "#10231a",
+      textOnDark: "#f4f7f5",
+    },
+  },
+  {
+    name: "Ocean",
+    primary: "#1d4ed8",
+    colors: {
+      siteBackground: "#ffffff",
+      primary: "#1d4ed8",
+      secondary: "#334155",
+      accent1: "#06b6d4",
+      accent2: "#3b82f6",
+      lightHeading: "#0f172a",
+      lightText: "#334155",
+      lightButton: "#1d4ed8",
+      lightButtonText: "#ffffff",
+      lightBackground: "#f1f5fb",
+      darkHeading: "#f1f5fb",
+      darkText: "#94a3b8",
+      darkButton: "#06b6d4",
+      darkButtonText: "#0f172a",
+      darkBackground: "#0f1f3d",
+      accent: "#06b6d4",
+      background: "#ffffff",
+      surface: "#f1f5fb",
+      text: "#0f172a",
+      dark: "#0f1f3d",
+      textOnDark: "#f1f5fb",
+    },
+  },
+  {
+    name: "Sunset",
+    primary: "#c2410c",
+    colors: {
+      siteBackground: "#fffbf7",
+      primary: "#c2410c",
+      secondary: "#44403c",
+      accent1: "#eab308",
+      accent2: "#f97316",
+      lightHeading: "#2a1a10",
+      lightText: "#44403c",
+      lightButton: "#c2410c",
+      lightButtonText: "#ffffff",
+      lightBackground: "#fdf1e7",
+      darkHeading: "#fffbf7",
+      darkText: "#d6d3d1",
+      darkButton: "#ea580c",
+      darkButtonText: "#ffffff",
+      darkBackground: "#2a1a10",
+      accent: "#eab308",
+      background: "#fffbf7",
+      surface: "#fdf1e7",
+      text: "#2a1a10",
+      dark: "#2a1a10",
+      textOnDark: "#fdf1e7",
+    },
+  },
+  {
+    name: "Mono",
+    primary: "#111827",
+    colors: {
+      siteBackground: "#ffffff",
+      primary: "#111827",
+      secondary: "#4b5563",
+      accent1: "#6b7280",
+      accent2: "#9ca3af",
+      lightHeading: "#111827",
+      lightText: "#374151",
+      lightButton: "#111827",
+      lightButtonText: "#ffffff",
+      lightBackground: "#f3f4f6",
+      darkHeading: "#ffffff",
+      darkText: "#d1d5db",
+      darkButton: "#ffffff",
+      darkButtonText: "#111827",
+      darkBackground: "#111827",
+      accent: "#6b7280",
+      background: "#ffffff",
+      surface: "#f3f4f6",
+      text: "#111827",
+      dark: "#111827",
+      textOnDark: "#ffffff",
+    },
+  },
+  {
+    name: "Midnight",
+    primary: "#a78bfa",
+    colors: {
+      siteBackground: "#0f172a",
+      primary: "#a78bfa",
+      secondary: "#94a3b8",
+      accent1: "#f472b6",
+      accent2: "#38bdf8",
+      lightHeading: "#0f172a",
+      lightText: "#334155",
+      lightButton: "#7c3aed",
+      lightButtonText: "#ffffff",
+      lightBackground: "#f8fafc",
+      darkHeading: "#f1f5f9",
+      darkText: "#cbd5e1",
+      darkButton: "#a78bfa",
+      darkButtonText: "#0f172a",
+      darkBackground: "#020617",
+      accent: "#f472b6",
+      background: "#0f172a",
+      surface: "#1e293b",
+      text: "#f1f5f9",
+      dark: "#020617",
+      textOnDark: "#f1f5f9",
+    },
+  },
 ];
 
 const RADIUS_LABELS: Record<(typeof THEME_RADII)[number], string> = { none: "Square", sm: "Slight", md: "Rounded", lg: "Very rounded", full: "Pill" };
@@ -86,17 +255,9 @@ function radiusKey(v: string | undefined): (typeof THEME_RADII)[number] {
 /** Reads the editable values out of tokens in either the current or the first-launch shape. */
 export function readThemeSettings(tokens: ThemeTokens) {
   const sanitized = computeThemeTokens(null, tokens);
+  const resolvedColors = resolveThemeColors(null, tokens);
   return {
-    colors: {
-      primary: sanitized["--color-primary"] ?? "#0f172a",
-      secondary: sanitized["--color-secondary"] ?? "#334155",
-      accent: sanitized["--color-accent"] ?? "#2563eb",
-      background: sanitized["--color-background"] ?? "#ffffff",
-      surface: sanitized["--color-surface"] ?? "#f8fafc",
-      text: sanitized["--color-text"] ?? "#0f172a",
-      dark: sanitized["--color-dark"] ?? "#0f172a",
-      textOnDark: sanitized["--color-text-on-dark"] ?? "#ffffff",
-    } as Record<string, string>,
+    colors: resolvedColors as Record<string, string>,
     sizes: resolveHeadingSizes(tokens),
     bodySizes: resolveBodySizes(tokens),
     heading: String(tokens.fonts?.heading ?? tokens.typography?.headingFont ?? "Inter"),
@@ -152,36 +313,6 @@ const accordion = {
   body: { display: "grid", gap: 10, paddingBottom: 14 } as CSSProperties,
 };
 
-/**
- * A colour field: a round swatch plus its hex code. The native colour input sits invisibly over a round,
- * clipped swatch, so every colour in the panel has the same round shape (the browser's own swatch is square).
- */
-function ColorField({ name, value, disabled, onPick }: { name: string; value: string; disabled?: boolean | undefined; onPick: (hex: string) => void }) {
-  const hex = /^#[0-9a-f]{6}$/i.test(value) ? value : "#000000";
-  return (
-    <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
-      <label style={{ position: "relative", width: 26, height: 26, flex: "none", borderRadius: "50%", background: hex, border: "1px solid rgba(0,0,0,.18)", boxShadow: "inset 0 0 0 2px #fff", overflow: "hidden", cursor: disabled ? "not-allowed" : "pointer", opacity: disabled ? 0.6 : 1 }}>
-        <input
-          type="color"
-          aria-label={`${name} colour`}
-          value={hex}
-          disabled={disabled}
-          onChange={(e) => onPick(e.target.value)}
-          style={{ position: "absolute", inset: 0, width: "100%", height: "100%", opacity: 0, cursor: "inherit", border: 0, padding: 0 }}
-        />
-      </label>
-      <input
-        type="text"
-        aria-label={`${name} hex`}
-        defaultValue={value}
-        key={value}
-        disabled={disabled}
-        onBlur={(e) => /^#[0-9a-f]{6}$/i.test(e.target.value.trim()) && onPick(e.target.value.trim())}
-        style={{ ...input, fontFamily: "ui-monospace, monospace" }}
-      />
-    </div>
-  );
-}
 
 function Field({ title, hint, children }: { title: string; hint?: string | undefined; children: ReactNode }) {
   return (
@@ -719,10 +850,22 @@ export function ThemeSettingsPanel({ tokens, onChange, disabled, note }: ThemeSe
     buttonColors?: Partial<Record<ButtonColorKey, string | undefined>>;
     layout?: ResolvedThemeLayout;
   }) => {
+    const patchColors = patch.colors
+      ? (() => {
+          const synced = { ...patch.colors };
+          if ("siteBackground" in patch.colors && !("background" in patch.colors)) synced.background = patch.colors.siteBackground;
+          if ("accent1" in patch.colors && !("accent" in patch.colors)) synced.accent = patch.colors.accent1;
+          if ("lightBackground" in patch.colors && !("surface" in patch.colors)) synced.surface = patch.colors.lightBackground;
+          if ("lightText" in patch.colors && !("text" in patch.colors)) synced.text = patch.colors.lightText;
+          if ("darkBackground" in patch.colors && !("dark" in patch.colors)) synced.dark = patch.colors.darkBackground;
+          if ("darkText" in patch.colors && !("textOnDark" in patch.colors)) synced.textOnDark = patch.colors.darkText;
+          return synced;
+        })()
+      : undefined;
     const next = {
       ...v,
       ...patch,
-      colors: { ...v.colors, ...(patch.colors ?? {}) },
+      colors: { ...v.colors, ...(patchColors ?? {}) },
       buttonColorsSet: { ...v.buttonColorsSet, ...(patch.buttonColors ?? {}) },
       layout: patch.layout ?? v.layout,
     };
@@ -754,24 +897,60 @@ export function ThemeSettingsPanel({ tokens, onChange, disabled, note }: ThemeSe
       <p style={{ fontSize: 11, color: "#71717a", margin: "0 0 4px" }}>{note ?? "Applies to every page of this theme."}</p>
 
       <Section id="colors" title="Colours" open={openId === "colors"} onToggle={() => toggle("colors")}>
-        <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
+        <div style={{ display: "flex", flexWrap: "wrap", gap: 6, marginBottom: 12 }}>
           {PRESETS.map((p) => (
             <button
               key={p.name}
               type="button"
               disabled={disabled}
               onClick={() => commit({ colors: p.colors })}
-              style={{ border: "1px solid #d4d4d8", background: "#fff", color: "#18181b", borderRadius: 999, padding: "2px 9px 2px 5px", fontSize: 11, cursor: "pointer", display: "inline-flex", alignItems: "center", gap: 6 }}
+              style={{
+                border: "1px solid #d4d4d8",
+                background: "#fff",
+                color: "#18181b",
+                borderRadius: 999,
+                padding: "3px 10px 3px 6px",
+                fontSize: 11,
+                cursor: disabled ? "not-allowed" : "pointer",
+                display: "inline-flex",
+                alignItems: "center",
+                gap: 6,
+                boxShadow: "0 1px 2px rgba(0,0,0,0.04)",
+              }}
             >
-              <span style={{ width: 14, height: 14, borderRadius: 999, background: p.colors["primary"], display: "inline-block" }} />
+              <span
+                style={{
+                  width: 14,
+                  height: 14,
+                  borderRadius: 999,
+                  background: p.primary,
+                  display: "inline-block",
+                  boxShadow: "inset 0 0 0 1px rgba(0,0,0,0.15)",
+                }}
+              />
               {p.name}
             </button>
           ))}
         </div>
-        {COLOR_FIELDS.map((f) => (
-          <Field key={f.key} title={f.label} hint={"hint" in f ? f.hint : undefined}>
-            <ColorField name={f.label} value={v.colors[f.key] ?? "#000000"} disabled={disabled} onPick={(hex) => commit({ colors: { [f.key]: hex } })} />
-          </Field>
+        {COLOR_SECTIONS.map((sec, secIdx) => (
+          <div key={secIdx} style={{ display: "grid", gap: 8, borderTop: secIdx > 0 ? "1px dashed #e4e4e7" : undefined, paddingTop: secIdx > 0 ? 10 : 0 }}>
+            {sec.title ? (
+              <span style={{ fontSize: 11, fontWeight: 700, color: "#18181b", textTransform: "uppercase", letterSpacing: "0.04em" }}>
+                {sec.title}
+              </span>
+            ) : null}
+            {sec.fields.map((f) => (
+              <Field key={f.key} title={f.label} hint={f.hint}>
+                <ColorPickerSwatch
+                  label={f.label}
+                  value={v.colors[f.key] ?? DEFAULT_THEME_COLORS[f.key]}
+                  disabled={disabled}
+                  showHexInput
+                  onChange={(hex) => hex && commit({ colors: { [f.key]: hex } })}
+                />
+              </Field>
+            ))}
+          </div>
         ))}
       </Section>
 
@@ -857,16 +1036,40 @@ export function ThemeSettingsPanel({ tokens, onChange, disabled, note }: ThemeSe
             </button>
           </div>
           <Field title="Dark button: background" hint="The main button. Also the colour of outline and soft buttons.">
-            <ColorField name="Dark button background" value={v.buttonColors.darkBg} disabled={disabled} onPick={(hex) => commit({ buttonColors: { darkBg: hex } })} />
+            <ColorPickerSwatch
+              label="Dark button background"
+              value={v.buttonColors.darkBg}
+              disabled={disabled}
+              showHexInput
+              onChange={(hex) => hex && commit({ buttonColors: { darkBg: hex } })}
+            />
           </Field>
           <Field title="Dark button: text">
-            <ColorField name="Dark button text" value={v.buttonColors.darkText} disabled={disabled} onPick={(hex) => commit({ buttonColors: { darkText: hex } })} />
+            <ColorPickerSwatch
+              label="Dark button text"
+              value={v.buttonColors.darkText}
+              disabled={disabled}
+              showHexInput
+              onChange={(hex) => hex && commit({ buttonColors: { darkText: hex } })}
+            />
           </Field>
           <Field title="Light button: background" hint="The secondary button.">
-            <ColorField name="Light button background" value={v.buttonColors.lightBg} disabled={disabled} onPick={(hex) => commit({ buttonColors: { lightBg: hex } })} />
+            <ColorPickerSwatch
+              label="Light button background"
+              value={v.buttonColors.lightBg}
+              disabled={disabled}
+              showHexInput
+              onChange={(hex) => hex && commit({ buttonColors: { lightBg: hex } })}
+            />
           </Field>
           <Field title="Light button: text">
-            <ColorField name="Light button text" value={v.buttonColors.lightText} disabled={disabled} onPick={(hex) => commit({ buttonColors: { lightText: hex } })} />
+            <ColorPickerSwatch
+              label="Light button text"
+              value={v.buttonColors.lightText}
+              disabled={disabled}
+              showHexInput
+              onChange={(hex) => hex && commit({ buttonColors: { lightText: hex } })}
+            />
           </Field>
         </div>
       </Section>

@@ -2,6 +2,7 @@ import { useState, type CSSProperties, type ReactNode } from "react";
 import type { BlockInstance } from "@bs/blocks";
 import { Dropdown, type DropdownOption } from "./Dropdown.tsx";
 import { useFrameEdit } from "./context.tsx";
+import { ColorPickerSwatch } from "./ColorPickerSwatch.tsx";
 
 /**
  * The General tab of the editor's left rail: store-wide settings that are not about one page. For now the
@@ -98,15 +99,12 @@ function NumberBox({ value, min, max, label: aria, onChange }: { value: number; 
 function ColourBox({ value, onChange, name }: { value: string | undefined; onChange: (v: string | undefined) => void; name: string }) {
   return (
     <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-      <label style={{ position: "relative", width: 26, height: 26, flex: "none", borderRadius: "50%", background: value ?? "repeating-conic-gradient(#e4e4e7 0 25%, #fff 0 50%) 50% / 10px 10px", border: "1px solid rgba(0,0,0,.18)", boxShadow: "inset 0 0 0 2px #fff", overflow: "hidden", cursor: "pointer" }}>
-        <input type="color" aria-label={name} value={value ?? "#000000"} onChange={(e) => onChange(e.target.value)} style={{ position: "absolute", inset: 0, width: "100%", height: "100%", opacity: 0, cursor: "pointer", border: 0, padding: 0 }} />
-      </label>
+      <ColorPickerSwatch
+        label={name}
+        value={value}
+        onChange={onChange}
+      />
       <span style={{ fontSize: 12, fontFamily: "ui-monospace, monospace", color: value ? "#18181b" : "#71717a" }}>{value ?? "Theme colour"}</span>
-      {value ? (
-        <button type="button" onClick={() => onChange(undefined)} style={{ border: 0, background: "none", color: "#2563eb", fontSize: 11, cursor: "pointer", padding: 0 }}>
-          Use theme colour
-        </button>
-      ) : null}
     </div>
   );
 }

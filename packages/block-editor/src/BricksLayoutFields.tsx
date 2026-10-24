@@ -10,6 +10,7 @@ import {
   useBricksActiveDevice,
 } from "./BricksTabs.tsx";
 import type { LayoutDevice } from "@bs/blocks";
+import { ColorPickerSwatch } from "./ColorPickerSwatch.tsx";
 
 // =============================================================================
 // BRICKS BUILDER ORIGINAL SVG ICONS
@@ -369,19 +370,11 @@ export const backgroundField = (): CustomField<Record<string, unknown> | undefin
         {/* Background Color */}
         <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
           <span style={{ fontSize: 12, color: "#27272a", fontWeight: 500 }}>Color</span>
-          <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
-            <input
-              type="color"
-              value={(v.color as string) || "#000000"}
-              onChange={(e) => set("color", e.target.value)}
-              style={{ width: 26, height: 26, borderRadius: "50%", border: "1px solid #d4d4d8", padding: 0, cursor: "pointer" }}
-            />
-            {v.color ? (
-              <button type="button" onClick={() => set("color", undefined)} style={{ border: 0, background: "none", color: "#2563eb", fontSize: 11, cursor: "pointer" }}>
-                Clear
-              </button>
-            ) : null}
-          </div>
+          <ColorPickerSwatch
+            label="Background Color"
+            value={v.color as string | undefined}
+            onChange={(hex) => set("color", hex)}
+          />
         </div>
 
         {/* Background Image with Media Library Button */}
@@ -592,11 +585,10 @@ export const borderField = (): CustomField<Record<string, unknown> | undefined> 
         </div>
         <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
           <span style={{ fontSize: 12, color: "#27272a", fontWeight: 500 }}>Color</span>
-          <input
-            type="color"
-            value={(v.color as string) || "#000000"}
-            onChange={(e) => set("color", e.target.value)}
-            style={{ width: 24, height: 24, borderRadius: "50%", border: "1px solid #d4d4d8", padding: 0, cursor: "pointer" }}
+          <ColorPickerSwatch
+            label="Border Color"
+            value={v.color as string | undefined}
+            onChange={(hex) => set("color", hex)}
           />
         </div>
 
@@ -674,14 +666,11 @@ export const boxShadowField = (): CustomField<Record<string, unknown> | undefine
             />
             Inset
           </label>
-          <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
-            <input
-              type="color"
-              value={(v.color as string) || "#000000"}
-              onChange={(e) => set("color", e.target.value)}
-              style={{ width: 22, height: 22, borderRadius: "50%", border: "1px solid #d4d4d8", padding: 0, cursor: "pointer" }}
-            />
-          </div>
+          <ColorPickerSwatch
+            label="Shadow Color"
+            value={v.color as string | undefined}
+            onChange={(hex) => set("color", hex)}
+          />
         </div>
       </div>
     );
