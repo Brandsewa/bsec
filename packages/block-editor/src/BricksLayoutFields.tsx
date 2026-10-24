@@ -1,3 +1,4 @@
+import { useState } from "react";
 import type { CustomField, Field } from "@puckeditor/core";
 import { AutoField, FieldLabel, usePuck } from "@puckeditor/core";
 import { useHost, useRenderData } from "./context.tsx";
@@ -57,6 +58,19 @@ export const BricksIcons = {
       <path d="M0.8 15.7v6c0 .4.2.8.4 1 .3.3.7.4 1.1.4h6" />
       <path d="M23.2 15.7v6c0 .4-.2.8-.4 1s-.7.4-1.1.4h-6" />
       <path d="M5.2 5.2h13.5v13.5H5.2V5.2Z" />
+    </svg>
+  ),
+  link: (
+    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71" />
+      <path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71" />
+    </svg>
+  ),
+  unlink: (
+    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M18.84 12.25l1.72-1.71a5 5 0 0 0-7.07-7.07l-1.72 1.71" />
+      <path d="M5.16 11.75l-1.71 1.71a5 5 0 0 0 7.07 7.07l1.71-1.71" />
+      <line x1="2" y1="2" x2="22" y2="22" />
     </svg>
   ),
 
@@ -549,36 +563,124 @@ export const backgroundField = (): CustomField<Record<string, unknown> | undefin
   },
 });
 
-// Border Panel with 4-Corner Radius
+// Border Panel with Linkable 4-Corner Radius
 export const borderField = (): CustomField<Record<string, unknown> | undefined> => ({
   type: "custom",
   label: "Border",
   render: ({ value, onChange }) => {
+    const activeDevice = useBricksActiveDevice();
+    const puck = usePuck();
     const v = (value as Record<string, unknown> | undefined) || {};
+
+    const selectedProps = puck?.selectedItem?.props as Record<string, any> | undefined;
+    const desktopBorder = (selectedProps?.border as Record<string, any>) || {};
+    const desktopRc = (desktopBorder.radiusCorners as Record<string, string>) || {};
+    const desktopRadius = (desktopBorder.radius as string) || "";
+    const desktopWidth = (desktopBorder.width as string) || "";
+
+    const normalizeValue = (raw: string | undefined): string => {
+      if (!raw) return "";
+      const trimmed = raw.trim();
+      if (!trimmed) return "";
+      if (/^-?\d+(\.\d+)?$/.test(trimmed)) return `${trimmed}px`;
+      return trimmed;
+    };
+
+    const rc = ((v.radiusCorners as Record<string, string>) || {});
+
+    // Initial linked state: true if no individual corners or if all 4 corners are identical
+    const [isLinked, setIsLinked] = useState(() => {
+      if (v.radiusCorners) {
+        const vals = Object.values(v.radiusCorners).filter(Boolean);
+        if (vals.length > 1) {
+          const first = vals[0];
+          return vals.every((x) => x === first);
+        }
+      }
+      return true;
+    });
+
     const set = (k: string, val: unknown) => {
       const next = { ...v, [k]: val !== undefined && val !== "" ? val : undefined };
       if (Object.values(next).every((x) => x === undefined)) onChange(undefined);
       else onChange(next);
     };
 
-    const rc = ((v.radiusCorners as Record<string, string>) || {});
+    const handleLinkedRadiusChange = (raw: string) => {
+      if (!raw) {
+        const next = { ...v, radius: undefined, radiusCorners: undefined };
+        if (Object.values(next).every((x) => x === undefined)) onChange(undefined);
+        else onChange(next);
+      } else {
+        const next = {
+          ...v,
+          radius: raw,
+          radiusCorners: { topLeft: raw, topRight: raw, bottomRight: raw, bottomLeft: raw },
+        };
+        onChange(next);
+      }
+    };
+
+    const handleLinkedRadiusBlur = (raw: string) => {
+      const normalized = normalizeValue(raw);
+      if (!normalized) {
+        const next = { ...v, radius: undefined, radiusCorners: undefined };
+        if (Object.values(next).every((x) => x === undefined)) onChange(undefined);
+        else onChange(next);
+      } else {
+        const next = {
+          ...v,
+          radius: normalized,
+          radiusCorners: { topLeft: normalized, topRight: normalized, bottomRight: normalized, bottomLeft: normalized },
+        };
+        onChange(next);
+      }
+    };
+
     const setCorner = (corner: string, val: string) => {
       const nextCorners = { ...rc, [corner]: val || undefined };
       if (Object.values(nextCorners).every((x) => !x)) {
-        set("radiusCorners", undefined);
+        const next = { ...v, radius: undefined, radiusCorners: undefined };
+        if (Object.values(next).every((x) => x === undefined)) onChange(undefined);
+        else onChange(next);
       } else {
-        set("radiusCorners", nextCorners);
+        const next = { ...v, radius: undefined, radiusCorners: nextCorners };
+        onChange(next);
       }
     };
+
+    const setCornerBlur = (corner: string, val: string) => {
+      const normalized = normalizeValue(val);
+      const nextCorners = { ...rc, [corner]: normalized || undefined };
+      if (Object.values(nextCorners).every((x) => !x)) {
+        const next = { ...v, radius: undefined, radiusCorners: undefined };
+        if (Object.values(next).every((x) => x === undefined)) onChange(undefined);
+        else onChange(next);
+      } else {
+        const next = { ...v, radius: undefined, radiusCorners: nextCorners };
+        onChange(next);
+      }
+    };
+
+    const cornersList = [
+      { key: "topLeft", label: "TL" },
+      { key: "topRight", label: "TR" },
+      { key: "bottomRight", label: "BR" },
+      { key: "bottomLeft", label: "BL" },
+    ] as const;
+
+    const currentLinkedValue = (v.radius as string) || rc.topLeft || "";
+    const inheritedLinkedValue = activeDevice !== "desktop" ? (desktopRadius || desktopRc.topLeft || "") : "";
 
     return (
       <div style={{ display: "grid", gap: 8 }}>
         <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
           <span style={{ fontSize: 12, color: "#27272a", fontWeight: 500 }}>Width</span>
           <input
-            placeholder="1px"
+            placeholder={activeDevice !== "desktop" && desktopWidth ? `${desktopWidth} (inherit)` : "1px"}
             value={(v.width as string) || ""}
             onChange={(e) => set("width", e.target.value)}
+            onBlur={(e) => set("width", normalizeValue(e.target.value))}
             style={{ width: 80, padding: "4px 8px", fontSize: 12, border: "1px solid #e4e4e7", borderRadius: 6, textAlign: "right" }}
           />
         </div>
@@ -604,27 +706,92 @@ export const borderField = (): CustomField<Record<string, unknown> | undefined> 
           />
         </div>
 
-        {/* 4-Corner Border Radius */}
+        {/* Border Radius Header with Link / Unlink toggle */}
         <div style={{ display: "grid", gap: 4, marginTop: 4 }}>
-          <span style={{ fontSize: 12, color: "#27272a", fontWeight: 500 }}>Border Radius</span>
-          <div style={{ display: "grid", gridTemplateColumns: "repeat(4, minmax(0, 1fr))", gap: 4 }}>
-            {[
-              { key: "topLeft", label: "TL" },
-              { key: "topRight", label: "TR" },
-              { key: "bottomRight", label: "BR" },
-              { key: "bottomLeft", label: "BL" },
-            ].map(({ key, label }) => (
-              <div key={key} style={{ display: "grid", gap: 2, textAlign: "center" }}>
-                <input
-                  placeholder="0px"
-                  value={rc[key] || (v.radius as string) || ""}
-                  onChange={(e) => setCorner(key, e.target.value)}
-                  style={{ width: "100%", padding: "4px", fontSize: 12, border: "1px solid #e4e4e7", borderRadius: 6, textAlign: "center", boxSizing: "border-box" }}
-                />
-                <span style={{ fontSize: 9, color: "#71717a" }}>{label}</span>
-              </div>
-            ))}
+          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+            <span style={{ fontSize: 12, color: "#27272a", fontWeight: 500 }}>Border Radius</span>
+            <button
+              type="button"
+              onClick={() => {
+                if (!isLinked) {
+                  const syncVal = rc.topLeft || rc.topRight || rc.bottomRight || rc.bottomLeft || (v.radius as string) || "";
+                  if (syncVal) {
+                    set("radius", syncVal);
+                    set("radiusCorners", { topLeft: syncVal, topRight: syncVal, bottomRight: syncVal, bottomLeft: syncVal });
+                  }
+                  setIsLinked(true);
+                } else {
+                  const currVal = (v.radius as string) || rc.topLeft || "";
+                  if (currVal) {
+                    set("radiusCorners", { topLeft: currVal, topRight: currVal, bottomRight: currVal, bottomLeft: currVal });
+                  }
+                  setIsLinked(false);
+                }
+              }}
+              title={isLinked ? "Unlink corners (edit TL, TR, BR, BL individually)" : "Link corners (apply same radius to all)"}
+              style={{
+                display: "inline-flex",
+                alignItems: "center",
+                gap: 4,
+                padding: "2px 6px",
+                fontSize: 10,
+                border: "1px solid #e4e4e7",
+                borderRadius: 4,
+                background: isLinked ? "#f4f4f5" : "#e0e7ff",
+                color: isLinked ? "#52525b" : "#4338ca",
+                cursor: "pointer",
+              }}
+            >
+              {isLinked ? BricksIcons.link : BricksIcons.unlink}
+              <span>{isLinked ? "Linked" : "Separate"}</span>
+            </button>
           </div>
+
+          {isLinked ? (
+            <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+              <input
+                placeholder={inheritedLinkedValue ? `${inheritedLinkedValue} (inherit)` : "0px"}
+                value={currentLinkedValue}
+                onChange={(e) => handleLinkedRadiusChange(e.target.value)}
+                onBlur={(e) => handleLinkedRadiusBlur(e.target.value)}
+                style={{
+                  width: "100%",
+                  padding: "4px 8px",
+                  fontSize: 12,
+                  border: "1px solid #e4e4e7",
+                  borderRadius: 6,
+                  textAlign: "right",
+                  boxSizing: "border-box",
+                }}
+              />
+            </div>
+          ) : (
+            <div style={{ display: "grid", gridTemplateColumns: "repeat(4, minmax(0, 1fr))", gap: 4 }}>
+              {cornersList.map(({ key, label }) => {
+                const inherited = activeDevice !== "desktop" ? (desktopRc[key] || desktopRadius || "") : "";
+                return (
+                  <div key={key} style={{ display: "grid", gap: 2, textAlign: "center" }}>
+                    <input
+                      placeholder={inherited || "0px"}
+                      value={rc[key] || (v.radius as string) || ""}
+                      onChange={(e) => setCorner(key, e.target.value)}
+                      onBlur={(e) => setCornerBlur(key, e.target.value)}
+                      style={{
+                        width: "100%",
+                        padding: "4px",
+                        fontSize: 12,
+                        border: "1px solid #e4e4e7",
+                        borderRadius: 6,
+                        textAlign: "center",
+                        boxSizing: "border-box",
+                      }}
+                    />
+                    <span style={{ fontSize: 9, color: "#71717a" }}>{label}</span>
+                  </div>
+                );
+              })}
+            </div>
+          )}
         </div>
       </div>
     );
@@ -636,7 +803,13 @@ export const boxShadowField = (): CustomField<Record<string, unknown> | undefine
   type: "custom",
   label: "Box Shadow",
   render: ({ value, onChange }) => {
+    const activeDevice = useBricksActiveDevice();
+    const puck = usePuck();
     const v = (value as Record<string, unknown> | undefined) || {};
+
+    const selectedProps = puck?.selectedItem?.props as Record<string, any> | undefined;
+    const desktopShadow = (selectedProps?.boxShadow as Record<string, any>) || {};
+
     const set = (k: string, val: unknown) => {
       const next = { ...v, [k]: val !== undefined && val !== "" ? val : undefined };
       if (Object.values(next).every((x) => x === undefined)) onChange(undefined);
@@ -655,11 +828,12 @@ export const boxShadowField = (): CustomField<Record<string, unknown> | undefine
         <div style={{ display: "grid", gridTemplateColumns: "repeat(4, minmax(0, 1fr))", gap: 4 }}>
           {SHADOW_DIMENSIONS.map(({ key, label }) => {
             const rawVal = v[key];
+            const inherited = activeDevice !== "desktop" && desktopShadow[key] !== undefined ? String(desktopShadow[key]) : "0";
             return (
               <label key={key} style={{ display: "grid", gap: 2, textAlign: "center" }}>
                 <input
                   type="number"
-                  placeholder="0"
+                  placeholder={inherited}
                   value={rawVal !== undefined ? String(rawVal) : ""}
                   onChange={(e) => set(key, e.target.value === "" ? undefined : Number(e.target.value))}
                   style={{ width: "100%", padding: "4px", fontSize: 12, border: "1px solid #e4e4e7", borderRadius: 6, textAlign: "center", boxSizing: "border-box" }}

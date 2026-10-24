@@ -664,6 +664,14 @@
   --brx-d-ta: initial;  --brx-t-ta: initial;  --brx-m-ta: initial;
   --brx-d-bg-c: initial;--brx-t-bg-c: initial;--brx-m-bg-c: initial;
   --brx-d-c: initial;   --brx-t-c: initial;   --brx-m-c: initial;
+  --brx-d-rtl: initial; --brx-t-rtl: initial; --brx-m-rtl: initial;
+  --brx-d-rtr: initial; --brx-t-rtr: initial; --brx-m-rtr: initial;
+  --brx-d-rbr: initial; --brx-t-rbr: initial; --brx-m-rbr: initial;
+  --brx-d-rbl: initial; --brx-t-rbl: initial; --brx-m-rbl: initial;
+  --brx-d-bw: initial;  --brx-t-bw: initial;  --brx-m-bw: initial;
+  --brx-d-bs: initial;  --brx-t-bs: initial;  --brx-m-bs: initial;
+  --brx-d-bc: initial;  --brx-t-bc: initial;  --brx-m-bc: initial;
+  --brx-d-bsh: initial; --brx-t-bsh: initial; --brx-m-bsh: initial;
 
   --b-dir: var(--brx-d-dir);
   --b-jc: var(--brx-d-jc);
@@ -690,6 +698,14 @@
   --b-ta: var(--brx-d-ta);
   --b-bg-c: var(--brx-d-bg-c);
   --b-c: var(--brx-d-c);
+  --b-rtl: var(--brx-d-rtl);
+  --b-rtr: var(--brx-d-rtr);
+  --b-rbr: var(--brx-d-rbr);
+  --b-rbl: var(--brx-d-rbl);
+  --b-bw: var(--brx-d-bw);
+  --b-bs: var(--brx-d-bs);
+  --b-bc: var(--brx-d-bc);
+  --b-bsh: var(--brx-d-bsh);
 
   flex-direction: var(--b-dir);
   justify-content: var(--b-jc);
@@ -719,6 +735,15 @@
   text-align: var(--b-ta);
   background-color: var(--b-bg-c);
   color: var(--b-c);
+
+  border-top-left-radius: var(--b-rtl);
+  border-top-right-radius: var(--b-rtr);
+  border-bottom-right-radius: var(--b-rbr);
+  border-bottom-left-radius: var(--b-rbl);
+  border-width: var(--b-bw);
+  border-style: var(--b-bs);
+  border-color: var(--b-bc);
+  box-shadow: var(--b-bsh);
 }
 
 /* Also forward flex/grid layout variables to inner Slot wrappers */
@@ -762,6 +787,14 @@
     --b-ta: var(--brx-t-ta, var(--brx-d-ta));
     --b-bg-c: var(--brx-t-bg-c, var(--brx-d-bg-c));
     --b-c: var(--brx-t-c, var(--brx-d-c));
+    --b-rtl: var(--brx-t-rtl, var(--brx-d-rtl));
+    --b-rtr: var(--brx-t-rtr, var(--brx-d-rtr));
+    --b-rbr: var(--brx-t-rbr, var(--brx-d-rbr));
+    --b-rbl: var(--brx-t-rbl, var(--brx-d-rbl));
+    --b-bw: var(--brx-t-bw, var(--brx-d-bw));
+    --b-bs: var(--brx-t-bs, var(--brx-d-bs));
+    --b-bc: var(--brx-t-bc, var(--brx-d-bc));
+    --b-bsh: var(--brx-t-bsh, var(--brx-d-bsh));
 
     flex-direction: var(--b-dir) !important;
     justify-content: var(--b-jc) !important;
@@ -790,6 +823,15 @@
     aspect-ratio: var(--b-ar) !important;
     text-align: var(--b-ta) !important;
     background-color: var(--b-bg-c) !important;
+
+    border-top-left-radius: var(--b-rtl) !important;
+    border-top-right-radius: var(--b-rtr) !important;
+    border-bottom-right-radius: var(--b-rbr) !important;
+    border-bottom-left-radius: var(--b-rbl) !important;
+    border-width: var(--b-bw) !important;
+    border-style: var(--b-bs) !important;
+    border-color: var(--b-bc) !important;
+    box-shadow: var(--b-bsh) !important;
   }
 
   .brx-resp > [style*="display: flex"],
@@ -833,6 +875,14 @@
     --b-ta: var(--brx-m-ta, var(--brx-t-ta, var(--brx-d-ta)));
     --b-bg-c: var(--brx-m-bg-c, var(--brx-t-bg-c, var(--brx-d-bg-c)));
     --b-c: var(--brx-m-c, var(--brx-t-c, var(--brx-d-c)));
+    --b-rtl: var(--brx-m-rtl, var(--brx-t-rtl, var(--brx-d-rtl)));
+    --b-rtr: var(--brx-m-rtr, var(--brx-t-rtr, var(--brx-d-rtr)));
+    --b-rbr: var(--brx-m-rbr, var(--brx-t-rbr, var(--brx-d-rbr)));
+    --b-rbl: var(--brx-m-rbl, var(--brx-t-rbl, var(--brx-d-rbl)));
+    --b-bw: var(--brx-m-bw, var(--brx-t-bw, var(--brx-d-bw)));
+    --b-bs: var(--brx-m-bs, var(--brx-t-bs, var(--brx-d-bs)));
+    --b-bc: var(--brx-m-bc, var(--brx-t-bc, var(--brx-d-bc)));
+    --b-bsh: var(--brx-m-bsh, var(--brx-t-bsh, var(--brx-d-bsh)));
 
     flex-direction: var(--b-dir) !important;
     justify-content: var(--b-jc) !important;
@@ -861,6 +911,15 @@
     aspect-ratio: var(--b-ar) !important;
     text-align: var(--b-ta) !important;
     background-color: var(--b-bg-c) !important;
+
+    border-top-left-radius: var(--b-rtl) !important;
+    border-top-right-radius: var(--b-rtr) !important;
+    border-bottom-right-radius: var(--b-rbr) !important;
+    border-bottom-left-radius: var(--b-rbl) !important;
+    border-width: var(--b-bw) !important;
+    border-style: var(--b-bs) !important;
+    border-color: var(--b-bc) !important;
+    box-shadow: var(--b-bsh) !important;
   }
 
   .brx-resp > [style*="display: flex"],
@@ -984,6 +1043,7 @@
   display: block;
   width: 100%;
   height: 100%;
+  border-radius: inherit;
 }
 .brxe-image img {
   display: block;

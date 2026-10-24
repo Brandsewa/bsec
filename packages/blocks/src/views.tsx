@@ -541,7 +541,7 @@ export function SectionView({ props, children, ctx }: A<R.SectionProps>): ReactN
     >
       {bg ? (
         <>
-          <picture style={{ position: "absolute", inset: 0, width: "100%", height: "100%", zIndex: 0 }}>
+          <picture style={{ position: "absolute", inset: 0, width: "100%", height: "100%", zIndex: 0, borderRadius: "inherit", overflow: "hidden" }}>
             {mobileBg && <source media="(max-width: 767px)" srcSet={mobileBg} />}
             {tabletBg && <source media="(max-width: 1023px)" srcSet={tabletBg} />}
             <img
@@ -557,10 +557,11 @@ export function SectionView({ props, children, ctx }: A<R.SectionProps>): ReactN
                 objectFit: (props.background?.imageSize as CSSProperties["objectFit"]) || "cover",
                 objectPosition: props.background?.imagePosition || "center center",
                 zIndex: 0,
+                borderRadius: "inherit",
               }}
             />
           </picture>
-          {props.overlayOpacity ? <div className="bsb-hero-scrim" style={{ position: "absolute", inset: 0, background: "#000", opacity: props.overlayOpacity / 100, zIndex: 0 }} /> : null}
+          {props.overlayOpacity ? <div className="bsb-hero-scrim" style={{ position: "absolute", inset: 0, background: "#000", opacity: props.overlayOpacity / 100, zIndex: 0, borderRadius: "inherit" }} /> : null}
         </>
       ) : null}
       {bgVideo ? (
@@ -578,6 +579,7 @@ export function SectionView({ props, children, ctx }: A<R.SectionProps>): ReactN
             objectFit: (props.background?.videoFit as CSSProperties["objectFit"]) || "cover",
             objectPosition: props.background?.videoPosition || "center center",
             zIndex: 0,
+            borderRadius: "inherit",
           }}
         >
           <source src={bgVideo} />
@@ -632,7 +634,7 @@ export function ContainerView({ props, children, ctx }: A<R.ContainerProps>): Re
       }}
     >
       {bg ? (
-        <picture style={{ position: "absolute", inset: 0, width: "100%", height: "100%", zIndex: 0 }}>
+        <picture style={{ position: "absolute", inset: 0, width: "100%", height: "100%", zIndex: 0, borderRadius: "inherit", overflow: "hidden" }}>
           {mobileBg && <source media="(max-width: 767px)" srcSet={mobileBg} />}
           {tabletBg && <source media="(max-width: 1023px)" srcSet={tabletBg} />}
           <img
@@ -648,6 +650,7 @@ export function ContainerView({ props, children, ctx }: A<R.ContainerProps>): Re
               objectFit: (props.background?.imageSize as CSSProperties["objectFit"]) || "cover",
               objectPosition: props.background?.imagePosition || "center center",
               zIndex: 0,
+              borderRadius: "inherit",
             }}
           />
         </picture>
@@ -667,6 +670,7 @@ export function ContainerView({ props, children, ctx }: A<R.ContainerProps>): Re
             objectFit: (props.background?.videoFit as CSSProperties["objectFit"]) || "cover",
             objectPosition: props.background?.videoPosition || "center center",
             zIndex: 0,
+            borderRadius: "inherit",
           }}
         >
           <source src={bgVideo} />
@@ -723,7 +727,7 @@ export function BlockView({ props, children, ctx }: A<R.BlockProps>): ReactNode 
       }}
     >
       {bg ? (
-        <picture style={{ position: "absolute", inset: 0, width: "100%", height: "100%", zIndex: 0 }}>
+        <picture style={{ position: "absolute", inset: 0, width: "100%", height: "100%", zIndex: 0, borderRadius: "inherit", overflow: "hidden" }}>
           {mobileBg && <source media="(max-width: 767px)" srcSet={mobileBg} />}
           {tabletBg && <source media="(max-width: 1023px)" srcSet={tabletBg} />}
           <img
@@ -739,6 +743,7 @@ export function BlockView({ props, children, ctx }: A<R.BlockProps>): ReactNode 
               objectFit: (props.background?.imageSize as CSSProperties["objectFit"]) || "cover",
               objectPosition: props.background?.imagePosition || "center center",
               zIndex: 0,
+              borderRadius: "inherit",
             }}
           />
         </picture>
@@ -758,6 +763,7 @@ export function BlockView({ props, children, ctx }: A<R.BlockProps>): ReactNode 
             objectFit: (props.background?.videoFit as CSSProperties["objectFit"]) || "cover",
             objectPosition: props.background?.videoPosition || "center center",
             zIndex: 0,
+            borderRadius: "inherit",
           }}
         >
           <source src={bgVideo} />
@@ -940,6 +946,7 @@ export function ImageView({ props, ctx }: A<R.ImageProps>): ReactNode {
         backgroundColor: imgInfo.dominantColor ?? undefined,
         width: "100%",
         height: "100%",
+        borderRadius: "inherit",
       }}
     />
   );
@@ -1001,7 +1008,7 @@ export function VideoView({ props, ctx }: A<R.VideoProps>): ReactNode {
           muted={props.autoplayLoop}
           playsInline
           preload="none"
-          style={{ width: "100%", height: "100%", objectFit: videoFit, objectPosition: videoPos }}
+          style={{ width: "100%", height: "100%", objectFit: videoFit, objectPosition: videoPos, borderRadius: "inherit" }}
         >
           {mobileMediaUrl ? <source media="(max-width: 767px)" src={mobileMediaUrl} /> : null}
           {tabletMediaUrl ? <source media="(max-width: 1023px)" src={tabletMediaUrl} /> : null}
@@ -1031,7 +1038,7 @@ export function VideoView({ props, ctx }: A<R.VideoProps>): ReactNode {
         muted={props.autoplayLoop}
         preload="none"
         playsInline
-        style={{ width: "100%", height: "100%", objectFit: videoFit, objectPosition: videoPos }}
+        style={{ width: "100%", height: "100%", objectFit: videoFit, objectPosition: videoPos, borderRadius: "inherit" }}
       />
     ) : (
       <iframe
@@ -1040,7 +1047,7 @@ export function VideoView({ props, ctx }: A<R.VideoProps>): ReactNode {
         loading="lazy"
         allowFullScreen
         allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
-        style={{ width: "100%", height: "100%", objectFit: videoFit, border: 0 }}
+        style={{ width: "100%", height: "100%", objectFit: videoFit, border: 0, borderRadius: "inherit" }}
       />
     );
   };

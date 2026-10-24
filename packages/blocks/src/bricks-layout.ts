@@ -419,6 +419,87 @@ export function bricksElementStyle(props: BricksLayoutProps, options?: { default
   if (tc_t) style["--brx-t-c"] = tc_t;
   if (tc_m) style["--brx-m-c"] = tc_m;
 
+  // Border Radius (per-corner with uniform radius fallback and D -> T -> M cascade)
+  const getCornerRadius = (
+    devBorder: z.infer<typeof borderSchema> | undefined,
+    corner: "topLeft" | "topRight" | "bottomRight" | "bottomLeft"
+  ): string | undefined => {
+    if (!devBorder) return undefined;
+    const cornerVal = devBorder.radiusCorners?.[corner];
+    if (cornerVal !== undefined && cornerVal !== "") return normalizeLengthValue(cornerVal);
+    if (devBorder.radius !== undefined && devBorder.radius !== "") return normalizeLengthValue(devBorder.radius);
+    return undefined;
+  };
+
+  const rtl_d = getCornerRadius(d.border, "topLeft");
+  const rtl_t = getCornerRadius(t?.border, "topLeft") ?? rtl_d;
+  const rtl_m = getCornerRadius(m?.border, "topLeft") ?? rtl_t;
+  if (rtl_d) style["--brx-d-rtl"] = rtl_d;
+  if (rtl_t) style["--brx-t-rtl"] = rtl_t;
+  if (rtl_m) style["--brx-m-rtl"] = rtl_m;
+
+  const rtr_d = getCornerRadius(d.border, "topRight");
+  const rtr_t = getCornerRadius(t?.border, "topRight") ?? rtr_d;
+  const rtr_m = getCornerRadius(m?.border, "topRight") ?? rtr_t;
+  if (rtr_d) style["--brx-d-rtr"] = rtr_d;
+  if (rtr_t) style["--brx-t-rtr"] = rtr_t;
+  if (rtr_m) style["--brx-m-rtr"] = rtr_m;
+
+  const rbr_d = getCornerRadius(d.border, "bottomRight");
+  const rbr_t = getCornerRadius(t?.border, "bottomRight") ?? rbr_d;
+  const rbr_m = getCornerRadius(m?.border, "bottomRight") ?? rbr_t;
+  if (rbr_d) style["--brx-d-rbr"] = rbr_d;
+  if (rbr_t) style["--brx-t-rbr"] = rbr_t;
+  if (rbr_m) style["--brx-m-rbr"] = rbr_m;
+
+  const rbl_d = getCornerRadius(d.border, "bottomLeft");
+  const rbl_t = getCornerRadius(t?.border, "bottomLeft") ?? rbl_d;
+  const rbl_m = getCornerRadius(m?.border, "bottomLeft") ?? rbl_t;
+  if (rbl_d) style["--brx-d-rbl"] = rbl_d;
+  if (rbl_t) style["--brx-t-rbl"] = rbl_t;
+  if (rbl_m) style["--brx-m-rbl"] = rbl_m;
+
+  // Border Width, Style, Color (D -> T -> M cascade)
+  const bw_d = normalizeLengthValue(d.border?.width);
+  const bw_t = normalizeLengthValue(t?.border?.width) ?? bw_d;
+  const bw_m = normalizeLengthValue(m?.border?.width) ?? bw_t;
+  if (bw_d) style["--brx-d-bw"] = bw_d;
+  if (bw_t) style["--brx-t-bw"] = bw_t;
+  if (bw_m) style["--brx-m-bw"] = bw_m;
+
+  const bs_d = d.border?.style;
+  const bs_t = t?.border?.style ?? bs_d;
+  const bs_m = m?.border?.style ?? bs_t;
+  if (bs_d) style["--brx-d-bs"] = bs_d;
+  if (bs_t) style["--brx-t-bs"] = bs_t;
+  if (bs_m) style["--brx-m-bs"] = bs_m;
+
+  const bc_d = d.border?.color;
+  const bc_t = t?.border?.color ?? bc_d;
+  const bc_m = m?.border?.color ?? bc_t;
+  if (bc_d) style["--brx-d-bc"] = bc_d;
+  if (bc_t) style["--brx-t-bc"] = bc_t;
+  if (bc_m) style["--brx-m-bc"] = bc_m;
+
+  // Box Shadow
+  const formatBoxShadow = (s: z.infer<typeof boxShadowSchema> | undefined): string | undefined => {
+    if (!s || (s.x === undefined && s.y === undefined && s.blur === undefined && s.spread === undefined)) return undefined;
+    const x = `${s.x ?? 0}px`;
+    const y = `${s.y ?? 0}px`;
+    const blur = `${s.blur ?? 0}px`;
+    const spread = `${s.spread ?? 0}px`;
+    const color = s.color || "rgba(0,0,0,0.15)";
+    const inset = s.inset ? "inset " : "";
+    return `${inset}${x} ${y} ${blur} ${spread} ${color}`;
+  };
+
+  const bsh_d = formatBoxShadow(d.boxShadow);
+  const bsh_t = formatBoxShadow(t?.boxShadow) ?? bsh_d;
+  const bsh_m = formatBoxShadow(m?.boxShadow) ?? bsh_t;
+  if (bsh_d) style["--brx-d-bsh"] = bsh_d;
+  if (bsh_t) style["--brx-t-bsh"] = bsh_t;
+  if (bsh_m) style["--brx-m-bsh"] = bsh_m;
+
   // Display
   const display = props.display || options?.defaultDisplay;
   if (display && display !== "none") {
@@ -485,36 +566,26 @@ export function bricksElementStyle(props: BricksLayoutProps, options?: { default
     style.color = props.background.textColor;
   }
 
-  // Border
-  if (props.border?.style && props.border.style !== "none") {
-    style.borderStyle = props.border.style;
-    style.borderWidth = props.border.width || "1px";
-    if (props.border.color) style.borderColor = props.border.color;
-  } else if (props.border?.width) {
-    style.borderWidth = props.border.width;
+  // Border (desktop base / SSR)
+  if (bs_d && bs_d !== "none") {
+    style.borderStyle = bs_d;
+    style.borderWidth = bw_d || "1px";
+    if (bc_d) style.borderColor = bc_d;
+  } else if (bw_d) {
+    style.borderWidth = bw_d;
     style.borderStyle = "solid";
-    if (props.border.color) style.borderColor = props.border.color;
+    if (bc_d) style.borderColor = bc_d;
   }
 
-  if (props.border?.radiusCorners) {
-    const rc = props.border.radiusCorners;
-    if (rc.topLeft) style.borderTopLeftRadius = rc.topLeft;
-    if (rc.topRight) style.borderTopRightRadius = rc.topRight;
-    if (rc.bottomRight) style.borderBottomRightRadius = rc.bottomRight;
-    if (rc.bottomLeft) style.borderBottomLeftRadius = rc.bottomLeft;
-  } else if (props.border?.radius) {
-    style.borderRadius = props.border.radius;
-  }
+  // Border Radius (desktop base / SSR, normalized)
+  if (rtl_d) style.borderTopLeftRadius = rtl_d;
+  if (rtr_d) style.borderTopRightRadius = rtr_d;
+  if (rbr_d) style.borderBottomRightRadius = rbr_d;
+  if (rbl_d) style.borderBottomLeftRadius = rbl_d;
 
-  // Box Shadow
-  if (props.boxShadow && (props.boxShadow.x !== undefined || props.boxShadow.y !== undefined || props.boxShadow.blur !== undefined)) {
-    const x = `${props.boxShadow.x ?? 0}px`;
-    const y = `${props.boxShadow.y ?? 0}px`;
-    const blur = `${props.boxShadow.blur ?? 0}px`;
-    const spread = `${props.boxShadow.spread ?? 0}px`;
-    const color = props.boxShadow.color || "rgba(0,0,0,0.15)";
-    const inset = props.boxShadow.inset ? "inset " : "";
-    style.boxShadow = `${inset}${x} ${y} ${blur} ${spread} ${color}`;
+  // Box Shadow (desktop base / SSR)
+  if (bsh_d) {
+    style.boxShadow = bsh_d;
   }
 
   return style;

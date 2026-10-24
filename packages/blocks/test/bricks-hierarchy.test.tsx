@@ -123,4 +123,89 @@ describe("Section > Container > 2x Blocks Hierarchy and Styling", () => {
     expect(html).toContain("--brx-m-bg-c:#1e293b");
     expect(html).toContain("--brx-m-c:#cbd5e1");
   });
+
+  it("renders responsive border radius across blocks, containers, and elements", () => {
+    // 1. Block with uniform border radius on desktop (20px), inherited on tablet, overridden on mobile (6px)
+    const blockWithRadius = block("Block", {
+      border: {
+        radius: "20px",
+        width: "2px",
+        style: "solid",
+        color: "#cbd5e1",
+      },
+      responsive: {
+        mobile: {
+          border: {
+            radius: "6px",
+          },
+        },
+      },
+      content: [],
+    });
+
+    const blockHtml = render(blockWithRadius);
+    expect(blockHtml).toContain("border-top-left-radius:20px");
+    expect(blockHtml).toContain("border-top-right-radius:20px");
+    expect(blockHtml).toContain("--brx-d-rtl:20px");
+    expect(blockHtml).toContain("--brx-d-rtr:20px");
+    expect(blockHtml).toContain("--brx-t-rtl:20px"); // Inherited from desktop
+    expect(blockHtml).toContain("--brx-m-rtl:6px");  // Overridden on mobile
+    expect(blockHtml).toContain("--brx-m-rtr:6px");
+    expect(blockHtml).toContain("--brx-d-bw:2px");
+    expect(blockHtml).toContain("--brx-d-bs:solid");
+    expect(blockHtml).toContain("--brx-d-bc:#cbd5e1");
+
+    // 2. Container with 4 individual corners on desktop and mobile
+    const containerWithCorners = block("Container", {
+      border: {
+        radiusCorners: {
+          topLeft: "16px",
+          topRight: "16px",
+          bottomRight: "0px",
+          bottomLeft: "0px",
+        },
+      },
+      responsive: {
+        mobile: {
+          border: {
+            radiusCorners: {
+              topLeft: "8px",
+              topRight: "8px",
+              bottomRight: "8px",
+              bottomLeft: "8px",
+            },
+          },
+        },
+      },
+      content: [],
+    });
+
+    const containerHtml = render(containerWithCorners);
+    expect(containerHtml).toContain("border-top-left-radius:16px");
+    expect(containerHtml).toContain("border-bottom-right-radius:0px");
+    expect(containerHtml).toContain("--brx-d-rtl:16px");
+    expect(containerHtml).toContain("--brx-d-rbr:0px");
+    expect(containerHtml).toContain("--brx-m-rtl:8px");
+    expect(containerHtml).toContain("--brx-m-rbr:8px");
+
+    // 3. Image element with custom border radius and inheritance
+    const imageWithRadius = block("Image", {
+      imageUrl: "https://example.com/test.jpg",
+      border: {
+        radius: "12px",
+      },
+      responsive: {
+        mobile: {
+          border: {
+            radius: "4px",
+          },
+        },
+      },
+    });
+
+    const imageHtml = render(imageWithRadius);
+    expect(imageHtml).toContain("--brx-d-rtl:12px");
+    expect(imageHtml).toContain("--brx-m-rtl:4px");
+    expect(imageHtml).toContain("border-radius:inherit");
+  });
 });
