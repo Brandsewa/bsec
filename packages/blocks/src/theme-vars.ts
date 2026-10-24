@@ -35,6 +35,8 @@ export interface ThemeTokensLike {
     | undefined;
   /** Heading sizes in pixels per level and device (see HEADING_LEVELS, DEFAULT_HEADING_SIZES). */
   fontSizes?: Record<string, Partial<Record<string, unknown>> | undefined> | undefined;
+  /** Global layout defaults: site width, section and container sizing/margin/padding per device. */
+  layout?: ThemeLayoutSettings | undefined;
   /** Legacy shapes written by the first launch template; still read, never written. */
   typography?: { headingFont?: string | undefined; bodyFont?: string | undefined } | undefined;
   shape?: { radius?: string | undefined; buttonStyle?: string | undefined } | undefined;
@@ -116,6 +118,122 @@ export function resolveHeadingSizes(tokens: ThemeTokensLike | null | undefined):
     };
   }
   return out;
+}
+
+export interface SpacingQuadValues {
+  top?: string | undefined;
+  right?: string | undefined;
+  bottom?: string | undefined;
+  left?: string | undefined;
+}
+
+export interface SizingValues {
+  width?: string | undefined;
+  minWidth?: string | undefined;
+  maxWidth?: string | undefined;
+}
+
+export interface ThemeLayoutElementSettings {
+  margin?: SpacingQuadValues | undefined;
+  padding?: SpacingQuadValues | undefined;
+  width?: string | undefined;
+  minWidth?: string | undefined;
+  maxWidth?: string | undefined;
+  sizing?: SizingValues | undefined;
+}
+
+export interface ThemeLayoutDeviceSettings {
+  siteWidth?: string | undefined;
+  section?: ThemeLayoutElementSettings | undefined;
+  container?: ThemeLayoutElementSettings | undefined;
+}
+
+export interface ThemeLayoutSettings {
+  desktop?: ThemeLayoutDeviceSettings | undefined;
+  tablet?: ThemeLayoutDeviceSettings | undefined;
+  mobile?: ThemeLayoutDeviceSettings | undefined;
+}
+
+export const DEFAULT_SITE_WIDTHS: Record<SizeDevice, string> = {
+  desktop: "1200px",
+  tablet: "100%",
+  mobile: "100%",
+};
+
+export function sanitizeLayoutLength(val: unknown, fallback?: string): string | undefined {
+  if (typeof val === "number" && Number.isFinite(val)) {
+    return `${val}px`;
+  }
+  if (typeof val !== "string") return fallback;
+  const trimmed = val.trim();
+  if (!trimmed) return fallback;
+  if (/^-?\d+(\.\d+)?$/.test(trimmed)) {
+    return `${trimmed}px`;
+  }
+  if (/^-?\d+(\.\d+)?(px|%|rem|em|vw|vh)$/.test(trimmed)) {
+    return trimmed;
+  }
+  if (trimmed === "auto" || trimmed === "none" || trimmed === "initial") {
+    return trimmed;
+  }
+  return fallback;
+}
+
+export interface ResolvedDeviceLayout {
+  siteWidth: string;
+  section: {
+    margin: SpacingQuadValues;
+    padding: SpacingQuadValues;
+    sizing: SizingValues;
+  };
+  container: {
+    margin: SpacingQuadValues;
+    padding: SpacingQuadValues;
+    sizing: SizingValues;
+  };
+}
+
+export type ResolvedThemeLayout = Record<SizeDevice, ResolvedDeviceLayout>;
+
+export function resolveThemeLayout(tokens: ThemeTokensLike | null | undefined): ResolvedThemeLayout {
+  const layout = tokens?.layout;
+  const resolveDevice = (dev: SizeDevice): ResolvedDeviceLayout => {
+    const rawDev = layout?.[dev] ?? {};
+    const siteWidth = sanitizeLayoutLength(rawDev.siteWidth, DEFAULT_SITE_WIDTHS[dev]) ?? DEFAULT_SITE_WIDTHS[dev];
+
+    const getElementProps = (rawElem: ThemeLayoutElementSettings | undefined) => {
+      const margin: SpacingQuadValues = {
+        top: sanitizeLayoutLength(rawElem?.margin?.top),
+        right: sanitizeLayoutLength(rawElem?.margin?.right),
+        bottom: sanitizeLayoutLength(rawElem?.margin?.bottom),
+        left: sanitizeLayoutLength(rawElem?.margin?.left),
+      };
+      const padding: SpacingQuadValues = {
+        top: sanitizeLayoutLength(rawElem?.padding?.top),
+        right: sanitizeLayoutLength(rawElem?.padding?.right),
+        bottom: sanitizeLayoutLength(rawElem?.padding?.bottom),
+        left: sanitizeLayoutLength(rawElem?.padding?.left),
+      };
+      const sizing: SizingValues = {
+        width: sanitizeLayoutLength(rawElem?.sizing?.width ?? rawElem?.width),
+        minWidth: sanitizeLayoutLength(rawElem?.sizing?.minWidth ?? rawElem?.minWidth),
+        maxWidth: sanitizeLayoutLength(rawElem?.sizing?.maxWidth ?? rawElem?.maxWidth),
+      };
+      return { margin, padding, sizing };
+    };
+
+    return {
+      siteWidth,
+      section: getElementProps(rawDev.section),
+      container: getElementProps(rawDev.container),
+    };
+  };
+
+  return {
+    desktop: resolveDevice("desktop"),
+    tablet: resolveDevice("tablet"),
+    mobile: resolveDevice("mobile"),
+  };
 }
 
 /** Weights the theme fonts are loaded in (googleFontsHref requests 400 to 700). */
@@ -215,7 +333,7 @@ function sanitizeRadius(val: unknown, fallback: string): string {
 }
 
 /** Black or white, whichever reads better on the given hex colour (falls back to white). */
-function readableOn(color: string): string {
+export function readableOn(color: string): string {
   const m = /^#([0-9a-f]{6}|[0-9a-f]{3})(?![0-9a-f])/i.exec(color);
   if (!m?.[1]) return "#ffffff";
   const hex = m[1].length === 3 ? m[1].split("").map((c) => c + c).join("") : m[1];
@@ -224,6 +342,123 @@ function readableOn(color: string): string {
   const lum = 0.2126 * lin(r) + 0.7152 * lin(g) + 0.0722 * lin(b);
   // Pick whichever of white or near-black has the higher WCAG contrast ratio (they tie at lum ~0.18).
   return lum > 0.18 ? "#0f172a" : "#ffffff";
+}
+
+export const DEFAULT_THEME_COLORS = {
+  siteBackground: "#ffffff",
+  primary: "#0f172a",
+  secondary: "#334155",
+  accent1: "#2563eb",
+  accent2: "#f59e0b",
+  lightHeading: "#0f172a",
+  lightText: "#334155",
+  lightButton: "#0f172a",
+  lightButtonText: "#ffffff",
+  lightBackground: "#f8fafc",
+  darkHeading: "#ffffff",
+  darkText: "#ffffff",
+  darkButton: "#ffffff",
+  darkButtonText: "#0f172a",
+  darkBackground: "#0f172a",
+} as const;
+
+export type ThemeColorKey = keyof typeof DEFAULT_THEME_COLORS;
+
+export interface GlobalColorDef {
+  key: ThemeColorKey;
+  label: string;
+  group: "site" | "palette" | "light" | "dark";
+  groupLabel: string;
+}
+
+export const GLOBAL_COLOR_DEFINITIONS: readonly GlobalColorDef[] = [
+  { key: "siteBackground", label: "Site Background", group: "site", groupLabel: "Site Background" },
+  { key: "primary", label: "Primary", group: "palette", groupLabel: "Palette" },
+  { key: "secondary", label: "Secondary", group: "palette", groupLabel: "Palette" },
+  { key: "accent1", label: "Accent 1", group: "palette", groupLabel: "Palette" },
+  { key: "accent2", label: "Accent 2", group: "palette", groupLabel: "Palette" },
+  { key: "lightHeading", label: "Heading", group: "light", groupLabel: "Light Scheme" },
+  { key: "lightText", label: "Text", group: "light", groupLabel: "Light Scheme" },
+  { key: "lightButton", label: "Button", group: "light", groupLabel: "Light Scheme" },
+  { key: "lightButtonText", label: "Button Text", group: "light", groupLabel: "Light Scheme" },
+  { key: "lightBackground", label: "Backgrounds", group: "light", groupLabel: "Light Scheme" },
+  { key: "darkHeading", label: "Heading", group: "dark", groupLabel: "Dark Scheme" },
+  { key: "darkText", label: "Text", group: "dark", groupLabel: "Dark Scheme" },
+  { key: "darkButton", label: "Button Background", group: "dark", groupLabel: "Dark Scheme" },
+  { key: "darkButtonText", label: "Button Text", group: "dark", groupLabel: "Dark Scheme" },
+  { key: "darkBackground", label: "Backgrounds", group: "dark", groupLabel: "Dark Scheme" },
+] as const;
+
+export type ResolvedThemeColors = Record<ThemeColorKey, string> & {
+  background: string;
+  accent: string;
+  surface: string;
+  text: string;
+  dark: string;
+  textOnDark: string;
+};
+
+export function resolveThemeColors(
+  brandSettings?: BrandSettingsLike | null,
+  themeTokens?: ThemeTokensLike | null,
+): ResolvedThemeColors {
+  const c = (themeTokens?.colors as Record<string, string | undefined>) ?? {};
+  const b = themeTokens?.buttons ?? {};
+
+  const rawPrimary = brandSettings?.primaryColor || c["primary"];
+  const rawSecondary = brandSettings?.secondaryColor || c["secondary"];
+  const rawAccent1 = brandSettings?.accentColor || c["accent1"] || c["accent"];
+  const rawAccent2 = c["accent2"];
+  const rawBackground = brandSettings?.backgroundColor || c["siteBackground"] || c["background"];
+
+  const rawLightHeading = c["lightHeading"] || c["heading"] || rawPrimary;
+  const rawLightText = brandSettings?.textColor || c["lightText"] || c["text"];
+  const rawLightBg = brandSettings?.surfaceColor || c["lightBackground"] || c["surface"];
+
+  const primary = sanitizeColor(rawPrimary, DEFAULT_THEME_COLORS.primary);
+  const secondary = sanitizeColor(rawSecondary, DEFAULT_THEME_COLORS.secondary);
+  const accent1 = sanitizeColor(rawAccent1, DEFAULT_THEME_COLORS.accent1);
+  const accent2 = sanitizeColor(rawAccent2, DEFAULT_THEME_COLORS.accent2);
+  const siteBackground = sanitizeColor(rawBackground, DEFAULT_THEME_COLORS.siteBackground);
+
+  const lightHeading = sanitizeColor(rawLightHeading, primary);
+  const lightText = sanitizeColor(rawLightText, DEFAULT_THEME_COLORS.lightText);
+  const lightButton = sanitizeColor(c["lightButton"] || b.darkBg, primary);
+  const lightButtonText = sanitizeColor(c["lightButtonText"] || b.darkText, readableOn(lightButton));
+  const lightBackground = sanitizeColor(rawLightBg, DEFAULT_THEME_COLORS.lightBackground);
+
+  const rawDarkBg = brandSettings?.["darkColor"] || c["darkBackground"] || c["dark"];
+  const darkBackground = sanitizeColor(rawDarkBg, DEFAULT_THEME_COLORS.darkBackground);
+  const darkHeading = sanitizeColor(c["darkHeading"], DEFAULT_THEME_COLORS.darkHeading);
+  const rawDarkText = c["darkText"] || c["textOnDark"];
+  const darkText = rawDarkText ? sanitizeColor(rawDarkText, DEFAULT_THEME_COLORS.darkText) : readableOn(darkBackground);
+  const darkButton = sanitizeColor(c["darkButton"], DEFAULT_THEME_COLORS.darkButton);
+  const darkButtonText = sanitizeColor(c["darkButtonText"] || b.lightText, DEFAULT_THEME_COLORS.darkButtonText);
+
+  return {
+    siteBackground,
+    primary,
+    secondary,
+    accent1,
+    accent2,
+    lightHeading,
+    lightText,
+    lightButton,
+    lightButtonText,
+    lightBackground,
+    darkHeading,
+    darkText,
+    darkButton,
+    darkButtonText,
+    darkBackground,
+    // Legacy aliases
+    background: siteBackground,
+    accent: accent1,
+    surface: lightBackground,
+    text: lightText,
+    dark: darkBackground,
+    textOnDark: darkText,
+  };
 }
 
 export function computeThemeTokens(
@@ -242,27 +477,21 @@ export function computeThemeTokens(
           ? brandRadiusKey
           : "md";
 
-  const colors = (themeTokens?.colors as Record<string, string | undefined>) ?? {};
+  const resolvedColors = resolveThemeColors(brandSettings, themeTokens);
 
-  const rawPrimary = brandSettings?.primaryColor || colors["primary"];
-  const rawSecondary = brandSettings?.secondaryColor || colors["secondary"];
-  const rawAccent = brandSettings?.accentColor || colors["accent"];
-  const rawBackground = brandSettings?.backgroundColor || colors["background"];
-  const rawSurface = brandSettings?.surfaceColor || colors["surface"];
-  const rawText = brandSettings?.textColor || colors["text"];
+  const primary = resolvedColors.primary;
+  const secondary = resolvedColors.secondary;
+  const accent = resolvedColors.accent1;
+  const accent1 = resolvedColors.accent1;
+  const accent2 = resolvedColors.accent2;
+  const background = resolvedColors.siteBackground;
+  const surface = resolvedColors.lightBackground;
+  const text = resolvedColors.lightText;
+  const dark = resolvedColors.darkBackground;
+  const onDark = resolvedColors.darkText;
 
   const rawFontHeading = brandSettings?.fontHeading || themeTokens?.fonts?.heading || themeTokens?.typography?.headingFont;
   const rawFontBody = brandSettings?.fontBody || themeTokens?.fonts?.body || themeTokens?.typography?.bodyFont;
-
-  const primary = sanitizeColor(rawPrimary, "#0f172a");
-  const secondary = sanitizeColor(rawSecondary, "#334155");
-  const accent = sanitizeColor(rawAccent, "#2563eb");
-  const background = sanitizeColor(rawBackground, "#ffffff");
-  const surface = sanitizeColor(rawSurface, "#f8fafc");
-  const text = sanitizeColor(rawText, "#0f172a");
-  // Dark sections: their own background and text colour, so widgets can offer a "Dark background" tone.
-  const dark = sanitizeColor(brandSettings?.["darkColor"] || colors["dark"], "#0f172a");
-  const onDark = sanitizeColor(colors["textOnDark"], readableOn(dark));
 
   const fontHeading = sanitizeFont(rawFontHeading, "Inter");
   const fontBody = sanitizeFont(rawFontBody, "Inter");
@@ -274,8 +503,8 @@ export function computeThemeTokens(
   // Two button colour schemes. "Dark" is the main button (its background doubles as the base of the outline
   // and soft styles); "light" is the secondary button. Unset values fall back to the original look.
   const btnTokens = themeTokens?.buttons;
-  const darkBg = sanitizeColor(btnTokens?.darkBg, primary);
-  const darkFg = sanitizeColor(btnTokens?.darkText, readableOn(darkBg));
+  const darkBg = sanitizeColor(btnTokens?.darkBg, resolvedColors.lightButton);
+  const darkFg = sanitizeColor(btnTokens?.darkText, resolvedColors.lightButtonText);
   const hasLightBg = typeof btnTokens?.lightBg === "string" && sanitizeColor(btnTokens.lightBg, "") !== "";
   const lightBg = sanitizeColor(btnTokens?.lightBg, surface);
   const lightFg = sanitizeColor(btnTokens?.lightText, text);
@@ -301,17 +530,68 @@ export function computeThemeTokens(
   sizeVars["--bs-body-t"] = `${body.tablet / 16}rem`;
   sizeVars["--bs-body-m"] = `${body.mobile / 16}rem`;
 
+  const layout = resolveThemeLayout(themeTokens);
+  const layoutVars: Record<string, string> = {};
+  const devLetters: Record<SizeDevice, string> = { desktop: "d", tablet: "t", mobile: "m" };
+  for (const dev of SIZE_DEVICES) {
+    const ltr = devLetters[dev];
+    const devLayout = layout[dev];
+    layoutVars[`--bs-site-w-${ltr}`] = devLayout.siteWidth;
+
+    const sec = devLayout.section;
+    if (sec.padding.top) layoutVars[`--bs-sec-${ltr}-pt`] = sec.padding.top;
+    if (sec.padding.right) layoutVars[`--bs-sec-${ltr}-pr`] = sec.padding.right;
+    if (sec.padding.bottom) layoutVars[`--bs-sec-${ltr}-pb`] = sec.padding.bottom;
+    if (sec.padding.left) layoutVars[`--bs-sec-${ltr}-pl`] = sec.padding.left;
+    if (sec.margin.top) layoutVars[`--bs-sec-${ltr}-mt`] = sec.margin.top;
+    if (sec.margin.right) layoutVars[`--bs-sec-${ltr}-mr`] = sec.margin.right;
+    if (sec.margin.bottom) layoutVars[`--bs-sec-${ltr}-mb`] = sec.margin.bottom;
+    if (sec.margin.left) layoutVars[`--bs-sec-${ltr}-ml`] = sec.margin.left;
+    if (sec.sizing.width) layoutVars[`--bs-sec-${ltr}-w`] = sec.sizing.width;
+    if (sec.sizing.minWidth) layoutVars[`--bs-sec-${ltr}-mnw`] = sec.sizing.minWidth;
+    if (sec.sizing.maxWidth) layoutVars[`--bs-sec-${ltr}-mxw`] = sec.sizing.maxWidth;
+
+    const cnt = devLayout.container;
+    if (cnt.padding.top) layoutVars[`--bs-cnt-${ltr}-pt`] = cnt.padding.top;
+    if (cnt.padding.right) layoutVars[`--bs-cnt-${ltr}-pr`] = cnt.padding.right;
+    if (cnt.padding.bottom) layoutVars[`--bs-cnt-${ltr}-pb`] = cnt.padding.bottom;
+    if (cnt.padding.left) layoutVars[`--bs-cnt-${ltr}-pl`] = cnt.padding.left;
+    if (cnt.margin.top) layoutVars[`--bs-cnt-${ltr}-mt`] = cnt.margin.top;
+    if (cnt.margin.right) layoutVars[`--bs-cnt-${ltr}-mr`] = cnt.margin.right;
+    if (cnt.margin.bottom) layoutVars[`--bs-cnt-${ltr}-mb`] = cnt.margin.bottom;
+    if (cnt.margin.left) layoutVars[`--bs-cnt-${ltr}-ml`] = cnt.margin.left;
+    if (cnt.sizing.width) layoutVars[`--bs-cnt-${ltr}-w`] = cnt.sizing.width;
+    if (cnt.sizing.minWidth) layoutVars[`--bs-cnt-${ltr}-mnw`] = cnt.sizing.minWidth;
+    if (cnt.sizing.maxWidth) layoutVars[`--bs-cnt-${ltr}-mxw`] = cnt.sizing.maxWidth;
+  }
+
   return {
     ...sizeVars,
+    ...layoutVars,
     // Block stylesheet variables (blocks.css). Same sanitized values, separate namespace so
     // they cannot collide with host Tailwind/theme variables.
     "--bs-primary": primary,
     "--bs-primary-fg": readableOn(primary),
+    "--bs-secondary": secondary,
+    "--bs-accent": accent,
+    "--bs-accent1": accent1,
+    "--bs-accent2": accent2,
     "--bs-surface": surface,
+    "--bs-site-bg": background,
     "--bs-bg": background,
     "--bs-text": text,
     "--bs-dark": dark,
     "--bs-on-dark": onDark,
+    "--bs-light-heading": resolvedColors.lightHeading,
+    "--bs-light-text": resolvedColors.lightText,
+    "--bs-light-btn-bg": resolvedColors.lightButton,
+    "--bs-light-btn-fg": resolvedColors.lightButtonText,
+    "--bs-light-bg": resolvedColors.lightBackground,
+    "--bs-dark-heading": resolvedColors.darkHeading,
+    "--bs-dark-text": resolvedColors.darkText,
+    "--bs-dark-btn-bg": resolvedColors.darkButton,
+    "--bs-dark-btn-fg": resolvedColors.darkButtonText,
+    "--bs-dark-bg": resolvedColors.darkBackground,
     "--bs-muted": `color-mix(in srgb, ${text} 60%, ${background})`,
     "--bs-border": `color-mix(in srgb, ${text} 15%, ${background})`,
     "--bs-radius": radius,

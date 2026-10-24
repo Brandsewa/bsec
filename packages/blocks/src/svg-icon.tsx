@@ -89,8 +89,38 @@ const ICON_PATHS: Record<string, ReactNode> = {
     </>
   ),
   support: <path d="M3 14h3a2 2 0 0 1 2 2v3a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-7a9 9 0 0 1 18 0v7a2 2 0 0 1-2 2h-1a2 2 0 0 1-2-2v-3a2 2 0 0 1 2-2h3" />,
+  "arrow-right": <path d="M5 12h14M12 5l7 7-7 7" />,
+  "arrow-left": <path d="M19 12H5M12 19l-7-7 7-7" />,
+  "chevron-right": <path d="m9 18 6-6-6-6" />,
+  "chevron-left": <path d="m15 18-6-6 6-6" />,
+  cart: (
+    <>
+      <circle cx="8" cy="21" r="1" />
+      <circle cx="19" cy="21" r="1" />
+      <path d="M2.05 2.05h2l2.66 12.42a2 2 0 0 0 2 1.58h9.78a2 2 0 0 0 1.95-1.57l1.65-7.43H5.12" />
+    </>
+  ),
+  "external-link": (
+    <>
+      <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6" />
+      <polyline points="15 3 21 3 21 9" />
+      <line x1="10" y1="14" x2="21" y2="3" />
+    </>
+  ),
+  plus: <path d="M5 12h14M12 5v14" />,
 };
-const ICON_ALIASES: Record<string, string> = { shieldcheck: "shield", rotateccw: "returns", headphones: "support" };
+const ICON_ALIASES: Record<string, string> = {
+  shieldcheck: "shield",
+  rotateccw: "returns",
+  headphones: "support",
+  shoppingcart: "cart",
+  "shopping-cart": "cart",
+  arrowright: "arrow-right",
+  arrowleft: "arrow-left",
+  chevronright: "chevron-right",
+  chevronleft: "chevron-left",
+  externallink: "external-link",
+};
 
 export function SvgIcon({ name, px }: { name: string; px: number }) {
   const key = name.toLowerCase();

@@ -5,7 +5,7 @@ import { saasDb, type Runtime } from "../runtime.ts";
 import { LAPSED_TRIAL_TIER, tierForPlan } from "./plan-tiers.ts";
 import { loadInvoiceProfile, loadPlatformBillingCredentials, type BillingProviderId } from "../platform/billing-settings.ts";
 import { findRazorpayPlanId } from "../platform/billing-plans.ts";
-import { cashfreeRequest, paiseToRupees, verifyCashfreeSignature, type CashfreeMode } from "@bs/payments";
+import { CashfreeApiError, cashfreeRequest, paiseToRupees, verifyCashfreeSignature, type CashfreeMode } from "@bs/payments";
 
 export interface SubscriptionBillingProvider {
   /** Which gateway this is. Providers written before Cashfree omit it and are Razorpay. */
@@ -150,6 +150,19 @@ export class RazorpaySubscriptionProvider implements SubscriptionBillingProvider
   }
 }
 
+/** Shows Cashfree's own message to the person who pressed the button instead of a generic failure. */
+async function asBadRequest<T>(call: () => Promise<T>): Promise<T> {
+  try {
+    return await call();
+  } catch (err) {
+    if (err instanceof CashfreeApiError) {
+      console.error("[billing] Cashfree rejected a request", { status: err.status, code: err.code, message: err.message });
+      throw new Error(`Bad Request: Cashfree said: ${err.message}${err.code ? ` (${err.code})` : ""}`, { cause: err });
+    }
+    throw err;
+  }
+}
+
 export class CashfreeSubscriptionProvider implements SubscriptionBillingProvider {
   readonly name = "cashfree" as const;
   private readonly clientId: string | null;
@@ -185,7 +198,7 @@ export class CashfreeSubscriptionProvider implements SubscriptionBillingProvider
     const amount = paiseToRupees(params.amountPaise);
     const subscriptionId = `bs_${params.tenantId.replace(/-/g, "").slice(0, 16)}_${Date.now().toString(36)}`;
     const expiry = new Date(Date.now() + 5 * 365 * 24 * 60 * 60 * 1000);
-    const res = await cashfreeRequest<{ subscription_id: string; subscription_session_id?: string; subscription_status?: string }>(
+    const res = await asBadRequest(() => cashfreeRequest<{ subscription_id: string; subscription_session_id?: string; subscription_status?: string }>(
       this.creds(),
       "POST",
       "/subscriptions",
@@ -206,7 +219,8 @@ export class CashfreeSubscriptionProvider implements SubscriptionBillingProvider
           plan_intervals: 1,
           plan_interval_type: yearly ? "YEAR" : "MONTH",
         },
-        authorization_details: { authorization_amount: 1, authorization_amount_refund: true, payment_methods: ["upi", "card", "enach"] },
+        // UPI AutoPay and cards. eMandate (enach) is left out: Cashfree wants a zero authorisation amount for it, and this one is 1 rupee.
+        authorization_details: { authorization_amount: 1, authorization_amount_refund: true, payment_methods: ["upi", "card"] },
         subscription_meta: { ...(params.returnUrl ? { return_url: params.returnUrl } : {}), notification_channel: ["EMAIL"] },
         subscription_expiry_time: expiry.toISOString(),
         ...(params.startAt ? { subscription_first_charge_time: new Date(params.startAt * 1000).toISOString() } : {}),
@@ -214,7 +228,7 @@ export class CashfreeSubscriptionProvider implements SubscriptionBillingProvider
       },
       this.fetchFn,
       subscriptionId,
-    );
+    ));
     if (!res.subscription_session_id) throw new Error("Cashfree did not return a subscription session");
     return {
       providerSubscriptionId: res.subscription_id,
@@ -225,13 +239,13 @@ export class CashfreeSubscriptionProvider implements SubscriptionBillingProvider
 
   /** Cashfree can only cancel at once; "at the end of the period" is kept by the caller (cancelAt) and enforced by a sweep. */
   async cancelSubscription(providerSubscriptionId: string): Promise<{ status: string }> {
-    const res = await cashfreeRequest<{ subscription_status?: string }>(
+    const res = await asBadRequest(() => cashfreeRequest<{ subscription_status?: string }>(
       this.creds(),
       "POST",
       `/subscriptions/${encodeURIComponent(providerSubscriptionId)}/manage`,
       { subscription_id: providerSubscriptionId, action: "CANCEL" },
       this.fetchFn,
-    );
+    ));
     return { status: (res.subscription_status ?? "CANCELLED").toLowerCase() };
   }
 
