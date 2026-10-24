@@ -1,5 +1,4 @@
 import { useSyncExternalStore } from "react";
-import { AutoField, FieldLabel, type CustomField, type Field } from "@puckeditor/core";
 import type { LayoutDevice } from "@bs/blocks";
 
 const openState = new Map<string, string>(); // blockType -> active tab/group id
@@ -213,7 +212,7 @@ export function BricksGroupHeader({
   title: string;
   icon: React.ReactNode;
 }) {
-  const isOpen = useBricksGroupOpen(blockType, groupId, groupId === "layout");
+  const isOpen = useBricksGroupOpen(blockType, groupId, false);
 
   return (
     <div
@@ -280,7 +279,7 @@ export function BricksFieldGate({
   children: React.ReactNode;
 }) {
   const activeTab = useBricksActiveTab(blockType);
-  const isGroupOpen = useBricksGroupOpen(blockType, group || "", group === "layout");
+  const isGroupOpen = useBricksGroupOpen(blockType, group || "", false);
 
   const isVisible = activeTab === tab && (!group || isGroupOpen);
 

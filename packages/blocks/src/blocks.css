@@ -672,6 +672,12 @@
   --brx-d-bs: initial;  --brx-t-bs: initial;  --brx-m-bs: initial;
   --brx-d-bc: initial;  --brx-t-bc: initial;  --brx-m-bc: initial;
   --brx-d-bsh: initial; --brx-t-bsh: initial; --brx-m-bsh: initial;
+  --brx-d-fs: initial;  --brx-t-fs: initial;  --brx-m-fs: initial;
+  --brx-d-fw: initial;  --brx-t-fw: initial;  --brx-m-fw: initial;
+  --brx-d-ff: initial;  --brx-t-ff: initial;  --brx-m-ff: initial;
+  --brx-d-lh: initial;  --brx-t-lh: initial;  --brx-m-lh: initial;
+  --brx-d-ls: initial;  --brx-t-ls: initial;  --brx-m-ls: initial;
+  --brx-d-tt: initial;  --brx-t-tt: initial;  --brx-m-tt: initial;
 
   --b-dir: var(--brx-d-dir);
   --b-jc: var(--brx-d-jc);
@@ -706,6 +712,12 @@
   --b-bs: var(--brx-d-bs);
   --b-bc: var(--brx-d-bc);
   --b-bsh: var(--brx-d-bsh);
+  --b-fs: var(--brx-d-fs);
+  --b-fw: var(--brx-d-fw);
+  --b-ff: var(--brx-d-ff);
+  --b-lh: var(--brx-d-lh);
+  --b-ls: var(--brx-d-ls);
+  --b-tt: var(--brx-d-tt);
 
   flex-direction: var(--b-dir);
   justify-content: var(--b-jc);
@@ -744,6 +756,13 @@
   border-style: var(--b-bs);
   border-color: var(--b-bc);
   box-shadow: var(--b-bsh);
+
+  font-size: var(--b-fs);
+  font-weight: var(--b-fw);
+  font-family: var(--b-ff);
+  line-height: var(--b-lh);
+  letter-spacing: var(--b-ls);
+  text-transform: var(--b-tt);
 }
 
 /* Also forward flex/grid layout variables to inner Slot wrappers */
@@ -795,6 +814,12 @@
     --b-bs: var(--brx-t-bs, var(--brx-d-bs));
     --b-bc: var(--brx-t-bc, var(--brx-d-bc));
     --b-bsh: var(--brx-t-bsh, var(--brx-d-bsh));
+    --b-fs: var(--brx-t-fs, var(--brx-d-fs));
+    --b-fw: var(--brx-t-fw, var(--brx-d-fw));
+    --b-ff: var(--brx-t-ff, var(--brx-d-ff));
+    --b-lh: var(--brx-t-lh, var(--brx-d-lh));
+    --b-ls: var(--brx-t-ls, var(--brx-d-ls));
+    --b-tt: var(--brx-t-tt, var(--brx-d-tt));
 
     flex-direction: var(--b-dir) !important;
     justify-content: var(--b-jc) !important;
@@ -832,6 +857,13 @@
     border-style: var(--b-bs) !important;
     border-color: var(--b-bc) !important;
     box-shadow: var(--b-bsh) !important;
+
+    font-size: var(--b-fs) !important;
+    font-weight: var(--b-fw) !important;
+    font-family: var(--b-ff) !important;
+    line-height: var(--b-lh) !important;
+    letter-spacing: var(--b-ls) !important;
+    text-transform: var(--b-tt) !important;
   }
 
   .brx-resp > [style*="display: flex"],
@@ -883,6 +915,12 @@
     --b-bs: var(--brx-m-bs, var(--brx-t-bs, var(--brx-d-bs)));
     --b-bc: var(--brx-m-bc, var(--brx-t-bc, var(--brx-d-bc)));
     --b-bsh: var(--brx-m-bsh, var(--brx-t-bsh, var(--brx-d-bsh)));
+    --b-fs: var(--brx-m-fs, var(--brx-t-fs, var(--brx-d-fs)));
+    --b-fw: var(--brx-m-fw, var(--brx-t-fw, var(--brx-d-fw)));
+    --b-ff: var(--brx-m-ff, var(--brx-t-ff, var(--brx-d-ff)));
+    --b-lh: var(--brx-m-lh, var(--brx-t-lh, var(--brx-d-lh)));
+    --b-ls: var(--brx-m-ls, var(--brx-t-ls, var(--brx-d-ls)));
+    --b-tt: var(--brx-m-tt, var(--brx-t-tt, var(--brx-d-tt)));
 
     flex-direction: var(--b-dir) !important;
     justify-content: var(--b-jc) !important;
@@ -920,6 +958,13 @@
     border-style: var(--b-bs) !important;
     border-color: var(--b-bc) !important;
     box-shadow: var(--b-bsh) !important;
+
+    font-size: var(--b-fs) !important;
+    font-weight: var(--b-fw) !important;
+    font-family: var(--b-ff) !important;
+    line-height: var(--b-lh) !important;
+    letter-spacing: var(--b-ls) !important;
+    text-transform: var(--b-tt) !important;
   }
 
   .brx-resp > [style*="display: flex"],
@@ -1038,6 +1083,89 @@
   width: 100%;
   box-sizing: border-box;
 }
+
+/* Bricks Button Component (.brxe-button) */
+.brxe-button {
+  display: inline-flex;
+  box-sizing: border-box;
+}
+.brxe-button.brx-btn-full,
+.brxe-button.brx-btn-full > a,
+.brxe-button.brx-btn-full > button {
+  width: 100% !important;
+  display: flex !important;
+}
+.brxe-button a,
+.brxe-button button {
+  gap: var(--brx-btn-gap, 0.5rem);
+  transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+  font-family: inherit;
+  font-size: inherit;
+  font-weight: inherit;
+  line-height: inherit;
+  letter-spacing: inherit;
+  text-transform: inherit;
+  text-decoration: none;
+}
+/* Style Type: Normal (Solid) */
+.brxe-button .brx-btn-normal {
+  background-color: var(--brx-btn-bg, var(--p));
+  color: var(--brx-btn-tc, var(--pf));
+  border: 1px solid var(--brx-btn-bg, var(--p));
+}
+.brxe-button .brx-btn-normal:hover {
+  background-color: var(--brx-btn-hbg, var(--brx-btn-bg, var(--p)));
+  color: var(--brx-btn-htc, var(--brx-btn-tc, var(--pf)));
+  opacity: 0.92;
+}
+/* Style Type: Line (Outline) */
+.brxe-button .brx-btn-line {
+  background-color: transparent;
+  color: var(--brx-btn-tc, var(--brx-btn-bg, var(--p)));
+  border: 2px solid var(--brx-btn-bg, var(--p));
+}
+.brxe-button .brx-btn-line:hover {
+  background-color: var(--brx-btn-hbg, var(--brx-btn-bg, var(--p)));
+  color: var(--brx-btn-htc, #ffffff);
+}
+/* Style Type: Text Button */
+.brxe-button .brx-btn-text {
+  background-color: transparent;
+  color: var(--brx-btn-tc, var(--p));
+  border: none;
+  padding: 0.25rem 0.5rem;
+}
+.brxe-button .brx-btn-text:hover {
+  background-color: transparent;
+  color: var(--brx-btn-htc, var(--p));
+  text-decoration: underline;
+}
+/* Style Type: Theme Button Custom Colors override */
+.brxe-button .bsb-btn[style*="--brx-btn-bg"] {
+  background-color: var(--brx-btn-bg);
+  border-color: var(--brx-btn-bg);
+}
+.brxe-button .bsb-btn[style*="--brx-btn-tc"] {
+  color: var(--brx-btn-tc);
+}
+.brxe-button .bsb-btn:hover {
+  background-color: var(--brx-btn-hbg, inherit);
+  color: var(--brx-btn-htc, inherit);
+}
+
+/* Bricks Text formatting styles */
+.brxe-text-basic ul,
+.brxe-text-basic ol {
+  padding-left: 1.5rem;
+  margin: 0.5rem 0;
+}
+.brxe-text-basic ul { list-style-type: disc; }
+.brxe-text-basic ol { list-style-type: decimal; }
+.brxe-text-basic li { margin-bottom: 0.25rem; }
+.brxe-text-basic a { color: var(--p); text-decoration: underline; }
+.brxe-text-basic a:hover { opacity: 0.8; }
+.brxe-text-basic p { margin: 0 0 0.75rem 0; }
+.brxe-text-basic p:last-child { margin-bottom: 0; }
 .brxe-image > a,
 .brxe-image > picture {
   display: block;

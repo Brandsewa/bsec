@@ -8,7 +8,13 @@ import { logoSizeField } from "./HeaderFooterPanels.tsx";
 import { elementOrderField } from "./ElementOrderField.tsx";
 import { accordionFields } from "./sections.tsx";
 import { layoutField, slideRadiusField } from "./LayoutField.tsx";
-import { createBricksLayoutFields, bricksRowSelectField, bricksRowInputField } from "./BricksLayoutFields.tsx";
+import {
+  createBricksLayoutFields,
+  bricksRowSelectField,
+  bricksRowInputField,
+  markdownTextField,
+  bricksColorField,
+} from "./BricksLayoutFields.tsx";
 import { useFrame, useRenderData } from "./context.tsx";
 import { ColorPickerSwatch } from "./ColorPickerSwatch.tsx";
 
@@ -115,7 +121,7 @@ const colorField = (label: string): CustomField<string | undefined> => ({
 
 const TONE = { default: "Plain", surface: "Soft background", primary: "Brand colour", dark: "Dark background" };
 const ALIGN = { left: "Left", center: "Center", right: "Right" };
-const SPACING = { none: "None", sm: "Small", md: "Medium", lg: "Large", xl: "Extra large" };
+const _SPACING = { none: "None", sm: "Small", md: "Medium", lg: "Large", xl: "Extra large" };
 const GAP = { none: "None", sm: "Small", md: "Medium", lg: "Large" };
 const WIDTH = { narrow: "Narrow", default: "Standard", wide: "Wide", full: "Full width" };
 const ITEMS = { start: "Start", center: "Center", end: "End", stretch: "Stretch" };
@@ -181,13 +187,6 @@ export const BLOCK_SPECS: Record<BlockType, Spec> = {
           { value: "h5", label: "H5" },
           { value: "h6", label: "H6" },
         ]) as Field,
-        size: bricksRowSelectField("Size", [
-          { value: "auto", label: "Auto (Theme)" },
-          { value: "sm", label: "Small" },
-          { value: "md", label: "Medium" },
-          { value: "lg", label: "Large" },
-          { value: "xl", label: "Extra Large" },
-        ]) as Field,
         align: bricksRowSelectField("Align", [
           { value: "left", label: "Left" },
           { value: "center", label: "Center" },
@@ -204,7 +203,7 @@ export const BLOCK_SPECS: Record<BlockType, Spec> = {
     fields: createBricksLayoutFields(
       "Text",
       {
-        text: area("Text (blank line = new paragraph)"),
+        text: markdownTextField("Text") as Field,
         tag: bricksRowSelectField("HTML tag", [
           { value: "p", label: "p" },
           { value: "div", label: "div" },
@@ -322,7 +321,63 @@ export const BLOCK_SPECS: Record<BlockType, Spec> = {
       mediaId: fileMediaField("Document file") as Field,
     },
   },
-  Button: { label: "Button", category: "content", fields: { label: text("Label"), href: link("Link"), variant: select("Style", { primary: "Solid", secondary: "Soft", outline: "Outline" }), size: select("Size", { auto: "Match theme", sm: "Small", md: "Medium", lg: "Large" }), fullWidth: radio("Full width"), align: select("Align", ALIGN) } },
+  Button: {
+    label: "Button",
+    category: "content",
+    fields: createBricksLayoutFields(
+      "Button",
+      {
+        text: bricksRowInputField("Text", "Click here") as Field,
+        link: bricksRowInputField("Link", "/collections/all") as Field,
+        newTab: radio("Open in new tab"),
+        styleType: bricksRowSelectField("Button Style", [
+          { value: "theme", label: "Theme Preset" },
+          { value: "normal", label: "Normal (Solid)" },
+          { value: "line", label: "Line (Outline)" },
+          { value: "text", label: "Text Button" },
+        ]) as Field,
+        variant: bricksRowSelectField("Theme Style", [
+          { value: "primary", label: "Primary (Solid)" },
+          { value: "secondary", label: "Secondary (Soft)" },
+          { value: "outline", label: "Outline" },
+        ]) as Field,
+        icon: bricksRowSelectField("Icon", [
+          { value: "none", label: "None" },
+          { value: "arrow-right", label: "Arrow Right" },
+          { value: "arrow-left", label: "Arrow Left" },
+          { value: "chevron-right", label: "Chevron Right" },
+          { value: "chevron-left", label: "Chevron Left" },
+          { value: "cart", label: "Shopping Cart" },
+          { value: "check", label: "Check" },
+          { value: "star", label: "Star" },
+          { value: "heart", label: "Heart" },
+          { value: "external-link", label: "External Link" },
+          { value: "plus", label: "Plus" },
+          { value: "truck", label: "Truck" },
+          { value: "shield", label: "Shield" },
+          { value: "gift", label: "Gift" },
+          { value: "phone", label: "Phone" },
+          { value: "mail", label: "Mail" },
+        ]) as Field,
+        iconPosition: bricksRowSelectField("Icon Position", [
+          { value: "left", label: "Left" },
+          { value: "right", label: "Right" },
+        ]) as Field,
+        iconGap: bricksRowInputField("Icon Gap", "8px") as Field,
+        buttonColor: bricksColorField("Button Color") as Field,
+        textColor: bricksColorField("Text Color") as Field,
+        hoverButtonColor: bricksColorField("Hover Button Color") as Field,
+        hoverTextColor: bricksColorField("Hover Text Color") as Field,
+        fullWidth: radio("Full width"),
+        align: bricksRowSelectField("Align", [
+          { value: "left", label: "Left" },
+          { value: "center", label: "Center" },
+          { value: "right", label: "Right" },
+        ]) as Field,
+      },
+      { includeDisplayControls: false }
+    ),
+  },
   Icon: { label: "Icon", category: "content", fields: { name: select("Icon", ICONS), size: select("Size", { sm: "Small", md: "Medium", lg: "Large" }), align: select("Align", ALIGN) } },
   Link: { label: "Link", category: "content", fields: { label: text("Label"), href: link("Link"), newTab: radio("Open in new tab") } },
 
@@ -1137,7 +1192,7 @@ export const RETIRED_FROM_PICKER: BlockType[] = [
   "Divider",
   // Old content & store widgets retired in favor of brand custom widgets
   "FileDownload",
-  "Button",
+  "RichText",
   "Icon",
   "Link",
   "CallToAction",

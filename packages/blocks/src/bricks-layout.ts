@@ -162,6 +162,16 @@ const boxShadowSchema = z.object({
   inset: z.boolean().optional(),
 });
 
+export const typographySchema = z.object({
+  fontFamily: z.string().optional(),
+  fontSize: lengthValue("width"),
+  fontWeight: z.string().optional(),
+  lineHeight: lengthValue("width"),
+  letterSpacing: lengthValue("width"),
+  textTransform: z.enum(["none", "uppercase", "lowercase", "capitalize"]).optional(),
+});
+export type TypographyValues = z.infer<typeof typographySchema>;
+
 // Base style values for layout & styling
 export const baseStyleSchema = z.object({
   // Content Tab
@@ -180,6 +190,9 @@ export const baseStyleSchema = z.object({
   margin: spacingQuad.optional(),
   padding: spacingQuad.optional(),
   sizing: sizingSchema.optional(),
+
+  // Style Tab - Typography
+  typography: typographySchema.optional(),
 
   // Style Tab - Background
   background: backgroundSchema.optional(),
@@ -500,6 +513,49 @@ export function bricksElementStyle(props: BricksLayoutProps, options?: { default
   if (bsh_t) style["--brx-t-bsh"] = bsh_t;
   if (bsh_m) style["--brx-m-bsh"] = bsh_m;
 
+  // Typography (D -> T -> M cascade)
+  const fs_d = normalizeLengthValue(d.typography?.fontSize);
+  const fs_t = normalizeLengthValue(t?.typography?.fontSize) ?? fs_d;
+  const fs_m = normalizeLengthValue(m?.typography?.fontSize) ?? fs_t;
+  if (fs_d) style["--brx-d-fs"] = fs_d;
+  if (fs_t) style["--brx-t-fs"] = fs_t;
+  if (fs_m) style["--brx-m-fs"] = fs_m;
+
+  const fw_d = d.typography?.fontWeight;
+  const fw_t = t?.typography?.fontWeight ?? fw_d;
+  const fw_m = m?.typography?.fontWeight ?? fw_t;
+  if (fw_d) style["--brx-d-fw"] = fw_d;
+  if (fw_t) style["--brx-t-fw"] = fw_t;
+  if (fw_m) style["--brx-m-fw"] = fw_m;
+
+  const ff_d = d.typography?.fontFamily;
+  const ff_t = t?.typography?.fontFamily ?? ff_d;
+  const ff_m = m?.typography?.fontFamily ?? ff_t;
+  if (ff_d) style["--brx-d-ff"] = ff_d;
+  if (ff_t) style["--brx-t-ff"] = ff_t;
+  if (ff_m) style["--brx-m-ff"] = ff_m;
+
+  const lh_d = normalizeLengthValue(d.typography?.lineHeight);
+  const lh_t = normalizeLengthValue(t?.typography?.lineHeight) ?? lh_d;
+  const lh_m = normalizeLengthValue(m?.typography?.lineHeight) ?? lh_t;
+  if (lh_d) style["--brx-d-lh"] = lh_d;
+  if (lh_t) style["--brx-t-lh"] = lh_t;
+  if (lh_m) style["--brx-m-lh"] = lh_m;
+
+  const ls_d = normalizeLengthValue(d.typography?.letterSpacing);
+  const ls_t = normalizeLengthValue(t?.typography?.letterSpacing) ?? ls_d;
+  const ls_m = normalizeLengthValue(m?.typography?.letterSpacing) ?? ls_t;
+  if (ls_d) style["--brx-d-ls"] = ls_d;
+  if (ls_t) style["--brx-t-ls"] = ls_t;
+  if (ls_m) style["--brx-m-ls"] = ls_m;
+
+  const tt_d = d.typography?.textTransform;
+  const tt_t = t?.typography?.textTransform ?? tt_d;
+  const tt_m = m?.typography?.textTransform ?? tt_t;
+  if (tt_d) style["--brx-d-tt"] = tt_d;
+  if (tt_t) style["--brx-t-tt"] = tt_t;
+  if (tt_m) style["--brx-m-tt"] = tt_m;
+
   // Display
   const display = props.display || options?.defaultDisplay;
   if (display && display !== "none") {
@@ -587,6 +643,14 @@ export function bricksElementStyle(props: BricksLayoutProps, options?: { default
   if (bsh_d) {
     style.boxShadow = bsh_d;
   }
+
+  // Typography (desktop base / SSR)
+  if (fs_d) style.fontSize = fs_d;
+  if (fw_d) style.fontWeight = fw_d;
+  if (ff_d) style.fontFamily = ff_d;
+  if (lh_d) style.lineHeight = lh_d;
+  if (ls_d) style.letterSpacing = ls_d;
+  if (tt_d) style.textTransform = tt_d;
 
   return style;
 }

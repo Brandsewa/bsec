@@ -103,4 +103,24 @@ describe("block picker by page kind", () => {
       expect(kinds.some((k) => blockAllowed(type, k)), type).toBe(true);
     }
   });
+
+  it("offers Button in the picker and hides retired RichText in favor of Text with markdown", () => {
+    const config = buildPuckConfig({ themeVars: {}, pageKind: "custom" }) as unknown as {
+      categories: Record<string, { components?: string[] }>;
+    };
+    const contentBlocks = config.categories.content?.components ?? [];
+
+    expect(contentBlocks).toContain("Button");
+    expect(contentBlocks).toContain("Text");
+    expect(contentBlocks).not.toContain("RichText");
+
+    // Heading has no predefined size dropdown
+    expect(BLOCK_SPECS.Heading.fields.size).toBeUndefined();
+
+    // Button has essential styleType, icon, color, and typography fields
+    expect(BLOCK_SPECS.Button.fields.styleType).toBeDefined();
+    expect(BLOCK_SPECS.Button.fields.icon).toBeDefined();
+    expect(BLOCK_SPECS.Button.fields.buttonColor).toBeDefined();
+    expect(BLOCK_SPECS.Button.fields.typography).toBeDefined();
+  });
 });

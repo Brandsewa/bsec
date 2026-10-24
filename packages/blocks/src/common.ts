@@ -74,5 +74,12 @@ export const ICON_NAMES = [
   "info",
   "package",
   "droplet",
+  "arrow-right",
+  "arrow-left",
+  "chevron-right",
+  "chevron-left",
+  "cart",
+  "external-link",
+  "plus",
 ] as const;
 export type IconName = (typeof ICON_NAMES)[number];

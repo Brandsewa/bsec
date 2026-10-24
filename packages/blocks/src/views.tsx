@@ -2,6 +2,7 @@
 /** @jsxImportSource react */
 import type { CSSProperties, ReactNode, ElementType } from "react";
 import { sanitizeRichText } from "./sanitize.ts";
+import { parseMarkdownToHtml } from "./markdown.ts";
 import type {
   BlockProduct,
   CartContentsOptions,
@@ -836,8 +837,15 @@ export function HeadingView({ props }: A<R.HeadingProps>): ReactNode {
   const textTablet = props.responsive?.tablet?.text;
   const textMobile = props.responsive?.mobile?.text;
 
+  const hasCustomFontSize = Boolean(props.typography?.fontSize);
+
   const content = (
-    <Tag className={cx("bsb-heading", props.size === "auto" ? `bsb-lvl-${props.level}` : `bsb-h-${props.size}`)}>
+    <Tag
+      className={cx(
+        "bsb-heading",
+        !hasCustomFontSize && (props.size === "auto" || !props.size ? `bsb-lvl-${props.level}` : `bsb-h-${props.size}`)
+      )}
+    >
       {textMobile ? <span className="brx-only-mobile">{textMobile}</span> : null}
       {textTablet ? <span className="brx-only-tablet">{textTablet}</span> : null}
       <span className={cx(textMobile && "brx-hide-mobile", textTablet && "brx-hide-tablet")}>
@@ -857,26 +865,23 @@ export function HeadingView({ props }: A<R.HeadingProps>): ReactNode {
 }
 
 export function TextView({ props }: A<R.TextProps>): ReactNode {
-  const Tag = (props.tag || "p") as ElementType;
   const customStyle = bricksElementStyle(props, { defaultWidth: "100%", defaultDisplay: "block" });
 
   const textDesktop = props.text;
   const textTablet = props.responsive?.tablet?.text;
   const textMobile = props.responsive?.mobile?.text;
 
-  const renderParagraphs = (raw: string) =>
-    raw.split(/\n{2,}/).map((para, i) => (
-      <Tag key={i} className="bsb-text" style={{ whiteSpace: "pre-line" }}>
-        {para}
-      </Tag>
-    ));
+  const renderContent = (raw: string) => {
+    const html = parseMarkdownToHtml(raw);
+    return <div className="bsb-text" dangerouslySetInnerHTML={{ __html: html }} />;
+  };
 
   const content = (
     <>
-      {textMobile ? <div className="brx-only-mobile">{renderParagraphs(textMobile)}</div> : null}
-      {textTablet ? <div className="brx-only-tablet">{renderParagraphs(textTablet)}</div> : null}
+      {textMobile ? <div className="brx-only-mobile">{renderContent(textMobile)}</div> : null}
+      {textTablet ? <div className="brx-only-tablet">{renderContent(textTablet)}</div> : null}
       <div className={cx(textMobile && "brx-hide-mobile", textTablet && "brx-hide-tablet")}>
-        {renderParagraphs(textDesktop || "")}
+        {renderContent(textDesktop || "")}
       </div>
     </>
   );
@@ -1140,13 +1145,68 @@ export function FileDownloadView({ props, ctx }: A<R.FileDownloadProps>): ReactN
 }
 
 export function ButtonView({ props }: A<R.ButtonProps>): ReactNode {
+  const styleType = props.styleType || "theme";
+  const customStyle = bricksElementStyle(props, { defaultDisplay: "inline-flex" });
+
+  const labelDesktop = props.text || props.label || "Click here";
+  const labelTablet = props.responsive?.tablet?.text;
+  const labelMobile = props.responsive?.mobile?.text;
+
+  const href = props.link || props.href || "#";
+  const target = props.newTab ? "_blank" : undefined;
+  const relAttr = props.newTab ? "noopener noreferrer" : undefined;
+
+  const iconName = props.icon && props.icon !== "none" ? props.icon : undefined;
+  const iconPos = props.iconPosition || "left";
+  const iconGap = props.iconGap || "8px";
+
+  // CSS variables for custom colors & icon gap
+  const btnStyle: CSSProperties & Record<string, string | undefined> = {};
+  if (props.buttonColor) btnStyle["--brx-btn-bg"] = props.buttonColor;
+  if (props.textColor) btnStyle["--brx-btn-tc"] = props.textColor;
+  if (props.hoverButtonColor) btnStyle["--brx-btn-hbg"] = props.hoverButtonColor;
+  if (props.hoverTextColor) btnStyle["--brx-btn-htc"] = props.hoverTextColor;
+  if (iconGap) btnStyle["--brx-btn-gap"] = iconGap;
+
+  const iconEl = iconName ? (
+    <span className="brxe-button-icon" style={{ display: "inline-flex", alignItems: "center", flexShrink: 0 }}>
+      <SvgIcon name={iconName} px={18} />
+    </span>
+  ) : null;
+
+  const labelEl = (
+    <span className="brxe-button-text">
+      {labelMobile ? <span className="brx-only-mobile">{labelMobile}</span> : null}
+      {labelTablet ? <span className="brx-only-tablet">{labelTablet}</span> : null}
+      <span className={cx(labelMobile && "brx-hide-mobile", labelTablet && "brx-hide-tablet")}>
+        {labelDesktop}
+      </span>
+    </span>
+  );
+
   return (
-    <div className={cx("bsb", `bsb-align-${props.align}`)}>
+    <div
+      className={cx("bsb brxe-button brx-resp", `bsb-align-${props.align}`, props.fullWidth && "brx-btn-full")}
+      style={customStyle}
+    >
       <a
-        href={props.href}
-        className={cx("bsb-btn", `bsb-btn-${props.variant}`, props.size !== "auto" && `bsb-btn-${props.size}`, props.fullWidth && "bsb-btn-block")}
+        href={href}
+        target={target}
+        rel={relAttr}
+        className={cx(
+          "bsb-btn",
+          styleType === "theme" && `bsb-btn-${props.variant || "primary"}`,
+          styleType === "normal" && "brx-btn-normal",
+          styleType === "line" && "brx-btn-line",
+          styleType === "text" && "brx-btn-text",
+          props.size !== "auto" && `bsb-btn-${props.size}`,
+          props.fullWidth && "bsb-btn-block"
+        )}
+        style={btnStyle}
       >
-        {props.label}
+        {iconPos === "left" && iconEl}
+        {labelEl}
+        {iconPos === "right" && iconEl}
       </a>
     </div>
   );

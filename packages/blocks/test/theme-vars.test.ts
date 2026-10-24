@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { computeThemeTokens, resolveThemeColors, DEFAULT_THEME_COLORS } from "../src/theme-vars.ts";
+import { computeThemeTokens, resolveThemeColors } from "../src/theme-vars.ts";
 
 const fg = (primary: string) => computeThemeTokens({ primaryColor: primary })["--bs-primary-fg"];
 

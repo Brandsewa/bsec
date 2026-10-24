@@ -17,7 +17,7 @@ import {
   widthSchema,
 } from "./common.ts";
 import { layoutSchema, slideRadiusSchema } from "./layout.ts";
-import { bricksLayoutSchema, BRICKS_OBJECT_FIT_OPTIONS, BRICKS_OBJECT_POSITION_OPTIONS } from "./bricks-layout.ts";
+import { bricksLayoutSchema, BRICKS_OBJECT_FIT_OPTIONS } from "./bricks-layout.ts";
 import * as V from "./views.tsx";
 import * as VB from "./views-blog.tsx";
 import * as VR from "./views-reviews.tsx";
@@ -499,8 +499,8 @@ export const DividerBlock: BlockDefinition<DividerProps> = {
 export const HeadingSchema = z.object({
   text: z.string().min(1).max(300),
   level: z.enum(["h1", "h2", "h3", "h4", "h5", "h6"]).default("h2"),
-  // "auto" follows the heading level's size from the theme settings; the others keep the older fixed steps.
-  size: z.enum(["sm", "md", "lg", "xl", "auto"]).default("lg"),
+  // Legacy size field kept optional for backward compatibility
+  size: z.enum(["sm", "md", "lg", "xl", "auto"]).default("auto").optional(),
   align: alignSchema.default("left"),
   link: hrefSchema.optional(),
   ...bricksLayoutSchema.shape,
@@ -510,7 +510,7 @@ export const HeadingBlock: BlockDefinition<HeadingProps> = {
   type: "Heading",
   version: 1,
   schema: HeadingSchema,
-  defaultProps: { text: "Heading", level: "h2", size: "lg", align: "left" },
+  defaultProps: { text: "Heading", level: "h2", size: "auto", align: "left" },
   render: V.HeadingView,
 };
 
@@ -587,20 +587,53 @@ export const FileDownloadBlock: BlockDefinition<FileDownloadProps> = {
 };
 
 export const ButtonSchema = z.object({
-  label: z.string().min(1).max(80),
+  // Labels & Links (text/link preferred with fallback to legacy label/href)
+  label: z.string().min(1).max(80).default("Button"),
+  text: z.string().max(80).optional(),
   href: hrefSchema.default("/"),
+  link: hrefSchema.optional(),
+  newTab: z.boolean().default(false),
+
+  // Style Type & Theme Preset
+  styleType: z.enum(["theme", "normal", "line", "text"]).default("theme"),
   variant: z.enum(["primary", "secondary", "outline"]).default("primary"),
-  // "auto" follows the theme's button size; the others are fixed sizes.
-  size: z.enum(["auto", "sm", "md", "lg"]).default("md"),
+  size: z.enum(["auto", "sm", "md", "lg"]).default("auto"),
   fullWidth: z.boolean().default(false),
   align: alignSchema.default("left"),
+
+  // Custom Colors
+  buttonColor: hexColorSchema.optional().or(z.literal("")),
+  textColor: hexColorSchema.optional().or(z.literal("")),
+  hoverButtonColor: hexColorSchema.optional().or(z.literal("")),
+  hoverTextColor: hexColorSchema.optional().or(z.literal("")),
+
+  // Icon support
+  icon: z.string().optional(),
+  iconPosition: z.enum(["left", "right"]).default("left"),
+  iconGap: z.string().optional(),
+
+  ...bricksLayoutSchema.shape,
 });
 export type ButtonProps = z.infer<typeof ButtonSchema>;
 export const ButtonBlock: BlockDefinition<ButtonProps> = {
   type: "Button",
   version: 1,
   schema: ButtonSchema,
-  defaultProps: { label: "Shop now", href: "/collections/all", variant: "primary", size: "auto", fullWidth: false, align: "left" },
+  defaultProps: {
+    label: "Click here",
+    text: "Click here",
+    href: "/collections/all",
+    link: "/collections/all",
+    newTab: false,
+    styleType: "theme",
+    variant: "primary",
+    size: "auto",
+    fullWidth: false,
+    align: "left",
+    icon: "none",
+    iconPosition: "left",
+    iconGap: "8px",
+  },
   render: V.ButtonView,
 };
 
