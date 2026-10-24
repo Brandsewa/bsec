@@ -21,10 +21,22 @@ import {
   DEFAULT_BODY_SIZES,
   MAX_BODY_PX,
   MIN_BODY_PX,
+  DEFAULT_SITE_WIDTHS,
+  resolveThemeLayout,
+  sanitizeLayoutLength,
+  DEFAULT_THEME_COLORS,
+  resolveThemeColors,
+  type ThemeColorKey,
   type HeadingSizes,
   type SizeDevice,
   type BlockInstance,
   type ThemeTokensLike,
+  type ResolvedThemeLayout,
+  type ResolvedDeviceLayout,
+  type SpacingQuadValues,
+  type SizingValues,
+  type ThemeLayoutSettings,
+  type ThemeLayoutDeviceSettings,
 } from "@bs/blocks";
 import { BlocksPreview } from "./BlocksPreview.tsx";
 import { Dropdown, type DropdownOption } from "./Dropdown.tsx";
@@ -39,23 +51,188 @@ import { useFontLink } from "./fonts.ts";
 
 export type ThemeTokens = ThemeTokensLike & Record<string, unknown>;
 
-const COLOR_FIELDS = [
-  { key: "primary", label: "Brand colour", hint: "Buttons, links and accents" },
-  { key: "secondary", label: "Secondary" },
-  { key: "accent", label: "Accent" },
-  { key: "background", label: "Page background" },
-  { key: "surface", label: "Soft background", hint: "Cards and alternate sections" },
-  { key: "dark", label: "Dark background", hint: "Sections set to the dark background" },
-  { key: "text", label: "Text on light backgrounds" },
-  { key: "textOnDark", label: "Text on dark backgrounds" },
-] as const;
+interface ThemeColorFieldDef {
+  key: ThemeColorKey;
+  label: string;
+  hint?: string;
+}
 
-const PRESETS: Array<{ name: string; colors: Record<string, string> }> = [
-  { name: "Forest", colors: { primary: "#0b6b42", secondary: "#334155", accent: "#f59e0b", background: "#ffffff", surface: "#f4f7f5", text: "#16201b", dark: "#10231a", textOnDark: "#f4f7f5" } },
-  { name: "Ocean", colors: { primary: "#1d4ed8", secondary: "#334155", accent: "#06b6d4", background: "#ffffff", surface: "#f1f5fb", text: "#0f172a", dark: "#0f1f3d", textOnDark: "#f1f5fb" } },
-  { name: "Sunset", colors: { primary: "#c2410c", secondary: "#44403c", accent: "#eab308", background: "#fffbf7", surface: "#fdf1e7", text: "#2a1a10", dark: "#2a1a10", textOnDark: "#fdf1e7" } },
-  { name: "Mono", colors: { primary: "#111827", secondary: "#4b5563", accent: "#6b7280", background: "#ffffff", surface: "#f3f4f6", text: "#111827", dark: "#111827", textOnDark: "#ffffff" } },
-  { name: "Midnight", colors: { primary: "#a78bfa", secondary: "#94a3b8", accent: "#f472b6", background: "#0f172a", surface: "#1e293b", text: "#f1f5f9", dark: "#020617", textOnDark: "#f1f5f9" } },
+const COLOR_SECTIONS: Array<{
+  title?: string;
+  fields: ThemeColorFieldDef[];
+}> = [
+  {
+    fields: [
+      { key: "siteBackground", label: "Site Background", hint: "Overall page / canvas background" },
+    ],
+  },
+  {
+    title: "Brand Palette",
+    fields: [
+      { key: "primary", label: "Primary", hint: "Main brand color, primary buttons and accents" },
+      { key: "secondary", label: "Secondary", hint: "Secondary actions, borders, and subtext" },
+      { key: "accent1", label: "Accent 1", hint: "First accent color for callouts and highlights" },
+      { key: "accent2", label: "Accent 2", hint: "Second accent color for badges and emphasis" },
+    ],
+  },
+  {
+    title: "Light Scheme",
+    fields: [
+      { key: "lightHeading", label: "Heading", hint: "Headings on light background" },
+      { key: "lightText", label: "Text", hint: "Body text on light background" },
+      { key: "lightButton", label: "Button", hint: "Button background on light scheme" },
+      { key: "lightButtonText", label: "Button Text", hint: "Button text on light scheme" },
+      { key: "lightBackground", label: "Backgrounds", hint: "Default section & card background on light scheme" },
+    ],
+  },
+  {
+    title: "Dark Scheme",
+    fields: [
+      { key: "darkHeading", label: "Heading", hint: "Headings on dark background" },
+      { key: "darkText", label: "Text", hint: "Body text on dark background" },
+      { key: "darkButton", label: "Button Background", hint: "Button background on dark scheme" },
+      { key: "darkButtonText", label: "Button Text", hint: "Button text on dark scheme" },
+      { key: "darkBackground", label: "Backgrounds", hint: "Default section & card background on dark scheme" },
+    ],
+  },
+];
+
+const PRESETS: Array<{ name: string; primary: string; colors: Record<string, string> }> = [
+  {
+    name: "Forest",
+    primary: "#0b6b42",
+    colors: {
+      siteBackground: "#ffffff",
+      primary: "#0b6b42",
+      secondary: "#334155",
+      accent1: "#15803d",
+      accent2: "#f59e0b",
+      lightHeading: "#16201b",
+      lightText: "#334155",
+      lightButton: "#0b6b42",
+      lightButtonText: "#ffffff",
+      lightBackground: "#f4f7f5",
+      darkHeading: "#f4f7f5",
+      darkText: "#cbd5e1",
+      darkButton: "#15803d",
+      darkButtonText: "#ffffff",
+      darkBackground: "#10231a",
+      accent: "#15803d",
+      background: "#ffffff",
+      surface: "#f4f7f5",
+      text: "#16201b",
+      dark: "#10231a",
+      textOnDark: "#f4f7f5",
+    },
+  },
+  {
+    name: "Ocean",
+    primary: "#1d4ed8",
+    colors: {
+      siteBackground: "#ffffff",
+      primary: "#1d4ed8",
+      secondary: "#334155",
+      accent1: "#06b6d4",
+      accent2: "#3b82f6",
+      lightHeading: "#0f172a",
+      lightText: "#334155",
+      lightButton: "#1d4ed8",
+      lightButtonText: "#ffffff",
+      lightBackground: "#f1f5fb",
+      darkHeading: "#f1f5fb",
+      darkText: "#94a3b8",
+      darkButton: "#06b6d4",
+      darkButtonText: "#0f172a",
+      darkBackground: "#0f1f3d",
+      accent: "#06b6d4",
+      background: "#ffffff",
+      surface: "#f1f5fb",
+      text: "#0f172a",
+      dark: "#0f1f3d",
+      textOnDark: "#f1f5fb",
+    },
+  },
+  {
+    name: "Sunset",
+    primary: "#c2410c",
+    colors: {
+      siteBackground: "#fffbf7",
+      primary: "#c2410c",
+      secondary: "#44403c",
+      accent1: "#eab308",
+      accent2: "#f97316",
+      lightHeading: "#2a1a10",
+      lightText: "#44403c",
+      lightButton: "#c2410c",
+      lightButtonText: "#ffffff",
+      lightBackground: "#fdf1e7",
+      darkHeading: "#fffbf7",
+      darkText: "#d6d3d1",
+      darkButton: "#ea580c",
+      darkButtonText: "#ffffff",
+      darkBackground: "#2a1a10",
+      accent: "#eab308",
+      background: "#fffbf7",
+      surface: "#fdf1e7",
+      text: "#2a1a10",
+      dark: "#2a1a10",
+      textOnDark: "#fdf1e7",
+    },
+  },
+  {
+    name: "Mono",
+    primary: "#111827",
+    colors: {
+      siteBackground: "#ffffff",
+      primary: "#111827",
+      secondary: "#4b5563",
+      accent1: "#6b7280",
+      accent2: "#9ca3af",
+      lightHeading: "#111827",
+      lightText: "#374151",
+      lightButton: "#111827",
+      lightButtonText: "#ffffff",
+      lightBackground: "#f3f4f6",
+      darkHeading: "#ffffff",
+      darkText: "#d1d5db",
+      darkButton: "#ffffff",
+      darkButtonText: "#111827",
+      darkBackground: "#111827",
+      accent: "#6b7280",
+      background: "#ffffff",
+      surface: "#f3f4f6",
+      text: "#111827",
+      dark: "#111827",
+      textOnDark: "#ffffff",
+    },
+  },
+  {
+    name: "Midnight",
+    primary: "#a78bfa",
+    colors: {
+      siteBackground: "#0f172a",
+      primary: "#a78bfa",
+      secondary: "#94a3b8",
+      accent1: "#f472b6",
+      accent2: "#38bdf8",
+      lightHeading: "#0f172a",
+      lightText: "#334155",
+      lightButton: "#7c3aed",
+      lightButtonText: "#ffffff",
+      lightBackground: "#f8fafc",
+      darkHeading: "#f1f5f9",
+      darkText: "#cbd5e1",
+      darkButton: "#a78bfa",
+      darkButtonText: "#0f172a",
+      darkBackground: "#020617",
+      accent: "#f472b6",
+      background: "#0f172a",
+      surface: "#1e293b",
+      text: "#f1f5f9",
+      dark: "#020617",
+      textOnDark: "#f1f5f9",
+    },
+  },
 ];
 
 const RADIUS_LABELS: Record<(typeof THEME_RADII)[number], string> = { none: "Square", sm: "Slight", md: "Rounded", lg: "Very rounded", full: "Pill" };
@@ -77,17 +254,9 @@ function radiusKey(v: string | undefined): (typeof THEME_RADII)[number] {
 /** Reads the editable values out of tokens in either the current or the first-launch shape. */
 export function readThemeSettings(tokens: ThemeTokens) {
   const sanitized = computeThemeTokens(null, tokens);
+  const resolvedColors = resolveThemeColors(null, tokens);
   return {
-    colors: {
-      primary: sanitized["--color-primary"] ?? "#0f172a",
-      secondary: sanitized["--color-secondary"] ?? "#334155",
-      accent: sanitized["--color-accent"] ?? "#2563eb",
-      background: sanitized["--color-background"] ?? "#ffffff",
-      surface: sanitized["--color-surface"] ?? "#f8fafc",
-      text: sanitized["--color-text"] ?? "#0f172a",
-      dark: sanitized["--color-dark"] ?? "#0f172a",
-      textOnDark: sanitized["--color-text-on-dark"] ?? "#ffffff",
-    } as Record<string, string>,
+    colors: resolvedColors as Record<string, string>,
     sizes: resolveHeadingSizes(tokens),
     bodySizes: resolveBodySizes(tokens),
     heading: String(tokens.fonts?.heading ?? tokens.typography?.headingFont ?? "Inter"),
@@ -112,6 +281,7 @@ export function readThemeSettings(tokens: ThemeTokens) {
       lightBg: tokens.buttons?.lightBg,
       lightText: tokens.buttons?.lightText,
     } as Partial<Record<ButtonColorKey, string>>,
+    layout: resolveThemeLayout(tokens),
   };
 }
 
@@ -142,33 +312,88 @@ const accordion = {
   body: { display: "grid", gap: 10, paddingBottom: 14 } as CSSProperties,
 };
 
-/**
- * A colour field: a round swatch plus its hex code. The native colour input sits invisibly over a round,
- * clipped swatch, so every colour in the panel has the same round shape (the browser's own swatch is square).
- */
-function ColorField({ name, value, disabled, onPick }: { name: string; value: string; disabled?: boolean | undefined; onPick: (hex: string) => void }) {
-  const hex = /^#[0-9a-f]{6}$/i.test(value) ? value : "#000000";
+
+/** A custom color row for Theme Settings: circular swatch (triggers native picker) + hex input + description below. */
+function ThemeColorRow({
+  title,
+  hint,
+  value,
+  disabled,
+  onChange,
+}: {
+  title: string;
+  hint?: string | undefined;
+  value: string | undefined;
+  disabled?: boolean | undefined;
+  onChange: (hex: string) => void;
+}) {
+  const hex = /^#[0-9a-f]{6}$/i.test(value ?? "") ? (value as string) : "#000000";
   return (
-    <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
-      <label style={{ position: "relative", width: 26, height: 26, flex: "none", borderRadius: "50%", background: hex, border: "1px solid rgba(0,0,0,.18)", boxShadow: "inset 0 0 0 2px #fff", overflow: "hidden", cursor: disabled ? "not-allowed" : "pointer", opacity: disabled ? 0.6 : 1 }}>
+    <div style={{ display: "grid", gap: 3 }}>
+      <span style={label}>{title}</span>
+      <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+        <label
+          title={`Click to pick ${title}`}
+          style={{
+            position: "relative",
+            width: 26,
+            height: 26,
+            flex: "none",
+            borderRadius: "50%",
+            background: value || "#ffffff",
+            border: "1px solid rgba(0,0,0,0.18)",
+            boxShadow: "inset 0 0 0 2px #fff",
+            cursor: disabled ? "not-allowed" : "pointer",
+            overflow: "hidden",
+            display: "inline-block",
+          }}
+        >
+          <input
+            type="color"
+            aria-label={`${title} color picker`}
+            value={hex}
+            disabled={disabled}
+            onChange={(e) => onChange(e.target.value)}
+            style={{
+              position: "absolute",
+              inset: 0,
+              width: "100%",
+              height: "100%",
+              opacity: 0,
+              cursor: "pointer",
+              border: 0,
+              padding: 0,
+            }}
+          />
+        </label>
         <input
-          type="color"
-          aria-label={`${name} colour`}
-          value={hex}
+          type="text"
+          aria-label={`${title} hex`}
+          value={value ?? ""}
+          placeholder="#000000"
           disabled={disabled}
-          onChange={(e) => onPick(e.target.value)}
-          style={{ position: "absolute", inset: 0, width: "100%", height: "100%", opacity: 0, cursor: "inherit", border: 0, padding: 0 }}
+          onChange={(e) => onChange(e.target.value)}
+          onBlur={(e) => {
+            const trimmed = e.target.value.trim();
+            if (/^#[0-9a-f]{3,8}$/i.test(trimmed)) onChange(trimmed);
+          }}
+          style={{
+            flex: 1,
+            border: "1px solid #d4d4d8",
+            borderRadius: 7,
+            padding: "5px 8px",
+            fontSize: 12,
+            background: "#fff",
+            color: "#111",
+            fontFamily: "ui-monospace, monospace",
+          }}
         />
-      </label>
-      <input
-        type="text"
-        aria-label={`${name} hex`}
-        defaultValue={value}
-        key={value}
-        disabled={disabled}
-        onBlur={(e) => /^#[0-9a-f]{6}$/i.test(e.target.value.trim()) && onPick(e.target.value.trim())}
-        style={{ ...input, fontFamily: "ui-monospace, monospace" }}
-      />
+      </div>
+      {hint ? (
+        <span style={{ display: "block", fontSize: 11, color: "#71717a", lineHeight: 1.35, marginTop: 1 }}>
+          {hint}
+        </span>
+      ) : null}
     </div>
   );
 }
@@ -347,6 +572,334 @@ function cleanButtonColors(set: Partial<Record<ButtonColorKey, string | undefine
   return out;
 }
 
+function cleanThemeLayout(layout: ResolvedThemeLayout | undefined): ThemeLayoutSettings | undefined {
+  if (!layout) return undefined;
+  const cleanQuad = (q?: SpacingQuadValues) => {
+    if (!q) return undefined;
+    const res: SpacingQuadValues = {};
+    if (q.top?.trim()) res.top = q.top.trim();
+    if (q.right?.trim()) res.right = q.right.trim();
+    if (q.bottom?.trim()) res.bottom = q.bottom.trim();
+    if (q.left?.trim()) res.left = q.left.trim();
+    return Object.keys(res).length > 0 ? res : undefined;
+  };
+  const cleanSizing = (s?: SizingValues) => {
+    if (!s) return undefined;
+    const res: SizingValues = {};
+    if (s.width?.trim()) res.width = s.width.trim();
+    if (s.minWidth?.trim()) res.minWidth = s.minWidth.trim();
+    if (s.maxWidth?.trim()) res.maxWidth = s.maxWidth.trim();
+    return Object.keys(res).length > 0 ? res : undefined;
+  };
+
+  const out: ThemeLayoutSettings = {};
+  for (const dev of SIZE_DEVICES) {
+    const devLayout = layout[dev];
+    if (!devLayout) continue;
+    const devOut: ThemeLayoutDeviceSettings = {};
+    if (devLayout.siteWidth && devLayout.siteWidth !== DEFAULT_SITE_WIDTHS[dev]) {
+      devOut.siteWidth = devLayout.siteWidth.trim();
+    }
+    const secMargin = cleanQuad(devLayout.section?.margin);
+    const secPad = cleanQuad(devLayout.section?.padding);
+    const secSizing = cleanSizing(devLayout.section?.sizing);
+    if (secMargin || secPad || secSizing) {
+      devOut.section = {
+        ...(secMargin ? { margin: secMargin } : {}),
+        ...(secPad ? { padding: secPad } : {}),
+        ...(secSizing ? { sizing: secSizing } : {}),
+      };
+    }
+    const cntMargin = cleanQuad(devLayout.container?.margin);
+    const cntPad = cleanQuad(devLayout.container?.padding);
+    const cntSizing = cleanSizing(devLayout.container?.sizing);
+    if (cntMargin || cntPad || cntSizing) {
+      devOut.container = {
+        ...(cntMargin ? { margin: cntMargin } : {}),
+        ...(cntPad ? { padding: cntPad } : {}),
+        ...(cntSizing ? { sizing: cntSizing } : {}),
+      };
+    }
+    if (Object.keys(devOut).length > 0) {
+      out[dev] = devOut;
+    }
+  }
+  return Object.keys(out).length > 0 ? out : undefined;
+}
+
+function QuadInputGroup({
+  values,
+  disabled,
+  placeholderTop = "0px",
+  placeholderRight = "0px",
+  placeholderBottom = "0px",
+  placeholderLeft = "0px",
+  onChange,
+}: {
+  values: SpacingQuadValues | undefined;
+  disabled?: boolean | undefined;
+  placeholderTop?: string | undefined;
+  placeholderRight?: string | undefined;
+  placeholderBottom?: string | undefined;
+  placeholderLeft?: string | undefined;
+  onChange: (next: SpacingQuadValues) => void;
+}) {
+  const sides = [
+    { key: "top", label: "Top", placeholder: placeholderTop },
+    { key: "right", label: "Right", placeholder: placeholderRight },
+    { key: "bottom", label: "Bottom", placeholder: placeholderBottom },
+    { key: "left", label: "Left", placeholder: placeholderLeft },
+  ] as const;
+
+  return (
+    <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 5 }}>
+      {sides.map(({ key, label: sideLabel, placeholder }) => (
+        <div key={key}>
+          <span style={{ display: "block", fontSize: 9, color: "#71717a", marginBottom: 2 }}>{sideLabel}</span>
+          <input
+            type="text"
+            value={values?.[key] ?? ""}
+            placeholder={placeholder}
+            disabled={disabled}
+            onChange={(e) => onChange({ ...values, [key]: e.target.value })}
+            onBlur={(e) => {
+              const sanitized = sanitizeLayoutLength(e.target.value) ?? (e.target.value.trim() === "" ? "" : e.target.value);
+              onChange({ ...values, [key]: sanitized });
+            }}
+            style={{ ...input, padding: "4px 6px", fontSize: 11 }}
+          />
+        </div>
+      ))}
+    </div>
+  );
+}
+
+function SizingInputGroup({
+  values,
+  disabled,
+  placeholderWidth = "100%",
+  placeholderMinWidth = "none",
+  placeholderMaxWidth = "100%",
+  onChange,
+}: {
+  values: SizingValues | undefined;
+  disabled?: boolean | undefined;
+  placeholderWidth?: string | undefined;
+  placeholderMinWidth?: string | undefined;
+  placeholderMaxWidth?: string | undefined;
+  onChange: (next: SizingValues) => void;
+}) {
+  const fields = [
+    { key: "width", label: "Width", placeholder: placeholderWidth },
+    { key: "minWidth", label: "Min W", placeholder: placeholderMinWidth },
+    { key: "maxWidth", label: "Max W", placeholder: placeholderMaxWidth },
+  ] as const;
+
+  return (
+    <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 5 }}>
+      {fields.map(({ key, label: fieldLabel, placeholder }) => (
+        <div key={key}>
+          <span style={{ display: "block", fontSize: 9, color: "#71717a", marginBottom: 2 }}>{fieldLabel}</span>
+          <input
+            type="text"
+            value={values?.[key] ?? ""}
+            placeholder={placeholder}
+            disabled={disabled}
+            onChange={(e) => onChange({ ...values, [key]: e.target.value })}
+            onBlur={(e) => {
+              const sanitized = sanitizeLayoutLength(e.target.value) ?? (e.target.value.trim() === "" ? "" : e.target.value);
+              onChange({ ...values, [key]: sanitized });
+            }}
+            style={{ ...input, padding: "4px 6px", fontSize: 11 }}
+          />
+        </div>
+      ))}
+    </div>
+  );
+}
+
+function LayoutSettingsEditor({
+  layout,
+  disabled,
+  onChange,
+}: {
+  layout: ResolvedThemeLayout;
+  disabled?: boolean | undefined;
+  onChange: (layout: ResolvedThemeLayout) => void;
+}) {
+  const [activeDevice, setActiveDevice] = useState<SizeDevice>("desktop");
+  const currentDev = layout[activeDevice];
+
+  const updateDev = (patch: Partial<ResolvedDeviceLayout>) => {
+    onChange({
+      ...layout,
+      [activeDevice]: {
+        ...currentDev,
+        ...patch,
+      },
+    });
+  };
+
+  const isDefault =
+    SIZE_DEVICES.every((d) => layout[d].siteWidth === DEFAULT_SITE_WIDTHS[d]) &&
+    SIZE_DEVICES.every(
+      (d) =>
+        !layout[d].section.margin.top &&
+        !layout[d].section.margin.right &&
+        !layout[d].section.margin.bottom &&
+        !layout[d].section.margin.left &&
+        !layout[d].section.padding.top &&
+        !layout[d].section.padding.right &&
+        !layout[d].section.padding.bottom &&
+        !layout[d].section.padding.left &&
+        !layout[d].section.sizing.width &&
+        !layout[d].section.sizing.minWidth &&
+        !layout[d].section.sizing.maxWidth &&
+        !layout[d].container.margin.top &&
+        !layout[d].container.margin.right &&
+        !layout[d].container.margin.bottom &&
+        !layout[d].container.margin.left &&
+        !layout[d].container.padding.top &&
+        !layout[d].container.padding.right &&
+        !layout[d].container.padding.bottom &&
+        !layout[d].container.padding.left &&
+        !layout[d].container.sizing.width &&
+        !layout[d].container.sizing.minWidth &&
+        !layout[d].container.sizing.maxWidth
+    );
+
+  const resetAll = () => {
+    onChange(resolveThemeLayout({}));
+  };
+
+  return (
+    <div style={{ display: "grid", gap: 12 }}>
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+        <div style={{ display: "flex", gap: 4, background: "#f4f4f5", padding: 3, borderRadius: 8, flex: 1, maxWidth: 230 }}>
+          {SIZE_DEVICES.map((d) => (
+            <button
+              key={d}
+              type="button"
+              disabled={disabled}
+              onClick={() => setActiveDevice(d)}
+              style={{
+                flex: 1,
+                display: "inline-flex",
+                alignItems: "center",
+                justifyContent: "center",
+                gap: 5,
+                padding: "4px 6px",
+                fontSize: 11,
+                fontWeight: 600,
+                borderRadius: 6,
+                border: 0,
+                cursor: "pointer",
+                background: activeDevice === d ? "#fff" : "transparent",
+                color: activeDevice === d ? "#18181b" : "#71717a",
+                boxShadow: activeDevice === d ? "0 1px 2px rgba(0,0,0,0.08)" : "none",
+              }}
+            >
+              <DeviceIcon device={d} />
+              {DEVICE_LABELS[d].label}
+            </button>
+          ))}
+        </div>
+        <button
+          type="button"
+          disabled={disabled || isDefault}
+          onClick={resetAll}
+          style={{ border: 0, background: "none", fontSize: 11, color: disabled || isDefault ? "#a1a1aa" : "#2563eb", cursor: disabled || isDefault ? "default" : "pointer", padding: "0 4px" }}
+        >
+          Reset
+        </button>
+      </div>
+
+      <Field title="Site width" hint={`Maximum container width on ${DEVICE_LABELS[activeDevice].label.toLowerCase()} (e.g. 1200px, 100%)`}>
+        <input
+          type="text"
+          value={currentDev.siteWidth}
+          placeholder={DEFAULT_SITE_WIDTHS[activeDevice]}
+          disabled={disabled}
+          onChange={(e) => updateDev({ siteWidth: e.target.value })}
+          onBlur={(e) => {
+            const sanitized = sanitizeLayoutLength(e.target.value, DEFAULT_SITE_WIDTHS[activeDevice]) ?? DEFAULT_SITE_WIDTHS[activeDevice];
+            updateDev({ siteWidth: sanitized });
+          }}
+          style={input}
+        />
+      </Field>
+
+      {/* Section Defaults */}
+      <div style={{ borderTop: "1px dashed #e4e4e7", paddingTop: 10, display: "grid", gap: 8 }}>
+        <span style={{ fontSize: 11, fontWeight: 700, color: "#18181b", textTransform: "uppercase", letterSpacing: "0.04em" }}>
+          Section Defaults ({DEVICE_LABELS[activeDevice].label})
+        </span>
+
+        <Field title="Section width (Min, Max, Width)">
+          <SizingInputGroup
+            values={currentDev.section.sizing}
+            disabled={disabled}
+            placeholderWidth="100%"
+            placeholderMaxWidth="100%"
+            onChange={(sizing) => updateDev({ section: { ...currentDev.section, sizing } })}
+          />
+        </Field>
+
+        <Field title="Section margin">
+          <QuadInputGroup
+            values={currentDev.section.margin}
+            disabled={disabled}
+            onChange={(margin) => updateDev({ section: { ...currentDev.section, margin } })}
+          />
+        </Field>
+
+        <Field title="Section padding">
+          <QuadInputGroup
+            values={currentDev.section.padding}
+            disabled={disabled}
+            onChange={(padding) => updateDev({ section: { ...currentDev.section, padding } })}
+          />
+        </Field>
+      </div>
+
+      {/* Container Defaults */}
+      <div style={{ borderTop: "1px dashed #e4e4e7", paddingTop: 10, display: "grid", gap: 8 }}>
+        <span style={{ fontSize: 11, fontWeight: 700, color: "#18181b", textTransform: "uppercase", letterSpacing: "0.04em" }}>
+          Container Defaults ({DEVICE_LABELS[activeDevice].label})
+        </span>
+
+        <Field title="Container width (Min, Max, Width)">
+          <SizingInputGroup
+            values={currentDev.container.sizing}
+            disabled={disabled}
+            placeholderWidth="100%"
+            placeholderMaxWidth={currentDev.siteWidth || DEFAULT_SITE_WIDTHS[activeDevice]}
+            onChange={(sizing) => updateDev({ container: { ...currentDev.container, sizing } })}
+          />
+        </Field>
+
+        <Field title="Container margin">
+          <QuadInputGroup
+            values={currentDev.container.margin}
+            disabled={disabled}
+            placeholderLeft="auto"
+            placeholderRight="auto"
+            onChange={(margin) => updateDev({ container: { ...currentDev.container, margin } })}
+          />
+        </Field>
+
+        <Field title="Container padding">
+          <QuadInputGroup
+            values={currentDev.container.padding}
+            disabled={disabled}
+            onChange={(padding) => updateDev({ container: { ...currentDev.container, padding } })}
+          />
+        </Field>
+      </div>
+    </div>
+  );
+}
+
 export interface ThemeSettingsPanelProps {
   tokens: ThemeTokens;
   onChange: (tokens: ThemeTokens) => void;
@@ -379,8 +932,27 @@ export function ThemeSettingsPanel({ tokens, onChange, disabled, note }: ThemeSe
     headingWeight?: string;
     bodyWeight?: string;
     buttonColors?: Partial<Record<ButtonColorKey, string | undefined>>;
+    layout?: ResolvedThemeLayout;
   }) => {
-    const next = { ...v, ...patch, colors: { ...v.colors, ...(patch.colors ?? {}) }, buttonColorsSet: { ...v.buttonColorsSet, ...(patch.buttonColors ?? {}) } };
+    const patchColors = patch.colors
+      ? (() => {
+          const synced = { ...patch.colors };
+          if ("siteBackground" in patch.colors && !("background" in patch.colors)) synced.background = patch.colors.siteBackground;
+          if ("accent1" in patch.colors && !("accent" in patch.colors)) synced.accent = patch.colors.accent1;
+          if ("lightBackground" in patch.colors && !("surface" in patch.colors)) synced.surface = patch.colors.lightBackground;
+          if ("lightText" in patch.colors && !("text" in patch.colors)) synced.text = patch.colors.lightText;
+          if ("darkBackground" in patch.colors && !("dark" in patch.colors)) synced.dark = patch.colors.darkBackground;
+          if ("darkText" in patch.colors && !("textOnDark" in patch.colors)) synced.textOnDark = patch.colors.darkText;
+          return synced;
+        })()
+      : undefined;
+    const next = {
+      ...v,
+      ...patch,
+      colors: { ...v.colors, ...(patchColors ?? {}) },
+      buttonColorsSet: { ...v.buttonColorsSet, ...(patch.buttonColors ?? {}) },
+      layout: patch.layout ?? v.layout,
+    };
     const { typography: _t, shape: _s, ...rest } = tokens;
     void _t;
     void _s;
@@ -399,6 +971,7 @@ export function ThemeSettingsPanel({ tokens, onChange, disabled, note }: ThemeSe
         size: next.buttonSize,
         ...cleanButtonColors(next.buttonColorsSet),
       },
+      layout: cleanThemeLayout(next.layout),
     });
   };
 
@@ -408,24 +981,59 @@ export function ThemeSettingsPanel({ tokens, onChange, disabled, note }: ThemeSe
       <p style={{ fontSize: 11, color: "#71717a", margin: "0 0 4px" }}>{note ?? "Applies to every page of this theme."}</p>
 
       <Section id="colors" title="Colours" open={openId === "colors"} onToggle={() => toggle("colors")}>
-        <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
+        <div style={{ display: "flex", flexWrap: "wrap", gap: 6, marginBottom: 12 }}>
           {PRESETS.map((p) => (
             <button
               key={p.name}
               type="button"
               disabled={disabled}
               onClick={() => commit({ colors: p.colors })}
-              style={{ border: "1px solid #d4d4d8", background: "#fff", color: "#18181b", borderRadius: 999, padding: "2px 9px 2px 5px", fontSize: 11, cursor: "pointer", display: "inline-flex", alignItems: "center", gap: 6 }}
+              style={{
+                border: "1px solid #d4d4d8",
+                background: "#fff",
+                color: "#18181b",
+                borderRadius: 999,
+                padding: "3px 10px 3px 6px",
+                fontSize: 11,
+                cursor: disabled ? "not-allowed" : "pointer",
+                display: "inline-flex",
+                alignItems: "center",
+                gap: 6,
+                boxShadow: "0 1px 2px rgba(0,0,0,0.04)",
+              }}
             >
-              <span style={{ width: 14, height: 14, borderRadius: 999, background: p.colors["primary"], display: "inline-block" }} />
+              <span
+                style={{
+                  width: 14,
+                  height: 14,
+                  borderRadius: 999,
+                  background: p.primary,
+                  display: "inline-block",
+                  boxShadow: "inset 0 0 0 1px rgba(0,0,0,0.15)",
+                }}
+              />
               {p.name}
             </button>
           ))}
         </div>
-        {COLOR_FIELDS.map((f) => (
-          <Field key={f.key} title={f.label} hint={"hint" in f ? f.hint : undefined}>
-            <ColorField name={f.label} value={v.colors[f.key] ?? "#000000"} disabled={disabled} onPick={(hex) => commit({ colors: { [f.key]: hex } })} />
-          </Field>
+        {COLOR_SECTIONS.map((sec, secIdx) => (
+          <div key={secIdx} style={{ display: "grid", gap: 10, borderTop: secIdx > 0 ? "1px dashed #e4e4e7" : undefined, paddingTop: secIdx > 0 ? 12 : 0 }}>
+            {sec.title ? (
+              <span style={{ fontSize: 11, fontWeight: 700, color: "#18181b", textTransform: "uppercase", letterSpacing: "0.04em" }}>
+                {sec.title}
+              </span>
+            ) : null}
+            {sec.fields.map((f) => (
+              <ThemeColorRow
+                key={f.key}
+                title={f.label}
+                hint={f.hint}
+                value={v.colors[f.key] ?? DEFAULT_THEME_COLORS[f.key]}
+                disabled={disabled}
+                onChange={(hex) => hex && commit({ colors: { [f.key]: hex } })}
+              />
+            ))}
+          </div>
         ))}
       </Section>
 
@@ -443,6 +1051,10 @@ export function ThemeSettingsPanel({ tokens, onChange, disabled, note }: ThemeSe
           <Dropdown compact ariaLabel="Body font weight" value={v.bodyWeight} options={WEIGHT_OPTIONS} disabled={disabled} onChange={(value) => commit({ bodyWeight: value })} />
         </Field>
         <HeadingSizesEditor sizes={v.sizes} bodySizes={v.bodySizes} disabled={disabled} onChange={(sizes, bodySizes) => commit({ sizes, bodySizes })} />
+      </Section>
+
+      <Section id="layout" title="Layout" open={openId === "layout"} onToggle={() => toggle("layout")}>
+        <LayoutSettingsEditor layout={v.layout} disabled={disabled} onChange={(layout) => commit({ layout })} />
       </Section>
 
       <Section id="corners" title="Corners" open={openId === "corners"} onToggle={() => toggle("corners")}>
@@ -506,18 +1118,32 @@ export function ThemeSettingsPanel({ tokens, onChange, disabled, note }: ThemeSe
               Reset
             </button>
           </div>
-          <Field title="Dark button: background" hint="The main button. Also the colour of outline and soft buttons.">
-            <ColorField name="Dark button background" value={v.buttonColors.darkBg} disabled={disabled} onPick={(hex) => commit({ buttonColors: { darkBg: hex } })} />
-          </Field>
-          <Field title="Dark button: text">
-            <ColorField name="Dark button text" value={v.buttonColors.darkText} disabled={disabled} onPick={(hex) => commit({ buttonColors: { darkText: hex } })} />
-          </Field>
-          <Field title="Light button: background" hint="The secondary button.">
-            <ColorField name="Light button background" value={v.buttonColors.lightBg} disabled={disabled} onPick={(hex) => commit({ buttonColors: { lightBg: hex } })} />
-          </Field>
-          <Field title="Light button: text">
-            <ColorField name="Light button text" value={v.buttonColors.lightText} disabled={disabled} onPick={(hex) => commit({ buttonColors: { lightText: hex } })} />
-          </Field>
+          <ThemeColorRow
+            title="Dark button: background"
+            hint="The main button. Also the colour of outline and soft buttons."
+            value={v.buttonColors.darkBg}
+            disabled={disabled}
+            onChange={(hex) => commit({ buttonColors: { darkBg: hex } })}
+          />
+          <ThemeColorRow
+            title="Dark button: text"
+            value={v.buttonColors.darkText}
+            disabled={disabled}
+            onChange={(hex) => commit({ buttonColors: { darkText: hex } })}
+          />
+          <ThemeColorRow
+            title="Light button: background"
+            hint="The secondary button."
+            value={v.buttonColors.lightBg}
+            disabled={disabled}
+            onChange={(hex) => commit({ buttonColors: { lightBg: hex } })}
+          />
+          <ThemeColorRow
+            title="Light button: text"
+            value={v.buttonColors.lightText}
+            disabled={disabled}
+            onChange={(hex) => commit({ buttonColors: { lightText: hex } })}
+          />
         </div>
       </Section>
     </div>

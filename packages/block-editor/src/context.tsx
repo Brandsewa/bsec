@@ -62,7 +62,17 @@ export const FrameEditContext = createContext<FrameEdit | null>(null);
 export const HostContext = createContext<BlockEditorHost | null>(null);
 export const RenderDataContext = createContext<EditorRenderData>({ data: {}, media: {} });
 
+export interface GlobalThemeColor {
+  key: string;
+  label: string;
+  hex: string;
+  group: "site" | "palette" | "light" | "dark";
+}
+
+export const ThemeColorsContext = createContext<GlobalThemeColor[]>([]);
+
 export const useHost = () => useContext(HostContext);
 export const useFrame = () => useContext(FrameContext);
 export const useFrameEdit = () => useContext(FrameEditContext);
 export const useRenderData = () => useContext(RenderDataContext);
+export const useThemeGlobalColors = () => useContext(ThemeColorsContext);

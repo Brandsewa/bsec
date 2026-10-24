@@ -12,7 +12,7 @@ describe("editor config", () => {
       const def = getBlockDefinition(type);
       const shape = (def.schema as unknown as { shape: Record<string, unknown> }).shape;
       for (const field of Object.keys(BLOCK_SPECS[type].fields)) {
-        if (field.startsWith("__section_")) continue; // accordion headers: display only, no data
+        if (field.startsWith("__section_") || field.startsWith("__bricks_")) continue; // accordion/tab headers: display only, no data
         expect(Object.keys(shape), `${type}.${field}`).toContain(field);
       }
     }
@@ -102,5 +102,25 @@ describe("block picker by page kind", () => {
       const kinds = ["home", "collection", "product", "cart", "blogArchive", "blogPost", "header", "footer"] as const;
       expect(kinds.some((k) => blockAllowed(type, k)), type).toBe(true);
     }
+  });
+
+  it("offers Button in the picker and hides retired RichText in favor of Text with markdown", () => {
+    const config = buildPuckConfig({ themeVars: {}, pageKind: "custom" }) as unknown as {
+      categories: Record<string, { components?: string[] }>;
+    };
+    const contentBlocks = config.categories.content?.components ?? [];
+
+    expect(contentBlocks).toContain("Button");
+    expect(contentBlocks).toContain("Text");
+    expect(contentBlocks).not.toContain("RichText");
+
+    // Heading has no predefined size dropdown
+    expect(BLOCK_SPECS.Heading.fields.size).toBeUndefined();
+
+    // Button has essential styleType, icon, color, and typography fields
+    expect(BLOCK_SPECS.Button.fields.styleType).toBeDefined();
+    expect(BLOCK_SPECS.Button.fields.icon).toBeDefined();
+    expect(BLOCK_SPECS.Button.fields.buttonColor).toBeDefined();
+    expect(BLOCK_SPECS.Button.fields.typography).toBeDefined();
   });
 });

@@ -42,6 +42,12 @@ export const logoSizeSchema = z
   .default({ desktop: {}, tablet: {}, mobile: {} });
 export type LogoSize = z.infer<typeof logoSizeSchema>;
 
+/** An external image link. https only: no javascript:, data: or plain http (mixed content, ADR-010). */
+export const httpsImageUrlSchema = z
+  .string()
+  .max(2000)
+  .refine((v) => /^https:\/\/[^\s]+$/i.test(v), { message: "Use an https:// image link" });
+
 export const hexColorSchema = z.string().regex(/^#[0-9a-fA-F]{6}$/, "Use a colour like #1f3a5f");
 
 export const alignSchema = z.enum(["left", "center", "right"]);
@@ -74,5 +80,12 @@ export const ICON_NAMES = [
   "info",
   "package",
   "droplet",
+  "arrow-right",
+  "arrow-left",
+  "chevron-right",
+  "chevron-left",
+  "cart",
+  "external-link",
+  "plus",
 ] as const;
 export type IconName = (typeof ICON_NAMES)[number];
