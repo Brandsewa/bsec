@@ -71,7 +71,7 @@ describe("Storefront Shell & Components", () => {
       expect(vars["--color-accent"]).toBe("#2563eb");
       expect(vars["--color-background"]).toBe("#ffffff");
       expect(vars["--color-surface"]).toBe("#f8fafc");
-      expect(vars["--color-text"]).toBe("#0f172a");
+      expect(vars["--color-text"]).toBe("#334155");
       expect(vars["--font-heading"]).toBe("Inter");
       expect(vars["--font-body"]).toBe("Inter");
       expect(vars["--radius"]).toBe("0.5rem");

@@ -636,6 +636,583 @@
 /* ...and to the showcase box itself. */
 .bsb-psc.bsb-lay { height: var(--h); min-height: var(--mnh); max-height: var(--mxh); aspect-ratio: var(--ar); }
 
+/* Bricks Responsive Layout System (.brx-resp applied to Section, Container, Block, Elements) */
+.brx-resp {
+  /* Prevent variable inheritance from ancestor layout containers */
+  --brx-d-dir: initial; --brx-t-dir: initial; --brx-m-dir: initial;
+  --brx-d-jc: initial;  --brx-t-jc: initial;  --brx-m-jc: initial;
+  --brx-d-ai: initial;  --brx-t-ai: initial;  --brx-m-ai: initial;
+  --brx-d-wrap: initial;--brx-t-wrap: initial;--brx-m-wrap: initial;
+  --brx-d-gap: initial; --brx-t-gap: initial; --brx-m-gap: initial;
+  --brx-d-cg: initial;  --brx-t-cg: initial;  --brx-m-cg: initial;
+  --brx-d-rg: initial;  --brx-t-rg: initial;  --brx-m-rg: initial;
+  --brx-d-pt: initial;  --brx-t-pt: initial;  --brx-m-pt: initial;
+  --brx-d-pr: initial;  --brx-t-pr: initial;  --brx-m-pr: initial;
+  --brx-d-pb: initial;  --brx-t-pb: initial;  --brx-m-pb: initial;
+  --brx-d-pl: initial;  --brx-t-pl: initial;  --brx-m-pl: initial;
+  --brx-d-mt: initial;  --brx-t-mt: initial;  --brx-m-mt: initial;
+  --brx-d-mr: initial;  --brx-t-mr: initial;  --brx-m-mr: initial;
+  --brx-d-mb: initial;  --brx-t-mb: initial;  --brx-m-mb: initial;
+  --brx-d-ml: initial;  --brx-t-ml: initial;  --brx-m-ml: initial;
+  --brx-d-w: initial;   --brx-t-w: initial;   --brx-m-w: initial;
+  --brx-d-mnw: initial; --brx-t-mnw: initial; --brx-m-mnw: initial;
+  --brx-d-mxw: initial; --brx-t-mxw: initial; --brx-m-mxw: initial;
+  --brx-d-h: initial;   --brx-t-h: initial;   --brx-m-h: initial;
+  --brx-d-mnh: initial; --brx-t-mnh: initial; --brx-m-mnh: initial;
+  --brx-d-mxh: initial; --brx-t-mxh: initial; --brx-m-mxh: initial;
+  --brx-d-ar: initial;  --brx-t-ar: initial;  --brx-m-ar: initial;
+  --brx-d-ta: initial;  --brx-t-ta: initial;  --brx-m-ta: initial;
+  --brx-d-bg-c: initial;--brx-t-bg-c: initial;--brx-m-bg-c: initial;
+  --brx-d-c: initial;   --brx-t-c: initial;   --brx-m-c: initial;
+  --brx-d-rtl: initial; --brx-t-rtl: initial; --brx-m-rtl: initial;
+  --brx-d-rtr: initial; --brx-t-rtr: initial; --brx-m-rtr: initial;
+  --brx-d-rbr: initial; --brx-t-rbr: initial; --brx-m-rbr: initial;
+  --brx-d-rbl: initial; --brx-t-rbl: initial; --brx-m-rbl: initial;
+  --brx-d-bw: initial;  --brx-t-bw: initial;  --brx-m-bw: initial;
+  --brx-d-bs: initial;  --brx-t-bs: initial;  --brx-m-bs: initial;
+  --brx-d-bc: initial;  --brx-t-bc: initial;  --brx-m-bc: initial;
+  --brx-d-bsh: initial; --brx-t-bsh: initial; --brx-m-bsh: initial;
+  --brx-d-fs: initial;  --brx-t-fs: initial;  --brx-m-fs: initial;
+  --brx-d-fw: initial;  --brx-t-fw: initial;  --brx-m-fw: initial;
+  --brx-d-ff: initial;  --brx-t-ff: initial;  --brx-m-ff: initial;
+  --brx-d-lh: initial;  --brx-t-lh: initial;  --brx-m-lh: initial;
+  --brx-d-ls: initial;  --brx-t-ls: initial;  --brx-m-ls: initial;
+  --brx-d-tt: initial;  --brx-t-tt: initial;  --brx-m-tt: initial;
+
+  --b-dir: var(--brx-d-dir);
+  --b-jc: var(--brx-d-jc);
+  --b-ai: var(--brx-d-ai);
+  --b-wrap: var(--brx-d-wrap);
+  --b-gap: var(--brx-d-gap);
+  --b-cg: var(--brx-d-cg);
+  --b-rg: var(--brx-d-rg);
+  --b-pt: var(--brx-d-pt);
+  --b-pr: var(--brx-d-pr);
+  --b-pb: var(--brx-d-pb);
+  --b-pl: var(--brx-d-pl);
+  --b-mt: var(--brx-d-mt);
+  --b-mr: var(--brx-d-mr);
+  --b-mb: var(--brx-d-mb);
+  --b-ml: var(--brx-d-ml);
+  --b-w: var(--brx-d-w);
+  --b-mnw: var(--brx-d-mnw);
+  --b-mxw: var(--brx-d-mxw);
+  --b-h: var(--brx-d-h);
+  --b-mnh: var(--brx-d-mnh);
+  --b-mxh: var(--brx-d-mxh);
+  --b-ar: var(--brx-d-ar);
+  --b-ta: var(--brx-d-ta);
+  --b-bg-c: var(--brx-d-bg-c);
+  --b-c: var(--brx-d-c);
+  --b-rtl: var(--brx-d-rtl);
+  --b-rtr: var(--brx-d-rtr);
+  --b-rbr: var(--brx-d-rbr);
+  --b-rbl: var(--brx-d-rbl);
+  --b-bw: var(--brx-d-bw);
+  --b-bs: var(--brx-d-bs);
+  --b-bc: var(--brx-d-bc);
+  --b-bsh: var(--brx-d-bsh);
+  --b-fs: var(--brx-d-fs);
+  --b-fw: var(--brx-d-fw);
+  --b-ff: var(--brx-d-ff);
+  --b-lh: var(--brx-d-lh);
+  --b-ls: var(--brx-d-ls);
+  --b-tt: var(--brx-d-tt);
+
+  flex-direction: var(--b-dir);
+  justify-content: var(--b-jc);
+  align-items: var(--b-ai);
+  flex-wrap: var(--b-wrap);
+  gap: var(--b-gap);
+  column-gap: var(--b-cg);
+  row-gap: var(--b-rg);
+
+  padding-top: var(--b-pt);
+  padding-right: var(--b-pr);
+  padding-bottom: var(--b-pb);
+  padding-left: var(--b-pl);
+
+  margin-top: var(--b-mt);
+  margin-right: var(--b-mr);
+  margin-bottom: var(--b-mb);
+  margin-left: var(--b-ml);
+
+  width: var(--b-w);
+  min-width: var(--b-mnw);
+  max-width: var(--b-mxw);
+  height: var(--b-h);
+  min-height: var(--b-mnh);
+  max-height: var(--b-mxh);
+  aspect-ratio: var(--b-ar);
+  text-align: var(--b-ta);
+  background-color: var(--b-bg-c);
+  color: var(--b-c);
+
+  border-top-left-radius: var(--b-rtl);
+  border-top-right-radius: var(--b-rtr);
+  border-bottom-right-radius: var(--b-rbr);
+  border-bottom-left-radius: var(--b-rbl);
+  border-width: var(--b-bw);
+  border-style: var(--b-bs);
+  border-color: var(--b-bc);
+  box-shadow: var(--b-bsh);
+
+  font-size: var(--b-fs);
+  font-weight: var(--b-fw);
+  font-family: var(--b-ff);
+  line-height: var(--b-lh);
+  letter-spacing: var(--b-ls);
+  text-transform: var(--b-tt);
+}
+
+/* Also forward flex/grid layout variables to inner Slot wrappers */
+.brx-resp > [style*="display: flex"],
+.brx-resp > div[style*="display: flex"],
+.brx-resp > [data-puck-dropzone],
+.brx-resp > [class*="DropZone"] {
+  flex-direction: var(--b-dir);
+  justify-content: var(--b-jc);
+  align-items: var(--b-ai);
+  flex-wrap: var(--b-wrap);
+  gap: var(--b-gap);
+  column-gap: var(--b-cg);
+  row-gap: var(--b-rg);
+}
+
+@media (max-width: 1023px) {
+  .brx-resp {
+    --b-dir: var(--brx-t-dir, var(--brx-d-dir));
+    --b-jc: var(--brx-t-jc, var(--brx-d-jc));
+    --b-ai: var(--brx-t-ai, var(--brx-d-ai));
+    --b-wrap: var(--brx-t-wrap, var(--brx-d-wrap));
+    --b-gap: var(--brx-t-gap, var(--brx-d-gap));
+    --b-cg: var(--brx-t-cg, var(--brx-d-cg));
+    --b-rg: var(--brx-t-rg, var(--brx-d-rg));
+    --b-pt: var(--brx-t-pt, var(--brx-d-pt));
+    --b-pr: var(--brx-t-pr, var(--brx-d-pr));
+    --b-pb: var(--brx-t-pb, var(--brx-d-pb));
+    --b-pl: var(--brx-t-pl, var(--brx-d-pl));
+    --b-mt: var(--brx-t-mt, var(--brx-d-mt));
+    --b-mr: var(--brx-t-mr, var(--brx-d-mr));
+    --b-mb: var(--brx-t-mb, var(--brx-d-mb));
+    --b-ml: var(--brx-t-ml, var(--brx-d-ml));
+    --b-w: var(--brx-t-w, var(--brx-d-w));
+    --b-mnw: var(--brx-t-mnw, var(--brx-d-mnw));
+    --b-mxw: var(--brx-t-mxw, var(--brx-d-mxw));
+    --b-h: var(--brx-t-h, var(--brx-d-h));
+    --b-mnh: var(--brx-t-mnh, var(--brx-d-mnh));
+    --b-mxh: var(--brx-t-mxh, var(--brx-d-mxh));
+    --b-ar: var(--brx-t-ar, var(--brx-d-ar));
+    --b-ta: var(--brx-t-ta, var(--brx-d-ta));
+    --b-bg-c: var(--brx-t-bg-c, var(--brx-d-bg-c));
+    --b-c: var(--brx-t-c, var(--brx-d-c));
+    --b-rtl: var(--brx-t-rtl, var(--brx-d-rtl));
+    --b-rtr: var(--brx-t-rtr, var(--brx-d-rtr));
+    --b-rbr: var(--brx-t-rbr, var(--brx-d-rbr));
+    --b-rbl: var(--brx-t-rbl, var(--brx-d-rbl));
+    --b-bw: var(--brx-t-bw, var(--brx-d-bw));
+    --b-bs: var(--brx-t-bs, var(--brx-d-bs));
+    --b-bc: var(--brx-t-bc, var(--brx-d-bc));
+    --b-bsh: var(--brx-t-bsh, var(--brx-d-bsh));
+    --b-fs: var(--brx-t-fs, var(--brx-d-fs));
+    --b-fw: var(--brx-t-fw, var(--brx-d-fw));
+    --b-ff: var(--brx-t-ff, var(--brx-d-ff));
+    --b-lh: var(--brx-t-lh, var(--brx-d-lh));
+    --b-ls: var(--brx-t-ls, var(--brx-d-ls));
+    --b-tt: var(--brx-t-tt, var(--brx-d-tt));
+
+    flex-direction: var(--b-dir) !important;
+    justify-content: var(--b-jc) !important;
+    align-items: var(--b-ai) !important;
+    flex-wrap: var(--b-wrap) !important;
+    gap: var(--b-gap) !important;
+    column-gap: var(--b-cg) !important;
+    row-gap: var(--b-rg) !important;
+
+    padding-top: var(--b-pt) !important;
+    padding-right: var(--b-pr) !important;
+    padding-bottom: var(--b-pb) !important;
+    padding-left: var(--b-pl) !important;
+
+    margin-top: var(--b-mt) !important;
+    margin-right: var(--b-mr) !important;
+    margin-bottom: var(--b-mb) !important;
+    margin-left: var(--b-ml) !important;
+
+    width: var(--b-w) !important;
+    min-width: var(--b-mnw) !important;
+    max-width: var(--b-mxw) !important;
+    height: var(--b-h) !important;
+    min-height: var(--b-mnh) !important;
+    max-height: var(--b-mxh) !important;
+    aspect-ratio: var(--b-ar) !important;
+    text-align: var(--b-ta) !important;
+    background-color: var(--b-bg-c) !important;
+
+    border-top-left-radius: var(--b-rtl) !important;
+    border-top-right-radius: var(--b-rtr) !important;
+    border-bottom-right-radius: var(--b-rbr) !important;
+    border-bottom-left-radius: var(--b-rbl) !important;
+    border-width: var(--b-bw) !important;
+    border-style: var(--b-bs) !important;
+    border-color: var(--b-bc) !important;
+    box-shadow: var(--b-bsh) !important;
+
+    font-size: var(--b-fs) !important;
+    font-weight: var(--b-fw) !important;
+    font-family: var(--b-ff) !important;
+    line-height: var(--b-lh) !important;
+    letter-spacing: var(--b-ls) !important;
+    text-transform: var(--b-tt) !important;
+  }
+
+  .brx-resp > [style*="display: flex"],
+  .brx-resp > div[style*="display: flex"],
+  .brx-resp > [data-puck-dropzone],
+  .brx-resp > [class*="DropZone"] {
+    flex-direction: var(--b-dir) !important;
+    justify-content: var(--b-jc) !important;
+    align-items: var(--b-ai) !important;
+    flex-wrap: var(--b-wrap) !important;
+    gap: var(--b-gap) !important;
+    column-gap: var(--b-cg) !important;
+    row-gap: var(--b-rg) !important;
+  }
+}
+
+@media (max-width: 767px) {
+  .brx-resp {
+    --b-dir: var(--brx-m-dir, var(--brx-t-dir, var(--brx-d-dir)));
+    --b-jc: var(--brx-m-jc, var(--brx-t-jc, var(--brx-d-jc)));
+    --b-ai: var(--brx-m-ai, var(--brx-t-ai, var(--brx-d-ai)));
+    --b-wrap: var(--brx-m-wrap, var(--brx-t-wrap, var(--brx-d-wrap)));
+    --b-gap: var(--brx-m-gap, var(--brx-t-gap, var(--brx-d-gap)));
+    --b-cg: var(--brx-m-cg, var(--brx-t-cg, var(--brx-d-cg)));
+    --b-rg: var(--brx-m-rg, var(--brx-t-rg, var(--brx-d-rg)));
+    --b-pt: var(--brx-m-pt, var(--brx-t-pt, var(--brx-d-pt)));
+    --b-pr: var(--brx-m-pr, var(--brx-t-pr, var(--brx-d-pr)));
+    --b-pb: var(--brx-m-pb, var(--brx-t-pb, var(--brx-d-pb)));
+    --b-pl: var(--brx-m-pl, var(--brx-t-pl, var(--brx-d-pl)));
+    --b-mt: var(--brx-m-mt, var(--brx-t-mt, var(--brx-d-mt)));
+    --b-mr: var(--brx-m-mr, var(--brx-t-mr, var(--brx-d-mr)));
+    --b-mb: var(--brx-m-mb, var(--brx-t-mb, var(--brx-d-mb)));
+    --b-ml: var(--brx-m-ml, var(--brx-t-ml, var(--brx-d-ml)));
+    --b-w: var(--brx-m-w, var(--brx-t-w, var(--brx-d-w)));
+    --b-mnw: var(--brx-m-mnw, var(--brx-t-mnw, var(--brx-d-mnw)));
+    --b-mxw: var(--brx-m-mxw, var(--brx-t-mxw, var(--brx-d-mxw)));
+    --b-h: var(--brx-m-h, var(--brx-t-h, var(--brx-d-h)));
+    --b-mnh: var(--brx-m-mnh, var(--brx-t-mnh, var(--brx-d-mnh)));
+    --b-mxh: var(--brx-m-mxh, var(--brx-t-mxh, var(--brx-d-mxh)));
+    --b-ar: var(--brx-m-ar, var(--brx-t-ar, var(--brx-d-ar)));
+    --b-ta: var(--brx-m-ta, var(--brx-t-ta, var(--brx-d-ta)));
+    --b-bg-c: var(--brx-m-bg-c, var(--brx-t-bg-c, var(--brx-d-bg-c)));
+    --b-c: var(--brx-m-c, var(--brx-t-c, var(--brx-d-c)));
+    --b-rtl: var(--brx-m-rtl, var(--brx-t-rtl, var(--brx-d-rtl)));
+    --b-rtr: var(--brx-m-rtr, var(--brx-t-rtr, var(--brx-d-rtr)));
+    --b-rbr: var(--brx-m-rbr, var(--brx-t-rbr, var(--brx-d-rbr)));
+    --b-rbl: var(--brx-m-rbl, var(--brx-t-rbl, var(--brx-d-rbl)));
+    --b-bw: var(--brx-m-bw, var(--brx-t-bw, var(--brx-d-bw)));
+    --b-bs: var(--brx-m-bs, var(--brx-t-bs, var(--brx-d-bs)));
+    --b-bc: var(--brx-m-bc, var(--brx-t-bc, var(--brx-d-bc)));
+    --b-bsh: var(--brx-m-bsh, var(--brx-t-bsh, var(--brx-d-bsh)));
+    --b-fs: var(--brx-m-fs, var(--brx-t-fs, var(--brx-d-fs)));
+    --b-fw: var(--brx-m-fw, var(--brx-t-fw, var(--brx-d-fw)));
+    --b-ff: var(--brx-m-ff, var(--brx-t-ff, var(--brx-d-ff)));
+    --b-lh: var(--brx-m-lh, var(--brx-t-lh, var(--brx-d-lh)));
+    --b-ls: var(--brx-m-ls, var(--brx-t-ls, var(--brx-d-ls)));
+    --b-tt: var(--brx-m-tt, var(--brx-t-tt, var(--brx-d-tt)));
+
+    flex-direction: var(--b-dir) !important;
+    justify-content: var(--b-jc) !important;
+    align-items: var(--b-ai) !important;
+    flex-wrap: var(--b-wrap) !important;
+    gap: var(--b-gap) !important;
+    column-gap: var(--b-cg) !important;
+    row-gap: var(--b-rg) !important;
+
+    padding-top: var(--b-pt) !important;
+    padding-right: var(--b-pr) !important;
+    padding-bottom: var(--b-pb) !important;
+    padding-left: var(--b-pl) !important;
+
+    margin-top: var(--b-mt) !important;
+    margin-right: var(--b-mr) !important;
+    margin-bottom: var(--b-mb) !important;
+    margin-left: var(--b-ml) !important;
+
+    width: var(--b-w) !important;
+    min-width: var(--b-mnw) !important;
+    max-width: var(--b-mxw) !important;
+    height: var(--b-h) !important;
+    min-height: var(--b-mnh) !important;
+    max-height: var(--b-mxh) !important;
+    aspect-ratio: var(--b-ar) !important;
+    text-align: var(--b-ta) !important;
+    background-color: var(--b-bg-c) !important;
+
+    border-top-left-radius: var(--b-rtl) !important;
+    border-top-right-radius: var(--b-rtr) !important;
+    border-bottom-right-radius: var(--b-rbr) !important;
+    border-bottom-left-radius: var(--b-rbl) !important;
+    border-width: var(--b-bw) !important;
+    border-style: var(--b-bs) !important;
+    border-color: var(--b-bc) !important;
+    box-shadow: var(--b-bsh) !important;
+
+    font-size: var(--b-fs) !important;
+    font-weight: var(--b-fw) !important;
+    font-family: var(--b-ff) !important;
+    line-height: var(--b-lh) !important;
+    letter-spacing: var(--b-ls) !important;
+    text-transform: var(--b-tt) !important;
+  }
+
+  .brx-resp > [style*="display: flex"],
+  .brx-resp > div[style*="display: flex"],
+  .brx-resp > [data-puck-dropzone],
+  .brx-resp > [class*="DropZone"] {
+    flex-direction: var(--b-dir) !important;
+    justify-content: var(--b-jc) !important;
+    align-items: var(--b-ai) !important;
+    flex-wrap: var(--b-wrap) !important;
+    gap: var(--b-gap) !important;
+    column-gap: var(--b-cg) !important;
+    row-gap: var(--b-rg) !important;
+  }
+}
+
+/* Global Layout theme defaults for Section and Container */
+.brxe-section.brx-resp {
+  --brx-d-pt: var(--bs-sec-d-pt, initial);
+  --brx-d-pr: var(--bs-sec-d-pr, initial);
+  --brx-d-pb: var(--bs-sec-d-pb, initial);
+  --brx-d-pl: var(--bs-sec-d-pl, initial);
+  --brx-d-mt: var(--bs-sec-d-mt, initial);
+  --brx-d-mr: var(--bs-sec-d-mr, initial);
+  --brx-d-mb: var(--bs-sec-d-mb, initial);
+  --brx-d-ml: var(--bs-sec-d-ml, initial);
+  --brx-d-w: var(--bs-sec-d-w, 100%);
+  --brx-d-mnw: var(--bs-sec-d-mnw, initial);
+  --brx-d-mxw: var(--bs-sec-d-mxw, 100%);
+}
+
+.brxe-container.brx-resp {
+  --brx-d-pt: var(--bs-cnt-d-pt, initial);
+  --brx-d-pr: var(--bs-cnt-d-pr, initial);
+  --brx-d-pb: var(--bs-cnt-d-pb, initial);
+  --brx-d-pl: var(--bs-cnt-d-pl, initial);
+  --brx-d-mt: var(--bs-cnt-d-mt, initial);
+  --brx-d-mr: var(--bs-cnt-d-mr, auto);
+  --brx-d-mb: var(--bs-cnt-d-mb, initial);
+  --brx-d-ml: var(--bs-cnt-d-ml, auto);
+  --brx-d-w: var(--bs-cnt-d-w, 100%);
+  --brx-d-mnw: var(--bs-cnt-d-mnw, initial);
+  --brx-d-mxw: var(--bs-cnt-d-mxw, var(--bs-site-w-d, 1200px));
+}
+
+@media (max-width: 1023px) {
+  .brxe-section.brx-resp {
+    --brx-t-pt: var(--bs-sec-t-pt, var(--bs-sec-d-pt, initial));
+    --brx-t-pr: var(--bs-sec-t-pr, var(--bs-sec-d-pr, initial));
+    --brx-t-pb: var(--bs-sec-t-pb, var(--bs-sec-d-pb, initial));
+    --brx-t-pl: var(--bs-sec-t-pl, var(--bs-sec-d-pl, initial));
+    --brx-t-mt: var(--bs-sec-t-mt, var(--bs-sec-d-mt, initial));
+    --brx-t-mr: var(--bs-sec-t-mr, var(--bs-sec-d-mr, initial));
+    --brx-t-mb: var(--bs-sec-t-mb, var(--bs-sec-d-mb, initial));
+    --brx-t-ml: var(--bs-sec-t-ml, var(--bs-sec-d-ml, initial));
+    --brx-t-w: var(--bs-sec-t-w, var(--bs-sec-d-w, 100%));
+    --brx-t-mnw: var(--bs-sec-t-mnw, var(--bs-sec-d-mnw, initial));
+    --brx-t-mxw: var(--bs-sec-t-mxw, var(--bs-sec-d-mxw, 100%));
+  }
+
+  .brxe-container.brx-resp {
+    --brx-t-pt: var(--bs-cnt-t-pt, var(--bs-cnt-d-pt, initial));
+    --brx-t-pr: var(--bs-cnt-t-pr, var(--bs-cnt-d-pr, initial));
+    --brx-t-pb: var(--bs-cnt-t-pb, var(--bs-cnt-d-pb, initial));
+    --brx-t-pl: var(--bs-cnt-t-pl, var(--bs-cnt-d-pl, initial));
+    --brx-t-mt: var(--bs-cnt-t-mt, var(--bs-cnt-d-mt, initial));
+    --brx-t-mr: var(--bs-cnt-t-mr, var(--bs-cnt-d-mr, auto));
+    --brx-t-mb: var(--bs-cnt-t-mb, var(--bs-cnt-d-mb, initial));
+    --brx-t-ml: var(--bs-cnt-t-ml, var(--bs-cnt-d-ml, auto));
+    --brx-t-w: var(--bs-cnt-t-w, var(--bs-cnt-d-w, 100%));
+    --brx-t-mnw: var(--bs-cnt-t-mnw, var(--bs-cnt-d-mnw, initial));
+    --brx-t-mxw: var(--bs-cnt-t-mxw, var(--bs-site-w-t, var(--bs-cnt-d-mxw, var(--bs-site-w-d, 100%))));
+  }
+}
+
+@media (max-width: 767px) {
+  .brxe-section.brx-resp {
+    --brx-m-pt: var(--bs-sec-m-pt, var(--bs-sec-t-pt, var(--bs-sec-d-pt, initial)));
+    --brx-m-pr: var(--bs-sec-m-pr, var(--bs-sec-t-pr, var(--bs-sec-d-pr, initial)));
+    --brx-m-pb: var(--bs-sec-m-pb, var(--bs-sec-t-pb, var(--bs-sec-d-pb, initial)));
+    --brx-m-pl: var(--bs-sec-m-pl, var(--bs-sec-t-pl, var(--bs-sec-d-pl, initial)));
+    --brx-m-mt: var(--bs-sec-m-mt, var(--bs-sec-t-mt, var(--bs-sec-d-mt, initial)));
+    --brx-m-mr: var(--bs-sec-m-mr, var(--bs-sec-t-mr, var(--bs-sec-d-mr, initial)));
+    --brx-m-mb: var(--bs-sec-m-mb, var(--bs-sec-t-mb, var(--bs-sec-d-mb, initial)));
+    --brx-m-ml: var(--bs-sec-m-ml, var(--bs-sec-t-ml, var(--bs-sec-d-ml, initial)));
+    --brx-m-w: var(--bs-sec-m-w, var(--bs-sec-t-w, var(--bs-sec-d-w, 100%)));
+    --brx-m-mnw: var(--bs-sec-m-mnw, var(--bs-sec-t-mnw, var(--bs-sec-d-mnw, initial)));
+    --brx-m-mxw: var(--bs-sec-m-mxw, var(--bs-sec-t-mxw, var(--bs-sec-d-mxw, 100%)));
+  }
+
+  .brxe-container.brx-resp {
+    --brx-m-pt: var(--bs-cnt-m-pt, var(--bs-cnt-t-pt, var(--bs-cnt-d-pt, initial)));
+    --brx-m-pr: var(--bs-cnt-m-pr, var(--bs-cnt-t-pr, var(--bs-cnt-d-pr, initial)));
+    --brx-m-pb: var(--bs-cnt-m-pb, var(--bs-cnt-t-pb, var(--bs-cnt-d-pb, initial)));
+    --brx-m-pl: var(--bs-cnt-m-pl, var(--bs-cnt-t-pl, var(--bs-cnt-d-pl, initial)));
+    --brx-m-mt: var(--bs-cnt-m-mt, var(--bs-cnt-t-mt, var(--bs-cnt-d-mt, initial)));
+    --brx-m-mr: var(--bs-cnt-m-mr, var(--bs-cnt-t-mr, var(--bs-cnt-d-mr, auto)));
+    --brx-m-mb: var(--bs-cnt-m-mb, var(--bs-cnt-t-mb, var(--bs-cnt-d-mb, initial)));
+    --brx-m-ml: var(--bs-cnt-m-ml, var(--bs-cnt-t-ml, var(--bs-cnt-d-ml, auto)));
+    --brx-m-w: var(--bs-cnt-m-w, var(--bs-cnt-t-w, var(--bs-cnt-d-w, 100%)));
+    --brx-m-mnw: var(--bs-cnt-m-mnw, var(--bs-cnt-t-mnw, var(--bs-cnt-d-mnw, initial)));
+    --brx-m-mxw: var(--bs-cnt-m-mxw, var(--bs-site-w-m, var(--bs-site-w-t, var(--bs-cnt-d-mxw, var(--bs-site-w-d, 100%)))));
+  }
+}
+
+/* Bricks elements sizing and layout */
+.brxe-image {
+  display: block;
+  box-sizing: border-box;
+  overflow: hidden;
+  width: 100%;
+  max-width: 100%;
+}
+.brxe-heading,
+.brxe-text-basic {
+  width: 100%;
+  box-sizing: border-box;
+}
+
+/* Bricks Button Component (.brxe-button) */
+.brxe-button {
+  display: inline-flex;
+  box-sizing: border-box;
+}
+.brxe-button.brx-btn-full,
+.brxe-button.brx-btn-full > a,
+.brxe-button.brx-btn-full > button {
+  width: 100% !important;
+  display: flex !important;
+}
+.brxe-button a,
+.brxe-button button {
+  gap: var(--brx-btn-gap, 0.5rem);
+  transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+  font-family: inherit;
+  font-size: inherit;
+  font-weight: inherit;
+  line-height: inherit;
+  letter-spacing: inherit;
+  text-transform: inherit;
+  text-decoration: none;
+}
+/* Style Type: Normal (Solid) */
+.brxe-button .brx-btn-normal {
+  background-color: var(--brx-btn-bg, var(--p));
+  color: var(--brx-btn-tc, var(--pf));
+  border: 1px solid var(--brx-btn-bg, var(--p));
+}
+.brxe-button .brx-btn-normal:hover {
+  background-color: var(--brx-btn-hbg, var(--brx-btn-bg, var(--p)));
+  color: var(--brx-btn-htc, var(--brx-btn-tc, var(--pf)));
+  opacity: 0.92;
+}
+/* Style Type: Line (Outline) */
+.brxe-button .brx-btn-line {
+  background-color: transparent;
+  color: var(--brx-btn-tc, var(--brx-btn-bg, var(--p)));
+  border: 2px solid var(--brx-btn-bg, var(--p));
+}
+.brxe-button .brx-btn-line:hover {
+  background-color: var(--brx-btn-hbg, var(--brx-btn-bg, var(--p)));
+  color: var(--brx-btn-htc, #ffffff);
+}
+/* Style Type: Text Button */
+.brxe-button .brx-btn-text {
+  background-color: transparent;
+  color: var(--brx-btn-tc, var(--p));
+  border: none;
+  padding: 0.25rem 0.5rem;
+}
+.brxe-button .brx-btn-text:hover {
+  background-color: transparent;
+  color: var(--brx-btn-htc, var(--p));
+  text-decoration: underline;
+}
+/* Style Type: Theme Button Custom Colors override */
+.brxe-button .bsb-btn[style*="--brx-btn-bg"] {
+  background-color: var(--brx-btn-bg);
+  border-color: var(--brx-btn-bg);
+}
+.brxe-button .bsb-btn[style*="--brx-btn-tc"] {
+  color: var(--brx-btn-tc);
+}
+.brxe-button .bsb-btn:hover {
+  background-color: var(--brx-btn-hbg, inherit);
+  color: var(--brx-btn-htc, inherit);
+}
+
+/* Bricks Text formatting styles */
+.brxe-text-basic ul,
+.brxe-text-basic ol {
+  padding-left: 1.5rem;
+  margin: 0.5rem 0;
+}
+.brxe-text-basic ul { list-style-type: disc; }
+.brxe-text-basic ol { list-style-type: decimal; }
+.brxe-text-basic li { margin-bottom: 0.25rem; }
+.brxe-text-basic a { color: var(--p); text-decoration: underline; }
+.brxe-text-basic a:hover { opacity: 0.8; }
+.brxe-text-basic p { margin: 0 0 0.75rem 0; }
+.brxe-text-basic p:last-child { margin-bottom: 0; }
+.brxe-image > a,
+.brxe-image > picture {
+  display: block;
+  width: 100%;
+  height: 100%;
+  border-radius: inherit;
+}
+.brxe-image img {
+  display: block;
+  width: 100%;
+  height: 100%;
+  max-width: 100%;
+  min-height: 0;
+  min-width: 0;
+}
+
+.brxe-video {
+  display: block;
+  box-sizing: border-box;
+  overflow: hidden;
+  max-width: 100%;
+}
+.brxe-video video,
+.brxe-video iframe {
+  display: block;
+  width: 100%;
+  height: 100%;
+  border: 0;
+  min-height: 0;
+  min-width: 0;
+}
+
+/* Responsive display switches */
+.brx-only-desktop { display: initial; }
+.brx-only-tablet { display: none; }
+.brx-only-mobile { display: none; }
+@media (max-width: 1023px) and (min-width: 768px) {
+  .brx-only-desktop { display: none !important; }
+  .brx-only-tablet { display: initial !important; }
+  .brx-hide-tablet { display: none !important; }
+}
+@media (max-width: 767px) {
+  .brx-only-desktop { display: none !important; }
+  .brx-only-mobile { display: initial !important; }
+  .brx-hide-mobile { display: none !important; }
+}
+
 /* FileDownload block */
 .bsb-file-download {
   display: flex;

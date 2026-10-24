@@ -3,6 +3,7 @@
 Source of truth: `docs/PLAN.html` v2.0 (build order in `docs/BUILD-PLAN-M2-M9.md`). Items are ticked only after verification; the evidence is noted next to each. "From code" means it was read in the repo but not exercised live.
 
 ## In flight
+- antigravity · `feat/theme-builder-layout` · Theme builder layout & responsive controls: per-device overrides (desktop/tablet/mobile), global site width & section/container defaults, categorized 15-key global color palette with portal swatches, responsive border radius & linked corner controls, button widget with style types & icons, custom typography, and markdown text widget with toolbar; change records `docs/changes/2026-10-24-antigravity-*.md` · 2026-10-24
 - claude · `feat/google-signin` · Google sign-in: platform client for staff and store owners (Super Admin Authentication hub, Tier A) and a store-owned Google app for customers behind a verified custom domain (Tier B); plan `docs/GOOGLE-SIGNIN-PLAN.md`, ADR-038, change record `docs/changes/2026-10-23-claude-google-sign-in.md`; awaiting a real Google client for a live walkthrough · 2026-10-23
 - claude · `feat/widgets-multicard-collgrid-blog` · Multi card, Collection products and Blog slider widgets, flat slider dots; built on `feat/sprint-storefront-theme-fixes` (PR 107); change record `docs/changes/2026-10-23-claude-new-widgets-multicard-collection-blog.md` · 2026-10-23
 - claude · `feat/sprint-storefront-theme-fixes` · owner sprint 2026-10-23: theme body sizes and dark colours, footer social icons, desktop search popup, hidden page title, FAQ accordion size controls, category label under the image, category and collection short and rich long description, collection page width and filter skeleton, login-only reviews, policy publish fix; change record `docs/changes/2026-10-23-claude-sprint-storefront-theme-fixes.md` · 2026-10-23
@@ -13,6 +14,58 @@ Source of truth: `docs/PLAN.html` v2.0 (build order in `docs/BUILD-PLAN-M2-M9.md
 - claude · `feat/platform-billing-b5-b6` · platform billing (charge merchants with Razorpay subscriptions): B1 merged; B1 to B4 merged; B5 (dunning) and B6 (invoice PDF) built on `feat/platform-billing-b5-b6`, B7 to B9 next; plan `docs/PLATFORM-BILLING-PLAN.md`, ADR-036 · 2026-10-18
 - claude · `fix/admin-polish-phase-1` · admin and Super Admin polish round, all three phases built (menus bug, auth forms, drawers, friendly IDs, variant builder, shipping zones and tiers, custom fields, promotions, flags, audit log, tenant purge, payments and domains pages, policy rich text); awaiting owner check and commit; plan `docs/ADMIN-SUPERADMIN-POLISH-PLAN.md`, ADR-034, ADR-035, change records `docs/changes/2026-10-17-claude-admin-polish-phase-1.md` and `...-phases-2-3.md` · 2026-10-17
 - claude · `feat/blog-system` · blog system built end to end (phases 1-5), awaiting owner review and merge; plan `docs/BLOG-PLAN.md`, ADR-033, change records `docs/changes/2026-10-15-claude-blog-*` · 2026-10-15
+
+## M14 · Theme Builder Layout, Responsive Controls & Widget Modernization (2026-10-24)
+
+Branch `feat/theme-builder-layout`. Change records:
+- [`docs/changes/2026-10-24-antigravity-bricks-responsive-layout.md`](docs/changes/2026-10-24-antigravity-bricks-responsive-layout.md)
+- [`docs/changes/2026-10-24-antigravity-global-colors-palette-swatch.md`](docs/changes/2026-10-24-antigravity-global-colors-palette-swatch.md)
+- [`docs/changes/2026-10-24-antigravity-responsive-border-radius.md`](docs/changes/2026-10-24-antigravity-responsive-border-radius.md)
+- [`docs/changes/2026-10-24-antigravity-button-typography-text.md`](docs/changes/2026-10-24-antigravity-button-typography-text.md)
+
+### 1. Responsive Layout & Sizing System
+- [x] **Device Switcher & Viewport Sync**: Desktop (1280px), Tablet (768px), and Mobile (375px) switcher bar placed beneath tabs in the builder inspector. Viewport changes automatically sync active device state and inspector values.
+- [x] **Recursive Tree Updates**: Deeply nested blocks inside Slots and DropZones correctly persist responsive device overrides for direction, alignment, gap, padding, margin, width, height, and border properties.
+- [x] **CSS Variable Isolation & Breakpoint Cascade**: Initialized `--brx-*` variables on `.brx-resp` with strict resets preventing unwanted inheritance down to nested blocks. Cascaded values from Desktop -> Tablet -> Mobile unless explicitly overridden.
+- [x] **Element Sizing Defaults**: Containers and blocks default to full width when solitary, dividing equally (50% each for two blocks, etc.) within row containers. On mobile viewports, child blocks inside containers automatically adapt to 100% full width and vertical flow unless custom styles are specified.
+- [x] **Responsive Art Direction**: Image and video widgets support per-device assets, rendering `<picture>` elements with media queries (`max-width: 1023px` and `max-width: 767px`) for responsive media loading.
+- [x] **Unit & Input Normalization**: Automatic normalization for length inputs (e.g., bare numbers `16`, `24` normalize to `16px`, `24px`).
+
+### 2. Global Layout Settings (`Theme Settings > Layout`)
+- [x] **Device-Specific Global Controls**: Breakpoint tabs (Desktop, Tablet, Mobile) with Reset capabilities in Theme Settings.
+- [x] **Site Width**: Responsive width controls in `px`, `%`, `rem`, `vw` (defaults: `1200px` on desktop, `100%` on tablet/mobile).
+- [x] **Section & Container Defaults**: Global width (min/max), margin, and padding quads with auto-centering fallback, emitted as `--bs-site-w-*`, `--bs-sec-*`, and `--bs-cnt-*` CSS variables, overridable by individual block settings.
+
+### 3. Global Color Architecture & Swatches
+- [x] **Categorized 15-Key Color Palette**:
+  - **Site Background**: Canvas color (`siteBackground`, `--bs-site-bg`, `--color-background`).
+  - **Brand Palette**: Primary, Secondary, Accent 1, Accent 2.
+  - **Light Scheme**: Heading, Text, Button, Button Text, Backgrounds.
+  - **Dark Scheme**: Heading, Text, Button Background, Button Text, Backgrounds.
+  - Preserved full backward compatibility with legacy `--bs-*` and `--color-*` token mappings.
+- [x] **Circular Swatches & Floating Portal Popovers**: Replaced raw square inputs with clean circular swatches. Inspector popovers are mounted via `createPortal` to `document.body` at `z-index: 999999` to eliminate stacking context traps from accordion animations.
+- [x] **Theme Settings & Inspector Tuning**:
+  - Theme Settings features direct circular swatches with inline hex inputs and descriptions cleanly positioned below inputs.
+  - Widget Style inspectors feature curated Site Palette selection with Text Color Scheme pairing (`lightHeading`, `lightText`, `darkHeading`, `darkText`) and automated contrast readability recommendations.
+
+### 4. Responsive Border Radius & Border Engine
+- [x] **4-Corner Radius Controls**: Linked mode (single input applied to all corners) and Unlinked/Separate mode (independent TL, TR, BR, BL inputs) with inherited placeholder indicators on tablet/mobile.
+- [x] **Responsive Border CSS Variables**: Emits `--brx-*-bw`, `--brx-*-bs`, `--brx-*-bc`, and `--brx-*-rtl/rtr/rbr/rbl` with `@media` rules enforcing active device styling in both editor preview and live storefront.
+- [x] **Nested Background Media Clipping**: Embedded background media (`picture`, `img`, `video`) inherits border-radius cleanly without leaking corners.
+
+### 5. Button Widget, Typography & Markdown Text
+- [x] **Comprehensive Button Widget**: Supports `theme` preset, `normal` (solid), `line` (outline), and `text` (ghost) style types, icon picker with left/right position and custom gap, custom colors and hover states (`buttonColor`, `textColor`, `hoverButtonColor`, `hoverTextColor`), size, full width, and target link options.
+- [x] **Responsive Typography System**: Integrated font family, responsive size, weight (300-800), line height, letter spacing, and text transform across Heading, Text, and Button blocks, deprecating legacy preset `size` dropdowns.
+- [x] **Markdown Text Widget**: Retired `RichText` from the inserter palette; upgraded `Text` block with a lightweight formatting toolbar supporting **bold**, *italics*, [links](url), bullet lists, and numbered lists, fully sanitized with `sanitizeRichText`.
+- [x] **Style Tab UX**: In all widget Style tabs, accordion sections start closed/collapsed by default.
+
+### 6. Verification
+- `pnpm typecheck`: Clean across all 15 packages.
+- `@bs/blocks`: 22 test files, 252 tests passed.
+- `@bs/block-editor`: 2 test files, 19 tests passed.
+- ESLint: 0 errors across `@bs/blocks` and `@bs/block-editor`.
+- `@bs/admin build`: Built cleanly with Vite.
+- `pnpm docs:check`: Passed (`docs:check ok`).
 
 ## M13 · Admin and Super Admin polish round (2026-10-17): built, not yet checked in a browser
 

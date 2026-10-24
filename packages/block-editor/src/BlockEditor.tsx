@@ -5,9 +5,10 @@ import "@bs/blocks/blocks.css";
 import { documentToPuck, puckToDocument, type BlockInstance, type PuckData } from "@bs/blocks";
 import { buildPuckConfig, type EditorPageKind } from "./config.tsx";
 import { useFontLink } from "./fonts.ts";
-import { FrameContext, FrameEditContext, HostContext, RenderDataContext, type BlockEditorHost, type EditorRenderData } from "./context.tsx";
+import { FrameContext, FrameEditContext, HostContext, RenderDataContext, ThemeColorsContext, type BlockEditorHost, type EditorRenderData } from "./context.tsx";
 import { dataSignature } from "./signature.ts";
 import { ThemeSettingsPanel, type ThemeTokens } from "./ThemeSettings.tsx";
+import { extractGlobalColors } from "./ColorPickerSwatch.tsx";
 import { EDITOR_VIEWPORTS } from "./viewports.ts";
 import { EditorHeader, EditorHeaderContext, type EditorHeaderState } from "./EditorHeader.tsx";
 import { FooterPanel, HeaderPanel } from "./HeaderFooterPanels.tsx";
@@ -314,8 +315,11 @@ export function BlockEditor({ title, initialBlocks: initialFromProps, host, them
     onPreview: previewHref || onPreview ? () => void preview() : undefined,
   };
 
+  const globalColors = useMemo(() => extractGlobalColors(themeTokens, themeVars), [themeTokens, themeVars]);
+
   return (
     <HostContext.Provider value={host}>
+      <ThemeColorsContext.Provider value={globalColors}>
       <ThemePanelContext.Provider value={themePanel}>
       <EditorHeaderContext.Provider value={headerState}>
       <FrameContext.Provider value={frame}>
@@ -351,6 +355,7 @@ export function BlockEditor({ title, initialBlocks: initialFromProps, host, them
       </FrameContext.Provider>
       </EditorHeaderContext.Provider>
       </ThemePanelContext.Provider>
+      </ThemeColorsContext.Provider>
     </HostContext.Provider>
   );
 }
