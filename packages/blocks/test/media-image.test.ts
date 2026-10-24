@@ -68,6 +68,8 @@ describe("mediaImage helper in @bs/blocks", () => {
           alt: "",
           ratio: "auto",
           rounded: false,
+          objectFit: "cover",
+          objectPosition: "center center",
         },
         ctx: {
           mediaDetails: (id) =>
@@ -95,6 +97,8 @@ describe("mediaImage helper in @bs/blocks", () => {
           alt: "Explicit user alt",
           ratio: "auto",
           rounded: false,
+          objectFit: "cover",
+          objectPosition: "center center",
         },
         ctx: {
           mediaDetails: (id) =>
@@ -122,6 +126,8 @@ describe("mediaImage helper in @bs/blocks", () => {
           alt: "",
           ratio: "auto",
           rounded: false,
+          objectFit: "cover",
+          objectPosition: "center center",
         },
         ctx: {
           mediaDetails: (id) =>

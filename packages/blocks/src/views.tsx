@@ -1,6 +1,6 @@
 /** @jsxRuntime automatic */
 /** @jsxImportSource react */
-import type { CSSProperties, ReactNode } from "react";
+import type { CSSProperties, ReactNode, ElementType } from "react";
 import { sanitizeRichText } from "./sanitize.ts";
 import type {
   BlockProduct,
@@ -14,6 +14,7 @@ import type {
   SlotRender,
 } from "./types.ts";
 import { layoutHasAspectRatio, layoutStyle, slideRadiusStyle } from "./layout.ts";
+import { bricksElementStyle } from "./bricks-layout.ts";
 import { mediaImage } from "./media-image.ts";
 import { PLACEHOLDER_IMAGE_URL } from "./media.ts";
 import { SvgIcon } from "./svg-icon.tsx";
@@ -392,9 +393,11 @@ export function ReviewsView({ props }: A<R.ReviewsProps>): ReactNode {
 }
 
 export function RichTextView({ props }: A<R.RichTextProps>): ReactNode {
+  const customStyle = bricksElementStyle(props);
   return (
     <section
-      className={cx("bsb bs-block-richtext bsb-py-lg bsb-w bsb-w-default bsb-richtext", `bsb-align-${props.alignment}`)}
+      className={cx("bsb bs-block-richtext brxe-text bsb-py-lg bsb-w bsb-w-default bsb-richtext", `bsb-align-${props.alignment}`)}
+      style={customStyle}
       dangerouslySetInnerHTML={{ __html: sanitizeRichText(props.content) }}
     />
   );
@@ -515,24 +518,269 @@ function Slot({
 }
 
 export function SectionView({ props, children, ctx }: A<R.SectionProps>): ReactNode {
-  const bg = mediaSrc(ctx, props.backgroundMediaId);
+  const bgImageId = props.background?.mediaId || props.backgroundMediaId;
+  const desktopBg = props.background?.imageUrl || mediaSrc(ctx, bgImageId);
+  const tabletBg = props.responsive?.tablet?.background?.imageUrl || mediaSrc(ctx, props.responsive?.tablet?.background?.mediaId);
+  const mobileBg = props.responsive?.mobile?.background?.imageUrl || mediaSrc(ctx, props.responsive?.mobile?.background?.mediaId);
+  const bg = desktopBg || tabletBg || mobileBg;
+
+  const bgVideo = props.background?.videoUrl;
+  const videoPoster = mediaSrc(ctx, props.background?.videoPosterId);
+  const customStyle = bricksElementStyle(props, { defaultWidth: "100%", defaultDisplay: "flex" });
+
+  const hasExplicitBg = Boolean(bg || bgVideo || props.background?.color);
+
   return (
-    <section className={cx("bsb", !bg && `bsb-tone-${props.tone}`, `bsb-py-${props.paddingY}`)} style={{ position: "relative", overflow: "hidden" }}>
+    <section
+      className={cx("bsb brxe-section brx-resp", !hasExplicitBg && props.tone && `bsb-tone-${props.tone}`, props.paddingY && `bsb-py-${props.paddingY}`)}
+      style={{
+        position: "relative",
+        boxSizing: "border-box",
+        ...customStyle,
+      }}
+    >
       {bg ? (
         <>
-          <img className="bsb-hero-bg" src={bg} alt="" loading="lazy" />
-          <div className="bsb-hero-scrim" style={{ opacity: props.overlayOpacity / 100 }} />
+          <picture style={{ position: "absolute", inset: 0, width: "100%", height: "100%", zIndex: 0 }}>
+            {mobileBg && <source media="(max-width: 767px)" srcSet={mobileBg} />}
+            {tabletBg && <source media="(max-width: 1023px)" srcSet={tabletBg} />}
+            <img
+              className="bsb-hero-bg"
+              src={desktopBg || tabletBg || mobileBg || ""}
+              alt=""
+              loading="lazy"
+              style={{
+                position: "absolute",
+                inset: 0,
+                width: "100%",
+                height: "100%",
+                objectFit: (props.background?.imageSize as CSSProperties["objectFit"]) || "cover",
+                objectPosition: props.background?.imagePosition || "center center",
+                zIndex: 0,
+              }}
+            />
+          </picture>
+          {props.overlayOpacity ? <div className="bsb-hero-scrim" style={{ position: "absolute", inset: 0, background: "#000", opacity: props.overlayOpacity / 100, zIndex: 0 }} /> : null}
         </>
       ) : null}
-      <Slot className={cx("bsb-w", `bsb-w-${props.width}`)} style={{ position: "relative" }}>{children}</Slot>
+      {bgVideo ? (
+        <video
+          autoPlay
+          loop
+          muted
+          playsInline
+          poster={videoPoster ?? undefined}
+          style={{
+            position: "absolute",
+            inset: 0,
+            width: "100%",
+            height: "100%",
+            objectFit: (props.background?.videoFit as CSSProperties["objectFit"]) || "cover",
+            objectPosition: props.background?.videoPosition || "center center",
+            zIndex: 0,
+          }}
+        >
+          <source src={bgVideo} />
+        </video>
+      ) : null}
+      <Slot
+        style={{
+          position: "relative",
+          zIndex: 1,
+          width: "100%",
+          display: "flex",
+          flexDirection: props.direction || "column",
+          alignItems: props.alignCrossAxis || "stretch",
+          gap: props.gap,
+        }}
+      >
+        {children}
+      </Slot>
     </section>
   );
 }
 
-export function ContainerView({ props, children }: A<R.ContainerProps>): ReactNode {
+export function ContainerView({ props, children, ctx }: A<R.ContainerProps>): ReactNode {
+  const desktopBg = props.background?.imageUrl || mediaSrc(ctx, props.background?.mediaId);
+  const tabletBg = props.responsive?.tablet?.background?.imageUrl || mediaSrc(ctx, props.responsive?.tablet?.background?.mediaId);
+  const mobileBg = props.responsive?.mobile?.background?.imageUrl || mediaSrc(ctx, props.responsive?.mobile?.background?.mediaId);
+  const bg = desktopBg || tabletBg || mobileBg;
+
+  const bgVideo = props.background?.videoUrl;
+  const videoPoster = mediaSrc(ctx, props.background?.videoPosterId);
+  const customStyle = bricksElementStyle(props, { defaultWidth: "100%", defaultDisplay: "flex" });
+
+  const hasExplicitBg = Boolean(bg || bgVideo || props.background?.color);
+  const hasCustomTone = props.tone && props.tone !== "default";
+
   return (
-    <div className={cx("bsb", `bsb-tone-${props.tone}`, `bsb-py-${props.paddingY}`, `bsb-align-${props.align}`)}>
-      <Slot className={cx("bsb-w", `bsb-w-${props.width}`)}>{children}</Slot>
+    <div
+      className={cx(
+        "bsb brxe-container brx-resp",
+        !hasExplicitBg && hasCustomTone && `bsb-tone-${props.tone}`,
+        props.paddingY && props.paddingY !== "none" && `bsb-py-${props.paddingY}`,
+        props.align && `bsb-align-${props.align}`
+      )}
+      style={{
+        position: "relative",
+        zIndex: 1,
+        boxSizing: "border-box",
+        marginLeft: "auto",
+        marginRight: "auto",
+        maxWidth: "100%",
+        ...customStyle,
+      }}
+    >
+      {bg ? (
+        <picture style={{ position: "absolute", inset: 0, width: "100%", height: "100%", zIndex: 0 }}>
+          {mobileBg && <source media="(max-width: 767px)" srcSet={mobileBg} />}
+          {tabletBg && <source media="(max-width: 1023px)" srcSet={tabletBg} />}
+          <img
+            className="bsb-hero-bg"
+            src={desktopBg || tabletBg || mobileBg || ""}
+            alt=""
+            loading="lazy"
+            style={{
+              position: "absolute",
+              inset: 0,
+              width: "100%",
+              height: "100%",
+              objectFit: (props.background?.imageSize as CSSProperties["objectFit"]) || "cover",
+              objectPosition: props.background?.imagePosition || "center center",
+              zIndex: 0,
+            }}
+          />
+        </picture>
+      ) : null}
+      {bgVideo ? (
+        <video
+          autoPlay
+          loop
+          muted
+          playsInline
+          poster={videoPoster ?? undefined}
+          style={{
+            position: "absolute",
+            inset: 0,
+            width: "100%",
+            height: "100%",
+            objectFit: (props.background?.videoFit as CSSProperties["objectFit"]) || "cover",
+            objectPosition: props.background?.videoPosition || "center center",
+            zIndex: 0,
+          }}
+        >
+          <source src={bgVideo} />
+        </video>
+      ) : null}
+      <Slot
+        style={{
+          position: "relative",
+          zIndex: 1,
+          width: "100%",
+          height: "100%",
+          display: "flex",
+          flexDirection: (props.direction ? `var(--b-dir, ${props.direction})` : "var(--b-dir, column)") as CSSProperties["flexDirection"],
+          alignItems: (props.alignCrossAxis ? `var(--b-ai, ${props.alignCrossAxis})` : "var(--b-ai, stretch)") as CSSProperties["alignItems"],
+          justifyContent: (props.alignMainAxis ? `var(--b-jc, ${props.alignMainAxis})` : "var(--b-jc, flex-start)") as CSSProperties["justifyContent"],
+          gap: props.gap ? `var(--b-gap, ${props.gap})` : "var(--b-gap)",
+          rowGap: props.rowGap ? `var(--b-rg, ${props.rowGap})` : "var(--b-rg)",
+          columnGap: props.colGap ? `var(--b-cg, ${props.colGap})` : "var(--b-cg)",
+          flexWrap: (props.flexWrap ? `var(--b-wrap, ${props.flexWrap})` : "var(--b-wrap, nowrap)") as CSSProperties["flexWrap"],
+        }}
+      >
+        {children}
+      </Slot>
+    </div>
+  );
+}
+
+export function BlockView({ props, children, ctx }: A<R.BlockProps>): ReactNode {
+  const desktopBg = props.background?.imageUrl || mediaSrc(ctx, props.background?.mediaId);
+  const tabletBg = props.responsive?.tablet?.background?.imageUrl || mediaSrc(ctx, props.responsive?.tablet?.background?.mediaId);
+  const mobileBg = props.responsive?.mobile?.background?.imageUrl || mediaSrc(ctx, props.responsive?.mobile?.background?.mediaId);
+  const bg = desktopBg || tabletBg || mobileBg;
+
+  const bgVideo = props.background?.videoUrl;
+  const videoPoster = mediaSrc(ctx, props.background?.videoPosterId);
+  
+  // If custom width is given, use it; otherwise use flex: 1 1 0 with minWidth: 0 so sibling blocks distribute space automatically
+  const hasCustomWidth = Boolean(props.sizing?.width);
+  const customStyle = bricksElementStyle(props, {
+    defaultWidth: hasCustomWidth ? undefined : "auto",
+    defaultDisplay: "flex",
+  });
+
+  return (
+    <div
+      className="bsb brxe-block brx-resp"
+      style={{
+        position: "relative",
+        zIndex: 1,
+        boxSizing: "border-box",
+        flex: hasCustomWidth ? (props.sizing?.width === "100%" ? "1 1 100%" : `0 0 ${props.sizing?.width}`) : "1 1 0",
+        minWidth: 0,
+        ...customStyle,
+      }}
+    >
+      {bg ? (
+        <picture style={{ position: "absolute", inset: 0, width: "100%", height: "100%", zIndex: 0 }}>
+          {mobileBg && <source media="(max-width: 767px)" srcSet={mobileBg} />}
+          {tabletBg && <source media="(max-width: 1023px)" srcSet={tabletBg} />}
+          <img
+            className="bsb-hero-bg"
+            src={desktopBg || tabletBg || mobileBg || ""}
+            alt=""
+            loading="lazy"
+            style={{
+              position: "absolute",
+              inset: 0,
+              width: "100%",
+              height: "100%",
+              objectFit: (props.background?.imageSize as CSSProperties["objectFit"]) || "cover",
+              objectPosition: props.background?.imagePosition || "center center",
+              zIndex: 0,
+            }}
+          />
+        </picture>
+      ) : null}
+      {bgVideo ? (
+        <video
+          autoPlay
+          loop
+          muted
+          playsInline
+          poster={videoPoster ?? undefined}
+          style={{
+            position: "absolute",
+            inset: 0,
+            width: "100%",
+            height: "100%",
+            objectFit: (props.background?.videoFit as CSSProperties["objectFit"]) || "cover",
+            objectPosition: props.background?.videoPosition || "center center",
+            zIndex: 0,
+          }}
+        >
+          <source src={bgVideo} />
+        </video>
+      ) : null}
+      <Slot
+        style={{
+          position: "relative",
+          zIndex: 1,
+          width: "100%",
+          height: "100%",
+          display: "flex",
+          flexDirection: (props.direction ? `var(--b-dir, ${props.direction})` : "var(--b-dir, column)") as CSSProperties["flexDirection"],
+          alignItems: (props.alignCrossAxis ? `var(--b-ai, ${props.alignCrossAxis})` : "var(--b-ai, stretch)") as CSSProperties["alignItems"],
+          justifyContent: (props.alignMainAxis ? `var(--b-jc, ${props.alignMainAxis})` : "var(--b-jc, flex-start)") as CSSProperties["justifyContent"],
+          gap: props.gap ? `var(--b-gap, ${props.gap})` : "var(--b-gap)",
+          rowGap: props.rowGap ? `var(--b-rg, ${props.rowGap})` : "var(--b-rg)",
+          columnGap: props.colGap ? `var(--b-cg, ${props.colGap})` : "var(--b-cg)",
+          flexWrap: (props.flexWrap ? `var(--b-wrap, ${props.flexWrap})` : "var(--b-wrap, nowrap)") as CSSProperties["flexWrap"],
+        }}
+      >
+        {children}
+      </Slot>
     </div>
   );
 }
@@ -575,20 +823,64 @@ export function DividerView({ props }: A<R.DividerProps>): ReactNode {
 /* ----------------------------- content ---------------------------- */
 
 export function HeadingView({ props }: A<R.HeadingProps>): ReactNode {
-  const Tag = props.level;
+  const Tag = (props.level || "h2") as ElementType;
+  const customStyle = bricksElementStyle(props);
+
+  const textDesktop = props.text;
+  const textTablet = props.responsive?.tablet?.text;
+  const textMobile = props.responsive?.mobile?.text;
+
+  const content = (
+    <Tag className={cx("bsb-heading", props.size === "auto" ? `bsb-lvl-${props.level}` : `bsb-h-${props.size}`)}>
+      {textMobile ? <span className="brx-only-mobile">{textMobile}</span> : null}
+      {textTablet ? <span className="brx-only-tablet">{textTablet}</span> : null}
+      <span className={cx(textMobile && "brx-hide-mobile", textTablet && "brx-hide-tablet")}>
+        {textDesktop}
+      </span>
+    </Tag>
+  );
+
   return (
-    <div className={cx("bsb", `bsb-align-${props.align}`)}>
-      <Tag className={cx("bsb-heading", props.size === "auto" ? `bsb-lvl-${props.level}` : `bsb-h-${props.size}`)}>{props.text}</Tag>
+    <div
+      className={cx("bsb brxe-heading brx-resp", `bsb-align-${props.align}`)}
+      style={customStyle}
+    >
+      {props.link ? <a href={props.link} style={{ color: "inherit", textDecoration: "none" }}>{content}</a> : content}
     </div>
   );
 }
 
 export function TextView({ props }: A<R.TextProps>): ReactNode {
+  const Tag = (props.tag || "p") as ElementType;
+  const customStyle = bricksElementStyle(props);
+
+  const textDesktop = props.text;
+  const textTablet = props.responsive?.tablet?.text;
+  const textMobile = props.responsive?.mobile?.text;
+
+  const renderParagraphs = (raw: string) =>
+    raw.split(/\n{2,}/).map((para, i) => (
+      <Tag key={i} className="bsb-text" style={{ whiteSpace: "pre-line" }}>
+        {para}
+      </Tag>
+    ));
+
+  const content = (
+    <>
+      {textMobile ? <div className="brx-only-mobile">{renderParagraphs(textMobile)}</div> : null}
+      {textTablet ? <div className="brx-only-tablet">{renderParagraphs(textTablet)}</div> : null}
+      <div className={cx(textMobile && "brx-hide-mobile", textTablet && "brx-hide-tablet")}>
+        {renderParagraphs(textDesktop || "")}
+      </div>
+    </>
+  );
+
   return (
-    <div className={cx("bsb", `bsb-align-${props.align}`, props.muted && "bsb-muted")}>
-      {props.text.split(/\n{2,}/).map((para, i) => (
-        <p key={i} className="bsb-text" style={{ whiteSpace: "pre-line" }}>{para}</p>
-      ))}
+    <div
+      className={cx("bsb brxe-text-basic brx-resp", `bsb-align-${props.align}`, props.muted && "bsb-muted")}
+      style={customStyle}
+    >
+      {props.link ? <a href={props.link} style={{ color: "inherit", textDecoration: "none" }}>{content}</a> : content}
     </div>
   );
 }
@@ -596,14 +888,29 @@ export function TextView({ props }: A<R.TextProps>): ReactNode {
 const RATIO_CLASS = { auto: "", square: "bsb-ratio-square", "4-3": "bsb-ratio-4-3", "16-9": "bsb-ratio-16-9" } as const;
 
 export function ImageView({ props, ctx }: A<R.ImageProps>): ReactNode {
-  const detail = props.mediaId ? ctx?.mediaDetails?.(props.mediaId) : null;
-  const src = detail?.url ?? mediaSrc(ctx, props.mediaId);
-  if (!src) return <div className="bsb bsb-placeholder">Add an image</div>;
+  const customStyle = bricksElementStyle(props);
 
+  const desktopDetail = props.mediaId ? ctx?.mediaDetails?.(props.mediaId) : null;
+  const desktopSrc = desktopDetail?.url ?? (props.mediaId ? mediaSrc(ctx, props.mediaId) : props.imageUrl);
+
+  const tabletMediaId = props.responsive?.tablet?.mediaId;
+  const tabletImageUrl = props.responsive?.tablet?.imageUrl;
+  const tabletDetail = tabletMediaId ? ctx?.mediaDetails?.(tabletMediaId) : null;
+  const tabletSrc = tabletDetail?.url ?? (tabletMediaId ? mediaSrc(ctx, tabletMediaId) : tabletImageUrl);
+
+  const mobileMediaId = props.responsive?.mobile?.mediaId;
+  const mobileImageUrl = props.responsive?.mobile?.imageUrl;
+  const mobileDetail = mobileMediaId ? ctx?.mediaDetails?.(mobileMediaId) : null;
+  const mobileSrc = mobileDetail?.url ?? (mobileMediaId ? mediaSrc(ctx, mobileMediaId) : mobileImageUrl);
+
+  const activeSrc = desktopSrc || tabletSrc || mobileSrc;
+  if (!activeSrc) return <div className="bsb bsb-placeholder">Add an image</div>;
+
+  const detail = desktopDetail || tabletDetail || mobileDetail;
   const imgInfo = mediaImage(
     detail
       ? {
-          url: src,
+          url: activeSrc,
           width: detail.width,
           height: detail.height,
           focalX: detail.focalX,
@@ -611,27 +918,45 @@ export function ImageView({ props, ctx }: A<R.ImageProps>): ReactNode {
           dominantColor: detail.dominantColor,
           derivatives: detail.derivatives,
         }
-      : { url: src },
+      : { url: activeSrc },
     { sizes: "(max-width: 768px) 100vw, 800px" },
   );
 
   const altText = props.alt && props.alt.trim().length > 0 ? props.alt : (detail?.alt ?? "");
+  const objectPos = props.objectPosition || imgInfo.objectPosition || "center center";
+  const objectFitStyle = props.objectFit || "cover";
 
-  const img = (
+  const rawImg = (
     <img
-      className={cx("bsb-img", RATIO_CLASS[props.ratio], props.rounded && "bsb-rounded")}
-      src={imgInfo.src}
-      srcSet={imgInfo.srcSet}
+      className={cx("bsb-img", RATIO_CLASS[(props.ratio || "auto") as keyof typeof RATIO_CLASS], props.rounded && "bsb-rounded")}
+      src={desktopSrc || activeSrc}
+      srcSet={desktopSrc ? imgInfo.srcSet : undefined}
       sizes={imgInfo.sizes}
       alt={altText}
       loading="lazy"
       style={{
-        objectPosition: imgInfo.objectPosition,
+        objectFit: objectFitStyle as CSSProperties["objectFit"],
+        objectPosition: objectPos,
         backgroundColor: imgInfo.dominantColor ?? undefined,
+        width: "100%",
+        height: "100%",
       }}
     />
   );
-  return <div className="bsb">{props.href ? <a href={props.href}>{img}</a> : img}</div>;
+
+  const renderedImage = (tabletSrc || mobileSrc) ? (
+    <picture>
+      {mobileSrc ? <source media="(max-width: 767px)" srcSet={mobileSrc} /> : null}
+      {tabletSrc ? <source media="(max-width: 1023px)" srcSet={tabletSrc} /> : null}
+      {rawImg}
+    </picture>
+  ) : rawImg;
+
+  return (
+    <figure className="bsb brxe-image brx-resp" style={{ margin: 0, ...customStyle }}>
+      {props.href ? <a href={props.href}>{renderedImage}</a> : renderedImage}
+    </figure>
+  );
 }
 
 function embed(url: string): { kind: "iframe" | "video"; src: string } | null {
@@ -639,7 +964,7 @@ function embed(url: string): { kind: "iframe" | "video"; src: string } | null {
     const u = new URL(url);
     if (/(^|\.)youtube\.com$/.test(u.hostname) && u.searchParams.get("v"))
       return { kind: "iframe", src: `https://www.youtube-nocookie.com/embed/${u.searchParams.get("v")}` };
-    if (u.hostname === "youtu.be") return { kind: "iframe", src: `https://www.youtube-nocookie.com/embed${u.pathname}` };
+    if (u.hostname === "youtu.be") return { kind: "iframe", src: `https://youtube-nocookie.com/embed${u.pathname}` };
     if (u.hostname === "vimeo.com") return { kind: "iframe", src: `https://player.vimeo.com/video${u.pathname}` };
     if (/\.(mp4|webm)$/i.test(u.pathname)) return { kind: "video", src: url };
   } catch {
@@ -649,56 +974,95 @@ function embed(url: string): { kind: "iframe" | "video"; src: string } | null {
 }
 
 export function VideoView({ props, ctx }: A<R.VideoProps>): ReactNode {
-  const mediaUrl = props.mediaId ? mediaSrc(ctx, props.mediaId) : null;
-  const posterUrl = props.posterMediaId ? mediaSrc(ctx, props.posterMediaId) : null;
+  const customStyle = bricksElementStyle(props);
 
-  if (props.mediaId) {
-    if (!mediaUrl) {
+  const desktopMediaUrl = props.mediaId ? mediaSrc(ctx, props.mediaId) : null;
+  const tabletMediaUrl = props.responsive?.tablet?.mediaId ? mediaSrc(ctx, props.responsive.tablet.mediaId) : null;
+  const mobileMediaUrl = props.responsive?.mobile?.mediaId ? mediaSrc(ctx, props.responsive.mobile.mediaId) : null;
+
+  const posterUrl = props.posterMediaId ? mediaSrc(ctx, props.posterMediaId) : null;
+  const showControls = props.controls !== false && !props.autoplayLoop;
+  const videoFit = (props.objectFit || "cover") as CSSProperties["objectFit"];
+  const videoPos = props.objectPosition || "center center";
+
+  if (props.mediaId || tabletMediaUrl || mobileMediaUrl) {
+    const activeUrl = desktopMediaUrl || tabletMediaUrl || mobileMediaUrl;
+    if (!activeUrl) {
       return <div className="bsb bsb-placeholder">Video not found</div>;
     }
     return (
-      <div className="bsb">
+      <div className="bsb brxe-video brx-resp" style={customStyle}>
         <video
           className="bsb-video"
-          src={mediaUrl}
           poster={posterUrl ?? undefined}
-          controls={!props.autoplayLoop}
+          controls={showControls}
           autoPlay={props.autoplayLoop}
           loop={props.autoplayLoop}
           muted={props.autoplayLoop}
           playsInline
           preload="none"
-        />
+          style={{ width: "100%", height: "100%", objectFit: videoFit, objectPosition: videoPos }}
+        >
+          {mobileMediaUrl ? <source media="(max-width: 767px)" src={mobileMediaUrl} /> : null}
+          {tabletMediaUrl ? <source media="(max-width: 1023px)" src={tabletMediaUrl} /> : null}
+          {desktopMediaUrl ? <source src={desktopMediaUrl} /> : null}
+        </video>
       </div>
     );
   }
 
-  const e = props.url ? embed(props.url) : null;
+  const desktopUrl = props.url;
+  const tabletUrl = props.responsive?.tablet?.videoUrl;
+  const mobileUrl = props.responsive?.mobile?.videoUrl;
+  const activeExternalUrl = desktopUrl || tabletUrl || mobileUrl;
+
+  const e = activeExternalUrl ? embed(activeExternalUrl) : null;
   if (!e) return <div className="bsb bsb-placeholder">Add a video from media or a link</div>;
+
+  const renderSingleVideoOrIframe = (embedData: { kind: "iframe" | "video"; src: string }) => {
+    return embedData.kind === "video" ? (
+      <video
+        className="bsb-video"
+        src={embedData.src}
+        poster={posterUrl ?? undefined}
+        controls={showControls}
+        autoPlay={props.autoplayLoop}
+        loop={props.autoplayLoop}
+        muted={props.autoplayLoop}
+        preload="none"
+        playsInline
+        style={{ width: "100%", height: "100%", objectFit: videoFit, objectPosition: videoPos }}
+      />
+    ) : (
+      <iframe
+        className="bsb-video"
+        src={embedData.src}
+        loading="lazy"
+        allowFullScreen
+        allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+        style={{ width: "100%", height: "100%", objectFit: videoFit, border: 0 }}
+      />
+    );
+  };
+
+  const mobileEmbed = mobileUrl ? embed(mobileUrl) : null;
+  const tabletEmbed = tabletUrl ? embed(tabletUrl) : null;
+
   return (
-    <div className="bsb">
-      {e.kind === "video" ? (
-        <video
-          className="bsb-video"
-          src={e.src}
-          poster={posterUrl ?? undefined}
-          controls={!props.autoplayLoop}
-          autoPlay={props.autoplayLoop}
-          loop={props.autoplayLoop}
-          muted={props.autoplayLoop}
-          preload="none"
-          playsInline
-        />
-      ) : (
-        <iframe
-          className="bsb-video"
-          src={e.src}
-          loading="lazy"
-          allowFullScreen
-          title="Video"
-          referrerPolicy="strict-origin-when-cross-origin"
-        />
-      )}
+    <div className="bsb brxe-video brx-resp" style={customStyle}>
+      {mobileEmbed ? (
+        <div className="brx-only-mobile" style={{ width: "100%", height: "100%" }}>
+          {renderSingleVideoOrIframe(mobileEmbed)}
+        </div>
+      ) : null}
+      {tabletEmbed ? (
+        <div className="brx-only-tablet" style={{ width: "100%", height: "100%" }}>
+          {renderSingleVideoOrIframe(tabletEmbed)}
+        </div>
+      ) : null}
+      <div className={cx(mobileEmbed && "brx-hide-mobile", tabletEmbed && "brx-hide-tablet")} style={{ width: "100%", height: "100%" }}>
+        {renderSingleVideoOrIframe(e)}
+      </div>
     </div>
   );
 }

@@ -19,6 +19,7 @@ export type BlockType =
   // Layout primitives: hold child blocks in their `content` slot
   | "Section"
   | "Container"
+  | "Block"
   | "Grid"
   | "FlexRow"
   | "FlexColumn"
@@ -407,6 +408,7 @@ export interface BlockDocument {
 export const SLOT_BLOCK_TYPES: ReadonlySet<BlockType> = new Set<BlockType>([
   "Section",
   "Container",
+  "Block",
   "Grid",
   "FlexRow",
   "FlexColumn",

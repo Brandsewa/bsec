@@ -47,6 +47,10 @@ export const COMPACT_CSS = `
 [class*="PuckLayout"] [class*="PuckFields-field"]:has([data-sec-closed]) { display: none; }
 /* Inside an accordion the fields sit together without Puck's divider line between each one. */
 [class*="PuckLayout"] [class*="PuckFields-field"]:has([data-sec-field]) { border: 0; border-top-width: 0; padding: 3px 4px 5px; }
+@keyframes bricksAccordionFade {
+  from { opacity: 0; transform: translateY(-4px); }
+  to { opacity: 1; transform: translateY(0); }
+}
 /* The header bar is the shaded element; Puck's row around it has no border or fill of its own. */
 [class*="PuckLayout"] [class*="PuckFields-field"]:has([data-sec-header]) { padding: 3px 4px; border: 0; border-top-width: 0; background: none; }
 [class*="PuckLayout"] [data-sec-header] { background: #f0f0f3; border-radius: 7px; }
@@ -59,4 +63,95 @@ export const COMPACT_CSS = `
 /* Left rail (Theme, Blocks, Outline): smaller icons and labels */
 [class*="PuckLayout"] [class*="NavItem-link"] { font-size: 10.5px; gap: 2px; padding-block: 8px; }
 [class*="PuckLayout"] [class*="NavItem-link"] svg { width: 18px; height: 18px; }
+
+/* -------------------------------------------------------------------------- */
+/* Canvas Guidelines & Empty State Indicators (Bricks Builder Style)           */
+/* -------------------------------------------------------------------------- */
+
+/* Subtle dotted/dashed outlines on all layout elements so boundaries are visible */
+.bsb.brxe-section {
+  outline: 1px dashed rgba(59, 130, 246, 0.28);
+  outline-offset: -1px;
+}
+.bsb.brxe-container {
+  outline: 1px dashed rgba(16, 185, 129, 0.35);
+  outline-offset: -1px;
+}
+.bsb.brxe-block {
+  outline: 1px dashed rgba(245, 158, 11, 0.35);
+  outline-offset: -1px;
+}
+
+/* Hovering or active guides */
+.bsb.brxe-section:hover {
+  outline-color: rgba(59, 130, 246, 0.6);
+}
+.bsb.brxe-container:hover {
+  outline-color: rgba(16, 185, 129, 0.7);
+}
+.bsb.brxe-block:hover {
+  outline-color: rgba(245, 158, 11, 0.7);
+}
+
+/* When a container or block has an empty dropzone, show clear Bricks-style placeholder guidelines */
+[data-puck-dropzone]:empty,
+[class*="_DropZone_"]:empty {
+  min-height: 80px !important;
+  width: 100% !important;
+  flex: 1 1 0 !important;
+  display: flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  background: repeating-linear-gradient(
+    -45deg,
+    rgba(240, 240, 243, 0.6),
+    rgba(240, 240, 243, 0.6) 10px,
+    rgba(255, 255, 255, 0.8) 10px,
+    rgba(255, 255, 255, 0.8) 20px
+  ) !important;
+  outline: 1.5px dashed #cbd5e1 !important;
+  outline-offset: -2px !important;
+  border-radius: 4px;
+  position: relative;
+}
+
+/* Ensure dropzones and draggable items inside flex containers properly stretch/grow */
+[data-puck-dropzone] {
+  width: 100%;
+  height: 100%;
+}
+
+/* Puck wraps each dropped block in a draggable wrapper div; ensure it respects flex distribution */
+[data-puck-dropzone] > div:has(> .brxe-block),
+[data-puck-dropzone] > [data-puck-component]:has(.brxe-block) {
+  flex: 1 1 0;
+  display: flex;
+  min-width: 0;
+}
+
+[data-puck-dropzone] > div:has(> .brxe-container),
+[data-puck-dropzone] > [data-puck-component]:has(.brxe-container) {
+  width: 100%;
+}
+
+[data-puck-dropzone]:empty::after,
+[class*="_DropZone_"]:empty::after {
+  content: "Drop elements here";
+  font-size: 11px;
+  font-weight: 500;
+  color: #94a3b8;
+  letter-spacing: 0.02em;
+  pointer-events: none;
+}
+
+/* Specific labels when empty inside Container or Block */
+.brxe-container > [data-puck-dropzone]:empty::after,
+.brxe-container > [class*="_DropZone_"]:empty::after {
+  content: "Container (Drop Blocks or Elements)";
+}
+
+.brxe-block > [data-puck-dropzone]:empty::after,
+.brxe-block > [class*="_DropZone_"]:empty::after {
+  content: "Block (Drop Elements)";
+}
 `;

@@ -12,7 +12,7 @@ describe("editor config", () => {
       const def = getBlockDefinition(type);
       const shape = (def.schema as unknown as { shape: Record<string, unknown> }).shape;
       for (const field of Object.keys(BLOCK_SPECS[type].fields)) {
-        if (field.startsWith("__section_")) continue; // accordion headers: display only, no data
+        if (field.startsWith("__section_") || field.startsWith("__bricks_")) continue; // accordion/tab headers: display only, no data
         expect(Object.keys(shape), `${type}.${field}`).toContain(field);
       }
     }

@@ -8,6 +8,7 @@ import { logoSizeField } from "./HeaderFooterPanels.tsx";
 import { elementOrderField } from "./ElementOrderField.tsx";
 import { accordionFields } from "./sections.tsx";
 import { layoutField, slideRadiusField } from "./LayoutField.tsx";
+import { createBricksLayoutFields, bricksRowSelectField, bricksRowInputField } from "./BricksLayoutFields.tsx";
 import { useFrame, useRenderData } from "./context.tsx";
 
 /**
@@ -138,27 +139,179 @@ const productFields = (carousel: boolean): Record<string, Field> => ({
 });
 
 export const BLOCK_SPECS: Record<BlockType, Spec> = {
-  Section: { label: "Section", category: "layout", fields: { [SLOT_PROP]: { type: "slot" }, tone: select("Background", TONE), paddingY: select("Vertical space", SPACING), width: select("Content width", WIDTH), backgroundMediaId: mediaField("Background image") as Field, overlayOpacity: num("Image darkening %", 0, 100) } },
-  Container: { label: "Container", category: "layout", fields: { [SLOT_PROP]: { type: "slot" }, width: select("Width", WIDTH), tone: select("Background", TONE), paddingY: select("Vertical space", SPACING), align: select("Text align", ALIGN) } },
+  Section: {
+    label: "Section",
+    category: "layout",
+    fields: createBricksLayoutFields("Section", {
+      [SLOT_PROP]: { type: "slot" },
+    }),
+  },
+  Container: {
+    label: "Container",
+    category: "layout",
+    fields: createBricksLayoutFields("Container", {
+      [SLOT_PROP]: { type: "slot" },
+    }),
+  },
+  Block: {
+    label: "Block",
+    category: "layout",
+    fields: createBricksLayoutFields("Block", {
+      [SLOT_PROP]: { type: "slot" },
+    }),
+  },
   Grid: { label: "Grid", category: "layout", fields: { [SLOT_PROP]: { type: "slot" }, columns: num("Columns (desktop)", 1, 6), columnsMobile: num("Columns (mobile)", 1, 2), gap: select("Gap", GAP) } },
   FlexRow: { label: "Flex row", category: "layout", fields: { [SLOT_PROP]: { type: "slot" }, gap: select("Gap", GAP), alignItems: select("Vertical align", ITEMS), justify: select("Horizontal align", { start: "Start", center: "Center", end: "End", between: "Space between" }) } },
   FlexColumn: { label: "Flex column", category: "layout", fields: { [SLOT_PROP]: { type: "slot" }, gap: select("Gap", GAP), alignItems: select("Align", ITEMS) } },
   Spacer: { label: "Spacer", category: "layout", fields: { size: select("Height", { sm: "Small", md: "Medium", lg: "Large", xl: "Extra large" }) } },
   Divider: { label: "Divider", category: "layout", fields: { width: select("Width", WIDTH) } },
 
-  Heading: { label: "Heading", category: "content", fields: { text: text("Text"), level: select("Tag", { h1: "H1", h2: "H2", h3: "H3", h4: "H4", h5: "H5", h6: "H6" }), size: select("Size", { auto: "Match the heading level (theme sizes)", sm: "Small", md: "Medium", lg: "Large", xl: "Extra large" }), align: select("Align", ALIGN) } },
-  Text: { label: "Text", category: "content", fields: { text: area("Text (blank line = new paragraph)"), align: select("Align", ALIGN), muted: radio("Softer colour") } },
-  RichText: { label: "Rich text", category: "content", fields: { content: area("HTML (formatting tags only)"), alignment: select("Align", ALIGN) } },
-  Image: { label: "Image", category: "content", fields: { mediaId: mediaField("Image") as Field, alt: text("Alt text"), ratio: select("Shape", { auto: "Original", square: "Square", "4-3": "4:3", "16-9": "16:9" }), rounded: radio("Rounded corners"), href: link("Link") } },
+  Heading: {
+    label: "Heading",
+    category: "content",
+    fields: createBricksLayoutFields(
+      "Heading",
+      {
+        text: bricksRowInputField("Text", "Heading") as Field,
+        level: bricksRowSelectField("HTML tag", [
+          { value: "h1", label: "H1" },
+          { value: "h2", label: "H2" },
+          { value: "h3", label: "H3" },
+          { value: "h4", label: "H4" },
+          { value: "h5", label: "H5" },
+          { value: "h6", label: "H6" },
+        ]) as Field,
+        size: bricksRowSelectField("Size", [
+          { value: "auto", label: "Auto (Theme)" },
+          { value: "sm", label: "Small" },
+          { value: "md", label: "Medium" },
+          { value: "lg", label: "Large" },
+          { value: "xl", label: "Extra Large" },
+        ]) as Field,
+        align: bricksRowSelectField("Align", [
+          { value: "left", label: "Left" },
+          { value: "center", label: "Center" },
+          { value: "right", label: "Right" },
+        ]) as Field,
+        link: bricksRowInputField("Link", "e.g. /shop or https://...") as Field,
+      },
+      { includeDisplayControls: false }
+    ),
+  },
+  Text: {
+    label: "Text",
+    category: "content",
+    fields: createBricksLayoutFields(
+      "Text",
+      {
+        text: area("Text (blank line = new paragraph)"),
+        tag: bricksRowSelectField("HTML tag", [
+          { value: "p", label: "p" },
+          { value: "div", label: "div" },
+          { value: "span", label: "span" },
+        ]) as Field,
+        align: bricksRowSelectField("Align", [
+          { value: "left", label: "Left" },
+          { value: "center", label: "Center" },
+          { value: "right", label: "Right" },
+        ]) as Field,
+        link: bricksRowInputField("Link", "e.g. /about or https://...") as Field,
+        muted: radio("Softer colour"),
+      },
+      { includeDisplayControls: false }
+    ),
+  },
+  RichText: {
+    label: "Rich text",
+    category: "content",
+    fields: createBricksLayoutFields(
+      "RichText",
+      {
+        content: area("HTML (formatting tags only)"),
+        alignment: bricksRowSelectField("Align", [
+          { value: "left", label: "Left" },
+          { value: "center", label: "Center" },
+          { value: "right", label: "Right" },
+        ]) as Field,
+      },
+      { includeDisplayControls: false }
+    ),
+  },
+  Image: {
+    label: "Image",
+    category: "content",
+    fields: createBricksLayoutFields(
+      "Image",
+      {
+        mediaId: mediaField("Image") as Field,
+        imageUrl: bricksRowInputField("Image URL", "https://...") as Field,
+        alt: bricksRowInputField("Alt text", "Image description") as Field,
+        ratio: bricksRowSelectField("Shape / Ratio", [
+          { value: "auto", label: "Original" },
+          { value: "square", label: "Square (1:1)" },
+          { value: "4-3", label: "Standard (4:3)" },
+          { value: "16-9", label: "Widescreen (16:9)" },
+        ]) as Field,
+        objectFit: bricksRowSelectField("Image Layout (Fit)", [
+          { value: "cover", label: "Cover (Fill & Crop)" },
+          { value: "contain", label: "Contain (Fit inside)" },
+          { value: "fill", label: "Fill (Stretch)" },
+          { value: "scale-down", label: "Scale Down" },
+          { value: "none", label: "None (Original)" },
+        ]) as Field,
+        objectPosition: bricksRowSelectField("Alignment (Focus)", [
+          { value: "center center", label: "Center" },
+          { value: "top center", label: "Top Center" },
+          { value: "bottom center", label: "Bottom Center" },
+          { value: "center left", label: "Center Left" },
+          { value: "center right", label: "Center Right" },
+          { value: "top left", label: "Top Left" },
+          { value: "top right", label: "Top Right" },
+          { value: "bottom left", label: "Bottom Left" },
+          { value: "bottom right", label: "Bottom Right" },
+        ]) as Field,
+        rounded: radio("Rounded corners"),
+        href: bricksRowInputField("Link", "/collections") as Field,
+      },
+      { includeDisplayControls: false }
+    ),
+  },
   Video: {
     label: "Video",
     category: "content",
-    fields: {
-      mediaId: videoMediaField("Library video") as Field,
-      posterMediaId: mediaField("Poster image") as Field,
-      autoplayLoop: radio("Autoplay loop (muted)"),
-      url: text("Or video URL (YouTube, Vimeo, MP4)"),
-    },
+    fields: createBricksLayoutFields(
+      "Video",
+      {
+        videoType: bricksRowSelectField("Source", [
+          { value: "youtube", label: "YouTube / URL" },
+          { value: "media", label: "Media Library" },
+        ]) as Field,
+        mediaId: videoMediaField("Library video") as Field,
+        url: bricksRowInputField("Video URL", "YouTube, Vimeo, MP4") as Field,
+        posterMediaId: mediaField("Poster image") as Field,
+        objectFit: bricksRowSelectField("Video Layout (Fit)", [
+          { value: "cover", label: "Cover (Fill & Crop)" },
+          { value: "contain", label: "Contain (Fit inside)" },
+          { value: "fill", label: "Fill (Stretch)" },
+          { value: "scale-down", label: "Scale Down" },
+          { value: "none", label: "None" },
+        ]) as Field,
+        objectPosition: bricksRowSelectField("Alignment (Focus)", [
+          { value: "center center", label: "Center" },
+          { value: "top center", label: "Top Center" },
+          { value: "bottom center", label: "Bottom Center" },
+          { value: "center left", label: "Center Left" },
+          { value: "center right", label: "Center Right" },
+          { value: "top left", label: "Top Left" },
+          { value: "top right", label: "Top Right" },
+          { value: "bottom left", label: "Bottom Left" },
+          { value: "bottom right", label: "Bottom Right" },
+        ]) as Field,
+        autoplayLoop: radio("Autoplay loop (muted)"),
+        controls: radio("Show player controls"),
+      },
+      { includeDisplayControls: false }
+    ),
   },
   FileDownload: {
     label: "File download",
@@ -975,7 +1128,32 @@ const ONLY: Record<"header" | "footer", BlockType[]> = {
 };
 const CHROME: BlockType[] = ["SiteHeader", "SiteFooter"];
 /** Still drawn when a page already uses them (templates, saved pages), but no longer offered in the block picker. */
-export const RETIRED_FROM_PICKER: BlockType[] = ["Testimonials"];
+export const RETIRED_FROM_PICKER: BlockType[] = [
+  // Old layout widgets retired in favor of Bricks Section, Container & Block
+  "Grid",
+  "FlexRow",
+  "FlexColumn",
+  "Spacer",
+  "Divider",
+  // Old content & store widgets retired in favor of brand custom widgets
+  "FileDownload",
+  "Button",
+  "Icon",
+  "Link",
+  "CallToAction",
+  "ProductGrid",
+  "ProductCarousel",
+  "CollectionGrid",
+  "Hero",
+  "Banner",
+  "Testimonials",
+  "Reviews",
+  "FAQ",
+  "Gallery",
+  "Newsletter",
+  "UspStrip",
+  "BlogPosts",
+];
 
 export function blockAllowed(type: BlockType, kind: EditorPageKind): boolean {
   if (kind === "header" || kind === "footer") return ONLY[kind].includes(type);

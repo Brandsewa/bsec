@@ -17,6 +17,7 @@ import {
   widthSchema,
 } from "./common.ts";
 import { layoutSchema, slideRadiusSchema } from "./layout.ts";
+import { bricksLayoutSchema, BRICKS_OBJECT_FIT_OPTIONS, BRICKS_OBJECT_POSITION_OPTIONS } from "./bricks-layout.ts";
 import * as V from "./views.tsx";
 import * as VB from "./views-blog.tsx";
 import * as VR from "./views-reviews.tsx";
@@ -275,6 +276,7 @@ export const ReviewsBlock: BlockDefinition<ReviewsProps> = {
 export const RichTextSchema = z.object({
   content: z.string().min(1),
   alignment: alignSchema.default("left"),
+  ...bricksLayoutSchema.shape,
 });
 export type RichTextProps = z.infer<typeof RichTextSchema>;
 
@@ -381,12 +383,12 @@ export const UspStripBlock: BlockDefinition<UspStripProps> = {
 /* Layout primitives. Children live in the `content` slot.             */
 /* ------------------------------------------------------------------ */
 
-export const SectionSchema = z.object({
-  tone: toneSchema.default("default"),
-  paddingY: spacingSchema.default("lg"),
-  width: widthSchema.default("wide"),
+export const SectionSchema = bricksLayoutSchema.extend({
+  tone: toneSchema.default("default").optional(),
+  paddingY: spacingSchema.default("lg").optional(),
+  width: widthSchema.default("wide").optional(),
   backgroundMediaId: z.string().optional(),
-  overlayOpacity: z.number().min(0).max(100).default(0),
+  overlayOpacity: z.number().min(0).max(100).default(0).optional(),
   content: slotSchema,
 });
 export type SectionProps = z.infer<typeof SectionSchema>;
@@ -394,15 +396,15 @@ export const SectionBlock: BlockDefinition<SectionProps> = {
   type: "Section",
   version: 1,
   schema: SectionSchema,
-  defaultProps: { tone: "default", paddingY: "lg", width: "wide", overlayOpacity: 0, content: [] },
+  defaultProps: { content: [] },
   render: V.SectionView,
 };
 
-export const ContainerSchema = z.object({
-  width: widthSchema.default("default"),
-  tone: toneSchema.default("default"),
-  paddingY: spacingSchema.default("none"),
-  align: alignSchema.default("left"),
+export const ContainerSchema = bricksLayoutSchema.extend({
+  width: widthSchema.default("default").optional(),
+  tone: toneSchema.default("default").optional(),
+  paddingY: spacingSchema.default("none").optional(),
+  align: alignSchema.default("left").optional(),
   content: slotSchema,
 });
 export type ContainerProps = z.infer<typeof ContainerSchema>;
@@ -410,8 +412,20 @@ export const ContainerBlock: BlockDefinition<ContainerProps> = {
   type: "Container",
   version: 1,
   schema: ContainerSchema,
-  defaultProps: { width: "default", tone: "default", paddingY: "none", align: "left", content: [] },
+  defaultProps: { content: [] },
   render: V.ContainerView,
+};
+
+export const BlockSchema = bricksLayoutSchema.extend({
+  content: slotSchema,
+});
+export type BlockProps = z.infer<typeof BlockSchema>;
+export const BlockBlock: BlockDefinition<BlockProps> = {
+  type: "Block",
+  version: 1,
+  schema: BlockSchema,
+  defaultProps: { content: [] },
+  render: V.BlockView,
 };
 
 export const GridSchema = z.object({
@@ -488,6 +502,8 @@ export const HeadingSchema = z.object({
   // "auto" follows the heading level's size from the theme settings; the others keep the older fixed steps.
   size: z.enum(["sm", "md", "lg", "xl", "auto"]).default("lg"),
   align: alignSchema.default("left"),
+  link: hrefSchema.optional(),
+  ...bricksLayoutSchema.shape,
 });
 export type HeadingProps = z.infer<typeof HeadingSchema>;
 export const HeadingBlock: BlockDefinition<HeadingProps> = {
@@ -500,46 +516,59 @@ export const HeadingBlock: BlockDefinition<HeadingProps> = {
 
 export const TextSchema = z.object({
   text: z.string().min(1).max(5000),
+  tag: z.enum(["p", "div", "span"]).default("p"),
   align: alignSchema.default("left"),
   muted: z.boolean().default(false),
+  link: hrefSchema.optional(),
+  ...bricksLayoutSchema.shape,
 });
 export type TextProps = z.infer<typeof TextSchema>;
 export const TextBlock: BlockDefinition<TextProps> = {
   type: "Text",
   version: 1,
   schema: TextSchema,
-  defaultProps: { text: "Write something helpful for your customers.", align: "left", muted: false },
+  defaultProps: { text: "Write something helpful for your customers.", tag: "p", align: "left", muted: false },
   render: V.TextView,
 };
 
 export const ImageSchema = z.object({
   mediaId: z.string().optional(),
+  imageUrl: z.string().url().optional().or(z.literal("")),
   alt: z.string().max(300).default(""),
   ratio: z.enum(["auto", "square", "4-3", "16-9"]).default("auto"),
+  objectFit: z.enum(BRICKS_OBJECT_FIT_OPTIONS).optional().default("cover"),
+  objectPosition: z.string().optional().default("center center"),
   rounded: z.boolean().default(false),
   href: hrefSchema.optional(),
+  ...bricksLayoutSchema.shape,
 });
 export type ImageProps = z.infer<typeof ImageSchema>;
 export const ImageBlock: BlockDefinition<ImageProps> = {
   type: "Image",
   version: 1,
   schema: ImageSchema,
-  defaultProps: { alt: "", ratio: "auto", rounded: false },
+  defaultProps: { alt: "", ratio: "auto", objectFit: "cover", objectPosition: "center center", rounded: false },
   render: V.ImageView,
 };
 
 export const VideoSchema = z.object({
+  videoType: z.enum(["youtube", "vimeo", "media", "url"]).default("youtube"),
   url: videoUrlSchema.default(""),
   mediaId: z.string().uuid().optional().or(z.literal("")),
   posterMediaId: z.string().uuid().optional().or(z.literal("")),
   autoplayLoop: z.boolean().default(false),
+  controls: z.boolean().default(true),
+  aspectRatio: z.string().optional(),
+  objectFit: z.enum(BRICKS_OBJECT_FIT_OPTIONS).default("cover"),
+  objectPosition: z.string().default("center center"),
+  ...bricksLayoutSchema.shape,
 });
 export type VideoProps = z.infer<typeof VideoSchema>;
 export const VideoBlock: BlockDefinition<VideoProps> = {
   type: "Video",
   version: 1,
   schema: VideoSchema,
-  defaultProps: { url: "", autoplayLoop: false },
+  defaultProps: { videoType: "youtube", url: "", autoplayLoop: false, controls: true, objectFit: "cover", objectPosition: "center center" },
   render: V.VideoView,
 };
 
@@ -1643,6 +1672,7 @@ export const BLOCK_DEFINITIONS: Record<BlockType, AnyBlockDefinition> = {
   UspStrip: UspStripBlock,
   Section: SectionBlock,
   Container: ContainerBlock,
+  Block: BlockBlock,
   Grid: GridBlock,
   FlexRow: FlexRowBlock,
   FlexColumn: FlexColumnBlock,

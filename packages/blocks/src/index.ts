@@ -9,6 +9,7 @@ export * from "./puck-adapter.ts";
 export * from "./theme-vars.ts";
 export * from "./sample-data.ts";
 export * from "./layout.ts";
+export * from "./bricks-layout.ts";
 export * from "./render-tree.tsx";
 export * from "./theme-pages.ts";
 export * from "./default-pages.ts";

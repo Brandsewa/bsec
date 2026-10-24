@@ -636,6 +636,241 @@
 /* ...and to the showcase box itself. */
 .bsb-psc.bsb-lay { height: var(--h); min-height: var(--mnh); max-height: var(--mxh); aspect-ratio: var(--ar); }
 
+/* Bricks Responsive Layout System (.brx-resp applied to Section, Container, Block, Elements) */
+.brx-resp {
+  --b-dir: var(--brx-d-dir);
+  --b-jc: var(--brx-d-jc);
+  --b-ai: var(--brx-d-ai);
+  --b-wrap: var(--brx-d-wrap);
+  --b-gap: var(--brx-d-gap);
+  --b-cg: var(--brx-d-cg);
+  --b-rg: var(--brx-d-rg);
+  --b-pt: var(--brx-d-pt);
+  --b-pr: var(--brx-d-pr);
+  --b-pb: var(--brx-d-pb);
+  --b-pl: var(--brx-d-pl);
+  --b-mt: var(--brx-d-mt);
+  --b-mr: var(--brx-d-mr);
+  --b-mb: var(--brx-d-mb);
+  --b-ml: var(--brx-d-ml);
+  --b-w: var(--brx-d-w);
+  --b-mnw: var(--brx-d-mnw);
+  --b-mxw: var(--brx-d-mxw);
+  --b-h: var(--brx-d-h);
+  --b-mnh: var(--brx-d-mnh);
+  --b-mxh: var(--brx-d-mxh);
+  --b-ar: var(--brx-d-ar);
+  --b-ta: var(--brx-d-ta);
+  --b-bg-c: var(--brx-d-bg-c);
+
+  flex-direction: var(--b-dir);
+  justify-content: var(--b-jc);
+  align-items: var(--b-ai);
+  flex-wrap: var(--b-wrap);
+  gap: var(--b-gap);
+  column-gap: var(--b-cg);
+  row-gap: var(--b-rg);
+
+  padding-top: var(--b-pt);
+  padding-right: var(--b-pr);
+  padding-bottom: var(--b-pb);
+  padding-left: var(--b-pl);
+
+  margin-top: var(--b-mt);
+  margin-right: var(--b-mr);
+  margin-bottom: var(--b-mb);
+  margin-left: var(--b-ml);
+
+  width: var(--b-w);
+  min-width: var(--b-mnw);
+  max-width: var(--b-mxw);
+  height: var(--b-h);
+  min-height: var(--b-mnh);
+  max-height: var(--b-mxh);
+  aspect-ratio: var(--b-ar);
+  text-align: var(--b-ta);
+}
+
+/* Also forward flex/grid layout variables to inner Slot wrappers */
+.brx-resp > [style*="display: flex"],
+.brx-resp > div[style*="display: flex"],
+.brx-resp > [data-puck-slot] {
+  flex-direction: var(--b-dir) !important;
+  justify-content: var(--b-jc) !important;
+  align-items: var(--b-ai) !important;
+  flex-wrap: var(--b-wrap) !important;
+  gap: var(--b-gap) !important;
+  column-gap: var(--b-cg) !important;
+  row-gap: var(--b-rg) !important;
+}
+
+@media (max-width: 1023px) {
+  .brx-resp {
+    --b-dir: var(--brx-t-dir, var(--brx-d-dir));
+    --b-jc: var(--brx-t-jc, var(--brx-d-jc));
+    --b-ai: var(--brx-t-ai, var(--brx-d-ai));
+    --b-wrap: var(--brx-t-wrap, var(--brx-d-wrap));
+    --b-gap: var(--brx-t-gap, var(--brx-d-gap));
+    --b-cg: var(--brx-t-cg, var(--brx-d-cg));
+    --b-rg: var(--brx-t-rg, var(--brx-d-rg));
+    --b-pt: var(--brx-t-pt, var(--brx-d-pt));
+    --b-pr: var(--brx-t-pr, var(--brx-d-pr));
+    --b-pb: var(--brx-t-pb, var(--brx-d-pb));
+    --b-pl: var(--brx-t-pl, var(--brx-d-pl));
+    --b-mt: var(--brx-t-mt, var(--brx-d-mt));
+    --b-mr: var(--brx-t-mr, var(--brx-d-mr));
+    --b-mb: var(--brx-t-mb, var(--brx-d-mb));
+    --b-ml: var(--brx-t-ml, var(--brx-d-ml));
+    --b-w: var(--brx-t-w, var(--brx-d-w));
+    --b-mnw: var(--brx-t-mnw, var(--brx-d-mnw));
+    --b-mxw: var(--brx-t-mxw, var(--brx-d-mxw));
+    --b-h: var(--brx-t-h, var(--brx-d-h));
+    --b-mnh: var(--brx-t-mnh, var(--brx-d-mnh));
+    --b-mxh: var(--brx-t-mxh, var(--brx-d-mxh));
+    --b-ar: var(--brx-t-ar, var(--brx-d-ar));
+    --b-ta: var(--brx-t-ta, var(--brx-d-ta));
+    --b-bg-c: var(--brx-t-bg-c, var(--brx-d-bg-c));
+
+    flex-direction: var(--b-dir) !important;
+    justify-content: var(--b-jc) !important;
+    align-items: var(--b-ai) !important;
+    flex-wrap: var(--b-wrap) !important;
+    gap: var(--b-gap) !important;
+    column-gap: var(--b-cg) !important;
+    row-gap: var(--b-rg) !important;
+
+    padding-top: var(--b-pt) !important;
+    padding-right: var(--b-pr) !important;
+    padding-bottom: var(--b-pb) !important;
+    padding-left: var(--b-pl) !important;
+
+    margin-top: var(--b-mt) !important;
+    margin-right: var(--b-mr) !important;
+    margin-bottom: var(--b-mb) !important;
+    margin-left: var(--b-ml) !important;
+
+    width: var(--b-w) !important;
+    min-width: var(--b-mnw) !important;
+    max-width: var(--b-mxw) !important;
+    height: var(--b-h) !important;
+    min-height: var(--b-mnh) !important;
+    max-height: var(--b-mxh) !important;
+    aspect-ratio: var(--b-ar) !important;
+    text-align: var(--b-ta) !important;
+    background-color: var(--b-bg-c) !important;
+  }
+}
+
+@media (max-width: 767px) {
+  .brx-resp {
+    --b-dir: var(--brx-m-dir, var(--brx-t-dir, var(--brx-d-dir)));
+    --b-jc: var(--brx-m-jc, var(--brx-t-jc, var(--brx-d-jc)));
+    --b-ai: var(--brx-m-ai, var(--brx-t-ai, var(--brx-d-ai)));
+    --b-wrap: var(--brx-m-wrap, var(--brx-t-wrap, var(--brx-d-wrap)));
+    --b-gap: var(--brx-m-gap, var(--brx-t-gap, var(--brx-d-gap)));
+    --b-cg: var(--brx-m-cg, var(--brx-t-cg, var(--brx-d-cg)));
+    --b-rg: var(--brx-m-rg, var(--brx-t-rg, var(--brx-d-rg)));
+    --b-pt: var(--brx-m-pt, var(--brx-t-pt, var(--brx-d-pt)));
+    --b-pr: var(--brx-m-pr, var(--brx-t-pr, var(--brx-d-pr)));
+    --b-pb: var(--brx-m-pb, var(--brx-t-pb, var(--brx-d-pb)));
+    --b-pl: var(--brx-m-pl, var(--brx-t-pl, var(--brx-d-pl)));
+    --b-mt: var(--brx-m-mt, var(--brx-t-mt, var(--brx-d-mt)));
+    --b-mr: var(--brx-m-mr, var(--brx-t-mr, var(--brx-d-mr)));
+    --b-mb: var(--brx-m-mb, var(--brx-t-mb, var(--brx-d-mb)));
+    --b-ml: var(--brx-m-ml, var(--brx-t-ml, var(--brx-d-ml)));
+    --b-w: var(--brx-m-w, var(--brx-t-w, var(--brx-d-w)));
+    --b-mnw: var(--brx-m-mnw, var(--brx-t-mnw, var(--brx-d-mnw)));
+    --b-mxw: var(--brx-m-mxw, var(--brx-t-mxw, var(--brx-d-mxw)));
+    --b-h: var(--brx-m-h, var(--brx-t-h, var(--brx-d-h)));
+    --b-mnh: var(--brx-m-mnh, var(--brx-t-mnh, var(--brx-d-mnh)));
+    --b-mxh: var(--brx-m-mxh, var(--brx-t-mxh, var(--brx-d-mxh)));
+    --b-ar: var(--brx-m-ar, var(--brx-t-ar, var(--brx-d-ar)));
+    --b-ta: var(--brx-m-ta, var(--brx-t-ta, var(--brx-d-ta)));
+    --b-bg-c: var(--brx-m-bg-c, var(--brx-t-bg-c, var(--brx-d-bg-c)));
+
+    flex-direction: var(--b-dir) !important;
+    justify-content: var(--b-jc) !important;
+    align-items: var(--b-ai) !important;
+    flex-wrap: var(--b-wrap) !important;
+    gap: var(--b-gap) !important;
+    column-gap: var(--b-cg) !important;
+    row-gap: var(--b-rg) !important;
+
+    padding-top: var(--b-pt) !important;
+    padding-right: var(--b-pr) !important;
+    padding-bottom: var(--b-pb) !important;
+    padding-left: var(--b-pl) !important;
+
+    margin-top: var(--b-mt) !important;
+    margin-right: var(--b-mr) !important;
+    margin-bottom: var(--b-mb) !important;
+    margin-left: var(--b-ml) !important;
+
+    width: var(--b-w) !important;
+    min-width: var(--b-mnw) !important;
+    max-width: var(--b-mxw) !important;
+    height: var(--b-h) !important;
+    min-height: var(--b-mnh) !important;
+    max-height: var(--b-mxh) !important;
+    aspect-ratio: var(--b-ar) !important;
+    text-align: var(--b-ta) !important;
+    background-color: var(--b-bg-c) !important;
+  }
+}
+
+/* Bricks elements sizing and layout */
+.brxe-image {
+  display: block;
+  box-sizing: border-box;
+  overflow: hidden;
+  max-width: 100%;
+}
+.brxe-image > a,
+.brxe-image > picture {
+  display: block;
+  width: 100%;
+  height: 100%;
+}
+.brxe-image img {
+  display: block;
+  width: 100%;
+  height: 100%;
+  max-width: 100%;
+  min-height: 0;
+  min-width: 0;
+}
+
+.brxe-video {
+  display: block;
+  box-sizing: border-box;
+  overflow: hidden;
+  max-width: 100%;
+}
+.brxe-video video,
+.brxe-video iframe {
+  display: block;
+  width: 100%;
+  height: 100%;
+  border: 0;
+  min-height: 0;
+  min-width: 0;
+}
+
+/* Responsive display switches */
+.brx-only-desktop { display: initial; }
+.brx-only-tablet { display: none; }
+.brx-only-mobile { display: none; }
+@media (max-width: 1023px) and (min-width: 768px) {
+  .brx-only-desktop { display: none !important; }
+  .brx-only-tablet { display: initial !important; }
+  .brx-hide-tablet { display: none !important; }
+}
+@media (max-width: 767px) {
+  .brx-only-desktop { display: none !important; }
+  .brx-only-mobile { display: initial !important; }
+  .brx-hide-mobile { display: none !important; }
+}
+
 /* FileDownload block */
 .bsb-file-download {
   display: flex;

@@ -1,7 +1,9 @@
-import { createContext, useContext, type CSSProperties, type ReactNode } from "react";
+import { createContext, useContext, useEffect, type CSSProperties, type ReactNode } from "react";
 import { usePuck } from "@puckeditor/core";
 import { Dropdown, type DropdownOption } from "./Dropdown.tsx";
 import { COMPACT_CSS } from "./compact.ts";
+import { useBricksActiveDevice, setBricksActiveDevice } from "./BricksTabs.tsx";
+import { DEVICE_FOR_WIDTH, EDITOR_VIEWPORTS } from "./viewports.ts";
 
 /**
  * The editor's top bar, replacing Puck's own header so everything lives in one row:
@@ -78,6 +80,38 @@ const Svg = ({ children }: { children: ReactNode }) => <svg {...icon}>{children}
 export function EditorHeader() {
   const state = useContext(EditorHeaderContext);
   const { appState, dispatch, history } = usePuck();
+  const activeDevice = useBricksActiveDevice();
+
+  // Sync Puck's viewport width to Bricks activeDevice state
+  const currentViewportWidth = appState.ui?.viewports?.current?.width;
+  useEffect(() => {
+    if (typeof currentViewportWidth === "number") {
+      const dev = DEVICE_FOR_WIDTH(currentViewportWidth);
+      if (dev && dev !== activeDevice) {
+        setBricksActiveDevice(dev);
+      }
+    }
+  }, [currentViewportWidth]);
+
+  // Sync Bricks device picker to Puck viewport width
+  useEffect(() => {
+    const targetVp = EDITOR_VIEWPORTS.find((v) => v.device === activeDevice);
+    if (targetVp && currentViewportWidth !== targetVp.width) {
+      dispatch({
+        type: "setUi",
+        ui: {
+          viewports: {
+            ...(appState.ui.viewports || {}),
+            current: {
+              width: targetVp.width,
+              height: targetVp.height || "auto",
+            },
+          },
+        },
+      });
+    }
+  }, [activeDevice]);
+
   if (!state) return <></>;
 
   const ui = appState.ui;
