@@ -3,6 +3,7 @@ import { createHmac } from "node:crypto";
 import {
   CASHFREE_API_VERSION,
   CashfreeProvider,
+  cashfreeIdempotencyKey,
   cashfreeModeOfSecret,
   paiseToRupees,
   rupeesToPaise,
@@ -31,6 +32,17 @@ describe("Cashfree helpers", () => {
   it("reads the mode from the secret", () => {
     expect(cashfreeModeOfSecret("cfsk_ma_prod_xyz")).toBe("live");
     expect(cashfreeModeOfSecret("cfsk_ma_test_xyz")).toBe("test");
+  });
+});
+
+describe("cashfreeIdempotencyKey", () => {
+  it("is always a UUID, stable for the same id, different for another", () => {
+    const uuid = /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/;
+    const a = cashfreeIdempotencyKey("bs_abc123_lq9x2k");
+    expect(a).toMatch(uuid);
+    expect(cashfreeIdempotencyKey("bs_abc123_lq9x2k")).toBe(a);
+    expect(cashfreeIdempotencyKey("bs_abc123_other")).not.toBe(a);
+    expect(cashfreeIdempotencyKey("0199b000-0000-7000-8000-000000000001")).toBe("0199b000-0000-7000-8000-000000000001");
   });
 });
 

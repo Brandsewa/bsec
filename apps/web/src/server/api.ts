@@ -2705,14 +2705,18 @@ export const storeRouter = os.router({
         .use(requirePermission("settings.read"))
         .handler(async ({ context, input }) => {
           if (!context.tenantCtx) throw new Error("Missing tenant context");
-          return subscribeToPlan(context.rt, context.tenantCtx, input);
+          return subscribeToPlan(context.rt, context.tenantCtx, input).catch((e) => {
+            throw mapAuthError(e);
+          });
         }),
       cancelSubscription: os.admin.planAndBilling.cancelSubscription
         .use(requireAdmin)
         .use(requirePermission("settings.read"))
         .handler(async ({ context }) => {
           if (!context.tenantCtx) throw new Error("Missing tenant context");
-          return cancelPlanSubscription(context.rt, context.tenantCtx);
+          return cancelPlanSubscription(context.rt, context.tenantCtx).catch((e) => {
+            throw mapAuthError(e);
+          });
         }),
       requestChange: os.admin.planAndBilling.requestChange
         .use(requireAdmin)

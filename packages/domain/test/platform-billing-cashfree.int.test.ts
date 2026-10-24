@@ -171,6 +171,21 @@ describe("C2 subscribe, charge and cancel through Cashfree", () => {
     expect(sub).toMatchObject({ provider: "cashfree", status: "trialing", providerSubscriptionId: call.body.subscription_id });
   });
 
+  it("sends a UUID idempotency key and shows Cashfree's own message when it rejects the subscription", async () => {
+    const store = await makeStore();
+    fakeCashfree();
+    await subscribeToPlan(rt, store.ctx, { planCode: "starter", interval: "monthly", phone: "9876543210" });
+    const ok = calls.find((c) => c.url.endsWith("/pg/subscriptions"))!;
+    expect(ok.headers["x-idempotency-key"]).toMatch(/^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/);
+    expect((ok.body.authorization_details as { payment_methods: string[] }).payment_methods).toEqual(["upi", "card"]);
+
+    vi.restoreAllMocks();
+    vi.spyOn(globalThis, "fetch").mockResolvedValue(new Response(JSON.stringify({ message: "customer_phone is invalid", code: "customer_details.customer_phone_invalid", type: "invalid_request_error" }), { status: 400 }));
+    const other = await makeStore();
+    const err = await errorOf(subscribeToPlan(rt, other.ctx, { planCode: "starter", interval: "monthly", phone: "9876543210" }));
+    expect(err).toBe("Bad Request: Cashfree said: customer_phone is invalid (customer_details.customer_phone_invalid)");
+  });
+
   it("verifies the signature, ignores the refunded authorisation payment, then activates and invoices once per payment", async () => {
     const store = await makeStore();
     fakeCashfree();
