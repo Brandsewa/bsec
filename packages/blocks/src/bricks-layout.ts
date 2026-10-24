@@ -89,11 +89,21 @@ export type BricksBorderStyle = (typeof BRICKS_BORDER_STYLE_OPTIONS)[number];
 
 export { LAYOUT_DEVICES, type LayoutDevice, CORNERS, type Corner };
 
+export function normalizeLengthValue(value: string | number | undefined): string | undefined {
+  if (value === undefined || value === null || value === "") return undefined;
+  const str = String(value).trim();
+  if (str === "") return undefined;
+  if (/^-?\d+(\.\d+)?$/.test(str)) {
+    return `${str}px`;
+  }
+  return str;
+}
+
 const lengthValue = (key: Parameters<typeof isValidLayoutValue>[0] = "width") =>
   z
-    .string()
-    .max(32)
-    .refine((v) => v === "" || isValidLayoutValue(key, v), {
+    .union([z.string(), z.number()])
+    .transform((v) => normalizeLengthValue(v))
+    .refine((v) => v === undefined || v === "" || isValidLayoutValue(key, v), {
       message: "Invalid size (use number with px, rem, em, % or keyword like auto/none)",
     })
     .optional();
@@ -243,74 +253,74 @@ export function bricksElementStyle(props: BricksLayoutProps, options?: { default
   if (t?.flexWrap) style["--brx-t-wrap"] = t.flexWrap;
   if (m?.flexWrap) style["--brx-m-wrap"] = m.flexWrap;
 
-  if (d.gap) style["--brx-d-gap"] = d.gap;
-  if (t?.gap) style["--brx-t-gap"] = t.gap;
-  if (m?.gap) style["--brx-m-gap"] = m.gap;
+  if (d.gap) style["--brx-d-gap"] = normalizeLengthValue(d.gap);
+  if (t?.gap) style["--brx-t-gap"] = normalizeLengthValue(t.gap);
+  if (m?.gap) style["--brx-m-gap"] = normalizeLengthValue(m.gap);
 
-  if (d.colGap) style["--brx-d-cg"] = d.colGap;
-  if (t?.colGap) style["--brx-t-cg"] = t.colGap;
-  if (m?.colGap) style["--brx-m-cg"] = m.colGap;
+  if (d.colGap) style["--brx-d-cg"] = normalizeLengthValue(d.colGap);
+  if (t?.colGap) style["--brx-t-cg"] = normalizeLengthValue(t.colGap);
+  if (m?.colGap) style["--brx-m-cg"] = normalizeLengthValue(m.colGap);
 
-  if (d.rowGap) style["--brx-d-rg"] = d.rowGap;
-  if (t?.rowGap) style["--brx-t-rg"] = t.rowGap;
-  if (m?.rowGap) style["--brx-m-rg"] = m.rowGap;
+  if (d.rowGap) style["--brx-d-rg"] = normalizeLengthValue(d.rowGap);
+  if (t?.rowGap) style["--brx-t-rg"] = normalizeLengthValue(t.rowGap);
+  if (m?.rowGap) style["--brx-m-rg"] = normalizeLengthValue(m.rowGap);
 
   // Padding
-  if (d.padding?.top) style["--brx-d-pt"] = d.padding.top;
-  if (d.padding?.right) style["--brx-d-pr"] = d.padding.right;
-  if (d.padding?.bottom) style["--brx-d-pb"] = d.padding.bottom;
-  if (d.padding?.left) style["--brx-d-pl"] = d.padding.left;
+  if (d.padding?.top) style["--brx-d-pt"] = normalizeLengthValue(d.padding.top);
+  if (d.padding?.right) style["--brx-d-pr"] = normalizeLengthValue(d.padding.right);
+  if (d.padding?.bottom) style["--brx-d-pb"] = normalizeLengthValue(d.padding.bottom);
+  if (d.padding?.left) style["--brx-d-pl"] = normalizeLengthValue(d.padding.left);
 
-  if (t?.padding?.top) style["--brx-t-pt"] = t.padding.top;
-  if (t?.padding?.right) style["--brx-t-pr"] = t.padding.right;
-  if (t?.padding?.bottom) style["--brx-t-pb"] = t.padding.bottom;
-  if (t?.padding?.left) style["--brx-t-pl"] = t.padding.left;
+  if (t?.padding?.top) style["--brx-t-pt"] = normalizeLengthValue(t.padding.top);
+  if (t?.padding?.right) style["--brx-t-pr"] = normalizeLengthValue(t.padding.right);
+  if (t?.padding?.bottom) style["--brx-t-pb"] = normalizeLengthValue(t.padding.bottom);
+  if (t?.padding?.left) style["--brx-t-pl"] = normalizeLengthValue(t.padding.left);
 
-  if (m?.padding?.top) style["--brx-m-pt"] = m.padding.top;
-  if (m?.padding?.right) style["--brx-m-pr"] = m.padding.right;
-  if (m?.padding?.bottom) style["--brx-m-pb"] = m.padding.bottom;
-  if (m?.padding?.left) style["--brx-m-pl"] = m.padding.left;
+  if (m?.padding?.top) style["--brx-m-pt"] = normalizeLengthValue(m.padding.top);
+  if (m?.padding?.right) style["--brx-m-pr"] = normalizeLengthValue(m.padding.right);
+  if (m?.padding?.bottom) style["--brx-m-pb"] = normalizeLengthValue(m.padding.bottom);
+  if (m?.padding?.left) style["--brx-m-pl"] = normalizeLengthValue(m.padding.left);
 
   // Margin
-  if (d.margin?.top) style["--brx-d-mt"] = d.margin.top;
-  if (d.margin?.right) style["--brx-d-mr"] = d.margin.right;
-  if (d.margin?.bottom) style["--brx-d-mb"] = d.margin.bottom;
-  if (d.margin?.left) style["--brx-d-ml"] = d.margin.left;
+  if (d.margin?.top) style["--brx-d-mt"] = normalizeLengthValue(d.margin.top);
+  if (d.margin?.right) style["--brx-d-mr"] = normalizeLengthValue(d.margin.right);
+  if (d.margin?.bottom) style["--brx-d-mb"] = normalizeLengthValue(d.margin.bottom);
+  if (d.margin?.left) style["--brx-d-ml"] = normalizeLengthValue(d.margin.left);
 
-  if (t?.margin?.top) style["--brx-t-mt"] = t.margin.top;
-  if (t?.margin?.right) style["--brx-t-mr"] = t.margin.right;
-  if (t?.margin?.bottom) style["--brx-t-mb"] = t.margin.bottom;
-  if (t?.margin?.left) style["--brx-t-ml"] = t.margin.left;
+  if (t?.margin?.top) style["--brx-t-mt"] = normalizeLengthValue(t.margin.top);
+  if (t?.margin?.right) style["--brx-t-mr"] = normalizeLengthValue(t.margin.right);
+  if (t?.margin?.bottom) style["--brx-t-mb"] = normalizeLengthValue(t.margin.bottom);
+  if (t?.margin?.left) style["--brx-t-ml"] = normalizeLengthValue(t.margin.left);
 
-  if (m?.margin?.top) style["--brx-m-mt"] = m.margin.top;
-  if (m?.margin?.right) style["--brx-m-mr"] = m.margin.right;
-  if (m?.margin?.bottom) style["--brx-m-mb"] = m.margin.bottom;
-  if (m?.margin?.left) style["--brx-m-ml"] = m.margin.left;
+  if (m?.margin?.top) style["--brx-m-mt"] = normalizeLengthValue(m.margin.top);
+  if (m?.margin?.right) style["--brx-m-mr"] = normalizeLengthValue(m.margin.right);
+  if (m?.margin?.bottom) style["--brx-m-mb"] = normalizeLengthValue(m.margin.bottom);
+  if (m?.margin?.left) style["--brx-m-ml"] = normalizeLengthValue(m.margin.left);
 
   // Sizing
-  if (d.sizing?.width) style["--brx-d-w"] = d.sizing.width;
-  if (t?.sizing?.width) style["--brx-t-w"] = t.sizing.width;
-  if (m?.sizing?.width) style["--brx-m-w"] = m.sizing.width;
+  if (d.sizing?.width) style["--brx-d-w"] = normalizeLengthValue(d.sizing.width);
+  if (t?.sizing?.width) style["--brx-t-w"] = normalizeLengthValue(t.sizing.width);
+  if (m?.sizing?.width) style["--brx-m-w"] = normalizeLengthValue(m.sizing.width);
 
-  if (d.sizing?.minWidth) style["--brx-d-mnw"] = d.sizing.minWidth;
-  if (t?.sizing?.minWidth) style["--brx-t-mnw"] = t.sizing.minWidth;
-  if (m?.sizing?.minWidth) style["--brx-m-mnw"] = m.sizing.minWidth;
+  if (d.sizing?.minWidth) style["--brx-d-mnw"] = normalizeLengthValue(d.sizing.minWidth);
+  if (t?.sizing?.minWidth) style["--brx-t-mnw"] = normalizeLengthValue(t.sizing.minWidth);
+  if (m?.sizing?.minWidth) style["--brx-m-mnw"] = normalizeLengthValue(m.sizing.minWidth);
 
-  if (d.sizing?.maxWidth) style["--brx-d-mxw"] = d.sizing.maxWidth;
-  if (t?.sizing?.maxWidth) style["--brx-t-mxw"] = t.sizing.maxWidth;
-  if (m?.sizing?.maxWidth) style["--brx-m-mxw"] = m.sizing.maxWidth;
+  if (d.sizing?.maxWidth) style["--brx-d-mxw"] = normalizeLengthValue(d.sizing.maxWidth);
+  if (t?.sizing?.maxWidth) style["--brx-t-mxw"] = normalizeLengthValue(t.sizing.maxWidth);
+  if (m?.sizing?.maxWidth) style["--brx-m-mxw"] = normalizeLengthValue(m.sizing.maxWidth);
 
-  if (d.sizing?.height) style["--brx-d-h"] = d.sizing.height;
-  if (t?.sizing?.height) style["--brx-t-h"] = t.sizing.height;
-  if (m?.sizing?.height) style["--brx-m-h"] = m.sizing.height;
+  if (d.sizing?.height) style["--brx-d-h"] = normalizeLengthValue(d.sizing.height);
+  if (t?.sizing?.height) style["--brx-t-h"] = normalizeLengthValue(t.sizing.height);
+  if (m?.sizing?.height) style["--brx-m-h"] = normalizeLengthValue(m.sizing.height);
 
-  if (d.sizing?.minHeight) style["--brx-d-mnh"] = d.sizing.minHeight;
-  if (t?.sizing?.minHeight) style["--brx-t-mnh"] = t.sizing.minHeight;
-  if (m?.sizing?.minHeight) style["--brx-m-mnh"] = m.sizing.minHeight;
+  if (d.sizing?.minHeight) style["--brx-d-mnh"] = normalizeLengthValue(d.sizing.minHeight);
+  if (t?.sizing?.minHeight) style["--brx-t-mnh"] = normalizeLengthValue(t.sizing.minHeight);
+  if (m?.sizing?.minHeight) style["--brx-m-mnh"] = normalizeLengthValue(m.sizing.minHeight);
 
-  if (d.sizing?.maxHeight) style["--brx-d-mxh"] = d.sizing.maxHeight;
-  if (t?.sizing?.maxHeight) style["--brx-t-mxh"] = t.sizing.maxHeight;
-  if (m?.sizing?.maxHeight) style["--brx-m-mxh"] = m.sizing.maxHeight;
+  if (d.sizing?.maxHeight) style["--brx-d-mxh"] = normalizeLengthValue(d.sizing.maxHeight);
+  if (t?.sizing?.maxHeight) style["--brx-t-mxh"] = normalizeLengthValue(t.sizing.maxHeight);
+  if (m?.sizing?.maxHeight) style["--brx-m-mxh"] = normalizeLengthValue(m.sizing.maxHeight);
 
   if (d.sizing?.aspectRatio) style["--brx-d-ar"] = d.sizing.aspectRatio.replace(/\s+/g, " ");
   if (t?.sizing?.aspectRatio) style["--brx-t-ar"] = t.sizing.aspectRatio.replace(/\s+/g, " ");
@@ -327,8 +337,8 @@ export function bricksElementStyle(props: BricksLayoutProps, options?: { default
   if (m?.background?.color) style["--brx-m-bg-c"] = m.background.color;
 
   // Display
-  const display = props.display || options?.defaultDisplay || "flex";
-  if (display !== "none") {
+  const display = props.display || options?.defaultDisplay;
+  if (display && display !== "none") {
     style.display = display;
   }
 
@@ -349,34 +359,34 @@ export function bricksElementStyle(props: BricksLayoutProps, options?: { default
   }
 
   // Gap
-  if (props.gap) style.gap = props.gap;
-  if (props.colGap) style.columnGap = props.colGap;
-  if (props.rowGap) style.rowGap = props.rowGap;
+  if (props.gap) style.gap = normalizeLengthValue(props.gap);
+  if (props.colGap) style.columnGap = normalizeLengthValue(props.colGap);
+  if (props.rowGap) style.rowGap = normalizeLengthValue(props.rowGap);
 
   // Margin
-  if (props.margin?.top) style.marginTop = props.margin.top;
-  if (props.margin?.right) style.marginRight = props.margin.right;
-  if (props.margin?.bottom) style.marginBottom = props.margin.bottom;
-  if (props.margin?.left) style.marginLeft = props.margin.left;
+  if (props.margin?.top) style.marginTop = normalizeLengthValue(props.margin.top);
+  if (props.margin?.right) style.marginRight = normalizeLengthValue(props.margin.right);
+  if (props.margin?.bottom) style.marginBottom = normalizeLengthValue(props.margin.bottom);
+  if (props.margin?.left) style.marginLeft = normalizeLengthValue(props.margin.left);
 
   // Padding
-  if (props.padding?.top) style.paddingTop = props.padding.top;
-  if (props.padding?.right) style.paddingRight = props.padding.right;
-  if (props.padding?.bottom) style.paddingBottom = props.padding.bottom;
-  if (props.padding?.left) style.paddingLeft = props.padding.left;
+  if (props.padding?.top) style.paddingTop = normalizeLengthValue(props.padding.top);
+  if (props.padding?.right) style.paddingRight = normalizeLengthValue(props.padding.right);
+  if (props.padding?.bottom) style.paddingBottom = normalizeLengthValue(props.padding.bottom);
+  if (props.padding?.left) style.paddingLeft = normalizeLengthValue(props.padding.left);
 
   // Sizing
   if (props.sizing?.width) {
-    style.width = props.sizing.width;
+    style.width = normalizeLengthValue(props.sizing.width);
   } else if (options?.defaultWidth) {
     style.width = options.defaultWidth;
   }
 
-  if (props.sizing?.minWidth) style.minWidth = props.sizing.minWidth;
-  if (props.sizing?.maxWidth) style.maxWidth = props.sizing.maxWidth;
-  if (props.sizing?.height) style.height = props.sizing.height;
-  if (props.sizing?.minHeight) style.minHeight = props.sizing.minHeight;
-  if (props.sizing?.maxHeight) style.maxHeight = props.sizing.maxHeight;
+  if (props.sizing?.minWidth) style.minWidth = normalizeLengthValue(props.sizing.minWidth);
+  if (props.sizing?.maxWidth) style.maxWidth = normalizeLengthValue(props.sizing.maxWidth);
+  if (props.sizing?.height) style.height = normalizeLengthValue(props.sizing.height);
+  if (props.sizing?.minHeight) style.minHeight = normalizeLengthValue(props.sizing.minHeight);
+  if (props.sizing?.maxHeight) style.maxHeight = normalizeLengthValue(props.sizing.maxHeight);
   if (props.sizing?.aspectRatio) style.aspectRatio = props.sizing.aspectRatio.replace(/\s+/g, " ");
 
   // Text alignment

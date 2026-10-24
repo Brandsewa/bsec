@@ -137,4 +137,45 @@ describe("Bricks Responsive Settings Across All Elements", () => {
     expect(html).toContain("Mobile Title");
     expect(html).toContain("brx-only-mobile");
   });
+
+  it("normalizes bare number gap inputs and sets responsive gaps and directions", () => {
+    const container = block("Container", {
+      direction: "row",
+      gap: "24", // Bare number normalized to 24px
+      colGap: "16",
+      rowGap: "20",
+      responsive: {
+        mobile: {
+          direction: "column",
+          gap: "12",
+        },
+      },
+      content: [],
+    });
+
+    const doc = { version: 1 as const, blocks: [container] };
+    const valid = validateBlockDocument(doc);
+    expect(valid.success).toBe(true);
+
+    const html = render(container);
+    // Gap should be normalized to px
+    expect(html).toContain("--brx-d-gap:24px");
+    expect(html).toContain("--brx-d-cg:16px");
+    expect(html).toContain("--brx-d-rg:20px");
+    expect(html).toContain("--brx-m-gap:12px");
+    expect(html).toContain("--brx-d-dir:row");
+    expect(html).toContain("--brx-m-dir:column");
+    expect(html).toContain("gap:var(--b-gap, 24px)");
+  });
+
+  it("renders image and heading with full width and no accidental auto margins", () => {
+    const img = block("Image", {
+      imageUrl: "https://example.com/mountain.jpg",
+    });
+
+    const html = render(img);
+    expect(html).toContain("width:100%");
+    expect(html).toContain("display:block");
+    expect(html).toContain("brxe-image");
+  });
 });

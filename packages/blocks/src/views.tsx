@@ -589,9 +589,12 @@ export function SectionView({ props, children, ctx }: A<R.SectionProps>): ReactN
           zIndex: 1,
           width: "100%",
           display: "flex",
-          flexDirection: props.direction || "column",
-          alignItems: props.alignCrossAxis || "stretch",
-          gap: props.gap,
+          flexDirection: (props.direction ? `var(--b-dir, ${props.direction})` : "var(--b-dir, column)") as CSSProperties["flexDirection"],
+          alignItems: (props.alignCrossAxis ? `var(--b-ai, ${props.alignCrossAxis})` : "var(--b-ai, stretch)") as CSSProperties["alignItems"],
+          justifyContent: (props.alignMainAxis ? `var(--b-jc, ${props.alignMainAxis})` : "var(--b-jc, flex-start)") as CSSProperties["justifyContent"],
+          gap: props.gap ? `var(--b-gap, ${props.gap})` : (props.responsive?.tablet?.gap || props.responsive?.mobile?.gap ? "var(--b-gap)" : undefined),
+          rowGap: props.rowGap ? `var(--b-rg, ${props.rowGap})` : (props.responsive?.tablet?.rowGap || props.responsive?.mobile?.rowGap ? "var(--b-rg)" : undefined),
+          columnGap: props.colGap ? `var(--b-cg, ${props.colGap})` : (props.responsive?.tablet?.colGap || props.responsive?.mobile?.colGap ? "var(--b-cg)" : undefined),
         }}
       >
         {children}
@@ -682,9 +685,9 @@ export function ContainerView({ props, children, ctx }: A<R.ContainerProps>): Re
           flexDirection: (props.direction ? `var(--b-dir, ${props.direction})` : "var(--b-dir, column)") as CSSProperties["flexDirection"],
           alignItems: (props.alignCrossAxis ? `var(--b-ai, ${props.alignCrossAxis})` : "var(--b-ai, stretch)") as CSSProperties["alignItems"],
           justifyContent: (props.alignMainAxis ? `var(--b-jc, ${props.alignMainAxis})` : "var(--b-jc, flex-start)") as CSSProperties["justifyContent"],
-          gap: props.gap ? `var(--b-gap, ${props.gap})` : "var(--b-gap)",
-          rowGap: props.rowGap ? `var(--b-rg, ${props.rowGap})` : "var(--b-rg)",
-          columnGap: props.colGap ? `var(--b-cg, ${props.colGap})` : "var(--b-cg)",
+          gap: props.gap ? `var(--b-gap, ${props.gap})` : (props.responsive?.tablet?.gap || props.responsive?.mobile?.gap ? "var(--b-gap)" : undefined),
+          rowGap: props.rowGap ? `var(--b-rg, ${props.rowGap})` : (props.responsive?.tablet?.rowGap || props.responsive?.mobile?.rowGap ? "var(--b-rg)" : undefined),
+          columnGap: props.colGap ? `var(--b-cg, ${props.colGap})` : (props.responsive?.tablet?.colGap || props.responsive?.mobile?.colGap ? "var(--b-cg)" : undefined),
           flexWrap: (props.flexWrap ? `var(--b-wrap, ${props.flexWrap})` : "var(--b-wrap, nowrap)") as CSSProperties["flexWrap"],
         }}
       >
@@ -773,9 +776,9 @@ export function BlockView({ props, children, ctx }: A<R.BlockProps>): ReactNode 
           flexDirection: (props.direction ? `var(--b-dir, ${props.direction})` : "var(--b-dir, column)") as CSSProperties["flexDirection"],
           alignItems: (props.alignCrossAxis ? `var(--b-ai, ${props.alignCrossAxis})` : "var(--b-ai, stretch)") as CSSProperties["alignItems"],
           justifyContent: (props.alignMainAxis ? `var(--b-jc, ${props.alignMainAxis})` : "var(--b-jc, flex-start)") as CSSProperties["justifyContent"],
-          gap: props.gap ? `var(--b-gap, ${props.gap})` : "var(--b-gap)",
-          rowGap: props.rowGap ? `var(--b-rg, ${props.rowGap})` : "var(--b-rg)",
-          columnGap: props.colGap ? `var(--b-cg, ${props.colGap})` : "var(--b-cg)",
+          gap: props.gap ? `var(--b-gap, ${props.gap})` : (props.responsive?.tablet?.gap || props.responsive?.mobile?.gap ? "var(--b-gap)" : undefined),
+          rowGap: props.rowGap ? `var(--b-rg, ${props.rowGap})` : (props.responsive?.tablet?.rowGap || props.responsive?.mobile?.rowGap ? "var(--b-rg)" : undefined),
+          columnGap: props.colGap ? `var(--b-cg, ${props.colGap})` : (props.responsive?.tablet?.colGap || props.responsive?.mobile?.colGap ? "var(--b-cg)" : undefined),
           flexWrap: (props.flexWrap ? `var(--b-wrap, ${props.flexWrap})` : "var(--b-wrap, nowrap)") as CSSProperties["flexWrap"],
         }}
       >
@@ -824,7 +827,7 @@ export function DividerView({ props }: A<R.DividerProps>): ReactNode {
 
 export function HeadingView({ props }: A<R.HeadingProps>): ReactNode {
   const Tag = (props.level || "h2") as ElementType;
-  const customStyle = bricksElementStyle(props);
+  const customStyle = bricksElementStyle(props, { defaultWidth: "100%", defaultDisplay: "block" });
 
   const textDesktop = props.text;
   const textTablet = props.responsive?.tablet?.text;
@@ -852,7 +855,7 @@ export function HeadingView({ props }: A<R.HeadingProps>): ReactNode {
 
 export function TextView({ props }: A<R.TextProps>): ReactNode {
   const Tag = (props.tag || "p") as ElementType;
-  const customStyle = bricksElementStyle(props);
+  const customStyle = bricksElementStyle(props, { defaultWidth: "100%", defaultDisplay: "block" });
 
   const textDesktop = props.text;
   const textTablet = props.responsive?.tablet?.text;
@@ -888,7 +891,7 @@ export function TextView({ props }: A<R.TextProps>): ReactNode {
 const RATIO_CLASS = { auto: "", square: "bsb-ratio-square", "4-3": "bsb-ratio-4-3", "16-9": "bsb-ratio-16-9" } as const;
 
 export function ImageView({ props, ctx }: A<R.ImageProps>): ReactNode {
-  const customStyle = bricksElementStyle(props);
+  const customStyle = bricksElementStyle(props, { defaultWidth: "100%", defaultDisplay: "block" });
 
   const desktopDetail = props.mediaId ? ctx?.mediaDetails?.(props.mediaId) : null;
   const desktopSrc = desktopDetail?.url ?? (props.mediaId ? mediaSrc(ctx, props.mediaId) : props.imageUrl);
@@ -974,7 +977,7 @@ function embed(url: string): { kind: "iframe" | "video"; src: string } | null {
 }
 
 export function VideoView({ props, ctx }: A<R.VideoProps>): ReactNode {
-  const customStyle = bricksElementStyle(props);
+  const customStyle = bricksElementStyle(props, { defaultWidth: "100%", defaultDisplay: "block" });
 
   const desktopMediaUrl = props.mediaId ? mediaSrc(ctx, props.mediaId) : null;
   const tabletMediaUrl = props.responsive?.tablet?.mediaId ? mediaSrc(ctx, props.responsive.tablet.mediaId) : null;

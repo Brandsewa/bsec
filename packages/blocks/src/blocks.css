@@ -638,6 +638,32 @@
 
 /* Bricks Responsive Layout System (.brx-resp applied to Section, Container, Block, Elements) */
 .brx-resp {
+  /* Prevent variable inheritance from ancestor layout containers */
+  --brx-d-dir: initial; --brx-t-dir: initial; --brx-m-dir: initial;
+  --brx-d-jc: initial;  --brx-t-jc: initial;  --brx-m-jc: initial;
+  --brx-d-ai: initial;  --brx-t-ai: initial;  --brx-m-ai: initial;
+  --brx-d-wrap: initial;--brx-t-wrap: initial;--brx-m-wrap: initial;
+  --brx-d-gap: initial; --brx-t-gap: initial; --brx-m-gap: initial;
+  --brx-d-cg: initial;  --brx-t-cg: initial;  --brx-m-cg: initial;
+  --brx-d-rg: initial;  --brx-t-rg: initial;  --brx-m-rg: initial;
+  --brx-d-pt: initial;  --brx-t-pt: initial;  --brx-m-pt: initial;
+  --brx-d-pr: initial;  --brx-t-pr: initial;  --brx-m-pr: initial;
+  --brx-d-pb: initial;  --brx-t-pb: initial;  --brx-m-pb: initial;
+  --brx-d-pl: initial;  --brx-t-pl: initial;  --brx-m-pl: initial;
+  --brx-d-mt: initial;  --brx-t-mt: initial;  --brx-m-mt: initial;
+  --brx-d-mr: initial;  --brx-t-mr: initial;  --brx-m-mr: initial;
+  --brx-d-mb: initial;  --brx-t-mb: initial;  --brx-m-mb: initial;
+  --brx-d-ml: initial;  --brx-t-ml: initial;  --brx-m-ml: initial;
+  --brx-d-w: initial;   --brx-t-w: initial;   --brx-m-w: initial;
+  --brx-d-mnw: initial; --brx-t-mnw: initial; --brx-m-mnw: initial;
+  --brx-d-mxw: initial; --brx-t-mxw: initial; --brx-m-mxw: initial;
+  --brx-d-h: initial;   --brx-t-h: initial;   --brx-m-h: initial;
+  --brx-d-mnh: initial; --brx-t-mnh: initial; --brx-m-mnh: initial;
+  --brx-d-mxh: initial; --brx-t-mxh: initial; --brx-m-mxh: initial;
+  --brx-d-ar: initial;  --brx-t-ar: initial;  --brx-m-ar: initial;
+  --brx-d-ta: initial;  --brx-t-ta: initial;  --brx-m-ta: initial;
+  --brx-d-bg-c: initial;--brx-t-bg-c: initial;--brx-m-bg-c: initial;
+
   --b-dir: var(--brx-d-dir);
   --b-jc: var(--brx-d-jc);
   --b-ai: var(--brx-d-ai);
@@ -694,14 +720,15 @@
 /* Also forward flex/grid layout variables to inner Slot wrappers */
 .brx-resp > [style*="display: flex"],
 .brx-resp > div[style*="display: flex"],
-.brx-resp > [data-puck-slot] {
-  flex-direction: var(--b-dir) !important;
-  justify-content: var(--b-jc) !important;
-  align-items: var(--b-ai) !important;
-  flex-wrap: var(--b-wrap) !important;
-  gap: var(--b-gap) !important;
-  column-gap: var(--b-cg) !important;
-  row-gap: var(--b-rg) !important;
+.brx-resp > [data-puck-dropzone],
+.brx-resp > [class*="DropZone"] {
+  flex-direction: var(--b-dir);
+  justify-content: var(--b-jc);
+  align-items: var(--b-ai);
+  flex-wrap: var(--b-wrap);
+  gap: var(--b-gap);
+  column-gap: var(--b-cg);
+  row-gap: var(--b-rg);
 }
 
 @media (max-width: 1023px) {
@@ -758,6 +785,19 @@
     aspect-ratio: var(--b-ar) !important;
     text-align: var(--b-ta) !important;
     background-color: var(--b-bg-c) !important;
+  }
+
+  .brx-resp > [style*="display: flex"],
+  .brx-resp > div[style*="display: flex"],
+  .brx-resp > [data-puck-dropzone],
+  .brx-resp > [class*="DropZone"] {
+    flex-direction: var(--b-dir) !important;
+    justify-content: var(--b-jc) !important;
+    align-items: var(--b-ai) !important;
+    flex-wrap: var(--b-wrap) !important;
+    gap: var(--b-gap) !important;
+    column-gap: var(--b-cg) !important;
+    row-gap: var(--b-rg) !important;
   }
 }
 
@@ -816,6 +856,19 @@
     text-align: var(--b-ta) !important;
     background-color: var(--b-bg-c) !important;
   }
+
+  .brx-resp > [style*="display: flex"],
+  .brx-resp > div[style*="display: flex"],
+  .brx-resp > [data-puck-dropzone],
+  .brx-resp > [class*="DropZone"] {
+    flex-direction: var(--b-dir) !important;
+    justify-content: var(--b-jc) !important;
+    align-items: var(--b-ai) !important;
+    flex-wrap: var(--b-wrap) !important;
+    gap: var(--b-gap) !important;
+    column-gap: var(--b-cg) !important;
+    row-gap: var(--b-rg) !important;
+  }
 }
 
 /* Bricks elements sizing and layout */
@@ -823,7 +876,13 @@
   display: block;
   box-sizing: border-box;
   overflow: hidden;
+  width: 100%;
   max-width: 100%;
+}
+.brxe-heading,
+.brxe-text-basic {
+  width: 100%;
+  box-sizing: border-box;
 }
 .brxe-image > a,
 .brxe-image > picture {

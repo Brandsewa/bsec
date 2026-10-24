@@ -237,7 +237,9 @@ export const quadField = (label: string): CustomField<Record<string, string> | u
 
     const v: Record<string, string | undefined> = (value as Record<string, string> | undefined) || {};
     const set = (k: string, val: string) => {
-      const next: Record<string, string | undefined> = { ...v, [k]: val || undefined };
+      const trimmed = val.trim();
+      const normalized = /^-?\d+(\.\d+)?$/.test(trimmed) ? `${trimmed}px` : trimmed;
+      const next: Record<string, string | undefined> = { ...v, [k]: normalized || undefined };
       if (Object.values(next).every((x) => !x)) onChange(undefined);
       else onChange(next as Record<string, string>);
     };
@@ -252,7 +254,13 @@ export const quadField = (label: string): CustomField<Record<string, string> | u
                 <input
                   placeholder={inherited || "-"}
                   value={v[k] || ""}
-                  onChange={(e) => set(k, e.target.value)}
+                  onChange={(e) => {
+                    const raw = e.target.value;
+                    const next: Record<string, string | undefined> = { ...v, [k]: raw || undefined };
+                    if (Object.values(next).every((x) => !x)) onChange(undefined);
+                    else onChange(next as Record<string, string>);
+                  }}
+                  onBlur={(e) => set(k, e.target.value)}
                   style={{ width: "100%", padding: "4px", fontSize: 12, border: "1px solid #e4e4e7", borderRadius: 6, textAlign: "center", boxSizing: "border-box" }}
                 />
                 <span style={{ fontSize: 9, color: "#71717a", textTransform: "uppercase" }}>{k}</span>
@@ -276,7 +284,9 @@ export const sizingField = (): CustomField<Record<string, string> | undefined> =
 
     const v: Record<string, string | undefined> = (value as Record<string, string> | undefined) || {};
     const set = (k: string, val: string) => {
-      const next: Record<string, string | undefined> = { ...v, [k]: val || undefined };
+      const trimmed = val.trim();
+      const normalized = k !== "aspectRatio" && /^-?\d+(\.\d+)?$/.test(trimmed) ? `${trimmed}px` : trimmed;
+      const next: Record<string, string | undefined> = { ...v, [k]: normalized || undefined };
       if (Object.values(next).every((x) => !x)) onChange(undefined);
       else onChange(next as Record<string, string>);
     };
@@ -300,7 +310,13 @@ export const sizingField = (): CustomField<Record<string, string> | undefined> =
               <input
                 placeholder={ph}
                 value={rawVal || ""}
-                onChange={(e) => set(key, e.target.value)}
+                onChange={(e) => {
+                  const raw = e.target.value;
+                  const next: Record<string, string | undefined> = { ...v, [key]: raw || undefined };
+                  if (Object.values(next).every((x) => !x)) onChange(undefined);
+                  else onChange(next as Record<string, string>);
+                }}
+                onBlur={(e) => set(key, e.target.value)}
                 style={{ width: 110, padding: "4px 8px", fontSize: 12, border: "1px solid #e4e4e7", borderRadius: 6, textAlign: "right" }}
               />
             </div>
@@ -703,6 +719,14 @@ export const bricksRowInputField = (
               onChange(raw);
             }
           }}
+          onBlur={(e) => {
+            if (type === "text") {
+              const raw = e.target.value.trim();
+              if (raw !== "" && /^-?\d+(\.\d+)?$/.test(raw)) {
+                onChange(`${raw}px`);
+              }
+            }
+          }}
           style={{
             width: 120,
             height: 28,
@@ -849,6 +873,22 @@ export function createBricksLayoutFields(
                         responsive: updatedResponsive,
                       },
                     };
+                  }
+                  if (item.props) {
+                    let hasModifiedChild = false;
+                    const nextProps = { ...item.props };
+                    for (const [key, val] of Object.entries(nextProps)) {
+                      if (Array.isArray(val) && val.length > 0 && typeof val[0] === "object" && val[0]?.props?.id) {
+                        const updatedChildren = updateTree(val);
+                        if (updatedChildren !== val) {
+                          nextProps[key] = updatedChildren;
+                          hasModifiedChild = true;
+                        }
+                      }
+                    }
+                    if (hasModifiedChild) {
+                      return { ...item, props: nextProps };
+                    }
                   }
                   return item;
                 });

@@ -121,12 +121,36 @@ export const COMPACT_CSS = `
   height: 100%;
 }
 
-/* Puck wraps each dropped block in a draggable wrapper div; ensure it respects flex distribution */
-[data-puck-dropzone] > div:has(> .brxe-block),
-[data-puck-dropzone] > [data-puck-component]:has(.brxe-block) {
+/* Puck wraps each dropped item in a draggable wrapper div; default to 100% width so content fills its slot */
+[data-puck-dropzone] > [data-puck-component],
+[data-puck-dropzone] > div:has(> .bsb) {
+  width: 100%;
+}
+
+/* Blocks inside a horizontal container distribute space equally */
+.brxe-container > [data-puck-dropzone] > div:has(> .brxe-block),
+.brxe-container > [data-puck-dropzone] > [data-puck-component]:has(.brxe-block) {
   flex: 1 1 0;
   display: flex;
   min-width: 0;
+}
+
+/* When container direction is column, blocks stack vertically with 100% width */
+.brxe-container > [data-puck-dropzone][style*="column"] > div:has(> .brxe-block),
+.brxe-container > [data-puck-dropzone][style*="column"] > [data-puck-component]:has(.brxe-block),
+.brxe-container[style*="--brx-d-dir: column"] > [data-puck-dropzone] > div:has(> .brxe-block),
+.brxe-container[style*="--brx-d-dir: column"] > [data-puck-dropzone] > [data-puck-component]:has(.brxe-block) {
+  flex: 0 0 100% !important;
+  width: 100% !important;
+}
+
+@media (max-width: 767px) {
+  .brxe-container > [data-puck-dropzone] > div:has(> .brxe-block),
+  .brxe-container > [data-puck-dropzone] > [data-puck-component]:has(.brxe-block),
+  .brxe-container > [data-puck-dropzone] > div > .brxe-block {
+    flex: 0 0 100% !important;
+    width: 100% !important;
+  }
 }
 
 [data-puck-dropzone] > div:has(> .brxe-container),
