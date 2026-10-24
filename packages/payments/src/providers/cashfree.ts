@@ -43,6 +43,18 @@ export function rupeesToPaise(rupees: number | string): number {
   return Math.round(Number(rupees) * 100);
 }
 
+const UUID_SHAPE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+/**
+ * Cashfree requires `x-idempotency-key` to be a UUID. Our own ids (subscription and refund ids) are not, so a stable UUID is
+ * derived from them: the same id always gives the same key, so a retried request is still recognised as a retry.
+ */
+export function cashfreeIdempotencyKey(id: string): string {
+  if (UUID_SHAPE.test(id)) return id.toLowerCase();
+  const h = createHash("sha256").update(id).digest("hex");
+  return `${h.slice(0, 8)}-${h.slice(8, 12)}-4${h.slice(13, 16)}-${((parseInt(h.slice(16, 18), 16) & 0x3f) | 0x80).toString(16)}${h.slice(18, 20)}-${h.slice(20, 32)}`;
+}
+
 export class CashfreeApiError extends Error {
   constructor(
     message: string,
@@ -76,7 +88,7 @@ export async function cashfreeRequest<T>(
       "x-api-version": CASHFREE_API_VERSION,
       "x-client-id": creds.clientId,
       "x-client-secret": creds.clientSecret,
-      ...(idempotencyKey ? { "x-idempotency-key": idempotencyKey } : {}),
+      ...(idempotencyKey ? { "x-idempotency-key": cashfreeIdempotencyKey(idempotencyKey) } : {}),
     },
     ...(body !== undefined ? { body: JSON.stringify(body) } : {}),
     signal: AbortSignal.timeout(15_000),
