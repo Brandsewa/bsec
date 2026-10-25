@@ -249,10 +249,10 @@ export class CashfreeSubscriptionProvider implements SubscriptionBillingProvider
     };
   }
 
-  /** Where the subscription stands at Cashfree; used to notice a finished authorisation when no webhook has arrived. */
-  async getSubscriptionState(providerSubscriptionId: string): Promise<{ status: string; authorizationStatus: string | null }> {
+  /** Where the subscription stands at Cashfree, and the id of its authorisation payment (the payment taken when the mandate was authorised). */
+  async getSubscriptionState(providerSubscriptionId: string): Promise<{ status: string; authorizationStatus: string | null; authorizationPaymentId: string | null }> {
     const res = await asBadRequest(() =>
-      cashfreeRequest<{ subscription_status?: string; authorisation_details?: { authorization_status?: string } }>(
+      cashfreeRequest<{ subscription_status?: string; authorisation_details?: { authorization_status?: string; payment_id?: string } }>(
         this.creds(),
         "GET",
         `/subscriptions/${encodeURIComponent(providerSubscriptionId)}`,
@@ -260,22 +260,30 @@ export class CashfreeSubscriptionProvider implements SubscriptionBillingProvider
         this.fetchFn,
       ),
     );
-    return { status: res.subscription_status ?? "", authorizationStatus: res.authorisation_details?.authorization_status ?? null };
+    return {
+      status: res.subscription_status ?? "",
+      authorizationStatus: res.authorisation_details?.authorization_status ?? null,
+      authorizationPaymentId: res.authorisation_details?.payment_id ?? null,
+    };
   }
 
-  /** Payments Cashfree has taken (or tried) on a subscription; used to notice the first payment when no webhook has arrived. */
-  async getSubscriptionPayments(providerSubscriptionId: string): Promise<Array<{ id: string | null; status: string; type: string; amountRupees: number }>> {
-    const res = await asBadRequest(() =>
-      cashfreeRequest<unknown>(this.creds(), "GET", `/subscriptions/${encodeURIComponent(providerSubscriptionId)}/payments`, undefined, this.fetchFn),
+  /** One payment of a subscription (for example its authorisation payment), as Cashfree recorded it. */
+  async getSubscriptionPayment(providerSubscriptionId: string, paymentId: string): Promise<{ id: string | null; status: string; type: string; amountRupees: number }> {
+    const r = await asBadRequest(() =>
+      cashfreeRequest<Record<string, unknown>>(
+        this.creds(),
+        "GET",
+        `/subscriptions/${encodeURIComponent(providerSubscriptionId)}/payments/${encodeURIComponent(paymentId)}`,
+        undefined,
+        this.fetchFn,
+      ),
     );
-    const rows = Array.isArray(res) ? res : ((res as { data?: unknown; payments?: unknown } | null)?.data ?? (res as { payments?: unknown } | null)?.payments ?? []);
-    if (!Array.isArray(rows)) return [];
-    return rows.map((r: Record<string, unknown>) => ({
+    return {
       id: r.cf_payment_id !== undefined && r.cf_payment_id !== null ? String(r.cf_payment_id) : typeof r.payment_id === "string" ? r.payment_id : null,
       status: String(r.payment_status ?? ""),
       type: String(r.payment_type ?? ""),
       amountRupees: Number(r.payment_amount ?? 0),
-    }));
+    };
   }
 
   /** Cashfree can only cancel at once; "at the end of the period" is kept by the caller (cancelAt) and enforced by a sweep. */
@@ -824,23 +832,19 @@ export async function reconcileCashfreeSubscription(rt: Runtime, sub: typeof sch
     if (!(provider instanceof CashfreeSubscriptionProvider) || !provider.isConfigured()) return false;
     const work = async (): Promise<boolean> => {
       let changed = false;
-      if (needsAuth) {
-        const st = await provider.getSubscriptionState(subId);
-        if (st.status === "ACTIVE" || st.authorizationStatus === "ACTIVE") {
-          await sdb
-            .update(schema.subscriptions)
-            .set({ authorizedAt: new Date(), updatedAt: new Date() })
-            .where(and(eq(schema.subscriptions.id, sub.id), sql`${schema.subscriptions.authorizedAt} IS NULL`));
-          changed = true;
-        }
+      const st = await provider.getSubscriptionState(subId);
+      if (needsAuth && (st.status === "ACTIVE" || st.authorizationStatus === "ACTIVE")) {
+        await sdb
+          .update(schema.subscriptions)
+          .set({ authorizedAt: new Date(), updatedAt: new Date() })
+          .where(and(eq(schema.subscriptions.id, sub.id), sql`${schema.subscriptions.authorizedAt} IS NULL`));
+        changed = true;
       }
-      if (needsPayment) {
-        // Asking for the payments is a bonus: if Cashfree cannot answer, what was learned above still counts.
-        const paid = await provider
-          .getSubscriptionPayments(subId)
-          .then((all) => all.find((p) => p.status === "SUCCESS" && p.id && p.amountRupees >= AUTH_CHARGE_FLOOR_RUPEES))
-          .catch(() => undefined);
-        if (paid) {
+      if (needsPayment && st.authorizationPaymentId) {
+        // The authorisation payment is the first plan payment when the plan price was taken at authorisation. Looking it up is a
+        // bonus: if Cashfree cannot answer, what was learned above still counts.
+        const paid = await provider.getSubscriptionPayment(subId, st.authorizationPaymentId).catch(() => undefined);
+        if (paid && paid.status === "SUCCESS" && paid.id && paid.amountRupees >= AUTH_CHARGE_FLOOR_RUPEES) {
           await applyBillingEvent(sdb, {
             kind: "charged",
             providerSubscriptionId: subId,
