@@ -1,0 +1,9 @@
+#!/bin/sh
+# Runs the quick gate before anything leaves this machine, so CI confirms instead of discovering.
+# Enable once per clone: pnpm hooks:install
+# Skip for a docs-only push by setting SKIP_GATE=1 (do not use --no-verify; AGENTS.md section 5).
+if [ "$SKIP_GATE" = "1" ]; then
+  echo "[pre-push] SKIP_GATE=1, quick gate skipped."
+  exit 0
+fi
+exec pnpm gate:quick

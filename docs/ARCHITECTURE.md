@@ -4,7 +4,7 @@
 
 | | |
 |---|---|
-| Last verified against | `feat/google-signin` (Google sign-in: platform client for staff and store owners in Super Admin, store-owned Google app for customers behind a verified custom domain, ADR-038), 2026-10-23 |
+| Last verified against | `ci/speedup` (CI: parallel image builds, sharded heavy tests, promote-images, pre-push hook), 2026-10-25 |
 | Verified how | files read from the working tree; `pnpm docs:check` for the mechanical parts. Facts marked *(from code)* were read, not run. |
 | Owner | whoever changes the area (see the update triggers in section 0) |
 
@@ -145,10 +145,14 @@ Git: `main` is production (every push to `main` that passes CI **deploys**). Fea
 ### CI/CD (`.github/workflows/ci.yml`)
 
 ```
-PR or push -> check-fast (typecheck, lint, build, test:fast) + check-heavy (test:heavy on real Postgres 18)
-             + secret-scan (Gitleaks CLI over full history, config .gitleaks.toml; images wait for it)
-push to main -> images (web, platform, worker, admin, superadmin, migrate -> ghcr.io/brandsewa/bsec-*)
-             -> staging-smoke-test (ephemeral compose, /health checks, Playwright e2e)
+PR or push -> check-fast (typecheck, lint, build, test:fast; Turborepo cache kept in .turbo)
+             + check-heavy-shard x3 (domain 1/2, domain 2/2, db+platform+web; each its own Postgres 18),
+               rolled up by check-heavy "heavy integration tests (real postgres)" (stable required-check name)
+             + secret-scan (Gitleaks CLI over full history, config .gitleaks.toml)
+push to main -> images (web, platform, worker, admin, superadmin, migrate -> ghcr.io/brandsewa/bsec-*, sha tag only,
+                runs alongside the checks, registry layer cache bsec-cache:<app>)
+             -> staging-smoke-test (needs images + all checks; ephemeral compose, /health checks, Playwright e2e)
+             -> promote-images (copies :sha to the :main tag Coolify pulls)
              -> deploy production (Coolify: run bsec-migrate, then deploy the app UUIDs)
 ```
 

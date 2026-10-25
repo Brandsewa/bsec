@@ -73,6 +73,12 @@ jobs:
         with:
           node-version-file: .nvmrc
           cache: pnpm
+      # Turborepo's local cache survives between runs, so unchanged packages skip lint/typecheck/build/test.
+      - uses: actions/cache@v6
+        with:
+          path: .turbo
+          key: turbo-${{ runner.os }}-fast-${{ github.sha }}
+          restore-keys: turbo-${{ runner.os }}-fast-
       - run: pnpm install --frozen-lockfile
       - name: "Fast check - docs:check"
         run: pnpm docs:check
@@ -95,10 +101,28 @@ jobs:
         if: needs.changes.outputs.docs_only == 'true'
         run: 'echo "Docs-only PR: docs:check succeeded; skipping lint, typecheck, build, and unit tests."'
 
-  check-heavy:
-    name: heavy integration tests (real postgres)
+  # Sharded: every *.int.test.ts file in packages/domain is its own slow suite and dominates the run, so it is split
+  # in two; everything else shares one job. Each job has its own Postgres, so shards never collide (AGENTS.md section 4).
+  # Within a job it is still one package at a time and one vitest worker; vitest 5 ignores VITEST_MAX_WORKERS.
+  check-heavy-shard:
+    name: heavy shard (${{ matrix.name }})
     needs: changes
+    if: needs.changes.outputs.docs_only != 'true'
     runs-on: ubuntu-24.04
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: domain 1/2
+            filter: "@bs/domain"
+            args: "--shard=1/2"
+          - name: domain 2/2
+            filter: "@bs/domain"
+            args: "--shard=2/2"
+          - name: db, platform, web
+            filter: "!@bs/domain"
+            args: ""
+            build_web: true
     services:
       postgres:
         image: postgres:18
@@ -116,24 +140,36 @@ jobs:
     steps:
       - uses: actions/checkout@v7
       - uses: pnpm/action-setup@v6
-        if: needs.changes.outputs.docs_only != 'true'
       - uses: actions/setup-node@v7
-        if: needs.changes.outputs.docs_only != 'true'
         with:
           node-version-file: .nvmrc
           cache: pnpm
+      - uses: actions/cache@v6
+        with:
+          path: .turbo
+          key: turbo-${{ runner.os }}-heavy-${{ matrix.build_web && 'web' || 'domain' }}-${{ github.sha }}
+          restore-keys: turbo-${{ runner.os }}-heavy-${{ matrix.build_web && 'web' || 'domain' }}-
       - run: pnpm install --frozen-lockfile
-        if: needs.changes.outputs.docs_only != 'true'
       - run: pnpm --filter "@bs/web..." build # perf-budget-bundle.int.test.ts reads .next
-        if: needs.changes.outputs.docs_only != 'true'
-      # One package at a time and one vitest worker: every *.int.test.ts shares one Postgres and runs migrations
-      # at start (AGENTS.md section 4). A 2-core hosted runner was serial by accident; bigger runners are not.
-      # Explicit flags: VITEST_MAX_WORKERS is not honoured by vitest 5, so the cap has to be on the command line.
-      - run: pnpm exec turbo run test:heavy --concurrency=1 -- --no-file-parallelism
-        if: needs.changes.outputs.docs_only != 'true'
-      - name: Fast path notice
-        if: needs.changes.outputs.docs_only == 'true'
-        run: 'echo "Docs-only PR: skipping heavy integration test suite."'
+        if: matrix.build_web
+      # --only: run just the filtered packages' test:heavy, not their dependencies' (the dependency would run in every shard).
+      - run: pnpm exec turbo run test:heavy --only --filter='${{ matrix.filter }}' --concurrency=1 -- --no-file-parallelism ${{ matrix.args }}
+
+  # Stable required-check name: branch protection keeps pointing at "heavy integration tests (real postgres)"
+  # whatever the shard layout is. A skipped shard job (docs-only PR) counts as success.
+  check-heavy:
+    name: heavy integration tests (real postgres)
+    needs: [changes, check-heavy-shard]
+    if: always()
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Require every shard to pass
+        env:
+          RESULT: ${{ needs.check-heavy-shard.result }}
+          DOCS_ONLY: ${{ needs.changes.outputs.docs_only }}
+        run: |
+          if [ "$DOCS_ONLY" = "true" ]; then echo "Docs-only PR: heavy suite skipped."; exit 0; fi
+          echo "shards: $RESULT"; test "$RESULT" = "success"
 
   secret-scan:
     name: secret-scan
@@ -148,9 +184,11 @@ jobs:
           docker run --rm -u "$(id -u):$(id -g)" -e HOME=/tmp -v "$PWD:/repo"
           ghcr.io/gitleaks/gitleaks:v8.28.0 git /repo --config /repo/.gitleaks.toml --no-banner --redact
 
+  # Builds run alongside the tests, not after them, and push only the immutable sha tag. The moving `main` tag that
+  # production pulls is applied by promote-images once every gate has passed, so a red run never changes what `main` means.
   images:
     name: build images → GHCR
-    needs: [check-fast, check-heavy, secret-scan]
+    needs: changes
     if: github.event_name == 'push' && github.ref == 'refs/heads/main'
     runs-on: ubuntu-24.04
     permissions:
@@ -168,6 +206,8 @@ jobs:
           registry: ghcr.io
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
+      - id: owner
+        run: echo "name=${GITHUB_REPOSITORY_OWNER,,}" >> "$GITHUB_OUTPUT" # registry refs must be lowercase
       - id: meta
         uses: docker/metadata-action@v6
         with:
@@ -175,7 +215,6 @@ jobs:
           images: ghcr.io/${{ github.repository_owner }}/bsec-${{ matrix.app }}
           tags: |
             type=sha,format=long
-            type=raw,value=main
       - uses: docker/build-push-action@v7
         with:
           context: .
@@ -187,16 +226,17 @@ jobs:
           build-args: |
             APP_VERSION=${{ github.sha }}
             VITE_SENTRY_DSN=${{ secrets.VITE_SENTRY_DSN }}
-          cache-from: type=gha,scope=${{ matrix.app }}
-          # mode=min: mode=max stored every layer (~345 MB x 6 images per run) and pushed the repo past the 10 GB Actions cache limit.
-          cache-to: type=gha,mode=min,scope=${{ matrix.app }}
+          # Registry cache: the 10 GB Actions cache limit forced mode=min, which kept only the final layers and made most
+          # builds cold. GHCR has no such cap, so mode=max keeps every layer (install, build) reusable.
+          cache-from: type=registry,ref=ghcr.io/${{ steps.owner.outputs.name }}/bsec-cache:${{ matrix.app }}
+          cache-to: type=registry,ref=ghcr.io/${{ steps.owner.outputs.name }}/bsec-cache:${{ matrix.app }},mode=max,image-manifest=true,oci-mediatypes=true
 
   # Ephemeral staging: run the exact images just pushed, on the runner, smoke-test, tear down.
   # Replaces a persistent staging VPS (cost/simplicity call, 2026-09-29). Fresh random secrets
   # per run; never touches production data or credentials.
   staging-smoke-test:
     name: staging smoke test (ephemeral compose)
-    needs: images
+    needs: [images, check-fast, check-heavy, secret-scan]
     runs-on: ubuntu-24.04
     timeout-minutes: 15
     permissions:
@@ -260,6 +300,10 @@ jobs:
           node-version-file: .nvmrc
           cache: pnpm
       - run: pnpm install --frozen-lockfile --filter @bs/e2e
+      - uses: actions/cache@v6
+        with:
+          path: ~/.cache/ms-playwright
+          key: playwright-${{ runner.os }}-${{ hashFiles('pnpm-lock.yaml') }}
       - run: pnpm --filter @bs/e2e exec playwright install --with-deps chromium
       - name: Browser end-to-end tests (real admin in a real browser against this stack)
         env:
@@ -290,9 +334,32 @@ jobs:
           $COMPOSE down -v
           echo "remaining containers:"; $COMPOSE ps -a
 
+  # Point the moving `main` tag at the exact images that just passed every gate (no rebuild, a manifest copy).
+  promote-images:
+    name: promote images → main tag
+    needs: [images, staging-smoke-test]
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: read
+      packages: write
+    strategy:
+      matrix:
+        app: [web, platform, worker, admin, superadmin, migrate]
+    steps:
+      - uses: docker/setup-buildx-action@v4
+      - uses: docker/login-action@v4
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - run: |
+          owner="${GITHUB_REPOSITORY_OWNER,,}"
+          img="ghcr.io/$owner/bsec-${{ matrix.app }}"
+          docker buildx imagetools create -t "$img:main" "$img:sha-${{ github.sha }}"
+
   deploy-production:
     name: deploy production (Coolify)
-    needs: [images, staging-smoke-test]
+    needs: [promote-images]
     runs-on: ubuntu-24.04
     # Required reviewers on the "production" environment gate this job (GitHub → Settings →
     # Environments → production). COOLIFY_TOKEN is a Coolify API token, permission "Deploy" only

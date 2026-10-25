@@ -89,7 +89,7 @@ const base = () => ({ productId: productA, reviewerName: "Asha", rating: 5, body
 describe("reviews", () => {
   it("rejects a review from someone who is not signed in", async () => {
     await expect(submitProductReview(rt, ctxA.tenantId, { ...base() })).rejects.toThrow(/sign in/i);
-    const rows = await withTenant(rt._db.db, ctxA.tenantId, (tx) => tx.select().from(schema.reviews));
+    const rows = await withTenant(rt._db.db, ctxA.tenantId, (tx) => tx.select().from(schema.reviews).where(eq(schema.reviews.tenantId, ctxA.tenantId)));
     expect(rows.length).toBe(0);
   });
 
