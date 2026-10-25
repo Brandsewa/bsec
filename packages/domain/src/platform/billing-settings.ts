@@ -35,6 +35,14 @@ export interface InvoiceProfile {
   gstRateBps: number;
 }
 
+export interface TrialPolicy {
+  enabled: boolean;
+  /** The days a new store is on trial when enabled (1 to 90). */
+  days: number;
+}
+
+export const DEFAULT_TRIAL_DAYS = 14;
+
 export interface PlatformBillingSettingsView {
   provider: BillingProviderId;
   mode: BillingMode;
@@ -42,6 +50,7 @@ export interface PlatformBillingSettingsView {
   graceDays: number;
   test: BillingKeySetView;
   live: BillingKeySetView;
+  trial: TrialPolicy;
   /** Cashfree App ID and secret per mode (its webhooks are signed with the secret, so no webhook secret). */
   cashfree: { test: BillingKeySetView; live: BillingKeySetView };
   invoice: InvoiceProfile;
@@ -80,6 +89,7 @@ export interface CashfreeKeysInput {
 }
 
 export interface UpdateBillingSettingsInput {
+  trial?: { enabled?: boolean | undefined; days?: number | undefined } | undefined;
   provider?: BillingProviderId | undefined;
   cashfree?: { test?: CashfreeKeysInput | undefined; live?: CashfreeKeysInput | undefined } | undefined;
   invoice?: UpdateInvoiceProfileInput | undefined;
@@ -186,6 +196,19 @@ export async function loadPlatformBillingCredentials(db: Db, provider?: BillingP
   return null;
 }
 
+function trialPolicyOf(row: BillingRow | undefined): TrialPolicy {
+  return { enabled: row?.trialEnabled ?? true, days: row?.trialDays ?? DEFAULT_TRIAL_DAYS };
+}
+
+/**
+ * The free trial a new store gets. `days` is what applies right now: the configured days when the trial is on, 0 when it is off.
+ * Read by signup and by the platform when it creates a store.
+ */
+export async function loadTrialPolicy(db: Db): Promise<TrialPolicy & { effectiveDays: number }> {
+  const policy = trialPolicyOf(await loadRow(db));
+  return { ...policy, effectiveDays: policy.enabled ? policy.days : 0 };
+}
+
 function invoiceProfileOf(row: BillingRow | undefined): InvoiceProfile {
   return {
     legalName: row?.invoiceLegalName ?? null,
@@ -214,6 +237,7 @@ export async function getPlatformBillingSettings(rt: Runtime, staffUserId: strin
     test: keySet(row, "test"),
     live: keySet(row, "live"),
     cashfree: { test: cashfreeKeySet(row, "test"), live: cashfreeKeySet(row, "live") },
+    trial: trialPolicyOf(row),
     invoice: invoiceProfileOf(row),
     webhookUrl: webhookUrl(),
     cashfreeWebhookUrl: webhookUrl("/cashfree"),
@@ -311,6 +335,18 @@ export async function updatePlatformBillingSettings(
         changed.push(`cashfree.${mode}.clientSecret`);
       }
     }
+    if (input.trial) {
+      const t = input.trial;
+      if (t.days !== undefined) {
+        if (!Number.isInteger(t.days) || t.days < 1 || t.days > 90) throw new Error("Bad Request: the trial is 1 to 90 days");
+        values.trialDays = t.days;
+        changed.push("trial.days");
+      }
+      if (t.enabled !== undefined) {
+        values.trialEnabled = t.enabled;
+        changed.push("trial.enabled");
+      }
+    }
     if (input.graceDays !== undefined) {
       values.graceDays = input.graceDays;
       changed.push("graceDays");
@@ -364,7 +400,7 @@ export async function updatePlatformBillingSettings(
         set: { ...values, provider, mode, enabled, updatedBy: staffUserId, updatedAt: new Date() },
       });
 
-    await writePlatformAudit(tx, staffUserId, "platform_billing.updated", "platform_billing", "default", null, { changedFields: changed, provider, mode, enabled }, meta);
+    await writePlatformAudit(tx, staffUserId, "platform_billing.updated", "platform_billing", "default", null, { changedFields: changed, provider, mode, enabled, ...(input.trial ? { trial: { enabled: values.trialEnabled ?? existing?.trialEnabled ?? true, days: values.trialDays ?? existing?.trialDays ?? DEFAULT_TRIAL_DAYS } } : {}) }, meta);
     return { ok: true as const };
   });
 }

@@ -20,7 +20,7 @@ interface PlanOption {
   features: Record<string, boolean>;
 }
 
-const TRIAL_DAYS = 14;
+const DEFAULT_TRIAL_DAYS = 14;
 
 
 function rupees(paise: number): string {
@@ -80,6 +80,8 @@ function SignupContent() {
   // Plan (loaded from the platform's real plans) and promo code check
   const [plans, setPlans] = useState<PlanOption[] | null>(null);
   const [plansError, setPlansError] = useState(false);
+  // The free trial is a platform setting; 0 means no trial (the store starts restricted until it pays).
+  const [trialDays, setTrialDays] = useState(DEFAULT_TRIAL_DAYS);
   const [selectedPlan, setSelectedPlan] = useState<string | null>(searchParams.get("plan"));
   const [promoStatus, setPromoStatus] = useState<{ checking?: boolean; valid?: boolean; message?: string } | null>(null);
   // Set when the bot check cannot run (for example the domain is not allowed on the Turnstile widget).
@@ -286,6 +288,15 @@ function SignupContent() {
       .catch(() => setPlansError(true));
   }, []);
 
+  useEffect(() => {
+    fetch("/api/saas/trial")
+      .then((r) => (r.ok ? r.json() : Promise.reject(new Error("trial"))))
+      .then((t: { days?: number }) => {
+        if (typeof t.days === "number") setTrialDays(t.days);
+      })
+      .catch(() => undefined);
+  }, []);
+
   const checkPromo = async (code: string, planCode: string | null) => {
     const trimmed = code.trim();
     if (!trimmed) {
@@ -324,7 +335,7 @@ function SignupContent() {
       "Configuring India shipping zones...",
       "Setting up Cash on Delivery & payment configurations...",
       "Publishing starter theme template & home page blocks...",
-      `Allocating size tier & starting ${TRIAL_DAYS}-day free trial...`,
+      trialDays > 0 ? `Allocating size tier & starting ${trialDays}-day free trial...` : "Allocating size tier & setting up your plan...",
     ];
 
     let stepIndex = 0;
@@ -448,7 +459,7 @@ function SignupContent() {
         <h1 className="su-title">
           Create your <i>online store</i>
         </h1>
-        <p className="bm-dim mt-3 text-sm">14-day free trial · Setup takes 2 minutes</p>
+        <p className="bm-dim mt-3 text-sm">{trialDays > 0 ? `${trialDays}-day free trial · ` : ""}Setup takes 2 minutes</p>
       </div>
 
       {/* Step Indicator */}
@@ -763,7 +774,7 @@ function SignupContent() {
           <div className="space-y-6">
             <div>
               <h2 className="mb-1 text-xl font-semibold">Step 4: Choose your plan & launch</h2>
-              <p className="bm-dim text-sm">Every plan includes a {TRIAL_DAYS}-day free trial. Upgrade or cancel anytime.</p>
+              <p className="bm-dim text-sm">{trialDays > 0 ? `Every plan includes a ${trialDays}-day free trial. Upgrade or cancel anytime.` : "Choose your plan. You pay to unlock it; cancel anytime."}</p>
             </div>
 
             {plansError && <p className="text-sm" style={{ color: "#ff8a8a" }}>Plans could not be loaded. Refresh the page to try again.</p>}
@@ -828,7 +839,7 @@ function SignupContent() {
               <div className="font-semibold">Launch Summary:</div>
               <div>• Store: <strong>{storeName}</strong> ({slug}.bcom.si)</div>
               <div>• Owner: <strong>{email}</strong></div>
-              <div>• Trial: <strong>{TRIAL_DAYS} days free</strong> on <strong>{plans?.find((p) => p.code === selectedPlan)?.name ?? "your chosen"}</strong> plan</div>
+              <div>• {trialDays > 0 ? <>Trial: <strong>{trialDays} days free</strong> on</> : <>Plan:</>} <strong>{plans?.find((p) => p.code === selectedPlan)?.name ?? "your chosen"}</strong> plan</div>
               <div>• Location: {[businessCity, businessState].filter(Boolean).join(", ")}</div>
             </div>
 
