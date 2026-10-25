@@ -79,6 +79,18 @@ pnpm test:heavy:local                   # fast shared local Postgres (or pnpm --
 - UI changes: run the app and use it (`pnpm --filter @bs/admin dev`, `@bs/web dev`). Type checks prove code compiles, not that the screen works. Say so plainly if you could not run it.
 - Report results honestly: failing or skipped tests are stated, with output. Never claim "verified" for something you did not run.
 
+### CI pipeline rules (`.github/workflows/ci.yml`)
+
+Every agent changing CI, or anything CI runs, follows these (change record: `docs/changes/2026-10-25-claude-ci-speedup.md`):
+
+- **Run the gate locally before every push.** `pnpm install` enables the pre-push hook (`.githooks/pre-push` runs `pnpm gate:quick`); if it is not active (`git config core.hooksPath` is empty), run `pnpm hooks:install`. Fix a red gate; do not use `--no-verify` or `SKIP_GATE=1` for code changes (`SKIP_GATE=1` is for docs-only pushes).
+- **Images build in parallel with the checks and push only the `sha-` tag.** The moving `:main` tag (what Coolify pulls) is set only by `promote-images`, after `check-fast`, `check-heavy`, `secret-scan` and `staging-smoke-test` pass. Never push `:main` from the build job.
+- **Heavy tests are sharded** (`check-heavy-shard`: domain 1/2, domain 2/2, db+platform+web), each with its own Postgres, rolled up by `check-heavy` named `heavy integration tests (real postgres)`. Keep that roll-up name stable (branch protection uses it). A new heavy suite goes into an existing shard; add a shard only if one exceeds about 4 minutes.
+- **Tests must not depend on file order or on other tests' data.** Shard and file order change. Platform-role (`app_platform`) queries bypass RLS, so always filter by `tenantId`; never assert counts over a whole table.
+- **Docker layer cache is the registry cache** `ghcr.io/<owner>/bsec-cache:<app>` (`mode=max`), not the GitHub Actions cache (10 GB cap). New heavy artifacts or caches must not use the Actions cache for large layers.
+- **Do not rebuild what another job already built.** Reuse the Turborepo cache (`.turbo`) and prefer `turbo run ...` over raw package scripts so tasks are cacheable.
+- A CI change that only runs on `main` (images, promote, deploy) cannot be proven by its PR: say so in the change record and watch the first `main` run. Never merge a second PR while a `main` run is in progress (section 5).
+
 ## 5. Git and release safety
 
 - **The repository is public** (development period; the owner will make it private near launch). Never commit server IPs, internal hostnames you were not told to publish, personal emails, local paths, tokens or customer data. Secret scanning and push protection are on.

@@ -18,6 +18,7 @@
     "scaffold:admin-procedure": "node scripts/scaffold-admin-procedure.mjs",
     "gate:quick": "node scripts/gate-quick.mjs",
     "hooks:install": "node scripts/install-hooks.mjs",
+    "prepare": "node -e \"try{require('child_process').execSync('git config core.hooksPath .githooks',{stdio:'ignore'})}catch{}\"",
     "docs:check": "node scripts/check-docs.mjs",
     "db:migrate": "pnpm --filter @bs/db migrate",
     "db:generate": "pnpm --filter @bs/db generate",

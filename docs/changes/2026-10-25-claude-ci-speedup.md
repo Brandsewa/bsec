@@ -16,6 +16,7 @@ A push to `main` took about 11 minutes (up to 30 cold) because image builds wait
 - `check-heavy` split into `check-heavy-shard` (domain 1/2, domain 2/2, db+platform+web, each with its own Postgres) and a roll-up job that keeps the name `heavy integration tests (real postgres)` so branch protection is unaffected. The web build now only runs in the shard that needs `.next`.
 - `.turbo` cached with `actions/cache` in `check-fast` and the heavy shards; Playwright browsers cached.
 - `.githooks/pre-push` runs `pnpm gate:quick`; enable with `pnpm hooks:install`. `SKIP_GATE=1` skips it.
+- `package.json` `prepare` enables the hook on every `pnpm install` (inline and error-swallowing: Docker install stages have no `scripts/` and no `.git`). `AGENTS.md` gains "CI pipeline rules" so every agent follows the new layout.
 - `docs/ARCHITECTURE.md` and `infra/coolify/RUNBOOK.md` updated to match.
 
 ## Decisions and trade-offs
