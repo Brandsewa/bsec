@@ -237,6 +237,20 @@ export class CashfreeSubscriptionProvider implements SubscriptionBillingProvider
     };
   }
 
+  /** Where the subscription stands at Cashfree; used to notice a finished authorisation when no webhook has arrived. */
+  async getSubscriptionState(providerSubscriptionId: string): Promise<{ status: string; authorizationStatus: string | null }> {
+    const res = await asBadRequest(() =>
+      cashfreeRequest<{ subscription_status?: string; authorisation_details?: { authorization_status?: string } }>(
+        this.creds(),
+        "GET",
+        `/subscriptions/${encodeURIComponent(providerSubscriptionId)}`,
+        undefined,
+        this.fetchFn,
+      ),
+    );
+    return { status: res.subscription_status ?? "", authorizationStatus: res.authorisation_details?.authorization_status ?? null };
+  }
+
   /** Cashfree can only cancel at once; "at the end of the period" is kept by the caller (cancelAt) and enforced by a sweep. */
   async cancelSubscription(providerSubscriptionId: string): Promise<{ status: string }> {
     const res = await asBadRequest(() => cashfreeRequest<{ subscription_status?: string }>(
@@ -323,6 +337,7 @@ type BillingEvent =
       currentEnd?: Date | "interval" | undefined;
     }
   | { kind: "authenticated"; providerSubscriptionId?: string | undefined; tenantIdNote?: string | undefined }
+  | { kind: "authorised"; providerSubscriptionId?: string | undefined }
   | { kind: "past_due"; providerSubscriptionId?: string | undefined }
   | { kind: "cancelled"; providerSubscriptionId?: string | undefined; honourCancelAt?: boolean }
   | { kind: "resumed"; providerSubscriptionId?: string | undefined }
@@ -380,6 +395,7 @@ async function applyBillingEvent(db: Db, ev: BillingEvent): Promise<string> {
           currentPeriodEnd: currentEnd,
           pastDueSince: null,
           dunningStage: 0,
+          authorizedAt: sql`COALESCE(${schema.subscriptions.authorizedAt}, now())`,
           updatedAt: new Date(),
         })
         .where(eq(schema.subscriptions.id, activeSub.id));
@@ -428,6 +444,16 @@ async function applyBillingEvent(db: Db, ev: BillingEvent): Promise<string> {
       .set({ providerSubscriptionId: ev.providerSubscriptionId, updatedAt: new Date() })
       .where(and(eq(schema.subscriptions.tenantId, ev.tenantIdNote), sql`${schema.subscriptions.providerSubscriptionId} IS DISTINCT FROM ${ev.providerSubscriptionId}`));
     return "subscription_authenticated";
+  }
+
+  if (ev.kind === "authorised") {
+    // The mandate is authorised, so automatic payment is set up. The plan does not change: the first charge may still be days away.
+    if (!ev.providerSubscriptionId) return "ignored";
+    await db
+      .update(schema.subscriptions)
+      .set({ authorizedAt: sql`COALESCE(${schema.subscriptions.authorizedAt}, now())`, updatedAt: new Date() })
+      .where(eq(schema.subscriptions.providerSubscriptionId, ev.providerSubscriptionId));
+    return "subscription_authorised_noted";
   }
 
   if (ev.kind === "past_due") {
@@ -659,7 +685,7 @@ export async function handleCashfreeBillingWebhook(
     if (type === "SUBSCRIPTION_STATUS_CHANGED") {
       const status = d.subscription_details?.subscription_status ?? "";
       // ACTIVE only means the mandate is authorised; the first charge may be deferred past a trial, so it does not activate the plan.
-      if (status === "ACTIVE") return { kind: "ignored", note: "subscription_authorised_noted" };
+      if (status === "ACTIVE") return { kind: "authorised", providerSubscriptionId: subId };
       if (status === "ON_HOLD" || status === "CARD_EXPIRED") return { kind: "past_due", providerSubscriptionId: subId };
       if (status === "CANCELLED" || status === "CUSTOMER_CANCELLED" || status === "COMPLETED" || status === "EXPIRED") {
         return { kind: "cancelled", providerSubscriptionId: subId, honourCancelAt: true };
@@ -904,7 +930,17 @@ export async function cancelTenantSubscription(
   // once, so cancelAt is kept here and endDueCashfreeCancellations ends the plan when the period is over.
   const atCycleEnd = sub.status === "active";
   const res = await billingProvider.cancelSubscription(sub.providerSubscriptionId, { atCycleEnd });
-  const cancelAt = atCycleEnd ? (sub.currentPeriodEnd ?? null) : new Date();
+  if (!atCycleEnd) {
+    // Nothing was ever charged (still on the trial, or the payment method was never finished): stopping automatic payment must not
+    // end the trial. The subscription link is dropped, so the gateway's own "cancelled" event finds no store to change, and the
+    // merchant can set up payment again.
+    await db
+      .update(schema.subscriptions)
+      .set({ providerSubscriptionId: null, authorizedAt: null, cancelAt: null, updatedAt: new Date() })
+      .where(eq(schema.subscriptions.id, sub.id));
+    return { ...res, cancelAt: null };
+  }
+  const cancelAt = sub.currentPeriodEnd ?? null;
   await db.update(schema.subscriptions).set({ cancelAt, updatedAt: new Date() }).where(eq(schema.subscriptions.id, sub.id));
   return { ...res, cancelAt };
 }

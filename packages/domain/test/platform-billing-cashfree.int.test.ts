@@ -9,6 +9,7 @@ import {
   cancelPlanSubscription,
   createRuntime,
   endDueCashfreeCancellations,
+  getPlanAndBilling,
   getPlatformBillingSettings,
   handleCashfreeBillingWebhook,
   handlePlatformBillingWebhook,
@@ -227,12 +228,53 @@ describe("C2 subscribe, charge and cancel through Cashfree", () => {
 
     const authorised = await handleCashfreeBillingWebhook(rt, post({ type: "SUBSCRIPTION_STATUS_CHANGED", data: { subscription_details: { subscription_id: subId, subscription_status: "ACTIVE" } } }));
     expect(authorised.actionTaken).toBe("subscription_authorised_noted");
-    expect((await latestSub(store.tenantId)).status).toBe("trialing");
+    const afterAuth = await latestSub(store.tenantId);
+    expect(afterAuth.status).toBe("trialing");
+    expect(afterAuth.authorizedAt).not.toBeNull(); // automatic payment is now set up
 
     await handleCashfreeBillingWebhook(rt, post({ type: "SUBSCRIPTION_PAYMENT_FAILED", data: { subscription_id: subId, payment_type: "CHARGE", cf_payment_id: 9, payment_amount: 100 } }));
     const failed = await latestSub(store.tenantId);
     expect(failed.status).toBe("past_due");
     expect(failed.pastDueSince).not.toBeNull();
+  });
+
+  it("shows an unconfirmed subscription as not authorised, notices the authorisation straight from Cashfree, and stopping it keeps the trial", async () => {
+    const store = await makeStore();
+    fakeCashfree();
+    await subscribeToPlan(rt, store.ctx, { planCode: "starter", interval: "monthly", phone: "9876543210" });
+    const subId = (await latestSub(store.tenantId)).providerSubscriptionId!;
+
+    // Created at Cashfree, authorisation not seen yet: the page still offers to set payment up.
+    vi.restoreAllMocks();
+    vi.spyOn(globalThis, "fetch").mockImplementation((async (input: unknown) => {
+      const url = String(input);
+      if (url.endsWith(`/subscriptions/${subId}`)) return new Response(JSON.stringify({ subscription_status: "INITIALIZED" }), { status: 200 });
+      return new Response("{}", { status: 404 });
+    }) as typeof fetch);
+    const before = await getPlanAndBilling(rt, store.ctx);
+    expect(before.billing).toMatchObject({ provider: "cashfree", hasSubscription: true, authorized: false });
+    expect(before.billing.firstChargeAt).not.toBeNull();
+
+    // The merchant finishes authorising and returns before any webhook: Cashfree says ACTIVE.
+    vi.restoreAllMocks();
+    vi.spyOn(globalThis, "fetch").mockImplementation((async (input: unknown) => {
+      const url = String(input);
+      if (url.endsWith(`/subscriptions/${subId}`)) return new Response(JSON.stringify({ subscription_status: "ACTIVE", authorisation_details: { authorization_status: "ACTIVE" } }), { status: 200 });
+      if (url.endsWith("/manage")) return new Response(JSON.stringify({ subscription_status: "CANCELLED" }), { status: 200 });
+      return new Response("{}", { status: 404 });
+    }) as typeof fetch);
+    expect((await getPlanAndBilling(rt, store.ctx)).billing.authorized).toBe(true);
+    expect((await latestSub(store.tenantId)).authorizedAt).not.toBeNull();
+
+    // Stopping automatic payment during the trial ends neither the trial nor the store's plan.
+    const res = await cancelPlanSubscription(rt, store.ctx);
+    expect(res.cancelAt).toBeNull();
+    const after = await latestSub(store.tenantId);
+    expect(after).toMatchObject({ status: "trialing", providerSubscriptionId: null, authorizedAt: null, cancelAt: null });
+    // Cashfree's own "cancelled" event then finds no store to change.
+    const ev = await handleCashfreeBillingWebhook(rt, post({ type: "SUBSCRIPTION_STATUS_CHANGED", data: { subscription_details: { subscription_id: subId, subscription_status: "CANCELLED" } } }));
+    expect(ev.actionTaken).toBe("subscription_cancelled");
+    expect((await latestSub(store.tenantId)).status).toBe("trialing");
   });
 
   it("cancels at Cashfree at once but keeps the paid plan until the period ends, then a sweep ends it", async () => {

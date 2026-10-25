@@ -2,7 +2,7 @@ import { and, desc, eq, sql } from "drizzle-orm";
 import { schema, withTenant, QUEUE_NAMES } from "@bs/db";
 import { SaasNotConfiguredError, saasDb, type Runtime } from "../runtime.ts";
 import { assertPermission, type TenantContext } from "../context.ts";
-import { cancelTenantSubscription, changeTenantPlan } from "../saas/billing.ts";
+import { CashfreeSubscriptionProvider, cancelTenantSubscription, changeTenantPlan, resolveBillingProvider } from "../saas/billing.ts";
 import { loadPlatformBillingCredentials } from "../platform/billing-settings.ts";
 import { resolveEffectiveQuota, DEFAULT_TIER_TABLE, type PlanQuotaKey } from "../system/quotas.ts";
 
@@ -48,8 +48,12 @@ export interface PlanAndBillingView {
     available: boolean;
     /** Billing runs in the gateway's test mode: no real money moves. */
     testMode: boolean;
-    /** A Razorpay subscription exists (authorised or charging). */
+    /** A gateway subscription exists (created, authorised or charging). */
     hasSubscription: boolean;
+    /** The merchant finished authorising automatic payment, so the first charge will happen by itself. */
+    authorized: boolean;
+    /** While on a trial: when the trial (and so the first charge) ends. */
+    firstChargeAt: string | null;
     /** When an active subscription will end because it was cancelled. */
     cancelAt: string | null;
   };
@@ -258,6 +262,30 @@ export async function getPlanAndBilling(
   } catch (e) {
     if (!(e instanceof SaasNotConfiguredError)) throw e;
   }
+  // Cashfree sends a webhook when the merchant finishes authorising, but the merchant is back on this page first (and a webhook
+  // can be missed), so a created-but-unconfirmed Cashfree subscription is checked with Cashfree directly. Best effort and short.
+  let authorizedAt = sub?.authorizedAt ?? null;
+  if (sub && sub.provider === "cashfree" && sub.providerSubscriptionId && !authorizedAt && sub.status !== "cancelled") {
+    try {
+      const sdb = saasDb(rt);
+      const p = await resolveBillingProvider(sdb, "cashfree");
+      if (p instanceof CashfreeSubscriptionProvider && p.isConfigured()) {
+        const st = await Promise.race([
+          p.getSubscriptionState(sub.providerSubscriptionId),
+          new Promise<never>((_, reject) => setTimeout(() => reject(new Error("timeout")), 4000)),
+        ]);
+        if (st.status === "ACTIVE" || st.authorizationStatus === "ACTIVE") {
+          authorizedAt = new Date();
+          await sdb
+            .update(schema.subscriptions)
+            .set({ authorizedAt, updatedAt: new Date() })
+            .where(and(eq(schema.subscriptions.id, sub.id), sql`${schema.subscriptions.authorizedAt} IS NULL`));
+        }
+      }
+    } catch {
+      // not configured here, or Cashfree is slow: the webhook will record it
+    }
+  }
   return {
     plan: planView,
     usage,
@@ -267,6 +295,8 @@ export async function getPlanAndBilling(
       available: Boolean(creds),
       testMode: creds?.mode !== "live",
       hasSubscription: Boolean(sub?.providerSubscriptionId),
+      authorized: Boolean(authorizedAt),
+      firstChargeAt: sub?.status === "trialing" ? (sub.currentPeriodEnd?.toISOString() ?? null) : null,
       cancelAt: sub?.cancelAt?.toISOString() ?? null,
     },
     openPlanChangeRequest,
