@@ -232,13 +232,15 @@ export function PlanAndBillingPage() {
                   Payments are in test mode right now: use {gatewayName} test payment details, no real money moves.
                 </p>
               ) : null}
-              {billing.hasSubscription && billing.authorized && plan?.status === "trialing" ? (
+              {billing.hasSubscription && billing.authorized && plan?.status !== "active" && plan?.status !== "cancelled" ? (
                 <div className="space-y-3">
                   <p className="text-sm text-foreground">
                     Automatic payment is set up through {gatewayName}.{" "}
                     {billing.firstChargeAt
                       ? `Your free trial runs until ${new Date(billing.firstChargeAt).toLocaleDateString("en-IN", { day: "numeric", month: "short", year: "numeric" })}; the first charge happens then, and you keep full access until it does.`
-                      : "Your first charge happens when your free period ends."}
+                      : billing.activationRequired
+                        ? "Your first payment has not come through yet. It is taken on the payment provider's schedule, usually within a day, and this page updates when it arrives. If you would rather pay now, stop automatic payment and choose your plan again."
+                        : "Your first charge happens when your free period ends."}
                   </p>
                   <Button variant="outline" size="sm" onClick={() => setConfirmCancelSubOpen(true)}>
                     Stop automatic payment
@@ -259,6 +261,11 @@ export function PlanAndBillingPage() {
                 </div>
               ) : (
                 <div className="flex flex-wrap items-end gap-3">
+                  {billing.activationRequired ? (
+                    <p className="w-full rounded-md border border-border bg-muted/40 p-3 text-sm text-foreground">
+                      Your store is not on an active plan yet. Choose a plan below and pay to activate it and unlock everything it includes.
+                    </p>
+                  ) : null}
                   {billing.hasSubscription && !billing.authorized ? (
                     <p className="w-full text-xs text-muted-foreground">
                       Payment set-up was started but not finished. Choose your plan and continue to try again.
