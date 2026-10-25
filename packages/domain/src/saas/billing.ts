@@ -263,6 +263,21 @@ export class CashfreeSubscriptionProvider implements SubscriptionBillingProvider
     return { status: res.subscription_status ?? "", authorizationStatus: res.authorisation_details?.authorization_status ?? null };
   }
 
+  /** Payments Cashfree has taken (or tried) on a subscription; used to notice the first payment when no webhook has arrived. */
+  async getSubscriptionPayments(providerSubscriptionId: string): Promise<Array<{ id: string | null; status: string; type: string; amountRupees: number }>> {
+    const res = await asBadRequest(() =>
+      cashfreeRequest<unknown>(this.creds(), "GET", `/subscriptions/${encodeURIComponent(providerSubscriptionId)}/payments`, undefined, this.fetchFn),
+    );
+    const rows = Array.isArray(res) ? res : ((res as { data?: unknown; payments?: unknown } | null)?.data ?? (res as { payments?: unknown } | null)?.payments ?? []);
+    if (!Array.isArray(rows)) return [];
+    return rows.map((r: Record<string, unknown>) => ({
+      id: r.cf_payment_id !== undefined && r.cf_payment_id !== null ? String(r.cf_payment_id) : typeof r.payment_id === "string" ? r.payment_id : null,
+      status: String(r.payment_status ?? ""),
+      type: String(r.payment_type ?? ""),
+      amountRupees: Number(r.payment_amount ?? 0),
+    }));
+  }
+
   /** Cashfree can only cancel at once; "at the end of the period" is kept by the caller (cancelAt) and enforced by a sweep. */
   async cancelSubscription(providerSubscriptionId: string): Promise<{ status: string }> {
     const res = await asBadRequest(() => cashfreeRequest<{ subscription_status?: string }>(
@@ -560,6 +575,30 @@ async function processBillingWebhook(
   }
 }
 
+/**
+ * A webhook that failed its signature check leaves one bounded trace (a single row per gateway, updated each time) so the owner
+ * can see in Super Admin that deliveries are arriving but the secret does not match. Nothing from the body is kept but its event type.
+ */
+async function recordRejectedBillingWebhook(db: Db, provider: "razorpay_platform" | "cashfree_platform", rawBody: string): Promise<void> {
+  try {
+    let type = "unknown";
+    try {
+      const parsed = JSON.parse(rawBody) as { type?: unknown; event?: unknown };
+      type = String(parsed.type ?? parsed.event ?? "unknown").slice(0, 80);
+    } catch {
+      // not JSON
+    }
+    await db.execute(sql`
+      INSERT INTO webhook_inbox (provider, event_id, signature_valid, payload_sanitized, status, attempts, error)
+      VALUES (${provider}, 'rejected_latest', false, ${JSON.stringify({ type })}::jsonb, 'rejected', 1, 'The signature did not match the saved secret')
+      ON CONFLICT (provider, event_id) DO UPDATE
+        SET attempts = webhook_inbox.attempts + 1, payload_sanitized = EXCLUDED.payload_sanitized, status = 'rejected', updated_at = now();
+    `);
+  } catch {
+    // diagnostics only: never let it change the answer to the gateway
+  }
+}
+
 function badRequest(message: string): Error {
   return Object.assign(new Error(message), { statusCode: 400 });
 }
@@ -584,6 +623,7 @@ export async function handlePlatformBillingWebhook(
 
   // 1. Signature Verification (Fails closed per ADR-014)
   if (!billingProvider.verifyWebhookSignature(params.rawBody, params.signature)) {
+    await recordRejectedBillingWebhook(db, "razorpay_platform", params.rawBody);
     throw badRequest("Invalid platform billing webhook signature");
   }
 
@@ -659,6 +699,7 @@ export async function handleCashfreeBillingWebhook(
   const db = saasDb(rt);
   const billingProvider = params.provider ?? (await resolveBillingProvider(db, "cashfree"));
   if (!billingProvider.verifyWebhookSignature(params.rawBody, params.signature, params.timestamp)) {
+    await recordRejectedBillingWebhook(db, "cashfree_platform", params.rawBody);
     throw badRequest("Invalid platform billing webhook signature");
   }
 
@@ -764,6 +805,59 @@ export async function endDueCashfreeCancellations(rt: Runtime, now: Date = new D
     });
   }
   return { ended };
+}
+
+/**
+ * Brings a Cashfree subscription up to date from Cashfree directly: that the merchant finished authorising, and that the first
+ * payment was taken. The signed webhook is the primary route; this covers the merchant returning to the page before it arrives
+ * and a webhook that never does. Best effort and short: any failure leaves things as they are. Returns true when something changed.
+ */
+export async function reconcileCashfreeSubscription(rt: Runtime, sub: typeof schema.subscriptions.$inferSelect): Promise<boolean> {
+  if (sub.provider !== "cashfree" || !sub.providerSubscriptionId || sub.status === "cancelled") return false;
+  const needsAuth = !sub.authorizedAt;
+  const needsPayment = sub.status !== "active";
+  if (!needsAuth && !needsPayment) return false;
+  const subId = sub.providerSubscriptionId;
+  try {
+    const sdb = saasDb(rt);
+    const provider = await resolveBillingProvider(sdb, "cashfree");
+    if (!(provider instanceof CashfreeSubscriptionProvider) || !provider.isConfigured()) return false;
+    const work = async (): Promise<boolean> => {
+      let changed = false;
+      if (needsAuth) {
+        const st = await provider.getSubscriptionState(subId);
+        if (st.status === "ACTIVE" || st.authorizationStatus === "ACTIVE") {
+          await sdb
+            .update(schema.subscriptions)
+            .set({ authorizedAt: new Date(), updatedAt: new Date() })
+            .where(and(eq(schema.subscriptions.id, sub.id), sql`${schema.subscriptions.authorizedAt} IS NULL`));
+          changed = true;
+        }
+      }
+      if (needsPayment) {
+        // Asking for the payments is a bonus: if Cashfree cannot answer, what was learned above still counts.
+        const paid = await provider
+          .getSubscriptionPayments(subId)
+          .then((all) => all.find((p) => p.status === "SUCCESS" && p.id && p.amountRupees >= AUTH_CHARGE_FLOOR_RUPEES))
+          .catch(() => undefined);
+        if (paid) {
+          await applyBillingEvent(sdb, {
+            kind: "charged",
+            providerSubscriptionId: subId,
+            amountPaise: Math.round(paid.amountRupees * 100),
+            paymentId: paid.id,
+            currentStart: new Date(),
+            currentEnd: "interval",
+          });
+          changed = true;
+        }
+      }
+      return changed;
+    };
+    return await Promise.race([work(), new Promise<boolean>((resolve) => setTimeout(() => resolve(false), 5000))]);
+  } catch {
+    return false;
+  }
 }
 
 /**

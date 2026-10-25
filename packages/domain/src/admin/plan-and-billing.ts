@@ -2,7 +2,7 @@ import { and, desc, eq, sql } from "drizzle-orm";
 import { schema, withTenant, QUEUE_NAMES } from "@bs/db";
 import { SaasNotConfiguredError, saasDb, type Runtime } from "../runtime.ts";
 import { assertPermission, type TenantContext } from "../context.ts";
-import { CashfreeSubscriptionProvider, cancelTenantSubscription, changeTenantPlan, resolveBillingProvider } from "../saas/billing.ts";
+import { cancelTenantSubscription, changeTenantPlan, reconcileCashfreeSubscription } from "../saas/billing.ts";
 import { loadPlatformBillingCredentials } from "../platform/billing-settings.ts";
 import { resolveEffectiveQuota, DEFAULT_TIER_TABLE, type PlanQuotaKey } from "../system/quotas.ts";
 
@@ -106,12 +106,19 @@ export async function getPlanAndBilling(
   const db = rt._db.db;
 
   // 1. Subscription & Plan (strictly filtered by ctx.tenantId)
-  const [sub] = await db
-    .select()
-    .from(schema.subscriptions)
-    .where(eq(schema.subscriptions.tenantId, ctx.tenantId))
-    .orderBy(desc(schema.subscriptions.createdAt))
-    .limit(1);
+  const loadSub = async () => {
+    const [row] = await db
+      .select()
+      .from(schema.subscriptions)
+      .where(eq(schema.subscriptions.tenantId, ctx.tenantId))
+      .orderBy(desc(schema.subscriptions.createdAt))
+      .limit(1);
+    return row;
+  };
+  let sub = await loadSub();
+  // Cashfree is asked directly whether the merchant finished authorising and whether the first payment went through: the webhook
+  // is the primary route, but the merchant is back on this page before it arrives (and a webhook can be missed).
+  if (sub && (await reconcileCashfreeSubscription(rt, sub))) sub = await loadSub();
 
   let currentPlan: typeof schema.plans.$inferSelect | null = null;
   if (sub?.planId) {
@@ -268,30 +275,7 @@ export async function getPlanAndBilling(
     // Never let the payment side break the page: without credentials the page just says online payment is not available.
     if (!(e instanceof SaasNotConfiguredError)) console.error("[billing] could not load the platform billing credentials", e);
   }
-  // Cashfree sends a webhook when the merchant finishes authorising, but the merchant is back on this page first (and a webhook
-  // can be missed), so a created-but-unconfirmed Cashfree subscription is checked with Cashfree directly. Best effort and short.
-  let authorizedAt = sub?.authorizedAt ?? null;
-  if (sub && sub.provider === "cashfree" && sub.providerSubscriptionId && !authorizedAt && sub.status !== "cancelled") {
-    try {
-      const sdb = saasDb(rt);
-      const p = await resolveBillingProvider(sdb, "cashfree");
-      if (p instanceof CashfreeSubscriptionProvider && p.isConfigured()) {
-        const st = await Promise.race([
-          p.getSubscriptionState(sub.providerSubscriptionId),
-          new Promise<never>((_, reject) => setTimeout(() => reject(new Error("timeout")), 4000)),
-        ]);
-        if (st.status === "ACTIVE" || st.authorizationStatus === "ACTIVE") {
-          authorizedAt = new Date();
-          await sdb
-            .update(schema.subscriptions)
-            .set({ authorizedAt, updatedAt: new Date() })
-            .where(and(eq(schema.subscriptions.id, sub.id), sql`${schema.subscriptions.authorizedAt} IS NULL`));
-        }
-      }
-    } catch {
-      // not configured here, or Cashfree is slow: the webhook will record it
-    }
-  }
+  const authorizedAt = sub?.authorizedAt ?? null;
   return {
     plan: planView,
     usage,
