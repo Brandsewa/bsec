@@ -28,9 +28,8 @@ export function ActivateStore({ storeName, onSignOut }: { storeName: string; onS
   const plans = plansQuery.data ?? [];
   const billing = billingQuery.data?.billing;
   const currentCode = billingQuery.data?.plan?.code ?? "";
-  useEffect(() => {
-    if (!planCode && plans.length > 0) setPlanCode(plans.find((p) => p.code === currentCode)?.code ?? plans[0]?.code ?? "");
-  }, [plans, currentCode, planCode]);
+  // The plan chosen at signup is preselected until the owner picks another.
+  const chosenPlan = planCode || (plans.find((p) => p.code === currentCode)?.code ?? plans[0]?.code ?? "");
 
   if (billingQuery.isLoading || plansQuery.isLoading) return <PageSkeleton />;
 
@@ -70,7 +69,7 @@ export function ActivateStore({ storeName, onSignOut }: { storeName: string; onS
               <div className="space-y-1.5">
                 <p className="text-xs font-medium text-muted-foreground">Plan</p>
                 <SimpleSelect
-                  value={planCode}
+                  value={chosenPlan}
                   onChange={setPlanCode}
                   placeholder="Choose a plan"
                   options={plans.map((p) => ({ value: p.code, label: `${p.name} (₹${(price(p) / 100).toLocaleString("en-IN")}/${billed === "yearly" ? "yr" : "mo"})` }))}
@@ -99,11 +98,11 @@ export function ActivateStore({ storeName, onSignOut }: { storeName: string; onS
             </p>
             <Button
               className="w-full"
-              disabled={!planCode || subscribe.isPending || (needsPhone && phone.replace(/\D/g, "").length < 10)}
+              disabled={!chosenPlan || subscribe.isPending || (needsPhone && phone.replace(/\D/g, "").length < 10)}
               onClick={() =>
                 subscribe.mutate(
                   {
-                    planCode,
+                    planCode: chosenPlan,
                     interval: billed,
                     ...(needsPhone ? { phone: phone.trim() } : {}),
                     ...(isCashfree ? { returnUrl: `${window.location.origin}/` } : {}),
