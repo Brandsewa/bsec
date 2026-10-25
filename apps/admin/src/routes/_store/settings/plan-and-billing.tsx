@@ -232,7 +232,19 @@ export function PlanAndBillingPage() {
                   Payments are in test mode right now: use {gatewayName} test payment details, no real money moves.
                 </p>
               ) : null}
-              {billing.hasSubscription && plan?.status === "active" ? (
+              {billing.hasSubscription && billing.authorized && plan?.status === "trialing" ? (
+                <div className="space-y-3">
+                  <p className="text-sm text-foreground">
+                    Automatic payment is set up through {gatewayName}.{" "}
+                    {billing.firstChargeAt
+                      ? `Your free trial runs until ${new Date(billing.firstChargeAt).toLocaleDateString("en-IN", { day: "numeric", month: "short", year: "numeric" })}; the first charge happens then, and you keep full access until it does.`
+                      : "Your first charge happens when your free period ends."}
+                  </p>
+                  <Button variant="outline" size="sm" onClick={() => setConfirmCancelSubOpen(true)}>
+                    Stop automatic payment
+                  </Button>
+                </div>
+              ) : billing.hasSubscription && plan?.status === "active" ? (
                 <div className="space-y-3">
                   <p className="text-sm text-foreground">
                     {billing.cancelAt
@@ -247,6 +259,11 @@ export function PlanAndBillingPage() {
                 </div>
               ) : (
                 <div className="flex flex-wrap items-end gap-3">
+                  {billing.hasSubscription && !billing.authorized ? (
+                    <p className="w-full text-xs text-muted-foreground">
+                      Payment set-up was started but not finished. Choose your plan and continue to try again.
+                    </p>
+                  ) : null}
                   <div className="min-w-48 space-y-1.5">
                     <p className="text-xs font-medium text-muted-foreground">Plan</p>
                     <SimpleSelect

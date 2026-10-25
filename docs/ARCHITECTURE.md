@@ -305,6 +305,7 @@ Drizzle schema files in `packages/db/src/schema/` (one Postgres database, `publi
 | 0075 | `collection_category_long_description` | `categories.description_json` and `collections.description_json` (JSONB, nullable): the long, formatted description shown below the product list, in the policy block format (headings, paragraphs with bold, italic and https links, lists, dividers; never HTML). The existing plain `description` is now the short description under the title (expand-only, no new table) |
 | 0076 | `platform_google_auth` | `platform_auth_providers` (switches, row `google`: `enabled`, `staff_signup_allowed`, `customer_signin_allowed`, `one_tap_allowed`) and single-row `platform_google_client` (Client ID, AES-256-GCM secret, last test); read-only for `app_rw`; marks existing platform staff emails verified so Google can link (ADR-038) |
 | 0077 | `customer_google_signin` | tenant tables `store_social_auth` (a store's own Client ID, enabled, one-tap, the verified Client ID and host) and `customer_identities` (customer to Google `sub`), forced RLS, composite foreign key to `customers` (ADR-038) |
+| 0078 | `subscription_authorized_at` | `subscriptions.authorized_at` (when the merchant finished authorising automatic payment; set by the gateway webhook or by a direct Cashfree status check on Plan and billing) |
 
 How to write one (expand, migrate, contract; `forceRlsSql`): `docs/migrations.md`. **Never edit an applied migration.** Latest on disk: `0074` (the docs check keeps this list honest).
 
