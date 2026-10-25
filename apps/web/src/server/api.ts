@@ -427,7 +427,7 @@ function billingError(err: unknown): unknown {
   console.error("[billing] payment action failed", mapped);
   const cause = (mapped as { cause?: unknown }).cause;
   const reason = /^Failed query/.test(mapped.message) && cause instanceof Error ? cause.message : mapped.message;
-  return new ORPCError("BAD_REQUEST", { message: `Could not start the payment: ${reason.slice(0, 220)}` });
+  return new ORPCError("BAD_REQUEST", { message: `Billing problem: ${reason.slice(0, 220)}` });
 }
 
 const requireAdmin = os.middleware(async ({ context, next }) => {
@@ -2706,7 +2706,11 @@ export const storeRouter = os.router({
         .use(requirePermission("settings.read"))
         .handler(async ({ context }) => {
           if (!context.tenantCtx) throw new Error("Missing tenant context");
-          return getPlanAndBilling(context.rt, context.tenantCtx);
+          return getPlanAndBilling(context.rt, context.tenantCtx).catch((e) => {
+            // Shown to the store owner on their own billing page: a short reason instead of a generic failure.
+            console.error("[billing] could not load plan and billing", e);
+            throw billingError(e);
+          });
         }),
       availablePlans: os.admin.planAndBilling.availablePlans
         .use(requireAdmin)

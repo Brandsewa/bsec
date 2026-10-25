@@ -52,6 +52,8 @@ export interface PlanAndBillingView {
     hasSubscription: boolean;
     /** The merchant finished authorising automatic payment, so the first charge will happen by itself. */
     authorized: boolean;
+    /** The store has no paid plan and no trial left (created by Super Admin, or its trial ended unpaid): it should choose a plan and pay. */
+    activationRequired: boolean;
     /** The owner's account already has a phone number, so the payment form need not ask for one. */
     phoneOnFile: boolean;
     /** While on a trial: when the trial (and so the first charge) ends. */
@@ -262,7 +264,8 @@ export async function getPlanAndBilling(
   try {
     creds = await loadPlatformBillingCredentials(saasDb(rt));
   } catch (e) {
-    if (!(e instanceof SaasNotConfiguredError)) throw e;
+    // Never let the payment side break the page: without credentials the page just says online payment is not available.
+    if (!(e instanceof SaasNotConfiguredError)) console.error("[billing] could not load the platform billing credentials", e);
   }
   // Cashfree sends a webhook when the merchant finishes authorising, but the merchant is back on this page first (and a webhook
   // can be missed), so a created-but-unconfirmed Cashfree subscription is checked with Cashfree directly. Best effort and short.
@@ -298,7 +301,8 @@ export async function getPlanAndBilling(
       testMode: creds?.mode !== "live",
       hasSubscription: Boolean(sub?.providerSubscriptionId),
       authorized: Boolean(authorizedAt),
-      phoneOnFile: await ownerHasPhone(rt, ctx),
+      activationRequired: await needsActivation(rt, ctx.tenantId, sub),
+      phoneOnFile: await ownerHasPhone(rt, ctx).catch(() => false),
       firstChargeAt: sub?.status === "trialing" ? (sub.currentPeriodEnd?.toISOString() ?? null) : null,
       cancelAt: sub?.cancelAt?.toISOString() ?? null,
     },
@@ -523,6 +527,26 @@ function storeOwnerId(ctx: TenantContext, what: string): string {
     throw new Error(`Forbidden: Only the store owner can ${what}.`);
   }
   return ctx.actor.userId;
+}
+
+/**
+ * A store with no paid plan and no trial left: it was created by Super Admin (or its trial ended) and has never paid. A store that
+ * paid once and is late now is a dunning case, not this one.
+ */
+async function needsActivation(rt: Runtime, tenantId: string, sub: typeof schema.subscriptions.$inferSelect | undefined): Promise<boolean> {
+  if (!sub || (sub.status !== "trialing" && sub.status !== "past_due")) return false;
+  const trialOver = sub.status === "past_due" || (sub.currentPeriodEnd !== null && sub.currentPeriodEnd.getTime() <= Date.now());
+  if (!trialOver) return false;
+  try {
+    const [paid] = await rt._db.db
+      .select({ id: schema.platformInvoices.id })
+      .from(schema.platformInvoices)
+      .where(eq(schema.platformInvoices.tenantId, tenantId))
+      .limit(1);
+    return !paid;
+  } catch {
+    return false;
+  }
 }
 
 async function ownerHasPhone(rt: Runtime, ctx: TenantContext): Promise<boolean> {

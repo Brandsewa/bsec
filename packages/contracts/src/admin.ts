@@ -1652,6 +1652,7 @@ export const PlanAndBillingView = z.object({
     provider: z.enum(["razorpay", "cashfree"]),
     hasSubscription: z.boolean(),
     authorized: z.boolean(),
+    activationRequired: z.boolean(),
     phoneOnFile: z.boolean(),
     firstChargeAt: z.string().nullable(),
     cancelAt: z.string().nullable(),

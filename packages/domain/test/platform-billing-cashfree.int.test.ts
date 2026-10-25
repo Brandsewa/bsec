@@ -308,6 +308,35 @@ describe("C2 subscribe, charge and cancel through Cashfree", () => {
     await updatePlatformBillingSettings(rt, owner, { trial: { enabled: true } });
   });
 
+  it("tells a store with no paid plan and no trial left to activate one, and lets a half-finished payment be stopped and redone", async () => {
+    // A store created from Super Admin whose trial is still running is not asked to activate yet.
+    const fresh = await makeStore();
+    expect((await getPlanAndBilling(rt, fresh.ctx)).billing.activationRequired).toBe(false);
+
+    // The stuck case: trial over (swept to past due), mandate authorised, nothing paid, nothing invoiced.
+    const stuck = await makeStore();
+    fakeCashfree();
+    await subscribeToPlan(rt, stuck.ctx, { planCode: "starter", interval: "monthly", phone: "9876543210" });
+    const subId = (await latestSub(stuck.tenantId)).providerSubscriptionId!;
+    await rt._db.db.update(schema.subscriptions).set({ status: "past_due", currentPeriodEnd: new Date(Date.now() - 1000), authorizedAt: new Date() }).where(eq(schema.subscriptions.tenantId, stuck.tenantId));
+    const before = (await getPlanAndBilling(rt, stuck.ctx)).billing;
+    expect(before).toMatchObject({ activationRequired: true, authorized: true, hasSubscription: true, firstChargeAt: null });
+
+    // Stopping automatic payment drops the link (the store stays as it is) and the page offers the plan form again.
+    const res = await cancelPlanSubscription(rt, stuck.ctx);
+    expect(res.cancelAt).toBeNull();
+    expect(calls.some((c) => c.url.endsWith(`/subscriptions/${subId}/manage`))).toBe(true);
+    const after = (await getPlanAndBilling(rt, stuck.ctx)).billing;
+    expect(after).toMatchObject({ activationRequired: true, authorized: false, hasSubscription: false });
+
+    // A store that already paid once and is late is a dunning case, not an activation one.
+    const paid = await makeStore();
+    await rt._db.db.update(schema.subscriptions).set({ status: "past_due", pastDueSince: new Date() }).where(eq(schema.subscriptions.tenantId, paid.tenantId));
+    const sub = await latestSub(paid.tenantId);
+    await rt._db.db.insert(schema.platformInvoices).values({ tenantId: paid.tenantId, subscriptionId: sub.id, number: `T/${seq}/1`, amountPaise: 100, taxPaise: 15, status: "paid", issuedAt: new Date(), paidAt: new Date(), providerPaymentId: `p-${seq}` });
+    expect((await getPlanAndBilling(rt, paid.ctx)).billing.activationRequired).toBe(false);
+  });
+
   it("cancels at Cashfree at once but keeps the paid plan until the period ends, then a sweep ends it", async () => {
     const store = await makeStore();
     fakeCashfree();
