@@ -1,4 +1,4 @@
-import { eq } from "drizzle-orm";
+import { desc, eq, inArray } from "drizzle-orm";
 import { schema, type Db } from "@bs/db";
 import { encryptSecret, decryptSecret, CashfreeProvider } from "@bs/payments";
 import type { Runtime } from "../runtime.ts";
@@ -471,4 +471,45 @@ export async function testPlatformBillingConnection(
     await writePlatformAudit(tx, staffUserId, "platform_billing.tested", "platform_billing", "default", null, { provider, mode, ok: result.ok }, meta);
   });
   return result;
+}
+
+export interface BillingWebhookDelivery {
+  id: string;
+  gateway: "razorpay" | "cashfree";
+  eventType: string;
+  /** False when the signature did not match the saved secret (the delivery was refused). */
+  signatureValid: boolean;
+  status: string;
+  error: string | null;
+  attempts: number;
+  receivedAt: string;
+  updatedAt: string;
+}
+
+/**
+ * The latest gateway webhooks for platform billing (accepted, failed, and the last refused one per gateway), so the owner can see
+ * whether the gateway is reaching us and whether the saved secret matches. Platform staff only; bodies are never shown.
+ */
+export async function listBillingWebhookDeliveries(rt: Runtime, staffUserId: string): Promise<BillingWebhookDelivery[]> {
+  await assertPlatformStaff(rt, staffUserId);
+  const rows = await rt._db.db
+    .select()
+    .from(schema.webhookInbox)
+    .where(inArray(schema.webhookInbox.provider, ["razorpay_platform", "cashfree_platform"]))
+    .orderBy(desc(schema.webhookInbox.updatedAt))
+    .limit(25);
+  return rows.map((r) => {
+    const payload = (r.payloadSanitized ?? {}) as { type?: unknown; event?: unknown };
+    return {
+      id: r.id,
+      gateway: r.provider === "cashfree_platform" ? "cashfree" : "razorpay",
+      eventType: String(payload.type ?? payload.event ?? "unknown").slice(0, 80),
+      signatureValid: r.signatureValid,
+      status: r.status,
+      error: r.error,
+      attempts: r.attempts,
+      receivedAt: r.receivedAt.toISOString(),
+      updatedAt: r.updatedAt.toISOString(),
+    };
+  });
 }

@@ -1454,6 +1454,23 @@ export const platformIntegrationsContract = {
       }),
     )
     .output(z.object({ ok: z.literal(true) })),
+  billingWebhooks: oc
+    .route({ method: "GET", path: "/platform/integrations/billing/webhooks" })
+    .output(
+      z.array(
+        z.object({
+          id: z.string(),
+          gateway: z.enum(["razorpay", "cashfree"]),
+          eventType: z.string(),
+          signatureValid: z.boolean(),
+          status: z.string(),
+          error: z.string().nullable(),
+          attempts: z.number().int(),
+          receivedAt: z.string(),
+          updatedAt: z.string(),
+        }),
+      ),
+    ),
   testBillingConnection: oc
     .route({ method: "POST", path: "/platform/integrations/billing/test" })
     .input(z.object({ mode: z.enum(["test", "live"]).optional(), provider: z.enum(["razorpay", "cashfree"]).optional() }))

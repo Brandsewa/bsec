@@ -12,6 +12,7 @@ import {
   endDueCashfreeCancellations,
   getAdminMe,
   getPlanAndBilling,
+  listBillingWebhookDeliveries,
   getPlatformBillingSettings,
   handleCashfreeBillingWebhook,
   handlePlatformBillingWebhook,
@@ -348,6 +349,56 @@ describe("C2 subscribe, charge and cancel through Cashfree", () => {
     expect(view.usage.every((u) => Number.isFinite(u.percentUsed))).toBe(true);
     // What the server sends must pass the API contract, or the owner sees "Something went wrong".
     expect(PlanAndBillingView.safeParse(JSON.parse(JSON.stringify(view))).success).toBe(true);
+  });
+
+  it("notices the first payment straight from Cashfree when no webhook arrives, ignoring the 1 rupee mandate check", async () => {
+    const store = await makeStore();
+    fakeCashfree();
+    await subscribeToPlan(rt, store.ctx, { planCode: "starter", interval: "monthly", phone: "9876543210" });
+    const subId = (await latestSub(store.tenantId)).providerSubscriptionId!;
+    const [starter] = await rt._db.db.select().from(schema.plans).where(eq(schema.plans.code, "starter"));
+    await rt._db.db.update(schema.subscriptions).set({ status: "past_due", currentPeriodEnd: new Date(Date.now() - 1000) }).where(eq(schema.subscriptions.tenantId, store.tenantId));
+
+    const cashfreeSays = (payments: unknown[]) => {
+      vi.restoreAllMocks();
+      vi.spyOn(globalThis, "fetch").mockImplementation((async (input: unknown) => {
+        const url = String(input);
+        if (url.endsWith(`/subscriptions/${subId}/payments`)) return new Response(JSON.stringify(payments), { status: 200 });
+        if (url.endsWith(`/subscriptions/${subId}`)) return new Response(JSON.stringify({ subscription_status: "ACTIVE", authorisation_details: { authorization_status: "ACTIVE" } }), { status: 200 });
+        return new Response("{}", { status: 404 });
+      }) as typeof fetch);
+    };
+
+    // Only the refunded 1 rupee check so far: authorised, but not paid.
+    cashfreeSays([{ cf_payment_id: 1, payment_status: "SUCCESS", payment_type: "AUTH", payment_amount: 1 }]);
+    const before = await getPlanAndBilling(rt, store.ctx);
+    expect(before.billing).toMatchObject({ authorized: true, activationRequired: true });
+    expect(before.plan?.status).toBe("past_due");
+
+    // The plan price was taken at authorisation: the page activates the store and invoices it once.
+    cashfreeSays([{ cf_payment_id: 990001, payment_status: "SUCCESS", payment_type: "AUTH", payment_amount: starter!.priceMonthlyPaise / 100 }]);
+    const after = await getPlanAndBilling(rt, store.ctx);
+    expect(after.plan?.status).toBe("active");
+    expect(after.billing.activationRequired).toBe(false);
+    expect(after.invoices).toHaveLength(1);
+    expect(after.invoices[0]).toMatchObject({ amountPaise: starter!.priceMonthlyPaise, status: "paid" });
+    await getPlanAndBilling(rt, store.ctx);
+    expect((await rt._db.db.select().from(schema.platformInvoices).where(eq(schema.platformInvoices.tenantId, store.tenantId)))).toHaveLength(1);
+  });
+
+  it("shows refused and processed webhook deliveries to platform staff, one bounded row for refused ones", async () => {
+    const before = (await listBillingWebhookDeliveries(rt, owner)).filter((d) => d.gateway === "cashfree").length;
+    const bad = post({ type: "SUBSCRIPTION_PAYMENT_SUCCESS", data: {} }, { secret: "wrong-secret" });
+    await errorOf(handleCashfreeBillingWebhook(rt, bad));
+    await errorOf(handleCashfreeBillingWebhook(rt, post({ type: "SUBSCRIPTION_PAYMENT_FAILED", data: {} }, { secret: "wrong-secret" })));
+    await handleCashfreeBillingWebhook(rt, post({ type: "SUBSCRIPTION_STATUS_CHANGED", data: { subscription_details: { subscription_id: "nobody", subscription_status: "ACTIVE" } } }));
+    const rows = (await listBillingWebhookDeliveries(rt, owner)).filter((d) => d.gateway === "cashfree");
+    const refused = rows.filter((d) => !d.signatureValid);
+    expect(refused).toHaveLength(1); // however many are refused, one row is kept and updated
+    expect(refused[0]).toMatchObject({ eventType: "SUBSCRIPTION_PAYMENT_FAILED", status: "rejected" });
+    expect(refused[0]!.attempts).toBeGreaterThanOrEqual(2);
+    expect(rows.length).toBeGreaterThan(before);
+    expect(rows.some((d) => d.signatureValid && d.status === "processed" && d.eventType === "SUBSCRIPTION_STATUS_CHANGED")).toBe(true);
   });
 
   it("cancels at Cashfree at once but keeps the paid plan until the period ends, then a sweep ends it", async () => {

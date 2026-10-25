@@ -322,6 +322,58 @@ function TrialCard({ view, canEdit, onSaved }: { view: PlatformBillingSettingsVi
   );
 }
 
+function WebhookDeliveriesCard() {
+  const { data, isLoading, refetch, isFetching } = useQuery({
+    queryKey: ["platform", "integrations", "billing-webhooks"],
+    queryFn: () => client.integrations.billingWebhooks(),
+    refetchInterval: 15000,
+  });
+  return (
+    <Card>
+      <CardHeader>
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          <CardTitle>Recent webhook deliveries</CardTitle>
+          <Button size="sm" variant="outline" disabled={isFetching} onClick={() => void refetch()}>
+            {isFetching ? "Refreshing..." : "Refresh"}
+          </Button>
+        </div>
+        <CardDescription>
+          What Razorpay and Cashfree have sent us. A "Refused" row means the gateway is reaching us but its signature did not match the secret saved here. If nothing is listed after a payment, the webhook URL is not registered (or not subscribed to the subscription events) in the gateway dashboard.
+        </CardDescription>
+      </CardHeader>
+      <CardContent>
+        {isLoading ? <MetricCardsSkeleton count={1} /> : null}
+        {data && data.length === 0 ? <p className="text-sm text-muted-foreground">No webhooks received yet.</p> : null}
+        {data && data.length > 0 ? (
+          <Table>
+            <TableHeader>
+              <TableRow>
+                <TableHead>When</TableHead>
+                <TableHead>Gateway</TableHead>
+                <TableHead>Event</TableHead>
+                <TableHead>Result</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {data.map((d) => (
+                <TableRow key={d.id}>
+                  <TableCell className="whitespace-nowrap text-xs">{new Date(d.updatedAt).toLocaleString()}</TableCell>
+                  <TableCell className="capitalize">{d.gateway}</TableCell>
+                  <TableCell className="text-xs">{d.eventType}</TableCell>
+                  <TableCell>
+                    {!d.signatureValid ? <Badge variant="destructive">Refused (secret mismatch){d.attempts > 1 ? ` x${d.attempts}` : ""}</Badge> : d.status === "processed" ? <Badge variant="secondary">Processed</Badge> : <Badge variant="destructive">{d.status}</Badge>}
+                    {d.error && d.signatureValid ? <div className="mt-1 text-[11px] text-muted-foreground">{d.error}</div> : null}
+                  </TableCell>
+                </TableRow>
+              ))}
+            </TableBody>
+          </Table>
+        ) : null}
+      </CardContent>
+    </Card>
+  );
+}
+
 function InvoiceDetailsCard({ view, canEdit, onSaved }: { view: PlatformBillingSettingsView["invoice"]; canEdit: boolean; onSaved: () => Promise<void> }) {
   const [form, setForm] = useState({
     legalName: view.legalName ?? "",
@@ -664,6 +716,8 @@ export function BillingIntegrations() {
           )}
 
           <InvoiceDetailsCard key={data.updatedAt ?? "new"} view={data.invoice} canEdit={canEdit} onSaved={refresh} />
+
+          <WebhookDeliveriesCard />
 
           <Card>
             <CardHeader>

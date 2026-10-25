@@ -85,6 +85,7 @@ import {
   createThemePreview,
   getPlatformEmailSettings,
   getPlatformBillingSettings,
+  listBillingWebhookDeliveries,
   listBillingPlans,
   syncBillingPlans,
   updatePlatformBillingSettings,
@@ -666,6 +667,10 @@ export const platformRouter = os.router({
     updateBillingSettings: os.integrations.updateBillingSettings.use(requireStaff("platform_owner")).handler(async ({ context, input }) => {
       const staffUserId = actor(context);
       return updatePlatformBillingSettings(context.rt, staffUserId, input, context.meta);
+    }),
+    billingWebhooks: os.integrations.billingWebhooks.use(requirePlatformStaff).handler(async ({ context }) => {
+      const staffUserId = actor(context);
+      return listBillingWebhookDeliveries(context.rt, staffUserId);
     }),
     testBillingConnection: os.integrations.testBillingConnection.use(requireStaff("platform_owner")).handler(async ({ context, input }) => {
       const staffUserId = actor(context);
