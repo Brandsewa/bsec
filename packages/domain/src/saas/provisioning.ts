@@ -1,3 +1,4 @@
+import { loadTrialPolicy } from "../platform/billing-settings.ts";
 import { randomUUID } from "node:crypto";
 import { eq, sql } from "drizzle-orm";
 import { schema, type Db } from "@bs/db";
@@ -356,7 +357,10 @@ export async function provisionTenant(
     const planId = planRow.rows[0]?.id ?? null;
 
     const subscriptionState = source === "self_service" ? "trial" : (input.subscriptionState ?? "trial");
-    const trialEnd = new Date(Date.now() + 14 * 24 * 60 * 60 * 1000);
+    // The trial length is a platform setting (Super Admin, Platform billing). With the trial off the end is "now", so the store is
+    // on the restricted tier (the trial sweep) until it pays.
+    const trialDays = (await loadTrialPolicy(tx)).effectiveDays;
+    const trialEnd = new Date(Date.now() + trialDays * 24 * 60 * 60 * 1000);
     const [sub] = await tx
       .insert(schema.subscriptions)
       .values({
@@ -365,7 +369,7 @@ export async function provisionTenant(
         status: subscriptionState === "trial" ? "trialing" : "active",
         interval: "monthly",
         currentPeriodStart: new Date(),
-        // Trials lapse after 14 days; manually billed and comped stores have no automatic expiry.
+        // Trials lapse after the configured days (14 by default); manually billed and comped stores have no automatic expiry.
         currentPeriodEnd: subscriptionState === "trial" ? trialEnd : null,
         provider: subscriptionState === "trial" ? "razorpay" : subscriptionState === "comped" ? "comped" : "manual",
       })

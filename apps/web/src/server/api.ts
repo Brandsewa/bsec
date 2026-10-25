@@ -257,6 +257,7 @@ import {
   previewPromoCode,
   acceptTenantOwnerInvite,
   listPublicPlans,
+  loadTrialPolicy,
   listPublicThemeTemplates,
   getOnboardingProgress,
   dismissOnboardingProgress,
@@ -3413,6 +3414,12 @@ api.get("/saas/plans", async (c) => {
   const db = saasDb(server().rt);
   const plans = await listPublicPlans(db);
   return c.json(plans);
+});
+
+/** The free trial a new store gets (Super Admin, Platform billing): the signup page shows it instead of a fixed number. */
+api.get("/saas/trial", async (c) => {
+  const policy = await loadTrialPolicy(saasDb(server().rt));
+  return c.json({ enabled: policy.enabled, days: policy.effectiveDays });
 });
 
 api.get("/saas/templates", async (c) => {

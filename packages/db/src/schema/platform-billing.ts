@@ -38,6 +38,9 @@ export const platformBillingSettings = pgTable("platform_billing_settings", {
   invoiceGstin: text("invoice_gstin"),
   invoiceSac: text("invoice_sac"),
   gstRateBps: integer("gst_rate_bps").notNull().default(1800),
+  // The free trial new stores get: on or off, and how many days (1 to 90). Off means a store starts restricted until it pays.
+  trialEnabled: boolean("trial_enabled").notNull().default(true),
+  trialDays: integer("trial_days").notNull().default(14),
   lastTestAt: timestamp("last_test_at", { withTimezone: true }),
   lastTestStatus: text("last_test_status"),
   lastTestError: text("last_test_error"),

@@ -264,6 +264,64 @@ function CashfreeKeysCard({
   );
 }
 
+function TrialCard({ view, canEdit, onSaved }: { view: PlatformBillingSettingsView["trial"]; canEdit: boolean; onSaved: () => Promise<void> }) {
+  const [enabled, setEnabled] = useState(view.enabled);
+  const [days, setDays] = useState(String(view.days));
+  const [saving, setSaving] = useState(false);
+  const dayCount = Number(days);
+  const valid = Number.isInteger(dayCount) && dayCount >= 1 && dayCount <= 90;
+  const dirty = enabled !== view.enabled || dayCount !== view.days;
+
+  const save = async () => {
+    if (!valid) {
+      toast.error("The trial is 1 to 90 days");
+      return;
+    }
+    setSaving(true);
+    try {
+      await client.integrations.updateBillingSettings({ trial: { enabled, days: dayCount } });
+      toast.success("Free trial saved");
+      await onSaved();
+    } catch (err) {
+      toast.error(messageOf(err));
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  return (
+    <Card>
+      <CardHeader>
+        <CardTitle>Free trial</CardTitle>
+        <CardDescription>
+          What a new store gets when it is created, by signup or by you. Stores already on a trial keep their end date (extend one on its Tenant page). With the trial off, a new store starts on the restricted plan until its owner pays, which also lets you test a first charge straight away.
+        </CardDescription>
+      </CardHeader>
+      <CardContent className="space-y-4">
+        <div className="flex items-center justify-between gap-4 rounded-md border border-border p-3">
+          <div>
+            <div className="text-sm font-medium text-foreground">Offer a free trial</div>
+            <div className="text-[11px] text-muted-foreground">Currently {view.enabled ? `on, ${view.days} days` : "off"}.</div>
+          </div>
+          <Switch aria-label="Offer a free trial" checked={enabled} disabled={!canEdit} onCheckedChange={setEnabled} />
+        </div>
+        <div className="flex flex-wrap items-end gap-3 rounded-md border border-border p-3">
+          <div className="space-y-1.5">
+            <Label htmlFor="trial-days">Trial length (days)</Label>
+            <Input id="trial-days" type="number" min={1} max={90} className="w-28" value={days} onChange={(e) => setDays(e.target.value)} disabled={!canEdit || !enabled} />
+          </div>
+          <p className="text-[11px] text-muted-foreground">1 to 90 days. The signup page and the first charge date follow this.</p>
+        </div>
+      </CardContent>
+      <CardFooter>
+        <Button size="sm" disabled={!canEdit || !dirty || !valid || saving} onClick={() => void save()}>
+          {saving ? "Saving..." : "Save trial settings"}
+        </Button>
+      </CardFooter>
+    </Card>
+  );
+}
+
 function InvoiceDetailsCard({ view, canEdit, onSaved }: { view: PlatformBillingSettingsView["invoice"]; canEdit: boolean; onSaved: () => Promise<void> }) {
   const [form, setForm] = useState({
     legalName: view.legalName ?? "",
@@ -520,6 +578,7 @@ export function BillingIntegrations() {
               ))}
             </CardContent>
           </Card>
+          <TrialCard key={`${data.trial.enabled}-${data.trial.days}-${data.updatedAt ?? ""}`} view={data.trial} canEdit={canEdit} onSaved={refresh} />
           {data.usingEnvFallback && data.provider === "razorpay" ? (
             <Alert>
               <AlertTitle>Using server environment keys</AlertTitle>
