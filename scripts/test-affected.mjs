@@ -47,12 +47,14 @@ if (reasonsForFull.length > 0) {
   process.exit(runCommand("pnpm", [scriptToRun, ...extraVitestArgs]));
 }
 
-console.log(`[test:affected] ${changedFiles.length} files changed. Running affected tests via vitest --changed origin/main...`);
+console.log(`[test:affected] ${changedFiles.length} files changed. Running affected tests in each package via vitest --changed origin/main...`);
 
-// Run vitest with --changed origin/main for fast tests
-const vitestArgs = ["--changed", "origin/main", ...extraVitestArgs];
-if (!isHeavy) {
-  vitestArgs.push("--exclude", "**/*.int.test.ts");
-}
-
-process.exit(runCommand("npx", ["vitest", "run", ...vitestArgs]));
+// Each package runs its own vitest config (aliases such as "@/" and the JSX transform live there); a root-level vitest cannot
+// load the web app's tests. Only packages changed against origin/main (and the packages that depend on them) run, and
+// --passWithNoTests keeps a package with nothing affected from failing the run.
+const vitestArgs = isHeavy
+  ? ["run", "int.test.ts", "--no-file-parallelism"]
+  : ["run", "--exclude", "**/*.int.test.ts"];
+process.exit(
+  runCommand("pnpm", ["--filter", "...[origin/main]", "--filter", "!bsec", "exec", "vitest", ...vitestArgs, "--changed", "origin/main", "--passWithNoTests", ...extraVitestArgs]),
+);
