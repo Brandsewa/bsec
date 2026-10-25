@@ -17,6 +17,7 @@
     "test:affected": "node scripts/test-affected.mjs",
     "scaffold:admin-procedure": "node scripts/scaffold-admin-procedure.mjs",
     "gate:quick": "node scripts/gate-quick.mjs",
+    "hooks:install": "node scripts/install-hooks.mjs",
     "docs:check": "node scripts/check-docs.mjs",
     "db:migrate": "pnpm --filter @bs/db migrate",
     "db:generate": "pnpm --filter @bs/db generate",
