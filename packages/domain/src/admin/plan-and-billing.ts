@@ -176,7 +176,8 @@ export async function getPlanAndBilling(
   for (const key of usageKeys) {
     const res = await resolveEffectiveQuota(db, ctx.tenantId, key as PlanQuotaKey);
     const used = counts[key] ?? 0;
-    const percentUsed = Math.min(100, Math.round((used / res.limit) * 100));
+    // A limit of 0 (the restricted tier allows no custom domains) would divide by zero and make the whole page fail validation.
+    const percentUsed = res.limit > 0 ? Math.min(100, Math.round((used / res.limit) * 100)) : used > 0 ? 100 : 0;
     usage.push({
       key,
       description: DEFAULT_TIER_TABLE[key as PlanQuotaKey]?.desc ?? key,
