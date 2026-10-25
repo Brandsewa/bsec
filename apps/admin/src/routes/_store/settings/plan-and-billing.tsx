@@ -287,7 +287,7 @@ export function PlanAndBillingPage() {
                       ]}
                     />
                   </div>
-                  {isCashfree ? (
+                  {isCashfree && !billing.phoneOnFile ? (
                     <div className="min-w-48 space-y-1.5">
                       <p className="text-xs font-medium text-muted-foreground">Mobile number</p>
                       <Input
@@ -302,13 +302,13 @@ export function PlanAndBillingPage() {
                   ) : null}
                   <Button
                     size="sm"
-                    disabled={!payPlanCode || subscribeMutation.isPending || (isCashfree && payPhone.replace(/\D/g, "").length < 10)}
+                    disabled={!payPlanCode || subscribeMutation.isPending || (isCashfree && !billing.phoneOnFile && payPhone.replace(/\D/g, "").length < 10)}
                     onClick={() =>
                       subscribeMutation.mutate(
                         {
                           planCode: payPlanCode,
                           interval: payInterval,
-                          ...(isCashfree ? { phone: payPhone.trim(), returnUrl: `${window.location.origin}${window.location.pathname}` } : {}),
+                          ...(isCashfree ? { ...(billing.phoneOnFile ? {} : { phone: payPhone.trim() }), returnUrl: `${window.location.origin}${window.location.pathname}` } : {}),
                         },
                         {
                           onSuccess: (res) => {

@@ -886,7 +886,7 @@ function SignupContent() {
                     <span>{provisionProgress}</span>
                   </>
                 ) : (
-                  <span>Launch My Store Now</span>
+                  <span>{trialDays > 0 ? "Launch My Store Now" : "Create my account and pay"}</span>
                 )}
               </button>
             </div>

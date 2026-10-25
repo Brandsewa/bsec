@@ -371,6 +371,8 @@ export async function provisionTenant(
         currentPeriodStart: new Date(),
         // Trials lapse after the configured days (14 by default); manually billed and comped stores have no automatic expiry.
         currentPeriodEnd: subscriptionState === "trial" ? trialEnd : null,
+        // With the trial off, a self-service signup has to pay before the store opens (admin "Activate your store").
+        paymentRequired: subscriptionState === "trial" && source === "self_service" && trialDays === 0,
         provider: subscriptionState === "trial" ? "razorpay" : subscriptionState === "comped" ? "comped" : "manual",
       })
       .returning({ id: schema.subscriptions.id });
