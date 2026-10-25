@@ -519,6 +519,13 @@
       "when": 1793236000000,
       "tag": "0079_platform_trial_policy",
       "breakpoints": true
+    },
+    {
+      "idx": 74,
+      "version": "7",
+      "when": 1793322400000,
+      "tag": "0080_subscription_payment_required",
+      "breakpoints": true
     }
   ]
 }

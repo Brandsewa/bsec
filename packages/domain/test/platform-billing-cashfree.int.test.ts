@@ -9,6 +9,7 @@ import {
   cancelPlanSubscription,
   createRuntime,
   endDueCashfreeCancellations,
+  getAdminMe,
   getPlanAndBilling,
   getPlatformBillingSettings,
   handleCashfreeBillingWebhook,
@@ -199,7 +200,7 @@ describe("C2 subscribe, charge and cancel through Cashfree", () => {
     expect(await errorOf(handleCashfreeBillingWebhook(rt, wrong))).toMatch(/Invalid platform billing webhook signature/);
 
     const auth = await handleCashfreeBillingWebhook(rt, post({ type: "SUBSCRIPTION_PAYMENT_SUCCESS", data: { subscription_id: subId, payment_type: "AUTH", cf_payment_id: 1, payment_amount: 1 } }));
-    expect(auth.actionTaken).toBe("authorisation_payment_noted");
+    expect(auth.actionTaken).toBe("subscription_authorised_noted"); // the 1 rupee mandate check is not a plan charge
     expect((await latestSub(store.tenantId)).status).toBe("trialing");
 
     const charge = post({ type: "SUBSCRIPTION_PAYMENT_SUCCESS", data: { subscription_id: subId, payment_type: "CHARGE", cf_payment_id: 555001, payment_amount: starter!.priceYearlyPaise / 100 } });
@@ -275,6 +276,36 @@ describe("C2 subscribe, charge and cancel through Cashfree", () => {
     const ev = await handleCashfreeBillingWebhook(rt, post({ type: "SUBSCRIPTION_STATUS_CHANGED", data: { subscription_details: { subscription_id: subId, subscription_status: "CANCELLED" } } }));
     expect(ev.actionTaken).toBe("subscription_cancelled");
     expect((await latestSub(store.tenantId)).status).toBe("trialing");
+  });
+
+  it("with the trial off a self-service store must pay first: the first cycle is taken at authorisation, and that payment opens the store", async () => {
+    await updatePlatformBillingSettings(rt, owner, { trial: { enabled: false } });
+    const slug = `cf-nopay-${++seq}`;
+    const r = await provisionTenant(rt, { storeName: slug, slug, planCode: "starter", owner: { email: `owner-${slug}@test.com`, name: "Owner One", password: "a long password 123" }, source: "self_service" });
+    const ctx: TenantContext = { tenantId: r.tenantId, storeStatus: "live", actor: { type: "staff", userId: r.ownerId }, roles: ["store_owner"], permissions: [...STORE_PERMISSIONS], requestId: `req-${slug}` };
+    expect((await getAdminMe(rt, r.ownerId)).stores.find((s) => s.tenantId === r.tenantId)?.paymentRequired).toBe(true);
+    expect((await latestSub(r.tenantId)).paymentRequired).toBe(true);
+
+    fakeCashfree();
+    await subscribeToPlan(rt, ctx, { planCode: "starter", interval: "monthly", phone: "9876543210" });
+    const call = calls.find((c) => c.url.endsWith("/pg/subscriptions"))!;
+    const [starter] = await rt._db.db.select().from(schema.plans).where(eq(schema.plans.code, "starter"));
+    // Nothing to wait for: the whole first cycle is the authorisation payment and is not refunded; renewals start a cycle later.
+    expect(call.body.authorization_details).toMatchObject({ authorization_amount: starter!.priceMonthlyPaise / 100, authorization_amount_refund: false });
+    const firstDebit = new Date(String(call.body.subscription_first_charge_time)).getTime();
+    expect(firstDebit - Date.now()).toBeGreaterThan(27 * 24 * 3600 * 1000);
+
+    const subId = (await latestSub(r.tenantId)).providerSubscriptionId!;
+    const paid = post({ type: "SUBSCRIPTION_AUTH_STATUS", data: { subscription_id: subId, payment_type: "AUTH", payment_status: "SUCCESS", cf_payment_id: 880001, payment_amount: starter!.priceMonthlyPaise / 100 } });
+    expect((await handleCashfreeBillingWebhook(rt, paid)).actionTaken).toBe("subscription_activated_and_invoiced");
+    const after = await latestSub(r.tenantId);
+    expect(after).toMatchObject({ status: "active", paymentRequired: false });
+    expect((await getAdminMe(rt, r.ownerId)).stores.find((s) => s.tenantId === r.tenantId)?.paymentRequired).toBe(false);
+    const inv = await rt._db.db.select().from(schema.platformInvoices).where(eq(schema.platformInvoices.tenantId, r.tenantId));
+    expect(inv).toHaveLength(1);
+    expect(inv[0]).toMatchObject({ amountPaise: starter!.priceMonthlyPaise, providerPaymentId: "880001" });
+
+    await updatePlatformBillingSettings(rt, owner, { trial: { enabled: true } });
   });
 
   it("cancels at Cashfree at once but keeps the paid plan until the period ends, then a sweep ends it", async () => {

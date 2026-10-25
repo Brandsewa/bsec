@@ -1,4 +1,4 @@
-import { and, eq } from "drizzle-orm";
+import { and, desc, eq } from "drizzle-orm";
 import { schema, withTenant, withUser } from "@bs/db";
 import { systemRoleDefinedPermissions, systemRoleFinancePermissions } from "@bs/auth";
 import type { Runtime } from "../runtime.ts";
@@ -11,6 +11,8 @@ export interface AdminMeStore {
   status: string;
   role: string;
   permissions: string[];
+  /** Created with the free trial off and not paid yet (admin shows "Activate your store"). */
+  paymentRequired?: boolean | undefined;
 }
 
 export interface AdminMeSupport {
@@ -66,7 +68,14 @@ export async function getAdminMe(rt: Runtime, userId: string): Promise<AdminMe> 
       .where(eq(schema.tenants.id, tenantId))
       .limit(1);
     if (!role || !tenant) continue;
+    const [sub] = await db
+      .select({ paymentRequired: schema.subscriptions.paymentRequired })
+      .from(schema.subscriptions)
+      .where(eq(schema.subscriptions.tenantId, tenantId))
+      .orderBy(desc(schema.subscriptions.createdAt))
+      .limit(1);
     stores.push({
+      paymentRequired: sub?.paymentRequired ?? false,
       tenantId: tenant.id,
       name: tenant.name,
       slug: tenant.slug,

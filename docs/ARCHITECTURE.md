@@ -307,6 +307,7 @@ Drizzle schema files in `packages/db/src/schema/` (one Postgres database, `publi
 | 0077 | `customer_google_signin` | tenant tables `store_social_auth` (a store's own Client ID, enabled, one-tap, the verified Client ID and host) and `customer_identities` (customer to Google `sub`), forced RLS, composite foreign key to `customers` (ADR-038) |
 | 0078 | `subscription_authorized_at` | `subscriptions.authorized_at` (when the merchant finished authorising automatic payment; set by the gateway webhook or by a direct Cashfree status check on Plan and billing) |
 | 0079 | `platform_trial_policy` | `platform_billing_settings.trial_enabled` and `trial_days` (the free trial new stores get; Super Admin, Platform billing; read by signup and store creation, public `GET /api/saas/trial`) |
+| 0080 | `subscription_payment_required` | `subscriptions.payment_required` (a self-service store created with the free trial off; the admin shows "Activate your store" until the first payment; cleared by the first charge) |
 
 How to write one (expand, migrate, contract; `forceRlsSql`): `docs/migrations.md`. **Never edit an applied migration.** Latest on disk: `0074` (the docs check keeps this list honest).
 

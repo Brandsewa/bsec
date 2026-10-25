@@ -52,6 +52,8 @@ export interface PlanAndBillingView {
     hasSubscription: boolean;
     /** The merchant finished authorising automatic payment, so the first charge will happen by itself. */
     authorized: boolean;
+    /** The owner's account already has a phone number, so the payment form need not ask for one. */
+    phoneOnFile: boolean;
     /** While on a trial: when the trial (and so the first charge) ends. */
     firstChargeAt: string | null;
     /** When an active subscription will end because it was cancelled. */
@@ -296,6 +298,7 @@ export async function getPlanAndBilling(
       testMode: creds?.mode !== "live",
       hasSubscription: Boolean(sub?.providerSubscriptionId),
       authorized: Boolean(authorizedAt),
+      phoneOnFile: await ownerHasPhone(rt, ctx),
       firstChargeAt: sub?.status === "trialing" ? (sub.currentPeriodEnd?.toISOString() ?? null) : null,
       cancelAt: sub?.cancelAt?.toISOString() ?? null,
     },
@@ -522,6 +525,12 @@ function storeOwnerId(ctx: TenantContext, what: string): string {
   return ctx.actor.userId;
 }
 
+async function ownerHasPhone(rt: Runtime, ctx: TenantContext): Promise<boolean> {
+  if (ctx.actor.type !== "staff") return false;
+  const [u] = await rt._db.db.select({ phone: schema.users.phone }).from(schema.users).where(eq(schema.users.id, ctx.actor.userId)).limit(1);
+  return Boolean(u?.phone && u.phone.replace(/\D/g, "").length >= 10);
+}
+
 /** Where Cashfree sends the merchant back after authorising. Only the platform's own domains and localhost are accepted. */
 function safeReturnUrl(raw: string | undefined): string | undefined {
   if (!raw) return undefined;
@@ -595,6 +604,8 @@ export async function subscribeToPlan(
     ...(creds.provider === "cashfree" ? { customerPhone: phone.replace(/^\+?91(?=[0-9]{10}$)/, "").replace(/^\+/, "") } : {}),
     ...(safeReturnUrl(input.returnUrl) ? { returnUrl: safeReturnUrl(input.returnUrl) as string } : {}),
     ...(startAtMs ? { startAt: Math.floor(startAtMs / 1000) } : {}),
+    // Nothing to wait for (no trial or free period left): the first cycle is paid now, when the mandate is authorised.
+    ...(startAtMs ? {} : { chargeFirstCycleNow: true }),
   });
 
   await withTenant(db, ctx.tenantId, async (tx) => {

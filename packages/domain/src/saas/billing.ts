@@ -26,6 +26,12 @@ export interface SubscriptionBillingProvider {
     customerPhone?: string;
     /** Where the gateway sends the merchant back after authorising (Cashfree). */
     returnUrl?: string;
+    /**
+     * Nothing is deferred (no trial or free period left): Cashfree takes the first cycle's price when the mandate is authorised and
+     * the automatic debits start one cycle later. A debit mandate cannot be debited at once (a day's pre-debit notice is required),
+     * so this is how a first payment happens at sign-up.
+     */
+    chargeFirstCycleNow?: boolean;
   }): Promise<{
     providerSubscriptionId: string;
     shortUrl?: string;
@@ -220,10 +226,16 @@ export class CashfreeSubscriptionProvider implements SubscriptionBillingProvider
           plan_interval_type: yearly ? "YEAR" : "MONTH",
         },
         // UPI AutoPay and cards. eMandate (enach) is left out: Cashfree wants a zero authorisation amount for it, and this one is 1 rupee.
-        authorization_details: { authorization_amount: 1, authorization_amount_refund: true, payment_methods: ["upi", "card"] },
+        authorization_details: params.chargeFirstCycleNow
+          ? { authorization_amount: amount, authorization_amount_refund: false, payment_methods: ["upi", "card"] }
+          : { authorization_amount: 1, authorization_amount_refund: true, payment_methods: ["upi", "card"] },
         subscription_meta: { ...(params.returnUrl ? { return_url: params.returnUrl } : {}), notification_channel: ["EMAIL"] },
         subscription_expiry_time: expiry.toISOString(),
-        ...(params.startAt ? { subscription_first_charge_time: new Date(params.startAt * 1000).toISOString() } : {}),
+        ...(params.chargeFirstCycleNow
+          ? { subscription_first_charge_time: addInterval(new Date(), params.interval).toISOString() }
+          : params.startAt
+            ? { subscription_first_charge_time: new Date(params.startAt * 1000).toISOString() }
+            : {}),
         subscription_tags: { tenant_id: params.tenantId, plan_code: params.planCode, psp_note: "Brand Sewa plan" },
       },
       this.fetchFn,
@@ -343,6 +355,9 @@ type BillingEvent =
   | { kind: "resumed"; providerSubscriptionId?: string | undefined }
   | { kind: "ignored"; note: string };
 
+/** An authorisation payment at or above this many rupees is a plan payment, not the 1 rupee mandate check. */
+const AUTH_CHARGE_FLOOR_RUPEES = 10;
+
 function addInterval(from: Date, interval: string): Date {
   const d = new Date(from);
   if (interval === "yearly") d.setUTCFullYear(d.getUTCFullYear() + 1);
@@ -395,6 +410,7 @@ async function applyBillingEvent(db: Db, ev: BillingEvent): Promise<string> {
           currentPeriodEnd: currentEnd,
           pastDueSince: null,
           dunningStage: 0,
+          paymentRequired: false,
           authorizedAt: sql`COALESCE(${schema.subscriptions.authorizedAt}, now())`,
           updatedAt: new Date(),
         })
@@ -655,6 +671,7 @@ export async function handleCashfreeBillingWebhook(
       payment_type?: string;
       payment_amount?: number;
       payment_status?: string;
+      authorization_details?: { authorization_status?: string };
       subscription_details?: { subscription_id?: string; subscription_status?: string };
     };
   }
@@ -672,6 +689,21 @@ export async function handleCashfreeBillingWebhook(
     const subId = d.subscription_id ?? d.subscription_details?.subscription_id;
     // Authorisation payments (the refunded ₹1 mandate check) are not plan charges and must never be invoiced.
     const isCharge = d.payment_type === undefined || d.payment_type === "CHARGE";
+
+    // The authorisation payment. A refunded 1 rupee check is not a plan charge, but when the first cycle is taken at authorisation the
+    // authorisation payment IS the first plan payment (it arrives as an AUTH payment of the plan price). Real plan prices are far above
+    // this floor, and one invoice is made per payment id either way.
+    const isAuthPayment = d.payment_type === "AUTH";
+    const authSucceeded = type === "SUBSCRIPTION_PAYMENT_SUCCESS" || d.payment_status === "SUCCESS" || d.authorization_details?.authorization_status === "ACTIVE";
+    if ((type === "SUBSCRIPTION_AUTH_STATUS" || type === "SUBSCRIPTION_PAYMENT_SUCCESS") && isAuthPayment) {
+      if (!authSucceeded) return { kind: "ignored", note: "authorisation_not_completed_noted" };
+      if (typeof d.payment_amount === "number" && d.payment_amount >= AUTH_CHARGE_FLOOR_RUPEES) {
+        const paymentId = d.cf_payment_id !== undefined ? String(d.cf_payment_id) : (d.payment_id ?? null);
+        return { kind: "charged", providerSubscriptionId: subId, amountPaise: Math.round(d.payment_amount * 100), paymentId, currentStart: new Date(), currentEnd: "interval" };
+      }
+      return { kind: "authorised", providerSubscriptionId: subId };
+    }
+    if (type === "SUBSCRIPTION_AUTH_STATUS") return { kind: "ignored", note: "ignored" };
 
     if (type === "SUBSCRIPTION_PAYMENT_SUCCESS") {
       if (!isCharge) return { kind: "ignored", note: "authorisation_payment_noted" };
@@ -800,6 +832,8 @@ export async function changeTenantPlan(
     customerPhone?: string;
     /** Where the gateway returns the merchant after authorising (Cashfree). */
     returnUrl?: string;
+    /** Charge the first cycle when the mandate is authorised (no trial or free period to wait for). */
+    chargeFirstCycleNow?: boolean;
     provider?: SubscriptionBillingProvider;
   },
 ) {
@@ -852,6 +886,7 @@ export async function changeTenantPlan(
     ...(params.customerName ? { customerName: params.customerName } : {}),
     ...(params.customerPhone ? { customerPhone: params.customerPhone } : {}),
     ...(params.returnUrl ? { returnUrl: params.returnUrl } : {}),
+    ...(params.chargeFirstCycleNow ? { chargeFirstCycleNow: true } : {}),
     tenantId: params.tenantId,
     ...(razorpayPlanId ? { planId: razorpayPlanId } : {}),
     ...(gateway === "cashfree" ? { amountPaise: pricePaise } : {}),
