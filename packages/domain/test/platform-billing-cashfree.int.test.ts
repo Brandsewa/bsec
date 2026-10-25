@@ -359,24 +359,24 @@ describe("C2 subscribe, charge and cancel through Cashfree", () => {
     const [starter] = await rt._db.db.select().from(schema.plans).where(eq(schema.plans.code, "starter"));
     await rt._db.db.update(schema.subscriptions).set({ status: "past_due", currentPeriodEnd: new Date(Date.now() - 1000) }).where(eq(schema.subscriptions.tenantId, store.tenantId));
 
-    const cashfreeSays = (payments: unknown[]) => {
+    const cashfreeSays = (payment: Record<string, unknown>) => {
       vi.restoreAllMocks();
       vi.spyOn(globalThis, "fetch").mockImplementation((async (input: unknown) => {
         const url = String(input);
-        if (url.endsWith(`/subscriptions/${subId}/payments`)) return new Response(JSON.stringify(payments), { status: 200 });
-        if (url.endsWith(`/subscriptions/${subId}`)) return new Response(JSON.stringify({ subscription_status: "ACTIVE", authorisation_details: { authorization_status: "ACTIVE" } }), { status: 200 });
+        if (url.endsWith(`/subscriptions/${subId}/payments/auth-pay-1`)) return new Response(JSON.stringify(payment), { status: 200 });
+        if (url.endsWith(`/subscriptions/${subId}`)) return new Response(JSON.stringify({ subscription_status: "ACTIVE", authorisation_details: { authorization_status: "ACTIVE", payment_id: "auth-pay-1" } }), { status: 200 });
         return new Response("{}", { status: 404 });
       }) as typeof fetch);
     };
 
     // Only the refunded 1 rupee check so far: authorised, but not paid.
-    cashfreeSays([{ cf_payment_id: 1, payment_status: "SUCCESS", payment_type: "AUTH", payment_amount: 1 }]);
+    cashfreeSays({ cf_payment_id: 1, payment_status: "SUCCESS", payment_type: "AUTH", payment_amount: 1 });
     const before = await getPlanAndBilling(rt, store.ctx);
     expect(before.billing).toMatchObject({ authorized: true, activationRequired: true });
     expect(before.plan?.status).toBe("past_due");
 
     // The plan price was taken at authorisation: the page activates the store and invoices it once.
-    cashfreeSays([{ cf_payment_id: 990001, payment_status: "SUCCESS", payment_type: "AUTH", payment_amount: starter!.priceMonthlyPaise / 100 }]);
+    cashfreeSays({ cf_payment_id: 990001, payment_status: "SUCCESS", payment_type: "AUTH", payment_amount: starter!.priceMonthlyPaise / 100 });
     const after = await getPlanAndBilling(rt, store.ctx);
     expect(after.plan?.status).toBe("active");
     expect(after.billing.activationRequired).toBe(false);
