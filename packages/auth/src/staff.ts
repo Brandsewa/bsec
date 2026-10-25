@@ -3,7 +3,7 @@ import { drizzleAdapter } from "better-auth/adapters/drizzle";
 import { schema, type Db } from "@bs/db";
 import { oneTap } from "better-auth/plugins";
 import { STAFF_COOKIE_PREFIX } from "./index.ts";
-import { googleSessionGuard, googleSocialProvider, type GoogleConfigLoader } from "./google.ts";
+import { googleAccountLinkGuard, googleSessionGuard, googleSocialProvider, type GoogleConfigLoader } from "./google.ts";
 
 export interface StaffAuthOptions {
   baseURL?: string;
@@ -90,9 +90,12 @@ export function createStaffAuth(db: Db, opts: StaffAuthOptions = {}) {
     // Google sign-in for existing accounts only (implicit sign-up is off). Linking requires a verified local email,
     // so a pre-registered unverified account can never be taken over by a Google login.
     ...(opts.loadGoogle ? { socialProviders: { google: googleSocialProvider(opts.loadGoogle) } } : {}),
-    account: { accountLinking: { enabled: true, requireLocalEmailVerified: true } },
+    // Google must confirm the email (Google is not a trusted-by-name provider). An unverified local account is linked only
+    // after googleAccountLinkGuard removes its password login and sessions.
+    account: { accountLinking: { enabled: true, requireLocalEmailVerified: false } },
     plugins: opts.loadGoogle ? [oneTap({ disableSignup: true })] : [],
     databaseHooks: {
+      account: { create: { before: async (account, ctx) => { await googleAccountLinkGuard(db)(account, ctx); } } },
       session: { create: { before: async (session, ctx) => { await googleSessionGuard(db, { requirePlatformStaff: false })(session, ctx); } } },
     },
     // Our own Postgres-backed limiter (checkAdminLoginLimit) guards sign-in; Better Auth's in-memory

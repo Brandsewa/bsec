@@ -56,6 +56,10 @@ export const subscriptions = pgTable("subscriptions", {
   provider: text("provider").notNull().default("razorpay"),
   providerSubscriptionId: text("provider_subscription_id"),
   cancelAt: timestamp("cancel_at", { withTimezone: true }),
+  // When the merchant finished authorising automatic payment on the gateway (null until then).
+  authorizedAt: timestamp("authorized_at", { withTimezone: true }),
+  // True while a self-service store created with the free trial off has not paid yet; the admin shows "Activate your store".
+  paymentRequired: boolean("payment_required").notNull().default(false),
   // Dunning (billing B5): when a paid subscription first failed to charge, and which reminder was sent last.
   pastDueSince: timestamp("past_due_since", { withTimezone: true }),
   dunningStage: integer("dunning_stage").notNull().default(0),

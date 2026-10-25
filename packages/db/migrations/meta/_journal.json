@@ -505,6 +505,27 @@
       "when": 1793063200000,
       "tag": "0077_customer_google_signin",
       "breakpoints": true
+    },
+    {
+      "idx": 72,
+      "version": "7",
+      "when": 1793149600000,
+      "tag": "0078_subscription_authorized_at",
+      "breakpoints": true
+    },
+    {
+      "idx": 73,
+      "version": "7",
+      "when": 1793236000000,
+      "tag": "0079_platform_trial_policy",
+      "breakpoints": true
+    },
+    {
+      "idx": 74,
+      "version": "7",
+      "when": 1793322400000,
+      "tag": "0080_subscription_payment_required",
+      "breakpoints": true
     }
   ]
 }

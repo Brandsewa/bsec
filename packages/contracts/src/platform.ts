@@ -1374,6 +1374,7 @@ export const PlatformBillingSettingsView = z.object({
   test: BillingKeySetView,
   live: BillingKeySetView,
   cashfree: z.object({ test: BillingKeySetView, live: BillingKeySetView }),
+  trial: z.object({ enabled: z.boolean(), days: z.number().int() }),
   webhookUrl: z.string(),
   cashfreeWebhookUrl: z.string(),
   usingEnvFallback: z.boolean(),
@@ -1433,6 +1434,7 @@ export const platformIntegrationsContract = {
     .input(
       z.object({
         provider: z.enum(["razorpay", "cashfree"]).optional(),
+        trial: z.object({ enabled: z.boolean().optional(), days: z.number().int().min(1).max(90).optional() }).optional(),
         cashfree: z.object({ test: CashfreeKeysInput.optional(), live: CashfreeKeysInput.optional() }).optional(),
         mode: z.enum(["test", "live"]).optional(),
         enabled: z.boolean().optional(),

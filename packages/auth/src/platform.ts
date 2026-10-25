@@ -3,7 +3,7 @@ import { drizzleAdapter } from "better-auth/adapters/drizzle";
 import { oneTap, twoFactor } from "better-auth/plugins";
 import { schema, type Db } from "@bs/db";
 import { PLATFORM_COOKIE_PREFIX } from "./index.ts";
-import { googleSessionGuard, googleSocialProvider, type GoogleConfigLoader } from "./google.ts";
+import { googleAccountLinkGuard, googleSessionGuard, googleSocialProvider, type GoogleConfigLoader } from "./google.ts";
 
 export interface PlatformAuthOptions {
   baseURL?: string | undefined;
@@ -100,8 +100,11 @@ export function createPlatformAuth(db: Db, opts: PlatformAuthOptions = {}) {
     },
     // Google sign-in for existing active platform_staff WITHOUT two-factor only (see googleSessionGuard).
     ...(opts.loadGoogle ? { socialProviders: { google: googleSocialProvider(opts.loadGoogle) } } : {}),
-    account: { accountLinking: { enabled: true, requireLocalEmailVerified: true } },
+    // Google must confirm the email (Google is not a trusted-by-name provider). An unverified local account is linked only
+    // after googleAccountLinkGuard removes its password login and sessions.
+    account: { accountLinking: { enabled: true, requireLocalEmailVerified: false } },
     databaseHooks: {
+      account: { create: { before: async (account, ctx) => { await googleAccountLinkGuard(db)(account, ctx); } } },
       session: { create: { before: async (session, ctx) => { await googleSessionGuard(db, { requirePlatformStaff: true })(session, ctx); } } },
     },
     plugins: [

@@ -257,6 +257,7 @@ import {
   previewPromoCode,
   acceptTenantOwnerInvite,
   listPublicPlans,
+  loadTrialPolicy,
   listPublicThemeTemplates,
   getOnboardingProgress,
   dismissOnboardingProgress,
@@ -413,6 +414,20 @@ function mapAuthError(err: unknown): unknown {
     if (m.startsWith("Precondition")) return new ORPCError("PRECONDITION_FAILED", { message: m.replace(/^Precondition:\s*/, "") });
   }
   return err;
+}
+
+/**
+ * Errors from the billing actions (subscribe, cancel) shown to the store owner. A known domain error keeps its own message;
+ * anything unexpected is logged and shown as a short reason (a database error shows the database's own message, never the
+ * query text), so a failed payment setup is diagnosable instead of a generic "Something went wrong".
+ */
+function billingError(err: unknown): unknown {
+  const mapped = mapAuthError(err);
+  if (mapped instanceof ORPCError || !(mapped instanceof Error)) return mapped;
+  console.error("[billing] payment action failed", mapped);
+  const cause = (mapped as { cause?: unknown }).cause;
+  const reason = /^Failed query/.test(mapped.message) && cause instanceof Error ? cause.message : mapped.message;
+  return new ORPCError("BAD_REQUEST", { message: `Could not start the payment: ${reason.slice(0, 220)}` });
 }
 
 const requireAdmin = os.middleware(async ({ context, next }) => {
@@ -2706,7 +2721,7 @@ export const storeRouter = os.router({
         .handler(async ({ context, input }) => {
           if (!context.tenantCtx) throw new Error("Missing tenant context");
           return subscribeToPlan(context.rt, context.tenantCtx, input).catch((e) => {
-            throw mapAuthError(e);
+            throw billingError(e);
           });
         }),
       cancelSubscription: os.admin.planAndBilling.cancelSubscription
@@ -2715,7 +2730,7 @@ export const storeRouter = os.router({
         .handler(async ({ context }) => {
           if (!context.tenantCtx) throw new Error("Missing tenant context");
           return cancelPlanSubscription(context.rt, context.tenantCtx).catch((e) => {
-            throw mapAuthError(e);
+            throw billingError(e);
           });
         }),
       requestChange: os.admin.planAndBilling.requestChange
@@ -3399,6 +3414,12 @@ api.get("/saas/plans", async (c) => {
   const db = saasDb(server().rt);
   const plans = await listPublicPlans(db);
   return c.json(plans);
+});
+
+/** The free trial a new store gets (Super Admin, Platform billing): the signup page shows it instead of a fixed number. */
+api.get("/saas/trial", async (c) => {
+  const policy = await loadTrialPolicy(saasDb(server().rt));
+  return c.json({ enabled: policy.enabled, days: policy.effectiveDays });
 });
 
 api.get("/saas/templates", async (c) => {

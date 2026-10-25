@@ -1272,6 +1272,8 @@ export const AdminMeStore = z.object({
   status: z.string(),
   role: z.string(),
   permissions: z.array(z.string()),
+  /** A store created with the free trial off that has not paid yet: the admin shows "Activate your store" until it does. */
+  paymentRequired: z.boolean().default(false),
 });
 export const AdminMeSupport = z.object({
   sessionId: z.string().uuid(),
@@ -1649,6 +1651,9 @@ export const PlanAndBillingView = z.object({
     testMode: z.boolean(),
     provider: z.enum(["razorpay", "cashfree"]),
     hasSubscription: z.boolean(),
+    authorized: z.boolean(),
+    phoneOnFile: z.boolean(),
+    firstChargeAt: z.string().nullable(),
     cancelAt: z.string().nullable(),
   }),
   openPlanChangeRequest: z

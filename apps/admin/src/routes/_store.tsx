@@ -52,6 +52,7 @@ import { AppShell } from "@/components/app-shell";
 import { fetchMe, signOut } from "../lib/auth.ts";
 import { getActiveStoreId, setActiveStoreId } from "../lib/session.ts";
 import { clearSupportSession } from "../lib/support.ts";
+import { ActivateStore } from "../components/billing/activate-store.tsx";
 import { ChangePasswordDialog } from "../components/settings/change-password-dialog.tsx";
 
 interface GatedItem {
@@ -178,6 +179,11 @@ function StoreShell() {
         />
       </PageContainer>
     );
+  }
+
+  // A store that signed up with the free trial off opens only after its first payment.
+  if (store.paymentRequired && !me.support) {
+    return <ActivateStore storeName={store.name} onSignOut={onSignOut} />;
   }
 
   return (
