@@ -5,6 +5,7 @@ import { schema } from "@bs/db";
 import { startTestDb, type TestDb } from "@bs/db/test-env";
 import { seedPlatformStaff } from "@bs/db/test-fixtures";
 import { STORE_PERMISSIONS } from "@bs/auth";
+import { PlanAndBillingView } from "@bs/contracts";
 import {
   cancelPlanSubscription,
   createRuntime,
@@ -335,6 +336,18 @@ describe("C2 subscribe, charge and cancel through Cashfree", () => {
     const sub = await latestSub(paid.tenantId);
     await rt._db.db.insert(schema.platformInvoices).values({ tenantId: paid.tenantId, subscriptionId: sub.id, number: `T/${seq}/1`, amountPaise: 100, taxPaise: 15, status: "paid", issuedAt: new Date(), paidAt: new Date(), providerPaymentId: `p-${seq}` });
     expect((await getPlanAndBilling(rt, paid.ctx)).billing.activationRequired).toBe(false);
+  });
+
+  it("loads Plan and billing for a store on the restricted tier (a limit of 0 must not break the page)", async () => {
+    const store = await makeStore();
+    await rt._db.db.insert(schema.tenantSizeTiers).values({ tenantId: store.tenantId, tier: "XS" }).onConflictDoUpdate({ target: schema.tenantSizeTiers.tenantId, set: { tier: "XS" } });
+    const view = await getPlanAndBilling(rt, store.ctx);
+    const domains = view.usage.find((u) => u.key === "custom_domains")!;
+    expect(domains.limit).toBe(0);
+    expect(Number.isFinite(domains.percentUsed)).toBe(true);
+    expect(view.usage.every((u) => Number.isFinite(u.percentUsed))).toBe(true);
+    // What the server sends must pass the API contract, or the owner sees "Something went wrong".
+    expect(PlanAndBillingView.safeParse(JSON.parse(JSON.stringify(view))).success).toBe(true);
   });
 
   it("cancels at Cashfree at once but keeps the paid plan until the period ends, then a sweep ends it", async () => {
