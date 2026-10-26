@@ -36,7 +36,11 @@ export function ActivateStore({ storeName, onSignOut }: { storeName: string; onS
   const isCashfree = billing?.provider === "cashfree";
   const needsPhone = isCashfree && !billing?.phoneOnFile;
   const confirming = Boolean(billing?.authorized);
+  const chosen = plans.find((p) => p.code === chosenPlan);
+  const freeEnds = billing?.freePeriodEndsAt ? new Date(billing.freePeriodEndsAt).toLocaleDateString("en-IN", { day: "numeric", month: "short", year: "numeric" }) : null;
+  const coupon = billing?.firstPaymentCoupon;
   const price = (p: (typeof plans)[number]) => (billed === "yearly" ? p.priceYearlyPaise : p.priceMonthlyPaise);
+  const discounted = !freeEnds && chosen && coupon && (!coupon.planCode || coupon.planCode === chosen.code) ? Math.round((price(chosen) * (100 - coupon.percentOff)) / 100) : 0;
 
   return (
     <PageContainer size="small">
@@ -93,9 +97,19 @@ export function ActivateStore({ storeName, onSignOut }: { storeName: string; onS
                 <Input value={phone} onChange={(e) => setPhone(e.target.value)} inputMode="tel" autoComplete="tel" placeholder="10-digit mobile" aria-label="Mobile number for the payment mandate" />
               </div>
             ) : null}
-            <p className="text-xs text-muted-foreground">
-              You pay the first {billed === "yearly" ? "year" : "month"} now through {isCashfree ? "UPI AutoPay or card" : "card or UPI"}; after that it renews automatically and you can stop it any time.
-            </p>
+            {freeEnds ? (
+              <p className="rounded-md border border-border bg-muted/40 p-3 text-xs text-foreground">
+                To open your store we set up automatic payment through {isCashfree ? "UPI AutoPay or card" : "card or UPI"}; about ₹1 is taken to verify it and is refunded. Your coupon covers the time until {freeEnds}, so nothing else is charged now. After that you are charged {chosen ? `₹${(price(chosen) / 100).toLocaleString("en-IN")}` : "the plan price"} every {billed === "yearly" ? "year" : "month"} automatically, and you can stop it any time before then.
+              </p>
+            ) : chosen && discounted ? (
+              <p className="rounded-md border border-border bg-muted/40 p-3 text-xs text-foreground">
+                Your coupon takes {billing?.firstPaymentCoupon?.percentOff}% off your first payment: you pay ₹{(discounted / 100).toLocaleString("en-IN")} instead of ₹{(price(chosen) / 100).toLocaleString("en-IN")} to open your store. After that it renews automatically at ₹{(price(chosen) / 100).toLocaleString("en-IN")} every {billed === "yearly" ? "year" : "month"}, and you can stop it any time.
+              </p>
+            ) : (
+              <p className="text-xs text-muted-foreground">
+                You pay the first {billed === "yearly" ? "year" : "month"} now through {isCashfree ? "UPI AutoPay or card" : "card or UPI"}; after that it renews automatically and you can stop it any time.
+              </p>
+            )}
             <Button
               className="w-full"
               disabled={!chosenPlan || subscribe.isPending || (needsPhone && phone.replace(/\D/g, "").length < 10)}
@@ -122,7 +136,7 @@ export function ActivateStore({ storeName, onSignOut }: { storeName: string; onS
                 )
               }
             >
-              {subscribe.isPending ? "Opening payment page..." : "Pay and open my store"}
+              {subscribe.isPending ? "Opening payment page..." : freeEnds ? "Verify payment method and open my store" : "Pay and open my store"}
             </Button>
           </div>
         )}
