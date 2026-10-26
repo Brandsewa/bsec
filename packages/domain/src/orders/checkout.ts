@@ -1,3 +1,4 @@
+import { isRazorpayCheckoutReady } from "../payments/razorpay-checkout.ts";
 import { createHash, randomBytes, randomUUID } from "node:crypto";
 import { and, eq, inArray, sql } from "drizzle-orm";
 import {
@@ -32,7 +33,6 @@ import { parseOrderProcessingConfig } from "../admin/order-settings-config.ts";
 import {
   getTenantPaymentMethods,
   parseCodPublicConfig,
-  hasEnabledPaymentAdapter,
 } from "../admin/payment-methods.ts";
 import { setMarketingConsent } from "../customers/consent.ts";
 import { trackSoftQuotaUsage } from "../system/quotas.ts";
@@ -215,7 +215,7 @@ export async function placeOrder(
       }
     } else {
       const onlineMethod = paymentMethodsList.find((m) => m.provider === "razorpay");
-      if (!onlineMethod || onlineMethod.status !== "active" || !hasEnabledPaymentAdapter("razorpay")) {
+      if (!onlineMethod || onlineMethod.status !== "active" || !(await isRazorpayCheckoutReady(rt._db.db, tenantId))) {
         throw new Error("Online payment is not available for this store. Please choose Cash on Delivery.");
       }
     }
@@ -662,7 +662,6 @@ export async function placeOrder(
 
     // 8. Payment Intent
     const intentId = randomUUID();
-    const providerOrderId: string | null = null;
 
     await tx.insert(paymentIntents).values({
       id: intentId,
@@ -672,7 +671,6 @@ export async function placeOrder(
       amount: grandTotal,
       currency: "INR",
       status: isCod ? "cod_pending" : "created",
-      providerOrderId: providerOrderId ?? null,
       idempotencyKey: input.idempotencyKey ?? null,
     });
 
@@ -756,12 +754,6 @@ export async function placeOrder(
       orderToken: orderViewRawToken,
       redirectUrl: `/orders/${orderViewRawToken}/thank-you`,
       codToken: codRawToken,
-      razorpay: !isCod && providerOrderId ? {
-        keyId: "rzp_test_key",
-        orderId: providerOrderId,
-        amount: grandTotal,
-        currency: "INR",
-      } : undefined,
     };
 
     return { status: 201, body: resultBody };

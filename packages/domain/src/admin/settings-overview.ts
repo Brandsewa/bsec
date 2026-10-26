@@ -5,7 +5,7 @@ import { assertPermission, type TenantContext } from "../context.ts";
 import { getOnboardingProgress } from "../saas/onboarding.ts";
 import { getTenantSubscription } from "../saas/billing.ts";
 import { listTenantDomains } from "../domains/service.ts";
-import { ONLINE_PAYMENT_AVAILABLE } from "./payments-settings.ts";
+import { isRazorpayCheckoutReady } from "../payments/razorpay-checkout.ts";
 import { parseStoreConfig } from "./store-config.ts";
 
 /**
@@ -165,7 +165,7 @@ export async function getSettingsOverview(rt: Runtime, ctx: TenantContext) {
   const overviewFacts: SettingsOverviewFacts = {
     ...facts,
     storefrontUrl: storefrontHostname ? `https://${storefrontHostname}` : null,
-    onlinePaymentAvailable: ONLINE_PAYMENT_AVAILABLE,
+    onlinePaymentAvailable: await isRazorpayCheckoutReady(rt._db.db, ctx.tenantId),
     hasCustomDomain: activeDomains.some((d) => d.type === "custom"),
     plan: currentPlan && subscription ? { name: currentPlan.name, status: subscription.status, interval: subscription.interval } : null,
   };

@@ -165,7 +165,7 @@ describe("End-to-End Checkout Place Order", () => {
     });
   });
 
-  it("rejects online payment when no active live adapter is registered (gated Razorpay)", async () => {
+  it("rejects online payment when the store has not activated Razorpay", async () => {
     // 1. Create new cart and add 1 unit
     const cart = await getOrCreateCart(rt, ctx, "cart_rzp_token_456");
     await addToCart(rt, ctx, {

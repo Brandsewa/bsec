@@ -4,6 +4,7 @@ import { sanitizePaymentPayload } from "@bs/payments";
 import { commitReservation } from "../catalog/inventory-reservations.ts";
 import type { Jobs } from "../jobs.ts";
 import type { Runtime } from "../runtime.ts";
+import { settleRazorpayPayment } from "../payments/razorpay-checkout.ts";
 
 export interface ReceiveWebhookInput {
   provider: string;
@@ -219,6 +220,7 @@ interface WebhookPayloadStructure {
       entity?: {
         id?: string;
         order_id?: string;
+        amount?: number;
         notes?: {
           order_id?: string;
           tenant_id?: string;
@@ -296,48 +298,18 @@ export async function processWebhookInboxItem(
     if (provider === "razorpay") {
       const eventType = payload.event;
       if (eventType === "payment.captured" || eventType === "order.paid") {
-        const orderId =
-          payload.order_id ||
-          payload.payload?.payment?.entity?.notes?.order_id ||
-          payload.payload?.payment?.entity?.order_id ||
-          payload.payload?.order?.entity?.notes?.order_id;
-
         const tenantId = item.tenant_id;
+        const entity = payload.payload?.payment?.entity;
+        const providerOrderId = entity?.order_id ?? payload.payload?.order?.entity?.id;
+        const providerPaymentId = entity?.id;
 
-        if (orderId && tenantId) {
-          await withTenant(db, tenantId, async (tx) => {
-            const [order] = await tx
-              .select()
-              .from(orders)
-              .where(eq(orders.id, orderId));
-
-            if (order && order.status === "pending") {
-              // Transition order to confirmed and paymentStatus to paid
-              await tx
-                .update(orders)
-                .set({
-                  status: "confirmed",
-                  paymentStatus: "paid",
-                  updatedAt: new Date(),
-                })
-                .where(eq(orders.id, orderId));
-
-              // Record event
-              await tx.insert(orderEvents).values({
-                tenantId,
-                orderId,
-                type: "order.confirm",
-                message: "Order confirmed via payment webhook",
-                actorType: "system",
-                data: {
-                  provider: "razorpay",
-                  eventId: item.event_id,
-                },
-              });
-
-              // Commit inventory reservation
-              await commitReservation(db, tenantId, { orderId });
-            }
+        if (tenantId && providerOrderId && providerPaymentId) {
+          // Same idempotent settle the browser callback uses; it also checks the amount against the order.
+          await settleRazorpayPayment(db, tenantId, {
+            providerOrderId,
+            providerPaymentId,
+            amount: typeof entity?.amount === "number" ? entity.amount : undefined,
+            source: "webhook",
           });
         }
       }

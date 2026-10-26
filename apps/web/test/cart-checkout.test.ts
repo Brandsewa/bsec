@@ -60,6 +60,15 @@ vi.mock("@bs/domain", async (importOriginal) => {
       ],
     })),
     clearCart: vi.fn(async () => {}),
+    startRazorpayPayment: vi.fn(async () => ({
+      keyId: "rzp_live_ABCDEF123456",
+      orderId: "order_rzp_1",
+      amount: 25000,
+      currency: "INR",
+      name: "ORD-00001",
+      email: "buyer@example.in",
+      phone: "9876543210",
+    })),
     placeOrder: vi.fn(async () => ({
       success: true,
       orderId: "ord-test-1",
@@ -485,7 +494,7 @@ const noConsent = { termsRequired: false, marketing: null };
         }
       });
 
-      it("refuses online payment while real online payments are not available, and never places the order", async () => {
+      it("places an online order as razorpay and returns the Razorpay payment details for the modal", async () => {
         const domain = await import("@bs/domain");
         vi.mocked(domain.placeOrder).mockClear();
         const { POST } = await import("../src/app/api/storefront/checkout/place-order/route.ts");
@@ -505,10 +514,13 @@ const noConsent = { termsRequired: false, marketing: null };
             }),
           });
           const res = await POST(req);
-          expect(res.status).toBe(400);
-          expect((await res.json()).error).toMatch(/Online payment is not available yet/);
+          expect(res.status).toBe(200);
+          const body = await res.json();
+          expect(body.razorpay).toMatchObject({ orderId: "order_rzp_1", amount: 25000 });
+          expect(body.orderToken).toBe("ord_1234567890abcdef");
         }
-        expect(domain.placeOrder).not.toHaveBeenCalled();
+        expect(vi.mocked(domain.placeOrder).mock.calls.every((c) => c[2].paymentMethod === "razorpay")).toBe(true);
+        expect(domain.startRazorpayPayment).toHaveBeenCalled();
       });
 
       it("returns 503 Service Unavailable when checkout feature flag is disabled", async () => {

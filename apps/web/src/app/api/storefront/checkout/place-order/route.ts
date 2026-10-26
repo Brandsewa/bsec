@@ -3,7 +3,7 @@ import { z } from "zod";
 import {
   evaluateStorefrontAccess,
   placeOrder,
-  ONLINE_PAYMENT_AVAILABLE,
+  startRazorpayPayment,
   FeatureDisabledError,
   checkStorefrontRateLimit,
   RateLimitExceededError,
@@ -103,10 +103,6 @@ export async function POST(req: Request) {
       h.get("idempotency-key") ??
       (typeof bodyObj.idempotencyKey === "string" ? bodyObj.idempotencyKey : undefined);
     const paymentMethod = parsed.data.paymentMethod === "online" ? "razorpay" : parsed.data.paymentMethod;
-    if (paymentMethod !== "cod" && !ONLINE_PAYMENT_AVAILABLE) {
-      return NextResponse.json({ error: "Online payment is not available yet. Please choose Cash on Delivery." }, { status: 400 });
-    }
-
     const orderResult = await placeOrder(rt, tenantCtx, {
       cartToken: token,
       idempotencyKey,
@@ -137,7 +133,14 @@ export async function POST(req: Request) {
       ).catch(() => undefined);
     }
 
-    const response = NextResponse.json(orderResult, { status: 200 });
+    // Online payment: the order is saved first, then the Razorpay order is created for it. If Razorpay cannot be reached
+    // the order still exists and its page offers "Pay now", so nothing is lost and the shopper is never double-charged.
+    let razorpay: Awaited<ReturnType<typeof startRazorpayPayment>> | undefined;
+    if (paymentMethod !== "cod") {
+      razorpay = await startRazorpayPayment(rt, tenantCtx.tenantId, orderResult.orderId).catch(() => undefined);
+    }
+
+    const response = NextResponse.json({ ...orderResult, razorpay }, { status: 200 });
 
     // Clear cart token cookie
     response.cookies.set({

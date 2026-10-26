@@ -40,8 +40,8 @@ export interface StorePaymentProviderView {
   webhookPath: string;
   tenantId: string;
   /**
-   * Whether checkout will offer this provider to shoppers today. Online checkout is not wired to a provider yet
-   * (see ONLINE_PAYMENT_AVAILABLE), so this is false and the UI says so.
+   * Whether checkout can take payments through this provider today. Only Razorpay is wired into checkout
+   * (payments/razorpay-checkout.ts); Stripe and Cashfree keys can be saved but shoppers are not offered them yet.
    */
   checkoutLive: boolean;
 }
@@ -79,6 +79,12 @@ export async function assertPaymentProviderEnabled(db: Db, provider: OnlineProvi
     );
   }
   return { liveModeAllowed: row.liveModeAllowed };
+}
+
+/** The platform's switches for a provider, read by checkout (no throw when it is off). */
+export async function readPlatformProviderState(db: Db, provider: OnlineProvider): Promise<{ enabled: boolean; liveModeAllowed: boolean }> {
+  const row = await readPlatformProvider(db, provider);
+  return { enabled: row.enabled, liveModeAllowed: row.liveModeAllowed };
 }
 
 /** Whether the platform currently offers the provider to new payments (used by checkout). */
@@ -154,7 +160,7 @@ async function loadStoreView(
       lastTestError: typeof setup.lastTestError === "string" ? setup.lastTestError : null,
       webhookPath: `/api/webhooks/${provider}?tenantId=${tenantId}`,
       tenantId,
-      checkoutLive: false,
+      checkoutLive: provider === "razorpay",
     };
   });
 }

@@ -221,7 +221,7 @@ describe("platform payment providers (real DB)", () => {
     expect(r).toMatchObject({ state: "connected_test", mode: "test" });
   });
 
-  it("checkout does not offer online payment yet, whatever the platform and store settings say", async () => {
+  it("checkout does not offer online payment until the store activates Razorpay", async () => {
     const opts = await getStorefrontPaymentOptions(rtWeb, ctxA.tenantId);
     expect(opts.online.available).toBe(false);
   });
