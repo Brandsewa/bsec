@@ -1,5 +1,6 @@
 "use client";
 
+import { payWithRazorpay } from "@/lib/razorpay-client.ts";
 import { priceOrder } from "@bs/domain/pricing";
 import React, { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
@@ -316,6 +317,15 @@ export function CheckoutForm({
       if (data.redirectUrl) {
         if (typeof window !== "undefined") {
           window.dispatchEvent(new Event("cart-updated"));
+        }
+        // Online payment: the order exists and is unpaid; take the payment now. Closing the window or a failed payment
+        // lands on the order page, which offers "Pay now" again.
+        if (data.razorpay && data.orderToken) {
+          const outcome = await payWithRazorpay(data.razorpay, data.orderToken);
+          if (outcome.status === "failed") {
+            router.push(`${data.redirectUrl}?payment=failed`);
+            return;
+          }
         }
         router.push(data.redirectUrl);
       }

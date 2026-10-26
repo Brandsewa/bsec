@@ -37,15 +37,6 @@ export interface UpdateCodMethodInput {
 }
 
 /**
- * Checks whether an active adapter is enabled for an online provider.
- * Since Razorpay is gated and no active checkout adapter exists in the registry, online providers return false.
- */
-export function hasEnabledPaymentAdapter(provider: string): boolean {
-  if (provider === "cod") return true;
-  return false;
-}
-
-/**
  * Normalizes COD public config.
  */
 export function parseCodPublicConfig(raw: unknown): CodPublicConfig {

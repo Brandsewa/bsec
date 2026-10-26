@@ -122,6 +122,7 @@ describe("RazorpayProvider", () => {
       amount: 149900,
       currency: "INR",
       receipt: "ORD-00001",
+      payment_capture: true,
       notes: {
         tenant_id: "tenant_0199a000",
         order_id: "ord_domain_001",

@@ -113,6 +113,8 @@ export class RazorpayProvider implements PaymentProvider {
       amount: total,
       currency: order.currency ?? "INR",
       receipt: order.number.slice(0, 40),
+      // Capture automatically so a successful payment is money received, not a hold that expires after a few days.
+      payment_capture: true,
       notes: {
         tenant_id: ctx.tenantId,
         order_id: order.id,

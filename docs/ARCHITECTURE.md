@@ -52,7 +52,7 @@ Production root domain is `bcom.si` (web, `admin.`, `platform.`, `superadmin.`, 
 
 > **Not this repo:** `AI Projects/bsecom 2026` ("taste-of-hills", an older single-store Next.js app) is a legacy project. Platform work belongs here.
 
-**Stage (2026-10-01):** M0 to M9 and M10 (theme editor) built and deployed. Cash on delivery works end to end; **online payment (Razorpay), courier (Shiprocket) and transactional email delivery are not live** (credentials deferred by decision). See `progress.md` for the exact matrix.
+**Stage (2026-10-01):** M0 to M9 and M10 (theme editor) built and deployed. Cash on delivery works end to end; **courier (Shiprocket) and transactional email delivery are not live; online payment is Razorpay-only and works per store (2026-10-26)** (credentials deferred by decision). See `progress.md` for the exact matrix.
 
 ---
 
@@ -174,7 +174,7 @@ Gotcha that already bit once: a new Coolify app must also be added to `APP_UUIDS
 
 **Platform action (`apps/superadmin` -> `apps/platform`).** Better Auth session + MFA (`/api/platform/mfa/complete`) -> `apps/platform/src/app.ts` oRPC router (`platformContract`) -> role guard (`assertRoleAtLeast`) -> domain `platform-services` / `platform/*` with the `BYPASSRLS` pool -> `platform_audit_logs` row. Every platform mutation must be audited (`apps/platform/test/audit-coverage.int.test.ts` enforces it).
 
-**Checkout (COD today).** `/checkout` -> `POST /api/storefront/checkout/place-order` -> `orders/checkout.ts` (prices recomputed server-side from the store's own shipping rates and discounts, stock reserved via `inventory_reservations`, order + payment intent in one transaction, idempotency key) -> `order.created` job -> emails. Online payment (Razorpay) builds on `payment_intents`/`payment_attempts`/webhook inbox but is **not live**.
+**Checkout (COD today).** `/checkout` -> `POST /api/storefront/checkout/place-order` -> `orders/checkout.ts` (prices recomputed server-side from the store's own shipping rates and discounts, stock reserved via `inventory_reservations`, order + payment intent in one transaction, idempotency key) -> `order.created` job -> emails. **Online payment (Razorpay, since 2026-10-26):** a store with Razorpay active (its own keys, platform enabled, live mode allowed for live keys: `isRazorpayCheckoutReady`) offers it at checkout. `place-order` saves the order and a `payment_intents` row, then `startRazorpayPayment` creates the Razorpay order with the store's keys (after commit, never env keys); the browser opens Razorpay's modal (`apps/web/src/lib/razorpay-client.ts`) and calls `POST /api/storefront/checkout/razorpay/verify` (signature checked with the store's secret) while the signed `payment.captured` webhook is the backstop; both end in the idempotent, amount-checked `settleRazorpayPayment` (`packages/domain/src/payments/razorpay-checkout.ts`). An unpaid order's page shows "Pay now" (`razorpay/start`). Stripe and Cashfree are not offered at checkout yet.
 
 **Background work.** Business code enqueues pg-boss jobs *inside* its transaction; `apps/worker` consumes them (`packages/domain/src/jobs.ts`). See section 11.
 

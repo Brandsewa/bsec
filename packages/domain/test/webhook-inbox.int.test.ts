@@ -5,6 +5,7 @@ import {
   createDb,
   type DbHandle,
   orders,
+  paymentIntents,
   inventoryReservations,
   webhookInbox,
   idempotencyKeys,
@@ -203,6 +204,19 @@ describe("PLAN §5.10 & §11.4 Idempotency & Webhook Inbox Integration", () => {
       });
     });
 
+    // The webhook is matched to the order through its Razorpay order id, so the order has a payment intent.
+    await withTenant(rwDb.db, tenantId, async (tx) => {
+      await tx.insert(paymentIntents).values({
+        tenantId,
+        orderId: testOrderId,
+        provider: "razorpay",
+        amount: 5000,
+        currency: "INR",
+        status: "created",
+        providerOrderId: "order_rzp_999",
+      });
+    });
+
     const [reservation] = await reserveInventory(
       rwDb.db,
       tenantId,
@@ -219,8 +233,7 @@ describe("PLAN §5.10 & §11.4 Idempotency & Webhook Inbox Integration", () => {
       signatureValid: true,
       rawPayload: {
         event: "payment.captured",
-        order_id: testOrderId,
-        payment_id: "pay_xyz_999",
+        payload: { payment: { entity: { id: "pay_xyz_999", order_id: "order_rzp_999", amount: 5000 } } },
       },
     });
 

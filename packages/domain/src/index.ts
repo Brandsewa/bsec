@@ -67,6 +67,7 @@ export * from "./segments/rules.ts";
 export * from "./segments/compile.ts";
 export * from "./segments/service.ts";
 export * from "./payments/credentials.ts";
+export * from "./payments/razorpay-checkout.ts";
 export * from "./orders/fulfillment-state-machine.ts";
 export * from "./orders/return-state-machine.ts";
 export * from "./orders/invoices.ts";

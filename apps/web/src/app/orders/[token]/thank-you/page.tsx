@@ -8,6 +8,7 @@ import { server } from "@/server/runtime.ts";
 import { getCachedDefaultPages } from "@/server/cached-storefront.ts";
 import { describeOrderStatus, describePayment } from "@/components/orders/order-labels.ts";
 import { StatusBadge, Money, Button } from "@bs/ui";
+import { PayNowButton } from "@/components/orders/PayNowButton.tsx";
 import { CreateAccountCard } from "@/components/orders/CreateAccountCard.tsx";
 
 interface ThankYouPageProps {
@@ -121,6 +122,13 @@ export default async function ThankYouPage({ params }: ThankYouPageProps) {
           ))}
         </div>
       </div>
+
+      {order.paymentStatus === "pending" && !cancelled ? (
+        <div className="mt-6 rounded-xl border border-border bg-card p-5 text-center">
+          <p className="text-sm text-muted-foreground">Your payment has not been completed yet. Your order is held for you until it is paid.</p>
+          <PayNowButton orderToken={token} />
+        </div>
+      ) : null}
 
       {copy.showCreateAccount ? <CreateAccountCard email={order.email} phone={order.phone} /> : null}
 

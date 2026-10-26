@@ -10,6 +10,7 @@ import { SettingsCard, SettingsPageFrame, useUnsavedGuard } from "../../../compo
 import PolicyRichEditor from "../../../components/policy-rich-editor.tsx";
 import { orpc } from "../../../lib/orpc.ts";
 import { errorMessage } from "../../../lib/errors.ts";
+import { policyLimitProblems } from "../../../lib/policy-rich-text.ts";
 import type { PolicyBlock, PolicyDetail, PolicyHandle } from "@bs/contracts";
 
 export const Route = createFileRoute("/_store/settings/policies")({
@@ -140,6 +141,8 @@ function PolicyForm({ policy, onSaved }: { policy: PolicyDetail; onSaved: () => 
   // Bumped when the draft is replaced from outside the editor (restore), so the editor reloads it.
   const [editorKey, setEditorKey] = useState(0);
 
+  const problems = policyLimitProblems(blocks);
+  const tooBig = problems.length > 0;
   const dirty = JSON.stringify({ title, blocks }) !== savedSnapshot;
   useUnsavedGuard(dirty);
 
@@ -236,7 +239,7 @@ function PolicyForm({ policy, onSaved }: { policy: PolicyDetail; onSaved: () => 
           <Button
             variant="outline"
             size="sm"
-            disabled={!dirty || blocks.length === 0 || saveDraftMutation.isPending}
+            disabled={!dirty || blocks.length === 0 || tooBig || saveDraftMutation.isPending}
             onClick={() =>
               saveDraftMutation.mutate({
                 handle: policy.handle,
@@ -250,7 +253,7 @@ function PolicyForm({ policy, onSaved }: { policy: PolicyDetail; onSaved: () => 
 
           <Button
             size="sm"
-            disabled={publishMutation.isPending}
+            disabled={publishMutation.isPending || tooBig}
             onClick={() => setShowPublishDialog(true)}
           >
             Publish Policy
@@ -350,6 +353,16 @@ function PolicyForm({ policy, onSaved }: { policy: PolicyDetail; onSaved: () => 
               <Input id="policy-title" value={title} onChange={(e) => setTitle(e.target.value)} maxLength={120} />
             </div>
             <PolicyRichEditor initialBlocks={policy.draftContent.blocks} resetKey={`${policy.id}:${editorKey}`} onChange={setBlocks} />
+            {tooBig ? (
+              <div role="alert" className="rounded-lg border border-destructive/40 bg-destructive/5 p-3 text-xs text-destructive">
+                <p className="font-medium">This policy is too long to save or publish yet.</p>
+                <ul className="mt-1 list-disc space-y-0.5 pl-4">
+                  {problems.map((m) => (
+                    <li key={m}>{m}</li>
+                  ))}
+                </ul>
+              </div>
+            ) : null}
             {blocks.length === 0 ? (
               <p className="text-xs text-muted-foreground">A policy needs at least some text before it can be saved.</p>
             ) : null}

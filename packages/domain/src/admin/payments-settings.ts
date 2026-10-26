@@ -4,11 +4,11 @@ import { decryptSecret, encryptSecret, isEncryptionKeyConfigured } from "@bs/pay
 import type { Runtime } from "../runtime.ts";
 import { assertPermission, type TenantContext } from "../context.ts";
 import { readStoreConfig } from "./store-config.ts";
-import { assertPaymentProviderEnabled, isPaymentProviderEnabled } from "./payment-providers.ts";
+import { assertPaymentProviderEnabled } from "./payment-providers.ts";
+import { isRazorpayCheckoutReady } from "../payments/razorpay-checkout.ts";
 import {
   getTenantPaymentMethods,
   parseCodPublicConfig,
-  hasEnabledPaymentAdapter,
 } from "./payment-methods.ts";
 
 export interface PaymentsStatusRecord {
@@ -18,13 +18,6 @@ export interface PaymentsStatusRecord {
 }
 
 const RAZORPAY_KEY_ID = /^rzp_(test|live)_[A-Za-z0-9]{6,}$/;
-
-/**
- * Whether shoppers can pay online. Creating a real Razorpay order at checkout is not built yet (the order gets a
- * placeholder id), so offering it would send a customer to a payment that cannot complete. Flip this to true when
- * checkout creates real Razorpay orders with the store's own keys.
- */
-export const ONLINE_PAYMENT_AVAILABLE = false;
 
 export interface StorefrontPaymentOptions {
   cod: {
@@ -43,12 +36,9 @@ export async function getStorefrontPaymentOptions(rt: Runtime, tenantId: string)
   const codCfg = parseCodPublicConfig(codMethod?.publicConfig);
   const codEnabled = codMethod ? codMethod.status === "active" : true;
 
-  // Online payment is available only if an active adapter exists in the registry AND the method is active
-  const razorpayMethod = methods.find((m) => m.provider === "razorpay");
-  const platformOffersRazorpay = await isPaymentProviderEnabled(rt._db.db, "razorpay");
-  const onlineAvailable = Boolean(
-    razorpayMethod && razorpayMethod.status === "active" && platformOffersRazorpay && hasEnabledPaymentAdapter("razorpay"),
-  );
+  // Online payment is offered only when the store activated Razorpay, the platform offers it (and live mode when the
+  // keys are live) and the store's own keys are saved.
+  const onlineAvailable = await isRazorpayCheckoutReady(rt._db.db, tenantId);
 
   return {
     cod: {
