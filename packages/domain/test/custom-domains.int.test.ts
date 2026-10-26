@@ -412,20 +412,22 @@ describe("M8 Custom Domains & Cloudflare for SaaS Integration (PLAN §8, ADR-007
     it("sweep re-checks only active domains that were not checked in the last day", async () => {
       const provider = new MockCustomDomainProvider();
       const d = await addPending("daily.brand-five.com", provider);
-      await verifyCustomDomain(rt, tenantId, d.id, provider, routingDeps());
-      const fresh = await sweepPendingCustomDomains(rwDb.db, { provider, routingDeps: routingDeps({ a: [] }) });
-      const [still] = await rwDb.db.select().from(schema.domains).where(eq(schema.domains.id, d.id));
-      expect(still?.status).toBe("active");
-      expect(still?.routingStatus).toBe("reachable");
-      expect(fresh.checked).toBe(0);
+      try {
+        await verifyCustomDomain(rt, tenantId, d.id, provider, routingDeps());
+        // Other tests share this database, so look at this domain's row rather than at how many domains were checked.
+        await sweepPendingCustomDomains(rwDb.db, { provider, routingDeps: routingDeps({ a: [] }) });
+        const [still] = await rwDb.db.select().from(schema.domains).where(eq(schema.domains.id, d.id));
+        expect(still?.status).toBe("active");
+        expect(still?.routingStatus).toBe("reachable");
 
-      await rwDb.db.update(schema.domains).set({ routingCheckedAt: new Date(Date.now() - 25 * 3_600_000) }).where(eq(schema.domains.id, d.id));
-      const stale = await sweepPendingCustomDomains(rwDb.db, { provider, routingDeps: routingDeps({ a: [] }) });
-      expect(stale.checked).toBe(1);
-      const [after] = await rwDb.db.select().from(schema.domains).where(eq(schema.domains.id, d.id));
-      expect(after?.routingStatus).toBe("dns_missing");
-      expect((after?.routingDetail as { failures: number }).failures).toBe(1);
-      await removeCustomDomain(rt, tenantId, d.id, provider);
+        await rwDb.db.update(schema.domains).set({ routingCheckedAt: new Date(Date.now() - 25 * 3_600_000) }).where(eq(schema.domains.id, d.id));
+        await sweepPendingCustomDomains(rwDb.db, { provider, routingDeps: routingDeps({ a: [] }) });
+        const [after] = await rwDb.db.select().from(schema.domains).where(eq(schema.domains.id, d.id));
+        expect(after?.routingStatus).toBe("dns_missing");
+        expect((after?.routingDetail as { failures: number }).failures).toBe(1);
+      } finally {
+        await removeCustomDomain(rt, tenantId, d.id, provider);
+      }
     });
 
     it("probe lookup answers for a domain in any status and never for an unknown host", async () => {
