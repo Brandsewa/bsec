@@ -1565,18 +1565,40 @@ export const CustomDomainItem = z.object({
           value: z.string(),
         })
         .optional(),
+      dcv: z
+        .object({
+          name: z.string(),
+          value: z.string(),
+        })
+        .optional(),
     })
     .nullable()
     .optional(),
+  routing: z.lazy(() => CustomDomainRouting).optional(),
   createdAt: z.string(),
 });
 export type CustomDomainItem = z.infer<typeof CustomDomainItem>;
+
+/**
+ * What the platform saw when it last looked at a custom domain's own DNS and made a real request to it, plus the
+ * records the merchant should create (read live from the platform's fallback origin, never hardcoded).
+ */
+export const CustomDomainRouting = z.object({
+  status: z.enum(["unknown", "dns_missing", "dns_wrong", "dns_ok", "reachable"]),
+  seen: z.object({ a: z.array(z.string()), aaaa: z.array(z.string()), cname: z.string().nullable() }),
+  probeFailed: z.boolean(),
+  failures: z.number().int(),
+  checkedAt: z.string().nullable(),
+  expected: z.object({ cname: z.string(), a: z.array(z.string()), aaaa: z.array(z.string()) }),
+});
+export type CustomDomainRouting = z.infer<typeof CustomDomainRouting>;
 
 export const CustomDomainVerifyResult = z.object({
   id: z.string().uuid(),
   hostname: z.string(),
   status: z.string(),
   sslStatus: z.string().nullable().optional(),
+  routing: CustomDomainRouting.optional(),
 });
 export type CustomDomainVerifyResult = z.infer<typeof CustomDomainVerifyResult>;
 

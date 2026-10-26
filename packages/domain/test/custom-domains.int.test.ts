@@ -17,6 +17,8 @@ import {
   listTenantDomains,
   getOnboardingProgress,
   QuotaExceededError,
+  lookupDomainIdForProbe,
+  type RoutingDeps,
   type CustomDomainProvider,
   type CustomHostnameResult,
   type CustomHostnameStatusResult,
@@ -81,6 +83,27 @@ afterAll(async () => {
   await rtPlatform?.close();
   await container?.stop();
 });
+
+const NO_RECORD = () => Promise.reject(Object.assign(new Error("ENODATA"), { code: "ENODATA" }));
+const TARGETS = { cname: "stores.bcom.si", a: ["104.21.59.175", "172.67.182.4"], aaaa: [] as string[] };
+
+/** DNS answers with a given A record set, and an HTTP probe that asks the real database which domain owns the host. */
+function routingDeps(opts: { a?: string[]; probe?: "real" | "fail" } = {}): RoutingDeps {
+  const a = opts.a ?? ["104.21.59.175"];
+  return {
+    targets: TARGETS,
+    resolver: {
+      resolve4: async () => (a.length ? a : await NO_RECORD()),
+      resolve6: NO_RECORD,
+      resolveCname: NO_RECORD,
+    },
+    fetchImpl: async (url) => {
+      if (opts.probe === "fail") return { status: 502, text: async () => "" };
+      const id = await lookupDomainIdForProbe(rwDb.db, new URL(url).hostname);
+      return { status: id ? 200 : 404, text: async () => JSON.stringify({ domainId: id }) };
+    },
+  };
+}
 
 class MockCustomDomainProvider implements CustomDomainProvider {
   private activeHostnames = new Set<string>();
@@ -225,7 +248,7 @@ describe("M8 Custom Domains & Cloudflare for SaaS Integration (PLAN §8, ADR-007
     // Simulate DNS and Cloudflare verification completing
     mockProvider.setActive("shop.mybrand.in");
 
-    const verified = await verifyCustomDomain(rt, tenantId, customDomainId, mockProvider);
+    const verified = await verifyCustomDomain(rt, tenantId, customDomainId, mockProvider, routingDeps());
     expect(verified.status).toBe("active");
     expect(verified.sslStatus).toBe("active");
 
@@ -298,7 +321,7 @@ describe("M8 Custom Domains & Cloudflare for SaaS Integration (PLAN §8, ADR-007
 
     // Once DNS and SSL are done at the provider, the next pass activates it without the merchant doing anything.
     configured.setActive("late.setup-example.com");
-    await sweepPendingCustomDomains(rwDb.db, { provider: configured });
+    await sweepPendingCustomDomains(rwDb.db, { provider: configured, routingDeps: routingDeps() });
     const [active] = await rwDb.db.select().from(schema.domains).where(eq(schema.domains.id, saved.id));
     expect(active?.status).toBe("active");
 
@@ -313,6 +336,107 @@ describe("M8 Custom Domains & Cloudflare for SaaS Integration (PLAN §8, ADR-007
       deleteCustomHostname: async () => ({ deleted: true }),
     };
     expect(await sweepPendingCustomDomains(rwDb.db, { provider: off })).toEqual({ checked: 0, changed: 0 });
+  });
+
+  describe("routing: Cloudflare 'active' is not enough (darjeelinghoney.com incident)", () => {
+    async function addPending(hostname: string, provider: MockCustomDomainProvider) {
+      const added = await addCustomDomain(rt, tenantId, { hostname, prevalidateTxt: true, provider });
+      provider.setActive(hostname);
+      return added;
+    }
+
+    it("keeps a domain out of 'active' while its DNS has no record, and names the problem", async () => {
+      const provider = new MockCustomDomainProvider();
+      const d = await addPending("norecord.brand-one.com", provider);
+      const res = await verifyCustomDomain(rt, tenantId, d.id, provider, routingDeps({ a: [] }));
+      expect(res.sslStatus).toBe("active");
+      expect(res.status).toBe("awaiting_dns");
+      expect(res.routingStatus).toBe("dns_missing");
+      await removeCustomDomain(rt, tenantId, d.id, provider);
+    });
+
+    it("reports 'dns_wrong' and the addresses seen when the domain points at a parking page", async () => {
+      const provider = new MockCustomDomainProvider();
+      const d = await addPending("parked.brand-two.com", provider);
+      const res = await verifyCustomDomain(rt, tenantId, d.id, provider, routingDeps({ a: ["84.32.84.32"] }));
+      expect(res.status).toBe("awaiting_dns");
+      expect(res.routingStatus).toBe("dns_wrong");
+      expect(res.routingDetail?.a).toEqual(["84.32.84.32"]);
+      await removeCustomDomain(rt, tenantId, d.id, provider);
+    });
+
+    it("stays pending when DNS points at us but the site does not answer yet", async () => {
+      const provider = new MockCustomDomainProvider();
+      const d = await addPending("slow.brand-three.com", provider);
+      const res = await verifyCustomDomain(rt, tenantId, d.id, provider, routingDeps({ probe: "fail" }));
+      expect(res.status).toBe("awaiting_dns");
+      expect(res.routingStatus).toBe("dns_ok");
+      expect(res.routingDetail?.probe).toBe("failed");
+      await removeCustomDomain(rt, tenantId, d.id, provider);
+    });
+
+    it("becomes active only when DNS and the HTTP probe both pass; later failures degrade it after 3 checks, with audit rows", async () => {
+      const provider = new MockCustomDomainProvider();
+      const d = await addPending("good.brand-four.com", provider);
+      const ok = await verifyCustomDomain(rt, tenantId, d.id, provider, routingDeps());
+      expect(ok.status).toBe("active");
+      expect(ok.routingStatus).toBe("reachable");
+
+      const broken = routingDeps({ a: [] });
+      const first = await verifyCustomDomain(rt, tenantId, d.id, provider, broken);
+      const second = await verifyCustomDomain(rt, tenantId, d.id, provider, broken);
+      expect(first.status).toBe("active");
+      expect(second.status).toBe("active");
+      const third = await verifyCustomDomain(rt, tenantId, d.id, provider, broken);
+      expect(third.status).toBe("degraded");
+      expect(third.routingDetail?.failures).toBe(3);
+
+      const [degradedAudit] = await platformDb.db
+        .select()
+        .from(schema.auditLogs)
+        .where(and(eq(schema.auditLogs.tenantId, tenantId), eq(schema.auditLogs.action, "domain.degraded"), eq(schema.auditLogs.targetId, d.id)));
+      expect(degradedAudit?.actorType).toBe("system");
+
+      // A degraded domain is still resolvable by the host resolver (it is not removed) and recovers by itself.
+      const back = await verifyCustomDomain(rt, tenantId, d.id, provider, routingDeps());
+      expect(back.status).toBe("active");
+      expect(back.routingDetail?.failures).toBe(0);
+      const [recoveredAudit] = await platformDb.db
+        .select()
+        .from(schema.auditLogs)
+        .where(and(eq(schema.auditLogs.tenantId, tenantId), eq(schema.auditLogs.action, "domain.recovered"), eq(schema.auditLogs.targetId, d.id)));
+      expect(recoveredAudit).toBeDefined();
+      await removeCustomDomain(rt, tenantId, d.id, provider);
+    });
+
+    it("sweep re-checks only active domains that were not checked in the last day", async () => {
+      const provider = new MockCustomDomainProvider();
+      const d = await addPending("daily.brand-five.com", provider);
+      await verifyCustomDomain(rt, tenantId, d.id, provider, routingDeps());
+      const fresh = await sweepPendingCustomDomains(rwDb.db, { provider, routingDeps: routingDeps({ a: [] }) });
+      const [still] = await rwDb.db.select().from(schema.domains).where(eq(schema.domains.id, d.id));
+      expect(still?.status).toBe("active");
+      expect(still?.routingStatus).toBe("reachable");
+      expect(fresh.checked).toBe(0);
+
+      await rwDb.db.update(schema.domains).set({ routingCheckedAt: new Date(Date.now() - 25 * 3_600_000) }).where(eq(schema.domains.id, d.id));
+      const stale = await sweepPendingCustomDomains(rwDb.db, { provider, routingDeps: routingDeps({ a: [] }) });
+      expect(stale.checked).toBe(1);
+      const [after] = await rwDb.db.select().from(schema.domains).where(eq(schema.domains.id, d.id));
+      expect(after?.routingStatus).toBe("dns_missing");
+      expect((after?.routingDetail as { failures: number }).failures).toBe(1);
+      await removeCustomDomain(rt, tenantId, d.id, provider);
+    });
+
+    it("probe lookup answers for a domain in any status and never for an unknown host", async () => {
+      const provider = new MockCustomDomainProvider();
+      const d = await addPending("probe.brand-six.com", provider);
+      expect(d.status).not.toBe("active");
+      expect(await lookupDomainIdForProbe(rwDb.db, "Probe.Brand-Six.com:443")).toBe(d.id);
+      expect(await lookupDomainIdForProbe(rwDb.db, "unknown.nowhere-example.com")).toBeNull();
+      await removeCustomDomain(rt, tenantId, d.id, provider);
+      expect(await lookupDomainIdForProbe(rwDb.db, "probe.brand-six.com")).toBeNull();
+    });
   });
 
   it("removes custom domain and automatically reassigns primary back to platform subdomain", async () => {
@@ -368,7 +492,7 @@ describe("M8 Custom Domains & Cloudflare for SaaS Integration (PLAN §8, ADR-007
     // Verify denial and success
     await expect(verifyCustomDomain(rt, deniedCtx, added.id, mockProvider)).rejects.toThrow(/Forbidden/);
     mockProvider.setActive("audit.example.com");
-    const verified = await verifyCustomDomain(rt, adminCtx, added.id, mockProvider);
+    const verified = await verifyCustomDomain(rt, adminCtx, added.id, mockProvider, routingDeps());
     expect(verified.status).toBe("active");
 
     const [verifyAudit] = await platformDb.db

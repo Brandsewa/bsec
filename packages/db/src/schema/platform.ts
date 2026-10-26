@@ -33,6 +33,10 @@ export const domains = pgTable("domains", {
   sslStatus: text("ssl_status"),
   failureReason: text("failure_reason"),
   lastCheckedAt: timestamp("last_checked_at", { withTimezone: true }),
+  /** unknown | dns_missing | dns_wrong | dns_ok | reachable (migration 0081): what the domain's own DNS and a real request showed. */
+  routingStatus: text("routing_status"),
+  routingDetail: jsonb("routing_detail"),
+  routingCheckedAt: timestamp("routing_checked_at", { withTimezone: true }),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().default(sql`now()`),
   updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().default(sql`now()`),
 });

@@ -139,6 +139,7 @@ export * from "./saas/onboarding.ts";
 export * from "./saas/billing.ts";
 export * from "./domains/provider.ts";
 export * from "./domains/service.ts";
+export * from "./domains/routing.ts";
 export { warnIfEncryptionKeyMissing, isEncryptionKeyConfigured } from "@bs/payments";
 export * from "./system/tenant-lifecycle.ts";
 export * from "./platform/support-sessions.ts";
