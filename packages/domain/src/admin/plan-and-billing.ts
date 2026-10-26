@@ -58,6 +58,10 @@ export interface PlanAndBillingView {
     phoneOnFile: boolean;
     /** While on a trial: when the trial (and so the first charge) ends. */
     firstChargeAt: string | null;
+    /** When a free-months coupon ends: nothing but a refunded 1 rupee check is charged until then. */
+    freePeriodEndsAt: string | null;
+    /** A percent-off coupon that discounts the first payment (renewals are at the list price); null when none applies. */
+    firstPaymentCoupon: { percentOff: number; planCode: string | null } | null;
     /** When an active subscription will end because it was cancelled. */
     cancelAt: string | null;
   };
@@ -276,6 +280,12 @@ export async function getPlanAndBilling(
     if (!(e instanceof SaasNotConfiguredError)) console.error("[billing] could not load the platform billing credentials", e);
   }
   const authorizedAt = sub?.authorizedAt ?? null;
+  const [freePromo] = await saasDb(rt)
+    .select({ endsAt: schema.tenantPromotions.endsAt })
+    .from(schema.tenantPromotions)
+    .where(and(eq(schema.tenantPromotions.tenantId, ctx.tenantId), eq(schema.tenantPromotions.status, "active"), eq(schema.tenantPromotions.kind, "free_months"), sql`${schema.tenantPromotions.endsAt} > now()`))
+    .limit(1)
+    .catch(() => []);
   return {
     plan: planView,
     usage,
@@ -289,6 +299,8 @@ export async function getPlanAndBilling(
       activationRequired: await needsActivation(rt, ctx.tenantId, sub),
       phoneOnFile: await ownerHasPhone(rt, ctx).catch(() => false),
       firstChargeAt: sub?.status === "trialing" ? (sub.currentPeriodEnd?.toISOString() ?? null) : null,
+      freePeriodEndsAt: freePromo?.endsAt.toISOString() ?? null,
+      firstPaymentCoupon: await firstPaymentCoupon(rt, ctx.tenantId),
       cancelAt: sub?.cancelAt?.toISOString() ?? null,
     },
     openPlanChangeRequest,
@@ -555,6 +567,27 @@ function safeReturnUrl(raw: string | undefined): string | undefined {
   }
 }
 
+/**
+ * A percent-off coupon takes that percentage off the FIRST payment only: Cashfree charges one fixed amount per cycle, so renewals
+ * are at the list price. It applies to a store that has never paid (one use), and only while the coupon has not expired.
+ * (A coupon of 100% is treated as a free period by the callers.)
+ */
+async function firstPaymentCoupon(rt: Runtime, tenantId: string): Promise<{ percentOff: number; planCode: string | null } | null> {
+  try {
+    const sdb = saasDb(rt);
+    const [paid] = await sdb.select({ id: schema.platformInvoices.id }).from(schema.platformInvoices).where(eq(schema.platformInvoices.tenantId, tenantId)).limit(1);
+    if (paid) return null;
+    const [p] = await sdb
+      .select({ percentOff: schema.tenantPromotions.percentOff, planCode: schema.tenantPromotions.planCode })
+      .from(schema.tenantPromotions)
+      .where(and(eq(schema.tenantPromotions.tenantId, tenantId), eq(schema.tenantPromotions.status, "active"), eq(schema.tenantPromotions.kind, "percent_off"), sql`${schema.tenantPromotions.endsAt} > now()`))
+      .limit(1);
+    return p?.percentOff && p.percentOff > 0 && p.percentOff < 100 ? { percentOff: p.percentOff, planCode: p.planCode } : null;
+  } catch {
+    return null;
+  }
+}
+
 /** The first charge must be later than this many seconds from now (Razorpay rejects a start_at that is too close). */
 const MIN_START_AHEAD_MS = 15 * 60 * 1000;
 
@@ -601,8 +634,26 @@ export async function subscribeToPlan(
     .where(and(eq(schema.tenantPromotions.tenantId, ctx.tenantId), eq(schema.tenantPromotions.status, "active"), eq(schema.tenantPromotions.kind, "free_months")))
     .limit(1);
   if (promo) candidates.push(promo.endsAt.getTime());
+  // A 100% coupon is a free period for the coupon's duration.
+  const [freeAll] = await saasDb(rt)
+    .select({ endsAt: schema.tenantPromotions.endsAt })
+    .from(schema.tenantPromotions)
+    .where(and(eq(schema.tenantPromotions.tenantId, ctx.tenantId), eq(schema.tenantPromotions.status, "active"), eq(schema.tenantPromotions.kind, "percent_off"), sql`${schema.tenantPromotions.percentOff} >= 100`))
+    .limit(1);
+  if (freeAll) candidates.push(freeAll.endsAt.getTime());
   const target = candidates.length > 0 ? Math.max(...candidates) : 0;
   const startAtMs = target > Date.now() + MIN_START_AHEAD_MS ? target : 0;
+
+  // Nothing deferred: a percent-off coupon discounts the first payment (one use, the chosen plan must match the coupon's plan).
+  let firstPaymentPaise = 0;
+  if (!startAtMs) {
+    const coupon = await firstPaymentCoupon(rt, ctx.tenantId);
+    if (coupon && (!coupon.planCode || coupon.planCode === input.planCode)) {
+      const [planRow] = await db.select({ m: schema.plans.priceMonthlyPaise, y: schema.plans.priceYearlyPaise }).from(schema.plans).where(eq(schema.plans.code, input.planCode)).limit(1);
+      const list = input.interval === "yearly" ? planRow?.y : planRow?.m;
+      if (list) firstPaymentPaise = Math.round((list * (100 - coupon.percentOff)) / 100);
+    }
+  }
 
   const res = await changeTenantPlan(rt, {
     tenantId: ctx.tenantId,
@@ -615,6 +666,7 @@ export async function subscribeToPlan(
     ...(startAtMs ? { startAt: Math.floor(startAtMs / 1000) } : {}),
     // Nothing to wait for (no trial or free period left): the first cycle is paid now, when the mandate is authorised.
     ...(startAtMs ? {} : { chargeFirstCycleNow: true }),
+    ...(firstPaymentPaise > 0 ? { firstPaymentPaise } : {}),
   });
 
   await withTenant(db, ctx.tenantId, async (tx) => {
