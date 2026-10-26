@@ -1075,6 +1075,13 @@
   }
 }
 
+/* A Block is a flex item with flex-basis 0 so siblings share a row equally. When the parent stacks (column on
+   tablet/mobile) that basis replaces the Block's height, and a Block whose only content is an absolutely placed
+   background image collapses to 0px and the image paints over the next section. Using the height as a floor keeps it. */
+.brxe-block.brx-resp {
+  min-height: var(--b-mnh, var(--b-h, auto)) !important;
+}
+
 /* Bricks elements sizing and layout */
 .brxe-image {
   display: block;
