@@ -627,6 +627,49 @@ function cleanThemeLayout(layout: ResolvedThemeLayout | undefined): ThemeLayoutS
   return Object.keys(out).length > 0 ? out : undefined;
 }
 
+/**
+ * Text input that keeps what the person types as a local draft and commits the cleaned value on blur or Enter.
+ * Committing on every keystroke re-resolved the value (`5` became `5px`, a cleared box snapped back), so editing was impossible.
+ */
+function LengthInput({
+  value,
+  placeholder,
+  disabled,
+  fallback,
+  style,
+  onCommit,
+}: {
+  value: string;
+  placeholder?: string | undefined;
+  disabled?: boolean | undefined;
+  /** Used when the box holds something that is not a length (and for a cleared box when set). */
+  fallback?: string | undefined;
+  style?: CSSProperties | undefined;
+  onCommit: (next: string) => void;
+}) {
+  const [draft, setDraft] = useState<string | null>(null);
+  const commit = (text: string) => {
+    setDraft(null);
+    const cleaned = sanitizeLayoutLength(text, fallback) ?? (text.trim() === "" ? "" : (fallback ?? ""));
+    if (cleaned !== value) onCommit(cleaned);
+  };
+  return (
+    <input
+      type="text"
+      value={draft ?? value}
+      placeholder={placeholder}
+      disabled={disabled}
+      onChange={(e) => setDraft(e.target.value)}
+      onBlur={(e) => commit(e.target.value)}
+      onKeyDown={(e) => {
+        if (e.key === "Enter") commit(e.currentTarget.value);
+        if (e.key === "Escape") setDraft(null);
+      }}
+      style={style}
+    />
+  );
+}
+
 function QuadInputGroup({
   values,
   disabled,
@@ -656,16 +699,11 @@ function QuadInputGroup({
       {sides.map(({ key, label: sideLabel, placeholder }) => (
         <div key={key}>
           <span style={{ display: "block", fontSize: 9, color: "#71717a", marginBottom: 2 }}>{sideLabel}</span>
-          <input
-            type="text"
+          <LengthInput
             value={values?.[key] ?? ""}
             placeholder={placeholder}
             disabled={disabled}
-            onChange={(e) => onChange({ ...values, [key]: e.target.value })}
-            onBlur={(e) => {
-              const sanitized = sanitizeLayoutLength(e.target.value) ?? (e.target.value.trim() === "" ? "" : e.target.value);
-              onChange({ ...values, [key]: sanitized });
-            }}
+            onCommit={(next) => onChange({ ...values, [key]: next })}
             style={{ ...input, padding: "4px 6px", fontSize: 11 }}
           />
         </div>
@@ -700,16 +738,11 @@ function SizingInputGroup({
       {fields.map(({ key, label: fieldLabel, placeholder }) => (
         <div key={key}>
           <span style={{ display: "block", fontSize: 9, color: "#71717a", marginBottom: 2 }}>{fieldLabel}</span>
-          <input
-            type="text"
+          <LengthInput
             value={values?.[key] ?? ""}
             placeholder={placeholder}
             disabled={disabled}
-            onChange={(e) => onChange({ ...values, [key]: e.target.value })}
-            onBlur={(e) => {
-              const sanitized = sanitizeLayoutLength(e.target.value) ?? (e.target.value.trim() === "" ? "" : e.target.value);
-              onChange({ ...values, [key]: sanitized });
-            }}
+            onCommit={(next) => onChange({ ...values, [key]: next })}
             style={{ ...input, padding: "4px 6px", fontSize: 11 }}
           />
         </div>
@@ -815,16 +848,12 @@ function LayoutSettingsEditor({
       </div>
 
       <Field title="Site width" hint={`Maximum container width on ${DEVICE_LABELS[activeDevice].label.toLowerCase()} (e.g. 1200px, 100%)`}>
-        <input
-          type="text"
+        <LengthInput
           value={currentDev.siteWidth}
           placeholder={DEFAULT_SITE_WIDTHS[activeDevice]}
           disabled={disabled}
-          onChange={(e) => updateDev({ siteWidth: e.target.value })}
-          onBlur={(e) => {
-            const sanitized = sanitizeLayoutLength(e.target.value, DEFAULT_SITE_WIDTHS[activeDevice]) ?? DEFAULT_SITE_WIDTHS[activeDevice];
-            updateDev({ siteWidth: sanitized });
-          }}
+          fallback={DEFAULT_SITE_WIDTHS[activeDevice]}
+          onCommit={(next) => updateDev({ siteWidth: next })}
           style={input}
         />
       </Field>
