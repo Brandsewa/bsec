@@ -324,10 +324,18 @@ describe("C2 subscribe, charge and cancel through Cashfree", () => {
     expect(calls.find((c) => c.url.endsWith("/pg/subscriptions"))!.body.authorization_details).toMatchObject({ authorization_amount: 1, authorization_amount_refund: true });
 
     const subId = (await latestSub(r.tenantId)).providerSubscriptionId!;
+    // With the trial off the zero-day trial has already lapsed: the sweep made the store past due and restricted.
+    await rt._db.db.execute(sql`UPDATE subscriptions SET status = 'past_due', past_due_since = now() WHERE tenant_id = ${r.tenantId}`);
+    await rt._db.db.execute(sql`INSERT INTO tenant_size_tiers (tenant_id, tier) VALUES (${r.tenantId}, 'XS') ON CONFLICT (tenant_id) DO UPDATE SET tier = 'XS'`);
     // The 1 rupee mandate check is not a plan payment: no invoice, but the authorised mandate opens a store the free period covers.
     const auth = post({ type: "SUBSCRIPTION_AUTH_STATUS", data: { subscription_id: subId, payment_type: "AUTH", payment_status: "SUCCESS", cf_payment_id: 880101, payment_amount: 1 } });
     expect((await handleCashfreeBillingWebhook(rt, auth)).actionTaken).toBe("subscription_authorised_noted");
-    expect(await latestSub(r.tenantId)).toMatchObject({ paymentRequired: false });
+    const covered = await latestSub(r.tenantId);
+    // Covered until the free period ends (not past due, not restricted); the first charge then makes it active.
+    expect(covered).toMatchObject({ paymentRequired: false, status: "trialing", pastDueSince: null });
+    expect(Math.abs(covered.currentPeriodEnd!.getTime() - (Date.now() + 90 * 24 * 3600 * 1000))).toBeLessThan(60_000);
+    const tierRows = await rt._db.db.execute<{ tier: string }>(sql`SELECT tier FROM tenant_size_tiers WHERE tenant_id = ${r.tenantId}`);
+    expect(tierRows.rows[0]?.tier).toBe("S");
     expect((await getAdminMe(rt, r.ownerId)).stores.find((s) => s.tenantId === r.tenantId)?.paymentRequired).toBe(false);
     expect(await rt._db.db.select().from(schema.platformInvoices).where(eq(schema.platformInvoices.tenantId, r.tenantId))).toHaveLength(0);
 
