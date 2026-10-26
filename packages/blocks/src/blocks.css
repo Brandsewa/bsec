@@ -296,7 +296,12 @@
 .bsb-mobile-subsublist { padding: 0.25rem 0 0.5rem 1rem; display: flex; flex-direction: column; gap: 0.35rem; }
 
 /* Phones have Search in the bottom bar. */
-@media (max-width: 767px) { .bsb-site-search { display: none; } }
+@media (max-width: 767px) { .bsb-site-actions .bsb-site-search { display: none; } }
+/* On phones the header is logo + account only; Explore (menu), Search and Cart live in the bottom bar. The drawer and cart still mount so the bar can open them. */
+@media (max-width: 767px) { .bsb-mobile-menu .bsb-mobile-toggle, .bsb-site-actions a[href="/cart"] { display: none; } }
+@media (min-width: 768px) { .bsb-phone-only { display: none; } }
+.bsb-site-account { display: inline-flex; align-items: center; gap: 0.4rem; height: 2.25rem; padding: 0 0.75rem; border-radius: 9999px; background: var(--s); color: inherit; text-decoration: none; font-size: 0.875rem; font-weight: 500; max-width: 9rem; }
+.bsb-site-account > span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .bsb-site-actions { display: flex; align-items: center; gap: 0.5rem; margin-left: auto; }
 .bsb-site-icon { display: inline-flex; width: 2.25rem; height: 2.25rem; align-items: center; justify-content: center; border-radius: 9999px; color: inherit; text-decoration: none; position: relative; }
 .bsb-site-icon:hover { background: var(--s); }

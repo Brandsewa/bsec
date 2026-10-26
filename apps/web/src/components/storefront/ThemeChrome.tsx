@@ -4,6 +4,7 @@ import { renderBlockTree, type BlockInstance } from "@bs/blocks";
 import "@bs/blocks/blocks.css";
 import type { BlockRenderData } from "@/components/blocks/BlockRenderer.tsx";
 import { CartBadge } from "./CartBadge.tsx";
+import { AccountLink } from "./AccountLink.tsx";
 import { BannerClient } from "@/components/blocks/BannerClient.tsx";
 
 /**
@@ -36,6 +37,7 @@ export function ThemeChrome({
           </Link>
         ),
         renderCart: () => <CartBadge />,
+        renderAccount: () => <AccountLink />,
         // The announcement bar's previous / next arrows.
         renderBanner: ({ children }) => <BannerClient>{children}</BannerClient>,
       })}

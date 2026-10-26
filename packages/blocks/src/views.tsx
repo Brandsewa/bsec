@@ -1422,10 +1422,17 @@ export function SiteHeaderView({ props, ctx }: A<R.SiteHeaderProps>): ReactNode 
             </NavLink>
           ) : null}
           {props.showAccount ? (
-            <NavLink ctx={ctx} href="/account" className="bsb-site-icon">
-              <span className="bsb-sr">Account</span>
-              {UserIcon}
-            </NavLink>
+            ctx?.renderAccount ? (
+              ctx.renderAccount()
+            ) : (
+              <NavLink ctx={ctx} href="/account" className="bsb-site-icon">
+                <span className="bsb-sr">Account</span>
+                {UserIcon}
+              </NavLink>
+            )
+          ) : ctx?.renderAccount ? (
+            // Phones always show the account pill; a header that turned the account icon off keeps it off on larger screens.
+            <span className="bsb-phone-only">{ctx.renderAccount()}</span>
           ) : null}
           {props.showCart ? (
             ctx?.renderCart ? (

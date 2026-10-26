@@ -6,9 +6,9 @@ import { useRouter } from "next/navigation";
 import { GoogleSignIn } from "./GoogleSignIn.tsx";
 import { Button, Field, FieldLabel, Input, Alert, AlertDescription, Tabs, TabsList, TabsTrigger } from "@bs/ui";
 
-export function LoginForm({ initialTab = "otp", redirectTo = "/account" }: { initialTab?: "password" | "otp"; /** Where to go after signing in (a same-site path). */ redirectTo?: string }) {
+export function LoginForm({ initialTab = "otp", redirectTo = "/account", phoneLogin = false }: { initialTab?: "password" | "otp"; /** Where to go after signing in (a same-site path). */ redirectTo?: string; /** Sign in with a phone code. Off for now: the code step is not set up yet, so only email and password show. */ phoneLogin?: boolean }) {
   const router = useRouter();
-  const [tab, setTab] = useState<"password" | "otp">(initialTab);
+  const [tab, setTab] = useState<"password" | "otp">(phoneLogin ? initialTab : "password");
 
   // Password login state
   const [email, setEmail] = useState("");
@@ -80,6 +80,7 @@ export function LoginForm({ initialTab = "otp", redirectTo = "/account" }: { ini
   return (
     <div className="w-full space-y-5" data-testid="login-form">
       {/* Tabs */}
+      {phoneLogin ? (
       <Tabs
         value={tab}
         onValueChange={(val) => {
@@ -97,6 +98,7 @@ export function LoginForm({ initialTab = "otp", redirectTo = "/account" }: { ini
           </TabsTrigger>
         </TabsList>
       </Tabs>
+      ) : null}
 
       {error ? (
         <Alert variant="destructive" role="alert">

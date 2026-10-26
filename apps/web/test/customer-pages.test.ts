@@ -105,7 +105,7 @@ describe("components", () => {
   });
 
   it("login form begins with the phone number step and never shows a code", () => {
-    const html = renderToString(React.createElement(LoginForm));
+    const html = renderToString(React.createElement(LoginForm, { phoneLogin: true }));
     expect(html).toContain("Send code");
     expect(html).not.toContain("123456");
   });
