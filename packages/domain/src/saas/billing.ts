@@ -32,6 +32,8 @@ export interface SubscriptionBillingProvider {
      * so this is how a first payment happens at sign-up.
      */
     chargeFirstCycleNow?: boolean;
+    /** With `chargeFirstCycleNow`: what the first payment is, in paise, when a coupon discounts it. Renewals stay at the list price. */
+    firstPaymentPaise?: number;
   }): Promise<{
     providerSubscriptionId: string;
     shortUrl?: string;
@@ -227,7 +229,7 @@ export class CashfreeSubscriptionProvider implements SubscriptionBillingProvider
         },
         // UPI AutoPay and cards. eMandate (enach) is left out: Cashfree wants a zero authorisation amount for it, and this one is 1 rupee.
         authorization_details: params.chargeFirstCycleNow
-          ? { authorization_amount: amount, authorization_amount_refund: false, payment_methods: ["upi", "card"] }
+          ? { authorization_amount: params.firstPaymentPaise ? paiseToRupees(params.firstPaymentPaise) : amount, authorization_amount_refund: false, payment_methods: ["upi", "card"] }
           : { authorization_amount: 1, authorization_amount_refund: true, payment_methods: ["upi", "card"] },
         subscription_meta: { ...(params.returnUrl ? { return_url: params.returnUrl } : {}), notification_channel: ["EMAIL"] },
         subscription_expiry_time: expiry.toISOString(),
@@ -488,10 +490,28 @@ async function applyBillingEvent(db: Db, ev: BillingEvent): Promise<string> {
   if (ev.kind === "authorised") {
     // The mandate is authorised, so automatic payment is set up. The plan does not change: the first charge may still be days away.
     if (!ev.providerSubscriptionId) return "ignored";
-    await db
+    const [authorised] = await db
       .update(schema.subscriptions)
       .set({ authorizedAt: sql`COALESCE(${schema.subscriptions.authorizedAt}, now())`, updatedAt: new Date() })
-      .where(eq(schema.subscriptions.providerSubscriptionId, ev.providerSubscriptionId));
+      .where(eq(schema.subscriptions.providerSubscriptionId, ev.providerSubscriptionId))
+      .returning({ id: schema.subscriptions.id, tenantId: schema.subscriptions.tenantId, paymentRequired: schema.subscriptions.paymentRequired });
+    // A store that must pay before opening has nothing to pay while a free-months promotion covers it: the authorised mandate
+    // is the commitment, and the first charge happens when the promotion ends. Without a promotion the first payment opens it.
+    if (authorised?.paymentRequired) {
+      const [promo] = await db
+        .select({ id: schema.tenantPromotions.id })
+        .from(schema.tenantPromotions)
+        .where(
+          and(
+            eq(schema.tenantPromotions.tenantId, authorised.tenantId),
+            eq(schema.tenantPromotions.status, "active"),
+            sql`(${schema.tenantPromotions.kind} = 'free_months' OR ${schema.tenantPromotions.percentOff} >= 100)`,
+            sql`${schema.tenantPromotions.endsAt} > now()`,
+          ),
+        )
+        .limit(1);
+      if (promo) await db.update(schema.subscriptions).set({ paymentRequired: false, updatedAt: new Date() }).where(eq(schema.subscriptions.id, authorised.id));
+    }
     return "subscription_authorised_noted";
   }
 
@@ -932,6 +952,7 @@ export async function changeTenantPlan(
     returnUrl?: string;
     /** Charge the first cycle when the mandate is authorised (no trial or free period to wait for). */
     chargeFirstCycleNow?: boolean;
+    firstPaymentPaise?: number;
     provider?: SubscriptionBillingProvider;
   },
 ) {
@@ -985,6 +1006,7 @@ export async function changeTenantPlan(
     ...(params.customerPhone ? { customerPhone: params.customerPhone } : {}),
     ...(params.returnUrl ? { returnUrl: params.returnUrl } : {}),
     ...(params.chargeFirstCycleNow ? { chargeFirstCycleNow: true } : {}),
+    ...(params.firstPaymentPaise ? { firstPaymentPaise: params.firstPaymentPaise } : {}),
     tenantId: params.tenantId,
     ...(razorpayPlanId ? { planId: razorpayPlanId } : {}),
     ...(gateway === "cashfree" ? { amountPaise: pricePaise } : {}),

@@ -1655,6 +1655,8 @@ export const PlanAndBillingView = z.object({
     activationRequired: z.boolean(),
     phoneOnFile: z.boolean(),
     firstChargeAt: z.string().nullable(),
+    freePeriodEndsAt: z.string().nullable(),
+    firstPaymentCoupon: z.object({ percentOff: z.number().int(), planCode: z.string().nullable() }).nullable(),
     cancelAt: z.string().nullable(),
   }),
   openPlanChangeRequest: z

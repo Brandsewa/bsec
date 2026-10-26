@@ -310,6 +310,65 @@ describe("C2 subscribe, charge and cancel through Cashfree", () => {
     await updatePlatformBillingSettings(rt, owner, { trial: { enabled: true } });
   });
 
+  it("with the trial off and a free-months coupon, authorising the mandate opens the store (nothing is charged until the free period ends)", async () => {
+    await updatePlatformBillingSettings(rt, owner, { trial: { enabled: false } });
+    const slug = `cf-promo-${++seq}`;
+    const r = await provisionTenant(rt, { storeName: slug, slug, planCode: "starter", owner: { email: `owner-${slug}@test.com`, name: "Owner One", password: "a long password 123" }, source: "self_service" });
+    const ctx: TenantContext = { tenantId: r.tenantId, storeStatus: "live", actor: { type: "staff", userId: r.ownerId }, roles: ["store_owner"], permissions: [...STORE_PERMISSIONS], requestId: `req-${slug}` };
+    await rt._db.db.insert(schema.tenantPromotions).values({ tenantId: r.tenantId, kind: "free_months", durationMonths: 3, source: "staff", status: "active", endsAt: new Date(Date.now() + 90 * 24 * 3600 * 1000) });
+    expect((await latestSub(r.tenantId)).paymentRequired).toBe(true);
+    expect((await getPlanAndBilling(rt, ctx)).billing.freePeriodEndsAt).not.toBeNull();
+
+    fakeCashfree();
+    await subscribeToPlan(rt, ctx, { planCode: "starter", interval: "monthly", phone: "9876543210" });
+    expect(calls.find((c) => c.url.endsWith("/pg/subscriptions"))!.body.authorization_details).toMatchObject({ authorization_amount: 1, authorization_amount_refund: true });
+
+    const subId = (await latestSub(r.tenantId)).providerSubscriptionId!;
+    // The 1 rupee mandate check is not a plan payment: no invoice, but the authorised mandate opens a store the free period covers.
+    const auth = post({ type: "SUBSCRIPTION_AUTH_STATUS", data: { subscription_id: subId, payment_type: "AUTH", payment_status: "SUCCESS", cf_payment_id: 880101, payment_amount: 1 } });
+    expect((await handleCashfreeBillingWebhook(rt, auth)).actionTaken).toBe("subscription_authorised_noted");
+    expect(await latestSub(r.tenantId)).toMatchObject({ paymentRequired: false });
+    expect((await getAdminMe(rt, r.ownerId)).stores.find((s) => s.tenantId === r.tenantId)?.paymentRequired).toBe(false);
+    expect(await rt._db.db.select().from(schema.platformInvoices).where(eq(schema.platformInvoices.tenantId, r.tenantId))).toHaveLength(0);
+
+    await updatePlatformBillingSettings(rt, owner, { trial: { enabled: true } });
+  });
+
+  it("a percent-off coupon discounts only the first payment (one use); a 100% coupon is a free period", async () => {
+    await updatePlatformBillingSettings(rt, owner, { trial: { enabled: false } });
+    const mk = async (kind: string, percentOff: number | null) => {
+      const slug = `cf-pct-${++seq}`;
+      const r = await provisionTenant(rt, { storeName: slug, slug, planCode: "growth", owner: { email: `owner-${slug}@test.com`, name: "Owner One", password: "a long password 123" }, source: "self_service" });
+      const ctx: TenantContext = { tenantId: r.tenantId, storeStatus: "live", actor: { type: "staff", userId: r.ownerId }, roles: ["store_owner"], permissions: [...STORE_PERMISSIONS], requestId: `req-${slug}` };
+      await rt._db.db.insert(schema.tenantPromotions).values({ tenantId: r.tenantId, kind, percentOff, durationMonths: 12, source: "staff", status: "active", endsAt: new Date(Date.now() + 365 * 24 * 3600 * 1000) });
+      return { r, ctx };
+    };
+    const [growth] = await rt._db.db.select().from(schema.plans).where(eq(schema.plans.code, "growth"));
+
+    const a = await mk("percent_off", 20);
+    expect((await getPlanAndBilling(rt, a.ctx)).billing.firstPaymentCoupon).toEqual({ percentOff: 20, planCode: null });
+    fakeCashfree();
+    await subscribeToPlan(rt, a.ctx, { planCode: "growth", interval: "yearly", phone: "9876543210" });
+    const body = calls.find((c) => c.url.endsWith("/pg/subscriptions"))!.body as { authorization_details: { authorization_amount: number }; plan_details: { plan_amount: number } };
+    // The first payment is discounted; the recurring plan amount stays at the list price.
+    expect(body.authorization_details.authorization_amount).toBe(Math.round(growth!.priceYearlyPaise * 0.8) / 100);
+    expect(body.plan_details.plan_amount).toBe(growth!.priceYearlyPaise / 100);
+
+    // Once a store has paid, the coupon no longer discounts anything.
+    await rt._db.db.insert(schema.platformInvoices).values({ tenantId: a.r.tenantId, subscriptionId: (await latestSub(a.r.tenantId)).id, number: `T-${seq}`, amountPaise: 100, taxPaise: 0, status: "paid", issuedAt: new Date(), paidAt: new Date(), providerPaymentId: `pct-${seq}` });
+    expect((await getPlanAndBilling(rt, a.ctx)).billing.firstPaymentCoupon).toBeNull();
+
+    const b = await mk("percent_off", 100);
+    fakeCashfree();
+    await subscribeToPlan(rt, b.ctx, { planCode: "growth", interval: "monthly", phone: "9876543210" });
+    expect(calls.find((c) => c.url.endsWith("/pg/subscriptions"))!.body.authorization_details).toMatchObject({ authorization_amount: 1, authorization_amount_refund: true });
+    const subId = (await latestSub(b.r.tenantId)).providerSubscriptionId!;
+    await handleCashfreeBillingWebhook(rt, post({ type: "SUBSCRIPTION_AUTH_STATUS", data: { subscription_id: subId, payment_type: "AUTH", payment_status: "SUCCESS", cf_payment_id: 880201, payment_amount: 1 } }));
+    expect(await latestSub(b.r.tenantId)).toMatchObject({ paymentRequired: false });
+
+    await updatePlatformBillingSettings(rt, owner, { trial: { enabled: true } });
+  });
+
   it("tells a store with no paid plan and no trial left to activate one, and lets a half-finished payment be stopped and redone", async () => {
     // A store created from Super Admin whose trial is still running is not asked to activate yet.
     const fresh = await makeStore();
