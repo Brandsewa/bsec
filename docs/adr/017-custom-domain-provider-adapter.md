@@ -38,5 +38,8 @@ Live credentials for third-party providers (Cloudflare API token, Zone ID) will 
 - Clean separation between internal domain state management and Cloudflare edge infrastructure.
 - Zero downtime migrations for existing live stores.
 
+## Update 2026-10-26: "active" means reachable
+Cloudflare reports a custom hostname `active` after ownership and certificate checks, which says nothing about whether the merchant's DNS reaches us (darjeelinghoney.com showed "connected" with no A record). A domain is now `active` only when Cloudflare is ready **and** `checkDomainRouting` passes: a DNS lookup through public resolvers (CNAME to the fallback origin, an A/AAAA equal to the fallback origin's live addresses, or any Cloudflare proxy address) followed by an HTTP probe of `https://<host>/.well-known/bsec-domain`, which must answer with that domain's own id. Results are stored in `domains.routing_*`. An active domain re-checked daily that fails 3 times in a row becomes `degraded` (still resolvable, banner in admin, audited, recovers by itself). The addresses shown to merchants are read live from the fallback origin because Cloudflare gives no fixed IP on our plan (`CUSTOM_DOMAIN_A_TARGETS` can pin them). Plan: `docs/CUSTOM-DOMAIN-ROUTING-PLAN.md`.
+
 ## Update 2026-10-19
 The polling worker now exists as the `domains.sweep` pg-boss job (every 5 minutes, `sweepPendingCustomDomains`). A domain saved while the provider was unconfigured has no provider id; the next check (manual or sweep) registers it once credentials exist. Traefik needs a catch-all router for custom hostnames: see DEPLOYMENT.md.

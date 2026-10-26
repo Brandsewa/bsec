@@ -3,7 +3,7 @@ interface CfCustomHostnameApiResponse {
     id: string;
     hostname: string;
     status: string;
-    ssl?: { status?: string };
+    ssl?: { status?: string; validation_records?: Array<{ txt_name?: string; txt_value?: string }> };
     ownership_verification?: { name: string; value: string };
     verification_errors?: string[];
   };
@@ -17,6 +17,8 @@ export interface CustomHostnameResult {
     name: string;
     value: string;
   } | undefined;
+  /** Certificate (DCV) TXT record; only present for the TXT validation method, once Cloudflare has generated it. */
+  dcvTxt?: { name: string; value: string } | undefined;
   status: "requested" | "awaiting_dns" | "verifying" | "ssl_pending" | "active" | "failed";
   sslStatus: "not_configured" | "initializing" | "pending_validation" | "pending_issuance" | "active" | "failed";
 }
@@ -27,6 +29,8 @@ export interface CustomHostnameStatusResult {
   status: "requested" | "awaiting_dns" | "verifying" | "ssl_pending" | "active" | "failed";
   sslStatus: "not_configured" | "initializing" | "pending_validation" | "pending_issuance" | "active" | "failed";
   verificationErrors?: string[];
+  txtVerification?: { name: string; value: string } | undefined;
+  dcvTxt?: { name: string; value: string } | undefined;
 }
 
 export interface CustomDomainProvider {
@@ -37,6 +41,13 @@ export interface CustomDomainProvider {
   ): Promise<CustomHostnameResult>;
   getCustomHostnameStatus(providerHostnameId: string): Promise<CustomHostnameStatusResult>;
   deleteCustomHostname(providerHostnameId: string): Promise<{ deleted: boolean }>;
+}
+
+function dcvFrom(result: CfCustomHostnameApiResponse["result"]): { dcvTxt?: { name: string; value: string } } {
+  for (const r of result.ssl?.validation_records ?? []) {
+    if (r.txt_name && r.txt_value) return { dcvTxt: { name: r.txt_name, value: r.txt_value } };
+  }
+  return {};
 }
 
 /**
@@ -115,6 +126,7 @@ export class CloudflareCustomDomainProvider implements CustomDomainProvider {
       hostname: result.hostname,
       cnameTarget: this.fallbackCname,
       ...(txtRecord ? { txtVerification: txtRecord } : {}),
+      ...dcvFrom(result),
       status: this.mapCloudflareStatus(result.status),
       sslStatus: this.mapCloudflareSslStatus(result.ssl?.status),
     };
@@ -155,6 +167,10 @@ export class CloudflareCustomDomainProvider implements CustomDomainProvider {
       status: this.mapCloudflareStatus(result.status),
       sslStatus: this.mapCloudflareSslStatus(result.ssl?.status),
       verificationErrors: result.verification_errors ?? [],
+      ...(result.ownership_verification
+        ? { txtVerification: { name: result.ownership_verification.name, value: result.ownership_verification.value } }
+        : {}),
+      ...dcvFrom(result),
     };
   }
 

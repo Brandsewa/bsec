@@ -263,6 +263,8 @@ import {
   dismissOnboardingProgress,
   getTenantSubscription,
   listTenantDomains,
+  getRoutingTargets,
+  toRoutingView,
   addCustomDomain,
   verifyCustomDomain,
   setPrimaryDomain,
@@ -2759,6 +2761,7 @@ export const storeRouter = os.router({
         .handler(async ({ context }) => {
           if (!context.tenantCtx) throw new Error("Missing tenant context");
           const rows = await listTenantDomains(context.rt, context.tenantCtx);
+          const targets = await getRoutingTargets();
           return rows.map((r) => ({
             id: r.id,
             hostname: r.hostname,
@@ -2768,6 +2771,7 @@ export const storeRouter = os.router({
             sslStatus: r.sslStatus,
             prevalidateTxt: r.prevalidateTxt,
             verification: r.verification ?? null,
+            routing: toRoutingView(r, targets),
             createdAt: r.createdAt.toISOString(),
           }));
         }),
@@ -2780,6 +2784,7 @@ export const storeRouter = os.router({
             hostname: input.hostname,
             ...(input.prevalidateTxt !== undefined ? { prevalidateTxt: input.prevalidateTxt } : {}),
           });
+          const targets = await getRoutingTargets();
           return {
             id: created.id,
             hostname: created.hostname,
@@ -2789,6 +2794,7 @@ export const storeRouter = os.router({
             sslStatus: created.sslStatus,
             prevalidateTxt: created.prevalidateTxt,
             verification: created.verification ?? null,
+            routing: toRoutingView(created, targets),
             createdAt: created.createdAt.toISOString(),
           };
         }),
@@ -2803,6 +2809,7 @@ export const storeRouter = os.router({
             hostname: updated.hostname,
             status: updated.status,
             sslStatus: updated.sslStatus,
+            routing: toRoutingView(updated, await getRoutingTargets()),
           };
         }),
       setPrimary: os.admin.domains.setPrimary

@@ -12,6 +12,7 @@ import { Field } from "@bs/ui";
 import { HeaderActions, SettingsCard, SettingsPageFrame } from "../../../components/settings/settings-page.tsx";
 import { orpc } from "../../../lib/orpc.ts";
 import { errorMessage } from "../../../lib/errors.ts";
+import { describeRouting, isApexDomain } from "../../../lib/domain-hosts.ts";
 
 export const Route = createFileRoute("/_store/settings/domains")({
   pendingComponent: () => <PageSkeleton />,
@@ -30,29 +31,48 @@ function DomainSetupGuide() {
       <p className="font-medium text-foreground">How connecting a domain works</p>
       <ol className="mt-2 list-decimal space-y-1.5 pl-4 text-muted-foreground">
         <li>
-          <span className="font-medium text-foreground">Add your domain here.</span> Enter the address you own, such as{" "}
-          <span className="font-mono">shop.mybrand.com</span>.
+          <span className="font-medium text-foreground">Add your domain here.</span> We recommend a <span className="font-mono">www</span> address such as{" "}
+          <span className="font-mono">www.mybrand.com</span>: it needs one simple record and works with every DNS provider.
         </li>
         <li>
-          <span className="font-medium text-foreground">Create the DNS records we show you</span> at your domain provider (GoDaddy, Namecheap, Cloudflare and
-          so on): a <span className="font-mono">CNAME</span> record that points your domain to our server, and a <span className="font-mono">TXT</span> record
-          if you tick the ownership check.
+          <span className="font-medium text-foreground">Create the DNS record we show you</span> at your domain provider (GoDaddy, Hostinger, Namecheap,
+          Cloudflare and so on). The optional ownership check needs two extra TXT records, but it is{" "}
+          <span className="font-medium text-foreground">not enough on its own</span>: your domain must also point to us.
         </li>
         <li>
           <span className="font-medium text-foreground">Wait for DNS to update.</span> This is usually a few minutes but can take up to 24 to 48 hours.
         </li>
         <li>
-          <span className="font-medium text-foreground">Press "Check status".</span> When the domain is found, it shows as Active with SSL (the padlock)
-          switched on, and you can make it your primary address.
+          <span className="font-medium text-foreground">Press "Check status".</span> We look at your domain's real DNS and open the address ourselves. It shows
+          as Active only when visitors really reach your store, and then you can make it your primary address.
         </li>
       </ol>
       <p className="mt-2 text-muted-foreground">
-        <span className="font-medium text-foreground">Subdomain or main domain?</span> A subdomain such as <span className="font-mono">shop.mybrand.com</span>{" "}
-        or <span className="font-mono">www.mybrand.com</span> is the easiest and works everywhere. For a bare domain such as{" "}
-        <span className="font-mono">mybrand.com</span>, a normal CNAME is not allowed at the root: your provider must offer an ALIAS or ANAME record, or
-        "CNAME flattening" (Cloudflare does). If it does not, connect <span className="font-mono">www.mybrand.com</span> and forward the bare domain to it.
-        Remove any old A, AAAA or CNAME record on the same name first, and do not point it anywhere else while connecting.
+        <span className="font-medium text-foreground">Bare domain (advanced)?</span> For <span className="font-mono">mybrand.com</span> without{" "}
+        <span className="font-mono">www</span>, DNS does not allow a CNAME, so we show A records instead. Remove any old A, AAAA or CNAME record on the same
+        name first (a parking page record will block it). Many providers can also forward the bare domain to <span className="font-mono">www</span>.
       </p>
+    </div>
+  );
+}
+
+type RecordRow = { type: string; name: string; value: string; copyLabel: string; copyButton: string };
+
+/** One DNS record the merchant must create, with a copy button for the value. */
+function RecordLine({ row, onCopy }: { row: RecordRow; onCopy: (text: string, label: string) => void }) {
+  return (
+    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 rounded bg-background p-2.5 border border-border">
+      <div className="flex flex-wrap items-center gap-3">
+        <span className="font-bold text-foreground">{row.type}</span>
+        <span className="text-muted-foreground">Name:</span>
+        <span className="text-foreground">{row.name}</span>
+        <span className="text-muted-foreground">{row.type === "CNAME" ? "Target:" : row.type === "TXT" ? "Value:" : "Points to:"}</span>
+        <span className="text-foreground truncate max-w-xs">{row.value}</span>
+      </div>
+      <Button type="button" size="sm" variant="ghost" onClick={() => onCopy(row.value, row.copyLabel)}>
+        <Copy className="size-3.5 mr-1" aria-hidden />
+        {row.copyButton}
+      </Button>
     </div>
   );
 }
@@ -115,7 +135,8 @@ export function DomainsSettingsPage() {
           if (res.status === "active") {
             toast.success("Domain verified and active!");
           } else {
-            toast.info(`Verification status: ${res.status.replace("_", " ")}. DNS changes may take some time to propagate.`);
+            const what = res.routing ? describeRouting(res.hostname, res.routing).text : null;
+            toast.info(what ?? `Verification status: ${res.status.replace("_", " ")}. DNS changes may take some time to propagate.`);
           }
           setVerifyingId(null);
         },
@@ -285,7 +306,15 @@ export function DomainsSettingsPage() {
           const isProviderDisabled = d.status === "requested" && d.sslStatus === "not_configured";
           const isActive = d.status === "active";
           // A domain saved before the platform finished its domain setup is still shown with its records; "Check status" registers it.
-          const isPending = !isActive && d.status !== "failed";
+          const isDegraded = d.status === "degraded";
+          const isPending = !isActive && d.status !== "failed" && !isDegraded;
+          const showRecords = isPending || isDegraded;
+          const apex = isApexDomain(d.hostname);
+          const expected = d.routing?.expected;
+          const cnameTarget = expected?.cname || d.verification?.cname || "stores.bcom.si";
+          const routingNote = describeRouting(d.hostname, d.routing);
+          const toneClass =
+            routingNote.tone === "ok" ? "text-emerald-600 dark:text-emerald-400" : routingNote.tone === "problem" ? "text-destructive" : "text-amber-700 dark:text-amber-300";
           const isFailed = d.status === "failed";
           const isVerifying = verifyingId === d.id || verifyDomain.isPending;
 
@@ -319,6 +348,12 @@ export function DomainsSettingsPage() {
                         Awaiting DNS
                       </span>
                     )}
+                    {isDegraded && (
+                      <span className="inline-flex items-center gap-1 rounded bg-destructive/10 px-2 py-0.5 text-xs font-medium text-destructive">
+                        <AlertTriangle className="size-3" aria-hidden />
+                        Needs attention
+                      </span>
+                    )}
                     {isFailed && (
                       <span className="inline-flex items-center gap-1 rounded bg-destructive/10 px-2 py-0.5 text-xs font-medium text-destructive">
                         <AlertTriangle className="size-3" aria-hidden />
@@ -328,7 +363,7 @@ export function DomainsSettingsPage() {
                   </div>
 
                   <div className="flex items-center gap-2">
-                    {isPending && (
+                    {showRecords && (
                       <Button size="sm" variant="outline" disabled={isVerifying} onClick={() => handleVerify(d.id)}>
                         <RefreshCw className={`mr-1.5 size-3.5 ${isVerifying ? "animate-spin" : ""}`} aria-hidden />
                         {isVerifying ? "Checking…" : "Check status"}
@@ -368,6 +403,16 @@ export function DomainsSettingsPage() {
                   </div>
                 )}
 
+                {isDegraded && (
+                  <div role="alert" className="rounded-md border border-destructive/30 bg-destructive/5 p-3.5 text-xs text-foreground">
+                    <p className="font-medium text-destructive">This domain no longer reaches your store</p>
+                    <p className="mt-1 text-muted-foreground">
+                      Its DNS record changed or was removed, so visitors may not be able to open it. Re-create the record below, then press Check status.
+                      Your store stays available on its platform address.
+                    </p>
+                  </div>
+                )}
+
                 {isFailed && (
                   <div role="alert" className="rounded-md border border-destructive/30 bg-destructive/5 p-3.5 text-xs text-foreground space-y-2">
                     <p className="font-medium text-destructive">DNS verification could not be completed</p>
@@ -391,67 +436,74 @@ export function DomainsSettingsPage() {
                   </div>
                 )}
 
-                {isPending && (
+                {showRecords && (
                   <div className="space-y-3">
                     <div className="rounded-md border border-border bg-muted/40 p-3.5 text-xs">
                       <p className="font-medium text-foreground">DNS Configuration Required</p>
                       <p className="mt-0.5 text-muted-foreground">
-                        Sign in to your domain registrar or DNS host (e.g. Cloudflare, GoDaddy, Namecheap) and add the following records:
+                        Sign in to your domain registrar or DNS host (e.g. Cloudflare, GoDaddy, Hostinger, Namecheap) and add the following records:
                       </p>
 
-                      <div className="mt-3 space-y-2 font-mono text-[11px]">
-                        {/* CNAME Record */}
-                        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 rounded bg-background p-2.5 border border-border">
-                          <div className="flex flex-wrap items-center gap-3">
-                            <span className="font-bold text-foreground">CNAME</span>
-                            <span className="text-muted-foreground">Name:</span>
-                            <span className="text-foreground">{d.hostname}</span>
-                            <span className="text-muted-foreground">Target:</span>
-                            <span className="text-foreground">{d.verification?.cname || "stores.bcom.si"}</span>
+                      <div className="mt-3 space-y-3 font-mono text-[11px]">
+                        {d.prevalidateTxt && (
+                          <div className="space-y-2">
+                            <p className="font-sans text-xs font-medium text-foreground">Step 1: prove you own the domain (TXT)</p>
+                            {d.verification?.txt ? (
+                              <RecordLine
+                                row={{ type: "TXT", name: d.verification.txt.name, value: d.verification.txt.value, copyLabel: "TXT verification value", copyButton: "Copy value" }}
+                                onCopy={copy}
+                              />
+                            ) : null}
+                            {d.verification?.dcv ? (
+                              <RecordLine
+                                row={{ type: "TXT", name: d.verification.dcv.name, value: d.verification.dcv.value, copyLabel: "certificate TXT value", copyButton: "Copy value" }}
+                                onCopy={copy}
+                              />
+                            ) : (
+                              <p className="font-sans text-muted-foreground">The certificate record appears here shortly. Press Check status in a minute.</p>
+                            )}
                           </div>
-                          <Button
-                            type="button"
-                            size="sm"
-                            variant="ghost"
-                            onClick={() => copy(d.verification?.cname || "stores.bcom.si", "CNAME target")}
-                          >
-                            <Copy className="size-3.5 mr-1" aria-hidden />
-                            Copy target
-                          </Button>
-                        </div>
+                        )}
 
-                        {/* TXT Record if pre-validation requested */}
-                        {d.verification?.txt ? (
-                          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 rounded bg-background p-2.5 border border-border">
-                            <div className="flex flex-wrap items-center gap-3">
-                              <span className="font-bold text-foreground">TXT</span>
-                              <span className="text-muted-foreground">Name:</span>
-                              <span className="text-foreground">{d.verification.txt.name}</span>
-                              <span className="text-muted-foreground">Value:</span>
-                              <span className="text-foreground truncate max-w-xs">{d.verification.txt.value}</span>
-                            </div>
-                            <Button
-                              type="button"
-                              size="sm"
-                              variant="ghost"
-                              onClick={() => {
-                                const val = d.verification?.txt?.value;
-                                if (val) copy(val, "TXT verification value");
-                              }}
-                            >
-                              <Copy className="size-3.5 mr-1" aria-hidden />
-                              Copy value
-                            </Button>
-                          </div>
-                        ) : null}
+                        <div className="space-y-2">
+                          <p className="font-sans text-xs font-medium text-foreground">
+                            {d.prevalidateTxt ? "Step 2: point your domain to us (required)" : "Point your domain to us"}
+                          </p>
+                          {apex ? (
+                            (expected?.a ?? []).length > 0 ? (
+                              <>
+                                {(expected?.a ?? []).map((ip) => (
+                                  <RecordLine key={ip} row={{ type: "A", name: d.hostname, value: ip, copyLabel: "A record address", copyButton: "Copy address" }} onCopy={copy} />
+                                ))}
+                                {(expected?.aaaa ?? []).map((ip) => (
+                                  <RecordLine key={ip} row={{ type: "AAAA", name: d.hostname, value: ip, copyLabel: "AAAA record address", copyButton: "Copy address" }} onCopy={copy} />
+                                ))}
+                                <p className="font-sans text-muted-foreground">
+                                  Add every A record above (they all point to us); AAAA records are optional. If your provider offers ALIAS, ANAME or CNAME flattening,
+                                  you can instead point <span className="font-mono">{d.hostname}</span> to <span className="font-mono">{cnameTarget}</span>. Or connect{" "}
+                                  <span className="font-mono">www.{d.hostname}</span> and forward the bare domain to it.
+                                </p>
+                              </>
+                            ) : (
+                              <p className="font-sans text-muted-foreground">
+                                We could not look up our addresses just now. Press Check status to try again, or connect <span className="font-mono">www.{d.hostname}</span>{" "}
+                                with a CNAME to <span className="font-mono">{cnameTarget}</span>.
+                              </p>
+                            )
+                          ) : (
+                            <RecordLine
+                              row={{ type: "CNAME", name: d.hostname, value: cnameTarget, copyLabel: "CNAME target", copyButton: "Copy target" }}
+                              onCopy={copy}
+                            />
+                          )}
+                          <p className={`font-sans ${toneClass}`} role="status">
+                            {routingNote.text}
+                          </p>
+                        </div>
                       </div>
 
                       <div className="mt-4 flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-t border-border pt-3">
-                        <Button
-                          size="sm"
-                          disabled={isVerifying}
-                          onClick={() => handleVerify(d.id)}
-                        >
+                        <Button size="sm" disabled={isVerifying} onClick={() => handleVerify(d.id)}>
                           <RefreshCw className={`mr-1.5 size-3.5 ${isVerifying ? "animate-spin" : ""}`} aria-hidden />
                           {isVerifying ? "Verifying…" : "Check status"}
                         </Button>

@@ -1,5 +1,5 @@
 import { randomUUID } from "node:crypto";
-import { and, eq, inArray, ne, sql } from "drizzle-orm";
+import { and, eq, inArray, isNull, lt, ne, or, sql } from "drizzle-orm";
 import { schema, withTenant } from "@bs/db";
 import type { Runtime } from "../runtime.ts";
 import { assertCustomDomainQuota } from "../system/quotas.ts";
@@ -9,6 +9,18 @@ import {
   type CustomDomainProvider,
   CloudflareCustomDomainProvider,
 } from "./provider.ts";
+import { checkDomainRouting, type DnsResolverLike, type ProbeFetch, type RoutingDetail, type RoutingTargets } from "./routing.ts";
+
+/** Test seam: the DNS resolver, the expected targets and the HTTP fetch used by the routing check. */
+export interface RoutingDeps {
+  resolver?: DnsResolverLike;
+  targets?: RoutingTargets;
+  fetchImpl?: ProbeFetch;
+}
+
+/** An active domain that fails its routing re-check this many times in a row is marked "degraded". */
+const DEGRADE_AFTER_FAILURES = 3;
+const ACTIVE_RECHECK_MS = 24 * 60 * 60_000;
 
 export interface CustomDomainRecord {
   id: string;
@@ -23,7 +35,11 @@ export interface CustomDomainRecord {
   verification: {
     cname?: string;
     txt?: { name: string; value: string };
+    dcv?: { name: string; value: string };
   } | null;
+  routingStatus: string | null;
+  routingDetail: RoutingDetail | null;
+  routingCheckedAt: Date | null;
   createdAt: Date;
   updatedAt: Date;
 }
@@ -201,6 +217,7 @@ export async function addCustomDomainInternal(
       : {
           cname: cfResult.cnameTarget,
           ...(cfResult.txtVerification ? { txt: cfResult.txtVerification } : {}),
+          ...(cfResult.dcvTxt ? { dcv: cfResult.dcvTxt } : {}),
         };
 
   // 4. Insert into domains table
@@ -231,6 +248,7 @@ export async function verifyCustomDomain(
   ctxOrTenantId: TenantContext | string,
   domainId: string,
   providerOverride?: CustomDomainProvider,
+  routingDeps?: RoutingDeps,
 ): Promise<CustomDomainRecord> {
   const tenantId = typeof ctxOrTenantId === "string" ? ctxOrTenantId : ctxOrTenantId.tenantId;
   if (typeof ctxOrTenantId !== "string") {
@@ -242,6 +260,7 @@ export async function verifyCustomDomain(
     tenantId,
     domainId,
     providerOverride,
+    routingDeps,
   );
 
   if (updated) {
@@ -251,6 +270,7 @@ export async function verifyCustomDomain(
       diff: {
         status: { before: domain.status, after: nextStatus },
         sslStatus: { before: domain.sslStatus, after: statusRes.sslStatus },
+        routingStatus: { before: domain.routingStatus, after: updated.routingStatus },
       },
     });
   }
@@ -263,8 +283,9 @@ export async function verifyCustomDomainInternal(
   tenantId: string,
   domainId: string,
   providerOverride?: CustomDomainProvider,
+  routingDeps?: RoutingDeps,
 ) {
-  return verifyDomainWithDb(rt._db.db, tenantId, domainId, providerOverride);
+  return verifyDomainWithDb(rt._db.db, tenantId, domainId, providerOverride, routingDeps);
 }
 
 type Db = Runtime["_db"]["db"];
@@ -279,6 +300,7 @@ export async function verifyDomainWithDb(
   tenantId: string,
   domainId: string,
   providerOverride?: CustomDomainProvider,
+  routingDeps?: RoutingDeps,
 ): Promise<{
   domain: typeof schema.domains.$inferSelect;
   updated: CustomDomainRecord;
@@ -315,7 +337,11 @@ export async function verifyDomainWithDb(
         sslStatus: created.sslStatus,
         cfCustomHostnameId: created.providerHostnameId,
         verification: created.cnameTarget
-          ? { cname: created.cnameTarget, ...(created.txtVerification ? { txt: created.txtVerification } : {}) }
+          ? {
+              cname: created.cnameTarget,
+              ...(created.txtVerification ? { txt: created.txtVerification } : {}),
+              ...(created.dcvTxt ? { dcv: created.dcvTxt } : {}),
+            }
           : null,
         lastCheckedAt: new Date(),
         updatedAt: new Date(),
@@ -341,22 +367,78 @@ export async function verifyDomainWithDb(
 
   const statusRes = await provider.getCustomHostnameStatus(domain.cfCustomHostnameId);
 
-  // State machine: requested -> awaiting_dns -> verifying -> ssl_pending -> active.
-  const rank: Record<string, number> = { requested: 0, awaiting_dns: 1, verifying: 2, ssl_pending: 3, active: 4 };
-  const currentRank = rank[domain.status] ?? -1;
-  const nextRank = rank[statusRes.status] ?? -1;
-  const nextStatus = statusRes.status === "failed" || nextRank >= currentRank ? statusRes.status : domain.status;
+  // Cloudflare "active" only means ownership and the certificate are done. Whether visitors really reach us is a
+  // separate question (docs/CUSTOM-DOMAIN-ROUTING-PLAN.md), so look at the domain's own DNS and make a real request.
+  const routing = await checkDomainRouting(domain.hostname, domain.id, routingDeps ?? {});
+  const reachable = routing.status === "reachable";
+  const previousFailures = (domain.routingDetail as RoutingDetail | null)?.failures ?? 0;
 
+  // State machine: requested -> awaiting_dns -> verifying -> ssl_pending -> active (and active <-> degraded).
+  const rank: Record<string, number> = { requested: 0, awaiting_dns: 1, verifying: 2, ssl_pending: 3, active: 4 };
+  let failures = 0;
+  let nextStatus: string;
+  if (statusRes.status === "failed") {
+    nextStatus = "failed";
+  } else if (domain.status === "active" || domain.status === "degraded") {
+    if (reachable) {
+      nextStatus = "active";
+    } else {
+      failures = previousFailures + 1;
+      nextStatus = domain.status === "degraded" || failures >= DEGRADE_AFTER_FAILURES ? "degraded" : "active";
+    }
+  } else {
+    const currentRank = rank[domain.status] ?? -1;
+    const nextRank = rank[statusRes.status] ?? -1;
+    const cfNext = nextRank >= currentRank ? statusRes.status : domain.status;
+    if (cfNext === "active" && !reachable) {
+      nextStatus = domain.status === "requested" ? "awaiting_dns" : domain.status;
+    } else {
+      nextStatus = cfNext;
+    }
+  }
+
+  const existingVerification = (domain.verification ?? null) as CustomDomainRecord["verification"];
+  const nextVerification =
+    existingVerification && (statusRes.dcvTxt || statusRes.txtVerification)
+      ? {
+          ...existingVerification,
+          ...(statusRes.txtVerification ? { txt: statusRes.txtVerification } : {}),
+          ...(statusRes.dcvTxt ? { dcv: statusRes.dcvTxt } : {}),
+        }
+      : existingVerification;
+
+  const now = new Date();
   const [updated] = await db
     .update(schema.domains)
     .set({
       status: nextStatus,
       sslStatus: statusRes.sslStatus,
-      lastCheckedAt: new Date(),
-      updatedAt: new Date(),
+      verification: nextVerification,
+      routingStatus: routing.status,
+      routingDetail: { ...routing.detail, failures },
+      routingCheckedAt: now,
+      lastCheckedAt: now,
+      updatedAt: now,
     })
     .where(eq(schema.domains.id, domain.id))
     .returning();
+
+  if (nextStatus !== domain.status && (nextStatus === "degraded" || domain.status === "degraded")) {
+    await withTenant(db, tenantId, (tx) =>
+      tx.insert(schema.auditLogs).values({
+        tenantId,
+        actorType: "system",
+        actorId: null,
+        action: nextStatus === "degraded" ? "domain.degraded" : "domain.recovered",
+        targetType: "custom_domain",
+        targetId: domain.id,
+        diff: {
+          status: { before: domain.status, after: nextStatus },
+          routingStatus: { before: domain.routingStatus, after: routing.status },
+        },
+      }),
+    );
+  }
 
   // If verified and active, mark onboarding checklist step complete
   if (nextStatus === "active") {
@@ -378,10 +460,25 @@ export async function verifyDomainWithDb(
   };
 }
 
+/**
+ * What the public probe route answers: which domain row (any status) owns this Host. The host resolver only knows
+ * active domains, so it cannot be used while a domain is still being connected. Returns only the domain id.
+ */
+export async function lookupDomainIdForProbe(db: Db, rawHost: string): Promise<string | null> {
+  const host = rawHost.split(",")[0]?.trim().split(":")[0]?.toLowerCase() ?? "";
+  if (!host) return null;
+  const [row] = await db
+    .select({ id: schema.domains.id })
+    .from(schema.domains)
+    .where(and(eq(schema.domains.hostname, host), ne(schema.domains.status, "removed")))
+    .limit(1);
+  return row?.id ?? null;
+}
+
 /** Background pass: refresh every custom domain that is still waiting on DNS or SSL. Returns how many changed state. */
 export async function sweepPendingCustomDomains(
   db: Db,
-  opts: { provider?: CustomDomainProvider; log?: { warn: (o: object, m: string) => void } } = {},
+  opts: { provider?: CustomDomainProvider; routingDeps?: RoutingDeps; log?: { warn: (o: object, m: string) => void } } = {},
 ): Promise<{ checked: number; changed: number }> {
   const provider = opts.provider ?? new CloudflareCustomDomainProvider();
   if (provider.isConfigured && !provider.isConfigured()) return { checked: 0, changed: 0 };
@@ -389,12 +486,24 @@ export async function sweepPendingCustomDomains(
   const pending = await db
     .select({ id: schema.domains.id, tenantId: schema.domains.tenantId, status: schema.domains.status })
     .from(schema.domains)
-    .where(and(eq(schema.domains.type, "custom"), inArray(schema.domains.status, ["requested", "awaiting_dns", "verifying", "ssl_pending"])));
+    .where(
+      and(
+        eq(schema.domains.type, "custom"),
+        or(
+          inArray(schema.domains.status, ["requested", "awaiting_dns", "verifying", "ssl_pending", "degraded"]),
+          // Active domains are re-checked once a day so a DNS change made later is noticed.
+          and(
+            eq(schema.domains.status, "active"),
+            or(isNull(schema.domains.routingCheckedAt), lt(schema.domains.routingCheckedAt, new Date(Date.now() - ACTIVE_RECHECK_MS))),
+          ),
+        ),
+      ),
+    );
 
   let changed = 0;
   for (const row of pending) {
     try {
-      const res = await verifyDomainWithDb(db, row.tenantId, row.id, provider);
+      const res = await verifyDomainWithDb(db, row.tenantId, row.id, provider, opts.routingDeps);
       if (res.nextStatus !== row.status) changed += 1;
     } catch (err) {
       // One bad domain must not stop the rest; the merchant can still press "Check status".

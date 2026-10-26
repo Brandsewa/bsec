@@ -61,7 +61,7 @@ export async function resolveHostToTenant(
     .limit(1);
 
   const row = rows[0];
-  if (!row || row.domainStatus !== "active") {
+  if (!row || row.domainStatus !== "active" && row.domainStatus !== "degraded") {
     return null;
   }
 
