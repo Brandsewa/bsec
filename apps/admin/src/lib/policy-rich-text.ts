@@ -158,3 +158,43 @@ export function policyBlocksToDoc(blocks: readonly PolicyBlock[]): RichNode {
   }
   return { type: "doc", content: content.length > 0 ? content : [{ type: "paragraph" }] };
 }
+
+/** Size limits of the stored policy format (ADR-010); the server rejects anything above them. */
+export const POLICY_LIMITS = { blocks: 80, paragraphChars: 2000, itemChars: 500, headingChars: 300, totalChars: 30000 } as const;
+
+/**
+ * Plain-language problems that would make the server refuse this policy, so the merchant can fix them
+ * before saving. Every line break becomes its own block, which is what usually pushes a long policy over.
+ */
+export function policyLimitProblems(blocks: readonly PolicyBlock[]): string[] {
+  const problems: string[] = [];
+  if (blocks.length > POLICY_LIMITS.blocks) {
+    problems.push(
+      `This policy has ${blocks.length} separate blocks (every heading, line, list and divider counts as one); the most allowed is ${POLICY_LIMITS.blocks}. Remove dividers, join short lines into one paragraph, or put them in a list.`,
+    );
+  }
+  let total = 0;
+  blocks.forEach((b, i) => {
+    const n = i + 1;
+    if (b.type === "paragraph") {
+      total += b.text.length;
+      if (b.text.length > POLICY_LIMITS.paragraphChars)
+        problems.push(`Block ${n} is a paragraph of ${b.text.length} characters; split it into paragraphs of at most ${POLICY_LIMITS.paragraphChars}.`);
+    } else if (b.type === "heading") {
+      total += b.text.length;
+      if (b.text.length > POLICY_LIMITS.headingChars) problems.push(`Block ${n} is a heading longer than ${POLICY_LIMITS.headingChars} characters.`);
+    } else if (b.type === "list") {
+      if (b.items.length > 50) problems.push(`Block ${n} is a list with ${b.items.length} items; the most allowed is 50.`);
+      for (const item of b.items) {
+        total += item.length;
+        if (item.length > POLICY_LIMITS.itemChars) {
+          problems.push(`A list item in block ${n} is ${item.length} characters; list items can have at most ${POLICY_LIMITS.itemChars}. Move it into a paragraph.`);
+          break;
+        }
+      }
+    }
+  });
+  if (total > POLICY_LIMITS.totalChars)
+    problems.push(`The policy text is ${total.toLocaleString()} characters; the most allowed is ${POLICY_LIMITS.totalChars.toLocaleString()}. Shorten it.`);
+  return problems;
+}

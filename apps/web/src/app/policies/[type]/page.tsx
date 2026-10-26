@@ -180,13 +180,8 @@ export default async function PolicyPage({ params }: PolicyPageProps) {
         <h1 className="text-3xl md:text-4xl font-bold tracking-tight text-foreground">
           {title}
         </h1>
-        <div className="mt-2 flex items-center gap-3 text-sm text-muted">
+        <div className="mt-2 text-sm text-muted">
           <span>Last updated: {lastUpdated}</span>
-          {publishedPolicy && (
-            <span className="rounded bg-muted/20 px-2 py-0.5 text-xs font-mono">
-              Version {publishedPolicy.version}
-            </span>
-          )}
         </div>
       </header>
       {publishedPolicy ? (
