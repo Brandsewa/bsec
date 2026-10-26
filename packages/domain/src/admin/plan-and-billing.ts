@@ -280,12 +280,17 @@ export async function getPlanAndBilling(
     if (!(e instanceof SaasNotConfiguredError)) console.error("[billing] could not load the platform billing credentials", e);
   }
   const authorizedAt = sub?.authorizedAt ?? null;
-  const [freePromo] = await saasDb(rt)
-    .select({ endsAt: schema.tenantPromotions.endsAt })
-    .from(schema.tenantPromotions)
-    .where(and(eq(schema.tenantPromotions.tenantId, ctx.tenantId), eq(schema.tenantPromotions.status, "active"), eq(schema.tenantPromotions.kind, "free_months"), sql`${schema.tenantPromotions.endsAt} > now()`))
-    .limit(1)
-    .catch(() => []);
+  // Like the credentials above: where the self-service role is not configured (local dev, tests) there is simply no coupon to show.
+  let freePromo: { endsAt: Date } | undefined;
+  try {
+    [freePromo] = await saasDb(rt)
+      .select({ endsAt: schema.tenantPromotions.endsAt })
+      .from(schema.tenantPromotions)
+      .where(and(eq(schema.tenantPromotions.tenantId, ctx.tenantId), eq(schema.tenantPromotions.status, "active"), eq(schema.tenantPromotions.kind, "free_months"), sql`${schema.tenantPromotions.endsAt} > now()`))
+      .limit(1);
+  } catch {
+    freePromo = undefined;
+  }
   return {
     plan: planView,
     usage,
