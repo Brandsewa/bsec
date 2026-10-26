@@ -34,18 +34,12 @@ const ICONS = {
       <path d="M9 8V6a3 3 0 0 1 6 0v2" />
     </svg>
   ),
-  account: (
-    <svg viewBox="0 0 24 24" className="h-[22px] w-[22px]" aria-hidden {...stroke}>
-      <circle cx="12" cy="8" r="4" />
-      <path d="M4 21c0-4 3.6-7 8-7s8 3 8 7" />
-    </svg>
-  ),
 };
 
 const ITEM = "relative flex min-w-0 flex-1 flex-col items-center justify-center gap-0.5 py-1.5 text-[11px] font-medium transition-colors";
 
 /**
- * Phone-only bar at the bottom of the screen: Home, Explore (the menu), Search, Cart and Account. The pages around it keep
+ * Phone-only bar at the bottom of the screen: Home, Explore (the menu), Search and Cart (Account is in the header). The pages around it keep
  * clear of it through the --bottom-nav-h variable, which also lifts the product page's sticky add-to-cart bar above it.
  */
 export function MobileBottomNav() {
@@ -118,10 +112,6 @@ export function MobileBottomNav() {
             <span className="absolute right-[calc(50%-1.25rem)] top-0.5 inline-flex h-4 min-w-4 items-center justify-center rounded-full bg-primary px-1 text-[10px] font-semibold leading-none text-primary-foreground">{count}</span>
           ) : null}
           Cart
-        </Link>
-        <Link href="/account" className={`${ITEM} ${tone(active("/account"))}`} aria-current={active("/account") ? "page" : undefined}>
-          {ICONS.account}
-          Account
         </Link>
       </nav>
     </>
