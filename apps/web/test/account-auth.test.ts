@@ -16,15 +16,22 @@ vi.mock("next/navigation", () => ({
 describe("Customer Auth & Store Accent", () => {
   describe("LoginForm component", () => {
     it("renders phone input and submit button with 44px mobile touch target class", () => {
-      const html = renderToString(React.createElement(LoginForm));
+      const html = renderToString(React.createElement(LoginForm, { phoneLogin: true }));
       expect(html).toContain('data-testid="login-form"');
       expect(html).toContain('id="login-phone"');
       expect(html).toContain('autoComplete="tel-national"');
       expect(html).toContain("Send code");
     });
 
-    it("renders password and otp tab choices", () => {
+    it("shows only email and password sign-in until phone login is turned on", () => {
       const html = renderToString(React.createElement(LoginForm));
+      expect(html).not.toContain("Phone Code");
+      expect(html).not.toContain('id="login-phone"');
+      expect(html).toContain('id="login-email"');
+    });
+
+    it("renders password and otp tab choices", () => {
+      const html = renderToString(React.createElement(LoginForm, { phoneLogin: true }));
       expect(html).toContain("Phone Code");
       expect(html).toContain("Email &amp; Password");
     });

@@ -60,7 +60,7 @@ export function AuthShell({
                 {brandLogo}
               </div>
             ) : null}
-            {brandName ? (
+            {brandName && variant !== "store" ? (
               <div className="text-xs font-semibold tracking-wider uppercase text-[var(--muted-foreground)]">
                 {brandName}
               </div>
@@ -68,7 +68,7 @@ export function AuthShell({
             <h1 className="text-xl font-bold tracking-tight text-[var(--foreground)]">
               {title}
             </h1>
-            {desc && (
+            {desc && variant !== "store" && (
               <p className="text-xs text-[var(--muted-foreground)] text-balance">
                 {desc}
               </p>
@@ -79,6 +79,11 @@ export function AuthShell({
           <Card className="p-6 border border-[var(--border)] shadow-xs rounded-[var(--radius)] bg-[var(--card)]">
             {children}
           </Card>
+
+          {/* A store's customer pages keep the card first; the explanation sits under it. */}
+          {desc && variant === "store" && (
+            <p className="text-center text-xs text-[var(--muted-foreground)] text-balance">{desc}</p>
+          )}
 
           {/* Optional Footer */}
           {footer && (

@@ -15,6 +15,8 @@ export const metadata: Metadata = {
 
 export default async function AccountLayout({ children }: { children: React.ReactNode }) {
   let primaryColor: string | undefined;
+  let buttonBg: string | undefined;
+  let buttonFg: string | undefined;
 
   try {
     const h = await headers();
@@ -33,6 +35,12 @@ export default async function AccountLayout({ children }: { children: React.Reac
         : computeThemeTokens(brandSettings, null);
 
       primaryColor = themeVars["--bs-primary"] || themeVars["--color-primary"];
+      // The theme builder's button colour; an outline button style has no fill, so those stores keep the default.
+      const bg = themeVars["--bs-btn-bg"];
+      if (bg && bg !== "transparent") {
+        buttonBg = bg;
+        buttonFg = themeVars["--bs-btn-fg"];
+      }
     }
   } catch {
     // Fall back to default platform mint
@@ -54,6 +62,7 @@ export default async function AccountLayout({ children }: { children: React.Reac
     "--brand-ink": derived.ink,
     "--brand-soft": derived.soft,
     "--ring": derived.ring,
+    ...(buttonBg ? { "--primary": buttonBg, ...(buttonFg ? { "--primary-foreground": buttonFg } : {}) } : {}),
   } as React.CSSProperties;
 
   return (
