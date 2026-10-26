@@ -494,12 +494,14 @@ async function applyBillingEvent(db: Db, ev: BillingEvent): Promise<string> {
       .update(schema.subscriptions)
       .set({ authorizedAt: sql`COALESCE(${schema.subscriptions.authorizedAt}, now())`, updatedAt: new Date() })
       .where(eq(schema.subscriptions.providerSubscriptionId, ev.providerSubscriptionId))
-      .returning({ id: schema.subscriptions.id, tenantId: schema.subscriptions.tenantId, paymentRequired: schema.subscriptions.paymentRequired });
-    // A store that must pay before opening has nothing to pay while a free-months promotion covers it: the authorised mandate
-    // is the commitment, and the first charge happens when the promotion ends. Without a promotion the first payment opens it.
-    if (authorised?.paymentRequired) {
+      .returning({ id: schema.subscriptions.id, tenantId: schema.subscriptions.tenantId, planId: schema.subscriptions.planId, status: schema.subscriptions.status, paymentRequired: schema.subscriptions.paymentRequired });
+    // A store that must pay before opening (or whose zero-day trial already lapsed) has nothing to pay while a free-months
+    // promotion covers it: the authorised mandate is the commitment, and Cashfree takes the first charge when the promotion ends.
+    // So it is covered until then: trialing until the promotion ends (the trial sweep and dunning leave it alone) on its plan's
+    // tier, not the restricted one. The first charge then makes it active. Without a promotion the first payment opens it.
+    if (authorised && (authorised.paymentRequired || authorised.status === "past_due")) {
       const [promo] = await db
-        .select({ id: schema.tenantPromotions.id })
+        .select({ endsAt: schema.tenantPromotions.endsAt })
         .from(schema.tenantPromotions)
         .where(
           and(
@@ -510,7 +512,22 @@ async function applyBillingEvent(db: Db, ev: BillingEvent): Promise<string> {
           ),
         )
         .limit(1);
-      if (promo) await db.update(schema.subscriptions).set({ paymentRequired: false, updatedAt: new Date() }).where(eq(schema.subscriptions.id, authorised.id));
+      if (promo) {
+        await db.transaction(async (tx) => {
+          await tx
+            .update(schema.subscriptions)
+            .set({ status: "trialing", currentPeriodEnd: promo.endsAt, pastDueSince: null, dunningStage: 0, paymentRequired: false, updatedAt: new Date() })
+            .where(eq(schema.subscriptions.id, authorised.id));
+          if (authorised.planId) {
+            const planRow = await tx.execute<{ code: string }>(sql`SELECT code FROM plans WHERE id = ${authorised.planId} LIMIT 1;`);
+            const tier = tierForPlan(planRow.rows[0]?.code);
+            await tx
+              .insert(schema.tenantSizeTiers)
+              .values({ tenantId: authorised.tenantId, tier })
+              .onConflictDoUpdate({ target: schema.tenantSizeTiers.tenantId, set: { tier, updatedAt: new Date() } });
+          }
+        });
+      }
     }
     return "subscription_authorised_noted";
   }
