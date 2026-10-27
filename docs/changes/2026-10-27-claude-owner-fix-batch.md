@@ -2,7 +2,7 @@
 
 - **Date:** 2026-10-27
 - **Agent:** claude
-- **Branch:** `feat/owner-fix-batch` (not merged yet)
+- **Branch:** `feat/owner-fix-batch` (merged in #145, 2464247)
 - **Area:** blocks, block-editor, db, domain, contracts, web, admin
 - **Type:** feature
 - **Supersedes:** none
