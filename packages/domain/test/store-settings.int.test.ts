@@ -324,7 +324,8 @@ describe("store settings audit trail and Phase 0-1 fields", () => {
     const rows = await withTenant(rwDb.db, tenantId, (tx) =>
       tx.select().from(auditLogs).where(eq(auditLogs.action, "store_settings.update")).orderBy(desc(auditLogs.id)),
     );
-    const latest = rows[0];
+    // The select has no ORDER BY, so the last row is not necessarily the newest: pick this update's row by its content.
+    const latest = rows.find((r) => (r.diff as { storeName?: { after?: string } } | null)?.storeName?.after === "Audited Store");
     expect(latest).toBeDefined();
     const diff = latest!.diff as { storeName?: { before: string; after: string } };
     expect(diff.storeName).toEqual({ before: before.storeName, after: "Audited Store" });
