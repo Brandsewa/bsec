@@ -1,8 +1,8 @@
-import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from "react";
-import { Puck, blocksPlugin, outlinePlugin } from "@puckeditor/core";
+import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
+import { Puck, blocksPlugin, outlinePlugin, useGetPuck } from "@puckeditor/core";
 import "@puckeditor/core/puck.css";
 import "@bs/blocks/blocks.css";
-import { documentToPuck, puckToDocument, type BlockInstance, type PuckData } from "@bs/blocks";
+import { documentToPuck, puckToDocument, type BlockInstance, type PuckData, type PuckItem } from "@bs/blocks";
 import { buildPuckConfig, type EditorPageKind } from "./config.tsx";
 import { useFontLink } from "./fonts.ts";
 import { FrameContext, FrameEditContext, HostContext, RenderDataContext, ThemeColorsContext, type BlockEditorHost, type EditorRenderData } from "./context.tsx";
@@ -13,6 +13,7 @@ import { EDITOR_VIEWPORTS } from "./viewports.ts";
 import { EditorHeader, EditorHeaderContext, type EditorHeaderState } from "./EditorHeader.tsx";
 import { FooterPanel, HeaderPanel } from "./HeaderFooterPanels.tsx";
 import { GeneralPanel } from "./GeneralPanel.tsx";
+import { ROOT_ZONE, wrapDroppedWidget } from "./wrap-on-drop.ts";
 
 export interface BlockEditorProps {
   title: string;
@@ -140,11 +141,31 @@ function ThemeIcon() {
 }
 
 
+/** Lives inside Puck so the editor can reach Puck's own state and dispatch (used to wrap a newly dropped widget). */
+type PuckGetter = ReturnType<typeof useGetPuck>;
+function PuckBridge({ target }: { target: { current: PuckGetter | null } }) {
+  target.current = useGetPuck();
+  return null;
+}
+
 export function BlockEditor({ title, initialBlocks: initialFromProps, host, themeVars, onSaveDraft, onPublish, onExit, previewHref, onPreview, publishLabel, pageKind, fontsHref, onBlocksChange, externalDirty, height, storeName, themeTokens, onThemeTokensChange, themeSettingsDisabled, themeSettingsNote, exitLabel, pages, frame: frameFromProps, onFrameChange }: BlockEditorProps) {
   useFontLink(fontsHref);
   // The canvas owns the document once mounted: a refetch after saving must not reset it.
   const [initialBlocks] = useState(initialFromProps);
   const blocksRef = useRef<BlockInstance[]>(initialBlocks);
+  const puckRef = useRef<PuckGetter | null>(null);
+  const overrides = useMemo(
+    () => ({
+      header: EditorHeader,
+      puck: ({ children }: { children: ReactNode }) => (
+        <>
+          <PuckBridge target={puckRef} />
+          {children}
+        </>
+      ),
+    }),
+    [],
+  );
   const [dirty, setDirty] = useState(false);
   const [busy, setBusy] = useState(false);
   const [status, setStatus] = useState<{ kind: "ok" | "error"; text: string } | null>(null);
@@ -347,7 +368,19 @@ export function BlockEditor({ title, initialBlocks: initialFromProps, host, them
             onPublish={() => {
               void run(() => onPublish(blocksRef.current), "Published");
             }}
-            overrides={{ header: EditorHeader } as never}
+            overrides={overrides as never}
+            onAction={(action, newState) => {
+              // A store widget dropped on the page itself arrives inside Section > Container (new drops only; moves, duplicates
+              // and drops into an existing Section / Container are left as they are).
+              if (action.type !== "insert" || action.destinationZone !== ROOT_ZONE) return;
+              const dropped = (newState.data.content[action.destinationIndex] as PuckItem | undefined)?.props.id;
+              if (!dropped) return;
+              queueMicrotask(() => {
+                const api = puckRef.current?.();
+                const next = api ? wrapDroppedWidget(api.appState.data as unknown as PuckData, dropped) : null;
+                if (api && next) api.dispatch({ type: "setData", data: { content: next.content } as never, recordHistory: false });
+              });
+            }}
           />
         </div>
       </RenderDataContext.Provider>
