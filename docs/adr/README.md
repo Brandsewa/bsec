@@ -44,6 +44,7 @@ New decisions get an ADR **before** code (PLAN §15). Copy `template.md`, take t
 | [036](036-platform-billing-credentials.md) | Platform billing credentials in Super Admin (supersedes ADR-014 point 1) | Accepted |
 | [037](037-cashfree-second-gateway.md) | Cashfree as a second payment gateway (platform billing and store connections) | Accepted |
 | [038](038-google-sign-in.md) | Google sign-in: platform client for our team and store owners, store-owned client for customers | Accepted |
+| [039](039-notification-manager.md) | Notification manager: event catalog, dispatcher, in-app inbox, branded email | Accepted |
 
 **Next number: 039.**
 

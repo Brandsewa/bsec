@@ -1,4 +1,5 @@
 import { useStorefrontUrl } from "../lib/storefront-url.ts";
+import { StoreNotifications } from "../components/notifications/StoreNotifications.tsx";
 import { useState } from "react";
 import { Outlet, createFileRoute, redirect, useRouterState } from "@tanstack/react-router";
 import {
@@ -213,6 +214,7 @@ function StoreShell() {
         }
         topRight={
           <>
+            {me.support || !store.permissions.includes("orders.read") ? null : <StoreNotifications canSeeActivity={store.permissions.includes("settings.read")} />}
             {me.stores.length > 1 ? (
               <SimpleSelect
                 ariaLabel="Switch store"

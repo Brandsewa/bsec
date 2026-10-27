@@ -347,6 +347,16 @@ const CASES: Record<string, Case> = {
       enabled: true,
     }),
   },
+  "notifications.updateRule": {
+    role: "platform_admin",
+    action: "notification_rule.update",
+    input: async () => ({ eventKey: "platform_store_signup", channel: "email", enabled: true, roleRecipients: ["platform_owner"], extraEmails: [`ops-${++seq}@platform.test`] }),
+  },
+  "notifications.updateBranding": {
+    role: "platform_admin",
+    action: "email_branding.update",
+    input: async () => ({ accent: "#0b6b42", baseFontSize: 15 }),
+  },
   "email.sendTest": {
     role: "platform_admin",
     action: "email_settings.test",
@@ -614,12 +624,15 @@ afterAll(async () => {
 });
 
 /** Every non-GET route in the contract, discovered from the contract itself (not from a hand-written list). */
+/** POST procedures that change nothing shared: a preview writes nothing, and marking the inbox only changes the caller's own read state. */
+const NOT_AUDITED = new Set(["notifications.previewBranding", "notifications.markInbox"]);
+
 function contractMutations(): string[] {
   const out: string[] = [];
   for (const [ns, procs] of Object.entries(platformContract as unknown as Record<string, Record<string, { "~orpc": { route: { method?: string } } }>>)) {
     for (const [name, def] of Object.entries(procs)) {
       const method = def["~orpc"].route.method ?? "POST";
-      if (method !== "GET") out.push(`${ns}.${name}`);
+      if (method !== "GET" && !NOT_AUDITED.has(`${ns}.${name}`)) out.push(`${ns}.${name}`);
     }
   }
   return out.sort();

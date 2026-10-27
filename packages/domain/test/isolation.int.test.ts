@@ -39,6 +39,14 @@ import {
   updateTaxClass,
   deleteTaxClass,
   getNotificationSettings,
+  getStoreNotificationRules,
+  updateStoreNotificationRule,
+  getStoreEmailBranding,
+  updateStoreEmailBranding,
+  previewStoreEmailBranding,
+  listStoreInbox,
+  markStoreInbox,
+  listStoreActivity,
   updateNotificationSettings,
   listPolicies,
   getPolicy,
@@ -1970,6 +1978,22 @@ describe("Generated Isolation Test Suite (M1 Real Postgres 18 Proof)", () => {
         if (procPath === "taxClasses.update") return await updateTaxClass(rt, ctx, { id: c.id, name: `${c.name} v2` });
         return await deleteTaxClass(rt, ctx, c.id);
       }
+      case "notifications.rules":
+        return await getStoreNotificationRules(rt, ctx);
+      case "notifications.updateRule":
+        return await updateStoreNotificationRule(rt, ctx, { eventKey: "store_new_order", channel: "email", extraEmails: ["iso@iso.test"] });
+      case "notifications.branding":
+        return await getStoreEmailBranding(rt, ctx);
+      case "notifications.updateBranding":
+        return await updateStoreEmailBranding(rt, ctx, { accent: "#0b6b42" });
+      case "notifications.previewBranding":
+        return await previewStoreEmailBranding(rt, ctx, { accent: "#0b6b42" });
+      case "notifications.inbox":
+        return await listStoreInbox(rt, ctx);
+      case "notifications.markInbox":
+        return await markStoreInbox(rt, ctx, { all: true });
+      case "notifications.activity":
+        return await listStoreActivity(rt, ctx);
       case "notificationSettings.get":
         return await getNotificationSettings(rt, ctx);
       case "notificationSettings.update":

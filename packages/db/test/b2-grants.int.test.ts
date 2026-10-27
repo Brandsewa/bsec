@@ -187,6 +187,7 @@ const NON_RLS_TABLES_WRITABLE_BY_APP_RW: string[] = [
   "domains",
   "platform_audit_logs", // INSERT + SELECT only (append-only), asserted in the test above
   "platform_email_log", // INSERT (mail diagnostics) + DELETE and SELECT(id, created_at) for the 90-day prune
+  "platform_notifications", // INSERT + DELETE and SELECT(id, created_at) (the worker adds Super Admin inbox cards and prunes old ones); staff read them through app_platform
   "platform_message_log", // INSERT (SMS/WhatsApp diagnostics, masked recipients) + DELETE and SELECT(id, created_at) for the 90-day prune
   "rate_limit_counters",
   "sessions",

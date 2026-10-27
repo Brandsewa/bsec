@@ -6,6 +6,7 @@ import { expireOldReservations } from "./catalog/inventory-reservations.ts";
 import { processWebhookInboxItem } from "./system/webhooks.ts";
 import { cleanupExpiredIdempotencyKeys } from "./system/idempotency.ts";
 import { sendTransactionalEmail } from "./system/email.ts";
+import type { NotifyInput } from "./notifications/dispatcher.ts";
 import { sweepAbandonedCarts } from "./system/abandoned-carts.ts";
 import { schema } from "@bs/db";
 import { eq, and, notInArray } from "drizzle-orm";
@@ -73,80 +74,58 @@ export async function handleOrderCreatedJob(
   });
   // The job is queued while the order is still being committed: if it is not visible yet, fail so pg-boss retries.
   if (!order) throw new Error(`Order ${orderId} not visible yet; retrying`);
-  if (!order.email) return;
-
   const eventRef = `order_created_${orderId}`;
-  const [alreadySent] = await withTenant(db, tenantId, async (tx) => {
-    return await tx
-      .select({ id: schema.emailLog.id })
-      .from(schema.emailLog)
-      .where(and(eq(schema.emailLog.tenantId, tenantId), eq(schema.emailLog.eventRef, eventRef), eq(schema.emailLog.status, "sent")))
-      .limit(1);
-  });
+  const [alreadySent] = order.email
+    ? await withTenant(db, tenantId, async (tx) => {
+        return await tx
+          .select({ id: schema.emailLog.id })
+          .from(schema.emailLog)
+          .where(and(eq(schema.emailLog.tenantId, tenantId), eq(schema.emailLog.eventRef, eventRef), eq(schema.emailLog.status, "sent")))
+          .limit(1);
+      })
+    : [undefined];
   if (alreadySent) {
     log.info({ orderId, eventRef }, "Order confirmation already sent, skipping duplicate");
-    return;
+  } else if (order.email) {
+    await dispatchTransactionalEmailOrThrow(db, log, {
+      tenantId,
+      template: "order_confirmation",
+      toEmail: order.email,
+      subject: `Order ${order.number} confirmed`,
+      data: { orderId, orderNumber: order.number },
+      eventRef,
+    });
   }
 
-  await dispatchTransactionalEmailOrThrow(db, log, {
-    tenantId,
-    template: "order_confirmation",
-    toEmail: order.email,
-    subject: `Order ${order.number} confirmed`,
-    data: { orderId, orderNumber: order.number },
-    eventRef,
-  });
-
-  // Staff new-order alert (Slice 7A, PLAN §3)
+  // Store new-order alert through the notification manager: in-app for the owner and admins, email to them, to the
+  // store's "also send to" addresses and to the older per-store staff list. Runs even when the shopper left no email.
   try {
     const { readNotificationPreferences } = await import("./admin/notification-settings.ts");
+    const { dispatchNotification } = await import("./notifications/dispatcher.ts");
     const prefs = await withTenant(db, tenantId, async (tx) => readNotificationPreferences(tx, tenantId));
-    if (prefs.staff.newOrder.enabled && prefs.staff.newOrder.recipients.length > 0) {
-      const [fullOrder] = await withTenant(db, tenantId, async (tx) => {
-        return await tx
-          .select({
-            number: schema.orders.number,
-            grandTotal: schema.orders.grandTotal,
-            shippingAddress: schema.orders.shippingAddress,
-          })
-          .from(schema.orders)
-          .where(and(eq(schema.orders.tenantId, tenantId), eq(schema.orders.id, orderId)))
-          .limit(1);
-      });
-
-      const customerName = (fullOrder?.shippingAddress as Record<string, unknown> | null)?.fullName ?? "Customer";
-      const grandTotal = fullOrder?.grandTotal ?? 0;
-
-      for (const recipient of prefs.staff.newOrder.recipients) {
-        const staffRef = `staff_order_${orderId}_${recipient.trim().toLowerCase()}`;
-        const [alreadySentStaff] = await withTenant(db, tenantId, async (tx) => {
-          return await tx
-            .select({ id: schema.emailLog.id })
-            .from(schema.emailLog)
-            .where(and(eq(schema.emailLog.tenantId, tenantId), eq(schema.emailLog.eventRef, staffRef), eq(schema.emailLog.status, "sent")))
-            .limit(1);
-        });
-
-        if (!alreadySentStaff) {
-          await dispatchTransactionalEmailOrThrow(db, log, {
-            tenantId,
-            template: "staff_new_order",
-            toEmail: recipient.trim(),
-            subject: `New order ${order.number} received (${customerName})`,
-            data: {
-              order: { number: order.number, grandTotal, items: [], subtotal: 0, discountTotal: 0, shippingTotal: 0, codFee: 0, paymentStatus: "pending" },
-              customerName: String(customerName),
-              adminUrl: `/orders/${orderId}`,
-            },
-            eventRef: staffRef,
-          }).catch((err) => {
-            log.warn({ err, recipient, orderId }, "Staff new-order email alert failed");
-          });
-        }
-      }
-    }
+    const [fullOrder] = await withTenant(db, tenantId, async (tx) => {
+      return await tx
+        .select({ number: schema.orders.number, grandTotal: schema.orders.grandTotal, shippingAddress: schema.orders.shippingAddress })
+        .from(schema.orders)
+        .where(and(eq(schema.orders.tenantId, tenantId), eq(schema.orders.id, orderId)))
+        .limit(1);
+    });
+    const customerName = String((fullOrder?.shippingAddress as Record<string, unknown> | null)?.fullName ?? "A customer");
+    const total = Number(fullOrder?.grandTotal ?? 0) / 100;
+    const amount = `₹${total.toLocaleString("en-IN", { maximumFractionDigits: 2 })}`;
+    await dispatchNotification(db, {
+      eventKey: "store_new_order",
+      tenantId,
+      eventRef: `store_new_order_${orderId}`,
+      title: `New order ${order.number}`,
+      body: `${customerName} placed an order for ${amount}.`,
+      link: `/orders/${orderId}`,
+      ctaLabel: "View order",
+      emailSubject: `New order ${order.number} received (${customerName})`,
+      legacyExtraEmails: prefs.staff.newOrder.enabled ? prefs.staff.newOrder.recipients : [],
+    });
   } catch (err) {
-    log.warn({ err, orderId }, "Failed to process staff new order alerts");
+    log.warn({ err, orderId }, "Failed to process the store new-order notification");
   }
 }
 
@@ -916,6 +895,34 @@ export async function startJobs(opts: {
     }
   });
 
+  // Notification manager: one job per event; the dispatcher resolves rules and recipients (ADR-039)
+  await boss.work<NotifyInput>(QUEUE_NAMES.NOTIFICATION_DISPATCH, { localConcurrency: 2 }, async (batch) => {
+    for (const job of batch) {
+      try {
+        const { dispatchNotification } = await import("./notifications/dispatcher.ts");
+        const res = await dispatchNotification(db, job.data);
+        opts.log.info({ job_id: job.id, eventKey: job.data.eventKey, ...res }, "notification.dispatch processed");
+      } catch (err) {
+        opts.log.error({ err, job_id: job.id }, "notification.dispatch failed");
+        throw err;
+      }
+    }
+  });
+
+  // In-app notifications older than the retention window are removed once a day
+  await boss.work(QUEUE_NAMES.NOTIFICATION_RETENTION_SWEEP, { localConcurrency: 1 }, async (batch) => {
+    for (const job of batch) {
+      try {
+        const { pruneNotifications } = await import("./notifications/service.ts");
+        const res = await pruneNotifications(db);
+        opts.log.info({ job_id: job.id, ...res }, "notification.retention_sweep processed");
+      } catch (err) {
+        opts.log.error({ err, job_id: job.id }, "notification.retention_sweep failed");
+        throw err;
+      }
+    }
+  });
+
   // Custom domains: pick up DNS/SSL progress without the merchant pressing "Check status" (ADR-017)
   await boss.work(QUEUE_NAMES.DOMAINS_SWEEP, { localConcurrency: 1 }, async (batch) => {
     for (const job of batch) {
@@ -1296,6 +1303,7 @@ export async function startJobs(opts: {
     await boss.schedule(QUEUE_NAMES.CART_RECOVERY_SWEEP, "0 * * * *", {});
     await boss.schedule(QUEUE_NAMES.SUBSCRIPTION_TRIAL_EXPIRY_SWEEP, "0 * * * *", {});
     await boss.schedule(QUEUE_NAMES.DOMAINS_SWEEP, "*/5 * * * *", {});
+    await boss.schedule(QUEUE_NAMES.NOTIFICATION_RETENTION_SWEEP, "30 3 * * *", {});
     await boss.schedule(QUEUE_NAMES.ORDER_PREORDER_REMINDER_SWEEP, "0 6 * * *", {});
     await boss.schedule(QUEUE_NAMES.ORDER_RETURN_PHOTO_CLEANUP, "0 3 * * *", {});
     await boss.schedule(QUEUE_NAMES.SEGMENTS_REFRESH_COUNTS, "0 */6 * * *", {});

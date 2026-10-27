@@ -2,6 +2,7 @@ import React, { useState, type FormEvent } from "react";
 import { Outlet, useLocation, useNavigate } from "@tanstack/react-router";
 import {
   Activity,
+  Bell,
   Boxes,
   Building2,
   CreditCard,
@@ -52,6 +53,7 @@ import {
 import { PasswordInput } from "@bs/ui";
 import { changePassword, signOut, type PlatformUser } from "../lib/auth.ts";
 import { UserContext } from "../lib/user-context.tsx";
+import { PlatformNotifications } from "../components/PlatformNotifications.tsx";
 
 interface LayoutProps {
   user: PlatformUser;
@@ -78,6 +80,7 @@ const navGroups: NavGroup[] = [
     items: [
       { label: "Support Sessions", href: "/support", icon: Headphones },
       { label: "System & Queues", href: "/system", icon: Activity },
+      { label: "Notifications", href: "/notifications", icon: Bell },
       { label: "Integrations", href: "/integrations", icon: Boxes },
       { label: "Quotas & Tiers", href: "/quotas", icon: Sliders },
       { label: "Feature Flags", href: "/features", icon: Flag },
@@ -167,6 +170,7 @@ export function Layout({ user, onLogout }: LayoutProps) {
     { id: "support", label: "Support Sessions", icon: Headphones, onSelect: () => navigate({ to: "/support" }), group: "Operations" },
     { id: "system", label: "System & Queues", icon: Activity, onSelect: () => navigate({ to: "/system" }), group: "Operations" },
     { id: "integrations", label: "Integrations Hub", icon: Boxes, onSelect: () => navigate({ to: "/integrations" }), group: "Operations" },
+    { id: "notification-manager", label: "Notifications (events and branding)", icon: Bell, onSelect: () => navigate({ to: "/notifications" }), group: "Operations" },
     { id: "notifications", label: "Notification Channels", icon: Mail, onSelect: () => navigate({ to: "/integrations/notifications" }), group: "Operations" },
     { id: "email", label: "Email (ZeptoMail / SMTP)", icon: Mail, onSelect: () => navigate({ to: "/integrations/notifications/email" }), group: "Operations" },
     { id: "sms", label: "SMS (Zoho CPaaS)", icon: Phone, onSelect: () => navigate({ to: "/integrations/notifications/sms" }), group: "Operations" },
@@ -209,6 +213,7 @@ export function Layout({ user, onLogout }: LayoutProps) {
                 Ctrl K
               </kbd>
             </button>
+            <PlatformNotifications />
             <DropdownMenu>
               <DropdownMenuTrigger
                 render={

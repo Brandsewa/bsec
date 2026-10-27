@@ -84,6 +84,13 @@ import {
   deleteThemeTemplate,
   createThemePreview,
   getPlatformEmailSettings,
+  getNotificationMatrix,
+  updateNotificationRule,
+  getPlatformEmailBranding,
+  updatePlatformEmailBranding,
+  previewPlatformBranding,
+  listPlatformInbox,
+  markPlatformInbox,
   getPlatformBillingSettings,
   listBillingWebhookDeliveries,
   listBillingPlans,
@@ -615,6 +622,21 @@ export const platformRouter = os.router({
     recentDeliveries: os.email.recentDeliveries.use(requirePlatformStaff).handler(async ({ context, input }) => {
       const staffUserId = actor(context);
       return listRecentEmailDeliveries(context.rt, staffUserId, input);
+    }),
+  },
+  notifications: {
+    matrix: os.notifications.matrix.use(requirePlatformStaff).handler(({ context }) => getNotificationMatrix(context.rt, actor(context))),
+    updateRule: os.notifications.updateRule.use(requireStaff("platform_admin")).handler(async ({ context, input }) => {
+      await updateNotificationRule(context.rt, actor(context), input, context.meta);
+      return { ok: true as const };
+    }),
+    branding: os.notifications.branding.use(requirePlatformStaff).handler(({ context }) => getPlatformEmailBranding(context.rt, actor(context))),
+    updateBranding: os.notifications.updateBranding.use(requireStaff("platform_admin")).handler(({ context, input }) => updatePlatformEmailBranding(context.rt, actor(context), input, context.meta)),
+    previewBranding: os.notifications.previewBranding.use(requirePlatformStaff).handler(({ context, input }) => previewPlatformBranding(context.rt, actor(context), input)),
+    inbox: os.notifications.inbox.use(requirePlatformStaff).handler(({ context }) => listPlatformInbox(context.rt, actor(context))),
+    markInbox: os.notifications.markInbox.use(requirePlatformStaff).handler(async ({ context, input }) => {
+      await markPlatformInbox(context.rt, actor(context), input);
+      return { ok: true as const };
     }),
   },
   storage: {

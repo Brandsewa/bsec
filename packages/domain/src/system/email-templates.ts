@@ -4,6 +4,8 @@
  * All amounts are paise; every piece of shopper- or merchant-provided text is HTML-escaped.
  */
 
+import { DEFAULT_EMAIL_BRANDING, FONT_STACKS, type EmailBrandingTokens } from "./email-branding.ts";
+
 export interface EmailBrand {
   storeName: string;
   /** The store's public address, e.g. https://tasteofhills.bcom.si (no trailing slash). */
@@ -13,6 +15,8 @@ export interface EmailBrand {
   footerNote?: string | null | undefined;
   /** Optional unsubscribe URL for marketing emails. */
   unsubscribeUrl?: string | null | undefined;
+  /** Colours, logo, fonts and footer (email-branding.ts). Missing means the BCom defaults. */
+  branding?: EmailBrandingTokens | undefined;
 }
 
 export interface EmailOrderLine {
@@ -92,46 +96,99 @@ function addressLines(a: EmailOrder["shippingAddress"]): string[] {
 }
 
 // --- layout ---------------------------------------------------------------------------------------------------------
+// Modern, responsive, table-based markup that survives Gmail, Outlook and Apple Mail. Every colour, font and size comes
+// from the branding tokens (email-branding.ts): the helpers below emit %%token%% placeholders and layout() fills them in,
+// so each template stays free of styling decisions.
 
-const ACCENT = "#1f6f4a";
+function mix(a: string, b: string, weight: number): string {
+  const pa = Number.parseInt(a.slice(1), 16);
+  const pb = Number.parseInt(b.slice(1), 16);
+  const ch = (shift: number) => Math.round(((pa >> shift) & 255) * (1 - weight) + ((pb >> shift) & 255) * weight);
+  return `#${[16, 8, 0].map((s) => ch(s).toString(16).padStart(2, "0")).join("")}`;
+}
 
-function layout(brand: EmailBrand, title: string, bodyHtml: string): string {
-  const support = brand.supportEmail ? `<p style="margin:8px 0 0">Questions? Reply to this email or write to <a href="mailto:${escapeHtml(brand.supportEmail)}" style="color:${ACCENT}">${escapeHtml(brand.supportEmail)}</a>.</p>` : "";
-  const footerNote = brand.footerNote ? `<p style="margin:8px 0 0;color:#6b726e;font-size:11px">${escapeHtml(brand.footerNote)}</p>` : "";
-  const unsub = brand.unsubscribeUrl ? `<p style="margin:8px 0 0;font-size:11px"><a href="${escapeHtml(brand.unsubscribeUrl)}" style="color:#6b726e;text-decoration:underline">Unsubscribe from marketing emails</a></p>` : "";
-  return `<!doctype html>
-<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>${escapeHtml(title)}</title></head>
-<body style="margin:0;background:#f4f5f4;font-family:-apple-system,Segoe UI,Helvetica,Arial,sans-serif;color:#1c1f1d">
-<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:#f4f5f4"><tr><td align="center" style="padding:24px 12px">
-<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="max-width:560px;background:#ffffff;border-radius:12px;overflow:hidden">
-<tr><td style="padding:20px 28px;border-bottom:1px solid #e6e8e6"><a href="${escapeHtml(brand.baseUrl)}" style="font-size:20px;font-weight:700;color:#1c1f1d;text-decoration:none">${escapeHtml(brand.storeName)}</a></td></tr>
-<tr><td style="padding:28px">${bodyHtml}</td></tr>
-<tr><td style="padding:18px 28px;background:#fafbfa;font-size:12px;color:#6b726e;border-top:1px solid #e6e8e6">
-<p style="margin:0">${escapeHtml(brand.storeName)} · <a href="${escapeHtml(brand.baseUrl)}" style="color:#6b726e">${escapeHtml(brand.baseUrl.replace(/^https?:\/\//, ""))}</a></p>${support}${footerNote}${unsub}
+function applyTokens(html: string, t: EmailBrandingTokens): string {
+  const values: Record<string, string> = {
+    accent: t.accent,
+    btnBg: t.buttonBackground,
+    btnText: t.buttonText,
+    link: t.linkColor,
+    text: t.text,
+    muted: t.mutedText,
+    border: mix(t.card, t.text, 0.12),
+    soft: mix(t.card, t.text, 0.04),
+    font: FONT_STACKS[t.fontFamily],
+    fs: `${t.baseFontSize}px`,
+    fsSmall: `${Math.max(11, t.baseFontSize - 2)}px`,
+    h1: `${Math.round(t.baseFontSize * t.headingScale)}px`,
+  };
+  return html.replace(/%%(\w+)%%/g, (m, key: string) => values[key] ?? m);
+}
+
+function layout(brand: EmailBrand, title: string, bodyHtml: string, preheader = ""): string {
+  const t = brand.branding ?? DEFAULT_EMAIL_BRANDING;
+  const f = t.footer;
+  const supportAddress = brand.supportEmail || f.supportEmail;
+  const support = supportAddress ? `<p style="margin:10px 0 0">Questions? Reply to this email or write to <a href="mailto:${escapeHtml(supportAddress)}" style="color:%%link%%;text-decoration:underline">${escapeHtml(supportAddress)}</a>.</p>` : "";
+  const footerNote = brand.footerNote ? `<p style="margin:10px 0 0">${escapeHtml(brand.footerNote)}</p>` : "";
+  const footerText = f.text ? `<p style="margin:10px 0 0">${escapeHtml(f.text)}</p>` : "";
+  const address = f.address ? `<p style="margin:10px 0 0">${escapeHtml(f.address)}</p>` : "";
+  const links = f.links.length
+    ? `<p style="margin:12px 0 0">${f.links.map((l) => `<a href="${escapeHtml(l.url)}" style="color:%%link%%;text-decoration:underline">${escapeHtml(l.label)}</a>`).join(" &nbsp;·&nbsp; ")}</p>`
+    : "";
+  const unsub = brand.unsubscribeUrl ? `<p style="margin:12px 0 0"><a href="${escapeHtml(brand.unsubscribeUrl)}" style="color:%%muted%%;text-decoration:underline">Unsubscribe from marketing emails</a></p>` : "";
+  const logo = t.logoUrl
+    ? `<a href="${escapeHtml(brand.baseUrl)}" style="text-decoration:none"><img src="${escapeHtml(t.logoUrl)}" alt="${escapeHtml(brand.storeName)}" height="44" style="display:block;border:0;outline:none;height:44px;max-height:44px;width:auto;max-width:220px"></a>`
+    : `<a href="${escapeHtml(brand.baseUrl)}" style="font-size:20px;line-height:1.2;font-weight:700;color:${t.headerText};text-decoration:none">${escapeHtml(brand.storeName)}</a>`;
+  const hidden = preheader
+    ? `<div style="display:none;max-height:0;overflow:hidden;opacity:0;mso-hide:all;font-size:1px;line-height:1px;color:${t.background}">${escapeHtml(preheader)}${"&zwnj;&nbsp;".repeat(40)}</div>`
+    : "";
+  const html = `<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="color-scheme" content="light"><meta name="supported-color-schemes" content="light"><title>${escapeHtml(title)}</title>
+<style>
+@media only screen and (max-width:620px){
+.bs-wrap{padding:12px 8px !important}
+.bs-card{border-radius:12px !important}
+.bs-pad{padding-left:20px !important;padding-right:20px !important}
+.bs-btn-wrap{width:100% !important}
+.bs-btn,.bs-btn a{display:block !important;width:100% !important;box-sizing:border-box;text-align:center !important}
+.bs-h1{font-size:22px !important}
+}
+</style></head>
+<body style="margin:0;padding:0;background:${t.background};font-family:%%font%%;color:%%text%%;-webkit-text-size-adjust:100%">${hidden}
+<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:${t.background}"><tr><td class="bs-wrap" align="center" style="padding:28px 12px">
+<table role="presentation" class="bs-card" width="100%" cellpadding="0" cellspacing="0" style="max-width:600px;background:${t.card};border-radius:16px;overflow:hidden;border:1px solid %%border%%">
+<tr><td style="height:4px;line-height:4px;font-size:4px;background:%%accent%%">&nbsp;</td></tr>
+<tr><td class="bs-pad" style="padding:22px 32px;background:${t.headerBackground};border-bottom:1px solid %%border%%">${logo}</td></tr>
+<tr><td class="bs-pad" style="padding:32px;font-size:%%fs%%;line-height:1.6">${bodyHtml}</td></tr>
+<tr><td class="bs-pad" style="padding:22px 32px;background:%%soft%%;border-top:1px solid %%border%%;font-size:%%fsSmall%%;line-height:1.55;color:%%muted%%">
+<p style="margin:0;font-weight:600;color:%%text%%">${escapeHtml(brand.storeName)}</p><p style="margin:2px 0 0"><a href="${escapeHtml(brand.baseUrl)}" style="color:%%muted%%;text-decoration:underline">${escapeHtml(brand.baseUrl.replace(/^https?:\/\//, ""))}</a></p>${address}${footerText}${support}${links}${footerNote}${unsub}
 </td></tr></table></td></tr></table></body></html>`;
+  return applyTokens(html, t);
 }
 
 function button(label: string, href: string): string {
-  return `<p style="margin:24px 0 0"><a href="${escapeHtml(href)}" style="display:inline-block;background:${ACCENT};color:#ffffff;text-decoration:none;font-weight:600;padding:12px 22px;border-radius:8px">${escapeHtml(label)}</a></p>`;
+  // A padded table cell is the one button shape every mail client renders, including Outlook.
+  return `<table role="presentation" class="bs-btn-wrap" cellpadding="0" cellspacing="0" style="margin:26px 0 4px"><tr><td class="bs-btn" style="border-radius:10px;background:%%btnBg%%"><a href="${escapeHtml(href)}" style="display:inline-block;padding:14px 28px;font-size:%%fs%%;font-weight:600;line-height:1.2;color:%%btnText%%;text-decoration:none;border-radius:10px">${escapeHtml(label)}</a></td></tr></table>`;
 }
 
 function heading(text: string): string {
-  return `<h1 style="margin:0 0 12px;font-size:22px;line-height:1.3">${escapeHtml(text)}</h1>`;
+  return `<h1 class="bs-h1" style="margin:0 0 14px;font-size:%%h1%%;line-height:1.25;font-weight:700;color:%%text%%">${escapeHtml(text)}</h1>`;
 }
 
 function para(text: string): string {
-  return `<p style="margin:0 0 12px;font-size:15px;line-height:1.55">${escapeHtml(text)}</p>`;
+  return `<p style="margin:0 0 14px;font-size:%%fs%%;line-height:1.6;color:%%text%%">${escapeHtml(text)}</p>`;
 }
 
 function orderBlock(o: EmailOrder): { html: string; text: string } {
   const rows = o.items
     .map(
       (it) =>
-        `<tr><td style="padding:8px 0;font-size:14px;border-bottom:1px solid #eef0ee">${escapeHtml(it.title)}${it.variant && it.variant !== "Default" ? ` <span style="color:#6b726e">(${escapeHtml(it.variant)})</span>` : ""} × ${it.quantity}</td><td align="right" style="padding:8px 0;font-size:14px;border-bottom:1px solid #eef0ee;white-space:nowrap">${formatInr(it.total)}</td></tr>`,
+        `<tr><td style="padding:12px 0;font-size:%%fs%%;border-bottom:1px solid %%border%%">${escapeHtml(it.title)}${it.variant && it.variant !== "Default" ? ` <span style="color:%%muted%%">(${escapeHtml(it.variant)})</span>` : ""} <span style="color:%%muted%%">× ${it.quantity}</span></td><td align="right" style="padding:12px 0 12px 12px;font-size:%%fs%%;border-bottom:1px solid %%border%%;white-space:nowrap">${formatInr(it.total)}</td></tr>`,
     )
     .join("");
   const line = (label: string, value: string, bold = false) =>
-    `<tr><td style="padding:4px 0;font-size:14px;${bold ? "font-weight:700;" : "color:#4b524e;"}">${escapeHtml(label)}</td><td align="right" style="padding:4px 0;font-size:14px;${bold ? "font-weight:700;" : ""}">${value}</td></tr>`;
+    `<tr><td style="padding:5px 0;font-size:%%fs%%;${bold ? "font-weight:700;" : "color:%%muted%%;"}">${escapeHtml(label)}</td><td align="right" style="padding:5px 0;font-size:%%fs%%;${bold ? "font-weight:700;" : ""}">${value}</td></tr>`;
   const totals = [
     line("Subtotal", formatInr(o.subtotal)),
     o.discountTotal > 0 ? line("Discount", `−${formatInr(o.discountTotal)}`) : "",
@@ -140,11 +197,13 @@ function orderBlock(o: EmailOrder): { html: string; text: string } {
     line("Total", formatInr(o.grandTotal), true),
   ].join("");
   const addr = addressLines(o.shippingAddress);
-  const html = `<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin:16px 0 8px"><tr><td style="font-size:13px;color:#6b726e;padding-bottom:6px">Order <strong style="color:#1c1f1d">${escapeHtml(o.number)}</strong></td></tr></table>
+  const html = `<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin:18px 0 0;background:%%soft%%;border-radius:12px"><tr><td style="padding:16px 18px">
+<p style="margin:0 0 6px;font-size:%%fsSmall%%;color:%%muted%%;text-transform:uppercase;letter-spacing:.06em">Order <strong style="color:%%text%%">${escapeHtml(o.number)}</strong></p>
 <table role="presentation" width="100%" cellpadding="0" cellspacing="0">${rows}</table>
-<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin-top:10px">${totals}</table>
-<p style="margin:14px 0 0;font-size:14px">${escapeHtml(paymentLine(o.paymentStatus))}</p>
-${addr.length ? `<p style="margin:14px 0 0;font-size:13px;color:#4b524e"><strong>Delivering to</strong><br>${addr.map(escapeHtml).join("<br>")}</p>` : ""}`;
+<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin-top:8px">${totals}</table>
+<p style="margin:12px 0 0;font-size:%%fs%%">${escapeHtml(paymentLine(o.paymentStatus))}</p>
+</td></tr></table>
+${addr.length ? `<p style="margin:16px 0 0;font-size:%%fsSmall%%;color:%%muted%%;line-height:1.55"><strong style="color:%%text%%">Delivering to</strong><br>${addr.map(escapeHtml).join("<br>")}</p>` : ""}`;
   const text = [
     `Order ${o.number}`,
     ...o.items.map((it) => `- ${it.title}${it.variant && it.variant !== "Default" ? ` (${it.variant})` : ""} x ${it.quantity}: ${formatInr(it.total)}`),
@@ -160,8 +219,13 @@ ${addr.length ? `<p style="margin:14px 0 0;font-size:13px;color:#4b524e"><strong
 }
 
 function footerText(brand: EmailBrand): string {
+  const f = (brand.branding ?? DEFAULT_EMAIL_BRANDING).footer;
   const parts = [`\n\n${brand.storeName}`, brand.baseUrl];
-  if (brand.supportEmail) parts.push(`Questions? ${brand.supportEmail}`);
+  if (f.address) parts.push(f.address);
+  if (f.text) parts.push(f.text);
+  const supportAddress = brand.supportEmail || f.supportEmail;
+  if (supportAddress) parts.push(`Questions? ${supportAddress}`);
+  for (const l of f.links) parts.push(`${l.label}: ${l.url}`);
   if (brand.footerNote) parts.push(brand.footerNote);
   if (brand.unsubscribeUrl) parts.push(`Unsubscribe: ${brand.unsubscribeUrl}`);
   return `${parts.join("\n")}\n`;
@@ -279,6 +343,17 @@ const TEMPLATES: Record<string, Builder> = {
       `${heading(`Set up your account for ${escapeHtml(brand.storeName)}`)}${para("Thank you for signing up! Please click the button below to set your password and complete setting up your account.")}${setupUrl ? button("Set your password", setupUrl) : ""}${para("This link will expire in 24 hours. If you didn't create an account, you can safely ignore this email.")}`,
     );
     const text = `Set up your account for ${brand.storeName}\n\nThank you for signing up! Please visit the link below to set your password and complete setting up your account:\n\n${setupUrl}\n\nThis link will expire in 24 hours. If you didn't create an account, you can safely ignore this email.${footerText(brand)}`;
+    return { html, text };
+  },
+  // A general message: a heading, short paragraphs and an optional button. The notification dispatcher uses it for
+  // events that go to store admins and Super Admin staff (platform brand) so each needs no template of its own.
+  notice: (brand, data, subject) => {
+    const head = String(data.heading ?? subject);
+    const lines = Array.isArray(data.lines) ? data.lines.map((l) => String(l)) : [];
+    const ctaUrl = typeof data.ctaUrl === "string" ? data.ctaUrl : "";
+    const ctaLabel = typeof data.ctaLabel === "string" ? data.ctaLabel : "Open";
+    const html = layout(brand, subject, `${heading(head)}${lines.map(para).join("")}${ctaUrl ? button(ctaLabel, ctaUrl) : ""}`, lines[0] ?? head);
+    const text = `${head}\n\n${lines.join("\n\n")}${ctaUrl ? `\n\n${ctaLabel}: ${ctaUrl}` : ""}${footerText(brand)}`;
     return { html, text };
   },
   staff_new_order: (brand, data, subject) => {

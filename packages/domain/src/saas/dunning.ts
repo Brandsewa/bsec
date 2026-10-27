@@ -2,7 +2,7 @@ import { and, eq, isNotNull, lt } from "drizzle-orm";
 import { schema, type Db } from "@bs/db";
 import type { Runtime } from "../runtime.ts";
 import { escapeHtml } from "../system/email-templates.ts";
-import { sendPlatformEmail } from "../system/platform-mailer.ts";
+import { dispatchNotification } from "../notifications/dispatcher.ts";
 import { LAPSED_TRIAL_TIER } from "./plan-tiers.ts";
 
 /**
@@ -30,7 +30,7 @@ export interface DunningEmailInput {
   billingUrl: string;
 }
 
-export function renderDunningEmail(kind: DunningKind, d: DunningEmailInput): { subject: string; html: string; text: string } {
+export function renderDunningEmail(kind: DunningKind, d: DunningEmailInput): { subject: string; lines: string[]; html: string; text: string } {
   const date = d.limitDate.toLocaleDateString("en-IN", { day: "numeric", month: "long", year: "numeric", timeZone: "Asia/Kolkata" });
   const copy: Record<DunningKind, { subject: string; lines: string[] }> = {
     failed: {
@@ -58,7 +58,7 @@ export function renderDunningEmail(kind: DunningKind, d: DunningEmailInput): { s
   const c = copy[kind];
   const html = `<div style="font-family:Arial,Helvetica,sans-serif;max-width:520px;margin:auto;line-height:1.5;color:#16201b">${c.lines.map((l) => `<p>${escapeHtml(l)}</p>`).join("")}<p><a href="${escapeHtml(d.billingUrl)}" style="display:inline-block;background:#0b6b42;color:#fff;padding:10px 18px;border-radius:6px;text-decoration:none">Open plan and billing</a></p><p style="color:#667;font-size:12px">Brand Sewa</p></div>`;
   const text = `${c.lines.join("\n\n")}\n\nPlan and billing: ${d.billingUrl}`;
-  return { subject: c.subject, html, text };
+  return { subject: c.subject, lines: c.lines, html, text };
 }
 
 function billingUrl(): string {
@@ -68,28 +68,30 @@ function billingUrl(): string {
   return `${local ? "http" : "https"}://${host}/settings/plan-and-billing`;
 }
 
-async function ownerEmails(db: Db, tenantId: string): Promise<string[]> {
-  const rows = await db
-    .select({ email: schema.users.email })
-    .from(schema.memberships)
-    .innerJoin(schema.roles, eq(schema.roles.id, schema.memberships.roleId))
-    .innerJoin(schema.users, eq(schema.users.id, schema.memberships.userId))
-    .where(and(eq(schema.memberships.tenantId, tenantId), eq(schema.roles.tenantId, tenantId), eq(schema.roles.name, "store_owner"), eq(schema.memberships.status, "active")));
-  return [...new Set(rows.map((r) => String(r.email)))];
-}
-
 async function notify(db: Db, tenantId: string, kind: DunningKind, limitDate: Date): Promise<"sent" | "skipped" | "failed"> {
   const [settings] = await db.select({ storeName: schema.storeSettings.storeName }).from(schema.storeSettings).where(eq(schema.storeSettings.tenantId, tenantId)).limit(1);
   const mail = renderDunningEmail(kind, { storeName: settings?.storeName ?? "your store", limitDate, billingUrl: billingUrl() });
-  const to = await ownerEmails(db, tenantId);
-  if (to.length === 0) return "skipped";
-  let worst: "sent" | "skipped" | "failed" = "skipped";
-  for (const address of to) {
-    const res = await sendPlatformEmail(db, { tenantId, to: address, template: `billing_${kind}`, ...mail }, { bypassRateLimit: true });
-    if (res.status === "failed") worst = "failed";
-    else if (res.status === "sent" && worst !== "failed") worst = "sent";
+  try {
+    // Through the notification manager: in-app card for the owner plus the email in the BCom brand. One notice per kind
+    // and limit date, so a re-run of the sweep sends nothing twice.
+    const res = await dispatchNotification(db, {
+      eventKey: `billing_${kind}`,
+      tenantId,
+      eventRef: `billing_${kind}_${tenantId}_${limitDate.toISOString().slice(0, 10)}`,
+      title: mail.subject,
+      body: mail.lines[0] ?? "",
+      emailSubject: mail.subject,
+      emailLines: mail.lines,
+      link: "/settings/plan-and-billing",
+      ctaLabel: "Open plan and billing",
+    });
+    if (kind === "failed") {
+      await dispatchNotification(db, { eventKey: "platform_billing_failed", tenantId, eventRef: `platform_billing_failed_${tenantId}_${limitDate.toISOString().slice(0, 10)}`, title: `Plan payment failed: ${settings?.storeName ?? tenantId}`, body: mail.lines[0] ?? "", link: `/tenants/${tenantId}` }).catch(() => undefined);
+    }
+    return res.emailed + res.inApp > 0 ? "sent" : "skipped";
+  } catch {
+    return "failed";
   }
-  return worst;
 }
 
 export async function runBillingDunningSweep(rt: Runtime, now: Date = new Date(), limit = 200): Promise<DunningSweepResult> {
