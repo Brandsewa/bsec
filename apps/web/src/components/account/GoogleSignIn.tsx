@@ -9,7 +9,7 @@ import { loadGoogleScript } from "@/lib/google-identity.ts";
  * store switched Google sign-in on and this host is one of its verified custom domains; otherwise it renders nothing
  * and Google's script is never loaded.
  */
-export function GoogleSignIn({ redirectTo }: { redirectTo: string }) {
+export function GoogleSignIn({ redirectTo, oneTap = true, text = "continue_with" }: { redirectTo: string; /** Show the floating One Tap prompt too. Only the sign-in page does. */ oneTap?: boolean; text?: "continue_with" | "signup_with" | "signin_with" }) {
   const router = useRouter();
   const buttonRef = useRef<HTMLDivElement | null>(null);
   const [active, setActive] = useState(false);
@@ -53,9 +53,9 @@ export function GoogleSignIn({ redirectTo }: { redirectTo: string }) {
           },
         });
         if (buttonRef.current) {
-          window.google.accounts.id.renderButton(buttonRef.current, { theme: "outline", size: "large", text: "continue_with", width: 320 });
+          window.google.accounts.id.renderButton(buttonRef.current, { theme: "outline", size: "large", text, width: 320 });
         }
-        if (cfg.oneTap) window.google.accounts.id.prompt();
+        if (oneTap && cfg.oneTap) window.google.accounts.id.prompt();
       } catch {
         /* Email and phone sign-in always remain available. */
       }
@@ -64,7 +64,7 @@ export function GoogleSignIn({ redirectTo }: { redirectTo: string }) {
       cancelled = true;
       window.google?.accounts.id.cancel();
     };
-  }, [redirectTo, router]);
+  }, [redirectTo, router, oneTap, text]);
 
   if (!active) return null;
   return (
