@@ -4,6 +4,8 @@ import { renderEmail, type EmailData } from "./email-templates.ts";
 import { loadEmailBrand, loadEmailOrder, mintOrderViewUrl } from "./email-context.ts";
 import { isFeatureEnabled } from "../features.ts";
 import { sendPlatformEmail } from "./platform-mailer.ts";
+import { isEmailEventEnabled } from "../notifications/rules.ts";
+import { loadCustomerEmailBranding } from "../notifications/branding-loader.ts";
 import {
   EMAIL_CLASS,
   getTemplatePreferenceField,
@@ -142,6 +144,16 @@ export async function sendTransactionalEmail(
       }
     }
 
+    // 2b. Super Admin and store rules from the notification manager (events not in the catalog are left alone).
+    if (!(await isEmailEventEnabled(tx, tenantId, template))) {
+      const [offLog] = await tx
+        .insert(schema.emailLog)
+        .values({ tenantId, template, toEmail, subject, status: "skipped", channel: "email", eventRef: eventRef ?? null, eventKey: eventKey ?? null, suppressedReason: "rule_off" })
+        .returning({ id: schema.emailLog.id });
+      if (!offLog) throw new Error("Failed to insert email_log entry");
+      return { logId: offLog.id, status: "skipped_preference" };
+    }
+
     // 3. Marketing email verification: require subscribed consent
     let unsubscribeToken: string | undefined;
     if (notificationRulesOn && emailClass === "marketing") {
@@ -214,6 +226,7 @@ export async function sendTransactionalEmail(
     // 5. Render email with brand and order context
     try {
       const brand = await loadEmailBrand(tx, tenantId);
+      brand.branding = await loadCustomerEmailBranding(tx, db, tenantId);
 
       // Add unsubscribeUrl if marketing
       if (unsubscribeToken) {

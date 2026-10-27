@@ -40,6 +40,7 @@ import { Features } from "./pages/Features.tsx";
 import { Staff } from "./pages/Staff.tsx";
 import { AuditLog } from "./pages/AuditLog.tsx";
 import { StorageSettings } from "./pages/StorageSettings.tsx";
+import { NotificationManager } from "./pages/NotificationManager.tsx";
 import { IntegrationsHub } from "./pages/integrations/IntegrationsHub.tsx";
 import { NotificationsHub } from "./pages/integrations/NotificationsHub.tsx";
 import { ChannelPage } from "./pages/integrations/ChannelPage.tsx";
@@ -348,6 +349,13 @@ const storageRoute = createRoute({
   component: () => null,
 });
 
+const notificationsRoute = createRoute({
+  getParentRoute: () => authLayoutRoute,
+  path: "/notifications",
+  component: NotificationManager,
+  pendingComponent: () => <PageSkeleton />,
+});
+
 const integrationsRoute = createRoute({
   getParentRoute: () => authLayoutRoute,
   path: "/integrations",
@@ -503,6 +511,7 @@ export const routeTree = rootRoute.addChildren([
     emailRoute,
     storageRoute,
     integrationsRoute,
+    notificationsRoute,
     integrationsNotificationsRoute,
     integrationsEmailRoute,
     integrationsSmsRoute,

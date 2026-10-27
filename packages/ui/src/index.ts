@@ -214,3 +214,5 @@ export {
   type DerivedAccent,
 } from "./theme/index.ts";
 
+export { NotificationDrawer, NotificationBell, type NotificationDrawerProps, type NotificationDrawerTab, type NotificationDrawerItem, type NotificationBellProps } from "./components/notification-drawer.tsx";
+export { EmailBrandingEditor, type EmailBrandingEditorProps, type EmailBrandingValue, type EmailBrandingIssue } from "./components/email-branding-editor.tsx";

@@ -533,6 +533,13 @@
       "when": 1793408800000,
       "tag": "0081_domain_routing_checks",
       "breakpoints": true
+    },
+    {
+      "idx": 76,
+      "version": "7",
+      "when": 1793495200000,
+      "tag": "0082_notification_manager",
+      "breakpoints": true
     }
   ]
 }

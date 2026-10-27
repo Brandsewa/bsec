@@ -22,10 +22,12 @@ import {
   platformSettingsContract,
 } from "./platform.ts";
 import { storefrontContract } from "./storefront.ts";
+import { platformNotificationsContract } from "./notifications.ts";
 
 export * from "./admin.ts";
 export * from "./finance.ts";
 export * from "./blog.ts";
+export * from "./notifications.ts";
 export * from "./friendly-ids.ts";
 export * from "./platform.ts";
 export * from "./storefront.ts";
@@ -74,6 +76,7 @@ export const platformContract = {
   staff: platformStaffContract,
   audit: platformAuditContract,
   email: platformEmailContract,
+  notifications: platformNotificationsContract,
   storage: platformStorageContract,
   integrations: platformIntegrationsContract,
   settings: platformSettingsContract,

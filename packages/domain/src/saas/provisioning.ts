@@ -1,7 +1,7 @@
 import { loadTrialPolicy } from "../platform/billing-settings.ts";
 import { randomUUID } from "node:crypto";
 import { eq, sql } from "drizzle-orm";
-import { schema, type Db } from "@bs/db";
+import { QUEUE_NAMES, schema, type Db } from "@bs/db";
 import { hashPassword, STORE_PERMISSIONS, SYSTEM_STORE_ROLES } from "@bs/auth";
 import { saasDb, type Runtime } from "../runtime.ts";
 import { tierForPlan } from "./plan-tiers.ts";
@@ -118,7 +118,7 @@ export async function provisionTenant(
   const adminHost = process.env.ADMIN_HOST?.trim() || (isLocal ? "localhost:5173" : `admin.${platformDomain}`);
   const adminUrl = `${protocol}://${adminHost}`;
 
-  return await db.transaction(async (tx) => {
+  const provisioned = await db.transaction(async (tx) => {
     const templateCode = input.themeTemplate || (await resolveSignupTemplateCode(tx));
 
     // 1. Verify slug is not already owned by another store
@@ -846,4 +846,21 @@ export async function provisionTenant(
       ownerInvite,
     };
   });
+
+  // Tell Super Admin staff about the new store (after commit, ADR-006). A failure to enqueue never undoes the store.
+  try {
+    await rt._jobs?.send(QUEUE_NAMES.NOTIFICATION_DISPATCH, {
+      eventKey: "platform_store_signup",
+      tenantId: provisioned.tenantId,
+      eventRef: `platform_store_signup_${provisioned.tenantId}`,
+      title: `New store: ${storeName}`,
+      body: `${ownerEmail} created ${provisioned.hostname} on the ${planCode} plan.`,
+      emailLines: [`${storeName} (${provisioned.hostname}) was created for ${ownerEmail} on the ${planCode} plan.`],
+      link: `/tenants/${provisioned.tenantId}`,
+      ctaLabel: "Open store",
+    });
+  } catch {
+    // The store exists; the alert is best effort.
+  }
+  return provisioned;
 }

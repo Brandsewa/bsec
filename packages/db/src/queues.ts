@@ -42,6 +42,9 @@ export const QUEUES = [
   { name: "media.backfill_derivatives", options: { retryLimit: 3, retryBackoff: true, retryDelay: 10 } },
   { name: "media.hash", options: { retryLimit: 5, retryBackoff: true, retryDelay: 5 } },
   { name: "media.backfill_hashes", options: { retryLimit: 3, retryBackoff: true, retryDelay: 10 } },
+  // Notification manager (docs/NOTIFICATION-MANAGER-PLAN.md): one dispatch job per event
+  { name: "notification.dispatch", options: { retryLimit: 5, retryBackoff: true, retryDelay: 5 } },
+  { name: "notification.retention_sweep", options: { retryLimit: 3, retryBackoff: true, retryDelay: 10 } },
 ] as const;
 
 export type QueueName = (typeof QUEUES)[number]["name"];
@@ -85,4 +88,6 @@ export const QUEUE_NAMES = {
   MEDIA_HASH: "media.hash",
   MEDIA_BACKFILL_HASHES: "media.backfill_hashes",
   DOMAINS_SWEEP: "domains.sweep",
+  NOTIFICATION_DISPATCH: "notification.dispatch",
+  NOTIFICATION_RETENTION_SWEEP: "notification.retention_sweep",
 } as const;

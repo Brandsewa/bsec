@@ -296,6 +296,14 @@ import {
   deleteTaxClass,
   getNotificationSettings,
   updateNotificationSettings,
+  getStoreNotificationRules,
+  updateStoreNotificationRule,
+  getStoreEmailBranding,
+  updateStoreEmailBranding,
+  previewStoreEmailBranding,
+  listStoreInbox,
+  markStoreInbox,
+  listStoreActivity,
   listPolicies,
   getPolicy,
   savePolicyDraft,
@@ -971,6 +979,66 @@ export const storeRouter = os.router({
         .handler(({ context, input }) => {
           if (!context.tenantCtx) throw new Error("Missing tenant context");
           return updateNotificationSettings(context.rt, context.tenantCtx, input);
+        }),
+    },
+    notifications: {
+      rules: os.admin.notifications.rules
+        .use(requireAdmin)
+        .use(requirePermission("settings.read"))
+        .handler(({ context }) => {
+          if (!context.tenantCtx) throw new Error("Missing tenant context");
+          return getStoreNotificationRules(context.rt, context.tenantCtx);
+        }),
+      updateRule: os.admin.notifications.updateRule
+        .use(requireAdmin)
+        .use(requirePermission("notifications.manage"))
+        .handler(async ({ context, input }) => {
+          if (!context.tenantCtx) throw new Error("Missing tenant context");
+          await updateStoreNotificationRule(context.rt, context.tenantCtx, input);
+          return { ok: true as const };
+        }),
+      branding: os.admin.notifications.branding
+        .use(requireAdmin)
+        .use(requirePermission("settings.read"))
+        .handler(({ context }) => {
+          if (!context.tenantCtx) throw new Error("Missing tenant context");
+          return getStoreEmailBranding(context.rt, context.tenantCtx);
+        }),
+      updateBranding: os.admin.notifications.updateBranding
+        .use(requireAdmin)
+        .use(requirePermission("notifications.manage"))
+        .handler(({ context, input }) => {
+          if (!context.tenantCtx) throw new Error("Missing tenant context");
+          return updateStoreEmailBranding(context.rt, context.tenantCtx, input);
+        }),
+      previewBranding: os.admin.notifications.previewBranding
+        .use(requireAdmin)
+        .use(requirePermission("settings.read"))
+        .handler(({ context, input }) => {
+          if (!context.tenantCtx) throw new Error("Missing tenant context");
+          return previewStoreEmailBranding(context.rt, context.tenantCtx, input);
+        }),
+      inbox: os.admin.notifications.inbox
+        .use(requireAdmin)
+        .use(requirePermission("orders.read"))
+        .handler(({ context }) => {
+          if (!context.tenantCtx) throw new Error("Missing tenant context");
+          return listStoreInbox(context.rt, context.tenantCtx);
+        }),
+      markInbox: os.admin.notifications.markInbox
+        .use(requireAdmin)
+        .use(requirePermission("orders.read"))
+        .handler(async ({ context, input }) => {
+          if (!context.tenantCtx) throw new Error("Missing tenant context");
+          await markStoreInbox(context.rt, context.tenantCtx, input);
+          return { ok: true as const };
+        }),
+      activity: os.admin.notifications.activity
+        .use(requireAdmin)
+        .use(requirePermission("settings.read"))
+        .handler(({ context }) => {
+          if (!context.tenantCtx) throw new Error("Missing tenant context");
+          return listStoreActivity(context.rt, context.tenantCtx);
         }),
     },
     policies: {

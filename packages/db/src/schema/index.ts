@@ -43,3 +43,4 @@ export * from "./platform-channel.ts";
 export * from "./platform-payments.ts";
 export * from "./platform-auth.ts";
 export * from "./social-auth.ts";
+export * from "./notifications.ts";

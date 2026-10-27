@@ -1,4 +1,4 @@
-import { CreditCard, Globe, ListPlus, HardDrive, History, Landmark, LayoutDashboard, LifeBuoy, Receipt, RotateCcw, ShoppingBag, ShoppingCart, Sparkles, Store, Truck, UserCheck, UserCog } from "lucide-react";
+import { BellRing, Mail, CreditCard, Globe, ListPlus, HardDrive, History, Landmark, LayoutDashboard, LifeBuoy, Receipt, RotateCcw, ShoppingBag, ShoppingCart, Sparkles, Store, Truck, UserCheck, UserCog } from "lucide-react";
 import type { ComponentType } from "react";
 import { hasPermission, type StorePermission } from "@bs/auth/permissions";
 
@@ -60,6 +60,8 @@ export const SETTINGS_NAV_GROUPS: readonly SettingsNavGroup[] = [
       { id: "orders", label: "Orders", href: "/settings/orders", description: "Numbering, processing, recovery", icon: ShoppingBag, perm: "orders.settings.manage" },
       { id: "returns", label: "Returns", href: "/settings/returns", description: "Returns and exchanges", icon: RotateCcw, perm: "settings.write" },
       { id: "notifications", label: "Notifications", href: "/settings/notifications", description: "Customer & staff emails", icon: LifeBuoy, perm: "notifications.manage" },
+      { id: "notification-alerts", label: "Team alerts", href: "/settings/notification-alerts", description: "Order and billing alerts", icon: BellRing, perm: "notifications.manage" },
+      { id: "email-branding", label: "Email branding", href: "/settings/email-branding", description: "Logo, colours, footer", icon: Mail, perm: "notifications.manage" },
       { id: "custom-fields", label: "Custom fields", href: "/settings/custom-fields", description: "Your own product fields", icon: ListPlus, perm: "products.write" },
       { id: "storage", label: "Storage", href: "/settings/storage", description: "Media files and usage limit", icon: HardDrive, perm: "settings.read" },
     ],
