@@ -73,9 +73,17 @@ export function GoogleVerifyClient() {
       {/* Always mounted: Google draws its button into this element before the state turns to "ready". */}
       <div ref={buttonRef} className="flex justify-center" />
       {state === "done" ? (
-        <p role="status" className="rounded-md border border-emerald-500/30 bg-emerald-500/10 p-3">
-          Google sign-in works on this domain. Go back to Store Admin and turn it on.
-        </p>
+        <div role="status" className="space-y-3 rounded-md border border-emerald-500/30 bg-emerald-500/10 p-3">
+          <p className="font-medium">Verified. Google sign-in works on this domain.</p>
+          <p>You can close this tab now and go back to your Store Admin dashboard to turn Google sign-in on for your customers.</p>
+          <button
+            type="button"
+            onClick={() => window.close()}
+            className="rounded-md border border-[var(--border)] px-3 py-1.5 text-xs font-medium hover:bg-[var(--muted)]"
+          >
+            Close this tab
+          </button>
+        </div>
       ) : null}
       {state === "error" ? (
         <p role="alert" className="rounded-md border border-red-500/30 bg-red-500/10 p-3 text-[var(--destructive)]">

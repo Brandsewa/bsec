@@ -9,7 +9,19 @@ import { loadGoogleScript } from "@/lib/google-identity.ts";
  * store switched Google sign-in on and this host is one of its verified custom domains; otherwise it renders nothing
  * and Google's script is never loaded.
  */
-export function GoogleSignIn({ redirectTo, oneTap = true, text = "continue_with" }: { redirectTo: string; /** Show the floating One Tap prompt too. Only the sign-in page does. */ oneTap?: boolean; text?: "continue_with" | "signup_with" | "signin_with" }) {
+export function GoogleSignIn({
+  redirectTo,
+  oneTap = true,
+  button = true,
+  text = "continue_with",
+}: {
+  redirectTo: string;
+  /** Show the floating One Tap prompt. */
+  oneTap?: boolean;
+  /** Draw the Continue with Google button. Off for the prompt-only use on the home and content pages. */
+  button?: boolean;
+  text?: "continue_with" | "signup_with" | "signin_with";
+}) {
   const router = useRouter();
   const buttonRef = useRef<HTMLDivElement | null>(null);
   const [active, setActive] = useState(false);
@@ -52,7 +64,7 @@ export function GoogleSignIn({ redirectTo, oneTap = true, text = "continue_with"
             router.refresh();
           },
         });
-        if (buttonRef.current) {
+        if (button && buttonRef.current) {
           window.google.accounts.id.renderButton(buttonRef.current, { theme: "outline", size: "large", text, width: 320 });
         }
         if (oneTap && cfg.oneTap) window.google.accounts.id.prompt();
@@ -64,7 +76,9 @@ export function GoogleSignIn({ redirectTo, oneTap = true, text = "continue_with"
       cancelled = true;
       window.google?.accounts.id.cancel();
     };
-  }, [redirectTo, router, oneTap, text]);
+  }, [redirectTo, router, oneTap, button, text]);
+
+  if (!button) return null;
 
   // The container stays mounted (hidden until Google is on) so Google can draw its button into it as soon as it loads.
   return (

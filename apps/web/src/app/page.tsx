@@ -13,6 +13,7 @@ import { renderBlockDocument, type BlockData } from "@bs/blocks";
 import { server } from "@/server/runtime.ts";
 import { getCachedStorefrontHomePage } from "@/server/cached-storefront.ts";
 import { BlockRenderer } from "@/components/blocks/BlockRenderer.tsx";
+import { GoogleOneTapPrompt } from "@/components/account/GoogleOneTapPrompt.tsx";
 import { MarketingLandingPage } from "@/components/marketing/MarketingLandingPage.tsx";
 import { loadLandingPlans } from "@/server/landing-plans.ts";
 
@@ -157,6 +158,7 @@ export default async function HomePage() {
         dangerouslySetInnerHTML={{ __html: JSON.stringify(orgJsonLd) }}
       />
       <BlockRenderer blocks={blocksToRender} renderData={renderData} />
+      <GoogleOneTapPrompt />
     </main>
   );
 }

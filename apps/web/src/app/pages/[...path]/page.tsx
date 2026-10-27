@@ -13,6 +13,7 @@ import {
 import { renderBlockDocument } from "@bs/blocks";
 import { server } from "@/server/runtime.ts";
 import { getCachedStorefrontPageByPath } from "@/server/cached-storefront.ts";
+import { GoogleOneTapPrompt } from "@/components/account/GoogleOneTapPrompt.tsx";
 import { BlockRenderer } from "@/components/blocks/BlockRenderer.tsx";
 
 interface CustomPageProps {
@@ -153,6 +154,7 @@ export default async function CustomContentPage({ params }: CustomPageProps) {
       {/* The page's own blocks carry the visible heading; keep the title for screen readers and search engines. */}
       <h1 className="sr-only">{pageData.page.title}</h1>
       <BlockRenderer blocks={renderResult.blocks} renderData={pageData.renderData} />
+      <GoogleOneTapPrompt />
     </article>
   );
 }

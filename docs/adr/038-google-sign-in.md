@@ -26,7 +26,7 @@ ADR-019 keeps customer identity in `customers` with opaque sessions. Tier B reim
 Google runs the prompt only on registered origins, so the admin app (another origin) cannot test the store's client. The owner is sent to `/account/google-verify` on the store's custom domain with a short-lived signed ticket; a successful real sign-in there sets `verified_at`, `verified_client_id` and `verified_host`. Enabling needs a valid verification; changing the Client ID or losing that domain voids it.
 
 ### 6. Rate limits and privacy
-Customer Google sign-in is limited per (tenant, IP) only; a shared per-email bucket would let one visitor lock every shopper out. Google's script loads only on the customer sign-in page, only when the store enabled it, and Google is mentioned in the admin card for the store's privacy policy. Erasure and export cover `customer_identities`.
+Customer Google sign-in is limited per (tenant, IP) only; a shared per-email bucket would let one visitor lock every shopper out. Google's script loads only where it is used (the sign-in page, the sign-up form, and, for One Tap, the store home page and content pages; amended 2026-10-27 by the owner), only when the store enabled it, and never for a signed-in visitor, and Google is mentioned in the admin card for the store's privacy policy. Erasure and export cover `customer_identities`.
 
 ## Consequences
 - New tables: `platform_auth_providers`, `platform_google_client` (migration 0076), `store_social_auth`, `customer_identities` (migration 0077).

@@ -13,6 +13,9 @@ const redirects: string[] = [];
 const notFoundCalls: number[] = [];
 
 vi.mock("next/navigation", () => ({
+  // the page now mounts the One Tap prompt, a client component that reads the path and the router
+  usePathname: () => "/pages/about",
+  useRouter: () => ({ replace: () => undefined, refresh: () => undefined }),
   permanentRedirect: (url: string) => {
     redirects.push(url);
     const err = Object.assign(new Error(`REDIRECT_308:${url}`), {

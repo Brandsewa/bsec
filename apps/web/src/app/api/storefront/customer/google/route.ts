@@ -3,7 +3,7 @@ import { z } from "zod";
 import { evaluateStorefrontAccess, getClientIp, getStorefrontGoogleConfig, RateLimitExceededError, signInWithGoogle } from "@bs/domain";
 import { server } from "@/server/runtime.ts";
 import { readAuthSettings } from "@/server/auth.ts";
-import { customerCookie, getRequestHeaders, sameOrigin } from "@/server/customer-session.ts";
+import { currentCustomer, customerCookie, getRequestHeaders, sameOrigin } from "@/server/customer-session.ts";
 
 const NO_STORE = { "Cache-Control": "no-store" };
 
@@ -17,6 +17,10 @@ export async function GET(req: Request) {
     const { rt } = server();
     const access = await evaluateStorefrontAccess(rt, host, { headers: h });
     if (!access.tenantId) return NextResponse.json({ enabled: false }, { headers: NO_STORE });
+    // A visitor who is already signed in needs neither the button nor One Tap.
+    if (await currentCustomer({ rt, tenantId: access.tenantId, mode: access.mode ?? "live" })) {
+      return NextResponse.json({ enabled: false }, { headers: NO_STORE });
+    }
     const cfg = await getStorefrontGoogleConfig(rt._db.db, secret, access.tenantId, host);
     return NextResponse.json(cfg, { headers: NO_STORE });
   } catch {
