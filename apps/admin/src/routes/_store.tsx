@@ -16,6 +16,8 @@ import {
   Layers,
   MapPin,
   Menu,
+  Inbox,
+  MailPlus,
   MessageSquareQuote,
   Package,
   Palette,
@@ -102,6 +104,8 @@ const nav: GatedGroup[] = [
       { label: "Customers", href: "/customers", icon: Users, perm: "customers.read" },
       { label: "Segments", href: "/segments", icon: Slice, perm: "customers.read" },
       { label: "Discounts", href: "/discounts", icon: BadgePercent, perm: "discounts.write" },
+      { label: "Leads", href: "/leads", icon: MailPlus, perm: "customers.read" },
+      { label: "Form submissions", href: "/form-submissions", icon: Inbox, perm: "customers.read" },
     ],
   },
   {

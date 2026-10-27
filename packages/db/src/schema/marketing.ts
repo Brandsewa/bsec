@@ -36,6 +36,30 @@ export const newsletterSubscribers = tenantTable(
 );
 
 /**
+ * Storefront contact-form submissions (theme "Contact form" block). Kept in the admin inbox; `recipientEmail` is where the form
+ * was configured to send them (empty = the store's admin email).
+ */
+export const formSubmissions = tenantTable(
+  "form_submissions",
+  {
+    id: uuid("id").default(sql`uuidv7()`).primaryKey(),
+    formName: text("form_name").notNull().default("Contact form"),
+    name: text("name").notNull(),
+    email: citext("email").notNull(),
+    phone: text("phone"),
+    choice: text("choice"),
+    message: text("message"),
+    recipientEmail: text("recipient_email"),
+    status: text("status").notNull().default("new"), // new, read, archived
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().default(sql`now()`),
+  },
+  (t) => [
+    unique("form_submissions_tenant_id_uniq").on(t.tenantId, t.id),
+    index("form_submissions_tenant_status_idx").on(t.tenantId, t.status, t.createdAt),
+  ],
+);
+
+/**
  * Discounts (PLAN §5.8 / M5).
  * Promotional discounts: percent, fixed amount, free shipping, or buy X get Y.
  * Null code indicates an automatic discount applied unconditionally at checkout.
@@ -58,7 +82,9 @@ export const discounts = tenantTable(
     combinable: boolean("combinable").notNull().default(false),
     startsAt: timestamp("starts_at", { withTimezone: true }),
     endsAt: timestamp("ends_at", { withTimezone: true }),
-    status: text("status").notNull().default("active"), // active, scheduled, expired, disabled
+    status: text("status").notNull().default("active"), // active, scheduled, expired, disabled, archived
+    /** Listed in the storefront coupon cards. Off by default so private codes (influencers, support) stay private. */
+    showOnStorefront: boolean("show_on_storefront").notNull().default(false),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().default(sql`now()`),
     updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().default(sql`now()`),
   },

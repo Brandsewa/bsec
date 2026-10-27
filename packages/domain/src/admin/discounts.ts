@@ -2,6 +2,20 @@ import { and, asc, desc, eq, sql } from "drizzle-orm";
 import { schema, withTenant } from "@bs/db";
 import type { Runtime } from "../runtime.ts";
 import { assertPermission, type TenantContext } from "../context.ts";
+import type { Tx } from "../blog/shared.ts";
+
+/** Audit row for a discount change (AGENTS.md rule 6: money settings are audited). */
+async function auditDiscount(tx: Tx, ctx: TenantContext, action: string, id: string, diff: Record<string, unknown>): Promise<void> {
+  await tx.insert(schema.auditLogs).values({
+    tenantId: ctx.tenantId,
+    actorType: ctx.actor.type,
+    actorId: ctx.actor.type === "staff" ? ctx.actor.userId : null,
+    action,
+    targetType: "discount",
+    targetId: id,
+    diff,
+  });
+}
 
 export interface ListDiscountsInput {
   search?: string | undefined;
@@ -27,6 +41,9 @@ export async function listAdminDiscounts(
 
     if (input.status) {
       conditions.push(eq(schema.discounts.status, input.status));
+    } else {
+      // Archived discounts only show under their own filter.
+      conditions.push(sql`${schema.discounts.status} <> 'archived'`);
     }
 
     if (input.type) {
@@ -108,6 +125,7 @@ export async function createAdminDiscount(
     usageLimit?: number | undefined;
     perCustomerLimit?: number | undefined;
     combinable?: boolean | undefined;
+    showOnStorefront?: boolean | undefined;
     startsAt?: string | undefined;
     endsAt?: string | undefined;
   },
@@ -128,6 +146,7 @@ export async function createAdminDiscount(
         usageLimit: input.usageLimit ?? null,
         perCustomerLimit: input.perCustomerLimit ?? null,
         combinable: input.combinable ?? false,
+        showOnStorefront: input.showOnStorefront ?? false,
         startsAt: input.startsAt ? new Date(input.startsAt) : null,
         endsAt: input.endsAt ? new Date(input.endsAt) : null,
         status: "active",
@@ -149,13 +168,47 @@ export async function createAdminDiscount(
   });
 }
 
+export async function getAdminDiscount(rt: Runtime, ctx: TenantContext, input: { id: string }) {
+  assertPermission(ctx, "discounts.write");
+  return await withTenant(rt._db.db, ctx.tenantId, async (tx) => {
+    const [d] = await tx.select().from(schema.discounts).where(and(eq(schema.discounts.tenantId, ctx.tenantId), eq(schema.discounts.id, input.id))).limit(1);
+    if (!d) throw new Error(`Discount not found: ${input.id}`);
+    return {
+      id: d.id,
+      code: d.code,
+      title: d.title,
+      type: d.type,
+      value: d.value,
+      minSubtotal: d.minSubtotal ?? 0,
+      usageLimit: d.usageLimit,
+      perCustomerLimit: d.perCustomerLimit,
+      usedCount: d.usedCount,
+      combinable: d.combinable,
+      showOnStorefront: d.showOnStorefront,
+      startsAt: d.startsAt ? d.startsAt.toISOString() : null,
+      endsAt: d.endsAt ? d.endsAt.toISOString() : null,
+      status: d.status,
+      createdAt: d.createdAt.toISOString(),
+    };
+  });
+}
+
 export async function updateAdminDiscount(
   rt: Runtime,
   ctx: TenantContext,
   input: {
     id: string;
     title?: string | undefined;
-    status?: "active" | "scheduled" | "expired" | "disabled" | undefined;
+    code?: string | null | undefined;
+    type?: "percent" | "fixed" | "free_shipping" | "buy_x_get_y" | undefined;
+    value?: number | undefined;
+    minSubtotal?: number | undefined;
+    perCustomerLimit?: number | null | undefined;
+    combinable?: boolean | undefined;
+    showOnStorefront?: boolean | undefined;
+    startsAt?: string | null | undefined;
+    endsAt?: string | null | undefined;
+    status?: "active" | "scheduled" | "expired" | "disabled" | "archived" | undefined;
     usageLimit?: number | null | undefined;
   },
 ) {
@@ -163,20 +216,32 @@ export async function updateAdminDiscount(
   const db = rt._db.db;
 
   return await withTenant(db, ctx.tenantId, async (tx) => {
+    const { id, ...changes } = input;
     const [updated] = await tx
       .update(schema.discounts)
       .set({
         ...(input.title ? { title: input.title } : {}),
+        ...(input.code !== undefined ? { code: input.code ? input.code.toUpperCase() : null } : {}),
+        ...(input.type ? { type: input.type } : {}),
+        ...(input.value !== undefined ? { value: input.value } : {}),
+        ...(input.minSubtotal !== undefined ? { minSubtotal: input.minSubtotal } : {}),
+        ...(input.perCustomerLimit !== undefined ? { perCustomerLimit: input.perCustomerLimit } : {}),
+        ...(input.combinable !== undefined ? { combinable: input.combinable } : {}),
+        ...(input.showOnStorefront !== undefined ? { showOnStorefront: input.showOnStorefront } : {}),
+        ...(input.startsAt !== undefined ? { startsAt: input.startsAt ? new Date(input.startsAt) : null } : {}),
+        ...(input.endsAt !== undefined ? { endsAt: input.endsAt ? new Date(input.endsAt) : null } : {}),
         ...(input.status ? { status: input.status } : {}),
         ...(input.usageLimit !== undefined ? { usageLimit: input.usageLimit } : {}),
         updatedAt: new Date(),
       })
-      .where(eq(schema.discounts.id, input.id))
+      .where(and(eq(schema.discounts.tenantId, ctx.tenantId), eq(schema.discounts.id, id)))
       .returning();
 
     if (!updated) {
       throw new Error(`Discount not found: ${input.id}`);
     }
+
+    await auditDiscount(tx, ctx, input.status === "archived" ? "discount.archive" : "discount.update", updated.id, changes);
 
     return {
       id: updated.id,
@@ -185,6 +250,9 @@ export async function updateAdminDiscount(
   });
 }
 
+/**
+ * Deletes a discount. One that has been redeemed on an order is archived instead, so order history keeps pointing at it.
+ */
 export async function deleteAdminDiscount(
   rt: Runtime,
   ctx: TenantContext,
@@ -194,7 +262,20 @@ export async function deleteAdminDiscount(
   const db = rt._db.db;
 
   return await withTenant(db, ctx.tenantId, async (tx) => {
-    await tx.delete(schema.discounts).where(eq(schema.discounts.id, input.id));
-    return { success: true };
+    const [used] = await tx
+      .select({ n: sql<number>`count(*)::int` })
+      .from(schema.discountRedemptions)
+      .where(and(eq(schema.discountRedemptions.tenantId, ctx.tenantId), eq(schema.discountRedemptions.discountId, input.id)));
+    if ((used?.n ?? 0) > 0) {
+      await tx
+        .update(schema.discounts)
+        .set({ status: "archived", updatedAt: new Date() })
+        .where(and(eq(schema.discounts.tenantId, ctx.tenantId), eq(schema.discounts.id, input.id)));
+      await auditDiscount(tx, ctx, "discount.archive", input.id, { reason: "used on orders, archived instead of deleted" });
+      return { success: true, archived: true };
+    }
+    await tx.delete(schema.discounts).where(and(eq(schema.discounts.tenantId, ctx.tenantId), eq(schema.discounts.id, input.id)));
+    await auditDiscount(tx, ctx, "discount.delete", input.id, {});
+    return { success: true, archived: false };
   });
 }

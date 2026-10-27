@@ -9,9 +9,10 @@ import {
 } from "@bs/domain";
 import { getBlockDefinition, type BlockInstance, type BlogListingOptions } from "@bs/blocks";
 import { server } from "@/server/runtime.ts";
-import { getCachedBlogList, getCachedStoreName, getCachedThemePage } from "@/server/cached-storefront.ts";
+import { getCachedBlogList, getCachedBlogMagazine, getCachedStoreName, getCachedThemePage } from "@/server/cached-storefront.ts";
 import { BlockRenderer } from "@/components/blocks/BlockRenderer.tsx";
 import { BlogListingSection } from "./BlogListingSection.tsx";
+import { BlogMagazine } from "./BlogMagazine.tsx";
 import { JsonLd } from "./JsonLd.tsx";
 
 /**
@@ -55,6 +56,13 @@ export async function BlogArchivePage({ categoryPath, page }: { categoryPath?: s
   // /blog/page/1 is /blog; a page number past the last page does not exist.
   if (page > list.pages) notFound();
 
+  // The magazine style is the blog index only (first page, no category); every other page keeps the classic list.
+  const listingProps = blocks0(template?.blocks)?.props;
+  const wantsMagazine = !categoryPath && page === 1 && (listingProps?.["style"] ?? "magazine") === "magazine";
+  const magazine = wantsMagazine
+    ? await getCachedBlogMagazine(tenantId, { latest: 1 + Number(listingProps?.["latestSideCount"] ?? 5), perCategory: Number(listingProps?.["postsPerCategory"] ?? 4) })
+    : null;
+
   const base = `https://${host}`;
   const crumbs = [
     { name: "Home", url: base },
@@ -74,17 +82,25 @@ export async function BlogArchivePage({ categoryPath, page }: { categoryPath?: s
         blocks={blocks}
         renderData={template?.renderData}
         context={{
-          renderBlogListing: (options: BlogListingOptions) => (
+          renderBlogListing: (options: BlogListingOptions) =>
+            magazine && options.style !== "classic" ? (
+              <BlogMagazine options={options} data={magazine} title={options.title || list.settings.title} />
+            ) : (
             <BlogListingSection
               list={list}
               categories={categories}
               options={options.title ? options : { ...options, title: list.settings.title }}
             />
-          ),
+            ),
         }}
       />
     </div>
   );
+}
+
+/** The theme's blog listing block, if the template has one. */
+function blocks0(blocks: BlockInstance[] | undefined) {
+  return blocks?.find((b) => b.type === "BlogListing");
 }
 
 /** /blog/page/1 and /blog/category/x/page/1 are the first page. */

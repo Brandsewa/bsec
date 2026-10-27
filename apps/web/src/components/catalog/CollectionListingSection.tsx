@@ -49,6 +49,8 @@ export function CollectionListingSection({
   filterData,
   filters,
   options = DEFAULT_COLLECTION_LISTING_OPTIONS,
+  basePath,
+  archive = { href: "/collections", label: "Collections" },
 }: {
   collection: StorefrontCollectionDetail["collection"];
   products: StorefrontCollectionDetail["products"];
@@ -59,6 +61,9 @@ export function CollectionListingSection({
   filterData?: StorefrontFacetedResult | undefined;
   filters?: Record<string, string | number | boolean | undefined> | undefined;
   options?: CollectionListingOptions | undefined;
+  /** Where numbered pages link; a category page passes its own path so it can share this template. */
+  basePath?: string | undefined;
+  archive?: { href: string; label: string } | undefined;
 }) {
   const o = { ...DEFAULT_COLLECTION_LISTING_OPTIONS, ...options };
   const totalPages = Math.ceil(products.total / limit);
@@ -111,7 +116,7 @@ export function CollectionListingSection({
         <Pagination
           currentPage={page}
           totalPages={totalPages}
-          baseUrl={`/collections/${collection.slug}`}
+          baseUrl={basePath ?? `/collections/${collection.slug}`}
           searchParams={{
             sort: rawSort !== "created_desc" ? rawSort : undefined,
             inStockOnly: inStockOnly ? "true" : undefined,
@@ -136,8 +141,8 @@ export function CollectionListingSection({
               Home
             </Link>
             <span>/</span>
-            <Link href="/collections" className="hover:text-foreground transition-colors">
-              Collections
+            <Link href={archive.href} className="hover:text-foreground transition-colors">
+              {archive.label}
             </Link>
             <span>/</span>
             <span className="font-medium text-foreground truncate max-w-[200px] sm:max-w-none">{collection.title}</span>

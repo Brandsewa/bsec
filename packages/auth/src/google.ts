@@ -109,6 +109,8 @@ export interface GoogleIdentityClaims {
   email: string;
   emailVerified: boolean;
   name: string;
+  /** Google profile photo (https only); display-only, never used as an identifier. */
+  picture?: string | undefined;
   nonce?: string | undefined;
 }
 
@@ -124,6 +126,7 @@ export async function verifyGoogleIdentity(idToken: string, clientId: string): P
     email: payload.email.toLowerCase(),
     emailVerified: payload.email_verified === true || (payload.email_verified as unknown) === "true",
     name: typeof payload.name === "string" ? payload.name : "",
+    picture: typeof payload.picture === "string" && /^https:\/\//i.test(payload.picture) && payload.picture.length <= 500 ? payload.picture : undefined,
     nonce: typeof payload.nonce === "string" ? payload.nonce : undefined,
   };
 }

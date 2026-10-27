@@ -37,23 +37,23 @@ export function OrderSummary({ cart, shippingPaise = 0, codFeePaise = 0, onCartC
     <div className="bs-panel p-4 sm:p-6">
       <h2 className="mb-2 hidden text-lg font-semibold tracking-tight text-foreground lg:block">Order Summary</h2>
 
-      <div className="divide-y divide-border/40 max-h-64 overflow-y-auto mb-3">
+      <div className="divide-y divide-border/40 max-h-64 overflow-y-auto mb-3 pt-1.5">
         {cart.items.map((item) => (
           <div key={item.id} className="flex items-center gap-2.5 py-2">
-            <div className="relative h-11 w-11 flex-shrink-0 overflow-hidden rounded-lg bg-background">
+            <div className="relative h-11 w-11 flex-shrink-0 rounded-lg bg-background">
               {item.primaryImage?.url ? (
                 /* eslint-disable-next-line @next/next/no-img-element */
                 <img
                   src={item.primaryImage.url}
                   alt={item.primaryImage.alt ?? item.product.title}
                   loading="lazy"
-                  className="h-full w-full object-cover"
+                  className="h-full w-full rounded-lg object-cover"
                 />
               ) : (
                 /* eslint-disable-next-line @next/next/no-img-element */
-                <img src={PLACEHOLDER_IMAGE_URL} alt="" className="h-full w-full object-cover" />
+                <img src={PLACEHOLDER_IMAGE_URL} alt="" className="h-full w-full rounded-lg object-cover" />
               )}
-              <span className="absolute -top-1 -right-1 flex h-4 w-4 items-center justify-center rounded-full bg-foreground text-[10px] font-bold text-background">
+              <span className="absolute -top-1.5 -right-1.5 z-10 flex h-5 min-w-5 px-1 items-center justify-center rounded-full bg-foreground text-[10px] font-bold text-background">
                 {item.quantity}
               </span>
             </div>

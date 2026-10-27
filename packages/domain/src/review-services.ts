@@ -5,9 +5,12 @@ import { assertPermission, type TenantContext } from "./context.ts";
 import { checkRateLimit, RateLimitExceededError } from "./system/rate-limit.ts";
 import { invalidateCache } from "./cache-invalidation.ts";
 
+export type ReviewStatus = "published" | "on_hold" | "spam" | "archived";
+export type ReviewSource = "customer" | "manual" | "import";
+
 export interface ListReviewsQuery {
   productId?: string | undefined;
-  status?: "all" | "published" | "on_hold" | "replied" | "awaiting_reply" | undefined;
+  status?: "all" | "published" | "on_hold" | "spam" | "archived" | "replied" | "awaiting_reply" | undefined;
   rating?: number | undefined;
   search?: string | undefined;
   dateFrom?: string | undefined;
@@ -358,8 +361,11 @@ export async function listAdminReviews(
       conditions.push(eq(schema.reviews.rating, query.rating));
     }
 
-    if (query.status && query.status !== "all") {
-      if (query.status === "published" || query.status === "on_hold") {
+    if (!query.status || query.status === "all") {
+      // Spam and archived reviews only show under their own filters.
+      conditions.push(sql`${schema.reviews.status} NOT IN ('spam', 'archived')`);
+    } else {
+      if (query.status === "published" || query.status === "on_hold" || query.status === "spam" || query.status === "archived") {
         conditions.push(eq(schema.reviews.status, query.status));
       } else if (query.status === "replied") {
         conditions.push(sql`${schema.reviews.replyText} IS NOT NULL AND ${schema.reviews.replyText} != ''`);
@@ -425,7 +431,8 @@ export async function listAdminReviews(
         rating: review.rating,
         title: review.title,
         body: review.body,
-        status: review.status as "published" | "on_hold",
+        status: review.status as ReviewStatus,
+        source: review.source as ReviewSource,
         replyText: review.replyText,
         repliedAt: review.repliedAt ? review.repliedAt.toISOString() : null,
         isVerifiedPurchase: Boolean(review.orderItemId),
@@ -464,6 +471,8 @@ export async function getAdminReviewStats(
 
     let published = 0;
     let onHold = 0;
+    let spam = 0;
+    let archived = 0;
     let replied = 0;
     let awaitingReply = 0;
     let sumPublishedRating = 0;
@@ -477,6 +486,10 @@ export async function getAdminReviewStats(
         if (ratingCounts[star] !== undefined) {
           ratingCounts[star]++;
         }
+      } else if (r.status === "spam") {
+        spam++;
+      } else if (r.status === "archived") {
+        archived++;
       } else {
         onHold++;
       }
@@ -494,6 +507,8 @@ export async function getAdminReviewStats(
       total: rows.length,
       published,
       onHold,
+      spam,
+      archived,
       replied,
       awaitingReply,
       averageRating,
@@ -545,7 +560,8 @@ export async function getAdminReviewDetail(
       rating: review.rating,
       title: review.title,
       body: review.body,
-      status: review.status as "published" | "on_hold",
+      status: review.status as ReviewStatus,
+      source: review.source as ReviewSource,
       replyText: review.replyText,
       repliedAt: review.repliedAt ? review.repliedAt.toISOString() : null,
       isVerifiedPurchase: Boolean(review.orderItemId),
@@ -918,4 +934,180 @@ export async function getCustomerReviews(db: Db, tenantId: string, customerId: s
       .orderBy(desc(schema.reviews.createdAt))
       .limit(100),
   );
+}
+
+/**
+ * Admin: approve (published), hold, mark as spam or archive reviews. Only published reviews count towards a product's rating
+ * and show on the storefront, so the rating is recomputed for every product touched.
+ */
+export async function setAdminReviewStatus(rt: Runtime, ctx: TenantContext, input: { ids: string[]; status: ReviewStatus }) {
+  assertPermission(ctx, "products.write");
+  if (input.ids.length === 0) return { count: 0 };
+
+  const touched = await withTenant(rt._db.db, ctx.tenantId, async (tx) => {
+    const updated = await tx
+      .update(schema.reviews)
+      .set({ status: input.status, updatedAt: new Date() })
+      .where(and(eq(schema.reviews.tenantId, ctx.tenantId), inArray(schema.reviews.id, input.ids)))
+      .returning({ id: schema.reviews.id, productId: schema.reviews.productId });
+    if (updated.length === 0) return [];
+    const productIds = Array.from(new Set(updated.map((u) => u.productId)));
+    for (const pId of productIds) await recomputeProductRatingAggregate(tx, ctx.tenantId, pId);
+    await tx.insert(schema.auditLogs).values({
+      tenantId: ctx.tenantId,
+      actorType: ctx.actor.type,
+      actorId: ctx.actor.type === "staff" ? ctx.actor.userId : null,
+      action: `review.${input.status}`,
+      targetType: "review",
+      targetId: updated[0]?.id ?? "",
+      diff: { status: input.status, count: updated.length, ids: updated.map((u) => u.id) },
+    });
+    return productIds;
+  });
+  for (const pId of touched) await invalidateCache(rt, ctx, { type: "review_updated", productId: pId });
+  return { count: touched.length === 0 ? 0 : input.ids.length };
+}
+
+export interface CreateAdminReviewInput {
+  productId: string;
+  reviewerName: string;
+  rating: number;
+  title?: string | undefined;
+  body: string;
+  status?: "published" | "on_hold" | undefined;
+  reviewedAt?: string | undefined;
+}
+
+/** Admin: add a review by hand. It is marked `manual` and never counts as a verified purchase. */
+export async function createAdminReview(rt: Runtime, ctx: TenantContext, input: CreateAdminReviewInput) {
+  assertPermission(ctx, "products.write");
+  const id = await withTenant(rt._db.db, ctx.tenantId, async (tx) => {
+    const [product] = await tx
+      .select({ id: schema.products.id })
+      .from(schema.products)
+      .where(and(eq(schema.products.tenantId, ctx.tenantId), eq(schema.products.id, input.productId)))
+      .limit(1);
+    if (!product) throw new Error("Not Found: Product not found.");
+    const when = input.reviewedAt ? new Date(input.reviewedAt) : new Date();
+    const [created] = await tx
+      .insert(schema.reviews)
+      .values({
+        tenantId: ctx.tenantId,
+        productId: input.productId,
+        reviewerName: input.reviewerName,
+        rating: input.rating,
+        title: input.title || null,
+        body: input.body,
+        status: input.status ?? "published",
+        source: "manual",
+        createdAt: Number.isNaN(when.getTime()) ? new Date() : when,
+      })
+      .returning({ id: schema.reviews.id });
+    if (!created) throw new Error("Could not add the review.");
+    await recomputeProductRatingAggregate(tx, ctx.tenantId, input.productId);
+    await tx.insert(schema.auditLogs).values({
+      tenantId: ctx.tenantId,
+      actorType: ctx.actor.type,
+      actorId: ctx.actor.type === "staff" ? ctx.actor.userId : null,
+      action: "review.created_manually",
+      targetType: "review",
+      targetId: created.id,
+      diff: { productId: input.productId, rating: input.rating, status: input.status ?? "published" },
+    });
+    return created.id;
+  });
+  await invalidateCache(rt, ctx, { type: "review_updated", productId: input.productId });
+  return getAdminReviewDetail(rt, ctx, id);
+}
+
+export interface ImportReviewRow {
+  productHandle: string;
+  reviewerName: string;
+  rating: number;
+  title?: string | undefined;
+  body: string;
+  status: ReviewStatus;
+  reviewedAt?: string | undefined;
+}
+
+/**
+ * Admin: import reviews (rows parsed from a CSV in the browser). Products are matched by handle. A row that repeats an existing
+ * review (same product, reviewer and text) is skipped, so running the same file twice adds nothing. `dryRun` validates and counts only.
+ */
+export async function importAdminReviews(rt: Runtime, ctx: TenantContext, input: { rows: ImportReviewRow[]; dryRun?: boolean | undefined }) {
+  assertPermission(ctx, "products.write");
+  if (input.rows.length > 500) throw new Error("Import up to 500 reviews at a time.");
+
+  const result = await withTenant(rt._db.db, ctx.tenantId, async (tx) => {
+    const handles = Array.from(new Set(input.rows.map((r) => r.productHandle.toLowerCase())));
+    const products = await tx
+      .select({ id: schema.products.id, slug: schema.products.slug })
+      .from(schema.products)
+      .where(and(eq(schema.products.tenantId, ctx.tenantId), inArray(schema.products.slug, handles)));
+    const bySlug = new Map(products.map((p) => [p.slug.toLowerCase(), p.id]));
+
+    const errors: Array<{ row: number; message: string }> = [];
+    let created = 0;
+    let skipped = 0;
+    const touched = new Set<string>();
+    const seen = new Set<string>();
+
+    for (const [i, r] of input.rows.entries()) {
+      const rowNo = i + 1;
+      const productId = bySlug.get(r.productHandle.toLowerCase());
+      if (!productId) {
+        errors.push({ row: rowNo, message: `No product with the handle "${r.productHandle}".` });
+        continue;
+      }
+      const name = r.reviewerName.trim() || "Anonymous";
+      const key = `${productId}|${name.toLowerCase()}|${r.body}`;
+      if (seen.has(key)) {
+        skipped++;
+        continue;
+      }
+      seen.add(key);
+      const [dup] = await tx
+        .select({ id: schema.reviews.id })
+        .from(schema.reviews)
+        .where(and(eq(schema.reviews.tenantId, ctx.tenantId), eq(schema.reviews.productId, productId), eq(schema.reviews.reviewerName, name), eq(schema.reviews.body, r.body)))
+        .limit(1);
+      if (dup) {
+        skipped++;
+        continue;
+      }
+      const when = r.reviewedAt ? new Date(r.reviewedAt) : new Date();
+      if (!input.dryRun) {
+        await tx.insert(schema.reviews).values({
+          tenantId: ctx.tenantId,
+          productId,
+          reviewerName: name,
+          rating: r.rating,
+          title: r.title || null,
+          body: r.body,
+          status: r.status,
+          source: "import",
+          createdAt: Number.isNaN(when.getTime()) ? new Date() : when,
+        });
+        touched.add(productId);
+      }
+      created++;
+    }
+
+    if (!input.dryRun && created > 0) {
+      for (const pId of touched) await recomputeProductRatingAggregate(tx, ctx.tenantId, pId);
+      await tx.insert(schema.auditLogs).values({
+        tenantId: ctx.tenantId,
+        actorType: ctx.actor.type,
+        actorId: ctx.actor.type === "staff" ? ctx.actor.userId : null,
+        action: "review.imported",
+        targetType: "review",
+        targetId: "import",
+        diff: { created, skipped, errors: errors.length },
+      });
+    }
+    return { created, skipped, errors, touched: Array.from(touched) };
+  });
+
+  for (const pId of result.touched) await invalidateCache(rt, ctx, { type: "review_updated", productId: pId });
+  return { created: result.created, skipped: result.skipped, errors: result.errors };
 }

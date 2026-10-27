@@ -1320,7 +1320,9 @@ export const Review = z.object({
   rating: z.number().int().min(1).max(5),
   title: z.string().nullable().optional(),
   body: z.string(),
-  status: z.enum(["published", "on_hold"]),
+  status: z.enum(["published", "on_hold", "spam", "archived"]),
+  /** How the review got here: a shopper wrote it, or the store added or imported it. */
+  source: z.enum(["customer", "manual", "import"]).optional(),
   replyText: z.string().nullable().optional(),
   repliedAt: z.string().nullable().optional(),
   isVerifiedPurchase: z.boolean(),
@@ -1333,6 +1335,8 @@ export const ReviewStats = z.object({
   total: z.number().int(),
   published: z.number().int(),
   onHold: z.number().int(),
+  spam: z.number().int().optional(),
+  archived: z.number().int().optional(),
   replied: z.number().int(),
   awaitingReply: z.number().int(),
   averageRating: z.number(),
@@ -2869,6 +2873,57 @@ export const adminContract = {
       .output(z.object({ success: z.boolean() })),
   },
 
+  // Contact-form inbox and newsletter leads
+  forms: {
+    list: oc
+      .route({ method: "GET", path: "/admin/form-submissions" })
+      .input(z.object({ status: z.enum(["new", "read", "archived"]).optional(), search: z.string().optional(), limit: z.number().int().min(1).max(100).default(25), offset: z.number().int().min(0).default(0) }).optional())
+      .output(
+        z.object({
+          items: z.array(
+            z.object({
+              id: z.string().uuid(),
+              formName: z.string(),
+              name: z.string(),
+              email: z.string(),
+              phone: z.string().nullable(),
+              choice: z.string().nullable(),
+              message: z.string().nullable(),
+              recipientEmail: z.string().nullable(),
+              status: z.enum(["new", "read", "archived"]),
+              createdAt: z.string(),
+            }),
+          ),
+          total: z.number(),
+          unread: z.number(),
+        }),
+      ),
+    setStatus: oc
+      .route({ method: "POST", path: "/admin/form-submissions/set-status" })
+      .input(z.object({ ids: z.array(z.string().uuid()).min(1).max(200), status: z.enum(["new", "read", "archived"]) }))
+      .output(z.object({ count: z.number() })),
+    delete: oc
+      .route({ method: "POST", path: "/admin/form-submissions/delete" })
+      .input(z.object({ ids: z.array(z.string().uuid()).min(1).max(200) }))
+      .output(z.object({ count: z.number() })),
+  },
+  leads: {
+    list: oc
+      .route({ method: "GET", path: "/admin/leads" })
+      .input(z.object({ status: z.enum(["subscribed", "unsubscribed"]).optional(), source: z.string().optional(), search: z.string().optional(), limit: z.number().int().min(1).max(100).default(25), offset: z.number().int().min(0).default(0) }).optional())
+      .output(
+        z.object({
+          items: z.array(z.object({ id: z.string().uuid(), email: z.string(), status: z.enum(["subscribed", "unsubscribed"]), source: z.string(), consentAt: z.string(), unsubscribedAt: z.string().nullable() })),
+          total: z.number(),
+          sources: z.array(z.string()),
+        }),
+      ),
+    unsubscribe: oc
+      .route({ method: "POST", path: "/admin/leads/{id}/unsubscribe" })
+      .input(z.object({ id: z.string().uuid() }))
+      .output(z.object({ success: z.boolean() })),
+  },
+
   // Reviews (Phase E)
   reviews: {
     list: oc
@@ -2877,7 +2932,7 @@ export const adminContract = {
         z
           .object({
             productId: z.string().uuid().optional(),
-            status: z.enum(["all", "published", "on_hold", "replied", "awaiting_reply"]).optional(),
+            status: z.enum(["all", "published", "on_hold", "spam", "archived", "replied", "awaiting_reply"]).optional(),
             rating: z.number().int().min(1).max(5).optional(),
             search: z.string().optional(),
             dateFrom: z.string().optional(),
@@ -2924,6 +2979,50 @@ export const adminContract = {
       .route({ method: "POST", path: "/admin/reviews/bulk-delete" })
       .input(z.object({ ids: z.array(z.string().uuid()).min(1) }))
       .output(z.object({ count: z.number() })),
+    /** Approve (published), put on hold, mark as spam or archive, for one or many reviews. */
+    setStatus: oc
+      .route({ method: "POST", path: "/admin/reviews/set-status" })
+      .input(z.object({ ids: z.array(z.string().uuid()).min(1).max(500), status: z.enum(["published", "on_hold", "spam", "archived"]) }))
+      .output(z.object({ count: z.number() })),
+    /** A review the store writes itself (for example one collected off-site). */
+    create: oc
+      .route({ method: "POST", path: "/admin/reviews" })
+      .input(
+        z.object({
+          productId: z.string().uuid(),
+          reviewerName: z.string().trim().min(1).max(120),
+          rating: z.number().int().min(1).max(5),
+          title: z.string().trim().max(160).optional(),
+          body: z.string().trim().min(1).max(4000),
+          status: z.enum(["published", "on_hold"]).default("published"),
+          /** ISO date to show as the review date; defaults to now. */
+          reviewedAt: z.string().optional(),
+        }),
+      )
+      .output(Review),
+    /** Imports reviews parsed from a CSV in the browser. Products are matched by their handle (slug). */
+    import: oc
+      .route({ method: "POST", path: "/admin/reviews/import" })
+      .input(
+        z.object({
+          dryRun: z.boolean().default(false),
+          rows: z
+            .array(
+              z.object({
+                productHandle: z.string().trim().min(1).max(200),
+                reviewerName: z.string().trim().max(120).default(""),
+                rating: z.number().int().min(1).max(5),
+                title: z.string().trim().max(160).optional(),
+                body: z.string().trim().min(1).max(4000),
+                status: z.enum(["published", "on_hold", "spam", "archived"]).default("published"),
+                reviewedAt: z.string().optional(),
+              }),
+            )
+            .min(1)
+            .max(500),
+        }),
+      )
+      .output(z.object({ created: z.number(), skipped: z.number(), errors: z.array(z.object({ row: z.number(), message: z.string() })) })),
   },
 
   // Inventory
@@ -4399,6 +4498,7 @@ export const adminContract = {
           usageLimit: z.number().int().min(1).optional(),
           perCustomerLimit: z.number().int().min(1).optional(),
           combinable: z.boolean().default(false),
+          showOnStorefront: z.boolean().default(false),
           startsAt: z.string().optional(),
           endsAt: z.string().optional(),
         }),
@@ -4413,13 +4513,44 @@ export const adminContract = {
           status: z.string(),
         }),
       ),
+    get: oc
+      .route({ method: "GET", path: "/admin/discounts/{id}" })
+      .input(z.object({ id: z.string().uuid() }))
+      .output(
+        z.object({
+          id: z.string().uuid(),
+          code: z.string().nullable(),
+          title: z.string(),
+          type: z.string(),
+          value: z.number(),
+          minSubtotal: z.number(),
+          usageLimit: z.number().nullable(),
+          perCustomerLimit: z.number().nullable(),
+          usedCount: z.number(),
+          combinable: z.boolean(),
+          showOnStorefront: z.boolean(),
+          startsAt: z.string().nullable(),
+          endsAt: z.string().nullable(),
+          status: z.string(),
+          createdAt: z.string(),
+        }),
+      ),
     update: oc
       .route({ method: "PATCH", path: "/admin/discounts/{id}" })
       .input(
         z.object({
           id: z.string().uuid(),
           title: z.string().min(1).optional(),
-          status: z.enum(["active", "scheduled", "expired", "disabled"]).optional(),
+          code: z.string().min(1).nullable().optional(),
+          type: z.enum(["percent", "fixed", "free_shipping", "buy_x_get_y"]).optional(),
+          value: z.number().int().min(0).optional(),
+          minSubtotal: z.number().int().min(0).optional(),
+          perCustomerLimit: z.number().int().min(1).nullable().optional(),
+          combinable: z.boolean().optional(),
+          showOnStorefront: z.boolean().optional(),
+          startsAt: z.string().nullable().optional(),
+          endsAt: z.string().nullable().optional(),
+          status: z.enum(["active", "scheduled", "expired", "disabled", "archived"]).optional(),
           usageLimit: z.number().int().min(1).nullable().optional(),
         }),
       )
@@ -4432,7 +4563,8 @@ export const adminContract = {
     delete: oc
       .route({ method: "DELETE", path: "/admin/discounts/{id}" })
       .input(z.object({ id: z.string().uuid() }))
-      .output(z.object({ success: z.boolean() })),
+      // `archived` is true when the discount had been used, so it was archived instead (order history keeps pointing at it).
+      .output(z.object({ success: z.boolean(), archived: z.boolean().optional() })),
   },
 
   // --- M7 Shipping Settings Admin ---

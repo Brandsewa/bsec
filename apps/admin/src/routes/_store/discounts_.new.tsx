@@ -49,6 +49,7 @@ function CreateDiscountPage() {
   const [usageLimit, setUsageLimit] = useState("");
   const [perCustomerLimit, setPerCustomerLimit] = useState("");
   const [combinable, setCombinable] = useState(false);
+  const [showOnStorefront, setShowOnStorefront] = useState(false);
   const [startsAt, setStartsAt] = useState("");
   const [endsAt, setEndsAt] = useState("");
 
@@ -86,6 +87,7 @@ function CreateDiscountPage() {
       ...(total ? { usageLimit: total } : {}),
       ...(per ? { perCustomerLimit: per } : {}),
       combinable,
+      showOnStorefront: code.trim() ? showOnStorefront : false,
       ...(toIso(startsAt) ? { startsAt: toIso(startsAt) as string } : {}),
       ...(toIso(endsAt) ? { endsAt: toIso(endsAt) as string } : {}),
     });
@@ -187,6 +189,12 @@ function CreateDiscountPage() {
                   <Checkbox id="discount-combinable" checked={combinable} onCheckedChange={(c) => setCombinable(c)} />
                   <FieldLabel htmlFor="discount-combinable" className="font-normal">
                     Can be combined with other discounts
+                  </FieldLabel>
+                </Field>
+                <Field orientation="horizontal">
+                  <Checkbox id="discount-showcase" checked={showOnStorefront} disabled={!code.trim()} onCheckedChange={(c) => setShowOnStorefront(c)} />
+                  <FieldLabel htmlFor="discount-showcase" className="font-normal">
+                    Show on the storefront (coupon cards on product pages)
                   </FieldLabel>
                 </Field>
               </FieldGroup>

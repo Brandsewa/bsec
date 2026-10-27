@@ -42,6 +42,7 @@ export const customerIdentities = tenantTable(
     provider: text("provider").notNull(), // 'google'
     subject: text("subject").notNull(),
     email: text("email").notNull(),
+    picture: text("picture"), // Google profile photo URL, display only
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().default(sql`now()`),
     lastLoginAt: timestamp("last_login_at", { withTimezone: true }).notNull().default(sql`now()`),
   },

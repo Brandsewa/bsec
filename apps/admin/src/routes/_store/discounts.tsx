@@ -1,5 +1,5 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
-import { Check, Copy, Download, MoreHorizontal, Percent, Plus, Power, Tag, Trash2 } from "lucide-react";
+import { Archive, ArchiveRestore, Check, Copy, Download, MoreHorizontal, Pencil, Percent, Plus, Power, Tag, Trash2 } from "lucide-react";
 import { useMemo, useState } from "react";
 import { MetricCard, MetricCardSkeleton, PageContainer, PageHeader, PageSection, PageSkeleton, TableSkeleton, toast } from "@bs/ui";
 import { keepPreviousData, useQuery, useQueryClient } from "@tanstack/react-query";
@@ -27,7 +27,7 @@ import { client, orpc } from "../../lib/orpc.ts";
 // ---------------------------------------------------------------------------------------------------------------
 
 type Sort = "created_desc" | "created_asc" | "title_asc" | "title_desc" | "used_desc" | "used_asc";
-type DiscountStatus = "active" | "scheduled" | "expired" | "disabled";
+type DiscountStatus = "active" | "scheduled" | "expired" | "disabled" | "archived";
 type DiscountType = "percent" | "fixed" | "free_shipping" | "buy_x_get_y";
 
 const SORTS: ReadonlyArray<{ id: Sort; label: string }> = [
@@ -44,6 +44,7 @@ const STATUS_TABS = [
   { id: "scheduled", label: "Scheduled" },
   { id: "expired", label: "Expired" },
   { id: "disabled", label: "Disabled" },
+  { id: "archived", label: "Archived" },
 ] as const;
 const TYPES = [
   { value: "any", label: "Type: any" },
@@ -63,7 +64,7 @@ export interface DiscountsSearch {
 
 export function parseDiscountsSearch(raw: Record<string, unknown>): DiscountsSearch {
   return {
-    status: oneOf(raw["status"], ["all", "active", "scheduled", "expired", "disabled"] as const) ?? "all",
+    status: oneOf(raw["status"], ["all", "active", "scheduled", "expired", "disabled", "archived"] as const) ?? "all",
     q: text(raw["q"]),
     type: oneOf(raw["type"], ["percent", "fixed", "free_shipping", "buy_x_get_y"] as const),
     sort: oneOf(raw["sort"], SORTS.map((x) => x.id)) ?? "created_desc",
@@ -151,13 +152,13 @@ export function DiscountsPage() {
   const sel = useTableSelection({ rows, getId: (d: DiscountRow) => d.id, total, resetKey: JSON.stringify([s.status, s.q, s.type]) });
   const refresh = () => void queryClient.invalidateQueries({ queryKey: orpc.admin.discounts.key() });
 
-  const setStatus = (items: DiscountRow[], status: "active" | "disabled") =>
+  const setStatus = (items: DiscountRow[], status: "active" | "disabled" | "archived") =>
     bulk.run({
       rows: items,
       getId: (d) => d.id,
       getLabel: (d) => d.code ?? d.title,
-      verb: status === "active" ? "Enabling" : "Disabling",
-      done: status === "active" ? "enabled" : "disabled",
+      verb: status === "active" ? "Enabling" : status === "archived" ? "Archiving" : "Disabling",
+      done: status === "active" ? "enabled" : status === "archived" ? "archived" : "disabled",
       noun: "discount",
       eligible: (d) => d.status !== status,
       action: (d) => client.admin.discounts.update({ id: d.id, status }),
@@ -207,7 +208,7 @@ export function DiscountsPage() {
       header: "Discount code",
       cell: (d) => (
         <div className="flex items-center gap-2">
-          <span className="rounded bg-muted px-2 py-0.5 font-mono font-semibold text-foreground">{d.code ?? "AUTOMATIC"}</span>
+          <Link to="/discounts/$id" params={{ id: d.id }} className="rounded bg-muted px-2 py-0.5 font-mono font-semibold text-foreground hover:underline">{d.code ?? "AUTOMATIC"}</Link>
           {d.code ? (
             <Button
               variant="ghost"
@@ -274,8 +275,16 @@ export function DiscountsPage() {
             <Copy /> Copy code
           </DropdownMenuItem>
         ) : null}
-        <DropdownMenuItem disabled={bulk.busy} onClick={() => void setStatus([d], d.status === "active" ? "disabled" : "active")}>
-          <Power /> {d.status === "active" ? "Disable" : "Enable"}
+        <DropdownMenuItem render={<Link to="/discounts/$id" params={{ id: d.id }} />}>
+          <Pencil /> Edit
+        </DropdownMenuItem>
+        {d.status !== "archived" ? (
+          <DropdownMenuItem disabled={bulk.busy} onClick={() => void setStatus([d], d.status === "active" ? "disabled" : "active")}>
+            <Power /> {d.status === "active" ? "Disable" : "Enable"}
+          </DropdownMenuItem>
+        ) : null}
+        <DropdownMenuItem disabled={bulk.busy} onClick={() => void setStatus([d], d.status === "archived" ? "active" : "archived")}>
+          {d.status === "archived" ? <ArchiveRestore /> : <Archive />} {d.status === "archived" ? "Restore" : "Archive"}
         </DropdownMenuItem>
         <DropdownMenuSeparator />
         <DropdownMenuItem variant="destructive" disabled={bulk.busy} onClick={() => setToDelete([d])}>
@@ -371,6 +380,9 @@ export function DiscountsPage() {
             <Button variant="outline" size="sm" disabled={bulk.busy || sel.allResults} onClick={() => void setStatus(sel.picked, "disabled")}>
               <Power className="mr-1.5" /> Disable
             </Button>
+            <Button variant="outline" size="sm" disabled={bulk.busy || sel.allResults} onClick={() => void setStatus(sel.picked, "archived")}>
+              <Archive className="mr-1.5" /> Archive
+            </Button>
             <Button variant="outline" size="sm" disabled={bulk.busy} onClick={() => void exportDiscounts("selection")}>
               <Download className="mr-1.5" /> Export
             </Button>
@@ -433,7 +445,7 @@ export function DiscountsPage() {
         open={toDelete !== null}
         onOpenChange={(open) => !open && setToDelete(null)}
         title={toDelete?.length === 1 ? `Delete ${toDelete[0]?.code ?? toDelete[0]?.title}?` : `Delete ${toDelete?.length ?? 0} discounts?`}
-        description="Customers will no longer be able to use them. This cannot be undone."
+        description="Customers will no longer be able to use them. A discount that was already used on an order is archived instead, so order history stays intact."
         confirmLabel="Delete"
         cancelLabel="Keep"
         destructive

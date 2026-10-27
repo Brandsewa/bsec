@@ -534,6 +534,39 @@ export async function getStorefrontCollection(
       return null;
     }
 
+    return {
+      collection: {
+        id: col.id,
+        title: col.title,
+        slug: col.slug,
+        type: col.type,
+        rules: col.rules,
+        sortOrder: col.sortOrder,
+        imageMediaId: col.imageMediaId,
+        description: col.description ?? null,
+        descriptionJson: (col.descriptionJson ?? null) as RichDescriptionValue | null,
+        seo: col.seo,
+        published: col.published,
+        indexable: col.indexable,
+        createdAt: col.createdAt.toISOString(),
+        updatedAt: col.updatedAt.toISOString(),
+      },
+      ...(await listCollectionProducts(tx, ctx, col, opts)),
+    };
+  });
+}
+
+type ListingTx = Parameters<Parameters<typeof withTenant>[2]>[0];
+/** What the product listing needs from a collection, or from a category dressed as one (see getStorefrontCategory). */
+type ListingSource = Pick<typeof schema.collections.$inferSelect, "id" | "type" | "rules" | "match" | "sortOrder">;
+
+/** Products, paging and filter facets for one collection (shared with categories, which reuse the same filter menu and page template). */
+async function listCollectionProducts(
+  tx: ListingTx,
+  ctx: TenantContext,
+  col: ListingSource,
+  opts?: CatalogListingOptions,
+): Promise<{ products: StorefrontCollectionDetail["products"]; filterData: StorefrontFacetedResult | undefined }> {
     const page = Math.max(1, opts?.page ?? 1);
     const limit = Math.max(1, Math.min(100, opts?.limit ?? 24));
     const offset = (page - 1) * limit;
@@ -1171,22 +1204,6 @@ export async function getStorefrontCollection(
     }
 
     return {
-      collection: {
-        id: col.id,
-        title: col.title,
-        slug: col.slug,
-        type: col.type,
-        rules: col.rules,
-        sortOrder: col.sortOrder,
-        imageMediaId: col.imageMediaId,
-        description: col.description ?? null,
-        descriptionJson: (col.descriptionJson ?? null) as RichDescriptionValue | null,
-        seo: col.seo,
-        published: col.published,
-        indexable: col.indexable,
-        createdAt: col.createdAt.toISOString(),
-        updatedAt: col.updatedAt.toISOString(),
-      },
       products: {
         items: summaryItems,
         total,
@@ -1195,7 +1212,6 @@ export async function getStorefrontCollection(
       },
       filterData,
     };
-  });
 }
 
 /**
@@ -1223,6 +1239,36 @@ export async function getStorefrontCategory(
 
     if (!cat) {
       return null;
+    }
+
+    // With a filter menu (the collection template asks for one) the category is listed by the same code as a collection: its own
+    // rules when automated, otherwise "is in this category", so filters, price slider and counts work the same on both pages.
+    if (opts?.filterMenuHandle) {
+      const asCollection: ListingSource = {
+        id: cat.id,
+        type: "automated",
+        match: cat.type === "automated" ? cat.match : "all",
+        rules: cat.type === "automated" ? cat.rules : [{ field: "category", operator: "equals", value: cat.id }],
+        sortOrder: cat.sortOrder === "manual" ? "newest" : cat.sortOrder,
+      };
+      const listed = await listCollectionProducts(tx, ctx, asCollection, opts);
+      return {
+        category: {
+          id: cat.id,
+          parentId: cat.parentId,
+          name: cat.name,
+          slug: cat.slug,
+          description: cat.description,
+          descriptionJson: (cat.descriptionJson ?? null) as RichDescriptionValue | null,
+          position: cat.position,
+          imageMediaId: cat.imageMediaId,
+          seo: cat.seo,
+          createdAt: cat.createdAt.toISOString(),
+          updatedAt: cat.updatedAt.toISOString(),
+        },
+        products: listed.products,
+        filterData: listed.filterData,
+      };
     }
 
     const page = Math.max(1, opts?.page ?? 1);

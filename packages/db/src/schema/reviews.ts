@@ -30,7 +30,8 @@ export const reviews = tenantTable(
     rating: integer("rating").notNull(),
     title: text("title"),
     body: text("body").notNull(),
-    status: text("status").notNull().default("on_hold"),
+    status: text("status").notNull().default("on_hold"), // published, on_hold, spam, archived
+    source: text("source").notNull().default("customer"), // customer, manual, import
     replyText: text("reply_text"),
     repliedAt: timestamp("replied_at", { withTimezone: true }),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().default(sql`now()`),

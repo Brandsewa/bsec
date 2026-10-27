@@ -8,6 +8,7 @@ import { usePathname } from "next/navigation";
 export function AccountLink() {
   const [name, setName] = useState<string | null>(null);
   const [signedIn, setSignedIn] = useState(false);
+  const [image, setImage] = useState<string | null>(null);
   // The header stays mounted across sign-in and sign-out, so look again whenever the page changes.
   const pathname = usePathname();
 
@@ -15,9 +16,10 @@ export function AccountLink() {
     let live = true;
     fetch("/api/storefront/customer/profile")
       .then((r) => (r.ok ? r.json() : null))
-      .then((d: { signedIn?: boolean; name?: string | null } | null) => {
+      .then((d: { signedIn?: boolean; name?: string | null; image?: string | null } | null) => {
         if (!live) return;
         setSignedIn(d?.signedIn === true);
+        setImage(d?.image ?? null);
         if (!d?.signedIn) return setName(null);
         setName(d.name?.trim().split(/\s+/)[0] || null);
       })
@@ -31,10 +33,16 @@ export function AccountLink() {
 
   return (
     <Link href="/account" className="bsb-site-account" aria-label={signedIn ? "My account" : "Log in"}>
-      <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-        <circle cx="12" cy="8" r="4" />
-        <path d="M4 21a8 8 0 0 1 16 0" />
-      </svg>
+      {image ? (
+        // Google profile photo: a plain img (no optimiser proxy), referrer withheld.
+        // eslint-disable-next-line @next/next/no-img-element
+        <img src={image} alt="" width={22} height={22} referrerPolicy="no-referrer" className="rounded-full object-cover" style={{ width: 22, height: 22 }} />
+      ) : (
+        <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+          <circle cx="12" cy="8" r="4" />
+          <path d="M4 21a8 8 0 0 1 16 0" />
+        </svg>
+      )}
       <span>{signedIn ? name ?? "Account" : "Login"}</span>
     </Link>
   );

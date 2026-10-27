@@ -320,10 +320,31 @@ export const FAQBlock: BlockDefinition<FAQProps> = {
 // 10. Gallery
 export const GallerySchema = z.object({
   title: z.string().optional(),
+  /** Text under the heading. */
+  description: z.string().max(400).optional(),
+  /** Alignment of the heading and the description. */
+  headerAlign: z.enum(["left", "center", "right"]).default("center"),
+  /** Space between the heading and the description, px. */
+  titleGap: z.number().int().min(0).max(80).default(8),
+  /** Space between the heading or description and the pictures, px. */
+  headerGap: z.number().int().min(0).max(120).default(24),
   images: z
     .array(z.object({ mediaId: z.string().min(1), caption: z.string().optional(), link: hrefSchema.optional() }))
     .default([]),
-  layout: z.enum(["grid", "masonry"]).default("grid"),
+  layout: z.enum(["grid", "masonry"]).default("masonry"),
+  /** Images per row on desktop, tablet and phone. */
+  columnsDesktop: z.enum(["2", "3", "4", "5", "6"]).default("4"),
+  columnsTablet: z.enum(["1", "2", "3", "4"]).default("3"),
+  columnsMobile: z.enum(["1", "2", "3"]).default("2"),
+  /** Space between images, px. */
+  gap: z.number().int().min(0).max(48).default(12),
+  /** Corner radius of each image, px. */
+  radius: z.number().int().min(0).max(48).default(8),
+  /** auto: every image keeps its own shape. manual: all images are cut to `manualHeight`. */
+  heightMode: z.enum(["auto", "manual"]).default("auto"),
+  manualHeight: z.number().int().min(80).max(800).default(240),
+  /** Open the picture in a viewer with arrows and a thumbnail strip. */
+  lightbox: z.boolean().default(true),
 });
 export type GalleryProps = z.infer<typeof GallerySchema>;
 
@@ -331,7 +352,7 @@ export const GalleryBlock: BlockDefinition<GalleryProps> = {
   type: "Gallery",
   version: 1,
   schema: GallerySchema,
-  defaultProps: { title: "Lookbook", images: [], layout: "grid" },
+  defaultProps: GallerySchema.parse({ title: "Lookbook" }),
   render: V.GalleryView,
 };
 
@@ -847,6 +868,9 @@ export const ProductDetailSchema = z.object({
   showRating: z.boolean().default(true),
   showDescription: z.boolean().default(true),
   showTags: z.boolean().default(true),
+  /** Coupon cards under Add to cart (the discounts marked "Show on the storefront"), with a View all drawer. */
+  showCoupons: z.boolean().default(true),
+  couponCount: z.number().int().min(1).max(4).default(2),
   stickyBuyBox: z.boolean().default(false),
   showTrustPoints: z.boolean().default(false),
   trustPoints: z.array(z.string().min(1).max(60)).max(4).default(DEFAULT_TRUST_POINTS),
@@ -913,6 +937,8 @@ export const ProductDetailBlock: BlockDefinition<ProductDetailProps> = {
     showRating: true,
     showDescription: true,
     showTags: true,
+    showCoupons: true,
+    couponCount: 2,
     stickyBuyBox: false,
     showTrustPoints: false,
     trustPoints: DEFAULT_TRUST_POINTS,
@@ -1367,6 +1393,18 @@ export const BlogListingSchema = z.object({
   /** 0 = use the store's blog setting. */
   postsPerPage: z.number().int().min(0).max(48).default(0),
   emptyText: z.string().max(160).default("No posts yet. Please check back soon."),
+  // Magazine style (the blog index): headline, subscribe form, latest posts, then a row per category.
+  style: z.enum(["classic", "magazine"]).default("magazine"),
+  /** The first (bold) and second (light) part of the big headline. Empty = the heading above. */
+  headlineBold: z.string().max(80).default(""),
+  headlineLight: z.string().max(120).default(""),
+  showSubscribe: z.boolean().default(true),
+  subscribeLabel: z.string().max(30).default("Subscribe"),
+  subscribePlaceholder: z.string().max(60).default("Your email address"),
+  /** Small posts listed beside the large latest post. */
+  latestSideCount: z.number().int().min(0).max(8).default(5),
+  showCategorySections: z.boolean().default(true),
+  postsPerCategory: z.number().int().min(1).max(8).default(4),
 });
 export type BlogListingProps = z.infer<typeof BlogListingSchema>;
 
@@ -1391,6 +1429,16 @@ export const BlogPostContentSchema = z.object({
   showRelated: z.boolean().default(true),
   relatedCount: z.number().int().min(0).max(6).default(3),
   showPrevNext: z.boolean().default(true),
+  // Magazine layout (default): table of contents beside the text, sidebar with about card, featured posts and categories.
+  layout: z.enum(["classic", "magazine"]).default("magazine"),
+  tocPosition: z.enum(["left", "right"]).default("left"),
+  showSidebar: z.boolean().default(true),
+  showAboutCard: z.boolean().default(true),
+  aboutTitle: z.string().max(80).default(""),
+  aboutText: z.string().max(300).default(""),
+  showFeatured: z.boolean().default(true),
+  featuredCount: z.number().int().min(1).max(8).default(5),
+  showCategoriesCloud: z.boolean().default(true),
 });
 export type BlogPostContentProps = z.infer<typeof BlogPostContentSchema>;
 
@@ -1588,6 +1636,8 @@ export const MultiCardItemSchema = z.object({
   linkHref: hrefSchema.default(""),
   /** A background picture for this card only (overrides the section-wide one). */
   bgMediaId: z.string().optional(),
+  /** Style 2 only: the picture across the top of the card. */
+  imageMediaId: z.string().optional(),
 });
 export const MultiCardSchema = z.object({
   // Section
@@ -1598,6 +1648,9 @@ export const MultiCardSchema = z.object({
   title: z.string().max(120).default(""),
   subtitle: z.string().max(300).default(""),
   headerAlign: alignSchema.default("left"),
+  /** icon: Style 1 (icon, heading, text, link). image: Style 2 (picture on top, then heading, text, link). */
+  cardStyle: z.enum(["icon", "image"]).default("icon"),
+  imageRatio: z.enum(["16:9", "4:3", "1:1"]).default("4:3"),
   // Layout
   perRowDesktop: z.enum(["1", "2", "3", "4"]).default("3"),
   perRowTablet: z.enum(["1", "2", "3"]).default("2"),
@@ -1653,6 +1706,64 @@ export const MultiCardBlock: BlockDefinition<MultiCardProps> = {
   schema: MultiCardSchema,
   defaultProps: MultiCardSchema.parse({}),
   render: VM.MultiCardView,
+};
+
+/**
+ * Coupon cards for the product page: the first few coupons the store chose to show (Discount > "Show on the storefront"), each with a
+ * copy button, and a "View all" button that opens a side drawer with every one. Product pages only; draws nothing when no coupon is shown.
+ */
+export const ProductCouponsSchema = z.object({
+  title: z.string().max(80).default("Available offers"),
+  showCount: z.number().int().min(1).max(4).default(2),
+  showViewAll: z.boolean().default(true),
+  viewAllLabel: z.string().max(40).default("View all"),
+});
+export type ProductCouponsProps = z.infer<typeof ProductCouponsSchema>;
+export const ProductCouponsBlock: BlockDefinition<ProductCouponsProps> = {
+  type: "ProductCoupons",
+  version: 1,
+  schema: ProductCouponsSchema,
+  defaultProps: ProductCouponsSchema.parse({}),
+  render: VM.ProductCouponsView,
+};
+
+/**
+ * Simple contact form: name and email always, and optionally a phone number, a dropdown list and a message. Submissions land in
+ * the store admin inbox (Form submissions); `recipientEmail` records where they are meant to be sent (empty = the store's admin email).
+ * It can be switched off without removing the block.
+ */
+export const ContactFormSchema = z.object({
+  enabled: z.boolean().default(true),
+  tone: toneSchema.default("default"),
+  width: widthSchema.default("narrow"),
+  box: layoutSchema.default({ desktop: { paddingTop: "48px", paddingBottom: "48px" }, mobile: { paddingTop: "32px", paddingBottom: "32px" } }),
+  title: z.string().max(120).default("Get in touch"),
+  description: z.string().max(300).default("Send us a message and we will get back to you."),
+  /** Shown in the admin inbox so several forms can be told apart. */
+  formName: z.string().max(80).default("Contact form"),
+  /** Where the text in the fields and their labels sits. */
+  fieldAlign: z.enum(["left", "center", "right"]).default("left"),
+  recipientEmail: z.string().max(254).email().or(z.literal("")).default(""),
+  showPhone: z.boolean().default(true),
+  phoneRequired: z.boolean().default(false),
+  showDropdown: z.boolean().default(false),
+  dropdownLabel: z.string().max(60).default("Topic"),
+  /** The dropdown choices, separated by commas. */
+  dropdownOptions: z.string().max(600).default("General question, Order support, Wholesale"),
+  showMessage: z.boolean().default(true),
+  messageLabel: z.string().max(60).default("Message"),
+  messageRequired: z.boolean().default(true),
+  submitLabel: z.string().max(40).default("Send message"),
+  successMessage: z.string().max(200).default("Thank you! We have received your message."),
+  consentText: z.string().max(200).default(""),
+});
+export type ContactFormProps = z.infer<typeof ContactFormSchema>;
+export const ContactFormBlock: BlockDefinition<ContactFormProps> = {
+  type: "ContactForm",
+  version: 1,
+  schema: ContactFormSchema,
+  defaultProps: ContactFormSchema.parse({}),
+  render: VM.ContactFormView,
 };
 
 export const CollectionShowcaseSchema = z.object({
@@ -1726,6 +1837,8 @@ export const BLOCK_DEFINITIONS: Record<BlockType, AnyBlockDefinition> = {
   ProductDetail: ProductDetailBlock,
   ProductInfoTabs: ProductInfoTabsBlock,
   ProductCustomField: ProductCustomFieldBlock,
+  ProductCoupons: ProductCouponsBlock,
+  ContactForm: ContactFormBlock,
   CollectionListing: CollectionListingBlock,
   CartContents: CartContentsBlock,
   HeroSlider: HeroSliderBlock,

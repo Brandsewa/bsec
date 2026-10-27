@@ -1,8 +1,11 @@
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import {
+  Archive,
+  ArchiveRestore,
   CheckCircle2,
   Clock,
   MessageSquare,
+  ShieldAlert,
   MoreHorizontal,
   Star,
   Trash2,
@@ -42,10 +45,11 @@ import { ConfirmDialog } from "@bs/ui";
 import { DateRangePicker, ScrollTabs } from "@bs/ui";
 import { TableToolbar } from "../../components/data-table/table-toolbar.tsx";
 import { day, dayAfterIso, dayStartIso } from "../../components/data-table/use-table-state.ts";
+import { AddReviewButton, ExportReviewsButton, ImportReviewsButton } from "../../components/reviews/review-tools.tsx";
 import { errorMessage } from "../../lib/errors.ts";
 import { orpc } from "../../lib/orpc.ts";
 
-type ReviewStatusFilter = "all" | "published" | "on_hold" | "replied" | "awaiting_reply";
+type ReviewStatusFilter = "all" | "published" | "on_hold" | "spam" | "archived" | "replied" | "awaiting_reply";
 
 const STATUS_TABS: ReadonlyArray<{ id: ReviewStatusFilter; label: string }> = [
   { id: "all", label: "All" },
@@ -53,6 +57,8 @@ const STATUS_TABS: ReadonlyArray<{ id: ReviewStatusFilter; label: string }> = [
   { id: "on_hold", label: "On Hold" },
   { id: "replied", label: "Replied" },
   { id: "awaiting_reply", label: "Awaiting Reply" },
+  { id: "spam", label: "Spam" },
+  { id: "archived", label: "Archived" },
 ];
 
 export interface ReviewsSearch {
@@ -66,7 +72,7 @@ export interface ReviewsSearch {
 
 export const Route = createFileRoute("/_store/reviews")({
   validateSearch: (raw: Record<string, unknown>): ReviewsSearch => ({
-    status: (["all", "published", "on_hold", "replied", "awaiting_reply"] as const).includes(
+    status: (["all", "published", "on_hold", "spam", "archived", "replied", "awaiting_reply"] as const).includes(
       raw["status"] as ReviewStatusFilter,
     )
       ? (raw["status"] as ReviewStatusFilter)
@@ -117,28 +123,6 @@ export function ReviewsPage() {
     }),
   );
 
-  const publishMutation = useMutation(
-    orpc.admin.reviews.publish.mutationOptions({
-      onSuccess: () => {
-        toast.success("Review published");
-        void queryClient.invalidateQueries({ queryKey: orpc.admin.reviews.list.key() });
-        void queryClient.invalidateQueries({ queryKey: orpc.admin.reviews.stats.key() });
-      },
-      onError: (err) => toast.error(errorMessage(err)),
-    }),
-  );
-
-  const holdMutation = useMutation(
-    orpc.admin.reviews.hold.mutationOptions({
-      onSuccess: () => {
-        toast.success("Review put on hold");
-        void queryClient.invalidateQueries({ queryKey: orpc.admin.reviews.list.key() });
-        void queryClient.invalidateQueries({ queryKey: orpc.admin.reviews.stats.key() });
-      },
-      onError: (err) => toast.error(errorMessage(err)),
-    }),
-  );
-
   const deleteMutation = useMutation(
     orpc.admin.reviews.delete.mutationOptions({
       onSuccess: () => {
@@ -164,10 +148,11 @@ export function ReviewsPage() {
     }),
   );
 
-  const bulkPublishMutation = useMutation(
-    orpc.admin.reviews.bulkPublish.mutationOptions({
-      onSuccess: (res: { count: number }) => {
-        toast.success(`Published ${res.count} reviews`);
+  const setStatusMutation = useMutation(
+    orpc.admin.reviews.setStatus.mutationOptions({
+      onSuccess: (res: { count: number }, vars) => {
+        const word = { published: "approved", on_hold: "put on hold", spam: "marked as spam", archived: "archived" }[vars.status];
+        toast.success(`${res.count} review${res.count === 1 ? "" : "s"} ${word}`);
         setSelectedIds([]);
         void queryClient.invalidateQueries({ queryKey: orpc.admin.reviews.list.key() });
         void queryClient.invalidateQueries({ queryKey: orpc.admin.reviews.stats.key() });
@@ -175,18 +160,7 @@ export function ReviewsPage() {
       onError: (err) => toast.error(errorMessage(err)),
     }),
   );
-
-  const bulkHoldMutation = useMutation(
-    orpc.admin.reviews.bulkHold.mutationOptions({
-      onSuccess: (res: { count: number }) => {
-        toast.success(`Put ${res.count} reviews on hold`);
-        setSelectedIds([]);
-        void queryClient.invalidateQueries({ queryKey: orpc.admin.reviews.list.key() });
-        void queryClient.invalidateQueries({ queryKey: orpc.admin.reviews.stats.key() });
-      },
-      onError: (err) => toast.error(errorMessage(err)),
-    }),
-  );
+  const moveTo = (ids: string[], next: "published" | "on_hold" | "spam" | "archived") => setStatusMutation.mutate({ ids, status: next });
 
   const bulkDeleteMutation = useMutation(
     orpc.admin.reviews.bulkDelete.mutationOptions({
@@ -251,6 +225,21 @@ export function ReviewsPage() {
       <PageHeader
         title="Customer Reviews"
         description="Moderate, manage, and reply to customer product feedback."
+        aside={
+          <div className="flex flex-wrap items-center gap-2">
+            <ExportReviewsButton
+              filters={{
+                status,
+                ...(search.q ? { search: search.q } : {}),
+                ...(search.rating ? { rating: search.rating } : {}),
+                ...(search.from ? { dateFrom: dayStartIso(search.from) } : {}),
+                ...(search.to ? { dateTo: dayAfterIso(search.to) } : {}),
+              }}
+            />
+            <ImportReviewsButton />
+            <AddReviewButton />
+          </div>
+        }
       />
 
       {/* Stats row */}
@@ -346,18 +335,24 @@ export function ReviewsPage() {
                 <Button
                   size="sm"
                   variant="outline"
-                  onClick={() => bulkPublishMutation.mutate({ ids: selectedIds })}
-                  disabled={bulkPublishMutation.isPending}
+                  onClick={() => moveTo(selectedIds, "published")}
+                  disabled={setStatusMutation.isPending}
                 >
-                  Publish Selected
+                  Approve Selected
                 </Button>
                 <Button
                   size="sm"
                   variant="outline"
-                  onClick={() => bulkHoldMutation.mutate({ ids: selectedIds })}
-                  disabled={bulkHoldMutation.isPending}
+                  onClick={() => moveTo(selectedIds, "on_hold")}
+                  disabled={setStatusMutation.isPending}
                 >
                   Put On Hold
+                </Button>
+                <Button size="sm" variant="outline" onClick={() => moveTo(selectedIds, "spam")} disabled={setStatusMutation.isPending}>
+                  Mark As Spam
+                </Button>
+                <Button size="sm" variant="outline" onClick={() => moveTo(selectedIds, "archived")} disabled={setStatusMutation.isPending}>
+                  Archive
                 </Button>
                 <Button
                   size="sm"
@@ -467,6 +462,11 @@ export function ReviewsPage() {
                       <td className="px-4 py-3">
                         <div className="flex flex-col">
                           <span className="font-medium text-foreground">{review.reviewerName}</span>
+                          {review.source === "manual" || review.source === "import" ? (
+                            <Badge variant="outline" className="mt-1 w-fit text-[10px]">
+                              {review.source === "manual" ? "Added by store" : "Imported"}
+                            </Badge>
+                          ) : null}
                           {review.isVerifiedPurchase && (
                             <Badge variant="outline" className="mt-1 w-fit text-[10px] text-emerald-600 border-emerald-300 bg-emerald-50">
                               Verified Purchase
@@ -484,6 +484,12 @@ export function ReviewsPage() {
                       <td className="px-4 py-3 whitespace-nowrap">
                         {review.status === "published" ? (
                           <Badge className="bg-emerald-600 hover:bg-emerald-700">Published</Badge>
+                        ) : review.status === "spam" ? (
+                          <Badge variant="secondary" className="bg-red-100 text-red-800">
+                            Spam
+                          </Badge>
+                        ) : review.status === "archived" ? (
+                          <Badge variant="secondary">Archived</Badge>
                         ) : (
                           <Badge variant="secondary" className="bg-amber-100 text-amber-800">
                             On Hold
@@ -496,19 +502,32 @@ export function ReviewsPage() {
                             <MoreHorizontal className="h-4 w-4" />
                           </DropdownMenuTrigger>
                           <DropdownMenuContent align="end">
-                            {review.status === "on_hold" ? (
-                              <DropdownMenuItem
-                                onClick={() => publishMutation.mutate({ id: review.id })}
-                              >
+                            {review.status !== "published" ? (
+                              <DropdownMenuItem onClick={() => moveTo([review.id], "published")}>
                                 <CheckCircle2 className="mr-2 h-4 w-4 text-emerald-600" />
-                                Publish
+                                Approve
                               </DropdownMenuItem>
                             ) : (
-                              <DropdownMenuItem
-                                onClick={() => holdMutation.mutate({ id: review.id })}
-                              >
+                              <DropdownMenuItem onClick={() => moveTo([review.id], "on_hold")}>
                                 <Clock className="mr-2 h-4 w-4 text-amber-600" />
                                 Put On Hold
+                              </DropdownMenuItem>
+                            )}
+                            {review.status !== "spam" ? (
+                              <DropdownMenuItem onClick={() => moveTo([review.id], "spam")}>
+                                <ShieldAlert className="mr-2 h-4 w-4 text-red-600" />
+                                Mark As Spam
+                              </DropdownMenuItem>
+                            ) : null}
+                            {review.status !== "archived" ? (
+                              <DropdownMenuItem onClick={() => moveTo([review.id], "archived")}>
+                                <Archive className="mr-2 h-4 w-4" />
+                                Archive
+                              </DropdownMenuItem>
+                            ) : (
+                              <DropdownMenuItem onClick={() => moveTo([review.id], "on_hold")}>
+                                <ArchiveRestore className="mr-2 h-4 w-4" />
+                                Restore
                               </DropdownMenuItem>
                             )}
                             <DropdownMenuItem

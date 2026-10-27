@@ -79,7 +79,7 @@ describe("block picker by page kind", () => {
   it("the product core is only offered on the product page, the collection core on the collection page", () => {
     expect(offered("product")).toContain("ProductDetail");
     expect(offered("product")).not.toContain("CollectionListing");
-    expect(offered("collection")).toContain("CollectionListing");
+    expect(offered("collection")).toContain("CollectionProducts");
     expect(offered("collection")).not.toContain("ProductDetail");
     for (const kind of ["home", "custom"] as const) {
       expect(offered(kind)).not.toContain("ProductDetail");

@@ -90,6 +90,14 @@ import {
   bulkPublishAdminReviews,
   bulkHoldAdminReviews,
   bulkDeleteAdminReviews,
+  setAdminReviewStatus,
+  listAdminFormSubmissions,
+  setAdminFormSubmissionStatus,
+  deleteAdminFormSubmissions,
+  listAdminLeads,
+  unsubscribeAdminLead,
+  createAdminReview,
+  importAdminReviews,
   listPageVersions,
   listThemeLibrary,
   previewPageRenderData,
@@ -214,6 +222,7 @@ import {
   unpublishPage,
   savePageDraft,
   updateAdminDiscount,
+  getAdminDiscount,
   updateAdminShippingSettings,
   saveAdminShippingZones,
   updateBrand,
@@ -896,6 +905,7 @@ describe("Generated Isolation Test Suite (M1 Real Postgres 18 Proof)", () => {
     expect(adminProcedures).toContain("customers.get");
     expect(adminProcedures).toContain("discounts.list");
     expect(adminProcedures).toContain("discounts.create");
+    expect(adminProcedures).toContain("discounts.get");
     expect(adminProcedures).toContain("discounts.update");
     expect(adminProcedures).toContain("discounts.delete");
   });
@@ -1457,6 +1467,8 @@ describe("Generated Isolation Test Suite (M1 Real Postgres 18 Proof)", () => {
           type: "percent",
           value: 15,
         });
+      case "discounts.get":
+        return await getAdminDiscount(rt, ctx, { id: testDiscountA });
       case "discounts.update":
         return await updateAdminDiscount(rt, ctx, { id: testDiscountA, title: "Updated Welcome 10%" });
       case "discounts.delete": {
@@ -1945,7 +1957,8 @@ describe("Generated Isolation Test Suite (M1 Real Postgres 18 Proof)", () => {
       case "reviews.reply":
       case "reviews.bulkPublish":
       case "reviews.bulkHold":
-      case "reviews.bulkDelete": {
+      case "reviews.bulkDelete":
+      case "reviews.setStatus": {
         let reviewId = "";
         await withTenant(rt._db.db, ctx.tenantId, async (tx) => {
           const [r] = await tx
@@ -1961,8 +1974,34 @@ describe("Generated Isolation Test Suite (M1 Real Postgres 18 Proof)", () => {
         if (procPath === "reviews.reply") return await replyAdminReview(rt, ctx, { id: reviewId, replyText: "Thanks" });
         if (procPath === "reviews.bulkPublish") return await bulkPublishAdminReviews(rt, ctx, [reviewId]);
         if (procPath === "reviews.bulkHold") return await bulkHoldAdminReviews(rt, ctx, [reviewId]);
+        if (procPath === "reviews.setStatus") return await setAdminReviewStatus(rt, ctx, { ids: [reviewId], status: "spam" });
         return await bulkDeleteAdminReviews(rt, ctx, [reviewId]);
       }
+      case "forms.list":
+        return await listAdminFormSubmissions(rt, ctx);
+      case "forms.setStatus":
+      case "forms.delete": {
+        let id = "";
+        await withTenant(rt._db.db, ctx.tenantId, async (tx) => {
+          const [r] = await tx.insert(schema.formSubmissions).values({ tenantId: ctx.tenantId, name: "Iso", email: "iso-form@example.com" }).returning({ id: schema.formSubmissions.id });
+          id = r!.id;
+        });
+        return procPath === "forms.setStatus" ? await setAdminFormSubmissionStatus(rt, ctx, { ids: [id], status: "read" }) : await deleteAdminFormSubmissions(rt, ctx, { ids: [id] });
+      }
+      case "leads.list":
+        return await listAdminLeads(rt, ctx);
+      case "leads.unsubscribe": {
+        let id = "";
+        await withTenant(rt._db.db, ctx.tenantId, async (tx) => {
+          const [r] = await tx.insert(schema.newsletterSubscribers).values({ tenantId: ctx.tenantId, email: `iso-lead-${Date.now()}@example.com`, source: "footer" }).returning({ id: schema.newsletterSubscribers.id });
+          id = r!.id;
+        });
+        return await unsubscribeAdminLead(rt, ctx, { id });
+      }
+      case "reviews.create":
+        return await createAdminReview(rt, ctx, { productId: testProductA, reviewerName: "Iso Manual", rating: 5, body: "Manual isolation review" });
+      case "reviews.import":
+        return await importAdminReviews(rt, ctx, { rows: [{ productHandle: "no-such-handle", reviewerName: "x", rating: 5, body: "y", status: "published" }] });
       // --- Settings rebuild phases 4-8: every procedure runs through the real permission and tenant checks ---
       case "taxSettings.get":
         return await getTaxSettings(rt, ctx);

@@ -14,6 +14,24 @@ import type { GoogleIdentityVerifier } from "../../saas/google-signup.ts";
  * Google client is never involved here, so the platform never sits between a shopper and Google.
  */
 
+/** The customer's Google profile photo URL, if they signed in with Google. Display only. */
+export async function getCustomerGooglePicture(db: Db, tenantId: string, customerId: string): Promise<string | null> {
+  const [row] = await withTenant(db, tenantId, (tx) =>
+    tx
+      .select({ picture: schema.customerIdentities.picture })
+      .from(schema.customerIdentities)
+      .where(
+        and(
+          eq(schema.customerIdentities.tenantId, tenantId),
+          eq(schema.customerIdentities.customerId, customerId),
+          eq(schema.customerIdentities.provider, "google"),
+        ),
+      )
+      .limit(1),
+  );
+  return row?.picture ?? null;
+}
+
 export const GOOGLE_CLIENT_ID_RE = /^[0-9]+-[a-z0-9]+\.apps\.googleusercontent\.com$/i;
 
 const SIGNIN_NONCE_TTL_MS = 5 * 60_000;
@@ -207,7 +225,7 @@ export async function signInWithGoogle(
         .limit(1);
       await tx
         .update(schema.customerIdentities)
-        .set({ lastLoginAt: new Date(now) })
+        .set({ lastLoginAt: new Date(now), picture: claims.picture ?? null })
         .where(and(eq(schema.customerIdentities.tenantId, tenantId), eq(schema.customerIdentities.id, identity.id)));
     } else {
       [customer] = await tx
@@ -243,6 +261,7 @@ export async function signInWithGoogle(
         provider: "google",
         subject: claims.sub,
         email: claims.email,
+        picture: claims.picture ?? null,
         lastLoginAt: new Date(now),
       });
     }

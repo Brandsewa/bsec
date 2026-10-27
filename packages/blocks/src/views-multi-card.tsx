@@ -1,7 +1,7 @@
 /** @jsxRuntime automatic */
 /** @jsxImportSource react */
 import type { CSSProperties, ReactNode } from "react";
-import type { BlockRenderArgs, RenderContext } from "./types.ts";
+import type { BlockRenderArgs, ContactFormOptions, ProductCouponsOptions, RenderContext } from "./types.ts";
 import { layoutStyle } from "./layout.ts";
 import { SvgIcon } from "./svg-icon.tsx";
 import type * as R from "./registry.ts";
@@ -22,6 +22,62 @@ const arrowSvg = (path: ReactNode) => (
   </svg>
 );
 
+/** Coupon cards (product page). The storefront draws the real ones; the editor and previews draw labelled samples. */
+export function ProductCouponsView({ props, ctx }: A<R.ProductCouponsProps>): ReactNode {
+  if (ctx?.renderProductCoupons) return <>{ctx.renderProductCoupons(props as ProductCouponsOptions)}</>;
+  const samples = [
+    { code: "WELCOME10", benefit: "10% off", condition: "On your first order" },
+    { code: "FREESHIP", benefit: "Free shipping", condition: "On orders over ₹999" },
+  ].slice(0, props.showCount);
+  return (
+    <section className="bsb bs-block-product-coupons bsb-py-sm">
+      <div className="bsb-w bsb-w-wide">
+        {props.title ? <h3 className="bsb-heading bsb-lvl-h4">{props.title}</h3> : null}
+        <div className="bsb-coupon-row">
+          {samples.map((c) => (
+            <div key={c.code} className="bsb-coupon">
+              <strong>{c.benefit}</strong>
+              <span className="bsb-muted">{c.condition}</span>
+              <code>{c.code}</code>
+            </div>
+          ))}
+        </div>
+        <p className="bsb-muted" style={{ fontSize: "0.75rem", marginTop: "0.5rem" }}>
+          Sample coupons. The shop shows the discounts you switch on under Discounts &gt; Show on the storefront.
+        </p>
+      </div>
+    </section>
+  );
+}
+
+/** Contact form. The storefront draws the live, working form; the editor draws a static sample. Off = nothing on the storefront. */
+export function ContactFormView({ props, ctx }: A<R.ContactFormProps>): ReactNode {
+  const live = Boolean(ctx?.renderContactForm);
+  if (live && !props.enabled) return null;
+  return (
+    <section className={cx("bsb bs-block-contact-form bsb-lay", `bsb-tone-${props.tone}`)} style={layoutStyle(props.box)}>
+      <div className={cx("bsb-w", `bsb-w-${props.width}`)}>
+        {props.title ? <h2 className="bsb-heading bsb-lvl-h2">{props.title}</h2> : null}
+        {props.description ? <p className="bsb-muted">{props.description}</p> : null}
+        {ctx?.renderContactForm ? (
+          ctx.renderContactForm(props as ContactFormOptions)
+        ) : (
+          <div className="bsb-cf-sample" style={{ opacity: props.enabled ? 1 : 0.5, textAlign: props.fieldAlign, "--cf-j": props.fieldAlign === "center" ? "center" : props.fieldAlign === "right" ? "flex-end" : "flex-start" } as CSSProperties}>
+            <div className="bsb-ph-box" style={{ height: 44 }}><span>Name</span></div>
+            <div className="bsb-ph-box" style={{ height: 44 }}><span>Email</span></div>
+            {props.showPhone ? <div className="bsb-ph-box" style={{ height: 44 }}><span>Phone</span></div> : null}
+            {props.showDropdown ? <div className="bsb-ph-box" style={{ height: 44 }}><span>{props.dropdownLabel}</span></div> : null}
+            {props.showMessage ? <div className="bsb-ph-box" style={{ height: 96 }}><span>{props.messageLabel}</span></div> : null}
+            <p className="bsb-muted" style={{ fontSize: "0.75rem" }}>
+              {props.enabled ? `Sample. Submissions go to the admin inbox${props.recipientEmail ? ` (recipient: ${props.recipientEmail})` : ""}.` : "Switched off: this form is hidden on the storefront."}
+            </p>
+          </div>
+        )}
+      </div>
+    </section>
+  );
+}
+
 export function MultiCardView({ props, ctx }: A<R.MultiCardProps>): ReactNode {
   const slider = props.tabletLayout === "slider" || props.mobileLayout === "slider";
   const hasHead = Boolean(props.title || props.subtitle);
@@ -36,6 +92,7 @@ export function MultiCardView({ props, ctx }: A<R.MultiCardProps>): ReactNode {
     "--mc-gap": `${props.elementGap}px`,
     "--mc-icon": `${props.iconSize}px`,
     "--mc-minh": `${props.cardMinHeight}px`,
+    "--mc-ratio": props.imageRatio.replace(":", " / "),
     ...(props.borderColor ? { "--mc-bc": props.borderColor } : null),
     ...(props.cardBg ? { "--mc-bg": props.cardBg } : null),
     ...(props.cardText ? { "--mc-fg": props.cardText } : null),
@@ -45,15 +102,17 @@ export function MultiCardView({ props, ctx }: A<R.MultiCardProps>): ReactNode {
   const cards = props.items.map((it, i) => {
     const icon = mediaSrc(ctx, it.iconMediaId);
     const bgImg = mediaSrc(ctx, it.bgMediaId ?? props.cardBgMediaId);
-    const showIcon = props.showIcon && (icon || it.icon);
+    const topImg = props.cardStyle === "image" ? mediaSrc(ctx, it.imageMediaId) : null;
+    const showIcon = props.cardStyle !== "image" && props.showIcon && (icon || it.icon);
     return (
-      <div key={i} className={cx("bsb-mc-card", bgImg && "bsb-mc-card-img", props.cardBg && "bsb-mc-card-bg")} {...(slider ? { "data-psc-item": "" } : null)}>
+      <div key={i} className={cx("bsb-mc-card", props.cardStyle === "image" && "bsb-mc-card-s2", bgImg && "bsb-mc-card-img", props.cardBg && "bsb-mc-card-bg")} {...(slider ? { "data-psc-item": "" } : null)}>
         {bgImg ? (
           <>
             <img className="bsb-mc-bgimg" src={bgImg} alt="" loading="lazy" />
             <span className="bsb-mc-shade" style={{ opacity: props.cardOverlay / 100 }} aria-hidden="true" />
           </>
         ) : null}
+        {props.cardStyle === "image" && topImg ? <img className="bsb-mc-topimg" src={topImg} alt="" loading="lazy" /> : null}
         <div className={cx("bsb-mc-body", `bsb-mc-v-${props.contentAlign}`, `bsb-align-${props.textAlign}`)}>
           {showIcon ? (
             <span className="bsb-mc-icon" aria-hidden="true">

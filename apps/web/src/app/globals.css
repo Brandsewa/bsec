@@ -38,7 +38,8 @@
 }
 
 body {
-  background: var(--store-bg);
+  /* The merchant's chosen page colour (theme Site Background) on every page, not only block pages; white until a theme sets one. */
+  background: var(--bs-site-bg, var(--store-bg));
   color: var(--store-fg);
   font-family: var(--bs-font-body, ui-sans-serif, system-ui, sans-serif);
 }
@@ -124,7 +125,9 @@ body {
 
 /* The grey panel behind each checkout step and the order summary: the text colour mixed into the page colour, so it stays
    clearly visible on any theme (a plain "surface" grey is nearly white on many). No border or shadow. */
-.bs-panel { border-radius: 0.5rem; background: color-mix(in srgb, var(--color-foreground, #0f172a) 7%, var(--color-background, #ffffff)); }
+.bs-panel { border-radius: 0.75rem; background: color-mix(in srgb, var(--color-background, #ffffff) 10%, #f6f6f4); }
+/* Form fields on a panel: the page colour lightened towards white, so they follow whatever colour the merchant picks and still lift off the panel. */
+.bs-field { background: color-mix(in srgb, var(--color-background, #ffffff) 35%, #ffffff); border-color: color-mix(in srgb, var(--color-foreground, #0f172a) 14%, transparent); }
 
 /* Rich text from a custom field (and the RichText block): Tailwind's reset removes list markers and heading sizes, so they are put back.
    Sizes are in em, so the text follows whatever font size the surrounding section uses. */

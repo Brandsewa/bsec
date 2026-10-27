@@ -125,6 +125,14 @@ import {
   bulkPublishAdminReviews,
   bulkHoldAdminReviews,
   bulkDeleteAdminReviews,
+  setAdminReviewStatus,
+  listAdminFormSubmissions,
+  setAdminFormSubmissionStatus,
+  deleteAdminFormSubmissions,
+  listAdminLeads,
+  unsubscribeAdminLead,
+  createAdminReview,
+  importAdminReviews,
   getStorefrontReviews,
   submitProductReview,
   updateMedia,
@@ -243,6 +251,7 @@ import {
   listAdminDiscounts,
   createAdminDiscount,
   updateAdminDiscount,
+  getAdminDiscount,
   deleteAdminDiscount,
   checkAdminApiRateLimit,
   checkStorefrontRateLimit,
@@ -1555,6 +1564,27 @@ export const storeRouter = os.router({
           if (!context.tenantCtx) throw new Error("Missing tenant context");
           return bulkHoldAdminReviews(context.rt, context.tenantCtx, input.ids);
         }),
+      setStatus: os.admin.reviews.setStatus
+        .use(requireAdmin)
+        .use(requirePermission("products.write"))
+        .handler(({ context, input }) => {
+          if (!context.tenantCtx) throw new Error("Missing tenant context");
+          return setAdminReviewStatus(context.rt, context.tenantCtx, input);
+        }),
+      create: os.admin.reviews.create
+        .use(requireAdmin)
+        .use(requirePermission("products.write"))
+        .handler(({ context, input }) => {
+          if (!context.tenantCtx) throw new Error("Missing tenant context");
+          return createAdminReview(context.rt, context.tenantCtx, input);
+        }),
+      import: os.admin.reviews.import
+        .use(requireAdmin)
+        .use(requirePermission("products.write"))
+        .handler(({ context, input }) => {
+          if (!context.tenantCtx) throw new Error("Missing tenant context");
+          return importAdminReviews(context.rt, context.tenantCtx, input);
+        }),
       bulkDelete: os.admin.reviews.bulkDelete
         .use(requireAdmin)
         .use(requirePermission("products.write"))
@@ -2553,6 +2583,46 @@ export const storeRouter = os.router({
       },
     },
 
+    forms: {
+      list: os.admin.forms.list
+        .use(requireAdmin)
+        .use(requirePermission("customers.read"))
+        .handler(({ context, input }) => {
+          if (!context.tenantCtx) throw new Error("Missing tenant context");
+          return listAdminFormSubmissions(context.rt, context.tenantCtx, input);
+        }),
+      setStatus: os.admin.forms.setStatus
+        .use(requireAdmin)
+        .use(requirePermission("customers.write"))
+        .handler(({ context, input }) => {
+          if (!context.tenantCtx) throw new Error("Missing tenant context");
+          return setAdminFormSubmissionStatus(context.rt, context.tenantCtx, input);
+        }),
+      delete: os.admin.forms.delete
+        .use(requireAdmin)
+        .use(requirePermission("customers.write"))
+        .handler(({ context, input }) => {
+          if (!context.tenantCtx) throw new Error("Missing tenant context");
+          return deleteAdminFormSubmissions(context.rt, context.tenantCtx, input);
+        }),
+    },
+    leads: {
+      list: os.admin.leads.list
+        .use(requireAdmin)
+        .use(requirePermission("customers.read"))
+        .handler(({ context, input }) => {
+          if (!context.tenantCtx) throw new Error("Missing tenant context");
+          return listAdminLeads(context.rt, context.tenantCtx, input);
+        }),
+      unsubscribe: os.admin.leads.unsubscribe
+        .use(requireAdmin)
+        .use(requirePermission("customers.write"))
+        .handler(({ context, input }) => {
+          if (!context.tenantCtx) throw new Error("Missing tenant context");
+          return unsubscribeAdminLead(context.rt, context.tenantCtx, input);
+        }),
+    },
+
     // --- M5 Discounts Admin ---
     discounts: {
       list: os.admin.discounts.list
@@ -2568,6 +2638,13 @@ export const storeRouter = os.router({
         .handler(({ context, input }) => {
           if (!context.tenantCtx) throw new Error("Missing tenant context");
           return createAdminDiscount(context.rt, context.tenantCtx, input);
+        }),
+      get: os.admin.discounts.get
+        .use(requireAdmin)
+        .use(requirePermission("discounts.write"))
+        .handler(({ context, input }) => {
+          if (!context.tenantCtx) throw new Error("Missing tenant context");
+          return getAdminDiscount(context.rt, context.tenantCtx, input);
         }),
       update: os.admin.discounts.update
         .use(requireAdmin)

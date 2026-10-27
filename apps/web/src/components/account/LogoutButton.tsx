@@ -26,6 +26,7 @@ export function LogoutButton() {
       type="button"
       variant="ghost"
       size="sm"
+      className="shrink-0 bg-[var(--muted)] text-[var(--foreground)] hover:bg-[var(--muted)]/70"
       onClick={logout}
       disabled={busy}
       loading={busy}

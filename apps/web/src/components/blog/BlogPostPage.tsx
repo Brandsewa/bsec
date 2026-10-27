@@ -4,7 +4,7 @@ import { headers } from "next/headers";
 import { buildBlogPostMetadata, evaluateStorefrontAccess, generateBlogPostingJsonLd, generateBreadcrumbJsonLd, getPublicBlogPost, type TenantContext } from "@bs/domain";
 import { getBlockDefinition, type BlockInstance, type BlogPostOptions } from "@bs/blocks";
 import { server } from "@/server/runtime.ts";
-import { getCachedBlogPost, getCachedStoreName, getCachedThemePage } from "@/server/cached-storefront.ts";
+import { getCachedBlogPost, getCachedBlogSidebar, getCachedStoreName, getCachedThemePage } from "@/server/cached-storefront.ts";
 import { BlockRenderer } from "@/components/blocks/BlockRenderer.tsx";
 import { BlogPostSection } from "./BlogPostSection.tsx";
 import { JsonLd } from "./JsonLd.tsx";
@@ -51,6 +51,9 @@ export async function BlogPostPage({ slug, previewToken }: { slug: string; previ
     { name: post.title, url: postUrl },
   ];
   const blocks: BlockInstance[] = template?.blocks ?? [{ id: "default-blog-post", type: "BlogPostContent", version: 1, props: { ...getBlockDefinition("BlogPostContent").defaultProps } }];
+  const postProps = blocks.find((b) => b.type === "BlogPostContent")?.props;
+  const wantsSidebar = (postProps?.["layout"] ?? "magazine") === "magazine" && postProps?.["showSidebar"] !== false;
+  const sidebar = wantsSidebar ? await getCachedBlogSidebar(tenantId, Number(postProps?.["featuredCount"] ?? 5)).catch(() => null) : null;
 
   return (
     <div className="bs-skin">
@@ -68,7 +71,7 @@ export async function BlogPostPage({ slug, previewToken }: { slug: string; previ
         blocks={blocks}
         renderData={template?.renderData}
         context={{
-          renderBlogPost: (options: BlogPostOptions) => <BlogPostSection post={post} options={options} postUrl={postUrl} blogTitle={settings.title} />,
+          renderBlogPost: (options: BlogPostOptions) => <BlogPostSection post={post} options={options} postUrl={postUrl} blogTitle={settings.title} blogDescription={settings.description} sidebar={sidebar} />,
         }}
       />
     </div>

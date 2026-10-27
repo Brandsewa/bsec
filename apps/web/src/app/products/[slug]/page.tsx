@@ -2,7 +2,8 @@ import { descriptionText } from "@/lib/description-text.ts";
 import { ProductInfoTabs } from "@/components/product/ProductInfoTabs.tsx";
 import { ProductCustomField } from "@/components/product/ProductCustomField.tsx";
 import { ProductReviewsSection } from "@/components/product/ProductReviewsSection.tsx";
-import { DEFAULT_SHIPPING_CONTENT, ProductShowcaseSchema, type ProductInfoTabsOptions } from "@bs/blocks";
+import { DEFAULT_SHIPPING_CONTENT, ProductShowcaseSchema, type ProductCouponsOptions, type ProductInfoTabsOptions } from "@bs/blocks";
+import { CouponCards } from "@/components/product/CouponCards.tsx";
 import React from "react";
 import type { Metadata } from "next";
 import { notFound } from "next/navigation";
@@ -19,7 +20,7 @@ import {
   tenantTag,
 } from "@bs/domain";
 import { server } from "@/server/runtime.ts";
-import { getCachedProductCustomFields, getCachedRelatedShowcaseData, getCachedStorefrontHomePage, getCachedStorefrontProduct, getCachedThemePage } from "@/server/cached-storefront.ts";
+import { getCachedProductCustomFields, getCachedStorefrontCoupons, getCachedRelatedShowcaseData, getCachedStorefrontHomePage, getCachedStorefrontProduct, getCachedThemePage } from "@/server/cached-storefront.ts";
 import { BlockRenderer } from "@/components/blocks/BlockRenderer.tsx";
 import { ProductDetailSection } from "@/components/product/ProductDetailSection.tsx";
 
@@ -181,12 +182,17 @@ export default async function ProductDetailPage({ params }: ProductPageProps) {
   const relatedData = template ? await getCachedRelatedShowcaseData(tenantId, product.id, adaptedBlocks).catch(() => ({})) : {};
   const renderData = template ? { ...template.renderData, data: { ...template.renderData.data, ...relatedData } } : undefined;
   const detail = (options?: Parameters<typeof ProductDetailSection>[0]["options"]) => (
-    <ProductDetailSection product={product} options={options} customFields={customFields} paymentImageUrl={options?.paymentImageMediaId ? media[options.paymentImageMediaId] : undefined} />
+    <ProductDetailSection product={product} options={options} customFields={customFields} coupons={coupons} paymentImageUrl={options?.paymentImageMediaId ? media[options.paymentImageMediaId] : undefined} />
   );
   // Custom fields (ADR-034): loaded once for the product and handed to the theme's "Custom field" blocks.
   const customFields = await getCachedProductCustomFields(tenantId, product.id).catch(() => []);
   const customField = (o: { fieldKey: string; showLabel: boolean; label: string }) => (
     <ProductCustomField field={customFields.find((f) => f.key === o.fieldKey)} showLabel={o.showLabel} label={o.label} />
+  );
+  // Coupon cards: the discounts the store chose to show (Discount > Show on the storefront).
+  const coupons = await getCachedStorefrontCoupons(tenantId).catch(() => []);
+  const couponCards = (o: ProductCouponsOptions) => (
+    <CouponCards coupons={coupons} title={o.title} showCount={o.showCount} showViewAll={o.showViewAll} viewAllLabel={o.viewAllLabel} />
   );
   const infoTabs = (o: ProductInfoTabsOptions) => (
     <ProductInfoTabs
@@ -200,11 +206,11 @@ export default async function ProductDetailPage({ params }: ProductPageProps) {
     />
   );
 
-  const templateContext = { renderProductDetail: (options: Parameters<typeof detail>[0]) => detail(options), renderProductInfoTabs: infoTabs, renderProductCustomField: customField };
+  const templateContext = { renderProductDetail: (options: Parameters<typeof detail>[0]) => detail(options), renderProductInfoTabs: infoTabs, renderProductCustomField: customField, renderProductCoupons: couponCards };
   // The theme's "Reviews" block is only a heading placeholder (the real reviews are drawn below the product's own blocks),
   // so it is left out here; the reviews section has its own heading.
   const templateBlocks = adaptedBlocks;
-  const coreTypes = new Set(["ProductDetail", "ProductInfoTabs", "ProductCustomField"]);
+  const coreTypes = new Set(["ProductDetail", "ProductInfoTabs", "ProductCustomField", "ProductCoupons"]);
   let lastCore = -1;
   templateBlocks.forEach((b, i) => {
     if (coreTypes.has(b.type)) lastCore = i;

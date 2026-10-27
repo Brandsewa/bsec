@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
-import { updateCustomerProfile } from "@bs/domain";
+import { getCustomerGooglePicture, updateCustomerProfile } from "@bs/domain";
 import { currentCustomer, customerApi, errorResponse, resolveStore } from "@/server/customer-session.ts";
 
 const Body = z.object({
@@ -17,7 +17,8 @@ export async function GET() {
     if (!store) return none;
     const customer = await currentCustomer(store);
     if (!customer) return none;
-    return NextResponse.json({ signedIn: true, name: customer.name }, { headers: { "Cache-Control": "private, no-store" } });
+    const image = await getCustomerGooglePicture(store.rt._db.db, store.tenantId, customer.id).catch(() => null);
+    return NextResponse.json({ signedIn: true, name: customer.name, image }, { headers: { "Cache-Control": "private, no-store" } });
   } catch {
     return none;
   }

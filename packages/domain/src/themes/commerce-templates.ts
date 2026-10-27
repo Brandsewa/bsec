@@ -43,7 +43,8 @@ const TRUST_ITEMS = [
 
 /** Collection page: products first, then reassurance and discovery. */
 export const MODERN_TEMPLATE_COLLECTION: BlockInstance[] = [
-  b("mc-collection", "CollectionListing", {
+  b("mc-collection", "CollectionProducts", {
+    showTitle: true,
     columns: "4",
     columnsTablet: "2",
     columnsMobile: "2",

@@ -28,19 +28,16 @@ export async function AccountGate({ children }: { children: React.ReactNode }) {
   }
 
   return (
-    <div className="mx-auto w-full max-w-[1000px] px-4 py-10 sm:px-6">
-      <div className="mb-6 flex flex-wrap items-center justify-between gap-3 pb-2">
-        <div>
+    <div className="mx-auto w-full max-w-[1000px] px-4 py-5 sm:px-6 sm:py-10">
+      <div className="mb-4 flex items-center justify-between gap-3 sm:mb-6">
+        <div className="min-w-0">
           <span className="text-xs font-semibold uppercase tracking-wider text-[var(--muted-foreground)]">My account</span>
-          <h1 className="text-2xl font-bold tracking-tight text-[var(--foreground)]">{customer.name || customer.phone}</h1>
+          <h1 className="truncate text-2xl font-bold tracking-tight text-[var(--foreground)]">{customer.name || customer.phone}</h1>
         </div>
-        <div className="flex items-center gap-3">
-          
-          <LogoutButton />
-        </div>
+        <LogoutButton />
       </div>
-      <div className="grid gap-6 lg:grid-cols-[14rem_minmax(0,1fr)] lg:gap-10">
-        <aside className="lg:sticky lg:top-6 lg:self-start">
+      <div className="grid grid-cols-[minmax(0,1fr)] gap-4 lg:grid-cols-[15rem_minmax(0,1fr)] lg:gap-8">
+        <aside className="min-w-0 lg:sticky lg:top-6 lg:self-start lg:rounded-2xl lg:bg-[var(--muted)] lg:p-3">
           <AccountNav />
         </aside>
         <div className="min-w-0">{children}</div>

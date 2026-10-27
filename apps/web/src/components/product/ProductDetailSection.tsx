@@ -1,6 +1,7 @@
 import React from "react";
 import Link from "next/link";
-import type { StorefrontCustomField, StorefrontProductDetail } from "@bs/domain";
+import type { StorefrontCoupon, StorefrontCustomField, StorefrontProductDetail } from "@bs/domain";
+import { CouponCards } from "./CouponCards.tsx";
 import { SvgIcon, normalizeElementOrder, type ProductDetailOptions } from "@bs/blocks";
 import { customFieldBody } from "./ProductCustomField.tsx";
 import { descriptionText } from "@/lib/description-text.ts";
@@ -21,6 +22,8 @@ export const DEFAULT_PRODUCT_DETAIL_OPTIONS: ProductDetailOptions = {
   showRating: true,
   showDescription: true,
   showTags: true,
+  showCoupons: true,
+  couponCount: 2,
   stickyBuyBox: false,
   showTrustPoints: false,
   stickyMobileBar: false,
@@ -57,10 +60,13 @@ export function ProductDetailSection({
   options = DEFAULT_PRODUCT_DETAIL_OPTIONS,
   paymentImageUrl,
   customFields = [],
+  coupons = [],
 }: {
   product: StorefrontProductDetail;
   /** The product's custom field values, for accordion rows that pull one. */
   customFields?: StorefrontCustomField[] | undefined;
+  /** Coupons the store shows (Discount > Show on the storefront). */
+  coupons?: StorefrontCoupon[] | undefined;
   options?: ProductDetailOptions | undefined;
   /** Resolved URL of the theme's secure-payment picture (media library); the built-in badge is used when absent. */
   paymentImageUrl?: string | undefined;
@@ -169,6 +175,10 @@ export function ProductDetailSection({
             </details>
           ))}
         </div>
+      ) : null,
+    coupons:
+      options.showCoupons !== false && coupons.length > 0 ? (
+        <CouponCards inline coupons={coupons} title="Available offers" showCount={options.couponCount ?? 2} showViewAll viewAllLabel="View all" />
       ) : null,
     tags:
       options.showTags && product.tags && product.tags.length > 0 ? (
