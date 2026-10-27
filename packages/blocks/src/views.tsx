@@ -15,7 +15,7 @@ import type {
   SlotRender,
 } from "./types.ts";
 import { layoutHasAspectRatio, layoutStyle, slideRadiusStyle } from "./layout.ts";
-import { bricksElementStyle, normalizeLengthValue } from "./bricks-layout.ts";
+import { bricksElementStyle, normalizeLengthValue, slotBasisVars } from "./bricks-layout.ts";
 import { mediaImage } from "./media-image.ts";
 import { PLACEHOLDER_IMAGE_URL } from "./media.ts";
 import { SvgIcon } from "./svg-icon.tsx";
@@ -593,6 +593,7 @@ export function SectionView({ props, children, ctx }: A<R.SectionProps>): ReactN
           width: "100%",
           display: "flex",
           flexDirection: (props.direction ? `var(--b-dir, ${props.direction})` : "var(--b-dir, column)") as CSSProperties["flexDirection"],
+          ...slotBasisVars(props),
           alignItems: (props.alignCrossAxis ? `var(--b-ai, ${props.alignCrossAxis})` : "var(--b-ai, stretch)") as CSSProperties["alignItems"],
           justifyContent: (props.alignMainAxis ? `var(--b-jc, ${props.alignMainAxis})` : "var(--b-jc, flex-start)") as CSSProperties["justifyContent"],
           gap: props.gap ? `var(--b-gap, ${props.gap})` : (props.responsive?.tablet?.gap || props.responsive?.mobile?.gap ? "var(--b-gap)" : undefined),
@@ -685,6 +686,7 @@ export function ContainerView({ props, children, ctx }: A<R.ContainerProps>): Re
           height: "100%",
           display: "flex",
           flexDirection: (props.direction ? `var(--b-dir, ${props.direction})` : "var(--b-dir, column)") as CSSProperties["flexDirection"],
+          ...slotBasisVars(props),
           alignItems: (props.alignCrossAxis ? `var(--b-ai, ${props.alignCrossAxis})` : "var(--b-ai, stretch)") as CSSProperties["alignItems"],
           justifyContent: (props.alignMainAxis ? `var(--b-jc, ${props.alignMainAxis})` : "var(--b-jc, flex-start)") as CSSProperties["justifyContent"],
           gap: props.gap ? `var(--b-gap, ${props.gap})` : (props.responsive?.tablet?.gap || props.responsive?.mobile?.gap ? "var(--b-gap)" : undefined),
@@ -786,6 +788,7 @@ export function BlockView({ props, children, ctx }: A<R.BlockProps>): ReactNode 
           height: "100%",
           display: "flex",
           flexDirection: (props.direction ? `var(--b-dir, ${props.direction})` : "var(--b-dir, column)") as CSSProperties["flexDirection"],
+          ...slotBasisVars(props),
           alignItems: (props.alignCrossAxis ? `var(--b-ai, ${props.alignCrossAxis})` : "var(--b-ai, stretch)") as CSSProperties["alignItems"],
           justifyContent: (props.alignMainAxis ? `var(--b-jc, ${props.alignMainAxis})` : "var(--b-jc, flex-start)") as CSSProperties["justifyContent"],
           gap: props.gap ? `var(--b-gap, ${props.gap})` : (props.responsive?.tablet?.gap || props.responsive?.mobile?.gap ? "var(--b-gap)" : undefined),
