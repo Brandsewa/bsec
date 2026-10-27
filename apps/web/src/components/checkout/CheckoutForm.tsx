@@ -348,6 +348,9 @@ export function CheckoutForm({
           ) : null}
         </div>
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+          <div className="sm:col-span-2">
+            <TextField id="checkout-fullname" label="Full name *" required value={fullName} onChange={setFullName} />
+          </div>
           <TextField id="checkout-email" label="Email address *" type="email" required value={email} onChange={setEmail} />
           <PhoneField id="checkout-phone" label="Phone number *" value={phone} onChange={setPhone} />
         </div>
@@ -435,6 +438,7 @@ export function CheckoutForm({
             ) : null}
         <AddressFields
           idPrefix="checkout"
+          showName={false}
           values={{ fullName, addressLine1, city, state, pincode }}
           onChange={(k, v) => {
             if (k === "fullName") setFullName(v);
@@ -453,11 +457,15 @@ export function CheckoutForm({
           <h2 className="mb-2.5 text-base font-semibold tracking-tight text-foreground sm:text-lg">Shipping Address</h2>
           <div className="space-y-3">
             <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+              <div className="sm:col-span-2">
+                <TextField id="checkout-ship-name" label="Full name *" required value={shipName} onChange={setShipName} />
+              </div>
               <TextField id="checkout-ship-email" label="Contact email (optional)" type="email" value={shipEmail} onChange={setShipEmail} />
               <PhoneField id="checkout-ship-phone" label="Contact phone *" value={shipPhone} onChange={setShipPhone} required />
             </div>
             <AddressFields
               idPrefix="checkout-ship"
+              showName={false}
               values={{ fullName: shipName, addressLine1: shipAddress1, city: shipCity, state: shipState, pincode: shipPincode }}
               onChange={(k, v) => {
                 if (k === "fullName") setShipName(v);
@@ -562,7 +570,7 @@ export function CheckoutForm({
           onClick={() => setNotesOpen((o) => !o)}
           aria-expanded={notesOpen}
           aria-controls="checkout-notes-panel"
-          className="flex w-full items-center justify-between rounded-lg bg-muted/50 px-3.5 py-2.5 text-left text-sm font-medium text-foreground transition-colors hover:bg-muted"
+          className="flex w-full items-center justify-between bs-panel px-3.5 py-2.5 text-left text-sm font-medium text-foreground transition-opacity hover:opacity-90"
         >
           <span>Order Instructions / Delivery Notes (Optional)</span>
           <svg aria-hidden className={`h-4 w-4 shrink-0 text-muted-foreground transition-transform ${notesOpen ? "rotate-180" : ""}`} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
@@ -648,12 +656,13 @@ export function CheckoutForm({
 // Each step of the checkout is a grey panel (the same one as the order summary), with white fields that stand out on it.
 const CARD = "bs-panel p-4 sm:p-6";
 
+
 const INPUT_CLASS =
-  "w-full rounded-lg border border-border bg-background px-3 py-2 text-sm text-foreground transition-colors placeholder:text-muted-foreground/70 hover:border-border focus:border-primary/60 focus:outline-none focus:ring-2 focus:ring-primary/15";
+  "bs-field w-full rounded-lg border px-3 py-2 text-sm text-foreground transition-colors placeholder:text-muted-foreground/70 hover:border-border focus:border-primary/60 focus:outline-none focus:ring-2 focus:ring-primary/15";
 
 // A field whose name sits inside it: the name reads as the placeholder, then shrinks to the top edge once there is text or focus.
 const FIELD_CLASS =
-  "peer h-12 w-full rounded-lg border border-border bg-background px-3 pb-1 pt-5 text-sm text-foreground placeholder-transparent transition-colors hover:border-border focus:border-primary/60 focus:outline-none focus:ring-2 focus:ring-primary/15";
+  "bs-field peer h-12 w-full rounded-lg border px-3 pb-1 pt-5 text-sm text-foreground placeholder-transparent transition-colors hover:border-border focus:border-primary/60 focus:outline-none focus:ring-2 focus:ring-primary/15";
 const FLOAT_LABEL =
   "pointer-events-none absolute left-3 top-3 origin-left text-sm text-muted-foreground transition-all peer-focus:top-1.5 peer-focus:text-[11px] peer-[:not(:placeholder-shown)]:top-1.5 peer-[:not(:placeholder-shown)]:text-[11px]";
 // Same, for fields that always show a value (the state list, the phone number with its +91): the name stays small at the top.
@@ -702,10 +711,10 @@ function PhoneField({ id, label, value, onChange, required = true }: { id: strin
 type AddressKey = "fullName" | "addressLine1" | "city" | "state" | "pincode";
 
 /** Name, street, city, state and pincode: used once for the billing and shipping address, and again for a separate shipping address. */
-function AddressFields({ idPrefix, values, onChange }: { idPrefix: string; values: Record<AddressKey, string>; onChange: (key: AddressKey, value: string) => void }) {
+function AddressFields({ idPrefix, values, onChange, showName = true }: { idPrefix: string; values: Record<AddressKey, string>; onChange: (key: AddressKey, value: string) => void; showName?: boolean }) {
   return (
     <div className="space-y-3">
-      <TextField id={`${idPrefix}-fullname`} label="Full name *" required value={values.fullName} onChange={(v) => onChange("fullName", v)} />
+      {showName ? <TextField id={`${idPrefix}-fullname`} label="Full name *" required value={values.fullName} onChange={(v) => onChange("fullName", v)} /> : null}
       <TextField id={`${idPrefix}-address1`} label="Address (flat, building, street) *" required value={values.addressLine1} onChange={(v) => onChange("addressLine1", v)} />
       <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
         <TextField id={`${idPrefix}-city`} label="City *" required value={values.city} onChange={(v) => onChange("city", v)} />

@@ -61,18 +61,8 @@ export function BlogListingSection({
   const vars = { "--cols": Number(options.columns), "--cols-t": Number(options.columnsTablet), "--cols-m": Number(options.columnsMobile) } as React.CSSProperties;
 
   return (
-    <section className="bsb bs-block-blog-listing bsb-py-lg">
+    <section className="bsb bs-block-blog-listing bsb-blog-tight">
       <div className="bsb-w bsb-w-wide">
-        {cat ? (
-          <nav aria-label="Breadcrumb" className="bsb-blog-crumbs">
-            <ol>
-              <li><Link href="/">Home</Link></li>
-              <li><Link href="/blog">{list.settings.title}</Link></li>
-              {cat.parent ? <li><Link href={categoryHref(cat.parent.path)}>{cat.parent.name}</Link></li> : null}
-              <li aria-current="page">{cat.name}</li>
-            </ol>
-          </nav>
-        ) : null}
         <header className="bsb-blog-head">
           <h1 className="bsb-heading bsb-h-xl">{heading}</h1>
           {intro ? <p className="bsb-muted bsb-blog-intro">{intro}</p> : null}

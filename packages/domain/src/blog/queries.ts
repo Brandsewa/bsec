@@ -289,6 +289,39 @@ export async function getRecentBlogPosts(
   });
 }
 
+export interface BlogMagazineData {
+  latest: BlogPostSummary[];
+  sections: Array<{ category: BlogCategoryRef; posts: BlogPostSummary[] }>;
+}
+
+/**
+ * The magazine-style blog index: the newest posts across every category, then one row of newest posts per top-level category.
+ * Uses the same visibility rule as every other storefront read.
+ */
+export async function getBlogMagazine(rt: Runtime, ctx: TenantContext, opts: { latest?: number | undefined; perCategory?: number | undefined } = {}): Promise<BlogMagazineData> {
+  const latestN = Math.min(Math.max(opts.latest ?? 6, 1), 12);
+  const per = Math.min(Math.max(opts.perCategory ?? 4, 1), 12);
+  return withTenant(rt._db.db, ctx.tenantId, async (tx) => {
+    const { posts: latest, enabled } = await recentBlogPostsTx(tx, ctx.tenantId, { limit: latestN });
+    if (!enabled) return { latest: [], sections: [] };
+    const { rows, ref } = await loadCategoryIndex(tx, ctx.tenantId);
+    const sections: BlogMagazineData["sections"] = [];
+    for (const c of rows.filter((r) => r.isActive && !r.parentId)) {
+      const { posts } = await recentBlogPostsTx(tx, ctx.tenantId, { limit: per, categorySlug: c.slug });
+      const category = ref(c.id);
+      if (category && posts.length > 0) sections.push({ category, posts });
+    }
+    return { latest, sections };
+  });
+}
+
+/** What the post page sidebar needs besides the post: starred ("featured") posts and the category list. */
+export async function getBlogSidebar(rt: Runtime, ctx: TenantContext, opts: { featured?: number | undefined } = {}): Promise<{ featured: BlogPostSummary[]; categories: PublicBlogCategory[] }> {
+  const n = Math.min(Math.max(opts.featured ?? 5, 1), 12);
+  const [{ posts }, categories] = await Promise.all([getRecentBlogPosts(rt, ctx, { limit: n, featuredOnly: true }), listPublicBlogCategories(rt, ctx)]);
+  return { featured: posts, categories };
+}
+
 export type PublicBlogPostResult =
   | { kind: "post"; post: BlogPostPage; settings: BlogSettings; preview: boolean }
   | { kind: "redirect"; slug: string }

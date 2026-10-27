@@ -239,7 +239,7 @@ export function LoginForm({ initialTab = "otp", redirectTo = "/account", phoneLo
           </Button>
         </form>
       )}
-      <GoogleSignIn redirectTo={redirectTo} />
+      <GoogleSignIn redirectTo="/" />
     </div>
   );
 }

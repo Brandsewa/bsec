@@ -4,7 +4,7 @@
 
 | | |
 |---|---|
-| Last verified against | `feat/notification-manager` (notification manager, migration 0082, ADR-039), 2026-10-27 |
+| Last verified against | `feat/owner-fix-batch` (owner fix batch: widgets, reviews, discounts, blog, checkout; migrations 0083 to 0086), 2026-10-27 |
 | Verified how | files read from the working tree; `pnpm docs:check` for the mechanical parts. Facts marked *(from code)* were read, not run. |
 | Owner | whoever changes the area (see the update triggers in section 0) |
 
@@ -211,7 +211,7 @@ Drizzle schema files in `packages/db/src/schema/` (one Postgres database, `publi
 | `orders.ts` | `orders`, `order_items`, `order_events`, `order_notes`, `number_sequences`, `action_tokens` T |
 | `payments.ts` | `payment_intents`, `payment_attempts`, `refunds` T |
 | `shipping.ts` | `fulfillments`, `fulfillment_items`, `tracking_events`, `returns`, `return_items`, `invoices`, `shipping_zones`, `shipping_rates`, `tax_classes` T |
-| `marketing.ts` | `newsletter_subscribers`, `discounts`, `discount_redemptions` T |
+| `marketing.ts` | `newsletter_subscribers`, `form_submissions`, `discounts`, `discount_redemptions` T |
 | `content.ts` | `themes`, `pages`, `page_versions`, `menus` T |
 | `branding.ts` | `brand_settings` T |
 | `blog.ts` | `blog_categories`, `blog_posts`, `blog_slug_redirects` T (ADR-033) |
@@ -312,6 +312,10 @@ Drizzle schema files in `packages/db/src/schema/` (one Postgres database, `publi
 | 0078 | `subscription_authorized_at` | `subscriptions.authorized_at` (when the merchant finished authorising automatic payment; set by the gateway webhook or by a direct Cashfree status check on Plan and billing) |
 | 0079 | `platform_trial_policy` | `platform_billing_settings.trial_enabled` and `trial_days` (the free trial new stores get; Super Admin, Platform billing; read by signup and store creation, public `GET /api/saas/trial`) |
 | 0081 | `domain_routing_checks` | `domains.routing_status`, `routing_detail`, `routing_checked_at`: what a custom domain's own DNS and a real HTTP probe showed (a domain is `active` only when it is `reachable`; `degraded` after 3 failed daily re-checks) |
+| 0083 | `customer_identity_picture` | `customer_identities.picture`: the Google profile photo URL, display only (header avatar) |
+| 0084 | `review_source` | `reviews.source` (`customer`, `manual`, `import`); review statuses now also `spam` and `archived` (no constraint, text column) |
+| 0085 | `discount_show_on_storefront` | `discounts.show_on_storefront` (default false): lists the code in the product-page coupon cards; discount status gains `archived` |
+| 0086 | `form_submissions` | `form_submissions` (tenant, forced RLS): contact-form messages from the theme's Contact form block, read in Admin > Form submissions |
 | 0082 | `notification_manager` | `notification_rules` and `platform_email_branding` (platform, `app_rw` read only), `notification_tenant_rules`, `store_email_branding` and `notifications` (tenant, RLS), `platform_notifications` (Super Admin inbox; `app_rw` INSERT, DELETE, SELECT(id, created_at)), function `notification_platform_recipients(roles)` (the only way the worker learns Super Admin recipients). ADR-039 |
 | 0080 | `subscription_payment_required` | `subscriptions.payment_required` (a self-service store created with the free trial off; the admin shows "Activate your store" until the first payment; cleared by the first charge) |
 
@@ -511,7 +515,12 @@ Keep this list honest; remove an item when fixed.
 
 ## New widgets and slider updates (2026-10-23)
 
-- **Multi card** (`MultiCard`, `views-multi-card.tsx`): cards with icon or picture, heading, text and link; 1 to 4 per row on desktop (always a grid), grid or slider on tablet and phone; per-card and section-wide colours, border, radius, padding, spacing and background picture. The slider markup is the product showcase's (`data-psc-*`), so `ProductShowcaseClient` drives it through `renderProductShowcase`; CSS (`.bsb-mc-*`) hides the controls on devices set to grid.
+- **Gallery** (`Gallery`): masonry or even grid with per-device columns, gap, radius and auto or fixed height; the click-to-open viewer (arrows, thumbnails, keyboard, swipe) is `GalleryClient` through `renderGallery`.
+- **Contact form** (`ContactForm`): name, email and optional phone, dropdown and message; on or off; recipient email recorded per form; `ContactFormClient` posts to `POST /api/storefront/forms/submit`, saved in `form_submissions` (honeypot, per-connection rate limit). Email delivery is not live, so the admin inbox (Form submissions) is where they are read.
+- **Coupon cards** (`ProductCoupons`, product page only): the first N discounts with Show on the storefront on, a copy button on each, and a View all side drawer (`CouponCards`, `getStorefrontCoupons`).
+- **Blog index and post** (`BlogListing` style `magazine`, `BlogPostContent` layout `magazine`): headline, subscribe form (posts to the footer's newsletter route with source `blog`; signups are listed in Admin > Leads), latest posts and a row per category (`getBlogMagazine`); post page with picture on top, sticky contents on the left (an accordion on phones), and a sidebar with about card, starred (`is_featured`) posts and categories (`getBlogSidebar`).
+- **Categories** render through the theme's collection template (`CollectionListingSection` with `basePath`), the same page collections use.
+- **Multi card** (`MultiCard`, `views-multi-card.tsx`): card style 1 (icon) or 2 (picture on top); cards with icon or picture, heading, text and link; 1 to 4 per row on desktop (always a grid), grid or slider on tablet and phone; per-card and section-wide colours, border, radius, padding, spacing and background picture. The slider markup is the product showcase's (`data-psc-*`), so `ProductShowcaseClient` drives it through `renderProductShowcase`; CSS (`.bsb-mc-*`) hides the controls on devices set to grid.
 - **Collection products** (`CollectionProducts`, collection page only): the collection page's product grid, filters and cards without its own heading, short or long description unless switched on, with a section box, so Heading, Image or Text widgets can sit above and around it. It reuses `CollectionListingSection` through `renderCollectionListing` with `bare: true`; the collection page reads its page size and filter menu from either listing block.
 - **Blog slider** (`BlogShowcase`, in `views-blog.tsx`): Recent posts as a slider or grid with cards per row for each device, and on phones a slider, grid or list (thumbnail optional). Its posts are resolved like Recent posts (`themes/block-data.ts`).
 - **Slider dots** (`blocks.css`): the page indicators are flat rounded lines whose current one stretches, for the hero slider, product showcase (also the product page's related products), Multi card and Blog slider. They show on phones only; arrows cover tablet and desktop. `dotsDesktop` turns them on there too. Style picker removed (one look).

@@ -7,6 +7,10 @@ import {
   getStorefrontCategory,
   listStorefrontCategories,
   getStorefrontCustomFields,
+  getStorefrontCoupons,
+  getBlogMagazine,
+  getBlogSidebar,
+  type StorefrontCoupon,
   type StorefrontCustomField,
   getStorefrontHomePage,
   getStorefrontPage,
@@ -98,6 +102,15 @@ export async function getCachedStorefrontCollection(
   }
 
   return res;
+}
+
+/** The coupons the store shows on product pages. Short-lived: a discount edit shows within a minute. */
+export async function getCachedStorefrontCoupons(tenantId: string): Promise<StorefrontCoupon[]> {
+  "use cache";
+  cacheTag(tenantTag(tenantId, "product"));
+  cacheLife({ stale: 30, revalidate: 60, expire: 3600 });
+  const { rt } = server();
+  return getStorefrontCoupons(rt, createStorefrontTenantContext(tenantId));
 }
 
 /** The custom fields to show for one product (ADR-034), refreshed with the product and with field changes. */
@@ -313,6 +326,24 @@ export async function getCachedBlogList(tenantId: string, query: PublicBlogListQ
   const ctx = createStorefrontTenantContext(tenantId);
   const [list, categories] = await Promise.all([listPublicBlogPosts(rt, ctx, query), listPublicBlogCategories(rt, ctx)]);
   return { list, categories };
+}
+
+/** The magazine blog index data (latest posts and a row per category). */
+export async function getCachedBlogMagazine(tenantId: string, opts: { latest: number; perCategory: number }) {
+  "use cache";
+  cacheTag(tenantTag(tenantId, "blog"));
+  cacheLife({ stale: 30, revalidate: 60, expire: 3600 });
+  const { rt } = server();
+  return getBlogMagazine(rt, createStorefrontTenantContext(tenantId), opts);
+}
+
+/** Featured posts and categories for the post page sidebar. */
+export async function getCachedBlogSidebar(tenantId: string, featured: number) {
+  "use cache";
+  cacheTag(tenantTag(tenantId, "blog"));
+  cacheLife({ stale: 30, revalidate: 60, expire: 3600 });
+  const { rt } = server();
+  return getBlogSidebar(rt, createStorefrontTenantContext(tenantId), { featured });
 }
 
 export async function getCachedBlogPost(tenantId: string, slug: string) {

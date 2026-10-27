@@ -2,6 +2,7 @@ import type { ComponentType, CSSProperties, ReactNode } from "react";
 import type { Config, CustomField, Field } from "@puckeditor/core";
 import { SLOT_BLOCK_TYPES, SLOT_PROP, getBlockDefinition, normalizeLengthValue, renderBlockTree, type BlockType, type RenderContext } from "@bs/blocks";
 import { mediaField, videoMediaField, fileMediaField } from "./MediaField.tsx";
+import { galleryImagesField } from "./GalleryImagesField.tsx";
 import { menuField } from "./MenuField.tsx";
 import { collectionsField } from "./CollectionsField.tsx";
 import { logoSizeField } from "./HeaderFooterPanels.tsx";
@@ -34,6 +35,9 @@ const area = (label: string): Field => ({ type: "textarea", label });
 const num = (label: string, min: number, max: number): Field => ({ type: "number", label, min, max });
 const select = (label: string, o: Record<string, string>): Field => ({ type: "select", label, options: pairs(o) });
 const radio = (label: string): Field => ({ type: "radio", label, options: yesNo });
+// Compact "label left, control right" rows (the same look as the layout fields), for the newer widgets.
+const rnum = (label: string, min: number, max: number): Field => bricksRowInputField(label, "", "number", min, max) as Field;
+const rsel = (label: string, o: Record<string, string>): Field => bricksRowSelectField(label, o) as Field;
 const link = (label: string): Field => text(`${label} (/path, https://…)`);
 
 // A compact on/off switch row (label left, switch right) for settings that are plain Yes/No. Stores the same boolean as radio().
@@ -387,13 +391,13 @@ export const BLOCK_SPECS: Record<BlockType, Spec> = {
   ProductGrid: { label: "Product grid", category: "store", fields: productFields(false) },
   CollectionGrid: { label: "Collection grid", category: "store", fields: { title: text("Heading"), subtitle: text("Description under the heading"), headerAlign: select("Heading and description position", ALIGN), showAll: radio("List every published collection"), collectionSlugs: listField("Collection slugs (ignored when listing every collection)") as Field, columns: select("Cards per row: desktop", { "4": "4", "3": "3", "2": "2" }), columnsTablet: select("Cards per row: tablet", { "2": "2", "1": "1" }), columnsMobile: select("Cards per row: mobile", { "1": "1", "2": "2" }) } },
   BlogPosts: { label: "Recent blog posts", category: "store", fields: { title: text("Heading"), subtitle: text("Description under the heading"), source: select("Which posts", { latest: "Newest posts", featured: "Featured posts", category: "From one category" }), categorySlug: text("Category address (only for 'From one category')"), count: num("How many posts", 1, 12), layout: select("Layout", { grid: "Grid", list: "List", slider: "Slider (swipe sideways)" }), columns: select("Posts per row: desktop", { "4": "4", "3": "3", "2": "2" }), columnsTablet: select("Posts per row: tablet", { "2": "2", "1": "1" }), columnsMobile: select("Posts per row: phone", { "1": "1", "2": "2" }), imageRatio: select("Image shape", { landscape: "Landscape", square: "Square", portrait: "Portrait (4:5)" }), showImage: radio("Image"), showExcerpt: radio("Summary"), excerptLines: select("Summary lines", { "2": "2", "3": "3", "4": "4" }), showDate: radio("Date"), showAuthor: radio("Author"), showCategory: radio("Category label"), showViewAll: radio("'View all' link"), viewAllLabel: text("'View all' link text"), hideWhenEmpty: radio("Hide the section when there are no posts"), tone: select("Background", TONE) } },
-  BlogListing: { label: "Blog archive posts", category: "store", fields: { title: text("Heading"), subtitle: text("Description under the heading"), showCategories: radio("Category links"), layout: select("Layout", { grid: "Grid", list: "List" }), columns: select("Posts per row: desktop", { "4": "4", "3": "3", "2": "2" }), columnsTablet: select("Posts per row: tablet", { "2": "2", "1": "1" }), columnsMobile: select("Posts per row: phone", { "1": "1", "2": "2" }), featuredFirst: radio("Show the first post larger"), imageRatio: select("Image shape", { landscape: "Landscape", square: "Square", portrait: "Portrait (4:5)" }), showImage: radio("Image"), showExcerpt: radio("Summary"), showDate: radio("Date"), showAuthor: radio("Author"), showReadingTime: radio("Reading time"), showCategoryLabel: radio("Category label"), postsPerPage: num("Posts per page (0 = use the blog setting)", 0, 48), emptyText: text("Text when there are no posts") } },
-  BlogPostContent: { label: "Blog post", category: "store", fields: { showBreadcrumb: radio("Breadcrumb"), showCategory: radio("Category label"), showDate: radio("Date"), showAuthor: radio("Author"), showReadingTime: radio("Reading time"), featuredImage: select("Featured image", { above: "Above the text", wide: "Wide, above the title", hidden: "Hidden" }), contentWidth: select("Text width", { narrow: "Narrow (easy to read)", normal: "Normal" }), showToc: radio("Table of contents (3 or more headings)"), showShare: radio("Share links"), showRelated: radio("Related posts"), relatedCount: num("How many related posts", 0, 6), showPrevNext: radio("Previous and next post links") } },
+  BlogListing: { label: "Blog archive posts", category: "store", fields: { style: select("Blog index style", { magazine: "Magazine: headline, subscribe form, latest posts, a row per category", classic: "Classic: heading and a grid of posts" }), headlineBold: text("Magazine headline: bold part (empty = Heading below)"), headlineLight: text("Magazine headline: light part"), showSubscribe: radio("Subscribe form under the headline"), subscribeLabel: text("Subscribe button text"), subscribePlaceholder: text("Email field placeholder"), latestSideCount: num("Small posts beside the latest post (0 hides them)", 0, 8), showCategorySections: radio("A row of posts for each category"), postsPerCategory: num("Posts in each category row", 1, 8), title: text("Heading"), subtitle: text("Description under the heading"), showCategories: radio("Category links"), layout: select("Layout", { grid: "Grid", list: "List" }), columns: select("Posts per row: desktop", { "4": "4", "3": "3", "2": "2" }), columnsTablet: select("Posts per row: tablet", { "2": "2", "1": "1" }), columnsMobile: select("Posts per row: phone", { "1": "1", "2": "2" }), featuredFirst: radio("Show the first post larger"), imageRatio: select("Image shape", { landscape: "Landscape", square: "Square", portrait: "Portrait (4:5)" }), showImage: radio("Image"), showExcerpt: radio("Summary"), showDate: radio("Date"), showAuthor: radio("Author"), showReadingTime: radio("Reading time"), showCategoryLabel: radio("Category label"), postsPerPage: num("Posts per page (0 = use the blog setting)", 0, 48), emptyText: text("Text when there are no posts") } },
+  BlogPostContent: { label: "Blog post", category: "store", fields: { layout: select("Layout", { magazine: "Magazine: picture on top, contents and sidebar beside the text", classic: "Classic: one narrow column" }), tocPosition: select("Table of contents side (desktop)", { left: "Left", right: "Right" }), showSidebar: radio("Sidebar (about card, featured posts, categories)"), showAboutCard: radio("About card in the sidebar"), aboutTitle: text("About card title (empty = blog title)"), aboutText: area("About card text (empty = blog description)"), showFeatured: radio("Featured posts in the sidebar (hidden when none are starred)"), featuredCount: num("How many featured posts", 1, 8), showCategoriesCloud: radio("Category list in the sidebar"), showBreadcrumb: radio("Breadcrumb"), showCategory: radio("Category label"), showDate: radio("Date"), showAuthor: radio("Author"), showReadingTime: radio("Reading time"), featuredImage: select("Featured image", { above: "Above the text", wide: "Wide, above the title", hidden: "Hidden" }), contentWidth: select("Text width", { narrow: "Narrow (easy to read)", normal: "Normal" }), showToc: radio("Table of contents (3 or more headings)"), showShare: radio("Share links"), showRelated: radio("Related posts"), relatedCount: num("How many related posts", 0, 6), showPrevNext: radio("Previous and next post links") } },
   Testimonials: { label: "Testimonials", category: "store", fields: { title: text("Heading"), layout: select("Layout", { grid: "Grid", carousel: "Carousel", single: "Single" }), tone: select("Background", TONE), items: { type: "array", label: "Testimonials", getItemSummary: (i: { author?: string }) => i.author ?? "Testimonial", arrayFields: { author: text("Customer name"), role: text("Role (e.g. Verified buyer)"), quote: area("Testimonial"), rating: num("Rating (1-5)", 1, 5), avatarMediaId: mediaField("Customer photo") as Field }, defaultItemProps: { author: "Customer", quote: "Great product!", rating: 5 } } as Field } },
   Reviews: { label: "Reviews", category: "store", fields: { title: text("Heading"), showAggregate: radio("Show average"), limit: num("How many", 1, 20) } },
   CallToAction: { label: "Call to action", category: "store", fields: { heading: text("Heading"), text: area("Supporting text"), primaryLabel: text("Main button"), primaryHref: link("Main button link"), secondaryLabel: text("Second button (optional)"), secondaryHref: link("Second button link"), backgroundMediaId: mediaField("Background image") as Field, overlayOpacity: num("Image darkening %", 0, 100), tone: select("Colour (no image)", TONE), align: select("Align", { center: "Center", left: "Left", right: "Right" }) } },
   FAQ: { label: "FAQ", category: "store", fields: { title: text("Heading"), items: { type: "array", label: "Questions", getItemSummary: (i: { question?: string }) => i.question ?? "Question", arrayFields: { question: text("Question"), answer: area("Answer") }, defaultItemProps: { question: "Question", answer: "Answer" } } as Field } },
-  Gallery: { label: "Gallery", category: "store", fields: { title: text("Heading"), images: { type: "array", label: "Images", getItemSummary: (i: { caption?: string }) => i.caption ?? "Image", arrayFields: { mediaId: mediaField("Image") as Field, caption: text("Caption"), link: link("Link") } } as Field } },
+  Gallery: { label: "Gallery", category: "bcom", fields: { title: text("Heading"), description: area("Description under the heading"), headerAlign: rsel("Heading and description alignment", { left: "Left", center: "Middle", right: "Right" }), titleGap: rnum("Space between heading and description (px)", 0, 80), headerGap: rnum("Space between the heading area and the pictures (px)", 0, 120), images: galleryImagesField("Pictures (pick many, drag to reorder)") as Field, layout: rsel("Style", { masonry: "Masonry (each picture keeps its shape)", grid: "Even grid" }), columnsDesktop: rsel("Pictures per row: desktop", { "2": "2", "3": "3", "4": "4", "5": "5", "6": "6" }), columnsTablet: rsel("Pictures per row: tablet", { "1": "1", "2": "2", "3": "3", "4": "4" }), columnsMobile: rsel("Pictures per row: phone", { "1": "1", "2": "2", "3": "3" }), gap: rnum("Space between pictures (px)", 0, 48), radius: rnum("Corner radius (px)", 0, 48), heightMode: rsel("Picture height", { auto: "Automatic", manual: "Fixed height" }), manualHeight: rnum("Fixed height (px)", 80, 800), lightbox: radio("Open in a viewer with arrows and thumbnails when clicked") } },
   Newsletter: { label: "Newsletter", category: "store", fields: { title: text("Heading"), subtitle: text("Subheading"), buttonText: text("Button"), placeholder: text("Email placeholder") } },
   SiteHeader: { label: "Header", category: "store", fields: { menuHandle: menuField("Navigation menu") as Field, logoText: text("Logo text (empty = store logo / name)"), logoMediaId: mediaField("Custom logo image (overrides brand logo)") as Field, logoSize: logoSizeField("Logo size") as Field, layout: select("Layout", { left: "Logo left, menu next to it", navCenter: "Logo left, menu in the middle", logoCenter: "Menu left, logo in the middle", logoRight: "Logo right, menu left", center: "Stacked: logo in the middle, menu below" }), links: { type: "array", label: "Fallback menu links", getItemSummary: (i: { label?: string }) => i.label ?? "Link", arrayFields: { label: text("Label"), href: link("Link") }, defaultItemProps: { label: "Link", href: "/" } } as Field, showSearch: radio("Search icon"), showAccount: radio("Account icon"), showCart: radio("Cart icon"), sticky: radio("Stay at top while scrolling"), tone: select("Background", TONE) } },
   SiteFooter: { label: "Footer", category: "store", fields: { layout: select("Layout", { columns: "Columns: brand, link columns, newsletter", centered: "Centred: brand on top, link columns in a row", compact: "Compact: brand and links side by side" }), logoMediaId: mediaField("Logo image (empty = brand name)") as Field, logoSize: logoSizeField("Logo size") as Field, logoText: text("Brand name (empty = store name)"), about: area("About text"), mobileAccordion: radio("Fold link columns into an accordion on phones"), columns: { type: "array", label: "Link columns", getItemSummary: (i: { title?: string }) => i.title ?? "Column", arrayFields: { title: text("Column title"), menuHandle: menuField("Navigation menu") as Field, links: { type: "array", label: "Fallback links", getItemSummary: (i: { label?: string }) => i.label ?? "Link", arrayFields: { label: text("Label"), href: link("Link") }, defaultItemProps: { label: "Link", href: "/" } } as Field }, defaultItemProps: { title: "Column", links: [] } } as Field, socials: { type: "array", label: "Social links", getItemSummary: (i: { network?: string }) => i.network ?? "Social link", arrayFields: { network: select("Network", { instagram: "Instagram", facebook: "Facebook", x: "X (Twitter)", youtube: "YouTube", linkedin: "LinkedIn", whatsapp: "WhatsApp", email: "Email", website: "Website" }), url: link("Link") }, defaultItemProps: { network: "instagram", url: "https://" } } as Field, socialStyle: select("Social icon style", { plain: "Plain icon", filled: "Filled circle", outline: "Outlined circle" }), socialColor: select("Social icon colour", { text: "Text colour", brand: "Brand colour" }), socialSize: num("Social icon size (px)", 14, 40), showNewsletter: radio("Newsletter signup"), newsletterTitle: text("Newsletter heading"), newsletterText: text("Newsletter text"), copyright: text("Copyright line (empty = automatic)"), tone: select("Background", TONE) } },
@@ -422,6 +426,8 @@ export const BLOCK_SPECS: Record<BlockType, Spec> = {
           showDescription: toggle("Short description") as Field,
           showReadMore: toggle("Two lines with a Read more popup") as Field,
           showTags: toggle("Tags") as Field,
+          showCoupons: toggle("Coupon cards under Add to cart") as Field,
+          couponCount: rnum("Coupons shown before View all", 1, 4),
           priceNote: text("Note under the price (empty hides it)"),
         },
       },
@@ -480,6 +486,32 @@ export const BLOCK_SPECS: Record<BlockType, Spec> = {
       },
     ]),
   },
+  ContactForm: {
+    label: "Contact form",
+    category: "bcom",
+    fields: {
+      enabled: radio("Show this form on the store (off hides it)"),
+      title: text("Heading"),
+      description: area("Text under the heading"),
+      formName: text("Form name (shown in the admin inbox)"),
+      fieldAlign: rsel("Text alignment in the fields", { left: "Left", center: "Middle", right: "Right" }),
+      recipientEmail: text("Send submissions to this email (empty = the store admin email)"),
+      showPhone: radio("Phone number field"),
+      phoneRequired: radio("Phone number is required"),
+      showDropdown: radio("Dropdown list"),
+      dropdownLabel: text("Dropdown label"),
+      dropdownOptions: text("Dropdown choices (separate with commas)"),
+      showMessage: radio("Message box"),
+      messageLabel: text("Message label"),
+      messageRequired: radio("Message is required"),
+      submitLabel: text("Button text"),
+      successMessage: text("Thank-you message"),
+      consentText: text("Small print under the button (optional)"),
+      width: rsel("Content width", WIDTH),
+      tone: rsel("Background", TONE),
+    },
+  },
+  ProductCoupons: { label: "Coupon cards", category: "store", fields: { title: text("Heading (empty hides it)"), showCount: rnum("Coupons shown before View all", 1, 4), showViewAll: radio("View all button (opens a side drawer)"), viewAllLabel: text("View all button text") } },
   ProductCustomField: { label: "Custom field", category: "store", fields: { fieldKey: text("Field key (from Settings > Custom fields)"), showLabel: radio("Show the field name"), label: text("Name override (optional)") } },
   ProductInfoTabs: { label: "Product tabs and picture", category: "store", fields: { descriptionLabel: text("First tab name"), shippingLabel: text("Second tab name"), shippingContent: area("Second tab text (blank line = new paragraph, \"- \" = list item)"), imageMediaId: mediaField("Picture (empty = placeholder)") as Field, imageAlt: text("Picture description"), imageSide: select("Picture side", { right: "Right", left: "Left" }) } },
   HeroSlider: {
@@ -715,6 +747,8 @@ export const BLOCK_SPECS: Record<BlockType, Spec> = {
         id: "layout",
         title: "Cards per row and slider",
         fields: {
+          cardStyle: rsel("Card style", { icon: "Style 1: icon, heading, text, link", image: "Style 2: picture on top, then text" }),
+          imageRatio: rsel("Style 2 picture shape", { "16:9": "Wide (16:9)", "4:3": "Standard (4:3)", "1:1": "Square" }),
           perRowDesktop: select("Cards per row: desktop (recommended 3)", { "1": "1", "2": "2", "3": "3", "4": "4" }),
           perRowTablet: select("Cards per row: tablet (recommended 2)", { "1": "1", "2": "2", "3": "3" }),
           perRowMobile: select("Cards per row: phone (recommended 1)", { "1": "1", "2": "2" }),
@@ -768,6 +802,7 @@ export const BLOCK_SPECS: Record<BlockType, Spec> = {
               text: area("Text"),
               linkLabel: text("Link text"),
               linkHref: link("Link"),
+              imageMediaId: mediaField("Style 2: picture on top of this card") as Field,
               bgMediaId: mediaField("Background picture for this card") as Field,
             },
             defaultItemProps: { icon: "star", heading: "Heading", text: "Write something helpful for your customers." },
@@ -937,7 +972,7 @@ export const BLOCK_SPECS: Record<BlockType, Spec> = {
           startsFrom: select("\u201cStarts from\u201d label", { auto: "When variants differ in price", always: "Always", never: "Never" }),
           showAddToCart: radio("Add-to-cart button on the image"),
           imageRatio: select("Image shape", { square: "Square", portrait: "Portrait (4:5)", landscape: "Landscape (4:3)" }),
-          cardStyle: select("Card style", { soft: "Soft image tile", bordered: "Bordered card", minimal: "Minimal" }),
+          cardStyle: rsel("Card style", { soft: "Soft image tile", bordered: "Bordered card", minimal: "Minimal" }),
           titleSize: select("Title size", { sm: "Small", md: "Medium", lg: "Large" }),
           titleLines: select("Title lines", { "1": "One line", "2": "Up to two lines" }),
           priceSize: select("Price size", { sm: "Small", md: "Medium", lg: "Large" }),
@@ -1105,7 +1140,7 @@ export const BLOCK_SPECS: Record<BlockType, Spec> = {
         title: "Product cards",
         fields: {
           imageRatio: select("Image shape", { square: "Square", portrait: "Portrait (4:5)" }),
-          cardStyle: select("Card style", { borderless: "Borderless", bordered: "Bordered", minimal: "Minimal" }),
+          cardStyle: rsel("Card style", { borderless: "Borderless", bordered: "Bordered", minimal: "Minimal" }),
           hoverSecondImage: radio("Second image on hover"),
           showSaleBadge: radio("Discount badge"),
           showCategoryBadge: radio("Category label above the product name"),
@@ -1118,7 +1153,7 @@ export const BLOCK_SPECS: Record<BlockType, Spec> = {
     ]),
   },
   CartContents: { label: "Cart contents", category: "store", fields: { heading: text("Page heading"), checkoutLabel: text("Checkout button label"), showFreeShippingBar: radio("Free-shipping progress bar (uses the store's shipping settings)"), showTrustPoints: radio("Reassurance lines under the button"), trustPoints: linesField("Reassurance lines (one per line, max 4)", 4) as Field, stickyMobileCheckout: radio("Phone: total and checkout bar while scrolling"), showContinueShopping: radio("Continue shopping link"), summaryPosition: select("Order summary", { right: "Right", left: "Left" }), stickySummary: radio("Keep summary in view while scrolling"), showDiscountCode: radio("Discount code box"), showShippingEstimator: radio("Shipping estimator") } },
-  CollectionListing: { label: "Collection products", category: "store", fields: { filterMenuHandle: menuField("Filter menu") as Field, columns: select("Cards per row: desktop", { "4": "4", "3": "3", "2": "2" }), columnsTablet: select("Cards per row: tablet", { "2": "2", "1": "1" }), columnsMobile: select("Cards per row: phone", { "1": "1", "2": "2" }), pageSize: select("Products per load", { "12": "12", "24": "24", "36": "36" }), defaultView: select("Default view", { grid: "Grid", list: "List" }), showViewToggle: radio("Grid / list switch"), imageRatio: select("Image shape", { square: "Square", portrait: "Portrait (4:5)" }), cardStyle: select("Card style", { borderless: "Borderless", bordered: "Bordered", minimal: "Minimal" }), hoverSecondImage: radio("Second image on hover"), showSaleBadge: radio("Discount badge"), showCategoryBadge: radio("Category label above the product name"), showRatings: radio("Ratings"), showAddToCart: radio("Add to cart icon on image"), showQuickAdd: radio("Quick-buy popup for products with variants"), showViewProduct: radio("View product link in popup"), showBreadcrumb: radio("Breadcrumb"), showFilters: radio("Sort and filters"), filtersCollapsible: radio("Filter sidebar can be hidden"), showDescription: radio("Collection description") } },
+  CollectionListing: { label: "Collection products", category: "store", fields: { filterMenuHandle: menuField("Filter menu") as Field, columns: select("Cards per row: desktop", { "4": "4", "3": "3", "2": "2" }), columnsTablet: select("Cards per row: tablet", { "2": "2", "1": "1" }), columnsMobile: select("Cards per row: phone", { "1": "1", "2": "2" }), pageSize: select("Products per load", { "12": "12", "24": "24", "36": "36" }), defaultView: select("Default view", { grid: "Grid", list: "List" }), showViewToggle: radio("Grid / list switch"), imageRatio: select("Image shape", { square: "Square", portrait: "Portrait (4:5)" }), cardStyle: rsel("Card style", { borderless: "Borderless", bordered: "Bordered", minimal: "Minimal" }), hoverSecondImage: radio("Second image on hover"), showSaleBadge: radio("Discount badge"), showCategoryBadge: radio("Category label above the product name"), showRatings: radio("Ratings"), showAddToCart: radio("Add to cart icon on image"), showQuickAdd: radio("Quick-buy popup for products with variants"), showViewProduct: radio("View product link in popup"), showBreadcrumb: radio("Breadcrumb"), showFilters: radio("Sort and filters"), filtersCollapsible: radio("Filter sidebar can be hidden"), showDescription: radio("Collection description") } },
   UspStrip: { label: "Trust strip", category: "store", fields: { items: { type: "array", label: "Points", getItemSummary: (i: { title?: string }) => i.title ?? "Point", arrayFields: { icon: select("Icon", ICONS), title: text("Title"), description: text("Description") }, defaultItemProps: { icon: "check", title: "Title", description: "Description" } } as Field } },
 };
 
@@ -1219,6 +1254,8 @@ const ONLY: Record<"header" | "footer", BlockType[]> = {
 const CHROME: BlockType[] = ["SiteHeader", "SiteFooter"];
 /** Still drawn when a page already uses them (templates, saved pages), but no longer offered in the block picker. */
 export const RETIRED_FROM_PICKER: BlockType[] = [
+  // The full "Collection page" block: new collection pages use "Collection products (grid only)" (CollectionProducts) instead.
+  "CollectionListing",
   // Old layout widgets retired in favor of Bricks Section, Container & Block
   "Grid",
   "FlexRow",
@@ -1239,7 +1276,6 @@ export const RETIRED_FROM_PICKER: BlockType[] = [
   "Testimonials",
   "Reviews",
   "FAQ",
-  "Gallery",
   "Newsletter",
   "UspStrip",
   "BlogPosts",
@@ -1248,7 +1284,7 @@ export const RETIRED_FROM_PICKER: BlockType[] = [
 export function blockAllowed(type: BlockType, kind: EditorPageKind): boolean {
   if (kind === "header" || kind === "footer") return ONLY[kind].includes(type);
   if (CHROME.includes(type)) return false;
-  if (type === "ProductDetail" || type === "ProductInfoTabs" || type === "ProductCustomField") return kind === "product";
+  if (type === "ProductDetail" || type === "ProductInfoTabs" || type === "ProductCustomField" || type === "ProductCoupons") return kind === "product";
   if (type === "CollectionListing" || type === "CollectionProducts") return kind === "collection";
   if (type === "CartContents") return kind === "cart";
   if (type === "BlogListing") return kind === "blogArchive";

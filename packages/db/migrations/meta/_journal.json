@@ -540,6 +540,34 @@
       "when": 1793495200000,
       "tag": "0082_notification_manager",
       "breakpoints": true
+    },
+    {
+      "idx": 77,
+      "version": "7",
+      "when": 1793495300000,
+      "tag": "0083_customer_identity_picture",
+      "breakpoints": true
+    },
+    {
+      "idx": 78,
+      "version": "7",
+      "when": 1793495400000,
+      "tag": "0084_review_source",
+      "breakpoints": true
+    },
+    {
+      "idx": 79,
+      "version": "7",
+      "when": 1793495500000,
+      "tag": "0085_discount_show_on_storefront",
+      "breakpoints": true
+    },
+    {
+      "idx": 80,
+      "version": "7",
+      "when": 1793495600000,
+      "tag": "0086_form_submissions",
+      "breakpoints": true
     }
   ]
 }

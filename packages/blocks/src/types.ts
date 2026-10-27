@@ -42,6 +42,8 @@ export type BlockType =
   | "ProductDetail"
   | "ProductInfoTabs"
   | "ProductCustomField"
+  | "ProductCoupons"
+  | "ContactForm"
   | "CollectionListing"
   | "CartContents"
   | "HeroSlider"
@@ -196,6 +198,10 @@ export interface RenderContext {
   renderProductInfoTabs?: ((opts: ProductInfoTabsOptions) => ReactNode) | undefined;
   /** One custom field of the current product (ADR-034), drawn by the storefront from the product's data; the editor draws a labelled sample instead. */
   renderProductCustomField?: ((opts: ProductCustomFieldOptions) => ReactNode) | undefined;
+  /** The store's coupon cards with the "view all" drawer (needs the store's discounts, so the storefront draws it). */
+  /** The live contact form (posts to the store); the editor draws a static sample. */
+  renderContactForm?: ((opts: ContactFormOptions) => ReactNode) | undefined;
+  renderProductCoupons?: ((opts: ProductCouponsOptions) => ReactNode) | undefined;
   renderCollectionListing?: ((opts: CollectionListingOptions) => ReactNode) | undefined;
   /** The real blog archive / single post (drawn by the storefront from the request's data); the editor draws labelled samples instead. */
   renderBlogListing?: ((opts: BlogListingOptions) => ReactNode) | undefined;
@@ -206,6 +212,16 @@ export interface RenderContext {
   renderHeroSlider?: ((p: { options: HeroSliderBehavior; children: ReactNode }) => ReactNode) | undefined;
   /** Same for the product showcase: tab switching, page dots, arrows, autoplay and quick add to cart. */
   renderProductShowcase?: ((p: { options: ProductShowcaseBehavior; children: ReactNode }) => ReactNode) | undefined;
+  /** Wraps the gallery grid with its click-to-open viewer (a client component). The editor draws the grid without it. */
+  renderGallery?: ((p: { images: GalleryViewerImage[]; children: ReactNode }) => ReactNode) | undefined;
+}
+
+/** One picture in the gallery viewer: the full-size source and a small one for the thumbnail strip. */
+export interface GalleryViewerImage {
+  src: string;
+  thumb: string;
+  alt: string;
+  caption?: string | undefined;
 }
 
 /** How a hero slider behaves in the browser. The markup is server-rendered; the host adds this behaviour. */
@@ -224,6 +240,32 @@ export interface ProductShowcaseBehavior {
   interval: number;
   loop: boolean;
   pauseOnHover: boolean;
+}
+
+export interface ContactFormOptions {
+  formName: string;
+  fieldAlign?: "left" | "center" | "right" | undefined;
+  recipientEmail: string;
+  showPhone: boolean;
+  phoneRequired: boolean;
+  showDropdown: boolean;
+  dropdownLabel: string;
+  /** Comma-separated choices. */
+  dropdownOptions: string;
+  showMessage: boolean;
+  messageLabel: string;
+  messageRequired: boolean;
+  submitLabel: string;
+  successMessage: string;
+  consentText: string;
+}
+
+export interface ProductCouponsOptions {
+  title: string;
+  /** Cards shown before "View all". */
+  showCount: number;
+  showViewAll: boolean;
+  viewAllLabel: string;
 }
 
 export interface ProductCustomFieldOptions {
@@ -249,6 +291,8 @@ export interface ProductDetailOptions {
   showRating: boolean;
   showDescription: boolean;
   showTags: boolean;
+  showCoupons?: boolean | undefined;
+  couponCount?: number | undefined;
   /** Desktop: the buy box stays in view while the gallery scrolls. */
   stickyBuyBox?: boolean | undefined;
   /** Short reassurance lines under the add-to-cart button (e.g. "Secure checkout"). */
@@ -321,6 +365,16 @@ export interface BlogListingOptions {
   imageRatio: "landscape" | "square" | "portrait";
   postsPerPage: number;
   emptyText: string;
+  /** magazine: header with subscribe form, latest posts, then a row per category (the blog index only). */
+  style?: "classic" | "magazine" | undefined;
+  headlineBold?: string | undefined;
+  headlineLight?: string | undefined;
+  showSubscribe?: boolean | undefined;
+  subscribeLabel?: string | undefined;
+  subscribePlaceholder?: string | undefined;
+  latestSideCount?: number | undefined;
+  showCategorySections?: boolean | undefined;
+  postsPerCategory?: number | undefined;
 }
 
 export interface BlogPostOptions {
@@ -336,6 +390,16 @@ export interface BlogPostOptions {
   showRelated: boolean;
   relatedCount: number;
   showPrevNext: boolean;
+  /** magazine: picture across the top, table of contents on the left, text in the middle, sidebar on the right. */
+  layout?: "classic" | "magazine" | undefined;
+  tocPosition?: "left" | "right" | undefined;
+  showSidebar?: boolean | undefined;
+  showAboutCard?: boolean | undefined;
+  aboutTitle?: string | undefined;
+  aboutText?: string | undefined;
+  showFeatured?: boolean | undefined;
+  featuredCount?: number | undefined;
+  showCategoriesCloud?: boolean | undefined;
 }
 
 export interface CollectionListingOptions {

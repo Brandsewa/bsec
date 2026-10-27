@@ -119,6 +119,7 @@ export function ProductDetailSample({ props, ctx }: BlockRenderArgs<ProductDetai
         valueOf={(it) => (it.source === "custom_field" ? <p className="bsb-muted">{`Value of “${it.fieldKey || "custom field"}” from each product (hidden for a product without it).`}</p> : <p style={{ whiteSpace: "pre-line" }}>{it.text}</p>)}
       />
     ) : null,
+    coupons: props.showCoupons !== false ? <div className="bsb-coupon"><strong>10% off</strong><code>WELCOME10</code><span className="bsb-muted">Sample coupon card</span></div> : null,
     tags: props.showTags ? <p className="bsb-muted bsb-pd-tags">Tags: #tea #green #organic</p> : null,
   };
 

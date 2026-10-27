@@ -1,10 +1,8 @@
 import React from "react";
-import { RichBlocks } from "@/components/storefront/RichBlocks.tsx";
 import type { Metadata } from "next";
 import { notFound } from "next/navigation";
 import { headers } from "next/headers";
 import { cacheTag } from "next/cache";
-import Link from "next/link";
 import {
   evaluateStorefrontAccess,
   getStorefrontCategory,
@@ -17,10 +15,9 @@ import {
   type CatalogListingOptions,
 } from "@bs/domain";
 import { server } from "@/server/runtime.ts";
-import { getCachedStorefrontCategory } from "@/server/cached-storefront.ts";
-import { ProductCard } from "@/components/catalog/ProductCard.tsx";
-import { ProductFilterSort } from "@/components/catalog/ProductFilterSort.tsx";
-import { Pagination } from "@/components/catalog/Pagination.tsx";
+import { getCachedStorefrontCategory, getCachedThemePage } from "@/server/cached-storefront.ts";
+import { BlockRenderer } from "@/components/blocks/BlockRenderer.tsx";
+import { CollectionListingSection } from "@/components/catalog/CollectionListingSection.tsx";
 
 interface CategoryPageProps {
   params: Promise<{ slug: string }>;
@@ -29,6 +26,7 @@ interface CategoryPageProps {
     limit?: string;
     sort?: string;
     inStockOnly?: string;
+    [key: string]: string | undefined;
   }>;
 }
 
@@ -92,6 +90,9 @@ export async function generateMetadata({ params, searchParams }: CategoryPagePro
   };
 }
 
+/** The collection page's product list is either the full "Collection page" block or the bare "Collection products" widget. */
+const isListingBlock = (type: string) => type === "CollectionListing" || type === "CollectionProducts";
+
 export default async function CategoryDetailPage({
   params,
   searchParams,
@@ -100,7 +101,6 @@ export default async function CategoryDetailPage({
   const sp = await searchParams;
 
   const page = Math.max(1, parseInt(sp.page ?? "1", 10) || 1);
-  const limit = Math.max(1, Math.min(100, parseInt(sp.limit ?? "24", 10) || 24));
   const rawSort = sp.sort ?? "created_desc";
   const inStockOnly = sp.inStockOnly === "true";
 
@@ -114,6 +114,8 @@ export default async function CategoryDetailPage({
   let categoryData: Awaited<ReturnType<typeof getStorefrontCategory>> = null;
   let host = "localhost";
   let tenantId = "";
+  let template: Awaited<ReturnType<typeof getCachedThemePage>> = null;
+  let limit = 12;
 
   try {
     const h = await headers();
@@ -126,11 +128,26 @@ export default async function CategoryDetailPage({
     }
 
     tenantId = access.tenantId;
+    // Categories are drawn with the theme's collection template, the same page collections use.
+    template = await getCachedThemePage(tenantId, "collection").catch(() => null);
+    const listingForSize = template?.blocks.find((b) => isListingBlock(b.type));
+    const templateSize = Number(listingForSize?.props?.["pageSize"]);
+    const defaultLimit = [12, 24, 36].includes(templateSize) ? templateSize : listingForSize ? 24 : 12;
+    limit = Math.max(1, Math.min(100, parseInt(sp.limit ?? "", 10) || defaultLimit));
+    // The collection template's filter menu (or the store's "filter" menu) drives the filters, as on collection pages.
+    const listingBlock = template?.blocks.find((b) => isListingBlock(b.type));
+    const filterMenuHandle = typeof listingBlock?.props?.filterMenuHandle === "string" && listingBlock.props.filterMenuHandle ? listingBlock.props.filterMenuHandle : "filter";
+    const filterParams: Record<string, string | string[] | undefined> = {};
+    for (const [k, v] of Object.entries(sp)) {
+      if (!["page", "limit", "sort"].includes(k)) filterParams[k] = v;
+    }
     categoryData = await getCachedStorefrontCategory(tenantId, slug, {
       page,
       limit,
       sort: sortOption,
       inStockOnly: inStockOnly || undefined,
+      filterMenuHandle,
+      filters: filterParams,
     });
   } catch {
     notFound();
@@ -153,7 +170,6 @@ export default async function CategoryDetailPage({
   const categoryCacheTag = tenantTag(tenantId, "category", category.id);
 
   const storeUrl = `https://${host}`;
-  const totalPages = Math.ceil(products.total / limit);
 
   // Schema.org structured data
   const itemListJsonLd = generateItemListJsonLd(
@@ -171,108 +187,53 @@ export default async function CategoryDetailPage({
     { name: category.name, url: `${storeUrl}/categories/${category.slug}` },
   ]);
 
+  // The listing template reads a collection; a category maps onto it field for field (no rules, no filter menu).
+  const asCollection = {
+    id: category.id,
+    title: category.name,
+    slug: category.slug,
+    type: "manual",
+    rules: null,
+    sortOrder: "manual",
+    imageMediaId: category.imageMediaId,
+    description: category.description,
+    descriptionJson: category.descriptionJson,
+    seo: category.seo,
+    published: true,
+    indexable: true,
+    createdAt: category.createdAt,
+    updatedAt: category.updatedAt,
+  };
+
+  const listing = (options?: Parameters<typeof CollectionListingSection>[0]["options"]) => (
+    <CollectionListingSection
+      collection={asCollection}
+      products={products}
+      page={page}
+      limit={limit}
+      rawSort={rawSort}
+      inStockOnly={inStockOnly}
+      filterData={categoryData?.filterData}
+      filters={sp}
+      options={options}
+      basePath={`/categories/${category.slug}`}
+      archive={{ href: "/categories", label: "Categories" }}
+    />
+  );
+
   return (
-    <div className="mx-auto w-full max-w-[80rem] px-4 py-8" data-cache-tag={categoryCacheTag}>
-      {/* Schema.org Structured Data */}
-      <script
-        type="application/ld+json"
-        dangerouslySetInnerHTML={{ __html: JSON.stringify(itemListJsonLd) }}
-      />
-      <script
-        type="application/ld+json"
-        dangerouslySetInnerHTML={{ __html: JSON.stringify(breadcrumbsJsonLd) }}
-      />
-
-      {/* Breadcrumbs Navigation */}
-      <nav aria-label="Breadcrumb" className="mb-6 flex items-center gap-2 text-sm text-muted-foreground">
-        <Link href="/" className="hover:text-foreground transition-colors">
-          Home
-        </Link>
-        <span>/</span>
-        <Link href="/categories" className="hover:text-foreground transition-colors">
-          Categories
-        </Link>
-        <span>/</span>
-        <span className="font-medium text-foreground truncate max-w-[200px] sm:max-w-none">
-          {category.name}
-        </span>
-      </nav>
-
-      {/* Category Header */}
-      <div className="mb-6">
-        <h1 className="text-3xl font-extrabold tracking-tight text-foreground sm:text-4xl">
-          {category.name}
-        </h1>
-        {category.description && (
-          <p className="mt-2 max-w-3xl text-base text-muted-foreground">
-            {category.description}
-          </p>
-        )}
-      </div>
-
-      {/* Filter and Sort bar */}
-      <ProductFilterSort
-        currentSort={rawSort}
-        inStockOnly={inStockOnly}
-        totalCount={products.total}
-      />
-
-      {/* Products Grid or Empty State */}
-      {products.items.length > 0 ? (
-        <div className="mt-8 grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
-          {products.items.map((product) => (
-            <ProductCard key={product.id} product={product} />
-          ))}
-        </div>
+    <div data-cache-tag={categoryCacheTag} className="bs-skin">
+      <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(itemListJsonLd) }} />
+      <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(breadcrumbsJsonLd) }} />
+      {template ? (
+        <BlockRenderer
+          blocks={template.blocks}
+          renderData={template.renderData}
+          context={{ renderCollectionListing: (options) => listing(options) }}
+        />
       ) : (
-        <div className="mt-16 text-center py-12 rounded-2xl border border-dashed border-border/80 bg-muted/20">
-          <svg
-            className="mx-auto h-12 w-12 text-muted-foreground/40 mb-3"
-            fill="none"
-            viewBox="0 0 24 24"
-            stroke="currentColor"
-            aria-hidden="true"
-          >
-            <path
-              strokeLinecap="round"
-              strokeLinejoin="round"
-              strokeWidth={1.5}
-              d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4"
-            />
-          </svg>
-          <h2 className="text-lg font-semibold text-foreground">No products found</h2>
-          <p className="mt-1 text-sm text-muted-foreground">
-            There are currently no products available in this category.
-          </p>
-          <div className="mt-6">
-            <Link
-              href="/"
-              className="inline-flex items-center rounded-lg bg-primary px-4 py-2 text-sm font-medium text-primary-foreground hover:opacity-90 transition-opacity"
-            >
-              Continue Shopping
-            </Link>
-          </div>
-        </div>
+        listing()
       )}
-
-      {/* Pagination */}
-      <Pagination
-        currentPage={page}
-        totalPages={totalPages}
-        baseUrl={`/categories/${category.slug}`}
-        searchParams={{
-          sort: rawSort !== "created_desc" ? rawSort : undefined,
-          inStockOnly: inStockOnly ? "true" : undefined,
-          limit: limit !== 24 ? limit : undefined,
-        }}
-      />
-
-      {/* Long description: detail content below the products */}
-      {category.descriptionJson && category.descriptionJson.blocks.length > 0 ? (
-        <section className="mt-12 max-w-3xl border-t border-border pt-8" aria-label={`About ${category.name}`}>
-          <RichBlocks blocks={category.descriptionJson.blocks} />
-        </section>
-      ) : null}
     </div>
   );
 }

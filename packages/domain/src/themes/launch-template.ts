@@ -198,7 +198,7 @@ export const LAUNCH_TEMPLATE_PRODUCT: BlockInstance[] = [
 ];
 
 export const LAUNCH_TEMPLATE_COLLECTION: BlockInstance[] = [
-  b("ec-collection", "CollectionListing", { columns: "4", showFilters: true, showDescription: true }),
+  b("ec-collection", "CollectionProducts", { columns: "4", showFilters: true, showTitle: true, showDescription: true }),
   b("ec-collection-cta", "CallToAction", {
     heading: "Can't find what you need?",
     text: "Message us and we'll help you choose.",

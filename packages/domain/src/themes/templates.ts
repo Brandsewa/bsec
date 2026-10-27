@@ -95,7 +95,7 @@ function starterPages(): TemplatePages {
       ...one("usp-1", "UspStrip"),
       ...one("products-1", "ProductGrid"),
     ],
-    collection: one("collection-1", "CollectionListing"),
+    collection: one("collection-1", "CollectionProducts"),
     product: one("product-1", "ProductDetail"),
     cart: one("cart-1", "CartContents"),
     header: one("header-1", "SiteHeader"),

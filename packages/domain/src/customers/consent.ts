@@ -14,6 +14,7 @@ export type MarketingConsentState = "subscribed" | "unsubscribed" | "not_subscri
 export type MarketingConsentSource =
   | "checkout"
   | "storefront_form"
+  | "blog"
   | "account_page"
   | "admin"
   | "import"

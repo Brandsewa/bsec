@@ -1,5 +1,5 @@
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
-import { FileText, FolderTree, MoreHorizontal, Plus, Settings2, Trash2 } from "lucide-react";
+import { FileText, FolderTree, MoreHorizontal, Plus, Settings2, Star, Trash2 } from "lucide-react";
 import { useState } from "react";
 import { keepPreviousData, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
@@ -98,6 +98,8 @@ function BlogPostsPage() {
   const refresh = () => void queryClient.invalidateQueries({ queryKey: orpc.admin.blog.posts.list.key() });
   const onError = (fallback: string) => (err: unknown) => toast.error(errorMessage(err, fallback));
   const publish = useMutation(orpc.admin.blog.posts.publish.mutationOptions({ onSuccess: () => { toast.success("Post published"); refresh(); }, onError: onError("Could not publish") }));
+  // The star marks a post as featured: featured posts fill the "Featured posts" card on the blog post page.
+  const feature = useMutation(orpc.admin.blog.posts.update.mutationOptions({ onSuccess: refresh, onError: onError("Could not change the featured star") }));
   const unpublish = useMutation(orpc.admin.blog.posts.unpublish.mutationOptions({ onSuccess: () => { toast.success("Post moved to drafts"); refresh(); }, onError: onError("Could not unpublish") }));
   const duplicate = useMutation(
     orpc.admin.blog.posts.duplicate.mutationOptions({
@@ -212,6 +214,17 @@ function BlogPostsPage() {
                                 <FileText className="size-4" aria-hidden />
                               </div>
                             )}
+                            <button
+                              type="button"
+                              aria-pressed={item.isFeatured}
+                              aria-label={item.isFeatured ? `Remove ${item.title} from featured posts` : `Feature ${item.title}`}
+                              title={item.isFeatured ? "Featured: click to remove" : "Click to feature this post"}
+                              disabled={feature.isPending}
+                              onClick={() => feature.mutate({ id: item.id, isFeatured: !item.isFeatured })}
+                              className="shrink-0 rounded p-1 hover:bg-muted"
+                            >
+                              <Star className={`size-4 ${item.isFeatured ? "fill-amber-400 text-amber-400" : "text-muted-foreground/50"}`} aria-hidden />
+                            </button>
                             <div className="min-w-0">
                               <Link to="/online-store/blog/$id" params={{ id: item.id }} className="font-medium text-foreground hover:underline">
                                 {item.title}
