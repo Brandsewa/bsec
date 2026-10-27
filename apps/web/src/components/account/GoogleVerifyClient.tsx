@@ -68,11 +68,10 @@ export function GoogleVerifyClient() {
     <div className="w-full space-y-4 text-sm" data-testid="google-verify">
       {state === "loading" ? <p className="text-[var(--muted-foreground)]">Getting ready…</p> : null}
       {state === "ready" ? (
-        <>
-          <p className="text-[var(--muted-foreground)]">Sign in with any Google account. Nothing is saved to your customers.</p>
-          <div ref={buttonRef} className="flex justify-center" />
-        </>
+        <p className="text-[var(--muted-foreground)]">Sign in with any Google account. Nothing is saved to your customers.</p>
       ) : null}
+      {/* Always mounted: Google draws its button into this element before the state turns to "ready". */}
+      <div ref={buttonRef} className="flex justify-center" />
       {state === "done" ? (
         <p role="status" className="rounded-md border border-emerald-500/30 bg-emerald-500/10 p-3">
           Google sign-in works on this domain. Go back to Store Admin and turn it on.

@@ -1,6 +1,6 @@
 import type { ComponentType, CSSProperties, ReactNode } from "react";
 import type { Config, CustomField, Field } from "@puckeditor/core";
-import { SLOT_BLOCK_TYPES, SLOT_PROP, getBlockDefinition, renderBlockTree, type BlockType, type RenderContext } from "@bs/blocks";
+import { SLOT_BLOCK_TYPES, SLOT_PROP, getBlockDefinition, normalizeLengthValue, renderBlockTree, type BlockType, type RenderContext } from "@bs/blocks";
 import { mediaField, videoMediaField, fileMediaField } from "./MediaField.tsx";
 import { menuField } from "./MenuField.tsx";
 import { collectionsField } from "./CollectionsField.tsx";
@@ -1144,6 +1144,27 @@ function FrameBlocks({ part }: { part: "header" | "footer" }): ReactNode {
   );
 }
 
+const blockMarker = (id: unknown) => String(id ?? "").replace(/[^A-Za-z0-9_-]/g, "");
+
+/**
+ * CSS that gives a Block's Puck wrapper the Block's width for each device (desktop, then tablet and mobile, which stack to
+ * the full line unless they set their own width: same rule as BlockView). Empty when the Block has no width of its own, so
+ * it keeps sharing the row. Values are length-validated by the block schema and normalised by `normalizeLengthValue`.
+ */
+export function blockWidthCss(
+  id: unknown,
+  props: { sizing?: { width?: string }; responsive?: { tablet?: { sizing?: { width?: string } }; mobile?: { sizing?: { width?: string } } } },
+): string {
+  const d = normalizeLengthValue(props.sizing?.width);
+  const marker = blockMarker(id);
+  if (!d || !marker) return "";
+  const t = normalizeLengthValue(props.responsive?.tablet?.sizing?.width) ?? "100%";
+  const m = normalizeLengthValue(props.responsive?.mobile?.sizing?.width) ?? t;
+  const sel = `[data-puck-dropzone] > [data-puck-component]:has(> i[data-blk="${marker}"])`;
+  const rule = (w: string) => `${sel}{flex:0 1 auto;width:${w}}`;
+  return `${rule(d)}@media(max-width:1023px){${rule(t)}}@media(max-width:767px){${rule(m)}}`;
+}
+
 function EditorBlock({ type, props }: { type: BlockType; props: AnyProps }): ReactNode {
   const def = getBlockDefinition(type);
   const { data, media, storeName } = useRenderData();
@@ -1171,7 +1192,21 @@ function EditorBlock({ type, props }: { type: BlockType; props: AnyProps }): Rea
       }
     : undefined;
 
-  return def.render({ props: effective, children, ctx });
+  const rendered = def.render({ props: effective, children, ctx });
+  if (type !== "Block") return rendered;
+  // The wrapper Puck puts around a Block is its flex item on the canvas, so the Block's width has to size the wrapper.
+  const css = blockWidthCss(id, effective as { sizing?: { width?: string }; responsive?: { tablet?: { sizing?: { width?: string } }; mobile?: { sizing?: { width?: string } } } });
+  return (
+    <>
+      {rendered}
+      {css ? (
+        <>
+          <i hidden data-blk={blockMarker(id)} />
+          <style>{css}</style>
+        </>
+      ) : null}
+    </>
+  );
 }
 
 /** Which kind of theme page is being edited; limits the block picker to blocks that make sense there. */

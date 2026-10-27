@@ -1,7 +1,7 @@
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { PostgreSqlContainer, type StartedPostgreSqlContainer } from "@testcontainers/postgresql";
 import { createHash } from "node:crypto";
-import { eq } from "drizzle-orm";
+import { desc, eq } from "drizzle-orm";
 import { auditLogs, createDb, invoices, schema, staffInvitations, tenantSecrets, withTenant, type DbHandle } from "@bs/db";
 import { bootstrapRoles } from "@bs/db/bootstrap";
 import { runMigrations } from "@bs/db/migrate";
@@ -320,8 +320,9 @@ describe("store settings audit trail and Phase 0-1 fields", () => {
       timezone: "Asia/Kolkata",
       address: { line1: "9 Audit Lane", city: "Mumbai", state: "Maharashtra", pincode: "400001" },
     });
+    // Newest first by id (uuidv7 is time ordered): an unordered select does not guarantee the last row is the latest.
     const rows = await withTenant(rwDb.db, tenantId, (tx) =>
-      tx.select().from(auditLogs).where(eq(auditLogs.action, "store_settings.update")),
+      tx.select().from(auditLogs).where(eq(auditLogs.action, "store_settings.update")).orderBy(desc(auditLogs.id)),
     );
     // The select has no ORDER BY, so the last row is not necessarily the newest: pick this update's row by its content.
     const latest = rows.find((r) => (r.diff as { storeName?: { after?: string } } | null)?.storeName?.after === "Audited Store");

@@ -15,7 +15,7 @@ import type {
   SlotRender,
 } from "./types.ts";
 import { layoutHasAspectRatio, layoutStyle, slideRadiusStyle } from "./layout.ts";
-import { bricksElementStyle } from "./bricks-layout.ts";
+import { bricksElementStyle, normalizeLengthValue, slotBasisVars } from "./bricks-layout.ts";
 import { mediaImage } from "./media-image.ts";
 import { PLACEHOLDER_IMAGE_URL } from "./media.ts";
 import { SvgIcon } from "./svg-icon.tsx";
@@ -593,6 +593,7 @@ export function SectionView({ props, children, ctx }: A<R.SectionProps>): ReactN
           width: "100%",
           display: "flex",
           flexDirection: (props.direction ? `var(--b-dir, ${props.direction})` : "var(--b-dir, column)") as CSSProperties["flexDirection"],
+          ...slotBasisVars(props),
           alignItems: (props.alignCrossAxis ? `var(--b-ai, ${props.alignCrossAxis})` : "var(--b-ai, stretch)") as CSSProperties["alignItems"],
           justifyContent: (props.alignMainAxis ? `var(--b-jc, ${props.alignMainAxis})` : "var(--b-jc, flex-start)") as CSSProperties["justifyContent"],
           gap: props.gap ? `var(--b-gap, ${props.gap})` : (props.responsive?.tablet?.gap || props.responsive?.mobile?.gap ? "var(--b-gap)" : undefined),
@@ -685,6 +686,7 @@ export function ContainerView({ props, children, ctx }: A<R.ContainerProps>): Re
           height: "100%",
           display: "flex",
           flexDirection: (props.direction ? `var(--b-dir, ${props.direction})` : "var(--b-dir, column)") as CSSProperties["flexDirection"],
+          ...slotBasisVars(props),
           alignItems: (props.alignCrossAxis ? `var(--b-ai, ${props.alignCrossAxis})` : "var(--b-ai, stretch)") as CSSProperties["alignItems"],
           justifyContent: (props.alignMainAxis ? `var(--b-jc, ${props.alignMainAxis})` : "var(--b-jc, flex-start)") as CSSProperties["justifyContent"],
           gap: props.gap ? `var(--b-gap, ${props.gap})` : (props.responsive?.tablet?.gap || props.responsive?.mobile?.gap ? "var(--b-gap)" : undefined),
@@ -713,7 +715,14 @@ export function BlockView({ props, children, ctx }: A<R.BlockProps>): ReactNode 
   const customStyle = bricksElementStyle(props, {
     defaultWidth: hasCustomWidth ? undefined : "auto",
     defaultDisplay: "flex",
-  });
+  }) as CSSProperties & Record<string, string | number | undefined>;
+  if (hasCustomWidth) {
+    // A width set for desktop only means "this column"; when the row stacks on tablet/mobile it should fill the line
+    // unless that device sets its own width. The width is a per-device variable (not flex-basis) so it follows the device.
+    const tabletW = normalizeLengthValue(props.responsive?.tablet?.sizing?.width) ?? "100%";
+    customStyle["--brx-t-w"] = tabletW;
+    customStyle["--brx-m-w"] = normalizeLengthValue(props.responsive?.mobile?.sizing?.width) ?? tabletW;
+  }
 
   return (
     <div
@@ -722,7 +731,8 @@ export function BlockView({ props, children, ctx }: A<R.BlockProps>): ReactNode 
         position: "relative",
         zIndex: 1,
         boxSizing: "border-box",
-        flex: hasCustomWidth ? (props.sizing?.width === "100%" ? "1 1 100%" : `0 0 ${props.sizing?.width}`) : "1 1 0",
+        // Custom width: size by `width` and let siblings shrink so two 50% blocks plus a gap still fit the row.
+        flex: hasCustomWidth ? "0 1 auto" : "1 1 0",
         minWidth: 0,
         ...customStyle,
       }}
@@ -778,6 +788,7 @@ export function BlockView({ props, children, ctx }: A<R.BlockProps>): ReactNode 
           height: "100%",
           display: "flex",
           flexDirection: (props.direction ? `var(--b-dir, ${props.direction})` : "var(--b-dir, column)") as CSSProperties["flexDirection"],
+          ...slotBasisVars(props),
           alignItems: (props.alignCrossAxis ? `var(--b-ai, ${props.alignCrossAxis})` : "var(--b-ai, stretch)") as CSSProperties["alignItems"],
           justifyContent: (props.alignMainAxis ? `var(--b-jc, ${props.alignMainAxis})` : "var(--b-jc, flex-start)") as CSSProperties["justifyContent"],
           gap: props.gap ? `var(--b-gap, ${props.gap})` : (props.responsive?.tablet?.gap || props.responsive?.mobile?.gap ? "var(--b-gap)" : undefined),

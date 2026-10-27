@@ -654,3 +654,16 @@ export function bricksElementStyle(props: BricksLayoutProps, options?: { default
 
   return style;
 }
+
+/**
+ * Per-device flex-basis for the children of a layout slot: `0%` while the slot is a row (siblings share it), `auto` once
+ * it stacks. The editor wraps every child in its own element, so its stylesheet needs this to size those wrappers; it is
+ * emitted as variables rather than read back from the inline style text.
+ */
+export function slotBasisVars(props: BricksLayoutProps): Record<string, string> {
+  const stacked = (v: string | undefined) => (v === "column" || v === "column-reverse" ? "auto" : "0%");
+  const d = props.direction ?? "column";
+  const t = props.responsive?.tablet?.direction ?? d;
+  const m = props.responsive?.mobile?.direction ?? t;
+  return { "--slot-fb-d": stacked(d), "--slot-fb-t": stacked(t), "--slot-fb-m": stacked(m) };
+}
