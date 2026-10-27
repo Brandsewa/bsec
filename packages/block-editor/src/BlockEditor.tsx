@@ -143,8 +143,9 @@ function ThemeIcon() {
 
 /** Lives inside Puck so the editor can reach Puck's own state and dispatch (used to wrap a newly dropped widget). */
 type PuckGetter = ReturnType<typeof useGetPuck>;
-function PuckBridge({ target }: { target: { current: PuckGetter | null } }) {
-  target.current = useGetPuck();
+function PuckBridge({ onReady }: { onReady: (get: PuckGetter) => void }) {
+  const get = useGetPuck();
+  useEffect(() => onReady(get), [get, onReady]);
   return null;
 }
 
@@ -154,17 +155,20 @@ export function BlockEditor({ title, initialBlocks: initialFromProps, host, them
   const [initialBlocks] = useState(initialFromProps);
   const blocksRef = useRef<BlockInstance[]>(initialBlocks);
   const puckRef = useRef<PuckGetter | null>(null);
+  const setPuckGetter = useCallback((get: PuckGetter) => {
+    puckRef.current = get;
+  }, []);
   const overrides = useMemo(
     () => ({
       header: EditorHeader,
       puck: ({ children }: { children: ReactNode }) => (
         <>
-          <PuckBridge target={puckRef} />
+          <PuckBridge onReady={setPuckGetter} />
           {children}
         </>
       ),
     }),
-    [],
+    [setPuckGetter],
   );
   const [dirty, setDirty] = useState(false);
   const [busy, setBusy] = useState(false);
