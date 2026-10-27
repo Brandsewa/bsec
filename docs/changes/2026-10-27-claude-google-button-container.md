@@ -2,7 +2,7 @@
 
 - **Date:** 2026-10-27
 - **Agent:** claude
-- **Branch:** `fix/google-button-container`
+- **Branch:** `fix/google-button-container` (merged in #141; branch deleted)
 - **Area:** web
 - **Type:** fix
 - **Supersedes:** none

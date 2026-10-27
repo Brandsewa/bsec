@@ -102,7 +102,8 @@ Every agent changing CI, or anything CI runs, follows these (change record: `doc
 - Small, focused commits with an imperative subject (`feat(themes): ...`, `fix(web): ...`, `docs: ...`, `test(e2e): ...`, `ci: ...`). One concern per commit.
 - Each agent signs its commits with its own trailer (below). Do not impersonate another agent.
 - Do not commit generated or local files (`routeTree.gen.ts`, `.turbo`, `dist`, `.env*`, `tsbuildinfo`, test reports). Do not commit unrelated drive-by changes.
-- Destructive or outward-facing actions need the owner's explicit yes in this session: deleting data or branches, production database work, rotating secrets, changing Coolify or Cloudflare config, publishing anything externally.
+- **Clean up after merge (owner rule, 2026-10-27).** When your PR is merged to `main`, and the `main` run for it has passed its deploy job, finish the job: (1) document it: set the change record's `Branch` line to `... (merged in #<PR>, <short commit>)` and remove your line from "In flight" in `progress.md` (docs-only follow-ups go in one small PR, or into your next change); (2) delete the feature branch on the remote (`git push origin --delete <branch>`, only if GitHub did not already delete it) and locally (`git branch -D <branch>`; a squash merge is never "merged" to git, so check `gh pr view <n> --json state` says `MERGED` first); (3) remove any worktree you made for it (`git worktree remove`) and run `git fetch --prune`. Delete only branches **you created whose PR is merged**. Never delete `main`, an open or unmerged branch, or another agent's branch (leave a note to its owner instead). A closed-unmerged PR's branch is deleted only with the owner's yes. Deleting branches is otherwise still an owner decision, so this rule is the only standing permission.
+- Destructive or outward-facing actions need the owner's explicit yes in this session: deleting data or branches (except merged branches of your own, as above), production database work, rotating secrets, changing Coolify or Cloudflare config, publishing anything externally.
 
 ## 6. Multi-agent protocol
 
@@ -159,6 +160,7 @@ A change is done only when **all** apply. Copy this list into your change record
 - [ ] A change record in `docs/changes/` (required) and `progress.md` status/known-gaps/in-flight updated if a milestone item changed state.
 - [ ] No secrets, no generated files, no unrelated edits in the diff.
 - [ ] Honest status: what you verified live, what you only read, what you did not do.
+- [ ] After merge: change record updated with the PR and commit, "In flight" line removed, your feature branch deleted (remote and local) and worktree removed (section 5).
 
 ## 8. Quick facts
 

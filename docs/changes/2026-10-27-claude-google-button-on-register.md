@@ -2,7 +2,7 @@
 
 - **Date:** 2026-10-27
 - **Agent:** claude
-- **Branch:** `feat/google-button-register`
+- **Branch:** `feat/google-button-register` (merged in #140; branch deleted)
 - **Area:** web
 - **Type:** feature
 - **Supersedes:** none

@@ -2,7 +2,7 @@
 
 - **Date:** 2026-10-24
 - **Agent:** claude
-- **Branch:** `fix/google-link-unverified-owner`
+- **Branch:** `fix/google-link-unverified-owner` (merged in #117; branch deleted)
 - **Area:** auth, admin, superadmin
 - **Type:** fix
 - **Supersedes:** none
