@@ -2,7 +2,7 @@
 
 - **Date:** 2026-10-23
 - **Agent:** claude
-- **Branch:** `feat/google-signin` (not merged yet)
+- **Branch:** `feat/google-signin` (merged in #109; branch deleted)
 - **Area:** db, auth, domain, contracts, web, platform, admin, superadmin
 - **Type:** feature
 - **Supersedes:** none

@@ -2,7 +2,7 @@
 
 - **Date:** 2026-10-27
 - **Agent:** claude
-- **Branch:** `feat/google-onetap-pages`
+- **Branch:** `feat/google-onetap-pages` (merged in #142; branch deleted)
 - **Area:** web, admin
 - **Type:** feature
 - **Supersedes:** none (amends ADR-038 on where One Tap shows)
