@@ -6,7 +6,8 @@ import { Badge, Button, ConfirmDialog, Dialog, DialogContent, DialogHeader, Dial
 import { DataTable, type Column } from "../../components/data-table/data-table.tsx";
 import { Pagination } from "../../components/data-table/pagination.tsx";
 import { errorMessage } from "../../lib/errors.ts";
-import { client, orpc } from "../../lib/orpc.ts";
+import { orpc } from "../../lib/orpc.ts";
+import type { client } from "../../lib/orpc.ts";
 
 type Row = Awaited<ReturnType<typeof client.admin.forms.list>>["items"][number];
 type Tab = "inbox" | "archived";

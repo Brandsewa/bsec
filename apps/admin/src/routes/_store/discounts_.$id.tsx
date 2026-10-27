@@ -1,5 +1,5 @@
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { PageContainer, PageHeader, PageSkeleton, toast } from "@bs/ui";
 import { Alert } from "@bs/ui";
@@ -8,7 +8,8 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@bs/u
 import { Checkbox } from "@bs/ui";
 import { Field, FieldDescription, FieldGroup, FieldLabel } from "@bs/ui";
 import { Input } from "@bs/ui";
-import { client, orpc } from "../../lib/orpc.ts";
+import { orpc } from "../../lib/orpc.ts";
+import type { client } from "../../lib/orpc.ts";
 import { errorMessage } from "../../lib/errors.ts";
 import { SimpleSelect } from "@bs/ui";
 
@@ -78,8 +79,7 @@ function EditDiscountForm({ discount }: { discount: LoadedDiscount }) {
   const [showOnStorefront, setShowOnStorefront] = useState(discount.showOnStorefront);
   const [startsAt, setStartsAt] = useState(toLocalInput(discount.startsAt));
   const [endsAt, setEndsAt] = useState(toLocalInput(discount.endsAt));
-  const [archived, setArchived] = useState(discount.status === "archived");
-  useEffect(() => setArchived(discount.status === "archived"), [discount.status]);
+  const archived = discount.status === "archived";
 
   const create = useMutation(
     orpc.admin.discounts.update.mutationOptions({
