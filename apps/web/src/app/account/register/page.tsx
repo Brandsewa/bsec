@@ -2,6 +2,7 @@
 
 import React, { useState } from "react";
 import Link from "next/link";
+import { GoogleSignIn } from "@/components/account/GoogleSignIn.tsx";
 import { AuthShell, Button, Field, FieldLabel, Input, Checkbox, Alert, AlertDescription } from "@bs/ui";
 
 export default function RegisterPage() {
@@ -137,6 +138,9 @@ export default function RegisterPage() {
             <Button type="submit" size="md" disabled={busy} loading={busy} className="w-full">
               {busy ? "Creating account…" : "Create account"}
             </Button>
+
+            {/* Same Google sign-in: a new email creates the account, a known one signs in. One Tap stays on the sign-in page. */}
+            <GoogleSignIn redirectTo="/account" oneTap={false} text="signup_with" />
           </form>
         )}
       </AuthShell>
