@@ -127,9 +127,10 @@ export const COMPACT_CSS = `
   width: 100%;
 }
 
-/* The editor wraps each Block in its own element, which is the real flex item. Siblings share a row equally and fill
-   the line once the slot stacks; the slot publishes the per-device basis (slotBasisVars). Never infer the direction from
-   the inline style text: "column-gap" contains "column" and used to force every Block to 100% width. */
+/* Puck wraps every child in its own element, and that wrapper is the real flex item. Siblings share a row equally and
+   fill the line once the slot stacks (the slot publishes the per-device basis, slotBasisVars); a Block with its own
+   width gets a rule from EditorBlock (blockWidthCss) that sizes the wrapper per device. The Block then just fills its
+   wrapper. Never infer the slot direction from the inline style text: "column-gap" contains "column". */
 [data-puck-dropzone] { --slot-fb: var(--slot-fb-d, 0%); }
 @media (max-width: 1023px) { [data-puck-dropzone] { --slot-fb: var(--slot-fb-t, var(--slot-fb-d, 0%)); } }
 @media (max-width: 767px) { [data-puck-dropzone] { --slot-fb: var(--slot-fb-m, var(--slot-fb-t, var(--slot-fb-d, 0%))); } }
@@ -139,9 +140,6 @@ export const COMPACT_CSS = `
   display: flex;
   min-width: 0;
 }
-
-/* The Block's own width is a percentage of its slot, but here its parent is the wrapper above, so it would shrink to a
-   fraction of its share. The wrapper does the sharing; the Block fills it. */
 [data-puck-dropzone] > [data-puck-component] > .brxe-block,
 [data-puck-dropzone] > div > .brxe-block {
   width: 100% !important;

@@ -53,3 +53,18 @@ describe("slot basis variables for the editor", () => {
     expect(vars({ direction: "row", colGap: "3rem" })).toEqual({ d: "0%", t: "0%", m: "0%" });
   });
 });
+
+describe("widgets inside a layout element", () => {
+  it("blocks.css lets Section/Container own the side padding and wide measure", async () => {
+    const { readFileSync } = await import("node:fs");
+    const css = readFileSync(new URL("../src/blocks.css", import.meta.url), "utf8");
+    expect(css).toMatch(/\.brxe-section \.bsb-w,\s*\.brxe-container \.bsb-w \{\s*padding-inline: 0;/);
+    expect(css).toMatch(/\.brxe-container \.bsb-w-wide,[\s\S]*?max-width: none;/);
+  });
+
+  it("slot forwarding rules in blocks.css no longer force a direction with !important", async () => {
+    const { readFileSync } = await import("node:fs");
+    const css = readFileSync(new URL("../src/blocks.css", import.meta.url), "utf8");
+    expect(css).not.toMatch(/\[data-puck-dropzone\],[\s\S]{0,60}\{\s*flex-direction: var\(--b-dir\) !important/);
+  });
+});
