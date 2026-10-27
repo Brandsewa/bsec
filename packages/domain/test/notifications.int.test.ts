@@ -44,7 +44,7 @@ const ctxFor = (tenantId: string, userId: string): TenantContext => ({
   tenantId,
   actor: { type: "staff", userId },
   roles: ["store_owner"],
-  permissions: ["settings.read", "notifications.manage"],
+  permissions: ["settings.read", "notifications.manage", "orders.read"],
 } as unknown as TenantContext);
 
 async function sql(text: string, params: unknown[] = []) {
@@ -139,7 +139,7 @@ describe("store events: dispatcher", () => {
   });
 
   it("requires notifications.manage to change a rule", async () => {
-    const readOnly = { ...ctxFor(tenantA, ownerA), permissions: ["settings.read"] } as unknown as TenantContext;
+    const readOnly = { ...ctxFor(tenantA, ownerA), permissions: ["settings.read", "orders.read"] } as unknown as TenantContext;
     await expect(updateStoreNotificationRule(rtApp, readOnly, { eventKey: "store_new_order", channel: "in_app", enabled: false })).rejects.toThrow();
   });
 });

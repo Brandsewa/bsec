@@ -11,6 +11,7 @@ import {
   provisionTenant,
   type Runtime,
   type TenantContext,
+  listStoreInbox,
 } from "../src/index.ts";
 import { createActiveProduct } from "./helpers/factories.ts";
 import { addToCart, getOrCreateCart } from "../src/storefront/cart.ts";
@@ -30,6 +31,8 @@ let n = 0;
 
 const logger = pino({ level: "silent" });
 const sent: Array<Record<string, unknown>> = [];
+/** Mail to the shopper only: the store owner now also gets a new-order alert from the same job. */
+const toShopper = () => sent.filter((m) => m.to === "asha@customer.example");
 
 let slugA: string;
 
@@ -130,8 +133,8 @@ describe("order confirmation email", () => {
     const placed = await placeOne("TEN");
     await handleOrderCreatedJob(rt._db.db, logger, { tenantId: ctx.tenantId, orderId: placed.orderId });
 
-    expect(sent).toHaveLength(1);
-    const mail = sent[0]!;
+    expect(toShopper()).toHaveLength(1);
+    const mail = toShopper()[0]!;
     expect(mail.to).toBe("asha@customer.example");
     expect(mail.subject).toBe(`Order ${placed.orderNumber} confirmed`);
     expect(String(mail.from)).toMatch(/^"?Taste of Hills"? <.+@.+>$/);
@@ -157,7 +160,7 @@ describe("order confirmation email", () => {
     const placed = await placeOne();
     await handleOrderCreatedJob(rt._db.db, logger, { tenantId: ctx.tenantId, orderId: placed.orderId });
     await handleOrderCreatedJob(rt._db.db, logger, { tenantId: ctx.tenantId, orderId: placed.orderId });
-    expect(sent).toHaveLength(1);
+    expect(toShopper()).toHaveLength(1);
     const logs = await rt._db.db.select().from(schema.emailLog).where(eq(schema.emailLog.eventRef, `order_created_${placed.orderId}`));
     expect(logs.map((l) => ({ template: l.template, status: l.status }))).toEqual([{ template: "order_confirmation", status: "sent" }]);
   });
@@ -165,7 +168,7 @@ describe("order confirmation email", () => {
   it("text a shopper typed can't inject markup into the email", async () => {
     const placed = await placeOne(undefined, `<script>alert(1)</script>`);
     await handleOrderCreatedJob(rt._db.db, logger, { tenantId: ctx.tenantId, orderId: placed.orderId });
-    const html = String(sent[0]!.html);
+    const html = String(toShopper()[0]!.html);
     expect(html).not.toContain("<script>alert(1)</script>");
     expect(html).toContain("&lt;script&gt;alert(1)&lt;/script&gt;");
   });
@@ -194,6 +197,20 @@ describe("order confirmation email", () => {
       await expect(handleOrderCreatedJob(db, logger, { tenantId: other.tenantId, orderId: placed.orderId })).rejects.toThrow(/not visible yet/);
     }
     expect(sent).toHaveLength(0);
+  });
+});
+
+describe("store new-order alert", () => {
+  it("tells the owner in-app and by email, and is not repeated when the job is retried", async () => {
+    const placed = await placeOne();
+    await handleOrderCreatedJob(rt._db.db, logger, { tenantId: ctx.tenantId, orderId: placed.orderId });
+    await handleOrderCreatedJob(rt._db.db, logger, { tenantId: ctx.tenantId, orderId: placed.orderId });
+    const alerts = sent.filter((m) => m.to === `owner@${slugA}.test`);
+    expect(alerts).toHaveLength(1);
+    expect(String(alerts[0]!.subject)).toContain("New order");
+    expect(String(alerts[0]!.html)).toMatch(/href="https:\/\/[^"]+\/orders\/[0-9a-f-]+"/);
+    const inbox = await listStoreInbox(rtWeb, ctx);
+    expect(inbox.items.filter((i) => i.link === `/orders/${placed.orderId}`)).toHaveLength(1);
   });
 });
 
