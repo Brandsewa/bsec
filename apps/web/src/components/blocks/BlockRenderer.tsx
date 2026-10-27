@@ -5,7 +5,7 @@ import { HeroSliderClient } from "./HeroSliderClient.tsx";
 import { BannerClient } from "./BannerClient.tsx";
 import { ProductShowcaseClient } from "./ProductShowcaseClient.tsx";
 import { GalleryClient } from "./GalleryClient.tsx";
-import { ContactFormClient } from "./ContactFormClient.tsx";
+import { ContactFormLazy } from "./ContactFormLazy.tsx";
 import "@bs/blocks/blocks.css";
 
 export interface BlockRenderData {
@@ -35,7 +35,7 @@ export function BlockRenderer({ blocks, renderData, context }: BlockRendererProp
     // The product showcase's tabs / dots / arrows / quick add to cart.
     renderProductShowcase: ({ options, children }) => <ProductShowcaseClient options={options}>{children}</ProductShowcaseClient>,
     // The contact form (posts to the store inbox).
-    renderContactForm: (options) => <ContactFormClient options={options} />,
+    renderContactForm: (options) => <ContactFormLazy options={options} />,
     // The gallery's click-to-open viewer.
     renderGallery: ({ images, children }) => <GalleryClient images={images}>{children}</GalleryClient>,
     ...context,

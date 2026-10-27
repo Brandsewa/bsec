@@ -19,7 +19,7 @@ export function AccountLink() {
       .then((d: { signedIn?: boolean; name?: string | null; image?: string | null } | null) => {
         if (!live) return;
         setSignedIn(d?.signedIn === true);
-        setImage(d?.signedIn && d.image ? d.image : null);
+        setImage(d?.image ?? null);
         if (!d?.signedIn) return setName(null);
         setName(d.name?.trim().split(/\s+/)[0] || null);
       })
@@ -33,7 +33,7 @@ export function AccountLink() {
 
   return (
     <Link href="/account" className="bsb-site-account" aria-label={signedIn ? "My account" : "Log in"}>
-      {signedIn && image ? (
+      {image ? (
         // Google profile photo: a plain img (no optimiser proxy), referrer withheld.
         // eslint-disable-next-line @next/next/no-img-element
         <img src={image} alt="" width={22} height={22} referrerPolicy="no-referrer" className="rounded-full object-cover" style={{ width: 22, height: 22 }} />

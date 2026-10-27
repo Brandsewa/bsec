@@ -368,6 +368,7 @@
 .bsb-gal-fixed .bsb-gal-img { height: var(--gal-h, 240px); object-fit: cover; }
 .bsb-gal-open .bsb-gal-item { cursor: zoom-in; }
 .bsb-cf-sample .bsb-ph-box { justify-content: var(--cf-j, flex-start); padding: 0 0.75rem; }
+.bsb-cf-skel { margin-top: 1rem; min-height: 22rem; border-radius: 0.5rem; background: color-mix(in srgb, currentColor 8%, transparent); animation: bs-shimmer 1.4s ease-in-out infinite alternate; }
 .bsb-cf-sample { display: grid; gap: 0.75rem; margin-top: 1rem; }
 .bsb-coupon-row { display: flex; flex-wrap: wrap; gap: 0.75rem; margin-top: 0.5rem; }
 .bsb-coupon { display: grid; gap: 0.25rem; padding: 0.75rem 1rem; border: 1.5px dashed var(--b); border-radius: 0.75rem; min-width: 12rem; }
