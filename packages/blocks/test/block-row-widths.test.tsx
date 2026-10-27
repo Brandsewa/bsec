@@ -36,3 +36,35 @@ describe("Block widths inside a row", () => {
     expect(row({}, {})).toContain("flex:1 1 0");
   });
 });
+
+describe("slot basis variables for the editor", () => {
+  const vars = (props: Record<string, unknown>) => {
+    const html = render({ id: "c", type: "Container" as never, version: 1, props: { content: [], ...props } });
+    return Object.fromEntries([...html.matchAll(/--slot-fb-([dtm]):([^;"]+)/g)].map((m) => [m[1], m[2]]));
+  };
+
+  it("is a row (siblings share the line) while the direction is row, and auto once it stacks", () => {
+    expect(vars({ direction: "row" })).toEqual({ d: "0%", t: "0%", m: "0%" });
+    expect(vars({ direction: "row", responsive: { tablet: { direction: "column" } } })).toEqual({ d: "0%", t: "auto", m: "auto" });
+    expect(vars({})).toEqual({ d: "auto", t: "auto", m: "auto" });
+  });
+
+  it("does not depend on a column gap (the inline style text contains 'column-gap')", () => {
+    expect(vars({ direction: "row", colGap: "3rem" })).toEqual({ d: "0%", t: "0%", m: "0%" });
+  });
+});
+
+describe("widgets inside a layout element", () => {
+  it("blocks.css lets Section/Container own the side padding and wide measure", async () => {
+    const { readFileSync } = await import("node:fs");
+    const css = readFileSync(new URL("../src/blocks.css", import.meta.url), "utf8");
+    expect(css).toMatch(/\.brxe-section \.bsb-w,\s*\.brxe-container \.bsb-w \{\s*padding-inline: 0;/);
+    expect(css).toMatch(/\.brxe-container \.bsb-w-wide,[\s\S]*?max-width: none;/);
+  });
+
+  it("slot forwarding rules in blocks.css no longer force a direction with !important", async () => {
+    const { readFileSync } = await import("node:fs");
+    const css = readFileSync(new URL("../src/blocks.css", import.meta.url), "utf8");
+    expect(css).not.toMatch(/\[data-puck-dropzone\],[\s\S]{0,60}\{\s*flex-direction: var\(--b-dir\) !important/);
+  });
+});

@@ -127,30 +127,23 @@ export const COMPACT_CSS = `
   width: 100%;
 }
 
-/* Blocks inside a horizontal container distribute space equally */
-.brxe-container > [data-puck-dropzone] > div:has(> .brxe-block),
-.brxe-container > [data-puck-dropzone] > [data-puck-component]:has(.brxe-block) {
-  flex: 1 1 0;
+/* Puck wraps every child in its own element, and that wrapper is the real flex item. Siblings share a row equally and
+   fill the line once the slot stacks (the slot publishes the per-device basis, slotBasisVars); a Block with its own
+   width gets a rule from EditorBlock (blockWidthCss) that sizes the wrapper per device. The Block then just fills its
+   wrapper. Never infer the slot direction from the inline style text: "column-gap" contains "column". */
+[data-puck-dropzone] { --slot-fb: var(--slot-fb-d, 0%); }
+@media (max-width: 1023px) { [data-puck-dropzone] { --slot-fb: var(--slot-fb-t, var(--slot-fb-d, 0%)); } }
+@media (max-width: 767px) { [data-puck-dropzone] { --slot-fb: var(--slot-fb-m, var(--slot-fb-t, var(--slot-fb-d, 0%))); } }
+[data-puck-dropzone] > div:has(> .brxe-block),
+[data-puck-dropzone] > [data-puck-component]:has(.brxe-block) {
+  flex: 1 1 var(--slot-fb);
   display: flex;
   min-width: 0;
 }
-
-/* When container direction is column, blocks stack vertically with 100% width */
-.brxe-container > [data-puck-dropzone][style*="column"] > div:has(> .brxe-block),
-.brxe-container > [data-puck-dropzone][style*="column"] > [data-puck-component]:has(.brxe-block),
-.brxe-container[style*="--brx-d-dir: column"] > [data-puck-dropzone] > div:has(> .brxe-block),
-.brxe-container[style*="--brx-d-dir: column"] > [data-puck-dropzone] > [data-puck-component]:has(.brxe-block) {
-  flex: 0 0 100% !important;
+[data-puck-dropzone] > [data-puck-component] > .brxe-block,
+[data-puck-dropzone] > div > .brxe-block {
   width: 100% !important;
-}
-
-@media (max-width: 767px) {
-  .brxe-container > [data-puck-dropzone] > div:has(> .brxe-block),
-  .brxe-container > [data-puck-dropzone] > [data-puck-component]:has(.brxe-block),
-  .brxe-container > [data-puck-dropzone] > div > .brxe-block {
-    flex: 0 0 100% !important;
-    width: 100% !important;
-  }
+  flex: 1 1 auto !important;
 }
 
 [data-puck-dropzone] > div:has(> .brxe-container),

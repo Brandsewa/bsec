@@ -871,17 +871,19 @@
     text-transform: var(--b-tt) !important;
   }
 
+  /* No !important here: the slot's own inline style already reads these variables with the element's own value as the
+     fallback. Forcing them made an unset direction compute to `row` (var() invalid -> initial) in the editor. */
   .brx-resp > [style*="display: flex"],
   .brx-resp > div[style*="display: flex"],
   .brx-resp > [data-puck-dropzone],
   .brx-resp > [class*="DropZone"] {
-    flex-direction: var(--b-dir) !important;
-    justify-content: var(--b-jc) !important;
-    align-items: var(--b-ai) !important;
-    flex-wrap: var(--b-wrap) !important;
-    gap: var(--b-gap) !important;
-    column-gap: var(--b-cg) !important;
-    row-gap: var(--b-rg) !important;
+    flex-direction: var(--b-dir);
+    justify-content: var(--b-jc);
+    align-items: var(--b-ai);
+    flex-wrap: var(--b-wrap);
+    gap: var(--b-gap);
+    column-gap: var(--b-cg);
+    row-gap: var(--b-rg);
   }
 }
 
@@ -972,17 +974,19 @@
     text-transform: var(--b-tt) !important;
   }
 
+  /* No !important here: the slot's own inline style already reads these variables with the element's own value as the
+     fallback. Forcing them made an unset direction compute to `row` (var() invalid -> initial) in the editor. */
   .brx-resp > [style*="display: flex"],
   .brx-resp > div[style*="display: flex"],
   .brx-resp > [data-puck-dropzone],
   .brx-resp > [class*="DropZone"] {
-    flex-direction: var(--b-dir) !important;
-    justify-content: var(--b-jc) !important;
-    align-items: var(--b-ai) !important;
-    flex-wrap: var(--b-wrap) !important;
-    gap: var(--b-gap) !important;
-    column-gap: var(--b-cg) !important;
-    row-gap: var(--b-rg) !important;
+    flex-direction: var(--b-dir);
+    justify-content: var(--b-jc);
+    align-items: var(--b-ai);
+    flex-wrap: var(--b-wrap);
+    gap: var(--b-gap);
+    column-gap: var(--b-cg);
+    row-gap: var(--b-rg);
   }
 }
 
@@ -1080,6 +1084,21 @@
    background image collapses to 0px and the image paints over the next section. Using the height as a floor keeps it. */
 .brxe-block.brx-resp {
   min-height: var(--b-mnh, var(--b-h, auto)) !important;
+}
+
+/* Pre-made widgets draw their own content column (.bsb-w: 1rem side padding, a max-width, auto margins). Placed inside a
+   Section or Container, that sat on top of the layout's own padding and the theme's site width, so a phone showed extra
+   side padding nobody had set. Inside a layout element the layout owns the spacing and width: the widget keeps its
+   designed reading width only for the narrow / default measures. */
+.brxe-section .bsb-w,
+.brxe-container .bsb-w {
+  padding-inline: 0;
+}
+.brxe-section .bsb-w-wide,
+.brxe-section .bsb-w-full,
+.brxe-container .bsb-w-wide,
+.brxe-container .bsb-w-full {
+  max-width: none;
 }
 
 /* Bricks elements sizing and layout */
