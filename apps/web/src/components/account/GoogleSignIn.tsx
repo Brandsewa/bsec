@@ -66,9 +66,9 @@ export function GoogleSignIn({ redirectTo, oneTap = true, text = "continue_with"
     };
   }, [redirectTo, router, oneTap, text]);
 
-  if (!active) return null;
+  // The container stays mounted (hidden until Google is on) so Google can draw its button into it as soon as it loads.
   return (
-    <div className="space-y-3" data-testid="google-signin">
+    <div className={active ? "space-y-3" : "hidden"} data-testid="google-signin">
       <div className="flex items-center gap-3 text-xs text-[var(--muted-foreground)]">
         <span className="h-px flex-1 bg-[var(--border)]" />
         or
