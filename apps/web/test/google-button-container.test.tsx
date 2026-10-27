@@ -18,10 +18,17 @@ describe("Google button container", () => {
     expect(html).toContain("flex justify-center");
   });
 
+  it("the prompt-only use (home and content pages) draws no markup at all", async () => {
+    const { GoogleSignIn } = await import("../src/components/account/GoogleSignIn.tsx");
+    const html = renderToString(React.createElement(GoogleSignIn, { redirectTo: "/", button: false }));
+    expect(html).toBe("");
+  });
+
   it("the setup test page mounts its container while still loading", async () => {
     const { GoogleVerifyClient } = await import("../src/components/account/GoogleVerifyClient.tsx");
     const html = renderToString(React.createElement(GoogleVerifyClient));
     expect(html).toContain("Getting ready");
+    expect(html).not.toContain("Verified");
     expect(html).toContain("flex justify-center");
   });
 });

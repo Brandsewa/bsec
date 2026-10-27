@@ -33,6 +33,7 @@ export function GoogleSigninCard() {
   const query = useQuery(orpc.admin.socialAuth.get.queryOptions());
   const [clientId, setClientId] = useState<string | null>(null);
   const [confirmDisconnect, setConfirmDisconnect] = useState(false);
+  const [blockedUrl, setBlockedUrl] = useState<string | null>(null);
 
   const refresh = () => queryClient.invalidateQueries({ queryKey: orpc.admin.socialAuth.key() });
 
@@ -64,14 +65,27 @@ export function GoogleSigninCard() {
       onError,
     }),
   );
-  const start = useMutation(
-    orpc.admin.socialAuth.startVerification.mutationOptions({
+  const start = useMutation(orpc.admin.socialAuth.startVerification.mutationOptions());
+  function onTestClick() {
+    setBlockedUrl(null);
+    // Opened here, at the click, because browsers block a tab opened after a server round trip.
+    const tab = window.open("", "_blank");
+    start.mutate(undefined, {
       onSuccess: ({ url }) => {
-        window.open(url, "_blank", "noopener");
+        if (tab && !tab.closed) {
+          tab.opener = null;
+          tab.location.href = url;
+        } else {
+          // The browser blocked the new tab: offer a plain link, which the browser always allows.
+          setBlockedUrl(url);
+        }
       },
-      onError,
-    }),
-  );
+      onError: (err) => {
+        tab?.close();
+        toast.error(errorMessage(err));
+      },
+    });
+  }
   const disconnect = useMutation(
     orpc.admin.socialAuth.disconnect.mutationOptions({
       onSuccess: () => {
@@ -189,9 +203,21 @@ export function GoogleSigninCard() {
               Opens your store&apos;s own domain in a new tab where you sign in once with Google. No customer is created. Come back here afterwards.
             </InfoTip>
           </div>
-          <Button type="button" variant="outline" size="sm" onClick={() => start.mutate({})} disabled={!d.clientId || start.isPending} loading={start.isPending}>
+          <Button type="button" variant="outline" size="sm" onClick={onTestClick} disabled={!d.clientId || start.isPending} loading={start.isPending}>
             Test sign-in
           </Button>
+          <p className="text-xs text-muted-foreground">
+            The test opens in a new tab. If nothing opens, your browser blocked the pop-up: allow pop-ups for this site and click again.
+          </p>
+          {blockedUrl ? (
+            <div role="alert" className="rounded-md border border-amber-500/40 bg-amber-500/10 p-3 text-xs">
+              Your browser blocked the new tab.{" "}
+              <a href={blockedUrl} target="_blank" rel="noopener noreferrer" className="font-medium underline">
+                Open the test page
+              </a>
+              .
+            </div>
+          ) : null}
           {d.verified && d.verifiedAt ? (
             <p className="text-xs text-muted-foreground">
               Passed on {d.verifiedHost} · {new Date(d.verifiedAt).toLocaleString()}
@@ -214,11 +240,11 @@ export function GoogleSigninCard() {
           </div>
           <div className="flex items-center justify-between gap-4">
             <div className="flex items-center gap-2 text-sm font-medium">
-              Show One Tap on the sign-in page
-              <InfoTip>The floating Google prompt. It appears only on the customer sign-in page, never on other pages.</InfoTip>
+              Show One Tap on home, content and sign-in pages
+              <InfoTip>The floating Google prompt. It appears on your home page, your content pages (like About us) and the sign-in page, only for visitors who are not signed in.</InfoTip>
             </div>
             <Switch
-              aria-label="Show One Tap on the sign-in page"
+              aria-label="Show One Tap on home, content and sign-in pages"
               checked={d.oneTapEnabled}
               disabled={update.isPending || !d.clientId}
               onCheckedChange={(checked) => update.mutate({ oneTapEnabled: Boolean(checked) })}
