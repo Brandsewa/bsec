@@ -2,7 +2,7 @@
 
 - **Date:** 2026-10-26
 - **Agent:** claude
-- **Branch:** `feat/custom-domain-routing` (not merged yet)
+- **Branch:** `feat/custom-domain-routing` (merged in #134, 66f06fa)
 - **Area:** db, domain, contracts, web, admin, docs
 - **Type:** fix
 - **Supersedes:** none
