@@ -11,6 +11,7 @@ import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, D
 import { ConfirmDialog } from "@bs/ui";
 import { Field } from "@bs/ui";
 import { SimpleSelect } from "@bs/ui";
+import { formatMoney } from "@bs/contracts/money";
 import { SettingsCard, SettingsPageFrame } from "../../../components/settings/settings-page.tsx";
 import { orpc } from "../../../lib/orpc.ts";
 import { errorMessage } from "../../../lib/errors.ts";
@@ -78,7 +79,10 @@ export function PlanAndBillingPage() {
 
   const { plan, usage, invoices, openPlanChangeRequest, billing } = query.data;
   const isCashfree = billing.provider === "cashfree";
-  const gatewayName = isCashfree ? "Cashfree" : "Razorpay";
+  const isPaypal = billing.provider === "paypal";
+  const gatewayName = isPaypal ? "PayPal" : isCashfree ? "Cashfree" : "Razorpay";
+  const billingCurrency = billing.currency ?? "INR";
+  const isUsd = billingCurrency === "USD";
   const availablePlans = availablePlansQuery.data ?? [];
 
   function handleOpenRequestDialog() {
@@ -277,10 +281,15 @@ export function PlanAndBillingPage() {
                       value={payPlanCode}
                       onChange={setPayPlanCode}
                       placeholder="Choose a plan"
-                      options={availablePlans.map((p) => ({
-                        value: p.code,
-                        label: `${p.name} (₹${((payInterval === "yearly" ? p.priceYearlyPaise : p.priceMonthlyPaise) / 100).toLocaleString("en-IN")}/${payInterval === "yearly" ? "yr" : "mo"})`,
-                      }))}
+                      options={availablePlans.map((p) => {
+                        const amount = isUsd
+                          ? (payInterval === "yearly" ? p.priceYearlyUsdCents : p.priceMonthlyUsdCents) ?? 0
+                          : (payInterval === "yearly" ? p.priceYearlyPaise : p.priceMonthlyPaise);
+                        return {
+                          value: p.code,
+                          label: `${p.name} (${formatMoney(amount, billingCurrency)}/${payInterval === "yearly" ? "yr" : "mo"})`,
+                        };
+                      })}
                     />
                   </div>
                   <div className="min-w-40 space-y-1.5">
@@ -398,7 +407,7 @@ export function PlanAndBillingPage() {
                           {new Date(inv.issuedAt).toLocaleDateString("en-IN", { day: "numeric", month: "short", year: "numeric" })}
                         </td>
                         <td className="p-3 font-medium text-foreground">
-                          ₹{(inv.amountPaise / 100).toLocaleString("en-IN", { minimumFractionDigits: 2 })}
+                          {formatMoney(inv.amountPaise, billingCurrency)}
                         </td>
                         <td className="p-3">
                           <Badge variant={inv.status === "paid" ? "outline" : "secondary"}>
@@ -442,10 +451,13 @@ export function PlanAndBillingPage() {
                 value={selectedPlanId}
                 placeholder="Select a plan"
                 onChange={setSelectedPlanId}
-                options={availablePlans.map((p) => ({
-                  value: p.id,
-                  label: `${p.name} (₹${(p.priceMonthlyPaise / 100).toLocaleString("en-IN")}/mo)`,
-                }))}
+                options={availablePlans.map((p) => {
+                  const amount = isUsd ? p.priceMonthlyUsdCents ?? 0 : p.priceMonthlyPaise;
+                  return {
+                    value: p.id,
+                    label: `${p.name} (${formatMoney(amount, billingCurrency)}/mo)`,
+                  };
+                })}
               />
             </Field>
 

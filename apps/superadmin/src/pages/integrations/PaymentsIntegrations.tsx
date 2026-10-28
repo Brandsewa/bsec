@@ -36,6 +36,10 @@ const COPY: Record<PlatformPaymentProviderView["provider"], { blurb: string; acc
     blurb: "India payment gateway (UPI, cards, netbanking, wallets). Stores connect their own Cashfree account with sandbox keys first.",
     accent: "bg-emerald-500/10 text-emerald-500",
   },
+  paypal: {
+    blurb: "Global payment gateway via PayPal hosted checkout. Stores connect their own PayPal account in sandbox or live mode.",
+    accent: "bg-sky-500/10 text-sky-500",
+  },
 };
 
 type Pending =

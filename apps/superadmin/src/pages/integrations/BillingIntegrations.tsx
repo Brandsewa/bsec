@@ -31,6 +31,7 @@ import {
   toast,
 } from "@bs/ui";
 import type { PlatformBillingSettingsView } from "@bs/contracts";
+import { formatMoney } from "@bs/contracts/money";
 import { client } from "../../lib/orpc.ts";
 import { messageOf } from "../../lib/errors.ts";
 import { useHasRole } from "../../lib/user-context.tsx";
@@ -264,6 +265,112 @@ function CashfreeKeysCard({
   );
 }
 
+function PayPalKeysCard({
+  mode,
+  view,
+  active,
+  canEdit,
+  onSaved,
+}: {
+  mode: Mode;
+  view: KeySet;
+  active: boolean;
+  canEdit: boolean;
+  onSaved: () => Promise<void>;
+}) {
+  const [form, setForm] = useState({ clientId: "", clientSecret: "", webhookId: "" });
+  const [saving, setSaving] = useState(false);
+  const [testing, setTesting] = useState(false);
+  const dirty = Boolean(form.clientId.trim() || form.clientSecret.trim() || form.webhookId.trim());
+
+  const save = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setSaving(true);
+    try {
+      await client.integrations.updateBillingSettings({
+        paypal: {
+          [mode]: {
+            ...(form.clientId.trim() ? { clientId: form.clientId.trim() } : {}),
+            ...(form.clientSecret.trim() ? { clientSecret: form.clientSecret.trim() } : {}),
+            ...(form.webhookId.trim() ? { webhookId: form.webhookId.trim() } : {}),
+          },
+        },
+      });
+      setForm({ clientId: "", clientSecret: "", webhookId: "" });
+      toast.success(`PayPal ${mode} credentials saved`);
+      await onSaved();
+    } catch (err) {
+      toast.error(messageOf(err));
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const test = async () => {
+    setTesting(true);
+    try {
+      const res = await client.integrations.testBillingConnection({ mode, provider: "paypal" });
+      if (res.ok) toast.success("PayPal accepted these credentials");
+      else toast.error(res.error ?? "PayPal rejected these credentials");
+      await onSaved();
+    } catch (err) {
+      toast.error(messageOf(err));
+    } finally {
+      setTesting(false);
+    }
+  };
+
+  return (
+    <Card>
+      <form onSubmit={save}>
+        <CardHeader>
+          <div className="flex items-center justify-between gap-2">
+            <CardTitle>PayPal {mode === "test" ? "sandbox credentials" : "live credentials"}</CardTitle>
+            {active ? <Badge>In use</Badge> : <Badge variant="secondary">Not in use</Badge>}
+          </div>
+          <CardDescription>
+            {mode === "test"
+              ? "From PayPal Developer Dashboard, Apps & Credentials, Sandbox. Used for global stores subscribing in USD."
+              : "From PayPal Developer Dashboard, Live. Real money moves with these keys. Save them only when you are ready."}
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <div className="space-y-1.5">
+            <Label htmlFor={`pp-${mode}-id`}>Client ID</Label>
+            <Input id={`pp-${mode}-id`} value={form.clientId} onChange={(e) => setForm({ ...form, clientId: e.target.value })} placeholder={view.keyId ?? ""} autoComplete="off" disabled={!canEdit} />
+            <p className="text-[11px] text-muted-foreground">{view.keyId ? "Saved; type to replace." : "Not saved yet."}</p>
+          </div>
+          <div className="space-y-1.5">
+            <Label htmlFor={`pp-${mode}-secret`}>Client Secret</Label>
+            <PasswordInput
+              id={`pp-${mode}-secret`}
+              value={form.clientSecret}
+              onChange={(e) => setForm({ ...form, clientSecret: e.target.value })}
+              placeholder={view.secretConfigured ? `Saved, ends in ${view.secretLastFour ?? "••••"}` : ""}
+              autoComplete="new-password"
+              disabled={!canEdit}
+            />
+            <p className="text-[11px] text-muted-foreground">Write-only. Encrypted with platform secrets and never returned.</p>
+          </div>
+          <div className="space-y-1.5">
+            <Label htmlFor={`pp-${mode}-webhook`}>Webhook ID</Label>
+            <Input id={`pp-${mode}-webhook`} value={form.webhookId} onChange={(e) => setForm({ ...form, webhookId: e.target.value })} placeholder={view.webhookSecretConfigured ? "Configured" : ""} autoComplete="off" disabled={!canEdit} />
+            <p className="text-[11px] text-muted-foreground">From PayPal Developer Dashboard when registering the webhook URL below. Needed to verify webhook signatures.</p>
+          </div>
+        </CardContent>
+        <CardFooter className="gap-2">
+          <Button type="submit" size="sm" disabled={!canEdit || !dirty || saving}>
+            {saving ? "Saving..." : "Save credentials"}
+          </Button>
+          <Button type="button" size="sm" variant="outline" disabled={!canEdit || testing || !view.secretConfigured} onClick={() => void test()}>
+            {testing ? "Testing..." : "Test connection"}
+          </Button>
+        </CardFooter>
+      </form>
+    </Card>
+  );
+}
+
 function TrialCard({ view, canEdit, onSaved }: { view: PlatformBillingSettingsView["trial"]; canEdit: boolean; onSaved: () => Promise<void> }) {
   const [enabled, setEnabled] = useState(view.enabled);
   const [days, setDays] = useState(String(view.days));
@@ -442,7 +549,7 @@ function InvoiceDetailsCard({ view, canEdit, onSaved }: { view: PlatformBillingS
 }
 
 function rupees(paise: number): string {
-  return `₹${(paise / 100).toLocaleString("en-IN", { maximumFractionDigits: 0 })}`;
+  return formatMoney(paise, "INR");
 }
 
 function PlansCard({ canEdit }: { canEdit: boolean }) {
@@ -522,7 +629,7 @@ export function BillingIntegrations() {
   const navigate = useNavigate();
   const queryClient = useQueryClient();
   const canEdit = useHasRole("platform_owner");
-  const [confirm, setConfirm] = useState<null | "enable" | "disable" | "live" | "test" | "cashfree" | "razorpay">(null);
+  const [confirm, setConfirm] = useState<null | "enable" | "disable" | "live" | "test" | "cashfree" | "razorpay" | "paypal">(null);
   const [saving, setSaving] = useState(false);
   const [grace, setGrace] = useState<string>("");
 
@@ -543,7 +650,7 @@ export function BillingIntegrations() {
             ? { enabled: false }
             : confirm === "live"
               ? { mode: "live" }
-              : confirm === "cashfree" || confirm === "razorpay"
+              : confirm === "cashfree" || confirm === "razorpay" || confirm === "paypal"
                 ? { provider: confirm }
                 : { mode: "test" },
       );
@@ -614,7 +721,7 @@ export function BillingIntegrations() {
               </CardDescription>
             </CardHeader>
             <CardContent className="flex flex-wrap gap-2">
-              {(["razorpay", "cashfree"] as const).map((p) => (
+              {(["razorpay", "cashfree", "paypal"] as const).map((p) => (
                 <Button
                   key={p}
                   type="button"
@@ -624,7 +731,7 @@ export function BillingIntegrations() {
                   aria-pressed={data.provider === p}
                   onClick={() => setConfirm(p)}
                 >
-                  {p === "razorpay" ? "Razorpay" : "Cashfree"}
+                  {p === "paypal" ? "PayPal" : p === "razorpay" ? "Razorpay" : "Cashfree"}
                   {data.provider === p ? " (active)" : ""}
                 </Button>
               ))}
@@ -702,6 +809,15 @@ export function BillingIntegrations() {
             </div>
           </div>
 
+          <div className="space-y-3">
+            <h2 className="text-sm font-semibold text-foreground">PayPal credentials{data.provider === "paypal" ? " (active gateway)" : ""}</h2>
+            <p className="text-xs text-muted-foreground">Used for stores outside India billing in USD (ADR-040 WP-5). Save credentials and webhook ID here.</p>
+            <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
+              <PayPalKeysCard mode="test" view={data.paypal.test} active={data.provider === "paypal" && data.mode === "test"} canEdit={canEdit} onSaved={refresh} />
+              <PayPalKeysCard mode="live" view={data.paypal.live} active={data.provider === "paypal" && data.mode === "live"} canEdit={canEdit} onSaved={refresh} />
+            </div>
+          </div>
+
           {data.provider === "cashfree" ? (
             <Card>
               <CardHeader>
@@ -727,7 +843,7 @@ export function BillingIntegrations() {
               </CardDescription>
             </CardHeader>
             <CardContent className="space-y-3">
-              {([["Razorpay", data.webhookUrl], ["Cashfree", data.cashfreeWebhookUrl]] as const).map(([label, url]) => (
+              {([["Razorpay", data.webhookUrl], ["Cashfree", data.cashfreeWebhookUrl], ["PayPal", data.paypalWebhookUrl]] as const).map(([label, url]) => (
                 <div key={label} className="space-y-1">
                   <p className="text-xs font-medium text-foreground">{label}</p>
                   <div className="flex items-center gap-2">
@@ -764,8 +880,8 @@ export function BillingIntegrations() {
               ? "Disable platform billing?"
               : confirm === "live"
                 ? "Switch to live mode?"
-                : confirm === "cashfree" || confirm === "razorpay"
-                  ? `Use ${confirm === "cashfree" ? "Cashfree" : "Razorpay"} for new subscriptions?`
+                : confirm === "cashfree" || confirm === "razorpay" || confirm === "paypal"
+                  ? `Use ${confirm === "paypal" ? "PayPal" : confirm === "cashfree" ? "Cashfree" : "Razorpay"} for new subscriptions?`
                   : "Switch back to test mode?"
         }
         description={
@@ -775,7 +891,7 @@ export function BillingIntegrations() {
               ? "No new subscriptions or charges can be started. Existing subscriptions keep running on their gateway's side."
               : confirm === "live"
                 ? "Merchants will be charged real money with the live keys. Make sure a full test-mode run has passed."
-                : confirm === "cashfree" || confirm === "razorpay"
+                : confirm === "cashfree" || confirm === "razorpay" || confirm === "paypal"
                   ? "New subscriptions will be created on this gateway. Subscriptions already running stay where they are. The gateway's keys for the active mode must be saved first."
                   : "New subscriptions will use the test keys again."
         }

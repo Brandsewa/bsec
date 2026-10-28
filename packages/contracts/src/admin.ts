@@ -1677,7 +1677,8 @@ export const PlanAndBillingView = z.object({
   billing: z.object({
     available: z.boolean(),
     testMode: z.boolean(),
-    provider: z.enum(["razorpay", "cashfree"]),
+    provider: z.enum(["razorpay", "cashfree", "paypal"]),
+    currency: z.string().optional(),
     hasSubscription: z.boolean(),
     authorized: z.boolean(),
     activationRequired: z.boolean(),
@@ -1710,6 +1711,8 @@ export const AvailablePlanSummary = z.object({
   name: z.string(),
   priceMonthlyPaise: z.number().int(),
   priceYearlyPaise: z.number().int(),
+  priceMonthlyUsdCents: z.number().int().nullable().optional(),
+  priceYearlyUsdCents: z.number().int().nullable().optional(),
   isCurrent: z.boolean(),
 });
 export type AvailablePlanSummary = z.infer<typeof AvailablePlanSummary>;

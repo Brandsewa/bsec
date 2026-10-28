@@ -424,6 +424,8 @@ export const platformPlansContract = {
       name: z.string(),
       priceMonthlyPaise: z.number(),
       priceYearlyPaise: z.number(),
+      priceMonthlyUsdCents: z.number().nullable().optional(),
+      priceYearlyUsdCents: z.number().nullable().optional(),
       activeSubscribersCount: z.number(),
       features: z.any(),
     }))),
@@ -1367,16 +1369,18 @@ const InvoiceProfile = z.object({
 
 export const PlatformBillingSettingsView = z.object({
   invoice: InvoiceProfile,
-  provider: z.enum(["razorpay", "cashfree"]),
+  provider: z.enum(["razorpay", "cashfree", "paypal"]),
   mode: z.enum(["test", "live"]),
   enabled: z.boolean(),
   graceDays: z.number().int(),
   test: BillingKeySetView,
   live: BillingKeySetView,
   cashfree: z.object({ test: BillingKeySetView, live: BillingKeySetView }),
+  paypal: z.object({ test: BillingKeySetView, live: BillingKeySetView }),
   trial: z.object({ enabled: z.boolean(), days: z.number().int() }),
   webhookUrl: z.string(),
   cashfreeWebhookUrl: z.string(),
+  paypalWebhookUrl: z.string(),
   usingEnvFallback: z.boolean(),
   lastTestAt: z.string().nullable(),
   lastTestStatus: z.enum(["success", "failed"]).nullable(),
@@ -1388,6 +1392,12 @@ export type PlatformBillingSettingsView = z.infer<typeof PlatformBillingSettings
 const CashfreeKeysInput = z.object({
   clientId: z.string().max(80).optional(),
   clientSecret: z.string().max(200).optional(), // write-only
+});
+
+const PayPalKeysInput = z.object({
+  clientId: z.string().max(120).optional(),
+  clientSecret: z.string().max(200).optional(), // write-only
+  webhookId: z.string().max(80).optional(),
 });
 
 const BillingKeysInput = z.object({
@@ -1433,9 +1443,10 @@ export const platformIntegrationsContract = {
     .route({ method: "PATCH", path: "/platform/integrations/billing/settings" })
     .input(
       z.object({
-        provider: z.enum(["razorpay", "cashfree"]).optional(),
+        provider: z.enum(["razorpay", "cashfree", "paypal"]).optional(),
         trial: z.object({ enabled: z.boolean().optional(), days: z.number().int().min(1).max(90).optional() }).optional(),
         cashfree: z.object({ test: CashfreeKeysInput.optional(), live: CashfreeKeysInput.optional() }).optional(),
+        paypal: z.object({ test: PayPalKeysInput.optional(), live: PayPalKeysInput.optional() }).optional(),
         mode: z.enum(["test", "live"]).optional(),
         enabled: z.boolean().optional(),
         graceDays: z.number().int().min(0).max(30).optional(),
@@ -1460,7 +1471,7 @@ export const platformIntegrationsContract = {
       z.array(
         z.object({
           id: z.string(),
-          gateway: z.enum(["razorpay", "cashfree"]),
+          gateway: z.enum(["razorpay", "cashfree", "paypal"]),
           eventType: z.string(),
           signatureValid: z.boolean(),
           status: z.string(),
@@ -1473,8 +1484,8 @@ export const platformIntegrationsContract = {
     ),
   testBillingConnection: oc
     .route({ method: "POST", path: "/platform/integrations/billing/test" })
-    .input(z.object({ mode: z.enum(["test", "live"]).optional(), provider: z.enum(["razorpay", "cashfree"]).optional() }))
-    .output(z.object({ ok: z.boolean(), mode: z.enum(["test", "live"]), provider: z.enum(["razorpay", "cashfree"]), error: z.string().optional() })),
+    .input(z.object({ mode: z.enum(["test", "live"]).optional(), provider: z.enum(["razorpay", "cashfree", "paypal"]).optional() }))
+    .output(z.object({ ok: z.boolean(), mode: z.enum(["test", "live"]), provider: z.enum(["razorpay", "cashfree", "paypal"]), error: z.string().optional() })),
   paymentProviders: oc
     .route({ method: "GET", path: "/platform/integrations/payments/providers" })
     .output(z.array(PlatformPaymentProviderView)),
