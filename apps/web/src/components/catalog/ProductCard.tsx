@@ -63,6 +63,7 @@ export function ProductCard({
   const imageAlt = product.primaryImage?.alt ?? product.title;
   const secondUrl = hoverSecondImage ? product.secondaryImage?.url : undefined;
   const hasRating = showRatings && product.ratingCount > 0;
+  const stars = Math.max(0, Math.min(5, Math.round(Number(product.ratingAvg))));
   const outOfStock = product.quickAdd ? !product.quickAdd.inStock : false;
 
   return (
@@ -101,9 +102,11 @@ export function ProductCard({
           <div className="mb-0.5 flex items-center justify-between gap-2 text-xs text-muted-foreground">
             {hasRating ? (
               <div className="flex shrink-0 items-center gap-1.5" aria-label={`Rated ${product.ratingAvg} out of 5 from ${product.ratingCount} reviews`}>
-                <span className="flex items-center text-amber-500">
-                  ★ <span className="ml-0.5 font-medium text-foreground">{product.ratingAvg}</span>
+                <span className="tracking-wide text-amber-500" aria-hidden="true">
+                  {"★".repeat(stars)}
+                  {"☆".repeat(5 - stars)}
                 </span>
+                <span className="font-medium text-foreground">{Number(product.ratingAvg).toFixed(1)}</span>
                 <span>({product.ratingCount})</span>
               </div>
             ) : null}

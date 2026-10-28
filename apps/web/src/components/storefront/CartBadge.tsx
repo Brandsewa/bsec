@@ -78,7 +78,7 @@ export function CartBadge({ count: initialCount, className = "", dock = false }:
     <Link
       href="/cart"
       onClick={onLinkClick}
-      className={dock ? "bs-cart-dock" : `inline-flex items-center gap-1.5 rounded-full px-3 py-1.5 text-sm font-medium transition-colors hover:opacity-80 ${className}`}
+      className={dock ? "bs-cart-dock" : `bs-cart-pill ${className}`}
       style={{ backgroundColor: "var(--color-surface, #f8fafc)", color: "var(--color-text, #0f172a)", borderRadius: "var(--radius, 9999px)" }}
       aria-label={`Cart, ${displayCount} items`}
     >
@@ -99,7 +99,7 @@ export function CartBadge({ count: initialCount, className = "", dock = false }:
       </svg>
       <span>Cart</span>
       <span
-        className="inline-flex h-5 min-w-5 items-center justify-center rounded-full px-1 text-xs font-semibold text-white"
+        className="bs-cart-count"
         style={{ backgroundColor: "var(--color-primary, #0f172a)" }}
       >
         {displayCount}

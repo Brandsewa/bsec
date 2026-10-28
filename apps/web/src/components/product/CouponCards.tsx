@@ -2,23 +2,40 @@ import type { StorefrontCoupon } from "@bs/domain";
 import { CouponCopy } from "./CouponCopy.tsx";
 import { CouponDrawer } from "./CouponDrawer.tsx";
 
-/** One coupon as a card: what it gives, when it applies, and the code with a copy button. */
+/**
+ * One coupon as a card, three evenly spaced rows: what it gives (left) with the end date (right); the description; the code with its
+ * copy button.
+ */
 function CouponCard({ coupon }: { coupon: StorefrontCoupon }) {
+  const description = [coupon.title, coupon.condition].filter(Boolean).join(" · ");
   return (
-    <div className="rounded-xl border border-dashed border-[color-mix(in_srgb,var(--color-foreground,#0f172a)_30%,transparent)] bg-[color-mix(in_srgb,var(--color-primary,#0f172a)_6%,transparent)] p-3.5">
-      <p className="text-sm font-bold text-foreground">{coupon.benefit}</p>
-      {coupon.title ? <p className="text-xs text-muted-foreground">{coupon.title}</p> : null}
-      {coupon.condition ? <p className="mt-0.5 text-xs text-muted-foreground">{coupon.condition}</p> : null}
-      <div className="mt-2.5 flex items-center justify-between gap-2">
-        <code className="rounded bg-background px-2 py-1 text-sm font-bold tracking-wider text-foreground">{coupon.code}</code>
-        <CouponCopy code={coupon.code} />
+    <div className="flex min-w-0 flex-col gap-1.5 rounded-xl border border-dashed border-[color-mix(in_srgb,var(--color-foreground,#0f172a)_30%,transparent)] bg-[color-mix(in_srgb,var(--color-primary,#0f172a)_6%,transparent)] p-2.5">
+      <div className="flex flex-wrap items-baseline justify-between gap-x-2 gap-y-0.5">
+        <p className="text-sm font-bold leading-tight text-foreground">{coupon.benefit}</p>
+        {coupon.endsAt ? (
+          <p className="whitespace-nowrap text-[10px] text-muted-foreground">Ends {new Date(coupon.endsAt).toLocaleDateString("en-IN", { day: "numeric", month: "short", year: "numeric" })}</p>
+        ) : null}
       </div>
-      {coupon.endsAt ? <p className="mt-1.5 text-[11px] text-muted-foreground">Ends {new Date(coupon.endsAt).toLocaleDateString("en-IN", { day: "numeric", month: "short", year: "numeric" })}</p> : null}
+      {description ? <p className="text-[11px] leading-snug text-muted-foreground">{description}</p> : null}
+      <div className="flex flex-wrap items-center justify-between gap-1.5">
+        <code className="min-w-0 break-all rounded bg-background px-1.5 py-0.5 text-xs font-bold text-foreground">{coupon.code}</code>
+        <span className="shrink-0">
+          <CouponCopy code={coupon.code}>
+            <svg className="bs-copy-icon h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+              <rect x="9" y="9" width="11" height="11" rx="2" />
+              <path d="M5 15V6a2 2 0 0 1 2-2h9" />
+            </svg>
+            <svg className="bs-copy-done h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+              <path d="M5 13l4 4L19 7" />
+            </svg>
+          </CouponCopy>
+        </span>
+      </div>
     </div>
   );
 }
 
-/** The first coupons as cards (two per row from tablet up), with a "View all" button that opens a side drawer listing every one. Server component. */
+/** The first coupons as compact cards (two per row on every screen size), with a "View all" button that opens a side drawer listing every one. Server component. */
 export function CouponCards({
   coupons,
   title,
@@ -49,7 +66,7 @@ export function CouponCards({
           </CouponDrawer>
         ) : null}
       </div>
-      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+      <div className="grid grid-cols-2 gap-2">
         {shown.map((c) => (
           <CouponCard key={c.code} coupon={c} />
         ))}

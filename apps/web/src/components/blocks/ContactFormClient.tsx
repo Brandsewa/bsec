@@ -1,13 +1,19 @@
 "use client";
 
-import { useState } from "react";
+import { useId, useState } from "react";
 import type { FormEvent } from "react";
 import type { ContactFormOptions } from "@bs/blocks";
 
-const FIELD = "w-full [text-align:inherit] rounded-lg border border-[color-mix(in_srgb,currentColor_20%,transparent)] bg-transparent px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-[color-mix(in_srgb,currentColor_30%,transparent)]";
+// The same fields as the checkout (CheckoutForm.tsx): near-white with a soft border, the name inside the field that shrinks to the top edge
+// once there is text or focus. Text alignment follows the block's "text alignment" setting.
+const FIELD = "bs-field peer h-12 w-full [text-align:inherit] rounded-lg border px-3 pb-1 pt-5 text-sm text-foreground placeholder-transparent transition-colors hover:border-border focus:border-primary/60 focus:outline-none focus:ring-2 focus:ring-primary/15";
+const AREA = "bs-field peer min-h-32 w-full [text-align:inherit] rounded-lg border px-3 pb-2 pt-6 text-sm text-foreground placeholder-transparent transition-colors hover:border-border focus:border-primary/60 focus:outline-none focus:ring-2 focus:ring-primary/15";
+const FLOAT_LABEL = "pointer-events-none absolute left-3 top-3 origin-left text-sm text-muted-foreground transition-all peer-focus:top-1.5 peer-focus:text-[11px] peer-[:not(:placeholder-shown)]:top-1.5 peer-[:not(:placeholder-shown)]:text-[11px]";
+const LABEL_TOP = "pointer-events-none absolute left-3 top-1.5 text-[11px] text-muted-foreground";
 
 /** The live contact form: posts to the store, shows a thank-you on success and a plain error otherwise. */
 export function ContactFormClient({ options }: { options: ContactFormOptions }) {
+  const uid = useId();
   const [state, setState] = useState<"idle" | "sending" | "done" | "error">("idle");
   const [error, setError] = useState("");
   const choices = options.dropdownOptions.split(",").map((c) => c.trim()).filter(Boolean);
@@ -55,37 +61,40 @@ export function ContactFormClient({ options }: { options: ContactFormOptions }) 
 
   return (
     <form onSubmit={(e) => void submit(e)} className="mt-4 grid gap-3" noValidate={false} style={{ textAlign: options.fieldAlign ?? "left" }}>
-      <label className="grid gap-1 text-sm font-medium">
-        Name
-        <input name="name" required maxLength={120} autoComplete="name" className={FIELD} />
-      </label>
-      <label className="grid gap-1 text-sm font-medium">
-        Email
-        <input name="email" type="email" required maxLength={254} autoComplete="email" className={FIELD} />
-      </label>
+      <div className="relative">
+        <input id={`${uid}-name`} name="name" required maxLength={120} autoComplete="name" placeholder=" " className={FIELD} />
+        <label htmlFor={`${uid}-name`} className={FLOAT_LABEL}>Name *</label>
+      </div>
+      <div className="relative">
+        <input id={`${uid}-email`} name="email" type="email" required maxLength={254} autoComplete="email" placeholder=" " className={FIELD} />
+        <label htmlFor={`${uid}-email`} className={FLOAT_LABEL}>Email *</label>
+      </div>
       {options.showPhone ? (
-        <label className="grid gap-1 text-sm font-medium">
-          Phone number{options.phoneRequired ? "" : " (optional)"}
-          <input name="phone" type="tel" inputMode="tel" required={options.phoneRequired} maxLength={20} autoComplete="tel" className={FIELD} />
-        </label>
+        <div className="relative">
+          <input id={`${uid}-phone`} name="phone" type="tel" inputMode="tel" required={options.phoneRequired} maxLength={20} autoComplete="tel" placeholder=" " className={FIELD} />
+          <label htmlFor={`${uid}-phone`} className={FLOAT_LABEL}>Phone number{options.phoneRequired ? " *" : ""}</label>
+        </div>
       ) : null}
       {options.showDropdown && choices.length > 0 ? (
-        <label className="grid gap-1 text-sm font-medium">
-          {options.dropdownLabel}
-          <select name="choice" className={FIELD} defaultValue={choices[0]}>
+        <div className="relative">
+          <select id={`${uid}-choice`} name="choice" className={`${FIELD} appearance-none pr-8`} defaultValue={choices[0]}>
             {choices.map((c) => (
               <option key={c} value={c}>
                 {c}
               </option>
             ))}
           </select>
-        </label>
+          <label htmlFor={`${uid}-choice`} className={LABEL_TOP}>{options.dropdownLabel}</label>
+          <svg className="pointer-events-none absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+            <path d="M6 9l6 6 6-6" />
+          </svg>
+        </div>
       ) : null}
       {options.showMessage ? (
-        <label className="grid gap-1 text-sm font-medium">
-          {options.messageLabel}
-          <textarea name="message" rows={5} required={options.messageRequired} maxLength={4000} className={FIELD} />
-        </label>
+        <div className="relative">
+          <textarea id={`${uid}-message`} name="message" rows={5} required={options.messageRequired} maxLength={4000} placeholder=" " className={AREA} />
+          <label htmlFor={`${uid}-message`} className={FLOAT_LABEL}>{options.messageLabel}{options.messageRequired ? " *" : ""}</label>
+        </div>
       ) : null}
       {/* Honeypot: hidden from people, filled by bots. */}
       <div aria-hidden className="absolute -left-[9999px] h-0 w-0 overflow-hidden">

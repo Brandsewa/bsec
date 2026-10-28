@@ -5,7 +5,7 @@ import { accountContext } from "@/server/customer-session.ts";
 import { Money, RelativeTime } from "@bs/ui";
 
 const shortcuts = [
-  { href: "/account/orders", label: "Purchase History", hint: "Track and review your orders" },
+  { href: "/account/orders", label: "Orders", hint: "Track and review your orders" },
   { href: "/account/reviews", label: "My Reviews", hint: "What you have said about products" },
   { href: "/account/addresses", label: "Address", hint: "Where we deliver" },
   { href: "/account/profile", label: "Profile", hint: "Your details and password" },
