@@ -230,13 +230,13 @@ export default async function RootLayout({ children }: { children: ReactNode }) 
           {marketCtx?.market ? <MarketBar markets={marketCtx.markets} current={marketCtx.market} suggestion={marketCtx.suggestion} path={requestPath} country={visitorCountryCode} /> : null}
           <StoreStatusBanner isBypass={access.isBypass} mode={access.mode} />
           {themeHeader ? (
-            <ThemeChrome blocks={themeHeader.blocks} renderData={themeHeader.renderData} storeName={storeName} />
+            <ThemeChrome blocks={themeHeader.blocks} renderData={themeHeader.renderData} storeName={storeName} currency={marketCtx?.currency ?? "INR"} locale={marketCtx?.locale ?? "en-IN"} />
           ) : (
             <StoreHeader storeName={storeName} logoWidth={logoWidth} />
           )}
           <main className="flex-1">{children}</main>
           {themeFooter ? (
-            <ThemeChrome blocks={themeFooter.blocks} renderData={themeFooter.renderData} storeName={storeName} />
+            <ThemeChrome blocks={themeFooter.blocks} renderData={themeFooter.renderData} storeName={storeName} currency={marketCtx?.currency ?? "INR"} locale={marketCtx?.locale ?? "en-IN"} />
           ) : (
             <StoreFooter storeName={storeName} />
           )}

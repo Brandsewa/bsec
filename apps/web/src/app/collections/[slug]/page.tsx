@@ -129,6 +129,8 @@ export default async function CollectionDetailPage({
   let collectionData: Awaited<ReturnType<typeof getStorefrontCollection>> = null;
   let host = "localhost";
   let tenantId = "";
+  let marketCurrency = "INR";
+  let marketLocale = "en-IN";
   let template: Awaited<ReturnType<typeof getCachedThemePage>> = null;
 
   try {
@@ -142,7 +144,10 @@ export default async function CollectionDetailPage({
     }
 
     tenantId = access.tenantId;
-    const marketId = (await getMarketContext(tenantId)).marketId;
+    const marketCtx = await getMarketContext(tenantId);
+    const marketId = marketCtx.marketId;
+    marketCurrency = marketCtx.currency;
+    marketLocale = marketCtx.locale;
 
     // Check if the theme's collection template defines a filterMenuHandle
     template = await getCachedThemePage(tenantId, "collection", marketId).catch(() => null);
@@ -229,6 +234,8 @@ export default async function CollectionDetailPage({
       filterData={collectionData?.filterData}
       filters={sp}
       options={options}
+      currency={marketCurrency}
+      locale={marketLocale}
     />
   );
 
@@ -241,7 +248,11 @@ export default async function CollectionDetailPage({
         <BlockRenderer
           blocks={template.blocks}
           renderData={template.renderData}
-          context={{ renderCollectionListing: (options) => listing(options) }}
+          context={{
+            currency: marketCurrency,
+            locale: marketLocale,
+            renderCollectionListing: (options) => listing(options),
+          }}
         />
       ) : (
         listing()

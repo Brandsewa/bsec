@@ -51,7 +51,8 @@ export default async function CartPage() {
   const cookieStore = await cookies();
   const token = cookieStore.get(CART_COOKIE_NAME)?.value;
 
-  const cart = await getOrCreateCart(rt, tenantCtx, token, undefined, (await getMarketContext(access.tenantId)).marketId);
+  const marketCtx = await getMarketContext(access.tenantId);
+  const cart = await getOrCreateCart(rt, tenantCtx, token, undefined, marketCtx.marketId);
 
   // The theme's own cart layout, when the store has one; the built-in layout otherwise.
   const template = await getCachedThemePage(access.tenantId, "cart").catch(() => null);
@@ -73,7 +74,11 @@ export default async function CartPage() {
       <BlockRenderer
         blocks={template.blocks}
         renderData={template.renderData}
-        context={{ renderCartContents: (options) => <CartView cart={cart} options={options} freeShippingThresholdPaise={freeShippingThresholdPaise} /> }}
+        context={{
+          currency: marketCtx.currency,
+          locale: marketCtx.locale,
+          renderCartContents: (options) => <CartView cart={cart} options={options} freeShippingThresholdPaise={freeShippingThresholdPaise} />,
+        }}
       />
     </div>
   );

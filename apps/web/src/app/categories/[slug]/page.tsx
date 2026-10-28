@@ -117,6 +117,8 @@ export default async function CategoryDetailPage({
   let categoryData: Awaited<ReturnType<typeof getStorefrontCategory>> = null;
   let host = "localhost";
   let tenantId = "";
+  let marketCurrency = "INR";
+  let marketLocale = "en-IN";
   let template: Awaited<ReturnType<typeof getCachedThemePage>> = null;
   let limit = 12;
 
@@ -131,7 +133,10 @@ export default async function CategoryDetailPage({
     }
 
     tenantId = access.tenantId;
-    const marketId = (await getMarketContext(tenantId)).marketId;
+    const marketCtx = await getMarketContext(tenantId);
+    const marketId = marketCtx.marketId;
+    marketCurrency = marketCtx.currency;
+    marketLocale = marketCtx.locale;
     // Categories are drawn with the theme's collection template, the same page collections use.
     template = await getCachedThemePage(tenantId, "collection", marketId).catch(() => null);
     const listingForSize = template?.blocks.find((b) => isListingBlock(b.type));
@@ -222,6 +227,8 @@ export default async function CategoryDetailPage({
       options={options}
       basePath={`/categories/${category.slug}`}
       archive={{ href: "/categories", label: "Categories" }}
+      currency={marketCurrency}
+      locale={marketLocale}
     />
   );
 
@@ -233,7 +240,11 @@ export default async function CategoryDetailPage({
         <BlockRenderer
           blocks={template.blocks}
           renderData={template.renderData}
-          context={{ renderCollectionListing: (options) => listing(options) }}
+          context={{
+            currency: marketCurrency,
+            locale: marketLocale,
+            renderCollectionListing: (options) => listing(options),
+          }}
         />
       ) : (
         listing()

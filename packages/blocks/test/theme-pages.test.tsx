@@ -333,4 +333,36 @@ describe("collection listing settings", () => {
     expect(parse({ columns: "2", columnsTablet: "1", columnsMobile: "2", defaultView: "list", pageSize: "36" })).toMatchObject({ columns: "2", defaultView: "list", pageSize: "36" });
     for (const bad of [{ columns: "5" }, { columnsTablet: "3" }, { defaultView: "table" }, { pageSize: "50" }, { cardStyle: "round" }]) expect(parse(bad)).toBeNull();
   });
+
+  it("formats ProductGrid prices with market currency and locale when provided in RenderContext", () => {
+    const grid = block("pg", "ProductGrid", { title: "Featured Products" });
+    const renderWithContext = (currency?: string, locale?: string) =>
+      renderToStaticMarkup(
+        <>{renderBlockTree([grid], {
+          currency,
+          locale,
+          data: {
+            pg: {
+              kind: "products",
+              products: [
+                {
+                  id: "p1",
+                  title: "Sample Hat",
+                  slug: "sample-hat",
+                  priceMin: 2400,
+                  compareAtPriceMin: 3000,
+                },
+              ],
+            },
+          },
+        })}</>,
+      );
+
+    const inrHtml = renderWithContext("INR", "en-IN");
+    expect(inrHtml).toContain("₹24");
+
+    const usdHtml = renderWithContext("USD", "en-US");
+    expect(usdHtml).toContain("$24");
+    expect(usdHtml).not.toContain("₹");
+  });
 });

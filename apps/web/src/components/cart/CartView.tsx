@@ -8,6 +8,7 @@ import { ShippingEstimator } from "./ShippingEstimator.tsx";
 import { DiscountCodeBox } from "./DiscountCodeBox.tsx";
 import { priceOrder } from "@bs/domain/pricing";
 import type { CartContentsOptions } from "@bs/blocks";
+import { useMoney } from "@/components/market/MarketProvider.tsx";
 
 export const DEFAULT_CART_CONTENTS_OPTIONS: CartContentsOptions = {
   summaryPosition: "right",
@@ -33,6 +34,7 @@ export interface CartViewProps {
 export function CartView({ cart: initialCart, options = DEFAULT_CART_CONTENTS_OPTIONS, freeShippingThresholdPaise }: CartViewProps) {
   const [cart, setCart] = useState<StorefrontCart>(initialCart);
   const [loading, setLoading] = useState(false);
+  const money = useMoney();
 
   const handleUpdateQuantity = async (itemId: string, quantity: number) => {
     setLoading(true);
@@ -108,8 +110,7 @@ export function CartView({ cart: initialCart, options = DEFAULT_CART_CONTENTS_OP
     );
   }
 
-  const inr = (paise: number) => `₹${(paise / 100).toLocaleString("en-IN")}`;
-  const formattedSubtotal = inr(cart.subtotal);
+  const formattedSubtotal = money(cart.subtotal);
   // shipping is only known at checkout, so the estimate here is goods minus any goods discount
   const estimate = priceOrder({
     subtotal: cart.subtotal,
@@ -125,7 +126,7 @@ export function CartView({ cart: initialCart, options = DEFAULT_CART_CONTENTS_OP
       </h1>
 
       {options.showFreeShippingBar && freeShippingThresholdPaise ? (
-        <FreeShippingBar subtotal={cart.subtotal} thresholdPaise={freeShippingThresholdPaise} inr={inr} />
+        <FreeShippingBar subtotal={cart.subtotal} thresholdPaise={freeShippingThresholdPaise} money={money} />
       ) : null}
 
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 lg:gap-12 items-start">
@@ -156,7 +157,7 @@ export function CartView({ cart: initialCart, options = DEFAULT_CART_CONTENTS_OP
             {estimate.discountTotal > 0 && cart.discount && (
               <div className="flex justify-between items-center text-sm py-2" data-testid="discount-line">
                 <span className="text-muted-foreground">Discount ({cart.discount.code})</span>
-                <span className="font-semibold text-emerald-700">−{inr(estimate.discountTotal)}</span>
+                <span className="font-semibold text-emerald-700">−{money(estimate.discountTotal)}</span>
               </div>
             )}
 
@@ -169,7 +170,7 @@ export function CartView({ cart: initialCart, options = DEFAULT_CART_CONTENTS_OP
 
             <div className="flex justify-between items-center text-base font-bold py-4">
               <span>Estimated Total</span>
-              <span className="text-xl text-foreground">{inr(estimate.grandTotal)}</span>
+              <span className="text-xl text-foreground">{money(estimate.grandTotal)}</span>
             </div>
 
             {options.showDiscountCode ? (
@@ -221,7 +222,7 @@ export function CartView({ cart: initialCart, options = DEFAULT_CART_CONTENTS_OP
           <div className="mx-auto flex max-w-xl items-center gap-3">
             <div className="flex-1">
               <p className="text-xs text-muted-foreground">Estimated total</p>
-              <p className="text-base font-bold text-foreground">{inr(estimate.grandTotal)}</p>
+              <p className="text-base font-bold text-foreground">{money(estimate.grandTotal)}</p>
             </div>
             <Link href="/checkout" className="rounded-xl bg-primary px-5 py-3 text-sm font-semibold text-primary-foreground shadow-sm">
               {options.checkoutLabel ?? "Proceed to Checkout"}
@@ -234,13 +235,13 @@ export function CartView({ cart: initialCart, options = DEFAULT_CART_CONTENTS_OP
 }
 
 /** Progress towards the store's free-shipping threshold; the real shipping price is still decided at checkout. */
-function FreeShippingBar({ subtotal, thresholdPaise, inr }: { subtotal: number; thresholdPaise: number; inr: (paise: number) => string }) {
+function FreeShippingBar({ subtotal, thresholdPaise, money }: { subtotal: number; thresholdPaise: number; money: (paise: number) => string }) {
   const reached = subtotal >= thresholdPaise;
   const percent = Math.min(100, Math.round((subtotal / thresholdPaise) * 100));
   return (
     <div className="mb-8 rounded-xl border border-border bg-surface/60 p-4" data-testid="free-shipping-bar">
       <p className="text-sm font-medium text-foreground">
-        {reached ? "You have unlocked free shipping" : `Add ${inr(thresholdPaise - subtotal)} more for free shipping`}
+        {reached ? "You have unlocked free shipping" : `Add ${money(thresholdPaise - subtotal)} more for free shipping`}
       </p>
       <div className="mt-2 h-2 overflow-hidden rounded-full bg-border" role="progressbar" aria-valuemin={0} aria-valuemax={100} aria-valuenow={percent}>
         <div className="h-full rounded-full bg-primary transition-all duration-300" style={{ width: `${percent}%` }} />

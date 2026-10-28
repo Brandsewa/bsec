@@ -5,6 +5,7 @@ import { evaluateStorefrontAccess } from "@bs/domain";
 import { server } from "@/server/runtime.ts";
 import { getCachedCollectionsArchive } from "@/server/cached-storefront.ts";
 import { BlockRenderer } from "@/components/blocks/BlockRenderer.tsx";
+import { getMarketContext } from "@/server/market.ts";
 
 // Static on purpose: the root layout already sets robots and the canonical host for the store.
 export const metadata: Metadata = {
@@ -19,10 +20,18 @@ export default async function CollectionsArchivePage() {
   const access = await evaluateStorefrontAccess(server().rt, host, { headers: h });
   if (!access.tenantId) return null;
 
+  const marketCtx = await getMarketContext(access.tenantId);
   const archive = await getCachedCollectionsArchive(access.tenantId);
   return (
     <div className="bs-skin">
-      <BlockRenderer blocks={archive.blocks} renderData={archive.renderData} />
+      <BlockRenderer
+        blocks={archive.blocks}
+        renderData={archive.renderData}
+        context={{
+          currency: marketCtx.currency,
+          locale: marketCtx.locale,
+        }}
+      />
     </div>
   );
 }

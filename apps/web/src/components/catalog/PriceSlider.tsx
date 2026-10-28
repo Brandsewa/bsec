@@ -1,13 +1,11 @@
 "use client";
 
 import React, { useState } from "react";
-
-function inr(rupees: number): string {
-  return new Intl.NumberFormat("en-IN", { style: "currency", currency: "INR", maximumFractionDigits: 0 }).format(rupees);
-}
+import { formatMoney, minorUnitExponent } from "@bs/contracts/money";
+import { useMarket } from "@/components/market/MarketProvider.tsx";
 
 /**
- * Two-handle price slider. Values are whole rupees; the page's facet data is in paise, so callers convert. The address is only
+ * Two-handle price slider. Values are whole currency units; the page's facet data is in minor units, so callers convert. The address is only
  * updated when a handle is released (or a key is pressed), not on every pixel of drag.
  */
 export function PriceSlider({
@@ -25,13 +23,17 @@ export function PriceSlider({
   disabled?: boolean | undefined;
   onCommit: (lo: number, hi: number) => void;
 }) {
+  const { currency, locale } = useMarket();
+  const factor = 10 ** minorUnitExponent(currency);
+  const fmt = (major: number) => formatMoney(major * factor, currency, { locale, alwaysShowFraction: false });
+
   const clamp = (n: number) => Math.min(max, Math.max(min, n));
   const [lo, setLo] = useState(clamp(valueMin));
   const [hi, setHi] = useState(clamp(valueMax));
   const step = max - min > 5000 ? 10 : 1;
 
   if (max <= min) {
-    return <p className="mt-3 text-sm text-muted-foreground">All products cost {inr(min)}.</p>;
+    return <p className="mt-3 text-sm text-muted-foreground">All products cost {fmt(min)}.</p>;
   }
 
   const pct = (n: number) => ((n - min) / (max - min)) * 100;
@@ -44,7 +46,7 @@ export function PriceSlider({
         <input
           type="range"
           aria-label="Minimum price"
-          aria-valuetext={inr(lo)}
+          aria-valuetext={fmt(lo)}
           min={min}
           max={max}
           step={step}
@@ -58,7 +60,7 @@ export function PriceSlider({
         <input
           type="range"
           aria-label="Maximum price"
-          aria-valuetext={inr(hi)}
+          aria-valuetext={fmt(hi)}
           min={min}
           max={max}
           step={step}
@@ -71,9 +73,9 @@ export function PriceSlider({
         />
       </div>
       <div className="mt-2 flex items-center justify-between text-sm" aria-live="polite">
-        <span className="font-medium text-foreground">{inr(lo)}</span>
+        <span className="font-medium text-foreground">{fmt(lo)}</span>
         <span className="text-muted-foreground">to</span>
-        <span className="font-medium text-foreground">{inr(hi)}</span>
+        <span className="font-medium text-foreground">{fmt(hi)}</span>
       </div>
     </div>
   );
