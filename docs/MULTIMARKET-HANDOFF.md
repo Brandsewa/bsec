@@ -43,7 +43,8 @@ Gate state at hand-off: `pnpm typecheck` passes for all 15 packages; domain lint
 6. Sandbox/test only for PayPal, Stripe and Razorpay. No live keys.
 7. `apps/*` never import `@bs/db`; the web app reads markets through `@bs/domain` (`listStorefrontMarkets`, `getStorefrontCheckoutOptions`).
 8. Every storefront read that shows a price goes through `withMarketScope` (domain) or a cached loader that takes `marketId` as an argument (web), so two markets never share a cached price.
-9. Migrations are expand-only. Next free migration number: **0090**. Next ADR number: **041**.
+9. **Product page JS budget (50 KB gzip, `apps/web/test/perf-budget-bundle.int.test.ts`).** Main had 10 bytes of headroom; the multi-market work now sits at 48.6 KB after lazy-loading `RequestQuoteDialog`. Client components use `useMoney()` (backed by the tiny `apps/web/src/lib/money-client.ts`), never `formatMoney` from `@bs/contracts/money`. Any chat that touches storefront client components runs `pnpm --filter @bs/web build` and that test before saying done, and states the number.
+10. Migrations are expand-only. Next free migration number: **0090**. Next ADR number: **041**.
 
 ## 3. Work packages (one Antigravity chat each, in order)
 

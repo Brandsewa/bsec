@@ -97,6 +97,8 @@ export default async function CustomContentPage({ params }: CustomPageProps) {
 
   let pageData: Awaited<ReturnType<typeof getCachedStorefrontPageByPath>> = null;
   let host = "localhost";
+  let marketCurrency = "INR";
+  let marketLocale = "en-IN";
 
   try {
     const h = await headers();
@@ -105,7 +107,10 @@ export default async function CustomContentPage({ params }: CustomPageProps) {
     const access = await evaluateStorefrontAccess(rt, host, { headers: h });
 
     if (access.tenantId) {
-      pageData = await getCachedStorefrontPageByPath(access.tenantId, path, (await getMarketContext(access.tenantId)).marketId);
+      const marketCtx = await getMarketContext(access.tenantId);
+      marketCurrency = marketCtx.currency;
+      marketLocale = marketCtx.locale;
+      pageData = await getCachedStorefrontPageByPath(access.tenantId, path, marketCtx.marketId);
 
       if (pageData) {
         // Enforce 308 permanent redirect if accessed via non-canonical ancestor path
@@ -154,7 +159,7 @@ export default async function CustomContentPage({ params }: CustomPageProps) {
       />
       {/* The page's own blocks carry the visible heading; keep the title for screen readers and search engines. */}
       <h1 className="sr-only">{pageData.page.title}</h1>
-      <BlockRenderer blocks={renderResult.blocks} renderData={pageData.renderData} />
+      <BlockRenderer blocks={renderResult.blocks} renderData={pageData.renderData} context={{ currency: marketCurrency, locale: marketLocale }} />
       <GoogleOneTapPrompt />
     </article>
   );

@@ -2,16 +2,19 @@
 
 import React, { createContext, useContext, useState, useSyncExternalStore } from "react";
 import type { StorefrontProductDetail, StorefrontVariant } from "@bs/domain";
-import { formatMoney } from "@bs/contracts/money";
+import { formatMinor } from "@/lib/money-client.ts";
 import { useMoney, useMarket } from "@/components/market/MarketProvider.tsx";
 import { addVariantToCart } from "./AddToCartButton.tsx";
-import { RequestQuoteDialog } from "./RequestQuoteDialog.tsx";
+import dynamic from "next/dynamic";
+
+// Only price-on-request products open it, so it loads on demand and stays out of the product page bundle (50 KB gzip budget).
+const RequestQuoteDialog = dynamic(() => import("./RequestQuoteDialog.tsx").then((m) => m.RequestQuoteDialog), { ssr: false });
 import { ShareButton } from "./ShareButton.tsx";
 import { buyModel } from "@/lib/buy-model.ts";
 
 /** Formats minor units into the store currency format (defaults to INR) */
 export function formatInr(paise: number, currency = "INR"): string {
-  return formatMoney(paise, currency);
+  return formatMinor(paise, currency, currency === "INR" ? "en-IN" : "en-US");
 }
 
 const subscribeNever = () => () => {};
@@ -251,7 +254,7 @@ export function PurchaseActions({ addToCartLabel = "Add to cart", buyNowLabel = 
           Request a quote
         </button>
         <p className="mt-2 text-center text-xs text-muted-foreground">Inquire for custom volume, tailored pricing, or specialized specifications.</p>
-        <RequestQuoteDialog product={product} selectedVariant={selectedVariant} open={quoteOpen} onClose={() => setQuoteOpen(false)} />
+        {quoteOpen ? <RequestQuoteDialog product={product} selectedVariant={selectedVariant} open={quoteOpen} onClose={() => setQuoteOpen(false)} /> : null}
       </div>
     );
   }

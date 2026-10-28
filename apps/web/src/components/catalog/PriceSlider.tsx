@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useState } from "react";
-import { formatMoney, minorUnitExponent } from "@bs/contracts/money";
+import { formatMinor } from "@/lib/money-client.ts";
 import { useMarket } from "@/components/market/MarketProvider.tsx";
 
 /**
@@ -24,8 +24,8 @@ export function PriceSlider({
   onCommit: (lo: number, hi: number) => void;
 }) {
   const { currency, locale } = useMarket();
-  const factor = 10 ** minorUnitExponent(currency);
-  const fmt = (major: number) => formatMoney(major * factor, currency, { locale, alwaysShowFraction: false });
+  const factor = currency === "JPY" ? 1 : 100;
+  const fmt = (major: number) => formatMinor(major * factor, currency, locale);
 
   const clamp = (n: number) => Math.min(max, Math.max(min, n));
   const [lo, setLo] = useState(clamp(valueMin));

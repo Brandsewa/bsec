@@ -4,6 +4,11 @@ import { renderToString } from "react-dom/server";
 
 // Mock server-only
 vi.mock("server-only", () => ({}));
+// The market lookups need a real request and the markets tables; they are covered by the domain real-database tests.
+vi.mock("@/server/market.ts", () => ({
+  getMarketContext: async () => ({ markets: [], market: null, suggestion: null, marketId: null, currency: "INR", locale: "en-IN", prefix: "" }),
+}));
+
 process.env.DATABASE_URL_RW = process.env.DATABASE_URL_RW ?? "postgres://x:y@127.0.0.1:1/none";
 
 // Mock next/navigation
