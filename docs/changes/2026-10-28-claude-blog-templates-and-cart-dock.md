@@ -2,7 +2,7 @@
 
 - **Date:** 2026-10-28
 - **Agent:** claude
-- **Branch:** `feat/blog-templates-cart-dock` (not merged yet; PR below once opened)
+- **Branch:** `feat/blog-templates-cart-dock` (merged in #147, fdfe825)
 - **Area:** blocks, block-editor, domain, contracts, web, admin
 - **Type:** feature
 - **Supersedes:** none

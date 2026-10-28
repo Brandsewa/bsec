@@ -2,7 +2,7 @@
 
 - **Date:** 2026-10-28
 - **Agent:** claude
-- **Branch:** `feat/product-card-rows` (PR below once opened)
+- **Branch:** `feat/product-card-rows` (merged in #148, 4fa9cd6)
 - **Area:** blocks, web
 - **Type:** feature
 - **Supersedes:** none
