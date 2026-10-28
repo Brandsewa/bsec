@@ -282,6 +282,7 @@ import {
   previewPromoCode,
   acceptTenantOwnerInvite,
   listPublicPlans,
+  listPlatformCountries,
   loadTrialPolicy,
   listPublicThemeTemplates,
   getOnboardingProgress,
@@ -3731,6 +3732,12 @@ api.get("/saas/plans", async (c) => {
   const db = saasDb(server().rt);
   const plans = await listPublicPlans(db);
   return c.json(plans);
+});
+
+api.get("/saas/countries", async (c) => {
+  const db = saasDb(server().rt);
+  const countries = await listPlatformCountries(db);
+  return c.json(countries);
 });
 
 /** The free trial a new store gets (Super Admin, Platform billing): the signup page shows it instead of a fixed number. */

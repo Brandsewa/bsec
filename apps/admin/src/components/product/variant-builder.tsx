@@ -1,6 +1,6 @@
 import { ImageIcon, Plus, X } from "lucide-react";
 import { useMemo, useState, type KeyboardEvent } from "react";
-import { useMutation } from "@tanstack/react-query";
+import { useMutation, useQuery } from "@tanstack/react-query";
 import {
   Button,
   Card,
@@ -27,6 +27,7 @@ import {
   toast,
 } from "@bs/ui";
 import type { ProductDetail, ProductVariant } from "@bs/contracts";
+import { formatWeight, type WeightUnit } from "@bs/contracts/units";
 import { client, orpc } from "../../lib/orpc.ts";
 import { errorMessage } from "../../lib/errors.ts";
 import { useBulkRunner } from "../data-table/use-bulk-runner.ts";
@@ -104,6 +105,8 @@ export interface VariantBuilderProps {
  * apply, then manage each variant (SKU, price, weight, barcode, image...) in a side drawer or set prices in bulk.
  */
 export function VariantBuilderCard({ product, priceOnRequest, onChanged }: VariantBuilderProps) {
+  const settingsQuery = useQuery(orpc.admin.settings.get.queryOptions());
+  const weightUnit: WeightUnit = settingsQuery.data?.weightUnit ?? "g";
   const initial: DraftOption[] = useMemo(() => product.options.map((o) => ({ name: o.name, values: [...o.values] })), [product.options]);
   const [draft, setDraft] = useState<DraftOption[]>(initial);
   const [drawerVariant, setDrawerVariant] = useState<ProductVariant | null>(null);
@@ -343,7 +346,7 @@ export function VariantBuilderCard({ product, priceOnRequest, onChanged }: Varia
                         </TableCell>
                         <TableCell className="font-mono text-xs text-muted-foreground">{v.sku}</TableCell>
                         <TableCell className="text-right text-sm">{priceOnRequest ? "Quote only" : inr.format(v.price / 100)}</TableCell>
-                        <TableCell className="text-right text-xs text-muted-foreground">{v.weightGrams != null ? `${v.weightGrams} g` : "—"}</TableCell>
+                        <TableCell className="text-right text-xs text-muted-foreground">{v.weightGrams != null ? formatWeight(v.weightGrams, weightUnit) : "—"}</TableCell>
                         <TableCell className="text-right">
                           <Button
                             type="button"

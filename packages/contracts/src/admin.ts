@@ -4,6 +4,7 @@ import { z } from "zod";
 import { financeContract } from "./finance.ts";
 import { blogContract } from "./blog.ts";
 import { storeNotificationsContract } from "./notifications.ts";
+import { UNIT_SYSTEMS, WEIGHT_UNITS } from "./units.ts";
 
 // --- Existing M1 Models ---
 export const Membership = z.object({
@@ -148,6 +149,9 @@ export const StoreSettings = z.object({
   storeName: z.string(),
   currency: z.string(),
   timezone: z.string(),
+  country: z.string().optional(),
+  unitSystem: z.enum(UNIT_SYSTEMS).default("metric"),
+  weightUnit: z.enum(WEIGHT_UNITS).default("kg"),
   legalName: z.string().nullable().optional(),
   supportEmail: z.string().nullable().optional(),
   supportPhone: z.string().nullable().optional(),
@@ -2217,6 +2221,8 @@ export const adminContract = {
           storeName: z.string().min(1).max(120).optional(),
           currency: z.string().min(3).max(3).optional(),
           timezone: StoreTimezone.optional(),
+          unitSystem: z.enum(UNIT_SYSTEMS).optional(),
+          weightUnit: z.enum(WEIGHT_UNITS).optional(),
           legalName: z.string().max(200).nullable().optional(),
           supportEmail: z.string().email().nullable().optional(),
           supportPhone: z.string().max(30).nullable().optional(),

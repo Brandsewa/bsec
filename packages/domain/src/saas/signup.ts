@@ -42,6 +42,7 @@ export interface CompleteSignupInput {
     googleTicket?: string | undefined;
   };
   planCode?: "starter" | "growth" | "pro" | string | undefined;
+  country?: string | undefined;
   business?: ProvisionBusinessInput | undefined;
   currency?: string | undefined;
   timezone?: string | undefined;
@@ -175,9 +176,10 @@ export async function completeSignup(
       phone: input.owner.phone,
     },
     planCode: input.planCode || "starter",
+    country: input.country,
     business: input.business,
-    currency: input.currency || "INR",
-    timezone: input.timezone || "Asia/Kolkata",
+    currency: input.currency,
+    timezone: input.timezone,
     leadId: input.leadId,
     source: "self_service",
     promoCode: input.promoCode,
@@ -207,6 +209,8 @@ export interface PublicPlan {
   name: string;
   priceMonthlyPaise: number;
   priceYearlyPaise: number;
+  priceMonthlyUsdCents: number | null;
+  priceYearlyUsdCents: number | null;
   currency: string;
   limits: Record<string, unknown>;
   features: Record<string, unknown>;
@@ -221,6 +225,17 @@ export interface PublicThemeTemplate {
   previewImageKey: string | null;
 }
 
+export interface PublicPlatformCountry {
+  iso2: string;
+  name: string;
+  defaultCurrency: string;
+  defaultLocale: string;
+  defaultTimezone: string;
+  defaultUnitSystem: string;
+  addressSchema: string;
+  sort: number;
+}
+
 export async function listPublicPlans(db: Db): Promise<PublicPlan[]> {
   const res = await db.execute<{
     id: string;
@@ -228,12 +243,14 @@ export async function listPublicPlans(db: Db): Promise<PublicPlan[]> {
     name: string;
     price_monthly_paise: number;
     price_yearly_paise: number;
+    price_monthly_usd_cents: number | null;
+    price_yearly_usd_cents: number | null;
     currency: string;
     limits: Record<string, unknown>;
     features: Record<string, unknown>;
     sort: number;
   }>(sql`
-    SELECT id, code, name, price_monthly_paise, price_yearly_paise, currency, limits, features, sort
+    SELECT id, code, name, price_monthly_paise, price_yearly_paise, price_monthly_usd_cents, price_yearly_usd_cents, currency, limits, features, sort
     FROM plans
     WHERE is_public = true
     ORDER BY sort ASC;
@@ -244,9 +261,39 @@ export async function listPublicPlans(db: Db): Promise<PublicPlan[]> {
     name: r.name,
     priceMonthlyPaise: Number(r.price_monthly_paise),
     priceYearlyPaise: Number(r.price_yearly_paise),
+    priceMonthlyUsdCents: r.price_monthly_usd_cents === null || r.price_monthly_usd_cents === undefined ? null : Number(r.price_monthly_usd_cents),
+    priceYearlyUsdCents: r.price_yearly_usd_cents === null || r.price_yearly_usd_cents === undefined ? null : Number(r.price_yearly_usd_cents),
     currency: r.currency,
     limits: r.limits,
     features: r.features,
+    sort: r.sort,
+  }));
+}
+
+export async function listPlatformCountries(db: Db): Promise<PublicPlatformCountry[]> {
+  const res = await db.execute<{
+    iso2: string;
+    name: string;
+    default_currency: string;
+    default_locale: string;
+    default_timezone: string;
+    default_unit_system: string;
+    address_schema: string;
+    sort: number;
+  }>(sql`
+    SELECT iso2, name, default_currency, default_locale, default_timezone, default_unit_system, address_schema, sort
+    FROM platform_countries
+    WHERE enabled = true
+    ORDER BY sort ASC, iso2 ASC;
+  `);
+  return res.rows.map((r) => ({
+    iso2: r.iso2,
+    name: r.name,
+    defaultCurrency: r.default_currency,
+    defaultLocale: r.default_locale,
+    defaultTimezone: r.default_timezone,
+    defaultUnitSystem: r.default_unit_system,
+    addressSchema: r.address_schema,
     sort: r.sort,
   }));
 }
