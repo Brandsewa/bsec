@@ -129,6 +129,33 @@ body {
 /* Form fields on a panel: the page colour lightened towards white, so they follow whatever colour the merchant picks and still lift off the panel. */
 .bs-field { background: color-mix(in srgb, var(--color-background, #ffffff) 35%, #ffffff); border-color: color-mix(in srgb, var(--color-foreground, #0f172a) 14%, transparent); }
 
+/* Header account button (signed in): the small arrow, and the account menu's slide-in (below 1024px) or quick fade (dropdown). */
+button.bsb-site-account { border: 0; cursor: pointer; font-family: inherit; }
+/* The arrow after the name is a pseudo-element (no extra element in the script); it turns over while the menu is open. */
+button.bsb-site-account::after { content: ""; flex: none; width: 0.375rem; height: 0.375rem; margin: -0.15rem 0 0 0.1rem; border-right: 1.5px solid currentColor; border-bottom: 1.5px solid currentColor; transform: rotate(45deg); transition: transform 0.15s; }
+button.bsb-site-account[aria-expanded="true"]::after { transform: rotate(225deg); margin-top: 0.15rem; }
+.bs-av { width: 22px; height: 22px; border-radius: 9999px; object-fit: cover; }
+@keyframes bs-slide-in { from { transform: translateX(100%); } to { transform: none; } }
+@keyframes bs-fade-in { from { opacity: 0; } to { opacity: 1; } }
+.bs-acct-backdrop { animation: bs-fade-in 0.25s ease-out; }
+.bs-acct-panel { animation: bs-slide-in 0.25s ease-out; }
+@media (min-width: 1024px) { .bs-acct-panel { animation: bs-fade-in 0.12s ease-out; } }
+@media (prefers-reduced-motion: reduce) { .bs-acct-backdrop, .bs-acct-panel { animation: none; } }
+
+/* The coupon copy button shows its copy icon, then a tick for a moment after it was pressed. */
+.bs-copy { display: inline-flex; align-items: center; justify-content: center; padding: 0.3rem; border-radius: 0.375rem; background: color-mix(in srgb, var(--color-foreground, #0f172a) 7%, transparent); color: var(--color-muted-foreground, #64748b); transition: background-color 0.15s, color 0.15s; }
+.bs-copy:hover { background: color-mix(in srgb, var(--color-foreground, #0f172a) 13%, transparent); color: var(--color-foreground, #0f172a); }
+.bs-copy[data-copied="true"] { color: var(--color-foreground, #0f172a); }
+.bs-copy svg { width: 0.9375rem; height: 0.9375rem; }
+.bs-copy .bs-copy-done { display: none; }
+.bs-copy[data-copied="true"] .bs-copy-done { display: block; }
+.bs-copy[data-copied="true"] .bs-copy-icon { display: none; }
+
+/* The header cart button and its count: kept as classes (not long utility strings) so the layout's script stays small. */
+.bs-cart-pill { display: inline-flex; align-items: center; gap: 0.375rem; padding: 0.375rem 0.75rem; border-radius: 9999px; font-size: 0.875rem; line-height: 1.25rem; font-weight: 500; transition: opacity 0.15s; }
+.bs-cart-pill:hover { opacity: 0.8; }
+.bs-cart-count { display: inline-flex; align-items: center; justify-content: center; height: 1.25rem; min-width: 1.25rem; padding: 0 0.25rem; border-radius: 9999px; font-size: 0.75rem; line-height: 1rem; font-weight: 600; color: #fff; }
+
 /* The cart docked on the right edge of the screen (desktop only; the header drops its cart from 1024px). It opens the cart drawer. */
 .bs-cart-dock { position: fixed; right: 0; top: 50%; z-index: 40; display: none; transform: translateY(-50%); flex-direction: column; align-items: center; justify-content: center; gap: 0.4rem; min-width: 2.75rem; padding: 0.7rem 0.4rem; font-size: 0.75rem; font-weight: 600; box-shadow: 0 6px 20px rgb(0 0 0 / 0.18); transition: opacity 0.15s; }
 /* !important: the cart link carries inline colours for its header look; the dock restyles it. */

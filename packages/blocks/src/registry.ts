@@ -352,7 +352,8 @@ export const GalleryBlock: BlockDefinition<GalleryProps> = {
   type: "Gallery",
   version: 1,
   schema: GallerySchema,
-  defaultProps: GallerySchema.parse({ title: "Lookbook" }),
+  // No sample heading: a new gallery shows only its pictures until the merchant writes one.
+  defaultProps: GallerySchema.parse({}),
   render: V.GalleryView,
 };
 
