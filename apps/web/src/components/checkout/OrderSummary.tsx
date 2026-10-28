@@ -3,6 +3,7 @@ import React from "react";
 import type { StorefrontCart } from "@bs/domain";
 import { priceOrder } from "@bs/domain/pricing";
 import { DiscountCodeBox } from "@/components/cart/DiscountCodeBox.tsx";
+import { useMoney, useMarket } from "@/components/market/MarketProvider.tsx";
 
 export interface OrderSummaryProps {
   cart: StorefrontCart;
@@ -14,7 +15,9 @@ export interface OrderSummaryProps {
 }
 
 export function OrderSummary({ cart, shippingPaise = 0, codFeePaise = 0, onCartChange }: OrderSummaryProps) {
-  const formattedSubtotal = `₹${(cart.subtotal / 100).toLocaleString("en-IN")}`;
+  const money = useMoney();
+  const { locale } = useMarket();
+  const formattedSubtotal = money(cart.subtotal);
   const pricing = priceOrder({
     subtotal: cart.subtotal,
     shipping: shippingPaise,
@@ -22,9 +25,9 @@ export function OrderSummary({ cart, shippingPaise = 0, codFeePaise = 0, onCartC
     discount: cart.discount ? { type: cart.discount.type, discountAmount: cart.discount.amount } : null,
   });
   const totalPaise = pricing.grandTotal;
-  const formattedTotal = `₹${(totalPaise / 100).toLocaleString("en-IN")}`;
+  const formattedTotal = money(totalPaise);
   const formattedShipping =
-    pricing.shippingTotal === 0 ? "Free" : `₹${(pricing.shippingTotal / 100).toLocaleString("en-IN")}`;
+    pricing.shippingTotal === 0 ? "Free" : money(pricing.shippingTotal);
 
   const preorderItems = cart.items.filter((it) => it.variant.preorderEnabled);
   const latestShipDate = preorderItems.reduce<string | null>((latest, it) => {
@@ -69,7 +72,7 @@ export function OrderSummary({ cart, shippingPaise = 0, codFeePaise = 0, onCartC
               )}
             </div>
             <span className="text-xs font-medium text-foreground">
-              ₹{(item.lineTotal / 100).toLocaleString("en-IN")}
+              {money(item.lineTotal)}
             </span>
           </div>
         ))}
@@ -87,13 +90,13 @@ export function OrderSummary({ cart, shippingPaise = 0, codFeePaise = 0, onCartC
         {pricing.discountTotal > 0 && cart.discount && (
           <div className="flex justify-between text-muted-foreground" data-testid="discount-line">
             <span>Discount ({cart.discount.code})</span>
-            <span className="font-semibold text-emerald-700">−{`₹${(pricing.discountTotal / 100).toLocaleString("en-IN")}`}</span>
+            <span className="font-semibold text-emerald-700">−{money(pricing.discountTotal)}</span>
           </div>
         )}
         {codFeePaise > 0 && (
           <div className="flex justify-between text-muted-foreground">
             <span>Cash on delivery fee</span>
-            <span className="font-semibold text-foreground">{`₹${(codFeePaise / 100).toLocaleString("en-IN")}`}</span>
+            <span className="font-semibold text-foreground">{money(codFeePaise)}</span>
           </div>
         )}
         <div className="flex justify-between text-base font-bold text-foreground border-t border-border/40 pt-2.5">
@@ -111,7 +114,7 @@ export function OrderSummary({ cart, shippingPaise = 0, codFeePaise = 0, onCartC
               <>
                 Your order ships on or after{" "}
                 <span className="font-semibold text-amber-950 dark:text-amber-100">
-                  {new Date(`${latestShipDate}T00:00:00`).toLocaleDateString("en-IN", { day: "numeric", month: "short", year: "numeric" })}
+                  {new Date(`${latestShipDate}T00:00:00`).toLocaleDateString(locale, { day: "numeric", month: "short", year: "numeric" })}
                 </span>{" "}
                 because it includes a pre-order item.
               </>

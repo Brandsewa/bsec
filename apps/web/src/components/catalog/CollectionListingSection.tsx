@@ -51,6 +51,8 @@ export function CollectionListingSection({
   options = DEFAULT_COLLECTION_LISTING_OPTIONS,
   basePath,
   archive = { href: "/collections", label: "Collections" },
+  currency = "INR",
+  locale,
 }: {
   collection: StorefrontCollectionDetail["collection"];
   products: StorefrontCollectionDetail["products"];
@@ -64,6 +66,8 @@ export function CollectionListingSection({
   /** Where numbered pages link; a category page passes its own path so it can share this template. */
   basePath?: string | undefined;
   archive?: { href: string; label: string } | undefined;
+  currency?: string | undefined;
+  locale?: string | undefined;
 }) {
   const o = { ...DEFAULT_COLLECTION_LISTING_OPTIONS, ...options };
   const totalPages = Math.ceil(products.total / limit);
@@ -91,6 +95,8 @@ export function CollectionListingSection({
             showViewProduct={o.showViewProduct}
             hoverSecondImage={o.hoverSecondImage}
             priority={i < 4}
+            currency={currency}
+            locale={locale}
           />
         ))}
       </ProductsContainer>

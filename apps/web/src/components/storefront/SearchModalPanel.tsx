@@ -7,6 +7,7 @@ import { addVariantToCart } from "@/components/product/AddToCartButton.tsx";
 import dynamic from "next/dynamic";
 import type { CardCartProduct } from "@/components/catalog/CardCartButton.tsx";
 import { PLACEHOLDER_IMAGE_URL } from "@/lib/placeholder.ts";
+import { useMoney } from "@/components/market/MarketProvider.tsx";
 
 // The quick-buy popup is only needed when someone chooses options, so it loads then.
 const QuickBuyDialog = dynamic(() => import("@/components/catalog/CardCartButton.tsx").then((m) => m.QuickBuyDialog), { ssr: false });
@@ -18,14 +19,10 @@ interface Result extends CardCartProduct {
   priceOnRequest: boolean;
 }
 
-function inr(paise: number): string {
-  const rupees = paise / 100;
-  return new Intl.NumberFormat("en-IN", { style: "currency", currency: "INR", maximumFractionDigits: rupees % 1 === 0 ? 0 : 2 }).format(rupees);
-}
-
 /** The search popup itself: type, see products as you go, open one or add it to the cart without leaving the page. */
 export function SearchModalPanel({ onClose }: { onClose: () => void }) {
   const router = useRouter();
+  const money = useMoney();
   const [query, setQuery] = useState("");
   const [results, setResults] = useState<Result[] | null>(null);
   const [loading, setLoading] = useState(false);
@@ -155,7 +152,7 @@ export function SearchModalPanel({ onClose }: { onClose: () => void }) {
                         {p.title}
                       </Link>
                       <p className="mt-0.5 text-sm text-muted-foreground">
-                        {p.priceOnRequest ? "Price on request" : p.priceMax > p.priceMin ? `From ${inr(p.priceMin)}` : inr(p.priceMin)}
+                        {p.priceOnRequest ? "Price on request" : p.priceMax > p.priceMin ? `From ${money(p.priceMin)}` : money(p.priceMin)}
                       </p>
                     </div>
                     {buyable ? (

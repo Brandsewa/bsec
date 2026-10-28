@@ -4,6 +4,7 @@ import React, { useCallback, useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { addVariantToCart } from "@/components/product/AddToCartButton.tsx";
 import { PLACEHOLDER_IMAGE_URL } from "@/lib/placeholder.ts";
+import { useMoney } from "@/components/market/MarketProvider.tsx";
 
 export interface CardCartProduct {
   title: string;
@@ -16,11 +17,6 @@ export interface CardCartProduct {
     options?: Array<{ name: string; values: string[] }> | undefined;
     variants?: Array<{ id: string; title: string; optionValues: Record<string, string>; price: number; compareAtPrice?: number | undefined; inStock: boolean }> | undefined;
   };
-}
-
-function inr(paise: number): string {
-  const rupees = paise / 100;
-  return new Intl.NumberFormat("en-IN", { style: "currency", currency: "INR", maximumFractionDigits: rupees % 1 === 0 ? 0 : 2 }).format(rupees);
 }
 
 const CART_ICON = (
@@ -168,6 +164,7 @@ export function QuickBuyDialog({ product, showViewProduct, onClose }: { product:
   };
 
   const hasSale = selected?.compareAtPrice !== undefined && selected.compareAtPrice > selected.price;
+  const money = useMoney();
 
   return (
     <div className="fixed inset-0 z-[70] flex items-end justify-center sm:items-center sm:p-4" data-testid="quick-buy">
@@ -192,8 +189,8 @@ export function QuickBuyDialog({ product, showViewProduct, onClose }: { product:
           <div className="min-w-0 p-5 sm:overflow-y-auto sm:p-8">
             <h2 className="pr-10 text-xl font-semibold leading-snug">{product.title}</h2>
             <p className="mt-2 flex items-baseline gap-2">
-              <span className="text-xl font-bold">{selected ? inr(selected.price) : "Choose options"}</span>
-              {hasSale && selected?.compareAtPrice ? <span className="text-sm text-muted-foreground line-through">{inr(selected.compareAtPrice)}</span> : null}
+              <span className="text-xl font-bold">{selected ? money(selected.price) : "Choose options"}</span>
+              {hasSale && selected?.compareAtPrice ? <span className="text-sm text-muted-foreground line-through">{money(selected.compareAtPrice)}</span> : null}
             </p>
             {product.shortDescription ? <p className="mt-3 line-clamp-3 text-sm leading-relaxed text-muted-foreground">{product.shortDescription}</p> : null}
 

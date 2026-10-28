@@ -2,6 +2,7 @@
 
 import React, { useState } from "react";
 import type { ShippingEstimate } from "@bs/domain";
+import { useMoney } from "@/components/market/MarketProvider.tsx";
 
 export interface ShippingEstimatorProps {
   onEstimateChange?: (estimate: ShippingEstimate | null) => void;
@@ -12,6 +13,7 @@ export function ShippingEstimator({ onEstimateChange }: ShippingEstimatorProps) 
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [estimate, setEstimate] = useState<ShippingEstimate | null>(null);
+  const money = useMoney();
 
   const handleEstimate = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -88,7 +90,7 @@ export function ShippingEstimator({ onEstimateChange }: ShippingEstimatorProps) 
                 <span className="font-medium">{rate.title}</span> ({rate.estimatedDays}):
               </span>
               <span className="font-semibold">
-                {rate.amount === 0 ? "Free" : `₹${(rate.amount / 100).toLocaleString("en-IN")}`}
+                {rate.amount === 0 ? "Free" : money(rate.amount)}
               </span>
             </div>
           ))}
