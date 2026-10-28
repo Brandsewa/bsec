@@ -28,6 +28,9 @@ export const plans = pgTable("plans", {
   priceMonthlyPaise: bigint("price_monthly_paise", { mode: "number" }).notNull(),
   priceYearlyPaise: bigint("price_yearly_paise", { mode: "number" }).notNull(),
   currency: char("currency", { length: 3 }).notNull().default("INR"),
+  /** Global (PayPal) price in USD cents, decision 13. null = not offered outside India. */
+  priceMonthlyUsdCents: bigint("price_monthly_usd_cents", { mode: "number" }),
+  priceYearlyUsdCents: bigint("price_yearly_usd_cents", { mode: "number" }),
   limits: jsonb("limits").notNull().default({}), // { products, staff, storage_mb, orders_month, custom_domain }
   features: jsonb("features").notNull().default({}),
   razorpayPlanIdMonthly: text("razorpay_plan_id_monthly"),

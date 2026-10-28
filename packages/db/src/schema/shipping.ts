@@ -281,6 +281,8 @@ export const shippingZones = tenantTable(
     /** Empty = the whole country. Otherwise only these states (migration 0065). */
     states: text("states").array().notNull().default(sql`ARRAY[]::text[]`),
     isDefault: boolean("is_default").notNull().default(false),
+    /** The market this zone belongs to (ADR-040); its rates are in that market's currency. */
+    marketId: uuid("market_id"),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().default(sql`now()`),
     updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().default(sql`now()`),
   },

@@ -60,14 +60,15 @@ beforeAll(async () => {
   await q(serverUrl, `CREATE DATABASE ${dbName}`);
   await bootstrapRoles(superUrl(), PW);
 
-  // A migrations folder that stops before 0087.
+  // A migrations folder that stops before 0087 (and so before 0088).
   tmp = mkdtempSync(path.join(os.tmpdir(), "mm-mig-"));
   const src = path.resolve(here, "../migrations");
   cpSync(src, tmp, { recursive: true });
   rmSync(path.join(tmp, "0087_markets_foundation.sql"));
+  rmSync(path.join(tmp, "0088_markets_config.sql"));
   const journalPath = path.join(tmp, "meta", "_journal.json");
   const journal = JSON.parse(readFileSync(journalPath, "utf8")) as { entries: { tag: string }[] };
-  journal.entries = journal.entries.filter((e) => e.tag !== "0087_markets_foundation");
+  journal.entries = journal.entries.filter((e) => !e.tag.startsWith("0087_") && !e.tag.startsWith("0088_"));
   writeFileSync(journalPath, JSON.stringify(journal));
   await runMigrations(as("app_owner"), tmp);
 

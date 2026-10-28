@@ -36,6 +36,10 @@ export const orders = tenantTable(
     baseCurrency: text("base_currency"),
     fxRate: numeric("fx_rate", { precision: 18, scale: 8 }),
     baseGrandTotal: bigint("base_grand_total", { mode: "number" }),
+    /** [{ name, rateBps, amount }] from the generic market tax engine (ADR-040). */
+    taxBreakdown: jsonb("tax_breakdown"),
+    /** The market policy text as it was at purchase; later edits never change an existing order. */
+    policySnapshot: jsonb("policy_snapshot"),
     status: text("status").notNull().default("pending"),
     paymentStatus: text("payment_status").notNull().default("pending"),
     fulfillmentStatus: text("fulfillment_status").notNull().default("unfulfilled"),

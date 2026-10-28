@@ -29,6 +29,12 @@ export const markets = tenantTable(
     pathPrefix: text("path_prefix"),
     catalogMode: text("catalog_mode").notNull().default("all"), // 'all' | 'selected'
     locale: text("locale"),
+    /** Collect tax from market_tax_rules (merchant-entered). The India base market keeps the existing GST engine. */
+    taxCollect: boolean("tax_collect").notNull().default(false),
+    taxShippingToo: boolean("tax_shipping_too").notNull().default(false),
+    /** Who accepted that rates and policies are the merchant's responsibility (ADR-040 section 4). */
+    complianceAckBy: uuid("compliance_ack_by"),
+    complianceAckAt: timestamp("compliance_ack_at", { withTimezone: true }),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().default(sql`now()`),
     updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().default(sql`now()`),
   },
