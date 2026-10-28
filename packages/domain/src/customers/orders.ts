@@ -37,6 +37,14 @@ export interface CustomerOrderDetail extends CustomerOrderSummary {
   phone: string;
   shippingAddress: unknown;
   billingAddress: unknown;
+  policySnapshot?: {
+    market?: string | null | undefined;
+    marketName?: string | null | undefined;
+    text?: string | null | undefined;
+    cancellation?: unknown;
+    returnSettings?: unknown;
+    capturedAt?: string | undefined;
+  } | null | undefined;
   items: OrderItemSummary[];
 }
 
@@ -159,6 +167,7 @@ export async function getCustomerOrderDetail(
       phone: order.phone,
       shippingAddress: order.shippingAddress,
       billingAddress: order.billingAddress,
+      policySnapshot: (order.policySnapshot ?? null) as CustomerOrderDetail["policySnapshot"],
       items: items.map((it) => ({
         id: it.id,
         variantId: it.variantId,
@@ -236,6 +245,7 @@ export async function getOrderByActionToken(
       phone: order.phone,
       shippingAddress: order.shippingAddress,
       billingAddress: order.billingAddress,
+      policySnapshot: (order.policySnapshot ?? null) as CustomerOrderDetail["policySnapshot"],
       items: items.map((it) => ({
         id: it.id,
         variantId: it.variantId,

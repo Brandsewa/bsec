@@ -1146,6 +1146,7 @@ export type ShippingRateItem = z.infer<typeof ShippingRateItem>;
 export const ShippingZoneItem = z.object({
   id: z.string().uuid(),
   name: z.string(),
+  marketId: z.string().uuid().nullable().optional(),
   countries: z.array(z.string()),
   /** Empty = the whole country; otherwise only these states. */
   states: z.array(z.string()).default([]),
@@ -1164,6 +1165,7 @@ export const UpdateShippingInput = z.object({
   standardRatePaise: z.number().int().min(0).default(0),
   expressRatePaise: z.number().int().min(0).default(15000),
   freeShippingThresholdPaise: z.number().int().min(0).nullable().optional(),
+  marketId: z.string().uuid().nullable().optional(),
 });
 export type UpdateShippingInput = z.infer<typeof UpdateShippingInput>;
 
@@ -1187,6 +1189,7 @@ export type SaveShippingRate = z.infer<typeof SaveShippingRate>;
 export const SaveShippingZone = z.object({
   id: z.string().uuid().optional(),
   name: z.string().trim().min(1).max(80),
+  marketId: z.string().uuid().nullable().optional(),
   countries: z.array(z.string().length(2)).min(1).max(250),
   states: z.array(z.string().trim().min(1).max(60)).max(60).default([]),
   isDefault: z.boolean(),
@@ -1805,6 +1808,7 @@ export const ShippingPreviewInput = z.object({
   destinationCountry: z.string().length(2).optional(),
   destinationState: z.string().optional(),
   destinationPincode: z.string().optional(),
+  marketId: z.string().uuid().nullable().optional(),
 });
 export type ShippingPreviewInput = z.infer<typeof ShippingPreviewInput>;
 

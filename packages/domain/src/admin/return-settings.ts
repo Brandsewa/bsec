@@ -83,6 +83,69 @@ export function parseReturnSettings(raw: unknown): ReturnSettings {
   };
 }
 
+/**
+ * Merges market return settings overrides over the store base return settings.
+ * Only non-null / non-empty fields in overrides take precedence.
+ */
+export function resolveMarketReturnSettings(
+  base: ReturnSettings,
+  overrides?: unknown,
+  policyTextOverride?: string | null,
+): ReturnSettings {
+  if (!overrides || typeof overrides !== "object") {
+    if (policyTextOverride !== undefined && policyTextOverride !== null && policyTextOverride.trim() !== "") {
+      return { ...base, policyText: policyTextOverride.trim() };
+    }
+    return { ...base };
+  }
+  const o = overrides as Record<string, unknown>;
+  const acceptReturns = typeof o.acceptReturns === "boolean" ? o.acceptReturns : base.acceptReturns;
+  const allowExchanges = typeof o.allowExchanges === "boolean" ? o.allowExchanges : base.allowExchanges;
+  const returnWindowDays =
+    typeof o.returnWindowDays === "number" && Number.isFinite(o.returnWindowDays) && o.returnWindowDays >= 1 && o.returnWindowDays <= 90
+      ? Math.round(o.returnWindowDays)
+      : base.returnWindowDays;
+
+  let reasons = base.reasons;
+  if (Array.isArray(o.reasons) && o.reasons.length > 0) {
+    const parsed = o.reasons
+      .filter((r): r is Record<string, unknown> => r && typeof r === "object")
+      .map((r) => ({
+        id: String(r.id || crypto.randomUUID()).slice(0, 50),
+        label: String(r.label || "").trim().slice(0, 60),
+        photoRequirement: (["required", "optional", "not_asked"].includes(String(r.photoRequirement))
+          ? String(r.photoRequirement)
+          : "optional") as "required" | "optional" | "not_asked",
+      }))
+      .filter((r) => r.label.length > 0)
+      .slice(0, 12);
+    if (parsed.length > 0) {
+      reasons = parsed;
+    }
+  }
+
+  const instructions =
+    typeof o.instructions === "string" && o.instructions.trim().length > 0
+      ? o.instructions.slice(0, 1000)
+      : base.instructions;
+
+  const policyText =
+    policyTextOverride !== undefined && policyTextOverride !== null && policyTextOverride.trim() !== ""
+      ? policyTextOverride.trim()
+      : typeof o.policyText === "string" && o.policyText.trim().length > 0
+        ? o.policyText.slice(0, 1000)
+        : base.policyText;
+
+  return {
+    acceptReturns,
+    allowExchanges,
+    returnWindowDays,
+    reasons,
+    instructions,
+    policyText,
+  };
+}
+
 /** Reads this store's return settings. `tx` must already be inside withTenant(). */
 export async function readReturnSettings(tx: Db, _tenantId: string): Promise<ReturnSettings> {
   const [row] = await tx

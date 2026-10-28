@@ -49,6 +49,8 @@ export interface EmailOrder {
   } | null | undefined;
   /** A link that shows this order without a login (an order-view token). */
   orderUrl?: string | undefined;
+  /** Market policy text snapshotted on the order at purchase (ADR-040). */
+  policyText?: string | null | undefined;
 }
 
 export interface EmailData {
@@ -244,12 +246,14 @@ function orderEmail(opts: { title: string; intro: (d: EmailData) => string; extr
     const intro = opts.intro(data);
     const extra = opts.extra?.(data) ?? "";
     const block = o ? orderBlock(o) : null;
+    const policyHtml = o?.policyText ? `<div style="margin:20px 0 0;padding:12px 14px;background:%%soft%%;border-radius:8px;font-size:%%fsSmall%%;color:%%muted%%;line-height:1.5"><strong style="color:%%text%%">Store policy:</strong><br>${escapeHtml(o.policyText)}</div>` : "";
+    const policyTextStr = o?.policyText ? `\n\nPolicy:\n${o.policyText}` : "";
     const html = layout(
       brand,
       subject,
-      `${heading(opts.title)}${para(intro)}${extra ? para(extra) : ""}${block ? block.html : ""}${o?.orderUrl ? button(opts.cta ?? "View your order", o.orderUrl) : ""}`,
+      `${heading(opts.title)}${para(intro)}${extra ? para(extra) : ""}${block ? block.html : ""}${policyHtml}${o?.orderUrl ? button(opts.cta ?? "View your order", o.orderUrl) : ""}`,
     );
-    const text = `${opts.title}\n\n${intro}${extra ? `\n${extra}` : ""}${block ? `\n\n${block.text}` : ""}${o?.orderUrl ? `\n\n${opts.cta ?? "View your order"}: ${o.orderUrl}` : ""}${footerText(brand)}`;
+    const text = `${opts.title}\n\n${intro}${extra ? `\n${extra}` : ""}${block ? `\n\n${block.text}` : ""}${policyTextStr}${o?.orderUrl ? `\n\n${opts.cta ?? "View your order"}: ${o.orderUrl}` : ""}${footerText(brand)}`;
     return { html, text };
   };
 }

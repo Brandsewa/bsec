@@ -67,7 +67,7 @@ export default async function OrderTrackingPage({ params }: OrderTrackingPagePro
             <span className="font-semibold">Dispatch date:</span> Ships on or after{" "}
             <span className="font-medium text-amber-900 dark:text-amber-100">
               {order.shipsOn >= new Date().toISOString().slice(0, 10)
-                ? new Date(`${order.shipsOn}T00:00:00`).toLocaleDateString("en-IN", { day: "numeric", month: "short", year: "numeric" })
+                ? new Date(`${order.shipsOn}T00:00:00`).toLocaleDateString("en-US", { day: "numeric", month: "short", year: "numeric" })
                 : "Ships soon"}
             </span>
           </div>
@@ -120,6 +120,17 @@ export default async function OrderTrackingPage({ params }: OrderTrackingPagePro
             <span><Money paise={order.grandTotal} currency={order.currency} /></span>
           </div>
         </div>
+
+        {order.policySnapshot?.text ? (
+          <div className="mt-6 border-t border-border pt-4">
+            <h3 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground mb-1">
+              {order.policySnapshot.marketName ? `${order.policySnapshot.marketName} Policy` : "Return & Cancellation Policy"}
+            </h3>
+            <p className="text-xs text-muted-foreground whitespace-pre-line">
+              {order.policySnapshot.text}
+            </p>
+          </div>
+        ) : null}
 
         {returnsView && (returnsView.returns.length > 0 || returnsView.canRequest) && (
           <div className="mt-8 space-y-4 border-t border-border pt-6">

@@ -94,7 +94,7 @@ export default async function ThankYouPage({ params }: ThankYouPageProps) {
               <span className="text-muted-foreground">Estimated dispatch:</span>
               <span className="font-semibold text-amber-700 dark:text-amber-400">
                 {order.shipsOn >= new Date().toISOString().slice(0, 10)
-                  ? `Ships on or after ${new Date(`${order.shipsOn}T00:00:00`).toLocaleDateString("en-IN", { day: "numeric", month: "short", year: "numeric" })}`
+                  ? `Ships on or after ${new Date(`${order.shipsOn}T00:00:00`).toLocaleDateString("en-US", { day: "numeric", month: "short", year: "numeric" })}`
                   : "Ships soon"}
               </span>
             </div>
@@ -121,6 +121,17 @@ export default async function ThankYouPage({ params }: ThankYouPageProps) {
             </div>
           ))}
         </div>
+
+        {order.policySnapshot?.text ? (
+          <div className="mt-5 border-t border-border pt-4">
+            <h3 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground mb-1">
+              {order.policySnapshot.marketName ? `${order.policySnapshot.marketName} Policy` : "Return & Cancellation Policy"}
+            </h3>
+            <p className="text-xs text-muted-foreground whitespace-pre-line">
+              {order.policySnapshot.text}
+            </p>
+          </div>
+        ) : null}
       </div>
 
       {order.paymentStatus === "pending" && !cancelled ? (
