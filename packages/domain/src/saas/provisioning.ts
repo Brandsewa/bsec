@@ -296,6 +296,13 @@ export async function provisionTenant(
       },
     });
 
+    // 9b. Base market (ADR-040): every store has exactly one, from its country and currency.
+    const [baseMarket] = await tx
+      .insert(schema.markets)
+      .values({ tenantId, name: "India", handle: "in", isBase: true, status: "active", currency, taxDisplay: "inclusive" })
+      .returning({ id: schema.markets.id });
+    if (baseMarket) await tx.insert(schema.marketCountries).values({ tenantId, marketId: baseMarket.id, country: "IN" });
+
     // 10. Default Warehouse Location
     await tx
       .insert(schema.locations)

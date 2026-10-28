@@ -162,6 +162,19 @@ describe("M8 Atomic Tenant Provisioning Engine (PLAN §5.1, §6.4, §7 / ADR-016
       cod: { enabled: true, feePaise: 0 },
     });
 
+    // Verify the base market (ADR-040): one per store, India, in the store currency, covering IN
+    const baseMarkets = await platformDb.db
+      .select()
+      .from(schema.markets)
+      .where(sql`tenant_id = ${result.tenantId}`);
+    expect(baseMarkets).toHaveLength(1);
+    expect(baseMarkets[0]).toMatchObject({ isBase: true, currency: "INR", handle: "in", status: "active" });
+    const baseCountries = await platformDb.db
+      .select()
+      .from(schema.marketCountries)
+      .where(sql`tenant_id = ${result.tenantId}`);
+    expect(baseCountries.map((c) => c.country)).toEqual(["IN"]);
+
     // Verify Warehouse Location
     const locations = await platformDb.db
       .select()
