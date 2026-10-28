@@ -8,7 +8,7 @@ import {
   type AuditMeta,
 } from "../platform-services.ts";
 
-export const PAYMENT_PROVIDER_IDS = ["razorpay", "stripe", "cashfree"] as const;
+export const PAYMENT_PROVIDER_IDS = ["razorpay", "stripe", "cashfree", "paypal"] as const;
 export type PaymentProviderId = (typeof PAYMENT_PROVIDER_IDS)[number];
 
 export interface PlatformPaymentProviderView {

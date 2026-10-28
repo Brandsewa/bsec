@@ -205,3 +205,6 @@ export * from "./notifications/branding-loader.ts";
 export * from "./markets/service.ts";
 export * from "./markets/rules.ts";
 export * from "./markets/gateways.ts";
+export * from "./payments/online-checkout.ts";
+export * from "./markets/lookup.ts";
+export * from "./markets/addresses.ts";

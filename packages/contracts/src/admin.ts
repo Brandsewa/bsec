@@ -1249,7 +1249,7 @@ export type PaymentsStatus = z.infer<typeof PaymentsStatus>;
 
 /** A payment provider as one store sees it (ADMIN-IMPROVEMENTS-PLAN §6.4). Never carries a key or secret. */
 export const StorePaymentProvider = z.object({
-  provider: z.enum(["razorpay", "stripe", "cashfree"]),
+  provider: z.enum(["razorpay", "stripe", "cashfree", "paypal"]),
   displayName: z.string(),
   platformEnabled: z.boolean(),
   liveModeAllowed: z.boolean(),
@@ -2118,7 +2118,7 @@ export const adminContract = {
       .route({ method: "PUT", path: "/admin/payment-providers/{provider}/credentials" })
       .input(
         z.object({
-          provider: z.enum(["razorpay", "stripe", "cashfree"]),
+          provider: z.enum(["razorpay", "stripe", "cashfree", "paypal"]),
           /** Razorpay key id (rzp_test_...) or Cashfree App ID; not used for Stripe. */
           keyId: z.string().min(6).max(100).optional(),
           /** Razorpay key secret, the Stripe secret key (sk_test_...), or the Cashfree secret key (cfsk_ma_test_...). */
@@ -2129,11 +2129,11 @@ export const adminContract = {
       .output(StorePaymentProvider),
     clearCredentials: oc
       .route({ method: "DELETE", path: "/admin/payment-providers/{provider}/credentials" })
-      .input(z.object({ provider: z.enum(["razorpay", "stripe", "cashfree"]) }))
+      .input(z.object({ provider: z.enum(["razorpay", "stripe", "cashfree", "paypal"]) }))
       .output(StorePaymentProvider.nullable()),
     test: oc
       .route({ method: "POST", path: "/admin/payment-providers/{provider}/test" })
-      .input(z.object({ provider: z.enum(["razorpay", "stripe", "cashfree"]) }))
+      .input(z.object({ provider: z.enum(["razorpay", "stripe", "cashfree", "paypal"]) }))
       .output(
         z.object({
           ok: z.boolean(),
@@ -2144,7 +2144,7 @@ export const adminContract = {
       ),
     setActive: oc
       .route({ method: "POST", path: "/admin/payment-providers/{provider}/active" })
-      .input(z.object({ provider: z.enum(["razorpay", "stripe", "cashfree"]), active: z.boolean() }))
+      .input(z.object({ provider: z.enum(["razorpay", "stripe", "cashfree", "paypal"]), active: z.boolean() }))
       .output(StorePaymentProvider),
   },
   paymentMethods: {

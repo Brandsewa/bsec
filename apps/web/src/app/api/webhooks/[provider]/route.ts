@@ -9,8 +9,9 @@ import {
   RateLimitExceededError,
   getClientIp,
 } from "@bs/domain";
-import { CashfreeProvider, RazorpayProvider, CODProvider, StripeProvider } from "@bs/payments";
+import { CashfreeProvider, RazorpayProvider, CODProvider, StripeProvider, PayPalProvider } from "@bs/payments";
 import { server } from "@/server/runtime.ts";
+import { storePayPalMode } from "@bs/domain";
 
 export async function POST(
   req: Request,
@@ -65,7 +66,14 @@ export async function POST(
       (typeof orderNotes?.tenant_id === "string" && orderNotes.tenant_id) ||
       undefined;
 
+    // Stripe nests the Checkout Session under data.object; PayPal nests the capture under resource (ADR-040).
+    const stripeObject = provider === "stripe" ? ((parsed.data as Record<string, unknown> | undefined)?.object as Record<string, unknown> | undefined) : undefined;
+    const ppResource = provider === "paypal" ? (parsed.resource as Record<string, unknown> | undefined) : undefined;
+    const ppRelated = (ppResource?.supplementary_data as Record<string, unknown> | undefined)?.related_ids as Record<string, unknown> | undefined;
+
     const providerOrderId =
+      (typeof stripeObject?.id === "string" && stripeObject.id) ||
+      (typeof ppRelated?.order_id === "string" && ppRelated.order_id) ||
       (typeof cfOrder?.order_id === "string" && cfOrder.order_id) ||
       (typeof paymentEntity?.order_id === "string" && paymentEntity.order_id) ||
       (typeof orderEntity?.id === "string" && orderEntity.id) ||
@@ -151,6 +159,12 @@ export async function POST(
       const creds = await getTenantPaymentSecrets(rt._db.db, tenantId, "stripe");
       const stripeProvider = new StripeProvider({ webhookSecret: creds.webhookSecret });
       const verified = await stripeProvider.verifyWebhook(headersRecord, rawBody);
+      signatureValid = verified.isValid;
+    } else if (provider === "paypal") {
+      // PayPal verifies its own signatures: the store's webhook id plus a call to PayPal's verification endpoint.
+      const creds = await getTenantPaymentSecrets(rt._db.db, tenantId, "paypal");
+      const mode = await storePayPalMode(rt._db.db, tenantId);
+      const verified = await new PayPalProvider({ clientId: creds.keyId, clientSecret: creds.keySecret, webhookId: creds.webhookSecret, mode }).verifyWebhook(headersRecord, rawBody);
       signatureValid = verified.isValid;
     } else if (provider === "cod") {
       const creds = await getTenantPaymentSecrets(rt._db.db, tenantId, "cod");

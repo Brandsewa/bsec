@@ -7,6 +7,7 @@ import { cartWeightGrams, getTenantShippingRates } from "../orders/shipping-rate
 import { toCountryCode } from "../orders/shipping-rules.ts";
 import { publicMediaUrl } from "../media/storage.ts";
 import { evaluateDiscount } from "../orders/discounts.ts";
+import { isNonBaseMarket, isProductVisibleInMarket, loadCheckoutMarket, loadMarketPriceMap } from "../markets/lookup.ts";
 
 export interface StorefrontCartItem {
   id: string;
@@ -55,6 +56,8 @@ export interface StorefrontCart {
   id: string;
   token: string;
   currency: string;
+  /** The market the cart is priced in (ADR-040). null on carts created before markets existed (treated as the base market). */
+  marketId: string | null;
   items: StorefrontCartItem[];
   itemCount: number;
   subtotal: number;
@@ -243,6 +246,7 @@ async function loadCartWithItems(
     id: cartRecord.id,
     token: cartRecord.token,
     currency: cartRecord.currency,
+    marketId: cartRecord.marketId ?? null,
     items,
     itemCount,
     subtotal,
@@ -260,6 +264,40 @@ async function loadCartWithItems(
 }
 
 /**
+ * Moves a cart to another market (ADR-040): the cart's currency changes, every line is repriced from the new market's
+ * prices, and a line that market does not sell (no price, or hidden from its catalog) is removed.
+ */
+async function repriceCartToMarket(
+  tx: Db,
+  tenantId: string,
+  cart: typeof schema.carts.$inferSelect,
+  marketId: string,
+): Promise<typeof schema.carts.$inferSelect> {
+  const market = await loadCheckoutMarket(tx, tenantId, marketId);
+  const items = await tx
+    .select({ id: schema.cartItems.id, variantId: schema.cartItems.variantId, productId: schema.variants.productId, basePrice: schema.variants.price })
+    .from(schema.cartItems)
+    .innerJoin(schema.variants, and(eq(schema.variants.tenantId, schema.cartItems.tenantId), eq(schema.variants.id, schema.cartItems.variantId)))
+    .where(eq(schema.cartItems.cartId, cart.id));
+  const prices = await loadMarketPriceMap(tx, tenantId, market.id, items.map((i) => i.variantId));
+  for (const it of items) {
+    const visible = await isProductVisibleInMarket(tx, tenantId, market.id, it.productId);
+    const price = market.isBase ? Number(it.basePrice) : prices.get(it.variantId)?.price;
+    if (!visible || price === undefined || price <= 0) {
+      await tx.delete(schema.cartItems).where(eq(schema.cartItems.id, it.id));
+    } else {
+      await tx.update(schema.cartItems).set({ unitPriceSnapshot: price, updatedAt: new Date() }).where(eq(schema.cartItems.id, it.id));
+    }
+  }
+  const [updated] = await tx
+    .update(schema.carts)
+    .set({ currency: market.currency, marketId: market.id, lastActivityAt: new Date() })
+    .where(eq(schema.carts.id, cart.id))
+    .returning();
+  return updated ?? cart;
+}
+
+/**
  * Looks up active cart by token and tenantId. If not found, generates a new UUID token and creates a cart row.
  */
 export async function getOrCreateCart(
@@ -267,6 +305,8 @@ export async function getOrCreateCart(
   ctx: TenantContext,
   token?: string,
   txOrDb?: Parameters<Parameters<typeof withTenant>[2]>[0],
+  /** The market the shopper is in (ADR-040). Omitted = keep the cart's own market, or the base market for a new cart. */
+  marketId?: string | null,
 ): Promise<StorefrontCart> {
   const runWithTx = async (tx: Parameters<Parameters<typeof withTenant>[2]>[0]) => {
     let cartRecord: typeof schema.carts.$inferSelect | undefined;
@@ -281,13 +321,15 @@ export async function getOrCreateCart(
     }
 
     if (!cartRecord) {
+      const market = await loadCheckoutMarket(tx as unknown as Db, ctx.tenantId, marketId);
       const newToken = crypto.randomUUID();
       const [newCart] = await tx
         .insert(schema.carts)
         .values({
           token: newToken,
           tenantId: ctx.tenantId,
-          currency: "INR",
+          currency: market.currency,
+          marketId: market.id,
           status: "active",
         })
         .returning();
@@ -296,6 +338,9 @@ export async function getOrCreateCart(
         throw new Error("Failed to create cart");
       }
       cartRecord = newCart;
+    } else if (marketId && cartRecord.marketId !== marketId) {
+      // The shopper switched market: the cart keeps its items but is repriced in the new market's currency.
+      cartRecord = await repriceCartToMarket(tx as unknown as Db, ctx.tenantId, cartRecord, marketId);
     }
 
     return loadCartWithItems(tx, cartRecord);
@@ -394,7 +439,17 @@ export async function addToCart(
       throw new Error("This product is price on request and cannot be added to cart");
     }
 
-    const unitPriceSnapshot = Number(variantData.variant.price);
+    const cartMarketId = cartRecord.marketId ?? null;
+    if (!(await isProductVisibleInMarket(tx as unknown as Db, ctx.tenantId, cartMarketId, variantData.product.id))) {
+      throw new Error("Variant not found or product is not available");
+    }
+    let unitPriceSnapshot = Number(variantData.variant.price);
+    if (await isNonBaseMarket(tx as unknown as Db, ctx.tenantId, cartMarketId)) {
+      const prices = await loadMarketPriceMap(tx as unknown as Db, ctx.tenantId, cartMarketId, [input.variantId]);
+      const marketPrice = prices.get(input.variantId);
+      if (!marketPrice || marketPrice.price <= 0) throw new Error("This product is not available in your region");
+      unitPriceSnapshot = marketPrice.price;
+    }
 
     // 3. Upsert into cartItems: increment quantity if already exists
     await tx

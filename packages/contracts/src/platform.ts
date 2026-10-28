@@ -1316,7 +1316,7 @@ export const UpdatePlatformChannelProviderInput = z.object({
 export type UpdatePlatformChannelProviderInput = z.infer<typeof UpdatePlatformChannelProviderInput>;
 
 export const PlatformPaymentProviderView = z.object({
-  provider: z.enum(["razorpay", "stripe", "cashfree"]),
+  provider: z.enum(["razorpay", "stripe", "cashfree", "paypal"]),
   displayName: z.string(),
   enabled: z.boolean(),
   liveModeAllowed: z.boolean(),
@@ -1482,7 +1482,7 @@ export const platformIntegrationsContract = {
     .route({ method: "PATCH", path: "/platform/integrations/payments/providers/{provider}" })
     .input(
       z.object({
-        provider: z.enum(["razorpay", "stripe", "cashfree"]),
+        provider: z.enum(["razorpay", "stripe", "cashfree", "paypal"]),
         enabled: z.boolean().optional(),
         liveModeAllowed: z.boolean().optional(),
       }),

@@ -92,6 +92,11 @@ export interface ShippingContextOptions {
   weightGrams?: number | undefined;
   /** Where the order ships. Without it the store's default zone is used. */
   destination?: ShippingDestination | undefined;
+  /**
+   * The market the order is in (ADR-040). Only that market's zones apply (the base market also keeps zones with no market).
+   * Without it every zone is considered, as before markets existed.
+   */
+  market?: { id: string; isBase: boolean } | undefined;
 }
 
 type TenantTx = Parameters<Parameters<typeof withTenant>[2]>[0];
@@ -108,12 +113,22 @@ export async function cartWeightGrams(tx: TenantTx, lines: Array<{ variantId: st
   return lines.reduce((sum, l) => sum + (byId.get(l.variantId) ?? 0) * l.quantity, 0);
 }
 
-async function loadZones(tx: TenantTx, tenantId: string) {
+async function loadZones(tx: TenantTx, tenantId: string, market?: ShippingContextOptions["market"]) {
   let zones = await tx
     .select()
     .from(shippingZones)
-    .where(eq(shippingZones.tenantId, tenantId))
+    .where(
+      market
+        ? and(
+            eq(shippingZones.tenantId, tenantId),
+            market.isBase ? sql`(${shippingZones.marketId} = ${market.id} OR ${shippingZones.marketId} IS NULL)` : eq(shippingZones.marketId, market.id),
+          )
+        : eq(shippingZones.tenantId, tenantId),
+    )
     .orderBy(sql`${shippingZones.isDefault} DESC, ${shippingZones.createdAt} ASC`);
+
+  // A market that is not the base market never gets a zone invented for it: no zone means we do not ship there.
+  if (market && !market.isBase) return zones;
 
   // Self-healing provisioning if tenant has no shipping zones yet
   if (zones.length === 0) {
@@ -165,7 +180,7 @@ async function resolveZoneRates(
   subtotalPaise: number,
   opts: ShippingContextOptions,
 ): Promise<{ zone: { id: string; name: string } | null; rates: ShippingRateCalculation[] }> {
-  const zones = await loadZones(tx, tenantId);
+  const zones = await loadZones(tx, tenantId, opts.market);
   const zone = pickShippingZone(zones, opts.destination);
   if (!zone) return { zone: null, rates: [] };
 

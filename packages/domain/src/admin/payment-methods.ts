@@ -14,7 +14,7 @@ export interface CodPublicConfig {
 
 export interface PaymentMethodRecord {
   id: string;
-  provider: "cod" | "razorpay";
+  provider: "cod" | "razorpay" | "stripe" | "cashfree" | "paypal";
   displayName: string;
   status: "disabled" | "pending_setup" | "active" | "unavailable" | "error";
   mode: "live" | "test" | null;
@@ -284,7 +284,7 @@ export async function updateCodMethod(
 
     return {
       id: savedRow.id,
-      provider: savedRow.provider as "cod" | "razorpay",
+      provider: savedRow.provider as PaymentMethodRecord["provider"],
       displayName: savedRow.displayName,
       status: savedRow.status as "disabled" | "pending_setup" | "active" | "unavailable" | "error",
       mode: (savedRow.mode as "live" | "test") ?? null,
