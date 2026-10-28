@@ -1,4 +1,5 @@
 import { and, asc, desc, eq, gte, isNull, lt, ne, sql } from "drizzle-orm";
+import { formatMoney } from "@bs/contracts/money";
 import { schema, withTenant } from "@bs/db";
 import type { Runtime } from "../runtime.ts";
 import { assertPermission, type TenantContext } from "../context.ts";
@@ -735,13 +736,13 @@ export async function getAdminCustomerActivity(rt: Runtime, ctx: TenantContext, 
     const items: ActivityItem[] = [];
 
     const orders = await tx
-      .select({ id: schema.orders.id, number: schema.orders.number, status: schema.orders.status, grandTotal: schema.orders.grandTotal, placedAt: schema.orders.placedAt })
+      .select({ id: schema.orders.id, number: schema.orders.number, status: schema.orders.status, grandTotal: schema.orders.grandTotal, currency: schema.orders.currency, placedAt: schema.orders.placedAt })
       .from(schema.orders)
       .where(and(eq(schema.orders.tenantId, ctx.tenantId), eq(schema.orders.customerId, input.customerId)))
       .orderBy(desc(schema.orders.placedAt))
       .limit(limit);
     for (const o of orders) {
-      items.push({ kind: "order", at: o.placedAt.toISOString(), title: `Order ${o.number}`, detail: `${o.status} · ₹${(Number(o.grandTotal) / 100).toFixed(2)}`, ref: o.id });
+      items.push({ kind: "order", at: o.placedAt.toISOString(), title: `Order ${o.number}`, detail: `${o.status} · ${formatMoney(Number(o.grandTotal), o.currency ?? "INR", { alwaysShowFraction: true })}`, ref: o.id });
     }
 
     const returnsRows = await tx

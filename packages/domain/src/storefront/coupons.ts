@@ -1,4 +1,5 @@
 import { and, asc, eq, gt, isNull, lte, or, sql } from "drizzle-orm";
+import { formatMoney } from "@bs/contracts/money";
 import { schema, withTenant } from "@bs/db";
 import type { Runtime } from "../runtime.ts";
 import type { TenantContext } from "../context.ts";
@@ -14,13 +15,11 @@ export interface StorefrontCoupon {
   endsAt: string | null;
 }
 
-const inr = (paise: number) => `₹${(paise / 100).toLocaleString("en-IN", { maximumFractionDigits: 2 })}`;
-
 /**
  * The coupons a store chose to show (Discount > "Show on the storefront"): active, started, not ended, not used up, with a code.
  * Customer-specific discounts are never listed.
  */
-export async function getStorefrontCoupons(rt: Runtime, ctx: TenantContext): Promise<StorefrontCoupon[]> {
+export async function getStorefrontCoupons(rt: Runtime, ctx: TenantContext, currency = "INR"): Promise<StorefrontCoupon[]> {
   const now = new Date();
   return withTenant(rt._db.db, ctx.tenantId, async (tx) => {
     const rows = await tx
@@ -43,8 +42,8 @@ export async function getStorefrontCoupons(rt: Runtime, ctx: TenantContext): Pro
     return rows.map((d) => ({
       code: d.code as string,
       title: d.title,
-      benefit: d.type === "percent" ? `${d.value}% off` : d.type === "fixed" ? `${inr(d.value)} off` : d.type === "free_shipping" ? "Free shipping" : "Special offer",
-      condition: d.minSubtotal && d.minSubtotal > 0 ? `On orders over ${inr(d.minSubtotal)}` : "",
+      benefit: d.type === "percent" ? `${d.value}% off` : d.type === "fixed" ? `${formatMoney(d.value, currency)} off` : d.type === "free_shipping" ? "Free shipping" : "Special offer",
+      condition: d.minSubtotal && d.minSubtotal > 0 ? `On orders over ${formatMoney(d.minSubtotal, currency)}` : "",
       endsAt: d.endsAt ? d.endsAt.toISOString() : null,
     }));
   });

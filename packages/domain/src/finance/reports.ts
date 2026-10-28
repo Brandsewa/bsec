@@ -13,6 +13,7 @@
  */
 
 import { and, eq, gte, lte, ne, sql } from "drizzle-orm";
+import { formatMoney } from "@bs/contracts/money";
 import { schema, withTenant, type DbHandle } from "@bs/db";
 import { FINANCE_EXPORT_ROLES } from "@bs/auth";
 import { assertPermission, type TenantContext } from "../context.ts";
@@ -250,7 +251,7 @@ export async function findLedgerAnomalies(
         account: acc.account,
         label: acc.label,
         currentBalancePaise: bal,
-        reason: `Negative cash balance (₹${(bal / 100).toFixed(2)}) indicates more funds disbursed than recorded collected.`,
+        reason: `Negative cash balance (${formatMoney(Math.abs(bal), currency, { alwaysShowFraction: true })}) indicates more funds disbursed than recorded collected.`,
       });
     }
   }
@@ -267,7 +268,7 @@ export async function findLedgerAnomalies(
         account: acc.account,
         label: acc.label,
         currentBalancePaise: bal,
-        reason: `Negative liability balance (₹${(bal / 100).toFixed(2)}) indicates an overpayment or excess settlement.`,
+        reason: `Negative liability balance (${formatMoney(Math.abs(bal), currency, { alwaysShowFraction: true })}) indicates an overpayment or excess settlement.`,
       });
     }
   }
