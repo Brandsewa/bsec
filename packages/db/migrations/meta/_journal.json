@@ -582,6 +582,13 @@
       "when": 1793495800000,
       "tag": "0088_markets_config",
       "breakpoints": true
+    },
+    {
+      "idx": 83,
+      "version": "7",
+      "when": 1793495900000,
+      "tag": "0089_market_scope_functions",
+      "breakpoints": true
     }
   ]
 }

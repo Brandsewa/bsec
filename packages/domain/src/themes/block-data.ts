@@ -1,4 +1,5 @@
 import { and, asc, desc, eq, inArray, isNull, sql } from "drizzle-orm";
+import { withMarketScope } from "../markets/scope.ts";
 import { schema, withTenant } from "@bs/db";
 import {
   collectMediaIds as collectDocumentMediaIds,
@@ -170,7 +171,7 @@ export async function resolveRelatedBlockData(
   if (targets.length === 0) return {};
   const db = rt._db.db;
   if (!(await isFeatureEnabled(db, ctx.tenantId, "catalog"))) return {};
-  return withTenant(db, ctx.tenantId, async (tx) => {
+  return withMarketScope(db, ctx, async (tx) => {
     const out: Record<string, BlockData> = {};
     for (const b of targets) out[b.id] = await resolveShowcase(tx, b, input.productId);
     return out;
@@ -706,7 +707,7 @@ export async function resolveBlockData(
   const db = rt._db.db;
   const catalogEnabled = await isFeatureEnabled(db, ctx.tenantId, "catalog");
 
-  return withTenant(db, ctx.tenantId, async (tx) => {
+  return withMarketScope(db, ctx, async (tx) => {
     const out: Record<string, BlockData> = {};
 
     if (catalogEnabled) {

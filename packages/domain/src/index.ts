@@ -208,3 +208,4 @@ export * from "./markets/gateways.ts";
 export * from "./payments/online-checkout.ts";
 export * from "./markets/lookup.ts";
 export * from "./markets/addresses.ts";
+export * from "./markets/scope.ts";

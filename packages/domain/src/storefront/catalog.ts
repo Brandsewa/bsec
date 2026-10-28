@@ -6,6 +6,8 @@ import type { TenantContext } from "../context.ts";
 import { isFeatureEnabled } from "../features.ts";
 import { publicMediaUrl } from "../media/storage.ts";
 import type { RichDescriptionValue } from "../rich-description.ts";
+import { getScopedMarketId, withMarketScope } from "../markets/scope.ts";
+import { isNonBaseMarket, loadMarketPriceMap } from "../markets/lookup.ts";
 
 export interface CollectionRule {
   field: "tag" | "product_type" | "brand" | "category" | "price" | "in_stock" | "title" | string;
@@ -70,13 +72,13 @@ export function buildSingleRuleCondition(rule: CollectionRule, productsTable: ty
     case "price": {
       const num = typeof val === "number" ? val : Number(val) || 0;
       if (rule.operator === "greater_than") {
-        return sql`EXISTS (SELECT 1 FROM variants v WHERE v.tenant_id = ${productsTable.tenantId} AND v.product_id = ${productsTable.id} AND v.price >= ${num})`;
+        return sql`EXISTS (SELECT 1 FROM variants v WHERE v.tenant_id = ${productsTable.tenantId} AND v.product_id = ${productsTable.id} AND market_variant_price(v.tenant_id, v.id, v.price) >= ${num})`;
       }
       if (rule.operator === "less_than") {
-        return sql`EXISTS (SELECT 1 FROM variants v WHERE v.tenant_id = ${productsTable.tenantId} AND v.product_id = ${productsTable.id} AND v.price <= ${num})`;
+        return sql`EXISTS (SELECT 1 FROM variants v WHERE v.tenant_id = ${productsTable.tenantId} AND v.product_id = ${productsTable.id} AND market_variant_price(v.tenant_id, v.id, v.price) <= ${num})`;
       }
       if (rule.operator === "equals") {
-        return sql`EXISTS (SELECT 1 FROM variants v WHERE v.tenant_id = ${productsTable.tenantId} AND v.product_id = ${productsTable.id} AND v.price = ${num})`;
+        return sql`EXISTS (SELECT 1 FROM variants v WHERE v.tenant_id = ${productsTable.tenantId} AND v.product_id = ${productsTable.id} AND market_variant_price(v.tenant_id, v.id, v.price) = ${num})`;
       }
       return undefined;
     }
@@ -336,7 +338,7 @@ export async function getStorefrontProduct(
     return null;
   }
 
-  return withTenant(db, ctx.tenantId, async (tx) => {
+  return withMarketScope(db, ctx, async (tx) => {
     const rows = await tx
       .select({
         product: schema.products,
@@ -411,7 +413,14 @@ export async function getStorefrontProduct(
       }
     }
 
-    const variants: StorefrontVariant[] = variantRows.map((v) => {
+    // In another market the prices come from that market, and a variant it has no price for is not sold there.
+    const scopedMarketId = await getScopedMarketId(tx);
+    const marketPriced = await isNonBaseMarket(tx, ctx.tenantId, scopedMarketId);
+    const marketPrices = marketPriced ? await loadMarketPriceMap(tx, ctx.tenantId, scopedMarketId, variantRows.map((v) => v.id)) : new Map<string, { price: number; compareAtPrice: number | null }>();
+    const sellableRows = marketPriced ? variantRows.filter((v) => marketPrices.has(v.id)) : variantRows;
+    if (marketPriced && sellableRows.length === 0) return null;
+
+    const variants: StorefrontVariant[] = sellableRows.map((v) => {
       const inv = inventoryByVariant[v.id];
       let stockStatus: "in_stock" | "low_stock" | "out_of_stock" = "in_stock";
 
@@ -432,8 +441,8 @@ export async function getStorefrontProduct(
         barcode: v.barcode,
         title: v.title,
         optionValues: v.optionValues as Record<string, string> | null,
-        price: Number(v.price),
-        compareAtPrice: v.compareAtPrice ? Number(v.compareAtPrice) : undefined,
+        price: marketPriced ? marketPrices.get(v.id)!.price : Number(v.price),
+        compareAtPrice: marketPriced ? (marketPrices.get(v.id)!.compareAtPrice ?? undefined) : v.compareAtPrice ? Number(v.compareAtPrice) : undefined,
         costPrice: v.costPrice ? Number(v.costPrice) : undefined,
         weightGrams: v.weightGrams ?? undefined,
         dimensions: v.dimensions as Record<string, unknown> | null,
@@ -528,7 +537,7 @@ export async function getStorefrontCollection(
     return null;
   }
 
-  return withTenant(db, ctx.tenantId, async (tx) => {
+  return withMarketScope(db, ctx, async (tx) => {
     const [col] = await tx
       .select()
       .from(schema.collections)
@@ -659,15 +668,15 @@ async function listCollectionProducts(
     }
     if (priceMin !== undefined && priceMax !== undefined) {
       filterConditions.push(
-        sql`exists (select 1 from variants v where v.tenant_id = ${schema.products.tenantId} and v.product_id = ${schema.products.id} and v.price >= ${priceMin} and v.price <= ${priceMax})`
+        sql`exists (select 1 from variants v where v.tenant_id = ${schema.products.tenantId} and v.product_id = ${schema.products.id} and market_variant_price(v.tenant_id, v.id, v.price) >= ${priceMin} and market_variant_price(v.tenant_id, v.id, v.price) <= ${priceMax})`
       );
     } else if (priceMin !== undefined) {
       filterConditions.push(
-        sql`exists (select 1 from variants v where v.tenant_id = ${schema.products.tenantId} and v.product_id = ${schema.products.id} and v.price >= ${priceMin})`
+        sql`exists (select 1 from variants v where v.tenant_id = ${schema.products.tenantId} and v.product_id = ${schema.products.id} and market_variant_price(v.tenant_id, v.id, v.price) >= ${priceMin})`
       );
     } else if (priceMax !== undefined) {
       filterConditions.push(
-        sql`exists (select 1 from variants v where v.tenant_id = ${schema.products.tenantId} and v.product_id = ${schema.products.id} and v.price <= ${priceMax})`
+        sql`exists (select 1 from variants v where v.tenant_id = ${schema.products.tenantId} and v.product_id = ${schema.products.id} and market_variant_price(v.tenant_id, v.id, v.price) <= ${priceMax})`
       );
     }
     if (brandSlugs.length > 0) {
@@ -697,7 +706,7 @@ async function listCollectionProducts(
       }
     }
 
-    const minPriceSql = sql`(select min(v.price) from variants v where v.tenant_id = ${schema.products.tenantId} and v.product_id = ${schema.products.id})`;
+    const minPriceSql = sql`(select min(market_variant_price(v.tenant_id, v.id, v.price)) from variants v where v.tenant_id = ${schema.products.tenantId} and v.product_id = ${schema.products.id})`;
 
     const effectiveSort = opts?.sort ?? col.sortOrder;
     let orderClause = asc(schema.products.createdAt);
@@ -862,8 +871,8 @@ async function listCollectionProducts(
           if (isAutomated) {
             const [priceRow] = await tx
               .select({
-                minPrice: sql<number>`coalesce(min(${schema.variants.price}), 0)::int`,
-                maxPrice: sql<number>`coalesce(max(${schema.variants.price}), 0)::int`,
+                minPrice: sql<number>`coalesce(min(market_variant_price(${schema.variants.tenantId}, ${schema.variants.id}, ${schema.variants.price})), 0)::int`,
+                maxPrice: sql<number>`coalesce(max(market_variant_price(${schema.variants.tenantId}, ${schema.variants.id}, ${schema.variants.price})), 0)::int`,
               })
               .from(schema.variants)
               .innerJoin(
@@ -879,8 +888,8 @@ async function listCollectionProducts(
           } else {
             const [priceRow] = await tx
               .select({
-                minPrice: sql<number>`coalesce(min(${schema.variants.price}), 0)::int`,
-                maxPrice: sql<number>`coalesce(max(${schema.variants.price}), 0)::int`,
+                minPrice: sql<number>`coalesce(min(market_variant_price(${schema.variants.tenantId}, ${schema.variants.id}, ${schema.variants.price})), 0)::int`,
+                maxPrice: sql<number>`coalesce(max(market_variant_price(${schema.variants.tenantId}, ${schema.variants.id}, ${schema.variants.price})), 0)::int`,
               })
               .from(schema.variants)
               .innerJoin(
@@ -1245,7 +1254,7 @@ export async function getStorefrontCategory(
     return null;
   }
 
-  return withTenant(db, ctx.tenantId, async (tx) => {
+  return withMarketScope(db, ctx, async (tx) => {
     const [cat] = await tx
       .select()
       .from(schema.categories)
@@ -1294,7 +1303,7 @@ export async function getStorefrontCategory(
       ? sql`exists (select 1 from variants v join inventory_levels il on il.tenant_id = v.tenant_id and il.variant_id = v.id where v.tenant_id = ${schema.products.tenantId} and v.product_id = ${schema.products.id} and (il.on_hand - il.reserved) > 0)`
       : undefined;
 
-    const minPriceSql = sql`(select min(v.price) from variants v where v.tenant_id = ${schema.products.tenantId} and v.product_id = ${schema.products.id})`;
+    const minPriceSql = sql`(select min(market_variant_price(v.tenant_id, v.id, v.price)) from variants v where v.tenant_id = ${schema.products.tenantId} and v.product_id = ${schema.products.id})`;
     // The shopper's choice wins; otherwise the category's own default order (like a collection's).
     const effectiveSort = opts?.sort ?? cat.sortOrder;
     let orderClause: SQL = asc(schema.productCategories.position);
@@ -1410,7 +1419,7 @@ export async function listStorefrontCategories(rt: Runtime, ctx: TenantContext):
   const db = rt._db.db;
   if (!(await isFeatureEnabled(db, ctx.tenantId, "catalog"))) return [];
 
-  return withTenant(db, ctx.tenantId, async (tx) => {
+  return withMarketScope(db, ctx, async (tx) => {
     const counts = await tx
       .select({ categoryId: schema.productCategories.categoryId, n: sql<number>`count(*)::int` })
       .from(schema.productCategories)
@@ -1534,7 +1543,7 @@ export async function getStorefrontFeaturedProducts(
     return res?.products.items ?? [];
   }
 
-  return withTenant(db, ctx.tenantId, async (tx) => {
+  return withMarketScope(db, ctx, async (tx) => {
     const rows = await tx
       .select()
       .from(schema.products)
@@ -1570,6 +1579,10 @@ export async function buildProductSummaries(
     .from(schema.variants)
     .where(inArray(schema.variants.productId, productIds));
 
+  const summaryMarketId = await getScopedMarketId(tx);
+  const summaryMarketPriced = await isNonBaseMarket(tx, tenantIdOf(products), summaryMarketId);
+  const summaryPrices = summaryMarketPriced ? await loadMarketPriceMap(tx, tenantIdOf(products), summaryMarketId, variantRows.map((v) => v.id)) : new Map<string, { price: number; compareAtPrice: number | null }>();
+
   const pricesByProduct: Record<
     string,
     {
@@ -1582,8 +1595,9 @@ export async function buildProductSummaries(
 
   for (const v of variantRows) {
     const pId = v.productId;
-    const price = Number(v.price);
-    const compareAt = v.compareAtPrice ? Number(v.compareAtPrice) : undefined;
+    if (summaryMarketPriced && !summaryPrices.has(v.id)) continue;
+    const price = summaryMarketPriced ? summaryPrices.get(v.id)!.price : Number(v.price);
+    const compareAt = summaryMarketPriced ? (summaryPrices.get(v.id)!.compareAtPrice ?? undefined) : v.compareAtPrice ? Number(v.compareAtPrice) : undefined;
     const existing = pricesByProduct[pId];
 
     if (!existing) {
@@ -1764,4 +1778,8 @@ export async function buildProductSummaries(
         : undefined,
     };
   });
+}
+
+function tenantIdOf(products: Array<typeof schema.products.$inferSelect>): string {
+  return products[0]?.tenantId ?? "";
 }

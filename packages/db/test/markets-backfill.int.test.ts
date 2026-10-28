@@ -66,9 +66,10 @@ beforeAll(async () => {
   cpSync(src, tmp, { recursive: true });
   rmSync(path.join(tmp, "0087_markets_foundation.sql"));
   rmSync(path.join(tmp, "0088_markets_config.sql"));
+  rmSync(path.join(tmp, "0089_market_scope_functions.sql"));
   const journalPath = path.join(tmp, "meta", "_journal.json");
   const journal = JSON.parse(readFileSync(journalPath, "utf8")) as { entries: { tag: string }[] };
-  journal.entries = journal.entries.filter((e) => !e.tag.startsWith("0087_") && !e.tag.startsWith("0088_"));
+  journal.entries = journal.entries.filter((e) => !e.tag.startsWith("0087_") && !e.tag.startsWith("0088_") && !e.tag.startsWith("0089_"));
   writeFileSync(journalPath, JSON.stringify(journal));
   await runMigrations(as("app_owner"), tmp);
 

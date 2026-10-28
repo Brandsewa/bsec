@@ -71,6 +71,8 @@ export interface TenantContext {
   roles: readonly string[];
   permissions: readonly string[];
   requestId: string;
+  /** The market a storefront request is in (ADR-040). Storefront reads use it for prices and catalog; absent = base market. */
+  marketId?: string | null | undefined;
 }
 
 /**

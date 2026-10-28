@@ -1,4 +1,5 @@
 import { and, desc, ilike, isNull, sql, inArray } from "drizzle-orm";
+import { withMarketScope } from "../markets/scope.ts";
 import { LISTED_PRODUCT_STATUSES } from "./product-status.ts";
 import { schema, withTenant } from "@bs/db";
 import type { Runtime } from "../runtime.ts";
@@ -46,7 +47,7 @@ export async function searchStorefrontProducts(
   const db = rt._db.db;
   const escapedQuery = normalizedQuery.replace(/[%_\\]/g, "\\$&");
 
-  const searchResult = await withTenant(db, ctx.tenantId, async (tx) => {
+  const searchResult = await withMarketScope(db, ctx, async (tx) => {
     const page = Math.max(1, opts?.page ?? 1);
     const limit = Math.max(1, Math.min(100, opts?.limit ?? 24));
     const offset = (page - 1) * limit;
@@ -95,7 +96,7 @@ export async function searchStorefrontProducts(
   // so any logging failure or db issue never fails the search response or aborts the search tx
   if (opts?.log === false) return searchResult;
   try {
-    await withTenant(db, ctx.tenantId, async (tx) => {
+    await withMarketScope(db, ctx, async (tx) => {
       await tx
         .insert(schema.searchQueries)
         .values({
@@ -143,7 +144,7 @@ export async function getSearchSuggestions(
   const escaped = normalized.replace(/[%_\\]/g, "\\$&");
   const db = rt._db.db;
 
-  return withTenant(db, ctx.tenantId, async (tx) => {
+  return withMarketScope(db, ctx, async (tx) => {
     const rows = await tx
       .select({
         title: schema.products.title,
