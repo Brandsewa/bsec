@@ -1,12 +1,14 @@
 import { and, desc, eq, isNull, inArray, notInArray, or, sql } from "drizzle-orm";
 import { listBlogForSitemap } from "../blog/queries.ts";
 import { LISTED_PRODUCT_STATUSES } from "./product-status.ts";
-import { schema, withTenant } from "@bs/db";
+import { schema, withTenant, type Db } from "@bs/db";
 import type { Runtime } from "../runtime.ts";
 import type { TenantContext } from "../context.ts";
 import { invalidateCache } from "../cache-invalidation.ts";
 import { syncMediaUsages } from "../media-services.ts";
 import { THEME_SYSTEM_PAGE_TYPES } from "../themes/system-pages.ts";
+import { loadStorefrontMarkets } from "../markets/lookup.ts";
+import { withMarketScope } from "../markets/scope.ts";
 import {
   parseCollectionRules,
   buildSingleRuleCondition,
@@ -255,6 +257,7 @@ export function generateWebSiteJsonLd(opts: {
 export function generateProductJsonLd(
   product: StorefrontProductDetail,
   storeUrl: string,
+  currency = "INR",
 ): ProductJsonLd {
   const baseUrl = storeUrl.replace(/\/$/, "");
   const productUrl = `${baseUrl}/products/${product.slug}`;
@@ -268,7 +271,7 @@ export function generateProductJsonLd(
     return {
       "@type": "Offer",
       price: v.price,
-      priceCurrency: "INR",
+      priceCurrency: currency,
       availability: isAvailable
         ? "https://schema.org/InStock"
         : "https://schema.org/OutOfStock",
@@ -718,8 +721,10 @@ export function buildCategorySeoMetadata(opts: {
   hasFilterOrSortParams?: boolean | undefined;
   page?: number | undefined;
   host: string;
+  prefix?: string | null | undefined;
 }): SeoMetadataResult {
   const cleanHost = opts.host.replace(/^https?:\/\//, "").replace(/\/$/, "");
+  const pfx = opts.prefix ? (opts.prefix.startsWith("/") ? opts.prefix : `/${opts.prefix}`) : "";
   const storeName = opts.storeSettings?.storeName ?? "Store";
   const seoObj = (typeof opts.category.seo === "object" && opts.category.seo !== null) ? (opts.category.seo as Record<string, unknown>) : {};
   const storedTitle = typeof seoObj.title === "string" && seoObj.title.trim().length > 0 ? seoObj.title.trim() : null;
@@ -737,9 +742,9 @@ export function buildCategorySeoMetadata(opts: {
   const shouldIndex = !isStoreBlocked && !isEmpty && !isFiltered;
   const shouldFollow = !isStoreBlocked;
 
-  let canonicalUrl = `https://${cleanHost}/categories/${opts.category.slug}`;
+  let canonicalUrl = `https://${cleanHost}${pfx}/categories/${opts.category.slug}`;
   if (!isFiltered && pageNum > 1 && !isEmpty) {
-    canonicalUrl = `https://${cleanHost}/categories/${opts.category.slug}?page=${pageNum}`;
+    canonicalUrl = `https://${cleanHost}${pfx}/categories/${opts.category.slug}?page=${pageNum}`;
   }
 
   return {
@@ -783,8 +788,10 @@ export function buildCollectionSeoMetadata(opts: {
   hasFilterOrSortParams?: boolean | undefined;
   page?: number | undefined;
   host: string;
+  prefix?: string | null | undefined;
 }): SeoMetadataResult {
   const cleanHost = opts.host.replace(/^https?:\/\//, "").replace(/\/$/, "");
+  const pfx = opts.prefix ? (opts.prefix.startsWith("/") ? opts.prefix : `/${opts.prefix}`) : "";
   const storeName = opts.storeSettings?.storeName ?? "Store";
   const seoObj = (typeof opts.collection.seo === "object" && opts.collection.seo !== null) ? (opts.collection.seo as Record<string, unknown>) : {};
   const storedTitle = typeof seoObj.title === "string" && seoObj.title.trim().length > 0 ? seoObj.title.trim() : null;
@@ -803,9 +810,9 @@ export function buildCollectionSeoMetadata(opts: {
   const shouldIndex = !isStoreBlocked && isEligible && !isFiltered;
   const shouldFollow = !isStoreBlocked;
 
-  let canonicalUrl = `https://${cleanHost}/collections/${opts.collection.slug}`;
+  let canonicalUrl = `https://${cleanHost}${pfx}/collections/${opts.collection.slug}`;
   if (!isFiltered && pageNum > 1 && isEligible) {
-    canonicalUrl = `https://${cleanHost}/collections/${opts.collection.slug}?page=${pageNum}`;
+    canonicalUrl = `https://${cleanHost}${pfx}/collections/${opts.collection.slug}?page=${pageNum}`;
   }
 
   return {
@@ -845,8 +852,10 @@ export function buildProductSeoMetadata(opts: {
   storeStatusMode?: string | undefined;
   noindex?: boolean | undefined;
   host: string;
+  prefix?: string | null | undefined;
 }): SeoMetadataResult {
   const cleanHost = opts.host.replace(/^https?:\/\//, "").replace(/\/$/, "");
+  const pfx = opts.prefix ? (opts.prefix.startsWith("/") ? opts.prefix : `/${opts.prefix}`) : "";
   const storeName = opts.storeSettings?.storeName ?? "Store";
   const seoObj = (typeof opts.product.seo === "object" && opts.product.seo !== null) ? (opts.product.seo as Record<string, unknown>) : {};
   const storedTitle = typeof seoObj.title === "string" && seoObj.title.trim().length > 0 ? seoObj.title.trim() : null;
@@ -876,9 +885,109 @@ export function buildProductSeoMetadata(opts: {
       images: firstImage ? [{ url: firstImage }] : undefined,
     },
     alternates: {
-      canonical: `https://${cleanHost}/products/${opts.product.slug}`,
+      canonical: `https://${cleanHost}${pfx}/products/${opts.product.slug}`,
     },
   };
+}
+
+async function getScopedCatalogForSitemap(
+  tx: Db,
+  tenantId: string,
+) {
+  // 1. Published Products (Listed statuses only)
+  const productRows = await tx
+    .select({
+      slug: schema.products.slug,
+      updatedAt: schema.products.updatedAt,
+    })
+    .from(schema.products)
+    .where(
+      and(
+        eq(schema.products.tenantId, tenantId),
+        inArray(schema.products.status, [...LISTED_PRODUCT_STATUSES]),
+        isNull(schema.products.deletedAt),
+      ),
+    )
+    .orderBy(desc(schema.products.updatedAt));
+
+  // 2. Published & Indexable Collections
+  const collectionRows = await tx
+    .select()
+    .from(schema.collections)
+    .where(
+      and(
+        eq(schema.collections.tenantId, tenantId),
+        eq(schema.collections.published, true),
+        eq(schema.collections.indexable, true),
+      ),
+    )
+    .orderBy(desc(schema.collections.updatedAt));
+
+  const eligibleCollections: typeof collectionRows = [];
+  for (const col of collectionRows) {
+    if (col.type === "automated" && col.rules) {
+      const parsed = parseCollectionRules(col.rules);
+      const conds = parsed.map((r) => buildSingleRuleCondition(r, schema.products));
+      const combined = col.match === "any" ? (conds.length > 0 ? or(...conds) : undefined) : (conds.length > 0 ? and(...conds) : undefined);
+      const [p] = await tx
+        .select({ id: schema.products.id })
+        .from(schema.products)
+        .where(
+          and(
+            eq(schema.products.tenantId, tenantId),
+            inArray(schema.products.status, [...LISTED_PRODUCT_STATUSES]),
+            isNull(schema.products.deletedAt),
+            combined,
+          ),
+        )
+        .limit(1);
+      if (p) eligibleCollections.push(col);
+    } else {
+      const [p] = await tx
+        .select({ id: schema.products.id })
+        .from(schema.collectionProducts)
+        .innerJoin(
+          schema.products,
+          and(
+            eq(schema.products.tenantId, schema.collectionProducts.tenantId),
+            eq(schema.products.id, schema.collectionProducts.productId),
+          ),
+        )
+        .where(
+          and(
+            eq(schema.collectionProducts.collectionId, col.id),
+            inArray(schema.products.status, [...LISTED_PRODUCT_STATUSES]),
+            isNull(schema.products.deletedAt),
+          ),
+        )
+        .limit(1);
+      if (p) eligibleCollections.push(col);
+    }
+  }
+
+  // 3. Active, Non-empty Categories
+  const categoryRows = await tx
+    .select({
+      slug: schema.categories.slug,
+      updatedAt: schema.categories.updatedAt,
+    })
+    .from(schema.categories)
+    .where(
+      and(
+        eq(schema.categories.tenantId, tenantId),
+        sql`exists (
+          select 1 from ${schema.productCategories} pc
+          join ${schema.products} p on p.tenant_id = pc.tenant_id and p.id = pc.product_id
+          where pc.tenant_id = ${schema.categories.tenantId}
+            and pc.category_id = ${schema.categories.id}
+            and p.status in ('active', 'published')
+            and p.deleted_at is null
+        )`,
+      ),
+    )
+    .orderBy(desc(schema.categories.updatedAt));
+
+  return { productRows, eligibleCollections, categoryRows };
 }
 
 /**
@@ -890,6 +999,8 @@ export function buildProductSeoMetadata(opts: {
  * - Published custom pages (/pages/[slug], monthly, 0.5)
  * - Published blog posts (/blog/[slug], monthly, 0.6)
  * - Static policy pages (/policies/..., yearly, 0.3)
+ * - For active non-base markets with path prefixes (e.g. /us):
+ *   Market home (/us), and the products, collections, categories that market actually sells (under withMarketScope)
  */
 export async function getStorefrontSitemapUrls(
   rt: Runtime,
@@ -901,100 +1012,10 @@ export async function getStorefrontSitemapUrls(
   const db = rt._db.db;
 
   return withTenant(db, ctx.tenantId, async (tx) => {
-    // 1. Published Products (Listed statuses only)
-    const productRows = await tx
-      .select({
-        slug: schema.products.slug,
-        updatedAt: schema.products.updatedAt,
-      })
-      .from(schema.products)
-      .where(
-        and(
-          eq(schema.products.tenantId, ctx.tenantId),
-          inArray(schema.products.status, [...LISTED_PRODUCT_STATUSES]),
-          isNull(schema.products.deletedAt),
-        ),
-      )
-      .orderBy(desc(schema.products.updatedAt));
+    // 1. Base catalog query
+    const { productRows, eligibleCollections, categoryRows } = await getScopedCatalogForSitemap(tx, ctx.tenantId);
 
-    // 2. Published & Indexable Collections
-    const collectionRows = await tx
-      .select()
-      .from(schema.collections)
-      .where(
-        and(
-          eq(schema.collections.tenantId, ctx.tenantId),
-          eq(schema.collections.published, true),
-          eq(schema.collections.indexable, true),
-        ),
-      )
-      .orderBy(desc(schema.collections.updatedAt));
-
-    const eligibleCollections: typeof collectionRows = [];
-    for (const col of collectionRows) {
-      if (col.type === "automated" && col.rules) {
-        const parsed = parseCollectionRules(col.rules);
-        const conds = parsed.map((r) => buildSingleRuleCondition(r, schema.products));
-        const combined = col.match === "any" ? (conds.length > 0 ? or(...conds) : undefined) : (conds.length > 0 ? and(...conds) : undefined);
-        const [p] = await tx
-          .select({ id: schema.products.id })
-          .from(schema.products)
-          .where(
-            and(
-              eq(schema.products.tenantId, ctx.tenantId),
-              inArray(schema.products.status, [...LISTED_PRODUCT_STATUSES]),
-              isNull(schema.products.deletedAt),
-              combined,
-            ),
-          )
-          .limit(1);
-        if (p) eligibleCollections.push(col);
-      } else {
-        const [p] = await tx
-          .select({ id: schema.products.id })
-          .from(schema.collectionProducts)
-          .innerJoin(
-            schema.products,
-            and(
-              eq(schema.products.tenantId, schema.collectionProducts.tenantId),
-              eq(schema.products.id, schema.collectionProducts.productId),
-            ),
-          )
-          .where(
-            and(
-              eq(schema.collectionProducts.collectionId, col.id),
-              inArray(schema.products.status, [...LISTED_PRODUCT_STATUSES]),
-              isNull(schema.products.deletedAt),
-            ),
-          )
-          .limit(1);
-        if (p) eligibleCollections.push(col);
-      }
-    }
-
-    // 3. Active, Non-empty Categories
-    const categoryRows = await tx
-      .select({
-        slug: schema.categories.slug,
-        updatedAt: schema.categories.updatedAt,
-      })
-      .from(schema.categories)
-      .where(
-        and(
-          eq(schema.categories.tenantId, ctx.tenantId),
-          sql`exists (
-            select 1 from ${schema.productCategories} pc
-            join ${schema.products} p on p.tenant_id = pc.tenant_id and p.id = pc.product_id
-            where pc.tenant_id = ${schema.categories.tenantId}
-              and pc.category_id = ${schema.categories.id}
-              and p.status in ('active', 'published')
-              and p.deleted_at is null
-          )`,
-        ),
-      )
-      .orderBy(desc(schema.categories.updatedAt));
-
-    // 4. Published Custom Pages (excluding "home" and theme system pages)
+    // 2. Published Custom Pages (excluding "home" and theme system pages)
     const pageRows = await tx
       .select({
         id: schema.pages.id,
@@ -1017,14 +1038,15 @@ export async function getStorefrontSitemapUrls(
 
     // Home page
     const homePageRow = pageRows.find((p) => p.type === "home");
+    const homeLastMod = homePageRow ? homePageRow.updatedAt.toISOString() : new Date().toISOString();
     sitemapItems.push({
       loc: baseUrl,
-      lastmod: homePageRow ? homePageRow.updatedAt.toISOString() : new Date().toISOString(),
+      lastmod: homeLastMod,
       changefreq: "daily",
       priority: 1.0,
     });
 
-    // Products
+    // Base Products
     for (const p of productRows) {
       sitemapItems.push({
         loc: `${baseUrl}/products/${p.slug}`,
@@ -1034,7 +1056,7 @@ export async function getStorefrontSitemapUrls(
       });
     }
 
-    // Collections
+    // Base Collections
     for (const c of eligibleCollections) {
       sitemapItems.push({
         loc: `${baseUrl}/collections/${c.slug}`,
@@ -1044,7 +1066,7 @@ export async function getStorefrontSitemapUrls(
       });
     }
 
-    // Categories
+    // Base Categories
     for (const cat of categoryRows) {
       sitemapItems.push({
         loc: `${baseUrl}/categories/${cat.slug}`,
@@ -1052,6 +1074,60 @@ export async function getStorefrontSitemapUrls(
         changefreq: "weekly",
         priority: 0.7,
       });
+    }
+
+    // Active markets with pathPrefix (WP-6: SEO and sitemap per market)
+    // Only active markets; never expose draft or disabled markets; base market is already unprefixed.
+    const markets = await loadStorefrontMarkets(tx, ctx.tenantId).catch(() => []);
+    const extraMarkets = markets.filter((m) => !m.isBase && m.pathPrefix && m.pathPrefix.trim().length > 0);
+
+    for (const market of extraMarkets) {
+      const rawPrefix = market.pathPrefix;
+      if (!rawPrefix) continue;
+      const prefix = rawPrefix.startsWith("/") ? rawPrefix : `/${rawPrefix}`;
+      const marketBaseUrl = `${baseUrl}${prefix}`;
+
+      // Market home
+      sitemapItems.push({
+        loc: marketBaseUrl,
+        lastmod: homeLastMod,
+        changefreq: "daily",
+        priority: 1.0,
+      });
+
+      // Products & Collections scoped to this market
+      const scopedCatalog = await withMarketScope(
+        db,
+        { tenantId: ctx.tenantId, marketId: market.id },
+        async (txScoped) => getScopedCatalogForSitemap(txScoped, ctx.tenantId),
+      );
+
+      for (const p of scopedCatalog.productRows) {
+        sitemapItems.push({
+          loc: `${marketBaseUrl}/products/${p.slug}`,
+          lastmod: p.updatedAt.toISOString(),
+          changefreq: "weekly",
+          priority: 0.8,
+        });
+      }
+
+      for (const c of scopedCatalog.eligibleCollections) {
+        sitemapItems.push({
+          loc: `${marketBaseUrl}/collections/${c.slug}`,
+          lastmod: c.updatedAt.toISOString(),
+          changefreq: "weekly",
+          priority: 0.7,
+        });
+      }
+
+      for (const cat of scopedCatalog.categoryRows) {
+        sitemapItems.push({
+          loc: `${marketBaseUrl}/categories/${cat.slug}`,
+          lastmod: cat.updatedAt.toISOString(),
+          changefreq: "weekly",
+          priority: 0.7,
+        });
+      }
     }
 
     const pagesById = new Map(pageRows.map((p) => [p.id, p]));
