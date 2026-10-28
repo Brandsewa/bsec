@@ -14,6 +14,7 @@ import {
   activateTheme,
   createRuntime,
   createThemeTemplate,
+  ensureThemeTemplatePage,
   getPage,
   getStorefrontHomePage,
   getStorefrontPage,
@@ -488,5 +489,27 @@ describe("blog template pages (ADR-033)", () => {
     await activateTheme(web, ctxFor(TENANT_A), { code: LAUNCH_TEMPLATE_CODE });
     expect(await getStorefrontThemePage(web, storefrontCtx(TENANT_A), "blog")).toBeNull();
     expect(await getStorefrontThemePage(web, storefrontCtx(TENANT_A), "blog-post")).toBeNull();
+  });
+
+  it("creates a missing blog template as a draft the editor can open, once, without changing the storefront until it is published", async () => {
+    const first = await ensureThemeTemplatePage(web, ctxFor(TENANT_B), { key: "blog" });
+    expect(first.created).toBe(true);
+    const again = await ensureThemeTemplatePage(web, ctxFor(TENANT_B), { key: "blog" });
+    expect(again).toEqual({ id: first.id, created: false });
+
+    // A draft holding the built-in layout; the storefront still draws its own until the store publishes it.
+    const draft = await getPage(web, ctxFor(TENANT_B), { id: first.id, draft: true });
+    expect(draft.type).toBe("blog_archive_template");
+    expect((draft.blocks as BlockInstance[]).map((b) => b.type)).toEqual(["BlogListing"]);
+    expect(await getStorefrontThemePage(web, storefrontCtx(TENANT_B), "blog")).toBeNull();
+
+    await publishPage(web, ctxFor(TENANT_B), { id: first.id });
+    expect((await getStorefrontThemePage(web, storefrontCtx(TENANT_B), "blog"))?.blocks.map((b) => b.type)).toEqual(["BlogListing"]);
+
+    const audit = await pg.query("select action from audit_logs where tenant_id = $1 and target_id = $2", [TENANT_B, first.id]);
+    expect(audit.rows.map((r: { action: string }) => r.action)).toEqual(["page.template_created"]);
+
+    // Needs permission to edit content.
+    await expect(ensureThemeTemplatePage(web, { ...ctxFor(TENANT_B), permissions: [] }, { key: "blog-post" })).rejects.toThrow();
   });
 });

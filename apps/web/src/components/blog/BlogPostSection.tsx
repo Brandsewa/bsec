@@ -1,6 +1,7 @@
 import Link from "next/link";
-import { BlogCard, formatBlogDate, type BlogPostOptions } from "@bs/blocks";
+import { BlogCard, NewsletterForm, formatBlogDate, type BlogPostOptions } from "@bs/blocks";
 import { toBlockBlogPost, type BlogPostPage, type BlogPostSummary, type PublicBlogCategory } from "@bs/domain";
+
 
 /** One blog post (ADR-033): header, picture, table of contents, the sanitised body, share links, related posts. Server component. */
 
@@ -146,14 +147,46 @@ function MagazinePost({ post, options, postUrl, blogTitle, blogDescription, side
                   </ul>
                 </section>
               ) : null}
+              {related.length > 0 ? (
+                <section className="bsb-bp-featured" aria-label="Related posts">
+                  <h2>Related posts</h2>
+                  <ul>
+                    {related.map((r) => (
+                      <li key={r.slug}>
+                        <Link href={`/blog/${r.slug}`}>
+                          {r.image ? (
+                            // eslint-disable-next-line @next/next/no-img-element
+                            <img src={r.image.url} alt="" loading="lazy" width={64} height={64} />
+                          ) : (
+                            <span className="bsb-mag-noimg" aria-hidden="true" />
+                          )}
+                          <span>
+                            <strong>{r.title}</strong>
+                            <small>{formatBlogDate(r.publishedAt)}</small>
+                          </span>
+                        </Link>
+                      </li>
+                    ))}
+                  </ul>
+                </section>
+              ) : null}
+              {options.showSubscribe !== false ? (
+                <section className="bsb-bp-subscribe" aria-label="Subscribe">
+                  {options.subscribeTitle ? <h2>{options.subscribeTitle}</h2> : null}
+                  {options.subscribeText ? <p className="bsb-muted">{options.subscribeText}</p> : null}
+                  <NewsletterForm className="bsb-mag-sub" source="blog" placeholder={options.subscribePlaceholder} buttonLabel={options.subscribeLabel} />
+                </section>
+              ) : null}
               {cats.length > 0 ? (
                 <section aria-label="Categories">
                   <h2>Categories</h2>
-                  <div className="bsb-bp-cloud">
+                  <ul className="bsb-bp-cats">
                     {cats.map((c) => (
-                      <Link key={c.id} href={`/blog/category/${c.path}`} className="bsb-blog-chip">{c.name}</Link>
+                      <li key={c.id}>
+                        <Link href={`/blog/category/${c.path}`}>{c.name}</Link>
+                      </li>
                     ))}
-                  </div>
+                  </ul>
                 </section>
               ) : null}
             </aside>
@@ -161,7 +194,8 @@ function MagazinePost({ post, options, postUrl, blogTitle, blogDescription, side
         </div>
       </div>
 
-      {related.length > 0 ? (
+      {/* With a sidebar the related posts sit there; the full-width row is for layouts without one. */}
+      {!showSidebar && related.length > 0 ? (
         <div className="bsb-w bsb-w-wide bsb-blog-related">
           <h2 className="bsb-heading bsb-h-lg">Related posts</h2>
           <div className="bsb-grid bsb-blog-grid" style={{ "--cols": 3, "--cols-t": 2, "--cols-m": 1 } as React.CSSProperties}>

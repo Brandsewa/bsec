@@ -96,21 +96,25 @@ export function ProductCard({
       </div>
 
       <div className="bs-pcard-body">
-        {showCategoryBadge && product.categoryName ? <p className="mb-0.5 truncate text-xs font-medium text-muted-foreground">{product.categoryName}</p> : null}
+        {/* First row: reviews on the left, the category on the right (either alone keeps its side). Then the title, then the price. */}
+        {hasRating || (showCategoryBadge && product.categoryName) ? (
+          <div className="mb-0.5 flex items-center justify-between gap-2 text-xs text-muted-foreground">
+            {hasRating ? (
+              <div className="flex shrink-0 items-center gap-1.5" aria-label={`Rated ${product.ratingAvg} out of 5 from ${product.ratingCount} reviews`}>
+                <span className="flex items-center text-amber-500">
+                  ★ <span className="ml-0.5 font-medium text-foreground">{product.ratingAvg}</span>
+                </span>
+                <span>({product.ratingCount})</span>
+              </div>
+            ) : null}
+            {showCategoryBadge && product.categoryName ? <p className="ml-auto min-w-0 truncate font-medium">{product.categoryName}</p> : null}
+          </div>
+        ) : null}
         {product.brand ? <p className="mb-0.5 text-xs font-semibold uppercase tracking-wider text-muted-foreground">{product.brand.name}</p> : null}
 
         <h3 className="bs-pcard-title">
           <Link href={`/products/${product.slug}`}>{product.title}</Link>
         </h3>
-
-        {hasRating ? (
-          <div className="mt-1 flex items-center gap-1.5 text-xs text-muted-foreground" aria-label={`Rated ${product.ratingAvg} out of 5 from ${product.ratingCount} reviews`}>
-            <span className="flex items-center text-amber-500">
-              ★ <span className="ml-0.5 font-medium text-foreground">{product.ratingAvg}</span>
-            </span>
-            <span>({product.ratingCount})</span>
-          </div>
-        ) : null}
 
         {product.shortDescription ? <p className="bs-pcard-desc text-muted-foreground">{product.shortDescription}</p> : null}
 

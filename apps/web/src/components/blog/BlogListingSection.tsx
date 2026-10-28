@@ -63,27 +63,30 @@ export function BlogListingSection({
   return (
     <section className="bsb bs-block-blog-listing bsb-blog-tight">
       <div className="bsb-w bsb-w-wide">
-        <header className="bsb-blog-head">
-          <h1 className="bsb-heading bsb-h-xl">{heading}</h1>
-          {intro ? <p className="bsb-muted bsb-blog-intro">{intro}</p> : null}
-        </header>
+        {/* Title and description on the left, the category filters on the right in one row (desktop); stacked below that width. */}
+        <div className={`bsb-head-row bsb-head-row-filters`}>
+          <header className="bsb-blog-head">
+            <h1 className="bsb-heading bsb-h-xl">{heading}</h1>
+            {intro ? <p className="bsb-muted bsb-blog-intro">{intro}</p> : null}
+          </header>
 
-        {options.showCategories && topLevel.length > 0 ? (
-          <nav aria-label="Blog categories" className="bsb-blog-cats">
-            <Link href="/blog" className="bsb-blog-chip" aria-current={!cat ? "page" : undefined}>All</Link>
-            {topLevel.map((c) => (
-              <Link key={c.id} href={categoryHref(c.path)} className="bsb-blog-chip" aria-current={current?.id === c.id && !cat?.parent ? "page" : undefined}>
-                {c.name}
-              </Link>
-            ))}
-            {subLinks.length > 0 ? <span className="bsb-blog-chip-sep" aria-hidden="true">›</span> : null}
-            {subLinks.map((c) => (
-              <Link key={c.id} href={categoryHref(c.path)} className="bsb-blog-chip" aria-current={cat?.id === c.id ? "page" : undefined}>
-                {c.name}
-              </Link>
-            ))}
-          </nav>
-        ) : null}
+          {options.showCategories && topLevel.length > 0 ? (
+            <nav aria-label="Blog categories" className="bsb-blog-cats">
+              <Link href="/blog" className="bsb-blog-chip" aria-current={!cat ? "page" : undefined}>All</Link>
+              {topLevel.map((c) => (
+                <Link key={c.id} href={categoryHref(c.path)} className="bsb-blog-chip" aria-current={current?.id === c.id && !cat?.parent ? "page" : undefined}>
+                  {c.name}
+                </Link>
+              ))}
+              {subLinks.length > 0 ? <span className="bsb-blog-chip-sep" aria-hidden="true">›</span> : null}
+              {subLinks.map((c) => (
+                <Link key={c.id} href={categoryHref(c.path)} className="bsb-blog-chip" aria-current={cat?.id === c.id ? "page" : undefined}>
+                  {c.name}
+                </Link>
+              ))}
+            </nav>
+          ) : null}
+        </div>
 
         {posts.length === 0 ? (
           <p className="bsb-muted bsb-align-center" data-testid="blog-empty" style={{ padding: "3rem 0" }}>

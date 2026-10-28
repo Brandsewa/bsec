@@ -118,7 +118,9 @@ export function StoreHeader({
             </svg>
           </Link>
 
-          <CartBadge count={cartItemCount} />
+          <span className="lg:hidden">
+            <CartBadge count={cartItemCount} />
+          </span>
         </div>
       </div>
     </header>

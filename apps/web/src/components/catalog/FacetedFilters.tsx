@@ -20,6 +20,8 @@ export interface FacetedFiltersProps {
 
 const SORT_OPTIONS = [
   { value: "created_desc", label: "Newest" },
+  { value: "popularity", label: "Best selling" },
+  { value: "rating", label: "Highest rated" },
   { value: "price_asc", label: "Price: Low to High" },
   { value: "price_desc", label: "Price: High to Low" },
   { value: "title_asc", label: "Alphabetical A-Z" },
@@ -254,11 +256,11 @@ export function FacetedFilters({
       {/* Top bar: Filters, product total, then sort and view on the right */}
       <div className="flex flex-wrap items-center justify-between gap-3 py-4 border-b border-border/60">
         <div className="flex items-center gap-3 sm:gap-4">
-          {/* Phone and tablet: opens the filter sheet */}
+          {/* Tablet: opens the filter sheet (on phones Filter and Sort sit in the bar at the bottom of the screen) */}
           <button
             type="button"
             onClick={() => setIsMobileOpen(true)}
-            className={`${hasFacets ? "lg:hidden inline-flex" : "hidden"} ${BAR_BUTTON}`}
+            className={`${hasFacets ? "hidden md:inline-flex lg:hidden" : "hidden"} ${BAR_BUTTON}`}
           >
             {FILTER_ICON}
             <span>Filters</span>
@@ -288,14 +290,6 @@ export function FacetedFilters({
         </div>
 
         <div className="flex items-center gap-2 sm:gap-3">
-          {/* Phone: a button like Filters that opens the sort sheet */}
-          <button type="button" onClick={() => setIsSortOpen(true)} className={`inline-flex md:hidden ${BAR_BUTTON}`} aria-haspopup="dialog">
-            <svg className="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-              <path d="M3 6h18M6 12h12M10 18h4" />
-            </svg>
-            <span>Sort</span>
-          </button>
-
           {/* Tablet and desktop: a select */}
           <div className="hidden md:flex items-center gap-2">
             <label htmlFor="catalog-sort" className="text-sm text-muted-foreground whitespace-nowrap">
@@ -367,9 +361,28 @@ export function FacetedFilters({
         </div>
       )}
 
-      {/* Mobile Drawer / Bottom Sheet */}
+      {/* Phone: Filter and Sort in one row, fixed just above the bottom navigation */}
+      <div aria-hidden className="h-14 md:hidden" />
+      <div className="fixed inset-x-0 z-40 flex border-t border-border bg-background md:hidden" style={{ bottom: "var(--bottom-nav-h, 0px)" }}>
+        {hasFacets ? (
+          <button type="button" onClick={() => setIsMobileOpen(true)} aria-haspopup="dialog" className="flex flex-1 items-center justify-center gap-2 py-3.5 text-sm font-medium text-foreground active:bg-muted">
+            {FILTER_ICON}
+            <span>Filter</span>
+            {filterData.activeFilterCount > 0 ? <span className={BADGE}>{filterData.activeFilterCount}</span> : null}
+          </button>
+        ) : null}
+        {hasFacets ? <span aria-hidden className="my-2 w-px bg-border" /> : null}
+        <button type="button" onClick={() => setIsSortOpen(true)} aria-haspopup="dialog" className="flex flex-1 items-center justify-center gap-2 py-3.5 text-sm font-medium text-foreground active:bg-muted">
+          <svg className="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+            <path d="M3 6h18M6 12h12M10 18h4" />
+          </svg>
+          <span>Sort</span>
+        </button>
+      </div>
+
+      {/* Mobile Drawer / Bottom Sheet: at least half the screen, over the bottom navigation */}
       {isMobileOpen ? (
-        <div className="fixed inset-0 z-50 flex flex-col justify-end lg:hidden" role="dialog" aria-modal="true">
+        <div className="fixed inset-0 z-[70] flex flex-col justify-end lg:hidden" role="dialog" aria-modal="true">
           {/* Backdrop */}
           <div
             className="fixed inset-0 bg-black/60 backdrop-blur-xs transition-opacity"
@@ -377,7 +390,7 @@ export function FacetedFilters({
           />
 
           {/* Sheet Content */}
-          <div className="relative z-10 max-h-[85vh] w-full rounded-t-2xl bg-background shadow-xl flex flex-col">
+          <div className="relative z-10 min-h-[50dvh] max-h-[85dvh] w-full rounded-t-2xl bg-background shadow-xl flex flex-col">
             {/* Header */}
             <div className="flex items-center justify-between px-6 py-4 border-b border-border">
               <div className="flex items-center gap-2">
@@ -431,9 +444,9 @@ export function FacetedFilters({
 
       {/* Phone sort sheet */}
       {isSortOpen ? (
-        <div className="fixed inset-0 z-50 flex flex-col justify-end md:hidden" role="dialog" aria-modal="true" aria-label="Sort products">
+        <div className="fixed inset-0 z-[70] flex flex-col justify-end md:hidden" role="dialog" aria-modal="true" aria-label="Sort products">
           <div className="fixed inset-0 bg-black/60 backdrop-blur-xs" onClick={() => setIsSortOpen(false)} />
-          <div className="relative z-10 w-full rounded-t-2xl bg-background shadow-xl">
+          <div className="relative z-10 min-h-[50dvh] w-full rounded-t-2xl bg-background shadow-xl">
             <div className="flex items-center justify-between px-6 py-4 border-b border-border">
               <h2 className="text-lg font-semibold text-foreground">Sort by</h2>
               <button type="button" onClick={() => setIsSortOpen(false)} className="rounded-full p-1.5 text-muted-foreground hover:bg-muted transition-colors" aria-label="Close sort">

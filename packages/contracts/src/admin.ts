@@ -3302,6 +3302,11 @@ export const adminContract = {
       .route({ method: "POST", path: "/admin/pages/block-data" })
       .input(z.object({ blocks: z.array(z.unknown()) }))
       .output(z.object({ data: z.record(z.string(), z.unknown()), media: z.record(z.string(), z.string()) })),
+    // Creates the store's blog archive or blog post layout (as a draft) when its theme has none, so the editor can open it.
+    ensureTemplate: oc
+      .route({ method: "POST", path: "/admin/pages/templates/{key}" })
+      .input(z.object({ key: z.enum(["blog", "blog-post"]) }))
+      .output(z.object({ id: z.string().uuid(), created: z.boolean() })),
     create: oc
       .route({ method: "POST", path: "/admin/pages" })
       .input(

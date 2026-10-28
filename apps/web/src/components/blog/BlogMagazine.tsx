@@ -1,6 +1,7 @@
 import Link from "next/link";
-import { BlogCard, formatBlogDate, type BlogListingOptions } from "@bs/blocks";
+import { BlogCard, NewsletterForm, formatBlogDate, type BlogListingOptions } from "@bs/blocks";
 import { toBlockBlogPost, type BlogMagazineData, type BlogPostSummary } from "@bs/domain";
+
 
 /**
  * The magazine-style blog index: a big headline with a subscribe form, the latest posts (one large, a few small), then a row of
@@ -20,7 +21,6 @@ export function BlogMagazine({ options, data, title }: { options: BlogListingOpt
   const [lead, ...others] = data.latest;
   const side = others.slice(0, options.latestSideCount ?? 5);
   const bold = options.headlineBold?.trim() || title;
-  const light = options.headlineLight?.trim();
   const rowCard = {
     showImage: options.showImage,
     showExcerpt: options.showExcerpt,
@@ -37,20 +37,18 @@ export function BlogMagazine({ options, data, title }: { options: BlogListingOpt
   return (
     <section className="bsb bs-block-blog-listing bsb-blog-mag bsb-blog-tight">
       <div className="bsb-w bsb-w-wide">
-        <header className="bsb-mag-head">
-          <h1 className="bsb-heading bsb-mag-title">
-            <strong>{bold}</strong>
-            {light ? <> {light}</> : null}
-          </h1>
-          {options.subtitle ? <p className="bsb-muted bsb-mag-intro">{options.subtitle}</p> : null}
+        <header className="bsb-mag-head bsb-head-row">
+          <div>
+            <h1 className="bsb-heading bsb-mag-title">
+              <strong>{bold}</strong>
+            </h1>
+            {options.subtitle ? <p className="bsb-muted bsb-mag-intro">{options.subtitle}</p> : null}
+          </div>
           {options.showSubscribe !== false ? (
-            <form className="bsb-mag-sub" action="/api/storefront/newsletter/subscribe" method="post">
-              <input type="hidden" name="source" value="blog" />
-              <input className="bsb-input" type="email" name="email" required placeholder={options.subscribePlaceholder || "Your email address"} aria-label="Email address" />
-              <button className="bsb-btn bsb-btn-primary bsb-btn-sm" type="submit">
-                {options.subscribeLabel || "Subscribe"}
-              </button>
-            </form>
+            <div className="bsb-mag-subbox">
+              <NewsletterForm className="bsb-mag-sub" source="blog" placeholder={options.subscribePlaceholder} buttonLabel={options.subscribeLabel} />
+              {options.subscribeText ? <p className="bsb-muted bsb-mag-subbox-text">{options.subscribeText}</p> : null}
+            </div>
           ) : null}
         </header>
 

@@ -301,10 +301,21 @@ export interface StorefrontCategoryDetail {
   filterData?: StorefrontFacetedResult | undefined;
 }
 
+/** Best selling: units sold across the product's variants in orders that were not cancelled, newest first among equals. */
+function popularityOrder(): SQL {
+  const sold = sql`(select coalesce(sum(oi.quantity), 0) from order_items oi join variants v on v.id = oi.variant_id and v.tenant_id = oi.tenant_id join orders o on o.id = oi.order_id and o.tenant_id = oi.tenant_id where oi.tenant_id = ${schema.products.tenantId} and v.product_id = ${schema.products.id} and o.cancelled_at is null)`;
+  return sql`${sold} desc, ${schema.products.createdAt} desc`;
+}
+
+/** Highest rated: the average rating, then how many reviews back it, then newest. Unrated products come last. */
+function ratingOrder(): SQL {
+  return sql`${schema.products.ratingAvg} desc, ${schema.products.ratingCount} desc, ${schema.products.createdAt} desc`;
+}
+
 export interface CatalogListingOptions {
   page?: number | undefined;
   limit?: number | undefined;
-  sort?: "price_asc" | "price_desc" | "newest" | "title" | undefined;
+  sort?: "price_asc" | "price_desc" | "newest" | "title" | "popularity" | "rating" | undefined;
   inStockOnly?: boolean | undefined;
   filterMenuHandle?: string | undefined;
   filters?: Record<string, string | string[] | undefined> | undefined;
@@ -702,6 +713,10 @@ async function listCollectionProducts(
       orderClause = asc(schema.products.title);
     } else if (effectiveSort === "title_desc") {
       orderClause = desc(schema.products.title);
+    } else if (effectiveSort === "popularity") {
+      orderClause = popularityOrder();
+    } else if (effectiveSort === "rating") {
+      orderClause = ratingOrder();
     }
 
     let prodRows: Array<{ product: typeof schema.products.$inferSelect }>;
@@ -1295,6 +1310,10 @@ export async function getStorefrontCategory(
       orderClause = asc(schema.products.title);
     } else if (effectiveSort === "title_desc") {
       orderClause = desc(schema.products.title);
+    } else if (effectiveSort === "popularity") {
+      orderClause = popularityOrder();
+    } else if (effectiveSort === "rating") {
+      orderClause = ratingOrder();
     }
 
     let prodRows: Array<{ product: typeof schema.products.$inferSelect }>;

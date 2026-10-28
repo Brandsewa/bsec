@@ -54,6 +54,7 @@ import {
   createMediaRecord,
   createMenu,
   createPage,
+  ensureThemeTemplatePage,
   createProduct,
   deleteBrand,
   deleteCategory,
@@ -1973,6 +1974,13 @@ export const storeRouter = os.router({
         .handler(({ context, input }) => {
           if (!context.tenantCtx) throw new Error("Missing tenant context");
           return previewPageRenderData(context.rt, context.tenantCtx, input);
+        }),
+      ensureTemplate: os.admin.pages.ensureTemplate
+        .use(requireAdmin)
+        .use(requirePermission("content.write"))
+        .handler(({ context, input }) => {
+          if (!context.tenantCtx) throw new Error("Missing tenant context");
+          return ensureThemeTemplatePage(context.rt, context.tenantCtx, input);
         }),
       create: os.admin.pages.create
         .use(requireAdmin)

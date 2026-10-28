@@ -129,6 +129,18 @@ body {
 /* Form fields on a panel: the page colour lightened towards white, so they follow whatever colour the merchant picks and still lift off the panel. */
 .bs-field { background: color-mix(in srgb, var(--color-background, #ffffff) 35%, #ffffff); border-color: color-mix(in srgb, var(--color-foreground, #0f172a) 14%, transparent); }
 
+/* The cart docked on the right edge of the screen (desktop only; the header drops its cart from 1024px). It opens the cart drawer. */
+.bs-cart-dock { position: fixed; right: 0; top: 50%; z-index: 40; display: none; transform: translateY(-50%); flex-direction: column; align-items: center; justify-content: center; gap: 0.4rem; min-width: 2.75rem; padding: 0.7rem 0.4rem; font-size: 0.75rem; font-weight: 600; box-shadow: 0 6px 20px rgb(0 0 0 / 0.18); transition: opacity 0.15s; }
+/* !important: the cart link carries inline colours for its header look; the dock restyles it. */
+.bs-cart-dock { border-radius: 0.5rem 0 0 0.5rem !important; background: var(--color-primary, #0f172a) !important; color: var(--color-primary-foreground, #fff) !important; }
+.bs-cart-dock:hover { opacity: 0.9; }
+/* Count first, then the icon; the "Cart" word is hidden (the link keeps its aria-label). */
+.bs-cart-dock > span:first-of-type { display: none; }
+.bs-cart-dock > span:last-child { order: 1; }
+.bs-cart-dock > svg { order: 2; }
+.bs-cart-dock > span:last-child { background: var(--color-background, #fff) !important; color: var(--color-primary, #0f172a) !important; }
+@media (min-width: 1024px) { .bs-cart-dock { display: inline-flex; } }
+
 /* Rich text from a custom field (and the RichText block): Tailwind's reset removes list markers and heading sizes, so they are put back.
    Sizes are in em, so the text follows whatever font size the surrounding section uses. */
 .bs-custom-field-rich { line-height: 1.65; overflow-wrap: anywhere; }

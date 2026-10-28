@@ -1,4 +1,4 @@
-import { and, desc, eq, gte, ilike, inArray, lte, or, sql, type SQL } from "drizzle-orm";
+import { and, asc, desc, eq, gte, ilike, inArray, lte, or, sql, type SQL } from "drizzle-orm";
 import { schema, withTenant, type Db } from "@bs/db";
 import type { Runtime } from "./runtime.ts";
 import { assertPermission, type TenantContext } from "./context.ts";
@@ -36,10 +36,16 @@ export interface ReviewReplyInput {
   replyText: string;
 }
 
+export type StorefrontReviewSort = "latest" | "oldest" | "highest" | "lowest";
+
 export interface StorefrontReviewsQuery {
   productId: string;
   page?: number | undefined;
   limit?: number | undefined;
+  /** Default latest. Sorting happens in the database so "load more" pages stay in one consistent order. */
+  sort?: StorefrontReviewSort | undefined;
+  /** Only reviews with this many stars. */
+  rating?: number | undefined;
 }
 
 /** Sanitizes public input: strips all HTML tags and control characters, escapes dangerous entities */
@@ -91,8 +97,21 @@ export async function recomputeProductRatingAggregate(tx: Db, tenantId: string, 
     .where(and(eq(schema.products.tenantId, tenantId), eq(schema.products.id, productId)));
 }
 
+function reviewOrder(sort: StorefrontReviewSort | undefined) {
+  switch (sort) {
+    case "oldest":
+      return [asc(schema.reviews.createdAt), asc(schema.reviews.id)];
+    case "highest":
+      return [desc(schema.reviews.rating), desc(schema.reviews.createdAt), desc(schema.reviews.id)];
+    case "lowest":
+      return [asc(schema.reviews.rating), desc(schema.reviews.createdAt), desc(schema.reviews.id)];
+    default:
+      return [desc(schema.reviews.createdAt), desc(schema.reviews.id)];
+  }
+}
+
 /**
- * Storefront: Query published reviews for a product with pagination, average rating and distribution breakdown.
+ * Storefront: Query published reviews for a product with pagination, sorting, an optional star filter, average rating and distribution breakdown.
  */
 export async function getStorefrontReviews(
   rt: Runtime,
@@ -151,11 +170,15 @@ export async function getStorefrontReviews(
           eq(schema.reviews.tenantId, tenantId),
           eq(schema.reviews.productId, query.productId),
           eq(schema.reviews.status, "published"),
+          ...(query.rating ? [eq(schema.reviews.rating, query.rating)] : []),
         ),
       )
-      .orderBy(desc(schema.reviews.createdAt))
+      // Ties break on id so a page boundary never repeats or skips a review.
+      .orderBy(...reviewOrder(query.sort))
       .limit(limit)
       .offset(offset);
+
+    const matching = query.rating ? distribution[query.rating as 1 | 2 | 3 | 4 | 5] ?? 0 : total;
 
     return {
       items: rows.map((r) => ({
@@ -170,6 +193,7 @@ export async function getStorefrontReviews(
         createdAt: r.createdAt.toISOString(),
       })),
       total,
+      matching,
       ratingAvg,
       ratingCount: total,
       ratingDistribution: distribution,

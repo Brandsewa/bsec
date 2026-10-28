@@ -17,4 +17,5 @@ export { SvgIcon } from "./svg-icon.tsx";
 export * from "./media.ts";
 export * from "./media-image.ts";
 export { BlogCard, formatBlogDate, type BlogCardOptions } from "./views-blog.tsx";
+export { NewsletterForm } from "./newsletter-form.tsx";
 export * from "./markdown.ts";
