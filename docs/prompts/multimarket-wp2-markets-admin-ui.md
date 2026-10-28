@@ -28,3 +28,9 @@ Before you say done:
 - Update `docs/ARCHITECTURE.md`, the handoff doc's section 1 table, and `progress.md` "In flight" as the package requires.
 
 Branch name: `feat/multimarket-wp2`. Claim it with one line in `progress.md` "In flight" (local only).
+
+## Parallel-lane rules (read before starting)
+
+Wave 1. You own new `apps/admin/src/routes/_store/settings/markets*`, `apps/admin/src/components/markets/**`, `settings/payments.tsx` (PayPal card) and the sidebar entry. Do NOT touch `settings/shipping.tsx`, `settings/plan-and-billing.tsx`, product forms or `packages/domain`.
+
+Shared files (`packages/contracts/src/admin.ts`, `apps/web/src/server/api.ts`, `packages/domain/test/isolation.int.test.ts`, `packages/domain/src/index.ts`) take only small append-only additions at a separate place; prefer a new file. Do not edit `docs/ARCHITECTURE.md`, `progress.md`, `docs/MULTIMARKET-HANDOFF.md` or other chats' change records; list your doc changes under "Docs to update" in your own change record. Convert any hardcoded `₹`/`en-IN` in files you edit.

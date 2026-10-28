@@ -28,3 +28,9 @@ Before you say done:
 - Update `docs/ARCHITECTURE.md`, the handoff doc's section 1 table, and `progress.md` "In flight" as the package requires.
 
 Branch name: `feat/multimarket-wp5`. Claim it with one line in `progress.md` "In flight" (local only).
+
+## Parallel-lane rules (read before starting)
+
+Wave 1. You own `packages/domain/src/saas/billing*.ts`, `dunning.ts`, the platform side of `packages/payments`, `apps/superadmin/src/pages/{Plans,integrations/BillingIntegrations}.tsx`, `settings/plan-and-billing.tsx`; you add migration 0090. Do NOT touch storefront, markets or shipping files.
+
+Shared files (`packages/contracts/src/admin.ts`, `apps/web/src/server/api.ts`, `packages/domain/test/isolation.int.test.ts`, `packages/domain/src/index.ts`) take only small append-only additions at a separate place; prefer a new file. Do not edit `docs/ARCHITECTURE.md`, `progress.md`, `docs/MULTIMARKET-HANDOFF.md` or other chats' change records; list your doc changes under "Docs to update" in your own change record. Convert any hardcoded `₹`/`en-IN` in files you edit.

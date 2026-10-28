@@ -49,7 +49,7 @@ Gate state at hand-off: `pnpm typecheck` passes for all 15 packages; domain lint
 
 Each chat gets its prompt from `docs/prompts/multimarket-wpN-*.md`. Claude verifies each package against its acceptance criteria and the gate before the next starts.
 
-### WP-1: Money formatting everywhere (Phase 1c)
+### WP-1: Money formatting everywhere (Phase 1c), split into WP-1a storefront (wave 1), WP-1b domain and email (wave 2), WP-1c admin sweep (wave 3)
 Replace every hardcoded rupee sign and `en-IN` in source files (not tests, not marketing) with the helpers.
 - Storefront (web): `components/cart/{CartItemRow,CartView,ShippingEstimator}.tsx`, `components/checkout/OrderSummary.tsx`, `components/product/{VariantSelector,ProductDetailSection,ProductCustomField}.tsx`, `components/catalog/{ProductCard,CardCartButton,PriceSlider}.tsx`, `components/storefront/{MiniCartDrawer,SearchModalPanel}.tsx`, `BlockRenderer` (pass `{ currency, locale }` into the block `RenderContext` from `getMarketContext`; `RenderContext` already has the fields and `@bs/blocks` already uses them), coupon texts in `domain/src/storefront/coupons.ts`, product structured data and the sitemap (price and currency of the market).
 - Domain messages: `orders/discounts.ts`, `orders/manual-lifecycle.ts`, `orders/return-state-machine.ts`, `orders/shipping-rates.ts`, `finance/*`, `saas/*` (Brand Sewa's own plan prices stay rupees via `formatMoney(x, "INR")`).
@@ -93,6 +93,30 @@ ZCode or Antigravity: run `pnpm gate:quick`, the full domain heavy suite, `pnpm 
 
 ### WP-8: Docs and closing
 `docs/ARCHITECTURE.md` sections 5, 7, 8, 9, 11, 14 (markets, resolution flow, routes, cache argument, env vars if any), `progress.md` (move the in-flight line, list known gaps honestly), a runbook note for the owner's compliance to-dos (PayPal purpose code and PAN, CA question on GST LUT, lawyer review of merchant terms), change records per package. Do not merge.
+
+
+## 3A. Parallel lanes (what can run at the same time without conflicts)
+
+Packages are split by the files they own. Run the packages of one **wave** in parallel, each in its own worktree and branch off `docs/multimarket-phase0`; Claude verifies each, merges the branches locally in the order shown, then the next wave starts from the merged result.
+
+| Wave | Chat | Owns (may edit) | Must NOT touch |
+|---|---|---|---|
+| 1 | **WP-1a** storefront money | `apps/web/src/components/**` (cart, checkout summary, product, catalog, storefront, blocks/BlockRenderer), `apps/web/src/app/{cart,products,collections,categories,search}/**`, `packages/blocks/**` | `apps/web/src/components/checkout/CheckoutForm.tsx`, `apps/web/src/app/{signup,orders,o}/**`, anything in `packages/domain`, `apps/admin`, `apps/superadmin` |
+| 1 | **WP-2** markets admin UI | new `apps/admin/src/routes/_store/settings/markets*`, `apps/admin/src/components/markets/**`, `settings/payments.tsx` (PayPal card), the admin sidebar entry | `settings/shipping.tsx`, `settings/plan-and-billing.tsx`, product forms, `packages/domain` (API already exists; if a missing field is needed, write it in Open questions) |
+| 1 | **WP-5** PayPal platform billing | `packages/domain/src/saas/billing*.ts`, `dunning.ts`, `packages/payments` (platform side only), `apps/superadmin/src/pages/{Plans,integrations/BillingIntegrations}.tsx`, `apps/admin/src/routes/_store/settings/plan-and-billing.tsx`, migration **0090** | storefront, markets files, shipping |
+| 1 | **WP-6** SEO and sitemap | `apps/web/src/app/sitemap.xml/**`, `robots.txt/**`, `packages/domain/src/storefront/seo.ts`, metadata functions of the product/collection pages (only the `generateMetadata` part) | component files (WP-1a), checkout |
+| 2 | **WP-3** shipping and policy surfaces | `apps/admin/src/routes/_store/settings/shipping.tsx`, `packages/domain/src/orders/shipping-rates.ts`, `shipping-rules.ts`, `apps/web/src/app/{orders,o}/**`, `packages/domain/src/system/email-templates.ts` (policy text only), return flow files | markets admin files (WP-2), signup |
+| 2 | **WP-4** signup by country and units | `apps/web/src/app/signup/**`, `packages/domain/src/saas/{signup,provisioning}.ts`, store-settings units UI, product and variant weight inputs (`apps/admin/src/components/product/**`), migration **0091** if needed | shipping settings (WP-3), billing (WP-5) |
+| 2 | **WP-1b** domain and email money | `packages/domain/src/**` messages only (`orders/{discounts,manual-lifecycle,return-state-machine}.ts`, `storefront/coupons.ts`, `finance/*`, `segments`, `customers/import.ts`, `system/email-templates.ts` currency args outside WP-3's policy text) | anything WP-3 and WP-4 own |
+| 3 | **WP-1c** admin and Super Admin money sweep | the remaining `₹`/`en-IN` in `apps/admin`, `apps/superadmin` and `packages/ui` | (everything else is merged already, so no conflicts) |
+| 4 | **WP-7** test round, then **WP-8** docs | read-only, then docs | |
+
+Rules that keep parallel chats from colliding:
+1. **Own your files; convert the money in them.** Every chat that edits a file with a hardcoded `₹` converts it while it is there (this is why WP-1c is last and small).
+2. **Shared files are append-only and small.** `packages/contracts/src/admin.ts`, `apps/web/src/server/api.ts`, `packages/domain/test/isolation.int.test.ts` and `packages/domain/src/index.ts` take new blocks at a clearly separate place (new object keys, new `case` lines, new `export *` lines). Prefer a new contract file over editing `admin.ts`. Do not reformat or reorder existing lines.
+3. **Migrations:** only WP-5 (0090) and WP-4 (0091) may add one. Any other chat that needs a column writes it under Open questions.
+4. **Do not edit** `docs/ARCHITECTURE.md`, `progress.md`, `docs/MULTIMARKET-HANDOFF.md` or another chat's change record. Put your doc changes in your own change record under "Docs to update"; Claude applies them once, after the merge (WP-8).
+5. No chat pushes, opens or merges a PR. Claude merges the local branches one by one and resolves conflicts.
 
 ## 4. Where things are (storefront side, for WP-1 to WP-6)
 
