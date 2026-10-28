@@ -620,6 +620,19 @@ describe("Storefront Integration & Tenant Isolation Suite (Real PostgreSQL 18)",
       expect(ascB?.products.items[0]!.id).toBe(productB1);
     });
 
+    it("rating and popularity sorting run for the scoped tenant: highest rated first, and best selling does not fail with no sales", async () => {
+      await withTenant(dbRw.db, tenantA, async (tx) => {
+        await tx.update(schema.products).set({ ratingAvg: "4.80", ratingCount: 5 }).where(eq(schema.products.id, productA1));
+        await tx.update(schema.products).set({ ratingAvg: "3.20", ratingCount: 9 }).where(eq(schema.products.id, productA2));
+      });
+      const rated = await getStorefrontCollection(rtApp, ctxA, "alpha-featured", { sort: "rating" });
+      expect(rated?.products.items.map((p) => p.id)).toEqual([productA1, productA2]);
+
+      // Nothing has been ordered in this fixture, so the order is the newest-first tie-break: both products, no SQL error.
+      const popular = await getStorefrontCollection(rtApp, ctxA, "alpha-featured", { sort: "popularity" });
+      expect(popular?.products.items.map((p) => p.id).sort()).toEqual([productA1, productA2].sort());
+    });
+
     it("search_queries logged in tenantA are isolated to tenantA", async () => {
       // Execute a unique search query under tenantA
       const uniqueQuery = "special-isolated-query-alpha";

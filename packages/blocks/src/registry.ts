@@ -1401,6 +1401,9 @@ export const BlogListingSchema = z.object({
   showSubscribe: z.boolean().default(true),
   subscribeLabel: z.string().max(30).default("Subscribe"),
   subscribePlaceholder: z.string().max(60).default("Your email address"),
+  /** Optional heading and line above the subscribe form (right side of the header on desktop). */
+  subscribeTitle: z.string().max(80).default(""),
+  subscribeText: z.string().max(200).default(""),
   /** Small posts listed beside the large latest post. */
   latestSideCount: z.number().int().min(0).max(8).default(5),
   showCategorySections: z.boolean().default(true),
@@ -1433,12 +1436,18 @@ export const BlogPostContentSchema = z.object({
   layout: z.enum(["classic", "magazine"]).default("magazine"),
   tocPosition: z.enum(["left", "right"]).default("left"),
   showSidebar: z.boolean().default(true),
-  showAboutCard: z.boolean().default(true),
+  /** The old "Blog / All posts" card. Off by default; the sidebar now shows related posts, a subscribe box and categories. */
+  showAboutCard: z.boolean().default(false),
   aboutTitle: z.string().max(80).default(""),
   aboutText: z.string().max(300).default(""),
-  showFeatured: z.boolean().default(true),
+  showFeatured: z.boolean().default(false),
   featuredCount: z.number().int().min(1).max(8).default(5),
   showCategoriesCloud: z.boolean().default(true),
+  showSubscribe: z.boolean().default(true),
+  subscribeTitle: z.string().max(80).default("Subscribe to our newsletter"),
+  subscribeText: z.string().max(200).default("New posts and updates, straight to your inbox."),
+  subscribePlaceholder: z.string().max(60).default("Your email address"),
+  subscribeLabel: z.string().max(30).default("Subscribe"),
 });
 export type BlogPostContentProps = z.infer<typeof BlogPostContentSchema>;
 

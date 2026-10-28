@@ -2,11 +2,11 @@ import { and, desc, eq, notInArray } from "drizzle-orm";
 import { z } from "zod";
 import { normalizeMenuItems } from "./menu-defaults.ts";
 import { schema, withTenant } from "@bs/db";
-import { validateBlockDocument } from "@bs/blocks";
+import { getBlockDefinition, validateBlockDocument } from "@bs/blocks";
 import type { Runtime } from "./runtime.ts";
 import { assertPermission, type TenantContext } from "./context.ts";
 import { invalidateCache } from "./cache-invalidation.ts";
-import { THEME_SYSTEM_PAGE_TYPES } from "./themes/system-pages.ts";
+import { THEME_SYSTEM_PAGES, THEME_SYSTEM_PAGE_TYPES } from "./themes/system-pages.ts";
 import { clearMediaUsagesForOwner } from "./media-services.ts";
 import {
   clearDocumentMediaUsages,
@@ -994,6 +994,60 @@ export async function duplicatePage(rt: Runtime, ctx: TenantContext, input: { id
       createdAt: newPage.createdAt.toISOString(),
       updatedAt: newPage.updatedAt.toISOString(),
     };
+  });
+}
+
+/** Block each ensurable theme template starts with: the built-in layout the storefront already draws. */
+const ENSURABLE_TEMPLATE_BLOCKS = { blog: "BlogListing", "blog-post": "BlogPostContent" } as const;
+export type EnsurableTemplateKey = keyof typeof ENSURABLE_TEMPLATE_BLOCKS;
+
+/**
+ * The blog archive and single post layouts are theme pages, but a store whose theme predates them has no row, so the editor's
+ * page list could not offer them. This creates the missing one as a draft holding the built-in layout: the storefront keeps using
+ * the same layout until the store publishes it. Safe to call again; it returns the existing page.
+ */
+export async function ensureThemeTemplatePage(rt: Runtime, ctx: TenantContext, input: { key: EnsurableTemplateKey }): Promise<{ id: string; created: boolean }> {
+  assertPermission(ctx, "content.write");
+  const def = THEME_SYSTEM_PAGES[input.key];
+  const blockType = ENSURABLE_TEMPLATE_BLOCKS[input.key];
+
+  return withTenant(rt._db.db, ctx.tenantId, async (tx) => {
+    const [existing] = await tx
+      .select({ id: schema.pages.id })
+      .from(schema.pages)
+      .where(and(eq(schema.pages.tenantId, ctx.tenantId), eq(schema.pages.type, def.type)))
+      .limit(1);
+    if (existing) return { id: existing.id, created: false };
+
+    const document = validateBlockDocument({
+      version: 1,
+      blocks: [{ id: crypto.randomUUID(), type: blockType, version: 1, props: { ...getBlockDefinition(blockType).defaultProps } }],
+    });
+    if (!document.success) throw new Error("The built-in template layout is not valid.");
+
+    const [row] = await tx
+      .insert(schema.pages)
+      .values({ tenantId: ctx.tenantId, title: def.title, slug: def.slug, type: def.type, status: "draft" })
+      .returning({ id: schema.pages.id });
+    if (!row) throw new Error("Failed to create the template page");
+
+    const [draft] = await tx
+      .insert(schema.pageVersions)
+      .values({ tenantId: ctx.tenantId, pageId: row.id, document: document.data })
+      .returning({ id: schema.pageVersions.id });
+    if (!draft) throw new Error("Failed to create the template draft");
+    await tx.update(schema.pages).set({ draftVersionId: draft.id }).where(eq(schema.pages.id, row.id));
+
+    await tx.insert(schema.auditLogs).values({
+      tenantId: ctx.tenantId,
+      actorType: ctx.actor.type,
+      actorId: ctx.actor.type === "staff" ? ctx.actor.userId : null,
+      action: "page.template_created",
+      targetType: "page",
+      targetId: row.id,
+      diff: { key: input.key, type: def.type },
+    });
+    return { id: row.id, created: true };
   });
 }
 

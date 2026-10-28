@@ -4,10 +4,13 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { BlockEditor, type BlockEditorHost, type EditorPageKind, type MediaAsset, type ThemeTokens } from "@bs/block-editor";
 import { googleFontsHref, type BlockInstance } from "@bs/blocks";
 import type { MediaKind } from "@bs/contracts";
-import { Button, EmptyState, PageContainer, PageSkeleton } from "@bs/ui";
+import { Button, EmptyState, PageContainer, PageSkeleton, toast } from "@bs/ui";
 import { client, orpc } from "../../lib/orpc.ts";
 import { MediaPickerDialog } from "../media/media-picker-dialog.tsx";
 import { storeHost, themeVarsFor } from "./host.ts";
+
+/** Page-list value of a theme template the store has no page for yet ("new:blog"); picking it creates the page. */
+const NEW_TEMPLATE_PREFIX = "new:";
 
 /**
  * Visual editor for one page. Edits a draft (saved as a new page version); Publish makes that
@@ -77,6 +80,21 @@ export default function PageVisualEditor({ pageId, canPublish, storeName }: { pa
   // Theme pages (header, footer, product, collection) are reached from the theme screen, not the Pages list.
   const exit = () => void navigate({ to: kind === "header" || kind === "footer" || kind === "product" || kind === "collection" || kind === "collections" || kind === "cart" || kind === "blogArchive" || kind === "blogPost" ? "/online-store/theme-library" : "/online-store/pages" });
   const fontsHref = googleFontsHref((tokens ?? null) as never);
+  /** Opens another page; a template the store does not have yet is created first. */
+  const openPage = async (value: string) => {
+    let id = value;
+    if (value.startsWith(NEW_TEMPLATE_PREFIX)) {
+      try {
+        const key = value.slice(NEW_TEMPLATE_PREFIX.length) as "blog" | "blog-post";
+        id = (await client.admin.pages.ensureTemplate({ key })).id;
+        await queryClient.invalidateQueries({ queryKey: orpc.admin.pages.list.key() });
+      } catch (e) {
+        toast.error(e instanceof Error ? e.message : "Could not open that template.");
+        return;
+      }
+    }
+    await navigate({ to: "/online-store/editor/$pageId", params: { pageId: id } });
+  };
 
   const pageSwitcherOptions = useMemo(() => {
     const list = pagesListQuery.data ?? [];
@@ -102,6 +120,14 @@ export default function PageVisualEditor({ pageId, canPublish, storeName }: { pa
       if (match) {
         options.push({ value: match.id, label: match.title || sys.defaultLabel });
         usedIds.add(match.id);
+      }
+    }
+
+    // A store whose theme has no blog layouts still gets them in the list: choosing one creates it (as a draft) first.
+    for (const [key, type, label] of [["blog", "blog_archive_template", "Blog archive template"], ["blog-post", "blog_post_template", "Blog post template"]] as const) {
+      if (!list.some((p) => p.type === type)) {
+        const at = options.findIndex((o) => o.value === list.find((p) => p.type === "footer")?.id);
+        options.splice(at < 0 ? options.length : at, 0, { value: `${NEW_TEMPLATE_PREFIX}${key}`, label });
       }
     }
 
@@ -185,7 +211,7 @@ export default function PageVisualEditor({ pageId, canPublish, storeName }: { pa
             ? {
                 value: pageId,
                 options: pageSwitcherOptions,
-                onChange: (newPageId) => void navigate({ to: "/online-store/editor/$pageId", params: { pageId: newPageId } }),
+                onChange: (newPageId) => void openPage(newPageId),
               }
             : undefined
         }

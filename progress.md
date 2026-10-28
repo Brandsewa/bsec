@@ -3,6 +3,7 @@
 Source of truth: `docs/PLAN.html` v2.0 (build order in `docs/BUILD-PLAN-M2-M9.md`). Items are ticked only after verification; the evidence is noted next to each. "From code" means it was read in the repo but not exercised live.
 
 ## In flight
+- claude · `feat/blog-templates-cart-dock` · blog archive and post templates in the editor page list, archive/category header, post sidebar, theme font sizes, tighter bullets, in-place subscribe, docked cart; change record `docs/changes/2026-10-28-claude-blog-templates-and-cart-dock.md` · 2026-10-28
 - claude · `feat/owner-fix-batch` · owner fix batch 2026-10-27: Contact form, Gallery, Multi card style 2 and Coupon cards widgets; discount edit and archive; review moderation, manual add, import and export; Leads and Form submissions admin pages; magazine blog index and post layout; account, header, checkout and footer fixes; categories use the collection template; change record `docs/changes/2026-10-27-claude-owner-fix-batch.md` · 2026-10-27
 - claude · `feat/notification-manager` · notification manager: event catalog, dispatcher, in-app drawer, Super Admin events matrix, store team alerts, branded responsive emails (SMS and WhatsApp adapter built but disabled); plan `docs/NOTIFICATION-MANAGER-PLAN.md`, ADR-039, change record `docs/changes/2026-10-27-claude-notification-manager.md` · 2026-10-27
 - claude · `ci/speedup` · faster CI: parallel image builds, sharded heavy tests, promote-images, pre-push gate; change record `docs/changes/2026-10-25-claude-ci-speedup.md` · 2026-10-25
