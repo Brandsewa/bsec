@@ -10,6 +10,7 @@ import { MiniCartConfigProvider, type MiniCartCopy } from "@/components/storefro
 import { StoreHeader } from "@/components/storefront/StoreHeader.tsx";
 import { StoreFooter } from "@/components/storefront/StoreFooter.tsx";
 import { ThemeChrome } from "@/components/storefront/ThemeChrome.tsx";
+import { CartBadge } from "@/components/storefront/CartBadge.tsx";
 import { SearchModal } from "@/components/storefront/SearchModal.tsx";
 import { MobileBottomNav } from "@/components/storefront/MobileBottomNav.tsx";
 import { StoreStatusBanner } from "@/components/storefront/StoreStatusBanner.tsx";
@@ -29,6 +30,13 @@ import { THEMED_PATH_SOURCE } from "@/lib/themed-paths.ts";
 import "./globals.css";
 
 const themeBootScript = makeThemeBootScript(THEMED_PATH_SOURCE);
+
+/**
+ * Newsletter forms (footer, newsletter block, status screens) are plain HTML posts; without this the shopper lands on the raw JSON
+ * reply. This sends them in the background and shows the message under the form. Inline on purpose: it adds nothing to the JS
+ * bundle. A form that React already handled (the blog's) is left alone, and without JavaScript the normal post still works.
+ */
+const newsletterScript = `document.addEventListener("submit",function(e){var f=e.target;if(e.defaultPrevented||!f||!f.action||f.action.indexOf("/api/storefront/newsletter/subscribe")<0)return;e.preventDefault();var b=f.querySelector("button[type=submit]");if(b)b.disabled=true;fetch(f.action,{method:"POST",body:new FormData(f),headers:{Accept:"application/json"}}).then(function(r){return r.json().catch(function(){return null}).then(function(d){return{ok:r.ok&&(!d||d.success!==false),m:d&&d.message}})}).catch(function(){return{ok:false}}).then(function(x){if(b)b.disabled=false;var p=f.nextElementSibling;if(!p||!p.hasAttribute("data-nl-msg")){p=document.createElement("p");p.setAttribute("data-nl-msg","");p.setAttribute("role","status");p.style.cssText="margin:.5rem 0 0;font-size:.8125rem";f.after(p)}if(x.ok)f.reset();p.textContent=x.m||(x.ok?"Subscribed successfully":"Could not subscribe. Please try again.")})});`;
 
 export const instant = false;
 
@@ -192,6 +200,7 @@ export default async function RootLayout({ children }: { children: ReactNode }) 
     <html lang="en" suppressHydrationWarning className={`${fontSans.variable} ${fontMono.variable}`} style={themeVars as React.CSSProperties}>
       <head>
         <script dangerouslySetInnerHTML={{ __html: themeBootScript }} />
+        <script dangerouslySetInnerHTML={{ __html: newsletterScript }} />
         {fontsHref ? <link rel="stylesheet" href={fontsHref} precedence="default" /> : null}
       </head>
       <body className="flex min-h-dvh flex-col antialiased">
@@ -210,6 +219,7 @@ export default async function RootLayout({ children }: { children: ReactNode }) 
             <StoreFooter storeName={storeName} />
           )}
           <SearchModal />
+          <CartBadge dock />
           {themeHeader ? <MobileBottomNav /> : null}
           </MiniCartConfigProvider>
         </WebThemeProvider>

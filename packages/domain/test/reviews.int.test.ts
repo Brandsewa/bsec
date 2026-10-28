@@ -200,3 +200,35 @@ describe("reviews", () => {
     expect(await resolveRelatedBlockData(rtWeb, ctxA, { productId: productA, blocks: [] })).toEqual({});
   });
 });
+
+describe("storefront review sorting and star filter", () => {
+  it("sorts in the database, filters by stars, and keeps the order stable across pages", async () => {
+    // Its own product, so these counts do not depend on the other tests' reviews.
+    const p = await createActiveProduct(rt, ctxA, { title: "Sorted Thing", sku: "REV-SORT", price: 10000, stock: 5 });
+    const day = (n: number) => new Date(Date.UTC(2026, 0, n));
+    const plan: Array<[string, number, Date]> = [["R3", 3, day(1)], ["R5a", 5, day(2)], ["R1", 1, day(3)], ["R5b", 5, day(4)], ["R2", 2, day(5)]];
+    await withTenant(rt._db.db, ctxA.tenantId, (tx) =>
+      tx.insert(schema.reviews).values(
+        plan.map(([name, rating, createdAt]) => ({ tenantId: ctxA.tenantId, productId: p.productId, reviewerName: name, rating, body: `${name} body text`, status: "published" as const, createdAt })),
+      ),
+    );
+    const names = async (q: { sort?: "latest" | "oldest" | "highest" | "lowest"; rating?: number; page?: number; limit?: number }) =>
+      (await getStorefrontReviews(rtWeb, ctxA.tenantId, { productId: p.productId, ...q })).items.map((i) => i.reviewerName);
+
+    expect(await names({})).toEqual(["R2", "R5b", "R1", "R5a", "R3"]); // latest is the default
+    expect(await names({ sort: "oldest" })).toEqual(["R3", "R5a", "R1", "R5b", "R2"]);
+    expect(await names({ sort: "highest" })).toEqual(["R5b", "R5a", "R3", "R2", "R1"]); // ties: newest first
+    expect(await names({ sort: "lowest" })).toEqual(["R1", "R2", "R3", "R5b", "R5a"]);
+
+    // Pages follow the same order with no repeats or gaps.
+    const paged = [...(await names({ sort: "highest", limit: 2, page: 1 })), ...(await names({ sort: "highest", limit: 2, page: 2 })), ...(await names({ sort: "highest", limit: 2, page: 3 }))];
+    expect(paged).toEqual(["R5b", "R5a", "R3", "R2", "R1"]);
+
+    // The star filter returns only that rating, and "matching" counts them for "load more".
+    const fives = await getStorefrontReviews(rtWeb, ctxA.tenantId, { productId: p.productId, rating: 5 });
+    expect(fives.items.map((i) => i.reviewerName)).toEqual(["R5b", "R5a"]);
+    expect(fives.matching).toBe(2);
+    expect(fives.total).toBe(5);
+    expect((await getStorefrontReviews(rtWeb, ctxA.tenantId, { productId: p.productId })).matching).toBe(5);
+  });
+});

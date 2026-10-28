@@ -36,7 +36,12 @@ export function ThemeChrome({
             {children}
           </Link>
         ),
-        renderCart: () => <CartBadge />,
+        // From 1024px the cart is docked on the screen's right edge (layout.tsx), so the header drops it.
+        renderCart: () => (
+          <span className="lg:hidden">
+            <CartBadge />
+          </span>
+        ),
         renderAccount: () => <AccountLink />,
         // The announcement bar's previous / next arrows.
         renderBanner: ({ children }) => <BannerClient>{children}</BannerClient>,

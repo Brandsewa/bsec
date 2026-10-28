@@ -372,6 +372,8 @@ export interface BlogListingOptions {
   showSubscribe?: boolean | undefined;
   subscribeLabel?: string | undefined;
   subscribePlaceholder?: string | undefined;
+  subscribeTitle?: string | undefined;
+  subscribeText?: string | undefined;
   latestSideCount?: number | undefined;
   showCategorySections?: boolean | undefined;
   postsPerCategory?: number | undefined;
@@ -400,6 +402,11 @@ export interface BlogPostOptions {
   showFeatured?: boolean | undefined;
   featuredCount?: number | undefined;
   showCategoriesCloud?: boolean | undefined;
+  showSubscribe?: boolean | undefined;
+  subscribeTitle?: string | undefined;
+  subscribeText?: string | undefined;
+  subscribePlaceholder?: string | undefined;
+  subscribeLabel?: string | undefined;
 }
 
 export interface CollectionListingOptions {

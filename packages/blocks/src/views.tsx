@@ -24,6 +24,7 @@ import type * as R from "./registry.ts";
 import { ProductDetailSample } from "./views-product.tsx";
 import { MobileMenu } from "./views-mobile-menu-client.tsx";
 import type { LogoSize } from "./common.ts";
+import { NewsletterForm } from "./newsletter-form.tsx";
 
 /**
  * Presentational renderers for every block. Pure: no hooks, no data fetching, no browser
@@ -480,10 +481,8 @@ export function NewsletterView({ props }: A<R.NewsletterProps>): ReactNode {
       <div className="bsb-w bsb-w-narrow">
         <h2 className="bsb-heading bsb-h-lg">{props.title}</h2>
         {props.subtitle ? <p className="bsb-muted">{props.subtitle}</p> : null}
-        <form className="bsb-form" action="#" method="post">
-          <input className="bsb-input" type="email" name="email" placeholder={props.placeholder} aria-label="Email" />
-          <button className="bsb-btn bsb-btn-primary" type="submit">{props.buttonText}</button>
-        </form>
+        <NewsletterForm placeholder={props.placeholder} buttonLabel={props.buttonText} />
+        {/* The shared form also posts to the store newsletter; this block's own button used to go nowhere. */}
       </div>
     </section>
   );
@@ -1599,10 +1598,7 @@ export function SiteFooterView({ props, ctx }: A<R.SiteFooterProps>): ReactNode 
     <div className="bsb-site-footer-news">
       <p className="bsb-site-footer-title">{props.newsletterTitle}</p>
       <p className="bsb-muted" style={{ fontSize: "0.8125rem", margin: "0.5rem 0 0.75rem" }}>{props.newsletterText}</p>
-      <form className="bsb-form" action="/api/storefront/newsletter/subscribe" method="post" style={{ margin: 0 }}>
-        <input className="bsb-input" type="email" name="email" required placeholder="Your email" aria-label="Email address" />
-        <button className="bsb-btn bsb-btn-primary bsb-btn-sm" type="submit">Subscribe</button>
-      </form>
+      <NewsletterForm placeholder="Your email" style={{ margin: 0 }} />
     </div>
   ) : null;
 

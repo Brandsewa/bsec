@@ -120,6 +120,7 @@ import {
   createMediaRecord,
   createMenu,
   createPage,
+  ensureThemeTemplatePage,
   createProduct,
   acceptInvitation,
   clearRazorpayCredentials,
@@ -1209,6 +1210,8 @@ describe("Generated Isolation Test Suite (M1 Real Postgres 18 Proof)", () => {
         return await getPage(rt, ctx, { id: testPageA });
       case "pages.create":
         return await createPage(rt, ctx, { title: `Page-${Date.now()}`, slug: `page-${Date.now()}-${Math.random().toString(36).slice(2, 6)}` });
+      case "pages.ensureTemplate":
+        return await ensureThemeTemplatePage(rt, ctx, { key: "blog-post" });
       case "pages.update":
         return await updatePage(rt, ctx, { id: testPageA, title: "Updated Page" });
       case "pages.saveDraft":

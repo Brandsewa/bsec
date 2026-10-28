@@ -11,6 +11,8 @@ export interface ProductFilterSortProps {
 
 const SORT_OPTIONS = [
   { value: "created_desc", label: "Newest" },
+  { value: "popularity", label: "Best selling" },
+  { value: "rating", label: "Highest rated" },
   { value: "price_asc", label: "Price: Low to High" },
   { value: "price_desc", label: "Price: High to Low" },
   { value: "title_asc", label: "Alphabetical A-Z" },

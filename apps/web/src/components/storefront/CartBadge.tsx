@@ -8,6 +8,8 @@ import Link from "next/link";
 export interface CartBadgeProps {
   count?: number | undefined;
   className?: string | undefined;
+  /** Desktop: the cart sits docked on the right edge of the screen instead of in the header (the header copy is hidden from 1024px). */
+  dock?: boolean | undefined;
 }
 
 const subscribeNever = () => () => {};
@@ -25,7 +27,7 @@ function readCountCookie(): number {
 
 const NO_DRAWER_PATHS = ["/cart", "/checkout"];
 
-export function CartBadge({ count: initialCount, className = "" }: CartBadgeProps) {
+export function CartBadge({ count: initialCount, className = "", dock = false }: CartBadgeProps) {
   const cookieCount = useSyncExternalStore(subscribeNever, readCountCookie, () => 0);
   const [liveCount, setLiveCount] = useState<number | null>(null);
   const [cart, setCart] = useState<StorefrontCart | null>(null);
@@ -53,12 +55,13 @@ export function CartBadge({ count: initialCount, className = "" }: CartBadgeProp
     const onUpdated = (e: Event) => {
       void loadCart();
       const wantsOpen = (e as CustomEvent<{ open?: boolean }>).detail?.open === true;
-      if (wantsOpen && !NO_DRAWER_PATHS.includes(window.location.pathname)) setOpen(true);
+      // The header copy and the docked copy both listen; only the one on screen (the dock from 1024px) opens the drawer.
+      if (wantsOpen && dock === window.innerWidth >= 1024 && !NO_DRAWER_PATHS.includes(window.location.pathname)) setOpen(true);
     };
     if (initialCount === undefined) void loadCart();
     window.addEventListener("cart-updated", onUpdated);
     return () => window.removeEventListener("cart-updated", onUpdated);
-  }, [initialCount, loadCart]);
+  }, [initialCount, loadCart, dock]);
 
   const displayCount = initialCount !== undefined ? (liveCount ?? initialCount) : (liveCount ?? cookieCount);
 
@@ -75,12 +78,8 @@ export function CartBadge({ count: initialCount, className = "" }: CartBadgeProp
     <Link
       href="/cart"
       onClick={onLinkClick}
-      className={`inline-flex items-center gap-1.5 rounded-full px-3 py-1.5 text-sm font-medium transition-colors hover:opacity-80 ${className}`}
-      style={{
-        backgroundColor: "var(--color-surface, #f8fafc)",
-        color: "var(--color-text, #0f172a)",
-        borderRadius: "var(--radius, 9999px)",
-      }}
+      className={dock ? "bs-cart-dock" : `inline-flex items-center gap-1.5 rounded-full px-3 py-1.5 text-sm font-medium transition-colors hover:opacity-80 ${className}`}
+      style={{ backgroundColor: "var(--color-surface, #f8fafc)", color: "var(--color-text, #0f172a)", borderRadius: "var(--radius, 9999px)" }}
       aria-label={`Cart, ${displayCount} items`}
     >
       <svg

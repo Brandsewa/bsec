@@ -1,7 +1,9 @@
 "use client";
 
-import React, { useCallback, useEffect, useRef, useState } from "react";
+import React, { useCallback, useEffect, useState } from "react";
 import type { Review } from "@bs/contracts";
+import { CloseButton, Overlay, ReviewCard, STAR_PATH, Stars } from "./reviews-shared.tsx";
+import { ReviewsDrawerLazy } from "./ReviewsDrawerLazy.tsx";
 
 interface ProductReviewsProps {
   productId: string;
@@ -19,112 +21,11 @@ const PAGE_SIZE = 10;
 /** Cards shown on the page: two rows of three on a desktop. "Show more" opens the side drawer with every review. */
 const CARDS_ON_PAGE = 6;
 
-const STAR_PATH =
-  "M9.049 2.927c.3-.921 1.603-.921 1.902 0l1.07 3.292a1 1 0 00.95.69h3.462c.969 0 1.371 1.24.588 1.81l-2.8 2.034a1 1 0 00-.364 1.118l1.07 3.292c.3.921-.755 1.688-1.54 1.118l-2.8-2.034a1 1 0 00-1.175 0l-2.8 2.034c-.784.57-1.838-.197-1.539-1.118l1.07-3.292a1 1 0 00-.364-1.118L2.98 8.72c-.783-.57-.38-1.81.588-1.81h3.461a1 1 0 00.951-.69l1.07-3.292z";
-
-function Stars({ value, size = "h-4 w-4" }: { value: number; size?: string }) {
-  return (
-    <span className="flex items-center" role="img" aria-label={`${value} out of 5 stars`}>
-      {Array.from({ length: 5 }).map((_, i) => (
-        <svg key={i} className={`${size} ${i < Math.round(value) ? "fill-amber-400 text-amber-400" : "text-muted-foreground/30"}`} viewBox="0 0 20 20" fill="currentColor" aria-hidden="true">
-          <path d={STAR_PATH} />
-        </svg>
-      ))}
-    </span>
-  );
-}
-
-function VerifiedTick() {
-  return (
-    <span className="inline-flex items-center text-emerald-600 dark:text-emerald-400" title="Verified purchase">
-      <svg className="h-4 w-4" viewBox="0 0 24 24" role="img" aria-label="Verified purchase">
-        <circle cx="12" cy="12" r="11" fill="currentColor" />
-        <path d="M7 12.5l3.2 3.2L17 9" fill="none" stroke="#fff" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round" />
-      </svg>
-    </span>
-  );
-}
-
-const dateOf = (iso: string) => new Date(iso).toLocaleDateString("en-IN", { day: "numeric", month: "short", year: "numeric" });
-
-function ReviewCard({ rev, full }: { rev: Review; full?: boolean }) {
-  return (
-    <article className="flex h-full flex-col gap-2 rounded-xl border border-border bg-card/60 p-4 shadow-sm">
-      <Stars value={rev.rating} />
-      {rev.title ? <h4 className="text-sm font-semibold text-foreground">{rev.title}</h4> : null}
-      <p className={`whitespace-pre-line text-sm leading-relaxed text-muted-foreground ${full ? "" : "line-clamp-5"}`}>{rev.body}</p>
-      {rev.replyText ? (
-        <div className="rounded-lg border-l-2 border-primary bg-muted/40 p-3 text-xs">
-          <span className="font-semibold text-foreground">Store response: </span>
-          <p className="mt-1 text-muted-foreground">{rev.replyText}</p>
-        </div>
-      ) : null}
-      <div className="mt-auto flex items-center justify-between gap-2 pt-2 text-xs text-muted-foreground">
-        <span className="flex items-center gap-1.5 font-medium text-foreground">
-          {rev.reviewerName}
-          {rev.isVerifiedPurchase ? <VerifiedTick /> : null}
-        </span>
-        <time dateTime={rev.createdAt}>{dateOf(rev.createdAt)}</time>
-      </div>
-    </article>
-  );
-}
-
-/** A modal or side panel: closes on Escape and on a click outside, keeps the page from scrolling behind it. */
-function Overlay({ side, label, onClose, children }: { side?: "right"; label: string; onClose: () => void; children: React.ReactNode }) {
-  const panel = useRef<HTMLDivElement>(null);
-  useEffect(() => {
-    const previous = document.activeElement as HTMLElement | null;
-    const onKey = (e: KeyboardEvent) => {
-      if (e.key === "Escape") onClose();
-    };
-    document.addEventListener("keydown", onKey);
-    const overflow = document.body.style.overflow;
-    document.body.style.overflow = "hidden";
-    panel.current?.focus();
-    return () => {
-      document.removeEventListener("keydown", onKey);
-      document.body.style.overflow = overflow;
-      previous?.focus?.();
-    };
-  }, [onClose]);
-
-  return (
-    <div className={`fixed inset-0 z-[90] flex bg-black/50 ${side === "right" ? "justify-end" : "items-center justify-center p-4"}`} onMouseDown={(e) => e.target === e.currentTarget && onClose()}>
-      <div
-        ref={panel}
-        role="dialog"
-        aria-modal="true"
-        aria-label={label}
-        tabIndex={-1}
-        className={
-          side === "right"
-            ? "flex h-full w-full max-w-md flex-col bg-background shadow-xl outline-none"
-            : "max-h-[90vh] w-full max-w-xl overflow-y-auto rounded-2xl bg-background shadow-xl outline-none"
-        }
-      >
-        {children}
-      </div>
-    </div>
-  );
-}
-
-function CloseButton({ onClick }: { onClick: () => void }) {
-  return (
-    <button type="button" onClick={onClick} aria-label="Close" className="rounded-md p-1.5 text-muted-foreground hover:bg-muted hover:text-foreground">
-      <svg className="h-5 w-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" aria-hidden="true">
-        <path d="M6 6l12 12M18 6L6 18" />
-      </svg>
-    </button>
-  );
-}
 
 export function ProductReviewsSection({ productId, productTitle }: ProductReviewsProps) {
   const [loaded, setLoaded] = useState(false);
   const [items, setItems] = useState<Review[]>([]);
   const [summary, setSummary] = useState({ total: 0, ratingAvg: 0, ratingCount: 0 });
-  const [nextPage, setNextPage] = useState(1);
-  const [loadingMore, setLoadingMore] = useState(false);
   const [formOpen, setFormOpen] = useState(false);
   const [drawerOpen, setDrawerOpen] = useState(false);
 
@@ -147,7 +48,6 @@ export function ProductReviewsSection({ productId, productTitle }: ProductReview
       const data = (await res.json()) as ReviewsResponse;
       setItems((prev) => (replace ? data.items : [...prev, ...data.items.filter((n) => !prev.some((p) => p.id === n.id))]));
       setSummary({ total: data.total, ratingAvg: Number(data.ratingAvg ?? 0), ratingCount: data.ratingCount });
-      setNextPage(page + 1);
     },
     [productId],
   );
@@ -160,7 +60,6 @@ export function ProductReviewsSection({ productId, productTitle }: ProductReview
         const data = (await res.json()) as ReviewsResponse;
         setItems(data.items);
         setSummary({ total: data.total, ratingAvg: Number(data.ratingAvg ?? 0), ratingCount: data.ratingCount });
-        setNextPage(2);
       })
       .catch(() => {})
       .finally(() => {
@@ -170,17 +69,6 @@ export function ProductReviewsSection({ productId, productTitle }: ProductReview
       cancelled = true;
     };
   }, [productId]);
-
-  const loadMore = async () => {
-    setLoadingMore(true);
-    try {
-      await fetchPage(nextPage, false);
-    } catch {
-      /* the button stays, so it can be tried again */
-    } finally {
-      setLoadingMore(false);
-    }
-  };
 
   useEffect(() => {
     let cancelled = false;
@@ -362,30 +250,8 @@ export function ProductReviewsSection({ productId, productTitle }: ProductReview
         </Overlay>
       ) : null}
 
-      {/* Every review: a side drawer */}
-      {drawerOpen ? (
-        <Overlay side="right" label="All customer reviews" onClose={closeDrawer}>
-          <div className="flex items-center justify-between gap-3 border-b border-border px-5 py-4">
-            <div>
-              <h3 className="text-lg font-semibold text-foreground">All reviews</h3>
-              <p className="text-xs text-muted-foreground">
-                {ratingAvg.toFixed(1)} out of 5 · {total} {total === 1 ? "review" : "reviews"}
-              </p>
-            </div>
-            <CloseButton onClick={closeDrawer} />
-          </div>
-          <div className="flex-1 space-y-4 overflow-y-auto px-5 py-4">
-            {items.map((rev) => (
-              <ReviewCard key={rev.id} rev={rev} full />
-            ))}
-            {items.length < total ? (
-              <button type="button" onClick={() => void loadMore()} disabled={loadingMore} className="w-full rounded-lg border border-input px-4 py-2 text-sm font-semibold transition-colors hover:bg-muted disabled:opacity-50">
-                {loadingMore ? "Loading..." : "Load more reviews"}
-              </button>
-            ) : null}
-          </div>
-        </Overlay>
-      ) : null}
+      {/* Every review: a side drawer, loaded only when opened (own sorting and paging) */}
+      {drawerOpen ? <ReviewsDrawerLazy productId={productId} ratingAvg={summary.ratingAvg} total={summary.total} onClose={closeDrawer} /> : null}
     </section>
   );
 }

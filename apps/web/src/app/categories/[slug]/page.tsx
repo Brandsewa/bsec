@@ -109,6 +109,8 @@ export default async function CategoryDetailPage({
   if (rawSort === "price_asc") sortOption = "price_asc";
   else if (rawSort === "price_desc") sortOption = "price_desc";
   else if (rawSort === "title_asc" || rawSort === "title") sortOption = "title";
+  else if (rawSort === "popularity") sortOption = "popularity";
+  else if (rawSort === "rating") sortOption = "rating";
   else if (rawSort === "created_desc" || rawSort === "newest") sortOption = "newest";
 
   let categoryData: Awaited<ReturnType<typeof getStorefrontCategory>> = null;

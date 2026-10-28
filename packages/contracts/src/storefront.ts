@@ -262,6 +262,8 @@ export const storefrontContract = {
           // Read from the query string, where every value arrives as text.
           page: z.coerce.number().int().min(1).default(1),
           limit: z.coerce.number().int().min(1).max(50).default(10),
+          sort: z.enum(["latest", "oldest", "highest", "lowest"]).default("latest"),
+          rating: z.coerce.number().int().min(1).max(5).optional(),
         }),
       )
       .output(
@@ -280,6 +282,8 @@ export const storefrontContract = {
             }),
           ),
           total: z.number().int(),
+          /** Reviews matching the star filter (the same as total when there is none): what "load more" counts against. */
+          matching: z.number().int(),
           ratingAvg: z.number(),
           ratingCount: z.number().int(),
           ratingDistribution: z.object({
