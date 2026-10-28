@@ -16,7 +16,7 @@ Adds `docs/MULTIMARKET-PLAN.md`: how a store gets one base market plus extra mar
 
 ## Decisions and trade-offs
 - Owner decisions: PayPal for Brand Sewa billing of international merchants; stores can connect Stripe and PayPal (rule 14 to be updated in Phase 0); manual exchange rates; merchant-entered taxes; duties paid by the shopper on delivery; market limits 1/2/5 by plan; subfolder URLs only for launch; compliance handled by the merchant.
-- ADR-039 is to be written in Phase 0, not in this change.
+- ADR-040 is to be written in Phase 0, not in this change.
 
 ## Verification
 - Code facts in the plan's section 3 come from reading schema files and grep counts, not a full read.
@@ -24,7 +24,7 @@ Adds `docs/MULTIMARKET-PLAN.md`: how a store gets one base market plus extra mar
 
 ## Docs updated
 - [ ] `docs/ARCHITECTURE.md`: not needed (no structural change yet)
-- [ ] ADR: deferred to Phase 0 (ADR-039)
+- [ ] ADR: deferred to Phase 0 (ADR-040)
 - [ ] `DEPLOYMENT.md`: not needed
 - [ ] `progress.md`: "In flight" line is added when Phase 0 starts
 

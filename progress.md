@@ -3,6 +3,7 @@
 Source of truth: `docs/PLAN.html` v2.0 (build order in `docs/BUILD-PLAN-M2-M9.md`). Items are ticked only after verification; the evidence is noted next to each. "From code" means it was read in the repo but not exercised live.
 
 ## In flight
+- claude · `docs/multimarket-phase0` → then one branch per phase · multi-market stores (markets, per-market currency, prices, catalog, gateway, shipping, policies, taxes); plan `docs/MULTIMARKET-PLAN.md`, ADR-040, change records `docs/changes/2026-10-28-claude-multimarket-*.md`; Phase 0 in progress · 2026-10-28
 - claude · `feat/notification-manager` · notification manager: event catalog, dispatcher, in-app drawer, Super Admin events matrix, store team alerts, branded responsive emails (SMS and WhatsApp adapter built but disabled); plan `docs/NOTIFICATION-MANAGER-PLAN.md`, ADR-039, change record `docs/changes/2026-10-27-claude-notification-manager.md` · 2026-10-27
 - claude · `ci/speedup` · faster CI: parallel image builds, sharded heavy tests, promote-images, pre-push gate; change record `docs/changes/2026-10-25-claude-ci-speedup.md` · 2026-10-25
 - antigravity · `feat/theme-builder-layout` · Theme builder layout & responsive controls: per-device overrides (desktop/tablet/mobile), global site width & section/container defaults, categorized 15-key global color palette with portal swatches, responsive border radius & linked corner controls, button widget with style types & icons, custom typography, and markdown text widget with toolbar; change records `docs/changes/2026-10-24-antigravity-*.md` · 2026-10-24
@@ -415,6 +416,7 @@ Cached "not found" never cleared after a draft product was published; Add to Car
 ### Decisions on record
 - Razorpay, Shiprocket and Resend keys, Sentry and uptime accounts: set up at the very end (2026-09-29).
 - Payment gateways (owner, 2026-10-08): Razorpay and Stripe only, test mode only. Super Admin enables a gateway for the platform and separately allows live mode; each store then connects its own keys and activates it (`docs/ADMIN-IMPROVEMENTS-PLAN.md` 6.4). PayPal, shipping, live keys and online checkout wiring are still deferred.
+- Multi-market (owner, 2026-10-28, `docs/MULTIMARKET-PLAN.md`, ADR-040): PayPal joins Razorpay and Stripe (sandbox only; Brand Sewa billing of global merchants by PayPal in USD, Indian merchants stay on Razorpay in INR); manual exchange rates; merchant-entered taxes; duties not collected; subfolder markets only; market limits are extra markets on top of the base (Starter 1, Growth 2, Enterprise 5); merchant is seller of record and uses their own gateway accounts; first pilot is the Indian store selling abroad; built and verified one phase at a time.
 - SMS and WhatsApp (owner, 2026-10-08): Zoho CPaaS, configured but not enrolled.
 - Hardening and load testing: after all phases are built (2026-09-29).
 - Shipping rates are per store, never hardcoded.
