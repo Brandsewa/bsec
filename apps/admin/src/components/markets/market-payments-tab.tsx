@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { AlertCircle, AlertTriangle, ShieldAlert } from "lucide-react";
-import { Button, Switch, toast } from "@bs/ui";
+import { Badge, Button, Switch, toast } from "@bs/ui";
 import type { MarketDetail } from "@bs/contracts";
 import { client } from "../../lib/orpc.ts";
 import { errorMessage } from "../../lib/errors.ts";

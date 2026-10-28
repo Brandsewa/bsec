@@ -89,6 +89,13 @@ function fakePayPal() {
   }) as typeof fetch);
 }
 
+/** The PayPal order id the subscription row stored when the checkout link was made. */
+async function storedOrderId(tenantId: string): Promise<string> {
+  const [row] = await rt._db.db.select({ id: schema.subscriptions.providerSubscriptionId }).from(schema.subscriptions).where(eq(schema.subscriptions.tenantId, tenantId));
+  if (!row?.id) throw new Error("the subscription has no provider order id");
+  return row.id;
+}
+
 async function makeStore(country = "US") {
   const slug = `pp-store-${++seq}`;
   const r = await provisionTenant(rt, {
@@ -202,7 +209,7 @@ describe("WP-5: PayPal platform billing for global merchants", () => {
     await enablePayPal();
 
     const store = await makeStore("US");
-    const subResult = await subscribeToPlan(rt, store.ctx, {
+    await subscribeToPlan(rt, store.ctx, {
       planCode: "starter",
       interval: "monthly",
     });
@@ -220,7 +227,7 @@ describe("WP-5: PayPal platform billing for global merchants", () => {
         custom_id: JSON.stringify({ tenant_id: store.tenantId, plan_code: "starter" }),
         supplementary_data: {
           related_ids: {
-            order_id: subResult.subscriptionId,
+            order_id: await storedOrderId(store.tenantId),
           },
         },
       },
@@ -237,8 +244,8 @@ describe("WP-5: PayPal platform billing for global merchants", () => {
           "paypal-transmission-time": new Date().toISOString(),
         },
         rawBody: JSON.stringify(webhookPayload),
-      },
-      { verifySignatureFn: async () => true },
+        verifySignatureFn: async () => true,
+    },
     );
 
     expect(res.actionTaken).toBe("subscription_activated_and_invoiced");
@@ -258,7 +265,7 @@ describe("WP-5: PayPal platform billing for global merchants", () => {
     await enablePayPal();
 
     const store = await makeStore("US");
-    const subResult = await subscribeToPlan(rt, store.ctx, {
+    await subscribeToPlan(rt, store.ctx, {
       planCode: "starter",
       interval: "monthly",
     });
@@ -272,7 +279,7 @@ describe("WP-5: PayPal platform billing for global merchants", () => {
         status: "DECLINED",
         supplementary_data: {
           related_ids: {
-            order_id: subResult.subscriptionId,
+            order_id: await storedOrderId(store.tenantId),
           },
         },
       },
@@ -283,11 +290,13 @@ describe("WP-5: PayPal platform billing for global merchants", () => {
       {
         headers: {},
         rawBody: JSON.stringify(declinePayload),
-      },
-      { verifySignatureFn: async () => true },
+        verifySignatureFn: async () => true,
+    },
     );
 
     expect(res.actionTaken).toBe("subscription_past_due");
+    const [after] = await rt._db.db.select({ status: schema.subscriptions.status }).from(schema.subscriptions).where(eq(schema.subscriptions.tenantId, store.tenantId));
+    expect(after?.status).toBe("past_due");
 
     // 2. Add extra markets for this store to test quota downgrade enforcement
     const [m1] = await rt._db.db
@@ -325,7 +334,6 @@ describe("WP-5: PayPal platform billing for global merchants", () => {
         pastDueSince: new Date(Date.now() - 10 * 86400_000), // 10 days ago (past 7-day grace period)
         providerSubscriptionId: "ORDER-PAYPAL-DECLINED-1",
         dunningStage: 2,
-        dunningLastNotifiedAt: new Date(Date.now() - 3 * 86400_000), // 3 days ago
       })
       .where(eq(schema.subscriptions.tenantId, store.tenantId));
 
