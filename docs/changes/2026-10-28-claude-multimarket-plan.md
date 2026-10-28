@@ -29,7 +29,7 @@ Adds `docs/MULTIMARKET-PLAN.md`: how a store gets one base market plus extra mar
 - [ ] `progress.md`: "In flight" line is added when Phase 0 starts
 
 ## Follow-ups and open questions
-- Open questions A-D in the plan's section 12: live PayPal timing, whether plan limits count the base market, billing currencies, which pilot store goes first.
+- None open; former questions A-D are answered as decisions 11-14 in the plan.
 - Phase 0: confirm PayPal Subscriptions works for an India-registered platform account.
 
 ## Definition of done
