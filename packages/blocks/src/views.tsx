@@ -215,7 +215,7 @@ function defaultCard(p: BlockProduct, o: { showPrice: boolean; showRating: boole
         <h3 className="bsb-card-title">{p.title}</h3>
         {o.showRating && p.ratingCount ? (
           <div style={{ fontSize: "0.8125rem" }}>
-            <Stars value={Number(p.ratingAvg ?? 0)} /> <span className="bsb-muted">({p.ratingCount})</span>
+            <Stars value={Number(p.ratingAvg ?? 0)} /> <strong>{Number(p.ratingAvg ?? 0).toFixed(1)}</strong> <span className="bsb-muted">({p.ratingCount})</span>
           </div>
         ) : null}
         {o.showPrice ? (
@@ -455,12 +455,15 @@ export function GalleryView({ props, ctx }: A<R.GalleryProps>): ReactNode {
       </figure>
     );
   });
+  // A gallery with no pictures draws nothing on the storefront (not even its heading); the editors draw a hint so it can still be found.
+  const hasPictures = items.some(Boolean);
+  if (!hasPictures && ctx?.renderGallery) return null;
   const grid = (
     <div
       className={cx("bsb-gal", `bsb-gal-${props.layout}`, props.heightMode === "manual" && "bsb-gal-fixed", props.lightbox && "bsb-gal-open")}
       style={{ "--gal-d": Number(props.columnsDesktop), "--gal-t": Number(props.columnsTablet), "--gal-m": Number(props.columnsMobile), "--gal-gap": `${props.gap}px`, "--gal-rad": `${props.radius}px`, "--gal-h": `${props.manualHeight}px` } as CSSProperties}
     >
-      {items}
+      {hasPictures ? items : <p className="bsb-muted bsb-align-center" style={{ gridColumn: "1 / -1", margin: 0 }}>Add pictures to this gallery.</p>}
     </div>
   );
   return (
@@ -1920,8 +1923,10 @@ function ShowcaseCard({ p, props, ctx, eager }: { p: BlockProduct; props: R.Prod
   const link = (children: ReactNode, className?: string, label?: string) =>
     ctx?.renderLink ? ctx.renderLink({ href, ...(className ? { className } : {}), children }) : <a href={href} className={className} {...(label ? { "aria-label": label } : null)}>{children}</a>;
 
+  // Row 1 is the reviews (left) and the category (right); the rest of the card order (title, price) follows it.
+  const ratingShown = props.cardOrder.some((c) => c.item === "rating" && c.show) && Number(p.ratingCount) > 0;
   const rows = props.cardOrder
-    .filter((c) => c.show)
+    .filter((c) => c.show && c.item !== "rating")
     .map((c) => {
       if (c.item === "title") {
         return (
@@ -1929,15 +1934,6 @@ function ShowcaseCard({ p, props, ctx, eager }: { p: BlockProduct; props: R.Prod
             {link(p.title)}
           </h3>
         );
-      }
-      if (c.item === "rating") {
-        return Number(p.ratingCount) > 0 ? (
-          <div key="rating" className="bsb-psc-rating">
-            <Stars value={Number(p.ratingAvg ?? 0)} />
-            <span className="bsb-psc-rating-num">{Number(p.ratingAvg ?? 0).toFixed(1)}</span>
-            <span className="bsb-muted">({p.ratingCount})</span>
-          </div>
-        ) : null;
       }
       return (
         <div key="price" className={cx("bsb-psc-price", `bsb-psc-price-${props.priceSize}`)}>
@@ -1970,9 +1966,20 @@ function ShowcaseCard({ p, props, ctx, eager }: { p: BlockProduct; props: R.Prod
           </button>
         ) : null}
       </div>
-      {rows.length > 0 || badge ? (
+      {rows.length > 0 || badge || ratingShown ? (
         <div className="bsb-psc-info">
-          {badge ? <p className="bsb-psc-cat">{badge}</p> : null}
+          {ratingShown || badge ? (
+            <div className="bsb-psc-meta">
+              {ratingShown ? (
+                <div className="bsb-psc-rating">
+                  <Stars value={Number(p.ratingAvg ?? 0)} />
+                  <span className="bsb-psc-rating-num">{Number(p.ratingAvg ?? 0).toFixed(1)}</span>
+                  <span className="bsb-muted">({p.ratingCount})</span>
+                </div>
+              ) : null}
+              {badge ? <p className="bsb-psc-cat">{badge}</p> : null}
+            </div>
+          ) : null}
           {rows}
         </div>
       ) : null}

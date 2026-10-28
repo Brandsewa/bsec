@@ -286,7 +286,11 @@ describe("product showcase", () => {
     };
     const priceFirst = render({ cardOrder: [{ item: "price", show: true }, { item: "title", show: true }, { item: "rating", show: true }] });
     expect(priceFirst.indexOf("bsb-psc-price")).toBeLessThan(priceFirst.indexOf("bsb-psc-title"));
-    expect(priceFirst.indexOf("bsb-psc-title")).toBeLessThan(priceFirst.indexOf("class=\"bsb-psc-rating\""));
+    // The reviews are always row 1 (with the category on the right), whatever the order of the other rows.
+    expect(priceFirst.indexOf("class=\"bsb-psc-rating\"")).toBeLessThan(priceFirst.indexOf("bsb-psc-price"));
+    expect(priceFirst.indexOf("class=\"bsb-psc-rating\"")).toBeLessThan(priceFirst.indexOf("class=\"bsb-psc-cat\""));
+    expect(priceFirst.indexOf("class=\"bsb-psc-cat\"")).toBeLessThan(priceFirst.indexOf("bsb-psc-price"));
+    expect(priceFirst).toContain("bsb-psc-meta");
     const noRating = render({ cardOrder: [{ item: "title", show: true }, { item: "rating", show: false }] });
     expect(noRating).not.toContain("bsb-psc-rating-num");
     expect(order([{ item: "title", show: true }]).length).toBe(1);

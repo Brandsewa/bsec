@@ -63,11 +63,11 @@ export function ContactFormView({ props, ctx }: A<R.ContactFormProps>): ReactNod
           ctx.renderContactForm(props as ContactFormOptions)
         ) : (
           <div className="bsb-cf-sample" style={{ opacity: props.enabled ? 1 : 0.5, textAlign: props.fieldAlign, "--cf-j": props.fieldAlign === "center" ? "center" : props.fieldAlign === "right" ? "flex-end" : "flex-start" } as CSSProperties}>
-            <div className="bsb-ph-box" style={{ height: 44 }}><span>Name</span></div>
-            <div className="bsb-ph-box" style={{ height: 44 }}><span>Email</span></div>
-            {props.showPhone ? <div className="bsb-ph-box" style={{ height: 44 }}><span>Phone</span></div> : null}
-            {props.showDropdown ? <div className="bsb-ph-box" style={{ height: 44 }}><span>{props.dropdownLabel}</span></div> : null}
-            {props.showMessage ? <div className="bsb-ph-box" style={{ height: 96 }}><span>{props.messageLabel}</span></div> : null}
+            <div className="bsb-ph-box" style={{ height: 48 }}><span>Name</span></div>
+            <div className="bsb-ph-box" style={{ height: 48 }}><span>Email</span></div>
+            {props.showPhone ? <div className="bsb-ph-box" style={{ height: 48 }}><span>Phone</span></div> : null}
+            {props.showDropdown ? <div className="bsb-ph-box" style={{ height: 48 }}><span>{props.dropdownLabel}</span></div> : null}
+            {props.showMessage ? <div className="bsb-ph-box" style={{ height: 128 }}><span>{props.messageLabel}</span></div> : null}
             <p className="bsb-muted" style={{ fontSize: "0.75rem" }}>
               {props.enabled ? `Sample. Submissions go to the admin inbox${props.recipientEmail ? ` (recipient: ${props.recipientEmail})` : ""}.` : "Switched off: this form is hidden on the storefront."}
             </p>

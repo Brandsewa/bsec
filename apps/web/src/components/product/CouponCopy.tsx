@@ -2,8 +2,8 @@
 
 import { useState } from "react";
 
-/** The Copy button on a coupon card: copies the code and says so for a moment. */
-export function CouponCopy({ code }: { code: string }) {
+/** The copy icon button on a coupon card: copies the code and shows a tick for a moment (the icons are passed in; `.bs-copy` in globals.css swaps them). */
+export function CouponCopy({ code, children }: { code: string; children?: React.ReactNode }) {
   const [copied, setCopied] = useState(false);
   return (
     <button
@@ -13,10 +13,11 @@ export function CouponCopy({ code }: { code: string }) {
         setCopied(true);
         setTimeout(() => setCopied(false), 1800);
       }}
-      aria-label={`Copy code ${code}`}
-      className="rounded-md bg-primary px-3 py-1.5 text-xs font-semibold text-primary-foreground"
+      aria-label={copied ? "Copied" : `Copy code ${code}`}
+      data-copied={copied}
+      className="bs-copy"
     >
-      {copied ? "Copied" : "Copy"}
+      {children}
     </button>
   );
 }
