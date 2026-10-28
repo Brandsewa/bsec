@@ -1,4 +1,5 @@
 import React from "react";
+import { getMarketContext } from "@/server/market.ts";
 import type { Metadata } from "next";
 import { headers, cookies } from "next/headers";
 import { evaluateStorefrontAccess, getFreeShippingThresholdPaise, getOrCreateCart } from "@bs/domain";
@@ -50,7 +51,7 @@ export default async function CartPage() {
   const cookieStore = await cookies();
   const token = cookieStore.get(CART_COOKIE_NAME)?.value;
 
-  const cart = await getOrCreateCart(rt, tenantCtx, token);
+  const cart = await getOrCreateCart(rt, tenantCtx, token, undefined, (await getMarketContext(access.tenantId)).marketId);
 
   // The theme's own cart layout, when the store has one; the built-in layout otherwise.
   const template = await getCachedThemePage(access.tenantId, "cart").catch(() => null);

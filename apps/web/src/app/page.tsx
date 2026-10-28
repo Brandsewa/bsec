@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import { getMarketContext } from "@/server/market.ts";
 import { headers } from "next/headers";
 import { cacheTag } from "next/cache";
 import {
@@ -83,7 +84,7 @@ export default async function HomePage() {
       };
 
       const [homeData, storeSettingsData] = await Promise.all([
-        getCachedStorefrontHomePage(access.tenantId).catch(() => null),
+        getCachedStorefrontHomePage(access.tenantId, (await getMarketContext(access.tenantId)).marketId).catch(() => null),
         getStoreSettings(rt, tenantCtx).catch(() => null),
       ]);
 

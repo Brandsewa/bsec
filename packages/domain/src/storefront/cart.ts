@@ -7,6 +7,7 @@ import { cartWeightGrams, getTenantShippingRates } from "../orders/shipping-rate
 import { toCountryCode } from "../orders/shipping-rules.ts";
 import { publicMediaUrl } from "../media/storage.ts";
 import { evaluateDiscount } from "../orders/discounts.ts";
+import { postalCodeProblem } from "../markets/addresses.ts";
 import { isNonBaseMarket, isProductVisibleInMarket, loadCheckoutMarket, loadMarketPriceMap } from "../markets/lookup.ts";
 
 export interface StorefrontCartItem {
@@ -106,6 +107,8 @@ export interface EstimateCartShippingInput {
   pincode: string;
   /** Shipping state, when known, to pick the matching shipping zone. */
   state?: string | undefined;
+  /** ISO country of the destination; defaults to the cart's market (India for the base market). */
+  country?: string | undefined;
 }
 
 /**
@@ -638,9 +641,13 @@ export async function quoteCartShipping(
   const weightGrams = await withTenant(rt._db.db, ctx.tenantId, (tx) =>
     cartWeightGrams(tx, cart.items.map((i) => ({ variantId: i.variantId, quantity: i.quantity }))),
   );
+  // The cart's market decides which zones apply and which country is assumed when none is given (ADR-040).
+  const market = await withTenant(rt._db.db, ctx.tenantId, (tx) => loadCheckoutMarket(tx, ctx.tenantId, cart.marketId));
+  const country = toCountryCode(input.country) ?? (market.isBase ? "IN" : (market.countries[0] ?? "IN"));
   const rates = await getTenantShippingRates(rt._db.db, ctx.tenantId, cart.subtotal, {
     weightGrams,
-    destination: { country: toCountryCode(input.country) ?? "IN", state: input.state },
+    destination: { country, state: input.state },
+    ...(market.id ? { market: { id: market.id, isBase: market.isBase } } : {}),
   });
   return rates.map((r) => ({
     id: r.method,
@@ -659,19 +666,22 @@ export async function estimateCartShipping(
   ctx: TenantContext,
   input: EstimateCartShippingInput,
 ): Promise<ShippingEstimate> {
-  const pincodeRegex = /^[1-9][0-9]{5}$/;
-  if (!pincodeRegex.test(input.pincode)) {
-    throw new Error("Invalid Indian pincode format");
-  }
-
   const cart = await getOrCreateCart(rt, ctx, input.token);
+  const market = await withTenant(rt._db.db, ctx.tenantId, (tx) => loadCheckoutMarket(tx, ctx.tenantId, cart.marketId));
+  const country = toCountryCode(input.country) ?? (market.isBase ? "IN" : (market.countries[0] ?? "IN"));
+  if (country === "IN") {
+    if (!/^[1-9][0-9]{5}$/.test(input.pincode)) throw new Error("Invalid Indian pincode format");
+  } else if (postalCodeProblem(country, input.pincode)) {
+    throw new Error("Invalid postal code format");
+  }
 
   const weightGrams = await withTenant(rt._db.db, ctx.tenantId, (tx) =>
     cartWeightGrams(tx, cart.items.map((i) => ({ variantId: i.variantId, quantity: i.quantity }))),
   );
   const rates = await getTenantShippingRates(rt._db.db, ctx.tenantId, cart.subtotal, {
     weightGrams,
-    ...(input.state ? { destination: { country: "IN", state: input.state } } : {}),
+    destination: { country, ...(input.state ? { state: input.state } : {}) },
+    ...(market.id ? { market: { id: market.id, isBase: market.isBase } } : {}),
   });
 
   return {

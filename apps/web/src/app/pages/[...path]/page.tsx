@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import { getMarketContext } from "@/server/market.ts";
 import { notFound, permanentRedirect } from "next/navigation";
 import { headers } from "next/headers";
 import { cacheTag } from "next/cache";
@@ -104,7 +105,7 @@ export default async function CustomContentPage({ params }: CustomPageProps) {
     const access = await evaluateStorefrontAccess(rt, host, { headers: h });
 
     if (access.tenantId) {
-      pageData = await getCachedStorefrontPageByPath(access.tenantId, path);
+      pageData = await getCachedStorefrontPageByPath(access.tenantId, path, (await getMarketContext(access.tenantId)).marketId);
 
       if (pageData) {
         // Enforce 308 permanent redirect if accessed via non-canonical ancestor path

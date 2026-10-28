@@ -26,6 +26,10 @@ import { googleFontsHref } from "@bs/blocks/theme-vars";
 import { fontSans, fontMono } from "@/lib/fonts.ts";
 import { makeThemeBootScript } from "@bs/ui/server";
 import { WebThemeProvider } from "@/components/theme/WebThemeProvider.tsx";
+import { MarketProvider } from "@/components/market/MarketProvider.tsx";
+import { MarketBar } from "@/components/market/MarketBar.tsx";
+import { getMarketContext, type MarketContext } from "@/server/market.ts";
+import { PATH_HEADER } from "@/lib/market-constants.ts";
 import { THEMED_PATH_SOURCE } from "@/lib/themed-paths.ts";
 import "./globals.css";
 
@@ -105,6 +109,10 @@ export default async function RootLayout({ children }: { children: ReactNode }) 
   let miniCartCopy: MiniCartCopy | undefined;
   let themeHeader: Awaited<ReturnType<typeof getCachedThemePage>> = null;
   let themeFooter: Awaited<ReturnType<typeof getCachedThemePage>> = null;
+  let marketCtx: MarketContext | null = null;
+  let requestPath = "/";
+  let requestHost = "localhost";
+  let visitorCountryCode: string | null = null;
 
   try {
     const h = await headers();
@@ -113,8 +121,12 @@ export default async function RootLayout({ children }: { children: ReactNode }) 
     const { rt } = server();
 
     access = await evaluateStorefrontAccess(rt, host, { headers: h });
+    requestHost = host;
+    requestPath = h.get(PATH_HEADER) ?? "/";
+    visitorCountryCode = h.get("cf-ray") ? (h.get("cf-ipcountry")?.toUpperCase() ?? null) : null;
 
     if (access.tenantId) {
+      marketCtx = await getMarketContext(access.tenantId).catch(() => null);
       storeName = await getCachedStoreName(access.tenantId).catch(() => "Store");
       // In M3, retrieve published brand settings and theme tokens using tenant context with Cache Components
       try {
@@ -202,10 +214,20 @@ export default async function RootLayout({ children }: { children: ReactNode }) 
         <script dangerouslySetInnerHTML={{ __html: themeBootScript }} />
         <script dangerouslySetInnerHTML={{ __html: newsletterScript }} />
         {fontsHref ? <link rel="stylesheet" href={fontsHref} precedence="default" /> : null}
+        {marketCtx && marketCtx.markets.length > 1
+          ? [
+              ...marketCtx.markets.map((m) => (
+                <link key={m.id} rel="alternate" hrefLang={m.locale ?? (m.currency === "USD" ? "en-US" : m.currency === "CAD" ? "en-CA" : "en-IN")} href={`https://${requestHost}${m.pathPrefix ?? ""}${requestPath}`} />
+              )),
+              <link key="x-default" rel="alternate" hrefLang="x-default" href={`https://${requestHost}${requestPath}`} />,
+            ]
+          : null}
       </head>
       <body className="flex min-h-dvh flex-col antialiased">
         <WebThemeProvider>
+          <MarketProvider value={{ currency: marketCtx?.currency ?? "INR", locale: marketCtx?.locale ?? "en-IN", prefix: marketCtx?.prefix ?? "" }}>
           <MiniCartConfigProvider copy={miniCartCopy}>
+          {marketCtx?.market ? <MarketBar markets={marketCtx.markets} current={marketCtx.market} suggestion={marketCtx.suggestion} path={requestPath} country={visitorCountryCode} /> : null}
           <StoreStatusBanner isBypass={access.isBypass} mode={access.mode} />
           {themeHeader ? (
             <ThemeChrome blocks={themeHeader.blocks} renderData={themeHeader.renderData} storeName={storeName} />
@@ -222,6 +244,7 @@ export default async function RootLayout({ children }: { children: ReactNode }) 
           <CartBadge dock />
           {themeHeader ? <MobileBottomNav /> : null}
           </MiniCartConfigProvider>
+          </MarketProvider>
         </WebThemeProvider>
       </body>
     </html>

@@ -3,7 +3,8 @@
  * snapshot checkout works from. No permission checks here: these run for anonymous shoppers, always inside `withTenant`.
  */
 import { and, eq, inArray, sql } from "drizzle-orm";
-import { schema, type Db } from "@bs/db";
+import { schema, withTenant, type Db } from "@bs/db";
+import type { Runtime } from "../runtime.ts";
 import { marketIdForCountry, type RoundingMode, type TaxRuleRow } from "./rules.ts";
 
 export interface StorefrontMarket {
@@ -231,4 +232,9 @@ export async function loadCheckoutMarket(tx: Db, tenantId: string, marketId: str
 export function toBaseCurrencyAmount(amountMinor: number, fxRate: number | null, targetExp: number, baseExp: number): number {
   if (!fxRate || fxRate <= 0) return amountMinor;
   return Math.round((amountMinor / 10 ** targetExp / fxRate) * 10 ** baseExp);
+}
+
+/** The markets a shopper can pick, for server components (opens its own tenant transaction). */
+export function listStorefrontMarkets(rt: Runtime, tenantId: string): Promise<StorefrontMarket[]> {
+  return withTenant(rt._db.db, tenantId, (tx) => loadStorefrontMarkets(tx, tenantId));
 }

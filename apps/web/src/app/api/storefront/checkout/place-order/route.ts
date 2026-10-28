@@ -4,6 +4,8 @@ import {
   evaluateStorefrontAccess,
   placeOrder,
   startRazorpayPayment,
+  startHostedPayment,
+  getStoreSettings,
   FeatureDisabledError,
   checkStorefrontRateLimit,
   RateLimitExceededError,
@@ -15,16 +17,18 @@ import { CART_COOKIE_NAME, getRequestHeaders, getCookieValue } from "../../cart/
 
 const PlaceOrderSchema = z.object({
   email: z.string().email("Valid email is required"),
-  phone: z.string().regex(/^[6-9][0-9]{9}$/, "Valid 10-digit Indian phone number required"),
+  // Phone and postal code are checked per country on the server (India keeps its exact rules, ADR-040).
+  phone: z.string().trim().min(7, "Phone number required").max(20),
+  country: z.string().trim().length(2).optional(),
   fullName: z.string().min(1, "Full name is required"),
   addressLine1: z.string().min(1, "Address line 1 is required"),
   addressLine2: z.string().optional(),
   city: z.string().min(1, "City is required"),
   state: z.string().min(1, "State is required"),
-  pincode: z.string().regex(/^[1-9][0-9]{5}$/, "Valid 6-digit Indian pincode required"),
+  pincode: z.string().trim().min(2, "Postal code required").max(12),
   // The method id of one of the store's own shipping rates (as listed on the checkout page).
   shippingMethod: z.string().min(1).max(64).optional(),
-  paymentMethod: z.enum(["cod", "razorpay", "online"]).default("cod"),
+  paymentMethod: z.enum(["cod", "razorpay", "stripe", "paypal", "online"]).default("cod"),
   notes: z.string().optional(),
   termsConsent: z.boolean().optional(),
   marketingConsent: z.boolean().optional(),
@@ -42,11 +46,12 @@ const PlaceOrderSchema = z.object({
     .object({
       fullName: z.string().trim().min(1, "Shipping name is required").max(120),
       email: z.string().trim().email().max(255).optional().or(z.literal("")),
-      phone: z.string().regex(/^[6-9][0-9]{9}$/, "Valid 10-digit shipping contact number required"),
+      phone: z.string().trim().min(7, "Shipping contact number required").max(20),
+      country: z.string().trim().length(2).optional(),
       addressLine1: z.string().trim().min(1, "Shipping address is required").max(200),
       city: z.string().trim().min(1).max(80),
       state: z.string().trim().min(1).max(80),
-      pincode: z.string().regex(/^[1-9][0-9]{5}$/, "Valid 6-digit shipping pincode required"),
+      pincode: z.string().trim().min(2, "Shipping postal code required").max(12),
     })
     .optional(),
 });
@@ -114,6 +119,7 @@ export async function POST(req: Request) {
       city: parsed.data.city,
       state: parsed.data.state,
       pincode: parsed.data.pincode,
+      country: parsed.data.country,
       shippingMethod: parsed.data.shippingMethod,
       paymentMethod,
       notes: parsed.data.notes,
@@ -136,11 +142,19 @@ export async function POST(req: Request) {
     // Online payment: the order is saved first, then the Razorpay order is created for it. If Razorpay cannot be reached
     // the order still exists and its page offers "Pay now", so nothing is lost and the shopper is never double-charged.
     let razorpay: Awaited<ReturnType<typeof startRazorpayPayment>> | undefined;
-    if (paymentMethod !== "cod") {
+    let checkoutUrl: string | undefined;
+    if (paymentMethod === "razorpay") {
       razorpay = await startRazorpayPayment(rt, tenantCtx.tenantId, orderResult.orderId).catch(() => undefined);
+    } else if (paymentMethod === "stripe" || paymentMethod === "paypal") {
+      // Stripe and PayPal take the shopper to the provider's own page; the same order page offers "Pay now" if this fails.
+      const proto = h.get("x-forwarded-proto") ?? (host.startsWith("localhost") || host.startsWith("127.") ? "http" : "https");
+      const storeName = (await getStoreSettings(rt, tenantCtx).catch(() => null))?.storeName;
+      checkoutUrl = (
+        await startHostedPayment(rt, tenantCtx.tenantId, orderResult.orderId, paymentMethod, { baseUrl: `${proto}://${host}`, orderToken: orderResult.orderToken, storeName }).catch(() => undefined)
+      )?.checkoutUrl;
     }
 
-    const response = NextResponse.json({ ...orderResult, razorpay }, { status: 200 });
+    const response = NextResponse.json({ ...orderResult, razorpay, checkoutUrl }, { status: 200 });
 
     // Clear cart token cookie
     response.cookies.set({

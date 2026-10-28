@@ -4,7 +4,7 @@ import { PayPalProvider, StripeProvider } from "@bs/payments";
 import type { Runtime } from "../runtime.ts";
 import { readPlatformProviderState } from "../admin/payment-providers.ts";
 import { getTenantPaymentSecrets } from "./credentials.ts";
-import { orderTokenHash, settleProviderPayment, type SettleResult } from "./razorpay-checkout.ts";
+import { orderTokenHash, settleProviderPayment, startRazorpayPaymentByToken, type SettleResult } from "./razorpay-checkout.ts";
 
 /**
  * Stripe and PayPal at the storefront checkout (ADR-040 section 5, ADR-008).
@@ -91,7 +91,7 @@ export async function startHostedPayment(
   if (provider === "stripe") {
     const stripe = new StripeProvider({
       secretKey: creds.keySecret,
-      successUrl: `${base}/api/storefront/checkout/return?provider=stripe&token=${encodeURIComponent(opts.orderToken)}`,
+      successUrl: `${base}/api/storefront/checkout/return?provider=stripe&ot=${encodeURIComponent(opts.orderToken)}`,
       cancelUrl: `${thankYou}?payment=cancelled`,
       fetchFn: deps.fetchFn,
     });
@@ -106,7 +106,7 @@ export async function startHostedPayment(
       mode: method?.mode === "live" ? "live" : "sandbox",
       brandName: opts.storeName,
       fetchFn: deps.fetchFn,
-      returnUrl: `${base}/api/storefront/checkout/return?provider=paypal&token=${encodeURIComponent(opts.orderToken)}`,
+      returnUrl: `${base}/api/storefront/checkout/return?provider=paypal&ot=${encodeURIComponent(opts.orderToken)}`,
       cancelUrl: `${thankYou}?payment=cancelled`,
     });
     const created = await paypal.createIntent({ tenantId }, forPayment);
@@ -184,4 +184,38 @@ export async function confirmHostedReturn(
 export async function storePayPalMode(db: Db, tenantId: string): Promise<"sandbox" | "live"> {
   const method = await methodState(db, tenantId, "paypal");
   return method?.mode === "live" ? "live" : "sandbox";
+}
+
+export type StartedPayment =
+  | { kind: "razorpay"; razorpay: Awaited<ReturnType<typeof startRazorpayPaymentByToken>> }
+  | { kind: "hosted"; checkoutUrl: string };
+
+/**
+ * "Pay now" for an unpaid online order, whichever provider the order was placed with. The provider comes from the order's own
+ * payment intent, never from the request, so a shopper cannot move an order to another gateway.
+ */
+export async function startPaymentByToken(
+  rt: Runtime,
+  tenantId: string,
+  orderToken: string,
+  opts: { baseUrl: string; storeName?: string | undefined },
+): Promise<StartedPayment> {
+  const db = rt._db.db;
+  const orderId = await orderIdForToken(db, tenantId, orderToken);
+  if (!orderId) throw new Error("Not Found: order not found");
+  const [intent] = await withTenant(db, tenantId, (tx) =>
+    tx
+      .select({ provider: schema.paymentIntents.provider })
+      .from(schema.paymentIntents)
+      .where(and(eq(schema.paymentIntents.tenantId, tenantId), eq(schema.paymentIntents.orderId, orderId)))
+      .orderBy(desc(schema.paymentIntents.createdAt))
+      .limit(1),
+  );
+  if (!intent) throw new Error("Not Found: this order has no online payment to complete");
+  if (intent.provider === "stripe" || intent.provider === "paypal") {
+    const started = await startHostedPayment(rt, tenantId, orderId, intent.provider, { baseUrl: opts.baseUrl, orderToken, storeName: opts.storeName });
+    return { kind: "hosted", checkoutUrl: started.checkoutUrl };
+  }
+  if (intent.provider === "razorpay") return { kind: "razorpay", razorpay: await startRazorpayPaymentByToken(rt, tenantId, orderToken) };
+  throw new Error("Bad Request: this order does not need an online payment");
 }

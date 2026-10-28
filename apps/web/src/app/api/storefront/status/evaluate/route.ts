@@ -1,6 +1,21 @@
 import { NextResponse, type NextRequest } from "next/server";
-import { evaluateStorefrontAccess, recordLookupFailure } from "@bs/domain";
+import { evaluateStorefrontAccess, listStorefrontMarkets, recordLookupFailure } from "@bs/domain";
 import { server } from "@/server/runtime.ts";
+
+/**
+ * URL prefixes of the store's active non-base markets ("/us"), for the middleware. Kept for 30 seconds per process, the same
+ * trade-off as the host resolver: a new market answers on its prefix within half a minute.
+ */
+const PREFIX_TTL_MS = 30_000;
+const prefixCache = new Map<string, { at: number; prefixes: { prefix: string; handle: string }[] }>();
+async function marketPrefixes(tenantId: string): Promise<{ prefix: string; handle: string }[]> {
+  const hit = prefixCache.get(tenantId);
+  if (hit && Date.now() - hit.at < PREFIX_TTL_MS) return hit.prefixes;
+  const { rt } = server();
+  const prefixes = (await listStorefrontMarkets(rt, tenantId).catch(() => [])).flatMap((m) => (m.pathPrefix ? [{ prefix: m.pathPrefix, handle: m.handle }] : []));
+  prefixCache.set(tenantId, { at: Date.now(), prefixes });
+  return prefixes;
+}
 
 export async function GET(request: NextRequest) {
   const host =
@@ -37,7 +52,8 @@ export async function GET(request: NextRequest) {
       }
     }
 
-    return NextResponse.json(access);
+    const marketPrefixesForTenant = access.tenantId ? await marketPrefixes(access.tenantId) : [];
+    return NextResponse.json({ ...access, marketPrefixes: marketPrefixesForTenant });
   } catch (error) {
     const { fallbackMode } = recordLookupFailure(host, error);
 

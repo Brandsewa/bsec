@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { getMarketContext } from "@/server/market.ts";
 import { headers, cookies } from "next/headers";
 import {
   evaluateStorefrontAccess,
@@ -72,7 +73,8 @@ export async function GET(req: Request) {
     };
 
     const existingToken = await getCookieValue(CART_COOKIE_NAME, req);
-    const cart = await getOrCreateCart(rt, tenantCtx, existingToken);
+    const marketId = (await getMarketContext(access.tenantId)).marketId;
+    const cart = await getOrCreateCart(rt, tenantCtx, existingToken, undefined, marketId);
 
     // The store's own free-shipping amount (from its shipping settings), for the mini cart's progress bar. Null when it has none.
     const freeShippingThresholdPaise = await getFreeShippingThresholdPaise(rt._db.db, access.tenantId).catch(() => null);

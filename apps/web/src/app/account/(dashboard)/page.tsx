@@ -58,7 +58,7 @@ export default async function AccountDashboardPage() {
                     <RelativeTime date={o.placedAt} />
                   </span>
                   <span className="font-medium tabular-nums">
-                    <Money paise={o.grandTotal} />
+                    <Money paise={o.grandTotal} currency={o.currency} />
                   </span>
                 </Link>
               </li>

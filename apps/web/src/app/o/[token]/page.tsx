@@ -91,7 +91,7 @@ export default async function OrderTrackingPage({ params }: OrderTrackingPagePro
                   <div className="text-xs text-muted-foreground">Qty: {item.quantity}</div>
                 </div>
                 <div className="font-semibold text-foreground">
-                  <Money paise={item.total} />
+                  <Money paise={item.total} currency={order.currency} />
                 </div>
               </div>
             ))}
@@ -101,23 +101,23 @@ export default async function OrderTrackingPage({ params }: OrderTrackingPagePro
         <div className="mt-6 border-t border-border pt-4 space-y-2 text-sm">
           <div className="flex justify-between text-muted-foreground">
             <span>Subtotal</span>
-            <span><Money paise={order.subtotal} /></span>
+            <span><Money paise={order.subtotal} currency={order.currency} /></span>
           </div>
           {(order.discountTotal ?? 0) > 0 && (
             <div className="flex justify-between text-muted-foreground">
               <span>Discount</span>
-              <span>−<Money paise={order.discountTotal ?? 0} /></span>
+              <span>−<Money paise={order.discountTotal ?? 0} currency={order.currency} /></span>
             </div>
           )}
           {order.shippingTotal > 0 && (
             <div className="flex justify-between text-muted-foreground">
               <span>Shipping</span>
-              <span><Money paise={order.shippingTotal} /></span>
+              <span><Money paise={order.shippingTotal} currency={order.currency} /></span>
             </div>
           )}
           <div className="flex justify-between font-bold text-base text-foreground pt-2 border-t border-border">
             <span>Grand Total</span>
-            <span><Money paise={order.grandTotal} /></span>
+            <span><Money paise={order.grandTotal} currency={order.currency} /></span>
           </div>
         </div>
 

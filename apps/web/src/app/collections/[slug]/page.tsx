@@ -1,4 +1,5 @@
 import React from "react";
+import { getMarketContext } from "@/server/market.ts";
 import type { Metadata } from "next";
 import { notFound } from "next/navigation";
 import { headers } from "next/headers";
@@ -141,9 +142,10 @@ export default async function CollectionDetailPage({
     }
 
     tenantId = access.tenantId;
+    const marketId = (await getMarketContext(tenantId)).marketId;
 
     // Check if the theme's collection template defines a filterMenuHandle
-    template = await getCachedThemePage(tenantId, "collection").catch(() => null);
+    template = await getCachedThemePage(tenantId, "collection", marketId).catch(() => null);
     const listingForSize = template?.blocks.find((b) => isListingBlock(b.type));
     const templateSize = Number(listingForSize?.props?.["pageSize"]);
     const defaultLimit = [12, 24, 36].includes(templateSize) ? templateSize : listingForSize ? 24 : 12;
@@ -177,7 +179,7 @@ export default async function CollectionDetailPage({
       inStockOnly: inStockOnly || undefined,
       filterMenuHandle,
       filters: filterParams,
-    });
+    }, marketId);
   } catch {
     notFound();
   }

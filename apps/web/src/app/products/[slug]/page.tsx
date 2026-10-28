@@ -1,4 +1,5 @@
 import { descriptionText } from "@/lib/description-text.ts";
+import { getMarketContext } from "@/server/market.ts";
 import { ProductInfoTabs } from "@/components/product/ProductInfoTabs.tsx";
 import { ProductCustomField } from "@/components/product/ProductCustomField.tsx";
 import { ProductReviewsSection } from "@/components/product/ProductReviewsSection.tsx";
@@ -107,6 +108,7 @@ export default async function ProductDetailPage({ params }: ProductPageProps) {
   let product: Awaited<ReturnType<typeof getStorefrontProduct>> = null;
   let host = "localhost";
   let tenantId = "";
+  let marketId: string | null = null;
 
   try {
     const h = await headers();
@@ -119,7 +121,8 @@ export default async function ProductDetailPage({ params }: ProductPageProps) {
     }
 
     tenantId = access.tenantId;
-    product = await getCachedStorefrontProduct(tenantId, slug);
+    marketId = (await getMarketContext(tenantId)).marketId;
+    product = await getCachedStorefrontProduct(tenantId, slug, marketId);
   } catch {
     notFound();
   }
@@ -147,14 +150,14 @@ export default async function ProductDetailPage({ params }: ProductPageProps) {
   ]);
 
   // The theme's own product page layout, when the store has one; the built-in layout otherwise.
-  const template = await getCachedThemePage(tenantId, "product").catch(() => null);
+  const template = await getCachedThemePage(tenantId, "product", marketId).catch(() => null);
   const media = template?.renderData?.media ?? {};
   // "Related" product carousels are resolved for this product and laid over the theme page's data.
   // "You may also like" always looks like the home page's product carousel and lists products related to this one: the home
   // carousel's card, arrows and dots settings are copied onto it, and an older plain Product carousel on this page is
   // replaced by that related carousel. The product page keeps its own heading, subtitle and count. The theme's "Reviews"
   // block is only a heading placeholder (the real reviews are drawn below the product's own blocks), so it is left out.
-  const homeDesign = template ? await getCachedStorefrontHomePage(tenantId).then((h) => findShowcaseProps(h.document.blocks)).catch(() => null) : null;
+  const homeDesign = template ? await getCachedStorefrontHomePage(tenantId, marketId).then((h) => findShowcaseProps(h.document.blocks)).catch(() => null) : null;
   const adaptedBlocks = (template?.blocks ?? [])
     .filter((b) => b.type !== "Reviews")
     .map((b) => {
@@ -179,7 +182,7 @@ export default async function ProductDetailPage({ params }: ProductPageProps) {
       const keep = { title: b.props["title"], subtitle: b.props["subtitle"], tabs: b.props["tabs"], limit: b.props["limit"] };
       return { ...b, props: ProductShowcaseSchema.parse({ ...homeDesign, ...keep }) as Record<string, unknown> };
     });
-  const relatedData = template ? await getCachedRelatedShowcaseData(tenantId, product.id, adaptedBlocks).catch(() => ({})) : {};
+  const relatedData = template ? await getCachedRelatedShowcaseData(tenantId, product.id, adaptedBlocks, marketId).catch(() => ({})) : {};
   const renderData = template ? { ...template.renderData, data: { ...template.renderData.data, ...relatedData } } : undefined;
   const detail = (options?: Parameters<typeof ProductDetailSection>[0]["options"]) => (
     <ProductDetailSection product={product} options={options} customFields={customFields} coupons={coupons} paymentImageUrl={options?.paymentImageMediaId ? media[options.paymentImageMediaId] : undefined} />

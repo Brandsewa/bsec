@@ -85,7 +85,7 @@ export default async function ThankYouPage({ params }: ThankYouPageProps) {
             <div className="flex justify-between">
               <span className="text-muted-foreground">Discount:</span>
               <span className="font-medium text-emerald-700 dark:text-emerald-400">
-                −<Money paise={order.discountTotal ?? 0} />
+                −<Money paise={order.discountTotal ?? 0} currency={order.currency} />
               </span>
             </div>
           )}
@@ -101,7 +101,7 @@ export default async function ThankYouPage({ params }: ThankYouPageProps) {
           )}
           <div className="flex justify-between">
             <span className="text-muted-foreground">Total:</span>
-            <span className="font-bold text-foreground"><Money paise={order.grandTotal} /></span>
+            <span className="font-bold text-foreground"><Money paise={order.grandTotal} currency={order.currency} /></span>
           </div>
         </div>
 
@@ -117,7 +117,7 @@ export default async function ThankYouPage({ params }: ThankYouPageProps) {
                   </span>
                 ) : null}
               </span>
-              <span className="text-muted-foreground"><Money paise={item.total} /></span>
+              <span className="text-muted-foreground"><Money paise={item.total} currency={order.currency} /></span>
             </div>
           ))}
         </div>

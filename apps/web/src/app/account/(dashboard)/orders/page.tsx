@@ -58,7 +58,7 @@ export default async function PurchaseHistoryPage() {
               <div className="flex items-center justify-between text-xs text-[var(--muted-foreground)]">
                 <RelativeTime date={o.placedAt} />
                 <span className="font-semibold text-sm text-[var(--foreground)]">
-                  <Money paise={o.grandTotal} />
+                  <Money paise={o.grandTotal} currency={o.currency} />
                 </span>
               </div>
             </Link>
@@ -93,7 +93,7 @@ export default async function PurchaseHistoryPage() {
                   <StatusBadge tone={mapStatusToTone(o.status)} label={o.status.replace(/_/g, " ")} />
                 </td>
                 <td className="px-4 py-3.5 text-right font-medium tabular-nums text-[var(--foreground)]">
-                  <Money paise={o.grandTotal} />
+                  <Money paise={o.grandTotal} currency={o.currency} />
                 </td>
                 <td className="px-4 py-3.5 text-right">
                   <Link

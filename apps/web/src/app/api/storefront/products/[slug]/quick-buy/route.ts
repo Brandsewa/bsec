@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { getMarketContext } from "@/server/market.ts";
 import { headers } from "next/headers";
 import { evaluateStorefrontAccess } from "@bs/domain";
 import { server } from "@/server/runtime.ts";
@@ -18,7 +19,7 @@ export async function GET(_req: Request, ctx: { params: Promise<{ slug: string }
     const access = await evaluateStorefrontAccess(rt, host, { headers: h });
     if (!access.tenantId) return NextResponse.json({ error: "Store not found" }, { status: 404 });
 
-    const product = await getCachedStorefrontProduct(access.tenantId, slug);
+    const product = await getCachedStorefrontProduct(access.tenantId, slug, (await getMarketContext(access.tenantId)).marketId);
     if (!product) return NextResponse.json({ error: "Product not found" }, { status: 404 });
 
     // The same options the product page offers, including the "Variant" fallback for variants the options cannot reach.

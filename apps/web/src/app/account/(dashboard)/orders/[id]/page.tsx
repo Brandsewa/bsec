@@ -68,7 +68,7 @@ export default async function AccountOrderPage({ params }: { params: Promise<{ i
               <div className="text-xs text-[var(--muted-foreground)]">Qty: {item.quantity}</div>
             </div>
             <div className="font-medium tabular-nums text-[var(--foreground)]">
-              <Money paise={item.total} />
+              <Money paise={item.total} currency={order.currency} />
             </div>
           </div>
         ))}
@@ -77,23 +77,23 @@ export default async function AccountOrderPage({ params }: { params: Promise<{ i
       <div className="mt-6 space-y-2 border-t border-[var(--border)] pt-4 text-sm">
         <div className="flex justify-between text-[var(--muted-foreground)]">
           <span>Subtotal</span>
-          <span className="tabular-nums"><Money paise={order.subtotal} /></span>
+          <span className="tabular-nums"><Money paise={order.subtotal} currency={order.currency} /></span>
         </div>
         {(order.discountTotal ?? 0) > 0 ? (
           <div className="flex justify-between text-[var(--muted-foreground)]">
             <span>Discount</span>
-            <span className="tabular-nums text-[var(--success)]">−<Money paise={order.discountTotal ?? 0} /></span>
+            <span className="tabular-nums text-[var(--success)]">−<Money paise={order.discountTotal ?? 0} currency={order.currency} /></span>
           </div>
         ) : null}
         {order.shippingTotal > 0 ? (
           <div className="flex justify-between text-[var(--muted-foreground)]">
             <span>Shipping</span>
-            <span className="tabular-nums"><Money paise={order.shippingTotal} /></span>
+            <span className="tabular-nums"><Money paise={order.shippingTotal} currency={order.currency} /></span>
           </div>
         ) : null}
         <div className="flex justify-between border-t border-[var(--border)] pt-3 text-base font-bold text-[var(--foreground)]">
           <span>Grand Total</span>
-          <span className="tabular-nums"><Money paise={order.grandTotal} /></span>
+          <span className="tabular-nums"><Money paise={order.grandTotal} currency={order.currency} /></span>
         </div>
       </div>
 

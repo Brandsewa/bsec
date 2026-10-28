@@ -1,4 +1,5 @@
 import React from "react";
+import { getMarketContext } from "@/server/market.ts";
 import type { Metadata } from "next";
 import { headers } from "next/headers";
 import Link from "next/link";
@@ -101,6 +102,7 @@ export default async function SearchPage({ searchParams }: SearchPageProps) {
           roles: ["store_admin"],
           permissions: ["products.read", "settings.write"],
           requestId: crypto.randomUUID(),
+          marketId: (await getMarketContext(access.tenantId)).marketId,
         };
 
         results = await searchStorefrontProducts(rt, tenantCtx, q, { page, limit });

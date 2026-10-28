@@ -221,7 +221,7 @@ export async function placeOrder(
       throw new Error(`Bad Request: This order cannot be shipped to ${destCountry} from the ${mkt.name} store. Choose your country again to see the right prices.`);
     }
     const billingProblem = addressProblem({ country: (toCountryCode(input.country) ?? destCountry), state: input.state, postalCode: input.pincode, ...(input.phone ? { phone: input.phone } : {}) });
-    if (billingProblem && !mkt.legacy) throw new Error(`Bad Request: ${billingProblem}`);
+    if (billingProblem) throw new Error(`Bad Request: ${billingProblem}`);
 
     // 2. Calculate amounts (in minor units) using canonical shipping calculation (PLAN §5.4, §7 / M7)
     const subtotal = cart.subtotal;

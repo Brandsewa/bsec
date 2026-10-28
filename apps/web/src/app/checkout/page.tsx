@@ -2,12 +2,13 @@ import React from "react";
 import type { Metadata } from "next";
 import { headers, cookies } from "next/headers";
 import { redirect } from "next/navigation";
-import { getCustomerAddresses, getCustomerProfile, evaluateStorefrontAccess, getOrCreateCart, getTenantShippingRates, getStorefrontPaymentOptions, getStorefrontCheckoutConsent } from "@bs/domain";
+import { getCustomerAddresses, getCustomerProfile, evaluateStorefrontAccess, getOrCreateCart, getTenantShippingRates, getStorefrontCheckoutOptions, getStorefrontCheckoutConsent } from "@bs/domain";
 import { accountContext } from "@/server/customer-session.ts";
 import { server } from "@/server/runtime.ts";
 import { getCachedDefaultPages } from "@/server/cached-storefront.ts";
 import { CheckoutContainer } from "@/components/checkout/CheckoutContainer.tsx";
 import { CART_COOKIE_NAME } from "@/app/api/storefront/cart/route.ts";
+import { getMarketContext } from "@/server/market.ts";
 
 export const metadata: Metadata = {
   title: "Checkout",
@@ -42,14 +43,17 @@ export default async function CheckoutPage() {
     requestId: crypto.randomUUID(),
   };
 
-  const cart = await getOrCreateCart(rt, tenantCtx, token);
+  const marketCtx = await getMarketContext(access.tenantId);
+  const cart = await getOrCreateCart(rt, tenantCtx, token, undefined, marketCtx.marketId);
 
   if (!cart.items || cart.items.length === 0) {
     redirect("/cart");
   }
 
   // The store's own shipping options, priced by the same function the order uses, so the total shown is the total charged.
-  const rates = await getTenantShippingRates(rt._db.db, access.tenantId, cart.subtotal);
+  const options = await getStorefrontCheckoutOptions(rt, access.tenantId, cart.marketId);
+  const cartMarket = marketCtx.markets.find((m) => m.id === cart.marketId);
+  const rates = await getTenantShippingRates(rt._db.db, access.tenantId, cart.subtotal, cartMarket ? { market: { id: cartMarket.id, isBase: cartMarket.isBase }, destination: { country: options.defaultCountry } } : {});
   const shippingRates = rates.map((r) => ({
     method: r.method,
     title: r.title,
@@ -59,8 +63,8 @@ export default async function CheckoutPage() {
   }));
 
   const consent = await getStorefrontCheckoutConsent(rt, access.tenantId);
-  const options = await getStorefrontPaymentOptions(rt, access.tenantId);
-  const paymentOptions = { codEnabled: options.cod.enabled, codFeePaise: options.cod.feePaise, onlineAvailable: options.online.available };
+  const paymentOptions = { codEnabled: options.cod.enabled, codFeePaise: options.cod.feePaise, onlineAvailable: options.online.available, methods: options.methods };
+  const region = { countries: options.countries, defaultCountry: options.defaultCountry };
 
   // A signed-in shopper starts with their saved address chosen (default first).
   const account = await accountContext();
@@ -79,7 +83,7 @@ export default async function CheckoutPage() {
         {copy.heading}
       </h1>
 
-      <CheckoutContainer cart={cart} shippingRates={shippingRates} paymentOptions={paymentOptions} consent={consent} savedAddresses={savedAddresses} customerEmail={customerEmail} signedIn={Boolean(account)} />
+      <CheckoutContainer cart={cart} shippingRates={shippingRates} paymentOptions={paymentOptions} consent={consent} savedAddresses={savedAddresses} customerEmail={customerEmail} signedIn={Boolean(account)} region={region} />
 
       {copy.showTrustBadges ? (
         <ul className="mt-8 flex flex-wrap gap-x-6 gap-y-2 text-sm text-muted-foreground">
