@@ -2,7 +2,7 @@ import { and, desc, eq, sql } from "drizzle-orm";
 import { schema, withTenant, QUEUE_NAMES } from "@bs/db";
 import { SaasNotConfiguredError, saasDb, type Runtime } from "../runtime.ts";
 import { assertPermission, type TenantContext } from "../context.ts";
-import { cancelTenantSubscription, changeTenantPlan, reconcileCashfreeSubscription } from "../saas/billing.ts";
+import { cancelTenantSubscription, changeTenantPlan, reconcileCashfreeSubscription, resolveBillingProvider } from "../saas/billing.ts";
 import { loadPlatformBillingCredentials } from "../platform/billing-settings.ts";
 import { resolveEffectiveQuota, DEFAULT_TIER_TABLE, type PlanQuotaKey } from "../system/quotas.ts";
 
@@ -40,10 +40,12 @@ export interface PlanAndBillingView {
   } | null;
   usage: PlanAndBillingUsageItem[];
   invoices: PlanAndBillingInvoiceItem[];
-  /** Paying by card or UPI through the platform's payment gateway, Razorpay or Cashfree (billing B3, ADR-037). */
+  /** Paying by card, UPI or PayPal through the platform's payment gateway (billing B3, ADR-037, ADR-040). */
   billing: {
     /** Which gateway a new subscription will use. */
-    provider: "razorpay" | "cashfree";
+    provider: "razorpay" | "cashfree" | "paypal";
+    /** Currency the store is billed in ("INR" for India, "USD" for global via PayPal). */
+    currency?: string;
     /** True once the platform owner has enabled billing with keys. */
     available: boolean;
     /** Billing runs in the gateway's test mode: no real money moves. */
@@ -85,6 +87,8 @@ export interface AvailablePlanSummary {
   name: string;
   priceMonthlyPaise: number;
   priceYearlyPaise: number;
+  priceMonthlyUsdCents?: number | null | undefined;
+  priceYearlyUsdCents?: number | null | undefined;
   isCurrent: boolean;
 }
 
@@ -133,6 +137,13 @@ export async function getPlanAndBilling(
       .limit(1);
     currentPlan = p ?? null;
   }
+
+  const [tenantRow] = await db
+    .select({ country: schema.tenants.country, currency: schema.tenants.currency })
+    .from(schema.tenants)
+    .where(eq(schema.tenants.id, ctx.tenantId))
+    .limit(1);
+  const isGlobalMerchant = Boolean(tenantRow?.country && tenantRow.country !== "IN");
 
   let daysLeftInTrial = 0;
   if (sub?.status === "trialing" && sub.currentPeriodEnd) {
@@ -274,7 +285,7 @@ export async function getPlanAndBilling(
   // Online payment is simply "not available" where the self-service database role is not configured (local dev, tests).
   let creds: Awaited<ReturnType<typeof loadPlatformBillingCredentials>> = null;
   try {
-    creds = await loadPlatformBillingCredentials(saasDb(rt));
+    creds = await loadPlatformBillingCredentials(saasDb(rt), isGlobalMerchant ? "paypal" : undefined);
   } catch (e) {
     // Never let the payment side break the page: without credentials the page just says online payment is not available.
     if (!(e instanceof SaasNotConfiguredError)) console.error("[billing] could not load the platform billing credentials", e);
@@ -296,7 +307,8 @@ export async function getPlanAndBilling(
     usage,
     invoices,
     billing: {
-      provider: creds?.provider ?? "razorpay",
+      provider: isGlobalMerchant ? "paypal" : (creds?.provider ?? "razorpay"),
+      currency: isGlobalMerchant ? "USD" : "INR",
       available: Boolean(creds),
       testMode: creds?.mode !== "live",
       hasSubscription: Boolean(sub?.providerSubscriptionId),
@@ -341,6 +353,8 @@ export async function listAvailablePlans(
     name: p.name,
     priceMonthlyPaise: p.priceMonthlyPaise,
     priceYearlyPaise: p.priceYearlyPaise,
+    priceMonthlyUsdCents: p.priceMonthlyUsdCents !== null ? Number(p.priceMonthlyUsdCents) : null,
+    priceYearlyUsdCents: p.priceYearlyUsdCents !== null ? Number(p.priceYearlyUsdCents) : null,
     isCurrent: p.id === sub?.planId,
   }));
 }
@@ -614,7 +628,14 @@ export async function subscribeToPlan(
   assertPermission(ctx, "settings.read");
   const userId = storeOwnerId(ctx, "subscribe to a plan");
   const db = rt._db.db;
-  const creds = await loadPlatformBillingCredentials(saasDb(rt));
+  const [tenantRow] = await db
+    .select({ country: schema.tenants.country })
+    .from(schema.tenants)
+    .where(eq(schema.tenants.id, ctx.tenantId))
+    .limit(1);
+  const isGlobalMerchant = Boolean(tenantRow?.country && tenantRow.country !== "IN");
+
+  const creds = await loadPlatformBillingCredentials(saasDb(rt), isGlobalMerchant ? "paypal" : undefined);
   if (!creds) throw new Error("Bad Request: online plan payment is not available yet. Request a plan change instead.");
 
   const [owner] = await db.select({ email: schema.users.email, name: schema.users.name, phone: schema.users.phone }).from(schema.users).where(eq(schema.users.id, userId)).limit(1);
@@ -672,6 +693,7 @@ export async function subscribeToPlan(
     // Nothing to wait for (no trial or free period left): the first cycle is paid now, when the mandate is authorised.
     ...(startAtMs ? {} : { chargeFirstCycleNow: true }),
     ...(firstPaymentPaise > 0 ? { firstPaymentPaise } : {}),
+    ...(creds.provider ? { provider: await resolveBillingProvider(saasDb(rt), creds.provider) } : {}),
   });
 
   await withTenant(db, ctx.tenantId, async (tx) => {

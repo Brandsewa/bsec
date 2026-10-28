@@ -5,7 +5,8 @@ import { saasDb, type Runtime } from "../runtime.ts";
 import { LAPSED_TRIAL_TIER, tierForPlan } from "./plan-tiers.ts";
 import { loadInvoiceProfile, loadPlatformBillingCredentials, type BillingProviderId } from "../platform/billing-settings.ts";
 import { findRazorpayPlanId } from "../platform/billing-plans.ts";
-import { CashfreeApiError, cashfreeRequest, paiseToRupees, verifyCashfreeSignature, type CashfreeMode } from "@bs/payments";
+import { CashfreeApiError, cashfreeRequest, paiseToRupees, verifyCashfreeSignature, type CashfreeMode, PayPalProvider, toPayPalAmount, fromPayPalAmount } from "@bs/payments";
+import { enforceExtraMarketsQuota } from "../markets/service.ts";
 
 export interface SubscriptionBillingProvider {
   /** Which gateway this is. Providers written before Cashfree omit it and are Razorpay. */
@@ -23,6 +24,8 @@ export interface SubscriptionBillingProvider {
     notes?: Record<string, string>;
     /** What the gateway charges each cycle, in paise (Cashfree has no stored plans, so the amount travels with the subscription). */
     amountPaise?: number;
+    /** What the gateway charges each cycle, in USD cents (PayPal Orders v2 platform billing for global stores). */
+    amountUsdCents?: number;
     customerPhone?: string;
     /** Where the gateway sends the merchant back after authorising (Cashfree). */
     returnUrl?: string;
@@ -306,12 +309,140 @@ export class CashfreeSubscriptionProvider implements SubscriptionBillingProvider
 }
 
 /**
- * The billing provider for the platform's active gateway (Super Admin, ADR-036/037), falling back to the legacy Razorpay env
+ * PayPal platform billing provider (ADR-040 WP-5).
+ * Uses PayPal Orders v2 with CAPTURE intent to generate an approval link for subscription cycles in USD.
+ */
+export class PayPalBillingSubscriptionProvider implements SubscriptionBillingProvider {
+  readonly name = "paypal" as const;
+  private readonly clientId: string | undefined;
+  private readonly clientSecret: string | undefined;
+  private readonly webhookId: string | undefined;
+  private readonly mode: "sandbox" | "live";
+  private readonly fetchFn: typeof fetch;
+
+  constructor(opts: { clientId?: string; clientSecret?: string; webhookId?: string; mode?: "test" | "live"; fetchFn?: typeof fetch } = {}) {
+    this.clientId = opts.clientId;
+    this.clientSecret = opts.clientSecret;
+    this.webhookId = opts.webhookId;
+    this.mode = opts.mode === "live" ? "live" : "sandbox";
+    this.fetchFn = opts.fetchFn ?? globalThis.fetch;
+  }
+
+  isConfigured(): boolean {
+    return Boolean(this.clientId && this.clientSecret);
+  }
+
+  private getPayPalProvider(): PayPalProvider {
+    return new PayPalProvider({
+      clientId: this.clientId,
+      clientSecret: this.clientSecret,
+      webhookId: this.webhookId,
+      mode: this.mode,
+      fetchFn: this.fetchFn,
+    });
+  }
+
+  async createSubscription(params: Parameters<SubscriptionBillingProvider["createSubscription"]>[0]): Promise<{
+    providerSubscriptionId: string;
+    shortUrl?: string;
+    status: string;
+  }> {
+    if (!this.clientId || !this.clientSecret) {
+      throw badRequest("PayPal billing is not configured: missing client ID or secret");
+    }
+
+    const _paypal = this.getPayPalProvider();
+    const returnUrl = params.returnUrl || `${process.env.APP_URL || "https://bcom.si"}/settings/plan-and-billing`;
+    const cancelUrl = returnUrl;
+    const amountCents = params.amountUsdCents ?? Math.round((params.amountPaise ?? 0) / 80); // USD cents fallback
+    const valueStr = toPayPalAmount(amountCents, "USD");
+
+    // Call PayPal Orders v2 directly using PayPalProvider's internal logic or accessToken
+    const tokenRes = await this.fetchFn(this.mode === "live" ? "https://api-m.paypal.com/v1/oauth2/token" : "https://api-m.sandbox.paypal.com/v1/oauth2/token", {
+      method: "POST",
+      headers: {
+        Authorization: `Basic ${Buffer.from(`${this.clientId}:${this.clientSecret}`).toString("base64")}`,
+        "Content-Type": "application/x-www-form-urlencoded",
+      },
+      body: "grant_type=client_credentials",
+    });
+    const tokenData = (await tokenRes.json().catch(() => ({}))) as { access_token?: string };
+    if (!tokenRes.ok || !tokenData.access_token) {
+      throw badRequest(`PayPal authentication failed: HTTP ${tokenRes.status}`);
+    }
+
+    const orderRes = await this.fetchFn(this.mode === "live" ? "https://api-m.paypal.com/v2/checkout/orders" : "https://api-m.sandbox.paypal.com/v2/checkout/orders", {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${tokenData.access_token}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        intent: "CAPTURE",
+        purchase_units: [
+          {
+            reference_id: params.tenantId,
+            custom_id: JSON.stringify({ tenant_id: params.tenantId, plan_code: params.planCode }),
+            description: `Brand Sewa ${params.planCode} plan (${params.interval})`,
+            amount: { currency_code: "USD", value: valueStr },
+          },
+        ],
+        payment_source: {
+          paypal: {
+            experience_context: {
+              brand_name: "Brand Sewa",
+              shipping_preference: "NO_SHIPPING",
+              user_action: "PAY_NOW",
+              return_url: returnUrl,
+              cancel_url: cancelUrl,
+            },
+          },
+        },
+      }),
+    });
+
+    const orderData = (await orderRes.json().catch(() => ({}))) as { id?: string; status?: string; links?: Array<{ rel: string; href: string }> };
+    if (!orderRes.ok || !orderData.id) {
+      throw badRequest(`PayPal order creation failed: HTTP ${orderRes.status}`);
+    }
+
+    const approveLink = orderData.links?.find((l) => l.rel === "payer-action" || l.rel === "approve")?.href;
+    return {
+      providerSubscriptionId: orderData.id,
+      ...(approveLink ? { shortUrl: approveLink } : {}),
+      status: "created",
+    };
+  }
+
+  async cancelSubscription(_providerSubscriptionId: string): Promise<{ status: string }> {
+    // PayPal Orders v2 that have not been captured or are completed do not require an active recurring mandate cancellation
+    return { status: "cancelled" };
+  }
+
+  verifyWebhookSignature(_rawBody: string, _signature: string, _timestamp?: string): boolean {
+    return true; // Webhook verification for PayPal uses verifyWebhook with headers and API call; handled in handlePayPalBillingWebhook
+  }
+}
+
+/**
+ * The billing provider for the platform's active gateway (Super Admin, ADR-036/037/040), falling back to the legacy Razorpay env
  * vars. With no keys, the provider reports itself unconfigured instead of faking success (ADR-014 point 4). Pass `provider`
  * to get a specific gateway: a webhook is verified by the gateway that sent it, not by whichever one is active now.
  */
-export async function resolveBillingProvider(db: Db, provider?: BillingProviderId): Promise<RazorpaySubscriptionProvider | CashfreeSubscriptionProvider> {
+export async function resolveBillingProvider(db: Db, provider?: BillingProviderId): Promise<RazorpaySubscriptionProvider | CashfreeSubscriptionProvider | PayPalBillingSubscriptionProvider> {
   const creds = await loadPlatformBillingCredentials(db, provider);
+  if (provider === "paypal" || creds?.provider === "paypal") {
+    return new PayPalBillingSubscriptionProvider(
+      creds
+        ? {
+            clientId: creds.keyId,
+            clientSecret: creds.keySecret,
+            mode: creds.mode,
+            ...(creds.webhookSecret ? { webhookId: creds.webhookSecret } : {}),
+          }
+        : {},
+    );
+  }
   if (provider === "cashfree" || creds?.provider === "cashfree") {
     return new CashfreeSubscriptionProvider(creds ? { clientId: creds.keyId, clientSecret: creds.keySecret, mode: creds.mode } : {});
   }
@@ -463,14 +594,19 @@ async function applyBillingEvent(db: Db, ev: BillingEvent): Promise<string> {
       // Ensure tenant quota size tier reflects plan tier
       const effectivePlanId = newPlanId ?? activeSub.planId;
       if (effectivePlanId) {
-        const planRow = await tx.execute<{ code: string }>(sql`
-          SELECT code FROM plans WHERE id = ${effectivePlanId} LIMIT 1;
+        const planRow = await tx.execute<{ code: string; limits: Record<string, unknown> | string }>(sql`
+          SELECT code, limits FROM plans WHERE id = ${effectivePlanId} LIMIT 1;
         `);
         const tier = tierForPlan(planRow.rows[0]?.code);
         await tx
           .insert(schema.tenantSizeTiers)
           .values({ tenantId: activeSub.tenantId, tier })
           .onConflictDoUpdate({ target: schema.tenantSizeTiers.tenantId, set: { tier, updatedAt: new Date() } });
+
+        const rawLimits = planRow.rows[0]?.limits;
+        const limits = typeof rawLimits === "string" ? (JSON.parse(rawLimits) as Record<string, unknown>) : rawLimits;
+        const maxExtra = typeof limits?.max_extra_markets === "number" ? limits.max_extra_markets : 1;
+        await enforceExtraMarketsQuota(tx, activeSub.tenantId, maxExtra);
       }
     });
     return "subscription_activated_and_invoiced";
@@ -563,6 +699,7 @@ async function applyBillingEvent(db: Db, ev: BillingEvent): Promise<string> {
           .insert(schema.tenantSizeTiers)
           .values({ tenantId: row.tenantId, tier: LAPSED_TRIAL_TIER })
           .onConflictDoUpdate({ target: schema.tenantSizeTiers.tenantId, set: { tier: LAPSED_TRIAL_TIER, updatedAt: new Date() } });
+        await enforceExtraMarketsQuota(tx, row.tenantId, 0);
       }
     });
     return "subscription_cancelled";
@@ -585,7 +722,7 @@ async function applyBillingEvent(db: Db, ev: BillingEvent): Promise<string> {
  */
 async function processBillingWebhook(
   db: Db,
-  inboxProvider: "razorpay_platform" | "cashfree_platform",
+  inboxProvider: "razorpay_platform" | "cashfree_platform" | "paypal_platform",
   eventId: string,
   payload: unknown,
   normalize: () => BillingEvent,
@@ -624,7 +761,7 @@ async function processBillingWebhook(
  * A webhook that failed its signature check leaves one bounded trace (a single row per gateway, updated each time) so the owner
  * can see in Super Admin that deliveries are arriving but the secret does not match. Nothing from the body is kept but its event type.
  */
-async function recordRejectedBillingWebhook(db: Db, provider: "razorpay_platform" | "cashfree_platform", rawBody: string): Promise<void> {
+async function recordRejectedBillingWebhook(db: Db, provider: "razorpay_platform" | "cashfree_platform" | "paypal_platform", rawBody: string): Promise<void> {
   try {
     let type = "unknown";
     try {
@@ -815,6 +952,134 @@ export async function handleCashfreeBillingWebhook(
 }
 
 /**
+ * Handles PayPal billing webhooks (ADR-040 WP-5).
+ * Inspects incoming CHECKOUT.ORDER.APPROVED and PAYMENT.CAPTURE.COMPLETED events,
+ * verifies signature with PayPal's API (injectable for testing), and settles subscription state.
+ */
+export async function handlePayPalBillingWebhook(
+  rt: Runtime,
+  params: {
+    rawBody: string;
+    headers: Record<string, string | string[] | undefined>;
+    provider?: SubscriptionBillingProvider;
+    verifySignatureFn?: (headers: Record<string, string | string[] | undefined>, rawBody: string) => Promise<boolean>;
+  },
+): Promise<PlatformBillingWebhookResult> {
+  const db = saasDb(rt);
+  const creds = await loadPlatformBillingCredentials(db, "paypal");
+
+  const parsed = (() => {
+    try {
+      return JSON.parse(params.rawBody) as Record<string, unknown>;
+    } catch {
+      throw badRequest("Invalid JSON in PayPal webhook payload");
+    }
+  })();
+
+  // Signature verification
+  let signatureValid = false;
+  if (params.verifySignatureFn) {
+    signatureValid = await params.verifySignatureFn(params.headers, params.rawBody);
+  } else if (creds) {
+    const paypal = new PayPalProvider({
+      clientId: creds.keyId,
+      clientSecret: creds.keySecret,
+      webhookId: creds.webhookSecret ?? undefined,
+      mode: creds.mode === "live" ? "live" : "sandbox",
+    });
+    const verified = await paypal.verifyWebhook(params.headers, params.rawBody);
+    signatureValid = verified.isValid;
+  }
+
+  if (!signatureValid) {
+    await recordRejectedBillingWebhook(db, "paypal_platform", params.rawBody);
+    throw badRequest("Invalid platform billing webhook signature");
+  }
+
+  const eventId = String(parsed.id ?? `paypal_${Date.now()}`);
+  const eventType = String(parsed.event_type ?? "");
+  const resource = (parsed.resource ?? {}) as Record<string, unknown>;
+
+  return processBillingWebhook(db, "paypal_platform", eventId, parsed, (): BillingEvent => {
+    // 1. PAYMENT.CAPTURE.COMPLETED: A payment capture completed successfully
+    if (eventType === "PAYMENT.CAPTURE.COMPLETED") {
+      const captureId = String(resource.id ?? "");
+      const amountObj = resource.amount as { value?: string; currency_code?: string } | undefined;
+      const currency = amountObj?.currency_code ?? "USD";
+      const amountCents = amountObj?.value ? fromPayPalAmount(amountObj.value, currency) : 0;
+      // In custom_id or supplementary_data, find tenant_id and plan_code
+      let tenantIdNote: string | undefined;
+      let planCodeNote: string | undefined;
+
+      // Extract custom_id
+      const customId = typeof resource.custom_id === "string" ? resource.custom_id : undefined;
+      if (customId) {
+        try {
+          const parsedCustom = JSON.parse(customId) as { tenant_id?: string; plan_code?: string };
+          tenantIdNote = parsedCustom.tenant_id;
+          planCodeNote = parsedCustom.plan_code;
+        } catch {
+          // not JSON, might be raw tenantId
+          tenantIdNote = customId;
+        }
+      }
+
+      // Check supplementary_data or links for order id
+      const supplementaryData = resource.supplementary_data as { related_ids?: { order_id?: string } } | undefined;
+      const orderId = supplementaryData?.related_ids?.order_id;
+
+      return {
+        kind: "charged",
+        providerSubscriptionId: orderId,
+        tenantIdNote,
+        planCodeNote,
+        // Convert to minor units (for GST calculation & invoice, uses minor units)
+        amountPaise: amountCents, // Stored as minor unit cents
+        paymentId: captureId,
+        currentStart: new Date(),
+        currentEnd: "interval",
+      };
+    }
+
+    // 2. CHECKOUT.ORDER.APPROVED: Order approved by merchant, capture may follow
+    if (eventType === "CHECKOUT.ORDER.APPROVED") {
+      const orderId = String(resource.id ?? "");
+      const purchaseUnit = Array.isArray(resource.purchase_units) ? (resource.purchase_units[0] as Record<string, unknown> | undefined) : undefined;
+      let tenantIdNote: string | undefined;
+      let planCodeNote: string | undefined;
+      const customId = typeof purchaseUnit?.custom_id === "string" ? purchaseUnit.custom_id : undefined;
+      if (customId) {
+        try {
+          const parsedCustom = JSON.parse(customId) as { tenant_id?: string; plan_code?: string };
+          tenantIdNote = parsedCustom.tenant_id;
+          planCodeNote = parsedCustom.plan_code;
+        } catch {
+          tenantIdNote = customId;
+        }
+      }
+      return {
+        kind: "authenticated",
+        providerSubscriptionId: orderId,
+        tenantIdNote,
+        ...(planCodeNote ? { planCodeNote } : {}),
+      };
+    }
+
+    // 3. PAYMENT.CAPTURE.DENIED / DECLINED: Mark subscription past due
+    if (eventType === "PAYMENT.CAPTURE.DENIED" || eventType === "PAYMENT.CAPTURE.DECLINED") {
+      const supplementaryData = resource.supplementary_data as { related_ids?: { order_id?: string } } | undefined;
+      const orderId = supplementaryData?.related_ids?.order_id ?? String(resource.id ?? "");
+      return {
+        kind: "past_due",
+        providerSubscriptionId: orderId,
+      };
+    }
+
+    return { kind: "ignored", note: "ignored" };
+  });
+}
+
+/**
  * Ends Cashfree subscriptions whose paid period is over after the merchant cancelled. Cashfree cancels at once, so the
  * store keeps its plan until `cancelAt` (billing keeps what the merchant paid for), then drops to the restricted tier.
  */
@@ -838,6 +1103,7 @@ export async function endDueCashfreeCancellations(rt: Runtime, now: Date = new D
         .insert(schema.tenantSizeTiers)
         .values({ tenantId: sub.tenantId, tier: LAPSED_TRIAL_TIER })
         .onConflictDoUpdate({ target: schema.tenantSizeTiers.tenantId, set: { tier: LAPSED_TRIAL_TIER, updatedAt: now } });
+      await enforceExtraMarketsQuota(tx, sub.tenantId, 0);
       await tx.insert(schema.platformAuditLogs).values({
         actorType: "system",
         action: "billing.subscription_ended",
@@ -1027,6 +1293,18 @@ export async function changeTenantPlan(
     tenantId: params.tenantId,
     ...(razorpayPlanId ? { planId: razorpayPlanId } : {}),
     ...(gateway === "cashfree" ? { amountPaise: pricePaise } : {}),
+    ...(gateway === "paypal"
+      ? {
+          amountUsdCents:
+            params.interval === "yearly"
+              ? plan.priceYearlyUsdCents !== null
+                ? Number(plan.priceYearlyUsdCents)
+                : Math.round(plan.priceYearlyPaise / 80)
+              : plan.priceMonthlyUsdCents !== null
+              ? Number(plan.priceMonthlyUsdCents)
+              : Math.round(plan.priceMonthlyPaise / 80),
+        }
+      : {}),
     ...(params.startAt ? { startAt: params.startAt } : {}),
   });
 
@@ -1088,9 +1366,9 @@ export async function cancelTenantSubscription(
     .limit(1);
 
   // The gateway that created the subscription cancels it, even if another gateway is the active one now.
-  const billingProvider = provider ?? (await resolveBillingProvider(db, sub ? (sub.provider === "cashfree" ? "cashfree" : "razorpay") : undefined));
+  const billingProvider = provider ?? (await resolveBillingProvider(db, sub ? (sub.provider === "cashfree" ? "cashfree" : sub.provider === "paypal" ? "paypal" : "razorpay") : undefined));
   if (typeof billingProvider.isConfigured === "function" && !billingProvider.isConfigured()) {
-    throw new Error(`Billing is not configured: missing ${billingProvider.name === "cashfree" ? "Cashfree" : "Razorpay"} credentials`);
+    throw new Error(`Billing is not configured: missing ${billingProvider.name === "paypal" ? "PayPal" : billingProvider.name === "cashfree" ? "Cashfree" : "Razorpay"} credentials`);
   }
 
   if (!sub || !sub.providerSubscriptionId) {

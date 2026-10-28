@@ -1,6 +1,7 @@
 import { sql } from "drizzle-orm";
 import type { Db } from "@bs/db";
 import { LAPSED_TRIAL_TIER } from "./plan-tiers.ts";
+import { enforceExtraMarketsQuota } from "../markets/service.ts";
 
 export interface TrialExpirySweepResult {
   inspected: number;
@@ -33,6 +34,7 @@ export async function runTrialExpirySweep(db: Db): Promise<TrialExpirySweepResul
         VALUES (${row.tenant_id}, ${LAPSED_TRIAL_TIER})
         ON CONFLICT (tenant_id) DO UPDATE SET tier = ${LAPSED_TRIAL_TIER}, updated_at = now();
       `);
+      await enforceExtraMarketsQuota(tx, row.tenant_id, 0);
     }
 
     return {

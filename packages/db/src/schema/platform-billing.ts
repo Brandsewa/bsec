@@ -31,6 +31,15 @@ export const platformBillingSettings = pgTable("platform_billing_settings", {
   cashfreeLiveClientId: text("cashfree_live_client_id"),
   cashfreeLiveSecretCiphertext: text("cashfree_live_secret_ciphertext"),
   cashfreeLiveSecretIv: text("cashfree_live_secret_iv"),
+  // The platform's PayPal credentials (ADR-040, WP-5). Used for non-India store subscriptions in USD.
+  paypalTestClientId: text("paypal_test_client_id"),
+  paypalTestSecretCiphertext: text("paypal_test_secret_ciphertext"),
+  paypalTestSecretIv: text("paypal_test_secret_iv"),
+  paypalTestWebhookId: text("paypal_test_webhook_id"),
+  paypalLiveClientId: text("paypal_live_client_id"),
+  paypalLiveSecretCiphertext: text("paypal_live_secret_ciphertext"),
+  paypalLiveSecretIv: text("paypal_live_secret_iv"),
+  paypalLiveWebhookId: text("paypal_live_webhook_id"),
   // Who issues the GST invoices (billing B6). The plan price is quoted inclusive of this tax.
   invoiceLegalName: text("invoice_legal_name"),
   invoiceAddress: text("invoice_address"),

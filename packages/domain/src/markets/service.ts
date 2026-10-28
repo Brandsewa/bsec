@@ -2,7 +2,7 @@
  * Markets admin service (ADR-040, docs/MULTIMARKET-PLAN.md). Every mutation checks `markets.manage`, runs in
  * `withTenant`, writes an audit row and invalidates the tenant's storefront cache.
  */
-import { and, asc, eq, inArray, sql } from "drizzle-orm";
+import { and, asc, desc, eq, inArray, sql } from "drizzle-orm";
 import { schema, withTenant, type Db } from "@bs/db";
 import { LAUNCH_CURRENCIES, normalizeCurrency } from "@bs/contracts/money";
 import type { Runtime } from "../runtime.ts";
@@ -143,6 +143,40 @@ export async function getExtraMarketLimit(tx: Db, tenantId: string): Promise<num
   const limits = typeof raw === "string" ? (JSON.parse(raw) as Record<string, unknown>) : raw;
   const v = limits?.["max_extra_markets"];
   return typeof v === "number" ? v : 1;
+}
+
+/**
+ * When a plan downgrades or limits change, disables excess extra markets newest first (createdAt DESC).
+ * Non-base active markets beyond maxAllowed are disabled, never deleted.
+ */
+export async function enforceExtraMarketsQuota(tx: Db, tenantId: string, maxAllowed?: number): Promise<string[]> {
+  const allowed = maxAllowed !== undefined ? maxAllowed : await getExtraMarketLimit(tx, tenantId);
+  const activeExtra = await tx
+    .select({ id: schema.markets.id, name: schema.markets.name })
+    .from(schema.markets)
+    .where(and(eq(schema.markets.tenantId, tenantId), eq(schema.markets.isBase, false), eq(schema.markets.status, "active")))
+    .orderBy(desc(schema.markets.createdAt));
+
+  const disabledIds: string[] = [];
+  if (activeExtra.length > allowed) {
+    const toDisable = activeExtra.slice(0, activeExtra.length - allowed);
+    for (const m of toDisable) {
+      await tx
+        .update(schema.markets)
+        .set({ status: "disabled", updatedAt: new Date() })
+        .where(and(eq(schema.markets.tenantId, tenantId), eq(schema.markets.id, m.id)));
+      disabledIds.push(m.id);
+      await tx.insert(schema.auditLogs).values({
+        tenantId,
+        actorType: "system",
+        action: "markets.downgrade_disabled",
+        targetType: "market",
+        targetId: m.id,
+        diff: { status: { before: "active", after: "disabled" }, reason: "plan_downgrade_quota_exceeded" },
+      });
+    }
+  }
+  return disabledIds;
 }
 
 async function enabledCountryCodes(tx: Db): Promise<Set<string>> {

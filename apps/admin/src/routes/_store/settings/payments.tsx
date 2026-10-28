@@ -418,6 +418,7 @@ const GATEWAY_BLURB: Record<StorePaymentProvider["provider"], string> = {
   razorpay: "Accept UPI, cards, netbanking and wallets in rupees.",
   stripe: "Accept cards through Stripe-hosted Checkout (the shopper pays on stripe.com).",
   cashfree: "Accept UPI, cards, netbanking and wallets in rupees through your own Cashfree account.",
+  paypal: "Accept international payments in USD and other currencies via PayPal hosted checkout.",
 };
 
 /**

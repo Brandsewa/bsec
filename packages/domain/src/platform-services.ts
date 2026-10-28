@@ -6,6 +6,7 @@ import type { Runtime } from "./runtime.ts";
 import { assertCanTransitionTenant } from "./system/tenant-lifecycle.ts";
 import { tierForPlan } from "./saas/plan-tiers.ts";
 import { purgeAvailableFrom } from "./platform/purge-retention.ts";
+import { enforceExtraMarketsQuota } from "./markets/service.ts";
 
 export interface AuditMeta {
   ip?: string | undefined;
@@ -835,6 +836,12 @@ export async function changePlatformTenantPlan(
       .insert(schema.tenantSizeTiers)
       .values({ tenantId, tier })
       .onConflictDoUpdate({ target: [schema.tenantSizeTiers.tenantId], set: { tier, updatedAt: sql`now()` } });
+
+    // Enforce extra markets quota on plan downgrade
+    const rawLimits = plan.limits;
+    const limits = typeof rawLimits === "string" ? (JSON.parse(rawLimits) as Record<string, unknown>) : (rawLimits as Record<string, unknown> | null);
+    const maxExtra = typeof limits?.max_extra_markets === "number" ? limits.max_extra_markets : 1;
+    await enforceExtraMarketsQuota(tx, tenantId, maxExtra);
 
     await writePlatformAudit(tx, platformStaffUserId, "tenant.change_plan", "tenant", tenantId, tenantId, {
       oldPlan: t.planId,

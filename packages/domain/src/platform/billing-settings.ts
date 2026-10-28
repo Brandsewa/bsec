@@ -1,6 +1,6 @@
 import { desc, eq, inArray } from "drizzle-orm";
 import { schema, type Db } from "@bs/db";
-import { encryptSecret, decryptSecret, CashfreeProvider } from "@bs/payments";
+import { encryptSecret, decryptSecret, CashfreeProvider, PayPalProvider } from "@bs/payments";
 import type { Runtime } from "../runtime.ts";
 import { assertPlatformStaff, assertRoleAtLeast, writePlatformAudit, type AuditMeta } from "../platform-services.ts";
 
@@ -10,9 +10,9 @@ import { assertPlatformStaff, assertRoleAtLeast, writePlatformAudit, type AuditM
  */
 
 export type BillingMode = "test" | "live";
-/** The gateway new subscriptions are created on (ADR-037). Subscriptions already created stay on their own gateway. */
-export type BillingProviderId = "razorpay" | "cashfree";
-export const BILLING_PROVIDER_IDS: readonly BillingProviderId[] = ["razorpay", "cashfree"];
+/** The gateway new subscriptions are created on (ADR-037, ADR-040). Subscriptions already created stay on their own gateway. */
+export type BillingProviderId = "razorpay" | "cashfree" | "paypal";
+export const BILLING_PROVIDER_IDS: readonly BillingProviderId[] = ["razorpay", "cashfree", "paypal"];
 
 type BillingRow = typeof schema.platformBillingSettings.$inferSelect;
 
@@ -53,11 +53,15 @@ export interface PlatformBillingSettingsView {
   trial: TrialPolicy;
   /** Cashfree App ID and secret per mode (its webhooks are signed with the secret, so no webhook secret). */
   cashfree: { test: BillingKeySetView; live: BillingKeySetView };
+  /** PayPal client ID, secret, and webhook ID per mode (ADR-040, WP-5). */
+  paypal: { test: BillingKeySetView; live: BillingKeySetView };
   invoice: InvoiceProfile;
   /** Where Razorpay must send subscription events (set it in the Razorpay dashboard for the matching mode). */
   webhookUrl: string;
   /** Where Cashfree must send subscription events (Cashfree dashboard, Developers, Webhooks). */
   cashfreeWebhookUrl: string;
+  /** Where PayPal must send subscription events (PayPal Developer dashboard, Webhooks). */
+  paypalWebhookUrl: string;
   /** True while the keys come from the server environment because none are saved here (ADR-014 fallback). */
   usingEnvFallback: boolean;
   lastTestAt: string | null;
@@ -88,10 +92,17 @@ export interface CashfreeKeysInput {
   clientSecret?: string | undefined;
 }
 
+export interface PayPalKeysInput {
+  clientId?: string | undefined;
+  clientSecret?: string | undefined;
+  webhookId?: string | undefined;
+}
+
 export interface UpdateBillingSettingsInput {
   trial?: { enabled?: boolean | undefined; days?: number | undefined } | undefined;
   provider?: BillingProviderId | undefined;
   cashfree?: { test?: CashfreeKeysInput | undefined; live?: CashfreeKeysInput | undefined } | undefined;
+  paypal?: { test?: PayPalKeysInput | undefined; live?: PayPalKeysInput | undefined } | undefined;
   invoice?: UpdateInvoiceProfileInput | undefined;
   mode?: BillingMode | undefined;
   enabled?: boolean | undefined;
@@ -150,7 +161,20 @@ function cashfreeKeySet(row: BillingRow | undefined, mode: BillingMode): Billing
   return { keyId, secretConfigured: Boolean(secret), secretLastFour: secret && secret.length >= 4 ? secret.slice(-4) : null, webhookSecretConfigured: Boolean(secret) };
 }
 
+function paypalKeySet(row: BillingRow | undefined, mode: BillingMode): BillingKeySetView {
+  const keyId = (mode === "test" ? row?.paypalTestClientId : row?.paypalLiveClientId) ?? null;
+  const secret = mode === "test" ? safeDecrypt(row?.paypalTestSecretCiphertext ?? null, row?.paypalTestSecretIv ?? null) : safeDecrypt(row?.paypalLiveSecretCiphertext ?? null, row?.paypalLiveSecretIv ?? null);
+  const webhookId = (mode === "test" ? row?.paypalTestWebhookId : row?.paypalLiveWebhookId) ?? null;
+  return {
+    keyId,
+    secretConfigured: Boolean(secret),
+    secretLastFour: secret && secret.length >= 4 ? secret.slice(-4) : null,
+    webhookSecretConfigured: Boolean(webhookId),
+  };
+}
+
 function activeProviderOf(row: BillingRow | undefined): BillingProviderId {
+  if (row?.provider === "paypal") return "paypal";
   return row?.provider === "cashfree" ? "cashfree" : "razorpay";
 }
 
@@ -168,6 +192,13 @@ export async function loadPlatformBillingCredentials(db: Db, provider?: BillingP
   const which = provider ?? activeProviderOf(row);
   if (row?.enabled) {
     const mode = row.mode === "live" ? "live" : "test";
+    if (which === "paypal") {
+      const clientId = mode === "test" ? row.paypalTestClientId : row.paypalLiveClientId;
+      const secret = mode === "test" ? safeDecrypt(row.paypalTestSecretCiphertext, row.paypalTestSecretIv) : safeDecrypt(row.paypalLiveSecretCiphertext, row.paypalLiveSecretIv);
+      const webhookId = mode === "test" ? row.paypalTestWebhookId : row.paypalLiveWebhookId;
+      if (clientId && secret) return { provider: "paypal", keyId: clientId, keySecret: secret, webhookSecret: webhookId ?? null, mode, source: "database" };
+      return null;
+    }
     if (which === "cashfree") {
       const clientId = mode === "test" ? row.cashfreeTestClientId : row.cashfreeLiveClientId;
       const secret = mode === "test" ? safeDecrypt(row.cashfreeTestSecretCiphertext, row.cashfreeTestSecretIv) : safeDecrypt(row.cashfreeLiveSecretCiphertext, row.cashfreeLiveSecretIv);
@@ -180,7 +211,7 @@ export async function loadPlatformBillingCredentials(db: Db, provider?: BillingP
     const webhook = mode === "test" ? safeDecrypt(row.testWebhookCiphertext, row.testWebhookIv) : safeDecrypt(row.liveWebhookCiphertext, row.liveWebhookIv);
     if (keyId && secret) return { provider: "razorpay", keyId, keySecret: secret, webhookSecret: webhook, mode, source: "database" };
   }
-  if (which === "cashfree") return null;
+  if (which === "cashfree" || which === "paypal") return null;
   const envKeyId = process.env.RAZORPAY_PLATFORM_KEY_ID?.trim();
   const envSecret = process.env.RAZORPAY_PLATFORM_KEY_SECRET?.trim();
   if (envKeyId && envSecret) {
@@ -237,10 +268,12 @@ export async function getPlatformBillingSettings(rt: Runtime, staffUserId: strin
     test: keySet(row, "test"),
     live: keySet(row, "live"),
     cashfree: { test: cashfreeKeySet(row, "test"), live: cashfreeKeySet(row, "live") },
+    paypal: { test: paypalKeySet(row, "test"), live: paypalKeySet(row, "live") },
     trial: trialPolicyOf(row),
     invoice: invoiceProfileOf(row),
     webhookUrl: webhookUrl(),
     cashfreeWebhookUrl: webhookUrl("/cashfree"),
+    paypalWebhookUrl: webhookUrl("/paypal"),
     usingEnvFallback: creds?.source === "env",
     lastTestAt: row?.lastTestAt ? row.lastTestAt.toISOString() : null,
     lastTestStatus: row?.lastTestStatus === "success" || row?.lastTestStatus === "failed" ? row.lastTestStatus : null,
@@ -261,9 +294,19 @@ type CashfreeColumns = {
   secretCt: "cashfreeTestSecretCiphertext" | "cashfreeLiveSecretCiphertext";
   secretIv: "cashfreeTestSecretIv" | "cashfreeLiveSecretIv";
 };
+type PayPalColumns = {
+  clientId: "paypalTestClientId" | "paypalLiveClientId";
+  secretCt: "paypalTestSecretCiphertext" | "paypalLiveSecretCiphertext";
+  secretIv: "paypalTestSecretIv" | "paypalLiveSecretIv";
+  webhookId: "paypalTestWebhookId" | "paypalLiveWebhookId";
+};
 const CASHFREE_COLUMNS: Record<BillingMode, CashfreeColumns> = {
   test: { clientId: "cashfreeTestClientId", secretCt: "cashfreeTestSecretCiphertext", secretIv: "cashfreeTestSecretIv" },
   live: { clientId: "cashfreeLiveClientId", secretCt: "cashfreeLiveSecretCiphertext", secretIv: "cashfreeLiveSecretIv" },
+};
+const PAYPAL_COLUMNS: Record<BillingMode, PayPalColumns> = {
+  test: { clientId: "paypalTestClientId", secretCt: "paypalTestSecretCiphertext", secretIv: "paypalTestSecretIv", webhookId: "paypalTestWebhookId" },
+  live: { clientId: "paypalLiveClientId", secretCt: "paypalLiveSecretCiphertext", secretIv: "paypalLiveSecretIv", webhookId: "paypalLiveWebhookId" },
 };
 const COLUMNS: Record<BillingMode, KeyColumns> = {
   test: { keyId: "testKeyId", secretCt: "testSecretCiphertext", secretIv: "testSecretIv", webhookCt: "testWebhookCiphertext", webhookIv: "testWebhookIv" },
@@ -335,6 +378,26 @@ export async function updatePlatformBillingSettings(
         changed.push(`cashfree.${mode}.clientSecret`);
       }
     }
+    for (const mode of ["test", "live"] as const) {
+      const keys = input.paypal?.[mode];
+      if (!keys) continue;
+      const cols = PAYPAL_COLUMNS[mode];
+      if (keys.clientId !== undefined && keys.clientId.trim()) {
+        values[cols.clientId] = keys.clientId.trim();
+        changed.push(`paypal.${mode}.clientId`);
+      }
+      if (keys.clientSecret !== undefined && keys.clientSecret.trim()) {
+        const secret = keys.clientSecret.trim();
+        const enc = encryptSecret(secret);
+        values[cols.secretCt] = enc.ciphertext;
+        values[cols.secretIv] = enc.iv;
+        changed.push(`paypal.${mode}.clientSecret`);
+      }
+      if (keys.webhookId !== undefined && keys.webhookId.trim()) {
+        values[cols.webhookId] = keys.webhookId.trim();
+        changed.push(`paypal.${mode}.webhookId`);
+      }
+    }
     if (input.trial) {
       const t = input.trial;
       if (t.days !== undefined) {
@@ -378,14 +441,17 @@ export async function updatePlatformBillingSettings(
     const provider = input.provider ?? activeProviderOf(existing);
     const col = COLUMNS[mode];
     const cf = CASHFREE_COLUMNS[mode];
+    const pp = PAYPAL_COLUMNS[mode];
     const hasKeys =
-      provider === "cashfree"
+      provider === "paypal"
+        ? Boolean(merged[pp.clientId] && merged[pp.secretCt] && merged[pp.secretIv])
+        : provider === "cashfree"
         ? Boolean(merged[cf.clientId] && merged[cf.secretCt] && merged[cf.secretIv])
         : Boolean(merged[col.keyId] && merged[col.secretCt] && merged[col.secretIv]);
-    const gateway = provider === "cashfree" ? "Cashfree" : "Razorpay";
-    if ((enabled || input.mode === "live" || input.provider === "cashfree") && !hasKeys) {
+    const gateway = provider === "paypal" ? "PayPal" : provider === "cashfree" ? "Cashfree" : "Razorpay";
+    if ((enabled || input.mode === "live" || input.provider === "cashfree" || input.provider === "paypal") && !hasKeys) {
       throw new Error(
-        `Bad Request: save the ${provider === "cashfree" ? "Cashfree " : ""}${mode} ${provider === "cashfree" ? "App ID and secret" : "key id and secret"} before ${input.mode === "live" ? "switching to live mode" : input.provider !== undefined && input.provider !== activeProviderOf(existing) ? `switching to ${gateway}` : "enabling billing"}`,
+        `Bad Request: save the ${provider === "paypal" ? "PayPal " : provider === "cashfree" ? "Cashfree " : ""}${mode} ${provider === "paypal" ? "Client ID and Secret" : provider === "cashfree" ? "App ID and secret" : "key id and secret"} before ${input.mode === "live" ? "switching to live mode" : input.provider !== undefined && input.provider !== activeProviderOf(existing) ? `switching to ${gateway}` : "enabling billing"}`,
       );
     }
     if (input.provider !== undefined && input.provider !== activeProviderOf(existing)) changed.push("provider");
@@ -430,7 +496,17 @@ export async function testPlatformBillingConnection(
   const provider = input.provider ?? activeProviderOf(row);
 
   let result: BillingConnectionTestResult;
-  if (provider === "cashfree") {
+  if (provider === "paypal") {
+    const cols = PAYPAL_COLUMNS[mode];
+    const clientId = row?.[cols.clientId] ?? null;
+    const secret = safeDecrypt(row?.[cols.secretCt] ?? null, row?.[cols.secretIv] ?? null);
+    if (!clientId || !secret) {
+      result = { ok: false, mode, provider, error: `Save the PayPal ${mode} Client ID and Secret first.` };
+    } else {
+      const r = await new PayPalProvider({ clientId, clientSecret: secret, mode: mode === "live" ? "live" : "sandbox", fetchFn: fetchImpl }).testConnection();
+      result = { ok: r.ok, mode, provider, ...(r.error ? { error: r.error } : {}) };
+    }
+  } else if (provider === "cashfree") {
     const cols = CASHFREE_COLUMNS[mode];
     const clientId = row?.[cols.clientId] ?? null;
     const secret = safeDecrypt(row?.[cols.secretCt] ?? null, row?.[cols.secretIv] ?? null);
@@ -475,7 +551,7 @@ export async function testPlatformBillingConnection(
 
 export interface BillingWebhookDelivery {
   id: string;
-  gateway: "razorpay" | "cashfree";
+  gateway: "razorpay" | "cashfree" | "paypal";
   eventType: string;
   /** False when the signature did not match the saved secret (the delivery was refused). */
   signatureValid: boolean;
@@ -495,15 +571,15 @@ export async function listBillingWebhookDeliveries(rt: Runtime, staffUserId: str
   const rows = await rt._db.db
     .select()
     .from(schema.webhookInbox)
-    .where(inArray(schema.webhookInbox.provider, ["razorpay_platform", "cashfree_platform"]))
+    .where(inArray(schema.webhookInbox.provider, ["razorpay_platform", "cashfree_platform", "paypal_platform"]))
     .orderBy(desc(schema.webhookInbox.updatedAt))
     .limit(25);
   return rows.map((r) => {
-    const payload = (r.payloadSanitized ?? {}) as { type?: unknown; event?: unknown };
+    const payload = (r.payloadSanitized ?? {}) as { type?: unknown; event?: unknown; event_type?: unknown };
     return {
       id: r.id,
-      gateway: r.provider === "cashfree_platform" ? "cashfree" : "razorpay",
-      eventType: String(payload.type ?? payload.event ?? "unknown").slice(0, 80),
+      gateway: r.provider === "paypal_platform" ? "paypal" : r.provider === "cashfree_platform" ? "cashfree" : "razorpay",
+      eventType: String(payload.type ?? payload.event ?? payload.event_type ?? "unknown").slice(0, 80),
       signatureValid: r.signatureValid,
       status: r.status,
       error: r.error,
