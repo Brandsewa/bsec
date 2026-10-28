@@ -430,6 +430,65 @@ describe("M8 Custom Domains & Cloudflare for SaaS Integration (PLAN §8, ADR-007
       }
     });
 
+    it("a bare domain always uses TXT pre-validation and stays locked in step 1 until ownership is verified (tasteofhills.com incident)", async () => {
+      const provider = new MockCustomDomainProvider();
+      // The caller does not ask for TXT; the service must still force it for a bare domain.
+      const added = await addCustomDomain(rt, tenantId, { hostname: "bareexample-one.com", provider });
+      try {
+        expect(added.prevalidateTxt).toBe(true);
+        expect(added.verification?.txt).toBeDefined();
+        expect(added.verification?.ownershipVerified).toBe(false);
+
+        // A records already point at Cloudflare and Cloudflare has not verified ownership: still not verified.
+        const waiting = await verifyCustomDomain(rt, tenantId, added.id, provider, routingDeps());
+        expect(waiting.verification?.ownershipVerified).toBe(false);
+        expect(waiting.status).not.toBe("active");
+
+        provider.setActive("bareexample-one.com");
+        const verified = await verifyCustomDomain(rt, tenantId, added.id, provider, routingDeps());
+        expect(verified.verification?.ownershipVerified).toBe(true);
+        expect(verified.verification?.txt).toBeDefined();
+      } finally {
+        await removeCustomDomain(rt, tenantId, added.id, provider);
+      }
+    });
+
+    it("a subdomain keeps the caller's choice and asks the provider to re-check pending domains only", async () => {
+      const refreshed: string[] = [];
+      const provider = new MockCustomDomainProvider();
+      (provider as CustomDomainProvider).refreshCustomHostname = async (id) => {
+        refreshed.push(id);
+      };
+      const added = await addCustomDomain(rt, tenantId, { hostname: "shop.refresh-example.com", provider });
+      try {
+        expect(added.prevalidateTxt).toBe(false);
+        await verifyCustomDomain(rt, tenantId, added.id, provider, routingDeps({ a: [] }));
+        expect(refreshed).toHaveLength(1);
+
+        provider.setActive("shop.refresh-example.com");
+        await verifyCustomDomain(rt, tenantId, added.id, provider, routingDeps());
+        const callsBeforeActiveCheck = refreshed.length;
+        await verifyCustomDomain(rt, tenantId, added.id, provider, routingDeps());
+        expect(refreshed.length).toBe(callsBeforeActiveCheck);
+      } finally {
+        await removeCustomDomain(rt, tenantId, added.id, provider);
+      }
+    });
+
+    it("a failing refresh never blocks the status check", async () => {
+      const provider = new MockCustomDomainProvider();
+      (provider as CustomDomainProvider).refreshCustomHostname = async () => {
+        throw new Error("Cloudflare custom hostname refresh failed (500)");
+      };
+      const added = await addCustomDomain(rt, tenantId, { hostname: "shop.refresh-fails.com", provider });
+      try {
+        const res = await verifyCustomDomain(rt, tenantId, added.id, provider, routingDeps({ a: [] }));
+        expect(res.status).toBe("awaiting_dns");
+      } finally {
+        await removeCustomDomain(rt, tenantId, added.id, provider);
+      }
+    });
+
     it("probe lookup answers for a domain in any status and never for an unknown host", async () => {
       const provider = new MockCustomDomainProvider();
       const d = await addPending("probe.brand-six.com", provider);

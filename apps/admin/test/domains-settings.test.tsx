@@ -81,6 +81,47 @@ describe("Domains Settings Page (/settings/domains)", () => {
     expect(html).toContain("disabled");
   });
 
+  it("keeps step 2 locked for a bare domain until ownership is verified, and says to remove existing A records", async () => {
+    const { Route } = await import("../src/routes/_store/settings/domains.tsx");
+    const { orpc } = await import("../src/lib/orpc.ts");
+    const qc = newClient();
+    qc.setQueryData(orpc.admin.domains.list.queryOptions().queryKey, [
+      {
+        id: "0199a000-0000-7000-8000-000000000009",
+        hostname: "tasteofhills.com",
+        type: "custom",
+        isPrimary: false,
+        status: "verifying",
+        sslStatus: "active",
+        prevalidateTxt: true,
+        verification: {
+          cname: "stores.bcom.si",
+          txt: { name: "_cf-custom-hostname.tasteofhills.com", value: "tok-1" },
+          dcv: { name: "_acme-challenge.tasteofhills.com", value: "tok-2" },
+          ownershipVerified: false,
+        },
+        routing: {
+          status: "dns_ok",
+          seen: { a: ["104.21.59.175"], aaaa: [], cname: null },
+          probeFailed: true,
+          failures: 0,
+          checkedAt: null,
+          expected: { cname: "stores.bcom.si", a: ["104.21.59.175"], aaaa: [] },
+        },
+        createdAt: "2026-10-27T12:00:00.000Z",
+      },
+    ]);
+    const Page = Route.options.component as () => React.ReactNode;
+    const html = await renderRouted(Page, qc);
+
+    expect(html).toContain("Step 1: prove you own the domain");
+    expect(html).toContain("_acme-challenge.tasteofhills.com");
+    expect(html).toContain("Step 2 unlocks when step 1 is verified");
+    expect(html).toContain("Remove the A and AAAA records for tasteofhills.com");
+    // The A record itself is not offered yet.
+    expect(html).not.toContain("Copy address");
+  });
+
   it("renders active domain with SSL badge and primary action", async () => {
     const { Route } = await import("../src/routes/_store/settings/domains.tsx");
     const { orpc } = await import("../src/lib/orpc.ts");

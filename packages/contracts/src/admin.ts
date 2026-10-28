@@ -1576,6 +1576,7 @@ export const CustomDomainItem = z.object({
           value: z.string(),
         })
         .optional(),
+      ownershipVerified: z.boolean().optional(),
     })
     .nullable()
     .optional(),
