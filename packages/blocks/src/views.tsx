@@ -46,10 +46,16 @@ function Actions({ children }: { children: ReactNode }) {
   return <div className="bsb-actions">{children}</div>;
 }
 
-/** Storefront prices are stored in paise (minor units). */
-const money = (paise: number) => {
-  const rupees = paise / 100;
-  return `₹${rupees.toLocaleString("en-IN", { maximumFractionDigits: rupees % 1 === 0 ? 0 : 2 })}`;
+/** Storefront prices are minor units of the shopper's market currency (ADR-040); INR with en-IN when the host gives no market. */
+const money = (minor: number, ctx?: RenderContext) => {
+  const currency = ctx?.currency ?? "INR";
+  const major = minor / (currency === "JPY" ? 1 : 100);
+  return new Intl.NumberFormat(ctx?.locale ?? (currency === "INR" ? "en-IN" : "en-US"), {
+    style: "currency",
+    currency,
+    minimumFractionDigits: major % 1 === 0 ? 0 : 2,
+    maximumFractionDigits: 2,
+  }).format(major);
 };
 
 function Stars({ value }: { value: number }) {
@@ -224,8 +230,8 @@ function defaultCard(p: BlockProduct, o: { showPrice: boolean; showRating: boole
               <span className="bsb-muted">Price on request</span>
             ) : (
               <>
-                {money(p.priceMin)}
-                {p.compareAtPriceMin && p.compareAtPriceMin > p.priceMin ? <s>{money(p.compareAtPriceMin)}</s> : null}
+                {money(p.priceMin, ctx)}
+                {p.compareAtPriceMin && p.compareAtPriceMin > p.priceMin ? <s>{money(p.compareAtPriceMin, ctx)}</s> : null}
               </>
             )}
           </div>
@@ -1938,8 +1944,8 @@ function ShowcaseCard({ p, props, ctx, eager }: { p: BlockProduct; props: R.Prod
       return (
         <div key="price" className={cx("bsb-psc-price", `bsb-psc-price-${props.priceSize}`)}>
           {showFrom ? <span className="bsb-psc-from">Starts from</span> : null}
-          <strong>{money(p.priceMin)}</strong>
-          {hasCompare ? <s>{money(p.compareAtPriceMin as number)}</s> : null}
+          <strong>{money(p.priceMin, ctx)}</strong>
+          {hasCompare ? <s>{money(p.compareAtPriceMin as number, ctx)}</s> : null}
         </div>
       );
     });

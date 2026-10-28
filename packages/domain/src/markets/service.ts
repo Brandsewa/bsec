@@ -306,7 +306,7 @@ export async function setFixedMarketPrices(
     if (set.length > 0) {
       await tx
         .insert(schema.marketPrices)
-        .values(set.map((i) => ({ tenantId: ctx.tenantId, marketId: m.id, variantId: i.variantId, price: i.price!, compareAtPrice: i.compareAtPrice ?? null, source: "fixed" as const })))
+        .values(set.map((i) => ({ tenantId: ctx.tenantId, marketId: m.id, variantId: i.variantId, price: i.price ?? 0, compareAtPrice: i.compareAtPrice ?? null, source: "fixed" as const })))
         .onConflictDoUpdate({
           target: [schema.marketPrices.tenantId, schema.marketPrices.marketId, schema.marketPrices.variantId],
           set: { price: sql`excluded.price`, compareAtPrice: sql`excluded.compare_at_price`, source: sql`'fixed'`, updatedAt: sql`now()` },
@@ -454,7 +454,7 @@ export async function createMarket(rt: Runtime, ctx: TenantContext, input: Creat
       fail("Conflict", `Your plan allows ${limit} extra market${limit === 1 ? "" : "s"} besides your base market. Upgrade to add more.`);
     }
     await assertCountriesFree(tx, ctx.tenantId, countries);
-    const prefix = input.pathPrefix || `/${slugifyHandle(countries.length === 1 ? countries[0]!.toLowerCase() : name).slice(0, 20)}`;
+    const prefix = input.pathPrefix || `/${slugifyHandle(countries.length === 1 ? (countries[0] ?? name).toLowerCase() : name).slice(0, 20)}`;
     if (!isValidPathPrefix(prefix)) fail("Bad Request", "The URL prefix clashes with a store page; choose another");
     if (existing.some((m) => m.pathPrefix === prefix)) fail("Conflict", `The URL prefix ${prefix} is already used by another market`);
     let handle = slugifyHandle(name);
@@ -477,15 +477,16 @@ export async function createMarket(rt: Runtime, ctx: TenantContext, input: Creat
         pathPrefix: prefix,
       })
       .returning();
-    await tx.insert(schema.marketCountries).values(countries.map((country) => ({ tenantId: ctx.tenantId, marketId: row!.id, country })));
+    if (!row) fail("Conflict", "The market could not be created");
+    await tx.insert(schema.marketCountries).values(countries.map((country) => ({ tenantId: ctx.tenantId, marketId: row.id, country })));
     if (needsRate && input.fxRate) {
-      await tx.insert(schema.marketFxHistory).values({ tenantId: ctx.tenantId, marketId: row!.id, rate: String(input.fxRate), setBy: ctx.actor.type === "staff" ? ctx.actor.userId : null });
-      await rebuildMarketPrices(tx, ctx.tenantId, row!.id);
+      await tx.insert(schema.marketFxHistory).values({ tenantId: ctx.tenantId, marketId: row.id, rate: String(input.fxRate), setBy: ctx.actor.type === "staff" ? ctx.actor.userId : null });
+      await rebuildMarketPrices(tx, ctx.tenantId, row.id);
     } else if (!needsRate) {
-      await rebuildSameCurrencyPrices(tx, ctx.tenantId, row!.id);
+      await rebuildSameCurrencyPrices(tx, ctx.tenantId, row.id);
     }
-    await audit(tx, ctx, "markets.create", row!.id, { name, currency, countries, pathPrefix: prefix });
-    return row!.id;
+    await audit(tx, ctx, "markets.create", row.id, { name, currency, countries, pathPrefix: prefix });
+    return row.id;
   });
   await invalidateCache(rt, ctx, { type: "markets_changed" });
   return getMarketDetail(rt, ctx, created);
@@ -608,7 +609,7 @@ export async function setMarketStatus(rt: Runtime, ctx: TenantContext, marketId:
     if (status === "active" && !m.isBase) {
       const detail = await readMarketDetail(tx, ctx.tenantId, marketId);
       const blocking = detail.paymentMethods.find((p) => p.enabled && p.blocking);
-      if (blocking) fail("Conflict", blocking.blocking!);
+      if (blocking?.blocking) fail("Conflict", blocking.blocking);
       if (!detail.readiness.ready) {
         fail("Conflict", `This market is not ready: ${detail.readiness.items.filter((i) => !i.ok).map((i) => i.message).join("; ")}`);
       }

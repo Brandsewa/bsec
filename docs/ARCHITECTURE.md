@@ -229,6 +229,7 @@ Drizzle schema files in `packages/db/src/schema/` (one Postgres database, `publi
 | `saas.ts` | `plans`, `subscriptions`, `platform_invoices`, `platform_audit_logs`, `theme_templates`, `signup_leads`, `slug_reservations`, `reserved_slugs`, `onboarding_progress`, `tenant_owner_invites`, `exports` |
 | `quotes.ts` | `quote_requests` T |
 | `markets.ts` | `markets` T, `market_countries` T, `platform_countries` P (ADR-040) |
+| `markets-config.ts` | `market_prices`, `market_fx_history`, `market_products`, `market_payment_methods`, `market_policies`, `market_tax_rules` T (ADR-040) |
 | `finance.ts` | `ledger_entries`, `expenses`, `fiscal_periods` T |
 | `index.ts` | `_platform_meta` |
 
@@ -318,6 +319,8 @@ Drizzle schema files in `packages/db/src/schema/` (one Postgres database, `publi
 | 0085 | `discount_show_on_storefront` | `discounts.show_on_storefront` (default false): lists the code in the product-page coupon cards; discount status gains `archived` |
 | 0086 | `form_submissions` | `form_submissions` (tenant, forced RLS): contact-form messages from the theme's Contact form block, read in Admin > Form submissions |
 | 0087 | `markets_foundation` | `markets`, `market_countries` (tenant, forced RLS), `platform_countries` (platform, seeded IN/US/CA, `app_rw` read only); `store_settings.unit_system`; `carts.market_id`, `orders.market_id/base_currency/fx_rate/base_grand_total`; backfills one base market per store (ADR-040) |
+| 0088 | `markets_config` | `market_prices`, `market_fx_history`, `market_products`, `market_payment_methods`, `market_policies`, `market_tax_rules` (tenant, forced RLS); `markets.tax_collect/tax_shipping_too/compliance_ack_*`; `shipping_zones.market_id`; `orders.tax_breakdown/policy_snapshot`; PayPal in provider checks and `platform_payment_providers`; `plans.price_*_usd_cents` and `limits.max_extra_markets` (ADR-040) |
+| 0089 | `market_scope_functions` | SQL functions `market_variant_price`, `market_product_visible` and the restrictive `market_visibility` policy on `products`: storefront reads inside `withMarketScope` see the shopper's market prices and catalog (ADR-040) |
 | 0082 | `notification_manager` | `notification_rules` and `platform_email_branding` (platform, `app_rw` read only), `notification_tenant_rules`, `store_email_branding` and `notifications` (tenant, RLS), `platform_notifications` (Super Admin inbox; `app_rw` INSERT, DELETE, SELECT(id, created_at)), function `notification_platform_recipients(roles)` (the only way the worker learns Super Admin recipients). ADR-039 |
 | 0080 | `subscription_payment_required` | `subscriptions.payment_required` (a self-service store created with the free trial off; the admin shows "Activate your store" until the first payment; cleared by the first charge) |
 

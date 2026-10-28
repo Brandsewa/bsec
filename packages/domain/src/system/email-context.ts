@@ -56,6 +56,7 @@ export async function loadEmailOrder(tx: Q, tenantId: string, orderId: string): 
     shippingTotal: Number(order.shippingTotal),
     codFee: Number(order.codFee ?? 0),
     grandTotal: Number(order.grandTotal),
+    currency: order.currency,
     paymentStatus: order.paymentStatus,
     shippingAddress: address,
   };

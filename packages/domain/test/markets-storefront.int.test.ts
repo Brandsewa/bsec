@@ -3,6 +3,7 @@
  * catalog a market sells, all scoped by the transaction-local market so no query needs rewriting.
  */
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
+import type { Client as PgClient } from "pg";
 import { startTestDb, type TestDb } from "@bs/db/test-env";
 import { STORE_PERMISSIONS } from "@bs/auth";
 import {
@@ -24,7 +25,7 @@ let rtWeb: Runtime;
 let admin: TenantContext;
 let usId = "";
 let baseId = "";
-let pg: import("pg").Client;
+let pg: PgClient;
 const ids = { cheap: "", pricey: "", cheapVariant: "", priceyVariant: "" };
 
 const shopper = (marketId?: string | null): TenantContext => ({

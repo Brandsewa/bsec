@@ -1,36 +1,47 @@
-# Multi-market Phase 1: foundation (in progress)
+# Multi-market: Phase 1 foundation and the server side of Phases 2 to 6
 
 - **Date:** 2026-10-28
 - **Agent:** claude
-- **Branch:** `docs/multimarket-phase0` (Phase 1 work stacked locally; owner decision: nothing is pushed or merged until the whole plan is built)
-- **Area:** db, domain, contracts
+- **Branch:** `docs/multimarket-phase0` (local only; owner rule: nothing is pushed or merged until the whole feature is built)
+- **Area:** db, domain, contracts, payments, web
 - **Type:** feature
 - **Supersedes:** none
 
 ## Summary
-Phase 1 of `docs/MULTIMARKET-PLAN.md`, no behaviour change for existing stores. Slices done: 1a money and weight-unit helpers; 1b markets tables, base-market backfill, provisioning. Slice 1c (replace hardcoded rupee sign and `en-IN` in about 125 source files) is not done.
+Phase 1 of `docs/MULTIMARKET-PLAN.md` (money and unit helpers, markets tables, base-market backfill, provisioning) plus, because they were small and testable, most of the server side of Phases 2 to 6: markets service, market prices and catalog, market-aware cart and checkout, tax and policy snapshot, Stripe and PayPal hosted payments, admin API, storefront resolution and switcher. The owner then asked to stop and hand the rest to Antigravity in several chats; the remaining work is split in `docs/MULTIMARKET-HANDOFF.md` (work packages WP-1 to WP-8) with a prompt per chat in `docs/prompts/multimarket-wp*.md`.
 
 ## What changed
-- `packages/contracts/src/money.ts`, `units.ts` (exported from the package root and `@bs/contracts/money`, `/units`): `formatMoney`, minor-unit exponents, `toMinorUnits`, grams to oz/lb/kg.
-- Migration `0087_markets_foundation`: `markets`, `market_countries`, `platform_countries`; `store_settings.unit_system`; `carts.market_id`; `orders.market_id/base_currency/fx_rate/base_grand_total`; one base market per existing store, covering the countries its shipping zones already serve.
-- `packages/domain/src/saas/provisioning.ts`: a new store gets its base market (India for now; Phase 1B reads the signup country).
+See the table in `docs/MULTIMARKET-HANDOFF.md` section 1 (every row names its files and its test). In short:
+- Migrations `0087_markets_foundation`, `0088_markets_config`, `0089_market_scope_functions`.
+- `packages/contracts`: `money.ts`, `units.ts`, `markets.ts` (14 `admin.markets.*` procedures), PayPal in provider enums.
+- `packages/payments`: PayPal provider. `packages/domain`: `markets/*`, `payments/online-checkout.ts`, market-aware `storefront/cart.ts`, `orders/checkout.ts`, `shipping-rates.ts`, `storefront/catalog.ts`, search and block data, emails and the new-order alert in the order's currency, permission `markets.manage`.
+- `apps/web`: middleware prefix rewrite, `server/market.ts`, switcher and suggestion banner, hreflang, market select route, market-aware cart/checkout/product/collection/category/home/search, country-aware checkout form, Stripe/PayPal redirect, `checkout/pay` and `checkout/return` routes, PayPal credentials route.
+- `@bs/ui` `Money` takes an ISO currency; `@bs/blocks` `RenderContext` carries currency and locale.
 
 ## Decisions and trade-offs
-- `formatMoney` drops ".00" on whole amounts and keeps two digits otherwise ("₹1,299", "₹1,299.50"); the old code printed "₹1,299.5". Intentional.
-- Backfill sets `base_grand_total = grand_total` for old orders (all INR, so the base total equals the charged total).
+- `formatMoney` drops ".00" on whole amounts, keeps two digits otherwise ("₹1,299", "₹1,299.50").
+- Market scope is carried in SQL (transaction-local `app.market_id`, functions and one restrictive RLS policy on `products`) so no storefront query had to be rewritten; it is inert when the setting is empty.
+- Prices of non-base markets are materialised (`market_prices`) by one TypeScript function on every variant write path; fixed overrides are never overwritten.
+- A store with no markets row behaves exactly as before (legacy fallback in `loadCheckoutMarket`).
+- The evaluate route caches market URL prefixes for 30 seconds per process.
+- Column names ending `_paise` are kept (minor units of the row's currency).
 
 ## Verification
-- Ran: `@bs/contracts` money/units tests 10 pass; `@bs/db` full suite 47 pass (includes the new `markets-backfill.int.test.ts`, 6 tests on a database built at migration 0086 with old-shape stores); `@bs/domain` `provisioning.int.test.ts` 4 pass; typecheck contracts, db, domain pass; `pnpm docs:check` pass.
-- NOT run yet: full domain heavy suite and isolation suite; lint on db and domain; UI.
+Ran (real Postgres 18 through `TEST_PG_ADMIN_URL`, serial):
+- `@bs/contracts` money/units 10 pass; `@bs/payments` PayPal 11 pass; `@bs/db` full suite 47 pass (includes the 0086-to-0089 backfill test, 6).
+- `@bs/domain`: `market-rules` 19, `market-addresses` 7, `markets.int` 14, `markets-checkout.int` 8, `markets-storefront.int` 7, `isolation.int` 1670, the 93 existing checkout/cart/payment/webhook/discount/finance-checkout/abandoned tests, `email-templates` 17. Full domain suite result: see "Full domain run" below.
+- `pnpm typecheck` all 15 packages pass; domain lint clean; `pnpm docs:check` ok.
+
+NOT verified: any page in a browser (storefront changes are typechecked only; admin screens are not built yet), web and e2e suites, PayPal Subscriptions for an India-registered account, real Stripe/PayPal sandbox calls (mocked `fetch` only).
 
 ## Docs updated
-- [x] `docs/ARCHITECTURE.md` (section 7: schema file and migration 0087)
+- [x] `docs/ARCHITECTURE.md` section 7 (schema files and migrations 0087 to 0089); sections 5, 8, 9 are for WP-8
 - [x] ADR-040 (Phase 0)
-- [ ] `progress.md`: update when Phase 1 completes
+- [x] `progress.md` (in flight, decisions)
+- [x] `docs/MULTIMARKET-HANDOFF.md`, `docs/prompts/multimarket-wp*.md`
 
 ## Follow-ups and open questions
-- Slice 1c: move call sites to `formatMoney` with the currency of the order/cart/store; Brand Sewa's own INR plan prices stay rupees via `formatMoney(x, "INR")`.
-- Slice 1d: store-level unit system setting in admin (product weight and shipping weight tiers).
+All remaining work and its acceptance criteria: `docs/MULTIMARKET-HANDOFF.md` section 3. Key risk: until WP-1 lands, do not enable a second market on a real store (block grids and several client components still format prices as INR).
 
 ## Definition of done
-Not yet: slices 1c and 1d outstanding.
+Not done for the feature as a whole; this record covers the foundation and server side only.

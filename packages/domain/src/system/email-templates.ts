@@ -4,6 +4,7 @@
  * All amounts are paise; every piece of shopper- or merchant-provided text is HTML-escaped.
  */
 
+import { formatMoney } from "@bs/contracts/money";
 import { DEFAULT_EMAIL_BRANDING, FONT_STACKS, type EmailBrandingTokens } from "./email-branding.ts";
 
 export interface EmailBrand {
@@ -35,6 +36,8 @@ export interface EmailOrder {
   shippingTotal: number;
   codFee: number;
   grandTotal: number;
+  /** ISO currency the order was charged in; INR when absent (ADR-040). */
+  currency?: string | undefined;
   paymentStatus: string;
   shippingAddress?: {
     fullName?: string | undefined;
@@ -69,9 +72,9 @@ export function escapeHtml(value: unknown): string {
   return String(value ?? "").replace(/[&<>"']/g, (c) => ESCAPES[c] ?? c);
 }
 
-export function formatInr(paise: number): string {
-  const rupees = (Number.isFinite(paise) ? paise : 0) / 100;
-  return `₹${rupees.toLocaleString("en-IN", { minimumFractionDigits: rupees % 1 === 0 ? 0 : 2, maximumFractionDigits: 2 })}`;
+/** Formats minor units in the order's currency (INR by default, which keeps the old rupee output). */
+export function formatInr(paise: number, currency = "INR"): string {
+  return formatMoney(Number.isFinite(paise) ? paise : 0, currency);
 }
 
 function paymentLine(status: string): string {
@@ -184,17 +187,17 @@ function orderBlock(o: EmailOrder): { html: string; text: string } {
   const rows = o.items
     .map(
       (it) =>
-        `<tr><td style="padding:12px 0;font-size:%%fs%%;border-bottom:1px solid %%border%%">${escapeHtml(it.title)}${it.variant && it.variant !== "Default" ? ` <span style="color:%%muted%%">(${escapeHtml(it.variant)})</span>` : ""} <span style="color:%%muted%%">× ${it.quantity}</span></td><td align="right" style="padding:12px 0 12px 12px;font-size:%%fs%%;border-bottom:1px solid %%border%%;white-space:nowrap">${formatInr(it.total)}</td></tr>`,
+        `<tr><td style="padding:12px 0;font-size:%%fs%%;border-bottom:1px solid %%border%%">${escapeHtml(it.title)}${it.variant && it.variant !== "Default" ? ` <span style="color:%%muted%%">(${escapeHtml(it.variant)})</span>` : ""} <span style="color:%%muted%%">× ${it.quantity}</span></td><td align="right" style="padding:12px 0 12px 12px;font-size:%%fs%%;border-bottom:1px solid %%border%%;white-space:nowrap">${formatInr(it.total, o.currency)}</td></tr>`,
     )
     .join("");
   const line = (label: string, value: string, bold = false) =>
     `<tr><td style="padding:5px 0;font-size:%%fs%%;${bold ? "font-weight:700;" : "color:%%muted%%;"}">${escapeHtml(label)}</td><td align="right" style="padding:5px 0;font-size:%%fs%%;${bold ? "font-weight:700;" : ""}">${value}</td></tr>`;
   const totals = [
-    line("Subtotal", formatInr(o.subtotal)),
-    o.discountTotal > 0 ? line("Discount", `−${formatInr(o.discountTotal)}`) : "",
-    line("Shipping", o.shippingTotal === 0 ? "Free" : formatInr(o.shippingTotal)),
-    o.codFee > 0 ? line("Cash on delivery fee", formatInr(o.codFee)) : "",
-    line("Total", formatInr(o.grandTotal), true),
+    line("Subtotal", formatInr(o.subtotal, o.currency)),
+    o.discountTotal > 0 ? line("Discount", `−${formatInr(o.discountTotal, o.currency)}`) : "",
+    line("Shipping", o.shippingTotal === 0 ? "Free" : formatInr(o.shippingTotal, o.currency)),
+    o.codFee > 0 ? line("Cash on delivery fee", formatInr(o.codFee, o.currency)) : "",
+    line("Total", formatInr(o.grandTotal, o.currency), true),
   ].join("");
   const addr = addressLines(o.shippingAddress);
   const html = `<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin:18px 0 0;background:%%soft%%;border-radius:12px"><tr><td style="padding:16px 18px">
@@ -206,12 +209,12 @@ function orderBlock(o: EmailOrder): { html: string; text: string } {
 ${addr.length ? `<p style="margin:16px 0 0;font-size:%%fsSmall%%;color:%%muted%%;line-height:1.55"><strong style="color:%%text%%">Delivering to</strong><br>${addr.map(escapeHtml).join("<br>")}</p>` : ""}`;
   const text = [
     `Order ${o.number}`,
-    ...o.items.map((it) => `- ${it.title}${it.variant && it.variant !== "Default" ? ` (${it.variant})` : ""} x ${it.quantity}: ${formatInr(it.total)}`),
-    `Subtotal: ${formatInr(o.subtotal)}`,
-    ...(o.discountTotal > 0 ? [`Discount: -${formatInr(o.discountTotal)}`] : []),
-    `Shipping: ${o.shippingTotal === 0 ? "Free" : formatInr(o.shippingTotal)}`,
-    ...(o.codFee > 0 ? [`Cash on delivery fee: ${formatInr(o.codFee)}`] : []),
-    `Total: ${formatInr(o.grandTotal)}`,
+    ...o.items.map((it) => `- ${it.title}${it.variant && it.variant !== "Default" ? ` (${it.variant})` : ""} x ${it.quantity}: ${formatInr(it.total, o.currency)}`),
+    `Subtotal: ${formatInr(o.subtotal, o.currency)}`,
+    ...(o.discountTotal > 0 ? [`Discount: -${formatInr(o.discountTotal, o.currency)}`] : []),
+    `Shipping: ${o.shippingTotal === 0 ? "Free" : formatInr(o.shippingTotal, o.currency)}`,
+    ...(o.codFee > 0 ? [`Cash on delivery fee: ${formatInr(o.codFee, o.currency)}`] : []),
+    `Total: ${formatInr(o.grandTotal, o.currency)}`,
     paymentLine(o.paymentStatus),
     ...(addr.length ? ["", "Delivering to:", ...addr] : []),
   ].join("\n");
@@ -278,7 +281,7 @@ const TEMPLATES: Record<string, Builder> = {
   refund_processed: orderEmail({
     title: "Your refund is on its way",
     intro: (d) =>
-      `We have processed a refund${typeof d.refundAmount === "number" && d.refundAmount > 0 ? ` of ${formatInr(d.refundAmount)}` : ""}${d.order ? ` for order ${d.order.number}` : ""}. It can take a few days to show in your account.`,
+      `We have processed a refund${typeof d.refundAmount === "number" && d.refundAmount > 0 ? ` of ${formatInr(d.refundAmount, d.order?.currency)}` : ""}${d.order ? ` for order ${d.order.number}` : ""}. It can take a few days to show in your account.`,
   }),
   order_preorder_date_changed: orderEmail({
     title: "Update on your pre-order ship date",
@@ -363,9 +366,9 @@ const TEMPLATES: Record<string, Builder> = {
     const html = layout(
       brand,
       subject,
-      `${heading("New order received!")}${para(`Order ${o?.number ? escapeHtml(o.number) : ""} was placed by ${escapeHtml(customerName)} for ${o ? formatInr(o.grandTotal) : ""}.`)}${adminUrl ? button("View order in admin", adminUrl) : ""}`,
+      `${heading("New order received!")}${para(`Order ${o?.number ? escapeHtml(o.number) : ""} was placed by ${escapeHtml(customerName)} for ${o ? formatInr(o.grandTotal, o.currency) : ""}.`)}${adminUrl ? button("View order in admin", adminUrl) : ""}`,
     );
-    const text = `New order received!\n\nOrder ${o?.number ?? ""} was placed by ${customerName} for ${o ? formatInr(o.grandTotal) : ""}.\n\n${adminUrl ? `View order in admin: ${adminUrl}` : ""}${footerText(brand)}`;
+    const text = `New order received!\n\nOrder ${o?.number ?? ""} was placed by ${customerName} for ${o ? formatInr(o.grandTotal, o.currency) : ""}.\n\n${adminUrl ? `View order in admin: ${adminUrl}` : ""}${footerText(brand)}`;
     return { html, text };
   },
 };

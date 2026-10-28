@@ -69,7 +69,7 @@ export interface RegionOption {
   name: string;
 }
 
-export const US_STATES: readonly RegionOption[] = [
+const US_PAIRS: ReadonlyArray<readonly [string, string]> = [
   ["AL", "Alabama"], ["AK", "Alaska"], ["AZ", "Arizona"], ["AR", "Arkansas"], ["CA", "California"], ["CO", "Colorado"],
   ["CT", "Connecticut"], ["DE", "Delaware"], ["DC", "District of Columbia"], ["FL", "Florida"], ["GA", "Georgia"],
   ["HI", "Hawaii"], ["ID", "Idaho"], ["IL", "Illinois"], ["IN", "Indiana"], ["IA", "Iowa"], ["KS", "Kansas"],
@@ -79,13 +79,15 @@ export const US_STATES: readonly RegionOption[] = [
   ["ND", "North Dakota"], ["OH", "Ohio"], ["OK", "Oklahoma"], ["OR", "Oregon"], ["PA", "Pennsylvania"], ["RI", "Rhode Island"],
   ["SC", "South Carolina"], ["SD", "South Dakota"], ["TN", "Tennessee"], ["TX", "Texas"], ["UT", "Utah"], ["VT", "Vermont"],
   ["VA", "Virginia"], ["WA", "Washington"], ["WV", "West Virginia"], ["WI", "Wisconsin"], ["WY", "Wyoming"],
-].map(([code, name]) => ({ code: code!, name: name! }));
+];
+export const US_STATES: readonly RegionOption[] = US_PAIRS.map(([code, name]) => ({ code, name }));
 
-export const CA_PROVINCES: readonly RegionOption[] = [
+const CA_PAIRS: ReadonlyArray<readonly [string, string]> = [
   ["AB", "Alberta"], ["BC", "British Columbia"], ["MB", "Manitoba"], ["NB", "New Brunswick"],
   ["NL", "Newfoundland and Labrador"], ["NT", "Northwest Territories"], ["NS", "Nova Scotia"], ["NU", "Nunavut"],
   ["ON", "Ontario"], ["PE", "Prince Edward Island"], ["QC", "Quebec"], ["SK", "Saskatchewan"], ["YT", "Yukon"],
-].map(([code, name]) => ({ code: code!, name: name! }));
+];
+export const CA_PROVINCES: readonly RegionOption[] = CA_PAIRS.map(([code, name]) => ({ code, name }));
 
 /** State or province choices for a country; empty means a free-text field. India keeps its existing state list elsewhere. */
 export function regionsFor(country: string): readonly RegionOption[] {

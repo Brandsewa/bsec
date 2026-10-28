@@ -186,5 +186,5 @@ export const RESERVED_PREFIXES = new Set([
 
 export function isValidPathPrefix(prefix: string): boolean {
   const m = /^\/([a-z0-9-]{1,40})$/.exec(prefix);
-  return !!m && !RESERVED_PREFIXES.has(m[1]!);
+  return !!m && !RESERVED_PREFIXES.has(m[1] ?? "");
 }

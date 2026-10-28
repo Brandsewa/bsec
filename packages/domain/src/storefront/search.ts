@@ -1,7 +1,7 @@
 import { and, desc, ilike, isNull, sql, inArray } from "drizzle-orm";
 import { withMarketScope } from "../markets/scope.ts";
 import { LISTED_PRODUCT_STATUSES } from "./product-status.ts";
-import { schema, withTenant } from "@bs/db";
+import { schema } from "@bs/db";
 import type { Runtime } from "../runtime.ts";
 import type { TenantContext } from "../context.ts";
 import { isFeatureEnabled } from "../features.ts";

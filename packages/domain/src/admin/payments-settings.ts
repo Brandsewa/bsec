@@ -79,7 +79,7 @@ export async function getStorefrontCheckoutOptions(rt: Runtime, tenantId: string
   if (offered("paypal") && (await isHostedProviderReady(rt._db.db, tenantId, "paypal"))) methods.push("paypal");
   const sameCurrency = mkt.currency === mkt.baseCurrency;
   const countries = mkt.countries.length > 0 ? mkt.countries : ["IN"];
-  const home = countries.includes(mkt.merchantCountry) ? mkt.merchantCountry : countries[0]!;
+  const home = countries.includes(mkt.merchantCountry) ? mkt.merchantCountry : (countries[0] ?? "IN");
   return {
     ...base,
     cod: sameCurrency ? base.cod : { ...base.cod, minOrderPaise: null, maxOrderPaise: null, feePaise: 0 },

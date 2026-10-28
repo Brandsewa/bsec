@@ -1,6 +1,6 @@
 import { and, asc, desc, eq, ilike, inArray, isNull, or, sql, type SQL } from "drizzle-orm";
 import { DIRECT_PRODUCT_STATUSES, LISTED_PRODUCT_STATUSES } from "./product-status.ts";
-import { schema, withTenant } from "@bs/db";
+import { schema, type withTenant } from "@bs/db";
 import type { Runtime } from "../runtime.ts";
 import type { TenantContext } from "../context.ts";
 import { isFeatureEnabled } from "../features.ts";
@@ -441,8 +441,8 @@ export async function getStorefrontProduct(
         barcode: v.barcode,
         title: v.title,
         optionValues: v.optionValues as Record<string, string> | null,
-        price: marketPriced ? marketPrices.get(v.id)!.price : Number(v.price),
-        compareAtPrice: marketPriced ? (marketPrices.get(v.id)!.compareAtPrice ?? undefined) : v.compareAtPrice ? Number(v.compareAtPrice) : undefined,
+        price: marketPriced ? (marketPrices.get(v.id)?.price ?? Number(v.price)) : Number(v.price),
+        compareAtPrice: marketPriced ? (marketPrices.get(v.id)?.compareAtPrice ?? undefined) : v.compareAtPrice ? Number(v.compareAtPrice) : undefined,
         costPrice: v.costPrice ? Number(v.costPrice) : undefined,
         weightGrams: v.weightGrams ?? undefined,
         dimensions: v.dimensions as Record<string, unknown> | null,
@@ -1596,8 +1596,8 @@ export async function buildProductSummaries(
   for (const v of variantRows) {
     const pId = v.productId;
     if (summaryMarketPriced && !summaryPrices.has(v.id)) continue;
-    const price = summaryMarketPriced ? summaryPrices.get(v.id)!.price : Number(v.price);
-    const compareAt = summaryMarketPriced ? (summaryPrices.get(v.id)!.compareAtPrice ?? undefined) : v.compareAtPrice ? Number(v.compareAtPrice) : undefined;
+    const price = summaryMarketPriced ? (summaryPrices.get(v.id)?.price ?? Number(v.price)) : Number(v.price);
+    const compareAt = summaryMarketPriced ? (summaryPrices.get(v.id)?.compareAtPrice ?? undefined) : v.compareAtPrice ? Number(v.compareAtPrice) : undefined;
     const existing = pricesByProduct[pId];
 
     if (!existing) {

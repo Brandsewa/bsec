@@ -3,6 +3,7 @@
  * order snapshot, PayPal payment and settlement checks, all against a real Postgres.
  */
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
+import type { Client as PgClient } from "pg";
 import { and, eq } from "drizzle-orm";
 import { schema, withTenant } from "@bs/db";
 import { startTestDb, type TestDb } from "@bs/db/test-env";
@@ -38,7 +39,7 @@ let rtWeb: Runtime;
 let ctx: TenantContext;
 let usId = "";
 let variantId = "";
-let pg: import("pg").Client;
+let pg: PgClient;
 
 const paypalFetch = (opts: { captureCurrency?: string; captureValue?: string } = {}): typeof fetch =>
   (async (url: string) => {
