@@ -680,7 +680,8 @@ export async function estimateCartShipping(
   );
   const rates = await getTenantShippingRates(rt._db.db, ctx.tenantId, cart.subtotal, {
     weightGrams,
-    destination: { country, ...(input.state ? { state: input.state } : {}) },
+    // Without a state or country the store's default zone is used, as before markets (a non-base market always names its country).
+    ...(input.state || input.country || !market.isBase ? { destination: { country, ...(input.state ? { state: input.state } : {}) } } : {}),
     ...(market.id ? { market: { id: market.id, isBase: market.isBase } } : {}),
   });
 

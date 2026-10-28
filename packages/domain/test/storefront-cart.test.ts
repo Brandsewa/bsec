@@ -1,4 +1,13 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
+
+// These tests hand-build the transaction; the market lookups have their own real-database tests (markets-checkout.int.test.ts).
+vi.mock("../src/markets/lookup.ts", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("../src/markets/lookup.ts")>()),
+  loadCheckoutMarket: async () => ({ id: null, legacy: true, merchantCountry: "IN", handle: "in", name: "IN", isBase: true, currency: "INR", baseCurrency: "INR", fxRate: null, adjustBps: 0, rounding: "none", countries: [], taxCollect: false, taxShippingToo: false, pricesIncludeTax: true, taxRules: [], paymentProviders: null, policy: null }),
+  isNonBaseMarket: async () => false,
+  isProductVisibleInMarket: async () => true,
+  loadMarketPriceMap: async () => new Map(),
+}));
 import { type Db, shippingZones, shippingRates, variants } from "@bs/db";
 import type { Runtime, TenantContext } from "../src/index.ts";
 import {

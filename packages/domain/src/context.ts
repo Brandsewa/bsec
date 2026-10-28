@@ -36,6 +36,7 @@ const SETTINGS_CAPABILITY_FAMILIES: readonly StorePermission[] = [
   "policies.manage",
   "privacy.manage",
   "audit.read",
+  "markets.manage",
 ];
 
 export const SUPPORT_READ_PERMISSIONS: readonly StorePermission[] = STORE_PERMISSIONS.filter(

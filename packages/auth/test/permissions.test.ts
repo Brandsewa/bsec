@@ -12,7 +12,7 @@ import {
 describe("permissions", () => {
   it("lists all store permissions without duplicates", () => {
     expect(new Set(STORE_PERMISSIONS).size).toBe(STORE_PERMISSIONS.length);
-    expect(STORE_PERMISSIONS.length).toBe(32); // 14 legacy + 15 capability families + 2 finance permissions + 1 orders.delete
+    expect(STORE_PERMISSIONS.length).toBe(33); // 14 legacy + 15 capability families + 2 finance permissions + 1 orders.delete + 1 markets.manage (ADR-040)
   });
 
   it("checks system store roles delegation matrix (owner-approved 2026-10-04)", () => {

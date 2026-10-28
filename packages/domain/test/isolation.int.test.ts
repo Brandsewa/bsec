@@ -2642,13 +2642,16 @@ async function executeAdminProcedure(procPath: string, rt: Runtime, ctx: TenantC
           const ownerOnly = proc === "payments.saveRazorpay" || proc === "payments.clearRazorpay" || proc === "paymentMethods.updateCod" || proc === "paymentProviders.saveCredentials" || proc === "paymentProviders.clearCredentials" || proc === "paymentProviders.test" || proc === "paymentProviders.setActive";
           // Maintenance mutations additionally require the store_owner role (decision 10), not just the family.
           const maintenanceOwnerOnly = proc === "settingsUpdate.apply" || proc === "storefront.scheduleMaintenance" || proc === "storefront.cancelScheduledMaintenance" || proc === "storefront.endMaintenance";
+          const marketsOnly = false;
           if (ownerOnly) {
             await expect(executeAdminProcedure(proc, rtApp, authCtx!)).rejects.toThrow(/payments\.manage/);
           }
           if (maintenanceOwnerOnly) {
             await expect(executeAdminProcedure(proc, rtApp, authCtx!)).rejects.toThrow(/only (the )?store owners?/i);
           }
-          const runCtx = ownerOnly
+          const runCtx = marketsOnly
+            ? { ...authCtx!, permissions: [...authCtx!.permissions, "markets.manage"] }
+            : ownerOnly
             ? { ...authCtx!, permissions: [...authCtx!.permissions, "payments.manage"] }
             : maintenanceOwnerOnly
               ? { ...authCtx!, roles: ["store_owner"] }

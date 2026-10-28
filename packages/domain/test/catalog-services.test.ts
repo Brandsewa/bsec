@@ -1,4 +1,10 @@
-import { describe, expect, it } from "vitest";
+import { vi, describe, expect, it } from "vitest";
+
+// The mocked transaction cannot run the market price sync; it has real-database tests in markets.int.test.ts.
+vi.mock("../src/markets/service.ts", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("../src/markets/service.ts")>()),
+  syncVariantMarketPrices: async () => undefined,
+}));
 import type { Db } from "@bs/db";
 import type { Runtime, TenantContext } from "../src/index.ts";
 import {

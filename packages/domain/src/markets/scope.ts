@@ -16,5 +16,5 @@ export function withMarketScope<T>(db: Db, ctx: { tenantId: string; marketId?: s
 /** The market the current transaction is scoped to (set by `withMarketScope`), or null for the base market and admin paths. */
 export async function getScopedMarketId(tx: Db): Promise<string | null> {
   const res = await tx.execute<{ m: string | null }>(sql`select nullif(current_setting('app.market_id', true), '') as m`);
-  return res.rows[0]?.m ?? null;
+  return res?.rows?.[0]?.m ?? null;
 }
