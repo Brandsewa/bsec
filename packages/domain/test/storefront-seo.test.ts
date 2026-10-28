@@ -208,6 +208,59 @@ describe("Storefront SEO & JSON-LD Structured Data", () => {
       expect(jsonLd.offers![1]?.availability).toBe("https://schema.org/OutOfStock");
     });
 
+    it("generates Schema.org Product JSON-LD with custom currency for a market", () => {
+      const product: StorefrontProductDetail = {
+        id: "prod-2",
+        title: "Mechanical Keyboard US",
+        slug: "mechanical-keyboard-us",
+        shortDescription: "Tactile mechanical keyboard in USD",
+        variants: [
+          {
+            id: "var-usd",
+            productId: "prod-2",
+            title: "Default",
+            sku: "KEY-USD",
+            barcode: null,
+            optionValues: {},
+            price: 9900,
+            compareAtPrice: 12000,
+            trackInventory: true,
+            allowBackorder: false,
+            position: 1,
+            imageMediaId: null,
+            stockStatus: "in_stock" as const,
+            availableQuantity: 5,
+            createdAt: "2026-01-01",
+            updatedAt: "2026-01-02",
+          },
+        ],
+        options: [],
+        status: "published",
+        descriptionJson: null,
+        brandId: null,
+        brand: null,
+        productType: null,
+        tags: [],
+        seo: null,
+        requiresShipping: true,
+        priceOnRequest: false,
+        ratingAvg: "0",
+        ratingCount: 0,
+        isFeatured: false,
+        createdAt: "2026-01-01",
+        updatedAt: "2026-01-02",
+        media: [],
+      };
+
+      const jsonLd = generateProductJsonLd(product, "https://acme.com", "USD");
+      expect(jsonLd.offers).toHaveLength(1);
+      expect(jsonLd.offers![0]).toMatchObject({
+        price: 9900,
+        priceCurrency: "USD",
+        availability: "https://schema.org/InStock",
+      });
+    });
+
     it("generates BreadcrumbList JSON-LD", () => {
       const items = [
         { name: "Home", url: "https://acme.com" },
@@ -759,6 +812,37 @@ describe("Storefront SEO & JSON-LD Structured Data", () => {
 
       expect(meta.robots).toEqual({ index: false, follow: true });
       expect(meta.alternates.canonical).toBe("https://clicky.com/products/secret-prototype");
+    });
+
+    it("respects market prefix in canonical for products, collections and categories", () => {
+      const prodMeta = buildProductSeoMetadata({
+        product: { title: "US Product", slug: "us-prod", status: "active" },
+        seoSettings: null,
+        storeSettings: { storeName: "Clicky Store" },
+        host: "clicky.com",
+        prefix: "/us",
+      });
+      expect(prodMeta.alternates.canonical).toBe("https://clicky.com/us/products/us-prod");
+
+      const colMeta = buildCollectionSeoMetadata({
+        collection: { title: "US Collection", slug: "us-col", published: true, indexable: true },
+        seoSettings: null,
+        storeSettings: { storeName: "Clicky Store" },
+        productsCount: 5,
+        host: "clicky.com",
+        prefix: "/us",
+      });
+      expect(colMeta.alternates.canonical).toBe("https://clicky.com/us/collections/us-col");
+
+      const catMeta = buildCategorySeoMetadata({
+        category: { name: "US Category", slug: "us-cat" },
+        seoSettings: null,
+        storeSettings: { storeName: "Clicky Store" },
+        productsCount: 5,
+        host: "clicky.com",
+        prefix: "/us",
+      });
+      expect(catMeta.alternates.canonical).toBe("https://clicky.com/us/categories/us-cat");
     });
   });
 });

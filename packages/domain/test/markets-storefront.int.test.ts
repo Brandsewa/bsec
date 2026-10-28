@@ -11,6 +11,7 @@ import {
   createRuntime,
   getStorefrontCollection,
   getStorefrontProduct,
+  getStorefrontSitemapUrls,
   provisionTenant,
   setFixedMarketPrices,
   setMarketProductVisibility,
@@ -59,12 +60,13 @@ beforeAll(async () => {
   const cheap = await mk("cheap-lamp", "Cheap Lamp", 50000, 60000);
   const pricey = await mk("pricey-lamp", "Pricey Lamp", 500000, null);
   Object.assign(ids, { cheap: cheap.productId, pricey: pricey.productId, cheapVariant: cheap.variantId, priceyVariant: pricey.variantId });
-  const [col] = (await pg.query(`insert into collections (tenant_id, title, slug, type) values ($1, 'Lamps', 'lamps', 'manual') returning id`, [admin.tenantId])).rows as { id: string }[];
+  const [col] = (await pg.query(`insert into collections (tenant_id, title, slug, type, published, indexable) values ($1, 'Lamps', 'lamps', 'manual', true, true) returning id`, [admin.tenantId])).rows as { id: string }[];
   for (const [i, p] of [cheap.productId, pricey.productId].entries()) {
     await pg.query(`insert into collection_products (tenant_id, collection_id, product_id, position) values ($1, $2, $3, $4)`, [admin.tenantId, col!.id, p, i]);
   }
-  const us = await createMarket(rtWeb, admin, { name: "United States", currency: "USD", countries: ["US"], fxRate: 0.012, taxDisplay: "exclusive" });
+  const us = await createMarket(rtWeb, admin, { name: "United States", currency: "USD", countries: ["US"], fxRate: 0.012, taxDisplay: "exclusive", pathPrefix: "/us" });
   usId = us.id;
+  await pg.query(`update markets set status = 'active' where id = $1`, [usId]);
 }, 240_000);
 
 afterAll(async () => {
@@ -133,3 +135,28 @@ describe("a collection listing in a market", () => {
     expect(base!.products.items.map((p) => p.slug).sort()).toEqual(["cheap-lamp", "pricey-lamp"]);
   });
 });
+
+describe("sitemap URLs in a multi-market store (WP-6)", () => {
+  it("includes market-prefixed URLs for active markets and respects market visibility", async () => {
+    // Hide pricey-lamp from the US market
+    await setMarketProductVisibility(rtWeb, admin, usId, [{ productId: ids.pricey, published: false }]);
+
+    const urls = await getStorefrontSitemapUrls(rtWeb, admin, "scope.store");
+    const locs = urls.map((u) => u.loc);
+
+    // Base market URLs (unprefixed)
+    expect(locs).toContain("https://scope.store");
+    expect(locs).toContain("https://scope.store/products/cheap-lamp");
+    expect(locs).toContain("https://scope.store/products/pricey-lamp");
+    expect(locs).toContain("https://scope.store/collections/lamps");
+
+    // US market URLs (/us prefixed)
+    expect(locs).toContain("https://scope.store/us");
+    expect(locs).toContain("https://scope.store/us/products/cheap-lamp");
+    expect(locs).toContain("https://scope.store/us/collections/lamps");
+
+    // Product hidden in USD market is absent from /us sitemap URLs
+    expect(locs).not.toContain("https://scope.store/us/products/pricey-lamp");
+  });
+});
+

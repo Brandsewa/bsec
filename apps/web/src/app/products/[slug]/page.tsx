@@ -48,10 +48,11 @@ export async function generateMetadata({ params }: ProductPageProps): Promise<Me
         requestId: crypto.randomUUID(),
       };
 
-      const [product, seoSettings, storeSettings] = await Promise.all([
+      const [product, seoSettings, storeSettings, marketCtx] = await Promise.all([
         getStorefrontProduct(rt, tenantCtx, slug),
         getStorefrontSeoSettings(rt, tenantCtx).catch(() => null),
         getStoreSettings(rt, tenantCtx).catch(() => null),
+        getMarketContext(access.tenantId).catch(() => null),
       ]);
 
       if (product) {
@@ -62,6 +63,7 @@ export async function generateMetadata({ params }: ProductPageProps): Promise<Me
           storeStatusMode: access.mode,
           noindex: access.noindex,
           host,
+          prefix: marketCtx?.prefix,
         });
 
         return {
@@ -112,6 +114,8 @@ export default async function ProductDetailPage({ params }: ProductPageProps) {
   let marketLocale = "en-IN";
   let product: Awaited<ReturnType<typeof getCachedStorefrontProduct>> = null;
 
+  let marketCtx: Awaited<ReturnType<typeof getMarketContext>> | null = null;
+
   try {
     const h = await headers();
     host = h.get("x-forwarded-host") ?? h.get("host") ?? "localhost";
@@ -123,7 +127,7 @@ export default async function ProductDetailPage({ params }: ProductPageProps) {
     }
 
     tenantId = access.tenantId;
-    const marketCtx = await getMarketContext(tenantId);
+    marketCtx = await getMarketContext(tenantId);
     marketId = marketCtx.marketId;
     marketCurrency = marketCtx.currency;
     marketLocale = marketCtx.locale;
@@ -147,12 +151,7 @@ export default async function ProductDetailPage({ params }: ProductPageProps) {
   const productCacheTag = tenantTag(tenantId, "product", product.id);
 
   const storeUrl = `https://${host}`;
-  const productJsonLd = generateProductJsonLd(product, storeUrl);
-  if (productJsonLd.offers && marketCurrency) {
-    for (const offer of productJsonLd.offers) {
-      offer.priceCurrency = marketCurrency;
-    }
-  }
+  const productJsonLd = generateProductJsonLd(product, storeUrl, marketCtx?.currency);
   const breadcrumbsJsonLd = generateBreadcrumbJsonLd([
     { name: "Home", url: storeUrl },
     { name: "Products", url: `${storeUrl}/products` },

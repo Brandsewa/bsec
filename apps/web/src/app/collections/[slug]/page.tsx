@@ -54,10 +54,11 @@ export async function generateMetadata({ params, searchParams }: CollectionPageP
         requestId: crypto.randomUUID(),
       };
 
-      const [res, seoSettings, storeSettings] = await Promise.all([
+      const [res, seoSettings, storeSettings, marketCtx] = await Promise.all([
         getStorefrontCollection(rt, tenantCtx, slug),
         getStorefrontSeoSettings(rt, tenantCtx).catch(() => null),
         getStoreSettings(rt, tenantCtx).catch(() => null),
+        getMarketContext(access.tenantId).catch(() => null),
       ]);
 
       if (res?.collection) {
@@ -84,6 +85,7 @@ export async function generateMetadata({ params, searchParams }: CollectionPageP
           hasFilterOrSortParams,
           page,
           host,
+          prefix: marketCtx?.prefix,
         });
 
         return {

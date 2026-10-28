@@ -51,10 +51,11 @@ export async function generateMetadata({ params, searchParams }: CategoryPagePro
         requestId: crypto.randomUUID(),
       };
 
-      const [res, seoSettings, storeSettings] = await Promise.all([
+      const [res, seoSettings, storeSettings, marketCtx] = await Promise.all([
         getStorefrontCategory(rt, tenantCtx, slug),
         getStorefrontSeoSettings(rt, tenantCtx).catch(() => null),
         getStoreSettings(rt, tenantCtx).catch(() => null),
+        getMarketContext(access.tenantId).catch(() => null),
       ]);
 
       if (res?.category) {
@@ -71,6 +72,7 @@ export async function generateMetadata({ params, searchParams }: CategoryPagePro
           hasFilterOrSortParams,
           page,
           host,
+          prefix: marketCtx?.prefix,
         });
 
         return {
