@@ -1,4 +1,5 @@
 import { oc } from "@orpc/contract";
+import { marketsContract } from "./markets.ts";
 import { z } from "zod";
 import { financeContract } from "./finance.ts";
 import { blogContract } from "./blog.ts";
@@ -1610,7 +1611,7 @@ export type CustomDomainVerifyResult = z.infer<typeof CustomDomainVerifyResult>;
 // --- Settings Phase 5 Payment Methods Schemas (Slice 5A, SETTINGS-SCHEMA §6.1) ---
 export const PaymentMethodItem = z.object({
   id: z.string().uuid(),
-  provider: z.enum(["cod", "razorpay"]),
+  provider: z.enum(["cod", "razorpay", "stripe", "cashfree", "paypal"]),
   displayName: z.string(),
   status: z.enum(["disabled", "pending_setup", "active", "unavailable", "error"]),
   mode: z.enum(["live", "test"]).nullable().optional(),
@@ -2064,6 +2065,7 @@ export const StoreGoogleSigninView = z.object({
 export type StoreGoogleSigninView = z.infer<typeof StoreGoogleSigninView>;
 
 export const adminContract = {
+  markets: marketsContract,
   support: {
     list: oc.route({ method: "GET", path: "/admin/support/sessions" }).output(z.array(StoreSupportSession)),
     approve: oc
@@ -2124,6 +2126,8 @@ export const adminContract = {
           /** Razorpay key secret, the Stripe secret key (sk_test_...), or the Cashfree secret key (cfsk_ma_test_...). */
           keySecret: z.string().min(6).max(300),
           webhookSecret: z.string().min(6).max(200).optional(),
+          /** PayPal only: sandbox ("test") or live. PayPal keys do not say which. */
+          mode: z.enum(["test", "live"]).optional(),
         }),
       )
       .output(StorePaymentProvider),

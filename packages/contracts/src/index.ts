@@ -25,6 +25,7 @@ import { storefrontContract } from "./storefront.ts";
 import { platformNotificationsContract } from "./notifications.ts";
 
 export * from "./admin.ts";
+export * from "./markets.ts";
 export * from "./finance.ts";
 export * from "./blog.ts";
 export * from "./notifications.ts";

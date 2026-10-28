@@ -19,6 +19,21 @@ import {
   updateProductMedia,
   listStorePaymentProviders,
   saveStripeCredentials,
+  savePayPalCredentials,
+  listMarkets,
+  getMarketDetail,
+  createMarket,
+  updateMarket,
+  setMarketCountries,
+  setMarketStatus,
+  deleteMarket,
+  listMarketPricing,
+  setFixedMarketPrices,
+  setMarketPaymentMethods,
+  setMarketPolicy,
+  setMarketTaxRules,
+  acknowledgeMarketCompliance,
+  setMarketProductVisibility,
   saveCashfreeCredentials,
   getStorePaymentProvider,
   clearProviderCredentials,
@@ -681,6 +696,135 @@ export const storeRouter = os.router({
           return disconnectStoreGoogle(context.rt, context.tenantCtx);
         }),
     },
+    markets: {
+      list: os.admin.markets.list
+        .use(requireAdmin)
+        .use(requirePermission("markets.manage"))
+        .handler(({ context }) => {
+          if (!context.tenantCtx) throw new Error("Missing tenant context");
+          return listMarkets(context.rt, context.tenantCtx).catch((e) => {
+            throw mapAuthError(e);
+          });
+        }),
+      get: os.admin.markets.get
+        .use(requireAdmin)
+        .use(requirePermission("markets.manage"))
+        .handler(({ context, input }) => {
+          if (!context.tenantCtx) throw new Error("Missing tenant context");
+          return getMarketDetail(context.rt, context.tenantCtx, input.id).catch((e) => {
+            throw mapAuthError(e);
+          });
+        }),
+      create: os.admin.markets.create
+        .use(requireAdmin)
+        .use(requirePermission("markets.manage"))
+        .handler(({ context, input }) => {
+          if (!context.tenantCtx) throw new Error("Missing tenant context");
+          return createMarket(context.rt, context.tenantCtx, input).catch((e) => {
+            throw mapAuthError(e);
+          });
+        }),
+      update: os.admin.markets.update
+        .use(requireAdmin)
+        .use(requirePermission("markets.manage"))
+        .handler(({ context, input }) => {
+          if (!context.tenantCtx) throw new Error("Missing tenant context");
+          const { id, ...patch } = input;
+          return updateMarket(context.rt, context.tenantCtx, id, patch).catch((e) => {
+            throw mapAuthError(e);
+          });
+        }),
+      setCountries: os.admin.markets.setCountries
+        .use(requireAdmin)
+        .use(requirePermission("markets.manage"))
+        .handler(({ context, input }) => {
+          if (!context.tenantCtx) throw new Error("Missing tenant context");
+          return setMarketCountries(context.rt, context.tenantCtx, input.id, input.countries).catch((e) => {
+            throw mapAuthError(e);
+          });
+        }),
+      setStatus: os.admin.markets.setStatus
+        .use(requireAdmin)
+        .use(requirePermission("markets.manage"))
+        .handler(({ context, input }) => {
+          if (!context.tenantCtx) throw new Error("Missing tenant context");
+          return setMarketStatus(context.rt, context.tenantCtx, input.id, input.status).catch((e) => {
+            throw mapAuthError(e);
+          });
+        }),
+      delete: os.admin.markets.delete
+        .use(requireAdmin)
+        .use(requirePermission("markets.manage"))
+        .handler(({ context, input }) => {
+          if (!context.tenantCtx) throw new Error("Missing tenant context");
+          return deleteMarket(context.rt, context.tenantCtx, input.id).catch((e) => {
+            throw mapAuthError(e);
+          });
+        }),
+      listPrices: os.admin.markets.listPrices
+        .use(requireAdmin)
+        .use(requirePermission("markets.manage"))
+        .handler(({ context, input }) => {
+          if (!context.tenantCtx) throw new Error("Missing tenant context");
+          return listMarketPricing(context.rt, context.tenantCtx, { marketId: input.id, search: input.search, limit: input.limit, offset: input.offset }).catch((e) => {
+            throw mapAuthError(e);
+          });
+        }),
+      setFixedPrices: os.admin.markets.setFixedPrices
+        .use(requireAdmin)
+        .use(requirePermission("markets.manage"))
+        .handler(({ context, input }) => {
+          if (!context.tenantCtx) throw new Error("Missing tenant context");
+          return setFixedMarketPrices(context.rt, context.tenantCtx, { marketId: input.id, items: input.items }).catch((e) => {
+            throw mapAuthError(e);
+          });
+        }),
+      setPaymentMethods: os.admin.markets.setPaymentMethods
+        .use(requireAdmin)
+        .use(requirePermission("markets.manage"))
+        .handler(({ context, input }) => {
+          if (!context.tenantCtx) throw new Error("Missing tenant context");
+          return setMarketPaymentMethods(context.rt, context.tenantCtx, input.id, input.methods).catch((e) => {
+            throw mapAuthError(e);
+          });
+        }),
+      setPolicy: os.admin.markets.setPolicy
+        .use(requireAdmin)
+        .use(requirePermission("markets.manage"))
+        .handler(({ context, input }) => {
+          if (!context.tenantCtx) throw new Error("Missing tenant context");
+          return setMarketPolicy(context.rt, context.tenantCtx, input.id, input.policy).catch((e) => {
+            throw mapAuthError(e);
+          });
+        }),
+      setTaxRules: os.admin.markets.setTaxRules
+        .use(requireAdmin)
+        .use(requirePermission("markets.manage"))
+        .handler(({ context, input }) => {
+          if (!context.tenantCtx) throw new Error("Missing tenant context");
+          return setMarketTaxRules(context.rt, context.tenantCtx, input.id, input.rules).catch((e) => {
+            throw mapAuthError(e);
+          });
+        }),
+      acknowledgeCompliance: os.admin.markets.acknowledgeCompliance
+        .use(requireAdmin)
+        .use(requirePermission("markets.manage"))
+        .handler(({ context, input }) => {
+          if (!context.tenantCtx) throw new Error("Missing tenant context");
+          return acknowledgeMarketCompliance(context.rt, context.tenantCtx, input.id).catch((e) => {
+            throw mapAuthError(e);
+          });
+        }),
+      setProductVisibility: os.admin.markets.setProductVisibility
+        .use(requireAdmin)
+        .use(requirePermission("markets.manage"))
+        .handler(({ context, input }) => {
+          if (!context.tenantCtx) throw new Error("Missing tenant context");
+          return setMarketProductVisibility(context.rt, context.tenantCtx, input.id, input.items).catch((e) => {
+            throw mapAuthError(e);
+          });
+        }),
+    },
     paymentProviders: {
       list: os.admin.paymentProviders.list
         .use(requireAdmin)
@@ -699,6 +843,15 @@ export const storeRouter = os.router({
               return await saveStripeCredentials(context.rt, context.tenantCtx, {
                 secretKey: input.keySecret,
                 webhookSecret: input.webhookSecret,
+              });
+            }
+            if (input.provider === "paypal") {
+              if (!input.keyId) throw new Error("Bad Request: the PayPal Client ID is required");
+              return await savePayPalCredentials(context.rt, context.tenantCtx, {
+                clientId: input.keyId,
+                clientSecret: input.keySecret,
+                webhookId: input.webhookSecret,
+                mode: input.mode ?? "test",
               });
             }
             if (input.provider === "cashfree") {

@@ -57,7 +57,7 @@ export interface StorefrontCart {
   token: string;
   currency: string;
   /** The market the cart is priced in (ADR-040). null on carts created before markets existed (treated as the base market). */
-  marketId: string | null;
+  marketId?: string | null | undefined;
   items: StorefrontCartItem[];
   itemCount: number;
   subtotal: number;

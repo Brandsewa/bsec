@@ -92,6 +92,7 @@ export function sampleCart(): StorefrontCart {
     id: "sample-cart",
     token: "sample",
     currency: "INR",
+    marketId: null,
     items,
     itemCount: items.reduce((n, i) => n + i.quantity, 0),
     subtotal: items.reduce((n, i) => n + i.lineTotal, 0),
