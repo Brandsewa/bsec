@@ -12,6 +12,7 @@ import {
 import { tenantForeignKey, tenantTable } from "../tenant-table.ts";
 import { citext } from "./custom-types.ts";
 import { variants } from "./catalog.ts";
+import { markets } from "./markets.ts";
 
 /**
  * Carts (PLAN §5.5 / M3).
@@ -26,6 +27,8 @@ export const carts = tenantTable(
     email: citext("email"),
     phone: text("phone"),
     currency: text("currency").notNull().default("INR"),
+    /** The market this cart is priced in (ADR-040). null on carts created before markets existed. */
+    marketId: uuid("market_id"),
     discountCodes: text("discount_codes").array().notNull().default(sql`ARRAY[]::text[]`),
     shippingAddress: jsonb("shipping_address"),
     shippingRateId: text("shipping_rate_id"),
@@ -40,6 +43,7 @@ export const carts = tenantTable(
     unique("carts_tenant_token_uniq").on(t.tenantId, t.token),
     unique("carts_tenant_id_uniq").on(t.tenantId, t.id),
     index("carts_tenant_status_idx").on(t.tenantId, t.status),
+    tenantForeignKey({ tableTenantId: t.tenantId, column: t.marketId, target: markets, name: "carts_market_fk", onDelete: "restrict" }),
   ],
 );
 

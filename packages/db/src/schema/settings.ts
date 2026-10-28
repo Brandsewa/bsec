@@ -30,6 +30,8 @@ export const storeSettings = tenantTable(
     currency: text("currency").notNull().default("INR"),
     timezone: text("timezone").notNull().default("Asia/Kolkata"),
     weightUnit: text("weight_unit").notNull().default("kg"),
+    /** "metric" | "imperial" (ADR-040). Weight is always stored in grams; this only changes how it is entered and shown. */
+    unitSystem: text("unit_system").notNull().default("metric"),
     orderPrefix: text("order_prefix").notNull().default("#"),
     social: jsonb("social"),
     checkout: jsonb("checkout"),
