@@ -13,7 +13,7 @@ export const buttonVariants = cva(
         outline: "border border-[var(--border)] bg-transparent text-[var(--foreground)] hover:bg-[var(--muted)] shadow-xs",
         ghost: "text-[var(--foreground)] hover:bg-[var(--muted)]",
         destructive: "bg-[var(--destructive)] text-[var(--destructive-foreground)] hover:bg-[var(--destructive)]/90 shadow-xs",
-        link: "text-[var(--brand-ink)] underline-offset-4 hover:underline p-0 h-auto",
+        link: "text-[var(--brand-ink)] underline-offset-4 hover:opacity-70 transition-opacity p-0 h-auto",
       },
       size: {
         sm: "h-8 px-3 text-[13px] gap-1.5 [&_svg]:size-3.5",

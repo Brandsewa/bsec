@@ -138,7 +138,7 @@ export default async function OrderTrackingPage({ params }: OrderTrackingPagePro
         <div className="mt-8 pt-6 border-t border-border flex justify-between items-center">
           <Link
             href="/"
-            className="text-sm font-medium text-primary hover:underline"
+            className="text-sm font-medium text-primary hover:opacity-70 transition-opacity"
           >
             ← Continue Shopping
           </Link>

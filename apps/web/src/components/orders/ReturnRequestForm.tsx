@@ -250,7 +250,7 @@ export function ReturnRequestForm({
                       type="button"
                       disabled={cancellingId === r.id}
                       onClick={() => setConfirmCancelId(r.id)}
-                      className="text-xs text-destructive hover:underline disabled:opacity-50"
+                      className="text-xs text-destructive hover:opacity-70 transition-opacity disabled:opacity-50"
                     >
                       {cancellingId === r.id ? "Cancelling..." : "Cancel request"}
                     </button>

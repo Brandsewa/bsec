@@ -59,7 +59,7 @@ export default function ResetPasswordPage({ params }: { params: Promise<{ token:
         title="Reset password"
         description="Enter a new secure password for your account."
         footer={
-          <Link href="/account/forgot-password" className="text-xs text-[var(--brand-ink)] hover:underline">
+          <Link href="/account/forgot-password" className="text-xs text-[var(--brand-ink)] hover:opacity-70 transition-opacity">
             Request a new link
           </Link>
         }

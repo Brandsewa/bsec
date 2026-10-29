@@ -125,7 +125,7 @@ export function CartItemRow({ item, onUpdateQuantity, onRemove }: CartItemRowPro
             type="button"
             disabled={updating}
             onClick={handleRemove}
-            className="text-xs text-destructive hover:underline mt-1 transition-colors"
+            className="text-xs text-destructive hover:opacity-70 transition-opacity mt-1 transition-colors"
           >
             Remove
           </button>

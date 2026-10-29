@@ -122,8 +122,8 @@ export function MiniCartDrawer({
         {items.length === 0 ? (
           <div className="flex flex-1 flex-col items-center justify-center gap-4 px-6 text-center">
             <p className="text-sm text-muted-foreground">Your cart is empty.</p>
-            <Link href="/collections" onClick={onClose} className="inline-flex h-11 items-center rounded-lg bg-primary px-5 text-sm font-semibold text-primary-foreground">
-              Browse collections
+            <Link href="/categories" onClick={onClose} className="inline-flex h-11 items-center rounded-lg bg-primary px-5 text-sm font-semibold text-primary-foreground">
+              Browse categories
             </Link>
           </div>
         ) : (
@@ -138,7 +138,7 @@ export function MiniCartDrawer({
                       <img src={item.primaryImage?.url ?? PLACEHOLDER_IMAGE_URL} alt={item.primaryImage?.url ? (item.primaryImage.alt ?? "") : ""} className="h-full w-full object-cover" />
                     </Link>
                     <div className="min-w-0 flex-1">
-                      <Link href={`/products/${item.product.slug}`} onClick={onClose} className="line-clamp-2 text-sm font-semibold leading-snug hover:underline" style={HEADING_FONT}>
+                      <Link href={`/products/${item.product.slug}`} onClick={onClose} className="line-clamp-2 text-sm font-semibold leading-snug hover:opacity-70 transition-opacity" style={HEADING_FONT}>
                         {item.product.title}
                       </Link>
                       {variantLabel ? <p className="text-xs leading-snug text-muted-foreground">{variantLabel}</p> : null}

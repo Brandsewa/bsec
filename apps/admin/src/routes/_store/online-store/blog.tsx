@@ -154,7 +154,7 @@ function BlogPostsPage() {
 
       <PageSection>
         <div className="grid gap-3">
-          <ScrollTabs tabs={STATUS_TABS} value={status} onChange={(val) => setSearch({ status: val as StatusFilter })} />
+          <ScrollTabs tabs={STATUS_TABS.map((t) => ({ ...t, count: list.data?.counts[t.id] }))} value={status} onChange={(val) => setSearch({ status: val as StatusFilter })} />
           <div className="flex flex-wrap items-center gap-2">
             <div className="min-w-[240px] flex-1">
               <TableToolbar

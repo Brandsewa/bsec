@@ -44,7 +44,7 @@ export default async function PrivacyVerifyPage({
       title={result.success ? "Request Confirmed" : "Verification Failed"}
       description="Customer Privacy Request"
       footer={
-        <Link href="/" className="text-xs text-[var(--brand-ink)] hover:underline">
+        <Link href="/" className="text-xs text-[var(--brand-ink)] hover:opacity-70 transition-opacity">
           ← Back to the store
         </Link>
       }

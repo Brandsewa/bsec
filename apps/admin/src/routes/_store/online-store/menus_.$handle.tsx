@@ -269,8 +269,26 @@ export const Route = createFileRoute("/_store/online-store/menus_/$handle")({
   component: EditMenuRoute,
 });
 
+/**
+ * Ids of items the storefront leaves out: a page item whose page is not published (the store never links to a page that cannot open),
+ * and everything nested under such an item, so a dropdown can vanish because its parent or its children are unpublished.
+ */
+function hiddenItemIds(items: MenuItem[], pageStatus: Map<string, string>): Set<string> {
+  const out = new Set<string>();
+  const walk = (list: MenuItem[], parentHidden: boolean) => {
+    for (const it of list) {
+      const hidden = parentHidden || (it.type === "page" && !!it.targetId && pageStatus.has(it.targetId) && pageStatus.get(it.targetId) !== "published");
+      if (hidden) out.add(it.id);
+      if (it.children && it.children.length > 0) walk(it.children, hidden);
+    }
+  };
+  walk(items, false);
+  return out;
+}
+
 function SortableNavigationRow({
   flat,
+  hidden,
   onEdit,
   onDelete,
   onMoveUp,
@@ -284,6 +302,7 @@ function SortableNavigationRow({
   canOutdent,
 }: {
   flat: FlatItem;
+  hidden: boolean;
   onEdit: () => void;
   onDelete: () => void;
   onMoveUp: () => void;
@@ -340,6 +359,11 @@ function SortableNavigationRow({
             {flat.item.openInNewTab ? (
               <Badge variant="secondary" className="text-[10px] shrink-0 font-normal">
                 New tab
+              </Badge>
+            ) : null}
+            {hidden ? (
+              <Badge variant="outline" className="text-[10px] shrink-0 font-normal text-amber-700 dark:text-amber-400" title="This item, or the item it sits under, links to a page that is not published, so the store leaves it out of the menu. Publish the page to show it.">
+                Not shown on store
               </Badge>
             ) : null}
           </div>
@@ -657,6 +681,7 @@ function MenuEditorForm({ menu }: { menu: MenuDetail }) {
   );
 
   const flatItems = useMemo(() => flattenItems(items), [items]);
+  const hiddenIds = useMemo(() => hiddenItemIds(items, new Map((pagesQuery.data ?? []).map((p) => [p.id, p.status ?? (p.publishedVersionId ? "published" : "draft")]))), [items, pagesQuery.data]);
 
   const updateMutation = useMutation(
     orpc.admin.menus.update.mutationOptions({
@@ -1107,6 +1132,7 @@ function MenuEditorForm({ menu }: { menu: MenuDetail }) {
                         <SortableNavigationRow
                           key={flat.id}
                           flat={flat}
+                          hidden={hiddenIds.has(flat.item.id)}
                           onEdit={() => openEditItemDrawer(flat)}
                           onDelete={() => setItems(removeItem(items, flat.path))}
                           onMoveUp={() => setItems(moveSibling(items, flat.path, -1))}

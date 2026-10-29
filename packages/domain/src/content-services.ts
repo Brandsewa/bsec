@@ -1058,7 +1058,7 @@ export async function savePageDraft(rt: Runtime, ctx: TenantContext, input: Save
   const validation = validateBlockDocument({ version: 1, blocks: input.blocks });
   if (!validation.success) {
     const msg = validation.errors.map((e) => `${e.path}: ${e.message}`).join(", ");
-    throw new Error(`Validation failed: ${msg}`);
+    throw new Error(`Bad Request: Validation failed: ${msg}`);
   }
 
   const db = rt._db.db;

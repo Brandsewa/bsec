@@ -204,7 +204,7 @@ export function CartView({ cart: initialCart, options = DEFAULT_CART_CONTENTS_OP
 
             {options.showContinueShopping !== false ? (
               <div className="mt-4 text-center">
-                <Link href="/" className="text-xs text-primary hover:underline">
+                <Link href="/" className="text-xs text-primary hover:opacity-70 transition-opacity">
                   or Continue Shopping
                 </Link>
               </div>

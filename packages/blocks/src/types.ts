@@ -40,7 +40,6 @@ export type BlockType =
   | "SiteHeader"
   | "SiteFooter"
   | "ProductDetail"
-  | "ProductInfoTabs"
   | "ProductCustomField"
   | "ProductCoupons"
   | "ContactForm"
@@ -195,7 +194,6 @@ export interface RenderContext {
   /** The announcement bar's previous / next arrows (a small client wrapper on the storefront); the editors draw them without behaviour. */
   renderBanner?: ((p: { children: ReactNode }) => ReactNode) | undefined;
   /** The product's long description and the theme's shipping and returns text in tabs; the editor draws a labelled placeholder instead. */
-  renderProductInfoTabs?: ((opts: ProductInfoTabsOptions) => ReactNode) | undefined;
   /** One custom field of the current product (ADR-034), drawn by the storefront from the product's data; the editor draws a labelled sample instead. */
   renderProductCustomField?: ((opts: ProductCustomFieldOptions) => ReactNode) | undefined;
   /** The store's coupon cards with the "view all" drawer (needs the store's discounts, so the storefront draws it). */
@@ -274,15 +272,6 @@ export interface ProductCustomFieldOptions {
   showLabel: boolean;
   /** Replaces the field's own name when set. */
   label: string;
-}
-
-export interface ProductInfoTabsOptions {
-  descriptionLabel: string;
-  shippingLabel: string;
-  shippingContent: string;
-  imageMediaId?: string | undefined;
-  imageAlt: string;
-  imageSide: "right" | "left";
 }
 
 export interface ProductDetailOptions {

@@ -23,7 +23,7 @@ export function RatingSummary({ average, count }: { average: number | string; co
   const avg = Math.max(0, Math.min(5, Number(average) || 0));
   const fill = `${(avg / 5) * 100}%`;
   return (
-    <a href="#reviews-section" className="inline-flex items-center gap-2 text-sm hover:underline" data-testid="rating-summary">
+    <a href="#reviews-section" className="inline-flex items-center gap-2 text-sm hover:opacity-70 transition-opacity" data-testid="rating-summary">
       <span className="relative inline-flex" role="img" aria-label={`Rated ${avg.toFixed(1)} out of 5 from ${count} ${count === 1 ? "review" : "reviews"}`}>
         <Stars className="text-muted-foreground/30" />
         <span className="absolute inset-y-0 left-0 overflow-hidden" style={{ width: fill }}>

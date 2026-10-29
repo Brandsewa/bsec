@@ -1,8 +1,6 @@
-import { descriptionText } from "@/lib/description-text.ts";
-import { ProductInfoTabs } from "@/components/product/ProductInfoTabs.tsx";
 import { ProductCustomField } from "@/components/product/ProductCustomField.tsx";
 import { ProductReviewsSection } from "@/components/product/ProductReviewsSection.tsx";
-import { DEFAULT_SHIPPING_CONTENT, ProductShowcaseSchema, type ProductCouponsOptions, type ProductInfoTabsOptions } from "@bs/blocks";
+import { ProductShowcaseSchema, type ProductCouponsOptions } from "@bs/blocks";
 import { CouponCards } from "@/components/product/CouponCards.tsx";
 import React from "react";
 import type { Metadata } from "next";
@@ -194,23 +192,11 @@ export default async function ProductDetailPage({ params }: ProductPageProps) {
   const couponCards = (o: ProductCouponsOptions) => (
     <CouponCards coupons={coupons} title={o.title} showCount={o.showCount} showViewAll={o.showViewAll} viewAllLabel={o.viewAllLabel} />
   );
-  const infoTabs = (o: ProductInfoTabsOptions) => (
-    <ProductInfoTabs
-      descriptionLabel={o.descriptionLabel}
-      shippingLabel={o.shippingLabel}
-      descriptionText={descriptionText(product.descriptionJson) || (product.shortDescription ?? "")}
-      shippingContent={o.shippingContent}
-      imageUrl={o.imageMediaId ? media[o.imageMediaId] : undefined}
-      imageAlt={o.imageAlt}
-      imageSide={o.imageSide}
-    />
-  );
-
-  const templateContext = { renderProductDetail: (options: Parameters<typeof detail>[0]) => detail(options), renderProductInfoTabs: infoTabs, renderProductCustomField: customField, renderProductCoupons: couponCards };
+  const templateContext = { renderProductDetail: (options: Parameters<typeof detail>[0]) => detail(options), renderProductCustomField: customField, renderProductCoupons: couponCards };
   // The theme's "Reviews" block is only a heading placeholder (the real reviews are drawn below the product's own blocks),
   // so it is left out here; the reviews section has its own heading.
   const templateBlocks = adaptedBlocks;
-  const coreTypes = new Set(["ProductDetail", "ProductInfoTabs", "ProductCustomField", "ProductCoupons"]);
+  const coreTypes = new Set(["ProductDetail", "ProductCustomField", "ProductCoupons"]);
   let lastCore = -1;
   templateBlocks.forEach((b, i) => {
     if (coreTypes.has(b.type)) lastCore = i;
@@ -235,13 +221,6 @@ export default async function ProductDetailPage({ params }: ProductPageProps) {
       ) : (
         <>
           {detail()}
-          <ProductInfoTabs
-            descriptionLabel="Description"
-            shippingLabel="Shipping & returns"
-            descriptionText={descriptionText(product.descriptionJson) || (product.shortDescription ?? "")}
-            shippingContent={DEFAULT_SHIPPING_CONTENT}
-            imageAlt=""
-          />
         </>
       )}
       {template ? null : (

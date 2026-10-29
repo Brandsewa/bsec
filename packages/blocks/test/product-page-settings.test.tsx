@@ -1,11 +1,10 @@
 import { describe, it, expect } from "vitest";
-import { renderToStaticMarkup } from "react-dom/server";
-import { getBlockDefinition, renderBlockTree, validateBlockDocument, type BlockInstance } from "../src/index.ts";
+import { getBlockDefinition, validateBlockDocument, type BlockInstance } from "../src/index.ts";
 
 const block = (id: string, type: BlockInstance["type"], props: Record<string, unknown> = {}): BlockInstance => ({ id, type, version: 1, props });
 
 describe("product page settings", () => {
-  const parse = (type: "ProductDetail" | "ProductInfoTabs", props: Record<string, unknown>) => {
+  const parse = (type: "ProductDetail", props: Record<string, unknown>) => {
     const r = validateBlockDocument({ version: 1, blocks: [block("p", type, props)] });
     return r.success ? r.data.blocks[0]?.props : null;
   };
@@ -53,11 +52,15 @@ describe("product page settings", () => {
     ];
     for (const props of bad) expect(parse("ProductDetail", props), JSON.stringify(props)).toBeNull();
   });
+});
 
-  it("validates the tabs block and draws a labelled placeholder in the editor", () => {
-    expect(parse("ProductInfoTabs", {})).toMatchObject({ descriptionLabel: "Description", shippingLabel: "Shipping & returns", imageSide: "right" });
-    expect(parse("ProductInfoTabs", { shippingContent: "x".repeat(4001) })).toBeNull();
-    expect(parse("ProductInfoTabs", { imageMediaId: "not-a-uuid" })).toBeNull();
-    expect(renderToStaticMarkup(<>{renderBlockTree([block("t", "ProductInfoTabs", {})], {})}</>)).toContain("Shipping &amp; returns");
+describe("retired product tabs block", () => {
+  it("is dropped from a saved page instead of failing it", () => {
+    const r = validateBlockDocument({
+      version: 1,
+      blocks: [{ id: "a", type: "ProductInfoTabs", version: 1, props: {} }, block("b", "ProductDetail")],
+    });
+    expect(r.success).toBe(true);
+    if (r.success) expect(r.data.blocks.map((b) => b.type)).toEqual(["ProductDetail"]);
   });
 });

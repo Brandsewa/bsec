@@ -6,7 +6,6 @@ vi.mock("server-only", () => ({}));
 
 import { estimateDelivery } from "../src/components/product/DeliveryEstimate.tsx";
 import { ProductDescription } from "../src/components/product/ProductDescription.tsx";
-import { ProductInfoTabs } from "../src/components/product/ProductInfoTabs.tsx";
 import { ProductGallery } from "../src/components/product/ProductGallery.tsx";
 import { ProductBuyProvider, VariantOptions, PriceBlock, PurchaseActions, SkuLine } from "../src/components/product/VariantSelector.tsx";
 import { descriptionText, paragraphs } from "../src/lib/description-text.ts";
@@ -61,29 +60,6 @@ describe("short description with Read more", () => {
   it("renders nothing without any description and no link when there is nothing more to read", () => {
     expect(render(React.createElement(ProductDescription, { title: "T", short: "", full: "", clamp: true }))).toBe("");
     expect(render(React.createElement(ProductDescription, { title: "T", short: "Same", full: "Same", clamp: true }))).not.toContain("Read more");
-  });
-});
-
-describe("tabs and picture section", () => {
-  const base = { descriptionLabel: "Description", shippingLabel: "Shipping & returns", imageAlt: "" };
-
-  it("shows both tabs, the description first, and the placeholder picture when none is set", () => {
-    const html = render(React.createElement(ProductInfoTabs, { ...base, descriptionText: "About this product", shippingContent: "Ships fast" }));
-    expect(html).toContain('role="tablist"');
-    expect(html).toContain("Description");
-    expect(html).toContain("Shipping &amp; returns");
-    expect(html).toContain("About this product");
-    expect(html).not.toContain("Ships fast"); // the second tab is not open yet
-    expect(html).toContain("/placeholder.png");
-  });
-
-  it("drops an empty tab, turns dash lines into a list and never renders HTML from the text", () => {
-    const html = render(React.createElement(ProductInfoTabs, { ...base, descriptionText: "<script>alert(1)</script>", shippingContent: "" }));
-    expect(html).not.toContain("Shipping");
-    expect(html).not.toContain("<script>");
-    expect(html).toContain("&lt;script&gt;");
-    const list = render(React.createElement(ProductInfoTabs, { ...base, descriptionText: "- one\n- two", shippingContent: "x" }));
-    expect(list).toContain("<li>one</li>");
   });
 });
 

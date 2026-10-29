@@ -43,7 +43,7 @@ export function CreateAccountCard({ email, name, phone }: CreateAccountCardProps
         <p className="mt-1 text-sm text-muted-foreground">
           We&apos;ve sent an account setup link to <strong className="text-foreground">{email}</strong>. Check your inbox to set your password. Once complete, all orders placed with this email will be linked to your account.
         </p>
-        <Link href="/account/login" className="mt-4 inline-block text-sm font-semibold text-primary hover:underline">
+        <Link href="/account/login" className="mt-4 inline-block text-sm font-semibold text-primary hover:opacity-70 transition-opacity">
           Go to sign in →
         </Link>
       </div>

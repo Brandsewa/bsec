@@ -55,7 +55,7 @@ export default function RegisterPage() {
         footer={
           <span>
             Already have an account?{" "}
-            <Link href="/account/login" className="font-semibold text-[var(--brand-ink)] hover:underline">
+            <Link href="/account/login" className="font-semibold text-[var(--brand-ink)] hover:opacity-70 transition-opacity">
               Sign in
             </Link>
           </span>
