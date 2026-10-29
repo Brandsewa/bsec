@@ -156,7 +156,7 @@ export async function getCustomerReturnDetail(db: Db, tenantId: string, customer
         ),
       )
       .orderBy(asc(orderEvents.createdAt));
-    const timeline = [{ label: RETURN_LABELS["return.request"]!, at: ret.createdAt }];
+    const timeline = [{ label: "Return requested", at: ret.createdAt }];
     for (const e of events) {
       const label = RETURN_LABELS[e.type];
       if (label && e.type !== "return.request") timeline.push({ label, at: e.createdAt });
