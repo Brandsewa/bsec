@@ -176,6 +176,8 @@ export async function handleFulfillmentShippedJob(
         .where(and(eq(schema.fulfillments.tenantId, tenantId), eq(schema.fulfillments.orderId, orderId)))
         .orderBy(schema.fulfillments.createdAt)
     ).filter((f) => f.status !== "cancelled");
+    // an id that is not a uuid cannot name a parcel (older callers passed placeholders): fall back to the carrier and number in the message
+    if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(fulfillmentId)) return { orderRow, parcel: undefined, parcels: live, items: [] };
     const items = await tx
       .select({ title: schema.orderItems.productTitle, variant: schema.orderItems.variantTitle, quantity: schema.fulfillmentItems.quantity })
       .from(schema.fulfillmentItems)
