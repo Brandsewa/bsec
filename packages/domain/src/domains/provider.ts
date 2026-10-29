@@ -40,6 +40,8 @@ export interface CustomDomainProvider {
     opts?: { prevalidate?: boolean },
   ): Promise<CustomHostnameResult>;
   getCustomHostnameStatus(providerHostnameId: string): Promise<CustomHostnameStatusResult>;
+  /** Asks the provider to re-run validation now instead of waiting for its own schedule. Best effort. */
+  refreshCustomHostname?(providerHostnameId: string, opts?: { prevalidate?: boolean }): Promise<void>;
   deleteCustomHostname(providerHostnameId: string): Promise<{ deleted: boolean }>;
 }
 
@@ -172,6 +174,20 @@ export class CloudflareCustomDomainProvider implements CustomDomainProvider {
         : {}),
       ...dcvFrom(result),
     };
+  }
+
+  /** PATCHing the hostname with its validation settings makes Cloudflare re-check it right away (the dashboard "Refresh"). */
+  async refreshCustomHostname(providerHostnameId: string, opts?: { prevalidate?: boolean }): Promise<void> {
+    if (!this.isConfigured() || !providerHostnameId) return;
+    const res = await fetch(
+      `https://api.cloudflare.com/client/v4/zones/${this.zoneId}/custom_hostnames/${providerHostnameId}`,
+      {
+        method: "PATCH",
+        headers: { Authorization: `Bearer ${this.apiToken}`, "Content-Type": "application/json" },
+        body: JSON.stringify({ ssl: { method: opts?.prevalidate ? "txt" : "http", type: "dv" } }),
+      },
+    );
+    if (!res.ok) throw new Error(`Cloudflare custom hostname refresh failed (${res.status})`);
   }
 
   async deleteCustomHostname(providerHostnameId: string): Promise<{ deleted: boolean }> {

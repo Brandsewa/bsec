@@ -76,6 +76,23 @@ async function safeList(fn: () => Promise<string[]>): Promise<string[]> {
   }
 }
 
+/** Second-level suffixes where "brand.co.in" is a bare domain. Keep in step with apps/admin/src/lib/domain-hosts.ts. */
+const TWO_PART_SUFFIXES = new Set([
+  "co.in", "org.in", "net.in", "firm.in", "gen.in", "ind.in", "ac.in", "edu.in", "gov.in",
+  "co.uk", "org.uk", "me.uk", "com.au", "net.au", "org.au", "co.nz", "com.sg", "co.za", "com.br", "co.jp",
+]);
+
+/**
+ * True for a bare (apex) domain such as "mybrand.com". A bare domain cannot CNAME to us, so it is pointed with A records
+ * that resolve to Cloudflare; Cloudflare then refuses TXT/HTTP ownership validation ("hostname is using Cloudflare").
+ * Ownership must therefore be proven by TXT *before* those records exist.
+ */
+export function isApexHostname(hostname: string): boolean {
+  const labels = hostname.trim().toLowerCase().split(".").filter(Boolean);
+  if (labels.length <= 2) return true;
+  return labels.length === 3 && TWO_PART_SUFFIXES.has(labels.slice(1).join("."));
+}
+
 export function fallbackOriginHost(): string {
   return (
     process.env.CUSTOM_DOMAIN_CNAME_TARGET?.trim() || `stores.${process.env.PLATFORM_DOMAIN?.trim() || "bcom.si"}`
