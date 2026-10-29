@@ -8,6 +8,7 @@ import {
   type ThemeTokensLike,
 } from "@bs/blocks";
 import { useThemeGlobalColors, type GlobalThemeColor } from "./context.tsx";
+import { HexInput } from "./HexInput.tsx";
 
 export interface ColorPickerSwatchProps {
   value?: string | undefined;
@@ -181,21 +182,12 @@ export function ColorPickerSwatch({
 
       {/* Optional Hex text input beside swatch (used if explicitly requested) */}
       {showHexInput ? (
-        <input
-          type="text"
-          aria-label={`${label} hex code`}
-          value={value ?? ""}
-          placeholder="#000000"
+        <HexInput
+          ariaLabel={`${label} hex code`}
+          value={value}
           disabled={disabled}
-          onChange={(e) => onChange(e.target.value)}
-          onBlur={(e) => {
-            const trimmed = e.target.value.trim();
-            if (/^#[0-9a-f]{3,8}$/i.test(trimmed)) {
-              onChange(trimmed);
-            } else if (trimmed === "") {
-              onChange(undefined);
-            }
-          }}
+          onCommit={onChange}
+          onClear={() => onChange(undefined)}
           style={{
             flex: 1,
             border: "1px solid #d4d4d8",
@@ -453,19 +445,11 @@ export function ColorPickerSwatch({
                   </label>
 
                   {/* Hex Text Input */}
-                  <input
-                    type="text"
-                    value={value ?? ""}
-                    placeholder="#000000"
-                    onChange={(e) => onChange(e.target.value)}
-                    onBlur={(e) => {
-                      const trimmed = e.target.value.trim();
-                      if (/^#[0-9a-f]{3,8}$/i.test(trimmed)) {
-                        onChange(trimmed);
-                      } else if (trimmed === "") {
-                        onChange(undefined);
-                      }
-                    }}
+                  <HexInput
+                    ariaLabel={`${label} hex code`}
+                    value={value}
+                    onCommit={onChange}
+                    onClear={() => onChange(undefined)}
                     style={{
                       flex: 1,
                       border: "1px solid #d4d4d8",

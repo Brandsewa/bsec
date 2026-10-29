@@ -13,7 +13,7 @@ export const buttonVariants = cva(
         default: "border border-input bg-muted text-foreground hover:bg-muted/80",
         ghost: "text-foreground-2 hover:bg-muted hover:text-foreground",
         destructive: "bg-destructive text-destructive-foreground hover:bg-destructive/90",
-        link: "text-primary underline-offset-4 hover:underline",
+        link: "text-primary underline-offset-4 hover:opacity-70 transition-opacity",
       },
       size: {
         sm: "h-8 px-3 max-md:h-touch",

@@ -18,7 +18,7 @@ export default async function AccountNotificationsPage() {
         <p className="text-sm font-semibold">Offers and news: {profile.acceptsMarketing ? "On" : "Off"}</p>
         <p className="text-xs text-[var(--muted-foreground)]">
           Change this on your{" "}
-          <Link href="/account/profile" className="font-semibold text-[var(--brand-ink)] hover:underline">
+          <Link href="/account/profile" className="font-semibold text-[var(--brand-ink)] hover:opacity-70 transition-opacity">
             profile
           </Link>
           .

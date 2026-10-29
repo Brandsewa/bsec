@@ -20,7 +20,7 @@ export default async function AccountReviewsPage() {
       {reviews.map((r) => (
         <li key={r.id} className="rounded-xl bg-[var(--muted)]/50 p-4">
           <div className="flex flex-wrap items-center justify-between gap-2">
-            <Link href={`/products/${r.productSlug}`} className="text-sm font-semibold hover:underline">
+            <Link href={`/products/${r.productSlug}`} className="text-sm font-semibold hover:opacity-70 transition-opacity">
               {r.productTitle}
             </Link>
             <span className="text-xs text-[var(--muted-foreground)]">

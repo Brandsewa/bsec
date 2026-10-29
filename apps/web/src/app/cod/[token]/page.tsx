@@ -72,7 +72,7 @@ export default async function CodConfirmationPage({ params, searchParams }: CodC
           : "Please confirm that you requested this Cash on Delivery order."
       }
       footer={
-        <Link href="/" className="text-xs text-[var(--brand-ink)] hover:underline">
+        <Link href="/" className="text-xs text-[var(--brand-ink)] hover:opacity-70 transition-opacity">
           ← Return to store
         </Link>
       }

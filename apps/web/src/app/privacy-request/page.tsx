@@ -31,7 +31,7 @@ export default async function PrivacyRequestPage() {
       title="Privacy & Data Rights"
       description="Request access, correction, or erasure of your personal data."
       footer={
-        <Link href="/" className="text-xs text-[var(--brand-ink)] hover:underline">
+        <Link href="/" className="text-xs text-[var(--brand-ink)] hover:opacity-70 transition-opacity">
           ← Back to the store
         </Link>
       }

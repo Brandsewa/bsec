@@ -2,6 +2,7 @@ import Link from "next/link";
 import { BlogCard, NewsletterForm, formatBlogDate, type BlogPostOptions } from "@bs/blocks";
 import { toBlockBlogPost, type BlogPostPage, type BlogPostSummary, type PublicBlogCategory } from "@bs/domain";
 
+import { PostMobileToc } from "./PostMobileToc.tsx";
 
 /** One blog post (ADR-033): header, picture, table of contents, the sanitised body, share links, related posts. Server component. */
 
@@ -29,7 +30,8 @@ export function BlogPostSection({ post, options, postUrl, blogTitle, blogDescrip
 function MagazinePost({ post, options, postUrl, blogTitle, blogDescription, sidebar }: { post: BlogPostPage; options: BlogPostOptions; postUrl: string; blogTitle: string; blogDescription: string; sidebar: Sidebar }) {
   const cat = post.category;
   const image = post.image;
-  const toc = options.showToc ? post.headings.filter((h) => h.level <= 3) : [];
+  // The table of contents lists the H2 sections only; H3 and deeper stay out of it.
+  const toc = options.showToc ? post.headings.filter((h) => h.level === 2) : [];
   const related = options.showRelated ? post.related.slice(0, options.relatedCount) : [];
   const showSidebar = options.showSidebar !== false;
   const featured = options.showFeatured !== false && sidebar ? sidebar.featured.filter((f) => f.id !== post.id).slice(0, options.featuredCount ?? 5) : [];
@@ -45,7 +47,7 @@ function MagazinePost({ post, options, postUrl, blogTitle, blogDescription, side
   const tocList = (
     <ol>
       {toc.map((h) => (
-        <li key={h.id} className={h.level === 3 ? "bsb-bp-toc-sub" : undefined}>
+        <li key={h.id}>
           <a href={`#${h.id}`}>{h.text}</a>
         </li>
       ))}
@@ -64,10 +66,7 @@ function MagazinePost({ post, options, postUrl, blogTitle, blogDescription, side
 
       <div className="bsb-w bsb-w-wide">
         {toc.length > 0 ? (
-          <details className="bsb-bp-toc-m">
-            <summary>Table of contents</summary>
-            <nav aria-label="Table of contents">{tocList}</nav>
-          </details>
+          <PostMobileToc items={toc} />
         ) : null}
 
         <div className={`bsb-bp-grid${tocRight ? " bsb-bp-toc-right" : ""}${toc.length === 0 ? " bsb-bp-no-toc" : ""}${showSidebar ? "" : " bsb-bp-no-side"}`}>
@@ -217,7 +216,7 @@ function ClassicPost({ post, options, postUrl, blogTitle }: { post: BlogPostPage
   ].filter(Boolean);
   const cat = post.category;
   const image = post.image;
-  const toc = options.showToc && post.headings.filter((h) => h.level === 2).length >= 3 ? post.headings.filter((h) => h.level <= 3) : [];
+  const toc = options.showToc && post.headings.filter((h) => h.level === 2).length >= 3 ? post.headings.filter((h) => h.level === 2) : [];
   const related = options.showRelated ? post.related.slice(0, options.relatedCount) : [];
   const figure =
     image && options.featuredImage !== "hidden" ? (
@@ -269,7 +268,7 @@ function ClassicPost({ post, options, postUrl, blogTitle }: { post: BlogPostPage
             <p className="bsb-blog-toc-title">In this article</p>
             <ol>
               {toc.map((h) => (
-                <li key={h.id} className={h.level === 3 ? "bsb-blog-toc-sub" : undefined}>
+                <li key={h.id}>
                   <a href={`#${h.id}`}>{h.text}</a>
                 </li>
               ))}

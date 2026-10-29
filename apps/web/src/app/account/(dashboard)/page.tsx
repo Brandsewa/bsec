@@ -36,7 +36,7 @@ export default async function AccountDashboardPage() {
         <div className="mb-3 flex items-center justify-between">
           <h2 className="text-lg font-bold">Recent orders</h2>
           {orders.length > 0 && (
-            <Link href="/account/orders" className="text-sm font-semibold text-[var(--brand-ink)] hover:underline">
+            <Link href="/account/orders" className="text-sm font-semibold text-[var(--brand-ink)] hover:opacity-70 transition-opacity">
               View all
             </Link>
           )}
@@ -44,7 +44,7 @@ export default async function AccountDashboardPage() {
         {recent.length === 0 ? (
           <p className="text-sm text-[var(--muted-foreground)]">
             You have not placed any orders yet.{" "}
-            <Link href="/collections" className="font-semibold text-[var(--brand-ink)] hover:underline">
+            <Link href="/collections" className="font-semibold text-[var(--brand-ink)] hover:opacity-70 transition-opacity">
               Start shopping
             </Link>
           </p>

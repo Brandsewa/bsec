@@ -417,7 +417,7 @@ function SignupContent() {
           <div>
             <span className="bm-label">Live Storefront URL</span>
             <div className="bm-code mt-1" style={{ color: "#7ee8c6" }}>
-              <a href={provisionSuccess.storeUrl} target="_blank" rel="noopener noreferrer" className="hover:underline">
+              <a href={provisionSuccess.storeUrl} target="_blank" rel="noopener noreferrer" className="hover:opacity-70 transition-opacity">
                 {provisionSuccess.storeUrl}
               </a>
             </div>
@@ -425,7 +425,7 @@ function SignupContent() {
           <div>
             <span className="bm-label">Store Admin Dashboard</span>
             <div className="bm-code mt-1">
-              <a href={`${provisionSuccess.adminUrl}/?store=${provisionSuccess.slug}`} target="_blank" rel="noopener noreferrer" className="hover:underline">
+              <a href={`${provisionSuccess.adminUrl}/?store=${provisionSuccess.slug}`} target="_blank" rel="noopener noreferrer" className="hover:opacity-70 transition-opacity">
                 {provisionSuccess.adminUrl}/?store={provisionSuccess.slug}
               </a>
             </div>

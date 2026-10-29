@@ -125,7 +125,7 @@ export function LoginForm({ initialTab = "otp", redirectTo = "/account", phoneLo
           <Field className="space-y-1.5">
             <div className="flex items-center justify-between">
               <FieldLabel htmlFor="login-password">Password</FieldLabel>
-              <Link href="/account/forgot-password" className="text-xs text-[var(--brand-ink)] hover:underline">
+              <Link href="/account/forgot-password" className="text-xs text-[var(--brand-ink)] hover:opacity-70 transition-opacity">
                 Forgot password?
               </Link>
             </div>
@@ -165,7 +165,7 @@ export function LoginForm({ initialTab = "otp", redirectTo = "/account", phoneLo
 
           <p className="pt-1 text-center text-xs text-[var(--muted-foreground)]">
             Don&apos;t have an account?{" "}
-            <Link href="/account/register" className="font-semibold text-[var(--brand-ink)] hover:underline">
+            <Link href="/account/register" className="font-semibold text-[var(--brand-ink)] hover:opacity-70 transition-opacity">
               Create account
             </Link>
           </p>
@@ -194,7 +194,7 @@ export function LoginForm({ initialTab = "otp", redirectTo = "/account", phoneLo
 
           <p className="pt-1 text-center text-xs text-[var(--muted-foreground)]">
             Don&apos;t have an account?{" "}
-            <Link href="/account/register" className="font-semibold text-[var(--brand-ink)] hover:underline">
+            <Link href="/account/register" className="font-semibold text-[var(--brand-ink)] hover:opacity-70 transition-opacity">
               Create account
             </Link>
           </p>

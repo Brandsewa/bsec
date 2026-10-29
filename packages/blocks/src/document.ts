@@ -10,6 +10,9 @@ import {
 import { sanitizeRichText } from "./sanitize.ts";
 import { isUuid } from "./media.ts";
 
+/** Retired block types. ProductInfoTabs (product Description / Shipping & returns tabs) was removed 2026-10-29. */
+const REMOVED_BLOCK_TYPES = new Set<string>(["ProductInfoTabs"]);
+
 export type ValidationError = {
   path: string;
   message: string;
@@ -133,6 +136,9 @@ function validateBlockList(
     } else {
       state.seenIds.add(id);
     }
+
+    // Block types that were retired: a saved copy is dropped quietly instead of failing the whole page.
+    if (typeof rawBlock.type === "string" && REMOVED_BLOCK_TYPES.has(rawBlock.type)) continue;
 
     const type = rawBlock.type as BlockType;
     if (!type || !BLOCK_TYPES.includes(type)) {

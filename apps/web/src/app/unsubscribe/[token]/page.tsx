@@ -44,7 +44,7 @@ export default async function UnsubscribePage({ params }: { params: Promise<{ to
               If you still get emails you do not want, use the link in the latest email, or sign in to your account and turn off marketing there.
             </p>
             <div>
-              <Link href="/account/profile" className="text-sm font-medium text-primary hover:underline">
+              <Link href="/account/profile" className="text-sm font-medium text-primary hover:opacity-70 transition-opacity">
                 Go to my account
               </Link>
             </div>
@@ -54,7 +54,7 @@ export default async function UnsubscribePage({ params }: { params: Promise<{ to
         )}
 
         <div className="border-t border-border pt-4">
-          <Link href="/" className="text-sm font-medium text-primary hover:underline">
+          <Link href="/" className="text-sm font-medium text-primary hover:opacity-70 transition-opacity">
             ← Back to the store
           </Link>
         </div>

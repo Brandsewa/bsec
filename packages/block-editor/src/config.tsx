@@ -513,7 +513,6 @@ export const BLOCK_SPECS: Record<BlockType, Spec> = {
   },
   ProductCoupons: { label: "Coupon cards", category: "store", fields: { title: text("Heading (empty hides it)"), showCount: rnum("Coupons shown before View all", 1, 4), showViewAll: radio("View all button (opens a side drawer)"), viewAllLabel: text("View all button text") } },
   ProductCustomField: { label: "Custom field", category: "store", fields: { fieldKey: text("Field key (from Settings > Custom fields)"), showLabel: radio("Show the field name"), label: text("Name override (optional)") } },
-  ProductInfoTabs: { label: "Product tabs and picture", category: "store", fields: { descriptionLabel: text("First tab name"), shippingLabel: text("Second tab name"), shippingContent: area("Second tab text (blank line = new paragraph, \"- \" = list item)"), imageMediaId: mediaField("Picture (empty = placeholder)") as Field, imageAlt: text("Picture description"), imageSide: select("Picture side", { right: "Right", left: "Left" }) } },
   HeroSlider: {
     label: "Hero slider",
     category: "bcom",
@@ -1284,7 +1283,7 @@ export const RETIRED_FROM_PICKER: BlockType[] = [
 export function blockAllowed(type: BlockType, kind: EditorPageKind): boolean {
   if (kind === "header" || kind === "footer") return ONLY[kind].includes(type);
   if (CHROME.includes(type)) return false;
-  if (type === "ProductDetail" || type === "ProductInfoTabs" || type === "ProductCustomField" || type === "ProductCoupons") return kind === "product";
+  if (type === "ProductDetail" || type === "ProductCustomField" || type === "ProductCoupons") return kind === "product";
   if (type === "CollectionListing" || type === "CollectionProducts") return kind === "collection";
   if (type === "CartContents") return kind === "cart";
   if (type === "BlogListing") return kind === "blogArchive";

@@ -9,7 +9,6 @@ import type {
   CollectionListingOptions,
   ProductDetailOptions,
   ProductCustomFieldOptions,
-  ProductInfoTabsOptions,
   BlockRenderArgs,
   RenderContext,
   SlotRender,
@@ -1646,19 +1645,6 @@ function Placeholder({ label, hint, children }: { label: string; hint: string; c
   );
 }
 
-export function ProductInfoTabsView({ props, ctx }: A<R.ProductInfoTabsProps>): ReactNode {
-  if (ctx?.renderProductInfoTabs) return <>{ctx.renderProductInfoTabs(props as ProductInfoTabsOptions)}</>;
-  return (
-    <Placeholder label="Product details tabs" hint="The product's description and the shipping and returns text appear here, beside a picture.">
-      <div className="bsb-ph-box" style={{ height: 120 }}>
-        <span>
-          {props.descriptionLabel} · {props.shippingLabel}
-        </span>
-      </div>
-    </Placeholder>
-  );
-}
-
 export function ProductCustomFieldView({ props, ctx }: A<R.ProductCustomFieldProps>): ReactNode {
   if (ctx?.renderProductCustomField) return <>{ctx.renderProductCustomField(props as ProductCustomFieldOptions)}</>;
   // Editor and theme previews: a labelled sample, since the real value comes from each product.
@@ -1812,6 +1798,8 @@ export function HeroSliderView({ props, ctx }: A<R.HeroSliderProps>): ReactNode 
         {props.slides.map((s, i) => {
           const img = mediaSrc(ctx, s.backgroundMediaId);
           const Title = i === 0 ? props.titleTag : "h2";
+          // A slide with only a picture or video gets no text panel, so there is no empty block under it on phones.
+          const hasContent = Boolean(s.title || s.subtitle || s.primaryLabel || s.secondaryLabel);
           return (
             <div key={i} className="bsb-hs-slide" role="group" aria-roledescription="slide" aria-label={`${i + 1} of ${n}`} data-hs-slide="">
               <div className="bsb-hs-media">
@@ -1834,7 +1822,8 @@ export function HeroSliderView({ props, ctx }: A<R.HeroSliderProps>): ReactNode 
                   </video>
                 ) : null}
               </div>
-              <div className="bsb-hs-shade" aria-hidden="true" />
+              {hasContent ? <div className="bsb-hs-shade" aria-hidden="true" /> : null}
+              {hasContent ? (
               <div className="bsb-hs-content">
                 <div className="bsb-hs-inner">
                   {s.title || s.subtitle ? (
@@ -1851,6 +1840,7 @@ export function HeroSliderView({ props, ctx }: A<R.HeroSliderProps>): ReactNode 
                   ) : null}
                 </div>
               </div>
+              ) : null}
             </div>
           );
         })}

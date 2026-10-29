@@ -3,6 +3,7 @@
 Source of truth: `docs/PLAN.html` v2.0 (build order in `docs/BUILD-PLAN-M2-M9.md`). Items are ticked only after verification; the evidence is noted next to each. "From code" means it was read in the repo but not exercised live.
 
 ## In flight
+- claude · `feat/storefront-batch-updates` · owner batch of 13 storefront and admin fixes (multi card save error, blog archive header, menu visibility badge, blog tab counters, hex typing, link and dot styling, mobile TOC bar, product tabs removed, hero slide gap, empty cart); change record `docs/changes/2026-10-29-claude-storefront-batch-updates.md` · 2026-10-29
 - claude · `fix/domain-ownership-before-a-records` · bare custom domains: TXT ownership first, A records only after (Cloudflare refuses TXT/HTTP validation once A records resolve to it), immediate provider re-check; change record `docs/changes/2026-10-28-claude-domain-ownership-before-a-records.md` · 2026-10-28
 - claude · `feat/notification-manager` · notification manager: event catalog, dispatcher, in-app drawer, Super Admin events matrix, store team alerts, branded responsive emails (SMS and WhatsApp adapter built but disabled); plan `docs/NOTIFICATION-MANAGER-PLAN.md`, ADR-039, change record `docs/changes/2026-10-27-claude-notification-manager.md` · 2026-10-27
 - claude · `ci/speedup` · faster CI: parallel image builds, sharded heavy tests, promote-images, pre-push gate; change record `docs/changes/2026-10-25-claude-ci-speedup.md` · 2026-10-25

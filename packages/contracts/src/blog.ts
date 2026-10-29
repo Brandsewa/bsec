@@ -146,7 +146,12 @@ export const blogContract = {
           })
           .optional(),
       )
-      .output(z.object({ items: z.array(BlogPostListItem), total: z.number().int() })),
+      .output(z.object({
+        items: z.array(BlogPostListItem),
+        total: z.number().int(),
+        /** Posts per status tab for the current search and category, ignoring the status filter. */
+        counts: z.object({ all: z.number().int(), published: z.number().int(), scheduled: z.number().int(), draft: z.number().int() }),
+      })),
     get: oc.route({ method: "GET", path: "/admin/blog/posts/{id}" }).input(Id).output(BlogPostDetail),
     create: oc
       .route({ method: "POST", path: "/admin/blog/posts" })

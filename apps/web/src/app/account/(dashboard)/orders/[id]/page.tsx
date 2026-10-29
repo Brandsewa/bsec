@@ -107,7 +107,7 @@ export default async function AccountOrderPage({ params }: { params: Promise<{ i
       </div>
 
       <div className="mt-8 flex flex-wrap items-center justify-between gap-3 border-t border-[var(--border)] pt-6">
-        <Link href="/account/orders" className="text-sm font-semibold text-[var(--brand-ink)] hover:underline">
+        <Link href="/account/orders" className="text-sm font-semibold text-[var(--brand-ink)] hover:opacity-70 transition-opacity">
           ← All orders
         </Link>
         {/* Opens the order's tracking and returns page; the link mints its secret on click, so it must not be prefetched. */}

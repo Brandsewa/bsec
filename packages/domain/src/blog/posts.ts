@@ -112,10 +112,9 @@ export async function listBlogPosts(rt: Runtime, ctx: TenantContext, q: BlogPost
   assertPermission(ctx, "content.write");
   return withTenant(rt._db.db, ctx.tenantId, async (tx) => {
     const conds = [eq(schema.blogPosts.tenantId, ctx.tenantId)];
-    if (q.status) conds.push(eq(schema.blogPosts.status, q.status));
     if (q.categoryId) conds.push(eq(schema.blogPosts.categoryId, q.categoryId));
     if (q.search?.trim()) conds.push(ilike(schema.blogPosts.title, `%${q.search.trim().replace(/[%_\\]/g, "\\$&")}%`));
-    const where = and(...conds);
+    const where = and(...conds, ...(q.status ? [eq(schema.blogPosts.status, q.status)] : []));
     const order =
       q.sort === "title_asc"
         ? asc(schema.blogPosts.title)
@@ -144,7 +143,16 @@ export async function listBlogPosts(rt: Runtime, ctx: TenantContext, q: BlogPost
       .limit(Math.min(Math.max(q.limit ?? 25, 1), 100))
       .offset(Math.max(q.offset ?? 0, 0));
     const [tot] = await tx.select({ n: sql<number>`count(*)::int` }).from(schema.blogPosts).where(where);
+    // Tab counters: same search and category, every status.
+    const byStatus = await tx
+      .select({ status: schema.blogPosts.status, n: sql<number>`count(*)::int` })
+      .from(schema.blogPosts)
+      .where(and(...conds))
+      .groupBy(schema.blogPosts.status);
+    const count = (s: string) => byStatus.find((r) => r.status === s)?.n ?? 0;
+    const counts = { all: byStatus.reduce((a, r) => a + r.n, 0), published: count("published"), scheduled: count("scheduled"), draft: count("draft") };
     return {
+      counts,
       items: items.map(({ featuredKey, ...i }) => ({
         ...i,
         status: i.status as BlogPostStatus,

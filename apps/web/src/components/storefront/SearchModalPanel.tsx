@@ -151,7 +151,7 @@ export function SearchModalPanel({ onClose }: { onClose: () => void }) {
                       <img src={p.imageUrl ?? PLACEHOLDER_IMAGE_URL} alt="" className="h-full w-full object-cover" />
                     </Link>
                     <div className="min-w-0 flex-1">
-                      <Link href={`/products/${p.slug}`} onClick={close} className="line-clamp-2 text-sm font-semibold leading-snug hover:underline">
+                      <Link href={`/products/${p.slug}`} onClick={close} className="line-clamp-2 text-sm font-semibold leading-snug hover:opacity-70 transition-opacity">
                         {p.title}
                       </Link>
                       <p className="mt-0.5 text-sm text-muted-foreground">

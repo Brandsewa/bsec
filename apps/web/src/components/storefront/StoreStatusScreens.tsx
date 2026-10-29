@@ -97,7 +97,7 @@ export function ComingSoonScreen({
                 href={link.url}
                 target="_blank"
                 rel="noopener noreferrer"
-                className="hover:underline"
+                className="hover:opacity-70 transition-opacity"
               >
                 {link.platform}
               </a>

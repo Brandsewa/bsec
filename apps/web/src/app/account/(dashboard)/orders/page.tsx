@@ -34,7 +34,7 @@ export default async function PurchaseHistoryPage() {
     return (
       <div className="rounded-xl bg-[var(--muted)]/50 p-6 text-center" data-testid="no-orders">
         <p className="text-sm text-[var(--muted-foreground)]">You have not placed any orders yet.</p>
-        <Link href="/collections" className="mt-3 inline-block text-sm font-semibold text-[var(--brand-ink)] hover:underline">
+        <Link href="/collections" className="mt-3 inline-block text-sm font-semibold text-[var(--brand-ink)] hover:opacity-70 transition-opacity">
           Start shopping
         </Link>
       </div>
@@ -82,7 +82,7 @@ export default async function PurchaseHistoryPage() {
             {orders.map((o) => (
               <tr key={o.id} className="hover:bg-[var(--muted)] transition-colors">
                 <td className="px-4 py-3.5 font-semibold text-[var(--foreground)]">
-                  <Link href={`/account/orders/${o.id}`} className="hover:underline">
+                  <Link href={`/account/orders/${o.id}`} className="hover:opacity-70 transition-opacity">
                     {o.number}
                   </Link>
                 </td>
@@ -98,7 +98,7 @@ export default async function PurchaseHistoryPage() {
                 <td className="px-4 py-3.5 text-right">
                   <Link
                     href={`/account/orders/${o.id}`}
-                    className="text-xs font-semibold text-[var(--brand-ink)] hover:underline"
+                    className="text-xs font-semibold text-[var(--brand-ink)] hover:opacity-70 transition-opacity"
                   >
                     View
                   </Link>
