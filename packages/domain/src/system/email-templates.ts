@@ -53,6 +53,14 @@ export interface EmailData {
   awb?: string | undefined;
   carrier?: string | undefined;
   returnNumber?: string | undefined;
+  /** Carrier link for this parcel (http or https only). */
+  trackingUrl?: string | undefined;
+  /** What is in this parcel, and which parcel of how many (split orders send one email per parcel). */
+  parcelItems?: Array<{ title: string; variant?: string | null | undefined; quantity: number }> | undefined;
+  parcelNumber?: number | undefined;
+  parcelCount?: number | undefined;
+  /** "Estimated delivery" text, only when the store sets a delivery window. */
+  estimatedDelivery?: string | undefined;
   refundAmount?: number | undefined;
   /** Link back to the cart, for the abandoned-cart reminder. */
   cartUrl?: string | undefined;
@@ -235,20 +243,46 @@ function footerText(brand: EmailBrand): string {
 
 type Builder = (brand: EmailBrand, data: EmailData, subject: string) => RenderedEmail;
 
-function orderEmail(opts: { title: string; intro: (d: EmailData) => string; extra?: (d: EmailData) => string; cta?: string }): Builder {
+function orderEmail(opts: {
+  title: string;
+  intro: (d: EmailData) => string;
+  extra?: (d: EmailData) => string;
+  /** Rich block after the extra line, as html and plain text. */
+  after?: (d: EmailData) => { html: string; text: string } | null;
+  cta?: string;
+}): Builder {
   return (brand, data, subject) => {
     const o = data.order;
     const intro = opts.intro(data);
     const extra = opts.extra?.(data) ?? "";
     const block = o ? orderBlock(o) : null;
+    const after = opts.after?.(data) ?? null;
     const html = layout(
       brand,
       subject,
-      `${heading(opts.title)}${para(intro)}${extra ? para(extra) : ""}${block ? block.html : ""}${o?.orderUrl ? button(opts.cta ?? "View your order", o.orderUrl) : ""}`,
+      `${heading(opts.title)}${para(intro)}${extra ? para(extra) : ""}${after ? after.html : ""}${block ? block.html : ""}${o?.orderUrl ? button(opts.cta ?? "View your order", o.orderUrl) : ""}`,
     );
-    const text = `${opts.title}\n\n${intro}${extra ? `\n${extra}` : ""}${block ? `\n\n${block.text}` : ""}${o?.orderUrl ? `\n\n${opts.cta ?? "View your order"}: ${o.orderUrl}` : ""}${footerText(brand)}`;
+    const text = `${opts.title}\n\n${intro}${extra ? `\n${extra}` : ""}${after ? `\n\n${after.text}` : ""}${block ? `\n\n${block.text}` : ""}${o?.orderUrl ? `\n\n${opts.cta ?? "View your order"}: ${o.orderUrl}` : ""}${footerText(brand)}`;
     return { html, text };
   };
+}
+
+/** The parcel in a shipped email: what is inside (for split orders) and the carrier's own tracking link. */
+function shippedParcelBlock(d: EmailData): { html: string; text: string } | null {
+  const items = d.parcelItems ?? [];
+  const link = d.trackingUrl && /^https?:\/\/\S+$/i.test(d.trackingUrl) ? d.trackingUrl : null;
+  if (items.length === 0 && !link) return null;
+  const split = (d.parcelCount ?? 1) > 1;
+  const head = split ? `In this parcel (${d.parcelNumber ?? 1} of ${d.parcelCount})` : "In this parcel";
+  const line = (it: { title: string; variant?: string | null | undefined; quantity: number }) =>
+    `${it.title}${it.variant && it.variant !== "Default" ? ` (${it.variant})` : ""} x ${it.quantity}`;
+  const html =
+    (items.length > 0
+      ? `<p style="margin:0 0 6px;font-size:%%fsSmall%%;color:%%muted%%;text-transform:uppercase;letter-spacing:.06em">${escapeHtml(head)}</p><ul style="margin:0 0 14px;padding-left:18px;font-size:%%fs%%;line-height:1.6;color:%%text%%">${items.map((it) => `<li>${escapeHtml(line(it))}</li>`).join("")}</ul>`
+      : "") +
+    (link ? `<p style="margin:0 0 14px;font-size:%%fs%%;line-height:1.6"><a href="${escapeHtml(link)}" style="color:%%text%%;text-decoration:underline">Track with ${escapeHtml(d.carrier ?? "the carrier")}</a></p>` : "");
+  const text = [items.length > 0 ? `${head}:\n${items.map((it) => `- ${line(it)}`).join("\n")}` : "", link ? `Track with ${d.carrier ?? "the carrier"}: ${link}` : ""].filter(Boolean).join("\n\n");
+  return { html, text };
 }
 
 const TEMPLATES: Record<string, Builder> = {
@@ -259,7 +293,15 @@ const TEMPLATES: Record<string, Builder> = {
   order_shipped: orderEmail({
     title: "Your order is on its way",
     intro: (d) => `Good news: order${d.order ? ` ${d.order.number}` : ""} has shipped.`,
-    extra: (d) => [d.carrier ? `Carrier: ${d.carrier}.` : "", d.awb ? `Tracking number: ${d.awb}.` : ""].filter(Boolean).join(" "),
+    extra: (d) =>
+      [
+        d.carrier ? `Carrier: ${d.carrier}.` : "",
+        d.awb ? `Tracking number: ${d.awb}.` : "",
+        d.estimatedDelivery ? `Estimated delivery: ${d.estimatedDelivery}.` : "",
+      ]
+        .filter(Boolean)
+        .join(" "),
+    after: shippedParcelBlock,
     cta: "Track your order",
   }),
   order_delivered: orderEmail({

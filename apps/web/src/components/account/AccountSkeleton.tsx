@@ -14,14 +14,14 @@ export function AccountSkeleton({ variant = "list" }: { variant?: "list" | "card
   return (
     <div aria-hidden className="space-y-5">
       <div className="grid grid-cols-2 gap-3">
-        <Bar className="h-24 rounded-2xl" />
-        <Bar className="h-24 rounded-2xl" />
+        <Bar className="h-24 rounded-lg" />
+        <Bar className="h-24 rounded-lg" />
       </div>
       <Bar className="h-6 w-40" />
       <div className="space-y-2">
-        <Bar className="h-14 w-full rounded-xl" />
-        <Bar className="h-14 w-full rounded-xl" />
-        <Bar className="h-14 w-full rounded-xl" />
+        <Bar className="h-14 w-full rounded-lg" />
+        <Bar className="h-14 w-full rounded-lg" />
+        <Bar className="h-14 w-full rounded-lg" />
       </div>
     </div>
   );

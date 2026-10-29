@@ -8,6 +8,9 @@ import { transitionOrder, type OrderStatus } from "./state-machine.ts";
 import { transitionFulfillment, type FulfillmentTransitionEvent } from "./fulfillment-state-machine.ts";
 import { createAdminFulfillment } from "../admin/orders.ts";
 import { isReturnPhotoStorageConfigured } from "./return-photos.ts";
+import { isFeatureEnabled, FeatureDisabledError } from "../features.ts";
+import { carrierTrackingUrl } from "../admin/order-settings-config.ts";
+import { readTrackingConfig } from "../admin/order-settings.ts";
 
 /**
  * Hand-run order lifecycle for merchants who ship themselves (no courier integration):
@@ -149,6 +152,98 @@ export async function advanceAdminOrder(
       }
     }
     return { success: true as const, status: input.to };
+  });
+}
+
+export interface ShipItemsInput {
+  id: string;
+  items: Array<{ orderItemId: string; quantity: number }>;
+  carrier?: string | undefined;
+  awb?: string | undefined;
+  trackingUrl?: string | undefined;
+  /** Queue the customer's shipping email. Off unless the merchant switches it on. */
+  notify?: boolean | undefined;
+}
+
+/**
+ * Ship some or all of an order's units as one parcel with its own carrier and tracking number. A later call ships the rest,
+ * so a split order carries one fulfillment (and one tracking number) per parcel. The order rolls up to partially fulfilled
+ * until every unit has shipped. Hand-run counterpart of the courier integration; it does not call any carrier.
+ */
+export async function shipAdminOrderItems(rt: Runtime, ctx: TenantContext, input: ShipItemsInput) {
+  assertPermission(ctx, "orders.write");
+  const db = rt._db.db;
+
+  if (!(await isFeatureEnabled(db, ctx.tenantId, "fulfillment"))) {
+    throw new FeatureDisabledError("fulfillment", "Fulfillment is currently disabled for this store");
+  }
+  const wanted = input.items.filter((i) => i.quantity > 0);
+  if (wanted.length === 0) throw new Error("Bad Request: Choose at least one item to ship");
+
+  const status = await withTenant(db, ctx.tenantId, async (tx) => {
+    const order = await loadOrder(tx, ctx.tenantId, input.id);
+    if (NOT_SHIPPABLE.includes(order.status)) throw new Error(`Precondition: A ${order.status} order can't be shipped`);
+    const today = new Date().toISOString().slice(0, 10);
+    if (order.shipsOn && !order.preorderReleasedAt && String(order.shipsOn) > today) {
+      throw new Error(`Precondition: Pre-order ships on ${order.shipsOn}`);
+    }
+    return order.status;
+  });
+  if (status === "pending") await confirmAdminOrder(rt, ctx, { id: input.id });
+
+  return await withTenant(db, ctx.tenantId, async (tx) => {
+    const txRt = { ...rt, _db: { db: tx } } as unknown as Runtime;
+    const lines = await tx
+      .select()
+      .from(schema.orderItems)
+      .where(and(eq(schema.orderItems.tenantId, ctx.tenantId), eq(schema.orderItems.orderId, input.id)));
+    const byId = new Map(lines.map((l) => [l.id, l]));
+    const seen = new Set<string>();
+    for (const w of wanted) {
+      const line = byId.get(w.orderItemId);
+      if (!line) throw new Error("Not Found: That item is not on this order");
+      if (seen.has(w.orderItemId)) throw new Error("Bad Request: An item was listed twice");
+      seen.add(w.orderItemId);
+      if (w.quantity > line.quantity - line.fulfilledQty) {
+        throw new Error(`Precondition: Only ${line.quantity - line.fulfilledQty} of ${line.productTitle} are left to ship`);
+      }
+    }
+
+    const [def] = await tx
+      .select({ id: schema.locations.id })
+      .from(schema.locations)
+      .where(eq(schema.locations.tenantId, ctx.tenantId))
+      .orderBy(sql`${schema.locations.isDefault} desc`)
+      .limit(1);
+    if (!def) throw new Error("Precondition: No inventory location found to fulfill from");
+
+    const carrier = input.carrier?.trim() || "Self-delivery";
+    const awb = input.awb?.trim() || undefined;
+    // staff typed no link: build it from the carrier's template in the store's tracking settings
+    const trackingUrl = input.trackingUrl?.trim() || (awb ? carrierTrackingUrl((await readTrackingConfig(db, ctx.tenantId)).carriers, carrier, awb) ?? undefined : undefined);
+    const [f] = await tx
+      .insert(schema.fulfillments)
+      .values({ tenantId: ctx.tenantId, orderId: input.id, locationId: def.id, status: "pending", carrier, awb: awb ?? null, trackingUrl: trackingUrl ?? null })
+      .returning({ id: schema.fulfillments.id });
+    if (!f) throw new Error("Failed to create the shipment");
+
+    for (const w of wanted) {
+      await tx.insert(schema.fulfillmentItems).values({ tenantId: ctx.tenantId, fulfillmentId: f.id, orderItemId: w.orderItemId, quantity: w.quantity });
+      await tx
+        .update(schema.orderItems)
+        .set({ fulfilledQty: sql`${schema.orderItems.fulfilledQty} + ${w.quantity}` })
+        .where(and(eq(schema.orderItems.tenantId, ctx.tenantId), eq(schema.orderItems.id, w.orderItemId)));
+    }
+
+    // At most one email, on the first step; the later hops are bookkeeping.
+    await transitionFulfillment(txRt, ctx, f.id, { type: "fulfillment.create_label", carrier, awb, trackingUrl }, tx, { notify: input.notify === true });
+    for (const ev of FULFILLMENT_CHAIN["label_created"] ?? []) await transitionFulfillment(txRt, ctx, f.id, ev, tx, { notify: false });
+
+    const shippedNow = new Map(wanted.map((w) => [w.orderItemId, w.quantity]));
+    const allShipped = lines.every((l) => l.fulfilledQty + (shippedNow.get(l.id) ?? 0) >= l.quantity);
+    const order = await loadOrder(tx, ctx.tenantId, input.id);
+    await walkOrder(txRt, ctx, tx, input.id, order.status, allShipped ? "fulfilled" : "partially_fulfilled");
+    return { fulfillmentId: f.id, fullyShipped: allShipped };
   });
 }
 

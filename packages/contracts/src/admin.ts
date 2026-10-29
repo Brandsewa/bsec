@@ -262,6 +262,25 @@ export const ListSettingsActivityOutput = z.object({
 });
 export type ListSettingsActivityOutput = z.infer<typeof ListSettingsActivityOutput>;
 
+export const TrackingSettings = z.object({
+  enabled: z.boolean(),
+  lookup: z.enum(["either", "email", "phone"]),
+  showTimeline: z.boolean(),
+  showCarrierDetails: z.boolean(),
+  estimatedDeliveryDays: z.number().int().min(1).max(60).nullable(),
+  message: z.string().max(300),
+  notifyByDefault: z.boolean(),
+  carriers: z
+    .array(
+      z.object({
+        name: z.string().trim().min(1).max(40),
+        urlTemplate: z.string().trim().max(300).refine((v) => v === "" || /^https?:\/\/\S+$/i.test(v), "Use a full link starting with http:// or https://"),
+      }),
+    )
+    .max(20),
+});
+export type TrackingSettings = z.infer<typeof TrackingSettings>;
+
 export const OrderSettings = z.object({
   prefix: z.string().max(10).regex(/^[A-Za-z0-9#\-_/]*$/, "Prefix can only contain letters, numbers, and # - _ /"),
   padding: z.number().int().min(3).max(8),
@@ -269,6 +288,7 @@ export const OrderSettings = z.object({
   currentNextValue: z.number().int().min(1),
   stockHoldMinutes: z.number().int().min(5).max(120).default(30),
   minimumOrderPaise: z.number().int().min(0).max(10_000_00).default(0),
+  tracking: TrackingSettings,
 });
 export type OrderSettings = z.infer<typeof OrderSettings>;
 
@@ -278,6 +298,7 @@ export const UpdateOrderSettingsInput = z.object({
   nextValue: z.number().int().min(1).optional(),
   stockHoldMinutes: z.number().int().min(5).max(120).optional(),
   minimumOrderPaise: z.number().int().min(0).max(10_000_00).optional(),
+  tracking: TrackingSettings.optional(),
 });
 export type UpdateOrderSettingsInput = z.infer<typeof UpdateOrderSettingsInput>;
 
@@ -3724,6 +3745,19 @@ export const adminContract = {
         }),
       )
       .output(z.object({ success: z.boolean(), status: z.string() })),
+    ship: oc
+      .route({ method: "POST", path: "/admin/orders/{id}/ship" })
+      .input(
+        z.object({
+          id: z.string().uuid(),
+          items: z.array(z.object({ orderItemId: z.string().uuid(), quantity: z.number().int().min(1) })).min(1),
+          carrier: z.string().trim().max(80).optional(),
+          awb: z.string().trim().max(80).optional(),
+          trackingUrl: z.string().trim().url().max(500).optional(),
+          notify: z.boolean().optional(),
+        }),
+      )
+      .output(z.object({ fulfillmentId: z.string().uuid(), fullyShipped: z.boolean() })),
     archive: oc
       .route({ method: "POST", path: "/admin/orders/archive" })
       .input(

@@ -15,6 +15,7 @@ import { runTrialExpirySweep } from "./saas/trial-expiry.ts";
 import { sweepPendingCustomDomains } from "./domains/service.ts";
 import { isMarketingAllowed } from "./system/tenant-lifecycle.ts";
 import { handleFinancePost, runFinanceReconcileSweep } from "./finance/index.ts";
+import { readTrackingConfig } from "./admin/order-settings.ts";
 
 /**
  * Job runtime (PLAN §11). Queues are created by the migrate step (as app_owner); workers run
@@ -160,22 +161,52 @@ export async function handleFulfillmentShippedJob(
   log: Logger,
   data: { tenantId: string; fulfillmentId: string; orderId: string; awb?: string; carrier?: string },
 ): Promise<void> {
-  const { tenantId, orderId, awb, carrier, fulfillmentId } = data;
-  const orderRows = await withTenant(db, tenantId, async (tx) => {
-    return await tx
+  const { tenantId, orderId, fulfillmentId } = data;
+  // The queue message only carries ids, so the parcel's carrier, number, link and contents are read here.
+  const { orderRow, parcel, parcels, items } = await withTenant(db, tenantId, async (tx) => {
+    const [orderRow] = await tx
       .select({ email: schema.orders.email, number: schema.orders.number })
       .from(schema.orders)
       .where(and(eq(schema.orders.tenantId, tenantId), eq(schema.orders.id, orderId)))
       .limit(1);
+    const live = (
+      await tx
+        .select({ id: schema.fulfillments.id, status: schema.fulfillments.status, carrier: schema.fulfillments.carrier, awb: schema.fulfillments.awb, trackingUrl: schema.fulfillments.trackingUrl })
+        .from(schema.fulfillments)
+        .where(and(eq(schema.fulfillments.tenantId, tenantId), eq(schema.fulfillments.orderId, orderId)))
+        .orderBy(schema.fulfillments.createdAt)
+    ).filter((f) => f.status !== "cancelled");
+    // an id that is not a uuid cannot name a parcel (older callers passed placeholders): fall back to the carrier and number in the message
+    if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(fulfillmentId)) return { orderRow, parcel: undefined, parcels: live, items: [] };
+    const items = await tx
+      .select({ title: schema.orderItems.productTitle, variant: schema.orderItems.variantTitle, quantity: schema.fulfillmentItems.quantity })
+      .from(schema.fulfillmentItems)
+      .innerJoin(schema.orderItems, and(eq(schema.orderItems.tenantId, schema.fulfillmentItems.tenantId), eq(schema.orderItems.id, schema.fulfillmentItems.orderItemId)))
+      .where(and(eq(schema.fulfillmentItems.tenantId, tenantId), eq(schema.fulfillmentItems.fulfillmentId, fulfillmentId)));
+    return { orderRow, parcel: live.find((f) => f.id === fulfillmentId), parcels: live, items };
   });
+  const tracking = await readTrackingConfig(db, tenantId);
 
-  if (orderRows[0]?.email) {
+  if (orderRow?.email) {
+    const showCarrier = tracking.showCarrierDetails;
     await dispatchTransactionalEmailOrThrow(db, log, {
       tenantId,
       template: "order_shipped",
-      toEmail: orderRows[0].email,
-      subject: `Your order ${orderRows[0].number} has shipped!`,
-      data: { orderId, orderNumber: orderRows[0].number, awb, carrier },
+      toEmail: orderRow.email,
+      subject: `Your order ${orderRow.number} has shipped!`,
+      data: {
+        orderId,
+        orderNumber: orderRow.number,
+        awb: showCarrier ? (parcel?.awb ?? data.awb) : undefined,
+        carrier: showCarrier ? (parcel?.carrier ?? data.carrier) : undefined,
+        trackingUrl: showCarrier ? (parcel?.trackingUrl ?? undefined) : undefined,
+        parcelItems: items,
+        parcelNumber: parcel ? parcels.findIndex((f) => f.id === parcel.id) + 1 : 1,
+        parcelCount: Math.max(1, parcels.length),
+        estimatedDelivery: tracking.estimatedDeliveryDays
+          ? new Date(Date.now() + tracking.estimatedDeliveryDays * 86_400_000).toLocaleDateString("en-IN", { day: "numeric", month: "short", year: "numeric", timeZone: "Asia/Kolkata" })
+          : undefined,
+      },
       eventRef: `fulfillment_${fulfillmentId}`,
     });
   }
