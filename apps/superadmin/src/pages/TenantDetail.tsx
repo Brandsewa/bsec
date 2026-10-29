@@ -55,6 +55,7 @@ import {
   toast,
 } from "@bs/ui";
 import { formatStoreId } from "@bs/contracts";
+import { formatMoney } from "@bs/contracts/money";
 import { TenantPromotions } from "./TenantPromotions.tsx";
 import { client } from "../lib/orpc.ts";
 import { apiBase, storeAdminBase } from "../lib/config.ts";
@@ -564,7 +565,7 @@ export function TenantDetail() {
               </div>
               <div className="flex justify-between py-1.5">
                 <span className="text-muted-foreground">Gross Merchandise Volume:</span>
-                <span className="font-semibold text-foreground">₹{(detail.usage.gmvPaise / 100).toLocaleString("en-IN")}</span>
+                <span className="font-semibold text-foreground">{formatMoney(detail.usage.gmvPaise, tenant && "currency" in tenant && typeof tenant.currency === "string" ? tenant.currency : "INR")}</span>
               </div>
             </div>
           </div>
@@ -674,8 +675,8 @@ export function TenantDetail() {
                   detail.billing.invoices.map((inv) => (
                     <TableRow key={inv.id} className="hover:bg-muted/30 transition-colors">
                       <TableCell className="font-mono text-xs font-semibold px-4 text-foreground">{inv.number}</TableCell>
-                      <TableCell className="text-xs font-semibold text-foreground">₹{(inv.amountPaise / 100).toFixed(2)}</TableCell>
-                      <TableCell className="text-xs text-muted-foreground">₹{(inv.taxPaise / 100).toFixed(2)}</TableCell>
+                      <TableCell className="text-xs font-semibold text-foreground">{formatMoney(inv.amountPaise, detail.billing.subscription && "currency" in detail.billing.subscription && typeof detail.billing.subscription.currency === "string" ? detail.billing.subscription.currency : "INR")}</TableCell>
+                      <TableCell className="text-xs text-muted-foreground">{formatMoney(inv.taxPaise, detail.billing.subscription && "currency" in detail.billing.subscription && typeof detail.billing.subscription.currency === "string" ? detail.billing.subscription.currency : "INR")}</TableCell>
                       <TableCell className="text-xs capitalize">{inv.status}</TableCell>
                       <TableCell className="text-xs text-muted-foreground text-right px-4">{new Date(inv.issuedAt).toLocaleDateString("en-IN")}</TableCell>
                     </TableRow>
@@ -699,7 +700,7 @@ export function TenantDetail() {
           </div>
           <div className="rounded-xl border border-border bg-card p-4 shadow-xs">
             <span className="text-xs text-muted-foreground">Gross Merchandise Volume</span>
-            <p className="text-2xl font-bold mt-1 text-foreground">₹{(detail.usage.gmvPaise / 100).toLocaleString("en-IN")}</p>
+            <p className="text-2xl font-bold mt-1 text-foreground">{formatMoney(detail.usage.gmvPaise, tenant && "currency" in tenant && typeof tenant.currency === "string" ? tenant.currency : "INR")}</p>
           </div>
         </div>
       )}
@@ -955,7 +956,7 @@ export function TenantDetail() {
               <SelectContent>
                 {(plans ?? []).map((p) => (
                   <SelectItem key={p.code} value={p.code}>
-                    {p.name} (₹{(p.priceMonthlyPaise / 100).toLocaleString("en-IN")}/month)
+                    {p.name} ({formatMoney(p.priceMonthlyPaise, "currency" in p && typeof p.currency === "string" ? p.currency : "INR")}/month)
                   </SelectItem>
                 ))}
               </SelectContent>

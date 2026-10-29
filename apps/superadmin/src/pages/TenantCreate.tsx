@@ -21,6 +21,7 @@ import {
   SelectValue,
   toast,
 } from "@bs/ui";
+import { formatMoney } from "@bs/contracts/money";
 import { client } from "../lib/orpc.ts";
 import { messageOf } from "../lib/errors.ts";
 
@@ -271,9 +272,9 @@ export function TenantCreate() {
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="starter">Starter (₹999 / mo)</SelectItem>
-                  <SelectItem value="growth">Growth (₹2,999 / mo)</SelectItem>
-                  <SelectItem value="pro">Pro (₹7,999 / mo)</SelectItem>
+                  <SelectItem value="starter">Starter ({formatMoney(99900, "INR")} / mo)</SelectItem>
+                  <SelectItem value="growth">Growth ({formatMoney(299900, "INR")} / mo)</SelectItem>
+                  <SelectItem value="pro">Pro ({formatMoney(799900, "INR")} / mo)</SelectItem>
                 </SelectContent>
               </Select>
             </div>

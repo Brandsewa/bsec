@@ -11,6 +11,8 @@ import { Switch } from "@bs/ui";
 import { Input } from "@bs/ui";
 import { Field } from "@bs/ui";
 import { HeaderActions, SettingsCard, SettingsPageFrame, useUnsavedGuard } from "../../../components/settings/settings-page.tsx";
+import { currencySymbol } from "@bs/contracts/money";
+import { useStoreCurrency } from "../../../lib/use-store-currency.ts";
 import { orpc } from "../../../lib/orpc.ts";
 import { errorMessage } from "../../../lib/errors.ts";
 
@@ -162,6 +164,8 @@ function CodConfigurationForm({
   disabled: boolean;
   onSaved: () => void;
 }) {
+  const storeCurrency = useStoreCurrency();
+  const sym = currencySymbol(storeCurrency);
   const queryClient = useQueryClient();
   const updateMutation = useMutation(orpc.admin.paymentMethods.updateCod.mutationOptions());
 
@@ -200,7 +204,7 @@ function CodConfigurationForm({
 
     const feeNum = Number(form.feeRupees);
     if (!Number.isFinite(feeNum) || feeNum < 0) {
-      toast.error("Please enter a valid handling fee (₹0 or greater).");
+      toast.error(`Please enter a valid handling fee (${sym}0 or greater).`);
       return;
     }
 
@@ -208,7 +212,7 @@ function CodConfigurationForm({
     if (form.minOrderRupees.trim()) {
       const minNum = Number(form.minOrderRupees);
       if (!Number.isFinite(minNum) || minNum < 0) {
-        toast.error("Please enter a valid minimum order value (₹0 or greater).");
+        toast.error(`Please enter a valid minimum order value (${sym}0 or greater).`);
         return;
       }
       minOrderPaise = Math.round(minNum * 100);
@@ -308,7 +312,7 @@ function CodConfigurationForm({
         </Field>
 
         <div className="grid gap-3 sm:grid-cols-3">
-          <Field id="feeRupees" label="COD fee (₹)" hint="Additional fee (0 for free).">
+          <Field id="feeRupees" label={`COD fee (${sym})`} hint="Additional fee (0 for free).">
             <Input
               id="feeRupees"
               type="number"
@@ -320,7 +324,7 @@ function CodConfigurationForm({
             />
           </Field>
 
-          <Field id="minOrder" label="Min order (₹)" hint="Optional minimum order limit.">
+          <Field id="minOrder" label={`Min order (${sym})`} hint="Optional minimum order limit.">
             <Input
               id="minOrder"
               type="number"
@@ -333,7 +337,7 @@ function CodConfigurationForm({
             />
           </Field>
 
-          <Field id="maxOrder" label="Max order (₹)" hint="Optional maximum order limit.">
+          <Field id="maxOrder" label={`Max order (${sym})`} hint="Optional maximum order limit.">
             <Input
               id="maxOrder"
               type="number"

@@ -32,6 +32,8 @@ import { orpc } from "../../lib/orpc.ts";
 import { errorMessage } from "../../lib/errors.ts";
 import { INDIAN_STATES } from "../../lib/india.ts";
 import { money } from "../../components/order-parts.tsx";
+import { formatMoney, currencySymbol } from "@bs/contracts/money";
+import { useStoreCurrency } from "../../lib/use-store-currency.ts";
 import { SimpleSelect } from "@bs/ui";
 
 export interface CreateOrderSearch {
@@ -293,6 +295,8 @@ function CreateCustomerDialog({
 }
 
 function CreateOrderPage() {
+  const storeCurrency = useStoreCurrency();
+  const sym = currencySymbol(storeCurrency);
   const navigate = useNavigate();
   const queryClient = useQueryClient();
   const { quoteId } = Route.useSearch();
@@ -829,14 +833,14 @@ function CreateOrderPage() {
                         value={discountType}
                         onChange={(v) => setDiscountType(v as "flat" | "percent")}
                         options={[
-                          { value: "flat", label: "Flat amount (₹)" },
+                          { value: "flat", label: `Flat amount (${sym})` },
                           { value: "percent", label: "Percentage (%)" },
                         ]}
                       />
                     </Field>
                     <Field>
                       <FieldLabel htmlFor="discount-val">
-                        {discountType === "flat" ? "Amount in ₹ *" : "Percentage (%) *"}
+                        {discountType === "flat" ? `Amount in ${sym} *` : "Percentage (%) *"}
                       </FieldLabel>
                       <Input
                         id="discount-val"
@@ -872,14 +876,14 @@ function CreateOrderPage() {
                     onCheckedChange={(checked) => setHasShippingOverride(Boolean(checked))}
                   />
                   <label htmlFor="chk-shipping-override" className="text-sm font-medium text-foreground cursor-pointer">
-                    Override shipping rate (max ₹10,000)
+                    Override shipping rate (max {formatMoney(1000000, storeCurrency)})
                   </label>
                 </div>
 
                 {hasShippingOverride ? (
                   <div className="mt-3 grid gap-3 pl-6 sm:grid-cols-2">
                     <Field>
-                      <FieldLabel htmlFor="ship-override-amount">Custom shipping in ₹ *</FieldLabel>
+                      <FieldLabel htmlFor="ship-override-amount">Custom shipping in {sym} *</FieldLabel>
                       <Input
                         id="ship-override-amount"
                         type="number"
@@ -1092,7 +1096,7 @@ function CreateOrderPage() {
                 <p className="text-xs text-destructive">Manual discount requires a reason and amount.</p>
               ) : null}
               {hasShippingOverrideError ? (
-                <p className="text-xs text-destructive">Shipping override requires a reason (max ₹10,000).</p>
+                <p className="text-xs text-destructive">Shipping override requires a reason (max {formatMoney(1000000, storeCurrency)}).</p>
               ) : null}
 
               <Button type="submit" size="lg" disabled={!ready || create.isPending} className="w-full">
@@ -1138,6 +1142,8 @@ function LineItemRow({
   onSetQty: (qty: number) => void;
   onSetPriceOverride: (priceRupees: string, reason: string) => void;
 }) {
+  const storeCurrency = useStoreCurrency();
+  const sym = currencySymbol(storeCurrency);
   const [editingPrice, setEditingPrice] = useState(line.priceOverride != null);
   const [overrideInput, setOverrideInput] = useState(
     line.priceOverride != null ? (line.priceOverride / 100).toFixed(2) : "",
@@ -1165,10 +1171,10 @@ function LineItemRow({
           <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
             <span>{line.variantTitle}</span>
             <span>·</span>
-            <span className={isOverridden ? "line-through" : ""}>{money(line.originalPrice)}</span>
+            <span className={isOverridden ? "line-through" : ""}>{money(line.originalPrice, storeCurrency)}</span>
             {isOverridden ? (
               <Badge variant="outline" className="text-amber-600 dark:text-amber-400 font-mono text-[10px]">
-                {money(line.effectivePrice)}
+                {money(line.effectivePrice, storeCurrency)}
               </Badge>
             ) : null}
           </div>
@@ -1220,7 +1226,7 @@ function LineItemRow({
           {editingPrice ? "Hide price override" : isOverridden ? "Edit price override" : "Override price"}
         </button>
         <span className="font-semibold text-foreground">
-          {money(line.effectivePrice * line.quantity)}
+          {money(line.effectivePrice * line.quantity, storeCurrency)}
         </span>
       </div>
 
@@ -1228,7 +1234,7 @@ function LineItemRow({
         <div className="mt-1 rounded border border-border bg-muted/30 p-2.5 grid gap-2">
           <div className="grid gap-2 sm:grid-cols-2">
             <Field>
-              <FieldLabel htmlFor={`line-price-${line.variantId}`}>Custom unit price in ₹</FieldLabel>
+              <FieldLabel htmlFor={`line-price-${line.variantId}`}>Custom unit price in {sym}</FieldLabel>
               <Input
                 id={`line-price-${line.variantId}`}
                 type="number"

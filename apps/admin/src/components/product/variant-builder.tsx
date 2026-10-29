@@ -27,6 +27,8 @@ import {
   toast,
 } from "@bs/ui";
 import type { ProductDetail, ProductVariant } from "@bs/contracts";
+import { formatMoney, currencySymbol } from "@bs/contracts/money";
+import { useStoreCurrency } from "../../lib/use-store-currency.ts";
 import { formatWeight, type WeightUnit } from "@bs/contracts/units";
 import { client, orpc } from "../../lib/orpc.ts";
 import { errorMessage } from "../../lib/errors.ts";
@@ -34,7 +36,6 @@ import { useBulkRunner } from "../data-table/use-bulk-runner.ts";
 import { MAX_OPTIONS, MAX_VARIANTS, MAX_VALUES, cleanOptions, optionCombinations, previewGrid, sameCombo, type DraftOption } from "../../lib/variant-grid.ts";
 import { VariantDrawer } from "./variant-drawer.tsx";
 
-const inr = new Intl.NumberFormat("en-IN", { style: "currency", currency: "INR" });
 const toPaise = (rupees: string) => Math.round(Number(rupees) * 100);
 
 /** Values of one option as removable chips; Enter or a comma adds, Backspace on an empty field removes the last. */
@@ -105,6 +106,8 @@ export interface VariantBuilderProps {
  * apply, then manage each variant (SKU, price, weight, barcode, image...) in a side drawer or set prices in bulk.
  */
 export function VariantBuilderCard({ product, priceOnRequest, onChanged }: VariantBuilderProps) {
+  const storeCurrency = useStoreCurrency();
+  const sym = currencySymbol(storeCurrency);
   const settingsQuery = useQuery(orpc.admin.settings.get.queryOptions());
   const weightUnit: WeightUnit = settingsQuery.data?.weightUnit ?? "g";
   const initial: DraftOption[] = useMemo(() => product.options.map((o) => ({ name: o.name, values: [...o.values] })), [product.options]);
@@ -345,7 +348,7 @@ export function VariantBuilderCard({ product, priceOnRequest, onChanged }: Varia
                           </div>
                         </TableCell>
                         <TableCell className="font-mono text-xs text-muted-foreground">{v.sku}</TableCell>
-                        <TableCell className="text-right text-sm">{priceOnRequest ? "Quote only" : inr.format(v.price / 100)}</TableCell>
+                        <TableCell className="text-right text-sm">{priceOnRequest ? "Quote only" : formatMoney(v.price, storeCurrency)}</TableCell>
                         <TableCell className="text-right text-xs text-muted-foreground">{v.weightGrams != null ? formatWeight(v.weightGrams, weightUnit) : "—"}</TableCell>
                         <TableCell className="text-right">
                           <Button
@@ -391,11 +394,11 @@ export function VariantBuilderCard({ product, priceOnRequest, onChanged }: Varia
           </DialogHeader>
           <div className="grid gap-3">
             <div className="grid gap-1.5">
-              <FieldLabel htmlFor="bulk-price">Price (₹)</FieldLabel>
+              <FieldLabel htmlFor="bulk-price">Price ({sym})</FieldLabel>
               <Input id="bulk-price" type="number" step="0.01" min="0" value={bulkPrice} onChange={(e) => setBulkPrice(e.target.value)} />
             </div>
             <div className="grid gap-1.5">
-              <FieldLabel htmlFor="bulk-compare">Compare-at (₹)</FieldLabel>
+              <FieldLabel htmlFor="bulk-compare">Compare-at ({sym})</FieldLabel>
               <Input id="bulk-compare" type="number" step="0.01" min="0" value={bulkCompare} onChange={(e) => setBulkCompare(e.target.value)} />
             </div>
           </div>

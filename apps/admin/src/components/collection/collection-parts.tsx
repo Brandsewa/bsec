@@ -13,9 +13,9 @@ import {
   SimpleSelect,
 } from "@bs/ui";
 import type { CollectionRule } from "@bs/contracts";
+import { formatMoney } from "@bs/contracts/money";
+import { useStoreCurrency } from "../../lib/use-store-currency.ts";
 import { ProductPickerDialog, type PickedProduct } from "../product/product-picker-dialog.tsx";
-
-const inr = new Intl.NumberFormat("en-IN", { style: "currency", currency: "INR", maximumFractionDigits: 0 });
 
 /** Manual and Automated side by side in one row. Shared by collections and categories. */
 export function CollectionTypeCard({
@@ -88,6 +88,7 @@ export function ProductAssignmentsCard({
   onChange: (next: PickedProduct[]) => void;
   description?: string;
 }) {
+  const storeCurrency = useStoreCurrency();
   const [open, setOpen] = useState(false);
 
   const move = (from: number, to: number) => {
@@ -127,7 +128,7 @@ export function ProductAssignmentsCard({
                   </span>
                   <span className="min-w-0">
                     <span className="block truncate font-medium">{p.title}</span>
-                    {p.priceMin != null ? <span className="block text-xs text-muted-foreground">From {inr.format(p.priceMin / 100)}</span> : null}
+                    {p.priceMin != null ? <span className="block text-xs text-muted-foreground">From {formatMoney(p.priceMin, storeCurrency)}</span> : null}
                   </span>
                 </div>
                 <div className="flex shrink-0 items-center gap-1">
@@ -168,7 +169,7 @@ const RULE_FIELDS = [
   { value: "tag", label: "Product tag" },
   { value: "brand", label: "Brand" },
   { value: "category", label: "Category" },
-  { value: "price", label: "Price (paise/inr)" },
+  { value: "price", label: "Price (minor units)" },
   { value: "in_stock", label: "In stock" },
 ];
 

@@ -1,7 +1,11 @@
 import { Badge } from "@bs/ui";
+import { formatMoney } from "@bs/contracts/money";
 
-/** Paise → "₹1,234" (en-IN grouping). */
-export const money = (paise: number) => `₹${(paise / 100).toLocaleString("en-IN")}`;
+/**
+ * Minor units → formatted money. Accepts optional currency (defaults to "INR").
+ */
+export const money = (minor: number, currency = "INR") => formatMoney(minor, currency);
+
 
 const BADGE_VARIANT: Record<string, "default" | "secondary" | "destructive" | "outline" | "success" | "warning"> = {
   paid: "success",

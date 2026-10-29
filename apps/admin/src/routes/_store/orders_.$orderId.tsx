@@ -298,12 +298,12 @@ function OrderDetailPage() {
                     </div>
                     <p className="text-muted-foreground">{it.variantTitle ?? it.sku ?? "Default"}</p>
                     <p className="text-muted-foreground">
-                      {money(it.unitPrice)} × {it.quantity}
+                      {money(it.unitPrice, order.currency ?? "INR")} × {it.quantity}
                       {it.fulfilledQty > 0 ? ` · ${it.fulfilledQty} fulfilled` : ""}
                       {it.returnedQty > 0 ? ` · ${it.returnedQty} returned` : ""}
                     </p>
                   </div>
-                  <span className="font-medium text-foreground">{money(it.total)}</span>
+                  <span className="font-medium text-foreground">{money(it.total, order.currency ?? "INR")}</span>
                 </div>
               ))}
             </CardContent>
@@ -454,14 +454,19 @@ function OrderDetailPage() {
               <CardTitle>Summary</CardTitle>
             </CardHeader>
             <CardContent className="grid gap-2">
-              <Row label="Subtotal" value={money(order.subtotal)} />
-              {order.discountTotal > 0 ? <Row label="Discount" value={`−${money(order.discountTotal)}`} /> : null}
-              <Row label="Shipping" value={money(order.shippingTotal)} />
-              {order.codFee > 0 ? <Row label="COD fee" value={money(order.codFee)} /> : null}
-              <Row label="Tax" value={money(order.taxTotal)} />
+              <Row label="Subtotal" value={money(order.subtotal, order.currency ?? "INR")} />
+              {order.discountTotal > 0 ? <Row label="Discount" value={`−${money(order.discountTotal, order.currency ?? "INR")}`} /> : null}
+              <Row label="Shipping" value={money(order.shippingTotal, order.currency ?? "INR")} />
+              {order.codFee > 0 ? <Row label="COD fee" value={money(order.codFee, order.currency ?? "INR")} /> : null}
+              <Row label="Tax" value={money(order.taxTotal, order.currency ?? "INR")} />
               <div className="border-t border-border pt-2">
-                <Row label="Total" value={money(order.grandTotal)} strong />
+                <Row label="Total" value={money(order.grandTotal, order.currency ?? "INR")} strong />
               </div>
+              {order.baseGrandTotal != null && order.baseCurrency && (order.currency ?? "INR") !== order.baseCurrency ? (
+                <div className="text-right text-xs text-muted-foreground">
+                  Base total: ~{money(order.baseGrandTotal, order.baseCurrency)}
+                </div>
+              ) : null}
             </CardContent>
           </Card>
 

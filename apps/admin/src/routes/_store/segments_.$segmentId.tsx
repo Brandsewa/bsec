@@ -19,6 +19,8 @@ import { SectionCard } from "@bs/ui";
 import { SimpleSelect } from "@bs/ui";
 import { ScrollTabs } from "@bs/ui";
 import { ConditionsBuilder, ConditionsPreview, type RuleSet } from "../../components/segments/conditions-builder.tsx";
+import { formatMoney } from "@bs/contracts/money";
+import { useStoreCurrency } from "../../lib/use-store-currency.ts";
 import { downloadCsv, toCsv } from "../../lib/csv.ts";
 import { errorMessage } from "../../lib/errors.ts";
 import { client, orpc } from "../../lib/orpc.ts";
@@ -165,6 +167,7 @@ export function membersListInput(segmentId: string, s: MembersSearch, paging: { 
 type MemberRow = Awaited<ReturnType<typeof client.admin.segments.members.list>>["items"][number];
 
 function MembersTab({ segmentId, kind, editMode }: { segmentId: string; kind: "manual" | "automatic"; editMode: boolean }) {
+  const storeCurrency = useStoreCurrency();
   const queryClient = useQueryClient();
   const [s, update] = useUrlTableState(parseMembersSearch);
   const [subscribedOnly, setSubscribedOnly] = useState(true);
@@ -213,12 +216,12 @@ function MembersTab({ segmentId, kind, editMode }: { segmentId: string; kind: "m
         for (const m of page.items) {
           if (source === "selection" && !picked.has(m.id)) continue;
           if (subscribedOnly && m.marketingState !== "subscribed") continue;
-          all.push([m.name, m.email, m.phone, m.ordersCount, (m.totalSpent / 100).toFixed(2), m.lastOrderAt ? new Date(m.lastOrderAt).toISOString() : "", MARKETING_LABEL[m.marketingState] ?? m.marketingState, m.tags.join("; ")]);
+          all.push([m.name, m.email, m.phone, m.ordersCount, (m.totalSpent / 100).toFixed(2), storeCurrency, m.lastOrderAt ? new Date(m.lastOrderAt).toISOString() : "", MARKETING_LABEL[m.marketingState] ?? m.marketingState, m.tags.join("; ")]);
         }
         offset += 100;
         if (offset >= page.total) break;
       }
-      downloadCsv(`segment-${segmentId.slice(0, 8)}-customers.csv`, toCsv(["Name", "Email", "Phone", "Orders", "Total spent (INR)", "Last order", "Marketing state", "Tags"], all));
+      downloadCsv(`segment-${segmentId.slice(0, 8)}-customers.csv`, toCsv(["Name", "Email", "Phone", "Orders", "Total spent", "Currency", "Last order", "Marketing state", "Tags"], all));
       toast.success(`Exported ${all.length.toLocaleString("en-IN")} customer${all.length === 1 ? "" : "s"}.`);
     } catch (e) {
       toast.error(errorMessage(e));
@@ -239,7 +242,7 @@ function MembersTab({ segmentId, kind, editMode }: { segmentId: string; kind: "m
     },
     { id: "phone", header: "Phone", optional: true, defaultHidden: true, className: "text-muted-foreground", cell: (m) => m.phone },
     { id: "orders", header: "Orders", className: "font-medium text-foreground", cell: (m) => `${m.ordersCount} orders` },
-    { id: "spent", header: "Spent", className: "text-right font-medium text-foreground", cell: (m) => `₹${(m.totalSpent / 100).toLocaleString("en-IN")}` },
+    { id: "spent", header: "Spent", className: "text-right font-medium text-foreground", cell: (m) => formatMoney(m.totalSpent, storeCurrency) },
     { id: "lastOrder", header: "Last order", className: "text-muted-foreground", cell: (m) => fmtDay(m.lastOrderAt) },
     {
       id: "marketing",
@@ -344,7 +347,7 @@ function MembersTab({ segmentId, kind, editMode }: { segmentId: string; kind: "m
           <div className="grid gap-1 p-3">
             <div className="flex items-center justify-between gap-2">
               <span className="truncate font-medium text-foreground">{m.name || "Unnamed"}</span>
-              <span className="font-medium text-foreground">₹{(m.totalSpent / 100).toLocaleString("en-IN")}</span>
+              <span className="font-medium text-foreground">{formatMoney(m.totalSpent, storeCurrency)}</span>
             </div>
             <p className="truncate text-muted-foreground">{m.email}</p>
             <p className="text-muted-foreground">

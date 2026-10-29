@@ -48,6 +48,7 @@ import {
   useUrlTableState,
 } from "../../components/data-table/use-table-state.ts";
 import { money } from "../../components/order-parts.tsx";
+import { useStoreCurrency } from "../../lib/use-store-currency.ts";
 import { DateRangePicker, ScrollTabs, SimpleSelect } from "@bs/ui";
 import { downloadCsv, toCsv } from "../../lib/csv.ts";
 import { errorMessage } from "../../lib/errors.ts";
@@ -126,6 +127,7 @@ function formatRelativeTime(dateStr: string): string {
 }
 
 function AbandonedCheckoutsStatsStrip() {
+  const storeCurrency = useStoreCurrency();
   const statsQuery = useQuery(orpc.admin.abandonedCheckouts.stats.queryOptions({}));
   const stats = statsQuery.data;
 
@@ -161,13 +163,14 @@ function AbandonedCheckoutsStatsStrip() {
       />
       <MetricCard
         label="Potential revenue"
-        value={money(stats?.potentialRevenue ?? 0)}
+        value={money(stats?.potentialRevenue ?? 0, storeCurrency)}
       />
     </div>
   );
 }
 
 function AbandonedCheckoutsPage() {
+  const storeCurrency = useStoreCurrency();
   const [s, update] = useUrlTableState(parseAbandonedCheckoutsSearch);
   const [exporting, setExporting] = useState(false);
 
@@ -258,7 +261,7 @@ function AbandonedCheckoutsPage() {
         header: "Total",
         cell: (row) => (
           <span className="font-medium tabular-nums text-foreground">
-            {money(row.total)}
+            {money(row.total, storeCurrency)}
           </span>
         ),
       },
@@ -293,7 +296,7 @@ function AbandonedCheckoutsPage() {
           ),
       },
     ],
-    [],
+    [storeCurrency],
   );
 
   const visibility = useColumnVisibility("abandoned_checkouts", columns);
@@ -390,7 +393,8 @@ function AbandonedCheckoutsPage() {
         "First Product",
         "Total Quantity",
         "Abandoned Date",
-        "Total (INR)",
+        "Total",
+        "Currency",
         "Email Status",
         "Recovery Status",
         "Recovered At",
@@ -405,6 +409,7 @@ function AbandonedCheckoutsPage() {
         String(it.itemsSummary.count),
         it.abandonedAt,
         (it.total / 100).toFixed(2),
+        storeCurrency,
         it.emailStatus,
         it.recovered ? "Recovered" : "Not recovered",
         it.recoveredAt ?? "",
@@ -586,7 +591,7 @@ function AbandonedCheckoutsPage() {
                   <div className="text-xs text-muted-foreground truncate">{r.customer.email || r.customer.phone || "No contact info"}</div>
                   <div className="flex items-center justify-between text-xs pt-1">
                     <span className="text-muted-foreground">{r.itemsSummary.firstTitle || "Cart"}</span>
-                    <span className="font-medium text-foreground">{money(r.total)}</span>
+                    <span className="font-medium text-foreground">{money(r.total, storeCurrency)}</span>
                   </div>
                 </div>
               </div>

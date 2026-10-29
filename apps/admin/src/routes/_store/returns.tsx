@@ -63,6 +63,8 @@ import {
 } from "../../components/data-table/use-table-state.ts";
 import { DateRangePicker, ScrollTabs, SimpleSelect } from "@bs/ui";
 import { downloadCsv, toCsv } from "../../lib/csv.ts";
+import { formatMoney } from "@bs/contracts/money";
+import { useStoreCurrency } from "../../lib/use-store-currency.ts";
 import { errorMessage } from "../../lib/errors.ts";
 import { client, orpc } from "../../lib/orpc.ts";
 
@@ -192,9 +194,9 @@ function StatusBadge({ status }: { status: string }) {
   }
 }
 
-const EXPORT_HEADER = ["Return #", "Date", "Status", "Resolution", "Order #", "Customer Name", "Customer Email", "Reason", "Items Count", "Refund Amount (INR)"];
+const EXPORT_HEADER = ["Return #", "Date", "Status", "Resolution", "Order #", "Customer Name", "Customer Email", "Reason", "Items Count", "Refund Amount", "Currency"];
 
-function exportRow(r: ReturnRow) {
+function exportRow(r: ReturnRow, currency: string) {
   const itemsCount = (r.items ?? []).reduce((s, i) => s + i.quantity, 0);
   const amount = r.refundAmount ?? r.computedRefundAmount;
   return [
@@ -208,10 +210,12 @@ function exportRow(r: ReturnRow) {
     r.reason,
     String(itemsCount),
     (amount / 100).toFixed(2),
+    currency,
   ];
 }
 
 export function ReturnsWorkbenchPage() {
+  const storeCurrency = useStoreCurrency();
   const navigate = useNavigate();
   const queryClient = useQueryClient();
   const [s, update] = useUrlTableState(parseReturnsSearch);
@@ -455,7 +459,7 @@ export function ReturnsWorkbenchPage() {
           const amount = row.refundAmount ?? row.computedRefundAmount;
           return (
             <span className="font-medium text-foreground">
-              ₹{(amount / 100).toLocaleString("en-IN", { minimumFractionDigits: 2 })}
+              {formatMoney(amount, storeCurrency)}
             </span>
           );
         },
@@ -474,7 +478,7 @@ export function ReturnsWorkbenchPage() {
         ),
       },
     ],
-    [navigate],
+    [navigate, storeCurrency],
   );
 
   const visibility = useColumnVisibility("returns-workbench", columns);
@@ -573,7 +577,7 @@ export function ReturnsWorkbenchPage() {
 
   async function handleExportCsv(source: "selection" | "all" = "all") {
     if (source === "selection" && !sel.allResults) {
-      const csv = toCsv(EXPORT_HEADER, sel.picked.map(exportRow));
+      const csv = toCsv(EXPORT_HEADER, sel.picked.map((r) => exportRow(r, storeCurrency)));
       downloadCsv(`returns-${new Date().toISOString().slice(0, 10)}.csv`, csv);
       toast.success(`Exported ${sel.picked.length} return${sel.picked.length === 1 ? "" : "s"}`);
       return;
@@ -592,7 +596,7 @@ export function ReturnsWorkbenchPage() {
         },
         { cap: 5000 },
       );
-      const csv = toCsv(EXPORT_HEADER, allRows.map(exportRow));
+      const csv = toCsv(EXPORT_HEADER, allRows.map((r) => exportRow(r, storeCurrency)));
       downloadCsv(`returns-${new Date().toISOString().slice(0, 10)}.csv`, csv);
       toast.success(`Exported ${allRows.length} returns`);
     } catch (err) {
@@ -879,7 +883,7 @@ export function ReturnsWorkbenchPage() {
                   <div className="text-xs text-muted-foreground truncate">{r.customerName || r.customerEmail || r.orderNumber}</div>
                   <div className="flex items-center justify-between text-xs pt-1">
                     <span className="capitalize text-muted-foreground">{r.resolution}</span>
-                    <span className="font-medium text-foreground">{r.refundAmount ? `₹${(r.refundAmount / 100).toFixed(2)}` : "—"}</span>
+                    <span className="font-medium text-foreground">{r.refundAmount ? formatMoney(r.refundAmount, storeCurrency) : "—"}</span>
                   </div>
                 </div>
               </div>

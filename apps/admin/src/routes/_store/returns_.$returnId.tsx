@@ -36,6 +36,8 @@ import {
   toast,
 } from "@bs/ui";
 import { StatusBadge } from "../../components/order-parts.tsx";
+import { formatMoney } from "@bs/contracts/money";
+import { useStoreCurrency } from "../../lib/use-store-currency.ts";
 import { errorMessage } from "../../lib/errors.ts";
 import { client, orpc } from "../../lib/orpc.ts";
 
@@ -44,13 +46,14 @@ export const Route = createFileRoute("/_store/returns_/$returnId")({
   component: ReturnDetailPage,
 });
 
-function inr(amount: number) {
-  return `₹${(amount / 100).toLocaleString("en-IN", { minimumFractionDigits: 2 })}`;
+function inr(amount: number, currency = "INR") {
+  return formatMoney(amount, currency);
 }
 
 type ActionKind = "approve" | "reject" | "pick_up" | "receive" | "refund" | "replace" | "close";
 
 export function ReturnDetailPage() {
+  const storeCurrency = useStoreCurrency();
   const { returnId } = Route.useParams();
   const navigate = useNavigate();
   const queryClient = useQueryClient();
@@ -272,7 +275,7 @@ export function ReturnDetailPage() {
               </div>
               <div>
                 <span className="text-muted-foreground">Order total:</span>{" "}
-                <span className="font-medium text-foreground">{inr(d.order?.grandTotal ?? 0)}</span>
+                <span className="font-medium text-foreground">{inr(d.order?.grandTotal ?? 0, d.order && "currency" in d.order && typeof d.order.currency === "string" ? d.order.currency : storeCurrency)}</span>
               </div>
               <div>
                 <span className="text-muted-foreground">Payment:</span>{" "}
@@ -293,10 +296,10 @@ export function ReturnDetailPage() {
                     <p className="font-medium text-foreground">{item.title}</p>
                     {item.variantTitle && <p className="text-muted-foreground">{item.variantTitle}</p>}
                     <p className="text-muted-foreground">
-                      Qty: {item.quantity} × {inr(item.unitPrice ?? 0)}
+                      Qty: {item.quantity} × {inr(item.unitPrice ?? 0, d.order && "currency" in d.order && typeof d.order.currency === "string" ? d.order.currency : storeCurrency)}
                     </p>
                   </div>
-                  <span className="font-semibold text-foreground">{inr(item.lineTotal ?? 0)}</span>
+                  <span className="font-semibold text-foreground">{inr(item.lineTotal ?? 0, d.order && "currency" in d.order && typeof d.order.currency === "string" ? d.order.currency : storeCurrency)}</span>
                 </div>
               ))}
             </CardContent>
@@ -386,7 +389,7 @@ export function ReturnDetailPage() {
                 {d.refundAmount && (
                   <div className="flex justify-between">
                     <span className="text-muted-foreground">Refunded amount:</span>
-                    <span className="font-bold text-foreground">{inr(d.refundAmount)}</span>
+                    <span className="font-bold text-foreground">{inr(d.refundAmount, d.order && "currency" in d.order && typeof d.order.currency === "string" ? d.order.currency : storeCurrency)}</span>
                   </div>
                 )}
                 {d.refundMethod && (

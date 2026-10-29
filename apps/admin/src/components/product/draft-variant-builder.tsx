@@ -15,6 +15,8 @@ import {
   TableHeader,
   TableRow,
 } from "@bs/ui";
+import { currencySymbol } from "@bs/contracts/money";
+import { useStoreCurrency } from "../../lib/use-store-currency.ts";
 import { MAX_OPTIONS, MAX_VALUES, MAX_VARIANTS, cleanOptions, optionCombinations, previewGrid, type DraftOption } from "../../lib/variant-grid.ts";
 import { ValueChips } from "./variant-builder.tsx";
 
@@ -78,6 +80,8 @@ export function DraftVariantBuilderCard({
   priceOnRequest: boolean;
   errors: Record<string, string>;
 }) {
+  const storeCurrency = useStoreCurrency();
+  const sym = currencySymbol(storeCurrency);
   const preview = previewGrid(options, []);
   const changeOptions = (next: DraftOption[]) => {
     onOptionsChange(next);
@@ -171,8 +175,8 @@ export function DraftVariantBuilderCard({
                 <TableRow className="bg-muted/40 hover:bg-muted/40">
                   <TableHead>Variant</TableHead>
                   <TableHead className="min-w-36">SKU *</TableHead>
-                  <TableHead className="min-w-28">Price (₹) *</TableHead>
-                  <TableHead className="min-w-28">Compare-at (₹)</TableHead>
+                  <TableHead className="min-w-28">Price ({sym}) *</TableHead>
+                  <TableHead className="min-w-28">Compare-at ({sym})</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>

@@ -56,14 +56,10 @@ import type {
   QuotaTierView,
   QuotaDefinitionView,
 } from "@bs/contracts";
+import { formatMoney } from "@bs/contracts/money";
 
-function formatINR(paise: number): string {
-  const rupees = paise / 100;
-  return new Intl.NumberFormat("en-IN", {
-    style: "currency",
-    currency: "INR",
-    maximumFractionDigits: 0,
-  }).format(rupees);
+function formatINR(paise: number, currency = "INR"): string {
+  return formatMoney(paise, currency);
 }
 
 export function Quotas() {
@@ -449,11 +445,11 @@ export function Quotas() {
                         {t.description || "—"}
                       </TableCell>
                       <TableCell className="text-xs font-semibold font-mono text-foreground">
-                        {formatINR(t.priceMonthlyPaise)}
+                        {formatINR(t.priceMonthlyPaise, "currency" in t && typeof t.currency === "string" ? t.currency : "INR")}
                         <span className="text-[10px] text-muted-foreground font-normal ml-1">/ mo</span>
                       </TableCell>
                       <TableCell className="text-xs font-semibold font-mono text-foreground">
-                        {formatINR(t.priceYearlyPaise)}
+                        {formatINR(t.priceYearlyPaise, "currency" in t && typeof t.currency === "string" ? t.currency : "INR")}
                         <span className="text-[10px] text-muted-foreground font-normal ml-1">/ yr</span>
                       </TableCell>
                       <TableCell className="text-xs">
@@ -702,7 +698,7 @@ export function Quotas() {
 
               <div className="grid grid-cols-2 gap-4">
                 <div>
-                  <Label htmlFor="tier-price-monthly" className="text-xs font-semibold">Monthly Price (₹)</Label>
+                  <Label htmlFor="tier-price-monthly" className="text-xs font-semibold">Monthly Price (INR / USD)</Label>
                   <Input
                     id="tier-price-monthly"
                     type="number"
@@ -717,7 +713,7 @@ export function Quotas() {
                 </div>
 
                 <div>
-                  <Label htmlFor="tier-price-yearly" className="text-xs font-semibold">Yearly Price (₹)</Label>
+                  <Label htmlFor="tier-price-yearly" className="text-xs font-semibold">Yearly Price (INR / USD)</Label>
                   <Input
                     id="tier-price-yearly"
                     type="number"

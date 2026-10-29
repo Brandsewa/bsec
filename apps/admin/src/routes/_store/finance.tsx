@@ -33,6 +33,8 @@ import { ScrollTabs } from "@bs/ui";
 import { SimpleSelect } from "@bs/ui";
 import { errorMessage } from "../../lib/errors.ts";
 import { orpc } from "../../lib/orpc.ts";
+import { formatMoney, currencySymbol } from "@bs/contracts/money";
+import { useStoreCurrency } from "../../lib/use-store-currency.ts";
 
 export type PeriodChoice = "7d" | "30d" | "90d" | "ytd" | "all";
 
@@ -61,15 +63,11 @@ export const Route = createFileRoute("/_store/finance")({
 });
 
 function formatPaise(paise: number, currency = "INR"): string {
-  const rupees = paise / 100;
-  return new Intl.NumberFormat("en-IN", {
-    style: "currency",
-    currency,
-    maximumFractionDigits: 0,
-  }).format(rupees);
+  return formatMoney(paise, currency);
 }
 
 export function FinanceOverviewPage() {
+  const storeCurrency = useStoreCurrency();
   const search = Route.useSearch();
   const navigate = useNavigate({ from: Route.fullPath });
   const queryClient = useQueryClient();
@@ -168,7 +166,7 @@ export function FinanceOverviewPage() {
               <HelpCircle className="h-5 w-5 flex-shrink-0" />
               <span>
                 Cost of goods snapshot is missing for{" "}
-                <strong>{formatPaise(data.costCoverage.revenueUncostedPaise)}</strong> (
+                <strong>{formatPaise(data.costCoverage.revenueUncostedPaise, storeCurrency)}</strong> (
                 {data.costCoverage.uncostedSharePercent}% of sales). Profit margins reflect
                 uncosted revenue.
               </span>
@@ -187,7 +185,7 @@ export function FinanceOverviewPage() {
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
             <MetricCard
               label="Net Profit"
-              value={formatPaise(data.profitAndLoss.netProfitPaise)}
+              value={formatPaise(data.profitAndLoss.netProfitPaise, storeCurrency)}
               description={
                 data.profitAndLoss.netProfitPaise >= 0
                   ? "Net surplus for selected period"
@@ -196,12 +194,12 @@ export function FinanceOverviewPage() {
             />
             <MetricCard
               label="Total Revenue"
-              value={formatPaise(data.profitAndLoss.totalIncomePaise)}
+              value={formatPaise(data.profitAndLoss.totalIncomePaise, storeCurrency)}
               description="Merchandise + shipping minus refunds"
             />
             <MetricCard
               label="Total Costs & Expenses"
-              value={formatPaise(data.profitAndLoss.totalExpensePaise)}
+              value={formatPaise(data.profitAndLoss.totalExpensePaise, storeCurrency)}
               description="COGS, operating, courier & fees"
             />
           </div>
@@ -234,7 +232,7 @@ export function FinanceOverviewPage() {
                           : "text-foreground font-mono"
                       }
                     >
-                      {formatPaise(line.amountPaise)}
+                      {formatPaise(line.amountPaise, storeCurrency)}
                     </span>
                   </div>
                 ))}
@@ -257,7 +255,7 @@ export function FinanceOverviewPage() {
                   >
                     <span className="font-medium">{line.label}</span>
                     <span className="font-mono text-foreground">
-                      {formatPaise(line.amountPaise)}
+                      {formatPaise(line.amountPaise, storeCurrency)}
                     </span>
                   </div>
                 ))}
@@ -289,13 +287,13 @@ export function FinanceOverviewPage() {
                         asset.balancePaise < 0 ? "text-destructive font-semibold" : ""
                       }`}
                     >
-                      {formatPaise(asset.balancePaise)}
+                      {formatPaise(asset.balancePaise, storeCurrency)}
                     </span>
                   </div>
                 ))}
                 <div className="pt-2 flex justify-between text-sm font-semibold">
                   <span>Total Cash & Bank:</span>
-                  <span className="font-mono">{formatPaise(data.cashPosition.totalCashPaise)}</span>
+                  <span className="font-mono">{formatPaise(data.cashPosition.totalCashPaise, storeCurrency)}</span>
                 </div>
               </div>
             </div>
@@ -311,19 +309,19 @@ export function FinanceOverviewPage() {
                     <span className="font-medium">Tax Payable (GST)</span>
                     <p className="text-xs text-muted-foreground">Collected from shoppers owed onward</p>
                   </div>
-                  <span className="font-mono">{formatPaise(data.owed.youOweTaxPaise)}</span>
+                  <span className="font-mono">{formatPaise(data.owed.youOweTaxPaise, storeCurrency)}</span>
                 </div>
                 <div className="flex items-center justify-between border-b border-border pb-2 text-sm">
                   <div>
                     <span className="font-medium">Unpaid Operational Bills</span>
                     <p className="text-xs text-muted-foreground">Recorded expenses not yet settled</p>
                   </div>
-                  <span className="font-mono">{formatPaise(data.owed.youOweBillsPaise)}</span>
+                  <span className="font-mono">{formatPaise(data.owed.youOweBillsPaise, storeCurrency)}</span>
                 </div>
                 <div className="pt-2 flex justify-between text-sm font-semibold">
                   <span>Total You Owe:</span>
                   <span className="font-mono text-destructive">
-                    {formatPaise(data.owed.totalYouOwePaise)}
+                    {formatPaise(data.owed.totalYouOwePaise, storeCurrency)}
                   </span>
                 </div>
               </div>
@@ -342,7 +340,7 @@ export function FinanceOverviewPage() {
               </p>
             </div>
             <span className="text-xl font-bold font-mono text-primary">
-              {formatPaise(data.gmvPaise)}
+              {formatPaise(data.gmvPaise, storeCurrency)}
             </span>
           </div>
         )}
@@ -369,6 +367,7 @@ function AdjustmentModal({
   onOpenChange: (open: boolean) => void;
   onSuccess: () => void;
 }) {
+  const storeCurrency = useStoreCurrency();
   const [preset, setPreset] = useState("settled_gateway_to_bank");
   const [accountDebit, setAccountDebit] = useState("cash_bank");
   const [accountCredit, setAccountCredit] = useState("cash_gateway");
@@ -435,7 +434,7 @@ function AdjustmentModal({
       accountDebit,
       accountCredit,
       amount: paise,
-      currency: "INR",
+      currency: storeCurrency,
       reason: reason.trim(),
     });
   };
@@ -501,7 +500,7 @@ function AdjustmentModal({
 
             <div className="grid grid-cols-2 gap-3">
               <div>
-                <Label>Amount (₹)</Label>
+                <Label>Amount ({currencySymbol(storeCurrency)})</Label>
                 <Input
                   type="number"
                   step="0.01"

@@ -14,12 +14,13 @@ import {
   toast,
 } from "@bs/ui";
 import type { TenantPromotionView, TermQuoteView } from "@bs/contracts";
+import { formatMoney } from "@bs/contracts/money";
 import { client } from "../lib/orpc.ts";
 import { messageOf } from "../lib/errors.ts";
 import { useHasRole } from "../lib/user-context.tsx";
 import { describePromotion } from "./Promotions.tsx";
 
-const inr = (paise: number) => `₹${(paise / 100).toLocaleString("en-IN", { minimumFractionDigits: 0, maximumFractionDigits: 2 })}`;
+const inr = (paise: number, currency = "INR") => formatMoney(paise, currency);
 
 /** Promotions of one store: what is active, what ended, and (platform owner) give or cancel one. Shown on the Billing tab. */
 export function TenantPromotions({ tenantId, planCode }: { tenantId: string; planCode: string }) {

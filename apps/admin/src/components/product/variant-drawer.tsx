@@ -17,6 +17,8 @@ import {
   toast,
 } from "@bs/ui";
 import type { ProductDetail, ProductVariant } from "@bs/contracts";
+import { currencySymbol } from "@bs/contracts/money";
+import { useStoreCurrency } from "../../lib/use-store-currency.ts";
 import { gramsToUnit, unitToGrams, type WeightUnit } from "@bs/contracts/units";
 import { MediaPickerDialog } from "../media/media-picker-dialog.tsx";
 import { orpc } from "../../lib/orpc.ts";
@@ -108,6 +110,8 @@ export function VariantDrawer(props: VariantDrawerProps) {
 }
 
 function VariantWorkspace({ onOpenChange, productId, productMedia, priceOnRequest, variant, variants, optionNames, canDelete, onChanged }: VariantDrawerProps) {
+  const storeCurrency = useStoreCurrency();
+  const sym = currencySymbol(storeCurrency);
   const isNew = variant === null;
   const settingsQuery = useQuery(orpc.admin.settings.get.queryOptions());
   const activeWeightUnit: WeightUnit = settingsQuery.data?.weightUnit ?? "g";
@@ -356,15 +360,15 @@ function VariantWorkspace({ onOpenChange, productId, productMedia, priceOnReques
             <h3 className="text-sm font-semibold text-foreground">Pricing</h3>
             <div className="grid gap-3 sm:grid-cols-3">
               <div className="grid gap-1.5">
-                <FieldLabel htmlFor="vd-price">Price (₹)</FieldLabel>
+                <FieldLabel htmlFor="vd-price">Price ({sym})</FieldLabel>
                 <Input id="vd-price" type="number" step="0.01" min="0" disabled={priceOnRequest} value={priceOnRequest ? "0.00" : form.price} onChange={(e) => patch({ price: e.target.value })} />
               </div>
               <div className="grid gap-1.5">
-                <FieldLabel htmlFor="vd-compare">Compare-at (₹)</FieldLabel>
+                <FieldLabel htmlFor="vd-compare">Compare-at ({sym})</FieldLabel>
                 <Input id="vd-compare" type="number" step="0.01" min="0" disabled={priceOnRequest} value={priceOnRequest ? "" : form.compare} onChange={(e) => patch({ compare: e.target.value })} />
               </div>
               <div className="grid gap-1.5">
-                <FieldLabel htmlFor="vd-cost">Cost per item (₹)</FieldLabel>
+                <FieldLabel htmlFor="vd-cost">Cost per item ({sym})</FieldLabel>
                 <Input id="vd-cost" type="number" step="0.01" min="0" value={form.cost} onChange={(e) => patch({ cost: e.target.value })} />
               </div>
             </div>

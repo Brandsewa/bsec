@@ -33,6 +33,8 @@ import { canExportFinance, downloadFinanceCsv } from "../../lib/finance-export.t
 import { SimpleSelect } from "@bs/ui";
 import { errorMessage } from "../../lib/errors.ts";
 import { orpc } from "../../lib/orpc.ts";
+import { formatMoney } from "@bs/contracts/money";
+import { useStoreCurrency } from "../../lib/use-store-currency.ts";
 
 export type ReportPeriod = "7d" | "30d" | "90d" | "ytd" | "all";
 
@@ -55,15 +57,12 @@ export const Route = createFileRoute("/_store/finance_/reports")({
   component: FinanceReportsPage,
 });
 
-function formatPaise(paise: number): string {
-  return new Intl.NumberFormat("en-IN", {
-    style: "currency",
-    currency: "INR",
-    maximumFractionDigits: 0,
-  }).format(paise / 100);
+function formatPaise(paise: number, currency = "INR"): string {
+  return formatMoney(paise, currency);
 }
 
 export function FinanceReportsPage() {
+  const storeCurrency = useStoreCurrency();
   const search = Route.useSearch();
   const navigate = useNavigate({ from: Route.fullPath });
   const queryClient = useQueryClient();
@@ -184,7 +183,7 @@ export function FinanceReportsPage() {
               <div className="text-right">
                 <span className="text-xs text-muted-foreground">Net Tax Owed</span>
                 <p className="text-xl font-bold font-mono text-primary">
-                  {formatPaise(overview.taxSummary.taxOwedPaise)}
+                  {formatPaise(overview.taxSummary.taxOwedPaise, storeCurrency)}
                 </p>
               </div>
             )}
@@ -195,19 +194,19 @@ export function FinanceReportsPage() {
               <div className="rounded-md border border-border p-3">
                 <span className="text-xs text-muted-foreground">Tax Collected</span>
                 <p className="text-base font-semibold font-mono text-emerald-600">
-                  {formatPaise(overview.taxSummary.taxCollectedPaise)}
+                  {formatPaise(overview.taxSummary.taxCollectedPaise, storeCurrency)}
                 </p>
               </div>
               <div className="rounded-md border border-border p-3">
                 <span className="text-xs text-muted-foreground">Tax Refunded (Returns)</span>
                 <p className="text-base font-semibold font-mono text-rose-600">
-                  {formatPaise(overview.taxSummary.taxRefundedPaise)}
+                  {formatPaise(overview.taxSummary.taxRefundedPaise, storeCurrency)}
                 </p>
               </div>
               <div className="rounded-md border border-border p-3">
                 <span className="text-xs text-muted-foreground">Net Liability (Owed)</span>
                 <p className="text-base font-semibold font-mono text-primary">
-                  {formatPaise(overview.taxSummary.taxOwedPaise)}
+                  {formatPaise(overview.taxSummary.taxOwedPaise, storeCurrency)}
                 </p>
               </div>
             </div>
@@ -232,12 +231,12 @@ export function FinanceReportsPage() {
                   {overview?.taxSummary.gstMonthlyBreakdown.map((row) => (
                     <tr key={row.month}>
                       <td className="p-3 font-semibold">{row.month}</td>
-                      <td className="p-3 text-right">{formatPaise(row.taxablePaise)}</td>
-                      <td className="p-3 text-right">{formatPaise(row.cgstPaise)}</td>
-                      <td className="p-3 text-right">{formatPaise(row.sgstPaise)}</td>
-                      <td className="p-3 text-right">{formatPaise(row.igstPaise)}</td>
+                      <td className="p-3 text-right">{formatPaise(row.taxablePaise, storeCurrency)}</td>
+                      <td className="p-3 text-right">{formatPaise(row.cgstPaise, storeCurrency)}</td>
+                      <td className="p-3 text-right">{formatPaise(row.sgstPaise, storeCurrency)}</td>
+                      <td className="p-3 text-right">{formatPaise(row.igstPaise, storeCurrency)}</td>
                       <td className="p-3 text-right font-semibold text-primary">
-                        {formatPaise(row.totalTaxPaise)}
+                        {formatPaise(row.totalTaxPaise, storeCurrency)}
                       </td>
                     </tr>
                   ))}
@@ -340,9 +339,9 @@ export function FinanceReportsPage() {
                 {trialBalance?.rows.map((r) => (
                   <tr key={r.account}>
                     <td className="p-3 font-sans font-medium">{r.label}</td>
-                    <td className="p-3 text-right">{formatPaise(r.totalDebitPaise)}</td>
-                    <td className="p-3 text-right">{formatPaise(r.totalCreditPaise)}</td>
-                    <td className="p-3 text-right font-semibold">{formatPaise(r.balancePaise)}</td>
+                    <td className="p-3 text-right">{formatPaise(r.totalDebitPaise, storeCurrency)}</td>
+                    <td className="p-3 text-right">{formatPaise(r.totalCreditPaise, storeCurrency)}</td>
+                    <td className="p-3 text-right font-semibold">{formatPaise(r.balancePaise, storeCurrency)}</td>
                   </tr>
                 ))}
               </tbody>

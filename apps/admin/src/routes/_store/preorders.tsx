@@ -26,6 +26,7 @@ import {
   useUrlTableState,
 } from "../../components/data-table/use-table-state.ts";
 import { StatusBadge, money } from "../../components/order-parts.tsx";
+import { useStoreCurrency } from "../../lib/use-store-currency.ts";
 import { ScrollTabs } from "@bs/ui";
 import { downloadCsv, toCsv } from "../../lib/csv.ts";
 import { errorMessage } from "../../lib/errors.ts";
@@ -104,8 +105,8 @@ function PreorderStatsStrip() {
   );
 }
 
-const EXPORT_HEADER = ["Order", "Placed at", "Ships on", "Status", "Payment", "Fulfillment", "Customer name", "Customer email", "Phone", "Items", "Total (INR)"];
-const exportRow = (o: PreorderRow) => [
+const EXPORT_HEADER = ["Order", "Placed at", "Ships on", "Status", "Payment", "Fulfillment", "Customer name", "Customer email", "Phone", "Items", "Total", "Currency"];
+const exportRow = (o: PreorderRow, currency: string) => [
   o.number,
   new Date(o.placedAt).toISOString(),
   o.shipsOn,
@@ -117,6 +118,7 @@ const exportRow = (o: PreorderRow) => [
   o.customerPhone ?? "",
   o.itemsCount,
   (o.grandTotal / 100).toFixed(2),
+  currency,
 ];
 const stamp = () => new Date().toISOString().slice(0, 10);
 
@@ -138,6 +140,7 @@ export const Route = createFileRoute("/_store/preorders")({
 });
 
 export function PreordersPage() {
+  const storeCurrency = useStoreCurrency();
   const queryClient = useQueryClient();
   const navigate = useNavigate();
   const [s, update] = useUrlTableState(parsePreordersSearch);
@@ -184,7 +187,7 @@ export function PreordersPage() {
   async function exportPreorders(source: "selection" | "matching") {
     try {
       if (source === "selection" && !sel.allResults) {
-        downloadCsv(`preorders-${stamp()}.csv`, toCsv(EXPORT_HEADER, sel.picked.map(exportRow)));
+        downloadCsv(`preorders-${stamp()}.csv`, toCsv(EXPORT_HEADER, sel.picked.map((o) => exportRow(o, storeCurrency))));
         toast.success(`Exported ${sel.picked.length} pre-order${sel.picked.length === 1 ? "" : "s"}.`);
         return;
       }
@@ -195,7 +198,7 @@ export function PreordersPage() {
         },
         { onProgress: (done, of) => bulk.setProgress({ label: "Exporting pre-orders", done, total: of }) },
       );
-      downloadCsv(`preorders-${stamp()}.csv`, toCsv(EXPORT_HEADER, all.map((o) => exportRow(o as PreorderRow))));
+      downloadCsv(`preorders-${stamp()}.csv`, toCsv(EXPORT_HEADER, all.map((o) => exportRow(o as PreorderRow, storeCurrency))));
       toast.success(all.length < count ? `Exported the first ${all.length.toLocaleString("en-IN")} of ${count.toLocaleString("en-IN")} pre-orders.` : `Exported ${all.length.toLocaleString("en-IN")} pre-orders.`);
     } catch (e) {
       toast.error(errorMessage(e));
@@ -287,7 +290,7 @@ export function PreordersPage() {
       id: "total",
       header: "Total",
       className: "text-right font-medium text-foreground",
-      cell: (o) => money(o.grandTotal),
+      cell: (o) => money(o.grandTotal, storeCurrency),
     },
   ];
 

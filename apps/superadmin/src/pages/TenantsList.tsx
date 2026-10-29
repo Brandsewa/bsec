@@ -35,6 +35,7 @@ import {
   TableRow,
   toast,
 } from "@bs/ui";
+import { formatMoney } from "@bs/contracts/money";
 import { client } from "../lib/orpc.ts";
 import { messageOf } from "../lib/errors.ts";
 
@@ -381,7 +382,7 @@ export function TenantsList() {
                   const productsLimit = getTierProductsLimit(t.code);
                   const priceText =
                     t.priceMonthlyPaise > 0
-                      ? `₹${(t.priceMonthlyPaise / 100).toLocaleString("en-IN")}/mo`
+                      ? `${formatMoney(t.priceMonthlyPaise, "currency" in t && typeof t.currency === "string" ? t.currency : "INR")}/mo`
                       : "Free";
                   return (
                     <SelectItem key={t.code} value={t.code}>
